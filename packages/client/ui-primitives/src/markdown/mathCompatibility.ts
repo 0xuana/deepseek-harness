@@ -1,4 +1,9 @@
-/** Extend upstream dollar-only math syntax with TeX delimiters while reusing its token vocabulary. */
+/**
+ * Extend upstream dollar-only math syntax with TeX delimiters while reusing its
+ * token vocabulary. The dollar construct claims every `$$` flow fence, so text
+ * on the opening line is math content instead of the upstream construct's fence
+ * meta, which the renderer does not read.
+ */
 
 import { factorySpace } from 'micromark-factory-space'
 import type {} from 'micromark-extension-math'
@@ -120,7 +125,7 @@ const tokenizeBackslashMathText: Tokenizer = function (effects, ok, nok) {
   }
 }
 
-function createMathFlow(marker: number, openMarker: number, closeMarker: number, multiline: boolean): Construct {
+function createMathFlow(marker: number, openMarker: number, closeMarker: number): Construct {
   const tokenize: Tokenizer = function (effects, ok, nok) {
     const self = this
     let oddBackslashRun = false
@@ -163,9 +168,12 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number,
         )(code)
       }
       if (markdownLineEnding(code)) {
-        return multiline
-          ? effects.attempt(nonLazyContinuation, afterContinuation, nok)(code)
-          : nok(code)
+        // A paragraph-interruption check must stop before the line ending, as
+        // `micromark-extension-math`'s flow does: consuming it here marks the
+        // next line lazy for every construct tried afterwards.
+        return self.interrupt
+          ? ok(code)
+          : effects.attempt(nonLazyContinuation, afterContinuation, nok)(code)
       }
       return valueStart(code)
     }
@@ -278,7 +286,7 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number,
 
   return {
     concrete: true,
-    name: marker === codes.dollarSign ? 'sameLineDollarMathFlow' : 'backslashMathFlow',
+    name: marker === codes.dollarSign ? 'dollarMathFlow' : 'backslashMathFlow',
     tokenize,
   }
 }
@@ -319,29 +327,29 @@ const backslashMathFlow = createMathFlow(
   codes.backslash,
   codes.leftSquareBracket,
   codes.rightSquareBracket,
-  true,
 )
 
-const sameLineDollarMathFlow = createMathFlow(
+const dollarMathFlow = createMathFlow(
   codes.dollarSign,
   codes.dollarSign,
   codes.dollarSign,
-  false,
 )
 
 const backslashMath: Extension = {
   flow: {
     [codes.backslash]: backslashMathFlow,
-    [codes.dollarSign]: sameLineDollarMathFlow,
+    [codes.dollarSign]: dollarMathFlow,
   },
   text: { [codes.backslash]: backslashMathText },
 }
 
 /**
- * TeX backslash delimiters and same-line display-dollar blocks as a micromark
- * syntax extension reusing `micromark-extension-math`'s token vocabulary; the
- * caller must also register `math()` on the same parse so the emitted tokens
- * compile to standard math nodes.
+ * TeX backslash delimiters and display-dollar blocks as a micromark syntax
+ * extension reusing `micromark-extension-math`'s token vocabulary; the caller
+ * must also register `math()` on the same parse so the emitted tokens compile
+ * to standard math nodes. Both `$$<math>$$` on one line and a `$$<math>` block
+ * closed by a trailing `$$` parse as one math node, and a closing `$$` may sit
+ * at the end of a content line.
  * @returns The micromark syntax extension.
  */
 export function mathCompatibility(): Extension {

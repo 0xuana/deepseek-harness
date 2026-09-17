@@ -492,6 +492,25 @@ describe('MarkdownText', () => {
     }
   })
 
+  it('renders a display-dollar block whose opening line carries math across lines', () => {
+    const cases = [
+      { source: '$$a+b\nc+d$$', value: 'a+b\nc+d' },
+      { source: '$$a+b\nc+d\n$$', value: 'a+b\nc+d' },
+      { source: 'Prose line\n$$a+b\nc+d$$', value: 'a+b\nc+d' },
+      { source: '- item\n  $$a+b\n  c+d$$', value: 'a+b\nc+d' },
+      { source: '- item\n$$\na+b\n$$', value: 'a+b' },
+    ]
+
+    for (const item of cases) {
+      const rendered = render(<MarkdownText text={item.source} />)
+      expect(rendered.container.querySelectorAll('.katex')).toHaveLength(1)
+      expect(rendered.container.querySelectorAll('.katex-display')).toHaveLength(1)
+      expect(rendered.container.querySelector('annotation')?.textContent).toBe(item.value)
+      expect(rendered.container.querySelector('.katex-error')).toBeNull()
+      rendered.unmount()
+    }
+  })
+
   it('lets display math interrupt an open paragraph', () => {
     for (const source of ['Prose line\n\\[x\\]', 'Prose line\n$$x$$']) {
       const rendered = render(<MarkdownText text={source} />)
