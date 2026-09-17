@@ -39,8 +39,8 @@ export function parseGfm(text: string): Root {
 export function parseGfmWithMath(text: string): Root {
   return fromMarkdown(text, {
     // `mathCompatibility()` MUST stay last: micromark dispatches the extension
-    // registered last first, and the dollar flow must own every `$$` fence so
-    // the opening line's text stays math instead of upstream's fence meta.
+    // registered last first, so its dollar flow takes precedence over `math()`
+    // and keeps the opening line's text as math instead of upstream's fence meta.
     extensions: [gfm(), cjkFriendlyStrong(), math(), mathCompatibility()],
     mdastExtensions: [gfmFromMarkdown(), mathFromMarkdown()],
   })

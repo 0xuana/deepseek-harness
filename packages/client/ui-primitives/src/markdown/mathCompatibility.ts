@@ -1,8 +1,10 @@
 /**
  * Extend upstream dollar-only math syntax with TeX delimiters while reusing its
- * token vocabulary. The dollar construct claims every `$$` flow fence, so text
- * on the opening line is math content instead of the upstream construct's fence
- * meta, which the renderer does not read.
+ * token vocabulary. The dollar construct is dispatched before upstream's
+ * `mathFlow`, so the shapes it accepts keep the opening line's text as math
+ * instead of fence meta, which the renderer does not read. A `$$` candidate it
+ * declines — a fence the opening line cannot close, or a block left open — is
+ * left to that upstream flow.
  */
 
 import { factorySpace } from 'micromark-factory-space'
@@ -169,19 +171,24 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
       }
       if (markdownLineEnding(code)) {
         // A paragraph-interruption check must stop before the line ending, as
-        // `micromark-extension-math`'s flow does: consuming it here marks the
-        // next line lazy for every construct tried afterwards.
-        return self.interrupt
-          ? ok(code)
-          : effects.attempt(nonLazyContinuation, afterContinuation, nok)(code)
+        // `micromark-extension-math`'s flow does: consuming it here keeps the
+        // paragraph open across the line boundary, so the document layer keeps
+        // the container and counts the next line lazy for every construct tried
+        // afterwards. Only the dollar flow faces that second construct.
+        if (self.interrupt && marker === codes.dollarSign) return ok(code)
+        return effects.attempt(nonLazyContinuation, afterContinuation, nok)(code)
       }
       return valueStart(code)
     }
 
     function afterClosingFenceAttempt(code: number | null): State | undefined {
-      return marker === codes.backslash
-        ? effects.check({ partial: true, tokenize: tokenizeOpeningFence }, nok, markerValueStart)(code)
-        : markerValueStart(code)
+      if (marker === codes.backslash) {
+        return effects.check({ partial: true, tokenize: tokenizeOpeningFence }, nok, markerValueStart)(code)
+      }
+      // A `$$` with text after it closes nothing: `$$x$$ trailing` is not a
+      // display block, and scanning on from here would swallow a later block's
+      // closing fence. Upstream inline math owns such text.
+      return nok(code)
     }
 
     function afterContinuation(code: number | null): State | undefined {

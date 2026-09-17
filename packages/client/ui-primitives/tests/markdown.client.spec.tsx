@@ -5,6 +5,7 @@ import { JsonBlock, MarkdownText } from './markdown-test-components.tsx'
 import { LinkIcon, MarkdownDelegateProvider } from '../src/index.ts'
 import { cjkFriendlyStrong } from '../src/markdown/cjkFriendlyStrong.ts'
 import { mathCompatibility } from '../src/markdown/mathCompatibility.ts'
+import { parseGfmWithMath } from '../src/markdown/parse.ts'
 
 afterEach(cleanup)
 
@@ -509,6 +510,39 @@ describe('MarkdownText', () => {
       expect(rendered.container.querySelector('.katex-error')).toBeNull()
       rendered.unmount()
     }
+
+    const followed = render(<MarkdownText text={'$$a+b\nc+d$$\n\nAfter'} />)
+    expect(followed.container.querySelectorAll('.katex-display')).toHaveLength(1)
+    expect(followed.container.querySelectorAll('p')).toHaveLength(1)
+    expect(followed.container.querySelector('p')?.textContent).toBe('After')
+    followed.unmount()
+  })
+
+  it('leaves a dollar candidate with trailing text to inline math ahead of a later block', () => {
+    const { container } = render(<MarkdownText text={'$$x$$ trailing\n\n$$y$$'} />)
+
+    expect(container.querySelectorAll('.katex')).toHaveLength(2)
+    expect(container.querySelectorAll('.katex-display')).toHaveLength(1)
+    expect(container.querySelector('.katex-display annotation')?.textContent).toBe('y')
+    expect(container.querySelector('.katex-error')).toBeNull()
+    expect(container.textContent).toContain('trailing')
+  })
+
+  it('keeps an unclosed backslash candidate inside one paragraph', () => {
+    const { container } = render(<MarkdownText text={'**before\n\\[literal]\nafter**'} />)
+
+    expect(container.querySelectorAll('p')).toHaveLength(1)
+    expect(container.querySelector('strong')).not.toBeNull()
+    expect(container.textContent).not.toContain('**')
+  })
+
+  it('bounds parser work for repeated unclosed dollar candidates', () => {
+    const source = '$$a$b\n'.repeat(1_600)
+    const startedAt = performance.now()
+    const tree = parseGfmWithMath(source)
+
+    expect(performance.now() - startedAt).toBeLessThan(3_000)
+    expect(JSON.stringify(tree)).not.toContain('math-display')
   })
 
   it('lets display math interrupt an open paragraph', () => {
