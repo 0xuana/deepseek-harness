@@ -221,7 +221,9 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
     }
 
     /** Record one consumed code unit so a fence can be told from a delimiter. */
-    function rememberConsumed(code: number): void {
+    function rememberConsumed(code: number | null): void {
+      /* v8 ignore next 2 -- every call site passes a code unit, never EOF. */
+      if (code === null) return
       consumedTail = `${consumedTail}${String.fromCharCode(code)}`.slice(-VERB_DELIMITER_TAIL)
     }
 
