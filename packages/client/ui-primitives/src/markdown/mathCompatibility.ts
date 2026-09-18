@@ -236,8 +236,10 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
       // that line's ending while a later `$$` on the same line still closes; on
       // any later line it ends the candidate outright, so a following block is
       // not swallowed. A solitary `$` is content, not a failed fence.
-      if (crossedLineEnding) return nok(code)
-      if (sawClosingFenceSequence) failedClose = true
+      if (sawClosingFenceSequence) {
+        if (crossedLineEnding) return nok(code)
+        failedClose = true
+      }
       return markerValueStart(code)
     }
 

@@ -656,6 +656,12 @@ describe('MarkdownText', () => {
     }
   })
 
+  it('keeps a lone dollar on a later line inside the block', () => {
+    const { container } = render(<MarkdownText text={'$$a+b\nc$d\n$$'} />)
+
+    expect(container.querySelector('.katex-error')?.textContent).toBe('a+b\nc$d')
+  })
+
   it('keeps a fence that fails inside a comment and a trailing lone dollar parseable', () => {
     const commentFail = render(<MarkdownText text={'$$x%$$ y'} />)
     expect(commentFail.container.querySelector('.katex-display')).toBeNull()
