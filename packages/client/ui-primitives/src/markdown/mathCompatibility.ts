@@ -9,7 +9,7 @@
 
 import { factorySpace } from 'micromark-factory-space'
 import type {} from 'micromark-extension-math'
-import { markdownLineEnding } from 'micromark-util-character'
+import { markdownLineEnding, markdownSpace } from 'micromark-util-character'
 import { codes, constants, types } from 'micromark-util-symbol'
 import type { Construct, Extension, Previous, State, Tokenizer } from 'micromark-util-types'
 
@@ -247,7 +247,7 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
       if (code === codes.percentSign && marker === codes.dollarSign && !inComment) {
         inComment = true
         commentHasContent = false
-      } else if (inComment) {
+      } else if (inComment && !markdownSpace(code)) {
         commentHasContent = true
       }
       effects.consume(code)
@@ -289,12 +289,13 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
       // An unescaped `%` starts a TeX comment that runs to the line ending, so
       // a `$$` inside it closes nothing. A `%` the fence follows immediately
       // holds no comment text, which is how writers use it mid-formula
-      // (`95%$$`); only a comment with text suppresses the close, and a `%`
-      // inside an open comment is comment text like any other character.
+      // (`95%$$`, and `95 %$$` alike); only a comment holding a non-whitespace
+      // character suppresses the close, and a `%` inside an open comment is
+      // comment text like any other character.
       if (!escaped && code === codes.percentSign && marker === codes.dollarSign && !inComment) {
         inComment = true
         commentHasContent = false
-      } else if (inComment) {
+      } else if (inComment && !markdownSpace(code)) {
         commentHasContent = true
       }
       effects.consume(code)

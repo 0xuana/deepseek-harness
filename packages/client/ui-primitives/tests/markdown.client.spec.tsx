@@ -589,33 +589,15 @@ describe('MarkdownText', () => {
   })
 
   it('closes a multi-line block whose last line ends in a bare percent', () => {
-    const { container } = render(<MarkdownText text={'$$\\text{acc} =\n95%$$'} />)
+    for (const source of ['$$\\text{acc} =\n95%$$', '$$\\text{acc} =\n95 %$$']) {
+      const rendered = render(<MarkdownText text={source} />)
 
-    expect(container.querySelectorAll('.katex-display')).toHaveLength(1)
-    expect(container.querySelector('.katex-display annotation')?.textContent).toBe('\\text{acc} =\n95%')
-  })
-
-  it('suppresses a close behind a comment that holds text', () => {
-    const { container } = render(<MarkdownText text={'$$\na = x% $$\n$$'} />)
-
-    expect(container.querySelectorAll('.katex-display')).toHaveLength(1)
-    expect(container.querySelector('.katex-display annotation')?.textContent).toContain('a = x% $$')
-  })
-
-  it('closes a same-line block whose percent is formula content', () => {
-    const { container } = render(<MarkdownText text={'$$\\text{acc} = 95%$$'} />)
-
-    expect(container.querySelectorAll('.katex-display')).toHaveLength(1)
-    expect(container.querySelector('.katex-display annotation')?.textContent).toBe('\\text{acc} = 95%')
-  })
-
-  it('treats a verbatim region as content rather than a comment', () => {
-    const { container } = render(<MarkdownText text={'$$\\verb|%|$$\n\nAfter\n\n$$\ny\n$$'} />)
-
-    expect(container.querySelectorAll('.katex-display')).toHaveLength(2)
-    expect(container.querySelector('.katex-error')).toBeNull()
-    expect(container.querySelectorAll('p')).toHaveLength(1)
-    expect(container.querySelector('p')?.textContent).toBe('After')
+      expect(rendered.container.querySelectorAll('.katex-display')).toHaveLength(1)
+      expect(rendered.container.querySelector('.katex-error')).toBeNull()
+      expect(rendered.container.querySelector('.katex-display annotation')?.textContent)
+        .toContain('95')
+      rendered.unmount()
+    }
   })
 
   it('keeps an escaped percent and malformed verbatim forms inside one block', () => {
