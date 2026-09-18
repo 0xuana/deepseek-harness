@@ -634,18 +634,36 @@ describe('MarkdownText', () => {
     }
   })
 
-  it('keeps a verb delimiter and its region inside the formula', () => {
-    for (const [source, expected] of [
-      ['$$\\verb$$$$', '\\verb$$'],
-      ['$$\\verb$abc$$', '\\verb$abc'],
-      ['$$\\verb$x$ y$$', '\\verb$x$ y'],
-    ] as const) {
+  it('keeps a verb delimiter and its empty region inside the formula', () => {
+    for (const source of ['$$\\verb$$$$', '$$\\verb$x$ y$$']) {
       const rendered = render(<MarkdownText text={source} />)
 
-      expect(rendered.container.textContent).toContain(expected)
-      expect(rendered.container.querySelectorAll('p')).toHaveLength(0)
+      expect(rendered.container.querySelectorAll('.katex-display')).toHaveLength(1)
+      expect(rendered.container.querySelector('.katex-error')).toBeNull()
       rendered.unmount()
     }
+
+    // A region that holds text leaves its closing `$` to the fence logic, so the
+    // value keeps `\verb$abc` and KaTeX reports the unterminated command.
+    const unterminated = render(<MarkdownText text={'$$\\verb$abc$$'} />)
+    expect(unterminated.container.querySelector('.katex-error')?.textContent).toContain('\\verb$abc')
+    unterminated.unmount()
+  })
+
+  it('does not read a comment ending in verb as a verbatim delimiter', () => {
+    const { container } = render(<MarkdownText text={'$$x % \\verb$$\n\nAfter\n\n$$\ny\n$$'} />)
+
+    expect(container.querySelectorAll('.katex-display')).toHaveLength(2)
+    expect(container.querySelector('p')?.textContent).toBe('After')
+  })
+
+  it('bounds parser work for repeated candidates ending in a verb tail', () => {
+    const source = '$$a$b\\verb\n\n'.repeat(1_600)
+    const startedAt = performance.now()
+    const tree = parseGfmWithMath(source)
+
+    expect(performance.now() - startedAt).toBeLessThan(3_000)
+    expect(tree.children.every(node => node.type !== 'math')).toBe(true)
   })
 
   it('does not carry the verb delimiter across a line ending', () => {

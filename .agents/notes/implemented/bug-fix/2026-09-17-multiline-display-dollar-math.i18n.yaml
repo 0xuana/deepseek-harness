@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-17-multiline-display-dollar-math.md
-2026-09-17-multiline-display-dollar-math.md: b4928502d16ff8f47edfec42178494650be093dc
-2026-09-17-multiline-display-dollar-math.zh.md: 1f2ddbdfa49328f37ffcc85147c99f3c259b73d8
+2026-09-17-multiline-display-dollar-math.md: e401da34e1fd557565b78089ce7ef950e6cb390b
+2026-09-17-multiline-display-dollar-math.zh.md: e09926fd2d9872876069bc951ede2e90a5f1ce12
