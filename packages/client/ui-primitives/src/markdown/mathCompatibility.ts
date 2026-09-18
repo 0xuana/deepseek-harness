@@ -18,6 +18,12 @@ import type { Construct, Extension, Previous, State, Tokenizer } from 'micromark
 /** Letters that follow a backslash to open TeX's `\verb` verbatim form. */
 const VERB_NAME = 'verb'
 
+/** Whether a code unit is an ASCII letter, which continues a control word. */
+function isAsciiLetter(code: number): boolean {
+  return (code >= codes.lowercaseA && code <= codes.lowercaseZ)
+    || (code >= codes.uppercaseA && code <= codes.uppercaseZ)
+}
+
 const previousBackslash: Previous = function (code) {
   if (code !== codes.backslash) return true
   const tail = this.events.at(-1)
@@ -135,6 +141,7 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
     const self = this
     let oddBackslashRun = false
     let inComment = false
+    let commentHasContent = false
     let crossedLineEnding = false
     let sawClosingFenceSequence = false
     let verbPrefixIndex = 0
@@ -170,7 +177,7 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
 
     function content(code: number | null): State | undefined {
       if (code === codes.eof) return nok(code)
-      if (code === marker && (marker !== codes.dollarSign || (!oddBackslashRun && !(inComment && crossedLineEnding)))) {
+      if (code === marker && closingFenceAllowed()) {
         return effects.attempt(
           { partial: true, tokenize: tokenizeClosingFence },
           closed,
@@ -185,7 +192,8 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
         // same-line form keeps closing as it did before this flow spanned lines.
         oddBackslashRun = false
         inComment = false
-        crossedLineEnding = true
+        commentHasContent = false
+        if (marker === codes.dollarSign) crossedLineEnding = true
         // A paragraph-interruption check on the dollar flow must not consume the
         // line ending: that keeps the paragraph open across the line boundary,
         // and the document layer then counts the next line lazy for every
@@ -197,6 +205,15 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
         return effects.attempt(nonLazyContinuation, afterContinuation, nok)(code)
       }
       return valueStart(code)
+    }
+
+    /**
+     * Whether the marker under the scanner may close the block. The dollar flow
+     * keeps an escaped `$` and a `%` comment that holds text from closing.
+     */
+    function closingFenceAllowed(): boolean {
+      if (marker !== codes.dollarSign) return true
+      return !oddBackslashRun && !(inComment && commentHasContent && crossedLineEnding)
     }
 
     function afterClosingFenceAttempt(code: number | null): State | undefined {
@@ -226,9 +243,14 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
       // of a value run, such as a line that starts inside the block. The
       // backslash construct reads neither this state nor the escape run.
       oddBackslashRun = code === codes.backslash
-      if (code === codes.percentSign && marker === codes.dollarSign) inComment = true
+      if (code === codes.percentSign && marker === codes.dollarSign) {
+        inComment = true
+        commentHasContent = false
+      } else if (inComment) {
+        commentHasContent = true
+      }
       effects.consume(code)
-      if (code !== codes.backslash) return value
+      if (code !== codes.backslash || inComment) return value
       verbPrefixIndex = 0
       return afterBackslash
     }
@@ -236,6 +258,7 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
     function markerValueStart(code: number | null): State | undefined {
       effects.enter('mathFlowValue')
       oddBackslashRun = false
+      if (inComment) commentHasContent = true
       effects.consume(code)
       return valueAfterMarker
     }
@@ -255,16 +278,23 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
       }
       const escaped = oddBackslashRun
       oddBackslashRun = code === codes.backslash ? !escaped : false
-      if (code === codes.backslash && !escaped) {
+      if (code === codes.backslash && !escaped && !inComment) {
         // A `\verb<delimiter>…<delimiter>` region is verbatim, so a `%` inside
-        // it is content rather than a comment.
+        // it is content rather than a comment. A comment holds no commands.
         effects.consume(code)
         verbPrefixIndex = 0
         return afterBackslash
       }
       // An unescaped `%` starts a TeX comment that runs to the line ending, so
-      // a `$$` inside it closes nothing.
-      if (!escaped && code === codes.percentSign && marker === codes.dollarSign) inComment = true
+      // a `$$` inside it closes nothing. A `%` the fence follows immediately
+      // holds no comment text, which is how writers use it mid-formula
+      // (`95%$$`); only a comment with text suppresses the close.
+      if (!escaped && code === codes.percentSign && marker === codes.dollarSign) {
+        inComment = true
+        commentHasContent = false
+      } else if (inComment) {
+        commentHasContent = true
+      }
       effects.consume(code)
       return value
     }
@@ -274,26 +304,61 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
         effects.consume(code)
         oddBackslashRun = false
         verbPrefixIndex += 1
-        return verbPrefixIndex === VERB_NAME.length ? verbatimDelimiterStart : afterBackslash
+        return verbPrefixIndex === VERB_NAME.length ? verbatimStar : afterBackslash
       }
       return value(code)
     }
 
-    function verbatimDelimiterStart(code: number | null): State | undefined {
+    /** `\verb` takes at most one `*`, then the delimiter it repeats. */
+    function verbatimStar(code: number | null): State | undefined {
       verbPrefixIndex = 0
-      if (code === codes.eof || markdownLineEnding(code)) return value(code)
-      if (code === codes.asterisk) {
-        effects.consume(code)
-        return verbatimDelimiterStart
-      }
+      if (code !== codes.asterisk) return verbatimDelimiterStart(code)
+      effects.consume(code)
+      return verbatimDelimiterStart
+    }
+
+    function verbatimDelimiterStart(code: number | null): State | undefined {
+      // A letter continues the control word (`\verbatim`), so it is no
+      // delimiter; `\verb` at a line ending has no delimiter at all.
+      if (code === null || markdownLineEnding(code) || isAsciiLetter(code)) return value(code)
       verbatimDelimiter = code
       oddBackslashRun = false
       effects.consume(code)
-      return verbatimContent
+      return verbatimCloseCheck
+    }
+
+    /**
+     * `\verb` closes on its delimiter before the line ends; without one the
+     * characters read so far are ordinary content, which keeps the error inside
+     * the formula instead of consuming a closing fence as verbatim text.
+     */
+    function verbatimCloseCheck(code: number | null): State | undefined {
+      return effects.check(
+        { partial: true, tokenize: tokenizeVerbatimClose },
+        verbatimContent,
+        verbatimFallback,
+      )(code)
+    }
+
+    function tokenizeVerbatimClose(
+      checkEffects: Parameters<Tokenizer>[0],
+      checkOk: State,
+      checkNok: State,
+    ): State {
+      return scan
+
+      function scan(code: number | null): State | undefined {
+        if (code === null || markdownLineEnding(code)) return checkNok(code)
+        if (code === verbatimDelimiter) return checkOk(code)
+        checkEffects.consume(code)
+        return scan
+      }
     }
 
     function verbatimContent(code: number | null): State | undefined {
-      if (code === codes.eof || markdownLineEnding(code)) {
+      /* v8 ignore next 4 -- the close check guarantees the delimiter precedes
+         any line ending, so this state never sees one. */
+      if (code === null || markdownLineEnding(code)) {
         verbatimDelimiter = null
         return value(code)
       }
@@ -302,6 +367,11 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
       if (!closes) return verbatimContent
       verbatimDelimiter = null
       return value
+    }
+
+    function verbatimFallback(code: number | null): State | undefined {
+      verbatimDelimiter = null
+      return value(code)
     }
 
     function closed(code: number | null): State | undefined {

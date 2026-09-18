@@ -588,6 +588,20 @@ describe('MarkdownText', () => {
     }
   })
 
+  it('closes a multi-line block whose last line ends in a bare percent', () => {
+    const { container } = render(<MarkdownText text={'$$\\text{acc} =\n95%$$'} />)
+
+    expect(container.querySelectorAll('.katex-display')).toHaveLength(1)
+    expect(container.querySelector('.katex-display annotation')?.textContent).toBe('\\text{acc} =\n95%')
+  })
+
+  it('suppresses a close behind a comment that holds text', () => {
+    const { container } = render(<MarkdownText text={'$$\na = x% $$\n$$'} />)
+
+    expect(container.querySelectorAll('.katex-display')).toHaveLength(1)
+    expect(container.querySelector('.katex-display annotation')?.textContent).toContain('a = x% $$')
+  })
+
   it('closes a same-line block whose percent is formula content', () => {
     const { container } = render(<MarkdownText text={'$$\\text{acc} = 95%$$'} />)
 
@@ -620,6 +634,24 @@ describe('MarkdownText', () => {
       const rendered = render(<MarkdownText text={source} />)
 
       expect(rendered.container.querySelector('.katex-error')).not.toBeNull()
+      rendered.unmount()
+    }
+  })
+
+  it('keeps a control word and an unterminated verbatim inside their formulas', () => {
+    const controlWord = render(<MarkdownText text={'$$\\verbatim + y$$'} />)
+    expect(controlWord.container.querySelector('.katex-display annotation')?.textContent).toBe('\\verbatim + y')
+    controlWord.unmount()
+
+    for (const source of [
+      '$$\\verb|abc$$\n\nAfter\n\n$$\ny\n$$',
+      '$$x % \\verb$abc$$\n\nAfter\n\n$$\ny\n$$',
+      '$$\\verb**abc*$$\n\nAfter\n\n$$\ny\n$$',
+    ]) {
+      const rendered = render(<MarkdownText text={source} />)
+
+      expect(rendered.container.querySelectorAll('.katex-display, .katex-error')).toHaveLength(2)
+      expect(rendered.container.querySelector('p')?.textContent).toBe('After')
       rendered.unmount()
     }
   })
