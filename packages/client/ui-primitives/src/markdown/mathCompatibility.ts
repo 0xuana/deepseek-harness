@@ -305,6 +305,7 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
 
     function valueAfterMarker(code: number | null): State | undefined {
       if (code === marker) {
+        rememberConsumed(code)
         effects.consume(code)
         return value
       }

@@ -693,6 +693,16 @@ describe('MarkdownText', () => {
     expect(container.querySelector('.katex-error')?.textContent).toBe('a+b\nc$d')
   })
 
+  it('renders a display formula whose later line uses a solitary dollar', () => {
+    const { container } = render(
+      <MarkdownText text={'$$f(x) = \\begin{cases}\n1 & \\text{if $x > 0$} \\\\\n0 & \\text{otherwise}\n\\end{cases}$$\n\nAfter'} />,
+    )
+
+    expect(container.querySelectorAll('.katex-display')).toHaveLength(1)
+    expect(container.querySelector('.katex-error')).toBeNull()
+    expect(container.querySelector('p')?.textContent).toBe('After')
+  })
+
   it('keeps a fence that fails inside a comment and a trailing lone dollar parseable', () => {
     const commentFail = render(<MarkdownText text={'$$x%$$ y'} />)
     expect(commentFail.container.querySelector('.katex-display')).toBeNull()
