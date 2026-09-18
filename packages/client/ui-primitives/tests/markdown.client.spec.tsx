@@ -559,6 +559,33 @@ describe('MarkdownText', () => {
     }
   })
 
+  it('renders a multi-line display formula that uses a solitary dollar', () => {
+    const source = '$$P = \\begin{cases} 1 & \\text{if $x>0$} \\\\\n0 & \\text{otherwise} \\end{cases}$$\n\nAfter'
+    const { container } = render(<MarkdownText text={source} />)
+
+    expect(container.querySelectorAll('.katex-display')).toHaveLength(1)
+    expect(container.querySelector('.katex-error')).toBeNull()
+    expect(container.querySelectorAll('p')).toHaveLength(1)
+    expect(container.querySelector('p')?.textContent).toBe('After')
+  })
+
+  it('ends the backslash escape run at a line ending', () => {
+    const { container } = render(<MarkdownText text={'$$a$b\\\n\n$$y$$'} />)
+
+    expect(container.querySelectorAll('.katex-display')).toHaveLength(1)
+    expect(container.querySelector('.katex-display annotation')?.textContent).toBe('y')
+    expect(container.querySelector('.katex-error')).toBeNull()
+  })
+
+  it('bounds parser work for repeated candidates ending in an odd backslash', () => {
+    const source = '$$a$b\\\n\n'.repeat(3_200)
+    const startedAt = performance.now()
+    const tree = parseGfmWithMath(source)
+
+    expect(performance.now() - startedAt).toBeLessThan(3_000)
+    expect(tree.children.every(node => node.type !== 'math')).toBe(true)
+  })
+
   it('keeps an escaped-dollar display candidate inside its paragraph', () => {
     const { container } = render(<MarkdownText text={'**before\n$$a\\$b\nafter**'} />)
 

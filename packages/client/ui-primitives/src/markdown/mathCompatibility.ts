@@ -171,6 +171,9 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
         )(code)
       }
       if (markdownLineEnding(code)) {
+        // A trailing backslash escapes the line ending, not the next line's
+        // first character, so the escape run ends here.
+        oddBackslashRun = false
         // A paragraph-interruption check on the dollar flow must not consume the
         // line ending: that keeps the paragraph open across the line boundary,
         // and the document layer then counts the next line lazy for every
