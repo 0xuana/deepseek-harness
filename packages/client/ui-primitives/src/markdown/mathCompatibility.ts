@@ -175,8 +175,9 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
     function content(code: number | null): State | undefined {
       if (code === codes.eof) return nok(code)
       if (code === marker && marker === codes.dollarSign && !inComment && verbDelimiterAhead()) {
-        // The `$` here delimits an empty `\verb…` region, so it and the region's
-        // closing character are content. A comment holds no commands.
+        // The `$` here delimits a `\verb…` region rather than closing the block,
+        // so it is content, and a `$` right after it closes an empty region and
+        // is content too. A comment holds no commands.
         return verbatimDelimiter(code)
       }
       if (code === marker && closingFenceAllowed()) {

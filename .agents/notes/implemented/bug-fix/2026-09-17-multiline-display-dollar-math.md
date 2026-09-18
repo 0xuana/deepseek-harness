@@ -55,7 +55,7 @@ The fifth follows from the comment gate: a block whose only closing fence sits b
 
 The sixth is a multi-line block inside a container whose continuation line falls back to the container's indentation. `- Define:` followed by `$$f(x)=x` at the item's indentation and then a de-indented continuation line gives upstream's flow a fence meta and no value, so the reader sees an empty display block and the continuation as prose — the opening line is gone. Keeping the continuation at the same indentation, or moving the block out of the list, renders it normally. Both flow behaviors match the grammar this replaced; only the multi-line blocks this flow owns are new.
 
-One further limitation is not a fallback: a fence inside an unterminated verbatim region is read as a fence, so `\verb|$$` closes the block there. The flow tracks the delimiter that follows `\verb` and does not parse the region's content.
+One further limitation is not a fallback: the flow reads the six characters before a fence and does not parse verbatim regions, so a fence inside an unterminated region (`\verb|$$`) closes the block there, and a region whose text ends in `\verb` (`\verb**\verb*$$`) has its fence read as that text's delimiter. The six characters before either fence are locally identical, so no rule that reads only that tail separates them.
 
 Repeated unclosed candidates keep linear parser work: an open candidate declines at the next line that starts with a full `$$` it cannot close, rather than scanning each candidate to EOF, which would make 9.6 KB of `$$a$b` lines take ~4 s instead of ~16 ms. KaTeX-level failures in a formula's own source, such as `\arccot`, remain errors by design.
 

@@ -6,6 +6,7 @@ import { LinkIconMedium, MarkdownDelegateProvider } from '../src/index.ts'
 import { cjkFriendlyStrong } from '../src/markdown/cjkFriendlyStrong.ts'
 import { mathCompatibility } from '../src/markdown/mathCompatibility.ts'
 import { parseGfmWithMath } from '../src/markdown/parse.ts'
+// The node-type augmentation the `math` assertions below read.
 import type {} from 'mdast-util-math'
 
 afterEach(cleanup)
@@ -654,6 +655,8 @@ describe('MarkdownText', () => {
     const { container } = render(<MarkdownText text={'$$x % \\verb$$\n\nAfter\n\n$$\ny\n$$'} />)
 
     expect(container.querySelectorAll('.katex-display')).toHaveLength(2)
+    expect(container.querySelector('.katex-display annotation')?.textContent).toBe('x % \\verb')
+    expect(container.querySelector('.katex-error')).toBeNull()
     expect(container.querySelector('p')?.textContent).toBe('After')
   })
 
