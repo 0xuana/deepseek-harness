@@ -633,6 +633,37 @@ describe('MarkdownText', () => {
     }
   })
 
+  it('keeps a verb delimiter and its region inside the formula', () => {
+    for (const [source, expected] of [
+      ['$$\\verb$$$$', '\\verb$$'],
+      ['$$\\verb$abc$$', '\\verb$abc'],
+      ['$$\\verb$x$ y$$', '\\verb$x$ y'],
+    ] as const) {
+      const rendered = render(<MarkdownText text={source} />)
+
+      expect(rendered.container.textContent).toContain(expected)
+      expect(rendered.container.querySelectorAll('p')).toHaveLength(0)
+      rendered.unmount()
+    }
+  })
+
+  it('does not carry the verb delimiter across a line ending', () => {
+    const { container } = render(<MarkdownText text={'$$a$b\\verb\n\n$$y$$'} />)
+
+    expect(container.querySelectorAll('.katex-display')).toHaveLength(1)
+    expect(container.querySelector('.katex-display annotation')?.textContent).toBe('y')
+  })
+
+  it('does not read an escaped backslash as the verb command', () => {
+    for (const source of ['$$\\\\verb$$\n\nAfter', '$$\\\\verb*$$\n\nAfter']) {
+      const rendered = render(<MarkdownText text={source} />)
+
+      expect(rendered.container.querySelectorAll('.katex-display')).toHaveLength(1)
+      expect(rendered.container.querySelector('p')?.textContent).toBe('After')
+      rendered.unmount()
+    }
+  })
+
   it('reads the character after verb as that command delimiter, not a fence', () => {
     for (const source of ['$$\n\\verb$$\nx\n$$\n\nAfter', '$$\n\\verb*$$\nx\n$$\n\nAfter']) {
       const rendered = render(<MarkdownText text={source} />)

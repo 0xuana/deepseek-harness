@@ -174,6 +174,12 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
 
     function content(code: number | null): State | undefined {
       if (code === codes.eof) return nok(code)
+      if (code === marker && marker === codes.dollarSign && verbDelimiterAhead()) {
+        // The `$` here delimits an empty `\verb…` region, so it and the region's
+        // closing character are content.
+        return verbatimDelimiter(code)
+      }
+
       if (code === marker && closingFenceAllowed()) {
         return effects.attempt(
           { partial: true, tokenize: tokenizeClosingFence },
@@ -194,6 +200,7 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
         oddBackslashRun = false
         inComment = false
         commentHasContent = false
+        consumedTail = ''
         if (marker === codes.dollarSign) crossedLineEnding = true
         // A paragraph-interruption check on the dollar flow must not consume the
         // line ending: that keeps the paragraph open across the line boundary,
@@ -214,10 +221,27 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
      */
     function closingFenceAllowed(): boolean {
       if (marker !== codes.dollarSign) return true
-      // The character after `\verb` or `\verb*` is that command's delimiter,
-      // so a fence there belongs to the formula.
-      if (VERB_DELIMITER_PREFIXES.some(prefix => consumedTail.endsWith(prefix))) return false
       return !oddBackslashRun && !(inComment && commentHasContent && crossedLineEnding)
+    }
+
+    /** Whether the marker under the scanner is a `\verb` region's delimiter. */
+    function verbDelimiterAhead(): boolean {
+      return VERB_DELIMITER_PREFIXES.some(prefix => consumedTail.endsWith(prefix))
+    }
+
+    function verbatimDelimiter(code: number | null): State | undefined {
+      effects.enter('mathFlowValue')
+      oddBackslashRun = false
+      rememberConsumed(code)
+      effects.consume(code)
+      return verbatimDelimiterClose
+    }
+
+    function verbatimDelimiterClose(code: number | null): State | undefined {
+      if (code !== marker) return value(code)
+      rememberConsumed(code)
+      effects.consume(code)
+      return value
     }
 
     /** Record one consumed code unit so a fence can be told from a delimiter. */
@@ -293,6 +317,7 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
         return content(code)
       }
       const escaped = oddBackslashRun
+      const doubleBackslash = code === codes.backslash && escaped
       oddBackslashRun = code === codes.backslash ? !escaped : false
       // An unescaped `%` starts a TeX comment that runs to the line ending, so
       // a `$$` inside it closes nothing. A `%` the fence follows immediately
@@ -306,7 +331,10 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
       } else if (inComment && !markdownSpace(code)) {
         commentHasContent = true
       }
-      rememberConsumed(code)
+      // `\\verb` is a line break followed by letters, not the command, so the
+      // pair's second backslash never reaches the tail the command match reads.
+      if (doubleBackslash) consumedTail = ''
+      else rememberConsumed(code)
       effects.consume(code)
       return value
     }
