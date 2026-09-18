@@ -600,31 +600,33 @@ describe('MarkdownText', () => {
     }
   })
 
-  it('keeps an escaped percent and malformed verbatim forms inside one block', () => {
-    for (const source of ['$$a\\%b$$', '$$\\verb*|%|$$']) {
+  it('keeps an escaped percent inside its formula', () => {
+    const { container } = render(<MarkdownText text={'$$a\\%b$$'} />)
+
+    expect(container.querySelectorAll('.katex-display')).toHaveLength(1)
+    expect(container.querySelector('.katex-display annotation')?.textContent).toBe('a\\%b')
+  })
+
+  it('leaves verbatim forms to the value scanner', () => {
+    const percent = render(<MarkdownText text={'$$\\verb|%|$$\n\nAfter\n\n$$\ny\n$$'} />)
+    expect(percent.container.querySelectorAll('.katex-display')).toHaveLength(2)
+    expect(percent.container.querySelector('.katex-error')).toBeNull()
+    expect(percent.container.querySelector('p')?.textContent).toBe('After')
+    percent.unmount()
+
+    const controlWord = render(<MarkdownText text={'$$\\verbatim + y$$'} />)
+    expect(controlWord.container.querySelector('.katex-display annotation')?.textContent).toBe('\\verbatim + y')
+    controlWord.unmount()
+
+    const starred = render(<MarkdownText text={'$$\\verb*a$$a$$'} />)
+    expect(starred.container.querySelector('.katex-display annotation')?.textContent).toBe('\\verb*a$$a')
+    starred.unmount()
+
+    for (const source of ['$$\\verb**abc*$$\n\nAfter\n\n$$\ny\n$$', '$$x % \\verb$abc$$\n\nAfter\n\n$$\ny\n$$']) {
       const rendered = render(<MarkdownText text={source} />)
 
-      expect(rendered.container.querySelectorAll('.katex-display')).toHaveLength(1)
-      rendered.unmount()
-    }
-
-    const escaped = render(<MarkdownText text={'$$a\\%b$$'} />)
-    expect(escaped.container.querySelector('.katex-display annotation')?.textContent).toBe('a\\%b')
-    escaped.unmount()
-
-    // An unterminated `\verb` at EOF leaves the flow to upstream mathFlow,
-    // whose fence meta the renderer drops, so the node's value is empty.
-    for (const source of ['$$\\verb', '$$\\verb|abc']) {
-      const rendered = render(<MarkdownText text={source} />)
-
-      expect(rendered.container.querySelector('.katex-display annotation')?.textContent).toBe('')
-      rendered.unmount()
-    }
-
-    for (const source of ['$$\\verb\n$$', '$$\\verb|abc\ndef$$']) {
-      const rendered = render(<MarkdownText text={source} />)
-
-      expect(rendered.container.querySelector('.katex-error')).not.toBeNull()
+      expect(rendered.container.querySelectorAll('.katex-display, .katex-error')).toHaveLength(2)
+      expect(rendered.container.querySelector('p')?.textContent).toBe('After')
       rendered.unmount()
     }
   })
@@ -642,28 +644,12 @@ describe('MarkdownText', () => {
     }
   })
 
-  it('repeats any delimiter character in the starred verbatim form', () => {
-    const { container } = render(<MarkdownText text={'$$\\verb*a$$a$$'} />)
+  it('closes a block at a fence behind a whitespace-only comment', () => {
+    const { container } = render(<MarkdownText text={'$$\na = x% $$\n$$'} />)
 
-    expect(container.querySelector('.katex-display annotation')?.textContent).toBe('\\verb*a$$a')
-  })
-
-  it('keeps a control word and an unterminated verbatim inside their formulas', () => {
-    const controlWord = render(<MarkdownText text={'$$\\verbatim + y$$'} />)
-    expect(controlWord.container.querySelector('.katex-display annotation')?.textContent).toBe('\\verbatim + y')
-    controlWord.unmount()
-
-    for (const source of [
-      '$$\\verb|abc$$\n\nAfter\n\n$$\ny\n$$',
-      '$$x % \\verb$abc$$\n\nAfter\n\n$$\ny\n$$',
-      '$$\\verb**abc*$$\n\nAfter\n\n$$\ny\n$$',
-    ]) {
-      const rendered = render(<MarkdownText text={source} />)
-
-      expect(rendered.container.querySelectorAll('.katex-display, .katex-error')).toHaveLength(2)
-      expect(rendered.container.querySelector('p')?.textContent).toBe('After')
-      rendered.unmount()
-    }
+    expect(container.querySelectorAll('.katex-display')).toHaveLength(2)
+    expect(container.querySelector('.katex-display annotation')?.textContent).toContain('a = x% ')
+    expect(container.querySelector('.katex-error')).toBeNull()
   })
 
   it('ends the backslash escape run at a line ending', () => {

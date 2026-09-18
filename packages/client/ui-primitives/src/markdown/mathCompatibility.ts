@@ -15,14 +15,6 @@ import type { Construct, Extension, Previous, State, Tokenizer } from 'micromark
 
 // oxlint-disable typescript/no-this-alias -- micromark binds tokenizer context only on the outer callback.
 
-/** Letters that follow a backslash to open TeX's `\verb` verbatim form. */
-const VERB_NAME = 'verb'
-
-/** Whether a code unit is an ASCII letter, which continues a control word. */
-function isAsciiLetter(code: number): boolean {
-  return (code >= codes.lowercaseA && code <= codes.lowercaseZ)
-    || (code >= codes.uppercaseA && code <= codes.uppercaseZ)
-}
 
 const previousBackslash: Previous = function (code) {
   if (code !== codes.backslash) return true
@@ -144,9 +136,7 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
     let commentHasContent = false
     let crossedLineEnding = false
     let sawClosingFenceSequence = false
-    let verbPrefixIndex = 0
-    let verbatimDelimiter: number | null = null
-    let verbatimStarred = false
+    let failedClose = false
     const tail = self.events.at(-1)
     const initialSize = tail?.[1].type === types.linePrefix
       ? tail[2].sliceSerialize(tail[1], true).length
@@ -186,6 +176,10 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
         )(code)
       }
       if (markdownLineEnding(code)) {
+        // A close that failed earlier on this candidate ends it at the line
+        // ending, which is what the grammar this flow replaced did: a failed
+        // `$$x$$ trailing` never reaches the next line.
+        if (marker === codes.dollarSign && failedClose) return nok(code)
         // A trailing backslash escapes the line ending, not the next line's
         // first character, so the escape run ends here, and a TeX comment ends
         // with the line. The comment exception covers only a closing fence on a
@@ -221,11 +215,14 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
       if (marker === codes.backslash) {
         return effects.check({ partial: true, tokenize: tokenizeOpeningFence }, nok, markerValueStart)(code)
       }
-      // A full `$$` that the line does not end after closes nothing: `$$x$$
-      // trailing` is not a display block, and scanning on from here would
-      // swallow a later block's closing fence. A solitary `$` is content that
-      // keeps the block open, not a failed fence.
-      return sawClosingFenceSequence ? nok(code) : markerValueStart(code)
+      // A full `$$` that the line does not end after closes nothing there. On
+      // the opening line the scan continues, so `$$x$$ trailing` declines at
+      // that line's ending while a later `$$` on the same line still closes; on
+      // any later line it ends the candidate outright, so a following block is
+      // not swallowed. A solitary `$` is content, not a failed fence.
+      if (crossedLineEnding) return nok(code)
+      if (sawClosingFenceSequence) failedClose = true
+      return markerValueStart(code)
     }
 
     function afterContinuation(code: number | null): State | undefined {
@@ -251,9 +248,7 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
         commentHasContent = true
       }
       effects.consume(code)
-      if (code !== codes.backslash || inComment) return value
-      verbPrefixIndex = 0
-      return afterBackslash
+      return value
     }
 
     function markerValueStart(code: number | null): State | undefined {
@@ -279,13 +274,6 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
       }
       const escaped = oddBackslashRun
       oddBackslashRun = code === codes.backslash ? !escaped : false
-      if (code === codes.backslash && !escaped && !inComment) {
-        // A `\verb<delimiter>…<delimiter>` region is verbatim, so a `%` inside
-        // it is content rather than a comment. A comment holds no commands.
-        effects.consume(code)
-        verbPrefixIndex = 0
-        return afterBackslash
-      }
       // An unescaped `%` starts a TeX comment that runs to the line ending, so
       // a `$$` inside it closes nothing. A `%` the fence follows immediately
       // holds no comment text, which is how writers use it mid-formula
@@ -300,87 +288,6 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
       }
       effects.consume(code)
       return value
-    }
-
-    function afterBackslash(code: number | null): State | undefined {
-      if (code === VERB_NAME.charCodeAt(verbPrefixIndex)) {
-        effects.consume(code)
-        oddBackslashRun = false
-        verbPrefixIndex += 1
-        return verbPrefixIndex === VERB_NAME.length ? verbatimStar : afterBackslash
-      }
-      return value(code)
-    }
-
-    /** `\verb` takes at most one `*`, then the delimiter it repeats. */
-    function verbatimStar(code: number | null): State | undefined {
-      verbPrefixIndex = 0
-      if (code !== codes.asterisk) {
-        verbatimStarred = false
-        return verbatimDelimiterStart(code)
-      }
-      effects.consume(code)
-      verbatimStarred = true
-      return verbatimDelimiterStart
-    }
-
-    function verbatimDelimiterStart(code: number | null): State | undefined {
-      // In the plain form a letter continues the control word (`\verbatim`),
-      // so it is no delimiter; the starred form repeats any character. `\verb`
-      // at a line ending has no delimiter at all.
-      if (code === null || markdownLineEnding(code)) return value(code)
-      if (!verbatimStarred && isAsciiLetter(code)) return value(code)
-      verbatimDelimiter = code
-      oddBackslashRun = false
-      effects.consume(code)
-      return verbatimCloseCheck
-    }
-
-    /**
-     * `\verb` closes on its delimiter before the line ends; without one the
-     * characters read so far are ordinary content, which keeps the error inside
-     * the formula instead of consuming a closing fence as verbatim text.
-     */
-    function verbatimCloseCheck(code: number | null): State | undefined {
-      return effects.check(
-        { partial: true, tokenize: tokenizeVerbatimClose },
-        verbatimContent,
-        verbatimFallback,
-      )(code)
-    }
-
-    function tokenizeVerbatimClose(
-      checkEffects: Parameters<Tokenizer>[0],
-      checkOk: State,
-      checkNok: State,
-    ): State {
-      return scan
-
-      function scan(code: number | null): State | undefined {
-        if (code === null || markdownLineEnding(code)) return checkNok(code)
-        if (code === verbatimDelimiter) return checkOk(code)
-        checkEffects.consume(code)
-        return scan
-      }
-    }
-
-    function verbatimContent(code: number | null): State | undefined {
-      /* v8 ignore next 4 -- the close check guarantees the delimiter precedes
-         any line ending, so this state never sees one. */
-      if (code === null || markdownLineEnding(code)) {
-        verbatimDelimiter = null
-        return value(code)
-      }
-      const closes = code === verbatimDelimiter
-      effects.consume(code)
-      if (!closes) return verbatimContent
-      verbatimDelimiter = null
-      return value
-    }
-
-    function verbatimFallback(code: number | null): State | undefined {
-      verbatimDelimiter = null
-      return value(code)
     }
 
     function closed(code: number | null): State | undefined {
