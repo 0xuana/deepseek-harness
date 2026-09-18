@@ -3,8 +3,8 @@
  * token vocabulary. The dollar construct is dispatched before upstream's
  * `mathFlow`, so the shapes it accepts keep the opening line's text as math
  * instead of fence meta, which the renderer does not read. A `$$` candidate it
- * declines — a fence the opening line cannot close, or a block left open — is
- * left to that upstream flow.
+ * declines — a `$$` sequence the line does not end after, or a block left open
+ * — is left to that upstream flow.
  */
 
 import { factorySpace } from 'micromark-factory-space'
@@ -131,6 +131,7 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
   const tokenize: Tokenizer = function (effects, ok, nok) {
     const self = this
     let oddBackslashRun = false
+    let sawClosingFenceSequence = false
     const tail = self.events.at(-1)
     const initialSize = tail?.[1].type === types.linePrefix
       ? tail[2].sliceSerialize(tail[1], true).length
@@ -170,12 +171,14 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
         )(code)
       }
       if (markdownLineEnding(code)) {
-        // A paragraph-interruption check must stop before the line ending, as
-        // `micromark-extension-math`'s flow does: consuming it here keeps the
-        // paragraph open across the line boundary, so the document layer keeps
-        // the container and counts the next line lazy for every construct tried
-        // afterwards. Only the dollar flow faces that second construct.
-        if (self.interrupt && marker === codes.dollarSign) return ok(code)
+        // A paragraph-interruption check on the dollar flow must not consume the
+        // line ending: that keeps the paragraph open across the line boundary,
+        // and the document layer then counts the next line lazy for every
+        // construct tried afterwards. Declining leaves the interruption decision
+        // to the upstream flow, whose own check short-circuits without consuming
+        // and claims only the fences it accepts. The backslash construct has no
+        // upstream counterpart and keeps consuming here.
+        if (self.interrupt && marker === codes.dollarSign) return nok(code)
         return effects.attempt(nonLazyContinuation, afterContinuation, nok)(code)
       }
       return valueStart(code)
@@ -185,10 +188,11 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
       if (marker === codes.backslash) {
         return effects.check({ partial: true, tokenize: tokenizeOpeningFence }, nok, markerValueStart)(code)
       }
-      // A `$$` with text after it closes nothing: `$$x$$ trailing` is not a
-      // display block, and scanning on from here would swallow a later block's
-      // closing fence. Upstream inline math owns such text.
-      return nok(code)
+      // A full `$$` that the line does not end after closes nothing: `$$x$$
+      // trailing` is not a display block, and scanning on from here would
+      // swallow a later block's closing fence. A solitary `$` is content that
+      // keeps the block open, not a failed fence.
+      return sawClosingFenceSequence ? nok(code) : markerValueStart(code)
     }
 
     function afterContinuation(code: number | null): State | undefined {
@@ -243,6 +247,7 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
       closeOk: State,
       closeNok: State,
     ): State {
+      sawClosingFenceSequence = false
       return factorySpace(closeEffects, sequenceStart, types.linePrefix, constants.tabSize)
 
       function sequenceStart(code: number | null): State | undefined {
@@ -257,6 +262,7 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
         if (code !== closeMarker) return closeNok(code)
         closeEffects.consume(code)
         closeEffects.exit('mathFlowFenceSequence')
+        sawClosingFenceSequence = true
         return factorySpace(closeEffects, after, types.whitespace)
       }
 

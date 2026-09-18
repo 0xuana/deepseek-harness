@@ -6,6 +6,7 @@ import { LinkIcon, MarkdownDelegateProvider } from '../src/index.ts'
 import { cjkFriendlyStrong } from '../src/markdown/cjkFriendlyStrong.ts'
 import { mathCompatibility } from '../src/markdown/mathCompatibility.ts'
 import { parseGfmWithMath } from '../src/markdown/parse.ts'
+import type {} from 'mdast-util-math'
 
 afterEach(cleanup)
 
@@ -542,7 +543,28 @@ describe('MarkdownText', () => {
     const tree = parseGfmWithMath(source)
 
     expect(performance.now() - startedAt).toBeLessThan(3_000)
-    expect(JSON.stringify(tree)).not.toContain('math-display')
+    expect(tree.children.every(node => node.type !== 'math')).toBe(true)
+  })
+
+  it('keeps a solitary dollar inside a display formula as content', () => {
+    for (const source of [
+      '$$P = \\begin{cases} 1 & \\text{if $x>0$} \\end{cases}$$',
+      '$$\\text{a $x$ b}\\tag{1}$$',
+    ]) {
+      const rendered = render(<MarkdownText text={source} />)
+
+      expect(rendered.container.querySelectorAll('.katex-display')).toHaveLength(1)
+      expect(rendered.container.querySelector('.katex-error')).toBeNull()
+      rendered.unmount()
+    }
+  })
+
+  it('keeps an escaped-dollar display candidate inside its paragraph', () => {
+    const { container } = render(<MarkdownText text={'**before\n$$a\\$b\nafter**'} />)
+
+    expect(container.querySelectorAll('p')).toHaveLength(1)
+    expect(container.querySelector('strong')).not.toBeNull()
+    expect(container.textContent).not.toContain('**')
   })
 
   it('lets display math interrupt an open paragraph', () => {
