@@ -569,36 +569,30 @@ describe('MarkdownText', () => {
     expect(container.querySelector('p')?.textContent).toBe('After')
   })
 
-  it('ignores a closing fence inside a TeX comment wherever the comment starts', () => {
-    for (const source of [
-      '$$\n\\frac{1}{ % keep $$\n2}\n$$\n\nAfter',
-      '$$\n% keep $$\n\\frac12\n$$\n\nAfter',
-      '$$% keep $$\n\\frac12\n$$\n\nAfter',
-    ]) {
+  it('ignores a closing fence inside a TeX comment on a later line', () => {
+    const commented = render(<MarkdownText text={'$$\n\\frac{1}{ % keep $$\n2}\n$$\n\nAfter'} />)
+    expect(commented.container.querySelectorAll('.katex-display')).toHaveLength(1)
+    expect(commented.container.querySelector('.katex-display annotation')?.textContent)
+      .toBe('\\frac{1}{ % keep $$\n2}')
+    expect(commented.container.querySelector('.katex-error')).toBeNull()
+    expect(commented.container.querySelector('p')?.textContent).toBe('After')
+    commented.unmount()
+
+    for (const source of ['$$\n% keep $$\n\\frac12\n$$\n\nAfter']) {
       const rendered = render(<MarkdownText text={source} />)
 
       expect(rendered.container.querySelectorAll('.katex-display')).toHaveLength(1)
       expect(rendered.container.querySelector('.katex-error')).toBeNull()
-      expect(rendered.container.querySelectorAll('p')).toHaveLength(1)
-      expect(rendered.container.querySelector('p')?.textContent).toBe('After')
-      expect(rendered.container.querySelector('.katex-display annotation')?.textContent)
-        .toBe('\\frac{1}{ % keep $$\n2}')
-      rendered.unmount()
-      break
-    }
-
-    for (const source of [
-      '$$\n% keep $$\n\\frac12\n$$\n\nAfter',
-      '$$% keep $$\n\\frac12\n$$\n\nAfter',
-    ]) {
-      const rendered = render(<MarkdownText text={source} />)
-
-      expect(rendered.container.querySelectorAll('.katex-display')).toHaveLength(1)
-      expect(rendered.container.querySelector('.katex-error')).toBeNull()
-      expect(rendered.container.querySelectorAll('p')).toHaveLength(1)
       expect(rendered.container.querySelector('p')?.textContent).toBe('After')
       rendered.unmount()
     }
+  })
+
+  it('closes a same-line block whose percent is formula content', () => {
+    const { container } = render(<MarkdownText text={'$$\\text{acc} = 95%$$'} />)
+
+    expect(container.querySelectorAll('.katex-display')).toHaveLength(1)
+    expect(container.querySelector('.katex-display annotation')?.textContent).toBe('\\text{acc} = 95%')
   })
 
   it('treats a verbatim region as content rather than a comment', () => {

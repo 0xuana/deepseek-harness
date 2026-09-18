@@ -135,6 +135,7 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
     const self = this
     let oddBackslashRun = false
     let inComment = false
+    let crossedLineEnding = false
     let sawClosingFenceSequence = false
     let verbPrefixIndex = 0
     let verbatimDelimiter: number | null = null
@@ -169,7 +170,7 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
 
     function content(code: number | null): State | undefined {
       if (code === codes.eof) return nok(code)
-      if (code === marker && (marker !== codes.dollarSign || (!oddBackslashRun && !inComment))) {
+      if (code === marker && (marker !== codes.dollarSign || (!oddBackslashRun && !(inComment && crossedLineEnding)))) {
         return effects.attempt(
           { partial: true, tokenize: tokenizeClosingFence },
           closed,
@@ -179,9 +180,12 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
       if (markdownLineEnding(code)) {
         // A trailing backslash escapes the line ending, not the next line's
         // first character, so the escape run ends here, and a TeX comment ends
-        // with the line.
+        // with the line. The comment exception covers only a closing fence on a
+        // later line, which is where the multi-line block can hide one; the
+        // same-line form keeps closing as it did before this flow spanned lines.
         oddBackslashRun = false
         inComment = false
+        crossedLineEnding = true
         // A paragraph-interruption check on the dollar flow must not consume the
         // line ending: that keeps the paragraph open across the line boundary,
         // and the document layer then counts the next line lazy for every
@@ -219,9 +223,10 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
     function valueStart(code: number | null): State | undefined {
       effects.enter('mathFlowValue')
       // An unescaped `%` opens a TeX comment wherever it is the first character
-      // of a value run, such as a line that starts inside the block.
+      // of a value run, such as a line that starts inside the block. The
+      // backslash construct reads neither this state nor the escape run.
       oddBackslashRun = code === codes.backslash
-      if (code === codes.percentSign) inComment = true
+      if (code === codes.percentSign && marker === codes.dollarSign) inComment = true
       effects.consume(code)
       if (code !== codes.backslash) return value
       verbPrefixIndex = 0
@@ -258,9 +263,8 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
         return afterBackslash
       }
       // An unescaped `%` starts a TeX comment that runs to the line ending, so
-      // a `$$` inside it closes nothing. The backslash construct ignores this
-      // state, as it has no upstream counterpart to keep in step with.
-      if (!escaped && code === codes.percentSign) inComment = true
+      // a `$$` inside it closes nothing.
+      if (!escaped && code === codes.percentSign && marker === codes.dollarSign) inComment = true
       effects.consume(code)
       return value
     }
