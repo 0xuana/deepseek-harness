@@ -131,6 +131,7 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
   const tokenize: Tokenizer = function (effects, ok, nok) {
     const self = this
     let oddBackslashRun = false
+    let inComment = false
     let sawClosingFenceSequence = false
     const tail = self.events.at(-1)
     const initialSize = tail?.[1].type === types.linePrefix
@@ -163,7 +164,7 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
 
     function content(code: number | null): State | undefined {
       if (code === codes.eof) return nok(code)
-      if (code === marker && (marker !== codes.dollarSign || !oddBackslashRun)) {
+      if (code === marker && (marker !== codes.dollarSign || (!oddBackslashRun && !inComment))) {
         return effects.attempt(
           { partial: true, tokenize: tokenizeClosingFence },
           closed,
@@ -172,8 +173,10 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
       }
       if (markdownLineEnding(code)) {
         // A trailing backslash escapes the line ending, not the next line's
-        // first character, so the escape run ends here.
+        // first character, so the escape run ends here, and a TeX comment ends
+        // with the line.
         oddBackslashRun = false
+        inComment = false
         // A paragraph-interruption check on the dollar flow must not consume the
         // line ending: that keeps the paragraph open across the line boundary,
         // and the document layer then counts the next line lazy for every
@@ -210,7 +213,10 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
 
     function valueStart(code: number | null): State | undefined {
       effects.enter('mathFlowValue')
+      // An unescaped `%` opens a TeX comment wherever it is the first character
+      // of a value run, such as a line that starts inside the block.
       oddBackslashRun = code === codes.backslash
+      if (code === codes.percentSign) inComment = true
       effects.consume(code)
       return value
     }
@@ -235,7 +241,11 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
         effects.exit('mathFlowValue')
         return content(code)
       }
+      const escaped = oddBackslashRun
       oddBackslashRun = code === codes.backslash ? !oddBackslashRun : false
+      // An unescaped `%` starts a TeX comment that runs to the line ending, so
+      // a `$$` inside it closes nothing.
+      if (!escaped && code === codes.percentSign) inComment = true
       effects.consume(code)
       return value
     }

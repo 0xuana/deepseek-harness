@@ -569,6 +569,32 @@ describe('MarkdownText', () => {
     expect(container.querySelector('p')?.textContent).toBe('After')
   })
 
+  it('ignores a closing fence inside a TeX comment', () => {
+    const { container } = render(<MarkdownText text={'$$\n\\frac{1}{ % keep $$\n2}\n$$\n\nAfter'} />)
+
+    expect(container.querySelectorAll('.katex-display')).toHaveLength(1)
+    expect(container.querySelector('.katex-display annotation')?.textContent)
+      .toBe('\\frac{1}{ % keep $$\n2}')
+    expect(container.querySelector('.katex-error')).toBeNull()
+    expect(container.querySelectorAll('p')).toHaveLength(1)
+    expect(container.querySelector('p')?.textContent).toBe('After')
+  })
+
+  it('keeps a TeX comment from closing the block wherever it starts', () => {
+    for (const source of [
+      '$$\n% keep $$\n\\frac12\n$$\n\nAfter',
+      '$$% keep $$\n\\frac12\n$$\n\nAfter',
+    ]) {
+      const rendered = render(<MarkdownText text={source} />)
+
+      expect(rendered.container.querySelectorAll('.katex-display')).toHaveLength(1)
+      expect(rendered.container.querySelector('.katex-error')).toBeNull()
+      expect(rendered.container.querySelectorAll('p')).toHaveLength(1)
+      expect(rendered.container.querySelector('p')?.textContent).toBe('After')
+      rendered.unmount()
+    }
+  })
+
   it('ends the backslash escape run at a line ending', () => {
     const { container } = render(<MarkdownText text={'$$a$b\\\n\n$$y$$'} />)
 
