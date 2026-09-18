@@ -146,6 +146,7 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
     let sawClosingFenceSequence = false
     let verbPrefixIndex = 0
     let verbatimDelimiter: number | null = null
+    let verbatimStarred = false
     const tail = self.events.at(-1)
     const initialSize = tail?.[1].type === types.linePrefix
       ? tail[2].sliceSerialize(tail[1], true).length
@@ -243,7 +244,7 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
       // of a value run, such as a line that starts inside the block. The
       // backslash construct reads neither this state nor the escape run.
       oddBackslashRun = code === codes.backslash
-      if (code === codes.percentSign && marker === codes.dollarSign) {
+      if (code === codes.percentSign && marker === codes.dollarSign && !inComment) {
         inComment = true
         commentHasContent = false
       } else if (inComment) {
@@ -288,8 +289,9 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
       // An unescaped `%` starts a TeX comment that runs to the line ending, so
       // a `$$` inside it closes nothing. A `%` the fence follows immediately
       // holds no comment text, which is how writers use it mid-formula
-      // (`95%$$`); only a comment with text suppresses the close.
-      if (!escaped && code === codes.percentSign && marker === codes.dollarSign) {
+      // (`95%$$`); only a comment with text suppresses the close, and a `%`
+      // inside an open comment is comment text like any other character.
+      if (!escaped && code === codes.percentSign && marker === codes.dollarSign && !inComment) {
         inComment = true
         commentHasContent = false
       } else if (inComment) {
@@ -312,15 +314,21 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
     /** `\verb` takes at most one `*`, then the delimiter it repeats. */
     function verbatimStar(code: number | null): State | undefined {
       verbPrefixIndex = 0
-      if (code !== codes.asterisk) return verbatimDelimiterStart(code)
+      if (code !== codes.asterisk) {
+        verbatimStarred = false
+        return verbatimDelimiterStart(code)
+      }
       effects.consume(code)
+      verbatimStarred = true
       return verbatimDelimiterStart
     }
 
     function verbatimDelimiterStart(code: number | null): State | undefined {
-      // A letter continues the control word (`\verbatim`), so it is no
-      // delimiter; `\verb` at a line ending has no delimiter at all.
-      if (code === null || markdownLineEnding(code) || isAsciiLetter(code)) return value(code)
+      // In the plain form a letter continues the control word (`\verbatim`),
+      // so it is no delimiter; the starred form repeats any character. `\verb`
+      // at a line ending has no delimiter at all.
+      if (code === null || markdownLineEnding(code)) return value(code)
+      if (!verbatimStarred && isAsciiLetter(code)) return value(code)
       verbatimDelimiter = code
       oddBackslashRun = false
       effects.consume(code)

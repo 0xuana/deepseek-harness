@@ -619,7 +619,7 @@ describe('MarkdownText', () => {
   })
 
   it('keeps an escaped percent and malformed verbatim forms inside one block', () => {
-    for (const source of ['$$a\\%b$$', '$$\\verb*|%|$$', '$$\\verb', '$$\\verb|abc']) {
+    for (const source of ['$$a\\%b$$', '$$\\verb*|%|$$']) {
       const rendered = render(<MarkdownText text={source} />)
 
       expect(rendered.container.querySelectorAll('.katex-display')).toHaveLength(1)
@@ -630,12 +630,40 @@ describe('MarkdownText', () => {
     expect(escaped.container.querySelector('.katex-display annotation')?.textContent).toBe('a\\%b')
     escaped.unmount()
 
+    // An unterminated `\verb` at EOF leaves the flow to upstream mathFlow,
+    // whose fence meta the renderer drops, so the node's value is empty.
+    for (const source of ['$$\\verb', '$$\\verb|abc']) {
+      const rendered = render(<MarkdownText text={source} />)
+
+      expect(rendered.container.querySelector('.katex-display annotation')?.textContent).toBe('')
+      rendered.unmount()
+    }
+
     for (const source of ['$$\\verb\n$$', '$$\\verb|abc\ndef$$']) {
       const rendered = render(<MarkdownText text={source} />)
 
       expect(rendered.container.querySelector('.katex-error')).not.toBeNull()
       rendered.unmount()
     }
+  })
+
+  it('treats a percent inside a comment as comment text', () => {
+    for (const source of [
+      '$$\n% 100%$$\n$$',
+      '$$\n\\frac{1}{ % accuracy 95%$$\n2}\n$$\n\nAfter',
+    ]) {
+      const rendered = render(<MarkdownText text={source} />)
+
+      expect(rendered.container.querySelectorAll('.katex-display')).toHaveLength(1)
+      expect(rendered.container.querySelector('.katex-error')).toBeNull()
+      rendered.unmount()
+    }
+  })
+
+  it('repeats any delimiter character in the starred verbatim form', () => {
+    const { container } = render(<MarkdownText text={'$$\\verb*a$$a$$'} />)
+
+    expect(container.querySelector('.katex-display annotation')?.textContent).toBe('\\verb*a$$a')
   })
 
   it('keeps a control word and an unterminated verbatim inside their formulas', () => {
