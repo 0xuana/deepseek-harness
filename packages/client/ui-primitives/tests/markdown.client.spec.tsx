@@ -626,7 +626,18 @@ describe('MarkdownText', () => {
     for (const source of ['$$\\verb**abc*$$\n\nAfter\n\n$$\ny\n$$', '$$x % \\verb$abc$$\n\nAfter\n\n$$\ny\n$$']) {
       const rendered = render(<MarkdownText text={source} />)
 
-      expect(rendered.container.querySelectorAll('.katex-display, .katex-error')).toHaveLength(2)
+      expect(rendered.container.querySelectorAll('.katex-display')).toHaveLength(2)
+      expect(rendered.container.querySelector('.katex-error')).toBeNull()
+      expect(rendered.container.querySelector('p')?.textContent).toBe('After')
+      rendered.unmount()
+    }
+  })
+
+  it('reads the character after verb as that command delimiter, not a fence', () => {
+    for (const source of ['$$\n\\verb$$\nx\n$$\n\nAfter', '$$\n\\verb*$$\nx\n$$\n\nAfter']) {
+      const rendered = render(<MarkdownText text={source} />)
+
+      expect(rendered.container.querySelectorAll('.katex-display')).toHaveLength(1)
       expect(rendered.container.querySelector('p')?.textContent).toBe('After')
       rendered.unmount()
     }
@@ -643,6 +654,19 @@ describe('MarkdownText', () => {
       expect(rendered.container.querySelector('.katex-error')).toBeNull()
       rendered.unmount()
     }
+  })
+
+  it('keeps a fence that fails inside a comment and a trailing lone dollar parseable', () => {
+    const commentFail = render(<MarkdownText text={'$$x%$$ y'} />)
+    expect(commentFail.container.querySelector('.katex-display')).toBeNull()
+    expect(commentFail.container.querySelector('annotation')?.textContent).toBe('x%')
+    expect(commentFail.container.textContent).toContain('y')
+    commentFail.unmount()
+
+    const lone = render(<MarkdownText text={'$$a$'} />)
+    expect(lone.container.querySelectorAll('.katex')).toHaveLength(0)
+    expect(lone.container.querySelector('p')?.textContent).toBe('$$a$')
+    lone.unmount()
   })
 
   it('closes a block at a fence behind a whitespace-only comment', () => {

@@ -15,6 +15,11 @@ import type { Construct, Extension, Previous, State, Tokenizer } from 'micromark
 
 // oxlint-disable typescript/no-this-alias -- micromark binds tokenizer context only on the outer callback.
 
+/** Prefixes whose following character is a `\verb` delimiter, not a fence. */
+const VERB_DELIMITER_PREFIXES = ['\\verb', '\\verb*'] as const
+
+/** Longest prefix above, in code units. */
+const VERB_DELIMITER_TAIL = 6
 
 const previousBackslash: Previous = function (code) {
   if (code !== codes.backslash) return true
@@ -136,6 +141,7 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
     let commentHasContent = false
     let crossedLineEnding = false
     let sawClosingFenceSequence = false
+    let consumedTail = ''
     let failedClose = false
     const tail = self.events.at(-1)
     const initialSize = tail?.[1].type === types.linePrefix
@@ -208,7 +214,15 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
      */
     function closingFenceAllowed(): boolean {
       if (marker !== codes.dollarSign) return true
+      // The character after `\verb` or `\verb*` is that command's delimiter,
+      // so a fence there belongs to the formula.
+      if (VERB_DELIMITER_PREFIXES.some(prefix => consumedTail.endsWith(prefix))) return false
       return !oddBackslashRun && !(inComment && commentHasContent && crossedLineEnding)
+    }
+
+    /** Record one consumed code unit so a fence can be told from a delimiter. */
+    function rememberConsumed(code: number): void {
+      consumedTail = `${consumedTail}${String.fromCharCode(code)}`.slice(-VERB_DELIMITER_TAIL)
     }
 
     function afterClosingFenceAttempt(code: number | null): State | undefined {
@@ -247,6 +261,7 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
       } else if (inComment && !markdownSpace(code)) {
         commentHasContent = true
       }
+      rememberConsumed(code)
       effects.consume(code)
       return value
     }
@@ -255,6 +270,7 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
       effects.enter('mathFlowValue')
       oddBackslashRun = false
       if (inComment) commentHasContent = true
+      rememberConsumed(code)
       effects.consume(code)
       return valueAfterMarker
     }
@@ -286,6 +302,7 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
       } else if (inComment && !markdownSpace(code)) {
         commentHasContent = true
       }
+      rememberConsumed(code)
       effects.consume(code)
       return value
     }
