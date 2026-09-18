@@ -592,10 +592,11 @@ describe('MarkdownText', () => {
     for (const source of ['$$\\text{acc} =\n95%$$', '$$\\text{acc} =\n95 %$$']) {
       const rendered = render(<MarkdownText text={source} />)
 
+      const annotation = rendered.container.querySelector('.katex-display annotation')?.textContent ?? ''
       expect(rendered.container.querySelectorAll('.katex-display')).toHaveLength(1)
       expect(rendered.container.querySelector('.katex-error')).toBeNull()
-      expect(rendered.container.querySelector('.katex-display annotation')?.textContent)
-        .toContain('95')
+      expect(annotation).toContain('95')
+      expect(annotation).toMatch(/^\\text\{acc\} =/)
       rendered.unmount()
     }
   })
