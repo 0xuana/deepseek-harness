@@ -15,6 +15,9 @@ import type { Construct, Extension, Previous, State, Tokenizer } from 'micromark
 
 // oxlint-disable typescript/no-this-alias -- micromark binds tokenizer context only on the outer callback.
 
+/** Letters that follow a backslash to open TeX's `\verb` verbatim form. */
+const VERB_NAME = 'verb'
+
 const previousBackslash: Previous = function (code) {
   if (code !== codes.backslash) return true
   const tail = this.events.at(-1)
@@ -133,6 +136,8 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
     let oddBackslashRun = false
     let inComment = false
     let sawClosingFenceSequence = false
+    let verbPrefixIndex = 0
+    let verbatimDelimiter: number | null = null
     const tail = self.events.at(-1)
     const initialSize = tail?.[1].type === types.linePrefix
       ? tail[2].sliceSerialize(tail[1], true).length
@@ -218,7 +223,9 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
       oddBackslashRun = code === codes.backslash
       if (code === codes.percentSign) inComment = true
       effects.consume(code)
-      return value
+      if (code !== codes.backslash) return value
+      verbPrefixIndex = 0
+      return afterBackslash
     }
 
     function markerValueStart(code: number | null): State | undefined {
@@ -242,11 +249,54 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number)
         return content(code)
       }
       const escaped = oddBackslashRun
-      oddBackslashRun = code === codes.backslash ? !oddBackslashRun : false
+      oddBackslashRun = code === codes.backslash ? !escaped : false
+      if (code === codes.backslash && !escaped) {
+        // A `\verb<delimiter>…<delimiter>` region is verbatim, so a `%` inside
+        // it is content rather than a comment.
+        effects.consume(code)
+        verbPrefixIndex = 0
+        return afterBackslash
+      }
       // An unescaped `%` starts a TeX comment that runs to the line ending, so
-      // a `$$` inside it closes nothing.
+      // a `$$` inside it closes nothing. The backslash construct ignores this
+      // state, as it has no upstream counterpart to keep in step with.
       if (!escaped && code === codes.percentSign) inComment = true
       effects.consume(code)
+      return value
+    }
+
+    function afterBackslash(code: number | null): State | undefined {
+      if (code === VERB_NAME.charCodeAt(verbPrefixIndex)) {
+        effects.consume(code)
+        oddBackslashRun = false
+        verbPrefixIndex += 1
+        return verbPrefixIndex === VERB_NAME.length ? verbatimDelimiterStart : afterBackslash
+      }
+      return value(code)
+    }
+
+    function verbatimDelimiterStart(code: number | null): State | undefined {
+      verbPrefixIndex = 0
+      if (code === codes.eof || markdownLineEnding(code)) return value(code)
+      if (code === codes.asterisk) {
+        effects.consume(code)
+        return verbatimDelimiterStart
+      }
+      verbatimDelimiter = code
+      oddBackslashRun = false
+      effects.consume(code)
+      return verbatimContent
+    }
+
+    function verbatimContent(code: number | null): State | undefined {
+      if (code === codes.eof || markdownLineEnding(code)) {
+        verbatimDelimiter = null
+        return value(code)
+      }
+      const closes = code === verbatimDelimiter
+      effects.consume(code)
+      if (!closes) return verbatimContent
+      verbatimDelimiter = null
       return value
     }
 

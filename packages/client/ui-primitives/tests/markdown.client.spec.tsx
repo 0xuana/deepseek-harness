@@ -569,18 +569,24 @@ describe('MarkdownText', () => {
     expect(container.querySelector('p')?.textContent).toBe('After')
   })
 
-  it('ignores a closing fence inside a TeX comment', () => {
-    const { container } = render(<MarkdownText text={'$$\n\\frac{1}{ % keep $$\n2}\n$$\n\nAfter'} />)
+  it('ignores a closing fence inside a TeX comment wherever the comment starts', () => {
+    for (const source of [
+      '$$\n\\frac{1}{ % keep $$\n2}\n$$\n\nAfter',
+      '$$\n% keep $$\n\\frac12\n$$\n\nAfter',
+      '$$% keep $$\n\\frac12\n$$\n\nAfter',
+    ]) {
+      const rendered = render(<MarkdownText text={source} />)
 
-    expect(container.querySelectorAll('.katex-display')).toHaveLength(1)
-    expect(container.querySelector('.katex-display annotation')?.textContent)
-      .toBe('\\frac{1}{ % keep $$\n2}')
-    expect(container.querySelector('.katex-error')).toBeNull()
-    expect(container.querySelectorAll('p')).toHaveLength(1)
-    expect(container.querySelector('p')?.textContent).toBe('After')
-  })
+      expect(rendered.container.querySelectorAll('.katex-display')).toHaveLength(1)
+      expect(rendered.container.querySelector('.katex-error')).toBeNull()
+      expect(rendered.container.querySelectorAll('p')).toHaveLength(1)
+      expect(rendered.container.querySelector('p')?.textContent).toBe('After')
+      expect(rendered.container.querySelector('.katex-display annotation')?.textContent)
+        .toBe('\\frac{1}{ % keep $$\n2}')
+      rendered.unmount()
+      break
+    }
 
-  it('keeps a TeX comment from closing the block wherever it starts', () => {
     for (const source of [
       '$$\n% keep $$\n\\frac12\n$$\n\nAfter',
       '$$% keep $$\n\\frac12\n$$\n\nAfter',
@@ -591,6 +597,35 @@ describe('MarkdownText', () => {
       expect(rendered.container.querySelector('.katex-error')).toBeNull()
       expect(rendered.container.querySelectorAll('p')).toHaveLength(1)
       expect(rendered.container.querySelector('p')?.textContent).toBe('After')
+      rendered.unmount()
+    }
+  })
+
+  it('treats a verbatim region as content rather than a comment', () => {
+    const { container } = render(<MarkdownText text={'$$\\verb|%|$$\n\nAfter\n\n$$\ny\n$$'} />)
+
+    expect(container.querySelectorAll('.katex-display')).toHaveLength(2)
+    expect(container.querySelector('.katex-error')).toBeNull()
+    expect(container.querySelectorAll('p')).toHaveLength(1)
+    expect(container.querySelector('p')?.textContent).toBe('After')
+  })
+
+  it('keeps an escaped percent and malformed verbatim forms inside one block', () => {
+    for (const source of ['$$a\\%b$$', '$$\\verb*|%|$$', '$$\\verb', '$$\\verb|abc']) {
+      const rendered = render(<MarkdownText text={source} />)
+
+      expect(rendered.container.querySelectorAll('.katex-display')).toHaveLength(1)
+      rendered.unmount()
+    }
+
+    const escaped = render(<MarkdownText text={'$$a\\%b$$'} />)
+    expect(escaped.container.querySelector('.katex-display annotation')?.textContent).toBe('a\\%b')
+    escaped.unmount()
+
+    for (const source of ['$$\\verb\n$$', '$$\\verb|abc\ndef$$']) {
+      const rendered = render(<MarkdownText text={source} />)
+
+      expect(rendered.container.querySelector('.katex-error')).not.toBeNull()
       rendered.unmount()
     }
   })
