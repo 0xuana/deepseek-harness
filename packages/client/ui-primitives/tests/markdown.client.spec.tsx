@@ -656,7 +656,7 @@ describe('MarkdownText', () => {
 
     expect(container.querySelectorAll('p')).toHaveLength(0)
     expect(container.querySelector('.katex-error')?.textContent).toContain('c+d$$ trailing')
-    expect(container.textContent).toContain('After')
+    expect(container.querySelector('.katex-error')?.textContent).toContain('After')
   })
 
   it('does not read a comment ending in verb as a verbatim delimiter', () => {
