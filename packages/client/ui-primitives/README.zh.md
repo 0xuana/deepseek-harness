@@ -158,6 +158,7 @@ kind: "package-library"
 - **`Pill` 与 `Input` 没有设计来源**：两个原子组件均自行定义；与其相似的侧边栏搜索字段和视图标签条由消费方组合，不是这些原子组件。
 - **`StateDot` 没有 `Active` 变体**：支持的状态为 done、warning、ongoing、error 和 idle。
 - **面向用户的文案必须由渲染点提供**：这些原子组件是 zero-Cordis 的，拿不到 `ctx.locale`；各功能必须通过原子组件的带类型 prop 提供完整本地化 label（见[决策](../../../.agents/notes/implemented/architecture/2026-08-23-locale-owned-client-ui-copy.zh.md)）。
+- **显示数学保留若干回退形状**：闭合 `$$` 所在行其后还有文本、块未闭合、以及围栏位于带文本的 `%` 注释或未闭合 `\verb` 区域内部时，块交由上游 flow 处理——它会丢弃开围栏行，并在下一个独占行 `$$` 或文件结尾结束；开围栏行含孤立 `$` 的多行块需要与前文空一行，容器内多行块的续行必须保持条目缩进。`$$` 围栏 meta 不再生效；解析器只读取围栏之前的六个字符，因此紧跟 `\verb` 或 `\verb*` 的 `$` 是该命令的分隔符而不是闭合围栏（见[决策](../../../.agents/notes/implemented/bug-fix/2026-09-17-multiline-display-dollar-math.zh.md)）。
 - **`TerminalBlock` 不是终端模拟器**：它渲染已结束或仍在运行的命令输出，而不是交互式会话：SGR 颜色、回车、退格、行内擦除、制表位与字符宽度会被遵循；绝对光标定位、清屏与备用屏幕序列会被剥离。
 
 <a id="dev-note"></a>
