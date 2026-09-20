@@ -2,7 +2,7 @@ version: 1
 scenario: fs-edit
 profile: headless
 composition: default
-recording: live
+recording: authored
 header:
   class: default
 workspace:
