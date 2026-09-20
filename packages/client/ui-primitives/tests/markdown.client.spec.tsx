@@ -651,6 +651,14 @@ describe('MarkdownText', () => {
     unterminated.unmount()
   })
 
+  it('leaves a later-line trailing fence to upstream, which takes the following prose', () => {
+    const { container } = render(<MarkdownText text={'$$a+b\nc+d$$ trailing\n\nAfter'} />)
+
+    expect(container.querySelectorAll('p')).toHaveLength(0)
+    expect(container.querySelector('.katex-error')?.textContent).toContain('c+d$$ trailing')
+    expect(container.textContent).toContain('After')
+  })
+
   it('does not read a comment ending in verb as a verbatim delimiter', () => {
     const { container } = render(<MarkdownText text={'$$x % \\verb$$\n\nAfter\n\n$$\ny\n$$'} />)
 
