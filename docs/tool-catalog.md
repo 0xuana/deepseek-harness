@@ -1342,15 +1342,15 @@ Update the exact current goal revision. edit, pause, and resume require a direct
     },
     "objective": {
       "type": "string",
-      "description": "Replacement objective; valid only with action edit."
+      "description": "Replacement objective for action edit; ignored otherwise."
     },
     "max_goal_rounds": {
       "type": "number",
-      "description": "Replacement cap; valid only with action edit."
+      "description": "Replacement cap for action edit; ignored otherwise."
     },
     "blocked_reason": {
       "type": "string",
-      "description": "Concrete blocking condition; required only with action blocked."
+      "description": "Concrete blocking condition required for action blocked; ignored otherwise."
     }
   },
   "required": [

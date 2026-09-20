@@ -204,11 +204,11 @@ interface ToolArgsMap {
     revision: number;
     /** edit | pause | resume | complete | blocked */
     action: "edit" | "pause" | "resume" | "complete" | "blocked";
-    /** Replacement objective; valid only with action edit. */
+    /** Replacement objective for action edit; ignored otherwise. */
     objective?: string;
-    /** Replacement cap; valid only with action edit. */
+    /** Replacement cap for action edit; ignored otherwise. */
     max_goal_rounds?: number;
-    /** Concrete blocking condition; required only with action blocked. */
+    /** Concrete blocking condition required for action blocked; ignored otherwise. */
     blocked_reason?: string;
   } & Record<string, JsonValue>;
   /** Fetch the content of a specific HTTP(S) URL and return it decoded to text. */

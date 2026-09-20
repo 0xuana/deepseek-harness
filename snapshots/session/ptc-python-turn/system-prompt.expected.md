@@ -423,11 +423,11 @@ class UpdateGoalArgs(TypedDict):
     revision: float
     # edit | pause | resume | complete | blocked
     action: Literal["edit", "pause", "resume", "complete", "blocked"]
-    # Replacement objective; valid only with action edit.
+    # Replacement objective for action edit; ignored otherwise.
     objective: NotRequired[str]
-    # Replacement cap; valid only with action edit.
+    # Replacement cap for action edit; ignored otherwise.
     max_goal_rounds: NotRequired[float]
-    # Concrete blocking condition; required only with action blocked.
+    # Concrete blocking condition required for action blocked; ignored otherwise.
     blocked_reason: NotRequired[str]
     # Additional keys beyond those declared are allowed.
 
