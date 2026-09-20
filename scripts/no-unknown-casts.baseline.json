@@ -481,10 +481,6 @@
   "packages/client/ui-agent-preset/tests/section-store.client.spec.ts": {
     "23e04af2a900d7a905ff7657de842e9833384a2d4c4afba33964477e43d8ba52": 1
   },
-  "packages/client/ui-agent-preset/tests/section.client.spec.tsx": {
-    "4cc9284f9e4d9df997ed042df717f143f3763130fdfb9e142226da4b5b4c60e6": 1,
-    "67694f8f44eb8347cb38c39d368f4f0ce1b78bd33a6a57a55cf4664f3eaa7f98": 1
-  },
   "packages/client/ui-agent-preset/tests/settings-store.client.spec.ts": {
     "c0e852e6b0e2a8a040b65723f8ab1d650d9cb06c26be7f3a0709ddb9f7525595": 1,
     "d6a04d954aef7a8edd403910851015c0ce1597f6f300292b5158a8bf993fc1d8": 1
@@ -2131,9 +2127,7 @@
     "b50b6842b3565ea7f1441afb3214ab0ccf027df0e44bb485005935849c46f8ea": 1
   },
   "packages/subagent/subagent/src/catalog.ts": {
-    "29a67bf48723006b65c652af8a0ff30a4385bb14d651d91ca3059e1ddcb44fcf": 1,
     "3e704e331ed2fc5d4c0855e2455b31b82924c525f2e267416e393cdbd36c251b": 1,
-    "c3a7c8abe19131a8d98f4fb6a495b590e67a56cbf2e741caccfe730f8261edb0": 1,
     "fdc5fcade0ba1abbc426ccccb07a1ad4998253799b8561815047d95178441cdf": 1
   },
   "packages/subagent/subagent/src/internal.ts": {
