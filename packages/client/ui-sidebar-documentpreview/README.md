@@ -48,6 +48,8 @@ After all text pages load, Markdown images use the authenticated `/api/file` rou
 
 Developer tools selects the HTML preview policy in both Web and desktop. The renderer receives `interactivePreview` from plugin assembly. Off uses a DOMPurify-sanitized complete static document in an iframe with no sandbox permissions: CSP blocks scripts, external resources, connections, forms, and nested frames; all `href` and `xlink:href` attributes, refresh directives, and declarative shadow roots are removed before reparsing. Inline styles and data images remain visible, and related files are not read. On uses the scripted Blob preview described below. A mode change unmounts the previous frame and aborts its pending related-file reads. Static preview releases CSS/JS resource subscriptions and keeps the root file watched. Other document formats retain their own policies.
 
+Both HTML modes set the initial iframe name to `dsh-sidebar-html-<tab-id>` for Desktop shortcut routing. This correlation does not grant the preview access to the parent document.
+
 The body reads its record, navigation and lifetime through `useTabInfo().tab`. `useResource<'file'>(tab.contentId)` supplies metadata; ordinary inject callbacks supply content reads:
 
 - The resource snapshot contains only `status`, `value`, and `failure`; `value` is `WorkspaceFileStat` metadata. Content reads do not wait for the first metadata frame once the provider is available. Observation failures take precedence over Preview's change notice; loaded content remains while metadata is unavailable.
@@ -67,6 +69,8 @@ Initial reads, additional pages, and HTML/PDF/image preparation share the ongoin
 ## Excel preview
 
 Open `.xlsx`, `.xls`, `.csv`, and `.tsv` directly in the browser with worksheet tabs, cell selection, copying, and a read-only formula bar. XLSX retains fonts, solid fills, borders, number formats, rich text, merged cells, row and column sizes, hidden rows/columns/sheets, and frozen headings. XLS retains saved values, formulas, number formats, merges, and available row/column metadata; fonts, borders, and frozen panes are unsupported. Workbooks display saved formula results without recalculating; missing results remain blank, and a compact formula-bar warning marks workbooks whose displayed results may be incomplete or inaccurate. Spreadsheet preview does not call the Office conversion service.
+
+XLSX preview omits DrawingML parts from an in-memory copy before parsing and ignores worksheet drawing references. The original file and worksheet XML remain unchanged. A notice above the table lists detected charts, images, shapes, and conditional formatting that are not displayed, and recommends opening the workbook in a system application. Files without these detected features have no notice; formula warnings remain separate.
 
 CSV and TSV default to the spreadsheet viewer and also offer Plain text. Commas and tabs delimit their fields respectively; quoted separators, escaped quotes, multiline fields, empty fields, and unequal row lengths are supported. The first row remains data. Values remain literal strings, including leading zeros, dates, booleans, and formula-looking text. Text files accept UTF-8 or BOM-marked UTF-16; invalid encoding receives conversion guidance. Malformed quoted fields fail the table preview rather than silently dropping data.
 
@@ -107,6 +111,8 @@ A yellow rounded-triangle warning appears before Reload in the document toolbar 
 Office registration, loading, caching, and font notices live in `src/client/office/`. The injected Office face writes converted PDF bytes, font metadata, and failures through the declared store actions. The Office body triggers loading, binds cancellation to its lifecycle, and declares a nested PDF slot that reuses the lazy PDF body and its tab viewing state. The keyed `sidebar.right.tab.document.action` slot places renderer controls before Reload. The Office action shares the body’s store and reads only the current revision’s font metadata. Registration remains available without the Host renderer; optional `remote.officeToPdf` and `remote.workspaceFiles` injections supply conversion and freshness callbacks, and their removal restores unavailable guidance. Registrations and tab retention follow effect lifetimes. The [conversion service](../../document/office-to-pdf/README.md) owns the Host Remote methods, mounted by `api/remotes`.
 
 The Office Remote returns converted PDFs as native `Uint8Array` values through Connection's multipart binary transport. Renderers borrow retained bytes read-only and copy them before Worker transfer.
+
+The page refresh shortcut reuses the selected preview’s reload operation, including its request retirement and scroll retention. The header reload tooltip and ARIA combination follow the effective shortcut binding.
 
 </details>
 
