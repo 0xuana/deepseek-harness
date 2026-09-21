@@ -62,9 +62,9 @@ interface ToolArgsMap {
     workdir?: string;
     /** Run in the background and return a job id immediately (collect with job_output, stop with job_kill). No timeout applies. */
     run_in_background?: boolean;
-    /** The wider sandbox mode this command needs. Only valid as a one-shot retry of a command the sandbox just denied; requires justification and user approval. */
+    /** Requested sandbox mode. Repeating the effective mode needs no approval; narrower modes are rejected. A wider mode is only valid for a one-shot retry after this exact command was denied and requires a non-empty justification and user approval. */
     sandbox_permissions?: "workspace-write" | "danger-full-access";
-    /** Required with sandbox_permissions: one sentence for the user explaining why this exact command needs the wider access. */
+    /** Non-empty, one-sentence reason for a different sandbox mode. May be omitted or blank when sandbox_permissions is omitted or repeats the effective mode; a non-empty reason requires sandbox_permissions. */
     justification?: string;
   } & Record<string, JsonValue>;
   /** Create one persisted same-session completion goal when the current direct human request is a long-running objective that should continue across autonomous goal rounds. You may infer that intent without requiring the user to say "create a goal". Do not use this for trivial single-turn work. Execution rejects non-human and subagent authority. */
@@ -84,9 +84,9 @@ interface ToolArgsMap {
     new_string: string;
     /** Replace all matches. Defaults to false; when false, old_string must appear exactly once. */
     replace_all?: boolean;
-    /** The wider sandbox mode this file operation needs. Only valid as a one-shot retry of an operation the sandbox just denied; requires justification and user approval. */
+    /** Requested sandbox mode. Repeating the effective mode needs no approval; narrower modes are rejected. A wider mode is only valid for a one-shot retry after this exact file operation was denied and requires a non-empty justification and user approval. */
     sandbox_permissions?: "workspace-write" | "danger-full-access";
-    /** Required with sandbox_permissions: one sentence for the user explaining why this exact file operation needs the wider access. */
+    /** Non-empty, one-sentence reason for a different sandbox mode. May be omitted or blank when sandbox_permissions is omitted or repeats the effective mode; a non-empty reason requires sandbox_permissions. */
     justification?: string;
   } & Record<string, JsonValue>;
   /** Use only in plan mode. Present your plan for the user's review and, on approval, leave plan mode. Send the COMPLETE plan as markdown, starting with a # heading that names it. The user may approve (carry out the plan from your next step) or keep planning — their feedback comes back in the tool result; revise and present again. */
@@ -250,9 +250,9 @@ interface ToolArgsMap {
     file_path: string;
     /** Full UTF-8 text content to write. */
     content: string;
-    /** The wider sandbox mode this file operation needs. Only valid as a one-shot retry of an operation the sandbox just denied; requires justification and user approval. */
+    /** Requested sandbox mode. Repeating the effective mode needs no approval; narrower modes are rejected. A wider mode is only valid for a one-shot retry after this exact file operation was denied and requires a non-empty justification and user approval. */
     sandbox_permissions?: "workspace-write" | "danger-full-access";
-    /** Required with sandbox_permissions: one sentence for the user explaining why this exact file operation needs the wider access. */
+    /** Non-empty, one-sentence reason for a different sandbox mode. May be omitted or blank when sandbox_permissions is omitted or repeats the effective mode; a non-empty reason requires sandbox_permissions. */
     justification?: string;
   } & Record<string, JsonValue>;
 }

@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-20-unambiguous-tool-arguments.md
-2026-09-20-unambiguous-tool-arguments.md: e671603648777e0576e294ddef1e1c9061cf2052
-2026-09-20-unambiguous-tool-arguments.zh.md: 325b3dc098763d13b5a3ab48db153264d03f8d1f
+2026-09-20-unambiguous-tool-arguments.md: 7e2a5111c3de45dfe61e1db67292c84a690915ff
+2026-09-20-unambiguous-tool-arguments.zh.md: 6887d9feb8b51fdf7e2b648cc8258dbee37d541d

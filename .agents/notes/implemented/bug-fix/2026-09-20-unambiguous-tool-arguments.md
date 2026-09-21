@@ -6,7 +6,7 @@ English | [中文](2026-09-20-unambiguous-tool-arguments.zh.md)
 
 ## Problem
 
-Models can populate optional fields that do not affect the requested operation. Rejecting these calls adds retries without protecting any state. A general OpenAI strict-schema adapter requires separate schema projection and argument restoration; these local compatibility rules do not implement that adapter.
+Models can populate optional fields that do not affect the requested operation. Rejecting these calls adds retries without protecting any state.
 
 ## Decision
 

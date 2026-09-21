@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterAll, afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
@@ -29,6 +29,17 @@ declare module '@deepseek-ai/dsh-llm' {
 }
 
 const testToolSignal = new AbortController().signal
+const testContexts: Context[] = []
+
+function testContext(): Context {
+  const ctx = new Context()
+  testContexts.push(ctx)
+  return ctx
+}
+
+afterEach(async () => {
+  for (const ctx of testContexts.splice(0).reverse()) await ctx.fiber.dispose()
+})
 
 interface StubAgent {
   readonly agent: Agent
@@ -38,6 +49,7 @@ interface StubAgent {
 }
 
 const isolatedInboxCtx = new Context()
+afterAll(async () => { await isolatedInboxCtx.fiber.dispose() })
 await isolatedInboxCtx.plugin(SessionStore)
 await isolatedInboxCtx.plugin(SessionProjectionRegistry)
 await isolatedInboxCtx.plugin(AgentRegistry)
@@ -98,7 +110,7 @@ function closeTurn(stub: StubAgent, turn: number): void {
 }
 
 async function harness(config: toolGoal.Config = {}) {
-  const ctx = new Context()
+  const ctx = testContext()
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
@@ -214,7 +226,7 @@ describe('goal tool registration and presentation', () => {
   })
 
   it('fails invalid direct config before registering anything', async () => {
-    const ctx = new Context()
+    const ctx = testContext()
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(ToolRuntime)
@@ -228,7 +240,7 @@ describe('goal tool registration and presentation', () => {
   })
 
   it('resolves the direct-apply default before registration', async () => {
-    const ctx = new Context()
+    const ctx = testContext()
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(ToolRuntime)
@@ -521,34 +533,30 @@ describe('goal tool state transitions', () => {
     'ignores populated fields unused by action %s without changing other goal values',
     async (action) => {
       const { ctx, root } = await harness()
-      try {
-        openTurn(root, { kind: 'user' })
-        const goal = ctx.goals.create(root.agent, { objective: 'keep this objective', maxGoalRounds: 4 })
-        if (action === 'resume') ctx.goals.disarm(root.agent)
-        const changesBefore = root.session.snapshotEvents().filter(event => event.type === 'goal/change').length
-        const result = await execute(ctx, 'update_goal', {
-          goal_id: goal.id,
-          revision: goal.revision,
-          action,
-          objective: 'replacement objective',
-          max_goal_rounds: 12,
-          blocked_reason: 'a concrete blocker',
-        }, root.agent)
-        const expected = {
-          objective: action === 'edit' ? 'replacement objective' : 'keep this objective',
-          maxGoalRounds: action === 'edit' ? 12 : 4,
-          revision: goal.revision + 1,
-          phase: action === 'pause' ? 'paused' : action === 'complete' || action === 'blocked' ? action : 'active',
-        }
-        expect(resultGoal(result)).toMatchObject(expected)
-        expect(ctx.goals.get(root.agent)).toMatchObject(expected)
-        expect(ctx.goals.get(root.agent)?.blockedReason).toEqual(action === 'blocked'
-          ? { code: 'model-reported', message: 'a concrete blocker' }
-          : undefined)
-        expect(root.session.snapshotEvents().filter(event => event.type === 'goal/change')).toHaveLength(changesBefore + 1)
-      } finally {
-        await ctx.fiber.dispose()
+      openTurn(root, { kind: 'user' })
+      const goal = ctx.goals.create(root.agent, { objective: 'keep this objective', maxGoalRounds: 4 })
+      if (action === 'resume') ctx.goals.disarm(root.agent)
+      const changesBefore = root.session.snapshotEvents().filter(event => event.type === 'goal/change').length
+      const result = await execute(ctx, 'update_goal', {
+        goal_id: goal.id,
+        revision: goal.revision,
+        action,
+        objective: 'replacement objective',
+        max_goal_rounds: 12,
+        blocked_reason: 'a concrete blocker',
+      }, root.agent)
+      const expected = {
+        objective: action === 'edit' ? 'replacement objective' : 'keep this objective',
+        maxGoalRounds: action === 'edit' ? 12 : 4,
+        revision: goal.revision + 1,
+        phase: action === 'pause' ? 'paused' : action === 'complete' || action === 'blocked' ? action : 'active',
       }
+      expect(resultGoal(result)).toMatchObject(expected)
+      expect(ctx.goals.get(root.agent)).toMatchObject(expected)
+      expect(ctx.goals.get(root.agent)?.blockedReason).toEqual(action === 'blocked'
+        ? { code: 'model-reported', message: 'a concrete blocker' }
+        : undefined)
+      expect(root.session.snapshotEvents().filter(event => event.type === 'goal/change')).toHaveLength(changesBefore + 1)
     },
   )
 

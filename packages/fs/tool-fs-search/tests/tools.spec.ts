@@ -1155,6 +1155,8 @@ describe('presentation', () => {
 
   it('grep titles carry the pattern, target, and include filter', () => {
     expect(presentGrepCall({ pattern: 'todo' })).toMatchObject({ card: 'generic', title: 'Grep todo', kind: 'search' })
+    expect(presentGrepCall({ pattern: 'todo', include: '' })).toEqual(presentGrepCall({ pattern: 'todo' }))
+    expect(presentGrepCall({ pattern: 'todo', path: 'src', include: '' }).title).toBe('Grep todo in src')
     expect(presentGrepCall({ pattern: 'todo', path: 'src', include: '*.ts' }).title).toBe('Grep todo in src (*.ts)')
   })
 
