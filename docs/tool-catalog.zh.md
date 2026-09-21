@@ -1349,15 +1349,15 @@ glob 和 grep 是无条件可用的发现工具，通过 ctx.subprocess spawn �
     },
     "objective": {
       "type": "string",
-      "description": "Replacement objective for action edit; ignored otherwise."
+      "description": "Replacement objective; valid only with action edit."
     },
     "max_goal_rounds": {
       "type": "number",
-      "description": "Replacement cap for action edit; ignored otherwise."
+      "description": "Replacement cap; valid only with action edit."
     },
     "blocked_reason": {
       "type": "string",
-      "description": "Concrete blocking condition required for action blocked; ignored otherwise."
+      "description": "Concrete blocking condition; required only with action blocked."
     }
   },
   "required": [

@@ -91,7 +91,7 @@
           },
           "sandbox_permissions": {
             "type": "string",
-            "description": "Requested sandbox mode. Repeating the effective mode needs no approval; narrower modes are rejected. A wider mode is only valid for a one-shot retry after this exact command was denied and requires a non-empty justification and user approval.",
+            "description": "The wider sandbox mode this command needs. Only valid as a one-shot retry of a command the sandbox just denied; requires justification and user approval.",
             "enum": [
               "workspace-write",
               "danger-full-access"
@@ -99,7 +99,7 @@
           },
           "justification": {
             "type": "string",
-            "description": "Non-empty, one-sentence reason for a different sandbox mode. May be omitted or blank when sandbox_permissions is omitted or repeats the effective mode; a non-empty reason requires sandbox_permissions."
+            "description": "Required with sandbox_permissions: one sentence for the user explaining why this exact command needs the wider access."
           }
         },
         "required": [
@@ -349,7 +349,7 @@
           },
           "sandbox_permissions": {
             "type": "string",
-            "description": "Requested sandbox mode. Repeating the effective mode needs no approval; narrower modes are rejected. A wider mode is only valid for a one-shot retry after this exact file operation was denied and requires a non-empty justification and user approval.",
+            "description": "The wider sandbox mode this file operation needs. Only valid as a one-shot retry of an operation the sandbox just denied; requires justification and user approval.",
             "enum": [
               "workspace-write",
               "danger-full-access"
@@ -357,7 +357,7 @@
           },
           "justification": {
             "type": "string",
-            "description": "Non-empty, one-sentence reason for a different sandbox mode. May be omitted or blank when sandbox_permissions is omitted or repeats the effective mode; a non-empty reason requires sandbox_permissions."
+            "description": "Required with sandbox_permissions: one sentence for the user explaining why this exact file operation needs the wider access."
           }
         },
         "required": [
@@ -745,15 +745,15 @@
           },
           "objective": {
             "type": "string",
-            "description": "Replacement objective for action edit; ignored otherwise."
+            "description": "Replacement objective; valid only with action edit."
           },
           "max_goal_rounds": {
             "type": "number",
-            "description": "Replacement cap for action edit; ignored otherwise."
+            "description": "Replacement cap; valid only with action edit."
           },
           "blocked_reason": {
             "type": "string",
-            "description": "Concrete blocking condition required for action blocked; ignored otherwise."
+            "description": "Concrete blocking condition; required only with action blocked."
           }
         },
         "required": [
@@ -888,7 +888,7 @@
           },
           "sandbox_permissions": {
             "type": "string",
-            "description": "Requested sandbox mode. Repeating the effective mode needs no approval; narrower modes are rejected. A wider mode is only valid for a one-shot retry after this exact file operation was denied and requires a non-empty justification and user approval.",
+            "description": "The wider sandbox mode this file operation needs. Only valid as a one-shot retry of an operation the sandbox just denied; requires justification and user approval.",
             "enum": [
               "workspace-write",
               "danger-full-access"
@@ -896,7 +896,7 @@
           },
           "justification": {
             "type": "string",
-            "description": "Non-empty, one-sentence reason for a different sandbox mode. May be omitted or blank when sandbox_permissions is omitted or repeats the effective mode; a non-empty reason requires sandbox_permissions."
+            "description": "Required with sandbox_permissions: one sentence for the user explaining why this exact file operation needs the wider access."
           }
         },
         "required": [

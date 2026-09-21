@@ -57,9 +57,9 @@ class BashArgs(TypedDict):
     workdir: NotRequired[str]
     # Run in the background and return a job id immediately (collect with job_output, stop with job_kill). No timeout applies.
     run_in_background: NotRequired[bool]
-    # Requested sandbox mode. Repeating the effective mode needs no approval; narrower modes are rejected. A wider mode is only valid for a one-shot retry after this exact command was denied and requires a non-empty justification and user approval.
+    # The wider sandbox mode this command needs. Only valid as a one-shot retry of a command the sandbox just denied; requires justification and user approval.
     sandbox_permissions: NotRequired[Literal["workspace-write", "danger-full-access"]]
-    # Non-empty, one-sentence reason for a different sandbox mode. May be omitted or blank when sandbox_permissions is omitted or repeats the effective mode; a non-empty reason requires sandbox_permissions.
+    # Required with sandbox_permissions: one sentence for the user explaining why this exact command needs the wider access.
     justification: NotRequired[str]
     # Additional keys beyond those declared are allowed.
 
@@ -130,9 +130,9 @@ class EditArgs(TypedDict):
     new_string: str
     # Replace all matches. Defaults to false; when false, old_string must appear exactly once.
     replace_all: NotRequired[bool]
-    # Requested sandbox mode. Repeating the effective mode needs no approval; narrower modes are rejected. A wider mode is only valid for a one-shot retry after this exact file operation was denied and requires a non-empty justification and user approval.
+    # The wider sandbox mode this file operation needs. Only valid as a one-shot retry of an operation the sandbox just denied; requires justification and user approval.
     sandbox_permissions: NotRequired[Literal["workspace-write", "danger-full-access"]]
-    # Non-empty, one-sentence reason for a different sandbox mode. May be omitted or blank when sandbox_permissions is omitted or repeats the effective mode; a non-empty reason requires sandbox_permissions.
+    # Required with sandbox_permissions: one sentence for the user explaining why this exact file operation needs the wider access.
     justification: NotRequired[str]
     # Additional keys beyond those declared are allowed.
 
@@ -423,11 +423,11 @@ class UpdateGoalArgs(TypedDict):
     revision: float
     # edit | pause | resume | complete | blocked
     action: Literal["edit", "pause", "resume", "complete", "blocked"]
-    # Replacement objective for action edit; ignored otherwise.
+    # Replacement objective; valid only with action edit.
     objective: NotRequired[str]
-    # Replacement cap for action edit; ignored otherwise.
+    # Replacement cap; valid only with action edit.
     max_goal_rounds: NotRequired[float]
-    # Concrete blocking condition required for action blocked; ignored otherwise.
+    # Concrete blocking condition; required only with action blocked.
     blocked_reason: NotRequired[str]
     # Additional keys beyond those declared are allowed.
 
@@ -491,9 +491,9 @@ class WriteArgs(TypedDict):
     file_path: str
     # Full UTF-8 text content to write.
     content: str
-    # Requested sandbox mode. Repeating the effective mode needs no approval; narrower modes are rejected. A wider mode is only valid for a one-shot retry after this exact file operation was denied and requires a non-empty justification and user approval.
+    # The wider sandbox mode this file operation needs. Only valid as a one-shot retry of an operation the sandbox just denied; requires justification and user approval.
     sandbox_permissions: NotRequired[Literal["workspace-write", "danger-full-access"]]
-    # Non-empty, one-sentence reason for a different sandbox mode. May be omitted or blank when sandbox_permissions is omitted or repeats the effective mode; a non-empty reason requires sandbox_permissions.
+    # Required with sandbox_permissions: one sentence for the user explaining why this exact file operation needs the wider access.
     justification: NotRequired[str]
     # Additional keys beyond those declared are allowed.
 

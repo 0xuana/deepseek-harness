@@ -262,13 +262,11 @@ export function apply(ctx: Context, config: Config = {}): void {
         sandbox_permissions: {
           type: 'string' as const,
           enum: [...escalationModes],
-          description: 'Requested sandbox mode. Repeating the effective mode needs no approval; narrower modes are rejected. '
-            + 'A wider mode is only valid for a one-shot retry after this exact command was denied and requires a non-empty justification and user approval.',
+          description: 'The wider sandbox mode this command needs. Only valid as a one-shot retry of a command the sandbox just denied; requires justification and user approval.',
         },
         justification: {
           type: 'string' as const,
-          description: 'Non-empty, one-sentence reason for a different sandbox mode. May be omitted or blank when sandbox_permissions '
-            + 'is omitted or repeats the effective mode; a non-empty reason requires sandbox_permissions.',
+          description: 'Required with sandbox_permissions: one sentence for the user explaining why this exact command needs the wider access.',
         },
       } : {},
     },
