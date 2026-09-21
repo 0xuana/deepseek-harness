@@ -7,10 +7,7 @@
     "noEmit": true,
     "rewriteRelativeImportExtensions": false
   },
-  "files": [
-    "packages/client/ui-settings-general/src/client/desktop-update-bridge.ts",
-    "packages/client/ui-sidebar-browser/src/index.ts"
-  ],
+  "files": [],
   "include": [
     "apps/web/product-isolation.ts",
     "apps/web/tests/default-product-isolation.e2e.ts",
@@ -42,6 +39,7 @@
     "apps/web/tests/chat-scroll-fixture.ts",
     "apps/web/tests/trajectory-virtualization.e2e.ts",
     "apps/web/tests/lifecycle-chrome.e2e.ts",
+    "apps/web/tests/reasoning-preview.e2e.ts",
     "apps/web/tests/details-session-lifecycle.e2e.ts",
     "apps/web/tests/sessionless-header.e2e.ts",
     "apps/web/tests/document-preview.e2e.ts",
@@ -183,6 +181,8 @@
     { "path": "./packages/experimental/computer-use-cua-driver-mcp" },
     { "path": "./packages/experimental/computer-use-cua-driver-native" },
     { "path": "./packages/client/ui-sidebar-documentpreview/tsconfig.host.json" },
+    { "path": "./packages/client/ui-sidebar-browser/tsconfig.host.json" },
+    { "path": "./packages/client/ui-settings-general/tsconfig.host.json" },
     { "path": "./packages/document/office-to-pdf" },
     { "path": "./packages/client/ui-deliverables/tsconfig.host.json" },
     { "path": "./vendor/cosmokit" },
