@@ -186,6 +186,7 @@ export const DEFAULT_PROFILE_BUNDLES: readonly string[] = ['@deepseek-ai/dsh-bas
  * manager ([rationale](../../../../.agents/notes/implemented/process/2026-09-15-shipped-optional-bundles.md)).
  */
 export const OPTIONAL_BUNDLES: readonly string[] = [
+  '@deepseek-ai/dsh-experimental-voice-input-bundle',
   '@deepseek-ai/dsh-experimental-agent-team-profile',
 ]
 
@@ -446,8 +447,13 @@ function readOptionalProfileManifest(profile: Profile | undefined): ProfileManif
   }
 }
 
-/** Broken selected manifests must not fail again during installation dependency traversal. */
-function skippedProfileBundles(profile: Profile | undefined, manifest: ProfileManifest | undefined): ReadonlySet<string> {
+/**
+ * Identify selected bundles that did not produce a loaded layer.
+ * @param profile - loaded profile, when present.
+ * @param manifest - its parsed manifest, when present.
+ * @returns selected bundle names missing from the loaded layers, for resolution and diagnostics.
+ */
+export function skippedProfileBundles(profile: Profile | undefined, manifest: ProfileManifest | undefined): ReadonlySet<string> {
   const selected = manifest?.dsh?.profile?.bundles ?? []
   const loaded = new Set(profile?.layers.map(layer => layer.packageName))
   return new Set(selected.filter(name => !loaded.has(name)))
