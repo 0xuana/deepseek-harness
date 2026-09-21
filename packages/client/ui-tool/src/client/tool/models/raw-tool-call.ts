@@ -50,15 +50,15 @@ export function singleResultText(block: ToolResultNode): string | undefined {
 }
 
 /**
- * Validate the optional escalation pair shared by first-party shell and file
- * mutation tools.
+ * Narrow optional escalation fields for shell and file cards. Absent or blank
+ * reasons are renderable; execution owns effective-mode and approval checks.
  * @param args - parsed open-root Tool arguments.
- * @returns whether the declared escalation fields form a valid pair.
+ * @returns whether field types, permission values, and non-empty reason pairing are renderable.
  */
 export function validEscalationFields(args: Record<string, unknown>): boolean {
   const permission = args.sandbox_permissions
   const justification = args.justification
-  if (permission === undefined && justification === undefined) return true
-  if (permission !== 'workspace-write' && permission !== 'danger-full-access') return false
-  return typeof justification === 'string' && justification.trim() !== ''
+  if (justification !== undefined && typeof justification !== 'string') return false
+  if (permission === undefined) return justification === undefined || justification.trim() === ''
+  return permission === 'workspace-write' || permission === 'danger-full-access'
 }

@@ -256,11 +256,26 @@ describe('terminalCardModel', () => {
     ['background type', { run_in_background: 'yes' }],
     ['permission type', { sandbox_permissions: 7, justification: 'Need access' }],
     ['permission value', { sandbox_permissions: 'read-only', justification: 'Need access' }],
-    ['missing justification', { sandbox_permissions: 'workspace-write' }],
     ['orphan justification', { justification: 'Need access' }],
-    ['blank justification', { sandbox_permissions: 'workspace-write', justification: ' ' }],
+    ['null justification', { sandbox_permissions: 'workspace-write', justification: null }],
+    ['numeric justification', { sandbox_permissions: 'workspace-write', justification: 7 }],
+    ['object justification', { sandbox_permissions: 'workspace-write', justification: {} }],
   ])('keeps malformed standard-shell optional fields generic: %s', (_label, fields) => {
     expect(terminalCardModel(running({ argsRaw: shellArgs(fields) }))).toBeNull()
+  })
+
+  it.each([undefined, 'workspace-write', 'danger-full-access'])('keeps shell cards with permission %j and absent or blank reasons', (permission) => {
+    for (const justification of [undefined, '', ' \t\n']) {
+      for (const name of ['bash', 'pwsh']) {
+        const argsRaw = shellArgs({
+          ...permission === undefined ? {} : { sandbox_permissions: permission },
+          ...justification === undefined ? {} : { justification },
+        })
+        expect(terminalCardModel(running({ name, argsRaw }))).not.toBeNull()
+        expect(terminalCardModel(settled({ call: { name, argsRaw } }))).not.toBeNull()
+        expect(terminalCardModel(settled({ call: { name, argsRaw }, isError: true }))).toBeNull()
+      }
+    }
   })
 
   it('accepts valid optional and unknown standard-shell fields on the open parameter root', () => {

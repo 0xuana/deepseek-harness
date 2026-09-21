@@ -147,12 +147,30 @@ describe('diffCardModel', () => {
     })
   })
 
+  it.each([undefined, 'workspace-write', 'danger-full-access'])('keeps file diffs with permission %j and absent or blank reasons', (permission) => {
+    for (const justification of [undefined, '', ' \t\n']) {
+      for (const name of ['write', 'edit']) {
+        const argsRaw = JSON.stringify({
+          file_path: 'notes/demo.txt', content: 'hello fixture', old_string: 'hello', new_string: 'hello fixture',
+          ...permission === undefined ? {} : { sandbox_permissions: permission },
+          ...justification === undefined ? {} : { justification },
+        })
+        expect(diffCardModel(running({ name, argsRaw }))).not.toBeNull()
+        expect(diffCardModel(settled({ call: { name, argsRaw } }))).toEqual({ card: { diffs: DIFFS } })
+        expect(diffCardModel(settled({ call: { name, argsRaw }, isError: true }))).toBeNull()
+      }
+    }
+  })
+
   it('validates mutation escalation fields but accepts unrelated open-root fields', () => {
     const args = (fields: Record<string, unknown>) => JSON.stringify({
       file_path: 'notes/demo.txt', old_string: 'hello', new_string: 'hello fixture', ...fields,
     })
     expect(diffCardModel(running({ argsRaw: args({ sandbox_permissions: 7, justification: 'Need access' }) }))).toBeNull()
-    expect(diffCardModel(running({ argsRaw: args({ sandbox_permissions: 'workspace-write' }) }))).toBeNull()
+    for (const justification of [null, 7, {}]) {
+      expect(diffCardModel(running({ argsRaw: args({ sandbox_permissions: 'workspace-write', justification }) }))).toBeNull()
+    }
+    expect(diffCardModel(running({ argsRaw: args({ justification: 'Need access' }) }))).toBeNull()
     expect(diffCardModel(running({ argsRaw: args({ extension: { version: 1 } }) }))).not.toBeNull()
   })
 })
