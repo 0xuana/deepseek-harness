@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use `dsh-client-locale` to switch the web GUI between the shipped English and Chinese locales or languages added by client plugins. User selections take effect immediately; loopback pages persist them in `$DSH_HOME/settings.yaml`, while non-loopback pages keep them only for the current process. New browsers use the first supported language requested by the browser until an allowed stored preference arrives. Plugin authors add typed namespace dictionaries and translate through the public locale API; slot-rendered copy updates without a reload.
+Use `dsh-client-locale` to switch the web GUI between the shipped English and Chinese locales or languages added by client plugins. User selections take effect immediately; loopback pages persist them in `$DSH_HOME/cordis.patch.yml`, while non-loopback pages keep them only for the current process. New browsers use the first supported language requested by the browser until an allowed stored preference arrives. Plugin authors add typed namespace dictionaries and translate through the public locale API; slot-rendered copy updates without a reload.
 
 ## Table of Contents
 
@@ -30,6 +30,8 @@ Use it wherever the web GUI needs a language switch or translated copy: the ship
 ### Choosing a language
 
 Open Settings → General and select a registered language. The active locale is applied immediately: the UI copy switches, `<html lang>` points at the external id or built-in document tag, and the choice is written to the durable settings section. A browser without an explicit Host preference selects the first registered language that matches `navigator` by full tag and then primary subtag, falling back to English. A stored external locale waits for its definition to register instead of becoming active while unavailable.
+
+Native shells may provide `__DSH_LOCALE__` with an asynchronous `read()` and an `onChange(locale)` callback. Initialization supplies the current Host preference and ordered OS languages before the Client mounts. Automatic selection stays provisional; only Settings selections write `locale.preference`. A fresh read on each page load prevents a stale preload preference after reload. Ordinary browsers keep navigator-based detection and their existing settings-scope policy.
 
 ### Registering a dictionary
 

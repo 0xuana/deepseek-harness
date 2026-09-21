@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-使用 `dsh-client-locale` 可在 web GUI 中切换内置的英文和中文 locale，或 client 插件添加的语言。用户选择会立即生效；loopback 页面把选择持久化到 `$DSH_HOME/settings.yaml`，非 loopback 页面则只为当前进程保留选择。全新浏览器会使用浏览器请求的第一个受支持语言，直到允许读取的已存储偏好到达。插件作者可添加类型化命名空间字典，并通过公开 locale API 翻译；经 slot 渲染的文案无需重新加载即可随语言切换更新。
+使用 `dsh-client-locale` 可在 web GUI 中切换内置的英文和中文 locale，或 client 插件添加的语言。用户选择会立即生效；loopback 页面把选择持久化到 `$DSH_HOME/cordis.patch.yml`，非 loopback 页面则只为当前进程保留选择。全新浏览器会使用浏览器请求的第一个受支持语言，直到允许读取的已存储偏好到达。插件作者可添加类型化命名空间字典，并通过公开 locale API 翻译；经 slot 渲染的文案无需重新加载即可随语言切换更新。
 
 ## 目录
 
@@ -30,6 +30,8 @@ kind: "package-reference"
 ### 选择语言
 
 打开“设置 → 常规”并选择一种已注册语言。生效中的 locale 会立即应用：UI 文案切换、`<html lang>` 指向外部 id 或内置语言的文档标签，选择写入持久设置分区。没有显式 Host 偏好的浏览器会按完整标签、再按主语言子标签选择 `navigator` 请求的第一个已注册语言，无法匹配时回退到英文。已存储的外部 locale 会等待其定义注册，不会在不可用时生效。
+
+原生壳可以提供包含异步 `read()` 和 `onChange(locale)` 回调的 `__DSH_LOCALE__`。初始化在 Client 挂载前提供当前 Host 偏好和有序的系统语言列表。自动选择保持临时状态；只有设置中的选择会写入 `locale.preference`。每次加载页面都重新读取，避免重载后沿用过期的 preload 偏好。普通浏览器继续使用 navigator 检测和原有的设置作用域策略。
 
 ### 注册字典
 

@@ -60,6 +60,12 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/experimental/browser-use-runtime': { kind: 'indirect', reason: 'Browser providers call the library to own resources and expose upstream MCP tools.' },
   'packages/computer-use/computer-use': { kind: 'none', reason: 'The registry only reserves provider names; providers own all model-facing tools and guidance.' },
   'packages/document/office-to-pdf': { kind: 'none', reason: 'The provider returns PDF bytes without constructing model input.' },
+
+  'packages/credentials/deepseek-account': { kind: 'none', reason: 'Account authorization registers no model context or tools; credentials affect HTTP authentication only.' },
+  'packages/credentials/deepseek-account-platform': { kind: 'none', reason: 'Account authorization registers no model context or tools; credentials affect HTTP authentication only.' },
+  'packages/api/account-controller': { kind: 'none', reason: 'Account authorization registers no model context or tools; credentials affect HTTP authentication only.' },
+  'packages/client/ui-settings-account': { kind: 'none', reason: 'Account authorization registers no model context or tools; credentials affect HTTP authentication only.' },
+
   'packages/attachment/attachment': { kind: 'indirect', reason: 'The storage seam delegates model request rendering to provider adapters.' },
   'packages/attachment/attachment-local': { kind: 'indirect', reason: 'The local backend delegates model request rendering to provider adapters.' },
   'packages/client/ui-jobs': { kind: 'none', reason: 'Browser-side presentation of host-observed output; touches no prompt, message, schema, stream, or tool result.' },
@@ -175,8 +181,8 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/session/session-turn-outline': { kind: 'none', reason: 'The turnOutline unit folds already-logged turn boundaries into a client-facing read model and registers nothing model-facing.' },
   'packages/session-query/session-query': { kind: 'none', reason: 'The trusted query service exposes cloned records only to callers and registers nothing model-facing.' },
   'packages/session-query/session-query-sqlite': { kind: 'none', reason: 'The search backend returns hits only to callers and registers nothing model-facing.' },
+  'packages/boot/config-editor': { kind: 'indirect', reason: 'Configuration consumers own model-visible behavior; this service persists profile edits.' },
   'packages/settings/settings': { kind: 'indirect', reason: 'The seam stores and resolves user settings; consumer plugins own any model-facing content fed by a value.' },
-  'packages/settings/settings-file': { kind: 'indirect', reason: 'The file provider stores and publishes namespace sections; consumers of ctx.settings own any model-facing behavior.' },
   'packages/credentials/credentials': { kind: 'indirect', reason: 'The seam resolves credential references; the consuming adapter owns every model-facing use a value authorizes.' },
   'packages/credentials/credentials-local': { kind: 'indirect', reason: 'The file/environment provider stores credential values; consumers of ctx.credentials own any model-facing behavior.' },
   'packages/credentials/authorization': { kind: 'none', reason: 'A configuration-time conversation with a human; no flow, notice, or prompt reaches a model request.' },
