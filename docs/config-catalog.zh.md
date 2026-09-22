@@ -681,7 +681,7 @@ export interface Config {
 export interface Config {
   /** Platform origin serving auth-api and browser pages. */
   platformOrigin?: string
-  /** Native desktop identity for Host API and embedded Platform requests; null omits the client platform header. */
+  /** Native desktop identity for Host API and embedded Platform requests; null identifies the client as web. */
   desktopPlatform?: 'darwin' | 'win32' | null
   /** Optional frontend deployment selector for embedded Usage and Top-up pages. */
   embeddedPageDist?: string
@@ -3509,7 +3509,7 @@ export interface Config {
 }
 ```
 
-来源： [`packages/shell/tool-pwsh-persistent/src/index.ts:480`](../packages/shell/tool-pwsh-persistent/src/index.ts)
+来源： [`packages/shell/tool-pwsh-persistent/src/index.ts:455`](../packages/shell/tool-pwsh-persistent/src/index.ts)
 
 <a id="deepseek-aidsh-tool-ralph"></a>
 
