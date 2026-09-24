@@ -4,12 +4,12 @@
  *
  * Every entry that reads untrusted text answers a discriminated result instead
  * of throwing: the library carries no failure vocabulary, and each caller maps
- * a reason onto its own domain code and diagnostic. The two entries that take
- * already-validated values throw on violated preconditions instead —
- * `resolveLocalInstant` raises a `RangeError` for an unknown zone or an
- * impossible calendar field, and `formatFourDigitYearInstant` cannot throw.
- * Local wall-clock resolution uses the maintained `Temporal` implementation, so
- * no caller owns offset sampling or DST rules.
+ * a reason onto its own domain code and diagnostic. `formatFourDigitYearInstant`
+ * and `isFourDigitYearInstant` never throw, while `resolveLocalInstant` raises a
+ * `RangeError` when a caller violates its precondition — an unknown zone, or
+ * calendar fields naming a value the calendar does not have. Local wall-clock
+ * resolution uses the maintained `Temporal` implementation, so no caller owns
+ * offset sampling or DST rules.
  * @module @deepseek-ai/dsh-util-time
  */
 
@@ -44,7 +44,11 @@ const IANA_TIME_ZONE = /^[A-Za-z][A-Za-z0-9_+.-]*(?:\/[A-Za-z0-9_+.-]+)+$/
 
 /** Exact calendar fields of one local wall-clock value. */
 export interface LocalCalendarTime {
-  /** Four-digit year; year 0 is rejected. */
+  /**
+   * Year of the calendar date. `parseLocalCalendar` rejects year 0 in untrusted
+   * text; `resolveLocalInstant` accepts any year a real `Temporal` date carries,
+   * so a caller that needs the four-digit bound filters the answered epoch.
+   */
   readonly year: number
   /** Month from 1 through 12. */
   readonly month: number
@@ -63,8 +67,9 @@ export interface LocalCalendarTime {
 /** Why an RFC 3339 instant string is unusable. */
 export type InstantRejection =
   | 'not_rfc3339'
+  /** A field outside its calendar range: year 0, or an hour, minute, or second above its maximum. */
+  | 'out_of_range'
   | 'not_a_calendar_date'
-  | 'not_a_wall_clock_time'
   | 'invalid_numeric_offset'
 
 /** Why a local calendar selector is unusable. */
@@ -194,7 +199,7 @@ export function parseOffsetInstant(value: string): InstantResult {
     millisecond: fractionalMilliseconds(groups['fraction']),
   }
   if (parts.year === 0 || parts.hour > 23 || parts.minute > 59 || parts.second > 59) {
-    return rejected('not_a_wall_clock_time')
+    return rejected('out_of_range')
   }
   const local = plainDateTime(parts)
   if (local === undefined) return rejected('not_a_calendar_date')
@@ -228,6 +233,18 @@ export function fourDigitYearEpoch(value: string): InstantResult {
     return rejected('not_a_calendar_date')
   }
   return Object.freeze({ kind: 'accepted', epoch })
+}
+
+/**
+ * Whether an epoch is representable as a canonical four-digit-year RFC 3339 UTC instant.
+ *
+ * Callers that only need the bound use this instead of re-deriving it from the
+ * two constants, so the range has one owner.
+ * @param epoch - Candidate epoch milliseconds.
+ * @returns Whether the epoch is a safe integer inside the four-digit-year range.
+ */
+export function isFourDigitYearInstant(epoch: number): boolean {
+  return inFourDigitYearRange(epoch)
 }
 
 /**

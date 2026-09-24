@@ -12,11 +12,11 @@ Status: implemented
 
 `dsh-util-time` 拥有各边界所接收的时间词汇。它位于 `packages/util/time/src/instant.ts`，`src/index.ts` 转出它，并保留 `canonicalClientTimeZone` 作为既有协议边界消费的 `string | undefined` 包装。
 
-本库回答带判别值的结果，不持有失败词汇。`parseOffsetInstant`、`fourDigitYearEpoch`、`parseLocalCalendar` 与 `canonicalizeTimeZone` 回答 `accepted` 分支，或回答携带稳定原因的 `rejected` 分支（`not_rfc3339`、`not_a_calendar_date`、`not_a_wall_clock_time`、`invalid_numeric_offset`、`malformed`、`out_of_range`、`blank`、`padded`、`not_area_location`、`unsupported`、`not_canonical_shape`）。每个调用方把原因映射成自己的错误码与诊断文案，因此本库从不撰写面向模型的文本。`formatFourDigitYearInstant` 返回规范时刻文本，越界时返回 `undefined`；`resolveLocalInstant` 回答纪元毫秒，对落在前向跳变缺口内的墙钟值回答 `undefined`。
-
-`dsh-time-context` 同样消费它，并保留自己更严格的策略。`deriveBrowserTimeZoneContext` 通过 `canonicalizeTimeZone` 读取每条 user-rpc 时区，并拒绝规范答案与所报值不同的别名，因此请求边界仍然要求另一个进程能解析回同一名称。三条拒绝与它们的文案归 time-context 所有；共享入口只回答规范名称或一个原因；被拒绝的结果中只有 `unsupported` 会携带本库捕获到的平台错误，使该拒绝在两个消费方都保留其 `cause`。
+本库回答带判别值的结果，不持有失败词汇。`parseOffsetInstant`、`fourDigitYearEpoch`、`parseLocalCalendar` 与 `canonicalizeTimeZone` 回答 `accepted` 分支，或回答携带稳定原因的 `rejected` 分支（`not_rfc3339`、`out_of_range`、`not_a_calendar_date`、`invalid_numeric_offset`、`malformed`、`blank`、`padded`、`not_area_location`、`unsupported`、`not_canonical_shape`）。每个调用方把原因映射成自己的错误码与诊断文案，因此本库从不撰写面向模型的文本。`formatFourDigitYearInstant` 返回规范时刻文本，越界时返回 `undefined`；`isFourDigitYearInstant` 回答某个纪元是否可表示；`resolveLocalInstant` 回答纪元毫秒，对落在前向跳变缺口内的墙钟值回答 `undefined`。两个严格解析器的原因词汇彼此对称：同一条件在两者中都叫 `out_of_range`，而 `LocalCalendarTime.year` 说明了二者中谁拒绝年份 0（`parseLocalCalendar`）、谁接受它（`resolveLocalInstant`，其调用方需要在 UTC 边界推导本地日期）。
 
 Schedule 消费它，并保留全部域内决策。`canonicalizeTimeZone`、`decodeInstant`、`parseAtInput` 与 `futureInstant` 仍是 Schedule 的入口，保留既有错误码与诊断文案；它们现在调用共享解析器并映射其原因。Schedule 仍拥有持久记录结构、折叠与状态转移权威、抗注入的框架文本，以及全部重复规则运算：cron 引擎、每日与每周日期遍历、最近到期搜索，以及 Schedule 特有的决策时刻边界。
+
+`dsh-time-context` 同样消费它，并保留自己更严格的策略。`deriveBrowserTimeZoneContext` 通过 `canonicalizeTimeZone` 读取每条 user-rpc 时区，并拒绝规范答案与所报值不同的别名，因此请求边界仍然要求另一个进程能解析回同一名称。三条拒绝与它们的文案归 time-context 所有；共享入口只回答规范名称或一个原因；被拒绝的结果中只有 `unsupported` 会携带本库捕获到的平台错误，使该拒绝在两个消费方都保留其 `cause`。
 
 受维护的 `@js-temporal/polyfill` 0.5.1 在成为 `dsh-schedule` 运行时依赖之外，也成为 `dsh-util-time` 的运行时依赖。本地解析继续使用它，因此缺口与重叠仍由宿主 IANA 数据决定，也没有调用方需要自己实现偏移采样。`util/time` 的 README 与包描述删去了新增依赖所否定的 `zero-dependency` 表述。
 
@@ -34,8 +34,8 @@ Schedule 消费它，并保留全部域内决策。`canonicalizeTimeZone`、`dec
 
 ## Consequences
 
-时间剖面现在只有一个归宿。时刻剖面或时区剖面的变更只做一次、只覆盖一次，新边界导入它而不是复制它。Schedule 的 `domain.ts` 去掉了三段正则、`Intl` 规范化、手写日历换算与四位年份边界运算。
+时间剖面现在只有一个归宿。时刻剖面或时区剖面的变更只做一次、只覆盖一次，新边界导入它而不是复制它。Schedule 的 `domain.ts` 去掉了为时刻、日历日期、本地时间与时区剖面命名的五段正则、`Intl` 规范化与手写日历换算。它保留了用于 UTC 边界日期运算的两个边界常量，并把每处可表示性守卫委托给 `isFourDigitYearInstant`，因此范围本身只有一个所有者。
 
-代价是更宽的已发布接口与更重的依赖图：`dsh-util-time` 增加了对 `@js-temporal/polyfill` 的运行时依赖，因此只导入 `canonicalClientTimeZone` 的消费方也会加载该模块。本库也不再是纯"只做校验与规范化"的包——其 README 与包描述必须说明这一点，其"已知限制"一节现在也记录了它。Schedule 在每个入口保留一层薄映射。本地日历与时刻映射函数以 `never` 默认分支穷尽 switch 本库的封闭原因联合，因此新增原因会让这两个调用点构建失败，而不是静默走兜底分支。时区映射函数做不到这一点：本库的 `not_canonical_shape` 原因不可达，用 switch 会留下一个 Schedule 测试永远无法执行的分支。
+代价是更宽的已发布接口与更重的依赖图：`dsh-util-time` 增加了对 `@js-temporal/polyfill` 的运行时依赖，因此只导入 `canonicalClientTimeZone` 的消费方也会加载该模块。本库也不再是纯"只做校验与规范化"的包——其 README 与包描述必须说明这一点，其"已知限制"一节现在也记录了它。Schedule 在每个入口保留一层薄映射。本地日历与时刻映射函数以 `never` 默认分支穷尽 switch 本库的封闭原因联合，因此新增原因会让这两个调用点构建失败，而不是静默走兜底分支。时区映射函数做不到这一点：在当前 IANA 数据下本库的 `not_canonical_shape` 原因不可达，用 switch 会留下一个 Schedule 测试永远无法执行的分支。因此该映射把 `blank`、`padded`、`not_area_location` 与 `unsupported` 合并成一条诊断，日后给 `TimeZoneRejection` 新增原因时会通过编译并静默套用那条通用文案。
 
 本次未触及、仍归 time-context 的两项：`packages/context/time-context/src/timestamp.ts` 中的 ISO 形状时间戳渲染（那是该包的持久读数字格式），以及其插件内的耗时措辞。浏览器客户端也保留自己的本地化日期渲染与自己的 UTC 偏移读取——它们服务的目的（读者的区域设置）与边界值不同；统一它们意味着先决定共享库是否也要拥有展示格式化，以及届时由谁拥有其不变量所校验的持久读数字格式。`packages/session/session-format-v0-to-v1/src/payload-validation.ts` 也用自己的一段正则与往返比对校验规范的四位年份 UTC 时刻，这是本次未触及、仍然存在的时刻剖面副本。

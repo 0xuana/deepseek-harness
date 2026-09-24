@@ -10,6 +10,7 @@ import {
   canonicalizeTimeZone as canonicalizeSharedTimeZone,
   formatFourDigitYearInstant,
   fourDigitYearEpoch,
+  isFourDigitYearInstant,
   parseLocalCalendar,
   parseOffsetInstant,
   resolveLocalInstant,
@@ -274,7 +275,7 @@ function instantDiagnostic(reason: InstantRejection): string {
     case 'not_a_calendar_date':
       return 'scheduledAt is not a real UTC calendar instant'
     case 'not_rfc3339':
-    case 'not_a_wall_clock_time':
+    case 'out_of_range':
     case 'invalid_numeric_offset':
       return NON_CANONICAL_INSTANT_MESSAGE
     /* v8 ignore next 3 -- the shared parser returns a closed rejection union. */
@@ -384,7 +385,7 @@ function parseAtOffsetInstant(value: string): number {
     case 'invalid_numeric_offset':
       throw new ScheduleInputError('invalid_rule', 'The at numeric offset is invalid.')
     case 'not_a_calendar_date':
-    case 'not_a_wall_clock_time':
+    case 'out_of_range':
       throw new ScheduleInputError('invalid_rule', 'The at value must be a real ISO calendar date and time.')
     /* v8 ignore next 3 -- the shared parser returns a closed rejection union. */
     default: {
@@ -755,9 +756,7 @@ export function resolveEveryOccurrence(
 ): RecurringOccurrence {
   const target = Date.parse(record.scheduledAt)
   const interval = record.everySeconds * 1_000
-  if (!Number.isSafeInteger(acceptedAt)
-    || acceptedAt < MIN_FOUR_DIGIT_YEAR_MS
-    || acceptedAt > MAX_FOUR_DIGIT_YEAR_MS) {
+  if (!isFourDigitYearInstant(acceptedAt)) {
     throw new ScheduleLogError('every acceptedAt must be a representable four-digit-year instant')
   }
   if (!Number.isSafeInteger(interval) || interval <= 0) {
@@ -774,7 +773,7 @@ export function resolveEveryOccurrence(
   }
   const occurrenceAt = new Date(occurrence).toISOString()
   const next = occurrence + interval
-  if (!Number.isSafeInteger(next) || next > MAX_FOUR_DIGIT_YEAR_MS) {
+  if (!isFourDigitYearInstant(next)) {
     return Object.freeze({ occurrenceAt })
   }
   return Object.freeze({
@@ -844,8 +843,7 @@ function latestDueOccurrence(
 
 /** Resolve a wall-clock rule only when its decision is at a representable four-digit-year instant. */
 function acceptedDecision(selector: string, acceptedAt: number): number {
-  if (!Number.isSafeInteger(acceptedAt)
-    || acceptedAt < MIN_FOUR_DIGIT_YEAR_MS || acceptedAt > MAX_FOUR_DIGIT_YEAR_MS) {
+  if (!isFourDigitYearInstant(acceptedAt)) {
     throw new ScheduleLogError(`${selector} acceptedAt must be a representable four-digit-year instant`)
   }
   return acceptedAt
@@ -1368,7 +1366,7 @@ export function createDailyScheduleRecord(
     throw new ScheduleInputError('invalid_prompt', 'prompt must be non-empty after trimming.')
   }
   const { time, timeZone } = parseDailyInput(daily)
-  if (!Number.isSafeInteger(now) || now < MIN_FOUR_DIGIT_YEAR_MS || now > MAX_FOUR_DIGIT_YEAR_MS) {
+  if (!isFourDigitYearInstant(now)) {
     throw new ScheduleInputError('time_out_of_range', 'Daily creation time must be a representable four-digit-year UTC instant.')
   }
   const scheduledAt = nextDailyTarget(dailyTime(time), timeZone, now)
@@ -1421,7 +1419,7 @@ export function createWeeklyScheduleRecord(
     throw new ScheduleInputError('invalid_prompt', 'prompt must be non-empty after trimming.')
   }
   const { time, timeZone, weekdays } = parseWeeklyInput(weekly)
-  if (!Number.isSafeInteger(now) || now < MIN_FOUR_DIGIT_YEAR_MS || now > MAX_FOUR_DIGIT_YEAR_MS) {
+  if (!isFourDigitYearInstant(now)) {
     throw new ScheduleInputError('time_out_of_range', 'Weekly creation time must be a representable four-digit-year UTC instant.')
   }
   const scheduledAt = nextWeeklyTarget(weeklyTime(time), timeZone, weekdays, now)
@@ -1455,7 +1453,7 @@ export function createCronScheduleRecord(
     throw new ScheduleInputError('invalid_prompt', 'prompt must be non-empty after trimming.')
   }
   const { expression, timeZone } = parseCronInput(cron)
-  if (!Number.isSafeInteger(now) || now < MIN_FOUR_DIGIT_YEAR_MS || now > MAX_FOUR_DIGIT_YEAR_MS) {
+  if (!isFourDigitYearInstant(now)) {
     throw new ScheduleInputError('time_out_of_range', 'Cron creation time must be a representable four-digit-year UTC instant.')
   }
   const scheduledAt = nextCronTarget(parseCronExpression(expression), timeZone, now)

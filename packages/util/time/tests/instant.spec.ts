@@ -6,6 +6,7 @@ import {
   canonicalizeTimeZone,
   formatFourDigitYearInstant,
   fourDigitYearEpoch,
+  isFourDigitYearInstant,
   parseLocalCalendar,
   parseOffsetInstant,
   resolveLocalInstant,
@@ -100,19 +101,19 @@ describe('parseOffsetInstant', () => {
   it('rejects a clock field, a zero year, and a non-existent calendar date', () => {
     expect(parseOffsetInstant('0000-03-08T02:30:00Z')).toEqual({
       kind: 'rejected',
-      reason: 'not_a_wall_clock_time',
+      reason: 'out_of_range',
     })
     expect(parseOffsetInstant('2026-03-08T24:30:00Z')).toEqual({
       kind: 'rejected',
-      reason: 'not_a_wall_clock_time',
+      reason: 'out_of_range',
     })
     expect(parseOffsetInstant('2026-03-08T02:60:00Z')).toEqual({
       kind: 'rejected',
-      reason: 'not_a_wall_clock_time',
+      reason: 'out_of_range',
     })
     expect(parseOffsetInstant('2026-03-08T02:30:60Z')).toEqual({
       kind: 'rejected',
-      reason: 'not_a_wall_clock_time',
+      reason: 'out_of_range',
     })
     expect(parseOffsetInstant('2026-02-30T02:30:00Z')).toEqual({
       kind: 'rejected',
@@ -173,6 +174,17 @@ describe('fourDigitYearEpoch', () => {
       kind: 'rejected',
       reason: 'not_a_calendar_date',
     })
+  })
+})
+
+describe('isFourDigitYearInstant', () => {
+  it('answers the range including both bounds and excludes everything else', () => {
+    expect(isFourDigitYearInstant(MIN_FOUR_DIGIT_YEAR_MS)).toBe(true)
+    expect(isFourDigitYearInstant(MAX_FOUR_DIGIT_YEAR_MS)).toBe(true)
+    expect(isFourDigitYearInstant(Date.parse('2026-03-08T02:30:00.000Z'))).toBe(true)
+    for (const epoch of [MIN_FOUR_DIGIT_YEAR_MS - 1, MAX_FOUR_DIGIT_YEAR_MS + 1, 0.5, Number.NaN]) {
+      expect(isFourDigitYearInstant(epoch)).toBe(false)
+    }
   })
 })
 

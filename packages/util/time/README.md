@@ -69,6 +69,7 @@ The strict parsers match a fixed regular expression before constructing any date
 | `parseOffsetInstant` | RFC 3339 with an explicit `Z` or numeric offset; the offset is part of the input. |
 | `fourDigitYearEpoch` | The canonical stored profile: exactly three fractional digits and a `Z`. |
 | `formatFourDigitYearInstant` | An integral epoch inside the four-digit-year range; answers `undefined` outside it or when non-integral. |
+| `isFourDigitYearInstant` | The same range, as a predicate, so a caller that only needs the bound does not re-derive it. |
 | `resolveLocalInstant` | Exact calendar fields of a real date, or an already-built `Temporal.PlainDateTime`, plus an already-canonical zone. |
 
 </details>
