@@ -29,7 +29,7 @@ kind: "package-library"
 
 它是**库，不是服务也不是插件**：无 `ctx`、不注册任何东西、不持有状态。
 
-在接收时区或墙钟选择器的那个边界上调用它，让值在进入任何持久物之前先过一遍。`dsh-api-session-controller` 与 `dsh-subagent` 通过 `canonicalClientTimeZone` 接收调用方所报时区；`dsh-schedule` 通过严格解析器读取每一个绝对选择器与墙钟选择器，并通过 `resolveLocalInstant` 解析其本地目标。自行拥有日历或间隔运算的消费方保留那部分运算，只在边界值上调用这些入口。
+在接收时区或墙钟选择器的那个边界上调用它，让值在进入任何持久物之前先过一遍。`dsh-api-session-controller` 与 `dsh-subagent` 通过 `canonicalClientTimeZone` 接收调用方所报时区；`dsh-time-context` 通过 `canonicalizeTimeZone` 接收某一轮请求所报时区，并拒绝别名而不是把它改写；`dsh-schedule` 通过严格解析器读取每一个绝对选择器与墙钟选择器，并通过 `resolveLocalInstant` 解析其本地目标。自行拥有日历或间隔运算的消费方保留那部分运算，只在边界值上调用这些入口。
 
 不发布运行时不变量伴生入口；这个纯工具不拥有事件流或可变运行时数据，每个入口都由单元测试验证。
 
@@ -64,7 +64,7 @@ if (local.kind === 'accepted') {
 | 入口 | 接受的输入 |
 |---|---|
 | `canonicalClientTimeZone` | `UTC` 或 IANA `Area/Location` 名称；被拒绝时回答 `undefined`。 |
-| `canonicalizeTimeZone` | 同样的名称；回答规范拼写或拒绝原因。 |
+| `canonicalizeTimeZone` | 同样的名称；回答规范拼写或拒绝原因；平台拒绝了一个格式合法的名称时，还会携带该平台错误。 |
 | `parseLocalCalendar` | `YYYY-MM-DD` 与 `HH:mm:ss`，可带 1 到 3 位小数秒。 |
 | `parseOffsetInstant` | 带显式 `Z` 或数字偏移的 RFC 3339；偏移量属于输入的一部分。 |
 | `fourDigitYearEpoch` | 规范存储剖面：恰好 3 位小数秒与 `Z`。 |
@@ -80,6 +80,7 @@ if (local.kind === 'accepted') {
 
 - [Schedule 宿主存储](../../schedule/schedule/README.zh.md) —— 保存已提交 UTC 时点的消费方。
 - [Session 控制器](../../api/session-controller/README.zh.md) —— 规范化浏览器时区的请求边界。
+- [时间上下文](../../context/time-context/README.zh.md) —— 拒绝非规范浏览器时区的请求消费方。
 - [util/ 包地图](../README.zh.md) —— 本库在共享工具中的位置。
 
 -----

@@ -205,7 +205,13 @@ describe('canonicalizeTimeZone', () => {
     expect(canonicalizeTimeZone('Asia')).toEqual({ kind: 'rejected', reason: 'not_area_location' })
     expect(canonicalizeTimeZone('GMT+8')).toEqual({ kind: 'rejected', reason: 'not_area_location' })
     expect(canonicalizeTimeZone('utc')).toEqual({ kind: 'rejected', reason: 'not_area_location' })
-    expect(canonicalizeTimeZone('Not/A_Real_Zone')).toEqual({ kind: 'rejected', reason: 'unsupported' })
+    const unsupported = canonicalizeTimeZone('Not/A_Real_Zone')
+    if (unsupported.kind !== 'rejected') throw new Error('expected a rejection')
+    expect(unsupported.reason).toBe('unsupported')
+    // The platform refusal is the caller's only evidence of why a well-formed name failed,
+    // so the rejection carries it instead of hiding it.
+    expect(unsupported.cause).toBeInstanceOf(RangeError)
+    expect(canonicalizeTimeZone('Asia')).not.toHaveProperty('cause')
   })
 })
 

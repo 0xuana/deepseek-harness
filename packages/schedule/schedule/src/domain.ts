@@ -285,16 +285,26 @@ function instantDiagnostic(reason: InstantRejection | undefined): string {
 /**
  * Map one shared zone rejection onto the stable Schedule input code.
  * @param reason - Reason the shared vocabulary refused the name.
+ * @param cause - Platform refusal the shared vocabulary caught, when it carried one.
  * @returns The public Schedule diagnostic for that refusal.
  */
-function timeZoneError(reason: TimeZoneRejection): ScheduleInputError {
+function timeZoneError(reason: TimeZoneRejection, cause?: unknown): ScheduleInputError {
+  const options = cause === undefined ? undefined : { cause }
   // `not_canonical_shape` names a platform-canonical answer outside the Area/Location
   // profile, which the shared parser's `Intl` step does not produce; this branch keeps
   // the diagnostic this entry has always returned for that reason.
   /* v8 ignore next 2 -- the shared parser never answers not_canonical_shape for a canonical zone. */
   return reason === 'not_canonical_shape'
-    ? new ScheduleInputError('invalid_time_zone', 'time_zone must resolve to UTC or an IANA Area/Location name.')
-    : new ScheduleInputError('invalid_time_zone', 'time_zone must be UTC or a valid IANA Area/Location name.')
+    ? new ScheduleInputError(
+      'invalid_time_zone',
+      'time_zone must resolve to UTC or an IANA Area/Location name.',
+      options,
+    )
+    : new ScheduleInputError(
+      'invalid_time_zone',
+      'time_zone must be UTC or a valid IANA Area/Location name.',
+      options,
+    )
 }
 
 /**
@@ -304,7 +314,7 @@ function timeZoneError(reason: TimeZoneRejection): ScheduleInputError {
  */
 export function canonicalizeTimeZone(value: string): string {
   const resolved = canonicalizeSharedTimeZone(value)
-  if (resolved.kind === 'rejected') throw timeZoneError(resolved.reason)
+  if (resolved.kind === 'rejected') throw timeZoneError(resolved.reason, resolved.cause)
   return resolved.timeZone
 }
 

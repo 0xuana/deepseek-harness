@@ -91,7 +91,12 @@ export type LocalCalendarResult =
 /** Discriminated result of resolving one raw IANA zone selector. */
 export type TimeZoneResult =
   | { readonly kind: 'accepted'; readonly timeZone: string }
-  | { readonly kind: 'rejected'; readonly reason: TimeZoneRejection }
+  | {
+    readonly kind: 'rejected'
+    readonly reason: TimeZoneRejection
+    /** Platform error caught while resolving the name; present when the platform refused a well-formed one. */
+    readonly cause?: unknown
+  }
 
 /** Reject with one stable reason. */
 function rejected<Reason extends string>(reason: Reason): { kind: 'rejected'; reason: Reason } {
@@ -257,9 +262,10 @@ export function canonicalizeTimeZone(value: string): TimeZoneResult {
   let canonical: string
   try {
     canonical = new Intl.DateTimeFormat('en-US', { timeZone: value }).resolvedOptions().timeZone
-  } catch {
-    // Intl rejects a well-formed name the platform's IANA data does not know.
-    return rejected('unsupported')
+  } catch (error: unknown) {
+    // Intl rejects a well-formed name the platform's IANA data does not know;
+    // the caught error is the caller's only evidence for its own diagnostic.
+    return Object.freeze({ kind: 'rejected', reason: 'unsupported', cause: error } as const)
   }
   /* v8 ignore next -- Intl answers UTC or a canonical IANA Area/Location for every accepted name. */
   if (canonical !== 'UTC' && !IANA_TIME_ZONE.test(canonical)) return rejected('not_canonical_shape')

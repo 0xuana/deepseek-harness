@@ -29,7 +29,7 @@ Shared time vocabulary for the boundaries that accept a caller's zone or a wall-
 
 It is a **library, not a service or plugin**: no `ctx`, registers nothing, holds no state.
 
-Call it at the boundary that receives the zone or the wall-clock selector, before the value reaches anything durable. `dsh-api-session-controller` and `dsh-subagent` admit a caller-reported zone through `canonicalClientTimeZone`; `dsh-schedule` reads every absolute and wall-clock selector through the strict parsers and resolves its local targets through `resolveLocalInstant`. A consumer that owns calendar or interval arithmetic of its own keeps that arithmetic and calls these entries only for the boundary value.
+Call it at the boundary that receives the zone or the wall-clock selector, before the value reaches anything durable. `dsh-api-session-controller` and `dsh-subagent` admit a caller-reported zone through `canonicalClientTimeZone`; `dsh-time-context` admits the zone a request turn reports through `canonicalizeTimeZone` and refuses an alias rather than rewriting it; `dsh-schedule` reads every absolute and wall-clock selector through the strict parsers and resolves its local targets through `resolveLocalInstant`. A consumer that owns calendar or interval arithmetic of its own keeps that arithmetic and calls these entries only for the boundary value.
 
 No runtime invariant companion is published because this pure utility owns no event stream or mutable runtime data; unit tests verify every entry.
 
@@ -64,7 +64,7 @@ The strict parsers match a fixed regular expression before constructing any date
 | Entry | Accepted input |
 |---|---|
 | `canonicalClientTimeZone` | `UTC` or an IANA `Area/Location` name; answers `undefined` when refused. |
-| `canonicalizeTimeZone` | The same names; answers the canonical spelling or a refusal reason. |
+| `canonicalizeTimeZone` | The same names; answers the canonical spelling or a refusal reason, and carries the platform error when the platform refused a well-formed name. |
 | `parseLocalCalendar` | `YYYY-MM-DD` and `HH:mm:ss`, with optional one-to-three fractional digits. |
 | `parseOffsetInstant` | RFC 3339 with an explicit `Z` or numeric offset; the offset is part of the input. |
 | `fourDigitYearEpoch` | The canonical stored profile: exactly three fractional digits and a `Z`. |
@@ -80,6 +80,7 @@ The strict parsers match a fixed regular expression before constructing any date
 
 - [Schedule Host storage](../../schedule/schedule/README.md) — the consumer that stores committed UTC targets.
 - [Session controller](../../api/session-controller/README.md) — the request boundary that canonicalizes a browser zone.
+- [Time context](../../context/time-context/README.md) — the request consumer that refuses a non-canonical browser zone.
 - [util/ package map](../README.md) — where this library sits among the shared utilities.
 
 -----
