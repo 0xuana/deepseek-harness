@@ -22,7 +22,7 @@ Schedule 消费它，并保留全部域内决策。`canonicalizeTimeZone`、`dec
 
 ## Alternatives considered
 
-**把共享模块保持为 Schedule 私有。** 抽成 `packages/schedule/schedule/src/time.ts` 可以缩小 `domain.ts`，而不触碰已发布包、其 lockfile 条目、README 或依赖集合。之所以否决，是因为本次要消除的重复是重复的**剖面**，不是重复的行数：时区正则、`Intl` 规范化步骤与时刻剖面仍会存在两份，下一个接收墙钟选择器的边界仍会复制出第三份。
+**把共享模块保持为 Schedule 私有。** 在 `domain.ts` 旁抽出一个 Schedule 私有的 `time` 模块可以缩小它，而不触碰已发布包、其 lockfile 条目、README 或依赖集合。之所以否决，是因为本次要消除的重复是重复的**剖面**，不是重复的行数：时区正则、`Intl` 规范化步骤与时刻剖面仍会存在两份，下一个接收墙钟选择器的边界仍会复制出第三份。
 
 **让本库自带错误类型。** 一个携带原因的 `TimeInputError` 可以让调用方直接重抛而不做映射，缩短每个调用点。之所以否决，是因为 `util/time` 既有契约规定每个边界拥有自己的拒绝词汇，而 Schedule 的诊断文案被 `tools.spec.ts`、快照期望与模型可见工具结果逐字固定；共享错误类会把一个调用方的措辞带进另一个调用方的界面。
 

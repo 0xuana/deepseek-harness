@@ -22,7 +22,7 @@ Observable behavior does not change. Every accepted input resolves to the same e
 
 ## Alternatives considered
 
-**Keep the shared module private to Schedule.** A `packages/schedule/schedule/src/time.ts` extraction would shrink `domain.ts` without touching a published package, its lockfile entry, its README, or its dependency set. It was rejected because the duplication this change exists to remove is the duplicate *profile*, not the duplicate line count: the zone regular expression, the canonical `Intl` step, and the instant profile would still exist twice, and the next boundary that accepts a wall-clock selector would copy a third.
+**Keep the shared module private to Schedule.** A Schedule-local `time` module beside `domain.ts` would shrink that file without touching a published package, its lockfile entry, its README, or its dependency set. It was rejected because the duplication this change exists to remove is the duplicate *profile*, not the duplicate line count: the zone regular expression, the canonical `Intl` step, and the instant profile would still exist twice, and the next boundary that accepts a wall-clock selector would copy a third.
 
 **Give the library its own error type.** A `TimeInputError` carrying the reason would let callers rethrow instead of mapping, shortening each call site. It was rejected because `util/time`'s existing contract is that each boundary owns its refusal vocabulary, and Schedule's diagnostics are pinned verbatim by `tools.spec.ts`, snapshot expectations, and the model-visible tool result; a shared error class invites one caller's wording into another caller's surface.
 
