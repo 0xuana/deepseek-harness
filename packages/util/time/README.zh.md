@@ -1,5 +1,5 @@
 ---
-description: "面向在协议边界接收调用方所报时区的维护者，说明 IANA 时区校验与规范化。"
+description: "面向在协议边界接收调用方所报时区或墙钟选择器的维护者，说明严格的 RFC 3339 时刻、本地日历与时区解析。"
 kind: "package-library"
 ---
 
@@ -9,12 +9,13 @@ kind: "package-library"
 
 ## 概述
 
-零依赖的时区词汇，供接收调用方时区的协议边界使用。`canonicalClientTimeZone` 只接受 `UTC` 或 IANA `Area/Location` 名称，并回答该名称在当前平台上的规范拼写，因此别名不会进入持久记录：时区标识会存储在消息中，并由另一个进程稍后重新推导；别名在该进程中无法与规范名称比较为相等。本库只做校验与规范化——不格式化任何时间，也不持有失败词汇，因为每个边界抛自己的域码。
+共享时间词汇，供接收调用方时区或墙钟选择器的协议边界使用。`canonicalClientTimeZone` 只接受 `UTC` 或 IANA `Area/Location` 名称，并回答当前平台上的规范拼写，因此别名不会进入持久记录。需要墙钟语义的消费方则通过带判别值的结果解析严格的 RFC 3339 时刻、本地日历字段与时区名称，再借助受维护的 `Temporal` 解析本地值，获得 DST 与重叠时段的既定行为。本库不持有失败词汇，也不生成面向模型的文本：每个调用方把拒绝原因映射成自己的域错误码。
 
 ## 目录
 
 - [使用本包](#use-this-package)
-- [API](#api)
+- [理解实现](#understand-the-implementation)
+- [延伸阅读](#further-exploration)
 - [模型体验](#model-experience)
 - [已知限制与延期工作](#known-limitations-and-deferred-work)
 - [开发备注](#dev-note)
@@ -24,40 +25,81 @@ kind: "package-library"
 <a id="use-this-package"></a>
 ## 使用本包
 
+### 何时使用
+
 它是**库，不是服务也不是插件**：无 `ctx`、不注册任何东西、不持有状态。
 
-不发布运行时不变量伴生入口；这个纯工具不拥有事件流或可变运行时数据，时区规范化由单元测试验证。
+在接收时区或墙钟选择器的那个边界上调用它，让值在进入任何持久物之前先过一遍。`dsh-api-session-controller` 与 `dsh-subagent` 通过 `canonicalClientTimeZone` 接收调用方所报时区；`dsh-schedule` 通过严格解析器读取每一个绝对选择器与墙钟选择器，并通过 `resolveLocalInstant` 解析其本地目标。自行拥有日历或间隔运算的消费方保留那部分运算，只在边界值上调用这些入口。
 
-在接收时区的那个边界上调用它，让值在进入任何持久物之前先过一遍。不可用的名称回答 `undefined`，由调用方抛出自己的拒绝——Session 提示词用 `session/invalid-time-zone`，subagent 续话用 `subagent/invalid-time-zone`。
+不发布运行时不变量伴生入口；这个纯工具不拥有事件流或可变运行时数据，每个入口都由单元测试验证。
+
+### 入口
+
+```ts
+import { canonicalClientTimeZone, fourDigitYearEpoch, parseLocalCalendar, resolveLocalInstant } from '@deepseek-ai/dsh-util-time'
+
+const zone = canonicalClientTimeZone('US/Eastern')            // 'America/New_York' or undefined
+const stored = fourDigitYearEpoch('2026-03-08T02:30:00.000Z') // { kind: 'accepted', epoch } or a rejection reason
+const local = parseLocalCalendar('2026-03-08', '02:30:00')    // { kind: 'accepted', time } or a rejection reason
+
+if (local.kind === 'accepted') {
+  resolveLocalInstant(local.time, zone ?? 'UTC') // epoch milliseconds, or undefined inside a DST gap
+}
+```
+
+不可用的时区名称由 `canonicalClientTimeZone` 回答 `undefined`，由调用方抛出自己的拒绝——Session 提示词用 `session/invalid-time-zone`，subagent 续话用 `subagent/invalid-time-zone`。其余每个入口都回答带判别值的结果，其 `rejected` 分支携带稳定的拒绝原因，同样由调用方选择自己的错误码与诊断文案。
 
 -----
 
-<a id="api"></a>
-## API
+<a id="understand-the-implementation"></a>
+## 理解实现
 
-```ts
-import { canonicalClientTimeZone } from '@deepseek-ai/dsh-util-time'
-```
+<details>
+<summary>实现内部细节 —— 点击展开</summary>
 
-| 导出 | 职责 |
+`src/instant.ts` 承载全部实现；`src/index.ts` 转出它，并把 `canonicalizeTimeZone` 归约为协议边界已经在消费的 `string | undefined` 形式。该模块的 JSDoc 说明每个入口接受的输入剖面与全部拒绝原因。
+
+严格解析器先匹配固定正则，再构造任何日期，因此拼写错误、越界时钟字段与日历上不存在的日期分别回答不同的原因。本地解析交给 `@js-temporal/polyfill`：`disambiguation: 'earlier'` 取重叠时段中的第一个时刻，而本地字段往返比对对前向跳变缺口内的值回答 `undefined`。
+
+| 入口 | 接受的输入 |
 |---|---|
-| `canonicalClientTimeZone(value)` | 对接受的时区回答规范的 `UTC` 或 IANA `Area/Location` 名称；空串、带空白、缩写、单段或平台不支持的名称回答 `undefined`。 |
+| `canonicalClientTimeZone` | `UTC` 或 IANA `Area/Location` 名称；被拒绝时回答 `undefined`。 |
+| `canonicalizeTimeZone` | 同样的名称；回答规范拼写或拒绝原因。 |
+| `parseLocalCalendar` | `YYYY-MM-DD` 与 `HH:mm:ss`，可带 1 到 3 位小数秒。 |
+| `parseOffsetInstant` | 带显式 `Z` 或数字偏移的 RFC 3339；偏移量属于输入的一部分。 |
+| `fourDigitYearEpoch` | 规范存储剖面：恰好 3 位小数秒与 `Z`。 |
+| `formatFourDigitYearInstant` | 四位年份范围内的纪元毫秒；超出范围回答 `undefined`。 |
+| `resolveLocalInstant` | 精确日历字段与已规范化的时区。 |
+
+</details>
+
+-----
+
+<a id="further-exploration"></a>
+## 延伸阅读
+
+- [Schedule 宿主存储](../../schedule/schedule/README.zh.md) —— 保存已提交 UTC 时点的消费方。
+- [Session 控制器](../../api/session-controller/README.zh.md) —— 规范化浏览器时区的请求边界。
+- [util/ 包地图](../README.zh.md) —— 本库在共享工具中的位置。
+
+-----
 
 <a id="model-experience"></a>
 ## 模型体验
 
-间接影响，取决于把规范时区记到持久消息上的那个消费方——`dsh-time-context` 据此渲染该轮模型可见的时区指令与时间戳。
+间接影响，取决于把规范时区或已提交 UTC 时刻记到持久记录上、并据此渲染模型可见调度文本的那些消费方。
 
 #### KV Cache 影响
 
-自身没有。把时区派生文本注入请求的那个消费方，对该请求的缓存行为负责。
+自身没有。把时区或调度的派生文本注入请求的那个消费方，对该请求的缓存行为负责。
 
 ## 已知限制与延期工作
 
 <a id="known-limitations-and-deferred-work"></a>
 
 - **别名解析取决于运行时的 ICU 数据**——一个别名组规范化成哪个名称由平台回答，因此两个跑在不同 Node 构建上的进程可能给出不同答案。
-- **只做校验**——不格式化、不做偏移运算、不推导 DST、不做时刻换算；需要这些的消费方直接用 `Intl`。
+- **不含重复规则运算**——只做时刻有效性、本地日历解析、时区解析与规范格式化；遍历候选日期或间隔的搜索由调用方自己拥有。
+- **`Temporal` polyfill 是运行时依赖**——只导入 `canonicalClientTimeZone` 的消费方在模块加载时同样会解析它，因为两个入口共用一个模块。
 
 <a id="dev-note"></a>
 ### 开发备注

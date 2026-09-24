@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-24-shared-time-vocabulary.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-24-shared-time-vocabulary.md
+/agent-note-shared-time-vocabulary-for-wall-clock-selectors:
+  en: ae04747237709d0c
+  zh: a3731d98d5e940f9
+/agent-note-shared-time-vocabulary-for-wall-clock-selectors/problem:
+  en: 6adc7f8750843df4
+  zh: 55a600663ece4b2a
+/agent-note-shared-time-vocabulary-for-wall-clock-selectors/decision:
+  en: 290a11695db08ffa
+  zh: a19b859e39e8cf8a
+/agent-note-shared-time-vocabulary-for-wall-clock-selectors/alternatives-considered:
+  en: db5c53007cf0ae82
+  zh: c654d66934c55d42
+/agent-note-shared-time-vocabulary-for-wall-clock-selectors/consequences:
+  en: a0a11d4bd4fa11e3
+  zh: 3536397be8dd0add

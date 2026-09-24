@@ -1,12 +1,17 @@
 /**
- * Time vocabulary shared by the wire boundaries that accept a caller's zone.
- * Validation and canonicalization only: this library formats nothing and owns
- * no failure vocabulary — each boundary declares and throws its own refusal.
+ * Time vocabulary shared by the boundaries that accept a caller's zone or a
+ * wall-clock selector.
+ *
+ * Validation, canonicalization, and strict parsing only: this library formats
+ * no model-facing text and owns no failure vocabulary — every entry answers a
+ * discriminated result, and each boundary maps a reason onto its own domain
+ * code and diagnostic.
  * @module @deepseek-ai/dsh-util-time
  */
 
-/** Strict browser-zone profile: UTC or an IANA Area/Location-style identifier. */
-const IANA_TIME_ZONE = /^[A-Za-z][A-Za-z0-9_+.-]*(?:\/[A-Za-z0-9_+.-]+)+$/
+import { canonicalizeTimeZone } from './instant.ts'
+
+export * from './instant.ts'
 
 /**
  * Validate and canonicalize one caller-supplied IANA zone at a wire boundary.
@@ -18,16 +23,6 @@ const IANA_TIME_ZONE = /^[A-Za-z][A-Za-z0-9_+.-]*(?:\/[A-Za-z0-9_+.-]+)+$/
  * @returns the canonical zone, or `undefined` when the name is unusable.
  */
 export function canonicalClientTimeZone(value: string): string | undefined {
-  if (value.length === 0 || value.trim() !== value
-    || (value !== 'UTC' && !IANA_TIME_ZONE.test(value))) return undefined
-  try {
-    const canonical = new Intl.DateTimeFormat('en-US', { timeZone: value })
-      .resolvedOptions().timeZone
-    /* v8 ignore next -- Intl returns UTC or a canonical IANA Area/Location for accepted input. */
-    if (canonical !== 'UTC' && !IANA_TIME_ZONE.test(canonical)) return undefined
-    return canonical
-  } catch {
-    // Intl rejects unsupported zone names; the caller maps that parser rejection.
-    return undefined
-  }
+  const resolved = canonicalizeTimeZone(value)
+  return resolved.kind === 'accepted' ? resolved.timeZone : undefined
 }
