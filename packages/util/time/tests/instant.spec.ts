@@ -1,3 +1,4 @@
+import { Temporal } from '@js-temporal/polyfill'
 import { describe, expect, it } from 'vitest'
 import {
   MAX_FOUR_DIGIT_YEAR_MS,
@@ -241,5 +242,12 @@ describe('resolveLocalInstant', () => {
 
   it('resolves UTC without a transition', () => {
     expect(resolveLocalInstant(local(2, 30), 'UTC')).toBe(Date.parse('2026-03-08T02:30:00.000Z'))
+  })
+
+  it('accepts an already-built plain date-time, so a caller that holds one needs no copy', () => {
+    expect(resolveLocalInstant(Temporal.PlainDateTime.from('2026-03-08T12:00:00'), 'America/New_York'))
+      .toBe(Date.parse('2026-03-08T16:00:00.000Z'))
+    expect(resolveLocalInstant(Temporal.PlainDateTime.from('2026-03-08T02:30:00'), 'America/New_York'))
+      .toBeUndefined()
   })
 })

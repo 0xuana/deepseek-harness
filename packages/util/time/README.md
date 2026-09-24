@@ -47,7 +47,7 @@ if (local.kind === 'accepted') {
 }
 ```
 
-`canonicalClientTimeZone` answers `undefined` for a name it refuses, and the caller raises its own refusal — `session/invalid-time-zone` for the Session prompt, `subagent/invalid-time-zone` for a subagent continuation. Every other entry answers a discriminated result whose `rejected` arm carries a stable reason, so each caller again chooses its own code and diagnostic.
+`canonicalClientTimeZone` answers `undefined` for a name it refuses, and the caller raises its own refusal — `session/invalid-time-zone` for the Session prompt, `subagent/invalid-time-zone` for a subagent continuation. Every entry that reads untrusted text answers a discriminated result whose `rejected` arm carries a stable reason, so each caller again chooses its own code and diagnostic. `formatFourDigitYearInstant` and `resolveLocalInstant` instead take already-validated values and answer a string or `undefined`.
 
 -----
 
@@ -57,7 +57,7 @@ if (local.kind === 'accepted') {
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-`src/instant.ts` holds the whole implementation; `src/index.ts` re-exports it and reduces `canonicalizeTimeZone` to the `string | undefined` form the wire boundaries already consume. The module JSDoc there states each entry's accepted profile and every reason.
+`src/instant.ts` holds the whole implementation; `src/index.ts` re-exports it and adds `canonicalClientTimeZone`, the `string | undefined` form the wire boundaries already consume. The module JSDoc there states each entry's accepted profile and every reason.
 
 The strict parsers match a fixed regular expression before constructing any date, so a malformed spelling, an out-of-range clock field, and a date the calendar does not have answer distinct reasons. Local resolution defers to `@js-temporal/polyfill`: `disambiguation: 'earlier'` picks the first instant of an overlap, and the local-field round trip answers `undefined` for a value inside a forward transition's gap.
 

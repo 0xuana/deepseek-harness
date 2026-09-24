@@ -3,9 +3,11 @@
  * wall-clock selector.
  *
  * Validation, canonicalization, and strict parsing only: this library formats
- * no model-facing text and owns no failure vocabulary — every entry answers a
- * discriminated result, and each boundary maps a reason onto its own domain
- * code and diagnostic.
+ * no model-facing text and owns no failure vocabulary. An entry that reads
+ * untrusted text answers a discriminated result, and each caller maps a reason
+ * onto its own domain code and diagnostic; `formatFourDigitYearInstant` and
+ * `resolveLocalInstant` take already-validated values and answer their result
+ * directly.
  * @module @deepseek-ai/dsh-util-time
  */
 

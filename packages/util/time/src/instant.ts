@@ -133,9 +133,9 @@ function plainDateTime(time: LocalCalendarTime): Temporal.PlainDateTime | undefi
   try {
     return Temporal.PlainDateTime.from(time, { overflow: 'reject' })
   } catch (error: unknown) {
-    /* v8 ignore next -- every numeric field is pre-checked, so only a non-existent date reaches here. */
+    /* v8 ignore next -- a rejected overflow answers a RangeError, so the false path is unreachable. */
     if (error instanceof RangeError) return undefined
-    /* v8 ignore next -- Temporal throws only RangeError for rejected overflow. */
+    /* v8 ignore next -- reached only when Temporal throws something other than a RangeError. */
     throw error
   }
 }
@@ -278,12 +278,15 @@ export function canonicalizeTimeZone(value: string): TimeZoneResult {
  * A value inside a forward transition's gap does not exist, so it answers
  * `undefined`; a value inside an overlap resolves to the earlier instant, which
  * is the same choice the maintained `Temporal` implementation makes.
- * @param time - Exact calendar fields of a real date whose fields are already in range.
+ * @param time - Exact calendar fields of a real date, or an already-built plain date-time.
  * @param timeZone - Already-canonical `UTC` or IANA zone.
  * @returns The resolved epoch milliseconds, or `undefined` for a nonexistent wall-clock time.
- * @throws RangeError when `timeZone` is not a known zone or `time` names an impossible calendar value.
+ * @throws RangeError when `timeZone` is not a known zone or the calendar value does not exist.
  */
-export function resolveLocalInstant(time: LocalCalendarTime, timeZone: string): number | undefined {
+export function resolveLocalInstant(
+  time: LocalCalendarTime | Temporal.PlainDateTime,
+  timeZone: string,
+): number | undefined {
   const local = Temporal.PlainDateTime.from(time, { overflow: 'reject' })
   const zoned = local.toZonedDateTime(timeZone, { disambiguation: 'earlier' })
   return zoned.toPlainDateTime().equals(local) ? zoned.epochMilliseconds : undefined

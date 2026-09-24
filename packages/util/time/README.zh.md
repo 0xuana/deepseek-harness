@@ -47,7 +47,7 @@ if (local.kind === 'accepted') {
 }
 ```
 
-不可用的时区名称由 `canonicalClientTimeZone` 回答 `undefined`，由调用方抛出自己的拒绝——Session 提示词用 `session/invalid-time-zone`，subagent 续话用 `subagent/invalid-time-zone`。其余每个入口都回答带判别值的结果，其 `rejected` 分支携带稳定的拒绝原因，同样由调用方选择自己的错误码与诊断文案。
+不可用的时区名称由 `canonicalClientTimeZone` 回答 `undefined`，由调用方抛出自己的拒绝——Session 提示词用 `session/invalid-time-zone`，subagent 续话用 `subagent/invalid-time-zone`。读取不可信文本的每个入口都回答带判别值的结果，其 `rejected` 分支携带稳定的拒绝原因，同样由调用方选择自己的错误码与诊断文案。`formatFourDigitYearInstant` 与 `resolveLocalInstant` 则接收已校验的值，直接回答字符串或 `undefined`。
 
 -----
 
@@ -57,7 +57,7 @@ if (local.kind === 'accepted') {
 <details>
 <summary>实现内部细节 —— 点击展开</summary>
 
-`src/instant.ts` 承载全部实现；`src/index.ts` 转出它，并把 `canonicalizeTimeZone` 归约为协议边界已经在消费的 `string | undefined` 形式。该模块的 JSDoc 说明每个入口接受的输入剖面与全部拒绝原因。
+`src/instant.ts` 承载全部实现；`src/index.ts` 转出它，并新增 `canonicalClientTimeZone`——协议边界已经在消费的 `string | undefined` 形式。该模块的 JSDoc 说明每个入口接受的输入剖面与全部拒绝原因。
 
 严格解析器先匹配固定正则，再构造任何日期，因此拼写错误、越界时钟字段与日历上不存在的日期分别回答不同的原因。本地解析交给 `@js-temporal/polyfill`：`disambiguation: 'earlier'` 取重叠时段中的第一个时刻，而本地字段往返比对对前向跳变缺口内的值回答 `undefined`。
 

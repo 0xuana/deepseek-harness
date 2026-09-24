@@ -253,26 +253,26 @@ function decodeId(value: unknown): ScheduleIdType {
 
 /** Validate one canonical four-digit-year UTC instant. */
 function decodeInstant(value: unknown): string {
-  const parsed = typeof value === 'string' ? fourDigitYearEpoch(value) : undefined
-  if (parsed === undefined || parsed.kind === 'rejected') {
-    throw new ScheduleLogError(instantDiagnostic(parsed?.reason))
+  if (typeof value !== 'string') {
+    throw new ScheduleLogError('scheduledAt must be a canonical four-digit-year RFC 3339 UTC instant')
   }
-  return value as string
+  const parsed = fourDigitYearEpoch(value)
+  if (parsed.kind === 'rejected') throw new ScheduleLogError(instantDiagnostic(parsed.reason))
+  return value
 }
 
 /**
  * Map one shared instant rejection onto the stable stored-data diagnostic.
- * @param reason - Reason the shared vocabulary refused the instant, or undefined for a non-string field.
+ * @param reason - Reason the shared vocabulary refused the instant.
  * @returns The Schedule log diagnostic for that refusal.
  */
-function instantDiagnostic(reason: InstantRejection | undefined): string {
+function instantDiagnostic(reason: InstantRejection): string {
   switch (reason) {
     case 'not_a_calendar_date':
       return 'scheduledAt is not a real UTC calendar instant'
     case 'not_rfc3339':
     case 'not_a_wall_clock_time':
     case 'invalid_numeric_offset':
-    case undefined:
       return 'scheduledAt must be a canonical four-digit-year RFC 3339 UTC instant'
     /* v8 ignore next 3 -- the shared parser returns a closed rejection union. */
     default: {
@@ -339,15 +339,9 @@ function localCalendarDiagnostic(reason: LocalCalendarRejection): string {
     /* v8 ignore next 3 -- the shared parser returns a closed rejection union. */
     default: {
       const unreachable: never = reason
-      throw new ScheduleLogError(`unknown local calendar rejection ${String(unreachable)}`)
+      throw new Error(`unknown local calendar rejection ${String(unreachable)}`)
     }
   }
-}
-
-/** Resolve only the earlier overlap instant; a gap fails the local-field round trip. */
-function localInstant(local: Temporal.PlainDateTime, timeZone: string): number | undefined {
-  const zoned = local.toZonedDateTime(timeZone, { disambiguation: 'earlier' })
-  return zoned.toPlainDateTime().equals(local) ? zoned.epochMilliseconds : undefined
 }
 
 /** Resolve a local one-shot, rejecting nonexistent wall-clock times. */
@@ -392,7 +386,7 @@ function parseAtOffsetInstant(value: string): number {
     /* v8 ignore next 3 -- the shared parser returns a closed rejection union. */
     default: {
       const unreachable: never = parsed.reason
-      throw new ScheduleLogError(`unknown instant rejection ${String(unreachable)}`)
+      throw new Error(`unknown instant rejection ${String(unreachable)}`)
     }
   }
 }
@@ -818,7 +812,7 @@ function nextMatchingTarget(
   }
   for (; Temporal.PlainDate.compare(date, lastDate) <= 0; date = date.add({ days: 1 })) {
     if (!matches(date)) continue
-    const target = localInstant(date.toPlainDateTime(time), timeZone)
+    const target = resolveLocalInstant(date.toPlainDateTime(time), timeZone)
     if (target === undefined) continue
     if (target > MAX_FOUR_DIGIT_YEAR_MS) return undefined
     if (target >= MIN_FOUR_DIGIT_YEAR_MS && target > now) return new Date(target).toISOString()
@@ -838,7 +832,7 @@ function latestDueOccurrence(
   let date = localDate(acceptedAt, 'UTC').add({ days: 1 })
   for (;; date = date.subtract({ days: 1 })) {
     if (!matches(date)) continue
-    const candidate = localInstant(date.toPlainDateTime(time), timeZone)
+    const candidate = resolveLocalInstant(date.toPlainDateTime(time), timeZone)
     if (candidate === undefined || candidate > acceptedAt) continue
     // A committed target remains due even if current tzdata places the rule before it.
     return Math.max(candidate, savedTarget)
@@ -986,7 +980,7 @@ function nextCronTarget(parsed: ParsedCronExpression, timeZone: string, floor: n
     if (matches(date)) {
       for (const time of times) {
         if (date.equals(firstDate) && Temporal.PlainTime.compare(time, floorTime) < 0) continue
-        const target = localInstant(date.toPlainDateTime(time), timeZone)
+        const target = resolveLocalInstant(date.toPlainDateTime(time), timeZone)
         if (target === undefined) continue
         if (target > MAX_FOUR_DIGIT_YEAR_MS) return undefined
         if (target >= MIN_FOUR_DIGIT_YEAR_MS && target > floor) return new Date(target).toISOString()
@@ -1040,7 +1034,7 @@ function latestCronOccurrence(
       // An earliest time that a DST gap removes leaves the bound to the first time
       // that does exist, and a date with no existing time keeps the full walk.
       const earliest = times.reduce<number | undefined>(
-        (found, time) => found ?? localInstant(date.toPlainDateTime(time), timeZone),
+        (found, time) => found ?? resolveLocalInstant(date.toPlainDateTime(time), timeZone),
         undefined,
       )
       if (earliest !== undefined && earliest > decision) {
@@ -1048,7 +1042,7 @@ function latestCronOccurrence(
         continue
       }
       for (const time of [...times].reverse()) {
-        const candidate = localInstant(date.toPlainDateTime(time), timeZone)
+        const candidate = resolveLocalInstant(date.toPlainDateTime(time), timeZone)
         if (candidate === undefined || candidate > decision || candidate < MIN_FOUR_DIGIT_YEAR_MS) continue
         // A committed target remains due even if current tzdata places the rule before it.
         return Math.max(candidate, savedTarget)
