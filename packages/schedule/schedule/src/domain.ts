@@ -14,7 +14,9 @@ import {
   parseOffsetInstant,
   resolveLocalInstant,
 } from '@deepseek-ai/dsh-util-time'
-import type { LocalCalendarRejection, LocalCalendarTime, TimeZoneRejection } from '@deepseek-ai/dsh-util-time'
+import type {
+  InstantRejection, LocalCalendarRejection, LocalCalendarTime, TimeZoneRejection,
+} from '@deepseek-ai/dsh-util-time'
 import { SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionLogOffset as SessionLogOffsetType } from '@deepseek-ai/dsh-session'
 import type {
@@ -253,13 +255,31 @@ function decodeId(value: unknown): ScheduleIdType {
 function decodeInstant(value: unknown): string {
   const parsed = typeof value === 'string' ? fourDigitYearEpoch(value) : undefined
   if (parsed === undefined || parsed.kind === 'rejected') {
-    throw new ScheduleLogError(
-      parsed?.reason === 'not_a_calendar_date'
-        ? 'scheduledAt is not a real UTC calendar instant'
-        : 'scheduledAt must be a canonical four-digit-year RFC 3339 UTC instant',
-    )
+    throw new ScheduleLogError(instantDiagnostic(parsed?.reason))
   }
   return value as string
+}
+
+/**
+ * Map one shared instant rejection onto the stable stored-data diagnostic.
+ * @param reason - Reason the shared vocabulary refused the instant, or undefined for a non-string field.
+ * @returns The Schedule log diagnostic for that refusal.
+ */
+function instantDiagnostic(reason: InstantRejection | undefined): string {
+  switch (reason) {
+    case 'not_a_calendar_date':
+      return 'scheduledAt is not a real UTC calendar instant'
+    case 'not_rfc3339':
+    case 'not_a_wall_clock_time':
+    case 'invalid_numeric_offset':
+    case undefined:
+      return 'scheduledAt must be a canonical four-digit-year RFC 3339 UTC instant'
+    /* v8 ignore next 3 -- the shared parser returns a closed rejection union. */
+    default: {
+      const unreachable: never = reason
+      throw new ScheduleLogError(`unknown instant rejection ${String(unreachable)}`)
+    }
+  }
 }
 
 /**
@@ -268,9 +288,20 @@ function decodeInstant(value: unknown): string {
  * @returns The public Schedule diagnostic for that refusal.
  */
 function timeZoneError(reason: TimeZoneRejection): ScheduleInputError {
-  return reason === 'not_canonical_shape'
-    ? new ScheduleInputError('invalid_time_zone', 'time_zone must resolve to UTC or an IANA Area/Location name.')
-    : new ScheduleInputError('invalid_time_zone', 'time_zone must be UTC or a valid IANA Area/Location name.')
+  switch (reason) {
+    case 'not_canonical_shape':
+      return new ScheduleInputError('invalid_time_zone', 'time_zone must resolve to UTC or an IANA Area/Location name.')
+    case 'blank':
+    case 'padded':
+    case 'not_area_location':
+    case 'unsupported':
+      return new ScheduleInputError('invalid_time_zone', 'time_zone must be UTC or a valid IANA Area/Location name.')
+    /* v8 ignore next 3 -- the shared parser returns a closed rejection union. */
+    default: {
+      const unreachable: never = reason
+      throw new ScheduleLogError(`unknown time zone rejection ${String(unreachable)}`)
+    }
+  }
 }
 
 /**

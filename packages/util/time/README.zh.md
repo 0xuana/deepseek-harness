@@ -68,7 +68,7 @@ if (local.kind === 'accepted') {
 | `parseLocalCalendar` | `YYYY-MM-DD` 与 `HH:mm:ss`，可带 1 到 3 位小数秒。 |
 | `parseOffsetInstant` | 带显式 `Z` 或数字偏移的 RFC 3339；偏移量属于输入的一部分。 |
 | `fourDigitYearEpoch` | 规范存储剖面：恰好 3 位小数秒与 `Z`。 |
-| `formatFourDigitYearInstant` | 四位年份范围内的纪元毫秒；超出范围回答 `undefined`。 |
+| `formatFourDigitYearInstant` | 四位年份范围内的整数纪元毫秒；超出范围或非整数时回答 `undefined`。 |
 | `resolveLocalInstant` | 精确日历字段与已规范化的时区。 |
 
 </details>

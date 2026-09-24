@@ -2,10 +2,14 @@
  * Strict instant and local-calendar vocabulary for the boundaries that accept a
  * wall-clock selector.
  *
- * Every entry answers a discriminated result instead of throwing: the library
- * carries no failure vocabulary, and each caller maps a reason onto its own
- * domain code and diagnostic. Local wall-clock resolution uses the maintained
- * `Temporal` implementation, so no caller owns offset sampling or DST rules.
+ * Every entry that reads untrusted text answers a discriminated result instead
+ * of throwing: the library carries no failure vocabulary, and each caller maps
+ * a reason onto its own domain code and diagnostic. The two entries that take
+ * already-validated values throw on violated preconditions instead —
+ * `resolveLocalInstant` raises a `RangeError` for an unknown zone or an
+ * impossible calendar field, and `formatFourDigitYearInstant` cannot throw.
+ * Local wall-clock resolution uses the maintained `Temporal` implementation, so
+ * no caller owns offset sampling or DST rules.
  * @module @deepseek-ai/dsh-util-time
  */
 
@@ -226,7 +230,7 @@ export function fourDigitYearEpoch(value: string): InstantResult {
  *
  * The bound check runs first, so a caller that also compares the result with a
  * decision time never formats an unrepresentable instant.
- * @param epoch - Candidate epoch milliseconds.
+ * @param epoch - Candidate epoch milliseconds; a non-integral value is unrepresentable.
  * @returns The canonical instant text, or `undefined` when the epoch is unrepresentable.
  */
 export function formatFourDigitYearInstant(epoch: number): string | undefined {
@@ -268,9 +272,10 @@ export function canonicalizeTimeZone(value: string): TimeZoneResult {
  * A value inside a forward transition's gap does not exist, so it answers
  * `undefined`; a value inside an overlap resolves to the earlier instant, which
  * is the same choice the maintained `Temporal` implementation makes.
- * @param time - Exact local calendar fields.
+ * @param time - Exact calendar fields of a real date whose fields are already in range.
  * @param timeZone - Already-canonical `UTC` or IANA zone.
  * @returns The resolved epoch milliseconds, or `undefined` for a nonexistent wall-clock time.
+ * @throws RangeError when `timeZone` is not a known zone or `time` names an impossible calendar value.
  */
 export function resolveLocalInstant(time: LocalCalendarTime, timeZone: string): number | undefined {
   const local = Temporal.PlainDateTime.from(time, { overflow: 'reject' })

@@ -68,7 +68,7 @@ The strict parsers match a fixed regular expression before constructing any date
 | `parseLocalCalendar` | `YYYY-MM-DD` and `HH:mm:ss`, with optional one-to-three fractional digits. |
 | `parseOffsetInstant` | RFC 3339 with an explicit `Z` or numeric offset; the offset is part of the input. |
 | `fourDigitYearEpoch` | The canonical stored profile: exactly three fractional digits and a `Z`. |
-| `formatFourDigitYearInstant` | An epoch inside the four-digit-year range; answers `undefined` outside it. |
+| `formatFourDigitYearInstant` | An integral epoch inside the four-digit-year range; answers `undefined` outside it or when non-integral. |
 | `resolveLocalInstant` | Exact calendar fields and an already-canonical zone. |
 
 </details>

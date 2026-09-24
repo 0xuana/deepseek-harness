@@ -18,13 +18,13 @@ Schedule 消费它，并保留全部域内决策。`canonicalizeTimeZone`、`dec
 
 受维护的 `@js-temporal/polyfill` 0.5.1 在成为 `dsh-schedule` 运行时依赖之外，也成为 `dsh-util-time` 的运行时依赖。本地解析继续使用它，因此缺口与重叠仍由宿主 IANA 数据决定，也没有调用方需要自己实现偏移采样。`util/time` 的 README 与包描述删去了新增依赖所否定的 `zero-dependency` 表述。
 
-可观察行为不变。每个被接受的输入解析出相同的纪元值，每个被拒绝的输入抛出相同的 `ScheduleInputError` 错误码与消息，存储的 `scheduledAt` 剖面不变，因此没有持久记录或录制快照需要重录。`packages/util/time/tests/instant.spec.ts` 直接覆盖新增入口，包含逐文件 100% 覆盖。
+可观察行为不变。每个被接受的输入解析出相同的纪元值，每个被拒绝的输入抛出相同的 `ScheduleInputError` 或 `ScheduleLogError` 错误码与相同的消息，存储的 `scheduledAt` 剖面不变，因此没有持久记录或录制快照需要重录。Schedule 的测试只断言错误码、从不断言这些消息字符串，因此 `packages/schedule/schedule/tests/domain.spec.ts` 新增了对三种本地日历诊断文案的断言；没有它，本次抽取中的一处措辞回退能通过整套测试。`packages/util/time/tests/instant.spec.ts` 直接覆盖新增入口，包含逐文件 100% 覆盖。
 
 ## Alternatives considered
 
 **把共享模块保持为 Schedule 私有。** 在 `domain.ts` 旁抽出一个 Schedule 私有的 `time` 模块可以缩小它，而不触碰已发布包、其 lockfile 条目、README 或依赖集合。之所以否决，是因为本次要消除的重复是重复的**剖面**，不是重复的行数：时区正则、`Intl` 规范化步骤与时刻剖面仍会存在两份，下一个接收墙钟选择器的边界仍会复制出第三份。
 
-**让本库自带错误类型。** 一个携带原因的 `TimeInputError` 可以让调用方直接重抛而不做映射，缩短每个调用点。之所以否决，是因为 `util/time` 既有契约规定每个边界拥有自己的拒绝词汇，而 Schedule 的诊断文案被 `tools.spec.ts`、快照期望与模型可见工具结果逐字固定；共享错误类会把一个调用方的措辞带进另一个调用方的界面。
+**让本库自带错误类型。** 一个携带原因的 `TimeInputError` 可以让调用方直接重抛而不做映射，缩短每个调用点。之所以否决，是因为 `util/time` 既有契约规定每个边界拥有自己的拒绝词汇，而 Schedule 的消息会通过工具结果的 `{ code, message }` 与客户端的消息卡片到达模型；共享错误类会把一个调用方的措辞带进另一个调用方的界面。
 
 **让本库回答 `undefined` 而不是原因。** 这正是 `canonicalClientTimeZone` 已有的形态，也是改动更小的做法。之所以否决，是因为 Schedule 必须区分格式错误的时刻、日历上不存在的日期与越界时钟字段，才能保留既有诊断；`canonicalizeTimeZone` 也必须区分名称本身不合法与本地无法解析。把二者压成一个假值，会迫使 Schedule 用自己的正则重新推导这层区分，从而恢复重复。
 
@@ -34,6 +34,6 @@ Schedule 消费它，并保留全部域内决策。`canonicalizeTimeZone`、`dec
 
 时间剖面现在只有一个归宿。时刻剖面或时区剖面的变更只做一次、只覆盖一次，新边界导入它而不是复制它。Schedule 的 `domain.ts` 去掉了三段正则、`Intl` 规范化、手写日历换算与四位年份边界运算。
 
-代价是更宽的已发布接口与更重的依赖图：`dsh-util-time` 增加了对 `@js-temporal/polyfill` 的运行时依赖，因此只导入 `canonicalClientTimeZone` 的消费方也会加载该模块。本库也不再是纯"只做校验与规范化"的包——其 README 与包描述必须说明这一点，其"已知限制"一节现在也记录了它。Schedule 在每个入口保留一层薄映射，因此本库联合类型新增原因时，每个调用方都会因穷尽 switch 而构建失败，而不是静默走默认分支。
+代价是更宽的已发布接口与更重的依赖图：`dsh-util-time` 增加了对 `@js-temporal/polyfill` 的运行时依赖，因此只导入 `canonicalClientTimeZone` 的消费方也会加载该模块。本库也不再是纯"只做校验与规范化"的包——其 README 与包描述必须说明这一点，其"已知限制"一节现在也记录了它。Schedule 在每个入口保留一层薄映射，每个映射函数都以 `never` 默认分支穷尽 switch 本库的封闭原因联合，因此新增原因会让每个受影响的调用方构建失败，而不是静默走兜底分支。
 
 `dsh-time-context` 保留自己的 IANA 正则与规范化，不参与本次改动。它在请求边界拒绝非规范别名，而 Schedule 会把它规范化，因此统一二者意味着决定浏览器时区指令需要两种行为中的哪一种；该决定属于消费方，而不属于这次抽取。
