@@ -47,7 +47,7 @@ if (local.kind === 'accepted') {
 }
 ```
 
-`canonicalClientTimeZone` answers `undefined` for a name it refuses, and the caller raises its own refusal — `session/invalid-time-zone` for the Session prompt, `subagent/invalid-time-zone` for a subagent continuation. `canonicalizeTimeZone` reports why it refused, as a discriminated result whose `rejected` arm carries a stable reason, so each caller chooses its own code and diagnostic; the strict parsers do the same. `canonicalClientTimeZone` is the wire-boundary form of the zone entry and answers the canonical name or `undefined`. `formatFourDigitYearInstant` and `resolveLocalInstant` take already-validated values and answer a string, or epoch milliseconds, with `undefined` for an unrepresentable epoch or a wall-clock value inside a DST gap.
+`canonicalClientTimeZone` answers `undefined` for a name it refuses, and the caller raises its own refusal — `session/invalid-time-zone` for the Session prompt, `subagent/invalid-time-zone` for a subagent continuation. `canonicalizeTimeZone`, the strict parsers, and `fourDigitYearEpoch` instead report why they refused, as a discriminated result whose `rejected` arm carries a stable reason, so each caller chooses its own code and diagnostic. `formatFourDigitYearInstant` and `resolveLocalInstant` take already-validated values and answer a string, or epoch milliseconds, with `undefined` for an unrepresentable epoch or a wall-clock value inside a DST gap.
 
 -----
 

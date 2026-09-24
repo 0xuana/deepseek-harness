@@ -20,7 +20,7 @@ Schedule 消费它，并保留全部域内决策。`canonicalizeTimeZone`、`dec
 
 受维护的 `@js-temporal/polyfill` 0.5.1 在成为 `dsh-schedule` 运行时依赖之外，也成为 `dsh-util-time` 的运行时依赖。本地解析继续使用它，因此缺口与重叠仍由宿主 IANA 数据决定，也没有调用方需要自己实现偏移采样。`util/time` 的 README 与包描述删去了新增依赖所否定的 `zero-dependency` 表述。
 
-可观察行为不变。每个被接受的输入解析出相同的纪元值，每个被拒绝的输入抛出相同的 `ScheduleInputError` 或 `ScheduleLogError` 错误码与相同的消息，存储的 `scheduledAt` 剖面不变，因此没有持久记录或录制快照需要重录。Schedule 的测试只断言错误码、从不断言这些消息字符串，因此 `packages/schedule/schedule/tests/domain.spec.ts` 新增了对三种本地日历诊断文案的断言；没有它，本次抽取中的一处措辞回退能通过整套测试。`packages/util/time/tests/instant.spec.ts` 直接覆盖新增入口，包含逐文件 100% 覆盖。
+可观察行为不变。每个被接受的输入解析出相同的纪元值，每个被拒绝的输入抛出相同的 `ScheduleInputError` 或 `ScheduleLogError` 错误码与相同的消息，存储的 `scheduledAt` 剖面不变，因此没有持久记录或录制快照需要重录。Schedule 其余测试只断言错误码，因此本次在 `packages/schedule/schedule/tests/domain.spec.ts` 新增的断言是唯一固定这三条本地日历消息的地方。`packages/util/time/tests/instant.spec.ts` 直接覆盖新增入口，包含逐文件 100% 覆盖。
 
 ## Alternatives considered
 
@@ -36,6 +36,6 @@ Schedule 消费它，并保留全部域内决策。`canonicalizeTimeZone`、`dec
 
 时间剖面现在只有一个归宿。时刻剖面或时区剖面的变更只做一次、只覆盖一次，新边界导入它而不是复制它。Schedule 的 `domain.ts` 去掉了为时刻、日历日期、本地时间与时区剖面命名的五段正则、`Intl` 规范化与手写日历换算。它保留了用于 UTC 边界日期运算的两个边界常量，并把每处可表示性守卫委托给 `isFourDigitYearInstant`，因此范围本身只有一个所有者。
 
-代价是更宽的已发布接口与更重的依赖图：`dsh-util-time` 增加了对 `@js-temporal/polyfill` 的运行时依赖，因此只导入 `canonicalClientTimeZone` 的消费方也会加载该模块。本库也不再是纯"只做校验与规范化"的包——其 README 与包描述必须说明这一点，其"已知限制"一节现在也记录了它。Schedule 在每个入口保留一层薄映射。本地日历与时刻映射函数以 `never` 默认分支穷尽 switch 本库的封闭原因联合，因此新增原因会让这两个调用点构建失败，而不是静默走兜底分支。时区映射函数做不到这一点：在当前 IANA 数据下本库的 `not_canonical_shape` 原因不可达，用 switch 会留下一个 Schedule 测试永远无法执行的分支。因此该映射把 `blank`、`padded`、`not_area_location` 与 `unsupported` 合并成一条诊断，日后给 `TimeZoneRejection` 新增原因时会通过编译并静默套用那条通用文案。
+代价是更宽的已发布接口与更重的依赖图：`dsh-util-time` 增加了对 `@js-temporal/polyfill` 的运行时依赖，因此只导入 `canonicalClientTimeZone` 的消费方也会加载该模块。本库也不再是纯"只做校验与规范化"的包——其 README 与包描述必须说明这一点，其"已知限制"一节现在也记录了它。Schedule 在每个入口保留一层薄映射。本地日历与时刻映射函数以 `never` 默认分支穷尽 switch 本库的封闭原因联合，因此新增原因会让这两个调用点构建失败，而不是静默走兜底分支。时区映射函数则只对 `not_canonical_shape` 分支——当前 IANA 数据不会产生该原因，因此它由 `v8 ignore` 守护而不是 `never` 默认分支——并把 `blank`、`padded`、`not_area_location` 与 `unsupported` 合并成一条诊断。因此日后给 `TimeZoneRejection` 新增原因时会通过编译并静默套用那条通用文案。
 
 本次未触及、仍归 time-context 的两项：`packages/context/time-context/src/timestamp.ts` 中的 ISO 形状时间戳渲染（那是该包的持久读数字格式），以及其插件内的耗时措辞。浏览器客户端也保留自己的本地化日期渲染与自己的 UTC 偏移读取——它们服务的目的（读者的区域设置）与边界值不同；统一它们意味着先决定共享库是否也要拥有展示格式化，以及届时由谁拥有其不变量所校验的持久读数字格式。`packages/session/session-format-v0-to-v1/src/payload-validation.ts` 也用自己的一段正则与往返比对校验规范的四位年份 UTC 时刻，这是本次未触及、仍然存在的时刻剖面副本。

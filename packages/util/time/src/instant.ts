@@ -15,10 +15,10 @@
 
 import { Temporal } from '@js-temporal/polyfill'
 
-/** Inclusive epoch-millisecond bounds of a four-digit-year RFC 3339 UTC instant. */
+/** Inclusive lower epoch-millisecond bound of a four-digit-year RFC 3339 UTC instant. */
 export const MIN_FOUR_DIGIT_YEAR_MS = Date.parse('0001-01-01T00:00:00.000Z')
 
-/** Inclusive epoch-millisecond bounds of a four-digit-year RFC 3339 UTC instant. */
+/** Inclusive upper epoch-millisecond bound of a four-digit-year RFC 3339 UTC instant. */
 export const MAX_FOUR_DIGIT_YEAR_MS = Date.parse('9999-12-31T23:59:59.999Z')
 
 /** Canonical four-digit-year RFC 3339 UTC instant with mandatory milliseconds. */
@@ -304,7 +304,10 @@ export function resolveLocalInstant(
   time: LocalCalendarTime | Temporal.PlainDateTime,
   timeZone: string,
 ): number | undefined {
-  const local = Temporal.PlainDateTime.from(time, { overflow: 'reject' })
+  // A caller walking candidate dates already holds an instance, and `from` copies it.
+  const local = time instanceof Temporal.PlainDateTime
+    ? time
+    : Temporal.PlainDateTime.from(time, { overflow: 'reject' })
   const zoned = local.toZonedDateTime(timeZone, { disambiguation: 'earlier' })
   return zoned.toPlainDateTime().equals(local) ? zoned.epochMilliseconds : undefined
 }
