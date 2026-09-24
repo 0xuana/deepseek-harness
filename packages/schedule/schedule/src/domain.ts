@@ -251,10 +251,13 @@ function decodeId(value: unknown): ScheduleIdType {
   return ScheduleId(value)
 }
 
+/** Stable Schedule diagnostic for a `scheduledAt` outside the canonical profile. */
+const NON_CANONICAL_INSTANT_MESSAGE = 'scheduledAt must be a canonical four-digit-year RFC 3339 UTC instant'
+
 /** Validate one canonical four-digit-year UTC instant. */
 function decodeInstant(value: unknown): string {
   if (typeof value !== 'string') {
-    throw new ScheduleLogError('scheduledAt must be a canonical four-digit-year RFC 3339 UTC instant')
+    throw new ScheduleLogError(NON_CANONICAL_INSTANT_MESSAGE)
   }
   const parsed = fourDigitYearEpoch(value)
   if (parsed.kind === 'rejected') throw new ScheduleLogError(instantDiagnostic(parsed.reason))
@@ -273,7 +276,7 @@ function instantDiagnostic(reason: InstantRejection): string {
     case 'not_rfc3339':
     case 'not_a_wall_clock_time':
     case 'invalid_numeric_offset':
-      return 'scheduledAt must be a canonical four-digit-year RFC 3339 UTC instant'
+      return NON_CANONICAL_INSTANT_MESSAGE
     /* v8 ignore next 3 -- the shared parser returns a closed rejection union. */
     default: {
       const unreachable: never = reason

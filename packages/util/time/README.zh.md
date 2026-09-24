@@ -47,7 +47,7 @@ if (local.kind === 'accepted') {
 }
 ```
 
-不可用的时区名称由 `canonicalClientTimeZone` 回答 `undefined`，由调用方抛出自己的拒绝——Session 提示词用 `session/invalid-time-zone`，subagent 续话用 `subagent/invalid-time-zone`。读取不可信文本的每个入口都回答带判别值的结果，其 `rejected` 分支携带稳定的拒绝原因，同样由调用方选择自己的错误码与诊断文案。`formatFourDigitYearInstant` 与 `resolveLocalInstant` 则接收已校验的值，直接回答字符串或 `undefined`。
+不可用的时区名称由 `canonicalClientTimeZone` 回答 `undefined`，由调用方抛出自己的拒绝——Session 提示词用 `session/invalid-time-zone`，subagent 续话用 `subagent/invalid-time-zone`。`canonicalizeTimeZone` 会说明拒绝原因，以带判别值的结果回答，其 `rejected` 分支携带稳定的拒绝原因，由各调用方选择自己的错误码与诊断文案；严格解析器同样如此。`canonicalClientTimeZone` 是时区入口在协议边界上的形式，回答规范名称或 `undefined`。`formatFourDigitYearInstant` 与 `resolveLocalInstant` 接收已校验的值，分别回答字符串与纪元毫秒，无法表示的纪元或落在 DST 缺口内的墙钟值回答 `undefined`。
 
 -----
 
@@ -69,7 +69,7 @@ if (local.kind === 'accepted') {
 | `parseOffsetInstant` | 带显式 `Z` 或数字偏移的 RFC 3339；偏移量属于输入的一部分。 |
 | `fourDigitYearEpoch` | 规范存储剖面：恰好 3 位小数秒与 `Z`。 |
 | `formatFourDigitYearInstant` | 四位年份范围内的整数纪元毫秒；超出范围或非整数时回答 `undefined`。 |
-| `resolveLocalInstant` | 精确日历字段与已规范化的时区。 |
+| `resolveLocalInstant` | 真实日期的精确日历字段，或已构造好的 `Temporal.PlainDateTime`，外加已规范化的时区。 |
 
 </details>
 

@@ -47,7 +47,7 @@ if (local.kind === 'accepted') {
 }
 ```
 
-`canonicalClientTimeZone` answers `undefined` for a name it refuses, and the caller raises its own refusal — `session/invalid-time-zone` for the Session prompt, `subagent/invalid-time-zone` for a subagent continuation. Every entry that reads untrusted text answers a discriminated result whose `rejected` arm carries a stable reason, so each caller again chooses its own code and diagnostic. `formatFourDigitYearInstant` and `resolveLocalInstant` instead take already-validated values and answer a string or `undefined`.
+`canonicalClientTimeZone` answers `undefined` for a name it refuses, and the caller raises its own refusal — `session/invalid-time-zone` for the Session prompt, `subagent/invalid-time-zone` for a subagent continuation. `canonicalizeTimeZone` reports why it refused, as a discriminated result whose `rejected` arm carries a stable reason, so each caller chooses its own code and diagnostic; the strict parsers do the same. `canonicalClientTimeZone` is the wire-boundary form of the zone entry and answers the canonical name or `undefined`. `formatFourDigitYearInstant` and `resolveLocalInstant` take already-validated values and answer a string, or epoch milliseconds, with `undefined` for an unrepresentable epoch or a wall-clock value inside a DST gap.
 
 -----
 
@@ -69,7 +69,7 @@ The strict parsers match a fixed regular expression before constructing any date
 | `parseOffsetInstant` | RFC 3339 with an explicit `Z` or numeric offset; the offset is part of the input. |
 | `fourDigitYearEpoch` | The canonical stored profile: exactly three fractional digits and a `Z`. |
 | `formatFourDigitYearInstant` | An integral epoch inside the four-digit-year range; answers `undefined` outside it or when non-integral. |
-| `resolveLocalInstant` | Exact calendar fields and an already-canonical zone. |
+| `resolveLocalInstant` | Exact calendar fields of a real date, or an already-built `Temporal.PlainDateTime`, plus an already-canonical zone. |
 
 </details>
 

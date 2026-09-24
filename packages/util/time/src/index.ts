@@ -3,11 +3,12 @@
  * wall-clock selector.
  *
  * Validation, canonicalization, and strict parsing only: this library formats
- * no model-facing text and owns no failure vocabulary. An entry that reads
- * untrusted text answers a discriminated result, and each caller maps a reason
- * onto its own domain code and diagnostic; `formatFourDigitYearInstant` and
- * `resolveLocalInstant` take already-validated values and answer their result
- * directly.
+ * no model-facing text and owns no failure vocabulary. A refusal that carries a
+ * reason is a discriminated result, and each caller maps that reason onto its
+ * own domain code and diagnostic. `canonicalClientTimeZone` is the wire-boundary
+ * form and answers a name or `undefined`; `formatFourDigitYearInstant` and
+ * `resolveLocalInstant` take already-validated values and answer a string or
+ * epoch milliseconds directly.
  * @module @deepseek-ai/dsh-util-time
  */
 
