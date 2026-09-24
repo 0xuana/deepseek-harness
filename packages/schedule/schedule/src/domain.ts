@@ -14,7 +14,7 @@ import {
   parseOffsetInstant,
   resolveLocalInstant,
 } from '@deepseek-ai/dsh-util-time'
-import type { LocalCalendarTime, TimeZoneRejection } from '@deepseek-ai/dsh-util-time'
+import type { LocalCalendarRejection, LocalCalendarTime, TimeZoneRejection } from '@deepseek-ai/dsh-util-time'
 import { SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionLogOffset as SessionLogOffsetType } from '@deepseek-ai/dsh-session'
 import type {
@@ -288,14 +288,26 @@ export function canonicalizeTimeZone(value: string): string {
 function parseLocalAt(value: LocalAtInput): LocalCalendarTime {
   const parsed = parseLocalCalendar(value.date, value.time)
   if (parsed.kind === 'rejected') {
-    throw new ScheduleInputError(
-      'invalid_rule',
-      parsed.reason === 'malformed'
-        ? 'Local at requires date YYYY-MM-DD and time HH:mm:ss with optional one-to-three digit milliseconds.'
-        : 'The local at value must be a real ISO calendar date and time.',
-    )
+    throw new ScheduleInputError('invalid_rule', localCalendarDiagnostic(parsed.reason))
   }
   return parsed.time
+}
+
+/** Map one shared local-calendar rejection onto the stable Schedule diagnostic. */
+function localCalendarDiagnostic(reason: LocalCalendarRejection): string {
+  switch (reason) {
+    case 'malformed':
+      return 'Local at requires date YYYY-MM-DD and time HH:mm:ss with optional one-to-three digit milliseconds.'
+    case 'not_a_calendar_date':
+      return 'The at value must be a real ISO calendar date and time.'
+    case 'out_of_range':
+      return 'The local at value must be a real ISO calendar date and time.'
+    /* v8 ignore next 3 -- the shared parser returns a closed rejection union. */
+    default: {
+      const unreachable: never = reason
+      throw new ScheduleLogError(`unknown local calendar rejection ${String(unreachable)}`)
+    }
+  }
 }
 
 /** Resolve only the earlier overlap instant; a gap fails the local-field round trip. */
