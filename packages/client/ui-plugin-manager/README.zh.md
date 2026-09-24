@@ -39,7 +39,7 @@ Host 通过普通 fetch 代理向 `https://registry.npmjs.org/-/ping` 和 `https
 
 准备和下载期间，**取消安装**会请求 Host 停止运行并等待确认。加载组合包的阶段不可取消。点击 ×、按 Escape 或点击遮罩会立即隐藏对话框，并在可以取消时请求取消。**查看安装任务**会重新打开同一任务并保留输出；结果待定或尚未确认时不能发起另一项安装。确认取消后回到 spec 输入界面并显示 toast；manifest 与 lockfile 已恢复，已下载文件可能保留。安装响应丢失后会请求恢复结果；**核对安装状态**和重连会重试该请求。Host 已无活动请求时，**未能获取安装结果**允许检查插件列表后返回编辑。早于接收确认的取消请求会等待并自动重试；取消失败可手动重试。隐藏的任务通过 toast 通知结果，不会重新弹出对话框。
 
-Host 将网络失败或超时归因于 GitHub 地址，且提供 npmmirror 时，对话框显示**无法访问 GitHub**，超时时显示**连接 GitHub 超时**，提供**改用国内镜像**和**取消**。选择镜像后回到空的包名输入框，记住所选安装源，不自动开始下一次安装。其他失败保留原有诊断和操作。镜像提供注册表中的包及依赖，不代替 GitHub 仓库下载。
+Host 将网络失败或超时归因于 GitHub 地址，且提供 npmmirror 时，对话框显示**无法访问 GitHub**，超时时显示**连接 GitHub 超时**，提供**改用国内镜像**和**取消**。选择镜像后回到空的包名输入框，记住所选安装源，不自动开始下一次安装。安装已在使用 npmmirror 时（无论是选中、手动输入，还是 pnpm 自身配置指向它），按钮改为**试试其他方式**，同样回到空的包名输入框并展开**插件安装引导和示例**，安装源保持不变。其他失败保留原有诊断和操作。镜像提供注册表中的包及依赖，不代替 GitHub 仓库下载。
 
 ### 切换一个组合包
 
@@ -51,7 +51,7 @@ Host 将网络失败或超时归因于 GitHub 地址，且提供 npmmirror 时�
 
 ### 配置页
 
-自带配置的插件把配置渲染在本页而不是设置里，通过本页声明的三个 slot：`plugins.item`（list）用于官方插件，按其 `label` 列在官方分组里；`plugins.bundle.config`（以组合包的包名为键）用于组合包自己的配置，显示在组合包页面的描述与行之间；`plugins.row.config`（以 `<包名>#<行 id>` 为键）用于某一行的配置，这一行由此多出一个**配置**控件，打开该行自己的页面。页面用 `view: 'page'` 渲染带自己保存控件的表单。官方插件卡片还在标题下渲染 `view: 'summary'`；行详情页只在缺少包描述时使用该视图。只有保存才写入：页面负责画标题、图标与面包屑，条目的表单在离开页面时丢弃暂存的修改。安装随附的四个宿主平面配置页——shell 执行器、agent loop、Subagent、DeepSeek 搜索提供方——各来自一个伴生包：[ui-settings-shell](../ui-settings-shell/README.zh.md)、[ui-settings-agent-loop](../ui-settings-agent-loop/README.zh.md)、[ui-settings-subagent](../ui-settings-subagent/README.zh.md) 与 [ui-settings-web-search](../ui-settings-web-search/README.zh.md)，在 Host 服务其命名空间期间注册。组合包的浏览器半侧用同样的方式注册：
+自带配置的插件把配置渲染在本页而不是设置里，通过本页声明的三个 slot：`plugins.item`（list）用于官方插件，按其 `label` 列在官方分组里；`plugins.bundle.config`（以组合包的包名为键）用于组合包自己的配置，显示在组合包页面的描述与行之间；`plugins.row.config`（以 `<包名>#<行 id>` 为键）用于某一行的配置，这一行由此多出一个**配置**控件，打开该行自己的页面。页面用 `view: 'page'` 渲染带自己保存控件的表单。官方插件卡片还在标题下渲染 `view: 'summary'`；行详情页只在缺少包描述时使用该视图。只有保存才写入：页面负责画标题、图标与面包屑，条目的表单在离开页面时丢弃暂存的修改。安装随附的四个宿主平面配置页——shell 执行器、agent loop、子智能体、DeepSeek 搜索提供方——各来自一个伴生包：[ui-settings-shell](../ui-settings-shell/README.zh.md)、[ui-settings-agent-loop](../ui-settings-agent-loop/README.zh.md)、[ui-settings-subagent](../ui-settings-subagent/README.zh.md) 与 [ui-settings-web-search](../ui-settings-web-search/README.zh.md)，在 Host 服务其命名空间期间注册。组合包的浏览器半侧用同样的方式注册：
 
 ```tsx ignore-check
 ctx.slots.inject('plugins.row.config', () => ctx.slots.register({
@@ -101,7 +101,7 @@ Host 入口通过生成的 Remote 接口暴露 `pluginRegistryProbe.fastest()`�
 
 自定义条目页以 Host 条目 id 作为注册 id；行页面使用 bundle 包名和行 id。当条目提供可编辑 Config 字段时，页面宿主传入 `form.state` 和 `form.mutate(operations, expectedRevision)`。自定义页面负责草稿和校验提示，并可复用 ui-primitives 的 `ConfigField`。整个 bundle 的页面可以包含多个条目，因此没有单一表单。
 
-页面的 `main` 注册把 `plugins.item`、`plugins.bundle.config` 与 `plugins.row.config` 声明为子 slot，因此它们与页面同生，注册方的 `ctx.slots.inject` 会等到它们出现。`configLedgerSource` 把三份账本投影成一个可观察对象——按账本顺序排列、标签按当前语言解析的官方条目，以及组合包与行的键——在账本或语言变化前保持缓存；页面把它作为 `useConfigLedger` 绑在 store 旁边，自身从不点名任何可配置插件。打开的是哪一页是页面本地状态：卡片、某个组合包、某个官方插件，或组合包的某一行。注册与做出它的浏览器半侧同生共死。`dsh-client-modules` 只把一个包的浏览器半侧挂在说明符恰为包名的那一行 Loader 行上，所以组合包为自己或任一行注册的页面，都会在那一行被关闭时一起消失；需要在其他行关闭时仍保留页面的子插件，应作为独立的包发布。 名称以 `@deepseek-ai/dsh-experimental-` 开头的官方包显示实验性标记。
+页面的 `main` 注册把 `plugins.item`、`plugins.bundle.config` 与 `plugins.row.config` 声明为子 slot，因此它们与页面同生，注册方的 `ctx.slots.inject` 会等到它们出现。`configLedgerSource` 把三份账本投影成一个可观察对象——按账本顺序排列、标签按当前语言解析的官方条目，以及组合包与行的键——在账本或语言变化前保持缓存；页面把它作为 `useConfigLedger` 绑在 store 旁边，自身从不点名任何可配置插件。注册拥有的导航 store 选择卡片、某个组合包、某个官方插件或组合包的某一行；切换离开插件面板时重置为列表，React 重新挂载则保留所选目标。其他 Client 插件注入 `pluginNavigation`，调用 `ctx.pluginNavigation.openBundle(packageName)` 即可打开组合包详情，不改变当前 Session。首次读取清单期间保留导航目标；组合包不存在时显示列表。注册与做出它的浏览器半侧同生共死。`dsh-client-modules` 只把一个包的浏览器半侧挂在说明符恰为包名的那一行 Loader 行上，所以组合包为自己或任一行注册的页面，都会在那一行被关闭时一起消失；需要在其他行关闭时仍保留页面的子插件，应作为独立的包发布。 名称以 `@deepseek-ai/dsh-experimental-` 开头的官方包显示实验性标记。
 
 `plugins.bundle.config` 以 npm 包名为 key，提供 Bundle 详情配置。`plugins.bundle.activation` 在用户从列表显式启用后提供 Bundle 自有引导，并传入关闭引导和打开详情的回调。仅列出已启用的 Bundle 不会触发引导。
 

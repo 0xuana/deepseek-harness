@@ -244,6 +244,9 @@ importers:
       '@deepseek-ai/dsh-experimental-agent-team-profile':
         specifier: workspace:*
         version: link:../../packages/experimental/agent-team-profile
+      '@deepseek-ai/dsh-experimental-auto-review':
+        specifier: workspace:*
+        version: link:../../packages/experimental/auto-review
       '@deepseek-ai/dsh-experimental-voice-input-bundle':
         specifier: workspace:*
         version: link:../../packages/experimental/voice-input-bundle
@@ -669,6 +672,9 @@ importers:
       react-dom:
         specifier: ^18.2.0
         version: 18.3.1(react@18.3.1)
+      sharp:
+        specifier: ^0.35.3
+        version: 0.35.3(@types/node@22.20.0)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -705,15 +711,21 @@ importers:
       '@deepseek-ai/dsh-jobs':
         specifier: workspace:*
         version: link:../../packages/jobs/jobs
+      '@deepseek-ai/dsh-schedule':
+        specifier: workspace:*
+        version: link:../../packages/schedule/schedule
       '@deepseek-ai/dsh-skill-office':
         specifier: workspace:*
         version: link:../../packages/skill/skill-office
       '@deepseek-ai/dsh-tool-workspace-dependencies':
         specifier: workspace:*
         version: link:../../packages/skill/tool-workspace-dependencies
+      '@deepseek-ai/dsh-workspace':
+        specifier: workspace:*
+        version: link:../../packages/workspace/workspace
       '@deepseek-ai/libreoffice-kit':
-        specifier: ^0.1.0
-        version: 0.1.0
+        specifier: ^0.1.1
+        version: 0.1.1
 
   apps/web:
     devDependencies:
@@ -2599,6 +2611,9 @@ importers:
       '@deepseek-ai/dsh-plugin-manager':
         specifier: workspace:*
         version: link:../../boot/plugin-manager
+      '@deepseek-ai/dsh-schedule':
+        specifier: workspace:*
+        version: link:../../schedule/schedule
       '@deepseek-ai/dsh-session-log-export':
         specifier: workspace:*
         version: link:../../session-query/session-log-export
@@ -2623,6 +2638,9 @@ importers:
       '@deepseek-ai/dsh-terminal-bash':
         specifier: workspace:*
         version: link:../../terminal/terminal-bash
+      '@deepseek-ai/dsh-time-context':
+        specifier: workspace:*
+        version: link:../../context/time-context
       '@deepseek-ai/dsh-tool-ask-user':
         specifier: workspace:*
         version: link:../../interaction/tool-ask-user
@@ -2733,8 +2751,8 @@ importers:
         specifier: workspace:*
         version: link:../../typert/registry
       '@deepseek-ai/libreoffice-kit':
-        specifier: ^0.1.0
-        version: 0.1.0
+        specifier: ^0.1.1
+        version: 0.1.1
 
   packages/client/connection:
     dependencies:
@@ -7027,8 +7045,8 @@ importers:
         specifier: workspace:*
         version: link:../../typert/protocol
       '@deepseek-ai/libreoffice-kit':
-        specifier: ^0.1.0
-        version: 0.1.0
+        specifier: ^0.1.1
+        version: 0.1.1
       '@deepseek-ai/schemastery':
         specifier: link:../../../vendor/schemastery
         version: link:../../../vendor/schemastery
@@ -8465,6 +8483,9 @@ importers:
       '@deepseek-ai/dsh-llm':
         specifier: workspace:*
         version: link:../../llm/llm
+      '@deepseek-ai/dsh-output-retention':
+        specifier: workspace:*
+        version: link:../../util/output-retention
       '@deepseek-ai/dsh-sandbox':
         specifier: workspace:*
         version: link:../../sandbox/sandbox
@@ -11385,6 +11406,9 @@ importers:
       '@deepseek-ai/dsh-llm':
         specifier: workspace:*
         version: link:../../llm/llm
+      '@deepseek-ai/dsh-output-retention':
+        specifier: workspace:*
+        version: link:../../util/output-retention
       '@deepseek-ai/dsh-sandbox':
         specifier: workspace:*
         version: link:../../sandbox/sandbox
@@ -11507,6 +11531,9 @@ importers:
       '@deepseek-ai/dsh-llm':
         specifier: workspace:*
         version: link:../../llm/llm
+      '@deepseek-ai/dsh-output-retention':
+        specifier: workspace:*
+        version: link:../../util/output-retention
       '@deepseek-ai/dsh-pwsh-local':
         specifier: workspace:*
         version: link:../pwsh-local
@@ -11597,8 +11624,8 @@ importers:
   packages/skill/skill-office:
     dependencies:
       '@deepseek-ai/libreoffice-kit':
-        specifier: ^0.1.0
-        version: 0.1.0
+        specifier: ^0.1.1
+        version: 0.1.1
       '@deepseek-ai/schemastery':
         specifier: link:../../../vendor/schemastery
         version: link:../../../vendor/schemastery
@@ -12041,9 +12068,6 @@ importers:
       '@deepseek-ai/dsh-session-projection':
         specifier: workspace:*
         version: link:../../session/session-projection
-      '@deepseek-ai/dsh-session-projection-cache':
-        specifier: workspace:*
-        version: link:../../session/session-projection-cache
       '@deepseek-ai/dsh-session-query':
         specifier: workspace:*
         version: link:../../session-query/session-query
@@ -14848,37 +14872,37 @@ packages:
     resolution: {integrity: sha512-QxULHAm7cNu72w97JUNCBFODFaXpbDg+dP8b/oWFAZ2MTRppA3U00Y2L1HqaS4J6yBqxwa/Y3nMBaxVKbB/NsA==}
     engines: {node: '>=20.19.0'}
 
-  '@deepseek-ai/libreoffice-kit-darwin-arm64@0.1.0':
-    resolution: {integrity: sha512-VtFKOp6CdNp9yfxkqxSg+tc3/od+E1BDiageJpQ2gBXKEVZAZDJLgn9ogf5tsgPKrADSoClWEUtQGrKpRove2Q==}
+  '@deepseek-ai/libreoffice-kit-darwin-arm64@0.1.1':
+    resolution: {integrity: sha512-D6NBvtoNpm9pOgBXGQTdxpds1tYMeiFKhGJgnXF/SE0124ZM8j0AOXI7cZ8CErHctqIoVYP+gKWCrnQl4we41A==}
     engines: {node: '>=22.19.0'}
     cpu: [arm64]
     os: [darwin]
 
-  '@deepseek-ai/libreoffice-kit-darwin-x64@0.1.0':
-    resolution: {integrity: sha512-TI+7wsPAj7lE4q+Mhl+cAJwmJYr7zJi2L1pIGicOZm3NFXrdLfv5Enp8MqU9tUDX2B2rofCPVkohq0g7db6VXQ==}
+  '@deepseek-ai/libreoffice-kit-darwin-x64@0.1.1':
+    resolution: {integrity: sha512-VcAqzmzDbRySLBnpRNYSEd+fDmAtdgL1hQMjRf4sFnQuz7m1vipQ00DtlqFG/T+9uCc20bMIyiDWh8zfYObW3w==}
     engines: {node: '>=22.19.0'}
     cpu: [x64]
     os: [darwin]
 
-  '@deepseek-ai/libreoffice-kit-wasm@0.1.0':
-    resolution: {integrity: sha512-xIZGPIeFAGnU8g7ChtFfW1JeOZ3T7sNaITvXpnGjZkwUhxiv/YqCO7KoWKD4ImVObNI0jiDtusAQKwbtgJiibQ==}
+  '@deepseek-ai/libreoffice-kit-wasm@0.1.1':
+    resolution: {integrity: sha512-YuKZJdDhR/0GeTZUHJsJvachJR8ZiS4lcrL+lxUF2GLRwXcMikN0zAQOA+6kD/nRI+vlHsCkX0KvHaKvfae79Q==}
     engines: {node: '>=22.19.0'}
     os: [linux]
 
-  '@deepseek-ai/libreoffice-kit-win32-arm64@0.1.0':
-    resolution: {integrity: sha512-zt2T2V86ulIIPckok5aYQAh5HLD+WiQrMwI9gbbLHm2gfj+1Z36x4b6BbQxkkADZZnc0hitYcEaqdxymThvIjQ==}
+  '@deepseek-ai/libreoffice-kit-win32-arm64@0.1.1':
+    resolution: {integrity: sha512-RR05Y9NQzPYRRo9vCydlp6HKv+0eR12A99Pw7bAuUmcagyGN3gtWZKaG6xrT8vccPf3mByP3Bi0Mo31D/lrySA==}
     engines: {node: '>=22.19.0'}
     cpu: [arm64]
     os: [win32]
 
-  '@deepseek-ai/libreoffice-kit-win32-x64@0.1.0':
-    resolution: {integrity: sha512-+lwdDltKEmvsldWHcFxIDsS7jQ7LNNhTOa7+JSN8E1oQKCPChkUGzovbgwvufNJ1R4aceJW60v2vQ0qp35pvvQ==}
+  '@deepseek-ai/libreoffice-kit-win32-x64@0.1.1':
+    resolution: {integrity: sha512-03CUYg9j2qJ7Q6K27xFCvTLa7FgawOZ1DtE6NlEYttF6TxGuyHEv358vBGc3cwlR1yG1Vfj+pa4e5MdPGpy8mA==}
     engines: {node: '>=22.19.0'}
     cpu: [x64]
     os: [win32]
 
-  '@deepseek-ai/libreoffice-kit@0.1.0':
-    resolution: {integrity: sha512-Q54S/ydM4OKirhwoE8g/FEJtVjViKZvDp/01Y//eXq5f2OgJTRPXxuvDEgYwFXq0xwzwSShag6t3sDOEKcc2eg==}
+  '@deepseek-ai/libreoffice-kit@0.1.1':
+    resolution: {integrity: sha512-vML+3Nh/159k/TWuxLfZU1O39BA0m+/jybfySu9dJaTHR2oAi+hHWud6iRhBaCie5N6ADfo4DNHajBk52pmRog==}
     engines: {node: '>=22.19.0'}
     hasBin: true
 
@@ -19032,13 +19056,9 @@ packages:
     deprecated: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
     hasBin: true
 
-  glob@7.2.0:
-    resolution: {integrity: sha512-lmLf6gtyrPq8tTjSmrO94wBeQbFR3HbLHbuyD69wuyQkImp2hWqMGB47OX65FBkPffO641IP9jWa1z4ivqG26Q==}
-    deprecated: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
-
   glob@7.2.3:
     resolution: {integrity: sha512-nFR0zLpU2YCaRxwoCJvL6UvCH2JFyFVIvwTLsIf21AuHlMskA1hhTdk+LlYJtOlYt9v6dvszD2BGRqBL+iQK9Q==}
-    deprecated: Glob versions prior to v9 are no longer supported
+    deprecated: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
 
   global-agent@3.0.0:
     resolution: {integrity: sha512-PT6XReJ+D07JvGoxQMkT6qji/jVNfX/h364XHZOWeRzy64sSFr+xJ5OX7LI3b4MPQzdL4H8Y8M0xzPpsVMwA8Q==}
@@ -22365,32 +22385,32 @@ snapshots:
 
   '@csstools/css-tokenizer@4.0.0': {}
 
-  '@deepseek-ai/libreoffice-kit-darwin-arm64@0.1.0':
+  '@deepseek-ai/libreoffice-kit-darwin-arm64@0.1.1':
     optional: true
 
-  '@deepseek-ai/libreoffice-kit-darwin-x64@0.1.0':
+  '@deepseek-ai/libreoffice-kit-darwin-x64@0.1.1':
     optional: true
 
-  '@deepseek-ai/libreoffice-kit-wasm@0.1.0':
+  '@deepseek-ai/libreoffice-kit-wasm@0.1.1':
     optional: true
 
-  '@deepseek-ai/libreoffice-kit-win32-arm64@0.1.0':
+  '@deepseek-ai/libreoffice-kit-win32-arm64@0.1.1':
     optional: true
 
-  '@deepseek-ai/libreoffice-kit-win32-x64@0.1.0':
+  '@deepseek-ai/libreoffice-kit-win32-x64@0.1.1':
     optional: true
 
-  '@deepseek-ai/libreoffice-kit@0.1.0':
+  '@deepseek-ai/libreoffice-kit@0.1.1':
     dependencies:
       fflate: 0.8.2
       fontkit: 2.0.4
       saxes: 6.0.0
     optionalDependencies:
-      '@deepseek-ai/libreoffice-kit-darwin-arm64': 0.1.0
-      '@deepseek-ai/libreoffice-kit-darwin-x64': 0.1.0
-      '@deepseek-ai/libreoffice-kit-wasm': 0.1.0
-      '@deepseek-ai/libreoffice-kit-win32-arm64': 0.1.0
-      '@deepseek-ai/libreoffice-kit-win32-x64': 0.1.0
+      '@deepseek-ai/libreoffice-kit-darwin-arm64': 0.1.1
+      '@deepseek-ai/libreoffice-kit-darwin-x64': 0.1.1
+      '@deepseek-ai/libreoffice-kit-wasm': 0.1.1
+      '@deepseek-ai/libreoffice-kit-win32-arm64': 0.1.1
+      '@deepseek-ai/libreoffice-kit-win32-x64': 0.1.1
 
   '@docsearch/css@3.8.2': {}
 
@@ -26457,15 +26477,6 @@ snapshots:
       package-json-from-dist: 1.0.1
       path-scurry: 1.11.1
 
-  glob@7.2.0:
-    dependencies:
-      fs.realpath: 1.0.0
-      inflight: 1.0.6
-      inherits: 2.0.4
-      minimatch: 3.1.5
-      once: 1.4.0
-      path-is-absolute: 1.0.1
-
   glob@7.2.3:
     dependencies:
       fs.realpath: 1.0.0
@@ -28201,7 +28212,7 @@ snapshots:
 
   rimraf@2.6.3:
     dependencies:
-      glob: 7.2.0
+      glob: 7.2.3
 
   roarr@2.15.4:
     dependencies:
