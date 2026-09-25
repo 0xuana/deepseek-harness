@@ -107,7 +107,7 @@ None of its own. The consumer that injects a zone- or schedule-derived line into
 - **No recurrence arithmetic** — instant validity, local-calendar parsing, zone resolution, canonical formatting, and a millisecond span only; a caller that walks candidate dates or intervals owns that search.
 - **`Duration` has no calendar units** — a day is exactly 24 hours and a month has no fixed length, so a caller that needs local calendar days derives them from the zone.
 - **`Duration` does not convert units implicitly** — it overrides no coercion hook (`valueOf`, `toString`, `Symbol.toPrimitive`), so a reader states its unit through `milliseconds` or a `to*` conversion.
-- **Seconds-unit boundaries still multiply** — `dsh-schedule` and the DeepSeek file store convert their own second-valued fields with `* 1_000`; `Duration.fromSeconds` is the intended next consumer for those spans, and none of them has moved yet.
+- **Seconds-unit spans still multiply** — `dsh-schedule`'s interval and delay fields and the DeepSeek file store's refresh margin are second-valued spans converted with `* 1_000`; `Duration.fromSeconds` is their intended next consumer, and none has moved yet. An epoch expressed in seconds is not a span and must not be built into one.
 - **The `Temporal` polyfill is a runtime dependency** — a consumer that imports only `canonicalClientTimeZone` still resolves it at module load, because both entries share one module.
 
 <a id="dev-note"></a>

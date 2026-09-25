@@ -107,7 +107,7 @@ Duration.fromSeconds(90).milliseconds // 90000 — the unit is in the name, and 
 - **不含重复规则运算**——只做时刻有效性、本地日历解析、时区解析、规范格式化与毫秒精度的时间段；遍历候选日期或间隔的搜索由调用方自己拥有。
 - **`Duration` 没有日历单位**——一天恰好是 24 小时，月没有固定长度；需要本地日历天的调用方从时区推导。
 - **`Duration` 不做隐式单位换算**——它不覆盖任何强制转换钩子（`valueOf`、`toString`、`Symbol.toPrimitive`），读取方必须通过 `milliseconds` 或某个 `to*` 换算声明单位。
-- **秒为单位的边界仍在自行相乘**——`dsh-schedule` 与 DeepSeek 的文件存储用 `* 1_000` 换算各自以秒为单位的字段；`Duration.fromSeconds` 是这些时间段的预期下一个消费方，目前都还没改。
+- **以秒为单位的跨度仍在自行相乘**——`dsh-schedule` 的间隔与延迟字段、DeepSeek 文件存储的刷新余量都是以秒为单位的跨度，用 `* 1_000` 换算；`Duration.fromSeconds` 是它们预期的下一个消费方，目前都还没改。以秒表示的纪元不是跨度，不得构造成跨度。
 - **`Temporal` polyfill 是运行时依赖**——只导入 `canonicalClientTimeZone` 的消费方在模块加载时同样会解析它，因为两个入口共用一个模块。
 
 <a id="dev-note"></a>
