@@ -50,7 +50,7 @@ Duration.fromSeconds(90).decompose() // { days: 0, hours: 0, minutes: 1, seconds
 Duration.fromSeconds(90).milliseconds // 90000 — the unit is in the name, and no coercion answers the count
 ```
 
-`canonicalClientTimeZone` answers `undefined` for a name it refuses, and the caller raises its own refusal — `session/invalid-time-zone` for the Session prompt, `subagent/invalid-time-zone` for a subagent continuation. `canonicalizeTimeZone`, the strict parsers, and `fourDigitYearEpoch` instead report why they refused, as a discriminated result whose `rejected` arm carries a stable reason, so each caller chooses its own code and diagnostic. `formatFourDigitYearInstant` and `resolveLocalInstant` take already-validated values and answer a string, or epoch milliseconds, with `undefined` for an unrepresentable epoch or a wall-clock value inside a DST gap. `Duration` is a frozen value type over one millisecond count: it validates that the count is finite, adds and orders without any unit conversion, converts to seconds, minutes, hours, and days fractionally, and splits a non-negative span into whole parts.
+`canonicalClientTimeZone` answers `undefined` for a name it refuses, and the caller raises its own refusal — `session/invalid-time-zone` for the Session prompt, `subagent/invalid-time-zone` for a subagent continuation. `canonicalizeTimeZone`, the strict parsers, and `fourDigitYearEpoch` instead report why they refused, as a discriminated result whose `rejected` arm carries a stable reason, so each caller chooses its own code and diagnostic. `formatFourDigitYearInstant` and `resolveLocalInstant` take already-validated values and answer a string, or epoch milliseconds, with `undefined` for an unrepresentable epoch or a wall-clock value inside a DST gap. `Duration` is a frozen value type over one millisecond count: it validates that the count is finite and inside the exactly representable range, adds, subtracts, orders, and reports a negative span without any unit conversion, converts to seconds, minutes, hours, and days fractionally, and splits a non-negative span into whole parts.
 
 -----
 
@@ -60,7 +60,7 @@ Duration.fromSeconds(90).milliseconds // 90000 — the unit is in the name, and 
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-`src/instant.ts` holds the whole implementation; `src/index.ts` re-exports it and adds `canonicalClientTimeZone`, the `string | undefined` form the wire boundaries already consume. The module JSDoc there states each entry's accepted profile and every reason.
+`src/instant.ts` holds the parsers and `src/duration.ts` the span; `src/index.ts` re-exports both and adds `canonicalClientTimeZone`, the `string | undefined` form the wire boundaries already consume. The module JSDoc there states each entry's accepted profile and every reason.
 
 The strict parsers match a fixed regular expression before constructing any date, so a malformed spelling, an out-of-range clock field, and a date the calendar does not have answer distinct reasons. Local resolution defers to `@js-temporal/polyfill`: `disambiguation: 'earlier'` picks the first instant of an overlap, and the local-field round trip answers `undefined` for a value inside a forward transition's gap.
 
@@ -106,7 +106,8 @@ None of its own. The consumer that injects a zone- or schedule-derived line into
 - **Alias resolution follows the runtime's ICU data** — which name an alias group canonicalizes to is the platform's answer, so two processes on different Node builds can disagree about it.
 - **No recurrence arithmetic** — instant validity, local-calendar parsing, zone resolution, canonical formatting, and a millisecond span only; a caller that walks candidate dates or intervals owns that search.
 - **`Duration` has no calendar units** — a day is exactly 24 hours and a month has no fixed length, so a caller that needs local calendar days derives them from the zone.
-- **`Duration` does not convert units implicitly** — it has no `valueOf` and no `toString`, so a reader states its unit through `milliseconds` or a `to*` conversion.
+- **`Duration` does not convert units implicitly** — it has no `valueOf`, no `toString`, and no `Symbol.toPrimitive`, so a reader states its unit through `milliseconds` or a `to*` conversion.
+- **Seconds-unit boundaries still multiply** — `dsh-schedule` and the DeepSeek file store convert their own second-valued fields with `* 1_000`; `Duration.fromSeconds` is the intended next consumer for those spans, and none of them has moved yet.
 - **The `Temporal` polyfill is a runtime dependency** — a consumer that imports only `canonicalClientTimeZone` still resolves it at module load, because both entries share one module.
 
 <a id="dev-note"></a>

@@ -33,11 +33,22 @@ export interface DurationParts {
 }
 
 /**
+ * Largest millisecond count a span holds.
+ *
+ * Every integer up to this bound is exactly representable, which is what makes
+ * the whole-part split exact; beyond it the parts a reader gets back would not
+ * add up to the span.
+ */
+const MAX_SPAN_MS = Number.MAX_SAFE_INTEGER
+
+/**
  * One span of time in milliseconds.
  *
- * Instances are frozen, so a span cannot drift after it is built, and they carry
- * no calendar meaning: a month is not a fixed count of milliseconds, so no entry
- * here converts to or from calendar units.
+ * Instances are frozen, so a span cannot drift after it is built. A span is
+ * bounded by the exactly representable millisecond range, which is wider than
+ * any interval this harness schedules, and it carries no calendar meaning: a
+ * month is not a fixed count of milliseconds, so no entry here converts to or
+ * from calendar units.
  */
 export class Duration {
   /** The additive identity. */
@@ -52,13 +63,18 @@ export class Duration {
 
   /**
    * Build one span from a millisecond count.
-   * @param milliseconds - Finite millisecond count; a fractional count is kept as given.
+   * @param milliseconds - Count within the exactly representable range (about 285,000 years); fractions are kept.
    * @returns The span.
-   * @throws TypeError when the count is not a finite number.
+   * @throws TypeError when the count is not finite, or exceeds the exactly representable millisecond range.
    */
   static fromMilliseconds(milliseconds: number): Duration {
     if (!Number.isFinite(milliseconds)) {
       throw new TypeError(`duration milliseconds must be finite, got ${String(milliseconds)}`)
+    }
+    if (Math.abs(milliseconds) > MAX_SPAN_MS) {
+      throw new TypeError(
+        `duration milliseconds must not exceed ${MAX_SPAN_MS} so its parts stay exact, got ${String(milliseconds)}`,
+      )
     }
     return new Duration(milliseconds)
   }
@@ -120,7 +136,7 @@ export class Duration {
 
   /**
    * The span in seconds.
-   * @returns The span as a fractional second count, lossless in both directions.
+   * @returns The span as a fractional seconds count: one division, so the answer is the double nearest the exact ratio.
    */
   toSeconds(): number {
     return this.span / MS_PER_SECOND
@@ -128,7 +144,7 @@ export class Duration {
 
   /**
    * The span in minutes.
-   * @returns The span as a fractional minute count, lossless in both directions.
+   * @returns The span as a fractional minutes count: one division, so the answer is the double nearest the exact ratio.
    */
   toMinutes(): number {
     return this.span / MS_PER_MINUTE
@@ -136,7 +152,7 @@ export class Duration {
 
   /**
    * The span in hours.
-   * @returns The span as a fractional hour count, lossless in both directions.
+   * @returns The span as a fractional hours count: one division, so the answer is the double nearest the exact ratio.
    */
   toHours(): number {
     return this.span / MS_PER_HOUR
@@ -148,7 +164,7 @@ export class Duration {
    * A day here is exactly 24 hours. A wall-clock reading that crosses a
    * daylight-saving transition is not a whole number of days, so a caller that
    * needs local calendar days derives them from the zone instead.
-   * @returns The span as a fractional day count, lossless in both directions.
+   * @returns The span as a fractional days count: one division, so the answer is the double nearest the exact ratio.
    */
   toDays(): number {
     return this.span / MS_PER_DAY
@@ -156,8 +172,9 @@ export class Duration {
 
   /**
    * Split the span into whole days, hours, minutes, seconds, and the remaining
-   * fraction of a second. Each part is floored, so the parts never exceed the
-   * span.
+   * fraction of a second. Each part is floored, and every span this class accepts
+   * is inside the exactly representable millisecond range, so the parts add back
+   * up to the span and the remainder stays below one second.
    * @returns The frozen whole parts.
    * @throws RangeError when the span is negative, because a negative interval
    * has no single whole-part decomposition: the caller owns that policy.

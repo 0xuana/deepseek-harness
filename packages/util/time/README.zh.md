@@ -50,7 +50,7 @@ Duration.fromSeconds(90).decompose() // { days: 0, hours: 0, minutes: 1, seconds
 Duration.fromSeconds(90).milliseconds // 90000 — the unit is in the name, and no coercion answers the count
 ```
 
-不可用的时区名称由 `canonicalClientTimeZone` 回答 `undefined`，由调用方抛出自己的拒绝——Session 提示词用 `session/invalid-time-zone`，subagent 续话用 `subagent/invalid-time-zone`。`canonicalizeTimeZone`、各严格解析器与 `fourDigitYearEpoch` 则会说明拒绝原因，以带判别值的结果回答，其 `rejected` 分支携带稳定的拒绝原因，由各调用方选择自己的错误码与诊断文案。`formatFourDigitYearInstant` 与 `resolveLocalInstant` 接收已校验的值，分别回答字符串与纪元毫秒，无法表示的纪元或落在 DST 缺口内的墙钟值回答 `undefined`。`Duration` 是一个基于单一毫秒计数的冻结值类型：它校验计数有限，加减与排序都不做单位换算，按小数换算到秒、分、小时与天，并把非负的时间段拆成整数量。
+不可用的时区名称由 `canonicalClientTimeZone` 回答 `undefined`，由调用方抛出自己的拒绝——Session 提示词用 `session/invalid-time-zone`，subagent 续话用 `subagent/invalid-time-zone`。`canonicalizeTimeZone`、各严格解析器与 `fourDigitYearEpoch` 则会说明拒绝原因，以带判别值的结果回答，其 `rejected` 分支携带稳定的拒绝原因，由各调用方选择自己的错误码与诊断文案。`formatFourDigitYearInstant` 与 `resolveLocalInstant` 接收已校验的值，分别回答字符串与纪元毫秒，无法表示的纪元或落在 DST 缺口内的墙钟值回答 `undefined`。`Duration` 是一个基于单一毫秒计数的冻结值类型：它校验计数有限且落在可精确表示的范围内，加减、排序与负值判断都不做单位换算，按小数换算到秒、分、小时与天，并把非负的时间段拆成整数量。
 
 -----
 
@@ -60,7 +60,7 @@ Duration.fromSeconds(90).milliseconds // 90000 — the unit is in the name, and 
 <details>
 <summary>实现内部细节 —— 点击展开</summary>
 
-`src/instant.ts` 承载全部实现；`src/index.ts` 转出它，并新增 `canonicalClientTimeZone`——协议边界已经在消费的 `string | undefined` 形式。该模块的 JSDoc 说明每个入口接受的输入剖面与全部拒绝原因。
+`src/instant.ts` 承载各解析器，`src/duration.ts` 承载时间段；`src/index.ts` 转出两者，并新增 `canonicalClientTimeZone`——协议边界已经在消费的 `string | undefined` 形式。该模块的 JSDoc 说明每个入口接受的输入剖面与全部拒绝原因。
 
 严格解析器先匹配固定正则，再构造任何日期，因此拼写错误、越界时钟字段与日历上不存在的日期分别回答不同的原因。本地解析交给 `@js-temporal/polyfill`：`disambiguation: 'earlier'` 取重叠时段中的第一个时刻，而本地字段往返比对对前向跳变缺口内的值回答 `undefined`。
 
@@ -106,7 +106,8 @@ Duration.fromSeconds(90).milliseconds // 90000 — the unit is in the name, and 
 - **别名解析取决于运行时的 ICU 数据**——一个别名组规范化成哪个名称由平台回答，因此两个跑在不同 Node 构建上的进程可能给出不同答案。
 - **不含重复规则运算**——只做时刻有效性、本地日历解析、时区解析、规范格式化与毫秒精度的时间段；遍历候选日期或间隔的搜索由调用方自己拥有。
 - **`Duration` 没有日历单位**——一天恰好是 24 小时，月没有固定长度；需要本地日历天的调用方从时区推导。
-- **`Duration` 不做隐式单位换算**——它没有 `valueOf` 也没有 `toString`，读取方必须通过 `milliseconds` 或某个 `to*` 换算声明单位。
+- **`Duration` 不做隐式单位换算**——它没有 `valueOf`、`toString` 与 `Symbol.toPrimitive`，读取方必须通过 `milliseconds` 或某个 `to*` 换算声明单位。
+- **秒为单位的边界仍在自行相乘**——`dsh-schedule` 与 DeepSeek 的文件存储用 `* 1_000` 换算各自以秒为单位的字段；`Duration.fromSeconds` 是这些时间段的预期下一个消费方，目前都还没改。
 - **`Temporal` polyfill 是运行时依赖**——只导入 `canonicalClientTimeZone` 的消费方在模块加载时同样会解析它，因为两个入口共用一个模块。
 
 <a id="dev-note"></a>

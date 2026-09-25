@@ -25,14 +25,25 @@ describe('Duration construction', () => {
     expect(() => Duration.fromSeconds(1e306)).toThrow(TypeError)
   })
 
+  it('refuses a count above the exactly representable millisecond range', () => {
+    expect(() => Duration.fromMilliseconds(Number.MAX_SAFE_INTEGER + 1)).toThrow(TypeError)
+    expect(Duration.fromMilliseconds(Number.MAX_SAFE_INTEGER).milliseconds).toBe(Number.MAX_SAFE_INTEGER)
+    // The bound is what keeps the whole-part identity exact, so it is asserted, not assumed.
+    const parts = Duration.fromMilliseconds(Number.MAX_SAFE_INTEGER).decompose()
+    const summed = parts.days * 86_400_000 + parts.hours * 3_600_000
+      + parts.minutes * 60_000 + parts.seconds * 1_000 + parts.milliseconds
+    expect(summed).toBe(Number.MAX_SAFE_INTEGER)
+  })
+
   it('is frozen, and overrides no implicit conversion', () => {
     const span = Duration.fromMilliseconds(1)
     expect(Object.isFrozen(span)).toBe(true)
     expect(Reflect.set(span, 'span', 2)).toBe(false)
     expect(span.milliseconds).toBe(1)
-    // Neither coercion is overridden, so no caller obtains the count by coercion.
+    // No coercion hook is overridden, so no caller obtains the count by coercion.
     expect(Object.hasOwn(Duration.prototype, 'valueOf')).toBe(false)
     expect(Object.hasOwn(Duration.prototype, 'toString')).toBe(false)
+    expect(Object.hasOwn(Duration.prototype, Symbol.toPrimitive)).toBe(false)
   })
 })
 
@@ -56,13 +67,18 @@ describe('Duration arithmetic', () => {
 })
 
 describe('Duration conversion', () => {
-  it('converts to larger units fractionally, so nothing is lost either way', () => {
+  it('converts to larger units fractionally, by one division each', () => {
     const span = Duration.fromMilliseconds(90_061_500)
     expect(span.toSeconds()).toBe(90_061.5)
     expect(span.toMinutes()).toBe(1_501.025)
     expect(span.toHours()).toBe(25.017_083_333_333_332)
     expect(span.toDays()).toBe(1.042_378_472_222_222_2)
     expect(Duration.fromSeconds(span.toSeconds()).milliseconds).toBe(span.milliseconds)
+    // A conversion is a single division, so a round trip returns the nearest
+    // double rather than the original count: 1001 ms is 1.001 s, and 1.001 s is
+    // not exactly 1001 ms.
+    expect(Duration.fromMilliseconds(1_001).toSeconds()).toBe(1.001)
+    expect(Duration.fromSeconds(1.001).milliseconds).toBe(1_000.999_999_999_999_9)
   })
 
   it('covers a day as exactly twenty-four hours', () => {
@@ -93,7 +109,22 @@ describe('Duration decompose', () => {
     const summed = parts.days * 86_400_000 + parts.hours * 3_600_000
       + parts.minutes * 60_000 + parts.seconds * 1_000 + parts.milliseconds
     expect(summed).toBe(3_661_999)
-    expect(summed).toBeLessThanOrEqual(3_661_999)
+  })
+
+  it('keeps the whole-part identity across the accepted range', () => {
+    const sum = (parts: { days: number; hours: number; minutes: number; seconds: number; milliseconds: number }): number =>
+      parts.days * 86_400_000 + parts.hours * 3_600_000
+      + parts.minutes * 60_000 + parts.seconds * 1_000 + parts.milliseconds
+    for (let span = 0; span <= 120_000; span += 1) {
+      expect(sum(Duration.fromMilliseconds(span).decompose())).toBe(span)
+    }
+    for (let i = 0; i < 2_000; i += 1) {
+      const span = Math.random() * Number.MAX_SAFE_INTEGER
+      const parts = Duration.fromMilliseconds(span).decompose()
+      expect(sum(parts)).toBe(span)
+      expect(parts.milliseconds).toBeGreaterThanOrEqual(0)
+      expect(parts.milliseconds).toBeLessThan(1_000)
+    }
   })
 
   it('refuses a negative span instead of inventing a sign policy', () => {
