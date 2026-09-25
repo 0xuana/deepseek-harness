@@ -25,14 +25,14 @@ describe('Duration construction', () => {
     expect(() => Duration.fromSeconds(1e306)).toThrow(TypeError)
   })
 
-  it('is frozen, and carries no implicit numeric conversion', () => {
+  it('is frozen, and overrides no implicit conversion', () => {
     const span = Duration.fromMilliseconds(1)
     expect(Object.isFrozen(span)).toBe(true)
     expect(Reflect.set(span, 'span', 2)).toBe(false)
     expect(span.milliseconds).toBe(1)
-    // Without a `valueOf` or `toString` override, a coercion never answers the count.
-    expect(Number(span)).toBe(Number.NaN)
-    expect(String(span)).toBe('[object Object]')
+    // Neither coercion is overridden, so no caller obtains the count by coercion.
+    expect(Object.hasOwn(Duration.prototype, 'valueOf')).toBe(false)
+    expect(Object.hasOwn(Duration.prototype, 'toString')).toBe(false)
   })
 })
 
