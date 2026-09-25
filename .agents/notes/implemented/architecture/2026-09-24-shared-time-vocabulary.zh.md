@@ -18,6 +18,8 @@ Schedule 消费它，并保留全部域内决策。`canonicalizeTimeZone`、`dec
 
 `dsh-time-context` 同样消费它，并保留自己更严格的策略。`deriveBrowserTimeZoneContext` 通过 `canonicalizeTimeZone` 读取每条 user-rpc 时区，并拒绝规范答案与所报值不同的别名，因此请求边界仍然要求另一个进程能解析回同一名称。三条拒绝与它们的文案归 time-context 所有；共享入口只回答规范名称或一个原因；被拒绝的结果中只有 `unsupported` 会携带本库捕获到的平台错误，使该拒绝在两个消费方都保留其 `cause`。
 
+`Duration` 以单一毫秒计数保存一段时间；它做成类而不是 branded number，是因为 TypeScript 的算术会抹掉 brand：两个不同品牌的数字相加得到的是无品牌的 `number`，所以 brand 挡不住秒与毫秒的混用，而实例可以。单位选毫秒，是因为本仓库的每个生产者与消费者本来就用它（`Date.now()`、`SessionEvent.time`、Session 日志、客户端），也因为 double 能精确表示 `Date` 全范围内的每一个毫秒，这个单位不消耗任何精度。实例被冻结；计数只能通过 `milliseconds` 或按小数换算的 `toSeconds`/`toMinutes`/`toHours`/`toDays` 读取，且刻意不提供 `valueOf` 与 `toString`，因此读取方永远不会拿到一个需要自己记单位的裸数字。加、减、排序与整数量拆解 `decompose()` 就是全部操作集合。
+
 受维护的 `@js-temporal/polyfill` 0.5.1 在成为 `dsh-schedule` 运行时依赖之外，也成为 `dsh-util-time` 的运行时依赖。本地解析继续使用它，因此缺口与重叠仍由宿主 IANA 数据决定，也没有调用方需要自己实现偏移采样。`util/time` 的 README 与包描述删去了新增依赖所否定的 `zero-dependency` 表述。
 
 可观察行为不变。每个被接受的输入解析出相同的纪元值，每个被拒绝的输入抛出相同的 `ScheduleInputError` 或 `ScheduleLogError` 错误码与相同的消息，存储的 `scheduledAt` 剖面不变，因此没有持久记录或录制快照需要重录。Schedule 其余测试只断言错误码，因此本次在 `packages/schedule/schedule/tests/domain.spec.ts` 新增的断言是唯一固定这三条本地日历消息的地方。`packages/util/time/tests/instant.spec.ts` 直接覆盖新增入口，包含逐文件 100% 覆盖。
@@ -30,6 +32,10 @@ Schedule 消费它，并保留全部域内决策。`canonicalizeTimeZone`、`dec
 
 **让本库回答 `undefined` 而不是原因。** 这正是 `canonicalClientTimeZone` 已有的形态，也是改动更小的做法。之所以否决，是因为 Schedule 必须区分格式错误的时刻、日历上不存在的日期与越界时钟字段，才能保留既有诊断；`canonicalizeTimeZone` 也必须区分名称本身不合法与本地无法解析。把二者压成一个假值，会迫使 Schedule 用自己的正则重新推导这层区分，从而恢复重复。
 
+**给毫秒计数加 brand，而不是造类。** 本仓库已有用于不透明标识的 `Branded<number>`，branded 计数也比类更小。之所以否决，是因为 brand 撑不过真正要紧的那步运算：TypeScript 接受 `brandedA + brandedB` 并回答无品牌的 `number`，于是把时间段加到纪元上的调用方会静默丢掉单位，而这正是该类型要防的错误。类会把这种相加变成类型错误，也让整数量拆解只有一个归宿。
+
+**用纳秒保存时间段。** `Temporal` 内部以 `bigint` 携带纳秒，所以纳秒时间段是可表示的。之所以否决，理由与边界保持毫秒相同：计数必须变成 `bigint`，而 `number` 算术、`Date` 与 `JSON.stringify` 都不接受它，于是每个消费方与每条持久记录都要多一次字符串或二进制转换。若改用 `number` 表示纳秒，在当前离线纪元量级上它会被量化到约 256 ns，那是同一个名字下的另一个值。
+
 **同时为其他消费方加入格式化与 DST 运算。** 目前没有消费方需要本库提供面向模型的格式化或偏移运算：`dsh-time-context` 自己拥有格式化器与时区策略文本。现在加入只会给本库一个没有消费方证据的公开操作集合，违背"每项抽象都绑定当前所有者与需求"的包规则。
 
 ## Consequences
@@ -37,5 +43,7 @@ Schedule 消费它，并保留全部域内决策。`canonicalizeTimeZone`、`dec
 时间剖面现在只有一个归宿。时刻剖面或时区剖面的变更只做一次、只覆盖一次，新边界导入它而不是复制它。Schedule 的 `domain.ts` 去掉了为时刻、日历日期、本地时间与时区剖面命名的五段正则、`Intl` 规范化与手写日历换算。它保留了用于 UTC 边界日期运算的两个边界常量，并把每处可表示性守卫委托给 `isFourDigitYearInstant`，因此范围本身只有一个所有者。
 
 代价是更宽的已发布接口与更重的依赖图：`dsh-util-time` 增加了对 `@js-temporal/polyfill` 的运行时依赖，因此只导入 `canonicalClientTimeZone` 的消费方也会加载该模块。本库也不再是纯"只做校验与规范化"的包——其 README 与包描述必须说明这一点，其"已知限制"一节现在也记录了它。Schedule 在每个入口保留一层薄映射。本地日历与时刻映射函数以 `never` 默认分支穷尽 switch 本库的封闭原因联合，因此新增原因会让这两个调用点构建失败，而不是静默走兜底分支。时区映射函数则只对 `not_canonical_shape` 分支——当前 IANA 数据不会产生该原因，因此它由 `v8 ignore` 守护而不是 `never` 默认分支——并把 `blank`、`padded`、`not_area_location` 与 `unsupported` 合并成一条诊断。因此日后给 `TimeZoneRejection` 新增原因时会通过编译并静默套用那条通用文案。
+
+耗时读数的拆分上收到库、措辞留在一侧：`dsh-time-context` 仍然决定回退的时钟读数钳到零、以及那行紧凑文本怎么写，而 `Duration.decompose()` 回答整数量。这次替换对每个有限样本都逐字不变，已用一份覆盖八千多个输入（含负数、小数与一年以上的值）的差分验证。有一个输入会变：非有限的耗时样本现在由时间段构造函数抛出，而不是渲染出 `NaNs`——而那本来就被该包自己的读数不变量拒绝，所以失败点前移到了产生它的那次采样。
 
 本次未触及、仍归 time-context 的两项：`packages/context/time-context/src/timestamp.ts` 中的 ISO 形状时间戳渲染（那是该包的持久读数字格式），以及其插件内的耗时措辞。浏览器客户端也保留自己的本地化日期渲染与自己的 UTC 偏移读取——它们服务的目的（读者的区域设置）与边界值不同；统一它们意味着先决定共享库是否也要拥有展示格式化，以及届时由谁拥有其不变量所校验的持久读数字格式。`packages/session/session-format-v0-to-v1/src/payload-validation.ts` 也用自己的一段正则与往返比对校验规范的四位年份 UTC 时刻，这是本次未触及、仍然存在的时刻剖面副本。

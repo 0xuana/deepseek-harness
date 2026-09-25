@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-util-time",
-  "description": "Time vocabulary shared by wire boundaries: canonicalClientTimeZone (IANA zone validation and canonicalization), and strict RFC 3339 instant, local-calendar, and zone resolution for wall-clock selectors",
+  "description": "Time vocabulary shared by wire boundaries: canonicalClientTimeZone (IANA zone validation and canonicalization), strict RFC 3339 instant, local-calendar, and zone resolution for wall-clock selectors, and a millisecond Duration span",
   "version": "0.1.7-rc.2",
   "publishConfig": {
     "access": "public"

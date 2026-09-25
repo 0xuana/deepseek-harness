@@ -1,6 +1,6 @@
 /**
  * Time vocabulary shared by the boundaries that accept a caller's zone or a
- * wall-clock selector.
+ * wall-clock selector, plus one span type for elapsed and interval arithmetic.
  *
  * Validation, canonicalization, and strict parsing only: this library formats
  * no model-facing text and owns no failure vocabulary. A refusal that carries a
@@ -8,12 +8,14 @@
  * own domain code and diagnostic. `canonicalClientTimeZone` is the wire-boundary
  * form and answers a name or `undefined`; `formatFourDigitYearInstant` and
  * `resolveLocalInstant` take already-validated values and answer a string or
- * epoch milliseconds directly.
+ * epoch milliseconds directly; `Duration` holds a span in milliseconds with no
+ * implicit numeric conversion.
  * @module @deepseek-ai/dsh-util-time
  */
 
 import { canonicalizeTimeZone } from './instant.ts'
 
+export * from './duration.ts'
 export * from './instant.ts'
 
 /**

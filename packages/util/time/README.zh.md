@@ -1,5 +1,5 @@
 ---
-description: "面向在协议边界接收调用方所报时区或墙钟选择器的维护者，说明严格的 RFC 3339 时刻、本地日历与时区解析。"
+description: "面向在协议边界接收调用方所报时区、墙钟选择器或耗时的维护者，说明严格的 RFC 3339 时刻、本地日历与时区解析，以及毫秒精度的时间段类型。"
 kind: "package-library"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-library"
 
 ## 概述
 
-共享时间词汇，供接收调用方时区或墙钟选择器的协议边界使用。`canonicalClientTimeZone` 只接受 `UTC` 或 IANA `Area/Location` 名称，并回答当前平台上的规范拼写，因此别名不会进入持久记录。需要墙钟语义的消费方则通过带判别值的结果解析严格的 RFC 3339 时刻、本地日历字段与时区名称，再借助受维护的 `Temporal` 解析本地值，获得 DST 与重叠时段的既定行为。本库不持有失败词汇，也不生成面向模型的文本：每个调用方把拒绝原因映射成自己的域错误码。
+共享时间词汇，供接收调用方时区、墙钟选择器或耗时的边界使用。`canonicalClientTimeZone` 回答当前平台上的规范 `UTC` 或 IANA `Area/Location` 拼写，因此别名不会进入持久记录。严格解析器以带判别值的结果读取 RFC 3339 时刻、本地日历字段与时区名称，`resolveLocalInstant` 则套用受维护的 `Temporal` 的 DST 与重叠行为。`Duration` 以毫秒保存一段时间并拆成整数量。本库不持有失败词汇，也不生成面向模型的文本：每个调用方把拒绝原因映射成自己的域错误码。
 
 ## 目录
 
@@ -29,14 +29,14 @@ kind: "package-library"
 
 它是**库，不是服务也不是插件**：无 `ctx`、不注册任何东西、不持有状态。
 
-在接收时区或墙钟选择器的那个边界上调用它，让值在进入任何持久物之前先过一遍。`dsh-api-session-controller` 与 `dsh-subagent` 通过 `canonicalClientTimeZone` 接收调用方所报时区；`dsh-time-context` 通过 `canonicalizeTimeZone` 接收某一轮请求所报时区，并拒绝别名而不是把它改写；`dsh-schedule` 通过严格解析器读取每一个绝对选择器与墙钟选择器，并通过 `resolveLocalInstant` 解析其本地目标。自行拥有日历或间隔运算的消费方保留那部分运算，只在边界值上调用这些入口。
+在接收时区或墙钟选择器的那个边界上调用它，让值在进入任何持久物之前先过一遍。`dsh-api-session-controller` 与 `dsh-subagent` 通过 `canonicalClientTimeZone` 接收调用方所报时区；`dsh-time-context` 通过 `canonicalizeTimeZone` 接收某一轮请求所报时区，并拒绝别名而不是把它改写；`dsh-schedule` 通过严格解析器读取每一个绝对选择器与墙钟选择器，并通过 `resolveLocalInstant` 解析其本地目标。`dsh-time-context` 通过 `Duration` 读取其耗时读数，并保留它注入那一行的措辞。自行拥有日历或间隔运算的消费方保留那部分运算，只在边界值上调用这些入口。
 
 不发布运行时不变量伴生入口；这个纯工具不拥有事件流或可变运行时数据，每个入口都由单元测试验证。
 
 ### 入口
 
 ```ts
-import { canonicalClientTimeZone, fourDigitYearEpoch, parseLocalCalendar, resolveLocalInstant } from '@deepseek-ai/dsh-util-time'
+import { Duration, canonicalClientTimeZone, fourDigitYearEpoch, parseLocalCalendar, resolveLocalInstant } from '@deepseek-ai/dsh-util-time'
 
 const zone = canonicalClientTimeZone('US/Eastern')            // 'America/New_York' or undefined
 const stored = fourDigitYearEpoch('2026-03-08T02:30:00.000Z') // { kind: 'accepted', epoch } or a rejection reason
@@ -45,9 +45,12 @@ const local = parseLocalCalendar('2026-03-08', '02:30:00')    // { kind: 'accept
 if (local.kind === 'accepted') {
   resolveLocalInstant(local.time, zone ?? 'UTC') // epoch milliseconds, or undefined inside a DST gap
 }
+
+Duration.fromSeconds(90).decompose() // { days: 0, hours: 0, minutes: 1, seconds: 30, milliseconds: 0 }
+Duration.fromSeconds(90).milliseconds // 90000 — the unit is in the name, and no coercion answers the count
 ```
 
-不可用的时区名称由 `canonicalClientTimeZone` 回答 `undefined`，由调用方抛出自己的拒绝——Session 提示词用 `session/invalid-time-zone`，subagent 续话用 `subagent/invalid-time-zone`。`canonicalizeTimeZone`、各严格解析器与 `fourDigitYearEpoch` 则会说明拒绝原因，以带判别值的结果回答，其 `rejected` 分支携带稳定的拒绝原因，由各调用方选择自己的错误码与诊断文案。`formatFourDigitYearInstant` 与 `resolveLocalInstant` 接收已校验的值，分别回答字符串与纪元毫秒，无法表示的纪元或落在 DST 缺口内的墙钟值回答 `undefined`。
+不可用的时区名称由 `canonicalClientTimeZone` 回答 `undefined`，由调用方抛出自己的拒绝——Session 提示词用 `session/invalid-time-zone`，subagent 续话用 `subagent/invalid-time-zone`。`canonicalizeTimeZone`、各严格解析器与 `fourDigitYearEpoch` 则会说明拒绝原因，以带判别值的结果回答，其 `rejected` 分支携带稳定的拒绝原因，由各调用方选择自己的错误码与诊断文案。`formatFourDigitYearInstant` 与 `resolveLocalInstant` 接收已校验的值，分别回答字符串与纪元毫秒，无法表示的纪元或落在 DST 缺口内的墙钟值回答 `undefined`。`Duration` 是一个基于单一毫秒计数的冻结值类型：它校验计数有限，加减与排序都不做单位换算，按小数换算到秒、分、小时与天，并把非负的时间段拆成整数量。
 
 -----
 
@@ -71,6 +74,7 @@ if (local.kind === 'accepted') {
 | `formatFourDigitYearInstant` | 四位年份范围内的整数纪元毫秒；超出范围或非整数时回答 `undefined`。 |
 | `isFourDigitYearInstant` | 同一范围的谓词形式，只判断范围边界的调用方无需自行推导。 |
 | `resolveLocalInstant` | 真实日期的精确日历字段，或已构造好的 `Temporal.PlainDateTime`，外加已规范化的时区。 |
+| `Duration` | 一个有限的毫秒计数，可由毫秒或秒构造，读取时从不交出裸计数。 |
 
 </details>
 
@@ -100,7 +104,9 @@ if (local.kind === 'accepted') {
 <a id="known-limitations-and-deferred-work"></a>
 
 - **别名解析取决于运行时的 ICU 数据**——一个别名组规范化成哪个名称由平台回答，因此两个跑在不同 Node 构建上的进程可能给出不同答案。
-- **不含重复规则运算**——只做时刻有效性、本地日历解析、时区解析与规范格式化；遍历候选日期或间隔的搜索由调用方自己拥有。
+- **不含重复规则运算**——只做时刻有效性、本地日历解析、时区解析、规范格式化与毫秒精度的时间段；遍历候选日期或间隔的搜索由调用方自己拥有。
+- **`Duration` 没有日历单位**——一天恰好是 24 小时，月没有固定长度；需要本地日历天的调用方从时区推导。
+- **`Duration` 不做隐式单位换算**——它没有 `valueOf` 也没有 `toString`，读取方必须通过 `milliseconds` 或某个 `to*` 换算声明单位。
 - **`Temporal` polyfill 是运行时依赖**——只导入 `canonicalClientTimeZone` 的消费方在模块加载时同样会解析它，因为两个入口共用一个模块。
 
 <a id="dev-note"></a>
