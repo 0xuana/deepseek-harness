@@ -3,10 +3,10 @@
  *
  * A class rather than a branded number: arithmetic on two branded numbers
  * answers an unbranded `number`, so a brand cannot stop seconds and
- * milliseconds from being added, while an instance can. There is no `valueOf`
- * and no `toString`, so no reader ever receives a bare count whose unit it has
- * to remember; a caller states the unit by reading `milliseconds` or by
- * converting through one of the `to*` entries.
+ * milliseconds from being added, while an instance can. No coercion hook is
+ * overridden, so no reader receives a bare count whose unit it has to remember;
+ * a caller states the unit by reading `milliseconds` or by converting through
+ * one of the `to*` entries.
  * @module @deepseek-ai/dsh-util-time
  */
 
@@ -83,7 +83,7 @@ export class Duration {
    * Build one span from a second count, for a boundary whose unit is seconds.
    * @param seconds - Finite second count; a fractional count is kept as given.
    * @returns The span.
-   * @throws TypeError when the count is not finite, or its millisecond equivalent is not.
+   * @throws TypeError when the count is not finite, or its millisecond equivalent is not finite or leaves the exactly representable range.
    */
   static fromSeconds(seconds: number): Duration {
     if (!Number.isFinite(seconds)) {
@@ -101,18 +101,20 @@ export class Duration {
    * Add one span to this span.
    * @param other - Span to add; both operands already share the millisecond unit.
    * @returns The sum.
+   * @throws TypeError when the sum leaves the exactly representable millisecond range.
    */
   plus(other: Duration): Duration {
-    return new Duration(this.span + other.span)
+    return Duration.fromMilliseconds(this.span + other.span)
   }
 
   /**
    * Subtract one span from this span.
    * @param other - Span to subtract.
    * @returns The difference, which is negative when `other` is longer.
+   * @throws TypeError when the difference leaves the exactly representable millisecond range.
    */
   minus(other: Duration): Duration {
-    return new Duration(this.span - other.span)
+    return Duration.fromMilliseconds(this.span - other.span)
   }
 
   /**
@@ -172,9 +174,10 @@ export class Duration {
 
   /**
    * Split the span into whole days, hours, minutes, seconds, and the remaining
-   * fraction of a second. Each part is floored, and every span this class accepts
-   * is inside the exactly representable millisecond range, so the parts add back
-   * up to the span and the remainder stays below one second.
+   * fraction of a second. Days, hours, minutes, and seconds are floored; the
+   * millisecond part keeps the fraction below one second. Every span this class
+   * accepts is inside the exactly representable millisecond range, so the parts
+   * add back up to the span.
    * @returns The frozen whole parts.
    * @throws RangeError when the span is negative, because a negative interval
    * has no single whole-part decomposition: the caller owns that policy.

@@ -55,6 +55,14 @@ describe('Duration arithmetic', () => {
     expect(Duration.zero.plus(Duration.zero).milliseconds).toBe(0)
   })
 
+  it('refuses a sum or difference that leaves the exactly representable range', () => {
+    const max = Duration.fromMilliseconds(Number.MAX_SAFE_INTEGER)
+    expect(() => max.plus(Duration.fromMilliseconds(1))).toThrow(TypeError)
+    expect(() => Duration.zero.minus(max).minus(Duration.fromMilliseconds(1))).toThrow(TypeError)
+    // The bound is checked at every construction, not only at the factories.
+    expect(max.plus(Duration.fromMilliseconds(0)).milliseconds).toBe(Number.MAX_SAFE_INTEGER)
+  })
+
   it('orders spans without surrendering the unit', () => {
     const minute = Duration.fromSeconds(60)
     const hour = Duration.fromSeconds(3_600)
