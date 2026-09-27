@@ -23,6 +23,7 @@
       "job_kill",
       "job_list",
       "job_output",
+      "list_subagent_models",
       "subagent",
       "workflow",
       "working_directory"
@@ -52,6 +53,7 @@
       "job_kill",
       "job_list",
       "job_output",
+      "list_subagent_models",
       "subagent",
       "workflow",
       "working_directory"
