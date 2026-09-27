@@ -4,6 +4,10 @@
       - strong: tool-subagent-control
       - text: Globally named send_message, interrupt_agent, and list_agents tools over ctx.subagents continuations
   - listitem:
+    - button "tool-subagent/list-models, tool-subagent-list-models, 已启用":
+      - strong: tool-subagent/list-models
+      - code: tool-subagent-list-models
+  - listitem:
     - button "tool-subagent-control/list-agents, tool-subagent-list-agents, 已启用":
       - strong: tool-subagent-control/list-agents
       - code: tool-subagent-list-agents
