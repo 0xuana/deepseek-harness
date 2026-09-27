@@ -162,6 +162,13 @@ interface ToolArgsMap {
     /** Continuation cursor returned by this server. */
     cursor?: string;
   } & Record<string, JsonValue>;
+  /** Discover LLM routes for subagents without changing the current Agent. Call with no arguments to list registered providers, with `provider` to list its allowed models, or with `provider` and `model` to inspect that exact model and its reasoning efforts. Catalog membership is advisory: an adapter may accept an unlisted model id. Use the returned ids with a delegation tool's `provider`, `model`, and `reasoning_effort` fields. */
+  list_subagent_models: {
+    /** Registered LLM provider id. Omit to list providers. */
+    provider?: string;
+    /** Exact model id to inspect. Requires provider; omit to list that provider's allowed models. */
+    model?: string;
+  } & Record<string, JsonValue>;
   /** Read a UTF-8 text file and return line-numbered content. */
   read: {
     /** Path to read, resolved by the filesystem backend. */
@@ -195,7 +202,7 @@ interface ToolArgsMap {
     /** The exact skill name from the available skills list. */
     name: string;
   } & Record<string, JsonValue>;
-  /** Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes. */
+  /** Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes. Child LLM selection is optional. Omit `provider`, `model`, and `reasoning_effort` to use configured child defaults and inherit compatible missing values from the parent Agent. Supply `provider` and `model` together after using `list_subagent_models` to inspect advertised routes and efforts. Changing the effective route without naming an effort uses the selected model's default effort. */
   subagent: {
     /** Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent. */
     cwd?: string;
@@ -203,8 +210,14 @@ interface ToolArgsMap {
     description: string;
     /** The complete, self-contained task for the subagent. It does not share this conversation's context, so include everything it needs. */
     prompt: string;
+    /** LLM provider route for the child. Supply together with model; omit both to use configured child defaults or inherit the parent route. */
+    provider?: string;
+    /** Model id interpreted by provider. Supply together with provider; omit both to use configured child defaults or inherit the parent route. */
+    model?: string;
+    /** Adapter-owned reasoning effort for the effective child route. Omit to inherit a compatible configured/parent effort or use a newly selected model's default. */
+    reasoning_effort?: string;
   } & Record<string, JsonValue>;
-  /** Delegate a task to a subagent that inherits this conversation: a child agent seeded with all completed turns so far (it does not see the current in-flight turn). Use this when the subtask builds on this conversation's context — a follow-up analysis, a review, a continuation — without consuming this conversation's context for the work itself. You receive its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes. */
+  /** Delegate a task to a subagent that inherits this conversation: a child agent seeded with all completed turns so far (it does not see the current in-flight turn). Use this when the subtask builds on this conversation's context — a follow-up analysis, a review, a continuation — without consuming this conversation's context for the work itself. You receive its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes. Child LLM selection is optional. Omit `provider`, `model`, and `reasoning_effort` to use configured child defaults and inherit compatible missing values from the parent Agent. Supply `provider` and `model` together after using `list_subagent_models` to inspect advertised routes and efforts. Changing the effective route without naming an effort uses the selected model's default effort. Changing the route can prevent provider-side reuse of the inherited conversation prefix. */
   subagent_fork: {
     /** Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent. */
     cwd?: string;
@@ -212,6 +225,12 @@ interface ToolArgsMap {
     description: string;
     /** The task for the subagent. It already sees this conversation's completed turns, so build on them freely and state only what is new. */
     prompt: string;
+    /** LLM provider route for the child. Supply together with model; omit both to use configured child defaults or inherit the parent route. */
+    provider?: string;
+    /** Model id interpreted by provider. Supply together with provider; omit both to use configured child defaults or inherit the parent route. */
+    model?: string;
+    /** Adapter-owned reasoning effort for the effective child route. Omit to inherit a compatible configured/parent effort or use a newly selected model's default. */
+    reasoning_effort?: string;
   } & Record<string, JsonValue>;
   /** Record and update a task list to plan multi-step work and show progress; skip it for trivial single-step tasks. Add one todo per concrete step before you start. While work remains, keep the todos being worked on `in_progress`, several only when work runs in parallel. Mark each todo `completed` as soon as it is done. */
   todo_write: {
@@ -438,6 +457,7 @@ interface ToolOutputMap {
   })[];
   list_mcp_resource_templates: JsonValue;
   list_mcp_resources: JsonValue;
+  list_subagent_models: string;
   read: {
     /** Canonical absolute path in the filesystem execution world. */
     path: string;

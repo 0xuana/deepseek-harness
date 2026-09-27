@@ -36,6 +36,7 @@ kind: "package-reference"
 ```yaml
 - name: '@deepseek-ai/dsh-subagent'
 - name: '@deepseek-ai/dsh-subagent-spawn-in-process'
+- name: '@deepseek-ai/dsh-tool-subagent/list-models'
 - name: '@deepseek-ai/dsh-tool-subagent'
   config:
     provider: spawn
@@ -64,7 +65,7 @@ kind: "package-reference"
 
 ### 选择子级 LLM
 
-设置 `modelSelectionSettings: true`，即可在组合每个全新顶层 Session 时读取宿主的 `subagent-model-selection` 偏好。没有已记录策略的恢复 Session 会保持禁用，包括显式为空的恢复。启用后，非空的精确 provider/model 路由列表会记录进 Session、由子 Session 继承，后续设置编辑不会改变它。工具随后公开可选的 `provider`、`model` 与 `reasoning_effort` 字段，并注册共享的 `list_subagent_models` 工具。此模式要求后端声明 `agentOptions`；两个进程内后端和 DSH SDK 支持该能力，而 ACP、Codex 与 Claude Code 会拒绝它，而不是忽略它。
+支持 `agentOptions` 的后端始终公开可选的 `provider`、`model` 和 `reasoning_effort` 字段。在委派工具旁加载一次 `@deepseek-ai/dsh-tool-subagent/list-models` 即可共享发现功能；随附组合已包含它。没有已记录 Session 策略时，发现和显式选择只允许父 Agent 当前生效的 provider/model 及其支持的强度。设置 `modelSelectionSettings: true` 后，新顶层 Session 会读取 Host 的 `subagent-model-selection` 偏好。启用时，精确路由列表记录在 Session 中，由子 Session 继承，并在恢复时保留；之后的设置编辑只影响新 Session。没有策略的恢复 Session 仍受父级路由限制。ACP、Codex 和 Claude Code 不支持 `agentOptions`，会拒绝选择字段。
 
 一次调用需同时提供 `provider` 与 `model`；当配置值、父 agent 值或提供方持有的默认值能提供路由时，也可只提供推理等级。静态的 `provider.agentRouteDefaults` 在存在时构成提供方／模型基线；工具配置与模型字段会在路由相关强度合并和确切路由预检前覆盖它。没有这些默认值的提供方会使用父 agent 最新已记录请求中的兼容值，再使用父级首次请求前的创建选项，并保留配置的 `maxTokens`。更改路由但未显式提供推理等级时，会清除继承的路由自有等级，使所选模型解析自己的默认值。实时 LLM 适配器在创建子 agent 前校验有效路由。目录成员资格只提供建议，因此适配器接受时，模型可以使用未列出的 id。
 
@@ -80,7 +81,7 @@ kind: "package-reference"
 
 ### 设计理念
 
-一个实例就是一个提供方加一个工具名称。插件镜像提供方生命周期：具名提供方出现时注册工具，提供方离开时释放工具，因此同级加载顺序与 HMR 替换不会让工具悬空。直接 Agent setup 显式传入尚未发布的 Session，并在发布前等待安装完成。由设置控制的常驻 preset 通过 `agent/created` 接收每个匹配 Agent，从其 Session 选择策略，并等待通过其 Context 发起的安装；安装失败会拒绝创建。提供方无法执行的数值型 `maxDepth` 或已配置 LLM 选择会在挂载时失败，而不是在首次委派时失败。每个工具作用域内最多一个实例可以拥有模型选择，因为 `list_subagent_models` 使用全局名称。
+一个实例对应一个提供方和一个工具名。插件在提供方存在时向所属组合注册定义，并在提供方离开时释放它。Agent 继承这份共享定义，因此现有工具过滤器即可生效，无需逐 Agent 注册。读取设置的实例在 Agent 创建时记录 Session 授权；调用时独立于注册读取持久策略。直接配置 Agent 时显式传入尚未发布的 Session。提供方不支持的数字 `maxDepth` 或配置的 LLM 选择会使挂载失败。发现功能由 spawn 和 fork 工具共享的独立组合项提供。本包不导出运行时不变量：策略直接来自 Session 投影，并在执行时校验，没有另行保存的逐 Agent 定义状态需要协调。
 
 ### Activation 所有权
 
@@ -128,11 +129,11 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-提供方存在时，以配置的工具名称公开生成的默认 [`subagent` schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-subagent)。启用的 Session 策略会添加 `provider`、`model`、`reasoning_effort` 和路由指引；后端必须支持 `agentOptions`。上下文继承和继续执行能力决定任务与后续消息的描述。工具限制会同时移除 schema 及其 `tool:<toolName>` 指引 section。
+生成的默认 [`subagent` schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-subagent) 在提供方存在时以配置的工具名公开。支持 `agentOptions` 的后端始终公开 `provider`、`model` 和 `reasoning_effort`。上下文继承和继续执行能力决定任务与后续工作描述。工具限制同时移除 schema 及其 `tool:<toolName>` 指导段。
 
 #### Token 影响
 
-每个父级请求支付固定的 schema 成本；模型选择增加三个参数。每个工具实例增加一个 schema 和一个简短的系统提示词 section。
+每次父级请求承担固定 schema 成本，其中支持选择的后端包含三个可选路由字段。每个工具实例增加一份 schema；可见委派工具共享一个简短系统提示词段。
 
 #### KV Cache 影响
 
@@ -142,11 +143,11 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-Session 携带策略的 settings 控制实例会公开子级 LLM 选择字段与 `list_subagent_models`。可选 `ctx.llm` 服务不可用时，调用会失败。发现只返回精确路由策略中的已注册提供方与已公布模型；未授权提供方会在调用其适配器目录前被拒绝，精确查询也必须先获准，才会解析模型的推理强度与默认值。执行阶段会独立强制同一策略。
+共享的 `list_subagent_models` 定义读取调用 Session 的路由策略，没有已记录策略时使用当前父级路由。可选的 `ctx.llm` 服务不可用时，调用会被拒绝。发现只解析允许的路由，包括建议性目录未列出的精确模型 ID；未授权的提供方／模型查询会在访问适配器前失败。执行过程独立强制同一策略。
 
 #### Token 影响
 
-启用的组合中存在一个固定发现 schema。只有模型调用工具时，目录内容才进入 transcript。
+随附组合中始终存在一份固定发现 schema，不受模型选择偏好影响。只有模型调用工具时，路由元数据才进入 transcript。
 
 #### KV Cache 影响
 
@@ -208,8 +209,8 @@ Start independent delegations with `subagent` or `subagent_fork` together in one
 这些限制说明本工具不返回或不强制执行什么；它们是当前包约束。
 
 - **本工具不等待结果**——使用完成通知或子任务消息。程序化结果等待由 subagent 服务提供。
-- **随附 fork 工具不能选择子级 LLM 路由**——它们继承父级提供方与模型，使复制的对话前缀仍有资格复用 KV Cache。仅当路由变更能保留复用或公开有界重算成本时，才重新启用选择。
-- **非路由子 agent 策略按实例固定**——另一个 persona、工具过滤器或深度上限需要另一个名称不同的工具。LLM 选择要求启用逐 Session 偏好，且提供方必须声明 `agentOptions`；两个进程内提供方和 DSH SDK 会声明该能力，而 ACP、Codex 与 Claude Code 会拒绝它，而不是忽略它。
+- **更改 fork 路由可能失去 KV Cache 复用** — 可选路由字段遵循与 spawn 相同的 Session 策略；更改提供方或模型可能需要重新预填充继承的对话。
+- **非路由子级策略按实例固定** — 更换角色、工具过滤器或深度上限，需要另一个不同名称的工具。显式 LLM 选择受 Session 授权路由限制，没有启用策略时只允许当前父级路由；不支持选择的后端会拒绝选择字段。
 
 <a id="dev-note"></a>
 ### 开发备注

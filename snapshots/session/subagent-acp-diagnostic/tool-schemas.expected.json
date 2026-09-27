@@ -261,6 +261,23 @@
       }
     },
     {
+      "name": "list_subagent_models",
+      "description": "Discover LLM routes for subagents without changing the current Agent. Call with no arguments to list registered providers, with `provider` to list its allowed models, or with `provider` and `model` to inspect that exact model and its reasoning efforts. Catalog membership is advisory: an adapter may accept an unlisted model id. Use the returned ids with a delegation tool's `provider`, `model`, and `reasoning_effort` fields.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "description": "Registered LLM provider id. Omit to list providers."
+          },
+          "model": {
+            "type": "string",
+            "description": "Exact model id to inspect. Requires provider; omit to list that provider's allowed models."
+          }
+        }
+      }
+    },
+    {
       "name": "read",
       "description": "Read a UTF-8 text file and return line-numbered content.",
       "parameters": {
@@ -339,7 +356,7 @@
     },
     {
       "name": "subagent",
-      "description": "Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes.",
+      "description": "Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes. Child LLM selection is optional. Omit `provider`, `model`, and `reasoning_effort` to use configured child defaults and inherit compatible missing values from the parent Agent. Supply `provider` and `model` together after using `list_subagent_models` to inspect advertised routes and efforts. Changing the effective route without naming an effort uses the selected model's default effort.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -354,6 +371,18 @@
           "prompt": {
             "type": "string",
             "description": "The complete, self-contained task for the subagent. It does not share this conversation's context, so include everything it needs."
+          },
+          "provider": {
+            "type": "string",
+            "description": "LLM provider route for the child. Supply together with model; omit both to use configured child defaults or inherit the parent route."
+          },
+          "model": {
+            "type": "string",
+            "description": "Model id interpreted by provider. Supply together with provider; omit both to use configured child defaults or inherit the parent route."
+          },
+          "reasoning_effort": {
+            "type": "string",
+            "description": "Adapter-owned reasoning effort for the effective child route. Omit to inherit a compatible configured/parent effort or use a newly selected model's default."
           }
         },
         "required": [
@@ -389,7 +418,7 @@
     },
     {
       "name": "subagent_fork",
-      "description": "Delegate a task to a subagent that inherits this conversation: a child agent seeded with all completed turns so far (it does not see the current in-flight turn). Use this when the subtask builds on this conversation's context — a follow-up analysis, a review, a continuation — without consuming this conversation's context for the work itself. You receive its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes.",
+      "description": "Delegate a task to a subagent that inherits this conversation: a child agent seeded with all completed turns so far (it does not see the current in-flight turn). Use this when the subtask builds on this conversation's context — a follow-up analysis, a review, a continuation — without consuming this conversation's context for the work itself. You receive its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes. Child LLM selection is optional. Omit `provider`, `model`, and `reasoning_effort` to use configured child defaults and inherit compatible missing values from the parent Agent. Supply `provider` and `model` together after using `list_subagent_models` to inspect advertised routes and efforts. Changing the effective route without naming an effort uses the selected model's default effort. Changing the route can prevent provider-side reuse of the inherited conversation prefix.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -404,6 +433,18 @@
           "prompt": {
             "type": "string",
             "description": "The task for the subagent. It already sees this conversation's completed turns, so build on them freely and state only what is new."
+          },
+          "provider": {
+            "type": "string",
+            "description": "LLM provider route for the child. Supply together with model; omit both to use configured child defaults or inherit the parent route."
+          },
+          "model": {
+            "type": "string",
+            "description": "Model id interpreted by provider. Supply together with provider; omit both to use configured child defaults or inherit the parent route."
+          },
+          "reasoning_effort": {
+            "type": "string",
+            "description": "Adapter-owned reasoning effort for the effective child route. Omit to inherit a compatible configured/parent effort or use a newly selected model's default."
           }
         },
         "required": [

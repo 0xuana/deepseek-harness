@@ -17,8 +17,8 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import * as tool from '../src/index.ts'
-import { registerListSubagentModels } from '../src/list-models.ts'
-import { testToolSignal, text } from './harness.ts'
+import { apply, inject, name, registerListSubagentModels } from '../src/list-models.ts'
+import { modelSelectionSetupAgent, setup, testToolSignal, text } from './harness.ts'
 
 class CatalogAdapter extends LlmAdapter {
   constructor(private readonly empty = false) {
@@ -69,7 +69,7 @@ async function setupListTool(routes = [
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  registerListSubagentModels(ctx, { routes })
+  registerListSubagentModels(ctx, () => ({ routes }))
   return ctx
 }
 
@@ -78,13 +78,13 @@ async function setupAllowedListTool() {
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  registerListSubagentModels(ctx, {
+  registerListSubagentModels(ctx, () => ({
     routes: [
       { provider: 'alpha', model: 'fast' },
       { provider: 'alpha', model: 'unlisted' },
       { provider: 'missing', model: 'hidden' },
     ],
-  })
+  }))
   return ctx
 }
 
@@ -100,7 +100,7 @@ function call(ctx: Context, args: unknown) {
 }
 
 describe('list_subagent_models', () => {
-  it('is omitted unless its delegation-tool instance owns discovery', async () => {
+  it('is loaded through its own composition entry', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(LlmRuntime)
@@ -112,13 +112,43 @@ describe('list_subagent_models', () => {
     expect(ctx.tools.get('list_subagent_models')).toBeUndefined()
   })
 
+  it('requires a calling Agent and an effective parent route', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRuntime)
+    await ctx.plugin({ apply, inject, name })
+    expect(text(await call(ctx, {}))).toContain('requires a calling agent')
+    await ctx.fiber.dispose()
+
+    const parentContext = await setup({ provider: 'mock' })
+    const agent = modelSelectionSetupAgent(parentContext)
+    const result = await parentContext.tools.execute({
+      signal: testToolSignal, callId: ToolCallId('missing-parent-route'),
+      name: 'list_subagent_models', arguments: {}, agent,
+    })
+    expect(result.isError).toBe(true)
+    expect(text(result)).toContain('without a parent provider and model')
+  })
+
+  it('reads the recorded Session allowlist through the shared discovery definition', async () => {
+    const ctx = await setup({ provider: 'mock', withModelSelection: true })
+    ctx.llm.registerAdapter(['alpha', 'secret'], new CatalogAdapter())
+    const result = await ctx.tools.execute({
+      signal: testToolSignal, callId: ToolCallId('recorded-routes'),
+      name: 'list_subagent_models', arguments: {}, agent: modelSelectionSetupAgent(ctx),
+    })
+    expect(result.isError).toBe(false)
+    expect(text(result)).toBe('alpha — ALPHA API')
+  })
+
   it('stays registered without the optional LLM service and rejects discovery calls', async () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
-    registerListSubagentModels(ctx, { routes: [{ provider: 'alpha', model: 'fast' }] })
+    registerListSubagentModels(ctx, () => ({ routes: [{ provider: 'alpha', model: 'fast' }] }))
     const result = await call(ctx, {})
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('`llm` service is unavailable')
@@ -127,7 +157,7 @@ describe('list_subagent_models', () => {
   it('rejects two discovery-owning instances in one tool scope', async () => {
     const ctx = await setupListTool()
     expect(() => {
-      registerListSubagentModels(ctx, { routes: [{ provider: 'alpha', model: 'fast' }] })
+      registerListSubagentModels(ctx, () => ({ routes: [{ provider: 'alpha', model: 'fast' }] }))
     }).toThrow('tool "list_subagent_models" is already registered')
   })
 
@@ -164,7 +194,7 @@ describe('list_subagent_models', () => {
     ctx.llm.registerAdapter(['alpha', 'beta'], new CatalogAdapter())
 
     expect(text(await call(ctx, {}))).toBe('alpha — ALPHA API')
-    expect(text(await call(ctx, { provider: 'alpha' }))).toBe('alpha/fast — Fast: Focused work.')
+    expect(text(await call(ctx, { provider: 'alpha' }))).toBe('alpha/fast — Fast: Focused work.\nalpha/unlisted — Fast: Focused work.')
     expect(text(await call(ctx, { provider: 'alpha', model: 'unlisted' })))
       .toContain('alpha/unlisted — Fast')
 
@@ -186,12 +216,12 @@ describe('list_subagent_models', () => {
     expect(listModels).not.toHaveBeenCalled()
   })
 
-  it('renders an empty advertised model list', async () => {
+  it('resolves an allowed model even when the advertised catalog is empty', async () => {
     const ctx = await setupListTool([{ provider: 'alpha', model: 'fast' }])
     ctx.llm.registerAdapter(['alpha'], new CatalogAdapter(true))
     const result = await call(ctx, { provider: 'alpha' })
     expect(result.isError).toBe(false)
-    expect(text(result)).toBe('(no advertised models for alpha)')
+    expect(text(result)).toBe('alpha/fast — Fast: Focused work.')
   })
 
   it('inspects exact-model efforts, descriptions, and defaults', async () => {

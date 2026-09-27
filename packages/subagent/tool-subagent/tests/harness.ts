@@ -9,6 +9,7 @@ import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import * as mock from './scripted-provider.ts'
 import * as tool from '../src/index.ts'
+import * as discovery from '../src/list-models.ts'
 import SubagentModelSelectionConfig from '../src/model-selection-settings.ts'
 
 const contexts = new Set<Context>()
@@ -58,6 +59,7 @@ export async function setup(toolConfig: SetupConfig, mockConfig: Partial<mock.Co
     await ctx.plugin(AgentLoop, { agents: [] })
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
+    await ctx.plugin(discovery)
     const provider = await mock.mountScriptedProvider(ctx, { name: 'mock', ...mockConfig })
     setupProviders.set(ctx, provider)
     const handle = await ctx.agents.create({
@@ -80,7 +82,8 @@ export async function setup(toolConfig: SetupConfig, mockConfig: Partial<mock.Co
   const provider = await mock.mountScriptedProvider(ctx, { name: 'mock', ...mockConfig })
   setupProviders.set(ctx, provider)
   await ctx.plugin(tool, config)
-  const handle = await ctx.agents.create({ sessionId: SessionId(`tool-setup-${++setupAgentCounter}`) })
+  await ctx.plugin(discovery)
+  const handle = await ctx.agents.create({ sessionId: SessionId(`tool-setup-${++setupAgentCounter}`), ...parentAgentOptions === undefined ? {} : { agentOptions: parentAgentOptions } })
   setupAgents.set(ctx, handle.agent)
   return ctx
 }

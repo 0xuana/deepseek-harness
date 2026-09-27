@@ -1,7 +1,7 @@
 import { mountWorkingDirectoryFixture } from '../../subagent/tests/working-directory-fixture.ts'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -132,13 +132,22 @@ describe('dsh-tool-subagent model selection', () => {
     expect(definition?.description).not.toContain('beta')
   })
 
-  it('hides and rejects route fields when selection is disabled', async () => {
-    const ctx = await setup({ provider: 'mock' })
+  it('rejects route arguments for a backend without Agent options support', async () => {
+    const ctx = await setup({ provider: 'mock' }, { capabilities: { agentOptions: false } })
+    const result = await callSubagent(ctx, {
+      description: 'unsupported route', prompt: 'do it', provider: 'alpha', model: 'parent-model',
+    })
+    expect(result.isError).toBe(true)
+    expect(text(result)).toContain('model selection is disabled for this tool instance')
+  })
+
+  it('keeps route fields visible but rejects other routes when selection is disabled', async () => {
+    const ctx = await setup({ provider: 'mock', parentAgentOptions: { provider: 'alpha', model: 'parent-model' } })
     const schema = ctx.tools.schemas().find(entry => entry.name === 'subagent')!
     const props = (schema.parameters as { properties?: Record<string, unknown> }).properties ?? {}
-    expect(Object.keys(props).sort()).toEqual(['cwd', 'description', 'prompt'])
-    expect(schema.description).not.toContain('list_subagent_models')
-    expect(ctx.tools.get('list_subagent_models')).toBeUndefined()
+    expect(Object.keys(props).sort()).toEqual(['cwd', 'description', 'model', 'prompt', 'provider', 'reasoning_effort'])
+    expect(schema.description).toContain('list_subagent_models')
+    expect(ctx.tools.get('list_subagent_models')).toBeDefined()
 
     const result = await callSubagent(ctx, {
       description: 'forced route',
@@ -147,7 +156,43 @@ describe('dsh-tool-subagent model selection', () => {
       model: 'fast-model',
     })
     expect(result.isError).toBe(true)
-    expect(text(result)).toContain('child model selection is disabled for this tool instance')
+    expect(text(result)).toContain('is not allowed for this Session')
+  })
+
+  it('discovers only the parent route by default and permits its explicit route and effort', async () => {
+    const requests: SubagentStartRequest[] = []
+    const ctx = await setup({
+      provider: 'mock',
+      parentAgentOptions: parentWithRoute().options,
+    }, { onStart: (request) => { requests.push(request) } })
+    ctx.llm.registerAdapter(['alpha', 'other-provider'], new MockAdapter([], REASONING))
+    const parent = modelSelectionSetupAgent(ctx)
+    const discover = (args: unknown) => ctx.tools.execute({
+      callId: ToolCallId('default-model-discovery'), name: 'list_subagent_models',
+      arguments: args, agent: parent, signal: new AbortController().signal,
+    })
+    expect(text(await discover({}))).toContain('alpha')
+    expect(text(await discover({}))).not.toContain('other-provider')
+    expect(text(await discover({ provider: 'alpha' }))).toContain('alpha/parent-model')
+    expect(text(await discover({ provider: 'alpha', model: 'parent-model' }))).toContain('low')
+    expect((await discover({ provider: 'alpha', model: 'other-model' })).isError).toBe(true)
+
+    const omitted = await callSubagent(ctx, { description: 'inherit', prompt: 'work' })
+    expect(omitted.isError, text(omitted)).toBe(false)
+    expect(requests[0]?.agentOptions).toBeUndefined()
+    const explicit = await callSubagent(ctx, {
+      description: 'same route', prompt: 'work', provider: 'alpha', model: 'parent-model',
+    })
+    expect(explicit.isError, text(explicit)).toBe(false)
+    expect(requests[1]?.agentOptions).toEqual({ provider: 'alpha', model: 'parent-model' })
+    const effort = await callSubagent(ctx, { description: 'effort', prompt: 'work', reasoning_effort: 'low' })
+    expect(effort.isError, text(effort)).toBe(false)
+    expect(requests[2]?.agentOptions).toEqual({ reasoningEffort: 'low' })
+    const rejected = await callSubagent(ctx, {
+      description: 'other route', prompt: 'work', provider: 'alpha', model: 'other-model',
+    })
+    expect(rejected.isError).toBe(true)
+    expect(requests).toHaveLength(3)
   })
 
   it('rejects enabled model selection when the provider cannot apply Agent options', async () => {
