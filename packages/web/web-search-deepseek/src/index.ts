@@ -3,7 +3,8 @@
  * with native `web_search_20250305`. A search initiated by a Session on the DeepSeek account route
  * authenticates with the account token when the account service allows the search endpoint;
  * every other search reuses `DEEPSEEK_API_KEY`. The provider does not reuse `DEEPSEEK_BASE_URL`;
- * auxiliary search has its own endpoint configuration.
+ * auxiliary search has its own endpoint configuration. A model request whose search would have
+ * neither credential is not offered `dsh-tool-web`'s `web_search`.
  * @module @deepseek-ai/dsh-web-search-deepseek
  */
 import type { Volatile } from '@deepseek-ai/cordis'
@@ -12,9 +13,12 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-agent'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
+import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
 import type {} from '@deepseek-ai/dsh-deepseek-account'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
 import type {} from '@deepseek-ai/dsh-session'
+import type {} from '@deepseek-ai/dsh-system-prompt'
+import { RUN_CODE_NAME } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-web'
 import {
   DeepSeekSearchProvider,
@@ -88,6 +92,10 @@ const ACCOUNT_PROVIDER = 'deepseek-account'
 /** Settings namespace carrying this provider's endpoint, model, and key reference. */
 export const WEB_SEARCH_DEEPSEEK_SETTINGS_NAMESPACE = 'web-search-deepseek'
 
+/** `dsh-tool-web`'s model-facing search tool and the prompt section that guides it. */
+const WEB_SEARCH_TOOL = 'web_search'
+const WEB_SEARCH_SECTION = 'tool:web_search'
+
 /**
  * Project one resolved section into the options the provider serves its next
  * search with. Environment fallbacks stay here rather than in the provider:
@@ -98,7 +106,7 @@ export const WEB_SEARCH_DEEPSEEK_SETTINGS_NAMESPACE = 'web-search-deepseek'
  */
 function resolveOptions(
   ctx: Context, config: { [K in keyof Config]: ReturnType<Config[K]['get']> },
-): DeepSeekSearchProviderOptions {
+): DeepSeekSearchProviderOptions & { readonly apiKeyEnv: CredentialRef } {
   const apiKeyEnv = credentialRef(config.apiKeyEnv)
   const literalApiKey = config.apiKey !== undefined && config.apiKey.length > 0
     ? config.apiKey
@@ -136,10 +144,56 @@ function resolveOptions(
   }
 }
 
-/** Register the DeepSeek search provider with `ctx.web`. */
+/**
+ * Whether the search a model request on `route` would make has a credential to send. Only
+ * presence is checked: the key's value is not read and the endpoint is not contacted, so a
+ * wrong key or an endpoint without native search still counts as configured.
+ * @param ctx - plugin context supplying the account, credential, and environment planes.
+ * @param options - options the next search would use.
+ * @param route - provider route of the model request being assembled.
+ * @returns whether the account token or an API key is available to that search.
+ */
+async function searchConfigured(
+  ctx: Context, options: ReturnType<typeof resolveOptions>, route: string | undefined,
+): Promise<boolean> {
+  if (options.apiKey !== undefined) return true
+  const account = ctx.get('deepseekAccount')
+  if (route === ACCOUNT_PROVIDER && account !== undefined) {
+    let token: string | undefined
+    try { token = await account.resolveToken(`${options.baseURL}/messages`) }
+    catch (_unreadableGrant) { /* An unreadable grant cannot authenticate the search, so the API key decides. */ }
+    if (token !== undefined && token.length > 0) return true
+  }
+  const credentials = ctx.get('credentials')
+  if (credentials === undefined) {
+    const ambient = launchEnvironmentOf(ctx).get(options.apiKeyEnv)
+    return ambient !== undefined && ambient.value.length > 0
+  }
+  try { return (await credentials.describe(options.apiKeyEnv)).configured }
+  catch (_unreadableStore) { return false /* A store that cannot be read supplies no key to the search either. */ }
+}
+
+/**
+ * Register the DeepSeek search provider with `ctx.web`, and withhold `dsh-tool-web`'s
+ * `web_search` from each model request whose search would have no credential to send.
+ */
 export function apply(ctx: Context, config: Config): void {
-  ctx.web.registerSearchProvider(new DeepSeekSearchProvider(() => resolveOptions(ctx, {
+  const options = () => resolveOptions(ctx, {
     apiKey: config.apiKey.get(), apiKeyEnv: config.apiKeyEnv.get(), baseURL: config.baseURL.get(), model: config.model.get(),
     apiVersion: config.apiVersion.get(), maxTokens: config.maxTokens.get(), maxUses: config.maxUses.get(),
-  })))
+  })
+  ctx.web.registerSearchProvider(new DeepSeekSearchProvider(options))
+  // Prepended so the route model selection writes for this request is already in the
+  // variables. A PTC presentation keeps the tool: its SDK declares web_search on its own.
+  ctx.on('system-prompt/assemble', async (_assembly, _context, next) => {
+    const assembly = await next()
+    const names = assembly.tools.map(tool => tool.name)
+    if (!names.includes(WEB_SEARCH_TOOL) || names.includes(RUN_CODE_NAME)) return assembly
+    if (await searchConfigured(ctx, options(), assembly.variables.provider)) return assembly
+    return {
+      ...assembly,
+      tools: assembly.tools.filter(tool => tool.name !== WEB_SEARCH_TOOL),
+      sections: assembly.sections.filter(section => section.name !== WEB_SEARCH_SECTION),
+    }
+  }, { prepend: true })
 }

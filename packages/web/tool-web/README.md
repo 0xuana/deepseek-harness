@@ -73,7 +73,7 @@ web_fetch({ url: 'https://example.com' })
 
 ### Stable registration
 
-Tool registration follows product enablement, not backend availability: a tool stays visible even when its selected provider is missing, misconfigured, ambiguous, or temporarily unavailable. Execution then fails with a structured `WebError` — for example `WEB_PROVIDER_UNAVAILABLE` or `WEB_PROVIDER_AMBIGUOUS` — which becomes an error tool result the model can read and hooks or UI can route on. To remove a web tool, disable it here in config.
+Tool registration follows product enablement, not backend availability: a tool stays visible even when its selected provider is missing, misconfigured, ambiguous, or temporarily unavailable. Execution then fails with a structured `WebError` — for example `WEB_PROVIDER_UNAVAILABLE` or `WEB_PROVIDER_AMBIGUOUS` — which becomes an error tool result the model can read and hooks or UI can route on. To remove a web tool, disable it here in config. A provider package may still withhold `web_search` from individual model requests: [`dsh-web-search-deepseek`](../web-search-deepseek/README.md#authentication) does so when a request's search would have no credential.
 
 ### Failures and recovery
 

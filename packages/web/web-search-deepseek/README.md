@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-With `dsh-web-search-deepseek`, the harness searches the web through DeepSeek's native search using the DeepSeek account sign-in or an existing `DEEPSEEK_API_KEY`. Choose it when a deployment wants DeepSeek native search and accepts that one search costs a full model turn in latency and tokens, because DeepSeek exposes no dedicated search endpoint. Results come from the structured search blocks DeepSeek returns, never from scraping text out of a reply. A missing credential fails the call with a structured error; a response without a search-result block fails loudly rather than degrading. The model-facing `web_search` tool lives in `dsh-tool-web`.
+With `dsh-web-search-deepseek`, the harness searches the web through DeepSeek's native search using the DeepSeek account sign-in or an existing `DEEPSEEK_API_KEY`. Choose it when a deployment accepts that one search costs a full model turn in latency and tokens, because DeepSeek exposes no dedicated search endpoint. Results come from the structured search blocks DeepSeek returns, never from reply text. A model request whose search has no credential is not offered `web_search`, which `dsh-tool-web` owns; a call that still arrives, or a response without a search-result block, fails with a structured error.
 
 ## Table of Contents
 
@@ -60,6 +60,8 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 A search authenticates with the DeepSeek account when the latest `request/context` event of the initiating Session names the `deepseek-account` provider route and `ctx.deepseekAccount` resolves a token for the search endpoint. The account service resolves one only while signed in and only for its deployment-configured inference origin, `https://api.deepseek.com` by default. That search sends only `x-dsh-auth-token`, even when an API key is configured. Every other search, including a call without an initiating Session and a search whose endpoint has another origin, sends the API key as both `x-api-key` and `Authorization: Bearer`. An HTTP 401 response to an account-authenticated search fails as `WEB_PROVIDER_ERROR` with sign-in guidance instead of endpoint guidance, and leaves the account signed in.
 
+Each model request is offered `dsh-tool-web`'s `web_search` only when the search it would make has a credential: the route that model selection assigns to the request is `deepseek-account` and `ctx.deepseekAccount` resolves a token for the configured search endpoint, a literal `apiKey` is set, or `ctx.credentials.describe` reports the `apiKeyEnv` reference configured (without that service, the process environment must carry it). Otherwise the provider removes `web_search` and its prompt guidance from that request. Only presence is checked: a wrong key, or an endpoint that does not serve the native `web_search_20250305` server tool, keeps the tool offered and fails each call. The check runs for every request, so a model switch or a newly stored key applies to the next request. A request presented through PTC keeps the tool, and a call that still arrives resolves credentials when it runs.
+
 ### What a search returns
 
 `content` is always omitted: DeepSeek's provider prose is not trusted as an answer. `sources[]` comes from `web_search_result` items inside `web_search_tool_result` blocks — `url` and `title` directly, and `publishedAt` from `page_age` — with snippets joined from URL-keyed `cited_text` entries where an excerpt exists. Results are deduplicated by URL, and because DeepSeek exposes no result-count knob, the service enforces `maxResults` by truncating and flagging.
@@ -93,7 +95,7 @@ The provider is built on two commitments:
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Config schema and per-search option capture |
+| [`src/index.ts`](src/index.ts) | Config schema, per-search option capture, and per-request `web_search` withholding |
 | [`src/provider.ts`](src/provider.ts) | The `DeepSeekSearchProvider`: Messages request dispatch, block parsing, citation joining, credential resolution |
 | [`src/types.ts`](src/types.ts) | Anthropic wire types for the search response |
 | — | No runtime invariant companion is published; the package emits a pre-dispatch log event but owns no later authoritative dispatch event to relate it to. Exact envelope equality is pinned at the provider boundary instead. |
@@ -101,6 +103,8 @@ The provider is built on two commitments:
 ### Request flow
 
 Each search captures the current Config values into provider options — endpoint, model, key reference, limits — then asks `ctx.deepseekAccount` for a token when the initiating Session uses the account route, otherwise resolves the credential reference through `ctx.credentials` (or the environment), appends the log-only session event, and dispatches the Messages request with the native `web_search` server tool. The response's `web_search_tool_result` blocks become `sources[]`; `cited_text` entries from text blocks are joined to their URLs as snippets; results are deduplicated by URL; and the service enforces the requested source bound on the way back.
+
+Separately, a prepended `system-prompt/assemble` listener reads the route that model selection writes into the assembly variables and removes `web_search` and its `tool:web_search` section when that route's search would have no credential. An assembly that contains the PTC `run_code` transport is left unchanged.
 
 </details>
 
@@ -117,6 +121,7 @@ Read these pages when the package-level contract is not enough. They move from t
 - [dsh-tool-web](../tool-web/README.md) — the model-facing `web_search` tool that renders this provider's sources.
 - [Generated configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-web-search-deepseek) — every accepted config field and its source declaration.
 - [Web capability seam decision](../../../.agents/notes/implemented/architecture/2026-06-24-web-capability-seam.md) — why search and fetch share one provider-selection service.
+- [Credential-based `web_search` withholding decision](../../../.agents/notes/implemented/architecture/2026-09-27-deepseek-search-withholds-web-search-without-credentials.md) — why this provider removes `web_search` from requests it cannot authenticate.
 
 -----
 
@@ -151,6 +156,20 @@ Zero direct conversation tokens from registration. Result tokens scale with retu
 
 Append-only; newly visible content follows the reusable request prefix and does not invalidate existing KV-cache entries.
 
+### Conversation tool list
+
+#### What the model sees
+
+A conversation request whose search would have no credential carries neither the `web_search` schema nor its prompt guidance; `web_fetch` and the other tools are unchanged. The agent loop records each difference from the previous request as a tool-registry update, so a route switch, or a key being stored or removed, appears as a `web_search` addition or removal on the next request.
+
+#### Token effect
+
+Withholding removes the `web_search` schema and its prompt guidance from the request.
+
+#### KV Cache effect
+
+On a DeepSeek route, a returning `web_search` is loaded as a deferred addition that keeps the cached prefix; removing it while the route stays the same changes the declared tools and prevents reuse from there. Routes without tool-update support send the complete tool list, so either change prevents reuse from the tool declarations. A model switch already invalidates the cache.
+
 ## Known Limitations and Deferred Work
 
 <a id="known-limitations-and-deferred-work"></a>
@@ -159,7 +178,10 @@ Append-only; newly visible content follows the reusable request prefix and does 
 These limits define when the provider is expensive or incomplete. They are current package constraints.
 
 - **One search costs a full Messages model turn** — latency plus generated tokens, with up to `maxUses` server-side searches; DeepSeek exposes no dedicated retrieval endpoint.
-- **Dynamic credential availability resolves inside the operation** — the synchronous availability check can establish that a resolver exists but cannot query an asynchronous credential store, so a selected keyless provider fails the search with `WEB_PROVIDER_CREDENTIAL_MISSING`; the stable `web_search` schema stays registered.
+- **Provider selection cannot see a missing key** — `available()` is synchronous and cannot query the asynchronous credential store, so `ctx.web` still selects a keyless provider and a direct search fails with `WEB_PROVIDER_CREDENTIAL_MISSING`; only model requests withhold `web_search`.
+- **Withholding checks presence, not validity** — a wrong key, or an endpoint without the native `web_search_20250305` server tool, keeps `web_search` offered, and each call fails with a structured error.
+- **Withholding assumes this provider serves search** — a composition that loads this package but selects another search provider still loses `web_search` whenever DeepSeek has no credential.
+- **PTC presentations keep `web_search`** — their generated SDK declares tools apart from the request's tool list, so a keyless call there fails with `WEB_PROVIDER_CREDENTIAL_MISSING`.
 - **Over-returned sources still cost tokens** — with no result-count knob on the wire, `maxResults` is enforced only post-hoc by service truncation.
 - **Uncited results carry no `snippet`** — a source gains one only when a text-block citation (`cited_text`) matches its URL.
 

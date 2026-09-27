@@ -73,7 +73,7 @@ web_fetch({ url: 'https://example.com' })
 
 ### 稳定注册
 
-工具注册遵循产品启用状态，而非后端可用性：即使选中的提供方缺失、错误配置、存在歧义或暂时不可用，工具仍保持可见。执行随后以结构化 `WebError` 失败——例如 `WEB_PROVIDER_UNAVAILABLE` 或 `WEB_PROVIDER_AMBIGUOUS`——它变成模型可读、钩子或 UI 可路由的错误工具结果。要移除 web 工具，请在此处通过配置将其禁用。
+工具注册遵循产品启用状态，而非后端可用性：即使选中的提供方缺失、错误配置、存在歧义或暂时不可用，工具仍保持可见。执行随后以结构化 `WebError` 失败——例如 `WEB_PROVIDER_UNAVAILABLE` 或 `WEB_PROVIDER_AMBIGUOUS`——它变成模型可读、钩子或 UI 可路由的错误工具结果。要移除 web 工具，请在此处通过配置将其禁用。提供方包仍可能从单个模型请求中撤下 `web_search`：[`dsh-web-search-deepseek`](../web-search-deepseek/README.zh.md#authentication) 会在请求的搜索没有可用凭据时这样做。
 
 ### 失败与恢复
 
