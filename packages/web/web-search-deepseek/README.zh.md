@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-有了 `dsh-web-search-deepseek`，harness 可以通过 DeepSeek 原生搜索检索 web，使用 DeepSeek 账号登录或部署已有的 `DEEPSEEK_API_KEY`。当部署接受一次搜索在延迟与 token 上消耗一个完整模型轮次时选择它，因为 DeepSeek 不提供专用搜索端点。结果来自 DeepSeek 返回的结构化搜索块，绝不取自回复文本。搜索没有可用凭据的模型请求不会获得 `web_search`（该工具属于 `dsh-tool-web`）；仍然到达的调用，或缺少搜索结果块的响应，都以结构化错误失败。
+有了 `dsh-web-search-deepseek`，harness 可以通过 DeepSeek 原生搜索检索 web，使用 DeepSeek 账号登录或部署已有的 `DEEPSEEK_API_KEY`。当部署接受一次搜索在延迟与 token 上消耗一个完整模型轮次时选择它，因为 DeepSeek 不提供专用搜索端点。结果来自 DeepSeek 返回的结构化搜索块，绝不取自回复文本。对搜索没有可用凭据的模型请求，提供方报告自身未就绪，因此 `dsh-tool-web` 不会为该请求提供 `web_search`；仍然到达的调用，或缺少搜索结果块的响应，都以结构化错误失败。
 
 ## 目录
 
@@ -60,7 +60,7 @@ kind: "package-reference"
 
 当发起会话最近的 `request/context` 事件指明 `deepseek-account` 提供方路由，且 `ctx.deepseekAccount` 为搜索端点解析出 token 时，搜索使用 DeepSeek 账号鉴权。账号服务仅在已登录时、且仅对部署配置的推理 origin（默认 `https://api.deepseek.com`）解析 token。这类搜索只发送 `x-dsh-auth-token`，即使配置了 API 密钥也是如此。其余所有搜索，包括没有发起会话的调用以及端点属于其他 origin 的搜索，都把 API 密钥同时作为 `x-api-key` 与 `Authorization: Bearer` 发送。账号鉴权的搜索收到 HTTP 401 时以 `WEB_PROVIDER_ERROR` 失败，附带登录指引而非端点指引，账号保持登录。
 
-每个模型请求仅在其将发起的搜索有可用凭据时才会获得 `dsh-tool-web` 的 `web_search`：模型选择为该请求指定的路由是 `deepseek-account` 且 `ctx.deepseekAccount` 为配置的搜索端点解析出 token，或设置了字面 `apiKey`，或 `ctx.credentials.describe` 报告 `apiKeyEnv` 引用已配置（没有该服务时，进程环境中必须存在该变量）。否则提供方会从该请求中移除 `web_search` 及其提示词说明。这里只检查凭据是否存在：错误的密钥，或不提供原生 `web_search_20250305` 服务器工具的端点，都会让该工具继续提供并使每次调用失败。检查在每个请求上执行，因此模型切换或新存储的密钥会在下一个请求生效。通过 PTC 呈现的请求保留该工具，仍然到达的调用会在运行时解析凭据。
+提供方的 `ready()` 回答模型请求将发起的搜索是否有可用凭据：该请求的路由是 `deepseek-account` 且 `ctx.deepseekAccount` 为配置的搜索端点解析出 token，或设置了字面 `apiKey`，或 `ctx.credentials.describe` 报告 `apiKeyEnv` 引用已配置（没有该服务时，进程环境中必须存在该变量）。本提供方是选中的搜索提供方时，[`dsh-tool-web`](../tool-web/README.zh.md#search-readiness) 会从它回答 false 的每个请求中撤下 `web_search` 及其提示词说明。这里只检查凭据是否存在：错误的密钥，或不提供原生 `web_search_20250305` 服务器工具的端点，都视为就绪并使每次调用失败。仍然到达的调用会在运行时解析凭据。
 
 ### 搜索返回什么
 
@@ -95,7 +95,7 @@ kind: "package-reference"
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Config schema、每次搜索的选项捕获，以及按请求撤下 `web_search` |
+| [`src/index.ts`](src/index.ts) | Config schema、每次搜索的选项捕获，以及搜索就绪判断 |
 | [`src/provider.ts`](src/provider.ts) | `DeepSeekSearchProvider`：Messages 请求分发、块解析、引用拼接、凭据解析 |
 | [`src/types.ts`](src/types.ts) | 搜索响应的 Anthropic 协议类型 |
 | — | 不发布运行时不变量配套入口；本包会在分发前发出日志事件，但没有后续的权威分发事件可与之关联；精确的请求包络相等性改由提供方边界保障。 |
@@ -104,7 +104,7 @@ kind: "package-reference"
 
 每次搜索先把当前 Config 段投影为提供方选项——端点、模型、密钥引用、上限——然后在发起会话使用账号路由时向 `ctx.deepseekAccount` 请求 token，否则通过 `ctx.credentials`（或环境）解析凭据引用，追加仅用于日志的会话事件，并以原生 `web_search` 服务器工具分发 Messages 请求。响应中的 `web_search_tool_result` 块变为 `sources[]`；文本块中的 `cited_text` 条目按其 URL 拼接为 snippet；结果按 URL 去重；服务在返回路径上强制执行请求的来源上限。
 
-另外，一个前置的 `system-prompt/assemble` 监听器读取模型选择写入组装变量的路由，当该路由的搜索没有可用凭据时，移除 `web_search` 及其 `tool:web_search` 段落。包含 PTC `run_code` 传输工具的组装保持不变。
+就绪判断捕获相同的选项，但不读取任何密钥值：账号路由向 `ctx.deepseekAccount` 请求 token，其他情况检查字面密钥，或询问 `ctx.credentials.describe()`（或环境）密钥引用是否已配置。
 
 </details>
 
@@ -121,7 +121,7 @@ kind: "package-reference"
 - [dsh-tool-web](../tool-web/README.zh.md)——渲染本提供方来源的面向模型 `web_search` 工具。
 - [生成配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-web-search-deepseek)——每个受支持配置字段及其源声明。
 - [web 能力 seam 决策](../../../.agents/notes/implemented/architecture/2026-06-24-web-capability-seam.zh.md)——搜索与抓取为何共用一项提供方选择服务。
-- [按凭据撤下 `web_search` 的决策](../../../.agents/notes/implemented/architecture/2026-09-27-deepseek-search-withholds-web-search-without-credentials.zh.md)——本提供方为何从无法鉴权的请求中移除 `web_search`。
+- [搜索就绪决策](../../../.agents/notes/implemented/architecture/2026-09-27-web-search-offered-by-provider-readiness.zh.md)——本提供方为何报告就绪状态，而由 `dsh-tool-web` 撤下 `web_search`。
 
 -----
 
@@ -156,11 +156,11 @@ kind: "package-reference"
 
 仅追加；新可见内容位于可复用请求前缀之后，不会使现有 KV Cache 条目失效。
 
-### 会话工具列表
+### 会话工具列表（间接）
 
 #### 模型看到的内容
 
-搜索没有可用凭据的会话请求既不包含 `web_search` 的 schema，也不包含它的提示词说明；`web_fetch` 与其他工具不变。agent loop（智能体循环）把与上一个请求的每处差异记录为工具注册表更新，因此路由切换，或密钥的存储与删除，会在下一个请求中表现为 `web_search` 的新增或移除。
+本提供方被选中时，它未就绪的会话请求既不包含 `web_search` 的 schema，也不包含它的提示词说明；该效果由 [`dsh-tool-web`](../tool-web/README.zh.md#search-readiness) 负责。
 
 #### Token 影响
 
@@ -168,7 +168,7 @@ kind: "package-reference"
 
 #### KV Cache 影响
 
-在 DeepSeek 路由上，重新提供的 `web_search` 以延迟加载的新增方式进入，保留已缓存的前缀；在路由不变时移除它会改变声明的工具，从该处起无法复用。不支持工具更新的路由发送完整工具列表，因此两种变化都会使复用从工具声明处中断。模型切换本身已经使缓存失效。
+重新提供或移除 `web_search` 会按 [`dsh-tool-web`](../tool-web/README.zh.md#search-readiness) 所述改变声明的工具。
 
 ## 已知限制与延期工作
 
@@ -178,10 +178,8 @@ kind: "package-reference"
 这些限制说明提供方在哪些情况下昂贵或不完整。它们是当前包约束。
 
 - **一次搜索消耗一个完整的 Messages 模型轮次**——产生延迟与生成 token，最多执行 `maxUses` 次服务端搜索；DeepSeek 不公开专用检索端点。
-- **提供方选择看不到缺失的密钥**——`available()` 是同步的，无法查询异步凭据存储，因此 `ctx.web` 仍会选中没有密钥的提供方，直接搜索会以 `WEB_PROVIDER_CREDENTIAL_MISSING` 失败；只有模型请求会撤下 `web_search`。
-- **撤下只检查凭据是否存在，不检查是否有效**——错误的密钥，或不提供原生 `web_search_20250305` 服务器工具的端点，会让 `web_search` 继续提供，每次调用都以结构化错误失败。
-- **撤下假定由本提供方负责搜索**——加载本包但选择其他搜索提供方的组合，只要 DeepSeek 没有凭据，仍会失去 `web_search`。
-- **PTC 呈现保留 `web_search`**——生成的 SDK 独立于请求的工具列表声明工具，因此在 PTC 中没有密钥的调用会以 `WEB_PROVIDER_CREDENTIAL_MISSING` 失败。
+- **提供方选择看不到缺失的密钥**——`available()` 是同步的，无法查询异步凭据存储，因此 `ctx.web` 仍会选中没有密钥的提供方，直接搜索会以 `WEB_PROVIDER_CREDENTIAL_MISSING` 失败；异步的 `ready()` 只影响哪些模型请求会获得 `web_search`。
+- **就绪判断只检查凭据是否存在，不检查是否有效**——错误的密钥，或不提供原生 `web_search_20250305` 服务器工具的端点，都视为就绪，因此 `web_search` 继续提供，每次调用都以结构化错误失败。
 - **超量返回的来源仍消耗 token**——协议没有结果数量旋钮，`maxResults` 只能由服务在事后截断。
 - **未引用的结果没有 `snippet`**——只有当文本块引用（`cited_text`）匹配其 URL 时，来源才会获得 snippet。
 

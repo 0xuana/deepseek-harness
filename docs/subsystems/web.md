@@ -122,6 +122,8 @@ type WebFetchBody =
 
 A provider's `available(): boolean` is a cheap LOCAL check (credential presence, parseable config) and **must not make network calls**. It is an input to execution-time selection, not a health system: `search()`/`fetch()` read it to pick a usable provider, and a selection failure surfaces as the structured `WebError` the caller routes on — which carries the branchable detail (the missing id or ambiguous candidate set) in its code and message.
 
+A search provider may also implement `ready(llmProvider): Promise<boolean>`, a configuration-only check that must not make network calls: it answers whether a search made for a model request on that chat route has a credential to send. `searchReady(llmProvider?)` asks only the provider that `search()` would select, treats a provider without `ready()` as ready, and answers true when selection fails, because `search()` reports that failure as a `WebError`. Readiness is not a selection input; `dsh-tool-web` asks for it on each model request and withholds `web_search` on false.
+
 Selection never depends on registration, config, or HMR order: a capability has an explicit provider id (config `searchProvider`/`fetchProvider`, or the matching env var feeding the same field), or auto-selects when exactly one usable provider is registered; multiple usable providers with no configured id is `WEB_PROVIDER_AMBIGUOUS`, not first-wins.
 
 ## Fetch network policy
@@ -190,6 +192,16 @@ registerFetchProvider(provider: WebFetchProvider): () => void
  * @returns the provider's results, capped to `request.maxResults`.
  */
 async search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult>
+
+/**
+ * Whether the provider `search()` would select can authenticate a search made for a
+ * model request on the `llmProvider` chat route. Asks only that provider's `ready()`;
+ * one without `ready()` counts as ready. Makes no network calls. A selection failure
+ * answers true, because `search()` reports that failure as a structured `WebError`.
+ * @param llmProvider - the provider route id of the model request, when known.
+ * @returns false only when the selected provider reports that it cannot authenticate.
+ */
+async searchReady(llmProvider?: string): Promise<boolean>
 
 /**
  * Retrieve one URL through the selected provider. Resolves the provider at

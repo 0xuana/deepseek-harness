@@ -6,7 +6,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import { defineTool, RUN_CODE_NAME } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView, ToolResult, WebSearchResultView, WebSource } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { WebSearchResult, WebSearchSource } from '@deepseek-ai/dsh-web'
@@ -293,10 +293,12 @@ function mergeSearchResults(
 }
 
 /**
- * Register the `web_search` tool and its system-prompt guidance.
+ * Register the `web_search` tool and its system-prompt guidance, and withhold both from
+ * each model request for whose chat route `ctx.web.searchReady()` answers false.
  *
- * @param ctx - context whose `tools` and `systemPrompt` registries receive the
- *   registrations; both are effect-scoped and unregister on plugin dispose.
+ * @param ctx - context whose `tools` and `systemPrompt` registries and
+ *   `system-prompt/assemble` event receive the registrations; all are effect-scoped
+ *   and unregister on plugin dispose.
  * @param maxResults - the deployment's source cap, sent as every seam
  *   request's `maxResults`.
  * @param maxQueries - the deployment's query cap enforced before provider calls.
@@ -374,4 +376,18 @@ export function applyWebSearchTool(
     presentCall: presentSearchCall,
     presentResult: (args, result) => presentSearchResult(args, result),
   }))
+
+  // Prepended so the route model selection writes for this request is already in the
+  // variables. A PTC presentation keeps the tool: its SDK declares web_search on its own.
+  ctx.on('system-prompt/assemble', async (_assembly, _context, next) => {
+    const assembly = await next()
+    const names = assembly.tools.map(tool => tool.name)
+    if (!names.includes('web_search') || names.includes(RUN_CODE_NAME)) return assembly
+    if (await ctx.web.searchReady(assembly.variables.provider)) return assembly
+    return {
+      ...assembly,
+      tools: assembly.tools.filter(tool => tool.name !== 'web_search'),
+      sections: assembly.sections.filter(section => section.name !== 'tool:web_search'),
+    }
+  }, { prepend: true })
 }

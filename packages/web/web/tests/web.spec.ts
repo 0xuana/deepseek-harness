@@ -156,6 +156,61 @@ describe('WebRuntime execution resolution', () => {
   })
 })
 
+describe('WebRuntime search readiness', () => {
+  /** A search provider whose readiness answer is scripted and whose calls are recorded. */
+  function readyProvider(id: string, isAvailable: boolean, ready: boolean, asked: (string | undefined)[] = []): WebSearchProvider {
+    return {
+      ...makeSearchProvider(id, isAvailable, () => Promise.resolve(searchResult(id))),
+      ready: (llmProvider) => {
+        asked.push(llmProvider)
+        return Promise.resolve(ready)
+      },
+    }
+  }
+
+  it('answers from the selected provider and passes it the request route', async () => {
+    const { web } = await mountWeb({ searchProvider: 'deepseek' })
+    const asked: (string | undefined)[] = []
+    web.registerSearchProvider(readyProvider('deepseek', available, false, asked))
+    await expect(web.searchReady('deepseek-official')).resolves.toBe(false)
+    expect(asked).toEqual(['deepseek-official'])
+  })
+
+  it('does not ask a provider that search() would not select', async () => {
+    const { web } = await mountWeb({ searchProvider: 'exa' })
+    const deepseekAsked: (string | undefined)[] = []
+    web.registerSearchProvider(readyProvider('exa', available, true))
+    web.registerSearchProvider(readyProvider('deepseek', available, false, deepseekAsked))
+    await expect(web.searchReady('deepseek-official')).resolves.toBe(true)
+    expect(deepseekAsked).toEqual([])
+  })
+
+  it('asks the single usable provider when none is configured', async () => {
+    const { web } = await mountWeb()
+    web.registerSearchProvider(readyProvider('usable', available, false))
+    web.registerSearchProvider(readyProvider('unusable', unavailable, true))
+    await expect(web.searchReady(undefined)).resolves.toBe(false)
+  })
+
+  it('treats a selected provider without ready() as ready', async () => {
+    const { web } = await mountWeb()
+    web.registerSearchProvider(makeSearchProvider('plain', available, () => Promise.resolve(searchResult('plain'))))
+    await expect(web.searchReady('deepseek-official')).resolves.toBe(true)
+  })
+
+  it.each([
+    ['nothing is registered', {}, []],
+    ['the configured provider is not registered', { searchProvider: 'missing' }, [readyProvider('other', available, false)]],
+    ['the configured provider is unavailable', { searchProvider: 'down' }, [readyProvider('down', unavailable, false)]],
+    ['several usable providers are registered', {}, [readyProvider('a', available, false), readyProvider('b', available, false)]],
+  ] as const)('answers true when %s, leaving search() to report the failure', async (_label, config, providers) => {
+    const { web } = await mountWeb(config)
+    for (const provider of providers) web.registerSearchProvider(provider)
+    await expect(web.searchReady('deepseek-official')).resolves.toBe(true)
+    await expect(web.search({ query: 'q' })).rejects.toBeInstanceOf(WebError)
+  })
+})
+
 describe('WebRuntime maxResults enforcement', () => {
   it('truncates sources and sets truncated when a provider over-returns', async () => {
     const { web } = await mountWeb()

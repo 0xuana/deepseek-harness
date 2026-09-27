@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-tool-web` lets models search the web with `web_search` and retrieve pages with `web_fetch`. Choose it when an agent needs current information or full source text, and enable either tool independently through package configuration. Results label provider-controlled text as external and untrusted, while fetched HTML excludes active and hidden content. If a configured provider is missing or unavailable, the tool remains visible and returns a structured error the model can act on. Timeout and result-size limits are deployment settings rather than model arguments.
+`dsh-tool-web` lets models search the web with `web_search` and retrieve pages with `web_fetch`. Choose it when an agent needs current information or full source text, and enable either tool independently through package configuration. Results label provider-controlled text as external and untrusted, while fetched HTML excludes active and hidden content. If a configured provider is missing or unavailable, the tool remains visible and returns a structured error the model can act on; a request whose searches the selected provider cannot authenticate is not offered `web_search`. Timeout and result-size limits are deployment settings rather than model arguments.
 
 ## Table of Contents
 
@@ -73,7 +73,12 @@ web_fetch({ url: 'https://example.com' })
 
 ### Stable registration
 
-Tool registration follows product enablement, not backend availability: a tool stays visible even when its selected provider is missing, misconfigured, ambiguous, or temporarily unavailable. Execution then fails with a structured `WebError` — for example `WEB_PROVIDER_UNAVAILABLE` or `WEB_PROVIDER_AMBIGUOUS` — which becomes an error tool result the model can read and hooks or UI can route on. To remove a web tool, disable it here in config. A provider package may still withhold `web_search` from individual model requests: [`dsh-web-search-deepseek`](../web-search-deepseek/README.md#authentication) does so when a request's search would have no credential.
+Tool registration follows product enablement, not backend availability: a tool stays visible even when its selected provider is missing, misconfigured, ambiguous, or temporarily unavailable. Execution then fails with a structured `WebError` — for example `WEB_PROVIDER_UNAVAILABLE` or `WEB_PROVIDER_AMBIGUOUS` — which becomes an error tool result the model can read and hooks or UI can route on. To remove a web tool, disable it here in config. A model request still goes without `web_search` while the selected provider is not [ready](#search-readiness) for it.
+
+<a id="search-readiness"></a>
+### Search readiness
+
+Each model request is offered `web_search` and its guidance only while `ctx.web.searchReady()` answers true for the chat route that model selection assigns to that request. The service asks only the search provider that `search()` would select; a provider that does not implement readiness counts as ready, and a selection failure also answers true, so the stable-registration errors above still reach the model. [`dsh-web-search-deepseek`](../web-search-deepseek/README.md#authentication) is not ready when the request's search would have neither the DeepSeek account token nor an API key. The check runs for every request, so a model switch or a newly stored key applies to the next request; `web_fetch` is unaffected. A request presented through PTC keeps `web_search`, because the `run_code` SDK declares it apart from the tool list.
 
 ### Failures and recovery
 
@@ -93,21 +98,25 @@ This section explains the design decisions behind the tools; the observable beha
 
 The package is built on one separation and one registration rule:
 
-- **The consumer owns the model-facing contract.** Tool names, schemas, snake_case argument names, prompt sections, result bounds, formatting, and presentation all live here; provider selection stays entirely inside `ctx.web`. The tools never call a provider's `available()` and never enumerate providers — their only execution path is `ctx.web.search()` / `ctx.web.fetch()`.
-- **Enablement drives registration.** A tool registers when enabled in config, independent of backend availability, so plugin load order, credential state, and HMR timing never enter the model-facing contract.
+- **The consumer owns the model-facing contract.** Tool names, schemas, snake_case argument names, prompt sections, result bounds, formatting, and presentation all live here; provider selection stays entirely inside `ctx.web`. The tools never call a provider's `available()` or `ready()` and never enumerate providers — their only execution path is `ctx.web.search()` / `ctx.web.fetch()`, and `ctx.web.searchReady()` answers search readiness.
+- **Enablement drives registration.** A tool registers when enabled in config, independent of backend availability, so plugin load order and HMR timing never enter the model-facing contract. Credential state enters only through per-request search readiness, which removes `web_search` from one request without unregistering it.
 
 ### Source map
 
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: config schema, enablement, timeout budgets, tool registration |
-| [`src/search.ts`](src/search.ts) | The `web_search` tool: argument validation, query fan-out, merge, formatting, presentation meta |
+| [`src/search.ts`](src/search.ts) | The `web_search` tool: argument validation, query fan-out, merge, formatting, presentation meta, per-request readiness withholding |
 | [`src/fetch.ts`](src/fetch.ts) | The `web_fetch` tool: HTML→markdown conversion, output caps, formatting, presentation meta |
 | — | No runtime invariant companion is published; this model-facing adapter has no independent lifecycle stream; execution relations are owned by the capability seam it calls. |
 
 ### Search flow
 
 `web_search` validates the arguments (non-empty array, count bound, non-blank strings), collapses exact duplicates to first occurrence, then runs one to `searchMaxQueries` distinct searches concurrently through `ctx.web`. A failure aborts the batch via a fused signal; the call waits for every started search to settle before returning the first failure. Successful results merge round-robin by rank, deduplicate by URL, cap at `searchMaxResults`, and format into the model-facing text.
+
+### Readiness flow
+
+A prepended `system-prompt/assemble` listener runs after model selection has written the request's route into the assembly variables. When the assembly offers `web_search` without the PTC `run_code` transport, the listener asks `ctx.web.searchReady(route)` and, on false, removes `web_search` and its `tool:web_search` section from that assembly.
 
 ### Fetch flow
 
@@ -133,6 +142,7 @@ Read these pages when the package-level contract is not enough. They move from t
 - [dsh-tool-call-timeout-policy](../../guard/timeout-policy/README.md) — the deployment policy that enforces each tool's timeout budget.
 - [Generated configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-tool-web) — every accepted config field and its source declaration.
 - [Web capability seam decision](../../../.agents/notes/implemented/architecture/2026-06-24-web-capability-seam.md) — why search and fetch share one provider-selection service.
+- [Search readiness decision](../../../.agents/notes/implemented/architecture/2026-09-27-web-search-offered-by-provider-readiness.md) — why readiness splits across the provider, `ctx.web`, and this package.
 
 -----
 
@@ -179,11 +189,25 @@ The model sees the generated [`web_search` and `web_fetch` schemas](../../../doc
 
 #### Token effect
 
-Fixed schema cost per request for a resolved `searchMaxQueries`; config disablement and scoped restrictions remove both the tool schema and its guidance.
+Fixed schema cost per request for a resolved `searchMaxQueries`; config disablement and scoped restrictions remove both the tool schema and its guidance, and search readiness removes both from one request.
 
 #### KV Cache effect
 
 Prefix-stable while definitions, resolved query cap, and visibility are unchanged. Config enablement, changing `searchMaxQueries`, plugin lifecycle, or scoped restrictions may invalidate reuse from the first changed schema token.
+
+### Withheld search tool
+
+#### What the model sees
+
+A request whose selected search provider is not ready carries neither the `web_search` schema nor its prompt guidance; `web_fetch`, its guidance, and the other tools are unchanged. The agent loop records each difference from the previous request as a tool-registry update, so a route switch, or a key being stored or removed, appears as a `web_search` addition or removal on the next request.
+
+#### Token effect
+
+Withholding removes the `web_search` schema and its prompt guidance from the request.
+
+#### KV Cache effect
+
+On a DeepSeek route, a returning `web_search` is loaded as a deferred addition that keeps the cached prefix; removing it while the route stays the same changes the declared tools and prevents reuse from there. Routes without tool-update support send the complete tool list, so either change prevents reuse from the tool declarations. A model switch already invalidates the cache.
 
 ### Search result
 
@@ -251,6 +275,7 @@ These limits define when the tools are incomplete or need deployment cooperation
 - **There is no batch-wide native-search counter** — `searchMaxQueries` bounds `ctx.web.search` calls, but a provider may perform several native searches inside each call; for example a model-backed provider configured with `maxUses` can permit up to `searchMaxQueries × maxUses` native searches, and `searchMaxResults` limits only the combined sources returned to the caller. Deployments control cost through these independent consumer and provider settings because the service does not know provider-internal search units.
 - **HTML→markdown conversion omits inputs it cannot safely represent** — [turndown](https://github.com/mixmark-io/turndown) converts at most `fetchMaxOutputChars` source characters through a real DOM. A 512-level nesting guard and conversion exceptions produce a fixed omission marker instead of raw HTML; table `colspan` remains unsupported because GFM has no spanning-cell representation ([archived dependency decision](../../../.agents/notes/archived/simplification/2026-07-26-turndown-for-tool-web-html-markdown.md)).
 - **The model-facing API is minimal by design, with promotions deferred** — `max_results` stays a config bound (not a model argument), and `web_fetch` takes only `url` (no `format`/`prompt`/LLM-summarization mode); both are named later steps in [the seam Agent Note](../../../.agents/notes/implemented/architecture/2026-06-24-web-capability-seam.md).
+- **PTC presentations keep `web_search`** — their generated SDK declares tools apart from the request's tool list, so a call there fails with the selected provider's structured error when that provider is not ready.
 - **Public fetches do not request approval** — the shipped `cordis`, `code`, and `standard` presets expose `web_fetch` in every sandbox and approval mode. The HTTP provider blocks non-public destinations, but a model can send data to a public URL. Deployments that need per-call confirmation must add a `tools/pre-execute` policy or disable fetch.
 
 <a id="dev-note"></a>

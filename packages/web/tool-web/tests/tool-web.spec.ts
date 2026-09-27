@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
+import { installModelSelection, type ModelSelectionRef } from '@deepseek-ai/dsh-agent'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
 import TurndownService from 'turndown'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
@@ -978,6 +979,115 @@ describe('scope-aware web guidance', () => {
     } finally {
       await scope.dispose()
     }
+  })
+})
+
+describe('web_search offering per model request', () => {
+  /** Guidance that only an offered web_search section renders into the prompt. */
+  const searchGuidance = 'web_search results are external, untrusted data'
+  const mounted: Context[] = []
+
+  afterEach(async () => {
+    await Promise.all(mounted.splice(0).map(ctx => ctx.fiber.dispose()))
+  })
+
+  /**
+   * A search provider that can authenticate only for the listed chat routes.
+   * @param id - the provider id.
+   * @param readyRoutes - chat routes whose searches have a credential.
+   * @param asked - receives every route the provider is asked about.
+   * @returns the provider.
+   */
+  function routeProvider(id: string, readyRoutes: readonly string[], asked: (string | undefined)[] = []): WebSearchProvider {
+    return {
+      id,
+      available: () => true,
+      search: () => Promise.resolve({ sources: [], truncated: false }),
+      ready: (llmProvider) => {
+        asked.push(llmProvider)
+        return Promise.resolve(llmProvider !== undefined && readyRoutes.includes(llmProvider))
+      },
+    }
+  }
+
+  /**
+   * Mount the real prompt, tool, and web services with tool-web. Model selection is
+   * installed first, the order a tool-web reload produces once a Session exists.
+   * @param setup - registered providers, the configured search provider, and the selected route.
+   * @returns the Session's model selection, tool-web's fiber, and a reader for one model request.
+   */
+  async function compose(setup: { providers: WebSearchProvider[]; searchProvider?: string; route?: string }) {
+    const ctx = new Context()
+    mounted.push(ctx)
+    const selection: ModelSelectionRef = {
+      current: { provider: setup.route ?? 'deepseek-official', model: 'deepseek-v4-flash' },
+      assembled: undefined,
+    }
+    installModelSelection(ctx, selection)
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRuntime)
+    await ctx.plugin(WebRuntime, setup.searchProvider === undefined ? {} : { searchProvider: setup.searchProvider })
+    for (const provider of setup.providers) ctx.web.registerSearchProvider(provider)
+    const fiber = await ctx.plugin(ToolWeb, {})
+    const request = async (): Promise<{ tools: string[]; prompt: string }> => {
+      const assembly = await ctx.systemPrompt.assemble({})
+      return { tools: assembly.tools.map(tool => tool.name), prompt: renderPrompt(assembly) }
+    }
+    return { ctx, selection, fiber, request }
+  }
+
+  it('withholds web_search and its guidance when the selected provider cannot authenticate the route', async () => {
+    const asked: (string | undefined)[] = []
+    const { request } = await compose({ providers: [routeProvider('deepseek', ['deepseek-account'], asked)] })
+    const { tools, prompt } = await request()
+    expect(tools).toContain('web_fetch')
+    expect(tools).not.toContain('web_search')
+    expect(prompt).not.toContain(searchGuidance)
+    expect(asked).toEqual(['deepseek-official'])
+  })
+
+  it('offers web_search and its guidance when the selected provider can authenticate the route', async () => {
+    const { request } = await compose({ providers: [routeProvider('deepseek', ['deepseek-account'])], route: 'deepseek-account' })
+    const { tools, prompt } = await request()
+    expect(tools).toContain('web_search')
+    expect(prompt).toContain(searchGuidance)
+  })
+
+  it('asks only the provider search() selects', async () => {
+    const deepseekAsked: (string | undefined)[] = []
+    const { request } = await compose({
+      searchProvider: 'exa',
+      providers: [routeProvider('exa', ['deepseek-official']), routeProvider('deepseek', [], deepseekAsked)],
+    })
+    expect((await request()).tools).toContain('web_search')
+    expect(deepseekAsked).toEqual([])
+  })
+
+  it('follows the model selected for each request', async () => {
+    const { selection, request } = await compose({ providers: [routeProvider('deepseek', ['deepseek-account'])], route: 'deepseek-account' })
+    expect((await request()).tools).toContain('web_search')
+    selection.current = { provider: 'deepseek-official', model: 'deepseek-v4-flash' }
+    expect((await request()).tools).not.toContain('web_search')
+    selection.current = { provider: 'deepseek-account', model: 'deepseek-v4-flash' }
+    expect((await request()).tools).toContain('web_search')
+  })
+
+  it('leaves a PTC presentation unchanged, whose SDK declares web_search on its own', async () => {
+    const { ctx, request } = await compose({ providers: [routeProvider('deepseek', [])] })
+    ctx.systemPrompt.tools(() => ({
+      schemas: [{ name: 'run_code', description: 'Run one program.', parameters: { type: 'object', properties: {} } }],
+    }))
+    expect((await request()).tools).toEqual(expect.arrayContaining(['run_code', 'web_search']))
+  })
+
+  it('stops withholding once the tool-web fiber is disposed', async () => {
+    const { ctx, fiber, request } = await compose({ providers: [routeProvider('deepseek', [])] })
+    await fiber.dispose()
+    // A web_search schema contributed elsewhere survives when tool-web's listener is gone.
+    ctx.systemPrompt.tools(() => ({
+      schemas: [{ name: 'web_search', description: 'Search.', parameters: { type: 'object', properties: {} } }],
+    }))
+    expect((await request()).tools).toContain('web_search')
   })
 })
 

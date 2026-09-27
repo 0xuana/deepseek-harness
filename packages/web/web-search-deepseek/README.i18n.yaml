@@ -9,8 +9,8 @@
   en: d2c50aae9d869902
   zh: ee9f3f0ff575cbf9
 /deepseek-ai-dsh-web-search-deepseek/summary:
-  en: c5e051ff0ec10e64
-  zh: 2ccb9ddbb27e1d9a
+  en: 85e496a6ce5ec02a
+  zh: 5c176ffdd476de85
 /deepseek-ai-dsh-web-search-deepseek/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
@@ -24,8 +24,8 @@
   en: 0553b6c926c44cf4
   zh: 5cd3221d3e8eebd9
 /deepseek-ai-dsh-web-search-deepseek/use-this-package/authentication:
-  en: 7aa164bfd685acd0
-  zh: 7f64a25a27b8228c
+  en: efdd2c7c5b6a43fd
+  zh: 79bf1de29e2fd42a
 /deepseek-ai-dsh-web-search-deepseek/use-this-package/what-a-search-returns:
   en: e30442c90365357b
   zh: 9c9e2f1182963a8a
@@ -42,14 +42,14 @@
   en: 1b1760efbf4568c1
   zh: fca06c959e51ce16
 /deepseek-ai-dsh-web-search-deepseek/understand-the-implementation/source-map:
-  en: 931d4b8deeb35193
-  zh: 29ba4609c2dfa6e3
+  en: 6bb247651e0702b9
+  zh: 6830cbd54fa50336
 /deepseek-ai-dsh-web-search-deepseek/understand-the-implementation/request-flow:
-  en: 2a010d8f723d3e08
-  zh: e9567d701196f3d8
+  en: 64970c72eb674ee7
+  zh: 00fea8e8b76379e4
 /deepseek-ai-dsh-web-search-deepseek/further-exploration:
-  en: d82a5364c3038ef2
-  zh: 7aef74f0d2593efb
+  en: 832e1d4973aa870d
+  zh: 5dd6b1e62504d39f
 /deepseek-ai-dsh-web-search-deepseek/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
@@ -77,21 +77,21 @@
 /deepseek-ai-dsh-web-search-deepseek/model-experience/conversation-tool-result-indirectly/kv-cache-effect:
   en: f5d5f97a153f7c70
   zh: f681f89596f500f5
-/deepseek-ai-dsh-web-search-deepseek/model-experience/conversation-tool-list:
-  en: 2ff809f92438ff14
-  zh: 1455137cc3b04889
-/deepseek-ai-dsh-web-search-deepseek/model-experience/conversation-tool-list/what-the-model-sees:
-  en: 8442688bb84b6080
-  zh: f8ca9bcf90c363eb
-/deepseek-ai-dsh-web-search-deepseek/model-experience/conversation-tool-list/token-effect:
+/deepseek-ai-dsh-web-search-deepseek/model-experience/conversation-tool-list-indirectly:
+  en: ddcce72a4a4e0def
+  zh: 338aa339f5708d7d
+/deepseek-ai-dsh-web-search-deepseek/model-experience/conversation-tool-list-indirectly/what-the-model-sees:
+  en: f4630a1af1a7ba32
+  zh: 98b9699676acc8d3
+/deepseek-ai-dsh-web-search-deepseek/model-experience/conversation-tool-list-indirectly/token-effect:
   en: fc3904d8f90cc055
   zh: 60f82b8a3b894e7a
-/deepseek-ai-dsh-web-search-deepseek/model-experience/conversation-tool-list/kv-cache-effect:
-  en: 28eaa6cb84269c07
-  zh: d4253f1a470eda4f
+/deepseek-ai-dsh-web-search-deepseek/model-experience/conversation-tool-list-indirectly/kv-cache-effect:
+  en: 1d836a33dfa97fcf
+  zh: 2593ccf2a5716b02
 /deepseek-ai-dsh-web-search-deepseek/known-limitations-and-deferred-work:
-  en: c11af65479cf66d7
-  zh: d56f599875768a3e
+  en: ec8770e6333c777d
+  zh: f37d4ca93d0ffa00
 /deepseek-ai-dsh-web-search-deepseek/known-limitations-and-deferred-work/dev-note:
   en: 7f775cc79dbce94b
   zh: 12b8f68f9e7c48ca

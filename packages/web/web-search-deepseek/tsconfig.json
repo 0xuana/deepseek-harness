@@ -37,12 +37,6 @@
     },
     {
       "path": "../../util/http-proxy"
-    },
-    {
-      "path": "../../core/system-prompt"
-    },
-    {
-      "path": "../../core/tools"
     }
   ]
 }

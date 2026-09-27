@@ -138,12 +138,31 @@ export class WebRuntime extends Service {
    * @returns the provider's results, capped to `request.maxResults`.
    */
   async search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult> {
-    const provider = resolveProvider({
+    const result = await this.selectSearchProvider().search(request, signal)
+    return capSources(result, request.maxResults)
+  }
+
+  /**
+   * Whether the provider `search()` would select can authenticate a search made for a
+   * model request on the `llmProvider` chat route. Asks only that provider's `ready()`;
+   * one without `ready()` counts as ready. Makes no network calls. A selection failure
+   * answers true, because `search()` reports that failure as a structured `WebError`.
+   * @param llmProvider - the provider route id of the model request, when known.
+   * @returns false only when the selected provider reports that it cannot authenticate.
+   */
+  async searchReady(llmProvider?: string): Promise<boolean> {
+    let provider: WebSearchProvider
+    try { provider = this.selectSearchProvider() }
+    catch (_selectionFailure) { return true /* search() surfaces the same failure when called. */ }
+    return await provider.ready?.(llmProvider) ?? true
+  }
+
+  /** Select the search provider with the rules above, throwing the matching {@link WebError}. */
+  private selectSearchProvider(): WebSearchProvider {
+    return resolveProvider({
       providers: this.searchProviders,
       ...this.searchProviderId !== undefined ? { configuredId: this.searchProviderId } : {},
     })
-    const result = await provider.search(request, signal)
-    return capSources(result, request.maxResults)
   }
 
   /**

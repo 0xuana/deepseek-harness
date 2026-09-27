@@ -3,8 +3,8 @@
  * with native `web_search_20250305`. A search initiated by a Session on the DeepSeek account route
  * authenticates with the account token when the account service allows the search endpoint;
  * every other search reuses `DEEPSEEK_API_KEY`. The provider does not reuse `DEEPSEEK_BASE_URL`;
- * auxiliary search has its own endpoint configuration. A model request whose search would have
- * neither credential is not offered `dsh-tool-web`'s `web_search`.
+ * auxiliary search has its own endpoint configuration. The provider reports itself not ready for a
+ * model request whose search would have neither credential.
  * @module @deepseek-ai/dsh-web-search-deepseek
  */
 import type { Volatile } from '@deepseek-ai/cordis'
@@ -17,8 +17,6 @@ import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
 import type {} from '@deepseek-ai/dsh-deepseek-account'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
 import type {} from '@deepseek-ai/dsh-session'
-import type {} from '@deepseek-ai/dsh-system-prompt'
-import { RUN_CODE_NAME } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-web'
 import {
   DeepSeekSearchProvider,
@@ -91,10 +89,6 @@ const ACCOUNT_PROVIDER = 'deepseek-account'
 
 /** Settings namespace carrying this provider's endpoint, model, and key reference. */
 export const WEB_SEARCH_DEEPSEEK_SETTINGS_NAMESPACE = 'web-search-deepseek'
-
-/** `dsh-tool-web`'s model-facing search tool and the prompt section that guides it. */
-const WEB_SEARCH_TOOL = 'web_search'
-const WEB_SEARCH_SECTION = 'tool:web_search'
 
 /**
  * Project one resolved section into the options the provider serves its next
@@ -174,26 +168,19 @@ async function searchConfigured(
 }
 
 /**
- * Register the DeepSeek search provider with `ctx.web`, and withhold `dsh-tool-web`'s
- * `web_search` from each model request whose search would have no credential to send.
+ * Register the DeepSeek search provider with `ctx.web`. Its `ready()` answers whether a
+ * search for a model request on the given route would have a credential to send.
  */
 export function apply(ctx: Context, config: Config): void {
   const options = () => resolveOptions(ctx, {
     apiKey: config.apiKey.get(), apiKeyEnv: config.apiKeyEnv.get(), baseURL: config.baseURL.get(), model: config.model.get(),
     apiVersion: config.apiVersion.get(), maxTokens: config.maxTokens.get(), maxUses: config.maxUses.get(),
   })
-  ctx.web.registerSearchProvider(new DeepSeekSearchProvider(options))
-  // Prepended so the route model selection writes for this request is already in the
-  // variables. A PTC presentation keeps the tool: its SDK declares web_search on its own.
-  ctx.on('system-prompt/assemble', async (_assembly, _context, next) => {
-    const assembly = await next()
-    const names = assembly.tools.map(tool => tool.name)
-    if (!names.includes(WEB_SEARCH_TOOL) || names.includes(RUN_CODE_NAME)) return assembly
-    if (await searchConfigured(ctx, options(), assembly.variables.provider)) return assembly
-    return {
-      ...assembly,
-      tools: assembly.tools.filter(tool => tool.name !== WEB_SEARCH_TOOL),
-      sections: assembly.sections.filter(section => section.name !== WEB_SEARCH_SECTION),
-    }
-  }, { prepend: true })
+  const provider = new DeepSeekSearchProvider(options)
+  ctx.web.registerSearchProvider({
+    id: provider.id,
+    available: () => provider.available(),
+    ready: llmProvider => searchConfigured(ctx, options(), llmProvider),
+    search: (request, signal) => provider.search(request, signal),
+  })
 }
