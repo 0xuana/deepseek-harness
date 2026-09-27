@@ -8,7 +8,6 @@ import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
 import { bindScopeParent, createScope, scopeOf } from '@deepseek-ai/dsh-scope'
 import LocalFileReference from '@deepseek-ai/dsh-file-reference-local'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
@@ -99,11 +98,9 @@ describe('serial creation listener integrations', () => {
     }
   })
 
-  it('rolls back creation when a shared preset tool installation fails', async () => {
+  it('rolls back creation when the shared preset cannot capture model-selection policy', async () => {
     const ctx = await core()
-    const errors: string[] = []
-    ctx.logger.error = ((error: unknown) => { errors.push(String(error)) }) as typeof ctx.logger.error
-    await ctx.plugin(Selection)
+    await ctx.plugin(Selection, { enabled: true, allowedModels: [] })
     await ctx.plugin(SubagentRuntime)
     await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
     const preset = createScope(ctx, { preset: 'review' })
@@ -113,10 +110,8 @@ describe('serial creation listener integrations', () => {
         sessionId: SessionId('review-tool'),
         setup(agentCtx) {
           bindScopeParent(scopeOf(agentCtx)!, scopeOf(preset.ctx)!)
-          agentCtx.tools.register(defineContentToolFixture({ name: 'subagent', description: 'occupied', parameters: {}, execute: () => Promise.resolve([]) }))
         },
-      })).rejects.toThrow('subagent')
-      expect(errors.some(error => error.includes('subagent'))).toBe(true)
+      })).rejects.toThrow('subagent model selection requires at least one allowed model')
       expect(ctx.agents.list()).toEqual([])
       expect(ctx.sessions.list()).toEqual([])
     } finally {
