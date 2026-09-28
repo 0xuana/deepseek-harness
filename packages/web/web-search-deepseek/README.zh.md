@@ -60,7 +60,7 @@ kind: "package-reference"
 
 当发起会话最近的 `request/context` 事件指明 `deepseek-account` 提供方路由，且 `ctx.deepseekAccount` 为搜索端点解析出 token 时，搜索使用 DeepSeek 账号鉴权。账号服务仅在已登录时、且仅对部署配置的推理 origin（默认 `https://api.deepseek.com`）解析 token。这类搜索只发送 `x-dsh-auth-token`，即使配置了 API 密钥也是如此。其余所有搜索，包括没有发起会话的调用以及端点属于其他 origin 的搜索，都把 API 密钥同时作为 `x-api-key` 与 `Authorization: Bearer` 发送。账号鉴权的搜索收到 HTTP 401 时以 `WEB_PROVIDER_ERROR` 失败，附带登录指引而非端点指引，账号保持登录。
 
-提供方的 `ready()` 回答模型请求将发起的搜索是否有可用凭据：该请求的路由是 `deepseek-account` 且 `ctx.deepseekAccount` 为配置的搜索端点解析出 token，或设置了字面 `apiKey`，或 `ctx.credentials.describe` 报告 `apiKeyEnv` 引用已配置（没有该服务时，进程环境中必须存在该变量）。本提供方是选中的搜索提供方时，[`dsh-tool-web`](../tool-web/README.zh.md#search-readiness) 会从它回答 false 的每个请求中撤下 `web_search` 及其提示词说明。这里只检查凭据是否存在：错误的密钥，或不提供原生 `web_search_20250305` 服务器工具的端点，都视为就绪并使每次调用失败。仍然到达的调用会在运行时解析凭据。
+提供方的 `ready()` 回答模型请求将发起的搜索是否有可用凭据：该请求的路由是 `deepseek-account` 且 `ctx.deepseekAccount` 为配置的搜索端点解析出 token，或设置了字面 `apiKey`，或 `ctx.credentials.describe` 报告 `apiKeyEnv` 引用已配置（没有该服务时，进程环境中必须存在该变量）。它按搜索解析凭据的顺序检查，读取账号 token 或凭据存储失败时回答 false，因为搜索会在该次读取上失败，而不会尝试下一种凭据。本提供方是选中的搜索提供方时，[`dsh-tool-web`](../tool-web/README.zh.md#search-readiness) 会从它回答 false 的每个请求中撤下 `web_search` 及其提示词说明。这里只检查凭据是否存在：错误的密钥，或不提供原生 `web_search_20250305` 服务器工具的端点，都视为就绪并使每次调用失败。仍然到达的调用会在运行时解析凭据。
 
 ### 搜索返回什么
 
@@ -104,7 +104,7 @@ kind: "package-reference"
 
 每次搜索先把当前 Config 段投影为提供方选项——端点、模型、密钥引用、上限——然后在发起会话使用账号路由时向 `ctx.deepseekAccount` 请求 token，否则通过 `ctx.credentials`（或环境）解析凭据引用，追加仅用于日志的会话事件，并以原生 `web_search` 服务器工具分发 Messages 请求。响应中的 `web_search_tool_result` 块变为 `sources[]`；文本块中的 `cited_text` 条目按其 URL 拼接为 snippet；结果按 URL 去重；服务在返回路径上强制执行请求的来源上限。
 
-就绪判断捕获相同的选项，但不读取任何密钥值：账号路由向 `ctx.deepseekAccount` 请求 token，其他情况检查字面密钥，或询问 `ctx.credentials.describe()`（或环境）密钥引用是否已配置。
+就绪判断捕获相同的选项，但不读取 API 密钥的值：账号路由先向 `ctx.deepseekAccount` 请求 token，然后检查字面密钥，或询问 `ctx.credentials.describe()`（或环境）密钥引用是否已配置。
 
 </details>
 

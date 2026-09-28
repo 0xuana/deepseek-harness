@@ -856,4 +856,25 @@ describe('web-search-deepseek search readiness', () => {
       await rm(dir, { recursive: true, force: true })
     }
   })
+
+  it.each<[string, Setup, string | undefined]>([
+    ['a literal key', { config: { apiKey: 'ds-key' } }, undefined],
+    ['a launch environment key', {}, 'env-key'],
+  ])('is not ready on the account route when the account grant cannot be read, even with %s', async (_label, setup, envKey) => {
+    if (envKey !== undefined) process.env.DEEPSEEK_API_KEY = envKey
+    const fetchMock = vi.fn(async () => jsonResponse(searchResponse()))
+    vi.stubGlobal('fetch', fetchMock)
+    const ctx = await compose({ ...setup, account: { resolveToken: () => Promise.reject(new Error('account storage unreadable')) } })
+    expect(await ctx.web.searchReady('deepseek-account')).toBe(false)
+    // A search on that route reads the same grant before any key and fails instead of trying the key.
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(AgentRegistry)
+    const session = ctx.sessions.create(SessionId('web-search-unreadable-grant'))
+    session.append('turn/start', { turn: 1 })
+    session.append('request/context', { provider: 'deepseek-account', model: 'deepseek-v4-flash' })
+    const failure = await rejectedWebError(ctx.agents.withInitiator({ session } as Agent, () => ctx.web.search({ query: 'q' })))
+    expect(failure.code).toBe('WEB_PROVIDER_ERROR')
+    expect(failure.message).toContain('account storage unreadable')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
 })

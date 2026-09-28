@@ -13,10 +13,10 @@ Status: implemented
 web 能力 seam 的每个角色各负责逐请求检查的一部分：
 
 - **Service Definition。** `WebSearchProvider` 有一个可选的 `ready(llmProvider)`，回答为该对话路由上的模型请求发起的搜索是否有可发送的凭据。它只检查配置，不发起网络调用。`ctx.web.searchReady(llmProvider?)` 按与 `search()` 相同的规则解析提供方并返回其回答。没有 `ready()` 的提供方视为就绪；选择失败时回答 true，因为 `search()` 会把该失败报告为结构化 `WebError`。
-- **Service Provider。** 以下情况 `dsh-web-search-deepseek` 回答 true：路由为 `deepseek-account` 且 `ctx.deepseekAccount.resolveToken()` 为配置的搜索端点返回 token；配置段带有字面 `apiKey`；或 `ctx.credentials.describe()` 报告 `apiKeyEnv` 引用已配置（没有该服务时，启动环境中存在该变量）。读取账号 token 或凭据存储失败时按没有凭据处理。提供方不点名任何工具或提示词段落。
+- **Service Provider。** 以下情况 `dsh-web-search-deepseek` 回答 true：路由为 `deepseek-account` 且 `ctx.deepseekAccount.resolveToken()` 为配置的搜索端点返回 token；配置段带有字面 `apiKey`；或 `ctx.credentials.describe()` 报告 `apiKeyEnv` 引用已配置（没有该服务时，启动环境中存在该变量）。它按 `search()` 解析凭据的顺序检查，读取账号 token 或凭据存储失败时回答 false，因为 `search()` 会在该次读取上失败，而不会尝试下一种凭据。提供方不点名任何工具或提示词段落。
 - **Consumer。** `dsh-tool-web` 添加一个前置的 `system-prompt/assemble` 监听器。对于每个提供 `web_search` 的组装，它以模型选择写入组装变量的路由询问 `ctx.web.searchReady()`，回答 false 时移除该工具及其 `tool:web_search` 提示词段落。前置使监听器在模型选择之后运行。包含 PTC `run_code` 传输工具的组装原样返回，因为生成的 SDK 独立于工具列表声明 `web_search`。
 
-只看凭据是否存在：不读取密钥的值，也不访问任何端点，因此错误的密钥，或不提供原生 `web_search_20250305` 服务器工具的端点，仍会让该工具保持提供。撤下只改变提供给模型的工具：仍然到达的调用会在运行时解析凭据，并以现有的结构化错误失败。
+只看凭据是否存在：不读取 API 密钥的值，也不访问任何端点，因此错误的密钥，或不提供原生 `web_search_20250305` 服务器工具的端点，仍会让该工具保持提供。撤下只改变提供给模型的工具：仍然到达的调用会在运行时解析凭据，并以现有的结构化错误失败。
 
 请求头记录组装后的工具，因此 agent loop（智能体循环）通过工具注册表更新宣告每次变化。路由切换、存储密钥或删除密钥都会改变下一个请求；DeepSeek 路由以延迟加载的新增方式载入重新提供的工具，不支持工具更新的路由则接收完整工具列表。
 

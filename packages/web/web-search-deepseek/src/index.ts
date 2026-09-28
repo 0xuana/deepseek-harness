@@ -139,9 +139,12 @@ function resolveOptions(
 }
 
 /**
- * Whether the search a model request on `route` would make has a credential to send. Only
- * presence is checked: the key's value is not read and the endpoint is not contacted, so a
- * wrong key or an endpoint without native search still counts as configured.
+ * Whether the search a model request on `route` would make has a credential to send, checked in
+ * the order the search resolves them: the account token first on the account route, then the
+ * API key. A failed read answers false, because the search fails on that read instead of trying
+ * the next credential. Only presence is checked: the API key's value is not read and the
+ * endpoint is not contacted, so a wrong key or an endpoint without native search still counts
+ * as configured.
  * @param ctx - plugin context supplying the account, credential, and environment planes.
  * @param options - options the next search would use.
  * @param route - provider route of the model request being assembled.
@@ -150,14 +153,14 @@ function resolveOptions(
 async function searchConfigured(
   ctx: Context, options: ReturnType<typeof resolveOptions>, route: string | undefined,
 ): Promise<boolean> {
-  if (options.apiKey !== undefined) return true
   const account = ctx.get('deepseekAccount')
   if (route === ACCOUNT_PROVIDER && account !== undefined) {
     let token: string | undefined
     try { token = await account.resolveToken(`${options.baseURL}/messages`) }
-    catch (_unreadableGrant) { /* An unreadable grant cannot authenticate the search, so the API key decides. */ }
+    catch (_unreadableGrant) { return false /* The search fails on this read before it tries the API key. */ }
     if (token !== undefined && token.length > 0) return true
   }
+  if (options.apiKey !== undefined) return true
   const credentials = ctx.get('credentials')
   if (credentials === undefined) {
     const ambient = launchEnvironmentOf(ctx).get(options.apiKeyEnv)
