@@ -22,4 +22,4 @@ The [approval publisher](../../../../.github/review-ownership/check-approval.mjs
 
 Run-title expansion does not prevent approval refreshes, while an unexpected workflow file still fails validation. Moving the review-event workflow requires updating the publisher's expected path.
 
-[Approval policy tests](../../../../.github/review-ownership/check-approval.test.mjs) cover a numbered run name, invalid source paths and events, unsuccessful runs, invalid titles, and superseded heads. The [approval outcome policy](2026-09-09-blocked-weighted-approvals-remain-pending.md) continues to own pending and successful status semantics.
+[Approval policy tests](../../../../.github/review-ownership/check-approval.test.mjs) cover a numbered run name, invalid source paths and events, unsuccessful runs, invalid titles, and superseded heads. The [approval decision check run](2026-09-29-weighted-approval-decision-check-run.md) continues to own the published conclusions.

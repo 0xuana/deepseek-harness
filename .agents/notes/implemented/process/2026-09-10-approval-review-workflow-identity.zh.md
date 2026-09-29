@@ -22,4 +22,4 @@ GitHub 可能用展开后的 `run-name` 填充工作流运行的 `name`。审批
 
 运行标题的展开不会阻止审批刷新，而非预期的工作流文件仍无法通过验证。移动评审事件工作流时，需要更新发布器预期的路径。
 
-[审批策略测试](../../../../.github/review-ownership/check-approval.test.mjs) 覆盖带编号的运行名称、无效的来源路径和事件、未成功的运行、无效标题以及已被替代的头提交。[审批结果策略](2026-09-09-blocked-weighted-approvals-remain-pending.zh.md) 继续负责待定与成功状态的语义。
+[审批策略测试](../../../../.github/review-ownership/check-approval.test.mjs) 覆盖带编号的运行名称、无效的来源路径和事件、未成功的运行、无效标题以及已被替代的头提交。[审批决策 check run](2026-09-29-weighted-approval-decision-check-run.zh.md) 继续负责所发布的 conclusion。
