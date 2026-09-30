@@ -1017,9 +1017,9 @@ describe('Weighted approval workflow', () => {
     const revokeIndex = steps.findIndex(step => step.id === 'revoke')
     expect(revokeIndex).toBeGreaterThan(steps.indexOf(checkout!))
     expect(revokeIndex).toBeLessThan(setupIndex)
-    expect(steps[revokeIndex]?.run).toBe('node .github/review-ownership/check-approval.mjs in_progress')
+    expect(steps[revokeIndex]?.run).toBe('node .github/review-ownership/check-approval.mjs revoke')
     expect(steps.at(-1)).toMatchObject({
-      if: "failure() && steps.revoke.outputs.active == 'true'",
+      if: "failure() || (cancelled() && steps.publish.outcome != 'success')",
       run: 'node .github/review-ownership/check-approval.mjs failure',
     })
     const pythonJob = workflowJob(loadWorkflow('.github/workflows/ci.yml'), 'python-sdk')
@@ -1032,6 +1032,7 @@ describe('Weighted approval workflow', () => {
       run: 'python3 -m pip install -r .github/review-ownership/requirements.txt',
     })
     expect(publish).toMatchObject({
+      id: 'publish',
       if: "steps.revoke.outputs.active == 'true'",
       env: {
         GITHUB_TOKEN: '${{ github.token }}',

@@ -123,7 +123,7 @@ For GitHub PRs, inspect remote CI after the push:
 gh pr checks
 ```
 
-Report pending checks as pending. Inspect failures before attributing them to the branch or the environment.
+Report pending checks as pending. Inspect failures before attributing them to the branch or the environment. A `weighted approval decision` check that `gh pr checks` lists as failed means the approval gate is waiting on reviewers (`ACTION_REQUIRED`), not that the branch broke.
 
 When `gh pr checks` reports "no checks reported" and `/actions/runs?head_sha=<sha>` returns `total_count: 0`, read mergeability before suspecting the push or a dropped GitHub event:
 

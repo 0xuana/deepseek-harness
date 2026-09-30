@@ -311,7 +311,6 @@ export async function evaluateApproval({ event, policySource, api, getOwnership 
  */
 export async function runApprovalCheck({ event, policySource, api, runUrl, getOwnership = productionOwnership, getMergedCount = countMergedAuthorPulls, write = line => process.stdout.write(`${line}\n`) }) {
   const pull = pullRequestFromEvent(event)
-  await publishCheck(api, pull, 'in_progress', 'Evaluating approval points.', runUrl)
   let result
   try {
     result = await evaluateApproval({ event, policySource, api, getOwnership, getMergedCount })
@@ -353,14 +352,15 @@ export async function runApprovalCheck({ event, policySource, api, runUrl, getOw
 }
 
 /**
- * Revoke a previous conclusion before dependency installation, or report its failure.
+ * Revoke a published success before dependency installation, or conclude a failed setup.
  * @param {{event: unknown, api: (path: string, options?: {method?: string, body?: unknown}) => Promise<unknown>, runUrl: string, phase: string}} options Publication inputs.
  * @returns {Promise<void>} Completion of the check-run write.
  */
 export async function publishApprovalPhase({ event, api, runUrl, phase }) {
-  if (!['in_progress', 'failure'].includes(phase)) throw new Error('invalid approval setup phase')
-  await publishCheck(api, pullRequestFromEvent(event), phase,
-    phase === 'in_progress' ? 'Preparing approval evaluation.' : 'Approval setup or evaluation failed.', runUrl)
+  const pull = pullRequestFromEvent(event)
+  if (phase === 'revoke') return revokeApproval(api, pull, runUrl)
+  if (phase === 'failure') return publishCheck(api, pull, 'failure', 'Approval setup or evaluation failed.', runUrl)
+  throw new Error('invalid approval setup phase')
 }
 
 /**
@@ -467,26 +467,59 @@ async function reviewerPermission(api, repository, login) {
   return response.permission.toLowerCase()
 }
 
-// Updating the head's existing GitHub Actions check run keeps one decision per head for branch rules and CI watchers.
-async function publishCheck(api, pull, state, title, runUrl) {
-  if (!/^https:\/\/[^\s]+$/u.test(runUrl)) throw new Error('workflow run URL must use HTTPS')
-  const body = {
-    ...(state === 'in_progress' ? { status: state } : { status: 'completed', conclusion: state }),
-    details_url: runUrl,
-    output: { title, summary: `${title} [Workflow run](${runUrl})` },
-  }
-  const listed = await api(`/repos/${pull.repository}/commits/${pull.headSha}/check-runs?check_name=${encodeURIComponent(CHECK_NAME)}&filter=all&per_page=${PAGE_SIZE}`)
-  if (!isRecord(listed) || !Array.isArray(listed.check_runs) || listed.total_count !== listed.check_runs.length) {
-    throw new Error('check-run list response is invalid or incomplete')
-  }
-  const runs = listed.check_runs.filter(run => isRecord(run) && isRecord(run.app) && run.app.slug === 'github-actions')
+// One decision per head keeps branch rules and CI watchers unambiguous; the head's existing GitHub
+// Actions run is updated and a run is created only when none exists.
+async function publishCheck(api, pull, conclusion, title, runUrl) {
+  requireHttpsRunUrl(runUrl)
+  const body = { status: 'completed', conclusion, details_url: runUrl, output: { title, summary: `${title} [Workflow run](${runUrl})` } }
+  const runs = await decisionRuns(api, pull)
   if (runs.length === 0) {
     await api(`/repos/${pull.repository}/check-runs`, { method: 'POST', body: { name: CHECK_NAME, head_sha: pull.headSha, ...body } })
+    return
   }
   for (const { id } of runs) {
     if (!Number.isSafeInteger(id)) throw new Error('check run has no valid id')
     await api(`/repos/${pull.repository}/check-runs/${id}`, { method: 'PATCH', body })
   }
+}
+
+// A head without a decision starts in progress; a published success becomes action_required, so an
+// interrupted evaluation cannot leave a success that its current inputs no longer support.
+async function revokeApproval(api, pull, runUrl) {
+  requireHttpsRunUrl(runUrl)
+  const title = 'Preparing approval evaluation.'
+  const output = { title, summary: `${title} [Workflow run](${runUrl})` }
+  const runs = await decisionRuns(api, pull)
+  if (runs.length === 0) {
+    await api(`/repos/${pull.repository}/check-runs`, {
+      method: 'POST',
+      body: { name: CHECK_NAME, head_sha: pull.headSha, status: 'in_progress', details_url: runUrl, output },
+    })
+    return
+  }
+  for (const { id, conclusion } of runs) {
+    if (!Number.isSafeInteger(id)) throw new Error('check run has no valid id')
+    // Only a published success satisfies the branch rule; every other conclusion already blocks it.
+    if (conclusion !== 'success') continue
+    await api(`/repos/${pull.repository}/check-runs/${id}`, {
+      method: 'PATCH',
+      body: { status: 'completed', conclusion: 'action_required', details_url: runUrl, output },
+    })
+  }
+}
+
+// A check run that reached completed never returns to in_progress: GitHub answers 200 and leaves the
+// run completed, so a published decision can only be replaced by another conclusion.
+async function decisionRuns(api, pull) {
+  const listed = await api(`/repos/${pull.repository}/commits/${pull.headSha}/check-runs?check_name=${encodeURIComponent(CHECK_NAME)}&filter=all&per_page=${PAGE_SIZE}`)
+  if (!isRecord(listed) || !Array.isArray(listed.check_runs) || listed.total_count !== listed.check_runs.length) {
+    throw new Error('check-run list response is invalid or incomplete')
+  }
+  return listed.check_runs.filter(run => isRecord(run) && isRecord(run.app) && run.app.slug === 'github-actions')
+}
+
+function requireHttpsRunUrl(runUrl) {
+  if (!/^https:\/\/[^\s]+$/u.test(runUrl)) throw new Error('workflow run URL must use HTTPS')
 }
 
 function pullRequestFromEvent(event) {
@@ -579,7 +612,7 @@ async function main() {
   const phase = process.argv[2]
   if (phase) {
     await publishApprovalPhase({ event, api, runUrl: process.env.GITHUB_RUN_URL ?? '', phase })
-    if (phase === 'in_progress' && process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, 'active=true\n')
+    if (phase === 'revoke' && process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, 'active=true\n')
     return
   }
   await runApprovalCheck({

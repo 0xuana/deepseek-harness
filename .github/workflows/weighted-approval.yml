@@ -41,7 +41,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: node .github/review-ownership/check-approval.mjs in_progress
+        run: node .github/review-ownership/check-approval.mjs revoke
       # SECURITY: dependency setup runs in the check-writing job.
       - if: steps.revoke.outputs.active == 'true'
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
@@ -53,13 +53,16 @@ jobs:
         if: steps.revoke.outputs.active == 'true'
         run: python3 -m pip install -r .github/review-ownership/requirements.txt
       - name: Publish weighted approval decision
+        id: publish
         if: steps.revoke.outputs.active == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: node .github/review-ownership/check-approval.mjs
+      # A failed or cancelled run must not leave an earlier conclusion standing. A job cancelled
+      # after the decision was published keeps that decision instead of overwriting it with failure.
       - name: Publish approval setup failure
-        if: failure() && steps.revoke.outputs.active == 'true'
+        if: failure() || (cancelled() && steps.publish.outcome != 'success')
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

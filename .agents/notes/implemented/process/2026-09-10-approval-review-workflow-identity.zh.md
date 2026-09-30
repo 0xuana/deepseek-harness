@@ -6,7 +6,7 @@ Status: implemented
 
 ## 问题
 
-GitHub 可能用展开后的 `run-name` 填充工作流运行的 `name`。审批评审工作流在该标题中包含拉取请求编号，因此将 `workflow_run.name` 与静态工作流名称比较，会在刷新审批状态前拒绝有效的评审事件。
+GitHub 可能用展开后的 `run-name` 填充工作流运行的 `name`。审批评审工作流在该标题中包含拉取请求编号，因此将 `workflow_run.name` 与静态工作流名称比较，会在刷新审批决策前拒绝有效的评审事件。
 
 ## 决策
 
