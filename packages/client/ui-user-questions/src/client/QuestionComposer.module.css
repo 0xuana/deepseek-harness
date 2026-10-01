@@ -60,6 +60,7 @@
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 .waitButton {
@@ -85,6 +86,7 @@
 }
 
 .headingBlock {
+  flex: 1;
   min-width: 0;
 }
 
@@ -97,14 +99,24 @@
 }
 
 .title {
-  margin: 0;
+  flex-shrink: 0;
+  margin: 5px 24px 0;
   font-size: 16px;
   line-height: 22px;
   font-weight: 500;
 }
 
+.cardMinimized .title {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 .detail {
-  margin: 0 2px 8px;
+  flex-shrink: 0;
+  margin: 0 14px 8px;
 }
 
 .footerActions {
@@ -175,29 +187,35 @@
   padding: 4px 12px;
 }
 
+.optionRow {
+  position: relative;
+  width: 100%;
+  min-height: 40px;
+  flex-shrink: 0;
+  border: 0.5px solid transparent;
+  border-radius: var(--dsw-radius-md);
+  background: transparent;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
 .option {
   display: flex;
-  /* flex-start, not center: with a wrapped description the indicator must
-     stay on the FIRST line (centering drifts it down the taller copy block).
-     The 8px padding makes a single-line row 40px exactly, so nothing reads
-     as top-heavy; .number/.checkbox re-center against the first line box. */
+  /* flex-start keeps the indicator aligned with the first label line. */
   align-items: flex-start;
   gap: 8px;
   width: 100%;
+  min-width: 0;
   min-height: 40px;
-  /* Rows are the scroll content, never the slack absorber: a shrinkable row
-     collapses to min-height while its wrapped copy keeps the taller
-     intrinsic height, and centered content then paints outside the row box —
-     over the title and the next row. Overflow belongs to .options. */
-  flex-shrink: 0;
   padding: 8px 12px 8px 8px;
-  border: 1px solid transparent;
-  border-radius: var(--dsw-radius-md);
+  border: 0;
   background: transparent;
   color: inherit;
   text-align: left;
   cursor: pointer;
-  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.optionWithDescription {
+  padding-right: 42px;
 }
 
 .optionSelected {
@@ -205,7 +223,7 @@
 }
 
 @media (hover: hover) {
-  .option:hover:not(:disabled) {
+  .optionRowInteractive:hover {
     background: var(--dsw-alias-interactive-bg-hover);
   }
 }
@@ -305,10 +323,48 @@
 }
 
 .description {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
   color: var(--dsw-alias-label-tertiary);
-  font-size: 14px;
-  line-height: 24px;
+  font-size: 13px;
+  line-height: 20px;
   font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.descriptionAction {
+  position: absolute;
+  right: 12px;
+  bottom: 6px;
+  width: 24px;
+  height: 24px;
+}
+
+.descriptionButton {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  corner-shape: round;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.descriptionButton:hover,
+.descriptionButton:focus-visible {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.descriptionPreview {
+  font-size: 13px;
+  line-height: 20px;
 }
 
 /* Read-only note standing in for a question the user skipped: it takes the
@@ -477,6 +533,14 @@
     padding: 8px 6px;
   }
 
+  .optionWithDescription {
+    padding-right: 36px;
+  }
+
+  .descriptionAction {
+    right: 6px;
+  }
+
   .footer {
     align-items: flex-end;
     padding: 0 10px;
@@ -488,7 +552,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .option,
+  .optionRow,
   .customRow {
     transition: none;
   }

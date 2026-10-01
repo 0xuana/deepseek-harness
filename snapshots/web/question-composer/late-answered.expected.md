@@ -29,14 +29,15 @@
   - text: {{clock}}
   - button "Copy"
 - region "Which color do you prefer?":
-  - text: Pick one
-  - heading "Which color do you prefer?" [level=2]
-  - text: Answered
+  - text: Pick one Answered
   - button "Collapse the question card" [expanded]
   - button "Close the panel — reopen it from the tool call"
+  - heading "Which color do you prefer?" [level=2]
   - group:
     - checkbox "Blue" [disabled]: Blue A cool recessive hue that reads as calm and trustworthy in long reading sessions and dense dashboards.
+    - button "Show details for “Blue”"
     - checkbox "Green" [checked] [disabled]: Green A restful mid-spectrum hue with the highest perceived brightness, easiest on the eye over long sessions.
+    - button "Show details for “Green”"
     - textbox "Type your answer" [disabled]: Answered after the timeout
   - button "Previous question" [disabled]
   - text: 1 / 1

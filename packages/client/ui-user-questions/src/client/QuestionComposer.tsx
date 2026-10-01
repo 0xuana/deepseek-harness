@@ -1,12 +1,12 @@
 import {
-  useEffect, useMemo, useRef, useState,
+  useEffect, useId, useMemo, useRef, useState,
   type ChangeEvent, type FocusEvent, type KeyboardEvent,
 } from 'react'
 import clsx from 'clsx'
 import {
   Button, IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconChevronLeftOutlineRegular,
   IconChevronRightOutlineRegular, IconChevronUpOutlineRegular, IconCloseOutlineRegular,
-  IconEditOutlineRegular, MarkdownText,
+  HoverCard, IconEditOutlineRegular, IconInfoOutlineRegular, MarkdownText,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { planReviewOf, type QuestionAnswer, type QuestionCardSnapshot, type QuestionComposerProps } from './contract/slots.ts'
 import type { PendingQuestion } from './contract/slots.ts'
@@ -157,6 +157,7 @@ type QuestionFlowProps =
   { pending: PendingQuestion } & Pick<QuestionComposerProps, 't' | 'useStore' | 'useQuestionCard' | 'actions'>
 
 function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: QuestionFlowProps) {
+  const descriptionIdPrefix = useId()
   const questions = pending.questions
   // A read-only card built from a settled call's transcript: the same panel
   // over the recorded answers, with nothing left to submit.
@@ -436,12 +437,16 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
         aria-labelledby={`question-${pending.key}-${String(index)}`}
       >
         <header className={css.header}>
-          <div className={css.headingBlock}>
-            {question.header !== undefined && <div className={css.eyebrow}>{question.header}</div>}
-            <h2 className={css.title} id={`question-${pending.key}-${String(index)}`}>
-              {question.question}
-            </h2>
-          </div>
+          {(question.header !== undefined || minimized) && (
+            <div className={css.headingBlock}>
+              {question.header !== undefined && <div className={css.eyebrow}>{question.header}</div>}
+              {minimized && (
+                <h2 className={css.title} id={`question-${pending.key}-${String(index)}`}>
+                  {question.question}
+                </h2>
+              )}
+            </div>
+          )}
           <div className={css.headerActions}>
             {countdown !== undefined && card.waitState !== 'waiting' && card.waitState !== 'editing' && card.waitState !== 'continued' && (
               <span className={css.waitStatus}>
@@ -486,12 +491,16 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
         {!minimized && (
           <>
             <div
+              key={`${question.id}-${String(index)}`}
               ref={answerSurface}
               className={css.body}
               data-question-scroll
               onFocusCapture={focusAnswerSurface}
               onBlurCapture={blurAnswerSurface}
             >
+              <h2 className={css.title} id={`question-${pending.key}-${String(index)}`}>
+                {question.question}
+              </h2>
               {question.detail !== undefined && (
                 <div className={css.detail}><MarkdownText text={question.detail} labels={markdownLabels} /></div>
               )}
@@ -499,40 +508,73 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
                 {(question.options ?? []).map((option, optionIndex) => {
                   const selected = draft.selected.includes(option.label)
                   const display = parseRecommendedLabel(option.label)
+                  const hasDescription = option.description !== undefined && option.description.trim() !== ''
+                  const descriptionId = `${descriptionIdPrefix}-question-${String(index)}-option-${String(optionIndex)}-description`
                   return (
-                    <button
-                      type="button" key={`${option.label}-${String(optionIndex)}`}
-                      className={clsx(css.option, selected && question.multiSelect !== true && css.optionSelected)}
-                      role={question.multiSelect === true ? 'checkbox' : 'radio'}
-                      aria-checked={selected}
-                      aria-label={display.label}
-                      disabled={locked}
-                      onClick={() => { choose(option.label) }}
-                      onKeyDown={(event) => {
-                        if (event.key !== 'Enter') return
-                        event.preventDefault()
-                        submitDrafts(drafts)
-                      }}
+                    <div
+                      key={`${option.label}-${String(optionIndex)}`}
+                      className={clsx(
+                        css.optionRow,
+                        (!locked || hasDescription) && css.optionRowInteractive,
+                        selected && question.multiSelect !== true && css.optionSelected,
+                      )}
+                      data-option-row
                     >
-                      {question.multiSelect === true
-                        ? (
-                          <span className={clsx(css.checkbox, selected && css.checkboxChecked)} aria-hidden="true">
-                            {selected && <IconCheckOutlineRegular size={12} />}
+                      <button
+                        type="button"
+                        className={clsx(css.option, hasDescription && css.optionWithDescription)}
+                        role={question.multiSelect === true ? 'checkbox' : 'radio'}
+                        aria-checked={selected}
+                        aria-label={display.label}
+                        disabled={locked}
+                        onClick={() => { choose(option.label) }}
+                        onKeyDown={(event) => {
+                          if (event.key !== 'Enter') return
+                          event.preventDefault()
+                          submitDrafts(drafts)
+                        }}
+                      >
+                        {question.multiSelect === true
+                          ? (
+                            <span className={clsx(css.checkbox, selected && css.checkboxChecked)} aria-hidden="true">
+                              {selected && <IconCheckOutlineRegular size={12} />}
+                            </span>
+                          )
+                          : <span className={css.number}>{optionIndex + 1}</span>}
+                        <span className={css.optionCopy}>
+                          <span className={css.optionLine}>
+                            <span className={css.optionLabel}>{display.label}</span>
+                            {display.recommended && (
+                              <span className={css.badge}>{t('option.recommended')}</span>
+                            )}
                           </span>
-                        )
-                        : <span className={css.number}>{optionIndex + 1}</span>}
-                      <span className={css.optionCopy}>
-                        <span className={css.optionLine}>
-                          <span className={css.optionLabel}>{display.label}</span>
-                          {display.recommended && (
-                            <span className={css.badge}>{t('option.recommended')}</span>
-                          )}
-                          {option.description !== undefined && (
-                            <span className={css.description}>{option.description}</span>
+                          {hasDescription && (
+                            <span id={descriptionId} className={css.description} data-option-description>{option.description}</span>
                           )}
                         </span>
-                      </span>
-                    </button>
+                      </button>
+                      {hasDescription && (
+                        <span className={css.descriptionAction}>
+                          <HoverCard
+                            inline
+                            openOnClick
+                            describeAnchor={false}
+                            openDelayMs={200}
+                            anchor={(
+                              <button
+                                type="button"
+                                className={css.descriptionButton}
+                                aria-label={t('option.details', { option: display.label })}
+                                aria-describedby={descriptionId}
+                              >
+                                <IconInfoOutlineRegular size={16} />
+                              </button>
+                            )}
+                            content={<span className={css.descriptionPreview} aria-hidden="true">{option.description}</span>}
+                          />
+                        </span>
+                      )}
+                    </div>
                   )
                 })}
 

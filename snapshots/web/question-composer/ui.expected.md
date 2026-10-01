@@ -1,11 +1,13 @@
 - region "Which color do you prefer?":
   - text: Pick one
-  - heading "Which color do you prefer?" [level=2]
   - button "Collapse the question card" [expanded]
   - button "Dismiss all questions"
+  - heading "Which color do you prefer?" [level=2]
   - group:
     - checkbox "Blue": Blue A cool recessive hue that reads as calm and trustworthy in long reading sessions and dense dashboards.
+    - button "Show details for “Blue”"
     - checkbox "Green": Green A restful mid-spectrum hue with the highest perceived brightness, easiest on the eye over long sessions.
+    - button "Show details for “Green”"
     - textbox "Type your answer"
   - button "Previous question" [disabled]
   - text: 1 / 1

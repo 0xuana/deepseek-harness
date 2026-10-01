@@ -225,6 +225,130 @@ describe('HoverCard', () => {
     expect(screen.getByText('card body')).toBeTruthy()
   })
 
+  it('pins on click for touch access and keeps the card through pointer leave and blur', () => {
+    render(
+      <>
+        <p id="existing-description">Existing description</p>
+        <HoverCard
+          inline
+          openOnClick
+          anchor={<button type="button" aria-describedby="existing-description">details</button>}
+          content={<div>card body</div>}
+        />
+      </>,
+    )
+    const anchor = screen.getByRole('button', { name: 'details' })
+    const wrapper = anchor.parentElement as HTMLElement
+    const touch = new Event('pointerover', { bubbles: true })
+    Object.defineProperty(touch, 'pointerType', { value: 'touch' })
+    fireEvent(wrapper, touch)
+    act(() => { vi.advanceTimersByTime(500) })
+    expect(screen.queryByText('card body')).toBeNull()
+
+    fireEvent.click(anchor)
+    const card = screen.getByText('card body').parentElement as HTMLElement
+    expect(card.getAttribute('data-pinned')).toBe('true')
+    expect(anchor.getAttribute('aria-describedby')).toBe(`existing-description ${card.id}`)
+    fireEvent.pointerLeave(wrapper)
+    act(() => { vi.advanceTimersByTime(POINTER_GRACE_MS) })
+    fireEvent.blur(anchor, { relatedTarget: document.body })
+    expect(screen.getByText('card body')).toBeTruthy()
+
+    fireEvent.pointerDown(card)
+    expect(screen.getByText('card body')).toBeTruthy()
+    fireEvent.pointerDown(document.body)
+    expect(screen.queryByText('card body')).toBeNull()
+    expect(anchor.getAttribute('aria-describedby')).toBe('existing-description')
+  })
+
+  it('preserves a caller-owned accessible description while click-pinned', () => {
+    render(<>
+      <p id="stable-description">Stable description</p>
+      <HoverCard
+        inline
+        openOnClick
+        describeAnchor={false}
+        anchor={<button type="button" aria-describedby="stable-description">details</button>}
+        content={<div>card body</div>}
+      />
+    </>)
+    const anchor = screen.getByRole('button', { name: 'details' })
+    expect(anchor.getAttribute('aria-describedby')).toBe('stable-description')
+    fireEvent.click(anchor)
+    expect(screen.getByText('card body')).toBeTruthy()
+    expect(anchor.getAttribute('aria-describedby')).toBe('stable-description')
+    fireEvent.pointerDown(document.body)
+    expect(screen.queryByText('card body')).toBeNull()
+    expect(anchor.getAttribute('aria-describedby')).toBe('stable-description')
+  })
+
+  it('dismisses a click-open card on another click, Escape, or Tab', () => {
+    const ownerKey = vi.fn()
+    render(<div onKeyDown={ownerKey}>
+      <HoverCard openOnClick anchor={<button type="button">details</button>} content={<div>card body</div>} />
+    </div>)
+    const anchor = screen.getByRole('button', { name: 'details' })
+
+    fireEvent.click(anchor)
+    expect(screen.getByText('card body')).toBeTruthy()
+    fireEvent.click(anchor)
+    expect(screen.queryByText('card body')).toBeNull()
+
+    fireEvent.click(anchor)
+    fireEvent.keyDown(anchor, { key: 'a' })
+    expect(screen.getByText('card body')).toBeTruthy()
+    ownerKey.mockClear()
+    expect(fireEvent.keyDown(anchor, { key: 'Escape' })).toBe(false)
+    expect(ownerKey).not.toHaveBeenCalled()
+    expect(screen.queryByText('card body')).toBeNull()
+
+    fireEvent.click(anchor)
+    expect(fireEvent.keyDown(anchor, { key: 'Tab' })).toBe(true)
+    expect(screen.queryByText('card body')).toBeNull()
+  })
+
+  it('drops a click pin when click opening is removed or the card is disabled', () => {
+    const pinnedCard = (disabled = false) => (
+      <HoverCard openOnClick disabled={disabled} anchor={<button type="button">details</button>} content={<div>card body</div>} />
+    )
+    const hoverCard = <HoverCard anchor={<button type="button">details</button>} content={<div>card body</div>} />
+    const view = render(pinnedCard())
+    const anchor = screen.getByRole('button', { name: 'details' })
+    fireEvent.click(anchor)
+    expect(screen.getByText('card body')).toBeTruthy()
+    view.rerender(pinnedCard(true))
+    expect(screen.queryByText('card body')).toBeNull()
+
+    view.rerender(pinnedCard())
+    fireEvent.click(anchor)
+    expect(screen.getByText('card body')).toBeTruthy()
+    view.rerender(hoverCard)
+    expect(screen.queryByText('card body')).toBeNull()
+  })
+
+  it('removes click-pin dismissal listeners on unmount', () => {
+    const view = render(
+      <HoverCard openOnClick anchor={<button type="button">details</button>} content={<div>card body</div>} />,
+    )
+    const registrations = vi.spyOn(document, 'addEventListener')
+    const removals = vi.spyOn(document, 'removeEventListener')
+    fireEvent.click(screen.getByRole('button', { name: 'details' }))
+    expect(screen.getByText('card body')).toBeTruthy()
+
+    const listeners = registrations.mock.calls.filter(([type]) => type === 'keydown' || type === 'pointerdown')
+    expect(listeners.map(([type]) => type).sort()).toEqual(['keydown', 'pointerdown'])
+    view.unmount()
+
+    for (const [type, listener, options] of listeners) {
+      const removed = removals.mock.calls.find(([removedType, removedListener]) =>
+        removedType === type && removedListener === listener)
+      expect(removed).toBeDefined()
+      expect(removed?.[2]).toBe(options)
+    }
+    expect(fireEvent.keyDown(document.body, { key: 'Escape' })).toBe(true)
+    fireEvent.pointerDown(document.body)
+  })
+
   it('dismisses on keyboard clicks and cancels a pending hover', () => {
     const { anchor, wrapper } = mount({ variant: 'preview' })
     fireEvent.pointerEnter(wrapper)
@@ -652,6 +776,22 @@ it('opens inline previews only for keyboard focus and closes when focus leaves t
   expect(screen.queryByText('thumbnail')).toBeNull()
   view.rerender(<HoverCard inline disabled anchor={anchor} content={<span>thumbnail</span>} />)
   fireEvent.focus(first)
+  expect(screen.queryByText('thumbnail')).toBeNull()
+  matches.mockRestore()
+})
+
+it('keeps an inline preview open when the pointer leaves its focused anchor', () => {
+  render(<HoverCard inline anchor={<button>details</button>} content={<span>thumbnail</span>} />)
+  const anchor = screen.getByRole('button', { name: 'details' })
+  const matches = vi.spyOn(anchor, 'matches').mockReturnValue(true)
+  fireEvent.focus(anchor)
+  expect(screen.getByText('thumbnail')).toBeTruthy()
+  const activeElement = vi.spyOn(document, 'activeElement', 'get').mockReturnValue(anchor)
+  fireEvent.pointerLeave(anchor.parentElement as HTMLElement)
+  act(() => { vi.advanceTimersByTime(POINTER_GRACE_MS) })
+  expect(screen.getByText('thumbnail')).toBeTruthy()
+  activeElement.mockRestore()
+  fireEvent.blur(anchor, { relatedTarget: document.body })
   expect(screen.queryByText('thumbnail')).toBeNull()
   matches.mockRestore()
 })

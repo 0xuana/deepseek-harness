@@ -1,11 +1,12 @@
-import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { CSSProperties, ReactNode, RefObject, SyntheticEvent } from 'react'
+import { cloneElement, useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import type { CSSProperties, ReactElement, ReactNode, RefObject, SyntheticEvent } from 'react'
 import clsx from 'clsx'
 import { createPortal } from 'react-dom'
 import { writeClipboard } from './clipboard.ts'
 import { usePointerGrace } from './pointer-grace.ts'
 import { overlayTopMargin } from './overlay-top-margin.ts'
 import { HoverCardGroupContext } from './HoverCardGroup.tsx'
+import { useDismissOnOutsidePointer } from './useDismissOnOutsidePointer.ts'
 import css from './HoverCard.module.css'
 
 /** Preview opacity transition and retained lifetime during dismissal. */
@@ -16,10 +17,37 @@ const INLINE_PREVIEW_WIDTH = 300
 const ANCHOR_GAP = 8
 const VIEWPORT_MARGIN = 8
 
+interface DescribedAnchorProps {
+  'aria-describedby'?: string | undefined
+}
+
+type HoverCardProps = {
+  /** Inline media preview using the shared menu material and keyboard focus. */
+  inline?: boolean
+  content: ReactNode
+  openDelayMs?: number
+  disabled?: boolean
+  grouped?: boolean
+  variant?: 'compact' | 'preview'
+  widthAnchorRef?: RefObject<HTMLElement | null>
+} & ({
+  anchor: ReactElement<DescribedAnchorProps>
+  openOnClick: true
+  describeAnchor?: boolean
+} | {
+  anchor: ReactNode
+  openOnClick?: false | undefined
+  describeAnchor?: never
+}) & ({ copyText?: string | undefined; copyLabel: string; copiedLabel: string } | {
+  copyText?: undefined
+  copyLabel?: string
+  copiedLabel?: string
+})
+
 /**
  * Render an anchor with a hover-triggered preview card independently of nested tooltips.
- * Touch entry does not open a preview or intercept the anchor's action.
- * @param props.anchor - the hover target (rendered in place inside a wrapper span).
+ * @param props.anchor - the hover target (rendered in place inside a wrapper span). With
+ * openOnClick, pass one focusable element that forwards ARIA props.
  * @param props.content - card content; the pointer may rest on it, so it is
  * readable and selectable, but it carries no dismissal affordance of its own.
  * @param props.openDelayMs - hover dwell before the card shows (default 500).
@@ -30,30 +58,23 @@ const VIEWPORT_MARGIN = 8
  * @param props.disabled - suppress opening; turning true dismisses an open card.
  * @param props.grouped - share first-display dwell across the surrounding list and active portal.
  * Group replacement removes the previous card immediately, including a fading preview.
+ * @param props.openOnClick - clicking or touching the anchor pins the card open. Another activation,
+ * Escape, Tab, or an outside pointerdown dismisses it; pointer leave and blur do not dismiss a pinned card.
+ * @param props.describeAnchor - with openOnClick, append the open card to the anchor's accessible
+ * description (default true). Set false when the caller supplies a stable description relationship.
  * @param props.copyText - optional primary value copied by activation and
  * included in the card's accessible name.
  * @param props.copyLabel - localized accessible activation-label prefix.
  * @param props.copiedLabel - localized visible success label.
  * @returns anchor wrapper with the conditional portaled card.
  */
-export function HoverCard({
-  anchor, content, openDelayMs = 500, disabled = false, grouped = false,
-  copyText, copyLabel, copiedLabel, variant = 'compact', widthAnchorRef, inline = false,
-}: {
-  anchor: ReactNode
-  /** Inline media preview using the shared menu material and keyboard focus. */
-  inline?: boolean
-  content: ReactNode
-  openDelayMs?: number
-  disabled?: boolean
-  grouped?: boolean
-  variant?: 'compact' | 'preview'
-  widthAnchorRef?: RefObject<HTMLElement | null>
-} & ({ copyText?: string | undefined; copyLabel: string; copiedLabel: string } | {
-  copyText?: undefined
-  copyLabel?: string
-  copiedLabel?: string
-})) {
+export function HoverCard(props: HoverCardProps) {
+  const {
+    content, openDelayMs = 500, disabled = false, grouped = false, describeAnchor = true,
+    copyText, copyLabel, copiedLabel, variant = 'compact', widthAnchorRef, inline = false,
+  } = props
+  const openOnClick = props.openOnClick === true
+  const id = useId()
   const rootRef = useRef<HTMLSpanElement>(null)
   const cardRef = useRef<HTMLDivElement>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -71,6 +92,7 @@ export function HoverCard({
   const parentGroup = useContext(HoverCardGroupContext)
   const group = grouped ? parentGroup : null
   const [groupOwner] = useState(() => Symbol('hover-card'))
+  const [pinned, setPinned] = useState(false)
 
   const clearCopied = useCallback(() => {
     if (copyTimerRef.current !== null) {
@@ -84,10 +106,12 @@ export function HoverCard({
   const close = useCallback(() => {
     copyEpochRef.current += 1
     clearCopied()
+    setPinned(false)
     setPhase(current => variant === 'preview' && current !== 'closed' ? 'closing' : 'closed')
   }, [clearCopied, variant])
 
   const { arm: armClose, cancel: cancelClose } = usePointerGrace(close)
+  useDismissOnOutsidePointer(rootRef, openOnClick && open, close, cardRef)
 
   const clearTimer = useCallback(() => {
     if (timerRef.current !== null) {
@@ -140,7 +164,7 @@ export function HoverCard({
   }, [])
 
   useEffect(() => {
-    if (!open || (variant !== 'preview' && !inline)) return
+    if (!open || openOnClick || (variant !== 'preview' && !inline)) return
     const dismiss = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') return
       if (inline) event.stopPropagation()
@@ -150,7 +174,27 @@ export function HoverCard({
     }
     window.addEventListener('keydown', dismiss, inline)
     return () => { window.removeEventListener('keydown', dismiss, inline) }
-  }, [open, variant, inline, cancelClose, close])
+  }, [open, openOnClick, variant, inline, cancelClose, close])
+
+  useEffect(() => {
+    if (!openOnClick || !open) return
+    const dismiss = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape' && event.key !== 'Tab') return
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        event.stopPropagation()
+      }
+      clearTimer()
+      cancelClose()
+      close()
+    }
+    document.addEventListener('keydown', dismiss, true)
+    return () => { document.removeEventListener('keydown', dismiss, true) }
+  }, [open, openOnClick, cancelClose, close])
+
+  useEffect(() => {
+    if (pinned && !openOnClick) close()
+  }, [close, openOnClick, pinned])
 
   // Fixed-position from the anchor rect before paint; track the anchor while
   // open (capture-phase scroll catches nested panes), as in Menu portal mode.
@@ -238,18 +282,32 @@ export function HoverCard({
   }
 
   const copyable = copyText !== undefined
+  const describedAnchor = props.openOnClick === true && describeAnchor
+    ? cloneElement(props.anchor, {
+      'aria-describedby': open
+        ? [props.anchor.props['aria-describedby'], id].filter(Boolean).join(' ')
+        : props.anchor.props['aria-describedby'],
+    })
+    : props.anchor
   const dismissFromAnchor = (event: SyntheticEvent<HTMLSpanElement>): void => {
     // Portal content is a React child, but its clicks and text selection do not activate the anchor.
     if (cardRef.current?.contains(event.target as Node)) return
     clearTimer()
     cancelClose()
+    if (openOnClick && !disabled && !pinned) {
+      setPinned(true)
+      setPhase('open')
+      return
+    }
     close()
   }
   const card = open && pos !== null && (
     <div
       ref={cardRef}
+      id={openOnClick ? id : undefined}
       className={clsx(css.card, variant === 'preview' && css.preview, inline && css.media, copyable && css.copyable, copied && css.feedback)}
       data-closing={closing || undefined}
+      data-pinned={pinned || undefined}
       style={{
         ...pos, minHeight: copied && copyHeightRef.current !== null ? copyHeightRef.current : undefined,
         '--dsh-hover-preview-fade': `${PREVIEW_FADE_MS}ms`,
@@ -288,7 +346,7 @@ export function HoverCard({
         if (!disabled && event.target.matches(':focus-visible')) { cancelClose(); setPhase('open') }
       } : undefined}
       onBlur={inline ? (event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) { clearTimer(); cancelClose(); close() }
+        if (!pinned && !event.currentTarget.contains(event.relatedTarget)) { clearTimer(); cancelClose(); close() }
       } : undefined}
       onPointerEnter={(event) => {
         if (disabled || event.pointerType === 'touch') return
@@ -304,13 +362,16 @@ export function HoverCard({
       onPointerLeave={() => {
         clearTimer()
         // Leaving a closed card schedules a no-op close; only arm while
-        // open, matching Menu's shape.
-        if (open) armClose()
+        // open, matching Menu's shape. Keyboard focus remains an independent
+        // open trigger after the pointer leaves.
+        if (open && !pinned
+          && rootRef.current?.contains(document.activeElement) !== true
+          && cardRef.current?.contains(document.activeElement) !== true) armClose()
       }}
-      onPointerDownCapture={dismissFromAnchor}
+      onPointerDownCapture={openOnClick ? undefined : dismissFromAnchor}
       onClickCapture={dismissFromAnchor}
     >
-      {anchor}
+      {describedAnchor}
       {open && copyable && <span className={css.status} role="status">{copied ? copiedLabel : ''}</span>}
       {card !== false && createPortal(card, document.body)}
     </span>

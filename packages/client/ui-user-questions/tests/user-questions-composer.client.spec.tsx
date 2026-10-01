@@ -24,7 +24,13 @@ afterEach(cleanup)
 const SID = 's1' as SessionId
 
 const seatOver = (dict: Record<string, string>, common: Record<string, string>): QuestionComposerProps['t'] =>
-  (key => dict[key] ?? common[key] ?? key)
+  (key, params) => {
+    const template = dict[key] ?? common[key] ?? key
+    return params === undefined
+      ? template
+      : template.replace(/\{(\w+)\}/g, (match, name: string) =>
+        name in params ? String(params[name]) : match)
+  }
 
 type SessionState = Parameters<Parameters<QuestionComposerProps['useSession']>[0]>[0]
 type ConversationState = Parameters<Parameters<QuestionComposerProps['useConversation']>[0]>[0]
@@ -257,6 +263,7 @@ describe('QuestionComposer', () => {
     const detail = screen.getByText('按当前空缺岗位的优先级选择。')
     const scrollRegion = detail.closest('[data-question-scroll]')
     expect(scrollRegion).toBeTruthy()
+    expect(scrollRegion?.contains(screen.getByRole('heading', { name: '选择候选人类型' }))).toBe(true)
     expect(scrollRegion?.contains(screen.getByRole('radio', { name: /工程落地型/ }))).toBe(true)
     expect(scrollRegion?.contains(screen.getByText('下一题').closest('button'))).toBe(false)
     fireEvent.click(screen.getByRole('radio', { name: /工程落地型/ }))
@@ -291,6 +298,77 @@ describe('QuestionComposer', () => {
       { id: 'signals', selected: ['系统设计', '代码质量', '产品判断'], custom: '沟通能力' },
     ]))
     expect(screen.getByRole<HTMLButtonElement>('button', { name: '正在提交…' }).disabled).toBe(true)
+  })
+
+  it('opens a full option description without choosing the option', () => {
+    const description = 'Remove the experimental client from every shipped template and require an explicit profile install.'
+    const { carrier } = wait([{
+      id: 'release', question: 'How should the release graph change?',
+      options: [
+        { label: 'Explicit install', description },
+        { label: 'Optional bundle' },
+        { label: 'Empty description', description: '' },
+        { label: 'Whitespace description', description: '   ' },
+      ],
+    }])
+    render(<QuestionComposer matched={carrier} {...kit} />)
+
+    const option = screen.getByRole('radio', { name: 'Explicit install' })
+    const details = screen.getByRole('button', { name: '查看“Explicit install”的选项说明' })
+    expect(screen.getAllByRole('button', { name: /选项说明/ })).toHaveLength(1)
+    expect(screen.getAllByText(description)).toHaveLength(1)
+    const describedBy = details.getAttribute('aria-describedby')
+    expect(describedBy).not.toBeNull()
+    expect(document.getElementById(describedBy as string)?.textContent).toBe(description)
+    fireEvent.click(details)
+
+    expect(option.getAttribute('aria-checked')).toBe('false')
+    expect(details.getAttribute('aria-describedby')).toBe(describedBy)
+    expect(screen.getAllByText(description)).toHaveLength(2)
+    fireEvent.pointerDown(document.body)
+    expect(screen.getAllByText(description)).toHaveLength(1)
+  })
+
+  it('resets scrolling and an open option description when the question changes', () => {
+    const firstDescription = 'First question detail that was pinned open.'
+    const secondDescription = 'Second question detail starts closed.'
+    const { carrier } = wait([
+      {
+        id: 'first', question: 'First question?',
+        options: [{ label: 'Continue', description: firstDescription }],
+      },
+      {
+        id: 'second', question: 'Second question?',
+        options: [{ label: 'Continue', description: secondDescription }],
+      },
+    ])
+    render(<QuestionComposer matched={carrier} {...kit} />)
+
+    expect(screen.getByRole('region', { name: 'First question?' })).toBeTruthy()
+    const firstScroll = screen.getByText('First question?').closest('[data-question-scroll]') as HTMLElement
+    firstScroll.scrollTop = 80
+    const firstDetails = screen.getByRole('button', { name: '查看“Continue”的选项说明' })
+    fireEvent.click(firstDetails)
+    expect(screen.getAllByText(firstDescription)).toHaveLength(2)
+    const firstDescribedIds = (firstDetails.getAttribute('aria-describedby') ?? '').split(/\s+/).filter(Boolean)
+    expect(firstDescribedIds.length).toBeGreaterThan(0)
+    expect(firstDescribedIds.every(id => document.getElementById(id) !== null)).toBe(true)
+    expect(firstDescribedIds.map(id => document.getElementById(id)?.textContent)).toContain(firstDescription)
+    fireEvent.click(screen.getByRole('radio', { name: 'Continue' }))
+
+    const secondScroll = screen.getByText('Second question?').closest('[data-question-scroll]') as HTMLElement
+    expect(screen.queryByRole('region', { name: 'First question?' })).toBeNull()
+    expect(screen.getByRole('region', { name: 'Second question?' })).toBeTruthy()
+    expect(secondScroll).not.toBe(firstScroll)
+    expect(secondScroll.scrollTop).toBe(0)
+    expect(screen.queryByText(firstDescription)).toBeNull()
+    expect(screen.getAllByText(secondDescription)).toHaveLength(1)
+    const secondDetails = screen.getByRole('button', { name: '查看“Continue”的选项说明' })
+    const describedIds = (secondDetails.getAttribute('aria-describedby') ?? '').split(/\s+/).filter(Boolean)
+    expect(describedIds.length).toBeGreaterThan(0)
+    expect(describedIds.every(id => document.getElementById(id) !== null)).toBe(true)
+    expect(describedIds.map(id => document.getElementById(id)?.textContent)).toContain(secondDescription)
+    expect(describedIds.map(id => document.getElementById(id)?.textContent)).not.toContain(firstDescription)
   })
 
   it('renders plan detail through the shared assistant Markdown primitive', () => {
@@ -863,6 +941,7 @@ describe('review card', () => {
     const chosen = screen.getByRole<HTMLButtonElement>('radio', { name: '工程落地型' })
     expect(chosen.getAttribute('aria-checked')).toBe('true')
     expect(chosen.disabled).toBe(true)
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: '查看“工程落地型”的选项说明' }).disabled).toBe(false)
     // Nothing is left to send, and the unused free-text field would read as
     // somewhere to type.
     expect(screen.queryByRole('button', { name: '跳过' })).toBeNull()

@@ -69,8 +69,8 @@ async function capMetrics(field: Locator): Promise<{ textLines: number; scrolls:
 }
 
 // The options carry long descriptions on purpose: the squeeze assertion below
-// needs option copy that WRAPS, which is the only text layout that reproduces a
-// collapsed row painting its copy outside its own box.
+// verifies that each description remains a single ellipsized line while the
+// complete text stays reachable through its information action.
 const PROMPT = 'Use the ask_user_question tool to ask me exactly one multi-select question with id "color", question "Which color do you prefer?", header "Pick one", and two options: label "Blue" with description "A cool recessive hue that reads as calm and trustworthy in long reading sessions and dense dashboards.", and label "Green" with description "A restful mid-spectrum hue with the highest perceived brightness, easiest on the eye over long sessions." Set multi_select to true. After I answer, reply with the single word DONE and stop.'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -343,47 +343,63 @@ describe('web e2e: resident question composer round trip', () => {
       await compareOrRefreshGolden(SIDEBAR_EXPECTED, sidebar, MODE)
     }
 
-    // Squeezed card: the option rows are the capped card's scroll content, so
-    // shrinking the seat must push overflow into the option list, never
-    // collapse a row below the height its own copy needs — a collapsed row
-    // paints its centered copy outside the row box, over the title and the
-    // neighbouring rows. Measured on the live composer at seat heights that
-    // force the cap, then restored for the answer gesture below. Replay only:
-    // record mode must reach the recording write below, not abort on layout.
+    // Squeezed card: the question and compact option rows share one scrollport,
+    // while navigation and submission stay outside it. Measured on the live
+    // composer at seat heights that force the cap, then restored for the answer
+    // gesture below. Replay only: record mode must reach the recording write
+    // below, not abort on layout.
     if (MODE !== 'record') {
       const original = page.viewportSize() ?? { width: 1680, height: 1000 }
+      const scrollStates: boolean[] = []
       for (const height of [520, 440, 380]) {
-        await page.setViewportSize({ width: 900, height })
+        await page.setViewportSize({ width: 640, height })
         const squeeze = await composer.evaluate((card) => {
-          // Role/ARIA selectors, not the CSS-module class names: the built
-          // client hashes those.
-          const rows = [...card.querySelectorAll<HTMLElement>(
-            '[role="radio"], [role="checkbox"], [aria-expanded]',
-          )]
+          const rows = [...card.querySelectorAll<HTMLElement>('[data-option-row]')]
+          const descriptions = [...card.querySelectorAll<HTMLElement>('[data-option-description]')]
           const spill = rows.map(row => Math.max(...[...row.children].map((child) => {
             const box = row.getBoundingClientRect()
             const inner = child.getBoundingClientRect()
             return Math.max(box.top - inner.top, inner.bottom - box.bottom)
           })))
           const list = card.querySelector<HTMLElement>('[data-question-scroll]')
+          const title = card.querySelector('h2')
           return {
             rows: rows.length,
             spill: Math.max(...spill),
-            // Wrapped option text is what overflows a collapsed row, and a
-            // scrolling list proves the seat is genuinely capped. Without both,
-            // the spill assertion would hold vacuously.
-            wrappedRows: rows.filter(row => row.getBoundingClientRect().height > 42).length,
+            ellipsized: descriptions.filter(item => item.scrollWidth > item.clientWidth).length,
+            descriptionLines: Math.max(...descriptions.map((item) => {
+              const style = getComputedStyle(item)
+              return item.clientHeight / parseFloat(style.lineHeight)
+            })),
             scrolls: list === null ? false : list.scrollHeight > list.clientHeight,
+            titleInScrollport: list?.contains(title) === true,
           }
         })
         expect(squeeze.rows).toBeGreaterThan(0)
-        expect(squeeze.wrappedRows).toBeGreaterThan(0)
-        expect(squeeze.scrolls).toBe(true)
+        expect(squeeze.ellipsized).toBeGreaterThan(0)
+        expect(squeeze.descriptionLines).toBeLessThan(1.1)
+        scrollStates.push(squeeze.scrolls)
+        expect(squeeze.titleInScrollport).toBe(true)
+        expect(await composer.getByRole('button', { name: 'Submit', exact: true }).isVisible()).toBe(true)
         // Sub-pixel tolerance: every row's copy stays inside its border box.
         expect(squeeze.spill).toBeLessThan(0.6)
       }
+      expect(scrollStates).toContain(true)
       await page.setViewportSize(original)
     }
+
+    const blue = composer.getByRole('checkbox', { name: 'Blue' })
+    const blueDetail = 'A cool recessive hue that reads as calm and trustworthy in long reading sessions and dense dashboards.'
+    const blueInfo = composer.getByRole('button', { name: 'Show details for “Blue”' })
+    await blueInfo.hover()
+    await expect.poll(() => page.getByText(blueDetail, { exact: true }).count()).toBe(2)
+    await composer.getByRole('heading', { name: 'Which color do you prefer?' }).hover()
+    await expect.poll(() => page.getByText(blueDetail, { exact: true }).count()).toBe(1)
+    await blueInfo.click()
+    expect(await blue.getAttribute('aria-checked')).toBe('false')
+    await expect.poll(() => page.getByText(blueDetail, { exact: true }).count()).toBe(2)
+    await composer.getByRole('heading', { name: 'Which color do you prefer?' }).click()
+    await expect.poll(() => page.getByText(blueDetail, { exact: true }).count()).toBe(1)
 
     // Multi-line custom answer: the field is a textarea whose hidden mirror
     // owns the box height, so a soft-wrapped or line-broken draft GROWS the
@@ -415,7 +431,6 @@ describe('web e2e: resident question composer round trip', () => {
       await custom.fill('')
     }
 
-    const blue = composer.getByRole('checkbox', { name: 'Blue' })
     await blue.click()
     await custom.fill('Include accessibility notes')
     expect(await blue.getAttribute('aria-checked')).toBe('true')
@@ -534,6 +549,123 @@ describe('web e2e: resident question composer round trip', () => {
     await composer.getByRole('button', { name: 'Skip' }).click()
     expect(await asked).toEqual({ answers: [{ id: 'free', selected: [] }] })
     await expect.poll(() => page.locator('[data-question-key]').count(), { timeout: 10_000 }).toBe(0)
+  }, 60_000)
+
+  it.skipIf(MODE === 'record')('keeps long questions answerable in short and zoomed viewports', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-question-long-copy'))
+    const sessionId = answeredSession
+    expect(sessionId).toBeDefined()
+    const agent = scaffold.ctx.agents.get(sessionId as SessionId)
+    expect(agent).toBeDefined()
+    const question = 'The release gate reports that the installed application graph still contains an experimental package through a default dependency. Which approach should we use to preserve explicit installation while keeping the supported application graph valid?'
+    const detail = 'Review the shipped profile, package ownership, upgrade impact, and the path users follow before choosing. The answer must preserve the existing release invariant, avoid a hidden compatibility path, and remain understandable to people who did not participate in the implementation discussion.'
+    const description = 'Remove the experimental client from every shipped template and require users to install it explicitly in the profile where they need it.'
+    const controller = new AbortController()
+    const asked = scaffold.ctx.userQuestions.ask({
+      agent: agent as NonNullable<typeof agent>,
+      signal: controller.signal,
+      questions: [{
+        id: 'release',
+        header: 'Release decision',
+        question,
+        detail,
+        multiSelect: true,
+        options: [
+          { label: 'Explicit install', description },
+          { label: 'Keep the default edge', description: 'Retain the current dependency and exempt it from the release graph invariant.' },
+          { label: 'Move the package', description: 'Rename the package outside the experimental namespace without changing how profiles acquire it.' },
+        ],
+      }],
+    })
+    const outcome = asked.then(value => ({ value }), (error: unknown) => ({ error }))
+
+    const composer = page.locator('[data-question-key]')
+    const original = page.viewportSize() ?? { width: 1680, height: 1000 }
+    let bodyCompleted = false
+    try {
+      await composer.waitFor({ timeout: 30_000 })
+      // Browser zoom reduces the CSS-pixel viewport. These dimensions model
+      // the same 640x420 window at 100%, 125%, and 150% without relying on a
+      // browser-global zoom preference that Playwright cannot isolate per page.
+      for (const viewport of [
+        { width: 640, height: 420 },
+        { width: 512, height: 336 },
+        { width: 427, height: 280 },
+      ]) {
+        await page.setViewportSize(viewport)
+        await expect.poll(() => composer.evaluate((card) => {
+          const scroll = card.querySelector<HTMLElement>('[data-question-scroll]')
+          const title = card.querySelector<HTMLElement>('h2')
+          const submit = [...card.querySelectorAll<HTMLButtonElement>('button')]
+            .find(button => button.textContent === 'Submit')
+          if (scroll === null || title === null || submit === undefined) return null
+          const submitBox = submit.getBoundingClientRect()
+          return {
+            footerFits: submitBox.top >= -0.5 && submitBox.bottom <= window.innerHeight + 0.5,
+            scrolls: scroll.scrollHeight > scroll.clientHeight,
+            titleInScrollport: scroll.contains(title),
+          }
+        })).toEqual({
+          footerFits: true,
+          scrolls: true,
+          titleInScrollport: true,
+        })
+        const questionLines = await composer.getByRole('heading', { name: question }).evaluate((title) => {
+          const style = getComputedStyle(title)
+          return title.getBoundingClientRect().height / parseFloat(style.lineHeight)
+        })
+        expect(questionLines).toBeGreaterThan(2)
+      }
+
+      const detailText = composer.getByText(detail, { exact: true })
+      expect(await detailText.evaluate(node => node.closest('[data-question-scroll]') !== null)).toBe(true)
+      await detailText.scrollIntoViewIfNeeded()
+      expect(await detailText.isVisible()).toBe(true)
+      expect(await composer.getByRole('button', { name: 'Submit', exact: true }).isVisible()).toBe(true)
+
+      const info = composer.getByRole('button', { name: 'Show details for “Explicit install”' })
+      const descriptionId = await info.getAttribute('aria-describedby')
+      expect(descriptionId).not.toBeNull()
+      expect(await page.locator(`[id=${JSON.stringify(descriptionId)}]`).textContent()).toBe(description)
+      await info.click()
+      expect(await composer.getByRole('checkbox', { name: 'Explicit install' }).getAttribute('aria-checked')).toBe('false')
+      expect(await info.getAttribute('aria-describedby')).toBe(descriptionId)
+      const preview = page.locator('[data-pinned="true"]')
+      await preview.getByText(description, { exact: true }).waitFor()
+      const previewBox = await preview.boundingBox()
+      const constrainedViewport = page.viewportSize()
+      expect(constrainedViewport).not.toBeNull()
+      expect(previewBox).not.toBeNull()
+      expect(previewBox?.x).toBeGreaterThanOrEqual(7.5)
+      expect(previewBox?.y).toBeGreaterThanOrEqual(7.5)
+      expect((previewBox?.x ?? 0) + (previewBox?.width ?? 0))
+        .toBeLessThanOrEqual((constrainedViewport?.width ?? 0) - 7.5)
+      expect((previewBox?.y ?? 0) + (previewBox?.height ?? 0))
+        .toBeLessThanOrEqual((constrainedViewport?.height ?? 0) - 7.5)
+      await page.keyboard.press('Escape')
+
+      await composer.getByRole('checkbox', { name: 'Explicit install' }).click()
+      await composer.getByRole('textbox').fill('Keep the migration steps explicit.')
+      await composer.getByRole('button', { name: 'Submit', exact: true }).click()
+      expect(await outcome).toEqual({
+        value: {
+          answers: [{
+            id: 'release',
+            selected: ['Explicit install'],
+            custom: 'Keep the migration steps explicit.',
+          }],
+        },
+      })
+      await expect.poll(() => page.locator('[data-question-key]').count(), { timeout: 10_000 }).toBe(0)
+      bodyCompleted = true
+    } finally {
+      controller.abort()
+      const cleanup = await Promise.allSettled([outcome, page.setViewportSize(original)])
+      if (bodyCompleted) {
+        const failure = cleanup.find((result): result is PromiseRejectedResult => result.status === 'rejected')
+        if (failure !== undefined) throw failure.reason
+      }
+    }
   }, 60_000)
 
 })
