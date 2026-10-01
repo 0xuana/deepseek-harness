@@ -22,7 +22,7 @@ function stubAnchorRect(anchor: HTMLElement, rect: { top: number; right: number 
 
 function mount(props: {
   widthAnchorRef?: { current: HTMLElement | null }
-  variant?: 'compact' | 'preview'
+  variant?: 'compact' | 'preview' | 'callout'
   openDelayMs?: number
   disabled?: boolean
   copyText?: string
@@ -165,6 +165,27 @@ describe('HoverCard', () => {
     expect(screen.queryByText('card body')).toBeNull()
   })
 
+  it('caps a callout, keeps its caret on the anchor, and flips it above when needed', () => {
+    const { wrapper } = mount({ variant: 'callout' })
+    fireEvent.pointerEnter(wrapper)
+    act(() => { vi.advanceTimersByTime(500) })
+    const card = screen.getByText('card body').closest('[data-placement]') as HTMLElement
+    const body = card.querySelector<HTMLElement>('[data-hover-card-scroll]') as HTMLElement
+    expect(card.style.width).toBe('300px')
+    expect(card.style.left).toBe('8px')
+    expect(card.style.top).toBe('82px')
+    expect(card.dataset.placement).toBe('below')
+    expect(card.style.getPropertyValue('--dsh-hover-card-max-height')).toBe('240px')
+    expect(card.style.getPropertyValue('--dsh-hover-card-anchor-x')).toBe('142px')
+
+    Object.defineProperty(body, 'scrollHeight', { configurable: true, value: 600 })
+    wrapper.getBoundingClientRect = () => DOMRect.fromRect({ x: 100, y: 700, width: 100, height: 34 })
+    fireEvent(window, new Event('resize'))
+    expect(card.style.top).toBe('452px')
+    expect(card.dataset.placement).toBe('above')
+    expect(card.style.getPropertyValue('--dsh-hover-card-max-height')).toBe('240px')
+  })
+
   it('observes preview and container sizes until dismissal', () => {
     let resize = () => {}
     const observe = vi.fn()
@@ -254,6 +275,9 @@ describe('HoverCard', () => {
     fireEvent.blur(anchor, { relatedTarget: document.body })
     expect(screen.getByText('card body')).toBeTruthy()
 
+    fireEvent.pointerLeave(card)
+    act(() => { vi.advanceTimersByTime(POINTER_GRACE_MS) })
+    expect(screen.getByText('card body')).toBeTruthy()
     fireEvent.pointerDown(card)
     expect(screen.getByText('card body')).toBeTruthy()
     fireEvent.pointerDown(document.body)
@@ -423,6 +447,21 @@ describe('HoverCard', () => {
     fireEvent.pointerEnter(wrapper)
     act(() => { vi.advanceTimersByTime(POINTER_GRACE_MS * 10) })
     expect(screen.getByText('card body')).toBeTruthy()
+  })
+
+  it('keeps the card open while its own pointer is inside and closes after leaving it', () => {
+    const { wrapper } = mount({ variant: 'callout' })
+    fireEvent.pointerEnter(wrapper)
+    act(() => { vi.advanceTimersByTime(500) })
+    const card = screen.getByText('card body').closest('[data-placement]') as HTMLElement
+    fireEvent.pointerLeave(wrapper)
+    act(() => { vi.advanceTimersByTime(POINTER_GRACE_MS - 50) })
+    fireEvent.pointerEnter(card)
+    act(() => { vi.advanceTimersByTime(POINTER_GRACE_MS) })
+    expect(screen.getByText('card body')).toBeTruthy()
+    fireEvent.pointerLeave(card)
+    act(() => { vi.advanceTimersByTime(POINTER_GRACE_MS) })
+    expect(screen.queryByText('card body')).toBeNull()
   })
 
   it('re-entering while open does not queue a second dwell', () => {

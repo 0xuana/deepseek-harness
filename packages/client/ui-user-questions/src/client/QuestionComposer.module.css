@@ -363,8 +363,11 @@
 }
 
 .descriptionPreview {
+  display: block;
   font-size: 13px;
   line-height: 20px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 /* Read-only note standing in for a question the user skipped: it takes the

@@ -633,6 +633,15 @@ describe('web e2e: resident question composer round trip', () => {
       const descriptionId = await info.getAttribute('aria-describedby')
       expect(descriptionId).not.toBeNull()
       expect(await page.locator(`[id=${JSON.stringify(descriptionId)}]`).textContent()).toBe(description)
+      await info.hover()
+      const hoveredPreview = page.locator('[data-placement]')
+      await hoveredPreview.getByText(description, { exact: true }).waitFor()
+      const hoveredBox = await hoveredPreview.boundingBox()
+      expect(hoveredBox).not.toBeNull()
+      await page.mouse.move((hoveredBox?.x ?? 0) + 24, (hoveredBox?.y ?? 0) + 24)
+      await page.waitForTimeout(250)
+      expect(await hoveredPreview.isVisible()).toBe(true)
+
       await info.click()
       expect(await composer.getByRole('checkbox', { name: 'Explicit install' }).getAttribute('aria-checked')).toBe('false')
       expect(await info.getAttribute('aria-describedby')).toBe(descriptionId)
@@ -655,10 +664,29 @@ describe('web e2e: resident question composer round trip', () => {
         .toBeLessThanOrEqual((constrainedViewport?.width ?? 0) - 7.5)
       expect((previewBox?.y ?? 0) + (previewBox?.height ?? 0))
         .toBeLessThanOrEqual((constrainedViewport?.height ?? 0) - 7.5)
-      expect(await preview.evaluate(card => ({
+      expect(previewBox?.height).toBeLessThanOrEqual(240)
+      const scrollport = preview.locator('[data-hover-card-scroll]')
+      expect(await scrollport.evaluate(card => ({
         overflowY: getComputedStyle(card).overflowY,
         scrolls: card.scrollHeight > card.clientHeight,
       }))).toEqual({ overflowY: 'auto', scrolls: true })
+      const caretMetrics = await preview.evaluate((card, infoButton) => {
+        const caret = card.querySelector<HTMLElement>('[data-hover-card-caret]')
+        if (!(infoButton instanceof HTMLElement) || caret === null) return null
+        const anchorBox = infoButton.getBoundingClientRect()
+        const caretBox = caret.getBoundingClientRect()
+        const placement = card.dataset.placement
+        return {
+          horizontalDelta: Math.abs((anchorBox.left + anchorBox.width / 2) - (caretBox.left + caretBox.width / 2)),
+          verticalGap: placement === 'above'
+            ? anchorBox.top - caretBox.bottom
+            : caretBox.top - anchorBox.bottom,
+        }
+      }, await info.elementHandle())
+      expect(caretMetrics).not.toBeNull()
+      expect(caretMetrics?.horizontalDelta).toBeLessThan(1)
+      expect(caretMetrics?.verticalGap).toBeGreaterThanOrEqual(0)
+      expect(caretMetrics?.verticalGap).toBeLessThanOrEqual(3)
       expect(await preview.getByText(description, { exact: true }).evaluate((text) => {
         const selection = window.getSelection()
         const range = document.createRange()
@@ -669,7 +697,7 @@ describe('web e2e: resident question composer round trip', () => {
         selection?.removeAllRanges()
         return selectedLength
       })).toBe(description.length)
-      expect(await preview.evaluate((card) => {
+      expect(await scrollport.evaluate((card) => {
         card.scrollTop = card.scrollHeight
         return card.scrollTop + card.clientHeight >= card.scrollHeight - 1
       })).toBe(true)

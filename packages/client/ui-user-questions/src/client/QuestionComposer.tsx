@@ -556,7 +556,7 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
                       {hasDescription && (
                         <span className={css.descriptionAction}>
                           <HoverCard
-                            inline
+                            variant="callout"
                             openOnClick
                             describeAnchor={false}
                             openDelayMs={200}
