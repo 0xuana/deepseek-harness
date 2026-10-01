@@ -701,6 +701,44 @@ describe('web e2e: resident question composer round trip', () => {
         card.scrollTop = card.scrollHeight
         return card.scrollTop + card.clientHeight >= card.scrollHeight - 1
       })).toBe(true)
+      const palette: string[] = []
+      const originalDarkTheme = await page.locator('body').getAttribute('data-ds-dark-theme')
+      try {
+        for (const dark of [false, true]) {
+          await page.evaluate((value) => { document.body.toggleAttribute('data-ds-dark-theme', value) }, dark)
+          const colors = await preview.evaluate((card) => {
+            const surface = card.querySelector<HTMLElement>('[class*="calloutSurface"]')
+            const body = card.querySelector<HTMLElement>('[data-hover-card-scroll]')
+            const caret = card.querySelector<HTMLElement>('[data-hover-card-caret]')
+            if (surface === null || body === null || caret === null) return null
+            return {
+              surface: getComputedStyle(surface).backgroundColor,
+              text: getComputedStyle(body).color,
+              caret: getComputedStyle(caret).backgroundColor,
+            }
+          })
+          expect(colors).not.toBeNull()
+          expect(colors?.surface).toBe(colors?.caret)
+          if (colors === null) throw new Error('Callout colors are unavailable')
+          const channels = (color: string) => color.match(/[\d.]+/g)?.slice(0, 3).map(Number) ?? []
+          const luminance = (color: string) => channels(color).reduce((total, channel, index) => {
+            const normalized = channel / 255
+            const linear = normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4
+            return total + linear * [0.2126, 0.7152, 0.0722][index]!
+          }, 0)
+          const foreground = luminance(colors.text)
+          const background = luminance(colors.surface)
+          expect((Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05))
+            .toBeGreaterThanOrEqual(4.5)
+          palette.push(colors.surface)
+        }
+        expect(palette[0]).not.toBe(palette[1])
+      } finally {
+        await page.evaluate((previous) => {
+          if (previous === null) document.body.removeAttribute('data-ds-dark-theme')
+          else document.body.setAttribute('data-ds-dark-theme', previous)
+        }, originalDarkTheme)
+      }
       await page.keyboard.press('Escape')
 
       await composer.getByRole('checkbox', { name: 'Explicit install' }).click()
