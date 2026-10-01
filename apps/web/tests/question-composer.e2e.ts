@@ -68,9 +68,8 @@ async function capMetrics(field: Locator): Promise<{ textLines: number; scrolls:
   })
 }
 
-// The options carry long descriptions on purpose: the squeeze assertion below
-// verifies that each description remains a single ellipsized line while the
-// complete text stays reachable through its information action.
+// The options carry descriptions on purpose: the squeeze assertion below
+// verifies that each description remains on one line in the card scrollport.
 const PROMPT = 'Use the ask_user_question tool to ask me exactly one multi-select question with id "color", question "Which color do you prefer?", header "Pick one", and two options: label "Blue" with description "A cool recessive hue that reads as calm and trustworthy in long reading sessions and dense dashboards.", and label "Green" with description "A restful mid-spectrum hue with the highest perceived brightness, easiest on the eye over long sessions." Set multi_select to true. After I answer, reply with the single word DONE and stop.'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -366,7 +365,6 @@ describe('web e2e: resident question composer round trip', () => {
           return {
             rows: rows.length,
             spill: Math.max(...spill),
-            ellipsized: descriptions.filter(item => item.scrollWidth > item.clientWidth).length,
             descriptionLines: Math.max(...descriptions.map((item) => {
               const style = getComputedStyle(item)
               return item.clientHeight / parseFloat(style.lineHeight)
@@ -376,7 +374,6 @@ describe('web e2e: resident question composer round trip', () => {
           }
         })
         expect(squeeze.rows).toBeGreaterThan(0)
-        expect(squeeze.ellipsized).toBeGreaterThan(0)
         expect(squeeze.descriptionLines).toBeLessThan(1.1)
         scrollStates.push(squeeze.scrolls)
         expect(squeeze.titleInScrollport).toBe(true)
@@ -595,11 +592,12 @@ describe('web e2e: resident question composer round trip', () => {
           fontSize: style.fontSize,
           lineHeight: style.lineHeight,
           hasDetails: row.querySelector('[data-option-details]') !== null,
+          maskImage: style.maskImage,
         }
       }))
       expect(rows).toHaveLength(4)
       expect(rows).toEqual(Array.from({ length: 4 }, () => ({
-        sameLine: true, fontSize: '14px', lineHeight: '24px', hasDetails: false,
+        sameLine: true, fontSize: '14px', lineHeight: '24px', hasDetails: false, maskImage: 'none',
       })))
       await composer.getByRole('radio', { name: '中（medium）' }).click()
       await composer.getByRole('button', { name: 'Submit', exact: true }).click()
@@ -719,10 +717,19 @@ describe('web e2e: resident question composer round trip', () => {
       expect(await page.locator(`[id=${JSON.stringify(descriptionId)}]`).evaluate((item) => {
         const style = getComputedStyle(item)
         return {
-          ellipsized: item.scrollWidth > item.clientWidth,
           lines: item.clientHeight / parseFloat(style.lineHeight),
+          textOverflow: style.textOverflow,
+          fades: style.maskImage !== 'none',
         }
-      })).toEqual({ ellipsized: true, lines: 1 })
+      })).toEqual({ lines: 1, textOverflow: 'clip', fades: true })
+      expect(await info.evaluate((button) => {
+        const icon = button.querySelector('svg')
+        const ring = icon?.parentElement
+        return {
+          dots: icon?.querySelectorAll('path').length,
+          ring: ring instanceof HTMLElement ? getComputedStyle(ring).borderStyle : undefined,
+        }
+      })).toEqual({ dots: 3, ring: 'solid' })
       const previewBox = await preview.boundingBox()
       const constrainedViewport = page.viewportSize()
       expect(constrainedViewport).not.toBeNull()

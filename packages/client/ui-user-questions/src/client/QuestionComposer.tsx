@@ -6,7 +6,7 @@ import clsx from 'clsx'
 import {
   Button, IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconChevronLeftOutlineRegular,
   IconChevronRightOutlineRegular, IconChevronUpOutlineRegular, IconCloseOutlineRegular,
-  HoverCard, IconEditOutlineRegular, IconInfoOutlineRegular, MarkdownText,
+  HoverCard, IconEditOutlineRegular, IconEllipsisOutlineRegular, MarkdownText,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { planReviewOf, type QuestionAnswer, type QuestionCardSnapshot, type QuestionComposerProps } from './contract/slots.ts'
 import type { PendingQuestion } from './contract/slots.ts'
@@ -609,7 +609,11 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
                             )}
                           </span>
                           {hasDescription && descriptionMode !== 'inline' && (
-                            <span id={descriptionId} className={css.description} data-option-description>{option.description}</span>
+                            <span
+                              id={descriptionId}
+                              className={clsx(css.description, showDetails && css.descriptionTruncated)}
+                              data-option-description
+                            >{option.description}</span>
                           )}
                         </span>
                       </button>
@@ -627,7 +631,7 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
                                 aria-label={t('option.details', { option: display.label })}
                                 aria-describedby={descriptionId}
                               >
-                                <IconInfoOutlineRegular size={16} />
+                                <span className={css.descriptionMoreIcon}><IconEllipsisOutlineRegular size={12} /></span>
                               </button>
                             )}
                             content={<span className={css.descriptionPreview} aria-hidden="true">{option.description}</span>}

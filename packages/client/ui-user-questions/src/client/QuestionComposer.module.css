@@ -331,8 +331,12 @@
   font-size: 13px;
   line-height: 20px;
   font-weight: 400;
-  text-overflow: ellipsis;
+  text-overflow: clip;
   white-space: nowrap;
+}
+
+.descriptionTruncated {
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
 }
 
 .descriptionInline {
@@ -368,6 +372,15 @@
 .descriptionButton:focus-visible {
   background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-primary);
+}
+
+.descriptionMoreIcon {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
 }
 
 .descriptionPreview {

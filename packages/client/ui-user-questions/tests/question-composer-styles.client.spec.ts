@@ -23,16 +23,19 @@ describe('QuestionComposer compact long-copy layout', () => {
     ]))
   })
 
-  it('keeps the option description to one ellipsized line', () => {
+  it('keeps the option description to one clipped line and fades only truncated text', () => {
     expect(declarations('.description')).toEqual(expect.arrayContaining([
       'display: block',
       'min-width: 0',
       'overflow: hidden',
       'font-size: 13px',
       'line-height: 20px',
-      'text-overflow: ellipsis',
+      'text-overflow: clip',
       'white-space: nowrap',
     ]))
+    expect(declarations('.descriptionTruncated')).toContain(
+      'mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent)',
+    )
   })
 
   it('keeps the question and choices in the card scrollport', () => {
