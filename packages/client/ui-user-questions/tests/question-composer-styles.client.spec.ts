@@ -15,6 +15,14 @@ function declarations(selector: string): string[] {
 }
 
 describe('QuestionComposer compact long-copy layout', () => {
+  it('keeps fitting descriptions in the original option-line typography', () => {
+    expect(declarations('.descriptionInline')).toEqual(expect.arrayContaining([
+      'font-size: 14px',
+      'line-height: 24px',
+      'font-weight: 400',
+    ]))
+  })
+
   it('keeps the option description to one ellipsized line', () => {
     expect(declarations('.description')).toEqual(expect.arrayContaining([
       'display: block',

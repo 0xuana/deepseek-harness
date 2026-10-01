@@ -1,5 +1,5 @@
 import {
-  useEffect, useId, useMemo, useRef, useState,
+  useEffect, useId, useLayoutEffect, useMemo, useRef, useState,
   type ChangeEvent, type FocusEvent, type KeyboardEvent,
 } from 'react'
 import clsx from 'clsx'
@@ -242,6 +242,60 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
   // oxlint-disable-next-line typescript/no-non-null-assertion
   const draft = drafts[index]!
   const hasOptions = (question.options?.length ?? 0) > 0
+  const [descriptionModes, setDescriptionModes] = useState<Map<number, 'inline' | 'block' | 'truncated'> | null>(null)
+
+  useLayoutEffect(() => {
+    const surface = answerSurface.current
+    if (surface === null || minimized) return
+    const rows = [...surface.querySelectorAll<HTMLElement>('[data-option-row]')]
+    const measure = (): void => {
+      const next = new Map<number, 'inline' | 'block' | 'truncated'>()
+      for (const row of rows) {
+        const description = row.querySelector<HTMLElement>('[data-option-description]')
+        if (description === null) continue
+        const optionIndex = Number(row.dataset.optionIndex)
+        const copy = row.querySelector<HTMLElement>('[data-option-copy]')
+        const line = row.querySelector<HTMLElement>('[data-option-line]')
+        if (copy === null || line === null || copy.clientWidth === 0) {
+          next.set(optionIndex, 'truncated')
+          continue
+        }
+        const actionSpace = parseFloat(getComputedStyle(row).getPropertyValue('--description-action-space'))
+        // The action's reserved width must not make a fitting description appear truncated.
+        const fullWidth = copy.clientWidth + (row.querySelector('[data-option-details]') === null ? 0 : actionSpace)
+        const probe = line.cloneNode(true) as HTMLElement
+        probe.querySelector('[data-option-description]')?.remove()
+        const probeDescription = description.cloneNode(true) as HTMLElement
+        probeDescription.removeAttribute('id')
+        probeDescription.className = clsx(css.descriptionInline)
+        probe.append(probeDescription)
+        probe.style.cssText = 'position:fixed;top:-10000px;left:0;width:max-content;flex-wrap:nowrap;visibility:hidden;pointer-events:none'
+        document.body.append(probe)
+        const inlineWidth = probe.getBoundingClientRect().width
+        probeDescription.className = clsx(css.description)
+        probeDescription.style.width = 'max-content'
+        const blockWidth = probeDescription.getBoundingClientRect().width
+        probe.remove()
+        next.set(optionIndex, inlineWidth <= fullWidth + 1 ? 'inline'
+          : blockWidth <= fullWidth + 1 ? 'block' : 'truncated')
+      }
+      setDescriptionModes(current => current !== null && current.size === next.size
+        && [...next].every(([optionIndex, mode]) => current.get(optionIndex) === mode) ? current : next)
+    }
+    measure()
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
+    for (const row of rows) {
+      observer?.observe(row)
+      const copy = row.querySelector('[data-option-copy]')
+      if (copy !== null) observer?.observe(copy)
+    }
+    const fonts = 'fonts' in document ? document.fonts : null
+    fonts?.addEventListener('loadingdone', measure)
+    return () => {
+      observer?.disconnect()
+      fonts?.removeEventListener('loadingdone', measure)
+    }
+  }, [index, minimized, question.options])
 
   const replaceProgress = (nextIndex: number, nextDrafts: QuestionDraftAnswer[]): void => {
     actions.replace(pending.key, {
@@ -509,20 +563,23 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
                   const selected = draft.selected.includes(option.label)
                   const display = parseRecommendedLabel(option.label)
                   const hasDescription = option.description !== undefined && option.description.trim() !== ''
+                  const descriptionMode = descriptionModes?.get(optionIndex) ?? 'truncated'
+                  const showDetails = hasDescription && descriptionMode === 'truncated'
                   const descriptionId = `${descriptionIdPrefix}-question-${String(index)}-option-${String(optionIndex)}-description`
                   return (
                     <div
                       key={`${option.label}-${String(optionIndex)}`}
                       className={clsx(
                         css.optionRow,
-                        (!locked || hasDescription) && css.optionRowInteractive,
+                        (!locked || showDetails) && css.optionRowInteractive,
                         selected && question.multiSelect !== true && css.optionSelected,
                       )}
                       data-option-row
+                      data-option-index={optionIndex}
                     >
                       <button
                         type="button"
-                        className={clsx(css.option, hasDescription && css.optionWithDescription)}
+                        className={clsx(css.option, showDetails && css.optionWithDescription)}
                         role={question.multiSelect === true ? 'checkbox' : 'radio'}
                         aria-checked={selected}
                         aria-label={display.label}
@@ -541,20 +598,23 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
                             </span>
                           )
                           : <span className={css.number}>{optionIndex + 1}</span>}
-                        <span className={css.optionCopy}>
-                          <span className={css.optionLine}>
+                        <span className={css.optionCopy} data-option-copy>
+                          <span className={css.optionLine} data-option-line>
                             <span className={css.optionLabel}>{display.label}</span>
                             {display.recommended && (
                               <span className={css.badge}>{t('option.recommended')}</span>
                             )}
+                            {hasDescription && descriptionMode === 'inline' && (
+                              <span id={descriptionId} className={css.descriptionInline} data-option-description>{option.description}</span>
+                            )}
                           </span>
-                          {hasDescription && (
+                          {hasDescription && descriptionMode !== 'inline' && (
                             <span id={descriptionId} className={css.description} data-option-description>{option.description}</span>
                           )}
                         </span>
                       </button>
-                      {hasDescription && (
-                        <span className={css.descriptionAction}>
+                      {showDetails && (
+                        <span className={css.descriptionAction} data-option-details>
                           <HoverCard
                             variant="callout"
                             openOnClick

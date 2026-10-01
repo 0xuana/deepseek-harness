@@ -188,6 +188,7 @@
 }
 
 .optionRow {
+  --description-action-space: 30px;
   position: relative;
   width: 100%;
   min-height: 40px;
@@ -215,7 +216,7 @@
 }
 
 .optionWithDescription {
-  padding-right: 42px;
+  padding-right: calc(12px + var(--description-action-space));
 }
 
 .optionSelected {
@@ -332,6 +333,13 @@
   font-weight: 400;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.descriptionInline {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 14px;
+  line-height: 24px;
+  font-weight: 400;
 }
 
 .descriptionAction {
@@ -537,7 +545,7 @@
   }
 
   .optionWithDescription {
-    padding-right: 36px;
+    padding-right: calc(6px + var(--description-action-space));
   }
 
   .descriptionAction {

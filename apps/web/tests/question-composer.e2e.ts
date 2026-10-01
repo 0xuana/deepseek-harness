@@ -348,8 +348,8 @@ describe('web e2e: resident question composer round trip', () => {
     // composer at seat heights that force the cap, then restored for the answer
     // gesture below. Replay only: record mode must reach the recording write
     // below, not abort on layout.
+    const originalViewport = page.viewportSize() ?? { width: 1680, height: 1000 }
     if (MODE !== 'record') {
-      const original = page.viewportSize() ?? { width: 1680, height: 1000 }
       const scrollStates: boolean[] = []
       for (const height of [520, 440, 380]) {
         await page.setViewportSize({ width: 640, height })
@@ -385,9 +385,10 @@ describe('web e2e: resident question composer round trip', () => {
         expect(squeeze.spill).toBeLessThan(0.6)
       }
       expect(scrollStates).toContain(true)
-      await page.setViewportSize(original)
+      await page.setViewportSize(originalViewport)
     }
 
+    await page.setViewportSize({ width: 640, height: 520 })
     const blue = composer.getByRole('checkbox', { name: 'Blue' })
     const blueDetail = 'A cool recessive hue that reads as calm and trustworthy in long reading sessions and dense dashboards.'
     const blueInfo = composer.getByRole('button', { name: 'Show details for “Blue”' })
@@ -400,6 +401,7 @@ describe('web e2e: resident question composer round trip', () => {
     await expect.poll(() => page.getByText(blueDetail, { exact: true }).count()).toBe(2)
     await composer.getByRole('heading', { name: 'Which color do you prefer?' }).click()
     await expect.poll(() => page.getByText(blueDetail, { exact: true }).count()).toBe(1)
+    await page.setViewportSize(originalViewport)
 
     // Multi-line custom answer: the field is a textarea whose hidden mirror
     // owns the box height, so a soft-wrapped or line-broken draft GROWS the
@@ -551,6 +553,68 @@ describe('web e2e: resident question composer round trip', () => {
     await expect.poll(() => page.locator('[data-question-key]').count(), { timeout: 10_000 }).toBe(0)
   }, 60_000)
 
+  it.skipIf(MODE === 'record')('keeps short option explanations beside their labels', async () => {
+    const sessionId = answeredSession
+    expect(sessionId).toBeDefined()
+    const agent = scaffold.ctx.agents.get(sessionId as SessionId)
+    expect(agent).toBeDefined()
+    const controller = new AbortController()
+    const asked = scaffold.ctx.userQuestions.ask({
+      agent: agent as NonNullable<typeof agent>,
+      signal: controller.signal,
+      questions: [{
+        id: 'reasoning',
+        header: '确认思考等级',
+        question: '选择 HF provider 的思考等级？',
+        options: [
+          { label: '高（high）', description: '倾向更充分的推理，通常更慢、消耗更多 token，需模型支持。' },
+          { label: '中（medium）', description: '平衡推理深度与速度；需模型支持。' },
+          { label: '低（low）', description: '优先速度与较低 token 消耗；需模型支持。' },
+          { label: '先查看当前配置', description: '先确认 HF provider 的模型及其支持的思考参数，再决定。' },
+        ],
+      }],
+    })
+    const outcome = asked.then(value => ({ value }), (error: unknown) => ({ error }))
+    const composer = page.locator('[data-question-key]')
+    const original = page.viewportSize() ?? { width: 1680, height: 1000 }
+    let completed = false
+    try {
+      await page.setViewportSize({ width: 1328, height: 720 })
+      await composer.getByRole('heading', { name: '选择 HF provider 的思考等级？' }).waitFor()
+      expect(await composer.getByRole('heading').evaluate((heading) => {
+        const style = getComputedStyle(heading)
+        return heading.getBoundingClientRect().height / parseFloat(style.lineHeight)
+      })).toBe(1)
+      const rows = await composer.locator('[data-option-row]').evaluateAll(options => options.map((row) => {
+        const label = row.querySelector<HTMLElement>('[data-option-line] > span:first-child')
+        const description = row.querySelector<HTMLElement>('[data-option-description]')
+        if (label === null || description === null) return null
+        const style = getComputedStyle(description)
+        return {
+          sameLine: Math.abs(label.getBoundingClientRect().top - description.getBoundingClientRect().top) < 1,
+          fontSize: style.fontSize,
+          lineHeight: style.lineHeight,
+          hasDetails: row.querySelector('[data-option-details]') !== null,
+        }
+      }))
+      expect(rows).toHaveLength(4)
+      expect(rows).toEqual(Array.from({ length: 4 }, () => ({
+        sameLine: true, fontSize: '14px', lineHeight: '24px', hasDetails: false,
+      })))
+      await composer.getByRole('radio', { name: '中（medium）' }).click()
+      await composer.getByRole('button', { name: 'Submit', exact: true }).click()
+      expect(await outcome).toEqual({ value: { answers: [{ id: 'reasoning', selected: ['中（medium）'] }] } })
+      completed = true
+    } finally {
+      controller.abort()
+      const cleanup = await Promise.allSettled([outcome, page.setViewportSize(original)])
+      if (completed) {
+        const failure = cleanup.find((result): result is PromiseRejectedResult => result.status === 'rejected')
+        if (failure !== undefined) throw failure.reason
+      }
+    }
+  }, 60_000)
+
   it.skipIf(MODE === 'record')('keeps long questions answerable in short and zoomed viewports', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-question-long-copy'))
     const sessionId = answeredSession
@@ -573,8 +637,8 @@ describe('web e2e: resident question composer round trip', () => {
         multiSelect: true,
         options: [
           { label: 'Explicit install', description },
-          { label: 'Keep the default edge', description: 'Retain the current dependency and exempt it from the release graph invariant.' },
-          { label: 'Move the package', description: 'Rename the package outside the experimental namespace without changing how profiles acquire it.' },
+          { label: 'Keep the default edge', description: 'Keep the current setup.' },
+          { label: 'Move the package', description: 'Move it to a separately installed package with an explicit profile entry.' },
         ],
       }],
     })
@@ -614,6 +678,11 @@ describe('web e2e: resident question composer round trip', () => {
         expect(metrics?.footerFits).toBe(true)
         expect(metrics?.titleInScrollport).toBe(true)
         scrollStates.push(metrics?.scrolls ?? false)
+        expect(await composer.getByRole('button', { name: 'Show details for “Keep the default edge”' }).count()).toBe(0)
+        if (viewport.width === 1440 || viewport.width === 427) {
+          expect(await composer.getByRole('button', { name: 'Show details for “Move the package”' }).count())
+            .toBe(viewport.width === 427 ? 1 : 0)
+        }
         const questionLines = await composer.getByRole('heading', { name: question }).evaluate((title) => {
           const style = getComputedStyle(title)
           return title.getBoundingClientRect().height / parseFloat(style.lineHeight)
