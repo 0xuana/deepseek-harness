@@ -559,7 +559,8 @@ describe('web e2e: resident question composer round trip', () => {
     expect(agent).toBeDefined()
     const question = 'The release gate reports that the installed application graph still contains an experimental package through a default dependency. Which approach should we use to preserve explicit installation while keeping the supported application graph valid?'
     const detail = 'Review the shipped profile, package ownership, upgrade impact, and the path users follow before choosing. The answer must preserve the existing release invariant, avoid a hidden compatibility path, and remain understandable to people who did not participate in the implementation discussion.'
-    const description = 'Remove the experimental client from every shipped template and require users to install it explicitly in the profile where they need it.'
+    const description = Array.from({ length: 48 }, (_, index) =>
+      `Migration step ${String(index + 1)} removes the experimental client from shipped templates, requires an explicit profile install, names the affected users, and records the cross-platform validation before rollout.`).join(' ')
     const controller = new AbortController()
     const asked = scaffold.ctx.userQuestions.ask({
       agent: agent as NonNullable<typeof agent>,
@@ -584,16 +585,18 @@ describe('web e2e: resident question composer round trip', () => {
     let bodyCompleted = false
     try {
       await composer.waitFor({ timeout: 30_000 })
-      // Browser zoom reduces the CSS-pixel viewport. These dimensions model
-      // the same 640x420 window at 100%, 125%, and 150% without relying on a
-      // browser-global zoom preference that Playwright cannot isolate per page.
+      // Cover common desktop sizes plus the CSS-pixel equivalents of a
+      // progressively zoomed 640x420 window without changing browser-global zoom.
+      const scrollStates: boolean[] = []
       for (const viewport of [
+        { width: 1440, height: 900 },
+        { width: 900, height: 600 },
         { width: 640, height: 420 },
         { width: 512, height: 336 },
         { width: 427, height: 280 },
       ]) {
         await page.setViewportSize(viewport)
-        await expect.poll(() => composer.evaluate((card) => {
+        const readMetrics = () => composer.evaluate((card) => {
           const scroll = card.querySelector<HTMLElement>('[data-question-scroll]')
           const title = card.querySelector<HTMLElement>('h2')
           const submit = [...card.querySelectorAll<HTMLButtonElement>('button')]
@@ -605,17 +608,20 @@ describe('web e2e: resident question composer round trip', () => {
             scrolls: scroll.scrollHeight > scroll.clientHeight,
             titleInScrollport: scroll.contains(title),
           }
-        })).toEqual({
-          footerFits: true,
-          scrolls: true,
-          titleInScrollport: true,
         })
+        await expect.poll(readMetrics).not.toBeNull()
+        const metrics = await readMetrics()
+        expect(metrics?.footerFits).toBe(true)
+        expect(metrics?.titleInScrollport).toBe(true)
+        scrollStates.push(metrics?.scrolls ?? false)
         const questionLines = await composer.getByRole('heading', { name: question }).evaluate((title) => {
           const style = getComputedStyle(title)
           return title.getBoundingClientRect().height / parseFloat(style.lineHeight)
         })
         expect(questionLines).toBeGreaterThan(2)
       }
+      expect(scrollStates).toContain(false)
+      expect(scrollStates).toContain(true)
 
       const detailText = composer.getByText(detail, { exact: true })
       expect(await detailText.evaluate(node => node.closest('[data-question-scroll]') !== null)).toBe(true)
@@ -632,6 +638,13 @@ describe('web e2e: resident question composer round trip', () => {
       expect(await info.getAttribute('aria-describedby')).toBe(descriptionId)
       const preview = page.locator('[data-pinned="true"]')
       await preview.getByText(description, { exact: true }).waitFor()
+      expect(await page.locator(`[id=${JSON.stringify(descriptionId)}]`).evaluate((item) => {
+        const style = getComputedStyle(item)
+        return {
+          ellipsized: item.scrollWidth > item.clientWidth,
+          lines: item.clientHeight / parseFloat(style.lineHeight),
+        }
+      })).toEqual({ ellipsized: true, lines: 1 })
       const previewBox = await preview.boundingBox()
       const constrainedViewport = page.viewportSize()
       expect(constrainedViewport).not.toBeNull()
@@ -642,6 +655,24 @@ describe('web e2e: resident question composer round trip', () => {
         .toBeLessThanOrEqual((constrainedViewport?.width ?? 0) - 7.5)
       expect((previewBox?.y ?? 0) + (previewBox?.height ?? 0))
         .toBeLessThanOrEqual((constrainedViewport?.height ?? 0) - 7.5)
+      expect(await preview.evaluate(card => ({
+        overflowY: getComputedStyle(card).overflowY,
+        scrolls: card.scrollHeight > card.clientHeight,
+      }))).toEqual({ overflowY: 'auto', scrolls: true })
+      expect(await preview.getByText(description, { exact: true }).evaluate((text) => {
+        const selection = window.getSelection()
+        const range = document.createRange()
+        range.selectNodeContents(text)
+        selection?.removeAllRanges()
+        selection?.addRange(range)
+        const selectedLength = selection?.toString().length ?? 0
+        selection?.removeAllRanges()
+        return selectedLength
+      })).toBe(description.length)
+      expect(await preview.evaluate((card) => {
+        card.scrollTop = card.scrollHeight
+        return card.scrollTop + card.clientHeight >= card.scrollHeight - 1
+      })).toBe(true)
       await page.keyboard.press('Escape')
 
       await composer.getByRole('checkbox', { name: 'Explicit install' }).click()
