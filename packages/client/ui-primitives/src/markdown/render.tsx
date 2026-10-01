@@ -100,11 +100,31 @@ function vocabularyImageUrl(url: string): string | undefined {
  * @param pathImages - Rewriting vocabulary, when the render pass has one.
  * @returns The displayable image URL, or undefined.
  */
-function imageSource(url: string, pathImages: MarkdownPathImages | undefined): string | undefined {
+function imageSource(url: string, pathImages: MarkdownPathImages | undefined, load: number): string | undefined {
   const remote = remoteImageUrl(sanitizeUrl(normalizeUri(url)))
   if (remote !== undefined) return remote
   const rewritten = pathImages?.resolve(url)
-  return rewritten === undefined ? undefined : vocabularyImageUrl(rewritten)
+  const allowed = rewritten === undefined ? undefined : vocabularyImageUrl(rewritten)
+  return allowed === undefined ? undefined : freshImageUrl(allowed, load)
+}
+
+let imageLoads = 0
+const nextImageLoad = (): number => ++imageLoads
+
+/**
+ * Tag a rewritten local image URL with its mount's load number. Browsers reuse
+ * a same-URL image within one document despite `no-store`, so without the tag
+ * a newly rendered image of a rewritten file would show the earlier bytes.
+ * @param url - Absolute rewritten image URL; data and blob URLs stay unchanged.
+ * @param load - Number allocated once per mounted image.
+ * @returns The URL with a `load` query parameter.
+ */
+function freshImageUrl(url: string, load: number): string {
+  const fresh = URL.parse(url)
+  if (fresh === null || fresh.protocol === 'data:' || fresh.protocol === 'blob:') return url
+  // Appending preserves the resolver's existing query encoding.
+  fresh.search = `${fresh.search === '' ? '?' : `${fresh.search}&`}load=${load}`
+  return fresh.href
 }
 
 /** Link/image reference targets collected from a document (first definition per identifier wins, as in CommonMark). */
@@ -584,10 +604,12 @@ function MarkdownFileLink({ file, glyph, children }: {
   readonly children: ReactNode[]
 }): ReactNode {
   const { openFile, fileImages } = useMarkdownDelegate()
+  const [load] = useState(nextImageLoad)
   if (openFile === undefined) return <>{children}</>
   // Pure-image anchors already contain their preview and keep one navigation target.
   const preview = glyph && classifyLinkPath(file.path) === 'image' ? fileImages : undefined
-  const src = preview?.resolve(file.path)
+  const resolved = preview?.resolve(file.path)
+  const src = resolved === undefined ? undefined : freshImageUrl(resolved, load)
   const anchor = (
     <button
       type="button"
@@ -635,8 +657,10 @@ function MarkdownImage({ destination, alt, pathImages, streaming, inLink }: {
   inLink: boolean
 }): ReactNode {
   const { fileImages } = useMarkdownDelegate()
+  const [load] = useState(nextImageLoad)
   const file = streaming ? undefined : parseFileLink(destination)
-  const src = (file === undefined ? undefined : fileImages?.resolve(file.path)) ?? imageSource(destination, pathImages)
+  const resolved = file === undefined ? undefined : fileImages?.resolve(file.path)
+  const src = resolved === undefined ? imageSource(destination, pathImages, load) : freshImageUrl(resolved, load)
   if (src === undefined) return <span className={css.imageAlt}>{alt}</span>
   return <LoadedMarkdownImage key={src} src={src} alt={alt} destination={destination} preview={inLink ? undefined : fileImages} />
 }
