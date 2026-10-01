@@ -133,6 +133,13 @@ it('keeps an unavailable image link navigable without showing a hover preview', 
   expect(openFile).toHaveBeenCalledWith('relative.png', undefined)
 })
 
+it('emits an unparsable file image URL unchanged', () => {
+  render(<MarkdownDelegateProvider openFile={vi.fn()} fileImages={{ ...fileImages, resolve: () => 'relative.png' }}>
+    <MarkdownText text="![Compare](image.png)" />
+  </MarkdownDelegateProvider>)
+  expect(screen.getByRole('img').getAttribute('src')).toBe('relative.png')
+})
+
 it('labels empty-alt image activation and retains a localized failure description', () => {
   mount('![](image.png)')
   expect(screen.getByRole('button', { name: 'View full image' })).toBeTruthy()

@@ -82,5 +82,6 @@ describe('web e2e: rewritten Markdown image files', () => {
     await page.getByText('Second chart', { exact: true }).last().waitFor()
     await expect.poll(width, { timeout: 10_000 }).toBe(240)
     expect(tripwire.pageErrors).toEqual([])
+    expect(tripwire.warnings).toEqual([])
   }, 60_000)
 })

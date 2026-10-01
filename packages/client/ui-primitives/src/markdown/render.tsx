@@ -98,6 +98,7 @@ function vocabularyImageUrl(url: string): string | undefined {
  * caller.
  * @param url - The authored markdown destination.
  * @param pathImages - Rewriting vocabulary, when the render pass has one.
+ * @param load - The mounted image's load number for rewritten URLs.
  * @returns The displayable image URL, or undefined.
  */
 function imageSource(url: string, pathImages: MarkdownPathImages | undefined, load: number): string | undefined {
@@ -108,6 +109,8 @@ function imageSource(url: string, pathImages: MarkdownPathImages | undefined, lo
   return allowed === undefined ? undefined : freshImageUrl(allowed, load)
 }
 
+// A module counter, not useId: useId derives from tree position, so images at
+// the same position in two sessions would share a URL.
 let imageLoads = 0
 const nextImageLoad = (): number => ++imageLoads
 
@@ -116,12 +119,14 @@ const nextImageLoad = (): number => ++imageLoads
  * a same-URL image within one document despite `no-store`, so without the tag
  * a newly rendered image of a rewritten file would show the earlier bytes.
  * @param url - Absolute rewritten image URL; data and blob URLs stay unchanged.
- * @param load - Number allocated once per mounted image.
- * @returns The URL with a `load` query parameter.
+ * @param load - Number allocated once per mounted image or file link.
+ * @returns The URL with a `load` query parameter; unparsable URLs stay unchanged.
  */
 function freshImageUrl(url: string, load: number): string {
-  const fresh = URL.parse(url)
-  if (fresh === null || fresh.protocol === 'data:' || fresh.protocol === 'blob:') return url
+  let fresh: URL
+  try { fresh = new URL(url) }
+  catch { return url } // Only an unparsable owner-supplied URL throws; it is emitted as before.
+  if (fresh.protocol === 'data:' || fresh.protocol === 'blob:') return url
   // Appending preserves the resolver's existing query encoding.
   fresh.search = `${fresh.search === '' ? '?' : `${fresh.search}&`}load=${load}`
   return fresh.href
@@ -178,7 +183,9 @@ export interface MarkdownPathImages {
    * Resolve one authored image destination.
    * @param value - The destination exactly as the markdown author wrote it.
    * @returns A displayable absolute URL, or undefined when the destination
-   * names no displayable image — it then stays inert alt text.
+   * names no displayable image — it then stays inert alt text. The renderer
+   * appends a per-mount `load` query parameter to results other than data and
+   * blob URLs.
    */
   resolve(value: string): string | undefined
 }
