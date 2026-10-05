@@ -441,7 +441,6 @@ describe('web e2e: empty-draft Cmd+Enter steers the whole queue', () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-steer-all'))
     const input = page.locator('[data-composer-input]').first()
     await input.waitFor({ timeout: 10_000 })
-    const settled = scaffold.whenTurnSettled(30_000)
 
     // Hold the question-tool stream until both rows have been steered, so
     // question-composer takeover cannot race queue publication or the shortcut.
@@ -492,11 +491,13 @@ describe('web e2e: empty-draft Cmd+Enter steers the whole queue', () => {
     // The unnamed tool block makes the reasoning row non-running. Its name and
     // arguments stay gated so the mid snapshot cannot acquire a preparation row.
     await page.locator('[data-variant="think"][data-state="ok"]').first().waitFor({ state: 'attached', timeout: 10_000 })
+    expect(await page.locator('[data-tool="ask_user_question"][data-state="preparing"]').count()).toBe(0)
     const mid = await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(STEER_ALL_MID, mid, MODE)
 
     // Answer the question; the step closes, the loop drains both steerings
     // into one next-step request, and the final reply obeys both markers.
+    const settled = scaffold.whenTurnSettled(30_000)
     releaseQuestion.resolve(undefined)
     const composer = page.locator('[data-question-key]')
     await composer.waitFor({ timeout: 30_000 })
