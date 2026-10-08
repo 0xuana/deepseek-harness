@@ -17,6 +17,8 @@ Web GUI 宿主以纯 loopback HTTP 提供 `/api`（默认 `127.0.0.1:3080`；CLI
 
 可达性由 webserver 的绑定配置（`host: 127.0.0.1 | 0.0.0.0`）控制，这道栅栏是混淆代理人防御，而不是身份。Connection 在栅栏之后应用独立的[浏览器令牌认证](2026-08-24-browser-token-authentication.zh.md)。栅栏不检查对端 socket 地址：绑定表达可达性，`trustedHosts` 点名接受的 authority，socket 地址提供不了 Host/Origin 校验需要的额外信息。
 
+`HostConnectionHandle.allowsRemoteAuthorities` 表示是否有通过校验的 `trustedHosts` 条目命名非回环主机名：代理后的回环监听器也能服务远程浏览器，因此目录选择器要求策略不接纳远程 authority，才会选择原生交互。
+
 ## 曾考虑的替代方案
 
 - **按 RPC 设防（延续现状）。** 否决：守卫清单永远追着方法清单跑，价值最高的方法本来就没被守住，而 browse RPC 上的回环规则会破坏它们为之存在的远程部署。

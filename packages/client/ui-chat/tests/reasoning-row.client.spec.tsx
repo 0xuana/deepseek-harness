@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from 'vitest'
+import type { ChainRenderOpts } from '@deepseek-ai/dsh-client-ui-slots'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -20,6 +21,18 @@ const t = makeTranslate(zh, commonZh)
 const renderMessageImages: AssistantMarkdownProps['renderMessageImages'] = () => null
 
 describe('ReasoningRow', () => {
+  it('offers only expanded reasoning to its display extension and preserves original Markdown fallback', () => {
+    const extension = vi.fn((_slot: string, _owner: object, options?: ChainRenderOpts) => options?.fallback)
+    const view = render(<ReasoningRow useDisclosure={useDisclosure} text="Original thought" running={false}
+      usePresentation={useDetailedPresentation} renderReasoningBody={extension} t={t} />)
+    expect(extension).not.toHaveBeenCalled()
+    fireEvent.click(view.getByRole('button'))
+    expect(extension.mock.calls[0]?.[0]).toBe('conversation.chat.reasoning-body')
+    expect(extension.mock.calls[0]?.[1]).toEqual({ text: 'Original thought', running: false })
+    expect(extension.mock.calls[0]?.[2]?.fallback).toBeDefined()
+    expect(view.getAllByText('Original thought')).toHaveLength(1)
+  })
+
   it.each([
     ['', ''],
     ['An unfinished line', ''],
@@ -126,7 +139,7 @@ describe('ReasoningRow', () => {
     )
     expect(view.getByText('运行中')).toBeTruthy()
     expect(view.getByRole('button').getAttribute('aria-expanded')).toBe('false')
-    expect(view.getByText('Newest reasoning tokens').parentElement?.getAttribute('data-streaming'))
+    expect(view.getByText('Newest reasoning tokens').closest('[data-streaming]')?.getAttribute('data-streaming'))
       .toBe('true')
 
     view.rerender(
@@ -138,7 +151,7 @@ describe('ReasoningRow', () => {
         renderMessageImages={renderMessageImages}
       />,
     )
-    expect(view.getByText('Newest reasoning tokens').parentElement
+    expect(view.getByText('Newest reasoning tokens').closest('[data-streaming]')
       ?.getAttribute('data-streaming')).toBe('true')
     expect(view.queryByText('Checking boundaries')).toBeNull()
 
@@ -167,7 +180,7 @@ describe('ReasoningRow', () => {
     const settledSummary = view.getByText('Inspect the session')
     expect(view.getByRole('button').getAttribute('aria-expanded')).toBe('false')
     expect(view.queryByText('运行中')).toBeNull()
-    expect(settledSummary.parentElement?.hasAttribute('data-streaming')).toBe(false)
+    expect(settledSummary.closest('[data-streaming]')).toBeNull()
   })
 
   it('expands from either Think or the reasoning summary', () => {

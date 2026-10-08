@@ -115,7 +115,6 @@ The package is built on one deliberate separation:
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: the `WebRuntime` service, both provider registries, execution-time selection, and search readiness |
 | [`src/types.ts`](src/types.ts) | Vocabulary: request/result types, the closed `WebFetchBody` union, and the `WebError` taxonomy |
-| — | No runtime invariant companion is published; provider maps are private and selection/result caps are enforced on each call; the seam publishes no independent registry or request/result observation stream. |
 
 ### Data model
 

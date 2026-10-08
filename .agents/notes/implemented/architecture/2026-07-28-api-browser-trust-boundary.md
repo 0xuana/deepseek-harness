@@ -17,6 +17,8 @@ Enforce browser trust once, at the carrier, for the entire `/api` prefix — two
 
 Reachability is the webserver binding's policy (`host: 127.0.0.1 | 0.0.0.0`), and this fence is a confused-deputy defense rather than identity. Connection applies the separate [browser token authentication](2026-08-24-browser-token-authentication.md) after the fence. The fence does not inspect peer socket addresses: binding expresses reachability, `trustedHosts` names accepted authorities, and the socket address adds nothing the Host/Origin checks need.
 
+`HostConnectionHandle.allowsRemoteAuthorities` projects whether any validated `trustedHosts` entry names a non-loopback hostname: a loopback listener behind a proxy can still serve remote browsers, so the directory picker requires a policy without remote authorities before it picks the native chooser.
+
 ## Alternatives considered
 
 - **Per-RPC guards (status quo extended).** Rejected: the guard list trails the method list forever, the highest-value methods were already unguarded, and a loopback rule on browse RPCs would break the remote deployments they exist for.
