@@ -421,7 +421,9 @@
 
     # The official settings pages: one companion package per host-plane
     # namespace, each registering its page into the Plugins page while the
-    # Host serves the namespace.
+    # Host serves the namespace. web-search-deepseek has no page here: its
+    # endpoint must serve DeepSeek native search, so its section is edited
+    # only in the profile's cordis.patch.yml.
     - id: ui-settings-shell
       name: '@deepseek-ai/dsh-client-ui-settings-shell'
 
@@ -430,9 +432,6 @@
 
     - id: ui-settings-subagent
       name: '@deepseek-ai/dsh-client-ui-settings-subagent'
-
-    - id: ui-settings-web-search
-      name: '@deepseek-ai/dsh-client-ui-settings-web-search'
 
     # Plan control: the composer plan seat over the plan projection + /plan channel.
     - id: ui-plan

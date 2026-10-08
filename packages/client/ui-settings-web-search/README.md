@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Open **Plugins** in the sidebar and select **Web search** in the Official group to set the provider's key, endpoint, and how many times one request may search. The page stages what is typed and writes it only on save; the key is written through the credentials domain rather than the settings document, so its literal never rides a response. The page exists while the Host serves the `web-search-deepseek` namespace.
+Once a deployment mounts this page, open **Plugins** in the sidebar and select **Web search** in the Official group to set the provider's key, endpoint, and how many times one request may search. The shipped Web app does not load it. The page stages what is typed and writes it only on save; the key is written through the credentials domain rather than the settings document, so its literal never rides a response. The page exists while the Host serves the `web-search-deepseek` namespace.
 
 ## Table of Contents
 
@@ -25,7 +25,15 @@ Open **Plugins** in the sidebar and select **Web search** in the Official group 
 <a id="use-this-package"></a>
 ## Use this package
 
-The **Web search** card in the Official group opens the page. **API key** starts blank on every load and reports only whether a key is configured; without one, it says that only conversations using a DeepSeek Account model can search, through the default endpoint, because those searches authenticate with the account sign-in; a blank draft keeps the stored key, and the control is disabled when the credential cannot be written from here, such as a key the process environment supplies. **Endpoint** and **Max searches per request** render the effective value, carry an **Overridden** badge with **Reset to default** once overridden, and save as a reset when emptied. The **Endpoint** hint states that the endpoint must support Anthropic's `web_search_20250305` server-side search. Nothing is written until **Save**; leaving the page drops the drafts.
+The shipped Web app does not load this page, because the provider's endpoint must serve DeepSeek's native search; it leaves the `web-search-deepseek` section to `cordis.patch.yml`. A deployment that wants the page adds this row to its Web profile patch, `$DSH_HOME/profiles/web/cordis.patch.yml`:
+
+```yaml
+- insert:
+    - id: ui-settings-web-search
+      name: '@deepseek-ai/dsh-client-ui-settings-web-search'
+```
+
+The **Web search** card in the Official group then opens the page. **API key** starts blank on every load and reports only whether a key is configured; without one, it says that only conversations using a DeepSeek Account model can search, through the default endpoint, because those searches authenticate with the account sign-in; a blank draft keeps the stored key, and the control is disabled when the credential cannot be written from here, such as a key the process environment supplies. **Endpoint** and **Max searches per request** render the effective value, carry an **Overridden** badge with **Reset to default** once overridden, and save as a reset when emptied. The **Endpoint** hint states that the endpoint must support Anthropic's `web_search_20250305` server-side search. Nothing is written until **Save**; leaving the page drops the drafts.
 
 -----
 

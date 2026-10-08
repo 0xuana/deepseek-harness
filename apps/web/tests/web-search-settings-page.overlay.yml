@@ -1,0 +1,5 @@
+# Mount the DeepSeek web-search settings page, which the shipped Web app leaves
+# out, the way a deployment's Web profile patch adds it back.
+- insert:
+    - id: ui-settings-web-search
+      name: '@deepseek-ai/dsh-client-ui-settings-web-search'

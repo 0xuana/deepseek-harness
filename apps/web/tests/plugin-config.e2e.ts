@@ -1,8 +1,9 @@
 // Web e2e scenario: the configuration pages on the Plugins page — the official
 // pages a deployment's exposed host-plane namespaces produce, one field edited
 // through the real wire down to `$DSH_HOME/cordis.patch.yml`, the override badge
-// and reset that layering produces, and a community bundle's row configuration
-// registered by its own browser half. Zero model calls: everything is client
+// and reset that layering produces, a community bundle's row configuration
+// registered by its own browser half, and the web search page a deployment's
+// patch row mounts. Zero model calls: everything is client
 // state plus the settings document and the profile on a blank frame, so there
 // is no fixture and a stray stream would fail loud on the open llm seam.
 import { readFile } from 'node:fs/promises'
@@ -88,15 +89,16 @@ describe('web e2e: plugin configuration pages', () => {
     const panel = await openPlugins()
 
     // Every page the shipped web composition exposes: the shell executor, the
-    // agent loop, subagent selection, and the DeepSeek search provider, after
-    // the shipped optional bundles and offline on-demand catalog.
-    await panel.getByRole('button', { name: '查看 网页搜索', exact: true }).waitFor({ timeout: 20_000 })
+    // agent loop, and subagent selection, after the shipped optional bundles
+    // and offline on-demand catalog. The DeepSeek search provider has no page.
+    await panel.getByRole('button', { name: '查看 子智能体', exact: true }).waitFor({ timeout: 20_000 })
     const official = panel.locator('[data-plugin-group="official"]')
     expect(await official.locator('[data-plugin-package]').count()).toBe(OPTIONAL_BUNDLES.length + ON_DEMAND_BUNDLES.length)
-    expect(await official.locator('[data-plugin-item]').count()).toBe(4)
-    for (const title of ['终端', 'Agent 循环', '子智能体', '网页搜索']) {
+    expect(await official.locator('[data-plugin-item]').count()).toBe(3)
+    for (const title of ['终端', 'Agent 循环', '子智能体']) {
       expect(await official.getByRole('button', { name: `查看 ${title}`, exact: true }).count()).toBe(1)
     }
+    expect(await official.getByRole('button', { name: '查看 网页搜索', exact: true }).count()).toBe(0)
     // A card carries the one-liner; the fields wait for the page.
     expect(await official.getByText('限制每条命令最多能跑多久、最多输出多少内容。', { exact: true }).count()).toBe(1)
     expect(await panel.getByLabel('命令超时（毫秒）').count()).toBe(0)
@@ -355,4 +357,41 @@ describe('web e2e: plugin configuration pages', () => {
   })
 
 
+})
+
+describe('web e2e: a deployment patch row mounts the web search page', () => {
+  let scaffold: WebScaffold
+  let browser: Browser
+  let page: Page
+  let tripwire: ReturnType<typeof watchConsole>
+
+  beforeAll(async () => {
+    // A separate Host: the shipped composition above must show no such page.
+    scaffold = await launchWebScaffold({
+      extraOverlayPath: fileURLToPath(new URL('./web-search-settings-page.overlay.yml', import.meta.url)),
+    })
+    browser = await chromium.launch()
+    page = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
+    tripwire = watchConsole(page)
+    await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+  }, 120_000)
+
+  afterAll(async () => {
+    await browser?.close()
+    await scaffold?.close()
+  })
+
+  it('lists the page in the Official group and states the endpoint requirement', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-config-web-search-page'))
+    await page.getByRole('navigation', { name: '全局面板' }).getByRole('button', { name: '插件', exact: true }).click()
+    const panel = page.locator('[data-plugin-panel]')
+    const card = panel.locator('[data-plugin-group="official"]').getByRole('button', { name: '查看 网页搜索', exact: true })
+    await card.waitFor({ timeout: 20_000 })
+    await card.click()
+    await panel.locator('[data-plugin-config]').waitFor({ timeout: 10_000 })
+    expect(await panel.getByLabel('接口地址', { exact: true }).count()).toBe(1)
+    expect(await panel.getByText('留空则使用提供方默认地址。接口地址需要支持 Anthropic web_search_20250305 服务端搜索。', { exact: true }).count()).toBe(1)
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
 })

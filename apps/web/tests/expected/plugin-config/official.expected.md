@@ -6,7 +6,7 @@
   - button "添加插件"
   - button "选择添加插件方式"
 - heading "官方" [level=3]
-- text: "17"
+- text: "16"
 - list:
   - listitem:
     - button "查看 智能体团队": 智能体团队
@@ -69,9 +69,6 @@
   - listitem:
     - button "查看 子智能体": 子智能体
     - text: 设置子智能体的递归层级、数量和模型。
-  - listitem:
-    - button "查看 网页搜索": 网页搜索
-    - text: 设置 DeepSeek 的搜索提供方。
 - heading "已安装" [level=3]
 - text: "2"
 - list:
