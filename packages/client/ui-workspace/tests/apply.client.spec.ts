@@ -485,7 +485,7 @@ describe('ui-workspace apply', () => {
     b.retain.mockClear()
     fork.forkSession('session' as never)
     await forkSession.mock.results[0]!.value
-    expect(b.fork).toHaveBeenCalledWith({ sessionId: 'session', increaseTitle: true })
+    expect(b.fork).toHaveBeenCalledWith({ sessionId: 'session', increaseTitle: true, onCreated: expect.any(Function) as (childId: SessionId) => void })
     expect(b.retain).not.toHaveBeenCalled()
 
     // The rename row raises the request the dialog entry reads; settling clears it.
@@ -530,9 +530,11 @@ describe('ui-workspace apply', () => {
     const browser = faceOf(b.slots.entries('sidebar.workspaces')[0]!) as WorkspaceBrowserInjected
     // The browser share delegates to the shared Session navigation action.
     browser.startSession('ws' as never)
-    expect(startSession).toHaveBeenLastCalledWith('ws')
+    expect(startSession).toHaveBeenLastCalledWith('ws', undefined)
     browser.startSession()
-    expect(startSession).toHaveBeenLastCalledWith(undefined)
+    expect(startSession).toHaveBeenLastCalledWith(undefined, undefined)
+    browser.startSession(undefined, { clearPreviousDraft: false })
+    expect(startSession).toHaveBeenLastCalledWith(undefined, { clearPreviousDraft: false })
     browser.open('session' as never)
     expect(b.retain).toHaveBeenCalledWith('session', { source: 'mainView' })
     const signal = new AbortController().signal

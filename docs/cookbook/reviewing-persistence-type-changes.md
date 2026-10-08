@@ -41,6 +41,8 @@ pnpm --silent run persistence-review --before .artifacts/base.schema.json --afte
 
 Record the commits supplying those files with the report. Add `--json` for structured output. This read-only comparison groups shared changes with their affected roots and uses actual literal `kind`/`form` values instead of union positions. Ambiguous alternatives remain separate additions and removals. Its compatibility section copies every root's authoritative classifier result; the structural explanation does not replace acknowledgement checks. Current catalog labels and declaration names are descriptive metadata; structural anchors and fingerprints identify types.
 
+The current machine inventory stores complete graphs in `roots`. A `types` entry contains `digest`, `names`, and `sources`, plus an explicit `schema` when roots cannot reconstruct that graph exactly. Readers resolve omitted graphs from root subgraphs by digest and validate explicit graphs directly, preserving every type and its metadata. Historical full entries remain readable. `formatVersion` identifies normalization rules; storage compaction does not change root fingerprints or require an acknowledgement.
+
 <a id="acknowledge"></a>
 ## 1. Record the change
 
@@ -55,12 +57,12 @@ Save the input as `.artifacts/persistence-change.prose.json`, creating the ignor
   "en": {
     "summary": "Makes the persisted hook audit decision optional.",
     "compatibility": "Existing records remain valid. Hook execution consumes HookOutput instead of replaying this audit field. Producers still write decisions, and absence does not imply pass.",
-    "verification": "pnpm exec vitest run packages/hooks/hook-protocol/tests/events.spec.ts: 10 tests passed."
+    "verification": "pnpm exec vitest run packages/experimental/hook-protocol/tests/events.spec.ts: 10 tests passed."
   },
   "zh": {
     "summary": "将持久化的钩子审计决策改为可选。",
     "compatibility": "已有记录仍然有效。钩子执行消费 HookOutput，不回放此审计字段。写入方仍然记录决策，缺失不代表 pass。",
-    "verification": "pnpm exec vitest run packages/hooks/hook-protocol/tests/events.spec.ts：10 个测试通过。"
+    "verification": "pnpm exec vitest run packages/experimental/hook-protocol/tests/events.spec.ts：10 个测试通过。"
   }
 }
 ```

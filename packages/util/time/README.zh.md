@@ -93,7 +93,7 @@ Duration.fromSeconds(90).milliseconds // 90000 — the unit is in the name, and 
 <a id="model-experience"></a>
 ## 模型体验
 
-间接影响，取决于把规范时区或已提交 UTC 时刻记到持久记录上、并据此渲染模型可见调度文本的那些消费方。
+间接影响，取决于把规范时区或已提交 UTC 时刻记到持久记录上的那些消费方：`dsh-time-context` 据时区渲染本轮模型可见的时区指令与时间戳，`dsh-schedule` 据已提交时刻渲染其模型可见的调度文本。
 
 #### KV Cache 影响
 

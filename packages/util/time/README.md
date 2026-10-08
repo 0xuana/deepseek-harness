@@ -93,7 +93,7 @@ The strict parsers match a fixed regular expression before constructing any date
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through the consumers that store a canonical zone or a committed UTC instant on durable records and render model-visible scheduler text from them.
+Indirectly, through the consumers that store a canonical zone or a committed UTC instant on durable records: `dsh-time-context` renders the turn's model-visible zone instruction and timestamp from the zone, and `dsh-schedule` renders its model-visible scheduler text from the committed instant.
 
 #### KV Cache effect
 

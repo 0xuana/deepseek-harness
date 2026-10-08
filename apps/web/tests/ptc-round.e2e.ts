@@ -1,5 +1,5 @@
 // PTC mode browser round trip with nested sub-calls and details selection.
-// Record: DSH_SNAPSHOT=record writes session.v3.jsonl, then a keyless
+// Record: DSH_SNAPSHOT=record writes the current Session generation, then a keyless
 // DSH_SNAPSHOT=refresh regenerates ui.expected.md.
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
@@ -81,7 +81,8 @@ describe('web e2e: PTC mode round renders nested sub-calls', () => {
         await row.waitFor({ state: 'attached', timeout: 30_000 })
         await expandOwningTurnProcess(page, row)
         await row.waitFor({ state: 'visible' })
-        await page.getByRole('button', { name: 'Preparing to run code', exact: true }).waitFor()
+        await row.getByText('Code', { exact: true }).waitFor()
+        expect(await row.getAttribute('data-tool')).toBe('run_code')
         expect(sessionEvents.some(event => event.type === 'tool/call')).toBe(false)
         expect(await row.getByRole('button').count()).toBe(0)
         expect(await row.locator('pre').count()).toBe(0)
