@@ -33,7 +33,7 @@ The shipped Web app does not load this page, because the provider's endpoint mus
       name: '@deepseek-ai/dsh-client-ui-settings-web-search'
 ```
 
-The **Web search** card in the Official group then opens the page. **API key** starts blank on every load and reports only whether a key is configured; without one, it says that only conversations using a DeepSeek Account model can search, through the default endpoint, because those searches authenticate with the account sign-in; a blank draft keeps the stored key, and the control is disabled when the credential cannot be written from here, such as a key the process environment supplies. **Endpoint** and **Max searches per request** render the effective value, carry an **Overridden** badge with **Reset to default** once overridden, and save as a reset when emptied. The **Endpoint** hint states that the endpoint must support Anthropic's `web_search_20250305` server-side search. Nothing is written until **Save**; leaving the page drops the drafts.
+The **Web search** card in the Official group then opens the page. **API key** starts blank on every load and reports only whether a key is configured; without one, it says that only conversations using a DeepSeek Account model can search, through the default endpoint, because those searches authenticate with the account sign-in; a blank draft keeps the stored key, and the control is disabled when the credential cannot be written from here, such as a key the process environment supplies. **Endpoint** and **Max searches per request** render the effective value, carry an **Overridden** badge with **Reset to default** once overridden, and save as a reset when emptied. Nothing is written until **Save**; leaving the page drops the drafts.
 
 -----
 

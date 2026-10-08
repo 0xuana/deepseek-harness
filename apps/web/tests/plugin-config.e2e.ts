@@ -382,7 +382,7 @@ describe('web e2e: a deployment patch row mounts the web search page', () => {
     await scaffold?.close()
   })
 
-  it('lists the page in the Official group and states the endpoint requirement', async () => {
+  it('lists the page in the Official group and opens its endpoint field', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-config-web-search-page'))
     await page.getByRole('navigation', { name: '全局面板' }).getByRole('button', { name: '插件', exact: true }).click()
     const panel = page.locator('[data-plugin-panel]')
@@ -391,7 +391,7 @@ describe('web e2e: a deployment patch row mounts the web search page', () => {
     await card.click()
     await panel.locator('[data-plugin-config]').waitFor({ timeout: 10_000 })
     expect(await panel.getByLabel('接口地址', { exact: true }).count()).toBe(1)
-    expect(await panel.getByText('留空则使用提供方默认地址。接口地址需要支持 Anthropic web_search_20250305 服务端搜索。', { exact: true }).count()).toBe(1)
+    expect(await panel.getByText('留空则使用提供方默认地址。', { exact: true }).count()).toBe(1)
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 })
