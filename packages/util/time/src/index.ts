@@ -2,8 +2,8 @@
  * Time vocabulary shared by the boundaries that accept a caller's zone or a
  * wall-clock selector, plus one span type for elapsed and interval arithmetic.
  *
- * Validation, canonicalization, and strict parsing only: this library formats
- * no model-facing text and owns no failure vocabulary. A refusal that carries a
+ * The library validates, canonicalizes, parses, and renders one canonical instant
+ * format; it produces no model-facing text and owns no failure vocabulary. A refusal that carries a
  * reason is a discriminated result, and each caller maps that reason onto its
  * own domain code and diagnostic. `canonicalClientTimeZone` is the wire-boundary
  * form and answers a name or `undefined`; `formatFourDigitYearInstant` and

@@ -31,7 +31,6 @@ kind: "package-library"
 
 在接收时区或墙钟选择器的那个边界上调用它，让值在进入任何持久物之前先过一遍。`dsh-api-session-controller` 与 `dsh-subagent` 通过 `canonicalClientTimeZone` 接收调用方所报时区；`dsh-time-context` 通过 `canonicalizeTimeZone` 接收某一轮请求所报时区，并拒绝别名而不是把它改写；`dsh-schedule` 通过严格解析器读取每一个绝对选择器与墙钟选择器，并通过 `resolveLocalInstant` 解析其本地目标。`dsh-time-context` 通过 `Duration` 读取其耗时读数，并保留它注入那一行的措辞。自行拥有日历或间隔运算的消费方保留那部分运算，只在边界值上调用这些入口。
 
-不发布运行时不变量伴生入口；这个纯工具不拥有事件流或可变运行时数据，每个入口都由单元测试验证。
 
 ### 入口
 

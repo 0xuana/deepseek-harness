@@ -31,7 +31,6 @@ It is a **library, not a service or plugin**: no `ctx`, registers nothing, holds
 
 Call it at the boundary that receives the zone or the wall-clock selector, before the value reaches anything durable. `dsh-api-session-controller` and `dsh-subagent` admit a caller-reported zone through `canonicalClientTimeZone`; `dsh-time-context` admits the zone a request turn reports through `canonicalizeTimeZone` and refuses an alias rather than rewriting it; `dsh-schedule` reads every absolute and wall-clock selector through the strict parsers and resolves its local targets through `resolveLocalInstant`. `dsh-time-context` reads its elapsed reading through `Duration` and keeps the wording of the line it injects. A consumer that owns calendar or interval arithmetic of its own keeps that arithmetic and calls these entries only for the boundary value.
 
-No runtime invariant companion is published because this pure utility owns no event stream or mutable runtime data; unit tests verify every entry.
 
 ### Entry point
 
