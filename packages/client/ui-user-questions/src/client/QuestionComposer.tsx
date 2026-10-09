@@ -246,6 +246,10 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
   const [descriptionModes, setDescriptionModes] = useState<Map<number, 'inline' | 'block' | 'truncated'> | null>(null)
 
   useLayoutEffect(() => {
+    if (answerSurface.current !== null) answerSurface.current.scrollTop = 0
+  }, [index])
+
+  useLayoutEffect(() => {
     const surface = answerSurface.current
     if (surface === null || minimized) return
     const title = surface.querySelector<HTMLElement>('[data-question-title]')
@@ -549,7 +553,6 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
         {!minimized && (
           <>
             <div
-              key={`${question.id}-${String(index)}`}
               ref={answerSurface}
               className={css.body}
               data-question-scroll
@@ -567,6 +570,7 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
                 {questionTruncated && (
                   <span className={css.questionAction}>
                     <HoverCard
+                      key={`${question.id}-${String(index)}`}
                       variant="callout"
                       openOnClick
                       describeAnchor={false}
@@ -614,6 +618,7 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
                         role={question.multiSelect === true ? 'checkbox' : 'radio'}
                         aria-checked={selected}
                         aria-label={display.label}
+                        aria-describedby={hasDescription ? descriptionId : undefined}
                         disabled={locked}
                         onClick={() => { choose(option.label) }}
                         onKeyDown={(event) => {
@@ -651,6 +656,7 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
                       {showDetails && (
                         <span className={css.descriptionAction} data-option-details>
                           <HoverCard
+                            key={`${question.id}-${String(index)}`}
                             variant="callout"
                             openOnClick
                             describeAnchor={false}

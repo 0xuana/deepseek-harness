@@ -331,11 +331,10 @@ describe('HoverCard', () => {
     expect(screen.queryByText('card body')).toBeNull()
   })
 
-  it('drops a click pin when click opening is removed or the card is disabled', () => {
+  it('drops a click pin when the card is disabled', () => {
     const pinnedCard = (disabled = false) => (
       <HoverCard openOnClick disabled={disabled} anchor={<button type="button">details</button>} content={<div>card body</div>} />
     )
-    const hoverCard = <HoverCard anchor={<button type="button">details</button>} content={<div>card body</div>} />
     const view = render(pinnedCard())
     const anchor = screen.getByRole('button', { name: 'details' })
     fireEvent.click(anchor)
@@ -343,11 +342,6 @@ describe('HoverCard', () => {
     view.rerender(pinnedCard(true))
     expect(screen.queryByText('card body')).toBeNull()
 
-    view.rerender(pinnedCard())
-    fireEvent.click(anchor)
-    expect(screen.getByText('card body')).toBeTruthy()
-    view.rerender(hoverCard)
-    expect(screen.queryByText('card body')).toBeNull()
   })
 
   it('removes click-pin dismissal listeners on unmount', () => {
@@ -884,4 +878,45 @@ it('flips inline media above a bottom link and constrains it without covering th
   fireEvent.resize(window)
   expect(card.style.top).toBe('42px')
   expect(Number.parseFloat(card.style.maxHeight)).toBe(window.innerHeight - 50)
+})
+
+it('closes a compact copyable card after its mouse-focused card loses the pointer', () => {
+  const { wrapper } = mount({ copyText: 'value' })
+  fireEvent.pointerEnter(wrapper)
+  act(() => { vi.advanceTimersByTime(500) })
+  const card = screen.getByRole('button', { name: 'Copy: value' })
+  act(() => { card.focus() })
+  expect(document.activeElement).toBe(card)
+  fireEvent.pointerLeave(card)
+  act(() => { vi.advanceTimersByTime(POINTER_GRACE_MS) })
+  expect(screen.queryByText('card body')).toBeNull()
+})
+
+it('closes a callout hover after click toggling leaves mouse focus on the anchor', () => {
+  render(<HoverCard variant="callout" openOnClick anchor={<button>details</button>} content="body" />)
+  const anchor = screen.getByRole('button', { name: 'details' })
+  act(() => { anchor.focus() })
+  fireEvent.click(anchor)
+  fireEvent.click(anchor)
+  fireEvent.pointerEnter(anchor.parentElement as HTMLElement)
+  act(() => { vi.advanceTimersByTime(500) })
+  expect(screen.getByText('body')).toBeTruthy()
+  fireEvent.pointerLeave(anchor.parentElement as HTMLElement)
+  act(() => { vi.advanceTimersByTime(POINTER_GRACE_MS) })
+  expect(screen.queryByText('body')).toBeNull()
+})
+
+it('scrolls an open callout with the focused anchor keyboard controls', () => {
+  render(<HoverCard variant="callout" openOnClick anchor={<button>details</button>} content="body" />)
+  const anchor = screen.getByRole('button', { name: 'details' })
+  fireEvent.click(anchor)
+  const scroll = document.querySelector<HTMLElement>('[data-hover-card-scroll]') as HTMLElement
+  Object.defineProperty(scroll, 'clientHeight', { configurable: true, value: 160 })
+  Object.defineProperty(scroll, 'scrollHeight', { configurable: true, value: 640 })
+  for (const [key, top] of [['ArrowDown', 20], ['ArrowUp', 0], ['PageDown', 160], ['PageUp', 0], ['End', 640], ['Home', 0]] as const) {
+    expect(fireEvent.keyDown(anchor, { key })).toBe(false)
+    expect(scroll.scrollTop).toBe(top)
+  }
+  fireEvent.keyDown(anchor, { key: 'Tab' })
+  expect(screen.queryByText('body')).toBeNull()
 })

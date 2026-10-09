@@ -64,6 +64,7 @@ type HoverCardProps = {
  * Group replacement removes the previous card immediately, including a fading preview.
  * @param props.openOnClick - clicking or touching the anchor pins the card open. Another activation,
  * Escape, Tab, or an outside pointerdown dismisses it; pointer leave and blur do not dismiss a pinned card.
+ * For callouts, focused anchors scroll the card with arrow keys, PageUp/PageDown, Home, and End.
  * @param props.describeAnchor - with openOnClick, append the open card to the anchor's accessible
  * description (default true). Set false when the caller supplies a stable description relationship.
  * @param props.copyText - optional primary value copied by activation and
@@ -88,6 +89,7 @@ export function HoverCard(props: HoverCardProps) {
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const copyHeightRef = useRef<number | null>(null)
   const copyEpochRef = useRef(0)
+  const keyboardFocus = useRef(false)
   const copyingRef = useRef(false)
   const mountedRef = useRef(true)
   const [phase, setPhase] = useState<'closed' | 'open' | 'closing'>('closed')
@@ -118,6 +120,7 @@ export function HoverCard(props: HoverCardProps) {
   }, [])
 
   const close = useCallback(() => {
+    keyboardFocus.current = false
     copyEpochRef.current += 1
     clearCopied()
     setPinned(false)
@@ -205,10 +208,6 @@ export function HoverCard(props: HoverCardProps) {
     document.addEventListener('keydown', dismiss, true)
     return () => { document.removeEventListener('keydown', dismiss, true) }
   }, [open, openOnClick, cancelClose, close])
-
-  useEffect(() => {
-    if (pinned && !openOnClick) close()
-  }, [close, openOnClick, pinned])
 
   // Fixed-position from the anchor rect before paint; track the anchor while
   // open (capture-phase scroll catches nested panes), as in Menu portal mode.
@@ -321,6 +320,7 @@ export function HoverCard(props: HoverCardProps) {
   const dismissFromAnchor = (event: SyntheticEvent<HTMLSpanElement>): void => {
     // Portal content is a React child, but its clicks and text selection do not activate the anchor.
     if (cardRef.current?.contains(event.target as Node)) return
+    keyboardFocus.current = false
     clearTimer()
     cancelClose()
     if (openOnClick && !disabled && !pinned) {
@@ -374,9 +374,7 @@ export function HoverCard(props: HoverCardProps) {
         setPhase('open')
       }}
       onPointerLeave={() => {
-        if (!pinned
-          && rootRef.current?.contains(document.activeElement) !== true
-          && cardRef.current?.contains(document.activeElement) !== true) armClose()
+        if (!pinned && !(anchored && keyboardFocus.current)) armClose()
       }}
     >
       {callout
@@ -397,10 +395,32 @@ export function HoverCard(props: HoverCardProps) {
       ref={rootRef}
       className={clsx(css.root, anchored && css.inline)}
       onFocus={anchored ? (event) => {
-        if (!disabled && event.target.matches(':focus-visible')) { cancelClose(); setPhase('open') }
+        if (!disabled && event.target.matches(':focus-visible')) {
+          keyboardFocus.current = true
+          cancelClose()
+          setPhase('open')
+        }
       } : undefined}
       onBlur={anchored ? (event) => {
+        keyboardFocus.current = false
         if (!pinned && !event.currentTarget.contains(event.relatedTarget)) { clearTimer(); cancelClose(); close() }
+      } : undefined}
+      onKeyDown={callout && open ? (event) => {
+        const scroll = scrollRef.current
+        if (scroll === null || !rootRef.current?.contains(event.target as Node)) return
+        let top: number
+        switch (event.key) {
+          case 'ArrowDown': top = scroll.scrollTop + scroll.clientHeight / 8; break
+          case 'ArrowUp': top = scroll.scrollTop - scroll.clientHeight / 8; break
+          case 'PageDown': top = scroll.scrollTop + scroll.clientHeight; break
+          case 'PageUp': top = scroll.scrollTop - scroll.clientHeight; break
+          case 'Home': top = 0; break
+          case 'End': top = scroll.scrollHeight; break
+          default: return
+        }
+        event.preventDefault()
+        event.stopPropagation()
+        scroll.scrollTop = top
       } : undefined}
       onPointerEnter={(event) => {
         if (disabled || event.pointerType === 'touch') return
@@ -418,9 +438,7 @@ export function HoverCard(props: HoverCardProps) {
         // Leaving a closed card schedules a no-op close; only arm while
         // open, matching Menu's shape. Keyboard focus remains an independent
         // open trigger after the pointer leaves.
-        if (open && !pinned
-          && rootRef.current?.contains(document.activeElement) !== true
-          && cardRef.current?.contains(document.activeElement) !== true) armClose()
+        if (open && !pinned && !(anchored && keyboardFocus.current)) armClose()
       }}
       onPointerDownCapture={openOnClick ? undefined : dismissFromAnchor}
       onClickCapture={dismissFromAnchor}

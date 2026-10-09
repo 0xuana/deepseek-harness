@@ -43,7 +43,7 @@ A `plan-review` intent — set by `dsh-plan-mode` on the `exit_plan_mode` review
 
 ### Failure and recovery
 
-An answer field autofocuses only when its answer channel is ready and no countdown exists. Manual focus and blur during the claim handshake are retained: the countdown starts paused only if the answer surface still has focus when the remaining duration arrives.
+An answer field autofocuses only when its answer channel is ready and no countdown exists. Custom-answer focus survives Enter navigation between option questions; navigation resets the question scroll position and closes its disclosures. Manual focus and blur during the claim handshake are retained: the countdown starts paused only if the answer surface still has focus when the remaining duration arrives.
 
 Returning a local answer does not release its foreground claim: the Host closes that stream after accepting the waterfall outcome. The plugin owns the claim through this delivery interval. Explicit delegation releases it before calling the next answerer, and plugin disposal cancels any remaining claims.
 

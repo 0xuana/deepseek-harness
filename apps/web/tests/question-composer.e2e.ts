@@ -337,7 +337,13 @@ describe('web e2e: resident question composer round trip', () => {
       // This golden owns the stable question surface; the answered-state
       // golden below owns the resulting transcript.
       const snapshot = await captureStableAria(page, '[data-question-key]', scaffold.workspaceCwd)
-      await compareOrRefreshGolden(UI_EXPECTED, snapshot, MODE)
+      const descriptions = await page.locator('[data-question-key] [role="checkbox"]').evaluateAll(nodes =>
+        nodes.map(node => ({
+          label: node.getAttribute('aria-label'),
+          description: (node.getAttribute('aria-describedby') ?? '').split(/\s+/)
+            .filter(Boolean).map(id => document.getElementById(id)?.textContent ?? '').join(' '),
+        })))
+      await compareOrRefreshGolden(UI_EXPECTED, `${snapshot}\nChoice descriptions: ${JSON.stringify(descriptions)}`, MODE)
       const sidebar = await captureStableAria(page, '[role="treeitem"][aria-selected="true"]', scaffold.workspaceCwd)
       await compareOrRefreshGolden(SIDEBAR_EXPECTED, sidebar, MODE)
     }
@@ -640,7 +646,7 @@ describe('web e2e: resident question composer round trip', () => {
           { label: 'Keep the default edge', description: 'Keep the current setup.' },
           { label: 'Move the package', description: 'Move it to a separately installed package with an explicit profile entry.' },
         ],
-      }],
+      }, { id: 'followup', question: 'Who should own the rollout?', options: [{ label: 'Release team' }] }],
     })
     const outcome = asked.then(value => ({ value }), (error: unknown) => ({ error }))
 
@@ -664,7 +670,7 @@ describe('web e2e: resident question composer round trip', () => {
           const scroll = card.querySelector<HTMLElement>('[data-question-scroll]')
           const title = card.querySelector<HTMLElement>('h2')
           const submit = [...card.querySelectorAll<HTMLButtonElement>('button')]
-            .find(button => button.textContent === 'Submit')
+            .find(button => button.textContent === 'Next')
           if (scroll === null || title === null || submit === undefined) return null
           const submitBox = submit.getBoundingClientRect()
           return {
@@ -720,6 +726,15 @@ describe('web e2e: resident question composer round trip', () => {
       })
       expect(previewGeometry.fits).toBe(true)
       expect(previewGeometry.scrolls).toBe(true)
+      const questionScroll = questionPreview.locator('[data-hover-card-scroll]')
+      await questionInfo.focus()
+      await page.keyboard.press('End')
+      expect(await questionScroll.evaluate(node => node.scrollTop + node.clientHeight >= node.scrollHeight - 1)).toBe(true)
+      await page.keyboard.press('Home')
+      expect(await questionScroll.evaluate(node => node.scrollTop)).toBe(0)
+      await page.keyboard.press('PageDown')
+      expect(await questionScroll.evaluate(node => node.scrollTop)).toBeGreaterThan(0)
+
       await composer.getByRole('heading', { name: question }).click()
       await expect.poll(() => questionPreview.count()).toBe(0)
 
@@ -727,7 +742,7 @@ describe('web e2e: resident question composer round trip', () => {
       expect(await detailText.evaluate(node => node.closest('[data-question-scroll]') !== null)).toBe(true)
       await detailText.scrollIntoViewIfNeeded()
       expect(await detailText.isVisible()).toBe(true)
-      expect(await composer.getByRole('button', { name: 'Submit', exact: true }).isVisible()).toBe(true)
+      expect(await composer.getByRole('button', { name: 'Next', exact: true }).isVisible()).toBe(true)
 
       const info = composer.getByRole('button', { name: 'Show details for “Explicit install”' })
       const descriptionId = await info.getAttribute('aria-describedby')
@@ -806,10 +821,11 @@ describe('web e2e: resident question composer round trip', () => {
         selection?.removeAllRanges()
         return selectedLength
       })).toBe(description.length)
-      expect(await scrollport.evaluate((card) => {
-        card.scrollTop = card.scrollHeight
-        return card.scrollTop + card.clientHeight >= card.scrollHeight - 1
-      })).toBe(true)
+      await info.focus()
+      await page.keyboard.press('Home')
+      expect(await scrollport.evaluate(card => card.scrollTop)).toBe(0)
+      await page.keyboard.press('End')
+      expect(await scrollport.evaluate(card => card.scrollTop + card.clientHeight >= card.scrollHeight - 1)).toBe(true)
       const palette: string[] = []
       const originalDarkTheme = await page.locator('body').getAttribute('data-ds-dark-theme')
       try {
@@ -851,7 +867,13 @@ describe('web e2e: resident question composer round trip', () => {
       await page.keyboard.press('Escape')
 
       await composer.getByRole('checkbox', { name: 'Explicit install' }).click()
-      await composer.getByRole('textbox').fill('Keep the migration steps explicit.')
+      const answer = composer.getByRole('textbox')
+      await answer.fill('Keep the migration steps explicit.')
+      await answer.press('Enter')
+      await composer.getByRole('heading', { name: 'Who should own the rollout?' }).waitFor()
+      expect(await answer.evaluate(node => document.activeElement === node)).toBe(true)
+      await page.keyboard.type('Release owner')
+      expect(await answer.inputValue()).toBe('Release owner')
       await composer.getByRole('button', { name: 'Submit', exact: true }).click()
       expect(await outcome).toEqual({
         value: {
@@ -859,7 +881,7 @@ describe('web e2e: resident question composer round trip', () => {
             id: 'release',
             selected: ['Explicit install'],
             custom: 'Keep the migration steps explicit.',
-          }],
+          }, { id: 'followup', selected: [], custom: 'Release owner' }],
         },
       })
       await expect.poll(() => page.locator('[data-question-key]').count(), { timeout: 10_000 }).toBe(0)

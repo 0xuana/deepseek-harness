@@ -13,3 +13,4 @@
   - status
   - button "Skip"
   - button "Submit" [disabled]
+Choice descriptions: [{"label":"Blue","description":"A cool recessive hue that reads as calm and trustworthy in long reading sessions and dense dashboards."},{"label":"Green","description":"A restful mid-spectrum hue with the highest perceived brightness, easiest on the eye over long sessions."}]

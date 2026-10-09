@@ -386,7 +386,7 @@ describe('QuestionComposer', () => {
     const secondScroll = screen.getByText('Second question?').closest('[data-question-scroll]') as HTMLElement
     expect(screen.queryByRole('region', { name: 'First question?' })).toBeNull()
     expect(screen.getByRole('region', { name: 'Second question?' })).toBeTruthy()
-    expect(secondScroll).not.toBe(firstScroll)
+    expect(secondScroll).toBe(firstScroll)
     expect(secondScroll.scrollTop).toBe(0)
     expect(screen.queryByText(firstDescription)).toBeNull()
     expect(screen.getAllByText(secondDescription)).toHaveLength(1)
@@ -1042,4 +1042,26 @@ describe('review card', () => {
     fireEvent.click(screen.getByLabelText(en['nav.next']))
     expect(screen.getByText(en['review.skipped'])).toBeTruthy()
   })
+})
+
+it('retains custom-answer focus across Enter navigation between option questions', () => {
+  const { carrier } = wait([
+    { id: 'one', question: 'First?', options: [{ label: 'One', description: 'First description' }] },
+    { id: 'two', question: 'Second?', options: [{ label: 'Two' }] },
+  ])
+  render(<QuestionComposer matched={carrier} {...kit} />)
+  const choice = screen.getByRole('radio', { name: 'One' })
+  expect(choice.getAttribute('aria-describedby')).toBeTruthy()
+  expect(document.getElementById(choice.getAttribute('aria-describedby') as string)?.textContent).toBe('First description')
+  const first = screen.getByRole('textbox')
+  act(() => { first.focus() })
+  fireEvent.change(first, { target: { value: 'first answer' } })
+  fireEvent.keyDown(first, { key: 'Enter' })
+  expect(screen.getByRole('heading', { name: 'Second?' })).toBeTruthy()
+  const second = screen.getByRole('textbox')
+  expect(second).toBe(first)
+  expect(document.activeElement).toBe(second)
+  fireEvent.change(second, { target: { value: 'second answer' } })
+  expect((second as HTMLTextAreaElement).value).toBe('second answer')
+  expect(screen.getByRole('radio', { name: 'Two' }).getAttribute('aria-describedby')).toBeNull()
 })

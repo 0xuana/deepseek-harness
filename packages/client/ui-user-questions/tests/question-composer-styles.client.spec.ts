@@ -1,3 +1,4 @@
+/** Checks CSS layout declarations that jsdom cannot measure. */
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
