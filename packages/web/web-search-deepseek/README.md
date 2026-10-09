@@ -182,7 +182,7 @@ These limits define when the provider is expensive or incomplete. They are curre
 - **Provider selection cannot see a missing key** — `available()` is synchronous and cannot query the asynchronous credential store, so `ctx.web` still selects a keyless provider and a direct search fails with `WEB_PROVIDER_CREDENTIAL_MISSING`; the asynchronous `ready()` affects only which model requests are offered `web_search`.
 - **Readiness checks presence, not validity** — a wrong key, or an endpoint without the native `web_search_20250305` server tool, counts as ready, so `web_search` stays offered and each call fails with a structured error.
 - **The endpoint check compares origins only** — a gateway on another origin that forwards an official DeepSeek key is still refused until search has its own key or endpoint.
-- **Configuring the default values counts as no configuration** — `apiKeyEnv: DEEPSEEK_API_KEY` written out matches the shipped row, so it keeps the DeepSeek-route and endpoint checks.
+- **Only the key reference is compared with its default** — `apiKeyEnv: DEEPSEEK_API_KEY` written out matches the shipped row, so it keeps the DeepSeek-route and endpoint checks; a written `baseURL` counts as search configuration even when it names the default endpoint.
 - **Over-returned sources still cost tokens** — with no result-count knob on the wire, `maxResults` is enforced only post-hoc by service truncation.
 - **Uncited results carry no `snippet`** — a source gains one only when a text-block citation (`cited_text`) matches its URL.
 

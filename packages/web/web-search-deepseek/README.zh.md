@@ -182,7 +182,7 @@ kind: "package-reference"
 - **提供方选择看不到缺失的密钥**——`available()` 是同步的，无法查询异步凭据存储，因此 `ctx.web` 仍会选中没有密钥的提供方，直接搜索会以 `WEB_PROVIDER_CREDENTIAL_MISSING` 失败；异步的 `ready()` 只影响哪些模型请求会获得 `web_search`。
 - **就绪判断只检查凭据是否存在，不检查是否有效**——错误的密钥，或不提供原生 `web_search_20250305` 服务器工具的端点，都视为就绪，因此 `web_search` 继续提供，每次调用都以结构化错误失败。
 - **端点检查只比较源**——位于其他源、转发官方 DeepSeek 密钥的网关仍会被拒绝，直到为搜索单独配置密钥或端点。
-- **写出默认值不算单独配置**——显式写出的 `apiKeyEnv: DEEPSEEK_API_KEY` 与发行配置行相同，因此仍受 DeepSeek 路由与端点检查约束。
+- **只有密钥引用会与默认值比较**——显式写出的 `apiKeyEnv: DEEPSEEK_API_KEY` 与发行配置行相同，因此仍受 DeepSeek 路由与端点检查约束；写出的 `baseURL` 即使就是默认端点，也算为搜索单独配置。
 - **超量返回的来源仍消耗 token**——协议没有结果数量旋钮，`maxResults` 只能由服务在事后截断。
 - **未引用的结果没有 `snippet`**——只有当文本块引用（`cited_text`）匹配其 URL 时，来源才会获得 snippet。
 
