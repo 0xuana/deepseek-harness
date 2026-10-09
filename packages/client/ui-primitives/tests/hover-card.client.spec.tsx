@@ -913,6 +913,8 @@ it('scrolls an open callout with the focused anchor keyboard controls', () => {
   const scroll = document.querySelector<HTMLElement>('[data-hover-card-scroll]') as HTMLElement
   Object.defineProperty(scroll, 'clientHeight', { configurable: true, value: 160 })
   Object.defineProperty(scroll, 'scrollHeight', { configurable: true, value: 640 })
+  expect(fireEvent.keyDown(scroll, { key: 'PageDown' })).toBe(true)
+  expect(scroll.scrollTop).toBe(0)
   for (const [key, top] of [['ArrowDown', 20], ['ArrowUp', 0], ['PageDown', 160], ['PageUp', 0], ['End', 640], ['Home', 0]] as const) {
     expect(fireEvent.keyDown(anchor, { key })).toBe(false)
     expect(scroll.scrollTop).toBe(top)
