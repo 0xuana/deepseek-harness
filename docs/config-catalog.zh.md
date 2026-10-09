@@ -4269,7 +4269,7 @@ export interface Config {
 
 - `inject`: `web`
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/web/web-search-deepseek/src/index.ts:51`](../packages/web/web-search-deepseek/src/index.ts)
+- `source`: [`packages/web/web-search-deepseek/src/index.ts:57`](../packages/web/web-search-deepseek/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config (all optional — `apply` fills env-var and constant defaults). */
@@ -4288,6 +4288,11 @@ export interface Config {
   maxTokens: Volatile<number>
   /** Maximum `web_search` server-tool uses per request. Defaults to 5. */
   maxUses: Volatile<number>
+  /**
+   * Chat routes besides `deepseek-account` and `deepseek-official` whose model requests may search; each
+   * such search is billed to the DeepSeek API key. Defaults to none.
+   */
+  routes: Volatile<string[]>
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-web-search-deepseek -->

@@ -78,7 +78,7 @@ web_fetch({ url: 'https://example.com' })
 <a id="search-readiness"></a>
 ### 搜索就绪
 
-每个模型请求只有在 `ctx.web.searchReady()` 对模型选择为该请求指定的对话路由回答 true 时，才会获得 `web_search` 及其指引。服务只询问 `search()` 会选中的那个搜索提供方；未实现就绪判断的提供方视为就绪，选择失败同样回答 true，因此上文稳定注册所述的错误仍会到达模型。当请求的搜索既无法用 DeepSeek 账号 token 也无法用 API 密钥鉴权时，[`dsh-web-search-deepseek`](../web-search-deepseek/README.zh.md#authentication) 报告未就绪。检查在每个请求上执行，因此模型切换或新存储的密钥会在下一个请求生效；`web_fetch` 不受影响。通过 PTC 呈现的请求保留 `web_search`，因为 `run_code` 的 SDK 独立于工具列表声明它。
+每个模型请求只有在 `ctx.web.searchReady()` 对模型选择为该请求指定的对话路由回答 true 时，才会获得 `web_search` 及其指引。服务只询问 `search()` 会选中的那个搜索提供方；未实现就绪判断的提供方视为就绪，选择失败同样回答 true，因此上文稳定注册所述的错误仍会到达模型。当请求的搜索没有可以发送的凭据时，[`dsh-web-search-deepseek`](../web-search-deepseek/README.zh.md#authentication) 报告未就绪；默认只有 DeepSeek 账号与官方路由的请求会发送凭据。检查在每个请求上执行，因此模型切换或新存储的密钥会在下一个请求生效；`web_fetch` 不受影响。通过 PTC 呈现的请求保留 `web_search`，因为 `run_code` 的 SDK 独立于工具列表声明它。
 
 ### 失败与恢复
 

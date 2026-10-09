@@ -10,7 +10,7 @@ import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import LocalCredentialProvider from '@deepseek-ai/dsh-credentials-local'
 import type { DeepSeekAccount } from '@deepseek-ai/dsh-deepseek-account'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
-import WebRuntime, { WebError } from '@deepseek-ai/dsh-web'
+import WebRuntime, { WebError, type WebSearchResult } from '@deepseek-ai/dsh-web'
 import {
   DeepSeekSearchProvider,
   DEEPSEEK_PROVIDER_ID,
@@ -443,6 +443,16 @@ describe('DeepSeekSearchProvider error handling', () => {
       }))
   })
 
+  it('passes a credential resolver\'s own WebError through unchanged', async () => {
+    const refusal = new WebError('the key is not for this search', 'WEB_PROVIDER_ROUTE_DISABLED')
+    const error = await rejectedWebError(searchProvider({
+      ...options,
+      apiKey: '',
+      resolveApiKey: () => Promise.reject(refusal),
+    }).search({ query: 'q' }))
+    expect(error).toBe(refusal)
+  })
+
   it('uses the default credential reference when no resolver is configured', async () => {
     await expect(searchProvider({ ...options, apiKey: '' }).search({ query: 'q' }))
       .rejects.toThrow('DeepSeek search has no API key for "DEEPSEEK_API_KEY"')
@@ -843,6 +853,24 @@ describe('web-search-deepseek search readiness', () => {
     expect(await ctx.web.searchReady('deepseek-account')).toBe(false)
   })
 
+  it('is not ready for a model request on another provider route, even with a search key', async () => {
+    process.env.DEEPSEEK_API_KEY = 'env-key'
+    const ctx = await compose()
+    expect(await ctx.web.searchReady('openai')).toBe(false)
+  })
+
+  it('is ready on another provider route the deployment lists in routes', async () => {
+    process.env.DEEPSEEK_API_KEY = 'env-key'
+    const ctx = await compose({ config: { routes: ['openai'] } })
+    expect(await ctx.web.searchReady('openai')).toBe(true)
+  })
+
+  it('is ready without a model route when a search key exists', async () => {
+    process.env.DEEPSEEK_API_KEY = 'env-key'
+    const ctx = await compose()
+    expect(await ctx.web.searchReady(undefined)).toBe(true)
+  })
+
   it('is not ready when the credential store cannot be read', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'dsh-web-search-store-'))
     try {
@@ -874,5 +902,51 @@ describe('web-search-deepseek search readiness', () => {
     expect(failure.code).toBe('WEB_PROVIDER_ERROR')
     expect(failure.message).toContain('account storage unreadable')
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('web-search-deepseek route policy', () => {
+  /**
+   * Run one search for a Session whose latest model request used `route`.
+   * @param route - provider route the Session's request context records.
+   * @param config - provider config; a literal key is always present.
+   * @returns the fetch mock with the search result or its rejection.
+   */
+  async function searchOn(route: string, config: Record<string, unknown> = {}) {
+    const fetchMock = vi.fn(async (_input: string, _init?: RequestInit) => jsonResponse(searchResponse()))
+    vi.stubGlobal('fetch', fetchMock)
+    const ctx = new Context()
+    try {
+      await ctx.plugin(SessionStore)
+      await ctx.plugin(AgentRegistry)
+      await ctx.plugin(WebRuntime, { searchProvider: DEEPSEEK_PROVIDER_ID })
+      await ctx.plugin(deepseekPlugin, { apiKey: 'ds-key', ...config })
+      const session = ctx.sessions.create(SessionId(`web-search-route-${route}`))
+      session.append('turn/start', { turn: 1 })
+      session.append('request/context', { provider: route, model: 'gpt-5' })
+      const search = ctx.agents.withInitiator({ session } as Agent, () => ctx.web.search({ query: 'q' }))
+      const outcome: { result?: WebSearchResult; error?: unknown } = await search.then(
+        result => ({ result }), (error: unknown) => ({ error }))
+      return { fetchMock, ...outcome }
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  }
+
+  it('refuses a search from a conversation on another provider route without contacting DeepSeek', async () => {
+    const { fetchMock, error } = await searchOn('openai')
+    expect(error).toMatchObject({
+      code: 'WEB_PROVIDER_ROUTE_DISABLED',
+      message: 'DeepSeek web search is not enabled for conversations on the "openai" model route: each search '
+        + 'is billed to the DeepSeek API key. Only the user can enable it, by listing the route in '
+        + 'web-search-deepseek.routes.',
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('searches for a conversation on a route the deployment lists', async () => {
+    const { fetchMock, result } = await searchOn('openai', { routes: ['openai'] })
+    expect(result).toMatchObject({ truncated: false })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })
