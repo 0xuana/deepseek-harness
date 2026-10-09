@@ -582,6 +582,8 @@ describe('web e2e: resident question composer round trip', () => {
         const style = getComputedStyle(heading)
         return heading.getBoundingClientRect().height / parseFloat(style.lineHeight)
       })).toBe(1)
+      expect(await composer.getByRole('button', { name: 'Show full question' }).count()).toBe(0)
+      expect(await composer.getByRole('heading').evaluate(heading => getComputedStyle(heading).maskImage)).toBe('none')
       const rows = await composer.locator('[data-option-row]').evaluateAll(options => options.map((row) => {
         const label = row.querySelector<HTMLElement>('[data-option-line] > span:first-child')
         const description = row.querySelector<HTMLElement>('[data-option-description]')
@@ -619,7 +621,7 @@ describe('web e2e: resident question composer round trip', () => {
     expect(sessionId).toBeDefined()
     const agent = scaffold.ctx.agents.get(sessionId as SessionId)
     expect(agent).toBeDefined()
-    const question = 'The release gate reports that the installed application graph still contains an experimental package through a default dependency. Which approach should we use to preserve explicit installation while keeping the supported application graph valid?'
+    const question = Array.from({ length: 8 }, () => 'The release gate reports that the installed application graph still contains an experimental package through a default dependency. Which approach should we use to preserve explicit installation while keeping the supported application graph valid?').join(' ')
     const detail = 'Review the shipped profile, package ownership, upgrade impact, and the path users follow before choosing. The answer must preserve the existing release invariant, avoid a hidden compatibility path, and remain understandable to people who did not participate in the implementation discussion.'
     const description = Array.from({ length: 48 }, (_, index) =>
       `Migration step ${String(index + 1)} removes the experimental client from shipped templates, requires an explicit profile install, names the affected users, and records the cross-platform validation before rollout.`).join(' ')
@@ -686,9 +688,40 @@ describe('web e2e: resident question composer round trip', () => {
           return title.getBoundingClientRect().height / parseFloat(style.lineHeight)
         })
         expect(questionLines).toBeGreaterThan(2)
+        expect(questionLines).toBeLessThanOrEqual(3.05)
+        const truncated = await composer.getByRole('heading', { name: question }).evaluate(title =>
+          title.scrollHeight > title.clientHeight + 1)
+        await expect.poll(() => composer.getByRole('button', { name: 'Show full question' }).count())
+          .toBe(truncated ? 1 : 0)
       }
       expect(scrollStates).toContain(false)
       expect(scrollStates).toContain(true)
+
+      const questionInfo = composer.getByRole('button', { name: 'Show full question' })
+      await questionInfo.scrollIntoViewIfNeeded()
+      const questionTitle = composer.getByRole('heading', { name: question })
+      expect(await questionInfo.getAttribute('aria-describedby')).toBe(await questionTitle.getAttribute('id'))
+      const questionMask = await questionTitle.evaluate(title => getComputedStyle(title).maskImage)
+      expect(questionMask).toContain('linear-gradient')
+      await page.keyboard.press('Tab')
+      await questionInfo.focus()
+      const questionPreview = page.locator('[data-placement]')
+      await questionPreview.getByText(question, { exact: true }).waitFor()
+      expect(await questionPreview.evaluate(node => node.closest('[data-question-scroll]') === null)).toBe(true)
+      await page.keyboard.press('Escape')
+      await expect.poll(() => questionPreview.count()).toBe(0)
+      await questionInfo.click()
+      await questionPreview.getByText(question, { exact: true }).waitFor()
+      const previewGeometry = await questionPreview.evaluate((node) => {
+        const rect = node.getBoundingClientRect()
+        const scroll = node.querySelector<HTMLElement>('[data-hover-card-scroll]')
+        return { fits: rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight,
+          scrolls: scroll !== null && scroll.scrollHeight > scroll.clientHeight }
+      })
+      expect(previewGeometry.fits).toBe(true)
+      expect(previewGeometry.scrolls).toBe(true)
+      await composer.getByRole('heading', { name: question }).click()
+      await expect.poll(() => questionPreview.count()).toBe(0)
 
       const detailText = composer.getByText(detail, { exact: true })
       expect(await detailText.evaluate(node => node.closest('[data-question-scroll]') !== null)).toBe(true)

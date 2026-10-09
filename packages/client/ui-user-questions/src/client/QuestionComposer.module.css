@@ -106,6 +106,34 @@
   font-weight: 500;
 }
 
+/* Keep the full question accessible while only its first three lines are visible. */
+.questionTitle {
+  position: relative;
+  flex-shrink: 0;
+  margin: 5px 24px 0;
+}
+
+.titlePreview {
+  margin: 0;
+  max-height: 3lh;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.titleTruncated {
+  mask-image: linear-gradient(#000, #000), linear-gradient(to right, #000 calc(100% - 74px), transparent calc(100% - 28px));
+  mask-size: 100% 2lh, 100% 1lh;
+  mask-position: top left, bottom left;
+  mask-repeat: no-repeat;
+}
+
+.questionAction {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+}
+
 .cardMinimized .title {
   display: -webkit-box;
   margin: 0;

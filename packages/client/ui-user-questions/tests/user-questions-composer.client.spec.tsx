@@ -300,6 +300,33 @@ describe('QuestionComposer', () => {
     expect(screen.getByRole<HTMLButtonElement>('button', { name: '正在提交…' }).disabled).toBe(true)
   })
 
+  it('opens the full truncated question and removes its action on the next fitting question', () => {
+    const question = 'First question with four rendered lines'
+    const scrollHeight = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.hasAttribute('data-question-title') && this.textContent === question ? 88 : 66
+    })
+    const clientHeight = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(66)
+    try {
+      const { carrier } = wait([
+        { id: 'first', question, options: [{ label: 'Continue' }] },
+        { id: 'second', question: 'Second question?', options: [{ label: 'Continue' }] },
+      ])
+      render(<QuestionComposer matched={carrier} {...kit} />)
+      const details = screen.getByRole('button', { name: '查看完整问题' })
+      expect(details.getAttribute('aria-describedby')).toBe(screen.getByRole('heading', { name: question }).id)
+      fireEvent.click(details)
+      expect(screen.getAllByText(question)).toHaveLength(2)
+      expect(screen.getByRole('radio', { name: 'Continue' }).getAttribute('aria-checked')).toBe('false')
+      fireEvent.click(screen.getByRole('radio', { name: 'Continue' }))
+      expect(screen.queryByText(question)).toBeNull()
+      expect(screen.queryByRole('button', { name: '查看完整问题' })).toBeNull()
+    } finally {
+      cleanup()
+      scrollHeight.mockRestore()
+      clientHeight.mockRestore()
+    }
+  })
+
   it('opens a full option description without choosing the option', () => {
     const description = 'Remove the experimental client from every shipped template and require an explicit profile install.'
     const { carrier } = wait([{

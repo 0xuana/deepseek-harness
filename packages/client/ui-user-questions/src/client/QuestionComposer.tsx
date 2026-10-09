@@ -242,13 +242,16 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
   // oxlint-disable-next-line typescript/no-non-null-assertion
   const draft = drafts[index]!
   const hasOptions = (question.options?.length ?? 0) > 0
+  const [questionTruncated, setQuestionTruncated] = useState(false)
   const [descriptionModes, setDescriptionModes] = useState<Map<number, 'inline' | 'block' | 'truncated'> | null>(null)
 
   useLayoutEffect(() => {
     const surface = answerSurface.current
     if (surface === null || minimized) return
+    const title = surface.querySelector<HTMLElement>('[data-question-title]')
     const rows = [...surface.querySelectorAll<HTMLElement>('[data-option-row]')]
     const measure = (): void => {
+      if (title !== null) setQuestionTruncated(title.scrollHeight > title.clientHeight + 1)
       const next = new Map<number, 'inline' | 'block' | 'truncated'>()
       for (const row of rows) {
         const description = row.querySelector<HTMLElement>('[data-option-description]')
@@ -284,6 +287,7 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
     }
     measure()
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
+    if (title !== null) observer?.observe(title)
     for (const row of rows) {
       observer?.observe(row)
       const copy = row.querySelector('[data-option-copy]')
@@ -295,7 +299,7 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
       observer?.disconnect()
       fonts?.removeEventListener('loadingdone', measure)
     }
-  }, [index, minimized, question.options])
+  }, [index, minimized, question.question, question.options])
 
   const replaceProgress = (nextIndex: number, nextDrafts: QuestionDraftAnswer[]): void => {
     actions.replace(pending.key, {
@@ -552,9 +556,36 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
               onFocusCapture={focusAnswerSurface}
               onBlurCapture={blurAnswerSurface}
             >
-              <h2 className={css.title} id={`question-${pending.key}-${String(index)}`}>
-                {question.question}
-              </h2>
+              <div className={css.questionTitle}>
+                <h2
+                  className={clsx(css.title, css.titlePreview, questionTruncated && css.titleTruncated)}
+                  id={`question-${pending.key}-${String(index)}`}
+                  data-question-title
+                >
+                  {question.question}
+                </h2>
+                {questionTruncated && (
+                  <span className={css.questionAction}>
+                    <HoverCard
+                      variant="callout"
+                      openOnClick
+                      describeAnchor={false}
+                      openDelayMs={200}
+                      anchor={(
+                        <button
+                          type="button"
+                          className={css.descriptionButton}
+                          aria-label={t('question.details')}
+                          aria-describedby={`question-${pending.key}-${String(index)}`}
+                        >
+                          <span className={css.descriptionMoreIcon}><IconEllipsisOutlineRegular size={12} /></span>
+                        </button>
+                      )}
+                      content={<span className={css.descriptionPreview} aria-hidden="true">{question.question}</span>}
+                    />
+                  </span>
+                )}
+              </div>
               {question.detail !== undefined && (
                 <div className={css.detail}><MarkdownText text={question.detail} labels={markdownLabels} /></div>
               )}
