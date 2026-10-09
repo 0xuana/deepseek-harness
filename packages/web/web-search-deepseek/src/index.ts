@@ -3,9 +3,9 @@
  * with native `web_search_20250305`. A search initiated by a Session on the DeepSeek account route
  * authenticates with the account token when the account service allows the search endpoint;
  * every other search reuses `DEEPSEEK_API_KEY`. The provider does not reuse `DEEPSEEK_BASE_URL`;
- * auxiliary search has its own endpoint configuration. The API key is sent only for model requests on
- * the DeepSeek routes or the routes a deployment lists, and the official chat route's own key only to a
- * search endpoint on that route's chat origin. The provider reports itself not ready for a model request
+ * auxiliary search has its own endpoint configuration. A key or endpoint configured for search serves
+ * every model route; without one, the DeepSeek chat key serves only the DeepSeek routes and only a search
+ * endpoint on the official chat route's origin. The provider reports itself not ready for a model request
  * whose search would have no credential it may send.
  * @module @deepseek-ai/dsh-web-search-deepseek
  */
@@ -69,11 +69,6 @@ export interface Config {
   maxTokens: Volatile<number>
   /** Maximum `web_search` server-tool uses per request. Defaults to 5. */
   maxUses: Volatile<number>
-  /**
-   * Chat routes besides `deepseek-account` and `deepseek-official` whose model requests may search; each
-   * such search is billed to the DeepSeek API key. Defaults to none.
-   */
-  routes: Volatile<string[]>
 }
 
 export const Config = z.object({
@@ -87,7 +82,6 @@ export const Config = z.object({
   apiVersion: z.string().default(DEEPSEEK_DEFAULT_API_VERSION).volatile(),
   maxTokens: z.number().step(1).min(1).default(DEEPSEEK_DEFAULT_MAX_TOKENS).volatile(),
   maxUses: z.number().step(1).min(1).default(DEEPSEEK_DEFAULT_MAX_USES).volatile(),
-  routes: z.array(z.string()).default([]).volatile(),
 })
 
 /**
@@ -105,8 +99,11 @@ const OFFICIAL_PROVIDER = 'deepseek-official'
 /** Package whose Loader row owns the official route's endpoint and key reference. */
 const OFFICIAL_ROUTE_PACKAGE = '@deepseek-ai/dsh-llm-deepseek-api-key'
 
-/** Chat routes whose model requests may search without being listed in `routes`. */
+/** Chat routes whose model requests may search with the DeepSeek chat key. */
 const DEEPSEEK_ROUTES: ReadonlySet<string> = new Set([ACCOUNT_PROVIDER, OFFICIAL_PROVIDER])
+
+/** The settings a refused search names; configuring any of them gives search its own setup. */
+const SEARCH_SETTINGS = 'web-search-deepseek.apiKeyEnv, web-search-deepseek.apiKey, or web-search-deepseek.baseURL'
 
 /** Settings namespace carrying this provider's endpoint, model, and key reference. */
 export const WEB_SEARCH_DEEPSEEK_SETTINGS_NAMESPACE = 'web-search-deepseek'
@@ -116,8 +113,12 @@ type SearchOptions = DeepSeekSearchProviderOptions & {
   readonly apiKeyEnv: CredentialRef
   /** Literal key from config, released only after the API-key checks pass. */
   readonly literalApiKey?: string
-  /** Chat routes listed besides the DeepSeek routes. */
-  readonly routes: readonly string[]
+  /**
+   * Whether the user configured a key or endpoint for search: a literal key, a key reference other than
+   * `DEEPSEEK_API_KEY`, `baseURL`, or `$DEEPSEEK_SEARCH_BASE_URL`. Without one, the search inherits the
+   * DeepSeek chat key and the official endpoint.
+   */
+  readonly configuredForSearch: boolean
 }
 
 /**
@@ -135,6 +136,7 @@ function resolveOptions(
   const literalApiKey = config.apiKey !== undefined && config.apiKey.length > 0
     ? config.apiKey
     : undefined
+  const configuredBaseURL = config.baseURL ?? launchEnvironmentOf(ctx).get(SEARCH_BASE_URL_ENV)?.value
   const options: SearchOptions = {
     ...literalApiKey === undefined ? {} : { literalApiKey },
     resolveAccountToken: async (endpoint) => {
@@ -155,10 +157,9 @@ function resolveOptions(
       return ambient !== undefined && ambient.value.length > 0 ? ambient.value : undefined
     },
     apiKeyEnv,
-    routes: config.routes,
-    baseURL: config.baseURL
-      ?? launchEnvironmentOf(ctx).get(SEARCH_BASE_URL_ENV)?.value
-      ?? DEEPSEEK_DEFAULT_BASE_URL,
+    configuredForSearch: literalApiKey !== undefined || config.apiKeyEnv !== DEFAULT_API_KEY_ENV
+      || configuredBaseURL !== undefined,
+    baseURL: configuredBaseURL ?? DEEPSEEK_DEFAULT_BASE_URL,
     model: config.model,
     apiVersion: config.apiVersion,
     maxTokens: config.maxTokens,
@@ -199,25 +200,25 @@ function officialChatRoute(ctx: Context): ResolvedDeepSeekOptions | undefined {
 }
 
 /**
- * Why a search for a model request on `route` must not send the API key, or undefined when it may. A
- * route other than the DeepSeek routes and `routes` would bill DeepSeek for another provider's
- * conversation. The official chat route's own key reference goes only to a search endpoint on that
- * route's chat origin, because a key for a gateway is not a DeepSeek key.
+ * Why a search for a model request on `route` must not send the API key, or undefined when it may. A key
+ * or endpoint the user configured for search serves every route. Without one, the key is the DeepSeek
+ * chat key: a route other than the DeepSeek routes would bill it for another provider's conversation,
+ * and the official chat route's own key reference goes only to a search endpoint on that route's chat
+ * origin, because a key for a gateway is not a DeepSeek key.
  * @param ctx - plugin context supplying the Loader rows.
  * @param options - options the search would use.
  * @param route - provider route of the model request; undefined for a search outside one.
  * @returns the structured refusal, or undefined.
  */
 function apiKeyRefusal(ctx: Context, options: SearchOptions, route: string | undefined): WebError | undefined {
-  if (route !== undefined && !DEEPSEEK_ROUTES.has(route) && !options.routes.includes(route)) {
+  if (options.configuredForSearch) return undefined
+  if (route !== undefined && !DEEPSEEK_ROUTES.has(route)) {
     return new WebError(
-      `DeepSeek web search is not enabled for conversations on the ${JSON.stringify(route)} model route: each search `
-      + 'is billed to the DeepSeek API key. Only the user can enable it, by listing the route in '
-      + 'web-search-deepseek.routes.',
+      `DeepSeek web search is not enabled for conversations on the ${JSON.stringify(route)} model route. `
+      + `Only the user can enable it, by configuring ${SEARCH_SETTINGS}.`,
       'WEB_PROVIDER_ROUTE_DISABLED',
     )
   }
-  if (options.literalApiKey !== undefined) return undefined
   const chat = officialChatRoute(ctx)
   if (chat === undefined || chat.apiKeyEnv !== options.apiKeyEnv) return undefined
   const chatOrigin = new URL(chat.baseURL).origin
@@ -226,8 +227,7 @@ function apiKeyRefusal(ctx: Context, options: SearchOptions, route: string | und
   return new WebError(
     `DeepSeek web search is not enabled: ${options.apiKeyEnv} is the key for the DeepSeek chat endpoint ${chatOrigin}, `
     + `so it is not sent to the search endpoint ${searchOrigin}. Only the user can enable search, by configuring `
-    + 'web-search-deepseek.apiKeyEnv with a key for the search endpoint, or web-search-deepseek.baseURL with an '
-    + 'endpoint on the chat origin that serves native web search.',
+    + `${SEARCH_SETTINGS}.`,
     'WEB_PROVIDER_ENDPOINT_MISMATCH',
   )
 }
@@ -273,7 +273,6 @@ export function apply(ctx: Context, config: Config): void {
   const options = () => resolveOptions(ctx, {
     apiKey: config.apiKey.get(), apiKeyEnv: config.apiKeyEnv.get(), baseURL: config.baseURL.get(), model: config.model.get(),
     apiVersion: config.apiVersion.get(), maxTokens: config.maxTokens.get(), maxUses: config.maxUses.get(),
-    routes: config.routes.get(),
   })
   const provider = new DeepSeekSearchProvider(options)
   ctx.web.registerSearchProvider({

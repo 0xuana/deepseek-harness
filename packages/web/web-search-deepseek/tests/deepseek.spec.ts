@@ -859,10 +859,25 @@ describe('web-search-deepseek search readiness', () => {
     expect(await ctx.web.searchReady('openai')).toBe(false)
   })
 
-  it('is ready on another provider route the deployment lists in routes', async () => {
-    process.env.DEEPSEEK_API_KEY = 'env-key'
-    const ctx = await compose({ config: { routes: ['openai'] } })
-    expect(await ctx.web.searchReady('openai')).toBe(true)
+  it.each<[string, Record<string, unknown>, Record<string, string>]>([
+    ['a literal key', { apiKey: 'ds-key' }, {}],
+    ['its own key reference', { apiKeyEnv: 'DEEPSEEK_SEARCH_KEY' }, { DEEPSEEK_SEARCH_KEY: 'search-key' }],
+    ['a configured endpoint', { baseURL: 'https://search.example.test/anthropic/v1' }, { DEEPSEEK_API_KEY: 'env-key' }],
+    ['an endpoint from the launch environment', {}, {
+      DEEPSEEK_API_KEY: 'env-key', DEEPSEEK_SEARCH_BASE_URL: 'https://search.example.test/anthropic/v1',
+    }],
+  ])('is ready on another provider route when web search has %s', async (_label, config, env) => {
+    const saved = Object.fromEntries(Object.keys(env).map(name => [name, process.env[name]]))
+    Object.assign(process.env, env)
+    try {
+      const ctx = await compose({ config })
+      expect(await ctx.web.searchReady('openai')).toBe(true)
+    } finally {
+      for (const [name, value] of Object.entries(saved)) {
+        if (value === undefined) Reflect.deleteProperty(process.env, name)
+        else process.env[name] = value
+      }
+    }
   })
 
   it('is ready without a model route when a search key exists', async () => {
@@ -909,18 +924,20 @@ describe('web-search-deepseek route policy', () => {
   /**
    * Run one search for a Session whose latest model request used `route`.
    * @param route - provider route the Session's request context records.
-   * @param config - provider config; a literal key is always present.
+   * @param config - provider config; without it the search uses `DEEPSEEK_API_KEY`, here set to `env-key`.
    * @returns the fetch mock with the search result or its rejection.
    */
   async function searchOn(route: string, config: Record<string, unknown> = {}) {
     const fetchMock = vi.fn(async (_input: string, _init?: RequestInit) => jsonResponse(searchResponse()))
     vi.stubGlobal('fetch', fetchMock)
+    const savedKey = process.env.DEEPSEEK_API_KEY
+    process.env.DEEPSEEK_API_KEY = 'env-key'
     const ctx = new Context()
     try {
       await ctx.plugin(SessionStore)
       await ctx.plugin(AgentRegistry)
       await ctx.plugin(WebRuntime, { searchProvider: DEEPSEEK_PROVIDER_ID })
-      await ctx.plugin(deepseekPlugin, { apiKey: 'ds-key', ...config })
+      await ctx.plugin(deepseekPlugin, config)
       const session = ctx.sessions.create(SessionId(`web-search-route-${route}`))
       session.append('turn/start', { turn: 1 })
       session.append('request/context', { provider: route, model: 'gpt-5' })
@@ -930,6 +947,8 @@ describe('web-search-deepseek route policy', () => {
       return { fetchMock, ...outcome }
     } finally {
       await ctx.fiber.dispose()
+      if (savedKey === undefined) Reflect.deleteProperty(process.env, 'DEEPSEEK_API_KEY')
+      else process.env.DEEPSEEK_API_KEY = savedKey
     }
   }
 
@@ -937,16 +956,17 @@ describe('web-search-deepseek route policy', () => {
     const { fetchMock, error } = await searchOn('openai')
     expect(error).toMatchObject({
       code: 'WEB_PROVIDER_ROUTE_DISABLED',
-      message: 'DeepSeek web search is not enabled for conversations on the "openai" model route: each search '
-        + 'is billed to the DeepSeek API key. Only the user can enable it, by listing the route in '
-        + 'web-search-deepseek.routes.',
+      message: 'DeepSeek web search is not enabled for conversations on the "openai" model route. Only the user '
+        + 'can enable it, by configuring web-search-deepseek.apiKeyEnv, web-search-deepseek.apiKey, or '
+        + 'web-search-deepseek.baseURL.',
     })
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('searches for a conversation on a route the deployment lists', async () => {
-    const { fetchMock, result } = await searchOn('openai', { routes: ['openai'] })
+  it('searches with the configured key for a conversation on another route', async () => {
+    const { fetchMock, result } = await searchOn('openai', { apiKey: 'search-key' })
     expect(result).toMatchObject({ truncated: false })
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [, init] = fetchMock.mock.calls[0] ?? []
+    expect((init?.headers as Record<string, string>)['x-api-key']).toBe('search-key')
   })
 })

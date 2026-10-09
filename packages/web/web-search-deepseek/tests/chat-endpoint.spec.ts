@@ -115,8 +115,8 @@ describe('web-search-deepseek with the official chat route loaded', () => {
       code: 'WEB_PROVIDER_ENDPOINT_MISMATCH',
       message: 'DeepSeek web search is not enabled: DEEPSEEK_API_KEY is the key for the DeepSeek chat endpoint '
         + 'https://gateway.test, so it is not sent to the search endpoint https://api.deepseek.com. Only the user can '
-        + 'enable search, by configuring web-search-deepseek.apiKeyEnv with a key for the search endpoint, or '
-        + 'web-search-deepseek.baseURL with an endpoint on the chat origin that serves native web search.',
+        + 'enable search, by configuring web-search-deepseek.apiKeyEnv, web-search-deepseek.apiKey, or '
+        + 'web-search-deepseek.baseURL.',
     })
     expect(fetchMock).not.toHaveBeenCalled()
   })
@@ -135,6 +135,7 @@ describe('web-search-deepseek with the official chat route loaded', () => {
   it.each<[string, Composition]>([
     ['its own key reference', { chatBaseURL: GATEWAY, search: { apiKeyEnv: 'DEEPSEEK_SEARCH_KEY' } }],
     ['a search endpoint on the gateway origin', { chatBaseURL: GATEWAY, search: { baseURL: `${GATEWAY}/v1` } }],
+    ['a search endpoint on another origin', { chatBaseURL: GATEWAY, search: { baseURL: 'https://search.example.test/anthropic/v1' } }],
   ])('is ready behind a gateway when web search has %s', async (_label, composition) => {
     const ctx = await compose(composition)
     expect(await ctx.web.searchReady('deepseek-official')).toBe(true)

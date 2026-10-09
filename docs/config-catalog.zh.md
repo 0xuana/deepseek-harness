@@ -4288,11 +4288,6 @@ export interface Config {
   maxTokens: Volatile<number>
   /** Maximum `web_search` server-tool uses per request. Defaults to 5. */
   maxUses: Volatile<number>
-  /**
-   * Chat routes besides `deepseek-account` and `deepseek-official` whose model requests may search; each
-   * such search is billed to the DeepSeek API key. Defaults to none.
-   */
-  routes: Volatile<string[]>
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-web-search-deepseek -->

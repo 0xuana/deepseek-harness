@@ -16,10 +16,10 @@ web 能力 seam 的每个角色各负责逐请求检查的一部分：
 - **Service Provider。** 以下情况 `dsh-web-search-deepseek` 回答 true：路由为 `deepseek-account` 且 `ctx.deepseekAccount.resolveToken()` 为配置的搜索端点返回 token；配置段带有字面 `apiKey`；或 `ctx.credentials.describe()` 报告 `apiKeyEnv` 引用已配置（没有该服务时，启动环境中存在该变量）。它按 `search()` 解析凭据的顺序检查，读取账号 token 或凭据存储失败时回答 false，因为 `search()` 会在该次读取上失败，而不会尝试下一种凭据。提供方不点名任何工具或提示词段落。
 - **Consumer。** `dsh-tool-web` 添加一个前置的 `system-prompt/assemble` 监听器。对于每个提供 `web_search` 的组装，它以模型选择写入组装变量的路由询问 `ctx.web.searchReady()`，回答 false 时移除该工具及其 `tool:web_search` 提示词段落。前置使监听器在模型选择之后运行。包含 PTC `run_code` 传输工具的组装原样返回，因为生成的 SDK 独立于工具列表声明 `web_search`。
 
-API 密钥要计入之前，提供方会做两项检查，并在每次搜索的 API 密钥解析函数（密钥唯一的出口）中再做一遍：
+API 密钥能否计入，取决于是否为搜索单独做了配置：字面 `apiKey`、不是 `DEEPSEEK_API_KEY` 的 `apiKeyEnv`、`baseURL`，或 `$DEEPSEEK_SEARCH_BASE_URL`。配置了其中任意一项的用户是有意设置了搜索，因此为搜索配置的密钥和端点服务于每个路由。没有这种配置时，密钥就是 DeepSeek 的聊天密钥，提供方会做两项检查，并在每次搜索的 API 密钥解析函数（密钥唯一的出口）中再做一遍：
 
-- **路由。** 路由不是 `deepseek-account`、`deepseek-official`，也不在部署列于 `routes` 的路由中的模型请求，会以 `WEB_PROVIDER_ROUTE_DISABLED` 被拒绝，因为它的搜索会让 DeepSeek 为其他提供方的对话计费。
-- **端点。** 当搜索要发送官方聊天路由自己的密钥引用时，搜索端点必须与该路由的聊天地址同源；否则以 `WEB_PROVIDER_ENDPOINT_MISMATCH` 拒绝，因为网关的密钥不是 DeepSeek 的密钥。提供方找到激活的 `dsh-llm-deepseek-api-key` Loader 行，用该包自己的解析函数解析它的地址。字面密钥、单独的密钥引用，或与聊天地址同源的搜索端点都能通过；没有这一行的组合没有可比较的聊天地址。
+- **路由。** 路由不是 `deepseek-account` 或 `deepseek-official` 的模型请求，会以 `WEB_PROVIDER_ROUTE_DISABLED` 被拒绝，因为它的搜索会让 DeepSeek 聊天密钥为其他提供方的对话计费。
+- **端点。** 当搜索要发送官方聊天路由自己的密钥引用时，搜索端点必须与该路由的聊天地址同源；否则以 `WEB_PROVIDER_ENDPOINT_MISMATCH` 拒绝，因为网关的密钥不是 DeepSeek 的密钥。提供方找到激活的 `dsh-llm-deepseek-api-key` Loader 行，用该包自己的解析函数解析它的地址。没有这一行的组合没有可比较的聊天地址。
 
 只看凭据是否存在：不读取 API 密钥的值，也不访问任何端点，因此错误的密钥，或不提供原生 `web_search_20250305` 服务器工具的端点，仍会让该工具保持提供。撤下只改变提供给模型的工具：仍然到达的调用会在运行时解析凭据，并以现有的结构化错误失败。
 
@@ -39,6 +39,8 @@ API 密钥要计入之前，提供方会做两项检查，并在每次搜索的 
 
 **只在 DeepSeek 账号路由上提供搜索。** 账号 token 只对官方端点签发，因此不需要端点检查。但所有发行 profile 的默认路由都是 `deepseek-official`，搜索会因此默认关闭，连与账号同样稳妥的官方 API 密钥情况也一并关闭。
 
+**列出允许搜索的路由。** `routes` 配置能让部署显式开放其他提供方的对话，但为搜索单独配置密钥或端点已经表达了这一意图，第二个配置项只是让用户多找一样东西。
+
 **在任何有 DeepSeek 密钥的路由上都继续提供搜索。** 使用其他提供方模型的对话会在用户未作选择的情况下，让 DeepSeek 为每次搜索计费，网关的密钥也会被发往 DeepSeek 的端点。
 
 **通过 `dsh-llm` 暴露每个路由的地址。** 在提供方或模型信息上加一个可选的地址字段，能让任何消费方比较地址，但 `listProviders()` 是 Remote 方法，这个字段会为了一个提供方的检查进入浏览器和模型可见的模型列表。
@@ -49,6 +51,6 @@ API 密钥要计入之前，提供方会做两项检查，并在每次搜索的 
 
 ## Consequences
 
-`dsh-web` 增加两个公共成员：可选的 `WebSearchProvider.ready()` 与 `WebRuntime.searchReady()`。`searchReady()` 是其唯一消费方所需的最小查询，这正是[观测接口决策](../../archived/simplification/2026-07-04-drop-unconsumed-web-observation-surface.md)允许状态查询回归的方式；它既不报告可用性，也不报告选择失败。Exa 与 Perplexity 提供方没有实现 `ready()`，其行为不变。PTC 呈现在没有凭据时仍然提供 `web_search`。无法提供原生服务器工具的端点仍会让工具保持提供，并使每次调用失败。在路由不变时移除工具会改变声明的工具，并使提示词缓存失效一次；模型切换本身已经使缓存失效。`routes` 配置是在其他提供方的对话中搜索的唯一途径。读取官方聊天地址让本提供方依赖 `dsh-llm-deepseek-api-key` 与 Loader 的行；回放组合禁用了该行，因此跳过端点检查。
+`dsh-web` 增加两个公共成员：可选的 `WebSearchProvider.ready()` 与 `WebRuntime.searchReady()`。`searchReady()` 是其唯一消费方所需的最小查询，这正是[观测接口决策](../../archived/simplification/2026-07-04-drop-unconsumed-web-observation-surface.md)允许状态查询回归的方式；它既不报告可用性，也不报告选择失败。Exa 与 Perplexity 提供方没有实现 `ready()`，其行为不变。PTC 呈现在没有凭据时仍然提供 `web_search`。无法提供原生服务器工具的端点仍会让工具保持提供，并使每次调用失败。在路由不变时移除工具会改变声明的工具，并使提示词缓存失效一次；模型切换本身已经使缓存失效。在其他提供方的对话中搜索，需要为搜索单独配置密钥或端点；写出发行配置的默认值不算单独配置。读取官方聊天地址让本提供方依赖 `dsh-llm-deepseek-api-key` 与 Loader 的行；回放组合禁用了该行，因此跳过端点检查。
 
 单元测试分别固定每个角色：`packages/web/web/tests/web.spec.ts` 覆盖 `searchReady()` 询问哪个提供方以及选择失败时的回答，`packages/web/web-search-deepseek/tests/deepseek.spec.ts` 覆盖 `ready()` 的每种凭据情况，`packages/web/tool-web/tests/tool-web.spec.ts` 通过真实的提示词、工具与模型选择服务进行组装。发行版 headless 无密钥冒烟测试与 `web-search-unconfigured` 录制会话快照在真实组合中固定了撤下行为。快照回放提供占位 DeepSeek 密钥，因此其工具列表不依赖运行环境。`packages/web/web-search-deepseek/tests/chat-endpoint.spec.ts` 用真实 Loader 组合挂载官方聊天路由，固定端点检查；`pi-ai-conversation-updates` 快照固定了 pi-ai 路由上的对话不会获得 `web_search`。
