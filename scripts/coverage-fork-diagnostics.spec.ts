@@ -198,7 +198,8 @@ describe('coverage fork configuration entry', () => {
       .toEqual([resolve('scripts/fixtures/coverage-fork.fixture.ts').replaceAll('\\', '/')])
     const report = workerExitReport(output, 'coverage-forks')!
     // A worker error is logged when the channel closes under a send, which precedes the exit the
-    // record describes. Vitest then reports no exit text, and the record cannot come first.
+    // record describes. Vitest then prints no "Worker exited unexpectedly" line, so only that
+    // line states an order the record can hold.
     if (report === 'Worker exited unexpectedly') {
       expect(output.indexOf('coverage-worker-exit:')).toBeLessThan(output.indexOf(report))
     }
