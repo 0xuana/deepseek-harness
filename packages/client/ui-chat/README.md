@@ -86,7 +86,7 @@ When Chat ends with an open Turn control and that Turn has no visible input, the
 
 Work-details modes control process-group display and reasoning previews. Compact, Standard, and Detailed fold eligible completed Turns without hiding the final answer; Verbose retains the duration/status header without a collapse action and shows historical process rows directly. The [business-rule reference](src/client/conversation-nodes/README.md#display-modes) contains the mode table, title behavior, whole-Turn eligibility, clocks, and disclosure resets.
 
-The Settings row below Work details offers an [independent collapse-timing preference](src/client/conversation-nodes/README.md#collapse-timing).
+The Settings row below Work details offers an [independent collapse-timing preference](src/client/conversation-nodes/README.md#collapse-timing), saved through the same Host profile configuration.
 
 -----
 
@@ -111,7 +111,7 @@ Scroll-edge fades initialize when `ResizeObserver` reports the open group's layo
 
 Each group owns local `useDisclosure` state that survives mode changes while its component stays mounted.
 
-The session-scoped `conversation.chat.reasoning.body` single Slot offers the original reasoning text and streaming state only when its body is expanded. Its official entry registers at priority 100 and calls the `conversation.chat.reasoning.content` Factory. A replacement uses a lower priority number and may call that same Factory with original or derived text. The root-scoped Factory requires no Session and fixes compact typography. Its optional `labels` accepts complete `MarkdownLabels` unchanged; omission uses Chat's localized defaults. The host supplies no inline fallback or plugin action state. Display extensions must preserve access to the original text and own their controls inside their Body wrapper. Extensions do not replace the reasoning preview or its disclosure policy.
+The session-scoped `conversation.chat.reasoning.body` single Slot offers the original reasoning text and streaming state only when its body is expanded. Its official entry registers at priority 100 and calls the `conversation.chat.reasoning.content` Factory. A replacement uses a lower priority number and may call that same Factory with original or derived text. The root-scoped Factory requires no Session and fixes compact typography. Its optional `labels` accepts complete `MarkdownLabels` unchanged; omission uses Chat's localized defaults. The host supplies no inline fallback or plugin action state. Display extensions must preserve access to the original text and own their controls inside their Body wrapper. Extensions do not replace the reasoning preview or its disclosure policy. The [reasoning display rules](src/client/conversation-nodes/README.md#display-modes) define which blocks produce rows.
 
 The Chat-node slot injects a reset-bound `useDisclosure` Hook for reasoning and tools. Intermediate renderers forward it without subscribing; each invocation owns independent open state. Source callbacks retain their receiver and stable identity. When an enclosing Turn actually hides a process member, its seat resets those disclosures without replacing component keys or changing the Hook reference. Display-mode changes preserve their open state.
 
