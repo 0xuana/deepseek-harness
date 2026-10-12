@@ -104,7 +104,7 @@ describe('SubagentModelSelectionConfig', () => {
 
     selectionConfigs.set(ctx, await liveConfig(ctx, SubagentModelSelectionConfig))
     await ctx.plugin(SessionProjectionRegistry)
-    ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
+    await ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
 
     // A stored policy the service cannot apply fails when it is read, not when the profile row is written.
     await selectionConfigs.get(ctx)!.update({ allowedModels: [...ALLOWED_MODELS, ...ALLOWED_MODELS] })
@@ -122,13 +122,14 @@ describe('SubagentModelSelectionConfig', () => {
 
     const invalid = Session.create(SessionId('empty-policy'))
     invalid.append('subagent/model-selection-policy', { allowedModels: [] })
-    expect(() => subagentModelSelectionPolicy(ctx.sessionProjections, invalid)).toThrow('requires at least one route')
+    const policy = await ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
+    expect(() => subagentModelSelectionPolicy(policy, invalid)).toThrow('requires at least one route')
 
     const malformed = Session.create(SessionId('malformed-policy'))
     malformed.append('subagent/model-selection-policy', {
       allowedModels: [{ provider: 1, model: 'fast-model' }],
     } as never)
-    expect(() => subagentModelSelectionPolicy(ctx.sessionProjections, malformed))
+    expect(() => subagentModelSelectionPolicy(policy, malformed))
       .toThrow('requires non-empty provider and model ids')
     await ctx.fiber.dispose()
   })
@@ -137,14 +138,15 @@ describe('SubagentModelSelectionConfig', () => {
     const ctx = await boot()
     const disabled = await createAgent(ctx, 'disabled')
     expect(selectable(ctx, disabled)).toBe(false)
-    expect(subagentModelSelectionPolicy(ctx.sessionProjections, disabled.session)).toBeUndefined()
+    const policy = await ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
+    expect(subagentModelSelectionPolicy(policy, disabled.session)).toBeUndefined()
 
     await selectionConfigs.get(ctx)!.update({
       enabled: true,
       allowedModels: ALLOWED_MODELS,
     })
     const enabled = await createAgent(ctx, 'enabled')
-    expect(subagentModelSelectionPolicy(ctx.sessionProjections, enabled.session)).toEqual(ALLOWED_MODELS)
+    expect(subagentModelSelectionPolicy(policy, enabled.session)).toEqual(ALLOWED_MODELS)
     expect(selectable(ctx, enabled)).toBe(true)
     expect(selectable(ctx, disabled)).toBe(false)
 
@@ -171,8 +173,8 @@ describe('SubagentModelSelectionConfig', () => {
       sessionId: SessionId('direct-agent-setup'),
       setup: async (agentCtx, agent) => {
         prepared = agent
-        const fiber = agentCtx.inject(tool.inject, (runtimeCtx) => {
-          tool.apply(runtimeCtx, {
+        const fiber = agentCtx.inject(tool.inject, async (runtimeCtx) => {
+          await tool.apply(runtimeCtx, {
             provider: 'spawn',
             modelSelectionSettings: true,
           }, agent.session)
@@ -336,7 +338,8 @@ describe('SubagentModelSelectionConfig', () => {
       meta: { parentSession: parent.id, origin: 'subagent' },
     })
     expect(selectable(ctx, child)).toBe(true)
-    expect(subagentModelSelectionPolicy(ctx.sessionProjections, child.session)).toEqual(ALLOWED_MODELS)
+    const policy = await ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
+    expect(subagentModelSelectionPolicy(policy, child.session)).toEqual(ALLOWED_MODELS)
 
     const orphan = await createAgent(ctx, 'orphan', {
       meta: { parentSession: SessionId('missing-parent'), origin: 'subagent' },
@@ -355,11 +358,11 @@ describe('SubagentModelSelectionConfig', () => {
     })
     const resumedEmpty = await createAgent(ctx, 'resumed-empty', { seed: [] })
     expect(selectable(ctx, resumedEmpty)).toBe(false)
-    expect(subagentModelSelectionPolicy(ctx.sessionProjections, resumedEmpty.session)).toBeUndefined()
+    expect(subagentModelSelectionPolicy(policy, resumedEmpty.session)).toBeUndefined()
 
     const resumedDisabled = await createAgent(ctx, 'resumed-disabled', { seed: oldSeed.snapshotEvents() })
     expect(selectable(ctx, resumedDisabled)).toBe(false)
-    expect(subagentModelSelectionPolicy(ctx.sessionProjections, resumedDisabled.session)).toBeUndefined()
+    expect(subagentModelSelectionPolicy(policy, resumedDisabled.session)).toBeUndefined()
     await ctx.fiber.dispose()
   })
 
@@ -368,22 +371,22 @@ describe('SubagentModelSelectionConfig', () => {
     await mountAgentLoopTestDependencies(withoutSettings)
     await mountWorkingDirectoryFixture(withoutSettings)
     await withoutSettings.plugin(SubagentRuntime)
-    expect(() => {
-      tool.apply(withoutSettings, {
+    await expect(async () => {
+      await tool.apply(withoutSettings, {
         provider: 'missing',
         modelSelectionSettings: true,
         maxDepth: 'provider-managed',
       })
-    }).toThrow('requires @deepseek-ai/dsh-tool-subagent/model-selection-settings')
+    }).rejects.toThrow('requires @deepseek-ai/dsh-tool-subagent/model-selection-settings')
     await withoutSettings.fiber.dispose()
 
     const withoutAgent = await boot(false)
-    expect(() => {
-      tool.apply(withoutAgent, {
+    await expect(async () => {
+      await tool.apply(withoutAgent, {
         provider: 'spawn',
         modelSelectionSettings: true,
       })
-    }).toThrow('requires a scoped preset Context')
+    }).rejects.toThrow('requires a scoped preset Context')
 
     await withoutAgent.fiber.dispose()
   })
@@ -405,13 +408,13 @@ describe('SubagentModelSelectionConfig', () => {
         parentSession: SessionId('missing-parent'),
       })
 
-      expect(() => {
-        tool.apply(ctx, {
+      await expect(async () => {
+        await tool.apply(ctx, {
           provider: 'missing',
           modelSelectionSettings: true,
           maxDepth: 'provider-managed',
         }, child)
-      }).toThrow('child model-selection inheritance requires the Session registry')
+      }).rejects.toThrow('child model-selection inheritance requires the Session registry')
     } finally {
       await ctx.fiber.dispose()
     }

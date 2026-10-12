@@ -895,7 +895,7 @@ describe('late replies', () => {
       error: { name: 'SessionFormatError', code: TOOL_OUTCOME_UNKNOWN },
     }, { surfaceOp: 'append' })
 
-    expect(ctx.sessionProjections.stateOf(agent.session, 'userQuestions')?.questions).toEqual({ active: [], settled: [] })
+    expect(ctx.sessionProjections.checkpoint(agent.session).userQuestions?.val).toMatchObject({ questions: { active: [], settled: [] } })
     expect(ctx.userQuestions.answer(agent, timedCallId, { answers: [{ id: 'scope', selected: [] }] })).toBe(false)
     expect(agent.steer).not.toHaveBeenCalled()
     await ctx.fiber.dispose()

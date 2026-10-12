@@ -1,4 +1,5 @@
 /** Scoped tool that declares filesystem deliveries in their owning Session. */
+import { turnBoundaryProjectionDefinition } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
@@ -9,7 +10,6 @@ import type {} from '@deepseek-ai/dsh-session-projection'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type { PresentedFile } from './types.ts'
 
-/** Stable Loader identity. */
 export const name = 'tool-present'
 
 /** Per-call delivery limit. */
@@ -23,15 +23,16 @@ export const Config: z<Config> = z.object({
   maxFiles: z.number().default(8),
 })
 
-/** Services used by the scoped delivery tool. */
 export const inject = ['tools', 'fs', 'sessionProjections', 'workingDirectory']
 
 /**
  * Register present with durable file references in its tool result.
  * @param ctx - agent-scoped services.
  * @param config - maximum files per call.
+ * @returns when the plugin is ready.
  */
-export function apply(ctx: Context, config: Config): void {
+export async function apply(ctx: Context, config: Config): Promise<void> {
+  const turnBoundary = await ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
   if (!Number.isSafeInteger(config.maxFiles) || config.maxFiles < 1) {
     throw new Error('present requires a positive integer maxFiles')
   }
@@ -76,8 +77,8 @@ export function apply(ctx: Context, config: Config): void {
     },
     async execute(args, exec) {
       if (exec.agent === undefined) throw new Error('present requires an agent Session')
-      const boundary = ctx.sessionProjections.stateOf(exec.agent.session, 'turnBoundary')
-      if (boundary === undefined || boundary.openTurnStartSeq === null) throw new Error('present requires an open turn')
+      const boundary = turnBoundary.stateOf(exec.agent.session)
+      if (boundary.openTurnStartSeq === null) throw new Error('present requires an open turn')
       if (args.files.length === 0 || args.files.length > config.maxFiles) throw new Error(`present accepts 1 to ${config.maxFiles} files`)
       const cwd = await ctx.workingDirectory.ensure(exec.agent, exec.signal)
       const options = { cwd, signal: exec.signal }

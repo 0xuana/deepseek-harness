@@ -89,7 +89,7 @@ function foldPlanMode(events: readonly SessionEvent[], end = events.length): boo
 
 async function mountProjectionSeam(ctx: Context): Promise<void> {
   await ctx.plugin(SessionProjectionRegistry)
-  ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
+  await ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
 }
 
 async function setup(config: PlanModeConfig = PLAN_CONFIG): Promise<Context> {
@@ -229,25 +229,6 @@ describe('ctx.planMode: get/set', () => {
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(PlanModeController, PLAN_CONFIG)
     expect(ctx.get('planMode')).toBeUndefined()
-  })
-
-  it('fails when the required plan projection key is absent', async () => {
-    const ctx = await setup()
-    const agent = await agentWithSession(ctx, 'missing-plan-projection')
-    vi.spyOn(ctx.sessionProjections, 'stateOf').mockReturnValue(undefined)
-    expect(() => ctx.planMode.get(agent)).toThrow('plan-mode requires the plan session projection')
-  })
-
-  it('registers plan state directly but requires turnBoundary state', async () => {
-    const ctx = new Context()
-    await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(SystemPrompt)
-    await ctx.plugin(ToolRuntime)
-    const agent = await agentWithSession(ctx, 'missing-plan-projection-keys')
-    const planMode = new PlanModeController(ctx, PLAN_CONFIG)
-    await new Promise(resolve => setImmediate(resolve))
-    expect(planMode.get(agent)).toEqual({ active: false })
-    expect(() => planMode.set(agent, true)).toThrow('plan-mode requires the turnBoundary session projection')
   })
 
   it('reads the folded state', async () => {

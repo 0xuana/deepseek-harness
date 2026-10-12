@@ -75,11 +75,11 @@ async function harness(presets?: readonly string[]) {
     },
   }
   ctx.agents.setFactory(factory)
-  const remote = createSessionTestRemote(ctx, {
+  const remote = await createSessionTestRemote(ctx, {
     defaultModelSelection: () => ({ provider: 'test', model: 'test-model' }),
     cwd,
   })
-  if (presets !== undefined) ctx.sessionProjections.register(agentPresetProjectionDefinition)
+  if (presets !== undefined) await ctx.sessionProjections.register(agentPresetProjectionDefinition)
   return { ctx, remote }
 }
 

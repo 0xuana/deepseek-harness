@@ -19,6 +19,7 @@ export type { LlmRetryEventData, LlmRetryStartedEventData } from './types.ts'
 export { RetryId } from './brand.ts'
 
 export const name = 'llm-retry'
+
 export const inject = ['agents', 'sessionProjections']
 
 /** This policy executor has no config; providers own `retryPolicy`. */
@@ -95,12 +96,6 @@ function cancellableDelay(delayMs: number, signal: AbortSignal): Promise<boolean
   })
 }
 
-/**
- * Install provider-routed normal or unbounded request recovery.
- * @param ctx - plugin context that owns the listener and active waits.
- * @param config - empty executor config; provider registrations own policy.
- * @param internals - non-serializable deterministic hooks for tests.
- */
 interface RetryStateEntry {
   retry: number
   retryId: RetryId
@@ -120,9 +115,16 @@ declare module '@deepseek-ai/dsh-session-projection/types' {
   }
 }
 
-export function apply(ctx: Context, config: Config = {}, internals: RetryInternals = {}): void {
+/**
+ * Install provider-routed normal or unbounded request recovery.
+ * @param ctx - plugin context that owns the listener and active waits.
+ * @param config - empty executor config; provider registrations own policy.
+ * @param internals - non-serializable deterministic hooks for tests.
+ * @returns when recovery listeners and their projection are ready.
+ */
+export async function apply(ctx: Context, config: Config = {}, internals: RetryInternals = {}): Promise<void> {
   validateConfig(config)
-  ctx.sessionProjections.register({
+  const projection = await ctx.sessionProjections.register({
     key: 'llmRetry',
     stateVersion: 1,
     stateSchema: llmRetryStateSchema,
@@ -217,7 +219,7 @@ export function apply(ctx: Context, config: Config = {}, internals: RetryInterna
     }
 
     const policyKey = retryPolicyKey(policy)
-    const retryState = ctx.sessionProjections.stateOf(agent.session, 'llmRetry') as LlmRetryState
+    const retryState = projection.stateOf(agent.session)
     const previous = retryState[retryStateKey(provider, policyKey)]
     const previousRetry = previous?.retry ?? 0
     if (policy.mode === 'normal' && previousRetry >= policy.maxRetries) return next()

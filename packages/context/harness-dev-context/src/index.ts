@@ -124,9 +124,10 @@ const ADMITS_NOTHING: LegacyPrompt = { source: null, web: null }
  * Register the two sections, their runtime-context values, and the
  * projection that keeps a Session's admitted paragraphs.
  * @param ctx - plugin context with every {@link inject} service.
+ * @returns after the projection reader and prompt registrations are ready.
  */
-export function apply(ctx: Context): void {
-  ctx.sessionProjections.register({
+export async function apply(ctx: Context): Promise<void> {
+  const legacyPrompt = await ctx.sessionProjections.register({
     key: LEGACY_PROMPT,
     stateVersion: 1,
     stateSchema: legacyPromptSchema,
@@ -135,8 +136,7 @@ export function apply(ctx: Context): void {
   })
   const admitted = (context: AssembleContext): LegacyPrompt => {
     const session = context.agent?.session
-    // This plugin registers the unit above, so its state exists for every Session.
-    return session === undefined ? ADMITS_NOTHING : ctx.sessionProjections.stateOf(session, LEGACY_PROMPT) as LegacyPrompt
+    return session === undefined ? ADMITS_NOTHING : legacyPrompt.stateOf(session)
   }
   ctx.systemPrompt.section({
     name: HARNESS_SOURCE,

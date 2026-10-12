@@ -235,9 +235,10 @@ describe('goal projection unit', () => {
     const bench = await harness(true)
     bench.ctx.goals.create(bench.agent, { objective: 'poisoned replay' })
     const failure = 'goal replay failed at session event 0: invalid restored goal stream'
-    const state = bench.ctx.sessionProjections.stateOf(bench.session, 'goal')
+    const handle = await bench.ctx.sessionProjections.register(goalProjectionDefinition)
+    const state = handle.stateOf(bench.session)
     expect(state).toBeDefined()
-    Object.assign(state!, { failure })
+    Object.assign(state, { failure })
 
     await expect(agentEvents(bench.ctx, bench.agent).serial('agent/created', { source: 'resume' }))
       .resolves.toBeUndefined()

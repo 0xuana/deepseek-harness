@@ -33,11 +33,12 @@ import { registerListSubagentModels } from './list-models.ts'
 import type {} from './model-selection-settings.ts'
 import {
   recordSubagentModelSelection,
-  subagentModelSelectionProjectionDefinition,
   subagentModelSelectionPolicy,
+  subagentModelSelectionProjectionDefinition,
 } from './model-selection-state.ts'
 
 export const name = 'tool-subagent'
+
 export const inject = ['tools', 'subagents', 'systemPrompt', 'sessionProjections']
 
 // Definition identity keeps shared guidance scoped to the actual visible tools,
@@ -159,8 +160,9 @@ function providerWording(inheritsConversation: boolean): { description: string; 
  * @param ctx - Context that owns the registrations.
  * @param config - delegation-tool configuration.
  * @param session - unpublished Session supplied by a direct Agent setup; omit for a standing composition.
+ * @returns when the plugin is ready.
  */
-export function apply(ctx: Context, config: Config, session?: Session): void {
+export async function apply(ctx: Context, config: Config, session?: Session): Promise<void> {
   // Direct apply() bypasses Schemastery's numeric constraints. A direct-apply
   // omission stays capless (the schema default only runs through the loader).
   if (config.maxDepth !== 'provider-managed') assertSubagentMaxDepth(config.maxDepth)
@@ -171,7 +173,7 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
   const toolName = config.toolName ?? 'subagent'
 
   const modelSelectionCapable = config.modelSelectionSettings === true
-  ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
+  const modelSelectionProjection = await ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
 
   const assertSubagentProviderConfiguration = (subagentProvider: SubagentProvider): void => {
     if (ctx.subagents.resolveMaxDepth(config.maxDepth) !== undefined && !subagentProvider.capabilities.depthLimit) {
@@ -401,7 +403,7 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
     const freshSession = target.firstLiveSeq === 0
       // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
       && target.eventAt(SessionSeq(0))?.type !== 'session/end-seed'
-    let allowedModels = subagentModelSelectionPolicy(ctx.sessionProjections, target)
+    let allowedModels = subagentModelSelectionPolicy(modelSelectionProjection, target)
     if (allowedModels === undefined) {
       const parentId = target.header.origin === 'subagent'
         ? target.header.parentSession
@@ -414,14 +416,14 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
         const parent = sessions.get(parentId)
         allowedModels = parent === undefined
           ? undefined
-          : subagentModelSelectionPolicy(ctx.sessionProjections, parent)
+          : subagentModelSelectionPolicy(modelSelectionProjection, parent)
       } else if (freshSession) {
         const current = settings.current()
         allowedModels = current.enabled ? current.allowedModels : undefined
       }
     }
     if (allowedModels !== undefined) {
-      recordSubagentModelSelection(ctx.sessionProjections, target, allowedModels)
+      recordSubagentModelSelection(modelSelectionProjection, target, allowedModels)
     }
     return allowedModels === undefined ? undefined : { routes: allowedModels }
   }

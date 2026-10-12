@@ -76,7 +76,7 @@ async function harness(
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
-  ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
+  await ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
   await ctx.plugin(SessionTitleService, TITLE_CONFIG)
   const adapter = new RecordingAdapter(script, reasoningEfforts)
   ctx.llm.registerAdapter(['title-route'], adapter)
@@ -249,7 +249,7 @@ describe('first-prompt LLM title provider', () => {
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
+    await ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
     await ctx.plugin(SessionTitleService, TITLE_CONFIG)
     // Delegate to the real registration while capturing it, to reach the guard
     // the service never produces.

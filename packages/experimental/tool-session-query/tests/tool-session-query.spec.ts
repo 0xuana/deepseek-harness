@@ -31,6 +31,7 @@ import SessionQueryEngine, {
 } from '@deepseek-ai/dsh-session-query'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { type ToolExecutionResult } from '@deepseek-ai/dsh-tools'
+import type { Config as ToolSessionQueryConfig } from '@deepseek-ai/dsh-tool-session-query'
 import * as ToolSessionQuery from '@deepseek-ai/dsh-tool-session-query'
 
 declare module '@deepseek-ai/dsh-llm' {
@@ -207,12 +208,12 @@ interface Mounted {
   call(name: string, args: unknown, options?: { agent?: Agent; signal?: AbortSignal }): Promise<ToolExecutionResult>
 }
 
-function registerTurnBoundary(ctx: Context): void {
-  ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
+async function registerTurnBoundary(ctx: Context): Promise<void> {
+  await ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
 }
 
 async function mount(
-  config: ToolSessionQuery.Config = {},
+  config: ToolSessionQueryConfig = {},
   callerCwd: string | null = '/work',
   enforceTimeout = false,
 ): Promise<Mounted> {
@@ -220,7 +221,7 @@ async function mount(
   activeContexts.push(ctx)
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
-  registerTurnBoundary(ctx)
+  await registerTurnBoundary(ctx)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   if (enforceTimeout) await ctx.plugin(TimeoutPolicy)
@@ -329,14 +330,14 @@ describe('registration and schemas', () => {
   it('fails invalid direct config before registering anything', async () => {
     const mounted = await mount()
     for (const maxSearchResults of [0, 1.5, Number.NaN]) {
-      expect(() => { ToolSessionQuery.apply(mounted.ctx, { maxSearchResults }) })
-        .toThrow('maxSearchResults')
+      await expect(ToolSessionQuery.apply(mounted.ctx, { maxSearchResults }))
+        .rejects.toThrow('maxSearchResults')
     }
     for (const searchTimeoutMs of [0, 1.5, Number.POSITIVE_INFINITY, MAX_TIMER_DELAY_MS + 1]) {
-      expect(() => { ToolSessionQuery.apply(mounted.ctx, { searchTimeoutMs }) })
-        .toThrow(`no greater than ${MAX_TIMER_DELAY_MS}`)
+      await expect(ToolSessionQuery.apply(mounted.ctx, { searchTimeoutMs }))
+        .rejects.toThrow(`no greater than ${MAX_TIMER_DELAY_MS}`)
     }
-    expect(() => { ToolSessionQuery.apply(new Context(), {}) }).toThrow()
+    await expect(ToolSessionQuery.apply(new Context(), {})).rejects.toThrow()
   })
 
   it('expresses the complete Node timer range in the Loader config schema', () => {
@@ -1652,7 +1653,7 @@ describe('search paging, prior-history bounds, titles, and cancellation', () => 
     expect(text(result)).toContain('Result cap reached')
   })
 
-  it('rejects current-session search without the turnBoundary fold', async () => {
+  it('rejects current-session search before any step has started', async () => {
     const ctx = new Context()
     activeContexts.push(ctx)
     await ctx.plugin(SessionStore)
@@ -1669,7 +1670,8 @@ describe('search paging, prior-history bounds, titles, and cancellation', () => 
       signal: new AbortController().signal,
       agent: fakeAgent(session),
     })
-    expect(errorCode(result)).toBe('SESSION_QUERY_TOOL_NO_CURRENT_STEP')
+    expect(ctx.sessionProjections.checkpoint(session).turnBoundary).toBeDefined()
+    expect(errorCode(result)).toBe('SESSION_QUERY_INVALID_FILTER')
   })
 
   it('preserves base results when a title read fails, annotates the code, and logs the full error', async () => {

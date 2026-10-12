@@ -18,6 +18,7 @@ import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { loadStoredSession } from '../../subagent/tests/persistence-helpers.ts'
 import * as mock from './scripted-provider.ts'
+import type { Config as toolConfig } from '../src/index.ts'
 import * as tool from '../src/index.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import {
@@ -325,7 +326,7 @@ describe('dsh-tool-subagent', () => {
       },
     })
     // Direct apply with only `provider` — no toolName, no agentOptions.
-    tool.apply(ctx, { maxDepth: 'provider-managed', provider: 'bare' })
+    await tool.apply(ctx, { maxDepth: 'provider-managed', provider: 'bare' })
     await new Promise(r => setTimeout(r, 10))
 
     expect(ctx.tools.schemas().some(s => s.name === 'subagent')).toBe(true)
@@ -347,7 +348,7 @@ describe('dsh-tool-subagent', () => {
     // Tool first: no provider yet — the tool must be absent, not broken.
     // Direct apply (schema bypass): also covers the waiting-note's default
     // toolName fallback, which validated config pre-fills.
-    tool.apply(ctx, { provider: 'mock' })
+    await tool.apply(ctx, { provider: 'mock' })
     expect(ctx.tools.schemas().some(s => s.name === 'subagent')).toBe(false)
     // Backend arrives (as a delayed sibling fiber would): the tool appears.
     await mock.mountScriptedProvider(ctx, { name: 'mock', reply: 'late but fine' })
@@ -360,7 +361,7 @@ describe('dsh-tool-subagent', () => {
     const ctx = await projectedContext()
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
-    tool.apply(ctx, {
+    await tool.apply(ctx, {
       provider: 'later-continuable',
       maxDepth: 'provider-managed',
     })
@@ -575,7 +576,6 @@ describe('dsh-tool-subagent', () => {
     expect(typeof unwrapped.apply).toBe('function')
     expect(unwrapped.Config).toBeDefined()
   })
-
   it('passes persona/toolFilter/maxDepth config through to the start request', async () => {
     let seen: { persona?: string; toolFilter?: unknown; maxDepth?: number } | undefined
     const ctx = await projectedContext()
@@ -621,14 +621,14 @@ describe('dsh-tool-subagent', () => {
       .rejects.toThrow()
   })
 
-  it('validates maxDepth when apply() is invoked directly without Schemastery', async () => {
+  it('validates maxDepth during initialization without Schemastery', async () => {
     const ctx = await projectedContext()
-    expect(() => {
-      tool.apply(ctx, {
+    await expect(async () => {
+      await tool.apply(ctx, {
         provider: 'unused',
         maxDepth: Number.NaN,
       })
-    }).toThrow('subagent maxDepth must be a non-negative safe integer')
+    }).rejects.toThrow('subagent maxDepth must be a non-negative safe integer')
   })
 
   it('a partial toolFilter (deny only) does not materialize an empty allow-list (deny-all trap)', async () => {
@@ -806,7 +806,7 @@ describe('dsh-tool-subagent local activation', () => {
         return {}
       },
     })
-    tool.apply(ctx, {
+    await tool.apply(ctx, {
       provider: 'gated',
       toolName: 'subagent_gated',
       maxDepth: 3,
@@ -850,7 +850,7 @@ describe('dsh-tool-subagent local activation', () => {
 
 describe('depth budget configuration', () => {
   /** Mount the tool over a request-capturing provider with full capabilities. */
-  async function captureSetup(config: Omit<tool.Config, 'provider'> = {}) {
+  async function captureSetup(config: Omit<toolConfig, 'provider'> = {}) {
     const requests: SubagentStartRequest[] = []
     const ctx = await projectedContext()
     await mountWorkingDirectoryFixture(ctx)

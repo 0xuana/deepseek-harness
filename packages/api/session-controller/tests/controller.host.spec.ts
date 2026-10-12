@@ -52,7 +52,7 @@ describe('SessionController facade', () => {
       bindPrompt: () => ({ commit: () => {}, [Symbol.dispose]: () => {} }),
       retirePrompt: () => {},
     } as never)
-    const controller = createSessionTestController(ctx, defaults)
+    const controller = await createSessionTestController(ctx, defaults)
     const status = vi.fn()
     const failure = vi.fn()
     const activity = vi.fn()
@@ -157,7 +157,7 @@ describe('SessionController facade', () => {
           events: [],
         }),
       }) as never)
-      const controller = createSessionTestController(ctx, defaults)
+      const controller = await createSessionTestController(ctx, defaults)
       const agents = (controller as unknown as { agents: ApiSessionAgentController }).agents
       const apiError = vi.fn()
       ctx.on('api-session/error', apiError)
@@ -213,7 +213,7 @@ describe('SessionController facade', () => {
         events: [],
       }),
     }) as never)
-    const controller = createSessionTestController(ctx, defaults)
+    const controller = await createSessionTestController(ctx, defaults)
     const agents = (controller as unknown as { agents: ApiSessionAgentController }).agents
     const started = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()

@@ -7,14 +7,16 @@ import type {
   Agent, AgentOptions, AgentSetup, ModelSelection as AgentModelSelection, ModelSelectionRef,
 } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
-import type {} from '@deepseek-ai/dsh-agent-preset-registry'
+import { agentPresetProjectionDefinition } from '@deepseek-ai/dsh-agent-preset-registry'
 import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { Session, SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionInspection } from '@deepseek-ai/dsh-session-persistence'
 import { SessionQueryError, type SessionObservation } from '@deepseek-ai/dsh-session-query'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-typert-registry'
-import type { ModelSelection } from './types.ts'
+import type { ModelSelection, ModelSelectionProjectionState } from './types.ts'
+import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
+import { modelSelectionProjection } from './model-selection-projection.ts'
 
 /** Cold Session identity absent from persistence. */
 export class ApiSessionNotFound extends Error {}
@@ -138,13 +140,24 @@ export async function inspectApiSession(
 
 /** Owns every operation that may create, resume, or configure a Web Agent. */
 export class ApiSessionAgentController {
+  private modelSelection!: ProjectionHandle<ModelSelectionProjectionState>
+  private agentPreset!: ProjectionHandle<string | null>
   private readonly resumes = new Map<SessionId, Promise<Agent>>()
   private readonly creations = new Map<SessionId, Promise<Agent>>()
   private readonly selections = new WeakMap<Agent, InstalledSelection>()
   private readonly imageAdmissionChains = new WeakMap<Agent, Promise<void>>()
 
   /** @param ctx - Host context carrying Agent, model, persistence, and Typert services. */
-  constructor(private readonly ctx: Context) {
+  constructor(private readonly ctx: Context) {}
+
+  /**
+   * Acquire projection readers before exposing dependent operations.
+   * @returns when all required registrations are ready.
+   */
+  async initialize(): Promise<void> {
+    const ctx = this.ctx
+    this.modelSelection = await ctx.sessionProjections.register(modelSelectionProjection)
+    this.agentPreset = await ctx.sessionProjections.register(agentPresetProjectionDefinition)
     ctx.typert.lookups.configure('agent', async (sessionId: SessionId) => {
       const found = await this.resolveAgent(sessionId)
       if ('error' in found) throw found.error
@@ -283,10 +296,7 @@ export class ApiSessionAgentController {
   selectionFor(agent: Agent): InstalledSelection {
     const installed = this.selections.get(agent)
     if (installed !== undefined) return installed
-    const projectionState = this.ctx.sessionProjections.stateOf(agent.session, 'modelSelection')
-    if (projectionState === undefined) {
-      throw new Error('api-session: required modelSelection projection is not registered')
-    }
+    const projectionState = this.modelSelection.stateOf(agent.session)
     let picked = projectionState.pending === null
       ? undefined
       : agentModelSelection(projectionState.pending)
@@ -355,10 +365,10 @@ export class ApiSessionAgentController {
   /**
    * Read the current Agent preset from the Session projection.
    * @param session - live Session whose projection state is available.
-   * @returns the current preset, or undefined when the capability is absent.
+   * @returns the current preset, or undefined when the Session has no recorded preset.
    */
   presetForSession(session: Session): string | undefined {
-    return this.ctx.sessionProjections.stateOf(session, 'agentPreset') ?? undefined
+    return this.agentPreset.stateOf(session) ?? undefined
   }
 
   /**
@@ -506,7 +516,7 @@ export class ApiSessionAgentController {
   /**
    * Read the current Agent preset from an all-projections observation.
    * @param observation - exact Session observation carrying its projection snapshot.
-   * @returns the current preset, or undefined when the capability is absent.
+   * @returns the current preset, or undefined when the Session has no recorded preset.
    */
   presetForObservation(observation: SessionObservation): string | undefined {
     if (observation.projections === undefined) {

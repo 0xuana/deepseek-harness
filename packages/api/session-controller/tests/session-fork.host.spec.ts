@@ -90,7 +90,7 @@ async function liveAgent(
   return session
 }
 
-const remote = (ctx: Context) => createSessionTestRemote(ctx, {
+const remote = async (ctx: Context) => await createSessionTestRemote(ctx, {
   defaultModelSelection: () => ({ provider: 'default-provider', model: 'default-model' }),
   cwd: '/tmp',
 })
@@ -120,7 +120,7 @@ describe('sessions.fork', () => {
       }) as never)
       const open = vi.spyOn(ctx.sessionPersistence, 'open')
 
-      const response = await remote(ctx).fork({
+      const response = await (await remote(ctx)).fork({
         sessionId: source.id,
         ...allowMigration === undefined ? {} : { allowMigration },
       })
@@ -150,7 +150,7 @@ describe('sessions.fork', () => {
       const observe = vi.spyOn(ctx.sessionQuery, 'observeSession')
       const create = vi.spyOn(ctx.agents, 'create')
 
-      await expect(remote(ctx).fork({ sessionId: sourceId, allowMigration: false })).resolves.toMatchObject({
+      await expect((await remote(ctx)).fork({ sessionId: sourceId, allowMigration: false })).resolves.toMatchObject({
         ok: false, error: { code: 'session/migration-required', details: { sessionId: sourceId } },
       })
       expect(stat).toHaveBeenCalledExactlyOnceWith(sourceId)
@@ -171,7 +171,7 @@ describe('sessions.fork', () => {
       const stat = vi.fn(() => Promise.reject(new Error('unexpected metadata read')))
       ctx.provide('sessionPersistence', testSessionPersistence(ctx, { stat }) as never)
 
-      const result = await remote(ctx).fork({ sessionId: source.id, allowMigration: false })
+      const result = await (await remote(ctx)).fork({ sessionId: source.id, allowMigration: false })
 
       if (!result.ok) throw result.error
       expect(stat).not.toHaveBeenCalled()
@@ -199,7 +199,7 @@ describe('sessions.fork', () => {
         return finish.promise
       })
       ctx.provide('sessionPersistence', testSessionPersistence(ctx, { stat }) as never)
-      const operation = remote(ctx).fork({ sessionId: sourceId, allowMigration: false })
+      const operation = (await remote(ctx)).fork({ sessionId: sourceId, allowMigration: false })
       try {
         await entered.promise
         const live = ctx.sessions.create(sourceId, { meta: source.header })
@@ -229,7 +229,7 @@ describe('sessions.fork', () => {
       const observe = vi.spyOn(ctx.sessionQuery, 'observeSession')
       const create = vi.spyOn(ctx.agents, 'create')
 
-      await expect(remote(ctx).fork({ sessionId: sourceId, allowMigration: false })).resolves.toMatchObject({
+      await expect((await remote(ctx)).fork({ sessionId: sourceId, allowMigration: false })).resolves.toMatchObject({
         ok: false, error: { code: 'gateway/internal', message: 'source metadata unavailable' },
       })
 
@@ -262,9 +262,9 @@ describe('sessions.fork', () => {
       expect(compacted.at(-1)).toMatchObject({ type: 'compaction/end', data: { turn: null } })
       source.inbox.append('next-turn', message('queued after compaction'))
 
-      const response = await createSessionTestRemote(ctx, {
+      const response = await (await createSessionTestRemote(ctx, {
         defaultModelSelection: () => ({ provider: 'mock', model: 'mock' }), cwd: '/tmp',
-      }).fork({ sessionId: source.id })
+      })).fork({ sessionId: source.id })
 
       if (!response.ok) throw response.error
       const child = ctx.agents.get(response.value.sessionId)!
@@ -304,9 +304,9 @@ describe('sessions.fork', () => {
         }
         const original = source.session.snapshotEvents()
         const atSeq = anchor === 'omitted' ? undefined : boundary
-        const response = await createSessionTestRemote(ctx, {
+        const response = await (await createSessionTestRemote(ctx, {
           defaultModelSelection: () => ({ provider: 'mock', model: 'mock' }), cwd: '/tmp',
-        }).fork({ sessionId: source.id, ...(atSeq === undefined ? {} : { atSeq }) })
+        })).fork({ sessionId: source.id, ...(atSeq === undefined ? {} : { atSeq }) })
         if (!response.ok) throw response.error
         const child = ctx.agents.get(response.value.sessionId)!
         const requestCount = adapter.requests.length
@@ -327,7 +327,7 @@ describe('sessions.fork', () => {
   it('cuts exactly at a completed turn and records lineage and cwd', async () => {
     const ctx = await composed()
     const source = await liveAgent(ctx, 'session-source', 2)
-    const response = await remote(ctx).fork(request({ sessionId: source.id, atSeq: 2 }))
+    const response = await (await remote(ctx)).fork(request({ sessionId: source.id, atSeq: 2 }))
     expect(response.ok ? null : response.error).toBeNull()
     if (!response.ok) return
     const child = ctx.sessions.get(response.value.sessionId)
@@ -369,7 +369,7 @@ describe('sessions.fork', () => {
       root: { header: owner.header, live: true, persisted: false },
     })
 
-    const response = await remote(ctx).fork(request({ sessionId: grandchild.id }))
+    const response = await (await remote(ctx)).fork(request({ sessionId: grandchild.id }))
 
     expect(response.ok ? undefined : response.error).toBeUndefined()
     if (!response.ok) return
@@ -424,7 +424,7 @@ describe('sessions.fork', () => {
     }) as never)
     const resume = vi.spyOn(ctx.agents, 'resume')
 
-    const response = await remote(ctx).fork(request({ sessionId: sourceId }))
+    const response = await (await remote(ctx)).fork(request({ sessionId: sourceId }))
 
     expect(response.ok ? undefined : response.error).toBeUndefined()
     if (!response.ok) return
@@ -441,7 +441,7 @@ describe('sessions.fork', () => {
   it('uses the latest completed prefix only when atSeq is omitted', async () => {
     const ctx = await composed()
     const source = await liveAgent(ctx, 'session-tail', 2, 'open')
-    const proxy = remote(ctx)
+    const proxy = await remote(ctx)
     const omitted = await proxy.fork(request({ sessionId: source.id }))
     expect(omitted.ok).toBe(true)
     if (omitted.ok) {
@@ -464,7 +464,7 @@ describe('sessions.fork', () => {
   it('rejects an omitted boundary when no turn has completed', async () => {
     const ctx = await composed()
     const source = await liveAgent(ctx, 'session-never-completed', 0, 'open')
-    const response = await remote(ctx).fork(request({ sessionId: source.id }))
+    const response = await (await remote(ctx)).fork(request({ sessionId: source.id }))
     expect(response).toMatchObject({
       ok: false,
       error: { code: 'session/fork-unavailable', details: { sessionId: source.id } },
@@ -481,7 +481,7 @@ describe('sessions.fork', () => {
       const inherited = source.snapshotEvents()
       if (openNextTurn) source.append('turn/start', { turn: 2 })
 
-      const response = await remote(ctx).fork({ sessionId: source.id })
+      const response = await (await remote(ctx)).fork({ sessionId: source.id })
 
       if (!response.ok) throw response.error
       const child = ctx.sessions.get(response.value.sessionId)!
@@ -496,7 +496,7 @@ describe('sessions.fork', () => {
 
   it('rejects invalid fork anchors before reading or creating a Session', async () => {
     const ctx = await composed()
-    const proxy = remote(ctx)
+    const proxy = await remote(ctx)
 
     for (const atSeq of [-1, 0.5]) {
       await expect(proxy.fork(request({ sessionId: sid('missing'), atSeq })))
@@ -510,7 +510,7 @@ describe('sessions.fork', () => {
     const ctx = await composed()
     const source = await liveAgent(ctx, 'session-aborted', 1, 'aborted')
     const anchor = (source.snapshotEvents().at(-1)?.seq ?? 0) - 1
-    const response = await remote(ctx).fork(request({ sessionId: source.id, atSeq: anchor }))
+    const response = await (await remote(ctx)).fork(request({ sessionId: source.id, atSeq: anchor }))
     expect(response.ok ? undefined : response.error).toBeUndefined()
     if (!response.ok) return
     const child = ctx.sessions.get(response.value.sessionId)
@@ -527,7 +527,7 @@ describe('sessions.fork', () => {
     const ctx = await composed()
     const source = await liveAgent(ctx, 'session-open', 1, 'open')
     const boundary = source.snapshotEvents().at(-1)?.seq ?? 0
-    const response = await remote(ctx).fork(request({ sessionId: source.id, atSeq: boundary }))
+    const response = await (await remote(ctx)).fork(request({ sessionId: source.id, atSeq: boundary }))
     expect(response.ok ? undefined : response.error).toBeUndefined()
     if (!response.ok) return
     const child = ctx.sessions.get(response.value.sessionId)
@@ -548,7 +548,7 @@ describe('sessions.fork', () => {
     const boundary = source.snapshotEvents().at(-1)?.seq ?? 0
     source.append('session/title', { title: 'after boundary', messageSeqs: [], source: { kind: 'fallback' } })
 
-    const response = await remote(ctx).fork(request({ sessionId: source.id, atSeq: boundary }))
+    const response = await (await remote(ctx)).fork(request({ sessionId: source.id, atSeq: boundary }))
 
     expect(response.ok ? undefined : response.error).toBeUndefined()
     if (!response.ok) return
@@ -604,7 +604,7 @@ describe('sessions.fork', () => {
     }) as never)
     const resume = vi.spyOn(ctx.agents, 'resume')
 
-    const response = await remote(ctx).fork(request({ sessionId: sourceId, atSeq: 4 }))
+    const response = await (await remote(ctx)).fork(request({ sessionId: sourceId, atSeq: 4 }))
 
     expect(response.ok ? undefined : response.error).toBeUndefined()
     if (!response.ok) return
@@ -656,7 +656,7 @@ describe('sessions.fork', () => {
       reason: 'change',
     })
     source.append('turn/end', { turn: 2, reason: { kind: 'completed' } })
-    const response = await remote(ctx).fork(request({ sessionId: source.id, atSeq: boundary.seq }))
+    const response = await (await remote(ctx)).fork(request({ sessionId: source.id, atSeq: boundary.seq }))
     expect(response.ok ? undefined : response.error).toBeUndefined()
     if (!response.ok) return
     const child = ctx.agents.get(response.value.sessionId)

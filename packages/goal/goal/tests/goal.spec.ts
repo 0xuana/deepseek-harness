@@ -1,3 +1,4 @@
+import { Service } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
@@ -174,8 +175,11 @@ describe('GoalService creation and replay', () => {
     await ctx.plugin(SessionProjectionRegistry)
     const stub = stubAgent('goal-direct-construction')
     await ctx.agents.register(stub.agent)
-    const goals = new GoalService(ctx)
-    await new Promise(resolve => setImmediate(resolve))
+    class DirectGoalService extends GoalService {
+      initialize(): Promise<void> { return this[Service.init]() }
+    }
+    const goals = new DirectGoalService(ctx)
+    await goals.initialize()
     expect(goals.create(stub.agent, { objective: 'direct' })).toMatchObject({
       objective: 'direct', maxGoalRounds: 256,
     })
@@ -277,8 +281,8 @@ describe('GoalService creation and replay', () => {
 
     await fiber.dispose()
     expect(ctx.get('goals')).toBeUndefined()
-    expect(ctx.sessionProjections.stateOf(stub.session, 'goal')).toBeUndefined()
-    expect(() => first.get(stub.agent)).toThrow('goal projection is not registered')
+    expect(ctx.sessionProjections.checkpoint(stub.session).goal?.val).toBeUndefined()
+    expect(first.get(stub.agent)).toMatchObject({ id: goal.id })
 
     await ctx.plugin(GoalService)
     expect(ctx.goals).not.toBe(first)

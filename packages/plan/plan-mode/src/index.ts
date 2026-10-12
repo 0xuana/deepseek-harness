@@ -25,6 +25,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { z as zod } from 'zod'
 import type { ZodType } from 'zod'
+import { turnBoundaryProjectionDefinition, type TurnBoundaryProjection } from '@deepseek-ai/dsh-agent'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
@@ -33,7 +34,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import { UserQuestionError, type AskUserQuestionAnswer } from '@deepseek-ai/dsh-user-questions'
 import type { CommandDefinitionId, CommandId } from '@deepseek-ai/dsh-commands'
 import type {} from '@deepseek-ai/dsh-session-projection'
-import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
+import type { ProjectionDefinition, ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type { PlanProjection, PlanUnitState } from './types.ts'
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -177,6 +178,8 @@ export class PlanModeController extends Service {
 
   /** Validated deployment-owned guidance. */
   private readonly section: string
+  private projection!: ProjectionHandle<PlanUnitState>
+  private turnBoundary!: ProjectionHandle<TurnBoundaryProjection>
 
   /**
    * Latest selection per session awaiting the next accepted in-turn pre-step.
@@ -188,6 +191,12 @@ export class PlanModeController extends Service {
   constructor(ctx: Context, config: PlanModeConfig = { section: '' }) {
     super(ctx, 'planMode')
     this.section = resolveConfig(config).section
+  }
+
+  protected async [Service.init](): Promise<void> {
+    const ctx = this.ctx
+    this.projection = await ctx.sessionProjections.register(planProjectionDefinition)
+    this.turnBoundary = await ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
     let disposed = false
     // Pre-step is outside Session.append publication, so it can append the
     // log-only mode event inside an open turn without re-entering the session.
@@ -223,7 +232,6 @@ export class PlanModeController extends Service {
       },
     })
 
-    ctx.sessionProjections.register(planProjectionDefinition)
 
     // The command child activates only when a command registry is composed.
     ctx.inject(['commands'], (commandCtx) => {
@@ -377,8 +385,7 @@ export class PlanModeController extends Service {
   }
 
   private hasOpenTurn(session: Session): boolean {
-    const state = this.ctx.sessionProjections.stateOf(session, 'turnBoundary')
-    if (state === undefined) throw new Error('plan-mode requires the turnBoundary session projection')
+    const state = this.turnBoundary.stateOf(session)
     return state.openTurnStartSeq !== null
   }
 
@@ -388,8 +395,7 @@ export class PlanModeController extends Service {
 
   /** Read the required plan projection state or fail at the first service access. */
   private planState(session: Session): PlanUnitState {
-    const state = this.ctx.sessionProjections.stateOf(session, 'plan')
-    if (state === undefined) throw new Error('plan-mode requires the plan session projection')
+    const state = this.projection.stateOf(session)
     return state
   }
 

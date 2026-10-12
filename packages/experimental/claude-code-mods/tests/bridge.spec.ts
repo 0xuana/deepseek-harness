@@ -535,7 +535,7 @@ describe('the mods API over harness services', () => {
       expect(out.session).toEqual({
         id: 'a1', cwd: h.workspace, root: h.workspace, model: 'mock', turns: 1,
         version: MODS_API_VERSION,
-        usage: { startedAt: agent.session.header.createdAt, context: { window: 0 }, rateLimits: [] },
+        usage: { startedAt: agent.session.header.createdAt, context: { tokens: 10, window: 0 }, rateLimits: [] },
         messages: [
           { role: 'user', text: 'hello', toolUses: [] },
           { role: 'user', text: `Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent working directory: ${JSON.stringify(h.workspace)}.`, toolUses: [] },
@@ -951,7 +951,7 @@ describe('loading diagnostics and configuration', () => {
   })
 
   it('is a Service plugin the Loader keeps by its default export', () => {
-    expect(ClaudeCodeMods.inject).toEqual(['workingDirectory'])
+    expect(ClaudeCodeMods.inject).toEqual(['workingDirectory', 'sessionProjections'])
     const loader = Object.create(Loader.prototype) as Loader
     const unwrapped: unknown = loader.unwrapExports({ default: ClaudeCodeMods })
     expect(unwrapped).toBe(ClaudeCodeMods)

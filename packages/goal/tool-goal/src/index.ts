@@ -20,12 +20,13 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView } from '@deepseek-ai/dsh-tools'
 import {
   completionAuthority,
-  goalToolExecution,
+  GoalToolExecutionResolver,
   requireDirectHuman,
 } from './authority.ts'
 import { renderWrapupContext } from './wrapup.ts'
 
 export const name = 'tool-goal'
+
 export const inject = ['agents', 'goals', 'tools', 'systemPrompt', 'sessionProjections']
 
 /** Model policy and hard lower bounds for goal-state updates. */
@@ -184,7 +185,9 @@ function present(title: string, kind: 'read' | 'other', rawInput?: unknown): Gen
 }
 
 /** Register the three Codex-shaped goal tools and their shared policy section. */
-export function apply(ctx: Context, config: Config): void {
+export async function apply(ctx: Context, config: Config): Promise<void> {
+  const executionResolver = new GoalToolExecutionResolver(ctx)
+  await executionResolver.initialize()
   const resolved = resolveConfig(config)
   ctx.systemPrompt.section({
     name: 'tool:goal',
@@ -198,7 +201,7 @@ export function apply(ctx: Context, config: Config): void {
     parameters: {},
     output: GOAL_OUTPUT,
     execute(_args, exec) {
-      const execution = goalToolExecution(ctx, exec)
+      const execution = executionResolver.resolve(exec)
       return Promise.resolve(goalValue(ctx.goals.get(execution.agent)))
     },
     presentCall: () => present('Read current goal', 'read'),
@@ -220,7 +223,7 @@ export function apply(ctx: Context, config: Config): void {
     },
     output: GOAL_OUTPUT,
     execute(args, exec) {
-      const execution = goalToolExecution(ctx, exec)
+      const execution = executionResolver.resolve(exec)
       requireDirectHuman(ctx, execution)
       const goal = ctx.goals.create(execution.agent, {
         objective: args.objective,
@@ -253,7 +256,7 @@ export function apply(ctx: Context, config: Config): void {
     },
     output: GOAL_OUTPUT,
     execute(args, exec) {
-      const execution = goalToolExecution(ctx, exec)
+      const execution = executionResolver.resolve(exec)
       const ref = goalRef(args.goal_id, args.revision)
       const replacements = {
         ...hasText(args.objective) ? { objective: args.objective } : {},

@@ -108,7 +108,7 @@ describe('declarative preset revisions', () => {
     await declare(ctx, contribution('minimal'))
     const agent = await agentOn(ctx, 'selection')
     expect(await ctx.agentPresets.select(agent, 'minimal')).toBe('minimal')
-    expect(ctx.sessionProjections.stateOf(agent.session, 'agentPreset')).toBe('minimal')
+    expect(ctx.sessionProjections.checkpoint(agent.session).agentPreset?.val).toBe('minimal')
     agent.session.append('turn/start', { turn: 1 })
     await expect(ctx.agentPresets.select(agent, 'standard')).rejects.toThrow('already started')
   })
@@ -276,7 +276,7 @@ it('serializes competing blank-session selections and recovers after a failed se
     ctx.agentPresets.select(agent, 'absent'), ctx.agentPresets.select(agent, 'minimal'), ctx.agentPresets.select(agent, 'standard'),
   ])
   expect(results.map(row => row.status)).toEqual(['rejected', 'fulfilled', 'fulfilled'])
-  expect(ctx.sessionProjections.stateOf(agent.session, 'agentPreset')).toBe('standard')
+  expect(ctx.sessionProjections.checkpoint(agent.session).agentPreset?.val).toBe('standard')
 })
 
 it('retains a newly acquired generation when a previous activation is replaced', async () => {
@@ -305,7 +305,7 @@ it('does not lose the durable selection when a tools observer rejects notificati
   const agent = await agentOn(ctx, 'observer')
   ctx.on('tools/change', () => { throw new Error('observer refused') })
   expect(await ctx.agentPresets.select(agent, 'minimal')).toBe('minimal')
-  expect(ctx.sessionProjections.stateOf(agent.session, 'agentPreset')).toBe('minimal')
+  expect(ctx.sessionProjections.checkpoint(agent.session).agentPreset?.val).toBe('minimal')
 })
 
 it('inventories failed conditional entries without executing their expressions again', async () => {

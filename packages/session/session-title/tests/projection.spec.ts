@@ -90,10 +90,8 @@ describe('title projection unit', () => {
     }
     await ctx.plugin(SessionTitleService, CONFIG)
 
-    const state = ctx.sessionProjections.stateOf(session, 'titleInput')
-    expect(state?.count).toBe(5_000)
-    expect(state?.first?.text).toBe('message 0')
-    expect(state?.lastSeq).toBe(session.seq - 1)
+    const state = ctx.sessionProjections.checkpoint(session).titleInput?.val
+    expect(state).toMatchObject({ count: 5_000, first: { text: 'message 0' }, lastSeq: session.seq - 1 })
     expect(ctx.sessionProjections.checkpoint(session).titleInput).toBeDefined()
   })
 

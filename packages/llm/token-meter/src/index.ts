@@ -38,6 +38,7 @@ import type { MeterSurfaceNode } from './surface-fold.ts'
 import { priceSurface } from './route-pricing.ts'
 
 export type * from './types.ts'
+export { contextPressureProjectionDefinition } from './usage-projection.ts'
 // Module-edge re-export: forces the emitted index.d.ts to import the
 // projection-unit modules, so their SessionProjectionStateMap augmentations load
 // in aggregate programs that only import the package root.
@@ -110,10 +111,13 @@ export class TokenMeter extends Service {
   constructor(ctx: Context, config: TokenMeterConfig = {}) {
     super(ctx, 'tokenMeter')
     validateConfigKeys(config)
+  }
 
-    ctx.sessionProjections.register(tokenUsageProjectionDefinition)
-    ctx.sessionProjections.register(contextPressureProjectionDefinition)
-    ctx.sessionProjections.register(contextBreakdownProjectionDefinition)
+  protected async [Service.init](): Promise<void> {
+    const ctx = this.ctx
+    await ctx.sessionProjections.register(tokenUsageProjectionDefinition)
+    await ctx.sessionProjections.register(contextPressureProjectionDefinition)
+    await ctx.sessionProjections.register(contextBreakdownProjectionDefinition)
 
     // Readers catch up independently, while eager observation bounds ordinary
     // read latency without creating state for sessions no consumer has read.

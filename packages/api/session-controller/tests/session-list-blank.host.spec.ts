@@ -25,7 +25,7 @@ async function harness(): Promise<{ ctx: Context; remote: TestSessionRemote; att
   await ctx.plugin(AgentRegistry)
   return {
     ctx,
-    remote: createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' }),
+    remote: await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' }),
     attach: async (session) => {
       await ctx.agents.register({ id: session.id, session, status: 'idle', ctx } as Agent)
     },

@@ -370,8 +370,9 @@ describe('contextBreakdown session projection', () => {
     const first = appendUser(session, 'the first of many messages')
     for (let index = 0; index < 24; index += 1) appendUser(session, `message number ${index} with some text`)
     const last = appendUser(session, 'the last message before compaction')
+    const projection = await ctx.sessionProjections.register(contextBreakdownProjectionDefinition)
     const state = () => {
-      const current = ctx.sessionProjections.stateOf(session, 'contextBreakdown')
+      const current = projection.stateOf(session)
       if (current === undefined) throw new Error('registered context breakdown has no state')
       return current
     }

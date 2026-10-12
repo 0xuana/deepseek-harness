@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
+import type { Config as AgentInstructionsConfig } from '@deepseek-ai/dsh-agent-instructions'
 import * as AgentInstructions from '@deepseek-ai/dsh-agent-instructions'
 import LlmRuntime, { createUserMessage, ToolCallId, type Message, type MessageSource, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
@@ -236,19 +237,19 @@ class BlockingReadFileSystem extends RecordingFileSystem {
   }
 }
 
-async function mountAgentInstructionsPlugin(ctx: Context, config: AgentInstructions.Config): Promise<Awaited<ReturnType<Context['plugin']>>> {
+async function mountAgentInstructionsPlugin(ctx: Context, config: AgentInstructionsConfig): Promise<Awaited<ReturnType<Context['plugin']>>> {
   if (ctx.get('workingDirectory') === undefined) provideWorkingDirectoryFixture(ctx)
   if (ctx.get('sessionProjections') === undefined) await ctx.plugin(SessionProjectionRegistry)
-  ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
+  await ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
   return ctx.plugin(AgentInstructions, config)
 }
 
-async function mountAgentInstructions(ctx: Context, config: AgentInstructions.Config): Promise<Awaited<ReturnType<Context['plugin']>>> {
+async function mountAgentInstructions(ctx: Context, config: AgentInstructionsConfig): Promise<Awaited<ReturnType<Context['plugin']>>> {
   await ctx.plugin(LocalFileSystem, { cwd: '/' })
   return mountAgentInstructionsPlugin(ctx, config)
 }
 
-async function mountFileToolsAndAgentInstructions(ctx: Context, config: AgentInstructions.Config): Promise<Awaited<ReturnType<Context['plugin']>>> {
+async function mountFileToolsAndAgentInstructions(ctx: Context, config: AgentInstructionsConfig): Promise<Awaited<ReturnType<Context['plugin']>>> {
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(LocalFileSystem, { cwd: '/' })
@@ -1234,7 +1235,7 @@ describe('workspace context request injection', () => {
     const ctx = new Context()
 
     provideWorkingDirectoryFixture(ctx)
-    await expect(mountAgentInstructionsPlugin(ctx, {} as AgentInstructions.Config)).rejects.toThrow(/maxBytes/)
+    await expect(mountAgentInstructionsPlugin(ctx, {} as AgentInstructionsConfig)).rejects.toThrow(/maxBytes/)
   })
 
   it('mounts without requiring a filesystem provider', async () => {
@@ -1249,28 +1250,6 @@ describe('workspace context request injection', () => {
 
   it('requires projections without making the optional filesystem a static dependency', () => {
     expect(AgentInstructions.inject).toEqual(['sessionProjections', 'workingDirectory'])
-  })
-
-  it('rejects a file-touch projection when the turn boundary unit is absent', async () => {
-    const ctx = new Context()
-    provideWorkingDirectoryFixture(ctx)
-    await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(AgentInstructions, { maxBytes: 65536 })
-    const exec = stubToolExecution({
-      callId: ToolCallId('missing-turn-boundary'),
-      name: 'read',
-      arguments: { file_path: 'file.txt' },
-      agent: await stubAgent('/virtual/repo'),
-      signal: testToolSignal,
-    })
-
-    expect(() => {
-      ctx.emit('tools/result', exec, {
-        content: [{ type: 'text', text: 'ok' }],
-        isError: false,
-        value: null,
-      })
-    }).toThrow('agent-instructions requires the turnBoundary session projection')
   })
 
   it('does not inject baseline context when no filesystem provider is present', async () => {

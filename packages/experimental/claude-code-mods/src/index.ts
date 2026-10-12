@@ -10,7 +10,7 @@
  * @module @deepseek-ai/dsh-experimental-claude-code-mods
  */
 
-import type { Context } from '@deepseek-ai/cordis'
+import { Service, type Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import z from '@deepseek-ai/schemastery'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
@@ -208,22 +208,25 @@ export class ClaudeCodeMods extends TypertRemoteService {
     bandRows: z.number().default(10),
   })
 
-  // Session initialization requires its directory owner; other services are read on demand.
-  static inject = ['workingDirectory']
+  // Session initialization requires its directory owner and projection registry; other services are read on demand.
+  static inject = ['workingDirectory', 'sessionProjections']
 
-  private readonly engine: ModsEngine<AgentBinding>
+  private engine!: ModsEngine<AgentBinding>
   private readonly registrations = new Map<string, Set<() => void>>()
-  private readonly surfaces: SurfaceTable
+  private surfaces!: SurfaceTable
 
-  constructor(ctx: Context, config: Config) {
+  constructor(ctx: Context, private readonly config: Config) {
     super(ctx, 'claudeCodeMods', { namespace: 'claudeCodeMods' })
+    for (const key of ['hookTimeoutMs', 'catchTimeoutMs', 'processTimeoutMs', 'bandColumns', 'bandRows'] as const) {
+      const value = config[key]
+      if (value !== undefined) assertPositive(key, value)
+    }
+  }
+
+  protected async [Service.init](): Promise<void> {
+    const { ctx, config } = this
     // The schema supplies every default; a direct construction passes the fields it needs.
     const { hookTimeoutMs = 10_000, catchTimeoutMs = 1_000, processTimeoutMs = 30_000, bandColumns = 120, bandRows = 10 } = config
-    assertPositive('hookTimeoutMs', hookTimeoutMs)
-    assertPositive('catchTimeoutMs', catchTimeoutMs)
-    assertPositive('processTimeoutMs', processTimeoutMs)
-    assertPositive('bandColumns', bandColumns)
-    assertPositive('bandRows', bandRows)
     const aliases = createToolNameAliases(config.toolAliases)
     const callOrigins = new Map<string, LoadedMod>()
     const modCommands = new Set<string>()
@@ -259,7 +262,7 @@ export class ClaudeCodeMods extends TypertRemoteService {
       }, 0).unref()
     }
     const modSubmissions = new Map<string, string>()
-    const ops = createHostOps({
+    const ops = await createHostOps({
       ctx, aliases, processTimeoutMs, registrations: this.registrations, callOrigins, modCommands, modTools, redraw,
       submitted: (messageId, mod) => { modSubmissions.set(messageId, mod) },
     })

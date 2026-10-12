@@ -33,8 +33,8 @@ function fakeAgent(session: Session): Agent {
   return { id: session.id, session } as unknown as Agent
 }
 
-function registerTurnBoundary(ctx: Context): void {
-  ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
+async function registerTurnBoundary(ctx: Context): Promise<void> {
+  await ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
 }
 
 describe('tool-session-query with the real SQLite provider', () => {
@@ -45,7 +45,7 @@ describe('tool-session-query with the real SQLite provider', () => {
     contexts.push(ctx)
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    registerTurnBoundary(ctx)
+    await registerTurnBoundary(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
@@ -118,7 +118,7 @@ describe('tool-session-query with the real SQLite provider', () => {
     contexts.push(ctx)
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    registerTurnBoundary(ctx)
+    await registerTurnBoundary(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
