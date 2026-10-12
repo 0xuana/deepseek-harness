@@ -234,6 +234,7 @@ describe('list_subagent_models', () => {
       const adapter = new CatalogAdapter()
       vi.spyOn(adapter, 'resolveModel').mockImplementation(async (provider, model) => {
         if (model === 'removed') throw new Error('model was removed')
+        // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- Exercise non-Error rejections from an external adapter.
         if (model === 'unavailable') return Promise.reject('metadata unavailable')
         return { provider, id: model, name: 'Plain' }
       })
