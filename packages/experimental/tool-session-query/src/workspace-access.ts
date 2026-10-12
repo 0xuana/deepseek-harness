@@ -6,6 +6,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
+import { HarnessError } from '@deepseek-ai/dsh-llm'
 import {
   type SessionHeader,
   type SessionId as SessionIdValue,
@@ -15,6 +16,8 @@ import type {
   SessionLineageNode,
   SessionRecord,
 } from '@deepseek-ai/dsh-session-query'
+import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
+import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import { serviceBoundary } from './service-boundary.ts'
 
 interface Caller {
@@ -48,6 +51,21 @@ interface DescendantVisit {
   readonly node: AuthorizedDescendant | null
   readonly depth: number
   readonly next: DescendantVisit | undefined
+}
+
+function callerOf(exec: ToolRunContext, turnBoundary: ProjectionHandle<TurnBoundaryProjection>): Caller {
+  const agent = exec.agent
+  if (agent === undefined) {
+    throw new HarnessError(
+      'session query tools require an agent-bound caller',
+      'SESSION_QUERY_TOOL_MISSING_AGENT',
+    )
+  }
+  return {
+    id: agent.session.id,
+    header: agent.session.header,
+    boundary: turnBoundary.stateOf(agent.session),
+  }
 }
 
 function targetId(args: { readonly session_id?: string }, caller: Caller): SessionIdValue {
@@ -224,6 +242,7 @@ function titleText(view: TitleView): string {
 
 /** Workspace-scoped caller authorization, title access, and lineage projection. */
 export const workspaceAccess = {
+  callerOf,
   targetId,
   authorizeTarget,
   recordAuthorized,

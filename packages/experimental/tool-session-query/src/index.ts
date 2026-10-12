@@ -5,11 +5,12 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import { turnBoundaryProjectionDefinition } from '@deepseek-ai/dsh-agent'
 import z from '@deepseek-ai/schemastery'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { toolInput } from './input.ts'
-import { SessionQueryOperations } from './operations.ts'
+import { operations } from './operations.ts'
 import { presentation } from './presentation.ts'
 
 export const name = 'tool-session-query'
@@ -58,8 +59,7 @@ const PROMPT_TEXT =
  * @returns when the tools and their projection reader are ready.
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
-  const operations = new SessionQueryOperations(ctx)
-  await operations.initialize()
+  const turnBoundary = await ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
   const resolved = resolveConfig(config)
   ctx.systemPrompt.section({
     name: 'tool:session-query',
@@ -73,7 +73,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     parameters: toolInput.sessionSearchParameters,
     output: TEXT_OUTPUT,
     timeoutMs: resolved.searchTimeoutMs,
-    execute: (args, exec) => operations.executeSessionSearch(args, exec, resolved.maxSearchResults),
+    execute: (args, exec) => operations.executeSessionSearch(ctx, turnBoundary, args, exec, resolved.maxSearchResults),
     presentCall: presentation.presentSessionSearchCall,
   }))
 
@@ -83,7 +83,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     parameters: toolInput.eventSearchParameters,
     output: TEXT_OUTPUT,
     timeoutMs: resolved.searchTimeoutMs,
-    execute: (args, exec) => operations.executeEventSearch(args, exec, resolved.maxSearchResults),
+    execute: (args, exec) => operations.executeEventSearch(ctx, turnBoundary, args, exec, resolved.maxSearchResults),
     presentCall: presentation.presentEventSearchCall,
   }))
 
@@ -93,7 +93,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     parameters: toolInput.targetSessionParameter,
     output: TEXT_OUTPUT,
     isConcurrencySafe: () => true,
-    execute: (args, exec) => operations.executeSessionTrace(args, exec),
+    execute: (args, exec) => operations.executeSessionTrace(ctx, turnBoundary, args, exec),
     presentCall: presentation.presentSessionTraceCall,
   }))
 
@@ -106,7 +106,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     },
     output: TEXT_OUTPUT,
     isConcurrencySafe: () => true,
-    execute: (args, exec) => operations.executeEventTrace(args, exec),
+    execute: (args, exec) => operations.executeEventTrace(ctx, turnBoundary, args, exec),
     presentCall: args => presentation.presentEventTargetCall('Trace event', args),
   }))
 
@@ -121,7 +121,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     },
     output: TEXT_OUTPUT,
     isConcurrencySafe: () => true,
-    execute: (args, exec) => operations.executeEventRead(args, exec),
+    execute: (args, exec) => operations.executeEventRead(ctx, turnBoundary, args, exec),
     presentCall: args => presentation.presentEventTargetCall('Read event', args),
   }))
 }
