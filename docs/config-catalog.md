@@ -3806,10 +3806,10 @@ export interface Config {
    */
   maxConsecutiveWakes?: number
   /**
-   * Largest complete completion notice, in UTF-8 bytes, that carries the
-   * job's unread output (default 2048); a larger one leaves that output for
-   * `job_output`. The producer's `outputLimitBytes` also bounds it, and 0
-   * never inlines output.
+   * Largest output stream, in UTF-8 bytes counted from the job's start, that a
+   * completion notice carries inline with the job's final result (default
+   * 2048); a job that wrote more leaves its output for `job_output`. The producer's `outputLimitBytes`
+   * bounds the complete notice, and 0 never inlines output.
    */
   inlineOutputBytes?: number
 }

@@ -37,7 +37,7 @@ kind: "package-reference"
 
 ### 完成通知
 
-任务完成时，拥有它的 agent 会收到 `background job <id> (<kind>: <label>) finished [status: ...]. Output:`，其后是它尚未读取的输出；没有输出时则以 `. No new output.` 结尾。若通知会超过 `inlineOutputBytes`（默认 2048 字节）或生产方的 `outputLimitBytes`，则改以 `. Read its output with job_output.` 结尾。label 取其首行，上限 120 个字符。在通知仍待领时收走该任务的 `job_output` 调用会撤回该通知；从未抵达模型的通知会把输出留给 `job_output`。繁忙的 agent 会在下一步收到注入的通知——inbox 尚有内容时轮次无法结束，因此同时结算的多个任务只花掉一步，而不是各占一轮。空闲的 agent 则被一个 follow-up 轮次唤醒，因为无人领取的通知就是模型永远不会知道的完成。模型已经收走的完成不再通知：注册表把释放了存活 `wait` 的结算报告为 `awaited`——无论是 `job_output` 的等待，还是 shell 工具在等待自己的前台命令——插件则记着模型经 `job_kill` 请求的杀停；所有者或服务 teardown 导致的结算会被跳过，因为没有人能读它。
+任务完成时，拥有它的 agent 会收到 `background job <id> (<kind>: <label>) finished [status: ...]. Output:`，其后是它尚未读取的输出和任务的最终结果；没有输出时则以 `. No new output.` 结尾。写出超过 `inlineOutputBytes`（默认 2048 字节）输出的任务，其通知改以 `. Read its output with job_output.` 结尾，输出保留在注册表中。最终结果按 `job_output` 返回的样子完整携带，因此结果较大时通知也较大；生产方的 `outputLimitBytes` 会保留内联通知输出的尾部，与 `job_output` 的做法相同。label 取其首行，上限 120 个字符。在通知仍待领时收走该任务的 `job_output` 调用会撤回该通知；从未抵达模型的通知会把输出留给 `job_output`。繁忙的 agent 会在下一步收到注入的通知——inbox 尚有内容时轮次无法结束，因此同时结算的多个任务只花掉一步，而不是各占一轮。空闲的 agent 则被一个 follow-up 轮次唤醒，因为无人领取的通知就是模型永远不会知道的完成。模型已经收走的完成不再通知：注册表把释放了存活 `wait` 的结算报告为 `awaited`——无论是 `job_output` 的等待，还是 shell 工具在等待自己的前台命令——插件则记着模型经 `job_kill` 请求的杀停；所有者或服务 teardown 导致的结算会被跳过，因为没有人能读它。
 
 唤醒默认不设上限：无人值守的 agent 连续串起后台命令与一次性 subagent 时，每次完成都会唤醒它。`maxConsecutiveWakes` 可以封顶：每个所有者最多被唤醒这么多次，此后的通知降级为注入；领取任何用户撰写的消息都会恢复预算。上限用来约束自激链——被唤醒的一轮可能启动某个后台任务，而它的完成又会唤醒同一个所有者——但超出上限的通知会静默等到用户下一次输入，依赖唤醒完成工作的会话会停在那里。`completionDelivery: quiet` 让空闲所有者也在注入通道上，确定性 transcript（文本记录）需要的正是这一点。
 
@@ -55,7 +55,7 @@ kind: "package-reference"
 | `maxWaitTimeoutMs` | `600,000` | 模型所给等待时间的上限；更大的值向下收敛到它 |
 | `completionDelivery` | `wakeup` | `wakeup` 为空闲所有者开启一轮；`quiet` 让通知继续待领 |
 | `maxConsecutiveWakes` | 未设置 | 一个所有者可由唤醒开启的轮数，超出后通知降级为注入；未设置即不封顶 |
-| `inlineOutputBytes` | `2048` | 携带任务未读输出的完整通知的最大长度；`0` 表示从不内联 |
+| `inlineOutputBytes` | `2048` | 通知连同最终结果内联携带的输出流的最大长度；`0` 表示从不内联 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-tool-jobs)是每个受支持字段及其 JSDoc 的穷尽式真源。
 
@@ -94,7 +94,7 @@ kind: "package-reference"
 
 结算订阅（`{ owners: 'scope' }`）跳过注册表报告为 `awaited` 的结算、模型经 `job_kill` 杀停的任务、无所有者的任务与 teardown 结算，然后解析登记在拥有者会话下的 agent。`wakeup` 投递为空闲所有者开启一轮；设置了 `maxConsecutiveWakes` 时只在预算内开启，按确切 `Agent` 记录在 `WeakMap` 中，领取用户撰写的消息（`agent/inbox/claimed`）会重置该所有者的预算。繁忙的所有者——或超出所配预算的任何通知，以及 `quiet` 投递——改为注入 next-step inbox。注册表只计入结算时仍被欠着投影的等待，因此超时或中止的等待会让之后的结算照常通知；移除会把任务从模型杀停集合里删掉，该集合只保有模型杀停过的存活任务。
 
-每条通知在结算时取走该任务唯一的一次消费式读取，并以通知的消息 id 暂存。内联通知被记录为 `user/message`（`session/event`）时，暂存的读取即被用掉；被某一步领取、但该步随后被拒绝或取消的通知不会被记录，因此其读取仍保持暂存。否则 `job_output` 会先于自己的读取返回暂存的读取，并在通知仍待领时将其从所有者的 inbox 中移除。任务移除会丢弃它。
+通知是否内联在任何读取之前决定，依据是任务的完整输出流（`JobView.output.total`）和生产方的上限。只有内联通知会在结算时取走消费式读取；它暂存该读取，直到通知被记录为 `user/message`（`session/event`）。被某一步领取、但该步随后被拒绝或取消的通知不会被记录，因此 `job_output` 会返回其暂存的读取。`job_output` 还会将待领通知从为所有者会话注册的 agent 的 inbox 中移除。任务移除会丢弃该条目；插件重新加载会丢弃通知从未被记录的暂存读取。
 
 </details>
 

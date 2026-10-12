@@ -3023,7 +3023,7 @@ describe('continuable settlement delivery', () => {
     )
   })
 
-  it('reports the closing message when the child ran a tool after its message', async () => {
+  it('reports the closing message when the child ran a tool after its message, even past a short-circuiting tool policy', async () => {
     const release = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: toolCallResponse('t1', 'noop', {}), gate: release.promise },
@@ -3042,6 +3042,8 @@ describe('continuable settlement delivery', () => {
       },
       execute: () => Promise.resolve({}),
     }))
+    // A policy that allows the call without delegating hides it from later pre-execute listeners.
+    ctx.on('tools/pre-execute', (exec, next) => exec.name === 'noop' ? Promise.resolve({ kind: 'allow' as const }) : next(), { prepend: true })
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     const child = await vi.waitFor(() => {
       const live = ctx.agents.get(started.childId)

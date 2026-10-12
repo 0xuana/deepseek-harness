@@ -948,20 +948,21 @@ export class SubagentManager {
       if (activation.kind === 'local') {
         observeLocalFailure(activation, wakeSettlement)
         activation.handle.agent.ctx.on('agent/inbox/inserted', wakeSettlement)
-        activation.handle.agent.ctx.on('agent/inbox/claimed', wakeSettlement)
-        activation.handle.agent.ctx.on('agent/inbox/discarded', wakeSettlement)
-        // Input, a later tool call, or another call in the same step as the
-        // child's message to its parent means the closing text may report work
-        // that message did not.
-        activation.handle.agent.ctx.on('agent/inbox/claimed', () => { activation.relayed = false })
-        activation.handle.agent.ctx.on('agent/pre-step', (_payload, next) => {
-          activation.stepToolCalls = 0
-          return next()
-        })
-        activation.handle.agent.ctx.on('tools/pre-execute', (_exec, next) => {
-          activation.stepToolCalls += 1
+        activation.handle.agent.ctx.on('agent/inbox/claimed', () => {
+          // Claimed input means the closing text may report work the child's
+          // last message to its parent did not.
           activation.relayed = false
-          return next()
+          wakeSettlement()
+        })
+        activation.handle.agent.ctx.on('agent/inbox/discarded', wakeSettlement)
+        // Logged tool calls cannot be skipped by tool policy: a call in a later
+        // step, or another call in the step that sent the message, also voids it.
+        activation.handle.agent.ctx.on('session/event', (_session, event) => {
+          if (event.type === 'step/start') activation.stepToolCalls = 0
+          else if (event.type === 'tool/call') {
+            activation.stepToolCalls += 1
+            activation.relayed = false
+          }
         })
       }
       observer.start(activationAgent(activation))

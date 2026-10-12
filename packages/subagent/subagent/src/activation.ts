@@ -79,7 +79,7 @@ interface ActivationBase {
    * message.
    */
   relayed: boolean
-  /** Tool calls started in the child's current step, which decides {@link relayed}. */
+  /** Tool calls the child's current step logged, which decides {@link relayed}. */
   stepToolCalls: number
 }
 
