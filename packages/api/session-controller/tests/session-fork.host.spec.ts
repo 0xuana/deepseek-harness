@@ -662,14 +662,9 @@ describe('sessions.fork', () => {
     const child = ctx.agents.get(response.value.sessionId)
     if (child === undefined) throw new Error('fork did not publish the child agent')
     expect(child.session.snapshotEvents().slice(0, child.session.inheritedEventCount)).toEqual(inherited)
-    const assembly = await child.ctx.systemPrompt.assemble()
-    expect(assembly.variables).toMatchObject({
-      provider: 'inherited-provider',
-      model: 'inherited-model',
-    })
     const fallback: LlmCallConfig = { provider: 'default-provider', model: 'default-model' }
     await expect(agentEvents(child.ctx, child).waterfall(
-      'agent/request', { turn: 1, step: 0, signal: new AbortController().signal }, () => Promise.resolve(fallback),
+      'agent/request', { turn: 1, step: 1, signal: new AbortController().signal }, () => Promise.resolve(fallback),
     )).resolves.toMatchObject({
       provider: 'inherited-provider',
       model: 'inherited-model',

@@ -1,7 +1,7 @@
 /**
  * Session Controller model-directory and selection behavior: dynamic provider grouping,
  * provider-local catalog failures, logged-selection restoration without stale
- * catalog injection, unavailable-model refusals, and the prompt-assembly
+ * catalog injection, unavailable-model refusals, and the request-preparation
  * boundary for a running selection change.
  */
 
@@ -486,7 +486,7 @@ describe('Web session model selection', () => {
     await ctx.fiber.dispose()
   })
 
-  it('rejects unlisted models and switches available models only after the next assembly', async () => {
+  it('rejects unlisted models and applies a selection when the next step prepares its request', async () => {
     const { ctx, agent, sessionId } = await harness()
     const remote = createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }), cwd: '/tmp' })
     const seed: LlmCallConfig = { provider: 'seed', model: 'seed', temperature: 0.2 }
@@ -494,6 +494,14 @@ describe('Web session model selection', () => {
 
     expect(currentSelection(ctx, sessionId))
       .toEqual({ provider: 'deepseek-official', model: 'deepseek-chat' })
+    expectValue(await remote.selectModel(request({
+      sessionId,
+      provider: 'deepseek-official',
+      model: 'deepseek-chat',
+    })))
+    await expect(agentEvents(ctx, agent).waterfall(
+      'agent/request', { turn: 1, step: 1, signal }, () => Promise.resolve(seed),
+    )).resolves.toEqual({ ...seed, provider: 'deepseek-official', model: 'deepseek-chat', reasoningEffort: 'high' })
 
     const selected = expectValue(await remote.selectModel(request({
       sessionId,
@@ -507,13 +515,10 @@ describe('Web session model selection', () => {
       reasoningEffort: 'max',
     })
     await expect(agentEvents(ctx, agent).waterfall(
-      'agent/request', { turn: 1, step: 0, signal }, () => Promise.resolve(seed),
-    )).resolves.toEqual(seed)
-
-    expect((await ctx.systemPrompt.assemble()).variables)
-      .toMatchObject({ provider: 'deepseek-official', model: 'deepseek-reasoner' })
-    await expect(agentEvents(ctx, agent).waterfall(
       'agent/request', { turn: 1, step: 1, signal }, () => Promise.resolve(seed),
+    )).resolves.toEqual({ ...seed, provider: 'deepseek-official', model: 'deepseek-chat', reasoningEffort: 'high' })
+    await expect(agentEvents(ctx, agent).waterfall(
+      'agent/request', { turn: 1, step: 2, signal }, () => Promise.resolve(seed),
     )).resolves.toMatchObject({
       provider: 'deepseek-official',
       model: 'deepseek-reasoner',

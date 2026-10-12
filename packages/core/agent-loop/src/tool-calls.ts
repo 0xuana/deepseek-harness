@@ -66,7 +66,7 @@ export async function executeToolCalls(
   toolCalls: ToolCallBlock[],
   signal: AbortSignal,
   acceptContext: (context: UserMessage) => void,
-  toolSet?: ResolvedToolSet,
+  toolSet: ResolvedToolSet,
 ): Promise<{ concluded: boolean }> {
   const agent = ctx.agents.requireInitiator()
   const { session } = agent
@@ -80,7 +80,7 @@ export async function executeToolCalls(
       arguments: parseArguments(block.arguments),
       agent,
       signal,
-      ...toolSet === undefined ? {} : { toolSet },
+      toolSet,
     },
   }))
 

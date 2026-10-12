@@ -276,7 +276,7 @@ export class ApiSessionAgentController {
   }
 
   /**
-   * Install or return the Session-local model selection used by prompt assembly.
+   * Install or return the Session-local model selection used by request preparation.
    * @param agent - live Agent that owns the selection.
    * @returns the installed mutable selection reference.
    */
@@ -326,7 +326,7 @@ export class ApiSessionAgentController {
   }
 
   /**
-   * Commit and cache one validated selection for the next prompt assembly.
+   * Commit and cache one validated selection for the next step's request preparation.
    * @param agent - live Agent that owns the selection.
    * @param selection - validated selection to record and apply.
    */

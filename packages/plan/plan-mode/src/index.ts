@@ -288,11 +288,8 @@ export class PlanModeController extends Service {
         }],
       },
       execute: async (args, exec) => {
-        const agent = exec.agent
-        if (agent === undefined) throw new Error(`${EXIT_PLAN_MODE} requires a calling agent (no session to switch)`)
-        if (!this.loggedActive(agent.session)) {
-          throw new Error(`${EXIT_PLAN_MODE} is only available in plan mode`)
-        }
+        // oxlint-disable-next-line typescript/no-non-null-assertion -- conditional admission requires a Plan-mode Agent
+        const agent = exec.agent!
         if (!/^#\s+\S/.test(args.plan.trim())) {
           throw new Error(`${EXIT_PLAN_MODE} requires a non-empty markdown plan starting with a # heading`)
         }
