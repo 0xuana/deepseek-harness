@@ -73,11 +73,14 @@ interface ActivationBase {
   announced: boolean
   /**
    * Whether this child's last action before its closing text was a message to
-   * its direct parent: no input was claimed and no tool call started since.
+   * its direct parent: the only tool call of its step, with no input claimed
+   * and no tool call started since.
    * Its settlement notice then omits the closing message, which restates that
    * message.
    */
   relayed: boolean
+  /** Tool calls started in the child's current step, which decides {@link relayed}. */
+  stepToolCalls: number
 }
 
 /** Resources retained only for the selected execution kind. */

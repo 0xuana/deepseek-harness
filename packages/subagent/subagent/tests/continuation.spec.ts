@@ -3060,6 +3060,49 @@ describe('continuable settlement delivery', () => {
     )
   })
 
+  it('reports the closing message when another tool ran in the same step as the message', async () => {
+    let childTurns = 0
+    const respond = (options: GenerateOptions): StreamChunk[] => {
+      const history = JSON.stringify(options.messages)
+      if (!history.includes('Your parent agent id is')) return textResponse('parent ack')
+      childTurns += 1
+      if (childTurns > 1) return textResponse('the answer')
+      const parentId = /Your parent agent id is \\"([^\\]+)\\"/.exec(history)![1]!
+      const calls = [
+        { id: ToolCallId('n1'), name: 'noop', arguments: '{}' },
+        { id: ToolCallId('s1'), name: 'send_message', arguments: JSON.stringify({ agent_id: parentId, message: 'interim' }) },
+      ]
+      return [
+        ...calls.flatMap((call, index): StreamChunk[] => [
+          { type: 'block-start', index, blockType: 'tool-call' },
+          { type: 'tool-call-delta', index, id: call.id, name: call.name, argumentsDelta: call.arguments },
+          { type: 'block-end', index, block: { type: 'tool-call', ...call } },
+        ]),
+        { type: 'usage', usage: { inputTokens: 10, outputTokens: 5 } },
+        { type: 'finish', reason: { kind: 'tool-calls' } },
+      ]
+    }
+    const { ctx, parent } = await setup(Array.from({ length: 6 }, () => respond))
+    await ctx.plugin(SubagentControl)
+    ctx.tools.register(defineTool({
+      name: 'noop',
+      description: 'does nothing',
+      parameters: {},
+      output: {
+        schema: { type: 'object', additionalProperties: false, properties: {} },
+        render: () => [{ type: 'text', text: 'noop' }],
+      },
+      execute: () => Promise.resolve({}),
+    }))
+    const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
+    await waitNoActivation(ctx, started.childId)
+
+    await vi.waitFor(() => { expect(settlementNotices(parent)).toHaveLength(1) })
+    expect(settlementNotices(parent)[0]!.text).toBe(
+      `Background subagent ${started.childId} finished and will do no further work unless you send it more.\nIts closing message:\nthe answer`,
+    )
+  })
+
   it('delivers the terminal reason when the child never had a chance to report', async () => {
     const { ctx, parent } = await setup([maxTokensResponse('half an ans'), textResponse('parent ack')])
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })

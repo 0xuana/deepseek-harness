@@ -82,10 +82,10 @@ async function fakeAgent(ctx: Context, sessionId: string, delivery: FakeDelivery
     ctx: scopeFiber.ctx,
     inject: delivery.inject ?? (() => {}),
     followup: delivery.followup ?? (() => {}),
-    inbox: { remove: delivery.remove ?? (() => true) },
     status: delivery.status ?? 'running',
     session: { id, header: { version: 0, id, createdAt: 0 } },
   } as unknown as Agent
+  Object.assign(agent, { inbox: { remove: delivery.remove ?? (() => true) } })
   agentRegistryDisposers.set(agent, await ctx.agents.register(agent))
   agentScopeFibers.set(agent, scopeFiber)
   return agent

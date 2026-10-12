@@ -935,6 +935,7 @@ export class SubagentManager {
       observer,
       announced: false,
       relayed: false,
+      stepToolCalls: 0,
     }
     void activation.result.promise.catch(() => undefined)
     this.resident.set(childId, activation)
@@ -949,10 +950,16 @@ export class SubagentManager {
         activation.handle.agent.ctx.on('agent/inbox/inserted', wakeSettlement)
         activation.handle.agent.ctx.on('agent/inbox/claimed', wakeSettlement)
         activation.handle.agent.ctx.on('agent/inbox/discarded', wakeSettlement)
-        // Input or a tool call after the child's last message to its parent
-        // means the closing text may report work that message did not.
+        // Input, a later tool call, or another call in the same step as the
+        // child's message to its parent means the closing text may report work
+        // that message did not.
         activation.handle.agent.ctx.on('agent/inbox/claimed', () => { activation.relayed = false })
+        activation.handle.agent.ctx.on('agent/pre-step', (_payload, next) => {
+          activation.stepToolCalls = 0
+          return next()
+        })
         activation.handle.agent.ctx.on('tools/pre-execute', (_exec, next) => {
+          activation.stepToolCalls += 1
           activation.relayed = false
           return next()
         })
@@ -1307,7 +1314,7 @@ export class SubagentManager {
     }
     const message = createAgentMessage(sender, content)
     this.sendAgentMessage(parent, message)
-    activation.relayed = true
+    activation.relayed = activation.stepToolCalls <= 1
     return message.id
   }
 
