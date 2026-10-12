@@ -7,7 +7,7 @@ import { monitorEventLoopDelay, performance } from 'node:perf_hooks'
 import { scheduler, setTimeout as delay } from 'node:timers/promises'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
-import SessionController from '@deepseek-ai/dsh-api-session-controller'
+import type SessionController from '@deepseek-ai/dsh-api-session-controller'
 import SessionStore, { SESSION_FORMAT_VERSION, SessionId, SessionLogOffset, type SessionHeader } from '@deepseek-ai/dsh-session'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
@@ -20,6 +20,7 @@ import { z } from 'zod'
 import { generationLogPath, sessionDir, toHeaderLine } from '../../packages/session/session-persistence-jsonl/src/format.ts'
 import { compressZstdFrame } from '../../packages/session/session-persistence-jsonl/src/zstd.ts'
 import { assertBuiltBenchmarkRuntime } from '../support/built-worker.ts'
+import { createBenchmarkSessionController } from './session-controller.ts'
 
 const KEY = 'syntheticProjectionList'
 const CWD = '/synthetic-projection-benchmark'
@@ -171,7 +172,7 @@ async function mountHost(ctx: Context, root: string, workload: typeof WORKLOADS[
   await ctx.plugin(SessionStore)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(SessionProjectionRegistry)
-  ctx.sessionProjections.register({
+  await ctx.sessionProjections.register({
     key: KEY, stateVersion: 1, stateSchema,
     init: header => makeState(Number(header.id.slice('projection-bench-'.length)), workload.baseRows),
     apply: state => state,
@@ -200,7 +201,7 @@ async function mountHost(ctx: Context, root: string, workload: typeof WORKLOADS[
   ctx.provide('fileUploads', { registerAgentResolver: () => dispose } as never)
   ctx.provide('agentDefaultModel', { currentSelection: () => ({ provider: 'synthetic', model: 'generated-model' }) } as never)
   ctx.provide('workspaceRegistry', { list: () => [], archivedSessionIds: [] } as never)
-  return new SessionController(ctx, { nativeOpen: false, ...(listWorkSliceMs === undefined ? {} : { listWorkSliceMs }) }, { canOpenPath: () => false })
+  return createBenchmarkSessionController(ctx, { nativeOpen: false, ...(listWorkSliceMs === undefined ? {} : { listWorkSliceMs }) })
 }
 
 async function memory(): Promise<Memory> {
