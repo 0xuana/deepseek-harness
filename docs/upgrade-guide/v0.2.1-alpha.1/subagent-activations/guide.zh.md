@@ -11,7 +11,9 @@ description: "受管理的子 agent activation 替代前台与 Job 后台委派�
 
 `@deepseek-ai/dsh-tool-subagent` 移除了 `backgroundMode`、`enableRunInBackground` 和模型参数 `run_in_background`。每次委派现在都会在接纳子 agent（智能体）后返回 `{ kind: 'activation', subagentId }`，运行时通过父级完成通知交付最终答案。前台结果和 `{ kind: 'background', jobId }` 结果已移除；子 agent 不再通过 `job_output` 或 `job_kill` 收集结果或停止。
 
-已发布的 `@deepseek-ai/dsh-subagent-in-process-driver` 包被移除。本地提供方通过 `prepareContinuable()` 提供创建输入，由子 agent 服务拥有执行过程。Spawn 和 Fork 子级可以接收后续消息；组合了持久化和 Session 查询服务时，结算后也能接收。外部提供方只执行一次，不接受后续消息。
+`@deepseek-ai/dsh-subagent-in-process-driver` 被移除。本地提供方通过 `prepareContinuable()` 提供创建输入，由子 agent 服务拥有执行过程。Spawn 和 Fork 子级可以接收后续消息；组合了持久化和 Session 查询服务时，结算后也能接收。外部提供方只执行一次，不接受后续消息。
+
+子 agent 初始化需要 `@deepseek-ai/dsh-session-projection`。
 
 ## 迁移
 
@@ -24,7 +26,7 @@ description: "受管理的子 agent activation 替代前台与 Job 后台委派�
        toolName: subagent
    ```
 
-   本地工具委派需要 Session 持久化。将其与[子 agent 服务及提供方](../../../../packages/subagent/subagent/README.zh.md#use-this-package)一起组合。
+   挂载 `@deepseek-ai/dsh-session-projection`。本地工具委派需要 Session 持久化。将其与[子 agent 服务及提供方](../../../../packages/subagent/subagent/README.zh.md#use-this-package)一起组合。
 
 2. 从工具调用中删除 `run_in_background`，并将结果消费方改为读取 `subagentId`。收集完成通知，替代前台输出或 Job 结果。组合了相应控制工具时，使用 `interrupt_agent` 停止当前执行；`send_message` 仅用于本地子级。
 
