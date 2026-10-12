@@ -1,14 +1,16 @@
-/** Default documentation theme with Markdown actions and a client-only image and diagram viewer. */
+/** Default documentation theme with Markdown actions, long-table controls, and image and diagram viewers. */
 import DefaultTheme from 'vitepress/theme'
-import { useData, useRoute, type Theme } from 'vitepress'
+import { onContentUpdated, useData, useRoute, type Theme } from 'vitepress'
 import { defineComponent, h, onBeforeUnmount, onMounted, watch } from 'vue'
 import type { MermaidViewer } from './mermaid-viewer.ts'
 import type { ImageViewer } from './image-viewer.ts'
 import type { MediaViewer } from './media-viewer.ts'
 import { PageMarkdownActions } from './page-markdown-actions.ts'
+import { DocumentTables } from './table-filter.ts'
 import './media-viewer.css'
 import './code-group.css'
 import './page-markdown-actions.css'
+import './table-filter.css'
 
 export default {
   extends: DefaultTheme,
@@ -20,8 +22,10 @@ export default {
       let viewer: MermaidViewer | undefined
       let images: ImageViewer | undefined
       let media: MediaViewer | undefined
+      let tables: DocumentTables | undefined
       let disposed = false
       onMounted(async () => {
+        tables = new DocumentTables(document, () => lang.value)
         const [{ installMermaidViewer }, { ImageViewer }, { MediaViewer }] = await Promise.all([
           import('./mermaid-viewer.ts'), import('./image-viewer.ts'), import('./media-viewer.ts'),
         ])
@@ -30,12 +34,16 @@ export default {
         viewer = installMermaidViewer(document, () => lang.value, media)
         images = new ImageViewer(document, () => lang.value, media)
       })
+      onContentUpdated(() => { tables?.refresh() })
+      watch(lang, () => { tables?.refresh() }, { flush: 'post' })
       watch([() => route.path, lang, isDark], () => {
         viewer?.refresh()
         images?.refresh()
       }, { flush: 'post' })
       onBeforeUnmount(() => {
         disposed = true
+        tables?.dispose()
+        tables = undefined
         viewer?.dispose()
         images?.dispose()
         media?.close()

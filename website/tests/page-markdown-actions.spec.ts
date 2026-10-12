@@ -7,7 +7,7 @@ import { fireEvent, getByRole, queryAllByRole, queryByRole, waitFor } from '@tes
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import Theme from '../.vitepress/theme/index.ts'
 
-vi.mock('vitepress', () => ({ useData: () => data, useRoute: () => route }))
+vi.mock('vitepress', () => ({ useData: () => data, useRoute: () => route, onContentUpdated() {} }))
 vi.mock('vitepress/theme', () => ({ default: { Layout: {
   setup: (_props: unknown, { slots }: { slots: Slots }) => () => h('main', null, slots['doc-before']?.()),
 } } }))
@@ -46,6 +46,15 @@ function deferred<T>() {
 
 function response(text = '# Quickstart\n\n[Reference](../reference/index.md)\n', status = 200, type = 'text/markdown') {
   return new Response(text, { status, headers: { 'content-type': `${type}; charset=utf-8` } })
+}
+
+function readBlob(blob: Blob): Promise<string | ArrayBuffer | null> {
+  const reader = new FileReader()
+  const done = new Promise<string | ArrayBuffer | null>((resolve) => {
+    reader.addEventListener('load', () => { resolve(reader.result) }, { once: true })
+  })
+  reader.readAsText(blob)
+  return done
 }
 
 async function mount() {
@@ -296,14 +305,38 @@ describe('page Markdown actions', () => {
     pending.resolve(response())
     await waitFor(() => { expect(getByRole(host, 'status').textContent).toBe('Markdown copied.') })
     expect(copied?.type).toBe('text/plain')
-    const reader = new FileReader()
-    const text = new Promise((resolve) => { reader.addEventListener('load', () => { resolve(reader.result) }, { once: true }) })
     assert(copied !== undefined)
-    reader.readAsText(copied)
-    expect(await text).toBe('# Quickstart\n\n[Reference](../reference/index.md)\n')
+    expect(await readBlob(copied)).toBe('# Quickstart\n\n[Reference](../reference/index.md)\n')
     expect(button.getAttribute('aria-disabled')).toBe('false')
     expect(button.getAttribute('aria-busy')).toBe('false')
     expect(document.activeElement).toBe(button)
+  })
+
+  it('copies and links complete Markdown while the page table is filtered', async () => {
+    const content = document.createElement('div')
+    content.className = 'VPDoc'
+    const values = Array.from({ length: 10 }, (_, index) => `service-${index}`)
+    const markdown = `| Service |\n| --- |\n${values.map(value => `| ${value} |\n`).join('')}`
+    content.innerHTML = `<main><div class="vp-doc"><table><thead><tr><th>Service</th></tr></thead><tbody>${values.map(value => `<tr><td>${value}</td></tr>`).join('')}</tbody></table></div></main>`
+    for (const cell of content.querySelectorAll('td')) {
+      Object.defineProperty(cell, 'innerText', { get: () => cell.textContent })
+    }
+    document.body.append(content)
+    try {
+      fetchMock.mockResolvedValueOnce(response(markdown))
+      await mount()
+      fireEvent.input(getByRole(content, 'searchbox'), { target: { value: 'service-9' } })
+      expect(content.querySelectorAll('tbody tr:not([hidden])')).toHaveLength(1)
+      fireEvent.click(getByRole(host, 'button', { name: 'Copy page' }))
+      await waitFor(() => { expect(getByRole(host, 'status').textContent).toBe('Markdown copied.') })
+      assert(copied)
+      expect(await readBlob(copied)).toBe(markdown)
+      await openMenu()
+      expect(getByRole(host, 'menuitem', { name: 'View as Markdown (opens in a new tab)' }).getAttribute('href'))
+        .toBe('/en/guide/quickstart.md')
+    } finally {
+      content.remove()
+    }
   })
 
   it.each(['network', '404', 'html'])('reports a %s response failure without success and allows retry', async (failure) => {
