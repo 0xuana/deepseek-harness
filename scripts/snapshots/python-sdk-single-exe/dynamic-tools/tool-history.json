@@ -149,7 +149,7 @@
           "role": "developer",
           "id": "{{messageId}}"
         },
-        "headerSeq": 19
+        "headerSeq": "{{header:2}}"
       },
       "surfaceOp": "append"
     },
