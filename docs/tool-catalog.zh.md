@@ -2023,7 +2023,7 @@ lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，�
 
 ### `list_subagent_models`
 
-发现 subagent 可用的 LLM 路由，不更改当前 Agent。无参数调用会列出已注册提供方；提供 `provider` 时会列出其允许的模型；同时提供 `provider` 和 `model` 时会检查该精确模型及其推理强度。目录条目只提供建议：adapter 可能接受未列出的模型 id。把返回的 id 用于委派工具的 `provider`、`model` 与 `reasoning_effort` 字段。
+查询 subagent 可用的模型，不更改当前 Agent。无参数：提供方；`provider`：允许的模型；`provider` + `model`：该模型及其推理强度。将返回的 id 用于委派。
 
 ```json
 {
@@ -2031,11 +2031,11 @@ lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，�
   "properties": {
     "provider": {
       "type": "string",
-      "description": "Registered LLM provider id. Omit to list providers."
+      "description": "Registered LLM provider id."
     },
     "model": {
       "type": "string",
-      "description": "Exact model id to inspect. Requires provider; omit to list that provider's allowed models."
+      "description": "Exact model id; requires provider."
     }
   }
 }
@@ -2045,7 +2045,7 @@ lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，�
 
 ### `subagent`
 
-将一项自包含任务委派给 subagent（在自身上下文中工作的独立 agent），用它卸载聚焦且独立的工作，例如研究、限定范围的实现或分析，以免消耗当前对话的上下文。subagent 会返回结果，但不会返回中间步骤。此工具启动独立管理的 subagent 并立即返回其 id。运行时会在任务结束时通知你。子代理通过 `send_message` 汇报结果；你可以使用 `send_message` 在运行时引导它，或在结束后继续对话。子级 LLM 选择是可选的。省略 `provider`、`model` 和 `reasoning_effort` 会使用配置的子级默认值，并从父 Agent 继承缺失且兼容的值。先通过 `list_subagent_models` 查询路由和强度，再同时提供 `provider` 与 `model`。更改生效路由却不指定强度时，使用所选模型的默认强度。
+将一项自包含任务委派给 subagent（在自身上下文中工作的独立 agent），用它卸载聚焦且独立的工作，例如研究、限定范围的实现或分析，以免消耗当前对话的上下文。subagent 会返回结果，但不会返回中间步骤。此工具启动独立管理的 subagent 并立即返回其 id。运行时会在任务结束时通知你。子代理通过 `send_message` 汇报结果；你可以使用 `send_message` 在运行时引导它，或在结束后继续对话。先通过 `list_subagent_models` 查询选项，再同时设置 `provider` 与 `model`。省略的值使用子级默认值，缺失时使用兼容的父级值。生效路由改变时，省略 `reasoning_effort` 会使用模型的默认强度。
 
 ```json
 {
@@ -2065,15 +2065,15 @@ lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，�
     },
     "provider": {
       "type": "string",
-      "description": "LLM provider route for the child. Supply together with model; omit both to use configured child defaults or inherit the parent route."
+      "description": "Child LLM provider id."
     },
     "model": {
       "type": "string",
-      "description": "Model id interpreted by provider. Supply together with provider; omit both to use configured child defaults or inherit the parent route."
+      "description": "Model id within that provider."
     },
     "reasoning_effort": {
       "type": "string",
-      "description": "Adapter-owned reasoning effort for the effective child route. Omit to inherit a compatible configured/parent effort or use a newly selected model's default."
+      "description": "Model-specific reasoning effort id."
     }
   },
   "required": [
