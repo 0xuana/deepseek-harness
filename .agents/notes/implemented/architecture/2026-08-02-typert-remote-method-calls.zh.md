@@ -215,7 +215,7 @@ Host lib build
 → Vite 构建 Web
 ```
 
-现有顶层 `build` 仍表现为先 `build:lib`、再 `build:web`，但 `build:lib` 内部必须先完成 Host 与 Remote artifact，再启动 Client TypeScript 编译。一次干净构建不能依赖上次残留的 `.d.ts`。
+顶层 `build` 运行 `scripts/build.ts` 中的步骤图，先完成 Host bundle 与 Remote artifact，再启动 Client TypeScript 编译。`build:lib` 仍是 `build:bench` 使用的完整串行 lib 构建，其 Host 部分 `build:lib:host` 供 vendor 发布 workflow 使用。`typecheck` 与 Host 编译并行，经 `scripts/generate-typert.ts` 写出 Remote artifact，再启动 Client TypeScript 编译。一次干净构建不能依赖上次残留的 `.d.ts`。
 
 即使主要输入是源文件，需要通过编译器解析消费方 surface 的仓库门禁也有相同的前置条件。公共 `typecheck`、`lint` 和 `doc-typecheck` 命令会先执行 Host 约定 pass。门禁调度器仅可在显式的 Typert 约定依赖或完整构建依赖完成后使用对应的 `*:contracts-ready` 变体，使并行 lane 既不会读取缺失的声明，也不会针对同一输出并发运行多个生成器。
 
@@ -520,7 +520,7 @@ SRC 弱 descriptor 不验证普通 JSON 内部结构。Host Remote 签名变化�
 
 Connection 的通用 channel API 必须同时适合当前 HTTP carrier 和后续 WebSocket carrier。若 Client Remote 或 Gateway 暴露 `fetch`、HTTP request 或 route handle，WebSocket 迁移会再次穿透 Remote 层，因此这些物理对象必须留在 Connection 内部。
 
-Remote endpoint 使用 Connection 的 `trusted-host` authority。系统默认接受 loopback；LAN 调用方必须通过显式 trusted-host 配置接入，但本层不增加逐方法调用方授权，因此每个 trusted host 都能调用已挂载的 Remote endpoint。
+Remote endpoint 使用 Connection 的 `trusted-host` authority。系统默认接受 loopback 与监听器自身的绑定地址；其他 LAN authority 必须通过显式 trusted-host 配置接入。本层不增加逐方法调用方授权，因此每个被接受的 authority 都能调用已挂载的 Remote endpoint。
 
 `hasSeen()` 优先保障 strict definition 的安全性，而非 SRC 可用性。strict descriptor 撤回时（例如 HMR 期间），Gateway 会继续认领 endpoint 并报告不可用，而不会回退到弱 SRC descriptor。重新注册即可恢复；只有重启 Typert 注册表才会忘记历史 strict definition。
 
