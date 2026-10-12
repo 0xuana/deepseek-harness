@@ -46,8 +46,11 @@ export interface ProjectionHandle<S> {
    * @returns the projection state at the Session's current cursor.
    */
   stateOf(session: Session): S
-  /** Unregister from global drives and snapshots without invalidating this reader. */
-  dispose(): void | Promise<void>
+  /**
+   * Unregister from global drives and snapshots without invalidating this reader.
+   * @returns a promise that resolves when this registration is released.
+   */
+  dispose(): Promise<void>
 }
 
 /**
@@ -303,7 +306,9 @@ export class SessionProjectionRegistry extends Service {
     await Promise.resolve()
     this.ctx.fiber.assertActive()
     return {
-      dispose,
+      async dispose() {
+        await dispose()
+      },
       stateOf: (session) => {
         return this.cellFor(registration, session).state as S
       },

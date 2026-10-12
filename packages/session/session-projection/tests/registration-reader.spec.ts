@@ -98,10 +98,11 @@ describe('retained projection readers', () => {
     const retained = await ctx.sessionProjections.register(definition)
     const handle = await owner.ctx.sessionProjections.register(definition)
     if (release === 'twice') {
-      await handle.dispose()
-      await handle.dispose()
+      await expect(handle.dispose()).resolves.toBeUndefined()
+      await expect(handle.dispose()).resolves.toBeUndefined()
     } else {
-      await Promise.all([owner.dispose(), Promise.resolve(handle.dispose())])
+      await Promise.all([owner.dispose(), expect(handle.dispose()).resolves.toBeUndefined()])
+      await expect(handle.dispose()).resolves.toBeUndefined()
     }
     session.append('turn/start', { turn: 1 })
     expect(ctx.sessionProjections.snapshot(session).values).toEqual({ 'test/reader': 1 })

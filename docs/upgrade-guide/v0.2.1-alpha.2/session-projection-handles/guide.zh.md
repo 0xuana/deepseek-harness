@@ -16,6 +16,6 @@ description: "Session 投影注册改为异步，并返回保留读取能力的�
 
 1. 将 `sessionProjections` 声明为插件的必需注入，并在消费者之前挂载 `SessionProjectionRegistry`，包括自定义组合中的 `SubagentRuntime`。
 2. 在函数插件的异步 `apply()` 或服务的 `[Service.init]()` 中，等待 `ctx.sessionProjections.register(definition)`，在发布依赖操作前保留返回的句柄。保留既有的函数插件命名空间导出。
-3. 将 `registry.stateOf(session, key)` 替换为 `handle.stateOf(session)`。读取方需要自行取得句柄时，导入归属包的投影定义。将保存的注销回调替换为 `handle.dispose`；fiber 释放仍会自动解除注册。处理初始化错误时须等待注册完成。
+3. 将 `registry.stateOf(session, key)` 替换为 `handle.stateOf(session)`。读取方需要自行取得句柄时，导入归属包的投影定义。将保存的注销回调替换为始终返回 `Promise<void>` 的 `handle.dispose`，并等待显式释放完成；fiber 释放仍会自动解除注册。处理初始化错误时须等待注册完成。
 4. 将 `installModelSelectionProjection(ctx)` 替换为 `await ctx.sessionProjections.register(modelSelectionProjection)`，从 `@deepseek-ai/dsh-api-session-controller/src/model-selection-projection.ts` 导入该定义。
 5. 对自定义插件执行类型检查，再验证激活、Session 状态读取与 owner 释放。已释放的读取句柄仍可使用，而投影单元在最后一次注册解除后会从新快照中消失。
