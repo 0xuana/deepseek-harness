@@ -215,7 +215,7 @@ Host lib build
 → Vite 构建 Web
 ```
 
-The existing top-level `build` still runs `build:lib` before `build:web`, but `build:lib` must complete the Host and Remote artifacts before starting Client TypeScript compilation. A clean build must not depend on stale `.d.ts` files from an earlier build.
+The top-level `build` runs the step graph in `scripts/build.ts`, which completes the Host bundle and the Remote artifacts before starting Client TypeScript compilation. `build:lib` remains the complete serial lib build for `build:bench`, and its Host half `build:lib:host` serves the vendor release workflows. `typecheck` writes the Remote artifacts through `scripts/generate-typert.ts`, beside Host compilation, before Client TypeScript compilation. A clean build must not depend on stale `.d.ts` files from an earlier build.
 
 Compiler-backed repository gates that resolve the consumer surface have the same prerequisite even when their primary inputs are source files. The public `typecheck`, `lint`, and `doc-typecheck` commands run the Host contract pass first. The gate scheduler may use their `*:contracts-ready` variants only after an explicit Typert-contract or complete-build dependency, so parallel lanes neither read missing declarations nor run concurrent generators against the same outputs.
 
@@ -520,7 +520,7 @@ A consumer may import a Remote contract that is not currently mounted on the Hos
 
 Connection's general channel API must suit both the current HTTP carrier and a future WebSocket carrier. If the Client Remote or Gateway exposes `fetch`, an HTTP request, or a route handle, WebSocket migration will pierce the Remote layer again. Those physical objects must therefore remain internal to Connection.
 
-Remote endpoints use Connection's `trusted-host` authority. Loopback is accepted by default and LAN callers require an explicit trusted-host configuration, but this layer adds no per-method caller authorization; every trusted host can invoke a mounted Remote endpoint.
+Remote endpoints use Connection's `trusted-host` authority. Loopback and the listener's own bind address are accepted by default; any other LAN authority requires an explicit trusted-host configuration. This layer adds no per-method caller authorization; every accepted authority can invoke a mounted Remote endpoint.
 
 `hasSeen()` favors strict-definition safety over SRC availability. While a strict descriptor is withdrawn, such as during HMR, the Gateway continues to claim the endpoint and reports it unavailable instead of falling back to a weak SRC descriptor. Re-registration restores it; only a Typert registry restart forgets the historical strict definition.
 

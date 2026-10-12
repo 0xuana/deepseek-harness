@@ -6,7 +6,7 @@
  * @module @deepseek-ai/dsh-session-persistence-jsonl
  */
 
-import { Context } from '@deepseek-ai/cordis'
+import { Context, type Fiber } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import {
   createSessionFormatCatalogWithChildren,
@@ -98,6 +98,12 @@ export interface Config {
   root: string
   /** Physical encoding; defaults to checksummed Zstandard frames. */
   compression?: JsonlCompression
+}
+
+/** Logical header paired with the catalog's selected physical-generation classification. */
+interface GenerationHeader {
+  readonly header: SessionHeader
+  readonly formatStatus: NonNullable<SessionPersistenceSnapshot['formatStatus']>
 }
 
 /** One stored event graph whose producer has established immutable sharing. */
@@ -237,24 +243,18 @@ function waitWithAbort<T>(operation: Promise<T>, signal?: AbortSignal): Promise<
 }
 
 /**
- * The JSONL persistence backend. Load as a plugin; it registers as
- * `ctx.sessionPersistence`. Sessions materialize lazily: a created session is
+ * The JSONL backend registered as `ctx.sessionPersistence` by the plugin.
+ * Sessions materialize lazily: a created session is
  * visible to this process immediately, reaches disk on its first append or
  * flush, and never existed if the process crashes before that.
  */
 class JsonlSessionPersistence extends SessionPersistence {
-  static Config: z<Config> = z.object({
-    root: z.string().required(),
-    compression: JsonlCompressionSchema,
-  })
-
   /** Backend label for diagnostics and effects; shadows `Service.name` without changing the service key. */
   override readonly name = 'session-persistence-jsonl'
 
   private root: string
   private compression: JsonlCompression
   private rootEncodingCheck: Promise<void> | undefined
-  private readonly tracker = new JsonlBackendTracker(this.name)
   private readonly generationFormat: Omit<JsonlGenerationFormatAdapter, 'createRestore'>
   /**
    * Bounded LRU of parsed, validated stored logs keyed by session id and
@@ -267,7 +267,7 @@ class JsonlSessionPersistence extends SessionPersistence {
   /** One joinable decode/migration operation per selected historical Session file revision. */
   private readonly migrationPreparations = new Map<SessionId, MigrationPreparation>()
 
-  constructor(ctx: Context, public config: Config) {
+  constructor(ctx: Context, public config: Config, private readonly tracker: JsonlBackendTracker) {
     super(ctx)
     /* v8 ignore next 5 -- generated catalog and Session source share one build-time version owner. */
     if (sessionFormatCatalog.currentVersion !== SESSION_FORMAT_VERSION) {
@@ -288,7 +288,6 @@ class JsonlSessionPersistence extends SessionPersistence {
         error instanceof SessionFormatUnsupportedMigrationError,
     }
     this.assertUsableRoot()
-    this.tracker.install(ctx)
   }
 
   /**
@@ -447,13 +446,13 @@ class JsonlSessionPersistence extends SessionPersistence {
     }
     const selected = await this.findLog(id, options?.signal)
     if (selected === undefined) return undefined
-    const header = await this.readGenerationHeader(selected, id, options?.signal)
-    if (header === undefined) return undefined
+    const metadata = await this.readGenerationHeader(selected, id, options?.signal)
+    if (metadata === undefined) return undefined
     try {
       const identity = await stat(selected.sourcePath, { bigint: true })
       options?.signal?.throwIfAborted()
       return {
-        header,
+        ...metadata,
         revision: selected.sourceVersion < SESSION_FORMAT_VERSION
           ? SessionPersistenceRevision(`${fileRevision(identity)}:${await this.historicalCorpusRevision(options?.signal)}`)
           : fileRevision(identity),
@@ -491,6 +490,7 @@ class JsonlSessionPersistence extends SessionPersistence {
         listed.add(artifact.header.id)
         snapshots.push({
           header: artifact.header,
+          formatStatus: artifact.formatStatus,
           revision: artifact.sourceVersion < SESSION_FORMAT_VERSION
             ? SessionPersistenceRevision(`${fileRevision(identity)}:${corpusRevision}`)
             : fileRevision(identity),
@@ -1055,29 +1055,29 @@ class JsonlSessionPersistence extends SessionPersistence {
 
   private async listArtifacts(
     signal?: AbortSignal,
-  ): Promise<Array<{ header: SessionHeader; path: string; sourceVersion: number }>> {
+  ): Promise<Array<GenerationHeader & { path: string; sourceVersion: number }>> {
     signal?.throwIfAborted()
     await this.ensureRootEncoding()
     signal?.throwIfAborted()
-    const artifacts: Array<{ header: SessionHeader; path: string; sourceVersion: number }> = []
+    const artifacts: Array<GenerationHeader & { path: string; sourceVersion: number }> = []
     const ids = new Set<SessionId>()
     for (const selected of await this.listGenerations(signal)) {
       signal?.throwIfAborted()
-      let header: SessionHeader | undefined
+      let metadata: GenerationHeader | undefined
       try {
-        header = await this.readGenerationHeader(selected, undefined, signal)
+        metadata = await this.readGenerationHeader(selected, undefined, signal)
       } catch (error: unknown) {
         if (error instanceof SessionFormatUnsupportedError || error instanceof SessionPersistenceCorruptionError) continue
         throw error
       }
-      if (header === undefined) {
+      if (metadata === undefined) {
         continue
       }
-      if (ids.has(header.id)) {
-        throw new Error(`duplicate JSONL session id "${header.id}" appears in multiple project directories`)
+      if (ids.has(metadata.header.id)) {
+        throw new Error(`duplicate JSONL session id "${metadata.header.id}" appears in multiple project directories`)
       }
-      ids.add(header.id)
-      artifacts.push({ header, path: selected.sourcePath, sourceVersion: selected.sourceVersion })
+      ids.add(metadata.header.id)
+      artifacts.push({ ...metadata, path: selected.sourcePath, sourceVersion: selected.sourceVersion })
     }
     signal?.throwIfAborted()
     return artifacts
@@ -1088,7 +1088,7 @@ class JsonlSessionPersistence extends SessionPersistence {
     selected: ResolvedJsonlGeneration,
     expectedId?: SessionId,
     signal?: AbortSignal,
-  ): Promise<SessionHeader | undefined> {
+  ): Promise<GenerationHeader | undefined> {
     let first: string | undefined
     try {
       first = this.compression === 'zstd'
@@ -1136,7 +1136,10 @@ class JsonlSessionPersistence extends SessionPersistence {
       expectedId,
       signal,
     )
-    return header
+    return {
+      header,
+      formatStatus: result.status,
+    }
   }
 
   /** Convert format-catalog string identities to current branded Session metadata. */
@@ -1716,10 +1719,36 @@ class JsonlSessionPersistence extends SessionPersistence {
   /* v8 ignore stop */
 }
 
-/**
- * One open channel onto a JSONL-stored session: the shared storage-handle
- * scaffolding over this backend's file primitives. Reads re-scan the artifact
- * under the stable-read loop.
- */
+/** JSONL persistence plugin label. */
+export const name = 'session-persistence-jsonl'
 
-export default JsonlSessionPersistence
+/** Loader schema for the backend's root and physical encoding. */
+export const Config: z<Config> = z.object({
+  root: z.string().required(),
+  compression: JsonlCompressionSchema,
+})
+
+/**
+ * Mount persistence with live routing and handles retained through the
+ * consumer unloads triggered by removing this provider. Consumers must own
+ * cleanup in their injecting scope; concurrent root disposal is not ordered.
+ * @param ctx - the owning plugin context.
+ * @param config - the storage root and physical encoding.
+ * @returns resolves when the service is ready.
+ */
+export async function apply(ctx: Context, config: Config): Promise<void> {
+  let service!: Fiber
+  // Keep this generator synchronous so thenable disposers are registered as functions, not awaited.
+  ctx.effect(function* () {
+    const tracker = new JsonlBackendTracker(name)
+    yield tracker.install(ctx)
+    service = ctx.plugin({
+      name: 'session-persistence-jsonl-service',
+      apply(serviceCtx: Context) {
+        new JsonlSessionPersistence(serviceCtx, config, tracker)
+      },
+    })
+    yield service.dispose
+  }, 'session-persistence-jsonl resources')
+  await service.await()
+}

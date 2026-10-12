@@ -1228,6 +1228,21 @@
     },
     {
       "doc": "docs/subsystems/jobs.md",
+      "symbol": "JobRegisteredData",
+      "source": "packages/jobs/jobs/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/jobs.md",
+      "symbol": "JobSettledData",
+      "source": "packages/jobs/jobs/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/jobs.md",
+      "symbol": "JobToolCall",
+      "source": "packages/jobs/jobs/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/jobs.md",
       "symbol": "JobSpec",
       "source": "packages/jobs/jobs/src/types.ts"
     },
@@ -1917,6 +1932,11 @@
       "source": "packages/host/webserver/src/index.ts"
     },
     {
+      "doc": "docs/subsystems/web-server.md",
+      "symbol": "TlsConfig",
+      "source": "packages/host/webserver/src/index.ts"
+    },
+    {
       "doc": "docs/subsystems/storage.md",
       "symbol": "StorageForms",
       "source": "packages/storage/storage/src/index.ts"
@@ -2064,6 +2084,11 @@
     {
       "doc": "docs/subsystems/typert.md",
       "symbol": "PeerScope",
+      "source": "packages/typert/protocol/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/typert.md",
+      "symbol": "RemoteUplinkWindow",
       "source": "packages/typert/protocol/src/types.ts"
     },
     {
@@ -2305,6 +2330,11 @@
       "doc": "docs/subsystems/ptc-runtime.md",
       "symbol": "PtcRunSandbox",
       "source": "packages/ptc-runtime/ptc-runtime/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/ssh.md",
+      "symbol": "HelperLaunch",
+      "source": "packages/ssh/ssh/src/index.ts"
     },
     {
       "doc": "docs/subsystems/ssh.md",
