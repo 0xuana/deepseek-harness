@@ -84,10 +84,6 @@
   name: '@deepseek-ai/dsh-tool-subagent-control'
   disabled: true
 
-- id: tool-subagent-list-models
-  name: '@deepseek-ai/dsh-tool-subagent/list-models'
-  disabled: true
-
 - id: tool-subagent-list-agents
   name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
   disabled: true

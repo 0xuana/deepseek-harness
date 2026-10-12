@@ -6,7 +6,6 @@ import type { LlmProviderInfo } from '@deepseek-ai/dsh-llm'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { parentAgentOptionsForDelegation } from '@deepseek-ai/dsh-subagent'
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
-import { subagentModelSelectionPolicy, subagentModelSelectionProjectionDefinition } from './model-selection-state.ts'
 import type { ModelSelectionPolicy } from './model-selection.ts'
 
 interface ListSubagentModelsRequest {
@@ -95,8 +94,8 @@ async function listSubagentModels(
 }
 
 /**
- * Register `list_subagent_models` in the owning composition.
- * Provider listings intersect the catalog with authorization, or resolve only the parent model when selection is disabled.
+ * Register `list_subagent_models` for the delegation-tool instance that owns model selection.
+ * Provider listings intersect the catalog with authorization, or resolve only the parent model without a Session policy.
  * @param ctx - Context whose tool registry owns the fixed discovery definition.
  * @param policyFor - Read the calling Session’s authorized routes; undefined restricts discovery to its parent model.
  */
@@ -125,22 +124,4 @@ export function registerListSubagentModels(ctx: Context, policyFor: (exec: ToolR
       return listSubagentModels(ctx, policyFor(exec), args, exec)
     },
   }))
-}
-
-/** Shared discovery plugin for all delegation tools in one composition. */
-export const name = 'tool-subagent-list-models'
-/** Services used to register discovery and read durable route policy. */
-export const inject = ['tools', 'sessionProjections']
-
-/**
- * Register one discovery tool whose results follow the calling Session’s policy.
- * @param ctx - Owning composition context.
- */
-export function apply(ctx: Context): void {
-  ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
-  registerListSubagentModels(ctx, (exec) => {
-    if (exec.agent === undefined) throw new Error('list_subagent_models requires a calling agent')
-    const routes = subagentModelSelectionPolicy(ctx.sessionProjections, exec.agent.session)
-    return routes === undefined ? undefined : { routes }
-  })
 }

@@ -16,8 +16,10 @@ import ToolRuntime from '@deepseek-ai/dsh-tools'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
+import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import * as tool from '../src/index.ts'
-import { apply, inject, name, registerListSubagentModels } from '../src/list-models.ts'
+import { registerListSubagentModels } from '../src/list-models.ts'
+import SubagentModelSelectionConfig from '../src/model-selection-settings.ts'
 import { modelSelectionSetupAgent, setup, testToolSignal, text } from './harness.ts'
 
 class CatalogAdapter extends LlmAdapter {
@@ -100,7 +102,7 @@ function call(ctx: Context, args: unknown, signal = testToolSignal) {
 }
 
 describe('list_subagent_models', () => {
-  it('is loaded through its own composition entry', async () => {
+  it('is omitted unless its delegation-tool instance owns model selection', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(LlmRuntime)
@@ -114,14 +116,23 @@ describe('list_subagent_models', () => {
 
   it('requires a calling Agent and an effective parent route', async () => {
     const ctx = new Context()
+    await ctx.plugin(SubagentModelSelectionConfig)
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin({ apply, inject, name })
+    await mountWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SubagentRuntime)
+    await ctx.plugin({
+      name: 'direct-tool-subagent',
+      inject: tool.inject,
+      apply: (direct: Context) => {
+        tool.apply(direct, { provider: 'unused', modelSelectionSettings: true }, Session.create(SessionId('direct-discovery')))
+      },
+    })
     expect(text(await call(ctx, {}))).toContain('requires a calling agent')
     await ctx.fiber.dispose()
 
-    const parentContext = await setup({ provider: 'mock' })
+    const parentContext = await setup({ provider: 'mock', withModelSelection: true, hostSelectionEnabled: false })
     const agent = modelSelectionSetupAgent(parentContext)
     const result = await parentContext.tools.execute({
       signal: testToolSignal, callId: ToolCallId('missing-parent-route'),
@@ -131,7 +142,7 @@ describe('list_subagent_models', () => {
     expect(text(result)).toContain('without a parent provider and model')
   })
 
-  it('reads the recorded Session allowlist through the shared discovery definition', async () => {
+  it('reads the recorded Session allowlist through the settings-owned discovery definition', async () => {
     const ctx = await setup({ provider: 'mock', withModelSelection: true })
     ctx.llm.registerAdapter(['alpha', 'secret'], new CatalogAdapter())
     const result = await ctx.tools.execute({
@@ -279,8 +290,13 @@ describe('list_subagent_models', () => {
     }
   })
 
-  it.each([false, true])('resolves only the current parent model when selection is disabled (empty catalog: %s)', async (empty) => {
-    const ctx = await setup({ provider: 'mock', parentAgentOptions: { provider: 'alpha', model: 'unlisted' } })
+  it.each([false, true])('resolves only the current parent model without a Session policy (empty catalog: %s)', async (empty) => {
+    const ctx = await setup({
+      provider: 'mock',
+      withModelSelection: true,
+      hostSelectionEnabled: false,
+      parentAgentOptions: { provider: 'alpha', model: 'unlisted' },
+    })
     const adapter = new CatalogAdapter(empty)
     const listModels = vi.spyOn(adapter, 'listModels')
     ctx.llm.registerAdapter(['alpha'], adapter)

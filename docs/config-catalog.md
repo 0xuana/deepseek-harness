@@ -3977,7 +3977,7 @@ export interface Config {
 
 - `inject`: `tools` · `subagents` · `systemPrompt` · `sessionProjections`
 - `refs`: [`AgentOptions`](subsystems/core.md)
-- `source`: [`packages/subagent/tool-subagent/src/index.ts:47`](../packages/subagent/tool-subagent/src/index.ts)
+- `source`: [`packages/subagent/tool-subagent/src/index.ts:48`](../packages/subagent/tool-subagent/src/index.ts)
 
 ```ts config-catalog
 /** Config: which registered provider this tool delegates to, plus child defaults. */
@@ -3990,8 +3990,11 @@ export interface Config {
    */
   toolName?: string
   /**
-   * Sample the Host `subagent-model-selection` setting for each new top-level
-   * Session and inherit that decision in its child Sessions.
+   * Expose optional child `provider`, `model`, and `reasoning_effort` fields
+   * plus `list_subagent_models`, and sample the Host `subagent-model-selection`
+   * setting for each new top-level Session; child Sessions inherit that
+   * decision. Requires a provider with `agentOptions` that does not inherit
+   * the parent conversation. At most one instance per tool scope may enable it.
    */
   modelSelectionSettings?: boolean
   /**

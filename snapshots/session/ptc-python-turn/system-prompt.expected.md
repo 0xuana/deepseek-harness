@@ -287,13 +287,6 @@ class ListAgentsOutput2(TypedDict):
     parent: NotRequired[str]
     depth: NotRequired[float]
 
-class ListSubagentModelsArgs(TypedDict):
-    # Registered LLM provider id.
-    provider: NotRequired[str]
-    # Exact model id; requires provider.
-    model: NotRequired[str]
-    # Additional keys beyond those declared are allowed.
-
 class ReadArgs(TypedDict):
     # Path to read, resolved by the filesystem backend.
     file_path: str
@@ -377,12 +370,6 @@ class SubagentArgs(TypedDict):
     description: str
     # The complete, self-contained task for the subagent. It does not share this conversation's context, so include everything it needs.
     prompt: str
-    # Child LLM provider id.
-    provider: NotRequired[str]
-    # Model id within that provider.
-    model: NotRequired[str]
-    # Model-specific reasoning effort id.
-    reasoning_effort: NotRequired[str]
     # Additional keys beyond those declared are allowed.
 
 class SubagentOutput(TypedDict):
@@ -548,8 +535,6 @@ class Tools(Protocol):
         """Read a background job: output since the previous read for stream jobs, or the result of a finished final-output job."""
     async def list_agents(self, args: ListAgentsArgs) -> list[ListAgentsOutput1 | ListAgentsOutput2]:
         """List subagents you started, with their ids, labels, and status. running means it is working; inactive means it is not currently working. You will be notified when a subagent finishes; there is no need to keep checking its status. Use send_message to continue the conversation."""
-    async def list_subagent_models(self, args: ListSubagentModelsArgs) -> str:
-        """Inspect subagent models without changing the current Agent. No arguments: providers; `provider`: allowed models; `provider` + `model`: that model and its reasoning efforts. Use returned ids for delegation."""
     async def read(self, args: ReadArgs) -> ReadOutput:
         """Read a UTF-8 text file and return line-numbered content."""
     async def read_image(self, args: ReadImageArgs) -> ReadImageOutput:
@@ -559,7 +544,7 @@ class Tools(Protocol):
     async def skill(self, args: SkillArgs) -> SkillOutput:
         """Load the full instructions for a skill. Call it before acting on a task that names or clearly matches a skill in the session skill catalog."""
     async def subagent(self, args: SubagentArgs) -> SubagentOutput:
-        """Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes. Inspect options with `list_subagent_models` before setting `provider` and `model` together. Omitted values use child defaults, falling back to compatible parent values. When the effective route changes, an omitted `reasoning_effort` uses the model's default."""
+        """Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes."""
     async def subagent_fork(self, args: SubagentForkArgs) -> SubagentForkOutput:
         """Delegate a task to a subagent that inherits this conversation: a child agent seeded with all completed turns so far (it does not see the current in-flight turn). Use this when the subtask builds on this conversation's context — a follow-up analysis, a review, a continuation — without consuming this conversation's context for the work itself. You receive its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes."""
     async def todo_write(self, args: TodoWriteArgs) -> TodoWriteOutput:

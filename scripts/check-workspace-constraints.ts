@@ -195,8 +195,9 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   '@deepseek-ai/dsh-experimental-inspector': ['lib/client.*.js', 'lib/worker.js', 'lib/devtools/**'],
   // Creator's composition guidance travels with the declaration package.
   '@deepseek-ai/dsh-agent-preset': ['skills'],
-  // Settings and shared discovery have independent composition entries.
-  '@deepseek-ai/dsh-tool-subagent': ['lib/list-models.js', 'lib/model-selection-settings.js'],
+  // The Web Host mounts the default-off settings owner independently of the
+  // delegation-tool instances.
+  '@deepseek-ai/dsh-tool-subagent': ['lib/model-selection-settings.js'],
   // The JSONL backend resolves its private verification Worker relative to
   // import.meta.url; it is shipped without a public package subpath.
   '@deepseek-ai/dsh-session-persistence-jsonl': ['lib/worker.cjs'],

@@ -16,7 +16,7 @@ A newly composed top-level Session snapshots the route list in `subagent/model-s
 
 The fixed `list_subagent_models` schema does not enumerate the policy. At call time, it lists authorized registered providers and intersects their advertised model catalogs with the recorded route list. Exact lookup requires authorization before resolving model metadata and all supported reasoning efforts, including for ids absent from the catalog. Without a recorded policy, discovery resolves only the parent Agent’s current effective route, even if the catalog omits it. The delegation executor independently checks any explicit provider, model, or effort selection against the same authorization before adapter preflight. A call with no selection fields retains configured or inherited routing.
 
-Model selection has no unrestricted static mode. The default-off Host setting authorizes alternative child routes; without it, the parent route and its supported efforts remain selectable. The primary spawn tool captures the setting once, while all capable delegation tools and shared discovery read the same Session policy. Fork tools reject model-selection arguments to preserve inherited-prefix reuse.
+Model selection has no unrestricted static mode. The default-off Host setting authorizes alternative child routes; without it, the parent route and its supported efforts remain selectable. Only a delegation tool configured with `modelSelectionSettings` exposes the route fields and registers `list_subagent_models`; the shipped Web spawn tool is that owner, captures the setting once, and reads the Session policy at each call. Fork tools reject model-selection arguments, and the setting fails their mount, to preserve inherited-prefix reuse.
 
 ## Alternatives considered
 
@@ -34,7 +34,7 @@ Model selection has no unrestricted static mode. The default-off Host setting au
 
 - New adapter registrations and newly advertised models do not expand user authorization.
 - Adapter removal or catalog lookup failure can make provider discovery unavailable without deleting the saved route decision; an allowed model remains usable when its adapter accepts it even if the advisory catalog omits it.
-- The allowlist itself consumes no parent-request tokens. Only a `list_subagent_models` result enters the transcript.
+- The allowlist itself consumes no parent-request tokens. Only a `list_subagent_models` result enters the transcript. Compositions with `modelSelectionSettings` carry the three route fields and the discovery schema in every Session; headless and SDK profiles carry neither.
 - The policy event is log-only and is appended while an Agent is composed, before either SDK begins its run subscription. Shipped SDK profiles do not enable this Web-owned preference, so the event changes neither SDK's expected notifications or persisted-session output; package restore tests own its durable projection instead of fabricating an SDK composition solely to emit it.
 - Unit coverage pins settings validation, malformed durable values, Session sampling and inheritance, shared definitions, parent-route defaults, discovery restrictions, executor denial, and the settings UI’s staged writes and revision checks. The assembled Web scenario pins the real settings document and Plugins card flow.
 

@@ -102,10 +102,7 @@ describe('dsh-tool-subagent', () => {
     expect(Object.keys(props).sort()).toEqual([
       'cwd',
       'description',
-      'model',
       'prompt',
-      'provider',
-      'reasoning_effort',
     ])
     expect(schema!.description).not.toContain('job_output')
   })

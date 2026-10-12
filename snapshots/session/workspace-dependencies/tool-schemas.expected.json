@@ -216,23 +216,6 @@
       }
     },
     {
-      "name": "list_subagent_models",
-      "description": "Inspect subagent models without changing the current Agent. No arguments: providers; `provider`: allowed models; `provider` + `model`: that model and its reasoning efforts. Use returned ids for delegation.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "provider": {
-            "type": "string",
-            "description": "Registered LLM provider id."
-          },
-          "model": {
-            "type": "string",
-            "description": "Exact model id; requires provider."
-          }
-        }
-      }
-    },
-    {
       "name": "load_workspace_dependencies",
       "description": "Get absolute paths to bundled Python and library directories, plus bundled Python distribution versions. Node.js and pnpm paths are included when the payload provides them. Python includes numpy, pandas, python-docx, python-pptx, openpyxl, Pillow, lxml, and XlsxWriter. Use these libraries for Office files unless the user or workspace instructions select another environment. When Node.js and pnpm paths are returned, run pnpm with that Node executable and pnpm script path. This does not change PATH or package-manager settings.",
       "parameters": {
@@ -319,7 +302,7 @@
     },
     {
       "name": "subagent",
-      "description": "Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes. Inspect options with `list_subagent_models` before setting `provider` and `model` together. Omitted values use child defaults, falling back to compatible parent values. When the effective route changes, an omitted `reasoning_effort` uses the model's default.",
+      "description": "Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -334,18 +317,6 @@
           "prompt": {
             "type": "string",
             "description": "The complete, self-contained task for the subagent. It does not share this conversation's context, so include everything it needs."
-          },
-          "provider": {
-            "type": "string",
-            "description": "Child LLM provider id."
-          },
-          "model": {
-            "type": "string",
-            "description": "Model id within that provider."
-          },
-          "reasoning_effort": {
-            "type": "string",
-            "description": "Model-specific reasoning effort id."
           }
         },
         "required": [

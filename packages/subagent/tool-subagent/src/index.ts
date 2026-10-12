@@ -29,6 +29,7 @@ import {
   requestedAgentOptions,
 } from './model-selection.ts'
 import type { DelegationModelRequest } from './model-selection.ts'
+import { registerListSubagentModels } from './list-models.ts'
 import type {} from './model-selection-settings.ts'
 import {
   recordSubagentModelSelection,
@@ -53,8 +54,11 @@ export interface Config {
    */
   toolName?: string
   /**
-   * Sample the Host `subagent-model-selection` setting for each new top-level
-   * Session and inherit that decision in its child Sessions.
+   * Expose optional child `provider`, `model`, and `reasoning_effort` fields
+   * plus `list_subagent_models`, and sample the Host `subagent-model-selection`
+   * setting for each new top-level Session; child Sessions inherit that
+   * decision. Requires a provider with `agentOptions` that does not inherit
+   * the parent conversation. At most one instance per tool scope may enable it.
    */
   modelSelectionSettings?: boolean
   /**
@@ -169,7 +173,7 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
   }
   const toolName = config.toolName ?? 'subagent'
 
-  const modelSelectionCapable = config.modelSelectionSettings === true
+  const modelSelectionEnabled = config.modelSelectionSettings === true
   ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
 
   const assertSubagentProviderConfiguration = (subagentProvider: SubagentProvider): void => {
@@ -184,12 +188,17 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
         `tool-subagent: provider "${subagentProvider.name}" does not support child agentOptions`,
       )
     }
-    if (modelSelectionCapable && !subagentProvider.capabilities.agentOptions) {
+    if (modelSelectionEnabled && !subagentProvider.capabilities.agentOptions) {
       throw new Error(
         `tool-subagent: provider "${subagentProvider.name}" does not support child model selection`,
       )
     }
-
+    if (modelSelectionEnabled && subagentProvider.inheritsParentContext) {
+      throw new Error(
+        `tool-subagent: provider "${subagentProvider.name}" inherits the parent conversation and does not accept child model selection`
+        + ' — remove `modelSelectionSettings` from this instance',
+      )
+    }
   }
 
   // Validate provider-owned config outside the optional LLM binding so an
@@ -201,12 +210,18 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
   if (initialProvider !== undefined) assertSubagentProviderConfiguration(initialProvider)
 
   const install = (runtimeCtx: Context): void => {
+    if (modelSelectionEnabled) {
+      registerListSubagentModels(runtimeCtx, (exec) => {
+        if (exec.agent === undefined) throw new Error('list_subagent_models requires a calling agent')
+        const routes = subagentModelSelectionPolicy(runtimeCtx.sessionProjections, exec.agent.session)
+        return routes === undefined ? undefined : { routes }
+      })
+    }
     // Load order and HMR replacement can change provider availability while
     // this fiber remains active.
     let mounted: { subagentProvider: SubagentProvider; disposeTool: () => void } | undefined
     const mount = (subagentProvider: SubagentProvider): void => {
       assertSubagentProviderConfiguration(subagentProvider)
-      const modelSelectionEnabled = subagentProvider.capabilities.agentOptions && !subagentProvider.inheritsParentContext
       const wording = providerWording(subagentProvider.inheritsParentContext)
       const providerRouteDefaults = subagentProvider.agentRouteDefaults
       const selectionDescription = providerRouteDefaults !== undefined

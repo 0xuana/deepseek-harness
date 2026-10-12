@@ -1,3 +1,0 @@
-- insert:
-    - id: discovery-fixture
-      name: '../../../packages/subagent/tool-subagent/tests/fixtures/model-discovery.mjs'

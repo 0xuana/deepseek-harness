@@ -16,7 +16,7 @@ Host 自有的 `subagent-model-selection` 设置 section 保存显式 `enabled` 
 
 固定的 `list_subagent_models` schema 不枚举策略。调用时，它列出已授权且已注册的提供方，并取其公布模型目录与已记录路由列表的交集。精确查询先要求授权，再解析模型元数据及全部支持的推理强度，也允许目录未列出的 ID。没有已记录策略时，发现只解析父 Agent 当前生效的路由，即使目录未列出它。委派执行器会在适配器预检前独立校验显式提供方、模型或强度选择是否符合相同授权。没有选择字段的调用保留配置或继承的路由。
 
-模型选择没有无限制的静态模式。默认关闭的 Host 设置授权其他子级路由；没有该授权时，仍可选择父级路由及其支持的强度。主 spawn 工具一次性记录设置，所有支持选择的委派工具和共享发现均读取同一 Session 策略。fork 工具拒绝模型选择参数，以保留对继承前缀的复用。
+模型选择没有无限制的静态模式。默认关闭的 Host 设置授权其他子级路由；没有该授权时，仍可选择父级路由及其支持的强度。只有配置了 `modelSelectionSettings` 的委派工具会公开路由字段并注册 `list_subagent_models`；随附 Web 的 spawn 工具就是该所有者，它一次性记录设置，并在每次调用时读取 Session 策略。fork 工具拒绝模型选择参数，且该设置会使其挂载失败，以保留对继承前缀的复用。
 
 ## Alternatives considered
 
@@ -34,7 +34,7 @@ Host 自有的 `subagent-model-selection` 设置 section 保存显式 `enabled` 
 
 - 新适配器注册和新公布模型不会扩大用户授权。
 - 适配器移除或目录查询失败可能使提供方发现不可用，但不会删除已存路由决定；只要适配器接受某个获准模型，即使建议性目录省略它，该模型仍可使用。
-- 允许列表本身不消耗父级请求 token。只有 `list_subagent_models` 结果进入 transcript。
+- 允许列表本身不消耗父级请求 token。只有 `list_subagent_models` 结果进入 transcript。配置了 `modelSelectionSettings` 的组合在每个 Session 中都携带三个路由字段和发现 schema；headless 与 SDK profile 两者都不携带。
 - 策略事件仅存在于日志，并在 Agent 组合期间、两套 SDK 开始订阅运行前追加。随附 SDK profile 不启用这项 Web 自有偏好，因此该事件不会改变任一 SDK 的预期通知或持久 Session 输出；其持久投影由包级恢复测试负责，不会为了发出该事件而虚构 SDK 组合。
 - 单元覆盖固定设置校验、异常持久值、Session 取样与继承、共享定义、父级路由默认值、发现限制、执行器拒绝，以及设置 UI 的暂存写入与 revision 检查。组装 Web 场景固定真实设置文档与 Plugins 设置卡流程。
 

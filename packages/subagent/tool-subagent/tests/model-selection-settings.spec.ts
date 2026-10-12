@@ -14,7 +14,6 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import * as tool from '../src/index.ts'
-import * as discovery from '../src/list-models.ts'
 import SubagentModelSelectionConfig from '../src/model-selection-settings.ts'
 import {
   subagentModelSelectionPolicy,
@@ -49,10 +48,8 @@ async function boot(withPreset = true): Promise<Context> {
   await mountWorkingDirectoryFixture(ctx)
   subagentConfigs.set(ctx, await liveConfig(ctx, SubagentRuntime))
   await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
-  await ctx.plugin(discovery)
   if (withPreset) {
     const preset = createScope(ctx, { preset: 'model-selection-test' })
-    await preset.ctx.plugin(discovery)
     await preset.ctx.plugin(tool, {
       provider: 'spawn',
       modelSelectionSettings: true,
@@ -272,7 +269,6 @@ describe('SubagentModelSelectionConfig', () => {
     const ctx = await boot(false)
     const preset = createScope(ctx, { preset: 'standard' })
     const other = createScope(ctx, { preset: 'minimal' })
-    await preset.ctx.plugin(discovery)
     await preset.ctx.plugin(tool, {
       provider: 'spawn',
       modelSelectionSettings: true,

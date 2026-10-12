@@ -73,7 +73,7 @@ import * as PluginManagerTools from '@deepseek-ai/dsh-plugin-manager/tools'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
 import McpResources from '@deepseek-ai/dsh-mcp-resources'
 import * as ToolSubagent from '@deepseek-ai/dsh-tool-subagent'
-import * as SubagentModelDiscovery from '../packages/subagent/tool-subagent/src/list-models.ts'
+import { registerListSubagentModels } from '../packages/subagent/tool-subagent/src/list-models.ts'
 import * as ToolWeb from '@deepseek-ai/dsh-tool-web'
 import WorkflowEngine from '@deepseek-ai/dsh-workflow'
 import type { WorkflowRun, WorkflowStartRequest } from '@deepseek-ai/dsh-workflow'
@@ -519,10 +519,10 @@ const TOOL_PACKAGES: ToolPackage[] = [
       await ctx.plugin(LlmRuntime)
       registerCatalogSubagentProvider(ctx, 'mock')
       await ctx.plugin(ToolSubagent, { provider: 'mock' })
-      await ctx.plugin(SubagentModelDiscovery)
+      registerListSubagentModels(ctx, () => ({ routes: [{ provider: 'mock', model: 'mock' }] }))
     },
     note:
-      'The registered delegation name is the load-time `toolName` config (default `subagent`); backends supporting agentOptions without inheriting parent context always expose optional route fields, and the shared discovery plugin resolves the calling Session’s allowed routes. Web presets sample the Plugins preference for each new top-level Session and preserve that decision for its child Sessions; `subagent_fork` rejects model-selection arguments; without an enabled policy, spawn selection and discovery are restricted to the current parent route. Each instance selects its backend through `provider` and reads model-selection settings through `modelSelectionSettings`. Every delegation returns a child id promptly; local children accept follow-ups, while external backends report their single execution automatically.',
+      'The registered delegation name is the load-time `toolName` config (default `subagent`); the default schema above has model selection off, while the discovery schema is shown as the fixed companion registered by an instance with `modelSelectionSettings`. That instance always exposes optional route fields; Web presets sample the Plugins preference for each new top-level Session and preserve that decision for its child Sessions, and without an enabled policy, selection and discovery are restricted to the current parent route. `subagent_fork` exposes no route selection. Each instance selects its backend through `provider`. Every delegation returns a child id promptly; local children accept follow-ups, while external backends report their single execution automatically.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-subagent-control',

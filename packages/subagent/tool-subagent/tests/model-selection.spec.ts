@@ -141,13 +141,37 @@ describe('dsh-tool-subagent model selection', () => {
     expect(text(result)).toContain('model selection is disabled for this tool instance')
   })
 
-  it('keeps route fields visible but rejects other routes when selection is disabled', async () => {
+  it('hides and rejects route fields without modelSelectionSettings', async () => {
     const ctx = await setup({ provider: 'mock', parentAgentOptions: { provider: 'alpha', model: 'parent-model' } })
     const schema = ctx.tools.schemas().find(entry => entry.name === 'subagent')!
     const props = (schema.parameters as { properties?: Record<string, unknown> }).properties ?? {}
+    expect(Object.keys(props).sort()).toEqual(['cwd', 'description', 'prompt'])
+    expect(schema.description).not.toContain('list_subagent_models')
+    expect(ctx.tools.get('list_subagent_models')).toBeUndefined()
+
+    for (const selection of [
+      { provider: 'alpha', model: 'parent-model' },
+      { reasoning_effort: 'low' },
+    ]) {
+      const result = await callSubagent(ctx, { description: 'forced route', prompt: 'do it', ...selection })
+      expect(result.isError).toBe(true)
+      expect(text(result)).toContain('child model selection is disabled for this tool instance')
+    }
+  })
+
+  it('keeps settings-owned route fields visible but rejects other routes without a Session policy', async () => {
+    const ctx = await setup({
+      provider: 'mock',
+      withModelSelection: true,
+      hostSelectionEnabled: false,
+      parentAgentOptions: { provider: 'alpha', model: 'parent-model' },
+    })
+    const agent = modelSelectionSetupAgent(ctx)
+    const schema = ctx.tools.schemas(agent).find(entry => entry.name === 'subagent')!
+    const props = (schema.parameters as { properties?: Record<string, unknown> }).properties ?? {}
     expect(Object.keys(props).sort()).toEqual(['cwd', 'description', 'model', 'prompt', 'provider', 'reasoning_effort'])
     expect(schema.description).toContain('list_subagent_models')
-    expect(ctx.tools.get('list_subagent_models')).toBeDefined()
+    expect(ctx.tools.get('list_subagent_models', agent)).toBeDefined()
 
     const result = await callSubagent(ctx, {
       description: 'forced route',
@@ -159,10 +183,12 @@ describe('dsh-tool-subagent model selection', () => {
     expect(text(result)).toContain('is not allowed for this Session')
   })
 
-  it('discovers only the parent route by default and permits its explicit route and effort', async () => {
+  it('discovers only the parent route without a Session policy and permits its explicit route and effort', async () => {
     const requests: SubagentStartRequest[] = []
     const ctx = await setup({
       provider: 'mock',
+      withModelSelection: true,
+      hostSelectionEnabled: false,
       parentAgentOptions: parentWithRoute().options,
     }, { onStart: (request) => { requests.push(request) } })
     ctx.llm.registerAdapter(['alpha', 'other-provider'], new MockAdapter([], REASONING))
@@ -469,17 +495,27 @@ describe('dsh-tool-subagent model selection', () => {
     expect(resolve).not.toHaveBeenCalled()
   })
 
+  it('rejects modelSelectionSettings on a provider that inherits the parent conversation', async () => {
+    await expect(setup({ provider: 'mock', withModelSelection: true }, { inheritsParentContext: true }))
+      .rejects.toThrow('provider "mock" inherits the parent conversation and does not accept child model selection')
+  })
+
   it('keeps fork model selection unavailable even with Session authorization', async () => {
     const started = vi.fn()
-    const ctx = await setup({ provider: 'mock', withModelSelection: true }, {
+    const ctx = await setup({ provider: 'mock' }, {
       inheritsParentContext: true,
       onStart: started,
     })
-    const schema = ctx.tools.schemas(modelSelectionSetupAgent(ctx)).find(entry => entry.name === 'subagent')!
+    const agent = modelSelectionSetupAgent(ctx)
+    agent.session.append('subagent/model-selection-policy', {
+      allowedModels: [{ provider: 'alpha', model: 'fast-model' }],
+    })
+    const schema = ctx.tools.schemas(agent).find(entry => entry.name === 'subagent')!
     const props = (schema.parameters as { properties?: Record<string, unknown> }).properties ?? {}
     expect(Object.keys(props).sort()).toEqual(['cwd', 'description', 'prompt'])
     expect(schema.description).toContain('inherits this conversation')
-    expect(schema.description).not.toContain('Child LLM selection')
+    expect(schema.description).not.toContain('list_subagent_models')
+    expect(ctx.tools.get('list_subagent_models', agent)).toBeUndefined()
 
     for (const selection of [
       { provider: 'alpha', model: 'fast-model' },
