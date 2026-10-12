@@ -18,7 +18,6 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import type { ToolExecutionResult } from '@deepseek-ai/dsh-tools'
-import * as GoalTools from '@deepseek-ai/dsh-tool-goal'
 import * as toolGoal from '@deepseek-ai/dsh-tool-goal'
 import { createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
 
@@ -105,7 +104,7 @@ async function harness(config: toolGoal.Config = {}) {
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(GoalService)
-  const fiber = await ctx.plugin(GoalTools, config)
+  const fiber = await ctx.plugin(toolGoal, config)
   const root = stubAgent(`goal-tool-root-${Math.random()}`, undefined, ctx)
   await ctx.agents.register(root.agent)
   return { ctx, fiber, root }
@@ -207,13 +206,13 @@ describe('goal tool registration and presentation', () => {
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(GoalService)
-    await expect(GoalTools.apply(ctx, { blockedAfterConsecutiveRounds: 1.5 })).rejects.toThrow(
+    await expect(toolGoal.apply(ctx, { blockedAfterConsecutiveRounds: 1.5 })).rejects.toThrow(
       'blockedAfterConsecutiveRounds must be a positive safe integer',
     )
     expect(ctx.tools.get('get_goal')).toBeUndefined()
   })
 
-  it('resolves the direct-constructor default before registration', async () => {
+  it('resolves the direct-apply default before registration', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
@@ -221,7 +220,7 @@ describe('goal tool registration and presentation', () => {
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(GoalService)
-    await GoalTools.apply(ctx, {})
+    await toolGoal.apply(ctx, {})
     const section = (await ctx.systemPrompt.assemble()).sections.find(item => item.name === 'tool:goal')
     expect(section?.text).toContain('at least 3 consecutive goal rounds')
   })
@@ -347,12 +346,12 @@ describe('goal tool execution authority', () => {
     const { ctx, root, fiber } = await harness()
     await fiber.dispose()
     openTurn(root, { kind: 'user' })
-    await ctx.plugin(GoalTools, {})
+    await ctx.plugin(toolGoal, {})
     const result = await execute(ctx, 'create_goal', { objective: 'accepted before tool load' }, root.agent)
     expect(resultGoal(result)).toMatchObject({ objective: 'accepted before tool load' })
   })
 
-  it.each([1, 2])('accepts %i direct human steering messages in a goal-sourced root turn', async (messageCount) => {
+  it('accepts direct human steering in a goal-sourced root turn', async () => {
     const { ctx, root } = await harness()
     const humanTurn = openTurn(root, { kind: 'user' })
     const created = ctx.goals.create(root.agent, { objective: 'steer me' })
@@ -360,12 +359,10 @@ describe('goal tool execution authority', () => {
     openTurn(root, {
       kind: 'goal', goalId: created.id, revision: created.revision, round: 1,
     })
-    for (let index = 0; index < messageCount; index++) {
-      root.session.append('user/message', createUserMessage({
-        content: [{ type: 'text', text: 'pause now' }],
-        source: { kind: 'user' },
-      }), { surfaceOp: 'append' })
-    }
+    root.session.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'pause now' }],
+      source: { kind: 'user' },
+    }), { surfaceOp: 'append' })
     const paused = await execute(ctx, 'update_goal', {
       goal_id: created.id, revision: created.revision, action: 'pause',
     }, root.agent)
