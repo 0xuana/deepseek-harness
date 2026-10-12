@@ -28,7 +28,7 @@ declare module '@deepseek-ai/dsh-llm' {
 
 import type { ContentBlock, MessageSource } from '@deepseek-ai/dsh-llm'
 import type { UserMessage } from '@deepseek-ai/dsh-session'
-import type { PostToolDecision, PreToolDecision, ToolExecution, ToolExecutionResult } from '@deepseek-ai/dsh-tools'
+import type { PostToolDecision, PreToolDecision, ToolExecution } from '@deepseek-ai/dsh-tools'
 import {
   appendHookInvoked,
   appendHookResult,
@@ -112,6 +112,10 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
 
   const turnBoundary = await ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
   const model = config.model ?? ''
+
+  function lastTurn(agent: Agent | undefined): number {
+    return agent === undefined ? 0 : turnBoundary.stateOf(agent.session).lastTurn
+  }
 
   // SessionStart is the one emit-shaped (detached) point Codex has: track its
   // run chains so disposal aborts a still-running hook process and drains the
@@ -235,7 +239,10 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   // PreToolUse → PreToolDecision. Codex blocks only (no allow/ask honored).
   ctx.on('tools/pre-execute', async (exec, next): Promise<PreToolDecision> => {
     const turn = lastTurn(exec.agent)
-    const merged = await runPoint('PreToolUse', exec.name, preToolPayload(exec, model), { ...exec.agent ? { agent: exec.agent } : {}, turn, signal: exec.signal })
+    const payload = toolPayload(exec, 'PreToolUse', model, turn)
+    const merged = await runPoint('PreToolUse', exec.name, payload, {
+      ...exec.agent ? { agent: exec.agent } : {}, turn, signal: exec.signal,
+    })
     if (merged.decision === 'deny') return { kind: 'deny', reason: merged.reason ?? 'blocked by PreToolUse hook' }
     return next()
   })
@@ -243,8 +250,14 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   // PostToolUse → PostToolDecision (block with feedback, or attach context).
   ctx.on('tools/post-execute', async (exec, result, next): Promise<PostToolDecision> => {
     const turn = lastTurn(exec.agent)
+    const payload = {
+      ...toolPayload(exec, 'PostToolUse', model, turn),
+      tool_response: blocksToText(result.content),
+    }
     /* jscpd:ignore-start */
-    const merged = await runPoint('PostToolUse', exec.name, postToolPayload(exec, result, model), { ...exec.agent ? { agent: exec.agent } : {}, turn, signal: exec.signal })
+    const merged = await runPoint('PostToolUse', exec.name, payload, {
+      ...exec.agent ? { agent: exec.agent } : {}, turn, signal: exec.signal,
+    })
     const context = contextFrom(merged)
     if (merged.decision === 'deny') {
       return { kind: 'block', feedback: [{ type: 'text', text: merged.reason ?? 'blocked by PostToolUse hook' }], ...context ? { additionalContexts: [context] } : {} }
@@ -268,7 +281,13 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   // avoid continuing the same turn indefinitely. It is always false here, so an
   // unconditionally blocking hook force-continues every step until it self-limits.
   ctx.on('agent/turn-stopping', async ({ agent, turn, signal }): Promise<void> => {
-    const merged = await runPoint('Stop', '', { ...turnBase(agent, 'Stop', model), stop_hook_active: false, last_assistant_message: null }, { agent, turn, signal })
+    const payload = {
+      ...base(agent, 'Stop', model),
+      turn_id: String(lastTurn(agent)),
+      stop_hook_active: false,
+      last_assistant_message: null,
+    }
+    const merged = await runPoint('Stop', '', payload, { agent, turn, signal })
     if (merged.decision === 'deny') {
       // A blocking Stop hook forces continuation; a block with no reason (exit 2,
       // empty stderr) still forces it — fall back to a generic steering line
@@ -277,27 +296,6 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       agent.steer(createUserMessage({ content: [{ type: 'text', text }], source: CONTEXT_SOURCE }))
     }
   })
-
-  function lastTurn(agent: Agent | undefined): number {
-    if (!agent) return 0
-    return turnBoundary.stateOf(agent.session).lastTurn
-  }
-
-  function turnBase(agent: Agent | undefined, event: string, model: string): Record<string, unknown> {
-    return { ...base(agent, event, model), turn_id: String(lastTurn(agent)) }
-  }
-
-  function preToolPayload(exec: ToolExecution, model: string): Record<string, unknown> {
-    // `tool_name` is the REAL tool name (matching the `exec.name` matcher subject);
-    // a hardcoded constant would disagree with what the matcher tests and make a
-    // config's tool matcher never fire. `tool_input` keeps Codex's `{ command }`
-    // shape (its shell payload), derived from the call's `command` arg when present.
-    return { ...turnBase(exec.agent, 'PreToolUse', model), tool_name: exec.name, tool_input: { command: commandOf(exec.arguments) }, tool_use_id: exec.callId }
-  }
-
-  function postToolPayload(exec: ToolExecution, result: ToolExecutionResult, model: string): Record<string, unknown> {
-    return { ...turnBase(exec.agent, 'PostToolUse', model), tool_name: exec.name, tool_input: { command: commandOf(exec.arguments) }, tool_use_id: exec.callId, tool_response: blocksToText(result.content) }
-  }
 }
 
 // --- Codex DIALECT payloads: snake_case, model on every event, turn_id on
@@ -322,6 +320,22 @@ function base(agent: Agent | undefined, event: string, model: string): Record<st
     hook_event_name: event,
     model,
     permission_mode: 'default',
+  }
+}
+
+/** Tool identity matches the matcher subject; Codex exposes only the command argument. */
+function toolPayload(
+  exec: ToolExecution,
+  event: 'PreToolUse' | 'PostToolUse',
+  model: string,
+  turn: number,
+): Record<string, unknown> {
+  return {
+    ...base(exec.agent, event, model),
+    turn_id: String(turn),
+    tool_name: exec.name,
+    tool_input: { command: commandOf(exec.arguments) },
+    tool_use_id: exec.callId,
   }
 }
 
