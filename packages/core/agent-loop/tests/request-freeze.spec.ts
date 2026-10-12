@@ -3,12 +3,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import type { Agent } from '@deepseek-ai/dsh-agent'
+import { turnBoundaryProjectionDefinition, type Agent } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { createAssistantMessage, createUserMessage, isAgentLoopRequest } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, ToolSchema } from '@deepseek-ai/dsh-llm'
 import { Session, SessionId, SessionLogOffset, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import * as values from '@deepseek-ai/dsh-util-values'
+import { inboxProjectionDefinition } from '../src/inbox.ts'
 import { ReactLoopAgent } from '../src/agent.ts'
 import { MockAdapter, textResponse } from './mock-adapter.ts'
 
@@ -73,7 +74,9 @@ describe('loop-owned request freezing', () => {
     expect(Object.isFrozen(userEvent.data.content)).toBe(false)
     expect(Object.isFrozen(assistantEvent.data.message)).toBe(false)
     ctx.effect(() => ctx.sessions.enter(session))
-    const agent = new ReactLoopAgent(loopCtx, id, { provider: 'mock', model: 'mock' }, session)
+    const agent = new ReactLoopAgent(loopCtx, id, { provider: 'mock', model: 'mock' }, session,
+      await loopCtx.sessionProjections.register(inboxProjectionDefinition),
+      await loopCtx.sessionProjections.register(turnBoundaryProjectionDefinition))
     cleanups.push(async () => {
       agent.cancel({ kind: 'disposed' })
       await agent.whenIdle()
@@ -122,7 +125,9 @@ describe('loop-owned request freezing', () => {
     expect(Object.isFrozen(session.deriveMessages())).toBe(false)
     expect(freeze.mock.calls.filter(([value]) => value === userEvent.data)).toHaveLength(1)
     expect(freeze.mock.calls.filter(([value]) => value === replacement.data)).toHaveLength(1)
-    const resumed = new ReactLoopAgent(loopCtx, id, { provider: 'mock', model: 'mock' }, session)
+    const resumed = new ReactLoopAgent(loopCtx, id, { provider: 'mock', model: 'mock' }, session,
+      await loopCtx.sessionProjections.register(inboxProjectionDefinition),
+      await loopCtx.sessionProjections.register(turnBoundaryProjectionDefinition))
     cleanups.push(async () => {
       resumed.cancel({ kind: 'disposed' })
       await resumed.whenIdle()

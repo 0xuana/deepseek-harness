@@ -149,7 +149,7 @@ async function harness(options: HarnessOptions = {}) {
   await ctx.plugin({ name: storageDomainName, inject: storageDomainInject, apply: storageDomainApply, Config: storageDomainConfig }, { backend: 'json' })
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
-  ctx.sessionProjections.register(marksUnit(options.stateVersion))
+  await ctx.sessionProjections.register(marksUnit(options.stateVersion))
   const fiber = await ctx.plugin(SessionProjectionCache, options.config ?? { writeEveryEvents: 100, writeIntervalMs: 60_000 })
   return { ctx, root, fiber, cache: ctx.sessionProjectionCache }
 }
@@ -300,7 +300,7 @@ describe('SessionProjectionCache write policy', () => {
     await ctx.sessionProjectionCache.write(clean)
     expect((await storedRows(root, clean.id))?.['cache-test/marks']).toEqual({ ver: 1, seq: -1, val: null })
     // A unit whose state violates the plain-JSON contract fails the write loud.
-    ctx.sessionProjections.register({
+    await ctx.sessionProjections.register({
       key: 'cache-test/marks2',
       stateSchema: z.custom<Map<string, string>>(() => true),
       init: () => new Map<string, string>(),
@@ -336,7 +336,7 @@ describe('SessionProjectionCache write policy', () => {
     await ctx.plugin({ name: storageDomainName, inject: storageDomainInject, apply: storageDomainApply, Config: storageDomainConfig }, { backend: 'json' })
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    ctx.sessionProjections.register(marksUnit())
+    await ctx.sessionProjections.register(marksUnit())
     await ctx.plugin(SessionProjectionCache, { writeEveryEvents: 100, writeIntervalMs: 60_000 })
     const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
     // A directory where the record document must land makes the atomic
@@ -387,7 +387,7 @@ describe('SessionProjectionCache listing read', () => {
       'cache-test/secondary-marks': { ver: 1, seq: SessionSeq(6), val: { marks: ['secondary'] } },
     })
     const { ctx, cache } = await harness({ root })
-    ctx.sessionProjections.register(secondaryMarksUnit)
+    await ctx.sessionProjections.register(secondaryMarksUnit)
 
     // The block carries one watermark: the seq every served value has folded
     // through at least, so the lower of the two rows names the block.
@@ -457,7 +457,7 @@ describe('SessionProjectionCache listing read', () => {
       },
     )
     const { ctx, cache } = await harness({ root })
-    ctx.sessionProjections.register(titleUnit)
+    await ctx.sessionProjections.register(titleUnit)
     const seededHeader = { ...headerOf(id), isSeeded: true }
 
     // An older format generation never serves the full block, but its title
@@ -509,7 +509,7 @@ describe('SessionProjectionCache listing read', () => {
       'cache-test/secret': { ver: 1, seq: SessionSeq(4), val: 'private prompt text' },
     })
     const { ctx, cache } = await harness({ root })
-    ctx.sessionProjections.register(secretUnit)
+    await ctx.sessionProjections.register(secretUnit)
     const header = headerOf(SessionId('host-state'))
 
     expect(cache.cachedSnapshot(header)).toEqual({
@@ -546,7 +546,7 @@ describe('SessionProjectionCache listing read', () => {
       'cache-test/marks3': { ver: 1, seq: SessionSeq(4), val: { marks: ['b'] } },
     })
     const { ctx, cache } = await harness({ root })
-    ctx.sessionProjections.register(marks3Unit)
+    await ctx.sessionProjections.register(marks3Unit)
     const block = cache.cachedSnapshot(headerOf(SessionId('multi-row')))
     expect(block?.values).toEqual({
       'cache-test/marks': { marks: ['a'] },
@@ -752,7 +752,7 @@ describe('SessionProjectionCache cold-read seeding', () => {
     })
     const { cache, ctx } = await harness({ root })
     const apply = vi.fn((_state: number, _event: SessionEvent) => 1)
-    ctx.sessionProjections.register({
+    await ctx.sessionProjections.register({
       key: 'cache-test/count',
       stateSchema: z.number().int().nonnegative(),
       init: () => 0,
@@ -794,7 +794,7 @@ describe('SessionProjectionCache cold-read seeding', () => {
     await ctx.plugin({ name: storageDomainName, inject: storageDomainInject, apply: storageDomainApply, Config: storageDomainConfig }, { backend: 'json' })
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    ctx.sessionProjections.register(marksUnit())
+    await ctx.sessionProjections.register(marksUnit())
     await ctx.plugin(SessionProjectionCache, { writeEveryEvents: 100, writeIntervalMs: 60_000 })
     const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
     // A directory where the record document must land makes the write-back

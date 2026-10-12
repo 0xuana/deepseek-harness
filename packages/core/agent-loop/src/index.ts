@@ -9,26 +9,26 @@ import type { Volatile } from '@deepseek-ai/cosmokit'
 import { Context, FiberState, Service } from '@deepseek-ai/cordis'
 import { randomUUID } from 'node:crypto'
 import z from '@deepseek-ai/schemastery'
-import { z as zod } from 'zod'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type {
-  Agent,
-  AgentFactory,
-  AgentHandle,
-  AgentOptions,
-  AgentSetup,
-  CreateAgentOptions,
-  ResumeAgentOptions,
-  SessionStartSource,
-  TurnBoundaryProjection,
+import {
+  turnBoundaryProjectionDefinition,
+  type Agent,
+  type AgentFactory,
+  type AgentHandle,
+  type AgentOptions,
+  type AgentSetup,
+  type CreateAgentOptions,
+  type ResumeAgentOptions,
+  type SessionStartSource,
+  type InboxState,
+  type TurnBoundaryProjection,
 } from '@deepseek-ai/dsh-agent'
 import { errorChain, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
-import { interruptedTurnClosers, SessionLogOffset, SessionPreparation, SessionSeq } from '@deepseek-ai/dsh-session'
+import { interruptedTurnClosers, SessionLogOffset, SessionPreparation } from '@deepseek-ai/dsh-session'
 import type { Session, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-tools'
-import type {} from '@deepseek-ai/dsh-session-projection'
-import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
+import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import { SessionPersistenceNotFoundError } from '@deepseek-ai/dsh-session-persistence'
 import type { SessionHandle, SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
 import { ReactLoopAgent } from './agent.ts'
@@ -36,63 +36,14 @@ import { inboxProjectionDefinition } from './inbox.ts'
 import { DEFAULT_MAX_PARALLEL_TOOL_CALLS } from './constants.ts'
 import type {} from './runtime-context.ts'
 
+export { turnBoundaryProjectionDefinition } from '@deepseek-ai/dsh-agent'
+
 /** Fiber states that cannot own or serve a new lifecycle. */
 const INACTIVE_STATES: ReadonlySet<FiberState> = new Set([
   FiberState.UNLOADING,
   FiberState.DISPOSED,
   FiberState.FAILED,
 ])
-
-const turnBoundaryProjectionSchema: zod.ZodType<TurnBoundaryProjection> = zod.object({
-  openTurnStartSeq: zod.number().int().nonnegative().transform(SessionSeq).nullable(),
-  lastStepStartSeq: zod.number().int().nonnegative().transform(SessionSeq).nullable(),
-  lastStepBoundary: zod.object({
-    kind: zod.union([zod.literal('start'), zod.literal('end')]),
-    seq: zod.number().int().nonnegative().transform(SessionSeq),
-  }).nullable(),
-  lastTurn: zod.number().int().nonnegative(),
-})
-
-/** Host projection of agent turn and step boundaries. */
-export const turnBoundaryProjectionDefinition = {
-  key: 'turnBoundary',
-  stateVersion: 2,
-  stateSchema: turnBoundaryProjectionSchema,
-  init: () => ({
-    openTurnStartSeq: null,
-    lastStepStartSeq: null,
-    lastStepBoundary: null,
-    lastTurn: 0,
-  }),
-  apply: (state, event) => {
-    switch (event.type) {
-      case 'turn/start':
-        return {
-          ...state,
-          openTurnStartSeq: event.seq,
-          lastTurn: event.data.turn,
-        }
-      case 'turn/end':
-        return {
-          ...state,
-          openTurnStartSeq: null,
-        }
-      case 'step/start':
-        return {
-          ...state,
-          lastStepStartSeq: event.seq,
-          lastStepBoundary: { kind: 'start', seq: event.seq },
-        }
-      case 'step/end':
-        return {
-          ...state,
-          lastStepBoundary: { kind: 'end', seq: event.seq },
-        }
-      default:
-        return state
-    }
-  },
-} satisfies ProjectionDefinition<'turnBoundary', TurnBoundaryProjection>
 
 /** Re-throw one collected failure as itself, or several as one `AggregateError`. */
 function throwCollectedFailures(failures: readonly unknown[], message: string): void {
@@ -361,6 +312,8 @@ export class AgentLoop extends Service implements AgentFactory {
   private readonly ownership: FactoryOwnership
   /** Plain holder prevents Cordis from re-tracing the factory's dependency context through a caller shadow. */
   private readonly runtime: { ctx: Context }
+  private inbox!: ProjectionHandle<InboxState>
+  private turnBoundary!: ProjectionHandle<TurnBoundaryProjection>
 
   constructor(ctx: Context, config: Config) {
     super(ctx, 'agentLoop')
@@ -372,19 +325,17 @@ export class AgentLoop extends Service implements AgentFactory {
     validateConfiguredAgents(this.config.agents)
     // Register only after every config validation above has passed, so a
     // rejected constructor leaves no projection unit behind.
-    const ownership = this.ownership = new FactoryOwnership(ctx.fiber)
+    this.ownership = new FactoryOwnership(ctx.fiber)
     this.runtime = { ctx }
-    ctx.effect(function* () {
-      const unregisterTurnBoundary = ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
-      yield unregisterTurnBoundary
-      const unregisterInbox = ctx.sessionProjections.register(inboxProjectionDefinition)
-      yield unregisterInbox
-      // Cordis skips later disposers after a rejection; finally still releases projections.
-      yield () => ownership.dispose().finally(() => {
-        unregisterInbox()
-        unregisterTurnBoundary()
-      })
-    }, 'agentLoop.transactions()')
+  }
+
+  protected async [Service.init](): Promise<void> {
+    const ctx = this.runtime.ctx
+    const ownership = this.ownership
+    // Agents retain readers while fiber disposal removes global projection registrations.
+    ctx.effect(() => () => ownership.dispose(), 'agentLoop.transactions()')
+    this.turnBoundary = await ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
+    this.inbox = await ctx.sessionProjections.register(inboxProjectionDefinition)
     ctx.effect(() => ctx.agents.setFactory(this), 'agentLoop.setFactory()')
     ctx.systemPrompt.variable('provider', context => context.agent?.options.provider)
     ctx.systemPrompt.variable('model', context => context.agent?.options.model)
@@ -599,9 +550,10 @@ export class AgentLoop extends Service implements AgentFactory {
       }
     }
     const untrack = this.ownership.track(dispose)
+    const { inbox, turnBoundary } = this
     try {
       unfollowOwner = ownerCtx.effect(function* () {
-        const created = machine = new ReactLoopAgent(loopCtx, id, options, session)
+        const created = machine = new ReactLoopAgent(loopCtx, id, options, session, inbox, turnBoundary)
         machineReady.resolve()
         // Adopt the scope on its original fiber so it cannot unload before teardown.
         // A loop already unloading during minting owns the provisional scope itself.
