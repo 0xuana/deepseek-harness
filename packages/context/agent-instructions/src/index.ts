@@ -33,7 +33,6 @@ import { instructionCandidateGroup, instructionScopeKey, scopeForDisplayPath, ty
 
 export { Config }
 export { name } from './state.ts'
-export type { AgentInstructionSource } from './state.ts'
 export {
   discoverBaselineInstructionFiles,
   loadBaselineInstructions,
