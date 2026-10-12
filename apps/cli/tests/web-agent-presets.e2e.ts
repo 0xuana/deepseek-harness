@@ -296,7 +296,9 @@ describe('the shipped Web composition', () => {
       expect(toolParameterNames(ctx, enabled.agent, 'subagent')).toEqual(expect.arrayContaining([
         'model', 'provider', 'reasoning_effort',
       ]))
-      expect(toolNames(ctx, disabled.agent)).toContain('list_subagent_models')
+      for (const agent of [disabled.agent, enabled.agent]) {
+        expect(toolParameterNames(ctx, agent, 'subagent_fork')).toEqual(['cwd', 'description', 'prompt'])
+      }
     } finally {
       await ctx.settings.update(SUBAGENT_MODEL_SELECTION_SETTINGS_NAMESPACE, { enabled: false })
       await enabled.dispose()

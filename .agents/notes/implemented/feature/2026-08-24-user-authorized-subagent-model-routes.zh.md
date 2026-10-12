@@ -16,7 +16,7 @@ Host 自有的 `subagent-model-selection` 设置 section 保存显式 `enabled` 
 
 固定的 `list_subagent_models` schema 不枚举策略。调用时，它列出已授权且已注册的提供方，并取其公布模型目录与已记录路由列表的交集。精确查询先要求授权，再解析模型元数据及全部支持的推理强度，也允许目录未列出的 ID。没有已记录策略时，发现只解析父 Agent 当前生效的路由，即使目录未列出它。委派执行器会在适配器预检前独立校验显式提供方、模型或强度选择是否符合相同授权。没有选择字段的调用保留配置或继承的路由。
 
-模型选择没有无限制的静态模式。默认关闭的 Host 设置授权其他子级路由；没有该授权时，仍可选择父级路由及其支持的强度。主 spawn 工具一次性记录设置，所有支持选择的委派工具和共享发现均读取同一 Session 策略。fork 默认保留父级路由，其描述会提示改变路由时的前缀重算成本。
+模型选择没有无限制的静态模式。默认关闭的 Host 设置授权其他子级路由；没有该授权时，仍可选择父级路由及其支持的强度。主 spawn 工具一次性记录设置，所有支持选择的委派工具和共享发现均读取同一 Session 策略。fork 工具拒绝模型选择参数，以保留对继承前缀的复用。
 
 ## Alternatives considered
 
@@ -40,4 +40,4 @@ Host 自有的 `subagent-model-selection` 设置 section 保存显式 `enabled` 
 
 ## Related decisions
 
-路由参数、适配器预检、发现工具与 fork 缓存成本仍由[模型选择的 subagent 路由](../../../../packages/subagent/tool-subagent/README.zh.md)负责。
+路由参数、适配器预检、发现工具与 fork 限制仍由[模型选择的 subagent 路由](../../../../packages/subagent/tool-subagent/README.zh.md)负责。

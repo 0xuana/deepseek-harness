@@ -396,12 +396,6 @@ class SubagentForkArgs(TypedDict):
     description: str
     # The task for the subagent. It already sees this conversation's completed turns, so build on them freely and state only what is new.
     prompt: str
-    # LLM provider route for the child. Supply together with model; omit both to use configured child defaults or inherit the parent route.
-    provider: NotRequired[str]
-    # Model id interpreted by provider. Supply together with provider; omit both to use configured child defaults or inherit the parent route.
-    model: NotRequired[str]
-    # Adapter-owned reasoning effort for the effective child route. Omit to inherit a compatible configured/parent effort or use a newly selected model's default.
-    reasoning_effort: NotRequired[str]
     # Additional keys beyond those declared are allowed.
 
 class SubagentForkOutput(TypedDict):
@@ -567,7 +561,7 @@ class Tools(Protocol):
     async def subagent(self, args: SubagentArgs) -> SubagentOutput:
         """Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes. Child LLM selection is optional. Omit `provider`, `model`, and `reasoning_effort` to use configured child defaults and inherit compatible missing values from the parent Agent. Supply `provider` and `model` together after using `list_subagent_models` to inspect advertised routes and efforts. Changing the effective route without naming an effort uses the selected model's default effort."""
     async def subagent_fork(self, args: SubagentForkArgs) -> SubagentForkOutput:
-        """Delegate a task to a subagent that inherits this conversation: a child agent seeded with all completed turns so far (it does not see the current in-flight turn). Use this when the subtask builds on this conversation's context — a follow-up analysis, a review, a continuation — without consuming this conversation's context for the work itself. You receive its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes. Child LLM selection is optional. Omit `provider`, `model`, and `reasoning_effort` to use configured child defaults and inherit compatible missing values from the parent Agent. Supply `provider` and `model` together after using `list_subagent_models` to inspect advertised routes and efforts. Changing the effective route without naming an effort uses the selected model's default effort. Changing the route can prevent provider-side reuse of the inherited conversation prefix."""
+        """Delegate a task to a subagent that inherits this conversation: a child agent seeded with all completed turns so far (it does not see the current in-flight turn). Use this when the subtask builds on this conversation's context — a follow-up analysis, a review, a continuation — without consuming this conversation's context for the work itself. You receive its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes."""
     async def todo_write(self, args: TodoWriteArgs) -> TodoWriteOutput:
         """Record and update a task list to plan multi-step work and show progress; skip it for trivial single-step tasks. Add one todo per concrete step before you start. While work remains, keep the todos being worked on `in_progress`, several only when work runs in parallel. Mark each todo `completed` as soon as it is done."""
     async def update_goal(self, args: UpdateGoalArgs) -> UpdateGoalOutput1 | UpdateGoalOutput2:

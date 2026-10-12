@@ -206,18 +206,12 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
     let mounted: { subagentProvider: SubagentProvider; disposeTool: () => void } | undefined
     const mount = (subagentProvider: SubagentProvider): void => {
       assertSubagentProviderConfiguration(subagentProvider)
-      const modelSelectionEnabled = subagentProvider.capabilities.agentOptions
+      const modelSelectionEnabled = subagentProvider.capabilities.agentOptions && !subagentProvider.inheritsParentContext
       const wording = providerWording(subagentProvider.inheritsParentContext)
       const providerRouteDefaults = subagentProvider.agentRouteDefaults
       const selectionDescription = providerRouteDefaults !== undefined
         ? ' Child LLM selection is optional. Omit `provider`, `model`, and `reasoning_effort` to use configured child defaults and this provider\'s route defaults. Supply `provider` and `model` together after using `list_subagent_models` to inspect advertised routes and efforts. Changing the effective route without naming an effort uses the selected model\'s default effort.'
         : ' Child LLM selection is optional. Omit `provider`, `model`, and `reasoning_effort` to use configured child defaults and inherit compatible missing values from the parent Agent. Supply `provider` and `model` together after using `list_subagent_models` to inspect advertised routes and efforts. Changing the effective route without naming an effort uses the selected model\'s default effort.'
-      const choiceDescription = !modelSelectionEnabled
-        ? ''
-        : selectionDescription
-          + (subagentProvider.inheritsParentContext
-            ? ' Changing the route can prevent provider-side reuse of the inherited conversation prefix.'
-            : '')
       const definition = defineTool({
         name: toolName,
         description: wording.description
@@ -225,7 +219,7 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
           + (subagentProvider.prepareContinuable !== undefined
             ? ' The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes.'
             : ' The completion notice includes its final answer. This backend does not accept follow-up messages.')
-          + choiceDescription,
+          + (modelSelectionEnabled ? selectionDescription : ''),
         parameters: {
           cwd: {
             type: 'string',

@@ -469,11 +469,31 @@ describe('dsh-tool-subagent model selection', () => {
     expect(resolve).not.toHaveBeenCalled()
   })
 
-  it('warns that changing a fork route can lose inherited-prefix reuse', async () => {
-    const ctx = await setup({ provider: 'mock', withModelSelection: true }, { inheritsParentContext: true })
+  it('keeps fork model selection unavailable even with Session authorization', async () => {
+    const started = vi.fn()
+    const ctx = await setup({ provider: 'mock', withModelSelection: true }, {
+      inheritsParentContext: true,
+      onStart: started,
+    })
     const schema = ctx.tools.schemas(modelSelectionSetupAgent(ctx)).find(entry => entry.name === 'subagent')!
+    const props = (schema.parameters as { properties?: Record<string, unknown> }).properties ?? {}
+    expect(Object.keys(props).sort()).toEqual(['cwd', 'description', 'prompt'])
     expect(schema.description).toContain('inherits this conversation')
-    expect(schema.description).toContain('can prevent provider-side reuse of the inherited conversation prefix')
+    expect(schema.description).not.toContain('Child LLM selection')
+
+    for (const selection of [
+      { provider: 'alpha', model: 'fast-model' },
+      { reasoning_effort: 'high' },
+    ]) {
+      const result = await callSubagent(ctx, { description: 'fork work', prompt: 'do it', ...selection })
+      expect(result.isError).toBe(true)
+      expect(text(result)).toContain('model selection is disabled for this tool instance')
+    }
+    expect(started).not.toHaveBeenCalled()
+
+    const inherited = await callSubagent(ctx, { description: 'fork work', prompt: 'do it' })
+    expect(inherited.isError).toBe(false)
+    expect(started).toHaveBeenCalledOnce()
   })
 
   it('propagates an exact-route resolver failure before child creation', async () => {

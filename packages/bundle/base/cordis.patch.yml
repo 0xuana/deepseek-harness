@@ -381,7 +381,7 @@
         provider: spawn
         toolName: subagent
 
-    # Fork inherits the parent route by default for KV Cache reuse. Parent and child
+    # Fork omits model-selection arguments for KV Cache reuse. Parent and child
     # share the messaging tools; return guidance follows the inherited history.
     # See packages/subagent/tool-subagent/README.md
     # and .agents/notes/implemented/architecture/2026-08-10-fork-children-stay-one-shot.md.

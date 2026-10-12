@@ -16,7 +16,7 @@ A newly composed top-level Session snapshots the route list in `subagent/model-s
 
 The fixed `list_subagent_models` schema does not enumerate the policy. At call time, it lists authorized registered providers and intersects their advertised model catalogs with the recorded route list. Exact lookup requires authorization before resolving model metadata and all supported reasoning efforts, including for ids absent from the catalog. Without a recorded policy, discovery resolves only the parent Agent’s current effective route, even if the catalog omits it. The delegation executor independently checks any explicit provider, model, or effort selection against the same authorization before adapter preflight. A call with no selection fields retains configured or inherited routing.
 
-Model selection has no unrestricted static mode. The default-off Host setting authorizes alternative child routes; without it, the parent route and its supported efforts remain selectable. The primary spawn tool captures the setting once, while all capable delegation tools and shared discovery read the same Session policy. Fork defaults preserve the parent route, and its description warns about prefix recomputation when that route changes.
+Model selection has no unrestricted static mode. The default-off Host setting authorizes alternative child routes; without it, the parent route and its supported efforts remain selectable. The primary spawn tool captures the setting once, while all capable delegation tools and shared discovery read the same Session policy. Fork tools reject model-selection arguments to preserve inherited-prefix reuse.
 
 ## Alternatives considered
 
@@ -40,4 +40,4 @@ Model selection has no unrestricted static mode. The default-off Host setting au
 
 ## Related decisions
 
-The route arguments, adapter preflight, discovery tool, and fork cache costs remain owned by [model-selected subagent routes](../../../../packages/subagent/tool-subagent/README.md).
+The route arguments, adapter preflight, discovery tool, and fork restriction remain owned by [model-selected subagent routes](../../../../packages/subagent/tool-subagent/README.md).

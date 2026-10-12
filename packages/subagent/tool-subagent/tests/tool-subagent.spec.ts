@@ -513,7 +513,7 @@ describe('dsh-tool-subagent', () => {
     const schema = ctx.tools.schemas().find(s => s.name === 'subagent')!
     expect(schema.description).toContain('inherits this conversation')
     expect(schema.description).not.toContain('does not see this conversation')
-    expect(schema.description).toContain('can prevent provider-side reuse of the inherited conversation prefix')
+    expect(schema.description).not.toContain('Child LLM selection')
     const props = (schema.parameters as { properties: Record<string, { description: string }> }).properties
     expect(props['prompt']!.description).toContain('completed turns')
   })
