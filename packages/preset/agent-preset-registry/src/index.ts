@@ -58,6 +58,7 @@ export class AgentPresetRegistry extends TypertRemoteService {
     selectedDefault: z.string().volatile(),
   })
   private turnBoundary!: ProjectionHandle<TurnBoundaryProjection>
+  private agentPreset!: ProjectionHandle<string | null>
   private readonly owner: Context
   private readonly definitions = new Map<string, Definition>()
   private readonly generations = new Map<ScopeKey, Generation>()
@@ -71,7 +72,7 @@ export class AgentPresetRegistry extends TypertRemoteService {
 
   protected async [Service.init](): Promise<void> {
     const ctx = this.owner
-    await ctx.sessionProjections.register(agentPresetProjectionDefinition)
+    this.agentPreset = await ctx.sessionProjections.register(agentPresetProjectionDefinition)
     this.turnBoundary = await ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
     ctx.inject(['settings'], (child) => { child.effect(() => child.settings.configure({ auto: false }, ctx.fiber)) })
     ctx.on('session/event', (session, event) => {
@@ -346,7 +347,9 @@ export class AgentPresetRegistry extends TypertRemoteService {
     return preset
   }
 
-  /** Select a preset before a session starts its first turn.
+  /** Select a preset before a session starts its first turn. A Session whose
+   * log records the preset and whose Agent runs its current revision keeps its
+   * composition; nothing is logged or announced.
    * @param agent Target Agent.
    * @param agentPreset Requested identity.
    * @returns Committed preset identity.
@@ -358,6 +361,9 @@ export class AgentPresetRegistry extends TypertRemoteService {
       if (boundary.openTurnStartSeq !== null || boundary.lastTurn > 0) {
         throw new RemoteError('agent-preset/locked', 'This session has already started', { sessionId: agent.id, agentPreset })
       }
+      const current = this.definitions.get(agentPreset)?.generation
+      if (current !== undefined && this.generationFor(agent.ctx) === current
+        && this.agentPreset.stateOf(agent.session) === agentPreset) return agentPreset
       const preset = await this.recompose(agent.ctx, agentPreset)
       agent.session.append('agent-preset/selected', { agentPreset: preset.id })
       return preset.id
