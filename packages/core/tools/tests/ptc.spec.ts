@@ -169,6 +169,51 @@ it('logs detached frozen nested metadata without changing the binding value or l
 })
 
 describe('mode-aware wire contribution', () => {
+  it('shares conditional admission with SDK bindings and rejects a replaced cached binding', async () => {
+    const { ctx, runtime, systemPrompt } = await setup({ mode: 'ptc' })
+    try {
+      const agent = { session: Session.create(SessionId('conditional-ptc')) } as Agent
+      let active = false
+      const execute = vi.fn(async () => 'done')
+      const definition = defineTool({
+        name: 'conditional', description: 'Available on selected requests.', parameters: {},
+        output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
+        execute,
+      })
+      const unregister = ctx.tools.register(definition, { when: () => active })
+      for (const enabled of [false, true]) {
+        active = enabled
+        const toolSet = await ctx.tools.resolve({ agent, signal: testToolSignal })
+        try {
+          const assembly = await systemPrompt.assemble({ scope: agent, agent, toolSet })
+          const sdk = assembly.sections.find(section => section.name === 'tools:sdk')?.text ?? ''
+          expect(sdk.includes('conditional:')).toBe(enabled)
+          runtime.behavior = async (request) => {
+            const functions = request.bindings[0]!.functions
+            expect(Object.keys(functions)).toEqual(enabled ? ['conditional'] : [])
+            if (enabled) {
+              expect(await functions.conditional!({})).toBe('done')
+              unregister()
+              ctx.tools.register(definition, { when: () => true })
+              await expect(functions.conditional!({})).rejects.toThrow('unknown tool "conditional"')
+            }
+            return { logs: [] }
+          }
+          const result = await ctx.tools.execute({
+            agent, toolSet, signal: testToolSignal, callId: ToolCallId('conditional-program'),
+            name: RUN_CODE_NAME, arguments: { code: 'program', description: 'Check conditional bindings' },
+          })
+          expect(result.isError).toBe(false)
+        } finally {
+          toolSet.dispose()
+        }
+      }
+      expect(execute).toHaveBeenCalledTimes(1)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('rejects an unsupported presentation mode in configuration', () => {
     expect(() => ToolRuntime.Config({ mode: 'both' } as never)).toThrow()
   })
@@ -267,7 +312,7 @@ describe('mode-aware wire contribution', () => {
     expect(sdk).toContain('deep_output: string | null')
   })
 
-  it('treats expert assembly output as authoritative in mode ptc', async () => {
+  it('keeps PTC declarations owned by the registry during presentation transforms', async () => {
     const mode = 'ptc'
     const { ctx, systemPrompt } = await setup({ mode })
     registerEcho(ctx)
@@ -276,13 +321,13 @@ describe('mode-aware wire contribution', () => {
       return {
         ...assembly,
         sections: assembly.sections.filter(section => section.name !== 'tools:sdk'),
-        tools: assembly.tools.filter(tool => tool.name !== RUN_CODE_NAME),
+        tools: [],
       }
     }, { prepend: true })
 
     const assembly = await systemPrompt.assemble()
     expect(assembly.sections.some(section => section.name === 'tools:sdk')).toBe(false)
-    expect(assembly.tools.some(tool => tool.name === RUN_CODE_NAME)).toBe(false)
+    expect(assembly.tools.some(tool => tool.name === RUN_CODE_NAME)).toBe(true)
   })
 
   it('lets one scope shadow the default SDK section in mode ptc', async () => {

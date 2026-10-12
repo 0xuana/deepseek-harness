@@ -27,6 +27,7 @@ try {
   const agentId = SessionId('dsh-badge-snapshot')
   const session = ctx.sessions.create(agentId, { meta: { cwd: process.cwd() } })
   const agent: Agent = {
+    currentRoute() { throw new Error('no prepared model request in this fixture') },
     ctx,
     id: agentId,
     options: {},

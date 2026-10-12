@@ -82,7 +82,7 @@ Plan mode is a product package, not a capability seam: there is no swappable bac
 
 ### Durable state and step-boundary appends
 
-The package persists one log-only whole-value event, `plan/mode`, and the last logged value is the state. A mode change appends immediately when no turn is open; during an open turn it stays pending until the next accepted in-turn pre-step — the only append point while an agent runs — and an append failure cannot block the turn. The `set`/`get` service methods and their exact return states live in [`src/index.ts`](src/index.ts) and read the registered `plan` projection; the first dependent access fails explicitly when the registry or key is absent.
+The package persists one log-only whole-value event, `plan/mode`, and the last logged value is the state. A mode change appends immediately when no turn is open; during an open turn it stays pending until the next accepted in-turn pre-step — the only append point while an agent runs — and an append failure stops step admission while retaining the pending selection. The `set`/`get` service methods and their exact return states live in [`src/index.ts`](src/index.ts) and read the registered `plan` projection; the first dependent access fails explicitly when the registry or key is absent.
 
 ### The `/plan` command
 
@@ -90,7 +90,7 @@ The command child activates only when a commands service is composed. It maps ba
 
 ### The exit tool
 
-`exit_plan_mode` stays registered while plan mode is inactive, so entering or leaving changes only the prompt section, never the request tool catalog. An approved review records a silent pending exit that the next accepted in-turn pre-step appends, keeping plan guidance for the rest of the current tool batch. Without a user-questions channel, or after a service reload while the review is pending, the call fails closed and `/plan off` remains the manual escape.
+`exit_plan_mode` is conditionally admitted only while the committed plan state is active. Entering or leaving changes the tool declarations and plan guidance together; Native and PTC execution use the same admitted set. An approved review records a silent pending exit that the next accepted in-turn pre-step appends, keeping plan guidance for the rest of the current tool batch. Without a user-questions channel, or after a service reload while the review is pending, the call fails closed and `/plan off` remains the manual escape.
 
 ### Session projection unit
 
@@ -164,15 +164,15 @@ The user block is append-only conversation growth. Entering or leaving plan mode
 
 #### What the model sees
 
-The [`exit_plan_mode` schema](../../../docs/tool-catalog.md#deepseek-aidsh-plan-mode) remains available in both states; execution outside plan mode fails, while an approved in-mode review returns the canonical `{ approved: true }` value and renders the existing confirmation text. Rejection remains a failed call carrying review feedback, and a dismissed review a failed call naming the user's takeover.
+The [`exit_plan_mode` schema](../../../docs/tool-catalog.md#deepseek-aidsh-plan-mode) is offered only in plan mode; calls outside its admitted set return `UNKNOWN_TOOL`, while an approved in-mode review returns the canonical `{ approved: true }` value and renders the existing confirmation text. Rejection remains a failed call carrying review feedback, and a dismissed review a failed call naming the user's takeover.
 
 #### Token effect
 
-The stable schema is paid according to ToolRuntime mode, and each plan argument and review result remains in conversation history.
+The schema is paid only while active, according to ToolRuntime mode, and each plan argument and review result remains in conversation history.
 
 #### KV Cache effect
 
-Mode transitions do not change the tool catalog; plan arguments and review results extend the conversation normally.
+Mode transitions add or remove the exit tool through the route’s tool-update protocol; plan arguments and review results extend the conversation normally.
 
 ## Known Limitations and Deferred Work
 

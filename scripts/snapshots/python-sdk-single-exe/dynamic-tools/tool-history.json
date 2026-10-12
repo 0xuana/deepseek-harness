@@ -47,7 +47,6 @@
           "tools": [
             "create_goal",
             "edit",
-            "exit_plan_mode",
             "get_goal",
             "glob",
             "grep",
@@ -56,7 +55,6 @@
             "job_list",
             "job_output",
             "list_agents",
-            "load_workspace_dependencies",
             "read",
             "read_image",
             "send_message",
@@ -87,7 +85,7 @@
     },
     {
       "type": "request/header",
-      "seq": 20,
+      "seq": 19,
       "time": 0,
       "data": {
         "header": {
@@ -104,7 +102,6 @@
           "tools": [
             "create_goal",
             "edit",
-            "exit_plan_mode",
             "get_goal",
             "glob",
             "grep",
@@ -113,7 +110,6 @@
             "job_list",
             "job_output",
             "list_agents",
-            "load_workspace_dependencies",
             "read",
             "read_image",
             "send_message",
@@ -135,7 +131,7 @@
     },
     {
       "type": "developer/message",
-      "seq": 21,
+      "seq": 20,
       "time": 0,
       "data": {
         "turn": 1,
@@ -153,13 +149,13 @@
           "role": "developer",
           "id": "{{messageId}}"
         },
-        "headerSeq": 20
+        "headerSeq": 19
       },
       "surfaceOp": "append"
     },
     {
       "type": "request/header",
-      "seq": 28,
+      "seq": 26,
       "time": 0,
       "data": {
         "header": {
@@ -176,7 +172,6 @@
           "tools": [
             "create_goal",
             "edit",
-            "exit_plan_mode",
             "get_goal",
             "glob",
             "grep",
@@ -185,7 +180,6 @@
             "job_list",
             "job_output",
             "list_agents",
-            "load_workspace_dependencies",
             "read",
             "read_image",
             "send_message",
@@ -206,7 +200,7 @@
     },
     {
       "type": "developer/message",
-      "seq": 29,
+      "seq": 27,
       "time": 0,
       "data": {
         "turn": 1,

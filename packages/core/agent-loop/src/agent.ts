@@ -30,7 +30,7 @@ import { createScope } from '@deepseek-ai/dsh-scope'
 import type { EpochHeader, RequestContext, Session, SessionId, SessionSeq, TurnEndReason, UserMessage } from '@deepseek-ai/dsh-session'
 import { canonicalHeader, headerEquals, ToolCallRecovery } from '@deepseek-ai/dsh-session'
 import { joinContextSections, renderContextSections, renderPrompt } from '@deepseek-ai/dsh-system-prompt'
-import type { PromptAssembly } from '@deepseek-ai/dsh-system-prompt'
+import type { PromptAssembly, PromptPreparation } from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import type { Context } from '@deepseek-ai/cordis'
 import { ReactLoopInbox } from './inbox.ts'
@@ -38,6 +38,7 @@ import { RuntimeContextProjection } from './runtime-context.ts'
 import { AssistantStreamAttempt } from './assistant-stream.ts'
 import { SystemPromptProjection } from './runtime-context.ts'
 import { executeToolCalls } from './tool-calls.ts'
+import { ToolActivationError } from '@deepseek-ai/dsh-tools'
 
 type Phase =
   | { kind: 'idle'; lastTurn: number }
@@ -51,13 +52,19 @@ type Phase =
 
 type StepEndReason = Extract<TurnEndReason, { kind: 'completed' | 'max-tokens' }>
 
+interface PreparedRequest {
+  config: LlmCallConfig
+  preparedCall?: PreparedLlmCall
+}
+
 type PreparedStep =
   | { kind: 'reject' }
   | {
     kind: 'enter'
     messages: UserMessage[]
     startsRequestSeries?: true
-    assembly: PromptAssembly
+    preparation: PromptPreparation
+    request: PreparedRequest
   }
 
 /** Remove adapter-derived values before plugins propose the next request config. */
@@ -97,6 +104,7 @@ function abortedCancelCause(signal: AbortSignal): AgentCancelCause | undefined {
 /** Drives one session through turn and step boundaries. */
 export class ReactLoopAgent implements Agent {
   readonly inbox: ReactLoopInbox
+  private requestRoute: Readonly<Pick<LlmCallConfig, 'provider' | 'model'>> | undefined
   private phase: Phase
   private activityDone: Promise<void> = Promise.resolve()
 
@@ -135,6 +143,11 @@ export class ReactLoopAgent implements Agent {
     this.phase = { kind: 'idle', lastTurn }
     this.runtimeContext = new RuntimeContextProjection(this.ctx, session)
     this.systemPrompt = new SystemPromptProjection(session)
+  }
+
+  currentRoute(): Readonly<Pick<LlmCallConfig, 'provider' | 'model'>> {
+    if (this.requestRoute === undefined) throw new Error('agent has no prepared model request')
+    return this.requestRoute
   }
 
   get status(): AgentStatus {
@@ -269,12 +282,14 @@ export class ReactLoopAgent implements Agent {
     if (this.phase.kind !== 'running') throw new Error(`agent "${this.id}": pre-step outside running phase`)
     const signal = this.phase.abort.signal
     const claimed = this.inbox.claim(target, position.turn)
-    const assembly = await this.loopCtx.systemPrompt.assemble(assembleContextFor(this, signal))
+    const request = await this.prepareRequest(position.turn, position.step, signal)
+    const preparation = await this.loopCtx.systemPrompt.prepare(assembleContextFor(this, signal))
+    preparation.variables = { ...preparation.variables, ...this.currentRoute() }
     signal.throwIfAborted()
     const decision = await this.dispatch.waterfall(
       'agent/pre-step', { messages: claimed, ...position, signal },
       (): Promise<PreStepDecision> => {
-        const sections = renderContextSections(assembly)
+        const sections = renderContextSections(preparation)
         const context = this.runtimeContext.project(joinContextSections(sections), sections)
         return Promise.resolve<PreStepDecision>({
           kind: 'enter',
@@ -284,7 +299,7 @@ export class ReactLoopAgent implements Agent {
     )
     signal.throwIfAborted()
     if (decision.kind === 'reject') return decision
-    return { ...decision, assembly }
+    return { ...decision, preparation, request }
   }
 
   /** Whether the assembled tool schemas differ from the logged request header's. */
@@ -313,6 +328,7 @@ export class ReactLoopAgent implements Agent {
     let target: InboxTarget = 'next-turn'
     try {
       while (true) {
+        this.requestRoute = undefined
         signal.throwIfAborted()
         const step = phase.step + 1
         const decision = await this.preStep(target, { turn, step })
@@ -356,6 +372,7 @@ export class ReactLoopAgent implements Agent {
         } finally {
           stopRecovery()
           this.session.append('step/end', { turn, step })
+          this.requestRoute = undefined
         }
         signal.throwIfAborted()
         if (turnEnds && this.inbox.nextStep.length === 0) {
@@ -372,16 +389,15 @@ export class ReactLoopAgent implements Agent {
         turnEnds = { kind: 'aborted', reason: cause }
         throw error
       }
-      // Every failure is structured: an `LlmError` keeps its facts, anything
-      // else flattens to `errorChain` text under the `UNKNOWN` code.
       turnEnds = {
         kind: 'error',
         error: error instanceof LlmError
           ? error.failure
-          : { message: errorChain(error), code: 'UNKNOWN' },
+          : { message: errorChain(error), code: error instanceof ToolActivationError ? error.code : 'UNKNOWN' },
       }
       this.throwError(error)
     } finally {
+      this.requestRoute = undefined
       try {
         // oxlint-disable-next-line typescript/no-non-null-assertion -- every exit assigns a turn ending
         this.session.append('turn/end', { turn, reason: turnEnds! })
@@ -403,159 +419,175 @@ export class ReactLoopAgent implements Agent {
     const { turn, step, abort: { signal } } = this.phase
     signal.throwIfAborted()
 
-    const { assembly } = decision
-    const renderedPrompt = renderPrompt(assembly)
     let firstAttempt = true
+    let acceptedAssembly: { provider: string; model: string; schemas: string; assembly: PromptAssembly } | undefined
     while (true) {
-      const { config, preparedCall } = await this.prepareRequest(turn, step, signal)
-      const currentContext = this.loopCtx.systemPrompt.refreshContext(assembly, assembleContextFor(this, signal))
-      const sections = renderContextSections(currentContext)
-      const context = this.runtimeContext.project(joinContextSections(sections), sections)
-      signal.throwIfAborted()
-      const startsRequestSeries = firstAttempt && decision.startsRequestSeries === true
-      const commits = this.systemPrompt.project(renderedPrompt, {
-        inHistory: preparedCall?.systemPromptUpdate === 'in-history',
-        startsSeries: startsRequestSeries
-          || this.requestSurfaceGeneration !== this.session.surface.contentGeneration
-          || (preparedCall?.toolUpdate === undefined && this.toolsChanged(assembly.tools)),
-      })
-      for (const { message, intent } of commits) {
-        this.session.append('system/message', { turn, step, message }, intent)
-      }
-      let contextAdmitted = false
-      if (firstAttempt) {
-        for (const message of decision.messages) {
-          if (message.source.kind === 'runtime-context') {
-            if (context !== undefined && !contextAdmitted) {
-              this.session.append('user/message', context, { surfaceOp: 'append' })
-              contextAdmitted = true
+      const { config, preparedCall } = firstAttempt ? decision.request : await this.prepareRequest(turn, step, signal)
+      const toolSet = await this.loopCtx.tools.resolve({ agent: this, signal })
+      try {
+        const schemas = JSON.stringify(this.loopCtx.tools.schemas(this, toolSet))
+        if (acceptedAssembly === undefined || acceptedAssembly.provider !== config.provider
+          || acceptedAssembly.model !== config.model || acceptedAssembly.schemas !== schemas) {
+          const assembly = await this.loopCtx.systemPrompt.assemble(
+            { ...assembleContextFor(this, signal), toolSet },
+            { ...decision.preparation, variables: { ...decision.preparation.variables, ...this.currentRoute() } },
+          )
+          acceptedAssembly = { provider: config.provider, model: config.model, schemas, assembly }
+        }
+        const { assembly } = acceptedAssembly
+        const renderedPrompt = renderPrompt(assembly)
+        const currentContext = this.loopCtx.systemPrompt.refreshContext(assembly, assembleContextFor(this, signal))
+        const sections = renderContextSections(currentContext)
+        const context = this.runtimeContext.project(joinContextSections(sections), sections)
+        signal.throwIfAborted()
+        const startsRequestSeries = firstAttempt && decision.startsRequestSeries === true
+        const commits = this.systemPrompt.project(renderedPrompt, {
+          inHistory: preparedCall?.systemPromptUpdate === 'in-history',
+          startsSeries: startsRequestSeries
+            || this.requestSurfaceGeneration !== this.session.surface.contentGeneration
+            || (preparedCall?.toolUpdate === undefined && this.toolsChanged(assembly.tools)),
+        })
+        for (const { message, intent } of commits) {
+          this.session.append('system/message', { turn, step, message }, intent)
+        }
+        let contextAdmitted = false
+        if (firstAttempt) {
+          for (const message of decision.messages) {
+            if (message.source.kind === 'runtime-context') {
+              if (context !== undefined && !contextAdmitted) {
+                this.session.append('user/message', context, { surfaceOp: 'append' })
+                contextAdmitted = true
+              }
+            } else {
+              this.session.append('user/message', message, { surfaceOp: 'append' })
             }
-          } else {
-            this.session.append('user/message', message, { surfaceOp: 'append' })
           }
         }
-      }
-      if (context !== undefined && !contextAdmitted) {
-        this.session.append('user/message', context, { surfaceOp: 'append' })
-      }
-      firstAttempt = false
-      const request = this.buildRequest(config, preparedCall, assembly.tools, { turn, step }, startsRequestSeries, signal)
-      const live = new AssistantStreamAttempt(
-        this.session.id,
-        ++this.assistantAttemptCounter,
-        () => ++this.assistantStreamRevision,
-        turn,
-        step,
-        (frame) => { this.dispatch.emit('agent/assistant-stream', { frame }) },
-      )
-      let started = false
-      try {
-        const stream = preparedCall?.stream(request) ?? this.loopCtx.llm.stream(request)
-        signal.throwIfAborted()
-        live.start()
-        started = true
-        for await (const chunk of stream) {
-          signal.throwIfAborted()
-          live.push(chunk)
+        if (context !== undefined && !contextAdmitted) {
+          this.session.append('user/message', context, { surfaceOp: 'append' })
         }
-        signal.throwIfAborted()
-      } catch (error: unknown) {
-        if (!started) throw error
+        firstAttempt = false
+        const request = this.buildRequest(config, preparedCall, assembly.tools, { turn, step }, startsRequestSeries, signal)
+        const live = new AssistantStreamAttempt(
+          this.session.id,
+          ++this.assistantAttemptCounter,
+          () => ++this.assistantStreamRevision,
+          turn,
+          step,
+          (frame) => { this.dispatch.emit('agent/assistant-stream', { frame }) },
+        )
+        let started = false
         try {
-          if (signal.aborted) {
-            const content = live.interruptedBlocks()
-            if (content.length > 0) {
-              live.settle('assistant/message', () => this.session.append('assistant/message', {
-                turn,
-                step,
-                message: createAssistantMessage({
-                  content,
-                  source: {
-                    provider: request.provider,
-                    model: request.model,
-                    ...live.replayState === undefined ? {} : { replayState: live.replayState },
-                  },
-                }),
-                interrupted: true,
-                ...live.usage === undefined ? {} : { usage: live.usage },
-                stream: live.stream,
-              }, { surfaceOp: 'append' }).seq)
+          const stream = preparedCall?.stream(request) ?? this.loopCtx.llm.stream(request)
+          signal.throwIfAborted()
+          live.start()
+          started = true
+          for await (const chunk of stream) {
+            signal.throwIfAborted()
+            live.push(chunk)
+          }
+          signal.throwIfAborted()
+        } catch (error: unknown) {
+          if (!started) throw error
+          try {
+            if (signal.aborted) {
+              const content = live.interruptedBlocks()
+              if (content.length > 0) {
+                live.settle('assistant/message', () => this.session.append('assistant/message', {
+                  turn,
+                  step,
+                  message: createAssistantMessage({
+                    content,
+                    source: {
+                      provider: request.provider,
+                      model: request.model,
+                      ...live.replayState === undefined ? {} : { replayState: live.replayState },
+                    },
+                  }),
+                  interrupted: true,
+                  ...live.usage === undefined ? {} : { usage: live.usage },
+                  stream: live.stream,
+                }, { surfaceOp: 'append' }).seq)
+              } else {
+                live.settle(
+                  'assistant/attempt',
+                  () => this.session.append('assistant/attempt', { turn, step, stream: live.stream }).seq,
+                )
+              }
             } else {
               live.settle(
                 'assistant/attempt',
                 () => this.session.append('assistant/attempt', { turn, step, stream: live.stream }).seq,
               )
             }
-          } else {
+          } catch (settlementError: unknown) {
+            throw new AggregateError(
+              [error, settlementError],
+              'Assistant stream failed and its durable settlement was rejected',
+              { cause: error },
+            )
+          }
+          throw error
+        }
+        try {
+          const finish = live.finish
+          if (finish.kind === 'error' || finish.kind === 'aborted') {
             live.settle(
               'assistant/attempt',
               () => this.session.append('assistant/attempt', { turn, step, stream: live.stream }).seq,
             )
+            const action = await this.dispatch.waterfall(
+              'agent/request-error', {
+                turn,
+                step,
+                provider: request.provider,
+                failure: finish.failure,
+                retryPolicy: preparedCall?.retryPolicy,
+                signal,
+              },
+              () => Promise.resolve<RequestErrorAction>(undefined),
+            )
+            signal.throwIfAborted()
+            if (action?.kind !== 'retry') {
+              throw new LlmError(finish.failure.message, finish.failure.code, finish.failure)
+            }
+            continue
           }
-        } catch (settlementError: unknown) {
-          throw new AggregateError(
-            [error, settlementError],
-            'Assistant stream failed and its durable settlement was rejected',
-            { cause: error },
-          )
-        }
-        throw error
-      }
-      try {
-        const finish = live.finish
-        if (finish.kind === 'error' || finish.kind === 'aborted') {
+
+          const message = createAssistantMessage({
+            content: live.blocks(),
+            source: {
+              provider: request.provider,
+              model: request.model,
+              ...live.replayState !== undefined ? { replayState: live.replayState } : {},
+            },
+          })
           live.settle(
-            'assistant/attempt',
-            () => this.session.append('assistant/attempt', { turn, step, stream: live.stream }).seq,
-          )
-          const action = await this.dispatch.waterfall(
-            'agent/request-error', {
+            'assistant/message',
+            () => this.session.append('assistant/message', {
               turn,
               step,
-              provider: request.provider,
-              failure: finish.failure,
-              retryPolicy: preparedCall?.retryPolicy,
-              signal,
-            },
-            () => Promise.resolve<RequestErrorAction>(undefined),
+              message,
+              ...live.usage === undefined ? {} : { usage: live.usage },
+              stream: live.stream,
+            }, { surfaceOp: 'append' }).seq,
           )
-          signal.throwIfAborted()
-          if (action?.kind !== 'retry') {
-            throw new LlmError(finish.failure.message, finish.failure.code, finish.failure)
-          }
-          continue
+          if (finish.kind === 'max-tokens') return { kind: 'max-tokens' }
+
+          const toolCalls = message.content.filter(block => block.type === 'tool-call')
+          if (toolCalls.length === 0) return { kind: 'completed' }
+          const { concluded } = await executeToolCalls(
+            this.loopCtx, turn, step, toolCalls, signal,
+            context => this.inbox.splice('next-step', this.inbox.nextStep.length, 0, [context]),
+            toolSet,
+          )
+          return concluded ? { kind: 'completed' } : null
+        } catch (error: unknown) {
+          if (!live.ended) live.abandon()
+          throw error
         }
-
-        const message = createAssistantMessage({
-          content: live.blocks(),
-          source: {
-            provider: request.provider,
-            model: request.model,
-            ...live.replayState !== undefined ? { replayState: live.replayState } : {},
-          },
-        })
-        live.settle(
-          'assistant/message',
-          () => this.session.append('assistant/message', {
-            turn,
-            step,
-            message,
-            ...live.usage === undefined ? {} : { usage: live.usage },
-            stream: live.stream,
-          }, { surfaceOp: 'append' }).seq,
-        )
-        if (finish.kind === 'max-tokens') return { kind: 'max-tokens' }
-
-        const toolCalls = message.content.filter(block => block.type === 'tool-call')
-        if (toolCalls.length === 0) return { kind: 'completed' }
-        const { concluded } = await executeToolCalls(
-          this.loopCtx, turn, step, toolCalls, signal,
-          context => this.inbox.splice('next-step', this.inbox.nextStep.length, 0, [context]),
-        )
-        return concluded ? { kind: 'completed' } : null
-      } catch (error: unknown) {
-        if (!live.ended) live.abandon()
-        throw error
+      } finally {
+        toolSet.dispose()
       }
     }
   }
@@ -565,7 +597,8 @@ export class ReactLoopAgent implements Agent {
     turn: number,
     step: number,
     signal: AbortSignal,
-  ): Promise<{ config: LlmCallConfig; preparedCall?: PreparedLlmCall }> {
+  ): Promise<PreparedRequest> {
+    this.requestRoute = undefined
     const { session } = this
 
     // A loop instance starts from its declared route, restoring only an explicit
@@ -609,6 +642,7 @@ export class ReactLoopAgent implements Agent {
       config = proposedConfig
     }
     signal.throwIfAborted()
+    this.requestRoute = Object.freeze({ provider: config.provider, model: config.model })
     return { config, ...preparedCall === undefined ? {} : { preparedCall } }
   }
 

@@ -27,16 +27,18 @@ sequenceDiagram
   Note over Agent,Driver: claim pending next-step input plus one queued prompt
   Driver-->>SDK: <code>agent/inbox/spliced</code> pure deletion
   Driver-->>SDK: <code>agent/inbox/claimed</code> { message, turn } per message
-  Driver->>Prompt: <code>system-prompt/assemble</code> waterfall
+  Driver->>Hooks: <code>agent/request</code> waterfall
+  Driver->>LLM: prepareCall(config, signal), bind Agent.currentRoute()
+  Driver->>Prompt: <code>system-prompt/prepare</code> waterfall
   Driver->>Hooks: <code>agent/pre-step</code> waterfall
   Hooks-->>Driver: authoritative reject or enter(messages)
   alt proposed step rejected, first batch empty, or pre-step failed
     Driver-->>Driver: claimed batch stays removed, the open turn spends no step
   else enter proposed step
   Driver->>Session: <code>step/start</code>
-  Driver->>Hooks: <code>agent/request</code> waterfall
-  Driver->>LLM: prepareCall(config, signal)
-  Note over Driver,LLM: cancellation during either async phase commits neither system nor users
+  Driver->>Tools: resolve({ agent, signal })
+  Driver->>Prompt: <code>system-prompt/assemble</code> with resolved tool set
+  Note over Driver,LLM: cancellation during preparation commits neither system nor users
   Note over Driver,Session: synchronous admission using the prepared call capability
   Driver->>Session: <code>system/message</code> ordered per-node reconciliation
   Driver->>Session: <code>user/message</code> per entered message
@@ -50,7 +52,7 @@ sequenceDiagram
     Driver-->>SDK: <code>agent/assistant-stream</code> committed end
     Driver->>Hooks: <code>agent/request-error</code> waterfall
     Hooks-->>Driver: return retry action or preserve the original error
-    Note over Driver,LLM: retry in the open step: prepare and reconcile the same rendered assembly without repeating pre-step or users
+    Note over Driver,LLM: retry resolves route and tools. Unchanged inputs reuse the prompt without repeating pre-step or users
   else model request succeeded
   Driver->>Session: <code>assistant/message</code>
   Driver-->>SDK: <code>agent/assistant-stream</code> committed end
@@ -58,7 +60,7 @@ sequenceDiagram
   loop barriers and bounded rolling pool, reclassify before start
     opt call starts
       Driver->>Session: <code>tool/call</code>
-      Driver->>Tools: ordered pre, concurrent execute
+      Driver->>Tools: ordered pre, concurrent execute with request tool set
       Tools-->>Session: tool-owned events when applicable
     end
     opt next model-order result ready
@@ -66,13 +68,16 @@ sequenceDiagram
       Driver->>Session: <code>tool/result</code>
     end
   end
+  Driver->>Tools: dispose request tool set
   Driver->>Session: <code>step/end</code>
+  Driver->>Driver: clear bound route
   opt natural stop and next-step inbox empty
     Driver->>Hooks: <code>agent/turn-stopping</code> serial terminal checkpoint
   end
   opt next-step input is pending
     Driver-->>Driver: claim pending next-step input
     Driver-->>SDK: <code>agent/inbox/claimed</code> { message, turn } per message
+    Driver->>Driver: prepare route and runtime context for the next step
     Driver->>Hooks: <code>agent/pre-step</code> waterfall
     Hooks-->>Driver: authoritative reject or enter(messages)
   end
@@ -84,7 +89,7 @@ sequenceDiagram
 
 `assistant/message` 事件会记录每次成功的提供方调用，包括返回空内容或以 `max-tokens` 结束的调用，并嵌入精确的紧凑带时间 stream。空内容不会进入派生历史。失败、重试、取消或 stream error attempt 到达 settlement 时，如果没有 surface message，就会把 stream 记录为 `assistant/attempt`。实时 `agent/assistant-stream` chunk frame 是瞬态数据；回放读取任一种持久 settlement，如果进程在 settlement 前硬中断，则不会留下持久 attempt stream。
 
-`dsh-compaction-basic` 在派生请求之前通过 `agent/pre-step` 处理压力，而 `agent/request-error` 仅用于规范的上下文溢出。任一触发条件满足后，系统都会先执行可选的工具结果剪枝，再选择摘要。恢复发生在仍打开的步骤内，只有剪枝或摘要生成推进 surface replacement generation 时才重试，否则仍以原始请求错误为准。每次重试都会准备调用，并在派生请求之前协调保留的已渲染组装结果，不重复组装、pre-step 或用户消息准入。
+`dsh-compaction-basic` 在派生请求之前通过 `agent/pre-step` 处理压力，而 `agent/request-error` 仅用于规范的上下文溢出。任一触发条件满足后，系统都会先执行可选的工具结果剪枝，再选择摘要。恢复发生在仍打开的步骤内，只有剪枝或摘要生成推进 surface replacement generation 时才重试，否则仍以原始请求错误为准。每次重试都会在派生请求之前准备调用并解析工具条件，不重复 pre-step 或用户消息准入。只有已绑定路由或工具 schema 变化时才重新组装提示词。
 
 以返回的 `agent/pre-step` 决策为准；通过包装 `next()` 的监听器会保留下游消息与 `startsRequestSeries`，除非有意替换。steering（中途引导）和注入的上下文在后续的认领操作取得其下一步骤批次后，会经过同一 waterfall（瀑布式事件）。
 

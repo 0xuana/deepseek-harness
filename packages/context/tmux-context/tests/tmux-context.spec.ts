@@ -106,6 +106,7 @@ async function mount(
 
 function sessionAgent(session: Session, id = 'agent'): Agent {
   const agent: Agent = {
+    currentRoute() { throw new Error('no prepared model request in this fixture') },
     id: SessionId(id),
     options: {},
     session,

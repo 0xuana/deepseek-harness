@@ -369,13 +369,13 @@ describe('prepared-route prompt admission', () => {
     expect(resumed.session.snapshotEvents().filter(event => event.type === 'request/header').at(-1)?.data.reason).toBe('resume')
   })
 
-  it.each(['request', 'prepare'] as const)('cancels during %s with a balanced empty step before input admission', async (stage) => {
+  it.each(['request', 'prepare'] as const)('cancels during %s before step and input admission', async (stage) => {
     const h = await harness()
     const entered = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
     const observe = async () => {
       const types = h.agent.session.snapshotEvents().map(event => event.type)
-      expect(types).toContain('step/start')
+      expect(types).not.toContain('step/start')
       expect(types).not.toContain('system/message')
       expect(types).not.toContain('user/message')
       expect(types).not.toContain('request/header')
@@ -394,7 +394,7 @@ describe('prepared-route prompt admission', () => {
     await h.agent.whenIdle()
     expect(h.capable.requests).toHaveLength(0)
     const types = h.agent.session.snapshotEvents().map(event => event.type)
-    expect(types.filter(type => type === 'step/start' || type === 'step/end')).toEqual(['step/start', 'step/end'])
+    expect(types.filter(type => type === 'step/start' || type === 'step/end')).toEqual([])
     expect(types.filter(type => ['system/message', 'user/message', 'request/header'].includes(type))).toEqual([])
   })
 

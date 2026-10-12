@@ -17,9 +17,9 @@ declare module '@deepseek-ai/cordis' {
 
   interface Events {
     /**
-     * Expert waterfall over the assembled sections, contexts, tools, and variables.
+     * Presentation waterfall over assembled sections, contexts, and variables.
      * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): scoped listeners
-     * receive only that scope's assemblies. The returned value is authoritative.
+     * receive only that scope's assemblies. The returned text is authoritative; tool declarations remain provider-owned.
      * A supplied signal controls only this explicit assembly request and must not
      * be retained to control later turns. A registered complete section is
      * restored after this waterfall, so listeners cannot add to or replace
@@ -28,7 +28,14 @@ declare module '@deepseek-ai/cordis' {
      * @param context - the caller's per-assembly context.
      * @mode waterfall
      */
-    'system-prompt/assemble'(this: Scoped<SystemPrompt>, assembly: PromptAssembly, context: AssembleContext, next: () => Promise<PromptAssembly>): Promise<PromptAssembly>
+    'system-prompt/assemble'(this: Scoped<SystemPrompt>, assembly: PromptPresentation, context: AssembleContext, next: () => Promise<PromptPresentation>): Promise<PromptPresentation>
+    /**
+     * Prepare variables and runtime context before step admission.
+     * @param preparation - registered variables and context contributions.
+     * @param context - calling scope and cancellation.
+     * @mode waterfall
+     */
+    'system-prompt/prepare'(this: Scoped<SystemPrompt>, preparation: PromptPreparation, context: AssembleContext, next: () => Promise<PromptPreparation>): Promise<PromptPreparation>
     /**
      * Emitted when any prompt provider changes. This registry notification is
      * unfiltered because a global change affects every scope.
@@ -117,15 +124,20 @@ export interface ToolProviderResult {
   readonly knownNames?: readonly string[]
 }
 
-/**
- * Merge-extensible assembled model input. Sections and contexts remain
- * uninterpolated until rendered; tools are already in canonical order.
- */
-export interface PromptAssembly {
-  sections: AssembledSection[]
+/** Prepared runtime facts and variables; context text remains uninterpolated. */
+export interface PromptPreparation {
   contexts: AssembledContext[]
-  tools: ToolSchema[]
   variables: Record<string, string | undefined>
+}
+
+/** Prompt text contributions; tool declarations are owned by their providers. */
+export interface PromptPresentation extends PromptPreparation {
+  sections: AssembledSection[]
+}
+
+/** Completed model inputs, including provider-owned tool declarations. */
+export interface PromptAssembly extends PromptPresentation {
+  tools: ToolSchema[]
 }
 
 const SECTION_ORDERS = {
@@ -323,7 +335,7 @@ export function joinContextSections(sections: readonly ContextSnapshotSection[])
  * @param assembly - the assembly whose contexts and variables to render.
  * @returns one entry per contributing context that rendered to non-empty text.
  */
-export function renderContextSections(assembly: PromptAssembly): ContextSnapshotSection[] {
+export function renderContextSections(assembly: PromptPreparation): ContextSnapshotSection[] {
   return assembly.contexts
     .map(context => ({
       name: context.name,
@@ -570,12 +582,12 @@ export class SystemPrompt extends Service {
    * added only by the assembly waterfall retain their accepted values. Current
    * suppression removes optional contexts, and missing required registrations
    * are restored in registry order. Sections, tools, and interpolation variables
-   * retain the accepted assembly; their providers and waterfall do not rerun.
+   * retain their accepted values during this refresh.
    * @param assembly - accepted assembly for this scope and step.
    * @param context - the same scope and current plugin-defined assembly fields.
    * @returns the accepted assembly with current runtime-context provider text.
    */
-  refreshContext(assembly: PromptAssembly, context: AssembleContext = {}): PromptAssembly {
+  refreshContext<T extends PromptPreparation>(assembly: T, context: AssembleContext = {}): T {
     const providers = this.layers.merge(context.scope, layer => layer.contexts)
     const suppressed = !this.layers.global.runtimeContextSuppressors.isEmpty()
       || this.layers.chainLayers(context.scope).some(layer => !layer.runtimeContextSuppressors.isEmpty())
@@ -598,16 +610,12 @@ export class SystemPrompt extends Service {
   }
 
   /**
-   * Assemble global and scoped providers, detach tool parameters, apply
-   * canonical ordering, then run the assembly waterfall. Scoped sections and
-   * variables shadow globals. The returned waterfall value is authoritative
-   * except that an effective complete section is restored afterwards as the
-   * sole prompt section.
-   * @param context - the optional scope and plugin-defined assembly fields.
-   * @returns the post-waterfall assembly with any complete prompt enforced.
+   * Prepare variables and runtime facts before accepting a step. No tool
+   * conditions or prompt sections are evaluated in this phase.
+   * @param context - calling scope and request cancellation.
+   * @returns prepared inputs after the preparation waterfall.
    */
-  // Keep configuration failures on the declared asynchronous error path.
-  async assemble(context: AssembleContext = {}): Promise<PromptAssembly> {
+  async prepare(context: AssembleContext = {}): Promise<PromptPreparation> {
     const scope = context.scope
     const scopeLayers = this.layers.chainLayers(scope)
     const runtimeContextSuppressed = !this.layers.global.runtimeContextSuppressors.isEmpty()
@@ -623,6 +631,28 @@ export class SystemPrompt extends Service {
         variables[name] = provider(context)
       }
     }
+    const contexts = [...this.layers.merge(scope, layer => layer.contexts).values()]
+      .filter(entry => !runtimeContextSuppressed || entry.required === true)
+      .sort((a, b) => a.order - b.order)
+      .map(entry => resolveContext(entry, context))
+    const preparation = { contexts, variables }
+    return this.ctx.waterfall(scopeTarget(this, scope), 'system-prompt/prepare', preparation, context,
+      () => Promise.resolve(preparation))
+  }
+
+  /**
+   * Assemble prompt sections and tool declarations after request preparation.
+   * The presentation waterfall cannot replace provider-owned tools.
+   * @param context - calling scope, route-bound agent, and resolved tools.
+   * @param preparation - accepted variables and runtime facts; prepared here when omitted.
+   * @returns the complete assembly with ordered tool declarations.
+   */
+  async assemble(context: AssembleContext = {}, preparation?: PromptPreparation): Promise<PromptAssembly> {
+    const prepared = preparation ?? await this.prepare(context)
+    const scope = context.scope
+    const scopeLayers = this.layers.chainLayers(scope)
+    const runtimeContextSuppressed = !this.layers.global.runtimeContextSuppressors.isEmpty()
+      || scopeLayers.some(layer => !layer.runtimeContextSuppressors.isEmpty())
     // Scoped sections shadow globals before the deterministic order sort.
     const sectionByName = this.layers.merge(scope, layer => layer.sections)
     const contextByName = this.layers.merge(scope, layer => layer.contexts)
@@ -661,25 +691,28 @@ export class SystemPrompt extends Service {
         if (section.complete === true) completeSection = { ...assembled }
         return assembled
       })
-    const assembly: PromptAssembly = {
-      sections,
-      contexts: [...contextByName.values()]
-        .filter(entry => !runtimeContextSuppressed || entry.required === true)
-        .sort((a, b) => a.order - b.order)
-        .map(entry => resolveContext(entry, context)),
-      tools: orderTools(collected, this.toolOrder, knownNames),
-      variables,
-    }
+    const tools = orderTools(collected, this.toolOrder, knownNames)
+    const assembly: PromptPresentation = { ...prepared, sections }
     const transformed = await this.ctx.waterfall(
       scopeTarget(this, scope), 'system-prompt/assemble', assembly, context,
       () => Promise.resolve(assembly),
     )
-    if (completeSection === undefined && !runtimeContextSuppressed) return transformed
     const requiredContexts = new Set([...contextByName.values()].filter(entry => entry.required === true).map(entry => entry.name))
+    const contexts = runtimeContextSuppressed
+      ? transformed.contexts.filter(entry => requiredContexts.has(entry.name)) : [...transformed.contexts]
+    for (const provider of contextByName.values()) {
+      if (provider.required !== true) continue
+      const name = provider.name
+      const value = resolveContext(provider, context)
+      const existing = contexts.findIndex(entry => entry.name === name)
+      if (existing >= 0) contexts[existing] = value
+      else contexts.push(value)
+    }
     return {
       ...transformed,
+      tools,
       sections: completeSection === undefined ? transformed.sections : [completeSection],
-      contexts: runtimeContextSuppressed ? transformed.contexts.filter(entry => requiredContexts.has(entry.name)) : transformed.contexts,
+      contexts,
     }
   }
 }

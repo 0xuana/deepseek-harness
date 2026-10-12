@@ -9,7 +9,7 @@ import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
-import { MockAdapter, textResponse } from './mock-adapter.ts'
+import { MockAdapter, textResponse, toolCallResponse } from './mock-adapter.ts'
 
 const contexts: Context[] = []
 afterEach(async () => {
@@ -110,5 +110,129 @@ describe('tool update emission', () => {
       [{ type: 'tool-addition', toolName: 'fetch' }], [{ type: 'tool-removal', toolName: 'fetch' }],
     ])
     expect(agent.session.requestHeader()?.tools?.map(schema => schema.name)).toEqual(['search'])
+  })
+})
+
+
+describe('request-time tool activation', () => {
+  it('uses the bound route for asynchronous conditions and rejects a historical name after removal', async () => {
+    const adapter = new MockAdapter([
+      toolCallResponse('allowed', 'conditional', {}), textResponse('done'),
+      toolCallResponse('removed', 'conditional', {}), textResponse('done'),
+    ])
+    const { ctx, agent } = await harness(adapter)
+    const routed: string[] = []
+    let calls = 0
+    let model = 'enabled'
+    ctx.on('agent/request', async (_payload, next) => ({ ...await next(), model }))
+    ctx.tools.register(defineContentToolFixture({
+      name: 'conditional', description: 'Available on one route.', parameters: {},
+      async execute(_args, exec) {
+        expect(exec.agent?.currentRoute()).toEqual({ provider: 'mock', model: 'enabled' })
+        calls++
+        return [{ type: 'text', text: 'done' }]
+      },
+    }), { when: async ({ agent: subject }) => {
+      const route = subject.currentRoute()
+      expect(Object.isFrozen(route)).toBe(true)
+      routed.push(route.model)
+      await Promise.resolve()
+      return route.model === 'enabled'
+    } })
+    expect(() => agent.currentRoute()).toThrow('no prepared model request')
+    await send(agent, 'enabled')
+    model = 'disabled'
+    await send(agent, 'try the historical name')
+    expect(calls).toBe(1)
+    expect(routed).toEqual(['enabled', 'enabled', 'disabled', 'disabled'])
+    expect(developerEvents(agent).at(-1)?.data.message.content)
+      .toEqual([{ type: 'tool-removal', toolName: 'conditional' }])
+    expect(agent.session.snapshotEvents().find(event => event.type === 'tool/result' && event.data.message.toolCallId === 'removed')?.data)
+      .toMatchObject({ error: { code: 'UNKNOWN_TOOL' } })
+    expect(() => agent.currentRoute()).toThrow('no prepared model request')
+  })
+
+  it('cancels an asynchronous condition without committing the proposed request', async () => {
+    const adapter = new MockAdapter([textResponse('unused')])
+    const { ctx, agent } = await harness(adapter)
+    const entered = Promise.withResolvers<undefined>()
+    const settle = Promise.withResolvers<boolean>()
+    ctx.tools.register(defineContentToolFixture({
+      name: 'conditional', description: 'A pending condition.', parameters: {},
+      execute: async () => [{ type: 'text', text: 'unused' }],
+    }), { when: () => { entered.resolve(undefined); return settle.promise } })
+    const running = send(agent, 'cancel during activation')
+    await entered.promise
+    agent.cancel({ kind: 'user' })
+    settle.resolve(true)
+    await running
+    expect(adapter.requests).toEqual([])
+    expect(agent.session.snapshotEvents().filter(event => ['request/header', 'system/message', 'user/message'].includes(event.type))).toEqual([])
+    expect(() => agent.currentRoute()).toThrow('no prepared model request')
+  })
+
+  it.each(['condition', 'route'])('reassembles on a retry after the %s changes without admitting users again', async (change) => {
+    const adapter = new MockAdapter([
+      [{ type: 'finish', reason: { kind: 'error', failure: { code: 'SERVER', message: 'retry', status: 503 } } }],
+      textResponse('done'),
+    ])
+    const { ctx, agent } = await harness(adapter)
+    let retried = false
+    let admissions = 0
+    ctx.on('agent/pre-step', (_input, next) => { admissions++; return next() })
+    ctx.on('agent/request', async (_input, next) => ({
+      ...await next(), model: change === 'route' && retried ? 'second' : 'first',
+    }))
+    ctx.on('agent/request-error', async (_input, next) => {
+      await next()
+      retried = true
+      return { kind: 'retry' }
+    })
+    ctx.tools.register(defineContentToolFixture({
+      name: 'conditional', description: 'Retry-dependent availability.', parameters: {},
+      execute: async () => [{ type: 'text', text: 'unused' }],
+    }), { when: () => change === 'route' || retried })
+    ctx.systemPrompt.section({
+      name: 'retry:guidance', order: 0, complete: true,
+      text: context => `${agent.currentRoute().model}:${ctx.tools.schemas(agent, context.toolSet).map(tool => tool.name).join(',')}`,
+    })
+    await send(agent, 'retry once')
+    const prompts = adapter.requests.map(request => request.messages.find(message => message.role === 'system')?.content)
+    expect(prompts[0]).toEqual([{ type: 'text', text: change === 'route' ? 'first:conditional' : 'first:' }])
+    expect(prompts[1]).toEqual([{ type: 'text', text: change === 'route' ? 'second:conditional' : 'first:conditional' }])
+    expect(admissions).toBe(1)
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'user/message' && event.data.source.kind === 'user')).toHaveLength(1)
+    expect(() => agent.currentRoute()).toThrow('no prepared model request')
+  })
+
+  it('reports condition failures without admitting a partial request', async () => {
+    const adapter = new MockAdapter([textResponse('unused')])
+    const { ctx, agent } = await harness(adapter)
+    ctx.tools.register(defineContentToolFixture({
+      name: 'conditional', description: 'An unavailable activation dependency.', parameters: {},
+      execute: async () => [{ type: 'text', text: 'unused' }],
+    }), { when: async () => { throw new Error('credential storage unavailable') } })
+    await send(agent, 'inspect')
+    expect(adapter.requests).toEqual([])
+    expect(agent.session.snapshotEvents().filter(event => ['request/header', 'system/message', 'user/message'].includes(event.type))).toEqual([])
+    expect(agent.session.snapshotEvents().find(event => event.type === 'turn/end')?.data)
+      .toMatchObject({ reason: { kind: 'error', error: { code: 'TOOL_ACTIVATION_FAILED' } } })
+    expect(() => agent.currentRoute()).toThrow('no prepared model request')
+  })
+
+  it('shares the selected set with prompt guidance', async () => {
+    const adapter = new MockAdapter([textResponse('done')])
+    const { ctx, agent } = await harness(adapter)
+    ctx.tools.register(defineContentToolFixture({
+      name: 'conditional', description: 'Disabled.', parameters: {},
+      execute: async () => [{ type: 'text', text: 'unused' }],
+    }), { when: () => false })
+    ctx.systemPrompt.section({
+      name: 'conditional:guidance', order: 0,
+      text: context => ctx.tools.get('conditional', context.scope, context.toolSet) === undefined ? '' : 'Conditional guidance',
+    })
+    await send(agent, 'inspect')
+    expect(adapter.requests[0]?.tools ?? []).toEqual([])
+    expect(JSON.stringify(adapter.requests[0]?.messages)).not.toContain('Conditional guidance')
   })
 })

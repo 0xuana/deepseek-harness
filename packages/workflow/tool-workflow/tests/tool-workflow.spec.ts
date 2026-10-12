@@ -457,6 +457,7 @@ describe('dsh-tool-workflow', () => {
       const engine = ctx.workflowEngine as StubEngine
       const session = Session.create(SessionId('caller'))
       const parent: Agent = {
+        currentRoute() { throw new Error('no prepared model request in this fixture') },
         id: session.id, options: {}, session, inbox: unsupportedInbox(), status: 'idle', ctx,
         send: () => {}, followup: () => {}, steer: () => {}, inject: () => {}, cancel: () => {},
         runMaintenance: task => task(new AbortController().signal), whenIdle: () => Promise.resolve(),
@@ -670,6 +671,7 @@ describe('dsh-tool-workflow', () => {
       await ctx.plugin(toolWorkflow, {})
       const session = Session.create(SessionId('caller'))
       const parent: Agent = {
+        currentRoute() { throw new Error('no prepared model request in this fixture') },
         id: session.id, options: {}, session, inbox: unsupportedInbox(), status: 'idle', ctx,
         send: () => {}, followup: () => {}, steer: () => {}, inject: () => {}, cancel: () => {},
         runMaintenance: task => task(new AbortController().signal), whenIdle: () => Promise.resolve(),

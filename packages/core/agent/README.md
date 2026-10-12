@@ -82,7 +82,9 @@ The package is built on one separation: the public `Agent` surface and registry 
 
 ### Step admission
 
-`PreStepDecision` is either `{ kind: 'reject' }` or `{ kind: 'enter', messages, startsRequestSeries? }`. The enter branch contains the complete identified, frozen message batch. Acceptance does not commit it: after assembly and `step/start`, `agent/request` and `prepareCall()` resolve the route before the loop commits the system prompt and user batch. Cancellation during either async phase commits neither. `startsRequestSeries: true` declares a distinct model-message series; a wrapping listener preserves that declaration and the batch unless it intentionally replaces either one. Claiming removes offered messages from the inbox, while messages inserted after the claim remain pending for a later boundary.
+`PreStepDecision` is either `{ kind: 'reject' }` or `{ kind: 'enter', messages, startsRequestSeries? }`. The enter branch contains the complete identified, frozen message batch. Route preparation runs before `agent/pre-step`. Acceptance does not commit the batch: tool conditions and prompt assembly must also succeed before system and user messages are logged. Cancellation during route preparation opens no step and commits neither message kind. `startsRequestSeries: true` declares a distinct model-message series; a wrapping listener preserves that declaration and the batch unless it intentionally replaces either one. Claiming removes offered messages from the inbox, while messages inserted after the claim remain pending for a later boundary.
+
+`agent.currentRoute()` returns the immutable provider/model bound by request preparation, through the corresponding tool batch. It throws before preparation and after the batch ends; initial options and previous Session headers are not fallbacks. Auxiliary model calls do not replace the main request route.
 
 ### Durable inbox
 
@@ -99,7 +101,7 @@ The package is built on one separation: the public `Agent` surface and registry 
 | [`src/types.ts`](src/types.ts) | `AgentOptions`, cancellation causes, and inbox projection vocabulary |
 | [`src/dispatch.ts`](src/dispatch.ts) | `agentEvents` fused dispatcher and `assembleContextFor(agent)` |
 | [`src/consumed-work.ts`](src/consumed-work.ts) | `foldConsumedWork(events)`: what the log's consumed work became |
-| [`src/model-selection.ts`](src/model-selection.ts) | `installModelSelection`: coupling one selection to assembly and routing |
+| [`src/model-selection.ts`](src/model-selection.ts) | `installModelSelection`: capturing a selection for step routing |
 | [`src/archive-admission.ts`](src/archive-admission.ts) | The `turn` family of the Workspace registry's archive admission: a running turn and its user-cause cancel |
 
 ### Registry and lifecycle

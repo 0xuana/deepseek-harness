@@ -24,6 +24,7 @@ function stubAgent(ctx: Context, rawId: string): Agent {
   const scopeFiber = ctx.plugin(() => {})
   const session = Session.create(id)
   const agent: Agent = {
+    currentRoute() { throw new Error('no prepared model request in this fixture') },
     id,
     options: {},
     session,

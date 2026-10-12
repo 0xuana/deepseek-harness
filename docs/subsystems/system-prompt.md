@@ -184,23 +184,29 @@ variable(name: string, provider: (context: AssembleContext) => string | undefine
  * added only by the assembly waterfall retain their accepted values. Current
  * suppression removes optional contexts, and missing required registrations
  * are restored in registry order. Sections, tools, and interpolation variables
- * retain the accepted assembly; their providers and waterfall do not rerun.
+ * retain their accepted values during this refresh.
  * @param assembly - accepted assembly for this scope and step.
  * @param context - the same scope and current plugin-defined assembly fields.
  * @returns the accepted assembly with current runtime-context provider text.
  */
-refreshContext(assembly: PromptAssembly, context: AssembleContext = {}): PromptAssembly
+refreshContext<T extends PromptPreparation>(assembly: T, context: AssembleContext = {}): T
 
 /**
- * Assemble global and scoped providers, detach tool parameters, apply
- * canonical ordering, then run the assembly waterfall. Scoped sections and
- * variables shadow globals. The returned waterfall value is authoritative
- * except that an effective complete section is restored afterwards as the
- * sole prompt section.
- * @param context - the optional scope and plugin-defined assembly fields.
- * @returns the post-waterfall assembly with any complete prompt enforced.
+ * Prepare variables and runtime facts before accepting a step. No tool
+ * conditions or prompt sections are evaluated in this phase.
+ * @param context - calling scope and request cancellation.
+ * @returns prepared inputs after the preparation waterfall.
  */
-async assemble(context: AssembleContext = {}): Promise<PromptAssembly>
+async prepare(context: AssembleContext = {}): Promise<PromptPreparation>
+
+/**
+ * Assemble prompt sections and tool declarations after request preparation.
+ * The presentation waterfall cannot replace provider-owned tools.
+ * @param context - calling scope, route-bound agent, and resolved tools.
+ * @param preparation - accepted variables and runtime facts; prepared here when omitted.
+ * @returns the complete assembly with ordered tool declarations.
+ */
+async assemble(context: AssembleContext = {}, preparation?: PromptPreparation): Promise<PromptAssembly>
 ```
 
 Source: [`packages/core/system-prompt/src/index.ts`](../../packages/core/system-prompt/src/index.ts)
@@ -213,13 +219,13 @@ Source: [`packages/core/system-prompt/src/index.ts`](../../packages/core/system-
 
 #### `system-prompt/assemble` — waterfall
 
-Expert waterfall over the assembled sections, contexts, tools, and variables. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): scoped listeners receive only that scope's assemblies. The returned value is authoritative. A supplied signal controls only this explicit assembly request and must not be retained to control later turns. A registered complete section is restored after this waterfall, so listeners cannot add to or replace that scope's system prompt.
+Presentation waterfall over assembled sections, contexts, and variables. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): scoped listeners receive only that scope's assemblies. The returned text is authoritative; tool declarations remain provider-owned. A supplied signal controls only this explicit assembly request and must not be retained to control later turns. A registered complete section is restored after this waterfall, so listeners cannot add to or replace that scope's system prompt.
 
 ```ts cordis-catalog
 /**
- * Expert waterfall over the assembled sections, contexts, tools, and variables.
+ * Presentation waterfall over assembled sections, contexts, and variables.
  * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): scoped listeners
- * receive only that scope's assemblies. The returned value is authoritative.
+ * receive only that scope's assemblies. The returned text is authoritative; tool declarations remain provider-owned.
  * A supplied signal controls only this explicit assembly request and must not
  * be retained to control later turns. A registered complete section is
  * restored after this waterfall, so listeners cannot add to or replace
@@ -228,7 +234,7 @@ Expert waterfall over the assembled sections, contexts, tools, and variables. Sc
  * @param context - the caller's per-assembly context.
  * @mode waterfall
  */
-'system-prompt/assemble'(this: Scoped<SystemPrompt>, assembly: PromptAssembly, context: AssembleContext, next: () => Promise<PromptAssembly>): Promise<PromptAssembly>
+'system-prompt/assemble'(this: Scoped<SystemPrompt>, assembly: PromptPresentation, context: AssembleContext, next: () => Promise<PromptPresentation>): Promise<PromptPresentation>
 ```
 
 Types: [Scoped](scope.md)
@@ -249,6 +255,26 @@ Emitted when any prompt provider changes. This registry notification is unfilter
  */
 'system-prompt/change'(): void
 ```
+
+Source: [`packages/core/system-prompt/src/index.ts`](../../packages/core/system-prompt/src/index.ts)
+
+<a id="system-promptprepare--waterfall"></a>
+
+#### `system-prompt/prepare` — waterfall
+
+Prepare variables and runtime context before step admission.
+
+```ts cordis-catalog
+/**
+ * Prepare variables and runtime context before step admission.
+ * @param preparation - registered variables and context contributions.
+ * @param context - calling scope and cancellation.
+ * @mode waterfall
+ */
+'system-prompt/prepare'(this: Scoped<SystemPrompt>, preparation: PromptPreparation, context: AssembleContext, next: () => Promise<PromptPreparation>): Promise<PromptPreparation>
+```
+
+Types: [Scoped](scope.md)
 
 Source: [`packages/core/system-prompt/src/index.ts`](../../packages/core/system-prompt/src/index.ts)
 <!-- END GENERATED cordis-surface -->

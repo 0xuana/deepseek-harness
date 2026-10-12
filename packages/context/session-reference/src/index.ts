@@ -92,7 +92,6 @@ export class SessionReferenceResolver extends TypertRemoteService {
   })
 
   private readonly config: Required<Omit<Config, 'maxReferenceBytes'>> & { maxReferenceBytes: number | undefined }
-  private readonly assembledRoutes = new WeakMap<Agent, { provider: string | undefined; model: string | undefined }>()
 
   constructor(ctx: Context, config: Config = {}) {
     super(ctx, 'sessionReferenceResolver')
@@ -123,15 +122,6 @@ export class SessionReferenceResolver extends TypertRemoteService {
         'SESSION_REFERENCE_INVALID_CONFIG',
       )
     }
-    // Prepend observes model-selection overrides after downstream assembly completes.
-    ctx.on('system-prompt/assemble', async (_assembly, context, next) => {
-      const assembly = await next()
-      if (context.agent !== undefined) {
-        const { provider, model } = assembly.variables
-        this.assembledRoutes.set(context.agent, { provider, model })
-      }
-      return assembly
-    }, { prepend: true })
     ctx.on('agent/pre-step', async ({ agent, signal }, next): Promise<PreStepDecision> => {
       const decision = await next()
       if (decision.kind === 'reject') return decision
@@ -359,10 +349,9 @@ export class SessionReferenceResolver extends TypertRemoteService {
 
   private async referenceBudget(agent: Agent, signal: AbortSignal | undefined): Promise<number> {
     if (this.config.maxReferenceBytes !== undefined) return this.config.maxReferenceBytes
-    // Options seed direct preparation; an assembled route owns model-step preparation.
-    const { provider, model } = this.assembledRoutes.get(agent) ?? agent.options
+    const { provider, model } = agent.currentRoute()
     const llm = this.ctx.get('llm')
-    if (provider === undefined || model === undefined || llm === undefined) return DEFAULT_MAX_REFERENCE_BYTES
+    if (llm === undefined) return DEFAULT_MAX_REFERENCE_BYTES
     let info: LlmResolvedModelInfo
     try {
       info = await settleWithCancellation(llm.resolveModelInfo(provider, model, signal), signal)

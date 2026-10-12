@@ -8,13 +8,12 @@
  *
  * The `plan` projection folds the session log, so resume and fork restore the
  * state. User selections remain pending until the next accepted in-turn
- * pre-step. The service includes the selected state in the proposed step
- * assembly, then appends `plan/mode` from `agent/pre-step` only when the step
- * is accepted. Same-step request retries reuse their assembly.
+ * pre-step. The service appends `plan/mode` from `agent/pre-step` before
+ * request-time tool conditions and plan guidance read that committed state.
+ * Same-step retries do not commit pending selections.
  *
- * The exit tool remains registered while plan mode is inactive, so entering
- * or leaving plan mode changes only the prompt section, not the request tool
- * catalog.
+ * The exit tool is admitted only for requests whose committed plan state is
+ * active. Native declarations, PTC bindings, and execution share that selection.
  *
  * See packages/plan/plan-mode/README.md.
  *
@@ -60,8 +59,7 @@ declare module '@deepseek-ai/cordis' {
 }
 
 /**
- * The model-facing exit tool's name. It stays registered while plan mode is
- * inactive so the request tool catalog is stable across transitions.
+ * The model-facing exit tool's name, admitted only while plan mode is active.
  */
 export const EXIT_PLAN_MODE = 'exit_plan_mode'
 
@@ -169,7 +167,7 @@ export const planProjectionDefinition = {
 
 /**
  * `ctx.planMode`: owns logged plan state, applies and narrates selected state at step start,
- * the `plan:policy` section, the `/plan` command, and the stable exit tool.
+ * the `plan:policy` section, the `/plan` command, and the conditional exit tool.
  * Client carriers expose the projection's cropped `{ active, pending }` view.
  */
 export class PlanModeController extends Service {
@@ -191,8 +189,8 @@ export class PlanModeController extends Service {
     let disposed = false
     // Pre-step is outside Session.append publication, so it can append the
     // log-only mode event inside an open turn without re-entering the session.
-    // A failed append remains pending for a later accepted in-turn pre-step,
-    // and policy cannot block the step.
+    // A failed append remains pending and stops admission before guidance or
+    // tool availability could describe an uncommitted state.
     ctx.on('agent/pre-step', async (
       { agent, signal },
       next,
@@ -201,12 +199,7 @@ export class PlanModeController extends Service {
       const pending = this.pendingIntents.get(agent.session)
       if (decision.kind === 'reject' || signal.aborted || pending === undefined) return decision
       const narration = this.narration(agent.session, pending.active)
-      try {
-        this.onBoundary(agent.session)
-      } catch (error) {
-        ctx.logger.warn('dsh-plan-mode: failed to append selected plan mode at step start: %o', error)
-        return decision
-      }
+      this.onBoundary(agent.session)
       return !pending.narrate || narration === undefined
         ? decision
         : { ...decision, messages: [...decision.messages, narration] }
@@ -218,8 +211,7 @@ export class PlanModeController extends Service {
       order: ctx.systemPrompt.getSectionOrder('PLAN_POLICY'),
       text: (context) => {
         if (context.agent === undefined) return ''
-        const pending = this.pendingIntents.get(context.agent.session)
-        return (pending?.active ?? this.loggedActive(context.agent.session)) ? this.section : ''
+        return this.loggedActive(context.agent.session) ? this.section : ''
       },
     })
 
@@ -347,7 +339,7 @@ export class PlanModeController extends Service {
         }
         // Keep plan guidance for the rest of this assistant tool batch. The
         // silent selection is appended at the next accepted in-turn pre-step,
-        // before its request assembly.
+        // before its tool and prompt assembly.
         this.pendingIntents.set(agent.session, { active: false, narrate: false })
         return { approved: true }
       },
@@ -362,7 +354,7 @@ export class PlanModeController extends Service {
         title: 'Plan review',
         content: result.content,
       }),
-    }))
+    }), { when: ({ agent }) => this.loggedActive(agent.session) })
   }
 
   private loggedActive(session: Session): boolean {

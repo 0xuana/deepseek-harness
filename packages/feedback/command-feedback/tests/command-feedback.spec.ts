@@ -33,6 +33,7 @@ function stubAgent(ctx: Context, id: string): { agent: Agent; session: Session }
   const session = ctx.sessions.create(SessionId(id))
   let status: AgentStatus = 'idle'
   const agent: Agent = {
+    currentRoute() { throw new Error('no prepared model request in this fixture') },
     id: session.id,
     options: {},
     session,

@@ -39,14 +39,14 @@
   en: 0acc88b042a99380
   zh: e4cf66b77f2fc7ae
 /deepseek-ai-dsh-plan-mode/understand-the-implementation/durable-state-and-step-boundary-appends:
-  en: ff946ab59a7b4a0f
-  zh: b1c79937770f57ad
+  en: 6d0adadc354f211e
+  zh: 86fa49a9f4377368
 /deepseek-ai-dsh-plan-mode/understand-the-implementation/the-plan-command:
   en: a7bf35c2a9da52bc
   zh: dea9f4b3a41f1a6d
 /deepseek-ai-dsh-plan-mode/understand-the-implementation/the-exit-tool:
-  en: 56798d0f45fb5775
-  zh: 282e4a522ce6dae0
+  en: 86b26413acb2e835
+  zh: a84d876efefa5bea
 /deepseek-ai-dsh-plan-mode/understand-the-implementation/session-projection-unit:
   en: 74cd6bdf50af51f5
   zh: 67609cf7202ececb
@@ -90,14 +90,14 @@
   en: 9622e96bdc01276d
   zh: 53801e68a49f3d1d
 /deepseek-ai-dsh-plan-mode/model-experience/exit-tool-schema-and-review-exchange/what-the-model-sees:
-  en: 3768d0189f9f13af
-  zh: 2168a9b24551b7c6
+  en: 76ba584f0225cc7f
+  zh: f8b010dbc909e4ac
 /deepseek-ai-dsh-plan-mode/model-experience/exit-tool-schema-and-review-exchange/token-effect:
-  en: d1b1418f20ee119d
-  zh: c2b89ea3cae57175
+  en: a1a020eb7ba26e7c
+  zh: a99208693d331a31
 /deepseek-ai-dsh-plan-mode/model-experience/exit-tool-schema-and-review-exchange/kv-cache-effect:
-  en: 6b1404ea11f1e60d
-  zh: 348d0579de218652
+  en: f640fc33aa30602f
+  zh: e0925a15d01141e9
 /deepseek-ai-dsh-plan-mode/known-limitations-and-deferred-work:
   en: a87aabfede0087fd
   zh: 201e9b3766980005

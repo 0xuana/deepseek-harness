@@ -1334,6 +1334,8 @@ def smoke_sdk_dynamic_tools(base_url: str, executable: Path, update_snapshots: b
             dsh_bin=str(executable), dsh_home=str(dsh_home), patches=(str(patch),),
             env={
                 "DSH_PERMISSION_MODE": "danger-full-access", "DSH_TELEMETRY_DISABLED": "1",
+                # This scenario owns tool changes independently of bundled office assets.
+                "DSH_PRIMARY_RUNTIME": "",
                 "HOME": str(user_home), "USERPROFILE": str(user_home),
                 "DSH_AGENTS_HOME": str(user_home / ".agents"),
             },

@@ -22,6 +22,7 @@ function stubAgent(rawId: string, overrides: Partial<Agent> = {}): Agent {
   const session = overrides.session ?? Session.create(id)
   const ctx = overrides.ctx ?? new Context()
   return {
+    currentRoute() { throw new Error('no prepared model request in this fixture') },
     id,
     options: {},
     session,

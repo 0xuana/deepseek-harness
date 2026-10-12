@@ -30,9 +30,9 @@ export interface ModelSelection {
 
 /** Mutable model selection plus the value captured for the current step. */
 export interface ModelSelectionRef {
-  /** Model selected for the next step that enters prompt assembly. */
+  /** Model selected for the next step entering route preparation. */
   current: ModelSelection | undefined
-  /** Selection captured when the current step entered prompt assembly. */
+  /** Selection captured by the first route preparation of the current step. */
   assembled: ModelSelection | undefined
 }
 
@@ -61,15 +61,13 @@ function modelSwitchNotice(previous: ModelSelection, selected: ModelSelection) {
 }
 
 /**
- * Couple one mutable selection to Agent-scoped prompt assembly and request routing.
- * Prompt assembly snapshots the selected model before delegating, then applies
- * its provider/model pair and effort to request config so a
- * concurrent switch takes effect on a later step instead of splitting the two
- * surfaces. An absent selected effort clears any inherited effort, restoring
- * the selected model's provider/default behavior.
+ * Couple one mutable selection to Agent-scoped request routing. The first
+ * request preparation in a step captures the selection before delegating;
+ * retries retain it, and concurrent selections apply to later steps. An absent
+ * selected effort clears inherited effort, restoring the model's provider default.
  *
  * A provider/model change appends a durable user-role notice to the next
- * admitted request. It compares the assembled selection with the latest
+ * admitted request. It compares the bound request route with the latest
  * request header; effort-only changes and empty no-request decisions add no
  * notice. Failure before header persistence repeats the notice on the next
  * request.
@@ -79,23 +77,14 @@ function modelSwitchNotice(previous: ModelSelection, selected: ModelSelection) {
  * @returns Disposer for all scoped waterfall listeners.
  */
 export function installModelSelection(agentCtx: Context, selection: ModelSelectionRef): () => void {
-  const disposeAssembly = agentCtx.on('system-prompt/assemble', async (_assembly, _context, next) => {
-    const selected = selection.current
-    const assembled = await next()
-    selection.assembled = selected
-    if (selected === undefined) return assembled
-    return {
-      ...assembled,
-      variables: {
-        ...assembled.variables,
-        provider: selected.provider,
-        model: selected.model,
-      },
-    }
-  })
+  let capturedStep: { turn: number; step: number } | undefined
   const disposeRequest = agentCtx.on(
     'agent/request',
-    async (_payload, next): Promise<LlmCallConfig> => {
+    async ({ turn, step }, next): Promise<LlmCallConfig> => {
+      if (capturedStep?.turn !== turn || capturedStep.step !== step) {
+        capturedStep = { turn, step }
+        selection.assembled = selection.current === undefined ? undefined : { ...selection.current }
+      }
       const resolved = await next()
       const selected = selection.assembled
       if (selected === undefined) return resolved
@@ -117,15 +106,14 @@ export function installModelSelection(agentCtx: Context, selection: ModelSelecti
       if (decision.kind === 'reject' || signal.aborted) return decision
       // The loop skips an empty first step and an emptied offered continuation.
       if (decision.messages.length === 0 && (step === 1 || messages.length > 0)) return decision
-      const selected = selection.assembled
+      const selected = agent.currentRoute()
       const previous = agent.session.requestHeader()?.config
-      if (selected === undefined || previous === undefined || sameRoute(selected, previous)) return decision
+      if (previous === undefined || sameRoute(selected, previous)) return decision
       return { ...decision, messages: [...decision.messages, modelSwitchNotice(previous, selected)] }
     },
     { prepend: true },
   )
   return () => {
-    disposeAssembly()
     disposeRequest()
     disposeNotice()
   }

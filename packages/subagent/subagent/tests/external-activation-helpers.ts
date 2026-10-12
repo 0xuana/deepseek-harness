@@ -33,6 +33,7 @@ export async function externalTestParent(ctx: Context, cwd?: string): Promise<Ag
   })
   const inbox = createInboxStub()
   const parent: Agent = {
+    currentRoute() { throw new Error('no prepared model request in this fixture') },
     id: session.id,
     session,
     ctx,

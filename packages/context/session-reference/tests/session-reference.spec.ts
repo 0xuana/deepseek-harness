@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { agentEvents, installModelSelection, type Agent, type ModelSelectionRef } from '@deepseek-ai/dsh-agent'
+import { agentEvents, type Agent } from '@deepseek-ai/dsh-agent'
 import { CompactionId, compactCheckpointSource } from '@deepseek-ai/dsh-compaction'
 import LlmRuntime, { createDeveloperMessage, createMessage, createSystemMessage, createToolResultMessage, createUserMessage, LlmError, ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
@@ -86,7 +86,8 @@ function withProjectionCache(
 }
 
 function fakeAgent(session: Session): Agent {
-  return { id: session.id, session, options: {} } as Agent
+  const options: Agent['options'] = {}
+  return { id: session.id, session, options, currentRoute: () => ({ provider: options.provider ?? 'seed', model: options.model ?? 'seed' }) } as Agent
 }
 
 function expectCode(code: SessionReferenceErrorCode): Error {
@@ -533,12 +534,10 @@ describe('model-relative reference budgets', () => {
     else expect(resolve).toHaveBeenCalledWith('seed', 'seed', undefined)
   })
 
-  it('uses the assembled selection, not the header, seed, or next selected model', async () => {
+  it('uses the bound request route independently of stored and initial routes', async () => {
     const { ctx, agent, source, resolve } = await setup()
-    const selection: ModelSelectionRef = { current: { provider: 'selected', model: 'large' }, assembled: undefined }
-    installModelSelection(ctx, selection)
-    await ctx.systemPrompt.assemble({ agent, scope: agent })
-    selection.current = { provider: 'selected', model: 'small' }
+    let route = { provider: 'selected', model: 'large' }
+    vi.spyOn(agent, 'currentRoute').mockImplementation(() => route)
     const message = createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: formatSessionReferenceMention({ sessionId: source.id }) }] })
     const signal = new AbortController().signal
     const enter = () => agentEvents(ctx, agent).waterfall('agent/pre-step', { messages: [message], turn: 1, step: 1, signal },
@@ -551,6 +550,7 @@ describe('model-relative reference budgets', () => {
     expect(bytes({ content: [], additionalContext: firstContext })).toBe(160_000)
     expect(resolve).toHaveBeenLastCalledWith('selected', 'large', signal)
     await ctx.systemPrompt.assemble({ agent, scope: agent })
+    route = { provider: 'selected', model: 'small' }
     resolve.mockResolvedValue({ provider: 'selected', id: 'small', name: 'small', context: { contextWindow: 8_000 } })
     const second = await enter()
     if (second.kind !== 'enter' || second.messages[1] === undefined) throw new Error('expected reference context')
@@ -558,23 +558,13 @@ describe('model-relative reference budgets', () => {
     expect(resolve).toHaveBeenLastCalledWith('selected', 'small', signal)
   })
 
-  it('uses the floor for absent metadata, service, or assembled route and ignores diagnostic assemblies', async () => {
+  it('uses the floor for absent metadata or service', async () => {
     const { ctx, agent, resolve, prepare, llmFiber } = await setup()
-    await ctx.systemPrompt.assemble()
     resolve.mockResolvedValue({ provider: 'seed', id: 'seed', name: 'seed' })
     expect(bytes(await prepare())).toBe(65_536)
     expect(resolve).toHaveBeenCalledOnce()
-    await ctx.systemPrompt.assemble({ agent, scope: agent })
-    expect(bytes(await prepare())).toBe(65_536)
-    expect(resolve).toHaveBeenCalledOnce()
-    delete agent.options.model
-    const other = fakeAgent(agent.session)
-    other.options.provider = 'seed'
-    await ctx.sessionReferenceResolver.prepare(other, [], [{ sessionId: SessionId('source') }])
-    expect(resolve).toHaveBeenCalledOnce()
     await llmFiber.dispose()
-    other.options.model = 'seed'
-    expect(bytes(await ctx.sessionReferenceResolver.prepare(other, [], [{ sessionId: SessionId('source') }]))).toBe(65_536)
+    expect(bytes(await ctx.sessionReferenceResolver.prepare(agent, [], [{ sessionId: SessionId('source') }]))).toBe(65_536)
   })
 
   it('uses the floor when the real LLM runtime has no adapter for the route', async () => {
@@ -619,7 +609,7 @@ describe('model-relative reference budgets', () => {
     expect(read).not.toHaveBeenCalled()
   })
 
-  it('removes both listeners when the resolver fiber is disposed', async () => {
+  it('removes the preparation listener when the resolver fiber is disposed', async () => {
     const { ctx, agent, source, resolve, resolverFiber } = await setup()
     const resolver = ctx.sessionReferenceResolver
     await resolverFiber.dispose()

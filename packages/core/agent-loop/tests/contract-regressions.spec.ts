@@ -1280,8 +1280,8 @@ describe('tool result call identity', () => {
   })
 })
 
-describe('disposal and cancellation during pre-step assembly', () => {
-  it('disposal during system-prompt assembly closes a no-step turn', { timeout: 30000 }, async () => {
+describe('disposal and cancellation during prompt assembly', () => {
+  it('disposal during system-prompt assembly closes an admitted step without model output', { timeout: 30000 }, async () => {
     // Start disposal, then release assembly. Do not await disposal first: it
     // waits for the blocked driver to exit.
     const adapter = new MockAdapter(['hang'])
@@ -1327,13 +1327,13 @@ describe('disposal and cancellation during pre-step assembly', () => {
     const e = agent.session.snapshotEvents()
     expect(e.filter(x => x.type === 'turn/start' || x.type === 'turn/end').map(x => x.type))
       .toEqual(['turn/start', 'turn/end'])
-    expect(e.some(x => x.type === 'step/start')).toBe(false)
-    expect(e.some(x => x.type === 'step/end')).toBe(false)
+    expect(e.some(x => x.type === 'step/start')).toBe(true)
+    expect(e.some(x => x.type === 'step/end')).toBe(true)
     expect(e.some(x => x.type === 'assistant/attempt')).toBe(false)
     expect(reasons).toEqual([{ kind: 'aborted', reason: { kind: 'disposed' } }])
   })
 
-  it('cancel during system-prompt assembly closes a no-step turn', { timeout: 30000 }, async () => {
+  it('cancel during system-prompt assembly closes an admitted step without model output', { timeout: 30000 }, async () => {
     const adapter = new MockAdapter([textResponse('should not appear')])
     let releaseAssemble!: () => void
     const blocker = new Promise<void>(r => void (releaseAssemble = r))
@@ -1374,8 +1374,8 @@ describe('disposal and cancellation during pre-step assembly', () => {
     const e = agent.session.snapshotEvents()
     expect(e.filter(x => x.type === 'turn/start' || x.type === 'turn/end').map(x => x.type))
       .toEqual(['turn/start', 'turn/end'])
-    expect(e.some(x => x.type === 'step/start')).toBe(false)
-    expect(e.some(x => x.type === 'step/end')).toBe(false)
+    expect(e.some(x => x.type === 'step/start')).toBe(true)
+    expect(e.some(x => x.type === 'step/end')).toBe(true)
     expect(e.some(x => x.type === 'assistant/attempt')).toBe(false)
     expect(e.some(x => x.type === 'assistant/message')).toBe(false)
     expect(adapter.requests).toHaveLength(0)

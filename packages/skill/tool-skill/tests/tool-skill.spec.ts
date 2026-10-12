@@ -69,6 +69,7 @@ function agentForCwd(cwd: string): Agent {
     version: SESSION_FORMAT_VERSION, id, createdAt: 0, cwd, isSeeded: false,
   })
   return {
+    currentRoute() { throw new Error('no prepared model request in this fixture') },
     ctx: new Context(),
     id,
     options: {},
@@ -87,6 +88,7 @@ function agentForCwd(cwd: string): Agent {
 
 function sessionAgent(session: Session, id = 'tool-skill-agent'): Agent {
   const agent: Agent = {
+    currentRoute() { throw new Error('no prepared model request in this fixture') },
     id: SessionId(id),
     options: {},
     session,

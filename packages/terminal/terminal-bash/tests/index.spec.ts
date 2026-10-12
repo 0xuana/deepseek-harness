@@ -55,6 +55,7 @@ function agent(ctx: Context, cwd?: string): Agent {
     version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false, ...cwd === undefined ? {} : { cwd },
   })
   return {
+    currentRoute() { throw new Error('no prepared model request in this fixture') },
     id, options: {}, session, inbox: unsupportedInbox(),
     status: 'idle',
     ctx,
@@ -675,6 +676,7 @@ describe('terminal-bash plugin shape', () => {
     const session = ctx.sessions.create(SessionId('mode-owner'))
     const ownerFiber = await ctx.plugin(() => {})
     const owner: Agent = {
+      currentRoute() { throw new Error('no prepared model request in this fixture') },
       id: session.id, options: {}, session, inbox: unsupportedInbox(),
       status: 'idle',
       ctx: ownerFiber.ctx,
@@ -726,6 +728,7 @@ describe('terminal-bash plugin shape', () => {
     const session = ctx.sessions.create(SessionId('pending-mode-owner'))
     const ownerFiber = await ctx.plugin(() => {})
     const owner: Agent = {
+      currentRoute() { throw new Error('no prepared model request in this fixture') },
       id: session.id, options: {}, session, inbox: unsupportedInbox(),
       status: 'idle',
       ctx: ownerFiber.ctx,

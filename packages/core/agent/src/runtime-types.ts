@@ -162,8 +162,14 @@ export type AssistantStreamFrame =
 
 declare module './types.ts' {
   interface Agent {
-    /** The provider route and model this agent's requests use. */
+    /** Initial request options; currentRoute() reports the bound request route. */
     readonly options: AgentOptions
+    /**
+     * Read the immutable route bound to this request and its tool batch.
+     * @returns the actual provider and model selected by prepareCall().
+     * @throws when no main request is prepared; never falls back to prior requests.
+     */
+    currentRoute(): Readonly<Pick<LlmCallConfig, 'provider' | 'model'>>
     /** The live session this agent drives; its log is the durable source of truth. */
     readonly session: Session
     /** Agent-owned access to durable pending work. */
@@ -322,9 +328,9 @@ declare module '@deepseek-ai/cordis' {
      * Replace the frozen call configuration. `await next()` yields the config
      * the machine would use (agent options on the first request, the logged
      * header afterwards); return a replacement to switch. On step admission,
-     * this runs after assembly and `step/start`, before the system prompt and
-     * accepted user batch are committed. Cancellation here or during subsequent
-     * `prepareCall()` resolution commits neither. The prepared call capability
+     * this runs before context preparation and `agent/pre-step`. Cancellation
+     * here or during subsequent `prepareCall()` resolution opens no step and
+     * commits no system prompt or user batch. The prepared call capability
      * governs prompt admission. Model-visible content must use logged channels;
      * this waterfall cannot mutate messages.
      * @param payload.agent - the agent making the model call.

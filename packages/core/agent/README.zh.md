@@ -82,7 +82,9 @@ await handle.agent.whenIdle()
 
 ### 步骤准入
 
-`PreStepDecision` 要么是 `{ kind: 'reject' }`，要么是 `{ kind: 'enter', messages, startsRequestSeries? }`。enter 分支包含完整、带标识且冻结的消息批次。接纳不等于提交：组装与 `step/start` 之后，`agent/request` 和 `prepareCall()` 先解析路由，循环随后才提交系统提示词与用户批次。在任一异步阶段取消都不会提交这两者。`startsRequestSeries: true` 声明一个独立的模型消息序列；包装下游 enter 的监听器会保留该声明与批次，除非有意替换其中一项。领取会从 inbox 移除候选消息，领取后插入的消息则等待后续边界。
+`PreStepDecision` 要么是 `{ kind: 'reject' }`，要么是 `{ kind: 'enter', messages, startsRequestSeries? }`。enter 分支包含完整、带标识且冻结的消息批次。路由准备在 `agent/pre-step` 之前执行。接纳不等于提交：工具条件与提示词组装也必须成功，随后才记录系统提示词与用户批次。在路由准备期间取消不会打开步骤，也不会提交这两种消息。`startsRequestSeries: true` 声明一个独立的模型消息序列；包装下游 enter 的监听器会保留该声明与批次，除非有意替换其中一项。领取会从 inbox 移除候选消息，领取后插入的消息则等待后续边界。
+
+`agent.currentRoute()` 返回请求准备绑定的不可变提供方与模型，持续到对应工具批次结束。准备前和批次结束后调用会抛错，不回退到初始选项或先前 Session 请求头。辅助模型调用不会替换主请求路由。
 
 ### 持久 inbox
 
@@ -99,7 +101,7 @@ await handle.agent.whenIdle()
 | [`src/types.ts`](src/types.ts) | `AgentOptions`、取消原因与收件箱投影词汇 |
 | [`src/dispatch.ts`](src/dispatch.ts) | `agentEvents` 融合分发器与 `assembleContextFor(agent)` |
 | [`src/consumed-work.ts`](src/consumed-work.ts) | `foldConsumedWork(events)`：日志消费掉的工作最终怎样了 |
-| [`src/model-selection.ts`](src/model-selection.ts) | `installModelSelection`：把一个选择耦合到组装与路由 |
+| [`src/model-selection.ts`](src/model-selection.ts) | `installModelSelection`：为步骤路由捕获模型选择 |
 | [`src/archive-admission.ts`](src/archive-admission.ts) | Workspace 注册表归档准入中的 `turn` 族：运行中的回合及其用户原因取消 |
 
 ### 注册表与生命周期
