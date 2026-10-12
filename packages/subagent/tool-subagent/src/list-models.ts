@@ -63,8 +63,18 @@ async function listSubagentModels(
   }
   const provider = registeredProvider(llm, policy, request.provider)
   if (request.model === undefined) {
-    const models = await Promise.all(allowedRoutes.map(route => llm.resolveModelInfo(provider.id, route.model, signal)))
-    return models.map(model => modelLine(provider.id, model)).join('\n')
+    const lines = await Promise.all(allowedRoutes.map(async (route) => {
+      let model
+      try {
+        model = await llm.resolveModelInfo(provider.id, route.model, signal)
+      } catch (error) {
+        signal.throwIfAborted()
+        return `${provider.id}/${route.model} — Error: ${error instanceof Error ? error.message : String(error)}`
+      }
+      return modelLine(provider.id, model)
+    }))
+    signal.throwIfAborted()
+    return lines.join('\n')
   }
   if (request.model.length === 0) throw new Error('`model` must be non-empty')
   if (!allowedRoutes.some(route => route.model === request.model)) {
@@ -80,6 +90,7 @@ async function listSubagentModels(
 
 /**
  * Register `list_subagent_models` in the owning composition.
+ * Provider listings report lookup failures per model; cancellation rejects the call.
  * @param ctx - Context whose tool registry owns the fixed discovery definition.
  * @param policyFor - Resolve the calling Session’s authorized routes.
  */

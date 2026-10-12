@@ -33,7 +33,7 @@ Model selection has no unrestricted static mode. The default-off Host setting au
 ## Consequences
 
 - New adapter registrations and newly advertised models do not expand user authorization.
-- Adapter removal or exact-model resolution failure can make discovery unavailable without deleting the saved route decision; an allowed model remains usable when its adapter accepts it even if the advisory catalog omits it.
+- Adapter removal can make provider discovery unavailable; provider model listings report exact-model resolution failures per item without discarding other results or deleting the saved route decision; an allowed model remains usable when its adapter accepts it even if the advisory catalog omits it.
 - The allowlist itself consumes no parent-request tokens. Only a `list_subagent_models` result enters the transcript.
 - The policy event is log-only and is appended while an Agent is composed, before either SDK begins its run subscription. Shipped SDK profiles do not enable this Web-owned preference, so the event changes neither SDK's expected notifications or persisted-session output; package restore tests own its durable projection instead of fabricating an SDK composition solely to emit it.
 - Unit coverage pins settings validation, malformed durable values, Session sampling and inheritance, shared definitions, parent-route defaults, discovery restrictions, executor denial, and the settings UI’s staged writes and revision checks. The assembled Web scenario pins the real settings document and Plugins card flow.

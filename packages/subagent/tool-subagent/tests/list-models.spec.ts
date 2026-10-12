@@ -90,9 +90,9 @@ async function setupAllowedListTool() {
 
 let counter = 0
 
-function call(ctx: Context, args: unknown) {
+function call(ctx: Context, args: unknown, signal = testToolSignal) {
   return ctx.tools.execute({
-    signal: testToolSignal,
+    signal,
     callId: ToolCallId(`list-models-${++counter}`),
     name: 'list_subagent_models',
     arguments: args,
@@ -222,6 +222,58 @@ describe('list_subagent_models', () => {
     const result = await call(ctx, { provider: 'alpha' })
     expect(result.isError).toBe(false)
     expect(text(result)).toBe('alpha/fast — Fast: Focused work.')
+  })
+
+  it.each([false, true])('reports each failed model alongside resolved models (all failed: %s)', async (allFailed) => {
+    const ctx = await setupListTool([
+      { provider: 'alpha', model: 'removed' },
+      ...allFailed ? [] : [{ provider: 'alpha', model: 'plain' }],
+      { provider: 'alpha', model: 'unavailable' },
+    ])
+    try {
+      const adapter = new CatalogAdapter()
+      vi.spyOn(adapter, 'resolveModel').mockImplementation(async (provider, model) => {
+        if (model === 'removed') throw new Error('model was removed')
+        if (model === 'unavailable') return Promise.reject('metadata unavailable')
+        return { provider, id: model, name: 'Plain' }
+      })
+      ctx.llm.registerAdapter(['alpha'], adapter)
+
+      const result = await call(ctx, { provider: 'alpha' })
+      expect(result.isError).toBe(false)
+      expect(text(result)).toBe([
+        'alpha/removed — Error: model was removed',
+        ...allFailed ? [] : ['alpha/plain — Plain'],
+        'alpha/unavailable — Error: metadata unavailable',
+      ].join('\n'))
+
+      const exact = await call(ctx, { provider: 'alpha', model: 'removed' })
+      expect(exact.isError).toBe(true)
+      expect(text(exact)).toContain('model was removed')
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it.each([false, true])('does not render cancellation as a model error (adapter rejects: %s)', async (rejects) => {
+    const ctx = await setupListTool([{ provider: 'alpha', model: 'plain' }])
+    try {
+      const controller = new AbortController()
+      const adapter = new CatalogAdapter()
+      vi.spyOn(adapter, 'resolveModel').mockImplementation(async (provider, model) => {
+        controller.abort(new Error('discovery cancelled'))
+        if (rejects) throw new Error('lookup interrupted')
+        return { provider, id: model, name: 'Plain' }
+      })
+      ctx.llm.registerAdapter(['alpha'], adapter)
+
+      const result = await call(ctx, { provider: 'alpha' }, controller.signal)
+      expect(result.isError).toBe(true)
+      expect(text(result)).toContain('discovery cancelled')
+      expect(text(result)).not.toContain('alpha/plain —')
+    } finally {
+      await ctx.fiber.dispose()
+    }
   })
 
   it('inspects exact-model efforts, descriptions, and defaults', async () => {
