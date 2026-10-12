@@ -149,7 +149,6 @@ async function bench(script: Script, options: BenchOptions = {}): Promise<{
     let idle = Promise.resolve()
     let running = false
     const agent: Agent = {
-      currentRoute() { throw new Error('no prepared model request in this fixture') },
       id: session.id,
       options: createOptions.agentOptions ?? {},
       session,

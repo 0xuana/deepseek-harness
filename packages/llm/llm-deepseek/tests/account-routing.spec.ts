@@ -88,26 +88,21 @@ it.each(['deepseek-account', 'deepseek-official'])('cancels only the active acco
     ? { kind: 'hook', reason: 'deepseek-account/signed-out' } : { kind: 'user' } } })
 })
 
-it.each(['tool', 'retry'])('replaces the active provider only after the next request binds: %s', async (transition) => {
+it('replaces the active provider only after the next step request binds', async () => {
   const ctx = await harness()
   const preparing = Promise.withResolvers<undefined>()
   const proceed = Promise.withResolvers<undefined>()
   const streaming = Promise.withResolvers<AbortSignal>()
-  let requests = 0
-  ctx.on('agent/request', async (_event, next) => {
-    const config = await next()
-    if (++requests === 1) return config
+  let steps = 0
+  ctx.on('agent/route', async (_event, next) => {
+    const route = await next()
+    if (++steps === 1) return route
     preparing.resolve(undefined)
     await proceed.promise
-    return { ...config, provider: 'deepseek-official' }
+    return { ...route, provider: 'deepseek-official' }
   })
-  ctx.on('agent/request-error', async (_event, next) => { await next(); return { kind: 'retry' } })
   ctx.on('llm/stream', async function* (request) {
     if (request.provider === 'deepseek-account') {
-      if (transition === 'retry') {
-        yield { type: 'finish', reason: { kind: 'error', failure: { code: 'TRANSPORT', message: 'retry fixture' } } }
-        return
-      }
       yield { type: 'block-start', index: 0, blockType: 'tool-call' }
       yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: ToolCallId('switch-call'), name: 'continue', arguments: '{}' } }
       yield { type: 'finish', reason: { kind: 'tool-calls' } }
@@ -256,11 +251,11 @@ it('ignores idle account history but uses the last bound route during a new turn
   expect(cancel).not.toHaveBeenCalled()
   const preparing = Promise.withResolvers<undefined>()
   const proceed = Promise.withResolvers<undefined>()
-  ctx.on('agent/request', async (_event, next) => {
-    const config = await next()
+  ctx.on('agent/route', async (_event, next) => {
+    const route = await next()
     preparing.resolve(undefined)
     await proceed.promise
-    return { ...config, provider: 'deepseek-official' }
+    return { ...route, provider: 'deepseek-official' }
   })
   try {
     send(agent)

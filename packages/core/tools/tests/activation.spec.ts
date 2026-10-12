@@ -18,7 +18,8 @@ async function setup() {
   contexts.push(ctx)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  const agent = { id: SessionId('activation'), currentRoute: () => ({ provider: 'test', model: 'test' }) } as Agent
+  const agent = { id: SessionId('activation') } as Agent
+  const route = { provider: 'test', model: 'test' }
   let scope!: Scope
   await ctx.plugin(Object.assign((inner: Context) => { scope = createScope(inner, agent) }, { inject: ['tools'] }))
   const controller = new AbortController()
@@ -29,8 +30,8 @@ async function setup() {
     async execute() { calls++; return 'done' },
   })
   const input = { agent, name: tool.name, arguments: {}, callId: ToolCallId('call'), signal: controller.signal }
-  const resolve = () => ctx.tools.resolve({ agent, signal: controller.signal })
-  return { ctx, agent, scope, controller, tool, input, resolve, calls: () => calls }
+  const resolve = () => ctx.tools.resolve({ agent, route, signal: controller.signal })
+  return { ctx, agent, route, scope, controller, tool, input, resolve, calls: () => calls }
 }
 
 it('activates and deactivates a registered tool without allowing historical calls', async () => {
@@ -103,7 +104,11 @@ it('does not restore a registration removed during its asynchronous condition', 
 it('propagates cancellation after an asynchronous condition settles', async () => {
   const h = await setup()
   const condition = Promise.withResolvers<boolean>()
-  h.ctx.tools.register(h.tool, { when: ({ signal }) => { expect(signal).toBe(h.controller.signal); return condition.promise } })
+  h.ctx.tools.register(h.tool, { when: ({ route, signal }) => {
+    expect(route).toBe(h.route)
+    expect(signal).toBe(h.controller.signal)
+    return condition.promise
+  } })
   const pending = h.resolve()
   const rejection = expect(pending).rejects.toMatchObject({ name: 'AbortError' })
   h.controller.abort()

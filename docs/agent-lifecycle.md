@@ -25,17 +25,18 @@ sequenceDiagram
   Note over Agent,Driver: claim pending next-step input plus one queued prompt
   Driver-->>SDK: <code>agent/inbox/spliced</code> pure deletion
   Driver-->>SDK: <code>agent/inbox/claimed</code> { message, turn } per message
-  Driver->>Hooks: <code>agent/request</code> waterfall
-  Driver->>LLM: prepareCall(config, signal), bind Agent.currentRoute()
-  Driver->>Prompt: <code>system-prompt/prepare</code> waterfall
-  Driver->>Hooks: <code>agent/pre-step</code> waterfall
+  Driver->>Hooks: <code>agent/route</code> waterfall chooses the step route
+  Driver->>Prompt: <code>system-prompt/prepare</code> waterfall on the step route
+  Driver->>Hooks: <code>agent/pre-step</code> waterfall with the step route
   Hooks-->>Driver: authoritative reject or enter(messages)
   alt proposed step rejected, first batch empty, or pre-step failed
     Driver-->>Driver: claimed batch stays removed, the open turn spends no step
   else enter proposed step
   Driver->>Session: <code>step/start</code>
-  Driver->>Tools: resolve({ agent, signal })
-  Driver->>Prompt: <code>system-prompt/assemble</code> with resolved tool set
+  Driver->>Tools: resolve({ agent, route, signal }) once per step
+  Driver->>Prompt: <code>system-prompt/assemble</code> with the step tool set
+  Driver->>Hooks: <code>agent/request</code> waterfall on the step route
+  Driver->>LLM: prepareCall(config, signal)
   Note over Driver,LLM: cancellation during preparation commits neither system nor users
   Note over Driver,Session: synchronous admission using the prepared call capability
   Driver->>Session: <code>system/message</code> ordered per-node reconciliation
@@ -50,7 +51,7 @@ sequenceDiagram
     Driver-->>SDK: <code>agent/assistant-stream</code> committed end
     Driver->>Hooks: <code>agent/request-error</code> waterfall
     Hooks-->>Driver: return retry action or preserve the original error
-    Note over Driver,LLM: retry resolves route and tools. Unchanged inputs reuse the prompt without repeating pre-step or users
+    Note over Driver,LLM: retry in the open step: request and prepare again on the same route, tool set, and prompt without repeating pre-step or users
   else model request succeeded
   Driver->>Session: <code>assistant/message</code>
   Driver-->>SDK: <code>agent/assistant-stream</code> committed end
@@ -58,7 +59,7 @@ sequenceDiagram
   loop barriers and bounded rolling pool, reclassify before start
     opt call starts
       Driver->>Session: <code>tool/call</code>
-      Driver->>Tools: ordered pre, concurrent execute with request tool set
+      Driver->>Tools: ordered pre, concurrent execute with the step tool set
       Tools-->>Session: tool-owned events when applicable
     end
     opt next model-order result ready
@@ -66,16 +67,16 @@ sequenceDiagram
       Driver->>Session: <code>tool/result</code>
     end
   end
-  Driver->>Tools: dispose request tool set
+  Driver->>Tools: dispose the step tool set
   Driver->>Session: <code>step/end</code>
-  Driver->>Driver: clear bound route
   opt natural stop and next-step inbox empty
     Driver->>Hooks: <code>agent/turn-stopping</code> serial terminal checkpoint
   end
   opt next-step input is pending
     Driver-->>Driver: claim pending next-step input
     Driver-->>SDK: <code>agent/inbox/claimed</code> { message, turn } per message
-    Driver->>Driver: prepare route and runtime context for the next step
+    Driver->>Hooks: <code>agent/route</code> waterfall
+    Driver->>Prompt: <code>system-prompt/prepare</code> waterfall
     Driver->>Hooks: <code>agent/pre-step</code> waterfall
     Hooks-->>Driver: authoritative reject or enter(messages)
   end
@@ -87,7 +88,7 @@ sequenceDiagram
 
 The `assistant/message` event records every successful provider call, including content-less and `max-tokens` finishes, and embeds the exact compact timed stream. Empty content stays out of derived history. A failed, retried, cancelled, or stream-error attempt that reaches settlement without a surface message records its stream as `assistant/attempt`. Live `agent/assistant-stream` chunk frames are transient; replay reads either durable settlement, and a hard process loss before settlement leaves no durable attempt stream.
 
-`dsh-compaction-basic` uses `agent/pre-step` for pressure before request derivation and `agent/request-error` only for canonical context overflow. Once either trigger qualifies, optional tool-result pruning runs before summary selection. Recovery runs within the open step and retries only when pruning or summarization advances the surface replacement generation; otherwise the original request error remains authoritative. Each retry prepares its call and resolves tool conditions before request derivation, without repeating pre-step or user admission. Prompt assembly repeats only when the bound route or tool schemas change.
+`dsh-compaction-basic` uses `agent/pre-step` for pressure before request derivation and `agent/request-error` only for canonical context overflow. Once either trigger qualifies, optional tool-result pruning runs before summary selection. Recovery runs within the open step and retries only when pruning or summarization advances the surface replacement generation; otherwise the original request error remains authoritative. Each retry prepares its call on the step route and reconciles the retained rendered assembly before request derivation, without repeating routing, tool resolution, assembly, pre-step, or user admission.
 
 The returned `agent/pre-step` decision is authoritative; listeners wrapping `next()` preserve downstream messages and `startsRequestSeries` unless replacement is intentional. Steering and injected context pass through the same waterfall after a later claim operation takes their next-step batch.
 

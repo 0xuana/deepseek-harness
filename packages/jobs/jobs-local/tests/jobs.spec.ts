@@ -35,7 +35,6 @@ function stubAgent(ctx: Context, rawId: string, presetScope?: ScopeKey): Agent {
   }
   const session = Session.create(id)
   const agent = {
-    currentRoute() { throw new Error('no prepared model request in this fixture') },
     id,
     options: {},
     session,

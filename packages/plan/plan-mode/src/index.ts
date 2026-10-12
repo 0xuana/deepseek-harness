@@ -9,7 +9,7 @@
  * The `plan` projection folds the session log, so resume and fork restore the
  * state. User selections remain pending until the next accepted in-turn
  * pre-step. The service appends `plan/mode` from `agent/pre-step` before
- * request-time tool conditions and plan guidance read that committed state.
+ * step-time tool conditions and plan guidance read that committed state.
  * Same-step retries do not commit pending selections.
  *
  * The exit tool is admitted only for requests whose committed plan state is

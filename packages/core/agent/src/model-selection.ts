@@ -10,7 +10,7 @@ import {
   type LlmCallConfig,
   type ReasoningEffortId,
 } from '@deepseek-ai/dsh-llm'
-import type { PreStepDecision } from './runtime-types.ts'
+import type { PreStepDecision, StepRoute } from './runtime-types.ts'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -30,21 +30,21 @@ export interface ModelSelection {
 
 /** Mutable model selection plus the value captured for the current step. */
 export interface ModelSelectionRef {
-  /** Model selected for the next step entering route preparation. */
+  /** Model selected for the next step to start. */
   current: ModelSelection | undefined
-  /** Selection captured by the first route preparation of the current step. */
+  /** Selection captured when the current step chose its route. */
   assembled: ModelSelection | undefined
 }
 
-function sameRoute(left: ModelSelection, right: ModelSelection): boolean {
+function sameRoute(left: StepRoute, right: StepRoute): boolean {
   return left.provider === right.provider && left.model === right.model
 }
 
-function routeLabel(route: ModelSelection, other: ModelSelection): string {
+function routeLabel(route: StepRoute, other: StepRoute): string {
   return route.provider === other.provider ? route.model : `${route.provider}/${route.model}`
 }
 
-function modelSwitchNotice(previous: ModelSelection, selected: ModelSelection) {
+function modelSwitchNotice(previous: StepRoute, selected: StepRoute) {
   const from = routeLabel(previous, selected)
   const to = routeLabel(selected, previous)
   return createUserMessage({
@@ -61,38 +61,39 @@ function modelSwitchNotice(previous: ModelSelection, selected: ModelSelection) {
 }
 
 /**
- * Couple one mutable selection to Agent-scoped request routing. The first
- * request preparation in a step captures the selection before delegating;
- * retries retain it, and concurrent selections apply to later steps. An absent
- * selected effort clears inherited effort, restoring the model's provider default.
+ * Couple one mutable selection to Agent-scoped step routing. Each step
+ * captures the selection when `agent/route` chooses its provider and model,
+ * and every request attempt in that step applies the captured effort; a
+ * selection made during the step applies from the next step. An absent
+ * selected effort clears inherited effort, restoring the model's provider
+ * default.
  *
  * A provider/model change appends a durable user-role notice to the next
- * admitted request. It compares the bound request route with the latest
- * request header; effort-only changes and empty no-request decisions add no
- * notice. Failure before header persistence repeats the notice on the next
- * request.
+ * admitted request. It compares the step route with the latest request
+ * header; effort-only changes and empty no-request decisions add no notice.
+ * Failure before header persistence repeats the notice on the next request.
  *
  * @param agentCtx - The selected Agent's scoped context.
  * @param selection - Mutable selection owned by the calling entry point.
  * @returns Disposer for all scoped waterfall listeners.
  */
 export function installModelSelection(agentCtx: Context, selection: ModelSelectionRef): () => void {
-  let capturedStep: { turn: number; step: number } | undefined
+  const disposeRoute = agentCtx.on('agent/route', async (_payload, next): Promise<StepRoute> => {
+    const selected = selection.current === undefined ? undefined : { ...selection.current }
+    selection.assembled = selected
+    const route = await next()
+    return selected === undefined ? route : { provider: selected.provider, model: selected.model }
+  })
   const disposeRequest = agentCtx.on(
     'agent/request',
-    async ({ turn, step }, next): Promise<LlmCallConfig> => {
-      if (capturedStep?.turn !== turn || capturedStep.step !== step) {
-        capturedStep = { turn, step }
-        selection.assembled = selection.current === undefined ? undefined : { ...selection.current }
-      }
+    async (_payload, next): Promise<LlmCallConfig> => {
       const resolved = await next()
       const selected = selection.assembled
-      if (selected === undefined) return resolved
+      // Another route listener may have replaced the captured route; its model keeps its own effort.
+      if (selected === undefined || !sameRoute(selected, resolved)) return resolved
       const { reasoningEffort: _inheritedEffort, ...withoutInheritedEffort } = resolved
       return {
         ...withoutInheritedEffort,
-        provider: selected.provider,
-        model: selected.model,
         ...selected.reasoningEffort === undefined
           ? {}
           : { reasoningEffort: selected.reasoningEffort },
@@ -101,19 +102,19 @@ export function installModelSelection(agentCtx: Context, selection: ModelSelecti
   )
   const disposeNotice = agentCtx.on(
     'agent/pre-step',
-    async ({ agent, messages, signal, step }, next): Promise<PreStepDecision> => {
+    async ({ agent, messages, route, signal, step }, next): Promise<PreStepDecision> => {
       const decision = await next()
       if (decision.kind === 'reject' || signal.aborted) return decision
       // The loop skips an empty first step and an emptied offered continuation.
       if (decision.messages.length === 0 && (step === 1 || messages.length > 0)) return decision
-      const selected = agent.currentRoute()
       const previous = agent.session.requestHeader()?.config
-      if (previous === undefined || sameRoute(selected, previous)) return decision
-      return { ...decision, messages: [...decision.messages, modelSwitchNotice(previous, selected)] }
+      if (previous === undefined || sameRoute(route, previous)) return decision
+      return { ...decision, messages: [...decision.messages, modelSwitchNotice(previous, route)] }
     },
     { prepend: true },
   )
   return () => {
+    disposeRoute()
     disposeRequest()
     disposeNotice()
   }

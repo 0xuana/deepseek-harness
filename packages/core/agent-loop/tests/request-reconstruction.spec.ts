@@ -294,11 +294,9 @@ describe('request stability across the loop', () => {
       provider: 'deepseek',
       model: 'deepseek-model',
     })
-    ctx.on('agent/request', async ({ turn }, next) => {
-      const config = await next()
-      return turn === 2
-        ? { ...config, provider: 'other', model: 'other-model' }
-        : config
+    ctx.on('agent/route', async ({ turn }, next) => {
+      const route = await next()
+      return turn === 2 ? { provider: 'other', model: 'other-model' } : route
     })
 
     send(agent, 'first')
@@ -328,11 +326,9 @@ describe('request stability across the loop', () => {
       model: 'deepseek-model',
       maxTokens: 4_096,
     })
-    ctx.on('agent/request', async ({ turn }, next) => {
-      const config = await next()
-      return turn === 2
-        ? { ...config, provider: 'other', model: 'other-model' }
-        : config
+    ctx.on('agent/route', async ({ turn }, next) => {
+      const route = await next()
+      return turn === 2 ? { provider: 'other', model: 'other-model' } : route
     })
 
     send(agent, 'first')
@@ -948,7 +944,7 @@ describe('request/context capacity records', () => {
 
     send(agent, 'first')
     await waitForIdle(ctx, agent)
-    ctx.on('agent/request', ({ agent: subject }, next) => subject === agent
+    ctx.on('agent/route', ({ agent: subject }, next) => subject === agent
       ? Promise.resolve({ provider: 'mock', model: 'large' })
       : next())
     send(agent, 'second')
@@ -976,7 +972,7 @@ describe('request/context capacity records', () => {
     const ctx = await harness(adapter)
     const agent = await ctx.agentLoop.create(SessionId('capacity-clear'), { provider: 'mock', model: 'known' })
     let model = 'known'
-    ctx.on('agent/request', ({ agent: subject }, next) => subject === agent
+    ctx.on('agent/route', ({ agent: subject }, next) => subject === agent
       ? Promise.resolve({ provider: 'mock', model })
       : next())
 

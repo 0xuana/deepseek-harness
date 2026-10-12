@@ -43,7 +43,6 @@ async function agent(ctx: Context): Promise<Agent> {
   const id = SessionId('pty-loader-agent')
   const session = Session.create(id)
   const value: Agent = {
-    currentRoute() { throw new Error('no prepared model request in this fixture') },
     id, options: {}, session, inbox: unsupportedInbox(),
     status: 'idle',
     ctx: scope.ctx,

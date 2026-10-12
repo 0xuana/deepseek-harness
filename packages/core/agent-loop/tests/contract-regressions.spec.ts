@@ -437,7 +437,7 @@ describe('adapter registration, routing, and accepted-input ownership', () => {
     expect(ctx.llm.listProviders()).toEqual([{ id: 'm1', name: 'm1' }])
   })
 
-  it('an agent without a model fails the step with a clear error (not NO_ADAPTER for "default")', async () => {
+  it('an agent without a model fails the turn with a clear error (not NO_ADAPTER for "default")', async () => {
     const adapter = new MockAdapter([textResponse('never')])
     const ctx = await harness(adapter)
     const agent = await ctx.agentLoop.create(SessionId('a1'), {}) // no model
@@ -450,15 +450,17 @@ describe('adapter registration, routing, and accepted-input ownership', () => {
       : undefined).toContain('has no provider/model')
     expect(turnEnd?.type === 'turn/end' && turnEnd.data.reason.kind === 'error'
       ? turnEnd.data.reason.error.message
-      : undefined).toContain('agent/request')
+      : undefined).toContain('agent/route')
+    expect(agent.session.snapshotEvents().some(event => event.type === 'step/start')).toBe(false)
+    expect(adapter.requests).toHaveLength(0)
   })
 
-  it('the agent/request waterfall can supply the model for a model-less agent', async () => {
+  it('the agent/route waterfall can supply the model for a model-less agent', async () => {
     const adapter = new MockAdapter([textResponse('routed')])
     const ctx = await harness(adapter)
     const agent = await ctx.agentLoop.create(SessionId('a1'), {}) // no model — router plugin decides
 
-    ctx.on('agent/request', async (_payload, next) => {
+    ctx.on('agent/route', async (_payload, next) => {
       return { ...await next(), provider: 'mock', model: 'mock' }
     })
 
@@ -466,6 +468,24 @@ describe('adapter registration, routing, and accepted-input ownership', () => {
     await waitForIdle(ctx, agent)
     expect(adapter.requests).toHaveLength(1)
     expect(agent.session.deriveMessages().at(-1)?.content).toEqual([{ type: 'text', text: 'routed' }])
+  })
+
+  it('agent/request cannot replace the step route', async () => {
+    const adapter = new MockAdapter([textResponse('never')])
+    const ctx = await harness(adapter)
+    ctx.llm.registerAdapter(['other'], new MockAdapter([textResponse('never')]))
+    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    ctx.on('agent/request', async (_payload, next) => ({ ...await next(), provider: 'other' }))
+
+    send(agent, 'go')
+    await waitForIdle(ctx, agent)
+    const turnEnd = agent.session.snapshotEvents().findLast(event => event.type === 'turn/end')
+    expect(turnEnd?.type === 'turn/end' && turnEnd.data.reason.kind === 'error'
+      ? turnEnd.data.reason.error.message
+      : undefined).toContain('agent/request cannot replace the step route mock/mock with other/mock')
+    expect(agent.session.snapshotEvents().filter(event => ['request/header', 'system/message', 'user/message'].includes(event.type)))
+      .toEqual([])
+    expect(adapter.requests).toHaveLength(0)
   })
 
   it('durable inbox splices carry exact messages and the claimed steer preserves its source', async () => {

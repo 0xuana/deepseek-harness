@@ -47,7 +47,6 @@ async function mount(config: Config = {}) {
 
 function sessionAgent(session: Session, id = 'agent'): Agent {
   const agent: Agent = {
-    currentRoute() { throw new Error('no prepared model request in this fixture') },
     id: SessionId(id),
     options: {},
     session,
@@ -99,7 +98,7 @@ async function fire(
   })
   const decision = await agentEvents(ctx, agent).waterfall(
     'agent/pre-step',
-    { messages: [proposed], turn, step, signal },
+    { messages: [proposed], turn, step, route: { provider: 'test', model: 'test' }, signal },
     () => Promise.resolve({ kind: 'enter' as const, messages: [proposed] }),
   )
   if (decision.kind === 'enter') {

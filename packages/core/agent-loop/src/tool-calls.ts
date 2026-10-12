@@ -57,7 +57,7 @@ interface GroupOutcome {
  * @param toolCalls - assistant calls in model order.
  * @param signal - abort signal shared by the step.
  * @param acceptContext - accepts committed result context for the next step boundary.
- * @param toolSet - request-owned admission propagated into every Native dispatch.
+ * @param toolSet - step-owned admission propagated into every Native dispatch.
  */
 export async function executeToolCalls(
   ctx: Context,

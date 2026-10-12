@@ -352,7 +352,6 @@ describe('foreground commands as jobs', () => {
     const ctx = await setup()
     const ownerId = SessionId('promote-owner')
     const owner: Agent = {
-      currentRoute() { throw new Error('no prepared model request in this fixture') },
       id: ownerId,
       options: {},
       session: Session.create(ownerId, undefined, {
@@ -469,7 +468,6 @@ describe('owned background output', () => {
     const ctx = await setup()
     const ownerId = SessionId('background-owner')
     const owner: Agent = {
-      currentRoute() { throw new Error('no prepared model request in this fixture') },
       id: ownerId,
       options: {},
       session: Session.create(ownerId, undefined, {

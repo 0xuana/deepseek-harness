@@ -187,7 +187,7 @@ describe('mode-aware wire contribution', () => {
       const unregister = ctx.tools.register(definition, { when: () => active })
       for (const enabled of [false, true]) {
         active = enabled
-        const toolSet = await ctx.tools.resolve({ agent, signal: testToolSignal })
+        const toolSet = await ctx.tools.resolve({ agent, route: { provider: 'test', model: 'test' }, signal: testToolSignal })
         try {
           const assembly = await systemPrompt.assemble({ scope: agent, agent, toolSet })
           const sdk = assembly.sections.find(section => section.name === 'tools:sdk')?.text ?? ''

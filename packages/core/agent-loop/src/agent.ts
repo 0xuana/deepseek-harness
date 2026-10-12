@@ -14,6 +14,7 @@ import type {
   InboxTarget,
   PreStepDecision,
   RequestErrorAction,
+  StepRoute,
 } from '@deepseek-ai/dsh-agent'
 import { agentEvents, assembleContextFor } from '@deepseek-ai/dsh-agent'
 import type { GenerateOptions, LlmCallConfig, Message, PreparedLlmCall } from '@deepseek-ai/dsh-llm'
@@ -63,8 +64,8 @@ type PreparedStep =
     kind: 'enter'
     messages: UserMessage[]
     startsRequestSeries?: true
+    route: StepRoute
     preparation: PromptPreparation
-    request: PreparedRequest
   }
 
 /** Remove adapter-derived values before plugins propose the next request config. */
@@ -104,7 +105,6 @@ function abortedCancelCause(signal: AbortSignal): AgentCancelCause | undefined {
 /** Drives one session through turn and step boundaries. */
 export class ReactLoopAgent implements Agent {
   readonly inbox: ReactLoopInbox
-  private requestRoute: Readonly<Pick<LlmCallConfig, 'provider' | 'model'>> | undefined
   private phase: Phase
   private activityDone: Promise<void> = Promise.resolve()
 
@@ -143,11 +143,6 @@ export class ReactLoopAgent implements Agent {
     this.phase = { kind: 'idle', lastTurn }
     this.runtimeContext = new RuntimeContextProjection(this.ctx, session)
     this.systemPrompt = new SystemPromptProjection(session)
-  }
-
-  currentRoute(): Readonly<Pick<LlmCallConfig, 'provider' | 'model'>> {
-    if (this.requestRoute === undefined) throw new Error('agent has no prepared model request')
-    return this.requestRoute
   }
 
   get status(): AgentStatus {
@@ -282,12 +277,11 @@ export class ReactLoopAgent implements Agent {
     if (this.phase.kind !== 'running') throw new Error(`agent "${this.id}": pre-step outside running phase`)
     const signal = this.phase.abort.signal
     const claimed = this.inbox.claim(target, position.turn)
-    const request = await this.prepareRequest(position.turn, position.step, signal)
-    const preparation = await this.loopCtx.systemPrompt.prepare(assembleContextFor(this, signal))
-    preparation.variables = { ...preparation.variables, ...this.currentRoute() }
+    const route = await this.chooseRoute(position.turn, position.step, signal)
+    const preparation = await this.loopCtx.systemPrompt.prepare({ ...assembleContextFor(this, signal), route })
     signal.throwIfAborted()
     const decision = await this.dispatch.waterfall(
-      'agent/pre-step', { messages: claimed, ...position, signal },
+      'agent/pre-step', { messages: claimed, ...position, route, signal },
       (): Promise<PreStepDecision> => {
         const sections = renderContextSections(preparation)
         const context = this.runtimeContext.project(joinContextSections(sections), sections)
@@ -299,7 +293,21 @@ export class ReactLoopAgent implements Agent {
     )
     signal.throwIfAborted()
     if (decision.kind === 'reject') return decision
-    return { ...decision, preparation, request }
+    return { ...decision, route, preparation }
+  }
+
+  /** Choose the provider and model that the proposed step keeps for every request attempt. */
+  private async chooseRoute(turn: number, step: number, signal: AbortSignal): Promise<StepRoute> {
+    const { provider, model } = this.requestBase()
+    const route = await this.dispatch.waterfall(
+      'agent/route', { turn, step, signal },
+      () => Promise.resolve<StepRoute>({ provider, model }),
+    )
+    signal.throwIfAborted()
+    if (!route.provider || !route.model) {
+      throw new Error(`agent "${this.id}" has no provider/model: set AgentOptions.provider and AgentOptions.model or supply both via the agent/route waterfall`)
+    }
+    return Object.freeze({ provider: route.provider, model: route.model })
   }
 
   /** Whether the assembled tool schemas differ from the logged request header's. */
@@ -328,7 +336,6 @@ export class ReactLoopAgent implements Agent {
     let target: InboxTarget = 'next-turn'
     try {
       while (true) {
-        this.requestRoute = undefined
         signal.throwIfAborted()
         const step = phase.step + 1
         const decision = await this.preStep(target, { turn, step })
@@ -372,7 +379,6 @@ export class ReactLoopAgent implements Agent {
         } finally {
           stopRecovery()
           this.session.append('step/end', { turn, step })
-          this.requestRoute = undefined
         }
         signal.throwIfAborted()
         if (turnEnds && this.inbox.nextStep.length === 0) {
@@ -397,7 +403,6 @@ export class ReactLoopAgent implements Agent {
       }
       this.throwError(error)
     } finally {
-      this.requestRoute = undefined
       try {
         // oxlint-disable-next-line typescript/no-non-null-assertion -- every exit assigns a turn ending
         this.session.append('turn/end', { turn, reason: turnEnds! })
@@ -419,24 +424,18 @@ export class ReactLoopAgent implements Agent {
     const { turn, step, abort: { signal } } = this.phase
     signal.throwIfAborted()
 
-    let firstAttempt = true
-    let acceptedAssembly: { provider: string; model: string; schemas: string; assembly: PromptAssembly } | undefined
-    while (true) {
-      const { config, preparedCall } = firstAttempt ? decision.request : await this.prepareRequest(turn, step, signal)
-      const toolSet = await this.loopCtx.tools.resolve({ agent: this, signal })
-      try {
-        const schemas = JSON.stringify(this.loopCtx.tools.schemas(this, toolSet))
-        if (acceptedAssembly === undefined || acceptedAssembly.provider !== config.provider
-          || acceptedAssembly.model !== config.model || acceptedAssembly.schemas !== schemas) {
-          const assembly = await this.loopCtx.systemPrompt.assemble(
-            { ...assembleContextFor(this, signal), toolSet },
-            { ...decision.preparation, variables: { ...decision.preparation.variables, ...this.currentRoute() } },
-          )
-          acceptedAssembly = { provider: config.provider, model: config.model, schemas, assembly }
-        }
-        const { assembly } = acceptedAssembly
-        const renderedPrompt = renderPrompt(assembly)
-        const currentContext = this.loopCtx.systemPrompt.refreshContext(assembly, assembleContextFor(this, signal))
+    const { route } = decision
+    const toolSet = await this.loopCtx.tools.resolve({ agent: this, route, signal })
+    try {
+      const assembly = await this.loopCtx.systemPrompt.assemble(
+        { ...assembleContextFor(this, signal), route, toolSet },
+        decision.preparation,
+      )
+      const renderedPrompt = renderPrompt(assembly)
+      let firstAttempt = true
+      while (true) {
+        const { config, preparedCall } = await this.prepareRequest(turn, step, route, signal)
+        const currentContext = this.loopCtx.systemPrompt.refreshContext(assembly, { ...assembleContextFor(this, signal), route })
         const sections = renderContextSections(currentContext)
         const context = this.runtimeContext.project(joinContextSections(sections), sections)
         signal.throwIfAborted()
@@ -586,24 +585,21 @@ export class ReactLoopAgent implements Agent {
           if (!live.ended) live.abandon()
           throw error
         }
-      } finally {
-        toolSet.dispose()
       }
+    } finally {
+      toolSet.dispose()
     }
   }
 
-  /** Resolve request config and bind its adapter before admitting model-visible input. */
-  private async prepareRequest(
-    turn: number,
-    step: number,
-    signal: AbortSignal,
-  ): Promise<PreparedRequest> {
-    this.requestRoute = undefined
-    const { session } = this
-
-    // A loop instance starts from its declared route, restoring only an explicit
-    // effort owned by that exact model. Later steps re-resolve marked defaults.
-    const persistedHeader = session.requestHeader()
+  /**
+   * The config this loop instance proposes before plugins act: its declared
+   * route on the first request, restoring only an explicit effort owned by
+   * that exact model, then the logged header without adapter defaults.
+   */
+  private requestBase(): LlmCallConfig {
+    const persistedHeader = this.session.requestHeader()
+    // oxlint-disable-next-line typescript/no-non-null-assertion -- the instance logged the header it now folds
+    if (this.requestHeaderLogged) return requestProposal(persistedHeader!)
     const persistedConfig = persistedHeader?.config
     const route = { provider: this.options.provider ?? '', model: this.options.model ?? '' }
     const persistedReasoningEffort = persistedConfig?.provider === route.provider
@@ -613,23 +609,34 @@ export class ReactLoopAgent implements Agent {
       : undefined
     const reasoningEffort = this.options.reasoningEffort ?? persistedReasoningEffort
     const maxTokens = this.options.maxTokens
-    const seedConfig = deepFreeze(structuredClone(
-      this.requestHeaderLogged
-        // oxlint-disable-next-line typescript/no-non-null-assertion -- the instance logged the header it now folds
-        ? requestProposal(persistedHeader!)
-        : {
-          ...route,
-          ...reasoningEffort === undefined ? {} : { reasoningEffort },
-          ...maxTokens === undefined ? {} : { maxTokens },
-        },
-    ))
+    return {
+      ...route,
+      ...reasoningEffort === undefined ? {} : { reasoningEffort },
+      ...maxTokens === undefined ? {} : { maxTokens },
+    }
+  }
+
+  /** Resolve one attempt's config on the step route and bind its adapter before admitting model-visible input. */
+  private async prepareRequest(
+    turn: number,
+    step: number,
+    route: StepRoute,
+    signal: AbortSignal,
+  ): Promise<PreparedRequest> {
+    let seed = this.requestBase()
+    if (seed.provider !== route.provider || seed.model !== route.model) {
+      // An effort belongs to one model; another route starts from its own default.
+      const { reasoningEffort: _effort, ...controls } = seed
+      seed = { ...controls, provider: route.provider, model: route.model }
+    }
+    const seedConfig = deepFreeze(structuredClone(seed))
     const proposedConfig = await this.dispatch.waterfall(
       'agent/request', { turn, step, signal },
       () => Promise.resolve(seedConfig),
     )
     signal.throwIfAborted()
-    if (!proposedConfig.provider || !proposedConfig.model) {
-      throw new Error(`agent "${this.id}" has no provider/model: set AgentOptions.provider and AgentOptions.model or supply both via the agent/request waterfall`)
+    if (proposedConfig.provider !== route.provider || proposedConfig.model !== route.model) {
+      throw new Error(`agent "${this.id}": agent/request cannot replace the step route ${route.provider}/${route.model} with ${proposedConfig.provider}/${proposedConfig.model}; choose routes with the agent/route waterfall`)
     }
     let config: LlmCallConfig
     let preparedCall: PreparedLlmCall | undefined
@@ -642,7 +649,6 @@ export class ReactLoopAgent implements Agent {
       config = proposedConfig
     }
     signal.throwIfAborted()
-    this.requestRoute = Object.freeze({ provider: config.provider, model: config.model })
     return { config, ...preparedCall === undefined ? {} : { preparedCall } }
   }
 

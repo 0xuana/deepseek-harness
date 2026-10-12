@@ -369,13 +369,13 @@ describe('prepared-route prompt admission', () => {
     expect(resumed.session.snapshotEvents().filter(event => event.type === 'request/header').at(-1)?.data.reason).toBe('resume')
   })
 
-  it.each(['request', 'prepare'] as const)('cancels during %s before step and input admission', async (stage) => {
+  it.each(['request', 'prepare'] as const)('cancels during %s with a balanced empty step before input admission', async (stage) => {
     const h = await harness()
     const entered = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
     const observe = async () => {
       const types = h.agent.session.snapshotEvents().map(event => event.type)
-      expect(types).not.toContain('step/start')
+      expect(types).toContain('step/start')
       expect(types).not.toContain('system/message')
       expect(types).not.toContain('user/message')
       expect(types).not.toContain('request/header')
@@ -394,8 +394,30 @@ describe('prepared-route prompt admission', () => {
     await h.agent.whenIdle()
     expect(h.capable.requests).toHaveLength(0)
     const types = h.agent.session.snapshotEvents().map(event => event.type)
-    expect(types.filter(type => type === 'step/start' || type === 'step/end')).toEqual([])
+    expect(types.filter(type => type === 'step/start' || type === 'step/end')).toEqual(['step/start', 'step/end'])
     expect(types.filter(type => ['system/message', 'user/message', 'request/header'].includes(type))).toEqual([])
+  })
+
+  it('cancels during route before a step opens', async () => {
+    const h = await harness()
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    h.ctx.on('agent/route', async (_payload, next) => {
+      expect(h.agent.session.snapshotEvents().map(event => event.type)).not.toContain('step/start')
+      entered.resolve(undefined)
+      await release.promise
+      return next()
+    })
+    h.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'cancelled' }], source: { kind: 'user' } }))
+    await entered.promise
+    h.agent.cancel({ kind: 'user' })
+    release.resolve(undefined)
+    await h.agent.whenIdle()
+    expect(h.capable.requests).toHaveLength(0)
+    const types = h.agent.session.snapshotEvents().map(event => event.type)
+    expect(types.filter(type => ['step/start', 'step/end', 'system/message', 'user/message', 'request/header'].includes(type)))
+      .toEqual([])
+    expect(types.filter(type => type === 'turn/start' || type === 'turn/end')).toEqual(['turn/start', 'turn/end'])
   })
 
   it('keeps generic config changes and concurrent selection on the same prepared route', async () => {

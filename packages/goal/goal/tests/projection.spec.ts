@@ -39,7 +39,6 @@ interface Bench {
 async function liveAgent(ctx: Context, session: Session): Promise<Agent> {
   const status: AgentStatus = 'idle'
   const agent: Agent = {
-    currentRoute() { throw new Error('no prepared model request in this fixture') },
     id: session.id,
     options: {},
     session,

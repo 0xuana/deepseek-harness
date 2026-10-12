@@ -30,7 +30,7 @@ export class AcpModelConfigError extends Error {
 
 /** Project and mutate one Agent's provider/model/reasoning selection through ACP config options. */
 export class AcpModelControl {
-  /** Scoped selection reference consumed by Agent request assembly. */
+  /** Scoped selection reference consumed by Agent step routing. */
   readonly selection: ModelSelectionRef
   private tail = Promise.resolve()
   private selected: ModelSelection | undefined
@@ -52,7 +52,7 @@ export class AcpModelControl {
   }
 
   /**
-   * Install request/prompt consistency listeners in the unpublished Agent scope.
+   * Install step routing listeners in the unpublished Agent scope.
    * @param agentCtx - Agent scope that consumes this selection.
    */
   install(agentCtx: Context): void {

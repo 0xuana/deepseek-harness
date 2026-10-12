@@ -282,7 +282,7 @@ export class ApiSessionAgentController {
   }
 
   /**
-   * Install or return the Session-local model selection used by request preparation.
+   * Install or return the Session-local model selection that chooses each step's route.
    * @param agent - live Agent that owns the selection.
    * @returns the installed mutable selection reference.
    */
@@ -332,7 +332,7 @@ export class ApiSessionAgentController {
   }
 
   /**
-   * Commit and cache one validated selection for the next step's request preparation.
+   * Commit and cache one validated selection for the next step's route.
    * @param agent - live Agent that owns the selection.
    * @param selection - validated selection to record and apply.
    */

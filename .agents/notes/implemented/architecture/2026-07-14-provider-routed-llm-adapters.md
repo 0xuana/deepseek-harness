@@ -18,7 +18,7 @@ The adapter configuration also assumes one DeepSeek API key and endpoint. A gene
 
 ### Provider is the adapter registration key
 
-`GenerateOptions` and `LlmCallConfig` carry `provider: string` beside `model: string`; `AgentOptions` carries the corresponding optional creation field. A loop request is valid only after both values are non-empty, and both values are part of the logged request header. `agent/request` may return a replacement pair on any step, so a session can switch providers and models without changing the Cordis plugin lifecycle.
+`GenerateOptions` and `LlmCallConfig` carry `provider: string` beside `model: string`; `AgentOptions` carries the corresponding optional creation field. A loop request is valid only after both values are non-empty, and both values are part of the logged request header. `agent/route` may return a replacement pair for any step, so a session can switch providers and models without changing the Cordis plugin lifecycle; every request attempt in the step keeps that pair.
 
 `LlmRuntime` registers and resolves adapters by provider. `registerAdapter(providers, adapter)` checks the entire provider list before mutating the registry, rejects a duplicate with `DUPLICATE_ADAPTER`, and disposes the whole registration as one effect. Model ids are not registration keys; the selected adapter still validates or forwards them. The later [LLM catalog and ACP selection Agent Note](../../archived/architecture/2026-07-15-llm-model-catalog-and-acp-selection.md) added advisory `listProviders()` / `listModels()` discovery without turning model membership into request validation.
 

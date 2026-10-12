@@ -206,7 +206,7 @@ interface ToolExecutionInput {
   readonly arguments: unknown
   /** The agent on whose behalf the call runs (set by the agent loop). */
   readonly agent?: Agent
-  /** Request admission shared by Native and PTC dispatch. Conditional tools require it. */
+  /** Step admission shared by Native and PTC dispatch. Conditional tools require it. */
   readonly toolSet?: ResolvedToolSet
   /**
    * Opaque token of the enclosing transport execution, when one exists. PTC
@@ -527,7 +527,7 @@ presentAs(mode: ToolPresentationMode): () => void
  * Register globally or in the calling agent scope. Scoped tools shadow
  * globals; duplicates within one layer and the reserved `run_code` name fail.
  * @param definition - tool schema, execution, and optional finalization/presentation callbacks.
- * @param options - optional request-time activation condition.
+ * @param options - optional step-time activation condition.
  * @returns the exact disposer that unregisters the tool.
  */
 register(definition: ToolDefinition, options: ToolRegistrationOptions = {}): () => void
@@ -560,16 +560,16 @@ guard(guard: ToolGuard): () => void
  * actually executed.
  * @param name - the tool name as registered.
  * @param scope - the viewing scope (the agent); omitted = the global view.
- * @param toolSet - request admission; omit only to inspect registered definitions.
+ * @param toolSet - step admission; omit only to inspect registered definitions.
  * @returns the definition the scope resolves, or undefined when none is visible.
  */
 get(name: string, scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolDefinition | undefined
 
 /**
- * Resolve conditions once for this request without changing shared registrations.
+ * Resolve conditions once for this step without changing shared registrations.
  * Cancellation or a rejected condition publishes no partial selection. Removed
  * registrations cannot be restored by a late condition result.
- * @param context - agent with a bound route and request cancellation.
+ * @param context - preparing agent, step route, and cancellation.
  * @returns the complete selection; the caller disposes it after its tool batch settles.
  */
 async resolve(context: ToolActivationContext): Promise<ResolvedToolSet>
@@ -578,7 +578,7 @@ async resolve(context: ToolActivationContext): Promise<ResolvedToolSet>
  * Project visible definitions onto the allowlisted model-facing schema fields,
  * excluding execution and presentation callbacks.
  * @param scope - the viewing scope (the agent); omitted = the global view.
- * @param toolSet - request admission, or omitted for registered-definition inspection.
+ * @param toolSet - step admission, or omitted for registered-definition inspection.
  * @returns one deep-cloned schema per visible tool.
  */
 schemas(scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolSchema[]

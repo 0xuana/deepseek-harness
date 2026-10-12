@@ -31,7 +31,6 @@ async function liveAgent(ctx: Context, session: Session, initial: AgentStatus): 
   const cancels: CancelCall[] = []
   let status = initial
   const agent: LiveAgent = {
-    currentRoute() { throw new Error('no prepared model request in this fixture') },
     id: session.id,
     options: {},
     session,

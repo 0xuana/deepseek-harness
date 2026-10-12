@@ -19,7 +19,17 @@ declare module '@deepseek-ai/dsh-system-prompt' {
   interface AssembleContext {
     /** Agent for this assembly; absent on diagnostics. When present, `scope` must identify the same agent. */
     agent?: Agent
+    /** Provider and model of the step being assembled; absent outside a step. */
+    route?: StepRoute
   }
+}
+
+/** Provider and model that `agent/route` chose for one step and every request attempt in it. */
+export interface StepRoute {
+  /** Registered provider route. */
+  readonly provider: string
+  /** Model id interpreted by the provider adapter. */
+  readonly model: string
 }
 
 /** Merge-extensible agent creation options. Persona belongs to system-prompt sections. */
@@ -162,14 +172,8 @@ export type AssistantStreamFrame =
 
 declare module './types.ts' {
   interface Agent {
-    /** Initial request options; currentRoute() reports the bound request route. */
+    /** Creation-time request options; `agent/route` may choose another provider and model for each step. */
     readonly options: AgentOptions
-    /**
-     * Read the immutable route bound to this request and its tool batch.
-     * @returns the actual provider and model selected by prepareCall().
-     * @throws when no main request is prepared; never falls back to prior requests.
-     */
-    currentRoute(): Readonly<Pick<LlmCallConfig, 'provider' | 'model'>>
     /** The live session this agent drives; its log is the durable source of truth. */
     readonly session: Session
     /** Agent-owned access to durable pending work. */
@@ -319,20 +323,41 @@ declare module '@deepseek-ai/cordis' {
      * @param payload.messages - messages removed from the inbox for this step.
      * @param payload.turn - the turn that will own the step.
      * @param payload.step - the step proposed by the loop.
+     * @param payload.route - the provider and model `agent/route` chose for this step.
      * @param payload.signal - the current turn's cancellation signal.
      * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
      * @mode waterfall
      */
-    'agent/pre-step'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; signal: AbortSignal }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>
+    'agent/pre-step'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; route: StepRoute; signal: AbortSignal }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>
     /**
-     * Replace the frozen call configuration. `await next()` yields the config
-     * the machine would use (agent options on the first request, the logged
-     * header afterwards); return a replacement to switch. On step admission,
-     * this runs before context preparation and `agent/pre-step`. Cancellation
-     * here or during subsequent `prepareCall()` resolution opens no step and
-     * commits no system prompt or user batch. The prepared call capability
-     * governs prompt admission. Model-visible content must use logged channels;
-     * this waterfall cannot mutate messages.
+     * Choose the provider and model for one proposed step. `await next()`
+     * yields the route the machine would use (agent options before this loop
+     * logs a request, the logged header afterwards); return a replacement to
+     * switch. The loop runs this once per proposed step, before context
+     * preparation and `agent/pre-step`. Prompt preparation, tool conditions,
+     * and every request attempt in the step use the result, so a later choice
+     * applies from the next step. Cancellation here opens no step.
+     * @param payload.agent - the agent proposing the step.
+     * @param payload.turn - the turn that will own the step.
+     * @param payload.step - the step proposed by the loop.
+     * @param payload.signal - the current turn's explicit abort signal.
+     * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
+     * @mode waterfall
+     */
+    'agent/route'(this: Scoped<Agent>, payload: { agent: Agent; turn: number; step: number; signal: AbortSignal }, next: () => Promise<StepRoute>): Promise<StepRoute>
+    /**
+     * Replace the frozen call configuration of one request attempt. `await
+     * next()` yields the config the machine would use on the step's
+     * `agent/route` result: agent options on the first request, the logged
+     * header afterwards, and no effort recorded for another model. Return a
+     * replacement to change call controls such as reasoning effort; returning
+     * another provider or model fails the step. On step admission, this runs
+     * after prompt assembly and `step/start`, before the system prompt and
+     * accepted user batch are committed, and again for each retry.
+     * Cancellation here or during subsequent `prepareCall()` resolution
+     * commits neither. The prepared call capability governs prompt admission.
+     * Model-visible content must use logged channels; this waterfall cannot
+     * mutate messages.
      * @param payload.agent - the agent making the model call.
      * @param payload.turn - the open turn number.
      * @param payload.step - the step whose request this is.

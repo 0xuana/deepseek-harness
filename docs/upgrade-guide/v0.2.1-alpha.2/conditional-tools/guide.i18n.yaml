@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.1-alpha.2/conditional-tools/guide.md
 /:
-  en: 0a9569f33806d6bf
-  zh: 3bd885a0d518aad8
-/update-conditional-tools-and-prompt-hooks:
-  en: 10c4bc2bc9693697
-  zh: e21505b305265c99
-/update-conditional-tools-and-prompt-hooks/change:
-  en: 018c4ade3568fbc5
-  zh: e2f0f9c1467250be
-/update-conditional-tools-and-prompt-hooks/migration:
-  en: abe994f27c41f65e
-  zh: 106d04a591a0faa2
+  en: a6fa0b92ad5adce4
+  zh: 743795b5e3985faf
+/update-step-routing-conditional-tools-and-prompt-hooks:
+  en: 7f578f5ad4a1406b
+  zh: 9b5984f46d7ae7b4
+/update-step-routing-conditional-tools-and-prompt-hooks/change:
+  en: a914aff13f6391ff
+  zh: b8a9dfaeaaa7d76f
+/update-step-routing-conditional-tools-and-prompt-hooks/migration:
+  en: bdb131c08b81d7ec
+  zh: e76b53840dc3bd8a

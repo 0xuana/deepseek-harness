@@ -26,7 +26,6 @@ async function harness(): Promise<Harness> {
 /** A registered idle Agent double: the gate reads only its Session header. */
 async function liveAgent(ctx: Context, session: Session): Promise<Agent> {
   const agent: Agent = {
-    currentRoute() { throw new Error('no prepared model request in this fixture') },
     id: session.id,
     options: {},
     session,
@@ -48,7 +47,7 @@ async function liveAgent(ctx: Context, session: Session): Promise<Agent> {
 /** Propose one model step for the Agent; the innermost decision enters. */
 const proposed = (ctx: Context, agent: Agent) => ctx.waterfall(
   'agent/pre-step',
-  { agent, messages: [], turn: 1, step: 1, signal: new AbortController().signal },
+  { agent, messages: [], turn: 1, step: 1, route: { provider: 'test', model: 'test' }, signal: new AbortController().signal },
   () => Promise.resolve({ kind: 'enter' as const, messages: [] }),
 )
 

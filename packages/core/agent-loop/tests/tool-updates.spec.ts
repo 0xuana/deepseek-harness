@@ -113,9 +113,8 @@ describe('tool update emission', () => {
   })
 })
 
-
-describe('request-time tool activation', () => {
-  it('uses the bound route for asynchronous conditions and rejects a historical name after removal', async () => {
+describe('step-time tool activation', () => {
+  it('uses the step route for asynchronous conditions and rejects a historical name after removal', async () => {
     const adapter = new MockAdapter([
       toolCallResponse('allowed', 'conditional', {}), textResponse('done'),
       toolCallResponse('removed', 'conditional', {}), textResponse('done'),
@@ -124,35 +123,33 @@ describe('request-time tool activation', () => {
     const routed: string[] = []
     let calls = 0
     let model = 'enabled'
-    ctx.on('agent/request', async (_payload, next) => ({ ...await next(), model }))
+    ctx.on('agent/route', async (_payload, next) => ({ ...await next(), model }))
     ctx.tools.register(defineContentToolFixture({
       name: 'conditional', description: 'Available on one route.', parameters: {},
       async execute(_args, exec) {
-        expect(exec.agent?.currentRoute()).toEqual({ provider: 'mock', model: 'enabled' })
+        expect(exec.agent?.session.requestHeader()?.config.model).toBe('enabled')
         calls++
         return [{ type: 'text', text: 'done' }]
       },
-    }), { when: async ({ agent: subject }) => {
-      const route = subject.currentRoute()
+    }), { when: async ({ route }) => {
       expect(Object.isFrozen(route)).toBe(true)
       routed.push(route.model)
       await Promise.resolve()
       return route.model === 'enabled'
     } })
-    expect(() => agent.currentRoute()).toThrow('no prepared model request')
     await send(agent, 'enabled')
     model = 'disabled'
     await send(agent, 'try the historical name')
     expect(calls).toBe(1)
     expect(routed).toEqual(['enabled', 'enabled', 'disabled', 'disabled'])
+    expect(adapter.requests.map(request => request.model)).toEqual(routed)
     expect(developerEvents(agent).at(-1)?.data.message.content)
       .toEqual([{ type: 'tool-removal', toolName: 'conditional' }])
     expect(agent.session.snapshotEvents().find(event => event.type === 'tool/result' && event.data.message.toolCallId === 'removed')?.data)
       .toMatchObject({ error: { code: 'UNKNOWN_TOOL' } })
-    expect(() => agent.currentRoute()).toThrow('no prepared model request')
   })
 
-  it('cancels an asynchronous condition without committing the proposed request', async () => {
+  it('cancels an asynchronous condition without committing the step request', async () => {
     const adapter = new MockAdapter([textResponse('unused')])
     const { ctx, agent } = await harness(adapter)
     const entered = Promise.withResolvers<undefined>()
@@ -168,21 +165,21 @@ describe('request-time tool activation', () => {
     await running
     expect(adapter.requests).toEqual([])
     expect(agent.session.snapshotEvents().filter(event => ['request/header', 'system/message', 'user/message'].includes(event.type))).toEqual([])
-    expect(() => agent.currentRoute()).toThrow('no prepared model request')
   })
 
-  it.each(['condition', 'route'])('reassembles on a retry after the %s changes without admitting users again', async (change) => {
+  it('keeps one route, tool set, and prompt across retries without admitting users again', async () => {
     const adapter = new MockAdapter([
       [{ type: 'finish', reason: { kind: 'error', failure: { code: 'SERVER', message: 'retry', status: 503 } } }],
       textResponse('done'),
     ])
     const { ctx, agent } = await harness(adapter)
     let retried = false
-    let admissions = 0
-    ctx.on('agent/pre-step', (_input, next) => { admissions++; return next() })
-    ctx.on('agent/request', async (_input, next) => ({
-      ...await next(), model: change === 'route' && retried ? 'second' : 'first',
-    }))
+    const counts = { routes: 0, conditions: 0, admissions: 0 }
+    ctx.on('agent/pre-step', (_input, next) => { counts.admissions++; return next() })
+    ctx.on('agent/route', async (_input, next) => {
+      counts.routes++
+      return { ...await next(), model: retried ? 'second' : 'first' }
+    })
     ctx.on('agent/request-error', async (_input, next) => {
       await next()
       retried = true
@@ -191,18 +188,18 @@ describe('request-time tool activation', () => {
     ctx.tools.register(defineContentToolFixture({
       name: 'conditional', description: 'Retry-dependent availability.', parameters: {},
       execute: async () => [{ type: 'text', text: 'unused' }],
-    }), { when: () => change === 'route' || retried })
+    }), { when: () => { counts.conditions++; return retried } })
     ctx.systemPrompt.section({
       name: 'retry:guidance', order: 0, complete: true,
-      text: context => `${agent.currentRoute().model}:${ctx.tools.schemas(agent, context.toolSet).map(tool => tool.name).join(',')}`,
+      text: context => `${context.route?.model}:${ctx.tools.schemas(agent, context.toolSet).map(tool => tool.name).join(',')}`,
     })
     await send(agent, 'retry once')
-    const prompts = adapter.requests.map(request => request.messages.find(message => message.role === 'system')?.content)
-    expect(prompts[0]).toEqual([{ type: 'text', text: change === 'route' ? 'first:conditional' : 'first:' }])
-    expect(prompts[1]).toEqual([{ type: 'text', text: change === 'route' ? 'second:conditional' : 'first:conditional' }])
-    expect(admissions).toBe(1)
+    expect(adapter.requests.map(request => request.model)).toEqual(['first', 'first'])
+    expect(adapter.requests.map(request => request.tools ?? [])).toEqual([[], []])
+    expect(adapter.requests.map(request => request.messages.find(message => message.role === 'system')?.content))
+      .toEqual([[{ type: 'text', text: 'first:' }], [{ type: 'text', text: 'first:' }]])
+    expect(counts).toEqual({ routes: 1, conditions: 1, admissions: 1 })
     expect(agent.session.snapshotEvents().filter(event => event.type === 'user/message' && event.data.source.kind === 'user')).toHaveLength(1)
-    expect(() => agent.currentRoute()).toThrow('no prepared model request')
   })
 
   it('reports condition failures without admitting a partial request', async () => {
@@ -217,7 +214,6 @@ describe('request-time tool activation', () => {
     expect(agent.session.snapshotEvents().filter(event => ['request/header', 'system/message', 'user/message'].includes(event.type))).toEqual([])
     expect(agent.session.snapshotEvents().find(event => event.type === 'turn/end')?.data)
       .toMatchObject({ reason: { kind: 'error', error: { code: 'TOOL_ACTIVATION_FAILED' } } })
-    expect(() => agent.currentRoute()).toThrow('no prepared model request')
   })
 
   it('shares the selected set with prompt guidance', async () => {

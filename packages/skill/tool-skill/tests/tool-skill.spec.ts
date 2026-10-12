@@ -69,7 +69,6 @@ function agentForCwd(cwd: string): Agent {
     version: SESSION_FORMAT_VERSION, id, createdAt: 0, cwd, isSeeded: false,
   })
   return {
-    currentRoute() { throw new Error('no prepared model request in this fixture') },
     ctx: new Context(),
     id,
     options: {},
@@ -88,7 +87,6 @@ function agentForCwd(cwd: string): Agent {
 
 function sessionAgent(session: Session, id = 'tool-skill-agent'): Agent {
   const agent: Agent = {
-    currentRoute() { throw new Error('no prepared model request in this fixture') },
     id: SessionId(id),
     options: {},
     session,
@@ -118,7 +116,7 @@ async function fireStep(ctx: Context, agent: Agent, turn: number, step: number):
   const signal = new AbortController().signal
   const decision = await agentEvents(ctx, agent).waterfall(
     'agent/pre-step',
-    { messages: [], turn, step, signal },
+    { messages: [], turn, step, route: { provider: 'test', model: 'test' }, signal },
     () => Promise.resolve({ kind: 'enter' as const, messages: [] }),
   )
   if (decision.kind === 'enter') {
@@ -136,7 +134,7 @@ async function proposeStep(
   const signal = new AbortController().signal
   return await agentEvents(ctx, agent).waterfall(
     'agent/pre-step',
-    { messages, turn: 1, step: 1, signal },
+    { messages, turn: 1, step: 1, route: { provider: 'test', model: 'test' }, signal },
     () => Promise.resolve({ kind: 'enter' as const, messages }),
   )
 }
@@ -168,7 +166,7 @@ async function composePrefix(ctx: Context, cwd: string, signal = new AbortContro
 async function composePrefixForAgent(ctx: Context, agent: Agent, signal = new AbortController().signal): Promise<Message[]> {
   const decision = await agentEvents(ctx, agent).waterfall(
     'agent/pre-step',
-    { messages: [], turn: 1, step: 1, signal },
+    { messages: [], turn: 1, step: 1, route: { provider: 'test', model: 'test' }, signal },
     () => Promise.resolve({ kind: 'enter' as const, messages: [] }),
   )
   if (decision.kind === 'enter') {
@@ -1106,7 +1104,7 @@ describe('user-explicit invocation injection', () => {
     const signal = new AbortController().signal
     const decision = await agentEvents(ctx, agent).waterfall(
       'agent/pre-step',
-      { messages: [gesture('/hidden-demo blocked step')], turn: 1, step: 1, signal },
+      { messages: [gesture('/hidden-demo blocked step')], turn: 1, step: 1, route: { provider: 'test', model: 'test' }, signal },
       () => Promise.resolve({ kind: 'reject' as const }),
     )
     expect(decision).toEqual({ kind: 'reject' })

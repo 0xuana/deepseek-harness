@@ -172,7 +172,7 @@ The schema is paid only while active, according to ToolRuntime mode, and each pl
 
 #### KV Cache effect
 
-Mode transitions add or remove the exit tool through the route’s tool-update protocol; plan arguments and review results extend the conversation normally.
+Entering plan mode adds the exit tool through the route’s tool-update protocol, and leaving removes it. An `in-history` route records both changes after cached history. An `addition-only` route, such as the default catalog’s `deepseek-flash`, cannot record the removal and drops the tool from later requests, so the first request after leaving can miss part of the cached prefix; a route without tool updates resends its changed declaration list after either transition. Plan arguments and review results extend the conversation normally.
 
 ## Known Limitations and Deferred Work
 

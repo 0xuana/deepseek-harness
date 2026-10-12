@@ -39,7 +39,6 @@ async function agent(ctx: Context, cwd: string | undefined): Promise<Agent> {
     ...cwd === undefined ? {} : { cwd },
   })
   const value: Agent = {
-    currentRoute() { throw new Error('no prepared model request in this fixture') },
     id,
     options: {},
     session,

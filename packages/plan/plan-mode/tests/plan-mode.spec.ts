@@ -1,6 +1,4 @@
 import { describe, expect, it, vi } from 'vitest'
-
-const testToolSignal = new AbortController().signal
 import { Context } from '@deepseek-ai/cordis'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
@@ -19,6 +17,9 @@ import { turnBoundaryProjectionDefinition } from '@deepseek-ai/dsh-agent-loop'
 import PlanModeController, { EXIT_PLAN_MODE, planProjectionDefinition, resolveConfig } from '../src/index.ts'
 import type { PlanModeConfig } from '../src/index.ts'
 import type { PlanUnitState } from '../src/types.ts'
+
+const testToolSignal = new AbortController().signal
+const TEST_ROUTE = { provider: 'test', model: 'test' }
 
 const TEST_PLAN_SECTION = 'Test plan mode instructions.'
 const PLAN_CONFIG = { section: TEST_PLAN_SECTION } satisfies PlanModeConfig
@@ -75,7 +76,7 @@ async function agentWithSession(
 }
 
 async function assembleFor(ctx: Context, agent: Agent) {
-  const toolSet = await ctx.tools.resolve({ agent, signal: testToolSignal })
+  const toolSet = await ctx.tools.resolve({ agent, route: TEST_ROUTE, signal: testToolSignal })
   return ctx.systemPrompt.assemble({ agent, scope: agent, toolSet })
 }
 
@@ -116,7 +117,7 @@ async function boundary(ctx: Context, agent: Agent & { session: Session }, type:
   const signal = new AbortController().signal
   const decision = await events.waterfall(
     'agent/pre-step',
-    { messages: [message], turn: 1, step: 1, signal },
+    { messages: [message], turn: 1, step: 1, route: { provider: 'test', model: 'test' }, signal },
     () => Promise.resolve({ kind: 'enter' as const, messages: [message] }),
   )
   if (decision.kind === 'enter') {
@@ -797,7 +798,7 @@ describe('exit_plan_mode', () => {
 
   async function callExit(ctx: Context, agent: Agent | undefined, plan = '# The plan\n\ndo things') {
     const signal = new AbortController().signal
-    const toolSet = agent === undefined ? undefined : await ctx.tools.resolve({ agent, signal })
+    const toolSet = agent === undefined ? undefined : await ctx.tools.resolve({ agent, route: TEST_ROUTE, signal })
     return ctx.tools.execute({
       ...toolSet === undefined ? {} : { toolSet },
       callId: ToolCallId(`call-exit-${++callCounter}`),
@@ -932,7 +933,7 @@ describe('exit_plan_mode', () => {
     const agent = await agentWithSession(ctx, 'ptc-exit', { active: true })
 
     const result = await ctx.tools.execute({
-      toolSet: await ctx.tools.resolve({ agent, signal: testToolSignal }),
+      toolSet: await ctx.tools.resolve({ agent, route: TEST_ROUTE, signal: testToolSignal }),
       callId: ToolCallId(`call-exit-${++callCounter}`),
       name: RUN_CODE_NAME,
       arguments: { code: `return await tools.${EXIT_PLAN_MODE}({ plan: ${JSON.stringify(plan)} })`, description: 'Submit the plan for review' },
@@ -1082,7 +1083,7 @@ describe('exit_plan_mode', () => {
     const { ctx, agent, asked } = await setupWithReview({ selected: ['Approve'] })
     const controller = new AbortController()
     const result = await ctx.tools.execute({
-      toolSet: await ctx.tools.resolve({ agent, signal: testToolSignal }),
+      toolSet: await ctx.tools.resolve({ agent, route: TEST_ROUTE, signal: testToolSignal }),
       callId: ToolCallId(`call-exit-${++callCounter}`),
       name: EXIT_PLAN_MODE,
       arguments: { plan: '# P' },

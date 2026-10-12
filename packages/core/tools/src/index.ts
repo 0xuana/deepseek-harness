@@ -11,7 +11,7 @@ import { AnonymousEntries, NamedEntries, ScopedLayers, scopeOf, scopeTarget } fr
 import type { ScopeKey, ScopeLayer, Scoped } from '@deepseek-ai/dsh-scope'
 import type { ToolCallId, ContentBlock, ToolSchema } from '@deepseek-ai/dsh-llm'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
-import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { Agent, StepRoute } from '@deepseek-ai/dsh-agent'
 import type { UserMessage } from '@deepseek-ai/dsh-session'
 import { assertNever, deepFreeze, snapshotJsonValue, type JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { PromptSection, ToolProviderResult } from '@deepseek-ai/dsh-system-prompt'
@@ -31,7 +31,7 @@ import { renderToolsSdkPy } from './py-types.ts'
 
 declare module '@deepseek-ai/dsh-system-prompt' {
   interface AssembleContext {
-    /** Request-owned tool selection; absent when inspecting registered definitions. */
+    /** Step-owned tool selection; absent when inspecting registered definitions. */
     toolSet?: ResolvedToolSet
   }
 }
@@ -227,29 +227,31 @@ export interface ToolOutputDefinition {
   presentationMeta?(args: unknown, value: JsonValue): JsonValue
 }
 
-/** Inputs for a tool's request-time activation condition. */
+/** Inputs for a tool's step-time activation condition. */
 export interface ToolActivationContext {
-  /** Agent whose currentRoute() is bound to the request being prepared. */
+  /** Agent preparing the step. */
   readonly agent: Agent
-  /** Cancellation of request preparation; asynchronous conditions must observe it. */
+  /** Provider and model that every request attempt in the step uses. */
+  readonly route: StepRoute
+  /** Cancellation of step preparation; asynchronous conditions must observe it. */
   readonly signal: AbortSignal
 }
 
 /** Lifecycle-owned conditions for a registered tool. */
 export interface ToolRegistrationOptions {
   /**
-   * Decide whether this request may call the tool. Omission enables it. False
-   * excludes it from both declarations and dispatch; rejection fails request
-   * preparation. Conditions must not mutate registrations or start tool work.
-   * @param context - requesting agent and cancellation signal.
-   * @returns whether the tool participates in this request.
+   * Decide whether the step's requests may call the tool. Omission enables
+   * it. False excludes it from both declarations and dispatch; rejection fails
+   * step preparation. Conditions must not mutate registrations or start tool work.
+   * @param context - preparing agent, step route, and cancellation signal.
+   * @returns whether the tool participates in this step.
    */
   readonly when?: (context: ToolActivationContext) => boolean | Promise<boolean>
 }
 
-/** One request's admitted registrations, also used by nested PTC calls. */
+/** One step's admitted registrations, also used by nested PTC calls. */
 export interface ResolvedToolSet {
-  /** Close request admission after its tool batch settles. */
+  /** Close admission after the step's tool batch settles. */
   dispose(): void
   /**
    * Read admitted registrations that remain visible in their original scope.
@@ -259,7 +261,7 @@ export interface ResolvedToolSet {
   view(scope: ScopeKey | undefined): ReadonlyMap<string, ToolDefinition>
 }
 
-/** Failure to determine a tool's request-time availability. */
+/** Failure to determine a tool's step-time availability. */
 export class ToolActivationError extends HarnessError {
   /**
    * Preserve a condition failure without treating it as normal unavailability.
@@ -394,7 +396,7 @@ export interface ToolExecutionInput {
   readonly arguments: unknown
   /** The agent on whose behalf the call runs (set by the agent loop). */
   readonly agent?: Agent
-  /** Request admission shared by Native and PTC dispatch. Conditional tools require it. */
+  /** Step admission shared by Native and PTC dispatch. Conditional tools require it. */
   readonly toolSet?: ResolvedToolSet
   /**
    * Opaque token of the enclosing transport execution, when one exists. PTC
@@ -1125,7 +1127,7 @@ export class ToolRuntime extends Service {
    * Register globally or in the calling agent scope. Scoped tools shadow
    * globals; duplicates within one layer and the reserved `run_code` name fail.
    * @param definition - tool schema, execution, and optional finalization/presentation callbacks.
-   * @param options - optional request-time activation condition.
+   * @param options - optional step-time activation condition.
    * @returns the exact disposer that unregisters the tool.
    */
   register(definition: ToolDefinition, options: ToolRegistrationOptions = {}): () => void {
@@ -1298,7 +1300,7 @@ export class ToolRuntime extends Service {
    * actually executed.
    * @param name - the tool name as registered.
    * @param scope - the viewing scope (the agent); omitted = the global view.
-   * @param toolSet - request admission; omit only to inspect registered definitions.
+   * @param toolSet - step admission; omit only to inspect registered definitions.
    * @returns the definition the scope resolves, or undefined when none is visible.
    */
   get(name: string, scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolDefinition | undefined {
@@ -1306,10 +1308,10 @@ export class ToolRuntime extends Service {
   }
 
   /**
-   * Resolve conditions once for this request without changing shared registrations.
+   * Resolve conditions once for this step without changing shared registrations.
    * Cancellation or a rejected condition publishes no partial selection. Removed
    * registrations cannot be restored by a late condition result.
-   * @param context - agent with a bound route and request cancellation.
+   * @param context - preparing agent, step route, and cancellation.
    * @returns the complete selection; the caller disposes it after its tool batch settles.
    */
   async resolve(context: ToolActivationContext): Promise<ResolvedToolSet> {
@@ -1379,7 +1381,7 @@ export class ToolRuntime extends Service {
    * Project visible definitions onto the allowlisted model-facing schema fields,
    * excluding execution and presentation callbacks.
    * @param scope - the viewing scope (the agent); omitted = the global view.
-   * @param toolSet - request admission, or omitted for registered-definition inspection.
+   * @param toolSet - step admission, or omitted for registered-definition inspection.
    * @returns one deep-cloned schema per visible tool.
    */
   schemas(scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolSchema[] {

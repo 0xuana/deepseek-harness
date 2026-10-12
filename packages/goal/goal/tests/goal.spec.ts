@@ -54,7 +54,6 @@ function stubAgentForSession(session: Session, suppliedCtx?: Context): StubAgent
   }
   const inbox = createInboxStub()
   const agent: Agent = {
-    currentRoute() { throw new Error('no prepared model request in this fixture') },
     id,
     options: {},
     session,

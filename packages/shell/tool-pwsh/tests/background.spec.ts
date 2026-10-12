@@ -204,7 +204,6 @@ describe('owned background output (pwsh)', () => {
     const { ctx, pwsh } = await setup()
     const ownerId = SessionId('pwsh-background-owner')
     const owner: Agent = {
-      currentRoute() { throw new Error('no prepared model request in this fixture') },
       id: ownerId,
       options: {},
       session: Session.create(ownerId, undefined, {
@@ -405,7 +404,6 @@ describe('foreground commands as jobs (pwsh)', () => {
     const { ctx, pwsh } = await setup()
     const ownerId = SessionId('pwsh-promote-owner')
     const owner: Agent = {
-      currentRoute() { throw new Error('no prepared model request in this fixture') },
       id: ownerId,
       options: {},
       session: Session.create(ownerId, undefined, {

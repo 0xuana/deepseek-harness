@@ -32,7 +32,6 @@ async function agent(ctx: Context): Promise<Agent> {
   const session = ctx.sessions.create(id)
   let status: AgentStatus = 'idle'
   const value: Agent = {
-    currentRoute() { throw new Error('no prepared model request in this fixture') },
     id,
     options: {},
     session,

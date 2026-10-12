@@ -67,7 +67,7 @@ ctx.systemPrompt.section({
 
 `refreshContext(assembly, context)` 在 pre-step 与路由准备之后刷新已注册的运行时事实。它保留已接纳的段、工具、变量及仅由组装 waterfall 添加的上下文，应用当前的可选上下文抑制，并恢复缺失的必需条目。将变化的事实放在上下文 provider 中；已注册上下文的文本会在准入前再次读取。
 
-`prepare(context)` 在步骤接纳前通过 `system-prompt/prepare` 解析变量与运行时事实。循环绑定路由并提交步骤选择后，`assemble(context, preparation)` 解析段落与工具声明。展示监听器接收段落、上下文与变量；工具声明仍由提供方持有。依赖工具的段落回调通过 `context.toolSet` 读取与执行相同的请求集合。
+`prepare(context)` 在步骤接纳前通过 `system-prompt/prepare` 解析变量与运行时事实。`agent/pre-step` 接纳步骤并提交其选择后，`assemble(context, preparation)` 解析段落与工具声明。展示监听器接收段落、上下文与变量；工具声明仍由提供方持有。依赖工具的段落回调通过 `context.toolSet` 读取与执行相同的步骤集合。
 
 ### 贡献提示词变量
 
@@ -159,7 +159,7 @@ You are an AI agent powered by DeepSeek Harness.
 
 #### 模型看到什么
 
-对于已交付工具，模型会收到[生成工具 schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tools)中对每个 agent 可见的子集；限制与请求时激活完成后，按配置或字典序排列。扩展可以通过同一注册表贡献其他定义。段与 schema 提供方是独立的组装输入。限制不会移除段落注册：工具指导插件通过 `text({ scope, toolSet })` 与 `ctx.tools.get(name, scope, toolSet)` 返回空文本或选择适用片段。任意静态段落不会被自动改写。
+对于已交付工具，模型会收到[生成工具 schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tools)中对每个 agent 可见的子集；限制与步骤时激活完成后，按配置或字典序排列。扩展可以通过同一注册表贡献其他定义。段与 schema 提供方是独立的组装输入。限制不会移除段落注册：工具指导插件通过 `text({ scope, toolSet })` 与 `ctx.tools.get(name, scope, toolSet)` 返回空文本或选择适用片段。任意静态段落不会被自动改写。
 
 #### Token 影响
 

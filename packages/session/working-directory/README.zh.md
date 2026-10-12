@@ -77,7 +77,7 @@ Session 投影拥有当前目录，并通过 Session observation 暴露它，因
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **原始项目缺失** — 当前目录与原始项目均不可用时，请求准备会拒绝每个模型轮次，包括纯聊天轮次。服务不会另选或重建仓库。请先恢复原始目录，或通过 SDK 的 `setWorkingDirectory`（Python 中为 `set_working_directory`）或 `ctx.workingDirectory.set` 选择现有的绝对目录，再重试。已有 shell 保留各自进程的目录。
+- **原始项目缺失** — 当前目录与原始项目均不可用时，步骤准备会拒绝每个模型轮次，包括纯聊天轮次。服务不会另选或重建仓库。请先恢复原始目录，或通过 SDK 的 `setWorkingDirectory`（Python 中为 `set_working_directory`）或 `ctx.workingDirectory.set` 选择现有的绝对目录，再重试。已有 shell 保留各自进程的目录。
 
 <a id="dev-note"></a>
 ### 开发备注

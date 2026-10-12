@@ -67,7 +67,7 @@ Set `interpolate: false` on a section or dynamic context to preserve its text li
 
 `refreshContext(assembly, context)` refreshes registered runtime facts after pre-step and route preparation. It preserves accepted sections, tools, variables, and contexts contributed only by the assembly waterfall, applies current optional-context suppression, and restores missing required entries. Put changing facts in context providers; registered context text is read again before admission.
 
-`prepare(context)` resolves variables and runtime facts through `system-prompt/prepare` before step admission. After the loop binds the route and commits step selections, `assemble(context, preparation)` resolves sections and tool declarations. Presentation listeners receive sections, contexts, and variables; tools remain provider-owned. Tool-aware section callbacks use `context.toolSet` to inspect the same request selection as execution.
+`prepare(context)` resolves variables and runtime facts through `system-prompt/prepare` before step admission. After `agent/pre-step` accepts the step and commits its selections, `assemble(context, preparation)` resolves sections and tool declarations. Presentation listeners receive sections, contexts, and variables; tools remain provider-owned. Tool-aware section callbacks use `context.toolSet` to inspect the same step selection as execution.
 
 ### Contribute a prompt variable
 
@@ -159,7 +159,7 @@ Prefix-stable while identity, persona, variables, section text, and order render
 
 #### What the model sees
 
-For shipped tools, the model receives the per-agent-visible subset of the [generated tool schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tools), ordered by configuration or lexicographically after restrictions and request-time activation. Extensions can contribute additional definitions through the same registry. Sections and schema providers are separate assembly inputs. A restriction does not remove a section registration: tool-guidance plugins use `text({ scope, toolSet })` and `ctx.tools.get(name, scope, toolSet)` to return empty text or select applicable fragments. Arbitrary static sections are not automatically rewritten.
+For shipped tools, the model receives the per-agent-visible subset of the [generated tool schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tools), ordered by configuration or lexicographically after restrictions and step-time activation. Extensions can contribute additional definitions through the same registry. Sections and schema providers are separate assembly inputs. A restriction does not remove a section registration: tool-guidance plugins use `text({ scope, toolSet })` and `ctx.tools.get(name, scope, toolSet)` to return empty text or select applicable fragments. Arbitrary static sections are not automatically rewritten.
 
 #### Token effect
 

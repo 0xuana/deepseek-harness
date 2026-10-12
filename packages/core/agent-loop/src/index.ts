@@ -386,8 +386,8 @@ export class AgentLoop extends Service implements AgentFactory {
       })
     }, 'agentLoop.transactions()')
     ctx.effect(() => ctx.agents.setFactory(this), 'agentLoop.setFactory()')
-    ctx.systemPrompt.variable('provider', context => context.agent?.options.provider)
-    ctx.systemPrompt.variable('model', context => context.agent?.options.model)
+    ctx.systemPrompt.variable('provider', context => context.route?.provider ?? context.agent?.options.provider)
+    ctx.systemPrompt.variable('model', context => context.route?.model ?? context.agent?.options.model)
 
     for (const { id, sessionId, cwd, resumeSessionId, ...options } of this.config.agents) {
       const meta = cwd === undefined ? {} : { cwd }
