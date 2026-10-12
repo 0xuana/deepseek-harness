@@ -194,7 +194,7 @@ describe('list_subagent_models', () => {
     ctx.llm.registerAdapter(['alpha', 'beta'], new CatalogAdapter())
 
     expect(text(await call(ctx, {}))).toBe('alpha — ALPHA API')
-    expect(text(await call(ctx, { provider: 'alpha' }))).toBe('alpha/fast — Fast: Focused work.\nalpha/unlisted — Fast: Focused work.')
+    expect(text(await call(ctx, { provider: 'alpha' }))).toBe('alpha/fast — Fast: Focused work.')
     expect(text(await call(ctx, { provider: 'alpha', model: 'unlisted' })))
       .toContain('alpha/unlisted — Fast')
 
@@ -216,62 +216,92 @@ describe('list_subagent_models', () => {
     expect(listModels).not.toHaveBeenCalled()
   })
 
-  it('resolves an allowed model even when the advertised catalog is empty', async () => {
-    const ctx = await setupListTool([{ provider: 'alpha', model: 'fast' }])
-    ctx.llm.registerAdapter(['alpha'], new CatalogAdapter(true))
+  it('returns an empty list when the catalog contains no authorized model', async () => {
+    const ctx = await setupListTool([{ provider: 'alpha', model: 'unlisted' }])
+    ctx.llm.registerAdapter(['alpha'], new CatalogAdapter())
     const result = await call(ctx, { provider: 'alpha' })
     expect(result.isError).toBe(false)
-    expect(text(result)).toBe('alpha/fast — Fast: Focused work.')
+    expect(text(result)).toBe('(no advertised models for alpha)')
   })
 
-  it.each([false, true])('reports each failed model alongside resolved models (all failed: %s)', async (allFailed) => {
+  it('lists authorized catalog entries without resolving removed or unlisted models', async () => {
     const ctx = await setupListTool([
       { provider: 'alpha', model: 'removed' },
-      ...allFailed ? [] : [{ provider: 'alpha', model: 'plain' }],
-      { provider: 'alpha', model: 'unavailable' },
+      { provider: 'alpha', model: 'plain' },
     ])
     try {
       const adapter = new CatalogAdapter()
-      vi.spyOn(adapter, 'resolveModel').mockImplementation(async (provider, model) => {
-        if (model === 'removed') throw new Error('model was removed')
-        // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- Exercise non-Error rejections from an external adapter.
-        if (model === 'unavailable') return Promise.reject('metadata unavailable')
-        return { provider, id: model, name: 'Plain' }
-      })
+      const resolveModel = vi.spyOn(adapter, 'resolveModel').mockRejectedValue(new Error('lookup unavailable'))
       ctx.llm.registerAdapter(['alpha'], adapter)
 
       const result = await call(ctx, { provider: 'alpha' })
       expect(result.isError).toBe(false)
-      expect(text(result)).toBe([
-        'alpha/removed — Error: model was removed',
-        ...allFailed ? [] : ['alpha/plain — Plain'],
-        'alpha/unavailable — Error: metadata unavailable',
-      ].join('\n'))
+      expect(text(result)).toBe('alpha/plain — Plain')
+      expect(resolveModel).not.toHaveBeenCalled()
 
       const exact = await call(ctx, { provider: 'alpha', model: 'removed' })
       expect(exact.isError).toBe(true)
-      expect(text(exact)).toContain('model was removed')
+      expect(text(exact)).toContain('lookup unavailable')
     } finally {
       await ctx.fiber.dispose()
     }
   })
 
-  it.each([false, true])('does not render cancellation as a model error (adapter rejects: %s)', async (rejects) => {
-    const ctx = await setupListTool([{ provider: 'alpha', model: 'plain' }])
+  it('rejects a failed catalog lookup', async () => {
+    const ctx = await setupListTool()
+    try {
+      const adapter = new CatalogAdapter()
+      vi.spyOn(adapter, 'listModels').mockRejectedValue(new Error('catalog unavailable'))
+      ctx.llm.registerAdapter(['alpha'], adapter)
+      const result = await call(ctx, { provider: 'alpha' })
+      expect(result.isError).toBe(true)
+      expect(text(result)).toContain('catalog unavailable')
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('rejects cancellation after a catalog lookup', async () => {
+    const ctx = await setupListTool()
     try {
       const controller = new AbortController()
       const adapter = new CatalogAdapter()
-      vi.spyOn(adapter, 'resolveModel').mockImplementation(async (provider, model) => {
+      vi.spyOn(adapter, 'listModels').mockImplementation(async () => {
         controller.abort(new Error('discovery cancelled'))
-        if (rejects) throw new Error('lookup interrupted')
-        return { provider, id: model, name: 'Plain' }
+        return []
       })
       ctx.llm.registerAdapter(['alpha'], adapter)
-
       const result = await call(ctx, { provider: 'alpha' }, controller.signal)
       expect(result.isError).toBe(true)
       expect(text(result)).toContain('discovery cancelled')
-      expect(text(result)).not.toContain('alpha/plain —')
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it.each([false, true])('resolves only the current parent model when selection is disabled (empty catalog: %s)', async (empty) => {
+    const ctx = await setup({ provider: 'mock', parentAgentOptions: { provider: 'alpha', model: 'unlisted' } })
+    const adapter = new CatalogAdapter(empty)
+    const listModels = vi.spyOn(adapter, 'listModels')
+    ctx.llm.registerAdapter(['alpha'], adapter)
+    const result = await ctx.tools.execute({
+      signal: testToolSignal, callId: ToolCallId('parent-only-discovery'),
+      name: 'list_subagent_models', arguments: { provider: 'alpha' }, agent: modelSelectionSetupAgent(ctx),
+    })
+    expect(result.isError).toBe(false)
+    expect(text(result)).toBe('alpha/unlisted — Fast: Focused work.')
+    expect(listModels).not.toHaveBeenCalled()
+  })
+
+  it('requires a calling Agent when a discovery registration supplies no policy', async () => {
+    const ctx = new Context()
+    try {
+      await ctx.plugin(SystemPrompt)
+      await ctx.plugin(ToolRuntime)
+      registerListSubagentModels(ctx, () => undefined)
+      const result = await call(ctx, {})
+      expect(result.isError).toBe(true)
+      expect(text(result)).toContain('requires a calling agent')
     } finally {
       await ctx.fiber.dispose()
     }

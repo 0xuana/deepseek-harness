@@ -38,10 +38,20 @@ function modelLine(provider: string, model: { id: string; name: string; descript
 /** Read the requested provider, allowed models, or exact-model efforts. */
 async function listSubagentModels(
   ctx: Context,
-  policy: ModelSelectionPolicy,
+  policy: ModelSelectionPolicy | undefined,
   request: ListSubagentModelsRequest,
-  signal: AbortSignal,
+  exec: ToolRunContext,
 ): Promise<string> {
+  const selectionEnabled = policy !== undefined
+  if (policy === undefined) {
+    if (exec.agent === undefined) throw new Error('list_subagent_models requires a calling agent')
+    const { provider, model } = parentAgentOptionsForDelegation(exec.agent)
+    if (provider === undefined || model === undefined) {
+      throw new Error('cannot discover child LLM routes without a parent provider and model')
+    }
+    policy = { routes: [{ provider, model }] }
+  }
+  const { signal } = exec
   const llm = ctx.get('llm')
   if (llm === undefined) {
     throw new Error('cannot discover child LLM routes because the `llm` service is unavailable')
@@ -58,23 +68,19 @@ async function listSubagentModels(
   }
   if (request.provider.length === 0) throw new Error('`provider` must be non-empty')
   const allowedRoutes = policy.routes.filter(route => route.provider === request.provider)
-  if (allowedRoutes.length === 0) {
+  const [firstRoute] = allowedRoutes
+  if (firstRoute === undefined) {
     throw new Error(`LLM provider "${request.provider}" is not allowed for this Session`)
   }
   const provider = registeredProvider(llm, policy, request.provider)
   if (request.model === undefined) {
-    const lines = await Promise.all(allowedRoutes.map(async (route) => {
-      let model
-      try {
-        model = await llm.resolveModelInfo(provider.id, route.model, signal)
-      } catch (error) {
-        signal.throwIfAborted()
-        return `${provider.id}/${route.model} — Error: ${error instanceof Error ? error.message : String(error)}`
-      }
-      return modelLine(provider.id, model)
-    }))
+    const models = selectionEnabled
+      ? (await llm.listModels(provider.id)).filter(model => allowedRoutes.some(route => route.model === model.id))
+      : [await llm.resolveModelInfo(provider.id, firstRoute.model, signal)]
     signal.throwIfAborted()
-    return lines.join('\n')
+    return models.length === 0
+      ? `(no advertised models for ${provider.id})`
+      : models.map(model => modelLine(provider.id, model)).join('\n')
   }
   if (request.model.length === 0) throw new Error('`model` must be non-empty')
   if (!allowedRoutes.some(route => route.model === request.model)) {
@@ -90,11 +96,11 @@ async function listSubagentModels(
 
 /**
  * Register `list_subagent_models` in the owning composition.
- * Provider listings report lookup failures per model; cancellation rejects the call.
+ * Provider listings intersect the catalog with authorization, or resolve only the parent model when selection is disabled.
  * @param ctx - Context whose tool registry owns the fixed discovery definition.
- * @param policyFor - Resolve the calling Session’s authorized routes.
+ * @param policyFor - Read the calling Session’s authorized routes; undefined restricts discovery to its parent model.
  */
-export function registerListSubagentModels(ctx: Context, policyFor: (exec: ToolRunContext) => ModelSelectionPolicy): void {
+export function registerListSubagentModels(ctx: Context, policyFor: (exec: ToolRunContext) => ModelSelectionPolicy | undefined): void {
   ctx.tools.register(defineTool({
     name: 'list_subagent_models',
     description:
@@ -118,7 +124,7 @@ export function registerListSubagentModels(ctx: Context, policyFor: (exec: ToolR
       render: (_args, result) => [{ type: 'text', text: result }],
     },
     execute(args, exec) {
-      return listSubagentModels(ctx, policyFor(exec), args, exec.signal)
+      return listSubagentModels(ctx, policyFor(exec), args, exec)
     },
   }))
 }
@@ -137,11 +143,6 @@ export function apply(ctx: Context): void {
   registerListSubagentModels(ctx, (exec) => {
     if (exec.agent === undefined) throw new Error('list_subagent_models requires a calling agent')
     const routes = subagentModelSelectionPolicy(ctx.sessionProjections, exec.agent.session)
-    if (routes !== undefined) return { routes }
-    const { provider, model } = parentAgentOptionsForDelegation(exec.agent)
-    if (provider === undefined || model === undefined) {
-      throw new Error('cannot discover child LLM routes without a parent provider and model')
-    }
-    return { routes: [{ provider, model }] }
+    return routes === undefined ? undefined : { routes }
   })
 }

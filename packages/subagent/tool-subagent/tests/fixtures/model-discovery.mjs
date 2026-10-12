@@ -2,6 +2,13 @@
 import { LlmAdapter } from '@deepseek-ai/dsh-llm'
 
 class DiscoveryAdapter extends LlmAdapter {
+  async listModels(provider) {
+    return [
+      { provider, id: 'healthy', name: 'Healthy' },
+      { provider, id: 'unauthorized', name: 'Unauthorized' },
+    ]
+  }
+
   async resolveModel(provider, model) {
     if (model === 'removed') throw new Error('model was removed')
     return { provider, id: model, name: 'Healthy' }
