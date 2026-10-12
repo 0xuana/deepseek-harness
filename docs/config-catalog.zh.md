@@ -3787,7 +3787,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-tool-jobs`
 
 - `inject`: `tools` · `jobs` · `systemPrompt`
-- `source`: [`packages/jobs/tool-jobs/src/index.ts:41`](../packages/jobs/tool-jobs/src/index.ts)
+- `source`: [`packages/jobs/tool-jobs/src/index.ts:43`](../packages/jobs/tool-jobs/src/index.ts)
 
 ```ts config-catalog
 /** Configures bounded `job_output` waits and completion-notice delivery. */
@@ -3807,6 +3807,13 @@ export interface Config {
    * the next user input.
    */
   maxConsecutiveWakes?: number
+  /**
+   * Largest complete completion notice, in UTF-8 bytes, that carries the
+   * job's unread output (default 2048); a larger one leaves that output for
+   * `job_output`. The producer's `outputLimitBytes` also bounds it, and 0
+   * never inlines output.
+   */
+  inlineOutputBytes?: number
 }
 
 /**

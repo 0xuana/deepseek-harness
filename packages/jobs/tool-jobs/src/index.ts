@@ -4,14 +4,16 @@
  * producers. It also delivers completions the model has not already
  * collected to the owning agent: injected into a busy owner's next step, or
  * opening a turn on an idle one under the default `wakeup` delivery, unbounded
- * unless `maxConsecutiveWakes` caps it per owner.
+ * unless `maxConsecutiveWakes` caps it per owner. A notice carries the job's
+ * unread output when it fits `inlineOutputBytes`, and `job_output` withdraws a
+ * notice still pending when it returns the same output.
  * @module @deepseek-ai/dsh-tool-jobs
  */
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { boundContextSummary, createUserMessage, type ContentBlock } from '@deepseek-ai/dsh-llm'
-import type { ContextFormed } from '@deepseek-ai/dsh-llm'
+import type { ContextFormed, MessageId } from '@deepseek-ai/dsh-llm'
 import { TextRetainer } from '@deepseek-ai/dsh-output-retention'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView, ToolDefinition, ToolExecution } from '@deepseek-ai/dsh-tools'
@@ -54,6 +56,13 @@ export interface Config {
    * the next user input.
    */
   maxConsecutiveWakes?: number
+  /**
+   * Largest complete completion notice, in UTF-8 bytes, that carries the
+   * job's unread output (default 2048); a larger one leaves that output for
+   * `job_output`. The producer's `outputLimitBytes` also bounds it, and 0
+   * never inlines output.
+   */
+  inlineOutputBytes?: number
 }
 
 export const Config: z<Config> = z.object({
@@ -61,6 +70,7 @@ export const Config: z<Config> = z.object({
   maxWaitTimeoutMs: z.number().min(1).default(600_000),
   completionDelivery: z.union(['quiet', 'wakeup'] as const).default('wakeup'),
   maxConsecutiveWakes: z.number().min(1),
+  inlineOutputBytes: z.natural().default(2048),
 })
 
 /** Shared schema for job-control outputs. */
@@ -119,9 +129,36 @@ function completionSummary(job: JobView): string {
   return boundContextSummary(`${job.kind} ${job.label} ${statusLine(publicJob(job))}`)
 }
 
+/**
+ * The job's label as a notice names it: the first non-empty line, bounded
+ * like a notice summary. The model wrote the full command and holds the job id.
+ * @param job - the settled job.
+ * @returns ` (kind: label) finished [status: …]`.
+ */
+function noticeDetail(job: JobView): string {
+  const text = job.label.trimStart()
+  const newline = text.indexOf('\n')
+  const label = boundContextSummary(newline === -1 ? text : `${text.slice(0, newline)}…`)
+  return ` (${job.kind}: ${label}) finished ${statusLine(publicJob(job))}`
+}
+
+/**
+ * The notice that carries the job's unread output, when the complete text fits.
+ * @param job - the settled job.
+ * @param output - the consuming read taken at settlement.
+ * @param maxBytes - the configured inline bound.
+ * @returns the notice text, or undefined when it exceeds either bound.
+ */
+function inlineCompletionNotice(job: JobView, output: string, maxBytes: number): string | undefined {
+  const body = output.endsWith('\n') ? output.slice(0, -1) : output
+  const text = `background job ${job.id}${noticeDetail(job)}${body.length === 0 ? '. No new output.' : `. Output:\n${body}`}`
+  const bytes = encoder.encode(text).byteLength
+  return bytes <= maxBytes && bytes <= (job.outputLimitBytes ?? Infinity) ? text : undefined
+}
+
 function fitCompletionNotice(job: JobView): string {
   const prefix = `background job ${job.id}`
-  const detail = ` (${job.kind}: ${job.label}) finished ${statusLine(publicJob(job))}`
+  const detail = noticeDetail(job)
   const action = '\nDone; job_output.'
   const complete = `${prefix}${detail}. Read its output with job_output.`
   const maxBytes = job.outputLimitBytes
@@ -180,6 +217,16 @@ function presentJobCall(title: string, kind: 'read' | 'execute', rawInput?: stri
   return { card: 'generic', title, kind, ...rawInput !== undefined ? { rawInput } : {} }
 }
 
+/** A settlement read held for the model; see the `held` map in {@link apply}. */
+interface HeldRead {
+  readonly owner: Agent
+  /** The notice that reported the settlement. */
+  readonly messageId: MessageId
+  readonly text: string
+  /** Whether the notice carries `text`. */
+  readonly inline: boolean
+}
+
 /** The consuming read as the model sees it: the delta, then the result once, then the status line. */
 function readBody(read: JobRead): { text: string; job: PublicJobSnapshot } {
   const delta = renderModelDelta(read.chunks, read.lossy, read.job.output.spillPaths ?? [])
@@ -194,6 +241,7 @@ export function apply(ctx: Context, config: Config): void {
   const waitCap = config.maxWaitTimeoutMs ?? 600_000
   const delivery = config.completionDelivery ?? 'wakeup'
   const wakeBudget = config.maxConsecutiveWakes
+  const inlineBytes = config.inlineOutputBytes ?? 2048
 
   // Turns this plugin opened on each owner since that owner last consumed
   // human input. Keyed by the exact Agent, so a same-session replacement
@@ -207,8 +255,15 @@ export function apply(ctx: Context, config: Config): void {
   if (wakeBudget !== undefined && !Number.isSafeInteger(wakeBudget)) {
     throw new Error(`tool-jobs: maxConsecutiveWakes (${wakeBudget}) must be a whole number of turns`)
   }
-  // Nothing spends the budget under quiet delivery or without a cap, so
-  // nothing needs to refill it.
+
+  // The consuming read each settlement notice took, until the model receives
+  // it: through the notice's logged `user/message` when the notice carries it
+  // inline, otherwise through `job_output`. A claimed notice can still miss
+  // the model (a rejected or cancelled step), so only the logged message
+  // spends it. `job_output` withdraws a notice still pending, which would only
+  // repeat its result.
+  const held = new Map<JobId, HeldRead>()
+
   if (delivery === 'wakeup' && wakeBudget !== undefined) {
     ctx.on('agent/inbox/claimed', ({ agent, message }) => {
       // Claiming is the point the human's input actually enters a step; a notice
@@ -216,6 +271,12 @@ export function apply(ctx: Context, config: Config): void {
       if (message.source.kind === 'user') spentWakes.delete(agent)
     })
   }
+  ctx.on('session/event', (session, event) => {
+    if (event.type !== 'user/message' || event.data.source.kind !== 'tool-jobs') return
+    for (const [id, entry] of held) {
+      if (entry.inline && entry.messageId === event.data.id && entry.owner.id === session.id) held.delete(id)
+    }
+  })
 
   const outputLimits = new WeakMap<ToolExecution, number>()
   ctx.on('tools/pre-execute', (exec, next) => {
@@ -272,6 +333,7 @@ export function apply(ctx: Context, config: Config): void {
   ctx.jobs.events.subscribe({ owners: 'scope' }, (event) => {
     if (event.type === 'removed') {
       killedByModel.delete(event.job.id)
+      held.delete(event.job.id)
       return
     }
     if (event.type !== 'settled') return
@@ -282,10 +344,12 @@ export function apply(ctx: Context, config: Config): void {
     // absent here when it left before settlement — and then no inbox is left.
     const owner = ctx.get('agents')?.get(event.job.owner)
     if (owner === undefined) return
+    const output = readBody(ctx.jobs.read(event.job.id, event.job.owner)).text
+    const inline = inlineCompletionNotice(event.job, output, inlineBytes)
     const message = createUserMessage({
       content: [{
         type: 'text',
-        text: fitCompletionNotice(event.job),
+        text: inline ?? fitCompletionNotice(event.job),
       }],
       source: {
         kind: 'tool-jobs',
@@ -293,6 +357,7 @@ export function apply(ctx: Context, config: Config): void {
         summary: completionSummary(event.job),
       },
     })
+    held.set(event.job.id, { owner, messageId: message.id, text: output, inline: inline !== undefined })
     if (delivery === 'wakeup' && owner.status === 'idle') {
       if (wakeBudget === undefined) {
         owner.followup(message)
@@ -344,7 +409,13 @@ export function apply(ctx: Context, config: Config): void {
         // set before any later settlement, which then notifies as usual.
         await jobs.wait(id, Math.min(args.timeout_ms ?? waitDefault, waitCap), exec.agent?.id, exec.signal)
       }
-      return readBody(jobs.read(id, exec.agent?.id))
+      const read = readBody(jobs.read(id, exec.agent?.id))
+      const notice = held.get(id)
+      if (notice === undefined) return read
+      held.delete(id)
+      // This result repeats the notice's output, so a notice still pending goes.
+      if (ctx.get('agents')?.get(notice.owner.id) === notice.owner) notice.owner.inbox.remove(notice.messageId)
+      return { text: `${notice.text}${read.text}`, job: read.job }
     },
     presentCall: args => presentJobCall(`Read output from background job ${args.job_id}`, 'read', args.job_id),
   }))

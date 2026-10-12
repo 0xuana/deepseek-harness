@@ -71,6 +71,13 @@ interface ActivationBase {
    * not exist, so its teardown owes the parent no settlement account.
    */
   announced: boolean
+  /**
+   * Whether this child's last action before its closing text was a message to
+   * its direct parent: no input was claimed and no tool call started since.
+   * Its settlement notice then omits the closing message, which restates that
+   * message.
+   */
+  relayed: boolean
 }
 
 /** Resources retained only for the selected execution kind. */

@@ -934,6 +934,7 @@ export class SubagentManager {
       ownedChildren: new Set(),
       observer,
       announced: false,
+      relayed: false,
     }
     void activation.result.promise.catch(() => undefined)
     this.resident.set(childId, activation)
@@ -948,6 +949,13 @@ export class SubagentManager {
         activation.handle.agent.ctx.on('agent/inbox/inserted', wakeSettlement)
         activation.handle.agent.ctx.on('agent/inbox/claimed', wakeSettlement)
         activation.handle.agent.ctx.on('agent/inbox/discarded', wakeSettlement)
+        // Input or a tool call after the child's last message to its parent
+        // means the closing text may report work that message did not.
+        activation.handle.agent.ctx.on('agent/inbox/claimed', () => { activation.relayed = false })
+        activation.handle.agent.ctx.on('tools/pre-execute', (_exec, next) => {
+          activation.relayed = false
+          return next()
+        })
       }
       observer.start(activationAgent(activation))
     } catch (error: unknown) {
@@ -1186,7 +1194,7 @@ export class SubagentManager {
       const parent = this.ctx.agents.get(activation.parent.id)
       if (parent !== activation.parent) return
       const message = createSettlementMessage(
-        activation.childId, terminal, activationAgent(activation) !== undefined,
+        activation.childId, terminal, activationAgent(activation) !== undefined, activation.relayed,
       )
       if (this.closingTeardownFor(parent) !== undefined) {
         parent.inject(message)
@@ -1299,6 +1307,7 @@ export class SubagentManager {
     }
     const message = createAgentMessage(sender, content)
     this.sendAgentMessage(parent, message)
+    activation.relayed = true
     return message.id
   }
 

@@ -6,6 +6,8 @@ import ToolRuntime from '@deepseek-ai/dsh-tools'
 import AgentRegistry, { emitAgentEvent } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import type { UserMessage } from '@deepseek-ai/dsh-llm'
+import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { bindScopeParent, createScope, scopeOf } from '@deepseek-ai/dsh-scope'
 import { JobId } from '@deepseek-ai/dsh-jobs'
@@ -63,6 +65,7 @@ async function setup(config: ToolJobs.Config = {}, registry: RegistryConfig = {}
 interface FakeDelivery {
   inject?: (...args: unknown[]) => void
   followup?: (...args: unknown[]) => void
+  remove?: (...args: unknown[]) => boolean
   /** Defaults to `running`, the lane that never wakes, so notice-content tests pin one lane. */
   status?: 'idle' | 'running'
 }
@@ -79,6 +82,7 @@ async function fakeAgent(ctx: Context, sessionId: string, delivery: FakeDelivery
     ctx: scopeFiber.ctx,
     inject: delivery.inject ?? (() => {}),
     followup: delivery.followup ?? (() => {}),
+    inbox: { remove: delivery.remove ?? (() => true) },
     status: delivery.status ?? 'running',
     session: { id, header: { version: 0, id, createdAt: 0 } },
   } as unknown as Agent
@@ -770,7 +774,7 @@ describe('completion notice delivery', () => {
     const message = inject.mock.calls[0]![0] as { content: readonly { type: string; text: string }[] }
     expect(message.content[0]!.text).toBe(
       `background job ${startedId(ctx, 'bash-1')} (bash: pnpm run watch) finished `
-      + '[status: killed, signal: SIGTERM; cancelled by the user]. Read its output with job_output.',
+      + '[status: killed, signal: SIGTERM; cancelled by the user]. No new output.',
     )
   })
 
@@ -913,7 +917,7 @@ describe('completion notices', () => {
     expect(inject).toHaveBeenCalledWith({
       id: expect.any(String) as unknown,
       role: 'user',
-      content: [{ type: 'text', text: `background job ${startedId(ctx, 'bash-1')} (bash: pnpm test) finished [status: completed, exit code: 0]. Read its output with job_output.` }],
+      content: [{ type: 'text', text: `background job ${startedId(ctx, 'bash-1')} (bash: pnpm test) finished [status: completed, exit code: 0]. No new output.` }],
       source: {
         kind: 'tool-jobs',
         form: 'notice',
@@ -1233,5 +1237,126 @@ describe('completion notices', () => {
     // The throw escapes the notice listener and is contained (logged) by the
     // registry's per-listener containment — visible, not swallowed.
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('unexpected inject bug'))
+  })
+})
+
+describe('completion notice output', () => {
+  /** The notice message the fake owner's inject received. */
+  function notice(inject: ReturnType<typeof vi.fn>, index = 0): UserMessage & { content: [{ type: 'text'; text: string }] } {
+    return inject.mock.calls[index]![0] as UserMessage & { content: [{ type: 'text'; text: string }] }
+  }
+
+  /** Report the notice as logged into the owner's Session, the point it reaches the model. */
+  function logged(ctx: Context, owner: Agent, message: UserMessage): void {
+    ctx.emit('session/event', owner.session, { type: 'user/message', seq: 1, time: 0, data: message } as SessionEvent)
+  }
+
+  it('carries unread output that fits, and the read is spent once the notice is logged', async () => {
+    const { ctx } = await setup()
+    const inject = vi.fn()
+    const owner = await fakeAgent(ctx, 'sess-1', { inject })
+    const p = producer({ owner: owner.id, label: 'pnpm test' })
+    const id = ctx.jobs.start(p.spec)
+    p.append('ok 3 tests\n', { channel: 'stdout' })
+    p.settle({ status: 'completed', detail: 'exit code: 0' })
+    await tick()
+
+    expect(notice(inject).content[0].text).toBe(`background job ${id} (bash: pnpm test) finished [status: completed, exit code: 0]. Output:\nok 3 tests`)
+    logged(ctx, owner, notice(inject))
+    expect(text(await call(ctx, 'job_output', { job_id: id }, owner))).toBe('(no new output)\n[status: completed, exit code: 0]')
+  })
+
+  it('leaves larger output for job_output', async () => {
+    const { ctx } = await setup({ inlineOutputBytes: 40 })
+    const inject = vi.fn()
+    const owner = await fakeAgent(ctx, 'sess-1', { inject })
+    const p = producer({ owner: owner.id, label: 'pnpm test' })
+    const id = ctx.jobs.start(p.spec)
+    p.append('ok 3 tests\n', { channel: 'stdout' })
+    p.settle({ status: 'completed', detail: 'exit code: 0' })
+    await tick()
+
+    expect(notice(inject).content[0].text).toBe(`background job ${id} (bash: pnpm test) finished [status: completed, exit code: 0]. Read its output with job_output.`)
+    logged(ctx, owner, notice(inject))
+    expect(text(await call(ctx, 'job_output', { job_id: id }, owner))).toBe('ok 3 tests\n[status: completed, exit code: 0]')
+  })
+
+  it('withdraws a pending notice when job_output returns the same output', async () => {
+    const { ctx } = await setup()
+    const inject = vi.fn()
+    const remove = vi.fn(() => true)
+    const owner = await fakeAgent(ctx, 'sess-1', { inject, remove })
+    const p = producer({ owner: owner.id, kind: 'test-task' })
+    const id = ctx.jobs.start(p.spec)
+    p.append('partial\n')
+    p.settle({ status: 'completed', result: 'answer' })
+    await tick()
+
+    expect(text(await call(ctx, 'job_output', { job_id: id, wait: true }, owner))).toBe('partial\nanswer\n[status: completed]')
+    expect(remove).toHaveBeenCalledWith(notice(inject).id)
+    expect(text(await call(ctx, 'job_output', { job_id: id }, owner))).toBe('(no new output)\n[status: completed]')
+    expect(remove).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the output of an inline notice that was claimed but never logged', async () => {
+    const { ctx } = await setup()
+    const inject = vi.fn()
+    const remove = vi.fn(() => false)
+    const owner = await fakeAgent(ctx, 'sess-1', { inject, remove })
+    const p = producer({ owner: owner.id })
+    const id = ctx.jobs.start(p.spec)
+    p.append('lost line\n')
+    p.settle({ status: 'completed' })
+    await tick()
+
+    // A rejected or cancelled step claims the notice without logging it.
+    emitAgentEvent(ctx, owner, 'agent/inbox/claimed', { message: notice(inject), turn: 1 })
+    expect(text(await call(ctx, 'job_output', { job_id: id }, owner))).toBe('lost line\n[status: completed]')
+    expect(remove).toHaveBeenCalledWith(notice(inject).id)
+  })
+
+  it('spends only the inline read of the logged notice in its own session', async () => {
+    const { ctx } = await setup()
+    const inject = vi.fn()
+    const owner = await fakeAgent(ctx, 'sess-1', { inject })
+    const other = await fakeAgent(ctx, 'sess-2')
+    const p = producer({ owner: owner.id })
+    const id = ctx.jobs.start(p.spec)
+    p.append('kept\n')
+    p.settle({ status: 'completed' })
+    await tick()
+
+    logged(ctx, other, notice(inject))
+    logged(ctx, owner, createUserMessage({ content: [{ type: 'text', text: 'x' }], source: { kind: 'tool-jobs', form: 'notice', summary: 'x' } }))
+    logged(ctx, owner, createUserMessage({ content: [{ type: 'text', text: 'hi' }], source: { kind: 'user' } }))
+    ctx.emit('session/event', owner.session, { type: 'turn/start', seq: 2, time: 0, data: { turn: 1 } } as SessionEvent)
+    expect(text(await call(ctx, 'job_output', { job_id: id }, owner))).toBe('kept\n[status: completed]')
+  })
+
+  it('leaves the inbox of an owner that is no longer registered', async () => {
+    const { ctx } = await setup()
+    const remove = vi.fn(() => true)
+    const oldOwner = await fakeAgent(ctx, 'shared', { remove })
+    const p = producer({ owner: oldOwner.id })
+    const id = ctx.jobs.start(p.spec)
+    p.settle({ status: 'completed' })
+    await tick()
+
+    await detachAgent(oldOwner)
+    const replacement = await fakeAgent(ctx, 'shared')
+    expect(text(await call(ctx, 'job_output', { job_id: id }, replacement))).toBe('(no new output)\n[status: completed]')
+    expect(remove).not.toHaveBeenCalled()
+  })
+
+  it('names a multi-line label by its first line', async () => {
+    const { ctx } = await setup()
+    const inject = vi.fn()
+    const owner = await fakeAgent(ctx, 'sess-1', { inject })
+    const p = producer({ owner: owner.id, label: "cat > a.mjs <<'EOF'\nconsole.log(1)\nEOF" })
+    const id = ctx.jobs.start(p.spec)
+    p.settle({ status: 'completed' })
+    await tick()
+
+    expect(notice(inject).content[0].text).toBe(`background job ${id} (bash: cat > a.mjs <<'EOF'…) finished [status: completed]. No new output.`)
   })
 })

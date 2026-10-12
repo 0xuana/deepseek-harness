@@ -2985,9 +2985,79 @@ describe('continuable settlement delivery', () => {
     await waitNoActivation(ctx, started.childId)
 
     // The contract is unconditional precisely so the parent-side tool
-    // description can promise it; bookkeeping "did it report?" would make the
-    // promise conditional on a channel this manager does not own.
+    // description can promise it; only the closing text, which restates the
+    // message, is left out.
     await vi.waitFor(() => { expect(settlementNotices(parent)).toHaveLength(1) })
+    expect(settlementNotices(parent)[0]!.text).toBe(
+      `Background subagent ${started.childId} finished and will do no further work unless you send it more.\n`
+      + 'It sent you a message just before finishing, so its closing message is omitted.',
+    )
+  })
+
+  it('reports the closing message again when the child received input after its message', async () => {
+    const release = Promise.withResolvers<undefined>()
+    const adapter = new GatedAdapter([
+      { chunks: textResponse('interim'), gate: release.promise },
+      { chunks: textResponse('parent ack') },
+      { chunks: textResponse('the answer') },
+      { chunks: textResponse('parent ack') },
+    ])
+    const { ctx, parent } = await setupWith(adapter)
+    const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
+    const child = await vi.waitFor(() => {
+      const live = ctx.agents.get(started.childId)
+      expect(live).toBeDefined()
+      expect(adapter.requests).toHaveLength(1)
+      return live!
+    })
+    await ctx.subagents.sendMessage(child, parent.id, message('an interim finding'), { signal: testSignal })
+    await vi.waitFor(() => { expect(adapter.requests).toHaveLength(2) })
+    await parent.whenIdle()
+    await ctx.subagents.sendMessage(parent, started.childId, message('now finish'), { signal: testSignal })
+    release.resolve(undefined)
+    await waitNoActivation(ctx, started.childId)
+
+    await vi.waitFor(() => { expect(settlementNotices(parent)).toHaveLength(1) })
+    expect(settlementNotices(parent)[0]!.text).toBe(
+      `Background subagent ${started.childId} finished and will do no further work unless you send it more.\nIts closing message:\nthe answer`,
+    )
+  })
+
+  it('reports the closing message when the child ran a tool after its message', async () => {
+    const release = Promise.withResolvers<undefined>()
+    const adapter = new GatedAdapter([
+      { chunks: toolCallResponse('t1', 'noop', {}), gate: release.promise },
+      { chunks: textResponse('parent ack') },
+      { chunks: textResponse('the answer') },
+      { chunks: textResponse('parent ack') },
+    ])
+    const { ctx, parent } = await setupWith(adapter)
+    ctx.tools.register(defineTool({
+      name: 'noop',
+      description: 'does nothing',
+      parameters: {},
+      output: {
+        schema: { type: 'object', additionalProperties: false, properties: {} },
+        render: () => [{ type: 'text', text: 'noop' }],
+      },
+      execute: () => Promise.resolve({}),
+    }))
+    const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
+    const child = await vi.waitFor(() => {
+      const live = ctx.agents.get(started.childId)
+      expect(live).toBeDefined()
+      expect(adapter.requests).toHaveLength(1)
+      return live!
+    })
+    await ctx.subagents.sendMessage(child, parent.id, message('an interim finding'), { signal: testSignal })
+    await vi.waitFor(() => { expect(adapter.requests).toHaveLength(2) })
+    release.resolve(undefined)
+    await waitNoActivation(ctx, started.childId)
+
+    await vi.waitFor(() => { expect(settlementNotices(parent)).toHaveLength(1) })
+    expect(settlementNotices(parent)[0]!.text).toBe(
+      `Background subagent ${started.childId} finished and will do no further work unless you send it more.\nIts closing message:\nthe answer`,
+    )
   })
 
   it('delivers the terminal reason when the child never had a chance to report', async () => {
