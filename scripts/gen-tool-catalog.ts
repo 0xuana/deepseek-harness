@@ -522,7 +522,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
       await ctx.plugin(ListSubagentModels)
     },
     note:
-      'The load-time `toolName` selects the delegation name (default `subagent`); `modelSelection` adds optional route fields. The independent `/list-models` plugin registers discovery. Web and Desktop presets mount discovery, enable spawn route fields, and leave fork route fields disabled. The Host settings service records authorization for each new top-level Session; child Sessions inherit it. Without a recorded policy, discovery and explicit selection permit only the current parent route. Every delegation returns a child id promptly; local children accept follow-ups, while external backends report their single execution automatically.',
+      'The load-time `toolName` selects the delegation name (default `subagent`); `modelSelection` adds optional route fields. The independent `/list-models` plugin registers discovery. Web and Desktop presets mount discovery, enable spawn route fields, and leave `subagent_fork` route fields disabled. The Host settings service records authorization for each new top-level Session; child Sessions inherit it. Without a recorded policy, discovery and explicit selection permit only the current parent route. Every delegation returns a child id promptly; local children accept follow-ups, while external backends report their single execution automatically.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-subagent-control',

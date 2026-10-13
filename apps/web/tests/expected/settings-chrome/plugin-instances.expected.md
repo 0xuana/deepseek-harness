@@ -9,6 +9,10 @@
       - strong: 子智能体列表工具
       - code: tool-subagent-list-agents
   - listitem:
+    - button "子智能体模型查询工具, tool-subagent-list-models, 已启用":
+      - strong: 子智能体模型查询工具
+      - code: tool-subagent-list-models
+  - listitem:
     - button "子智能体委派工具, tool-subagent, 已启用":
       - strong: 子智能体委派工具
       - text: 让 AI 将任务交给子智能体，并获取运行结果。

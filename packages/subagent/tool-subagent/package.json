@@ -29,10 +29,12 @@
     "./list-models": {
       "types": "./lib/types/list-models.d.ts",
       "default": "./lib/list-models.js"
-    }
+    },
+    "./list-models/locale/*.json": "./locale/list-models/*.json"
   },
   "files": [
     "locale/*.json",
+    "locale/list-models/*.json",
     "locale/model-selection-settings/*.json",
     "lib/index.js",
     "lib/model-selection-settings.js",
