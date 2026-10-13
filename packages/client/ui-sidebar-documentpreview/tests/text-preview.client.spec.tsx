@@ -110,6 +110,10 @@ function target(container: HTMLElement): string | null {
   return container.querySelector('[data-textpreview-target]')?.getAttribute('data-textpreview-target') ?? null
 }
 
+function marks(container: HTMLElement): HTMLElement[] {
+  return Array.from(container.querySelectorAll<HTMLElement>('[data-textpreview-mark]'))
+}
+
 function click(container: HTMLElement, selector: string): void {
   const button = container.querySelector<HTMLButtonElement>(selector)
   if (button === null) throw new Error(`expected ${selector}`)
@@ -525,8 +529,12 @@ describe('TextPreview — navigation and view', () => {
     act(() => { PendingIntersectionObserver.instances[0]!.intersect(block) })
     await waitFor(() => { expect(view.container.querySelector('[data-code-preview] pre.shiki')).not.toBeNull() })
     expect(scrollport(view.container)).toBe(codeScrollport)
+    // The band lives in the scrollport, so the highlighted swap keeps it.
+    expect(marks(view.container).map(mark => [mark.parentElement, mark.dataset.textpreviewMark, mark.style.top]))
+      .toEqual([[codeScrollport, '2', `${LINE_HEIGHT}px`]])
     view.rerender(<TextPreview {...codeProps(h, { params: { line: 3 }, revision: 2 })} />)
     expect(codeScrollport.scrollTop).toBe(2 * LINE_HEIGHT)
+    expect(marks(view.container).map(mark => mark.dataset.textpreviewMark)).toEqual(['3'])
     expect(h.instance.getSnapshot().byTab[TAB_ID]?.revision).toBe(2)
   })
 
@@ -540,6 +548,12 @@ describe('TextPreview — navigation and view', () => {
     expect(h.read).toHaveBeenLastCalledWith(SESSION, PATH, 4, h.controller.signal)
     expect(body(view.container).scrollTop).toBe(4 * LINE_HEIGHT)
     expect(target(view.container)).toBe('5')
+    const [mark] = marks(view.container)
+    expect(mark?.parentElement).toBe(body(view.container))
+    expect(mark?.dataset.textpreviewMark).toBe('5')
+    expect(mark?.style.top).toBe(`${4 * LINE_HEIGHT}px`)
+    fireEvent.animationEnd(mark!)
+    expect(marks(view.container)).toEqual([])
     expect(h.instance.getSnapshot().byTab[TAB_ID]?.revision).toBe(1)
     expect(h.instance.getSnapshot().byTab[TAB_ID]?.scrollTop).toBe(4 * LINE_HEIGHT)
   })
@@ -554,6 +568,7 @@ describe('TextPreview — navigation and view', () => {
     const second = render(<TextPreview {...h.props({ params: { line: 3 }, revision: 1 })} />)
     await settle()
     expect(body(second.container).scrollTop).toBe(300)
+    expect(marks(second.container)).toEqual([])
   })
 
   it('jumps again for a new navigation to the same tab', async () => {
@@ -564,6 +579,7 @@ describe('TextPreview — navigation and view', () => {
     view.rerender(<TextPreview {...h.props({ params: { line: 2 }, revision: 2 })} />)
     expect(body(view.container).scrollTop).toBe(1 * LINE_HEIGHT)
     expect(target(view.container)).toBe('2')
+    expect(marks(view.container).map(mark => mark.dataset.textpreviewMark)).toEqual(['2'])
     expect(h.instance.getSnapshot().byTab[TAB_ID]?.revision).toBe(2)
   })
 
@@ -573,6 +589,7 @@ describe('TextPreview — navigation and view', () => {
     await settle()
     expect(h.read).toHaveBeenCalledTimes(1)
     expect(target(view.container)).toBeNull()
+    expect(marks(view.container)).toEqual([])
     expect(body(view.container).scrollTop).toBe(0)
     expect(h.instance.getSnapshot().byTab[TAB_ID]?.revision).toBe(1)
     view.rerender(<TextPreview {...h.props({ params: {}, revision: 2 })} />)
