@@ -46,7 +46,7 @@ kind: "package-reference"
 |---|---|---|
 | `provider` | 必填 | `ctx.subagents` 上的提供方名称（如 `spawn`、`fork`、`acp`） |
 | `toolName` | `subagent` | 面向模型的工具名称；每个已加载实例必须不同 |
-| `modelSelectionSettings` | `false` | 公开子级路由字段和 `list_subagent_models`，并为每个顶层 Session 读取宿主的精确路由授权偏好；常驻 preset 观察匹配 Session，直接 Agent setup 则显式传入其 Session；要求提供方支持 `agentOptions` 且不继承父级上下文 |
+| `modelSelectionSettings` | `false` | 公开子级路由字段和 `list_subagent_models`，并为每个顶层 Session 读取宿主的精确路由授权偏好；常驻 preset 观察匹配 Session，直接 Agent setup 则显式传入其 Session；要求提供方支持 `agentOptions` |
 | `agentOptions` | — | 配置的子级 `provider`、`model`、适配器所有的 `reasoningEffort` 与正整数 `maxTokens` 默认值；要求提供方支持 `agentOptions`，并会覆盖提供方持有的路由默认值 |
 | `persona` | — | 每个子 agent 独立的 persona；要求提供方具备 `persona` 能力 |
 | `toolFilter` | — | 每个子 agent 独立的全局工具限制；要求提供方具备 `toolFilter` 能力 |
@@ -64,7 +64,7 @@ kind: "package-reference"
 
 ### 选择子级 LLM
 
-设置 `modelSelectionSettings: true` 后，该实例公开可选的 `provider`、`model` 和 `reasoning_effort` 字段，并注册 `list_subagent_models`；未设置的实例两者都不公开，并拒绝选择字段。该实例为新顶层 Session 读取 Host 的 `subagent-model-selection` 偏好。启用时，精确路由列表记录在 Session 中，由子 Session 继承，并在恢复时保留；之后的设置编辑只影响新 Session。没有已记录 Session 策略时，发现和显式选择只允许父 Agent 当前生效的 provider/model 及其支持的强度。此模式要求后端公布 `agentOptions` 且不继承父级对话；进程内 Spawn 和 DSH SDK 满足条件，Fork、ACP、Codex 和 Claude Code 会使挂载失败。
+设置 `modelSelectionSettings: true` 后，该实例公开可选的 `provider`、`model` 和 `reasoning_effort` 字段，并注册 `list_subagent_models`；未设置的实例两者都不公开，并拒绝选择字段。该实例为新顶层 Session 读取 Host 的 `subagent-model-selection` 偏好。启用时，精确路由列表记录在 Session 中，由子 Session 继承，并在恢复时保留；之后的设置编辑只影响新 Session。没有已记录 Session 策略时，发现和显式选择只允许父 Agent 当前生效的 provider/model 及其支持的强度。此模式要求后端公布 `agentOptions`；进程内 Spawn、Fork 和 DSH SDK 满足条件，ACP、Codex 和 Claude Code 会使挂载失败。
 
 一次调用需同时提供 `provider` 与 `model`；当配置值、父 agent 值或提供方持有的默认值能提供路由时，也可只提供推理等级。静态的 `provider.agentRouteDefaults` 在存在时构成提供方／模型基线；工具配置与模型字段会在路由相关强度合并和确切路由预检前覆盖它。没有这些默认值的提供方会使用父 agent 最新已记录请求中的兼容值，再使用父级首次请求前的创建选项，并保留配置的 `maxTokens`。更改路由但未显式提供推理等级时，会清除继承的路由自有等级，使所选模型解析自己的默认值。实时 LLM 适配器在创建子 agent 前校验有效路由。目录成员资格只提供建议，因此适配器接受时，模型可以使用未列出的 id。
 
@@ -136,7 +136,7 @@ kind: "package-reference"
 
 #### KV Cache 影响
 
-只要提供方实例及其配置不变，前缀就保持稳定。适配器目录变化不会改变定义。fork 工具省略模型选择字段，以保留对继承的父级前缀的复用。
+只要提供方实例及其配置不变，前缀就保持稳定。适配器目录变化不会改变定义。随附 fork 工具省略模型选择字段，以保留对继承的父级前缀的复用。自定义 fork 工具可以启用选择；更改其路由可能使前缀无法复用。
 
 ### 模型选择与发现
 
@@ -208,7 +208,7 @@ Start independent delegations with `subagent` or `subagent_fork` together in one
 这些限制说明本工具不返回或不强制执行什么；它们是当前包约束。
 
 - **本工具不等待结果**——使用完成通知或子任务消息。程序化结果等待由 subagent 服务提供。
-- **fork 工具拒绝模型选择** — 继承父级上下文的工具既不公开也不接受 `provider`、`model` 或 `reasoning_effort`，即使 Session 已授权也不例外；`modelSelectionSettings` 会使其挂载失败。部署仍可配置 `agentOptions`。
+- **随附 fork 工具省略模型选择**：其配置保持 `modelSelectionSettings` 关闭，以保留对继承前缀的复用。自定义 fork 工具可以启用它，并接受与其他委派工具相同的 Session 授权和适配器校验。
 - **非路由子级策略按实例固定** — 更换角色、工具过滤器或深度上限，需要另一个不同名称的工具。显式 LLM 选择需要 `modelSelectionSettings`，并受 Session 授权路由限制，没有启用策略时只允许当前父级路由。
 
 <a id="dev-note"></a>

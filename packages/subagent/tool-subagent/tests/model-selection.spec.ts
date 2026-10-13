@@ -495,12 +495,41 @@ describe('dsh-tool-subagent model selection', () => {
     expect(resolve).not.toHaveBeenCalled()
   })
 
-  it('rejects modelSelectionSettings on a provider that inherits the parent conversation', async () => {
-    await expect(setup({ provider: 'mock', withModelSelection: true }, { inheritsParentContext: true }))
-      .rejects.toThrow('provider "mock" inherits the parent conversation and does not accept child model selection')
+  it('enforces Session authorization when a fork tool explicitly enables model selection', async () => {
+    const requests: SubagentStartRequest[] = []
+    const ctx = await setup({ provider: 'mock', withModelSelection: true }, {
+      inheritsParentContext: true,
+      onStart: (request) => { requests.push(request) },
+    })
+    ctx.llm.registerAdapter(['alpha'], new MockAdapter([], REASONING))
+    const agent = modelSelectionSetupAgent(ctx)
+    const schema = ctx.tools.schemas(agent).find(entry => entry.name === 'subagent')!
+    expect(schema.description).toContain('inherits this conversation')
+    expect(schema.description).toContain('list_subagent_models')
+
+    const allowed = await callSubagent(ctx, {
+      description: 'fork work', prompt: 'do it', provider: 'alpha', model: 'fast-model', reasoning_effort: 'low',
+    })
+    expect(allowed.isError, text(allowed)).toBe(false)
+    expect(requests[0]?.agentOptions).toEqual({
+      provider: 'alpha', model: 'fast-model', reasoningEffort: ReasoningEffortId('low'),
+    })
+
+    const denied = await callSubagent(ctx, {
+      description: 'unauthorized route', prompt: 'do it', provider: 'alpha', model: 'denied-model',
+    })
+    expect(denied.isError).toBe(true)
+    expect(text(denied)).toContain('is not allowed for this Session')
+
+    const invalidEffort = await callSubagent(ctx, {
+      description: 'unsupported effort', prompt: 'do it', provider: 'alpha', model: 'fast-model', reasoning_effort: 'invalid',
+    })
+    expect(invalidEffort.isError).toBe(true)
+    expect(text(invalidEffort)).toContain('invalid')
+    expect(requests).toHaveLength(1)
   })
 
-  it('keeps fork model selection unavailable even with Session authorization', async () => {
+  it('keeps fork model selection unavailable without instance opt-in even with Session authorization', async () => {
     const started = vi.fn()
     const ctx = await setup({ provider: 'mock' }, {
       inheritsParentContext: true,

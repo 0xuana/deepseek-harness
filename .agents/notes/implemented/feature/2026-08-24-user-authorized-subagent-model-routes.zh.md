@@ -16,7 +16,7 @@ Host 自有的 `subagent-model-selection` 设置 section 保存显式 `enabled` 
 
 固定的 `list_subagent_models` schema 不枚举策略。调用时，它列出已授权且已注册的提供方，并取其公布模型目录与已记录路由列表的交集。精确查询先要求授权，再解析模型元数据及全部支持的推理强度，也允许目录未列出的 ID。没有已记录策略时，发现只解析父 Agent 当前生效的路由，即使目录未列出它。委派执行器会在适配器预检前独立校验显式提供方、模型或强度选择是否符合相同授权。没有选择字段的调用保留配置或继承的路由。
 
-模型选择没有无限制的静态模式。默认关闭的 Host 设置授权其他子级路由；没有该授权时，仍可选择父级路由及其支持的强度。只有配置了 `modelSelectionSettings` 的委派工具会公开路由字段并注册 `list_subagent_models`；随附 Web 的 spawn 工具就是该所有者，它一次性记录设置，并在每次调用时读取 Session 策略。fork 工具拒绝模型选择参数，且该设置会使其挂载失败，以保留对继承前缀的复用。
+模型选择没有无限制的静态模式。默认关闭的 Host 设置授权其他子级路由；没有该授权时，仍可选择父级路由及其支持的强度。只有配置了 `modelSelectionSettings` 的委派工具会公开路由字段并注册 `list_subagent_models`；随附 Web 的 spawn 工具就是该所有者，它一次性记录设置，并在每次调用时读取 Session 策略。随附 fork 工具保持 `modelSelectionSettings` 关闭，以保留对继承前缀的复用；自定义 fork 组合可以在相同 Session 授权下启用它。
 
 ## Alternatives considered
 

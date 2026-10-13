@@ -46,7 +46,7 @@ Load the subagent service, an in-process or remote backend, and this tool; then 
 |---|---|---|
 | `provider` | required | Provider name on `ctx.subagents` (e.g. `spawn`, `fork`, `acp`) |
 | `toolName` | `subagent` | Model-facing tool name; distinct for every loaded instance |
-| `modelSelectionSettings` | `false` | Expose child route fields and `list_subagent_models`, and sample the Host's exact-route authorization preference for each top-level Session; a standing preset observes matching Sessions, while direct Agent setup passes its Session explicitly; requires provider `agentOptions` support without parent-context inheritance |
+| `modelSelectionSettings` | `false` | Expose child route fields and `list_subagent_models`, and sample the Host's exact-route authorization preference for each top-level Session; a standing preset observes matching Sessions, while direct Agent setup passes its Session explicitly; requires provider `agentOptions` support |
 | `agentOptions` | — | Configured child `provider`, `model`, adapter-owned `reasoningEffort`, and positive `maxTokens` defaults; requires provider `agentOptions` support and overlays any provider-owned route defaults |
 | `persona` | — | Per-child persona; requires the provider's `persona` capability |
 | `toolFilter` | — | Per-child global-tool restriction; requires the `toolFilter` capability |
@@ -64,7 +64,7 @@ Every backend’s completion notice carries its final answer. Local Spawn and Fo
 
 ### Selecting a child LLM
 
-Set `modelSelectionSettings: true` to expose optional `provider`, `model`, and `reasoning_effort` fields and register `list_subagent_models` with this instance; instances without it expose neither and reject selection fields. The instance samples the Host’s `subagent-model-selection` preference for fresh top-level Sessions. When enabled, its exact route list is recorded in the Session, inherited by child Sessions, and preserved on restore; later settings edits affect only new Sessions. Without a recorded Session policy, discovery and explicit selection permit only the parent Agent’s current effective provider/model and its supported efforts. This mode requires a backend that advertises `agentOptions` and does not inherit the parent conversation; both in-process Spawn and DSH SDK qualify, while Fork, ACP, Codex, and Claude Code fail the mount.
+Set `modelSelectionSettings: true` to expose optional `provider`, `model`, and `reasoning_effort` fields and register `list_subagent_models` with this instance; instances without it expose neither and reject selection fields. The instance samples the Host’s `subagent-model-selection` preference for fresh top-level Sessions. When enabled, its exact route list is recorded in the Session, inherited by child Sessions, and preserved on restore; later settings edits affect only new Sessions. Without a recorded Session policy, discovery and explicit selection permit only the parent Agent’s current effective provider/model and its supported efforts. This mode requires a backend that advertises `agentOptions`; in-process Spawn and Fork and DSH SDK qualify, while ACP, Codex, and Claude Code fail the mount.
 
 A call supplies `provider` and `model` together, or supplies only an effort when configured, parent, or provider-owned defaults provide the route. Static `provider.agentRouteDefaults`, when present, form the provider/model baseline; tool configuration and model fields overlay it before route-aware effort merging and exact-route preflight. Providers without these defaults use compatible values from the parent's latest logged request, then the parent's creation options before its first request, while retaining the configured `maxTokens`. Changing the route without an explicit effort clears the inherited route-owned effort, so the selected model resolves its default. The live LLM adapter validates the effective route before child creation. Catalog membership remains advisory, so a model can use an unlisted id when its adapter accepts it.
 
@@ -136,7 +136,7 @@ Fixed schema cost per parent request; `modelSelectionSettings` adds three option
 
 #### KV Cache effect
 
-Prefix-stable while provider instances and their configuration are unchanged. Adapter catalog changes do not alter the definition. Fork tools omit model-selection fields to preserve reuse of the inherited parent prefix.
+Prefix-stable while provider instances and their configuration are unchanged. Adapter catalog changes do not alter the definition. Shipped fork tools omit model-selection fields to preserve reuse of the inherited parent prefix. A custom fork tool may enable selection; changing its route can prevent prefix reuse.
 
 ### Model selection and discovery
 
@@ -208,7 +208,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 These limits define what this tool does not return or enforce; they are current package constraints.
 
 - **This tool does not wait for results** — use the completion notice or child messages. Programmatic result waiting belongs to the subagent service.
-- **Fork tools reject model selection** — tools that inherit parent context neither expose nor accept `provider`, `model`, or `reasoning_effort`, even with Session authorization, and `modelSelectionSettings` fails their mount. Configured `agentOptions` remain available to the deployment.
+- **Shipped fork tools omit model selection** — their configuration leaves `modelSelectionSettings` disabled to preserve inherited-prefix reuse. Custom fork tools may enable it under the same Session authorization and adapter validation as other delegation tools.
 - **Non-routing child policy is fixed per instance** — another persona, tool filter, or depth cap requires another distinctly named tool. Explicit LLM selection requires `modelSelectionSettings` and is restricted to the Session’s authorized routes, or the current parent route without an enabled policy.
 
 <a id="dev-note"></a>

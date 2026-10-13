@@ -3995,8 +3995,8 @@ export interface Config {
    * Expose optional child `provider`, `model`, and `reasoning_effort` fields
    * plus `list_subagent_models`, and sample the Host `subagent-model-selection`
    * setting for each new top-level Session; child Sessions inherit that
-   * decision. Requires a provider with `agentOptions` that does not inherit
-   * the parent conversation. At most one instance per tool scope may enable it.
+   * decision. Requires a provider with `agentOptions` support.
+   * At most one instance per tool scope may enable it.
    */
   modelSelectionSettings?: boolean
   /**
