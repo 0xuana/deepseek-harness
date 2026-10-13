@@ -1,12 +1,12 @@
 - dialog "Settings":
+  - text: Settings
+  - button "Open configuration file"
+  - button "Close"
   - navigation:
-    - text: Settings
     - button "General"
     - button "Models"
     - button "Built-in plugins"
     - button "Agent presets"
-  - button "Open configuration file"
-  - button "Close"
   - text: Permission Choose the default permission mode for new sessions
   - button "Workspace Write"
   - text: Language

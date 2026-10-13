@@ -1,12 +1,12 @@
 - dialog "设置":
+  - text: 设置
+  - button "打开配置文件"
+  - button "关闭"
   - navigation:
-    - text: 设置
     - button "通用设置"
     - button "模型"
     - button "内置插件"
     - button "Agent 预设"
-  - button "打开配置文件"
-  - button "关闭"
   - heading "模型" [level=2]
   - paragraph: 填入各提供商的 API 密钥即可使用其模型。
   - status: 已保存 minimax-cn。

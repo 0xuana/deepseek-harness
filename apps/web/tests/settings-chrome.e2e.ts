@@ -227,7 +227,7 @@ describe('web e2e: settings modal and General preferences', () => {
     const dialog = overflowPage.getByRole('dialog', { name: '设置', exact: true })
     const navigation = dialog.getByRole('navigation')
     const list = navigation.locator('[class*="_navList"]')
-    const title = navigation.getByText('设置', { exact: true })
+    const title = dialog.getByText('设置', { exact: true })
     const options = dialog.locator('[class*="_options"]')
     const last = navigation.getByRole('button').last()
     await last.waitFor()
@@ -257,6 +257,74 @@ describe('web e2e: settings modal and General preferences', () => {
     await last.click()
     await expect.poll(() => last.getAttribute('aria-current')).toBe('true')
     await expect.poll(() => options.innerText()).not.toBe(contentBefore)
+    expect(console.pageErrors).toEqual([])
+    expect(console.warnings).toEqual([])
+  })
+
+  it('fills a phone viewport and turns the rail into the horizontal section strip', async () => {
+    const phone = await browser.newPage({ viewport: { width: 390, height: 844 }, locale: ZH_BROWSER_LOCALE })
+    onTestFinished(() => phone.close())
+    onTestFailed(() => saveSettingsFailureShot(phone, 'web-e2e-settings-phone'))
+    const console = watchConsole(phone)
+    await phone.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+    await openSettings(phone, 'zh')
+    const dialog = phone.getByRole('dialog', { name: '设置', exact: true })
+    await dialog.waitFor({ timeout: 10_000 })
+    await dialog.getByRole('button', { name: '通用设置', exact: true }).waitFor({ timeout: 10_000 })
+
+    // The panel is the viewport: no centered card, no side margins, no rail.
+    await expect.poll(() => dialog.boundingBox()).toEqual({ x: 0, y: 0, width: 390, height: 844 })
+
+    // The rail reads left to right on one line instead of stacking.
+    const navigation = dialog.getByRole('navigation')
+    const list = navigation.locator('[class*="_navList"]')
+    const cells = navigation.getByRole('button')
+    const first = await cells.first().boundingBox()
+    const second = await cells.nth(1).boundingBox()
+    expect(first).not.toBeNull()
+    expect(second).not.toBeNull()
+    expect(second!.x).toBeGreaterThanOrEqual(first!.x + first!.width - 1)
+    expect(Math.abs(second!.y - first!.y)).toBeLessThan(1)
+    expect(await list.evaluate(el => getComputedStyle(el).overflowX)).toBe('auto')
+
+    // The shipped sections overflow the strip, which scrolls sideways; the
+    // section column starts below it and keeps the panel's width.
+    const strip = await list.boundingBox()
+    const options = dialog.locator('[class*="_options"]')
+    const optionsBox = await options.boundingBox()
+    expect(strip).not.toBeNull()
+    expect(optionsBox).not.toBeNull()
+    expect(await list.evaluate(el => el.scrollWidth)).toBeGreaterThan(await list.evaluate(el => el.clientWidth))
+    expect(optionsBox!.y).toBeGreaterThanOrEqual(strip!.y + strip!.height - 1)
+    expect(Math.round(optionsBox!.width)).toBe(390)
+    expect(await phone.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+
+    // Opening the panel brings the active cell into the strip's viewport.
+    const active = dialog.locator('[aria-current="true"]')
+    const activeBox = await active.boundingBox()
+    expect(activeBox).not.toBeNull()
+    expect(activeBox!.x).toBeGreaterThanOrEqual(0)
+    expect(activeBox!.x + activeBox!.width).toBeLessThanOrEqual(390)
+
+    // Tapping a cell swaps the page, and a General row keeps its label and
+    // control on one line rather than stacking.
+    await cells.nth(1).click()
+    await expect.poll(() => cells.nth(1).getAttribute('aria-current')).toBe('true')
+    await expect.poll(() => dialog.getByText('权限', { exact: true }).count()).toBe(0)
+    await cells.first().click()
+    await expect.poll(() => dialog.getByText('权限', { exact: true }).count(), { timeout: 5_000 }).toBe(1)
+    const permissionRow = dialog.getByText('权限', { exact: true }).locator('..')
+    const permissionBox = await permissionRow.boundingBox()
+    const controlBox = await dialog.getByRole('button', { name: '工作区内修改' }).boundingBox()
+    expect(controlBox).not.toBeNull()
+    expect(permissionBox).not.toBeNull()
+    expect(controlBox!.y).toBeLessThan(permissionBox!.y + permissionBox!.height)
+
+    // The Appearance cubes share one row instead of wrapping to two.
+    const cubes = dialog.getByRole('button', { name: /浅色|深色|跟随系统/ })
+    const cubeBoxes = await cubes.evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().top))
+    expect(new Set(cubeBoxes.map(top => Math.round(top))).size).toBe(1)
+
     expect(console.pageErrors).toEqual([])
     expect(console.warnings).toEqual([])
   })

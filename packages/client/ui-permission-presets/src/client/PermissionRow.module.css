@@ -17,6 +17,14 @@
   padding-right: 48px;
 }
 
+/* Narrow settings panel: the 48px gutter separates the label from its control
+   across a wide row and only squeezes the label here. */
+@media (max-width: 767px) {
+  .rowText {
+    padding-right: 16px;
+  }
+}
+
 .title {
   font-size: 14px;
   font-weight: 400;

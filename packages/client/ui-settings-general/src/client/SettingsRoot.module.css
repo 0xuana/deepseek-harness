@@ -81,11 +81,20 @@
    content-sized panel would resize under the pointer on every nav click.
    The viewport height leaves 24px of air above and below, widened to the
    frame's published overlay inset on both sides, so the panel sits centered
-   and clear of the strip. */
+   and clear of the strip.
+   The four shell seats are direct children placed by area: the rail's title
+   and the content header share the first row, the rail's cells and the active
+   section the second. The mobile block at the end of this file rearranges the
+   same areas into the horizontal layout, so only the areas move. */
 .panel {
   position: relative;
   z-index: 1;
-  display: flex;
+  display: grid;
+  grid-template-columns: 188px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    'title header'
+    'nav options';
   width: 800px;
   height: min(800px, calc(100vh - 2 * max(24px, var(--dsh-frame-overlay-top, 24px))));
   max-width: calc(100vw - 48px);
@@ -106,21 +115,25 @@
   outline: none;
 }
 
-/* Nav rail (figma .Setting-nav 501:29958): 188 wide, pad (12,22,12,0),
-   gap 18, no own fill — the panel white shows through. */
+/* Nav rail (figma .Setting-nav 501:29958): the 188px track's cells, pad
+   (12,0), no own fill — the panel white shows through. */
 .nav {
-  flex: none;
+  grid-area: nav;
+  min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  width: 188px;
-  padding: 22px 12px 0;
+  padding: 0 12px;
   box-sizing: border-box;
 }
 
-/* Title row (figma 501:29959): 16/500 lh24, 12px side padding. */
+/* Title row (figma 501:29959): 16/500 lh24, at the rail's 24px text inset.
+   The rail's own 22px top padding and 18px gap below the title become this
+   seat's padding, so the first grid row measures the 64px the title and gap
+   occupied rather than the 54px content header beside it. */
 .navTitle {
-  padding: 0 12px;
+  grid-area: title;
+  padding: 22px 12px 18px 24px;
   font-size: 16px;
   line-height: 24px;
   font-weight: 500;
@@ -132,6 +145,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -176,17 +190,9 @@
   text-overflow: ellipsis;
 }
 
-/* Content column (figma Content 501:29980): header + options. */
-.content {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
 /* Header (figma .Header 501:29981): h54, pad (10,20,14,8), close right. */
 .header {
-  flex: none;
+  grid-area: header;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -226,10 +232,85 @@
 
 /* Options area (figma Options 501:29983): pad (24,0,24,24), scrolls. */
 .options {
-  flex: 1;
+  grid-area: options;
+  min-width: 0;
   min-height: 0;
   padding: 0 24px 24px;
   overflow-y: auto;
+}
+
+/* Phones and narrow windows, under the 768px boundary ui-sidebar-right's
+   fullscreen rule and PlanPreview already use: the panel takes the viewport and
+   the rail becomes the horizontal tab strip the Web product uses. The title
+   shares the first row with the header's action and close seats, the registered
+   section cells scroll sideways on the second, and the active section fills the
+   rest. Cells keep their labels whole and the strip scrolls instead of
+   truncating, so a registrant's label length or section count cannot wrap or
+   clip a name; the active cell carries data-modal-autofocus, so opening the
+   panel scrolls it into view. */
+@media (max-width: 767px) {
+  .panel {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-areas:
+      'title header'
+      'nav nav'
+      'options options';
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    border-radius: 0;
+  }
+
+  .navTitle {
+    padding: 22px 0 0 16px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .header {
+    height: auto;
+    padding: 20px 16px 0 10px;
+  }
+
+  .nav {
+    padding: 0;
+  }
+
+  /* The strip runs edge to edge and pads its own ends, so the first cell lines
+     up with the title and the last one stays clear of the panel edge. */
+  .navList {
+    flex-direction: row;
+    gap: 4px;
+    padding: 12px 16px 14px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior: none;
+    scrollbar-width: none;
+  }
+
+  .navList::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Cells grow into spare width and hold a 108px floor. The four shipped
+     sections already measure more than a 390px viewport, so the next cell shows
+     past the edge and the strip reads as scrollable. */
+  .navCell {
+    flex: 1 0 auto;
+    justify-content: center;
+    min-width: 108px;
+    padding: 0 14px;
+  }
+
+  .navLabel {
+    flex: none;
+  }
+
+  .options {
+    padding: 0 16px 24px;
+  }
 }
 
 /* Visually-hidden text seat (close button accessible name from slot content). */
