@@ -9,7 +9,7 @@ import WorkingDirectory, { type Config as WorkingDirectoryConfig } from '@deepse
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { renderContextSnapshot, renderPrompt, type AssembleContext, type PromptPreparation } from '@deepseek-ai/dsh-system-prompt'
+import { renderContextSnapshot, renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import * as WorkingDirectoryTool from '@deepseek-ai/dsh-tool-working-directory'
 
 async function fixture(config?: (root: string) => WorkingDirectoryConfig) {
@@ -177,13 +177,9 @@ describe('Session working directories', () => {
     })])
   })
 
-  it.each((['system-prompt/prepare', 'system-prompt/assemble'] as const).flatMap(event =>
-    (['remove', 'replace'] as const).map(change => ({ event, change })),
-  ))('retains required current-directory context after $event can $change it', async ({ event, change }) => {
+  it.each(['remove', 'replace'] as const)('retains required current-directory context after an assembly transform can %s it', async (change) => {
     await using f = await fixture()
-    f.ctx.on(event, async <Assembly extends PromptPreparation>(
-      _assembly: Assembly, _context: AssembleContext, next: () => Promise<Assembly>,
-    ) => {
+    f.ctx.on('system-prompt/assemble', async (_assembly, _context, next) => {
       const assembled = await next()
       return {
         ...assembled,

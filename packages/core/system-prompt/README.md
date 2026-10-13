@@ -67,7 +67,7 @@ Set `interpolate: false` on a section or dynamic context to preserve its text li
 
 `refreshContext(assembly, context)` refreshes registered runtime facts after pre-step and route preparation. It preserves accepted sections, tools, variables, and contexts contributed only by the assembly waterfall, applies current optional-context suppression, and restores missing required entries. Put changing facts in context providers; registered context text is read again before admission.
 
-`prepare(context)` resolves variables and runtime facts through `system-prompt/prepare` before step admission. After `agent/pre-step` accepts the step and commits its selections, `assemble(context, preparation)` resolves sections and tool declarations. Presentation listeners receive sections, contexts, and variables; tools remain provider-owned. Tool-aware section callbacks use `context.toolSet` to inspect the same step selection as execution.
+The agent loop calls `assemble(context)` once per step after `step/start`, when the step's model selection (`context.agent.step`) and admitted tool set (`context.toolSet`) are fixed. Presentation listeners receive sections, contexts, and variables; tools remain provider-owned. Tool-aware section callbacks use `context.toolSet` to inspect the same step selection as execution.
 
 ### Contribute a prompt variable
 

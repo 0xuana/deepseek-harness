@@ -70,7 +70,7 @@ kind: "package-reference"
 
 解析器通过 `ctx.get("spillStore")` 获取可选存储，只保存被截断的引用。存储归目标会话所有；来源信息标识被引用的源会话与标签，不伪造工具调用。异步保存后会检查取消，即使产物已写入，也会阻止发布。产物过期仍遵循后端既有策略。
 
-预算使用 `agent/model` 选定、由 `agent/pre-step` 以 `modelSelection` 携带的步骤模型。未传入模型选择的直接 `prepare` 调用使用 agent 选项；Session 请求头不决定预算模型。
+预算使用 `agent/model` 选定的步骤模型，`agent/pre-step` 期间 agent 通过 `agent.step` 公开它。步骤之外的直接 `prepare` 调用使用 agent 选项；Session 请求头不决定预算模型。
 
 ### 源码地图
 

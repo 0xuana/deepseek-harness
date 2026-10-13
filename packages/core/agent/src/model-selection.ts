@@ -51,8 +51,8 @@ function modelSwitchNotice(previous: ModelSelection, selected: ModelSelection) {
  * model's provider default.
  *
  * A provider/model change appends a durable user-role notice to the next
- * admitted request. It compares the step's selection with the latest request
- * header; effort-only changes and empty no-request decisions add no notice.
+ * admitted request. It compares `agent.step` with the latest request header;
+ * effort-only changes and empty no-request decisions add no notice.
  * Failure before header persistence repeats the notice on the next request.
  *
  * @param agentCtx - The selected Agent's scoped context.
@@ -67,14 +67,15 @@ export function installModelSelection(agentCtx: Context, selection: ModelSelecti
   })
   const disposeNotice = agentCtx.on(
     'agent/pre-step',
-    async ({ agent, messages, modelSelection, signal, step }, next): Promise<PreStepDecision> => {
+    async ({ agent, messages, signal, step }, next): Promise<PreStepDecision> => {
       const decision = await next()
       if (decision.kind === 'reject' || signal.aborted) return decision
       // The loop skips an empty first step and an emptied offered continuation.
       if (decision.messages.length === 0 && (step === 1 || messages.length > 0)) return decision
+      const selected = agent.step?.modelSelection
       const previous = agent.session.requestHeader()?.config
-      if (previous === undefined || sameModel(modelSelection, previous)) return decision
-      return { ...decision, messages: [...decision.messages, modelSwitchNotice(previous, modelSelection)] }
+      if (selected === undefined || previous === undefined || sameModel(selected, previous)) return decision
+      return { ...decision, messages: [...decision.messages, modelSwitchNotice(previous, selected)] }
     },
     { prepend: true },
   )

@@ -2389,7 +2389,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-plan-mode`
 
 - `inject`: `tools` · `systemPrompt` · `sessionProjections`
-- `source`: [`packages/plan/plan-mode/src/index.ts:67`](../packages/plan/plan-mode/src/index.ts)
+- `source`: [`packages/plan/plan-mode/src/index.ts:68`](../packages/plan/plan-mode/src/index.ts)
 
 ```ts config-catalog
 /** Deployment-owned plan guidance. */
@@ -3494,7 +3494,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-system-prompt`
 
-- `source`: [`packages/core/system-prompt/src/index.ts:269`](../packages/core/system-prompt/src/index.ts)
+- `source`: [`packages/core/system-prompt/src/index.ts:262`](../packages/core/system-prompt/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: the deployment-authored fragment of the system prompt (see {@link Config.personaPrefix} for its contract). */
@@ -4173,7 +4173,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-tools`
 
 - `inject`: `systemPrompt`
-- `source`: [`packages/core/tools/src/index.ts:735`](../packages/core/tools/src/index.ts)
+- `source`: [`packages/core/tools/src/index.ts:733`](../packages/core/tools/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: how the registered tools are presented to the model. */

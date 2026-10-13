@@ -39,14 +39,14 @@
   en: 0acc88b042a99380
   zh: e4cf66b77f2fc7ae
 /deepseek-ai-dsh-plan-mode/understand-the-implementation/durable-state-and-step-boundary-appends:
-  en: 6d0adadc354f211e
-  zh: 86fa49a9f4377368
+  en: 1d2abc9a8ef4a1bf
+  zh: e09bc45a1d94934f
 /deepseek-ai-dsh-plan-mode/understand-the-implementation/the-plan-command:
   en: a7bf35c2a9da52bc
   zh: dea9f4b3a41f1a6d
 /deepseek-ai-dsh-plan-mode/understand-the-implementation/the-exit-tool:
-  en: 86b26413acb2e835
-  zh: a84d876efefa5bea
+  en: cd036af680065de1
+  zh: eed170bfef995d80
 /deepseek-ai-dsh-plan-mode/understand-the-implementation/session-projection-unit:
   en: 74cd6bdf50af51f5
   zh: 67609cf7202ececb
@@ -99,8 +99,8 @@
   en: 9d9626fbf4cdc8de
   zh: 8237cbc3ca048024
 /deepseek-ai-dsh-plan-mode/known-limitations-and-deferred-work:
-  en: a87aabfede0087fd
-  zh: 201e9b3766980005
+  en: 985f29a245876400
+  zh: f7c9d7ed6eab1f55
 /deepseek-ai-dsh-plan-mode/known-limitations-and-deferred-work/dev-note:
   en: 7de02cd33a767bd6
   zh: d9e54003f230f725

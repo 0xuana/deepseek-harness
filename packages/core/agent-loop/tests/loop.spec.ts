@@ -796,7 +796,7 @@ describe('agent loop', () => {
     }
   })
 
-  it('replaces a stale owned snapshot at its accepted position and admits it once', async () => {
+  it('admits the runtime-context snapshot current at admission after the accepted batch', async () => {
     const adapter = new MockAdapter([textResponse('done')])
     const ctx = await harness(adapter)
     try {
@@ -807,16 +807,20 @@ describe('agent loop', () => {
         const decision = await next()
         current = 'after'
         if (decision.kind === 'reject') return decision
-        const context = decision.messages.find(message => message.source.kind === 'runtime-context')!
-        return { ...decision, messages: [context, ...decision.messages.filter(message => message !== context), context] }
+        expect(decision.messages.map(message => message.source.kind)).toEqual(['user'])
+        const appended = createUserMessage({ content: [{ type: 'text', text: 'appended' }], source: { kind: 'user' } })
+        return { ...decision, messages: [...decision.messages, appended] }
       })
       send(agent, 'accepted user')
       await agent.whenIdle()
       const users = adapter.requests[0]?.messages.filter(message => message.role === 'user') ?? []
-      expect(users.map(message => message.source?.kind)).toEqual(['runtime-context', 'user'])
-      expect(users[0]?.content).toEqual([{ type: 'text', text: 'Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nafter' }])
-      expect(users[1]?.content).toEqual([{ type: 'text', text: 'accepted user' }])
-      expect(agent.session.snapshotEvents().filter(event => event.type === 'user/message')).toHaveLength(2)
+      expect(users.map(message => message.content)).toEqual([
+        [{ type: 'text', text: 'accepted user' }],
+        [{ type: 'text', text: 'appended' }],
+        [{ type: 'text', text: 'Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nafter' }],
+      ])
+      expect(users.at(-1)?.source?.kind).toBe('runtime-context')
+      expect(agent.session.snapshotEvents().filter(event => event.type === 'user/message')).toHaveLength(3)
     } finally {
       await ctx.fiber.dispose()
     }

@@ -19,7 +19,6 @@ import type { PlanModeConfig } from '../src/index.ts'
 import type { PlanUnitState } from '../src/types.ts'
 
 const testToolSignal = new AbortController().signal
-const TEST_MODEL_SELECTION = { provider: 'test', model: 'test' }
 
 const TEST_PLAN_SECTION = 'Test plan mode instructions.'
 const PLAN_CONFIG = { section: TEST_PLAN_SECTION } satisfies PlanModeConfig
@@ -36,8 +35,8 @@ function registerQuestionAnswerer(ctx: Context, answerer: QuestionAnswerer): () 
  * Drives the REAL plugin: mounts `dsh-plan-mode` beside real `SystemPrompt` and
  * `ToolRuntime` services, with fake Agents carrying real `Session`s and a
  * real scoped `agent.ctx` minted through `createScope`.
- * Request boundaries are simulated by dispatching the real pre-step waterfall
- * and the following `step/start` session event used by the loop.
+ * Request boundaries are simulated by dispatching the real step-boundary and
+ * pre-step events and the following `step/start` session event used by the loop.
  */
 
 async function agentWithSession(
@@ -76,7 +75,7 @@ async function agentWithSession(
 }
 
 async function assembleFor(ctx: Context, agent: Agent) {
-  const toolSet = await ctx.tools.resolve({ agent, modelSelection: TEST_MODEL_SELECTION, signal: testToolSignal })
+  const toolSet = await ctx.tools.resolve({ agent, signal: testToolSignal })
   return ctx.systemPrompt.assemble({ agent, scope: agent, toolSet })
 }
 
@@ -106,19 +105,25 @@ async function setup(config: PlanModeConfig = PLAN_CONFIG): Promise<Context> {
 }
 
 /**
- * Dispatch pre-step processing and optionally its following step-start commit.
+ * Dispatch a step boundary, its pre-step processing, and optionally the following step-start commit.
  */
-async function boundary(ctx: Context, agent: Agent & { session: Session }, type: 'pre-step' | 'step-start'): Promise<void> {
+async function boundary(
+  ctx: Context,
+  agent: Agent & { session: Session },
+  type: 'pre-step' | 'step-start',
+  proposal: 'enter' | 'reject' = 'enter',
+): Promise<void> {
   const events = agentEvents(ctx, agent)
   const message = createUserMessage({
     content: [{ type: 'text', text: 'boundary probe' }],
     source: { kind: 'user' },
   })
   const signal = new AbortController().signal
+  await events.serial('agent/step-boundary', { turn: 1, step: 1, signal })
   const decision = await events.waterfall(
     'agent/pre-step',
-    { messages: [message], turn: 1, step: 1, modelSelection: { provider: 'test', model: 'test' }, signal },
-    () => Promise.resolve({ kind: 'enter' as const, messages: [message] }),
+    { messages: [message], turn: 1, step: 1, signal },
+    () => Promise.resolve(proposal === 'enter' ? { kind: 'enter' as const, messages: [message] } : { kind: 'reject' as const }),
   )
   if (decision.kind === 'enter') {
     for (const message of decision.messages.slice(1)) {
@@ -327,7 +332,7 @@ describe('the boundary flush', () => {
     expect(agent.session.snapshotEvents().some(event => event.type === 'plan/mode')).toBe(false)
   })
 
-  it('flushes from pre-step before the following step/start', async () => {
+  it('flushes at the step boundary before the following step/start', async () => {
     const ctx = await setup()
     const agent = await agentWithSession(ctx)
     openTurn(agent.session)
@@ -337,7 +342,7 @@ describe('the boundary flush', () => {
     expect(ctx.planMode.get(agent)).toEqual({ active: true })
   })
 
-  it('removes the pre-step flush when the plugin fiber is disposed', async () => {
+  it('removes the boundary flush when the plugin fiber is disposed', async () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
@@ -400,6 +405,19 @@ describe('the boundary flush', () => {
     expect(noticeTexts(agent.session)).toEqual(['The user switched this session back to the default mode.'])
   })
 
+  it('commits at a rejected proposal and owes the notice to the next admitted step', async () => {
+    const ctx = await setup()
+    const agent = await agentWithSession(ctx)
+    header(agent.session)
+    openTurn(agent.session)
+    ctx.planMode.set(agent, true)
+    await boundary(ctx, agent, 'pre-step', 'reject')
+    expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
+    expect(noticeTexts(agent.session)).toEqual([])
+    await boundary(ctx, agent, 'pre-step')
+    expect(noticeTexts(agent.session)).toEqual(['The user switched this session to plan mode.'])
+  })
+
   it('stays silent when the header already reflects the flushed mode', async () => {
     const ctx = await setup()
     const agent = await agentWithSession(ctx)
@@ -439,7 +457,7 @@ describe('the boundary flush', () => {
     expect(ctx.planMode.get(agent).pending).toBeUndefined()
   })
 
-  it('rejects a pre-step append failure and keeps the intent pending', async () => {
+  it('rejects a boundary append failure and keeps the intent pending', async () => {
     const ctx = await setup()
     const warn = vi.fn()
     ctx.logger.warn = warn as never
@@ -798,7 +816,7 @@ describe('exit_plan_mode', () => {
 
   async function callExit(ctx: Context, agent: Agent | undefined, plan = '# The plan\n\ndo things') {
     const signal = new AbortController().signal
-    const toolSet = agent === undefined ? undefined : await ctx.tools.resolve({ agent, modelSelection: TEST_MODEL_SELECTION, signal })
+    const toolSet = agent === undefined ? undefined : await ctx.tools.resolve({ agent, signal })
     return ctx.tools.execute({
       ...toolSet === undefined ? {} : { toolSet },
       callId: ToolCallId(`call-exit-${++callCounter}`),
@@ -933,7 +951,7 @@ describe('exit_plan_mode', () => {
     const agent = await agentWithSession(ctx, 'ptc-exit', { active: true })
 
     const result = await ctx.tools.execute({
-      toolSet: await ctx.tools.resolve({ agent, modelSelection: TEST_MODEL_SELECTION, signal: testToolSignal }),
+      toolSet: await ctx.tools.resolve({ agent, signal: testToolSignal }),
       callId: ToolCallId(`call-exit-${++callCounter}`),
       name: RUN_CODE_NAME,
       arguments: { code: `return await tools.${EXIT_PLAN_MODE}({ plan: ${JSON.stringify(plan)} })`, description: 'Submit the plan for review' },
@@ -1083,7 +1101,7 @@ describe('exit_plan_mode', () => {
     const { ctx, agent, asked } = await setupWithReview({ selected: ['Approve'] })
     const controller = new AbortController()
     const result = await ctx.tools.execute({
-      toolSet: await ctx.tools.resolve({ agent, modelSelection: TEST_MODEL_SELECTION, signal: testToolSignal }),
+      toolSet: await ctx.tools.resolve({ agent, signal: testToolSignal }),
       callId: ToolCallId(`call-exit-${++callCounter}`),
       name: EXIT_PLAN_MODE,
       arguments: { plan: '# P' },

@@ -1660,15 +1660,15 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: 'get(agent: Agent): { active: boolean; pending?: boolean }',
-        description: 'Read the logged plan state and any selected state awaiting the next accepted in-turn pre-step.',
+        description: 'Read the logged plan state and any selected state awaiting the next step boundary.',
         parameters: [{ name: 'agent', description: 'The agent to read.' }],
         returns: 'Current logged state plus a pending selection, when present.',
       },
       {
         signature: 'set(agent: Agent, active: boolean): \'committed\' | \'queued\' | \'cancelled\' | \'noop\'',
-        description: 'Select whether plan mode should be active. Between turns the method appends the change immediately because no in-turn pre-step will run until another prompt starts a turn. The open-turn fold is the idle signal: agent status stays `running` through post-turn checkpointing, when no further in-turn pre-step runs. During an open turn the selection remains pending until the next accepted in-turn pre-step. Repeated selection of the current or already-pending state is a no-op.',
+        description: 'Select whether plan mode should be active. Between turns the method appends the change immediately because no step boundary will run until another prompt starts a turn. The open-turn fold is the idle signal: agent status stays `running` through post-turn checkpointing, when no further step boundary runs. During an open turn the selection remains pending until the next step boundary. Repeated selection of the current or already-pending state is a no-op.',
         parameters: [{ name: 'agent', description: 'The agent to switch.' }, { name: 'active', description: 'Whether plan mode should be active.' }],
-        returns: 'what happened: `committed` (logged now), `queued` (awaiting the next accepted in-turn pre-step), `cancelled` (an opposite pending selection was cleared; the logged state already matches), or `noop` (already in that state).',
+        returns: 'what happened: `committed` (logged now), `queued` (awaiting the next step boundary), `cancelled` (an opposite pending selection was cleared; the logged state already matches), or `noop` (already in that state).',
       },
     ],
   },
@@ -2393,9 +2393,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'mention-carrying candidates in rank order.',
       },
       {
-        signature: 'async prepare( agent: Agent, content: ContentBlock[], references: SessionReferenceInput[], signal?: AbortSignal, modelSelection?: ModelSelection, ): Promise<PreparedReferencedMessage>',
-        description: 'Snapshot all references for one accepted direct message and return one aggregated durable context. Automatic budgets use the step\'s model selection, or agent options for direct preparation. Missing model capacity or adapter uses 64 KiB; other metadata lookup failures and cancellation reject preparation. Truncated previews include omission facts and a full-snapshot spill locator, or an explicit unavailable notice. Cancellation prevents context publication, including when storage completes after cancellation.',
-        parameters: [{ name: 'agent', description: 'target agent; references to it are rejected.' }, { name: 'content', description: 'already host-normalized readable message content.' }, { name: 'references', description: 'structured source sessions in mention order.' }, { name: 'signal', description: 'optional cancellation boundary for the active turn.' }, { name: 'modelSelection', description: 'provider and model of the step admitting the message; omitted for direct preparation.' }],
+        signature: 'async prepare( agent: Agent, content: ContentBlock[], references: SessionReferenceInput[], signal?: AbortSignal, ): Promise<PreparedReferencedMessage>',
+        description: 'Snapshot all references for one accepted direct message and return one aggregated durable context. Automatic budgets use the model of the agent\'s current step, or agent options outside a step. Missing model capacity or adapter uses 64 KiB; other metadata lookup failures and cancellation reject preparation. Truncated previews include omission facts and a full-snapshot spill locator, or an explicit unavailable notice. Cancellation prevents context publication, including when storage completes after cancellation.',
+        parameters: [{ name: 'agent', description: 'target agent; references to it are rejected.' }, { name: 'content', description: 'already host-normalized readable message content.' }, { name: 'references', description: 'structured source sessions in mention order.' }, { name: 'signal', description: 'optional cancellation boundary for the active turn.' }],
         returns: 'detached content and optional referenced-session context.',
       },
     ],
@@ -3095,22 +3095,16 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the exact Cordis effect disposer.',
       },
       {
-        signature: 'refreshContext<T extends PromptPreparation>(assembly: T, context: AssembleContext = {}): T',
+        signature: 'refreshContext(assembly: PromptAssembly, context: AssembleContext = {}): PromptAssembly',
         description: 'Refresh accepted registered runtime facts for request admission. Contexts added only by the assembly waterfall retain their accepted values. Current suppression removes optional contexts, and missing required registrations are restored in registry order. Sections, tools, and interpolation variables retain their accepted values during this refresh.',
         parameters: [{ name: 'assembly', description: 'accepted assembly for this scope and step.' }, { name: 'context', description: 'the same scope and current plugin-defined assembly fields.' }],
         returns: 'the accepted assembly with current runtime-context provider text.',
       },
       {
-        signature: 'async prepare(context: AssembleContext = {}): Promise<PromptPreparation>',
-        description: 'Prepare variables and runtime facts before accepting a step. No tool conditions or prompt sections are evaluated in this phase.',
-        parameters: [{ name: 'context', description: 'calling scope and request cancellation.' }],
-        returns: 'prepared inputs after the preparation waterfall.',
-      },
-      {
-        signature: 'async assemble(context: AssembleContext = {}, preparation?: PromptPreparation): Promise<PromptAssembly>',
-        description: 'Assemble prompt sections and tool declarations after request preparation. The presentation waterfall cannot replace provider-owned tools.',
-        parameters: [{ name: 'context', description: 'calling scope, route-bound agent, and resolved tools.' }, { name: 'preparation', description: 'accepted variables and runtime facts; prepared here when omitted.' }],
-        returns: 'the complete assembly with ordered tool declarations.',
+        signature: 'async assemble(context: AssembleContext = {}): Promise<PromptAssembly>',
+        description: 'Assemble global and scoped providers, detach tool parameters, apply canonical ordering, then run the presentation waterfall. Scoped sections and variables shadow globals. The waterfall\'s text is authoritative except that an effective complete section is restored afterwards as the sole prompt section, current suppression removes optional contexts, and required contexts keep their provider values; tool declarations stay provider-owned.',
+        parameters: [{ name: 'context', description: 'the optional scope, step tool set, and plugin-defined assembly fields.' }],
+        returns: 'the post-waterfall assembly with ordered tool declarations.',
       },
     ],
   },
@@ -3354,7 +3348,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       {
         signature: 'async resolve(context: ToolActivationContext): Promise<ResolvedToolSet>',
         description: 'Resolve conditions once for this step without changing shared registrations. Cancellation or a rejected condition publishes no partial selection. Removed registrations cannot be restored by a late condition result.',
-        parameters: [{ name: 'context', description: 'preparing agent, step model selection, and cancellation.' }],
+        parameters: [{ name: 'context', description: 'preparing agent and cancellation.' }],
         returns: 'the complete selection; the caller disposes it after its tool batch settles.',
       },
       {
@@ -3985,15 +3979,15 @@ export const EVENT_API: readonly EventApiEntry[] = [
     mode: 'waterfall',
     signature: '\'agent/model\'(this: Scoped<Agent>, payload: { agent: Agent; turn: number; step: number; signal: AbortSignal }, next: () => Promise<ModelSelection>): Promise<ModelSelection>',
     summary: 'Choose the provider, model, and reasoning effort for one proposed step.',
-    description: 'Choose the provider, model, and reasoning effort for one proposed step. `await next()` yields the selection the machine would use: agent options before this loop logs a request, the logged header afterwards, with an effort only when one was chosen for that exact model. Return a replacement to switch; an effort belongs to its model, so a replacement that changes the model names that model\'s effort or omits it for the provider default. The loop runs this once per proposed step, before context preparation and `agent/pre-step`. Prompt preparation, tool conditions, and every request attempt in the step use the result, so a later choice applies from the next step. Cancellation here opens no step.',
+    description: 'Choose the provider, model, and reasoning effort for one proposed step. `await next()` yields the selection the machine would use: agent options before this loop logs a request, the logged header afterwards, with an effort only when one was chosen for that exact model. Return a replacement to switch; an effort belongs to its model, so a replacement that changes the model names that model\'s effort or omits it for the provider default. The loop runs this once per proposed step, after `agent/step-boundary` and before `agent/pre-step`, then publishes the result as `agent.step`. Pre-step listeners, tool conditions, prompt assembly, and every request attempt in the step use it, so a later choice applies from the next step. Cancellation here opens no step.',
     parameters: [{ name: 'payload', description: '.signal - the current turn\'s explicit abort signal. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.' }],
   },
   {
     name: 'agent/pre-step',
     mode: 'waterfall',
-    signature: '\'agent/pre-step\'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; modelSelection: ModelSelection; signal: AbortSignal }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>',
+    signature: '\'agent/pre-step\'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; signal: AbortSignal }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>',
     summary: 'Reject a proposed step or replace the messages that enter it.',
-    description: 'Reject a proposed step or replace the messages that enter it. Calling `next()` preserves the current messages.',
+    description: 'Reject a proposed step or replace the messages that enter it. Calling `next()` preserves the current messages. `payload.agent.step` already holds the model selection that `agent/model` chose for this step.',
     parameters: [{ name: 'payload', description: '.signal - the current turn\'s cancellation signal. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.' }],
   },
   {
@@ -4019,6 +4013,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'Agent status changed (`idle` ⇄ `running`).',
     description: 'Agent status changed (`idle` ⇄ `running`). A waking delivery enters `running` synchronously after reserving cancellation; `idle` means no driver remains scheduled or active.',
     parameters: [{ name: 'payload', description: '.status - the status just entered (the transition\'s destination). Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.' }],
+  },
+  {
+    name: 'agent/step-boundary',
+    mode: 'serial',
+    signature: '\'agent/step-boundary\'(this: Scoped<Agent>, payload: { agent: Agent; turn: number; step: number; signal: AbortSignal }): Promise<void> | void',
+    summary: 'A proposed step reached its boundary: the loop claimed its input and is about to choose its model.',
+    description: 'A proposed step reached its boundary: the loop claimed its input and is about to choose its model. Listeners commit selections that take effect from this step, such as a pending plan-mode switch, so `agent/model`, `agent/pre-step`, tool conditions, and prompt assembly read one state. Runs once per proposed step; a throw fails the proposal, and cancellation opens no step.',
+    parameters: [{ name: 'payload', description: '.signal - the current turn\'s explicit abort signal. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.' }],
   },
   {
     name: 'agent/turn-stopping',
@@ -4435,14 +4437,6 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'Emitted when any prompt provider changes.',
     description: 'Emitted when any prompt provider changes. This registry notification is unfiltered because a global change affects every scope.',
     parameters: [],
-  },
-  {
-    name: 'system-prompt/prepare',
-    mode: 'waterfall',
-    signature: '\'system-prompt/prepare\'(this: Scoped<SystemPrompt>, preparation: PromptPreparation, context: AssembleContext, next: () => Promise<PromptPreparation>): Promise<PromptPreparation>',
-    summary: 'Prepare variables and runtime context before step admission.',
-    description: 'Prepare variables and runtime context before step admission.',
-    parameters: [{ name: 'preparation', description: 'registered variables and context contributions.' }, { name: 'context', description: 'calling scope and cancellation.' }],
   },
   {
     name: 'tools/change',
@@ -6385,12 +6379,8 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type PromptOrigin = {\n    kind: \'composer\';\n} | {\n    kind: \'plugin\';\n    name: string;\n};',
   },
   {
-    name: 'PromptPreparation',
-    declaration: 'export interface PromptPreparation {\n    contexts: AssembledContext[];\n    variables: Record<string, string | undefined>;\n}',
-  },
-  {
     name: 'PromptPresentation',
-    declaration: 'export interface PromptPresentation extends PromptPreparation {\n    sections: AssembledSection[];\n}',
+    declaration: 'export interface PromptPresentation {\n    sections: AssembledSection[];\n    contexts: AssembledContext[];\n    variables: Record<string, string | undefined>;\n}',
   },
   {
     name: 'PromptSection',
@@ -7778,7 +7768,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SystemPrompt',
-    declaration: 'export class SystemPrompt extends Service {\n    static Config: z<Config>;\n    constructor(ctx: Context, config: Config);\n    section(section: PromptSection): () => void;\n    getSectionOrder(name: PromptSectionOrderName): number;\n    getContextOrder(name: PromptContextOrderName): number;\n    context(context: PromptContext): () => void;\n    suppressRuntimeContext(): () => void;\n    tools(provider: (context: AssembleContext) => ToolProviderResult): () => void;\n    variable(name: string, provider: (context: AssembleContext) => string | undefined): () => void;\n    refreshContext<T extends PromptPreparation>(assembly: T, context: AssembleContext = {}): T;\n    async prepare(context: AssembleContext = {}): Promise<PromptPreparation>;\n    async assemble(context: AssembleContext = {}, preparation?: PromptPreparation): Promise<PromptAssembly>;\n}',
+    declaration: 'export class SystemPrompt extends Service {\n    static Config: z<Config>;\n    constructor(ctx: Context, config: Config);\n    section(section: PromptSection): () => void;\n    getSectionOrder(name: PromptSectionOrderName): number;\n    getContextOrder(name: PromptContextOrderName): number;\n    context(context: PromptContext): () => void;\n    suppressRuntimeContext(): () => void;\n    tools(provider: (context: AssembleContext) => ToolProviderResult): () => void;\n    variable(name: string, provider: (context: AssembleContext) => string | undefined): () => void;\n    refreshContext(assembly: PromptAssembly, context: AssembleContext = {}): PromptAssembly;\n    async assemble(context: AssembleContext = {}): Promise<PromptAssembly>;\n}',
   },
   {
     name: 'SystemPromptMessageSource',
@@ -7966,7 +7956,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ToolActivationContext',
-    declaration: 'export interface ToolActivationContext {\n    readonly agent: Agent;\n    readonly modelSelection: ModelSelection;\n    readonly signal: AbortSignal;\n}',
+    declaration: 'export interface ToolActivationContext {\n    readonly agent: Agent;\n    readonly signal: AbortSignal;\n}',
   },
   {
     name: 'ToolAdditionBlock',

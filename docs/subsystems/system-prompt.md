@@ -189,24 +189,20 @@ variable(name: string, provider: (context: AssembleContext) => string | undefine
  * @param context - the same scope and current plugin-defined assembly fields.
  * @returns the accepted assembly with current runtime-context provider text.
  */
-refreshContext<T extends PromptPreparation>(assembly: T, context: AssembleContext = {}): T
+refreshContext(assembly: PromptAssembly, context: AssembleContext = {}): PromptAssembly
 
 /**
- * Prepare variables and runtime facts before accepting a step. No tool
- * conditions or prompt sections are evaluated in this phase.
- * @param context - calling scope and request cancellation.
- * @returns prepared inputs after the preparation waterfall.
+ * Assemble global and scoped providers, detach tool parameters, apply
+ * canonical ordering, then run the presentation waterfall. Scoped sections
+ * and variables shadow globals. The waterfall's text is authoritative except
+ * that an effective complete section is restored afterwards as the sole
+ * prompt section, current suppression removes optional contexts, and
+ * required contexts keep their provider values; tool declarations stay
+ * provider-owned.
+ * @param context - the optional scope, step tool set, and plugin-defined assembly fields.
+ * @returns the post-waterfall assembly with ordered tool declarations.
  */
-async prepare(context: AssembleContext = {}): Promise<PromptPreparation>
-
-/**
- * Assemble prompt sections and tool declarations after request preparation.
- * The presentation waterfall cannot replace provider-owned tools.
- * @param context - calling scope, route-bound agent, and resolved tools.
- * @param preparation - accepted variables and runtime facts; prepared here when omitted.
- * @returns the complete assembly with ordered tool declarations.
- */
-async assemble(context: AssembleContext = {}, preparation?: PromptPreparation): Promise<PromptAssembly>
+async assemble(context: AssembleContext = {}): Promise<PromptAssembly>
 ```
 
 Source: [`packages/core/system-prompt/src/index.ts`](../../packages/core/system-prompt/src/index.ts)
@@ -255,26 +251,6 @@ Emitted when any prompt provider changes. This registry notification is unfilter
  */
 'system-prompt/change'(): void
 ```
-
-Source: [`packages/core/system-prompt/src/index.ts`](../../packages/core/system-prompt/src/index.ts)
-
-<a id="system-promptprepare--waterfall"></a>
-
-#### `system-prompt/prepare` — waterfall
-
-Prepare variables and runtime context before step admission.
-
-```ts cordis-catalog
-/**
- * Prepare variables and runtime context before step admission.
- * @param preparation - registered variables and context contributions.
- * @param context - calling scope and cancellation.
- * @mode waterfall
- */
-'system-prompt/prepare'(this: Scoped<SystemPrompt>, preparation: PromptPreparation, context: AssembleContext, next: () => Promise<PromptPreparation>): Promise<PromptPreparation>
-```
-
-Types: [Scoped](scope.md)
 
 Source: [`packages/core/system-prompt/src/index.ts`](../../packages/core/system-prompt/src/index.ts)
 <!-- END GENERATED cordis-surface -->

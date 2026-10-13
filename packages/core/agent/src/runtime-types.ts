@@ -19,8 +19,6 @@ declare module '@deepseek-ai/dsh-system-prompt' {
   interface AssembleContext {
     /** Agent for this assembly; absent on diagnostics. When present, `scope` must identify the same agent. */
     agent?: Agent
-    /** Model selection of the step being assembled; absent outside a step. */
-    modelSelection?: ModelSelection
   }
 }
 
@@ -32,6 +30,12 @@ export interface ModelSelection {
   model: string
   /** Adapter-owned reasoning effort, or provider/default behavior when absent. */
   reasoningEffort?: ReasoningEffortId
+}
+
+/** Decisions the driver fixed for one proposed or running step. */
+export interface AgentStep {
+  /** Provider, model, and reasoning effort that every request attempt in the step uses. */
+  readonly modelSelection: ModelSelection
 }
 
 /** Merge-extensible agent creation options. Persona belongs to system-prompt sections. */
@@ -176,6 +180,13 @@ declare module './types.ts' {
   interface Agent {
     /** Creation-time request options; `agent/model` may choose another provider, model, and effort for each step. */
     readonly options: AgentOptions
+    /**
+     * The step the driver is preparing or running. The driver publishes it
+     * after `agent/model` and clears it when the step ends or its proposal is
+     * rejected, fails, or is cancelled, so it is undefined between steps and
+     * during `agent/model`. Work that outlives its step reads it at its start.
+     */
+    readonly step?: AgentStep | undefined
     /** The live session this agent drives; its log is the durable source of truth. */
     readonly session: Session
     /** Agent-owned access to durable pending work. */
@@ -320,17 +331,32 @@ declare module '@deepseek-ai/cordis' {
     // ---- the machine's extension points ----
     /**
      * Reject a proposed step or replace the messages that enter it. Calling
-     * `next()` preserves the current messages.
+     * `next()` preserves the current messages. `payload.agent.step` already
+     * holds the model selection that `agent/model` chose for this step.
      * @param payload.agent - the agent proposing the step.
      * @param payload.messages - messages removed from the inbox for this step.
      * @param payload.turn - the turn that will own the step.
      * @param payload.step - the step proposed by the loop.
-     * @param payload.modelSelection - the provider, model, and effort `agent/model` chose for this step.
      * @param payload.signal - the current turn's cancellation signal.
      * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
      * @mode waterfall
      */
-    'agent/pre-step'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; modelSelection: ModelSelection; signal: AbortSignal }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>
+    'agent/pre-step'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; signal: AbortSignal }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>
+    /**
+     * A proposed step reached its boundary: the loop claimed its input and is
+     * about to choose its model. Listeners commit selections that take effect
+     * from this step, such as a pending plan-mode switch, so `agent/model`,
+     * `agent/pre-step`, tool conditions, and prompt assembly read one state.
+     * Runs once per proposed step; a throw fails the proposal, and
+     * cancellation opens no step.
+     * @param payload.agent - the agent proposing the step.
+     * @param payload.turn - the turn that will own the step.
+     * @param payload.step - the step proposed by the loop.
+     * @param payload.signal - the current turn's explicit abort signal.
+     * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
+     * @mode serial
+     */
+    'agent/step-boundary'(this: Scoped<Agent>, payload: { agent: Agent; turn: number; step: number; signal: AbortSignal }): Promise<void> | void
     /**
      * Choose the provider, model, and reasoning effort for one proposed step.
      * `await next()` yields the selection the machine would use: agent options
@@ -338,10 +364,11 @@ declare module '@deepseek-ai/cordis' {
      * effort only when one was chosen for that exact model. Return a
      * replacement to switch; an effort belongs to its model, so a replacement
      * that changes the model names that model's effort or omits it for the
-     * provider default. The loop runs this once per proposed step, before
-     * context preparation and `agent/pre-step`. Prompt preparation, tool
-     * conditions, and every request attempt in the step use the result, so a
-     * later choice applies from the next step. Cancellation here opens no step.
+     * provider default. The loop runs this once per proposed step, after
+     * `agent/step-boundary` and before `agent/pre-step`, then publishes the
+     * result as `agent.step`. Pre-step listeners, tool conditions, prompt
+     * assembly, and every request attempt in the step use it, so a later
+     * choice applies from the next step. Cancellation here opens no step.
      * @param payload.agent - the agent proposing the step.
      * @param payload.turn - the turn that will own the step.
      * @param payload.step - the step proposed by the loop.

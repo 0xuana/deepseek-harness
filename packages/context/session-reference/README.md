@@ -70,7 +70,7 @@ Preparation reads each referenced session's current surface exactly once, when t
 
 The resolver discovers optional storage through `ctx.get("spillStore")` and saves only truncated references. Storage ownership is the target session; the source descriptor identifies the referenced session and label, without a fabricated tool call. Cancellation is checked after the asynchronous save and prevents publication even if an artifact was written. Artifact expiry remains the backend's existing policy.
 
-The budget uses the step model that `agent/model` chose, which `agent/pre-step` carries as `modelSelection`. Direct `prepare` calls without a model selection use agent options; session headers do not select the budget model.
+The budget uses the step model that `agent/model` chose, which the agent exposes as `agent.step` during `agent/pre-step`. Direct `prepare` calls outside a step use agent options; session headers do not select the budget model.
 
 ### Source map
 

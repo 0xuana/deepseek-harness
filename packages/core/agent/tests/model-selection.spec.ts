@@ -5,6 +5,7 @@ import {
   agentEvents,
   installModelSelection,
   type Agent,
+  type AgentStep,
   type ModelSelection,
   type ModelSelectionRef,
 } from '../src/index.ts'
@@ -24,13 +25,25 @@ function harness(current?: ModelSelection, previous?: ModelSelection) {
   contexts.push(ctx)
   const selection: ModelSelectionRef = { current }
   const dispose = installModelSelection(ctx, selection)
-  const agent = { session: Session.create(SessionId('model-selection')) } as Agent
+  const state: { session: Session; step?: AgentStep } = { session: Session.create(SessionId('model-selection')) }
+  const agent = state as Agent
   if (previous) agent.session.append('request/header', { header: { config: previous }, reason: 'initial' })
   const choose = (step: number) =>
     agentEvents(ctx, agent).waterfall('agent/model', { turn: 1, step, signal }, () => Promise.resolve(seed))
-  const preStep = (modelSelection: ModelSelection, messages = [input], offered = [input], step = 1, stepSignal = signal) =>
-    agentEvents(ctx, agent).waterfall('agent/pre-step', { turn: 1, step, messages: offered, modelSelection, signal: stepSignal },
-      () => Promise.resolve({ kind: 'enter' as const, messages }))
+  /** Dispatch pre-step for a step whose published model selection is `modelSelection`. */
+  const preStep = (
+    modelSelection: ModelSelection | undefined,
+    messages = [input],
+    offered = [input],
+    step = 1,
+    stepSignal = signal,
+    decision: 'enter' | 'reject' = 'enter',
+  ) => {
+    if (modelSelection === undefined) delete state.step
+    else state.step = { modelSelection }
+    return agentEvents(ctx, agent).waterfall('agent/pre-step', { turn: 1, step, messages: offered, signal: stepSignal },
+      () => Promise.resolve(decision === 'enter' ? { kind: 'enter' as const, messages } : { kind: 'reject' as const }))
+  }
   return { ctx, agent, selection, dispose, choose, preStep }
 }
 
@@ -63,7 +76,7 @@ describe('installModelSelection()', () => {
     await expect(h.preStep({ provider: 'beta', model: 'b1' })).resolves.toMatchObject({ messages: [input, notice('alpha/a0', 'beta/b1')] })
   })
 
-  it('preserves initial, effort-only, rejected, cancelled, and disposed decisions', async () => {
+  it('preserves initial, effort-only, unpublished, rejected, cancelled, and disposed decisions', async () => {
     const h = harness()
     const initial = { provider: 'alpha', model: 'a0' }
     await expect(h.preStep(initial)).resolves.toEqual({ kind: 'enter', messages: [input] })
@@ -72,9 +85,9 @@ describe('installModelSelection()', () => {
       reason: 'initial',
     })
     await expect(h.preStep({ ...initial, reasoningEffort: ReasoningEffortId('low') })).resolves.toEqual({ kind: 'enter', messages: [input] })
+    await expect(h.preStep(undefined)).resolves.toEqual({ kind: 'enter', messages: [input] })
     const switched = { provider: 'alpha', model: 'a1' }
-    await expect(agentEvents(h.ctx, h.agent).waterfall('agent/pre-step', { turn: 1, step: 3, messages: [], modelSelection: switched, signal },
-      () => Promise.resolve({ kind: 'reject' as const }))).resolves.toEqual({ kind: 'reject' })
+    await expect(h.preStep(switched, [], [], 3, signal, 'reject')).resolves.toEqual({ kind: 'reject' })
     await expect(h.preStep(switched, [input], [input], 3, AbortSignal.abort())).resolves.toEqual({ kind: 'enter', messages: [input] })
     h.dispose()
     await expect(h.preStep(switched)).resolves.toEqual({ kind: 'enter', messages: [input] })

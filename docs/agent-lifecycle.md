@@ -25,22 +25,22 @@ sequenceDiagram
   Note over Agent,Driver: claim pending next-step input plus one queued prompt
   Driver-->>SDK: <code>agent/inbox/spliced</code> pure deletion
   Driver-->>SDK: <code>agent/inbox/claimed</code> { message, turn } per message
-  Driver->>Hooks: <code>agent/model</code> waterfall chooses the step provider, model, and effort
-  Driver->>Prompt: <code>system-prompt/prepare</code> waterfall with the step model selection
-  Driver->>Hooks: <code>agent/pre-step</code> waterfall with the step model selection
+  Driver->>Hooks: <code>agent/step-boundary</code> serial commits selections pending for this step
+  Driver->>Hooks: <code>agent/model</code> waterfall chooses provider, model, and effort, published as agent.step
+  Driver->>Hooks: <code>agent/pre-step</code> waterfall reads agent.step
   Hooks-->>Driver: authoritative reject or enter(messages)
   alt proposed step rejected, first batch empty, or pre-step failed
     Driver-->>Driver: claimed batch stays removed, the open turn spends no step
   else enter proposed step
   Driver->>Session: <code>step/start</code>
-  Driver->>Tools: resolve({ agent, modelSelection, signal }) once per step
-  Driver->>Prompt: <code>system-prompt/assemble</code> with the step tool set
+  Driver->>Tools: resolve({ agent, signal }) once per step
+  Driver->>Prompt: <code>system-prompt/assemble</code> contexts, variables, sections, and the step tool set
   Driver->>Hooks: <code>agent/request</code> waterfall with the step model selection
   Driver->>LLM: prepareCall(config, signal)
   Note over Driver,LLM: cancellation during preparation commits neither system nor users
   Note over Driver,Session: synchronous admission using the prepared call capability
   Driver->>Session: <code>system/message</code> ordered per-node reconciliation
-  Driver->>Session: <code>user/message</code> per entered message
+  Driver->>Session: <code>user/message</code> per entered message, then a changed runtime-context snapshot
   Driver->>Session: <code>request/header</code> and <code>request/context</code> as needed
   Driver->>Driver: derive and freeze request from the log
   Driver->>LLM: bound prepared call through <code>llm/stream</code> waterfall
@@ -75,8 +75,8 @@ sequenceDiagram
   opt next-step input is pending
     Driver-->>Driver: claim pending next-step input
     Driver-->>SDK: <code>agent/inbox/claimed</code> { message, turn } per message
+    Driver->>Hooks: <code>agent/step-boundary</code> serial
     Driver->>Hooks: <code>agent/model</code> waterfall
-    Driver->>Prompt: <code>system-prompt/prepare</code> waterfall
     Driver->>Hooks: <code>agent/pre-step</code> waterfall
     Hooks-->>Driver: authoritative reject or enter(messages)
   end

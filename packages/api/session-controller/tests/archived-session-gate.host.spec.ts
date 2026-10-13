@@ -47,7 +47,7 @@ async function liveAgent(ctx: Context, session: Session): Promise<Agent> {
 /** Propose one model step for the Agent; the innermost decision enters. */
 const proposed = (ctx: Context, agent: Agent) => ctx.waterfall(
   'agent/pre-step',
-  { agent, messages: [], turn: 1, step: 1, modelSelection: { provider: 'test', model: 'test' }, signal: new AbortController().signal },
+  { agent, messages: [], turn: 1, step: 1, signal: new AbortController().signal },
   () => Promise.resolve({ kind: 'enter' as const, messages: [] }),
 )
 

@@ -131,11 +131,12 @@ describe('step-time tool activation', () => {
         calls++
         return [{ type: 'text', text: 'done' }]
       },
-    }), { when: async ({ modelSelection }) => {
-      expect(Object.isFrozen(modelSelection)).toBe(true)
-      selectedModels.push(modelSelection.model)
+    }), { when: async ({ agent: subject }) => {
+      const selection = subject.step?.modelSelection
+      expect(Object.isFrozen(selection)).toBe(true)
+      selectedModels.push(selection?.model ?? '')
       await Promise.resolve()
-      return modelSelection.model === 'enabled'
+      return selection?.model === 'enabled'
     } })
     await send(agent, 'enabled')
     model = 'disabled'
@@ -191,7 +192,7 @@ describe('step-time tool activation', () => {
     }), { when: () => { counts.conditions++; return retried } })
     ctx.systemPrompt.section({
       name: 'retry:guidance', order: 0, complete: true,
-      text: context => `${context.modelSelection?.model}:${ctx.tools.schemas(agent, context.toolSet).map(tool => tool.name).join(',')}`,
+      text: context => `${context.agent?.step?.modelSelection.model}:${ctx.tools.schemas(agent, context.toolSet).map(tool => tool.name).join(',')}`,
     })
     await send(agent, 'retry once')
     expect(adapter.requests.map(request => request.model)).toEqual(['first', 'first'])

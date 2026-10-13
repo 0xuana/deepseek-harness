@@ -39,7 +39,7 @@ Mount alongside `fs`, `sessionProjections`, and `systemPrompt`. `defaultDirector
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The Session projection owns the effective directory and exposes it in Session observations, so cold readers can use it without activating an Agent; the header continues to identify the original project. Changes serialize per Session, validate through the filesystem provider, check cancellation and Agent lifetime, commit an event, and queue a user-context notice. If notice queuing fails after commit, the operation returns the committed directory and logs a warning; the next request or resume still receives the required directory context. `system-prompt/prepare` validates the current directory before step admission and before publishing its required context contribution. Existing processes and sandbox grants keep their independent ownership. The [service implementation](src/index.ts) defines the API.
+The Session projection owns the effective directory and exposes it in Session observations, so cold readers can use it without activating an Agent; the header continues to identify the original project. Changes serialize per Session, validate through the filesystem provider, check cancellation and Agent lifetime, commit an event, and queue a user-context notice. If notice queuing fails after commit, the operation returns the committed directory and logs a warning; the next request or resume still receives the required directory context. Prompt assembly validates the current directory before publishing its required context contribution. Existing processes and sandbox grants keep their independent ownership. The [service implementation](src/index.ts) defines the API.
 
 No runtime invariant companion is published because the service reads its only directory state from the Session projection and checks filesystem validity at use.
 
@@ -77,7 +77,7 @@ Directory transitions append context without replacing the stable system-prompt 
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **Missing original project** — when the current directory and the original project are both unavailable, step preparation rejects every model turn, including chat-only turns. The service does not choose or recreate a repository. Restore the original directory, or use SDK `setWorkingDirectory` (`set_working_directory` in Python) or `ctx.workingDirectory.set` to select an existing absolute directory before retrying. Existing shells retain their process-local directories.
+- **Missing original project** — when the current directory and the original project are both unavailable, prompt assembly rejects every model turn, including chat-only turns. The service does not choose or recreate a repository. Restore the original directory, or use SDK `setWorkingDirectory` (`set_working_directory` in Python) or `ctx.workingDirectory.set` to select an existing absolute directory before retrying. Existing shells retain their process-local directories.
 
 <a id="dev-note"></a>
 ### Dev Note

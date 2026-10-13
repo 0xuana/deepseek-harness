@@ -11,7 +11,7 @@ import { AnonymousEntries, NamedEntries, ScopedLayers, scopeOf, scopeTarget } fr
 import type { ScopeKey, ScopeLayer, Scoped } from '@deepseek-ai/dsh-scope'
 import type { ToolCallId, ContentBlock, ToolSchema } from '@deepseek-ai/dsh-llm'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
-import type { Agent, ModelSelection } from '@deepseek-ai/dsh-agent'
+import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { UserMessage } from '@deepseek-ai/dsh-session'
 import { assertNever, deepFreeze, snapshotJsonValue, type JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { PromptSection, ToolProviderResult } from '@deepseek-ai/dsh-system-prompt'
@@ -229,10 +229,8 @@ export interface ToolOutputDefinition {
 
 /** Inputs for a tool's step-time activation condition. */
 export interface ToolActivationContext {
-  /** Agent preparing the step. */
+  /** Agent preparing the step; `agent.step` holds the step's model selection. */
   readonly agent: Agent
-  /** Provider, model, and reasoning effort that every request attempt in the step uses. */
-  readonly modelSelection: ModelSelection
   /** Cancellation of step preparation; asynchronous conditions must observe it. */
   readonly signal: AbortSignal
 }
@@ -243,7 +241,7 @@ export interface ToolRegistrationOptions {
    * Decide whether the step's requests may call the tool. Omission enables
    * it. False excludes it from both declarations and dispatch; rejection fails
    * step preparation. Conditions must not mutate registrations or start tool work.
-   * @param context - preparing agent, step model selection, and cancellation signal.
+   * @param context - preparing agent and cancellation signal.
    * @returns whether the tool participates in this step.
    */
   readonly when?: (context: ToolActivationContext) => boolean | Promise<boolean>
@@ -1311,7 +1309,7 @@ export class ToolRuntime extends Service {
    * Resolve conditions once for this step without changing shared registrations.
    * Cancellation or a rejected condition publishes no partial selection. Removed
    * registrations cannot be restored by a late condition result.
-   * @param context - preparing agent, step model selection, and cancellation.
+   * @param context - preparing agent and cancellation.
    * @returns the complete selection; the caller disposes it after its tool batch settles.
    */
   async resolve(context: ToolActivationContext): Promise<ResolvedToolSet> {

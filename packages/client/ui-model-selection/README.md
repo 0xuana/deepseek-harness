@@ -86,7 +86,7 @@ Read these pages when the model surface is not enough. They move from the browse
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through the `session.selectModel` selection both entries submit: the Host snapshots the complete `ModelSelection` at the next prompt-assembly boundary and owns the model-visible effect, while a running step keeps its assembled selection.
+Indirectly, through the `session.selectModel` selection both entries submit: the Host applies the complete `ModelSelection` when the next step chooses its model and owns the model-visible effect, while a running step keeps the selection it started with.
 
 #### KV Cache effect
 

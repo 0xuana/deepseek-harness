@@ -2182,6 +2182,11 @@
       "source": "packages/core/agent/src/runtime-types.ts"
     },
     {
+      "doc": "docs/subsystems/core.md",
+      "symbol": "AgentStep",
+      "source": "packages/core/agent/src/runtime-types.ts"
+    },
+    {
       "doc": "docs/subsystems/feedback.md",
       "symbol": "MessageFeedbackVersion",
       "source": "packages/feedback/message-feedback/src/types.ts"

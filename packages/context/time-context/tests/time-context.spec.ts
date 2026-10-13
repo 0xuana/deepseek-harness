@@ -98,7 +98,7 @@ async function fire(
   })
   const decision = await agentEvents(ctx, agent).waterfall(
     'agent/pre-step',
-    { messages: [proposed], turn, step, modelSelection: { provider: 'test', model: 'test' }, signal },
+    { messages: [proposed], turn, step, signal },
     () => Promise.resolve({ kind: 'enter' as const, messages: [proposed] }),
   )
   if (decision.kind === 'enter') {

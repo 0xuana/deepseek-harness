@@ -28,7 +28,7 @@ Status: implemented
 
 插件通过 `ctx.systemPrompt.variable(name, provider)` 注册 `{{name}}` 值。组装过程将它们解析到 waterfall 可见的变量映射中。渲染阶段拒绝以下情况：引用未知的自有属性、已注册的提供方返回 `undefined`、格式错误的完整引用、以及仍包含闭合 `}}` 的不平衡引用；孤立的未匹配 `{{` 保留为行文，替换后的值不会被重新扫描。注册阶段拒绝无效或重复的变量名，section 名称也必须唯一。段可设置 `interpolate: false` 来原样保留生成的文档；`tools:sdk` 使用此设置，因为工具描述和 schema 可能会介绍自身的 `{{…}}` 语法。
 
-`dsh-agent-loop` 注册 `provider` 和 `model`，它们都是组装上下文的纯投影：步骤内取 `agent/model` 选定的步骤模型选择，步骤外取 agent 的 `options` 这一对值。示例 persona 引用 `{{model}}`，由模型选择拥有模型名称。这些变量保留在 loop 插件上，因为它们描述该循环驱动的 agent；替换循环自行提供自己的变量。[Session 工作目录决策](2026-09-13-session-working-directory.zh.md) 拥有目录状态及其字面用户上下文位置；循环不注册 `cwd`。
+`dsh-agent-loop` 注册 `provider` 和 `model`，它们都是组装上下文的纯投影：步骤内从 `agent.step` 读取 `agent/model` 选定的步骤模型选择，步骤外取 agent 的 `options` 这一对值。示例 persona 引用 `{{model}}`，由模型选择拥有模型名称。这些变量保留在 loop 插件上，因为它们描述该循环驱动的 agent；替换循环自行提供自己的变量。[Session 工作目录决策](2026-09-13-session-working-directory.zh.md) 拥有目录状态及其字面用户上下文位置；循环不注册 `cwd`。
 
 ### Persona 作为 order-0 section
 

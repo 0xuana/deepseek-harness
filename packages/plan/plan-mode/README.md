@@ -82,7 +82,7 @@ Plan mode is a product package, not a capability seam: there is no swappable bac
 
 ### Durable state and step-boundary appends
 
-The package persists one log-only whole-value event, `plan/mode`, and the last logged value is the state. A mode change appends immediately when no turn is open; during an open turn it stays pending until the next accepted in-turn pre-step — the only append point while an agent runs — and an append failure stops step admission while retaining the pending selection. The `set`/`get` service methods and their exact return states live in [`src/index.ts`](src/index.ts) and read the registered `plan` projection; the first dependent access fails explicitly when the registry or key is absent.
+The package persists one log-only whole-value event, `plan/mode`, and the last logged value is the state. A mode change appends immediately when no turn is open; during an open turn it stays pending until the next step boundary — the only append point while an agent runs, before the step chooses its model — and an append failure fails that proposal while retaining the pending selection. The `set`/`get` service methods and their exact return states live in [`src/index.ts`](src/index.ts) and read the registered `plan` projection; the first dependent access fails explicitly when the registry or key is absent.
 
 ### The `/plan` command
 
@@ -90,7 +90,7 @@ The command child activates only when a commands service is composed. It maps ba
 
 ### The exit tool
 
-`exit_plan_mode` is conditionally admitted only while the committed plan state is active. Entering or leaving changes the tool declarations and plan guidance together; Native and PTC execution use the same admitted set. An approved review records a silent pending exit that the next accepted in-turn pre-step appends, keeping plan guidance for the rest of the current tool batch. Without a user-questions channel, or after a service reload while the review is pending, the call fails closed and `/plan off` remains the manual escape.
+`exit_plan_mode` is conditionally admitted only while the committed plan state is active. Entering or leaving changes the tool declarations and plan guidance together; Native and PTC execution use the same admitted set. An approved review records a silent pending exit that the next step boundary appends, keeping plan guidance for the rest of the current tool batch. Without a user-questions channel, or after a service reload while the review is pending, the call fails closed and `/plan off` remains the manual escape.
 
 ### Session projection unit
 
@@ -182,7 +182,7 @@ Entering plan mode adds the exit tool through the route’s tool-update protocol
 These limits describe when plan mode does not behave as you might expect or needs extra care. They are current package constraints, not a roadmap.
 
 - **Guidance, not enforcement** — plan mode restrains through text only; deployments that need enforced restrictions configure sandbox mode and approval policy independently.
-- **Pending selections are process-local** — a selection made after the turn's final accepted pre-step is lost if the process exits before another accepted in-turn pre-step; the UI must reapply it.
+- **Pending selections are process-local** — a selection made after the turn's final step boundary is lost if the process exits before another step boundary; the UI must reapply it.
 - **No creation-time plan option** — forked agents inherit logged plan state, while newly spawned agents begin inactive.
 - **Live children cannot open the review** — a child owned by another live agent fails the `exit_plan_mode` call and is told to include the unresolved decision in its final result; durable fork lineage alone does not prevent a session resumed as a runtime root from opening the review.
 - **One specialized review renderer** — only the Web UI has a `plan-review` presentation; another interaction provider presents the same request through its generic option flow.

@@ -275,7 +275,6 @@ describe('SubagentModelSelectionConfig', () => {
       messages: [],
       turn: 1,
       step: 1,
-      modelSelection: { provider: 'test', model: 'test' },
       signal: new AbortController().signal,
     }
     await expect(ctx.waterfall(ctx as never, 'agent/pre-step', payload, next))

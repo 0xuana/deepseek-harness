@@ -51,6 +51,30 @@ describe('SystemPrompt', () => {
       await ctx.fiber.dispose()
     }
   })
+  it('keeps required contexts at their provider values after presentation listeners', async () => {
+    const ctx = new Context()
+    try {
+      await ctx.plugin(SystemPrompt)
+      ctx.systemPrompt.context({ name: 'directory', order: 0, required: true, text: 'Directory: /project' })
+      ctx.systemPrompt.context({ name: 'optional', order: 1, text: 'optional' })
+      let rewrite = true
+      ctx.on('system-prompt/assemble', async (_assembly, _context, next) => {
+        const accepted = await next()
+        return rewrite
+          ? { ...accepted, contexts: accepted.contexts.map(entry => ({ ...entry, text: 'rewritten' })) }
+          : { ...accepted, contexts: accepted.contexts.filter(entry => entry.name !== 'directory') }
+      })
+      expect((await ctx.systemPrompt.assemble()).contexts).toEqual([
+        { name: 'directory', text: 'Directory: /project' }, { name: 'optional', text: 'rewritten' },
+      ])
+      rewrite = false
+      expect((await ctx.systemPrompt.assemble()).contexts).toEqual([
+        { name: 'optional', text: 'optional' }, { name: 'directory', text: 'Directory: /project' },
+      ])
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
   it('refreshes registered context without reassembling accepted sections, schemas, variables, or expert additions', async () => {
     const ctx = new Context()
     try {

@@ -67,7 +67,7 @@ ctx.systemPrompt.section({
 
 `refreshContext(assembly, context)` 在 pre-step 与路由准备之后刷新已注册的运行时事实。它保留已接纳的段、工具、变量及仅由组装 waterfall 添加的上下文，应用当前的可选上下文抑制，并恢复缺失的必需条目。将变化的事实放在上下文 provider 中；已注册上下文的文本会在准入前再次读取。
 
-`prepare(context)` 在步骤接纳前通过 `system-prompt/prepare` 解析变量与运行时事实。`agent/pre-step` 接纳步骤并提交其选择后，`assemble(context, preparation)` 解析段落与工具声明。展示监听器接收段落、上下文与变量；工具声明仍由提供方持有。依赖工具的段落回调通过 `context.toolSet` 读取与执行相同的步骤集合。
+agent loop 在每个步骤的 `step/start` 之后调用一次 `assemble(context)`，此时该步骤的模型选择（`context.agent.step`）与准入工具集合（`context.toolSet`）都已确定。展示监听器接收段落、上下文与变量；工具声明仍由提供方持有。依赖工具的段落回调通过 `context.toolSet` 读取与执行相同的步骤集合。
 
 ### 贡献提示词变量
 

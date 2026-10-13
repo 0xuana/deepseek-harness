@@ -569,7 +569,7 @@ get(name: string, scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolDefinition |
  * Resolve conditions once for this step without changing shared registrations.
  * Cancellation or a rejected condition publishes no partial selection. Removed
  * registrations cannot be restored by a late condition result.
- * @param context - preparing agent, step model selection, and cancellation.
+ * @param context - preparing agent and cancellation.
  * @returns the complete selection; the caller disposes it after its tool batch settles.
  */
 async resolve(context: ToolActivationContext): Promise<ResolvedToolSet>

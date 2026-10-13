@@ -94,7 +94,7 @@ export class WorkingDirectoryService extends Service {
       interpolate: false,
       text: context => context.agent === undefined ? '' : this.contextText(context.agent.session),
     })
-    ctx.on('system-prompt/prepare', async (_assembly, context, next) => {
+    ctx.on('system-prompt/assemble', async (_assembly, context, next) => {
       if (context.agent === undefined) return next()
       await this.ensure(context.agent, context.signal)
       const assembly = await next()

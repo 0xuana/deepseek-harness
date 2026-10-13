@@ -67,6 +67,13 @@ interface Agent {
   readonly id: SessionId
   /** Creation-time request options; `agent/model` may choose another provider, model, and effort for each step. */
   readonly options: AgentOptions
+  /**
+   * The step the driver is preparing or running. The driver publishes it
+   * after `agent/model` and clears it when the step ends or its proposal is
+   * rejected, fails, or is cancelled, so it is undefined between steps and
+   * during `agent/model`. Work that outlives its step reads it at its start.
+   */
+  readonly step?: AgentStep | undefined
   /** The live session this agent drives; its log is the durable source of truth. */
   readonly session: Session
   /** Agent-owned access to durable pending work. */
@@ -212,7 +219,7 @@ interface AgentOptions {
 
 每个步骤在 `agent/model` 之后都要求 `provider` 与 `model` 都存在；该 waterfall 可以补上或替换 options 中的提供方、模型与推理强度。显式 `reasoningEffort` 会为该模型的首个步骤选择提供初始值；确切模型解析会校验该值，省略时则允许填入适配器默认值。提供 `maxTokens` 时，它必须是正安全整数，并限制每次对话模型请求的输出；省略时，系统会在写入请求 header 前填入确切模型的适配器默认值，否则提供方行为保持不变。agent 作用域的 `deployment:persona-prefix` 提示词段落可以遮蔽全局默认 persona。
 
-步骤在提示词准备、`agent/pre-step`、工具条件以及每次请求尝试中都沿用其模型选择；`agent/request` 只能修改 `maxTokens`、`temperature`、`stop` 等采样控制参数：
+驱动把该步骤的模型选择发布为 `agent.step`，供 `agent/pre-step`、工具条件、提示词组装以及每次请求尝试读取；`agent/request` 只能修改 `maxTokens`、`temperature`、`stop` 等采样控制参数：
 
 ```ts type-equiv
 /** Complete provider, model, and optional reasoning effort; `agent/model` fixes one for each step. */
@@ -223,6 +230,14 @@ interface ModelSelection {
   model: string
   /** Adapter-owned reasoning effort, or provider/default behavior when absent. */
   reasoningEffort?: ReasoningEffortId
+}
+```
+
+```ts type-equiv
+/** Decisions the driver fixed for one proposed or running step. */
+interface AgentStep {
+  /** Provider, model, and reasoning effort that every request attempt in the step uses. */
+  readonly modelSelection: ModelSelection
 }
 ```
 
@@ -333,7 +348,7 @@ pre-step 决策使用与持久 user-role 输入相同、带标识的 `UserMessag
 
 源码：[`packages/core/agent/src/types.ts`](../../packages/core/agent/src/types.ts)
 
-`agent/pre-step` 接收一个 payload，携带独占的已领取批次（`messages`）、拟进入步骤的坐标（`turn`、`step`）、其模型选择 `modelSelection` 与当前轮次的取消 `signal`。首次提案在已打开的轮次内、任何步骤开始前运行；工具 continuation 可以在步骤之间提交空的已领取批次：
+`agent/pre-step` 接收一个 payload，携带独占的已领取批次（`messages`）、拟进入步骤的坐标（`turn`、`step`）与当前轮次的取消 `signal`；`payload.agent.step` 已持有该步骤的模型选择。首次提案在已打开的轮次内、任何步骤开始前运行；工具 continuation 可以在步骤之间提交空的已领取批次：
 
 它返回 `PreStepDecision`。reject 不会打开步骤。enter 提供在 `step/start` 后追加的完整消息批次；最终决策省略的已领取消息保持已删除，而领取后插入的输入仍留待后续处理：
 
@@ -955,7 +970,7 @@ Source: [`packages/core/agent/src/runtime-types.ts`](../../packages/core/agent/s
 
 #### `agent/model` — waterfall
 
-Choose the provider, model, and reasoning effort for one proposed step. `await next()` yields the selection the machine would use: agent options before this loop logs a request, the logged header afterwards, with an effort only when one was chosen for that exact model. Return a replacement to switch; an effort belongs to its model, so a replacement that changes the model names that model's effort or omits it for the provider default. The loop runs this once per proposed step, before context preparation and `agent/pre-step`. Prompt preparation, tool conditions, and every request attempt in the step use the result, so a later choice applies from the next step. Cancellation here opens no step.
+Choose the provider, model, and reasoning effort for one proposed step. `await next()` yields the selection the machine would use: agent options before this loop logs a request, the logged header afterwards, with an effort only when one was chosen for that exact model. Return a replacement to switch; an effort belongs to its model, so a replacement that changes the model names that model's effort or omits it for the provider default. The loop runs this once per proposed step, after `agent/step-boundary` and before `agent/pre-step`, then publishes the result as `agent.step`. Pre-step listeners, tool conditions, prompt assembly, and every request attempt in the step use it, so a later choice applies from the next step. Cancellation here opens no step.
 
 ```ts cordis-catalog
 /**
@@ -965,10 +980,11 @@ Choose the provider, model, and reasoning effort for one proposed step. `await n
  * effort only when one was chosen for that exact model. Return a
  * replacement to switch; an effort belongs to its model, so a replacement
  * that changes the model names that model's effort or omits it for the
- * provider default. The loop runs this once per proposed step, before
- * context preparation and `agent/pre-step`. Prompt preparation, tool
- * conditions, and every request attempt in the step use the result, so a
- * later choice applies from the next step. Cancellation here opens no step.
+ * provider default. The loop runs this once per proposed step, after
+ * `agent/step-boundary` and before `agent/pre-step`, then publishes the
+ * result as `agent.step`. Pre-step listeners, tool conditions, prompt
+ * assembly, and every request attempt in the step use it, so a later
+ * choice applies from the next step. Cancellation here opens no step.
  * @param payload.agent - the agent proposing the step.
  * @param payload.turn - the turn that will own the step.
  * @param payload.step - the step proposed by the loop.
@@ -987,22 +1003,22 @@ Source: [`packages/core/agent/src/runtime-types.ts`](../../packages/core/agent/s
 
 #### `agent/pre-step` — waterfall
 
-Reject a proposed step or replace the messages that enter it. Calling `next()` preserves the current messages.
+Reject a proposed step or replace the messages that enter it. Calling `next()` preserves the current messages. `payload.agent.step` already holds the model selection that `agent/model` chose for this step.
 
 ```ts cordis-catalog
 /**
  * Reject a proposed step or replace the messages that enter it. Calling
- * `next()` preserves the current messages.
+ * `next()` preserves the current messages. `payload.agent.step` already
+ * holds the model selection that `agent/model` chose for this step.
  * @param payload.agent - the agent proposing the step.
  * @param payload.messages - messages removed from the inbox for this step.
  * @param payload.turn - the turn that will own the step.
  * @param payload.step - the step proposed by the loop.
- * @param payload.modelSelection - the provider, model, and effort `agent/model` chose for this step.
  * @param payload.signal - the current turn's cancellation signal.
  * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
  * @mode waterfall
  */
-'agent/pre-step'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; modelSelection: ModelSelection; signal: AbortSignal }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>
+'agent/pre-step'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; signal: AbortSignal }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>
 ```
 
 Types: [Scoped](scope.zh.md) · [UserMessage](session.zh.md)
@@ -1089,6 +1105,34 @@ Agent status changed (`idle` ⇄ `running`). A waking delivery enters `running` 
  * @mode emit
  */
 'agent/status'(this: Scoped<Agent>, payload: { agent: Agent; status: AgentStatus }): void
+```
+
+Types: [Scoped](scope.zh.md)
+
+Source: [`packages/core/agent/src/runtime-types.ts`](../../packages/core/agent/src/runtime-types.ts)
+
+<a id="agentstep-boundary--serial"></a>
+
+#### `agent/step-boundary` — serial
+
+A proposed step reached its boundary: the loop claimed its input and is about to choose its model. Listeners commit selections that take effect from this step, such as a pending plan-mode switch, so `agent/model`, `agent/pre-step`, tool conditions, and prompt assembly read one state. Runs once per proposed step; a throw fails the proposal, and cancellation opens no step.
+
+```ts cordis-catalog
+/**
+ * A proposed step reached its boundary: the loop claimed its input and is
+ * about to choose its model. Listeners commit selections that take effect
+ * from this step, such as a pending plan-mode switch, so `agent/model`,
+ * `agent/pre-step`, tool conditions, and prompt assembly read one state.
+ * Runs once per proposed step; a throw fails the proposal, and
+ * cancellation opens no step.
+ * @param payload.agent - the agent proposing the step.
+ * @param payload.turn - the turn that will own the step.
+ * @param payload.step - the step proposed by the loop.
+ * @param payload.signal - the current turn's explicit abort signal.
+ * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
+ * @mode serial
+ */
+'agent/step-boundary'(this: Scoped<Agent>, payload: { agent: Agent; turn: number; step: number; signal: AbortSignal }): Promise<void> | void
 ```
 
 Types: [Scoped](scope.zh.md)

@@ -116,7 +116,7 @@ async function fireStep(ctx: Context, agent: Agent, turn: number, step: number):
   const signal = new AbortController().signal
   const decision = await agentEvents(ctx, agent).waterfall(
     'agent/pre-step',
-    { messages: [], turn, step, modelSelection: { provider: 'test', model: 'test' }, signal },
+    { messages: [], turn, step, signal },
     () => Promise.resolve({ kind: 'enter' as const, messages: [] }),
   )
   if (decision.kind === 'enter') {
@@ -134,7 +134,7 @@ async function proposeStep(
   const signal = new AbortController().signal
   return await agentEvents(ctx, agent).waterfall(
     'agent/pre-step',
-    { messages, turn: 1, step: 1, modelSelection: { provider: 'test', model: 'test' }, signal },
+    { messages, turn: 1, step: 1, signal },
     () => Promise.resolve({ kind: 'enter' as const, messages }),
   )
 }
@@ -166,7 +166,7 @@ async function composePrefix(ctx: Context, cwd: string, signal = new AbortContro
 async function composePrefixForAgent(ctx: Context, agent: Agent, signal = new AbortController().signal): Promise<Message[]> {
   const decision = await agentEvents(ctx, agent).waterfall(
     'agent/pre-step',
-    { messages: [], turn: 1, step: 1, modelSelection: { provider: 'test', model: 'test' }, signal },
+    { messages: [], turn: 1, step: 1, signal },
     () => Promise.resolve({ kind: 'enter' as const, messages: [] }),
   )
   if (decision.kind === 'enter') {
@@ -1104,7 +1104,7 @@ describe('user-explicit invocation injection', () => {
     const signal = new AbortController().signal
     const decision = await agentEvents(ctx, agent).waterfall(
       'agent/pre-step',
-      { messages: [gesture('/hidden-demo blocked step')], turn: 1, step: 1, modelSelection: { provider: 'test', model: 'test' }, signal },
+      { messages: [gesture('/hidden-demo blocked step')], turn: 1, step: 1, signal },
       () => Promise.resolve({ kind: 'reject' as const }),
     )
     expect(decision).toEqual({ kind: 'reject' })

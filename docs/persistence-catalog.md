@@ -732,7 +732,7 @@ Source: [`packages/interaction/permission-presets/src/index.ts:59`](../packages/
 'plan/mode': { active: boolean }
 ```
 
-Source: [`packages/plan/plan-mode/src/index.ts:51`](../packages/plan/plan-mode/src/index.ts)
+Source: [`packages/plan/plan-mode/src/index.ts:52`](../packages/plan/plan-mode/src/index.ts)
 
 ### `request/*`
 
@@ -5158,7 +5158,7 @@ Sources: [`packages/llm/llm/src/types.ts:127`](../packages/llm/llm/src/types.ts)
 
 SHA-256: `3cfc3a56502da1f8c6153c2c56657bab4b749056968634dd0991d325ec1c919f`
 
-Sources: [`packages/core/tools/src/index.ts:761`](../packages/core/tools/src/index.ts)
+Sources: [`packages/core/tools/src/index.ts:759`](../packages/core/tools/src/index.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -5734,7 +5734,7 @@ Array of `unknown` (opaque).
 
 SHA-256: `20a57544bbf204dacd1ae6beb2ab29444365c3c869f2afdf489dcdcbc3d9c8c5`
 
-Sources: [`packages/plan/plan-mode/src/index.ts:51`](../packages/plan/plan-mode/src/index.ts)
+Sources: [`packages/plan/plan-mode/src/index.ts:52`](../packages/plan/plan-mode/src/index.ts)
 
 | Property | Presence | Type |
 |---|---|---|

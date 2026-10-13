@@ -86,7 +86,7 @@ composer 的 `ModelSelect` 与 `/model` 选项构建器共用[提供方排序](s
 <a id="model-experience"></a>
 ## 模型体验
 
-两个入口提交的 `session.selectModel` 选择会间接影响模型：Host 会在下一次提示词组装边界为完整的 `ModelSelection` 创建快照，并负责使其对模型生效；运行中的步骤则保留已组装的选择。
+两个入口提交的 `session.selectModel` 选择会间接影响模型：Host 会在下一个步骤选择模型时应用完整的 `ModelSelection`，并负责使其对模型生效；运行中的步骤则保留开始时的选择。
 
 #### KV Cache 影响
 
