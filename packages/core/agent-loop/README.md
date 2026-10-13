@@ -48,7 +48,7 @@ Agents declared in the config start automatically when the plugin loads. Each en
 | `maxParallelToolCalls` | `10` | Parallel-safe tool calls in flight per step; `1` is serial |
 | `agents[].id` | required | Stable label; a fresh session mints `${id}-session-<uuid>` unless `sessionId` is set |
 | `agents[].provider` / `agents[].model` | — | Model route; both required before dispatch |
-| `agents[].reasoningEffort` | — | Non-empty initial reasoning effort; `agent/request` may override it |
+| `agents[].reasoningEffort` | — | Non-empty initial reasoning effort; `agent/model` may override it |
 | `agents[].maxTokens` | — | Positive per-request output-token cap |
 | `agents[].cwd` | — | Workspace directory for a fresh session |
 | `agents[].sessionId` | — | Exact identity: first use creates, a remount resumes materialized history |
