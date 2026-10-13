@@ -62,20 +62,3 @@ export function subagentModelSelectionPolicy(
 ): AllowedModelRoute[] | undefined {
   return projections.stateOf(session, 'subagentModelSelectionPolicy')?.map(route => ({ ...route }))
 }
-
-/**
- * Append the route policy once, before the Session’s first model request.
- * @param projections - registry that owns the policy projection.
- * @param session - session receiving route authorization.
- * @param allowedModels - exact routes the Session may select explicitly.
- */
-export function recordSubagentModelSelection(
-  projections: Pick<SessionProjectionRegistry, 'stateOf'>,
-  session: Session,
-  allowedModels: readonly AllowedModelRoute[],
-): void {
-  if (subagentModelSelectionPolicy(projections, session) !== undefined) return
-  session.append('subagent/model-selection-policy', {
-    allowedModels: allowedModels.map(route => ({ ...route })),
-  })
-}

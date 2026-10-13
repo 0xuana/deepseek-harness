@@ -7,6 +7,10 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import { parentAgentOptionsForDelegation } from '@deepseek-ai/dsh-subagent'
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type { ModelSelectionPolicy } from './model-selection.ts'
+import { subagentModelSelectionPolicy, subagentModelSelectionProjectionDefinition } from './model-selection-state.ts'
+
+export const name = 'tool-subagent-list-models'
+export const inject = ['tools', 'sessionProjections']
 
 interface ListSubagentModelsRequest {
   readonly provider?: string
@@ -37,13 +41,14 @@ function modelLine(provider: string, model: { id: string; name: string; descript
 /** Read the requested provider, allowed models, or exact-model efforts. */
 async function listSubagentModels(
   ctx: Context,
-  policy: ModelSelectionPolicy | undefined,
   request: ListSubagentModelsRequest,
   exec: ToolRunContext,
 ): Promise<string> {
+  if (exec.agent === undefined) throw new Error('list_subagent_models requires a calling agent')
+  const routes = subagentModelSelectionPolicy(ctx.sessionProjections, exec.agent.session)
+  let policy = routes === undefined ? undefined : { routes }
   const selectionEnabled = policy !== undefined
   if (policy === undefined) {
-    if (exec.agent === undefined) throw new Error('list_subagent_models requires a calling agent')
     const { provider, model } = parentAgentOptionsForDelegation(exec.agent)
     if (provider === undefined || model === undefined) {
       throw new Error('cannot discover child LLM routes without a parent provider and model')
@@ -94,12 +99,11 @@ async function listSubagentModels(
 }
 
 /**
- * Register `list_subagent_models` for the delegation-tool instance that owns model selection.
- * Provider listings intersect the catalog with authorization, or resolve only the parent model without a Session policy.
- * @param ctx - Context whose tool registry owns the fixed discovery definition.
- * @param policyFor - Read the calling Session’s authorized routes; undefined restricts discovery to its parent model.
+ * Register independent discovery of the calling Session’s authorized child models.
+ * @param ctx - Context carrying the tool registry and Session projections.
  */
-export function registerListSubagentModels(ctx: Context, policyFor: (exec: ToolRunContext) => ModelSelectionPolicy | undefined): void {
+export function apply(ctx: Context): void {
+  ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
   ctx.tools.register(defineTool({
     name: 'list_subagent_models',
     description:
@@ -121,7 +125,7 @@ export function registerListSubagentModels(ctx: Context, policyFor: (exec: ToolR
       render: (_args, result) => [{ type: 'text', text: result }],
     },
     execute(args, exec) {
-      return listSubagentModels(ctx, policyFor(exec), args, exec)
+      return listSubagentModels(ctx, args, exec)
     },
   }))
 }

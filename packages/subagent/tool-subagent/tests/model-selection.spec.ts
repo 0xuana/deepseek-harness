@@ -141,7 +141,7 @@ describe('dsh-tool-subagent model selection', () => {
     expect(text(result)).toContain('model selection is disabled for this tool instance')
   })
 
-  it('hides and rejects route fields without modelSelectionSettings', async () => {
+  it('hides and rejects route fields without modelSelection', async () => {
     const ctx = await setup({ provider: 'mock', parentAgentOptions: { provider: 'alpha', model: 'parent-model' } })
     const schema = ctx.tools.schemas().find(entry => entry.name === 'subagent')!
     const props = (schema.parameters as { properties?: Record<string, unknown> }).properties ?? {}

@@ -73,7 +73,7 @@ import * as PluginManagerTools from '@deepseek-ai/dsh-plugin-manager/tools'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
 import McpResources from '@deepseek-ai/dsh-mcp-resources'
 import * as ToolSubagent from '@deepseek-ai/dsh-tool-subagent'
-import { registerListSubagentModels } from '../packages/subagent/tool-subagent/src/list-models.ts'
+import * as ListSubagentModels from '../packages/subagent/tool-subagent/src/list-models.ts'
 import * as ToolWeb from '@deepseek-ai/dsh-tool-web'
 import WorkflowEngine from '@deepseek-ai/dsh-workflow'
 import type { WorkflowRun, WorkflowStartRequest } from '@deepseek-ai/dsh-workflow'
@@ -519,10 +519,10 @@ const TOOL_PACKAGES: ToolPackage[] = [
       await ctx.plugin(LlmRuntime)
       registerCatalogSubagentProvider(ctx, 'mock')
       await ctx.plugin(ToolSubagent, { provider: 'mock' })
-      registerListSubagentModels(ctx, () => ({ routes: [{ provider: 'mock', model: 'mock' }] }))
+      await ctx.plugin(ListSubagentModels)
     },
     note:
-      'The registered delegation name is the load-time `toolName` config (default `subagent`); the default schema above has model selection off, while the discovery schema is shown as the fixed companion registered by an instance with `modelSelectionSettings`. That instance always exposes optional route fields; Web presets sample the Plugins preference for each new top-level Session and preserve that decision for its child Sessions, and without an enabled policy, selection and discovery are restricted to the current parent route. The shipped `subagent_fork` exposes no route selection. Each instance selects its backend through `provider`. Every delegation returns a child id promptly; local children accept follow-ups, while external backends report their single execution automatically.',
+      'The load-time `toolName` selects the delegation name (default `subagent`); `modelSelection` adds optional route fields. The independent `/list-models` plugin registers discovery. Web and Desktop presets mount discovery, enable spawn route fields, and leave fork route fields disabled. The Host settings service records authorization for each new top-level Session; child Sessions inherit it. Without a recorded policy, discovery and explicit selection permit only the current parent route. Every delegation returns a child id promptly; local children accept follow-ups, while external backends report their single execution automatically.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-subagent-control',

@@ -25,13 +25,18 @@
     "./src/*": "./src/*",
     "./package.json": "./package.json",
     "./locale/*.json": "./locale/*.json",
-    "./model-selection-settings/locale/*.json": "./locale/model-selection-settings/*.json"
+    "./model-selection-settings/locale/*.json": "./locale/model-selection-settings/*.json",
+    "./list-models": {
+      "types": "./lib/types/list-models.d.ts",
+      "default": "./lib/list-models.js"
+    }
   },
   "files": [
     "locale/*.json",
     "locale/model-selection-settings/*.json",
     "lib/index.js",
     "lib/model-selection-settings.js",
+    "lib/list-models.js",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",

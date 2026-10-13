@@ -12,11 +12,11 @@ Status: implemented
 
 Host 自有的 `subagent-model-selection` 设置 section 保存显式 `enabled` 开关与 `allowedModels`，后者是由精确 `{ provider, model }` 路由组成的数组。启用时必须至少有一条路由；关闭时可以保留已选路由，供以后重新启用。Plugins 设置卡通过 `session/modelCatalog` 读取实时适配器目录，让用户暂存开关与路由，再在一次带 revision 限制的设置 mutation 中保存两个字段。它不保存适配器自有的显示名称、描述或推理强度元数据。当前目录中缺失的已存或暂存路由仍显示为不可用并允许移除；某个提供方的目录失败不会阻塞其他提供方，也不会清除已存授权或未保存选择。连接重置会丢弃草稿，因为 namespace revision 只能在同一个 Host 进程内比较。
 
-设置启用时，新组合的顶层 Session 在首个模型请求前将路由列表记录为 `subagent/model-selection-policy`。事件存在表示选择已启用；事件不保存全局开关。子 Session 从在线父级继承同一精确列表，恢复的 Session 使用已记录事件而非当前设置。因此设置变更只影响之后组合的顶层 Session。没有该事件时，包括显式为空的恢复 Session，显式选择仍仅限当前父级路由。
+设置启用时，Host 设置服务为每个新顶层 Session 在首个模型请求前将路由列表记录为 `subagent/model-selection-policy`。事件存在表示选择已启用；事件不保存全局开关。子 Session 从在线父级继承同一精确列表，恢复的 Session 使用已记录事件而非当前设置。因此设置变更只影响之后创建的顶层 Session。没有该事件时，包括显式为空的恢复 Session，显式选择仍仅限当前父级路由。
 
 固定的 `list_subagent_models` schema 不枚举策略。调用时，它列出已授权且已注册的提供方，并取其公布模型目录与已记录路由列表的交集。精确查询先要求授权，再解析模型元数据及全部支持的推理强度，也允许目录未列出的 ID。没有已记录策略时，发现只解析父 Agent 当前生效的路由，即使目录未列出它。委派执行器会在适配器预检前独立校验显式提供方、模型或强度选择是否符合相同授权。没有选择字段的调用保留配置或继承的路由。
 
-模型选择没有无限制的静态模式。默认关闭的 Host 设置授权其他子级路由；没有该授权时，仍可选择父级路由及其支持的强度。只有配置了 `modelSelectionSettings` 的委派工具会公开路由字段并注册 `list_subagent_models`；随附 Web 的 spawn 工具就是该所有者，它一次性记录设置，并在每次调用时读取 Session 策略。随附 fork 工具保持 `modelSelectionSettings` 关闭，以保留对继承前缀的复用；自定义 fork 组合可以在相同 Session 授权下启用它。
+模型选择没有无限制的静态模式。默认关闭的 Host 设置授权其他子级路由；没有该授权时，仍可选择父级路由及其支持的强度。各委派工具的 `modelSelection` 选项只控制自身路由字段。独立的 `/list-models` 插件负责发现。Web 与 Desktop preset 默认挂载发现工具，启用 spawn 路由字段，并为 fork 保持关闭，以保留对继承前缀的复用；自定义 fork 组合可以在相同 Session 授权下启用这些字段。工具安装不采样或扩大授权。
 
 ## Alternatives considered
 
@@ -34,7 +34,7 @@ Host 自有的 `subagent-model-selection` 设置 section 保存显式 `enabled` 
 
 - 新适配器注册和新公布模型不会扩大用户授权。
 - 适配器移除或目录查询失败可能使提供方发现不可用，但不会删除已存路由决定；只要适配器接受某个获准模型，即使建议性目录省略它，该模型仍可使用。
-- 允许列表本身不消耗父级请求 token。只有 `list_subagent_models` 结果进入 transcript。配置了 `modelSelectionSettings` 的组合在每个 Session 中都携带三个路由字段和发现 schema；headless 与 SDK profile 两者都不携带。
+- 允许列表本身不消耗父级请求 token。只有 `list_subagent_models` 结果进入 transcript。`modelSelection` 选项增加三个路由字段；`/list-models` 增加独立发现 schema。随附 headless 与 SDK profile 两者都不携带。
 - 策略事件仅存在于日志，并在 Agent 组合期间、两套 SDK 开始订阅运行前追加。随附 SDK profile 不启用这项 Web 自有偏好，因此该事件不会改变任一 SDK 的预期通知或持久 Session 输出；其持久投影由包级恢复测试负责，不会为了发出该事件而虚构 SDK 组合。
 - 单元覆盖固定设置校验、异常持久值、Session 取样与继承、共享定义、父级路由默认值、发现限制、执行器拒绝，以及设置 UI 的暂存写入与 revision 检查。组装 Web 场景固定真实设置文档与 Plugins 设置卡流程。
 

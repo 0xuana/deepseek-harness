@@ -9,6 +9,7 @@ import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import * as mock from './scripted-provider.ts'
 import * as tool from '../src/index.ts'
+import * as ListModels from '../src/list-models.ts'
 import SubagentModelSelectionConfig from '../src/model-selection-settings.ts'
 
 const contexts = new Set<Context>()
@@ -51,12 +52,12 @@ const TEST_ALLOWED_MODELS = [
 export async function setup(toolConfig: SetupConfig, mockConfig: Partial<mock.Config> = {}): Promise<Context> {
   const ctx = ownContext(new Context())
   const { withModelSelection, hostSelectionEnabled = true, parentAgentOptions, ...config } = toolConfig
+  await mountAgentLoopTestDependencies(ctx)
   if (withModelSelection === true) {
     await ctx.plugin(SubagentModelSelectionConfig, {
       enabled: hostSelectionEnabled,
       allowedModels: TEST_ALLOWED_MODELS,
     })
-    await mountAgentLoopTestDependencies(ctx)
     await ctx.plugin(AgentLoop, { agents: [] })
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
@@ -65,9 +66,10 @@ export async function setup(toolConfig: SetupConfig, mockConfig: Partial<mock.Co
     const handle = await ctx.agents.create({
       sessionId: SessionId(`model-selection-setup-${++setupAgentCounter}`),
       ...parentAgentOptions !== undefined ? { agentOptions: parentAgentOptions } : {},
-      setup: async (agentCtx, agent) => {
+      setup: async (agentCtx) => {
+        await agentCtx.plugin(ListModels)
         const fiber = agentCtx.inject(tool.inject, (runtimeCtx) => {
-          tool.apply(runtimeCtx, { ...config, modelSelectionSettings: true }, agent.session)
+          tool.apply(runtimeCtx, { ...config, modelSelection: true })
         })
         await fiber.await()
       },
@@ -75,7 +77,6 @@ export async function setup(toolConfig: SetupConfig, mockConfig: Partial<mock.Co
     setupAgents.set(ctx, handle.agent)
     return ctx
   }
-  await mountAgentLoopTestDependencies(ctx)
   await ctx.plugin(AgentLoop, { agents: [] })
   await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)

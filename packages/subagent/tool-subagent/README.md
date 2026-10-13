@@ -46,7 +46,7 @@ Load the subagent service, an in-process or remote backend, and this tool; then 
 |---|---|---|
 | `provider` | required | Provider name on `ctx.subagents` (e.g. `spawn`, `fork`, `acp`) |
 | `toolName` | `subagent` | Model-facing tool name; distinct for every loaded instance |
-| `modelSelectionSettings` | `false` | Expose child route fields and `list_subagent_models`, and sample the Host's exact-route authorization preference for each top-level Session; a standing preset observes matching Sessions, while direct Agent setup passes its Session explicitly; requires provider `agentOptions` support |
+| `modelSelection` | `false` | Expose optional child route fields; requires provider `agentOptions` support |
 | `agentOptions` | — | Configured child `provider`, `model`, adapter-owned `reasoningEffort`, and positive `maxTokens` defaults; requires provider `agentOptions` support and overlays any provider-owned route defaults |
 | `persona` | — | Per-child persona; requires the provider's `persona` capability |
 | `toolFilter` | — | Per-child global-tool restriction; requires the `toolFilter` capability |
@@ -64,7 +64,7 @@ Every backend’s completion notice carries its final answer. Local Spawn and Fo
 
 ### Selecting a child LLM
 
-Set `modelSelectionSettings: true` to expose optional `provider`, `model`, and `reasoning_effort` fields and register `list_subagent_models` with this instance; instances without it expose neither and reject selection fields. The instance samples the Host’s `subagent-model-selection` preference for fresh top-level Sessions. When enabled, its exact route list is recorded in the Session, inherited by child Sessions, and preserved on restore; later settings edits affect only new Sessions. Without a recorded Session policy, discovery and explicit selection permit only the parent Agent’s current effective provider/model and its supported efforts. This mode requires a backend that advertises `agentOptions`; in-process Spawn and Fork and DSH SDK qualify, while ACP, Codex, and Claude Code fail the mount.
+Set `modelSelection: true` to expose optional `provider`, `model`, and `reasoning_effort` fields; instances without it reject selection fields. Mount `@deepseek-ai/dsh-tool-subagent/list-models` independently to expose `list_subagent_models`. Web and Desktop presets mount discovery by default, enable route fields for spawn, and leave them disabled for fork. The Host’s `/model-selection-settings` service samples the user preference during Agent creation, independently of tool installation. When enabled, its exact route list is recorded in each fresh top-level Session, inherited by child Sessions, and preserved on restore; later settings edits affect only new Sessions. Without a recorded Session policy, discovery and explicit selection permit only the parent Agent’s current effective provider/model and its supported efforts. Route fields require a backend that advertises `agentOptions`; in-process Spawn and Fork and DSH SDK qualify, while ACP, Codex, and Claude Code fail the mount.
 
 A call supplies `provider` and `model` together, or supplies only an effort when configured, parent, or provider-owned defaults provide the route. Static `provider.agentRouteDefaults`, when present, form the provider/model baseline; tool configuration and model fields overlay it before route-aware effort merging and exact-route preflight. Providers without these defaults use compatible values from the parent's latest logged request, then the parent's creation options before its first request, while retaining the configured `maxTokens`. Changing the route without an explicit effort clears the inherited route-owned effort, so the selected model resolves its default. The live LLM adapter validates the effective route before child creation. Catalog membership remains advisory, so a model can use an unlisted id when its adapter accepts it.
 
@@ -80,7 +80,7 @@ This section explains how the tool mirrors provider lifecycle and settles runs; 
 
 ### Design concept
 
-One instance is one provider plus one tool name. The plugin registers its definition in the owning composition while the provider is present and disposes it when the provider leaves. Agents inherit that shared definition, so their existing tool filters apply without per-Agent registration. Settings-backed instances also register `list_subagent_models` in the same composition and capture Session authorization during Agent creation; calls read the durable policy independently of registration. Direct Agent setup supplies its unpublished Session explicitly. A numeric `maxDepth` or configured LLM selection unsupported by the provider fails the mount. At most one instance in a tool scope may set `modelSelectionSettings` because `list_subagent_models` has a global name. No runtime invariant companion is published: policy comes directly from the Session projection and is checked at execution.
+One instance is one provider plus one tool name. The plugin registers its definition in the owning composition while the provider is present and disposes it when the provider leaves. Agents inherit that shared definition, so their existing tool filters apply without per-Agent registration. Discovery is a separate plugin and reads the same durable Session policy as the delegation executor. A numeric `maxDepth` or configured LLM selection unsupported by the provider fails the mount. Multiple distinctly named delegation tools may expose model selection in one scope.
 
 ### Activation ownership
 
@@ -128,11 +128,11 @@ Read these pages when the package-level contract is not enough; they move from t
 
 #### What the model sees
 
-The generated default [`subagent` schema](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent) appears under the configured tool name while its provider exists. An instance with `modelSelectionSettings` adds `provider`, `model`, and `reasoning_effort` plus route guidance in every Session. Context inheritance and continuation support determine task and follow-up descriptions. A tool restriction removes both the schema and its `tool:<toolName>` guidance section.
+The generated default [`subagent` schema](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent) appears under the configured tool name while its provider exists. An instance with `modelSelection` adds `provider`, `model`, and `reasoning_effort` plus route guidance in every Session. Context inheritance and continuation support determine task and follow-up descriptions. A tool restriction removes both the schema and its `tool:<toolName>` guidance section.
 
 #### Token effect
 
-Fixed schema cost per parent request; `modelSelectionSettings` adds three optional route fields. Each tool instance adds one schema; visible delegation tools share one short system-prompt section.
+Fixed schema cost per parent request; `modelSelection` adds three optional route fields. Each tool instance adds one schema; visible delegation tools share one short system-prompt section.
 
 #### KV Cache effect
 
@@ -142,11 +142,11 @@ Prefix-stable while provider instances and their configuration are unchanged. Ad
 
 #### What the model sees
 
-The `list_subagent_models` definition registered by a settings-backed instance reads the calling Session’s route policy, falling back to the current parent route when no policy is recorded. Calls reject while the optional `ctx.llm` service is unavailable. With a recorded policy, provider model lists intersect the advertised catalog with the Session’s authorized routes. Without one, they resolve only the current parent model, even if the catalog omits it. Exact-model queries accept authorized ids absent from the catalog; unauthorized provider/model lookups fail before adapter access. Catalog or exact-model lookup failures and cancellation reject the call. Execution independently enforces the same policy.
+The independent `list_subagent_models` definition reads the calling Session’s route policy, falling back to the current parent route when no policy is recorded. Calls reject while the optional `ctx.llm` service is unavailable. With a recorded policy, provider model lists intersect the advertised catalog with the Session’s authorized routes. Without one, they resolve only the current parent model, even if the catalog omits it. Exact-model queries accept authorized ids absent from the catalog; unauthorized provider/model lookups fail before adapter access. Catalog or exact-model lookup failures and cancellation reject the call. Execution independently enforces the same policy.
 
 #### Token effect
 
-One fixed discovery schema is present in compositions with `modelSelectionSettings`, regardless of the Session’s preference; the shipped Web presets include it, while headless and SDK profiles do not. Route metadata enters the transcript only when the model calls the tool.
+One fixed discovery schema is present wherever `/list-models` is mounted, regardless of the Session’s preference or delegation tools; the shipped Web and Desktop presets include it, while headless and SDK profiles do not. Route metadata enters the transcript only when the model calls the tool.
 
 #### KV Cache effect
 
@@ -208,8 +208,8 @@ Append-only; newly visible content follows the reusable request prefix and does 
 These limits define what this tool does not return or enforce; they are current package constraints.
 
 - **This tool does not wait for results** — use the completion notice or child messages. Programmatic result waiting belongs to the subagent service.
-- **Shipped fork tools omit model selection** — their configuration leaves `modelSelectionSettings` disabled to preserve inherited-prefix reuse. Custom fork tools may enable it under the same Session authorization and adapter validation as other delegation tools.
-- **Non-routing child policy is fixed per instance** — another persona, tool filter, or depth cap requires another distinctly named tool. Explicit LLM selection requires `modelSelectionSettings` and is restricted to the Session’s authorized routes, or the current parent route without an enabled policy.
+- **Shipped fork tools omit model selection** — their configuration leaves `modelSelection` disabled to preserve inherited-prefix reuse. Custom fork tools may enable it under the same Session authorization and adapter validation as other delegation tools.
+- **Non-routing child policy is fixed per instance** — another persona, tool filter, or depth cap requires another distinctly named tool. Explicit LLM selection requires `modelSelection` and is restricted to the Session’s authorized routes, or the current parent route without an enabled policy.
 
 <a id="dev-note"></a>
 ### Dev Note

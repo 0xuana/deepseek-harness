@@ -197,7 +197,7 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   '@deepseek-ai/dsh-agent-preset': ['skills'],
   // The Web Host mounts the default-off settings owner independently of the
   // delegation-tool instances.
-  '@deepseek-ai/dsh-tool-subagent': ['lib/model-selection-settings.js'],
+  '@deepseek-ai/dsh-tool-subagent': ['lib/model-selection-settings.js', 'lib/list-models.js'],
   // The JSONL backend resolves its private verification Worker relative to
   // import.meta.url; it is shipped without a public package subpath.
   '@deepseek-ai/dsh-session-persistence-jsonl': ['lib/worker.cjs'],
