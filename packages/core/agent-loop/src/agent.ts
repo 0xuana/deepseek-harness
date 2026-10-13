@@ -12,9 +12,9 @@ import type {
   AgentStatus,
   CancelOptions,
   InboxTarget,
+  ModelSelection,
   PreStepDecision,
   RequestErrorAction,
-  StepRoute,
 } from '@deepseek-ai/dsh-agent'
 import { agentEvents, assembleContextFor } from '@deepseek-ai/dsh-agent'
 import type { GenerateOptions, LlmCallConfig, Message, PreparedLlmCall } from '@deepseek-ai/dsh-llm'
@@ -64,9 +64,14 @@ type PreparedStep =
     kind: 'enter'
     messages: UserMessage[]
     startsRequestSeries?: true
-    route: StepRoute
+    modelSelection: ModelSelection
     preparation: PromptPreparation
   }
+
+/** Name a provider, model, and reasoning effort in diagnostics. */
+function selectionLabel({ provider, model, reasoningEffort }: ModelSelection): string {
+  return `${provider}/${model} (reasoning effort ${reasoningEffort ?? 'unset'})`
+}
 
 /** Remove adapter-derived values before plugins propose the next request config. */
 function requestProposal(header: EpochHeader): LlmCallConfig {
@@ -277,11 +282,11 @@ export class ReactLoopAgent implements Agent {
     if (this.phase.kind !== 'running') throw new Error(`agent "${this.id}": pre-step outside running phase`)
     const signal = this.phase.abort.signal
     const claimed = this.inbox.claim(target, position.turn)
-    const route = await this.chooseRoute(position.turn, position.step, signal)
-    const preparation = await this.loopCtx.systemPrompt.prepare({ ...assembleContextFor(this, signal), route })
+    const modelSelection = await this.chooseModel(position.turn, position.step, signal)
+    const preparation = await this.loopCtx.systemPrompt.prepare({ ...assembleContextFor(this, signal), modelSelection })
     signal.throwIfAborted()
     const decision = await this.dispatch.waterfall(
-      'agent/pre-step', { messages: claimed, ...position, route, signal },
+      'agent/pre-step', { messages: claimed, ...position, modelSelection, signal },
       (): Promise<PreStepDecision> => {
         const sections = renderContextSections(preparation)
         const context = this.runtimeContext.project(joinContextSections(sections), sections)
@@ -293,21 +298,26 @@ export class ReactLoopAgent implements Agent {
     )
     signal.throwIfAborted()
     if (decision.kind === 'reject') return decision
-    return { ...decision, route, preparation }
+    return { ...decision, modelSelection, preparation }
   }
 
-  /** Choose the provider and model that the proposed step keeps for every request attempt. */
-  private async chooseRoute(turn: number, step: number, signal: AbortSignal): Promise<StepRoute> {
-    const { provider, model } = this.requestBase()
-    const route = await this.dispatch.waterfall(
-      'agent/route', { turn, step, signal },
-      () => Promise.resolve<StepRoute>({ provider, model }),
+  /** Choose the provider, model, and effort that the proposed step keeps for every request attempt. */
+  private async chooseModel(turn: number, step: number, signal: AbortSignal): Promise<ModelSelection> {
+    const { provider, model, reasoningEffort } = this.requestBase()
+    const proposed: ModelSelection = { provider, model, ...reasoningEffort === undefined ? {} : { reasoningEffort } }
+    const selected = await this.dispatch.waterfall(
+      'agent/model', { turn, step, signal },
+      () => Promise.resolve(proposed),
     )
     signal.throwIfAborted()
-    if (!route.provider || !route.model) {
-      throw new Error(`agent "${this.id}" has no provider/model: set AgentOptions.provider and AgentOptions.model or supply both via the agent/route waterfall`)
+    if (!selected.provider || !selected.model) {
+      throw new Error(`agent "${this.id}" has no provider/model: set AgentOptions.provider and AgentOptions.model or supply both via the agent/model waterfall`)
     }
-    return Object.freeze({ provider: route.provider, model: route.model })
+    return Object.freeze({
+      provider: selected.provider,
+      model: selected.model,
+      ...selected.reasoningEffort === undefined ? {} : { reasoningEffort: selected.reasoningEffort },
+    })
   }
 
   /** Whether the assembled tool schemas differ from the logged request header's. */
@@ -424,18 +434,18 @@ export class ReactLoopAgent implements Agent {
     const { turn, step, abort: { signal } } = this.phase
     signal.throwIfAborted()
 
-    const { route } = decision
-    const toolSet = await this.loopCtx.tools.resolve({ agent: this, route, signal })
+    const { modelSelection } = decision
+    const toolSet = await this.loopCtx.tools.resolve({ agent: this, modelSelection, signal })
     try {
       const assembly = await this.loopCtx.systemPrompt.assemble(
-        { ...assembleContextFor(this, signal), route, toolSet },
+        { ...assembleContextFor(this, signal), modelSelection, toolSet },
         decision.preparation,
       )
       const renderedPrompt = renderPrompt(assembly)
       let firstAttempt = true
       while (true) {
-        const { config, preparedCall } = await this.prepareRequest(turn, step, route, signal)
-        const currentContext = this.loopCtx.systemPrompt.refreshContext(assembly, { ...assembleContextFor(this, signal), route })
+        const { config, preparedCall } = await this.prepareRequest(turn, step, modelSelection, signal)
+        const currentContext = this.loopCtx.systemPrompt.refreshContext(assembly, { ...assembleContextFor(this, signal), modelSelection })
         const sections = renderContextSections(currentContext)
         const context = this.runtimeContext.project(joinContextSections(sections), sections)
         signal.throwIfAborted()
@@ -593,8 +603,9 @@ export class ReactLoopAgent implements Agent {
 
   /**
    * The config this loop instance proposes before plugins act: its declared
-   * route on the first request, restoring only an explicit effort owned by
-   * that exact model, then the logged header without adapter defaults.
+   * provider and model on the first request, restoring only an explicit
+   * effort owned by that exact model, then the logged header without adapter
+   * defaults.
    */
   private requestBase(): LlmCallConfig {
     const persistedHeader = this.session.requestHeader()
@@ -616,27 +627,24 @@ export class ReactLoopAgent implements Agent {
     }
   }
 
-  /** Resolve one attempt's config on the step route and bind its adapter before admitting model-visible input. */
+  /** Resolve one attempt's config on the step's model selection and bind its adapter before admitting model-visible input. */
   private async prepareRequest(
     turn: number,
     step: number,
-    route: StepRoute,
+    modelSelection: ModelSelection,
     signal: AbortSignal,
   ): Promise<PreparedRequest> {
-    let seed = this.requestBase()
-    if (seed.provider !== route.provider || seed.model !== route.model) {
-      // An effort belongs to one model; another route starts from its own default.
-      const { reasoningEffort: _effort, ...controls } = seed
-      seed = { ...controls, provider: route.provider, model: route.model }
-    }
-    const seedConfig = deepFreeze(structuredClone(seed))
+    const { provider: _provider, model: _model, reasoningEffort: _effort, ...controls } = this.requestBase()
+    const seedConfig = deepFreeze(structuredClone({ ...controls, ...modelSelection }))
     const proposedConfig = await this.dispatch.waterfall(
       'agent/request', { turn, step, signal },
       () => Promise.resolve(seedConfig),
     )
     signal.throwIfAborted()
-    if (proposedConfig.provider !== route.provider || proposedConfig.model !== route.model) {
-      throw new Error(`agent "${this.id}": agent/request cannot replace the step route ${route.provider}/${route.model} with ${proposedConfig.provider}/${proposedConfig.model}; choose routes with the agent/route waterfall`)
+    if (proposedConfig.provider !== modelSelection.provider
+      || proposedConfig.model !== modelSelection.model
+      || proposedConfig.reasoningEffort !== modelSelection.reasoningEffort) {
+      throw new Error(`agent "${this.id}": agent/request cannot replace the step model selection ${selectionLabel(modelSelection)} with ${selectionLabel(proposedConfig)}; choose models with the agent/model waterfall`)
     }
     let config: LlmCallConfig
     let preparedCall: PreparedLlmCall | undefined

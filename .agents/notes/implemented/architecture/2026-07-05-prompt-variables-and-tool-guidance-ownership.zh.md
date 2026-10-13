@@ -28,7 +28,7 @@ Status: implemented
 
 插件通过 `ctx.systemPrompt.variable(name, provider)` 注册 `{{name}}` 值。组装过程将它们解析到 waterfall 可见的变量映射中。渲染阶段拒绝以下情况：引用未知的自有属性、已注册的提供方返回 `undefined`、格式错误的完整引用、以及仍包含闭合 `}}` 的不平衡引用；孤立的未匹配 `{{` 保留为行文，替换后的值不会被重新扫描。注册阶段拒绝无效或重复的变量名，section 名称也必须唯一。段可设置 `interpolate: false` 来原样保留生成的文档；`tools:sdk` 使用此设置，因为工具描述和 schema 可能会介绍自身的 `{{…}}` 语法。
 
-`dsh-agent-loop` 注册 `provider` 和 `model`，它们都是组装上下文的纯投影：步骤内取 `agent/route` 选定的步骤路由，步骤外取 agent 的 `options` 这一对值。示例 persona 引用 `{{model}}`，由路由拥有模型名称。这些变量保留在 loop 插件上，因为它们描述该循环驱动的 agent；替换循环自行提供自己的变量。[Session 工作目录决策](2026-09-13-session-working-directory.zh.md) 拥有目录状态及其字面用户上下文位置；循环不注册 `cwd`。
+`dsh-agent-loop` 注册 `provider` 和 `model`，它们都是组装上下文的纯投影：步骤内取 `agent/model` 选定的步骤模型选择，步骤外取 agent 的 `options` 这一对值。示例 persona 引用 `{{model}}`，由模型选择拥有模型名称。这些变量保留在 loop 插件上，因为它们描述该循环驱动的 agent；替换循环自行提供自己的变量。[Session 工作目录决策](2026-09-13-session-working-directory.zh.md) 拥有目录状态及其字面用户上下文位置；循环不注册 `cwd`。
 
 ### Persona 作为 order-0 section
 
@@ -65,7 +65,7 @@ Status: implemented
 ## 后果
 
 - 组装后的提示词中每个事实现在恰好有一个归属方，leaf YAML 中手工维护的工具行文已消除：加载或卸载一个工具插件不再需要编辑任何部署的 persona。
-- `{{model}}` 反映 `agent/route` 选定的步骤路由，且 `agent/request` 不能替换该路由，因此渲染后的提示词与路由后的请求头指向同一模型。提供或切换模型的插件在 `agent/route` 上拥有这一事实；一个循环测试端到端固定了 supply 路径。已接受。
+- `{{model}}` 反映 `agent/model` 选定的步骤模型选择，且 `agent/request` 不能替换该模型，因此渲染后的提示词与路由后的请求头指向同一模型。提供或切换模型的插件在 `agent/model` 上拥有这一事实；一个循环测试端到端固定了 supply 路径。已接受。
 - 当一个已绑定的提供方不存在时（尚未激活、已卸载、HMR（热模块替换）重载中），subagent 工具不存在，该窗口内的模型请求中不会包含它。这是诚实的状态——替代方案是注册一个 description 或执行都不可信的工具。
 - 严格插值在模型请求之前拒绝缺失或无值的变量。该轮次以 `error` 结束，循环仍可服务后续轮次；引用 `{{model}}` 的 persona 要求组合它的运行时提供该值。
 - 插值文本仍不支持行内转义；字面文本段无需转义。PTC 单元测试覆盖两种模式和运行时语言，录制的 `ptc-turn` 场景在模型可见的提示词中保留工具模板示例。

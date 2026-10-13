@@ -8,7 +8,6 @@ import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deep
 import { BasicCompactionEngine } from '@deepseek-ai/dsh-compaction-basic'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { ToolCallId, createMessage, createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
-import type { LlmCallConfig } from '@deepseek-ai/dsh-llm'
 import SessionStore, { TOOL_OUTCOME_UNKNOWN, SESSION_FORMAT_VERSION, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import { SessionPersistenceRevision, type SessionPersistenceSnapshot } from '@deepseek-ai/dsh-session-persistence'
@@ -663,13 +662,9 @@ describe('sessions.fork', () => {
     if (child === undefined) throw new Error('fork did not publish the child agent')
     expect(child.session.snapshotEvents().slice(0, child.session.inheritedEventCount)).toEqual(inherited)
     const signal = new AbortController().signal
-    const route = await agentEvents(child.ctx, child).waterfall(
-      'agent/route', { turn: 1, step: 1, signal }, () => Promise.resolve({ provider: 'default-provider', model: 'default-model' }),
-    )
-    expect(route).toEqual({ provider: 'inherited-provider', model: 'inherited-model' })
     await expect(agentEvents(child.ctx, child).waterfall(
-      'agent/request', { turn: 1, step: 1, signal }, () => Promise.resolve<LlmCallConfig>({ ...route }),
-    )).resolves.toEqual({ ...route, reasoningEffort: 'high' })
+      'agent/model', { turn: 1, step: 1, signal }, () => Promise.resolve({ provider: 'default-provider', model: 'default-model' }),
+    )).resolves.toEqual({ provider: 'inherited-provider', model: 'inherited-model', reasoningEffort: 'high' })
     await ctx.fiber.dispose()
   })
 })

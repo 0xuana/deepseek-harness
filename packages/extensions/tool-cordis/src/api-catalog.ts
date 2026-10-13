@@ -2393,9 +2393,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'mention-carrying candidates in rank order.',
       },
       {
-        signature: 'async prepare( agent: Agent, content: ContentBlock[], references: SessionReferenceInput[], signal?: AbortSignal, route?: StepRoute, ): Promise<PreparedReferencedMessage>',
-        description: 'Snapshot all references for one accepted direct message and return one aggregated durable context. Automatic budgets use the step route, or agent options for direct preparation. Missing model capacity or adapter uses 64 KiB; other metadata lookup failures and cancellation reject preparation. Truncated previews include omission facts and a full-snapshot spill locator, or an explicit unavailable notice. Cancellation prevents context publication, including when storage completes after cancellation.',
-        parameters: [{ name: 'agent', description: 'target agent; references to it are rejected.' }, { name: 'content', description: 'already host-normalized readable message content.' }, { name: 'references', description: 'structured source sessions in mention order.' }, { name: 'signal', description: 'optional cancellation boundary for the active turn.' }, { name: 'route', description: 'provider and model of the step admitting the message; omitted for direct preparation.' }],
+        signature: 'async prepare( agent: Agent, content: ContentBlock[], references: SessionReferenceInput[], signal?: AbortSignal, modelSelection?: ModelSelection, ): Promise<PreparedReferencedMessage>',
+        description: 'Snapshot all references for one accepted direct message and return one aggregated durable context. Automatic budgets use the step\'s model selection, or agent options for direct preparation. Missing model capacity or adapter uses 64 KiB; other metadata lookup failures and cancellation reject preparation. Truncated previews include omission facts and a full-snapshot spill locator, or an explicit unavailable notice. Cancellation prevents context publication, including when storage completes after cancellation.',
+        parameters: [{ name: 'agent', description: 'target agent; references to it are rejected.' }, { name: 'content', description: 'already host-normalized readable message content.' }, { name: 'references', description: 'structured source sessions in mention order.' }, { name: 'signal', description: 'optional cancellation boundary for the active turn.' }, { name: 'modelSelection', description: 'provider and model of the step admitting the message; omitted for direct preparation.' }],
         returns: 'detached content and optional referenced-session context.',
       },
     ],
@@ -3366,7 +3366,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       {
         signature: 'async resolve(context: ToolActivationContext): Promise<ResolvedToolSet>',
         description: 'Resolve conditions once for this step without changing shared registrations. Cancellation or a rejected condition publishes no partial selection. Removed registrations cannot be restored by a late condition result.',
-        parameters: [{ name: 'context', description: 'preparing agent, step route, and cancellation.' }],
+        parameters: [{ name: 'context', description: 'preparing agent, step model selection, and cancellation.' }],
         returns: 'the complete selection; the caller disposes it after its tool batch settles.',
       },
       {
@@ -3993,9 +3993,17 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'payload', description: '.message - the inserted message. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.' }],
   },
   {
+    name: 'agent/model',
+    mode: 'waterfall',
+    signature: '\'agent/model\'(this: Scoped<Agent>, payload: { agent: Agent; turn: number; step: number; signal: AbortSignal }, next: () => Promise<ModelSelection>): Promise<ModelSelection>',
+    summary: 'Choose the provider, model, and reasoning effort for one proposed step.',
+    description: 'Choose the provider, model, and reasoning effort for one proposed step. `await next()` yields the selection the machine would use: agent options before this loop logs a request, the logged header afterwards, with an effort only when one was chosen for that exact model. Return a replacement to switch; an effort belongs to its model, so a replacement that changes the model names that model\'s effort or omits it for the provider default. The loop runs this once per proposed step, before context preparation and `agent/pre-step`. Prompt preparation, tool conditions, and every request attempt in the step use the result, so a later choice applies from the next step. Cancellation here opens no step.',
+    parameters: [{ name: 'payload', description: '.signal - the current turn\'s explicit abort signal. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.' }],
+  },
+  {
     name: 'agent/pre-step',
     mode: 'waterfall',
-    signature: '\'agent/pre-step\'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; route: StepRoute; signal: AbortSignal }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>',
+    signature: '\'agent/pre-step\'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; modelSelection: ModelSelection; signal: AbortSignal }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>',
     summary: 'Reject a proposed step or replace the messages that enter it.',
     description: 'Reject a proposed step or replace the messages that enter it. Calling `next()` preserves the current messages.',
     parameters: [{ name: 'payload', description: '.signal - the current turn\'s cancellation signal. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.' }],
@@ -4005,7 +4013,7 @@ export const EVENT_API: readonly EventApiEntry[] = [
     mode: 'waterfall',
     signature: '\'agent/request\'(this: Scoped<Agent>, payload: { agent: Agent; turn: number; step: number; signal: AbortSignal }, next: () => Promise<LlmCallConfig>): Promise<LlmCallConfig>',
     summary: 'Replace the frozen call configuration of one request attempt.',
-    description: 'Replace the frozen call configuration of one request attempt. `await next()` yields the config the machine would use on the step\'s `agent/route` result: agent options on the first request, the logged header afterwards, and no effort recorded for another model. Return a replacement to change call controls such as reasoning effort; returning another provider or model fails the step. On step admission, this runs after prompt assembly and `step/start`, before the system prompt and accepted user batch are committed, and again for each retry. Cancellation here or during subsequent `prepareCall()` resolution commits neither. The prepared call capability governs prompt admission. Model-visible content must use logged channels; this waterfall cannot mutate messages.',
+    description: 'Replace the frozen call configuration of one request attempt. `await next()` yields the step\'s `agent/model` selection with the machine\'s other call controls: agent options on the first request, the logged header afterwards. Return a replacement to change sampling controls such as `maxTokens`, `temperature`, or `stop`; returning another provider, model, or reasoning effort fails the step. On step admission, this runs after prompt assembly and `step/start`, before the system prompt and accepted user batch are committed, and again for each retry. Cancellation here or during subsequent `prepareCall()` resolution commits neither. The prepared call capability governs prompt admission. Model-visible content must use logged channels; this waterfall cannot mutate messages.',
     parameters: [{ name: 'payload', description: '.signal - the current turn\'s explicit abort signal. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.' }],
   },
   {
@@ -4015,14 +4023,6 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'Handle one failed model-request attempt before the loop retries or closes its step.',
     description: 'Handle one failed model-request attempt before the loop retries or closes its step. A listener returns `{ kind: \'retry\' }` without calling `next()` when it owns recovery, or calls `next()` to delegate. The default `undefined` leaves the failure terminal.',
     parameters: [{ name: 'payload', description: '.signal - the turn abort signal. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.' }],
-  },
-  {
-    name: 'agent/route',
-    mode: 'waterfall',
-    signature: '\'agent/route\'(this: Scoped<Agent>, payload: { agent: Agent; turn: number; step: number; signal: AbortSignal }, next: () => Promise<StepRoute>): Promise<StepRoute>',
-    summary: 'Choose the provider and model for one proposed step.',
-    description: 'Choose the provider and model for one proposed step. `await next()` yields the route the machine would use (agent options before this loop logs a request, the logged header afterwards); return a replacement to switch. The loop runs this once per proposed step, before context preparation and `agent/pre-step`. Prompt preparation, tool conditions, and every request attempt in the step use the result, so a later choice applies from the next step. Cancellation here opens no step.',
-    parameters: [{ name: 'payload', description: '.signal - the current turn\'s explicit abort signal. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.' }],
   },
   {
     name: 'agent/status',
@@ -7573,10 +7573,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type SshStreamEndpoint = z.infer<typeof streamEndpointSchema>;',
   },
   {
-    name: 'StepRoute',
-    declaration: 'export interface StepRoute {\n    readonly provider: string;\n    readonly model: string;\n}',
-  },
-  {
     name: 'StorageBackend',
     declaration: 'export interface StorageBackend {\n    readonly kv?: KvFacet;\n    close(): Promise<void>;\n}',
   },
@@ -7966,7 +7962,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ToolActivationContext',
-    declaration: 'export interface ToolActivationContext {\n    readonly agent: Agent;\n    readonly route: StepRoute;\n    readonly signal: AbortSignal;\n}',
+    declaration: 'export interface ToolActivationContext {\n    readonly agent: Agent;\n    readonly modelSelection: ModelSelection;\n    readonly signal: AbortSignal;\n}',
   },
   {
     name: 'ToolAdditionBlock',

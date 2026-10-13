@@ -834,12 +834,12 @@ describe('automation-only ACP bridge', () => {
     expect(harness.ctx.agents.get(SessionId(sessionId))?.options).toEqual({})
   })
 
-  it('allows route listeners to supply a route when ACP has no initial selection', async () => {
+  it('allows model listeners to supply a model when ACP has no initial selection', async () => {
     harness = await makeBridgeHarness({
       config: { provider: undefined, model: undefined },
       script: [textResponse('listener-routed')],
     })
-    harness.ctx.on('agent/route', async (_payload, next) => ({
+    harness.ctx.on('agent/model', async (_payload, next) => ({
       ...await next(),
       provider: 'mock',
       model: 'mock',

@@ -205,9 +205,9 @@ function overflowHistorySeed(): readonly SessionEvent[] {
 }
 
 describe('CBR-001: a real-loop checkpoint is a valid boundary on both sides', () => {
-  it('uses the model actually routed by agent/route for post-step pressure', async () => {
+  it('uses the model actually selected by agent/model for post-step pressure', async () => {
     const { ctx } = await harness(8)
-    ctx.on('agent/route', async (_payload, next) => ({
+    ctx.on('agent/model', async (_payload, next) => ({
       ...await next(), provider: 'mock', model: 'mock',
     }))
     try {
@@ -380,7 +380,7 @@ describe('context-overflow recovery across the real loop and compaction-basic', 
       await ctx.plugin(AgentLoop, { agents: [] })
       await ctx.plugin(TokenMeter)
       ctx.llm.registerAdapter(['mock'], adapter)
-      ctx.on('agent/route', async (_payload, next) => ({
+      ctx.on('agent/model', async (_payload, next) => ({
         ...await next(), provider: 'mock', model: 'mock',
       }))
       await ctx.plugin(BasicCompactionEngine, {

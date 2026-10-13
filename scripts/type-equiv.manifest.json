@@ -2153,7 +2153,7 @@
     },
     {
       "doc": "docs/subsystems/core.md",
-      "symbol": "StepRoute",
+      "symbol": "ModelSelection",
       "source": "packages/core/agent/src/runtime-types.ts"
     },
     {

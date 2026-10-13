@@ -61,7 +61,7 @@ Source: [`packages/core/agent/src/types.ts`](../../packages/core/agent/src/types
 interface Agent {
   /** Session-backed Agent identity. */
   readonly id: SessionId
-  /** Creation-time request options; `agent/route` may choose another provider and model for each step. */
+  /** Creation-time request options; `agent/model` may choose another provider, model, and effort for each step. */
   readonly options: AgentOptions
   /** The live session this agent drives; its log is the durable source of truth. */
   readonly session: Session
@@ -206,17 +206,19 @@ interface AgentOptions {
 }
 ```
 
-Each step requires `provider` and `model` after `agent/route`, which may supply or replace the options pair. An explicit `reasoningEffort` seeds the first request on that route; exact-model resolution validates it, while omission allows the adapter default to materialize. When present, `maxTokens` must be a positive safe integer and caps every conversation-model request; omission allows the exact-model adapter default to materialize before the request header, or otherwise leaves provider behavior unchanged. An agent-scoped `deployment:persona-prefix` prompt section may shadow the global default persona.
+Each step requires `provider` and `model` after `agent/model`, which may supply or replace the options' provider, model, and effort. An explicit `reasoningEffort` seeds the first step's selection for that model; exact-model resolution validates it, while omission allows the adapter default to materialize. When present, `maxTokens` must be a positive safe integer and caps every conversation-model request; omission allows the exact-model adapter default to materialize before the request header, or otherwise leaves provider behavior unchanged. An agent-scoped `deployment:persona-prefix` prompt section may shadow the global default persona.
 
-The step keeps the chosen route for prompt preparation, `agent/pre-step`, tool conditions, and every request attempt; `agent/request` may change only call controls:
+The step keeps its model selection for prompt preparation, `agent/pre-step`, tool conditions, and every request attempt; `agent/request` may change only sampling controls such as `maxTokens`, `temperature`, and `stop`:
 
 ```ts type-equiv
-/** Provider and model that `agent/route` chose for one step and every request attempt in it. */
-interface StepRoute {
+/** Complete provider, model, and optional reasoning effort; `agent/model` fixes one for each step. */
+interface ModelSelection {
   /** Registered provider route. */
-  readonly provider: string
-  /** Model id interpreted by the provider adapter. */
-  readonly model: string
+  provider: string
+  /** Provider-owned model id. */
+  model: string
+  /** Adapter-owned reasoning effort, or provider/default behavior when absent. */
+  reasoningEffort?: ReasoningEffortId
 }
 ```
 
@@ -323,7 +325,7 @@ Pre-step decisions use the same identified `UserMessage` type as durable user-ro
 
 Source: [`packages/core/agent/src/types.ts`](../../packages/core/agent/src/types.ts)
 
-`agent/pre-step` receives one payload carrying the exclusive claimed batch (`messages`), the proposed step's coordinates (`turn`, `step`), its `route`, and the current turn's cancellation `signal`. The initial proposal runs inside an open turn before any step; a tool continuation may submit an empty claimed batch between steps:
+`agent/pre-step` receives one payload carrying the exclusive claimed batch (`messages`), the proposed step's coordinates (`turn`, `step`), its `modelSelection`, and the current turn's cancellation `signal`. The initial proposal runs inside an open turn before any step; a tool continuation may submit an empty claimed batch between steps:
 
 It returns a `PreStepDecision`. Reject opens no step. Enter supplies the complete message batch appended after `step/start`; claimed messages omitted by the final decision remain removed, while input inserted after the claim stays pending:
 
@@ -937,6 +939,38 @@ Types: [Scoped](scope.md) · [UserMessage](session.md)
 
 Source: [`packages/core/agent/src/runtime-types.ts`](../../packages/core/agent/src/runtime-types.ts)
 
+<a id="agentmodel--waterfall"></a>
+
+#### `agent/model` — waterfall
+
+Choose the provider, model, and reasoning effort for one proposed step. `await next()` yields the selection the machine would use: agent options before this loop logs a request, the logged header afterwards, with an effort only when one was chosen for that exact model. Return a replacement to switch; an effort belongs to its model, so a replacement that changes the model names that model's effort or omits it for the provider default. The loop runs this once per proposed step, before context preparation and `agent/pre-step`. Prompt preparation, tool conditions, and every request attempt in the step use the result, so a later choice applies from the next step. Cancellation here opens no step.
+
+```ts cordis-catalog
+/**
+ * Choose the provider, model, and reasoning effort for one proposed step.
+ * `await next()` yields the selection the machine would use: agent options
+ * before this loop logs a request, the logged header afterwards, with an
+ * effort only when one was chosen for that exact model. Return a
+ * replacement to switch; an effort belongs to its model, so a replacement
+ * that changes the model names that model's effort or omits it for the
+ * provider default. The loop runs this once per proposed step, before
+ * context preparation and `agent/pre-step`. Prompt preparation, tool
+ * conditions, and every request attempt in the step use the result, so a
+ * later choice applies from the next step. Cancellation here opens no step.
+ * @param payload.agent - the agent proposing the step.
+ * @param payload.turn - the turn that will own the step.
+ * @param payload.step - the step proposed by the loop.
+ * @param payload.signal - the current turn's explicit abort signal.
+ * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
+ * @mode waterfall
+ */
+'agent/model'(this: Scoped<Agent>, payload: { agent: Agent; turn: number; step: number; signal: AbortSignal }, next: () => Promise<ModelSelection>): Promise<ModelSelection>
+```
+
+Types: [Scoped](scope.md)
+
+Source: [`packages/core/agent/src/runtime-types.ts`](../../packages/core/agent/src/runtime-types.ts)
+
 <a id="agentpre-step--waterfall"></a>
 
 #### `agent/pre-step` — waterfall
@@ -951,12 +985,12 @@ Reject a proposed step or replace the messages that enter it. Calling `next()` p
  * @param payload.messages - messages removed from the inbox for this step.
  * @param payload.turn - the turn that will own the step.
  * @param payload.step - the step proposed by the loop.
- * @param payload.route - the provider and model `agent/route` chose for this step.
+ * @param payload.modelSelection - the provider, model, and effort `agent/model` chose for this step.
  * @param payload.signal - the current turn's cancellation signal.
  * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
  * @mode waterfall
  */
-'agent/pre-step'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; route: StepRoute; signal: AbortSignal }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>
+'agent/pre-step'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; modelSelection: ModelSelection; signal: AbortSignal }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>
 ```
 
 Types: [Scoped](scope.md) · [UserMessage](session.md)
@@ -967,16 +1001,16 @@ Source: [`packages/core/agent/src/runtime-types.ts`](../../packages/core/agent/s
 
 #### `agent/request` — waterfall
 
-Replace the frozen call configuration of one request attempt. `await next()` yields the config the machine would use on the step's `agent/route` result: agent options on the first request, the logged header afterwards, and no effort recorded for another model. Return a replacement to change call controls such as reasoning effort; returning another provider or model fails the step. On step admission, this runs after prompt assembly and `step/start`, before the system prompt and accepted user batch are committed, and again for each retry. Cancellation here or during subsequent `prepareCall()` resolution commits neither. The prepared call capability governs prompt admission. Model-visible content must use logged channels; this waterfall cannot mutate messages.
+Replace the frozen call configuration of one request attempt. `await next()` yields the step's `agent/model` selection with the machine's other call controls: agent options on the first request, the logged header afterwards. Return a replacement to change sampling controls such as `maxTokens`, `temperature`, or `stop`; returning another provider, model, or reasoning effort fails the step. On step admission, this runs after prompt assembly and `step/start`, before the system prompt and accepted user batch are committed, and again for each retry. Cancellation here or during subsequent `prepareCall()` resolution commits neither. The prepared call capability governs prompt admission. Model-visible content must use logged channels; this waterfall cannot mutate messages.
 
 ```ts cordis-catalog
 /**
  * Replace the frozen call configuration of one request attempt. `await
- * next()` yields the config the machine would use on the step's
- * `agent/route` result: agent options on the first request, the logged
- * header afterwards, and no effort recorded for another model. Return a
- * replacement to change call controls such as reasoning effort; returning
- * another provider or model fails the step. On step admission, this runs
+ * next()` yields the step's `agent/model` selection with the machine's
+ * other call controls: agent options on the first request, the logged
+ * header afterwards. Return a replacement to change sampling controls such
+ * as `maxTokens`, `temperature`, or `stop`; returning another provider,
+ * model, or reasoning effort fails the step. On step admission, this runs
  * after prompt assembly and `step/start`, before the system prompt and
  * accepted user batch are committed, and again for each retry.
  * Cancellation here or during subsequent `prepareCall()` resolution
@@ -1023,35 +1057,6 @@ Handle one failed model-request attempt before the loop retries or closes its st
 ```
 
 Types: [LlmFailure](llm-streaming.md) · [ResolvedRetryPolicy](llm-streaming.md) · [Scoped](scope.md)
-
-Source: [`packages/core/agent/src/runtime-types.ts`](../../packages/core/agent/src/runtime-types.ts)
-
-<a id="agentroute--waterfall"></a>
-
-#### `agent/route` — waterfall
-
-Choose the provider and model for one proposed step. `await next()` yields the route the machine would use (agent options before this loop logs a request, the logged header afterwards); return a replacement to switch. The loop runs this once per proposed step, before context preparation and `agent/pre-step`. Prompt preparation, tool conditions, and every request attempt in the step use the result, so a later choice applies from the next step. Cancellation here opens no step.
-
-```ts cordis-catalog
-/**
- * Choose the provider and model for one proposed step. `await next()`
- * yields the route the machine would use (agent options before this loop
- * logs a request, the logged header afterwards); return a replacement to
- * switch. The loop runs this once per proposed step, before context
- * preparation and `agent/pre-step`. Prompt preparation, tool conditions,
- * and every request attempt in the step use the result, so a later choice
- * applies from the next step. Cancellation here opens no step.
- * @param payload.agent - the agent proposing the step.
- * @param payload.turn - the turn that will own the step.
- * @param payload.step - the step proposed by the loop.
- * @param payload.signal - the current turn's explicit abort signal.
- * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
- * @mode waterfall
- */
-'agent/route'(this: Scoped<Agent>, payload: { agent: Agent; turn: number; step: number; signal: AbortSignal }, next: () => Promise<StepRoute>): Promise<StepRoute>
-```
-
-Types: [Scoped](scope.md)
 
 Source: [`packages/core/agent/src/runtime-types.ts`](../../packages/core/agent/src/runtime-types.ts)
 

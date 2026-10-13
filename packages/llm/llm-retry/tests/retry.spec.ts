@@ -524,7 +524,7 @@ describe('provider-routed retry policy', () => {
     expect(adapter.requests.map(request => request.provider)).toEqual(['mock', 'other', 'other'])
   })
 
-  it('selects an always policy from the provider chosen by agent/route', async () => {
+  it('selects an always policy from the provider chosen by agent/model', async () => {
     vi.useFakeTimers()
     const adapter = new ScriptedAdapter([
       new LlmError('rerouted auth failed', 'AUTH'),
@@ -533,7 +533,7 @@ describe('provider-routed retry policy', () => {
     ;({ ctx: context } = await harness(adapter, {
       other: alwaysConfig({ initialDelayMs: 1, maxDelayMs: 1, jitterRatio: 0 }),
     }, (ctx) => {
-      ctx.on('agent/route', async (_payload, next) => ({
+      ctx.on('agent/model', async (_payload, next) => ({
         ...await next(),
         provider: 'other',
       }))

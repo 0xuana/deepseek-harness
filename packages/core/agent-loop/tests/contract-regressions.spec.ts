@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import LlmRuntime, { type RequestMessage, createUserMessage, ToolCallId, LlmError, MessageSource, ProviderRequestId, StreamChunk  } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { type RequestMessage, createUserMessage, ToolCallId, LlmError, MessageSource, ProviderRequestId, ReasoningEffortId, StreamChunk  } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import SessionStore, { Session, SessionEvent, SessionId, TurnEndReason, type UserMessage } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -450,17 +450,17 @@ describe('adapter registration, routing, and accepted-input ownership', () => {
       : undefined).toContain('has no provider/model')
     expect(turnEnd?.type === 'turn/end' && turnEnd.data.reason.kind === 'error'
       ? turnEnd.data.reason.error.message
-      : undefined).toContain('agent/route')
+      : undefined).toContain('agent/model')
     expect(agent.session.snapshotEvents().some(event => event.type === 'step/start')).toBe(false)
     expect(adapter.requests).toHaveLength(0)
   })
 
-  it('the agent/route waterfall can supply the model for a model-less agent', async () => {
+  it('the agent/model waterfall can supply the model for a model-less agent', async () => {
     const adapter = new MockAdapter([textResponse('routed')])
     const ctx = await harness(adapter)
     const agent = await ctx.agentLoop.create(SessionId('a1'), {}) // no model — router plugin decides
 
-    ctx.on('agent/route', async (_payload, next) => {
+    ctx.on('agent/model', async (_payload, next) => {
       return { ...await next(), provider: 'mock', model: 'mock' }
     })
 
@@ -470,19 +470,22 @@ describe('adapter registration, routing, and accepted-input ownership', () => {
     expect(agent.session.deriveMessages().at(-1)?.content).toEqual([{ type: 'text', text: 'routed' }])
   })
 
-  it('agent/request cannot replace the step route', async () => {
+  it.each([
+    ['provider', { provider: 'other' }, 'other/mock (reasoning effort unset)'],
+    ['reasoning effort', { reasoningEffort: ReasoningEffortId('high') }, 'mock/mock (reasoning effort high)'],
+  ] as const)('agent/request cannot replace the step %s', async (_field, replacement, replaced) => {
     const adapter = new MockAdapter([textResponse('never')])
     const ctx = await harness(adapter)
     ctx.llm.registerAdapter(['other'], new MockAdapter([textResponse('never')]))
     const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
-    ctx.on('agent/request', async (_payload, next) => ({ ...await next(), provider: 'other' }))
+    ctx.on('agent/request', async (_payload, next) => ({ ...await next(), ...replacement }))
 
     send(agent, 'go')
     await waitForIdle(ctx, agent)
     const turnEnd = agent.session.snapshotEvents().findLast(event => event.type === 'turn/end')
     expect(turnEnd?.type === 'turn/end' && turnEnd.data.reason.kind === 'error'
       ? turnEnd.data.reason.error.message
-      : undefined).toContain('agent/request cannot replace the step route mock/mock with other/mock')
+      : undefined).toContain(`agent/request cannot replace the step model selection mock/mock (reasoning effort unset) with ${replaced}; choose models with the agent/model waterfall`)
     expect(agent.session.snapshotEvents().filter(event => ['request/header', 'system/message', 'user/message'].includes(event.type)))
       .toEqual([])
     expect(adapter.requests).toHaveLength(0)

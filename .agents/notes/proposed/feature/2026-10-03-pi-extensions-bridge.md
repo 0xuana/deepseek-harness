@@ -42,7 +42,7 @@ Add an experimental bridge that loads unmodified Pi extension sources and serves
 | `sendUserMessage`, `sendMessage` | `agent.followup()`, `agent.steer()`, `agent.inject()` |
 | `appendEntry`, `setLabel`, tool `details`, `ctx.sessionManager` | Ignorable Session records and `tool/result` metadata, read back as Pi entries |
 | `getActiveTools`, `setActiveTools`, `getAllTools` | `ctx.tools.schemas()`; `setActiveTools` applies a scoped `ctx.tools.restrict()` to global tools and adds or removes the bridge's own Agent-scoped registrations, because a restriction does not hide scoped tools |
-| `setModel`, `getThinkingLevel`, `setThinkingLevel` | An `agent/route` override for the model and an `agent/request` override for the thinking level |
+| `setModel`, `getThinkingLevel`, `setThinkingLevel` | An `agent/model` override for the model and thinking level |
 | `exec` | `ctx.subprocess`, argv without a shell |
 | `ctx.ui.select`, `confirm`, `input`, `editor` | `ctx.userQuestions` |
 | `ctx.ui.notify`, `setStatus`, `setWidget`, `setTitle`, `setEditorText` | A Remote stream the Web package renders |

@@ -454,7 +454,7 @@ describe('Cordis provider composition', () => {
     ctx.on('system-prompt/assemble', async (_assembly, _context, next) => ({
       ...await next(), sections: [{ name: 'test', text: prompt, order: 0 }],
     }))
-    const selection: ModelSelectionRef = { current: { provider: 'deepseek-official', model: MODEL }, assembled: undefined }
+    const selection: ModelSelectionRef = { current: { provider: 'deepseek-official', model: MODEL } }
     const agent = await ctx.agentLoop.create(SessionId('capability-switch'), selection.current)
     installModelSelection(agent.ctx, selection)
     await send(agent, 'first')

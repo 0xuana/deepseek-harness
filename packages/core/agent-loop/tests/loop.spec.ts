@@ -602,12 +602,12 @@ describe('agent loop', () => {
     expect(turnEnds[1]?.type === 'turn/end' && turnEnds[1].data.reason.kind).toBe('completed')
   })
 
-  it('renders a {{model}} persona from the route an agent/route listener supplies', async () => {
-    // AgentOptions.model unset: the step route arrives through agent/route,
+  it('renders a {{model}} persona from the model an agent/model listener supplies', async () => {
+    // AgentOptions.model unset: the step model arrives through agent/model,
     // before prompt preparation, so the prompt variables already name it.
     const adapter = new MockAdapter([textResponse('ok')])
     const ctx = await harness(adapter, 'You run on {{model}}.')
-    ctx.on('agent/route', async (_payload, next) => ({ ...await next(), provider: 'mock', model: 'mock' }))
+    ctx.on('agent/model', async (_payload, next) => ({ ...await next(), provider: 'mock', model: 'mock' }))
     const agent = await ctx.agentLoop.create(SessionId('a-late-model'), {})
 
     send(agent, 'hi')
@@ -1298,20 +1298,26 @@ describe('agent loop', () => {
     expect(texts).toContain('late steering')
   })
 
-  it('agent/route waterfall switches models for the step; the switch is logged', async () => {
-    const adapter = new MockAdapter([textResponse('ok')])
+  it('agent/model waterfall switches model and effort for the step; the switch is logged', async () => {
+    const low = ReasoningEffortId('low')
+    const high = ReasoningEffortId('high')
+    const adapter = new MockAdapter([textResponse('ok')], {
+      efforts: [{ id: low, name: 'Low' }, { id: high, name: 'High' }],
+      defaultEffort: high,
+    })
     const ctx = await harness(adapter)
     const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
 
-    ctx.on('agent/route', async (_payload, next) => ({ ...await next(), model: 'other-model' }))
+    ctx.on('agent/model', async () => ({ provider: 'mock', model: 'other-model', reasoningEffort: low }))
 
     send(agent, 'hi')
     await waitForIdle(ctx, agent)
-    expect(adapter.requests[0]!.model).toBe('other-model')
+    expect(adapter.requests[0]).toMatchObject({ model: 'other-model', reasoningEffort: low })
     // The header event records what the request ACTUALLY used — the switch is
     // a reconstructable fact, not silent drift.
     const headerEvent = agent.session.snapshotEvents().find(e => e.type === 'request/header')
-    expect(headerEvent?.type === 'request/header' && headerEvent.data.header.config.model).toBe('other-model')
+    expect(headerEvent?.type === 'request/header' && headerEvent.data.header.config)
+      .toMatchObject({ model: 'other-model', reasoningEffort: low })
   })
 
   it('agent/request waterfall replaces call controls with a replacement config; the change is logged', async () => {

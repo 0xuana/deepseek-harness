@@ -1,18 +1,18 @@
 /**
  * Session Controller model-directory and selection behavior: dynamic provider grouping,
  * provider-local catalog failures, logged-selection restoration without stale
- * catalog injection, unavailable-model refusals, and the step-route
+ * catalog injection, unavailable-model refusals, and the step-model
  * boundary for a running selection change.
  */
 
 import { describe, expect, it, vi, onTestFinished } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
-import type { Agent, StepRoute } from '@deepseek-ai/dsh-agent'
+import type { Agent } from '@deepseek-ai/dsh-agent'
 import AttachmentStore from '@deepseek-ai/dsh-attachment'
 import LlmRuntime, { LlmAdapter, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type {
-  GenerateOptions, LlmCallConfig, LlmCallConfigAdapterDefaults, LlmModelInfo,
+  GenerateOptions, LlmCallConfigAdapterDefaults, LlmModelInfo,
   LlmModelReasoningInfo, LlmProviderInfo, LlmResolvedModelInfo, StreamChunk,
   UserMessage,
 } from '@deepseek-ai/dsh-llm'
@@ -486,15 +486,12 @@ describe('Web session model selection', () => {
     await ctx.fiber.dispose()
   })
 
-  it('rejects unlisted models and applies a selection from the next step route', async () => {
+  it('rejects unlisted models and applies a selection from the next step', async () => {
     const { ctx, agent, sessionId } = await harness()
     const remote = createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }), cwd: '/tmp' })
     const signal = new AbortController().signal
-    const route = (step: number) => agentEvents(ctx, agent).waterfall(
-      'agent/route', { turn: 1, step, signal }, () => Promise.resolve({ provider: 'seed', model: 'seed' }),
-    )
-    const requestOn = (step: number, stepRoute: StepRoute) => agentEvents(ctx, agent).waterfall(
-      'agent/request', { turn: 1, step, signal }, () => Promise.resolve<LlmCallConfig>({ ...stepRoute, temperature: 0.2 }),
+    const choose = (step: number) => agentEvents(ctx, agent).waterfall(
+      'agent/model', { turn: 1, step, signal }, () => Promise.resolve({ provider: 'seed', model: 'seed' }),
     )
 
     expect(currentSelection(ctx, sessionId))
@@ -504,9 +501,7 @@ describe('Web session model selection', () => {
       provider: 'deepseek-official',
       model: 'deepseek-chat',
     })))
-    const chat = await route(1)
-    expect(chat).toEqual({ provider: 'deepseek-official', model: 'deepseek-chat' })
-    await expect(requestOn(1, chat)).resolves.toEqual({ ...chat, temperature: 0.2, reasoningEffort: 'high' })
+    await expect(choose(1)).resolves.toEqual({ provider: 'deepseek-official', model: 'deepseek-chat', reasoningEffort: 'high' })
 
     const selected = expectValue(await remote.selectModel(request({
       sessionId,
@@ -519,10 +514,7 @@ describe('Web session model selection', () => {
       model: 'deepseek-reasoner',
       reasoningEffort: 'max',
     })
-    await expect(requestOn(1, chat)).resolves.toEqual({ ...chat, temperature: 0.2, reasoningEffort: 'high' })
-    const reasoner = await route(2)
-    expect(reasoner).toEqual({ provider: 'deepseek-official', model: 'deepseek-reasoner' })
-    await expect(requestOn(2, reasoner)).resolves.toEqual({ ...reasoner, temperature: 0.2, reasoningEffort: 'max' })
+    await expect(choose(2)).resolves.toEqual({ provider: 'deepseek-official', model: 'deepseek-reasoner', reasoningEffort: 'max' })
 
     const unsupported = await remote.selectModel(request({
       sessionId,

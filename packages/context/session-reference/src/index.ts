@@ -7,7 +7,7 @@
 
 import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import type { Agent, PreStepDecision, StepRoute } from '@deepseek-ai/dsh-agent'
+import type { Agent, ModelSelection, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { createUserMessage, freezeMessage, LlmError } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, LlmResolvedModelInfo, UserMessage } from '@deepseek-ai/dsh-llm'
@@ -122,12 +122,12 @@ export class SessionReferenceResolver extends TypertRemoteService {
         'SESSION_REFERENCE_INVALID_CONFIG',
       )
     }
-    ctx.on('agent/pre-step', async ({ agent, route, signal }, next): Promise<PreStepDecision> => {
+    ctx.on('agent/pre-step', async ({ agent, modelSelection, signal }, next): Promise<PreStepDecision> => {
       const decision = await next()
       if (decision.kind === 'reject') return decision
       return {
         ...decision,
-        messages: await this.prepareDirectMessages(agent, route, decision.messages, signal),
+        messages: await this.prepareDirectMessages(agent, modelSelection, decision.messages, signal),
       }
     }, { prepend: true })
   }
@@ -136,14 +136,14 @@ export class SessionReferenceResolver extends TypertRemoteService {
    * Replace canonical mentions in direct user messages and place each prepared
    * snapshot immediately after the message that cited it.
    * @param agent - agent entering the model step.
-   * @param route - provider and model of the step.
+   * @param modelSelection - provider and model of the step.
    * @param messages - messages accepted by downstream pre-step listeners.
    * @param signal - active turn cancellation.
    * @returns direct messages followed by their session-reference context in citation order.
    */
   private async prepareDirectMessages(
     agent: Agent,
-    route: StepRoute,
+    modelSelection: ModelSelection,
     messages: readonly UserMessage[],
     signal: AbortSignal,
   ): Promise<UserMessage[]> {
@@ -157,7 +157,7 @@ export class SessionReferenceResolver extends TypertRemoteService {
         return { type: 'text', text: parsed.text }
       })
       if (references.length === 0) return [message]
-      const resolved = await this.prepare(agent, content, references, signal, route)
+      const resolved = await this.prepare(agent, content, references, signal, modelSelection)
       const direct = freezeMessage({ ...message, content: resolved.content })
       /* v8 ignore if -- a parsed canonical mention always leaves one normalized reference */
       if (resolved.additionalContext === undefined) {
@@ -278,7 +278,7 @@ export class SessionReferenceResolver extends TypertRemoteService {
 
   /**
    * Snapshot all references for one accepted direct message and return one aggregated durable context.
-   * Automatic budgets use the step route, or agent options for direct preparation.
+   * Automatic budgets use the step's model selection, or agent options for direct preparation.
    * Missing model capacity or adapter uses 64 KiB; other metadata lookup failures and cancellation reject preparation.
    * Truncated previews include omission facts and a full-snapshot spill locator, or an explicit unavailable notice.
    * Cancellation prevents context publication, including when storage completes after cancellation.
@@ -286,7 +286,7 @@ export class SessionReferenceResolver extends TypertRemoteService {
    * @param content - already host-normalized readable message content.
    * @param references - structured source sessions in mention order.
    * @param signal - optional cancellation boundary for the active turn.
-   * @param route - provider and model of the step admitting the message; omitted for direct preparation.
+   * @param modelSelection - provider and model of the step admitting the message; omitted for direct preparation.
    * @returns detached content and optional referenced-session context.
    */
   async prepare(
@@ -294,13 +294,13 @@ export class SessionReferenceResolver extends TypertRemoteService {
     content: ContentBlock[],
     references: SessionReferenceInput[],
     signal?: AbortSignal,
-    route?: StepRoute,
+    modelSelection?: ModelSelection,
   ): Promise<PreparedReferencedMessage> {
     const acceptedContent = structuredClone(content)
     const inputs = normalizeReferences(agent.id, references, this.config.maxReferences)
     if (inputs.length === 0) return { content: acceptedContent }
     assertNotCancelled(signal)
-    const maxReferenceBytes = await this.referenceBudget(agent, route, signal)
+    const maxReferenceBytes = await this.referenceBudget(agent, modelSelection, signal)
     assertNotCancelled(signal)
     let prepared: PreparedSource[]
     try {
@@ -351,10 +351,14 @@ export class SessionReferenceResolver extends TypertRemoteService {
     return { content: acceptedContent, additionalContext }
   }
 
-  private async referenceBudget(agent: Agent, route: StepRoute | undefined, signal: AbortSignal | undefined): Promise<number> {
+  private async referenceBudget(
+    agent: Agent,
+    modelSelection: ModelSelection | undefined,
+    signal: AbortSignal | undefined,
+  ): Promise<number> {
     if (this.config.maxReferenceBytes !== undefined) return this.config.maxReferenceBytes
-    // Options seed direct preparation; the step route owns model-step preparation.
-    const { provider, model } = route ?? agent.options
+    // Options seed direct preparation; the step's model selection owns model-step preparation.
+    const { provider, model } = modelSelection ?? agent.options
     const llm = this.ctx.get('llm')
     if (provider === undefined || model === undefined || llm === undefined) return DEFAULT_MAX_REFERENCE_BYTES
     let info: LlmResolvedModelInfo

@@ -466,7 +466,7 @@ describe('session reference spill outcomes', () => {
       })
       const direct = createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: formatSessionReferenceMention({ sessionId: source.id }) }] })
       const pending = agentEvents(ctx, fakeAgent(target)).waterfall('agent/pre-step',
-        { messages: [direct], turn: 1, step: 1, route: { provider: 'test', model: 'test' }, signal: controller.signal },
+        { messages: [direct], turn: 1, step: 1, modelSelection: { provider: 'test', model: 'test' }, signal: controller.signal },
         () => Promise.resolve({ kind: 'enter' as const, messages: [direct] }))
       const rejected = expect(pending).rejects.toThrow(expectCode('SESSION_REFERENCE_CANCELLED'))
       await started.promise
@@ -533,12 +533,12 @@ describe('model-relative reference budgets', () => {
     else expect(resolve).toHaveBeenCalledWith('seed', 'seed', undefined)
   })
 
-  it('uses the step route rather than agent options', async () => {
+  it('uses the step model selection rather than agent options', async () => {
     const { ctx, agent, source, resolve } = await setup()
-    let route = { provider: 'selected', model: 'large' }
+    let modelSelection = { provider: 'selected', model: 'large' }
     const message = createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: formatSessionReferenceMention({ sessionId: source.id }) }] })
     const signal = new AbortController().signal
-    const enter = () => agentEvents(ctx, agent).waterfall('agent/pre-step', { messages: [message], turn: 1, step: 1, route, signal },
+    const enter = () => agentEvents(ctx, agent).waterfall('agent/pre-step', { messages: [message], turn: 1, step: 1, modelSelection, signal },
       () => Promise.resolve({ kind: 'enter' as const, messages: [message] }))
     const first = await enter()
     expect(first.kind).toBe('enter')
@@ -547,7 +547,7 @@ describe('model-relative reference budgets', () => {
     if (firstContext === undefined) throw new Error('expected reference context')
     expect(bytes({ content: [], additionalContext: firstContext })).toBe(160_000)
     expect(resolve).toHaveBeenLastCalledWith('selected', 'large', signal)
-    route = { provider: 'selected', model: 'small' }
+    modelSelection = { provider: 'selected', model: 'small' }
     resolve.mockResolvedValue({ provider: 'selected', id: 'small', name: 'small', context: { contextWindow: 8_000 } })
     const second = await enter()
     if (second.kind !== 'enter' || second.messages[1] === undefined) throw new Error('expected reference context')
@@ -621,7 +621,7 @@ describe('model-relative reference budgets', () => {
     expect(resolve).toHaveBeenLastCalledWith('seed', 'seed', undefined)
     const message = createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: formatSessionReferenceMention({ sessionId: source.id }) }] })
     const seed = { kind: 'enter' as const, messages: [message] }
-    await expect(agentEvents(ctx, agent).waterfall('agent/pre-step', { messages: [message], turn: 1, step: 1, route: { provider: 'test', model: 'test' }, signal: new AbortController().signal },
+    await expect(agentEvents(ctx, agent).waterfall('agent/pre-step', { messages: [message], turn: 1, step: 1, modelSelection: { provider: 'test', model: 'test' }, signal: new AbortController().signal },
       () => Promise.resolve(seed))).resolves.toBe(seed)
   })
 
@@ -877,7 +877,7 @@ describe('session reference discovery and preparation', () => {
 
     const decision = await agentEvents(ctx, agent).waterfall(
       'agent/pre-step',
-      { messages: [direct, ordinary, plugin], turn: 1, step: 1, route: { provider: 'test', model: 'test' }, signal },
+      { messages: [direct, ordinary, plugin], turn: 1, step: 1, modelSelection: { provider: 'test', model: 'test' }, signal },
       () => Promise.resolve({ kind: 'enter' as const, messages: [direct, ordinary, plugin] }),
     )
 
@@ -913,14 +913,14 @@ describe('session reference discovery and preparation', () => {
 
     await expect(agentEvents(ctx, agent).waterfall(
       'agent/pre-step',
-      { messages: [malformed], turn: 1, step: 1, route: { provider: 'test', model: 'test' }, signal },
+      { messages: [malformed], turn: 1, step: 1, modelSelection: { provider: 'test', model: 'test' }, signal },
       () => Promise.resolve({ kind: 'reject' as const }),
     )).resolves.toEqual({ kind: 'reject' })
     expect(readSurface).not.toHaveBeenCalled()
 
     await expect(agentEvents(ctx, agent).waterfall(
       'agent/pre-step',
-      { messages: [malformed], turn: 1, step: 1, route: { provider: 'test', model: 'test' }, signal },
+      { messages: [malformed], turn: 1, step: 1, modelSelection: { provider: 'test', model: 'test' }, signal },
       () => Promise.resolve({ kind: 'enter' as const, messages: [malformed] }),
     )).rejects.toThrow(/invalid session reference URI/)
   })

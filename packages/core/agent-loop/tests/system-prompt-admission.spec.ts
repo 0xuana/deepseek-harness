@@ -39,7 +39,7 @@ async function harness(capable = new MockAdapter(Array.from({ length: 8 }, () =>
   ctx.on('system-prompt/assemble', async (_assembly, _context, next) => ({
     ...await next(), sections: [{ name: 'test', text: prompt, order: 0 }],
   }))
-  const selection: ModelSelectionRef = { current: { provider: 'capable', model: 'model' }, assembled: undefined }
+  const selection: ModelSelectionRef = { current: { provider: 'capable', model: 'model' } }
   const agent = await ctx.agentLoop.create(SessionId('admission'), { provider: 'capable', model: 'model' })
   installModelSelection(agent.ctx, selection)
   ctx.on('llm/stream', (request, next) => {
@@ -398,11 +398,11 @@ describe('prepared-route prompt admission', () => {
     expect(types.filter(type => ['system/message', 'user/message', 'request/header'].includes(type))).toEqual([])
   })
 
-  it('cancels during route before a step opens', async () => {
+  it('cancels during model selection before a step opens', async () => {
     const h = await harness()
     const entered = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
-    h.ctx.on('agent/route', async (_payload, next) => {
+    h.ctx.on('agent/model', async (_payload, next) => {
       expect(h.agent.session.snapshotEvents().map(event => event.type)).not.toContain('step/start')
       entered.resolve(undefined)
       await release.promise

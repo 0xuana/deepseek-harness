@@ -7,7 +7,7 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import type { ModelSelection } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
-import { boundContextSummary, createUserMessage, errorChain, type LlmCallConfig } from '@deepseek-ai/dsh-llm'
+import { boundContextSummary, createUserMessage, errorChain } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-permission-presets'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-title'
@@ -90,16 +90,12 @@ function reportRollbackFailure(ctx: Context, subject: string, error: unknown): v
 
 /** Apply the creation-time selection until its first durable request header exists. */
 function installInitialModelSelection(agentCtx: Context, selection: ModelSelection): void {
-  agentCtx.on('agent/request', async ({ agent }, next): Promise<LlmCallConfig> => {
-    const resolved = await next()
+  agentCtx.on('agent/model', async ({ agent }, next): Promise<ModelSelection> => {
+    const proposed = await next()
     if (agent.session.requestHeader() !== undefined
-      || resolved.provider !== selection.provider
-      || resolved.model !== selection.model) return resolved
-    const { reasoningEffort: _inheritedEffort, ...withoutInheritedEffort } = resolved
-    return {
-      ...withoutInheritedEffort,
-      ...selection.reasoningEffort === undefined ? {} : { reasoningEffort: selection.reasoningEffort },
-    }
+      || proposed.provider !== selection.provider
+      || proposed.model !== selection.model) return proposed
+    return { ...selection }
   })
 }
 

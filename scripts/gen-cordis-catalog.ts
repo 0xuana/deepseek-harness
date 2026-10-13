@@ -334,7 +334,6 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   InspectorJsonValue: 'extensions.md',
   MessageId: 'llm-streaming.md',
   ResumeAgentOptions: 'core.md',
-  StepRoute: 'core.md',
   SettleReason: 'core.md',
   AdapterRegistrationHandle: 'llm-streaming.md',
   DirectoryRegistrationHandle: 'llm-streaming.md',

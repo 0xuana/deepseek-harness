@@ -94,12 +94,12 @@ it('replaces the active provider only after the next step request binds', async 
   const proceed = Promise.withResolvers<undefined>()
   const streaming = Promise.withResolvers<AbortSignal>()
   let steps = 0
-  ctx.on('agent/route', async (_event, next) => {
-    const route = await next()
-    if (++steps === 1) return route
+  ctx.on('agent/model', async (_event, next) => {
+    const proposed = await next()
+    if (++steps === 1) return proposed
     preparing.resolve(undefined)
     await proceed.promise
-    return { ...route, provider: 'deepseek-official' }
+    return { ...proposed, provider: 'deepseek-official' }
   })
   ctx.on('llm/stream', async function* (request) {
     if (request.provider === 'deepseek-account') {
@@ -251,11 +251,11 @@ it('ignores idle account history but uses the last bound route during a new turn
   expect(cancel).not.toHaveBeenCalled()
   const preparing = Promise.withResolvers<undefined>()
   const proceed = Promise.withResolvers<undefined>()
-  ctx.on('agent/route', async (_event, next) => {
-    const route = await next()
+  ctx.on('agent/model', async (_event, next) => {
+    const proposed = await next()
     preparing.resolve(undefined)
     await proceed.promise
-    return { ...route, provider: 'deepseek-official' }
+    return { ...proposed, provider: 'deepseek-official' }
   })
   try {
     send(agent)

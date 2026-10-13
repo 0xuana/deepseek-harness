@@ -4,13 +4,8 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import {
-  boundContextSummary,
-  createUserMessage,
-  type LlmCallConfig,
-  type ReasoningEffortId,
-} from '@deepseek-ai/dsh-llm'
-import type { PreStepDecision, StepRoute } from './runtime-types.ts'
+import { boundContextSummary, createUserMessage } from '@deepseek-ai/dsh-llm'
+import type { ModelSelection, PreStepDecision } from './runtime-types.ts'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -18,35 +13,23 @@ declare module '@deepseek-ai/dsh-llm' {
   }
 }
 
-/** Complete provider, model, and optional reasoning effort selected for one live Agent. */
-export interface ModelSelection {
-  /** Registered provider route. */
-  provider: string
-  /** Provider-owned model id. */
-  model: string
-  /** Adapter-owned reasoning effort, or provider/default behavior when absent. */
-  reasoningEffort?: ReasoningEffortId
-}
-
-/** Mutable model selection plus the value captured for the current step. */
+/** Mutable model selection taken by each step that starts. */
 export interface ModelSelectionRef {
-  /** Model selected for the next step to start. */
+  /** Model selected for the next step to start; undefined keeps the step's proposed selection. */
   current: ModelSelection | undefined
-  /** Selection captured when the current step chose its route. */
-  assembled: ModelSelection | undefined
 }
 
-function sameRoute(left: StepRoute, right: StepRoute): boolean {
+function sameModel(left: ModelSelection, right: ModelSelection): boolean {
   return left.provider === right.provider && left.model === right.model
 }
 
-function routeLabel(route: StepRoute, other: StepRoute): string {
-  return route.provider === other.provider ? route.model : `${route.provider}/${route.model}`
+function modelLabel(selection: ModelSelection, other: ModelSelection): string {
+  return selection.provider === other.provider ? selection.model : `${selection.provider}/${selection.model}`
 }
 
-function modelSwitchNotice(previous: StepRoute, selected: StepRoute) {
-  const from = routeLabel(previous, selected)
-  const to = routeLabel(selected, previous)
+function modelSwitchNotice(previous: ModelSelection, selected: ModelSelection) {
+  const from = modelLabel(previous, selected)
+  const to = modelLabel(selected, previous)
   return createUserMessage({
     content: [{
       type: 'text' as const,
@@ -61,15 +44,14 @@ function modelSwitchNotice(previous: StepRoute, selected: StepRoute) {
 }
 
 /**
- * Couple one mutable selection to Agent-scoped step routing. Each step
- * captures the selection when `agent/route` chooses its provider and model,
- * and every request attempt in that step applies the captured effort; a
- * selection made during the step applies from the next step. An absent
- * selected effort clears inherited effort, restoring the model's provider
- * default.
+ * Couple one mutable selection to Agent-scoped step model choice. Each step
+ * takes the provider, model, and effort current when `agent/model` runs, and
+ * every request attempt in that step keeps them; a selection made during the
+ * step applies from the next step. An absent selected effort leaves the
+ * model's provider default.
  *
  * A provider/model change appends a durable user-role notice to the next
- * admitted request. It compares the step route with the latest request
+ * admitted request. It compares the step's selection with the latest request
  * header; effort-only changes and empty no-request decisions add no notice.
  * Failure before header persistence repeats the notice on the next request.
  *
@@ -78,44 +60,26 @@ function modelSwitchNotice(previous: StepRoute, selected: StepRoute) {
  * @returns Disposer for all scoped waterfall listeners.
  */
 export function installModelSelection(agentCtx: Context, selection: ModelSelectionRef): () => void {
-  const disposeRoute = agentCtx.on('agent/route', async (_payload, next): Promise<StepRoute> => {
-    const selected = selection.current === undefined ? undefined : { ...selection.current }
-    selection.assembled = selected
-    const route = await next()
-    return selected === undefined ? route : { provider: selected.provider, model: selected.model }
+  const disposeModel = agentCtx.on('agent/model', async (_payload, next): Promise<ModelSelection> => {
+    const selected = selection.current
+    const proposed = await next()
+    return selected === undefined ? proposed : { ...selected }
   })
-  const disposeRequest = agentCtx.on(
-    'agent/request',
-    async (_payload, next): Promise<LlmCallConfig> => {
-      const resolved = await next()
-      const selected = selection.assembled
-      // Another route listener may have replaced the captured route; its model keeps its own effort.
-      if (selected === undefined || !sameRoute(selected, resolved)) return resolved
-      const { reasoningEffort: _inheritedEffort, ...withoutInheritedEffort } = resolved
-      return {
-        ...withoutInheritedEffort,
-        ...selected.reasoningEffort === undefined
-          ? {}
-          : { reasoningEffort: selected.reasoningEffort },
-      }
-    },
-  )
   const disposeNotice = agentCtx.on(
     'agent/pre-step',
-    async ({ agent, messages, route, signal, step }, next): Promise<PreStepDecision> => {
+    async ({ agent, messages, modelSelection, signal, step }, next): Promise<PreStepDecision> => {
       const decision = await next()
       if (decision.kind === 'reject' || signal.aborted) return decision
       // The loop skips an empty first step and an emptied offered continuation.
       if (decision.messages.length === 0 && (step === 1 || messages.length > 0)) return decision
       const previous = agent.session.requestHeader()?.config
-      if (previous === undefined || sameRoute(route, previous)) return decision
-      return { ...decision, messages: [...decision.messages, modelSwitchNotice(previous, route)] }
+      if (previous === undefined || sameModel(modelSelection, previous)) return decision
+      return { ...decision, messages: [...decision.messages, modelSwitchNotice(previous, modelSelection)] }
     },
     { prepend: true },
   )
   return () => {
-    disposeRoute()
-    disposeRequest()
+    disposeModel()
     disposeNotice()
   }
 }

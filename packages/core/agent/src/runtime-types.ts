@@ -19,17 +19,19 @@ declare module '@deepseek-ai/dsh-system-prompt' {
   interface AssembleContext {
     /** Agent for this assembly; absent on diagnostics. When present, `scope` must identify the same agent. */
     agent?: Agent
-    /** Provider and model of the step being assembled; absent outside a step. */
-    route?: StepRoute
+    /** Model selection of the step being assembled; absent outside a step. */
+    modelSelection?: ModelSelection
   }
 }
 
-/** Provider and model that `agent/route` chose for one step and every request attempt in it. */
-export interface StepRoute {
+/** Complete provider, model, and optional reasoning effort; `agent/model` fixes one for each step. */
+export interface ModelSelection {
   /** Registered provider route. */
-  readonly provider: string
-  /** Model id interpreted by the provider adapter. */
-  readonly model: string
+  provider: string
+  /** Provider-owned model id. */
+  model: string
+  /** Adapter-owned reasoning effort, or provider/default behavior when absent. */
+  reasoningEffort?: ReasoningEffortId
 }
 
 /** Merge-extensible agent creation options. Persona belongs to system-prompt sections. */
@@ -172,7 +174,7 @@ export type AssistantStreamFrame =
 
 declare module './types.ts' {
   interface Agent {
-    /** Creation-time request options; `agent/route` may choose another provider and model for each step. */
+    /** Creation-time request options; `agent/model` may choose another provider, model, and effort for each step. */
     readonly options: AgentOptions
     /** The live session this agent drives; its log is the durable source of truth. */
     readonly session: Session
@@ -323,20 +325,23 @@ declare module '@deepseek-ai/cordis' {
      * @param payload.messages - messages removed from the inbox for this step.
      * @param payload.turn - the turn that will own the step.
      * @param payload.step - the step proposed by the loop.
-     * @param payload.route - the provider and model `agent/route` chose for this step.
+     * @param payload.modelSelection - the provider, model, and effort `agent/model` chose for this step.
      * @param payload.signal - the current turn's cancellation signal.
      * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
      * @mode waterfall
      */
-    'agent/pre-step'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; route: StepRoute; signal: AbortSignal }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>
+    'agent/pre-step'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; modelSelection: ModelSelection; signal: AbortSignal }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>
     /**
-     * Choose the provider and model for one proposed step. `await next()`
-     * yields the route the machine would use (agent options before this loop
-     * logs a request, the logged header afterwards); return a replacement to
-     * switch. The loop runs this once per proposed step, before context
-     * preparation and `agent/pre-step`. Prompt preparation, tool conditions,
-     * and every request attempt in the step use the result, so a later choice
-     * applies from the next step. Cancellation here opens no step.
+     * Choose the provider, model, and reasoning effort for one proposed step.
+     * `await next()` yields the selection the machine would use: agent options
+     * before this loop logs a request, the logged header afterwards, with an
+     * effort only when one was chosen for that exact model. Return a
+     * replacement to switch; an effort belongs to its model, so a replacement
+     * that changes the model names that model's effort or omits it for the
+     * provider default. The loop runs this once per proposed step, before
+     * context preparation and `agent/pre-step`. Prompt preparation, tool
+     * conditions, and every request attempt in the step use the result, so a
+     * later choice applies from the next step. Cancellation here opens no step.
      * @param payload.agent - the agent proposing the step.
      * @param payload.turn - the turn that will own the step.
      * @param payload.step - the step proposed by the loop.
@@ -344,14 +349,14 @@ declare module '@deepseek-ai/cordis' {
      * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
      * @mode waterfall
      */
-    'agent/route'(this: Scoped<Agent>, payload: { agent: Agent; turn: number; step: number; signal: AbortSignal }, next: () => Promise<StepRoute>): Promise<StepRoute>
+    'agent/model'(this: Scoped<Agent>, payload: { agent: Agent; turn: number; step: number; signal: AbortSignal }, next: () => Promise<ModelSelection>): Promise<ModelSelection>
     /**
      * Replace the frozen call configuration of one request attempt. `await
-     * next()` yields the config the machine would use on the step's
-     * `agent/route` result: agent options on the first request, the logged
-     * header afterwards, and no effort recorded for another model. Return a
-     * replacement to change call controls such as reasoning effort; returning
-     * another provider or model fails the step. On step admission, this runs
+     * next()` yields the step's `agent/model` selection with the machine's
+     * other call controls: agent options on the first request, the logged
+     * header afterwards. Return a replacement to change sampling controls such
+     * as `maxTokens`, `temperature`, or `stop`; returning another provider,
+     * model, or reasoning effort fails the step. On step admission, this runs
      * after prompt assembly and `step/start`, before the system prompt and
      * accepted user batch are committed, and again for each retry.
      * Cancellation here or during subsequent `prepareCall()` resolution

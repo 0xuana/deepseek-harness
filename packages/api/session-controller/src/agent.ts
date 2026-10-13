@@ -282,7 +282,7 @@ export class ApiSessionAgentController {
   }
 
   /**
-   * Install or return the Session-local model selection that chooses each step's route.
+   * Install or return the Session-local model selection that each step takes.
    * @param agent - live Agent that owns the selection.
    * @returns the installed mutable selection reference.
    */
@@ -324,7 +324,6 @@ export class ApiSessionAgentController {
         picked = undefined
         return true
       },
-      assembled: undefined,
     }
     installModelSelection(agent.ctx, selection)
     this.selections.set(agent, selection)
@@ -332,7 +331,7 @@ export class ApiSessionAgentController {
   }
 
   /**
-   * Commit and cache one validated selection for the next step's route.
+   * Commit and cache one validated selection for the next step.
    * @param agent - live Agent that owns the selection.
    * @param selection - validated selection to record and apply.
    */

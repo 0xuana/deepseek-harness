@@ -96,10 +96,7 @@ async function commandHarness(
     currentSelection: () => ({ provider: 'fixture', model: 'fixture-model' }),
     saveSelection: () => Promise.resolve(),
   } as never)
-  const selection: ModelSelectionRef = {
-    current: { provider: 'fixture', model: 'fixture-model' },
-    assembled: undefined,
-  }
+  const selection: ModelSelectionRef = { current: { provider: 'fixture', model: 'fixture-model' } }
   const agents = {
     resolveAgent: (id: SessionId) => Promise.resolve(id === agent.id
       ? { agent }

@@ -88,10 +88,7 @@ async function uploadHarness(origin?: 'subagent'): Promise<{
     listProviders: () => [{ id: 'fixture', name: 'Fixture' }],
     resolveModelInfo: () => Promise.resolve({ provider: 'fixture', id: 'fixture-model', name: 'Fixture' }),
   } as never)
-  const selection: ModelSelectionRef = {
-    current: { provider: 'fixture', model: 'fixture-model' },
-    assembled: undefined,
-  }
+  const selection: ModelSelectionRef = { current: { provider: 'fixture', model: 'fixture-model' } }
   const agents = {
     resolveAgent: () => Promise.resolve({ agent }),
     selectionFor: () => selection,

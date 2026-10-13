@@ -205,7 +205,7 @@ async listCandidates( agent: Agent, query: string = '', limit: number = this.con
 
 /**
  * Snapshot all references for one accepted direct message and return one aggregated durable context.
- * Automatic budgets use the step route, or agent options for direct preparation.
+ * Automatic budgets use the step's model selection, or agent options for direct preparation.
  * Missing model capacity or adapter uses 64 KiB; other metadata lookup failures and cancellation reject preparation.
  * Truncated previews include omission facts and a full-snapshot spill locator, or an explicit unavailable notice.
  * Cancellation prevents context publication, including when storage completes after cancellation.
@@ -213,13 +213,13 @@ async listCandidates( agent: Agent, query: string = '', limit: number = this.con
  * @param content - already host-normalized readable message content.
  * @param references - structured source sessions in mention order.
  * @param signal - optional cancellation boundary for the active turn.
- * @param route - provider and model of the step admitting the message; omitted for direct preparation.
+ * @param modelSelection - provider and model of the step admitting the message; omitted for direct preparation.
  * @returns detached content and optional referenced-session context.
  */
-async prepare( agent: Agent, content: ContentBlock[], references: SessionReferenceInput[], signal?: AbortSignal, route?: StepRoute, ): Promise<PreparedReferencedMessage>
+async prepare( agent: Agent, content: ContentBlock[], references: SessionReferenceInput[], signal?: AbortSignal, modelSelection?: ModelSelection, ): Promise<PreparedReferencedMessage>
 ```
 
-Types: [Agent](core.zh.md) · [ContentBlock](llm-streaming.zh.md) · [StepRoute](core.zh.md)
+Types: [Agent](core.zh.md) · [ContentBlock](llm-streaming.zh.md) · [ModelSelection](core.zh.md)
 
 Source: [`packages/context/session-reference/src/index.ts`](../../packages/context/session-reference/src/index.ts)
 <!-- END GENERATED cordis-surface -->

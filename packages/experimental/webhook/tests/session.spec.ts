@@ -1,5 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
-import { ReasoningEffortId, type LlmCallConfig } from '@deepseek-ai/dsh-llm'
+import type { ModelSelection } from '@deepseek-ai/dsh-agent'
+import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   WebhookDeliveryId,
@@ -182,19 +183,19 @@ async function create(test: SessionHarness, request = test.request): Promise<voi
 }
 
 /** Read the initial model-selection listener installed during Agent setup. */
-function modelRequestListener(test: SessionHarness): (
+function modelChoiceListener(test: SessionHarness): (
   payload: unknown,
-  next: () => Promise<LlmCallConfig>,
-) => Promise<LlmCallConfig> {
-  const listener = test.modelListeners.get('agent/request')
+  next: () => Promise<ModelSelection>,
+) => Promise<ModelSelection> {
+  const listener = test.modelListeners.get('agent/model')
   if (typeof listener !== 'function') {
     throw new Error('webhook Session did not install its initial model selection')
   }
-  const request = listener as (
+  const choose = listener as (
     payload: unknown,
-    next: () => Promise<LlmCallConfig>,
-  ) => Promise<LlmCallConfig>
-  return (_payload, next) => request({ agent: test.agent }, next)
+    next: () => Promise<ModelSelection>,
+  ) => Promise<ModelSelection>
+  return (_payload, next) => choose({ agent: test.agent }, next)
 }
 
 describe('webhook Session creation', () => {
@@ -231,7 +232,7 @@ describe('webhook Session creation', () => {
     const withoutCap = harness()
     await create(withoutCap, { ...withoutCap.request, model: { provider: 'p', model: 'm' } })
     expect(withoutCap.calls).not.toContain('default-model')
-    await expect(modelRequestListener(withoutCap)(undefined, async () => ({
+    await expect(modelChoiceListener(withoutCap)(undefined, async () => ({
       provider: 'p', model: 'm', reasoningEffort: ReasoningEffortId('inherited'),
     }))).resolves.toEqual({ provider: 'p', model: 'm' })
   })
@@ -239,32 +240,32 @@ describe('webhook Session creation', () => {
   it('preserves default reasoning until the first request header is durable', async () => {
     const test = harness()
     await create(test)
-    const request = modelRequestListener(test)
+    const choose = modelChoiceListener(test)
 
-    await expect(request(undefined, async () => ({
+    await expect(choose(undefined, async () => ({
       provider: 'other-provider',
       model: 'default-model',
       reasoningEffort: ReasoningEffortId('other-provider-effort'),
     }))).resolves.toMatchObject({ reasoningEffort: 'other-provider-effort' })
-    await expect(request(undefined, async () => ({
+    await expect(choose(undefined, async () => ({
       provider: 'default-provider',
       model: 'other-model',
       reasoningEffort: ReasoningEffortId('other-model-effort'),
     }))).resolves.toMatchObject({ reasoningEffort: 'other-model-effort' })
 
-    const routed: unknown = await request(undefined, async () => ({
+    const chosen: unknown = await choose(undefined, async () => ({
       provider: 'default-provider',
       model: 'default-model',
       reasoningEffort: ReasoningEffortId('inherited'),
     }))
-    expect(routed).toEqual({
+    expect(chosen).toEqual({
       provider: 'default-provider',
       model: 'default-model',
       reasoningEffort: 'high',
     })
 
     test.markRequestHeader()
-    await expect(request(undefined, async () => ({
+    await expect(choose(undefined, async () => ({
       provider: 'later-provider',
       model: 'later-model',
       reasoningEffort: ReasoningEffortId('later'),

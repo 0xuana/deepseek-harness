@@ -1,4 +1,4 @@
-/** Model selection chooses each step's route once; requests in that step keep it. */
+/** Model selection fixes each step's provider, model, and effort once; requests in that step keep them. */
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import {
@@ -7,9 +7,8 @@ import {
   type Agent,
   type ModelSelection,
   type ModelSelectionRef,
-  type StepRoute,
 } from '../src/index.ts'
-import { createUserMessage, ReasoningEffortId, type LlmCallConfig } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
 
 const contexts: Context[] = []
@@ -18,23 +17,21 @@ afterEach(async () => {
 })
 const signal = new AbortController().signal
 const input = createUserMessage({ content: [{ type: 'text', text: 'continue' }], source: { kind: 'user' } })
-const seedRoute: StepRoute = { provider: 'seed', model: 'seed' }
+const seed: ModelSelection = { provider: 'seed', model: 'seed', reasoningEffort: ReasoningEffortId('max') }
 
 function harness(current?: ModelSelection, previous?: ModelSelection) {
   const ctx = new Context()
   contexts.push(ctx)
-  const selection: ModelSelectionRef = { current, assembled: undefined }
+  const selection: ModelSelectionRef = { current }
   const dispose = installModelSelection(ctx, selection)
   const agent = { session: Session.create(SessionId('model-selection')) } as Agent
   if (previous) agent.session.append('request/header', { header: { config: previous }, reason: 'initial' })
-  const route = (step: number, seed: StepRoute = seedRoute) =>
-    agentEvents(ctx, agent).waterfall('agent/route', { turn: 1, step, signal }, () => Promise.resolve(seed))
-  const request = (step: number, seed: LlmCallConfig) =>
-    agentEvents(ctx, agent).waterfall('agent/request', { turn: 1, step, signal }, () => Promise.resolve(seed))
-  const preStep = (stepRoute: StepRoute, messages = [input], offered = [input], step = 1, stepSignal = signal) =>
-    agentEvents(ctx, agent).waterfall('agent/pre-step', { turn: 1, step, messages: offered, route: stepRoute, signal: stepSignal },
+  const choose = (step: number) =>
+    agentEvents(ctx, agent).waterfall('agent/model', { turn: 1, step, signal }, () => Promise.resolve(seed))
+  const preStep = (modelSelection: ModelSelection, messages = [input], offered = [input], step = 1, stepSignal = signal) =>
+    agentEvents(ctx, agent).waterfall('agent/pre-step', { turn: 1, step, messages: offered, modelSelection, signal: stepSignal },
       () => Promise.resolve({ kind: 'enter' as const, messages }))
-  return { ctx, agent, selection, dispose, route, request, preStep }
+  return { ctx, agent, selection, dispose, choose, preStep }
 }
 
 function notice(from: string, to: string) {
@@ -42,56 +39,41 @@ function notice(from: string, to: string) {
 }
 
 describe('installModelSelection()', () => {
-  it('captures one selection per step for its route and every request effort, then disposes routing', async () => {
+  it('gives each step the current selection, effort included, then disposes', async () => {
     const h = harness()
-    expect(await h.route(1)).toBe(seedRoute)
-    const inherited: LlmCallConfig = { provider: 'alpha', model: 'a1', reasoningEffort: ReasoningEffortId('max'), temperature: 0.2 }
-    expect(await h.request(1, inherited)).toBe(inherited)
+    expect(await h.choose(1)).toBe(seed)
 
-    h.selection.current = { provider: 'alpha', model: 'a1', reasoningEffort: ReasoningEffortId('high') }
-    expect(await h.route(2)).toEqual({ provider: 'alpha', model: 'a1' })
+    const high = { provider: 'alpha', model: 'a1', reasoningEffort: ReasoningEffortId('high') }
+    h.selection.current = high
+    const chosen = await h.choose(2)
+    expect(chosen).toEqual(high)
+    expect(chosen).not.toBe(high)
+
+    // An absent selected effort leaves the provider default instead of inheriting the proposal's.
     h.selection.current = { provider: 'beta', model: 'b1' }
-    const selected = { ...inherited, reasoningEffort: ReasoningEffortId('high') }
-    expect(await h.request(2, inherited)).toEqual(selected)
-    expect(await h.request(2, inherited)).toEqual(selected)
-
-    expect(await h.route(3)).toEqual({ provider: 'beta', model: 'b1' })
-    expect(await h.request(3, { ...inherited, provider: 'beta', model: 'b1' }))
-      .toEqual({ provider: 'beta', model: 'b1', temperature: 0.2 })
+    expect(await h.choose(3)).toEqual({ provider: 'beta', model: 'b1' })
 
     h.dispose()
-    expect(await h.route(4)).toBe(seedRoute)
-    expect(await h.request(4, inherited)).toBe(inherited)
+    expect(await h.choose(4)).toBe(seed)
   })
 
-  it('keeps the effort of a route that an outer listener replaced', async () => {
-    const h = harness({ provider: 'alpha', model: 'a1', reasoningEffort: ReasoningEffortId('high') })
-    h.ctx.on('agent/route', async (_payload, next) => {
-      await next()
-      return { provider: 'gamma', model: 'g1' }
-    }, { prepend: true })
-    expect(await h.route(1)).toEqual({ provider: 'gamma', model: 'g1' })
-    const config: LlmCallConfig = { provider: 'gamma', model: 'g1', reasoningEffort: ReasoningEffortId('max') }
-    expect(await h.request(1, config)).toBe(config)
-  })
-
-  it('announces same-provider and cross-provider step routes', async () => {
+  it('announces same-provider and cross-provider model switches', async () => {
     const h = harness(undefined, { provider: 'alpha', model: 'a0' })
     await expect(h.preStep({ provider: 'alpha', model: 'a1' })).resolves.toMatchObject({ messages: [input, notice('a0', 'a1')] })
     await expect(h.preStep({ provider: 'beta', model: 'b1' })).resolves.toMatchObject({ messages: [input, notice('alpha/a0', 'beta/b1')] })
   })
 
-  it('preserves initial, unchanged, rejected, cancelled, and disposed decisions', async () => {
+  it('preserves initial, effort-only, rejected, cancelled, and disposed decisions', async () => {
     const h = harness()
-    const route = { provider: 'alpha', model: 'a0' }
-    await expect(h.preStep(route)).resolves.toEqual({ kind: 'enter', messages: [input] })
+    const initial = { provider: 'alpha', model: 'a0' }
+    await expect(h.preStep(initial)).resolves.toEqual({ kind: 'enter', messages: [input] })
     h.agent.session.append('request/header', {
-      header: { config: { ...route, reasoningEffort: ReasoningEffortId('high') } },
+      header: { config: { ...initial, reasoningEffort: ReasoningEffortId('high') } },
       reason: 'initial',
     })
-    await expect(h.preStep(route)).resolves.toEqual({ kind: 'enter', messages: [input] })
+    await expect(h.preStep({ ...initial, reasoningEffort: ReasoningEffortId('low') })).resolves.toEqual({ kind: 'enter', messages: [input] })
     const switched = { provider: 'alpha', model: 'a1' }
-    await expect(agentEvents(h.ctx, h.agent).waterfall('agent/pre-step', { turn: 1, step: 3, messages: [], route: switched, signal },
+    await expect(agentEvents(h.ctx, h.agent).waterfall('agent/pre-step', { turn: 1, step: 3, messages: [], modelSelection: switched, signal },
       () => Promise.resolve({ kind: 'reject' as const }))).resolves.toEqual({ kind: 'reject' })
     await expect(h.preStep(switched, [input], [input], 3, AbortSignal.abort())).resolves.toEqual({ kind: 'enter', messages: [input] })
     h.dispose()
@@ -100,9 +82,9 @@ describe('installModelSelection()', () => {
 
   it('preserves empty claims and announces an empty tool continuation', async () => {
     const h = harness(undefined, { provider: 'alpha', model: 'a0' })
-    const route = { provider: 'alpha', model: 'a1' }
-    await expect(h.preStep(route, [])).resolves.toEqual({ kind: 'enter', messages: [] })
-    await expect(h.preStep(route, [], [input], 2)).resolves.toEqual({ kind: 'enter', messages: [] })
-    await expect(h.preStep(route, [], [], 2)).resolves.toMatchObject({ messages: [notice('a0', 'a1')] })
+    const switched = { provider: 'alpha', model: 'a1' }
+    await expect(h.preStep(switched, [])).resolves.toEqual({ kind: 'enter', messages: [] })
+    await expect(h.preStep(switched, [], [input], 2)).resolves.toEqual({ kind: 'enter', messages: [] })
+    await expect(h.preStep(switched, [], [], 2)).resolves.toMatchObject({ messages: [notice('a0', 'a1')] })
   })
 })

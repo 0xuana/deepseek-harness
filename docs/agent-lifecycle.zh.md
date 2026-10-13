@@ -27,17 +27,17 @@ sequenceDiagram
   Note over Agent,Driver: claim pending next-step input plus one queued prompt
   Driver-->>SDK: <code>agent/inbox/spliced</code> pure deletion
   Driver-->>SDK: <code>agent/inbox/claimed</code> { message, turn } per message
-  Driver->>Hooks: <code>agent/route</code> waterfall chooses the step route
-  Driver->>Prompt: <code>system-prompt/prepare</code> waterfall on the step route
-  Driver->>Hooks: <code>agent/pre-step</code> waterfall with the step route
+  Driver->>Hooks: <code>agent/model</code> waterfall chooses the step provider, model, and effort
+  Driver->>Prompt: <code>system-prompt/prepare</code> waterfall with the step model selection
+  Driver->>Hooks: <code>agent/pre-step</code> waterfall with the step model selection
   Hooks-->>Driver: authoritative reject or enter(messages)
   alt proposed step rejected, first batch empty, or pre-step failed
     Driver-->>Driver: claimed batch stays removed, the open turn spends no step
   else enter proposed step
   Driver->>Session: <code>step/start</code>
-  Driver->>Tools: resolve({ agent, route, signal }) once per step
+  Driver->>Tools: resolve({ agent, modelSelection, signal }) once per step
   Driver->>Prompt: <code>system-prompt/assemble</code> with the step tool set
-  Driver->>Hooks: <code>agent/request</code> waterfall on the step route
+  Driver->>Hooks: <code>agent/request</code> waterfall with the step model selection
   Driver->>LLM: prepareCall(config, signal)
   Note over Driver,LLM: cancellation during preparation commits neither system nor users
   Note over Driver,Session: synchronous admission using the prepared call capability
@@ -53,7 +53,7 @@ sequenceDiagram
     Driver-->>SDK: <code>agent/assistant-stream</code> committed end
     Driver->>Hooks: <code>agent/request-error</code> waterfall
     Hooks-->>Driver: return retry action or preserve the original error
-    Note over Driver,LLM: retry in the open step: request and prepare again on the same route, tool set, and prompt without repeating pre-step or users
+    Note over Driver,LLM: retry in the open step: request and prepare again with the same model selection, tool set, and prompt without repeating pre-step or users
   else model request succeeded
   Driver->>Session: <code>assistant/message</code>
   Driver-->>SDK: <code>agent/assistant-stream</code> committed end
@@ -77,7 +77,7 @@ sequenceDiagram
   opt next-step input is pending
     Driver-->>Driver: claim pending next-step input
     Driver-->>SDK: <code>agent/inbox/claimed</code> { message, turn } per message
-    Driver->>Hooks: <code>agent/route</code> waterfall
+    Driver->>Hooks: <code>agent/model</code> waterfall
     Driver->>Prompt: <code>system-prompt/prepare</code> waterfall
     Driver->>Hooks: <code>agent/pre-step</code> waterfall
     Hooks-->>Driver: authoritative reject or enter(messages)
@@ -90,7 +90,7 @@ sequenceDiagram
 
 `assistant/message` 事件会记录每次成功的提供方调用，包括返回空内容或以 `max-tokens` 结束的调用，并嵌入精确的紧凑带时间 stream。空内容不会进入派生历史。失败、重试、取消或 stream error attempt 到达 settlement 时，如果没有 surface message，就会把 stream 记录为 `assistant/attempt`。实时 `agent/assistant-stream` chunk frame 是瞬态数据；回放读取任一种持久 settlement，如果进程在 settlement 前硬中断，则不会留下持久 attempt stream。
 
-`dsh-compaction-basic` 在派生请求之前通过 `agent/pre-step` 处理压力，而 `agent/request-error` 仅用于规范的上下文溢出。任一触发条件满足后，系统都会先执行可选的工具结果剪枝，再选择摘要。恢复发生在仍打开的步骤内，只有剪枝或摘要生成推进 surface replacement generation 时才重试，否则仍以原始请求错误为准。每次重试都会在该步骤的路由上准备调用，并在派生请求之前协调保留的已渲染组装结果，不重复路由选择、工具解析、组装、pre-step 或用户消息准入。
+`dsh-compaction-basic` 在派生请求之前通过 `agent/pre-step` 处理压力，而 `agent/request-error` 仅用于规范的上下文溢出。任一触发条件满足后，系统都会先执行可选的工具结果剪枝，再选择摘要。恢复发生在仍打开的步骤内，只有剪枝或摘要生成推进 surface replacement generation 时才重试，否则仍以原始请求错误为准。每次重试都会按该步骤的模型选择准备调用，并在派生请求之前协调保留的已渲染组装结果，不重复模型选择、工具解析、组装、pre-step 或用户消息准入。
 
 以返回的 `agent/pre-step` 决策为准；通过包装 `next()` 的监听器会保留下游消息与 `startsRequestSeries`，除非有意替换。steering（中途引导）和注入的上下文在后续的认领操作取得其下一步骤批次后，会经过同一 waterfall（瀑布式事件）。
 

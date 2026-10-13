@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-12-step-model-chosen-before-preparation.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-12-step-model-chosen-before-preparation.md
+/agent-note-choose-the-step-model-before-step-preparation:
+  en: f068fddb192978d2
+  zh: 601deb72d3d90263
+/agent-note-choose-the-step-model-before-step-preparation/problem:
+  en: cb8d6f058dd5f47d
+  zh: bb70e1cfe6880da5
+/agent-note-choose-the-step-model-before-step-preparation/decision:
+  en: d0ee43966ff59a93
+  zh: 4f69bc120de87c44
+/agent-note-choose-the-step-model-before-step-preparation/alternatives-considered:
+  en: 3114082393f6a55f
+  zh: a3790bd3b18658e0
+/agent-note-choose-the-step-model-before-step-preparation/consequences:
+  en: c553f9931c8c467b
+  zh: 0d77c5c71d266d27
+/agent-note-choose-the-step-model-before-step-preparation/related:
+  en: 00ef1147a7852c0a
+  zh: 4bd89960e08b6eda

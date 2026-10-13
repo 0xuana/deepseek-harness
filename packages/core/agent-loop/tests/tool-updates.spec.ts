@@ -114,35 +114,35 @@ describe('tool update emission', () => {
 })
 
 describe('step-time tool activation', () => {
-  it('uses the step route for asynchronous conditions and rejects a historical name after removal', async () => {
+  it('uses the step model selection for asynchronous conditions and rejects a historical name after removal', async () => {
     const adapter = new MockAdapter([
       toolCallResponse('allowed', 'conditional', {}), textResponse('done'),
       toolCallResponse('removed', 'conditional', {}), textResponse('done'),
     ])
     const { ctx, agent } = await harness(adapter)
-    const routed: string[] = []
+    const selectedModels: string[] = []
     let calls = 0
     let model = 'enabled'
-    ctx.on('agent/route', async (_payload, next) => ({ ...await next(), model }))
+    ctx.on('agent/model', async (_payload, next) => ({ ...await next(), model }))
     ctx.tools.register(defineContentToolFixture({
-      name: 'conditional', description: 'Available on one route.', parameters: {},
+      name: 'conditional', description: 'Available on one model.', parameters: {},
       async execute(_args, exec) {
         expect(exec.agent?.session.requestHeader()?.config.model).toBe('enabled')
         calls++
         return [{ type: 'text', text: 'done' }]
       },
-    }), { when: async ({ route }) => {
-      expect(Object.isFrozen(route)).toBe(true)
-      routed.push(route.model)
+    }), { when: async ({ modelSelection }) => {
+      expect(Object.isFrozen(modelSelection)).toBe(true)
+      selectedModels.push(modelSelection.model)
       await Promise.resolve()
-      return route.model === 'enabled'
+      return modelSelection.model === 'enabled'
     } })
     await send(agent, 'enabled')
     model = 'disabled'
     await send(agent, 'try the historical name')
     expect(calls).toBe(1)
-    expect(routed).toEqual(['enabled', 'enabled', 'disabled', 'disabled'])
-    expect(adapter.requests.map(request => request.model)).toEqual(routed)
+    expect(selectedModels).toEqual(['enabled', 'enabled', 'disabled', 'disabled'])
+    expect(adapter.requests.map(request => request.model)).toEqual(selectedModels)
     expect(developerEvents(agent).at(-1)?.data.message.content)
       .toEqual([{ type: 'tool-removal', toolName: 'conditional' }])
     expect(agent.session.snapshotEvents().find(event => event.type === 'tool/result' && event.data.message.toolCallId === 'removed')?.data)
@@ -167,17 +167,17 @@ describe('step-time tool activation', () => {
     expect(agent.session.snapshotEvents().filter(event => ['request/header', 'system/message', 'user/message'].includes(event.type))).toEqual([])
   })
 
-  it('keeps one route, tool set, and prompt across retries without admitting users again', async () => {
+  it('keeps one model selection, tool set, and prompt across retries without admitting users again', async () => {
     const adapter = new MockAdapter([
       [{ type: 'finish', reason: { kind: 'error', failure: { code: 'SERVER', message: 'retry', status: 503 } } }],
       textResponse('done'),
     ])
     const { ctx, agent } = await harness(adapter)
     let retried = false
-    const counts = { routes: 0, conditions: 0, admissions: 0 }
+    const counts = { selections: 0, conditions: 0, admissions: 0 }
     ctx.on('agent/pre-step', (_input, next) => { counts.admissions++; return next() })
-    ctx.on('agent/route', async (_input, next) => {
-      counts.routes++
+    ctx.on('agent/model', async (_input, next) => {
+      counts.selections++
       return { ...await next(), model: retried ? 'second' : 'first' }
     })
     ctx.on('agent/request-error', async (_input, next) => {
@@ -191,14 +191,14 @@ describe('step-time tool activation', () => {
     }), { when: () => { counts.conditions++; return retried } })
     ctx.systemPrompt.section({
       name: 'retry:guidance', order: 0, complete: true,
-      text: context => `${context.route?.model}:${ctx.tools.schemas(agent, context.toolSet).map(tool => tool.name).join(',')}`,
+      text: context => `${context.modelSelection?.model}:${ctx.tools.schemas(agent, context.toolSet).map(tool => tool.name).join(',')}`,
     })
     await send(agent, 'retry once')
     expect(adapter.requests.map(request => request.model)).toEqual(['first', 'first'])
     expect(adapter.requests.map(request => request.tools ?? [])).toEqual([[], []])
     expect(adapter.requests.map(request => request.messages.find(message => message.role === 'system')?.content))
       .toEqual([[{ type: 'text', text: 'first:' }], [{ type: 'text', text: 'first:' }]])
-    expect(counts).toEqual({ routes: 1, conditions: 1, admissions: 1 })
+    expect(counts).toEqual({ selections: 1, conditions: 1, admissions: 1 })
     expect(agent.session.snapshotEvents().filter(event => event.type === 'user/message' && event.data.source.kind === 'user')).toHaveLength(1)
   })
 

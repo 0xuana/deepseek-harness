@@ -338,7 +338,7 @@ async function run(ctx: Context, config: Config, io: HeadlessIo): Promise<void> 
   // that DOES configure one has to join it here first
   // (@deepseek-ai/dsh-agent-preset-registry README, "Composing a child agent").
   const setup = (agentCtx: Context): void => {
-    const selected: ModelSelectionRef = { current: selection, assembled: undefined }
+    const selected: ModelSelectionRef = { current: selection }
     installModelSelection(agentCtx, selected)
   }
   const sessionId = brandString<SessionId>(config.sessionId ?? `session-${randomUUID()}`)
