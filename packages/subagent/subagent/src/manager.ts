@@ -934,7 +934,7 @@ export class SubagentManager {
       ownedChildren: new Set(),
       observer,
       announced: false,
-      relayed: false,
+      omitClosingText: false,
       stepToolCalls: 0,
     }
     void activation.result.promise.catch(() => undefined)
@@ -951,7 +951,7 @@ export class SubagentManager {
         activation.handle.agent.ctx.on('agent/inbox/claimed', () => {
           // Claimed input means the closing text may report work the child's
           // last message to its parent did not.
-          activation.relayed = false
+          activation.omitClosingText = false
           wakeSettlement()
         })
         activation.handle.agent.ctx.on('agent/inbox/discarded', wakeSettlement)
@@ -961,7 +961,7 @@ export class SubagentManager {
           if (event.type === 'step/start') activation.stepToolCalls = 0
           else if (event.type === 'tool/call') {
             activation.stepToolCalls += 1
-            activation.relayed = false
+            activation.omitClosingText = false
           }
         })
       }
@@ -1202,7 +1202,7 @@ export class SubagentManager {
       const parent = this.ctx.agents.get(activation.parent.id)
       if (parent !== activation.parent) return
       const message = createSettlementMessage(
-        activation.childId, terminal, activationAgent(activation) !== undefined, activation.relayed,
+        activation.childId, terminal, activationAgent(activation) !== undefined, activation.omitClosingText,
       )
       if (this.closingTeardownFor(parent) !== undefined) {
         parent.inject(message)
@@ -1315,7 +1315,7 @@ export class SubagentManager {
     }
     const message = createAgentMessage(sender, content)
     this.sendAgentMessage(parent, message)
-    activation.relayed = activation.stepToolCalls <= 1
+    activation.omitClosingText = activation.stepToolCalls <= 1
     return message.id
   }
 
