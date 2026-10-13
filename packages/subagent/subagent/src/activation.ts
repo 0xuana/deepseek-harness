@@ -71,14 +71,6 @@ interface ActivationBase {
    * not exist, so its teardown owes the parent no settlement account.
    */
   announced: boolean
-  /**
-   * Whether this child's settlement notice omits its closing text: true while
-   * the child's last action was a message to its direct parent, as the only
-   * tool call of its step, with no input claimed and no tool call logged since.
-   */
-  omitClosingText: boolean
-  /** Tool calls the child's current step logged, which decides {@link omitClosingText}. */
-  stepToolCalls: number
 }
 
 /** Resources retained only for the selected execution kind. */
@@ -92,6 +84,14 @@ export type ActivationResource =
     failureAt: SessionLogOffset | undefined
     /** Renewed when local settlement must recheck input or owned children. */
     poke: PromiseWithResolvers<void>
+    /**
+     * Whether this child's settlement notice omits its closing text: true while
+     * the child's last action was a message to its direct parent, as the only
+     * tool call of its step, with no input claimed and no tool call logged since.
+     */
+    omitClosingText: boolean
+    /** Tool calls the child's current step logged, which decides {@link omitClosingText}. */
+    toolCallsThisStep: number
   }
   | {
     readonly kind: 'external'

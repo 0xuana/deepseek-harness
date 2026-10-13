@@ -917,7 +917,16 @@ export class SubagentManager {
           setup,
         })
 
-      resource = { kind: 'local', handle, outputStart: handle.agent.session.seq, structured, failureAt: undefined, poke: Promise.withResolvers<void>() }
+      resource = {
+        kind: 'local',
+        handle,
+        outputStart: handle.agent.session.seq,
+        structured,
+        failureAt: undefined,
+        poke: Promise.withResolvers<void>(),
+        omitClosingText: false,
+        toolCallsThisStep: 0,
+      }
     }
     const observer = this.host.observeActivation(provider, childId, parent)
 
@@ -934,8 +943,6 @@ export class SubagentManager {
       ownedChildren: new Set(),
       observer,
       announced: false,
-      omitClosingText: false,
-      stepToolCalls: 0,
     }
     void activation.result.promise.catch(() => undefined)
     this.resident.set(childId, activation)
@@ -958,9 +965,9 @@ export class SubagentManager {
         // Logged tool calls cannot be skipped by tool policy: a call in a later
         // step, or another call in the step that sent the message, also voids it.
         activation.handle.agent.ctx.on('session/event', (_session, event) => {
-          if (event.type === 'step/start') activation.stepToolCalls = 0
+          if (event.type === 'step/start') activation.toolCallsThisStep = 0
           else if (event.type === 'tool/call') {
-            activation.stepToolCalls += 1
+            activation.toolCallsThisStep += 1
             activation.omitClosingText = false
           }
         })
@@ -1202,7 +1209,7 @@ export class SubagentManager {
       const parent = this.ctx.agents.get(activation.parent.id)
       if (parent !== activation.parent) return
       const message = createSettlementMessage(
-        activation.childId, terminal, activationAgent(activation) !== undefined, activation.omitClosingText,
+        activation.childId, terminal, activation.kind === 'local', activation.kind === 'local' && activation.omitClosingText,
       )
       if (this.closingTeardownFor(parent) !== undefined) {
         parent.inject(message)
@@ -1294,7 +1301,7 @@ export class SubagentManager {
 
   /** Deliver one resident continuable child's message to its live direct parent. */
   private sendToParent(
-    activation: Activation,
+    activation: LocalActivation,
     sender: Agent,
     content: ContentBlock[],
   ): MessageId {
@@ -1315,7 +1322,7 @@ export class SubagentManager {
     }
     const message = createAgentMessage(sender, content)
     this.sendAgentMessage(parent, message)
-    activation.omitClosingText = activation.stepToolCalls <= 1
+    activation.omitClosingText = activation.toolCallsThisStep <= 1
     return message.id
   }
 
