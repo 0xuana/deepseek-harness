@@ -243,7 +243,7 @@ export class ChatViewport {
       finish: (cancelled) => {
         if (this.elements !== elements) return
         // Commit the final sibling margins while their input-fold transition override still applies.
-        void elements.column.offsetHeight
+        const finalHeight = Math.max(elements.column.offsetHeight, elements.scroller.scrollHeight - this.spacerHeight())
         delete elements.column.dataset.inputFold
         if (cancelled) {
           const metrics = scrollMetrics(elements.scroller)
@@ -252,7 +252,10 @@ export class ChatViewport {
           this.invalidate()
           return
         }
+        target = Math.max(base, finalHeight - elements.scroller.clientHeight, 0)
+        finalRoom = target === 0 ? 0 : Math.max(0, target + elements.scroller.clientHeight - finalHeight)
         this.setSpacer(finalRoom)
+        elements.scroller.scrollTop = target
         const metrics = scrollMetrics(elements.scroller)
         const landing = { metrics, position: null, turn: this.latestTurn }
         this.observation = { top: metrics.top, landing }
