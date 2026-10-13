@@ -1415,6 +1415,42 @@ describe('running and lock semantics', () => {
     expect(focused).toEqual([true])
   })
 
+  it.each([
+    { name: 'iPhone', userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1', platform: 'iPhone', maxTouchPoints: 5, automatic: false },
+    { name: 'Android phone', userAgent: 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 Chrome/119.0.0.0 Mobile Safari/537.36', platform: 'Linux armv8l', maxTouchPoints: 0, automatic: false },
+    { name: 'Android tablet', userAgent: 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 Chrome/119.0.0.0 Safari/537.36', platform: 'Linux armv8l', maxTouchPoints: 5, automatic: false },
+    { name: 'desktop-mode iPad', userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.6 Safari/605.1.15', platform: 'MacIntel', maxTouchPoints: 5, automatic: false },
+    { name: 'Mac', userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.6 Safari/605.1.15', platform: 'MacIntel', maxTouchPoints: 0, automatic: true },
+    { name: 'Windows touchscreen', userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/119.0.0.0 Safari/537.36', platform: 'Win32', maxTouchPoints: 5, automatic: true },
+  ])('automatic composer focus respects device classification: $name', ({ userAgent, platform, maxTouchPoints, automatic }) => {
+    for (const [name, value] of Object.entries({ userAgent, platform, maxTouchPoints })) {
+      const descriptor = Object.getOwnPropertyDescriptor(navigator, name)
+      Object.defineProperty(navigator, name, { configurable: true, value })
+      onTestFinished(() => {
+        if (descriptor === undefined) Reflect.deleteProperty(navigator, name)
+        else Object.defineProperty(navigator, name, descriptor)
+      })
+    }
+    const outside = document.createElement('input')
+    document.body.append(outside)
+    onTestFinished(() => { outside.remove() })
+    outside.focus()
+
+    const { view, textarea, props } = bench({ draft: 'draft' })
+    expect(document.activeElement).toBe(automatic ? textarea : outside)
+    act(() => { outside.focus() })
+    act(() => { view.rerender(<InputBar {...props} sessionId={'s2' as SessionId} />) })
+    expect(document.activeElement).toBe(automatic ? textarea : outside)
+    act(() => { outside.focus() })
+    act(() => { view.rerender(<InputBar {...props} disabled />) })
+    act(() => { view.rerender(<InputBar {...props} />) })
+    expect(document.activeElement).toBe(automatic ? textarea : outside)
+
+    act(() => { outside.focus() })
+    fireEvent.mouseDown(view.container.querySelector('[data-composer-card]')!, { button: 0 })
+    expect(document.activeElement).toBe(textarea)
+  })
+
   it('a persisted draft adopted after mount does not steal focus from another control', () => {
     const { shell } = bench()
     const other = document.createElement('input')

@@ -68,6 +68,8 @@ Queue 预览启用空白折叠和文档边缘 trim，保留 emoji，并使用 CS
 
 上下文占用率入口遵循[统计控件圆角规则](../../../docs/ui-radius.zh.md#radius-scale)。
 
+对于 Bowser 从 UA 识别为 `mobile` 或 `tablet` 的设备，以及报告 `MacIntel` 且触摸点数大于一的 iPad，composer 会跳过挂载、切换 Session 和解除锁定时的自动聚焦。点击输入框仍会聚焦。桌面设备（包括 Windows 触屏电脑）保留自动聚焦，不受窗口宽度影响。隐藏移动平台信息的浏览器模式或自定义 UA 可能导致识别失败；仅凭桌面 UA 无法区分 Android 平板与 Linux 电脑。
+
 上下文占用按钮在输入卡片下方、会话统计右侧显示圆环和百分比。点击按钮可在视口内的面板查看 token 构成，没有统计项时面板也不会越界；上下文用量和容量尚不可用时，按钮保持隐藏。
 
 关闭代码工作工具时，外壳仅隐藏 Trajectory；其他插件贡献的 View 仍然可用。可用 View 少于两个时隐藏 View 标签栏。在 Trajectory 激活时关闭代码工作工具会返回 Chat；已保存的 View 偏好和 Session 记录保持不变。开启后，Trajectory 恢复可用。View 所有者接收可用列表，使导航操作跟随相同的可见性。
