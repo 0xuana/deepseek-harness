@@ -124,7 +124,7 @@ describe('documentation table filtering', () => {
     expect(getByRole(fixture.section, 'status').textContent).toBe('No matching rows.')
     expect(fixture.table.textContent).toBe(content)
     const clear = getByRole<HTMLButtonElement>(fixture.section, 'button', { name: 'Clear' })
-    expect(clear.textContent).toBe('')
+    expect(clear.textContent).toBe('×')
     clear.focus()
     clear.click()
     expect(visible(fixture.table)).toEqual(fixture.rows)
@@ -181,7 +181,16 @@ describe('documentation table filtering', () => {
     expect(visible(previous.table)).toEqual(previous.rows)
   })
 
-  it('keeps the header below navigation and within the table after scroll, resize, and filtering', () => {
+  it('skips layout work on pages without long tables', () => {
+    renderTable(9)
+    install()
+    fireEvent.scroll(window)
+    fireEvent.resize(window)
+    observers[0]?.notify()
+    expect(frames.size).toBe(0)
+  })
+
+  it('keeps the header below navigation and above the horizontal scrollbar after scroll, resize, and filtering', () => {
     const { table, section } = renderTable()
     const head = table.tHead
     assert(head)
@@ -190,7 +199,8 @@ describe('documentation table filtering', () => {
     document.body.prepend(nav)
     const layout = { top: 200, height: 500, nav: 64 }
     vi.spyOn(nav, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, 0, 800, layout.nav))
-    vi.spyOn(table, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, layout.top, 600, layout.height))
+    vi.spyOn(table, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, layout.top, 600, layout.height + 15))
+    vi.spyOn(table, 'clientHeight', 'get').mockImplementation(() => layout.height)
     vi.spyOn(head, 'offsetHeight', 'get').mockReturnValue(40)
     install()
     paint()

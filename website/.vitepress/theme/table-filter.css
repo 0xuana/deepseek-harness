@@ -47,8 +47,8 @@
 }
 
 .dsh-table-toolbar button span {
-  font-size: 18px;
-  transform: rotate(45deg);
+  font-size: 22px;
+  line-height: 1;
 }
 
 .dsh-table-toolbar input:focus-visible,
@@ -69,6 +69,14 @@
 
 .vp-doc table.dsh-filterable-table {
   margin-top: 8px;
+}
+
+.vp-doc .dsh-filterable-table tbody tr {
+  background-color: var(--vp-c-bg);
+}
+
+.vp-doc .dsh-filterable-table tbody tr:nth-child(2n of :not([hidden])) {
+  background-color: var(--vp-c-bg-soft);
 }
 
 .dsh-filterable-table > thead {

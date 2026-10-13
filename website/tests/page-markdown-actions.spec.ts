@@ -7,7 +7,7 @@ import { fireEvent, getByRole, queryAllByRole, queryByRole, waitFor } from '@tes
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import Theme from '../.vitepress/theme/index.ts'
 
-vi.mock('vitepress', () => ({ useData: () => data, useRoute: () => route, onContentUpdated() {} }))
+vi.mock('vitepress', () => ({ useData: () => data, useRoute: () => route, onContentUpdated() {}, getScrollOffset: () => 64 }))
 vi.mock('vitepress/theme', () => ({ default: { Layout: {
   setup: (_props: unknown, { slots }: { slots: Slots }) => () => h('main', null, slots['doc-before']?.()),
 } } }))
@@ -104,6 +104,37 @@ afterEach(async () => {
 })
 
 describe('page Markdown actions', () => {
+  it('positions the initial hash after layout enhancements and cancels it on unmount', async () => {
+    const anchor = document.createElement('h2')
+    anchor.id = 'after-table'
+    anchor.style.paddingTop = '16px'
+    document.body.append(anchor)
+    const url = location.href
+    const state: unknown = history.state
+    history.replaceState(null, '', '#after-table')
+    const scroll = vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+    const frame = vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(42)
+    const cancel = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {})
+    try {
+      vi.spyOn(anchor, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 300, 100, 20))
+      await mount()
+      expect(scroll).not.toHaveBeenCalled()
+      const callback = frame.mock.calls[0]?.[0]
+      assert(callback)
+      callback(0)
+      expect(scroll).toHaveBeenCalledWith(0, 252)
+      app?.unmount()
+      await mount()
+      app?.unmount()
+      app = undefined
+      expect(cancel).toHaveBeenCalledWith(42)
+    } finally {
+      anchor.remove()
+      history.replaceState(state, '', url)
+      vi.restoreAllMocks()
+    }
+  })
+
   it.each(['en-US', 'zh-CN'])('preserves the accessible controls and status in %s', async (lang) => {
     data.lang.value = lang
     data.frontmatter.value = { rawMarkdownPath: `${lang === 'en-US' ? 'en/' : ''}guide/quickstart.md` }

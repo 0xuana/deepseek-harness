@@ -1,7 +1,7 @@
 /** Client-only filtering and page-scroll headers for original Markdown tables. */
 const messages = {
-  en: { filter: 'Filter table', clear: 'Clear', empty: 'No matching rows.' },
-  zh: { filter: '筛选表格', clear: '清空', empty: '没有匹配的行。' },
+  en: { placeholder: 'Search...', filter: 'Filter table', clear: 'Clear', empty: 'No matching rows.' },
+  zh: { placeholder: 'Search...', filter: '筛选表格', clear: '清空', empty: '没有匹配的行。' },
 }
 
 class FilterableTable {
@@ -35,7 +35,7 @@ class FilterableTable {
     this.#clear = doc.createElement('button')
     this.#clear.type = 'button'
     const clearIcon = doc.createElement('span')
-    clearIcon.className = 'vpi-plus'
+    clearIcon.textContent = '×'
     clearIcon.setAttribute('aria-hidden', 'true')
     this.#clear.append(clearIcon)
     this.#status = doc.createElement('p')
@@ -60,7 +60,7 @@ class FilterableTable {
   }
 
   localize(copy: typeof messages.en): void {
-    this.#input.placeholder = 'Search...'
+    this.#input.placeholder = copy.placeholder
     this.#input.setAttribute('aria-label', copy.filter)
     this.#clear.setAttribute('aria-label', copy.clear)
     this.#clear.title = copy.clear
@@ -80,10 +80,14 @@ class FilterableTable {
     this.changed()
   }
 
-  positionHeader(top: number): void {
+  measureHeaderOffset(top: number): number {
+    return Math.min(
+      Math.max(top - this.table.getBoundingClientRect().top, 0), Math.max(this.table.clientHeight - this.head.offsetHeight, 0),
+    )
+  }
+
+  positionHeader(offset: number): void {
     // Horizontal overflow makes the table the sticky scroll container; translate its own head to retain column alignment.
-    const bounds = this.table.getBoundingClientRect()
-    const offset = Math.min(Math.max(top - bounds.top, 0), Math.max(bounds.height - this.head.offsetHeight, 0))
     this.head.style.setProperty('--dsh-table-header-offset', `${offset}px`)
   }
 
@@ -145,12 +149,14 @@ export class DocumentTables {
   }
 
   #schedule(): void {
-    if (this.#frame !== undefined) return
+    if (this.#tables.size === 0 || this.#frame !== undefined) return
     this.#frame = window.requestAnimationFrame(() => {
       this.#frame = undefined
+      if (this.#tables.size === 0) return
       const navigation = this.doc.querySelectorAll('.VPNav, .VPLocalNav')
       const top = Math.max(0, ...Array.from(navigation, element => element.getBoundingClientRect().bottom))
-      for (const table of this.#tables.values()) table.positionHeader(top)
+      const positions = Array.from(this.#tables.values(), table => ({ table, offset: table.measureHeaderOffset(top) }))
+      for (const { table, offset } of positions) table.positionHeader(offset)
     })
   }
 
