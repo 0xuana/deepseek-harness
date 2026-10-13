@@ -60,7 +60,7 @@ class FilterableTable {
   }
 
   localize(copy: typeof messages.en): void {
-    this.#input.placeholder = copy.filter
+    this.#input.placeholder = 'Search...'
     this.#input.setAttribute('aria-label', copy.filter)
     this.#clear.setAttribute('aria-label', copy.clear)
     this.#clear.title = copy.clear
