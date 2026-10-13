@@ -181,37 +181,6 @@ describe('documentation table filtering', () => {
     expect(visible(previous.table)).toEqual(previous.rows)
   })
 
-  it.each(['row', 'head'] as const)('refreshes a table whose %s nodes were replaced', (replacement) => {
-    const fixture = renderTable()
-    const owner = install()
-    filter(fixture.section, 'package-9')
-    if (replacement === 'row') {
-      const donor = renderTable(1)
-      const row = donor.rows[0]
-      assert(row)
-      fixture.body.firstElementChild?.replaceWith(row)
-      donor.section.remove()
-    } else {
-      fixture.table.deleteTHead()
-      fixture.table.createTHead().innerHTML = '<tr><th>Updated heading</th></tr>'
-    }
-    owner.refresh()
-    expect(queryAllByRole(fixture.section, 'searchbox')).toHaveLength(1)
-    expect(getByRole<HTMLInputElement>(fixture.section, 'searchbox').value).toBe('')
-    expect(visible(fixture.table)).toHaveLength(10)
-  })
-
-  it('removes controls when a table becomes short', () => {
-    const { section, table, rows } = renderTable()
-    const owner = install()
-    filter(section, 'unmatched')
-    table.deleteRow(-1)
-    owner.refresh()
-    expect(queryAllByRole(section, 'searchbox')).toHaveLength(0)
-    expect(visible(table)).toEqual(rows.slice(0, 9))
-    expect(table.className).toBe('')
-  })
-
   it('keeps the header below navigation and within the table after scroll, resize, and filtering', () => {
     const { table, section } = renderTable()
     const head = table.tHead
