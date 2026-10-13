@@ -109,7 +109,8 @@
 
 /* A navigated line's mark: a band in the scrollport over the line, so renderer
    re-renders such as syntax highlighting do not drop it. It holds briefly, then
-   fades out and removes itself. */
+   fades out and removes itself. Reduced motion keeps the fade: it is an
+   opacity change, not movement, and its end removes the band. */
 .lineMark {
   position: absolute;
   left: 0;

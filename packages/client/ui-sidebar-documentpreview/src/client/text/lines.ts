@@ -55,20 +55,40 @@ export function scrollToLine(body: HTMLElement, line: number): HTMLElement | und
 
 /**
  * Mark a revealed line with a fading band. The band is a child of the scrollport,
- * not of the line, so a renderer that rebuilds its lines keeps the mark; it
- * replaces an earlier mark and removes itself when its animation ends.
+ * not of the line, so a renderer that rebuilds its lines keeps the mark. It
+ * replaces an earlier mark and removes itself when its animation ends or when
+ * the scrollport is resized, because a resize can reflow the lines above it.
  * @param body - the scrollport that {@link scrollToLine} scrolled.
  * @param row - the line element it returned.
  * @param line - 1-based source line, recorded on the band.
  */
 export function markLine(body: HTMLElement, row: HTMLElement, line: number): void {
-  body.querySelector(':scope > [data-textpreview-mark]')?.remove()
+  clearLineMark(body)
   const mark = body.ownerDocument.createElement('div')
   mark.className = clsx(css.lineMark)
   mark.setAttribute('data-textpreview-mark', String(line))
   mark.style.top = `${row.offsetTop}px`
   mark.style.height = `${row.offsetHeight}px`
   mark.style.width = `${body.scrollWidth}px`
-  mark.addEventListener('animationend', () => { mark.remove() }, { once: true })
+  // The first observation reports the current size; only later ones are resizes.
+  let measured = false
+  const observer = new ResizeObserver(() => {
+    if (measured) dismiss()
+    measured = true
+  })
+  function dismiss(): void {
+    observer.disconnect()
+    mark.remove()
+  }
+  mark.addEventListener('animationend', dismiss, { once: true })
   body.append(mark)
+  observer.observe(body)
+}
+
+/**
+ * Remove the scrollport's line mark, for layout changes that move lines without resizing it.
+ * @param body - the scrollport that may hold a mark.
+ */
+export function clearLineMark(body: HTMLElement): void {
+  body.querySelector(':scope > [data-textpreview-mark]')?.remove()
 }

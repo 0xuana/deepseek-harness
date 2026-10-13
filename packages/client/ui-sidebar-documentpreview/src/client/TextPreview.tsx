@@ -29,7 +29,7 @@ import { binaryDocumentPath, matchingDocumentPreviews } from './document/registr
 import type { DocumentPreviewDefinition } from './document/registry.ts'
 import { unviewableBinaryPath } from './document/unviewable.ts'
 import { PLAIN_BODY_ID } from './text/index.ts'
-import { loadedPages, lastLineLoaded, markLine, scrollToLine } from './text/lines.ts'
+import { clearLineMark, loadedPages, lastLineLoaded, markLine, scrollToLine } from './text/lines.ts'
 import css from './TextPreview.module.css'
 
 export { linesOf, loadedPages, lastLineLoaded, scrollToLine } from './text/lines.ts'
@@ -293,7 +293,13 @@ export function TextPreview({
               aria-pressed={state.wrap}
               aria-label={t('wrap.aria')}
               data-textpreview-tool="wrap"
-              onClick={() => { actions.toggledWrap(tab.id) }}
+              onClick={() => {
+                actions.toggledWrap(tab.id)
+                // Wrapping reflows the lines under a line mark without resizing its scrollport.
+                const body = scrollportRef.current
+                /* v8 ignore next -- callback refs bind the scrollport during commit, before user input. */
+                if (body !== null) clearLineMark(body)
+              }}
             >
               {state.wrap ? <IconNowrapFillRegular /> : <IconWrapFillRegular />}
             </button>
