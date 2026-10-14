@@ -638,9 +638,36 @@ export class Fiber {
     })
   }
 
-  private _resolveConfig(config: any) {
-    config = this.context.waterfall(this, 'internal/config', config, () => config)
-    return this.runtime ? resolveConfig(this.runtime, config) : config
+  /** Raw input retained for the next activation, without evaluating expressions or validating it. */
+  get rawConfig(): unknown {
+    return this.ctx.fiber._config
+  }
+
+  /** Retain raw input without changing the running config or triggering an update. */
+  set rawConfig(config: unknown) {
+    this.ctx.fiber._config = config
+  }
+
+  /**
+   * The config object published by the existing activation/update lifecycle, without cloning or re-parsing.
+   * It is undefined before the first resolution and remains readable after unload; callers requiring a live instance check `state`.
+   */
+  get effectiveConfig(): unknown {
+    return this.ctx.fiber.config
+  }
+
+  /**
+   * Evaluate and validate a candidate using this fiber's `internal/config` hooks and runtime schema.
+   * Does not publish the result, replace raw input, or commit running volatile references.
+   * Required injections must be available when a hook uses them.
+   * @param config Raw candidate input.
+   * @returns The candidate's resolved config, retaining the schema's result identity.
+   * @throws {ValidationError} when the runtime schema rejects the candidate; hook errors propagate.
+   */
+  resolveConfig(config: unknown): unknown {
+    const fiber = this.ctx.fiber
+    config = fiber.context.waterfall(fiber, 'internal/config', config, () => config)
+    return fiber.runtime ? resolveConfig(fiber.runtime, config) : config
   }
 
   private async _reload() {
@@ -652,7 +679,7 @@ export class Fiber {
       // the load. Do not run plugin code for a stale epoch; the state update
       // below will drain any effects collected while the fiber was PENDING.
       if (this._runner.epoch === oldEpoch) {
-        this.config = this._resolveConfig(this._config)
+        this.config = this.resolveConfig(this._config)
         await this._execute(this._runner)
         this._error = undefined
       }
@@ -744,7 +771,7 @@ export class Fiber {
       this._refresh()
       return
     }
-    config = this._resolveConfig(config)
+    config = this.resolveConfig(config)
     this.context.waterfall(this, 'internal/update', config, noSave, () => {
       this.config = config
       this._error = undefined
