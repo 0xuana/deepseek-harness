@@ -4,7 +4,6 @@
  * the local UTC offset rather than any credential.
  * @module @deepseek-ai/dsh-client-ui-settings-account/src/client/client-metadata
  */
-import { localUtcOffsetSeconds } from '@deepseek-ai/dsh-util-time'
 import type { AccountClientMetadata } from '@deepseek-ai/dsh-deepseek-account/types'
 
 /**
@@ -19,6 +18,7 @@ export function accountClientMetadata(locale: string, version: string | undefine
   return {
     version,
     locale,
-    timezoneOffsetSeconds: localUtcOffsetSeconds(Date.now()),
+    // Date.getTimezoneOffset reports minutes west of UTC; Platform wants seconds east.
+    timezoneOffsetSeconds: -new Date().getTimezoneOffset() * 60,
   }
 }
