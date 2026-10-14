@@ -10,6 +10,7 @@
   "include": [
     "apps/web/tests/collapse-timing.e2e.ts",
     "apps/web/tests/notice-wake-tail.e2e.ts",
+    "apps/web/tests/fold-blank-matrix.e2e.ts",
     "apps/web/tests/chat-flow-layout.e2e.ts",
     "apps/web/product-isolation.ts",
     "apps/web/katex-fonts.ts",
@@ -82,6 +83,7 @@
     "apps/web/tests/inspector-source-build.e2e.ts",
     "apps/web/tests/plugin-install-cancel.e2e.ts",
     "apps/web/tests/plugin-install-approve.e2e.ts",
+    "apps/web/tests/plugin-hmr-lifecycle.e2e.ts",
     "apps/web/tests/plugin-install-registry.e2e.ts",
     "apps/web/tests/plugin-install-github.e2e.ts",
     "apps/web/tests/client-plugin-live.e2e.ts",
@@ -317,6 +319,7 @@
     { "path": "./packages/api/session-controller/tsconfig.host.json" },
     { "path": "./packages/api/workspace-files/tsconfig.host.json" },
     { "path": "./packages/api/settings-controller" },
+    { "path": "./packages/api/remote-access/tsconfig.host.json" },
     { "path": "./packages/api/workspace-controller/tsconfig.host.json" },
     { "path": "./packages/typert/loader" },
     { "path": "./packages/session/session-persistence" },

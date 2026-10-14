@@ -184,7 +184,11 @@ describe('Session-list work slices', () => {
   it('routes an overridden budget through the public Session Controller', async () => {
     const h = await harness([{ id: 'first', phase: 'cold' }, { id: 'middle', phase: 'cold' }, { id: 'last', phase: 'cold' }], 4)
     const dispose = (): void => {}
-    h.ctx.provide('typert', { lookups: { configure: () => dispose }, contexts: { configureHost: () => dispose } } as never)
+    h.ctx.provide('typert', {
+      lookups: { configure: () => dispose },
+      contexts: { configureHost: () => dispose },
+      resources: { register: () => dispose },
+    } as never)
     h.ctx.provide('fileUploads', { registerAgentResolver: () => dispose } as never)
     h.ctx.provide('agentDefaultModel', { currentSelection: () => ({ provider: 'test', model: 'test' }) } as never)
     h.ctx.provide('workspaceRegistry', { list: () => [], archivedSessionIds: [] } as never)

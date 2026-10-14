@@ -87,18 +87,19 @@ function mountScroll(deferCompletedTurns = true, initial: Partial<ChatScrollInpu
       input = { ...input, ...patch }
       view.rerender(<ScrollHarness input={input} onMotion={onMotion} />)
     },
-    startFold: (finalHeight?: number) => {
+    startFold: () => {
       const motion = callbacks.motion
       if (motion === undefined) throw new Error('Viewport motion callbacks are not bound')
-      act(() => { motion.collapse(row, () => {
-        row.hidden = true
-        if (finalHeight !== undefined) height = finalHeight
-      }) })
+      act(() => { motion.collapse(row, () => { row.hidden = true }) })
     },
+    /** Run the fold's frame clock to its end (a row outside a batch finishes on its transition). */
     finishFold: () => {
       const event = new Event('transitionend', { bubbles: true })
       Object.defineProperty(event, 'propertyName', { value: 'height' })
-      act(() => { row.dispatchEvent(event) })
+      act(() => {
+        row.dispatchEvent(event)
+        vi.advanceTimersByTime(200)
+      })
     },
   }
 }
@@ -382,12 +383,14 @@ describe('Chat scroll collapse timing', () => {
 
   it('coalesces submitted inputs into one frame-owned fold', async () => {
     const h = mountScroll()
-    h.startFold(920)
+    h.startFold()
     h.update({ submissionId: 'first' })
     h.update({ submissionId: 'second' })
     expect(h.scrollTo).not.toHaveBeenCalled()
     expect(h.scroller.scrollTop).toBe(0)
     await act(async () => { await Promise.resolve() })
+    // The folded row leaves the committed layout; the landing reads the actual content height.
+    h.grow(920)
     act(() => { vi.advanceTimersByTime(400) })
     expect(h.scrollTo).not.toHaveBeenCalled()
     expect(h.scroller.scrollTop).toBe(520)
@@ -486,7 +489,7 @@ describe('Chat scroll collapse timing', () => {
   it.each([false, true])('keeps a fold cancelled through resize until new input owns follow (new input=%s)', async (newInput) => {
     const h = mountScroll()
     h.scroller.scrollTop = 500
-    h.startFold(920)
+    h.startFold()
     h.update({ submissionId: 'first' })
     await act(async () => { await Promise.resolve() })
     fireEvent.wheel(h.scroller, { deltaY: -80 })
@@ -495,6 +498,7 @@ describe('Chat scroll collapse timing', () => {
     h.resize()
     h.update({ order: ['streaming-change'], running: true })
     if (newInput) h.update({ submissionId: 'second' })
+    h.grow(920)
     h.finishFold()
     await act(async () => { await Promise.resolve() })
     act(() => { vi.advanceTimersByTime(400) })
