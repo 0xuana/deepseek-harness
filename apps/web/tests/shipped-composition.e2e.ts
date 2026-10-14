@@ -154,7 +154,7 @@ interface ChildScriptState {
 function childReviewSections(options: GenerateOptions): Record<string, unknown> {
   const block = options.messages[0]?.content[0]
   if (block?.type !== 'text') throw new Error('shipped child review request has no text body')
-  const labels = ['ENVIRONMENT', 'PROJECT_INSTRUCTIONS', 'FILTERED_HISTORY', 'PENDING_ACTION'] as const
+  const labels = ['ENVIRONMENT', 'FILTERED_HISTORY', 'PENDING_ACTION'] as const
   const sections: Record<string, unknown> = {}
   for (const [index, label] of labels.entries()) {
     const prefix = `${label}\n`

@@ -30,14 +30,13 @@ The reviewer derives authority from existing Session facts. A shipped Web human 
 
 ### One complete reviewer request
 
-The integration uses only the latest `request/header.config` provider/model and the shipped adapter's default reasoning. It neither compares redundant route metadata nor copies the main agent's request. The request has five fixed partitions:
+The integration uses only the latest `request/header.config` provider/model and the shipped adapter's default reasoning. It neither compares redundant route metadata nor copies the main agent's request. The request has four fixed partitions:
 
 | Partition | Retained input |
 | --- | --- |
 | `REVIEW_POLICY` | Fixed classification, source authority, and strict result rules; allow executes immediately with Full access and no later confirmation |
 | `ENVIRONMENT` | Existing Session header `cwd` only |
-| `PROJECT_INSTRUCTIONS` | Visible project instructions with their original sources and constraint role |
-| `FILTERED_HISTORY` | Current compaction surface's sourced human/direct-parent messages, checkpoints, image/attachment facts, and historical call names with logged arguments |
+| `FILTERED_HISTORY` | Current compaction surface's sourced human/direct-parent messages, project instructions with the constraint role, checkpoints, image/attachment facts, and historical call names with logged arguments, in surface order so each review extends the previous review's prefix |
 | `PENDING_ACTION` | Tool name, description, parameter schema, and parsed arguments |
 
 The reviewer builds those two action sections from the Session's complete action history: an authorization is the earlier call the `REVIEW_POLICY` source rules make eligible, and a duplicate or conflicting identity has to be visible anywhere in the log rather than inside a recent window, so neither the Session projections nor a bounded read serves the decision. The read is the deprecated synchronous `snapshotEvents()` under a line-scoped `typescript/no-deprecated` waiver.

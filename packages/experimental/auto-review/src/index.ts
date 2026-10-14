@@ -37,7 +37,7 @@ const AUTO_REVIEW_DENIED_ERROR_NAME = 'AutoReviewDeniedError'
 /** Structured error code persisted for every final reviewer denial. */
 const AUTO_REVIEW_DENIED_CODE = 'AUTO_REVIEW_DENIED'
 
-/** Fixed policy sent as the first of the review request's five sections. */
+/** Fixed policy sent as the first of the review request's four sections. */
 const REVIEW_POLICY = `REVIEW_POLICY
 You are the final authorization reviewer for exactly one pending tool call. Your decision replaces human approval for this call. If you allow it, the call executes immediately with full host access and no later confirmation.
 
@@ -103,7 +103,6 @@ interface ReviewSnapshot {
   readonly provider: string
   readonly model: string
   readonly cwd: string
-  readonly projectInstructions: readonly HistoricalUserMessage[]
   readonly history: readonly HistoricalEntry[]
   readonly action: PendingAction
 }
@@ -354,10 +353,10 @@ function ptcAction(
 }
 
 /**
- * Freeze the five reviewer sections from one session and pending execution.
+ * Freeze the four reviewer sections from one session and pending execution.
  * @param agent - agent whose durable surface and request header authorize the call.
  * @param exec - immutable pending execution.
- * @returns the exact route and four data sections paired with {@link REVIEW_POLICY}.
+ * @returns the exact route and three data sections paired with {@link REVIEW_POLICY}.
  */
 function snapshotAutoReview(agent: Agent, exec: ToolExecution, cwd: string): ReviewSnapshot {
   const { session } = agent
@@ -412,7 +411,6 @@ function snapshotAutoReview(agent: Agent, exec: ToolExecution, cwd: string): Rev
     throw new Error('auto-review: the pending PTC call is missing or ambiguous in the session log')
   }
 
-  const projectInstructions: HistoricalUserMessage[] = []
   const history: HistoricalEntry[] = []
   const visibleParentKeys = new Set<string>()
   let passedCurrentRoot = false
@@ -425,7 +423,7 @@ function snapshotAutoReview(agent: Agent, exec: ToolExecution, cwd: string): Rev
       if (isProjectInstruction(event.data.source)) {
         const content = event.data.content
         if (content.length > 0) {
-          projectInstructions.push({
+          history.push({
             kind: 'user-message',
             role: 'constraint',
             source: event.data.source,
@@ -513,19 +511,21 @@ function snapshotAutoReview(agent: Agent, exec: ToolExecution, cwd: string): Rev
     provider: header.config.provider,
     model: header.config.model,
     cwd,
-    projectInstructions,
     history,
     action,
   })
 }
 
-/** Render the four data sections paired with the fixed policy section. */
+/**
+ * Render the three data sections paired with the fixed policy section. History
+ * keeps surface order, including project instructions loaded mid-session, so a
+ * later review's text extends an earlier one through its last history entry and
+ * the provider's prefix cache stays valid until compaction or a cwd change.
+ */
 function reviewUserText(snapshot: ReviewSnapshot): string {
   return [
     'ENVIRONMENT',
     json({ cwd: snapshot.cwd }),
-    'PROJECT_INSTRUCTIONS',
-    json(snapshot.projectInstructions),
     'FILTERED_HISTORY',
     json(snapshot.history),
     'PENDING_ACTION',

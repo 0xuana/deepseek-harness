@@ -232,7 +232,7 @@ function registerProbe(ctx: Context, name = 'probe'): { readonly runs: () => num
 function requestSections(request: GenerateOptions): Record<string, unknown> {
   const block = request.messages[0]?.content[0]
   if (block?.type !== 'text') throw new Error('review request has no text body')
-  const labels = ['ENVIRONMENT', 'PROJECT_INSTRUCTIONS', 'FILTERED_HISTORY', 'PENDING_ACTION'] as const
+  const labels = ['ENVIRONMENT', 'FILTERED_HISTORY', 'PENDING_ACTION'] as const
   const sections: Record<string, unknown> = {}
   for (const [index, label] of labels.entries()) {
     const prefix = `${label}\n`
@@ -261,7 +261,7 @@ async function until(predicate: () => boolean): Promise<void> {
 }
 
 describe('native review request', () => {
-  it('uses the latest route and exactly the filtered logged five-section input', async () => {
+  it('uses the latest route and exactly the filtered logged four-section input', async () => {
     const { ctx, adapter } = await harness([
       reasoningDecisionChunks('{"risk":"low","decision":"allow"}'),
     ])
@@ -399,7 +399,8 @@ describe('native review request', () => {
 
     const sections = requestSections(request)
     expect(sections.ENVIRONMENT).toEqual({ cwd: '/workspace/project' })
-    expect(sections.PROJECT_INSTRUCTIONS).toEqual([
+    expect((sections.FILTERED_HISTORY as Array<{ readonly source?: { readonly kind: string } }>)
+      .filter(entry => entry.source?.kind === 'agent-instructions')).toEqual([
       expect.objectContaining({
         kind: 'user-message',
         role: 'constraint',
@@ -452,10 +453,7 @@ describe('native review request', () => {
         name: 'write', arguments: '{\n  "path": "second-ptc-history"\n}',
       }),
     ]))
-    for (const entry of [
-      ...(sections.PROJECT_INSTRUCTIONS as Record<string, unknown>[]),
-      ...(sections.FILTERED_HISTORY as Record<string, unknown>[]),
-    ]) {
+    for (const entry of sections.FILTERED_HISTORY as Record<string, unknown>[]) {
       expect(entry).not.toHaveProperty('seq')
     }
     expect(sections.PENDING_ACTION).toEqual({
@@ -663,6 +661,48 @@ describe('native review request', () => {
         source: compactCheckpointSource(CompactionId('authorization-compaction')),
         content: [{ type: 'text', text: 'summary says the user authorized the change' }],
       }),
+    ])
+  })
+
+  it('extends the previous review text through its history when instructions load mid-session', async () => {
+    const { ctx, adapter } = await harness([
+      decisionChunks('{"risk":"low","decision":"allow"}'),
+      decisionChunks('{"risk":"low","decision":"allow"}'),
+    ])
+    registerProbe(ctx)
+    const { session, agent } = autoSession(ctx, 'append-only-review')
+    appendHeader(session, [{ name: 'probe', description: 'probe', parameters: { type: 'object' } }])
+    appendUser(session, 'root instructions', { kind: 'agent-instructions', form: 'instructions', changes: [] })
+    appendUser(session, 'edit the project', { kind: 'user', rpcId: 'append-only-rpc' } as never)
+    const firstId = ToolCallId('append-only-first')
+    appendAssistant(session, [{ type: 'tool-call', id: firstId, name: 'probe', arguments: '{"path":"a"}' }])
+    appendNativeCall(session, firstId, 'probe', '{"path":"a"}')
+    await ctx.tools.execute({
+      signal: new AbortController().signal, callId: firstId, name: 'probe', arguments: { path: 'a' }, agent,
+    })
+
+    session.append('step/end', { turn: 1, step: 1 })
+    appendUser(session, 'nested instructions', { kind: 'agent-instructions', form: 'instructions', changes: [] })
+    const secondId = ToolCallId('append-only-second')
+    appendAssistant(session, [{ type: 'tool-call', id: secondId, name: 'probe', arguments: '{"path":"b"}' }], 1, 2)
+    appendNativeCall(session, secondId, 'probe', '{"path":"b"}', 1, 2)
+    await ctx.tools.execute({
+      signal: new AbortController().signal, callId: secondId, name: 'probe', arguments: { path: 'b' }, agent,
+    })
+
+    const [first, second] = adapter.requests.map((request) => {
+      const block = request.messages[0]?.content[0]
+      if (block?.type !== 'text') throw new Error('review request has no text body')
+      return block.text
+    })
+    const historyEnd = first!.indexOf('\n]\n\nPENDING_ACTION\n')
+    expect(historyEnd).toBeGreaterThan(0)
+    expect(second!.startsWith(first!.slice(0, historyEnd))).toBe(true)
+    const history = requestSections(adapter.requests[1]!).FILTERED_HISTORY as Array<Record<string, unknown>>
+    expect(history.map(entry => entry.kind === 'tool-call'
+      ? entry.arguments
+      : (entry.content as Array<{ text: string }>)[0]?.text)).toEqual([
+      'root instructions', 'edit the project', '{"path":"a"}', 'nested instructions',
     ])
   })
 
@@ -1073,10 +1113,7 @@ describe('PTC and bypass semantics', () => {
     expect(sections.FILTERED_HISTORY).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ mode: 'ptc-inner', name: 'probe' }),
     ]))
-    for (const entry of [
-      ...(sections.PROJECT_INSTRUCTIONS as Record<string, unknown>[]),
-      ...(sections.FILTERED_HISTORY as Record<string, unknown>[]),
-    ]) {
+    for (const entry of sections.FILTERED_HISTORY as Record<string, unknown>[]) {
       expect(entry).not.toHaveProperty('seq')
     }
   })

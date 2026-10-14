@@ -30,14 +30,13 @@ Reviewer 从既有 Session 事实派生权威。Shipped Web human 指令具有 `
 
 ### 一次完整 reviewer 请求
 
-Integration 只使用最新 `request/header.config` 的 provider／model 与 shipped adapter 默认 reasoning。它既不比较冗余 route metadata，也不复制主 agent 请求。请求固定包含五个分区：
+Integration 只使用最新 `request/header.config` 的 provider／model 与 shipped adapter 默认 reasoning。它既不比较冗余 route metadata，也不复制主 agent 请求。请求固定包含四个分区：
 
 | 分区 | 保留输入 |
 | --- | --- |
 | `REVIEW_POLICY` | 固定分类、来源权威与严格结果规则；allow 后立即以 Full access 执行，没有后续确认 |
 | `ENVIRONMENT` | 仅既有 Session header `cwd` |
-| `PROJECT_INSTRUCTIONS` | 可见项目指令，保留原始来源并赋予约束角色 |
-| `FILTERED_HISTORY` | 当前 compaction surface 中带来源的 human／直接父级消息、checkpoint、图片／附件事实，以及历史调用名称与日志参数 |
+| `FILTERED_HISTORY` | 当前 compaction surface 中带来源的 human／直接父级消息、带约束角色的项目指令、checkpoint、图片／附件事实，以及历史调用名称与日志参数，按 surface 顺序排列，使每次评审延续上一次评审的前缀 |
 | `PENDING_ACTION` | 工具名称、描述、参数 schema 与解析后的 arguments |
 
 reviewer 从 Session 的完整动作历史构建这两个动作分节：授权是符合 `REVIEW_POLICY` 来源规则的那个更早调用，而重复或冲突的身份必须在整份日志的任何位置都可见，而不是只在近期窗口内可见，因此 Session 投影与有界读取都无法支撑该判定。这次读取使用已废弃的同步 `snapshotEvents()`，并带有行级 `typescript/no-deprecated` 豁免。
