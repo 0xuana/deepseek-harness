@@ -162,7 +162,7 @@ function childReviewSections(options: GenerateOptions): Record<string, unknown> 
   if (call?.kind !== 'tool-call') throw new Error('shipped child review request does not end with its pending call')
   return {
     FILTERED_HISTORY: items.slice(0, -1).filter(item => item.kind !== 'tool-schema'),
-    PENDING_ACTION: { name: call.name, arguments: JSON.parse(call.arguments as string) as unknown },
+    PENDING_ACTION: { name: call.name, arguments: JSON.parse(call.arguments as string) as Record<string, unknown> },
   }
 }
 

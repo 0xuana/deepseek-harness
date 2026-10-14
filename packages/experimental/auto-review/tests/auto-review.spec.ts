@@ -256,7 +256,7 @@ function requestSections(request: GenerateOptions): Record<string, unknown> {
     try { parsed = JSON.parse(raw) } catch { parsed = raw }
   }
   return {
-    ENVIRONMENT: JSON.parse(environment.slice('ENVIRONMENT\n'.length)) as unknown,
+    ENVIRONMENT: JSON.parse(environment.slice('ENVIRONMENT\n'.length)) as Record<string, unknown>,
     FILTERED_HISTORY: entries.slice(0, -1).filter(entry => entry.kind !== 'tool-schema'),
     PENDING_ACTION: {
       mode: call.mode, name: call.name, description: schema.description, parameters: schema.parameters, arguments: parsed,
