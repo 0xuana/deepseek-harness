@@ -64,7 +64,7 @@ kind: "package-reference"
 | [`src/client/guard.ts`](src/client/guard.ts) | 已装载浏览器半收到的白名单 `ctx` façade |
 | [`src/client/inspect-registry.ts`](src/client/inspect-registry.ts) | Client Inspect Provider 与待答查询路由器 |
 | [`src/client/providers.ts`](src/client/providers.ts) | 第一方 client Inspect Provider（slots、theme、events） |
-| [`src/client/timer.ts`](src/client/timer.ts) | 动态包注入的 client 定时器服务 |
+| [`src/client/timer.ts`](src/client/timer.ts) | client 定时器按顺序完成并发 interval 读取；throttle/debounce 包装函数返回 void，释放后不再执行 |
 
 ### 查询槽位输入
 

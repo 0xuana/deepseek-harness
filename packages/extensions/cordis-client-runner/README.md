@@ -64,7 +64,7 @@ The browser half is built on one principle: a dynamic package must ride the same
 | [`src/client/guard.ts`](src/client/guard.ts) | The whitelisting `ctx` façade for loaded browser halves |
 | [`src/client/inspect-registry.ts`](src/client/inspect-registry.ts) | Client Inspect Providers and the pending-query router |
 | [`src/client/providers.ts`](src/client/providers.ts) | First-party client Inspect Providers (slots, theme, events) |
-| [`src/client/timer.ts`](src/client/timer.ts) | The client timer service dynamic packages inject |
+| [`src/client/timer.ts`](src/client/timer.ts) | Client timers with ordered concurrent interval reads and void-returning throttle/debounce wrappers that become inert on disposal |
 
 ### Inspecting slot inputs
 

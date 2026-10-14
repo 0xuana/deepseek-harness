@@ -21,7 +21,7 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-type WithDispose<T> = T & { dispose: () => void }
+type Scheduled<F extends (...args: any[]) => any> = ((...args: Parameters<F>) => void) & { dispose: () => void }
 
 // These `any` positions mirror the Host TimerService's overload erasure: generic callback tuples and async-iterator
 // return/rejection values must pass through without narrowing them to one caller's invocation.
@@ -104,7 +104,7 @@ export class ClientTimerService extends Service {
   /**
    * Iterate over timer ticks.
    * @param delay - interval in milliseconds.
-   * @returns async iterator of ticks.
+   * @returns Iterator completing concurrent reads in order, one per tick; disposal rejects all pending reads.
    */
   interval<R = any>(delay: number): AsyncIterableIterator<void, R, void>
   interval(...args: any[]): any {
@@ -118,33 +118,37 @@ export class ClientTimerService extends Service {
     }
 
     let done: { kind: 'return'; value: any } | { kind: 'throw'; reason: any } | undefined
-    let nextTask: PromiseWithResolvers<IteratorResult<void>> | undefined
+    const nextTasks: PromiseWithResolvers<IteratorResult<void>>[] = []
     const dispose = this.ctx.effect(() => {
       const timer = globalThis.setInterval(() => {
-        nextTask?.resolve({ done: false, value: undefined })
+        nextTasks.shift()?.resolve({ done: false, value: undefined })
       }, delay)
       return () => {
         globalThis.clearInterval(timer)
         if (done !== undefined) return
         done = { kind: 'throw', reason: new Error('Context has been disposed') }
-        nextTask?.reject(done.reason)
+        for (const task of nextTasks.splice(0)) task.reject(done.reason)
       }
     }, 'ctx.interval()')
     return {
       next: () => {
-        if (done === undefined) return (nextTask = Promise.withResolvers()).promise
+        if (done === undefined) {
+          const task = Promise.withResolvers<IteratorResult<void>>()
+          nextTasks.push(task)
+          return task.promise
+        }
         if (done.kind === 'return') return Promise.resolve({ done: true, value: done.value })
         return Promise.reject(done.reason)
       },
       return: (value: any) => {
         if (done === undefined) done = { kind: 'return', value }
-        nextTask?.resolve({ done: true, value })
+        for (const task of nextTasks.splice(0)) task.resolve({ done: true, value })
         void dispose()
         return Promise.resolve({ done: true, value })
       },
       throw: (reason: any) => {
         if (done === undefined) done = { kind: 'throw', reason }
-        nextTask?.reject(reason)
+        for (const task of nextTasks.splice(0)) task.reject(reason)
         void dispose()
         return Promise.resolve({ done: true, value: undefined })
       },
@@ -155,15 +159,18 @@ export class ClientTimerService extends Service {
   }
 
   /** Build a delayed wrapper whose pending callback belongs to the calling Fiber. */
-  private schedule(label: string, trigger: (args: any[], disposed: boolean) => number | undefined, disposed = false): any {
+  private schedule(label: string, trigger: (args: any[]) => number | undefined): any {
     let timer: number | undefined
+    let disposed = false
     const dispose = this.ctx.effect(() => () => {
       disposed = true
       globalThis.clearTimeout(timer)
+      timer = undefined
     }, label)
     const wrapper: any = (...args: any[]): void => {
+      if (disposed) return
       globalThis.clearTimeout(timer)
-      timer = trigger(args, disposed)
+      timer = trigger(args)
     }
     wrapper.dispose = dispose
     return wrapper
@@ -174,33 +181,32 @@ export class ClientTimerService extends Service {
    * @param callback - Function to throttle.
    * @param delay - Minimum interval between calls in milliseconds.
    * @param noTrailing - Whether to suppress a delayed trailing call.
-   * @returns Throttled function with an early disposer.
+   * @returns Void-returning wrapper; disposal cancels pending work and makes later calls inert.
    */
-  throttle<F extends (...args: any[]) => void>(callback: F, delay: number, noTrailing?: boolean): WithDispose<F> {
+  throttle<F extends (...args: any[]) => any>(callback: F, delay: number, noTrailing?: boolean): Scheduled<F> {
     let lastCall = -Infinity
     const execute = (...args: Parameters<F>): void => {
       lastCall = Date.now()
       callback(...args)
     }
-    return this.schedule('ctx.throttle()', (args, disposed) => {
+    return this.schedule('ctx.throttle()', (args) => {
       const remaining = delay - Date.now() + lastCall
       if (remaining <= 0) {
         execute(...args as Parameters<F>)
-      } else if (!disposed) {
+      } else if (!noTrailing) {
         return globalThis.setTimeout(execute, remaining, ...args)
       }
-    }, noTrailing)
+    })
   }
 
   /**
    * Return a debounced function whose timer is disposed with the calling Fiber.
    * @param callback - Function to debounce.
    * @param delay - Quiet period in milliseconds.
-   * @returns Debounced function with an early disposer.
+   * @returns Void-returning wrapper; disposal cancels pending work and makes later calls inert.
    */
-  debounce<F extends (...args: any[]) => void>(callback: F, delay: number): WithDispose<F> {
-    return this.schedule('ctx.debounce()', (args, disposed) => {
-      if (disposed) return
+  debounce<F extends (...args: any[]) => any>(callback: F, delay: number): Scheduled<F> {
+    return this.schedule('ctx.debounce()', (args) => {
       return globalThis.setTimeout(callback, delay, ...args)
     })
   }

@@ -1007,11 +1007,11 @@ export const CORDIS_CATALOG_POLICY: CordisCatalogPolicy = {
         jsDoc: '/** Return an async iterator of timer ticks. */',
       },
       {
-        signature: 'throttle<F extends (...args: any[]) => void>(callback: F, delay: number, noTrailing?: boolean): F & { dispose: () => void }',
+        signature: 'throttle<F extends (...args: any[]) => any>(callback: F, delay: number, noTrailing?: boolean): ((...args: Parameters<F>) => void) & { dispose: () => void }',
         jsDoc: '/** Return a throttled function whose timer is disposed with the current fiber. */',
       },
       {
-        signature: 'debounce<F extends (...args: any[]) => void>(callback: F, delay: number): F & { dispose: () => void }',
+        signature: 'debounce<F extends (...args: any[]) => any>(callback: F, delay: number): ((...args: Parameters<F>) => void) & { dispose: () => void }',
         jsDoc: '/** Return a debounced function whose timer is disposed with the current fiber. */',
       },
     ],
