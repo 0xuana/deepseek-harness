@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-13-web-install-icons-and-launch-display.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-10-13-web-install-icons-and-launch-display.md
+/agent-note-web-install-icons-and-launch-display:
+  en: 99458c7724588fd3
+  zh: 1af39a382e1a8b6a
+/agent-note-web-install-icons-and-launch-display/problem:
+  en: 726b732fcaf49153
+  zh: 74f854807a14409d
+/agent-note-web-install-icons-and-launch-display/decision:
+  en: ac98a944eeedf562
+  zh: 2802162ddb00c1b0
+/agent-note-web-install-icons-and-launch-display/alternatives-considered:
+  en: 49f105c70f8453c0
+  zh: aed4457cfe9d41df
+/agent-note-web-install-icons-and-launch-display/consequences:
+  en: d0caf7aca43fa1db
+  zh: a354287e7aa1343d
