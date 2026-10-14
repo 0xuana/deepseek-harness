@@ -1,6 +1,19 @@
-/** Focus presentation for automatic entry and restoration. */
+/** Focus policy and presentation for automatic entry and restoration. */
+import bowser from 'bowser'
 const releases = new WeakMap<HTMLElement, () => void>()
 const navigationKeys = new Set(['Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'])
+
+/**
+ * Decide whether the current browser device permits automatic text-input focus.
+ * Bowser identifies phones and tablets from the UA; MacIntel with multiple touch points identifies desktop-mode iPads.
+ * This policy does not restrict focus requested by a user gesture or keyboard navigation.
+ * @returns false for identified phones and tablets; true for other devices, including unrecognized UAs.
+ */
+export function shouldAutoFocusTextInput(): boolean {
+  const platformType = bowser.parse(navigator.userAgent).platform.type
+  const desktopIPad = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1
+  return platformType !== 'mobile' && platformType !== 'tablet' && !desktopIPad
+}
 
 /**
  * Focus an automatic destination without a focus outline until keyboard navigation or blur.

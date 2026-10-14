@@ -68,7 +68,7 @@ Queue 预览启用空白折叠和文档边缘 trim，保留 emoji，并使用 CS
 
 上下文占用率入口遵循[统计控件圆角规则](../../../docs/ui-radius.zh.md#radius-scale)。
 
-对于 Bowser 从 UA 识别为 `mobile` 或 `tablet` 的设备，以及报告 `MacIntel` 且触摸点数大于一的 iPad，composer 会跳过挂载、切换 Session 和解除锁定时的自动聚焦。点击输入框仍会聚焦。桌面设备（包括 Windows 触屏电脑）保留自动聚焦，不受窗口宽度影响。隐藏移动平台信息的浏览器模式或自定义 UA 可能导致识别失败；仅凭桌面 UA 无法区分 Android 平板与 Linux 电脑。
+composer 在挂载、切换 Session 和解除锁定时使用共享的[文字输入框聚焦策略](../ui-primitives/README.zh.md#use-this-package)。识别出的手机和平板需要点击输入框；桌面设备保留自动聚焦。
 
 上下文占用按钮在输入卡片下方、会话统计右侧显示圆环和百分比。点击按钮可在视口内的面板查看 token 构成，没有统计项时面板也不会越界；上下文用量和容量尚不可用时，按钮保持隐藏。
 

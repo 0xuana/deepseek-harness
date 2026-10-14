@@ -16,9 +16,8 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, KeyboardEvent, MouseEvent } from 'react'
 import clsx from 'clsx'
-import bowser from 'bowser'
 import {
-  IconPlusOutlineMedium, IconWarningOutlineRegular, Toast, Tooltip,
+  IconPlusOutlineMedium, IconWarningOutlineRegular, shouldAutoFocusTextInput, Toast, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 // Type-only: the `plan` projection key merge (the TodoDock posture — the
 // composer reads a host-computed value; the domain owns the key).
@@ -173,15 +172,11 @@ export const InputBar = memo(function InputBar({
     revealDraftSelection(scrollRef)
   }
 
-  // Phones and tablets require explicit composer focus. Desktop-mode iPads
-  // share the Mac platform identifier, so touch support also identifies them.
   // Automatic desktop focus restores and reveals the draft selection without
   // scrolling the conversation.
   useEffect(() => {
     if (locked || editor === null) return
-    const platformType = bowser.parse(navigator.userAgent).platform.type
-    const desktopIPad = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1
-    if (platformType === 'mobile' || platformType === 'tablet' || desktopIPad) return
+    if (!shouldAutoFocusTextInput()) return
     focusDraftEditor(editor, revealSelection)
   }, [locked, sessionId, editor])
 

@@ -12,7 +12,9 @@
  * search field. Provider headings paint their background only while pinned
  * by scrolling. Clearing a query restores the full list and search focus.
  * Selecting restores trigger focus without a ring until the trigger loses focus
- * or the menu reopens. Model names match a case-insensitive ordered subsequence
+ * or the menu reopens. Mobile devices do not automatically focus the
+ * trigger or a pane when opening or drilling, so search does not raise the keyboard.
+ * Model names match a case-insensitive ordered subsequence
  * within each provider group, ranked by
  * prefix, alignment score, then catalog order. Returning to the root pane
  * hands focus back to the cell that opened it. Data and submission ride the
@@ -35,7 +37,7 @@ import clsx from 'clsx'
 import type { ModelReasoningEffort, ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
 import {
   IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconCloseFillRegular,
-  IconDataOutlineRegular, IconWarningOutlineRegular, Input, rankByName, StateDot, Toast,
+  IconDataOutlineRegular, IconWarningOutlineRegular, Input, rankByName, shouldAutoFocusTextInput, StateDot, Toast,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ModelLabelOwner, ModelSelectInjected } from './slots.ts'
@@ -182,7 +184,7 @@ export function ModelSelect(
     previousShowSearch.current = showSearch
     const intent = paneFocus.current ?? (changedSearchMode && pane === 'model' ? 'drill' : null)
     paneFocus.current = null
-    if (!open || intent === null) return
+    if (!open || intent === null || !shouldAutoFocusTextInput()) return
     if (intent === 'drill') {
       if (pane === 'model' && showSearch) {
         searchRef.current?.focus()
@@ -249,7 +251,7 @@ export function ModelSelect(
 
   const show = (): void => {
     setSelectionFocus(false)
-    triggerRef.current?.focus()
+    if (shouldAutoFocusTextInput()) triggerRef.current?.focus()
     setQuery('')
     setHighlightedIndex(null)
     if (currentChoice === undefined) paneFocus.current = 'drill'

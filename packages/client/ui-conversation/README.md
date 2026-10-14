@@ -68,7 +68,7 @@ The composer measures its expanded control groups after size, content, visibilit
 
 The context meter follows the [statistics-control radius](../../../docs/ui-radius.md#radius-scale).
 
-The composer skips automatic focus on mount, Session switching, and unlock for Bowser's UA classifications `mobile` and `tablet`, and for iPads reporting `MacIntel` with more than one touch point. Tapping the input still focuses it. Desktop devices, including Windows touchscreen computers, retain automatic focus regardless of window width. Browser modes or custom UA strings that conceal the mobile platform can prevent identification; a desktop UA alone cannot distinguish Android tablets from Linux computers.
+The composer uses the shared [text-input focus policy](../ui-primitives/README.md#use-this-package) on mount, Session switching, and unlock. Identified phones and tablets require tapping the input; desktop devices retain automatic focus.
 
 The context-occupancy button shows a ring and percentage below the input card, after the Session statistics. Clicking it opens the token breakdown in a panel kept inside the viewport, including when no statistics are shown; the button stays hidden until context usage and capacity are available.
 

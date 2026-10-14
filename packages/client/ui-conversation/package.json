@@ -96,8 +96,7 @@
     "@deepseek-ai/dsh-agent": "workspace:*",
     "@deepseek-ai/dsh-settings": "workspace:*",
     "@deepseek-ai/dsh-client-shortcuts": "workspace:*",
-    "@deepseek-ai/dsh-client-product-analytics": "workspace:*",
-    "bowser": "^2.14.1"
+    "@deepseek-ai/dsh-client-product-analytics": "workspace:*"
   },
   "files": [
     "locale/*.json",
