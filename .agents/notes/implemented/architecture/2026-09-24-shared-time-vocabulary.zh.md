@@ -18,7 +18,7 @@ Schedule 消费它，并保留全部域内决策。`canonicalizeTimeZone`、`dec
 
 `dsh-time-context` 同样消费它，并保留自己更严格的策略。`deriveBrowserTimeZoneContext` 通过 `canonicalizeTimeZone` 读取每条 user-rpc 时区，并拒绝规范答案与所报值不同的别名，因此请求边界仍然要求另一个进程能解析回同一名称。三条拒绝与它们的文案归 time-context 所有；共享入口只回答规范名称或一个原因；被拒绝的结果中只有 `unsupported` 会携带本库捕获到的平台错误，使该拒绝在两个消费方都保留其 `cause`。
 
-`Duration` 以单一毫秒计数保存一段时间；它做成类而不是 branded number，是因为 TypeScript 的算术会抹掉 brand：两个不同品牌的数字相加得到的是无品牌的 `number`，所以 brand 挡不住秒与毫秒的混用，而实例可以。单位选毫秒，是因为本仓库的每个生产者与消费者本来就用它（`Date.now()`、`SessionEvent.time`、Session 日志、客户端），也因为 double 能精确表示 `Date` 全范围内的每一个毫秒，这个单位不消耗任何精度。实例被冻结；计数只能通过 `milliseconds` 或按小数换算的 `toSeconds`/`toMinutes`/`toHours`/`toDays` 读取，且刻意不覆盖任何强制转换钩子，因此读取方永远不会拿到一个需要自己记单位的裸数字。加、减、排序、负值判断与整数量拆解 `decompose()` 就是全部操作集合，另有 `zero` 恒等元与面向以秒为单位边界的 `fromSeconds` 构造入口。
+`Duration` 以单一毫秒计数保存一段时间；它做成类而不是 branded number，是因为 TypeScript 的算术会抹掉 brand：两个不同品牌的数字相加得到的是无品牌的 `number`，所以 brand 挡不住秒与毫秒的混用，而实例可以。单位选毫秒，是因为本仓库的每个生产者与消费者本来就用它（`Date.now()`、`SessionEvent.time`、Session 日志、客户端），也因为 double 能精确表示 `Date` 全范围内的每一个毫秒，这个单位不消耗任何精度。实例被冻结，不覆盖任何强制转换钩子，且时间段受可精确表示的毫秒范围约束——这正是拆分精确的前提。公开面就是 `fromMilliseconds` 与整数量拆解 `decompose()`，即已迁移消费方所调用的两个入口。
 
 受维护的 `@js-temporal/polyfill` 0.5.1 在成为 `dsh-schedule` 运行时依赖之外，也成为 `dsh-util-time` 的运行时依赖。本地解析继续使用它，因此缺口与重叠仍由宿主 IANA 数据决定，也没有调用方需要自己实现偏移采样。`util/time` 自身的描述与 README 去掉了 `zero-dependency` 这一说法，因为它容易被误读：该组的约定禁止的是 harness 依赖（以便任何组都能依赖 util），并不禁止外部包；因此 `packages/README.md` 与 `AGENTS.md` 里的 `util/` 一行保留该说法，而 `packages/util/README.md` 与本包自己的描述写明它加载了什么。
 
@@ -44,7 +44,7 @@ Schedule 消费它，并保留全部域内决策。`canonicalizeTimeZone`、`dec
 
 代价是更宽的已发布接口与更重的依赖图：`dsh-util-time` 增加了对 `@js-temporal/polyfill` 的运行时依赖，因此只导入 `canonicalClientTimeZone` 的消费方也会加载该模块。本库也不再是纯"只做校验与规范化"的包——其 README 与包描述必须说明这一点，其"已知限制"一节现在也记录了它。Schedule 在每个入口保留一层薄映射。本地日历与时刻映射函数以 `never` 默认分支穷尽 switch 本库的封闭原因联合，因此新增原因会让这两个调用点构建失败，而不是静默走兜底分支。时区映射函数则只对 `not_canonical_shape` 分支——当前 IANA 数据不会产生该原因，因此它由 `v8 ignore` 守护而不是 `never` 默认分支——并把 `blank`、`padded`、`not_area_location` 与 `unsupported` 合并成一条诊断。因此日后给 `TimeZoneRejection` 新增原因时会通过编译并静默套用那条通用文案。
 
-该值类型在第二个消费方出现之前就交付了完整操作集合。目前只有 `fromMilliseconds` 与 `decompose()` 有生产调用方，即 `dsh-time-context`；`fromSeconds`、`milliseconds`、`plus`、`minus`、`compare`、`isNegative`、`zero` 与四个 `to*` 换算都没有调用方。这是有意的选择而不是疏漏：`dsh-schedule` 与 DeepSeek 文件存储里以秒为单位的字段是预期的下一批消费方，而另一种做法——一个能保存时间段却只能拆解它的类——会在每个调用点出现时再长出同样的成员。包 README 把这些尚未迁移的边界记为已知限制。
+值类型只发布消费方会调用的部分，因此这个时间段只暴露 `dsh-time-context` 用到的构造入口与拆解，其余不发布。某个换算、某个算术运算或 `zero` 恒等元都随第一个需要它的调用方落地；`dsh-schedule` 与 DeepSeek 文件存储里以秒为单位的字段就是将来会要求第二个单位换算的那些跨度，而类已经携带的范围约束与冻结正是让这次添加保持很小的原因。包 README 把这些尚未迁移的边界记为已知限制。
 
 耗时读数的拆分上收到库、措辞留在一侧：`dsh-time-context` 仍然决定回退的时钟读数钳到零、以及那行紧凑文本怎么写，而 `Duration.decompose()` 回答整数量。这次替换对每个有限样本都逐字不变，用一份覆盖八千多个输入（含负数、小数与一年以上的值）的差分测得。该测量不是提交进仓库的测试：消费方自己那套测试固定了它渲染出的读数（`1d 1h 1m 1s`、`1m 1s`、`4m 2s`，以及被钳到零的那次）。有两个样本会变：`NaN` 原本渲染出 `NaNs`、`+Infinity` 原本渲染出 `Infinityd NaNs`，现在两者都由时间段构造函数抛出，于是非有限的读数在产生它的地方失败，而不是渲染出一段文本。`-Infinity` 样本不变，因为消费方在构造时间段之前已把它钳到零。
 

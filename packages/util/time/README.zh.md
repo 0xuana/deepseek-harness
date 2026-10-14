@@ -45,11 +45,10 @@ if (local.kind === 'accepted') {
   resolveLocalInstant(local.time, zone ?? 'UTC') // epoch milliseconds, or undefined inside a DST gap
 }
 
-Duration.fromSeconds(90).decompose() // { days: 0, hours: 0, minutes: 1, seconds: 30, milliseconds: 0 }
-Duration.fromSeconds(90).milliseconds // 90000 — the unit is in the name, and no coercion answers the count
+Duration.fromMilliseconds(1_500).decompose() // { days: 0, hours: 0, minutes: 0, seconds: 1, milliseconds: 500 }
 ```
 
-不可用的时区名称由 `canonicalClientTimeZone` 回答 `undefined`，由调用方抛出自己的拒绝——Session 提示词用 `session/invalid-time-zone`，subagent 续话用 `subagent/invalid-time-zone`。`canonicalizeTimeZone`、各严格解析器与 `fourDigitYearEpoch` 则会说明拒绝原因，以带判别值的结果回答，其 `rejected` 分支携带稳定的拒绝原因，由各调用方选择自己的错误码与诊断文案。`formatFourDigitYearInstant` 与 `resolveLocalInstant` 接收已校验的值，分别回答字符串与纪元毫秒，无法表示的纪元或落在 DST 缺口内的墙钟值回答 `undefined`。`Duration` 是一个基于单一毫秒计数的冻结值类型：它校验计数有限且落在可精确表示的范围内，加减、排序与负值判断都不做单位换算，按小数换算到秒、分、小时与天，并把非负的时间段拆成整数量。
+不可用的时区名称由 `canonicalClientTimeZone` 回答 `undefined`，由调用方抛出自己的拒绝——Session 提示词用 `session/invalid-time-zone`，subagent 续话用 `subagent/invalid-time-zone`。`canonicalizeTimeZone`、各严格解析器与 `fourDigitYearEpoch` 则会说明拒绝原因，以带判别值的结果回答，其 `rejected` 分支携带稳定的拒绝原因，由各调用方选择自己的错误码与诊断文案。`formatFourDigitYearInstant` 与 `resolveLocalInstant` 接收已校验的值，分别回答字符串与纪元毫秒，无法表示的纪元或落在 DST 缺口内的墙钟值回答 `undefined`。`Duration` 是一个基于单一毫秒计数的冻结值类型：它校验计数有限且落在可精确表示的范围内，并把非负的时间段拆成整数量。它只发布消费方会调用的部分；面向其它单位或时间段算术的成员都随第一个需要它的调用方落地。
 
 -----
 
@@ -73,7 +72,7 @@ Duration.fromSeconds(90).milliseconds // 90000 — the unit is in the name, and 
 | `formatFourDigitYearInstant` | 四位年份范围内的整数纪元毫秒；超出范围或非整数时回答 `undefined`。 |
 | `isFourDigitYearInstant` | 同一范围的谓词形式，只判断范围边界的调用方无需自行推导。 |
 | `resolveLocalInstant` | 真实日期的精确日历字段，或已构造好的 `Temporal.PlainDateTime`，外加已规范化的时区。 |
-| `Duration` | 一个有限的毫秒计数，可由毫秒或秒构造，读取时从不交出裸计数。 |
+| `Duration` | 一个落在可精确表示范围内的毫秒计数，以及它拆出的整日、整时、整分、整秒与不足一秒的余数。 |
 
 </details>
 
@@ -105,8 +104,8 @@ Duration.fromSeconds(90).milliseconds // 90000 — the unit is in the name, and 
 - **别名解析取决于运行时的 ICU 数据**——一个别名组规范化成哪个名称由平台回答，因此两个跑在不同 Node 构建上的进程可能给出不同答案。
 - **不含重复规则运算**——只做时刻有效性、本地日历解析、时区解析、规范格式化与毫秒精度的时间段；遍历候选日期或间隔的搜索由调用方自己拥有。
 - **`Duration` 没有日历单位**——一天恰好是 24 小时，月没有固定长度；需要本地日历天的调用方从时区推导。
-- **`Duration` 不做隐式单位换算**——它不覆盖任何强制转换钩子（`valueOf`、`toString`、`Symbol.toPrimitive`），读取方必须通过 `milliseconds` 或某个 `to*` 换算声明单位。
-- **以秒为单位的跨度仍在自行相乘**——`dsh-schedule` 的间隔与延迟字段、DeepSeek 文件存储的刷新余量都是以秒为单位的跨度，用 `* 1_000` 换算；`Duration.fromSeconds` 是它们预期的下一个消费方，目前都还没改。以秒表示的纪元不是跨度，不得构造成跨度。
+- **`Duration` 只发布消费方会调用的部分**——`fromMilliseconds` 与 `decompose()`；某个换算、某个算术运算或 `zero` 恒等元都随第一个需要它的调用方落地，公开契约跟着调用方长，而不是长在它前面。
+- **以秒为单位的跨度仍在自行相乘**——`dsh-schedule` 的间隔与延迟字段、DeepSeek 文件存储的刷新余量都是以秒为单位的跨度，用 `* 1_000` 换算；它们都还没迁移到本库，而以秒表示的纪元不是跨度，不得构造成跨度。
 - **`Temporal` polyfill 是运行时依赖**——只导入 `canonicalClientTimeZone` 的消费方在模块加载时同样会解析它，因为两个入口共用一个模块。
 
 <a id="dev-note"></a>

@@ -15,8 +15,19 @@
 
 import { canonicalizeTimeZone } from './instant.ts'
 
-export * from './duration.ts'
-export * from './instant.ts'
+export { Duration } from './duration.ts'
+export {
+  MAX_FOUR_DIGIT_YEAR_MS,
+  MIN_FOUR_DIGIT_YEAR_MS,
+  canonicalizeTimeZone,
+  formatFourDigitYearInstant,
+  fourDigitYearEpoch,
+  isFourDigitYearInstant,
+  parseLocalCalendar,
+  parseOffsetInstant,
+  resolveLocalInstant,
+} from './instant.ts'
+export type { InstantRejection, LocalCalendarRejection, LocalCalendarTime, TimeZoneRejection } from './instant.ts'
 
 /**
  * Validate and canonicalize one caller-supplied IANA zone at a wire boundary.

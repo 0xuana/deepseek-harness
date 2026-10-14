@@ -1,19 +1,16 @@
 /**
- * One span of time, held as a count of milliseconds.
+ * One span of time, held as a count of milliseconds and split into the whole
+ * parts a reading is written in.
  *
  * A class rather than a branded number: arithmetic on two branded numbers
  * answers an unbranded `number`, so a brand cannot stop seconds and
- * milliseconds from being added, while an instance can. No coercion hook is
- * overridden, so no reader receives a bare count whose unit it has to remember;
- * a caller states the unit by reading `milliseconds` or by converting through
- * one of the `to*` entries.
+ * milliseconds from being added, while an instance can. The published surface
+ * is the set the migrated consumers call; a further member lands with the caller
+ * that needs it.
  * @module @deepseek-ai/dsh-util-time
  */
 
 const MS_PER_SECOND = 1_000
-const MS_PER_MINUTE = 60 * MS_PER_SECOND
-const MS_PER_HOUR = 60 * MS_PER_MINUTE
-const MS_PER_DAY = 24 * MS_PER_HOUR
 const SECONDS_PER_DAY = 86_400
 const SECONDS_PER_HOUR = 3_600
 const SECONDS_PER_MINUTE = 60
@@ -47,13 +44,9 @@ const MAX_SPAN_MS = Number.MAX_SAFE_INTEGER
  * Instances are frozen, so a span cannot drift after it is built. A span is
  * bounded by the exactly representable millisecond range, which is wider than
  * any interval this harness schedules, and it carries no calendar meaning: a
- * month is not a fixed count of milliseconds, so no entry here converts to or
- * from calendar units.
+ * month is not a fixed count of milliseconds.
  */
 export class Duration {
-  /** The additive identity. */
-  static readonly zero: Duration = new Duration(0)
-
   private readonly span: number
 
   private constructor(milliseconds: number) {
@@ -77,99 +70,6 @@ export class Duration {
       )
     }
     return new Duration(milliseconds)
-  }
-
-  /**
-   * Build one span from a second count, for a boundary whose unit is seconds.
-   * @param seconds - Finite second count; a fractional count is kept as given.
-   * @returns The span.
-   * @throws TypeError when the count is not finite, or its millisecond equivalent is not finite or leaves the exactly representable range.
-   */
-  static fromSeconds(seconds: number): Duration {
-    if (!Number.isFinite(seconds)) {
-      throw new TypeError(`duration seconds must be finite, got ${String(seconds)}`)
-    }
-    return Duration.fromMilliseconds(seconds * MS_PER_SECOND)
-  }
-
-  /** The span as a millisecond count; the unit is part of the name. */
-  get milliseconds(): number {
-    return this.span
-  }
-
-  /**
-   * Add one span to this span.
-   * @param other - Span to add; both operands already share the millisecond unit.
-   * @returns The sum.
-   * @throws TypeError when the sum leaves the exactly representable millisecond range.
-   */
-  plus(other: Duration): Duration {
-    return Duration.fromMilliseconds(this.span + other.span)
-  }
-
-  /**
-   * Subtract one span from this span.
-   * @param other - Span to subtract.
-   * @returns The difference, which is negative when `other` is longer.
-   * @throws TypeError when the difference leaves the exactly representable millisecond range.
-   */
-  minus(other: Duration): Duration {
-    return Duration.fromMilliseconds(this.span - other.span)
-  }
-
-  /**
-   * Order two spans.
-   * @param other - Span to compare with.
-   * @returns `-1` when this span is shorter, `0` when equal, `1` when longer.
-   */
-  compare(other: Duration): -1 | 0 | 1 {
-    if (this.span < other.span) return -1
-    return this.span > other.span ? 1 : 0
-  }
-
-  /**
-   * Whether the span is a negative interval, which every sign-sensitive reader
-   * must decide how to handle.
-   * @returns Whether the millisecond count is below zero.
-   */
-  isNegative(): boolean {
-    return this.span < 0
-  }
-
-  /**
-   * The span in seconds.
-   * @returns The span as a fractional seconds count: one division, so the answer is the double nearest the exact ratio.
-   */
-  toSeconds(): number {
-    return this.span / MS_PER_SECOND
-  }
-
-  /**
-   * The span in minutes.
-   * @returns The span as a fractional minutes count: one division, so the answer is the double nearest the exact ratio.
-   */
-  toMinutes(): number {
-    return this.span / MS_PER_MINUTE
-  }
-
-  /**
-   * The span in hours.
-   * @returns The span as a fractional hours count: one division, so the answer is the double nearest the exact ratio.
-   */
-  toHours(): number {
-    return this.span / MS_PER_HOUR
-  }
-
-  /**
-   * The span in days.
-   *
-   * A day here is exactly 24 hours. A wall-clock reading that crosses a
-   * daylight-saving transition is not a whole number of days, so a caller that
-   * needs local calendar days derives them from the zone instead.
-   * @returns The span as a fractional days count: one division, so the answer is the double nearest the exact ratio.
-   */
-  toDays(): number {
-    return this.span / MS_PER_DAY
   }
 
   /**
