@@ -16,6 +16,7 @@
 import { canonicalizeTimeZone } from './instant.ts'
 
 export { Duration } from './duration.ts'
+export { localUtcOffsetSeconds } from './local-offset.ts'
 export {
   MAX_FOUR_DIGIT_YEAR_MS,
   MIN_FOUR_DIGIT_YEAR_MS,

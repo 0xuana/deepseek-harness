@@ -73,6 +73,7 @@ Duration.fromMilliseconds(1_500).decompose() // { days: 0, hours: 0, minutes: 0,
 | `isFourDigitYearInstant` | 同一范围的谓词形式，只判断范围边界的调用方无需自行推导。 |
 | `resolveLocalInstant` | 真实日期的精确日历字段，或已构造好的 `Temporal.PlainDateTime`，外加已规范化的时区。 |
 | `Duration` | 一个落在可精确表示范围内的毫秒计数，以及它拆出的整日、整时、整分、整秒与不足一秒的余数。 |
+| `localUtcOffsetSeconds` | 传入要读取宿主时区偏移的时刻；回答 UTC 以东的整秒数。 |
 
 </details>
 

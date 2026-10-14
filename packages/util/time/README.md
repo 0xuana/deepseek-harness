@@ -73,6 +73,7 @@ The strict parsers match a fixed regular expression before constructing any date
 | `isFourDigitYearInstant` | The same range, as a predicate, so a caller that only needs the bound does not re-derive it. |
 | `resolveLocalInstant` | Exact calendar fields of a real date, or an already-built `Temporal.PlainDateTime`, plus an already-canonical zone. |
 | `Duration` | One finite millisecond count inside the exactly representable range, and its split into whole days, hours, minutes, seconds, and the remaining fraction. |
+| `localUtcOffsetSeconds` | An epoch to read the host zone's offset at; answers whole seconds east of UTC. |
 
 </details>
 
