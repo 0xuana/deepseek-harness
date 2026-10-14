@@ -11,6 +11,8 @@ description: 自定义 subagent 组合必须分离路由字段、模型发现和
 
 `@deepseek-ai/dsh-tool-subagent` 将 `modelSelectionSettings` 替换为 `modelSelection`，该选项只控制可选子级路由字段。工具不再注册 `list_subagent_models` 或采样用户设置。Host 的 `/model-selection-settings` 服务在 Agent 创建时记录授权，包括在委派工具挂载前创建的 Session。已有 Session 保留已记录策略；之后安装工具不会重新采样设置。随附 Web 与 Desktop preset 包含独立发现插件，并为 fork 保持路由字段关闭。自定义 fork 工具可以启用这些字段。
 
+Host 启用模型选择但允许模型列表为空时，会拒绝创建所有新的顶层 Session，包括未挂载委派工具的 Session。设置界面不允许保存这种组合；直接写入的配置必须提供非空列表或关闭模型选择。
+
 ## 迁移
 
 1. 在自定义 `cordis.yml`、patch 或直接插件配置中，将公开路由参数的委派工具的 `modelSelectionSettings: true` 改为 `modelSelection: true`。

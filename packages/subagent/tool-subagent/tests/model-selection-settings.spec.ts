@@ -78,51 +78,62 @@ async function createAgent(ctx: Context, id: string, options: {
   return handle.agent
 }
 
+let policySessionCounter = 0
+
+/** Observe settings through the policy captured by a fresh top-level Agent. */
+async function capturePolicy(ctx: Context) {
+  const { agent } = await ctx.agents.create({ sessionId: SessionId(`settings-policy-${++policySessionCounter}`) })
+  return subagentModelSelectionPolicy(ctx.sessionProjections, agent.session)
+}
+
 describe('SubagentModelSelectionConfig', () => {
   it('uses the composed default without a settings provider', async () => {
     const ctx = ownContext(new Context())
-    await mountAgentLoopTestDependencies(ctx)
+    await mountAgentLoopTestDependencies(ctx, { workingDirectory: true })
+    await ctx.plugin(AgentLoop, { agents: [] })
     await ctx.plugin(SubagentModelSelectionConfig, { enabled: true, allowedModels: ALLOWED_MODELS })
 
-    expect(ctx.subagentModelSelection.current()).toEqual({ enabled: true, allowedModels: ALLOWED_MODELS })
+    expect(await capturePolicy(ctx)).toEqual(ALLOWED_MODELS)
     await ctx.fiber.dispose()
   })
 
   it('defaults off and follows the validated user layer', async () => {
     const ctx = ownContext(new Context())
-    await mountAgentLoopTestDependencies(ctx)
+    await mountAgentLoopTestDependencies(ctx, { workingDirectory: true })
+    await ctx.plugin(AgentLoop, { agents: [] })
 
     selectionConfigs.set(ctx, await liveConfig(ctx, SubagentModelSelectionConfig))
 
-    expect(ctx.subagentModelSelection.current()).toEqual({ enabled: false, allowedModels: [] })
+    expect(await capturePolicy(ctx)).toBeUndefined()
     await selectionConfigs.get(ctx)!.update({
       enabled: true,
       allowedModels: ALLOWED_MODELS,
     })
-    expect(ctx.subagentModelSelection.current()).toEqual({ enabled: true, allowedModels: ALLOWED_MODELS })
+    expect(await capturePolicy(ctx)).toEqual(ALLOWED_MODELS)
     await ctx.fiber.dispose()
   })
 
   it('rejects duplicate routes, enabled empty settings, and an empty durable policy', async () => {
     const ctx = ownContext(new Context())
-    await mountAgentLoopTestDependencies(ctx)
+    await mountAgentLoopTestDependencies(ctx, { workingDirectory: true })
+    await ctx.plugin(AgentLoop, { agents: [] })
 
     selectionConfigs.set(ctx, await liveConfig(ctx, SubagentModelSelectionConfig))
     ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
 
-    // A stored policy the service cannot apply fails when it is read, not when the profile row is written.
+    // File-written invalid settings reject Agent creation even without delegation tools.
     await selectionConfigs.get(ctx)!.update({ allowedModels: [...ALLOWED_MODELS, ...ALLOWED_MODELS] })
-    expect(() => ctx.subagentModelSelection.current()).toThrow('repeats route "alpha/fast-model"')
+    await expect(capturePolicy(ctx)).rejects.toThrow('repeats route "alpha/fast-model"')
 
     await selectionConfigs.get(ctx)!.update({ enabled: true, allowedModels: [] })
-    expect(() => ctx.subagentModelSelection.current()).toThrow('enabled subagent model selection requires at least one allowed model')
+    await expect(capturePolicy(ctx)).rejects.toThrow('enabled subagent model selection requires at least one allowed model')
     await selectionConfigs.get(ctx)!.update({
       enabled: false,
       allowedModels: ALLOWED_MODELS,
     })
-    expect(ctx.subagentModelSelection.current()).toEqual({ enabled: false, allowedModels: ALLOWED_MODELS })
+    expect(await capturePolicy(ctx)).toBeUndefined()
     await selectionConfigs.get(ctx)!.update({ allowedModels: [] })
-    expect(ctx.subagentModelSelection.current()).toEqual({ enabled: false, allowedModels: [] })
+    expect(await capturePolicy(ctx)).toBeUndefined()
 
     const invalid = Session.create(SessionId('empty-policy'))
     invalid.append('subagent/model-selection-policy', { allowedModels: [] })

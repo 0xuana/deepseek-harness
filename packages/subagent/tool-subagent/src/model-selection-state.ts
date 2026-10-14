@@ -33,7 +33,10 @@ const modelSelectionPolicySchema: zod.ZodType<AllowedModelRoute[] | null> = zod.
   model: zod.string().min(1),
 }).strict()).min(1).nullable()
 
-/** Host-only projection of the durable model-selection policy. */
+/**
+ * Host-only projection of the durable model-selection policy.
+ * Each independently mounted consumer registers this shared definition; the registry reference-counts it.
+ */
 export const subagentModelSelectionProjectionDefinition = {
   key: 'subagentModelSelectionPolicy',
   stateVersion: 1,

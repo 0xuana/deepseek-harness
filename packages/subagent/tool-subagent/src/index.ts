@@ -193,8 +193,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       const wording = providerWording(subagentProvider.inheritsParentContext)
       const providerRouteDefaults = subagentProvider.agentRouteDefaults
       const selectionDescription = providerRouteDefaults !== undefined
-        ? ' Inspect options with `list_subagent_models` before setting `provider` and `model` together. Omitted values use child defaults, falling back to this backend\'s route defaults. When the effective route changes, an omitted `reasoning_effort` uses the model\'s default.'
-        : ' Inspect options with `list_subagent_models` before setting `provider` and `model` together. Omitted values use child defaults, falling back to compatible parent values. When the effective route changes, an omitted `reasoning_effort` uses the model\'s default.'
+        ? ' Supply `provider` and `model` together. Omitted values use child defaults, falling back to this backend\'s route defaults. When the effective route changes, an omitted `reasoning_effort` uses the model\'s default.'
+        : ' Supply `provider` and `model` together. Omitted values use child defaults, falling back to compatible parent values. When the effective route changes, an omitted `reasoning_effort` uses the model\'s default.'
       const definition = defineTool({
         name: toolName,
         description: wording.description
@@ -202,7 +202,10 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
           + (subagentProvider.prepareContinuable !== undefined
             ? ' The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes.'
             : ' The completion notice includes its final answer. This backend does not accept follow-up messages.')
-          + (modelSelectionEnabled ? selectionDescription : ''),
+          + (modelSelectionEnabled ? selectionDescription : '')
+          + (modelSelectionEnabled && subagentProvider.inheritsParentContext
+            ? ' Changing the route can prevent provider-side reuse of the inherited conversation prefix.'
+            : ''),
         parameters: {
           cwd: {
             type: 'string',

@@ -12,6 +12,7 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { MockAdapter } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import * as mock from './scripted-provider.ts'
 import * as tool from '../src/index.ts'
+import * as ListModels from '../src/list-models.ts'
 import {
   assertAllowedModelRoutes,
   assertAllowedModelSelection,
@@ -121,7 +122,8 @@ describe('dsh-tool-subagent model selection', () => {
       'provider',
       'reasoning_effort',
     ])
-    expect(schema.description).toContain('list_subagent_models')
+    expect(schema.description).not.toContain('list_subagent_models')
+    expect(schema.description).not.toContain('Changing the route can prevent provider-side reuse')
     expect(ctx.tools.get('list_subagent_models', agent)).toBeDefined()
     expect(schema.description).not.toContain('alpha')
 
@@ -159,6 +161,43 @@ describe('dsh-tool-subagent model selection', () => {
     }
   })
 
+  it('shows discovery guidance only while its tool is visible, regardless of mount order', async () => {
+    const ctx = await setup({ provider: 'mock', modelSelection: true })
+    const agent = modelSelectionSetupAgent(ctx)
+    const descriptions = () => ctx.tools.schemas(agent).map(schema => schema.description).join('\n')
+    const guidance = 'Inspect options here before selecting a child provider and model'
+    expect(descriptions()).not.toContain(guidance)
+    expect(descriptions()).not.toContain('list_subagent_models')
+
+    const discovery = await ctx.plugin(ListModels)
+    expect(descriptions()).toContain(guidance)
+    const restore = agent.ctx.tools.restrict({ deny: ['list_subagent_models'] })
+    expect(descriptions()).not.toContain(guidance)
+    restore()
+    expect(descriptions()).toContain(guidance)
+    await discovery.dispose()
+    expect(descriptions()).not.toContain(guidance)
+  })
+
+  it.each(['configured', 'provider'] as const)('explains effort-only denial on a %s route without Session authorization', async (source) => {
+    const defaults = { provider: 'alpha', model: 'configured-model' }
+    const start = vi.fn()
+    const ctx = await setup({
+      provider: 'mock', modelSelection: true,
+      parentAgentOptions: { provider: 'alpha', model: 'parent-model' },
+      ...source === 'configured' ? { agentOptions: defaults } : {},
+    }, {
+      onStart: start,
+      ...source === 'provider' ? { agentRouteDefaults: defaults } : {},
+    })
+    const result = await callSubagent(ctx, {
+      description: 'adjust effort', prompt: 'work', reasoning_effort: 'low',
+    })
+    expect(result.isError).toBe(true)
+    expect(text(result)).toContain('without a recorded model-selection policy, explicit selection (including reasoning_effort) is limited to the parent route')
+    expect(start).not.toHaveBeenCalled()
+  })
+
   it('keeps settings-owned route fields visible but rejects other routes without a Session policy', async () => {
     const ctx = await setup({
       provider: 'mock',
@@ -170,7 +209,8 @@ describe('dsh-tool-subagent model selection', () => {
     const schema = ctx.tools.schemas(agent).find(entry => entry.name === 'subagent')!
     const props = (schema.parameters as { properties?: Record<string, unknown> }).properties ?? {}
     expect(Object.keys(props).sort()).toEqual(['cwd', 'description', 'model', 'prompt', 'provider', 'reasoning_effort'])
-    expect(schema.description).toContain('list_subagent_models')
+    expect(schema.description).not.toContain('list_subagent_models')
+    expect(schema.description).not.toContain('Changing the route can prevent provider-side reuse')
     expect(ctx.tools.get('list_subagent_models', agent)).toBeDefined()
 
     const result = await callSubagent(ctx, {
@@ -505,7 +545,8 @@ describe('dsh-tool-subagent model selection', () => {
     const agent = modelSelectionSetupAgent(ctx)
     const schema = ctx.tools.schemas(agent).find(entry => entry.name === 'subagent')!
     expect(schema.description).toContain('inherits this conversation')
-    expect(schema.description).toContain('list_subagent_models')
+    expect(schema.description).not.toContain('list_subagent_models')
+    expect(schema.description).toContain('Changing the route can prevent provider-side reuse of the inherited conversation prefix.')
 
     const allowed = await callSubagent(ctx, {
       description: 'fork work', prompt: 'do it', provider: 'alpha', model: 'fast-model', reasoning_effort: 'low',

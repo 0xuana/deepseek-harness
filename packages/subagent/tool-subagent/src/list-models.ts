@@ -109,7 +109,7 @@ export function apply(ctx: Context): void {
     description:
       'Inspect subagent models without changing the current Agent. No arguments: providers; '
       + '`provider`: allowed models; `provider` + `model`: that model and its reasoning efforts. '
-      + 'Use returned ids for delegation.',
+      + 'Inspect options here before selecting a child provider and model; use returned ids for delegation.',
     parameters: {
       provider: {
         type: 'string',

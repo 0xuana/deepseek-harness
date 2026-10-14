@@ -72,7 +72,7 @@ export class SubagentModelSelectionConfig extends Service {
    * Read a detached selection preference for the next fresh top-level Session.
    * @returns the enabled state and exact allowed routes.
    */
-  current(): SubagentModelSelectionSettings {
+  private current(): SubagentModelSelectionSettings {
     const enabled = this.config.enabled.get()
     const allowedModels = this.config.allowedModels.get()
     assertAllowedModelRoutes(allowedModels)

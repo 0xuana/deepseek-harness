@@ -2958,14 +2958,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     key: 'subagentModelSelection',
     summary: 'Host settings owner that records Session authorization before the first model request.',
     description: 'Host settings owner that records Session authorization before the first model request.',
-    methods: [
-      {
-        signature: 'current(): SubagentModelSelectionSettings',
-        description: 'Read a detached selection preference for the next fresh top-level Session.',
-        parameters: [],
-        returns: 'the enabled state and exact allowed routes.',
-      },
-    ],
+    methods: [],
   },
   {
     key: 'subagents',

@@ -408,14 +408,6 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 Host settings owner that records Session authorization before the first model request.
 
-```ts cordis-catalog
-/**
- * Read a detached selection preference for the next fresh top-level Session.
- * @returns the enabled state and exact allowed routes.
- */
-current(): SubagentModelSelectionSettings
-```
-
 Source: [`packages/subagent/tool-subagent/src/model-selection-settings.ts`](../../packages/subagent/tool-subagent/src/model-selection-settings.ts)
 
 <a id="ctxsubagents--subagentruntime"></a>

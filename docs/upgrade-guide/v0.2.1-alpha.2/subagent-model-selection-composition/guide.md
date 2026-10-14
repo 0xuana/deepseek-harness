@@ -11,6 +11,8 @@ English | [中文](guide.zh.md)
 
 `@deepseek-ai/dsh-tool-subagent` replaces `modelSelectionSettings` with `modelSelection`, which controls only optional child route fields. The tool no longer registers `list_subagent_models` or samples user settings. The Host `/model-selection-settings` service records authorization during Agent creation, including Sessions created before delegation tools are mounted. Existing Sessions keep their recorded policy; installing tools later does not resample settings. Shipped Web and Desktop presets include the independent discovery plugin and keep fork route fields disabled. Custom fork tools may enable them.
 
+A Host with model selection enabled and an empty allowed-model list rejects every fresh top-level Session, including those without delegation tools. The settings UI prevents saving that combination; configurations written directly must supply a non-empty list or disable selection.
+
 ## Migration
 
 1. In custom `cordis.yml`, patches, or direct plugin configuration, rename `modelSelectionSettings: true` to `modelSelection: true` on delegation tools that expose route arguments.

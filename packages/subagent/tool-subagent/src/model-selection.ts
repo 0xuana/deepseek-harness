@@ -152,7 +152,10 @@ export function assertAllowedModelSelection(
     ? provider === parentOptions.provider && model === parentOptions.model
     : policy.routes.some(route => route.provider === provider && route.model === model)
   if (allowed) return
-  throw new Error(`child LLM route "${provider}/${model}" is not allowed for this Session`)
+  throw new Error(`child LLM route "${provider}/${model}" is not allowed for this Session`
+    + (policy === undefined
+      ? '; without a recorded model-selection policy, explicit selection (including reasoning_effort) is limited to the parent route'
+      : ''))
 }
 
 /**
