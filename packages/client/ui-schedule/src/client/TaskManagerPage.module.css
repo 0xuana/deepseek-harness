@@ -1481,3 +1481,16 @@
     gap: 0;
   }
 }
+
+/* Touch devices take a 16px step on this page's text fields: iOS Safari zooms
+   the visual viewport for a focused field under that size and leaves the page
+   pannable after the keyboard closes, so the compact 13-14px steps above read
+   as a page wider than the screen. A fine pointer keeps those steps. */
+@media (pointer: coarse) {
+  .searchField input,
+  .instruction,
+  .ruleInput,
+  .zoneSearch {
+    font-size: 16px;
+  }
+}
