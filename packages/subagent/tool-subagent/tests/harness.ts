@@ -69,7 +69,7 @@ export async function setup(toolConfig: SetupConfig, mockConfig: Partial<mock.Co
       setup: async (agentCtx) => {
         await agentCtx.plugin(ListModels)
         const fiber = agentCtx.inject(tool.inject, (runtimeCtx) => {
-          tool.apply(runtimeCtx, { ...config, modelSelection: true })
+          return tool.apply(runtimeCtx, { ...config, modelSelection: true })
         })
         await fiber.await()
       },

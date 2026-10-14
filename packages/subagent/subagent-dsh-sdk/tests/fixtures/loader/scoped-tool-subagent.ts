@@ -18,13 +18,11 @@ export function apply(ctx: Context, config: Config): void {
   const install = (agent: Agent): void => {
     agent.ctx.plugin(ListModels)
     agent.ctx.inject(ToolSubagent.inject, (runtimeCtx) => {
-      ToolSubagent.apply(runtimeCtx, {
+      return ToolSubagent.apply(runtimeCtx, {
         provider: config.provider,
         modelSelection: true,
         ...(config.toolName === undefined ? {} : { toolName: config.toolName }),
         ...(config.agentOptions === undefined ? {} : { agentOptions: config.agentOptions }),
-        ...(config.persona === undefined ? {} : { persona: config.persona }),
-        ...(config.toolFilter === undefined ? {} : { toolFilter: config.toolFilter }),
         ...(config.maxDepth === undefined ? {} : { maxDepth: config.maxDepth }),
       })
     })
