@@ -84,7 +84,7 @@ Reviewer 从当前 Session surface 与待执行调用重建四个分区：固定
 
 #### 模型看到什么
 
-Reviewer 使用最新 `request/header.config` 的 provider 与模型，并沿用 shipped adapter 默认 reasoning。固定 `REVIEW_POLICY` 替代恰好一个动作的人工审批：allow 后立即以 Full access 执行。其余四个分区只包含上文列出的保留事实。响应为一个严格 JSON text 对象，包含 `risk` 与 `decision`；deny 可附字符串 `reason`。Reasoning blocks 可以位于这唯一 text block 之前。只有 `low + allow`、`medium + allow/deny` 和 `high + deny` 合法。
+Reviewer 使用最新 `request/header.config` 的 provider 与模型，并沿用 shipped adapter 默认 reasoning。固定 `REVIEW_POLICY` 替代恰好一个动作的人工审批：allow 后立即以 Full access 执行。其余三个分区只包含上文列出的保留事实。响应为一个严格 JSON text 对象，包含 `risk` 与 `decision`；deny 可附字符串 `reason`。Reasoning blocks 可以位于这唯一 text block 之前。只有 `low + allow`、`medium + allow/deny` 和 `high + deny` 合法。
 
 #### Token 影响
 
@@ -92,7 +92,7 @@ Reviewer 使用最新 `request/header.config` 的 provider 与模型，并沿用
 
 #### KV Cache 影响
 
-历史保持 surface 顺序且待审动作位于最后，因此每次评审文本在上一次评审的最后一条历史条目之前都与上一次相同；provider 的前缀缓存可以复用策略与先前历史。Compaction、cwd 变化，以及较早历史条目离开 surface 会终止这种复用。Auto 不向主 agent 增加专门 runtime context 或模式切换提示词。
+历史保持 surface 顺序且待审动作位于最后，因此每次评审文本在上一次评审的最后一条历史条目之前都与上一次相同；按 prompt 前缀缓存的路由因此可以复用策略与先前历史。Compaction、cwd 变化，以及较早历史条目离开 surface 会终止这种复用。Auto 不向主 agent 增加专门 runtime context 或模式切换提示词。
 
 ### 工具拒绝
 
@@ -117,6 +117,8 @@ Reviewer 使用最新 `request/header.config` 的 provider 与模型，并沿用
 - 模型分类可能出错。不提供确定性工具豁免、持久 grant、可配置策略或重试层。
 - 进程内 Auto child 独立审查自身调用。进程外 child 在父委派调用获准后保留原生权限系统。
 - reviewer 在带行级豁免的情况下，通过已废弃的同步 `snapshotEvents()` 读取 Session 动作历史。此前的调用、PTC start 与直接父级的初始 prompt 目前都没有投影或分页读取方，因此迁移按[同步读取决策](../../../.agents/notes/implemented/architecture/2026-09-09-deprecate-synchronous-session-event-reads.zh.md)继续延期。
+- 只在显式 `cache_control` 标记处缓存的路由会把标记放在评审请求末尾，因此只复用策略而不复用历史。复用历史需要 LLM 请求 API 提供缓存标记选项。
+- 评审请求不携带 `sessionId`，因此 OpenAI 路由不会收到 `prompt_cache_key`。传入它还会让评审请求附带 DeepSeek session-log 上传与 session header，需要先做请求用途决策。
 
 <a id="dev-note"></a>
 ### 开发备注

@@ -84,7 +84,7 @@ Unloading closes selection and review admission, migrates live Auto Sessions to 
 
 #### What the model sees
 
-The reviewer uses the latest `request/header.config` provider and model with the shipped adapter's default reasoning. Its fixed `REVIEW_POLICY` replaces human approval for exactly one action: allow executes immediately with Full access. The other four sections contain only the retained facts described above. It returns one strict JSON text object with `risk` and `decision`; deny may include a string `reason`. Reasoning blocks may precede that single text block. Only `low + allow`, `medium + allow/deny`, and `high + deny` are valid.
+The reviewer uses the latest `request/header.config` provider and model with the shipped adapter's default reasoning. Its fixed `REVIEW_POLICY` replaces human approval for exactly one action: allow executes immediately with Full access. The other three sections contain only the retained facts described above. It returns one strict JSON text object with `risk` and `decision`; deny may include a string `reason`. Reasoning blocks may precede that single text block. Only `low + allow`, `medium + allow/deny`, and `high + deny` are valid.
 
 #### Token effect
 
@@ -92,7 +92,7 @@ One additional model request per supported call, without caching, retries, trunc
 
 #### KV Cache effect
 
-Each review's text extends the previous review's text through its last history entry, because history keeps surface order and the pending action comes last; a provider's prefix cache therefore reuses the policy and earlier history. Compaction, a cwd change, and an earlier history entry leaving the surface end that reuse. Auto adds no dedicated runtime context or mode-switch prompt to the main agent.
+Each review's text extends the previous review's text through its last history entry, because history keeps surface order and the pending action comes last; a route that caches by prompt prefix therefore reuses the policy and earlier history. Compaction, a cwd change, and an earlier history entry leaving the surface end that reuse. Auto adds no dedicated runtime context or mode-switch prompt to the main agent.
 
 ### Tool denial
 
@@ -117,6 +117,8 @@ The denial appends an ordinary tool result; it does not rewrite earlier context 
 - Model classification can be wrong. There are no deterministic tool exemptions, persistent grants, configurable policy, or retry layer.
 - In-process Auto children review their own calls. Out-of-process children retain their native permission systems after the parent delegation call is allowed.
 - The reviewer reads the Session action history through the deprecated synchronous `snapshotEvents()` reader under a line-scoped waiver. Prior calls, PTC starts, and the direct parent's initial prompt have no projection or paged reader yet, so the migration stays deferred by [the synchronous-read decision](../../../.agents/notes/implemented/architecture/2026-09-09-deprecate-synchronous-session-event-reads.md).
+- Routes that cache only at explicit `cache_control` markers mark the end of the review request, so they reuse the policy but not the history. Reusing history needs a cache-marker option in the LLM request API.
+- Review requests carry no `sessionId`, so OpenAI routes receive no `prompt_cache_key`. Passing it would also attach the DeepSeek session-log upload and session headers to review requests, which first needs a request-purpose decision.
 
 <a id="dev-note"></a>
 ### Dev Note
