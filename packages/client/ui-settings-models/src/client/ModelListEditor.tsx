@@ -10,7 +10,8 @@
  * candidates the user picks from, never configuration written behind them. The
  * picker opens with the configured models checked, so confirming it adds the
  * newly checked candidates and removes the unchecked configured ones in the
- * draft; configured rows the reply does not list are kept.
+ * draft; configured rows the reply does not list are kept, and a confirmation
+ * that would empty the list is refused.
  *
  * A provider that cannot be interrogated (an unreachable endpoint, a protocol
  * with no readable listing) is not a dead end: the failure is shown next to the
@@ -177,7 +178,10 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
   const catalog = inheritedCatalog?.provider === catalogProvider ? inheritedCatalog?.models : undefined
   const inputDefaults = useMemo(() => new Map(catalog?.map(model => [model.id, model.inputModalities])), [catalog])
   const [candidates, setCandidates] = useState<readonly LlmDiscoveredModel[] | undefined>(undefined)
-  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set())
+  // Candidates whose checkbox the user flipped from its default. The default
+  // is read from the list at render, so a row drafted while the fetch was in
+  // flight opens checked rather than being removed by a stale selection.
+  const [flipped, setFlipped] = useState<ReadonlySet<string>>(new Set())
   const [candidateQuery, setCandidateQuery] = useState('')
   const [expanded, setExpanded] = useState<ReadonlySet<number>>(new Set())
   // Capacities are edited as text, so a field's keystrokes are held here rather
@@ -205,6 +209,7 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
    * after them down, so per-row state follows its row.
    */
   const forgetRows = (removed: ReadonlySet<number>): void => {
+    if (removed.size === 0) return
     /** The surviving row's new position, or `undefined` for a removed row. */
     const moved = (at: number): number | undefined =>
       removed.has(at) ? undefined : at - [...removed].filter(gone => gone < at).length
@@ -272,13 +277,10 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
         setFailure(t('fetchEmpty'))
         return
       }
-      // The picker opens on the current list so a few models can be added or
-      // removed in one place. An empty list serves the whole catalog, so every
-      // candidate starts checked.
-      const known = new Set(models.map(model => textOf(model, 'id')))
       setCandidateQuery('')
-      setCandidates(found)
-      setPicked(new Set(found.filter(model => models.length === 0 || known.has(model.id)).map(model => model.id)))
+      setFlipped(new Set())
+      // A listing may repeat an id; the picker and the list hold each model once.
+      setCandidates([...new Map(found.map(model => [model.id, model])).values()])
     } finally {
       setBusy(false)
     }
@@ -286,55 +288,66 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
 
   const closePicker = (): void => {
     setCandidates(undefined)
-    setPicked(new Set())
+    setFlipped(new Set())
     setCandidateQuery('')
   }
 
+  // The picker opens on the current list so a few models can be added or
+  // removed in one place. A list with no identified model serves the whole
+  // catalog or nothing yet, so every candidate starts checked.
+  const configuredIds = new Set(models.map(model => textOf(model, 'id')).filter(id => id.length > 0))
+  const pickedByDefault = (id: string): boolean => configuredIds.size === 0 || configuredIds.has(id)
+  const isPicked = (id: string): boolean => pickedByDefault(id) !== flipped.has(id)
+
+  const activeCandidates = candidates ?? []
+  const listed = new Set(activeCandidates.map(candidate => candidate.id))
+  // An unchecked candidate leaves the list. A row the listing does not name,
+  // including a half-typed row without an id, is outside the picker and stays.
+  const removedRows = new Set<number>()
+  models.forEach((model, at) => {
+    const id = textOf(model, 'id')
+    if (listed.has(id) && !isPicked(id)) removedRows.add(at)
+  })
+  // A kept row the user already tuned wins over the provider's own numbers.
+  const keptRows = models.filter((_model, at) => !removedRows.has(at))
+  const keptIds = new Set(keptRows.map(model => textOf(model, 'id')))
+  const addedRows = activeCandidates
+    .filter(candidate => isPicked(candidate.id) && !keptIds.has(candidate.id))
+    .map(adopt)
+  // An empty list serves the whole catalog, so emptying a non-empty list
+  // would restore every model instead of removing the unchecked ones.
+  const emptiesList = models.length > 0 && keptRows.length === 0 && addedRows.length === 0
+
   const adoptPicked = (): void => {
-    /* v8 ignore next -- the dialog only renders with candidates loaded */
-    if (candidates === undefined) return
-    const listed = new Set(candidates.map(candidate => candidate.id))
-    // An unchecked candidate leaves the list. A row the listing does not name,
-    // including a half-typed row without an id, is outside the picker and stays.
-    const removed = new Set<number>()
-    models.forEach((model, at) => {
-      const id = textOf(model, 'id')
-      if (listed.has(id) && !picked.has(id)) removed.add(at)
-    })
-    const kept = models.filter((_model, at) => !removed.has(at))
-    const keptIds = new Set(kept.map(model => textOf(model, 'id')))
-    // A kept row the user already tuned wins over the provider's own numbers.
-    const added = candidates.filter(candidate => picked.has(candidate.id) && !keptIds.has(candidate.id))
-    onChange([...kept, ...added.map(adopt)])
-    forgetRows(removed)
+    onChange([...keptRows, ...addedRows])
+    forgetRows(removedRows)
     closePicker()
   }
 
   const toggle = (id: string): void => {
-    setPicked((current) => {
+    setFlipped((current) => {
       const next = new Set(current)
       if (!next.delete(id)) next.add(id)
       return next
     })
   }
 
-  const activeCandidates = candidates ?? []
   const normalizedCandidateQuery = candidateQuery.trim().toLowerCase()
   const visibleCandidates = normalizedCandidateQuery.length === 0
     ? activeCandidates
     : activeCandidates.filter(candidate => candidate.id.toLowerCase().includes(normalizedCandidateQuery)
       || candidate.name?.toLowerCase().includes(normalizedCandidateQuery) === true)
   const allVisibleCandidatesPicked = visibleCandidates.length > 0
-    && visibleCandidates.every(candidate => picked.has(candidate.id))
+    && visibleCandidates.every(candidate => isPicked(candidate.id))
 
   const toggleVisibleCandidates = (): void => {
     // Only visible candidates change: a hidden checked one may be a configured
     // model, and clearing it would remove that model unseen.
-    setPicked((current) => {
+    const target = !allVisibleCandidatesPicked
+    setFlipped((current) => {
       const next = new Set(current)
-      const clear = visibleCandidates.every(candidate => current.has(candidate.id))
       for (const candidate of visibleCandidates) {
-        if (clear) next.delete(candidate.id)
+        if (pickedByDefault(candidate.id) === target) next.delete(candidate.id)
         else next.add(candidate.id)
       }
       return next
@@ -435,7 +448,14 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
         footer={(
           <>
             <Button variant="outline" onClick={closePicker}>{t('cancel')}</Button>
-            <Button variant="outline" onClick={adoptPicked}>{t('fetchAdopt')}</Button>
+            <Button
+              variant="outline"
+              disabled={emptiesList}
+              title={emptiesList ? t('fetchKeepOne') : undefined}
+              onClick={adoptPicked}
+            >
+              {t('fetchAdopt')}
+            </Button>
           </>
         )}
       >
@@ -466,7 +486,7 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
                   <label className={styles['candidateLabel']}>
                     <input
                       type="checkbox"
-                      checked={picked.has(candidate.id)}
+                      checked={isPicked(candidate.id)}
                       onChange={() => { toggle(candidate.id) }}
                     />
                     <span className={styles['candidateId']} title={candidate.name ?? candidate.id}>

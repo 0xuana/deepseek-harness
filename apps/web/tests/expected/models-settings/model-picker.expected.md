@@ -1,7 +1,7 @@
 - dialog "选择模型":
   - heading "选择模型" [level=2]
   - button "关闭"
-  - paragraph: 以下是模型提供商的可用模型。已勾选的模型会保留在列表中，取消勾选已配置的模型即可移除。
+  - paragraph: 以下是模型提供商的可用模型，勾选的模型即为模型列表。
   - searchbox "搜索模型"
   - button "取消全选"
   - list:
