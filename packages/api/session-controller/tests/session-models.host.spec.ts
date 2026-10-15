@@ -567,23 +567,40 @@ describe('Web session model selection', () => {
     await ctx.fiber.dispose()
   })
 
-  it('reads the Agent default live for a session whose log names no selection', async () => {
-    const { ctx, sessionId } = await harness()
+  it('follows default changes until an explicit selection through the Web create entrypoint', async () => {
+    const { ctx, agent: template } = await harness()
+    onTestFinished(() => ctx.fiber.dispose())
     let stored = { provider: 'deepseek-official', model: 'deepseek-chat' }
-    createSessionTestRemote(ctx, {
+    const remote = createSessionTestRemote(ctx, {
       defaultModelSelection: () => stored,
+      saveDefaultModelSelection: (selection) => { stored = selection },
       cwd: '/tmp',
     })
-
-    expect(currentSelection(ctx, sessionId))
-      .toEqual({ provider: 'deepseek-official', model: 'deepseek-chat' })
-    // The default moving after the session exists still reaches it: New
-    // Session reuses a blank session rather than minting another, so a seed
-    // captured at creation would show the superseded model there.
+    ctx.agents.setFactory({
+      async createAgent(ownerCtx, options) {
+        const session = ctx.sessions.create(options.sessionId)
+        const agent: Agent = { ...template, id: session.id, session, ctx: ownerCtx, options: options.agentOptions ?? {} }
+        await options.setup?.(ownerCtx, agent)
+        await ctx.agents.register(agent)
+        return { agent, dispose: () => Promise.resolve() }
+      },
+      resume: () => Promise.reject(new Error('unexpected resume')),
+    })
+    const first = expectValue(await remote.create({ cwd: '/tmp' }))
+    const second = expectValue(await remote.create({ cwd: '/tmp' }))
+    const agent = ctx.agents.get(first.sessionId)!
+    expect(currentModelSelection(ctx.sessionProjections, agent)).toEqual(stored)
     stored = { provider: 'deepseek-official', model: 'deepseek-reasoner' }
-    expect(currentSelection(ctx, sessionId))
-      .toEqual({ provider: 'deepseek-official', model: 'deepseek-reasoner' })
-    await ctx.fiber.dispose()
+    expect(currentModelSelection(ctx.sessionProjections, agent)).toEqual(stored)
+    const selection = { ...stored, reasoningEffort: ReasoningEffortId('high') }
+    // The explicit selection is identical to the live fallback, including effort.
+    stored = selection
+    expectValue(await remote.selectModel({ sessionId: first.sessionId, ...selection }))
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'model/selection'))
+      .toMatchObject([{ data: selection }])
+    expectValue(await remote.selectModel({ sessionId: second.sessionId, provider: 'deepseek-official', model: 'deepseek-chat' }))
+    expect(currentModelSelection(ctx.sessionProjections, agent)).toEqual(selection)
+    expect(currentSelection(ctx, first.sessionId)).toEqual(selection)
   })
 
   it('keeps a session on its logged selection when the Agent default differs', async () => {

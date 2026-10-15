@@ -24,7 +24,11 @@ declare module '@deepseek-ai/dsh-system-prompt' {
   }
 }
 
-/** Merge-extensible agent creation options. Persona belongs to system-prompt sections. */
+/**
+ * Merge-extensible agent options. Route fields may be live accessors until the
+ * Session records a selection or request; step preparation captures their value.
+ * Persona belongs to system-prompt sections.
+ */
 export interface AgentOptions {
   /** Provider route (must have a registered adapter at call time). */
   provider?: string
@@ -164,7 +168,7 @@ export type AssistantStreamFrame =
 
 declare module './types.ts' {
   interface Agent {
-    /** Initial route and output controls; the route applies only while the Session records no model selection or request. */
+    /** Route fallback and output controls; live accessors apply until the Session records a selection or request. */
     readonly options: AgentOptions
     /** The live session this agent drives; its log is the durable source of truth. */
     readonly session: Session

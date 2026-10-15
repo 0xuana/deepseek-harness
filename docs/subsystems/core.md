@@ -61,7 +61,7 @@ Source: [`packages/core/agent/src/types.ts`](../../packages/core/agent/src/types
 interface Agent {
   /** Session-backed Agent identity. */
   readonly id: SessionId
-  /** Initial route and output controls; the route applies only while the Session records no model selection or request. */
+  /** Route fallback and output controls; live accessors apply until the Session records a selection or request. */
   readonly options: AgentOptions
   /** The live session this agent drives; its log is the durable source of truth. */
   readonly session: Session
@@ -193,7 +193,11 @@ type AssistantStreamFrame =
 `running` describes the driver-wide drain interval and may span consecutive queued turns; it does not prove a turn is still open. Disposal removes the agent from the registry and emits `agent/disposed`; it is not a terminal status value. `followup()` returns no handle: its `MessageId` identifies durable inbox insertion, claim, and discard facts, not a later assistant output or turn ending. `whenIdle()` observes the whole agent, so callers may call a receipt-to-idle interval a run only when they explicitly own that interval ([decision](../../.agents/notes/implemented/architecture/2026-07-30-followup-enqueue-and-owned-runs.md)).
 
 ```ts type-equiv
-/** Merge-extensible agent creation options. Persona belongs to system-prompt sections. */
+/**
+ * Merge-extensible agent options. Route fields may be live accessors until the
+ * Session records a selection or request; step preparation captures their value.
+ * Persona belongs to system-prompt sections.
+ */
 interface AgentOptions {
   /** Provider route (must have a registered adapter at call time). */
   provider?: string

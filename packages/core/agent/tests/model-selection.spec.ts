@@ -72,7 +72,7 @@ describe('Session model selection', () => {
     expect(h.ctx.sessionProjections.snapshot(h.session).values.modelSelection).toEqual({ lastUsed: null, next: null })
 
     h.record(INITIAL)
-    expect(h.session.snapshotEvents()).toEqual([])
+    expect(h.session.snapshotEvents()).toMatchObject([{ type: 'model/selection', data: INITIAL }])
     const selected = { provider: 'beta', model: 'b1', reasoningEffort: ReasoningEffortId('high') }
     h.record(selected)
     selected.model = 'mutated'
@@ -80,7 +80,7 @@ describe('Session model selection', () => {
     read.model = 'also mutated'
     expect(h.current()).toEqual({ provider: 'beta', model: 'b1', reasoningEffort: 'high' })
     h.record(h.current()!)
-    expect(h.session.snapshotEvents()).toHaveLength(1)
+    expect(h.session.snapshotEvents()).toHaveLength(2)
     h.agent.options.model = 'other initial model'
     expect(h.current()?.model).toBe('b1')
   })

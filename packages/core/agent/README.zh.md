@@ -42,7 +42,7 @@ await handle.dispose()   // stops the loop, unregisters, removes the session, un
 
 `AgentOptions` 提供初始提供方／模型路由、可选的由适配器定义的 `reasoningEffort`，以及可选的正数 `maxTokens` 输出上限。循环会校验确切模型的推理（reasoning）支持、解析适配器默认值、把生效值记录在请求头中，并将它们应用到每个对话请求。可选的 `setup(agentCtx, agent)` 回调会在 agent 发布之前组合其作用域世界：`agentCtx` 拥有注册，显式的未发布 Agent 则提供其 Session；Context 不含反向 Agent 属性。作用域工具、提示词段与监听器在任何创建公告之前就已存在。Setup 只做组合：创建完成后才能驱动 agent。
 
-Session 中记录的模型选择优先于最近请求的路由，最近请求的路由又优先于 `AgentOptions`。校验新选择后调用 `recordModelSelection(ctx.sessionProjections, agent, selection)`；它只在选择不同时追加 `model/selection`。`currentModelSelection()` 读取这份共享状态，不使用独立的可变缓存。恢复保留记录中的选择；需要有意覆盖它的部署在 setup 期间调用 `recordDeclaredRoute()`。该辅助函数仅在路由相同时保留显式推理强度，适配器默认的强度则重新解析。
+Session 中记录的模型选择优先于最近请求的路由，最近请求的路由又优先于 `AgentOptions`。校验新选择后调用 `recordModelSelection(ctx.sessionProjections, agent, selection)`；除非记录中已有相同选择，否则它会追加 `model/selection`。与 options 回退值相同的显式选择仍会记录。`currentModelSelection()` 读取这份共享状态，不使用独立的可变缓存。恢复保留记录中的选择；需要有意覆盖它的部署在 setup 期间调用 `recordDeclaredRoute()`。该辅助函数仅在路由相同时保留显式推理强度，适配器默认的强度则重新解析。
 
 ### 驱动 agent 的对话
 

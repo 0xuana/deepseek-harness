@@ -315,6 +315,24 @@ describe('automation-only ACP bridge', () => {
     })
   })
 
+  it('restores a pending model selection without any request header', async () => {
+    harness = await makeBridgeHarness()
+    await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
+    const created = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
+    await harness.client.setSessionConfigOption({
+      sessionId: created.sessionId, configId: 'model', value: '["mock","plain"]',
+    })
+    const agent = harness.ctx.agents.get(SessionId(created.sessionId))!
+    expect(agent.session.requestHeader()).toBeUndefined()
+    expect(agent.session.snapshotEvents().some(event => event.type === 'model/selection')).toBe(true)
+    await harness.client.closeSession({ sessionId: created.sessionId })
+
+    const resumed = await harness.client.resumeSession({ sessionId: created.sessionId, cwd: process.cwd() })
+    expect(resumed.configOptions?.find(option => option.id === 'model')).toMatchObject({
+      currentValue: '["mock","plain"]',
+    })
+  })
+
   it('restores an explicitly selected reasoning effort', async () => {
     harness = await makeBridgeHarness({ script: [textResponse('persisted')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })

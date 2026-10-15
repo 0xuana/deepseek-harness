@@ -87,19 +87,25 @@ export function currentModelSelection(
   projections: ModelSelectionProjections,
   agent: Agent,
 ): ModelSelection | undefined {
-  const state = projections.stateOf(agent.session, 'modelSelection')
-  if (state === undefined) {
-    throw new Error(`agent "${agent.id}": the modelSelection projection is not registered; mount dsh-session-projection`)
-  }
-  const recorded = state.pending ?? state.lastUsed
+  const recorded = recordedModelSelection(projections, agent)
   if (recorded !== null) return { ...recorded }
   const { provider, model, reasoningEffort } = agent.options
   return provider && model ? toSelection(provider, model, reasoningEffort) : undefined
 }
 
+/** Read only durable selection state; deployment defaults are not an explicit choice. */
+function recordedModelSelection(projections: ModelSelectionProjections, agent: Agent): ModelSelection | null {
+  const state = projections.stateOf(agent.session, 'modelSelection')
+  if (state === undefined) {
+    throw new Error(`agent "${agent.id}": the modelSelection projection is not registered; mount dsh-session-projection`)
+  }
+  return state.pending ?? state.lastUsed
+}
+
 /**
  * Record the selection the Agent's next model step uses. A selection equal to
- * {@link currentModelSelection} records nothing; callers validate the route first.
+ * the pending or last-used recorded selection records nothing; an options-only
+ * fallback is always recorded. Callers validate the route first.
  * @param projections - registry carrying the `modelSelection` projection.
  * @param agent - Agent whose Session receives the `model/selection` event.
  * @param selection - complete provider, model, and optional reasoning effort.
@@ -109,7 +115,7 @@ export function recordModelSelection(
   agent: Agent,
   selection: ModelSelection,
 ): void {
-  if (sameModelSelection(currentModelSelection(projections, agent) ?? null, selection)) return
+  if (sameModelSelection(recordedModelSelection(projections, agent), selection)) return
   agent.session.append('model/selection', toSelection(selection.provider, selection.model, selection.reasoningEffort))
 }
 
