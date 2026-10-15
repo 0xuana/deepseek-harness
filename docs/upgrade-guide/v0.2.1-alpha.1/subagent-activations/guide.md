@@ -11,9 +11,7 @@ English | [中文](guide.zh.md)
 
 `@deepseek-ai/dsh-tool-subagent` removes `backgroundMode`, `enableRunInBackground`, and the model argument `run_in_background`. Every delegation now returns `{ kind: 'activation', subagentId }` after accepting the child, and the runtime delivers its final answer in a parent completion notice. Foreground results and `{ kind: 'background', jobId }` results are removed; subagents are no longer collected or stopped through `job_output` or `job_kill`.
 
-`@deepseek-ai/dsh-subagent-in-process-driver` is removed. Local providers contribute creation inputs through `prepareContinuable()`; the subagent service owns execution. Spawn and Fork children can receive later messages, including after settlement when persistence and Session query are available. External providers execute once and do not accept follow-up messages.
-
-Subagent initialization requires `@deepseek-ai/dsh-session-projection`.
+The published `@deepseek-ai/dsh-subagent-in-process-driver` package is removed. Local providers contribute creation inputs through `prepareContinuable()`; the subagent service owns execution. Spawn and Fork children can receive later messages, including after settlement when persistence and Session query are available. External providers execute once and do not accept follow-up messages.
 
 ## Migration
 
@@ -26,7 +24,7 @@ Subagent initialization requires `@deepseek-ai/dsh-session-projection`.
        toolName: subagent
    ```
 
-   Mount `@deepseek-ai/dsh-session-projection`. Local tool delegation requires Session persistence. Compose it with the [subagent service and provider](../../../../packages/subagent/subagent/README.md#use-this-package).
+   Local tool delegation requires Session persistence. Compose it with the [subagent service and provider](../../../../packages/subagent/subagent/README.md#use-this-package).
 
 2. Remove `run_in_background` from tool calls and update result consumers to read `subagentId`. Collect the completion notice instead of foreground output or a Job result. Use `interrupt_agent` to stop the current execution; use `send_message` only for local children when those control tools are composed.
 
