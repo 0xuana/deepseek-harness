@@ -1529,7 +1529,7 @@ function renderEventRelations(pkgs: Pkg[], events: readonly EventEntry[]): strin
     }
     lines.push(
       '',
-      '## Non-harness or undeclared event strings seen in package source',
+      '## Events outside the current Harness API catalog',
       '',
       renderGeneratedRegion('event-producer-consumer:undeclared', extraRows.join('\n')),
     )

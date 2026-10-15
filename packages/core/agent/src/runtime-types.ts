@@ -331,6 +331,10 @@ declare module '@deepseek-ai/cordis' {
      * `prepareCall()` resolution commits neither. The prepared call capability
      * governs prompt admission. Model-visible content must use logged channels;
      * this waterfall cannot mutate messages.
+     * @deprecated Retained for existing listeners; do not add new listeners.
+     * Use recordModelSelection() before step preparation for model and reasoning
+     * choices, and AgentOptions.maxTokens for the output cap. Other per-request
+     * control overrides have no replacement API.
      * @param payload.agent - the agent making the model call.
      * @param payload.turn - the open turn number.
      * @param payload.step - the step whose request this is.
