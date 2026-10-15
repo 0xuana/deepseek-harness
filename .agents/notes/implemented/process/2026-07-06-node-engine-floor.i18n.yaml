@@ -2,18 +2,18 @@
 # section, a hash of its English and Chinese blocks outside code blocks and generated regions.
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-07-06-node-engine-floor.md
-/agent-note-raise-the-node-lts-engine-floor-to-22-19:
-  en: 01f43f2b4c6bd4fa
-  zh: 7f34e5b3c1c55419
-/agent-note-raise-the-node-lts-engine-floor-to-22-19/problem:
-  en: d7bf1b1699ce0dc8
-  zh: f10dfd0e4787bb44
-/agent-note-raise-the-node-lts-engine-floor-to-22-19/decision:
-  en: 0051c0d8c1948f63
-  zh: cbab7aa0f53f7200
-/agent-note-raise-the-node-lts-engine-floor-to-22-19/consequences:
-  en: 0b9fbe932d9a8b1f
-  zh: 642e19d06caecef2
-/agent-note-raise-the-node-lts-engine-floor-to-22-19/alternatives-considered:
-  en: c433389b2064eaf9
-  zh: 57de2af812def1c4
+/agent-note-node-runtime-floor-and-compatibility-coverage:
+  en: 233253ec88be6880
+  zh: 5e1f0db7eea06d67
+/agent-note-node-runtime-floor-and-compatibility-coverage/problem:
+  en: 1e45546d7452029f
+  zh: d99966ac42bb193f
+/agent-note-node-runtime-floor-and-compatibility-coverage/decision:
+  en: f7eea7a3e6be6d22
+  zh: 976494745decb87b
+/agent-note-node-runtime-floor-and-compatibility-coverage/consequences:
+  en: 224ce4b13f297f8b
+  zh: 1bb5f8ebdf3243b3
+/agent-note-node-runtime-floor-and-compatibility-coverage/alternatives-considered:
+  en: f03afb2aaedfba62
+  zh: 19ab9a0cd9ec3a5e

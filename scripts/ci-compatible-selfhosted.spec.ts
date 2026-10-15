@@ -67,12 +67,11 @@ describe('Node compatibility self-hosted routing', () => {
     expect(route({ repository: '' })).toBe('ubuntu-latest')
   })
 
-  it('preserves all three required version jobs and their concurrency', () => {
+  it('preserves the supported version jobs and their concurrency', () => {
     expect(job.if).toBe("github.event_name == 'pull_request'")
     expect(job.strategy['fail-fast']).toBe(false)
     expect(job.strategy.matrix.include).toEqual([
-      { node: '22.19', name: 'node 22.19', runner: 'ubuntu-latest', gate_concurrency: '1' },
-      { node: '24.9', name: 'node 24.9', runner: 'ubuntu-latest', gate_concurrency: '1' },
+      { node: '24.0', name: 'node 24.0', runner: 'ubuntu-latest', gate_concurrency: '1' },
       { node: 26, name: 'node 26', runner: 'ubuntu-latest', gate_concurrency: '1' },
     ])
     expect(job.env.DSH_GATE_CONCURRENCY).toBe('${{ matrix.gate_concurrency }}')
@@ -133,8 +132,8 @@ describe('Node compatibility self-hosted routing', () => {
     const step = job.steps.find(candidate => candidate.name === 'Verify isolated Node installation')!
     expect(step.if).toBe("runner.environment == 'self-hosted'")
     for (const [executable, status] of [
-      ['/runner temp/node-compat-toolcache/node/24.9.0/x64/bin/node', 0],
-      ['/shared/toolcache/node/24.9.0/x64/bin/node', 1],
+      ['/runner temp/node-compat-toolcache/node/24.0.0/x64/bin/node', 0],
+      ['/shared/toolcache/node/24.0.0/x64/bin/node', 1],
       ['/runner temp/node-compat-toolcache-other/node', 1],
     ] as const) {
       const child = spawnSync('bash', ['-e', '-u', '-o', 'pipefail', '-c', 'node() { printf "%s" "$TEST_EXECUTABLE"; }; ' + step.run!], {

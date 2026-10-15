@@ -36,7 +36,7 @@ Skill selection is independent of delivery: project, custom-directory, and user 
 
 Office operation skills invoke the configured Node and Kit CLI through the profile's shell commands. See the [Office provider](../../packages/skill/skill-office/README.md#use-this-package) for command selection and replacing the skill collection. Configuration patches apply at process startup; changing skills does not require rebuilding the runtime wheel or Python environment.
 
-Repository builds also materialize a dev-only `runtime/node/` carrier. It runs `node runtime/node/runtime-bootstrap.mjs` on system Node 22.19 or newer. It is never selected automatically and is excluded from wheels and sdists.
+Repository builds also materialize a dev-only `runtime/node/` carrier. It runs `node runtime/node/runtime-bootstrap.mjs` on system Node 24.0 or newer. It is never selected automatically and is excluded from wheels and sdists.
 
 Both carriers execute the same `dsh` grammar and shipped profiles, including the standalone `sdk-minimal` tree and the full `web` profile with its frontend assets. The private `dsh-python-runtime-closure` manifest defines the packaged dependency closure; there is no Python-specific Node application or checked-in default `cordis.yml`.
 

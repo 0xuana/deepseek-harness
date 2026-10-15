@@ -429,7 +429,7 @@ function nodeCompatGates(): Gate[] {
   const typecheck = flagEnabled('DSH_NODE_COMPAT_SKIP_TYPECHECK')
     ? []
     : [pnpmScript('typecheck', 'typecheck')]
-  if (runningNodeMajor() !== 22) {
+  if (!process.versions.node.startsWith('24.0.')) {
     return [...typecheck, ...nodeCompatSmokeGates()]
   }
   return [
@@ -473,15 +473,6 @@ function nodeCompatSmokeGates(options: { cliSmoke?: boolean } = {}): Gate[] {
     )
   }
   return gates
-}
-
-/** Active Node major used to select version-specific compatibility checks. */
-function runningNodeMajor(): number {
-  const major = Number.parseInt(process.versions.node.split('.')[0] ?? '', 10)
-  if (!Number.isSafeInteger(major)) {
-    throw new Error(`run-gates: cannot parse Node version ${JSON.stringify(process.versions.node)}.`)
-  }
-  return major
 }
 
 function ciStaticGates(options: { ownsBuild: boolean }): Gate[] {
