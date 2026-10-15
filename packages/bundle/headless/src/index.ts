@@ -14,7 +14,7 @@ import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import { installModelSwitchNotice, recordModelSelection } from '@deepseek-ai/dsh-agent'
+import { installModelSwitchNotice, recordDeclaredRoute } from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentOptions } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
 import type {} from '@deepseek-ai/dsh-fs'
@@ -339,7 +339,7 @@ async function run(ctx: Context, config: Config, io: HeadlessIo): Promise<void> 
   // (@deepseek-ai/dsh-agent-preset-registry README, "Composing a child agent").
   const setup = (agentCtx: Context, agent: Agent): void => {
     // A resumed Session continues with this run's configured model.
-    recordModelSelection(ctx.sessionProjections, agent, selection)
+    if (config.sessionId !== undefined) recordDeclaredRoute(ctx.sessionProjections, agent, selection)
     installModelSwitchNotice(agentCtx)
   }
   const sessionId = brandString<SessionId>(config.sessionId ?? `session-${randomUUID()}`)

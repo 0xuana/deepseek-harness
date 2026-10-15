@@ -4,7 +4,7 @@ import { Readable } from 'node:stream'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import AgentRegistry from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { currentModelSelection } from '@deepseek-ai/dsh-agent'
 import type {
   Agent,
   AgentHandle,
@@ -13,7 +13,7 @@ import type {
   ResumeAgentOptions,
 } from '@deepseek-ai/dsh-agent'
 import AgentDefaultModelConfig from '@deepseek-ai/dsh-agent-default-model'
-import { LlmAttemptId, ToolCallId, createAssistantMessage, createToolResultMessage, createUserMessage, type MessageId, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import { LlmAttemptId, ReasoningEffortId, ToolCallId, createAssistantMessage, createToolResultMessage, createUserMessage, type MessageId, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import SessionStore from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Session, SessionId, UserMessage } from '@deepseek-ai/dsh-session'
@@ -736,6 +736,32 @@ describe('headless runner', () => {
     expect(await test.run()).toMatchObject({ code: 0, out: 'resumed answer\n', err: '' })
     expect(session.seq).toBeGreaterThan(before)
     await test.ctx.fiber.dispose()
+  })
+
+  it.each(['test-model', 'other-model'])('restores explicit effort only for the declared route (%s)', async (savedModel) => {
+    const test = await bench({
+      afterPrompt(session, message, agent) {
+        expect(currentModelSelection(test.ctx.sessionProjections, agent)).toEqual({
+          provider: 'test-provider', model: 'test-model',
+          ...savedModel === 'test-model' ? { reasoningEffort: 'high' } : {},
+        })
+        appendTurn(session, 1, message, 'resumed answer', true)
+      },
+    }, {
+      sessionId: 'session-effort',
+      observe: () => Promise.resolve({
+        header: { cwd: process.cwd(), origin: 'user' },
+        events: [],
+        [Symbol.dispose]() {},
+      }),
+    })
+    try {
+      const session = test.ctx.sessions.create(brandString<SessionId>('session-effort'), { meta: { cwd: process.cwd() } })
+      session.append('model/selection', { provider: 'test-provider', model: savedModel, reasoningEffort: ReasoningEffortId('high') })
+      expect(await test.run()).toMatchObject({ code: 0, out: 'resumed answer\n', err: '' })
+    } finally {
+      await test.ctx.fiber.dispose()
+    }
   })
 
   it('rejects a persisted Session recorded in another working directory', async () => {
