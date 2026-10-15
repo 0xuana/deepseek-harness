@@ -18,8 +18,8 @@
   en: 326904be67f43b86
   zh: e143c7d9e1f30bc0
 /deepseek-ai-dsh-agent/use-this-package/create-or-resume-an-agent:
-  en: a11f471882357617
-  zh: 2158cd792d283c7d
+  en: adb806cfe9e2e0a4
+  zh: 8da57f9e62869523
 /deepseek-ai-dsh-agent/use-this-package/drive-an-agent-s-conversation:
   en: 71e258897e2e7d73
   zh: abf0991012faa17e
@@ -27,8 +27,8 @@
   en: 2594a1e02adea801
   zh: cae8860369728efb
 /deepseek-ai-dsh-agent/use-this-package/intercept-or-observe-work-in-flight:
-  en: 8019485edab3d0d4
-  zh: 12421a5775a419a6
+  en: ae14e4c604211d42
+  zh: 208018c2d017d5ca
 /deepseek-ai-dsh-agent/understand-the-implementation:
   en: ce7e776e9d516bdb
   zh: 59d2751743db7795
@@ -42,8 +42,8 @@
   en: f6802c7f94f623b3
   zh: cc3885db80765970
 /deepseek-ai-dsh-agent/understand-the-implementation/source-map:
-  en: d88de2a182691dbb
-  zh: 837d4454f1d7dea0
+  en: 5385d7a8618df0eb
+  zh: 35853b9d1a1406f1
 /deepseek-ai-dsh-agent/understand-the-implementation/registry-and-lifecycle:
   en: df92e97cedd0d02e
   zh: f6040c145bffd933
@@ -63,8 +63,8 @@
   en: 962c598672b0eed6
   zh: d05b3bc936685ad3
 /deepseek-ai-dsh-agent/model-experience/user-steering-and-injected-messages/what-the-model-sees:
-  en: 9703263d210e6246
-  zh: c5568c930f10fab5
+  en: b32fa34babcb4ac4
+  zh: 8bbdabbf2b0a21e1
 /deepseek-ai-dsh-agent/model-experience/user-steering-and-injected-messages/token-effect:
   en: 5f428bfadaf4394b
   zh: 03308df9fd3492a7

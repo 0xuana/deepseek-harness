@@ -42,7 +42,7 @@ await handle.dispose()   // stops the loop, unregisters, removes the session, un
 
 `AgentOptions` supplies the initial provider/model route, optional adapter-owned `reasoningEffort`, and optional positive `maxTokens` output cap. The loop validates exact-model reasoning support, resolves adapter defaults, records the effective values in the request header, and applies them to each conversation request. An optional `setup(agentCtx, agent)` callback composes the agent's scoped world before it is published: `agentCtx` owns registrations, while the explicit unpublished Agent provides its Session; the Context has no reverse Agent property. Scoped tools, prompt sections, and listeners exist before any creation announcement. Setup is composition-only: drive the agent only after creation resolves.
 
-A Session's recorded model selection takes precedence over its latest request route, which takes precedence over `AgentOptions`. Call `recordModelSelection(ctx.sessionProjections, agent, selection)` after validating a new choice; it appends `model/selection` unless the same choice is already recorded. An explicit choice equal to the options fallback is still recorded. `currentModelSelection()` reads this shared state without a separate mutable cache. Resume preserves the recorded choice; deployments that intentionally replace it call `recordDeclaredRoute()` during setup. That helper retains explicit reasoning effort only for the same route, while adapter-defaulted effort is resolved again.
+A Session's recorded model selection takes precedence over its latest request route, which takes precedence over `AgentOptions`. Validated choices are stored as `model/selection` events unless the same choice is already recorded; an explicit choice equal to the options fallback is still recorded. Selection reads use the shared projection without a separate mutable cache. Programmatic resume preserves the recorded choice. A deployment can override the route during setup; when its configuration omits reasoning effort, the override retains saved explicit effort only for the same route. Adapter-defaulted effort is resolved again.
 
 ### Drive an agent's conversation
 
@@ -66,7 +66,7 @@ await handle.agent.whenIdle()
 
 ### Intercept or observe work in flight
 
-`agent/request` is deprecated and retained for existing listeners. Do not add new listeners. Use `recordModelSelection()` before step preparation for provider, model, and reasoning effort, and `AgentOptions.maxTokens` for the output cap. Other per-request control overrides have no replacement API.
+`agent/request` is deprecated and retained for existing listeners. Do not add new listeners. Provider, model, and reasoning effort are selected before step preparation; `AgentOptions.maxTokens` sets the output cap. Other per-request control overrides have no replacement API. See the [migration guide](../../../docs/upgrade-guide/v0.2.1-alpha.3/session-model-selection/guide.md) for affected callers.
 
 The `agent/*` events let plugins act on live work without depending on the loop package. `agent/pre-step` can reject a proposed step or replace the messages entering it; `agent/request-error` lets a listener retry a failed model request; `agent/turn-stopping` runs before an otherwise completed turn closes and can steer to keep it open. `agent/assistant-stream` carries one process-local Assistant attempt's ordered start, transient chunk, and end frames. Start names the attempt's turn and step, chunk indexes are dense from zero, and `end.index` is the next chunk position. The loop commits the complete compact stream as one `assistant/message` or `assistant/attempt` before a committed end frame, so the live event remains presentation data rather than the replay source. `agent/status`, `agent/created`, and `agent/disposed` drive UI and coordination state, and the per-message `agent/inbox/*` notifications keep inbox projections in sync. Exact signatures, dispatch modes, and payload contracts live in the generated region of the [core subsystem page](../../../docs/subsystems/core.md#cordis-surface).
 
@@ -103,7 +103,7 @@ The package is built on one separation: the public `Agent` surface and registry 
 | [`src/types.ts`](src/types.ts) | `AgentOptions`, cancellation causes, and inbox projection vocabulary |
 | [`src/dispatch.ts`](src/dispatch.ts) | `agentEvents` fused dispatcher and `assembleContextFor(agent)` |
 | [`src/consumed-work.ts`](src/consumed-work.ts) | `foldConsumedWork(events)`: what the log's consumed work became |
-| [`src/model-selection.ts`](src/model-selection.ts) | Durable model-selection fold, read/write helpers, and optional switch notices |
+| [`src/model-selection.ts`](src/model-selection.ts) | Session model-selection state and optional switch notices |
 | [`src/archive-admission.ts`](src/archive-admission.ts) | The `turn` family of the Workspace registry's archive admission: a running turn and its user-cause cancel |
 
 ### Registry and lifecycle
@@ -144,7 +144,7 @@ The package-level contract is enough for most consumers; read these when you nee
 
 #### What the model sees
 
-`followup`, `steer`, and `inject` feed the owning session as identified user-role messages; accepted content becomes part of the derived history the model reads on later steps. `agent/pre-step` and the other declared events let plugins reject a proposed step or add durable request material. `installModelSwitchNotice` adds `[model changed: assistant turns above this point were generated by <previous>; the session continues with <next>]` to the first step assembled for a different provider/model route that would send a model request; provider names appear only when the switch crosses providers, and reasoning-effort-only changes add nothing. An empty first decision and a decision that removes offered messages remain no-request results. If a request step fails before logging its header, the next request step receives the notice again because the durable previous route has not changed.
+`followup`, `steer`, and `inject` feed the owning session as identified user-role messages; accepted content becomes part of the derived history the model reads on later steps. `agent/pre-step` and the other declared events let plugins reject a proposed step or add durable request material. When model-switch notices are enabled, the first step assembled for a different provider/model route that would send a model request receives `[model changed: assistant turns above this point were generated by <previous>; the session continues with <next>]`; provider names appear only when the switch crosses providers, and reasoning-effort-only changes add nothing. An empty first decision and a decision that removes offered messages remain no-request results. If a request step fails before logging its header, the next request step receives the notice again because the durable previous route has not changed.
 
 #### Token effect
 
