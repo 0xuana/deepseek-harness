@@ -131,6 +131,31 @@
       "seq": 12,
       "time": 0,
       "data": {
+        "id": "{{messageId}}",
+        "role": "user",
+        "content": [
+          {
+            "type": "image",
+            "attachment": {
+              "attachmentId": "sha256:b1ff9c8ea3a780bad09b346c423d2d0e46815926879b18e841d928376a946640",
+              "mediaType": "image/png",
+              "width": 1,
+              "height": 1,
+              "bytes": 69
+            }
+          }
+        ],
+        "source": {
+          "kind": "python-snapshot-image-offload"
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "user/message",
+      "seq": 13,
+      "time": 0,
+      "data": {
         "content": [
           {
             "type": "text",
@@ -157,31 +182,6 @@
         },
         "role": "user",
         "id": "{{messageId}}"
-      },
-      "surfaceOp": "append"
-    },
-    {
-      "type": "user/message",
-      "seq": 13,
-      "time": 0,
-      "data": {
-        "id": "{{messageId}}",
-        "role": "user",
-        "content": [
-          {
-            "type": "image",
-            "attachment": {
-              "attachmentId": "sha256:b1ff9c8ea3a780bad09b346c423d2d0e46815926879b18e841d928376a946640",
-              "mediaType": "image/png",
-              "width": 1,
-              "height": 1,
-              "bytes": 69
-            }
-          }
-        ],
-        "source": {
-          "kind": "python-snapshot-image-offload"
-        }
       },
       "surfaceOp": "append"
     },
@@ -273,7 +273,7 @@
       "data": {
         "targets": [
           {
-            "seq": 13,
+            "seq": 12,
             "imageIndexes": [
               0
             ]
@@ -1673,6 +1673,37 @@
           "seq": 12,
           "time": 0,
           "data": {
+            "id": "{{messageId}}",
+            "role": "user",
+            "content": [
+              {
+                "type": "image",
+                "attachment": {
+                  "attachmentId": "sha256:b1ff9c8ea3a780bad09b346c423d2d0e46815926879b18e841d928376a946640",
+                  "mediaType": "image/png",
+                  "width": 1,
+                  "height": 1,
+                  "bytes": 69
+                }
+              }
+            ],
+            "source": {
+              "kind": "python-snapshot-image-offload"
+            }
+          },
+          "surfaceOp": "append"
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{parent}}",
+        "event": {
+          "type": "user/message",
+          "seq": 13,
+          "time": 0,
+          "data": {
             "content": [
               {
                 "type": "text",
@@ -1699,37 +1730,6 @@
             },
             "role": "user",
             "id": "{{messageId}}"
-          },
-          "surfaceOp": "append"
-        }
-      }
-    },
-    {
-      "method": "session.event",
-      "payload": {
-        "sessionId": "{{parent}}",
-        "event": {
-          "type": "user/message",
-          "seq": 13,
-          "time": 0,
-          "data": {
-            "id": "{{messageId}}",
-            "role": "user",
-            "content": [
-              {
-                "type": "image",
-                "attachment": {
-                  "attachmentId": "sha256:b1ff9c8ea3a780bad09b346c423d2d0e46815926879b18e841d928376a946640",
-                  "mediaType": "image/png",
-                  "width": 1,
-                  "height": 1,
-                  "bytes": 69
-                }
-              }
-            ],
-            "source": {
-              "kind": "python-snapshot-image-offload"
-            }
           },
           "surfaceOp": "append"
         }
@@ -1851,7 +1851,7 @@
           "data": {
             "targets": [
               {
-                "seq": 13,
+                "seq": 12,
                 "imageIndexes": [
                   0
                 ]
