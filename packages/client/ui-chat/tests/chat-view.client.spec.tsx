@@ -1829,8 +1829,9 @@ describe('ChatView', () => {
     expect(within(pendingBubble as HTMLElement).queryByRole('button', { name: '在新对话中分支' })).toBeNull()
     expect(turnProcessControl(view.container)).toBeNull()
     expect(runningContent(view.container)?.textContent).toMatch(/^深度求索中，用时 \d+秒 ···$/)
+    // The status stays on the running Turn's tail; the steering waiting for the next Step follows it.
     expect(view.getByRole('status').compareDocumentPosition(view.getByText('interrupt now'))
-      & Node.DOCUMENT_POSITION_PRECEDING).not.toBe(0)
+      & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
 
     act(() => {
       h.setSession({ testInbox: { 'next-turn': [queued], 'next-step': [] } })
@@ -2055,6 +2056,31 @@ describe('ChatView', () => {
       expect(view.getAllByText(`input ${hostOrder[0]}`)).toHaveLength(1)
     },
   )
+
+  it('keeps steering a stopped Turn left pending ahead of the next opening echo, in claim order', () => {
+    const local = (requestId: string, placement: 'steering' | 'transcript', text: string) => ({
+      requestId: requestId as never, placement, time: 1_000, text, attachments: [],
+    })
+    const steers = [local('s1', 'steering', 'steer one'), local('s2', 'steering', 'steer two')]
+    const next = local('next', 'transcript', 'next prompt')
+    const inbox: InboxState = { 'next-turn': [], 'next-step': steers.map(item => ({
+      id: item.requestId, role: 'user', source: { kind: 'user', rpcId: item.requestId },
+      content: [{ type: 'text', text: item.text }],
+    })) }
+    const h = makeHarness({}, { pendingSubmissions: [...steers, next], testInbox: inbox })
+    const view = render(<h.ChatView {...h.props} />)
+    const flow = () => [...view.container.querySelectorAll<HTMLElement>(
+      '[data-submission-echo], [data-chat-flow-kind="turn-process"], [data-chat-running]',
+    )].map(element => element.hasAttribute('data-chat-running') ? 'status'
+      : element.matches('[data-chat-flow-kind="turn-process"]') ? 'title'
+        : String([...steers, next].find(input => element.textContent?.includes(input.text))?.requestId))
+    // The next Turn's first claim logs the pending steering before the prompt.
+    expect(flow()).toEqual(['s1', 's2', 'next'])
+    act(() => { h.setSession({ running: true }) })
+    expect(flow()).toEqual(['s1', 's2', 'next', 'status'])
+    act(() => { h.setChat({ turnTimings: new Map([[1, { startTime: 1_000 }]]) }) })
+    expect(flow()).toEqual(['s1', 's2', 'next', 'title', 'status'])
+  })
 
   it('leaves an opening echo below an empty historical Turn title', () => {
     const h = makeHarness({ turnTimings: new Map([[1, { startTime: 1_000 }]]), turnEnds: new Map([[1, 2]]) }, {
