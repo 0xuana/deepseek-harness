@@ -13,7 +13,6 @@ import type { TerminalBackend, TerminalBackendSpawnSpec, TerminalSendOperation }
 import type { SubprocessTerminalHandle, SubprocessTerminalSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
-import type {} from '@deepseek-ai/dsh-session-projection'
 import { ENCODING_PREAMBLE } from '@deepseek-ai/dsh-pwsh-local'
 import { type Config, type ResolvedConfig, resolveConfig, type ShellDialect, validateConfig } from './config.ts'
 import { LocalPtySession } from './session.ts'
