@@ -54,7 +54,18 @@ it.each(['turn-tail-actions', 'goal-multi-turn-actions', 'present'] as const)(
         const { top, bottom } = seat.getBoundingClientRect()
         return { top, bottom }
       })
-      expect(answerBounds.top).toBe(await process.evaluate(element => element.getBoundingClientRect().bottom) + 16)
+      const processBottom = await process.evaluate(element => element.getBoundingClientRect().bottom)
+      if (scenario === 'present') {
+        expect(answerBounds.top).toBe(processBottom + 16)
+      } else {
+        // Every reply stays visible: the intermediate reply follows the folded control at the 12px reply gap.
+        const leadTop = await page.getByText('Reading the workspace now.', { exact: true }).evaluate((element) => {
+          const seat = element.closest('[data-chat-flow-kind="assistant-step"]')
+          if (seat === null) throw new Error('intermediate reply has no Chat seat')
+          return seat.getBoundingClientRect().top
+        })
+        expect(leadTop).toBe(processBottom + 12)
+      }
       if (scenario === 'present') {
         const geometry = await page.locator('[data-presented-files-row]').evaluate((grid) => {
           const root = grid.parentElement
