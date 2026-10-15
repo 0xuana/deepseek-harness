@@ -1,7 +1,8 @@
 /** Shared pure fold of the Session's turn and step events. */
 import type { TurnBoundaryProjection } from './types.ts'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
-import { SessionSeq } from '@deepseek-ai/dsh-session'
+import type { SessionSeq } from '@deepseek-ai/dsh-session/types'
+import { brandNumber } from '@deepseek-ai/dsh-brand'
 import { z as zod } from 'zod'
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
@@ -11,12 +12,14 @@ declare module '@deepseek-ai/dsh-session-projection/types' {
   }
 }
 
+const sessionSeqSchema = zod.number().int().nonnegative().transform(brandNumber<SessionSeq>)
+
 const turnBoundaryProjectionSchema: zod.ZodType<TurnBoundaryProjection> = zod.object({
-  openTurnStartSeq: zod.number().int().nonnegative().transform(SessionSeq).nullable(),
-  lastStepStartSeq: zod.number().int().nonnegative().transform(SessionSeq).nullable(),
+  openTurnStartSeq: sessionSeqSchema.nullable(),
+  lastStepStartSeq: sessionSeqSchema.nullable(),
   lastStepBoundary: zod.object({
     kind: zod.union([zod.literal('start'), zod.literal('end')]),
-    seq: zod.number().int().nonnegative().transform(SessionSeq),
+    seq: sessionSeqSchema,
   }).nullable(),
   lastTurn: zod.number().int().nonnegative(),
 })
