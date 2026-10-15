@@ -592,7 +592,7 @@ export class ReactLoopAgent implements Agent {
     )
     signal.throwIfAborted()
     if (proposedConfig.provider !== selection.provider || proposedConfig.model !== selection.model) {
-      throw new Error('agent/request cannot change the provider or model after step preparation')
+      throw new Error(`agent "${this.id}": agent/request proposed "${proposedConfig.provider}/${proposedConfig.model}" after step preparation fixed "${selection.provider}/${selection.model}"; use recordModelSelection() before step preparation`)
     }
     let config: LlmCallConfig
     let preparedCall: PreparedLlmCall | undefined

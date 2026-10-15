@@ -1314,7 +1314,7 @@ describe('agent loop', () => {
       .toEqual([])
     expect(agent.session.snapshotEvents().at(-1)).toMatchObject({
       type: 'turn/end', data: { reason: { kind: 'error', error: {
-        message: 'agent/request cannot change the provider or model after step preparation',
+        message: `agent "a1": agent/request proposed "${field === 'provider' ? 'other/mock' : 'mock/other'}" after step preparation fixed "mock/mock"; use recordModelSelection() before step preparation`,
       } } },
     })
   })
