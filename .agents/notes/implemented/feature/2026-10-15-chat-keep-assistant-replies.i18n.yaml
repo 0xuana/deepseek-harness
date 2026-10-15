@@ -1,0 +1,31 @@
+# Bilingual-pair consistency record for 2026-10-15-chat-keep-assistant-replies.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-10-15-chat-keep-assistant-replies.md
+/agent-note-keep-every-assistant-reply-when-a-turn-folds:
+  en: 813e0e2590457f2d
+  zh: 12b01305ae439712
+/agent-note-keep-every-assistant-reply-when-a-turn-folds/problem:
+  en: 967c8df85ef30286
+  zh: 7cd5f219fe42f567
+/agent-note-keep-every-assistant-reply-when-a-turn-folds/decision:
+  en: 7f59f284df26b5fe
+  zh: b6ae20ffdb506ac3
+/agent-note-keep-every-assistant-reply-when-a-turn-folds/decision/what-stays-visible:
+  en: 41d8322fb0a8d010
+  zh: a413bfdffb34833f
+/agent-note-keep-every-assistant-reply-when-a-turn-folds/decision/what-does-not-change:
+  en: 352c5bdf25c09c62
+  zh: 24878584535b4d57
+/agent-note-keep-every-assistant-reply-when-a-turn-folds/decision/implementation:
+  en: 96ec890325a9d88f
+  zh: 4cc13ec9117f9a67
+/agent-note-keep-every-assistant-reply-when-a-turn-folds/alternatives-considered:
+  en: 28694c0a82df72ac
+  zh: 8f6f81c833cf8f2c
+/agent-note-keep-every-assistant-reply-when-a-turn-folds/consequences:
+  en: 07a2a18edd197c62
+  zh: 4f93fdbf0bce61b5
+/agent-note-keep-every-assistant-reply-when-a-turn-folds/testing:
+  en: 73760d0f673fad28
+  zh: 98392c167db5bd9a
