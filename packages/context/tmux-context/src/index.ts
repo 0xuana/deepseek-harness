@@ -210,12 +210,6 @@ const tmuxContextStateSchema = zod.object({
 
 type TmuxContextState = zod.infer<typeof tmuxContextStateSchema>
 
-/**
- * Register a prepended pre-step listener for the lifetime of `ctx`.
- * @param ctx - plugin context; the listener is disposed with it.
- * @param config - durable refresh scheduling configuration.
- * @throws when the refresh interval is invalid.
- */
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionStateMap {
     /** The stable state block of this plugin's latest durable injection, or null. */
@@ -223,15 +217,18 @@ declare module '@deepseek-ai/dsh-session-projection/types' {
   }
 }
 
-/** Register the tmux-context plugin after its projections are ready.
- * @param ctx - plugin context.
- * @returns when the plugin is ready.
+/**
+ * Register a prepended pre-step listener for the lifetime of `ctx`.
+ * @param ctx - plugin context; the listener is disposed with it.
+ * @param config - durable refresh scheduling configuration.
+ * @returns when the listener is registered.
+ * @throws when the refresh interval is invalid.
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
   const refreshIntervalMs = config.refreshIntervalMs
   validateRefreshInterval(refreshIntervalMs)
 
-  const projection = await ctx.sessionProjections.register({
+  const tmuxContextProjectionHandle = await ctx.sessionProjections.register({
     key: 'tmuxContext',
     stateVersion: 1,
     stateSchema: tmuxContextStateSchema,
@@ -255,7 +252,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     if (decision.kind === 'reject' || signal.aborted || step !== 1) return decision
     const bash = ctx.get('shell')
     if (bash === undefined) return decision
-    const previous = projection.stateOf(agent.session)
+    const previous = tmuxContextProjectionHandle.stateOf(agent.session)
     if (refreshIntervalMs !== undefined && refreshIntervalMs > 0 && previous !== null) {
       const now = Date.now()
       if (now >= previous.time && now - previous.time < refreshIntervalMs) return decision
