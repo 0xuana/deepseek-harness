@@ -308,7 +308,7 @@ export class AgentLoop extends Service implements AgentFactory {
   private readonly ownership: FactoryOwnership
   /** Plain holder prevents Cordis from re-tracing the factory's dependency context through a caller shadow. */
   private readonly runtime: { ctx: Context }
-  private inbox!: ProjectionHandle<InboxState>
+  private inboxProjectionHandle!: ProjectionHandle<InboxState>
 
   constructor(ctx: Context, config: Config) {
     super(ctx, 'agentLoop')
@@ -327,7 +327,7 @@ export class AgentLoop extends Service implements AgentFactory {
     const ownership = this.ownership
     // The inbox remains readable until agent teardown finishes.
     ctx.effect(() => () => ownership.dispose(), 'agentLoop.transactions()')
-    this.inbox = await ctx.sessionProjections.register(inboxProjectionDefinition)
+    this.inboxProjectionHandle = await ctx.sessionProjections.register(inboxProjectionDefinition)
     ctx.effect(() => ctx.agents.setFactory(this), 'agentLoop.setFactory()')
     ctx.systemPrompt.variable('provider', context => context.agent?.options.provider)
     ctx.systemPrompt.variable('model', context => context.agent?.options.model)
@@ -543,10 +543,10 @@ export class AgentLoop extends Service implements AgentFactory {
       }
     }
     const untrack = this.ownership.track(dispose)
-    const inbox = this.inbox
+    const inboxProjectionHandle = this.inboxProjectionHandle
     try {
       unfollowOwner = ownerCtx.effect(function* () {
-        const created = machine = new ReactLoopAgent(loopCtx, id, options, session, () => inbox.stateOf(session), lastTurn)
+        const created = machine = new ReactLoopAgent(loopCtx, id, options, session, () => inboxProjectionHandle.stateOf(session), lastTurn)
         machineReady.resolve()
         // Adopt the scope on its original fiber so it cannot unload before teardown.
         // A loop already unloading during minting owns the provisional scope itself.

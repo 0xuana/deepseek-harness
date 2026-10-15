@@ -15,12 +15,12 @@ export class TeamJournal {
 
   /**
    * @param ctx - Team service context with the injected Session service.
-   * @param projection - Team state registration owned by the Team service.
+   * @param teamProjectionHandle - Team state registration owned by the Team service.
    * @param onCommit - synchronous notification after the Team event flush succeeds.
    */
   constructor(
     private readonly ctx: Context,
-    private readonly projection: ProjectionHandle<TeamProjectionState>,
+    private readonly teamProjectionHandle: ProjectionHandle<TeamProjectionState>,
     private readonly onCommit: (root: Agent) => void,
   ) {}
 
@@ -31,7 +31,7 @@ export class TeamJournal {
    * @throws when the durable Team projection has failed.
    */
   state(root: Agent): TeamState {
-    const projection = this.projection.stateOf(root.session)
+    const projection = this.teamProjectionHandle.stateOf(root.session)
     if (projection.failure !== undefined) throw new Error(projection.failure)
     return projection
   }

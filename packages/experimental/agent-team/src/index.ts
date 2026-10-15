@@ -90,8 +90,8 @@ export class TeamService extends Service {
 
   protected async [Service.init](): Promise<void> {
     const ctx = this.ctx
-    const projection = await ctx.sessionProjections.register(teamProjectionDefinition)
-    this.journal = new TeamJournal(ctx, projection, (root) => { this.activity.notify(TeamId(root.id)) })
+    const teamProjectionHandle = await ctx.sessionProjections.register(teamProjectionDefinition)
+    this.journal = new TeamJournal(ctx, teamProjectionHandle, (root) => { this.activity.notify(TeamId(root.id)) })
     this.roster = new TeamRoster(ctx, this.journal, this.lifecycle, this.config.maxMembers)
     this.tasks = new TeamTaskBoard(this.journal, this.config.maxTasks)
     ctx.effect(() => () => this.disposeRuntime(), 'agentTeams.runtimeLifecycle()')

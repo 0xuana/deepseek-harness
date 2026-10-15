@@ -160,7 +160,7 @@ export async function apply(ctx: Context, config: Config, session?: Session): Pr
   const toolName = config.toolName ?? 'subagent'
 
   const modelSelectionCapable = config.modelSelectionSettings === true
-  const modelSelectionProjection = await ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
+  const subagentModelSelectionProjectionHandle = await ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
 
   const assertSubagentProviderConfiguration = (subagentProvider: SubagentProvider): void => {
     presets.assertProvider(subagentProvider)
@@ -416,7 +416,7 @@ export async function apply(ctx: Context, config: Config, session?: Session): Pr
     const freshSession = target.firstLiveSeq === 0
       // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
       && target.eventAt(SessionSeq(0))?.type !== 'session/end-seed'
-    let allowedModels = subagentModelSelectionPolicy(modelSelectionProjection, target)
+    let allowedModels = subagentModelSelectionPolicy(subagentModelSelectionProjectionHandle, target)
     if (allowedModels === undefined) {
       const parentId = target.header.origin === 'subagent'
         ? target.header.parentSession
@@ -429,14 +429,14 @@ export async function apply(ctx: Context, config: Config, session?: Session): Pr
         const parent = sessions.get(parentId)
         allowedModels = parent === undefined
           ? undefined
-          : subagentModelSelectionPolicy(modelSelectionProjection, parent)
+          : subagentModelSelectionPolicy(subagentModelSelectionProjectionHandle, parent)
       } else if (freshSession) {
         const current = settings.current()
         allowedModels = current.enabled ? current.allowedModels : undefined
       }
     }
     if (allowedModels !== undefined) {
-      recordSubagentModelSelection(modelSelectionProjection, target, allowedModels)
+      recordSubagentModelSelection(subagentModelSelectionProjectionHandle, target, allowedModels)
     }
     return allowedModels === undefined ? undefined : { routes: allowedModels }
   }

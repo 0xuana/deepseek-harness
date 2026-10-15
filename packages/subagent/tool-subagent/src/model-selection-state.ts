@@ -52,29 +52,29 @@ export const subagentModelSelectionProjectionDefinition = {
 
 /**
  * Read the exact route list captured for a model-selectable definition.
- * @param projection - registered policy state reader.
+ * @param subagentModelSelectionProjectionHandle - registered policy state reader.
  * @param session - session whose durable decision is read.
  * @returns a detached route list, or undefined for the fixed-route definition.
  */
 export function subagentModelSelectionPolicy(
-  projection: Pick<ProjectionHandle<AllowedModelRoute[] | null>, 'stateOf'>,
+  subagentModelSelectionProjectionHandle: Pick<ProjectionHandle<AllowedModelRoute[] | null>, 'stateOf'>,
   session: Session,
 ): AllowedModelRoute[] | undefined {
-  return projection.stateOf(session)?.map(route => ({ ...route }))
+  return subagentModelSelectionProjectionHandle.stateOf(session)?.map(route => ({ ...route }))
 }
 
 /**
  * Append the route policy once, before its definition can reach a model request.
- * @param projection - registered policy state reader.
+ * @param subagentModelSelectionProjectionHandle - registered policy state reader.
  * @param session - session receiving the model-selectable definition.
  * @param allowedModels - exact routes the definition may select explicitly.
  */
 export function recordSubagentModelSelection(
-  projection: Pick<ProjectionHandle<AllowedModelRoute[] | null>, 'stateOf'>,
+  subagentModelSelectionProjectionHandle: Pick<ProjectionHandle<AllowedModelRoute[] | null>, 'stateOf'>,
   session: Session,
   allowedModels: readonly AllowedModelRoute[],
 ): void {
-  if (subagentModelSelectionPolicy(projection, session) !== undefined) return
+  if (subagentModelSelectionPolicy(subagentModelSelectionProjectionHandle, session) !== undefined) return
   session.append('subagent/model-selection-policy', {
     allowedModels: allowedModels.map(route => ({ ...route })),
   })

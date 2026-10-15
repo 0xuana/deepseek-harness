@@ -177,7 +177,7 @@ export class PlanModeController extends Service {
 
   /** Validated deployment-owned guidance. */
   private readonly section: string
-  private projection!: ProjectionHandle<PlanUnitState>
+  private planProjectionHandle!: ProjectionHandle<PlanUnitState>
 
   /**
    * Latest selection per session awaiting the next accepted in-turn pre-step.
@@ -193,7 +193,7 @@ export class PlanModeController extends Service {
 
   protected async [Service.init](): Promise<void> {
     const ctx = this.ctx
-    this.projection = await ctx.sessionProjections.register(planProjectionDefinition)
+    this.planProjectionHandle = await ctx.sessionProjections.register(planProjectionDefinition)
     let disposed = false
     // Pre-step is outside Session.append publication, so it can append the
     // log-only mode event inside an open turn without re-entering the session.
@@ -389,7 +389,7 @@ export class PlanModeController extends Service {
   }
 
   private planState(session: Session): PlanUnitState {
-    return this.projection.stateOf(session)
+    return this.planProjectionHandle.stateOf(session)
   }
 
   /**

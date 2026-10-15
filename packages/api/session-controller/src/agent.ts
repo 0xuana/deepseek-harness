@@ -170,7 +170,7 @@ export async function inspectApiSession(
 
 /** Owns every operation that may create, resume, or configure a Web Agent. */
 export class ApiSessionAgentController {
-  private modelSelection!: ProjectionHandle<ModelSelectionProjectionState>
+  private modelSelectionProjectionHandle!: ProjectionHandle<ModelSelectionProjectionState>
   private readonly resumes = new Map<SessionId, Promise<Agent>>()
   private readonly claims = new Map<SessionId, Promise<void>>()
   private readonly selections = new WeakMap<Agent, InstalledSelection>()
@@ -185,7 +185,7 @@ export class ApiSessionAgentController {
    */
   async initialize(): Promise<void> {
     const ctx = this.ctx
-    this.modelSelection = await ctx.sessionProjections.register(modelSelectionProjection)
+    this.modelSelectionProjectionHandle = await ctx.sessionProjections.register(modelSelectionProjection)
     ctx.typert.lookups.configure('agent', async (sessionId: SessionId) => {
       const found = await this.resolveAgent(sessionId)
       if ('error' in found) throw found.error
@@ -300,7 +300,7 @@ export class ApiSessionAgentController {
   selectionFor(agent: Agent): InstalledSelection {
     const installed = this.selections.get(agent)
     if (installed !== undefined) return installed
-    const projectionState = this.modelSelection.stateOf(agent.session)
+    const projectionState = this.modelSelectionProjectionHandle.stateOf(agent.session)
     let picked = projectionState.pending === null
       ? undefined
       : agentModelSelection(projectionState.pending)

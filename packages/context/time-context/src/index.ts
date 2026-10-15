@@ -155,7 +155,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     return created
   }
 
-  const projection = await ctx.sessionProjections.register({
+  const timeContextProjectionHandle = await ctx.sessionProjections.register({
     key: 'timeContext',
     stateVersion: 2,
     stateSchema: timeContextStateSchema,
@@ -190,7 +190,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     const decision = await next()
     if (decision.kind === 'reject' || signal.aborted) return decision
     const now = Date.now()
-    const state = projection.stateOf(agent.session)
+    const state = timeContextProjectionHandle.stateOf(agent.session)
     if (refreshIntervalMs > 0) {
       const lastInjection = state.lastInjectionTime
       if (lastInjection != null

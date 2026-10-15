@@ -72,7 +72,7 @@ export class WorkingDirectoryService extends Service {
   private readonly operations = new Set<Promise<unknown>>()
   private readonly lifecycle = new AbortController()
 
-  private projection!: ProjectionHandle<string | null>
+  private workingDirectoryProjectionHandle!: ProjectionHandle<string | null>
 
   constructor(ctx: Context, config: Config) {
     super(ctx, 'workingDirectory')
@@ -84,7 +84,7 @@ export class WorkingDirectoryService extends Service {
   protected async [Service.init](): Promise<void> {
     const ctx = this.ctx
     const directorySchema = zod.string().min(1).refine(isAbsolute).nullable()
-    this.projection = await ctx.sessionProjections.register({
+    this.workingDirectoryProjectionHandle = await ctx.sessionProjections.register({
       key: 'workingDirectory',
       stateVersion: 1,
       stateSchema: directorySchema,
@@ -125,7 +125,7 @@ export class WorkingDirectoryService extends Service {
    * @returns its effective absolute directory.
    */
   get(session: Session): string {
-    return this.projection.stateOf(session) ?? this.defaultDirectory
+    return this.workingDirectoryProjectionHandle.stateOf(session) ?? this.defaultDirectory
   }
 
   /**
@@ -144,7 +144,7 @@ export class WorkingDirectoryService extends Service {
       control.throwIfAborted()
       agent.ctx.fiber.assertActive()
       if (info?.type === 'directory') {
-        if (this.projection.stateOf(agent.session) === null) {
+        if (this.workingDirectoryProjectionHandle.stateOf(agent.session) === null) {
           agent.session.append('working-directory/change', { cwd: current })
         }
         return current

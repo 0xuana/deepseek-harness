@@ -122,7 +122,7 @@ export class SandboxPolicyService extends Service {
   readonly defaultMode: SandboxMode
   /** The absolute `workspace-write` fallback root for calls without a session cwd. */
   readonly workspaceRoot: string
-  private projection!: ProjectionHandle<SandboxMode | null>
+  private sandboxModeProjectionHandle!: ProjectionHandle<SandboxMode | null>
 
   constructor(ctx: Context, config: Config) {
     super(ctx, 'sandboxPolicy')
@@ -135,7 +135,7 @@ export class SandboxPolicyService extends Service {
 
   protected async [Service.init](): Promise<void> {
     const ctx = this.ctx
-    this.projection = await ctx.sessionProjections.register({
+    this.sandboxModeProjectionHandle = await ctx.sessionProjections.register({
       key: 'sandboxMode',
       stateVersion: 1,
       stateSchema: sandboxModeStateSchema,
@@ -181,7 +181,7 @@ export class SandboxPolicyService extends Service {
    * @returns the last logged mode, or `undefined` without one.
    */
   overrideOf(session: Session): SandboxMode | undefined {
-    return this.projection.stateOf(session) ?? undefined
+    return this.sandboxModeProjectionHandle.stateOf(session) ?? undefined
   }
 }
 

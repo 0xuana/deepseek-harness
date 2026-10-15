@@ -247,7 +247,7 @@ interface FactorySlot {
 export class AgentRegistry extends Service {
   static inject = ['sessionProjections']
 
-  private turnBoundaryProjection!: ProjectionHandle<TurnBoundaryProjection>
+  private turnBoundaryProjectionHandle!: ProjectionHandle<TurnBoundaryProjection>
   private store = new Map<SessionId, AgentEntry>()
   private factory: FactorySlot | undefined
   private readonly initiators = new AsyncLocalStorage<Agent | undefined>()
@@ -290,7 +290,7 @@ export class AgentRegistry extends Service {
   }
 
   protected async [Service.init](): Promise<void> {
-    this.turnBoundaryProjection = await this.ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
+    this.turnBoundaryProjectionHandle = await this.ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
   }
 
   /**
@@ -299,7 +299,7 @@ export class AgentRegistry extends Service {
    * @returns the current turn and step positions; do not mutate the returned value.
    */
   turnBoundaryOf(session: Session): TurnBoundaryProjection {
-    return this.turnBoundaryProjection.stateOf(session)
+    return this.turnBoundaryProjectionHandle.stateOf(session)
   }
 
   /**

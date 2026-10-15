@@ -127,7 +127,7 @@ const ADMITS_NOTHING: LegacyPrompt = { source: null, web: null }
  * @returns after the projection reader and prompt registrations are ready.
  */
 export async function apply(ctx: Context): Promise<void> {
-  const legacyPrompt = await ctx.sessionProjections.register({
+  const legacyPromptProjectionHandle = await ctx.sessionProjections.register({
     key: LEGACY_PROMPT,
     stateVersion: 1,
     stateSchema: legacyPromptSchema,
@@ -136,7 +136,7 @@ export async function apply(ctx: Context): Promise<void> {
   })
   const admitted = (context: AssembleContext): LegacyPrompt => {
     const session = context.agent?.session
-    return session === undefined ? ADMITS_NOTHING : legacyPrompt.stateOf(session)
+    return session === undefined ? ADMITS_NOTHING : legacyPromptProjectionHandle.stateOf(session)
   }
   ctx.systemPrompt.section({
     name: HARNESS_SOURCE,

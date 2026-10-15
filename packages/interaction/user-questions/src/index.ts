@@ -78,7 +78,7 @@ type QueuedReply = { messageId: MessageId; claimedTurn?: number }
 /** `ctx.userQuestions`: validation plus the scoped answerer waterfall. */
 export class UserQuestionService extends TypertRemoteService {
   static Config = z.object({})
-  private projection: ProjectionHandle<UserQuestionProjectionState> | undefined
+  private userQuestionProjectionHandle: ProjectionHandle<UserQuestionProjectionState> | undefined
   private readonly waits = new Map<Agent, Map<ToolCallId, TimedQuestionWait>>()
   private readonly queuedReplies = new WeakMap<Session, Map<ToolCallId, QueuedReply>>()
 
@@ -128,8 +128,8 @@ export class UserQuestionService extends TypertRemoteService {
 
   protected async [Service.init](): Promise<void> {
     const binding = this.ctx.inject(['sessionProjections'], async (ctx) => {
-      this.projection = await ctx.sessionProjections.register(userQuestionProjectionDefinition)
-      return () => { this.projection = undefined }
+      this.userQuestionProjectionHandle = await ctx.sessionProjections.register(userQuestionProjectionDefinition)
+      return () => { this.userQuestionProjectionHandle = undefined }
     })
     if (this.ctx.get('sessionProjections') !== undefined) await binding
   }
@@ -150,7 +150,7 @@ export class UserQuestionService extends TypertRemoteService {
   }
 
   private continued(agent: Agent): readonly PendingUserQuestion[] {
-    return this.projection?.stateOf(agent.session).questions.active.filter(question => question.state === 'continued') ?? []
+    return this.userQuestionProjectionHandle?.stateOf(agent.session).questions.active.filter(question => question.state === 'continued') ?? []
   }
 
   /**

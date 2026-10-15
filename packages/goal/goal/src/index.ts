@@ -247,7 +247,7 @@ export class GoalService extends TypertRemoteService {
   private readonly resolved: ResolvedConfig
   private readonly runtimeStates = new WeakMap<Session, GoalRuntimeState>()
 
-  private projection!: ProjectionHandle<GoalProjectionState>
+  private goalProjectionHandle!: ProjectionHandle<GoalProjectionState>
 
   constructor(ctx: Context, config: Config = {}) {
     super(ctx, 'goals')
@@ -258,7 +258,7 @@ export class GoalService extends TypertRemoteService {
 
   protected async [Service.init](): Promise<void> {
     const ctx = this.ctx
-    this.projection = await ctx.sessionProjections.register(goalProjectionDefinition)
+    this.goalProjectionHandle = await ctx.sessionProjections.register(goalProjectionDefinition)
     ctx.on('agent/created', ({ agent }) => {
       this.setActivation(agent.session, 'disarmed')
     })
@@ -480,7 +480,7 @@ export class GoalService extends TypertRemoteService {
 
   /** Read the current durable projection maintained by the registry. */
   private state(session: Session): GoalProjection | null {
-    const state = this.projection.stateOf(session)
+    const state = this.goalProjectionHandle.stateOf(session)
     if (state.failure !== null) throw new Error(state.failure)
     return state.current
   }
@@ -502,7 +502,7 @@ export class GoalService extends TypertRemoteService {
     const runtime = this.runtimeState(session)
     if (runtime.activation === activation) return
     runtime.activation = activation
-    const state = this.projection.stateOf(session)
+    const state = this.goalProjectionHandle.stateOf(session)
     if (state.failure !== null) return
     const goal = this.view(state.current, runtime)
     this.ctx.emit('goal/activation-changed', {

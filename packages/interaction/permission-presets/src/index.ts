@@ -204,7 +204,7 @@ export class PermissionPresetService extends TypertRemoteService {
   private autoAdmit: (() => void) | undefined
   private defaultSettings: () => PermissionSettings
 
-  private projection!: ProjectionHandle<PermissionProjectionState>
+  private permissionProjectionHandle!: ProjectionHandle<PermissionProjectionState>
 
   constructor(ctx: Context, config: Config) {
     super(ctx, 'permissionPresets')
@@ -239,7 +239,7 @@ export class PermissionPresetService extends TypertRemoteService {
     const selectionSchema = zod.object({
       currentValue: zod.string().min(1),
     }) as zod.ZodType<PermissionSelection>
-    this.projection = await ctx.sessionProjections.register({
+    this.permissionProjectionHandle = await ctx.sessionProjections.register({
       key: 'permissions',
       stateVersion: 2,
       stateSchema: permissionStateSchema,
@@ -331,7 +331,7 @@ export class PermissionPresetService extends TypertRemoteService {
   }
 
   private permissionState(session: Session): PermissionProjectionState {
-    return this.projection.stateOf(session)
+    return this.permissionProjectionHandle.stateOf(session)
   }
 
   /**

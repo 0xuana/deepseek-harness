@@ -57,7 +57,7 @@ export class AgentPresetRegistry extends TypertRemoteService {
     default: z.string().required(),
     selectedDefault: z.string().volatile(),
   })
-  private agentPreset!: ProjectionHandle<string | null>
+  private agentPresetProjectionHandle!: ProjectionHandle<string | null>
   private readonly owner: Context
   private readonly definitions = new Map<string, Definition>()
   private readonly generations = new Map<ScopeKey, Generation>()
@@ -71,7 +71,7 @@ export class AgentPresetRegistry extends TypertRemoteService {
 
   protected async [Service.init](): Promise<void> {
     const ctx = this.owner
-    this.agentPreset = await ctx.sessionProjections.register(agentPresetProjectionDefinition)
+    this.agentPresetProjectionHandle = await ctx.sessionProjections.register(agentPresetProjectionDefinition)
     ctx.inject(['settings'], (child) => { child.effect(() => child.settings.configure({ auto: false }, ctx.fiber)) })
     ctx.on('session/event', (session, event) => {
       if (event.type === 'agent-preset/selected') ctx.emit('agent-preset/selected', session.id, event.data.agentPreset)
@@ -87,7 +87,7 @@ export class AgentPresetRegistry extends TypertRemoteService {
    * @returns the recorded preset, or null when none was selected.
    */
   presetForSession(session: Session): string | null {
-    return this.agentPreset.stateOf(session)
+    return this.agentPresetProjectionHandle.stateOf(session)
   }
 
   /** Register and eagerly load a definition; activation failure remains visible in the roster.
@@ -370,7 +370,7 @@ export class AgentPresetRegistry extends TypertRemoteService {
       }
       const current = this.definitions.get(agentPreset)?.generation
       if (current !== undefined && this.generationFor(agent.ctx) === current
-        && this.agentPreset.stateOf(agent.session) === agentPreset) return agentPreset
+        && this.agentPresetProjectionHandle.stateOf(agent.session) === agentPreset) return agentPreset
       const preset = await this.recompose(agent.ctx, agentPreset)
       agent.session.append('agent-preset/selected', { agentPreset: preset.id })
       return preset.id

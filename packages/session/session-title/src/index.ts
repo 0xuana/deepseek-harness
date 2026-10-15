@@ -306,7 +306,7 @@ export class SessionTitleService extends Service {
     maxTitleBytes: z.number().step(1).min(1).required(),
   })
 
-  private titleInput!: ProjectionHandle<TitleInputState>
+  private titleInputProjectionHandle!: ProjectionHandle<TitleInputState>
   private readonly config: ResolvedConfig
   private readonly ownerFiber: Fiber
   private registration: ProviderRegistration | undefined
@@ -347,7 +347,7 @@ export class SessionTitleService extends Service {
 
     await ctx.sessionProjections.register(titleProjectionDefinition)
 
-    this.titleInput = await ctx.sessionProjections.register<'titleInput', TitleInputState>({
+    this.titleInputProjectionHandle = await ctx.sessionProjections.register<'titleInput', TitleInputState>({
       key: 'titleInput',
       stateVersion: 3,
       stateSchema: titleInputStateSchema,
@@ -734,7 +734,7 @@ export class SessionTitleService extends Service {
   }
 
   private titleInputOf(session: Session): TitleInputState {
-    return this.titleInput.stateOf(session)
+    return this.titleInputProjectionHandle.stateOf(session)
   }
 
   /** Queue detached service work and retain it through service disposal. */
