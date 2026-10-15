@@ -106,6 +106,8 @@ const windowsRunnerCoverageExclusions = process.platform === 'win32'
       // win32.spec's injected bindings and exercised natively by every
       // Windows suite through the real backend.
       'packages/session/session-persistence-jsonl/src/lease.ts',
+      // The macOS provider transport uses Unix sockets; POSIX lanes cover its real socket lifecycle.
+      'packages/experimental/cua-macos/src/shared-native.ts',
     ]
   : []
 
@@ -304,7 +306,6 @@ export default defineConfig({
         // Keep already-complete Inspector modules under the per-file gate and
         // enumerate the remaining direct-test debt instead of exempting src/**.
         // TODO(inspector): close these branch gaps and remove the entries.
-        'packages/experimental/inspector/src/host/plugin.ts',
         'packages/experimental/inspector/src/shared/bridge/{control-codec,rpc}.ts',
         'packages/experimental/inspector/src/shared/bridge/messages/observation.ts',
         'packages/experimental/inspector/src/shared/bridge/messages/query/codec.ts',

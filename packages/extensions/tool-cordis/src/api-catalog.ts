@@ -767,7 +767,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'readonly browserPeer: PeerScope',
-        description: 'The Peer every authenticated browser connection shares; its principal is the owner and its scope lives as long as Connection.',
+        description: 'The owner Peer every authenticated browser connection shares.',
         parameters: [],
       },
       {
@@ -789,15 +789,21 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'admit(request: ConnectionTrustRequest): PeerAdmission',
-        description: 'Admit one network request: it passes requestRejection and speaks for browserPeer, or it is refused with that status.',
+        description: 'Admit an HTTP request against its signed browser or API credential and live Peer.',
         parameters: [{ name: 'request', description: 'request headers from the HTTP or upgrade request.' }],
-        returns: 'the admitted Peer, or the rejection status.',
+        returns: 'the credential\'s Peer, or the rejection status.',
       },
       {
-        signature: 'createPeer(options: { readonly principal: Principal }): PeerScope',
-        description: 'Create an independent Peer. In-process only: no route, header, query, or cookie reaches it. Disposed with the Context that read `ctx.connection`, or earlier by its own `dispose()`.',
-        parameters: [{ name: 'options', description: '.principal - principal fixed for the Peer\'s lifetime.' }],
+        signature: 'createPeer(options: { readonly principal: Principal; readonly interactions?: \'answer\' | \'none\' }): PeerScope',
+        description: 'Create an independent in-process Peer, disposed with the Context that read `ctx.connection`.',
+        parameters: [{ name: 'options', description: 'fixed principal and optional interaction participation (default `answer`).' }],
         returns: 'a new Peer distinct from every other Peer.',
+      },
+      {
+        signature: 'admitConnection(request: ConnectionTrustRequest): ConnectionAdmission',
+        description: 'Claim a physical socket for an API Peer; browser sockets share their owner Peer.',
+        parameters: [{ name: 'request', description: 'authenticated upgrade request headers.' }],
+        returns: 'the Peer and idempotent release, or 409 for duplicate API ownership. The carrier releases on socket termination or failed upgrade; release removes API admission synchronously without cancelling independent HTTP calls.',
       },
       {
         signature: 'authorizeIndex(request: ConnectionIndexRequest, response: ConnectionIndexResponse): boolean',
@@ -929,7 +935,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'abstract getProfile(client: AccountClientMetadata): Promise<AccountDetails[\'profile\'] | null>',
-        description: 'Query Platform profile independently of wallet balances. A ready result whose stable profile ID first becomes available or changes notifies watch consumers, so identity consumers re-read getPlatformSession; repeated IDs stay silent.',
+        description: 'Query Platform profile independently of wallet balances. A ready result whose stable profile ID first becomes available or changes notifies identity-enabled watch consumers, so they re-read getPlatformSession; repeated IDs stay silent.',
         parameters: [{ name: 'client', description: 'identity of the requesting UI for this call.' }],
         returns: 'profile outcome, or null if signed out or the grant changed during the query.',
       },
@@ -970,9 +976,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the signed-out state after local removal; remote failures never restore the grant.',
       },
       {
-        signature: 'abstract watch(signal: AbortSignal): AsyncIterable<AccountView>',
+        signature: 'abstract watch(signal: AbortSignal, includeIdentityChanges?: boolean): AsyncIterable<AccountView>',
         description: 'Subscribe to snapshots including a complete initial state.',
-        parameters: [{ name: 'signal', description: 'subscription lifetime; ending it never cancels login.' }],
+        parameters: [{ name: 'signal', description: 'subscription lifetime; ending it never cancels login.' }, { name: 'includeIdentityChanges', description: 'also notify when cached Platform identity changes; defaults to false.' }],
         returns: 'complete snapshots as account state changes.',
       },
       {
@@ -1490,6 +1496,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the owning adapter\'s image pricing for the route, when declared.',
       },
       {
+        signature: 'imageRequestTarget(provider: string, model: string, image: ImageAttachmentRef): ImageRequestTarget',
+        description: 'Resolve the image projection for an exact registered model route.',
+        parameters: [{ name: 'provider', description: 'registered provider route.' }, { name: 'model', description: 'exact model id.' }, { name: 'image', description: 'normalized image reference.' }],
+        returns: 'dimensions and byte target used by the adapter\'s request serializer.',
+      },
+      {
         signature: 'fileRequestText(ref: FileAttachmentRef): string',
         description: 'Resolve the exact text one durable file occurrence contributes to every provider request in the current execution environment.',
         parameters: [{ name: 'ref', description: 'durable verbatim file reference from model history.' }],
@@ -1777,6 +1789,39 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'pluginMarket',
+    summary: 'Fetches, validates, and caches configured market indexes; annotates entries with the profile\'s installation facts.',
+    description: 'Fetches, validates, and caches configured market indexes; annotates entries with the profile\'s installation facts.',
+    methods: [
+      {
+        signature: '@Remote listIndexes(): MarketIndexSummary[]',
+        description: 'List the configured index sources without fetching them.',
+        parameters: [],
+        returns: 'every source in order, with the title of its last successful read and, when the last read failed, its error.',
+      },
+      {
+        signature: '@Remote async setIndexes(urls: string[]): Promise<void>',
+        description: 'Replace the configured index sources through Settings, without remounting this service. `plugin-market/changed` announces the committed list. A URL already configured is kept as written, so a client can add or remove sources beside one that `listIndexes` reports as unusable.',
+        parameters: [{ name: 'urls', description: 'index URLs in display order.' }],
+        throws: ['{RemoteError} `plugin-market/invalid-index-url` for an invalid new URL or a repeated URL; `plugin-market/settings-unavailable` without Settings or a profile entry.'],
+      },
+      {
+        signature: '@Remote async search(url: string, query: MarketQuery): Promise<MarketSearchResult>',
+        description: 'Return one page of the plugins of a configured index that match a query. Concurrent reads of a URL share one fetch; a successful document is reused for `cacheTtlMs` unless `refresh` is set. Matching and ordering read only the document; installation status and compatibility are computed for the returned page on every call.',
+        parameters: [{ name: 'url', description: 'a configured index URL.' }, { name: 'query', description: 'text, filters, order, page, and whether to bypass the cached document.' }],
+        returns: 'the index header, the page\'s plugins with each plugin\'s default version and installation status and each version\'s compatibility and install arguments, the number of matches, and the next page\'s offset.',
+        throws: ['{RemoteError} `plugin-market/invalid-query`, `plugin-market/unknown-index`, `plugin-market/invalid-index-url`, `plugin-market/fetch-failed`, or `plugin-market/invalid-index`.'],
+      },
+      {
+        signature: 'async entry(url: string, name: string): Promise<MarketListingEntry | undefined>',
+        description: 'Read one plugin of a configured index, using the cached document as `search` does.',
+        parameters: [{ name: 'url', description: 'a configured index URL.' }, { name: 'name', description: 'the plugin\'s package name.' }],
+        returns: 'the plugin with its default version, installation status, and annotated versions; undefined when the index does not list it.',
+        throws: ['{RemoteError} `plugin-market/unknown-index`, `plugin-market/invalid-index-url`, `plugin-market/fetch-failed`, or `plugin-market/invalid-index`.'],
+      },
+    ],
+  },
+  {
     key: 'pluginRegistryProbe',
     summary: 'Compares public registry responses on the Host; the Client owns the initial selection.',
     description: 'Compares public registry responses on the Host; the Client owns the initial selection.',
@@ -1809,7 +1854,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: '@Remote async report(event: ProductEvent): Promise<void>',
-        description: 'Submit selected Desktop fields; missing identity is omitted and never generated.',
+        description: 'Submit selected Desktop fields with cached static environment and fresh identity. The first intake waits for bounded environment queries; concurrent intakes share them. Missing identity is omitted; failed environment fields carry fixed reasons.',
         parameters: [{ name: 'event', description: 'typed product event without message contents or credentials.' }],
         returns: 'after local submission; no delivery or warehouse acknowledgement.',
       },
@@ -4373,6 +4418,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'progress', description: 'the installation\'s request id and phase, with the attempt while installing.' }],
   },
   {
+    name: 'plugin-market/changed',
+    mode: 'emit',
+    signature: '\'plugin-market/changed\'(): void',
+    summary: 'The configured index sources changed.',
+    description: 'The configured index sources changed.',
+    parameters: [],
+  },
+  {
     name: 'schedule/changed',
     mode: 'emit',
     signature: '\'schedule/changed\'(): void',
@@ -5053,6 +5106,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ConfinedSandboxMode = Exclude<SandboxMode, \'danger-full-access\'>;',
   },
   {
+    name: 'ConnectionAdmission',
+    declaration: 'export type ConnectionAdmission = {\n    readonly peer: PeerScope;\n    readonly release: () => Promise<void>;\n} | {\n    readonly rejection: 401 | 403 | 409;\n};',
+  },
+  {
     name: 'ConnectionFetchHandler',
     declaration: 'export interface ConnectionFetchHandler {\n    requestBodyMode(request: {\n        readonly method: string;\n        readonly url: URL;\n    }): ConnectionRequestBodyMode;\n    fetch(request: Request, peer: PeerScope): Promise<Response>;\n}',
   },
@@ -5638,7 +5695,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'IncompatiblePlugin',
-    declaration: 'export interface IncompatiblePlugin {\n    name: string;\n    version: string;\n    runtimeVersion: string;\n    peers: Record<string, string>;\n}',
+    declaration: 'export interface IncompatiblePlugin {\n    name: string;\n    version: string;\n    runtimeVersion: string;\n    requirements: Record<string, string>;\n}',
   },
   {
     name: 'IndexInjection',
@@ -5858,7 +5915,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmAdapter',
-    declaration: 'export abstract class LlmAdapter {\n    providerInfo(provider: string): LlmProviderInfo;\n    providerRetryPolicy(_provider: string): ResolvedRetryPolicy | undefined;\n    imageRequestPricing(_provider: string, _model: string): LlmImageRequestPricing | undefined;\n    listModels(_provider: string): Promise<readonly LlmModelInfo[]>;\n    resolveModel(provider: string, model: string, _signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async prepareCall(provider: string, model: string, signal?: AbortSignal): Promise<PreparedAdapterCall>;\n    abstract stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
+    declaration: 'export abstract class LlmAdapter {\n    providerInfo(provider: string): LlmProviderInfo;\n    providerRetryPolicy(_provider: string): ResolvedRetryPolicy | undefined;\n    imageRequestPricing(_provider: string, _model: string): LlmImageRequestPricing | undefined;\n    imageRequestTarget(_provider: string, _model: string, image: ImageAttachmentRef): ImageRequestTarget;\n    listModels(_provider: string): Promise<readonly LlmModelInfo[]>;\n    resolveModel(provider: string, model: string, _signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async prepareCall(provider: string, model: string, signal?: AbortSignal): Promise<PreparedAdapterCall>;\n    abstract stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
   },
   {
     name: 'LlmAttemptId',
@@ -5878,7 +5935,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmConfigurableProvider',
-    declaration: 'export interface LlmConfigurableProvider {\n    provider: string;\n    displayName: string;\n    settingsNs: string;\n    settingsPath: readonly string[];\n    declared?: boolean;\n    defaultBaseURL?: string;\n    nativeAuth?: LlmNativeAuth;\n    error?: string;\n}',
+    declaration: 'export interface LlmConfigurableProvider {\n    provider: string;\n    displayName: string;\n    settingsNs: string;\n    settingsPath: readonly string[];\n    declared?: boolean;\n    defaultBaseURL?: string;\n    baseURLEnv?: readonly string[];\n    nativeAuth?: LlmNativeAuth;\n    error?: string;\n}',
   },
   {
     name: 'LlmDiscoveredModel',
@@ -5930,7 +5987,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmRuntime',
-    declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    @Remote(\'discoverModels\')\n    async remoteDiscoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined;\n    fileRequestText(ref: FileAttachmentRef): string;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallConfig, signal?: AbortSignal): Promise<LlmCallConfig>;\n    async prepareCall(config: LlmCallConfig, signal?: AbortSignal, configure?: ConfigureCall): Promise<PreparedLlmCall>;\n    strea /* …truncated — full shape in source */',
+    declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    @Remote(\'discoverModels\')\n    async remoteDiscoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined;\n    imageRequestTarget(provider: string, model: string, image: ImageAttachmentRef): ImageRequestTarget;\n    fileRequestText(ref: FileAttachmentRef): string;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallConfig, signal?: AbortSignal): Promise<LlmCallConfig>;\n    async prepareCall(conf /* …truncated — full shape in source */',
   },
   {
     name: 'LocalAtInput',
@@ -5991,6 +6048,82 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ManualCompactAgentContext',
     declaration: 'export interface ManualCompactAgentContext extends CompactionAgentContext {\n    runMaintenance<T>(task: (signal: AbortSignal) => Promise<T>): Promise<T>;\n}',
+  },
+  {
+    name: 'MarketCompatibility',
+    declaration: 'export type MarketCompatibility = {\n    readonly compatible: true;\n} | {\n    readonly compatible: false;\n    readonly runtimeVersion: string;\n    readonly requirements: Readonly<Record<string, string>>;\n    readonly exempted: boolean;\n};',
+  },
+  {
+    name: 'MarketDeclaration',
+    declaration: 'export interface MarketDeclaration {\n    readonly title: LocalizedText;\n}',
+  },
+  {
+    name: 'MarketEngines',
+    declaration: 'export interface MarketEngines {\n    readonly dsh?: string;\n}',
+  },
+  {
+    name: 'MarketIndexMetadata',
+    declaration: 'export interface MarketIndexMetadata {\n    readonly categories: Readonly<Record<string, MarketDeclaration>>;\n    readonly labels: Readonly<Record<string, MarketDeclaration>>;\n    readonly sortKeys: Readonly<Record<string, MarketSortKeyDeclaration>>;\n}',
+  },
+  {
+    name: 'MarketIndexSummary',
+    declaration: 'export interface MarketIndexSummary {\n    readonly url: string;\n    readonly title?: LocalizedText;\n    readonly description?: LocalizedText;\n    readonly error?: string;\n}',
+  },
+  {
+    name: 'MarketInstallation',
+    declaration: 'export interface MarketInstallation {\n    readonly status: MarketInstallationStatus;\n    readonly installedVersion?: string;\n}',
+  },
+  {
+    name: 'MarketInstallationStatus',
+    declaration: 'export type MarketInstallationStatus = \'not-installed\' | \'installed\' | \'update-available\' | \'different-version\' | \'provided\';',
+  },
+  {
+    name: 'MarketInstallTarget',
+    declaration: 'export interface MarketInstallTarget {\n    readonly spec: string;\n    readonly registry?: string;\n}',
+  },
+  {
+    name: 'MarketListingEntry',
+    declaration: 'export interface MarketListingEntry extends Omit<MarketPlugin, \'versions\'> {\n    readonly versions: readonly MarketListingVersion[];\n    readonly defaultVersion?: string;\n    readonly installation: MarketInstallation;\n}',
+  },
+  {
+    name: 'MarketListingVersion',
+    declaration: 'export interface MarketListingVersion extends MarketVersion {\n    readonly install: MarketInstallTarget;\n    readonly compatibility: MarketCompatibility;\n}',
+  },
+  {
+    name: 'MarketPlugin',
+    declaration: 'export interface MarketPlugin {\n    readonly name: string;\n    readonly title?: LocalizedText;\n    readonly description?: LocalizedText;\n    readonly icon?: string;\n    readonly author?: string;\n    readonly homepage?: string;\n    readonly repository?: MarketRepository;\n    readonly metadata: MarketPluginMetadata;\n    readonly versions: readonly MarketVersion[];\n}',
+  },
+  {
+    name: 'MarketPluginMetadata',
+    declaration: 'export interface MarketPluginMetadata {\n    readonly category?: string;\n    readonly keywords: readonly string[];\n    readonly labels: readonly string[];\n    readonly sortKeys: Readonly<Record<string, number>>;\n}',
+  },
+  {
+    name: 'MarketQuery',
+    declaration: 'export interface MarketQuery {\n    readonly text?: string;\n    readonly category?: string;\n    readonly labels?: readonly string[];\n    readonly sort: MarketSort;\n    readonly offset: number;\n    readonly limit: number;\n    readonly refresh?: boolean;\n    readonly fetchedAt?: number;\n}',
+  },
+  {
+    name: 'MarketRepository',
+    declaration: 'export interface MarketRepository {\n    readonly url: string;\n    readonly directory?: string;\n}',
+  },
+  {
+    name: 'MarketSearchResult',
+    declaration: 'export interface MarketSearchResult {\n    readonly url: string;\n    readonly title: LocalizedText;\n    readonly description?: LocalizedText;\n    readonly metadata: MarketIndexMetadata;\n    readonly fetchedAt: number;\n    readonly entries: readonly MarketListingEntry[];\n    readonly total: number;\n    readonly nextOffset: number | null;\n}',
+  },
+  {
+    name: 'MarketSort',
+    declaration: 'export type MarketSort = {\n    readonly kind: \'index\';\n} | {\n    readonly kind: \'relevance\';\n} | {\n    readonly kind: \'published\';\n    readonly direction: \'asc\' | \'desc\';\n} | {\n    readonly kind: \'key\';\n    readonly id: string;\n    readonly direction: \'asc\' | \'desc\';\n};',
+  },
+  {
+    name: 'MarketSortKeyDeclaration',
+    declaration: 'export interface MarketSortKeyDeclaration {\n    readonly title: LocalizedText;\n    readonly order: \'asc\' | \'desc\';\n}',
+  },
+  {
+    name: 'MarketSource',
+    declaration: 'export type MarketSource = {\n    readonly type: \'npm\';\n    readonly registry?: string;\n} | {\n    readonly type: \'git\';\n    readonly url: string;\n    readonly commit: string;\n    readonly path?: string;\n};',
+  },
+  {
+    name: 'MarketVersion',
+    declaration: 'export interface MarketVersion {\n    readonly version: string;\n    readonly publishTimestamp: number;\n    readonly source: MarketSource;\n    readonly engines: MarketEngines;\n}',
   },
   {
     name: 'MatcherValue',
@@ -6250,7 +6383,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'PeerScope',
-    declaration: 'export interface PeerScope {\n    readonly id: PeerId;\n    readonly ctx: Context;\n    readonly principal: Principal;\n    readonly signal: AbortSignal;\n    dispose(): Promise<void>;\n}',
+    declaration: 'export interface PeerScope {\n    readonly id: PeerId;\n    readonly ctx: Context;\n    readonly principal: Principal;\n    readonly signal: AbortSignal;\n    readonly interactions: \'answer\' | \'none\';\n    dispose(): Promise<void>;\n}',
   },
   {
     name: 'PendingModule',
@@ -8458,7 +8591,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WebBootGraph',
-    declaration: 'export interface WebBootGraph {\n    rev: string;\n    entries: WebBootEntry[];\n    batches: WebBootBatch[];\n}',
+    declaration: 'export interface WebBootGraph {\n    rev: string;\n    release?: WebBootRelease;\n    entries: WebBootEntry[];\n    batches: WebBootBatch[];\n}',
+  },
+  {
+    name: 'WebBootRelease',
+    declaration: 'export interface WebBootRelease {\n    version: string;\n    commit?: string;\n}',
   },
   {
     name: 'WebFetchBody',
