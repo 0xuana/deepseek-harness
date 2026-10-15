@@ -208,15 +208,6 @@ const tmuxContextStateSchema = zod.object({
   time: zod.number(),
 }).nullable()
 
-type TmuxContextState = zod.infer<typeof tmuxContextStateSchema>
-
-declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionStateMap {
-    /** The stable state block of this plugin's latest durable injection, or null. */
-    tmuxContext: TmuxContextState
-  }
-}
-
 /**
  * Register a prepended pre-step listener for the lifetime of `ctx`.
  * @param ctx - plugin context; the listener is disposed with it.

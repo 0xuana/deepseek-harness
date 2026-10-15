@@ -30,13 +30,6 @@ import { createTimestampFormatter, formatTimestamp } from './timestamp.ts'
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'time-context'
 
-declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionStateMap {
-    /** Latest time-context readings. */
-    timeContext: TimeContextProjection
-  }
-}
-
 const timeContextStateSchema = zod.object({
   /** Time of the latest model-visible event (user/assistant message, tool result), or null. */
   lastMessageTime: zod.number().nullable(),
@@ -45,9 +38,6 @@ const timeContextStateSchema = zod.object({
   /** Latest injection time in the open turn, or null before that turn receives one. */
   lastTurnInjectionTime: zod.number().nullable(),
 })
-
-/** Folded time-context readings. */
-type TimeContextProjection = zod.infer<typeof timeContextStateSchema>
 
 /** The agent registry that owns pre-step processing. */
 export const inject = ['agents', 'sessionProjections']

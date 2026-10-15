@@ -37,9 +37,6 @@ import { checkpointRow, projectionCacheDomainSpec } from '../src/spec.ts'
 // Declarations must match the shipped title unit's exactly (the repo-wide
 // compile face sees both).
 declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionStateMap {
-    title: string | null
-  }
   interface SessionProjectionMap {
     title: string | null
   }

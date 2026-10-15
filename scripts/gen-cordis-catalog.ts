@@ -825,7 +825,6 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   ProjectionDefinition: 'session-projection.md',
   ProjectionHandle: 'session-projection.md',
   SessionProjectionMap: 'session-projection.md',
-  SessionProjectionStateMap: 'session-projection.md',
   ProjectionChangeListener: 'session-projection.md',
   ProjectionSnapshot: 'session-projection.md',
   ProjectionCheckpoint: 'session-projection.md',

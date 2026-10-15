@@ -1,6 +1,6 @@
 /**
- * Service Definition and drive registry for the session-projection capability seam: the merge-extensible state and client-view type
- * tables, the `ProjectionDefinition` state-driven computation unit contract,
+ * Service Definition and drive registry for the session-projection capability seam: the merge-extensible client-view type
+ * table, the `ProjectionDefinition` state-driven computation unit contract,
  * and the `ctx.sessionProjections` registry that DRIVES every registered unit
  * forward eagerly over committed session events. Domain host plugins
  * contribute pure folds and optional client views; the framework owns the
@@ -33,9 +33,9 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-import type { SessionProjectionMap, SessionProjectionStateMap } from './types.ts'
+import type { SessionProjectionMap } from './types.ts'
 
-export type { SessionProjectionMap, SessionProjectionStateMap } from './types.ts'
+export type { SessionProjectionMap } from './types.ts'
 
 /** An effect-owned registration with a reader retained independently of registration. */
 export interface ProjectionHandle<S> {
@@ -61,11 +61,8 @@ export interface ProjectionHandle<S> {
  * synchronous (an async unit would tear the carriers' consistency cut), and
  * `state` MUST be plain JSON (the persisted-cache precondition).
  */
-export interface ProjectionDefinition<
-  K extends keyof SessionProjectionStateMap,
-  S extends SessionProjectionStateMap[K] = SessionProjectionStateMap[K],
-> {
-  /** The projection key this unit owns (its `SessionProjectionStateMap` entry). */
+export interface ProjectionDefinition<K extends string, S> {
+  /** The projection key this unit owns. */
   key: K
   /** Validates persisted state before it seeds a fold. */
   stateSchema: ZodType<S>
@@ -242,10 +239,7 @@ export class SessionProjectionRegistry extends Service {
    * @param definition - key, state schema, pure unit functions, and stateVersion.
    * @returns a ready handle with synchronous state reads and the effect disposer.
    */
-  register<
-    K extends keyof SessionProjectionMap,
-    S extends SessionProjectionStateMap[K],
-  >(
+  register<K extends keyof SessionProjectionMap, S>(
     definition: Omit<ProjectionDefinition<K, S>, 'wire'> & {
       wire: NonNullable<ProjectionDefinition<K, S>['wire']>
     },
@@ -257,13 +251,10 @@ export class SessionProjectionRegistry extends Service {
    * @param definition - key, state schema, pure unit functions, and stateVersion.
    * @returns a ready handle with synchronous state reads and the effect disposer.
    */
-  register<
-    K extends Exclude<keyof SessionProjectionStateMap, keyof SessionProjectionMap>,
-    S extends SessionProjectionStateMap[K],
-  >(
-    definition: Omit<ProjectionDefinition<K, S>, 'wire'>,
+  register<K extends string, S>(
+    definition: ProjectionDefinition<K, S> & { key: Exclude<K, keyof SessionProjectionMap> },
   ): Promise<ProjectionHandle<S>>
-  async register<K extends keyof SessionProjectionStateMap, S extends SessionProjectionStateMap[K]>(
+  async register<K extends string, S>(
     definition: ProjectionDefinition<K, S>,
   ): Promise<ProjectionHandle<S>> {
     const wire = definition.wire as {

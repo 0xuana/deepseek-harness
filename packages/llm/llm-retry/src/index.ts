@@ -107,12 +107,6 @@ const llmRetryStateSchema: zod.ZodType<LlmRetryState> = zod.record(zod.string(),
   retry: zod.number().int().nonnegative(),
   retryId: zod.string(),
 })) as unknown as zod.ZodType<LlmRetryState>
-declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionStateMap {
-    /** Retry state for the current step by provider and policy. */
-    llmRetry: LlmRetryState
-  }
-}
 
 /**
  * Install provider-routed normal or unbounded request recovery.

@@ -85,13 +85,6 @@ const legacyPromptSchema = zod.object({ source: zod.string().nullable(), web: zo
 /** Value-bearing paragraphs of the latest nonempty system prompt a Session committed; `null` where it has none. */
 type LegacyPrompt = zod.infer<typeof legacyPromptSchema>
 
-declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionStateMap {
-    /** Value-bearing harness-source and Web-surface paragraphs of the latest nonempty admitted system prompt. */
-    harnessDevLegacyPrompt: LegacyPrompt
-  }
-}
-
 /** The complete single-line paragraph between `prefix` and `suffix`, or `null` when the prompt has none. */
 function legacyParagraph(prompt: string, { prefix, suffix }: { prefix: string; suffix: string }): string | null {
   const start = prompt.indexOf(prefix)

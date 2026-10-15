@@ -21,13 +21,6 @@ declare module '@deepseek-ai/dsh-session/types' {
   }
 }
 
-declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionStateMap {
-    /** Exact routes authorized for child LLM selection, or null when disabled. */
-    subagentModelSelectionPolicy: AllowedModelRoute[] | null
-  }
-}
-
 const modelSelectionPolicySchema: zod.ZodType<AllowedModelRoute[] | null> = zod.array(zod.object({
   provider: zod.string().min(1),
   model: zod.string().min(1),

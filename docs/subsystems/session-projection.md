@@ -28,7 +28,7 @@ interface ProjectionHandle<S> {
 
 ## The unit
 
-`SessionProjectionStateMap` is the merge-extensible table of host fold states, while `SessionProjectionMap` retains the client-visible whole values. A domain contributes one `ProjectionDefinition` per state key; a `wire` block makes that key client-visible, and rendering belongs to the slot system, never this layer:
+`ProjectionDefinition<K, S>` carries each unit's host state type locally; registration infers `S` from `stateSchema` and returns `ProjectionHandle<S>`. Only client-visible keys merge into `SessionProjectionMap`, which types their whole values. A `wire` block makes a unit client-visible, and rendering belongs to the slot system, never this layer:
 
 ```ts type-equiv
 /**
@@ -39,11 +39,8 @@ interface ProjectionHandle<S> {
  * synchronous (an async unit would tear the carriers' consistency cut), and
  * `state` MUST be plain JSON (the persisted-cache precondition).
  */
-interface ProjectionDefinition<
-  K extends keyof SessionProjectionStateMap,
-  S extends SessionProjectionStateMap[K] = SessionProjectionStateMap[K],
-> {
-  /** The projection key this unit owns (its `SessionProjectionStateMap` entry). */
+interface ProjectionDefinition<K extends string, S> {
+  /** The projection key this unit owns. */
   key: K
   /** Validates persisted state before it seeds a fold. */
   stateSchema: ZodType<S>
@@ -235,7 +232,7 @@ Source: [`packages/session/session-projection-cache/src/index.ts`](../../package
  * @param definition - key, state schema, pure unit functions, and stateVersion.
  * @returns a ready handle with synchronous state reads and the effect disposer.
  */
-register< K extends keyof SessionProjectionMap, S extends SessionProjectionStateMap[K], >( definition: Omit<ProjectionDefinition<K, S>, 'wire'> & { wire: NonNullable<ProjectionDefinition<K, S>['wire']> }, ): Promise<ProjectionHandle<S>>
+register<K extends keyof SessionProjectionMap, S>( definition: Omit<ProjectionDefinition<K, S>, 'wire'> & { wire: NonNullable<ProjectionDefinition<K, S>['wire']> }, ): Promise<ProjectionHandle<S>>
 
 /**
  * Register one host-only unit. Its state is omitted from client snapshots
@@ -244,7 +241,7 @@ register< K extends keyof SessionProjectionMap, S extends SessionProjectionState
  * @param definition - key, state schema, pure unit functions, and stateVersion.
  * @returns a ready handle with synchronous state reads and the effect disposer.
  */
-register< K extends Exclude<keyof SessionProjectionStateMap, keyof SessionProjectionMap>, S extends SessionProjectionStateMap[K], >( definition: Omit<ProjectionDefinition<K, S>, 'wire'>, ): Promise<ProjectionHandle<S>>
+register<K extends string, S>( definition: ProjectionDefinition<K, S> & { key: Exclude<K, keyof SessionProjectionMap> }, ): Promise<ProjectionHandle<S>>
 
 /**
  * Subscribe to the change feed. The registration is an effect on the

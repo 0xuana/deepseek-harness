@@ -38,10 +38,6 @@ export interface TurnOutlineState {
 }
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionStateMap {
-    /** Whole-log turn outline fold state (entries plus the open turn's response draft). */
-    turnOutline: TurnOutlineState
-  }
   interface SessionProjectionMap {
     /** Every started turn with its `turn/start` seq and bounded previews, strictly increasing by turn; see {@link TurnOutlineEntry}. */
     turnOutline: readonly TurnOutlineEntry[]

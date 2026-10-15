@@ -24,7 +24,6 @@ import {
   SessionSeq,
 } from '@deepseek-ai/dsh-session'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
-import type { SessionProjectionStateMap } from '@deepseek-ai/dsh-session-projection/types'
 import type {
   ContextPressureProjection,
   TokenMeasurement,
@@ -33,17 +32,13 @@ import type {
 } from './types.ts'
 import { contextBreakdownProjectionDefinition } from './breakdown-projection.ts'
 import { contextPressureProjectionDefinition, tokenUsageProjectionDefinition } from './usage-projection.ts'
+import type { ContextPressureState } from './usage-projection.ts'
 import { estimateContent, estimateMessage, estimateToolsTokens, ROLE_OVERHEAD } from './estimate.ts'
 import { commitSurfaceTokens, planSurfaceTokens } from './surface-fold.ts'
 import type { MeterSurfaceNode } from './surface-fold.ts'
 import { priceSurface } from './route-pricing.ts'
 
 export type * from './types.ts'
-// Module-edge re-export: forces the emitted index.d.ts to import the
-// projection-unit modules, so their SessionProjectionStateMap augmentations load
-// in aggregate programs that only import the package root.
-export type * from './usage-projection.ts'
-export type * from './breakdown-projection.ts'
 
 /**
  * Raw anchor facts captured at the latest successful call; the baseline is
@@ -107,7 +102,7 @@ export class TokenMeter extends Service {
   static inject = ['sessionProjections']
 
   private readonly states = new WeakMap<Session, ReplayState>()
-  private contextPressureProjectionHandle!: ProjectionHandle<SessionProjectionStateMap['contextPressure']>
+  private contextPressureProjectionHandle!: ProjectionHandle<ContextPressureState>
 
   constructor(ctx: Context, config: TokenMeterConfig = {}) {
     super(ctx, 'tokenMeter')

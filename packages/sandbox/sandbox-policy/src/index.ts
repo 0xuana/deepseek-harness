@@ -93,14 +93,6 @@ const sandboxModeStateSchema = zod.union([
   zod.literal('danger-full-access'),
 ]).nullable()
 
-type SandboxModeState = zod.infer<typeof sandboxModeStateSchema>
-declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionStateMap {
-    /** Last logged sandbox-mode override, or null before one (deployment default applies at resolve time). */
-    sandboxMode: SandboxModeState
-  }
-}
-
 /**
  * The sandbox-policy service (`ctx.sandboxPolicy`). Owns the deployment
  * default mode, fallback workspace root, and current request-time policy

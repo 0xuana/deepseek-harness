@@ -41,11 +41,6 @@ afterEach(async () => {
 let nextHarnessSession = 1
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionStateMap {
-    'test/last-user': LastUserState
-    'test/internal-count': number
-    'test/private-prompt': string | null
-  }
   interface SessionProjectionMap {
     'test/last-user': { text: string } | null
   }

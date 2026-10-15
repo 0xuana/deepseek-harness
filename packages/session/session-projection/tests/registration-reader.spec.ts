@@ -7,10 +7,6 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { z } from 'zod'
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionStateMap {
-    'test/reader': number
-    'test/unrelated-reader': number
-  }
   interface SessionProjectionMap {
     'test/reader': number
   }

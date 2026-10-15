@@ -38,15 +38,6 @@ import { checkpointRecord, projectionCacheDomainSpec } from '../src/spec.ts'
 import type { CheckpointRecord } from '../src/spec.ts'
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionStateMap {
-    'cache-test/marks': MarksState
-    'cache-test/secondary-marks': MarksState
-    'cache-test/marks2': Map<string, string>
-    'cache-test/count': number
-    'cache-test/secret': string
-    'cache-test/marks3': MarksState
-    title: string | null
-  }
   interface SessionProjectionMap {
     'cache-test/marks': { marks: string[] }
     'cache-test/secondary-marks': { marks: string[] }

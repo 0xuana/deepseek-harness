@@ -41,13 +41,6 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionStateMap {
-    /** Latest logged permission overrides and constructor-seed status. */
-    permissions: PermissionProjectionState
-  }
-}
-
 declare module '@deepseek-ai/dsh-session/types' {
   interface SessionEventMap {
     /**

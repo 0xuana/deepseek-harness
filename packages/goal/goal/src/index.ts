@@ -47,10 +47,6 @@ import type {
   GoalSnapshotChangeMeta,
 } from './domain.ts'
 
-// The pure payload outlet (./types.ts, ONE home of the `goal` projection-key
-// declaration) re-exported onto the package root keeps the module edge in
-// the emitted index.d.ts, so aggregate programs consuming the declarations
-// still receive the SessionProjectionStateMap merge.
 export type * from './types.ts'
 export type * from './domain.ts'
 export { GOAL_CHANGE_VERSION, GoalError, GoalId } from './runtime.ts'

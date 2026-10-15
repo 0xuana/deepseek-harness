@@ -55,7 +55,7 @@ const definition = {
 
 ### Register and read
 
-`await register(definition)` installs the unit and returns a handle with synchronous `stateOf(session)` reads and `dispose(): Promise<void>`. Await `dispose()` to release the registration; repeated calls are safe. Registrants with the same key and `stateVersion` share cells; incompatible or invalid versions reject registration. Registration belongs to the calling fiber. The last unregister removes the unit from global event drives, snapshots, checkpoints, and change notifications. Existing handles remain readable: each retains its original unit and folds new Session events on demand, even if another version later registers the same key. Reading a handle does not initialize unrelated units or register it again. Carriers use `snapshot(session)` for a consistent client-view cut and `onChanged(listener)` for changes to registered units.
+`await register(definition)` infers the host state type from `stateSchema`, installs the unit, and returns a handle with synchronous `stateOf(session)` reads and `dispose(): Promise<void>`. Await `dispose()` to release the registration; repeated calls are safe. Registrants with the same key and `stateVersion` share cells; incompatible or invalid versions reject registration. Registration belongs to the calling fiber. The last unregister removes the unit from global event drives, snapshots, checkpoints, and change notifications. Existing handles remain readable: each retains its original unit and folds new Session events on demand, even if another version later registers the same key. Reading a handle does not initialize unrelated units or register it again. Carriers use `snapshot(session)` for a consistent client-view cut and `onChanged(listener)` for changes to registered units.
 
 ```text
 const todoProjectionHandle = await ctx.sessionProjections.register(definition)
@@ -88,7 +88,7 @@ The package is the Service Definition and drive role of a capability seam: the f
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `SessionProjectionRegistry` service, `ProjectionDefinition`, snapshot and checkpoint machinery |
-| [`src/types.ts`](src/types.ts) | The merge-extensible `SessionProjectionMap` and `SessionProjectionStateMap` type tables |
+| [`src/types.ts`](src/types.ts) | The merge-extensible client `SessionProjectionMap` type table |
 
 ### Drive and checkpoint flow
 

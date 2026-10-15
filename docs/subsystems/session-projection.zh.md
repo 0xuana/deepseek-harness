@@ -28,7 +28,7 @@ interface ProjectionHandle<S> {
 
 ## 投影单元
 
-`SessionProjectionStateMap` 是 host 侧折叠状态的 merge-extensible 类型表，`SessionProjectionMap` 则继续表示客户端可见的全量值。领域为每个状态 key 贡献一个 `ProjectionDefinition`；`wire` 块使该 key 对客户端可见，渲染归 slot 体系管，永远不归本层：
+`ProjectionDefinition<K, S>` 在各单元内部携带宿主状态类型；注册从 `stateSchema` 推导 `S`，并返回 `ProjectionHandle<S>`。只有客户端可见的 key 合并到 `SessionProjectionMap`，由它约束对应的全量值。`wire` 块使单元对客户端可见，渲染归 slot 体系管，永远不归本层：
 
 ```ts type-equiv
 /**
@@ -39,11 +39,8 @@ interface ProjectionHandle<S> {
  * synchronous (an async unit would tear the carriers' consistency cut), and
  * `state` MUST be plain JSON (the persisted-cache precondition).
  */
-interface ProjectionDefinition<
-  K extends keyof SessionProjectionStateMap,
-  S extends SessionProjectionStateMap[K] = SessionProjectionStateMap[K],
-> {
-  /** The projection key this unit owns (its `SessionProjectionStateMap` entry). */
+interface ProjectionDefinition<K extends string, S> {
+  /** The projection key this unit owns. */
   key: K
   /** Validates persisted state before it seeds a fold. */
   stateSchema: ZodType<S>
@@ -235,7 +232,7 @@ Source: [`packages/session/session-projection-cache/src/index.ts`](../../package
  * @param definition - key, state schema, pure unit functions, and stateVersion.
  * @returns a ready handle with synchronous state reads and the effect disposer.
  */
-register< K extends keyof SessionProjectionMap, S extends SessionProjectionStateMap[K], >( definition: Omit<ProjectionDefinition<K, S>, 'wire'> & { wire: NonNullable<ProjectionDefinition<K, S>['wire']> }, ): Promise<ProjectionHandle<S>>
+register<K extends keyof SessionProjectionMap, S>( definition: Omit<ProjectionDefinition<K, S>, 'wire'> & { wire: NonNullable<ProjectionDefinition<K, S>['wire']> }, ): Promise<ProjectionHandle<S>>
 
 /**
  * Register one host-only unit. Its state is omitted from client snapshots
@@ -244,7 +241,7 @@ register< K extends keyof SessionProjectionMap, S extends SessionProjectionState
  * @param definition - key, state schema, pure unit functions, and stateVersion.
  * @returns a ready handle with synchronous state reads and the effect disposer.
  */
-register< K extends Exclude<keyof SessionProjectionStateMap, keyof SessionProjectionMap>, S extends SessionProjectionStateMap[K], >( definition: Omit<ProjectionDefinition<K, S>, 'wire'>, ): Promise<ProjectionHandle<S>>
+register<K extends string, S>( definition: ProjectionDefinition<K, S> & { key: Exclude<K, keyof SessionProjectionMap> }, ): Promise<ProjectionHandle<S>>
 
 /**
  * Subscribe to the change feed. The registration is an effect on the

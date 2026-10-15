@@ -5,13 +5,6 @@ import type { SessionSeq } from '@deepseek-ai/dsh-session/types'
 import { brandNumber } from '@deepseek-ai/dsh-brand'
 import { z as zod } from 'zod'
 
-declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionStateMap {
-    /** The agent session's open/last turn and step boundary facts (whole value). */
-    turnBoundary: TurnBoundaryProjection
-  }
-}
-
 const sessionSeqSchema = zod.number().int().nonnegative().transform(brandNumber<SessionSeq>)
 
 const turnBoundaryProjectionSchema: zod.ZodType<TurnBoundaryProjection> = zod.object({
