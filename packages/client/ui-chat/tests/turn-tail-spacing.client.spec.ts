@@ -28,8 +28,10 @@ describe('Running status move below the first output', () => {
 
   it('travels the first output row gap plus one font-scaled row', () => {
     const view = read('ChatView.module.css')
-    // A process row or group header after a mid-Turn input.
-    expect(view).toMatch(new RegExp(String.raw`\[data-chat-group-key\]\s*\) ~ \.running \{\s*${travel(6)}`))
+    // A process row or group header after a mid-Turn input: the default sits on the single-class
+    // status rule, the lowest-specificity selector, so each variant below outranks it.
+    expect(view).toMatch(new RegExp(String.raw`\n\.running \{[^}]*${travel(6)}`))
+    expect(view.match(/--dsh-running-follow: calc\(/g)).toHaveLength(3)
     // A response keeps its 12px clearance.
     expect(view).toMatch(new RegExp(String.raw`\)\)\)\)\[data-chat-group-part="response"\] ~ \.running \{\s*${travel(12)}`))
     // A new Turn's first output follows the empty running process control at its 16px clearance.
@@ -38,10 +40,14 @@ describe('Running status move below the first output', () => {
 
   it('slides the status from where it stood, like the steering entrance, outside input folds and reduced motion', () => {
     const view = read('ChatView.module.css')
-    expect(view).toMatch(new RegExp(String.raw`@media \(prefers-reduced-motion: no-preference\) \{\s*\.column:not\(\[data-input-fold\]\)[^{]*\[data-chat-group-key\]\s*\) ~ \.running \{\s*`
+    const unpinned = String.raw`\.column:not\(\[data-input-fold\]\):not\(\[data-chat-tail-pinned\]\)`
+    expect(view).toMatch(new RegExp(String.raw`@media \(prefers-reduced-motion: no-preference\) \{\s*${unpinned}[^{]*\[data-chat-group-key\]\s*\) ~ \.running \{\s*`
       + String.raw`animation: running-follows-output 110ms cubic-bezier\(0\.4, 0, 0\.2, 1\);`))
     expect(view).toMatch(new RegExp(String.raw`@keyframes running-follows-output \{\s*from \{\s*opacity: 0;\s*`
       + String.raw`translate: 0 calc\(-1 \* var\(--dsh-running-follow\)\);\s*\}\s*40% \{\s*opacity: 1;`))
+    // Following scrolls hold the status still while the tail is pinned, so neither status move plays there.
+    expect(view.match(/animation: running-(enters-slot|follows-output) /g)).toHaveLength(2)
+    expect(view.match(new RegExp(String.raw`${unpinned} > :global\(\[data-slot="conversation\.chat\.flow"\]\) > `, 'g'))).toHaveLength(2)
   })
 
   it('sizes every first-output row to the travelled row height', () => {

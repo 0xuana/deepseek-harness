@@ -560,3 +560,54 @@ it('releases a removed paging row without navigating to unrelated content', () =
   expect(h.viewport.preserving).toBe(false)
   expect(h.scroller.scrollTop).toBe(80)
 })
+
+it('pins the tail only while the reader follows overflowing content, after that resize follows', () => {
+  let notifyResize = () => {}
+  class Observer implements ResizeObserver {
+    constructor(callback: ResizeObserverCallback) { notifyResize = () => { callback([], this) } }
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  }
+  vi.stubGlobal('ResizeObserver', Observer)
+  const column = document.createElement('div')
+  document.body.append(column)
+  let scrollHeight = 200
+  Object.defineProperties(column, {
+    clientHeight: { configurable: true, value: 300 },
+    scrollHeight: { configurable: true, get: () => scrollHeight },
+  })
+  const viewport = new ChatViewport()
+  onTestFinished(() => {
+    viewport.detach()
+    column.remove()
+    vi.unstubAllGlobals()
+  })
+  viewport.attach(column, column)
+  const follow = new ScrollFollow(true, 4)
+  viewport.bindReader({ follow, landedAtTail: () => {}, pending: () => false })
+  const pinned = () => column.hasAttribute('data-chat-tail-pinned')
+  let pinnedWhileFollowing: boolean | undefined
+  viewport.connect({
+    scroll: () => {}, scrollEnd: () => {}, interact: () => {},
+    resize: () => { pinnedWhileFollowing = pinned() },
+  })
+
+  // Content that fits moves the tail on screen, so status moves keep playing.
+  notifyResize()
+  expect(pinned()).toBe(false)
+  // The growth that first overflows is followed before the mark changes, in the same resize.
+  scrollHeight = 900
+  notifyResize()
+  expect(pinnedWhileFollowing).toBe(false)
+  expect(pinned()).toBe(true)
+  // Scrolling away releases follow intent and the pin; returning to the floor restores it.
+  follow.setFollowing(false)
+  column.dispatchEvent(new Event('scroll'))
+  expect(pinned()).toBe(false)
+  follow.setFollowing(true)
+  column.dispatchEvent(new Event('scroll'))
+  expect(pinned()).toBe(true)
+  viewport.detach()
+  expect(pinned()).toBe(false)
+})

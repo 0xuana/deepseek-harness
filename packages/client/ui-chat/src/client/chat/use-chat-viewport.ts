@@ -99,6 +99,7 @@ export class ChatViewport {
         this.reclaimBelow()
         this.invalidate()
         this.events?.resize()
+        this.updateTailPin()
       })
       this.observer.observe(column)
       this.observer.observe(scroller)
@@ -110,7 +111,10 @@ export class ChatViewport {
   detach(): void {
     this.stopPreserving()
     this.motion.clear()
-    if (this.elements !== null) this.elements.scroller.style.overflowAnchor = ''
+    if (this.elements !== null) {
+      this.elements.scroller.style.overflowAnchor = ''
+      delete this.elements.column.dataset.chatTailPinned
+    }
     this.elements?.scroller.removeEventListener('scroll', this.onScroll)
     this.elements?.scroller.removeEventListener('scrollend', this.onScrollEnd, true)
     for (const type of READING_INTENTS) this.elements?.scroller.removeEventListener(type, this.onIntent, true)
@@ -754,10 +758,26 @@ export class ChatViewport {
     this.invalidate()
     if (this.paging !== null) {
       this.events?.resize()
+      this.updateTailPin()
       return
     }
     const scroll = this.readScroll()
     if (scroll !== null) this.events?.scroll(scroll)
+    this.updateTailPin()
+  }
+
+  /**
+   * Mark the column while the tail is pinned: the reader follows the floor and the content overflows, so
+   * following scrolls absorb content growth and rows at the tail keep their on-screen position. Moves that
+   * replay a status position change are skipped there. Called after the follow scroll of the same
+   * resize, before paint, so a move that starts in that frame is cancelled before it is drawn.
+   */
+  private updateTailPin(): void {
+    const elements = this.elements
+    if (elements === null) return
+    const pinned = this.reader?.follow.active === true && elements.scroller.scrollHeight > elements.scroller.clientHeight
+    if (pinned) elements.column.dataset.chatTailPinned = ''
+    else delete elements.column.dataset.chatTailPinned
   }
 
   private readonly onScrollEnd = (event: Event): void => {
