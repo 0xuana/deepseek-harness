@@ -76,7 +76,7 @@ The Turn control follows all its opening inputs, including human steering and no
 
 | Admitted input | Chat presentation |
 |---|---|
-| Human message claimed from `next-step` | Steering message, outside process folding. |
+| Human message claimed from `next-step` | Steering message, outside process folding. When Chat orders the claim's first human message after the Turn control, that message keeps the Turn tail slot above it; the claim's later messages follow at the ordinary input gap. |
 | Non-human message in the current `next-turn` claim | Independent, initially collapsed Turn-trigger notice. |
 | Non-human message in an idle `next-step` claim | Turn-trigger notice only in Step 1, with a loaded Turn start, a claim after that start, no `next-turn` claim in this Turn, and no human in the same `next-step` batch. |
 | Other non-human input | Ordinary Context, retained in the Node Store but omitted from Chat. Unclaimed, canceled, or requeued messages do not establish a waking claim. |

@@ -1,5 +1,5 @@
 /** Ordered Chat rows, local echoes, and running status share the flow slot's parent. */
-import { memo } from 'react'
+import { memo, type ReactElement } from 'react'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import type { ChatFlowSlotProps } from '../contract/slots.ts'
 import { ChatNodeSeat } from './ChatNodeSeat.tsx'
@@ -41,21 +41,36 @@ export const ChatFlow = memo(function ChatFlow({
         return assertNever(entry)
     }
   })
-  const pendingRows = pendingInputs.map(item => 'requestId' in item ? (
-    <PendingSubmissionBubble key={item.requestId} submission={item}
-      loadImage={loadImage} renderFactorySlot={renderFactorySlot} t={t} />
-  ) : (
-    <PendingSteeringBubble key={item.id} content={item.content}
-      loadImage={loadImage} renderFactorySlot={renderFactorySlot} t={t} />
-  ))
+  // Transcript echoes open the running Turn and precede the status; steering
+  // and Inbox echoes follow it, so the status stays on the running Turn's tail.
+  const openingRows: ReactElement[] = []
+  const pendingRows: ReactElement[] = []
+  for (const item of pendingInputs) {
+    if ('requestId' in item) {
+      (item.placement === 'transcript' ? openingRows : pendingRows).push(
+        <PendingSubmissionBubble key={item.requestId} submission={item}
+          loadImage={loadImage} renderFactorySlot={renderFactorySlot} t={t} />,
+      )
+    } else {
+      pendingRows.push(
+        <PendingSteeringBubble key={item.id} content={item.content}
+          loadImage={loadImage} renderFactorySlot={renderFactorySlot} t={t} />,
+      )
+    }
+  }
   const tail = entries.at(-1)
   const node = tail?.kind === 'node' ? nodeStore.get(tail.key) : undefined
   // An empty opening control follows one local transcript echo, never steering.
   // All rows share this keyed list so inserting the control keeps the echo mounted.
   if (node?.kind === 'turn-process' && node.location.kind === 'turn'
     && node.location.turn.status === 'open' && node.location.turn.turn !== lastInputTurn) {
-    const index = pendingInputs.findIndex(item => 'requestId' in item && item.placement === 'transcript')
-    if (index !== -1) rows.splice(rows.length - 1, 0, ...pendingRows.splice(index, 1))
+    const echo = openingRows.shift()
+    if (echo !== undefined) rows.splice(rows.length - 1, 0, echo)
   }
-  return [...rows, ...pendingRows, ...running ? [<RunningStatus key="running" startTime={runningStartTime} t={t} />] : []]
+  // Rows enter before the keyed status and echoes after it, so React never moves its DOM node.
+  return [
+    ...rows, ...openingRows,
+    ...running ? [<RunningStatus key="running" startTime={runningStartTime} t={t} />] : [],
+    ...pendingRows,
+  ]
 })

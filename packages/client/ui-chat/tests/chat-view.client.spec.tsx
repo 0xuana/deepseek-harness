@@ -4404,4 +4404,21 @@ describe('ChatView', () => {
     act(() => { h.setSession({ running: false }) })
     expect(column.querySelector('[data-chat-running]')).toBeNull()
   })
+
+  it('marks the steering row whose data carries a batch start, and no other input', () => {
+    const batchStart = (seq: number, text: string) => ({ ...steering(seq, text, 1), batchStart: true as const })
+    const h = makeHarness({
+      nodes: [
+        userInTurn(1, 'question', 1), assistant(2, 'working', 1, 1),
+        batchStart(3, 'first direction'),
+        steering(4, 'second direction', 1),
+        assistant(5, 'answer', 1, 2),
+      ],
+      turnTimings: new Map([[1, { startTime: 0 }]]),
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    const rows = [...view.container.querySelectorAll('[data-chat-steering-batch="start"]')]
+      .map(element => element.closest<HTMLElement>('[data-chat-node-key]')?.dataset.chatNodeKey)
+    expect(rows).toEqual(['fixture:steering:3'])
+  })
 })
