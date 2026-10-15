@@ -162,6 +162,48 @@
   }
 }
 
+/* While the running Step has no output, the status sits directly below the
+   input. When the first output row appears, the status enters its slot below
+   that row from where it stood: it travels the row's gap plus one 24px row,
+   which follows the content font size. The gap is 6px for a process row or
+   group header, 12px for a response, and 16px after the running Turn's process
+   control, which renders empty until the Turn closes, so it precedes a new
+   Turn's first output. Later output keeps the same animation and does not
+   restart it. */
+:is(.column, :global([data-slot="conversation.chat.flow"])) > :nth-last-child(2 of :not([hidden]):not([data-pending-steering]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty)))):is(
+  .flowItem:not([data-chat-flow-kind="user"]):not([data-chat-flow-kind="steering"]):not([data-chat-flow-kind="turn-trigger"]),
+  [data-chat-group-key]
+) ~ .running {
+  --dsh-running-follow: calc(6px + 24px + var(--dsh-content-font-delta, 0px));
+}
+
+:is(.column, :global([data-slot="conversation.chat.flow"])) > :nth-last-child(2 of :not([hidden]):not([data-pending-steering]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))))[data-chat-group-part="response"] ~ .running {
+  --dsh-running-follow: calc(12px + 24px + var(--dsh-content-font-delta, 0px));
+}
+
+:is(.column, :global([data-slot="conversation.chat.flow"])) > [data-chat-flow-kind="turn-process"] + :nth-last-child(2 of :not([hidden]):not([data-pending-steering]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty)))) ~ .running {
+  --dsh-running-follow: calc(16px + 24px + var(--dsh-content-font-delta, 0px));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .column:not([data-input-fold]) > :global([data-slot="conversation.chat.flow"]) > :nth-last-child(2 of :not([hidden]):not([data-pending-steering]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty)))):is(
+    .flowItem:not([data-chat-flow-kind="user"]):not([data-chat-flow-kind="steering"]):not([data-chat-flow-kind="turn-trigger"]),
+    [data-chat-group-key]
+  ) ~ .running {
+    animation: running-follows-output 110ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
+@keyframes running-follows-output {
+  from {
+    opacity: 0;
+    translate: 0 calc(-1 * var(--dsh-running-follow));
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
 /* Empty Seats, including retained empty slot anchors, preserve Turn lookup
    without contributing height or the sibling gap. */
 .flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty)) {

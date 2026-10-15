@@ -1,4 +1,4 @@
-/** CSS checks for the Turn tail slot held by the completed-turn footer or a steering batch start. */
+/** CSS checks for the Turn tail slot and the running status's move below a Step's first output. */
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -19,5 +19,34 @@ describe('Turn tail slot spacing', () => {
     const marked = String.raw`:has\(> \[data-slot="conversation\.chat\.node"\] > \[data-chat-steering-batch`
     expect(view).toMatch(new RegExp(String.raw`\.flowItem${marked}="start"\]\)\s*\{\s*--dsh-chat-flow-gap:\s*calc\(44px \+ var\(--dsh-content-font-delta, 0px\)\);`))
     expect(view.match(new RegExp(String.raw`:not\(\.running\):not\(${marked}\]\)\)\s*\{\s*--dsh-chat-flow-gap:\s*1[26]px;`, 'g'))).toHaveLength(2)
+  })
+})
+
+describe('Running status move below the first output', () => {
+  const row = String.raw`calc\(24px \+ var\(--dsh-content-font-delta, 0px\)\)`
+  const travel = (gap: number) => String.raw`--dsh-running-follow: calc\(${gap}px \+ 24px \+ var\(--dsh-content-font-delta, 0px\)\);`
+
+  it('travels the first output row gap plus one font-scaled row', () => {
+    const view = read('ChatView.module.css')
+    // A process row or group header after a mid-Turn input.
+    expect(view).toMatch(new RegExp(String.raw`\[data-chat-group-key\]\s*\) ~ \.running \{\s*${travel(6)}`))
+    // A response keeps its 12px clearance.
+    expect(view).toMatch(new RegExp(String.raw`\)\)\)\)\[data-chat-group-part="response"\] ~ \.running \{\s*${travel(12)}`))
+    // A new Turn's first output follows the empty running process control at its 16px clearance.
+    expect(view).toMatch(new RegExp(String.raw`> \[data-chat-flow-kind="turn-process"\] \+ :nth-last-child\(2 of [^{]*\) ~ \.running \{\s*${travel(16)}`))
+  })
+
+  it('slides the status from where it stood, like the steering entrance, outside input folds and reduced motion', () => {
+    const view = read('ChatView.module.css')
+    expect(view).toMatch(new RegExp(String.raw`@media \(prefers-reduced-motion: no-preference\) \{\s*\.column:not\(\[data-input-fold\]\)[^{]*\[data-chat-group-key\]\s*\) ~ \.running \{\s*`
+      + String.raw`animation: running-follows-output 110ms cubic-bezier\(0\.4, 0, 0\.2, 1\);`))
+    expect(view).toMatch(new RegExp(String.raw`@keyframes running-follows-output \{\s*from \{\s*opacity: 0;\s*`
+      + String.raw`translate: 0 calc\(-1 \* var\(--dsh-running-follow\)\);\s*\}\s*40% \{\s*opacity: 1;`))
+  })
+
+  it('sizes every first-output row to the travelled row height', () => {
+    expect(read('ReasoningRow.module.css')).toMatch(new RegExp(String.raw`\.root:not\(\[data-expanded\]\) \{[^}]*height: ${row};`))
+    expect(read('ChatGroupSeat.module.css')).toMatch(new RegExp(String.raw`\.title \{[^}]*line-height: ${row};`))
+    expect(read('AssistantMarkdown.module.css')).toMatch(new RegExp(String.raw`\.root \{[^}]*line-height: ${row};`))
   })
 })
