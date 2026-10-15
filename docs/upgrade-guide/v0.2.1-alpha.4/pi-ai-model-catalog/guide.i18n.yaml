@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.1-alpha.4/pi-ai-model-catalog/guide.md
 /:
-  en: 3d2fec5fa8405395
-  zh: b8617482168609b1
-/pi-ai-1-2-0-removes-model-ids-and-lowers-sonnet-4-5-context:
-  en: 793381c1cb58d941
-  zh: de53660729d48116
-/pi-ai-1-2-0-removes-model-ids-and-lowers-sonnet-4-5-context/change:
-  en: 0948c8c82d4f8256
-  zh: 763504917909d130
-/pi-ai-1-2-0-removes-model-ids-and-lowers-sonnet-4-5-context/migration:
-  en: 6db9f70e6db44b3c
-  zh: 34156f7446a78bc1
+  en: 95f84e4861e282ee
+  zh: ee2bf9db07fcc61e
+/pi-ai-1-3-0-model-catalog-changes:
+  en: ffd3cd2159b8c733
+  zh: bf7e8f5a62d432f4
+/pi-ai-1-3-0-model-catalog-changes/change:
+  en: 66ff01b4e9eb0e15
+  zh: 6c71de9b23ebc8b9
+/pi-ai-1-3-0-model-catalog-changes/migration:
+  en: 6f1313d45d05c97d
+  zh: a5d396d5c9316031
