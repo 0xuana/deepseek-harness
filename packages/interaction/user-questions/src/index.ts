@@ -144,8 +144,9 @@ export class UserQuestionService extends TypertRemoteService {
   }
 
   private continued(agent: Agent): readonly PendingUserQuestion[] {
-    const state = this.ctx.get('sessionProjections')?.stateOf(agent.session, 'userQuestions')
-    return (state?.questions.active ?? []).filter(question => question.state === 'continued')
+    // oxlint-disable-next-line typescript/no-non-null-assertion -- live roots require the registry that activates this projection.
+    const state = this.ctx.sessionProjections.stateOf(agent.session, 'userQuestions')!
+    return state.questions.active.filter(question => question.state === 'continued')
   }
 
   /**
