@@ -71,7 +71,7 @@ describe('Cordis Timer', () => {
     throttled('second')
     await vi.advanceTimersByTimeAsync(10)
     expect(callback.mock.calls).toEqual(noTrailing ? [['first']] : [['first'], ['second']])
-    throttled('pending')
+    throttled('before disposal')
     const calls = callback.mock.calls.length
     throttled.dispose()
     await vi.advanceTimersByTimeAsync(20)
