@@ -23,9 +23,10 @@ import {
   SessionLogOffset,
   SessionSeq,
 } from '@deepseek-ai/dsh-session'
-// Type-only: activates the `ctx.sessionProjections` Context declaration.
-import type {} from '@deepseek-ai/dsh-session-projection'
+import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
+import type { SessionProjectionStateMap } from '@deepseek-ai/dsh-session-projection/types'
 import type {
+  ContextPressureProjection,
   TokenMeasurement,
   TokenMeasurementBaseline,
   TokenMeterConfig,
@@ -38,7 +39,6 @@ import type { MeterSurfaceNode } from './surface-fold.ts'
 import { priceSurface } from './route-pricing.ts'
 
 export type * from './types.ts'
-export { contextPressureProjectionDefinition } from './usage-projection.ts'
 // Module-edge re-export: forces the emitted index.d.ts to import the
 // projection-unit modules, so their SessionProjectionStateMap augmentations load
 // in aggregate programs that only import the package root.
@@ -107,6 +107,7 @@ export class TokenMeter extends Service {
   static inject = ['sessionProjections']
 
   private readonly states = new WeakMap<Session, ReplayState>()
+  private contextPressureProjection!: ProjectionHandle<SessionProjectionStateMap['contextPressure']>
 
   constructor(ctx: Context, config: TokenMeterConfig = {}) {
     super(ctx, 'tokenMeter')
@@ -116,7 +117,7 @@ export class TokenMeter extends Service {
   protected async [Service.init](): Promise<void> {
     const ctx = this.ctx
     await ctx.sessionProjections.register(tokenUsageProjectionDefinition)
-    await ctx.sessionProjections.register(contextPressureProjectionDefinition)
+    this.contextPressureProjection = await ctx.sessionProjections.register(contextPressureProjectionDefinition)
     await ctx.sessionProjections.register(contextBreakdownProjectionDefinition)
 
     // Readers catch up independently, while eager observation bounds ordinary
@@ -124,6 +125,15 @@ export class TokenMeter extends Service {
     ctx.on('session/event', (session) => {
       if (this.states.has(session)) this._sync(session)
     })
+  }
+
+  /**
+   * Read the latest logged context occupancy and its projected surface adjustment.
+   * @param session - Session whose committed usage and request capacity are read.
+   * @returns context pressure; fields remain absent until their source events are recorded.
+   */
+  contextPressure(session: Session): ContextPressureProjection {
+    return contextPressureProjectionDefinition.wire.view(this.contextPressureProjection.stateOf(session))
   }
 
   /**

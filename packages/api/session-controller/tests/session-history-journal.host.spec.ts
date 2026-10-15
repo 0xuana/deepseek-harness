@@ -3,6 +3,7 @@
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { type Agent, type AssistantStreamFrame } from '@deepseek-ai/dsh-agent'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SessionStore from '@deepseek-ai/dsh-session'
 import { LlmAttemptId, ToolCallId, createMessage, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { MessageSource } from '@deepseek-ai/dsh-llm'
@@ -50,6 +51,7 @@ function appendExtension(session: Session, type: string, data: unknown): Session
 async function harness(): Promise<{ ctx: Context }> {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   installSessionReadTestServices(ctx)
   return { ctx }

@@ -2,6 +2,7 @@ import { resolve } from 'node:path'
 import * as nativeCommand from '@deepseek-ai/dsh-native-command'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SessionStore from '@deepseek-ai/dsh-session'
 import FsLocal from '@deepseek-ai/dsh-fs-local'
 import { onTestFinished } from 'vitest'
@@ -14,6 +15,7 @@ import {
 async function context(): Promise<Context> {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(FsLocal)
   onTestFinished(() => ctx.fiber.dispose())

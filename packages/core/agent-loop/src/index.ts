@@ -10,18 +10,16 @@ import { Context, FiberState, Service } from '@deepseek-ai/cordis'
 import { randomUUID } from 'node:crypto'
 import z from '@deepseek-ai/schemastery'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import {
-  turnBoundaryProjectionDefinition,
-  type Agent,
-  type AgentFactory,
-  type AgentHandle,
-  type AgentOptions,
-  type AgentSetup,
-  type CreateAgentOptions,
-  type ResumeAgentOptions,
-  type SessionStartSource,
-  type InboxState,
-  type TurnBoundaryProjection,
+import type {
+  Agent,
+  AgentFactory,
+  AgentHandle,
+  AgentOptions,
+  AgentSetup,
+  CreateAgentOptions,
+  ResumeAgentOptions,
+  SessionStartSource,
+  InboxState,
 } from '@deepseek-ai/dsh-agent'
 import { errorChain, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { interruptedTurnClosers, SessionLogOffset, SessionPreparation } from '@deepseek-ai/dsh-session'
@@ -35,8 +33,6 @@ import { ReactLoopAgent } from './agent.ts'
 import { inboxProjectionDefinition } from './inbox.ts'
 import { DEFAULT_MAX_PARALLEL_TOOL_CALLS } from './constants.ts'
 import type {} from './runtime-context.ts'
-
-export { turnBoundaryProjectionDefinition } from '@deepseek-ai/dsh-agent'
 
 /** Fiber states that cannot own or serve a new lifecycle. */
 const INACTIVE_STATES: ReadonlySet<FiberState> = new Set([
@@ -313,7 +309,6 @@ export class AgentLoop extends Service implements AgentFactory {
   /** Plain holder prevents Cordis from re-tracing the factory's dependency context through a caller shadow. */
   private readonly runtime: { ctx: Context }
   private inbox!: ProjectionHandle<InboxState>
-  private turnBoundary!: ProjectionHandle<TurnBoundaryProjection>
 
   constructor(ctx: Context, config: Config) {
     super(ctx, 'agentLoop')
@@ -323,8 +318,6 @@ export class AgentLoop extends Service implements AgentFactory {
       maxParallelToolCalls: config.maxParallelToolCalls,
     }
     validateConfiguredAgents(this.config.agents)
-    // Register only after every config validation above has passed, so a
-    // rejected constructor leaves no projection unit behind.
     this.ownership = new FactoryOwnership(ctx.fiber)
     this.runtime = { ctx }
   }
@@ -332,9 +325,8 @@ export class AgentLoop extends Service implements AgentFactory {
   protected async [Service.init](): Promise<void> {
     const ctx = this.runtime.ctx
     const ownership = this.ownership
-    // Agents retain readers while fiber disposal removes global projection registrations.
+    // The inbox remains readable until agent teardown finishes.
     ctx.effect(() => () => ownership.dispose(), 'agentLoop.transactions()')
-    this.turnBoundary = await ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
     this.inbox = await ctx.sessionProjections.register(inboxProjectionDefinition)
     ctx.effect(() => ctx.agents.setFactory(this), 'agentLoop.setFactory()')
     ctx.systemPrompt.variable('provider', context => context.agent?.options.provider)
@@ -467,6 +459,7 @@ export class AgentLoop extends Service implements AgentFactory {
         : new Error(`agent "${id}" creation aborted`, { cause: callerSignal.reason })
     }
     const loopCtx = this.runtime.ctx
+    const lastTurn = loopCtx.agents.turnBoundaryOf(session).lastTurn
 
     // Deactivation fuses three owners, each with its own reason: the caller's
     // cancellation signal, the owner fiber's unload, and factory teardown.
@@ -550,10 +543,10 @@ export class AgentLoop extends Service implements AgentFactory {
       }
     }
     const untrack = this.ownership.track(dispose)
-    const { inbox, turnBoundary } = this
+    const inbox = this.inbox
     try {
       unfollowOwner = ownerCtx.effect(function* () {
-        const created = machine = new ReactLoopAgent(loopCtx, id, options, session, inbox, turnBoundary)
+        const created = machine = new ReactLoopAgent(loopCtx, id, options, session, () => inbox.stateOf(session), lastTurn)
         machineReady.resolve()
         // Adopt the scope on its original fiber so it cannot unload before teardown.
         // A loop already unloading during minting owns the provisional scope itself.

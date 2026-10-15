@@ -71,7 +71,7 @@ it.each([0, 1, 2])('retains Agent resources until all work exits with %i failed 
   expect(scopeDisposed).toBe(true)
   expect(abortHandled).toBe(1)
   expect(projections.checkpoint(agent.session).inbox).toBeUndefined()
-  expect(projections.checkpoint(agent.session).turnBoundary).toBeUndefined()
+  expect(projections.checkpoint(agent.session).turnBoundary).toBeDefined()
   expect(ctx.agents.get(agent.id)).toBeUndefined()
   expect(ctx.sessions.get(agent.session.id)).toBeUndefined()
 })

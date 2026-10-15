@@ -5,8 +5,6 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import type { TurnBoundaryProjection } from '@deepseek-ai/dsh-agent'
-import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionId } from '@deepseek-ai/dsh-session'
@@ -56,12 +54,11 @@ interface SearchCollection<T> {
 
 async function executeSessionSearch(
   ctx: Context,
-  turnBoundary: ProjectionHandle<TurnBoundaryProjection>,
   args: SessionSearchArgs,
   exec: ToolRunContext,
   maxResults: number,
 ): Promise<string> {
-  const caller = workspaceAccess.callerOf(exec, turnBoundary)
+  const caller = workspaceAccess.callerOf(exec, ctx)
   const cwd = caller.header.cwd
   if (cwd === undefined) {
     throw new HarnessError(
@@ -119,12 +116,11 @@ async function executeSessionSearch(
 
 async function executeEventSearch(
   ctx: Context,
-  turnBoundary: ProjectionHandle<TurnBoundaryProjection>,
   args: EventSearchArgs,
   exec: ToolRunContext,
   maxResults: number,
 ): Promise<string> {
-  const caller = workspaceAccess.callerOf(exec, turnBoundary)
+  const caller = workspaceAccess.callerOf(exec, ctx)
   const sessionId = workspaceAccess.targetId(args, caller)
   await workspaceAccess.authorizeTarget(ctx, caller, sessionId, exec.signal)
   const query = toolInput.normalizeQuery(args.query)
@@ -168,11 +164,10 @@ async function executeEventSearch(
 
 async function executeSessionTrace(
   ctx: Context,
-  turnBoundary: ProjectionHandle<TurnBoundaryProjection>,
   args: SessionTargetArgs,
   exec: ToolRunContext,
 ): Promise<string> {
-  const caller = workspaceAccess.callerOf(exec, turnBoundary)
+  const caller = workspaceAccess.callerOf(exec, ctx)
   const sessionId = workspaceAccess.targetId(args, caller)
   await workspaceAccess.authorizeTarget(ctx, caller, sessionId, exec.signal)
   const trace = await serviceBoundary.call(ctx, exec.signal, 'session lineage trace', () =>
@@ -201,13 +196,12 @@ async function executeSessionTrace(
 
 async function executeEventTrace(
   ctx: Context,
-  turnBoundary: ProjectionHandle<TurnBoundaryProjection>,
   args: EventTargetArgs,
   exec: ToolRunContext,
 ): Promise<string> {
   toolInput.assertNonNegativeSafeInteger('seq', args.seq)
   const seq = SessionSeq(args.seq)
-  const caller = workspaceAccess.callerOf(exec, turnBoundary)
+  const caller = workspaceAccess.callerOf(exec, ctx)
   const sessionId = workspaceAccess.targetId(args, caller)
   await workspaceAccess.authorizeTarget(ctx, caller, sessionId, exec.signal)
   const trace = await serviceBoundary.call(ctx, exec.signal, 'event trace', () =>
@@ -219,7 +213,6 @@ async function executeEventTrace(
 
 async function executeEventRead(
   ctx: Context,
-  turnBoundary: ProjectionHandle<TurnBoundaryProjection>,
   args: EventReadArgs,
   exec: ToolRunContext,
 ): Promise<string> {
@@ -227,7 +220,7 @@ async function executeEventRead(
   const seq = SessionSeq(args.seq)
   if (args.before !== undefined) toolInput.assertNonNegativeSafeInteger('before', args.before)
   if (args.after !== undefined) toolInput.assertNonNegativeSafeInteger('after', args.after)
-  const caller = workspaceAccess.callerOf(exec, turnBoundary)
+  const caller = workspaceAccess.callerOf(exec, ctx)
   const sessionId = workspaceAccess.targetId(args, caller)
   await workspaceAccess.authorizeTarget(ctx, caller, sessionId, exec.signal)
   const window = await serviceBoundary.call(ctx, exec.signal, 'event read', () =>

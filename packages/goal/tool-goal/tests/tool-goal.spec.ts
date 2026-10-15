@@ -193,7 +193,7 @@ describe('goal tool registration and presentation', () => {
   it('has the Loader-safe namespace export shape', () => {
     expect('default' in toolGoal).toBe(false)
     expect(toolGoal.name).toBe('tool-goal')
-    expect(toolGoal.inject).toEqual(['agents', 'goals', 'tools', 'systemPrompt', 'sessionProjections'])
+    expect(toolGoal.inject).toEqual(['agents', 'goals', 'tools', 'systemPrompt'])
     const loader = Object.create(Loader.prototype) as Loader
     expect(loader.unwrapExports(toolGoal)).toBe(toolGoal)
   })
@@ -206,7 +206,7 @@ describe('goal tool registration and presentation', () => {
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(GoalService)
-    await expect(toolGoal.apply(ctx, { blockedAfterConsecutiveRounds: 1.5 })).rejects.toThrow(
+    expect(() => { toolGoal.apply(ctx, { blockedAfterConsecutiveRounds: 1.5 }) }).toThrow(
       'blockedAfterConsecutiveRounds must be a positive safe integer',
     )
     expect(ctx.tools.get('get_goal')).toBeUndefined()
@@ -220,7 +220,7 @@ describe('goal tool registration and presentation', () => {
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(GoalService)
-    await toolGoal.apply(ctx, {})
+    toolGoal.apply(ctx, {})
     const section = (await ctx.systemPrompt.assemble()).sections.find(item => item.name === 'tool:goal')
     expect(section?.text).toContain('at least 3 consecutive goal rounds')
   })

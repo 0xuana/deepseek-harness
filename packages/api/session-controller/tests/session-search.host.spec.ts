@@ -57,8 +57,8 @@ function hit(id: string, index = 0): SessionSearchHit {
 async function baseContext(): Promise<Context> {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
-  await ctx.plugin(AgentRegistry)
   await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(AgentRegistry)
   return ctx
 }
 

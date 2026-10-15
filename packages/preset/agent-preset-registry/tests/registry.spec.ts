@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { createScope } from '@deepseek-ai/dsh-scope'
-import { assembleContextFor } from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { assembleContextFor } from '@deepseek-ai/dsh-agent'
 import { entryListProblem } from '../src/index.ts'
 import { currentKey, harness, declare, contribution, agentOn, liveRegistries, plugin } from './harness.ts'
 import { omitsGeneratedPage } from '../../../settings/settings/tests/live-config.ts'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import AgentPresets, { agentPresetProjectionDefinition } from '../src/index.ts'
+import AgentPresets from '../src/index.ts'
 import type { Context } from '@deepseek-ai/cordis'
 
 const contexts: Context[] = []
@@ -246,6 +246,7 @@ it('ignores a retired modeSelectionEnabled field in the user patch', async () =>
 it('keeps its own instance off the generated Settings pages', () => omitsGeneratedPage(async (ctx) => {
   await ctx.plugin(Loader)
   await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(AgentRegistry)
   return ctx.plugin(AgentPresets, { default: 'standard' })
 }))
 
@@ -317,12 +318,11 @@ it('logs the default preset a blank Session runs once it is selected without a r
   const ctx = await setup()
   await declare(ctx, contribution('standard'))
   const agent = await agentOn(ctx, 'unrecorded')
-  const preset = await ctx.sessionProjections.register(agentPresetProjectionDefinition)
-  expect(preset.stateOf(agent.session)).toBeNull()
+  expect(ctx.agentPresets.presetForSession(agent.session)).toBeNull()
 
   expect(await ctx.agentPresets.select(agent, 'standard')).toBe('standard')
 
-  expect(preset.stateOf(agent.session)).toBe('standard')
+  expect(ctx.agentPresets.presetForSession(agent.session)).toBe('standard')
 })
 
 it('recomposes and logs a repeated selection once the preset definition was replaced', async () => {

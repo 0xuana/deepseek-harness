@@ -3,7 +3,6 @@
  * @module @deepseek-ai/dsh-session-title
  */
 
-import { turnBoundaryProjectionDefinition, type TurnBoundaryProjection } from '@deepseek-ai/dsh-agent'
 import { Context, FiberState, Service, type Fiber } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { z as zod } from 'zod'
@@ -19,6 +18,7 @@ import type {
 import { SessionSeq } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import type { ProjectionDefinition, ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
+import type {} from '@deepseek-ai/dsh-agent'
 export type {
   SessionTitleEventData,
   SessionTitleModelIdentity,
@@ -299,14 +299,13 @@ export function foldSessionTitle(events: readonly SessionEvent[]): SessionTitleS
 
 /** Log-backed title fold plus asynchronous fallback generation. */
 export class SessionTitleService extends Service {
-  static inject = ['sessions', 'sessionProjections']
+  static inject = ['sessions', 'sessionProjections', 'agents']
   static Config: z<Config> = z.object({
     fallbackMaxWords: z.number().step(1).min(1).required(),
     fallbackMaxBytes: z.number().step(1).min(1).required(),
     maxTitleBytes: z.number().step(1).min(1).required(),
   })
 
-  private turnBoundary!: ProjectionHandle<TurnBoundaryProjection>
   private titleInput!: ProjectionHandle<TitleInputState>
   private readonly config: ResolvedConfig
   private readonly ownerFiber: Fiber
@@ -334,8 +333,6 @@ export class SessionTitleService extends Service {
 
   protected async [Service.init](): Promise<void> {
     const ctx = this.ctx
-    this.turnBoundary = await ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
-
     ctx.effect(() => async () => {
       this.lifetime.abort(new Error('session-title service disposed'))
       if (this.registration !== undefined) this.registration.closing = true
@@ -556,7 +553,7 @@ export class SessionTitleService extends Service {
     const state = session === undefined ? undefined : this.work.get(session)
     const pending = state?.pending
     if (session === undefined || state === undefined || pending === undefined) return
-    const boundary = this.turnBoundary.stateOf(session).lastStepBoundary
+    const boundary = this.ctx.agents.turnBoundaryOf(session).lastStepBoundary
     const route = session.requestHeader()?.config
     if (boundary?.kind !== 'start'
       || route?.provider !== options.provider

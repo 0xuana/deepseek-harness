@@ -1,5 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SESSION_FORMAT_VERSION, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
@@ -23,6 +24,7 @@ describe('SessionController facade', () => {
   it('owns Host service methods and publishes Agent lifecycle projections', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const sessionId = SessionId('controller-session')
     const header: SessionHeader = {
@@ -144,6 +146,7 @@ describe('SessionController facade', () => {
     async (outcome) => {
       const ctx = new Context()
       await ctx.plugin(SessionStore)
+      await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(AgentRegistry)
       const sessionId = SessionId(`background-${outcome}`)
       const header: SessionHeader = {
@@ -200,6 +203,7 @@ describe('SessionController facade', () => {
   it('waits for an admitted background promotion during teardown', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const sessionId = SessionId('background-disposal')
     const header: SessionHeader = {

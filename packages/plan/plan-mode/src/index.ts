@@ -25,7 +25,6 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { z as zod } from 'zod'
 import type { ZodType } from 'zod'
-import { turnBoundaryProjectionDefinition, type TurnBoundaryProjection } from '@deepseek-ai/dsh-agent'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
@@ -174,12 +173,11 @@ export const planProjectionDefinition = {
  * Client carriers expose the projection's cropped `{ active, pending }` view.
  */
 export class PlanModeController extends Service {
-  static inject = ['tools', 'systemPrompt', 'sessionProjections']
+  static inject = ['tools', 'systemPrompt', 'sessionProjections', 'agents']
 
   /** Validated deployment-owned guidance. */
   private readonly section: string
   private projection!: ProjectionHandle<PlanUnitState>
-  private turnBoundary!: ProjectionHandle<TurnBoundaryProjection>
 
   /**
    * Latest selection per session awaiting the next accepted in-turn pre-step.
@@ -196,7 +194,6 @@ export class PlanModeController extends Service {
   protected async [Service.init](): Promise<void> {
     const ctx = this.ctx
     this.projection = await ctx.sessionProjections.register(planProjectionDefinition)
-    this.turnBoundary = await ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
     let disposed = false
     // Pre-step is outside Session.append publication, so it can append the
     // log-only mode event inside an open turn without re-entering the session.
@@ -231,7 +228,6 @@ export class PlanModeController extends Service {
         return (pending?.active ?? this.loggedActive(context.agent.session)) ? this.section : ''
       },
     })
-
 
     // The command child activates only when a command registry is composed.
     ctx.inject(['commands'], (commandCtx) => {
@@ -385,18 +381,15 @@ export class PlanModeController extends Service {
   }
 
   private hasOpenTurn(session: Session): boolean {
-    const state = this.turnBoundary.stateOf(session)
-    return state.openTurnStartSeq !== null
+    return this.ctx.agents.turnBoundaryOf(session).openTurnStartSeq !== null
   }
 
   private loggedActiveAtLastHeader(session: Session): boolean | undefined {
     return this.planState(session).activeAtLastHeader ?? undefined
   }
 
-  /** Read the required plan projection state or fail at the first service access. */
   private planState(session: Session): PlanUnitState {
-    const state = this.projection.stateOf(session)
-    return state
+    return this.projection.stateOf(session)
   }
 
   /**

@@ -136,6 +136,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Registry of YAML-declared presets and the revisions live Agents retain.',
     methods: [
       {
+        signature: 'presetForSession(session: Session): string | null',
+        description: 'Read the preset recorded for a Session, including selections no longer in the roster.',
+        parameters: [{ name: 'session', description: 'Session whose committed preset selection is read.' }],
+        returns: 'the recorded preset, or null when none was selected.',
+      },
+      {
         signature: 'async register(definition: PresetDefinition): Promise<() => Promise<void>>',
         description: 'Register and eagerly load a definition; activation failure remains visible in the roster.',
         parameters: [{ name: 'definition', description: 'Parsed configuration supplied by the declaring plugin.' }],
@@ -226,6 +232,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     summary: 'Agent service (`ctx.agents`): tracks live agents and carries the initiating Agent through one process-local asynchronous driver chain.',
     description: 'Agent service (`ctx.agents`): tracks live agents and carries the initiating Agent through one process-local asynchronous driver chain. Agent *creation* is provided by whichever plugin implements the AgentFactory (`@deepseek-ai/dsh-agent-loop`), registered via setFactory.\n\nInitiator methods provide same-process causal attribution only. Ambient presence is neither liveness proof nor authorization; subjects and owners remain explicit, as does identity at worker, process, persistence, and wire boundaries. Returned Promise boundaries drain during teardown, except a nested lineage that starts an owning-fiber unload is excluded from its own drain.',
     methods: [
+      {
+        signature: 'turnBoundaryOf(session: Session): TurnBoundaryProjection',
+        description: 'Read the turn and step positions recorded in a Session.',
+        parameters: [{ name: 'session', description: 'Session whose committed events are read.' }],
+        returns: 'the current turn and step positions; do not mutate the returned value.',
+      },
       {
         signature: 'currentInitiator(): Agent | undefined',
         description: 'Read the Agent that initiated the inherited asynchronous driver chain. Use this optional form for logging, tracing, metrics, or host attribution that also supports agentless calls. When a parent creates a child, setup reports the causal parent while the setup callback\'s Agent parameter identifies the child.',
@@ -3316,6 +3328,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Replay owner for one service-wide estimator and isolated per-session folds.',
     methods: [
       {
+        signature: 'contextPressure(session: Session): ContextPressureProjection',
+        description: 'Read the latest logged context occupancy and its projected surface adjustment.',
+        parameters: [{ name: 'session', description: 'Session whose committed usage and request capacity are read.' }],
+        returns: 'context pressure; fields remain absent until their source events are recorded.',
+      },
+      {
         signature: 'measure(session: Session, requestHeader?: EpochHeader): TokenMeasurement',
         description: 'Measure current request pressure and surface through the durable tail.\n\nThe effective envelope\'s routed provider/model selects the request-image pricing every node is priced under: a route whose adapter declares image pricing charges each retained image its visual tokens plus its model-visible text, while other routes keep the fixed heuristic. Provider usage is reused only when the latest successful call\'s canonical request envelope matches `requestHeader` and its total is no lower than that call\'s full route-priced anchor; otherwise the complete envelope and surface are repriced. The anchor includes all surface nodes immediately before the assistant message, including inputs admitted after step/start.\n\n`requestHeader` replaces the latest logged envelope for pressure and node pricing; the node set always describes the current session surface. Every call clones those positional nodes, so measurement is O(surface).',
         parameters: [{ name: 'session', description: 'session to replay through its current durable tail.' }, { name: 'requestHeader', description: 'optional effective request envelope replacing the latest logged header.' }],
@@ -5097,6 +5115,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ContentBlockType',
     declaration: 'export type ContentBlockType = keyof ContentBlockMap;',
+  },
+  {
+    name: 'ContextPressureProjection',
+    declaration: 'export interface ContextPressureProjection {\n    pressureTokens?: number;\n    projectedTokens?: number;\n    contextWindow?: number;\n}',
   },
   {
     name: 'ContinuableCreateRequest',
@@ -8221,6 +8243,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'TranslationSpec',
     declaration: 'export type TranslationSpec = AnonymousTranslationSpec | PaidTranslationSpec;',
+  },
+  {
+    name: 'TurnBoundaryProjection',
+    declaration: 'export interface TurnBoundaryProjection {\n    readonly openTurnStartSeq: OptionalSessionSeq;\n    readonly lastStepStartSeq: OptionalSessionSeq;\n    readonly lastStepBoundary: {\n        readonly kind: \'start\' | \'end\';\n        readonly seq: SessionSeq;\n    } | null;\n    readonly lastTurn: number;\n}',
   },
   {
     name: 'TurnCompleteInput',

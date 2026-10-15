@@ -187,7 +187,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 }
 ```
 
-来源：[`packages/core/agent/src/types.ts:96`](../packages/core/agent/src/types.ts)
+来源：[`packages/core/agent/src/types.ts:88`](../packages/core/agent/src/types.ts)
 
 ### `agent-preset/*`
 
@@ -737,7 +737,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'plan/mode': { active: boolean }
 ```
 
-来源：[`packages/plan/plan-mode/src/index.ts:53`](../packages/plan/plan-mode/src/index.ts)
+来源：[`packages/plan/plan-mode/src/index.ts:52`](../packages/plan/plan-mode/src/index.ts)
 
 ### `request/*`
 
@@ -5763,7 +5763,7 @@ SHA-256: `b1664fa89f8eab49a14e7e3168d8bc4da4aa9fd76332f6c4a053d839e5276ae7`
 
 SHA-256: `20a57544bbf204dacd1ae6beb2ab29444365c3c869f2afdf489dcdcbc3d9c8c5`
 
-来源：[`packages/plan/plan-mode/src/index.ts:53`](../packages/plan/plan-mode/src/index.ts)
+来源：[`packages/plan/plan-mode/src/index.ts:52`](../packages/plan/plan-mode/src/index.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
@@ -6371,7 +6371,7 @@ SHA-256: `17d1afb770d9941936130996da00dc86782cfef731d8d6526162c301256a4ac3`
 
 SHA-256: `fa106c5b33b657e8ef16e8cbf39f3b7d44e5cbcdf4f9303d9db6410f28951e42`
 
-来源：[`packages/core/agent/src/types.ts:96`](../packages/core/agent/src/types.ts)
+来源：[`packages/core/agent/src/types.ts:88`](../packages/core/agent/src/types.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|

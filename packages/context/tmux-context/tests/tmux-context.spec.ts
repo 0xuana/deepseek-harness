@@ -93,8 +93,8 @@ async function mount(
   withBash = false,
 ): Promise<{ ctx: Context; bash: FakeBash | undefined }> {
   const ctx = new Context()
-  await ctx.plugin(AgentRegistry)
   await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(AgentRegistry)
   let bash: FakeBash | undefined
   if (withBash) {
     await ctx.plugin(FakeBash)

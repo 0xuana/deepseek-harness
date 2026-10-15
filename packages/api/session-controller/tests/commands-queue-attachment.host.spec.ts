@@ -1,6 +1,7 @@
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Agent, Inbox, ModelSelectionRef } from '@deepseek-ai/dsh-agent'
 import { AttachmentError, AttachmentId } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
@@ -36,6 +37,7 @@ async function commandHarness(
 }> {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   installSessionReadTestServices(ctx)
   await ctx.sessionProjections.register(subagentIdentityProjectionDefinition)
@@ -126,6 +128,7 @@ describe('Session queue commands', () => {
   it('preserves the cold Agent resolver rejection', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const error = new RemoteError('session/agent-busy', 'owned by a child', { reason: 'subagent-owned' })
     const controller = new SessionCommandController(ctx, {

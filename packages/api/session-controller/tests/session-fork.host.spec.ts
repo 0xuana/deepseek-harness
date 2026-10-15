@@ -3,6 +3,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Agent, AgentHandle, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { BasicCompactionEngine } from '@deepseek-ai/dsh-compaction-basic'
@@ -32,6 +33,7 @@ async function composed(workspaces: readonly Workspace[] = []): Promise<Context>
   const ctx = new Context()
   await ctx.plugin(SessionStore)
   await ctx.plugin(SystemPrompt, { personaPrefix: '' })
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   installSessionReadTestServices(ctx)
   ctx.provide('workspaceRegistry', { list: () => workspaces, archivedSessionIds: [] } as never)

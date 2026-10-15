@@ -60,8 +60,8 @@ async function liveAgent(ctx: Context, session: Session): Promise<Agent> {
 async function harness(withGoal: boolean): Promise<Bench> {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
-  await ctx.plugin(AgentRegistry)
   await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(AgentRegistry)
   if (withGoal) await ctx.plugin(GoalService)
   const session = ctx.sessions.create()
   const agent = await liveAgent(ctx, session)

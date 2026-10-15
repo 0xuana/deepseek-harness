@@ -5,7 +5,6 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { turnBoundaryProjectionDefinition } from '@deepseek-ai/dsh-agent'
 import z from '@deepseek-ai/schemastery'
 import { GoalId } from '@deepseek-ai/dsh-goal'
 import type { GoalRef, GoalView } from '@deepseek-ai/dsh-goal'
@@ -27,7 +26,7 @@ import {
 import { renderWrapupContext } from './wrapup.ts'
 
 export const name = 'tool-goal'
-export const inject = ['agents', 'goals', 'tools', 'systemPrompt', 'sessionProjections']
+export const inject = ['agents', 'goals', 'tools', 'systemPrompt']
 
 /** Model policy and hard lower bounds for goal-state updates. */
 export interface Config {
@@ -185,9 +184,8 @@ function present(title: string, kind: 'read' | 'other', rawInput?: unknown): Gen
 }
 
 /** Register the three Codex-shaped goal tools and their shared policy section. */
-export async function apply(ctx: Context, config: Config): Promise<void> {
+export function apply(ctx: Context, config: Config): void {
   const resolved = resolveConfig(config)
-  const turnBoundary = await ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
   ctx.systemPrompt.section({
     name: 'tool:goal',
     order: ctx.systemPrompt.getSectionOrder('TOOL_GOAL'),
@@ -200,7 +198,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     parameters: {},
     output: GOAL_OUTPUT,
     execute(_args, exec) {
-      const execution = goalToolExecution(ctx, exec, turnBoundary)
+      const execution = goalToolExecution(ctx, exec)
       return Promise.resolve(goalValue(ctx.goals.get(execution.agent)))
     },
     presentCall: () => present('Read current goal', 'read'),
@@ -222,7 +220,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     },
     output: GOAL_OUTPUT,
     execute(args, exec) {
-      const execution = goalToolExecution(ctx, exec, turnBoundary)
+      const execution = goalToolExecution(ctx, exec)
       requireDirectHuman(ctx, execution)
       const goal = ctx.goals.create(execution.agent, {
         objective: args.objective,
@@ -255,7 +253,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     },
     output: GOAL_OUTPUT,
     execute(args, exec) {
-      const execution = goalToolExecution(ctx, exec, turnBoundary)
+      const execution = goalToolExecution(ctx, exec)
       const ref = goalRef(args.goal_id, args.revision)
       const replacements = {
         ...hasText(args.objective) ? { objective: args.objective } : {},

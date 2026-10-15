@@ -11,14 +11,16 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { isPromise } from 'node:util/types'
 import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import type { Scoped } from '@deepseek-ai/dsh-scope'
-import type { SessionEvent, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import type { Session, SessionEvent, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import { installTurnArchiveAdmission } from './archive-admission.ts'
-import type { Agent } from './types.ts'
+import type { Agent, TurnBoundaryProjection } from './types.ts'
 import type { AgentOptions, SessionStartSource } from './runtime-types.ts'
+import { turnBoundaryProjectionDefinition } from './projection.ts'
 
 export * from './runtime-types.ts'
 export * from './types.ts'
-export { turnBoundaryProjectionDefinition } from './projection.ts'
+export type * from './projection.ts'
 export * from './consumed-work.ts'
 export * from './model-selection.ts'
 export { agentCarrier, agentEvents, assembleContextFor, emitAgentEvent } from './dispatch.ts'
@@ -243,6 +245,9 @@ interface FactorySlot {
  * nested lineage that starts an owning-fiber unload is excluded from its own drain.
  */
 export class AgentRegistry extends Service {
+  static inject = ['sessionProjections']
+
+  private turnBoundaryProjection!: ProjectionHandle<TurnBoundaryProjection>
   private store = new Map<SessionId, AgentEntry>()
   private factory: FactorySlot | undefined
   private readonly initiators = new AsyncLocalStorage<Agent | undefined>()
@@ -282,6 +287,19 @@ export class AgentRegistry extends Service {
     // Archive admission: the Workspace registry asks what still runs for a
     // Session before hiding it; a running turn answers here, for every Agent.
     installTurnArchiveAdmission(ctx, sessionId => this.get(sessionId))
+  }
+
+  protected async [Service.init](): Promise<void> {
+    this.turnBoundaryProjection = await this.ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
+  }
+
+  /**
+   * Read the turn and step positions recorded in a Session.
+   * @param session - Session whose committed events are read.
+   * @returns the current turn and step positions; do not mutate the returned value.
+   */
+  turnBoundaryOf(session: Session): TurnBoundaryProjection {
+    return this.turnBoundaryProjection.stateOf(session)
   }
 
   /**

@@ -331,8 +331,7 @@ export class PermissionPresetService extends TypertRemoteService {
   }
 
   private permissionState(session: Session): PermissionProjectionState {
-    const state = this.projection.stateOf(session)
-    return state
+    return this.projection.stateOf(session)
   }
 
   /**

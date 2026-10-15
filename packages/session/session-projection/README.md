@@ -29,7 +29,7 @@ Mount `dsh-session-projection` wherever client carriers need current values of l
 
 ### When to choose it
 
-Choose it when a domain keeps state that clients should see without re-deriving it — a todo list, a goal snapshot, conversation statistics. The registry drives units eagerly over committed events, so any registered unit's value is current by construction. A unit without a `wire` block keeps its state host-only. Host readers declare `sessionProjections` in their plugin dependencies and await registration before exposing synchronous reads.
+Choose it when a domain keeps state that clients should see without re-deriving it — a todo list, a goal snapshot, conversation statistics. The registry drives units eagerly over committed events, so any registered unit's value is current by construction. A unit without a `wire` block keeps its state host-only. Domain owners declare `sessionProjections` in their plugin dependencies and await registration before exposing synchronous service methods. Other plugins read those methods through the owning service.
 
 ### Define a projection unit
 
@@ -63,7 +63,7 @@ const state = projection.stateOf(session)
 const { asOfSeq, values } = ctx.sessionProjections.snapshot(session)
 ```
 
-A domain that requires projected state declares `sessionProjections` as a Cordis service dependency; optional contributors may register under `ctx.inject(['sessionProjections'], …)`. Carriers use `ctx.get('sessionProjections')` and omit their block or frames when the registry is absent.
+A domain that owns projected state declares `sessionProjections` as a Cordis service dependency and keeps its handle private. Consumers inject that domain service and use its methods, such as `ctx.agents.turnBoundaryOf(session)`, without importing definitions or retaining projection readers. Optional contributors may register under `ctx.inject(['sessionProjections'], …)`. Carriers use `ctx.get('sessionProjections')` and omit their block or frames when the registry is absent.
 
 ### Persisted checkpoints
 

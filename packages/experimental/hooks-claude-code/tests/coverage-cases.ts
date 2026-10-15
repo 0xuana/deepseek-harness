@@ -381,7 +381,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       // Direct apply with only configPath — bypasses schemastery's defaults, so
       // the bridge must run on the raw minimal config (the per-hook timeout is
       // the protocol lib's reference default, not a config knob).
-      await HooksClaude.apply(ctx, { configPath: join(d, 'hooks.json') })
+      HooksClaude.apply(ctx, { configPath: join(d, 'hooks.json') })
       ctx.llm.registerAdapter(['mock'], adapter)
       const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))

@@ -19,7 +19,6 @@ export type { LlmRetryEventData, LlmRetryStartedEventData } from './types.ts'
 export { RetryId } from './brand.ts'
 
 export const name = 'llm-retry'
-
 export const inject = ['agents', 'sessionProjections']
 
 /** This policy executor has no config; providers own `retryPolicy`. */

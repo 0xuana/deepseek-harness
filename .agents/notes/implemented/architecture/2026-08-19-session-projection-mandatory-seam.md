@@ -12,9 +12,9 @@ An optional projection registry lets a plugin whose host behavior reads projecte
 
 This decision builds on the split between host projection state and client views in [Session projection state and client views](../../archived/architecture/2026-08-19-session-projection-state-and-client-views.md).
 
-Every host reader treats the projection registry and its required key as mandatory state. Plugins declare `sessionProjections` as a required injection and await acquisition before exposing readers. Official compositions mount the registry before those plugins. `ApiProxyService` follows the required-injection form; the lower-level `createApiProxy` factory remains tolerant for isolated tests and diagnostics.
+Every host state owner treats the projection registry and its required key as mandatory state. Owners declare `sessionProjections` as a required injection and await acquisition before exposing service methods; other consumers depend on those services. Official compositions mount the registry before those plugins. `ApiProxyService` follows the required-injection form; the lower-level `createApiProxy` factory remains tolerant for isolated tests and diagnostics.
 
-Readers acquire state through [awaited registration and retained handles](2026-10-12-session-projection-registration-handles.md). That decision supersedes optional first-access acquisition and returning a bare disposer. It preserves the required-state rule here: a missing registry cannot silently produce default host state. Client views still contain only consumed fields; typed handle reads provide richer host state.
+Owners acquire state through [awaited registration and retained handles](2026-10-12-session-projection-registration-handles.md). That decision supersedes optional first-access acquisition and returning a bare disposer. It preserves the required-state rule here: a missing registry cannot silently produce default host state. Client views still contain only consumed fields; business service methods expose the host data each consumer needs.
 
 `onChanged` publishes client-visible value changes only. Registration changes do not create a second Host event stream or client tombstone protocol. A later authoritative history or list baseline reflects the active key set.
 

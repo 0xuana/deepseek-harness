@@ -26,6 +26,7 @@ import type {} from '@deepseek-ai/dsh-session-projection'
 import type { ShellExecutor, ShellRunResult } from '@deepseek-ai/dsh-shell'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
+
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
     /** Location attribution; readers preserve the content without this producer.
@@ -39,6 +40,7 @@ declare module '@deepseek-ai/dsh-llm' {
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'tmux-context'
 
+/** The agent registry that owns pre-step processing. */
 export const inject = ['agents', 'sessionProjections']
 
 /** Per-turn tmux-location scheduling. Invalid values fail plugin load. */

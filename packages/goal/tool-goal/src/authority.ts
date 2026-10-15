@@ -1,12 +1,11 @@
 /** Execution-time authority checks for the model-facing goal tools. */
 
 import type { Context } from '@deepseek-ai/cordis'
-import type { Agent, TurnBoundaryProjection } from '@deepseek-ai/dsh-agent'
+import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { GoalView } from '@deepseek-ai/dsh-goal'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
-import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 
 /** The calling agent plus the immutable event cut and open-turn start seq used for authority checks. */
 export interface GoalToolExecution {
@@ -27,12 +26,12 @@ function reject(message: string, code = 'GOAL_TOOL_AUTHORITY_REQUIRED'): never {
 
 /** Resolve the immutable event cut and open-turn boundary without copying the turn suffix. */
 function openTurnEvents(
-  turnBoundary: ProjectionHandle<TurnBoundaryProjection>,
+  ctx: Context,
   agent: Agent,
 ): Pick<GoalToolExecution, 'events' | 'openTurnStartSeq'> {
   // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
   const events = agent.session.snapshotEvents()
-  const boundary = turnBoundary.stateOf(agent.session)
+  const boundary = ctx.agents.turnBoundaryOf(agent.session)
   if (boundary.openTurnStartSeq === null) {
     reject('goal tools require an open model turn', 'GOAL_TOOL_DRIVER_REQUIRED')
   }
@@ -43,14 +42,9 @@ function openTurnEvents(
  * Resolve and authenticate the calling agent and its driver boundary.
  * @param ctx - Context carrying the live agent registry.
  * @param exec - Tool execution metadata supplied by the registry.
- * @param turnBoundary - Ready reader for the calling Session's turn boundary.
  * @returns The authenticated agent, immutable event cut, and open-turn boundary.
  */
-export function goalToolExecution(
-  ctx: Context,
-  exec: ToolRunContext,
-  turnBoundary: ProjectionHandle<TurnBoundaryProjection>,
-): GoalToolExecution {
+export function goalToolExecution(ctx: Context, exec: ToolRunContext): GoalToolExecution {
   const agent = exec.agent
   if (agent === undefined) {
     return reject('goal tools require a calling agent', 'GOAL_TOOL_AGENT_REQUIRED')
@@ -62,7 +56,7 @@ export function goalToolExecution(
       'GOAL_TOOL_DRIVER_REQUIRED',
     )
   }
-  return { agent, ...openTurnEvents(turnBoundary, agent) }
+  return { agent, ...openTurnEvents(ctx, agent) }
 }
 
 /** Whether the captured open turn contains an event accepted by `predicate`. */

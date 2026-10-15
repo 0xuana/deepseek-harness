@@ -22903,7 +22903,7 @@
       "digest": "20a57544bbf204dacd1ae6beb2ab29444365c3c869f2afdf489dcdcbc3d9c8c5",
       "names": [],
       "sources": [
-        "packages/plan/plan-mode/src/index.ts:53"
+        "packages/plan/plan-mode/src/index.ts:52"
       ]
     },
     {
@@ -26047,7 +26047,7 @@
       "digest": "fa106c5b33b657e8ef16e8cbf39f3b7d44e5cbcdf4f9303d9db6410f28951e42",
       "names": [],
       "sources": [
-        "packages/core/agent/src/types.ts:96"
+        "packages/core/agent/src/types.ts:88"
       ]
     },
     {

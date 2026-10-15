@@ -17,7 +17,6 @@ import type {
   SessionRecord,
 } from '@deepseek-ai/dsh-session-query'
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
-import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import { serviceBoundary } from './service-boundary.ts'
 
 interface Caller {
@@ -53,7 +52,7 @@ interface DescendantVisit {
   readonly next: DescendantVisit | undefined
 }
 
-function callerOf(exec: ToolRunContext, turnBoundary: ProjectionHandle<TurnBoundaryProjection>): Caller {
+function callerOf(exec: ToolRunContext, ctx: Context): Caller {
   const agent = exec.agent
   if (agent === undefined) {
     throw new HarnessError(
@@ -64,7 +63,7 @@ function callerOf(exec: ToolRunContext, turnBoundary: ProjectionHandle<TurnBound
   return {
     id: agent.session.id,
     header: agent.session.header,
-    boundary: turnBoundary.stateOf(agent.session),
+    boundary: ctx.agents.turnBoundaryOf(agent.session),
   }
 }
 

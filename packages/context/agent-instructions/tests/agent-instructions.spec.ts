@@ -12,7 +12,7 @@ import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId, SessionSeq, type SessionEvent, type SurfaceIntent, type UserMessage } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import AgentRegistry, { agentEvents, type Agent } from '@deepseek-ai/dsh-agent'
-import AgentLoop, { turnBoundaryProjectionDefinition } from '@deepseek-ai/dsh-agent-loop'
+import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { FileSystem, FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
 import type {
   FsDirEntry,
@@ -239,8 +239,8 @@ class BlockingReadFileSystem extends RecordingFileSystem {
 
 async function mountAgentInstructionsPlugin(ctx: Context, config: AgentInstructionsConfig): Promise<Awaited<ReturnType<Context['plugin']>>> {
   if (ctx.get('workingDirectory') === undefined) provideWorkingDirectoryFixture(ctx)
-  if (ctx.get('sessionProjections') === undefined) await ctx.plugin(SessionProjectionRegistry)
-  await ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
+  if (ctx.get('sessionProjections') === undefined) if (ctx.get('sessionProjections') === undefined) await ctx.plugin(SessionProjectionRegistry)
+  if (ctx.get('agents') === undefined) await ctx.plugin(AgentRegistry)
   return ctx.plugin(AgentInstructions, config)
 }
 
@@ -1248,8 +1248,8 @@ describe('workspace context request injection', () => {
     }
   })
 
-  it('requires projections without making the optional filesystem a static dependency', () => {
-    expect(AgentInstructions.inject).toEqual(['sessionProjections', 'workingDirectory'])
+  it('requires agents without making the optional filesystem a static dependency', () => {
+    expect(AgentInstructions.inject).toEqual(['agents', 'workingDirectory'])
   })
 
   it('does not inject baseline context when no filesystem provider is present', async () => {

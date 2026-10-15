@@ -49,6 +49,7 @@ const timeContextStateSchema = zod.object({
 /** Folded time-context readings. */
 type TimeContextProjection = zod.infer<typeof timeContextStateSchema>
 
+/** The agent registry that owns pre-step processing. */
 export const inject = ['agents', 'sessionProjections']
 
 /** Request-preparation clock formatting and append scheduling. Invalid values fail plugin load. */

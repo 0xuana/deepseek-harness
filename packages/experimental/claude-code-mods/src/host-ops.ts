@@ -9,8 +9,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import type {} from '@deepseek-ai/dsh-session-projection'
-import { turnBoundaryProjectionDefinition, type Agent } from '@deepseek-ai/dsh-agent'
+import type { Agent } from '@deepseek-ai/dsh-agent'
 // Type-only: activate the `ctx.get('subprocess')` Context declaration.
 import type {} from '@deepseek-ai/dsh-subprocess'
 import type { CommandDefinition } from '@deepseek-ai/dsh-commands'
@@ -19,7 +18,7 @@ import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, Message } from '@deepseek-ai/dsh-llm'
 import { scopeOf } from '@deepseek-ai/dsh-scope'
 import type { WorkingDirectoryService } from '@deepseek-ai/dsh-working-directory'
-import { contextPressureProjectionDefinition } from '@deepseek-ai/dsh-token-meter'
+import type {} from '@deepseek-ai/dsh-token-meter'
 import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain'
 import type { Domain } from '@deepseek-ai/dsh-storage-domain'
 import { assertObjectJsonSchema } from '@deepseek-ai/dsh-tools'
@@ -158,14 +157,12 @@ function sizeOf(info: { size?: number } | undefined): number {
 }
 
 /**
- * Build the op table with the required session projection registry and composed harness services.
+ * Build the op table over the composed harness services.
  * @param options - the context, aliases, limits, and registration tracking.
- * @returns engine behaviors by event name, after both session projections are registered.
+ * @returns engine behaviors by event name.
  */
-export async function createHostOps(options: HostOpsOptions): Promise<OpTable<AgentBinding>> {
+export function createHostOps(options: HostOpsOptions): OpTable<AgentBinding> {
   const { ctx, aliases } = options
-  const turnBoundary = await ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
-  const contextPressure = await ctx.sessionProjections.register(contextPressureProjectionDefinition)
   let storeDomain: Promise<Domain<typeof storeDomainSpec>> | undefined
 
   function store(): Promise<Domain<typeof storeDomainSpec>> {
@@ -405,14 +402,14 @@ export async function createHostOps(options: HostOpsOptions): Promise<OpTable<Ag
     },
     'session.turns': (_input, context) => {
       const agent = requireAgent(context, 'session.turns')
-      return turnBoundary.stateOf(agent.session).lastTurn
+      return ctx.agents.turnBoundaryOf(agent.session).lastTurn
     },
     'session.messages': (_input, context) => sessionMessages(requireAgent(context, 'session.messages').session.deriveMessages(), aliases),
     'session.usage': (_input, context): SessionUsage => {
       const agent = requireAgent(context, 'session.usage')
-      const pressure = contextPressure.stateOf(agent.session)
-      const tokens = pressure.pressureTokens
-      const window = pressure.contextWindow ?? 0
+      const pressure = ctx.get('tokenMeter')?.contextPressure(agent.session)
+      const tokens = pressure?.pressureTokens
+      const window = pressure?.contextWindow ?? 0
       return {
         startedAt: agent.session.header.createdAt,
         context: {

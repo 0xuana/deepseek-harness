@@ -9,14 +9,12 @@
  * @module @deepseek-ai/dsh-agent-instructions
  */
 
-import { turnBoundaryProjectionDefinition } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import type { Context } from '@deepseek-ai/cordis'
 import { isDeepStrictEqual } from 'node:util'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { Session, UserMessage } from '@deepseek-ai/dsh-session'
-import type {} from '@deepseek-ai/dsh-session-projection'
 import type { ToolExecution, ToolExecutionResult, ToolExecutionToken } from '@deepseek-ai/dsh-tools'
 import { Config, resolveConfig, workspaceBaselineIdentity, type ResolvedConfig } from './config.ts'
 import { findProjectRoot, loadBaselineInstructionSet } from './files.ts'
@@ -24,6 +22,7 @@ import { trimmedInstructionDigest } from './digest.ts'
 import {
   applyInstructionVersionUpdates,
   baselineInstructionState,
+  name,
   reconcileInstructionContext,
   agentInstructionsMessage,
   type InstructionVersionCache,
@@ -31,8 +30,9 @@ import {
 } from './state.ts'
 import { instructionCandidateGroup, instructionScopeKey, scopeForDisplayPath, type AgentInstructionChange } from './render.ts'
 
-export { Config }
-export { name } from './state.ts'
+export { Config, name }
+/** Services required by workspace instruction projection. */
+export const inject = ['agents', 'workingDirectory']
 export {
   discoverBaselineInstructionFiles,
   loadBaselineInstructions,
@@ -43,8 +43,6 @@ export type {
 } from './files.ts'
 export { renderAgentInstructions } from './render.ts'
 export type { RenderedAgentInstructions, TruncatedInstruction } from './render.ts'
-
-export const inject = ['sessionProjections', 'workingDirectory']
 
 function visibleBaselineSource(
   agent: Agent,
@@ -84,13 +82,7 @@ function filePathFromExecution(exec: ToolExecution): string | undefined {
   return filePath.length > 0 ? filePath : undefined
 }
 
-/** Register the agent-instructions plugin after its projections are ready.
- * @param ctx - plugin context.
- * @param config - workspace instruction policy.
- * @returns when the plugin is ready.
- */
-export async function apply(ctx: Context, config: Config): Promise<void> {
-  const turnBoundary = await ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
+export function apply(ctx: Context, config: Config): void {
   const resolved: ResolvedConfig = resolveConfig(config)
   const instructionVersions: InstructionVersionCache = new WeakMap()
   const baselinePreparations = new WeakMap<Session, {
@@ -310,7 +302,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   }
 
   const stepIsOpen = (session: Session): boolean => {
-    const boundary = turnBoundary.stateOf(session)
+    const boundary = ctx.agents.turnBoundaryOf(session)
     return boundary.openTurnStartSeq !== null
       && boundary.lastStepBoundary?.kind === 'start'
       && boundary.lastStepBoundary.seq > boundary.openTurnStartSeq

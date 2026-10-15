@@ -47,8 +47,8 @@ async function harness(withPersistence = true) {
   const ctx = new Context()
   contexts.push(ctx)
   await ctx.plugin(SessionStore)
-  await ctx.plugin(AgentRegistry)
   await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(AgentRegistry)
   await ctx.sessionProjections.register(subagentCatalogProjectionDefinition)
   await ctx.sessionProjections.register(titleProjectionDefinition)
   if (withPersistence) {

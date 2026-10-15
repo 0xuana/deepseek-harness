@@ -8,12 +8,10 @@
  * @module @deepseek-ai/dsh-hooks-claude-code
  */
 
-import { turnBoundaryProjectionDefinition } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import { readFileSync } from 'node:fs'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import type {} from '@deepseek-ai/dsh-session-projection'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
@@ -44,11 +42,10 @@ import type { SubagentRunId } from '@deepseek-ai/dsh-subagent'
 import { parseClaudeCodeConfig, type ClaudeCodeHookConfig } from './config.ts'
 
 export const name = 'hooks-claude-code'
-
-export const inject = ['shell', 'sessionProjections', 'workingDirectory']
-
-// `shell` runs hooks and `sessionProjections` supplies turn numbers; the rest
+// `shell` runs hooks and `agents` supplies turn numbers; the rest
 // are read opportunistically via ctx.get so a deployment can omit them.
+export const inject = ['shell', 'agents', 'workingDirectory']
+
 /** Plugin config: where the CC hook config lives + substitution roots. */
 export interface Config {
   /**
@@ -101,12 +98,7 @@ function assertPositiveInteger(name: string, value: number): void {
   }
 }
 
-/** Register the hooks-claude-code plugin after its projections are ready.
- * @param ctx - plugin context.
- * @param config - hook configuration path and execution limits.
- * @returns when the plugin is ready.
- */
-export async function apply(ctx: Context, config: Config): Promise<void> {
+export function apply(ctx: Context, config: Config): void {
   // Validate before config parsing so a bad value cannot be hidden by its early return.
   const stderrSummaryMaxChars = config.stderrSummaryMaxChars ?? DEFAULT_STDERR_SUMMARY_MAX_CHARS
   assertPositiveInteger('stderrSummaryMaxChars', stderrSummaryMaxChars)
@@ -127,8 +119,6 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     ctx.logger.warn(`hooks-claude-code: could not load hook config "${config.configPath}": ${String(error)} — no hooks registered`)
     return
   }
-
-  const turnBoundary = await ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
 
   // Emit-shaped points run detached, so track their chains; disposal aborts
   // active hooks and drains continuations before resolving.
@@ -251,7 +241,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
 
   // --- PreToolUse → PreToolDecision. Matcher subject is the tool name. ---
   ctx.on('tools/pre-execute', async (exec, next): Promise<PreToolDecision> => {
-    const turn = lastTurn(exec.agent)
+    const turn = lastTurn(ctx, exec.agent)
     const merged = await runPoint('PreToolUse', exec.name, preToolPayload(exec), { ...exec.agent ? { agent: exec.agent } : {}, turn, signal: exec.signal })
     if (merged.decision === 'deny') return { kind: 'deny', reason: merged.reason ?? 'blocked by PreToolUse hook' }
     if (merged.decision === 'ask') return { kind: 'ask', ...merged.reason !== undefined ? { reason: merged.reason } : {} }
@@ -260,7 +250,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
 
   // --- PostToolUse → PostToolDecision. Matcher subject is the tool name. ---
   ctx.on('tools/post-execute', async (exec, result, next): Promise<PostToolDecision> => {
-    const turn = lastTurn(exec.agent)
+    const turn = lastTurn(ctx, exec.agent)
     const merged = await runPoint('PostToolUse', exec.name, postToolPayload(exec, result), { ...exec.agent ? { agent: exec.agent } : {}, turn, signal: exec.signal })
     const context = contextFrom(merged)
     if (merged.decision === 'deny') {
@@ -310,12 +300,6 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     detached.track(runPoint('SubagentStop', SUBAGENT_TYPE, subagentPayload('SubagentStop', info, child), { ...child ? { agent: child, directory: 'committed' } : {}, signal: detached.signal })
       .catch((error: unknown) => { ctx.logger.warn(`hooks-claude-code: SubagentStop hook failed: ${String(error)}`) }))
   })
-
-  function lastTurn(agent: Agent | undefined): number {
-    if (!agent) return 0
-    const boundary = turnBoundary.stateOf(agent.session)
-    return boundary.lastTurn
-  }
 }
 
 /**
@@ -328,6 +312,12 @@ const SUBAGENT_TYPE = 'general-purpose'
 
 // --- Per-event stdin payloads (the CC DIALECT shape). Field names match CC's
 // hook input schema; this is the part a bridge owns. ---
+
+/** The last open turn number in the agent's log, or 0 without an agent. */
+function lastTurn(ctx: Context, agent: Agent | undefined): number {
+  if (!agent) return 0
+  return ctx.agents.turnBoundaryOf(agent.session).lastTurn
+}
 
 /** Flatten content blocks to the text a hook payload carries (the common case). */
 function blocksToText(content: ContentBlock[]): string {

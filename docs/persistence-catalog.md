@@ -185,7 +185,7 @@ Sources: [`packages/core/session/src/types.ts:432`](../packages/core/session/src
 }
 ```
 
-Source: [`packages/core/agent/src/types.ts:96`](../packages/core/agent/src/types.ts)
+Source: [`packages/core/agent/src/types.ts:88`](../packages/core/agent/src/types.ts)
 
 ### `agent-preset/*`
 
@@ -735,7 +735,7 @@ Source: [`packages/interaction/permission-presets/src/index.ts:59`](../packages/
 'plan/mode': { active: boolean }
 ```
 
-Source: [`packages/plan/plan-mode/src/index.ts:53`](../packages/plan/plan-mode/src/index.ts)
+Source: [`packages/plan/plan-mode/src/index.ts:52`](../packages/plan/plan-mode/src/index.ts)
 
 ### `request/*`
 
@@ -5761,7 +5761,7 @@ Array of `unknown` (opaque).
 
 SHA-256: `20a57544bbf204dacd1ae6beb2ab29444365c3c869f2afdf489dcdcbc3d9c8c5`
 
-Sources: [`packages/plan/plan-mode/src/index.ts:53`](../packages/plan/plan-mode/src/index.ts)
+Sources: [`packages/plan/plan-mode/src/index.ts:52`](../packages/plan/plan-mode/src/index.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -6369,7 +6369,7 @@ Sources: [`packages/core/session/src/types.ts:428`](../packages/core/session/src
 
 SHA-256: `fa106c5b33b657e8ef16e8cbf39f3b7d44e5cbcdf4f9303d9db6410f28951e42`
 
-Sources: [`packages/core/agent/src/types.ts:96`](../packages/core/agent/src/types.ts)
+Sources: [`packages/core/agent/src/types.ts:88`](../packages/core/agent/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|

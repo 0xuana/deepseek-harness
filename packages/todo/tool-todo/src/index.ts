@@ -20,7 +20,6 @@ import type {} from '@deepseek-ai/dsh-session-projection'
 export type * from './types.ts'
 
 export const name = 'tool-todo'
-
 export const inject = ['tools', 'sessionProjections']
 
 /** The valid {@link TodoItem} statuses, as a runtime set for input narrowing. */

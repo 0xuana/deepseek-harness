@@ -8,6 +8,7 @@
 import { describe, expect, it, vi, onTestFinished } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AttachmentStore from '@deepseek-ai/dsh-attachment'
 import LlmRuntime, { LlmAdapter, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
@@ -96,6 +97,7 @@ async function harness(logged?: {
   await ctx.plugin(SessionStore)
   await ctx.plugin(SystemPrompt, { personaPrefix: '' })
   await ctx.plugin(LlmRuntime)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   ctx.llm.registerAdapter(['deepseek-official'], new CatalogAdapter('DeepSeek', [
     { provider: 'deepseek-official', id: 'deepseek-chat', name: 'DeepSeek Chat' },

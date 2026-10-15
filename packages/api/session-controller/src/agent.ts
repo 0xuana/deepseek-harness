@@ -3,12 +3,12 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import type { Context } from '@deepseek-ai/cordis'
-import { installModelSelection, turnBoundaryProjectionDefinition } from '@deepseek-ai/dsh-agent'
+import { installModelSelection } from '@deepseek-ai/dsh-agent'
 import type {
-  Agent, AgentOptions, AgentSetup, ModelSelection as AgentModelSelection, ModelSelectionRef, TurnBoundaryProjection,
+  Agent, AgentOptions, AgentSetup, ModelSelection as AgentModelSelection, ModelSelectionRef,
 } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
-import { agentPresetProjectionDefinition } from '@deepseek-ai/dsh-agent-preset-registry'
+import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { Session, SessionId } from '@deepseek-ai/dsh-session'
@@ -171,8 +171,6 @@ export async function inspectApiSession(
 /** Owns every operation that may create, resume, or configure a Web Agent. */
 export class ApiSessionAgentController {
   private modelSelection!: ProjectionHandle<ModelSelectionProjectionState>
-  private agentPreset!: ProjectionHandle<string | null>
-  private turnBoundary!: ProjectionHandle<TurnBoundaryProjection>
   private readonly resumes = new Map<SessionId, Promise<Agent>>()
   private readonly claims = new Map<SessionId, Promise<void>>()
   private readonly selections = new WeakMap<Agent, InstalledSelection>()
@@ -188,8 +186,6 @@ export class ApiSessionAgentController {
   async initialize(): Promise<void> {
     const ctx = this.ctx
     this.modelSelection = await ctx.sessionProjections.register(modelSelectionProjection)
-    this.agentPreset = await ctx.sessionProjections.register(agentPresetProjectionDefinition)
-    this.turnBoundary = await ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
     ctx.typert.lookups.configure('agent', async (sessionId: SessionId) => {
       const found = await this.resolveAgent(sessionId)
       if ('error' in found) throw found.error
@@ -373,10 +369,10 @@ export class ApiSessionAgentController {
   /**
    * Read the current Agent preset from the Session projection.
    * @param session - live Session whose projection state is available.
-   * @returns the current preset, or undefined when the Session has no recorded preset.
+   * @returns the current preset, or undefined without a preset service or recorded selection.
    */
   presetForSession(session: Session): string | undefined {
-    return this.agentPreset.stateOf(session) ?? undefined
+    return this.ctx.get('agentPresets')?.presetForSession(session) ?? undefined
   }
 
   /**
@@ -554,7 +550,7 @@ export class ApiSessionAgentController {
 
   /** Whether no turn has started, by the predicate the preset registry's `select` enforces. */
   private isBlank(session: Session): boolean {
-    const boundary = this.turnBoundary.stateOf(session)
+    const boundary = this.ctx.agents.turnBoundaryOf(session)
     return boundary.openTurnStartSeq === null && boundary.lastTurn === 0
   }
 
@@ -601,7 +597,7 @@ export class ApiSessionAgentController {
   /**
    * Read the current Agent preset from an all-projections observation.
    * @param observation - exact Session observation carrying its projection snapshot.
-   * @returns the current preset, or undefined when the Session has no recorded preset.
+   * @returns the current preset, or undefined when the capability is absent.
    */
   presetForObservation(observation: SessionObservation): string | undefined {
     if (observation.projections === undefined) {

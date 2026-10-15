@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context, type Fiber } from '@deepseek-ai/cordis'
-import type { Agent } from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import { createUserMessage, ToolCallId, HarnessError , createMessage } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import { MAX_TIMER_DELAY_MS, TimeoutReason } from '@deepseek-ai/dsh-timeout'
@@ -15,7 +15,6 @@ import SessionStore, {
   type SessionId as SessionIdValue,
 } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import { turnBoundaryProjectionDefinition } from '@deepseek-ai/dsh-agent-loop'
 import SessionQueryEngine, {
   SessionQueryError,
   SessionSearchCursor,
@@ -209,7 +208,7 @@ interface Mounted {
 }
 
 async function registerTurnBoundary(ctx: Context): Promise<void> {
-  await ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
+  await ctx.plugin(AgentRegistry)
 }
 
 async function mount(
@@ -330,14 +329,14 @@ describe('registration and schemas', () => {
   it('fails invalid direct config before registering anything', async () => {
     const mounted = await mount()
     for (const maxSearchResults of [0, 1.5, Number.NaN]) {
-      await expect(ToolSessionQuery.apply(mounted.ctx, { maxSearchResults }))
-        .rejects.toThrow('maxSearchResults')
+      expect(() => { ToolSessionQuery.apply(mounted.ctx, { maxSearchResults }) })
+        .toThrow('maxSearchResults')
     }
     for (const searchTimeoutMs of [0, 1.5, Number.POSITIVE_INFINITY, MAX_TIMER_DELAY_MS + 1]) {
-      await expect(ToolSessionQuery.apply(mounted.ctx, { searchTimeoutMs }))
-        .rejects.toThrow(`no greater than ${MAX_TIMER_DELAY_MS}`)
+      expect(() => { ToolSessionQuery.apply(mounted.ctx, { searchTimeoutMs }) })
+        .toThrow(`no greater than ${MAX_TIMER_DELAY_MS}`)
     }
-    await expect(ToolSessionQuery.apply(new Context(), {})).rejects.toThrow()
+    expect(() => { ToolSessionQuery.apply(new Context(), {}) }).toThrow()
   })
 
   it('expresses the complete Node timer range in the Loader config schema', () => {
@@ -1661,6 +1660,7 @@ describe('search paging, prior-history bounds, titles, and cancellation', () => 
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(FakeQuery)
+    await ctx.plugin(AgentRegistry)
     await ctx.plugin(ToolSessionQuery)
     const session = createSession(ctx, 'no-boundary-caller', '/work')
     const result = await ctx.tools.execute({

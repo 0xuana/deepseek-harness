@@ -14,8 +14,9 @@ import { sessionStatsProjectionDefinition } from './projection.ts'
 
 export type * from './types.ts'
 
+/** Cordis plugin name. */
 export const name = 'session-stats'
-
+/** The projection registry is the plugin's whole purpose; without it the fiber stays pending. */
 export const inject = ['sessionProjections']
 
 /**

@@ -504,7 +504,7 @@ function unwrapExpr(expr: ts.Expression): ts.Expression {
  * packages whose schemas an intersect composes. A key path is the top-level
  * key or a nested path through object/array compositions (`agents[].id`).
  * Handles object/union calls, chained refinements, named const schema imports
- * through package-relative or public workspace source paths, and `z.intersect([X.Config, …])`; errors on
+ * through public workspace source paths, and `z.intersect([X.Config, …])`; errors on
  * anything else, so a schema the walk cannot see fails the gate instead of
  * silently thinning it. Nested values that are neither `object` nor `array`
  * compositions (primitives, unions, dynamic-key dicts) contribute no paths.

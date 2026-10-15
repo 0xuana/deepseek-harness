@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import type { Agent } from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import type { Message } from '@deepseek-ai/dsh-llm'
 import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
@@ -38,8 +38,9 @@ const mod: LoadedMod = { name: 'unit-mod', version: undefined, root: '/mods/unit
 async function setup(ctx = new Context()) {
   contexts.push(ctx)
   if (ctx.get('sessionProjections') === undefined) await ctx.plugin(SessionProjectionRegistry)
+  if (ctx.get('agents') === undefined) await ctx.plugin(AgentRegistry)
   const registrations = new Map<string, Set<() => void>>()
-  const ops = await createHostOps({
+  const ops = createHostOps({
     ctx,
     aliases: createToolNameAliases(),
     processTimeoutMs: 5_000,

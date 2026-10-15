@@ -5,7 +5,6 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { turnBoundaryProjectionDefinition } from '@deepseek-ai/dsh-agent'
 import z from '@deepseek-ai/schemastery'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { defineTool } from '@deepseek-ai/dsh-tools'
@@ -13,9 +12,11 @@ import { toolInput } from './input.ts'
 import { operations } from './operations.ts'
 import { presentation } from './presentation.ts'
 
+/** Cordis plugin name used by Loader diagnostics. */
 export const name = 'tool-session-query'
 
-export const inject = ['tools', 'systemPrompt', 'sessionQuery', 'sessionProjections']
+/** Capability services required by the model-facing consumer. */
+export const inject = ['tools', 'systemPrompt', 'sessionQuery', 'agents']
 
 /** Default maximum number of authorized search hits returned by one call. */
 export const DEFAULT_MAX_SEARCH_RESULTS = 100
@@ -52,14 +53,8 @@ const PROMPT_TEXT =
   + 'events in one session. Search results are cursor-free and workspace-scoped. Follow a useful hit with '
   + 'session_trace, session_event_trace, or session_event_read when you need lineage, relationships, or exact data.'
 
-/**
- * Register all five tools and their shared model guidance.
- * @param ctx - owning plugin context.
- * @param config - search limits.
- * @returns when the tools and their projection reader are ready.
- */
-export async function apply(ctx: Context, config: Config): Promise<void> {
-  const turnBoundary = await ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
+/** Register all five tools and their shared model guidance. */
+export function apply(ctx: Context, config: Config): void {
   const resolved = resolveConfig(config)
   ctx.systemPrompt.section({
     name: 'tool:session-query',
@@ -73,7 +68,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     parameters: toolInput.sessionSearchParameters,
     output: TEXT_OUTPUT,
     timeoutMs: resolved.searchTimeoutMs,
-    execute: (args, exec) => operations.executeSessionSearch(ctx, turnBoundary, args, exec, resolved.maxSearchResults),
+    execute: (args, exec) => operations.executeSessionSearch(ctx, args, exec, resolved.maxSearchResults),
     presentCall: presentation.presentSessionSearchCall,
   }))
 
@@ -83,7 +78,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     parameters: toolInput.eventSearchParameters,
     output: TEXT_OUTPUT,
     timeoutMs: resolved.searchTimeoutMs,
-    execute: (args, exec) => operations.executeEventSearch(ctx, turnBoundary, args, exec, resolved.maxSearchResults),
+    execute: (args, exec) => operations.executeEventSearch(ctx, args, exec, resolved.maxSearchResults),
     presentCall: presentation.presentEventSearchCall,
   }))
 
@@ -93,7 +88,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     parameters: toolInput.targetSessionParameter,
     output: TEXT_OUTPUT,
     isConcurrencySafe: () => true,
-    execute: (args, exec) => operations.executeSessionTrace(ctx, turnBoundary, args, exec),
+    execute: (args, exec) => operations.executeSessionTrace(ctx, args, exec),
     presentCall: presentation.presentSessionTraceCall,
   }))
 
@@ -106,7 +101,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     },
     output: TEXT_OUTPUT,
     isConcurrencySafe: () => true,
-    execute: (args, exec) => operations.executeEventTrace(ctx, turnBoundary, args, exec),
+    execute: (args, exec) => operations.executeEventTrace(ctx, args, exec),
     presentCall: args => presentation.presentEventTargetCall('Trace event', args),
   }))
 
@@ -121,7 +116,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     },
     output: TEXT_OUTPUT,
     isConcurrencySafe: () => true,
-    execute: (args, exec) => operations.executeEventRead(ctx, turnBoundary, args, exec),
+    execute: (args, exec) => operations.executeEventRead(ctx, args, exec),
     presentCall: args => presentation.presentEventTargetCall('Read event', args),
   }))
 }

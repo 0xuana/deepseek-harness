@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### 何时选择
 
-当领域保存客户端应看到、但不应自行重新派生的状态——todo 清单、goal 快照、对话统计——时选择本包。注册表在已提交事件上主动驱动单元，因此任何已注册单元的值按构造即为当前值。不带 `wire` 块的单元将状态保留在 host。host 读取方在插件依赖中声明 `sessionProjections`，并等待注册完成后才提供同步读取。
+当领域保存客户端应看到、但不应自行重新派生的状态——todo 清单、goal 快照、对话统计——时选择本包。注册表在已提交事件上主动驱动单元，因此任何已注册单元的值按构造即为当前值。不带 `wire` 块的单元将状态保留在 host。领域所有者在插件依赖中声明 `sessionProjections`，并等待注册完成后才提供同步服务方法。其他插件通过所属服务调用这些方法。
 
 ### 定义投影单元
 
@@ -63,7 +63,7 @@ const state = projection.stateOf(session)
 const { asOfSeq, values } = ctx.sessionProjections.snapshot(session)
 ```
 
-必须使用投影状态的领域把 `sessionProjections` 声明为 Cordis 服务依赖；可选贡献方可以在 `ctx.inject(['sessionProjections'], …)` 下注册。载体使用 `ctx.get('sessionProjections')`，注册表缺席时省略自己的块或帧。
+持有投影状态的领域将 `sessionProjections` 声明为 Cordis 服务依赖，并在内部保留句柄。消费方注入该领域服务并使用其方法，例如 `ctx.agents.turnBoundaryOf(session)`，无需导入定义或保留投影读取句柄。可选贡献方可以在 `ctx.inject(['sessionProjections'], …)` 下注册。载体使用 `ctx.get('sessionProjections')`，注册表缺席时省略自己的块或帧。
 
 ### 持久检查点
 

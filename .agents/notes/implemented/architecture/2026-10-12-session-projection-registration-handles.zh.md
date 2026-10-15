@@ -10,11 +10,11 @@ Status: implemented
 
 ## Decision
 
-`SessionProjectionRegistry.register` 返回类型化句柄的 Promise。消费者在激活期间等待它，再暴露依赖操作。函数插件保留命名空间导出并使用异步 `apply`；服务使用初始化钩子。定义仍归领域拥有方，每个读取方注册所需定义，不再查询可能不存在的键。这取代了[必需读取方决策](2026-08-19-session-projection-mandatory-seam.zh.md)中的可选首次访问获取方式与返回释放函数的细节，同时保留必需状态和裁剪 Client 视图的规则。
+`SessionProjectionRegistry.register` 返回类型化句柄的 Promise。领域所有者在激活期间等待它，再提供依赖操作。函数插件保留命名空间导出并使用异步 `apply`；服务使用初始化钩子。领域服务在内部持有定义和句柄，通过方法返回业务数据。消费方依赖该服务，无需注册其定义或接收投影读取句柄。这取代了[必需读取方决策](2026-08-19-session-projection-mandatory-seam.zh.md)中的可选首次访问获取方式与返回释放函数的细节，同时保留必需状态和裁剪 Client 视图的规则。
 
 句柄拥有共享定义及其逐 Session 单元的一次引用。其释放函数恰好一次地解除全局参与；最后一次释放会从实时推进、快照和检查点中移除单元。读取句柄在释放后仍可使用原定义折叠未读取事件。后续注册的其他状态版本不会替换旧句柄的定义。注册在异步交接后检查 owner 是否存活；如果 owner 在收到句柄前卸载，注册拒绝。
 
-AgentLoop 在发布工厂前只获取一次 inbox 与轮次边界句柄。每个 Agent 在同步构造时收到这些读取句柄。loop fiber 移除全局注册后，清理过程仍可使用它们，因此投影释放无需等待每个 Agent teardown。这保留既有创建与 setup 顺序，无需逐 Agent 注册或增加初始化状态。
+AgentRegistry 持有轮次和步骤状态，并提供 `turnBoundaryOf(session)`。AgentLoop 在发布工厂前只获取一次 inbox 句柄，在创建 Agent 作用域前读取最后轮次，并将 inbox 回调与该轮次编号传入同步 Agent 构造过程。loop fiber 移除全局注册后，回调仍在清理期间保留其句柄。这保留既有创建与 setup 顺序，无需逐 Agent 注册或增加初始化状态。
 
 ## Alternatives considered
 
@@ -28,4 +28,4 @@ AgentLoop 在发布工厂前只获取一次 inbox 与轮次边界句柄。每个
 
 ## Consequences
 
-消费者必须迁移获取方式并保留句柄。只要调用方持有已释放句柄，其定义和弱键单元就仍存在；句柄不会恢复全局 wire 参与。注册读取测试覆盖释放后折叠、版本替换、无关单元隔离、重复释放、并发 owner 释放以及获取期间 owner 卸载。Agent 生命周期测试覆盖清理失败、作用域创建竞态与后台子 Agent 停止。
+投影所有者必须迁移获取方式并保留句柄；其他消费方使用所属服务。只要调用方持有已释放句柄，其定义和弱键单元就仍存在；句柄不会恢复全局 wire 参与。注册读取测试覆盖释放后折叠、版本替换、无关单元隔离、重复释放、并发 owner 释放以及获取期间 owner 卸载。Agent 生命周期测试覆盖清理失败、作用域创建竞态与后台子 Agent 停止。

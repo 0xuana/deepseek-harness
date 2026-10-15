@@ -59,7 +59,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-agent-instructions`
 
-- `inject`: `sessionProjections` · `workingDirectory`
+- `inject`: `agents` · `workingDirectory`
 - `source`: [`packages/context/agent-instructions/src/config.ts:18`](../packages/context/agent-instructions/src/config.ts)
 
 ```ts config-catalog
@@ -92,7 +92,7 @@ export interface Config {
 
 - `inject`: `agents` · `sessions` · `llm` · `tools` · `systemPrompt` · `sessionProjections`
 - `refs`: [`AgentOptions`](subsystems/core.md) · [`SessionId`](subsystems/core.md) · `Volatile` (`@deepseek-ai/cosmokit`)
-- `source`: [`packages/core/agent-loop/src/index.ts:254`](../packages/core/agent-loop/src/index.ts)
+- `source`: [`packages/core/agent-loop/src/index.ts:250`](../packages/core/agent-loop/src/index.ts)
 
 ```ts config-catalog
 /** Agent-loop plugin configuration. */
@@ -137,7 +137,7 @@ export type Config = PresetDefinition
 
 ## `@deepseek-ai/dsh-agent-preset-registry`
 
-- `inject`: `loader` · `sessionProjections`
+- `inject`: `loader` · `sessionProjections` · `agents`
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
 - `source`: [`packages/preset/agent-preset-registry/src/preset.ts:13`](../packages/preset/agent-preset-registry/src/preset.ts)
 
@@ -950,7 +950,7 @@ export interface StagehandModelConfig {
 
 ## `@deepseek-ai/dsh-experimental-claude-code-mods`
 
-- `inject`: `workingDirectory` · `sessionProjections`
+- `inject`: `workingDirectory` · `agents`
 - `source`: [`packages/experimental/claude-code-mods/src/index.ts:53`](../packages/experimental/claude-code-mods/src/index.ts)
 
 ```ts config-catalog
@@ -1459,8 +1459,8 @@ export interface HmrConfig extends ChokidarOptions {
 
 ## `@deepseek-ai/dsh-hooks-claude-code`
 
-- `inject`: `shell` · `sessionProjections` · `workingDirectory`
-- `source`: [`packages/experimental/hooks-claude-code/src/index.ts:53`](../packages/experimental/hooks-claude-code/src/index.ts)
+- `inject`: `shell` · `agents` · `workingDirectory`
+- `source`: [`packages/experimental/hooks-claude-code/src/index.ts:50`](../packages/experimental/hooks-claude-code/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: where the CC hook config lives + substitution roots. */
@@ -1498,8 +1498,8 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-hooks-codex`
 
-- `inject`: `shell` · `sessionProjections` · `workingDirectory`
-- `source`: [`packages/experimental/hooks-codex/src/index.ts:53`](../packages/experimental/hooks-codex/src/index.ts)
+- `inject`: `shell` · `agents` · `workingDirectory`
+- `source`: [`packages/experimental/hooks-codex/src/index.ts:49`](../packages/experimental/hooks-codex/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: where the Codex hooks.json lives + the model name for payloads. */
@@ -2113,7 +2113,7 @@ export interface ReplayModelConfig {
 ## `@deepseek-ai/dsh-llm-retry`
 
 - `inject`: `agents` · `sessionProjections`
-- `source`: [`packages/llm/llm-retry/src/index.ts:26`](../packages/llm/llm-retry/src/index.ts)
+- `source`: [`packages/llm/llm-retry/src/index.ts:25`](../packages/llm/llm-retry/src/index.ts)
 
 ```ts config-catalog
 /** This policy executor has no config; providers own `retryPolicy`. */
@@ -2386,8 +2386,8 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-plan-mode`
 
-- `inject`: `tools` · `systemPrompt` · `sessionProjections`
-- `source`: [`packages/plan/plan-mode/src/index.ts:70`](../packages/plan/plan-mode/src/index.ts)
+- `inject`: `tools` · `systemPrompt` · `sessionProjections` · `agents`
+- `source`: [`packages/plan/plan-mode/src/index.ts:69`](../packages/plan/plan-mode/src/index.ts)
 
 ```ts config-catalog
 /** Deployment-owned plan guidance. */
@@ -2945,7 +2945,7 @@ export enum SessionTelemetryMode {
 
 ## `@deepseek-ai/dsh-session-title`
 
-- `inject`: `sessions` · `sessionProjections`
+- `inject`: `sessions` · `sessionProjections` · `agents`
 - `source`: [`packages/session/session-title/src/index.ts:56`](../packages/session/session-title/src/index.ts)
 
 ```ts config-catalog
@@ -3593,7 +3593,7 @@ export type ShellDialect = 'bash' | 'pwsh'
 ## `@deepseek-ai/dsh-time-context`
 
 - `inject`: `agents` · `sessionProjections`
-- `source`: [`packages/context/time-context/src/index.ts:55`](../packages/context/time-context/src/index.ts)
+- `source`: [`packages/context/time-context/src/index.ts:56`](../packages/context/time-context/src/index.ts)
 
 ```ts config-catalog
 /** Request-preparation clock formatting and append scheduling. Invalid values fail plugin load. */
@@ -3612,7 +3612,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-tmux-context`
 
 - `inject`: `agents` · `sessionProjections`
-- `source`: [`packages/context/tmux-context/src/index.ts:45`](../packages/context/tmux-context/src/index.ts)
+- `source`: [`packages/context/tmux-context/src/index.ts:47`](../packages/context/tmux-context/src/index.ts)
 
 ```ts config-catalog
 /** Per-turn tmux-location scheduling. Invalid values fail plugin load. */
@@ -3781,8 +3781,8 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-tool-goal`
 
-- `inject`: `agents` · `goals` · `tools` · `systemPrompt` · `sessionProjections`
-- `source`: [`packages/goal/tool-goal/src/index.ts:33`](../packages/goal/tool-goal/src/index.ts)
+- `inject`: `agents` · `goals` · `tools` · `systemPrompt`
+- `source`: [`packages/goal/tool-goal/src/index.ts:32`](../packages/goal/tool-goal/src/index.ts)
 
 ```ts config-catalog
 /** Model policy and hard lower bounds for goal-state updates. */
@@ -3856,8 +3856,8 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-tool-present`
 
-- `inject`: `tools` · `fs` · `sessionProjections` · `workingDirectory`
-- `source`: [`packages/deliverables/tool-present/src/index.ts:16`](../packages/deliverables/tool-present/src/index.ts)
+- `inject`: `tools` · `fs` · `agents` · `workingDirectory`
+- `source`: [`packages/deliverables/tool-present/src/index.ts:15`](../packages/deliverables/tool-present/src/index.ts)
 
 ```ts config-catalog
 /** Per-call delivery limit. */
@@ -3949,8 +3949,8 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-tool-session-query`
 
-- `inject`: `tools` · `systemPrompt` · `sessionQuery` · `sessionProjections`
-- `source`: [`packages/experimental/tool-session-query/src/index.ts:27`](../packages/experimental/tool-session-query/src/index.ts)
+- `inject`: `tools` · `systemPrompt` · `sessionQuery` · `agents`
+- `source`: [`packages/experimental/tool-session-query/src/index.ts:28`](../packages/experimental/tool-session-query/src/index.ts)
 
 ```ts config-catalog
 /** Deployment-owned search count and timeout bounds. */
@@ -4006,7 +4006,7 @@ export interface Config {
 
 - `inject`: `tools` · `subagents` · `systemPrompt` · `sessionProjections`
 - `refs`: [`AgentOptions`](subsystems/core.md)
-- `source`: [`packages/subagent/tool-subagent/src/index.ts:51`](../packages/subagent/tool-subagent/src/index.ts)
+- `source`: [`packages/subagent/tool-subagent/src/index.ts:50`](../packages/subagent/tool-subagent/src/index.ts)
 
 ```ts config-catalog
 /** Config: which registered provider this tool delegates to, plus child defaults. */
@@ -4075,7 +4075,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-tool-todo`
 
 - `inject`: `tools` · `sessionProjections`
-- `source`: [`packages/todo/tool-todo/src/index.ts:30`](../packages/todo/tool-todo/src/index.ts)
+- `source`: [`packages/todo/tool-todo/src/index.ts:29`](../packages/todo/tool-todo/src/index.ts)
 
 ```ts config-catalog
 /** Model-facing todo tool configuration. */
@@ -4519,7 +4519,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `package` | `inject` | `source` |
 | --- | --- | --- |
 | `@deepseek-ai/dsh-acp-app` | `cmdlineArgs` | [`packages/bundle/acp-app/src/index.ts`](../packages/bundle/acp-app/src/index.ts) |
-| `@deepseek-ai/dsh-agent` | — | [`packages/core/agent/src/index.ts`](../packages/core/agent/src/index.ts) |
+| `@deepseek-ai/dsh-agent` | `sessionProjections` | [`packages/core/agent/src/index.ts`](../packages/core/agent/src/index.ts) |
 | `@deepseek-ai/dsh-api-account-controller` | `deepseekAccount` · `agents` | [`packages/api/account-controller/src/index.ts`](../packages/api/account-controller/src/index.ts) |
 | `@deepseek-ai/dsh-api-remote-access` | — | [`packages/api/remote-access/src/index.ts`](../packages/api/remote-access/src/index.ts) |
 | `@deepseek-ai/dsh-api-remotes` | `typertGateway` | [`packages/api/remotes/src/index.ts`](../packages/api/remotes/src/index.ts) |

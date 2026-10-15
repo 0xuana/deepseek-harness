@@ -171,8 +171,8 @@ async function seed(root: string, workload: typeof WORKLOADS[keyof typeof WORKLO
 
 async function mountHost(ctx: Context, root: string, workload: typeof WORKLOADS[keyof typeof WORKLOADS], observation: ViewObservation, listWorkSliceMs?: number): Promise<SessionController> {
   await ctx.plugin(SessionStore)
-  await ctx.plugin(AgentRegistry)
   await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(AgentRegistry)
   await ctx.sessionProjections.register({
     key: KEY, stateVersion: 1, stateSchema,
     init: header => makeState(Number(header.id.slice('projection-bench-'.length)), workload.baseRows),

@@ -1,6 +1,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import SessionStore, { SESSION_FORMAT_VERSION, SessionSeq, SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
@@ -49,6 +50,7 @@ async function bench() {
   const ctx = new Context()
   contexts.push(ctx)
   await ctx.plugin(SessionStore)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   ctx.provide('sessionPersistence', testSessionPersistence(ctx, {
     list: () => Promise.resolve([header]),
@@ -193,6 +195,7 @@ describe('SessionController subagent catalog', () => {
     const ctx = new Context()
     contexts.push(ctx)
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     installSessionReadTestServices(ctx)
     const controller = await createSessionTestController(ctx, defaults)

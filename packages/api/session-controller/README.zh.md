@@ -27,7 +27,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-控制器独立于预设执行能力注册 `agentPreset` 投影。其值为已记录的预设 id 或 null；键存在不代表组合中包含 `agentPresets`。
+控制器通过可选服务方法 `agentPresets.presetForSession(session)` 读取 Session 已记录的预设。null 结果表示未记录预设；服务缺席表示控制器无法获知预设身份。
 
 历史页与 follow opening 快照为每个持久 Session 事件携带一条 `{ type: 'event', event: SessionWireEvent }` record。Client 把每条已接受 record 保留为一个持久 `SessionEventLikeEntry`；Assistant token 边界保留在 `assistant/message` 或 `assistant/attempt` 的紧凑流内。工具参数、结果内容、失败信息和 `tool/result.data.meta` 原样通过；控制器不解析工具定义、不运行展示转换器，也不附加 UI 数据。
 

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { agentPresetProjectionDefinition } from '@deepseek-ai/dsh-agent-preset-registry'
 import SessionStore, { SESSION_FORMAT_VERSION, SessionLogOffset, SessionId } from '@deepseek-ai/dsh-session'
@@ -34,6 +35,7 @@ async function harness(): Promise<{ ctx: Context; agents: ApiSessionAgentControl
   roots.push(ctx)
   await ctx.plugin(TypertRegistry)
   await ctx.plugin(SessionStore)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   installSessionReadTestServices(ctx)
   await ctx.sessionProjections.register(agentPresetProjectionDefinition)

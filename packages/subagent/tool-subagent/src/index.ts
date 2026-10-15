@@ -35,12 +35,11 @@ import { SubagentPresetSelection, type PresetSelectionConfig, type PresetSelecti
 import type {} from './model-selection-settings.ts'
 import {
   recordSubagentModelSelection,
-  subagentModelSelectionPolicy,
   subagentModelSelectionProjectionDefinition,
+  subagentModelSelectionPolicy,
 } from './model-selection-state.ts'
 
 export const name = 'tool-subagent'
-
 export const inject = ['tools', 'subagents', 'systemPrompt', 'sessionProjections']
 
 // Definition identity keeps shared guidance scoped to the actual visible tools,
