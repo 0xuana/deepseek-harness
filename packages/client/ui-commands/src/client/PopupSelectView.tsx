@@ -15,7 +15,7 @@ import { MenuGroup, MenuSurface, observeStickyMenuGroups } from '@deepseek-ai/ds
 import { Fragment, useEffect, useMemo, useRef } from 'react'
 import { useSyncExternalStore } from 'react'
 import clsx from 'clsx'
-import { IconCheckOutlineRegular, RiskConfirmation, shouldAutoFocusTextInput, useAnchoredMaxHeight } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconCheckOutlineRegular, isMobileDevice, RiskConfirmation, useAnchoredMaxHeight } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import { filterOptions } from './popup.ts'
 import type { SelectOption } from './contract.ts'
@@ -85,7 +85,7 @@ export function PopupSelectView({ popup, t }: PopupSelectViewProps) {
   // Focus the search input after it mounts (separate effect so the ref is populated).
   useEffect(() => {
     if (!state.open || state.confirming !== null) return
-    if (!shouldAutoFocusTextInput()) return
+    if (isMobileDevice()) return
     searchRef.current?.focus()
   }, [state.open, state.confirming])
 

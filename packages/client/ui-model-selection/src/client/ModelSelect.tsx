@@ -37,7 +37,7 @@ import clsx from 'clsx'
 import type { ModelReasoningEffort, ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
 import {
   IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconCloseFillRegular,
-  IconDataOutlineRegular, IconWarningOutlineRegular, Input, rankByName, shouldAutoFocusTextInput, StateDot, Toast,
+  IconDataOutlineRegular, IconWarningOutlineRegular, Input, isMobileDevice, rankByName, StateDot, Toast,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ModelLabelOwner, ModelSelectInjected } from './slots.ts'
@@ -184,7 +184,7 @@ export function ModelSelect(
     previousShowSearch.current = showSearch
     const intent = paneFocus.current ?? (changedSearchMode && pane === 'model' ? 'drill' : null)
     paneFocus.current = null
-    if (!open || intent === null || !shouldAutoFocusTextInput()) return
+    if (!open || intent === null || isMobileDevice()) return
     if (intent === 'drill') {
       if (pane === 'model' && showSearch) {
         searchRef.current?.focus()
@@ -251,7 +251,7 @@ export function ModelSelect(
 
   const show = (): void => {
     setSelectionFocus(false)
-    if (shouldAutoFocusTextInput()) triggerRef.current?.focus()
+    if (!isMobileDevice()) triggerRef.current?.focus()
     setQuery('')
     setHighlightedIndex(null)
     if (currentChoice === undefined) paneFocus.current = 'drill'

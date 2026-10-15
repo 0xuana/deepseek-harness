@@ -11,7 +11,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import {
-  IconCheckOutlineRegular, shouldAutoFocusTextInput, useAnchoredPosition, useDismissOnOutsidePointer,
+  IconCheckOutlineRegular, isMobileDevice, useAnchoredPosition, useDismissOnOutsidePointer,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './TaskMenu.module.css'
 
@@ -176,7 +176,7 @@ export function TaskMenu({ open, anchor, items = [], selectedId, onSelect, onClo
       handedOver.current = false
       return
     }
-    if (handedOver.current || !shouldAutoFocusTextInput()) return
+    if (handedOver.current || isMobileDevice()) return
     const list = listRef.current
     /* v8 ignore next -- the list is rendered in the same commit that sets `open`, before this effect runs. */
     if (list === null) return

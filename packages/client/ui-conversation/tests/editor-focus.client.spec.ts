@@ -3,7 +3,7 @@
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { $getRoot, $getSelection, $isRangeSelection, SELECTION_CHANGE_COMMAND, UNDO_COMMAND } from 'lexical'
 import { DraftEditorRuntime } from '../src/client/input/editor/runtime.ts'
-import { focusDraftEditor } from '../src/client/input/editor/view-binding.ts'
+import { focusDraftEditor, installDraftKeyboardDismissal } from '../src/client/input/editor/view-binding.ts'
 
 function fixture(start = 1, end = 4) {
   // jsdom has no Range geometry; these cases observe selection and focus, not scrolling.
@@ -135,6 +135,23 @@ it('restores a pending selection when blur and explicit focus share one update b
   expect(f.selection()).toMatchObject({ anchor: 6, focus: 6 })
   expect(f.domSelection()).toMatchObject({ anchor: 6, focus: 6, text: '' })
   expect(reveal).toHaveBeenCalledOnce()
+})
+
+it('retains mobile focus for a newer draft suffix and removes dismissal with the view', () => {
+  const userAgent = vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1')
+  onTestFinished(() => { userAgent.mockRestore() })
+  const f = fixture()
+  const dispose = installDraftKeyboardDismissal(f.editor)
+  onTestFinished(dispose)
+
+  f.runtime.clearCommittedDraft(() => 6)
+  expect(f.root.textContent).toBe('beta')
+  expect(document.activeElement).toBe(f.root)
+
+  dispose()
+  f.runtime.clearCommittedDraft(() => null)
+  expect(f.root.textContent).toBe('')
+  expect(document.activeElement).toBe(f.root)
 })
 
 it('removes focus preservation and update subscriptions when registration is disposed', () => {

@@ -68,7 +68,7 @@ The composer measures its expanded control groups after size, content, visibilit
 
 The context meter follows the [statistics-control radius](../../../docs/ui-radius.md#radius-scale).
 
-The composer uses the shared [text-input focus policy](../ui-primitives/README.md#use-this-package) on mount, Session switching, and unlock. Identified phones and tablets require tapping the input; desktop devices retain automatic focus. The [Lexical patch](../../../patches/lexical@0.49.0.patch) keeps caret scrolling in the same coordinate system as DOM geometry when a mobile keyboard pans the page.
+The composer uses the shared [text-input focus policy](../ui-primitives/README.md#use-this-package) on mount, Session switching, and unlock. Identified phones and tablets require tapping the input; desktop devices retain automatic focus. On these mobile devices, a submission that empties the draft dismisses the keyboard; rejected submissions and retained newer draft text preserve focus. The [Lexical patch](../../../patches/lexical@0.49.0.patch) keeps caret scrolling in the same coordinate system as DOM geometry when a mobile keyboard pans the page.
 
 The context-occupancy button shows a ring and percentage below the input card, after the Session statistics. Clicking it opens the token breakdown in a panel kept inside the viewport, including when no statistics are shown; the button stays hidden until context usage and capacity are available.
 

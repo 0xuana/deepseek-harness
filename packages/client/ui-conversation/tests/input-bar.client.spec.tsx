@@ -1422,7 +1422,7 @@ describe('running and lock semantics', () => {
     { name: 'desktop-mode iPad', userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.6 Safari/605.1.15', platform: 'MacIntel', maxTouchPoints: 5, automatic: false },
     { name: 'Mac', userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.6 Safari/605.1.15', platform: 'MacIntel', maxTouchPoints: 0, automatic: true },
     { name: 'Windows touchscreen', userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/119.0.0.0 Safari/537.36', platform: 'Win32', maxTouchPoints: 5, automatic: true },
-  ])('automatic composer focus respects device classification: $name', ({ userAgent, platform, maxTouchPoints, automatic }) => {
+  ])('composer focus and submission respect device classification: $name', async ({ userAgent, platform, maxTouchPoints, automatic }) => {
     for (const [name, value] of Object.entries({ userAgent, platform, maxTouchPoints })) {
       const descriptor = Object.getOwnPropertyDescriptor(navigator, name)
       Object.defineProperty(navigator, name, { configurable: true, value })
@@ -1436,7 +1436,7 @@ describe('running and lock semantics', () => {
     onTestFinished(() => { outside.remove() })
     outside.focus()
 
-    const { view, textarea, props } = bench({ draft: 'draft' })
+    const { view, textarea, props, shell, button, sink } = bench({ draft: 'draft' })
     expect(document.activeElement).toBe(automatic ? textarea : outside)
     act(() => { outside.focus() })
     act(() => { view.rerender(<InputBar {...props} sessionId={'s2' as SessionId} />) })
@@ -1448,6 +1448,41 @@ describe('running and lock semantics', () => {
 
     act(() => { outside.focus() })
     fireEvent.mouseDown(view.container.querySelector('[data-composer-card]')!, { button: 0 })
+    expect(document.activeElement).toBe(textarea)
+
+    writeDraft(shell, '')
+    expect(document.activeElement).toBe(textarea)
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+    expect(sink).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(textarea)
+
+    for (const gesture of ['click', 'enter'] as const) {
+      writeDraft(shell, `send by ${gesture}`)
+      act(() => { textarea.focus() })
+      if (gesture === 'click') {
+        fireEvent.mouseDown(button, { button: 0 })
+        fireEvent.click(button)
+      } else {
+        fireEvent.keyDown(textarea, { key: 'Enter' })
+      }
+      await act(async () => {})
+      expect(sink).toHaveBeenLastCalledWith(`send by ${gesture}`, [], 'queue', expect.any(AbortSignal))
+      expect(shell.snapshot.draft).toBe('')
+      expect(document.activeElement === textarea).toBe(automatic)
+    }
+
+    writeDraft(shell, '/goal ')
+    act(() => {
+      shell.beginCommand(
+        { name: 'goal', token: '/goal ', submit: () => Promise.resolve({ kind: 'error', text: 'Missing goal' }) },
+        { start: 0, end: 6, draftRev: shell.snapshot.draftRev },
+      )
+      textarea.focus()
+    })
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+    await act(async () => {})
+    expect(shell.snapshot.phase).toBe('claimed')
+    expect(shell.snapshot.draft).toBe('/goal ')
     expect(document.activeElement).toBe(textarea)
   })
 

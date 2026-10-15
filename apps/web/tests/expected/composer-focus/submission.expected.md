@@ -1,0 +1,2 @@
+- Desktop: Send clears the draft; editor focused through response completion
+- Mobile: Send clears the draft; editor unfocused through response completion

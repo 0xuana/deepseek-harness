@@ -42,6 +42,9 @@ const REFERENCE_PLACEHOLDER_RE = /[\uE100-\uE11D\uFFFC]/gu
 /** Undo merge window for contiguous typing, in ms (the old machine's mergeWindowMs). */
 const HISTORY_MERGE_DELAY_MS = 1000
 
+/** Editor update that removes submitted content while retaining any newer draft suffix. */
+export const DRAFT_SUBMITTED_TAG = 'dsh-draft-submitted'
+
 /** One model-owned editor; registration and disposal remain with its model. */
 export class DraftEditorRuntime {
   /** The editor bound by the Composer's contenteditable host. */
@@ -323,7 +326,7 @@ export class DraftEditorRuntime {
       const root = $getRoot()
       root.clear()
       root.selectEnd()
-    }, { discrete: true, tag: HISTORY_MERGE_TAG })
+    }, { discrete: true, tag: [HISTORY_MERGE_TAG, DRAFT_SUBMITTED_TAG] })
   }
 
   /**
