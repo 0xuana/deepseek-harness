@@ -61,7 +61,7 @@ Source: [`packages/core/agent/src/types.ts`](../../packages/core/agent/src/types
 interface Agent {
   /** Session-backed Agent identity. */
   readonly id: SessionId
-  /** The provider route and model this agent's requests use. */
+  /** Initial route and output controls; the route applies only while the Session records no model selection or request. */
   readonly options: AgentOptions
   /** The live session this agent drives; its log is the durable source of truth. */
   readonly session: Session
@@ -200,13 +200,51 @@ interface AgentOptions {
   /** Model id interpreted by the selected provider adapter. */
   model?: string
   /** Adapter-owned reasoning effort for the selected provider/model route. */
-  reasoningEffort?: ReasoningEffortId
+  reasoningEffort?: ReasoningEffortId | undefined
   /** Maximum output tokens for each conversation-model request. */
   maxTokens?: number
 }
 ```
 
-Dispatch requires `provider` and `model` after `agent/request`. An explicit `reasoningEffort` seeds the first request on that route; exact-model resolution validates it, while omission allows the adapter default to materialize. When present, `maxTokens` must be a positive safe integer and caps every conversation-model request; omission allows the exact-model adapter default to materialize before the request header, or otherwise leaves provider behavior unchanged. An agent-scoped `deployment:persona-prefix` prompt section may shadow the global default persona.
+Step preparation requires `provider` and `model` before prompt assembly. `agent/request` may change request controls but must preserve that route. An explicit `reasoningEffort` seeds the first request on that route; exact-model resolution validates it, while omission allows the adapter default to materialize. When present, `maxTokens` must be a positive safe integer and caps every conversation-model request; omission allows the exact-model adapter default to materialize before the request header, or otherwise leaves provider behavior unchanged. An agent-scoped `deployment:persona-prefix` prompt section may shadow the global default persona.
+
+The Agent registry registers `modelSelection` on `ctx.sessionProjections`. `model/selection` records a complete choice without entering model history. A matching request header clears `pending`; the latest request remains `lastUsed`. Adapter-defaulted effort is omitted so later requests resolve the default again. `next` is null only before either a choice or a request is recorded; in that case `AgentOptions` supplies the route. The [Agent package](../../packages/core/agent/README.md) describes selection helpers and resume policy.
+
+```ts type-equiv
+/** Complete provider, model, and optional reasoning effort chosen for one Session's model steps. */
+interface ModelSelection {
+  /** Registered provider route. */
+  provider: string
+  /** Provider-owned model id. */
+  model: string
+  /** Adapter-owned reasoning effort, or provider/default behavior when absent. */
+  reasoningEffort?: ReasoningEffortId
+}
+```
+
+```ts type-equiv
+/**
+ * Durable model-selection fold for one Session. An effort the adapter
+ * defaulted on a recorded request is omitted, so later requests resolve the
+ * default again instead of pinning it as a choice.
+ */
+interface ModelSelectionProjectionState {
+  /** Selection used by the latest recorded model request. */
+  readonly lastUsed: ModelSelection | null
+  /** Later recorded selection not yet used by a matching model request. */
+  readonly pending: ModelSelection | null
+}
+```
+
+```ts type-equiv
+/** Client view of the durable model-selection fold. */
+interface ModelSelectionProjection {
+  /** Selection used by the latest recorded model request. */
+  readonly lastUsed: ModelSelection | null
+  /** Selection the next model step uses; null while the Agent's initial options supply the route. */
+  readonly next: ModelSelection | null
+}
+```
 
 The inbox is the delivery vocabulary — two ordered pending-message lists the agent owns as a durable projection:
 
@@ -940,13 +978,14 @@ Reject a proposed step or replace the messages that enter it. Calling `next()` p
  * @param payload.turn - the turn that will own the step.
  * @param payload.step - the step proposed by the loop.
  * @param payload.signal - the current turn's cancellation signal.
+ * @param payload.callConfig - provider and model fixed for this step and its retries.
  * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
  * @mode waterfall
  */
-'agent/pre-step'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; signal: AbortSignal }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>
+'agent/pre-step'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; signal: AbortSignal; callConfig: Readonly<Pick<LlmCallConfig, 'provider' | 'model'>> }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>
 ```
 
-Types: [Scoped](scope.md) · [UserMessage](session.md)
+Types: [LlmCallConfig](llm-streaming.md) · [Scoped](scope.md) · [UserMessage](session.md)
 
 Source: [`packages/core/agent/src/runtime-types.ts`](../../packages/core/agent/src/runtime-types.ts)
 
@@ -954,13 +993,14 @@ Source: [`packages/core/agent/src/runtime-types.ts`](../../packages/core/agent/s
 
 #### `agent/request` — waterfall
 
-Replace the frozen call configuration. `await next()` yields the config the machine would use (agent options on the first request, the logged header afterwards); return a replacement to switch. On step admission, this runs after assembly and `step/start`, before the system prompt and accepted user batch are committed. Cancellation here or during subsequent `prepareCall()` resolution commits neither. The prepared call capability governs prompt admission. Model-visible content must use logged channels; this waterfall cannot mutate messages.
+Replace the frozen call configuration. `await next()` yields the config the machine would use (the step's model selection with agent options on the first request, the logged header's controls afterwards); a replacement may adjust controls but must keep the provider and model. On step admission, this runs after assembly and `step/start`, before the system prompt and accepted user batch are committed. Cancellation here or during subsequent `prepareCall()` resolution commits neither. The prepared call capability governs prompt admission. Model-visible content must use logged channels; this waterfall cannot mutate messages.
 
 ```ts cordis-catalog
 /**
  * Replace the frozen call configuration. `await next()` yields the config
- * the machine would use (agent options on the first request, the logged
- * header afterwards); return a replacement to switch. On step admission,
+ * the machine would use (the step's model selection with agent options on
+ * the first request, the logged header's controls afterwards); a
+ * replacement may adjust controls but must keep the provider and model. On step admission,
  * this runs after assembly and `step/start`, before the system prompt and
  * accepted user batch are committed. Cancellation here or during subsequent
  * `prepareCall()` resolution commits neither. The prepared call capability

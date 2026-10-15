@@ -1,3 +1,4 @@
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
@@ -86,6 +87,7 @@ async function setup() {
   provideWorkingDirectoryFixture(ctx)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(LocalJobRegistry, { pumpPollMs: 5 })
   await ctx.plugin(ToolTasks)
@@ -456,6 +458,7 @@ describe('foreground commands as jobs (pwsh)', () => {
     provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(LocalJobRegistry)
     await ctx.plugin(BashEnvPlugin)
@@ -494,6 +497,7 @@ describe('foreground commands as jobs (pwsh)', () => {
     provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(LocalJobRegistry)
     await ctx.plugin(ToolTasks)

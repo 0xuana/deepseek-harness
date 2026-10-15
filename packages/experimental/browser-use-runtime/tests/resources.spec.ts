@@ -1,3 +1,4 @@
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -11,6 +12,7 @@ const contexts: Context[] = []
 async function fixture() {
   const ctx = new Context()
   contexts.push(ctx)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   async function owner(id: string) {
     const fiber = ctx.plugin(() => {})

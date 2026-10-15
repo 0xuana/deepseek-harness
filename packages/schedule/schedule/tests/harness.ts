@@ -1,4 +1,5 @@
 /** Host Schedule tests use real domain storage and an explicit Session resolver. */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { Context, Service } from '@deepseek-ai/cordis'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
@@ -72,6 +73,7 @@ export async function harness(options: {
   const ctx = new Context()
   options.onContext?.(ctx)
   await ctx.plugin(SessionStore)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(SystemPrompt, {})
   await ctx.plugin(ToolRuntime)

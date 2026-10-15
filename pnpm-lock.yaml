@@ -7054,6 +7054,10 @@ importers:
         version: link:../../core/system-prompt
 
   packages/core/agent:
+    dependencies:
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:~

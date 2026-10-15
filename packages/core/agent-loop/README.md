@@ -29,7 +29,7 @@ Mount `dsh-agent-loop` in any composition that should run agents. It supplies th
 
 ### Configure declarative agents
 
-Agents declared in the config start automatically when the plugin loads. Each entry needs an `id` label; a model call additionally requires both `provider` and `model` (`agent/request` may supply a missing pair before dispatch).
+Agents declared in config start automatically when the plugin loads. Each entry needs an `id` label; a model step also needs both `provider` and `model` in the Session selection or initial options before prompt assembly.
 
 ```yaml
 - name: '@deepseek-ai/dsh-agent-loop'
@@ -47,7 +47,7 @@ Agents declared in the config start automatically when the plugin loads. Each en
 |---|---|---|
 | `maxParallelToolCalls` | `10` | Parallel-safe tool calls in flight per step; `1` is serial |
 | `agents[].id` | required | Stable label; a fresh session mints `${id}-session-<uuid>` unless `sessionId` is set |
-| `agents[].provider` / `agents[].model` | — | Model route; both required before dispatch |
+| `agents[].provider` / `agents[].model` | — | Model route; both required before step preparation |
 | `agents[].reasoningEffort` | — | Non-empty initial reasoning effort; `agent/request` may override it |
 | `agents[].maxTokens` | — | Positive per-request output-token cap |
 | `agents[].cwd` | — | Workspace directory for a fresh session |
@@ -55,6 +55,8 @@ Agents declared in the config start automatically when the plugin loads. Each en
 | `agents[].resumeSessionId` | — | Load this persisted session instead of creating one; mutually exclusive with `sessionId` |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-agent-loop) lists every accepted field. `maxParallelToolCalls` is a volatile Config field sampled for the next tool group; `agents` remains startup configuration.
+
+A configured resume records the declared route as the Session selection before publication. Programmatic resume preserves the Session choice unless its setup explicitly records another route; initial `agentOptions` alone do not override saved history.
 
 ### Create or resume agents programmatically
 
@@ -89,6 +91,8 @@ This section explains how the package realizes the behavior above; the observabl
 The package is the one concrete implementation of the public `Agent` contract. It registers itself as the `AgentFactory` on `ctx.agents`, so consumers never import this package; ownership of each created agent lives with the caller fiber and the loop provider, converging on one memoized quiescence boundary. Every observable effect happens through session events and the `agent/*` taxonomy — package internals are never part of the public surface.
 
 ### Request headers and adapter defaults
+
+Before prompt assembly, the loop reads the shared `modelSelection` projection and captures one selection for the step and its retries. Prompt variables and `agent/pre-step.callConfig` use that route. `agent/request` may replace controls such as reasoning effort or sampling, but changing provider or model rejects the step before input is committed. A later recorded choice applies to the next step, including a tool continuation in the same turn.
 
 After `agent/request`, `ctx.llm.prepareCall()` validates adapter-owned fields and resolves reasoning-effort and output-token defaults under the active turn signal. The loop retains that exact adapter through resolution, `request/header` logging, and dispatch. It writes a full header for the first request, a changed envelope (config or tools — the prompt is not part of the header), an explicit message-series start, a request after a surface replacement or image-offload decision, and resume; unchanged steps, retries, and ordinary later turns in the same series inherit the latest header, and an in-history prompt append is not a replacement, so the request that follows it inherits the header too. Beside the header, the loop logs `request/context` — provider, model, `contextWindow`, and the route's `systemPromptUpdate` mode from `prepareCall()` — only when one of those differs from the latest snapshot. Before the next waterfall, the loop removes adapter-default fields so the current route resolves them again, while explicit settings persist. An unhandled route still fails with `NO_ADAPTER`.
 

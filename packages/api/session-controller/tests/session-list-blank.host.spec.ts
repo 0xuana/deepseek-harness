@@ -6,6 +6,7 @@
  * prompt's turn/start clears it. The host/session-added frame shares the
  * same predicate function (covered by the workspace spec's frame assertion).
  */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -22,6 +23,7 @@ import { createSessionTestRemote, type TestSessionRemote } from './test-remote.t
 async function harness(): Promise<{ ctx: Context; remote: TestSessionRemote; attach: (session: Session) => Promise<void> }> {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   return {
     ctx,

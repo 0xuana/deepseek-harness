@@ -1,3 +1,4 @@
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createToolResultMessage, ToolCallId, type ToolSchema } from '@deepseek-ai/dsh-llm'
@@ -69,6 +70,7 @@ interface OptionSchemaShape {
 
 async function setup(config: toolAskUser.Config = { mode: 'timed', timeout: -1 }) {
   const ctx = new Context()
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)

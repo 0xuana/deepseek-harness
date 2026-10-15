@@ -1,8 +1,9 @@
-import * as Protocol from '@deepseek-ai/dsh-llm-deepseek'
 /**
  * Real Messages round trips use the official root and require credentials.
  * System-update checks additionally require DEEPSEEK_IN_HISTORY_MODEL.
  */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
+import * as Protocol from '@deepseek-ai/dsh-llm-deepseek'
 import { randomUUID } from 'node:crypto'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -148,6 +149,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('DeepSeek Messages real API', () 
     const unversionedModule = pathToFileURL(join(pluginRoot, 'plugin.mjs')).href
     const ctx = await boot()
     await ctx.plugin(Loader)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(SessionStore)
     await ctx.plugin(DeepSeekLlmApiExtensionRegistry)

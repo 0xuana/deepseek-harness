@@ -1,14 +1,14 @@
 /** Session Controller fork boundaries, lineage, and inherited model routing. */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { currentModelSelection } from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentHandle, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { BasicCompactionEngine } from '@deepseek-ai/dsh-compaction-basic'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { ToolCallId, createMessage, createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
-import type { LlmCallConfig } from '@deepseek-ai/dsh-llm'
 import SessionStore, { TOOL_OUTCOME_UNKNOWN, SESSION_FORMAT_VERSION, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import { SessionPersistenceRevision, type SessionPersistenceSnapshot } from '@deepseek-ai/dsh-session-persistence'
@@ -32,6 +32,7 @@ async function composed(workspaces: readonly Workspace[] = []): Promise<Context>
   const ctx = new Context()
   await ctx.plugin(SessionStore)
   await ctx.plugin(SystemPrompt, { personaPrefix: '' })
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   installSessionReadTestServices(ctx)
   ctx.provide('workspaceRegistry', { list: () => workspaces, archivedSessionIds: [] } as never)
@@ -662,18 +663,8 @@ describe('sessions.fork', () => {
     const child = ctx.agents.get(response.value.sessionId)
     if (child === undefined) throw new Error('fork did not publish the child agent')
     expect(child.session.snapshotEvents().slice(0, child.session.inheritedEventCount)).toEqual(inherited)
-    const assembly = await child.ctx.systemPrompt.assemble()
-    expect(assembly.variables).toMatchObject({
-      provider: 'inherited-provider',
-      model: 'inherited-model',
-    })
-    const fallback: LlmCallConfig = { provider: 'default-provider', model: 'default-model' }
-    await expect(agentEvents(child.ctx, child).waterfall(
-      'agent/request', { turn: 1, step: 0, signal: new AbortController().signal }, () => Promise.resolve(fallback),
-    )).resolves.toMatchObject({
-      provider: 'inherited-provider',
-      model: 'inherited-model',
-      reasoningEffort: 'high',
+    expect(currentModelSelection(ctx.sessionProjections, child)).toEqual({
+      provider: 'inherited-provider', model: 'inherited-model', reasoningEffort: 'high',
     })
     await ctx.fiber.dispose()
   })

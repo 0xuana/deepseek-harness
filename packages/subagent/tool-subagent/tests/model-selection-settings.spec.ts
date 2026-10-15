@@ -1,5 +1,5 @@
-import { mountWorkingDirectoryFixture } from '../../subagent/tests/working-directory-fixture.ts'
 /** Default-off settings and per-session model-selection decisions. */
+import { mountWorkingDirectoryFixture } from '../../subagent/tests/working-directory-fixture.ts'
 
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -272,6 +272,7 @@ describe('SubagentModelSelectionConfig', () => {
     const next = () => Promise.resolve({ kind: 'enter' as const, messages: [] })
     const payload = {
       agent: enabled.agent,
+      callConfig: { provider: 'mock', model: 'mock' },
       messages: [],
       turn: 1,
       step: 1,

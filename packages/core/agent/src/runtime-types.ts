@@ -19,6 +19,8 @@ declare module '@deepseek-ai/dsh-system-prompt' {
   interface AssembleContext {
     /** Agent for this assembly; absent on diagnostics. When present, `scope` must identify the same agent. */
     agent?: Agent
+    /** Provider and model fixed for this step; absent outside step preparation. */
+    callConfig?: Readonly<Pick<LlmCallConfig, 'provider' | 'model'>>
   }
 }
 
@@ -29,7 +31,7 @@ export interface AgentOptions {
   /** Model id interpreted by the selected provider adapter. */
   model?: string
   /** Adapter-owned reasoning effort for the selected provider/model route. */
-  reasoningEffort?: ReasoningEffortId
+  reasoningEffort?: ReasoningEffortId | undefined
   /** Maximum output tokens for each conversation-model request. */
   maxTokens?: number
 }
@@ -162,7 +164,7 @@ export type AssistantStreamFrame =
 
 declare module './types.ts' {
   interface Agent {
-    /** The provider route and model this agent's requests use. */
+    /** Initial route and output controls; the route applies only while the Session records no model selection or request. */
     readonly options: AgentOptions
     /** The live session this agent drives; its log is the durable source of truth. */
     readonly session: Session
@@ -314,14 +316,16 @@ declare module '@deepseek-ai/cordis' {
      * @param payload.turn - the turn that will own the step.
      * @param payload.step - the step proposed by the loop.
      * @param payload.signal - the current turn's cancellation signal.
+     * @param payload.callConfig - provider and model fixed for this step and its retries.
      * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
      * @mode waterfall
      */
-    'agent/pre-step'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; signal: AbortSignal }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>
+    'agent/pre-step'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; signal: AbortSignal; callConfig: Readonly<Pick<LlmCallConfig, 'provider' | 'model'>> }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>
     /**
      * Replace the frozen call configuration. `await next()` yields the config
-     * the machine would use (agent options on the first request, the logged
-     * header afterwards); return a replacement to switch. On step admission,
+     * the machine would use (the step's model selection with agent options on
+     * the first request, the logged header's controls afterwards); a
+     * replacement may adjust controls but must keep the provider and model. On step admission,
      * this runs after assembly and `step/start`, before the system prompt and
      * accepted user batch are committed. Cancellation here or during subsequent
      * `prepareCall()` resolution commits neither. The prepared call capability

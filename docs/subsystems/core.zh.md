@@ -65,7 +65,7 @@ interface AgentHandle {
 interface Agent {
   /** Session-backed Agent identity. */
   readonly id: SessionId
-  /** The provider route and model this agent's requests use. */
+  /** Initial route and output controls; the route applies only while the Session records no model selection or request. */
   readonly options: AgentOptions
   /** The live session this agent drives; its log is the durable source of truth. */
   readonly session: Session
@@ -204,13 +204,51 @@ interface AgentOptions {
   /** Model id interpreted by the selected provider adapter. */
   model?: string
   /** Adapter-owned reasoning effort for the selected provider/model route. */
-  reasoningEffort?: ReasoningEffortId
+  reasoningEffort?: ReasoningEffortId | undefined
   /** Maximum output tokens for each conversation-model request. */
   maxTokens?: number
 }
 ```
 
-在 `agent/request` 之后，分发要求 `provider` 与 `model` 都存在。显式 `reasoningEffort` 会为该路由的首次请求提供初始值；确切模型解析会校验该值，省略时则允许填入适配器默认值。提供 `maxTokens` 时，它必须是正安全整数，并限制每次对话模型请求的输出；省略时，系统会在写入请求 header 前填入确切模型的适配器默认值，否则提供方行为保持不变。agent 作用域的 `deployment:persona-prefix` 提示词段落可以遮蔽全局默认 persona。
+步骤准备在提示词组装前要求 `provider` 与 `model` 都存在。`agent/request` 可以更改请求控制参数，但必须保留该路由。显式 `reasoningEffort` 会为该路由的首次请求提供初始值；确切模型解析会校验该值，省略时则允许填入适配器默认值。提供 `maxTokens` 时，它必须是正安全整数，并限制每次对话模型请求的输出；省略时，系统会在写入请求 header 前填入确切模型的适配器默认值，否则提供方行为保持不变。agent 作用域的 `deployment:persona-prefix` 提示词段落可以遮蔽全局默认 persona。
+
+Agent 注册表在 `ctx.sessionProjections` 上注册 `modelSelection`。`model/selection` 记录完整选择，但不进入模型历史。匹配的请求头会清除 `pending`，最近请求仍保留为 `lastUsed`。适配器默认的推理强度会被省略，使后续请求重新解析默认值。只有尚未记录选择或请求时，`next` 才为 null，此时由 `AgentOptions` 提供路由。[Agent 包](../../packages/core/agent/README.zh.md)说明选择辅助函数与恢复策略。
+
+```ts type-equiv
+/** Complete provider, model, and optional reasoning effort chosen for one Session's model steps. */
+interface ModelSelection {
+  /** Registered provider route. */
+  provider: string
+  /** Provider-owned model id. */
+  model: string
+  /** Adapter-owned reasoning effort, or provider/default behavior when absent. */
+  reasoningEffort?: ReasoningEffortId
+}
+```
+
+```ts type-equiv
+/**
+ * Durable model-selection fold for one Session. An effort the adapter
+ * defaulted on a recorded request is omitted, so later requests resolve the
+ * default again instead of pinning it as a choice.
+ */
+interface ModelSelectionProjectionState {
+  /** Selection used by the latest recorded model request. */
+  readonly lastUsed: ModelSelection | null
+  /** Later recorded selection not yet used by a matching model request. */
+  readonly pending: ModelSelection | null
+}
+```
+
+```ts type-equiv
+/** Client view of the durable model-selection fold. */
+interface ModelSelectionProjection {
+  /** Selection used by the latest recorded model request. */
+  readonly lastUsed: ModelSelection | null
+  /** Selection the next model step uses; null while the Agent's initial options supply the route. */
+  readonly next: ModelSelection | null
+}
+```
 
 inbox 即投递词汇——agent 以持久投影形式拥有的两条有序待处理消息列表：
 
@@ -952,13 +990,14 @@ Reject a proposed step or replace the messages that enter it. Calling `next()` p
  * @param payload.turn - the turn that will own the step.
  * @param payload.step - the step proposed by the loop.
  * @param payload.signal - the current turn's cancellation signal.
+ * @param payload.callConfig - provider and model fixed for this step and its retries.
  * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
  * @mode waterfall
  */
-'agent/pre-step'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; signal: AbortSignal }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>
+'agent/pre-step'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; signal: AbortSignal; callConfig: Readonly<Pick<LlmCallConfig, 'provider' | 'model'>> }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>
 ```
 
-Types: [Scoped](scope.zh.md) · [UserMessage](session.zh.md)
+Types: [LlmCallConfig](llm-streaming.zh.md) · [Scoped](scope.zh.md) · [UserMessage](session.zh.md)
 
 Source: [`packages/core/agent/src/runtime-types.ts`](../../packages/core/agent/src/runtime-types.ts)
 
@@ -966,13 +1005,14 @@ Source: [`packages/core/agent/src/runtime-types.ts`](../../packages/core/agent/s
 
 #### `agent/request` — waterfall
 
-Replace the frozen call configuration. `await next()` yields the config the machine would use (agent options on the first request, the logged header afterwards); return a replacement to switch. On step admission, this runs after assembly and `step/start`, before the system prompt and accepted user batch are committed. Cancellation here or during subsequent `prepareCall()` resolution commits neither. The prepared call capability governs prompt admission. Model-visible content must use logged channels; this waterfall cannot mutate messages.
+Replace the frozen call configuration. `await next()` yields the config the machine would use (the step's model selection with agent options on the first request, the logged header's controls afterwards); a replacement may adjust controls but must keep the provider and model. On step admission, this runs after assembly and `step/start`, before the system prompt and accepted user batch are committed. Cancellation here or during subsequent `prepareCall()` resolution commits neither. The prepared call capability governs prompt admission. Model-visible content must use logged channels; this waterfall cannot mutate messages.
 
 ```ts cordis-catalog
 /**
  * Replace the frozen call configuration. `await next()` yields the config
- * the machine would use (agent options on the first request, the logged
- * header afterwards); return a replacement to switch. On step admission,
+ * the machine would use (the step's model selection with agent options on
+ * the first request, the logged header's controls afterwards); a
+ * replacement may adjust controls but must keep the provider and model. On step admission,
  * this runs after assembly and `step/start`, before the system prompt and
  * accepted user batch are committed. Cancellation here or during subsequent
  * `prepareCall()` resolution commits neither. The prepared call capability

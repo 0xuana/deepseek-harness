@@ -1,3 +1,4 @@
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
@@ -46,6 +47,7 @@ function stop(ctx: Context, sessionId: SessionId): Promise<void> {
 describe('Turn archive admission', () => {
   it('reports the turn family only while the session\'s Agent is running, ahead of later providers', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const agent = await liveAgent(ctx, 'busy', 'running')
     await liveAgent(ctx, 'quiet', 'idle')
@@ -61,6 +63,7 @@ describe('Turn archive admission', () => {
 
   it('cancels a running turn with the user cause and without keeping the inbox, and leaves the rest alone', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const running = await liveAgent(ctx, 'stop-me', 'running')
     const idle = await liveAgent(ctx, 'already-idle', 'idle')
@@ -74,6 +77,7 @@ describe('Turn archive admission', () => {
 
   it('stops answering once the registry fiber is disposed', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     const fiber = await ctx.plugin(AgentRegistry)
     const agent = await liveAgent(ctx, 'watched', 'running')
     expect(await ask(ctx, agent.id)).toEqual([{ kind: 'turn' }])

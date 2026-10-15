@@ -4,6 +4,7 @@
  * request/header snapshot. Each request extends its predecessor unless a logged compaction
  * replacement or header change explains the difference.
  */
+import { recordDeclaredRoute, recordModelSelection } from '@deepseek-ai/dsh-agent'
 
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -253,6 +254,7 @@ describe('request stability across the loop', () => {
         sessionId: SessionId(`effort-${model}`),
         seed: structuredClone(agent.session.snapshotEvents()),
         agentOptions: { provider: 'mock', model },
+        setup: (_ctx, agent) => { recordDeclaredRoute(resumedCtx.sessionProjections, agent, agent.options) },
       })
       send(resumedHandle.agent, 'resumed')
       await waitForIdle(resumedCtx, resumedHandle.agent)
@@ -294,15 +296,9 @@ describe('request stability across the loop', () => {
       provider: 'deepseek',
       model: 'deepseek-model',
     })
-    ctx.on('agent/request', async ({ turn }, next) => {
-      const config = await next()
-      return turn === 2
-        ? { ...config, provider: 'other', model: 'other-model' }
-        : config
-    })
-
     send(agent, 'first')
     await waitForIdle(ctx, agent)
+    recordModelSelection(ctx.sessionProjections, agent, { provider: 'other', model: 'other-model' })
     send(agent, 'second')
     await waitForIdle(ctx, agent)
 
@@ -328,15 +324,9 @@ describe('request stability across the loop', () => {
       model: 'deepseek-model',
       maxTokens: 4_096,
     })
-    ctx.on('agent/request', async ({ turn }, next) => {
-      const config = await next()
-      return turn === 2
-        ? { ...config, provider: 'other', model: 'other-model' }
-        : config
-    })
-
     send(agent, 'first')
     await waitForIdle(ctx, agent)
+    recordModelSelection(ctx.sessionProjections, agent, { provider: 'other', model: 'other-model' })
     send(agent, 'second')
     await waitForIdle(ctx, agent)
 
@@ -948,9 +938,7 @@ describe('request/context capacity records', () => {
 
     send(agent, 'first')
     await waitForIdle(ctx, agent)
-    ctx.on('agent/request', ({ agent: subject }, next) => subject === agent
-      ? Promise.resolve({ provider: 'mock', model: 'large' })
-      : next())
+    recordModelSelection(ctx.sessionProjections, agent, { provider: 'mock', model: 'large' })
     send(agent, 'second')
     await waitForIdle(ctx, agent)
 
@@ -975,14 +963,9 @@ describe('request/context capacity records', () => {
     const adapter = capacityAdapter({ known: 64_000 }, [textResponse('a'), textResponse('b')])
     const ctx = await harness(adapter)
     const agent = await ctx.agentLoop.create(SessionId('capacity-clear'), { provider: 'mock', model: 'known' })
-    let model = 'known'
-    ctx.on('agent/request', ({ agent: subject }, next) => subject === agent
-      ? Promise.resolve({ provider: 'mock', model })
-      : next())
-
     send(agent, 'first')
     await waitForIdle(ctx, agent)
-    model = 'unknown'
+    recordModelSelection(ctx.sessionProjections, agent, { provider: 'mock', model: 'unknown' })
     send(agent, 'second')
     await waitForIdle(ctx, agent)
 

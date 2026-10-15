@@ -28,7 +28,6 @@ import { SessionHistoryController } from './history.ts'
 import { SessionFileReferences } from './file-references.ts'
 import { ApiSessionList } from './list.ts'
 import { buildModelCatalog, hasProviderApiKey } from './catalog.ts'
-import { installModelSelectionProjection } from './model-selection-projection.ts'
 import { SessionSkillCatalog } from './skill-catalog.ts'
 import { SessionMediaReferences } from './media-references.ts'
 import { ArchivedSessionGate } from './archived-session-gate.ts'
@@ -158,7 +157,6 @@ export class SessionController extends TypertRemoteService {
     super(ctx, 'sessionController', { namespace: 'session' })
     ctx.typert.resources.register('session', { field: 'sessionId' })
     const resolved = SessionController.Config(config)
-    installModelSelectionProjection(ctx)
     this.agents = new ApiSessionAgentController(ctx)
     this.commands = new SessionCommandController(ctx, this.agents, process.cwd())
     ctx.effect(() => ctx.fileUploads.registerAgentResolver(async (sessionId) => {
@@ -208,15 +206,6 @@ export class SessionController extends TypertRemoteService {
       ctx.emit('api-session/error', agent.id, errorChain(error))
     })
     ctx.on('session/event', (session, event) => {
-      if (event.type === 'request/header') {
-        const agent = ctx.agents.get(session.id)
-        if (agent?.session === session) this.agents.consumeSelection(
-          agent,
-          event.data.header.config.provider,
-          event.data.header.config.model,
-          event.data.header.config.reasoningEffort,
-        )
-      }
       if (event.type !== 'user/message' || event.data.source.kind !== 'user') return
       ctx.emit('api-session/activity', session.id, event.time)
     })

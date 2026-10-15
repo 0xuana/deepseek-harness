@@ -1,3 +1,4 @@
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import * as Protocol from '@deepseek-ai/dsh-llm-deepseek'
 import { readFileSync } from 'node:fs'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
@@ -228,6 +229,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('llm-deepseek e2e (real API)', ()
     const ctx = new Context()
     contexts.push(ctx)
     await ctx.plugin(Loader)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(SessionStore)

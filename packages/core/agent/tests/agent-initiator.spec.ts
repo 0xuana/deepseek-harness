@@ -1,3 +1,4 @@
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { runInNewContext } from 'node:vm'
@@ -15,6 +16,7 @@ async function harness(): Promise<{
   dispose: () => Promise<void>
 }> {
   const ctx = new Context()
+  await ctx.plugin(SessionProjectionRegistry)
   const fiber = await ctx.plugin(AgentRegistry)
   return {
     ctx,

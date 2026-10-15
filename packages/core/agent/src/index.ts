@@ -13,6 +13,7 @@ import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import type { Scoped } from '@deepseek-ai/dsh-scope'
 import type { SessionEvent, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import { installTurnArchiveAdmission } from './archive-admission.ts'
+import { modelSelectionProjectionDefinition } from './model-selection.ts'
 import type { Agent } from './types.ts'
 import type { AgentOptions, SessionStartSource } from './runtime-types.ts'
 
@@ -20,7 +21,7 @@ export * from './runtime-types.ts'
 export * from './types.ts'
 export type * from './projection.ts'
 export * from './consumed-work.ts'
-export * from './model-selection.ts'
+export { currentModelSelection, installModelSwitchNotice, recordDeclaredRoute, recordModelSelection } from './model-selection.ts'
 export { agentCarrier, agentEvents, assembleContextFor, emitAgentEvent } from './dispatch.ts'
 export type { AgentEventDispatch, AgentSubjectEvent } from './dispatch.ts'
 
@@ -243,6 +244,8 @@ interface FactorySlot {
  * nested lineage that starts an owning-fiber unload is excluded from its own drain.
  */
 export class AgentRegistry extends Service {
+  static inject = ['sessionProjections']
+
   private store = new Map<SessionId, AgentEntry>()
   private factory: FactorySlot | undefined
   private readonly initiators = new AsyncLocalStorage<Agent | undefined>()
@@ -282,6 +285,7 @@ export class AgentRegistry extends Service {
     // Archive admission: the Workspace registry asks what still runs for a
     // Session before hiding it; a running turn answers here, for every Agent.
     installTurnArchiveAdmission(ctx, sessionId => this.get(sessionId))
+    ctx.sessionProjections.register(modelSelectionProjectionDefinition)
   }
 
   /**

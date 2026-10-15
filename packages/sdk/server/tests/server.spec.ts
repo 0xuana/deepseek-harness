@@ -1,3 +1,4 @@
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { MESSAGES_RESPONSE } from './messages-response.ts'
 import { mountWorkingDirectoryFixture } from '../../../subagent/subagent/tests/working-directory-fixture.ts'
 import { createUserMessage, LlmAdapter, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
@@ -456,6 +457,7 @@ describe('HarnessSdkJsonRpcServer', () => {
   it('forwards whole-agent status without attributing a turn outcome', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const transport = new FakeTransport()
     const server = new HarnessSdkJsonRpcServer(ctx, transport)

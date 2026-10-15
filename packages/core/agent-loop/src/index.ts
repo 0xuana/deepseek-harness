@@ -23,6 +23,7 @@ import type {
   TurnBoundaryProjection,
 } from '@deepseek-ai/dsh-agent'
 import { errorChain, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { recordDeclaredRoute } from '@deepseek-ai/dsh-agent'
 import { interruptedTurnClosers, SessionLogOffset, SessionPreparation, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-system-prompt'
@@ -306,7 +307,7 @@ export interface Config {
    * omission defaults to {@link DEFAULT_MAX_PARALLEL_TOOL_CALLS}.
    */
   maxParallelToolCalls: Volatile<number>
-  /** Agents created or resumed at plugin startup. */
+  /** Agents created or resumed at plugin startup; a resumed agent records its configured route as the Session's model selection. */
   agents: (AgentOptions & {
     /** Stable config label used in logs and as the fresh combined-id prefix. */
     id: string
@@ -386,8 +387,8 @@ export class AgentLoop extends Service implements AgentFactory {
       })
     }, 'agentLoop.transactions()')
     ctx.effect(() => ctx.agents.setFactory(this), 'agentLoop.setFactory()')
-    ctx.systemPrompt.variable('provider', context => context.agent?.options.provider)
-    ctx.systemPrompt.variable('model', context => context.agent?.options.model)
+    ctx.systemPrompt.variable('provider', context => context.callConfig?.provider ?? context.agent?.options.provider)
+    ctx.systemPrompt.variable('model', context => context.callConfig?.model ?? context.agent?.options.model)
 
     for (const { id, sessionId, cwd, resumeSessionId, ...options } of this.config.agents) {
       const meta = cwd === undefined ? {} : { cwd }
@@ -412,6 +413,7 @@ export class AgentLoop extends Service implements AgentFactory {
           void this.resumeWith(ctx, childCtx.sessionPersistence, {
             resumeSessionId,
             agentOptions: options,
+            setup: (_agentCtx, agent) => { recordDeclaredRoute(ctx.sessionProjections, agent, options) },
           }).catch((error: unknown) => {
             this.reportConfiguredStartupFailure(id, 'resume', resumeSessionId, error)
           })
@@ -454,7 +456,11 @@ export class AgentLoop extends Service implements AgentFactory {
     await this.waitForDrainingConfiguredIdentity(ownerCtx, sessionId)
     if (!this.ownership.isActive()) return
     try {
-      await this.resumeWith(ownerCtx, persistence, { resumeSessionId: sessionId, agentOptions })
+      await this.resumeWith(ownerCtx, persistence, {
+        resumeSessionId: sessionId,
+        agentOptions,
+        setup: (_agentCtx, agent) => { recordDeclaredRoute(this.runtime.ctx.sessionProjections, agent, agentOptions) },
+      })
       return
     } catch (error: unknown) {
       if (!this.ownership.isActive()) return

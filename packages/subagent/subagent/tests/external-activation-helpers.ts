@@ -1,4 +1,5 @@
 /** Registered parent fixtures for external backend activation tests. */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 
 import { randomUUID } from 'node:crypto'
 import { onTestFinished } from 'vitest'
@@ -18,6 +19,7 @@ function parentStore(ctx: Context): Promise<WeakMap<Agent, Agent>> {
   onTestFinished(() => ctx.fiber.dispose())
   const ready = (async () => {
     if (ctx.get('sessions') === undefined) await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     if (ctx.get('agents') === undefined) await ctx.plugin(AgentRegistry)
     return new WeakMap<Agent, Agent>()
   })()

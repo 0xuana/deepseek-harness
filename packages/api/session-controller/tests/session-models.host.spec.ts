@@ -4,22 +4,23 @@
  * catalog injection, unavailable-model refusals, and the prompt-assembly
  * boundary for a running selection change.
  */
+import { createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 
 import { describe, expect, it, vi, onTestFinished } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { currentModelSelection } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AttachmentStore from '@deepseek-ai/dsh-attachment'
 import LlmRuntime, { LlmAdapter, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type {
-  GenerateOptions, LlmCallConfig, LlmCallConfigAdapterDefaults, LlmModelInfo,
+  GenerateOptions, LlmCallConfigAdapterDefaults, LlmModelInfo,
   LlmModelReasoningInfo, LlmProviderInfo, LlmResolvedModelInfo, StreamChunk,
   UserMessage,
 } from '@deepseek-ai/dsh-llm'
 import SessionStore from '@deepseek-ai/dsh-session'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionPromptRequest, SessionRequestId } from '../src/types.ts'
-import { ApiSessionAgentController } from '../src/agent.ts'
 import { buildModelCatalog, hasProviderApiKey } from '../src/catalog.ts'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
@@ -96,6 +97,7 @@ async function harness(logged?: {
   await ctx.plugin(SessionStore)
   await ctx.plugin(SystemPrompt, { personaPrefix: '' })
   await ctx.plugin(LlmRuntime)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   ctx.llm.registerAdapter(['deepseek-official'], new CatalogAdapter('DeepSeek', [
     { provider: 'deepseek-official', id: 'deepseek-chat', name: 'DeepSeek Chat' },
@@ -126,11 +128,23 @@ async function harness(logged?: {
   }
   const agent = {
     id: session.id,
+    options: {
+      get provider() { return ctx.agentDefaultModel.currentSelection().provider },
+      get model() { return ctx.agentDefaultModel.currentSelection().model },
+      get reasoningEffort() { return ctx.agentDefaultModel.currentSelection().reasoningEffort },
+    },
     session,
     status: 'running',
     ctx,
-    inbox: { nextTurn: [], nextStep: [] },
-  } as unknown as Agent
+    inbox: createInboxStub(),
+    whenIdle: vi.fn(() => Promise.resolve()),
+    runMaintenance: async () => { throw new Error('unexpected maintenance') },
+    send: vi.fn(),
+    inject: vi.fn(),
+    cancel: vi.fn(),
+    followup: vi.fn(),
+    steer: vi.fn(),
+  } satisfies Agent
   await ctx.agents.register(agent)
   return { ctx, agent, sessionId: session.id }
 }
@@ -486,11 +500,9 @@ describe('Web session model selection', () => {
     await ctx.fiber.dispose()
   })
 
-  it('rejects unlisted models and switches available models only after the next assembly', async () => {
+  it('rejects unlisted models and records validated selections for the next step', async () => {
     const { ctx, agent, sessionId } = await harness()
     const remote = createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }), cwd: '/tmp' })
-    const seed: LlmCallConfig = { provider: 'seed', model: 'seed', temperature: 0.2 }
-    const signal = new AbortController().signal
 
     expect(currentSelection(ctx, sessionId))
       .toEqual({ provider: 'deepseek-official', model: 'deepseek-chat' })
@@ -506,18 +518,9 @@ describe('Web session model selection', () => {
       model: 'deepseek-reasoner',
       reasoningEffort: 'max',
     })
-    await expect(agentEvents(ctx, agent).waterfall(
-      'agent/request', { turn: 1, step: 0, signal }, () => Promise.resolve(seed),
-    )).resolves.toEqual(seed)
-
-    expect((await ctx.systemPrompt.assemble()).variables)
-      .toMatchObject({ provider: 'deepseek-official', model: 'deepseek-reasoner' })
-    await expect(agentEvents(ctx, agent).waterfall(
-      'agent/request', { turn: 1, step: 1, signal }, () => Promise.resolve(seed),
-    )).resolves.toMatchObject({
-      provider: 'deepseek-official',
-      model: 'deepseek-reasoner',
-      reasoningEffort: 'max',
+    expect(currentModelSelection(ctx.sessionProjections, agent)).toEqual(selected.selected)
+    expect(agent.session.snapshotEvents().at(-1)).toMatchObject({
+      type: 'model/selection', data: selected.selected,
     })
 
     const unsupported = await remote.selectModel(request({
@@ -612,7 +615,7 @@ describe('Web session model selection', () => {
       cwd: '/tmp',
     })
 
-    expect(new ApiSessionAgentController(ctx).selectionFor(agent).current)
+    expect(currentModelSelection(ctx.sessionProjections, agent))
       .toEqual({ provider: 'deepseek-official', model: 'deepseek-chat' })
     await ctx.fiber.dispose()
   })

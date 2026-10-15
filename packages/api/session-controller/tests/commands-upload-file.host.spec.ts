@@ -1,7 +1,9 @@
+import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import { createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
-import type { Agent, ModelSelectionRef } from '@deepseek-ai/dsh-agent'
+import type { Agent } from '@deepseek-ai/dsh-agent'
 import AttachmentStore, { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import type {
   FileAttachmentRef, ImageAttachmentRef, SaveFileAttachment, SaveFileStreamAttachment,
@@ -14,7 +16,7 @@ import { createScope } from '@deepseek-ai/dsh-scope'
 import FileUploads from '@deepseek-ai/dsh-client-file-upload'
 import type { FileUploadReceiptId } from '@deepseek-ai/dsh-client-file-upload/types'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import type { ApiSessionAgentController } from '../src/agent.ts'
+import { ApiSessionAgentController } from '../src/agent.ts'
 import { SessionCommandController } from '../src/commands.ts'
 import type { SessionRequestId } from '../src/types.ts'
 
@@ -35,7 +37,9 @@ async function uploadHarness(origin?: 'subagent'): Promise<{
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(SessionStore)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
+  await ctx.plugin(TypertRegistry)
   await ctx.plugin(CommandRuntime)
   const session = ctx.sessions.create(SESSION, {
     meta: { cwd: '/workspace', ...(origin === undefined ? {} : { origin }) },
@@ -44,15 +48,20 @@ async function uploadHarness(origin?: 'subagent'): Promise<{
   const followup = vi.fn()
   const agent = {
     id: session.id,
+    options: { provider: 'fixture', model: 'fixture-model' },
+    whenIdle: vi.fn(() => Promise.resolve()),
+    runMaintenance: async () => { throw new Error('unexpected maintenance') },
+    send: vi.fn(),
+    inject: vi.fn(),
     session,
     inbox,
     status: 'idle',
-    ctx: undefined,
+    ctx,
     steer: vi.fn(),
     followup,
     cancel: vi.fn(),
-  } as unknown as Agent
-  ;(agent as { ctx: Context }).ctx = createScope(ctx, agent).ctx
+  } satisfies Agent
+  agent.ctx = createScope(ctx, agent).ctx
   const disposeAgent = await ctx.agents.register(agent)
   const saveFile = vi.fn((input: SaveFileAttachment): Promise<FileAttachmentRef> => Promise.resolve({
     attachmentId: AttachmentId(`sha256:${'cd'.repeat(32)}`),
@@ -88,15 +97,8 @@ async function uploadHarness(origin?: 'subagent'): Promise<{
     listProviders: () => [{ id: 'fixture', name: 'Fixture' }],
     resolveModelInfo: () => Promise.resolve({ provider: 'fixture', id: 'fixture-model', name: 'Fixture' }),
   } as never)
-  const selection: ModelSelectionRef = {
-    current: { provider: 'fixture', model: 'fixture-model' },
-    assembled: undefined,
-  }
-  const agents = {
-    resolveAgent: () => Promise.resolve({ agent }),
-    selectionFor: () => selection,
-    serializeImageAdmission: <Value>(_agent: Agent, operation: () => Promise<Value>) => operation(),
-  } as unknown as ApiSessionAgentController
+  const agents = new ApiSessionAgentController(ctx)
+  vi.spyOn(agents, 'resolveAgent').mockResolvedValue({ agent })
   const uploads = new FileUploads(ctx)
   if (uploadRoute === undefined) throw new Error('file upload route was not registered')
   return {
@@ -321,13 +323,10 @@ describe('Session file uploads', () => {
       new AbortController().signal,
     )
     await first.controller.prompt(promptRequest([{ type: 'file', receiptId: observed.receiptId }]), USER_SOURCE)
-    first.ctx.emit('session/event', first.agent.session, {
-      type: 'user/message',
-      data: createUserMessage({
-        content: [{ type: 'text', text: 'extension event' }],
-        source: { kind: 'user', rpcId: 1 } as never,
-      }),
-    } as never)
+    first.agent.session.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'extension event' }],
+      source: { kind: 'user', rpcId: 1 } as never,
+    }), { surfaceOp: 'append' })
     expect(first.uploads.resolve(first.agent, observed.receiptId)).toEqual(observed.file)
     first.agent.session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'observed' }],

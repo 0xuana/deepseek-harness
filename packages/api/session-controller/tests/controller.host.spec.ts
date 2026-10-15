@@ -1,3 +1,4 @@
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -23,6 +24,7 @@ describe('SessionController facade', () => {
   it('owns Host service methods and publishes Agent lifecycle projections', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const sessionId = SessionId('controller-session')
     const header: SessionHeader = {
@@ -86,10 +88,6 @@ describe('SessionController facade', () => {
       'resolveAgent',
     ).mockResolvedValueOnce({ error: activationError })
     await expect(resolveUploadAgent(sessionId)).rejects.toBe(activationError)
-    const consumeSelection = vi.spyOn(
-      (controller as unknown as { agents: ApiSessionAgentController }).agents,
-      'consumeSelection',
-    )
 
     await expect(controller.resolveAgent(sessionId)).resolves.toEqual({ agent })
     await expect(controller.inspect(sessionId)).resolves.toEqual({
@@ -115,9 +113,9 @@ describe('SessionController facade', () => {
       header: { config: { provider: 'fixture', model: 'fixture-model' } },
       reason: 'initial',
     })
-    expect(consumeSelection).toHaveBeenCalledWith(
-      agent, 'fixture', 'fixture-model', undefined,
-    )
+    expect(ctx.sessionProjections.stateOf(session, 'modelSelection')).toEqual({
+      lastUsed: { provider: 'fixture', model: 'fixture-model' }, pending: null,
+    })
     const unowned = ctx.sessions.create(SessionId('controller-unowned'), {
       meta: { cwd: '/workspace' },
     })
@@ -125,7 +123,9 @@ describe('SessionController facade', () => {
       header: { config: { provider: 'fixture', model: 'other-model' } },
       reason: 'initial',
     })
-    expect(consumeSelection).toHaveBeenCalledTimes(1)
+    expect(ctx.sessionProjections.stateOf(unowned, 'modelSelection')).toEqual({
+      lastUsed: { provider: 'fixture', model: 'other-model' }, pending: null,
+    })
 
     const abort = new AbortController()
     const iterator = controller.follow({
@@ -144,6 +144,7 @@ describe('SessionController facade', () => {
     async (outcome) => {
       const ctx = new Context()
       await ctx.plugin(SessionStore)
+      await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(AgentRegistry)
       const sessionId = SessionId(`background-${outcome}`)
       const header: SessionHeader = {
@@ -200,6 +201,7 @@ describe('SessionController facade', () => {
   it('waits for an admitted background promotion during teardown', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const sessionId = SessionId('background-disposal')
     const header: SessionHeader = {

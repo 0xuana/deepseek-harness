@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### 配置声明式 agent
 
-配置中声明的 agent 会在插件加载时自动启动。每个条目需要一个 `id` 标签；模型调用还同时需要 `provider` 与 `model`（`agent/request` 可以在分发前补齐缺失的这一对值）。
+配置中声明的 agent 会在插件加载时自动启动。每个条目需要一个 `id` 标签；模型步骤还要求 Session 选择或初始选项在提示词组装前同时提供 `provider` 与 `model`。
 
 ```yaml
 - name: '@deepseek-ai/dsh-agent-loop'
@@ -47,7 +47,7 @@ kind: "package-reference"
 |---|---|---|
 | `maxParallelToolCalls` | `10` | 每个步骤同时在途的并行安全工具调用数；`1` 为串行 |
 | `agents[].id` | 必填 | 稳定标签；未设置 `sessionId` 时，全新会话会生成 `${id}-session-<uuid>` |
-| `agents[].provider` / `agents[].model` | — | 模型路由；分发前两者都必须存在 |
+| `agents[].provider` / `agents[].model` | — | 模型路由；步骤准备前两者都必须存在 |
 | `agents[].reasoningEffort` | — | 非空的初始推理强度；`agent/request` 可以覆盖它 |
 | `agents[].maxTokens` | — | 正数的逐请求输出 token 上限 |
 | `agents[].cwd` | — | 全新会话的工作目录 |
@@ -55,6 +55,8 @@ kind: "package-reference"
 | `agents[].resumeSessionId` | — | 加载这个持久化会话而不是创建新会话；与 `sessionId` 互斥 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-agent-loop) 列出所有接受的字段。`maxParallelToolCalls` 是在下一个工具组开始时读取的 volatile Config 字段；`agents` 仍是启动配置。
+
+配置式恢复会在发布前将声明的路由记录为 Session 选择。程序化恢复保留 Session 选择，除非其 setup 显式记录另一条路由；仅传入初始 `agentOptions` 不会覆盖已有历史。
 
 ### 以编程方式创建或恢复 agent
 
@@ -89,6 +91,8 @@ const handle = await ctx.agents.create({
 该包是公开 `Agent` 约定的唯一具象实现。它在 `ctx.agents` 上把自身注册为 `AgentFactory`，因此消费方从不导入本包；每个创建 agent 的所有权归属于调用方 fiber 与循环提供方，并汇合到同一个记忆化的完全停稳边界。每个可观察效果都通过会话事件与 `agent/*` 分类体系发生——包内部实现绝不属于公开接口。
 
 ### 请求 header 与适配器默认值
+
+循环在提示词组装前读取共享 `modelSelection` 投影，并为该步骤及其重试捕获一次选择。提示词变量与 `agent/pre-step.callConfig` 使用该路由。`agent/request` 可以替换推理强度、采样等控制参数，但改变提供方或模型会在提交输入前拒绝该步骤。之后记录的选择从下一个步骤开始生效，包括同一轮次中的工具后续步骤。
 
 `agent/request` 返回后，`ctx.llm.prepareCall()` 会在活跃轮次信号下校验适配器持有的字段，并解析推理强度和输出 token 默认值。循环会在解析、`request/header` 记录与分派期间保留同一个适配器。循环会为首次请求、变化的 envelope（配置或工具——提示词不属于 header）、显式消息序列起点、surface 替换或图片省略决定后的请求及恢复写入完整 header；同一序列内内容未变的步骤、重试与普通后续轮次继承最新 header，历史内追加提示词不是替换，因此紧随其后的请求同样继承 header。在 header 之外，循环还会记录 `request/context`——提供方、模型、`contextWindow` 以及来自 `prepareCall()` 的路由 `systemPromptUpdate` 模式——且仅在其中任何一项与最新快照不同时记录。下一次 waterfall 分发前，循环移除适配器默认字段，使当前路由重新解析它们；显式设置则保留。未处理的路由仍以 `NO_ADAPTER` 失败。
 

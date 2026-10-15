@@ -1,7 +1,9 @@
+import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
-import type { Agent, Inbox, ModelSelectionRef } from '@deepseek-ai/dsh-agent'
+import type { Agent, Inbox } from '@deepseek-ai/dsh-agent'
 import { AttachmentError, AttachmentId } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import { createAssistantMessage, createUserMessage, MessageId } from '@deepseek-ai/dsh-llm'
@@ -36,7 +38,9 @@ async function commandHarness(
 }> {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
+  await ctx.plugin(TypertRegistry)
   installSessionReadTestServices(ctx)
   ctx.sessionProjections.register(subagentIdentityProjectionDefinition)
   const sessionId = SessionId('commands-session')
@@ -82,6 +86,11 @@ async function commandHarness(
   const cancel = vi.fn()
   const agent = {
     id: session.id,
+    options: { provider: 'fixture', model: 'fixture-model' },
+    whenIdle: vi.fn(() => Promise.resolve()),
+    runMaintenance: async () => { throw new Error('unexpected maintenance') },
+    send: vi.fn(),
+    inject: vi.fn(),
     session,
     inbox,
     status: 'running',
@@ -89,25 +98,18 @@ async function commandHarness(
     steer,
     followup: vi.fn(),
     cancel,
-  } as unknown as Agent
+  } satisfies Agent
   await ctx.agents.register(agent)
   ctx.provide('workspaceRegistry', { get: () => undefined, list: () => [] } as never)
   ctx.provide('agentDefaultModel', {
     currentSelection: () => ({ provider: 'fixture', model: 'fixture-model' }),
     saveSelection: () => Promise.resolve(),
   } as never)
-  const selection: ModelSelectionRef = {
-    current: { provider: 'fixture', model: 'fixture-model' },
-    assembled: undefined,
-  }
-  const agents = {
-    resolveAgent: (id: SessionId) => Promise.resolve(id === agent.id
-      ? { agent }
-      : { error: new RemoteError('session/not-found', 'missing', { sessionId: id }) }),
-    selectionFor: () => selection,
-    serializeImageAdmission: <Value>(_agent: Agent, operation: () => Promise<Value>) => operation(),
-    composeAgent: () => Promise.resolve({ setup: () => {} }),
-  } as unknown as ApiSessionAgentController
+  const agents = new ApiSessionAgentController(ctx)
+  vi.spyOn(agents, 'resolveAgent').mockImplementation(id => Promise.resolve(id === agent.id
+    ? { agent }
+    : { error: new RemoteError('session/not-found', 'missing', { sessionId: id }) }))
+  vi.spyOn(agents, 'composeAgent').mockResolvedValue({ setup: () => {} })
   return {
     ctx,
     controller: new SessionCommandController(ctx, agents, '/workspace'),
@@ -126,6 +128,7 @@ describe('Session queue commands', () => {
   it('preserves the cold Agent resolver rejection', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const error = new RemoteError('session/agent-busy', 'owned by a child', { reason: 'subagent-owned' })
     const controller = new SessionCommandController(ctx, {

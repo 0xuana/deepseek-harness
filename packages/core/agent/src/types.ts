@@ -4,6 +4,7 @@
  * @module @deepseek-ai/dsh-agent/types
  */
 
+import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm/brand'
 import type { UserMessage } from '@deepseek-ai/dsh-llm/types'
 // Type-only: the Workspace registry's archive-admission family map this registry merges `turn` into.
 import type {} from '@deepseek-ai/dsh-workspace/types'
@@ -86,6 +87,47 @@ export interface TurnBoundaryProjection {
   readonly lastTurn: number
 }
 
+/** Complete provider, model, and optional reasoning effort chosen for one Session's model steps. */
+export interface ModelSelection {
+  /** Registered provider route. */
+  provider: string
+  /** Provider-owned model id. */
+  model: string
+  /** Adapter-owned reasoning effort, or provider/default behavior when absent. */
+  reasoningEffort?: ReasoningEffortId
+}
+
+/**
+ * Durable model-selection fold for one Session. An effort the adapter
+ * defaulted on a recorded request is omitted, so later requests resolve the
+ * default again instead of pinning it as a choice.
+ */
+export interface ModelSelectionProjectionState {
+  /** Selection used by the latest recorded model request. */
+  readonly lastUsed: ModelSelection | null
+  /** Later recorded selection not yet used by a matching model request. */
+  readonly pending: ModelSelection | null
+}
+
+/** Client view of the durable model-selection fold. */
+export interface ModelSelectionProjection {
+  /** Selection used by the latest recorded model request. */
+  readonly lastUsed: ModelSelection | null
+  /** Selection the next model step uses; null while the Agent's initial options supply the route. */
+  readonly next: ModelSelection | null
+}
+
+declare module '@deepseek-ai/dsh-session-projection/types' {
+  interface SessionProjectionStateMap {
+    /** Recorded model selection and the selection used by the latest request. */
+    modelSelection: ModelSelectionProjectionState
+  }
+  interface SessionProjectionMap {
+    /** Recorded model selection for the next model step and the latest request. */
+    modelSelection: ModelSelectionProjection
+  }
+}
+
 declare module '@deepseek-ai/dsh-session/types' {
   interface SessionEventMap {
     /**
@@ -100,5 +142,10 @@ declare module '@deepseek-ai/dsh-session/types' {
       inserted: UserMessage[]
       outcome?: 'canceled'
     }
+    /**
+     * Complete model selection that applies from the next model step until a
+     * later selection. Log-only: it never enters derived model history.
+     */
+    'model/selection': ModelSelection
   }
 }

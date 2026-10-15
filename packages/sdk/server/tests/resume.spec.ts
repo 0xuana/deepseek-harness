@@ -65,7 +65,10 @@ describe('SDK persisted session resume', () => {
     const restored = second.ctx.agents.get(SessionId('saved-session'))!.session
     expect(restored.header.cwd).toBe(root)
     expect(restored.snapshotEvents().slice(0, original.length)).toEqual(original)
-    expect(restored.snapshotEvents().at(-1)).toMatchObject({ type: 'session/end-seed' })
+    expect(restored.snapshotEvents().slice(original.length)).toMatchObject([
+      { type: 'session/end-seed' },
+      { type: 'model/selection', data: { provider: 'mock', model: 'resumed-model' } },
+    ])
     expect(second.adapter.requests).toHaveLength(0)
     expect(second.events).toEqual([])
     await second.server.prompt({ sessionId: 'saved-session', contentBlocks: [{ type: 'text', text: 'what did I say?' }] })

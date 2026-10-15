@@ -1,3 +1,4 @@
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -704,6 +705,7 @@ describe('web-search-deepseek account route selection', () => {
     const ctx = new Context()
     try {
       await ctx.plugin(SessionStore)
+      await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(AgentRegistry)
       await ctx.plugin(WebRuntime, { searchProvider: DEEPSEEK_PROVIDER_ID })
       ctx.provide('deepseekAccount', {

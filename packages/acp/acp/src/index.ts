@@ -45,7 +45,6 @@ import {
   type SessionNotification,
   type Stream,
 } from '@agentclientprotocol/sdk'
-import type { ModelSelection } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-persistence'
 // Side-effect type import: declaration-merges the approval waterfall answered below.
@@ -59,7 +58,7 @@ const DEFAULT_SESSION_LIST_PAGE_SIZE = 100
 
 export const name = 'acp'
 /** Core services required by the standard automation controls. */
-export const inject = ['agents', 'llm', 'sessionPersistence', 'sessions']
+export const inject = ['agents', 'llm', 'sessionPersistence', 'sessionProjections', 'sessions']
 
 /** Preserve invalid-parameter detail in the SDK wire error message. */
 function invalidParams(detail: string): RequestError {
@@ -212,7 +211,6 @@ export function apply(ctx: Context, config: AcpConfig): void {
           cwd: params.cwd,
           mcpServers: params.mcpServers,
           agentOptions: agentOptions(config),
-          fallbackSelection: initialSelection(config),
           signal,
           notify,
         })
@@ -263,7 +261,6 @@ export function apply(ctx: Context, config: AcpConfig): void {
             cwd: params.cwd,
             mcpServers: params.mcpServers ?? [],
             agentOptions: agentOptions(config),
-            fallbackSelection: initialSelection(config),
             signal,
             notify,
           })
@@ -450,13 +447,6 @@ function agentOptions(config: AcpConfig): { provider?: string; model?: string } 
     ...config.provider !== undefined ? { provider: config.provider } : {},
     ...config.model !== undefined ? { model: config.model } : {},
   }
-}
-
-/** Initial session selection when both deployment fields are present. */
-function initialSelection(config: AcpConfig): ModelSelection | undefined {
-  return config.provider === undefined || config.model === undefined
-    ? undefined
-    : { provider: config.provider, model: config.model }
 }
 
 interface SessionListCursor {

@@ -1,3 +1,4 @@
+import { recordModelSelection } from '@deepseek-ai/dsh-agent'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PROTOCOL_VERSION } from '@agentclientprotocol/sdk'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -667,7 +668,7 @@ describe('automation-only ACP bridge', () => {
     expect(harness.adapter.requests[0]?.reasoningEffort).toBeUndefined()
   })
 
-  it('pins image admission and request routing to one prompt selection', async () => {
+  it('checks images against the admission route and uses the latest selection when the step starts', async () => {
     harness = await makeBridgeHarness({ imageCapable: true, script: [textResponse('image accepted')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const created = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
@@ -696,7 +697,7 @@ describe('automation-only ACP bridge', () => {
     releaseValidation.resolve(undefined)
     await expect(prompt).resolves.toEqual({ stopReason: 'end_turn' })
 
-    expect(harness.adapter.requests[0]).toMatchObject({ provider: 'mock', model: 'mock' })
+    expect(harness.adapter.requests[0]).toMatchObject({ provider: 'mock', model: 'plain' })
     harness.attachments!.beforeValidate = undefined
     await expect(harness.client.prompt({
       sessionId: created.sessionId,
@@ -704,7 +705,7 @@ describe('automation-only ACP bridge', () => {
     })).rejects.toThrow(/does not declare image input/)
   })
 
-  it('applies a mid-turn model change to the following turn', async () => {
+  it('applies a mid-turn model change to the following step', async () => {
     harness = await makeBridgeHarness({ script: [oneToolCall(), textResponse('first turn'), textResponse('second turn')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const created = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
@@ -715,7 +716,7 @@ describe('automation-only ACP bridge', () => {
     if (plain === undefined) throw new Error('expected Mock Plain in the model catalog')
     harness.ctx.tools.register(defineContentToolFixture({
       name: 'switch_model',
-      description: 'Switch the following turn to the plain model.',
+      description: 'Switch the following step to the plain model.',
       parameters: {},
       execute: async () => {
         await harness!.client.setSessionConfigOption({
@@ -730,7 +731,7 @@ describe('automation-only ACP bridge', () => {
     await harness.client.prompt({ sessionId: created.sessionId, prompt: [{ type: 'text', text: 'first' }] })
     await harness.client.prompt({ sessionId: created.sessionId, prompt: [{ type: 'text', text: 'second' }] })
 
-    expect(harness.adapter.requests.map(request => request.model)).toEqual(['mock', 'mock', 'plain'])
+    expect(harness.adapter.requests.map(request => request.model)).toEqual(['mock', 'plain', 'plain'])
   })
 
   it('mounts a standard stdio MCP server inside the created session', async () => {
@@ -834,20 +835,17 @@ describe('automation-only ACP bridge', () => {
     expect(harness.ctx.agents.get(SessionId(sessionId))?.options).toEqual({})
   })
 
-  it('allows request listeners to supply a route when ACP has no initial selection', async () => {
+  it('uses a recorded selection when ACP has no initial route', async () => {
     harness = await makeBridgeHarness({
       config: { provider: undefined, model: undefined },
       script: [textResponse('listener-routed')],
     })
-    harness.ctx.on('agent/request', async (_payload, next) => ({
-      ...await next(),
-      provider: 'mock',
-      model: 'mock',
-    }))
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const created = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
 
     expect(created.configOptions).toEqual([])
+    const agent = harness.ctx.agents.get(SessionId(created.sessionId))!
+    recordModelSelection(harness.ctx.sessionProjections, agent, { provider: 'mock', model: 'mock' })
     await expect(harness.client.prompt({
       sessionId: created.sessionId,
       prompt: [{ type: 'text', text: 'route me' }],

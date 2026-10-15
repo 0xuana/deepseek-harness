@@ -1,4 +1,5 @@
 /** Session creation, blank-Session reuse, and Agent preset identity through `session.create`. */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -64,6 +65,7 @@ async function harness(options: HarnessOptions = {}) {
   const ctx = new Context()
   contexts.push(ctx)
   await ctx.plugin(SessionStore)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   const presets = options.presets
   const selections: { sessionId: SessionId; agentPreset: string }[] = []

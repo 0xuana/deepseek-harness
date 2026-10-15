@@ -1,4 +1,5 @@
 /** Raw Session journal transport and message-aligned pagination coverage. */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -50,6 +51,7 @@ function appendExtension(session: Session, type: string, data: unknown): Session
 async function harness(): Promise<{ ctx: Context }> {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   installSessionReadTestServices(ctx)
   return { ctx }

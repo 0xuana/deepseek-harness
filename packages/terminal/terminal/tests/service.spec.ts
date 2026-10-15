@@ -1,3 +1,4 @@
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
@@ -120,6 +121,7 @@ function backend(type = 'stub') {
 
 async function harness() {
   const ctx = new Context()
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   const fiber = await ctx.plugin(TerminalSessionService)
   ptyServiceDisposers.set(ctx, async () => { await fiber.dispose() })

@@ -25,7 +25,7 @@ Use `dsh-agent` to create or resume live agents, send follow-up or steering inpu
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount `dsh-agent` wherever live agents exist: it provides `ctx.agents` and the `Agent` handle that plugins, UI, hooks, and orchestrators work against. The service is inert until a driver registers a factory — the shipped driver is `dsh-agent-loop`, so the smallest useful composition loads both.
+Mount `dsh-session-projection` before `dsh-agent`. The Agent registry provides `ctx.agents`, the `Agent` handle, and the shared `modelSelection` projection. A driver must register a factory before callers create or resume Agents; the shipped driver is `dsh-agent-loop`.
 
 ### Create or resume an agent
 
@@ -41,6 +41,8 @@ await handle.dispose()   // stops the loop, unregisters, removes the session, un
 ```
 
 `AgentOptions` supplies the initial provider/model route, optional adapter-owned `reasoningEffort`, and optional positive `maxTokens` output cap. The loop validates exact-model reasoning support, resolves adapter defaults, records the effective values in the request header, and applies them to each conversation request. An optional `setup(agentCtx, agent)` callback composes the agent's scoped world before it is published: `agentCtx` owns registrations, while the explicit unpublished Agent provides its Session; the Context has no reverse Agent property. Scoped tools, prompt sections, and listeners exist before any creation announcement. Setup is composition-only: drive the agent only after creation resolves.
+
+A Session's recorded model selection takes precedence over its latest request route, which takes precedence over `AgentOptions`. Call `recordModelSelection(ctx.sessionProjections, agent, selection)` after validating a new choice; it appends `model/selection` only when the choice differs. `currentModelSelection()` reads this shared state without a separate mutable cache. Resume preserves the recorded choice; deployments that intentionally replace it call `recordDeclaredRoute()` during setup. That helper retains explicit reasoning effort only for the same route, while adapter-defaulted effort is resolved again.
 
 ### Drive an agent's conversation
 
@@ -82,7 +84,7 @@ The package is built on one separation: the public `Agent` surface and registry 
 
 ### Step admission
 
-`PreStepDecision` is either `{ kind: 'reject' }` or `{ kind: 'enter', messages, startsRequestSeries? }`. The enter branch contains the complete identified, frozen message batch. Acceptance does not commit it: after assembly and `step/start`, `agent/request` and `prepareCall()` resolve the route before the loop commits the system prompt and user batch. Cancellation during either async phase commits neither. `startsRequestSeries: true` declares a distinct model-message series; a wrapping listener preserves that declaration and the batch unless it intentionally replaces either one. Claiming removes offered messages from the inbox, while messages inserted after the claim remain pending for a later boundary.
+`PreStepDecision` is either `{ kind: 'reject' }` or `{ kind: 'enter', messages, startsRequestSeries? }`. The enter branch contains the complete identified, frozen message batch. Acceptance does not commit it: after assembly and `step/start`, `agent/request` adjusts controls without changing the step route, and `prepareCall()` binds the adapter before the loop commits the system prompt and user batch. Cancellation during either async phase commits neither. `startsRequestSeries: true` declares a distinct model-message series; a wrapping listener preserves that declaration and the batch unless it intentionally replaces either one. Claiming removes offered messages from the inbox, while messages inserted after the claim remain pending for a later boundary.
 
 ### Durable inbox
 
@@ -99,7 +101,7 @@ The package is built on one separation: the public `Agent` surface and registry 
 | [`src/types.ts`](src/types.ts) | `AgentOptions`, cancellation causes, and inbox projection vocabulary |
 | [`src/dispatch.ts`](src/dispatch.ts) | `agentEvents` fused dispatcher and `assembleContextFor(agent)` |
 | [`src/consumed-work.ts`](src/consumed-work.ts) | `foldConsumedWork(events)`: what the log's consumed work became |
-| [`src/model-selection.ts`](src/model-selection.ts) | `installModelSelection`: coupling one selection to assembly and routing |
+| [`src/model-selection.ts`](src/model-selection.ts) | Durable model-selection fold, read/write helpers, and optional switch notices |
 | [`src/archive-admission.ts`](src/archive-admission.ts) | The `turn` family of the Workspace registry's archive admission: a running turn and its user-cause cancel |
 
 ### Registry and lifecycle
@@ -140,7 +142,7 @@ The package-level contract is enough for most consumers; read these when you nee
 
 #### What the model sees
 
-`followup`, `steer`, and `inject` feed the owning session as identified user-role messages; accepted content becomes part of the derived history the model reads on later steps. `agent/pre-step` and the other declared events let plugins reject a proposed step or add durable request material. `installModelSelection` adds `[model changed: assistant turns above this point were generated by <previous>; the session continues with <next>]` to the first step assembled for a different provider/model route that would send a model request; provider names appear only when the switch crosses providers, and reasoning-effort-only changes add nothing. An empty first decision and a decision that removes offered messages remain no-request results. If a request step fails before logging its header, the next request step receives the notice again because the durable previous route has not changed.
+`followup`, `steer`, and `inject` feed the owning session as identified user-role messages; accepted content becomes part of the derived history the model reads on later steps. `agent/pre-step` and the other declared events let plugins reject a proposed step or add durable request material. `installModelSwitchNotice` adds `[model changed: assistant turns above this point were generated by <previous>; the session continues with <next>]` to the first step assembled for a different provider/model route that would send a model request; provider names appear only when the switch crosses providers, and reasoning-effort-only changes add nothing. An empty first decision and a decision that removes offered messages remain no-request results. If a request step fails before logging its header, the next request step receives the notice again because the durable previous route has not changed.
 
 #### Token effect
 
@@ -154,7 +156,7 @@ Accepted history and steering are append-only; a blocked submission sends no req
 
 #### What the model sees
 
-Registrations through `agent.ctx` can shadow prompt sections or tools and can install agent-only interceptors during unpublished setup, so one agent sees a different prompt and tool set than its neighbors. Model selection captures one provider/model/effort value before prompt assembly and applies it to the same step's request; a later concurrent change waits for another step.
+Registrations through `agent.ctx` can shadow prompt sections or tools and can install agent-only interceptors during unpublished setup, so one agent sees a different prompt and tool set than its neighbors. Model selection captures one provider/model/effort value before prompt assembly and applies it to the same step's request and retries; a later concurrent change waits for another step.
 
 #### Token effect
 

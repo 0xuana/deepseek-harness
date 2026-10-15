@@ -1,3 +1,4 @@
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import * as fs from 'node:fs/promises'
 import { lstat, mkdir, mkdtemp, readFile, readlink, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -302,6 +303,7 @@ it('rejects a payload whose Node.js or pnpm version is malformed', async () => {
 async function tool(config: workspaceDependencies.Config) {
   const ctx = new Context()
   try {
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)

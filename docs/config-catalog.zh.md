@@ -16,9 +16,9 @@
 
 ## `@deepseek-ai/dsh-acp`
 
-- `inject`: `agents` · `llm` · `sessionPersistence` · `sessions`
+- `inject`: `agents` · `llm` · `sessionPersistence` · `sessionProjections` · `sessions`
 - `refs`: `Stream` (`@agentclientprotocol/sdk`)
-- `source`: [`packages/acp/acp/src/index.ts:75`](../packages/acp/acp/src/index.ts)
+- `source`: [`packages/acp/acp/src/index.ts:74`](../packages/acp/acp/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: the provider/model selection used for each ACP-created agent. */
@@ -94,7 +94,7 @@ export interface Config {
 
 - `inject`: `agents` · `sessions` · `llm` · `tools` · `systemPrompt` · `sessionProjections`
 - `refs`: [`AgentOptions`](subsystems/core.zh.md) · [`SessionId`](subsystems/core.zh.md) · `Volatile` (`@deepseek-ai/cosmokit`)
-- `source`: [`packages/core/agent-loop/src/index.ts:303`](../packages/core/agent-loop/src/index.ts)
+- `source`: [`packages/core/agent-loop/src/index.ts:304`](../packages/core/agent-loop/src/index.ts)
 
 ```ts config-catalog
 /** Agent-loop plugin configuration. */
@@ -104,7 +104,7 @@ export interface Config {
    * omission defaults to {@link DEFAULT_MAX_PARALLEL_TOOL_CALLS}.
    */
   maxParallelToolCalls: Volatile<number>
-  /** Agents created or resumed at plugin startup. */
+  /** Agents created or resumed at plugin startup; a resumed agent records its configured route as the Session's model selection. */
   agents: (AgentOptions & {
     /** Stable config label used in logs and as the fresh combined-id prefix. */
     id: string
@@ -222,7 +222,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-api-session-controller`
 
 - `inject`: `agentDefaultModel` · `agents` · `attachments` · `fileUploads` · `fs` · `llm` · `remoteAccess` · `sessions` · `sessionProjections` · `sessionQuery` · `typert` · `workspaceRegistry`
-- `source`: [`packages/api/session-controller/src/index.ts:94`](../packages/api/session-controller/src/index.ts)
+- `source`: [`packages/api/session-controller/src/index.ts:93`](../packages/api/session-controller/src/index.ts)
 
 ```ts config-catalog
 /** Session Controller deployment policy. */
@@ -1436,7 +1436,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-headless`
 
-- `inject`: `agentDefaultModel` · `agents` · `sessions`
+- `inject`: `agentDefaultModel` · `agents` · `sessionProjections` · `sessions`
 - `source`: [`packages/bundle/headless/src/index.ts:43`](../packages/bundle/headless/src/index.ts)
 
 ```ts config-catalog
@@ -2746,7 +2746,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-sdk-jsonrpc-server`
 
-- `inject`: `agents` · `workingDirectory`
+- `inject`: `agents` · `sessionProjections` · `workingDirectory`
 - `refs`: `Readable` (`node:stream`) · `Writable` (`node:stream`)
 - `source`: [`packages/sdk/server/src/index.ts:24`](../packages/sdk/server/src/index.ts)
 
@@ -4564,7 +4564,7 @@ export interface Config {
 | `package` | `inject` | `source` |
 | --- | --- | --- |
 | `@deepseek-ai/dsh-acp-app` | `cmdlineArgs` | [`packages/bundle/acp-app/src/index.ts`](../packages/bundle/acp-app/src/index.ts) |
-| `@deepseek-ai/dsh-agent` | — | [`packages/core/agent/src/index.ts`](../packages/core/agent/src/index.ts) |
+| `@deepseek-ai/dsh-agent` | `sessionProjections` | [`packages/core/agent/src/index.ts`](../packages/core/agent/src/index.ts) |
 | `@deepseek-ai/dsh-api-account-controller` | `deepseekAccount` · `agents` | [`packages/api/account-controller/src/index.ts`](../packages/api/account-controller/src/index.ts) |
 | `@deepseek-ai/dsh-api-remote-access` | — | [`packages/api/remote-access/src/index.ts`](../packages/api/remote-access/src/index.ts) |
 | `@deepseek-ai/dsh-api-remotes` | `typertGateway` | [`packages/api/remotes/src/index.ts`](../packages/api/remotes/src/index.ts) |
