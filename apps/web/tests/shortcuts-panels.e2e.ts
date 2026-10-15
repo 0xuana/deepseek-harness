@@ -282,6 +282,7 @@ describe.skipIf(process.platform === 'win32')('Web sidebar shortcuts', () => {
       await panel.getByRole('button', { name: 'Fullscreen', exact: true }).click()
       await panel.locator('[data-dockkit-split-button]').click()
       await expect.poll(() => panel.locator('[data-dockkit-pane]').count()).toBe(2)
+      // Pane closure can leave the Split tooltip open beneath the stationary pointer.
       await right.locator('[data-dockkit-split-button]').locator('..').hover()
       await page.getByRole('tooltip', { name: 'Two panes is the limit', exact: true }).waitFor()
       await (closeFirst === 'left' ? left : right).getByRole('tab').focus()

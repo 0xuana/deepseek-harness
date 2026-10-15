@@ -24,7 +24,7 @@ Plugin-manager and HMR lifecycle switches wait up to `PLUGIN_TOGGLE_SETTLE_MS` (
 
 Explicit scrolling uses `scrollIntoView` from `support.ts`: it resolves the locator again when its old element detaches and checks connection in the same browser task as native scrolling. Scenarios retain their visibility and geometry assertions after scrolling.
 
-[Sidebar keyboard snapshots](shortcuts-panels.e2e.ts) move the pointer outside the controls and wait for hover tooltips to close before capture. Keyboard focus remains on the pane.
+[The snapshot after closing a sidebar pane](shortcuts-panels.e2e.ts) moves the pointer outside the controls and waits for hover tooltips to close before capture. Keyboard focus remains on the pane.
 
 ## These are Host-face tests
 
