@@ -80,11 +80,11 @@ The context this fiber's plugin runs in (extends the parent context).
 ### fiber.config
 
 ```ts cordis-catalog
-/** The validated plugin config (updated by `update()`). */
+/** The validated plugin config (updated by `update()`); read through {@link effectiveConfig}. */
 public config: any
 ```
 
-The validated plugin config (updated by `update()`).
+The validated plugin config (updated by `update()`); read through effectiveConfig.
 
 [Source](../../vendor/cordis/src/fiber.ts#L190)
 
@@ -318,7 +318,7 @@ Runs the `internal/update` waterfall first, so update hooks (and HMR) can veto o
 
 **Returns** nothing; the restart runs behind the `internal/update` waterfall.
 
-[Source](../../vendor/cordis/src/fiber.ts#L763)
+[Source](../../vendor/cordis/src/fiber.ts#L764)
 
 ## Effect
 

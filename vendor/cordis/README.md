@@ -106,6 +106,6 @@ Schemas may return `Volatile<T>` references, whose values are read through `.get
 
 ## Configuration access
 
-`fiber.rawConfig` reads or retains the raw input for a later activation. Assigning it does not validate, update the running instance or trigger a restart. `fiber.resolveConfig(candidate)` evaluates the fiber’s config hooks and schema without publishing the result; any services used by those hooks must already be available. `fiber.effectiveConfig` returns the lifecycle-published object without re-parsing, preserving the identity of volatile references. It is undefined before the first resolution and stays readable after unload, so consumers that require a running instance also check the fiber state.
+`fiber.rawConfig` reads or retains the raw input for a later activation. Assigning it does not validate, update the running instance or trigger a restart. Registry wrappers route raw writes, updates and restarts through the same canonical fiber. `fiber.resolveConfig(candidate)` evaluates the fiber's config hooks and schema without publishing the result; any services used by those hooks must already be available. `fiber.effectiveConfig` returns the lifecycle-published object without re-parsing, preserving the identity of volatile references. It is undefined before the first resolution and stays readable after unload, so consumers that require a running instance also check the fiber state.
 
 Use `fiber.update()` for an ordinary config change. Loader retains raw input separately when committing only volatile values into the running object.

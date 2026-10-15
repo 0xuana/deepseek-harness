@@ -82,11 +82,11 @@ public readonly ctx: Context
 ### fiber.config
 
 ```ts cordis-catalog
-/** The validated plugin config (updated by `update()`). */
+/** The validated plugin config (updated by `update()`); read through {@link effectiveConfig}. */
 public config: any
 ```
 
-经过校验的插件配置（由 `update()` 更新）。
+经过校验的插件配置（由 `update()` 更新）；通过 `effectiveConfig` 读取。
 
 [源码](../../vendor/cordis/src/fiber.ts#L190)
 
@@ -218,7 +218,6 @@ getEffects()
 get rawConfig(): unknown
 ```
 
-
 保留供下次激活使用的原始输入，不执行表达式求值或验证。
 
 [源码](../../vendor/cordis/src/fiber.ts#L642)
@@ -232,7 +231,6 @@ get rawConfig(): unknown
  */
 get effectiveConfig(): unknown
 ```
-
 
 既有激活／更新生命周期发布的配置对象，不克隆或重新解析。首次解析前为 undefined，卸载后仍可读取；需要运行实例的调用方应检查 `state`。
 
@@ -251,7 +249,6 @@ get effectiveConfig(): unknown
  */
 resolveConfig(config: unknown): unknown
 ```
-
 
 通过此 fiber 的 `internal/config` 钩子和运行时 schema 对候选值求值并验证。此操作不发布结果、不替换原始输入，也不提交运行中的 volatile 引用。钩子访问的注入服务必须已经可用。
 
@@ -323,7 +320,7 @@ update(config: any, noSave = false)
 
 **返回**无返回值；重启由 `internal/update` waterfall 执行。
 
-[源码](../../vendor/cordis/src/fiber.ts#L763)
+[源码](../../vendor/cordis/src/fiber.ts#L764)
 
 ## Effect
 

@@ -481,9 +481,9 @@ it('logs an invalid candidate and keeps its references while other entries commi
   await invalid.entry!.update({ config: { title: 'invalid', nested: { count: -1 } } })
   await healthy.entry!.update({ config: { title: 'healthy' } })
   expect(warning).toHaveBeenCalledTimes(2)
-  expect((invalid.config as ReturnType<typeof Config>).title.get()).toBe('hello')
+  expect((invalid.effectiveConfig as ReturnType<typeof Config>).title.get()).toBe('hello')
   expect(invalid.rawConfig).toEqual({ title: 'invalid', nested: { count: -1 } })
-  expect((healthy.config as ReturnType<typeof Config>).title.get()).toBe('healthy')
+  expect((healthy.effectiveConfig as ReturnType<typeof Config>).title.get()).toBe('healthy')
   expect(events).toHaveBeenCalledExactlyOnceWith([['title']])
 })
 
@@ -617,7 +617,7 @@ it('isolates a failing notification listener and dispatches with a Context recei
   expect(receivers).toEqual([fiber])
   expect(warning).toHaveBeenCalledWith(expect.objectContaining({ message: 'listener boom' }))
   await update(other, { title: 'unaffected' })
-  expect((other.config as ReturnType<typeof Config>).title.get()).toBe('unaffected')
+  expect((other.effectiveConfig as ReturnType<typeof Config>).title.get()).toBe('unaffected')
 })
 
 it('remounts instead of committing when an ordinary field parses into a fresh class instance', async () => {

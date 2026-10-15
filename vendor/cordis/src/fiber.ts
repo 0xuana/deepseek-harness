@@ -186,9 +186,9 @@ export class Fiber {
   public uid: number | null
   /** The context this fiber's plugin runs in (extends the parent context). */
   public readonly ctx: Context
-  /** The validated plugin config (updated by `update()`). */
+  /** The validated plugin config (updated by `update()`); read through {@link effectiveConfig}. */
   public config: any
-  /** The raw plugin config, re-resolved before each activation. */
+  /** The raw plugin config, re-resolved before activation; use {@link rawConfig} to read or retain it. */
   public _config: any
   /** Current lifecycle state; transitions emit `internal/status`. */
   public state = FiberState.PENDING
@@ -743,10 +743,11 @@ export class Fiber {
    * @throws {CordisError} `INACTIVE_EFFECT` when the fiber is already disposed.
    */
   async restart() {
-    this.assertActive()
-    this._setEpoch(INACTIVE)
-    this._refresh()
-    await this.await()
+    const fiber = this.ctx.fiber
+    fiber.assertActive()
+    fiber._setEpoch(INACTIVE)
+    fiber._refresh()
+    await fiber.await()
   }
 
   /**
@@ -761,21 +762,22 @@ export class Fiber {
    * @throws {ValidationError} when the new config fails validation.
    */
   update(config: any, noSave = false) {
-    this.assertActive()
-    this._config = config
-    if (this.state !== FiberState.ACTIVE) {
+    const fiber = this.ctx.fiber
+    fiber.assertActive()
+    fiber._config = config
+    if (fiber.state !== FiberState.ACTIVE) {
       // Config resolution may access injected services, so defer it until the
       // fiber can activate.
-      this._error = undefined
-      this._setEpoch(INACTIVE)
-      this._refresh()
+      fiber._error = undefined
+      fiber._setEpoch(INACTIVE)
+      fiber._refresh()
       return
     }
-    config = this.resolveConfig(config)
-    this.context.waterfall(this, 'internal/update', config, noSave, () => {
-      this.config = config
-      this._error = undefined
-      return this.restart()
+    config = fiber.resolveConfig(config)
+    fiber.context.waterfall(fiber, 'internal/update', config, noSave, () => {
+      fiber.config = config
+      fiber._error = undefined
+      return fiber.restart()
     })
   }
 }
