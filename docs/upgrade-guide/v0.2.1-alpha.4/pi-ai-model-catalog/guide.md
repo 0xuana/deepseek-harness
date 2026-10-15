@@ -3,7 +3,7 @@ kind: upgrade-guide
 description: "The pi-ai 1.2.0 catalog removes model IDs and lowers the default context limit for Anthropic Sonnet 4.5."
 ---
 
-# pi-ai model catalog
+# pi-ai 1.2.0 removes model IDs and lowers Sonnet 4.5 context
 
 English | [中文](guide.zh.md)
 

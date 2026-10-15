@@ -3,7 +3,7 @@ kind: upgrade-guide
 description: "pi-ai 1.2.0 目录移除了部分模型 ID，并降低了 Anthropic Sonnet 4.5 的默认上下文限制。"
 ---
 
-# pi-ai 模型目录
+# pi-ai 1.2.0 移除部分模型 ID 并降低 Sonnet 4.5 上下文限制
 
 [English](guide.md) | 中文
 

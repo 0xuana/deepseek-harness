@@ -5,12 +5,12 @@
 /:
   en: 3d2fec5fa8405395
   zh: b8617482168609b1
-/pi-ai-model-catalog:
-  en: ad7d66838bb7f924
-  zh: d4b120332acf786f
-/pi-ai-model-catalog/change:
+/pi-ai-1-2-0-removes-model-ids-and-lowers-sonnet-4-5-context:
+  en: 793381c1cb58d941
+  zh: de53660729d48116
+/pi-ai-1-2-0-removes-model-ids-and-lowers-sonnet-4-5-context/change:
   en: 0948c8c82d4f8256
   zh: 763504917909d130
-/pi-ai-model-catalog/migration:
+/pi-ai-1-2-0-removes-model-ids-and-lowers-sonnet-4-5-context/migration:
   en: 6db9f70e6db44b3c
   zh: 34156f7446a78bc1
