@@ -55,7 +55,7 @@ Surface order is authoritative; replacement nodes can have higher durable seqs t
 
 ## `ContextPressureProjection`
 
-`ctx.tokenMeter.contextPressure(session)` synchronously reads the latest recorded context pressure and capacity. These display values do not price a new request; use `measure()` for request pricing.
+`ctx.tokenMeter.contextPressure(session)` synchronously reads the latest logged `pressureTokens` and `contextWindow`; the client projection also derives `projectedTokens` from surface changes. These display values do not price a new request; use `measure()` for request pricing.
 
 Source: [`packages/llm/token-meter/src/projection.ts`](../../packages/llm/token-meter/src/projection.ts)
 
@@ -107,11 +107,11 @@ Replay owner for one service-wide estimator and isolated per-session folds.
 
 ```ts cordis-catalog
 /**
- * Read the latest logged context occupancy and its projected surface adjustment.
+ * Read the latest logged provider prompt size and route capacity.
  * @param session - Session whose committed usage and request capacity are read.
  * @returns context pressure; fields remain absent until their source events are recorded.
  */
-contextPressure(session: Session): ContextPressureProjection
+contextPressure(session: Session): Pick<ContextPressureProjection, 'pressureTokens' | 'contextWindow'>
 
 /**
  * Measure current request pressure and surface through the durable tail.

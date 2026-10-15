@@ -107,7 +107,7 @@ export class TokenMeter extends Service {
   static inject = ['sessionProjections']
 
   private readonly states = new WeakMap<Session, ReplayState>()
-  private contextPressureProjection!: ProjectionHandle<SessionProjectionStateMap['contextPressure']>
+  private contextPressureProjectionHandle!: ProjectionHandle<SessionProjectionStateMap['contextPressure']>
 
   constructor(ctx: Context, config: TokenMeterConfig = {}) {
     super(ctx, 'tokenMeter')
@@ -117,7 +117,7 @@ export class TokenMeter extends Service {
   protected async [Service.init](): Promise<void> {
     const ctx = this.ctx
     await ctx.sessionProjections.register(tokenUsageProjectionDefinition)
-    this.contextPressureProjection = await ctx.sessionProjections.register(contextPressureProjectionDefinition)
+    this.contextPressureProjectionHandle = await ctx.sessionProjections.register(contextPressureProjectionDefinition)
     await ctx.sessionProjections.register(contextBreakdownProjectionDefinition)
 
     // Readers catch up independently, while eager observation bounds ordinary
@@ -128,12 +128,16 @@ export class TokenMeter extends Service {
   }
 
   /**
-   * Read the latest logged context occupancy and its projected surface adjustment.
+   * Read the latest logged provider prompt size and route capacity.
    * @param session - Session whose committed usage and request capacity are read.
    * @returns context pressure; fields remain absent until their source events are recorded.
    */
-  contextPressure(session: Session): ContextPressureProjection {
-    return contextPressureProjectionDefinition.wire.view(this.contextPressureProjection.stateOf(session))
+  contextPressure(session: Session): Pick<ContextPressureProjection, 'pressureTokens' | 'contextWindow'> {
+    const { pressureTokens, contextWindow } = this.contextPressureProjectionHandle.stateOf(session)
+    return {
+      ...pressureTokens === undefined ? {} : { pressureTokens },
+      ...contextWindow === undefined ? {} : { contextWindow },
+    }
   }
 
   /**

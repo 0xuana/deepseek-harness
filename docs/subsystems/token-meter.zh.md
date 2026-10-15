@@ -55,7 +55,7 @@ interface TokenSurfaceNode {
 
 ## `ContextPressureProjection`
 
-`ctx.tokenMeter.contextPressure(session)` 同步读取最新记录的上下文压力与容量。这些显示值不为新请求计价；请求计价使用 `measure()`。
+`ctx.tokenMeter.contextPressure(session)` 同步读取最新记录的 `pressureTokens` 和 `contextWindow`；客户端投影还根据表层变化派生 `projectedTokens`。这些显示值不为新请求计价；请求计价使用 `measure()`。
 
 来源: [`packages/llm/token-meter/src/projection.ts`](../../packages/llm/token-meter/src/projection.ts)
 
@@ -107,11 +107,11 @@ Replay owner for one service-wide estimator and isolated per-session folds.
 
 ```ts cordis-catalog
 /**
- * Read the latest logged context occupancy and its projected surface adjustment.
+ * Read the latest logged provider prompt size and route capacity.
  * @param session - Session whose committed usage and request capacity are read.
  * @returns context pressure; fields remain absent until their source events are recorded.
  */
-contextPressure(session: Session): ContextPressureProjection
+contextPressure(session: Session): Pick<ContextPressureProjection, 'pressureTokens' | 'contextWindow'>
 
 /**
  * Measure current request pressure and surface through the durable tail.

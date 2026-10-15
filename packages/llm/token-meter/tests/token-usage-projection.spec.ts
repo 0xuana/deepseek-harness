@@ -382,7 +382,8 @@ describe('contextPressure session projection', () => {
     }, 1, 1)
     // Output is deliberately absent: occupancy describes the prompt that was
     // sent, so it holds still while the response streams.
-    expect(ctx.tokenMeter.contextPressure(session)).toEqual({ pressureTokens: 125, projectedTokens: 125 })
+    expect(ctx.tokenMeter.contextPressure(session)).toEqual({ pressureTokens: 125 })
+    expect(pressure(ctx, session)).toEqual({ pressureTokens: 125, projectedTokens: 125 })
   })
 
   it('replaces pressure with the newest request rather than accumulating', async () => {

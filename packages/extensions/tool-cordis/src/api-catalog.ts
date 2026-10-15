@@ -3373,8 +3373,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Replay owner for one service-wide estimator and isolated per-session folds.',
     methods: [
       {
-        signature: 'contextPressure(session: Session): ContextPressureProjection',
-        description: 'Read the latest logged context occupancy and its projected surface adjustment.',
+        signature: 'contextPressure(session: Session): Pick<ContextPressureProjection, \'pressureTokens\' | \'contextWindow\'>',
+        description: 'Read the latest logged provider prompt size and route capacity.',
         parameters: [{ name: 'session', description: 'Session whose committed usage and request capacity are read.' }],
         returns: 'context pressure; fields remain absent until their source events are recorded.',
       },
