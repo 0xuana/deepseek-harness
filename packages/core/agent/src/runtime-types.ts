@@ -343,21 +343,6 @@ declare module '@deepseek-ai/cordis' {
      */
     'agent/pre-step'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; signal: AbortSignal }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>
     /**
-     * A proposed step reached its boundary: the loop claimed its input and is
-     * about to choose its model. Listeners commit selections that take effect
-     * from this step, such as a pending plan-mode switch, so `agent/model`,
-     * `agent/pre-step`, tool conditions, and prompt assembly read one state.
-     * Runs once per proposed step; a throw fails the proposal, and
-     * cancellation opens no step.
-     * @param payload.agent - the agent proposing the step.
-     * @param payload.turn - the turn that will own the step.
-     * @param payload.step - the step proposed by the loop.
-     * @param payload.signal - the current turn's explicit abort signal.
-     * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
-     * @mode serial
-     */
-    'agent/step-boundary'(this: Scoped<Agent>, payload: { agent: Agent; turn: number; step: number; signal: AbortSignal }): Promise<void> | void
-    /**
      * Choose the provider, model, and reasoning effort for one proposed step.
      * `await next()` yields the selection the machine would use: agent options
      * before this loop logs a request, the logged header afterwards, with an
@@ -365,7 +350,7 @@ declare module '@deepseek-ai/cordis' {
      * replacement to switch; an effort belongs to its model, so a replacement
      * that changes the model names that model's effort or omits it for the
      * provider default. The loop runs this once per proposed step, after
-     * `agent/step-boundary` and before `agent/pre-step`, then publishes the
+     * claiming its input and before `agent/pre-step`, then publishes the
      * result as `agent.step`. Pre-step listeners, tool conditions, prompt
      * assembly, and every request attempt in the step use it, so a later
      * choice applies from the next step. Cancellation here opens no step.

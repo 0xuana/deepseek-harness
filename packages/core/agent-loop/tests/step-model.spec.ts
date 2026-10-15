@@ -1,4 +1,4 @@
-/** Each proposed step commits boundary selections, then publishes its model selection as `agent.step`. */
+/** Each proposed step publishes its `agent/model` selection as `agent.step`. */
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import LlmRuntime, { createUserMessage } from '@deepseek-ai/dsh-llm'
@@ -48,7 +48,6 @@ describe('agent.step', () => {
     const ctx = await harness(adapter)
     const agent = await ctx.agentLoop.create(SessionId('step-visibility'), { provider: 'mock', model: 'mock' })
     const seen = {
-      boundary: [] as (AgentStep | undefined)[],
       model: [] as (AgentStep | undefined)[],
       preStep: [] as (AgentStep | undefined)[],
       condition: [] as (AgentStep | undefined)[],
@@ -57,7 +56,6 @@ describe('agent.step', () => {
       execute: [] as (AgentStep | undefined)[],
       stopping: [] as (AgentStep | undefined)[],
     }
-    ctx.on('agent/step-boundary', ({ agent: subject }) => { seen.boundary.push(subject.step) })
     ctx.on('agent/model', async ({ agent: subject }, next) => {
       seen.model.push(subject.step)
       return next()
@@ -95,7 +93,6 @@ describe('agent.step', () => {
     send(agent, 'go')
     await agent.whenIdle()
 
-    expect(seen.boundary).toEqual([undefined, undefined])
     expect(seen.model).toEqual([undefined, undefined])
     const [first, second] = seen.preStep
     expect(first).toEqual({ modelSelection: { provider: 'mock', model: 'mock' } })
@@ -139,18 +136,17 @@ describe('agent.step', () => {
   })
 })
 
-describe('agent/step-boundary', () => {
-  it('runs after the claim and before agent/model once per proposed step', async () => {
+describe('agent/model', () => {
+  it('runs after the claim and before agent/pre-step once per proposed step', async () => {
     const adapter = new MockAdapter([toolCallResponse('c1', 'noop', {}), textResponse('done')])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('boundary-order'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(SessionId('model-order'), { provider: 'mock', model: 'mock' })
     ctx.tools.register(defineContentToolFixture({
       name: 'noop', description: 'Do nothing.', parameters: {},
       execute: async () => [],
     }))
     const order: string[] = []
     ctx.on('agent/inbox/claimed', () => { order.push('claimed') })
-    ctx.on('agent/step-boundary', ({ step }) => { order.push(`boundary:${String(step)}`) })
     ctx.on('agent/model', async ({ step }, next) => {
       order.push(`model:${String(step)}`)
       return next()
@@ -163,51 +159,7 @@ describe('agent/step-boundary', () => {
     send(agent, 'go')
     await agent.whenIdle()
 
-    expect(order).toEqual(['claimed', 'boundary:1', 'model:1', 'pre-step:1', 'boundary:2', 'model:2', 'pre-step:2'])
-  })
-
-  it('fails the proposal before model choice when a listener throws', async () => {
-    const adapter = new MockAdapter([])
-    const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('boundary-failure'), { provider: 'mock', model: 'mock' })
-    let modelChosen = false
-    ctx.on('agent/step-boundary', () => { throw new Error('boundary commit failed') })
-    ctx.on('agent/model', async (_payload, next) => {
-      modelChosen = true
-      return next()
-    })
-
-    send(agent, 'go')
-    await agent.whenIdle()
-
-    expect(modelChosen).toBe(false)
-    const reason = lastTurnEnd(agent)
-    expect(reason?.kind === 'error' ? reason.error.message : undefined).toContain('boundary commit failed')
-    expect(eventTypes(agent)).not.toContain('step/start')
-    expect(adapter.requests).toEqual([])
-  })
-
-  it('opens no step when the turn is cancelled during the boundary', async () => {
-    const adapter = new MockAdapter([])
-    const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('boundary-cancel'), { provider: 'mock', model: 'mock' })
-    const entered = Promise.withResolvers<undefined>()
-    const release = Promise.withResolvers<undefined>()
-    ctx.on('agent/step-boundary', async () => {
-      entered.resolve(undefined)
-      await release.promise
-    })
-
-    send(agent, 'cancelled')
-    await entered.promise
-    agent.cancel({ kind: 'user' })
-    release.resolve(undefined)
-    await agent.whenIdle()
-
-    expect(lastTurnEnd(agent)?.kind).toBe('aborted')
-    expect(eventTypes(agent)).not.toContain('step/start')
-    expect(agent.step).toBeUndefined()
-    expect(adapter.requests).toEqual([])
+    expect(order).toEqual(['claimed', 'model:1', 'pre-step:1', 'model:2', 'pre-step:2'])
   })
 })
 

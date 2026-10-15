@@ -8,15 +8,15 @@
 /plan-mode/logged-state-and-recovery:
   en: dd1e8ba31e6fd535
   zh: a22dbccc60c73bc9
-/plan-mode/pending-selections-and-the-step-boundary-append:
-  en: a62c24bf1e46c0ff
-  zh: bbe0ff492ee1be65
+/plan-mode/pending-selections-and-the-pre-step-append:
+  en: 4185f7aae9fa44aa
+  zh: 675e8318f0fbca4b
 /plan-mode/configuration:
   en: ee04468005fae8e1
   zh: 1347d554102951f2
 /plan-mode/the-exit-tool-and-the-plan-command:
-  en: 6739f69a1b71b495
-  zh: a538adbe4c85b529
+  en: d5b681e65d84d0e7
+  zh: 9c3d5499d34df3bc
 /plan-mode/the-service:
-  en: c798c709c5cb6454
-  zh: bac179e6fd51a98f
+  en: f3e6d5a7fe0b67f0
+  zh: 774cc97e493991fa

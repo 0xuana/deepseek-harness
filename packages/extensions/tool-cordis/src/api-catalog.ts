@@ -1660,15 +1660,15 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: 'get(agent: Agent): { active: boolean; pending?: boolean }',
-        description: 'Read the logged plan state and any selected state awaiting the next step boundary.',
+        description: 'Read the logged plan state and any selected state awaiting the next accepted in-turn pre-step.',
         parameters: [{ name: 'agent', description: 'The agent to read.' }],
         returns: 'Current logged state plus a pending selection, when present.',
       },
       {
         signature: 'set(agent: Agent, active: boolean): \'committed\' | \'queued\' | \'cancelled\' | \'noop\'',
-        description: 'Select whether plan mode should be active. Between turns the method appends the change immediately because no step boundary will run until another prompt starts a turn. The open-turn fold is the idle signal: agent status stays `running` through post-turn checkpointing, when no further step boundary runs. During an open turn the selection remains pending until the next step boundary. Repeated selection of the current or already-pending state is a no-op.',
+        description: 'Select whether plan mode should be active. Between turns the method appends the change immediately because no in-turn pre-step will run until another prompt starts a turn. The open-turn fold is the idle signal: agent status stays `running` through post-turn checkpointing, when no further in-turn pre-step runs. During an open turn the selection remains pending until the next accepted in-turn pre-step. Repeated selection of the current or already-pending state is a no-op.',
         parameters: [{ name: 'agent', description: 'The agent to switch.' }, { name: 'active', description: 'Whether plan mode should be active.' }],
-        returns: 'what happened: `committed` (logged now), `queued` (awaiting the next step boundary), `cancelled` (an opposite pending selection was cleared; the logged state already matches), or `noop` (already in that state).',
+        returns: 'what happened: `committed` (logged now), `queued` (awaiting the next accepted in-turn pre-step), `cancelled` (an opposite pending selection was cleared; the logged state already matches), or `noop` (already in that state).',
       },
     ],
   },
@@ -3979,7 +3979,7 @@ export const EVENT_API: readonly EventApiEntry[] = [
     mode: 'waterfall',
     signature: '\'agent/model\'(this: Scoped<Agent>, payload: { agent: Agent; turn: number; step: number; signal: AbortSignal }, next: () => Promise<ModelSelection>): Promise<ModelSelection>',
     summary: 'Choose the provider, model, and reasoning effort for one proposed step.',
-    description: 'Choose the provider, model, and reasoning effort for one proposed step. `await next()` yields the selection the machine would use: agent options before this loop logs a request, the logged header afterwards, with an effort only when one was chosen for that exact model. Return a replacement to switch; an effort belongs to its model, so a replacement that changes the model names that model\'s effort or omits it for the provider default. The loop runs this once per proposed step, after `agent/step-boundary` and before `agent/pre-step`, then publishes the result as `agent.step`. Pre-step listeners, tool conditions, prompt assembly, and every request attempt in the step use it, so a later choice applies from the next step. Cancellation here opens no step.',
+    description: 'Choose the provider, model, and reasoning effort for one proposed step. `await next()` yields the selection the machine would use: agent options before this loop logs a request, the logged header afterwards, with an effort only when one was chosen for that exact model. Return a replacement to switch; an effort belongs to its model, so a replacement that changes the model names that model\'s effort or omits it for the provider default. The loop runs this once per proposed step, after claiming its input and before `agent/pre-step`, then publishes the result as `agent.step`. Pre-step listeners, tool conditions, prompt assembly, and every request attempt in the step use it, so a later choice applies from the next step. Cancellation here opens no step.',
     parameters: [{ name: 'payload', description: '.signal - the current turn\'s explicit abort signal. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.' }],
   },
   {
@@ -4013,14 +4013,6 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'Agent status changed (`idle` ⇄ `running`).',
     description: 'Agent status changed (`idle` ⇄ `running`). A waking delivery enters `running` synchronously after reserving cancellation; `idle` means no driver remains scheduled or active.',
     parameters: [{ name: 'payload', description: '.status - the status just entered (the transition\'s destination). Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.' }],
-  },
-  {
-    name: 'agent/step-boundary',
-    mode: 'serial',
-    signature: '\'agent/step-boundary\'(this: Scoped<Agent>, payload: { agent: Agent; turn: number; step: number; signal: AbortSignal }): Promise<void> | void',
-    summary: 'A proposed step reached its boundary: the loop claimed its input and is about to choose its model.',
-    description: 'A proposed step reached its boundary: the loop claimed its input and is about to choose its model. Listeners commit selections that take effect from this step, such as a pending plan-mode switch, so `agent/model`, `agent/pre-step`, tool conditions, and prompt assembly read one state. Runs once per proposed step; a throw fails the proposal, and cancellation opens no step.',
-    parameters: [{ name: 'payload', description: '.signal - the current turn\'s explicit abort signal. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.' }],
   },
   {
     name: 'agent/turn-stopping',

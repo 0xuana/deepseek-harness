@@ -35,8 +35,8 @@ function registerQuestionAnswerer(ctx: Context, answerer: QuestionAnswerer): () 
  * Drives the REAL plugin: mounts `dsh-plan-mode` beside real `SystemPrompt` and
  * `ToolRuntime` services, with fake Agents carrying real `Session`s and a
  * real scoped `agent.ctx` minted through `createScope`.
- * Request boundaries are simulated by dispatching the real step-boundary and
- * pre-step events and the following `step/start` session event used by the loop.
+ * Request boundaries are simulated by dispatching the real pre-step waterfall
+ * and the following `step/start` session event used by the loop.
  */
 
 async function agentWithSession(
@@ -105,7 +105,7 @@ async function setup(config: PlanModeConfig = PLAN_CONFIG): Promise<Context> {
 }
 
 /**
- * Dispatch a step boundary, its pre-step processing, and optionally the following step-start commit.
+ * Dispatch pre-step processing and optionally its following step-start commit.
  */
 async function boundary(
   ctx: Context,
@@ -119,7 +119,6 @@ async function boundary(
     source: { kind: 'user' },
   })
   const signal = new AbortController().signal
-  await events.serial('agent/step-boundary', { turn: 1, step: 1, signal })
   const decision = await events.waterfall(
     'agent/pre-step',
     { messages: [message], turn: 1, step: 1, signal },
@@ -332,7 +331,7 @@ describe('the boundary flush', () => {
     expect(agent.session.snapshotEvents().some(event => event.type === 'plan/mode')).toBe(false)
   })
 
-  it('flushes at the step boundary before the following step/start', async () => {
+  it('flushes from pre-step before the following step/start', async () => {
     const ctx = await setup()
     const agent = await agentWithSession(ctx)
     openTurn(agent.session)
@@ -342,7 +341,7 @@ describe('the boundary flush', () => {
     expect(ctx.planMode.get(agent)).toEqual({ active: true })
   })
 
-  it('removes the boundary flush when the plugin fiber is disposed', async () => {
+  it('removes the pre-step flush when the plugin fiber is disposed', async () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
@@ -405,16 +404,17 @@ describe('the boundary flush', () => {
     expect(noticeTexts(agent.session)).toEqual(['The user switched this session back to the default mode.'])
   })
 
-  it('commits at a rejected proposal and owes the notice to the next admitted step', async () => {
+  it('keeps the selection pending through a rejected proposal and commits it at the next accepted step', async () => {
     const ctx = await setup()
     const agent = await agentWithSession(ctx)
     header(agent.session)
     openTurn(agent.session)
     ctx.planMode.set(agent, true)
     await boundary(ctx, agent, 'pre-step', 'reject')
-    expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
+    expect(ctx.planMode.get(agent)).toEqual({ active: false, pending: true })
     expect(noticeTexts(agent.session)).toEqual([])
     await boundary(ctx, agent, 'pre-step')
+    expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
     expect(noticeTexts(agent.session)).toEqual(['The user switched this session to plan mode.'])
   })
 
@@ -457,7 +457,7 @@ describe('the boundary flush', () => {
     expect(ctx.planMode.get(agent).pending).toBeUndefined()
   })
 
-  it('rejects a boundary append failure and keeps the intent pending', async () => {
+  it('rejects a pre-step append failure and keeps the intent pending', async () => {
     const ctx = await setup()
     const warn = vi.fn()
     ctx.logger.warn = warn as never

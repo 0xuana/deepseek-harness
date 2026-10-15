@@ -7,11 +7,10 @@
  * state.
  *
  * The `plan` projection folds the session log, so resume and fork restore the
- * state. User selections made during a turn remain pending until the next
- * step boundary. The service appends `plan/mode` from `agent/step-boundary`,
- * before the step chooses its model, so `agent/model`, `agent/pre-step`, tool
- * conditions, and plan guidance read the committed state. Same-step retries
- * do not commit pending selections.
+ * state. User selections remain pending until the next accepted in-turn
+ * pre-step. The service appends `plan/mode` from `agent/pre-step` before
+ * step-time tool conditions and plan guidance read that committed state.
+ * Same-step retries do not commit pending selections.
  *
  * The exit tool is admitted only for requests whose committed plan state is
  * active. Native declarations, PTC bindings, and execution share that selection.
@@ -178,40 +177,32 @@ export class PlanModeController extends Service {
   private readonly section: string
 
   /**
-   * Latest selection per session awaiting the next step boundary.
+   * Latest selection per session awaiting the next accepted in-turn pre-step.
    * `narrate` is true for user selections and false for the exit tool, whose
    * result already narrates the transition.
    */
   private readonly pendingIntents = new WeakMap<Session, { active: boolean; narrate: boolean }>()
-  /** Sessions whose boundary-committed user switch still owes a notice in an admitted step. */
-  private readonly unannounced = new WeakSet<Session>()
 
   constructor(ctx: Context, config: PlanModeConfig = { section: '' }) {
     super(ctx, 'planMode')
     this.section = resolveConfig(config).section
     let disposed = false
-    // The step boundary is outside Session.append publication, so it can append
-    // the log-only mode event inside an open turn without re-entering the
-    // session. A failed append remains pending and fails the proposal before
-    // model choice, guidance, or tool availability could read an uncommitted state.
-    ctx.on('agent/step-boundary', ({ agent }) => {
-      const pending = this.pendingIntents.get(agent.session)
-      if (pending === undefined) return
-      this.onBoundary(agent.session)
-      if (pending.narrate) this.unannounced.add(agent.session)
-      else this.unannounced.delete(agent.session)
-    })
-    // The notice joins the first admitted step after the commit; a rejected
-    // proposal leaves it owed to the next one.
+    // Pre-step is outside Session.append publication, so it can append the
+    // log-only mode event inside an open turn without re-entering the session.
+    // A failed append remains pending and stops admission before guidance or
+    // tool availability could describe an uncommitted state.
     ctx.on('agent/pre-step', async (
       { agent, signal },
       next,
     ): Promise<PreStepDecision> => {
       const decision = await next()
-      if (decision.kind === 'reject' || signal.aborted || !this.unannounced.has(agent.session)) return decision
-      this.unannounced.delete(agent.session)
-      const narration = this.narration(agent.session, this.loggedActive(agent.session))
-      return narration === undefined ? decision : { ...decision, messages: [...decision.messages, narration] }
+      const pending = this.pendingIntents.get(agent.session)
+      if (decision.kind === 'reject' || signal.aborted || pending === undefined) return decision
+      const narration = this.narration(agent.session, pending.active)
+      this.onBoundary(agent.session)
+      return !pending.narrate || narration === undefined
+        ? decision
+        : { ...decision, messages: [...decision.messages, narration] }
     })
     ctx.effect(() => () => { disposed = true }, 'dsh-plan-mode: close service lifetime')
 
@@ -248,7 +239,7 @@ export class PlanModeController extends Service {
                 return { kind: 'success', text: 'Plan mode entry cancelled.' }
               case 'noop':
                 // Repeat the queued wording while an exit still awaits the
-                // next step boundary; only a truly inactive session reads
+                // next accepted pre-step; only a truly inactive session reads
                 // idempotent.
                 return this.loggedActive(agent.session)
                   ? { kind: 'success', text: 'Leaving plan mode (applies from the next step).' }
@@ -337,8 +328,8 @@ export class PlanModeController extends Service {
           }
           throw cause
         }
-        // A review may outlive this plugin fiber. Without its step-boundary
-        // listener, an approved selection could never be appended, so fail and keep planning.
+        // A review may outlive this plugin fiber. Without its pre-step listener,
+        // an approved selection could never be appended, so fail and keep planning.
         if (disposed) {
           throw new Error('the plan-mode service was reloaded while the plan was under review; present the plan again')
         }
@@ -351,8 +342,8 @@ export class PlanModeController extends Service {
             : `The user chose to keep planning; their feedback: ${feedback}`)
         }
         // Keep plan guidance for the rest of this assistant tool batch. The
-        // silent selection is appended at the next step boundary, before that
-        // step chooses its model, tools, and prompt.
+        // silent selection is appended at the next accepted in-turn pre-step,
+        // before its tool and prompt assembly.
         this.pendingIntents.set(agent.session, { active: false, narrate: false })
         return { approved: true }
       },
@@ -393,7 +384,7 @@ export class PlanModeController extends Service {
 
   /**
    * Read the logged plan state and any selected state awaiting the next
-   * step boundary.
+   * accepted in-turn pre-step.
    *
    * @param agent The agent to read.
    * @returns Current logged state plus a pending selection, when present.
@@ -406,17 +397,17 @@ export class PlanModeController extends Service {
 
   /**
    * Select whether plan mode should be active. Between turns the method
-   * appends the change immediately because no step boundary will run until
+   * appends the change immediately because no in-turn pre-step will run until
    * another prompt starts a turn. The open-turn fold is the idle signal:
    * agent status stays `running` through post-turn checkpointing, when no
-   * further step boundary runs. During an open turn the selection remains
-   * pending until the next step boundary. Repeated selection of the current
-   * or already-pending state is a no-op.
+   * further in-turn pre-step runs. During an open turn the selection remains
+   * pending until the next accepted in-turn pre-step. Repeated selection of
+   * the current or already-pending state is a no-op.
    *
    * @param agent The agent to switch.
    * @param active Whether plan mode should be active.
    * @returns what happened: `committed` (logged now), `queued` (awaiting the
-   * next step boundary), `cancelled` (an opposite pending selection
+   * next accepted in-turn pre-step), `cancelled` (an opposite pending selection
    * was cleared; the logged state already matches), or `noop` (already in that
    * state).
    */
@@ -442,7 +433,7 @@ export class PlanModeController extends Service {
     return 'committed'
   }
 
-  /** Append one pending selection at a step boundary. */
+  /** Append one pending selection before the next request assembly. */
   private onBoundary(session: Session): void {
     const pending = this.pendingIntents.get(session)
     if (pending === undefined) return
@@ -452,8 +443,8 @@ export class PlanModeController extends Service {
       return
     }
     session.append('plan/mode', { active: target })
-    // Delete only after append succeeds so a later step boundary can retry a
-    // failed durable write.
+    // Delete only after append succeeds so a later accepted in-turn pre-step
+    // can retry a failed durable write.
     this.pendingIntents.delete(session)
   }
 

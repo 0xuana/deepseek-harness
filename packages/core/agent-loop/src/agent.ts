@@ -288,8 +288,6 @@ export class ReactLoopAgent implements Agent {
     if (this.phase.kind !== 'running') throw new Error(`agent "${this.id}": pre-step outside running phase`)
     const signal = this.phase.abort.signal
     const claimed = this.inbox.claim(target, position.turn)
-    await this.dispatch.serial('agent/step-boundary', { ...position, signal })
-    signal.throwIfAborted()
     const modelSelection = await this.chooseModel(position.turn, position.step, signal)
     this.currentStep = Object.freeze({ modelSelection })
     const decision = await this.dispatch.waterfall(

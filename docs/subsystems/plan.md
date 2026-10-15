@@ -10,11 +10,11 @@ Source: [`packages/plan/plan-mode/src/index.ts`](../../packages/plan/plan-mode/s
 
 `plan/mode` (`{ active: boolean }`) is a log-only, whole-value-replace [session event](session.md): durable and replayable, never in the model transcript. The optionally registered `plan` unit folds committed mode, command settlement, and the mode recorded at the latest request header. `ctx.planMode` reads that state through `stateOf()`; the first dependent access fails if the registry, `plan` key, or `turnBoundary` key is absent. Clients receive only `{ active, pending }`; resume, fork, and compaction recover both from the log. The complete event declaration is in the [persistence log event catalog](../persistence-catalog.md).
 
-## Pending selections and the step-boundary append
+## Pending selections and the pre-step append
 
-Because every session event is turn-enclosed, `set(agent, active)` appends a selection immediately only between turns. During an open turn the selection remains pending until the next step boundary appends it, in whichever turn that occurs. A selection never forces continuation, so one made after a turn's final step boundary is appended in a later turn. `set` is a no-op when the target equals the logged-or-already-pending state, and `get(agent)` returns `{ active: boolean; pending?: boolean }`: the logged state used by the current step plus the selected state waiting to be appended.
+Because every session event is turn-enclosed, `set(agent, active)` appends a selection immediately only between turns. During an open turn the selection remains pending until the next accepted in-turn pre-step appends it, in whichever turn that occurs. A selection never forces continuation, so one made after a turn's final accepted pre-step is appended in a later turn. `set` is a no-op when the target equals the logged-or-already-pending state, and `get(agent)` returns `{ active: boolean; pending?: boolean }`: the logged state used by the current step plus the selected state waiting to be appended.
 
-The only append point while an agent is running is an `agent/step-boundary` listener. It runs once for every proposed step, including turn 1 step 1, after the step claims its input and before `agent/model`, so model choice, `agent/pre-step`, tool conditions, and plan guidance read the committed state; same-step request-recovery retries do not run it. An append failure fails the proposal and keeps the selection pending for a later boundary. An appended user selection also records one plugin-sourced `user/message` notice in the first admitted step, but only when the last logged request header described the other state, so the model is told exactly when its context changed and never redundantly. A selection made after a turn's final step boundary remains process-local and is lost if the process exits before another boundary ([README limitation](../../packages/plan/plan-mode/README.md#known-limitations-and-deferred-work)).
+The only append point while an agent is running is an `agent/pre-step` listener. It observes every proposed step, including turn 1 step 1, calls downstream listeners first, and appends only after they accept the step; a rejected proposal keeps the selection pending, and same-step request-recovery retries do not run it. Tool conditions and plan guidance are resolved after `step/start`, so they read the committed state; `agent/model` runs before `agent/pre-step` and sees a new selection from the following step. An append failure fails the proposal and keeps the selection pending for a later accepted in-turn pre-step. An appended user selection also records one plugin-sourced `user/message` notice, but only when the last logged request header described the other state, so the model is told exactly when its context changed and never redundantly. A selection made after a turn's final accepted pre-step remains process-local and is lost if the process exits before another accepted in-turn pre-step ([README limitation](../../packages/plan/plan-mode/README.md#known-limitations-and-deferred-work)).
 
 ## Configuration
 
@@ -30,13 +30,13 @@ A missing, blank, or non-string `section` and any unknown key fail at plugin loa
 
 ## The exit tool and the `/plan` command
 
-[`exit_plan_mode`](../tool-catalog.md#deepseek-aidsh-plan-mode) is admitted only while the committed plan state is active, so entering or leaving plan mode changes the request tool declarations and the plan guidance together; Native and PTC execution use the same admitted set, and a call outside plan mode returns `UNKNOWN_TOOL`. In plan mode it requires a complete markdown plan starting with a `#` heading and presents it for review through the [user-questions seam](user-questions.md). Approval returns `{ approved: true }` and records a silent (non-narrated) pending exit that is appended at the next step boundary. Plan guidance therefore remains active for the rest of the assistant's current tool batch, and the tool result itself reports the transition. Keep-planning is a failed call carrying the user's feedback, so the model revises and presents again. A dismissed review returns `{ approved: false }` and concludes the turn, so plan mode stays active until the user's next message. A missing interaction channel and a service reload during review also fail the call rather than silently leaving plan mode.
+[`exit_plan_mode`](../tool-catalog.md#deepseek-aidsh-plan-mode) is admitted only while the committed plan state is active, so entering or leaving plan mode changes the request tool declarations and the plan guidance together; Native and PTC execution use the same admitted set, and a call outside plan mode returns `UNKNOWN_TOOL`. In plan mode it requires a complete markdown plan starting with a `#` heading and presents it for review through the [user-questions seam](user-questions.md). Approval returns `{ approved: true }` and records a silent (non-narrated) pending exit that is appended at the next accepted in-turn pre-step. Plan guidance therefore remains active for the rest of the assistant's current tool batch, and the tool result itself reports the transition. Keep-planning is a failed call carrying the user's feedback, so the model revises and presents again. A dismissed review returns `{ approved: false }` and concludes the turn, so plan mode stays active until the user's next message. A missing interaction channel and a service reload during review also fail the call rather than silently leaving plan mode.
 
 When [`ctx.commands`](commands.md) is composed, the plugin registers `/plan [off|message]`: bare `/plan` selects plan mode, any other non-empty message selects it and then submits the text through `agent.steer()` so it becomes the next step's ordinary logged user message under plan guidance, and the exact argument `off` selects inactive, which also cancels a pending entry before it is appended and becomes visible to a request.
 
 ## The service
 
-`ctx.planMode` owns the logged plan state, applies selected state at the step boundary and narrates it in the admitted step, and owns the `plan:policy` section, the `/plan` command, and the conditional exit tool; `get`/`set` signatures are in the generated [service catalog](#ctxplanmode--planmodecontroller).
+`ctx.planMode` owns the logged plan state, applies and narrates selected state at step start, and owns the `plan:policy` section, the `/plan` command, and the conditional exit tool; `get`/`set` signatures are in the generated [service catalog](#ctxplanmode--planmodecontroller).
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -55,7 +55,7 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 ```ts cordis-catalog
 /**
  * Read the logged plan state and any selected state awaiting the next
- * step boundary.
+ * accepted in-turn pre-step.
  *
  * @param agent The agent to read.
  * @returns Current logged state plus a pending selection, when present.
@@ -64,17 +64,17 @@ get(agent: Agent): { active: boolean; pending?: boolean }
 
 /**
  * Select whether plan mode should be active. Between turns the method
- * appends the change immediately because no step boundary will run until
+ * appends the change immediately because no in-turn pre-step will run until
  * another prompt starts a turn. The open-turn fold is the idle signal:
  * agent status stays `running` through post-turn checkpointing, when no
- * further step boundary runs. During an open turn the selection remains
- * pending until the next step boundary. Repeated selection of the current
- * or already-pending state is a no-op.
+ * further in-turn pre-step runs. During an open turn the selection remains
+ * pending until the next accepted in-turn pre-step. Repeated selection of
+ * the current or already-pending state is a no-op.
  *
  * @param agent The agent to switch.
  * @param active Whether plan mode should be active.
  * @returns what happened: `committed` (logged now), `queued` (awaiting the
- * next step boundary), `cancelled` (an opposite pending selection
+ * next accepted in-turn pre-step), `cancelled` (an opposite pending selection
  * was cleared; the logged state already matches), or `noop` (already in that
  * state).
  */
