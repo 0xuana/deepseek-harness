@@ -20,6 +20,7 @@ function samePresentation(
     && left.turnStarted === right.turnStarted
     && left.turnClosed === right.turnClosed
     && left.hasExternalProcess === right.hasExternalProcess
+    && left.hasNonReplyProcess === right.hasNonReplyProcess
     && left.hasInterleavedInput === right.hasInterleavedInput
     && left.compactAnswer === right.compactAnswer)
 }
@@ -48,6 +49,7 @@ function derivePresentation(
   }
 
   let hasExternalProcess = false
+  let hasNonReplyProcess = false
   let hasInterleavedInput = false
   let compactAnswer = true
   for (const key of keys) {
@@ -63,6 +65,11 @@ function derivePresentation(
       || (spec.answerAnchorSeq !== null && node.anchorSeq >= spec.answerAnchorSeq)) continue
     if (node.kind !== 'assistant-step' || spec.answerStep === null || node.data.step !== spec.answerStep) {
       hasExternalProcess = true
+      // When every reply stays visible, another Step's reply folds only its reasoning.
+      if (node.kind !== 'assistant-step'
+        || node.data.blocks.some(block => block.kind === 'reasoning' && block.text.trim() !== '')) {
+        hasNonReplyProcess = true
+      }
     }
   }
   return {
@@ -71,6 +78,7 @@ function derivePresentation(
     turnStarted: location.turn.start !== undefined,
     turnClosed: location.turn.status === 'closed',
     hasExternalProcess,
+    hasNonReplyProcess,
     hasInterleavedInput,
     compactAnswer,
   }
