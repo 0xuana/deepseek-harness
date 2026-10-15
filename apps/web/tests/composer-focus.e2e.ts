@@ -40,6 +40,51 @@ function describeSelection(state: Awaited<ReturnType<typeof selectionState>>): s
 }
 
 /**
+ * Keep the visible composer still when keyboard panning changes viewport coordinates.
+ * @param page - Page with the focused composer.
+ * @returns The observed page and composer scroll behavior.
+ */
+async function exerciseKeyboardViewport(page: Page): Promise<string> {
+  const input = page.locator('[data-composer-input][contenteditable="true"]')
+  const restore = await page.evaluateHandle(() => {
+    const viewport = window.visualViewport
+    if (viewport === null) throw new Error('Expected a visual viewport')
+    const style = document.documentElement.style
+    const height = style.getPropertyValue('height')
+    const priority = style.getPropertyPriority('height')
+    const scroll = window.scrollY
+    const offset = Object.getOwnPropertyDescriptor(viewport, 'offsetTop')
+    style.setProperty('height', `${window.innerHeight * 2}px`)
+    window.scrollTo(0, window.innerHeight)
+    // Safari can report the keyboard's page displacement as offsetTop even
+    // though DOM rectangles already account for that page scroll.
+    Object.defineProperty(viewport, 'offsetTop', { configurable: true, get: () => window.scrollY })
+    return () => {
+      if (offset === undefined) Reflect.deleteProperty(viewport, 'offsetTop')
+      else Object.defineProperty(viewport, 'offsetTop', offset)
+      if (height === '') style.removeProperty('height')
+      else style.setProperty('height', height, priority)
+      window.scrollTo(0, scroll)
+    }
+  })
+  try {
+    const before = await input.evaluate(el => ({ top: el.getBoundingClientRect().top, scroll: window.scrollY }))
+    expect(before.scroll).toBeGreaterThan(0)
+    await page.keyboard.insertText('z')
+    const after = await input.evaluate(el => new Promise<{ top: number; scroll: number }>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        resolve({ top: el.getBoundingClientRect().top, scroll: window.scrollY })
+      }))
+    }))
+    expect(after).toEqual(before)
+    return '- typing with a keyboard-panned viewport preserves page scroll and composer position'
+  } finally {
+    await restore.evaluate((dispose) => { dispose() })
+    await restore.dispose()
+  }
+}
+
+/**
  * Exercise the card's top, inter-row gap, toolbar gap and bottom padding.
  * @param page - Page containing an editable composer.
  * @returns Stable behavior observations for the expected-output file.
@@ -113,6 +158,15 @@ async function exerciseComposer(page: Page): Promise<string[]> {
   await page.keyboard.insertText('!')
   await expect.poll(() => input.textContent()).toBe('alpha BET!A gamma')
   observations.push(`- typing replaces the restored selection and resumes at the restored caret: ${await input.textContent()}`)
+  const retained = await input.elementHandle()
+  const beforeResize = await selectionState(page)
+  for (const width of [390, 768, 1680]) {
+    await page.setViewportSize({ width, height: 1000 })
+    expect(await retained!.evaluate(element => element.isConnected)).toBe(true)
+    expect(await selectionState(page)).toEqual(beforeResize)
+  }
+  observations.push('- resizing through 390px, 768px and 1680px preserves the editor, focus, draft and caret')
+  observations.push(await exerciseKeyboardViewport(page))
   return observations
 }
 
