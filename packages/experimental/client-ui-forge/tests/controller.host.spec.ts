@@ -56,6 +56,8 @@ const UNAVAILABLE = { editable: false, blocker: null, request: null, created: nu
 
 /** Matches a generated branch name with the default prefix. */
 const GENERATED_BRANCH: unknown = expect.stringMatching(/^dsh-[0-9a-f]{8}$/)
+/** Abbreviated commit object name Git prints for HEAD. */
+const COMMIT: unknown = expect.stringMatching(/^[0-9a-f]{7,}$/)
 
 /** Matches the failure of an attempt whose base branch does not exist. */
 const MISSING_BASE: unknown = expect.stringMatching(/^worktree command failed \(128\): fatal: /)
@@ -137,7 +139,7 @@ describe('forgePanel.follow', () => {
     })
     expect(settled).toEqual({
       directory: repo,
-      checkout: { state: 'ready', checkout: { root: repo, branch: 'main' } },
+      checkout: { state: 'ready', checkout: { root: repo, branch: 'main', linked: false, commit: COMMIT } },
       repository: demo,
       readiness: { state: 'ready', message: null },
       changeRequests: [],
@@ -291,7 +293,7 @@ describe('forgePanel.follow', () => {
     const moved = await follower.until(state => state.checkout.state === 'ready')
 
     expect(moved.directory).toBe(linked)
-    expect(moved.checkout).toEqual({ state: 'ready', checkout: { root: linked, branch: 'feat' } })
+    expect(moved.checkout).toEqual({ state: 'ready', checkout: { root: linked, branch: 'feat', linked: true, commit: COMMIT } })
     expect(follower.states.every(state => state.checkout.state !== 'ready' || state.directory === linked)).toBe(true)
   })
 
@@ -405,7 +407,7 @@ describe('forgePanel worktree blockers', () => {
     const writable = await follower.next(state => state.worktree.blocker !== 'read-only')
 
     expect(readOnly.worktree).toEqual({ ...UNAVAILABLE, blocker: 'read-only' })
-    expect(readOnly.checkout).toEqual({ state: 'ready', checkout: { root: repo, branch: 'main' } })
+    expect(readOnly.checkout).toEqual({ state: 'ready', checkout: { root: repo, branch: 'main', linked: false, commit: COMMIT } })
     expect(writable.worktree).toEqual(UNAVAILABLE)
   })
 
@@ -550,7 +552,7 @@ describe('forgePanel worktree requests', () => {
     const moved = await follower.until(state => state.directory === created?.path && state.checkout.state === 'ready' && state.worktree.created !== null)
     expect(moved).toEqual({
       directory: created?.path,
-      checkout: { state: 'ready', checkout: { root: created?.path, branch: created?.branch } },
+      checkout: { state: 'ready', checkout: { root: created?.path, branch: created?.branch, linked: true, commit: COMMIT } },
       repository: demo,
       readiness: { state: 'ready', message: null },
       changeRequests: [],
@@ -616,7 +618,7 @@ describe('forgePanel worktree creation at admission', () => {
     expect(prepare.worktree).toEqual({ ...UNAVAILABLE, editable: true, request: { from: null }, creation: { ...running, phase: 'prepare' } })
     expect(checkout.worktree).toEqual({ ...UNAVAILABLE, editable: true, request: { from: null }, creation: { ...running, phase: 'checkout' } })
     expect(moved.worktree).toEqual({ ...UNAVAILABLE, request: { from: null }, created })
-    expect(moved.checkout).toEqual({ state: 'ready', checkout: { root: created?.path, branch } })
+    expect(moved.checkout).toEqual({ state: 'ready', checkout: { root: created?.path, branch, linked: true, commit: COMMIT } })
     expect(created).toEqual({
       path: join(repo, '.agents', 'worktrees', ...branch.split('/')),
       branch: GENERATED_BRANCH,
@@ -866,7 +868,7 @@ describe('forgePanel removed worktrees', () => {
 
     expect(gone.worktree).toEqual({ ...UNAVAILABLE, request: { from: null }, created, missing: { branchExists: false } })
     expect(await git(repo, 'rev-parse', created.branch)).toBe(created.baseCommit)
-    expect(restored.checkout).toEqual({ state: 'ready', checkout: { root: created.path, branch: created.branch } })
+    expect(restored.checkout).toEqual({ state: 'ready', checkout: { root: created.path, branch: created.branch, linked: true, commit: COMMIT } })
     await expect(access(join(created.path, 'later.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
@@ -1032,7 +1034,7 @@ describe('forgePanel leaving a worktree', () => {
     expect(maintenance).toHaveBeenCalledOnce()
     expect(opened.ctx.workingDirectory.get(opened.session)).toBe(repo)
     expect(opened.agent.inbox.nextStep).toEqual([notice(repo)])
-    expect(moved.checkout).toEqual({ state: 'ready', checkout: { root: repo, branch: 'main' } })
+    expect(moved.checkout).toEqual({ state: 'ready', checkout: { root: repo, branch: 'main', linked: false, commit: COMMIT } })
     expect(moved.worktree).toEqual({ ...UNAVAILABLE, request: { from: null }, created })
     expect(await branches(repo)).toEqual([created.branch, 'main'])
   })

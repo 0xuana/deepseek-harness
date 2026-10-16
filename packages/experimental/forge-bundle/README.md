@@ -1,5 +1,5 @@
 ---
-description: "Enable the pull request panel and worktree Sessions from the Plugins page."
+description: "Enable the change request panel and worktree Sessions from the Plugins page."
 kind: "package-bundle"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Show the pull requests each Session creates with their checks and reviews, and let a new Session start in its own Git worktree. Enable Pull requests & worktrees on the Web or Desktop Plugins page; shipped profiles leave it disabled. GitHub status comes from the `gh` CLI signed in on the Host; without it, the panel still shows the branch and the worktree option still works.
+Show the change requests of each Session with their checks and reviews, and let a new Session start in its own Git worktree. Enable Change requests & worktrees on the Web or Desktop Plugins page; shipped profiles leave it disabled. GitHub status comes from the `gh` CLI signed in on the Host; without it, the panel still shows the branch and the worktree option still works.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ Show the pull requests each Session creates with their checks and reviews, and l
 <a id="use-this-package"></a>
 ## Use this package
 
-Open Plugins and enable Pull requests & worktrees in the Official group. In a Git workspace, check Worktree in the composer before the first message to start the Session in a new worktree. In a Session whose directory is inside a Git checkout, the header button opens the panel. Pull requests that the Session creates with `gh pr create`, or that a later `git push` updates, appear without further steps. Run `gh auth login --hostname <host>` in a terminal to sign in; the panel shows the command when sign-in is missing. The [panel package](../client-ui-forge/README.md#use-this-package) describes each control.
+Open Plugins and enable Change requests & worktrees in the Official group. In a Git workspace, check Worktree in the composer before the first message to start the Session in a new worktree. In a Session whose directory is inside a Git checkout, the header button opens the panel. GitHub pull requests that the Session creates with `gh pr create`, or that a later `git push` updates, appear as change requests without further steps. Run `gh auth login --hostname <host>` in a terminal to sign in; the panel shows the command when sign-in is missing. The [panel package](../client-ui-forge/README.md#use-this-package) describes each control.
 
 -----
 
@@ -62,7 +62,7 @@ None from the bundle; see the [panel](../client-ui-forge/README.md#model-experie
 <a id="known-limitations-and-deferred-work"></a>
 
 - GitHub is the only code host provider, and the bundle serves github.com only; a GitHub Enterprise host needs a profile patch that lists it in the `forge-github` row's [`hosts`](../forge-github/README.md#use-this-package). No provider recognizes GitLab or other hosts.
-- The model has no tool for bound pull requests yet.
+- The model has no tool for bound change requests yet.
 
 -----
 

@@ -81,7 +81,7 @@ export function unserved(url: string): ForgePanelChangeRequest {
 
 /** Checkout of `/work/repo` on `main`. */
 export function checkout(overrides: Partial<ForgeCheckout> = {}): ForgeCheckout {
-  return { root: '/work/repo', branch: 'main', ...overrides }
+  return { root: '/work/repo', branch: 'main', linked: false, commit: '0a1b2c3', ...overrides }
 }
 
 /** Worktree the panel created at `/work/repo-dsh` from the checkout `/work/repo`, on a new branch started from `main`. */

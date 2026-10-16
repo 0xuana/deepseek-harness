@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-/** One change request card: the collapsed status summary, the read failure notices, and the expanded details and actions. */
-import { cleanup, fireEvent, render, within } from '@testing-library/react'
+/** One change request card: state glyph, title link, collapsed summary, read notices, and expanded details and actions. */
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ForgeFailure } from '@deepseek-ai/dsh-experimental-forge/types'
@@ -15,17 +15,16 @@ afterEach(cleanup)
 const t = makeTranslate(en)
 const NOW = Date.parse('2026-10-09T12:00:00Z')
 /** Minus sign (U+2212) the diff size puts before the deleted line count. */
-const MINUS = '\u2212'
+const MINUS = '−'
 
 /** Render one card inside its list, with every action recorded unless `actions` replaces it. */
 function card(value: ForgePanelChangeRequest, options: { expanded?: boolean; actions?: Partial<ChangeRequestActions> } = {}) {
   const openLink = vi.fn<(url: string) => void>()
   const copyLink = vi.fn<(url: string) => void>()
   const retry = vi.fn<() => void>()
-  const addToChat = vi.fn<(url: string) => void>()
   const remove = vi.fn<(entry: ForgePanelChangeRequest) => void>()
   const onToggle = vi.fn<() => void>()
-  const actions: ChangeRequestActions = { openLink, copyLink, retry, addToChat, remove, ...options.actions }
+  const actions: ChangeRequestActions = { openLink, copyLink, retry, remove, ...options.actions }
   const view = render(
     <ul>
       <ChangeRequestCard entry={value} expanded={options.expanded ?? false} onToggle={onToggle} now={NOW} actions={actions} t={t} />
@@ -34,7 +33,16 @@ function card(value: ForgePanelChangeRequest, options: { expanded?: boolean; act
   const item = view.container.querySelector('[data-forge-change]')
   const head = item?.querySelector(`.${css.changeHead}`)
   if (!(item instanceof HTMLElement) || !(head instanceof HTMLElement)) throw new Error('no change request card')
-  return { view, item, head, openLink, copyLink, retry, addToChat, remove, onToggle }
+  /** The number and status line below the title, or null when it names neither. */
+  const meta = (): HTMLElement | null => head.querySelector(`.${css.meta}`)
+  return { view, item, head, meta, title: within(head).getByRole('link'), openLink, copyLink, retry, remove, onToggle }
+}
+
+/** The number and status line of a card that has one. */
+function metaOf(b: ReturnType<typeof card>): HTMLElement {
+  const meta = b.meta()
+  if (meta === null) throw new Error('no number or status line')
+  return meta
 }
 
 /** The value a details row shows next to its label. */
@@ -44,56 +52,85 @@ function rowValue(item: HTMLElement, label: string): HTMLElement {
   return value
 }
 
-/** Name and time of each listed check, in display order. */
-function checkRows(item: HTMLElement): string[] {
-  return [...item.querySelectorAll(`.${css.checks} .${css.check}`)]
-    .map(row => `${row.querySelector(`.${css.code}`)?.textContent ?? ''}|${row.querySelector(`.${css.value}`)?.textContent ?? ''}`)
+/** Outcome, name, time, and whether it opens a link, of each check the open checks list shows, in display order. */
+function checkRows(): string[] {
+  return screen.queryAllByRole('menuitem').map((row) => {
+    const [name, time] = row.querySelector(`.${css.checkItem}`)?.children ?? []
+    const state = row.querySelector('[data-forge-check]')?.getAttribute('data-forge-check') ?? ''
+    return [state, name?.textContent, time?.textContent, row.hasAttribute('disabled') ? 'no link' : 'link'].join('|')
+  })
 }
 
-describe('collapsed ChangeRequestCard', () => {
-  it('summarizes an open change request by title, number, head branch, diff size, and checks', () => {
-    const b = card(entry(7, snapshot(7, { headBranch: 'feat/login' })))
-    expect(b.head.getAttribute('aria-expanded')).toBe('false')
-    expect(within(b.head).getByText('Change 7')).toBeTruthy()
-    expect(within(b.head).getByText('#7')).toBeTruthy()
-    expect(within(b.head).getByText('·')).toBeTruthy()
-    expect(within(b.head).getByText('feat/login')).toBeTruthy()
-    expect(within(b.head).getByText('+12')).toBeTruthy()
-    expect(within(b.head).getByText(`${MINUS}3`)).toBeTruthy()
-    expect(within(b.head).getByText(en['change.ci.passed']).querySelector('[data-state="done"]')).not.toBeNull()
-    expect(b.head.querySelector('[data-flag]')).toBeNull()
-    expect(within(b.item).queryByRole('button', { name: en['change.view'] })).toBeNull()
+describe('ChangeRequestCard head', () => {
+  it('names the state of each change request with a tinted glyph', () => {
+    const cases = [
+      [{ state: 'open', draft: false }, 'open', en['change.state.open']],
+      [{ state: 'open', draft: false, checksRollup: 'failure' }, 'blocked', en['change.state.blocked']],
+      [{ state: 'open', draft: true }, 'draft', en['change.state.draft']],
+      [{ state: 'merged' }, 'merged', en['change.state.merged']],
+      [{ state: 'closed' }, 'closed', en['change.state.closed']],
+    ] as const
+    for (const [overrides, tone, state] of cases) {
+      const glyph = card(entry(7, snapshot(7, overrides))).head.querySelector('[data-forge-glyph]')
+      expect(glyph?.getAttribute('data-tone')).toBe(tone)
+      expect(glyph?.getAttribute('aria-label')).toBe(`Change request state: ${state}`)
+      expect(glyph?.matches(`.${css.tinted}`)).toBe(true)
+      cleanup()
+    }
+  })
 
-    fireEvent.click(b.head)
+  it('gives a change request without a snapshot the unknown state', () => {
+    const glyph = card(unserved('https://gitlab.example/group/app/-/merge_requests/3')).head.querySelector('[data-forge-glyph]')
+    expect(glyph?.getAttribute('data-tone')).toBe('unknown')
+    expect(glyph?.getAttribute('aria-label')).toBe(`Change request state: ${en['change.state.unknown']}`)
+  })
+
+  it('opens the snapshot URL from the title instead of following the link in the page', () => {
+    const b = card(entry(7, snapshot(7, { url: 'https://github.com/octo/demo/pull/7#web' })))
+    expect(b.title.textContent).toBe('Change 7')
+    expect(b.title.getAttribute('href')).toBe('https://github.com/octo/demo/pull/7#web')
+    expect(fireEvent.click(b.title)).toBe(false)
+    expect(b.openLink).toHaveBeenCalledWith('https://github.com/octo/demo/pull/7#web')
+    expect(b.onToggle).not.toHaveBeenCalled()
+  })
+
+  it('toggles from the chevron, while the number line stays plain text', () => {
+    const b = card(entry(7, snapshot(7)))
+    expect(b.item.hasAttribute('data-expanded')).toBe(false)
+    expect(metaOf(b).closest('button')).toBeNull()
+    const chevron = within(b.head).getByRole('button', { name: 'Expand #7' })
+    expect(chevron.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(chevron)
     expect(b.onToggle).toHaveBeenCalledOnce()
   })
+})
 
-  it.each([
-    ['an open', { state: 'open', draft: false }, 'open'],
-    ['a draft', { state: 'open', draft: true }, 'draft'],
-    ['a merged', { state: 'merged' }, 'merged'],
-    ['a closed', { state: 'closed' }, 'closed'],
-  ] as const)('tones the glyph of %s change request', (_name, overrides, tone) => {
-    const b = card(entry(7, snapshot(7, overrides)))
-    expect(b.head.querySelector(`.${css.glyph}`)?.getAttribute('data-tone')).toBe(tone)
+describe('collapsed ChangeRequestCard', () => {
+  it('summarizes an open change request by its number and checks, without its actions or diff size', () => {
+    const b = card(entry(7, snapshot(7)))
+    const meta = metaOf(b)
+    expect(within(meta).getByText('#7')).toBeTruthy()
+    expect(within(meta).getByText('·')).toBeTruthy()
+    expect(within(meta).getByText(en['change.ci.passed']).querySelector('[data-forge-check]')?.getAttribute('data-forge-check')).toBe('success')
+    expect(meta.querySelector('[data-flag]')).toBeNull()
+    expect(within(b.item).queryByText('+12')).toBeNull()
+    for (const name of [en['change.view'], en['change.copy'], 'Remove #7 from this Session']) {
+      expect(within(b.item).queryByRole('button', { name })).toBeNull()
+    }
   })
 
-  it('gives the glyph of a change request without a snapshot the unknown tone', () => {
-    expect(card(unserved('https://gitlab.example/group/app/-/merge_requests/3')).head.querySelector(`.${css.glyph}`)?.getAttribute('data-tone')).toBe('unknown')
-  })
-
   it.each([
-    ['no checks', { checksRollup: 'none' }, en['change.ci.none'], undefined],
-    ['running checks', { checksRollup: 'pending' }, en['change.ci.running'], 'ongoing'],
+    ['no checks', { checksRollup: 'none' }, en['change.ci.none'], undefined, null],
+    ['running checks', { checksRollup: 'pending' }, en['change.ci.running'], 'pending', null],
     ['listed failed checks', {
       checksRollup: 'failure',
       checks: [check('lint', { state: 'failure' }), check('test'), check('types', { state: 'failure' })],
-    }, '2 failed', 'error'],
-    ['failed checks the host did not list', { checksRollup: 'failure', checksTruncated: true }, en['change.ci.failedUnlisted'], 'error'],
-  ] as const)('states %s', (_label, overrides, text, dot) => {
-    const ci = within(card(entry(1, snapshot(1, overrides))).head).getByText(text)
-    expect(ci.querySelector('[data-state]')?.getAttribute('data-state')).toBe(dot)
-    expect(ci.getAttribute('data-tone')).toBe(dot === 'error' ? 'error' : null)
+    }, '2 checks failed', 'failure', 'error'],
+    ['failed checks the host did not list', { checksRollup: 'failure', checksTruncated: true }, en['change.ci.failedUnlisted'], 'failure', 'error'],
+  ] as const)('states %s', (_label, overrides, text, glyph, tone) => {
+    const ci = within(metaOf(card(entry(1, snapshot(1, overrides))))).getByText(text)
+    expect(ci.querySelector('[data-forge-check]')?.getAttribute('data-forge-check')).toBe(glyph)
+    expect(ci.getAttribute('data-tone')).toBe(tone)
   })
 
   it.each([
@@ -101,30 +138,30 @@ describe('collapsed ChangeRequestCard', () => {
     ['merge conflicts', { mergeability: 'conflicting', draft: true }, 'conflicting', en['change.flag.conflicting']],
     ['draft state', { draft: true }, 'draft', en['change.flag.draft']],
   ] as const)('flags %s after the checks', (_label, overrides, flag, text) => {
-    const b = card(entry(1, snapshot(1, overrides)))
-    expect(b.head.querySelector('[data-flag]')?.getAttribute('data-flag')).toBe(flag)
-    expect(within(b.head).getByText(text)).toBeTruthy()
+    const meta = metaOf(card(entry(1, snapshot(1, overrides))))
+    expect(meta.querySelector('[data-flag]')?.getAttribute('data-flag')).toBe(flag)
+    expect(within(meta).getByText(text)).toBeTruthy()
   })
 
   it.each([
-    ['merged three hours ago', { state: 'merged', closedAt: '2026-10-09T09:00:00Z' }, 'merged', 'Merged · 3 h ago'],
+    ['merged three hours ago', { state: 'merged', closedAt: '2026-10-09T09:00:00Z' }, 'merged', 'Merged into main · 3 h ago'],
     ['closed without a close time', { state: 'closed' }, 'closed', en['change.state.closed']],
     ['closed at a time that does not parse', { state: 'closed', closedAt: 'last week' }, 'closed', en['change.state.closed']],
   ] as const)('states a change request %s instead of its checks', (_label, overrides, tone, text) => {
-    const b = card(entry(1, snapshot(1, { ...overrides, checksRollup: 'failure', reviewDecision: 'changes-requested' })))
-    const finished = within(b.head).getByText(text)
-    expect(finished.getAttribute('data-tone')).toBe(tone)
-    expect(within(b.head).getByText('+12')).toBeTruthy()
-    expect(within(b.head).queryByText(en['change.ci.failedUnlisted'])).toBeNull()
-    expect(b.head.querySelector('[data-flag]')).toBeNull()
+    const meta = metaOf(card(entry(1, snapshot(1, { ...overrides, checksRollup: 'failure', reviewDecision: 'changes-requested' }))))
+    expect(within(meta).getByText(text).getAttribute('data-tone')).toBe(tone)
+    expect(within(meta).queryByText(en['change.ci.failedUnlisted'])).toBeNull()
+    expect(meta.querySelector('[data-flag]')).toBeNull()
   })
 
-  it('names the URL and the number of a change request before its first poll', () => {
+  it('names the URL and the number of a change request with a spinner before its first poll', () => {
     const b = card(entry(1, null))
-    expect(within(b.head).getByText('github.com/octo/demo/pull/1')).toBeTruthy()
-    expect(within(b.head).getByText('#1')).toBeTruthy()
-    expect(within(b.head).queryByText('·')).toBeNull()
-    expect(within(b.head).getByText(en['change.loading']).querySelector('[data-state="ongoing"]')).not.toBeNull()
+    expect(b.title.textContent).toBe('github.com/octo/demo/pull/1')
+    expect(b.title.getAttribute('href')).toBe('https://github.com/octo/demo/pull/1')
+    const meta = metaOf(b)
+    expect(within(meta).getByText('#1')).toBeTruthy()
+    expect(within(meta).getByText('·')).toBeTruthy()
+    expect(meta.querySelector('[data-state="ongoing"]')).not.toBeNull()
     expect(b.item.querySelector(`.${css.notice}`)).toBeNull()
   })
 
@@ -132,11 +169,10 @@ describe('collapsed ChangeRequestCard', () => {
     ['not-found', en['change.failure.notFound']],
     ['unauthenticated', en['change.failure.unauthenticated']],
     ['unavailable', en['change.failure.unavailable']],
-  ] as const)('explains a %s read failure and retries it', (code, text) => {
+  ] as const)('explains a %s read failure in place of the summary and retries it', (code, text) => {
     const failure: ForgeFailure = { code, message: 'detail' }
     const b = card(entry(1, failure))
-    expect(within(b.head).getByText('github.com/octo/demo/pull/1')).toBeTruthy()
-    expect(within(b.head).queryByText(en['change.loading'])).toBeNull()
+    expect(metaOf(b).textContent).toBe('#1')
     const notice = b.item.querySelector(`.${css.notice}`)
     if (!(notice instanceof HTMLElement)) throw new Error('no failure notice')
     expect(within(notice).getByText(text)).toBeTruthy()
@@ -146,19 +182,17 @@ describe('collapsed ChangeRequestCard', () => {
     expect(b.openLink).not.toHaveBeenCalled()
   })
 
-  it('keeps the last snapshot of a change request whose latest read failed, without its summary', () => {
+  it('keeps the title of the last snapshot after a failed read but not its stale summary', () => {
     const b = card(entry(4, { code: 'unavailable', message: 'down' }, { kept: snapshot(4, { checksRollup: 'failure' }) }))
-    expect(within(b.head).getByText('Change 4')).toBeTruthy()
-    expect(within(b.head).getByText('feat')).toBeTruthy()
-    expect(within(b.head).queryByText('+12')).toBeNull()
+    expect(b.title.textContent).toBe('Change 4')
+    expect(metaOf(b).textContent).toBe('#4')
     expect(within(b.item).getByText(en['change.failure.unavailable'])).toBeTruthy()
   })
 
-  it('opens a URL no provider serves instead of retrying it', () => {
+  it('opens a URL no provider serves instead of retrying it, without a number line when the URL names no number', () => {
     const b = card(unserved('http://example.test/review/latest'))
-    expect(within(b.head).getByText('example.test/review/latest')).toBeTruthy()
-    expect(b.head.querySelector(`.${css.metaRow}`)).toBeNull()
-    expect(b.head.querySelector(`.${css.summary}`)).toBeNull()
+    expect(b.title.textContent).toBe('example.test/review/latest')
+    expect(b.meta()).toBeNull()
     const notice = b.item.querySelector(`.${css.notice}`)
     if (!(notice instanceof HTMLElement)) throw new Error('no unserved notice')
     expect(within(notice).getByText(en['change.unserved'])).toBeTruthy()
@@ -166,78 +200,76 @@ describe('collapsed ChangeRequestCard', () => {
 
     fireEvent.click(within(notice).getByRole('button', { name: en['change.view'] }))
     expect(b.openLink).toHaveBeenCalledWith('http://example.test/review/latest')
+    fireEvent.click(within(b.head).getByRole('button', { name: 'Expand http://example.test/review/latest' }))
+    expect(b.onToggle).toHaveBeenCalledOnce()
   })
 
   it('reads the number of an unserved URL from its path', () => {
-    const b = card(unserved('https://example.test/review/17'))
-    expect(within(b.head).getByText('#17')).toBeTruthy()
-  })
-
-  it('shows the head branch and opens the snapshot URL of an unnumbered change request', () => {
-    const b = card({ ...unserved('https://example.test/review/latest'), snapshot: snapshot(3, { url: 'https://example.test/review/latest#web' }) })
-    expect(within(b.head).getByText('Change 3')).toBeTruthy()
-    expect(within(b.head).getByText('feat')).toBeTruthy()
-    expect(within(b.head).queryByText('·')).toBeNull()
-    expect(within(b.head).queryByText(/^#/)).toBeNull()
-
-    fireEvent.click(within(b.item).getByRole('button', { name: en['change.view'] }))
-    expect(b.openLink).toHaveBeenCalledWith('https://example.test/review/latest#web')
+    expect(metaOf(card(unserved('https://example.test/review/17'))).textContent).toBe('#17')
   })
 })
 
 describe('expanded ChangeRequestCard', () => {
-  it('shows the details of an open change request and runs its actions on the snapshot URL', () => {
-    const value = entry(7, snapshot(7, { url: 'https://github.com/octo/demo/pull/7#web' }))
+  it('shows the target, details, and diff size of an open change request and runs its actions on the snapshot URL', () => {
+    const value = entry(7, snapshot(7, { url: 'https://github.com/octo/demo/pull/7#web', additions: 12345 }))
     const b = card(value, { expanded: true })
     expect(b.item.getAttribute('data-forge-change')).toBe('https://github.com/octo/demo/pull/7')
-    expect(b.head.getAttribute('aria-expanded')).toBe('true')
-    expect(rowValue(b.item, en['change.row.state']).textContent).toBe(`${en['change.state.open']} · ${en['change.origin.created']}`)
+    expect(b.item.hasAttribute('data-expanded')).toBe(true)
+    expect(metaOf(b).textContent).toBe('#7·feat → main')
+    expect(within(b.head).getByRole('button', { name: 'Collapse #7' }).getAttribute('aria-expanded')).toBe('true')
     expect(rowValue(b.item, en['change.row.checks']).textContent).toBe(en['change.ci.none'])
+    expect(within(b.item).getByText(en['change.row.checks']).closest('button')).toBeNull()
     expect(rowValue(b.item, en['change.row.review']).textContent).toBe(en['change.review.none'])
     expect(rowValue(b.item, en['change.row.merge']).textContent).toBe(en['change.merge.mergeable'])
     for (const label of [en['change.row.review'], en['change.row.merge']]) expect(rowValue(b.item, label).getAttribute('data-tone')).toBeNull()
-    expect(within(b.item).getByRole('separator')).toBeTruthy()
+    expect(within(b.item).getByText('+12,345')).toBeTruthy()
+    expect(within(b.item).getByText(`${MINUS}3`)).toBeTruthy()
 
-    fireEvent.click(within(b.item).getByRole('button', { name: en['change.view'] }))
+    fireEvent.click(within(b.head).getByRole('button', { name: en['change.view'] }))
     fireEvent.click(within(b.item).getByRole('button', { name: en['change.copy'] }))
-    fireEvent.click(within(b.item).getByRole('button', { name: en['change.addToChat'] }))
-    fireEvent.click(within(b.item).getByRole('button', { name: en['change.remove'] }))
+    fireEvent.click(within(b.head).getByRole('button', { name: 'Remove #7 from this Session' }))
     expect(b.openLink).toHaveBeenCalledWith('https://github.com/octo/demo/pull/7#web')
     expect(b.copyLink).toHaveBeenCalledWith('https://github.com/octo/demo/pull/7#web')
-    expect(b.addToChat).toHaveBeenCalledWith('https://github.com/octo/demo/pull/7#web')
     expect(b.remove).toHaveBeenCalledWith(value)
   })
 
-  it.each([
-    ['a draft found after a push', { draft: true }, 'discovered', 'Draft · Found after a push', en['change.merge.mergeable']],
-    ['a tracked merged change request', { state: 'merged', mergeability: 'conflicting' }, 'tracked', 'Merged · Tracked', en['change.state.merged']],
-    ['a closed change request', { state: 'closed' }, 'created', 'Closed · Created in this Session', en['change.state.closed']],
-    ['an open change request whose mergeability is unknown', { mergeability: 'unknown' }, 'tracked', 'Ready for review · Tracked',
-      en['change.merge.unknown']],
-  ] as const)('states %s', (_label, overrides, origin, state, merge) => {
-    const b = card(entry(1, snapshot(1, overrides), { origin }), { expanded: true })
-    expect(rowValue(b.item, en['change.row.state']).textContent).toBe(state)
-    expect(rowValue(b.item, en['change.row.merge']).textContent).toBe(merge)
-    expect(rowValue(b.item, en['change.row.merge']).getAttribute('data-tone')).toBeNull()
-  })
-
-  it('marks merge conflicts of an open change request', () => {
-    const b = card(entry(1, snapshot(1, { mergeability: 'conflicting' })), { expanded: true })
-    expect(rowValue(b.item, en['change.row.merge']).textContent).toBe(en['change.merge.conflicting'])
-    expect(rowValue(b.item, en['change.row.merge']).getAttribute('data-tone')).toBe('error')
+  it('marks a draft before its branches', () => {
+    const meta = metaOf(card(entry(7, snapshot(7, { draft: true })), { expanded: true }))
+    expect(within(meta).getByText(en['change.state.draft'])).toBeTruthy()
+    expect(meta.textContent).toBe('#7·Draftfeat → main')
   })
 
   it.each([
-    ['an approval', { reviewDecision: 'approved' }, en['change.review.approved'], null],
+    ['merge conflicts', { mergeability: 'conflicting' }, 'Conflicts with main', 'error'],
+    ['an unknown mergeability', { mergeability: 'unknown' }, en['change.merge.unknown'], null],
+  ] as const)('states %s of an open change request', (_label, overrides, text, tone) => {
+    const value = rowValue(card(entry(1, snapshot(1, overrides)), { expanded: true }).item, en['change.row.merge'])
+    expect(value.textContent).toBe(text)
+    expect(value.getAttribute('data-tone')).toBe(tone)
+  })
+
+  it.each([
+    ['an approval', { reviewDecision: 'approved' }, en['change.review.approved'], 'success'],
     ['a required review', { reviewDecision: 'review-required' }, en['change.review.required'], null],
     ['requested changes', { reviewDecision: 'changes-requested' }, en['change.review.changesRequested'], 'error'],
-    ['an approval with unresolved threads', { reviewDecision: 'approved', unresolvedThreads: 2 }, 'Approved · 2 unresolved', null],
+    ['an approval with unresolved threads', { reviewDecision: 'approved', unresolvedThreads: 2 }, 'Approved · 2 unresolved', 'success'],
     ['requested changes with an unresolved thread', { reviewDecision: 'changes-requested', unresolvedThreads: 1 },
       'Changes requested · 1 unresolved', 'error'],
   ] as const)('states the review of %s', (_label, overrides, text, tone) => {
     const value = rowValue(card(entry(1, snapshot(1, overrides)), { expanded: true }).item, en['change.row.review'])
     expect(value.textContent).toBe(text)
     expect(value.getAttribute('data-tone')).toBe(tone)
+  })
+
+  it.each([
+    ['merged', { state: 'merged', closedAt: '2026-10-09T09:00:00Z' }, 'Merged into main · 3 h ago'],
+    ['closed', { state: 'closed' }, en['change.state.closed']],
+  ] as const)('states a %s change request in one line instead of its checks, review, and merge rows', (tone, overrides, text) => {
+    const b = card(entry(1, snapshot(1, { ...overrides, mergeability: 'conflicting', reviewDecision: 'changes-requested' })), { expanded: true })
+    const line = within(b.item).getByText(text, { selector: `.${css.rowValue}` })
+    expect(line.getAttribute('data-tone')).toBe(tone)
+    for (const label of [en['change.row.checks'], en['change.row.review'], en['change.row.merge']]) expect(within(b.item).queryByText(label)).toBeNull()
+    expect(within(b.item).getByText('+12')).toBeTruthy()
   })
 
   it('lists the checks failed first, then running, then the rest, with their times and links', () => {
@@ -253,68 +285,86 @@ describe('expanded ChangeRequestCard', () => {
     ]
     const b = card(entry(1, snapshot(1, { checks, checksRollup: 'failure', checksTruncated: true })), { expanded: true })
     const toggle = within(b.item).getByText(en['change.row.checks']).closest('button')
-    if (toggle === null) throw new Error('the checks row does not expand')
+    if (toggle === null) throw new Error('the checks row does not open a list')
     const summary = rowValue(b.item, en['change.row.checks'])
-    expect(summary.textContent).toBe('1 failed · 2 running · 2 passed · 3 not run')
+    expect(summary.textContent).toBe('1 failed · 2 running · 2 passed · 3 other')
     expect(summary.getAttribute('data-tone')).toBe('error')
+    expect(summary.querySelector('[data-forge-check]')?.getAttribute('data-forge-check')).toBe('failure')
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
-    expect(checkRows(b.item)).toEqual([])
+    expect(checkRows()).toEqual([])
 
     fireEvent.click(toggle)
     expect(toggle.getAttribute('aria-expanded')).toBe('true')
-    expect(checkRows(b.item)).toEqual([
-      'lint|1h 0m', 'deploy|Queued', 'test|Running', 'build|1m 5s', 'package|', 'docs|1m 5s', 'e2e|', 'perf|1h 30m',
+    expect(checkRows()).toEqual([
+      'failure|lint|1h 0m|link',
+      'pending|deploy|Queued|no link',
+      'pending|test|Running|no link',
+      'success|build|1m 5s|no link',
+      'success|package||no link',
+      'neutral|docs|1m 5s|no link',
+      'skipped|e2e||no link',
+      'cancelled|perf|1h 30m|no link',
     ])
-    const rows = [...b.item.querySelectorAll(`.${css.checks} .${css.check}`)]
-    expect(rows[0]?.querySelector(`.${css.fail}`)).not.toBeNull()
-    expect(rows.slice(1, 3).map(row => row.querySelector('[data-state]')?.getAttribute('data-state'))).toEqual(['ongoing', 'ongoing'])
-    expect(rows[3]?.querySelector(`.${css.pass}`)).not.toBeNull()
-    expect(rows.slice(5).map(row => row.querySelector('[data-state]')?.getAttribute('data-state'))).toEqual(['idle', 'idle', 'idle'])
-    expect(rows.map(row => row.tagName)).toEqual(['BUTTON', 'DIV', 'DIV', 'DIV', 'DIV', 'DIV', 'DIV', 'DIV'])
-    expect(within(b.item).getByText('Only the first 8 are listed')).toBeTruthy()
+    expect(screen.getByText('Only the first 8 are listed')).toBeTruthy()
 
-    fireEvent.click(rows[0]!)
+    fireEvent.click(screen.getAllByRole('menuitem')[0]!)
     expect(b.openLink).toHaveBeenCalledWith('https://ci.example.test/lint')
-
-    fireEvent.click(toggle)
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
-    expect(checkRows(b.item)).toEqual([])
+    expect(checkRows()).toEqual([])
+  })
+
+  it('closes the checks list from its row and from an outside press', () => {
+    const b = card(entry(1, snapshot(1, { checks: [check('build')] })), { expanded: true })
+    const toggle = within(b.item).getByText(en['change.row.checks']).closest('button')
+    if (toggle === null) throw new Error('the checks row does not open a list')
+    fireEvent.click(toggle)
+    fireEvent.click(toggle)
+    expect(checkRows()).toEqual([])
+    fireEvent.click(toggle)
+    expect(checkRows()).toEqual(['success|build|1m 5s|no link'])
+    fireEvent.pointerDown(document.body)
+    expect(checkRows()).toEqual([])
+    expect(b.openLink).not.toHaveBeenCalled()
   })
 
   it.each([
-    ['passed checks', [check('build'), check('test')], '2 passed', ['build|1m 5s', 'test|1m 5s']],
+    ['passed checks', [check('build'), check('test')], '2 passed', ['success|build|1m 5s|no link', 'success|test|1m 5s|no link']],
     ['running and skipped checks', [
       check('docs', { state: 'skipped', startedAt: null, completedAt: null }),
       check('test', { state: 'pending', completedAt: null }),
-    ], '1 running · 1 not run', ['test|Running', 'docs|']],
+    ], '1 running · 1 other', ['pending|test|Running|no link', 'skipped|docs||no link']],
   ])('counts %s without an error tone or a truncation note', (_label, checks, text, rows) => {
     const b = card(entry(1, snapshot(1, { checks, checksRollup: 'pending' })), { expanded: true })
     const summary = rowValue(b.item, en['change.row.checks'])
     expect(summary.textContent).toBe(text)
     expect(summary.getAttribute('data-tone')).toBeNull()
     fireEvent.click(within(b.item).getByText(en['change.row.checks']))
-    expect(checkRows(b.item)).toEqual(rows)
-    expect(b.item.querySelector(`.${css.truncated}`)).toBeNull()
+    expect(checkRows()).toEqual(rows)
+    expect(screen.queryByText(/^Only the first/)).toBeNull()
   })
 
-  it('shows only the link actions and the Session actions before the first poll', () => {
+  it('shows only the link actions before the first poll', () => {
     const b = card(entry(1, null), { expanded: true })
-    expect(within(b.item).queryByText(en['change.row.state'])).toBeNull()
+    expect(metaOf(b).textContent).toBe('#1')
     expect(within(b.item).queryByText(en['change.row.checks'])).toBeNull()
-    expect(within(b.item).getByRole('separator')).toBeTruthy()
-    fireEvent.click(within(b.item).getByRole('button', { name: en['change.view'] }))
-    expect(b.openLink).toHaveBeenCalledWith('https://github.com/octo/demo/pull/1')
+    expect(within(b.item).queryByText('+12')).toBeNull()
+    fireEvent.click(within(b.item).getByRole('button', { name: en['change.copy'] }))
+    expect(b.copyLink).toHaveBeenCalledWith('https://github.com/octo/demo/pull/1')
   })
 
-  it.each([
-    ['neither Session action', { addToChat: undefined, remove: undefined }, []],
-    ['only adding to the chat', { remove: undefined }, [en['change.addToChat']]],
-    ['only removal', { addToChat: undefined }, [en['change.remove']]],
-  ] as const)('omits the Session actions a surface lacks, offering %s', (_label, actions, offered) => {
-    const b = card(entry(1, snapshot(1)), { expanded: true, actions })
-    const sessionActions = [en['change.addToChat'], en['change.remove']]
-      .filter(name => within(b.item).queryByRole('button', { name }) !== null)
-    expect(sessionActions).toEqual(offered)
-    expect(within(b.item).queryAllByRole('separator')).toHaveLength(offered.length === 0 ? 0 : 1)
+  it('shows the branches and opens the snapshot URL of an unnumbered change request', () => {
+    const b = card({ ...unserved('https://example.test/review/latest'), snapshot: snapshot(3, { url: 'https://example.test/review/latest#web' }) }, { expanded: true })
+    expect(b.title.textContent).toBe('Change 3')
+    expect(metaOf(b).textContent).toBe('feat → main')
+    fireEvent.click(within(b.head).getByRole('button', { name: 'Remove Change 3 from this Session' }))
+    expect(b.remove).toHaveBeenCalledOnce()
+    fireEvent.click(within(b.head).getByRole('button', { name: en['change.view'] }))
+    expect(b.openLink).toHaveBeenCalledWith('https://example.test/review/latest#web')
+  })
+
+  it('omits removal on a surface without a Session binding', () => {
+    const b = card(entry(1, snapshot(1)), { expanded: true, actions: { remove: undefined } })
+    expect(within(b.head).queryByRole('button', { name: 'Remove #1 from this Session' })).toBeNull()
+    expect(within(b.head).getByRole('button', { name: en['change.view'] })).toBeTruthy()
   })
 })

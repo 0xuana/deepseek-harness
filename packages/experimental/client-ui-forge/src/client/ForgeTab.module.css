@@ -60,6 +60,20 @@
   outline-offset: 2px;
 }
 
+/* The worktree the Session works in is gone. */
+.checkout[data-missing],
+.checkout[data-missing] .checkoutBranch {
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+.checkoutName {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  border-radius: var(--dsw-radius-sm);
+}
+
 .checkoutIcon {
   flex: none;
 }
@@ -190,67 +204,95 @@
   background: var(--dsw-alias-bg-layer-1);
 }
 
-/* The whole summary is the expansion toggle. */
+/* Glyph, title link with the number line below it, then the expanded card's
+   open and remove buttons and the expansion toggle. */
 .changeHead {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  box-sizing: border-box;
-  width: 100%;
+  align-items: flex-start;
+  gap: 2px;
   min-width: 0;
-  padding: 10px 10px 10px 12px;
-  border: 0;
-  border-radius: var(--dsw-radius-md);
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
+  padding: 8px 6px 4px 12px;
 }
 
-.changeHead:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+.changeHead > .glyph {
+  margin: 3px 6px 0 0;
 }
 
-.changeHead:focus-visible {
-  outline: none;
-  box-shadow: inset 0 0 0 2px var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
-}
-
-.headRow {
+.headText {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
-}
-
-/* Lifecycle tone of the change request glyph, which draws in the current color. */
-.glyph {
-  display: inline-flex;
-  flex: none;
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.glyph[data-tone='open'] {
-  color: var(--dsw-alias-state-success-primary);
-}
-
-.glyph[data-tone='merged'] {
-  color: var(--dsw-alias-state-business-primary);
-}
-
-.glyph[data-tone='closed'] {
-  color: var(--dsw-alias-state-error-primary);
+  padding-top: 1px;
 }
 
 .changeTitle {
-  flex: 1;
-  min-width: 0;
+  display: -webkit-box;
   overflow: hidden;
+  color: var(--dsw-alias-label-primary);
   font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 20px;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.change:not([data-expanded]) .changeTitle {
+  -webkit-line-clamp: 1;
+}
+
+.changeTitle:hover {
+  color: var(--dsw-alias-label-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.changeTitle:focus-visible,
+.rowButton:focus-visible,
+.checkoutName:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
+}
+
+/* Number line below the title: the status while collapsed, the branches while expanded. */
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 1px 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+/* Lifecycle glyph; drawn in the current color unless the state tints it. */
+.glyph {
+  display: inline-flex;
+  flex: none;
+}
+
+.tinted {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.tinted[data-tone='open'] {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+/* Orange, because the closed glyph already takes red. */
+.tinted[data-tone='blocked'] {
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+.tinted[data-tone='merged'] {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.tinted[data-tone='closed'] {
+  color: var(--dsw-alias-state-error-primary);
 }
 
 .chevron {
@@ -261,24 +303,6 @@
 
 .chevronOpen {
   transform: rotate(180deg);
-}
-
-/* Number, branch, and status lines align with the title past the 15px glyph and its 8px gap. */
-.metaRow,
-.summary {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  padding-left: 23px;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 12px;
-  line-height: 18px;
-}
-
-.summary {
-  flex-wrap: wrap;
-  gap: 4px 10px;
 }
 
 .code {
@@ -296,6 +320,7 @@
   display: inline-flex;
   gap: 6px;
   font-family: var(--ds-font-family-code);
+  font-size: 12px;
 }
 
 .added {
@@ -331,134 +356,111 @@
   color: var(--dsw-alias-state-business-primary);
 }
 
-/* Read failure or unsupported host below the toggle, with its one action. */
+/* Read failure or unsupported host below the head, with its one action. */
 .notice {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 0 10px 10px 35px;
+  padding: 0 10px 10px 33px;
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
   line-height: 18px;
 }
 
-.details {
+/* Expanded rows aligned with the title: a 36px label column and the value. */
+.rows {
   display: flex;
   flex-direction: column;
-  padding: 4px 4px 6px;
-  border-top: 0.5px solid var(--dsw-alias-border-l2);
+  padding: 0 10px 6px 33px;
 }
 
-.linkRow {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.linkRow .item {
-  flex: 1;
-}
-
-/* One detail row: a 15px glyph, the label, and a right-aligned value. */
-.item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  box-sizing: border-box;
-  width: 100%;
-  min-width: 0;
-  min-height: 34px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: var(--dsw-radius-sm);
-  background: transparent;
-  color: var(--dsw-alias-label-primary);
-  font: inherit;
-  text-align: left;
-}
-
-button.item {
-  cursor: pointer;
-}
-
-button.item:hover,
-button.item:focus-visible {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
-
-.item svg {
-  flex: none;
-}
-
-.item[data-tone='error'] {
-  color: var(--dsw-alias-state-error-primary);
-}
-
-button.item[data-tone='error']:hover,
-button.item[data-tone='error']:focus-visible {
-  background: var(--dsw-alias-interactive-bg-hover-danger);
-}
-
-.value {
-  min-width: 0;
-  margin-left: auto;
-  overflow: hidden;
-  color: var(--dsw-alias-label-secondary);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.value[data-tone='error'] {
-  color: var(--dsw-alias-state-error-primary);
-}
-
-.separator {
-  height: 0.5px;
-  margin: 4px 6px;
-  background: var(--dsw-alias-border-l2);
-}
-
-.checks {
-  display: flex;
-  flex-direction: column;
-  margin: 0 6px 4px 34px;
-  padding: 2px 0;
-  border-left: 0.5px solid var(--dsw-alias-border-l2);
-  list-style: none;
-}
-
-.check {
-  display: flex;
+.row {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   box-sizing: border-box;
   width: 100%;
   min-height: 30px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: var(--dsw-radius-sm);
-  background: transparent;
   color: var(--dsw-alias-label-primary);
   font: inherit;
-  font-size: 12px;
   text-align: left;
 }
 
-button.check {
+.row > .rowValue:only-child {
+  grid-column: 1 / -1;
+}
+
+.rowButton {
+  width: calc(100% + 12px);
+  margin: 0 -6px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
   cursor: pointer;
 }
 
-button.check:hover,
-button.check:focus-visible {
+.rowButton:hover,
+.rowButton[aria-expanded='true'] {
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
-.check svg {
-  flex: none;
+.rowLabel {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
 }
 
-.check .value {
+.rowValue {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.rowValue[data-tone='error'] {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.rowValue[data-tone='success'] {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.rowValue[data-tone='merged'] {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.rowValue[data-tone='closed'] {
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* The checks menu anchors to the whole row. */
+.checksAnchor {
+  display: block;
+}
+
+.checksList {
+  min-width: 280px;
+}
+
+.checkItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+
+.checkTime {
+  flex: none;
+  margin-left: auto;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+}
+
+.checkGlyph {
+  display: inline-flex;
   flex: none;
   color: var(--dsw-alias-label-tertiary);
 }
@@ -471,13 +473,24 @@ button.check:focus-visible {
   color: var(--dsw-alias-state-error-primary);
 }
 
-.truncated {
-  padding: 4px 10px;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 12px;
+.running {
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 6px 33px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.footerEnd {
+  margin-left: auto;
 }
 
 .titleIcon {
+  display: inline-flex;
   flex: none;
   color: var(--dsw-alias-label-secondary);
 }

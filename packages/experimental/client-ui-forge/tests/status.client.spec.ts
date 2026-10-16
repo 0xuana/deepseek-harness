@@ -9,8 +9,16 @@ describe('toneOf', () => {
     ['no snapshot yet', null, 'unknown'],
     ['an open change request', snapshot(1), 'open'],
     ['an open draft', snapshot(1, { draft: true }), 'draft'],
+    ['an open change request with failed checks', snapshot(1, { checksRollup: 'failure' }), 'blocked'],
+    ['an open change request with requested changes', snapshot(1, { reviewDecision: 'changes-requested' }), 'blocked'],
+    ['an open change request with conflicts', snapshot(1, { mergeability: 'conflicting' }), 'blocked'],
+    ['a draft with failed checks', snapshot(1, { draft: true, checksRollup: 'failure' }), 'blocked'],
+    ['an open change request that waits for checks, a review, and its mergeability',
+      snapshot(1, { checksRollup: 'pending', reviewDecision: 'review-required', mergeability: 'unknown' }), 'open'],
     ['a merged change request', snapshot(1, { state: 'merged', draft: true }), 'merged'],
+    ['a merged change request with failed checks', snapshot(1, { state: 'merged', checksRollup: 'failure' }), 'merged'],
     ['a closed change request', snapshot(1, { state: 'closed' }), 'closed'],
+    ['a closed change request with conflicts', snapshot(1, { state: 'closed', mergeability: 'conflicting' }), 'closed'],
   ] as const)('draws %s as %s', (_label, value, tone) => {
     expect(toneOf(value)).toBe(tone)
   })

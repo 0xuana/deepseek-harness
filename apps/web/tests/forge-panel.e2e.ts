@@ -1,13 +1,14 @@
-/** Worktree Sessions and the pull request panel through the real optional bundle, a Git checkout, and a scripted GitHub CLI. */
+/** Worktree Sessions and the change request panel through the real optional bundle, a Git checkout, and a scripted GitHub CLI. */
 import { execFile } from 'node:child_process'
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import type {} from '@deepseek-ai/dsh-experimental-forge-session'
 import { pluginRecordOf, type SessionEvent } from '@deepseek-ai/dsh-session'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { abbreviateHomePath } from '@deepseek-ai/dsh-util-workspace-path'
 import { chromium, type Browser, type Page } from 'playwright'
 import { expect, it, onTestFailed, onTestFinished } from 'vitest'
 import {
@@ -21,6 +22,8 @@ const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/lifecycle-chrome/s
 const EXPECTED = fileURLToPath(new URL('./expected/forge-panel', import.meta.url))
 const MODE = webSnapshotMode()
 const PULL = 'https://github.com/octo/demo/pull/7'
+/** Message sent after the worktree is removed, which the composer keeps. */
+const FOLLOW_UP = 'Summarize the failed check'
 const run = promisify(execFile)
 
 /**
@@ -164,7 +167,7 @@ function worktreeRecords(events: readonly SessionEvent[]): unknown[] {
   })
 }
 
-it.skipIf(MODE === 'record')('starts a Session in a worktree before its first message, follows its pull request, and restores the removed worktree', async () => {
+it.skipIf(MODE === 'record')('starts a Session in a worktree before its first message, follows its change request, and restores the removed worktree', async () => {
   const { scaffold, page, root, project, tripwire } = await requestReleaseWorktree('web-e2e-forge-panel')
   const { settled } = await sendPrompt(page, scaffold)
   const sessionId = await settled
@@ -202,42 +205,44 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
   const label = page.locator('[data-forge-branch]')
   await expect.poll(() => label.textContent(), { timeout: 20_000 }).toBe(branch)
   await label.hover()
-  await page.getByRole('tooltip').filter({ hasText: `工作树：${directory}，基于 release 创建` }).waitFor()
+  await page.getByRole('tooltip').filter({ hasText: `工作树（基于 release）：${abbreviateHomePath(directory, homedir())}` }).waitFor()
   await page.mouse.move(0, 0)
 
-  // A pull request bound the way a `gh pr create` result binds one.
+  // A change request bound the way a `gh pr create` result binds one.
   scaffold.ctx.forgeSession.track(session, PULL)
   const header = page.locator('[data-forge-header]')
-  await expect.poll(() => header.getAttribute('aria-label'), { timeout: 20_000 }).toBe('本会话的 PR：有需要处理的项')
+  await expect.poll(() => header.getAttribute('aria-label'), { timeout: 20_000 }).toBe('本会话的变更请求需要处理')
   expect(await header.getAttribute('aria-pressed')).toBe('false')
   await header.click()
   await expect.poll(() => header.getAttribute('aria-pressed')).toBe('true')
   const panel = page.locator('[data-forge-panel]')
   const checkout = panel.locator('[data-forge-checkout]')
   await checkout.getByText(branch, { exact: true }).waitFor({ timeout: 20_000 })
-  await checkout.getByText('基于 release', { exact: true }).waitFor()
+  await checkout.getByText('工作树 · 基于 release', { exact: true }).waitFor()
   const change = panel.locator(`[data-forge-change="${PULL}"]`)
-  await change.getByText('Add the pull request panel', { exact: true }).waitFor({ timeout: 20_000 })
-  await change.getByText('1 项失败', { exact: true }).waitFor()
-  await change.getByRole('button', { name: /^Add the pull request panel/ }).click()
-  await change.getByRole('button', { name: /^检查/ }).click()
-  await change.getByText('test', { exact: true }).waitFor()
+  const title = change.getByRole('link', { name: 'Add the pull request panel', exact: true })
+  await title.waitFor({ timeout: 20_000 })
+  // The only open change request starts expanded.
+  await change.getByText('等待评审 · 1 条未解决讨论', { exact: true }).waitFor()
   await compareOrRefreshGolden(join(EXPECTED, 'panel.expected.md'),
     (await captureStableAria(page, '[data-forge-panel]', scaffold.workspaceCwd)).replaceAll(branch, 'dsh-{{worktree}}'), MODE)
-
-  const composer = page.locator('[data-composer-input]').first()
-  await change.getByRole('button', { name: '添加到聊天', exact: true }).click()
-  await expect.poll(() => composer.textContent()).toContain(PULL)
+  const checksRow = change.getByRole('button', { name: /^检查/ })
+  await checksRow.click()
+  const checks = page.getByRole('menu')
+  await expect.poll(() => checks.getByRole('menuitem').allTextContents()).toEqual([expect.stringMatching(/^test/), expect.stringMatching(/^lint/)])
+  await page.keyboard.press('Escape')
+  await checks.waitFor({ state: 'detached' })
+  expect(await checksRow.getAttribute('aria-expanded')).toBe('false')
 
   const bindings = async () => (await readPersistedEvents(scaffold, sessionId)).flatMap((event) => {
     const record = pluginRecordOf(event)
     return record?.type === 'plugin:forge-session/binding' ? [record.data] : []
   })
-  await change.getByRole('button', { name: '从会话中移除 PR', exact: true }).click()
+  await change.getByRole('button', { name: '从本会话移除 #7', exact: true }).click()
   await change.waitFor({ state: 'detached' })
-  await panel.getByText('本会话还没有 PR', { exact: true }).waitFor()
-  await page.getByRole('alert').filter({ hasText: '已从会话中移除 #7' }).getByRole('button', { name: '撤销', exact: true }).click()
-  await change.getByText('Add the pull request panel', { exact: true }).waitFor({ timeout: 20_000 })
+  await panel.getByText('本会话还没有变更请求', { exact: true }).waitFor()
+  await page.getByRole('alert').filter({ hasText: '已从本会话移除 #7' }).getByRole('button', { name: '撤销', exact: true }).click()
+  await title.waitFor({ timeout: 20_000 })
   await expect.poll(bindings).toEqual([{ action: 'track', url: PULL }, { action: 'dismiss', url: PULL }, { action: 'track', url: PULL }])
 
   const calls = (await readFile(join(root, 'calls.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as string[])
@@ -248,6 +253,8 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
 
   // Removing the worktree outside the Session returns the next message to the composer until the worktree is restored.
   await git(project, 'worktree', 'remove', '--force', directory)
+  const composer = page.locator('[data-composer-input]').first()
+  await writeComposerDraft(page, composer, FOLLOW_UP)
   const refused = page.waitForResponse('**/api/session/prompt')
   await composer.press('Enter')
   const envelope = await (await refused).json() as { readonly result: unknown }
@@ -255,10 +262,10 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
     ok: false, error: { code: 'session/prompt-rejected', details: { reason: 'forge/worktree-missing', presented: true } },
   })
   const missing = page.locator('[data-forge-missing]')
-  await missing.getByText(`可以在原路径重新检出分支 ${branch}；删除前未提交的修改无法找回`, { exact: true }).waitFor()
+  await missing.getByText(`可以在原位置恢复分支 ${branch} 的工作树。删除前未提交的修改无法恢复`, { exact: true }).waitFor()
   await expect.poll(() => label.getAttribute('data-missing')).toBe('')
   await page.locator('[data-composer-input][contenteditable="true"]').waitFor()
-  expect(await composer.textContent()).toContain(PULL)
+  expect(await composer.textContent()).toContain(FOLLOW_UP)
   // The card presents the refusal, so the composer adds no notice of its own.
   expect(await page.getByRole('alert').filter({ hasText: 'was removed' }).count()).toBe(0)
   expect((await readPersistedEvents(scaffold, sessionId)).filter(event => event.type === 'turn/start')).toHaveLength(1)
@@ -268,7 +275,7 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
   expect(await git(directory, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe(branch)
   expect(await git(directory, 'rev-parse', 'HEAD')).toBe(baseCommit)
   await expect.poll(() => label.getAttribute('data-missing')).toBeNull()
-  expect(await composer.textContent()).toContain(PULL)
+  expect(await composer.textContent()).toContain(FOLLOW_UP)
   expect(tripwire.pageErrors).toEqual([])
   expect(tripwire.warnings).toEqual([])
 })
@@ -318,7 +325,7 @@ it.skipIf(MODE === 'record')('returns the first message to the New Session compo
   const label = page.locator('[data-forge-branch]')
   await expect.poll(() => label.textContent(), { timeout: 20_000 }).toBe('main')
   await label.hover()
-  await page.getByRole('tooltip').filter({ hasText: `当前检出：${project}` }).waitFor()
+  await page.getByRole('tooltip').filter({ hasText: `项目目录：${abbreviateHomePath(project, homedir())}` }).waitFor()
   expect(tripwire.pageErrors).toEqual([])
   expect(tripwire.warnings).toEqual([])
 })

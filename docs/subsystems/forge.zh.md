@@ -197,6 +197,10 @@ interface ForgeCheckout {
   readonly root: string
   /** Checked-out branch, or null when HEAD is detached. */
   readonly branch: string | null
+  /** Whether the checkout is a linked worktree of another checkout's repository. */
+  readonly linked: boolean
+  /** Abbreviated commit HEAD names, or null while the checked-out branch has no commit. */
+  readonly commit: string | null
 }
 ```
 

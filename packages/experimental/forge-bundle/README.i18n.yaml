@@ -3,20 +3,20 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/forge-bundle/README.md
 /:
-  en: cc727e6b70e62904
-  zh: d86d2a43dd64e5c8
+  en: 75db4d505f21f46f
+  zh: a0e463c38ed59efa
 /deepseek-ai-dsh-experimental-forge-bundle:
   en: 567570af44a77fa2
   zh: 3d7722fe3ade65d6
 /deepseek-ai-dsh-experimental-forge-bundle/summary:
-  en: cd022525a06668aa
-  zh: 4098a47146a7fff7
+  en: f6ce7db50e10af0b
+  zh: 415f509876e88d8a
 /deepseek-ai-dsh-experimental-forge-bundle/table-of-contents:
   en: d152484eb41ac6b4
   zh: 2f8a621b991260a1
 /deepseek-ai-dsh-experimental-forge-bundle/use-this-package:
-  en: 1abdf65b302f9181
-  zh: 498d89e30835a711
+  en: 4773dc9d2f292388
+  zh: b40ce2d8b2b8605b
 /deepseek-ai-dsh-experimental-forge-bundle/understand-the-implementation:
   en: 6effcbf40264388b
   zh: b4f093955671c650
@@ -30,8 +30,8 @@
   en: 06c8b68589e27fc7
   zh: 092fd7649b34bc04
 /deepseek-ai-dsh-experimental-forge-bundle/known-limitations-and-deferred-work:
-  en: c8122ac0c46b9a87
-  zh: 436edc8dca640222
+  en: ab489084b24ecb16
+  zh: 6be1686e9741dffa
 /deepseek-ai-dsh-experimental-forge-bundle/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

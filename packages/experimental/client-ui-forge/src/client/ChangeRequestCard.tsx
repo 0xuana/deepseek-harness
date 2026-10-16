@@ -1,25 +1,27 @@
-/** One change request as a collapsible card: a status summary, and its details and actions when expanded. */
+/**
+ * One change request as a card: its title links to the host, a one-line
+ * summary shows while collapsed, and the checks, review, merge state, and
+ * diff size show while expanded.
+ */
 
 import { useState, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
-  Button, IconBranchOutlineRegular, IconCheckOutlineRegular, IconChecklistOutlineRegular, IconChevronDownOutlineRegular,
-  IconCloseOutlineRegular, IconContextInjectionOutlineRegular, IconCopyOutlineRegular, IconInfoOutlineRegular,
-  IconRightUpOutlineRegular, IconTrashOutlineRegular, IconUsersOutlineRegular, StateDot, Tooltip,
+  Button, IconChevronDownOutlineRegular, IconCloseOutlineRegular, IconCopyOutlineRegular, IconRightUpOutlineRegular,
+  Menu, MenuItemButton, StateDot, Tooltip, type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
-import { assertNever } from '@deepseek-ai/dsh-util-values'
-import type { ChangeRequestCheck, ChangeRequestSnapshot, ForgeFailure } from '@deepseek-ai/dsh-experimental-forge/types'
-import type { BindingOrigin } from '@deepseek-ai/dsh-experimental-forge-session/types'
+import type { ChangeRequestCheck, ChangeRequestSnapshot, CheckState, ChecksRollup, ForgeFailure } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { ForgePanelChangeRequest } from '../types.ts'
 import { formatAgo, formatDuration } from './format.ts'
+import { ChangeRequestGlyph, CheckGlyph } from './glyphs.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
-import { checkCounts, checkDuration, ciSummary, flagOf, numberOf, toneOf } from './status.ts'
+import { checkCounts, checkDuration, ciSummary, flagOf, numberOf, toneOf, type ChangeRequestTone } from './status.ts'
 import css from './ForgeTab.module.css'
 
 type Translate = PropsLocale<typeof NS>['t']
 
-/** What a card can do; a surface without a composer or Session binding omits the optional actions. */
+/** What a card can do; a surface without a Session binding omits `remove`. */
 export interface ChangeRequestActions {
   /** Open a URL outside the app. */
   readonly openLink: (url: string) => void
@@ -27,8 +29,6 @@ export interface ChangeRequestActions {
   readonly copyLink: (url: string) => void
   /** Read the status again after a failed read. */
   readonly retry: () => void
-  /** Insert the change request URL into the composer. */
-  readonly addToChat?: ((url: string) => void) | undefined
   /** Remove the change request from its Session. */
   readonly remove?: ((entry: ForgePanelChangeRequest) => void) | undefined
 }
@@ -49,10 +49,13 @@ export interface ChangeRequestCardProps {
   readonly t: Translate
 }
 
-const ORIGIN: Record<BindingOrigin, ForgePanelKey> = {
-  created: 'change.origin.created',
-  discovered: 'change.origin.discovered',
-  tracked: 'change.origin.tracked',
+const STATE: Record<ChangeRequestTone, ForgePanelKey> = {
+  open: 'change.state.open',
+  blocked: 'change.state.blocked',
+  draft: 'change.state.draft',
+  merged: 'change.state.merged',
+  closed: 'change.state.closed',
+  unknown: 'change.state.unknown',
 }
 
 const REVIEW: Record<ChangeRequestSnapshot['reviewDecision'], ForgePanelKey> = {
@@ -62,95 +65,25 @@ const REVIEW: Record<ChangeRequestSnapshot['reviewDecision'], ForgePanelKey> = {
   'none': 'change.review.none',
 }
 
-const MERGE: Record<ChangeRequestSnapshot['mergeability'], ForgePanelKey> = {
-  mergeable: 'change.merge.mergeable',
-  conflicting: 'change.merge.conflicting',
-  unknown: 'change.merge.unknown',
-}
-
 const FAILURE: Record<ForgeFailure['code'], ForgePanelKey> = {
   'not-found': 'change.failure.notFound',
   'unauthenticated': 'change.failure.unauthenticated',
   'unavailable': 'change.failure.unavailable',
 }
 
-function stateKey(snapshot: ChangeRequestSnapshot): ForgePanelKey {
-  if (snapshot.state === 'open') return snapshot.draft ? 'change.state.draft' : 'change.state.open'
-  return snapshot.state === 'merged' ? 'change.state.merged' : 'change.state.closed'
+const ROLLUP: Record<ChecksRollup, CheckState> = {
+  none: 'neutral',
+  pending: 'pending',
+  success: 'success',
+  failure: 'failure',
+}
+
+const CHECK_RANK: Record<CheckState, number> = {
+  failure: 0, pending: 1, success: 2, neutral: 3, skipped: 3, cancelled: 3,
 }
 
 function failureOf(entry: ForgePanelChangeRequest): ForgeFailure | undefined {
   return entry.update !== null && 'failure' in entry.update ? entry.update.failure : undefined
-}
-
-function Diff({ snapshot }: { readonly snapshot: ChangeRequestSnapshot }): ReactNode {
-  return (
-    <span className={css.diff}>
-      <span className={css.added}>{`+${String(snapshot.additions)}`}</span>
-      <span className={css.deleted}>{`−${String(snapshot.deletions)}`}</span>
-    </span>
-  )
-}
-
-function Ci({ snapshot, t }: { readonly snapshot: ChangeRequestSnapshot; readonly t: Translate }): ReactNode {
-  const ci = ciSummary(snapshot)
-  switch (ci.kind) {
-    case 'none': return <span className={css.ci}>{t('change.ci.none')}</span>
-    case 'running': return <span className={css.ci}><StateDot state="ongoing" size={11} />{t('change.ci.running')}</span>
-    case 'passed': return <span className={css.ci}><StateDot state="done" size={7} />{t('change.ci.passed')}</span>
-    case 'failed': return (
-      <span className={css.ci} data-tone="error">
-        <StateDot state="error" size={7} />
-        {ci.count > 0 ? t('change.ci.failed', { count: ci.count }) : t('change.ci.failedUnlisted')}
-      </span>
-    )
-    /* v8 ignore next -- closed CiSummary kind union exhaustiveness guard */
-    default: return assertNever(ci, 'CiSummary.kind')
-  }
-}
-
-/** Status line inside the toggle: diff size, then checks and the open-state flag, or the merge or close time. */
-function Summary({ entry, now, t }: { readonly entry: ForgePanelChangeRequest; readonly now: number; readonly t: Translate }): ReactNode {
-  const snapshot = entry.snapshot
-  if (entry.ref === null || failureOf(entry) !== undefined) return null
-  if (snapshot === null) {
-    return <span className={css.summary}><span className={css.ci}><StateDot state="ongoing" size={11} />{t('change.loading')}</span></span>
-  }
-  if (snapshot.state !== 'open') {
-    const ago = snapshot.closedAt === null ? undefined : formatAgo(snapshot.closedAt, now, t)
-    const state = t(stateKey(snapshot))
-    return (
-      <span className={css.summary}>
-        <Diff snapshot={snapshot} />
-        <span className={css.finished} data-tone={snapshot.state}>{ago === undefined ? state : t('time.finished', { state, time: ago })}</span>
-      </span>
-    )
-  }
-  const flag = flagOf(snapshot)
-  return (
-    <span className={css.summary}>
-      <Diff snapshot={snapshot} />
-      <Ci snapshot={snapshot} t={t} />
-      {flag !== undefined && <span className={css.flag} data-flag={flag}>{t(`change.flag.${flag}`)}</span>}
-    </span>
-  )
-}
-
-function CheckIcon({ check }: { readonly check: ChangeRequestCheck }): ReactNode {
-  switch (check.state) {
-    case 'success': return <IconCheckOutlineRegular size={13} className={css.pass} />
-    case 'failure': return <IconCloseOutlineRegular size={13} className={css.fail} />
-    case 'pending': return <StateDot state="ongoing" size={12} />
-    case 'neutral':
-    case 'skipped':
-    case 'cancelled': return <StateDot state="idle" size={7} />
-    /* v8 ignore next -- closed CheckState union exhaustiveness guard */
-    default: return assertNever(check.state, 'ChangeRequestCheck.state')
-  }
-}
-
-const CHECK_RANK: Record<ChangeRequestCheck['state'], number> = {
-  failure: 0, pending: 1, success: 2, neutral: 3, skipped: 3, cancelled: 3,
 }
 
 /** Failed checks first, then running ones, then the rest, each group in host order. */
@@ -164,124 +97,157 @@ function checkTime(check: ChangeRequestCheck, t: Translate): string {
   return elapsed === undefined ? '' : formatDuration(elapsed, t)
 }
 
-function Checks({ snapshot, openLink, t }: {
+function DiffSize({ snapshot }: { readonly snapshot: ChangeRequestSnapshot }): ReactNode {
+  return (
+    <span className={css.diff}>
+      <span className={css.added}>{`+${snapshot.additions.toLocaleString('en-US')}`}</span>
+      <span className={css.deleted}>{`−${snapshot.deletions.toLocaleString('en-US')}`}</span>
+    </span>
+  )
+}
+
+/** The merged or closed fact with its time, such as 已合并到 main · 2 小时前. */
+function finished(snapshot: ChangeRequestSnapshot, now: number, t: Translate): string {
+  const state = snapshot.state === 'merged' ? t('change.mergedTo', { base: snapshot.baseBranch }) : t('change.state.closed')
+  const ago = snapshot.closedAt === null ? undefined : formatAgo(snapshot.closedAt, now, t)
+  return ago === undefined ? state : t('time.finished', { state, time: ago })
+}
+
+/** Collapsed status after the number: checks and the most urgent flag, the merge or close time, or a read in progress. */
+function Summary({ snapshot, now, t }: {
+  readonly snapshot: ChangeRequestSnapshot | null
+  readonly now: number
+  readonly t: Translate
+}): ReactNode {
+  if (snapshot === null) return <StateDot state="ongoing" size={11} />
+  if (snapshot.state !== 'open') {
+    return <span className={css.finished} data-tone={snapshot.state}>{finished(snapshot, now, t)}</span>
+  }
+  const ci = ciSummary(snapshot)
+  const flag = flagOf(snapshot)
+  return (
+    <>
+      <span className={css.ci} data-tone={ci.kind === 'failed' ? 'error' : undefined}>
+        {ci.kind !== 'none' && <CheckGlyph state={ROLLUP[snapshot.checksRollup]} size={12} />}
+        {ci.kind === 'failed'
+          ? ci.count > 0 ? t('change.ci.failed', { count: ci.count }) : t('change.ci.failedUnlisted')
+          : t(`change.ci.${ci.kind}`)}
+      </span>
+      {flag !== undefined && <span className={css.flag} data-flag={flag}>{t(`change.flag.${flag}`)}</span>}
+    </>
+  )
+}
+
+/** Expanded identity after the number: draft state and the head and base branches. */
+function Target({ snapshot, t }: { readonly snapshot: ChangeRequestSnapshot; readonly t: Translate }): ReactNode {
+  return (
+    <>
+      {snapshot.state === 'open' && snapshot.draft && <span>{t('change.state.draft')}</span>}
+      <span className={clsx(css.code, css.ellipsis)}>{`${snapshot.headBranch} → ${snapshot.baseBranch}`}</span>
+    </>
+  )
+}
+
+function ChecksRow({ snapshot, openLink, t }: {
   readonly snapshot: ChangeRequestSnapshot
   readonly openLink: (url: string) => void
   readonly t: Translate
 }): ReactNode {
   const [open, setOpen] = useState(false)
-  const counts = checkCounts(snapshot.checks)
   if (snapshot.checks.length === 0) {
-    return <Row icon={<IconChecklistOutlineRegular size={15} />} label={t('change.row.checks')} value={t('change.ci.none')} />
+    return (
+      <div className={css.row}>
+        <span className={css.rowLabel}>{t('change.row.checks')}</span>
+        <span className={css.rowValue}>{t('change.ci.none')}</span>
+      </div>
+    )
   }
+  const counts = checkCounts(snapshot.checks)
   const summary = [
     ...counts.failed > 0 ? [t('change.checks.failed', { count: counts.failed })] : [],
     ...counts.running > 0 ? [t('change.checks.running', { count: counts.running })] : [],
     ...counts.passed > 0 ? [t('change.checks.passed', { count: counts.passed })] : [],
     ...counts.other > 0 ? [t('change.checks.other', { count: counts.other })] : [],
   ].join(' · ')
+  const close = (): void => { setOpen(false) }
+  const truncated: MenuEntry[] = [{ type: 'label', id: 'truncated', text: t('change.checks.truncated', { count: snapshot.checks.length }) }]
   return (
-    <>
-      <button type="button" className={css.item} aria-expanded={open} onClick={() => { setOpen(!open) }}>
-        <IconChecklistOutlineRegular size={15} />
-        <span>{t('change.row.checks')}</span>
-        <span className={css.value} data-tone={counts.failed > 0 ? 'error' : undefined}>{summary}</span>
-        <IconChevronDownOutlineRegular size={12} className={clsx(css.chevron, open && css.chevronOpen)} />
-      </button>
-      {open && (
-        <ul className={css.checks}>
-          {orderedChecks(snapshot.checks).map((check, index) => {
-            const body = (
-              <>
-                <CheckIcon check={check} />
-                <span className={clsx(css.code, css.ellipsis)}>{check.name}</span>
-                <span className={css.value}>{checkTime(check, t)}</span>
-              </>
-            )
-            const url = check.url
-            return (
-              <li key={`${String(index)}:${check.name}`}>
-                {url === null
-                  ? <div className={css.check}>{body}</div>
-                  : <button type="button" className={css.check} onClick={() => { openLink(url) }}>{body}</button>}
-              </li>
-            )
-          })}
-          {snapshot.checksTruncated && <li className={css.truncated}>{t('change.checks.truncated', { count: snapshot.checks.length })}</li>}
-        </ul>
+    <Menu
+      open={open}
+      onClose={close}
+      portal
+      dense
+      className={css.checksAnchor}
+      listClassName={css.checksList}
+      anchor={(
+        <button type="button" className={clsx(css.row, css.rowButton)} aria-haspopup="menu" aria-expanded={open} onClick={() => { setOpen(!open) }}>
+          <span className={css.rowLabel}>{t('change.row.checks')}</span>
+          <span className={css.rowValue} data-tone={counts.failed > 0 ? 'error' : undefined}>
+            <CheckGlyph state={ROLLUP[snapshot.checksRollup]} size={14} />
+            <span className={css.ellipsis}>{summary}</span>
+          </span>
+          <IconChevronDownOutlineRegular size={12} className={clsx(css.chevron, open && css.chevronOpen)} />
+        </button>
       )}
-    </>
+      {...snapshot.checksTruncated ? { footer: truncated } : {}}
+    >
+      {orderedChecks(snapshot.checks).map((check, index) => {
+        const { url } = check
+        return (
+          <MenuItemButton
+            // The list is replaced as a whole with each snapshot, and check names can repeat.
+            key={index}
+            icon={<CheckGlyph state={check.state} />}
+            disabled={url === null}
+            onSelect={url === null ? close : () => {
+              close()
+              openLink(url)
+            }}
+          >
+            <span className={css.checkItem}>
+              <span className={css.ellipsis}>{check.name}</span>
+              <span className={css.checkTime}>{checkTime(check, t)}</span>
+            </span>
+          </MenuItemButton>
+        )
+      })}
+    </Menu>
   )
 }
 
-function Row({ icon, label, value, tone }: {
-  readonly icon: ReactNode
-  readonly label: string
-  readonly value: string
-  readonly tone?: 'error' | undefined
-}): ReactNode {
-  return (
-    <div className={css.item} data-static="">
-      {icon}
-      <span>{label}</span>
-      <span className={css.value} data-tone={tone}>{value}</span>
-    </div>
-  )
-}
-
-function Details({ entry, url, actions, t }: {
-  readonly entry: ForgePanelChangeRequest
-  readonly url: string
+function Details({ snapshot, now, actions, t }: {
+  readonly snapshot: ChangeRequestSnapshot
+  readonly now: number
   readonly actions: ChangeRequestActions
   readonly t: Translate
 }): ReactNode {
-  const snapshot = entry.snapshot
-  const { addToChat, remove } = actions
-  const review = snapshot === null ? '' : t(REVIEW[snapshot.reviewDecision])
-  return (
-    <div className={css.details}>
-      <div className={css.linkRow}>
-        <button type="button" className={css.item} onClick={() => { actions.openLink(url) }}>
-          <IconRightUpOutlineRegular size={15} />
-          <span>{t('change.view')}</span>
-        </button>
-        <Tooltip label={t('change.copy')} side="top">
-          <button type="button" className={css.iconButton} aria-label={t('change.copy')} onClick={() => { actions.copyLink(url) }}>
-            <IconCopyOutlineRegular size={14} />
-          </button>
-        </Tooltip>
+  if (snapshot.state !== 'open') {
+    return (
+      <div className={css.rows}>
+        <div className={css.row}>
+          <span className={css.rowValue} data-tone={snapshot.state}>{finished(snapshot, now, t)}</span>
+        </div>
       </div>
-      {snapshot !== null && (
-        <>
-          <Row icon={<IconInfoOutlineRegular size={15} />} label={t('change.row.state')} value={`${t(stateKey(snapshot))} · ${t(ORIGIN[entry.origin])}`} />
-          <Checks snapshot={snapshot} openLink={actions.openLink} t={t} />
-          <Row
-            icon={<IconUsersOutlineRegular size={15} />}
-            label={t('change.row.review')}
-            value={snapshot.unresolvedThreads > 0 ? t('change.review.threads', { review, count: snapshot.unresolvedThreads }) : review}
-            tone={snapshot.reviewDecision === 'changes-requested' ? 'error' : undefined}
-          />
-          <Row
-            icon={<IconBranchOutlineRegular size={15} />}
-            label={t('change.row.merge')}
-            value={snapshot.state === 'open' ? t(MERGE[snapshot.mergeability]) : t(stateKey(snapshot))}
-            tone={snapshot.state === 'open' && snapshot.mergeability === 'conflicting' ? 'error' : undefined}
-          />
-        </>
-      )}
-      {(addToChat !== undefined || remove !== undefined) && <div className={css.separator} role="separator" />}
-      {addToChat !== undefined && (
-        <button type="button" className={css.item} onClick={() => { addToChat(url) }}>
-          <IconContextInjectionOutlineRegular size={15} />
-          <span>{t('change.addToChat')}</span>
-        </button>
-      )}
-      {remove !== undefined && (
-        <button type="button" className={css.item} data-tone="error" onClick={() => { remove(entry) }}>
-          <IconTrashOutlineRegular size={15} />
-          <span>{t('change.remove')}</span>
-        </button>
-      )}
+    )
+  }
+  const review = t(REVIEW[snapshot.reviewDecision])
+  const reviewTone = snapshot.reviewDecision === 'changes-requested' ? 'error' : snapshot.reviewDecision === 'approved' ? 'success' : undefined
+  const merge = snapshot.mergeability === 'mergeable'
+    ? t('change.merge.mergeable')
+    : snapshot.mergeability === 'conflicting' ? t('change.merge.conflicting', { base: snapshot.baseBranch }) : t('change.merge.unknown')
+  return (
+    <div className={css.rows}>
+      <ChecksRow snapshot={snapshot} openLink={actions.openLink} t={t} />
+      <div className={css.row}>
+        <span className={css.rowLabel}>{t('change.row.review')}</span>
+        <span className={css.rowValue} data-tone={reviewTone}>
+          {snapshot.unresolvedThreads > 0 ? t('change.review.threads', { review, count: snapshot.unresolvedThreads }) : review}
+        </span>
+      </div>
+      <div className={css.row}>
+        <span className={css.rowLabel}>{t('change.row.merge')}</span>
+        <span className={css.rowValue} data-tone={snapshot.mergeability === 'conflicting' ? 'error' : undefined}>{merge}</span>
+      </div>
     </div>
   )
 }
@@ -297,23 +263,62 @@ export function ChangeRequestCard({ entry, expanded, onToggle, now, actions, t }
   const url = snapshot?.url ?? entry.url
   const failure = failureOf(entry)
   const notice = entry.ref === null ? 'change.unserved' : failure === undefined ? undefined : FAILURE[failure.code]
+  const tone = toneOf(snapshot)
+  const name = number === null ? snapshot?.title ?? url : t('change.number', { number })
+  // A notice replaces the collapsed summary, so a failed read never shows its stale status beside it.
+  const meta = expanded
+    ? snapshot === null ? null : <Target snapshot={snapshot} t={t} />
+    : notice === undefined ? <Summary snapshot={snapshot} now={now} t={t} /> : null
+  const { remove } = actions
   return (
-    <li className={css.change} data-forge-change={entry.url}>
-      <button type="button" className={css.changeHead} aria-expanded={expanded} onClick={onToggle}>
-        <span className={css.headRow}>
-          <span className={css.glyph} data-tone={toneOf(snapshot)} aria-hidden="true"><IconBranchOutlineRegular size={15} /></span>
-          <span className={css.changeTitle}>{snapshot?.title ?? entry.url.replace(/^https?:\/\//i, '')}</span>
-          <IconChevronDownOutlineRegular size={12} className={clsx(css.chevron, expanded && css.chevronOpen)} />
-        </span>
-        {(number !== null || snapshot !== null) && (
-          <span className={css.metaRow}>
-            {number !== null && <span className={css.code}>{t('change.number', { number })}</span>}
-            {number !== null && snapshot !== null && <span aria-hidden="true">·</span>}
-            {snapshot !== null && <span className={clsx(css.code, css.ellipsis)}>{snapshot.headBranch}</span>}
-          </span>
+    <li className={css.change} data-forge-change={entry.url} data-expanded={expanded ? '' : undefined}>
+      <div className={css.changeHead}>
+        <ChangeRequestGlyph tone={tone} label={t('change.stateAria', { state: t(STATE[tone]) })} />
+        <div className={css.headText}>
+          <a
+            className={css.changeTitle}
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(event) => {
+              event.preventDefault()
+              actions.openLink(url)
+            }}
+          >
+            {snapshot?.title ?? url.replace(/^https?:\/\//i, '')}
+          </a>
+          {(number !== null || meta !== null) && (
+            <div className={css.meta}>
+              {number !== null && <span className={css.code}>{t('change.number', { number })}</span>}
+              {number !== null && meta !== null && <span aria-hidden="true">·</span>}
+              {meta}
+            </div>
+          )}
+        </div>
+        {expanded && (
+          <Tooltip label={t('change.view')} side="top">
+            <button type="button" className={css.iconButton} aria-label={t('change.view')} onClick={() => { actions.openLink(url) }}>
+              <IconRightUpOutlineRegular size={14} />
+            </button>
+          </Tooltip>
         )}
-        <Summary entry={entry} now={now} t={t} />
-      </button>
+        {expanded && remove !== undefined && (
+          <Tooltip label={t('change.remove')} side="top">
+            <button type="button" className={css.iconButton} aria-label={t('change.removeAria', { name })} onClick={() => { remove(entry) }}>
+              <IconCloseOutlineRegular size={14} />
+            </button>
+          </Tooltip>
+        )}
+        <button
+          type="button"
+          className={css.iconButton}
+          aria-expanded={expanded}
+          aria-label={t(expanded ? 'change.collapse' : 'change.expand', { name })}
+          onClick={onToggle}
+        >
+          <IconChevronDownOutlineRegular size={12} className={clsx(css.chevron, expanded && css.chevronOpen)} />
+        </button>
+      </div>
       {notice !== undefined && (
         <div className={css.notice}>
           <span>{t(notice)}</span>
@@ -322,7 +327,17 @@ export function ChangeRequestCard({ entry, expanded, onToggle, now, actions, t }
             : <Button size="sm" variant="outline" onClick={actions.retry}>{t('retry')}</Button>}
         </div>
       )}
-      {expanded && <Details entry={entry} url={url} actions={actions} t={t} />}
+      {expanded && snapshot !== null && <Details snapshot={snapshot} now={now} actions={actions} t={t} />}
+      {expanded && (
+        <div className={css.footer}>
+          {snapshot !== null && <DiffSize snapshot={snapshot} />}
+          <Tooltip label={t('change.copy')} side="top">
+            <button type="button" className={clsx(css.iconButton, css.footerEnd)} aria-label={t('change.copy')} onClick={() => { actions.copyLink(url) }}>
+              <IconCopyOutlineRegular size={14} />
+            </button>
+          </Tooltip>
+        </div>
+      )}
     </li>
   )
 }

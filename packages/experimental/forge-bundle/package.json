@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-experimental-forge-bundle",
-  "description": "Experimental pull request panel and worktree option for Sessions in Git repositories",
+  "description": "Experimental change request panel and worktree option for Sessions in Git repositories",
   "version": "0.2.1-rc.2",
   "icon": "./icon.svg",
   "publishConfig": {

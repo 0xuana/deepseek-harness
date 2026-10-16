@@ -1,19 +1,15 @@
-- text: 工作树 dsh-{{worktree}} 基于 release
-- heading "本会话的 Pull Request · 1" [level=3]
+- text: dsh-{{worktree}} 工作树 · 基于 release
+- heading "本会话的变更请求 · 1" [level=3]
 - button "刷新状态"
 - list:
   - listitem:
-    - 'button "Add the pull request panel #7 feat +128 −14 1 项失败" [expanded]'
-    - button "查看 PR"
-    - button "复制 PR 链接"
-    - text: 状态 可供审查 · 手动跟踪
-    - button "检查 1 项失败 · 1 项通过" [expanded]
-    - list:
-      - listitem:
-        - button "test 2 分 7 秒"
-      - listitem:
-        - button "lint 42 秒"
-    - text: 评审 等待评审 · 1 条未解决讨论 合并 可合并
-    - separator
-    - button "添加到聊天"
-    - button "从会话中移除 PR"
+    - img "变更请求状态：需要处理"
+    - link "Add the pull request panel":
+      - /url: https://github.com/octo/demo/pull/7
+    - text: "#7 feat → main"
+    - button "在浏览器中打开"
+    - 'button "从本会话移除 #7"'
+    - 'button "收起 #7" [expanded]'
+    - button "检查 1 项失败 · 1 项通过"
+    - text: 评审 等待评审 · 1 条未解决讨论 合并 无冲突 +128 −14
+    - button "复制变更请求链接"

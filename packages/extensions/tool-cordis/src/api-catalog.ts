@@ -5947,7 +5947,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgeCheckout',
-    declaration: 'export interface ForgeCheckout {\n    readonly root: string;\n    readonly branch: string | null;\n}',
+    declaration: 'export interface ForgeCheckout {\n    readonly root: string;\n    readonly branch: string | null;\n    readonly linked: boolean;\n    readonly commit: string | null;\n}',
   },
   {
     name: 'ForgeCheckoutState',

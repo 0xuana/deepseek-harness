@@ -69,7 +69,7 @@ async function branched(root: string): Promise<string> {
 }
 
 describe('inspectCheckout', () => {
-  it('reads the root, shared Git directory, branch, upstream, and remotes of the checkout with five read-only commands', async () => {
+  it('reads the root, shared Git directory, branch, commit, upstream, and remotes of the checkout with seven read-only commands', async () => {
     const root = await directory()
     const repo = await repository(root)
     await git(root, 'init', '--bare', '-b', 'main', 'origin.git')
@@ -83,7 +83,7 @@ describe('inspectCheckout', () => {
 
     const inspection = await inspectCheckout(ctx, CONFIG, session(repo), nested, live())
 
-    expect(inspection?.checkout).toEqual({ root: repo, branch: 'main' })
+    expect(inspection?.checkout).toEqual({ root: repo, branch: 'main', linked: false, commit: await git(repo, 'rev-parse', '--short', 'HEAD') })
     expect(inspection?.commonDir).toBe(join(repo, '.git'))
     expect(inspection?.upstream).toBe('origin/main')
     expect(inspection?.remotes).toHaveLength(2)
@@ -96,6 +96,8 @@ describe('inspectCheckout', () => {
       'remote -v',
       'rev-parse --abbrev-ref --symbolic-full-name @{upstream}',
       'rev-parse --path-format=absolute --git-common-dir',
+      'rev-parse --path-format=absolute --git-dir',
+      'rev-parse --short HEAD',
       'rev-parse --show-toplevel',
       'symbolic-ref --quiet --short HEAD',
     ])
@@ -113,7 +115,8 @@ describe('inspectCheckout', () => {
     const ctx = await context(sandboxRecord(), repo)
 
     await expect(inspectCheckout(ctx, CONFIG, session(repo), linked, live())).resolves.toEqual({
-      checkout: { root: linked, branch: 'feat' }, commonDir: join(repo, '.git'), upstream: null, remotes: [],
+      checkout: { root: linked, branch: 'feat', linked: true, commit: await git(linked, 'rev-parse', '--short', 'HEAD') },
+      commonDir: join(repo, '.git'), upstream: null, remotes: [],
     })
   })
 
@@ -134,10 +137,11 @@ describe('inspectCheckout', () => {
     const ctx = await context(sandboxRecord(), root)
 
     await expect(inspectCheckout(ctx, CONFIG, session(root), join(root, 'empty'), live())).resolves.toEqual({
-      checkout: { root: join(root, 'empty'), branch: 'main' }, commonDir: join(root, 'empty', '.git'), upstream: null, remotes: [],
+      checkout: { root: join(root, 'empty'), branch: 'main', linked: false, commit: null }, commonDir: join(root, 'empty', '.git'), upstream: null, remotes: [],
     })
     await expect(inspectCheckout(ctx, CONFIG, session(root), repo, live())).resolves.toEqual({
-      checkout: { root: repo, branch: null }, commonDir: join(repo, '.git'), upstream: null, remotes: [],
+      checkout: { root: repo, branch: null, linked: false, commit: await git(repo, 'rev-parse', '--short', 'HEAD') },
+      commonDir: join(repo, '.git'), upstream: null, remotes: [],
     })
   })
 
@@ -163,7 +167,7 @@ describe.skipIf(!posix)('inspectCheckout with a stand-in Git', () => {
 
     const inspection = await inspectCheckout(ctx, CONFIG, session(repo), repo, live())
 
-    expect(inspection?.checkout).toEqual({ root: repo, branch: 'main' })
+    expect(inspection?.checkout).toMatchObject({ root: repo, branch: 'main' })
     await expect(access(marker)).rejects.toThrow()
     await git(repo, 'status', '--porcelain')
     expect(await readFile(marker, 'utf8')).toContain('executed')
@@ -176,6 +180,7 @@ describe.skipIf(!posix)('inspectCheckout with a stand-in Git', () => {
       'case "$*" in',
       `  *--show-toplevel*) env | grep -E '^(GIT_|LC_ALL)' | sort > "${log}"; echo /work/repo ;;`,
       '  *--git-common-dir*) echo /work/repo/.git ;;',
+      '  *--git-dir*) echo /work/repo/.git ;;',
       '  *symbolic-ref*) exit 1 ;;',
       '  *--abbrev-ref*) exit 128 ;;',
       'esac',
@@ -185,7 +190,7 @@ describe.skipIf(!posix)('inspectCheckout with a stand-in Git', () => {
 
     try {
       await expect(inspectCheckout(ctx, { ...CONFIG, gitCommand: fake }, session(root), root, live())).resolves.toEqual({
-        checkout: { root: '/work/repo', branch: null }, commonDir: '/work/repo/.git', upstream: null, remotes: [],
+        checkout: { root: '/work/repo', branch: null, linked: false, commit: null }, commonDir: '/work/repo/.git', upstream: null, remotes: [],
       })
     } finally {
       vi.unstubAllEnvs()
@@ -207,6 +212,8 @@ describe.skipIf(!posix)('inspectCheckout with a stand-in Git', () => {
       'case "$*" in',
       `  *--show-toplevel*) echo "${alias}/" ;;`,
       `  *--git-common-dir*) echo "${alias}/.git" ;;`,
+      `  *--git-dir*) echo "${alias}/.git" ;;`,
+      '  *"rev-parse --short"*) echo 0a1b2c3 ;;',
       '  *symbolic-ref*) echo main ;;',
       '  *--abbrev-ref*) echo origin/main ;;',
       'esac',
@@ -214,7 +221,7 @@ describe.skipIf(!posix)('inspectCheckout with a stand-in Git', () => {
     const ctx = await context(sandboxRecord(), root)
 
     await expect(inspectCheckout(ctx, { ...CONFIG, gitCommand: fake }, session(root), root, live())).resolves.toEqual({
-      checkout: { root: repo, branch: 'main' }, commonDir: join(repo, '.git'), upstream: 'origin/main', remotes: [],
+      checkout: { root: repo, branch: 'main', linked: false, commit: '0a1b2c3' }, commonDir: join(repo, '.git'), upstream: 'origin/main', remotes: [],
     })
   })
 
@@ -242,6 +249,8 @@ describe.skipIf(!posix)('inspectCheckout with a stand-in Git', () => {
 
   it.each([
     ['common-dir', '*--git-common-dir*) echo "fatal: bad common dir" >&2; exit 128 ;;', 'git common-dir failed (128): fatal: bad common dir'],
+    ['git-dir', '*--git-dir*) echo "fatal: bad git dir" >&2; exit 128 ;;', 'git git-dir failed (128): fatal: bad git dir'],
+    ['head', '*"rev-parse --short"*) echo "fatal: bad object" >&2; exit 2 ;;', 'git head failed (2): fatal: bad object'],
     ['symbolic-ref', '*symbolic-ref*) echo "fatal: bad HEAD" >&2; exit 128 ;;', 'git symbolic-ref failed (128): fatal: bad HEAD'],
     ['upstream', '*--abbrev-ref*) echo "fatal: bad upstream" >&2; exit 1 ;;', 'git upstream failed (1): fatal: bad upstream'],
     ['remote', '*remote*) echo "fatal: bad config" >&2; exit 3 ;;', 'git remote failed (3): fatal: bad config'],
@@ -252,6 +261,7 @@ describe.skipIf(!posix)('inspectCheckout with a stand-in Git', () => {
       `  ${failure}`,
       '  *--show-toplevel*) echo /work/repo ;;',
       '  *--git-common-dir*) echo /work/repo/.git ;;',
+      '  *--git-dir*) echo /work/repo/.git ;;',
       'esac',
     ].join('\n'))
     const ctx = await context(sandboxRecord(), root)
@@ -416,11 +426,12 @@ describe.skipIf(!sandboxUsable)('Git inspection under the local sandbox', () => 
     const confine = vi.spyOn(ctx.sandbox, 'confine')
 
     await expect(inspectCheckout(ctx, CONFIG, session(repo), repo, live())).resolves.toEqual({
-      checkout: { root: repo, branch: 'main' }, commonDir: join(repo, '.git'), upstream: null, remotes: [],
+      checkout: { root: repo, branch: 'main', linked: false, commit: await git(repo, 'rev-parse', '--short', 'HEAD') },
+      commonDir: join(repo, '.git'), upstream: null, remotes: [],
     })
     await expect(listBranches(ctx, CONFIG, session(repo), repo, 50, live())).resolves.toEqual({ current: 'main', branches: ['main'] })
 
-    expect(confine).toHaveBeenCalledTimes(7)
+    expect(confine).toHaveBeenCalledTimes(9)
     expect(confine.mock.calls.every(call => call[1].mode === 'read-only')).toBe(true)
     expect((await stat(index)).mtimeMs).toBe(before.mtimeMs)
     await expect(access(join(repo, '.git', 'index.lock'))).rejects.toThrow()

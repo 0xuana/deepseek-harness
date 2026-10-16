@@ -96,15 +96,18 @@ export async function inspectCheckout(
     throw new Error(`git rev-parse failed: ${firstLine(top.stderr)}`)
   }
   const canonical = async (path: string): Promise<string> => ctx.fs.processPath(await ctx.fs.resolve(path, { cwd: directory, signal }))
-  const [root, commonDir, branch, upstream, remotes] = await Promise.all([
+  const [root, commonDir, gitDir, branch, commit, upstream, remotes] = await Promise.all([
     canonical(parseTopLevel(top.stdout)),
     git('common-dir', ['rev-parse', '--path-format=absolute', '--git-common-dir']).then(output => canonical(parseTopLevel(output.stdout))),
+    git('git-dir', ['rev-parse', '--path-format=absolute', '--git-dir']).then(output => canonical(parseTopLevel(output.stdout))),
     currentBranch(git),
+    headCommit(git),
     git('upstream', ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'], [0, 128]),
     git('remote', ['remote', '-v']),
   ])
   return {
-    checkout: { root, branch },
+    // A linked worktree keeps its own Git directory under the shared one; a submodule or a separate Git directory does not.
+    checkout: { root, branch, linked: gitDir !== commonDir, commit },
     commonDir,
     upstream: upstream.exitCode === 0 ? parseName(upstream.stdout) : null,
     remotes: parseRemotes(remotes.stdout),
@@ -171,6 +174,12 @@ function gitIn(ctx: Context, config: GitConfig, session: Session, directory: str
 /** Read the checked-out branch, including an unborn one; null when HEAD is detached. */
 async function currentBranch(git: Git): Promise<string | null> {
   const head = await git('symbolic-ref', ['symbolic-ref', '--quiet', '--short', 'HEAD'], [0, 1])
+  return head.exitCode === 0 ? parseName(head.stdout) : null
+}
+
+/** Read the abbreviated commit HEAD names; null while the checked-out branch has no commit. */
+async function headCommit(git: Git): Promise<string | null> {
+  const head = await git('head', ['rev-parse', '--short', 'HEAD'], [0, 128])
   return head.exitCode === 0 ? parseName(head.stdout) : null
 }
 

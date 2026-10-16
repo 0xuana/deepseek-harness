@@ -1,9 +1,10 @@
-/** Session header entry that shows or hides the forge tab and marks pull requests that need attention. */
+/** Session header entry that shows or hides the forge tab and marks change requests that need attention. */
 
 import type { ReactNode } from 'react'
-import { IconBranchOutlineRegular, StateDot, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { StateDot, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { HostObservable, InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import { ChangeRequestGlyph } from './glyphs.tsx'
 import type { NS } from './locales.ts'
 import type { PanelSnapshot } from './source.ts'
 import { needsAttention } from './status.ts'
@@ -59,7 +60,7 @@ export function HeaderButton({ usePanel, useVisible, toggle, t }: HeaderButtonPr
         data-forge-header=""
         onClick={() => { toggle(pressed) }}
       >
-        <IconBranchOutlineRegular size={16} />
+        <ChangeRequestGlyph tone="open" tinted={false} size={16} />
         {attention && <StateDot state="error" size={6} className={css.dot} />}
       </button>
     </Tooltip>

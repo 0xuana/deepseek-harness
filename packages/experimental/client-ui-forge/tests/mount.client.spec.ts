@@ -2,6 +2,7 @@
 /** Forge panel registration: the Remote mount, slot entries, per-Session stores, actions and their notices, and unload. */
 import assert from 'node:assert/strict'
 import { Context, Service } from '@deepseek-ai/cordis'
+import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
@@ -98,13 +99,14 @@ async function base() {
   const ctx = new Context()
   const unmount = vi.fn(async () => {})
   class Remote extends Service {
+    $host: RemoteHostFacts = { home: '/home/octo', isLoopback: true }
     constructor() { super(ctx, 'remote') }
     async $mount(contribution: TypertRemoteContribution) {
       expect(contribution).toBe(REMOTE)
       return unmount
     }
   }
-  new Remote()
+  const remote = new Remote()
   const streams: ReturnType<typeof stream>[] = []
   const forgePanel = {
     follow: vi.fn((_sessionId: SessionId, signal: AbortSignal) => {
@@ -143,7 +145,7 @@ async function base() {
       'shell.overlay': { kind: 'list', scope: 'root' },
     },
   } as never, () => null)
-  return { ctx, unmount, streams, forgePanel, sidebarRightTabs, unregisterTab, sidebarRight }
+  return { ctx, remote, unmount, streams, forgePanel, sidebarRightTabs, unregisterTab, sidebarRight }
 }
 
 async function fixture() {
@@ -280,6 +282,24 @@ describe('mountForgePanel Session stores', () => {
     await f.dispose()
   })
 
+  it('reads the Host facts for the tab and the branch label again after each reconnect', async () => {
+    const f = await fixture()
+    const host = f.tab(S1).hooks.host
+    expect(f.branch(S2).hooks.host).toBe(host)
+    expect(host.getSnapshot()).toEqual({ home: '/home/octo', isLoopback: true })
+    const listener = vi.fn()
+    const unsubscribe = host.subscribe(listener)
+
+    f.remote.$host = { home: '/home/other', isLoopback: false }
+    f.ctx.emit('connection/reset')
+    expect(listener).toHaveBeenCalledOnce()
+    expect(host.getSnapshot()).toEqual({ home: '/home/other', isLoopback: false })
+    unsubscribe()
+    f.ctx.emit('connection/reset')
+    expect(listener).toHaveBeenCalledOnce()
+    await f.dispose()
+  })
+
   it('shares the tab visibility of a Session with its header entry', async () => {
     const f = await fixture()
     const visible = f.header(S1).hooks.visible
@@ -345,10 +365,19 @@ describe('mountForgePanel tab actions', () => {
     await f.dispose()
   })
 
-  it('shows the notices the tab reports until they are dismissed', async () => {
+  it('restores a removed worktree, confirming it or reporting why it failed until the notice is dismissed', async () => {
     const f = await fixture()
-    f.tab(S1).report('toast.chatFailed')
-    expect(f.notice()).toMatchObject({ key: 'toast.chatFailed', tone: 'failure', seq: 1 })
+    f.tab(S1).restore()
+    await settle()
+    expect(f.forgePanel.restoreWorktree).toHaveBeenCalledWith(S1)
+    expect(f.notice()).toMatchObject({ key: 'toast.restored', tone: 'success', seq: 1 })
+
+    f.forgePanel.restoreWorktree.mockResolvedValueOnce(REFUSED.restore)
+    f.tab(S1).restore()
+    await settle()
+    expect(f.notice()).toMatchObject({
+      key: 'toast.restoreFailed', tone: 'failure', seq: 2, params: { message: 'fatal: \'/work/repo-dsh\' already exists' },
+    })
     f.toast().dismiss()
     expect(f.notice()).toBeNull()
     await f.dispose()

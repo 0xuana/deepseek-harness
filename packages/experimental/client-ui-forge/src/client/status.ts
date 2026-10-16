@@ -3,8 +3,11 @@
 import type { ChangeRequestCheck, ChangeRequestSnapshot, ChecksRollup } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { ForgePanelChangeRequest } from '../types.ts'
 
-/** Glyph tone of a change request: its lifecycle state, or `unknown` before the first snapshot. */
-export type ChangeRequestTone = 'open' | 'draft' | 'merged' | 'closed' | 'unknown'
+/**
+ * Glyph tone of a change request: its lifecycle state, `blocked` for an open
+ * one that needs its author, or `unknown` before the first snapshot.
+ */
+export type ChangeRequestTone = 'open' | 'blocked' | 'draft' | 'merged' | 'closed' | 'unknown'
 
 /** Combined check outcome shown on a collapsed card. */
 export type CiSummary =
@@ -32,14 +35,20 @@ const SETTLED: Record<Exclude<ChecksRollup, 'failure'>, Exclude<CiSummary['kind'
 export type ChangeRequestFlag = 'changesRequested' | 'conflicting' | 'draft'
 
 /**
- * Pick the glyph tone of a change request.
+ * Pick the glyph tone of a change request: an open one, drafts included, is
+ * `blocked` while its checks failed, changes were requested, or it conflicts
+ * with its base; running checks, a pending review, and an unknown
+ * mergeability only wait and keep it `open` or `draft`.
  * @param snapshot - latest snapshot, or null before the first one.
  * @returns the tone.
  */
 export function toneOf(snapshot: ChangeRequestSnapshot | null): ChangeRequestTone {
   if (snapshot === null) return 'unknown'
-  if (snapshot.state === 'open') return snapshot.draft ? 'draft' : 'open'
-  return snapshot.state
+  if (snapshot.state !== 'open') return snapshot.state
+  if (snapshot.checksRollup === 'failure' || snapshot.reviewDecision === 'changes-requested' || snapshot.mergeability === 'conflicting') {
+    return 'blocked'
+  }
+  return snapshot.draft ? 'draft' : 'open'
 }
 
 /**
@@ -83,14 +92,23 @@ export function flagOf(snapshot: ChangeRequestSnapshot): ChangeRequestFlag | und
 }
 
 /**
- * Whether an open change request needs the user: failed checks, requested changes, or merge conflicts.
+ * Whether a change request needs the user, the condition its card draws as `blocked`.
  * @param entry - bound change request.
  * @returns whether the header marks it.
  */
 export function needsAttention(entry: ForgePanelChangeRequest): boolean {
-  const snapshot = entry.snapshot
-  if (snapshot === null || snapshot.state !== 'open') return false
-  return snapshot.checksRollup === 'failure' || snapshot.reviewDecision === 'changes-requested' || snapshot.mergeability === 'conflicting'
+  return toneOf(entry.snapshot) === 'blocked'
+}
+
+/**
+ * Pick the cards a Session's panel opens before the user expands or collapses
+ * one: the only open change request, drafts included, when exactly one is open.
+ * @param entries - bound change requests.
+ * @returns the URLs of the cards that start expanded.
+ */
+export function defaultExpanded(entries: readonly ForgePanelChangeRequest[]): ReadonlySet<string> {
+  const open = entries.filter(entry => entry.snapshot?.state === 'open')
+  return new Set(open.length === 1 ? open.map(entry => entry.url) : [])
 }
 
 /**

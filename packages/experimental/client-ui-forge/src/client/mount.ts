@@ -1,12 +1,13 @@
 /** Remote contribution and slot registrations of the forge panel. */
 
 import type { Context } from '@deepseek-ai/cordis'
-import type {} from '@deepseek-ai/dsh-api-remotes/client'
+import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
+import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type {} from '@deepseek-ai/dsh-experimental-client-ui-forge/remote'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -98,18 +99,32 @@ function registerUi(ctx: Context): void {
       })
     })
   }
+  const host: HostObservable<RemoteHostFacts> = {
+    getSnapshot: () => ctx.remote.$host,
+    subscribe: listener => ctx.on('connection/reset', listener),
+  }
+  const restore = async (sessionId: SessionId): Promise<string | undefined> => {
+    const result = await ctx.remote.forgePanel.restoreWorktree(sessionId)
+    if (!result.ok) return result.error.message
+    notices.report('toast.restored', { tone: 'success' })
+    return undefined
+  }
   const tabFace = (sessionId: SessionId): ForgeTabInjected => {
     const store = storesOf(sessionId)
     return {
-      hooks: store.panel.hooks,
+      hooks: { panel: store.panel.hooks.panel, host },
       reconnect: store.panel.reconnect,
       refresh: () => {
         void ctx.remote.forgePanel.refresh(sessionId).then(result => settled(result, 'toast.refreshFailed'))
       },
       remove: (entry) => { remove(sessionId, entry) },
+      restore: () => {
+        void restore(sessionId).then((message) => {
+          if (message !== undefined) notices.report('toast.restoreFailed', { params: { message } })
+        })
+      },
       openLink,
       copyText,
-      report: (key) => { notices.report(key) },
       reportVisible: store.visibility.set,
     }
   }
@@ -123,12 +138,7 @@ function registerUi(ctx: Context): void {
       withdraw: () => {
         void ctx.remote.forgePanel.cancelWorktree(sessionId).then(result => settled(result, 'toast.worktreeFailed'))
       },
-      restore: async () => {
-        const result = await ctx.remote.forgePanel.restoreWorktree(sessionId)
-        if (!result.ok) return result.error.message
-        notices.report('toast.restored', { tone: 'success' })
-        return undefined
-      },
+      restore: () => restore(sessionId),
       leave: () => {
         void ctx.remote.forgePanel.continueInProject(sessionId).then(result => settled(result, 'toast.leaveFailed'))
       },
@@ -183,7 +193,7 @@ function registerUi(ctx: Context): void {
     // After the subagent lineage (-30), Team navigation (-20), and the preset label (-10).
     order: 10,
     locale: NS,
-    inject: (sessionId: SessionId): BranchChipInjected => ({ hooks: storesOf(sessionId).panel.hooks }),
+    inject: (sessionId: SessionId): BranchChipInjected => ({ hooks: { panel: storesOf(sessionId).panel.hooks.panel, host } }),
   }, BranchChip))
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
     name: 'shell.overlay', id: 'forge-panel.toast', locale: NS,

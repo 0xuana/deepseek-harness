@@ -1,5 +1,5 @@
 ---
-description: "从插件页面启用 pull request 面板与 worktree Session。"
+description: "从插件页面启用变更请求面板与 worktree Session。"
 kind: "package-bundle"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-展示每个 Session 创建的 pull request 及其检查与评审状态，并让新 Session 在自己的 Git worktree 中开始。在 Web 或 Desktop 的插件页面启用“PR 与工作树”；发布的 profile 默认禁用该功能。GitHub 状态来自宿主上已登录的 `gh` 命令行；没有它时，面板仍会显示分支，工作树选项也照常可用。
+展示每个 Session 的变更请求及其检查与评审状态，并让新 Session 在自己的 Git worktree 中开始。在 Web 或 Desktop 的插件页面启用“变更请求与工作树”；发布的 profile 默认禁用该功能。GitHub 状态来自宿主上已登录的 `gh` 命令行；没有它时，面板仍会显示分支，工作树选项也照常可用。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用本包
 
-打开插件页面，在官方分组中启用“PR 与工作树”。在 Git 工作区中，发出第一条消息之前在输入框中勾选“工作树”，Session 就会在新的 worktree 中开始。Session 的目录位于 Git 检出中时，标题栏按钮会打开面板。Session 用 `gh pr create` 创建的 pull request，以及之后 `git push` 更新的 pull request，无需额外操作即会出现。在终端运行 `gh auth login --hostname <host>` 登录；缺少登录时，面板会显示这条命令。[面板包](../client-ui-forge/README.zh.md#use-this-package)说明了每个控件。
+打开插件页面，在官方分组中启用“变更请求与工作树”。在 Git 工作区中，发出第一条消息之前在输入框中勾选“工作树”，Session 就会在新的 worktree 中开始。Session 的目录位于 Git 检出中时，标题栏按钮会打开面板。Session 用 `gh pr create` 创建的 GitHub pull request，以及之后 `git push` 更新的 pull request，无需额外操作即会作为变更请求出现。在终端运行 `gh auth login --hostname <host>` 登录；缺少登录时，面板会显示这条命令。[面板包](../client-ui-forge/README.zh.md#use-this-package)说明了每个控件。
 
 -----
 
@@ -62,7 +62,7 @@ Bundle 本身没有影响；worktree 通知见[面板](../client-ui-forge/README
 <a id="known-limitations-and-deferred-work"></a>
 
 - 只有 GitHub 一个代码托管提供方，且本 Bundle 只服务 github.com；GitHub Enterprise 主机需要用 profile patch 把它列入 `forge-github` 行的 [`hosts`](../forge-github/README.zh.md#use-this-package)。没有提供方识别 GitLab 等其他平台。
-- 模型目前还没有读取已绑定 pull request 的工具。
+- 模型目前还没有读取已绑定变更请求的工具。
 
 -----
 

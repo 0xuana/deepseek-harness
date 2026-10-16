@@ -2,7 +2,7 @@
 /** Forge tab body: connection states, the checkout row, the sign-in banner, the change request list, and tab visibility. */
 import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { InputActions, TokenSpan } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
 import type { PaneId, SidebarRightTabInfo, TabId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
@@ -11,12 +11,12 @@ import { en } from '../src/client/locales.ts'
 import type { PanelSnapshot } from '../src/client/source.ts'
 import css from '../src/client/ForgeTab.module.css'
 import type { ForgePanelChangeRequest, ForgePanelState } from '../src/types.ts'
-import { created, entry, ready, snapshot, worktree } from './client-fixtures.client.ts'
+import { created, entry, ready, removed, snapshot, worktree } from './client-fixtures.client.ts'
 
 afterEach(cleanup)
 
 const t = makeTranslate(en)
-const unused = (): never => { throw new Error('the forge tab does not call this input action') }
+const unused = (): never => { throw new Error('the forge tab does not call this tab action') }
 
 /** Tab information of a forge tab whose visibility the test sets. */
 function tabInfo(visible: boolean): SidebarRightTabInfo {
@@ -36,35 +36,27 @@ function tabInfo(visible: boolean): SidebarRightTabInfo {
   }
 }
 
-function tab(state: ForgePanelState | null, options: { disconnected?: boolean; visible?: boolean; inserted?: boolean } = {}) {
+function tab(state: ForgePanelState | null, options: { disconnected?: boolean; visible?: boolean; home?: string } = {}) {
   const panel = createSnapshotStore<PanelSnapshot>({ state, disconnected: options.disconnected ?? false })
+  const host = createSnapshotStore<RemoteHostFacts>({ home: options.home, isLoopback: true })
   const visibility = createSnapshotStore<boolean>(options.visible ?? true)
   const useVisibility = bindSnapshotSelector(visibility)
-  const span: TokenSpan = { start: 4, end: 4, draftRev: 2 }
-  const captureInsertion = vi.fn(() => span)
-  const insertText = vi.fn((_text: string, _span: TokenSpan) => options.inserted ?? true)
-  const inputActions: InputActions = {
-    captureInsertion, insertText, setDraft: unused, persistDraft: unused,
-    addAttachments: unused, removeAttachment: unused, pruneAttachments: unused, submit: unused,
-  }
   const reconnect = vi.fn<() => void>()
   const refresh = vi.fn<() => void>()
   const remove = vi.fn<(entry: ForgePanelChangeRequest) => void>()
+  const restore = vi.fn<() => void>()
   const openLink = vi.fn<(url: string) => void>()
   const copyText = vi.fn<(text: string) => void>()
-  const report = vi.fn<ForgeTabProps['report']>()
   const reportVisible = vi.fn<(visible: boolean) => void>()
   const props: ForgeTabProps = {
     useTabInfo: () => tabInfo(useVisibility(current => current)),
-    inputActions,
     usePanel: bindSnapshotSelector(panel),
-    reconnect, refresh, remove, openLink, copyText, report, reportVisible,
+    useHost: bindSnapshotSelector(host),
+    reconnect, refresh, remove, restore, openLink, copyText, reportVisible,
     t,
   }
   const view = render(<ForgeTab {...props} />)
-  return {
-    view, panel, visibility, span, captureInsertion, insertText, reconnect, refresh, remove, openLink, copyText, report, reportVisible,
-  }
+  return { view, panel, visibility, reconnect, refresh, remove, restore, openLink, copyText, reportVisible }
 }
 
 /** The checkout row, or null when the tab shows none. */
@@ -73,9 +65,9 @@ function checkoutRow(view: ReturnType<typeof render>): HTMLElement | null {
   return row instanceof HTMLElement ? row : null
 }
 
-/** The heads of the rendered change request cards, in list order. */
-function heads(view: ReturnType<typeof render>): HTMLElement[] {
-  return [...view.container.querySelectorAll(`.${css.changeHead}`)].filter(head => head instanceof HTMLElement)
+/** The expansion state of each rendered card, in list order. */
+function expansion(view: ReturnType<typeof render>): boolean[] {
+  return [...view.container.querySelectorAll('[data-forge-change]')].map(card => card.hasAttribute('data-expanded'))
 }
 
 describe('ForgeTab connection', () => {
@@ -115,7 +107,7 @@ describe('ForgeTab checkout', () => {
   it('shows no checkout row while the first inspection runs', () => {
     const b = tab(ready({ checkout: { state: 'pending' } }))
     expect(checkoutRow(b.view)).toBeNull()
-    expect(b.view.getByText('Pull requests of this Session · 0')).toBeTruthy()
+    expect(b.view.getByText('Change requests of this Session · 0')).toBeTruthy()
   })
 
   it('explains a directory outside a Git checkout', () => {
@@ -132,35 +124,42 @@ describe('ForgeTab checkout', () => {
     expect(b.view.getByRole('tooltip').textContent).toBe('git status failed (128): fatal')
   })
 
-  it('names the branch of the current checkout and shows its root on hover', () => {
-    const b = tab(ready())
-    const row = b.view.container.querySelector('[data-forge-checkout]')
-    if (!(row instanceof HTMLElement)) throw new Error('no checkout row')
-    expect([...row.querySelectorAll('span')].map(span => span.textContent)).toEqual([en['checkout.branch'], 'main', en['checkout.current']])
-    fireEvent.mouseEnter(row)
-    expect(b.view.getByRole('tooltip').textContent).toBe('/work/repo')
+  it('names the branch and kind of the project directory and shows its path on hover', () => {
+    const b = tab(ready(), { home: '/work' })
+    const row = checkoutRow(b.view)
+    if (row === null) throw new Error('no checkout row')
+    expect(row.textContent).toBe(`main${en['checkout.project']}`)
+    fireEvent.mouseEnter(row.querySelector(`.${css.checkoutName}`)!)
+    expect(b.view.getByRole('tooltip').textContent).toBe('Project directory: ~/repo')
   })
 
-  it('names a detached HEAD', () => {
+  it('names a detached HEAD with its commit', () => {
     const b = tab(ready({}, { branch: null }))
-    expect(within(checkoutRow(b.view)!).getByText(en['checkout.detached'])).toBeTruthy()
+    expect(checkoutRow(b.view)?.textContent).toBe(`${en['checkout.detached']}·0a1b2c3${en['checkout.project']}`)
+  })
+
+  it('calls a linked worktree another tool created a worktree', () => {
+    const b = tab(ready({}, { linked: true }))
+    expect(checkoutRow(b.view)?.textContent).toBe(`main${en['checkout.worktree']}`)
   })
 
   it.each([
-    ['its base branch', created({ path: '/work/repo-dsh' }), 'From main'],
-    ['the commit it started from', created({ path: '/work/repo-dsh', from: null, baseCommit: '0123456789abcdef' }), 'From 0123456'],
-  ])('names the worktree this Session created with %s', (_label, made, base) => {
-    const b = tab(ready({ directory: '/work/repo-dsh', worktree: worktree({ created: made }) }, { root: '/work/repo-dsh', branch: 'other' }))
-    const row = b.view.container.querySelector('[data-forge-checkout]')
-    if (!(row instanceof HTMLElement)) throw new Error('no checkout row')
-    expect([...row.querySelectorAll('span')].map(span => span.textContent)).toEqual([en['checkout.worktree'], 'dsh/0a1b2c3d', base])
+    ['its base branch', created({ path: '/work/repo-dsh' }), 'Worktree · from main'],
+    ['the commit it started from', created({ path: '/work/repo-dsh', from: null, baseCommit: '0123456789abcdef' }), 'Worktree · from 0123456'],
+  ])('names the worktree this Session created with %s', (_label, made, kind) => {
+    const b = tab(ready({ directory: '/work/repo-dsh', worktree: worktree({ created: made }) }, { root: '/work/repo-dsh', branch: 'other', linked: true }))
+    expect(checkoutRow(b.view)?.textContent).toBe(`dsh/0a1b2c3d${kind}`)
   })
 
-  it('names the current checkout once the Session works outside the worktree it created', () => {
-    const b = tab(ready({ worktree: worktree({ created: created({ path: '/work/repo-dsh' }) }) }))
-    const row = b.view.container.querySelector('[data-forge-checkout]')
-    if (!(row instanceof HTMLElement)) throw new Error('no checkout row')
-    expect([...row.querySelectorAll('span')].map(span => span.textContent)).toEqual([en['checkout.branch'], 'main', en['checkout.current']])
+  it('names a removed worktree and restores it on request', () => {
+    const b = tab(removed())
+    const row = checkoutRow(b.view)
+    if (row === null) throw new Error('no checkout row')
+    expect(row.hasAttribute('data-missing')).toBe(true)
+    expect(within(row).getByText('dsh/0a1b2c3d')).toBeTruthy()
+    expect(within(row).getByText(en['missing.title'])).toBeTruthy()
+    fireEvent.click(within(row).getByRole('button', { name: en['checkout.restore'] }))
+    expect(b.restore).toHaveBeenCalledOnce()
   })
 })
 
@@ -168,7 +167,7 @@ describe('ForgeTab sign-in banner', () => {
   it('offers the GitHub CLI sign-in command for an unauthenticated GitHub host', () => {
     const b = tab(ready({ readiness: { state: 'unauthenticated', message: 'not logged in' } }))
     const banner = b.view.getByRole('status')
-    expect(within(banner).getByText('Sign in to github.com to show pull request status')).toBeTruthy()
+    expect(within(banner).getByText('Sign in to github.com to show change request status')).toBeTruthy()
     expect(within(banner).getByText('gh auth login --hostname github.com').tagName).toBe('CODE')
     expect(within(banner).queryByText('not logged in')).toBeNull()
     fireEvent.click(within(banner).getByRole('button', { name: en['signin.copy'] }))
@@ -176,8 +175,8 @@ describe('ForgeTab sign-in banner', () => {
   })
 
   it.each([
-    ['with its message', 'token expired', ['Sign in to gitlab.example.test to show pull request status', 'token expired']],
-    ['without a message', null, ['Sign in to gitlab.example.test to show pull request status']],
+    ['with its message', 'token expired', ['Sign in to gitlab.example.test to show change request status', 'token expired']],
+    ['without a message', null, ['Sign in to gitlab.example.test to show change request status']],
   ])('asks to sign in to another code host %s', (_label, message, texts) => {
     const b = tab(ready({
       repository: { forge: 'gitlab', host: 'gitlab.example.test', owner: 'octo', name: 'demo' },
@@ -189,8 +188,8 @@ describe('ForgeTab sign-in banner', () => {
   })
 
   it.each([
-    ['with its message', 'spawn gh ENOENT', 'Pull requests on github.com could not be read: spawn gh ENOENT'],
-    ['without a message', null, 'Pull requests on github.com could not be read: '],
+    ['with its message', 'spawn gh ENOENT', 'Change requests on github.com could not be read: spawn gh ENOENT'],
+    ['without a message', null, 'Change requests on github.com could not be read: '],
   ])('explains an unreachable host %s', (_label, message, text) => {
     const b = tab(ready({ readiness: { state: 'unavailable', message } }))
     expect(b.view.getByRole('status').textContent).toBe(text)
@@ -209,38 +208,47 @@ describe('ForgeTab sign-in banner', () => {
 describe('ForgeTab change requests', () => {
   it('shows the empty state and refreshes on request', () => {
     const b = tab(ready())
-    expect(b.view.getByText('Pull requests of this Session · 0')).toBeTruthy()
+    expect(b.view.getByText('Change requests of this Session · 0')).toBeTruthy()
     expect(b.view.getByText(en['changes.empty'])).toBeTruthy()
     expect(b.view.getByText(en['changes.emptyHint'])).toBeTruthy()
     fireEvent.click(b.view.getByRole('button', { name: en.refresh }))
     expect(b.refresh).toHaveBeenCalledOnce()
   })
 
-  it('lists the bound change requests and expands one at a time', () => {
-    const b = tab(ready({ changeRequests: [entry(1, snapshot(1)), entry(2, null)] }))
-    expect(b.view.getByText('Pull requests of this Session · 2')).toBeTruthy()
-    expect(b.view.queryByText(en['changes.empty'])).toBeNull()
-    const expanded = () => heads(b.view).map(head => head.getAttribute('aria-expanded'))
-    expect(expanded()).toEqual(['false', 'false'])
+  it.each([
+    ['open', snapshot(1)],
+    ['draft', snapshot(1, { draft: true })],
+  ])('expands the only %s change request by default', (_label, only) => {
+    const b = tab(ready({ changeRequests: [entry(1, only), entry(2, snapshot(2, { state: 'merged' })), entry(3, null)] }))
+    expect(b.view.getByText('Change requests of this Session · 3')).toBeTruthy()
+    expect(expansion(b.view)).toEqual([true, false, false])
+  })
 
-    fireEvent.click(heads(b.view)[0]!)
-    expect(expanded()).toEqual(['true', 'false'])
-    fireEvent.click(heads(b.view)[1]!)
-    expect(expanded()).toEqual(['false', 'true'])
-    fireEvent.click(heads(b.view)[1]!)
-    expect(expanded()).toEqual(['false', 'false'])
+  it('collapses every card while several change requests are open', () => {
+    const b = tab(ready({ changeRequests: [entry(1, snapshot(1)), entry(2, snapshot(2))] }))
+    expect(expansion(b.view)).toEqual([false, false])
+  })
+
+  it('keeps the cards the user expanded and collapsed across later updates', () => {
+    const b = tab(ready({ changeRequests: [entry(1, snapshot(1)), entry(2, snapshot(2, { state: 'closed' }))] }))
+    expect(expansion(b.view)).toEqual([true, false])
+    fireEvent.click(b.view.getByRole('button', { name: 'Collapse #1' }))
+    fireEvent.click(b.view.getByRole('button', { name: 'Expand #2' }))
+    expect(expansion(b.view)).toEqual([false, true])
+
+    act(() => { b.panel.set({ state: ready({ changeRequests: [entry(1, snapshot(1, { title: 'Renamed' })), entry(2, snapshot(2, { state: 'closed' }))] }), disconnected: false }) })
+    expect(expansion(b.view)).toEqual([false, true])
   })
 
   it('wires the card actions to the tab actions', () => {
     const value = entry(7, snapshot(7))
     const b = tab(ready({ changeRequests: [value, entry(8, { code: 'unavailable', message: 'down' })] }))
-    fireEvent.click(heads(b.view)[0]!)
     const card = b.view.container.querySelector('[data-forge-change="https://github.com/octo/demo/pull/7"]')
     if (!(card instanceof HTMLElement)) throw new Error('no card')
-
+    // The only open change request starts expanded.
     fireEvent.click(within(card).getByRole('button', { name: en['change.view'] }))
     fireEvent.click(within(card).getByRole('button', { name: en['change.copy'] }))
-    fireEvent.click(within(card).getByRole('button', { name: en['change.remove'] }))
+    fireEvent.click(within(card).getByRole('button', { name: 'Remove #7 from this Session' }))
     fireEvent.click(b.view.getByRole('button', { name: en.retry }))
     expect(b.openLink).toHaveBeenCalledWith('https://github.com/octo/demo/pull/7')
     expect(b.copyText).toHaveBeenCalledWith('https://github.com/octo/demo/pull/7')
@@ -248,27 +256,11 @@ describe('ForgeTab change requests', () => {
     expect(b.refresh).toHaveBeenCalledOnce()
   })
 
-  it('adds a change request URL to the composer at the captured insertion point', () => {
-    const b = tab(ready({ changeRequests: [entry(7, snapshot(7))] }))
-    fireEvent.click(heads(b.view)[0]!)
-    fireEvent.click(b.view.getByRole('button', { name: en['change.addToChat'] }))
-    expect(b.captureInsertion).toHaveBeenCalledOnce()
-    expect(b.insertText).toHaveBeenCalledWith('https://github.com/octo/demo/pull/7 ', b.span)
-    expect(b.report).not.toHaveBeenCalled()
-  })
-
-  it('reports a composer that refuses the insertion', () => {
-    const b = tab(ready({ changeRequests: [entry(7, snapshot(7))] }), { inserted: false })
-    fireEvent.click(heads(b.view)[0]!)
-    fireEvent.click(b.view.getByRole('button', { name: en['change.addToChat'] }))
-    expect(b.report).toHaveBeenCalledWith('toast.chatFailed')
-  })
-
   it('dates a finished change request from the current time', () => {
     vi.useFakeTimers({ toFake: ['Date'], now: Date.parse('2026-10-09T12:00:00Z') })
     try {
       const b = tab(ready({ changeRequests: [entry(1, snapshot(1, { state: 'merged', closedAt: '2026-10-09T11:00:00Z' }))] }))
-      expect(b.view.getByText('Merged · 1 h ago')).toBeTruthy()
+      expect(b.view.getByText('Merged into main · 1 h ago')).toBeTruthy()
     } finally {
       vi.useRealTimers()
     }
