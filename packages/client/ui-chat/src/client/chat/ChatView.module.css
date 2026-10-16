@@ -187,13 +187,23 @@
     animation: running-follows-output 110ms cubic-bezier(0.4, 0, 0.2, 1);
   }
 
-  /* An input fold, or a pinned tail whose following scrolls hold the status
-     still, runs both status moves at zero duration. The structure alone names
-     the animation, so a switch only changes the duration of a move its
-     structural change already created: turning a switch off never replays a
-     finished move, and turning it on completes a running one at once. The
-     structural rules above are wrapped in :where() so this rule outranks them. */
-  .column:is([data-input-fold], [data-chat-tail-pinned]) .running {
+  /* Switches only change the duration of a move its structural change already
+     created, so turning one off never replays a finished move and turning it on
+     completes a running one at once. The structural rules above are wrapped in
+     :where() so these rules outrank them. An input fold runs both moves at zero
+     duration. */
+  .column[data-input-fold] .running {
+    animation-duration: 0s;
+  }
+
+  /* While the tail is pinned, following scrolls absorb output growth and the
+     status keeps its on-screen position, so the first-output slide runs at zero
+     duration. Admitted steering still passes its pending echo below the status,
+     so the steering entrance keeps its duration. */
+  .column[data-chat-tail-pinned] > :global([data-slot="conversation.chat.flow"]) > :nth-last-child(2 of :not([hidden]):not([data-pending-steering]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty)))):is(
+    .flowItem:not([data-chat-flow-kind="user"]):not([data-chat-flow-kind="steering"]):not([data-chat-flow-kind="turn-trigger"]),
+    [data-chat-group-key]
+  ) ~ .running {
     animation-duration: 0s;
   }
 }

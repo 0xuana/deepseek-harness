@@ -48,15 +48,25 @@ describe('Running status move below the first output', () => {
 
   it('lets input folds and the pinned tail change only the duration of a status move', () => {
     const view = read('ChatView.module.css')
+    const normalize = (selector: string) => selector.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\s+/g, ' ').trim()
     // Structure alone names each move, so a switch turning off never adds an animation name and replays a
-    // finished move. The structure sits in :where() so the switch rule outranks it.
-    const moves = [...view.matchAll(/([^{}]+)\{\s*animation: running-(?:enters-slot|follows-output) /g)].map(match => match[1]!.trim())
+    // finished move. The structure sits in :where() so the switch rules outrank it.
+    const moves = [...view.matchAll(/([^{}]+)\{\s*animation: running-(?:enters-slot|follows-output) /g)].map(match => normalize(match[1]!))
     expect(moves).toHaveLength(2)
     for (const selector of moves) {
       expect(selector).toMatch(/^:where\(/)
       expect(selector).not.toMatch(/data-input-fold|data-chat-tail-pinned/)
     }
-    expect(view).toMatch(/\.column:is\(\[data-input-fold\], \[data-chat-tail-pinned\]\) \.running \{\s*animation-duration: 0s;\s*\}/)
+    // An input fold zeroes both moves; the pinned tail zeroes only the first-output slide, whose structure it
+    // repeats, and leaves the entrance after admitted steering at its duration.
+    const slide = moves.find(selector => selector.includes('[data-chat-group-key]'))!
+    expect(slide.endsWith(') ~ .running')).toBe(true)
+    const slideStructure = slide.slice(':where('.length, -') ~ .running'.length)
+    const switches = [...view.matchAll(/([^{}]+)\{\s*animation-duration: 0s;\s*\}/g)].map(match => normalize(match[1]!))
+    expect(switches).toEqual([
+      '.column[data-input-fold] .running',
+      `${slideStructure.replace(/^\.column/, '.column[data-chat-tail-pinned]')} ~ .running`,
+    ])
     expect(view.match(/data-chat-tail-pinned/g)).toHaveLength(1)
   })
 
