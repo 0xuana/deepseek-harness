@@ -140,9 +140,9 @@ export class BasicCompactionEngine extends CompactionEngine {
   }
 
   /**
-   * Register automatic between-step pressure and model-request overflow
-   * recovery. `compactIfNeeded` stays dynamically dispatched so subclass
-   * overrides are honored at event time.
+   * Register between-step pressure, model-switch pressure, and request-overflow
+   * recovery. Pre-step and overflow listeners dispatch through `compactIfNeeded`;
+   * model switches price the proposed header directly. All summaries use `summarize`.
    */
   private _registerAutomaticCompaction(): void {
     const { ctx } = this
@@ -178,10 +178,12 @@ export class BasicCompactionEngine extends CompactionEngine {
       if (status === 'idle') this.overflowRetries.delete(agent)
     })
 
+    // Prepend wraps routing listeners: await their final selection while the
+    // committed header still identifies the model that can summarize the history.
     ctx.on('agent/request', async ({ agent, signal }, next) => {
       const config = await next()
       const previous = agent.session.requestHeader()
-      if (signal.aborted || previous === undefined
+      if (signal.aborted || previous === undefined || config.provider === '' || config.model === ''
         || (previous.config.provider === config.provider && previous.config.model === config.model)) return config
       try {
         const header = { ...previous, config }
@@ -310,12 +312,12 @@ export class BasicCompactionEngine extends CompactionEngine {
     }
   }
 
-  /** Price a proposed envelope while summaries retain the last committed route. */
+  /** Price the proposed header; switch checks require history below its threshold. */
   private async compactPressure(
     agent: Agent,
     header: EpochHeader,
     signal: AbortSignal,
-    requireFit: boolean,
+    requireBelowThreshold: boolean,
   ): Promise<CompactionResult | null> {
     const target = header.config
     const policy = resolveTargetPolicy(this.config, target)
@@ -351,7 +353,7 @@ export class BasicCompactionEngine extends CompactionEngine {
     for (let attempt = 0; attempt <= spec.compactionRetries; attempt += 1) {
       const range = selectCompactableRange(agent.session, measurement, spec.retainTokens)
       if (range === null) {
-        if (result === null && !requireFit) return null
+        if (result === null && !requireBelowThreshold) return null
         throw new Error(
           'no safe compaction range can reduce context below threshold '
           + `(${measurement.totalTokens} estimated tokens >= threshold ${spec.thresholdTokens})`,

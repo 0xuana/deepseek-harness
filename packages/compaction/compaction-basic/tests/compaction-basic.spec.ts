@@ -1727,6 +1727,92 @@ describe('model-switch pressure', () => {
     expect(ctx.tokenMeter.measure(session).totalTokens).toBeLessThan(300)
   })
 
+  it.each([false, true])('requires a valid small-window policy even for short history (override: %s)', async (override) => {
+    const { ctx, adapter } = harness({
+      headroomTokens: 65_536, maxTokens: 65_536,
+      modelPolicies: override ? [{ provider: '64k', model: '64k', headroomTokens: 4_096, maxTokens: 4_096 }] : [],
+    })
+    ctx.llm.registerAdapter(['64k'], new ContextAdapter(65_536))
+    const session = conversation(1, 'short')
+    const previous = session.requestHeader()
+    const selected = { provider: '64k', model: '64k', maxTokens: 4_096 }
+    const switching = request(ctx, session, selected)
+    if (override) await expect(switching).resolves.toEqual(selected)
+    else await expect(switching).rejects.toMatchObject({ code: 'MODEL_SWITCH_COMPACTION_FAILED' })
+    expect(session.requestHeader()).toEqual(previous)
+    expect(adapter.lastOptions).toBeUndefined()
+  })
+
+  it('repeatedly summarizes on the previous route until destination pressure is below threshold', async () => {
+    const { ctx, adapter } = harness()
+    const first = new ScriptedAdapter([{ type: 'text', text: 'm'.repeat(1_600) }])
+    const calls = vi.spyOn(adapter, 'stream').mockImplementationOnce(options => first.stream(options))
+    const session = conversation(4, 'fixture '.repeat(80))
+    const previous = session.requestHeader()
+    const selected = { provider: 'small', model: 'small' }
+
+    await expect(request(ctx, session, selected)).resolves.toEqual(selected)
+
+    expect(calls).toHaveBeenCalledTimes(2)
+    for (const [options] of calls.mock.calls) expect(options).toMatchObject({ provider: MODEL, model: MODEL })
+    expect(session.snapshotEvents().filter(event => event.type === 'compaction/summary')).toHaveLength(2)
+    expect(ctx.tokenMeter.measure(session, { config: selected }).totalTokens).toBeLessThan(500)
+    expect(session.requestHeader()).toEqual(previous)
+  })
+
+  it.each(['summary error', 'non-shrinking summary', 'cancellation'] as const)(
+    'keeps the first checkpoint and permits retry after a second-attempt %s',
+    async (failure) => {
+      const { ctx, adapter } = harness()
+      const first = new ScriptedAdapter([{ type: 'text', text: 'm'.repeat(1_600) }])
+      const second = failure === 'non-shrinking summary' ? first : new ScriptedAdapter([], {
+        kind: 'error', failure: { code: 'AUTH', message: 'summary credentials expired' },
+      })
+      const controller = new AbortController()
+      const cancelled = new Error('cancel second summary')
+      vi.spyOn(adapter, 'stream')
+        .mockImplementationOnce(options => first.stream(options))
+        .mockImplementationOnce((options) => {
+          if (failure === 'cancellation') controller.abort(cancelled)
+          return second.stream(options)
+        })
+      const session = conversation(4, 'fixture '.repeat(80))
+      const previous = session.requestHeader()
+      const selected = { provider: 'small', model: 'small' }
+
+      const switching = request(ctx, session, selected, controller.signal)
+      if (failure === 'cancellation') await expect(switching).rejects.toBe(cancelled)
+      else await expect(switching).rejects.toMatchObject({ code: 'MODEL_SWITCH_COMPACTION_FAILED' })
+
+      expect(session.requestHeader()).toEqual(previous)
+      expect(session.snapshotEvents().filter(event => event.type === 'compaction/summary')).toHaveLength(1)
+      expect(session.snapshotEvents().filter(event => event.type === 'compaction/start')).toHaveLength(2)
+      expect(session.snapshotEvents().filter(event => event.type === 'compaction/end')).toHaveLength(2)
+      expect(session.deriveMessages().some(message => message.source.kind === 'compact-checkpoint')).toBe(true)
+      await expect(request(ctx, session, selected)).resolves.toEqual(selected)
+      expect(ctx.tokenMeter.measure(session, { config: selected }).totalTokens).toBeLessThan(500)
+    },
+  )
+
+  it('stops after the destination retry budget while retaining completed checkpoints', async () => {
+    const { ctx, adapter } = harness({ compactionRetries: 2 })
+    const calls = vi.spyOn(adapter, 'stream')
+    for (const length of [1_600, 1_500, 1_400]) {
+      const summary = new ScriptedAdapter([{ type: 'text', text: 'm'.repeat(length) }])
+      calls.mockImplementationOnce(options => summary.stream(options))
+    }
+    const session = conversation(4, 'fixture '.repeat(80))
+    const previous = session.requestHeader()
+    const switching = request(ctx, session, { provider: 'small', model: 'small' })
+
+    await expect(switching).rejects.toThrow('still above threshold after 3 compaction attempts')
+
+    expect(calls).toHaveBeenCalledTimes(3)
+    expect(session.requestHeader()).toEqual(previous)
+    expect(session.snapshotEvents().filter(event => event.type === 'compaction/summary')).toHaveLength(3)
+    expect(session.snapshotEvents().filter(event => event.type === 'compaction/end')).toHaveLength(3)
+  })
+
   it('retains an explicit summary target when switching models', async () => {
     const { ctx, adapter } = harness({ summarizationProvider: 'summary', summarizationModel: 'summary' })
     ctx.llm.registerAdapter(['summary'], adapter)
@@ -1735,11 +1821,14 @@ describe('model-switch pressure', () => {
     expect(adapter.lastOptions).toMatchObject({ provider: 'summary', model: 'summary' })
   })
 
-  it('skips initial, unchanged, below-threshold, disabled and already cancelled requests', async () => {
+  it('skips initial, incomplete, unchanged, below-threshold, disabled and already cancelled requests', async () => {
     const { ctx, adapter } = harness()
     const selected = { provider: 'small', model: 'small' }
     await request(ctx, Session.create(SessionId('initial-switch')), selected)
     await request(ctx, conversation(4), { provider: MODEL, model: MODEL })
+    for (const config of [{ provider: '', model: 'small' }, { provider: 'small', model: '' }]) {
+      await expect(request(ctx, conversation(4), config)).resolves.toEqual(config)
+    }
     await request(ctx, conversation(1), selected)
     await request(ctx, conversation(4), selected, AbortSignal.abort('cancelled'))
     expect(adapter.lastOptions).toBeUndefined()
