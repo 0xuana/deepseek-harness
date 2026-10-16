@@ -14808,6 +14808,9 @@ importers:
       '@deepseek-ai/dsh-agent':
         specifier: workspace:*
         version: link:../../core/agent
+      '@deepseek-ai/dsh-agent-model':
+        specifier: workspace:*
+        version: link:../../core/agent-model
       '@deepseek-ai/dsh-app-boot':
         specifier: workspace:*
         version: link:../../boot/app-boot
@@ -14820,6 +14823,9 @@ importers:
       '@deepseek-ai/dsh-session':
         specifier: workspace:*
         version: link:../../core/session
+      '@deepseek-ai/dsh-tools':
+        specifier: workspace:*
+        version: link:../../core/tools
 
   packages/test-support/remote-mock:
     dependencies:
