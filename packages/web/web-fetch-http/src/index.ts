@@ -8,8 +8,11 @@
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-web'
+import ipaddr from 'ipaddr.js'
 import { HttpFetchProvider } from './provider.ts'
-import type { HttpFetchLimits } from './provider.ts'
+import type { HttpFetchLimits, HttpFetchResolver } from './provider.ts'
+import { publicHttpNetwork } from './network.ts'
+import type { IpRange } from './network.ts'
 
 const MAX_NODE_TIMER_DELAY_MS = 2_147_483_647
 
@@ -28,7 +31,7 @@ export const name = 'web-fetch-http'
 /** The web seam this provider registers into. */
 export const inject = ['web']
 
-/** Plugin config: the provider's transport and size limits plus its `User-Agent` (all defaulted). */
+/** Plugin config: the provider's transport and size limits, `User-Agent`, and fake-IP ranges (all defaulted). */
 export interface Config {
   /** Maximum response body size in bytes. */
   maxResponseBytes?: number
@@ -40,6 +43,13 @@ export interface Config {
   maxRedirects?: number
   /** `User-Agent` header sent on every request. */
   userAgent?: string
+  /**
+   * CIDR blocks that a fake-IP DNS proxy on this host answers with, such as `198.18.0.0/15` for
+   * Clash/Mihomo TUN mode. A hostname resolving inside them is fetched even though the address is
+   * not public, because the proxy resolves the real host; set only when such a proxy intercepts all
+   * traffic from this process. Empty by default.
+   */
+  fakeIpRanges?: string[]
 }
 
 export const Config: z<Config> = z.object({
@@ -48,6 +58,7 @@ export const Config: z<Config> = z.object({
   timeoutMs: z.number().default(30_000),
   maxRedirects: z.number().default(5),
   userAgent: z.string().default(DEFAULT_USER_AGENT),
+  fakeIpRanges: z.array(z.string()).default([]),
 })
 
 /** Complete config after schemastery applies every field default. */
@@ -75,6 +86,15 @@ function assertNonNegativeInteger(name: string, value: number): void {
   }
 }
 
+/** Parse one `fakeIpRanges` entry, failing loud on anything but CIDR notation. */
+function parseFakeIpRange(cidr: string): IpRange {
+  try {
+    return ipaddr.parseCIDR(cidr)
+  } catch (error: unknown) {
+    throw new Error(`web-fetch-http: fakeIpRanges entry "${cidr}" is not a CIDR block`, { cause: error })
+  }
+}
+
 /** Register the local HTTP(S) fetch provider with `ctx.web`. */
 export function apply(ctx: Context, config: Config): void {
   // schemastery (Config) has already filled every defaulted field.
@@ -90,5 +110,8 @@ export function apply(ctx: Context, config: Config): void {
     maxRedirects: resolved.maxRedirects,
     userAgent: resolved.userAgent,
   }
-  ctx.web.registerFetchProvider(new HttpFetchProvider(limits))
+  const fakeIpRanges = resolved.fakeIpRanges.map(parseFakeIpRange)
+  const resolveAddresses: HttpFetchResolver = (hostname, signal) =>
+    publicHttpNetwork.resolve(hostname, signal, fakeIpRanges)
+  ctx.web.registerFetchProvider(new HttpFetchProvider(limits, resolveAddresses))
 }

@@ -45,7 +45,8 @@ export class HttpFetchProvider implements WebFetchProvider {
    */
   constructor(
     private readonly limits: HttpFetchLimits,
-    private readonly resolveAddresses: HttpFetchResolver = publicHttpNetwork.resolve,
+    private readonly resolveAddresses: HttpFetchResolver = (hostname, signal) =>
+      publicHttpNetwork.resolve(hostname, signal, []),
   ) {}
 
   /** No credentials to check — an anonymous public fetcher is always usable. */

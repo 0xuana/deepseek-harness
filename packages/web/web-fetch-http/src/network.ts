@@ -33,16 +33,13 @@ export interface PinnedResponse {
 /** Resolver signature used to test public-address policy without process DNS changes. */
 export type AddressResolver = (hostname: string, options: { all: true; order: 'verbatim' }) => Promise<LookupAddress[]>
 
+/** One parsed CIDR block, as returned by `ipaddr.parseCIDR`. */
+export type IpRange = [ipaddr.IPv4 | ipaddr.IPv6, number]
+
 /** RFC 6052 prefix lengths that may carry an IPv4 destination through NAT64. */
 const RFC6052_PREFIX_LENGTHS = [32, 40, 48, 56, 64, 96] as const
 const IPV4ONLY_DISCOVERY_HOST = 'ipv4only.arpa'
 const IPV4ONLY_SENTINELS = new Set(['192.0.0.170', '192.0.0.171'])
-/**
- * RFC 2544 benchmarking block that fake-IP DNS in TUN-mode proxies (Clash/Mihomo, Surge, sing-box)
- * returns for every hostname. The proxy maps the address back to the hostname and resolves it, so a
- * DNS answer in this block is treated like a proxied hop; an IP literal in it stays blocked.
- */
-const FAKE_IP_RANGE = ipaddr.parseCIDR('198.18.0.0/15')
 
 interface Nat64Prefix {
   readonly bytes: readonly number[]
@@ -71,17 +68,21 @@ export function isPublicIpAddress(input: string): boolean {
 
 /**
  * Resolve a hostname once and reject the complete answer set if any destination
- * is not public. A hostname's answer in the fake-IP block counts as public. The returned addresses
- * are the only ones the transport may use.
+ * is not public. The returned addresses are the only ones the transport may use.
+ *
+ * A hostname answer inside `fakeIpRanges` is accepted: a fake-IP DNS proxy maps that address back to
+ * the hostname and resolves the real host itself. An IP literal in those ranges stays blocked.
  *
  * @param hostname - URL hostname, including brackets when it is an IPv6 literal.
  * @param signal - aborts the wait for system resolution; an in-flight OS lookup may finish unused.
+ * @param fakeIpRanges - ranges the operator declared as fake-IP DNS answers; empty accepts none.
  * @param resolver - lookup implementation, overridden only by focused tests.
  * @returns the validated, non-empty address set.
  */
 export async function resolvePublicAddresses(
   hostname: string,
   signal: AbortSignal,
+  fakeIpRanges: readonly IpRange[],
   resolver: AddressResolver = systemLookup,
 ): Promise<PublicAddress[]> {
   const unbracketed = stripIpv6Brackets(hostname)
@@ -104,7 +105,7 @@ export async function resolvePublicAddresses(
     if ((entry.family !== 4 && entry.family !== 6) || isIP(entry.address) !== entry.family) {
       throw new WebError(`hostname "${hostname}" resolved to an invalid IP address`, 'WEB_PROVIDER_ERROR')
     }
-    if (!isPublicIpAddress(entry.address) && !(literalFamily === 0 && isFakeIpAddress(entry.address))) {
+    if (!isPublicIpAddress(entry.address) && !(literalFamily === 0 && inRanges(entry.address, fakeIpRanges))) {
       throw new WebError(`URL hostname "${hostname}" resolves to a non-public IP address`, 'WEB_BLOCKED_URL')
     }
     const translatedIpv4 = translatedIpv4Address(entry.address, nat64Prefixes)
@@ -116,10 +117,9 @@ export async function resolvePublicAddresses(
   return addresses
 }
 
-/** Whether an IPv4 address is in {@link FAKE_IP_RANGE}. */
-function isFakeIpAddress(address: string): boolean {
-  const parsed = ipaddr.parse(address)
-  return parsed instanceof ipaddr.IPv4 && parsed.match(FAKE_IP_RANGE)
+/** Whether an address lies in one of the ranges; an address never matches a range of the other family. */
+function inRanges(address: string, ranges: readonly IpRange[]): boolean {
+  return ipaddr.subnetMatch(ipaddr.parse(address), { fake: [...ranges] }, 'other') === 'fake'
 }
 
 /** Discover the active DNS64 prefix set using RFC 7050's reserved hostname. */

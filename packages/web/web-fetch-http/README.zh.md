@@ -47,6 +47,7 @@ kind: "package-reference"
 | `timeoutMs` | `30,000` | 抓取超时——资源兜底，不是面向模型的工具预算 |
 | `maxRedirects` | `5` | 同源重定向最大跳数（`0` 表示不跟随） |
 | `userAgent` | `deepseek-harness/…` | 每次请求发送的 `User-Agent` 标头 |
+| `fakeIpRanges` | `[]` | 本机 fake-IP DNS 代理返回的 CIDR 地址段，例如 Clash/Mihomo TUN 模式的 `198.18.0.0/15` |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-web-fetch-http)是每个受支持字段及其 JSDoc 的穷尽式真源。
 
@@ -61,7 +62,7 @@ const page = await ctx.web.fetch({ url: 'https://example.com' })
 
 ### 传输行为
 
-提供方保持请求匿名且有界：只接受不含内嵌凭据且不超过 2,048 个字符的 `http:` 与 `https:` URL。它只解析一次主机名；只要结果中有任何 IPv4 或 IPv6 地址不是公共单播地址，就拒绝整个结果，并把连接固定到已校验的地址集合。主机名解析到 `198.18.0.0/15`（Clash 等 TUN 模式代理的 fake-IP DNS 为所有域名返回的地址段）时视为公开地址，因为真实主机由代理解析；该地址段的 IP 字面量仍被拒绝。IPv6 检查会发现活动 DNS64 前缀，并拒绝指向非公开 IPv4 的转换地址。每次同源重定向都会重复解析与固定；跨源重定向会失败并要求重新调用。提供方还强制执行字节、字符、跳数和时间上限，拒绝不支持的内容类型，并发送显式产品 `User-Agent`。
+提供方保持请求匿名且有界：只接受不含内嵌凭据且不超过 2,048 个字符的 `http:` 与 `https:` URL。它只解析一次主机名；只要结果中有任何 IPv4 或 IPv6 地址不是公共单播地址，就拒绝整个结果，并把连接固定到已校验的地址集合。主机名解析到已配置的 `fakeIpRanges` 地址段时会被接受，因为真实主机由 fake-IP 代理解析；这些地址段中的 IP 字面量仍被拒绝。IPv6 检查会发现活动 DNS64 前缀，并拒绝指向非公开 IPv4 的转换地址。每次同源重定向都会重复解析与固定；跨源重定向会失败并要求重新调用。提供方还强制执行字节、字符、跳数和时间上限，拒绝不支持的内容类型，并发送显式产品 `User-Agent`。
 
 ### 失败与恢复
 
@@ -132,7 +133,7 @@ const page = await ctx.web.fetch({ url: 'https://example.com' })
 这些限制说明提供方何时不安全或不合适。它们是当前包约束。
 
 - **只解码文本内容**——包括 html/xhtml 与 `text/*` 加 JSON/XML 家族；缺少 `Content-Type` 或任何二进制类型都会抛出 `WEB_UNSUPPORTED_CONTENT_TYPE`，可提取文本的 PDF 解码属于明确的延期工作。
-- **fake-IP 应答把地址检查交给代理**——在 TUN 模式 fake-IP 代理下，所有主机名都解析到 `198.18.0.0/15`，提供方无法得知代理自身的解析是否到达非公开主机；经 `HTTP_PROXY` 路由的请求也有同样限制。
+- **fake-IP 代理需要配置**——TUN 模式 fake-IP 代理为所有主机名返回非公开地址，因此在 `fakeIpRanges` 列出其地址段之前抓取都会失败。配置地址段后，提供方无法得知代理自身的解析是否到达非公开主机，经 `HTTP_PROXY` 路由的请求也有同样限制；在没有此类代理的主机上，该地址段会被直接访问。
 - **charset 只来自 `Content-Type` 标头**（默认 UTF-8）——HTML `<meta charset>` 声明会被忽略；声明但无法识别的 charset 标签会抛出异常，而非回退。
 
 <a id="dev-note"></a>

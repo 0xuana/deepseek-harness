@@ -4364,10 +4364,10 @@ export interface Config {
 ## `@deepseek-ai/dsh-web-fetch-http`
 
 - `inject`: `web`
-- `source`: [`packages/web/web-fetch-http/src/index.ts:32`](../packages/web/web-fetch-http/src/index.ts)
+- `source`: [`packages/web/web-fetch-http/src/index.ts:35`](../packages/web/web-fetch-http/src/index.ts)
 
 ```ts config-catalog
-/** Plugin config: the provider's transport and size limits plus its `User-Agent` (all defaulted). */
+/** Plugin config: the provider's transport and size limits, `User-Agent`, and fake-IP ranges (all defaulted). */
 export interface Config {
   /** Maximum response body size in bytes. */
   maxResponseBytes?: number
@@ -4379,6 +4379,13 @@ export interface Config {
   maxRedirects?: number
   /** `User-Agent` header sent on every request. */
   userAgent?: string
+  /**
+   * CIDR blocks that a fake-IP DNS proxy on this host answers with, such as `198.18.0.0/15` for
+   * Clash/Mihomo TUN mode. A hostname resolving inside them is fetched even though the address is
+   * not public, because the proxy resolves the real host; set only when such a proxy intercepts all
+   * traffic from this process. Empty by default.
+   */
+  fakeIpRanges?: string[]
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-web-fetch-http -->

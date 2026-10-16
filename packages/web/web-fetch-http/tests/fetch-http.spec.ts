@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { AddressInfo } from 'node:net'
+import type { LookupAddress } from 'node:dns'
+import ipaddr from 'ipaddr.js'
 import { Context } from '@deepseek-ai/cordis'
 import WebRuntime from '@deepseek-ai/dsh-web'
 import { HttpFetchProvider, LOCAL_FETCH_PROVIDER_ID } from '@deepseek-ai/dsh-web-fetch-http'
@@ -126,7 +128,7 @@ describe('public-network policy', () => {
       { address: '8.8.4.4', family: 4 },
       { address: '2001:4860:4860::8888', family: 6 },
     ])
-    await expect(resolvePublicAddresses('example.test', new AbortController().signal, resolver))
+    await expect(resolvePublicAddresses('example.test', new AbortController().signal, [], resolver))
       .resolves.toEqual([
         { address: '8.8.4.4', family: 4 },
         { address: '2001:4860:4860::8888', family: 6 },
@@ -138,31 +140,51 @@ describe('public-network policy', () => {
       { address: '8.8.8.8', family: 4 },
       { address: '127.0.0.1', family: 4 },
     ])
-    await expect(resolvePublicAddresses('rebinding.test', new AbortController().signal, resolver))
+    await expect(resolvePublicAddresses('rebinding.test', new AbortController().signal, [], resolver))
       .rejects.toThrow(expect.objectContaining({ code: 'WEB_BLOCKED_URL' }))
   })
 
-  it('accepts a fake-IP DNS answer for a hostname but not the same address as a literal', async () => {
-    const resolver = vi.fn(async () => [{ address: '198.18.0.138', family: 4 }])
-    await expect(resolvePublicAddresses('www.example.com', new AbortController().signal, resolver))
-      .resolves.toEqual([{ address: '198.18.0.138', family: 4 }])
-    await expect(resolvePublicAddresses('198.19.255.1', new AbortController().signal, resolver))
-      .rejects.toThrow(expect.objectContaining({ code: 'WEB_BLOCKED_URL' }))
-    expect(resolver).toHaveBeenCalledOnce()
+  describe('fake-IP ranges', () => {
+    const fakeIpRanges = [ipaddr.parseCIDR('198.18.0.0/15'), ipaddr.parseCIDR('fc00::/18')]
+    const fakeAnswers = [{ address: '198.18.0.138', family: 4 }, { address: 'fc00::8a', family: 6 }]
+    const resolver = (answers: LookupAddress[]) => vi.fn(async (hostname: string) => hostname === 'ipv4only.arpa' ? [] : answers)
+
+    it('accepts hostname answers inside a configured range', async () => {
+      await expect(resolvePublicAddresses('www.example.com', new AbortController().signal, fakeIpRanges, resolver(fakeAnswers)))
+        .resolves.toEqual(fakeAnswers)
+    })
+
+    it('rejects the same answers when no range is configured', async () => {
+      await expect(resolvePublicAddresses('www.example.com', new AbortController().signal, [], resolver(fakeAnswers)))
+        .rejects.toThrow(expect.objectContaining({ code: 'WEB_BLOCKED_URL' }))
+    })
+
+    it('still rejects a non-public answer beside a fake one', async () => {
+      const answers = [{ address: '198.18.0.138', family: 4 }, { address: '127.0.0.1', family: 4 }]
+      await expect(resolvePublicAddresses('www.example.com', new AbortController().signal, fakeIpRanges, resolver(answers)))
+        .rejects.toThrow(expect.objectContaining({ code: 'WEB_BLOCKED_URL' }))
+    })
+
+    it('still rejects an IP literal inside a configured range', async () => {
+      const lookup = resolver([])
+      await expect(resolvePublicAddresses('198.19.255.1', new AbortController().signal, fakeIpRanges, lookup))
+        .rejects.toThrow(expect.objectContaining({ code: 'WEB_BLOCKED_URL' }))
+      expect(lookup).not.toHaveBeenCalled()
+    })
   })
 
   it('rejects empty and invalid resolver results', async () => {
-    await expect(resolvePublicAddresses('empty.test', new AbortController().signal, async () => []))
+    await expect(resolvePublicAddresses('empty.test', new AbortController().signal, [], async () => []))
       .rejects.toThrow(expect.objectContaining({ code: 'WEB_PROVIDER_ERROR' }))
-    await expect(resolvePublicAddresses('family.test', new AbortController().signal, async () => [{ address: '8.8.8.8', family: 0 }]))
+    await expect(resolvePublicAddresses('family.test', new AbortController().signal, [], async () => [{ address: '8.8.8.8', family: 0 }]))
       .rejects.toThrow(expect.objectContaining({ code: 'WEB_PROVIDER_ERROR' }))
-    await expect(resolvePublicAddresses('mismatch.test', new AbortController().signal, async () => [{ address: '::1', family: 4 }]))
+    await expect(resolvePublicAddresses('mismatch.test', new AbortController().signal, [], async () => [{ address: '::1', family: 4 }]))
       .rejects.toThrow(expect.objectContaining({ code: 'WEB_PROVIDER_ERROR' }))
   })
 
   it('validates bracketed IPv6 literals after checking for an active DNS64 prefix', async () => {
     const resolver = vi.fn(async () => [{ address: '192.0.0.170', family: 4 }])
-    await expect(resolvePublicAddresses('[2001:4860:4860::8888]', new AbortController().signal, resolver))
+    await expect(resolvePublicAddresses('[2001:4860:4860::8888]', new AbortController().signal, [], resolver))
       .resolves.toEqual([{ address: '2001:4860:4860::8888', family: 6 }])
     expect(resolver).toHaveBeenCalledWith('ipv4only.arpa', { all: true, order: 'verbatim' })
   })
@@ -172,7 +194,7 @@ describe('public-network policy', () => {
       ? [{ address: '2001:4860:64:64::c000:aa', family: 6 }]
       : [{ address: '2001:4860:64:64::7f00:1', family: 6 }])
 
-    await expect(resolvePublicAddresses('nat64.test', new AbortController().signal, resolver))
+    await expect(resolvePublicAddresses('nat64.test', new AbortController().signal, [], resolver))
       .rejects.toThrow(expect.objectContaining({ code: 'WEB_BLOCKED_URL' }))
   })
 
@@ -181,7 +203,7 @@ describe('public-network policy', () => {
       ? [{ address: '2001:4860:64:64::c000:aa', family: 6 }]
       : [{ address: '2001:4860:64:64::808:808', family: 6 }])
 
-    await expect(resolvePublicAddresses('nat64.test', new AbortController().signal, resolver))
+    await expect(resolvePublicAddresses('nat64.test', new AbortController().signal, [], resolver))
       .resolves.toEqual([{ address: '2001:4860:64:64::808:808', family: 6 }])
   })
 
@@ -197,7 +219,7 @@ describe('public-network policy', () => {
         { address: '2001:4860:64:64:100::1', family: 6 },
       ])
 
-    await expect(resolvePublicAddresses('native-v6.test', new AbortController().signal, resolver))
+    await expect(resolvePublicAddresses('native-v6.test', new AbortController().signal, [], resolver))
       .resolves.toEqual([
         { address: '2001:4860:65:64::808:808', family: 6 },
         { address: '2001:4860:64:64:100::1', family: 6 },
@@ -208,19 +230,19 @@ describe('public-network policy', () => {
     let finish!: (value: never[]) => void
     const resolver = vi.fn(() => new Promise<never[]>((resolve) => { finish = resolve }))
     const controller = new AbortController()
-    const pending = resolvePublicAddresses('slow.test', controller.signal, resolver)
+    const pending = resolvePublicAddresses('slow.test', controller.signal, [], resolver)
     controller.abort(new Error('stop'))
     await expect(pending).rejects.toThrow('web fetch aborted during hostname resolution')
     finish([])
 
     const alreadyAborted = new AbortController()
     alreadyAborted.abort(new Error('already stopped'))
-    await expect(resolvePublicAddresses('slow.test', alreadyAborted.signal, resolver))
+    await expect(resolvePublicAddresses('slow.test', alreadyAborted.signal, [], resolver))
       .rejects.toThrow('web fetch aborted during hostname resolution')
   })
 
   it('propagates resolver failures', async () => {
-    await expect(resolvePublicAddresses('broken.test', new AbortController().signal, async () => { throw new Error('dns failed') }))
+    await expect(resolvePublicAddresses('broken.test', new AbortController().signal, [], async () => { throw new Error('dns failed') }))
       .rejects.toThrow('dns failed')
   })
 
@@ -633,5 +655,21 @@ describe('web-fetch-http plugin registration', () => {
     await expect(ctx.web.fetch({ url: `${base}/` }))
       .resolves.toMatchObject({ statusCode: 200 })
     await fiber.dispose()
+  })
+
+  it('hands configured fake-IP ranges to address resolution', async () => {
+    const ctx = new Context()
+    await ctx.plugin(WebRuntime, { fetchProvider: LOCAL_FETCH_PROVIDER_ID })
+    const fiber = await ctx.plugin(fetchPlugin, { fakeIpRanges: ['198.18.0.0/15'] })
+    await expect(ctx.web.fetch({ url: `${base}/` })).resolves.toMatchObject({ statusCode: 200 })
+    expect(publicHttpNetwork.resolve).toHaveBeenCalledWith('127.0.0.1', expect.any(AbortSignal), [ipaddr.parseCIDR('198.18.0.0/15')])
+    await fiber.dispose()
+  })
+
+  it('rejects a fake-IP range that is not CIDR notation at construction', async () => {
+    const ctx = new Context()
+    await ctx.plugin(WebRuntime, { fetchProvider: LOCAL_FETCH_PROVIDER_ID })
+    await expect(ctx.plugin(fetchPlugin, { fakeIpRanges: ['198.18.0.1'] }))
+      .rejects.toThrow(/fakeIpRanges entry "198.18.0.1" is not a CIDR block/)
   })
 })

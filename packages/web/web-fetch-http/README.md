@@ -47,6 +47,7 @@ Load the web service and the provider; configurable limits have safe defaults an
 | `timeoutMs` | `30,000` | Fetch timeout — a resource backstop, not the model-facing tool budget |
 | `maxRedirects` | `5` | Maximum same-origin redirect hops (`0` follows none) |
 | `userAgent` | `deepseek-harness/…` | `User-Agent` header sent on every request |
+| `fakeIpRanges` | `[]` | CIDR blocks a fake-IP DNS proxy on this host answers with, such as `198.18.0.0/15` for Clash/Mihomo TUN mode |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-web-fetch-http) is the exhaustive source for every accepted field and its JSDoc.
 
@@ -61,7 +62,7 @@ const page = await ctx.web.fetch({ url: 'https://example.com' })
 
 ### Transport behavior
 
-The provider keeps requests anonymous and bounded: it accepts only `http:` and `https:` URLs without embedded credentials and rejects URLs over 2,048 characters. It resolves each hostname once, rejects the complete result if any IPv4 or IPv6 address is not public unicast, and pins the connection to that validated set. A hostname answer in `198.18.0.0/15`, the range fake-IP DNS of TUN-mode proxies such as Clash returns for every name, counts as public because the proxy resolves the real host; an IP literal in that range stays blocked. IPv6 checks discover the active DNS64 prefix and reject translations to non-public IPv4. Each same-origin redirect repeats resolution and pinning; cross-origin redirects fail and require a fresh call. The provider also enforces byte, character, hop, and time caps, rejects unsupported content types, and sends an explicit product `User-Agent`.
+The provider keeps requests anonymous and bounded: it accepts only `http:` and `https:` URLs without embedded credentials and rejects URLs over 2,048 characters. It resolves each hostname once, rejects the complete result if any IPv4 or IPv6 address is not public unicast, and pins the connection to that validated set. A hostname answer inside a configured `fakeIpRanges` block is accepted because the fake-IP proxy resolves the real host; an IP literal in such a block stays blocked. IPv6 checks discover the active DNS64 prefix and reject translations to non-public IPv4. Each same-origin redirect repeats resolution and pinning; cross-origin redirects fail and require a fresh call. The provider also enforces byte, character, hop, and time caps, rejects unsupported content types, and sends an explicit product `User-Agent`.
 
 ### Failures and recovery
 
@@ -132,7 +133,7 @@ No direct invalidation; the named consumer owns any request-prefix changes.
 These limits define when the provider is unsafe or a poor fit. They are current package constraints.
 
 - **Only textual content decodes** — html/xhtml and `text/*` plus JSON/XML families; a missing `Content-Type` or any binary type throws `WEB_UNSUPPORTED_CONTENT_TYPE`, and text-extractable PDF decoding is named deferred work.
-- **Fake-IP answers delegate address checks to the proxy** — under a TUN-mode fake-IP proxy every hostname resolves into `198.18.0.0/15`, so the provider cannot see whether the proxy's own resolution reaches a non-public host, the same limit that applies to a hop routed through `HTTP_PROXY`.
+- **Fake-IP proxies need configuration** — a TUN-mode fake-IP proxy answers every hostname with a non-public address, so fetches fail until `fakeIpRanges` lists its range. With a range configured, the provider cannot see whether the proxy's own resolution reaches a non-public host, the same limit that applies to a hop routed through `HTTP_PROXY`; on a host without such a proxy, the range is reachable directly.
 - **Charset comes only from the `Content-Type` header** (UTF-8 default) — an HTML `<meta charset>` declaration is ignored, and a declared-but-unrecognized charset label throws rather than falling back.
 
 <a id="dev-note"></a>
