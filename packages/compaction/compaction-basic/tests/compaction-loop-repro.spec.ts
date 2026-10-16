@@ -5,7 +5,7 @@ import { createUserMessage, createSystemMessage, CONTEXT_WINDOW_EXCEEDED_CODE, L
 import type { ContentBlock, GenerateOptions, LlmResolvedModelInfo, ResolvedRetryPolicy, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { ToolCallId, LlmAdapter } from '@deepseek-ai/dsh-llm'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
-import { recordModelSelection, type Agent } from '@deepseek-ai/dsh-agent'
+import { type Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { BasicCompactionEngine } from '@deepseek-ai/dsh-compaction-basic'
@@ -212,7 +212,7 @@ describe('CBR-001: a real-loop checkpoint is a valid boundary on both sides', ()
         provider: 'unconfigured-agent-fallback',
         model: 'unconfigured-agent-fallback',
       })
-      recordModelSelection(ctx.sessionProjections, agent, { provider: 'mock', model: 'mock' })
+      ctx.agentModel.select(agent, { provider: 'mock', model: 'mock' })
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'do a routed multi-step task' }], source: { kind: 'user' } }))
       await waitForIdle(ctx, agent)
 
@@ -397,7 +397,7 @@ describe('context-overflow recovery across the real loop and compaction-basic', 
           },
         })
 
-        recordModelSelection(ctx.sessionProjections, agent, { provider: 'mock', model: 'mock' })
+        ctx.agentModel.select(agent, { provider: 'mock', model: 'mock' })
         agent.followup(createUserMessage({ content: [{ type: 'text', text: 'continue from history' }], source: { kind: 'user' } }))
         await agent.whenIdle()
 

@@ -40,6 +40,9 @@
     },
     {
       "path": "../../fs/fs-local"
+    },
+    {
+      "path": "../../core/agent-model"
     }
   ]
 }

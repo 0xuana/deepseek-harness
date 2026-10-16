@@ -15,11 +15,11 @@
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-agent/use-this-package:
-  en: 326904be67f43b86
-  zh: e143c7d9e1f30bc0
+  en: 5fd4a83e491faae1
+  zh: 40d9342260f75e2c
 /deepseek-ai-dsh-agent/use-this-package/create-or-resume-an-agent:
-  en: adb806cfe9e2e0a4
-  zh: 8da57f9e62869523
+  en: cb45db3b7202461a
+  zh: a002e1b07e12172e
 /deepseek-ai-dsh-agent/use-this-package/drive-an-agent-s-conversation:
   en: 71e258897e2e7d73
   zh: abf0991012faa17e
@@ -27,8 +27,8 @@
   en: 2594a1e02adea801
   zh: cae8860369728efb
 /deepseek-ai-dsh-agent/use-this-package/intercept-or-observe-work-in-flight:
-  en: ae14e4c604211d42
-  zh: 208018c2d017d5ca
+  en: 81dc076889cd965f
+  zh: 1578d770f2c5d782
 /deepseek-ai-dsh-agent/understand-the-implementation:
   en: ce7e776e9d516bdb
   zh: 59d2751743db7795
@@ -36,14 +36,14 @@
   en: 7c850051d2857bfa
   zh: 4cab817553114e15
 /deepseek-ai-dsh-agent/understand-the-implementation/step-admission:
-  en: 9389b6c0ee0026f4
-  zh: 91879cd69d16226e
+  en: c5ebf07dbc1a883f
+  zh: 847735016e1727a3
 /deepseek-ai-dsh-agent/understand-the-implementation/durable-inbox:
   en: f6802c7f94f623b3
   zh: cc3885db80765970
 /deepseek-ai-dsh-agent/understand-the-implementation/source-map:
-  en: 5385d7a8618df0eb
-  zh: 35853b9d1a1406f1
+  en: 6c4b27402462be8c
+  zh: 466730834fa82810
 /deepseek-ai-dsh-agent/understand-the-implementation/registry-and-lifecycle:
   en: df92e97cedd0d02e
   zh: f6040c145bffd933
@@ -63,11 +63,11 @@
   en: 962c598672b0eed6
   zh: d05b3bc936685ad3
 /deepseek-ai-dsh-agent/model-experience/user-steering-and-injected-messages/what-the-model-sees:
-  en: b32fa34babcb4ac4
-  zh: 8bbdabbf2b0a21e1
+  en: 1da09e174588443f
+  zh: f6168d519339ac7b
 /deepseek-ai-dsh-agent/model-experience/user-steering-and-injected-messages/token-effect:
-  en: 5f428bfadaf4394b
-  zh: 03308df9fd3492a7
+  en: 95ed6c912ead0fba
+  zh: d5ad3d7257f7836c
 /deepseek-ai-dsh-agent/model-experience/user-steering-and-injected-messages/kv-cache-effect:
   en: 75dc61fe240860f0
   zh: 621720291d1b4bd3

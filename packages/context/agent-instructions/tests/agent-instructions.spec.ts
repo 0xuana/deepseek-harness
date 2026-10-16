@@ -49,6 +49,7 @@ import {
   mountAgentLoopTestDependencies,
   mountAgentLoopTestHarness,
 } from '@deepseek-ai/dsh-agent-loop-testkit'
+import * as AgentModelPlugin from '@deepseek-ai/dsh-agent-model'
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -1255,6 +1256,7 @@ describe('workspace context request injection', () => {
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(AgentInstructions, { maxBytes: 65536 })
     const exec = stubToolExecution({
       callId: ToolCallId('missing-turn-boundary'),
@@ -3633,6 +3635,7 @@ describe('dynamic nested workspace context injection', () => {
       await ctx.plugin(LlmRuntime)
       await ctx.plugin(SessionStore)
       await ctx.plugin(SessionProjectionRegistry)
+      await ctx.plugin(AgentModelPlugin)
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
       await ctx.plugin(AgentRegistry)

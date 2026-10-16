@@ -1,4 +1,3 @@
-import { recordModelSelection } from '@deepseek-ai/dsh-agent'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PROTOCOL_VERSION } from '@agentclientprotocol/sdk'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -863,7 +862,7 @@ describe('automation-only ACP bridge', () => {
 
     expect(created.configOptions).toEqual([])
     const agent = harness.ctx.agents.get(SessionId(created.sessionId))!
-    recordModelSelection(harness.ctx.sessionProjections, agent, { provider: 'mock', model: 'mock' })
+    harness.ctx.agentModel.select(agent, { provider: 'mock', model: 'mock' })
     await expect(harness.client.prompt({
       sessionId: created.sessionId,
       prompt: [{ type: 'text', text: 'route me' }],

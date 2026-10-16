@@ -629,6 +629,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Owns live Agent handles, the create/resume factory seam, and process-local initiator propagation.',
   },
   {
+    key: 'agentModel',
+    pkg: 'agent-model',
+    title: 'Session model selection',
+    mode: 'core',
+    consumers: ['agent-loop', 'api-session-controller', 'acp', 'sdk-jsonrpc-server', 'headless'],
+    note: 'Reads and records Session model choices; owns the modelSelection projection and optional scoped route-switch notices.',
+  },
+  {
     key: 'agentDefaultModel',
     pkg: 'agent-default-model',
     title: 'Default Agent model selection',

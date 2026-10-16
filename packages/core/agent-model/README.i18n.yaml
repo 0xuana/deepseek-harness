@@ -1,0 +1,46 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/core/agent-model/README.md
+/:
+  en: 47d6f306e5ae4f55
+  zh: 022ec46c0e23194b
+/deepseek-ai-dsh-agent-model:
+  en: 2b4c8fc77ac2b04e
+  zh: dd7d344a92a29cdd
+/deepseek-ai-dsh-agent-model/summary:
+  en: 21423e931b7ebf09
+  zh: f357ade62c85e9b5
+/deepseek-ai-dsh-agent-model/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 725b47765ee8f30b
+/deepseek-ai-dsh-agent-model/use-this-package:
+  en: f2f4388fbe782649
+  zh: de4cbde4a0195353
+/deepseek-ai-dsh-agent-model/understand-the-implementation:
+  en: 71a1536cb2330595
+  zh: f65233dfcba14af7
+/deepseek-ai-dsh-agent-model/further-exploration:
+  en: c519faa401a47398
+  zh: 20a6e428162dcf76
+/deepseek-ai-dsh-agent-model/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-agent-model/model-experience/optional-route-switch-notice:
+  en: 6c60206a2618ff38
+  zh: b193eed786c567ba
+/deepseek-ai-dsh-agent-model/model-experience/optional-route-switch-notice/what-the-model-sees:
+  en: e58a8d2ac2f2c6b5
+  zh: 63400baf224b841e
+/deepseek-ai-dsh-agent-model/model-experience/optional-route-switch-notice/token-effect:
+  en: 878389d2d3feb863
+  zh: 2c59e93f7f46af57
+/deepseek-ai-dsh-agent-model/model-experience/optional-route-switch-notice/kv-cache-effect:
+  en: 4ae01fff11ba7d69
+  zh: 1c94b66a848d594e
+/deepseek-ai-dsh-agent-model/known-limitations-and-deferred-work:
+  en: 4d18cc7cc2c58a63
+  zh: d36f8f799e6e45e2
+/deepseek-ai-dsh-agent-model/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: e88aeb617ffb74ea

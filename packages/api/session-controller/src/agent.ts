@@ -3,9 +3,9 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import type { Context } from '@deepseek-ai/cordis'
-import { installModelSwitchNotice } from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentOptions, AgentSetup } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
+import * as ModelSwitchNotice from '@deepseek-ai/dsh-agent-model/notice'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Session, SessionId } from '@deepseek-ai/dsh-session'
@@ -300,13 +300,13 @@ export class ApiSessionAgentController {
   async composeAgent(presetId: string | undefined): Promise<ApiSessionComposition> {
     const presets = this.ctx.get('agentPresets')
     if (presets === undefined) {
-      return { setup: (agentCtx) => { installModelSwitchNotice(agentCtx) } }
+      return { setup: async (agentCtx) => { await agentCtx.plugin(ModelSwitchNotice) } }
     }
     const resolvedId = (await presets.resolve(presetId)).id
     return {
       agentPreset: resolvedId,
       setup: async (agentCtx) => {
-        installModelSwitchNotice(agentCtx)
+        await agentCtx.plugin(ModelSwitchNotice)
         await presets.mount(agentCtx, resolvedId)
       },
     }

@@ -114,6 +114,9 @@
     },
     {
       "path": "../../session/working-directory"
+    },
+    {
+      "path": "../../core/agent-model"
     }
   ]
 }

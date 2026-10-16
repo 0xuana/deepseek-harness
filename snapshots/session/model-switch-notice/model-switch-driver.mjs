@@ -1,11 +1,9 @@
 /** Test-only explicit initial selection and model switch after the first step's tool call. */
 
-import { currentModelSelection, recordModelSelection } from '@deepseek-ai/dsh-agent'
-
-const SELECTED = { provider: 'deepseek-official', model: 'deepseek-v4-pro' }
+const SELECTED = { provider: 'deepseek-official', model: 'deepseek-v4-pro', reasoningEffort: 'max' }
 
 export const name = 'model-switch-driver'
-export const inject = ['tools', 'sessionProjections']
+export const inject = ['tools', 'agentModel']
 
 /**
  * Record an explicit initial choice and a switch after `todo_write`.
@@ -13,16 +11,22 @@ export const inject = ['tools', 'sessionProjections']
  */
 export function apply(ctx) {
   ctx.on('agent/created', ({ agent }) => {
-    const initial = currentModelSelection(ctx.sessionProjections, agent)
+    const initial = ctx.agentModel.resolveForNextStep(agent)
     if (initial === undefined) throw new Error('model-switch driver requires an initial route')
-    recordModelSelection(ctx.sessionProjections, agent, initial)
-    recordModelSelection(ctx.sessionProjections, agent, initial)
+    ctx.agentModel.select(agent, initial)
+    ctx.agentModel.select(agent, initial)
+  })
+  ctx.on('agent/pre-step', ({ callConfig }, next) => {
+    if (callConfig.model === SELECTED.model && callConfig.reasoningEffort !== SELECTED.reasoningEffort) {
+      throw new Error('model-switch driver requires the explicit effort before the second step')
+    }
+    return next()
   })
   ctx.on('tools/execute', async (exec, next) => {
     const result = await next()
     if (exec.name === 'todo_write' && !result.isError) {
       if (exec.agent === undefined) throw new Error('model-switch driver requires a calling Agent')
-      recordModelSelection(ctx.sessionProjections, exec.agent, SELECTED)
+      ctx.agentModel.select(exec.agent, SELECTED)
     }
     return result
   })

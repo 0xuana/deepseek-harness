@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import AgentRegistry, { installModelSwitchNotice, recordDeclaredRoute, recordModelSelection, type Agent } from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { type Agent, type ModelSelection } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import LlmRuntime, { createUserMessage, LlmError, type GenerateOptions } from '@deepseek-ai/dsh-llm'
+import * as AgentModelPlugin from '@deepseek-ai/dsh-agent-model'
+import * as ModelSwitchNotice from '@deepseek-ai/dsh-agent-model/notice'
+import LlmRuntime, { createUserMessage, LlmError, ReasoningEffortId, type GenerateOptions } from '@deepseek-ai/dsh-llm'
 import { toPiContext } from '@deepseek-ai/dsh-llm-pi-ai/src/context.ts'
 import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
@@ -27,6 +29,7 @@ async function harness(capable = new MockAdapter(Array.from({ length: 8 }, () =>
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(AgentModelPlugin)
   await ctx.plugin(SystemPrompt, { personaPrefix: '', personaSuffix: '' })
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(AgentRegistry)
@@ -40,7 +43,7 @@ async function harness(capable = new MockAdapter(Array.from({ length: 8 }, () =>
     ...await next(), sections: [{ name: 'test', text: prompt, order: 0 }],
   }))
   const agent = await ctx.agentLoop.create(SessionId('admission'), { provider: 'capable', model: 'model' })
-  installModelSwitchNotice(agent.ctx)
+  await agent.ctx.plugin(ModelSwitchNotice)
   ctx.on('llm/stream', (request, next) => {
     // Rebuild from copied source events, not the live projection's cached state.
     const subject = ctx.agents.get(request.sessionId!)!
@@ -182,7 +185,7 @@ describe('prepared-route prompt admission', () => {
     h.setPrompt('prompt three')
     await send(h.agent, 'third')
     expect(systemTexts(h.capable.requests[2]!)).toHaveLength(3)
-    recordModelSelection(h.ctx.sessionProjections, h.agent, { provider, model: 'model' })
+    h.ctx.agentModel.select(h.agent, { provider, model: 'model' })
     h.setPrompt('')
     await send(h.agent, 'clear')
     const adapter = provider === 'capable' ? h.capable : h.plain
@@ -286,7 +289,7 @@ describe('prepared-route prompt admission', () => {
     h.setPrompt('prompt two')
     await send(h.agent, 'second')
     expect(systemTexts(h.capable.requests[1]!)).toHaveLength(2)
-    recordModelSelection(h.ctx.sessionProjections, h.agent, { provider: 'plain', model: 'model' })
+    h.ctx.agentModel.select(h.agent, { provider: 'plain', model: 'model' })
     if (changed) h.setPrompt('prompt three')
     await send(h.agent, 'third')
     expectPlain(h.plain.requests[0]!, changed ? 'prompt three' : 'prompt two')
@@ -304,9 +307,9 @@ describe('prepared-route prompt admission', () => {
 
   it('appends on the first capable request after a plain route', async () => {
     const h = await harness()
-    recordModelSelection(h.ctx.sessionProjections, h.agent, { provider: 'plain', model: 'model' })
+    h.ctx.agentModel.select(h.agent, { provider: 'plain', model: 'model' })
     await send(h.agent, 'first')
-    recordModelSelection(h.ctx.sessionProjections, h.agent, { provider: 'capable', model: 'model' })
+    h.ctx.agentModel.select(h.agent, { provider: 'capable', model: 'model' })
     h.setPrompt('prompt two')
     await send(h.agent, 'second')
     expect(systemTexts(h.capable.requests[0]!)).toEqual([
@@ -366,7 +369,7 @@ describe('prepared-route prompt admission', () => {
       sessionId: SessionId('resumed'),
       agentOptions: { provider: 'plain', model: 'model' },
       seed: [...seed],
-      setup: (_ctx, agent) => { recordDeclaredRoute(h.ctx.sessionProjections, agent, agent.options) },
+      setup: (_ctx, agent) => { h.ctx.agentModel.applyConfiguredRoute(agent, { provider: 'plain', model: 'model' }) },
     })
     await send(resumed, 'resume')
     expectPlain(h.plain.requests[0]!, 'prompt two')
@@ -402,22 +405,61 @@ describe('prepared-route prompt admission', () => {
     expect(types.filter(type => ['system/message', 'user/message', 'request/header'].includes(type))).toEqual([])
   })
 
+  it.each([
+    { selected: undefined, proposed: ReasoningEffortId('high') },
+    { selected: ReasoningEffortId('high'), proposed: ReasoningEffortId('low') },
+    { selected: ReasoningEffortId('high'), proposed: undefined },
+  ])('rejects an agent/request effort change from $selected to $proposed before input admission', async ({ selected, proposed }) => {
+    const adapter = new MockAdapter([textResponse('never')], {
+      efforts: [{ id: ReasoningEffortId('low'), name: 'Low' }, { id: ReasoningEffortId('high'), name: 'High' }],
+      defaultEffort: ReasoningEffortId('low'),
+    })
+    const h = await harness(adapter)
+    h.ctx.agentModel.select(h.agent, {
+      provider: 'capable', model: 'model', ...selected === undefined ? {} : { reasoningEffort: selected },
+    })
+    h.ctx.on('agent/request', async (_payload, next) => {
+      const { reasoningEffort: _effort, ...config } = await next()
+      return { ...config, ...proposed === undefined ? {} : { reasoningEffort: proposed } }
+    })
+
+    await send(h.agent, 'reject the changed effort')
+    expect(adapter.requests).toEqual([])
+    const events = h.agent.session.snapshotEvents()
+    expect(events.filter(event => ['request/header', 'user/message', 'system/message'].includes(event.type))).toEqual([])
+    expect(events.at(-1)).toMatchObject({
+      type: 'turn/end', data: { reason: { kind: 'error', error: {
+        message: `agent "admission": agent/request proposed reasoning effort "${proposed ?? 'adapter default'}" after step preparation fixed "${selected ?? 'adapter default'}"; use ctx.agentModel.select() before step preparation`,
+      } } },
+    })
+  })
+
   it('retains the captured selection for a retry and uses a pending choice on the next step', async () => {
     const adapter = new MockAdapter([
       () => { throw new LlmError('retry this request', 'SERVER') },
       textResponse('recovered'),
-    ])
+    ], { efforts: [{ id: ReasoningEffortId('high'), name: 'High' }] })
     const h = await harness(adapter)
+    const selection = { provider: 'capable', model: 'model', reasoningEffort: ReasoningEffortId('high') }
+    h.ctx.agentModel.select(h.agent, selection)
+    const prepared: (Readonly<ModelSelection> | undefined)[] = []
+    h.ctx.on('system-prompt/assemble', (_assembly, context, next) => {
+      prepared.push(context.callConfig)
+      return next()
+    })
+    h.ctx.on('agent/pre-step', ({ callConfig }, next) => {
+      prepared.push(callConfig)
+      return next()
+    })
     h.ctx.on('agent/request-error', () => {
-      recordModelSelection(h.ctx.sessionProjections, h.agent, { provider: 'plain', model: 'next-model' })
+      h.ctx.agentModel.select(h.agent, { provider: 'plain', model: 'next-model' })
       return Promise.resolve({ kind: 'retry' as const })
     })
 
     await send(h.agent, 'retry once')
-    expect(adapter.requests.map(({ provider, model }) => ({ provider, model }))).toEqual([
-      { provider: 'capable', model: 'model' },
-      { provider: 'capable', model: 'model' },
-    ])
+    expect(prepared).toEqual([selection, selection])
+    expect(adapter.requests.map(({ provider, model, reasoningEffort }) => ({ provider, model, reasoningEffort })))
+      .toEqual([selection, selection])
     expect(h.plain.requests).toHaveLength(0)
     expect(h.ctx.sessionProjections.stateOf(h.agent.session, 'modelSelection')?.pending)
       .toEqual({ provider: 'plain', model: 'next-model' })
@@ -433,7 +475,7 @@ describe('prepared-route prompt admission', () => {
     h.setPrompt('prompt two')
     h.ctx.on('agent/request', async (_payload, next) => {
       const config = await next()
-      recordModelSelection(h.ctx.sessionProjections, h.agent, { provider: 'plain', model: 'model' })
+      h.ctx.agentModel.select(h.agent, { provider: 'plain', model: 'model' })
       return { ...config, temperature: 0.5, maxTokens: 100 }
     })
     await send(h.agent, 'second')

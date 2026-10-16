@@ -3,8 +3,9 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { installAccountTaskCancellation, type DeepSeekAccount } from '@deepseek-ai/dsh-deepseek-account'
 import { Context } from '@deepseek-ai/cordis'
 import LlmRuntime, { createUserMessage, LlmAdapter, type GenerateOptions, type StreamChunk, ToolCallId } from '@deepseek-ai/dsh-llm'
-import AgentRegistry, { recordModelSelection, type Agent } from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
+import * as AgentModelPlugin from '@deepseek-ai/dsh-agent-model'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -31,7 +32,7 @@ async function harness() {
   const ctx = new Context()
   contexts.push(ctx)
   installAccountTaskCancellation(ctx)
-  for (const plugin of [LlmRuntime, SessionStore, SessionProjectionRegistry, SystemPrompt, ToolRuntime, AgentRegistry]) {
+  for (const plugin of [LlmRuntime, SessionStore, SessionProjectionRegistry, AgentModelPlugin, SystemPrompt, ToolRuntime, AgentRegistry]) {
     await ctx.plugin(plugin)
   }
   await ctx.plugin(AgentLoop, { agents: [] })
@@ -109,7 +110,7 @@ it.each(['tool', 'retry'])('keeps the active provider until a later step binds a
     return config
   })
   const selectOfficial = (agent: Agent) => {
-    recordModelSelection(ctx.sessionProjections, agent, { provider: 'deepseek-official', model: 'deepseek-v4-flash' })
+    ctx.agentModel.select(agent, { provider: 'deepseek-official', model: 'deepseek-v4-flash' })
   }
   ctx.on('agent/request-error', async ({ agent }, next) => {
     await next()
@@ -279,7 +280,7 @@ it('ignores idle account history but uses the last bound route during a new turn
   const cancel = vi.spyOn(agent, 'cancel')
   ctx.emit('deepseek-account/signed-out')
   expect(cancel).not.toHaveBeenCalled()
-  recordModelSelection(ctx.sessionProjections, agent, { provider: 'deepseek-official', model: 'deepseek-v4-flash' })
+  ctx.agentModel.select(agent, { provider: 'deepseek-official', model: 'deepseek-v4-flash' })
   const preparing = Promise.withResolvers<undefined>()
   const proceed = Promise.withResolvers<undefined>()
   ctx.on('agent/request', async (_event, next) => {

@@ -14,9 +14,10 @@ import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import { installModelSwitchNotice, recordDeclaredRoute } from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentOptions } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
+import type {} from '@deepseek-ai/dsh-agent-model'
+import * as ModelSwitchNotice from '@deepseek-ai/dsh-agent-model/notice'
 import type {} from '@deepseek-ai/dsh-fs'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
@@ -37,7 +38,7 @@ import { projectJsonRun, boundJsonLine } from './json-stream.ts'
 export const name = 'headless-runner'
 
 /** Core services required before the one-shot turn can start. */
-export const inject = ['agentDefaultModel', 'agents', 'sessionProjections', 'sessions']
+export const inject = ['agentDefaultModel', 'agents', 'agentModel', 'sessions']
 
 /** Plugin config: the task and run options resolved from this app's injected provider service. */
 export interface Config {
@@ -248,7 +249,7 @@ async function resolveAgent(
   agents: Context['agents'],
   sessionId: SessionId,
   agentOptions: AgentOptions,
-  setup: (agentCtx: Context, agent: Agent) => void,
+  setup: (agentCtx: Context, agent: Agent) => void | Promise<void>,
   cwd: string,
 ): Promise<Agent> {
   // Resuming promises the caller a log a later process can continue. Without a
@@ -337,10 +338,10 @@ async function run(ctx: Context, config: Config, io: HeadlessIo): Promise<void> 
   // host plane and the agent reads them from the global layer. A deployment
   // that DOES configure one has to join it here first
   // (@deepseek-ai/dsh-agent-preset-registry README, "Composing a child agent").
-  const setup = (agentCtx: Context, agent: Agent): void => {
+  const setup = async (agentCtx: Context, agent: Agent): Promise<void> => {
     // A resumed Session continues with this run's configured model.
-    if (config.sessionId !== undefined) recordDeclaredRoute(ctx.sessionProjections, agent, selection)
-    installModelSwitchNotice(agentCtx)
+    if (config.sessionId !== undefined) ctx.agentModel.applyConfiguredRoute(agent, selection)
+    await agentCtx.plugin(ModelSwitchNotice)
   }
   const sessionId = brandString<SessionId>(config.sessionId ?? `session-${randomUUID()}`)
   const fs = ctx.get('fs')

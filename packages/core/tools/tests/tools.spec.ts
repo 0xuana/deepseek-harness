@@ -7,6 +7,7 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
+import * as AgentModelPlugin from '@deepseek-ai/dsh-agent-model'
 import ApprovalService, { type ApprovalOutcome, type ApprovalRequest } from '@deepseek-ai/dsh-user-approval'
 import ToolRuntime, {
   defineContentToolFixture, defineTool, JsonSchemaError, parameterSchemaSpecToJsonSchema, validateArgs, ToolArgsError, ToolNotFoundError,
@@ -809,6 +810,7 @@ describe('ToolRuntime', () => {
       await ctx.plugin(LlmRuntime)
       await ctx.plugin(SessionStore)
       await ctx.plugin(SessionProjectionRegistry)
+      await ctx.plugin(AgentModelPlugin)
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
       await ctx.plugin(AgentRegistry)

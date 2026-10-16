@@ -524,6 +524,45 @@ Types: [SessionHeader](persistence.md)
 
 Source: [`packages/core/agent-loop/src/index.ts`](../../packages/core/agent-loop/src/index.ts)
 
+<a id="ctxagentmodel--agentmodel"></a>
+
+### `ctx.agentModel` — `AgentModel`
+
+Read and record Session model choices without resolving adapter defaults.
+
+```ts cordis-catalog
+/**
+ * Resolve the choice for the next step to begin preparation. Recorded choices
+ * take precedence over the last request and then the Agent's live options.
+ * This read neither starts a step nor changes an already-prepared step.
+ * @param agent - Agent whose Session and fallback options are read.
+ * @returns a detached choice, or undefined when no source names both provider and model.
+ */
+resolveForNextStep(agent: Agent): Readonly<ModelSelection> | undefined
+
+/**
+ * Replace the next step's complete selection. Omitted effort follows adapter
+ * defaults. An equal recorded choice is a no-op; an options-only fallback is
+ * always recorded. Callers own model availability and capability validation.
+ * The append uses the Session's existing persistence and failure guarantees.
+ * @param agent - Agent whose Session receives the model/selection event.
+ * @param selection - complete provider, model, and optional explicit effort.
+ */
+select(agent: Agent, selection: Readonly<ModelSelection>): void
+
+/**
+ * Apply an explicit deployment route, including on Session resume. An omitted
+ * effort inherits the current explicit effort only for the same route;
+ * otherwise it follows adapter defaults. Call only when the entry point
+ * explicitly overrides recorded selection, not for ordinary resume fallback.
+ * @param agent - Agent whose Session receives the configured choice.
+ * @param selection - complete configured provider/model and optional effort.
+ */
+applyConfiguredRoute(agent: Agent, selection: Readonly<ModelSelection>): void
+```
+
+Source: [`packages/core/agent-model/src/service.ts`](../../packages/core/agent-model/src/service.ts)
+
 <a id="ctxagentpresets--agentpresetregistry"></a>
 
 ### `ctx.agentPresets` — `AgentPresetRegistry`
@@ -982,14 +1021,14 @@ Reject a proposed step or replace the messages that enter it. Calling `next()` p
  * @param payload.turn - the turn that will own the step.
  * @param payload.step - the step proposed by the loop.
  * @param payload.signal - the current turn's cancellation signal.
- * @param payload.callConfig - provider and model fixed for this step and its retries.
+ * @param payload.callConfig - model selection fixed for this step and its retries; omitted effort uses adapter defaults.
  * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
  * @mode waterfall
  */
-'agent/pre-step'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; signal: AbortSignal; callConfig: Readonly<Pick<LlmCallConfig, 'provider' | 'model'>> }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>
+'agent/pre-step'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; signal: AbortSignal; callConfig: Readonly<ModelSelection> }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>
 ```
 
-Types: [LlmCallConfig](llm-streaming.md) · [Scoped](scope.md) · [UserMessage](session.md)
+Types: [Scoped](scope.md) · [UserMessage](session.md)
 
 Source: [`packages/core/agent/src/runtime-types.ts`](../../packages/core/agent/src/runtime-types.ts)
 

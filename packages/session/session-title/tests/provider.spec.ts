@@ -5,6 +5,7 @@ import { deepFreeze } from '@deepseek-ai/dsh-util-values'
 import SessionStore, { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { turnBoundaryProjectionDefinition } from '@deepseek-ai/dsh-agent-loop'
+import * as AgentModelPlugin from '@deepseek-ai/dsh-agent-model'
 import SessionTitleService, {
   SessionTitleProviderId,
   type SessionTitleProvider,
@@ -56,6 +57,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(SessionTitleService, CONFIG)
     const parent = ctx.sessions.create(SessionId('title-parent'))
     parent.append('turn/start', {
@@ -121,6 +123,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(SessionTitleService, CONFIG)
     const requests: SessionTitleProviderRequest[] = []
     const provider: SessionTitleProvider = {
@@ -185,6 +188,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     onTestFinished(() => ctx.fiber.dispose())
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(SessionTitleService, { fallbackMaxWords: 5, fallbackMaxBytes: 1, maxTitleBytes: 24 })
     const currentTitles: (SessionTitleSnapshot | undefined)[] = []
     ctx.sessionTitle.register({
@@ -214,6 +218,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     onTestFinished(() => ctx.fiber.dispose())
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(SessionTitleService, CONFIG)
     const currentTitles: (SessionTitleSnapshot | undefined)[] = []
     ctx.sessionTitle.register({
@@ -255,6 +260,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(SessionTitleService, CONFIG)
     const session = ctx.sessions.create(SessionId('chunked-provider-input'))
     session.append('turn/start', { turn: 1 })
@@ -284,6 +290,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(SessionTitleService, CONFIG)
     const requests: SessionTitleProviderRequest[] = []
     ctx.sessionTitle.register({
@@ -320,6 +327,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(SessionTitleService, CONFIG)
     const pending = deferred<SessionTitleProviderResult>()
     let observedSignal: AbortSignal | undefined
@@ -372,6 +380,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(SessionTitleService, CONFIG)
     const pending = deferred<SessionTitleProviderResult>()
     const dispose = ctx.sessionTitle.register({
@@ -407,6 +416,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(SessionTitleService, CONFIG)
     const firstResult = deferred<SessionTitleProviderResult>()
     const requests: SessionTitleProviderRequest[] = []
@@ -452,6 +462,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentModelPlugin)
     ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
     await ctx.plugin(SessionTitleService, CONFIG)
     const requests: SessionTitleProviderRequest[] = []
@@ -508,6 +519,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentModelPlugin)
     ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
     await ctx.plugin(SessionTitleService, CONFIG)
     const generate = vi.fn(async (request: SessionTitleProviderRequest): Promise<SessionTitleProviderResult> => ({
@@ -541,6 +553,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(SessionTitleService, CONFIG)
     const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => undefined)
     const provider: SessionTitleProvider = {

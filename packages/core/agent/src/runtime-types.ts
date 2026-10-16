@@ -12,15 +12,15 @@ import type {
 } from '@deepseek-ai/dsh-llm'
 import type { AgentCancelCause, Session, SessionSeq, UserMessage } from '@deepseek-ai/dsh-session'
 export type { AgentCancelCause } from '@deepseek-ai/dsh-session'
-import type { Agent, InboxTarget } from './types.ts'
+import type { Agent, InboxTarget, ModelSelection } from './types.ts'
 export type { Agent } from './types.ts'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 declare module '@deepseek-ai/dsh-system-prompt' {
   interface AssembleContext {
     /** Agent for this assembly; absent on diagnostics. When present, `scope` must identify the same agent. */
     agent?: Agent
-    /** Provider and model fixed for this step; absent outside step preparation. */
-    callConfig?: Readonly<Pick<LlmCallConfig, 'provider' | 'model'>>
+    /** Model selection fixed for this step; omitted effort uses adapter defaults. Absent outside step preparation. */
+    callConfig?: Readonly<ModelSelection>
   }
 }
 
@@ -320,23 +320,24 @@ declare module '@deepseek-ai/cordis' {
      * @param payload.turn - the turn that will own the step.
      * @param payload.step - the step proposed by the loop.
      * @param payload.signal - the current turn's cancellation signal.
-     * @param payload.callConfig - provider and model fixed for this step and its retries.
+     * @param payload.callConfig - model selection fixed for this step and its retries; omitted effort uses adapter defaults.
      * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
      * @mode waterfall
      */
-    'agent/pre-step'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; signal: AbortSignal; callConfig: Readonly<Pick<LlmCallConfig, 'provider' | 'model'>> }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>
+    'agent/pre-step'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; signal: AbortSignal; callConfig: Readonly<ModelSelection> }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>
     /**
      * Replace the frozen call configuration. `await next()` yields the config
      * the machine would use (the step's model selection with agent options on
      * the first request, the logged header's controls afterwards); a
-     * replacement may adjust controls but must keep the provider and model. On step admission,
+     * replacement may adjust controls but must keep the provider, model, and
+     * reasoning effort selection. On step admission,
      * this runs after assembly and `step/start`, before the system prompt and
      * accepted user batch are committed. Cancellation here or during subsequent
      * `prepareCall()` resolution commits neither. The prepared call capability
      * governs prompt admission. Model-visible content must use logged channels;
      * this waterfall cannot mutate messages.
      * @deprecated Retained for existing listeners; do not add new listeners.
-     * Use recordModelSelection() before step preparation for model and reasoning
+     * Use ctx.agentModel.select() before step preparation for model and reasoning
      * choices, and AgentOptions.maxTokens for the output cap. Other per-request
      * control overrides have no replacement API.
      * @param payload.agent - the agent making the model call.

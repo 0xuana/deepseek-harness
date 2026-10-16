@@ -10,8 +10,8 @@ import {
   type SessionNotification,
   type StopReason,
 } from '@agentclientprotocol/sdk'
-import { installModelSwitchNotice } from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentHandle, AgentOptions, AgentStatus } from '@deepseek-ai/dsh-agent'
+import * as ModelSwitchNotice from '@deepseek-ai/dsh-agent-model/notice'
 import { createUserMessage, errorChain, type UserMessage } from '@deepseek-ai/dsh-llm'
 import { type Session, type SessionEvent, type SessionId, type TurnEndReason } from '@deepseek-ai/dsh-session'
 import { AcpContentError, admitAcpPrompt } from './content.ts'
@@ -80,7 +80,7 @@ function internalError(detail: string): RequestError {
  * @param options - workspace and MCP servers requested for the session.
  */
 async function composeAgent(agentCtx: Context, options: AcpSessionBuildOptions): Promise<void> {
-  installModelSwitchNotice(agentCtx)
+  await agentCtx.plugin(ModelSwitchNotice)
   await mountAcpMcpServers(agentCtx, options.mcpServers, options.cwd)
 }
 
@@ -103,7 +103,7 @@ export class AcpSession {
     private readonly notify: (notification: SessionNotification) => Promise<void>,
   ) {
     this.agent = handle.agent
-    this.modelControl = new AcpModelControl(ctx.llm, ctx.sessionProjections, handle.agent)
+    this.modelControl = new AcpModelControl(ctx.llm, ctx.agentModel, handle.agent)
     this.disposeAgent = () => handle.dispose()
   }
 
@@ -173,7 +173,7 @@ export class AcpSession {
   }
 
   /**
-   * Apply one standard configuration option to later ACP turns.
+   * Apply one standard configuration option from the next model step.
    * @param configId - advertised standard option id.
    * @param value - selected standard option value.
    * @param signal - optional request cancellation.

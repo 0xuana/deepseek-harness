@@ -55,6 +55,7 @@ describe('dsh-sdk-minimal bundle', () => {
       ['tools', '@deepseek-ai/dsh-tools'],
       ['mcp-resources', '@deepseek-ai/dsh-mcp-resources'],
       ['agent', '@deepseek-ai/dsh-agent'],
+      ['agent-model', '@deepseek-ai/dsh-agent-model'],
       ['llm-retry', '@deepseek-ai/dsh-llm-retry'],
       ['jobs', '@deepseek-ai/dsh-jobs-local'],
       ['agent-loop', '@deepseek-ai/dsh-agent-loop'],

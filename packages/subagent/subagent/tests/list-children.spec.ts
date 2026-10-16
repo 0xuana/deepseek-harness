@@ -7,6 +7,7 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
+import * as AgentModelPlugin from '@deepseek-ai/dsh-agent-model'
 import SessionStore, { SESSION_FORMAT_VERSION, SessionId } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
@@ -189,6 +190,7 @@ describe('SubagentRuntime.listChildren', () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(TestSessionQuery)
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
@@ -219,6 +221,7 @@ describe('SubagentRuntime.listChildren', () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(TestSessionQuery)
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)

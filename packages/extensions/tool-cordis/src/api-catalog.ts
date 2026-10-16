@@ -131,6 +131,29 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'agentModel',
+    summary: 'Read and record Session model choices without resolving adapter defaults.',
+    description: 'Read and record Session model choices without resolving adapter defaults.',
+    methods: [
+      {
+        signature: 'resolveForNextStep(agent: Agent): Readonly<ModelSelection> | undefined',
+        description: 'Resolve the choice for the next step to begin preparation. Recorded choices take precedence over the last request and then the Agent\'s live options. This read neither starts a step nor changes an already-prepared step.',
+        parameters: [{ name: 'agent', description: 'Agent whose Session and fallback options are read.' }],
+        returns: 'a detached choice, or undefined when no source names both provider and model.',
+      },
+      {
+        signature: 'select(agent: Agent, selection: Readonly<ModelSelection>): void',
+        description: 'Replace the next step\'s complete selection. Omitted effort follows adapter defaults. An equal recorded choice is a no-op; an options-only fallback is always recorded. Callers own model availability and capability validation. The append uses the Session\'s existing persistence and failure guarantees.',
+        parameters: [{ name: 'agent', description: 'Agent whose Session receives the model/selection event.' }, { name: 'selection', description: 'complete provider, model, and optional explicit effort.' }],
+      },
+      {
+        signature: 'applyConfiguredRoute(agent: Agent, selection: Readonly<ModelSelection>): void',
+        description: 'Apply an explicit deployment route, including on Session resume. An omitted effort inherits the current explicit effort only for the same route; otherwise it follows adapter defaults. Call only when the entry point explicitly overrides recorded selection, not for ordinary resume fallback.',
+        parameters: [{ name: 'agent', description: 'Agent whose Session receives the configured choice.' }, { name: 'selection', description: 'complete configured provider/model and optional effort.' }],
+      },
+    ],
+  },
+  {
     key: 'agentPresets',
     summary: 'Registry of YAML-declared presets and the revisions live Agents retain.',
     description: 'Registry of YAML-declared presets and the revisions live Agents retain.',
@@ -4072,10 +4095,10 @@ export const EVENT_API: readonly EventApiEntry[] = [
   {
     name: 'agent/pre-step',
     mode: 'waterfall',
-    signature: '\'agent/pre-step\'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; signal: AbortSignal; callConfig: Readonly<Pick<LlmCallConfig, \'provider\' | \'model\'>> }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>',
+    signature: '\'agent/pre-step\'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; signal: AbortSignal; callConfig: Readonly<ModelSelection> }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>',
     summary: 'Reject a proposed step or replace the messages that enter it.',
     description: 'Reject a proposed step or replace the messages that enter it. Calling `next()` preserves the current messages.',
-    parameters: [{ name: 'payload', description: '.callConfig - provider and model fixed for this step and its retries. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.' }],
+    parameters: [{ name: 'payload', description: '.callConfig - model selection fixed for this step and its retries; omitted effort uses adapter defaults. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.' }],
   },
   {
     name: 'agent/request-error',

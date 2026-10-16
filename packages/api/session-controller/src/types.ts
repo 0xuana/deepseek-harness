@@ -1,6 +1,7 @@
 /** Browser-safe request, result, and lifecycle vocabulary for the Session Remote service. */
-import type { NativeFileApplication } from '@deepseek-ai/dsh-native-command/types'
 
+import type {} from '@deepseek-ai/dsh-agent-model/types'
+import type { NativeFileApplication } from '@deepseek-ai/dsh-native-command/types'
 import type {
   AttachmentIdType, ImageAttachmentLimits, ImageAttachmentRef, ImageMediaType,
 } from '@deepseek-ai/dsh-attachment'
@@ -89,9 +90,6 @@ export interface ModelSelection {
   readonly model: string
   readonly reasoningEffort?: string
 }
-
-/** Client view of the durable model-selection fold owned by the Agent loop. */
-export type { ModelSelectionProjection } from '@deepseek-ai/dsh-agent/types'
 
 /** One adapter-owned reasoning effort for an exact model route. */
 export interface ModelReasoningEffort {

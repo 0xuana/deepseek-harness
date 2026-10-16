@@ -4,7 +4,7 @@ import { Readable } from 'node:stream'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import AgentRegistry, { currentModelSelection } from '@deepseek-ai/dsh-agent'
+import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type {
   Agent,
   AgentHandle,
@@ -19,6 +19,7 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Session, SessionId, UserMessage } from '@deepseek-ai/dsh-session'
 import { SessionQueryError } from '@deepseek-ai/dsh-session-query'
 import { createInboxStub, provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
+import * as AgentModelPlugin from '@deepseek-ai/dsh-agent-model'
 import { apply, Config } from '../src/index.ts'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import { internals } from '../src/runner-internals.ts'
@@ -179,6 +180,7 @@ async function bench(script: Script, options: BenchOptions = {}): Promise<{
 
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(AgentModelPlugin)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(AgentDefaultModelConfig, { provider: 'test-provider', model: 'test-model' })
   ctx.agents.setFactory({
@@ -741,7 +743,7 @@ describe('headless runner', () => {
   it.each(['test-model', 'other-model'])('restores explicit effort only for the declared route (%s)', async (savedModel) => {
     const test = await bench({
       afterPrompt(session, message, agent) {
-        expect(currentModelSelection(test.ctx.sessionProjections, agent)).toEqual({
+        expect(test.ctx.agentModel.resolveForNextStep(agent)).toEqual({
           provider: 'test-provider', model: 'test-model',
           ...savedModel === 'test-model' ? { reasoningEffort: 'high' } : {},
         })

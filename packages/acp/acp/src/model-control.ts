@@ -1,9 +1,9 @@
 /** Standard ACP session configuration over one Agent's model selection. */
 
 import type { SessionConfigOption, SessionConfigValueId } from '@agentclientprotocol/sdk'
-import { currentModelSelection, recordModelSelection, type Agent, type ModelSelection } from '@deepseek-ai/dsh-agent'
+import { type Agent, type ModelSelection } from '@deepseek-ai/dsh-agent'
+import type { AgentModel } from '@deepseek-ai/dsh-agent-model'
 import { ReasoningEffortId, type LlmCallConfig, type LlmRuntime } from '@deepseek-ai/dsh-llm'
-import type SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 
 const MODEL_CONFIG_ID = 'model'
 const REASONING_CONFIG_ID = 'reasoning_effort'
@@ -39,7 +39,7 @@ export class AcpModelControl {
 
   constructor(
     private readonly llm: LlmRuntime,
-    private readonly projections: SessionProjectionRegistry,
+    private readonly agentModel: AgentModel,
     private readonly agent: Agent,
   ) {}
 
@@ -48,7 +48,7 @@ export class AcpModelControl {
    * @returns a detached selection, or undefined when neither the Session nor the deployment names a route.
    */
   current(): ModelSelection | undefined {
-    return currentModelSelection(this.projections, this.agent)
+    return this.agentModel.resolveForNextStep(this.agent)
   }
 
   /**
@@ -77,7 +77,7 @@ export class AcpModelControl {
         const selected = state.choices.get(value)
         if (selected === undefined) throw new AcpModelConfigError(`unknown model option: ${value}`)
         await this.resolveSelection(selected, signal)
-        recordModelSelection(this.projections, this.agent, selected)
+        this.agentModel.select(this.agent, selected)
       } else if (configId === REASONING_CONFIG_ID) {
         const info = await this.llm.resolveModelInfo(current.provider, current.model, signal)
         const providerDefault = value === PROVIDER_DEFAULT_REASONING_VALUE
@@ -88,7 +88,7 @@ export class AcpModelControl {
         ) {
           throw new AcpModelConfigError(`unknown reasoning effort for ${current.provider}/${current.model}: ${value}`)
         }
-        recordModelSelection(this.projections, this.agent, await this.resolveSelection({
+        this.agentModel.select(this.agent, await this.resolveSelection({
           provider: current.provider,
           model: current.model,
           ...providerDefault ? {} : { reasoningEffort: ReasoningEffortId(value) },

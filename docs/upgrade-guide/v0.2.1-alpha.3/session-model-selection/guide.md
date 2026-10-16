@@ -1,6 +1,6 @@
 ---
 kind: upgrade-guide
-description: "Session model choices now apply at step preparation, and request listeners must preserve the selected route."
+description: "Session model choices are fixed at step preparation, and projection types move to their owning package."
 ---
 
 # Session model selection applies at the next step
@@ -11,15 +11,18 @@ English | [中文](guide.zh.md)
 
 ACP model and reasoning changes take effect at the next model step, including a tool continuation in the current turn. Previously, ACP pinned the selection for the complete prompt turn. A prepared step and its retries retain their captured selection. Image admission checks the route selected when admission begins; a later option change can select a different route before the step starts.
 
-The Agent registry now requires `sessionProjections` and owns the durable `modelSelection` projection. Programmatic resume restores recorded choices, including a selection not yet used by a request, before falling back to `AgentOptions`. Configured Agent-loop resumes, headless adoption, and SDK resume explicitly record their deployment route.
+`dsh-agent-model` provides `ctx.agentModel` and owns the durable `modelSelection` projection. The Agent registry no longer registers it. Programmatic resume restores recorded choices, including unused selections, before falling back to `AgentOptions`. Configured Agent-loop resumes, headless adoption, and SDK resume record their deployment route; an omitted effort preserves saved explicit effort only for the same route.
 
-Plugins must select a complete provider/model route before prompt assembly. `agent/request` is deprecated. Existing listeners still run on each main-loop request attempt and can adjust controls, but provider or model changes are rejected. Auxiliary calls such as compaction do not dispatch it. `installModelSelection` and `ModelSelectionRef` are removed; selection readers and writers use the shared Session projection.
+Plugins must select provider, model, and optional explicit reasoning effort before prompt assembly. `agent/request` is deprecated. Existing listeners still run on each main-loop request attempt and can adjust other controls, but cannot change provider or model, or add, change, or clear reasoning effort. Absent effort still resolves through adapter defaults on each attempt. Auxiliary calls such as compaction do not dispatch this event. `installModelSelection` and `ModelSelectionRef` are removed.
+
+The client projection type moves to `dsh-agent-model/types`; API package re-exports and the named Host projection-state export are removed.
 
 ## Migration
 
-1. In custom Cordis compositions, mount `dsh-session-projection` before `dsh-agent`.
-2. Do not add new `agent/request` listeners. Replace mutable selection references and listeners that select provider, model, or reasoning effort with `recordModelSelection(ctx.sessionProjections, agent, selection)` from `@deepseek-ai/dsh-agent`. Validate the route before recording it. Use `currentModelSelection()` to read the choice and `installModelSwitchNotice(agent.ctx)` when the composition needs a durable model-switch notice.
+1. In custom Cordis compositions, mount `dsh-session-projection` and `dsh-agent-model`. Consumers inject `agentModel`; shipped bundles include it.
+2. Replace mutable references and selection hooks with `ctx.agentModel.select(agent, selection)` after validation. Read with `resolveForNextStep(agent)`. Replace switch-notice helpers by importing the `@deepseek-ai/dsh-agent-model/notice` plugin and awaiting `agentCtx.plugin(ModelSwitchNotice)` in Agent setup. Do not add `agent/request` listeners.
 3. Set the output cap through `AgentOptions.maxTokens`. Other per-request control overrides have no replacement API; retain an existing listener where that behavior is still required.
-4. To override a saved route during programmatic resume, call `recordDeclaredRoute()` in the Agent setup callback. Supplying `agentOptions` alone provides only a fallback for a Session without a selection or request.
-5. Pass the fixed route in `agent/pre-step.callConfig` when dispatching that event. Direct `SessionReferenceResolver.prepare()` callers pass the route as the fourth argument, before the optional signal.
+4. To override a saved route during programmatic resume, call `ctx.agentModel.applyConfiguredRoute(agent, selection)` in the Agent setup callback. Supplying `agentOptions` alone provides only a fallback for a Session without a selection or request.
+5. Pass the captured `Readonly<ModelSelection>` in `agent/pre-step.callConfig`, including explicit effort when selected; `AssembleContext.callConfig` carries the same selection. Direct `SessionReferenceResolver.prepare()` callers pass the route as the fourth argument, before the optional signal.
 6. ACP controllers that require one model throughout a turn must wait for the active prompt to finish before changing its options. Verify that a mid-turn change is recorded as `model/selection`, the next step uses it, and resume retains an unused choice.
+7. Import `ModelSelectionProjection` from `@deepseek-ai/dsh-agent-model/types`, replacing Agent/API package aliases. `ModelSelection` remains in `dsh-agent/types`. Replace named Host state imports with `SessionProjectionStateMap['modelSelection']` after importing the new `/types` module; ordinary reads use `resolveForNextStep()`. Effort values use `ReasoningEffortId` from `dsh-llm/brand`.

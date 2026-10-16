@@ -8,7 +8,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { resolve } from 'node:path'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import { recordDeclaredRoute } from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
 import { admitEncodedImages, type EncodedImageAttachment, type ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import { createUserMessage, ReasoningEffortId, type ContentBlock, type LlmRuntime } from '@deepseek-ai/dsh-llm'
@@ -411,7 +410,7 @@ export class HarnessSdkJsonRpcServer {
       resumeSessionId: brandString<SessionId>(sessionId),
       agentOptions,
       // The initialized route replaces the restored Session's model selection.
-      setup: (_agentCtx, agent) => { recordDeclaredRoute(this.ctx.sessionProjections, agent, agentOptions) },
+      setup: (_agentCtx, agent) => { this.ctx.agentModel.applyConfiguredRoute(agent, agentOptions) },
     }) : this.ctx.agents.create({
       sessionId: brandString<SessionId>(sessionId),
       meta: { cwd: this.cwd },

@@ -1,5 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { type Agent, type ModelSelection } from '@deepseek-ai/dsh-agent'
+import * as AgentModelPlugin from '@deepseek-ai/dsh-agent-model'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -39,10 +40,11 @@ async function createControl(runtime: LlmRuntime, initial?: ModelSelection) {
   onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(AgentModelPlugin)
   await ctx.plugin(AgentRegistry)
   const session = ctx.sessions.create(SessionId('model-control'))
   const agent = { id: session.id, session, options: initial ?? {} } as Agent
-  return { control: new AcpModelControl(runtime, ctx.sessionProjections, agent), session }
+  return { control: new AcpModelControl(runtime, ctx.agentModel, agent), session }
 }
 
 describe('ACP model configuration control', () => {

@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.1-alpha.3/session-model-selection/guide.md
 /:
-  en: b587cfd9808e132f
-  zh: f3a5ddb2b458a751
+  en: 3890f393c1af5500
+  zh: 64fce473a9f35fae
 /session-model-selection-applies-at-the-next-step:
   en: e8582a68349890cd
   zh: a385414164b09b8a
 /session-model-selection-applies-at-the-next-step/change:
-  en: c0591f3f484f17b7
-  zh: 26e8688ed4d94771
+  en: 5a4adcaa813068c0
+  zh: 3f41f12ad64d1baa
 /session-model-selection-applies-at-the-next-step/migration:
-  en: bfe78d6dcdb58441
-  zh: f33086495dcb1bae
+  en: 32a29602f2487011
+  zh: ae596527ef1c97b3

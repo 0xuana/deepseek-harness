@@ -20,6 +20,7 @@ import Agents from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
+import * as AgentModelPlugin from '@deepseek-ai/dsh-agent-model'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import Projections from '@deepseek-ai/dsh-session-projection'
 import WorkingDirectory from '@deepseek-ai/dsh-working-directory'
@@ -71,7 +72,7 @@ async function load(exclusive = false, mode?: string, toolCallTimeoutMs?: number
   const model = new FixtureModel()
   const modules = new Map<string, unknown>([
     ['browserUse', BrowserUse], ['prompt', SystemPrompt], ['tools', Tools], ['llm', Llm],
-    ['sessions', Sessions], ['agents', Agents], ['loop', AgentLoop], ['projections', Projections],
+    ['sessions', Sessions], ['agents', Agents], ['loop', AgentLoop], ['projections', Projections], ['agentModel', AgentModelPlugin],
     ['fs', LocalFileSystem], ['workingDirectory', WorkingDirectory],
     ['model', { inject: ['llm'], apply(ctx: Context) { ctx.effect(() => ctx.llm.registerAdapter(['fixture'], model)) } }],
     ['browser', { inject: ['browserUse', 'agents', 'tools', 'systemPrompt', 'workingDirectory'], apply(ctx: Context) {
@@ -150,6 +151,7 @@ it('waits for SystemPrompt and ToolRuntime before reserving the provider', async
   contexts.push(ctx)
   await ctx.plugin(BrowserUse)
   await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(AgentModelPlugin)
   await ctx.plugin(Agents)
   provideWorkingDirectoryFixture(ctx)
   const tools = ctx.plugin(Tools)

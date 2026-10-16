@@ -10,6 +10,7 @@ import { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { unsupportedInbox, mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
+import * as AgentModelPlugin from '@deepseek-ai/dsh-agent-model'
 import * as timeContext from '@deepseek-ai/dsh-time-context'
 import type { Config } from '@deepseek-ai/dsh-time-context'
 
@@ -40,6 +41,7 @@ afterEach(() => {
 async function mount(config: Config = {}) {
   const ctx = new Context()
   await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(AgentModelPlugin)
   await ctx.plugin(AgentRegistry)
   const fiber = await ctx.plugin(timeContext, config)
   return { ctx, fiber }
@@ -383,6 +385,7 @@ describe('configuration and lifecycle', () => {
   it('fails loud for an invalid explicit zone or an unavailable process zone', async () => {
     const invalid = new Context()
     await invalid.plugin(SessionProjectionRegistry)
+    await invalid.plugin(AgentModelPlugin)
     await invalid.plugin(AgentRegistry)
     await expect(invalid.plugin(timeContext, { timeZone: 'Not/A_Real_Zone' })).rejects.toThrow(
       /invalid IANA timeZone/,
@@ -393,6 +396,7 @@ describe('configuration and lifecycle', () => {
     })
     const unresolved = new Context()
     await unresolved.plugin(SessionProjectionRegistry)
+    await unresolved.plugin(AgentModelPlugin)
     await unresolved.plugin(AgentRegistry)
     await expect(unresolved.plugin(timeContext, {})).rejects.toThrow(/failed to resolve the system time zone/)
   })
@@ -532,6 +536,7 @@ describe('real Loader export path', () => {
 
     const ctx = new Context()
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(AgentRegistry)
     const plugin = loader.unwrapExports(timeContext) as Parameters<Context['plugin']>[0]
     await ctx.plugin(plugin)

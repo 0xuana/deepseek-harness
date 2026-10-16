@@ -22,8 +22,8 @@ import type {
   SessionStartSource,
   TurnBoundaryProjection,
 } from '@deepseek-ai/dsh-agent'
+import type {} from '@deepseek-ai/dsh-agent-model'
 import { errorChain, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
-import { recordDeclaredRoute } from '@deepseek-ai/dsh-agent'
 import { interruptedTurnClosers, SessionLogOffset, SessionPreparation, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-system-prompt'
@@ -340,7 +340,7 @@ function validateConfiguredAgents(agents: Config['agents']): void {
 
 /** Concrete agent factory and driver service. */
 export class AgentLoop extends Service implements AgentFactory {
-  static inject = ['agents', 'sessions', 'llm', 'tools', 'systemPrompt', 'sessionProjections']
+  static inject = ['agentModel', 'agents', 'sessions', 'llm', 'tools', 'systemPrompt', 'sessionProjections']
 
   /** Runtime schema for declarative agents. */
   static Config: z<{ agents?: Config['agents']; maxParallelToolCalls?: number }, Config> = z.object({
@@ -413,7 +413,7 @@ export class AgentLoop extends Service implements AgentFactory {
           void this.resumeWith(ctx, childCtx.sessionPersistence, {
             resumeSessionId,
             agentOptions: options,
-            setup: (_agentCtx, agent) => { recordDeclaredRoute(ctx.sessionProjections, agent, options) },
+            setup: (_agentCtx, agent) => { this.applyConfiguredRoute(agent, options) },
           }).catch((error: unknown) => {
             this.reportConfiguredStartupFailure(id, 'resume', resumeSessionId, error)
           })
@@ -421,6 +421,13 @@ export class AgentLoop extends Service implements AgentFactory {
         return fiber.dispose
       }, `agentLoop.resume(${id})`)
     }
+  }
+
+  private applyConfiguredRoute(agent: Agent, options: AgentOptions): void {
+    const { provider, model, reasoningEffort } = options
+    if (provider && model) this.runtime.ctx.agentModel.applyConfiguredRoute(agent, {
+      provider, model, ...reasoningEffort === undefined ? {} : { reasoningEffort },
+    })
   }
 
   /** Report a contained declarative-start failure to identity-bound consumers. */
@@ -459,7 +466,7 @@ export class AgentLoop extends Service implements AgentFactory {
       await this.resumeWith(ownerCtx, persistence, {
         resumeSessionId: sessionId,
         agentOptions,
-        setup: (_agentCtx, agent) => { recordDeclaredRoute(this.runtime.ctx.sessionProjections, agent, agentOptions) },
+        setup: (_agentCtx, agent) => { this.applyConfiguredRoute(agent, agentOptions) },
       })
       return
     } catch (error: unknown) {

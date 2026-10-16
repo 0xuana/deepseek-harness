@@ -11,6 +11,7 @@ import { bindScopeParent, createScope, scopeOf, scopeTarget } from '@deepseek-ai
 import { liveConfig } from '../../../settings/settings/tests/live-config.ts'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
+import * as AgentModelPlugin from '@deepseek-ai/dsh-agent-model'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
@@ -105,6 +106,7 @@ describe('SubagentModelSelectionConfig', () => {
 
     selectionConfigs.set(ctx, await liveConfig(ctx, SubagentModelSelectionConfig))
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentModelPlugin)
     ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
 
     // A stored policy the service cannot apply fails when it is read, not when the profile row is written.
@@ -391,6 +393,7 @@ describe('SubagentModelSelectionConfig', () => {
     try {
       selectionConfigs.set(ctx, await liveConfig(ctx, SubagentModelSelectionConfig))
       await ctx.plugin(SessionProjectionRegistry)
+      await ctx.plugin(AgentModelPlugin)
       await mountWorkingDirectoryFixture(ctx)
       subagentConfigs.set(ctx, await liveConfig(ctx, SubagentRuntime))
       const childId = SessionId('child-without-session-registry')

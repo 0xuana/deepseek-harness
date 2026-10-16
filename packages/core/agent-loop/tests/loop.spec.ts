@@ -6,9 +6,10 @@ import type { GenerateOptions } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId, TurnEndReason } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
-import AgentRegistry, { recordModelSelection, type Agent, type AssistantStreamFrame } from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { type Agent, type AssistantStreamFrame } from '@deepseek-ai/dsh-agent'
 
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
+import * as AgentModelPlugin from '@deepseek-ai/dsh-agent-model'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { MockAdapter, maxTokensResponse, textResponse, toolCallResponse } from './mock-adapter.ts'
 
@@ -33,6 +34,7 @@ async function harness(adapter: MockAdapter, persona = '') {
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(AgentModelPlugin)
   await ctx.plugin(SystemPrompt, { personaPrefix: persona })
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(AgentRegistry)
@@ -606,7 +608,7 @@ describe('agent loop', () => {
     const adapter = new MockAdapter([textResponse('ok')])
     const ctx = await harness(adapter, 'You run on {{model}}.')
     const agent = await ctx.agentLoop.create(SessionId('a-recorded-model'), {})
-    recordModelSelection(ctx.sessionProjections, agent, { provider: 'mock', model: 'mock' })
+    ctx.agentModel.select(agent, { provider: 'mock', model: 'mock' })
 
     send(agent, 'hi')
     await waitForIdle(ctx, agent)
@@ -1314,7 +1316,7 @@ describe('agent loop', () => {
       .toEqual([])
     expect(agent.session.snapshotEvents().at(-1)).toMatchObject({
       type: 'turn/end', data: { reason: { kind: 'error', error: {
-        message: `agent "a1": agent/request proposed "${field === 'provider' ? 'other/mock' : 'mock/other'}" after step preparation fixed "mock/mock"; use recordModelSelection() before step preparation`,
+        message: `agent "a1": agent/request proposed "${field === 'provider' ? 'other/mock' : 'mock/other'}" after step preparation fixed "mock/mock"; use ctx.agentModel.select() before step preparation`,
       } } },
     })
   })
@@ -1902,6 +1904,7 @@ describe('agent loop', () => {
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(AgentRegistry)
@@ -1930,6 +1933,7 @@ describe('agent loop', () => {
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(AgentRegistry)

@@ -9,6 +9,7 @@ import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
+import * as AgentModelPlugin from '@deepseek-ai/dsh-agent-model'
 import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import LlmRuntime, { LlmAdapter, ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
@@ -76,7 +77,7 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
   await writeFile(join(root, 'observe-helper'), '')
   const readEvents = async () => (await readFile(join(root, 'helper-events.jsonl'), 'utf8')).trim().split('\n').map(line => AuditEvent.parse(JSON.parse(line)))
   const modules = {
-    llm: LlmRuntime, session: SessionStore, projection: SessionProjectionRegistry,
+    llm: LlmRuntime, session: SessionStore, projection: SessionProjectionRegistry, agentModel: AgentModelPlugin,
     systemPrompt: SystemPrompt, tools: ToolRuntime, agents: AgentRegistry, agentLoop: AgentLoop,
     attachments: LocalAttachmentStore, computerUse: ComputerUseRegistry, subprocess: SubprocessLocal,
     cua: NativeProvider,
