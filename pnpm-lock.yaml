@@ -2652,6 +2652,9 @@ importers:
       '@deepseek-ai/dsh-session':
         specifier: workspace:*
         version: link:../../core/session
+      '@deepseek-ai/dsh-session-checkpoint-policy':
+        specifier: workspace:*
+        version: link:../../session/session-checkpoint-policy
       '@deepseek-ai/dsh-session-log-deepseek':
         specifier: workspace:*
         version: link:../../session/session-log-deepseek
