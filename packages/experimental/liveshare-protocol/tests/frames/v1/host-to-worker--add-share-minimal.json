@@ -1,0 +1,19 @@
+{
+  "dir": "host->worker",
+  "note": "a share as a build without the optional spec fields publishes it: no sessionMode, no allowsFork, no deadline",
+  "frame": {
+    "type": "add-share",
+    "share": {
+      "shareId": "share-two",
+      "sessionId": "session-two",
+      "sessionTitle": "Second",
+      "accessMode": "open",
+      "relay": "wss://relay.example",
+      "gatewayToken": "token-two",
+      "ownerDisplayName": "Owner",
+      "allowedSubjectIds": []
+    }
+  },
+  "required": ["type", "share"],
+  "optional": []
+}

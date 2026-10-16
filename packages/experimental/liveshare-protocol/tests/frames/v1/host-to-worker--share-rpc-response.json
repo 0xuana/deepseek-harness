@@ -1,0 +1,22 @@
+{
+  "dir": "host->worker",
+  "note": "the owner host hands its answer back for one in-flight request, naming the share it came through",
+  "frame": {
+    "type": "share-rpc-response",
+    "id": 7,
+    "status": 200,
+    "body": {
+      "ok": true
+    },
+    "shareId": "share-one"
+  },
+  "required": [
+    "type",
+    "id",
+    "status"
+  ],
+  "optional": [
+    "body",
+    "shareId"
+  ]
+}

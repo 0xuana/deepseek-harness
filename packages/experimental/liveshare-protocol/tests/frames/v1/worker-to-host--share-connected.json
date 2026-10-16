@@ -1,0 +1,7 @@
+{
+  "dir": "worker->host",
+  "note": "one share is registered on the Relay and reachable",
+  "frame": { "type": "share-connected", "shareId": "share-one" },
+  "required": ["type", "shareId"],
+  "optional": []
+}

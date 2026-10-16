@@ -385,6 +385,10 @@ export default defineConfig({
         // by decision: its correctness signal is its uninstrumented suite and
         // the packer's end-to-end image spec.
         'packages/experimental/webworker-runtime/src/**/*.ts',
+        // The wire codec and identity providers this layer publishes are the
+        // same surfaces, and their value-consuming half runs inside the
+        // separately deployed Relay package, so the same lane owns them.
+        'packages/experimental/liveshare-protocol/src/**/*.ts',
         // Projection/command round: executor lifecycle branches and the
         // registry's drive tails need the same maturing lanes. TODO(gui):
         // cover and remove with the client test lane above.

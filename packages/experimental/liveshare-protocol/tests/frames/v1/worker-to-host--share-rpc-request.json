@@ -1,0 +1,13 @@
+{
+  "dir": "worker->host",
+  "note": "the gateway worker reports one routed request, with the identity the Relay asserted",
+  "frame": {
+    "type": "share-rpc-request",
+    "id": 7,
+    "shareId": "share-one",
+    "body": { "op": "stream-open", "id": 1, "endpoint": "trajectory", "payload": {} },
+    "actor": { "providerId": "feishu", "tenantId": "tenant-a", "subjectId": "ou_viewer" }
+  },
+  "required": ["type", "id", "shareId", "actor"],
+  "optional": ["body"]
+}

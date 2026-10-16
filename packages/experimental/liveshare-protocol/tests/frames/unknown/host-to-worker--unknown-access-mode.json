@@ -1,0 +1,17 @@
+{
+  "dir": "host->worker",
+  "note": "a share whose access mode is outside the closed enum fails the whole command instead of widening it",
+  "frame": {
+    "type": "add-share",
+    "share": {
+      "shareId": "share-three",
+      "sessionId": "session-three",
+      "sessionTitle": "Third",
+      "accessMode": "selected",
+      "relay": "wss://relay.example",
+      "gatewayToken": "token-three",
+      "ownerDisplayName": "Owner",
+      "allowedSubjectIds": []
+    }
+  }
+}

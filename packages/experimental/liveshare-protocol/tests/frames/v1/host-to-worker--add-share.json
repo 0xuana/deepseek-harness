@@ -1,0 +1,24 @@
+{
+  "dir": "host->worker",
+  "note": "the owner host publishes one share to its gateway worker, every optional spec field present",
+  "frame": {
+    "type": "add-share",
+    "share": {
+      "shareId": "share-one",
+      "sessionId": "session-one",
+      "sessionTitle": "Review the migration",
+      "accessMode": "approval",
+      "relay": "wss://relay.example",
+      "gatewayToken": "token-one",
+      "ownerDisplayName": "Owner",
+      "allowedSubjectIds": ["ou_viewer", "feishu:tenant-a:ou_other"],
+      "sessionMode": "write",
+      "allowsFork": true,
+      "dshVersion": "0.2.0-rc.2",
+      "ownerInstanceId": "instance-one",
+      "expiresAt": "2026-10-03T00:00:00.000Z"
+    }
+  },
+  "required": ["type", "share"],
+  "optional": []
+}
