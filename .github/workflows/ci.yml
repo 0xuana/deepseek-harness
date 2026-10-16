@@ -581,6 +581,9 @@ jobs:
             $null = [Management.Automation.Language.Parser]::ParseFile((Join-Path $env:GITHUB_WORKSPACE $path), [ref]$tokens, [ref]$parseErrors)
             if ($parseErrors.Count) { throw ($parseErrors -join "`n") }
           }
+      - name: Verify windowless Windows runner launcher
+        shell: pwsh
+        run: ./apps/desktop/tests/windows-runner-launcher.ps1
       - name: Run Windows observational gates on built artifacts
         id: observational
         continue-on-error: true

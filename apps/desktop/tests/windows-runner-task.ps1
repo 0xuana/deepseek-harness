@@ -7,11 +7,13 @@ $source = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../scripts'))
 $runner = Join-Path $root 'runner with spaces'
 $null = New-Item -ItemType Directory -Path $runner
 Set-Content -LiteralPath (Join-Path $runner '.runner') -Value '{}'
-foreach ($file in @('windows-runner-task.ps1','run-windows-runner-task.ps1')) { Copy-Item -LiteralPath (Join-Path $source $file) -Destination $root }
+foreach ($file in @('windows-runner-task.ps1','run-windows-runner-task.ps1','windows-runner-launcher.cs')) { Copy-Item -LiteralPath (Join-Path $source $file) -Destination $root }
 $manager = Join-Path $root 'windows-runner-task.ps1'
 @'
 param([string]$RunnerRoot, [string]$ConfigRoot, [switch]$CheckOnly)
 if ($CheckOnly) { exit 0 }
+Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class ConsoleProbe { [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow(); }'
+Add-Content -LiteralPath (Join-Path $RunnerRoot 'consoles.txt') -Value ([ConsoleProbe]::GetConsoleWindow().ToInt64())
 Add-Content -LiteralPath (Join-Path $RunnerRoot 'starts.txt') -Value $PID
 if (-not (Test-Path -LiteralPath (Join-Path $RunnerRoot 'failed-once'))) {
     Set-Content -LiteralPath (Join-Path $RunnerRoot 'failed-once') -Value 'yes'
@@ -42,11 +44,18 @@ try {
     $installed = $true
     $config = Get-Content -LiteralPath (Join-Path $runner 'dsh-task/config.json') -Raw | ConvertFrom-Json
     $task = Get-ScheduledTask -TaskName $config.TaskName -TaskPath '\'
+    $launcher = Join-Path $runner 'dsh-task/launcher.exe'
+    if ($task.Actions.Execute -ne $launcher) { throw 'Task must start the windowless launcher.' }
+    $image = [IO.File]::ReadAllBytes($launcher)
+    $peOffset = [BitConverter]::ToInt32($image, 0x3c)
+    if ([BitConverter]::ToUInt16($image, $peOffset + 24 + 68) -ne 2) { throw 'Launcher must use the Windows GUI subsystem.' }
     if ($task.State -ne 'Disabled' -or $task.Settings.ExecutionTimeLimit -ne 'PT0S' -or $task.Settings.MultipleInstances -ne 'IgnoreNew') { throw 'Unexpected task scheduling settings.' }
     Invoke-Manager install -ExpectFailure
     Invoke-Manager start
     $starts = Join-Path $runner 'starts.txt'
     Wait-Condition { (Test-Path -LiteralPath $starts) -and @(Get-Content -LiteralPath $starts).Count -ge 2 } 'automatic retry after unexpected clean exit' 110
+    $consoles = @(Get-Content -LiteralPath (Join-Path $runner 'consoles.txt'))
+    if ($consoles.Count -ne 2 -or @($consoles | Where-Object { $_ -ne '0' }).Count) { throw 'Initial or recovered runner allocated a console.' }
     $childId = [int]@(Get-Content -LiteralPath $starts)[-1]
     $child = Get-Process -Id $childId
     Invoke-Manager start
@@ -83,7 +92,7 @@ try {
     $installed = $false
     Invoke-Manager status -ExpectFailure
     if (-not (Test-Path -LiteralPath (Join-Path $runner '.runner'))) { throw 'Registration removed.' }
-    Write-Output "PASS: install, duplicate refusal, automatic retry, start, status, stop, child teardown, retry exhaustion, uninstall. Evidence: $root"
+    Write-Output "PASS: windowless initial launch and recovery, install, duplicate refusal, automatic retry, start, status, stop, child teardown, retry exhaustion, uninstall. Evidence: $root"
 } catch { $primaryFailure = $_; throw } finally {
     $cleanupErrors = @()
     if ($installed) {
