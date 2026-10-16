@@ -25,6 +25,8 @@ Use `present` to declare final files accessible through the Session filesystem, 
 <a id="use-this-package"></a>
 ## Use this package
 
+The `./prompt` plugin registers the shared desktop file-reference guidance using only `systemPrompt`. The Web and `sdk` bundles mount it separately from the tool, so the same guidance is available without a Web server.
+
 `present` validates paths against the Session's current working directory and records absolute paths, so later directory changes do not redirect delivered files.
 
 The `standard`, `ptc`, and `cordis` agent presets mount this plugin. Call `present` with `files: [{ path, description? }]` after creating the files. Files must be regular files accessible through the Session filesystem. Relative paths resolve against the Session working directory; absolute paths may name files outside it, including `/tmp` or Downloads. Missing files, directories, final symbolic links, and provider-denied paths fail the call. Files in a shell sandbox’s private `/tmp` must first be written somewhere the Session filesystem can access.
@@ -82,6 +84,26 @@ One tool schema per mounted agent and one result line per delivered file. File b
 #### KV Cache effect
 
 The tool schema is static for the mount lifetime. Delivery result text extends the conversation without rewriting its prompt prefix.
+
+### Clickable file-reference guidance
+
+#### What the model sees
+
+The separate `./prompt` entry registers this static guidance for desktop file references.
+
+##### Shared guidance
+
+```markdown
+Prefer showing the primary results within your final response alongside a brief explanation. Use ![Description](<path/to/image.png>) when an image supports an explanation or comparison. Use [Description](<path/to/image.png>) when referring to an image or listing files. Enclose Markdown file destinations in angle brackets, especially paths containing spaces. Do not call present just to list edited source files, or run commands to check whether a diff view will appear. Use present when a separate file card helps the user open the complete deliverable, including images, Office documents, spreadsheets, and slide decks. Each presented file adds a card below the reply, with preview and native-open actions. Avoid repeating results already shown inline unless the separate card adds useful access. Outside commands, configuration expressions, and code blocks, link every mention of an existing file, including repeats and tables, to its full path relative to the working directory or absolute; append #L24 or #L24-L30 to the target for known lines. Use the filename or a clear alias as the label, adding only enough parent directories to distinguish files; keep full paths out of labels. Default to the name alone; when precise locations matter, append :24 or :24–30, with no # or L in the line suffix.
+```
+
+#### Token effect
+
+One fixed paragraph containing output-selection, rendering, and file-reference guidance whenever the separate `./prompt` plugin is mounted. The tool schema is independent of this prompt entry.
+
+#### KV Cache effect
+
+The section is static at first-party order 9000 for the lifetime of the `./prompt` mount, so it remains in the reusable prompt prefix and does not change across Turns.
 
 ## Known Limitations and Deferred Work
 

@@ -153,6 +153,21 @@ describe('harness-dev-context', () => {
   })
 
   it.each([
+    { config: { checkout: false as const }, expected: ['not provided for this SDK session', 'not provided for this SDK session'] },
+    { config: { checkout: '/embedding/source', guiUrl: 'http://127.0.0.1:4312' }, expected: ['"/embedding/source"', '"http://127.0.0.1:4312"'] },
+  ])('renders SDK desktop context without a Web server: $config', async ({ config, expected }) => {
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    await mountAgentLoopTestDependencies(ctx)
+    await ctx.plugin(HarnessDevContext, config)
+    const assembly = await ctx.systemPrompt.assemble()
+    expect(assembly.sections.filter(entry => entry.name === 'harness:source' || entry.name === 'app:web-surface')
+      .map(entry => entry.text)).toEqual([SOURCE_PROMPT, WEB_PROMPT])
+    expect(renderContextSnapshot(assembly)).toContain(`Current DeepSeek Harness implementation checkout: ${expected[0]}.`)
+    expect(renderContextSnapshot(assembly)).toContain(`Current DeepSeek Harness Web GUI URL: ${expected[1]}.`)
+  })
+
+  it.each([
     { route: 'replace-only', systemPromptUpdate: undefined },
     { route: 'in-history', systemPromptUpdate: 'in-history' as const },
   ])('resumes an earlier-format Session on other ports without rewriting its system prompt ($route)', async ({ systemPromptUpdate }) => {

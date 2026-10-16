@@ -12,6 +12,7 @@
 import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
 import { z as zod } from 'zod'
+import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-web-app'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
@@ -21,8 +22,22 @@ import type { AssembleContext } from '@deepseek-ai/dsh-system-prompt'
 /** Stable Cordis plugin name. */
 export const name = 'harness-dev-context'
 
-/** Prompt registries, the projection registry, and the Web GUI whose URL the model learns. */
-export const inject = ['systemPrompt', 'sessionProjections', 'webApp']
+/** Prompt and projection registries; the Web GUI service is optional. */
+export const inject = ['systemPrompt', 'sessionProjections']
+
+/** Desktop context supplied by a host or an SDK embedding. */
+export interface Config {
+  /** Implementation checkout; omit for this installation, or false when unavailable. */
+  checkout?: string | false
+  /** GUI URL; omit to use the mounted Web application when available. */
+  guiUrl?: string
+}
+
+/** Validate deployment-provided desktop context. */
+export const Config: z<Config> = z.object({
+  checkout: z.union([z.string(), z.const(false)]),
+  guiUrl: z.string(),
+})
 
 /** This installation's root, four directories above this package's source or built entry. */
 const SOURCE_ROOT = fileURLToPath(new URL('../../../..', import.meta.url))
@@ -123,9 +138,10 @@ const ADMITS_NOTHING: LegacyPrompt = { source: null, web: null }
 /**
  * Register the two sections, their runtime-context values, and the
  * projection that keeps a Session's admitted paragraphs.
- * @param ctx - plugin context with every {@link inject} service.
+ * @param ctx - plugin context with the required {@link inject} services.
+ * @param config - optional embedding checkout and GUI URL.
  */
-export function apply(ctx: Context): void {
+export function apply(ctx: Context, config: Config = {}): void {
   ctx.sessionProjections.register({
     key: LEGACY_PROMPT,
     stateVersion: 1,
@@ -148,7 +164,8 @@ export function apply(ctx: Context): void {
     name: HARNESS_SOURCE,
     order: ctx.systemPrompt.getContextOrder('HARNESS_SOURCE'),
     interpolate: false,
-    text: `Current DeepSeek Harness implementation checkout: ${JSON.stringify(SOURCE_ROOT)}.`,
+    text: `Current DeepSeek Harness implementation checkout: ${config.checkout === false
+      ? 'not provided for this SDK session' : JSON.stringify(config.checkout ?? SOURCE_ROOT)}.`,
   })
   ctx.systemPrompt.section({
     name: WEB_SURFACE,
@@ -160,6 +177,10 @@ export function apply(ctx: Context): void {
     name: WEB_SURFACE,
     order: ctx.systemPrompt.getContextOrder('WEB_SURFACE'),
     interpolate: false,
-    text: () => `Current DeepSeek Harness Web GUI URL: ${JSON.stringify(ctx.webApp.getAdvertisedUrl())}.`,
+    text: () => {
+      const url = config.guiUrl ?? ctx.get('webApp')?.getAdvertisedUrl()
+      return `Current DeepSeek Harness Web GUI URL: ${url === undefined
+        ? 'not provided for this SDK session' : JSON.stringify(url)}.`
+    },
   })
 }

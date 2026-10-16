@@ -66,7 +66,11 @@ describe('Python SDK dsh profile keyless smoke', () => {
     { label: 'reports max-token turns with mapping enabled through env', envValue: 'true', editorEnabled: false },
     { label: 'reports max-token turns with mapping disabled through env', envValue: 'false', editorEnabled: false },
     { label: 'allows an explicit patch to enable str_replace_editor', envValue: undefined, editorEnabled: true },
-  ])('$label', async ({ envValue, editorEnabled }) => {
+    { label: 'uses desktop tools through the PTC environment switch', envValue: undefined, editorEnabled: false, ptc: true },
+  ])('$label', async (scenario) => {
+    const { envValue, editorEnabled } = scenario
+    const ptc = 'ptc' in scenario && scenario.ptc
+
     const root = await mkdtemp(join(tmpdir(), 'dsh-python-sdk-runtime-smoke-'))
     const editorPatch = join(root, 'editor.patch.yml')
     if (editorEnabled) await writeFile(editorPatch, [
@@ -103,6 +107,7 @@ describe('Python SDK dsh profile keyless smoke', () => {
         DSH_HOME: join(root, '.dsh'),
         DSH_PERMISSION_MODE: 'danger-full-access',
         DSH_TELEMETRY_DISABLED: '1',
+        DSH_TOOLS_MODE: ptc ? 'ptc' : 'native',
         DEEPSEEK_API_KEY: 'keyless-smoke-no-call',
         DEEPSEEK_BASE_URL: `http://127.0.0.1:${address.port}`,
         ...(envValue === undefined ? {} : { DSH_MAX_TOKENS_AS_SUCCESS: envValue }),
@@ -176,9 +181,22 @@ describe('Python SDK dsh profile keyless smoke', () => {
       const toolNames = tools.map(tool => tool.name)
       expect(modelRequests[0]?.output_config).toEqual({ effort: 'max' })
       expect(modelRequests[0]?.max_tokens).toBe(1234)
-      expect(toolNames).toEqual(expect.arrayContaining(['read', 'write', 'edit', 'web_fetch', 'web_search']))
-      expect(toolNames.includes('str_replace_editor')).toBe(editorEnabled)
-      expect(toolNames).not.toContain('list_subagent_models')
+      const expectedTools = ['read', 'write', 'edit', 'web_fetch', 'web_search', 'subagent', 'subagent_fork',
+        'present', 'ask_user_question', 'schedule_create', 'schedule_delete', 'schedule_list', 'schedule_update']
+      const requestText = JSON.stringify(modelRequests[0])
+      if (ptc) {
+        expect(toolNames).toEqual(['run_code'])
+        for (const tool of expectedTools) expect(requestText.includes(`${tool}:`), tool).toBe(true)
+      } else {
+        expect(toolNames).toEqual(expect.arrayContaining(expectedTools))
+        expect(toolNames.includes('str_replace_editor')).toBe(editorEnabled)
+        expect(toolNames).not.toContain('list_subagent_models')
+      }
+      for (const text of ['Tokens prefixed with @', 'Prefer showing the primary results',
+        'Current DeepSeek Harness implementation checkout:', 'Current DeepSeek Harness Web GUI URL:',
+        'Time sampled while preparing']) {
+        expect(requestText.includes(text), text).toBe(true)
+      }
 
       child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'shutdown' })}\n`)
       const shutdown = await waitForLine(lines, value => value.id === 3, () => stderr)

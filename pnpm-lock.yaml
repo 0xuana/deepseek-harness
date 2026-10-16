@@ -2548,18 +2548,51 @@ importers:
 
   packages/bundle/sdk-app:
     dependencies:
+      '@deepseek-ai/dsh-api-session-controller':
+        specifier: workspace:*
+        version: link:../../api/session-controller
+      '@deepseek-ai/dsh-client-connection':
+        specifier: workspace:*
+        version: link:../../client/connection
+      '@deepseek-ai/dsh-client-file-upload':
+        specifier: workspace:*
+        version: link:../../client/file-upload
       '@deepseek-ai/dsh-cmdline':
         specifier: workspace:*
         version: link:../../boot/cmdline
+      '@deepseek-ai/dsh-file-reference-local':
+        specifier: workspace:*
+        version: link:../../context/file-reference-local
+      '@deepseek-ai/dsh-harness-dev-context':
+        specifier: workspace:*
+        version: link:../../context/harness-dev-context
+      '@deepseek-ai/dsh-schedule':
+        specifier: workspace:*
+        version: link:../../schedule/schedule
       '@deepseek-ai/dsh-sdk-jsonrpc-server':
         specifier: workspace:*
         version: link:../../sdk/server
       '@deepseek-ai/dsh-skill-office':
         specifier: workspace:*
         version: link:../../skill/skill-office
+      '@deepseek-ai/dsh-time-context':
+        specifier: workspace:*
+        version: link:../../context/time-context
+      '@deepseek-ai/dsh-tool-ask-user':
+        specifier: workspace:*
+        version: link:../../interaction/tool-ask-user
+      '@deepseek-ai/dsh-tool-present':
+        specifier: workspace:*
+        version: link:../../deliverables/tool-present
+      '@deepseek-ai/dsh-tool-schedule':
+        specifier: workspace:*
+        version: link:../../schedule/tool-schedule
       '@deepseek-ai/dsh-tool-workspace-dependencies':
         specifier: workspace:*
         version: link:../../skill/tool-workspace-dependencies
+      '@deepseek-ai/dsh-workspace':
+        specifier: workspace:*
+        version: link:../../workspace/workspace
       '@deepseek-ai/schemastery':
         specifier: link:../../../vendor/schemastery
         version: link:../../../vendor/schemastery
@@ -6856,6 +6889,9 @@ importers:
 
   packages/context/harness-dev-context:
     dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
       zod:
         specifier: 4.4.3
         version: 4.4.3

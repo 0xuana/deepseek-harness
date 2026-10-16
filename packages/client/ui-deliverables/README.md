@@ -89,19 +89,19 @@ Read these pages when the deliverables surface is not enough. They move from the
 <a id="model-experience"></a>
 ## Model Experience
 
-### Clickable file-reference guidance
+### Desktop file references
 
 #### What the model sees
 
-The guidance prefers primary results in the final reply: inline images support explanations and comparisons, image links serve references and file lists, and image file cards serve separate deliverables. File destinations use angle brackets, including paths with spaces. It recommends separate `present` cards for complete file deliverables, especially Office files, usually selecting the most important one or two, with at most four files per call when more are needed. It discourages cards solely for code edits and extra commands to inspect diff visibility. This guidance applies even with Coding Tools disabled: it accepts fewer file surfaces to avoid duplicate presentation and unnecessary tool calls. It asks the model to link every existing-file mention outside commands, configuration expressions, and code blocks, including repeats and tables. Labels default to filenames or clear aliases, with only enough parent directories to distinguish files. Precise references display `filename:24` or `filename:24–30`; their destinations retain full relative or absolute paths with `#L24` or `#L24-L30` anchors. The display suffix contains neither `#` nor `L`.
+The Web composition mounts the shared [`dsh-tool-present/prompt`](../../deliverables/tool-present/README.md#model-experience) guidance. This UI package renders the resulting file references and cards.
 
 #### Token effect
 
-One fixed paragraph containing output-selection, rendering, and file-reference guidance whenever this package is loaded. The [present tool](../../deliverables/tool-present/README.md#model-experience) owns the delivery schema and result text.
+No direct tokens; the separate prompt plugin owns the guidance.
 
 #### KV Cache effect
 
-The section is static at first-party order 9000 for the lifetime of the package mount, so it remains in the reusable prompt prefix and does not change across Turns.
+No direct effect on model requests.
 
 ## Known Limitations and Deferred Work
 

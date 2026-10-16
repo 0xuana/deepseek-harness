@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-随附的 Web bundle 以 `harness-dev-context` 行挂载此插件。不希望 agent 得知 harness checkout 或 GUI URL 时，在 profile patch 中禁用该行。插件不接受配置，只在每个注入服务都存在时激活：`systemPrompt`、`sessionProjections`，以及 Web 运行时的 `webApp` 服务，因此 `--help` 与非 Web 组合永远不会挂载它。
+Web 和 `sdk` bundle 挂载 `harness-dev-context` 行。它依赖 `systemPrompt` 和 `sessionProjections`，`webApp` 为可选服务。将 `checkout` 设为实现路径；省略时使用当前安装位置，未提供 checkout 时设为 `false`。将 `guiUrl` 设为嵌入应用的 GUI URL；否则插件在服务可用时读取 `webApp.getAdvertisedUrl()`。缺失值显示为 `not provided for this SDK session`。禁用该行会同时省略两个提示段和上下文。
 
 ### 模型得到什么
 

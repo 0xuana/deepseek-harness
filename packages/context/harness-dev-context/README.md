@@ -25,7 +25,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-The shipped Web bundle mounts this plugin as its `harness-dev-context` row. Disable that row in a profile patch when the agent should not learn the harness checkout or GUI URL. The plugin takes no configuration and activates only where every injected service exists: `systemPrompt`, `sessionProjections`, and the `webApp` service of the Web runtime, so `--help` and non-Web compositions never mount it.
+The Web and `sdk` bundles mount the `harness-dev-context` row. It requires `systemPrompt` and `sessionProjections`; `webApp` is optional. Set `checkout` to an implementation path, omit it to use this installation, or set it to `false` when no checkout is provided. Set `guiUrl` to the embedding GUI URL; otherwise the plugin reads `webApp.getAdvertisedUrl()` when available. Missing values are reported as `not provided for this SDK session`. Disable the row to omit both sections and contexts.
 
 ### What the model gets
 

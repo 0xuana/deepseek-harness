@@ -25,6 +25,8 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
+`./prompt` 插件仅依赖 `systemPrompt`，注册共用的桌面文件引用指导。Web 和 `sdk` bundle 将其与工具分别挂载，因此不启动 Web 服务也能获得相同指导。
+
 `present` 按 Session 的当前工作目录校验路径并记录绝对路径，因此后续目录切换不会让已交付文件指向其他位置。
 
 `standard`、`ptc` 与 `cordis` Agent preset 挂载本插件。创建文件后，以 `files: [{ path, description? }]` 调用 `present`。文件必须是 Session 文件系统可访问的普通文件。相对路径按 Session 工作目录解析；绝对路径可以指向工作区外的文件，包括 `/tmp` 或 Downloads。文件缺失、为目录、最终路径为符号链接或提供方拒绝访问时，调用失败。Shell 沙箱私有 `/tmp` 中的文件需要先写入 Session 文件系统可访问的位置。
@@ -82,6 +84,26 @@ kind: "package-reference"
 #### KV Cache 影响
 
 工具 schema 在挂载期间保持静态。交付结果文本扩展对话，不重写提示词前缀。
+
+### 可点击文件引用指引
+
+#### 模型看到的内容
+
+独立的 `./prompt` 入口注册以下桌面文件引用静态指导。
+
+##### 共用指导
+
+```markdown
+Prefer showing the primary results within your final response alongside a brief explanation. Use ![Description](<path/to/image.png>) when an image supports an explanation or comparison. Use [Description](<path/to/image.png>) when referring to an image or listing files. Enclose Markdown file destinations in angle brackets, especially paths containing spaces. Do not call present just to list edited source files, or run commands to check whether a diff view will appear. Use present when a separate file card helps the user open the complete deliverable, including images, Office documents, spreadsheets, and slide decks. Each presented file adds a card below the reply, with preview and native-open actions. Avoid repeating results already shown inline unless the separate card adds useful access. Outside commands, configuration expressions, and code blocks, link every mention of an existing file, including repeats and tables, to its full path relative to the working directory or absolute; append #L24 or #L24-L30 to the target for known lines. Use the filename or a clear alias as the label, adding only enough parent directories to distinguish files; keep full paths out of labels. Default to the name alone; when precise locations matter, append :24 or :24–30, with no # or L in the line suffix.
+```
+
+#### Token 影响
+
+挂载独立的 `./prompt` 插件时，加入一个包含输出选择、渲染和文件引用指导的固定段落。工具 schema 与此提示入口相互独立。
+
+#### KV Cache 影响
+
+该段落在`./prompt` 插件挂载期间始终以 first-party 顺序 9000 保持静态，因此留在可复用的提示词前缀中，不会随轮次改变。
 
 ## 已知限制与延期工作
 

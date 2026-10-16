@@ -15,8 +15,8 @@
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-tool-present/use-this-package:
-  en: 3bb0413b8aa3bd10
-  zh: ab753bb651a62209
+  en: 37ef200202b08440
+  zh: 2ec14b957b690cea
 /deepseek-ai-dsh-tool-present/understand-the-implementation:
   en: 6e73ca41dddc096e
   zh: b59fdfa3f3cc47e1
@@ -38,6 +38,21 @@
 /deepseek-ai-dsh-tool-present/model-experience/present/kv-cache-effect:
   en: c5e95beba09dce3c
   zh: 50f71fac2592f652
+/deepseek-ai-dsh-tool-present/model-experience/clickable-file-reference-guidance:
+  en: eb244aa21a4e5210
+  zh: e3450addfa19cea5
+/deepseek-ai-dsh-tool-present/model-experience/clickable-file-reference-guidance/what-the-model-sees:
+  en: 11fefedc31acd9b3
+  zh: 164c52058c488a4e
+/deepseek-ai-dsh-tool-present/model-experience/clickable-file-reference-guidance/what-the-model-sees/shared-guidance:
+  en: f6f9454c369cd5a2
+  zh: 127b54d86cdf0cd5
+/deepseek-ai-dsh-tool-present/model-experience/clickable-file-reference-guidance/token-effect:
+  en: e64e0d84f6f011a6
+  zh: 52d77e614a04bc35
+/deepseek-ai-dsh-tool-present/model-experience/clickable-file-reference-guidance/kv-cache-effect:
+  en: 7e63953a84e6ae94
+  zh: 477da4c56a897c38
 /deepseek-ai-dsh-tool-present/known-limitations-and-deferred-work:
   en: 918d8b8f09063e68
   zh: 48591e5324a462c4

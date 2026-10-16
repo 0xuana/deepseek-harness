@@ -28,6 +28,9 @@
     },
     {
       "path": "../../bundle/web-app"
+    },
+    {
+      "path": "../../../vendor/schemastery"
     }
   ]
 }

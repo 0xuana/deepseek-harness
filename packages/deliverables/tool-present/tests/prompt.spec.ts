@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises'
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it } from 'vitest'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import { apply, inject } from '../src/index.ts'
+import { apply, inject } from '../src/prompt.ts'
 
 let ctx: Context | undefined
 
@@ -13,17 +13,10 @@ afterEach(async () => {
   ctx = undefined
 })
 
-describe('ui-deliverables node plugin', () => {
+describe('desktop file-reference prompt', () => {
   it('registers final-response file-reference guidance only while mounted', async () => {
     ctx = new Context()
     await ctx.plugin(SystemPrompt, { personaPrefix: '' })
-    ctx.provide('connection', { fetch: { register: () => () => {} } } as never)
-    ctx.provide('sessionQuery', {} as never)
-    ctx.provide('sessionController', {} as never)
-    ctx.provide('workspaceFiles', {} as never)
-    ctx.provide('fs', {} as never)
-    ctx.provide('sandboxPolicy', {} as never)
-    ctx.provide('workspaceChanges', {} as never)
     const mounted = ctx.plugin({ apply, inject })
     await mounted.await()
 
