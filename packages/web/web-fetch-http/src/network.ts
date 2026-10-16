@@ -37,6 +37,12 @@ export type AddressResolver = (hostname: string, options: { all: true; order: 'v
 const RFC6052_PREFIX_LENGTHS = [32, 40, 48, 56, 64, 96] as const
 const IPV4ONLY_DISCOVERY_HOST = 'ipv4only.arpa'
 const IPV4ONLY_SENTINELS = new Set(['192.0.0.170', '192.0.0.171'])
+/**
+ * RFC 2544 benchmarking block that fake-IP DNS in TUN-mode proxies (Clash/Mihomo, Surge, sing-box)
+ * returns for every hostname. The proxy maps the address back to the hostname and resolves it, so a
+ * DNS answer in this block is treated like a proxied hop; an IP literal in it stays blocked.
+ */
+const FAKE_IP_RANGE = ipaddr.parseCIDR('198.18.0.0/15')
 
 interface Nat64Prefix {
   readonly bytes: readonly number[]
@@ -65,7 +71,8 @@ export function isPublicIpAddress(input: string): boolean {
 
 /**
  * Resolve a hostname once and reject the complete answer set if any destination
- * is not public. The returned addresses are the only ones the transport may use.
+ * is not public. A hostname's answer in the fake-IP block counts as public. The returned addresses
+ * are the only ones the transport may use.
  *
  * @param hostname - URL hostname, including brackets when it is an IPv6 literal.
  * @param signal - aborts the wait for system resolution; an in-flight OS lookup may finish unused.
@@ -97,7 +104,7 @@ export async function resolvePublicAddresses(
     if ((entry.family !== 4 && entry.family !== 6) || isIP(entry.address) !== entry.family) {
       throw new WebError(`hostname "${hostname}" resolved to an invalid IP address`, 'WEB_PROVIDER_ERROR')
     }
-    if (!isPublicIpAddress(entry.address)) {
+    if (!isPublicIpAddress(entry.address) && !(literalFamily === 0 && isFakeIpAddress(entry.address))) {
       throw new WebError(`URL hostname "${hostname}" resolves to a non-public IP address`, 'WEB_BLOCKED_URL')
     }
     const translatedIpv4 = translatedIpv4Address(entry.address, nat64Prefixes)
@@ -107,6 +114,12 @@ export async function resolvePublicAddresses(
     addresses.push({ address: entry.address, family: entry.family })
   }
   return addresses
+}
+
+/** Whether an IPv4 address is in {@link FAKE_IP_RANGE}. */
+function isFakeIpAddress(address: string): boolean {
+  const parsed = ipaddr.parse(address)
+  return parsed instanceof ipaddr.IPv4 && parsed.match(FAKE_IP_RANGE)
 }
 
 /** Discover the active DNS64 prefix set using RFC 7050's reserved hostname. */

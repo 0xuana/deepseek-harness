@@ -142,6 +142,15 @@ describe('public-network policy', () => {
       .rejects.toThrow(expect.objectContaining({ code: 'WEB_BLOCKED_URL' }))
   })
 
+  it('accepts a fake-IP DNS answer for a hostname but not the same address as a literal', async () => {
+    const resolver = vi.fn(async () => [{ address: '198.18.0.138', family: 4 }])
+    await expect(resolvePublicAddresses('www.example.com', new AbortController().signal, resolver))
+      .resolves.toEqual([{ address: '198.18.0.138', family: 4 }])
+    await expect(resolvePublicAddresses('198.19.255.1', new AbortController().signal, resolver))
+      .rejects.toThrow(expect.objectContaining({ code: 'WEB_BLOCKED_URL' }))
+    expect(resolver).toHaveBeenCalledOnce()
+  })
+
   it('rejects empty and invalid resolver results', async () => {
     await expect(resolvePublicAddresses('empty.test', new AbortController().signal, async () => []))
       .rejects.toThrow(expect.objectContaining({ code: 'WEB_PROVIDER_ERROR' }))
