@@ -12,10 +12,41 @@ description: "在专用 macOS 和 Windows runner 上发布留存的 Desktop 安�
 
 ## 目录
 
+- [配置顺序](#setup-sequence)
+- [Runner 标签与排队排查](#runner-labels)
 - [机器配置](#machine-setup)
 - [打包与发布](#package-and-publish)
 - [恢复与记录](#recovery-and-records)
 - [恢复频道](#restore-a-channel)
+
+<a id="setup-sequence"></a>
+
+## 配置顺序
+
+首次配置专用机器时按此顺序操作。部署操作员负责注册、凭据、审批和真实上传验收；仓库检查不能证明机器已具备发布能力。
+
+1. 准备 runner 专用 checkout 和仓库外的配置目录。按 [Windows 机器与签名配置](../../windows-signing/README.zh.md#machine-setup)或 [macOS runner 与签名配置](../../packaging/README.zh.md#macos-actions)准备工具、模板和平台凭据。
+2. 通过 GitHub **Settings → Actions → Runners** 或组织的 runner 管理页面注册 runner。记录准确的注册名称，允许本仓库访问其 runner group，并分配[必需标签](#runner-labels)。注册时保留默认标签。
+3. 按平台指南安装并启动守护任务。Windows 计划任务和 macOS LaunchAgent 都要求配置的用户登录，不能在登录前无人值守启动。确认已连接 GitHub 且出现 `Listening for Jobs`，再检查 GitHub 中 runner 在线。
+4. 完成[本机发布配置](#machine-setup)、仓库变量 `DESKTOP_PUBLISH_RUNNERS` 和两个部署 Environment。仓库管理员负责路由与审批人；COS 管理员负责桶配置及对象读写权限；production 还需要配置 GitHub App。
+5. 按[打包与发布](#package-and-publish)完成一次 Windows 已签名或 macOS 已公证的 **test** 打包。确认打包 job 使用预期的注册 runner 并留存文件。从 `master` 发起发布，填写该 run ID 和 attempt；确认 `prepare` 确实在同一台机器上启动并生成审批摘要。
+6. 审核摘要中的环境、版本、频道和 URL 后，再批准测试上传。验证发布记录、公开安装包下载和升级 feed。test 验收不能证明 production 权限可用：production 需独立配置与审批。保留 run/attempt 和验收结果，供故障恢复使用。
+
+<a id="runner-labels"></a>
+
+## Runner 标签与排队排查
+
+GitHub 要求 runner 同时匹配 job 的 `runs-on` 列表中的全部标签。[默认标签规则](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/use-in-a-workflow)说明了为什么使用 `--no-default-labels` 注册后，runner 即使在线也可能无法接单。当前工作流要求：
+
+| Job | 同一台 runner 必须具备的标签 |
+| --- | --- |
+| Windows 打包 | `dsh-win-package-trial` |
+| macOS 打包 | `self-hosted`、`macOS`、`ARM64`、`dsh-mac-package-trial` |
+| 发布 `prepare` 和 `publish` | `self-hosted`，以及选中的 `DESKTOP_PUBLISH_RUNNERS` 条目中的 `label` |
+
+只有 `dsh-win-package-trial` 的 runner 可以打包 Windows，却不能接发布任务。路由条目不会给 GitHub 中注册的 runner 添加标签。需由 runner 管理员修正注册标签；修改路由的 `target` 或重启正常监听的进程都不能补齐缺失标签。
+
+job 排队时，先对照 job 页面请求的标签与 **Settings → Actions → Runners** 中的标签，再检查仓库/group 访问权限，以及匹配的 runner 是否在线且空闲。守护任务运行只说明进程存在。托管的 `route` job 成功只说明已选定打包任务，不代表 `prepare` 能被分配。部署等待审批时需要 Environment 审批人操作，已经分配但失败的 job 则需查看步骤日志。重启前先区分这些状态。
 
 <a id="machine-setup"></a>
 

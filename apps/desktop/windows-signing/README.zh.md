@@ -36,7 +36,7 @@ description: "配置和维护 Windows 打包 runner、签名凭据、EV Token �
 
 ### 受监督启动
 
-任务安装器需要 Windows .NET Framework 4 编译器，路径为 `%SystemRoot%/Microsoft.NET/Framework64/v4.0.30319/csc.exe`。它将 GUI 可执行文件编译到 `runner/dsh-task/launcher.exe`；该程序不分配控制台地启动 PowerShell，并等待其退出。启动输出和错误分别写入 `launcher-*.out.log` 和 `launcher-*.err.log`。任务结果 `2` 表示启动器失败，`3` 表示无法写入错误日志。正常 runner 输出仍保存在 `run-*.log`。
+完整的注册、标签、路由和审批配置顺序见 [CI 发布配置](../publishing/ci/README.zh.md#setup-sequence)。任务安装器需要 Windows .NET Framework 4 编译器，路径为 `%SystemRoot%/Microsoft.NET/Framework64/v4.0.30319/csc.exe`。它将 GUI 可执行文件编译到 `runner/dsh-task/launcher.exe`；该程序不分配控制台地启动 PowerShell，并等待其退出。启动输出和错误分别写入 `launcher-*.out.log` 和 `launcher-*.err.log`。任务结果 `2` 表示启动器失败，`3` 表示无法写入错误日志。正常 runner 输出仍保存在 `run-*.log`。
 
 以 runner 的 Windows 用户运行 `pwsh -NoProfile -File apps/desktop/scripts/windows-runner-task.ps1 -Action install -RunnerRoot <registered-runner-directory> -ConfigRoot <machine-root>/packaging`，使用该机器安装的 PowerShell 7。安装器检查环境，并将启动脚本复制到 `runner/dsh-task`；注册、工具和凭据仍单独管理。它注册一个初始禁用、权限受限的交互式计划任务，不保存账户密码。执行 `-Action start` 或 `-Action status` 时只传 `-RunnerRoot`；配置目录及重试选项仅适用于安装。任务在该用户登录桌面后启动，重启后也需要登录，注销时停止。它不提供无人值守开机，也不解锁签名 Token。
 
