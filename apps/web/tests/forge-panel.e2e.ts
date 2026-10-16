@@ -175,9 +175,9 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
   const session = scaffold.ctx.sessions.get(sessionId)
   if (session === undefined) throw new Error('The worktree Session must stay loaded')
   const directory = scaffold.ctx.workingDirectory.get(session)
-  const branch = `dsh/${basename(directory)}`
+  const branch = basename(directory)
   expect(directory).toBe(join(project, '.agents', 'worktrees', branch))
-  expect(branch).toMatch(/^dsh\/[0-9a-f]{8}$/)
+  expect(branch).toMatch(new RegExp(`^dsh-${sessionId.slice('session-'.length, 'session-'.length + 8)}-[0-9a-f]{4}$`))
   expect(await git(directory, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe(branch)
   const baseCommit = await git(project, 'rev-parse', 'release')
   expect(await git(directory, 'rev-parse', 'HEAD')).toBe(baseCommit)
@@ -223,7 +223,7 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
   await change.getByRole('button', { name: /^检查/ }).click()
   await change.getByText('test', { exact: true }).waitFor()
   await compareOrRefreshGolden(join(EXPECTED, 'panel.expected.md'),
-    (await captureStableAria(page, '[data-forge-panel]', scaffold.workspaceCwd)).replaceAll(branch, 'dsh/{{worktree}}'), MODE)
+    (await captureStableAria(page, '[data-forge-panel]', scaffold.workspaceCwd)).replaceAll(branch, 'dsh-{{worktree}}'), MODE)
 
   const composer = page.locator('[data-composer-input]').first()
   await change.getByRole('button', { name: '添加到聊天', exact: true }).click()
@@ -281,7 +281,7 @@ it.skipIf(MODE === 'record')('returns the first message to the New Session compo
   const failure = card.getByRole('region', { name: '创建工作树失败', exact: true })
   await failure.getByText('原因', { exact: true }).waitFor({ timeout: 20_000 })
   const attempted = await failure.getByRole('definition').first().textContent()
-  expect(attempted).toMatch(/^dsh\/[0-9a-f]{8}$/)
+  expect(attempted).toMatch(/^dsh-[0-9a-f]{8}-[0-9a-f]{4}$/)
   await failure.getByText('再次发送消息即可重试', { exact: true }).waitFor()
   const option = page.locator('[data-forge-worktree]')
   const checkbox = option.getByRole('checkbox', { name: '工作树', exact: true })

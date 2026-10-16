@@ -1,4 +1,4 @@
-- text: 工作树 dsh/{{worktree}} 基于 release
+- text: 工作树 dsh-{{worktree}} 基于 release
 - heading "本会话的 Pull Request · 1" [level=3]
 - button "刷新状态"
 - list:

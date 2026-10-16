@@ -1,9 +1,9 @@
 /** The worktree a Session requests before it starts: its record, its projection, and its creation. */
 
-import { randomBytes } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import type { AdmissionDecision } from '@deepseek-ai/dsh-agent-controller'
+import { generatedWorktreeName } from '@deepseek-ai/dsh-experimental-worktree'
 import type { CreatedWorktree, CreateWorktreePhase } from '@deepseek-ai/dsh-experimental-worktree'
 import { appendPluginRecord, pluginRecordOf } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
@@ -130,7 +130,7 @@ export class WorktreeCreations {
   /**
    * @param ctx - context that optionally provides `worktrees`.
    * @param states - reads the `forgeWorktree` projection of a Session.
-   * @param prefix - branch name prefix; eight random hexadecimal digits follow it.
+   * @param prefix - branch name prefix that `generatedWorktreeName` combines with the Session id and random digits.
    * @param changed - called after the creation of a Session starts, changes phase, or ends, and after its failure changes.
    */
   constructor(
@@ -233,7 +233,7 @@ export class WorktreeCreations {
     const worktrees = this.ctx.get('worktrees')
     if (worktrees === undefined) throw new Error('No worktree service is mounted')
     const session = agent.session
-    let status: ForgeWorktreeCreation = { phase: 'prepare', branch: `${this.prefix}${randomBytes(4).toString('hex')}`, from, held }
+    let status: ForgeWorktreeCreation = { phase: 'prepare', branch: generatedWorktreeName(this.prefix, session.id), from, held }
     this.failures.delete(session)
     this.live.set(session, status)
     this.changed(session)

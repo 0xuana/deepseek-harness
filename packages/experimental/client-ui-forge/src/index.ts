@@ -57,7 +57,7 @@ export class ForgePanelController extends TypertRemoteService {
     maxOutputBytes: z.number().default(1_048_576),
     readinessTimeoutMs: z.number().default(15_000),
     maxBranches: z.number().default(50),
-    worktreePrefix: z.string().default('dsh/'),
+    worktreePrefix: z.string().default('dsh-'),
   })
 
   private readonly home: Context

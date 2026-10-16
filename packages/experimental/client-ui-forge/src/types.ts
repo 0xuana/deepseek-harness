@@ -188,7 +188,10 @@ export interface Config {
   readinessTimeoutMs?: number
   /** Most local branches listed as worktree bases. */
   maxBranches?: number
-  /** Prefix of the branch and checkout directory created for a Session worktree; eight random hexadecimal digits follow it. */
+  /**
+   * Prefix of the branch and checkout directory created for a Session worktree; the first eight
+   * hexadecimal digits of the Session id's UUID, a hyphen, and four random hexadecimal digits follow it.
+   */
   worktreePrefix?: string
 }
 

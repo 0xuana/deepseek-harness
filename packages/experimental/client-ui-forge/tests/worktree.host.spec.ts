@@ -175,7 +175,7 @@ interface Creating extends Runtime {
 /**
  * Open a {@link runtime} whose worktree creations report every change.
  * @param cwd - Session project directory.
- * @param options - branch prefix, `dsh/` when omitted, and whether the worktree service is mounted, as it is when omitted.
+ * @param options - branch prefix, `dsh-` when omitted, and whether the worktree service is mounted, as it is when omitted.
  * @returns the composition.
  */
 async function creating(cwd: string, options: { readonly prefix?: string; readonly worktrees?: boolean } = {}): Promise<Creating> {
@@ -184,7 +184,7 @@ async function creating(cwd: string, options: { readonly prefix?: string; readon
   const states = await base.ctx.sessionProjections.register(forgeWorktreeProjection)
   const changes: (ForgeWorktreeCreation | null)[] = []
   const recorded: (ForgeSessionWorktree | null)[] = []
-  const creations: WorktreeCreations = new WorktreeCreations(base.ctx, states, options.prefix ?? 'dsh/', (session) => {
+  const creations: WorktreeCreations = new WorktreeCreations(base.ctx, states, options.prefix ?? 'dsh-', (session) => {
     changes.push(creations.of(session))
     recorded.push(states.stateOf(session).created)
   })
@@ -192,7 +192,7 @@ async function creating(cwd: string, options: { readonly prefix?: string; readon
 }
 
 /** Matches a generated branch name with the default prefix. */
-const GENERATED_BRANCH: unknown = expect.stringMatching(/^dsh\/[0-9a-f]{8}$/)
+const GENERATED_BRANCH: unknown = expect.stringMatching(/^dsh-[0-9a-f]{8}$/)
 
 /** Matches the failure of an attempt whose base branch does not exist. */
 const MISSING_BASE: unknown = expect.stringMatching(/^worktree command failed \(128\): fatal: /)
@@ -219,7 +219,7 @@ describe('creating a requested worktree', () => {
     const result = await opened.creations.create(opened.agent, null, signal, false)
 
     const branch = result.branch
-    expect(branch).toMatch(/^dsh\/[0-9a-f]{8}$/)
+    expect(branch).toMatch(/^dsh-[0-9a-f]{8}$/)
     const path = join(repo, '.agents', 'worktrees', ...branch.split('/'))
     const created = { path, branch, from: null, baseCommit: head, repositoryRoot: repo }
     expect(result).toEqual({ path, branch, baseCommit: head, repositoryRoot: repo })
@@ -349,7 +349,7 @@ describe('worktree creation at the first step proposal', () => {
 
     const created = worktreeOf(opened)
     const branch = created?.branch ?? ''
-    expect(branch).toMatch(/^dsh\/[0-9a-f]{8}$/)
+    expect(branch).toMatch(/^dsh-[0-9a-f]{8}$/)
     const path = join(repo, '.agents', 'worktrees', ...branch.split('/'))
     expect(created).toEqual({ path, branch, from: null, baseCommit: head, repositoryRoot: repo })
     expect(opened.records).toEqual([{ action: 'request', from: null }, { action: 'created', worktree: created }])

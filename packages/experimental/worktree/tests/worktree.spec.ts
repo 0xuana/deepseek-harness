@@ -89,9 +89,18 @@ describe('creating and entering retained worktrees', () => {
     ctx = await harness(root, { directory: 'checkouts', namePrefix: 'task-' })
     const agent = testAgent(ctx, root)
     const created = await ctx.worktrees.create(agent)
-    expect(created.branch).toMatch(/^task-[0-9a-f-]{36}$/)
+    expect(created.branch).toMatch(/^task-[0-9a-f]{8}$/)
     expect(created.path).toBe(join(root, 'checkouts', created.branch))
     expect(await contents(join(root, 'checkouts/.gitignore'))).toBe('custom\n')
+  })
+
+  it('names a generated worktree after the UUID in the Session id', async () => {
+    const root = await repo()
+    ctx = await harness(root)
+    const agent = testAgent(ctx, root, 'session-6B1F02C4-61de-44ee-813f-1191894bc2c5')
+    const created = await ctx.worktrees.create(agent)
+    expect(created.branch).toMatch(/^dsh-6b1f02c4-[0-9a-f]{4}$/)
+    expect(created.path).toBe(join(root, '.agents/worktrees', created.branch))
   })
 
   it('creates from a linked checkout using its own commit and default pool', async () => {

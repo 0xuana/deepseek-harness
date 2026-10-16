@@ -55,7 +55,7 @@ const ready = (state: ForgePanelState): boolean => state.checkout.state === 'rea
 const UNAVAILABLE = { editable: false, blocker: null, request: null, created: null, creation: null, failure: null, missing: null }
 
 /** Matches a generated branch name with the default prefix. */
-const GENERATED_BRANCH: unknown = expect.stringMatching(/^dsh\/[0-9a-f]{8}$/)
+const GENERATED_BRANCH: unknown = expect.stringMatching(/^dsh-[0-9a-f]{8}$/)
 
 /** Matches the failure of an attempt whose base branch does not exist. */
 const MISSING_BASE: unknown = expect.stringMatching(/^worktree command failed \(128\): fatal: /)

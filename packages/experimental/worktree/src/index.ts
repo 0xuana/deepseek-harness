@@ -1,6 +1,5 @@
 /** Creates a new Git branch and checkout, then changes the calling Session's working directory; restores a removed checkout. */
 
-import { randomUUID } from 'node:crypto'
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -10,11 +9,13 @@ import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { PREPARE_DIRECTORY } from './directory.ts'
+import { generatedWorktreeName } from './name.ts'
 import { runCommand } from './process.ts'
 import type { ProcessConfig } from './process.ts'
 import type { CreatedWorktree, CreateWorktreePhase, CreateWorktreeRequest, RestoredWorktree, RestoreWorktreeRequest } from './types.ts'
 
 export type { CreatedWorktree, CreateWorktreePhase, CreateWorktreeRequest, RestoredWorktree, RestoreWorktreeRequest } from './types.ts'
+export { generatedWorktreeName } from './name.ts'
 
 /** Worktree location, generated names, executables, and subprocess resource limits. */
 export interface Config {
@@ -62,7 +63,7 @@ export class WorktreeService extends Service {
 
   static Config: z<Config> = z.object({
     directory: z.string().default('.agents/worktrees'),
-    namePrefix: z.string().default('worktree-'),
+    namePrefix: z.string().default('dsh-'),
     gitCommand: z.string().default('git'),
     nodeCommand: z.string().default('node'),
     timeoutMs: z.number().default(60_000),
@@ -117,7 +118,7 @@ export class WorktreeService extends Service {
   ): Promise<CreatedWorktree> {
     const operationSignal = signal === undefined ? this.lifetime.signal : AbortSignal.any([this.lifetime.signal, signal])
     operationSignal.throwIfAborted()
-    const operation = this.createCheckout(agent, this.resolve(request), operationSignal, onPhase)
+    const operation = this.createCheckout(agent, this.resolve(agent, request), operationSignal, onPhase)
     this.pending.add(operation)
     try {
       return await operation
@@ -151,8 +152,8 @@ export class WorktreeService extends Service {
     }
   }
 
-  private resolve(request: CreateWorktreeRequest): WorktreeSpec {
-    const branch = request.name ?? `${this.config.namePrefix}${randomUUID()}`
+  private resolve(agent: Agent, request: CreateWorktreeRequest): WorktreeSpec {
+    const branch = request.name ?? generatedWorktreeName(this.config.namePrefix, agent.session.id)
     if (!relativePath(branch) || branch.startsWith('-')) throw new Error('worktree name must be a relative Git branch name')
     const revision = request.from ?? 'HEAD'
     if (revision.length === 0) throw new Error('worktree from must name a local commit, branch, or tag')

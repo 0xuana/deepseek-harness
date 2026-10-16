@@ -1033,7 +1033,10 @@ export interface Config {
   readinessTimeoutMs?: number
   /** Most local branches listed as worktree bases. */
   maxBranches?: number
-  /** Prefix of the branch and checkout directory created for a Session worktree; eight random hexadecimal digits follow it. */
+  /**
+   * Prefix of the branch and checkout directory created for a Session worktree; the first eight
+   * hexadecimal digits of the Session id's UUID, a hyphen, and four random hexadecimal digits follow it.
+   */
   worktreePrefix?: string
 }
 ```
@@ -1472,7 +1475,7 @@ export type PaidTranslationProvider = 'deepseek-account' | 'deepseek-official'
 ## `@deepseek-ai/dsh-experimental-worktree`
 
 - `inject`: `workingDirectory` · `fs` · `subprocess` · `sandbox` · `sandboxPolicy`
-- `source`: [`packages/experimental/worktree/src/index.ts:20`](../packages/experimental/worktree/src/index.ts)
+- `source`: [`packages/experimental/worktree/src/index.ts:21`](../packages/experimental/worktree/src/index.ts)
 
 ```ts config-catalog
 /** Worktree location, generated names, executables, and subprocess resource limits. */
