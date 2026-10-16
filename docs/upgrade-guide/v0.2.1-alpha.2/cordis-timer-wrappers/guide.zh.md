@@ -9,7 +9,7 @@ description: "Timer 包装函数的 TypeScript 返回类型为 void，释放后�
 
 ## 变更
 
-`ctx.throttle()` 和 `ctx.debounce()` 返回的函数现在声明 `void` 返回类型。此前这些函数继承回调的返回类型，但运行时已经返回 `undefined`。使用包装函数返回值或将包装函数赋给回调类型的 TypeScript 代码可能需要更新。此变更适用于 Host Timer 和浏览器 ClientTimerService。
+`ctx.throttle()` 和 `ctx.debounce()` 返回的函数现在声明 `void` 返回类型。此前这些函数继承回调的返回类型，但运行时已经返回 `undefined`。使用包装函数返回值或将包装函数赋给回调类型的 TypeScript 代码可能需要更新。Host 与浏览器使用同一份 `TimerService` 实现。
 
 调用 `.dispose()` 或释放所属 fiber 会取消待执行的工作，并使后续包装函数调用不再执行。此前已释放的 throttle 包装函数仍可能执行前沿调用；debounce 包装函数在释放后已经会忽略调用。
 
