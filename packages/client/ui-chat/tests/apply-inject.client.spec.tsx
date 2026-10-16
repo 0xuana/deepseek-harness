@@ -69,9 +69,12 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
     openTab: vi.fn<(kind: string, options?: unknown) => void>(),
   }
   runtime.ctx.provide('sidebarRight', sidebarRight as never)
+  // Pages open files through the right Sidebar's tab-type registry, whose own claim decides whether
+  // an address opens at all; the spy records whether this call site ever asks it.
   const browserAvailable = createSnapshotStore(true)
   const sidebarRightTabs = {
     get: vi.fn<(kind: string) => object | undefined>(() => browserAvailable.getSnapshot() ? {} : undefined),
+    candidates: vi.fn<(address: string) => readonly object[]>(() => []),
     subscribe: (listener: () => void) => browserAvailable.subscribe(listener),
     register: vi.fn(() => () => {}),
   }
@@ -82,13 +85,15 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
   )
   runtime.remote.provideNamespaces({ session: { openWorkspacePath } })
   const openSession = vi.fn<(id: SessionId) => void>()
-  runtime.ctx.provide('uiWorkspace', {
+  const uiWorkspace = {
     openWorkspace: vi.fn(async (_workspaceId: WorkspaceId, beforeOpen: (id: SessionId) => void) => {
       beforeOpen(ROOT)
       openSession(ROOT)
     }),
     openSession,
-  } as never)
+    openListedBranch: vi.fn((_childId: SessionId) => {}),
+  }
+  runtime.ctx.provide('uiWorkspace', uiWorkspace as never)
   const session = sessionFakeFor()
   await runtime.sessions.add({
     id: ROOT,
@@ -135,6 +140,7 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
     },
     runtime, chat, chatSettings, browserAvailable,
     layout, openWorkspacePath, sidebarRight, sidebarRightTabs, session, chatViewApi, chatFlowApi, rootReference, openSession,
+    uiWorkspace,
   }
 }
 
@@ -288,6 +294,59 @@ describe('Chat inject API', () => {
     await b.runtime.dispose()
   })
 
+  it('states why a refused branch failed, on the Session it was asked of', async () => {
+    /** The notice the addressed Session's composer currently carries, as the page would show it. */
+    const noticeOf = (sessionId: SessionId): string | undefined => {
+      const scope = b.runtime.sessions.scope(sessionId)
+      if (scope === undefined) return undefined
+      const input = scope.get('conversation')?.input.for(scope)
+      return input?.notices.getSnapshot()?.text
+    }
+    const b = await bench()
+    const { injected } = b.chatViewApi(b.rootReference)
+    // The Host's own message reaches the reader with the stable code beside it, and the Session it was
+    // asked of is the one that shows it.
+    vi.spyOn(b.runtime.sessions, 'fork').mockRejectedValueOnce({
+      rpcError: { code: 'boundary-not-committed', message: 'boundary is not committed' },
+    })
+    injected.forkAt(18)
+    await vi.waitFor(() => {
+      expect(noticeOf(ROOT)).toBe(
+        '未能完成分支：boundary is not committed (boundary-not-committed)',
+      )
+    })
+    // A rejection that named no code keeps its own message and gains no placeholder.
+    vi.spyOn(b.runtime.sessions, 'fork').mockRejectedValueOnce(new Error('fork child rename failed'))
+    injected.forkAt(19)
+    await vi.waitFor(() => {
+      expect(noticeOf(ROOT)).toBe('未能完成分支：fork child rename failed')
+    })
+    await b.runtime.dispose()
+  })
+
+  it('leaves a branch unnamed and opens it once listed while access excludes renaming the Session', async () => {
+    const b = await bench()
+    const source = vi.spyOn(b.runtime.ctx.remoteAccess, 'source')
+    source.mockImplementation((_kind, _id, endpoint) => createSnapshotStore(endpoint !== 'session/rename'))
+    const { injected } = b.chatViewApi(b.rootReference)
+    injected.forkAt(17)
+    // Naming a branch renames it, which this page may not do: asking for the rename would fail the
+    // fork after the Host already made the child, so the page forks an unnamed branch.
+    await vi.waitFor(() => {
+      expect(b.runtime.sessions.calls).toContainEqual({
+        method: 'fork', args: [{ sessionId: ROOT, atSeq: 17, increaseTitle: false, onCreated: expect.any(Function) as (childId: SessionId) => void }],
+      })
+    })
+    // The child's own list item is what says the branch is this page's own, so the page asks the
+    // Workspace navigation to open it then — that service waits for the item rather than assembling
+    // a view of a child the page cannot yet describe.
+    expect(b.uiWorkspace.openListedBranch).toHaveBeenCalledWith(ROOT)
+    expect(b.runtime.sessions.calls).not.toContainEqual({ method: 'open', args: [ROOT] })
+    expect(source).toHaveBeenCalledWith('session', ROOT, 'session/rename')
+    source.mockRestore()
+    await b.runtime.dispose()
+  })
+
   it('addresses file paths under the Session\'s scope and opens them in the right Sidebar', async () => {
     const b = await bench()
     const { injected } = b.chatViewApi(b.rootReference)
@@ -308,6 +367,10 @@ describe('Chat inject API', () => {
     // A line travels as the `file` type's navigation parameter, not in the address.
     await injected.openFile('src/a.ts', { line: 7 })
     expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1/src/a.ts', { params: { line: 7 } })
+    // Which type claims the address is the Sidebar registry's decision: the call site hands the
+    // address over without asking whether this page carries a type that would open it. A page with
+    // none — a reader's share — is answered by its own registered type, or by the Sidebar's refusal.
+    expect(b.sidebarRightTabs.candidates).not.toHaveBeenCalled()
     await b.runtime.dispose()
   })
 
@@ -509,6 +572,7 @@ describe('Chat inject API', () => {
 
     const flow = b.chatFlowApi(b.rootReference)
     expect(flow.instance).toBe(b.chatViewApi(b.rootReference).instance)
+    expect(flow.injected.hooks.presentation).toBe(injected.hooks.presentation)
     expect(flow.injected.keyedHooks.chatNode('missing')).toBe(injected.keyedHooks.chatNode('missing'))
     expect(flow.injected.keyedHooks.chatNodeProcess('missing')).toBe(injected.keyedHooks.chatNodeProcess('missing'))
     expect(flow.injected.keyedHooks.chatNodeBottom('missing')).toBe(injected.keyedHooks.chatNodeBottom('missing'))

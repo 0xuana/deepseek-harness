@@ -864,6 +864,7 @@ describe('plugin registration', () => {
       session,
     } as never)
     ctx.provide('remote.session', session as never)
+    ctx.provide('remoteAccess', { owner: true } as never)
     ctx.provide('configForms', { developerTools: { enabled: createSnapshotStore(true) }, get: () => stubConfigForm().scope } as never)
     await ctx.plugin({ inject: localeInject, apply: applyLocale }).await()
 

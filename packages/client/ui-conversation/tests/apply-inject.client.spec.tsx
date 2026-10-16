@@ -167,6 +167,38 @@ describe('Conversation inject API', () => {
     await vi.waitFor(() => { expect(document.querySelector('[data-quote-preview-text]')?.textContent).toBe('@literal /review') })
     expect(document.querySelector('[data-slot-error]')).toBeNull()
     expect(errors).not.toHaveBeenCalled()
+  it('refuses every File intake while the access snapshot excludes uploads but allows prompting', async () => {
+    const b = await bench()
+    onTestFinished(() => b.runtime.dispose())
+    const denied = createSnapshotStore(false)
+    const source = vi.spyOn(b.runtime.ctx.remoteAccess, 'source')
+    onTestFinished(() => { source.mockRestore() })
+    source.mockImplementation((kind, id, endpoint) => {
+      expect([kind, id]).toEqual(['session', ROOT])
+      return endpoint === 'fileUploads/upload' ? denied : createSnapshotStore(true)
+    })
+    const composer = b.composerApi(ROOT)
+    expect(composer.hooks.fileIntake).toBe(denied)
+    for (const file of [new File(['note'], 'note.txt'), new File(['image'], 'shot.png', { type: 'image/png' })]) {
+      expect(composer.addFiles?.([file])).toBe('当前无法添加文件或图片')
+    }
+    expect(b.rootUpload).not.toHaveBeenCalled()
+    // The File command reads the same answer: a bound picker stays closed.
+    const contributions = new Map<string, CommandContribution>()
+    b.runtime.ctx.provide('commandUi', {
+      register: (contribution: CommandContribution) => {
+        contributions.set(contribution.name, contribution)
+        return () => { contributions.delete(contribution.name) }
+      },
+    } satisfies Pick<CommandUiContract, 'register'>)
+    await vi.waitFor(() => { expect(contributions.has('file')).toBe(true) })
+    const open = vi.fn()
+    composer.keyboard!.bindFilePicker({ open, available: () => true })
+    const file = contributions.get('file')!
+    expect(file.available({ sessionId: ROOT })).toBe(false)
+    if (file.ui.kind !== 'action') throw new Error('File must be an action')
+    file.ui.run({ sessionId: ROOT })
+    expect(open).not.toHaveBeenCalled()
   })
 
   it('owns the File action, reads its mounted composer availability, and unregisters on disposal', async () => {
@@ -403,6 +435,23 @@ describe('Conversation inject API', () => {
     await b.runtime.dispose()
   })
 
+  it('never stops a Session after its access snapshot withdraws session/cancel', async () => {
+    const b = await bench()
+    const cancel = createSnapshotStore(true)
+    const source = vi.spyOn(b.runtime.ctx.remoteAccess, 'source')
+    onTestFinished(() => { source.mockRestore() })
+    source.mockImplementation((_kind, _id, endpoint) => endpoint === 'session/cancel' ? cancel : createSnapshotStore(true))
+    const composer = b.composerApi(ROOT)
+    composer.stop!()
+    await vi.waitFor(() => { expect(b.sessionFake.cancel).toHaveBeenCalledOnce() })
+    // Withdrawn while the view is open: the same handler re-reads the live answer and the cancel
+    // never reaches the Session.
+    cancel.set(false)
+    composer.stop!()
+    expect(b.sessionFake.cancel).toHaveBeenCalledOnce()
+    await b.runtime.dispose()
+  })
+
   it('releases a draft attachment only after the input shell accepts its removal', async () => {
     const b = await bench()
     const composer = b.composerApi(ROOT)
@@ -602,6 +651,56 @@ describe('Conversation inject API', () => {
       .rejects.toThrow('offline')
     expect(b.opened).toHaveBeenCalledTimes(opens)
     await b.runtime.dispose()
+  })
+
+  it('releases View refresh ownership before a withdrawn Session or plugin can receive locale changes', async () => {
+    const b = await bench()
+    onTestFinished(() => b.runtime.dispose())
+    const removeView = b.slots.register(
+      { name: 'conversation.view', id: 'chat', label: 'Chat' },
+      (() => null) as never,
+    )
+    onTestFinished(removeView)
+    const binding = b.rootReference.binding
+    b.runtime.ctx.uiSession.bindingSource(b.rootReference)
+    const resolve = vi.spyOn(b.runtime.ctx.uiConversation, 'binding')
+    const errors = vi.spyOn(console, 'error')
+    onTestFinished(() => { resolve.mockRestore(); errors.mockRestore() })
+    resolve.mockClear()
+
+    b.rootReference.release()
+    expect(b.runtime.sessions.binding(ROOT)).toBeUndefined()
+    b.runtime.ctx.locale.setLocale('en')
+    expect(resolve).not.toHaveBeenCalled()
+    expect(errors).not.toHaveBeenCalled()
+    await binding.ctx.fiber.dispose()
+    await b.feature.dispose()
+    b.runtime.ctx.locale.setLocale('zh')
+    expect(resolve).not.toHaveBeenCalled()
+    expect(errors).not.toHaveBeenCalled()
+  })
+
+  it('detaches View refresh when Conversation unloads before its retained Session', async () => {
+    const b = await bench()
+    onTestFinished(() => b.runtime.dispose())
+    const removeView = b.slots.register(
+      { name: 'conversation.view', id: 'chat', label: 'Chat' },
+      (() => null) as never,
+    )
+    onTestFinished(removeView)
+    b.runtime.ctx.uiSession.bindingSource(b.rootReference)
+    const resolve = vi.spyOn(b.runtime.ctx.uiConversation, 'binding')
+    const errors = vi.spyOn(console, 'error')
+    onTestFinished(() => { resolve.mockRestore(); errors.mockRestore() })
+
+    await b.feature.dispose()
+    expect(b.runtime.sessions.binding(ROOT)).toBe(b.rootReference.binding)
+    resolve.mockClear()
+    b.runtime.ctx.locale.setLocale('en')
+    b.rootReference.release()
+    b.runtime.ctx.locale.setLocale('zh')
+    expect(resolve).not.toHaveBeenCalled()
+    expect(errors).not.toHaveBeenCalled()
   })
 
   it('projects the dynamic View registration ledger', async () => {

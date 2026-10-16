@@ -59,11 +59,12 @@ export interface UiWorkspace {
     options?: Pick<StartSessionOptions, 'agentPreset'>,
   ): Promise<void>
   /**
-   * Fork a Session without changing the current selection.
+   * Fork a Session. Pages whose access snapshot includes renaming it increment the child title without
+   * selecting it; other pages leave the title unchanged and open the child once it is listed.
    * @param sessionId - source Session.
    * @param onCreated - observer before the optional child-title update.
    * @param options - optional permission to start source migration; omission preserves the Host default.
-   * @returns the child SessionId after creation and inherited-title increment.
+   * @returns the child SessionId after creation and any permitted inherited-title increment.
    */
   forkSession(
     sessionId: SessionId,
@@ -71,6 +72,14 @@ export interface UiWorkspace {
     options?: Pick<Parameters<ISessions['fork']>[0], 'allowMigration'>,
   ): Promise<SessionId>
   /**
+   * Open a created Session once its id is known to the list. Later navigation or plugin disposal
+   * cancels the wait; a completed refresh without that id or a failed refresh leaves selection intact.
+   * @param childId - Session the Host created.
+   */
+  openListedBranch(childId: SessionId): void
+  /**
+   * Resolve the Session for a new conversation in a Workspace: the Host reuses
+   * the first listed blank member while it is reusable and otherwise creates one,
    * Resolve the Session for a new conversation in a Workspace: navigation names the first
    * reusable blank member, skipping blanks that list a preset other than a requested one, and
    * the Host reuses it under the requested preset or its default, or creates another Session.
@@ -325,11 +334,64 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     onCreated?: (childId: SessionId) => void,
     options?: Pick<Parameters<ISessions['fork']>[0], 'allowMigration'>,
   ): Promise<SessionId> {
-    return this.sessions.fork({
+    // Naming a branch renames the child. A page whose access snapshot excludes renaming the source
+    // Session leaves the name to the Host — asking for it would fail the fork it just made.
+    const namesBranch = this.ctx.remoteAccess.source('session', sessionId, 'session/rename').getSnapshot()
+    const childId = await this.sessions.fork({
       sessionId,
-      increaseTitle: true,
+      increaseTitle: namesBranch,
       ...onCreated === undefined ? {} : { onCreated },
       ...options?.allowMigration === undefined ? {} : { allowMigration: options.allowMigration },
+    })
+    if (!namesBranch) {
+      // A page that may not rename the Session it branched presents the child only once the Host's own
+      // summary of it is on the list; opening sooner assembles a view of a branch it cannot describe.
+      this.openListedBranch(childId)
+    }
+    return childId
+  }
+
+  /** @inheritdoc */
+  openListedBranch(childId: SessionId): void {
+    const navigation = AbortSignal.any([this.ctx.layout.beginNavigation(), this.lifetime.signal])
+    if (navigation.aborted) return
+    let stop = (): void => {}
+    let settled = false
+    const finish = (): void => {
+      settled = true
+      stop()
+      navigation.removeEventListener('abort', finish)
+    }
+    const open = (): void => {
+      if (settled || navigation.aborted || this.sessions.list.getSnapshot().byId[childId] === undefined) return
+      finish()
+      try {
+        this.replaceMain(childId, navigation, 'reveal')
+      } catch (error: unknown) {
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- retain may synchronously abort navigation before throwing.
+        if (!navigation.aborted) this.notify({ kind: 'createFailed', message: creationFailureMessage(error) })
+      }
+    }
+    stop = this.sessions.list.subscribe(open)
+    navigation.addEventListener('abort', finish, { once: true })
+    // Registration may synchronously publish the row; always recheck after the disposer is owned.
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- subscribe may synchronously call open and finish.
+    if (settled) {
+      stop()
+      navigation.removeEventListener('abort', finish)
+      return
+    }
+    open()
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- open synchronously settles a listed child.
+    if (settled) return
+    void this.sessions.refresh().then(() => {
+      open()
+      finish()
+    }, (error: unknown) => {
+      if (!settled && !navigation.aborted) {
+        this.notify({ kind: 'createFailed', message: creationFailureMessage(error) })
+      }
+      finish()
     })
   }
 

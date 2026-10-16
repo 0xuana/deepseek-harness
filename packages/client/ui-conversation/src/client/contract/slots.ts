@@ -528,6 +528,8 @@ export interface ComposerBarInjected {
   toggleCommandMenu: ((selection: EditSelection) => void) | undefined
   stop: (() => void) | undefined
   hooks: {
+    /** Live permission for file intake, independently of text prompting. */
+    fileIntake: ObservableSnapshot<boolean>
     /** Readable sequence while the fixed Stop command is registered. */
     stopShortcut: ObservableSnapshot<readonly string[]>
     /**

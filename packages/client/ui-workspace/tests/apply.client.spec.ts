@@ -4,6 +4,7 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type {
   ISessions, SessionListState, SessionReference, SessionSnapshot, SessionSummary,
 } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { SessionProjectionValues } from '@deepseek-ai/dsh-api-session-controller/types'
 import { SessionForkError } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceId, WorkspaceSnapshot, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -53,6 +54,15 @@ const workspaceState = (
 ): WorkspaceSnapshot => ({
   items, archivedSessionIds, pinnedSessionIds, state: 'idle', phase: 'ready', error: null,
 })
+
+/**
+ * Branch facts the Host publishes for a child a reader page created. The `forkLineage` key belongs
+ * to the Liveshare package, which this program does not name, so the value is built through the open
+ * key space the wire allows.
+ */
+const branchFacts: SessionProjectionValues = {
+  forkLineage: { origin: 'fork', sourceSessionId: sid('session'), authoredByViewer: true, workspaceReadOnly: true },
+}
 
 const ALLOWED: HostObservable<boolean> = createSnapshotStore(true)
 
@@ -117,6 +127,7 @@ async function bench(access: 'fake' | 'static' = 'fake') {
     operation: (reference: SessionReference) => unknown,
   ) => await operation(retain(target)))
   const fork = vi.fn<ISessions['fork']>(async () => sid('forked'))
+  const refresh = vi.fn(async () => undefined)
   const pinSession = vi.fn(async () => undefined)
   const unpinSession = vi.fn(async () => undefined)
   // The Host snapshots the injected hooks derive from and a pin's order write
@@ -124,7 +135,19 @@ async function bench(access: 'fake' | 'static' = 'fake') {
   // keeps its identity between reads.
   let workspaceSnapshot = workspaceState([])
   let sessionSnapshot = sessionState([])
-  const subscribe = () => () => {}
+  const listeners = new Set<() => void>()
+  const subscribe = (listener: () => void): (() => void) => {
+    listeners.add(listener)
+    return () => { listeners.delete(listener) }
+  }
+  const setSummary = (sessionId: string, facts: Partial<SessionSummary>): void => {
+    const byId = {
+      ...sessionSnapshot.byId,
+      [sessionId]: { ...summary(sessionId, 0), ...sessionSnapshot.byId[sessionId as SessionId], ...facts },
+    }
+    sessionSnapshot = { ...sessionSnapshot, ids: Object.keys(byId) as SessionId[], byId }
+    for (const listener of [...listeners]) listener()
+  }
   const workspacesSubscribe = vi.fn(subscribe)
   const initializeDefault = vi.fn(async (): Promise<WorkspaceView | undefined> => undefined)
   ctx.provide('workspaces', {
@@ -145,6 +168,7 @@ async function bench(access: 'fake' | 'static' = 'fake') {
     create: vi.fn(async () => 'created' as never),
     retain,
     using,
+    refresh,
     search,
     searchResultLimit: 20,
     binding,
@@ -167,7 +191,7 @@ async function bench(access: 'fake' | 'static' = 'fake') {
   return {
     ctx, slots: ctx.get('slots') as SlotRegistry, locale, create, rename, commands, accessSource, whenResourceAccess, stopGuard,
     retain, using, selectPanel, search, renameSession, binding, fork, pickDirectory, pinSession, unpinSession,
-    workspacesSubscribe, initializeDefault, history, scope, sessionOf,
+    workspacesSubscribe, refresh, setSummary, initializeDefault, history, scope, sessionOf,
     setWorkspaces: (snapshot: WorkspaceSnapshot): void => { workspaceSnapshot = snapshot },
     setSessions: (snapshot: SessionListState): void => { sessionSnapshot = snapshot },
   }
@@ -854,6 +878,225 @@ describe('ui-workspace apply', () => {
     const picker = faceOf(b.slots.entries('conversation.hero.workspace')[0]!) as WorkspacePickerInjected
     await picker.createWorkspace({ path: '/tmp/project' })
     expect(b.create).toHaveBeenCalledWith({ path: '/tmp/project' })
+  })
+
+  /**
+   * Answer as a standalone reader page's access snapshot does: it may branch the one Session the
+   * share grants and may not rename it.
+   * @param b - Benchmark whose access source answers.
+   */
+  function provideReaderAnswers(b: Awaited<ReturnType<typeof bench>>): void {
+    b.accessSource.mockImplementation((_kind, id, endpoint) =>
+      createSnapshotStore(endpoint === 'session/fork' && id === 'session'))
+  }
+
+  it('leaves a reader\'s branch unnamed and opens it once the Host lists it', async () => {
+    const b = await bench()
+    provideReaderAnswers(b)
+    b.refresh.mockImplementationOnce(() => new Promise<undefined>(() => {}))
+    declare(b.slots, 'sidebar.workspaces')
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+
+    const forkSession = (faceOf(entry(b.slots, MENU_ITEM, 'fork')) as ForkSessionInjected).forkSession
+    forkSession('session' as never)
+    // Naming a branch renames the child, a write a reader page does not hold: asking for it would
+    // fail the fork after the Host already made the child.
+    await vi.waitFor(() => {
+      expect(b.fork).toHaveBeenCalledWith({
+        sessionId: 'session', increaseTitle: false, allowMigration: false,
+        onCreated: expect.any(Function) as (childId: SessionId) => void,
+      })
+    })
+    // The child's own list item is what says the branch is this page's own, so the reader page waits
+    // for it rather than assembling a view of a child it cannot yet describe.
+    await vi.waitFor(() => { expect(b.refresh).toHaveBeenCalled() })
+    expect(b.retain).not.toHaveBeenCalledWith('forked', { source: 'mainView' })
+    b.setSummary('forked', { projectionValues: branchFacts })
+    await vi.waitFor(() => { expect(b.retain).toHaveBeenCalledWith('forked', { source: 'mainView' }) })
+  })
+
+  it('forks the reader main Session by shortcut without requesting a title write and waits for its row', async () => {
+    const b = await bench()
+    onTestFinished(() => b.ctx.fiber.dispose())
+    provideReaderAnswers(b)
+    b.setSessions(sessionState([{ ...summary('session', 1), retainedBy: { mainView: 1 } }]))
+    const refreshed = Promise.withResolvers<undefined>()
+    b.refresh.mockImplementationOnce(() => refreshed.promise)
+    onTestFinished(() => { refreshed.resolve(undefined) })
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    const resolution = b.commands.get('session.fork')!.resolve({ region: 'page', modal: null, target: null })
+    if (resolution.status !== 'handled') throw new Error('the reader may branch its main Session')
+    resolution.run()
+    await vi.waitFor(() => { expect(b.refresh).toHaveBeenCalledOnce() })
+    expect(b.fork).toHaveBeenCalledExactlyOnceWith({ sessionId: sid('session'), increaseTitle: false })
+    expect(b.retain).not.toHaveBeenCalledWith('forked', { source: 'mainView' })
+    b.setSummary('forked', { projectionValues: branchFacts })
+    expect(b.retain).toHaveBeenCalledWith('forked', { source: 'mainView' })
+    expect(b.renameSession).not.toHaveBeenCalled()
+    refreshed.resolve(undefined)
+  })
+
+  it('does not open or retry a reader fork refused for migration until its source notice is used', async () => {
+    const b = await bench()
+    onTestFinished(() => b.ctx.fiber.dispose())
+    provideReaderAnswers(b)
+    declare(b.slots, 'sidebar.workspaces', 'shell.overlay')
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    b.fork.mockRejectedValueOnce(new SessionForkError(
+      new RemoteError('session/migration-required', 'migration required', { sessionId: sid('session') }),
+      sid('session'),
+    ))
+    const fork = faceOf(entry(b.slots, MENU_ITEM, 'fork')) as ForkSessionInjected
+    const toast = faceOf(entry(b.slots, 'shell.overlay', 'workspace.row-toast')) as RowToastInjected
+
+    fork.forkSession(sid('session'))
+    await vi.waitFor(() => {
+      expect(toast.hooks.toast.getSnapshot()).toEqual({ kind: 'forkRequiresOpen', sessionId: 'session', seq: 1 })
+    })
+
+    expect(b.fork).toHaveBeenCalledExactlyOnceWith({
+      sessionId: 'session', increaseTitle: false, allowMigration: false, onCreated: b.fork.mock.calls[0]?.[0].onCreated,
+    })
+    expect(b.fork.mock.calls[0]?.[0].onCreated).toBeTypeOf('function')
+    expect(b.refresh).not.toHaveBeenCalled()
+    expect(b.retain).not.toHaveBeenCalled()
+    expect(b.renameSession).not.toHaveBeenCalled()
+    expect(b.selectPanel).not.toHaveBeenCalled()
+    toast.dismissToast()
+    ;(faceOf(b.slots.entries('workspace.toast').find(row => row.options.key === 'forkRequiresOpen')!) as ToastDisplayInjected<'forkRequiresOpen'>)
+      .display({ kind: 'forkRequiresOpen', sessionId: sid('session'), seq: 1 }, b.locale.bind('workspace'), toast.dismissToast).actions![0]!.onClick()
+    expect(b.retain).toHaveBeenCalledExactlyOnceWith('session', { source: 'mainView' })
+    expect(b.fork).toHaveBeenCalledOnce()
+    expect(b.renameSession).not.toHaveBeenCalled()
+  })
+
+  it('opens a branch the list already reports as this page\'s own', async () => {
+    const b = await bench()
+    provideReaderAnswers(b)
+    // The Host's own summary of the child is already on the list, so the page can describe it now.
+    b.setSummary('forked', { projectionValues: branchFacts })
+    declare(b.slots, 'sidebar.workspaces')
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+
+    const forkSession = (faceOf(entry(b.slots, MENU_ITEM, 'fork')) as ForkSessionInjected).forkSession
+    forkSession('session' as never)
+    await vi.waitFor(() => { expect(b.retain).toHaveBeenCalledWith('forked', { source: 'mainView' }) })
+    // Nothing is asked of the Host and nothing is watched: the facts are already here.
+    expect(b.refresh).not.toHaveBeenCalled()
+  })
+
+  it('keeps waiting through list changes that say nothing about the child', async () => {
+    const b = await bench()
+    provideReaderAnswers(b)
+    b.refresh.mockImplementationOnce(() => new Promise<undefined>(() => {}))
+    declare(b.slots, 'sidebar.workspaces')
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+
+    const forkSession = (faceOf(entry(b.slots, MENU_ITEM, 'fork')) as ForkSessionInjected).forkSession
+    forkSession('session' as never)
+    await vi.waitFor(() => { expect(b.refresh).toHaveBeenCalled() })
+    // A list change about another branch is not this child's own item: the page stays on the wait.
+    b.setSummary('another', { projectionValues: branchFacts })
+    expect(b.retain).not.toHaveBeenCalledWith('forked', { source: 'mainView' })
+    b.setSummary('forked', { projectionValues: branchFacts })
+    await vi.waitFor(() => { expect(b.retain).toHaveBeenCalledWith('forked', { source: 'mainView' }) })
+  })
+
+  it('opens a row published synchronously during subscription and detaches the wait', async () => {
+    const b = await bench()
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    const source = b.ctx.sessions.list
+    const original = source.subscribe.bind(source)
+    Object.assign(source, { subscribe: (listener: () => void) => {
+      const stop = original(listener)
+      b.setSummary('raced', { id: sid('raced') })
+      return stop
+    } })
+    b.ctx.uiWorkspace.openListedBranch(sid('raced'))
+    expect(b.retain).toHaveBeenCalledWith('raced', { source: 'mainView' })
+    b.setSummary('raced', { title: 'later' })
+    expect(b.retain.mock.calls.filter(([id]) => id === 'raced')).toHaveLength(1)
+    expect(b.refresh).not.toHaveBeenCalled()
+  })
+
+  it('cancels listed navigation on later user navigation and disposal', async () => {
+    const b = await bench()
+    const navigation = new AbortController()
+    Object.assign(b.ctx.layout, { beginNavigation: () => navigation.signal })
+    b.refresh.mockImplementation(() => new Promise<undefined>(() => {}))
+    const fiber = b.ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    b.ctx.uiWorkspace.openListedBranch(sid('late'))
+    navigation.abort()
+    b.setSummary('late', { id: sid('late') })
+    expect(b.retain).not.toHaveBeenCalledWith('late', { source: 'mainView' })
+    Object.assign(b.ctx.layout, { beginNavigation: () => new AbortController().signal })
+    b.ctx.uiWorkspace.openListedBranch(sid('later'))
+    await fiber.dispose()
+    b.setSummary('later', { id: sid('later') })
+    expect(b.retain).not.toHaveBeenCalledWith('later', { source: 'mainView' })
+  })
+
+  it('settles a completed refresh without the created id and reports refresh rejection', async () => {
+    const b = await bench()
+    declare(b.slots, 'shell.overlay')
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    b.ctx.uiWorkspace.openListedBranch(sid('missing'))
+    await Promise.resolve()
+    b.setSummary('missing', { id: sid('missing') })
+    expect(b.retain).not.toHaveBeenCalledWith('missing', { source: 'mainView' })
+    b.refresh.mockRejectedValueOnce(new Error('list refused'))
+    b.ctx.uiWorkspace.openListedBranch(sid('refused'))
+    await Promise.resolve()
+    const toast = faceOf(entry(b.slots, 'shell.overlay', 'workspace.row-toast')) as RowToastInjected
+    expect(toast.hooks.toast.getSnapshot()).toMatchObject({ kind: 'createFailed', message: 'list refused' })
+  })
+
+  it('does not subscribe or refresh a branch when navigation is already cancelled', async () => {
+    const b = await bench()
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    const navigation = new AbortController()
+    navigation.abort()
+    Object.assign(b.ctx.layout, { beginNavigation: () => navigation.signal })
+    b.ctx.uiWorkspace.openListedBranch(sid('cancelled'))
+    expect(b.refresh).not.toHaveBeenCalled()
+    expect(b.retain).not.toHaveBeenCalledWith('cancelled', { source: 'mainView' })
+  })
+
+  it.each([false, true])('reports a failed branch opening only while navigation is active (cancel=%s)', async (cancel) => {
+    const b = await bench()
+    declare(b.slots, 'shell.overlay')
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    const navigation = new AbortController()
+    Object.assign(b.ctx.layout, { beginNavigation: () => navigation.signal })
+    b.setSummary('broken', { id: sid('broken') })
+    b.retain.mockImplementationOnce(() => {
+      if (cancel) navigation.abort()
+      throw new Error('branch opening refused')
+    })
+    b.ctx.uiWorkspace.openListedBranch(sid('broken'))
+    const toast = faceOf(entry(b.slots, 'shell.overlay', 'workspace.row-toast')) as RowToastInjected
+    expect(toast.hooks.toast.getSnapshot()).toEqual(cancel ? null
+      : { kind: 'createFailed', message: 'branch opening refused', seq: 1 })
+    expect(b.refresh).not.toHaveBeenCalled()
+  })
+
+  it.each(['opened', 'cancelled'] as const)('ignores a refresh failure after branch navigation is %s', async (end) => {
+    const b = await bench()
+    declare(b.slots, 'shell.overlay')
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    const navigation = new AbortController()
+    Object.assign(b.ctx.layout, { beginNavigation: () => navigation.signal })
+    const refreshed = Promise.withResolvers<undefined>()
+    b.refresh.mockImplementationOnce(() => refreshed.promise)
+    b.ctx.uiWorkspace.openListedBranch(sid('late-refresh'))
+    if (end === 'opened') b.setSummary('late-refresh', { id: sid('late-refresh') })
+    else navigation.abort()
+    refreshed.reject(new Error('late refresh refused'))
+    await Promise.resolve()
+    const toast = faceOf(entry(b.slots, 'shell.overlay', 'workspace.row-toast')) as RowToastInjected
+    expect(toast.hooks.toast.getSnapshot()).toBeNull()
+    expect(b.retain.mock.calls.filter(([id]) => id === 'late-refresh')).toHaveLength(end === 'opened' ? 1 : 0)
   })
 
   it('declares the browser child slots and reports directory-flow occupancy per surface', async () => {

@@ -213,7 +213,8 @@ export class InputHub implements SessionInputResolver {
    */
   canPickFiles(id: SessionId): boolean {
     const binding = this.sessions().binding(id)
-    return binding !== undefined && this.shells.get(binding)?.canPickFiles() === true
+    return this.rootCtx.remoteAccess.source('session', id, 'fileUploads/upload').getSnapshot()
+      && binding !== undefined && this.shells.get(binding)?.canPickFiles() === true
   }
 
   /**
@@ -222,7 +223,7 @@ export class InputHub implements SessionInputResolver {
    */
   pickFiles(id: SessionId): void {
     const binding = this.sessions().binding(id)
-    if (binding !== undefined) this.shells.get(binding)?.pickFiles()
+    if (this.canPickFiles(id) && binding !== undefined) this.shells.get(binding)?.pickFiles()
   }
 
   /**

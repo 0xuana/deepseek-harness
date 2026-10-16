@@ -1926,6 +1926,43 @@ describe('ChatView', () => {
     expect(h.forkAt).toHaveBeenCalledWith(3)
   }))
 
+  it('keeps next-input folding independent from a live session/fork answer in the same flow', () => {
+    const h = makeCompletionHarness('detailed', 'next-input')
+    const fork = createSnapshotStore(true)
+    const useFork = bindSnapshotSelector(fork)
+    // Chat Node renderers read the harness's standard props object, so the override goes there.
+    Object.assign(h.props, {
+      useAccess: (endpoint: string) => {
+        const allowed = useFork(value => value)
+        return endpoint === 'session/fork' ? allowed : true
+      },
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    const root = view.container.querySelector<HTMLElement>('[data-chat-group-key][data-chat-turn="2"]')!
+    act(() => { h.complete() })
+    const control = view.container.querySelector<HTMLButtonElement>('[data-turn-process="2"]')!
+    expect(control.getAttribute('aria-expanded')).toBe('true')
+    expect(root.closest('[hidden]')).toBeNull()
+    expect(view.getAllByRole('button', { name: '在新对话中分支' })).toHaveLength(2)
+
+    act(() => { fork.set(false) })
+    expect(view.queryAllByRole('button', { name: '在新对话中分支' })).toHaveLength(0)
+    expect(view.container.querySelector('[data-chat-group-key][data-chat-turn="2"]')).toBe(root)
+    expect(control.getAttribute('aria-expanded')).toBe('true')
+    expect(root.closest('[hidden]')).toBeNull()
+
+    act(() => { h.sendNext() })
+    expect(view.getByText('next question').closest('[data-submission-echo]')).not.toBeNull()
+    expect(control.getAttribute('aria-expanded')).toBe('false')
+    expect(root.hasAttribute('hidden')).toBe(true)
+    act(() => { fork.set(true) })
+    expect(view.getAllByRole('button', { name: '在新对话中分支' })).toHaveLength(2)
+    expect(view.container.querySelector('[data-chat-group-key][data-chat-turn="2"]')).toBe(root)
+    expect(control.getAttribute('aria-expanded')).toBe('false')
+    expect(root.hasAttribute('hidden')).toBe(true)
+    expect(view.getByText('current answer').closest('[hidden]')).toBeNull()
+  })
+
   it('keeps pending file mentions non-interactive until admission enables the reference injector', () => {
     const pending: InboxState['next-step'][number] = {
       id: MessageId('pending-file-mention'), role: 'user', source: { kind: 'user' },

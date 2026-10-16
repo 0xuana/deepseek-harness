@@ -58,7 +58,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /** Services required by the Conversation plugin. */
 export const inject = [
-  'slots', 'sessions', 'fileUpload', 'uiSession', 'uiWorkspace', 'locale', 'configForms',
+  'slots', 'sessions', 'fileUpload', 'uiSession', 'uiWorkspace', 'locale', 'configForms', 'remoteAccess',
 ]
 
 /** Conversation runtime configuration. */
@@ -94,6 +94,10 @@ const ABSENT_MENU_LAUNCHER = {
 const EMPTY_FILE_UPLOADS: DraftFileUploads = {}
 const ABSENT_FILE_UPLOADS = {
   getSnapshot: () => EMPTY_FILE_UPLOADS,
+  subscribe: () => () => {},
+}
+const ABSENT_FILE_INTAKE = {
+  getSnapshot: () => false,
   subscribe: () => () => {},
 }
 
@@ -158,8 +162,10 @@ export function apply(ctx: Context, config: Config = Config({})): void {
   const slots = ctx.slots
   // Schemastery's field default is materialized before Cordis calls apply.
   const maxConcurrentFileUploads = config.maxConcurrentFileUploads as number
-  const workspaceNavigation = ctx.get('uiWorkspace') as unknown as WorkspaceNavigation
+  const workspaceNavigation = ctx.get('uiWorkspace') as WorkspaceNavigation
   const uiConversation = new UiConversation(ctx, sessions)
+  // File intake is its own access question: a page may prompt a Session whose files it may not upload.
+  const fileIntakeOf = (id: SessionId) => ctx.remoteAccess.source('session', id, 'fileUploads/upload')
   uiConversation.userText.register(sessionReferenceRule)
   uiConversation.userText.register(collapseWhitespaceRule)
   uiConversation.userText.register(trimWhitespaceRule)
@@ -237,7 +243,16 @@ export function apply(ctx: Context, config: Config = Config({})): void {
     if (trackedBindings.has(binding)) return
     trackedBindings.add(binding)
     bindings.add(binding)
-    binding.ctx.effect(() => () => { bindings.delete(binding) }, 'ui-conversation: active Provider binding')
+    ctx.effect(() => binding.ctx.effect(() => {
+      // Controller withdrawal precedes asynchronous Session-scope disposal.
+      const disposeRetention = sessions.retainInfo(binding.sessionId).subscribe(() => {
+        if (sessions.binding(binding.sessionId) !== binding) bindings.delete(binding)
+      })
+      return () => {
+        disposeRetention()
+        bindings.delete(binding)
+      }
+    }, 'ui-conversation: active Provider binding'), 'ui-conversation: View binding ownership')
   }
   const refreshViews = (): void => {
     const current = conversationViews.getSnapshot()
@@ -258,6 +273,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
       disposeDeveloperTools()
       disposeLocale()
       disposeViews()
+      bindings.clear()
     }
   }, 'ui-conversation: View selection')
 
@@ -484,6 +500,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
             stopShortcut,
             busyEnter: submissionPolicy.busyEnter,
             fileUploads: ABSENT_FILE_UPLOADS,
+            fileIntake: ABSENT_FILE_INTAKE,
             notices: ABSENT_NOTICES,
             lexicon: ABSENT_LEXICON,
             menuLauncher: ABSENT_MENU_LAUNCHER,
@@ -494,9 +511,12 @@ export function apply(ctx: Context, config: Config = Config({})): void {
       const shell = inputHub.shell(sessionId)
       const inputTriggers = inputHub.inputTriggers(sessionId)
       const bridge = hostPathBridge()
+      const fileIntake = fileIntakeOf(sessionId)
+      const cancelAccess = ctx.remoteAccess.source('session', sessionId, 'session/cancel')
       return {
         keyboard: shell,
         addFiles: (files, directories = new Set()) => {
+          if (!fileIntake.getSnapshot()) return t('attachment.dropBlocked')
           if (sessions.binding(sessionId) === undefined) return t('file.sessionUnavailable')
           if (shell.snapshot.phase === 'adjudicating' || shell.snapshot.phase === 'submitting') {
             return t('attachment.dropBlocked')
@@ -557,10 +577,16 @@ export function apply(ctx: Context, config: Config = Config({})): void {
               span: { ...selection, draftRev: snapshot.draftRev },
             })
           },
-        stop: () => { stop(sessionId) },
+        // The bar hides Stop while the access snapshot excludes `session/cancel`; the handler re-reads
+        // the live answer, so a click the page had already rendered never reaches a withdrawn endpoint.
+        stop: () => {
+          if (!cancelAccess.getSnapshot()) return
+          stop(sessionId)
+        },
         hooks: {
           stopShortcut,
           busyEnter: submissionPolicy.busyEnter,
+          fileIntake,
           fileUploads: conversation.fileUploads,
           notices: shell.notices,
           lexicon: shell.lexicon,

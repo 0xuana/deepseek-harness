@@ -28,6 +28,14 @@ export class PresentedOpenController {
   private readonly pending = new Set<Promise<void | PresentedOpenFailure>>()
 
   /**
+   * @param ownerHostRoutes - whether the Owner's own HTTP host routes are reachable from this page.
+   *   False on a page a business package re-labeled for another Peer: `present.host` and the open,
+   *   reveal, and changes routes behind it belong to the Owner's origin, so leaving `host` null keeps
+   *   the cards' unavailable fallback and stops the dependent owner-only reads.
+   */
+  constructor(private readonly ownerHostRoutes = true) {}
+
+  /**
    * Open a declared file once while a request for the same coordinates is pending.
    * Failures remain visible on the card and a later gesture retries them.
    * @param sessionId - viewed Session, including a fork's own identity.
@@ -77,7 +85,7 @@ export class PresentedOpenController {
    * @returns after metadata or a retryable error is published.
    */
   async loadHost(): Promise<void> {
-    if (this.lifetime.signal.aborted) return
+    if (!this.ownerHostRoutes || this.lifetime.signal.aborted) return
     if (this.loading !== undefined) return this.loading
     this.host.set(null)
     const task = this.readHost(AbortSignal.any([this.lifetime.signal, this.metadata.signal]))

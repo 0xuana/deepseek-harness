@@ -478,6 +478,25 @@ describe('connection client apply', () => {
     })
   })
 
+  it('hands its carrier the document-relative route', async () => {
+    const handle = await mount()
+    const original = globalThis.fetch
+    const seen: string[] = []
+    globalThis.fetch = async (input: URL | RequestInfo) => {
+      seen.push(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url)
+      return Response.json({ type: 'server-response', rpcId: 'mismatch', result: { ok: true, value: null } })
+    }
+    try {
+      await expect(handle.rpc.call('/api', 'goals/create', {})).rejects.toThrow('rpcId mismatch')
+    } finally {
+      globalThis.fetch = original
+    }
+    // The caller posts the document-relative route and each carrier resolves it against its own
+    // base: the page's own fetch against its document (mount prefix included), a transport that
+    // owns another base against that one (the `RpcFetch` contract in ../src/client/rpc.ts).
+    expect(seen[0]).toBe('api/goals/create')
+  })
+
   it('uses an already decoded rpc carrier from the transport hooks instead of the HTTP caller', async () => {
     ;(globalThis as Win).location = { hostname: 'preview.example' }
     const rpc: ClientConnectionRpc = {

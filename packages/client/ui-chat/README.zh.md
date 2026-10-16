@@ -24,6 +24,7 @@ kind: "package-reference"
 - [轮次过程折叠](#turn-process-folding)
 - [分组渲染](#grouped-rendering)
 - [滚动归属](#scroll-ownership)
+- [写操作](#write-actions)
 - [模型体验](#model-experience)
 - [已知限制与暂缓事项](#known-limitations-and-deferred-work)
 - [开发备注](#dev-note)
@@ -41,13 +42,13 @@ kind: "package-reference"
 
 原生消息图片使用独立的用户与输出位置。`conversation.chat.user.content` Factory 声明 `conversation.chat.user.images`，由 `UserContent` 渲染；Assistant 节点注册声明 `conversation.chat.message.images`，由 `AssistantMarkdown` 渲染。两者通过显式 props 接收图片来源、授权 `loadImage` 和布局参数。官方 `MessageImages` 条目调用共享的 root 作用域 `conversation.images.content` Factory。每个位置均可独立替换，无需复制画廊实现。
 
-Session 作用域的 `conversation.chat.user.content` Factory 只渲染用户内容区域：文本、额外内容块、按输入顺序排列的图片／文件附件及引用摘要。[`UserContentInput`](src/client/contract/slots.ts) 携带预处理的 `content`、变换 `facts`、显示 props 和显式 `loadImage`；引用动作由节点自己的 Injection 提供。正文调用共享 `conversation.user.text` Factory，图片调用自身拥有的图片 Slot。直接调用需要 Session 绑定，行包装层由调用方提供。
+Session 作用域的 `conversation.chat.user.content` Factory 只渲染用户内容区域：文本、额外内容块、按输入顺序排列的图片／文件附件及引用摘要。[`UserContentInput`](src/client/contract/slots.ts) 携带预处理的 `content`、变换 `facts`、显示 props 和显式 `loadImage`；引用动作由节点自己的 Injection 提供。正文调用共享 `conversation.user.text` Factory，图片调用自身拥有的图片 Slot。直接调用需要 Session 绑定，行包装层由调用方提供。引用渲染独立于 Session 的访问答案；撤回 `session/fork` 答案只移除分支操作，不替换内容或重置轮次开合状态。
 
 `UserStyleBubble` 和[各来源包装层](<src/client/chat/MessageItem.tsx#L157-L309>) 保留用户行、key、pending／echo 标记、时间、复制控件及其他消息操作。内容 Factory 不读取来源专属模型或私有 Context，也不是全局用户内容替换入口。
 
 独立的 Markdown 图片以内嵌预览显示，点击打开共享图片浮层；本地路径在消息落定后基于当前查看的工作区解析。图片文件链接保持点击打开侧栏，鼠标停留或键盘聚焦时显示缩略图，Esc 关闭缩略图。图片加载失败时保留本地化状态与图片说明；不执行重复图片过滤。
 
-设置 → 通用设置 → 网页链接默认打开方式控制普通点击 Chat HTTP(S) 链接时的目标：「应用内侧边栏」（默认）打开新的右侧 Sidebar Browser tab，「默认浏览器」打开外部标签页。该设置项位于快捷键之后，仅在 Sidebar Browser 可用时显示。若 Sidebar Browser 未注册，两种选择均使用外部浏览器；带修饰键的点击保留原生行为。已认证浏览器的 `ui-chat.linkOpening` 偏好在 Host 上持久化，设置无法持久化写入时仅在当前进程内生效。已发送的文件引用及消息日志确认调用的 skill 也可在右侧栏打开预览。文件路径使用当前查看的 Session；skill 名称由该 Session 当前的输入触发源解析。两者悬停或聚焦时均使用正文文件链接的虚线下划线。会话、目录和命令标签仍只作为引用展示。
+设置 → 通用设置 → 网页链接默认打开方式控制普通点击 Chat HTTP(S) 链接时的目标：「应用内侧边栏」（默认）打开新的右侧 Sidebar Browser tab，「默认浏览器」打开外部标签页。该设置项位于快捷键之后，仅在 Sidebar Browser 可用时显示。若 Sidebar Browser 未注册，两种选择均使用外部浏览器；带修饰键的点击保留原生行为。`ui-chat.linkOpening` 偏好在已认证浏览器的 Host 上持久化，设置无法持久化写入时仅在当前进程内生效。已发送的文件引用及消息日志确认调用的 skill 也可在右侧栏打开预览。文件路径使用当前查看的 Session；skill 名称由该 Session 当前的输入触发源解析。两者悬停或聚焦时均使用正文文件链接的虚线下划线。会话、目录和命令标签仍只作为引用展示。页面的标签类型注册表决定如何打开文件地址。只列出工作区路径而不提供文件内容的页面提供自己的标签反馈；Chat 只委派导航，不推断文件读取权限。
 
 <a id="system-prompt-row"></a>
 ## Chat 隐藏的行
@@ -173,6 +174,11 @@ Chat 会在历史前插与 renderer 重新挂载时恢复语义锚点，并且�
 活跃轮次高亮采用近似定位：`readVisibleTurn` 对 flow 插槽的直属 Node/Group 布局盒二分（独立渲染时使用正文容器的直属布局盒），落在间隙时保留前方候选。它不做文档命中测试，也不查询 Group 成员或全部 Turn 标记。空 Seat 保留零高度的流内布局盒，使外层位置有序且不增加间距。这种定位不改变语义位置捕获或分页补偿。
 
 </details>
+
+<a id="write-actions"></a>
+## 写操作
+
+轮次末尾的分支操作读取会话作用域的 `useAccess('session/fork')` 钩子，调用方 Peer 的访问快照不含该端点时不显示；视图始终收到 `forkAt` 处理函数。只有当快照对源 Session 含 `session/rename` 时，分支才为子会话命名；否则子会话保留 Host 给的标题，并在会话列表出现它之后打开。Host 拒绝的一次分支会在它被请求的那个 Session 上说明原因（走 composer 的 notice 通道），内容为 Host 自己的消息并附上稳定错误码。会话树的分支动词共用这一拒绝提示，以及同一套命名与打开分支的规则。这些界面判断不替代 Host 授权。
 
 -----
 

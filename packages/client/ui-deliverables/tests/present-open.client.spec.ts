@@ -131,6 +131,19 @@ it('coalesces metadata reads and suppresses their publication after disposal', a
 })
 
 
+it('issues no owner-only host read on a page a business package re-labeled for another Peer', async () => {
+  const fetcher = vi.fn().mockResolvedValue(Response.json({ name: 'owner-host', available: true, fileManager: 'finder' }))
+  vi.stubGlobal('fetch', fetcher)
+  const controller = new PresentedOpenController(false)
+  await controller.loadHost()
+  controller.resetHost()
+  await controller.loadHost()
+  // Unread metadata keeps the card's unavailable fallback, and the reads that hang off it stay off too.
+  expect(fetcher).not.toHaveBeenCalled()
+  expect(controller.host.getSnapshot()).toBeNull()
+  await controller.dispose()
+})
+
 it('invalidates cached desktop metadata without eagerly fetching an unused Host', async () => {
   const fetcher = vi.fn().mockResolvedValue(Response.json({ name: 'old', available: false, fileManager: null }))
   vi.stubGlobal('fetch', fetcher)

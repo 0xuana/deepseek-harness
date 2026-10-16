@@ -24,6 +24,7 @@ File-mention providers receive the viewed Session ID with the closing-turn owner
 - [Turn Process Folding](#turn-process-folding)
 - [Grouped rendering](#grouped-rendering)
 - [Scroll ownership](#scroll-ownership)
+- [Write actions](#write-actions)
 - [Model Experience](#model-experience)
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 - [Dev Note](#dev-note)
@@ -41,13 +42,13 @@ Sent generic-file attachments retain the draft's [file-card radius](../../../doc
 
 Native message images use separate user and output positions. The `conversation.chat.user.content` Factory declares `conversation.chat.user.images`, which `UserContent` renders; the Assistant node registration declares `conversation.chat.message.images`, which `AssistantMarkdown` renders. Both receive image sources, the authorized `loadImage`, and layout options through explicit props. Their official `MessageImages` entries call the shared root-scoped `conversation.images.content` Factory. Each position can be replaced independently without duplicating the gallery implementation.
 
-The session-scoped `conversation.chat.user.content` Factory renders only the user content stack: text, extra blocks, image/file attachments in input order, and reference summaries. Its [`UserContentInput`](src/client/contract/slots.ts) carries prepared `content`, transform `facts`, display props, and explicit `loadImage`; node-owned injections provide reference actions. It calls the shared `conversation.user.text` Factory for text and its own image Slot for images. Direct callers need a Session binding and supply their own row wrapper.
+The session-scoped `conversation.chat.user.content` Factory renders only the user content stack: text, extra blocks, image/file attachments in input order, and reference summaries. Its [`UserContentInput`](src/client/contract/slots.ts) carries prepared `content`, transform `facts`, display props, and explicit `loadImage`; node-owned injections provide reference actions. It calls the shared `conversation.user.text` Factory for text and its own image Slot for images. Direct callers need a Session binding and supply their own row wrapper. Reference rendering is independent of the Session's access answers; a withdrawn `session/fork` answer removes only the branch action, without replacing content or resetting Turn disclosures.
 
 `UserStyleBubble` and the [source-specific wrappers](<src/client/chat/MessageItem.tsx#L157-L309>) retain the user row, keys, pending/echo markers, timestamps, copy controls, and other message actions. The content Factory reads neither source-specific models nor private Context, and is not a global user-content override entry point.
 
 Standalone Markdown images show contained previews and open the shared image lightbox; local paths resolve against the viewed workspace after settlement. Image file links keep their sidebar activation and show a thumbnail after hover dwell or keyboard focus. Escape dismisses the thumbnail. Failed images retain a localized status and their description; no duplicate-image filtering is applied.
 
-Settings → General → Open chat links in selects the destination for ordinary clicks on Chat HTTP(S) links: In-App Sidebar (default) opens a new right-Sidebar Browser tab, while Default Browser opens an external tab. The setting follows Keyboard shortcuts and is shown only while the Sidebar Browser is available. If the Sidebar Browser is not registered, both choices use the external browser; modified clicks retain native behavior. The `ui-chat.linkOpening` preference persists on the Host for authenticated browsers and stays process-local when settings cannot persist writes. Sent file references and skills confirmed by the message’s logged invocation also open in the right Sidebar. File paths use the viewed Session; skill names resolve through its current input-trigger source. Both use the prose file-link dotted underline on hover or focus. Sessions, directories, and command labels remain non-navigating references.
+Settings → General → Open chat links in selects the destination for ordinary clicks on Chat HTTP(S) links: In-App Sidebar (default) opens a new right-Sidebar Browser tab, while Default Browser opens an external tab. The setting follows Keyboard shortcuts and is shown only while the Sidebar Browser is available. If the Sidebar Browser is not registered, both choices use the external browser; modified clicks retain native behavior. The `ui-chat.linkOpening` preference persists on the Host for authenticated browsers and stays process-local when settings cannot persist writes. Sent file references and skills confirmed by the message’s logged invocation also open in the right Sidebar. File paths use the viewed Session; skill names resolve through its current input-trigger source. Both use the prose file-link dotted underline on hover or focus. Sessions, directories, and command labels remain non-navigating references. The page's tab-type registry decides how a file address opens. A page that lists workspace paths without serving file contents provides its own tab response; Chat delegates navigation without inferring file-read permission.
 
 <a id="system-prompt-row"></a>
 ## Hidden Chat rows
@@ -173,6 +174,11 @@ Within a process group, wheel, touchstart, and any pointerdown interrupt an acti
 Active-Turn highlighting is approximate: `readVisibleTurn` binary-searches the flow slot's direct Node/Group boxes (or the column's in standalone rendering) and retains the preceding candidate in gaps. It neither hit-tests the document nor searches Group members or all Turn markers. Empty Seats retain zero-height in-flow boxes so outer positions remain ordered without extra spacing. This lookup does not change semantic position capture or paging compensation.
 
 </details>
+
+<a id="write-actions"></a>
+## Write actions
+
+The Turn Tail branch action reads the Session-scope `useAccess('session/fork')` Hook and disappears while the calling Peer's access snapshot excludes that endpoint; the view always receives the `forkAt` handler. A branch names its child only while the snapshot includes `session/rename` for the source Session; otherwise the child keeps the Host's title and opens once the Session list carries it. A branch the Host refuses states why, on the Session it was asked of, through the composer's notice channel, as the Host's own message with the stable code beside it. The Session tree's branch verb shares the refusal notice and the rule for naming and opening a branch. These answers never replace Host authorization.
 
 -----
 

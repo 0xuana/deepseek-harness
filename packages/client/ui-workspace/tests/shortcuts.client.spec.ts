@@ -42,6 +42,11 @@ async function bench(runtime: 'web' | 'desktop' = 'desktop', platform: ShortcutP
     sessionId: sid(id), session: { ...history, loadOlder },
   }]))
   ctx.provide('sessions', { list, binding: (id: SessionId) => bindings.get(id) })
+  // Endpoints the current Session's access snapshot excludes; empty for the owner.
+  const denied = new Set<string>()
+  ctx.provide('remoteAccess', {
+    source: (_kind: string, _id: string, endpoint: string) => createSnapshotStore(!denied.has(endpoint)),
+  })
   const panelInfo = createSnapshotStore<PanelInfo>({ activePanelId: null })
   ctx.provide('layout', { panelInfo })
   const directory = createSnapshotStore(true)
@@ -63,12 +68,45 @@ async function bench(runtime: 'web' | 'desktop' = 'desktop', platform: ShortcutP
   const select = (id: string) => { list.set({ ...list.getSnapshot(), byId: {
     [sid('a')]: row('a', id === 'a'), [sid('b')]: row('b', id === 'b'),
   } }) }
-  return { ctx, fiber, registry, commands, navigation, controls, reportForkFailure, list, directory, select, history, loadOlder, panelInfo }
+  return {
+    ctx, fiber, registry, commands, navigation, controls, reportForkFailure, list, directory, select, history, loadOlder,
+    panelInfo, denied,
+  }
 }
 
 afterEach(() => { vi.restoreAllMocks() })
 
 describe('workspace shortcut ownership', () => {
+  it('refuses the Session write commands the current Session\'s access snapshot excludes', async () => {
+    const b = await bench()
+    for (const endpoint of ['session/rename', 'session/fork', 'workspace/archiveSession']) b.denied.add(endpoint)
+    // The pointer controls are absent on such a page; these commands stay bound, so each one answers
+    // with the page's own refusal instead of running a write the Host would refuse.
+    for (const id of ['session.rename', 'session.fork', 'session.archive']) {
+      expect(b.commands.get(id)!.resolve(context)).toMatchObject({ status: 'blocked', reason: en['shortcut.notPermitted'] })
+    }
+    // Reading is not a write: search stays available on the same page.
+    expect(b.commands.get('session.search')!.resolve(context)).toMatchObject({ status: 'handled' })
+  })
+
+  it('rechecks session/fork before each fork and retains shared failure reporting', async () => {
+    const b = await bench('web')
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    b.navigation.forkSession.mockRejectedValueOnce(new SessionForkError(
+      new RemoteError('session/fork-unavailable', 'no completed turn', { sessionId: sid('a') }), sid('a'),
+    ))
+    const invoke = () => b.registry.dispatch(key('KeyF', { shift: true }), context, vi.fn())
+    expect(invoke().status).toBe('handled')
+    await vi.waitFor(() => { expect(b.reportForkFailure).toHaveBeenCalledExactlyOnceWith('unavailable') })
+    b.denied.add('session/fork')
+    expect(invoke()).toMatchObject({ status: 'blocked', reason: en['shortcut.notPermitted'] })
+    expect(b.navigation.forkSession).toHaveBeenCalledOnce()
+    b.denied.delete('session/fork')
+    expect(invoke().status).toBe('handled')
+    expect(b.navigation.forkSession).toHaveBeenCalledTimes(2)
+    expect(warning).not.toHaveBeenCalled()
+  })
+
   it('refuses rename and archive without a selected Session and keeps a busy picker closed', async () => {
     const b = await bench()
     b.select('none')

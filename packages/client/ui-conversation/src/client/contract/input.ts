@@ -216,6 +216,8 @@ export interface SessionInput extends InputTarget {
   focus(): void
   /** Input state store (InputZone currency + decorations read here). */
   readonly state: SnapshotStore<InputState>
+  /** Latest notice this composer carries (null after clear), which the addressed bar renders. */
+  readonly notices: SnapshotStore<InputNotice | null>
 }
 
 /** Session-addressed access to the per-session input facade. */
