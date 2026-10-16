@@ -4258,6 +4258,8 @@ export interface Config {
   searchMaxResults?: number
   /** Upper bound on queries accepted by one `web_search` call. */
   searchMaxQueries?: number
+  /** Cap on each source summary in `web_search` output, in characters. Defaults to 800. */
+  searchSummaryMaxChars?: number
   /** Cooperative timeout budget (ms) for `web_fetch`. Defaults to 30000. */
   fetchTimeoutMs?: number
   /** Cooperative timeout budget (ms) for `web_search`. Defaults to 30000. */
