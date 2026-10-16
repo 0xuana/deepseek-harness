@@ -38,6 +38,19 @@ describe('Button', () => {
     render(<Button variant="outline">Cancel</Button>)
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeDefined()
   })
+
+  it('keeps the native element and focus when outline rendering changes', () => {
+    const ref = createRef<HTMLButtonElement>()
+    const { rerender } = render(<Button ref={ref} variant="outline">Open</Button>)
+    const button = screen.getByRole('button')
+    button.focus()
+    rerender(<Button ref={ref} variant="outline" outlineRendering="inset">Open</Button>)
+    expect(button.hasAttribute('outlineRendering')).toBe(false)
+    expect(ref.current).toBe(button)
+    expect(document.activeElement).toBe(button)
+    rerender(<Button ref={ref} variant="primary" outlineRendering="inset">Open</Button>)
+    expect(ref.current).toBe(button)
+  })
 })
 
 describe('Pill', () => {

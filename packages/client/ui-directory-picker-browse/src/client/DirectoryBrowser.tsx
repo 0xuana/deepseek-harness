@@ -964,6 +964,7 @@ export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen,
         <div className={css.footerBar}>
           <Button
             variant="outline"
+            outlineRendering="inset"
             icon={<IconPlusOutlineRegular size={14} />}
             disabled={parent === null || loading || parentInert || draftPending}
             onClick={() => {

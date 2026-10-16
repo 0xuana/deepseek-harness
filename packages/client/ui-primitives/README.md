@@ -121,7 +121,7 @@ The atoms cannot read the application locale, so every piece of user-facing copy
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
-`Button` uses H36/R12 for `md` and H28/R8 for `sm`, including outlined controls. Menus and cards follow the [shared radius rules](../../../docs/web-styling.md#corner-radii-and-settings-cards); feature classes preserve control geometry.
+`Button` uses H36/R12 for `md` and H28/R8 for `sm`, including outlined controls. `outlineRendering` defaults to `border`; `inset` affects only `variant="outline"`, keeps a transparent layout border, and paints the stroke with an inset shadow. The inset width uses ui-theme's DPR-aware `--dsh-hairline-width`, with a 0.5px fallback outside the theme. Inset controls own their border color and box-shadow; feature classes must preserve both. Menus and cards follow the [shared radius rules](../../../docs/web-styling.md#corner-radii-and-settings-cards); feature classes preserve control geometry.
 
 `Menu.listClassName` styles the menu card independently of the anchor wrapper, including in portal mode. Leading icons use the `--dsw-alias-menu-icon` color; destructive icons retain their error color.
 

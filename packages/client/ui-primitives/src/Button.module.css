@@ -56,6 +56,12 @@
   background: transparent;
 }
 
+/* Opt-in inset painting preserves the outlined control's layout border. */
+.outline.insetOutline {
+  border-color: transparent;
+  box-shadow: inset 0 0 0 var(--dsh-hairline-width, 0.5px) var(--dsw-alias-border-l3);
+}
+
 .outline:hover:not(:disabled) {
   background: var(--dsw-alias-interactive-bg-hover);
 }

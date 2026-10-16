@@ -25,6 +25,20 @@ const sheetCss = readFileSync(
 const platformCss = readFileSync(
   fileURLToPath(new URL('../src/styles/design-platform.css', import.meta.url)), 'utf8')
 
+describe('opt-in button outlines', () => {
+  it('keeps the default border and requires both outline and inset classes for shadow painting', () => {
+    const rules = parseRules(readFileSync(
+      fileURLToPath(new URL('../../ui-primitives/src/Button.module.css', import.meta.url)), 'utf8'))
+    const native = new Map(rules.filter(rule => rule.selectors.includes('.outline')).flatMap(rule => rule.declarations))
+    expect(native.get('border')).toBe('0.5px solid var(--dsw-alias-border-l3)')
+    expect(native.has('box-shadow')).toBe(false)
+    const inset = rules.filter(rule => rule.declarations.some(([property, value]) =>
+      property === 'box-shadow' && value.includes('--dsh-hairline-width')))
+    expect(inset.map(rule => rule.selectors)).toEqual([['.outline.insetOutline']])
+    expect(new Map(inset[0]?.declarations).get('border-color')).toBe('transparent')
+  })
+})
+
 describe('elevation tokens', () => {
   const rules = parseRules(sheetCss)
   const bodyOnly = new Map(rules
