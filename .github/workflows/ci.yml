@@ -575,7 +575,7 @@ jobs:
       - name: Parse Windows runner supervision scripts
         shell: pwsh
         run: |
-          foreach ($path in @('apps/desktop/scripts/windows-runner-task.ps1', 'apps/desktop/scripts/run-windows-runner-task.ps1', 'apps/desktop/tests/windows-runner-task.ps1')) {
+          foreach ($path in @('apps/desktop/scripts/windows-runner-task.ps1', 'apps/desktop/scripts/run-windows-runner-task.ps1', 'apps/desktop/tests/windows-runner-task.ps1', 'apps/desktop/tests/windows-runner-launcher.ps1')) {
             $tokens = $null
             $parseErrors = $null
             $null = [Management.Automation.Language.Parser]::ParseFile((Join-Path $env:GITHUB_WORKSPACE $path), [ref]$tokens, [ref]$parseErrors)

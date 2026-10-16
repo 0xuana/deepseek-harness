@@ -51,10 +51,28 @@ try {
     if ([BitConverter]::ToUInt16($image, $peOffset + 24 + 68) -ne 2) { throw 'Launcher must use the Windows GUI subsystem.' }
     if ($task.State -ne 'Disabled' -or $task.Settings.ExecutionTimeLimit -ne 'PT0S' -or $task.Settings.MultipleInstances -ne 'IgnoreNew') { throw 'Unexpected task scheduling settings.' }
     Invoke-Manager install -ExpectFailure
+    $runScript = Join-Path $runner 'dsh-task/run.ps1'
+    $originalRun = Get-Content -LiteralPath $runScript -Raw
+    Set-Content -LiteralPath (Join-Path $runner 'dsh-task/pipe-writer.ps1') -Value 'Start-Sleep -Seconds 240'
+    $inheritedWriter = @'
+if (-not (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'inherited-writer-started'))) {
+    $info = [Diagnostics.ProcessStartInfo]::new((Join-Path $PSHOME 'pwsh.exe'))
+    $info.UseShellExecute = $false
+    $info.CreateNoWindow = $true
+    foreach ($arg in @('-NoProfile', '-NonInteractive', '-File', (Join-Path $PSScriptRoot 'pipe-writer.ps1'))) { $info.ArgumentList.Add($arg) }
+    $writer = [Diagnostics.Process]::Start($info)
+    Set-Content -LiteralPath (Join-Path $PSScriptRoot 'inherited-writer-started') -Value $writer.Id
+    $writer.Dispose()
+}
+'@
+    Set-Content -LiteralPath $runScript -Value ($inheritedWriter + "`n" + $originalRun)
     Invoke-Manager start
     $starts = Join-Path $runner 'starts.txt'
+    Wait-Condition { (Get-ScheduledTaskInfo -TaskName $taskName -TaskPath '\').LastTaskResult -eq 5 } 'inherited writer returns drain timeout'
+    if ((Get-ScheduledTask -TaskName $taskName -TaskPath '\').State -eq 'Disabled') { throw 'Drain timeout disabled automatic recovery.' }
     # The one-minute scheduler trigger and cold PowerShell/CIM startup share the busy Windows host.
     Wait-Condition { (Test-Path -LiteralPath $starts) -and @(Get-Content -LiteralPath $starts).Count -ge 2 } 'automatic retry after unexpected clean exit' 180
+    if ([int](Get-Content -LiteralPath (Join-Path $runner 'dsh-task/attempts.txt') -Raw) -ne 2) { throw 'Drain recovery did not consume the normal restart budget.' }
     $consoles = @(Get-Content -LiteralPath (Join-Path $runner 'consoles.txt'))
     if ($consoles.Count -ne 2 -or @($consoles | Where-Object { $_ -ne '0' }).Count) { throw 'Initial or recovered runner allocated a console.' }
     $childId = [int]@(Get-Content -LiteralPath $starts)[-1]

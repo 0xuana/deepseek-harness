@@ -18,6 +18,7 @@ Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; pu
 exit 37
 '@ | Set-Content -LiteralPath (Join-Path $taskRoot 'run.ps1')
 function Invoke-Launcher([string]$Executable, [int]$ExpectedExit) {
+    $existingLogs = @(Get-ChildItem -LiteralPath $taskRoot -Filter 'launcher-*.err.log' | ForEach-Object FullName)
     $process = [Diagnostics.Process]::new()
     $process.StartInfo = [Diagnostics.ProcessStartInfo]::new($launcher)
     $process.StartInfo.UseShellExecute = $false
@@ -29,7 +30,7 @@ function Invoke-Launcher([string]$Executable, [int]$ExpectedExit) {
         $started = $process.Start()
         if (-not $process.WaitForExit(30000)) { throw 'Launcher did not exit within 30 seconds.' }
         if ($process.ExitCode -ne $ExpectedExit) { throw "Expected exit $ExpectedExit, got $($process.ExitCode)." }
-        $logs = @(Get-ChildItem -LiteralPath $taskRoot -Filter ('launcher-*-'+$process.Id+'-*.err.log'))
+        $logs = @(Get-ChildItem -LiteralPath $taskRoot -Filter ('launcher-*-'+$process.Id+'-*.err.log') | Where-Object { $_.FullName -notin $existingLogs })
         if ($logs.Count -ne 1) { throw 'Expected a unique launcher diagnostic.' }
         return $logs[0].FullName.Substring(0, $logs[0].FullName.Length - '.err.log'.Length)
     } catch { $primaryFailure = $_; throw } finally {
@@ -64,17 +65,26 @@ $orphan = [Diagnostics.Process]::Start($info)
 exit 37
 '@ | Set-Content -LiteralPath (Join-Path $taskRoot 'run.ps1')
 $orphan = $null
+$primaryFailure = $null
 try {
-    # This fixture has no registered task; failure to disable it returns 4 after the bounded drain.
-    $log = Invoke-Launcher (Join-Path $PSHOME 'pwsh.exe') 4
+    $log = Invoke-Launcher (Join-Path $PSHOME 'pwsh.exe') 5
     if (-not (Get-Content -LiteralPath ($log + '.drain.log') -Raw).Contains('child exit 37')) { throw 'Inherited writer did not exercise bounded draining.' }
-} finally {
-    $record = Get-Content -LiteralPath (Join-Path $taskRoot 'orphan.json') -Raw | ConvertFrom-Json
-    $orphan = Get-Process -Id $record.Pid -ErrorAction SilentlyContinue
-    if ($orphan -and $orphan.StartTime.ToUniversalTime().Ticks -eq $record.Started) {
-        $orphan.Kill($true)
-        if (-not $orphan.WaitForExit(30000)) { throw 'Orphan fixture did not exit.' }
-        $orphan.Dispose()
+} catch { $primaryFailure = $_; throw } finally {
+    try {
+        $recordFile = Join-Path $taskRoot 'orphan.json'
+        if (Test-Path -LiteralPath $recordFile) {
+            $record = Get-Content -LiteralPath $recordFile -Raw | ConvertFrom-Json
+            $orphan = Get-Process -Id $record.Pid -ErrorAction SilentlyContinue
+            if ($orphan -and $orphan.StartTime.ToUniversalTime().Ticks -eq $record.Started) {
+                $orphan.Kill($true)
+                if (-not $orphan.WaitForExit(30000)) { throw 'Orphan fixture did not exit.' }
+            }
+        }
+    } catch {
+        if (-not $primaryFailure) { throw }
+        Write-Warning "Orphan cleanup also failed: $_"
+    } finally {
+        if ($orphan) { $orphan.Dispose() }
     }
 }
 Write-Output "PASS: GUI executable, no child console, exit propagation, stdout/stderr, startup failure and bounded inherited-pipe drain. Evidence: $root"

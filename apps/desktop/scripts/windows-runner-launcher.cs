@@ -38,10 +38,8 @@ internal static class WindowsRunnerLauncher
                 // Descendants can retain inherited pipe writers after the direct child exits.
                 if (!Task.WaitAll(new[] { stdout, stderr }, TimeSpan.FromSeconds(5)))
                 {
-                    File.WriteAllText(log + ".drain.log", "Output drain timed out after child exit " + child.ExitCode + "; launcher logs may be incomplete. Inspect surviving descendants before restarting.");
-                    child.StandardOutput.Close();
-                    child.StandardError.Close();
-                    DisableTask(root);
+                    File.WriteAllText(log + ".drain.log", "Output drain timed out after child exit " + child.ExitCode + "; launcher logs may be incomplete. Periodic recovery remains governed by the restart budget.");
+                    // Process exit releases pipe reads still held by background copy tasks.
                     return 5;
                 }
                 return child.ExitCode;
@@ -49,7 +47,7 @@ internal static class WindowsRunnerLauncher
         }
         catch (Exception error)
         {
-            // Failures before run.ps1 cannot consume its budget. Disable periodic starts instead.
+            // Launcher exceptions disable periodic starts, including failures before run.ps1 can consume its budget.
             int result = 2;
             try { DisableTask(root); }
             catch (Exception disableError) { error = new AggregateException(error, disableError); result = 4; }
@@ -65,6 +63,7 @@ internal static class WindowsRunnerLauncher
 
     private static void DisableTask(string root)
     {
+        // Keep task identity aligned with windows-runner-task.ps1 and run-windows-runner-task.ps1.
         string runner = Directory.GetParent(root.TrimEnd(Path.DirectorySeparatorChar)).FullName.TrimEnd('\\', '/');
         string taskName;
         using (var hash = SHA256.Create())
