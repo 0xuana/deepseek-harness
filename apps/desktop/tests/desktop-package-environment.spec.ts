@@ -64,6 +64,11 @@ describe('Desktop local packaging configuration', () => {
 
   it.each(['', '0', '-1', '1.5', 'Infinity', '01', '9007199254740992'])('rejects invalid pack concurrency %s', (value) => {
     expect(() => resolveWindowsPackageSettings({ DSH_DESKTOP_WINDOWS_PACK_CONCURRENCY: value })).toThrow('PACK_CONCURRENCY')
+    for (const options of [{ unsigned: true }, { prepareOnly: true }]) {
+      expect(() => {
+        validateDesktopPackageEnvironment({ ...RELEASE, DSH_DESKTOP_WINDOWS_PACK_CONCURRENCY: value }, WINDOWS, options)
+      }).toThrow('PACK_CONCURRENCY')
+    }
   })
 
   it.each(['1', '2', '4', '8'])('accepts cache concurrency %s', (value) => {
