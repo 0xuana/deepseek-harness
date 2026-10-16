@@ -27,7 +27,7 @@ function Invoke-Manager([string]$Operation, [switch]$ExpectFailure) {
     & (Join-Path $PSHOME 'pwsh.exe') -NoProfile -File $manager -Action $Operation -RunnerRoot $runner @installOptions
     if (($LASTEXITCODE -eq 0) -eq [bool]$ExpectFailure) { throw "Unexpected exit $LASTEXITCODE for $Operation" }
 }
-function Wait-Condition([scriptblock]$Condition, [string]$Description, [int]$Seconds = 30) {
+function Wait-Condition([scriptblock]$Condition, [string]$Description, [int]$Seconds = 60) {
     $deadline = [DateTime]::UtcNow.AddSeconds($Seconds)
     do {
         if (& $Condition) { return }
@@ -53,7 +53,8 @@ try {
     Invoke-Manager install -ExpectFailure
     Invoke-Manager start
     $starts = Join-Path $runner 'starts.txt'
-    Wait-Condition { (Test-Path -LiteralPath $starts) -and @(Get-Content -LiteralPath $starts).Count -ge 2 } 'automatic retry after unexpected clean exit' 110
+    # The one-minute scheduler trigger and cold PowerShell/CIM startup share the busy Windows host.
+    Wait-Condition { (Test-Path -LiteralPath $starts) -and @(Get-Content -LiteralPath $starts).Count -ge 2 } 'automatic retry after unexpected clean exit' 180
     $consoles = @(Get-Content -LiteralPath (Join-Path $runner 'consoles.txt'))
     if ($consoles.Count -ne 2 -or @($consoles | Where-Object { $_ -ne '0' }).Count) { throw 'Initial or recovered runner allocated a console.' }
     $childId = [int]@(Get-Content -LiteralPath $starts)[-1]
@@ -88,11 +89,34 @@ try {
     Start-ScheduledTask -TaskName $config.TaskName -TaskPath '\'
     Wait-Condition { (Get-ScheduledTask -TaskName $config.TaskName -TaskPath '\').State -eq 'Disabled' } 'invalid restart budget disables task'
     if (@(Get-Content -LiteralPath $starts).Count -ne 3) { throw 'Invalid budget launched another runner.' }
+    $savedAction = (Get-ScheduledTask -TaskName $taskName -TaskPath '\').Actions
+    $missingAction = New-ScheduledTaskAction -Execute $launcher -Argument ('"' + (Join-Path $root 'missing.exe') + '"') -WorkingDirectory $runner
+    $null = Set-ScheduledTask -TaskName $taskName -TaskPath '\' -Action $missingAction
+    Set-Content -LiteralPath (Join-Path $runner 'dsh-task/attempts.txt') -Value '0'
+    $null = Enable-ScheduledTask -TaskName $taskName -TaskPath '\'
+    Start-ScheduledTask -TaskName $taskName -TaskPath '\'
+    Wait-Condition { (Get-ScheduledTask -TaskName $taskName -TaskPath '\').State -eq 'Disabled' } 'launcher startup failure disables periodic starts'
+    Wait-Condition { (Get-ScheduledTaskInfo -TaskName $taskName -TaskPath '\').LastTaskResult -eq 2 } 'launcher startup failure result'
+    $null = Set-ScheduledTask -TaskName $taskName -TaskPath '\' -Action $savedAction
+    $taskDirectory = Join-Path $runner 'dsh-task'
+    $originalAcl = Get-Acl -LiteralPath $taskDirectory
+    try {
+        $blockedAcl = Get-Acl -LiteralPath $taskDirectory
+        $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User
+        $blockedAcl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($sid, 'WriteData, AppendData', 'ContainerInherit, ObjectInherit', 'None', 'Deny'))
+        Set-Acl -LiteralPath $taskDirectory -AclObject $blockedAcl
+        $null = Enable-ScheduledTask -TaskName $taskName -TaskPath '\'
+        Start-ScheduledTask -TaskName $taskName -TaskPath '\'
+        Wait-Condition { (Get-ScheduledTask -TaskName $taskName -TaskPath '\').State -eq 'Disabled' } 'unwritable task directory disables periodic starts'
+        Wait-Condition { (Get-ScheduledTaskInfo -TaskName $taskName -TaskPath '\').LastTaskResult -eq 3 } 'unwritable diagnostic result'
+    } finally { Set-Acl -LiteralPath $taskDirectory -AclObject $originalAcl }
+    if (@(Get-Content -LiteralPath $starts).Count -ne 3) { throw 'Launcher failure started another runner.' }
+    if ([int](Get-Content -LiteralPath (Join-Path $taskDirectory 'attempts.txt') -Raw) -ne 0) { throw 'Startup failure unexpectedly entered run.ps1.' }
     Invoke-Manager uninstall
     $installed = $false
     Invoke-Manager status -ExpectFailure
     if (-not (Test-Path -LiteralPath (Join-Path $runner '.runner'))) { throw 'Registration removed.' }
-    Write-Output "PASS: windowless initial launch and recovery, install, duplicate refusal, automatic retry, start, status, stop, child teardown, retry exhaustion, uninstall. Evidence: $root"
+    Write-Output "PASS: windowless initial launch and recovery, install, duplicate refusal, automatic retry, start, status, stop, child teardown, retry exhaustion, startup failure containment, unwritable diagnostics, uninstall. Evidence: $root"
 } catch { $primaryFailure = $_; throw } finally {
     $cleanupErrors = @()
     if ($installed) {
@@ -100,8 +124,8 @@ try {
         try { Stop-ScheduledTask -TaskName $taskName -TaskPath '\' } catch { $cleanupErrors += $_ }
         try { Unregister-ScheduledTask -TaskName $taskName -TaskPath '\' -Confirm:$false } catch { $cleanupErrors += $_ }
     }
-    foreach ($process in @(Get-CimInstance Win32_Process -Filter "Name = 'pwsh.exe'")) {
-        if ($process.CommandLine -and $process.CommandLine.Contains($root)) {
+    foreach ($process in @(Get-CimInstance Win32_Process -Filter "Name = 'pwsh.exe' OR Name = 'launcher.exe'")) {
+        if (($process.Name -eq 'pwsh.exe' -and $process.CommandLine -and $process.CommandLine.Contains($root)) -or ($process.Name -eq 'launcher.exe' -and $process.ExecutablePath -and $process.ExecutablePath.StartsWith($root + '\', [StringComparison]::OrdinalIgnoreCase))) {
             $owned = Get-Process -Id $process.ProcessId -ErrorAction SilentlyContinue
             if ($owned) {
                 try {

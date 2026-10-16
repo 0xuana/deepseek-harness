@@ -23,22 +23,58 @@ function Invoke-Launcher([string]$Executable, [int]$ExpectedExit) {
     $process.StartInfo.UseShellExecute = $false
     $process.StartInfo.CreateNoWindow = $true
     $process.StartInfo.ArgumentList.Add($Executable)
+    $started = $false
+    $primaryFailure = $null
     try {
-        $null = $process.Start()
+        $started = $process.Start()
         if (-not $process.WaitForExit(30000)) { throw 'Launcher did not exit within 30 seconds.' }
         if ($process.ExitCode -ne $ExpectedExit) { throw "Expected exit $ExpectedExit, got $($process.ExitCode)." }
-        return (Join-Path $taskRoot ('launcher-' + $process.Id))
-    } finally {
-        if ($process.Id -and -not $process.HasExited) {
-            $process.Kill($true)
-            if (-not $process.WaitForExit(30000)) { throw 'Launcher teardown did not complete.' }
+        $logs = @(Get-ChildItem -LiteralPath $taskRoot -Filter ('launcher-*-'+$process.Id+'-*.err.log'))
+        if ($logs.Count -ne 1) { throw 'Expected a unique launcher diagnostic.' }
+        return $logs[0].FullName.Substring(0, $logs[0].FullName.Length - '.err.log'.Length)
+    } catch { $primaryFailure = $_; throw } finally {
+        try {
+            if ($started -and -not $process.HasExited) {
+                $process.Kill($true)
+                if (-not $process.WaitForExit(30000)) { throw 'Launcher teardown did not complete.' }
+            }
+        } catch {
+            if (-not $primaryFailure) { throw }
+            Write-Warning "Launcher cleanup also failed: $_"
+        } finally {
+            $process.Dispose()
         }
-        $process.Dispose()
     }
 }
 $log = Invoke-Launcher (Join-Path $PSHOME 'pwsh.exe') 37
 if ((Get-Content -LiteralPath ($log + '.out.log') -Raw).Trim() -ne 'console=0') { throw 'Child allocated a console or stdout was lost.' }
 if ((Get-Content -LiteralPath ($log + '.err.log') -Raw).Trim() -ne 'launcher stderr probe') { throw 'Child stderr was lost.' }
-$log = Invoke-Launcher (Join-Path $root 'missing.exe') 2
+$log = Invoke-Launcher (Join-Path $root 'missing.exe') 4
 if (-not (Get-Content -LiteralPath ($log + '.err.log') -Raw).Contains('Win32Exception')) { throw 'Startup failure diagnostic was lost.' }
-Write-Output "PASS: GUI executable, no child console, exit propagation, stdout/stderr and startup failure. Evidence: $root"
+@'
+$info = [Diagnostics.ProcessStartInfo]::new((Join-Path $PSHOME 'pwsh.exe'))
+$info.UseShellExecute = $false
+$info.CreateNoWindow = $true
+$info.ArgumentList.Add('-NoProfile')
+$info.ArgumentList.Add('-NonInteractive')
+$info.ArgumentList.Add('-Command')
+$info.ArgumentList.Add('Start-Sleep -Seconds 120')
+$orphan = [Diagnostics.Process]::Start($info)
+@{ Pid = $orphan.Id; Started = $orphan.StartTime.ToUniversalTime().Ticks } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $PSScriptRoot 'orphan.json')
+exit 37
+'@ | Set-Content -LiteralPath (Join-Path $taskRoot 'run.ps1')
+$orphan = $null
+try {
+    # This fixture has no registered task; failure to disable it returns 4 after the bounded drain.
+    $log = Invoke-Launcher (Join-Path $PSHOME 'pwsh.exe') 4
+    if (-not (Get-Content -LiteralPath ($log + '.drain.log') -Raw).Contains('child exit 37')) { throw 'Inherited writer did not exercise bounded draining.' }
+} finally {
+    $record = Get-Content -LiteralPath (Join-Path $taskRoot 'orphan.json') -Raw | ConvertFrom-Json
+    $orphan = Get-Process -Id $record.Pid -ErrorAction SilentlyContinue
+    if ($orphan -and $orphan.StartTime.ToUniversalTime().Ticks -eq $record.Started) {
+        $orphan.Kill($true)
+        if (-not $orphan.WaitForExit(30000)) { throw 'Orphan fixture did not exit.' }
+        $orphan.Dispose()
+    }
+}
+Write-Output "PASS: GUI executable, no child console, exit propagation, stdout/stderr, startup failure and bounded inherited-pipe drain. Evidence: $root"
