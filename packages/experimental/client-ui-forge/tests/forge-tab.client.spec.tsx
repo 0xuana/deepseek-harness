@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 /** Forge tab body: connection states, the checkout row, the sign-in banner, the change request list, and tab visibility. */
-import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
+import type { MergeRequest } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { PaneId, SidebarRightTabInfo, TabId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
@@ -44,6 +45,8 @@ function tab(state: ForgePanelState | null, options: { disconnected?: boolean; v
   const reconnect = vi.fn<() => void>()
   const refresh = vi.fn<() => void>()
   const remove = vi.fn<(entry: ForgePanelChangeRequest) => void>()
+  const markReady = vi.fn<(entry: ForgePanelChangeRequest) => Promise<void>>(async () => {})
+  const merge = vi.fn<(entry: ForgePanelChangeRequest, request: MergeRequest) => Promise<void>>(async () => {})
   const restore = vi.fn<() => void>()
   const openLink = vi.fn<(url: string) => void>()
   const copyText = vi.fn<(text: string) => void>()
@@ -52,11 +55,11 @@ function tab(state: ForgePanelState | null, options: { disconnected?: boolean; v
     useTabInfo: () => tabInfo(useVisibility(current => current)),
     usePanel: bindSnapshotSelector(panel),
     useHost: bindSnapshotSelector(host),
-    reconnect, refresh, remove, restore, openLink, copyText, reportVisible,
+    reconnect, refresh, remove, markReady, merge, restore, openLink, copyText, reportVisible,
     t,
   }
   const view = render(<ForgeTab {...props} />)
-  return { view, panel, visibility, reconnect, refresh, remove, restore, openLink, copyText, reportVisible }
+  return { view, panel, visibility, reconnect, refresh, remove, markReady, merge, restore, openLink, copyText, reportVisible }
 }
 
 /** The checkout row, or null when the tab shows none. */
@@ -254,6 +257,25 @@ describe('ForgeTab change requests', () => {
     expect(b.copyText).toHaveBeenCalledWith('https://github.com/octo/demo/pull/7')
     expect(b.remove).toHaveBeenCalledWith(value)
     expect(b.refresh).toHaveBeenCalledOnce()
+  })
+
+  it('wires ready for review and merge to the tab actions', async () => {
+    const draft = entry(7, snapshot(7, { draft: true }))
+    const mergeable = entry(8, snapshot(8, { mergeReady: true, headSha: 'b'.repeat(40) }))
+    const b = tab(ready({ changeRequests: [draft, mergeable] }))
+    // Two open change requests both start collapsed.
+    fireEvent.click(b.view.getByRole('button', { name: 'Expand #7' }))
+    fireEvent.click(b.view.getByRole('button', { name: 'Expand #8' }))
+
+    await act(async () => {
+      fireEvent.click(b.view.getByRole('button', { name: en['change.markReady'] }))
+    })
+    fireEvent.click(b.view.getByRole('button', { name: en['change.merge'] }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('menuitem', { name: en['change.mergeConfirm'] }))
+    })
+    expect(b.markReady).toHaveBeenCalledWith(draft)
+    expect(b.merge).toHaveBeenCalledWith(mergeable, { method: 'squash', headSha: 'b'.repeat(40) })
   })
 
   it('dates a finished change request from the current time', () => {

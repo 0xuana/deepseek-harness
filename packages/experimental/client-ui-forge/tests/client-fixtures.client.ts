@@ -14,7 +14,10 @@ export function ref(number: number): ChangeRequestRef {
   return { repository: { forge: 'github', host: 'github.com', owner: 'octo', name: 'demo' }, number }
 }
 
-/** Open, mergeable change request from `feat` into `main` that adds 12 lines, deletes 3, and lists no checks. */
+/**
+ * Open change request from `feat` into `main` without conflicts that adds 12
+ * lines, deletes 3, lists no checks, and that the host would not merge yet.
+ */
 export function snapshot(number: number, overrides: Partial<ChangeRequestSnapshot> = {}): ChangeRequestSnapshot {
   return {
     ref: ref(number),
@@ -29,6 +32,8 @@ export function snapshot(number: number, overrides: Partial<ChangeRequestSnapsho
     additions: 12,
     deletions: 3,
     mergeability: 'mergeable',
+    mergeReady: false,
+    mergeMethods: ['squash', 'merge', 'rebase'],
     reviewDecision: 'none',
     checks: [],
     checksRollup: 'success',

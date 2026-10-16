@@ -202,6 +202,24 @@ describe('forge watch', () => {
     expect(provider.fetches).toEqual([[ref(1)], [ref(1)]])
   })
 
+  it('polls a watched change request at once after an action settles, whatever its outcome', async () => {
+    const provider = new FakeProvider()
+    provider.results.set(key, snapshot(ref(1), { draft: true }))
+    const context = await setup(provider)
+    collect(context)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.fetches).toHaveLength(1)
+
+    await context.forge.markReady(ref(1), new AbortController().signal)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.fetches).toHaveLength(2)
+
+    provider.actionResult = { code: 'failed', message: 'Pull Request is not mergeable' }
+    await context.forge.merge(ref(1), { method: 'merge', headSha: 'a'.repeat(40) }, new AbortController().signal)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.fetches).toHaveLength(3)
+  })
+
   it('lets a fetch already in flight serve a refresh', async () => {
     const provider = new FakeProvider()
     const release = held(provider, target => snapshot(target))

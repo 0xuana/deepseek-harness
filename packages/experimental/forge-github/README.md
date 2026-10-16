@@ -40,6 +40,8 @@ The provider serves a remote URL in `https`, `http`, `ssh`, or `git` form, or in
 
 Check runs map to `pending` until completed, then to `success`, `failure` (failure, timed out, startup failure, or action required), `cancelled`, `skipped`, or `neutral`. Check runs keep their start and completion times. Commit status contexts map `SUCCESS` to `success`, `FAILURE` and `ERROR` to `failure`, and every other state to `pending`, and carry no times. A GraphQL `NOT_FOUND` error becomes a `not-found` failure. When `gh` prints no JSON, a diagnostic that mentions authentication or `gh auth login` becomes `unauthenticated` and any other diagnostic becomes `unavailable`.
 
+A pull request is `mergeReady` when it is open, not a draft, GitHub reports its merge state as `CLEAN`, `HAS_HOOKS`, or `UNSTABLE`, and the signed-in user has write, maintain, or admin permission. `mergeMethods` lists the squash, merge-commit, and rebase methods the repository allows, the user's default merge method first. Marking ready runs `gh pr ready <number> --repo <host>/<owner>/<name>`. Merging calls `PUT repos/<owner>/<name>/pulls/<number>/merge` through `gh api` with the method and the expected head SHA, so GitHub refuses once new commits arrived, which is reported as `stale`. Unlike `gh pr merge`, it never enables auto-merge, never joins a merge queue, and never deletes the head branch. A refused action reports GitHub's message, and a diagnostic that mentions authentication becomes `unauthenticated`.
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -88,6 +90,7 @@ None. Provider output reaches only host-side watchers.
 - **First 100 checks and review threads** — `checksTruncated` marks a head commit with more checks; unresolved threads after the first 100 are not counted.
 - **No fork discovery** — head lookups exclude pull requests whose head is in another repository.
 - **Rate limits** — every poll costs one GraphQL query per host against the signed-in account's rate limit.
+- **No merge queue** — a base branch that requires a merge queue refuses a direct merge, and the provider never queues one.
 
 <a id="dev-note"></a>
 ### Dev Note

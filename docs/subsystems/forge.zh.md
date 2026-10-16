@@ -55,6 +55,10 @@ interface ForgeProvider {
   findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]>
   /** Report whether the provider can reach `host` with current credentials. */
   readiness(host: string, signal: AbortSignal): Promise<ForgeReadiness>
+  /** Mark a draft change request ready for review, resolving to undefined once the host accepted it. */
+  markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
+  /** Merge a change request while its head is still `request.headSha`, resolving to undefined once merged. */
+  merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
 }
 ```
 
@@ -99,6 +103,13 @@ interface ChangeRequestSnapshot {
   readonly deletions: number
   /** Merge conflict status; `unknown` while the host computes it. */
   readonly mergeability: Mergeability
+  /**
+   * Whether the host would merge the change request now for the signed-in
+   * user: open, not a draft, and meeting the base branch's merge rules.
+   */
+  readonly mergeReady: boolean
+  /** Merge methods the repository accepts, the signed-in user's usual one first. */
+  readonly mergeMethods: readonly MergeMethod[]
   /** Aggregate review outcome. */
   readonly reviewDecision: ReviewDecision
   /** Checks on the head commit in host order. */
@@ -138,6 +149,33 @@ type ChangeRequestUpdate = {
  * @param update - the settled result.
  */
 type ChangeRequestListener = (update: ChangeRequestUpdate) => void
+```
+
+## 变更请求操作
+
+`ctx.forge.markReady` 把草稿标记为可评审，`ctx.forge.merge` 只在 head 仍是用户确认的提交时合并变更请求。主机拒绝时，两者都 resolve 为 `ForgeActionFailure` 而不是抛错，并在结束后立即轮询被监听的变更请求。快照的 `mergeReady` 与 `mergeMethods` 告诉消费方何时提供合并、可用哪些合并方式；GitHub 如何给出这两项由 [GitHub 提供方 README](../../packages/experimental/forge-github/README.zh.md#use-this-package) 说明。
+
+```ts type-equiv
+/** A merge the user confirmed for the head commit they saw. */
+interface MergeRequest {
+  /** How the commits enter the base branch. */
+  readonly method: MergeMethod
+  /** Commit object name the head must still have; the merge is refused once the head moves. */
+  readonly headSha: string
+}
+```
+
+```ts type-equiv
+/** Why a provider could not change a change request. */
+interface ForgeActionFailure {
+  /**
+   * `unauthenticated`: credentials are missing or rejected; `stale`: the head
+   * moved past the confirmed commit; `failed`: the host refused or could not be reached.
+   */
+  readonly code: 'unauthenticated' | 'stale' | 'failed'
+  /** Human-readable cause, usually the host's own message. */
+  readonly message: string
+}
 ```
 
 ## Session 绑定
@@ -188,7 +226,7 @@ type SessionChangeRequestsListener = (changeRequests: readonly SessionChangeRequ
 
 ## 面板
 
-`ctx.forgePanel` 是 [forge 面板](../../packages/experimental/client-ui-forge/README.zh.md#use-this-package)的宿主 Remote。跟随一个 Session 时，它以流的形式推送 `ForgePanelState`：在 Session 执行环境中对其当前目录进行的只读 Git 检查、从上游远端或 `origin` 识别出的代码托管平台、该平台的登录状态、Session 的绑定及其轮询状态与最近的快照，以及它的 worktree 请求。它的操作可以列出基准分支、绑定和隐藏 URL、刷新、请求或撤回 worktree、停止正在进行的创建，以及恢复已删除的 worktree 或离开它回到源检出。请求是一条 `plugin:client-ui-forge/worktree` 记录。面板监听 [Agent 消息接纳](../../packages/core/agent/README.zh.md)：Session 有未完成的请求时，它在通过 `ctx.worktrees` 创建 worktree 期间暂留第一条消息；Session 所在的 worktree 已被删除时拒绝消息；最近一次失败的创建保留在面板状态中。每次拒绝都带有一个 `ForgeAdmissionRefusal` 原因，面板跟随该 Session 时由它自行呈现。对于未经接纳就进入的消息，由第一个步骤提议创建 worktree。第一轮开始之后的请求会被忽略。对 Session 检出的改动以其 Agent 的维护任务运行，因此其他客户端发来的消息会等它们完成。
+`ctx.forgePanel` 是 [forge 面板](../../packages/experimental/client-ui-forge/README.zh.md#use-this-package)的宿主 Remote。跟随一个 Session 时，它以流的形式推送 `ForgePanelState`：在 Session 执行环境中对其当前目录进行的只读 Git 检查、从上游远端或 `origin` 识别出的代码托管平台、该平台的登录状态、Session 的绑定及其轮询状态与最近的快照，以及它的 worktree 请求。它的操作可以列出基准分支、绑定和隐藏 URL、刷新、把已绑定的草稿标记为可评审或合并已绑定的变更请求、请求或撤回 worktree、停止正在进行的创建，以及恢复已删除的 worktree 或离开它回到源检出。请求是一条 `plugin:client-ui-forge/worktree` 记录。面板监听 [Agent 消息接纳](../../packages/core/agent/README.zh.md)：Session 有未完成的请求时，它在通过 `ctx.worktrees` 创建 worktree 期间暂留第一条消息；Session 所在的 worktree 已被删除时拒绝消息；最近一次失败的创建保留在面板状态中。每次拒绝都带有一个 `ForgeAdmissionRefusal` 原因，面板跟随该 Session 时由它自行呈现。对于未经接纳就进入的消息，由第一个步骤提议创建 worktree。第一轮开始之后的请求会被忽略。对 Session 检出的改动以其 Agent 的维护任务运行，因此其他客户端发来的消息会等它们完成。
 
 ```ts type-equiv
 /** Git facts for the checkout that contains the Session's current directory. */
@@ -439,6 +477,26 @@ async findByHead(repository: ForgeRepository, branch: string, signal: AbortSigna
 async readiness(repository: ForgeRepository, signal: AbortSignal): Promise<ForgeReadiness>
 
 /**
+ * Mark a draft change request ready for review, then poll it at once when it is watched.
+ * @param ref - change request served by a registered provider.
+ * @param signal - cancellation of the request.
+ * @returns undefined once the host accepted the change, or why it did not.
+ * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+ */
+async markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
+
+/**
+ * Merge a change request while its head is still `request.headSha`, then
+ * poll it at once when it is watched.
+ * @param ref - change request served by a registered provider.
+ * @param request - merge method and the head commit the user confirmed.
+ * @param signal - cancellation of the request.
+ * @returns undefined once the host merged it, or why it did not.
+ * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+ */
+async merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
+
+/**
  * Watch one change request as an effect on the calling fiber. The first
  * watcher starts polling at once; listeners receive every later result,
  * and `latest` returns the current one. Polling stops when the last watcher
@@ -517,6 +575,31 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * @param signal - request cancellation.
  */
 @Remote async refresh(session: Session, signal: AbortSignal): Promise<void>
+
+/**
+ * Mark a draft change request of a Session ready for review; the change
+ * request is polled again once the host answers.
+ * @param session - Session the change request is bound to.
+ * @param url - binding URL of the change request.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+ * `forgePanel/action-failed` with the host's reason when the host refuses or cannot be reached.
+ */
+@Remote async markReady(session: Session, url: string, signal: AbortSignal): Promise<void>
+
+/**
+ * Merge a change request of a Session while its head is still `headSha`;
+ * the change request is polled again once the host answers.
+ * @param session - Session the change request is bound to.
+ * @param url - binding URL of the change request.
+ * @param method - how the commits enter the base branch.
+ * @param headSha - head commit the user confirmed.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+ * `forgePanel/stale-head` when the head moved past `headSha`; `forgePanel/action-failed` with the host's
+ * reason when the host refuses otherwise or cannot be reached.
+ */
+@Remote async merge(session: Session, url: string, method: MergeMethod, headSha: string, signal: AbortSignal): Promise<void>
 
 /**
  * Ask for a new worktree before the Session's first turn, replacing an open

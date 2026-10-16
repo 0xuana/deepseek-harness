@@ -2614,6 +2614,16 @@
     },
     {
       "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeActionFailure",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "MergeRequest",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
       "symbol": "ForgeCheckout",
       "source": "packages/experimental/client-ui-forge/src/types.ts"
     },

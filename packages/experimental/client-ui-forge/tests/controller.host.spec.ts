@@ -1128,6 +1128,48 @@ describe('forgePanel actions', () => {
     expect(opened.provider.probes).toEqual([])
   })
 
+  it('marks a bound change request ready and merges it through its provider, reporting what the host refused', async () => {
+    const { repo } = await project()
+    const opened = await open(repo)
+    shellTurn(opened.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
+    const follower = reader(opened)
+    await follower.until(state => ready(state) && polled(state, pullUrl(7)))
+    const head = 'a'.repeat(40)
+
+    await opened.ctx.forgePanel.markReady(opened.session, pullUrl(7), signal)
+    await opened.ctx.forgePanel.merge(opened.session, pullUrl(7), 'squash', head, signal)
+    opened.provider.actionResult = { code: 'stale', message: 'Head branch was modified' }
+    await expect(opened.ctx.forgePanel.merge(opened.session, pullUrl(7), 'rebase', head, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/stale-head', message: 'Head branch was modified' })
+    opened.provider.actionResult = { code: 'unauthenticated', message: 'Bad credentials' }
+    await expect(opened.ctx.forgePanel.markReady(opened.session, pullUrl(7), signal))
+      .rejects.toMatchObject({ code: 'forgePanel/action-failed', message: 'Bad credentials' })
+    opened.provider.actionResult = { code: 'failed', message: 'Pull Request is not mergeable' }
+    await expect(opened.ctx.forgePanel.merge(opened.session, pullUrl(7), 'merge', head, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/action-failed', message: 'Pull Request is not mergeable' })
+
+    expect(opened.provider.actions).toEqual(['ready 7', `merge 7 squash ${head}`, `merge 7 rebase ${head}`, 'ready 7', `merge 7 merge ${head}`])
+  })
+
+  it('acts only on change requests visibly bound to the Session that a provider serves', async () => {
+    const { repo } = await project()
+    const opened = await open(repo)
+    shellTurn(opened.session, 1, [
+      { callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` },
+      { callId: 'other', command: 'gh pr create --fill', output: 'https://unserved.test/a/b/pull/3\n' },
+    ])
+    const follower = reader(opened)
+    await follower.until(state => ready(state) && polled(state, pullUrl(7)))
+    await opened.ctx.forgePanel.dismiss(opened.session, pullUrl(7), signal)
+    const head = 'a'.repeat(40)
+
+    for (const url of [pullUrl(7), pullUrl(8), 'https://unserved.test/a/b/pull/3']) {
+      await expect(opened.ctx.forgePanel.markReady(opened.session, url, signal)).rejects.toMatchObject({ code: 'forgePanel/not-bound' })
+      await expect(opened.ctx.forgePanel.merge(opened.session, url, 'merge', head, signal)).rejects.toMatchObject({ code: 'forgePanel/not-bound' })
+    }
+    expect(opened.provider.actions).toEqual([])
+  })
+
   it('lists the base branches of the Session\'s current checkout, at most maxBranches', async () => {
     const { repo } = await project()
     await commitAt(repo, 'main.txt', '2026-03-01T00:00:00Z')
@@ -1156,6 +1198,8 @@ describe('forgePanel actions', () => {
     await expect(opened.ctx.forgePanel.track(opened.session, pullUrl(1), controller.signal)).rejects.toThrow('closed')
     await expect(opened.ctx.forgePanel.dismiss(opened.session, pullUrl(1), controller.signal)).rejects.toThrow('closed')
     await expect(opened.ctx.forgePanel.refresh(opened.session, controller.signal)).rejects.toThrow('closed')
+    await expect(opened.ctx.forgePanel.markReady(opened.session, pullUrl(1), controller.signal)).rejects.toThrow('closed')
+    await expect(opened.ctx.forgePanel.merge(opened.session, pullUrl(1), 'merge', 'a'.repeat(40), controller.signal)).rejects.toThrow('closed')
     await expect(opened.ctx.forgePanel.branches(opened.session, controller.signal)).rejects.toThrow('closed')
     await expect(opened.ctx.forgePanel.requestWorktree(opened.session, null, controller.signal)).rejects.toThrow('closed')
     await expect(opened.ctx.forgePanel.cancelWorktree(opened.session, controller.signal)).rejects.toThrow('closed')

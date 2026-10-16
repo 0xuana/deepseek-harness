@@ -1,7 +1,7 @@
 /**
  * One change request as a card: its title links to the host, a one-line
- * summary shows while collapsed, and the checks, review, merge state, and
- * diff size show while expanded.
+ * summary shows while collapsed, and the checks, review, merge state, diff
+ * size, and the ready-for-review or merge action show while expanded.
  */
 
 import { useState, type ReactNode } from 'react'
@@ -11,7 +11,9 @@ import {
   Menu, MenuItemButton, StateDot, Tooltip, type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ChangeRequestCheck, ChangeRequestSnapshot, CheckState, ChecksRollup, ForgeFailure } from '@deepseek-ai/dsh-experimental-forge/types'
+import type {
+  ChangeRequestCheck, ChangeRequestSnapshot, CheckState, ChecksRollup, ForgeFailure, MergeMethod, MergeRequest,
+} from '@deepseek-ai/dsh-experimental-forge/types'
 import type { ForgePanelChangeRequest } from '../types.ts'
 import { formatAgo, formatDuration } from './format.ts'
 import { ChangeRequestGlyph, CheckGlyph } from './glyphs.tsx'
@@ -21,7 +23,7 @@ import css from './ForgeTab.module.css'
 
 type Translate = PropsLocale<typeof NS>['t']
 
-/** What a card can do; a surface without a Session binding omits `remove`. */
+/** What a card can do; a surface without a Session binding omits `remove`, `markReady`, and `merge`. */
 export interface ChangeRequestActions {
   /** Open a URL outside the app. */
   readonly openLink: (url: string) => void
@@ -31,6 +33,10 @@ export interface ChangeRequestActions {
   readonly retry: () => void
   /** Remove the change request from its Session. */
   readonly remove?: ((entry: ForgePanelChangeRequest) => void) | undefined
+  /** Mark a draft ready for review; settles once the outcome is reported. */
+  readonly markReady?: ((entry: ForgePanelChangeRequest) => Promise<void>) | undefined
+  /** Merge the change request as `request` describes; settles once the outcome is reported. */
+  readonly merge?: ((entry: ForgePanelChangeRequest, request: MergeRequest) => Promise<void>) | undefined
 }
 
 /** Props of one change request card. */
@@ -215,6 +221,100 @@ function ChecksRow({ snapshot, openLink, t }: {
   )
 }
 
+/** The merge button and its menu: a title row, one row per method with the chosen one checked, and the confirmation. */
+function MergeMenu({ snapshot, name, usual, busy, onMerge, t }: {
+  readonly snapshot: ChangeRequestSnapshot
+  readonly name: string
+  readonly usual: MergeMethod
+  readonly busy: boolean
+  readonly onMerge: (method: MergeMethod) => void
+  readonly t: Translate
+}): ReactNode {
+  const [open, setOpen] = useState(false)
+  const [chosen, setChosen] = useState<string>(usual)
+  // The methods can change between polls; a choice the repository no longer allows falls back to the usual one.
+  const method = snapshot.mergeMethods.find(entry => entry === chosen) ?? usual
+  const close = (): void => { setOpen(false) }
+  const base = snapshot.baseBranch
+  const items: MenuEntry[] = [
+    { type: 'label', id: 'title', text: t('change.mergeTitle', { name, base }) },
+    ...snapshot.mergeMethods.map(entry => ({
+      id: entry,
+      label: (
+        <span className={css.method}>
+          <span>{t(`change.mergeMethod.${entry}`)}</span>
+          <span className={css.methodNote}>{t(`change.mergeNote.${entry}`, { base })}</span>
+        </span>
+      ),
+    })),
+  ]
+  return (
+    <Menu
+      open={open}
+      onClose={close}
+      portal
+      align="end"
+      anchor={(
+        <Button size="sm" variant="primary" aria-haspopup="menu" aria-expanded={open} disabled={busy} onClick={() => { setOpen(!open) }}>
+          {t('change.merge')}
+          <IconChevronDownOutlineRegular size={12} className={clsx(css.chevron, open && css.chevronOpen)} />
+        </Button>
+      )}
+      items={items}
+      selectedId={method}
+      onSelect={setChosen}
+    >
+      <MenuItemButton
+        separatorBefore
+        onSelect={() => {
+          close()
+          onMerge(method)
+        }}
+      >
+        {t('change.mergeConfirm')}
+      </MenuItemButton>
+    </Menu>
+  )
+}
+
+/** The footer action of an open change request: mark a draft ready, or merge one the host would merge now. */
+function Primary({ entry, snapshot, name, actions, t }: {
+  readonly entry: ForgePanelChangeRequest
+  readonly snapshot: ChangeRequestSnapshot
+  readonly name: string
+  readonly actions: ChangeRequestActions
+  readonly t: Translate
+}): ReactNode {
+  // One request at a time: the action stays disabled until the previous one settles.
+  const [busy, setBusy] = useState(false)
+  const run = (action: () => Promise<void>): void => {
+    setBusy(true)
+    void action().finally(() => { setBusy(false) })
+  }
+  const { markReady, merge } = actions
+  if (snapshot.state !== 'open') return null
+  if (snapshot.draft) {
+    if (markReady === undefined) return null
+    return (
+      <Button size="sm" variant="primary" disabled={busy} onClick={() => { run(() => markReady(entry)) }}>
+        {t('change.markReady')}
+      </Button>
+    )
+  }
+  const [usual] = snapshot.mergeMethods
+  if (!snapshot.mergeReady || usual === undefined || merge === undefined) return null
+  return (
+    <MergeMenu
+      snapshot={snapshot}
+      name={name}
+      usual={usual}
+      busy={busy}
+      onMerge={(method) => { run(() => merge(entry, { method, headSha: snapshot.headSha })) }}
+      t={t}
+    />
+  )
+}
+
 function Details({ snapshot, now, actions, t }: {
   readonly snapshot: ChangeRequestSnapshot
   readonly now: number
@@ -336,6 +436,7 @@ export function ChangeRequestCard({ entry, expanded, onToggle, now, actions, t }
               <IconCopyOutlineRegular size={14} />
             </button>
           </Tooltip>
+          {snapshot !== null && <Primary entry={entry} snapshot={snapshot} name={name} actions={actions} t={t} />}
         </div>
       )}
     </li>

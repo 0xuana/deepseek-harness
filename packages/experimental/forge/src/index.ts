@@ -7,7 +7,7 @@ import { changeRequestKey } from './keys.ts'
 import { nextPollDelay } from './schedule.ts'
 import type {
   ChangeRequestKey, ChangeRequestListener, ChangeRequestRef, ChangeRequestSnapshot, ChangeRequestUpdate, Config,
-  ForgeFailure, ForgeProvider, ForgeReadiness, ForgeRepository,
+  ForgeActionFailure, ForgeFailure, ForgeProvider, ForgeReadiness, ForgeRepository, MergeRequest,
 } from './types.ts'
 
 export { changeRequestKey } from './keys.ts'
@@ -159,6 +159,34 @@ export class ForgeService extends Service {
    */
   async readiness(repository: ForgeRepository, signal: AbortSignal): Promise<ForgeReadiness> {
     return await this.provider(repository.forge).readiness(repository.host, signal)
+  }
+
+  /**
+   * Mark a draft change request ready for review, then poll it at once when it is watched.
+   * @param ref - change request served by a registered provider.
+   * @param signal - cancellation of the request.
+   * @returns undefined once the host accepted the change, or why it did not.
+   * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+   */
+  async markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeActionFailure | undefined> {
+    const failure = await this.provider(ref.repository.forge).markReady(ref, signal)
+    this.refresh(ref)
+    return failure
+  }
+
+  /**
+   * Merge a change request while its head is still `request.headSha`, then
+   * poll it at once when it is watched.
+   * @param ref - change request served by a registered provider.
+   * @param request - merge method and the head commit the user confirmed.
+   * @param signal - cancellation of the request.
+   * @returns undefined once the host merged it, or why it did not.
+   * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+   */
+  async merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined> {
+    const failure = await this.provider(ref.repository.forge).merge(ref, request, signal)
+    this.refresh(ref)
+    return failure
   }
 
   /**

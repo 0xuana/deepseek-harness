@@ -2,14 +2,21 @@
 
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
-  ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeFailure, ForgeProvider, ForgeReadiness, ForgeRepository,
+  ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeFailure, ForgeProvider, ForgeReadiness,
+  ForgeRepository, MergeRequest,
 } from '@deepseek-ai/dsh-experimental-forge'
 import { GhUnavailableError } from './gh.ts'
 import type { GhRunner } from './gh.ts'
 import { HEAD_QUERY, mapHeadResponse, mapSnapshotResponse, snapshotQuery } from './graphql.ts'
-import { parsePullRequestUrl, parseRemoteUrl } from './urls.ts'
+import { checkedRepository, parsePullRequestUrl, parseRemoteUrl } from './urls.ts'
 
 const AUTHENTICATION = /gh auth login|authentication|bad credentials|HTTP 401/i
+
+/** Status code `gh api` appends to the message of a failed request. */
+const HTTP_STATUS = /\(HTTP (\d{3})\)/
+
+/** A full SHA-1 or SHA-256 object name. */
+const COMMIT = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i
 
 /** Reads GitHub and GitHub Enterprise pull requests through a `gh` runner. */
 export class GitHubProvider implements ForgeProvider {
@@ -68,6 +75,30 @@ export class GitHubProvider implements ForgeProvider {
     return mapHeadResponse(body, repository, branch)
   }
 
+  /**
+   * Mark a draft pull request ready for review with `gh pr ready`; one that
+   * is already ready stays ready.
+   */
+  async markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeActionFailure | undefined> {
+    const { host, owner, name } = checkedRepository(ref)
+    return await this.act(['pr', 'ready', String(ref.number), '--repo', `${host}/${owner}/${name}`], signal)
+  }
+
+  /**
+   * Merge a pull request through the REST merge endpoint with the expected
+   * head commit, so GitHub refuses with 409 once new commits arrived. Unlike
+   * `gh pr merge`, it never enables auto-merge, never joins a merge queue, and
+   * never deletes the head branch.
+   */
+  async merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined> {
+    const { host, owner, name } = checkedRepository(ref)
+    if (!COMMIT.test(request.headSha)) throw new Error(`forge-github: invalid head commit ${JSON.stringify(request.headSha)}`)
+    return await this.act([
+      'api', '--hostname', host, '--method', 'PUT', `repos/${owner}/${name}/pulls/${ref.number}/merge`,
+      '-f', `merge_method=${request.method}`, '-f', `sha=${request.headSha}`,
+    ], signal)
+  }
+
   async readiness(host: string, signal: AbortSignal): Promise<ForgeReadiness> {
     try {
       const output = await this.gh(['auth', 'status', '--hostname', host], signal)
@@ -77,6 +108,23 @@ export class GitHubProvider implements ForgeProvider {
       if (error instanceof GhUnavailableError) return { state: 'unavailable', message: error.message }
       throw error
     }
+  }
+
+  /** Run one changing `gh` command; a refusal or a `gh` that cannot start becomes a failure. */
+  private async act(args: readonly string[], signal: AbortSignal): Promise<ForgeActionFailure | undefined> {
+    let output
+    try {
+      output = await this.gh(args, signal)
+    } catch (error) {
+      if (error instanceof GhUnavailableError) return { code: 'failed', message: error.message }
+      throw error
+    }
+    if (output.exitCode === 0) return undefined
+    const message = hostMessage(output.stdout) ?? firstLine(output.stderr) ?? `gh exited with ${output.exitCode}`
+    const status = HTTP_STATUS.exec(output.stderr)?.[1]
+    if (status === '409') return { code: 'stale', message }
+    if (AUTHENTICATION.test(output.stderr)) return { code: 'unauthenticated', message }
+    return { code: 'failed', message }
   }
 
   private async fetchHost(
@@ -94,6 +142,13 @@ export class GitHubProvider implements ForgeProvider {
     }
     return new Map([...query.targets.values()].map(ref => [changeRequestKey(ref), failure] as const))
   }
+}
+
+/** The `message` of the JSON error body `gh api` prints for a failed request. */
+function hostMessage(stdout: string): string | undefined {
+  const body = parseJson(stdout)
+  if (typeof body !== 'object' || body === null || !('message' in body) || typeof body.message !== 'string') return undefined
+  return body.message.trim().length > 0 ? body.message : undefined
 }
 
 function parseJson(text: string): unknown {

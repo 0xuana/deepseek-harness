@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Read pull requests and merge requests without coupling consumers to one code host. A provider maps remote and change request URLs to provider-neutral references, finds change requests by head branch, and reads their status in batches. Watchers of one change request share a single polling loop whose cadence follows check, mergeability, and lifecycle state.
+Read and act on pull requests and merge requests without coupling consumers to one code host. A provider maps remote and change request URLs to provider-neutral references, finds change requests by head branch, reads their status in batches, and marks drafts ready or merges on request. Watchers of one change request share a single polling loop whose cadence follows check, mergeability, and lifecycle state.
 
 ## Table of Contents
 
@@ -33,6 +33,8 @@ Mount the registry with at least one provider package, such as the GitHub provid
 ```
 
 `ctx.forge.register(provider)` is an effect on the calling fiber and returns its disposer. One provider serves one forge family; registering a second provider for the same family throws. `repositoryFromRemote(url)` and `changeRequestFromUrl(url)` ask providers in registration order and return the first match. `changeRequestUrl(ref)`, `findByHead(repository, branch, signal)`, and `readiness(repository, signal)` delegate to the provider of the reference's forge and throw when none is registered; `readiness` reports whether the provider can reach the host with current credentials.
+
+`markReady(ref, signal)` marks a draft ready for review, and `merge(ref, { method, headSha }, signal)` merges a change request only while its head is still `headSha`. Both delegate to the provider of the reference's forge, throw when none is registered, and resolve to undefined once the host accepted the change or to a `ForgeActionFailure`: `unauthenticated`, `stale` when the head moved past `headSha`, or `failed` with the host's reason. After either settles, a watched change request is polled at once. Snapshots carry `mergeReady`, whether the host would merge the change request now for the signed-in user, and `mergeMethods`, the methods the repository accepts with that user's usual one first.
 
 `ctx.forge.watch(ref, listener)` is also an effect. The first watcher of a change request polls it at once; `latest(ref)` returns the most recent result. Each forge has at most one fetch in flight, and that fetch includes every due change request of the forge. An open change request is polled every `activeIntervalMs` while checks are pending or mergeability is unknown, and every `idleIntervalMs` otherwise. Closed and merged change requests are not polled again. `refresh(ref)` polls a watched change request at once, including after a terminal state; a fetch already in flight for its forge serves the request. A failed read repeats after `activeIntervalMs` doubled for each consecutive failure, up to `maxBackoffMs`. A fetch that exceeds `fetchTimeoutMs` settles as an `unavailable` failure whose message names `FORGE_FETCH_TIMEOUT`. Unregistering a provider settles its watched change requests as `unavailable`. Polling stops when the last watcher leaves. The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-experimental-forge) lists the defaults.
 

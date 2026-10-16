@@ -55,6 +55,10 @@ interface ForgeProvider {
   findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]>
   /** Report whether the provider can reach `host` with current credentials. */
   readiness(host: string, signal: AbortSignal): Promise<ForgeReadiness>
+  /** Mark a draft change request ready for review, resolving to undefined once the host accepted it. */
+  markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
+  /** Merge a change request while its head is still `request.headSha`, resolving to undefined once merged. */
+  merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
 }
 ```
 
@@ -99,6 +103,13 @@ interface ChangeRequestSnapshot {
   readonly deletions: number
   /** Merge conflict status; `unknown` while the host computes it. */
   readonly mergeability: Mergeability
+  /**
+   * Whether the host would merge the change request now for the signed-in
+   * user: open, not a draft, and meeting the base branch's merge rules.
+   */
+  readonly mergeReady: boolean
+  /** Merge methods the repository accepts, the signed-in user's usual one first. */
+  readonly mergeMethods: readonly MergeMethod[]
   /** Aggregate review outcome. */
   readonly reviewDecision: ReviewDecision
   /** Checks on the head commit in host order. */
@@ -138,6 +149,33 @@ type ChangeRequestUpdate = {
  * @param update - the settled result.
  */
 type ChangeRequestListener = (update: ChangeRequestUpdate) => void
+```
+
+## Change request actions
+
+`ctx.forge.markReady` marks a draft ready for review, and `ctx.forge.merge` merges a change request only while its head is still the commit the user confirmed. Both resolve to a `ForgeActionFailure` instead of throwing when the host refuses, and poll a watched change request at once afterwards. A snapshot's `mergeReady` and `mergeMethods` tell a consumer when to offer a merge and with which methods; the [GitHub provider README](../../packages/experimental/forge-github/README.md#use-this-package) owns how GitHub answers both.
+
+```ts type-equiv
+/** A merge the user confirmed for the head commit they saw. */
+interface MergeRequest {
+  /** How the commits enter the base branch. */
+  readonly method: MergeMethod
+  /** Commit object name the head must still have; the merge is refused once the head moves. */
+  readonly headSha: string
+}
+```
+
+```ts type-equiv
+/** Why a provider could not change a change request. */
+interface ForgeActionFailure {
+  /**
+   * `unauthenticated`: credentials are missing or rejected; `stale`: the head
+   * moved past the confirmed commit; `failed`: the host refused or could not be reached.
+   */
+  readonly code: 'unauthenticated' | 'stale' | 'failed'
+  /** Human-readable cause, usually the host's own message. */
+  readonly message: string
+}
 ```
 
 ## Session bindings
@@ -188,7 +226,7 @@ type SessionChangeRequestsListener = (changeRequests: readonly SessionChangeRequ
 
 ## Panel
 
-`ctx.forgePanel` is the Host Remote of the [forge panel](../../packages/experimental/client-ui-forge/README.md#use-this-package). Following a Session streams a `ForgePanelState`: a read-only Git inspection of the Session's current directory in its execution world, the code host recognized from the upstream remote or `origin`, the sign-in state of that host, the Session's bindings with their polled status and last snapshot, and its worktree request. Its actions list base branches, bind and hide URLs, refresh, request or withdraw a worktree, stop a running creation, and restore a removed worktree or leave it for the source checkout. A request is a `plugin:client-ui-forge/worktree` record. The panel listens to [Agent admission](../../packages/core/agent/README.md): it holds the first message of a Session with an open request while it creates the worktree through `ctx.worktrees`, refuses messages while the worktree the Session works in is gone, and keeps the last failed creation in the panel state. Each refusal carries a `ForgeAdmissionRefusal` reason, and the panel presents it while it follows the Session. The first step proposal creates the worktree for a message that entered without admission. Requests after the first turn starts are ignored. Changes to a Session's checkout run as maintenance of its Agent, so a message from another client waits for them.
+`ctx.forgePanel` is the Host Remote of the [forge panel](../../packages/experimental/client-ui-forge/README.md#use-this-package). Following a Session streams a `ForgePanelState`: a read-only Git inspection of the Session's current directory in its execution world, the code host recognized from the upstream remote or `origin`, the sign-in state of that host, the Session's bindings with their polled status and last snapshot, and its worktree request. Its actions list base branches, bind and hide URLs, refresh, mark a bound draft ready or merge a bound change request, request or withdraw a worktree, stop a running creation, and restore a removed worktree or leave it for the source checkout. A request is a `plugin:client-ui-forge/worktree` record. The panel listens to [Agent admission](../../packages/core/agent/README.md): it holds the first message of a Session with an open request while it creates the worktree through `ctx.worktrees`, refuses messages while the worktree the Session works in is gone, and keeps the last failed creation in the panel state. Each refusal carries a `ForgeAdmissionRefusal` reason, and the panel presents it while it follows the Session. The first step proposal creates the worktree for a message that entered without admission. Requests after the first turn starts are ignored. Changes to a Session's checkout run as maintenance of its Agent, so a message from another client waits for them.
 
 ```ts type-equiv
 /** Git facts for the checkout that contains the Session's current directory. */
@@ -439,6 +477,26 @@ async findByHead(repository: ForgeRepository, branch: string, signal: AbortSigna
 async readiness(repository: ForgeRepository, signal: AbortSignal): Promise<ForgeReadiness>
 
 /**
+ * Mark a draft change request ready for review, then poll it at once when it is watched.
+ * @param ref - change request served by a registered provider.
+ * @param signal - cancellation of the request.
+ * @returns undefined once the host accepted the change, or why it did not.
+ * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+ */
+async markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
+
+/**
+ * Merge a change request while its head is still `request.headSha`, then
+ * poll it at once when it is watched.
+ * @param ref - change request served by a registered provider.
+ * @param request - merge method and the head commit the user confirmed.
+ * @param signal - cancellation of the request.
+ * @returns undefined once the host merged it, or why it did not.
+ * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+ */
+async merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
+
+/**
  * Watch one change request as an effect on the calling fiber. The first
  * watcher starts polling at once; listeners receive every later result,
  * and `latest` returns the current one. Polling stops when the last watcher
@@ -517,6 +575,31 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * @param signal - request cancellation.
  */
 @Remote async refresh(session: Session, signal: AbortSignal): Promise<void>
+
+/**
+ * Mark a draft change request of a Session ready for review; the change
+ * request is polled again once the host answers.
+ * @param session - Session the change request is bound to.
+ * @param url - binding URL of the change request.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+ * `forgePanel/action-failed` with the host's reason when the host refuses or cannot be reached.
+ */
+@Remote async markReady(session: Session, url: string, signal: AbortSignal): Promise<void>
+
+/**
+ * Merge a change request of a Session while its head is still `headSha`;
+ * the change request is polled again once the host answers.
+ * @param session - Session the change request is bound to.
+ * @param url - binding URL of the change request.
+ * @param method - how the commits enter the base branch.
+ * @param headSha - head commit the user confirmed.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+ * `forgePanel/stale-head` when the head moved past `headSha`; `forgePanel/action-failed` with the host's
+ * reason when the host refuses otherwise or cannot be reached.
+ */
+@Remote async merge(session: Session, url: string, method: MergeMethod, headSha: string, signal: AbortSignal): Promise<void>
 
 /**
  * Ask for a new worktree before the Session's first turn, replacing an open

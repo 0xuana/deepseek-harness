@@ -6,6 +6,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
+import type { MergeRequest } from '@deepseek-ai/dsh-experimental-forge/types'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { ForgePanelChangeRequest, ForgePanelState } from '../types.ts'
@@ -26,6 +27,10 @@ export interface ForgeTabInjected {
   readonly refresh: () => void
   /** Remove a change request from the Session, offering to undo it. */
   readonly remove: (entry: ForgePanelChangeRequest) => void
+  /** Mark a draft ready for review; settles once the outcome is reported. */
+  readonly markReady: (entry: ForgePanelChangeRequest) => Promise<void>
+  /** Merge a change request as `request` describes; settles once the outcome is reported. */
+  readonly merge: (entry: ForgePanelChangeRequest, request: MergeRequest) => Promise<void>
   /** Check the removed worktree of the Session out again, reporting the outcome. */
   readonly restore: () => void
   /** Open a URL outside the app. */
@@ -116,7 +121,7 @@ function SignIn({ state, copyText, t }: {
  * @returns the tab body.
  */
 export function ForgeTab({
-  useTabInfo, usePanel, useHost, reconnect, refresh, remove, restore, openLink, copyText, reportVisible, t,
+  useTabInfo, usePanel, useHost, reconnect, refresh, remove, markReady, merge, restore, openLink, copyText, reportVisible, t,
 }: ForgeTabProps): ReactNode {
   const snapshot = usePanel(current => current)
   const home = useHost(facts => facts.home)
@@ -134,7 +139,7 @@ export function ForgeTab({
     </div>
   )
   if (state === null) return <div className={css.centered}>{disconnected || <StateDot state="ongoing" />}</div>
-  const actions: ChangeRequestActions = { openLink, copyLink: copyText, retry: refresh, remove }
+  const actions: ChangeRequestActions = { openLink, copyLink: copyText, retry: refresh, remove, markReady, merge }
   const expanded = chosen ?? defaultExpanded(state.changeRequests)
   const toggle = (url: string): void => {
     const next = new Set(expanded)

@@ -3,7 +3,8 @@ import type { Fiber } from '@deepseek-ai/cordis'
 import ForgeService, { changeRequestKey } from '../src/index.ts'
 import type { Config } from '../src/index.ts'
 import type {
-  ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeFailure, ForgeProvider, ForgeReadiness, ForgeRepository,
+  ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeFailure, ForgeProvider, ForgeReadiness,
+  ForgeRepository, MergeRequest,
 } from '../src/types.ts'
 
 type FetchResult = ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>
@@ -31,6 +32,8 @@ export function snapshot(target: ChangeRequestRef, overrides: Partial<ChangeRequ
     additions: 12,
     deletions: 3,
     mergeability: 'mergeable',
+    mergeReady: true,
+    mergeMethods: ['squash', 'merge', 'rebase'],
     reviewDecision: 'none',
     checks: [],
     checksRollup: 'success',
@@ -51,6 +54,9 @@ export class FakeProvider implements ForgeProvider {
   readonly heads = new Map<string, readonly ChangeRequestRef[]>()
   fetchImpl: ((refs: readonly ChangeRequestRef[], signal: AbortSignal) => Promise<FetchResult>) | undefined
   readinessResult: ForgeReadiness = { state: 'ready', message: null }
+  /** Every action in call order, such as `ready 7` or `merge 7 squash <sha>`. */
+  readonly actions: string[] = []
+  actionResult: ForgeActionFailure | undefined
 
   constructor(forge = 'fake') {
     this.forge = forge
@@ -90,6 +96,16 @@ export class FakeProvider implements ForgeProvider {
 
   async readiness(): Promise<ForgeReadiness> {
     return this.readinessResult
+  }
+
+  async markReady(target: ChangeRequestRef): Promise<ForgeActionFailure | undefined> {
+    this.actions.push(`ready ${target.number}`)
+    return this.actionResult
+  }
+
+  async merge(target: ChangeRequestRef, request: MergeRequest): Promise<ForgeActionFailure | undefined> {
+    this.actions.push(`merge ${target.number} ${request.method} ${request.headSha}`)
+    return this.actionResult
   }
 }
 

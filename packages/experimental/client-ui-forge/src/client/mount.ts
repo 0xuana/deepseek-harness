@@ -83,13 +83,17 @@ function registerUi(ctx: Context): void {
       () => { notices.report('toast.copyFailed') },
     )
   }
+  /** How toasts name a change request: its number, else its title, else its URL. */
+  const nameOf = (entry: ForgePanelChangeRequest): string => {
+    const number = numberOf(entry)
+    return number === null ? entry.snapshot?.title ?? entry.url : t('change.number', { number })
+  }
   const remove = (sessionId: SessionId, entry: ForgePanelChangeRequest): void => {
     void ctx.remote.forgePanel.dismiss(sessionId, entry.url).then((result) => {
       if (!settled(result, 'toast.removeFailed')) return
-      const number = numberOf(entry)
       notices.report('toast.removed', {
         tone: 'success',
-        params: { name: number === null ? entry.snapshot?.title ?? entry.url : t('change.number', { number }) },
+        params: { name: nameOf(entry) },
         // Restoring needs a provider that recognizes the URL; an unrecognized one is removed without undo.
         ...entry.ref === null ? {} : {
           undo: () => {
@@ -118,6 +122,17 @@ function registerUi(ctx: Context): void {
         void ctx.remote.forgePanel.refresh(sessionId).then(result => settled(result, 'toast.refreshFailed'))
       },
       remove: (entry) => { remove(sessionId, entry) },
+      markReady: async (entry) => {
+        const result = await ctx.remote.forgePanel.markReady(sessionId, entry.url)
+        if (result.ok) notices.report('toast.markedReady', { tone: 'success', params: { name: nameOf(entry) } })
+        else notices.report('toast.markReadyFailed', { params: { message: result.error.message } })
+      },
+      merge: async (entry, request) => {
+        const result = await ctx.remote.forgePanel.merge(sessionId, entry.url, request.method, request.headSha)
+        if (result.ok) notices.report('toast.merged', { tone: 'success', params: { name: nameOf(entry) } })
+        else if (result.error.code === 'forgePanel/stale-head') notices.report('toast.mergeStale', { params: { name: nameOf(entry) } })
+        else notices.report('toast.mergeFailed', { params: { message: result.error.message } })
+      },
       restore: () => {
         void restore(sessionId).then((message) => {
           if (message !== undefined) notices.report('toast.restoreFailed', { params: { message } })

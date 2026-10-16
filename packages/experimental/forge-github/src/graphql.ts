@@ -3,14 +3,14 @@
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
   ChangeRequestCheck, ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, CheckState, ChecksRollup, ForgeFailure, ForgeRepository,
-  Mergeability, ReviewDecision,
+  Mergeability, MergeMethod, ReviewDecision,
 } from '@deepseek-ai/dsh-experimental-forge'
 import { z } from 'zod'
-import { isSegment } from './urls.ts'
+import { checkedRepository } from './urls.ts'
 
 const PULL_REQUEST_FIELDS = `number url title state isDraft updatedAt closedAt
   author { login }
-  headRefName headRefOid baseRefName additions deletions mergeable reviewDecision
+  headRefName headRefOid baseRefName additions deletions mergeable mergeStateStatus reviewDecision
   reviewThreads(first: 100) { nodes { isResolved } }
   commits(last: 1) { nodes { commit { statusCheckRollup { state contexts(first: 100) {
     pageInfo { hasNextPage }
@@ -20,6 +20,8 @@ const PULL_REQUEST_FIELDS = `number url title state isDraft updatedAt closedAt
       ... on StatusContext { context state targetUrl }
     }
   } } } } }`
+
+const REPOSITORY_FIELDS = 'squashMergeAllowed mergeCommitAllowed rebaseMergeAllowed viewerPermission viewerDefaultMergeMethod'
 
 /** Head-branch lookup; variables `owner`, `name`, and `branch` are passed as strings. */
 export const HEAD_QUERY = `query($owner: String!, $name: String!, $branch: String!) {
@@ -63,6 +65,7 @@ const pullRequestSchema = z.object({
   additions: z.number().int().nonnegative(),
   deletions: z.number().int().nonnegative(),
   mergeable: z.string(),
+  mergeStateStatus: z.string(),
   reviewDecision: z.string().nullable(),
   reviewThreads: z.object({ nodes: z.array(z.object({ isResolved: z.boolean() })) }),
   commits: z.object({
@@ -75,6 +78,14 @@ const pullRequestSchema = z.object({
       }),
     })),
   }),
+})
+
+const repositorySchema = z.object({
+  squashMergeAllowed: z.boolean(),
+  mergeCommitAllowed: z.boolean(),
+  rebaseMergeAllowed: z.boolean(),
+  viewerPermission: z.string().nullable(),
+  viewerDefaultMergeMethod: z.string(),
 })
 
 const responseSchema = z.object({
@@ -96,6 +107,24 @@ const headSchema = z.object({
 })
 
 type PullRequestNode = z.infer<typeof pullRequestSchema>
+type RepositoryNode = z.infer<typeof repositorySchema>
+
+/** GitHub merge states in which the merge button works: mergeable, with passing or non-required failing checks. */
+const MERGEABLE_NOW: ReadonlySet<string> = new Set(['CLEAN', 'HAS_HOOKS', 'UNSTABLE'])
+
+/** Repository permissions that may merge. */
+const MERGERS: ReadonlySet<string> = new Set(['ADMIN', 'MAINTAIN', 'WRITE'])
+
+/** Merge methods in menu order, with the repository setting that allows each and GitHub's name for it. */
+const METHODS: readonly {
+  readonly method: MergeMethod
+  readonly allowed: 'squashMergeAllowed' | 'mergeCommitAllowed' | 'rebaseMergeAllowed'
+  readonly name: string
+}[] = [
+  { method: 'squash', allowed: 'squashMergeAllowed', name: 'SQUASH' },
+  { method: 'merge', allowed: 'mergeCommitAllowed', name: 'MERGE' },
+  { method: 'rebase', allowed: 'rebaseMergeAllowed', name: 'REBASE' },
+]
 
 /** One batched snapshot query and the change request behind each alias. */
 export interface SnapshotQuery {
@@ -115,9 +144,7 @@ export interface SnapshotQuery {
 export function snapshotQuery(refs: readonly ChangeRequestRef[]): SnapshotQuery {
   const repositories = new Map<string, { repository: ForgeRepository; numbers: Map<number, ChangeRequestRef> }>()
   for (const ref of refs) {
-    const { owner, name } = ref.repository
-    if (!isSegment(owner) || !isSegment(name)) throw new Error(`forge-github: invalid repository ${JSON.stringify(`${owner}/${name}`)}`)
-    if (!Number.isSafeInteger(ref.number) || ref.number <= 0) throw new Error(`forge-github: invalid pull request number ${ref.number}`)
+    const { owner, name } = checkedRepository(ref)
     const id = `${owner}/${name}`.toLowerCase()
     let entry = repositories.get(id)
     if (entry === undefined) {
@@ -134,7 +161,8 @@ export function snapshotQuery(refs: readonly ChangeRequestRef[]): SnapshotQuery 
       pulls.push(`p${p}: pullRequest(number: ${number}) { ...ChangeRequestFields }`)
       targets.set(`r${r}.p${p}`, ref)
     }
-    fields.push(`r${r}: repository(owner: ${JSON.stringify(repository.owner)}, name: ${JSON.stringify(repository.name)}) { ${pulls.join(' ')} }`)
+    const owner = JSON.stringify(repository.owner)
+    fields.push(`r${r}: repository(owner: ${owner}, name: ${JSON.stringify(repository.name)}) { ${REPOSITORY_FIELDS} ${pulls.join(' ')} }`)
   }
   return { document: `query { ${fields.join(' ')} }\nfragment ChangeRequestFields on PullRequest { ${PULL_REQUEST_FIELDS} }`, targets }
 }
@@ -142,7 +170,8 @@ export function snapshotQuery(refs: readonly ChangeRequestRef[]): SnapshotQuery 
 /**
  * Map a snapshot response, including GitHub's partial-error form, into one
  * result per alias target. Path-scoped errors apply to their repository or
- * pull request; errors without a path apply to every unresolved target.
+ * pull request; errors without a path apply to every unresolved target. A
+ * repository without readable merge settings offers no merge.
  * @param body - parsed JSON printed by `gh api graphql`.
  * @param query - the query that produced the response.
  * @returns a snapshot or failure for every target.
@@ -162,7 +191,8 @@ export function mapSnapshotResponse(body: unknown, query: SnapshotQuery): Map<Ch
       ?? errors.find(entry => entry.path === undefined)
     const raw = parsed.data.data?.[repositoryAlias]?.[pullAlias]
     const node = pullRequestSchema.safeParse(raw)
-    if (node.success) results.set(key, toSnapshot(ref, node.data))
+    const settings = repositorySchema.safeParse(parsed.data.data?.[repositoryAlias])
+    if (node.success) results.set(key, toSnapshot(ref, node.data, settings.success ? settings.data : undefined))
     else if (error !== undefined) results.set(key, { code: error.type === 'NOT_FOUND' ? 'not-found' : 'unavailable', message: error.message })
     else if (raw === null || raw === undefined) results.set(key, { code: 'not-found', message: 'pull request not found' })
     else results.set(key, { code: 'unavailable', message: 'unexpected pull request fields' })
@@ -187,7 +217,7 @@ export function mapHeadResponse(body: unknown, repository: ForgeRepository, bran
   return found.pullRequests.nodes.filter(node => !node.isCrossRepository).map(node => ({ repository, number: node.number }))
 }
 
-function toSnapshot(ref: ChangeRequestRef, node: PullRequestNode): ChangeRequestSnapshot {
+function toSnapshot(ref: ChangeRequestRef, node: PullRequestNode, settings: RepositoryNode | undefined): ChangeRequestSnapshot {
   const rollup = node.commits.nodes[0]?.commit.statusCheckRollup ?? null
   const checks: ChangeRequestCheck[] = []
   for (const context of rollup?.contexts.nodes ?? []) {
@@ -228,6 +258,9 @@ function toSnapshot(ref: ChangeRequestRef, node: PullRequestNode): ChangeRequest
     additions: node.additions,
     deletions: node.deletions,
     mergeability: mergeability(node.mergeable),
+    mergeReady: settings !== undefined && MERGERS.has(settings.viewerPermission ?? '') && node.state === 'OPEN' && !node.isDraft
+      && MERGEABLE_NOW.has(node.mergeStateStatus),
+    mergeMethods: settings === undefined ? [] : mergeMethods(settings),
     reviewDecision: reviewDecision(node.reviewDecision),
     checks,
     checksRollup: checksRollup(rollup?.state),
@@ -236,6 +269,13 @@ function toSnapshot(ref: ChangeRequestRef, node: PullRequestNode): ChangeRequest
     updatedAt: node.updatedAt,
     closedAt: node.closedAt,
   }
+}
+
+/** The methods the repository allows, the viewer's default first. */
+function mergeMethods(settings: RepositoryNode): MergeMethod[] {
+  const allowed = METHODS.filter(entry => settings[entry.allowed])
+  const usual = allowed.filter(entry => entry.name === settings.viewerDefaultMergeMethod)
+  return [...usual, ...allowed.filter(entry => !usual.includes(entry))].map(entry => entry.method)
 }
 
 function changeRequestState(state: PullRequestNode['state']): ChangeRequestSnapshot['state'] {

@@ -56,6 +56,9 @@ export type Mergeability = 'mergeable' | 'conflicting' | 'unknown'
 /** Aggregate review outcome required by the host's merge rules. */
 export type ReviewDecision = 'approved' | 'changes-requested' | 'review-required' | 'none'
 
+/** How a merge brings the commits of a change request into its base branch. */
+export type MergeMethod = 'merge' | 'squash' | 'rebase'
+
 /** Status of one change request at the time its provider read it. */
 export interface ChangeRequestSnapshot {
   /** Change request the snapshot describes. */
@@ -82,6 +85,13 @@ export interface ChangeRequestSnapshot {
   readonly deletions: number
   /** Merge conflict status; `unknown` while the host computes it. */
   readonly mergeability: Mergeability
+  /**
+   * Whether the host would merge the change request now for the signed-in
+   * user: open, not a draft, and meeting the base branch's merge rules.
+   */
+  readonly mergeReady: boolean
+  /** Merge methods the repository accepts, the signed-in user's usual one first. */
+  readonly mergeMethods: readonly MergeMethod[]
   /** Aggregate review outcome. */
   readonly reviewDecision: ReviewDecision
   /** Checks on the head commit in host order. */
@@ -120,6 +130,25 @@ export type ChangeRequestUpdate = {
   readonly failure: ForgeFailure
 })
 
+/** A merge the user confirmed for the head commit they saw. */
+export interface MergeRequest {
+  /** How the commits enter the base branch. */
+  readonly method: MergeMethod
+  /** Commit object name the head must still have; the merge is refused once the head moves. */
+  readonly headSha: string
+}
+
+/** Why a provider could not change a change request. */
+export interface ForgeActionFailure {
+  /**
+   * `unauthenticated`: credentials are missing or rejected; `stale`: the head
+   * moved past the confirmed commit; `failed`: the host refused or could not be reached.
+   */
+  readonly code: 'unauthenticated' | 'stale' | 'failed'
+  /** Human-readable cause, usually the host's own message. */
+  readonly message: string
+}
+
 /** Whether a provider can reach one host with the current credentials. */
 export interface ForgeReadiness {
   /** `ready`, `unauthenticated` (sign-in needed), or `unavailable` (tool missing or host unreachable). */
@@ -150,6 +179,10 @@ export interface ForgeProvider {
   findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]>
   /** Report whether the provider can reach `host` with current credentials. */
   readiness(host: string, signal: AbortSignal): Promise<ForgeReadiness>
+  /** Mark a draft change request ready for review, resolving to undefined once the host accepted it. */
+  markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
+  /** Merge a change request while its head is still `request.headSha`, resolving to undefined once merged. */
+  merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
 }
 
 /**

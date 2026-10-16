@@ -1088,7 +1088,7 @@ export type Config = CuaConfig
 
 ## `@deepseek-ai/dsh-experimental-forge`
 
-- `source`: [`packages/experimental/forge/src/types.ts:162`](../packages/experimental/forge/src/types.ts)
+- `source`: [`packages/experimental/forge/src/types.ts:195`](../packages/experimental/forge/src/types.ts)
 
 ```ts config-catalog
 /** Poll cadence and fetch deadline for watched change requests. */

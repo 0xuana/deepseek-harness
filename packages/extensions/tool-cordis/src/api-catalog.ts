@@ -1240,6 +1240,20 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['when no provider serves the repository\'s forge.'],
       },
       {
+        signature: 'async markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeActionFailure | undefined>',
+        description: 'Mark a draft change request ready for review, then poll it at once when it is watched.',
+        parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'signal', description: 'cancellation of the request.' }],
+        returns: 'undefined once the host accepted the change, or why it did not.',
+        throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
+      },
+      {
+        signature: 'async merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>',
+        description: 'Merge a change request while its head is still `request.headSha`, then poll it at once when it is watched.',
+        parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'request', description: 'merge method and the head commit the user confirmed.' }, { name: 'signal', description: 'cancellation of the request.' }],
+        returns: 'undefined once the host merged it, or why it did not.',
+        throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
+      },
+      {
         signature: 'watch(ref: ChangeRequestRef, listener: ChangeRequestListener): () => void',
         description: 'Watch one change request as an effect on the calling fiber. The first watcher starts polling at once; listeners receive every later result, and `latest` returns the current one. Polling stops when the last watcher leaves. Listeners must not throw; a thrown error is logged and skipped.',
         parameters: [{ name: 'ref', description: 'change request to poll.' }, { name: 'listener', description: 'receives each polling result.' }],
@@ -1291,6 +1305,18 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: '@Remote async refresh(session: Session, signal: AbortSignal): Promise<void>',
         description: 'Reinspect a followed Session\'s checkout, probe sign-in again, and poll its change requests at once; an unfollowed Session is unchanged.',
         parameters: [{ name: 'session', description: 'Session whose panel refreshes.' }, { name: 'signal', description: 'request cancellation.' }],
+      },
+      {
+        signature: '@Remote async markReady(session: Session, url: string, signal: AbortSignal): Promise<void>',
+        description: 'Mark a draft change request of a Session ready for review; the change request is polled again once the host answers.',
+        parameters: [{ name: 'session', description: 'Session the change request is bound to.' }, { name: 'url', description: 'binding URL of the change request.' }, { name: 'signal', description: 'request cancellation.' }],
+        throws: ['`forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves; `forgePanel/action-failed` with the host\'s reason when the host refuses or cannot be reached.'],
+      },
+      {
+        signature: '@Remote async merge(session: Session, url: string, method: MergeMethod, headSha: string, signal: AbortSignal): Promise<void>',
+        description: 'Merge a change request of a Session while its head is still `headSha`; the change request is polled again once the host answers.',
+        parameters: [{ name: 'session', description: 'Session the change request is bound to.' }, { name: 'url', description: 'binding URL of the change request.' }, { name: 'method', description: 'how the commits enter the base branch.' }, { name: 'headSha', description: 'head commit the user confirmed.' }, { name: 'signal', description: 'request cancellation.' }],
+        throws: ['`forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves; `forgePanel/stale-head` when the head moved past `headSha`; `forgePanel/action-failed` with the host\'s reason when the host refuses otherwise or cannot be reached.'],
       },
       {
         signature: '@Remote async requestWorktree(session: Session, from: string | null, signal: AbortSignal): Promise<void>',
@@ -5355,7 +5381,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ChangeRequestSnapshot',
-    declaration: 'export interface ChangeRequestSnapshot {\n    readonly ref: ChangeRequestRef;\n    readonly url: string;\n    readonly title: string;\n    readonly state: ChangeRequestState;\n    readonly draft: boolean;\n    readonly author: string | null;\n    readonly headBranch: string;\n    readonly headSha: string;\n    readonly baseBranch: string;\n    readonly additions: number;\n    readonly deletions: number;\n    readonly mergeability: Mergeability;\n    readonly reviewDecision: ReviewDecision;\n    readonly checks: readonly ChangeRequestCheck[];\n    readonly checksRollup: ChecksRollup;\n    readonly checksTruncated: boolean;\n    readonly unresolvedThreads: number;\n    readonly updatedAt: string;\n    readonly closedAt: string | null;\n}',
+    declaration: 'export interface ChangeRequestSnapshot {\n    readonly ref: ChangeRequestRef;\n    readonly url: string;\n    readonly title: string;\n    readonly state: ChangeRequestState;\n    readonly draft: boolean;\n    readonly author: string | null;\n    readonly headBranch: string;\n    readonly headSha: string;\n    readonly baseBranch: string;\n    readonly additions: number;\n    readonly deletions: number;\n    readonly mergeability: Mergeability;\n    readonly mergeReady: boolean;\n    readonly mergeMethods: readonly MergeMethod[];\n    readonly reviewDecision: ReviewDecision;\n    readonly checks: readonly ChangeRequestCheck[];\n    readonly checksRollup: ChecksRollup;\n    readonly checksTruncated: boolean;\n    readonly unresolvedThreads: number;\n    readonly updatedAt: string;\n    readonly closedAt: string | null;\n}',
   },
   {
     name: 'ChangeRequestState',
@@ -5942,6 +5968,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface FinishReasonMap {\n    \'stop\': {\n        kind: \'stop\';\n    };\n    \'tool-calls\': {\n        kind: \'tool-calls\';\n    };\n    \'max-tokens\': {\n        kind: \'max-tokens\';\n    };\n    \'aborted\': {\n        kind: \'aborted\';\n        failure: LlmFailure;\n    };\n    \'error\': {\n        kind: \'error\';\n        failure: LlmFailure;\n    };\n}',
   },
   {
+    name: 'ForgeActionFailure',
+    declaration: 'export interface ForgeActionFailure {\n    readonly code: \'unauthenticated\' | \'stale\' | \'failed\';\n    readonly message: string;\n}',
+  },
+  {
     name: 'ForgeBranches',
     declaration: 'export interface ForgeBranches {\n    readonly current: string | null;\n    readonly branches: readonly string[];\n}',
   },
@@ -5975,7 +6005,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgeProvider',
-    declaration: 'export interface ForgeProvider {\n    readonly forge: string;\n    repositoryFromRemote(url: string): ForgeRepository | undefined;\n    changeRequestFromUrl(url: string): ChangeRequestRef | undefined;\n    changeRequestUrl(ref: ChangeRequestRef): string;\n    fetch(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>;\n    findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]>;\n    readiness(host: string, signal: AbortSignal): Promise<ForgeReadiness>;\n}',
+    declaration: 'export interface ForgeProvider {\n    readonly forge: string;\n    repositoryFromRemote(url: string): ForgeRepository | undefined;\n    changeRequestFromUrl(url: string): ChangeRequestRef | undefined;\n    changeRequestUrl(ref: ChangeRequestRef): string;\n    fetch(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>;\n    findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]>;\n    readiness(host: string, signal: AbortSignal): Promise<ForgeReadiness>;\n    markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeActionFailure | undefined>;\n    merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>;\n}',
   },
   {
     name: 'ForgeReadiness',
@@ -6616,6 +6646,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'Mergeability',
     declaration: 'export type Mergeability = \'mergeable\' | \'conflicting\' | \'unknown\';',
+  },
+  {
+    name: 'MergeMethod',
+    declaration: 'export type MergeMethod = \'merge\' | \'squash\' | \'rebase\';',
+  },
+  {
+    name: 'MergeRequest',
+    declaration: 'export interface MergeRequest {\n    readonly method: MergeMethod;\n    readonly headSha: string;\n}',
   },
   {
     name: 'Message',

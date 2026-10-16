@@ -13,7 +13,8 @@ import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
 import ForgeService, { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
-  ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeFailure, ForgeProvider, ForgeReadiness, ForgeRepository,
+  ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeFailure, ForgeProvider, ForgeReadiness,
+  ForgeRepository, MergeRequest,
 } from '@deepseek-ai/dsh-experimental-forge'
 import ForgeSessionService from '@deepseek-ai/dsh-experimental-forge-session'
 import WorktreeService from '@deepseek-ai/dsh-experimental-worktree'
@@ -224,6 +225,8 @@ export function snapshot(ref: ChangeRequestRef): ChangeRequestSnapshot {
     additions: 12,
     deletions: 3,
     mergeability: 'mergeable',
+    mergeReady: true,
+    mergeMethods: ['squash', 'merge', 'rebase'],
     reviewDecision: 'none',
     checks: [],
     checksRollup: 'success',
@@ -242,6 +245,10 @@ export class FakeProvider implements ForgeProvider {
   /** Polling failures returned instead of snapshots, by change request number. */
   readonly failures = new Map<number, ForgeFailure>()
   readinessImpl: (host: string, signal: AbortSignal) => Promise<ForgeReadiness> = () => Promise.resolve({ state: 'ready', message: null })
+  /** Every action in call order, such as `ready 7` or `merge 7 squash <sha>`. */
+  readonly actions: string[] = []
+  /** Outcome of the next actions; undefined reports success. */
+  actionResult: ForgeActionFailure | undefined
 
   repositoryFromRemote(url: string): ForgeRepository | undefined {
     const [, host = '', owner = '', name = ''] = /^https:\/\/([a-z.]+\.test)\/([^/]+)\/([^/]+?)\.git$/.exec(url) ?? []
@@ -269,6 +276,16 @@ export class FakeProvider implements ForgeProvider {
   readiness(host: string, signal: AbortSignal): Promise<ForgeReadiness> {
     this.probes.push(host)
     return this.readinessImpl(host, signal)
+  }
+
+  markReady(ref: ChangeRequestRef): Promise<ForgeActionFailure | undefined> {
+    this.actions.push(`ready ${ref.number}`)
+    return Promise.resolve(this.actionResult)
+  }
+
+  merge(ref: ChangeRequestRef, request: MergeRequest): Promise<ForgeActionFailure | undefined> {
+    this.actions.push(`merge ${ref.number} ${request.method} ${request.headSha}`)
+    return Promise.resolve(this.actionResult)
   }
 }
 

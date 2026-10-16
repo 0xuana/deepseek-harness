@@ -27,6 +27,18 @@ export function statusContext(context: string, state: string): Record<string, un
   return { __typename: 'StatusContext', context, state, targetUrl: null }
 }
 
+/** Merge settings of a repository that allows squash and merge commits and whose viewer may merge, usually with a merge commit. */
+export function repositorySettings(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    squashMergeAllowed: true,
+    mergeCommitAllowed: true,
+    rebaseMergeAllowed: false,
+    viewerPermission: 'WRITE',
+    viewerDefaultMergeMethod: 'MERGE',
+    ...overrides,
+  }
+}
+
 /** A pull request node with the fields the snapshot query selects. */
 export function pullRequestNode(number: number, overrides: Record<string, unknown> = {}, contexts: unknown[] = [], rollupState: string | null = 'SUCCESS'): Record<string, unknown> {
   return {
@@ -44,6 +56,7 @@ export function pullRequestNode(number: number, overrides: Record<string, unknow
     additions: 128,
     deletions: 14,
     mergeable: 'MERGEABLE',
+    mergeStateStatus: 'CLEAN',
     reviewDecision: null,
     reviewThreads: { nodes: [{ isResolved: true }, { isResolved: false }, { isResolved: false }] },
     commits: {

@@ -43,6 +43,22 @@ describe('forge registry', () => {
     expect(() => ctx!.forge.changeRequestUrl(ref(1, elsewhere))).toThrow('forge: no provider is registered for "missing"')
     await expect(ctx.forge.findByHead(elsewhere, 'topic', signal)).rejects.toThrow('forge: no provider is registered for "missing"')
     await expect(ctx.forge.readiness(elsewhere, signal)).rejects.toThrow('forge: no provider is registered for "missing"')
+    await expect(ctx.forge.markReady(ref(1, elsewhere), signal)).rejects.toThrow('forge: no provider is registered for "missing"')
+    await expect(ctx.forge.merge(ref(1, elsewhere), { method: 'squash', headSha: 'a'.repeat(40) }, signal))
+      .rejects.toThrow('forge: no provider is registered for "missing"')
+  })
+
+  it('delegates change request actions to the provider of their forge and returns its outcome', async () => {
+    ctx = await forgeContext()
+    const provider = new FakeProvider()
+    await provide(ctx, provider)
+    const signal = new AbortController().signal
+
+    await expect(ctx.forge.markReady(ref(3), signal)).resolves.toBeUndefined()
+    provider.actionResult = { code: 'stale', message: 'Head branch was modified' }
+    await expect(ctx.forge.merge(ref(3), { method: 'rebase', headSha: 'b'.repeat(40) }, signal))
+      .resolves.toEqual({ code: 'stale', message: 'Head branch was modified' })
+    expect(provider.actions).toEqual(['ready 3', `merge 3 rebase ${'b'.repeat(40)}`])
   })
 
   it('refuses a second provider for the same forge', async () => {

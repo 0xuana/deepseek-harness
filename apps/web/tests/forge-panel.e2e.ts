@@ -22,21 +22,43 @@ const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/lifecycle-chrome/s
 const EXPECTED = fileURLToPath(new URL('./expected/forge-panel', import.meta.url))
 const MODE = webSnapshotMode()
 const PULL = 'https://github.com/octo/demo/pull/7'
+/** A draft change request that the double lets the panel mark ready and merge. */
+const DRAFT = 'https://github.com/octo/demo/pull/9'
 /** Message sent after the worktree is removed, which the composer keeps. */
 const FOLLOW_UP = 'Summarize the failed check'
 const run = promisify(execFile)
 
 /**
- * GitHub CLI double: signed in to github.com; GraphQL serves pull request 7 of
- * octo/demo with one failed and one passed check run, one unresolved thread,
- * and a required review. Every invocation is appended to `calls.jsonl`.
+ * GitHub CLI double: signed in to github.com, with octo/demo allowing every
+ * merge method and the viewer's usual one squash. GraphQL serves pull request
+ * 7 with one failed and one passed check run, one unresolved thread, and a
+ * required review, and pull request 9, an approved draft whose checks passed.
+ * `gh pr ready 9` and the REST merge of pull request 9 change what later
+ * queries report, through `state.json`. Every invocation is appended to
+ * `calls.jsonl`.
  */
 const GH = `#!/usr/bin/env node
-import { appendFileSync } from 'node:fs'
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 const args = process.argv.slice(2)
-appendFileSync(join(dirname(fileURLToPath(import.meta.url)), 'calls.jsonl'), JSON.stringify(args) + '\\n')
+const here = dirname(fileURLToPath(import.meta.url))
+appendFileSync(join(here, 'calls.jsonl'), JSON.stringify(args) + '\\n')
+const statePath = join(here, 'state.json')
+const state = existsSync(statePath) ? JSON.parse(readFileSync(statePath, 'utf8')) : { ready: false, mergedAt: null }
+const save = () => { writeFileSync(statePath, JSON.stringify(state)) }
+if (args[0] === 'pr' && args[1] === 'ready' && args[2] === '9') {
+  state.ready = true
+  save()
+  process.stderr.write('Pull request octo/demo#9 is marked as "ready for review"\\n')
+  process.exit(0)
+}
+if (args[0] === 'api' && args[5] === 'repos/octo/demo/pulls/9/merge') {
+  state.mergedAt = new Date().toISOString()
+  save()
+  process.stdout.write(JSON.stringify({ sha: 'c'.repeat(40), merged: true, message: 'Pull Request successfully merged' }))
+  process.exit(0)
+}
 if (args[0] === 'auth' && args[1] === 'status') {
   process.stdout.write('github.com\\n  Logged in to github.com account octo\\n')
   process.exit(0)
@@ -48,21 +70,35 @@ if (args[0] === 'api' && args[1] === 'graphql') {
     detailsUrl: 'https://github.com/octo/demo/actions/runs/1', startedAt: '2026-10-09T00:00:00Z', completedAt,
     checkSuite: { workflowRun: { workflow: { name: 'CI' } } },
   })
-  const pull = number => number !== 7 ? null : {
-    number, url: 'https://github.com/octo/demo/pull/7', title: 'Add the pull request panel', state: 'OPEN', isDraft: false,
-    updatedAt: '2026-10-09T00:00:00Z', closedAt: null, author: { login: 'octo' }, headRefName: 'feat', headRefOid: 'a'.repeat(40),
-    baseRefName: 'main', additions: 128, deletions: 14, mergeable: 'MERGEABLE', reviewDecision: 'REVIEW_REQUIRED',
-    reviewThreads: { nodes: [{ isResolved: false }] },
-    commits: { nodes: [{ commit: { statusCheckRollup: { state: 'FAILURE', contexts: {
-      pageInfo: { hasNextPage: false },
-      nodes: [check('lint', 'SUCCESS', '2026-10-09T00:00:42Z'), check('test', 'FAILURE', '2026-10-09T00:02:07Z')],
-    } } } }] },
+  const pulls = {
+    7: {
+      number: 7, url: 'https://github.com/octo/demo/pull/7', title: 'Add the pull request panel', state: 'OPEN', isDraft: false,
+      updatedAt: '2026-10-09T00:00:00Z', closedAt: null, author: { login: 'octo' }, headRefName: 'feat', headRefOid: 'a'.repeat(40),
+      baseRefName: 'main', additions: 128, deletions: 14, mergeable: 'MERGEABLE', mergeStateStatus: 'BLOCKED', reviewDecision: 'REVIEW_REQUIRED',
+      reviewThreads: { nodes: [{ isResolved: false }] },
+      commits: { nodes: [{ commit: { statusCheckRollup: { state: 'FAILURE', contexts: {
+        pageInfo: { hasNextPage: false },
+        nodes: [check('lint', 'SUCCESS', '2026-10-09T00:00:42Z'), check('test', 'FAILURE', '2026-10-09T00:02:07Z')],
+      } } } }] },
+    },
+    9: {
+      number: 9, url: 'https://github.com/octo/demo/pull/9', title: 'Add the merge button', state: state.mergedAt === null ? 'OPEN' : 'MERGED',
+      isDraft: !state.ready, updatedAt: '2026-10-09T00:00:00Z', closedAt: state.mergedAt, author: { login: 'octo' },
+      headRefName: 'feat/merge', headRefOid: 'b'.repeat(40), baseRefName: 'main', additions: 30, deletions: 2, mergeable: 'MERGEABLE',
+      mergeStateStatus: state.ready ? 'CLEAN' : 'BLOCKED', reviewDecision: 'APPROVED', reviewThreads: { nodes: [] },
+      commits: { nodes: [{ commit: { statusCheckRollup: { state: 'SUCCESS', contexts: {
+        pageInfo: { hasNextPage: false }, nodes: [check('lint', 'SUCCESS', '2026-10-09T00:00:42Z')],
+      } } } }] },
+    },
+  }
+  const settings = {
+    squashMergeAllowed: true, mergeCommitAllowed: true, rebaseMergeAllowed: true, viewerPermission: 'WRITE', viewerDefaultMergeMethod: 'SQUASH',
   }
   const data = {}
   let repository
   for (const match of query.matchAll(/(r\\d+): repository\\(|(p\\d+): pullRequest\\(number: (\\d+)\\)/g)) {
-    if (match[1] !== undefined) data[repository = match[1]] = {}
-    else data[repository][match[2]] = pull(Number(match[3]))
+    if (match[1] !== undefined) data[repository = match[1]] = { ...settings }
+    else data[repository][match[2]] = pulls[Number(match[3])] ?? null
   }
   process.stdout.write(JSON.stringify({ data }))
   process.exit(0)
@@ -76,8 +112,8 @@ async function git(cwd: string, ...args: string[]): Promise<string> {
   return stdout.trim()
 }
 
-/** A Web scaffold with the bundle, a GitHub checkout of `main` and `release`, and a fresh Session whose worktree option chose `release`. */
-interface ReleaseRequest {
+/** A Web scaffold with the bundle, a GitHub checkout of `main` and `release`, and the New Session screen of that workspace. */
+interface PanelLaunch {
   readonly scaffold: WebScaffold
   readonly page: Page
   /** Temporary directory of the GitHub CLI double and its call log. */
@@ -88,11 +124,11 @@ interface ReleaseRequest {
 }
 
 /**
- * Launch the bundle against a GitHub checkout of `main` and `release`, open a fresh Session, and choose the worktree option from `release`.
+ * Launch the bundle against a GitHub checkout of `main` and `release` and open the New Session screen of that workspace.
  * @param failureShot - name of the screenshot saved when the test fails.
  * @returns the scaffold, page, and checkout.
  */
-async function requestReleaseWorktree(failureShot: string): Promise<ReleaseRequest> {
+async function launchPanel(failureShot: string): Promise<PanelLaunch> {
   const resources: { scaffold?: WebScaffold; browser?: Browser } = {}
   const root = await mkdtemp(join(tmpdir(), 'dsh-forge-panel-'))
   onTestFinished(async () => {
@@ -136,14 +172,24 @@ async function requestReleaseWorktree(failureShot: string): Promise<ReleaseReque
   onTestFailed(async () => { await saveFailureShot(page, failureShot) })
   await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
   await connectFreshWorkspaceZh(page, scaffold.workspaceCwd)
+  return { scaffold, page, root, project, tripwire }
+}
 
+/**
+ * Launch the panel and choose the worktree option of the fresh Session from `release`.
+ * @param failureShot - name of the screenshot saved when the test fails.
+ * @returns the scaffold, page, and checkout.
+ */
+async function requestReleaseWorktree(failureShot: string): Promise<PanelLaunch> {
+  const launched = await launchPanel(failureShot)
+  const { page } = launched
   const option = page.locator('[data-forge-worktree]')
   await option.waitFor({ timeout: 20_000 })
   await option.getByRole('checkbox', { name: '工作树', exact: true }).check()
   await option.getByRole('button', { name: '基于 main', exact: true }).click()
   await page.getByRole('menuitem', { name: 'release', exact: true }).click()
   await option.getByRole('button', { name: '基于 release', exact: true }).waitFor()
-  return { scaffold, page, root, project, tripwire }
+  return launched
 }
 
 /**
@@ -224,8 +270,9 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
   await title.waitFor({ timeout: 20_000 })
   // The only open change request starts expanded.
   await change.getByText('等待评审 · 1 条未解决讨论', { exact: true }).waitFor()
+  // The random branch suffix can read as a duration, so the branch is replaced before the capture normalizes durations.
   await compareOrRefreshGolden(join(EXPECTED, 'panel.expected.md'),
-    (await captureStableAria(page, '[data-forge-panel]', scaffold.workspaceCwd)).replaceAll(branch, 'dsh-{{worktree}}'), MODE)
+    await captureStableAria(page, '[data-forge-panel]', scaffold.workspaceCwd, { replacements: [[branch, 'dsh-{{worktree}}']] }), MODE)
   const checksRow = change.getByRole('button', { name: /^检查/ })
   await checksRow.click()
   const checks = page.getByRole('menu')
@@ -326,6 +373,44 @@ it.skipIf(MODE === 'record')('returns the first message to the New Session compo
   await expect.poll(() => label.textContent(), { timeout: 20_000 }).toBe('main')
   await label.hover()
   await page.getByRole('tooltip').filter({ hasText: `项目目录：${abbreviateHomePath(project, homedir())}` }).waitFor()
+  expect(tripwire.pageErrors).toEqual([])
+  expect(tripwire.warnings).toEqual([])
+})
+
+it.skipIf(MODE === 'record')('marks a draft change request ready for review and merges it with the usual method', async () => {
+  const { scaffold, page, root, tripwire } = await launchPanel('web-e2e-forge-panel-merge')
+  const { settled } = await sendPrompt(page, scaffold)
+  const sessionId = await settled
+  await page.getByText('LIGHTHOUSE', { exact: true }).waitFor()
+  const session = scaffold.ctx.sessions.get(sessionId)
+  if (session === undefined) throw new Error('The Session must stay loaded')
+
+  scaffold.ctx.forgeSession.track(session, DRAFT)
+  const header = page.locator('[data-forge-header]')
+  await expect.poll(() => header.getAttribute('aria-label'), { timeout: 20_000 }).toBe('本会话的变更请求')
+  await header.click()
+  const change = page.locator(`[data-forge-change="${DRAFT}"]`)
+  await change.getByRole('link', { name: 'Add the merge button', exact: true }).waitFor({ timeout: 20_000 })
+
+  // The only open change request starts expanded, so its action is in view.
+  await change.getByRole('button', { name: '标记为可评审', exact: true }).click()
+  await page.getByRole('alert').filter({ hasText: '已将 #9 标记为可评审' }).waitFor()
+  const merge = change.getByRole('button', { name: '合并', exact: true })
+  await merge.waitFor({ timeout: 20_000 })
+  await merge.click()
+  const menu = page.getByRole('menu')
+  await menu.getByText('将 #9 合并到 main', { exact: true }).waitFor()
+  await compareOrRefreshGolden(join(EXPECTED, 'merge-menu.expected.md'), await captureStableAria(page, '[role="menu"]', scaffold.workspaceCwd), MODE)
+  await menu.getByRole('menuitem', { name: '确认合并', exact: true }).click()
+  await page.getByRole('alert').filter({ hasText: '已合并 #9' }).waitFor()
+  // Merged, the change request is no longer open, so its card collapses to the merge line.
+  await change.getByText(/^已合并到 main · /).waitFor({ timeout: 20_000 })
+
+  const calls = (await readFile(join(root, 'calls.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as string[])
+  expect(calls).toContainEqual(['pr', 'ready', '9', '--repo', 'github.com/octo/demo'])
+  expect(calls).toContainEqual([
+    'api', '--hostname', 'github.com', '--method', 'PUT', 'repos/octo/demo/pulls/9/merge', '-f', 'merge_method=squash', '-f', `sha=${'b'.repeat(40)}`,
+  ])
   expect(tripwire.pageErrors).toEqual([])
   expect(tripwire.warnings).toEqual([])
 })

@@ -40,6 +40,8 @@ kind: "package-reference"
 
 检查运行（check run）在完成前映射为 `pending`，完成后映射为 `success`、`failure`（失败、超时、启动失败或需要操作）、`cancelled`、`skipped` 或 `neutral`。检查运行保留其开始与完成时间。提交状态上下文把 `SUCCESS` 映射为 `success`，把 `FAILURE` 与 `ERROR` 映射为 `failure`，其余状态均映射为 `pending`，且不带时间。GraphQL 的 `NOT_FOUND` 错误转为 `not-found` 失败。`gh` 没有输出 JSON 时，提到身份验证或 `gh auth login` 的诊断转为 `unauthenticated`，其他诊断转为 `unavailable`。
 
+pull request 处于打开状态、不是草稿、GitHub 报告其合并状态为 `CLEAN`、`HAS_HOOKS` 或 `UNSTABLE`，且已登录用户具有 write、maintain 或 admin 权限时，`mergeReady` 为真。`mergeMethods` 列出仓库允许的压缩合并、合并提交与变基合并方式，用户默认的合并方式排在最前。标记为可评审运行 `gh pr ready <number> --repo <host>/<owner>/<name>`。合并经 `gh api` 调用 `PUT repos/<owner>/<name>/pulls/<number>/merge`，带上合并方式与预期的 head SHA，因此有新提交到达后 GitHub 会拒绝，报告为 `stale`。与 `gh pr merge` 不同，它从不启用自动合并、从不加入合并队列，也从不删除 head 分支。被拒绝的操作报告 GitHub 的原因，提到身份验证的诊断转为 `unauthenticated`。
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -88,6 +90,7 @@ kind: "package-reference"
 - **前 100 个检查与评审讨论**——head 提交的检查超过上限时以 `checksTruncated` 标记；前 100 个之后的未解决讨论不计入。
 - **不发现 fork**——按 head 分支查找时，不包含 head 位于其他仓库的 pull request。
 - **速率限制**——每次轮询都会以已登录账号的速率配额为每个主机消耗一次 GraphQL 查询。
+- **不支持合并队列**——要求合并队列的基准分支会拒绝直接合并，提供方也不会把变更请求加入队列。
 
 <a id="dev-note"></a>
 ### 开发备注

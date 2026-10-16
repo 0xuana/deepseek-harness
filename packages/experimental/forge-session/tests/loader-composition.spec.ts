@@ -61,6 +61,7 @@ const node = (number) => ({
   additions: 1,
   deletions: 0,
   mergeable: 'MERGEABLE',
+  mergeStateStatus: number === 7 ? 'BLOCKED' : 'CLEAN',
   reviewDecision: null,
   reviewThreads: { nodes: [] },
   commits: { nodes: [{ commit: { statusCheckRollup: {

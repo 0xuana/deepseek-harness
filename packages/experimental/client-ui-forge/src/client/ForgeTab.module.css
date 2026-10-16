@@ -489,6 +489,19 @@
   margin-left: auto;
 }
 
+/* A merge method row: its name with the note on what it does below. */
+.method {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.methodNote {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+}
+
 .titleIcon {
   display: inline-flex;
   flex: none;

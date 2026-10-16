@@ -1,7 +1,8 @@
 import { Context } from '@deepseek-ai/cordis'
 import ForgeService, { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
-  ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeFailure, ForgeProvider, ForgeReadiness, ForgeRepository,
+  ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeFailure, ForgeProvider, ForgeReadiness,
+  ForgeRepository,
 } from '@deepseek-ai/dsh-experimental-forge'
 import { createAssistantMessage, createToolResultMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import SessionStore from '@deepseek-ai/dsh-session'
@@ -38,6 +39,8 @@ export function snapshot(ref: ChangeRequestRef, overrides: Partial<ChangeRequest
     additions: 12,
     deletions: 3,
     mergeability: 'mergeable',
+    mergeReady: true,
+    mergeMethods: ['squash', 'merge', 'rebase'],
     reviewDecision: 'none',
     checks: [],
     checksRollup: 'success',
@@ -88,6 +91,14 @@ export class FakeProvider implements ForgeProvider {
 
   readiness(): Promise<ForgeReadiness> {
     return Promise.resolve({ state: 'ready', message: null })
+  }
+
+  markReady(): Promise<ForgeActionFailure | undefined> {
+    return Promise.resolve(undefined)
+  }
+
+  merge(): Promise<ForgeActionFailure | undefined> {
+    return Promise.resolve(undefined)
   }
 }
 

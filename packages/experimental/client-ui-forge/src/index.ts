@@ -4,7 +4,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { AdmissionDecision } from '@deepseek-ai/dsh-agent-controller'
-import type {} from '@deepseek-ai/dsh-experimental-forge'
+import type { ChangeRequestRef, ForgeActionFailure, MergeMethod } from '@deepseek-ai/dsh-experimental-forge'
 import type {} from '@deepseek-ai/dsh-experimental-forge-session'
 import type {} from '@deepseek-ai/dsh-experimental-worktree'
 import { appendPluginRecord } from '@deepseek-ai/dsh-session'
@@ -176,6 +176,41 @@ export class ForgePanelController extends TypertRemoteService {
   }
 
   /**
+   * Mark a draft change request of a Session ready for review; the change
+   * request is polled again once the host answers.
+   * @param session - Session the change request is bound to.
+   * @param url - binding URL of the change request.
+   * @param signal - request cancellation.
+   * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+   * `forgePanel/action-failed` with the host's reason when the host refuses or cannot be reached.
+   */
+  @Remote
+  async markReady(session: Session, url: string, signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted()
+    const failure = await this.home.forge.markReady(this.boundRef(session, url), signal)
+    if (failure !== undefined) throw actionError(failure)
+  }
+
+  /**
+   * Merge a change request of a Session while its head is still `headSha`;
+   * the change request is polled again once the host answers.
+   * @param session - Session the change request is bound to.
+   * @param url - binding URL of the change request.
+   * @param method - how the commits enter the base branch.
+   * @param headSha - head commit the user confirmed.
+   * @param signal - request cancellation.
+   * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+   * `forgePanel/stale-head` when the head moved past `headSha`; `forgePanel/action-failed` with the host's
+   * reason when the host refuses otherwise or cannot be reached.
+   */
+  @Remote
+  async merge(session: Session, url: string, method: MergeMethod, headSha: string, signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted()
+    const failure = await this.home.forge.merge(this.boundRef(session, url), { method, headSha }, signal)
+    if (failure !== undefined) throw actionError(failure)
+  }
+
+  /**
    * Ask for a new worktree before the Session's first turn, replacing an open
    * request and forgetting a failed attempt. Admission of the next message, or
    * else the first step proposal, creates a branch from `from`, or from HEAD of
@@ -306,6 +341,13 @@ export class ForgePanelController extends TypertRemoteService {
       : refusal('forge/worktree-missing', 'The worktree this Session works in was removed; restore it before sending', presented)
   }
 
+  /** The provider reference of a visible binding of the Session, which actions are limited to. */
+  private boundRef(session: Session, url: string): ChangeRequestRef {
+    const ref = this.home.forgeSession.changeRequests(session).find(entry => entry.url === url)?.ref ?? null
+    if (ref === null) throw new RemoteError('forgePanel/not-bound', 'The change request is not bound to this Session or no provider serves it', {})
+    return ref
+  }
+
   private worktreeState(session: Session): ForgeWorktreeState {
     return this.worktreeStates.stateOf(session)
   }
@@ -355,6 +397,15 @@ export class ForgePanelController extends TypertRemoteService {
     }
     return panel
   }
+}
+
+/**
+ * Report a failed change request action, separating a head that moved since the user confirmed it.
+ * @param failure - the provider's failure.
+ * @returns the Remote error to throw.
+ */
+function actionError(failure: ForgeActionFailure): RemoteError {
+  return new RemoteError(failure.code === 'stale' ? 'forgePanel/stale-head' : 'forgePanel/action-failed', failure.message, {})
 }
 
 /**

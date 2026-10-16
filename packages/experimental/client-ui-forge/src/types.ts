@@ -215,6 +215,12 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'forgePanel/session-busy': Record<string, never>
     /** The removed worktree could not be checked out again; the message gives the reason. */
     'forgePanel/restore-failed': Record<string, never>
+    /** The URL is not a visible binding of the Session that a provider serves, so the panel does not act on it. */
+    'forgePanel/not-bound': Record<string, never>
+    /** The change request has new commits since the head the user confirmed, so it was not merged. */
+    'forgePanel/stale-head': Record<string, never>
+    /** The code host refused the change or could not be reached; the message gives the host's reason. */
+    'forgePanel/action-failed': Record<string, never>
   }
 }
 

@@ -2,13 +2,14 @@ import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type { ChangeRequestSnapshot } from '@deepseek-ai/dsh-experimental-forge'
 import { describe, expect, it } from 'vitest'
 import { mapHeadResponse, mapSnapshotResponse, snapshotQuery } from '../src/graphql.ts'
-import { checkRun, demo, pull, pullRequestNode, statusContext } from './fixtures.ts'
+import { checkRun, demo, pull, pullRequestNode, repositorySettings, statusContext } from './fixtures.ts'
 
 const other = { ...demo, name: 'other' }
 
-function single(node: unknown): ChangeRequestSnapshot {
+/** Map one pull request node of a repository with `settings`, or without readable merge settings when it is null. */
+function single(node: unknown, settings: Record<string, unknown> | null = repositorySettings()): ChangeRequestSnapshot {
   const query = snapshotQuery([pull(1)])
-  const result = mapSnapshotResponse({ data: { r0: { p0: node } } }, query).get(changeRequestKey(pull(1)))
+  const result = mapSnapshotResponse({ data: { r0: { ...settings, p0: node } } }, query).get(changeRequestKey(pull(1)))
   if (result === undefined || 'code' in result) throw new Error(`expected a snapshot, received ${JSON.stringify(result)}`)
   return result
 }
@@ -19,8 +20,9 @@ describe('snapshot query', () => {
     const query = snapshotQuery([pull(1), pull(2, upper), pull(1, upper), pull(7, other)])
 
     expect([...query.targets]).toEqual([['r0.p0', pull(1)], ['r0.p1', pull(2, upper)], ['r1.p0', pull(7, other)]])
-    expect(query.document).toContain('r0: repository(owner: "octo", name: "demo") { p0: pullRequest(number: 1) { ...ChangeRequestFields } p1: pullRequest(number: 2) { ...ChangeRequestFields } }')
-    expect(query.document).toContain('r1: repository(owner: "octo", name: "other") { p0: pullRequest(number: 7) { ...ChangeRequestFields } }')
+    const settings = 'squashMergeAllowed mergeCommitAllowed rebaseMergeAllowed viewerPermission viewerDefaultMergeMethod'
+    expect(query.document).toContain(`r0: repository(owner: "octo", name: "demo") { ${settings} p0: pullRequest(number: 1) { ...ChangeRequestFields } p1: pullRequest(number: 2) { ...ChangeRequestFields } }`)
+    expect(query.document).toContain(`r1: repository(owner: "octo", name: "other") { ${settings} p0: pullRequest(number: 7) { ...ChangeRequestFields } }`)
     expect(query.document).toContain('fragment ChangeRequestFields on PullRequest {')
   })
 
@@ -46,6 +48,8 @@ describe('snapshot mapping', () => {
       additions: 128,
       deletions: 14,
       mergeability: 'mergeable',
+      mergeReady: true,
+      mergeMethods: ['merge', 'squash'],
       reviewDecision: 'none',
       checks: [{
         name: 'lint',
@@ -145,6 +149,40 @@ describe('snapshot mapping', () => {
     ]))
 
     expect(snapshot.checks.map(check => [check.name, check.workflow])).toEqual([['a', null], ['b', null]])
+  })
+
+  it.each([
+    ['clean', {}, {}, true],
+    ['mergeable with hooks', { mergeStateStatus: 'HAS_HOOKS' }, {}, true],
+    ['mergeable with failing checks that are not required', { mergeStateStatus: 'UNSTABLE' }, {}, true],
+    ['blocked by a rule', { mergeStateStatus: 'BLOCKED' }, {}, false],
+    ['behind its base', { mergeStateStatus: 'BEHIND' }, {}, false],
+    ['conflicting', { mergeStateStatus: 'DIRTY' }, {}, false],
+    ['still computing', { mergeStateStatus: 'UNKNOWN' }, {}, false],
+    ['a draft', { isDraft: true }, {}, false],
+    ['merged', { state: 'MERGED' }, {}, false],
+    ['closed', { state: 'CLOSED' }, {}, false],
+    ['for a maintainer', {}, { viewerPermission: 'MAINTAIN' }, true],
+    ['for an administrator', {}, { viewerPermission: 'ADMIN' }, true],
+    ['for a triager', {}, { viewerPermission: 'TRIAGE' }, false],
+    ['for a reader', {}, { viewerPermission: 'READ' }, false],
+    ['for a viewer without a permission', {}, { viewerPermission: null }, false],
+  ])('offers a merge of a pull request %s only when GitHub would merge it now', (_label, node, settings, ready) => {
+    expect(single(pullRequestNode(1, node), repositorySettings(settings)).mergeReady).toBe(ready)
+  })
+
+  it.each([
+    ['puts the viewer\'s usual method first', { rebaseMergeAllowed: true, viewerDefaultMergeMethod: 'REBASE' }, ['rebase', 'squash', 'merge']],
+    ['keeps the menu order when the usual method is squash', { rebaseMergeAllowed: true, viewerDefaultMergeMethod: 'SQUASH' }, ['squash', 'merge', 'rebase']],
+    ['skips a usual method the repository disallows', { mergeCommitAllowed: false, rebaseMergeAllowed: true }, ['squash', 'rebase']],
+    ['lists nothing when the repository allows no method', { squashMergeAllowed: false, mergeCommitAllowed: false }, []],
+  ])('lists the merge methods the repository allows: %s', (_label, settings, methods) => {
+    expect(single(pullRequestNode(1), repositorySettings(settings)).mergeMethods).toEqual(methods)
+  })
+
+  it('offers no merge in a repository whose merge settings are unreadable', () => {
+    expect(single(pullRequestNode(1), null)).toMatchObject({ mergeReady: false, mergeMethods: [] })
+    expect(single(pullRequestNode(1), { squashMergeAllowed: 'yes' })).toMatchObject({ mergeReady: false, mergeMethods: [] })
   })
 
   it('marks truncated checks, a hidden author, drafts, and a commit without rollup', () => {

@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 /** One change request card: state glyph, title link, collapsed summary, read notices, and expanded details and actions. */
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import type { ForgeFailure } from '@deepseek-ai/dsh-experimental-forge/types'
+import type { ForgeFailure, MergeRequest } from '@deepseek-ai/dsh-experimental-forge/types'
 import { ChangeRequestCard, type ChangeRequestActions } from '../src/client/ChangeRequestCard.tsx'
 import { en } from '../src/client/locales.ts'
 import css from '../src/client/ForgeTab.module.css'
@@ -366,5 +366,126 @@ describe('expanded ChangeRequestCard', () => {
     const b = card(entry(1, snapshot(1)), { expanded: true, actions: { remove: undefined } })
     expect(within(b.head).queryByRole('button', { name: 'Remove #1 from this Session' })).toBeNull()
     expect(within(b.head).getByRole('button', { name: en['change.view'] })).toBeTruthy()
+  })
+})
+
+/** A promise that settles when the test says so. */
+function deferred(): { readonly promise: Promise<void>; readonly resolve: () => void } {
+  let resolve = (): void => {}
+  const promise = new Promise<void>((settle) => { resolve = settle })
+  return { promise, resolve }
+}
+
+/** Each row of the open merge menu, and whether it carries the selection check. */
+function mergeRows(): string[] {
+  return screen.getAllByRole('menuitem').map(row => `${row.textContent ?? ''}${row.querySelector('svg') === null ? '' : ' ✓'}`)
+}
+
+describe('ChangeRequestCard actions', () => {
+  const head = 'b'.repeat(40)
+
+  it('marks a draft ready for review, refusing a second request until the first settles', async () => {
+    const pending = deferred()
+    const markReady = vi.fn<(entry: ForgePanelChangeRequest) => Promise<void>>(() => pending.promise)
+    const value = entry(7, snapshot(7, { draft: true, mergeReady: true }))
+    const b = card(value, { expanded: true, actions: { markReady } })
+    const button = within(b.item).getByRole('button', { name: en['change.markReady'] })
+    expect(within(b.item).queryByRole('button', { name: en['change.merge'] })).toBeNull()
+
+    fireEvent.click(button)
+    fireEvent.click(button)
+    expect(markReady).toHaveBeenCalledOnce()
+    expect(markReady).toHaveBeenCalledWith(value)
+    expect(button.hasAttribute('disabled')).toBe(true)
+
+    await act(async () => {
+      pending.resolve()
+      await pending.promise
+    })
+    expect(button.hasAttribute('disabled')).toBe(false)
+  })
+
+  it('lists the methods the repository allows with the usual one chosen, and merges the confirmed head with the chosen one', async () => {
+    const pending = deferred()
+    const merge = vi.fn<(entry: ForgePanelChangeRequest, request: MergeRequest) => Promise<void>>(() => pending.promise)
+    const value = entry(7, snapshot(7, { mergeReady: true, mergeMethods: ['merge', 'squash', 'rebase'], headSha: head }))
+    const b = card(value, { expanded: true, actions: { merge } })
+    const button = within(b.item).getByRole('button', { name: en['change.merge'] })
+    expect(within(b.item).queryByRole('button', { name: en['change.markReady'] })).toBeNull()
+    expect(button.getAttribute('aria-expanded')).toBe('false')
+
+    fireEvent.click(button)
+    expect(button.getAttribute('aria-expanded')).toBe('true')
+    expect(within(screen.getByRole('menu')).getByText('Merge #7 into main')).toBeTruthy()
+    expect(mergeRows()).toEqual([
+      'Create a merge commitKeep every commit and add a merge commit ✓',
+      'Squash and mergeCombine every commit into one',
+      'Rebase and mergeReplay each commit onto main',
+      'Confirm merge',
+    ])
+
+    fireEvent.click(screen.getByRole('menuitem', { name: /^Rebase and merge/ }))
+    expect(mergeRows().map(row => row.endsWith(' ✓'))).toEqual([false, false, true, false])
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Confirm merge' }))
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(merge).toHaveBeenCalledWith(value, { method: 'rebase', headSha: head })
+    expect(button.hasAttribute('disabled')).toBe(true)
+
+    await act(async () => {
+      pending.resolve()
+      await pending.promise
+    })
+    expect(button.hasAttribute('disabled')).toBe(false)
+    fireEvent.click(button)
+    fireEvent.click(button)
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(merge).toHaveBeenCalledOnce()
+  })
+
+  it('falls back to the usual method once the repository stops allowing the chosen one', async () => {
+    const merge = vi.fn<(entry: ForgePanelChangeRequest, request: MergeRequest) => Promise<void>>(async () => {})
+    const actions: ChangeRequestActions = { openLink: vi.fn(), copyLink: vi.fn(), retry: vi.fn(), merge }
+    const view = (methods: MergeRequest['method'][]) => (
+      <ul>
+        <ChangeRequestCard
+          entry={entry(7, snapshot(7, { mergeReady: true, mergeMethods: methods, headSha: head }))}
+          expanded
+          onToggle={vi.fn()}
+          now={NOW}
+          actions={actions}
+          t={t}
+        />
+      </ul>
+    )
+    const rendered = render(view(['squash', 'rebase']))
+    fireEvent.click(within(rendered.container).getByRole('button', { name: en['change.merge'] }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /^Rebase and merge/ }))
+    rendered.rerender(view(['squash']))
+
+    expect(mergeRows()).toEqual(['Squash and mergeCombine every commit into one ✓', 'Confirm merge'])
+    await act(async () => {
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Confirm merge' }))
+    })
+    expect(merge).toHaveBeenCalledWith(expect.objectContaining({ url: 'https://github.com/octo/demo/pull/7' }), { method: 'squash', headSha: head })
+  })
+
+  it.each([
+    ['the host would not merge it now', { mergeReady: false }],
+    ['the repository allows no merge method', { mergeReady: true, mergeMethods: [] }],
+    ['it is merged', { state: 'merged', mergeReady: true }],
+    ['it is a closed draft', { state: 'closed', draft: true }],
+  ] as const)('offers neither action when %s', (_label, overrides) => {
+    const b = card(entry(7, snapshot(7, overrides)), { expanded: true })
+    expect(within(b.item).queryByRole('button', { name: en['change.markReady'] })).toBeNull()
+    expect(within(b.item).queryByRole('button', { name: en['change.merge'] })).toBeNull()
+  })
+
+  it('offers neither action on a surface without a Session binding', () => {
+    const actions = { markReady: undefined, merge: undefined }
+    for (const value of [entry(7, snapshot(7, { draft: true })), entry(8, snapshot(8, { mergeReady: true }))]) {
+      const b = card(value, { expanded: true, actions })
+      expect(within(b.item).queryAllByRole('button', { name: new RegExp(`^(${en['change.markReady']}|${en['change.merge']})$`) })).toEqual([])
+      cleanup()
+    }
   })
 })

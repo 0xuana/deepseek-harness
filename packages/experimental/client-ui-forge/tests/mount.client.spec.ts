@@ -63,6 +63,8 @@ const REFUSED = {
   busy: { ok: false, error: new RemoteError('forgePanel/session-busy', 'busy', {}) },
   restore: { ok: false, error: new RemoteError('forgePanel/restore-failed', 'fatal: \'/work/repo-dsh\' already exists', {}) },
   failed: { ok: false, error: new RemoteError('gateway/bad-request', 'failed', {}) },
+  stale: { ok: false, error: new RemoteError('forgePanel/stale-head', 'Head branch was modified', {}) },
+  refused: { ok: false, error: new RemoteError('forgePanel/action-failed', 'Pull Request is not mergeable', {}) },
 } satisfies Record<string, RemoteResult<never>>
 
 function isTabFace(value: Record<string, unknown>): value is Record<string, unknown> & ForgeTabInjected {
@@ -116,6 +118,8 @@ async function base() {
     }),
     track: vi.fn(async (_sessionId: SessionId, _url: string): Promise<RemoteResult<void>> => OK),
     dismiss: vi.fn(async (_sessionId: SessionId, _url: string): Promise<RemoteResult<void>> => OK),
+    markReady: vi.fn(async (_sessionId: SessionId, _url: string): Promise<RemoteResult<void>> => OK),
+    merge: vi.fn(async (_sessionId: SessionId, _url: string, _method: string, _headSha: string): Promise<RemoteResult<void>> => OK),
     refresh: vi.fn(async (_sessionId: SessionId): Promise<RemoteResult<void>> => OK),
     requestWorktree: vi.fn(async (_sessionId: SessionId, _from: string | null): Promise<RemoteResult<void>> => OK),
     cancelWorktree: vi.fn(async (_sessionId: SessionId): Promise<RemoteResult<void>> => OK),
@@ -425,6 +429,33 @@ describe('mountForgePanel removal', () => {
     f.tab(S1).remove(entry(7, snapshot(7)))
     await settle()
     expect(f.notice()).toMatchObject({ key: 'toast.removeFailed', tone: 'failure', params: {}, undo: undefined })
+    await f.dispose()
+  })
+})
+
+describe('mountForgePanel change request actions', () => {
+  it.each([
+    ['confirms it', OK, { key: 'toast.markedReady', tone: 'success', params: { name: '#7' } }],
+    ['reports why the host refused', REFUSED.refused, { key: 'toast.markReadyFailed', tone: 'failure', params: { message: 'Pull Request is not mergeable' } }],
+  ])('marks a draft ready through the Remote and %s', async (_label, result, notice) => {
+    const f = await fixture()
+    f.forgePanel.markReady.mockResolvedValueOnce(result)
+    await f.tab(S1).markReady(entry(7, snapshot(7, { draft: true })))
+    expect(f.forgePanel.markReady).toHaveBeenCalledWith(S1, 'https://github.com/octo/demo/pull/7')
+    expect(f.notice()).toMatchObject(notice)
+    await f.dispose()
+  })
+
+  it.each([
+    ['confirms it', OK, { key: 'toast.merged', tone: 'success', params: { name: '#7' } }],
+    ['says a moved head needs another look', REFUSED.stale, { key: 'toast.mergeStale', tone: 'failure', params: { name: '#7' } }],
+    ['reports why the host refused', REFUSED.refused, { key: 'toast.mergeFailed', tone: 'failure', params: { message: 'Pull Request is not mergeable' } }],
+  ])('merges through the Remote with the confirmed head and %s', async (_label, result, notice) => {
+    const f = await fixture()
+    f.forgePanel.merge.mockResolvedValueOnce(result)
+    await f.tab(S1).merge(entry(7, snapshot(7)), { method: 'rebase', headSha: 'b'.repeat(40) })
+    expect(f.forgePanel.merge).toHaveBeenCalledWith(S1, 'https://github.com/octo/demo/pull/7', 'rebase', 'b'.repeat(40))
+    expect(f.notice()).toMatchObject(notice)
     await f.dispose()
   })
 })
