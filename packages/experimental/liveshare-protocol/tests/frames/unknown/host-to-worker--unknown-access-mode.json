@@ -7,7 +7,7 @@
       "shareId": "share-three",
       "sessionId": "session-three",
       "sessionTitle": "Third",
-      "accessMode": "selected",
+      "accessMode": "approval",
       "relay": "wss://relay.example",
       "gatewayToken": "token-three",
       "ownerDisplayName": "Owner",

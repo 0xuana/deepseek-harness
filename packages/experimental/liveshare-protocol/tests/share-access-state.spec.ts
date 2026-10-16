@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { parseGatewayFrame, parseRelayFrame, parseTunnelWorkerEvent, LIVESHARE_CAPABILITIES } from '../src/tunnel-protocol.ts'
 
 const registrationToken = '12345678-1234-4123-8123-123456789abc'
-const state = { type: 'share-access-state', version: 12, accessMode: 'approval',
+const state = { type: 'share-access-state', version: 12, accessMode: 'selected',
   allowedSubjectIds: ['identity-key'], sessionMode: 'write', expiresAt: '2026-10-09T00:00:00Z' }
 
 describe('Relay authority snapshot frame', () => {
@@ -14,7 +14,7 @@ describe('Relay authority snapshot frame', () => {
     expect(LIVESHARE_CAPABILITIES).toContain('share-access-state')
   })
   it.each([
-    { version: -1 }, { version: 0.5 }, { accessMode: 'selected' }, { sessionMode: 'future' },
+    { version: -1 }, { version: 0.5 }, { accessMode: 'approval' }, { sessionMode: 'future' },
     { allowedSubjectIds: [1] }, { allowedSubjectIds: [''] }, { expiresAt: 'not-a-time' },
   ])('refuses malformed authority fields %j', (fields) => {
     expect(parseRelayFrame(JSON.stringify({ ...state, ...fields }))).toBeUndefined()

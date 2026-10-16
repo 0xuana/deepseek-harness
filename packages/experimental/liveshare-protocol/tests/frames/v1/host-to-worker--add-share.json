@@ -7,7 +7,7 @@
       "shareId": "share-one",
       "sessionId": "session-one",
       "sessionTitle": "Review the migration",
-      "accessMode": "approval",
+      "accessMode": "selected",
       "relay": "wss://relay.example",
       "gatewayToken": "token-one",
       "ownerDisplayName": "Owner",

@@ -36,7 +36,7 @@ export interface TunnelShareSpec {
   readonly shareId: string
   readonly sessionId: string
   readonly sessionTitle: string
-  readonly accessMode: 'open' | 'approval'
+  readonly accessMode: 'open' | 'selected'
   readonly relay: string
   readonly gatewayToken: string
   readonly ownerProviderId?: string
@@ -178,7 +178,7 @@ export interface ShareAccessStateFrame {
   readonly type: 'share-access-state'
   /** Monotonic durable Relay store revision. */
   readonly version: number
-  readonly accessMode: 'open' | 'approval'
+  readonly accessMode: 'open' | 'selected'
   readonly allowedSubjectIds: readonly string[]
   /**
    * Tier the share carries.
@@ -447,7 +447,7 @@ function isTunnelShareSpec(value: unknown): value is TunnelShareSpec {
   return typeof value.shareId === 'string' && value.shareId !== ''
     && typeof value.sessionId === 'string'
     && typeof value.sessionTitle === 'string'
-    && (value.accessMode === 'open' || value.accessMode === 'approval')
+    && (value.accessMode === 'open' || value.accessMode === 'selected')
     && typeof value.relay === 'string'
     && typeof value.gatewayToken === 'string'
     && typeof value.ownerDisplayName === 'string'
@@ -503,7 +503,7 @@ function isTunnelRequestIdentity(value: Record<string, unknown>): value is Recor
 export function parseShareAccessState(value: unknown): ShareAccessStateFrame | undefined {
   if (!isRecord(value) || value.type !== 'share-access-state'
     || !Number.isSafeInteger(value.version) || Number(value.version) < 0
-    || (value.accessMode !== 'open' && value.accessMode !== 'approval')
+    || (value.accessMode !== 'open' && value.accessMode !== 'selected')
     || !isSubjectIds(value.allowedSubjectIds)
     || (value.sessionMode !== 'view' && value.sessionMode !== 'fork-readonly' && value.sessionMode !== 'write')
     || (value.allowsFork !== undefined && typeof value.allowsFork !== 'boolean')
