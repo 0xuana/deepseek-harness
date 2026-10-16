@@ -145,12 +145,9 @@
 
 /* Steering rows keep their full layout from insertion. Only the status moves:
    it enters its new slot below them from one slot higher, independent of how
-   many admitted rows it passes or how tall they are. While the viewport pins
-   the tail (it follows the floor and the content overflows), following scrolls
-   absorb the growth and the status keeps its on-screen position, so neither
-   status move plays. */
+   many admitted rows it passes or how tall they are. */
 @media (prefers-reduced-motion: no-preference) {
-  .column:not([data-input-fold]):not([data-chat-tail-pinned]) > :global([data-slot="conversation.chat.flow"]) > .flowItem[data-chat-flow-kind="steering"] + .running {
+  :where(.column > :global([data-slot="conversation.chat.flow"]) > .flowItem[data-chat-flow-kind="steering"]) + .running {
     animation: running-enters-slot 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
   }
 }
@@ -183,11 +180,21 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .column:not([data-input-fold]):not([data-chat-tail-pinned]) > :global([data-slot="conversation.chat.flow"]) > :nth-last-child(2 of :not([hidden]):not([data-pending-steering]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty)))):is(
+  :where(.column > :global([data-slot="conversation.chat.flow"]) > :nth-last-child(2 of :not([hidden]):not([data-pending-steering]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty)))):is(
     .flowItem:not([data-chat-flow-kind="user"]):not([data-chat-flow-kind="steering"]):not([data-chat-flow-kind="turn-trigger"]),
     [data-chat-group-key]
-  ) ~ .running {
+  )) ~ .running {
     animation: running-follows-output 110ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* An input fold, or a pinned tail whose following scrolls hold the status
+     still, runs both status moves at zero duration. The structure alone names
+     the animation, so a switch only changes the duration of a move its
+     structural change already created: turning a switch off never replays a
+     finished move, and turning it on completes a running one at once. The
+     structural rules above are wrapped in :where() so this rule outranks them. */
+  .column:is([data-input-fold], [data-chat-tail-pinned]) .running {
+    animation-duration: 0s;
   }
 }
 

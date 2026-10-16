@@ -38,16 +38,26 @@ describe('Running status move below the first output', () => {
     expect(view).toMatch(new RegExp(String.raw`> \[data-chat-flow-kind="turn-process"\] \+ :nth-last-child\(2 of [^{]*\) ~ \.running \{\s*${travel(16)}`))
   })
 
-  it('slides the status from where it stood, like the steering entrance, outside input folds and reduced motion', () => {
+  it('slides the status from where it stood, like the steering entrance, outside reduced motion', () => {
     const view = read('ChatView.module.css')
-    const unpinned = String.raw`\.column:not\(\[data-input-fold\]\):not\(\[data-chat-tail-pinned\]\)`
-    expect(view).toMatch(new RegExp(String.raw`@media \(prefers-reduced-motion: no-preference\) \{\s*${unpinned}[^{]*\[data-chat-group-key\]\s*\) ~ \.running \{\s*`
+    expect(view).toMatch(new RegExp(String.raw`@media \(prefers-reduced-motion: no-preference\) \{\s*:where\(\.column > [^{]*\[data-chat-group-key\]\s*\)\) ~ \.running \{\s*`
       + String.raw`animation: running-follows-output 110ms cubic-bezier\(0\.4, 0, 0\.2, 1\);`))
     expect(view).toMatch(new RegExp(String.raw`@keyframes running-follows-output \{\s*from \{\s*opacity: 0;\s*`
       + String.raw`translate: 0 calc\(-1 \* var\(--dsh-running-follow\)\);\s*\}\s*40% \{\s*opacity: 1;`))
-    // Following scrolls hold the status still while the tail is pinned, so neither status move plays there.
-    expect(view.match(/animation: running-(enters-slot|follows-output) /g)).toHaveLength(2)
-    expect(view.match(new RegExp(String.raw`${unpinned} > :global\(\[data-slot="conversation\.chat\.flow"\]\) > `, 'g'))).toHaveLength(2)
+  })
+
+  it('lets input folds and the pinned tail change only the duration of a status move', () => {
+    const view = read('ChatView.module.css')
+    // Structure alone names each move, so a switch turning off never adds an animation name and replays a
+    // finished move. The structure sits in :where() so the switch rule outranks it.
+    const moves = [...view.matchAll(/([^{}]+)\{\s*animation: running-(?:enters-slot|follows-output) /g)].map(match => match[1]!.trim())
+    expect(moves).toHaveLength(2)
+    for (const selector of moves) {
+      expect(selector).toMatch(/^:where\(/)
+      expect(selector).not.toMatch(/data-input-fold|data-chat-tail-pinned/)
+    }
+    expect(view).toMatch(/\.column:is\(\[data-input-fold\], \[data-chat-tail-pinned\]\) \.running \{\s*animation-duration: 0s;\s*\}/)
+    expect(view.match(/data-chat-tail-pinned/g)).toHaveLength(1)
   })
 
   it('sizes every first-output row to the travelled row height', () => {
