@@ -604,6 +604,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       'client-ui-approval ApprovalPanel',
       'client-ui-subagent SubagentReadOnlyComposer',
       'client-ui-user-questions QuestionComposer',
+      'client-ui-cua ApplicationApproval',
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.composer\', () => ctx.slots.register(\n      { name: \'conversation.composer\', select: owner => null },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
