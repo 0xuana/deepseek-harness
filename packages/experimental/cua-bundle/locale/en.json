@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Computer Use",
+    "description": "macOS only. Windows support is in development. Enabling makes PTC persistent and loads Computer Use for existing and new PTC sessions. Switch to PTC mode and grant Accessibility and Screen Recording permissions to use Computer Use."
+  }
+}

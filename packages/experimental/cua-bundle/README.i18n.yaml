@@ -1,0 +1,46 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/cua-bundle/README.md
+/:
+  en: 6a4efed7f053f52c
+  zh: 9135d38515947b44
+/deepseek-ai-dsh-cua-bundle:
+  en: 9084fb48d0f6489c
+  zh: ce692972d91cf663
+/deepseek-ai-dsh-cua-bundle/summary:
+  en: 06d8bf4ee1ef6f3b
+  zh: 8568f649fb846615
+/deepseek-ai-dsh-cua-bundle/table-of-contents:
+  en: b563e4ec4727d0de
+  zh: d0228da978238e05
+/deepseek-ai-dsh-cua-bundle/use-this-package:
+  en: 5b315d6902074bdd
+  zh: b904b76441f44088
+/deepseek-ai-dsh-cua-bundle/understand-the-implementation:
+  en: 1d592dc9112502fe
+  zh: a922cd0878b6c27d
+/deepseek-ai-dsh-cua-bundle/further-exploration:
+  en: 9f15d56b5b16e1ca
+  zh: 75eb08e8828c8877
+/deepseek-ai-dsh-cua-bundle/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-cua-bundle/model-experience/computer-use-and-persistent-ptc:
+  en: b932589e03b6ff18
+  zh: b932589e03b6ff18
+/deepseek-ai-dsh-cua-bundle/model-experience/computer-use-and-persistent-ptc/what-the-model-sees:
+  en: 591af735d1eb92f6
+  zh: 3632bffa33c77b28
+/deepseek-ai-dsh-cua-bundle/model-experience/computer-use-and-persistent-ptc/token-effect:
+  en: 09a8fd5d9ab27cea
+  zh: 05de759d1f4f33c5
+/deepseek-ai-dsh-cua-bundle/model-experience/computer-use-and-persistent-ptc/kv-cache-effect:
+  en: 417c40acd93df532
+  zh: 69cc5cf7140c75a9
+/deepseek-ai-dsh-cua-bundle/known-limitations-and-deferred-work:
+  en: 8ddfd9245748b7c3
+  zh: 52015ab010abd0f8
+/deepseek-ai-dsh-cua-bundle/known-limitations-and-deferred-work/dev-note:
+  en: 0a1253c6f7b5e8b9
+  zh: ce96645b3e75874e
