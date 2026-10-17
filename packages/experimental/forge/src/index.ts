@@ -51,6 +51,16 @@ export class ForgeService extends Service {
   private readonly pending = new Set<Promise<void>>()
   private readonly lifetime = new AbortController()
   private timer: ReturnType<typeof setTimeout> | undefined
+  /**
+   * Poll what is due. A field rather than a method, so the timer runs it on
+   * the instance itself: a polling round started through a caller's `ctx.forge`
+   * would otherwise run on that caller's shadow receiver, and every later round
+   * would nest one more shadow until a property write overflows the stack.
+   */
+  private readonly tick = (): void => {
+    this.timer = undefined
+    this.poll()
+  }
 
   constructor(ctx: Context, config: Config) {
     super(ctx, 'forge')
@@ -200,10 +210,7 @@ export class ForgeService extends Service {
       next = next === undefined ? watch.dueAt : Math.min(next, watch.dueAt)
     }
     if (next === undefined) return
-    this.timer = setTimeout(() => {
-      this.timer = undefined
-      this.poll()
-    }, Math.max(0, next - Date.now()))
+    this.timer = setTimeout(this.tick, Math.max(0, next - Date.now()))
   }
 
   private poll(): void {

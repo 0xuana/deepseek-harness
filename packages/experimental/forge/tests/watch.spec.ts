@@ -66,6 +66,21 @@ describe('forge watch', () => {
     expect(context.forge.latest(ref(2))).toBeUndefined()
   })
 
+  it('keeps polling a change request watched through ctx.forge for many rounds', async () => {
+    // A round that ran on the previous round's receiver would nest one more shadow each time,
+    // and such a chain overflows the stack within a few hundred rounds.
+    ctx = await forgeContext({ activeIntervalMs: 1, idleIntervalMs: 1, maxBackoffMs: 1, fetchTimeoutMs: 500 })
+    const provider = new FakeProvider()
+    provider.results.set(key, snapshot(ref(1)))
+    await provide(ctx, provider)
+    const { updates } = collect(ctx)
+
+    for (let step = 0; step < 300 && updates.length < 1_000; step++) await vi.advanceTimersByTimeAsync(10)
+
+    expect(updates.length).toBeGreaterThanOrEqual(1_000)
+    expect(updates.at(-1)).toMatchObject({ key, snapshot: snapshot(ref(1)) })
+  })
+
   it('batches due change requests of one forge into one fetch', async () => {
     const provider = new FakeProvider()
     const context = await setup(provider)
