@@ -236,7 +236,7 @@ describe.skipIf(process.platform === 'win32')('SSH helper wire and lifecycle bou
     await mkdir(outside)
     await symlink(extra, alias, 'dir')
     const target = (path: string) => ({ targetKey: path, displayPath: path })
-    const policy = { mode: 'workspace-write' as const, workspaceRoot: workspace, additionalWritableRoots: [alias, extra] }
+    const policy = { mode: 'workspace-write' as const, workspaceRoot: workspace, additionalWritableRoots: [alias, extra], sessionId: 'ssh-extra-grant' }
     try {
       const written = await test.client.request('fs.write', {
         target: target(join(extra, 'allowed.txt')), content: 'ok', policy,
