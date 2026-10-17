@@ -468,6 +468,12 @@
                             "const": 2
                           }
                         ]
+                      },
+                      "holdMs": {
+                        "description": "Milliseconds to hold each mouse press before release. Uses pointer input even for AX targets; omission preserves ordinary click behavior. The operation deadline still applies.",
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 2147483647
                       }
                     },
                     "required": [
@@ -538,6 +544,12 @@
                             "const": 2
                           }
                         ]
+                      },
+                      "holdMs": {
+                        "description": "Milliseconds to hold each mouse press before release. Uses pointer input even for AX targets; omission preserves ordinary click behavior. The operation deadline still applies.",
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 2147483647
                       }
                     },
                     "required": [
@@ -611,6 +623,12 @@
                             "const": 2
                           }
                         ]
+                      },
+                      "holdMs": {
+                        "description": "Milliseconds to hold each mouse press before release. Uses pointer input even for AX targets; omission preserves ordinary click behavior. The operation deadline still applies.",
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 2147483647
                       }
                     },
                     "required": [

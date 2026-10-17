@@ -89,6 +89,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--helper", type=Path, required=True)
     parser.add_argument("--artifacts", type=Path)
+    parser.add_argument("--click-only", action="store_true")
     args = parser.parse_args()
     transcript = []
     helper = None
@@ -102,7 +103,7 @@ def main():
         info = {"CFBundleName": "Capabilities Fixture", "CFBundleDisplayName": "Capabilities Fixture",
                 "CFBundleIdentifier": "test.dsh.cua." + uuid.uuid4().hex,
                 "CFBundleExecutable": "CapabilitiesFixture", "CFBundlePackageType": "APPL",
-                "DSHFixtureStatePath": str(state_file)}
+                "DSHFixtureStatePath": str(state_file), "DSHFixtureBackground": args.click_only}
         (application / "Contents/Info.plist").write_bytes(plistlib.dumps(info))
         subprocess.run(["swiftc", str(ROOT / "tests/CapabilitiesFixture.swift"), "-o", str(executable)], check=True)
         try:
@@ -120,39 +121,42 @@ def main():
             app = call("launchApp", owner)
             pid = app["pid"]
             wait_for_state(state_file, lambda value: value["pid"] == pid and value["windowId"] > 0)
-            call("activate", owner)
-            state = wait_for_state(state_file, lambda value: value["pid"] == pid and value["active"] and value["keyWindow"])
-            assert call("findApps", {"query": str(application), "maxAppMatches": 20})[0]["pid"] == pid
-            observed = call("getState", {**owner, "maxElements": 2000, "maxDepth": 25})
-            field = next(item for item in observed["elements"] if item["role"] == "AXTextArea")
-            assert "valueWritable=true" in observed["tree"] and "selectionWritable=true" in observed["tree"], observed["tree"]
-            target = {**owner, "snapshotId": observed["snapshotId"], "elementIndex": field["index"]}
-            call("selectText", {**target, "text": "target"}, "AMBIGUOUS_TEXT")
-            call("selectText", {**target, "text": "target", "prefix": "第二😀 "})
-            selected = wait_for_state(state_file, lambda value: value["selection"] == [17, 6])
-            assert selected["text"] == "第一😀 target，第二😀 target.", selected
-            call("paste", {**owner, "text": "替换\n第二行\t保留", "format": "text", "maxClipboardBytes": 33554432, "pasteReadTimeoutMs": 1000, "maxElements": 2000, "maxDepth": 25})
-            state = wait_for_state(state_file, lambda value: value["text"] == "第一😀 target，第二😀 替换\n第二行\t保留.")
-            assert state["pasteAttempts"] == [True], state
-            observed = call("getState", {**owner, "maxElements": 2000, "maxDepth": 25})
-            field = next(item for item in observed["elements"] if item["role"] == "AXTextArea")
-            target = {**owner, "snapshotId": observed["snapshotId"], "elementIndex": field["index"]}
-            call("selectText", {**target, "text": state["text"]})
-            html = '<h1>Heading</h1><p><b>Bold</b> and <a href="https://example.com/">link</a></p>'
-            call("paste", {**owner, "text": html, "format": "html", "maxClipboardBytes": 33554432, "pasteReadTimeoutMs": 1000, "maxElements": 2000, "maxDepth": 25})
-            state = wait_for_state(state_file, lambda value: any(run.get("link") == "https://example.com/" for run in value["runs"]))
-            assert any(run["bold"] and "Bold" in run["text"] for run in state["runs"]), state
+            if not args.click_only:
+                call("activate", owner)
+                state = wait_for_state(state_file, lambda value: value["pid"] == pid and value["active"] and value["keyWindow"])
+                assert call("findApps", {"query": str(application), "maxAppMatches": 20})[0]["pid"] == pid
+                observed = call("getState", {**owner, "maxElements": 2000, "maxDepth": 25})
+                field = next(item for item in observed["elements"] if item["role"] == "AXTextArea")
+                assert "valueWritable=true" in observed["tree"] and "selectionWritable=true" in observed["tree"], observed["tree"]
+                target = {**owner, "snapshotId": observed["snapshotId"], "elementIndex": field["index"]}
+                call("selectText", {**target, "text": "target"}, "AMBIGUOUS_TEXT")
+                call("selectText", {**target, "text": "target", "prefix": "第二😀 "})
+                selected = wait_for_state(state_file, lambda value: value["selection"] == [17, 6])
+                assert selected["text"] == "第一😀 target，第二😀 target.", selected
+                call("paste", {**owner, "text": "替换\n第二行\t保留", "format": "text", "maxClipboardBytes": 33554432, "pasteReadTimeoutMs": 1000, "maxElements": 2000, "maxDepth": 25})
+                state = wait_for_state(state_file, lambda value: value["text"] == "第一😀 target，第二😀 替换\n第二行\t保留.")
+                assert state["pasteAttempts"] == [True], state
+                observed = call("getState", {**owner, "maxElements": 2000, "maxDepth": 25})
+                field = next(item for item in observed["elements"] if item["role"] == "AXTextArea")
+                target = {**owner, "snapshotId": observed["snapshotId"], "elementIndex": field["index"]}
+                call("selectText", {**target, "text": state["text"]})
+                html = '<h1>Heading</h1><p><b>Bold</b> and <a href="https://example.com/">link</a></p>'
+                call("paste", {**owner, "text": html, "format": "html", "maxClipboardBytes": 33554432, "pasteReadTimeoutMs": 1000, "maxElements": 2000, "maxDepth": 25})
+                state = wait_for_state(state_file, lambda value: any(run.get("link") == "https://example.com/" for run in value["runs"]))
+                assert any(run["bold"] and "Bold" in run["text"] for run in state["runs"]), state
+            state = json.loads(state_file.read_text())
             pad = state["pad"]
             point = {"x": pad[0] + 80, "y": pad[1] + 70}
             window = {**owner, "windowId": state["windowId"]}
-            call("click", {**window, **point, "mouseButton": "middle", "modifiers": ["shift"]})
-            state = wait_for_state(state_file, lambda value: any(event["type"] == 26 and event.get("button") == 2 and event["shift"] for event in value["events"]))
-            call("drag", {**window, "fromX": point["x"], "fromY": point["y"], "toX": point["x"] + 80,
-                          "toY": point["y"] + 20, "durationMs": 200, "steps": 10, "mouseButton": "middle", "modifiers": ["shift"]})
-            state = wait_for_state(state_file, lambda value: any(event["type"] == 27 and event.get("button") == 2 and event["shift"] for event in value["events"]))
-            call("pressKey", {**owner, "key": "KP_0"})
-            call("pressKey", {**owner, "key": "KP_Enter"})
-            state = wait_for_state(state_file, lambda value: {82, 76}.issubset({event.get("keyCode") for event in value["events"]}))
+            if not args.click_only:
+                call("click", {**window, **point, "mouseButton": "middle", "modifiers": ["shift"]})
+                state = wait_for_state(state_file, lambda value: any(event["type"] == 26 and event.get("button") == 2 and event["shift"] for event in value["events"]))
+                call("drag", {**window, "fromX": point["x"], "fromY": point["y"], "toX": point["x"] + 80,
+                              "toY": point["y"] + 20, "durationMs": 200, "steps": 10, "mouseButton": "middle", "modifiers": ["shift"]})
+                state = wait_for_state(state_file, lambda value: any(event["type"] == 27 and event.get("button") == 2 and event["shift"] for event in value["events"]))
+                call("pressKey", {**owner, "key": "KP_0"})
+                call("pressKey", {**owner, "key": "KP_Enter"})
+                state = wait_for_state(state_file, lambda value: {82, 76}.issubset({event.get("keyCode") for event in value["events"]}))
             check_click_holds(helper, owner, window, point, state_file)
             timed = NativeHelper(transcript, args.helper, ["--timeout-ms", "5000"])
             try:
@@ -169,7 +173,8 @@ def main():
                 shot = call("screenshot", window)
                 (args.artifacts / "capabilities.png").write_bytes(base64.b64decode(shot["data"]))
                 (args.artifacts / "state.json").write_text(json.dumps(state, ensure_ascii=False, indent=2))
-            print("PASS: stopped-app discovery and launch, repeated Unicode selection, plain/HTML paste, middle/modifier drag, keypad identity, click holds and cancellation/timeout release")
+            print("PASS: click holds and cancellation/timeout release" if args.click_only else
+                  "PASS: stopped-app launch, Unicode selection, plain/HTML paste, middle/modifier drag, keypad identity and click holds")
         finally:
             if pid is None and state_file.exists():
                 pid = json.loads(state_file.read_text())["pid"]

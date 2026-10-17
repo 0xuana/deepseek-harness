@@ -87,9 +87,13 @@ final class CapabilitiesFixture: NSObject, NSApplicationDelegate, NSWindowDelega
             self.persist()
         }
         window.contentView!.addSubview(pad)
-        window.makeKeyAndOrderFront(nil)
-        window.makeFirstResponder(text)
-        NSApplication.shared.activate(ignoringOtherApps: true)
+        if Bundle.main.object(forInfoDictionaryKey: "DSHFixtureBackground") as? Bool == true {
+            window.orderFront(nil)
+        } else {
+            window.makeKeyAndOrderFront(nil)
+            window.makeFirstResponder(text)
+            NSApplication.shared.activate(ignoringOtherApps: true)
+        }
         persist()
     }
     func applicationDidBecomeActive(_ notification: Notification) { persist() }
