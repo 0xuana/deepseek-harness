@@ -331,6 +331,8 @@ describe('headless stream-json snapshots', () => {
             const events = parseJsonl(log.content)
             expect(events.filter(event => event.type === 'permission/preset').at(-1)?.data)
               .toEqual({ preset: 'auto' })
+            expect(events.filter(event => event.type === 'approval/policy').at(-1)?.data)
+              .toEqual({ policy: 'ask' })
             expect(events.filter(event => event.type === 'turn/end')).toHaveLength(wake)
           },
         })
@@ -338,6 +340,7 @@ describe('headless stream-json snapshots', () => {
           type: 'final', sessionId, reason: { kind: 'completed' }, text: 'AUTO_SHUTDOWN_OK',
         })
       }
+      const beforeRejectedRestore = (await persistedLogs(cwd, join(cwd, '.dsh', 'sessions')))[0]!.content
       const unavailable = await runLoaderSmoke({
         ...options,
         label: 'Auto restore without its integration',
@@ -346,10 +349,15 @@ describe('headless stream-json snapshots', () => {
       })
       expect(unavailable.stderr).toContain('cannot restore preset "auto" without its active integration')
       expect(parseJsonl(unavailable.stdout).some(event => event.type === 'final')).toBe(false)
-      const events = parseJsonl((await persistedLogs(cwd, join(cwd, '.dsh', 'sessions')))[0]!.content)
-      expect(events.filter(event => event.type === 'permission/preset').at(-1)?.data)
-        .toEqual({ preset: 'auto' })
-      expect(events.filter(event => event.type === 'turn/end')).toHaveLength(2)
+      const afterRejectedRestore = (await persistedLogs(cwd, join(cwd, '.dsh', 'sessions')))[0]!.content
+      expect(afterRejectedRestore.startsWith(beforeRejectedRestore)).toBe(true)
+      // Restore records its seed boundary before live publication validates the saved permission.
+      expect(parseJsonl(afterRejectedRestore.slice(beforeRejectedRestore.length))).toEqual([{
+        type: 'session/end-seed',
+        seq: parseJsonl(beforeRejectedRestore).length - 1,
+        time: expect.any(Number),
+        data: {},
+      }])
       await runLoaderSmoke({
         ...options,
         label: 'Change restored Auto to Read only with its integration',
@@ -368,7 +376,7 @@ describe('headless stream-json snapshots', () => {
     } finally {
       await rm(cwd, { recursive: true, force: true })
     }
-  })
+  }, LOADER_SMOKE_TEST_TIMEOUT_MS * 4)
 
   it.each(['src', 'lib'] as const)('runs one task through the product headless profile command (%s)', async (mode) => {
     const task = 'Prove the product headless profile path with one real tool round trip.'

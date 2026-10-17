@@ -11,7 +11,7 @@ description: "Auto review Session 在应用关闭时保留权限预设，重新�
 
 此前，应用关闭可能会将存活的 Auto review Session 改为 Full access，结果取决于资源释放顺序。现在关闭会保留 Auto 及其审批策略。在运行中的应用内移除 Auto review 插件，仍会将其存活的 Auto Session 改为 Full access。
 
-已保存的 Auto Session 必须在 Auto review 集成存在时才能重新打开。即使 headless 调用请求另一权限预设也一样：恢复会先验证已保存的选择，再应用新参数。既有日志不会被改写。
+已保存的 Auto Session 必须在 Auto review 集成存在时才能重新打开。即使 headless 调用请求另一权限预设也一样：恢复会先验证已保存的选择，再应用新参数。既有策略记录不会被改写。
 
 ## 迁移
 

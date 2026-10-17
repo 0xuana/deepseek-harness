@@ -61,7 +61,7 @@ Auto 在每个受支持调用的 body 执行前审查一次，包括每个已开
 
 Reviewer 从当前 Session surface 与待执行调用重建五个分区：固定策略、仅 cwd 的环境、带来源的项目约束、过滤后带来源的历史，以及完整待审动作。原生 schema 来自最新 request header。PTC binding 冻结其 schema，经由调度器传入临时执行元数据；开始与结算事件都不序列化描述或参数 schema。主 agent 的 `system/message` 节点、assistant 正文与 reasoning、tool results 全部排除。外层评审输入是冻结的 `RequestUserInput`，不含持久身份或来源；保留历史在评审文本中仍携带原始来源。[决策记录](../../../.agents/notes/implemented/feature/2026-08-28-auto-review.zh.md)拥有权威、生命周期与 child 继承的理由。
 
-卸载时先关闭选择与 review admission，再中止并等待在途 review 结清，最后撤回 listener 与 contribution。在应用仍运行时移除插件，会先经由既有 preset writer 将存活 Auto Session 迁移到 Full access。迁移写入 `never` 审批策略，不排入策略变更通知；模型在下一次 runtime-context 快照中看到新策略。沙箱值与持久终端在迁移中保持不变。应用关闭保留选中的预设与审批策略。持久 Auto Session 缺少完整 integration 时不能发布，即使重新打开的请求选择了其他预设也一样。重新打开前须再次加载 integration。重装只恢复选项，不把存活 Session 切回 Auto。
+卸载时先关闭选择与 review admission。如果应用根 context 仍活跃，卸载随后经由既有 preset writer 将存活 Auto Session 迁移到 Full access；这包括移除和重载插件。迁移写入 `never` 审批策略，不排入策略变更通知；模型在下一次 runtime-context 快照中看到新策略。沙箱值与持久终端在迁移中保持不变。应用关闭保留选中的预设与审批策略。两种路径都会先中止并等待在途 review 结清，再撤回 listener 与 contribution。持久 Auto Session 缺少完整 integration 时不能发布，即使重新打开的请求选择了其他预设也一样。重新打开前须再次加载 integration。重装只恢复选项，不把存活 Session 切回 Auto。
 
 </details>
 

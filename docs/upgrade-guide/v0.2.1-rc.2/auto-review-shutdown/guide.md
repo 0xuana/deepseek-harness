@@ -11,7 +11,7 @@ English | [中文](guide.zh.md)
 
 Application shutdown previously could change a live Auto review Session to Full access, depending on disposal order. Shutdown now preserves Auto and its approval policy. Removing the Auto review plugin from a running application still changes its live Auto Sessions to Full access.
 
-A saved Auto Session requires the Auto review integration before it can reopen. This also applies when a headless invocation requests another permission preset: restore validates the saved selection before applying the new flag. Existing logs are not rewritten.
+A saved Auto Session requires the Auto review integration before it can reopen. This also applies when a headless invocation requests another permission preset: restore validates the saved selection before applying the new flag. Existing policy records are not rewritten.
 
 ## Migration
 

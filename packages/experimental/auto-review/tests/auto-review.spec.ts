@@ -92,6 +92,7 @@ class RecordingAdapter extends LlmAdapter {
 
 interface PluginFiber {
   readonly dispose: () => Promise<void>
+  restart(): Promise<void>
 }
 
 const PRESETS = {
@@ -137,6 +138,7 @@ async function harness(
   contexts.push(ctx)
   const adapter = new RecordingAdapter(script)
   let auto: PluginFiber | undefined
+  // Keep review dependencies alive through the drain. Shutdown tests own concurrent Session cleanup.
   await ctx.effect(async function* () {
     yield (await ctx.plugin(LlmRuntime)).dispose
     yield (await ctx.plugin(SessionStore)).dispose
@@ -1310,6 +1312,19 @@ describe('out-of-process delegation boundary', () => {
 })
 
 describe('cancellation and integration teardown', () => {
+  it('migrates live Auto Sessions when the integration restarts under an active root', async () => {
+    const { ctx, auto } = await harness([])
+    const { session } = autoSession(ctx, 'restart-auto')
+
+    await auto.restart()
+
+    expect(ctx.root.fiber.state).toBe(FiberState.ACTIVE)
+    expect(ctx.permissionPresets.current(session)).toBe('danger-full-access')
+    expect(ctx.permissionPresets.names).toContain(AUTO_PRESET)
+    expect(session.snapshotEvents().filter(event => event.type === 'approval/policy').at(-1)?.data)
+      .toEqual({ policy: 'never' })
+  })
+
   it.each(['allow', 'deny', 'failure'] as const)(
     'preserves Auto while application shutdown drains a late reviewer %s',
     async (outcome) => {
