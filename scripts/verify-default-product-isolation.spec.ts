@@ -113,15 +113,16 @@ describe('default product isolation', () => {
     expect(verifyDefaultProductIsolation(root).failures).toEqual([])
   })
 
-  it.each([true, false])('ships an optional bundle switched off with legacy icon=%s', (legacy) => {
+  it.each([[true, false], [false, false], [true, true], [false, true]])('ships an optional bundle switched off with legacy icon=%s and metadata=%s', (legacy, declared) => {
     const root = fixture()
-    const layer = '@deepseek-ai/dsh-experimental-layer'
-    write(root, 'packages/experimental/layer/package.json', {
+    const layer = declared ? '@deepseek-ai/dsh-prototype-layer' : '@deepseek-ai/dsh-experimental-layer'
+    const directory = declared ? 'packages/bundle/prototype-layer' : 'packages/experimental/layer'
+    write(root, `${directory}/package.json`, {
       name: layer, ...legacy ? { icon: './icon.svg' } : {},
       exports: { ...legacy ? {} : { './icon': './icon.svg' }, './locale/*.json': './locale/*.json' },
-      dependencies: { [experimental]: 'workspace:^' }, dsh: { bundle: { patch: './cordis.patch.yml' } },
+      dependencies: { [experimental]: 'workspace:^' }, dsh: { bundle: { patch: './cordis.patch.yml', ...declared ? { experimental: true } : {} } },
     })
-    write(root, 'packages/experimental/layer/cordis.patch.yml', [{ insert: [{ name: experimental }] }])
+    write(root, `${directory}/cordis.patch.yml`, [{ insert: [{ name: experimental }] }])
     manifest(root, 'apps/cli/package.json', { dependencies: { [core]: 'workspace:^', [layer]: 'workspace:^' } })
     write(root, profile, `export const PROFILE_TEMPLATES = { web: { bundles: ['${base}'] } }\n`
       + `export const DEFAULT_PROFILE_BUNDLES = ['${base}']\n`

@@ -21,8 +21,9 @@ import {
 } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/plugin-manager', import.meta.url))
-const MANAGER_EXPECTED = join(SNAPSHOT_DIR, 'manager.expected.md')
-const LIVE_EXPECTED = join(SNAPSHOT_DIR, 'live-enabled.expected.md')
+const PLATFORM_SUFFIX = process.platform === 'darwin' ? '' : '-unsupported-platform'
+const MANAGER_EXPECTED = join(SNAPSHOT_DIR, `manager${PLATFORM_SUFFIX}.expected.md`)
+const LIVE_EXPECTED = join(SNAPSHOT_DIR, `live-enabled${PLATFORM_SUFFIX}.expected.md`)
 const EXPORTS_EXPECTED = join(SNAPSHOT_DIR, 'exports.expected.md')
 const EXPORTS_EN_EXPECTED = join(SNAPSHOT_DIR, 'exports-en.expected.md')
 const FIXTURE_PLUGINS = fileURLToPath(new URL('./fixtures/plugins', import.meta.url))
@@ -298,7 +299,7 @@ describe('web e2e: plugin manager', () => {
           width: node.getBoundingClientRect().width,
           height: node.getBoundingClientRect().height,
         })))
-        expect(blankActions).toEqual(Array.from({ length: 4 }, () => ({ children: 0, background: 'rgba(0, 0, 0, 0)', width: 36, height: 20 })))
+        expect(blankActions).toEqual(Array.from({ length: 4 }, () => ({ children: 0, background: 'rgba(0, 0, 0, 0)', width: 58, height: 20 })))
         if (shots !== undefined) {
           for (const colorScheme of ['light', 'dark'] as const) {
             await probe.emulateMedia({ colorScheme })
@@ -585,7 +586,7 @@ describe('web e2e: plugin manager', () => {
     expect(await panel.locator('[data-plugin-group="more"] [data-plugin-package]').count())
       .toBe(OPTIONAL_BUNDLES.length + ON_DEMAND_BUNDLES.length)
     expect(await panel.getByText('实验性', { exact: true }).count())
-      .toBe(OPTIONAL_BUNDLES.filter(name => name.startsWith('@deepseek-ai/dsh-experimental-')).length)
+      .toBe((await scaffold.ctx.pluginManager.listBundles()).filter(bundle => bundle.optional && (bundle.experimental === true || bundle.name.startsWith('@deepseek-ai/dsh-experimental-'))).length)
     expect(await panel.locator('[data-plugin-group="bundles"]').count()).toBe(0)
     await panel.getByRole('button', { name: '返回插件', exact: true }).click()
     expect(await panel.locator('[data-plugin-group="bundles"] [data-plugin-package]').count()).toBe(2)
@@ -1114,6 +1115,7 @@ describe('web e2e: plugin manager', () => {
     await assertFixtureInventory(SNAPSHOT_DIR, [
       'manager.expected.md', 'live-enabled.expected.md', 'missing-bundle.expected.md', 'exports.expected.md', 'exports-en.expected.md', 'icons.expected.md', 'loading.expected.md', 'refresh.expected.md',
       'ime-enter.expected.md', 'header-responsive.expected.md', 'preview.expected.md',
+      'manager-unsupported-platform.expected.md', 'live-enabled-unsupported-platform.expected.md',
     ])
   })
 })

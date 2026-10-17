@@ -69,7 +69,7 @@ export function parseBuildArguments(args: readonly string[]): BuildArguments {
 /**
  * Construct the build steps of one scope as a gate dependency graph.
  * Artifact steps keep the serial order native, Host compilation, Host bundle (Typert),
- * Desktop bundle, Client compilation, Client bundle, then Web. The typecheck scope runs Host
+ * Desktop bundle, Client compilation, Client bundle, configured CUA preparation, then Web. The typecheck scope runs Host
  * compilation beside the bundle-free Typert pass, which reads only source, and then Client
  * compilation, which needs both outputs; it writes no bundle. In the complete and typecheck
  * scopes each aggregate check waits only for its own face's package compilation; alone, the
@@ -94,7 +94,8 @@ export function buildGates(
     for (const step of libraryBuildSteps(root, 'all')) {
       gates.push(libraryGate(step, step.id === 'host-src' ? ['native'] : step.needs, env))
     }
-    gates.push(pnpmGate('web', 'Web build', ['run', 'build:web'], ['client-bundle'], env))
+    gates.push(pnpmGate('cua', 'configured CUA helper', ['run', 'build:cua'], ['client-bundle'], env))
+    gates.push(pnpmGate('web', 'Web build', ['run', 'build:web'], ['cua'], env))
   }
   if (scope === 'typecheck') {
     for (const step of contractSteps(root, 'all')) gates.push(libraryGate(step, step.needs, env))
