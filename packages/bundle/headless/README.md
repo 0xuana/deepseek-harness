@@ -39,13 +39,15 @@ The agent works through the task, streams each non-empty provider reasoning delt
 { echo "Summarize these changes:"; git diff --stat; } | dsh --profile headless
 ```
 
-The task and run options are supplied through three settings:
+The task and run options use these settings:
 
 | Field | Default | Meaning |
 |---|---|---|
 | `task` | stdin | The task text; stdin supplies it when omitted or `-` |
 | `sessionId` | `session-<uuid>` | Exact Session identity to adopt; an unknown id fails |
 | `json` | `false` | Project the run as newline-delimited events on stdout |
+| `permissionMode` | session policy | Apply a configured permission preset before submitting the task, including on resume |
+| `additionalWritableRoots` | none | Explicit absolute directories requested by `--add-dir`; the sandbox composition must include them |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-headless) is the exhaustive source for every accepted field and its JSDoc.
 
@@ -73,9 +75,26 @@ The restored store uses [saved credentials before environment fallbacks](../../c
 
 Every invocation defaults to a fresh `session-<uuid>` identity, which `--json` reports in its opening `session` event. Pass `--session-id <id>` to continue that conversation: the runner adopts the persisted Session with that id, and an id with no stored Session fails before the task runs rather than quietly opening an empty history. Adoption requires the composed `sessionPersistence` and `sessionQuery` services, so a profile that omits either fails loudly instead of returning an id whose history dies with the process. An Agent already live under the requested id in this process is refused: another owner may still drive it, so the runner cannot claim an exclusive run interval over it. The identity is opaque, so the exact string is used, whitespace included. The working directory is resolved through the mounted filesystem provider (`fs.resolve('.')` and `fs.processPath()`), or the process cwd when no filesystem service is mounted; new Sessions record that directory. Adoption compares the recorded cwd with the same provider-resolved directory and refuses a Session that is a subagent or forked session, that recorded no working directory, that runs under an agent preset this profile does not compose, or whose preset record is malformed — the check reads the preset the Session log currently records, so a Session that switched preset while blank is rejected too. A supervisor therefore cannot silently drive someone else's conversation under a different composition; any mismatch fails before the task runs.
 
+### Supervising implementation tasks
+
+Use one prepared Git worktree per implementation task. Start the process with that worktree as its working directory. Supply a focused task on stdin and capture stdout as NDJSON; diagnostics remain on stderr.
+
+```sh
+git_dir=$(git rev-parse --path-format=absolute --git-common-dir)
+dsh headless --permission-mode workspace-write --add-dir "$git_dir" --json - < task.txt > run.jsonl
+```
+
+`--add-dir` accepts repeatable absolute execution-world paths. The shared Git directory permits staging, committing, and repository hooks without granting the parent checkout's source files. It grants all metadata in that directory, including shared refs and configuration. Additional grants apply to this invocation and must be supplied again when resuming. The shipped profile passes them to `sandbox-policy`; an overlay that replaces that row must include `ctx.headlessStartup.additionalWritableRoots`, or the runner rejects the request before model work. The [local sandbox provider](../../sandbox/sandbox-local/README.md) defines platform support.
+
+Read the opening `session.sessionId`, review the diff, and send revision instructions with `--session-id` from the same worktree. Repeat the directory grants. `--permission-mode` selects an existing permission preset through the permission service and overrides the session's saved selection before the task runs; omission preserves normal defaults and saved policy. Neither option edits saved profiles or user settings.
+
+Ask the worker to report its working directory, base and resulting commit, changed files, exact gate commands, exit codes, log paths, and blocked or unrun checks. Review that evidence and trust completed gate reports. Run a check again only when a revision or new finding invalidates its evidence. Bound investigation in the task, and keep publication with the supervisor. A gate blocked by host IPC, external caches, or nested sandboxing remains unrun until the supervisor authorizes and runs it in a suitable environment.
+
+A supervisor that interrupts a process must await its exit before resuming its Session. Keep the event log even after a nonzero exit. Require both process exit zero and `final.reason.kind === 'completed'` for a completed agent run, then assess the worker's task and gate report separately. A `tool_result` status of `completed` means that the tool returned; a shell command inside it can still have a nonzero exit.
+
 ### Machine-readable output
 
-`--json` replaces the final-text stdout line with a newline-delimited JSON event stream, while stderr keeps only the `dsh:` diagnostics. The stream opens with `session` (carrying the identity the run used) and closes with `final`, and carries `status`, `text`, `thinking`, `tool_call`, and `tool_result` events in between. `text` and `thinking` are projected from committed assistant messages, so a retried or discarded attempt never reaches the stream; they arrive when the step commits, not per token, and default-mode stderr reasoning remains the only live text channel. The terminal `final` event carries the same lossless answer as the default mode and is not capped; every other string and object key is capped at 8 KiB and flagged with `truncated`, and one event line, its newline included, is capped at 32 KiB — an over-long event keeps its scalar fields, drops structured ones, and at the extreme reduces to `type` and `truncated`, while a payload nested 64 levels or deeper is cut at that depth. An empty tool-argument string projects as `{}`, matching what the executor runs, while arguments that JSON cannot round-trip — an overflowing number such as `1e400` — keep their raw text rather than the `null` that `JSON.stringify` would report. A failure the runner raises outside a turn writes an `error` event and ends the stream without `final`, in addition to the `dsh:` stderr line; a profile whose own plugins fail to load exits before the runner mounts, so that case keeps only the loader's stderr diagnostics. A turn that fails in-turn still ends with a `final` event (often empty) and no `error` event, so a well-formed stream can still describe a failed run: treat exit code 1 and the `turn_end` reason as the failure signal.
+`--json` replaces the final-text stdout line with a newline-delimited JSON event stream, while stderr keeps only the `dsh:` diagnostics. The stream opens with `session` (carrying the identity the run used) and closes with `final`, and carries `status`, `text`, `thinking`, `tool_call`, and `tool_result` events in between. `text` and `thinking` are projected from committed assistant messages, so a retried or discarded attempt never reaches the stream; they arrive when the step commits, not per token, and default-mode stderr reasoning remains the only live text channel. The terminal `final` event carries the exact `sessionId`, the durable turn `reason` (or `null` when the final turn has no terminal event), and the same lossless answer as the default mode; it is not capped; every other string and object key is capped at 8 KiB and flagged with `truncated`, and one event line, its newline included, is capped at 32 KiB — an over-long event keeps its scalar fields, drops structured ones, and at the extreme reduces to `type` and `truncated`, while a payload nested 64 levels or deeper is cut at that depth. An empty tool-argument string projects as `{}`, matching what the executor runs, while arguments that JSON cannot round-trip — an overflowing number such as `1e400` — keep their raw text rather than the `null` that `JSON.stringify` would report. A failure the runner raises outside a turn writes an `error` event and ends the stream without `final`, in addition to the `dsh:` stderr line; a profile whose own plugins fail to load exits before the runner mounts, so that case keeps only the loader's stderr diagnostics. A turn that fails in-turn still ends with a `final` event (often empty) and no `error` event, so a well-formed stream can still describe a failed run: treat exit code 1 and the `turn_end` reason as the failure signal.
 
 ### When to use it
 

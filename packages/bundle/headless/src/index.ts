@@ -30,6 +30,8 @@ import type {} from '@deepseek-ai/cordis-plugin-loader'
 import type {} from '@deepseek-ai/dsh-cmdline'
 import type {} from '@deepseek-ai/dsh-session-query'
 import type {} from '@deepseek-ai/dsh-subagent'
+import type {} from '@deepseek-ai/dsh-permission-presets'
+import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import { internals } from './runner-internals.ts'
 import { projectJsonRun, boundJsonLine } from './json-stream.ts'
 
@@ -47,12 +49,18 @@ export interface Config {
   sessionId?: string
   /** Whether stdout carries the machine-readable event stream instead of final text. */
   json?: boolean
+  /** Permission preset applied before the task; omission keeps the session's current policy. */
+  permissionMode?: string
+  /** Absolute directories requested by the CLI; the composed sandbox policy must include each one. */
+  additionalWritableRoots?: string[]
 }
 
 export const Config: z<Config> = z.object({
   task: z.string(),
   sessionId: z.string(),
   json: z.boolean(),
+  permissionMode: z.string(),
+  additionalWritableRoots: z.array(z.string()).default([]),
 })
 
 /** Outcome of one owned run interval. */
@@ -83,6 +91,7 @@ function summarize(session: Session, firstSeq: SessionLogOffset): RunOutcome {
     }
     if (event.type === 'turn/start') {
       started = true
+      reason = undefined
       continue
     }
     if (!started) continue
@@ -332,6 +341,17 @@ async function run(ctx: Context, config: Config, io: HeadlessIo): Promise<void> 
   }
 
   const selection = defaultModel.currentSelection()
+  const permissions = ctx.get('permissionPresets')
+  if (config.permissionMode !== undefined) {
+    if (permissions === undefined) throw new Error('headless --permission-mode requires the permissionPresets service')
+    permissions.resolve(config.permissionMode)
+  }
+  if (config.additionalWritableRoots !== undefined && config.additionalWritableRoots.length > 0) {
+    const policy = ctx.get('sandboxPolicy')
+    if (policy === undefined || config.additionalWritableRoots.some(root => !policy.additionalWritableRoots?.includes(root))) {
+      throw new Error('headless --add-dir requires the sandbox-policy row to include headlessStartup.additionalWritableRoots; check the profile overlays')
+    }
+  }
   const agentOptions = { provider: selection.provider, model: selection.model }
   // This bundle composes no preset roster, so the model-facing rows sit in the
   // host plane and the agent reads them from the global layer. A deployment
@@ -359,6 +379,7 @@ async function run(ctx: Context, config: Config, io: HeadlessIo): Promise<void> 
     // re-read the log the runner holds before submitting the task.
     assertAdoptable(agent.session.header, liveEvents(agent.session), sessionId, cwd)
   }
+  if (config.permissionMode !== undefined && permissions !== undefined) permissions.set(agent.session, config.permissionMode)
   const firstSeq = agent.session.seq
   const projection = config.json === true ? projectJsonRun(ctx, agent, io.stdout, { cwd }) : undefined
   const stopReasoning = projection === undefined ? streamReasoning(ctx, agent, io.stderr) : undefined
@@ -391,7 +412,7 @@ async function run(ctx: Context, config: Config, io: HeadlessIo): Promise<void> 
     if (failure !== undefined) throw failure.error
     const outcome = summarize(agent.session, firstSeq)
     if (projection === undefined) io.stdout.write(outcome.text + '\n')
-    else projection.finish(outcome.text)
+    else projection.finish(outcome.text, outcome.reason)
     if (outcome.reason?.kind === 'error') {
       io.stderr.write(`dsh: ${outcome.reason.error.code}: ${outcome.reason.error.message}\n`)
     }

@@ -345,7 +345,7 @@ describe('headless stream-json snapshots', () => {
       configPath: headlessOverlayPath,
       binArgs: [
         '--profile', 'headless', '--patch', headlessOverlayPath,
-        '--json', task,
+        '--permission-mode', 'workspace-write', '--add-dir', tmpdir(), '--json', task,
       ],
       tsconfigPath,
       env: {
@@ -353,13 +353,20 @@ describe('headless stream-json snapshots', () => {
         DSH_TELEMETRY_DISABLED: '1',
         NODE_OPTIONS: [process.env.NODE_OPTIONS, '--disable-warning=ExperimentalWarning'].filter(Boolean).join(' '),
       },
+      inspect: async (cwd) => {
+        const logs = await persistedLogs(cwd, join(cwd, '.dsh', 'sessions'))
+        const content = logs[0]?.content ?? ''
+        const modes = parseJsonl(content).filter(event => event.type === 'sandbox/mode')
+        expect(modes.at(-1)?.data).toEqual({ mode: 'workspace-write' })
+        expect(content).toContain('Additional writable directories:')
+      },
     })
 
     const events = result.stdout.trim().split('\n').map(line => JSON.parse(line) as JsonObject)
     expect(events[0]).toMatchObject({ type: 'session' })
     expect(events[0]?.sessionId).toMatch(/^session-/)
     expect(typeof events[0]?.cwd).toBe('string')
-    expect(events.at(-1)).toMatchObject({ type: 'final', text: 'CLI tool round trip complete: CLI_TOOL_ROUND_TRIP' })
+    expect(events.at(-1)).toMatchObject({ type: 'final', sessionId: events[0]?.sessionId, reason: { kind: 'completed' }, text: 'CLI tool round trip complete: CLI_TOOL_ROUND_TRIP' })
     expect(events.map(event => event.type)).toContain('thinking')
     expect(events.map(event => event.type)).toContain('tool_call')
     expect(events.map(event => event.type)).toContain('tool_result')
@@ -424,7 +431,7 @@ describe('headless stream-json snapshots', () => {
         configPath: headlessOverlayPath,
         binArgs: [
           '--profile', 'headless', '--patch', headlessOverlayPath,
-          '--json', '--session-id', sessionId, secondTask,
+          '--json', '--permission-mode', 'read-only', '--session-id', sessionId, secondTask,
         ],
         tsconfigPath,
         env,
@@ -434,12 +441,16 @@ describe('headless stream-json snapshots', () => {
           const content = logs[0]?.content ?? ''
           expect(content).toContain(firstTask)
           expect(content).toContain(secondTask)
+          const modes = parseJsonl(content).filter(event => event.type === 'sandbox/mode')
+          expect(modes.at(-1)?.data).toEqual({ mode: 'read-only' })
         },
       })
       const secondEvents = second.stdout.trim().split('\n').map(line => JSON.parse(line) as JsonObject)
       expect(secondEvents[0]).toMatchObject({ type: 'session', sessionId })
       expect(secondEvents.at(-1)).toMatchObject({
         type: 'final',
+        sessionId,
+        reason: { kind: 'completed' },
         text: 'CLI tool round trip complete: CLI_TOOL_ROUND_TRIP',
       })
     } finally {

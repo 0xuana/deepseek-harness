@@ -28,6 +28,15 @@
         task: !!js ctx.headlessStartup.task
         sessionId: !!js ctx.headlessStartup.sessionId
         json: !!js ctx.headlessStartup.json
+        permissionMode: !!js ctx.headlessStartup.permissionMode
+        additionalWritableRoots: !!js ctx.headlessStartup.additionalWritableRoots
+
+- id: sandbox-policy
+  inject: [headlessStartup]
+  config:
+    mode: !!js process.env.DSH_PERMISSION_MODE ?? 'workspace-write'
+    workspaceRoot: !!js process.cwd()
+    additionalWritableRoots: !!js ctx.headlessStartup.additionalWritableRoots
 
 - id: hmr
   disabled: true

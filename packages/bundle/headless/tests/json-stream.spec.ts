@@ -180,7 +180,7 @@ describe('--json projection', () => {
     const events = test.parsed()
     expect(events[1]).toEqual({ type: 'tool_result', callId: 'c1', status: 'completed', result: 'a.txt' })
     expect(events[2]).toEqual({ type: 'tool_result', callId: 'c2', status: 'error', result: 'boom' })
-    expect(events.at(-1)).toEqual({ type: 'final', text: 'done' })
+    expect(events.at(-1)).toEqual({ type: 'final', sessionId: 'session-1', reason: null, text: 'done' })
   })
 
   it('skips a compaction replacement of an older tool result', () => {
@@ -399,7 +399,19 @@ describe('--json projection', () => {
   it('writes the terminal final event without bounding its answer', () => {
     const test = harness({ maxStringBytes: 4 })
     test.projection.finish('abcdefgh')
-    expect(test.parsed().at(-1)).toEqual({ type: 'final', text: 'abcdefgh' })
+    expect(test.parsed().at(-1)).toEqual({ type: 'final', sessionId: 'session-1', reason: null, text: 'abcdefgh' })
+  })
+
+  it('retains the durable completion reason and exact identity in the final record', () => {
+    const test = harness({ maxStringBytes: 4 }, 'session-exact')
+    test.projection.finish('answer', { kind: 'completed' })
+    expect(test.parsed().at(-1)).toEqual({ type: 'final', sessionId: 'session-exact', reason: { kind: 'completed' }, text: 'answer' })
+  })
+
+  it('reports an interrupted task separately from its earlier assistant text', () => {
+    const test = harness()
+    test.projection.finish('I will start by reading the files.', { kind: 'aborted', reason: { kind: 'user' } })
+    expect(test.parsed().at(-1)).toMatchObject({ reason: { kind: 'aborted', reason: { kind: 'user' } } })
   })
 
   it('ignores events from another Session and stops writing after dispose', () => {

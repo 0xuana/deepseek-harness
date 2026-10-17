@@ -16,6 +16,7 @@ import AgentDefaultModelConfig from '@deepseek-ai/dsh-agent-default-model'
 import { LlmAttemptId, ToolCallId, createAssistantMessage, createToolResultMessage, createUserMessage, type MessageId, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import SessionStore from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
+import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
 import type { Session, SessionId, UserMessage } from '@deepseek-ai/dsh-session'
 import { SessionQueryError } from '@deepseek-ai/dsh-session-query'
 import { createInboxStub, provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
@@ -47,6 +48,8 @@ interface BenchOptions {
   readStdin?: () => Promise<string>
   sessionId?: string
   json?: boolean
+  permissionMode?: string
+  additionalWritableRoots?: string[]
   observe?: () => Promise<ObservationStub>
   /** Leave the query service unmounted to exercise the fail-loud path. */
   omitSessionQuery?: boolean
@@ -225,6 +228,8 @@ async function bench(script: Script, options: BenchOptions = {}): Promise<{
         ...options.useStdin === true ? {} : { task: options.task ?? 'do the thing' },
         ...options.sessionId === undefined ? {} : { sessionId: options.sessionId },
         ...options.json === undefined ? {} : { json: options.json },
+        ...options.permissionMode === undefined ? {} : { permissionMode: options.permissionMode },
+        ...options.additionalWritableRoots === undefined ? {} : { additionalWritableRoots: options.additionalWritableRoots },
       })
       return { code: await exited, out, err, order }
     },
@@ -232,6 +237,64 @@ async function bench(script: Script, options: BenchOptions = {}): Promise<{
 }
 
 describe('headless runner', () => {
+  it('does not reuse an earlier completed reason when the final turn has no terminal event', async () => {
+    const test = await bench({ afterPrompt(session, message) {
+      appendTurn(session, 1, message, 'earlier answer', true)
+      session.append('turn/start', { turn: 2 })
+    } }, { json: true })
+    try {
+      const result = await test.run()
+      expect(result.code).toBe(1)
+      const events = result.out.trim().split('\n').map(line => JSON.parse(line) as Record<string, unknown>)
+      expect(events.at(-1)).toMatchObject({ type: 'final', text: 'earlier answer', reason: null })
+    } finally { await test.ctx.fiber.dispose() }
+  })
+  it('rejects an explicit preset when its service is absent before submitting work', async () => {
+    const test = await bench({ afterPrompt() { throw new Error('must not run') } }, { permissionMode: 'workspace-write', json: true })
+    try {
+      const result = await test.run()
+      expect(result.code).toBe(1)
+      expect(result.err).toContain('requires the permissionPresets service')
+    } finally { await test.ctx.fiber.dispose() }
+  })
+
+  it('rejects an unknown preset before creating an Agent', async () => {
+    const test = await bench({ afterPrompt() { throw new Error('must not run') } }, { permissionMode: 'missing' })
+    test.ctx.provide('permissionPresets', { resolve() { throw new Error('unknown preset') } } as never)
+    try {
+      const result = await test.run()
+      expect(result.code).toBe(1)
+      expect(result.err).toContain('unknown preset')
+    } finally { await test.ctx.fiber.dispose() }
+  })
+
+  it('applies an explicit preset before submitting the task', async () => {
+    let selected: string | undefined
+    const test = await bench({ afterPrompt(session, message) {
+      expect(selected).toBe('workspace-write')
+      appendTurn(session, 1, message, 'done', true)
+    } }, { permissionMode: 'workspace-write' })
+    test.ctx.provide('permissionPresets', { resolve() {}, set(_session: Session, name: string) { selected = name } } as never)
+    try { expect(await test.run()).toMatchObject({ code: 0 }) }
+    finally { await test.ctx.fiber.dispose() }
+  })
+
+  it('refuses CLI directory grants omitted by an overriding policy composition', async () => {
+    const test = await bench({ afterPrompt() { throw new Error('must not run') } }, { additionalWritableRoots: ['/extra'] })
+    try {
+      const result = await test.run()
+      expect(result.code).toBe(1)
+      expect(result.err).toContain('requires the sandbox-policy row')
+    }
+    finally { await test.ctx.fiber.dispose() }
+  })
+
+  it.each([true, false])('requires the composed policy to contain each requested directory (included=%s)', async (included) => {
+    const test = await bench({ afterPrompt(session, message) { appendTurn(session, 1, message, 'done', true) } }, { additionalWritableRoots: ['/extra'] })
+    await test.ctx.plugin(SandboxPolicyService, { additionalWritableRoots: included ? ['/extra'] : [] })
+    try { expect((await test.run()).code).toBe(included ? 0 : 1) }
+    finally { await test.ctx.fiber.dispose() }
+  })
   it('waits for parent awakened between idle and child observation', async () => {
     const cleanup = Promise.withResolvers<undefined>()
     const cleaning = Promise.withResolvers<undefined>()
@@ -1167,8 +1230,8 @@ describe('headless runner', () => {
   })
 
   it('validates config: the task and run options are optional', () => {
-    expect(new Config({})).toEqual({})
+    expect(new Config({})).toEqual({ additionalWritableRoots: [] })
     expect(new Config({ task: 'x', sessionId: 'session-x', json: true }))
-      .toEqual({ task: 'x', sessionId: 'session-x', json: true })
+      .toEqual({ task: 'x', sessionId: 'session-x', json: true, additionalWritableRoots: [] })
   })
 })
