@@ -4,7 +4,7 @@ import Dispatch
 import Darwin
 
 final class CancellationLatch: @unchecked Sendable {
-    // The synchronous AX/input loops cannot await a cancellation message on their own actor.
+    // Blocking AX calls and synchronous input loops also observe connection cancellation.
     private let lock = NSLock()
     private var cancelled = false
     func cancel() { lock.withLock { cancelled = true } }

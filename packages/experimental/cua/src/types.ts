@@ -68,7 +68,7 @@ export type CuaPointerModifier = NonNullable<CuaParameters<'click'>['modifiers']
 export type CuaMouseButton = NonNullable<CuaParameters<'click'>['mouseButton']>
 /**
  * Left clicks support one or two presses; right and middle clicks support one.
- * holdMs holds each press for 1–2147483647 milliseconds through pointer input; omission preserves ordinary clicks.
+ * holdMs holds each press for 1–5000 milliseconds through pointer input; omission preserves ordinary clicks.
  */
 export type CuaClickOptions = Pick<CuaParameters<'click'>, 'mouseButton' | 'clickCount' | 'modifiers' | 'holdMs'> & CuaCoordinateOptions
 /** One same-window drag; omitted button is left and omitted modifiers are empty. */

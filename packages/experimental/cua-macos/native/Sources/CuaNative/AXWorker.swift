@@ -1,4 +1,4 @@
-// Actor-owned native identities, scoped AX snapshots and synchronous desktop operations.
+// Actor-owned native identities, scoped AX snapshots and desktop operations.
 import Foundation
 import Dispatch
 import ApplicationServices
@@ -343,7 +343,7 @@ actor AXWorker {
             }
             try ax().perform(selected, action)
         case "click", "hover":
-            let holdMs = params.contains("holdMs") ? try params.integer("holdMs", in: 1...2147483647) : nil
+            let holdMs = params.contains("holdMs") ? try params.integer("holdMs", in: 1...5000) : nil
             let button = try params.optionalString("mouseButton") ?? "left"
             let count = params.contains("clickCount") ? try params.integer("clickCount", in: 1...2) : 1
             guard button == "left" || (["right", "middle"].contains(button) && count == 1) else { throw RequestParameters.invalid("Unsupported mouse button or click count") }

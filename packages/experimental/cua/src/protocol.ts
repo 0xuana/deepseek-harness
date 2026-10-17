@@ -11,8 +11,8 @@ const app = { appHandle: z.string().min(1) }
 const pointer = { mouseButton: z.enum(['left', 'right', 'middle']).optional(),
   modifiers: z.array(z.enum(['command', 'control', 'option', 'shift', 'fn'])).optional() }
 const click = { ...pointer, clickCount: z.union([z.literal(1), z.literal(2)]).optional(),
-  holdMs: z.number().int().min(1).max(2 ** 31 - 1).optional()
-    .describe('Milliseconds to hold each mouse press before release. Uses pointer input even for AX targets; omission preserves ordinary click behavior. The operation deadline still applies.') }
+  holdMs: z.number().int().min(1).max(5000).optional()
+    .describe('Milliseconds between each mouse press and release; omitted for an ordinary click.') }
 const window = { ...app, windowId: id }
 const snapshot = { ...app, snapshotId: z.string().min(1), elementIndex: z.number().int().nonnegative() }
 const coordinate = { ...window, snapshotId: z.string().min(1).optional(), x: point, y: point }
