@@ -56,6 +56,8 @@ With the provider mounted, a command runs under the mode you resolve per call. E
 
 An unsupported platform or an unusable runner fails closed: `confine()` rejects with `SANDBOX_UNAVAILABLE` and names the runner options for the platform, and the consumer surfaces that error rather than running the command unconfined. A runner that starts but refuses its profile is identified by its fatal stderr signature and exit code, so a broken sandbox is not mistaken for a denied command. The `runnerCommand` override is an operator assertion: it skips functional probes and assumes the configured runner implements the bwrap-compatible profile honestly.
 
+Seatbelt, bwrap, and Landlock include the policy's explicit `additionalWritableRoots` under `workspace-write`. Read-only ignores those grants. Windows ACL rejects a workspace-write policy with additional directories before creating grants or starting a child; its standing workspace capability cannot safely authorize a wider directory set.
+
 -----
 
 <a id="understand-the-implementation"></a>

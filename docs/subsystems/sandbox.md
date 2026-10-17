@@ -54,6 +54,13 @@ interface SandboxExecutionPolicy {
   /** Absolute root directory `workspace-write` may write under. */
   workspaceRoot: string
   /**
+   * Extra absolute directories `workspace-write` may also write under. Absence
+   * means none. The enforcing host canonicalizes each entry; a remote policy
+   * keeps the execution-world spelling until its own helper resolves it. These
+   * grant nothing under `read-only` or `danger-full-access`.
+   */
+  additionalWritableRoots?: readonly string[]
+  /**
    * Opaque identity of the calling session (the branded `dsh-session`
    * SessionId). Backends key per-session state off it (e.g. windows-acl gives
    * each live session/workspace pair a random private temp directory and SID,

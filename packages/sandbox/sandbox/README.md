@@ -56,7 +56,7 @@ The mode names the file effects a command may perform; enforcement completeness 
 | Mode | Effect |
 |---|---|
 | `read-only` | Denies writes except required sinks such as `/dev/null` |
-| `workspace-write` | Allows writes under the workspace root plus a backend-defined temp area |
+| `workspace-write` | Allows writes under the workspace root, explicitly configured additional roots, and a backend-defined temp area |
 | `danger-full-access` | Bypasses confinement; the consumer spawns its original argv |
 
 Enforcement is reported per call: `full` means the backend governs every promised file effect, while `partial` means an active backend or older kernel ABI governs only a subset — the Windows ACL rung and older Landlock ABIs are the current partial cases, so a consumer that requires the absolute boundary can reject or surface them.
