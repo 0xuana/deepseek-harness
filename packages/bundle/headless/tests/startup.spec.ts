@@ -109,7 +109,7 @@ export const apply = ctx => globalThis.__headlessStartupApply(ctx)
   await ctx.loader.await()
   disposers.push(async () => { await ctx.fiber.dispose() })
   return {
-    task: ctx.get(HEADLESS_STARTUP_SERVICE) as HeadlessStartupValues | undefined,
+    task: ctx.get(HEADLESS_STARTUP_SERVICE),
     observed,
   }
 }
