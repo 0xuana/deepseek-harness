@@ -1485,7 +1485,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-headless`
 
 - `inject`: `agentDefaultModel` · `agents` · `sessions`
-- `source`: [`packages/bundle/headless/src/index.ts:45`](../packages/bundle/headless/src/index.ts)
+- `source`: [`packages/bundle/headless/src/index.ts:46`](../packages/bundle/headless/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: the task and run options resolved from this app's injected provider service. */
@@ -1498,8 +1498,6 @@ export interface Config {
   json?: boolean
   /** Permission preset applied before the task; omission keeps the session's current policy. */
   permissionMode?: string
-  /** Absolute directories requested by the CLI; the composed sandbox policy must include each one. */
-  additionalWritableRoots?: string[]
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-headless -->

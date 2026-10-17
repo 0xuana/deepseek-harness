@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { tmpdir } from 'node:os'
@@ -345,7 +345,9 @@ describe('headless stream-json snapshots', () => {
       configPath: headlessOverlayPath,
       binArgs: [
         '--profile', 'headless', '--patch', headlessOverlayPath,
-        '--permission-mode', 'workspace-write', '--add-dir', tmpdir(), '--json', task,
+        '--permission-mode', 'workspace-write',
+        ...process.platform === 'win32' ? [] : ['--add-dir', await realpath(tmpdir())],
+        '--json', task,
       ],
       tsconfigPath,
       env: {
@@ -358,7 +360,7 @@ describe('headless stream-json snapshots', () => {
         const content = logs[0]?.content ?? ''
         const modes = parseJsonl(content).filter(event => event.type === 'sandbox/mode')
         expect(modes.at(-1)?.data).toEqual({ mode: 'workspace-write' })
-        expect(content).toContain('Additional writable directories:')
+        if (process.platform !== 'win32') expect(content).toContain('Additional writable directories:')
       },
     })
 
@@ -370,6 +372,7 @@ describe('headless stream-json snapshots', () => {
     expect(events.map(event => event.type)).toContain('thinking')
     expect(events.map(event => event.type)).toContain('tool_call')
     expect(events.map(event => event.type)).toContain('tool_result')
+    expect(events.filter(event => event.type === 'tool_result').every(event => event.status === 'completed')).toBe(true)
     expect(events.map(event => event.type)).not.toContain('error')
     expect(result.stderr).toBe('')
   }, LOADER_SMOKE_TEST_TIMEOUT_MS)

@@ -36,6 +36,13 @@ export interface HeadlessStartupValues {
   additionalWritableRoots?: string[]
 }
 
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    /** Parsed arguments of this headless invocation. */
+    headlessStartup: HeadlessStartupValues
+  }
+}
+
 /**
  * This app's command: the task positional, its options, and its help text.
  * @returns a fresh program, so one process can parse more than once (tests).
@@ -48,7 +55,8 @@ function headlessCommand(): Command {
     .option('--json', 'write newline-delimited run events to stdout instead of the final message')
     .option('--session-id <id>', 'adopt the persisted Session with this id; an unknown id is an error')
     .option('--permission-mode <preset>', 'select a configured permission preset for this task, including on resume')
-    .option('--add-dir <path>', 'allow an additional absolute directory under workspace-write (repeatable)', (value: string, previous?: string[]) => [...previous ?? [], value])
+    .option('--add-dir <path>', 'allow an additional physical absolute directory under workspace-write (repeatable)',
+      (value: string, previous?: string[]) => [...previous ?? [], value])
     .argument('[task...]', 'the task text; multiple words are joined by spaces, and `-` reads stdin')
     .addHelpText('after', `
 Examples:
@@ -56,7 +64,8 @@ Examples:
   echo "run the tests" | dsh --profile headless   read the task from stdin
   dsh --profile headless --json "run the tests"   emit machine-readable run events
   dsh --profile headless --session-id session-… "continue"   resume an existing Session
-  dsh headless --permission-mode workspace-write --add-dir /repo/.git "commit the fix"
+  dsh --profile headless --permission-mode workspace-write --add-dir /repo/.git "commit the fix"
+                                                        grant shared Git metadata for this task
 `)
 }
 
@@ -129,7 +138,7 @@ export function apply(ctx: Context): void {
       task,
       sessionId,
       json: options.json === true,
-      ...options.permissionMode === undefined ? {} : { permissionMode: options.permissionMode },
+      ...options.permissionMode === undefined ? {} : { permissionMode: options.permissionMode.trim() },
       ...options.addDir === undefined ? {} : { additionalWritableRoots: [...new Set(options.addDir)] },
     } satisfies HeadlessStartupValues)
   })

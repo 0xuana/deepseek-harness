@@ -118,8 +118,8 @@ Options:
                               unknown id is an error
   --permission-mode <preset>  select a configured permission preset for this
                               task, including on resume
-  --add-dir <path>            allow an additional absolute directory under
-                              workspace-write (repeatable)
+  --add-dir <path>            allow an additional physical absolute directory
+                              under workspace-write (repeatable)
   -h, --help                  show this help
 
 Examples:
@@ -127,7 +127,8 @@ Examples:
   echo "run the tests" | dsh --profile headless   read the task from stdin
   dsh --profile headless --json "run the tests"   emit machine-readable run events
   dsh --profile headless --session-id session-… "continue"   resume an existing Session
-  dsh headless --permission-mode workspace-write --add-dir /repo/.git "commit the fix"
+  dsh --profile headless --permission-mode workspace-write --add-dir /repo/.git "commit the fix"
+                                                        grant shared Git metadata for this task
 
 ```
 

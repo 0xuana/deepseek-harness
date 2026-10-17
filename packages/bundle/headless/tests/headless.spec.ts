@@ -131,6 +131,12 @@ async function bench(script: Script, options: BenchOptions = {}): Promise<{
   run(): Promise<{ code: number; out: string; err: string; order: string[] }>
 }> {
   const ctx = new Context()
+  if (options.additionalWritableRoots !== undefined) {
+    ctx.provide('headlessStartup', {
+      task: options.task, sessionId: options.sessionId, json: options.json ?? false,
+      additionalWritableRoots: options.additionalWritableRoots,
+    })
+  }
   provideWorkingDirectoryFixture(ctx)
   if (options.filesystemCwd !== undefined) {
     const cwd = options.filesystemCwd
@@ -229,7 +235,6 @@ async function bench(script: Script, options: BenchOptions = {}): Promise<{
         ...options.sessionId === undefined ? {} : { sessionId: options.sessionId },
         ...options.json === undefined ? {} : { json: options.json },
         ...options.permissionMode === undefined ? {} : { permissionMode: options.permissionMode },
-        ...options.additionalWritableRoots === undefined ? {} : { additionalWritableRoots: options.additionalWritableRoots },
       })
       return { code: await exited, out, err, order }
     },
@@ -259,7 +264,9 @@ describe('headless runner', () => {
   })
 
   it('rejects an unknown preset before creating an Agent', async () => {
-    const test = await bench({ afterPrompt() { throw new Error('must not run') } }, { permissionMode: 'missing' })
+    const test = await bench({ afterPrompt() { throw new Error('must not run') } }, {
+      permissionMode: 'missing', useStdin: true, readStdin() { throw new Error('must not read stdin') },
+    })
     test.ctx.provide('permissionPresets', { resolve() { throw new Error('unknown preset') } } as never)
     try {
       const result = await test.run()
@@ -1230,8 +1237,8 @@ describe('headless runner', () => {
   })
 
   it('validates config: the task and run options are optional', () => {
-    expect(new Config({})).toEqual({ additionalWritableRoots: [] })
+    expect(new Config({})).toEqual({})
     expect(new Config({ task: 'x', sessionId: 'session-x', json: true }))
-      .toEqual({ task: 'x', sessionId: 'session-x', json: true, additionalWritableRoots: [] })
+      .toEqual({ task: 'x', sessionId: 'session-x', json: true })
   })
 })

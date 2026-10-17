@@ -1274,6 +1274,38 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'headlessStartup',
+    summary: 'What the runner row reads from HEADLESS_STARTUP_SERVICE.',
+    description: 'What the runner row reads from HEADLESS_STARTUP_SERVICE.',
+    methods: [
+      {
+        signature: 'task: string | undefined',
+        description: 'The task text this invocation asked for; absent when the runner reads stdin.',
+        parameters: [],
+      },
+      {
+        signature: 'sessionId: string | undefined',
+        description: 'Exact Session identity to adopt; absent for a fresh random identity.',
+        parameters: [],
+      },
+      {
+        signature: 'json: boolean',
+        description: 'Whether stdout carries the machine-readable event stream instead of final text.',
+        parameters: [],
+      },
+      {
+        signature: 'permissionMode?: string',
+        description: 'Permission preset to apply before the task; absent preserves session policy.',
+        parameters: [],
+      },
+      {
+        signature: 'additionalWritableRoots?: string[]',
+        description: 'Explicit absolute write grants for this invocation; absent adds no directories.',
+        parameters: [],
+      },
+    ],
+  },
+  {
     key: 'hmr',
     summary: 'Hot reload service with Cordis-compatible module configuration and events.',
     description: 'Hot reload service with Cordis-compatible module configuration and events.',

@@ -9,12 +9,6 @@
   ],
   "references": [
     {
-      "path": "../../interaction/permission-presets"
-    },
-    {
-      "path": "../../sandbox/sandbox-policy"
-    },
-    {
       "path": "../../../vendor/cordis"
     },
     {
@@ -46,6 +40,12 @@
     },
     {
       "path": "../../subagent/subagent"
+    },
+    {
+      "path": "../../interaction/permission-presets"
+    },
+    {
+      "path": "../../sandbox/sandbox-policy"
     }
   ]
 }

@@ -32,6 +32,7 @@ import type {} from '@deepseek-ai/dsh-session-query'
 import type {} from '@deepseek-ai/dsh-subagent'
 import type {} from '@deepseek-ai/dsh-permission-presets'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
+import type {} from './startup.ts'
 import { internals } from './runner-internals.ts'
 import { projectJsonRun, boundJsonLine } from './json-stream.ts'
 
@@ -51,8 +52,6 @@ export interface Config {
   json?: boolean
   /** Permission preset applied before the task; omission keeps the session's current policy. */
   permissionMode?: string
-  /** Absolute directories requested by the CLI; the composed sandbox policy must include each one. */
-  additionalWritableRoots?: string[]
 }
 
 export const Config: z<Config> = z.object({
@@ -60,7 +59,6 @@ export const Config: z<Config> = z.object({
   sessionId: z.string(),
   json: z.boolean(),
   permissionMode: z.string(),
-  additionalWritableRoots: z.array(z.string()).default([]),
 })
 
 /** Outcome of one owned run interval. */
@@ -77,7 +75,7 @@ interface HeadlessIo {
   exit(code: number): void
 }
 
-/** Aggregate the last assistant text and turn outcome in one owned interval. */
+/** Aggregate the interval's last assistant text; only its final turn can establish completion. */
 function summarize(session: Session, firstSeq: SessionLogOffset): RunOutcome {
   let started = false
   let text = ''
@@ -314,7 +312,7 @@ function fail(io: HeadlessIo, error: unknown, json: boolean): void {
  * Run one task through one Agent and request process exit.
  * Live Agent failures require a later durable terminal before a recovered run can succeed.
  * @param ctx - plugin context carrying the Agent, default model, Session, and launcher IO services.
- * @param config - task, optional exact Session identity, and output mode.
+ * @param config - task, exact Session identity, output mode, and permission preset.
  * @param io - process-facing effects.
  */
 async function run(ctx: Context, config: Config, io: HeadlessIo): Promise<void> {
@@ -333,6 +331,19 @@ async function run(ctx: Context, config: Config, io: HeadlessIo): Promise<void> 
     throw new Error('headless-runner: sessionId must not be blank')
   }
 
+  const permissions = ctx.get('permissionPresets')
+  if (config.permissionMode !== undefined) {
+    if (permissions === undefined) throw new Error('headless --permission-mode requires the permissionPresets service')
+    permissions.resolve(config.permissionMode)
+  }
+  const requestedRoots = ctx.get('headlessStartup')?.additionalWritableRoots
+  if (requestedRoots !== undefined && requestedRoots.length > 0) {
+    const policy = ctx.get('sandboxPolicy')
+    if (policy === undefined || requestedRoots.some(root => !policy.additionalWritableRoots?.includes(root))) {
+      throw new Error('headless --add-dir requires the sandbox-policy row to include headlessStartup.additionalWritableRoots; check the profile overlays')
+    }
+  }
+
   const task = config.task === undefined || config.task === '-'
     ? await internals.readStdin()
     : config.task
@@ -341,17 +352,6 @@ async function run(ctx: Context, config: Config, io: HeadlessIo): Promise<void> 
   }
 
   const selection = defaultModel.currentSelection()
-  const permissions = ctx.get('permissionPresets')
-  if (config.permissionMode !== undefined) {
-    if (permissions === undefined) throw new Error('headless --permission-mode requires the permissionPresets service')
-    permissions.resolve(config.permissionMode)
-  }
-  if (config.additionalWritableRoots !== undefined && config.additionalWritableRoots.length > 0) {
-    const policy = ctx.get('sandboxPolicy')
-    if (policy === undefined || config.additionalWritableRoots.some(root => !policy.additionalWritableRoots?.includes(root))) {
-      throw new Error('headless --add-dir requires the sandbox-policy row to include headlessStartup.additionalWritableRoots; check the profile overlays')
-    }
-  }
   const agentOptions = { provider: selection.provider, model: selection.model }
   // This bundle composes no preset roster, so the model-facing rows sit in the
   // host plane and the agent reads them from the global layer. A deployment

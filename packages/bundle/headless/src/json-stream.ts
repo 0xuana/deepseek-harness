@@ -232,8 +232,8 @@ function addUsage(state: StepUsageState, next: StepUsage | undefined): StepUsage
  * The opening `session` event is written before the subscription starts, so a
  * caller must invoke this before submitting the task. Text and reasoning are
  * emitted only when the step's `assistant/message` commits them, and the
- * terminal `final` event carries the same lossless answer the default mode
- * prints (it is deliberately not bounded).
+ * terminal `final` event carries the exact Session identity, the durable turn
+ * reason (null without a terminal turn), and the lossless answer. It is not bounded.
  * @param ctx - plugin context carrying the live Session feed.
  * @param agent - the exact Agent whose events belong to this invocation.
  * @param sink - stdout sink receiving one JSON object per line.

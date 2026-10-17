@@ -13,5 +13,6 @@
   inject: [headlessStartup]
   config:
     task: !!js ctx.headlessStartup.task
+    sessionId: !!js ctx.headlessStartup.sessionId
     json: !!js ctx.headlessStartup.json
     permissionMode: workspace-write
