@@ -67,6 +67,14 @@ export interface DshEnginesManifest {
 
 /** The configuration layer exported by a bundle package. */
 export interface DshBundleManifest {
+  /** Top-level fields saved to existing profile entries on explicit enablement.
+   * Settings remain after disablement.
+   */
+  configureOnEnable?: Record<string, Record<string, unknown>>
+  /** Supported Node Host platform names; omission allows every operating system. */
+  platforms?: string[]
+  /** Mark this optional feature as experimental in plugin management. */
+  experimental?: boolean
   /** One patch file path, or an ordered list applied in sequence, each relative to the declaring package root. */
   patch: string | string[]
 }

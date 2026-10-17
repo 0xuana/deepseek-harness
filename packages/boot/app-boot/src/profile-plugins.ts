@@ -1,6 +1,7 @@
 /** Installed profile dependencies and their bundle activation after package-manager operations. */
 
 import { join } from 'node:path'
+import { assertBundlePlatform } from './bundle-platform.ts'
 import { readProfileManifest, resolveBundleDir, writeProfileManifest, type ProfileManifest } from './profile.ts'
 
 /** Profile directory and installation used by the shared bundle resolver. */
@@ -112,7 +113,10 @@ export function reconcileProfilePlugins(options: ProfilePluginLocation & {
   const previous = after.manifest.dsh?.profile?.bundles ?? []
   const bundles = previous.filter(name => !(beforeNames.has(name) || afterNames.has(name)) || bundleNames.has(name))
   for (const dependency of after.dependencies) {
-    if (dependency.bundle && !disabled.has(dependency.name) && !bundles.includes(dependency.name)) bundles.push(dependency.name)
+    if (dependency.bundle && !disabled.has(dependency.name) && !bundles.includes(dependency.name)) {
+      assertBundlePlatform(bundleManifest(options, dependency.name)?.dsh?.bundle?.platforms, process.platform)
+      bundles.push(dependency.name)
+    }
   }
   const changed = bundles.length !== previous.length || bundles.some((name, index) => name !== previous[index])
   const manifest = changed ? writeProfileBundles(options.profileDir, after.manifest, bundles) : after.manifest

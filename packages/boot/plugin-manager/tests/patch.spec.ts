@@ -5,9 +5,101 @@ import { tmpdir } from 'node:os'
 import { expect, it, onTestFinished } from 'vitest'
 import { applyEntryPatches } from '@deepseek-ai/cordis-plugin-include'
 import { initProfile, loadOptionalPatches, type ProfileContext } from '@deepseek-ai/dsh-app-boot'
-import { writePluginEnabled } from '../src/patch.ts'
+import { prepareBundleConfiguration, writePluginEnabled } from '../src/patch.ts'
 
 const TOOL = { id: 'tool', name: 'package' }
+
+it('prepares durable activation settings while preserving prior fields, expressions and comments', async () => {
+  const profile = await fixture('# personal\n- id: runtime\n  config:\n    timeout: 42\n    command: !!js process.execPath\n- id: locale\n  config: { preference: zh }\n', [
+    { id: 'runtime', name: 'runtime-package', config: { executionMode: 'per-call' } },
+    { id: 'presets', name: 'preset-package', config: { default: 'standard' } },
+    { id: 'locale', name: 'locale-package' },
+  ])
+  const before = await readFile(profile.patchPath, 'utf8')
+  const input = { runtime: { executionMode: 'persistent-in-memory' }, presets: { selectedDefault: 'ptc' } }
+  const prepared = await prepareBundleConfiguration(profile, input)
+  expect(await readFile(profile.patchPath, 'utf8')).toBe(before)
+  expect(prepared).toContain('# personal')
+  expect(prepared).toContain('!!js process.execPath')
+  if (prepared === undefined) throw new Error('Expected changed enablement settings')
+  await writeFile(profile.patchPath, prepared)
+  expect(loadOptionalPatches('test', profile.patchPath)).toEqual([
+    { id: 'runtime', config: { timeout: 42, command: { __jsExpr: 'process.execPath' }, executionMode: 'persistent-in-memory' } },
+    { id: 'locale', config: { preference: 'zh' } },
+    { id: 'presets', name: 'preset-package', config: { default: 'standard', selectedDefault: 'ptc' } },
+  ])
+  expect(await prepareBundleConfiguration(profile, input)).toBeUndefined()
+})
+
+it('accepts unrelated launch overrides when the requested field has the intended effective value', async () => {
+  const profile = await fixture('[]\n', [{ id: 'runtime', name: 'runtime-package', config: { timeout: 42 } }])
+  const launch = { ...profile, overlays: [{ id: 'runtime', config: { executionMode: 'persistent-in-memory', timeout: 10 } }] }
+  const prepared = await prepareBundleConfiguration(launch, { runtime: { executionMode: 'persistent-in-memory' } })
+  if (prepared === undefined) throw new Error('Expected saved runtime configuration')
+  await writeFile(profile.patchPath, prepared)
+  expect(loadOptionalPatches('test', profile.patchPath)).toEqual([
+    { id: 'runtime', name: 'runtime-package', config: { timeout: 42, executionMode: 'persistent-in-memory' } },
+  ])
+})
+
+it('refuses a whole-config expression without evaluating it or replacing the user patch', async () => {
+  const before = '- id: runtime\n  config: !!js "(() => { throw new Error(\'must not evaluate\') })()"\n'
+  const profile = await fixture(before, [{ id: 'runtime', name: 'runtime-package' }])
+  await expect(prepareBundleConfiguration(profile, { runtime: { executionMode: 'persistent-in-memory' } }))
+    .rejects.toThrow('Bundle enablement cannot edit the whole-config expression for "runtime"; use a literal config mapping')
+  expect(await readFile(profile.patchPath, 'utf8')).toBe(before)
+})
+
+it('replaces a target field expression while preserving unrelated expressions', async () => {
+  const profile = await fixture('- id: runtime\n  config:\n    executionMode: !!js process.env.MODE\n    timeout: !!js process.env.TIMEOUT\n', [
+    { id: 'runtime', name: 'runtime-package' },
+  ])
+  const prepared = await prepareBundleConfiguration(profile, { runtime: { executionMode: 'persistent-in-memory' } })
+  expect(prepared).toContain('executionMode: persistent-in-memory')
+  expect(prepared).toContain('timeout: !!js process.env.TIMEOUT')
+  expect(prepared).not.toContain('process.env.MODE')
+})
+
+it('retains configuration anchors referenced by other entries', async () => {
+  const profile = await fixture('- id: runtime\n  config: &runtimeConfig\n    timeout: &timeout 30000\n- id: other\n  config:\n    timeout: *timeout\n    inherited: *runtimeConfig\n', [
+    { id: 'runtime', name: 'runtime-package' }, { id: 'other', name: 'other-package' },
+  ])
+  const prepared = await prepareBundleConfiguration(profile, { runtime: { executionMode: 'persistent-in-memory' } })
+  if (prepared === undefined) throw new Error('Expected activation settings')
+  await writeFile(profile.patchPath, prepared)
+  expect(loadOptionalPatches('test', profile.patchPath)).toEqual([
+    { id: 'runtime', config: { timeout: 30000 } },
+    { id: 'other', config: { timeout: 30000, inherited: { timeout: 30000 } } },
+    { id: 'runtime', name: 'runtime-package', config: { timeout: 30000, executionMode: 'persistent-in-memory' } },
+  ])
+  expect(await prepareBundleConfiguration(profile, { runtime: { executionMode: 'persistent-in-memory' } })).toBeUndefined()
+})
+
+it.each(['runtime-package', 'retired-runtime'])('keeps name-qualified activation overrides for %s', async (name) => {
+  const profile = await fixture(`- id: runtime\n  name: ${name}\n  config: { timeout: 42 }\n`, [
+    { id: 'runtime', name: 'runtime-package', config: { timeout: 10 } },
+  ])
+  const prepared = await prepareBundleConfiguration(profile, { runtime: { executionMode: 'persistent-in-memory' } })
+  if (prepared === undefined) throw new Error('Expected activation settings')
+  await writeFile(profile.patchPath, prepared)
+  const patch = { id: 'runtime', name: 'runtime-package', config: {
+    timeout: name === 'runtime-package' ? 42 : 10, executionMode: 'persistent-in-memory',
+  } }
+  expect(loadOptionalPatches('test', profile.patchPath)).toEqual(name === 'runtime-package' ? [patch] : [
+    { id: 'runtime', name, config: { timeout: 42 } }, patch,
+  ])
+})
+
+it('refuses invalid activation settings, absent entries and higher-layer overrides before writing', async () => {
+  const profile = await fixture('[]\n', [{ id: 'runtime', name: 'runtime-package', config: {} }])
+  for (const input of [[], { runtime: false }, { absent: { mode: 'new' } }]) {
+    await expect(prepareBundleConfiguration(profile, input)).rejects.toThrow()
+    expect(await readFile(profile.patchPath, 'utf8')).toBe('[]\n')
+  }
+  await writeFile(join(profile.home, 'cordis.patch.yml'), '- id: runtime\n  config: { executionMode: per-call }\n')
+  await expect(prepareBundleConfiguration(profile, { runtime: { executionMode: 'persistent-in-memory' } })).rejects.toThrow('overridden')
+  expect(await readFile(profile.patchPath, 'utf8')).toBe('[]\n')
+})
 
 /** Create a profile whose patch file holds `text` (none when omitted) and whose one selected bundle inserts `rows`. */
 async function fixture(text?: string, rows: object[] = []): Promise<ProfileContext> {

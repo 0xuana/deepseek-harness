@@ -169,6 +169,17 @@ function install(dir: string, name: string) {
   writeFileSync(join(dir, 'package.json'), JSON.stringify(manifest))
 }
 
+it('keeps a newly installed unsupported bundle out of the saved selection', async () => {
+  const { dir, context, pnpm } = fixture()
+  pnpm.mutate = (target) => {
+    install(target, 'restricted')
+    writeFileSync(join(target, 'node_modules/restricted/package.json'), JSON.stringify({ name: 'restricted', version: '1',
+      dsh: { bundle: { patch: './cordis.patch.yml', platforms: [process.platform === 'darwin' ? 'win32' : 'darwin'] } } }))
+  }
+  await expect(runProfilePnpm(context, ['add', 'restricted'], { execution: 'service', outputBytes: 8192 })).rejects.toThrow('Host is running')
+  expect(readProfileManifest('test', dir).dsh?.profile?.bundles).toEqual([])
+})
+
 function installGuarded(dir: string, dependency: string, name = dependency, version = '1.0.0', peer = '>=999.0.0') {
   install(dir, dependency)
   writeFileSync(join(dir, 'node_modules', dependency, 'package.json'), JSON.stringify({

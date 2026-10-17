@@ -89,6 +89,70 @@ async function fixture(reload: 'live' | 'startup' = 'live', overlay = false, pre
   return { ctx, dir, manager: ctx.pluginManager, bundle, profile, stopHmr, overlays, connection }
 }
 
+it.each(['live', 'startup'] as const)('persists enablement settings, applies them with %s reload and retains them after disablement', async (reload) => {
+  const { manager, dir, ctx } = await fixture(reload, false, undefined, {}, undefined, (dir) => {
+    const core = join(dir, 'node_modules/core/cordis.patch.yml')
+    const patches = JSON.parse(readFileSync(core, 'utf8')) as Array<{ insert: object[] }>
+    patches[0]!.insert.push({ id: 'runtime', name: join(dir, 'node_modules/extra/plugin.mjs'),
+      config: { service: 'activationProbe', executionMode: 'per-call', timeout: 42 } })
+    writeFileSync(core, JSON.stringify(patches))
+    const path = join(dir, 'node_modules/extra/package.json')
+    const meta = JSON.parse(readFileSync(path, 'utf8')) as { dsh: { bundle: object } }
+    meta.dsh.bundle = { ...meta.dsh.bundle, configureOnEnable: { runtime: { executionMode: 'persistent-in-memory' } } }
+    writeFileSync(path, JSON.stringify(meta))
+  })
+  await manager.setBundleEnabled('extra', false)
+  const runtime = [...ctx.loader.entries()].find(entry => entry.options.id === 'runtime')!
+  expect(await manager.setBundleEnabled('extra', true)).toMatchObject({
+    application: reload === 'live' ? 'applied' : 'restart-required', changed: true,
+  })
+  expect(runtime.options.config).toEqual({ service: 'activationProbe', executionMode: reload === 'live' ? 'persistent-in-memory' : 'per-call', timeout: 42 })
+  const appliedFiber = runtime.fiber
+  const saved = readFileSync(join(dir, 'cordis.patch.yml'), 'utf8')
+  expect(parse(saved)).toContainEqual({ id: 'runtime', name: pathToFileURL(join(dir, 'node_modules/extra/plugin.mjs')).href,
+    config: { service: 'activationProbe', executionMode: 'persistent-in-memory', timeout: 42 } })
+  await manager.setBundleEnabled('extra', false)
+  expect(readFileSync(join(dir, 'cordis.patch.yml'), 'utf8')).toBe(saved)
+  expect(runtime.fiber === appliedFiber).toBe(true)
+  await manager.setBundleEnabled('extra', true)
+  expect(readFileSync(join(dir, 'cordis.patch.yml'), 'utf8')).toBe(saved)
+  expect(runtime.fiber === appliedFiber).toBe(true)
+})
+
+it.each(['live', 'startup'] as const)('refuses an unsupported bundle before saving or applying it with %s reload', async (reload) => {
+  const { manager, dir, ctx } = await fixture(reload, false, undefined, {}, undefined, (dir) => {
+    const path = join(dir, 'node_modules/extra/package.json')
+    writeFileSync(path, JSON.stringify({ name: 'extra', version: '1.0.0', description: 'Platform-limited bundle',
+      dsh: { bundle: { patch: './cordis.patch.yml', experimental: true, configureOnEnable: { absent: { mode: 'new' } }, platforms: [process.platform === 'darwin' ? 'win32' : 'darwin'] } } }))
+    const manifest = readProfileManifest('test', dir)
+    manifest.dsh = { profile: { bundles: ['core'] } }
+    writeFileSync(join(dir, 'package.json'), JSON.stringify(manifest))
+  })
+  const before = readFileSync(join(dir, 'package.json'), 'utf8')
+  const patchBefore = readFileSync(join(dir, 'cordis.patch.yml'), 'utf8')
+  expect((await manager.listBundles()).find(row => row.name === 'extra')).toMatchObject({
+    enabled: false, experimental: true, description: 'Platform-limited bundle', error: { code: 'unsupported-platform' },
+  })
+  expect(await manager.setBundleEnabled('extra', true)).toMatchObject({ changed: false, application: 'failed', error: { code: 'unsupported-platform' } })
+  expect(readFileSync(join(dir, 'package.json'), 'utf8')).toBe(before)
+  expect(ctx.get('managedProbe')).toBeUndefined()
+  expect(readFileSync(join(dir, 'cordis.patch.yml'), 'utf8')).toBe(patchBefore)
+  expect(await manager.setBundleEnabled('extra', false)).toMatchObject({ changed: false })
+})
+
+it('allows supported bundle activation and permits deselecting an unsupported saved bundle', async () => {
+  const { manager, dir } = await fixture()
+  const path = join(dir, 'node_modules/extra/package.json')
+  const metadata = readProfileManifest('test', join(dir, 'node_modules/extra'))
+  metadata.dsh = { bundle: { patch: './cordis.patch.yml', platforms: [process.platform] } }
+  writeFileSync(path, JSON.stringify(metadata))
+  expect(await manager.setBundleEnabled('extra', false)).toMatchObject({ changed: true, application: 'applied' })
+  expect(await manager.setBundleEnabled('extra', true)).toMatchObject({ changed: true, application: 'applied' })
+  metadata.dsh.bundle!.platforms = [process.platform === 'darwin' ? 'win32' : 'darwin']
+  writeFileSync(path, JSON.stringify(metadata))
+  expect(await manager.setBundleEnabled('extra', false)).toMatchObject({ changed: true, application: 'applied' })
+})
+
 it.each(['network', 'timeout'] as const)('stops a GitHub %s before pnpm and attributes it to the repository', async (kind) => {
   const { manager, dir, connection } = await fixture()
   const before = readFileSync(join(dir, 'package.json'), 'utf8')
@@ -1513,6 +1577,20 @@ it.each([false, true])('rechecks installed bundle peers before accepting a disab
     expect(readFileSync(join(dir, 'package.json'), 'utf8')).toBe(before)
   }
   expect(readProfileManifest('test', dir).dsh?.profile?.bundles).toEqual(['core', 'extra'])
+})
+
+it.each([true, false])('projects the explicit experimental flag %s independently of package naming', async (experimental) => {
+  const { manager, dir } = await fixture()
+  const path = join(dir, 'node_modules/extra/package.json')
+  const manifest = JSON.parse(readFileSync(path, 'utf8')) as { dsh: { bundle: { experimental?: boolean | string } } }
+  manifest.dsh.bundle.experimental = experimental
+  writeFileSync(path, JSON.stringify(manifest))
+  expect((await manager.listBundles()).find(row => row.name === 'extra')).toMatchObject({ experimental })
+  manifest.dsh.bundle.experimental = 'yes'
+  writeFileSync(path, JSON.stringify(manifest))
+  const error = (await manager.listBundles()).find(row => row.name === 'extra')?.error
+  expect(error?.code).toBe('operation-error')
+  expect(error?.diagnostic).toContain('must be a boolean')
 })
 
 

@@ -206,6 +206,23 @@ function renderTab(
 }
 
 describe('PluginManagerPage', () => {
+  it('starts each page at the top and keeps scroll position during a refresh', () => {
+    const { set } = renderTab({ packages: [pkg()] })
+    const open = screen.getByRole('button', { name: 'View dsh-better-sidebar' })
+    const panel = open.closest<HTMLElement>('[data-plugin-panel]')!
+    panel.scrollTop = 350
+    fireEvent.click(open)
+    expect(panel.scrollTop).toBe(0)
+    panel.scrollTop = 120
+    set({ refreshStatus: 'refreshing' })
+    expect(panel.scrollTop).toBe(120)
+    set({ refreshStatus: 'idle', packages: [pkg({ version: '0.17.0' })] })
+    expect(panel.scrollTop).toBe(120)
+    fireEvent.click(screen.getByRole('button', { name: en.backToList }))
+    expect(panel.scrollTop).toBe(0)
+    expect(screen.getByRole('heading', { name: en.title, level: 1 })).toBeTruthy()
+  })
+
   it('shows no tabs without contributions, and switches between Installed and a contributed tab', () => {
     const { actions, navigation, setTabs, set } = renderTab({ packages: [pkg()] }, {}, {
       'plugins.tab:discover': (_view, owner) => {
@@ -705,6 +722,26 @@ describe('PluginManagerPage', () => {
     expect(within(detail).queryByRole('button', { name: en.uninstallLabel.replace('{name}', title) })).toBeNull()
     fireEvent.click(within(detail).getByRole('switch', { name: en.enableToggle.replace('{name}', title) }))
     expect(actions.setEnabled).toHaveBeenCalledExactlyOnceWith('@deepseek-ai/dsh-experimental-agent-team-profile', true)
+  })
+
+  it('keeps the persisted selection while marking a failed component as a problem', () => {
+    renderTab({ packages: [pkg({ name: 'cua', enabled: true, rows: [row({ phase: 'failed', diagnostic: 'native preparation unavailable' })] })] })
+    expect(document.querySelector('[data-plugin-package="cua"]')?.getAttribute('data-plugin-status')).toBe('problem')
+    expect(screen.getByRole('switch', { name: en.enableToggle.replace('{name}', 'cua') }).getAttribute('aria-checked')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', 'cua') }))
+    expect(screen.getByText(`${en.reasonLabel}: native preparation unavailable`)).toBeTruthy()
+  })
+
+  it('marks a normally named Computer Use bundle experimental and explains persistent PTC before enabling', () => {
+    const description = 'Enabling switches this profile to persistent PTC.'
+    const { actions } = renderTab({ packages: [pkg({
+      name: '@deepseek-ai/dsh-cua-bundle', experimental: true, enabled: false, optional: true, installed: false,
+      meta: { title: 'Computer Use', description },
+    })] })
+    expect(screen.getByText(en.statusBeta)).toBeTruthy()
+    expect(screen.getByText(description)).toBeTruthy()
+    fireEvent.click(screen.getByRole('switch', { name: en.enableToggle.replace('{name}', 'Computer Use') }))
+    expect(actions.setEnabled).toHaveBeenCalledExactlyOnceWith('@deepseek-ai/dsh-cua-bundle', true)
   })
 
   it.each([
@@ -1357,6 +1394,11 @@ describe('PluginManagerPage', () => {
     expect(within(detail).getByText(`${en.reasonLabel}: ${en.reasonIncompatibleVersionUnnamed} ${en.reasonIncompatibleInstalled}`)).toBeTruthy()
     fireEvent.click(within(detail).getByRole('button', { name: en.backToList }))
     expect(document.querySelector('[data-plugin-detail]')).toBeNull()
+    set({ packages: [pkg({ enabled: false, error: { code: 'unsupported-platform' } })] })
+    expect(screen.getByText(en.reasonUnsupportedPlatform)).toBeTruthy()
+    expect(screen.getByRole('switch', { name: en.enableToggle.replace('{name}', 'dsh-better-sidebar') })).toHaveProperty('disabled', true)
+    set({ packages: [pkg({ enabled: true, error: { code: 'unsupported-platform' } })] })
+    expect(screen.getByRole('switch', { name: en.enableToggle.replace('{name}', 'dsh-better-sidebar') })).toHaveProperty('disabled', false)
     // A bundle that leaves the list drops back to the cards.
     const { version: _version, ...unversioned } = pkg()
     set({ packages: [unversioned] })
@@ -1398,7 +1440,7 @@ describe('PluginManagerPage', () => {
     fireEvent.click(toggle('row-2'))
     expect(actions.setRowEnabled).toHaveBeenCalledTimes(1)
     expect(toggle('include:row-5')).toHaveProperty('disabled', true)
-    expect(within(detail).getByText(en.rowPhaseFailed)).toBeTruthy()
+    expect(within(detail.querySelector<HTMLElement>('[data-plugin-row="include:row-3"]')!).getByText(en.rowPhaseFailed)).toBeTruthy()
     expect(within(detail).getByText(en.rowPhaseLoading)).toBeTruthy()
     expect(within(detail).getByText(en.rowPhaseUnloading)).toBeTruthy()
     expect(document.querySelector('[data-plugin-row="include:row-3"]')?.getAttribute('data-state')).toBe('failed')
@@ -2267,6 +2309,28 @@ describe('PluginManagerPage', () => {
   })
 })
 
+it.each([false, true])('shows progress only for the changing bundle and clears it when settled (enabled=%s)', (enabled) => {
+  const name = 'dsh-better-sidebar'
+  const { set, setLanguage, actions } = renderTab({ packages: [pkg({ enabled }), pkg({ name: 'dsh-other' })] })
+  const toggle = screen.getByRole('switch', { name: `Enable ${name}` })
+  expect(screen.queryByRole('status')).toBeNull()
+  fireEvent.click(toggle)
+  expect(actions.setEnabled).toHaveBeenCalledExactlyOnceWith(name, !enabled)
+  set({ busy: [name] })
+  for (const dict of [en, zh]) {
+    setLanguage(dict)
+    const status = screen.getByRole('status', { name: dict.applyingChange.replace('{name}', name) })
+    expect(status.querySelector('[data-state="ongoing"]')).not.toBeNull()
+  }
+  expect(toggle).toHaveProperty('disabled', true)
+  fireEvent.click(toggle)
+  expect(actions.setEnabled).toHaveBeenCalledOnce()
+  expect(screen.getByRole('switch', { name: '启用 dsh-other' })).toHaveProperty('disabled', false)
+  set({ busy: [] })
+  expect(screen.queryByRole('status')).toBeNull()
+  expect(toggle).toHaveProperty('disabled', false)
+})
+
 it.each([false, true])('opens activation guidance details and returns to the originating list (experimental: %s)', (fromMore) => {
   const name = fromMore ? '@deepseek-ai/dsh-experimental-terminal-bundle' : 'dsh-better-sidebar'
   const bundle = pkg({ name, official: fromMore })
@@ -2322,7 +2386,6 @@ it('supplies the accepted entry values and atomic mutation action to a custom pl
   fireEvent.click(screen.getByText('Save custom'))
   expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['count'], value: 3 }], 7)
 })
-
 
 describe('on-demand Official bundles', () => {
   const name = '@deepseek-ai/dsh-subagent-codex'
@@ -2429,4 +2492,41 @@ describe('on-demand Official bundles', () => {
     expect(within(detail).queryByRole('button', { name: en.uninstallLabel.replace('{name}', title) })).toBeNull()
     expect(detail.querySelector('[data-plugin-rows]')).toBeNull()
   })
+})
+
+it('uses the same activation guidance from a package detail switch', () => {
+  const name = 'dsh-better-sidebar'
+  const { set, actions } = renderTab({ packages: [pkg({ enabled: false })] }, { bundles: new Set([name]) }, {
+    [`plugins.bundle.activation:${name}`]: (_view, owner) => <button onClick={(owner as PluginActivationOwnerProps).onDismiss}>Finish setup</button>,
+    [`plugins.bundle.config:${name}`]: () => <div>Bundle setup</div>,
+  })
+  fireEvent.click(screen.getByRole('button', { name: `View ${name}` }))
+  expect(screen.getByText('Bundle setup')).toBeTruthy()
+  fireEvent.click(screen.getByRole('switch'))
+  expect(actions.setEnabled).toHaveBeenCalledWith(name, true)
+  set({ packages: [pkg()], busy: [name] })
+  expect(screen.queryByText('Finish setup')).toBeNull()
+  set({ busy: [] })
+  fireEvent.click(screen.getByText('Finish setup'))
+  expect(screen.queryByText('Finish setup')).toBeNull()
+  expect(screen.getByText('Bundle setup')).toBeTruthy()
+  fireEvent.click(screen.getByRole('switch'))
+  set({ packages: [pkg({ enabled: false })] })
+  expect(screen.queryByText('Finish setup')).toBeNull()
+})
+
+
+it('keeps bundle configuration mounted while reporting its pending operation', () => {
+  const name = 'dsh-better-sidebar'
+  const { set } = renderTab({ packages: [pkg()] }, { bundles: new Set([name]) }, {
+    [`plugins.bundle.config:${name}`]: (_view, owner) => <div data-testid="bundle-config">{String((owner as { busy?: boolean }).busy)}</div>,
+  })
+  fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', name) }))
+  const panel = screen.getByTestId('bundle-config')
+  expect(panel.textContent).toBe('false')
+  set({ busy: [name] })
+  expect(screen.getByTestId('bundle-config')).toBe(panel)
+  expect(panel.textContent).toBe('true')
+  set({ busy: [] })
+  expect(panel.textContent).toBe('false')
 })

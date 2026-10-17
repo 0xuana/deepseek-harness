@@ -58,6 +58,7 @@ const CODE_KEYS = {
   'bundle-in-use': 'reasonBundleInUse',
   'stale-approval': 'reasonStaleApproval',
   'incompatible-version': 'reasonIncompatibleVersionUnnamed',
+  'unsupported-platform': 'reasonUnsupportedPlatform',
   'operation-error': 'reasonOperationError',
 } satisfies Record<ManagementError['code'], PluginManagerLocaleKey>
 
@@ -115,12 +116,12 @@ export function shortName(name: string): string {
  * @returns localized copy with a technical-name fallback and the independent beta status.
  */
 export function packageText(
-  pkg: Pick<PackageView, 'name' | 'meta'>, resolveText: PluginManagerFace['resolveText'],
+  pkg: Pick<PackageView, 'name' | 'meta' | 'experimental'>, resolveText: PluginManagerFace['resolveText'],
 ): { title: string; description: string | undefined; beta: boolean } {
   return {
     title: pkg.meta?.title === undefined ? pkg.name : resolveText(pkg.meta.title),
     description: pkg.meta?.description === undefined ? undefined : resolveText(pkg.meta.description) || undefined,
-    beta: pkg.name.startsWith('@deepseek-ai/dsh-experimental-'),
+    beta: pkg.experimental === true || pkg.name.startsWith('@deepseek-ai/dsh-experimental-'),
   }
 }
 

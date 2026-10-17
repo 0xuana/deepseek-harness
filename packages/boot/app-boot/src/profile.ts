@@ -28,6 +28,7 @@ import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import { applyEntryPatches, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import type { DshBundleManifest, DshPackageManifest } from '@deepseek-ai/dsh-package-manifest'
+import { assertBundlePlatform } from './bundle-platform.ts'
 import { evaluatePluginCompatibility, pluginCompatibilityWarning } from './plugin-compatibility.ts'
 import { readProfileVersionExemptions } from './profile-compatibility.ts'
 import { loadOverlayPatches } from './index.ts'
@@ -221,6 +222,7 @@ export const DEFAULT_PROFILE_BUNDLES: readonly string[] = ['@deepseek-ai/dsh-bas
  * [admission](../../../../.agents/notes/implemented/architecture/2026-09-21-experimental-capabilities-as-optional-bundles.md)).
  */
 export const OPTIONAL_BUNDLES: readonly string[] = [
+  '@deepseek-ai/dsh-cua-bundle',
   '@deepseek-ai/dsh-experimental-session-search',
   '@deepseek-ai/dsh-experimental-ralph-bundle',
   '@deepseek-ai/dsh-experimental-terminal-bundle',
@@ -729,7 +731,8 @@ export function resolveBundleDir(
  * the shared Harness home. This is used by application-owned profiles whose
  * package project and lifecycle belong to that application.
  * Retired bundles are removed from the stored bundle list first, rewriting the
- * manifest when it listed one. Unreadable bundles, and bundles whose own dsh requirements the profile does not exempt, are skipped
+ * manifest when it listed one. Unreadable bundles, unsupported Host platforms, and bundles whose own dsh requirements
+ * the profile does not exempt are skipped
  * without changing the manifest and listed in `skippedBundles`; nothing is printed.
  * @param binName - the diagnostic prefix on thrown errors.
  * @param dir - absolute profile package directory.
@@ -756,6 +759,7 @@ export function loadProfileDirectory(
       if (bundle === undefined) {
         throw new Error(`${binName}: profile bundle ${JSON.stringify(packageName)} declares no dsh.bundle in its package.json`)
       }
+      assertBundlePlatform(bundle.platforms, process.platform)
       // A bundle is not a plugin row, so row admission never reads its own dsh requirements.
       const issue = evaluatePluginCompatibility(bundleManifest, exemptions)
       if (issue !== undefined && !issue.exempted) throw new Error(pluginCompatibilityWarning(issue))

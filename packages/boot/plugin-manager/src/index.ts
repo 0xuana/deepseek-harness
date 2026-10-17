@@ -17,6 +17,7 @@ import {
   evaluatePluginCompatibility, readProfileCompatibility, readProfileVersionExemptions,
   setProfileVersionExemption, PROFILE_COMPATIBILITY_FILENAME,
   OFFICIAL_ON_DEMAND_CATALOG, getDshRuntimeVersion, ResolutionRestartRequired,
+  assertBundlePlatform, UnsupportedBundlePlatformError,
 } from '@deepseek-ai/dsh-app-boot'
 import type {} from '@deepseek-ai/dsh-hmr'
 import type { ProfileContext, ProfileManifest } from '@deepseek-ai/dsh-app-boot'
@@ -25,7 +26,7 @@ import { classifyInstallFailure } from './install-failure.ts'
 import { officialBundleInstallTarget } from './official-install-target.ts'
 import { dependencySpec, InvalidInstallSpecError, parseInstallSpec, type ParsedInstallSpec } from './install-spec.ts'
 import { attributeFailure, normalizeRegistry, NPMMIRROR_REGISTRY, registryPlan } from './registry.ts'
-import { flatten, writePluginEnabled } from './patch.ts'
+import { flatten, prepareBundleConfiguration, writePluginEnabled } from './patch.ts'
 import { incompatiblePlugin, ManagementFailure } from './failure.ts'
 import { approveBuilds, recordPendingBuilds } from './build-approval.ts'
 import { checkGithubConnection } from './github-connection.ts'
@@ -88,6 +89,7 @@ function messageOf(error: unknown): string { return error instanceof Error ? err
 
 /** An expected refusal keeps its code; anything else becomes an operation error carrying its exact diagnostic. */
 function managementError(error: unknown): ManagementError {
+  if (error instanceof UnsupportedBundlePlatformError) return { code: 'unsupported-platform' }
   if (!(error instanceof ManagementFailure)) return { code: 'operation-error', diagnostic: messageOf(error) }
   return { code: error.code, ...error.incompatible === undefined ? {} : { incompatible: error.incompatible } }
 }
@@ -361,18 +363,25 @@ export class PluginManager extends TypertRemoteService {
             ...(readOnlyReason === undefined ? {} : { readOnlyReason }), error: targetError ?? { code: 'not-bundle' }, rows: [], overrides: [] })
           continue
         }
+        const experimental = info.dsh?.bundle?.experimental
+        if (experimental !== undefined && typeof experimental !== 'boolean') throw new Error('bundle experimental must be a boolean')
         version = info.version
         const compatibility = evaluatePluginCompatibility(info, exemptions)
         if (compatibility !== undefined && !compatibility.exempted) throw new ManagementFailure('incompatible-version', [incompatiblePlugin(compatibility)])
         const dir = resolveBundleDir('dsh', name, this.profile.installAnchor, this.profile.dir)
         const meta = offered?.meta ?? readPluginMeta(info.name ?? name, pathToFileURL(join(dir, 'package.json')).href)
-        bundles.push({ name, official, availability, ...target, ...(version === undefined ? {} : { version }),
+        let platformError: ManagementError | undefined
+        try { assertBundlePlatform(info.dsh?.bundle?.platforms, process.platform) }
+        catch (error) { platformError = managementError(error) }
+        const error = targetError ?? platformError
+        bundles.push({ name, official, availability, ...target, ...experimental === undefined ? {} : { experimental },
+          ...(version === undefined ? {} : { version }),
           ...(info.description === undefined || info.description === '' ? {} : { description: info.description }),
           ...meta === undefined ? {} : { meta },
           ...sourceOf(info.name), enabled, installed, optional, removable: removable && readOnlyReason === undefined,
           ...(readOnlyReason === undefined ? {} : { readOnlyReason }),
           ...this.declaredRows(name, info),
-          ...targetError === undefined ? {} : { error: targetError } })
+          ...error === undefined ? {} : { error } })
       } catch (error) {
         if (enabled || installed || optional || offered !== undefined) {
           bundles.push({ name, official, availability, ...catalogMeta, ...target, ...(version === undefined ? {} : { version }),
@@ -808,19 +817,27 @@ export class PluginManager extends TypertRemoteService {
   private async selectBundle(name: string, enabled: boolean): Promise<void> {
     const manifest = readProfileManifest('dsh', this.profile.dir)
     const previous = bundleSelection(manifest)
+    let enableConfiguration: string | undefined
     if (enabled || !previous.includes(name)) {
       const metadata = bundleManifest(name, this.profile.dir, this.profile.installAnchor)
       if (metadata === undefined) throw new ManagementFailure('not-bundle')
       if (enabled) {
+        assertBundlePlatform(metadata.dsh?.bundle?.platforms, process.platform)
         const compatibility = evaluatePluginCompatibility(metadata, readProfileVersionExemptions(this.profile.dir))
         if (compatibility !== undefined && !compatibility.exempted) throw new ManagementFailure('incompatible-version', [incompatiblePlugin(compatibility)])
         this.bundleRows(name)
+        if (metadata.dsh?.bundle?.configureOnEnable !== undefined) {
+          enableConfiguration = await prepareBundleConfiguration(this.profile, metadata.dsh.bundle.configureOnEnable)
+        }
       }
     }
     if (!enabled && previous.includes(name)) {
       if (this.protectsManager(name)) throw new ManagementFailure('management-required')
     }
     const bundles = enabled ? [...previous, ...previous.includes(name) ? [] : [name]] : previous.filter(item => item !== name)
+    if (enableConfiguration !== undefined) {
+      await writeFileAtomic(this.profile.patchPath, enableConfiguration, { mode: 0o600 })
+    }
     if (JSON.stringify(previous) === JSON.stringify(bundles)) return
     manifest.dsh = { ...manifest.dsh, profile: { ...manifest.dsh?.profile, bundles } }
     await saveManifest(this.profile.dir, manifest)

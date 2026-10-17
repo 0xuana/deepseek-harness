@@ -8,7 +8,7 @@
  * the page declares.
  */
 
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { PluginInstallFailureKind, Registry } from '@deepseek-ai/dsh-api-remotes/client'
 import {
@@ -293,6 +293,11 @@ function MetadataError({ error, t }: { readonly error: string | undefined; reado
   return error === undefined ? null : <p className={css.reason} role="status" data-package-meta-error>{t('metadataError', { error })}</p>
 }
 
+/** A failed component keeps its current Host diagnostic beside its controls. */
+function RuntimeError({ error, t }: { readonly error: string | undefined; readonly t: Translate }): ReactNode {
+  return error === undefined ? null : <p className={css.reason} role="status" data-plugin-runtime-error>{t('reasonLabel')}: {error}</p>
+}
+
 /**
  * A pack's rows as a list in the order the pack declares them: a state dot,
  * the row id, one line saying its state, a configure control for a row that
@@ -369,6 +374,7 @@ function RowsSection({ rows, t, resolveText, toggle, configure }: {
                     />}
                 </div>
                 <MetadataError error={row.meta?.error} t={t} />
+                <RuntimeError error={row.diagnostic} t={t} />
               </li>
             ))}
           </ul>
@@ -426,19 +432,25 @@ function EnableSwitch({ pkg, title, t, busy, onSetEnabled }: {
   readonly onSetEnabled: (enabled: boolean) => void
 }): ReactNode {
   return (
-    <Switch
-      checked={pkg.enabled}
-      label={t('enableToggle', { name: title })}
-      disabled={busy || pkg.readOnlyReason !== undefined || (!pkg.enabled && pkg.error !== undefined && !(pkg.availability === 'missing' && pkg.installTarget !== undefined))}
-      {...pkg.readOnlyReason === undefined ? {} : { title: managementText({ code: pkg.readOnlyReason }, t) }}
-      onChange={onSetEnabled}
-    />
+    <span className={css.bundleToggle}>
+      <span className={css.toggleProgress} role={busy ? 'status' : undefined}
+        aria-label={busy ? t('applyingChange', { name: title }) : undefined}>
+        {busy ? <StateDot state="ongoing" /> : null}
+      </span>
+      <Switch
+        checked={pkg.enabled}
+        label={t('enableToggle', { name: title })}
+        disabled={busy || pkg.readOnlyReason !== undefined || (!pkg.enabled && pkg.error !== undefined && !(pkg.availability === 'missing' && pkg.installTarget !== undefined))}
+        {...pkg.readOnlyReason === undefined ? {} : { title: managementText({ code: pkg.readOnlyReason }, t) }}
+        onChange={onSetEnabled}
+      />
+    </span>
   )
 }
 
 /** The status one card carries: running, off, or a problem the Host reported. */
 function packageStatus(pkg: PackageView): 'running' | 'disabled' | 'problem' {
-  if (pkg.error !== undefined) return 'problem'
+  if (pkg.error !== undefined || (pkg.enabled && pkg.rows.some(row => row.phase === 'failed'))) return 'problem'
   return pkg.enabled ? 'running' : 'disabled'
 }
 
@@ -567,6 +579,7 @@ function PackageCard({ pkg, t, resolveText, busy, highlighted, onOpen, onSetEnab
         end={<EnableSwitch pkg={pkg} title={title} t={t} busy={busy} onSetEnabled={onSetEnabled} />}
       />
       <MetadataError error={pkg.meta?.error} t={t} />
+      {pkg.error?.code === 'unsupported-platform' && <p className={css.reason} role="status">{managementText(pkg.error, t)}</p>}
     </li>
   )
 }
@@ -681,6 +694,7 @@ function RowDetail({ pkg, row, t, resolveText, onBack, renderSlot, form }: {
         <p className={css.detailDesc}>{description ?? renderSlot('plugins.row.config', { view: 'summary' }, { entryKey: key })}</p>
       </div>
       <MetadataError error={row.meta?.error} t={t} />
+      <RuntimeError error={row.diagnostic} t={t} />
       <div className={css.detailSections} data-plugin-config>
         {renderSlot('plugins.row.config', { view: 'page', form }, { entryKey: key })}
         {renderSlot('plugins.detail.section', { subject })}
@@ -779,7 +793,7 @@ function PackageDetail({
         {configured
           ? (
             <section className={css.detailSection} data-plugin-config>
-              {renderSlot('plugins.bundle.config', { view: 'page' }, { entryKey: pkg.name })}
+              {renderSlot('plugins.bundle.config', { view: 'page', busy }, { entryKey: pkg.name })}
             </section>
           )
           : null}
@@ -1515,6 +1529,11 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   const selectedTab = props.useStore(state => state.tab)
   // A contributed tab that left the ledger falls back to Installed, and stays there when it returns.
   const tab = tabs.some(item => item.id === selectedTab) ? selectedTab : INSTALLED_TAB
+  const pageRef = useRef<HTMLElement>(null)
+  useLayoutEffect(() => {
+    /* v8 ignore else -- The unconditional section attaches its ref before this layout effect. */
+    if (pageRef.current !== null) pageRef.current.scrollTop = 0
+  }, [view, tab])
   useEffect(() => { if (tab !== selectedTab) setTab(tab) }, [tab, selectedTab, setTab])
   // A bundle an install just enabled is shown where its card is.
   useEffect(() => { if (state.highlight !== null) setTab(INSTALLED_TAB) }, [state.highlight, setTab])
@@ -1564,6 +1583,10 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
     ? {}
     : { role: 'tabpanel', id: `${tabsId}-${INSTALLED_TAB}-panel`, 'aria-labelledby': `${tabsId}-${INSTALLED_TAB}` }
   const activated = listed.find(pkg => pkg.name === activation && pkg.enabled && !state.busy.includes(pkg.name))
+  const setBundleEnabled = (name: string, enabled: boolean): void => {
+    setActivation(enabled ? name : null)
+    props.setEnabled(name, enabled)
+  }
   const setRowEnabled = (row: PackageRow, enabled: boolean): void => {
     /* v8 ignore next -- a row without a live entry has its switch disabled */
     if (row.entryId !== undefined) props.setRowEnabled(row.entryId, enabled)
@@ -1583,7 +1606,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
       busy={packageBusy(pkg)}
       highlighted={state.highlight === pkg.name}
       onOpen={() => { setActivation(null); setView({ kind: 'package', name: pkg.name, ...showsMoreList ? { from: 'more' } : {} }) }}
-      onSetEnabled={(enabled) => { setActivation(enabled ? pkg.name : null); props.setEnabled(pkg.name, enabled) }}
+      onSetEnabled={(enabled) => { setBundleEnabled(pkg.name, enabled) }}
     />
   )
   const basicCards = ledger.items.map(item => (
@@ -1608,7 +1631,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   }
 
   return (
-    <section className={css.page} data-plugin-panel aria-busy={state.status === 'loading' || refreshing}>
+    <section ref={pageRef} className={css.page} data-plugin-panel aria-busy={state.status === 'loading' || refreshing}>
       {showsMainList
         ? (
           <header className={css.pageHead} data-window-drag>
@@ -1731,7 +1754,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
             renderSlot={renderSlot}
             inMore={openPkgInMore}
             onBack={() => { setView({ kind: openPkgInMore ? 'more' : 'list' }) }}
-            onSetEnabled={(enabled) => { props.setEnabled(openPkg.name, enabled) }}
+            onSetEnabled={(enabled) => { setBundleEnabled(openPkg.name, enabled) }}
             onUninstall={() => { props.uninstall(openPkg.name) }}
             onUpdate={() => { props.update(openPkg.name) }}
             onSetRowEnabled={setRowEnabled}
@@ -1772,7 +1795,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
             </div>
           )
         : null}
-      {showsCards && activated !== undefined && !state.install.open
+      {onInstalled && activated !== undefined && !state.install.open
         ? renderSlot('plugins.bundle.activation', {
           packageName: activated.name,
           onDismiss: () => { setActivation(null) },
