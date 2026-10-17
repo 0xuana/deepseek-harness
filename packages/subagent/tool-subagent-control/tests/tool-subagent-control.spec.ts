@@ -354,7 +354,7 @@ describe('dsh-tool-subagent-control', () => {
   it('has the namespace-plugin export shape (no stray default)', () => {
     expect('default' in tool).toBe(false)
     expect(tool.name).toBe('tool-subagent-control')
-    expect(tool.inject).toEqual(['tools', 'subagents'])
+    expect(tool.inject).toEqual(['tools', 'subagents', 'agents', 'sessionProjections'])
     expect(typeof tool.apply).toBe('function')
   })
 })

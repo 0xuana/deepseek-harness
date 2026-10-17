@@ -261,6 +261,23 @@
       }
     },
     {
+      "name": "list_subagent_models",
+      "description": "Inspect subagent models without changing the current Agent. No arguments: providers; `provider`: allowed models; `provider` + `model`: that model and its reasoning efforts. Inspect options here before selecting a child provider and model; use returned ids for delegation.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "description": "Registered LLM provider id."
+          },
+          "model": {
+            "type": "string",
+            "description": "Exact model id; requires provider."
+          }
+        }
+      }
+    },
+    {
       "name": "lsp",
       "description": "Query a language server for precise code navigation. operation is one of goToDefinition, findReferences, goToImplementation, hover. line and character are one-based UTF-16 cursor coordinates. findReferences includes the declaration.",
       "parameters": {

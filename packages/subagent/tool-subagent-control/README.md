@@ -1,5 +1,5 @@
 ---
-description: "Global send_message, interrupt_agent, and list_agents tools for users and maintainers composing or debugging continuable-child control."
+description: "Shared messaging, interruption, child discovery, and model discovery tools for users and maintainers composing or debugging continuable-child control."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-tool-subagent-control` adds the global control tools for continuable children: `send_message` steers between a direct parent and child, `interrupt_agent` stops a child's current turn while keeping its inbox and descendants intact, and `list_agents` (from the separately loadable `list-agents` plugin) lists continuable children by durable id and label. Parents and continuable children inherit the same `send_message` definition and ordering, so model communication adds no child-only tool schema. No tool's presence decides whether a delegation tool starts continuable work.
+`dsh-tool-subagent-control` lets agents message and interrupt subagents, list continuable children, and inspect authorized child models. One plugin instance registers all four tools for a scope shared by multiple delegation backends. Parents and continuable children inherit the same messaging definition and ordering. Tool presence neither selects the delegation lifecycle nor grants permission to use another model.
 
 ## Table of Contents
 
@@ -25,11 +25,11 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this package in any composition with continuable children the model should message, interrupt, or list. The root plugin needs only the subagent service; the list tool is a separate plugin a deployment can omit.
+Mount this package once per tool scope. It requires `tools`, `subagents`, `agents`, and `sessionProjections`. The optional `llm` service supplies model discovery; an unavailable service causes discovery calls to fail without removing the tools.
 
 ### Minimal configuration
 
-Load the subagent service, a backend, the delegation tool, and this package. Adding the separate list plugin exposes all three tools:
+With the required services available, load the subagent service, a backend, the delegation tool, and this package to expose all four control and discovery tools:
 
 ```yaml
 - name: '@deepseek-ai/dsh-subagent'
@@ -38,10 +38,9 @@ Load the subagent service, a backend, the delegation tool, and this package. Add
   config:
     provider: spawn
 - name: '@deepseek-ai/dsh-tool-subagent-control'
-- name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
 ```
 
-This package takes no configuration: the root plugin provides `send_message` and `interrupt_agent`, and the list plugin provides `list_agents`.
+This package takes no configuration. Its main entry registers `send_message`, `interrupt_agent`, `list_agents`, and `list_subagent_models` together; existing tool restrictions can hide individual tools.
 
 ### send_message
 
@@ -81,8 +80,9 @@ The tool forwards its execution signal, which owns admission only until inbox ac
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | `send_message` and `interrupt_agent` registration |
+| [`src/index.ts`](src/index.ts) | Shared registration of all four tools |
 | [`src/list-agents.ts`](src/list-agents.ts) | `list_agents` registration: direct-child discovery and status refinement |
+| [`src/list-models.ts`](src/list-models.ts) | Model discovery using the shared Session authorization projection |
 
 </details>
 
@@ -95,7 +95,7 @@ Read these pages when the package-level contract is not enough; they move from t
 
 - [Subagent subsystem](../../../docs/subsystems/subagent.md) — continuable children, activations, inbox, interrupt, and follow-up authority.
 - [dsh-tool-subagent](../tool-subagent/README.md) — the delegation tool that starts continuable children.
-- [Generated tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent-control) — the three tool schemas.
+- [Generated tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent-control) — the tool schemas.
 
 -----
 
@@ -106,7 +106,7 @@ Read these pages when the package-level contract is not enough; they move from t
 
 #### What the model sees
 
-The generated [schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent-control): `send_message` takes `agent_id` and `message`; `interrupt_agent` takes `agent_id`; `list_agents` takes no parameters.
+The generated [schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent-control): `send_message` takes `agent_id` and `message`; `interrupt_agent` takes `agent_id`; `list_agents` accepts an optional `scope`; `list_subagent_models` accepts optional `provider` and `model` ids.
 
 #### Token effect
 
@@ -157,6 +157,20 @@ Grows linearly with the listed continuable children and diagnostics — reachabl
 #### KV Cache effect
 
 Append-only; each result follows the reusable request prefix.
+
+### Model selection and discovery
+
+#### What the model sees
+
+The `list_subagent_models` definition reads the calling Session’s route policy, falling back to the current parent route when no policy is recorded. Calls reject while the optional `ctx.llm` service is unavailable. With a recorded policy, provider model lists intersect the advertised catalog with the Session’s authorized routes. Without one, they resolve only the current parent model, even if the catalog omits it. The discovery tool’s own description instructs the model to query options before selecting a child route; omitting or filtering out discovery removes that guidance. Exact-model queries accept authorized ids absent from the catalog; unauthorized provider/model lookups fail before adapter access. Catalog or exact-model lookup failures and cancellation reject the call. Execution independently enforces the same policy.
+
+#### Token effect
+
+One fixed discovery schema is present wherever this package is mounted, regardless of the Session’s preference or delegation tools; the shipped Web, Desktop, headless, SDK, and ACP profiles include it. Route metadata enters the transcript only when the model calls the tool.
+
+#### KV Cache effect
+
+The schema is prefix-stable across adapter registration and catalog changes. Each discovery result is appended after the reusable prefix.
 
 ## Known Limitations and Deferred Work
 

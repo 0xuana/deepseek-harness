@@ -32,7 +32,7 @@ import { SubagentPresetSelection, type PresetSelectionConfig, type PresetSelecti
 import {
   subagentModelSelectionProjectionDefinition,
   subagentModelSelectionPolicy,
-} from './model-selection-state.ts'
+} from '@deepseek-ai/dsh-subagent'
 
 export const name = 'tool-subagent'
 export const inject = ['tools', 'subagents', 'systemPrompt', 'sessionProjections']

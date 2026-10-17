@@ -89,6 +89,8 @@ This section explains how the service is built and where the observable behavior
 - **Fulfillment is publication.** `startActivation()` returns only after the child is accepted and its handle can cancel that exact execution.
 - **Trusted same-process values.** Requests, descriptors, and results are borrowed immutable; serialization and hostile-input validation belong at process and wire boundaries.
 
+The shared model-selection helpers in [`model-selection.ts`](src/model-selection.ts) validate exact allowed routes. [`model-selection-state.ts`](src/model-selection-state.ts) declares the durable policy event and its reference-counted Session projection; delegation, discovery, and Host settings consume the same definition.
+
 ### Source map
 
 | File | Role |

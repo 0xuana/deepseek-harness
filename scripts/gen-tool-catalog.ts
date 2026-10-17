@@ -38,7 +38,6 @@ import * as WebFetchLocal from '@deepseek-ai/dsh-web-fetch-http'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import type { SubagentProvider } from '@deepseek-ai/dsh-subagent'
 import * as ToolSubagentControl from '@deepseek-ai/dsh-tool-subagent-control'
-import * as ToolSubagentListAgents from '@deepseek-ai/dsh-tool-subagent-control/list-agents'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import * as SkillFileSystem from '@deepseek-ai/dsh-skill-filesystem'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
@@ -75,7 +74,6 @@ import * as PluginMarketTools from '@deepseek-ai/dsh-plugin-market/tools'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
 import McpResources from '@deepseek-ai/dsh-mcp-resources'
 import * as ToolSubagent from '@deepseek-ai/dsh-tool-subagent'
-import * as ListSubagentModels from '../packages/subagent/tool-subagent/src/list-models.ts'
 import * as ToolWeb from '@deepseek-ai/dsh-tool-web'
 import WorkflowEngine from '@deepseek-ai/dsh-workflow'
 import type { WorkflowRun, WorkflowStartRequest } from '@deepseek-ai/dsh-workflow'
@@ -522,10 +520,9 @@ const TOOL_PACKAGES: ToolPackage[] = [
     pkg: '@deepseek-ai/dsh-tool-subagent',
     dir: 'tool-subagent',
     source: {
-      list_subagent_models: 'packages/subagent/tool-subagent/src/list-models.ts',
       subagent: 'packages/subagent/tool-subagent/src/index.ts',
     },
-    requires: ['ctx.tools', 'ctx.subagents', 'ctx.systemPrompt', 'ctx.sessionProjections', 'ctx.llm for model discovery and selected-route validation'],
+    requires: ['ctx.tools', 'ctx.subagents', 'ctx.systemPrompt', 'ctx.sessionProjections', 'ctx.llm for selected-route validation'],
     writes: ['tool/call', 'tool/result', 'child session events through the chosen provider'],
     shippedNames: ['subagent', 'subagent_fork'],
     async mount(ctx) {
@@ -533,10 +530,9 @@ const TOOL_PACKAGES: ToolPackage[] = [
       await ctx.plugin(LlmRuntime)
       registerCatalogSubagentProvider(ctx, 'mock')
       await ctx.plugin(ToolSubagent, { provider: 'mock' })
-      await ctx.plugin(ListSubagentModels)
     },
     note:
-      'The load-time `toolName` selects the delegation name (default `subagent`); `modelSelection` adds optional route fields. The independent `/list-models` plugin registers discovery. Web and Desktop presets mount discovery, enable spawn route fields, and leave `subagent_fork` route fields disabled. The Host settings service records authorization for each new top-level Session; child Sessions inherit it. Without a recorded policy, discovery and explicit selection permit only the current parent route. Every delegation returns a child id promptly; local children accept follow-ups, while external backends report their single execution automatically.',
+      'The load-time `toolName` selects the delegation name (default `subagent`); `modelSelection` adds optional route fields. The shared `tool-subagent-control` plugin registers model discovery. Web and Desktop presets enable spawn route fields and leave `subagent_fork` route fields disabled. The Host settings service records authorization for each new top-level Session; child Sessions inherit it. Without a recorded policy, discovery and explicit selection permit only the current parent route. Every delegation returns a child id promptly; local children accept follow-ups, while external backends report their single execution automatically.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-subagent-control',
@@ -544,9 +540,10 @@ const TOOL_PACKAGES: ToolPackage[] = [
     source: {
       interrupt_agent: 'packages/subagent/tool-subagent-control/src/index.ts',
       list_agents: 'packages/subagent/tool-subagent-control/src/list-agents.ts',
+      list_subagent_models: 'packages/subagent/tool-subagent-control/src/list-models.ts',
       send_message: 'packages/subagent/tool-subagent-control/src/index.ts',
     },
-    requires: ['ctx.tools', 'ctx.subagents', 'ctx.agents and ctx.sessionProjections (list_agents only)'],
+    requires: ['ctx.tools', 'ctx.subagents', 'ctx.agents', 'ctx.sessionProjections', 'ctx.llm for model discovery'],
     writes: ['tool/call', 'tool/result', 'child session events through ctx.subagents'],
     async mount(ctx) {
       await ctx.plugin(SubagentRuntime)
@@ -554,10 +551,9 @@ const TOOL_PACKAGES: ToolPackage[] = [
       await ctx.plugin(AgentRegistry)
       await ctx.plugin(SessionStore)
       await ctx.plugin(ToolSubagentControl)
-      await ctx.plugin(ToolSubagentListAgents)
     },
     note:
-      'The globally named discovery, interruption, and local-message tools over managed subagents: provider-bound `tool-subagent` instances register distinct delegation tools, while this package registers `send_message` and `interrupt_agent` once, plus `list_agents` from its separately loaded `/list-agents` plugin (whose catalog rows use the sessionProjections and live Agent registries).',
+      'The globally named discovery, interruption, and local-message tools over managed subagents: provider-bound `tool-subagent` instances register distinct delegation tools, while one instance of this package registers `send_message`, `interrupt_agent`, `list_agents`, and `list_subagent_models`. Model discovery reads the calling Session’s recorded authorization, or only its current parent route when no policy is recorded.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-jobs',

@@ -9,7 +9,7 @@ import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import * as mock from './scripted-provider.ts'
 import * as tool from '../src/index.ts'
-import * as ListModels from '../src/list-models.ts'
+import * as ControlTools from '@deepseek-ai/dsh-tool-subagent-control'
 import SubagentModelSelectionConfig from '../src/model-selection-settings.ts'
 
 const contexts = new Set<Context>()
@@ -67,7 +67,7 @@ export async function setup(toolConfig: SetupConfig, mockConfig: Partial<mock.Co
       sessionId: SessionId(`model-selection-setup-${++setupAgentCounter}`),
       ...parentAgentOptions !== undefined ? { agentOptions: parentAgentOptions } : {},
       setup: async (agentCtx) => {
-        await agentCtx.plugin(ListModels)
+        await agentCtx.plugin(ControlTools)
         const fiber = agentCtx.inject(tool.inject, (runtimeCtx) => {
           return tool.apply(runtimeCtx, { ...config, modelSelection: true })
         })

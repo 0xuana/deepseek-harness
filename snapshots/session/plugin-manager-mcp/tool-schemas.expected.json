@@ -261,6 +261,23 @@
       }
     },
     {
+      "name": "list_subagent_models",
+      "description": "Inspect subagent models without changing the current Agent. No arguments: providers; `provider`: allowed models; `provider` + `model`: that model and its reasoning efforts. Inspect options here before selecting a child provider and model; use returned ids for delegation.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "description": "Registered LLM provider id."
+          },
+          "model": {
+            "type": "string",
+            "description": "Exact model id; requires provider."
+          }
+        }
+      }
+    },
+    {
       "name": "plugin_manager",
       "description": "List plugins or bundles in the current profile, enable or disable them, install a bundle, or remove an installed bundle. Every action requires danger-full-access permission or approval for this call. Approval does not change the session permission mode. Changes affect every session in this profile. List first to obtain exact identifiers. Package installation can execute allowed build scripts. Live profiles apply changes immediately, including upgrades of installed packages; a change result that is not applied carries nextStep, which says what to do or tell the user. Unmet DSH version requirements (engines.dsh, else DSH peer dependencies) block installation and activation. Version exemptions risk crashes and data loss: warn the user and obtain explicit permission for the exact plugin and runtime versions before granting one.",
       "parameters": {
@@ -992,6 +1009,23 @@
           "required": [
             "server"
           ]
+        }
+      },
+      {
+        "name": "list_subagent_models",
+        "description": "Inspect subagent models without changing the current Agent. No arguments: providers; `provider`: allowed models; `provider` + `model`: that model and its reasoning efforts. Inspect options here before selecting a child provider and model; use returned ids for delegation.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "provider": {
+              "type": "string",
+              "description": "Registered LLM provider id."
+            },
+            "model": {
+              "type": "string",
+              "description": "Exact model id; requires provider."
+            }
+          }
         }
       },
       {

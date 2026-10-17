@@ -14,12 +14,12 @@ import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-test
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import * as tool from '../src/index.ts'
-import * as ListModels from '../src/list-models.ts'
+import * as ControlTools from '@deepseek-ai/dsh-tool-subagent-control'
 import SubagentModelSelectionConfig from '../src/model-selection-settings.ts'
 import {
   subagentModelSelectionPolicy,
   subagentModelSelectionProjectionDefinition,
-} from '../src/model-selection-state.ts'
+} from '@deepseek-ai/dsh-subagent'
 import { callSubagent, ownContext, text } from './harness.ts'
 
 const ALLOWED_MODELS = [{ provider: 'alpha', model: 'fast-model' }]
@@ -51,7 +51,7 @@ async function boot(withPreset = true): Promise<Context> {
   await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
   if (withPreset) {
     const preset = createScope(ctx, { preset: 'model-selection-test' })
-    await preset.ctx.plugin(ListModels)
+    await preset.ctx.plugin(ControlTools)
     await preset.ctx.plugin(tool, {
       provider: 'spawn',
       modelSelection: true,
@@ -186,7 +186,7 @@ describe('SubagentModelSelectionConfig', () => {
       sessionId: SessionId('direct-agent-setup'),
       setup: async (agentCtx, agent) => {
         prepared = agent
-        await agentCtx.plugin(ListModels)
+        await agentCtx.plugin(ControlTools)
         const fiber = agentCtx.inject(tool.inject, (runtimeCtx) => {
           return tool.apply(runtimeCtx, {
             provider: 'spawn',
@@ -226,7 +226,7 @@ describe('SubagentModelSelectionConfig', () => {
     })
     const outside = await ctx.agents.create({ sessionId: SessionId('existing-outside') })
     await selectionConfigs.get(ctx)!.update({ enabled: false })
-    await preset.ctx.plugin(ListModels)
+    await preset.ctx.plugin(ControlTools)
     await preset.ctx.plugin(tool, { provider: 'spawn', modelSelection: true })
     expect(subagentModelSelectionPolicy(ctx.sessionProjections, inside.agent.session)).toEqual(ALLOWED_MODELS)
     expect(subagentModelSelectionPolicy(ctx.sessionProjections, outside.agent.session)).toEqual(ALLOWED_MODELS)
@@ -287,7 +287,7 @@ describe('SubagentModelSelectionConfig', () => {
     const ctx = await boot(false)
     const preset = createScope(ctx, { preset: 'standard' })
     const other = createScope(ctx, { preset: 'minimal' })
-    await preset.ctx.plugin(ListModels)
+    await preset.ctx.plugin(ControlTools)
     await preset.ctx.plugin(tool, {
       provider: 'spawn',
       modelSelection: true,

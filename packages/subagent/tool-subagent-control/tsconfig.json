@@ -25,6 +25,12 @@
     },
     {
       "path": "../subagent"
+    },
+    {
+      "path": "../../core/agent"
+    },
+    {
+      "path": "../../session/session-projection"
     }
   ]
 }

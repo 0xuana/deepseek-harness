@@ -1,3 +1,4 @@
+import AgentRegistry from '@deepseek-ai/dsh-agent'
 import { mountWorkingDirectoryFixture } from '../../subagent/tests/working-directory-fixture.ts'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -17,13 +18,13 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import * as tool from '../src/index.ts'
-import * as ListModels from '../src/list-models.ts'
+import * as tool from '@deepseek-ai/dsh-tool-subagent'
+import * as ControlTools from '@deepseek-ai/dsh-tool-subagent-control'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
-import SubagentModelSelectionConfig from '../src/model-selection-settings.ts'
-import { modelSelectionSetupAgent, ownContext, setup, testToolSignal, text } from './harness.ts'
+import SubagentModelSelectionConfig from '@deepseek-ai/dsh-tool-subagent/model-selection-settings'
+import { modelSelectionSetupAgent, ownContext, setup, testToolSignal, text } from '../../tool-subagent/tests/harness.ts'
 
 class CatalogAdapter extends LlmAdapter {
   constructor(private readonly empty = false) {
@@ -76,7 +77,9 @@ async function setupListTool(routes = [
   await mountAgentLoopTestDependencies(ctx)
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(SubagentModelSelectionConfig, { enabled: true, allowedModels: routes })
-  await ctx.plugin(ListModels)
+  await mountWorkingDirectoryFixture(ctx)
+  await ctx.plugin(SubagentRuntime)
+  await ctx.plugin(ControlTools)
   const { agent } = await ctx.agents.create({ sessionId: SessionId('discovery-parent') })
   callingAgents.set(ctx, agent)
   return ctx
@@ -103,7 +106,7 @@ function call(ctx: Context, args: unknown, signal = testToolSignal) {
 }
 
 describe('list_subagent_models', () => {
-  it('is mounted independently of delegation tools', async () => {
+  it('registers and disposes all four shared tools independently of delegation tools', async () => {
     const ctx = ownContext(new Context())
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(LlmRuntime)
@@ -113,10 +116,15 @@ describe('list_subagent_models', () => {
     await ctx.plugin(SubagentRuntime)
     await ctx.plugin(tool, { provider: 'unused' })
     expect(ctx.tools.get('list_subagent_models')).toBeUndefined()
-    const discovery = await ctx.plugin(ListModels)
-    expect(ctx.tools.get('list_subagent_models')).toBeDefined()
+    await ctx.plugin(AgentRegistry)
+    const discovery = await ctx.plugin(ControlTools)
+    const names = ['send_message', 'interrupt_agent', 'list_agents', 'list_subagent_models']
+    for (const name of names) expect(ctx.tools.schemas().filter(schema => schema.name === name)).toHaveLength(1)
     await discovery.dispose()
-    expect(ctx.tools.get('list_subagent_models')).toBeUndefined()
+    for (const name of names) expect(ctx.tools.get(name)).toBeUndefined()
+    const reloaded = await ctx.plugin(ControlTools)
+    for (const name of names) expect(ctx.tools.schemas().filter(schema => schema.name === name)).toHaveLength(1)
+    await reloaded.dispose()
     await ctx.fiber.dispose()
   })
 
@@ -125,7 +133,10 @@ describe('list_subagent_models', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(ListModels)
+    await ctx.plugin(AgentRegistry)
+    await mountWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SubagentRuntime)
+    await ctx.plugin(ControlTools)
     expect(text(await call(ctx, {}))).toContain('requires a calling agent')
     await ctx.fiber.dispose()
 
@@ -139,7 +150,7 @@ describe('list_subagent_models', () => {
     expect(text(result)).toContain('without a parent provider and model')
   })
 
-  it('reads the recorded Session allowlist through the independent discovery definition', async () => {
+  it('reads the recorded Session allowlist through the shared control plugin', async () => {
     const ctx = await setup({ provider: 'mock', withModelSelection: true })
     ctx.llm.registerAdapter(['alpha', 'secret'], new CatalogAdapter())
     const result = await ctx.tools.execute({
@@ -156,7 +167,10 @@ describe('list_subagent_models', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(ListModels)
+    await ctx.plugin(AgentRegistry)
+    await mountWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SubagentRuntime)
+    await ctx.plugin(ControlTools)
     callingAgents.set(ctx, callingAgents.get(parent)!)
     expect(ctx.tools.get('list_subagent_models')).toBeDefined()
     const result = await call(ctx, {})

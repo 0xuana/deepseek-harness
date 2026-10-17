@@ -73,7 +73,7 @@ kind: "package-reference"
 
 ### 选择子级 LLM
 
-设置 `modelSelection: true` 后，该实例公开可选的 `provider`、`model` 和 `reasoning_effort` 字段；未设置的实例拒绝选择字段。独立挂载 `@deepseek-ai/dsh-tool-subagent/list-models` 以公开 `list_subagent_models`。Web 与 Desktop preset 默认挂载发现工具，为 spawn 启用路由字段，为 fork 保持关闭。Host 的 `/model-selection-settings` 服务在 Agent 创建时读取用户偏好，与工具安装无关。启用时，精确路由列表记录在每个新顶层 Session 中，由子 Session 继承，并在恢复时保留；之后的设置编辑只影响新 Session。没有已记录 Session 策略时，发现和显式选择只允许父 Agent 当前生效的 provider/model 及其支持的强度。路由字段要求后端公布 `agentOptions`；进程内 Spawn、Fork 和 DSH SDK 满足条件，ACP、Codex 和 Claude Code 会使挂载失败。
+设置 `modelSelection: true` 后，该实例公开可选的 `provider`、`model` 和 `reasoning_effort` 字段；未设置的实例拒绝选择字段。挂载一次[子智能体控制工具](../tool-subagent-control/README.zh.md)，一起公开模型查询、消息、中断和子级列表。Web 与 Desktop preset 为 spawn 启用路由字段，为 fork 保持关闭。Host 的 `/model-selection-settings` 服务在 Agent 创建时读取用户偏好，与工具安装无关。启用时，精确路由列表记录在每个新顶层 Session 中，由子 Session 继承，并在恢复时保留；之后的设置编辑只影响新 Session。没有已记录 Session 策略时，发现和显式选择只允许父 Agent 当前生效的 provider/model 及其支持的强度。路由字段要求后端公布 `agentOptions`；进程内 Spawn、Fork 和 DSH SDK 满足条件，ACP、Codex 和 Claude Code 会使挂载失败。
 
 一次调用需同时提供 `provider` 与 `model`；当配置值、父 agent 值或提供方持有的默认值能提供路由时，也可只提供推理等级。静态的 `provider.agentRouteDefaults` 在存在时构成提供方／模型基线；工具配置与模型字段会在路由相关强度合并和确切路由预检前覆盖它。没有这些默认值的提供方会使用父 agent 最新已记录请求中的兼容值，再使用父级首次请求前的创建选项，并保留配置的 `maxTokens`。更改路由但未显式提供推理等级时，会清除继承的路由自有等级，使所选模型解析自己的默认值。实时 LLM 适配器在创建子 agent 前校验有效路由。目录成员资格只提供建议，因此适配器接受时，模型可以使用未列出的 id。
 
@@ -111,8 +111,6 @@ kind: "package-reference"
 | [`src/preset-selection.ts`](src/preset-selection.ts) | 配置的 preset 校验、模型白名单与描述引导 |
 | [`src/model-selection.ts`](src/model-selection.ts) | 请求／配置合并与实时 LLM 路由预检 |
 | [`src/model-selection-settings.ts`](src/model-selection-settings.ts) | 为新 Session 读取的宿主所有 opt-in 设置 |
-| [`src/model-selection-state.ts`](src/model-selection-state.ts) | 记录并继承已读取决定的 Session 事件 |
-| [`src/list-models.ts`](src/list-models.ts) | `list_subagent_models` 运行时发现工具 |
 
 </details>
 
@@ -147,20 +145,6 @@ kind: "package-reference"
 #### KV Cache 影响
 
 只要提供方实例及其配置不变，前缀就保持稳定。适配器目录变化不会改变定义。随附 fork 工具省略模型选择字段，以保留对继承的父级前缀的复用。自定义 fork 工具可以启用选择；更改其路由可能使前缀无法复用。
-
-### 模型选择与发现
-
-#### 模型看到什么
-
-独立的 `list_subagent_models` 定义读取调用 Session 的路由策略，没有已记录策略时使用当前父级路由。可选的 `ctx.llm` 服务不可用时，调用会被拒绝。有已记录策略时，提供方模型列表取公布目录与 Session 授权路由的交集。没有策略时，只解析当前父级模型，即使目录未列出它。发现工具自身的描述要求模型在选择子级路由前查询选项；未挂载或过滤掉发现工具时，这段指导也不会出现。精确模型查询允许已授权但目录未列出的 ID；未授权的提供方／模型查询会在访问适配器前失败。目录或精确模型查询失败以及取消都会使调用被拒绝。执行过程独立强制同一策略。
-
-#### Token 影响
-
-挂载 `/list-models` 的组合中存在一份固定发现 schema，不受 Session 偏好或委派工具影响；随附 Web 与 Desktop preset 包含它，headless 与 SDK profile 不包含。只有模型调用工具时，路由元数据才进入 transcript。
-
-#### KV Cache 影响
-
-适配器注册与目录变化不会改变 schema 前缀。每个发现结果都追加在可复用前缀之后。
 
 ### 系统提示词
 

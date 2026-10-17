@@ -8,12 +8,10 @@ import type {} from '@deepseek-ai/dsh-agent'
 import {
   subagentModelSelectionPolicy,
   subagentModelSelectionProjectionDefinition,
-} from './model-selection-state.ts'
-import {
   AllowedModelRouteSchema,
   assertAllowedModelRoutes,
   type AllowedModelRoute,
-} from './model-selection.ts'
+} from '@deepseek-ai/dsh-subagent'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {

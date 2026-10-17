@@ -162,6 +162,13 @@ interface ToolArgsMap {
     /** Continuation cursor returned by this server. */
     cursor?: string;
   } & Record<string, JsonValue>;
+  /** Inspect subagent models without changing the current Agent. No arguments: providers; `provider`: allowed models; `provider` + `model`: that model and its reasoning efforts. Inspect options here before selecting a child provider and model; use returned ids for delegation. */
+  list_subagent_models: {
+    /** Registered LLM provider id. */
+    provider?: string;
+    /** Exact model id; requires provider. */
+    model?: string;
+  } & Record<string, JsonValue>;
   /** Read a UTF-8 text file and return line-numbered content. */
   read: {
     /** Path to read, resolved by the filesystem backend. */
@@ -438,6 +445,7 @@ interface ToolOutputMap {
   })[];
   list_mcp_resource_templates: JsonValue;
   list_mcp_resources: JsonValue;
+  list_subagent_models: string;
   read: {
     /** Canonical absolute path in the filesystem execution world. */
     path: string;

@@ -976,7 +976,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 }
 ```
 
-来源：[`packages/subagent/tool-subagent/src/model-selection-state.ts:17`](../packages/subagent/tool-subagent/src/model-selection-state.ts)
+来源：[`packages/subagent/subagent/src/model-selection-state.ts:17`](../packages/subagent/subagent/src/model-selection-state.ts)
 
 ### `system/*`
 
@@ -4712,7 +4712,7 @@ SHA-256: `00c054d3018c198d92f459563331edd1385e58345c677bb499791df2da0ade9f`
 
 <a id="persistence-type-packagessessionsession-titlesrctypestssessiontitlemodelidentity"></a>
 
-<a id="persistence-type-packagessubagenttool-subagentsrcmodel-selectiontsallowedmodelroute"></a>
+<a id="persistence-type-packagessubagentsubagentsrcmodel-selectiontsallowedmodelroute"></a>
 
 <a id="persistence-type-sessiontitlemodelidentity"></a>
 
@@ -4720,7 +4720,7 @@ SHA-256: `00c054d3018c198d92f459563331edd1385e58345c677bb499791df2da0ade9f`
 
 SHA-256: `07e1a58c58b593f507b8e7f25723bb0aa42baae6e00f5ecfddf28cb1e64d3235`
 
-来源：[`packages/session/session-title/src/types.ts:20`](../packages/session/session-title/src/types.ts) · [`packages/subagent/tool-subagent/src/model-selection.ts:9`](../packages/subagent/tool-subagent/src/model-selection.ts)
+来源：[`packages/session/session-title/src/types.ts:20`](../packages/session/session-title/src/types.ts) · [`packages/subagent/subagent/src/model-selection.ts:6`](../packages/subagent/subagent/src/model-selection.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
@@ -5787,7 +5787,7 @@ SHA-256: `6e52dd55a1d48954ed5464ec46fe34d9eb65f709baabc9561e7a279910b0c406`
 
 SHA-256: `0d47a8f3d847243c4488e755ad4cab7a04ac5d4621b9c81865524cf3f4d8536f`
 
-来源：[`packages/subagent/tool-subagent/src/model-selection-state.ts:17`](../packages/subagent/tool-subagent/src/model-selection-state.ts)
+来源：[`packages/subagent/subagent/src/model-selection-state.ts:17`](../packages/subagent/subagent/src/model-selection-state.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|

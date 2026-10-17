@@ -261,6 +261,23 @@
       }
     },
     {
+      "name": "list_subagent_models",
+      "description": "Inspect subagent models without changing the current Agent. No arguments: providers; `provider`: allowed models; `provider` + `model`: that model and its reasoning efforts. Inspect options here before selecting a child provider and model; use returned ids for delegation.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "description": "Registered LLM provider id."
+          },
+          "model": {
+            "type": "string",
+            "description": "Exact model id; requires provider."
+          }
+        }
+      }
+    },
+    {
       "name": "ralph",
       "description": "Run a foreground fresh-agent Ralph loop toward one immutable objective. Use only when the direct human explicitly asks for Ralph or fresh-agent iteration. Each round opens a new child with no parent conversation or prior child session; the shared workspace is long-term memory, and only a bounded structured report crosses rounds. The call returns when a worker reports completion or a concrete blocker, or at the round limit. Ordinary long-running same-session work belongs to goal tools.",
       "parameters": {

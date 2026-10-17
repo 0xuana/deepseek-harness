@@ -3,7 +3,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import * as ToolSubagent from '@deepseek-ai/dsh-tool-subagent'
-import * as ListModels from '@deepseek-ai/dsh-tool-subagent/list-models'
+import * as ControlTools from '@deepseek-ai/dsh-tool-subagent-control'
 import type { Config } from '@deepseek-ai/dsh-tool-subagent'
 
 export const name = 'scoped-tool-subagent'
@@ -16,7 +16,7 @@ export const inject = ['agents', 'subagentModelSelection']
  */
 export function apply(ctx: Context, config: Config): void {
   const install = (agent: Agent): void => {
-    agent.ctx.plugin(ListModels)
+    agent.ctx.plugin(ControlTools)
     agent.ctx.inject(ToolSubagent.inject, (runtimeCtx) => {
       return ToolSubagent.apply(runtimeCtx, {
         provider: config.provider,

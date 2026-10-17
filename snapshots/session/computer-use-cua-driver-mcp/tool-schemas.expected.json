@@ -301,6 +301,23 @@
       }
     },
     {
+      "name": "list_subagent_models",
+      "description": "Inspect subagent models without changing the current Agent. No arguments: providers; `provider`: allowed models; `provider` + `model`: that model and its reasoning efforts. Inspect options here before selecting a child provider and model; use returned ids for delegation.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "description": "Registered LLM provider id."
+          },
+          "model": {
+            "type": "string",
+            "description": "Exact model id; requires provider."
+          }
+        }
+      }
+    },
+    {
       "name": "mcp__cua-driver-mcp__disconnect",
       "description": "Disconnect the fixture.",
       "parameters": {

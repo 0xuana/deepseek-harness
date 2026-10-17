@@ -287,6 +287,13 @@ class ListAgentsOutput2(TypedDict):
     parent: NotRequired[str]
     depth: NotRequired[float]
 
+class ListSubagentModelsArgs(TypedDict):
+    # Registered LLM provider id.
+    provider: NotRequired[str]
+    # Exact model id; requires provider.
+    model: NotRequired[str]
+    # Additional keys beyond those declared are allowed.
+
 class ReadArgs(TypedDict):
     # Path to read, resolved by the filesystem backend.
     file_path: str
@@ -535,6 +542,8 @@ class Tools(Protocol):
         """Read a background job: output since the previous read for stream jobs, or the result of a finished final-output job."""
     async def list_agents(self, args: ListAgentsArgs) -> list[ListAgentsOutput1 | ListAgentsOutput2]:
         """List subagents you started, with their ids, labels, and status. running means it is working; inactive means it is not currently working. You will be notified when a subagent finishes; there is no need to keep checking its status. Use send_message to continue the conversation."""
+    async def list_subagent_models(self, args: ListSubagentModelsArgs) -> str:
+        """Inspect subagent models without changing the current Agent. No arguments: providers; `provider`: allowed models; `provider` + `model`: that model and its reasoning efforts. Inspect options here before selecting a child provider and model; use returned ids for delegation."""
     async def read(self, args: ReadArgs) -> ReadOutput:
         """Read a UTF-8 text file and return line-numbered content."""
     async def read_image(self, args: ReadImageArgs) -> ReadImageOutput:
