@@ -309,7 +309,8 @@ describe('UserQuestionService', () => {
           ...(options === undefined ? {} : { options }),
           intent: { kind: 'plan-review', approve: 'Ship it' },
         }],
-      })).rejects.toMatchObject({ name: 'UserQuestionError', code: 'BAD_INTENT' })
+      })).rejects.toMatchObject({ name: 'UserQuestionError', code: 'BAD_INTENT',
+        message: 'question plan-review declares intent plan-review whose approve label "Ship it" names none of its options' })
     }
     expect(p.ask).not.toHaveBeenCalled()
   })
@@ -328,7 +329,8 @@ describe('UserQuestionService', () => {
         options: [{ label: 'Approve' }, { label: 'Keep planning' }],
         intent: { kind: 'plan-review', approve: 'Approve' },
       }],
-    })).rejects.toMatchObject({ name: 'UserQuestionError', code: 'BAD_INTENT' })
+    })).rejects.toMatchObject({ name: 'UserQuestionError', code: 'BAD_INTENT',
+      message: 'question plan-review declares intent plan-review without the detail it reviews' })
     expect(p.ask).not.toHaveBeenCalled()
   })
 

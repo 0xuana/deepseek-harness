@@ -65,6 +65,9 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   })])
   expect(await approval.getByText('Fixture', { exact: true }).count()).toBe(1)
   expect(await approval.getByRole('textbox').count()).toBe(0)
+  expect(await approval.locator('[data-approval-scroll]').evaluate(element => getComputedStyle(element).textAlign)).toBe('left')
+  expect(await approval.getByRole('button', { name: 'Always allow', exact: true })
+    .evaluate(button => getComputedStyle(button.parentElement!).flexWrap)).toBe('wrap')
   await expect.poll(() => approval.locator('img').evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(1)
   expect(await approval.getByText('/Applications/Fixture.app', { exact: true }).count()).toBe(0)
   await compareOrRefreshGolden(fileURLToPath(new URL('./expected/cua-permissions/application-approval.expected.md', import.meta.url)),

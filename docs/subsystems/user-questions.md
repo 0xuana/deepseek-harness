@@ -22,7 +22,7 @@ interface AskUserQuestionOption {
 
 ## Presentation intent
 
-`AskUserQuestionIntent` changes presentation while preserving option labels and the caller’s decision policy. `plan-review` names the approve option and requires plan detail. `approval` requires one blocking question with detail and distinct reject, approve and optional always-allow labels covering exactly the offered options. It rejects multi-select and timed waits. An unrecognized intent remains a generic option list.
+`AskUserQuestionIntent` changes presentation while preserving option labels and the caller’s decision policy. `plan-review` names the approve option and requires plan detail. `approval` requires one blocking question with detail and distinct reject, approve and optional always-allow labels covering exactly the offered options. It rejects multi-select and timed waits. The CUA frontend renders its fixed approvals through the existing composer chain; ordinary questions and plan review keep their existing renderers.
 
 ```ts type-equiv
 /**

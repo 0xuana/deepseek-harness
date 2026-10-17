@@ -22,7 +22,7 @@ interface AskUserQuestionOption {
 
 ## 呈现意图
 
-`AskUserQuestionIntent` 改变呈现方式，保留选项标签和调用方的决策规则。`plan-review` 指定批准选项，并要求提供计划正文。`approval` 要求只有一个阻塞式问题，带有说明以及互不相同的拒绝、允许和可选的始终允许标签，完整对应已提供的选项，不支持多选或计时等待。未识别的意图仍显示为通用选项列表。
+`AskUserQuestionIntent` 改变呈现方式，保留选项标签和调用方的决策规则。`plan-review` 指定批准选项，并要求提供计划正文。`approval` 要求只有一个阻塞式问题，带有说明以及互不相同的拒绝、允许和可选的始终允许标签，完整对应已提供的选项，不支持多选或计时等待。CUA 前端通过现有 composer 呈现自己的固定审批；普通问答和计划审阅继续使用原有呈现。
 
 ```ts type-equiv
 /**

@@ -20,8 +20,6 @@ The Web client shows an agent's question beside the chat input. Users choose opt
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 - [Dev Note](#dev-note)
 
-An `approval` intent reuses the shared approval card for fixed choices. It displays caller-supplied subject metadata and localized copy, with no text field or question pager; the existing question channel still delivers the selected label.
-
 -----
 
 <a id="use-this-package"></a>
@@ -38,6 +36,8 @@ A multi-select draft keeps its selected labels while the user opens or edits the
 Each late reply is shown once, including when it opens a new Turn. Replies follow normal Chat process grouping and whole-Turn folding. Expand the containing Turn and work group to read a reply that has been folded away.
 
 A question that already settled opens as a read-only card: the same pager over the recorded answers, marked `Answered`. Every option and text field is disabled, Skip and the submit action are gone, a question the user skipped says so in place of its empty answer, and a free-text field appears only where the recorded answer used one. Closing it removes the card, and the tool call row builds another from the same record.
+
+Fixed approval questions use the same pending-question and answer channel. Their feature plugin supplies the composer presentation; the generic question form leaves these requests to that contribution.
 
 ### The plan-review card
 

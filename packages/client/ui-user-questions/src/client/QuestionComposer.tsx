@@ -11,7 +11,6 @@ import {
 import { planReviewOf, type QuestionAnswer, type QuestionCardSnapshot, type QuestionComposerProps } from './contract/slots.ts'
 import type { PendingQuestion } from './contract/slots.ts'
 import type { QuestionDraftAnswer, QuestionDraftProgress } from './draft-store.ts'
-import { QuestionApproval } from './QuestionApproval.tsx'
 import { PlanReviewPanel } from './PlanReviewPanel.tsx'
 import css from './QuestionComposer.module.css'
 
@@ -140,8 +139,6 @@ function AnswerField(props: AnswerFieldProps) {
 export function QuestionComposer(props: QuestionComposerProps) {
   const question = props.matched
   const review = useMemo(() => planReviewOf(question.questions), [question])
-  const item = question.questions[0]
-  if (item?.intent?.kind === 'approval') return <QuestionApproval {...props} item={item} intent={item.intent} />
   return review === undefined
     ? (
       <QuestionFlow

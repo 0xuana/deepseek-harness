@@ -301,6 +301,12 @@ export class UserQuestionService extends TypertRemoteService {
         : [intent.approve]
       const options = question.options ?? []
       if (labels.some(label => !options.some(option => option.label === label))) {
+        if (intent.kind === 'plan-review') {
+          throw new UserQuestionError(
+            `question ${question.id} declares intent ${intent.kind} whose approve label `
+            + `${JSON.stringify(intent.approve)} names none of its options`,
+            'BAD_INTENT')
+        }
         throw new UserQuestionError(`question ${question.id} declares intent ${intent.kind} with an unoffered action`, 'BAD_INTENT')
       }
       if (question.detail === undefined) {

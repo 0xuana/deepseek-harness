@@ -46,6 +46,15 @@
     },
     {
       "path": "../../typert/protocol"
+    },
+    {
+      "path": "../../client/ui-user-questions/tsconfig.json"
+    },
+    {
+      "path": "../../client/ui-approval/tsconfig.json"
+    },
+    {
+      "path": "../../client/ui-conversation/tsconfig.client.json"
     }
   ]
 }

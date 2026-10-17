@@ -55,7 +55,7 @@ function ApprovalFlow(props: FactoryComponentPropsOf<'conversation.approval.card
       onKeyUpCapture={() => { compositionEnded.current = false }}
       onCompositionStartCapture={() => { composing.current = true }}
       onCompositionEndCapture={() => { composing.current = false; compositionEnded.current = true }}>
-      <div className={css.card}>
+      <div className={subject === undefined ? css.card : `${css.card} ${css.withSubject}`}>
         <div className={css.strip}><StateDot state={answered ? 'ongoing' : 'warning'} />{t('waiting')}</div>
         <div
           className={css.body}

@@ -370,14 +370,7 @@ describe('apply', () => {
     const store = entry.store as ReturnType<typeof createQuestionDraftStore>
     expect(store.create(SESSION_ID).getSnapshot()).toEqual({ progressByRequest: {} })
     const pending = b.pending.getSnapshot()[0]!
-    const face = (entry.inject as () => {
-      keyedHooks: { questionCard: (key: string) => PendingQuestion | undefined }
-      resolveText: (text: { en: string; zh: string }) => string
-    })()
-    b.locale.setLocale('zh')
-    expect(face.resolveText({ en: 'Allow for this session', zh: '本会话允许' })).toBe('本会话允许')
-    b.locale.setLocale('en')
-    expect(face.resolveText({ en: 'Allow for this session', zh: '本会话允许' })).toBe('Allow for this session')
+    const face = (entry.inject as () => { keyedHooks: { questionCard: (key: string) => PendingQuestion | undefined } })()
     expect(face.keyedHooks.questionCard(pending.key)).toBe(pending)
     expect(face.keyedHooks.questionCard('question:missing')).toBeUndefined()
     const select = entry.select as (
@@ -385,6 +378,9 @@ describe('apply', () => {
     ) => PendingQuestion | null
     expect(select({ pendingInteraction: undefined })).toBeNull()
     expect(select({ pendingInteraction: pending })).toBe(pending)
+    expect(select({ pendingInteraction: new PendingQuestion(SESSION_ID, PLAN_QUESTIONS) })?.kind).toBe('plan-review')
+    expect(select({ pendingInteraction: new PendingQuestion(SESSION_ID, [{ id: 'cua-app-access', question: 'Allow?',
+      intent: { kind: 'approval', approve: 'Allow', reject: 'Deny' } }]) })).toBeNull()
     expect(pending).toMatchObject({ kind: 'question', sessionId: SESSION_ID, questions: QUESTIONS, callId: undefined })
     expect(pending.snapshot()).toEqual({
       state: 'open', waitState: 'counting', countdown: undefined,

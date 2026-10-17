@@ -114,8 +114,6 @@ const questionDraftStore = createQuestionDraftStore().create(SID)
 const kit: Omit<QuestionComposerProps, 'matched'> = {
   useQuestionCard: () => { throw new Error('plan review does not read question card state') },
   renderSlot: () => null,
-  renderFactorySlot: () => null,
-  resolveText: text => text.en,
   SessionProvider: ({ children }) => children,
   sessionId: SID,
   session: undefined,

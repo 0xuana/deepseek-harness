@@ -346,13 +346,12 @@
 }
 
 .cardDesc {
-  min-height: 2lh;
   font-size: 13px;
   line-height: 18px;
   color: var(--dsw-alias-label-tertiary);
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   overflow: hidden;
 }
 

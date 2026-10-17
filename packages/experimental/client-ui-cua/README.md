@@ -20,7 +20,7 @@ Open Computer Use in Plugins to check Accessibility and Screen Recording, reques
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 - [Dev Note](#dev-note)
 
-Application permission prompts and permission-page lists show native icons and application names. Paths remain available on hover. Icons are presentation metadata and are never saved with grants. The prompt offers session access, refusal and, for verifiable applications with writable settings, persistent access through the shared approval card.
+Application permission prompts and permission-page lists show native icons and application names. Paths remain available on hover. Icons are presentation metadata and are never saved with grants. This plugin registers the application-approval presentation in the existing composer chain and reuses the shared approval card. The pending question still owns waiting, cancellation and answers. The prompt offers session access, refusal and, for verifiable applications with writable settings, persistent access.
 
 -----
 

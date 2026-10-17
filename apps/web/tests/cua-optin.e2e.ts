@@ -44,6 +44,14 @@ it.skipIf(process.platform !== 'darwin').each([undefined, 'minimal'] as const)('
     expect(await card.textContent()).toContain('请切换到 PTC 模式')
     expect(await card.textContent()).toContain('Windows 支持正在开发中')
     expect(await card.textContent()).not.toContain('Swift')
+    const description = await card.getByRole('button', { name: '查看 Computer Use', exact: true }).evaluate((button) => {
+      const element = document.getElementById(button.getAttribute('aria-describedby')!)!
+      const style = getComputedStyle(element)
+      return { lines: style.webkitLineClamp, height: element.getBoundingClientRect().height,
+        lineHeight: Number.parseFloat(style.lineHeight) }
+    })
+    expect(description.lines).toBe('1')
+    expect(description.height).toBeLessThanOrEqual(description.lineHeight + 1)
     const originalAgent = scaffold.ctx.agents.list()[0]!
     const ptcAgent = (await scaffold.ctx.agents.create({
       sessionId: SessionId('cua-existing-ptc'),

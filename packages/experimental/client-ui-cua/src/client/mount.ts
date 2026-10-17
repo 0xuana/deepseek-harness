@@ -8,7 +8,9 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { ComposerChainProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { PermissionController } from './controller.ts'
+import { ApplicationApproval, selectApplicationApproval } from './ApplicationApproval.tsx'
 import { PermissionPanel, PermissionSetup, PermissionToast } from './PermissionPanel.tsx'
 import { en, NS, zh, type CuaPermissionLocaleKey } from './locales.ts'
 
@@ -52,6 +54,11 @@ export async function mountCuaPermissions(ctx: Context, contribution: TypertRemo
       retryApproval: async (id) => { const result = await ctx.remote.cuaAccess.retryApproval(id); if (!result.ok) throw result.error },
     })
     const face = controller.face()
+    ctx.slots.inject('conversation.composer', () => ctx.slots.register({
+      name: 'conversation.composer', priority: -1, locale: NS,
+      select: ({ pendingInteraction }: ComposerChainProps) => selectApplicationApproval(pendingInteraction),
+      inject: () => ({ resolveText: (text: { en: string; [locale: string]: string }) => ctx.locale.resolveText(text) }),
+    }, ApplicationApproval))
     const preset = ctx.configForms.get<{ default: string; selectedDefault?: string }>('agent-preset-registry')
     const settings = {
       ...face,

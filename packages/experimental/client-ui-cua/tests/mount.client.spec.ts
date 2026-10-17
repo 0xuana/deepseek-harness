@@ -59,6 +59,7 @@ async function fixture(fail = false) {
   ctx.slots.register({ name: 'root', children: {
     'plugins.bundle.activation': { kind: 'keyed', scope: 'root' },
     'plugins.bundle.config': { kind: 'keyed', scope: 'root' }, 'shell.overlay': { kind: 'list', scope: 'root' },
+    'conversation.composer': { kind: 'chain', scope: 'session' },
   } } as never, () => null)
   if (fail) vi.spyOn(ctx.slots, 'inject').mockImplementationOnce(() => { throw new Error('slot unavailable') })
   return { ctx, unmount, unsubscribe, status, systemStatus, applicationIcons,
@@ -73,6 +74,12 @@ it('withdraws the permission Remote and all controls with the optional plugin', 
   try {
     const fiber = f.ctx.plugin({ inject: [...inject], apply: ctx => mountCuaPermissions(ctx, contribution) })
     await fiber
+    const approval = f.ctx.slots.entries('conversation.composer')[0]!
+    const select = approval.select as (owner: { pendingInteraction: undefined }) => unknown
+    expect(select({ pendingInteraction: undefined })).toBeNull()
+    const presentation = approval.inject!()
+    assert(typeof presentation.resolveText === 'function')
+    expect(presentation.resolveText({ en: 'Localized', zh: 'Localized' })).toBe('Localized')
     const entry = f.ctx.slots.entries('plugins.bundle.config')[0]!
     const actions = entry.inject!()
     actionsOf(actions)
@@ -117,6 +124,7 @@ it('withdraws the permission Remote and all controls with the optional plugin', 
     await (settings.setPtcDefault as () => Promise<boolean>)()
     expect(f.setDefault).toHaveBeenCalledExactlyOnceWith('selectedDefault', 'ptc')
     await fiber.dispose()
+    expect(f.ctx.slots.entries('conversation.composer')).toHaveLength(0)
     expect(f.ctx.slots.entries('plugins.bundle.config')).toHaveLength(0)
     expect(f.ctx.slots.entries('shell.overlay')).toHaveLength(0)
     expect(f.unsubscribe).toHaveBeenCalledOnce()

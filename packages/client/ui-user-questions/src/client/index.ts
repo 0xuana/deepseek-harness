@@ -15,7 +15,6 @@ import type { InboxWireState } from '@deepseek-ai/dsh-agent/types'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
-import type {} from '@deepseek-ai/dsh-client-ui-approval/client'
 import type { ComposerChainProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { PendingInteractionPublisher } from '@deepseek-ai/dsh-client-ui-session/client'
@@ -384,12 +383,11 @@ export function apply(ctx: ClientContext): void {
     {
       name: 'conversation.composer',
       select: ({ pendingInteraction }: ComposerChainProps): PendingQuestion | null =>
-        pendingInteraction instanceof PendingQuestion ? pendingInteraction : null,
+        pendingInteraction instanceof PendingQuestion && pendingInteraction.questions[0]?.intent?.kind !== 'approval'
+          ? pendingInteraction : null,
       locale: NS,
       store: questionDraftStore,
-      inject: () => ({ keyedHooks: { questionCard: (key: string) => cards.source(key) },
-        resolveText: (text: { en: string; [locale: string]: string }) => ctx.locale.resolveText(text),
-      }),
+      inject: () => ({ keyedHooks: { questionCard: (key: string) => cards.source(key) } }),
       children: { 'conversation.plan-review.actions': { kind: 'list', scope: 'session' } },
     },
     QuestionComposer,
