@@ -66,8 +66,9 @@ async replace(ns: string, section: object, expectedRevision?: number): Promise<v
  * @param ns Profile entry id.
  * @param ops Ordered form edits.
  * @param expectedRevision Revision returned by describe.
+ * @param signal Cancel while waiting for HMR admission; admitted writes finish normally.
  */
-async mutate(ns: string, ops: readonly SettingsPathOp[], expectedRevision?: number): Promise<void>
+async mutate(ns: string, ops: readonly SettingsPathOp[], expectedRevision?: number, signal?: AbortSignal): Promise<void>
 ```
 
 Source: [`packages/settings/settings/src/index.ts`](../../packages/settings/settings/src/index.ts)

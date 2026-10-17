@@ -69,6 +69,8 @@ kind: "package-group"
 | [`ptc-runtime-python`](ptc-runtime-python/README.zh.md) | PTC 执行 seam 的 CPython 子进程后端 | `ctx.ptcRuntime` |
 | [CUA](cua/README.zh.md) | 共享应用与窗口对象、授权和已记录的执行。 | 库 |
 | [macOS CUA](cua-macos/README.zh.md) | Swift 原生执行与平台组件准备。 | `ctx.computerUse` |
+| [`cua-bundle`](cua-bundle/README.zh.md) | 默认关闭的 Computer Use 开关与 persistent PTC 组合 | — |
+| [`client-ui-cua`](client-ui-cua/README.zh.md) | Computer Use 权限设置与应用授权管理 | — |
 | [`computer-use-cua-driver-mcp`](computer-use-cua-driver-mcp/README.zh.md) | 通过 MCP 使用已安装的 Cua Driver | `ctx.computerUse` |
 | [`computer-use-cua-driver-native`](computer-use-cua-driver-native/README.zh.md) | 嵌入 Cua Driver 原生 npm 运行时 | `ctx.computerUse` |
 | [`browser-use-playwright-mcp`](browser-use-playwright-mcp/README.zh.md) | 通过 MCP 提供 Playwright 浏览器工具 | `ctx.browserUse` |
