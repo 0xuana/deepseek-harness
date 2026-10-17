@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.1-rc.1/subagent-control-tools/guide.md
 /:
-  en: 4d2019e127794a55
-  zh: 2a18e757dde2fe4a
-/configure-subagent-discovery-through-main-entries:
-  en: 332d9f5f7da0a93b
-  zh: eced76fff0f527a0
-/configure-subagent-discovery-through-main-entries/change:
-  en: 6218140f28726aeb
-  zh: 8706857018796e46
-/configure-subagent-discovery-through-main-entries/migration:
-  en: bdd27339ecfb3d86
-  zh: 3f8cfcefa96234d8
+  en: d97a8cf3403991bf
+  zh: 7ef3622f752de926
+/update-subagent-model-selection-and-control-tools:
+  en: 94241cbd81231955
+  zh: 0e1b5032ce228b57
+/update-subagent-model-selection-and-control-tools/change:
+  en: 365ba74eca3f90da
+  zh: 177b74ef9933cee4
+/update-subagent-model-selection-and-control-tools/migration:
+  en: a249dd8e8f91c5e4
+  zh: 88b2a33be42ad258
