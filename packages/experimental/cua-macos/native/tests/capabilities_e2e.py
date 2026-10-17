@@ -11,7 +11,7 @@ import tempfile
 import time
 import uuid
 
-from native_test_support import ROOT, NativeHelper, run_cleanup
+from native_test_support import ROOT, NativeHelper, line, run_cleanup
 
 
 def wait_for_state(path, predicate):
@@ -42,6 +42,47 @@ def stop_application(pid):
         time.sleep(0.025)
     os.kill(pid, signal.SIGKILL)
     raise AssertionError("fixture did not exit after SIGTERM")
+
+
+def check_click_holds(helper, owner, window, point, state_file):
+    observed = helper.call("getState", {**owner, "maxElements": 2000, "maxDepth": 25})
+    pad = next(item for item in observed["elements"] if item["role"] == "AXButton" and item["title"] == "Input receiver")
+    target = {**owner, "snapshotId": observed["snapshotId"], "elementIndex": pad["index"]}
+    state = json.loads(state_file.read_text())
+    presses = state["axPresses"]
+    helper.call("click", target)
+    state = wait_for_state(state_file, lambda value: value["axPresses"] == presses + 1)
+    count = len(state["events"])
+    for invalid in [0, -1, 1.5, 2147483648, "800", None]:
+        helper.call("click", {**target, "holdMs": invalid}, "INVALID_ARGUMENT")
+    assert json.loads(state_file.read_text())["axPresses"] == presses + 1
+    for params, types in [({**target, "holdMs": 150}, [1, 2]),
+                          ({**window, **point, "holdMs": 150, "mouseButton": "right"}, [3, 4]),
+                          ({**window, **point, "holdMs": 150, "mouseButton": "middle"}, [25, 26]),
+                          ({**window, **point, "holdMs": 150, "clickCount": 2}, [1, 2, 1, 2])]:
+        helper.call("click", params)
+        state = wait_for_state(state_file, lambda value: len(value["events"]) >= count + len(types))
+        events = state["events"][count:]
+        assert [event["type"] for event in events] == types, events
+        for index in range(0, len(events), 2):
+            assert events[index + 1]["timestamp"] - events[index]["timestamp"] >= 0.150, events
+        assert state["axPresses"] == presses + 1, state
+        count += len(types)
+    # Observe the received down event before cancelling; the requested minute cannot expire during this check.
+    request = {"id": "cancel-held-click", "method": "click", "params": {**window, **point, "holdMs": 60000}}
+    helper.process.stdin.write(json.dumps(request) + "\n")
+    helper.process.stdin.flush()
+    wait_for_state(state_file, lambda value: len(value["events"]) == count + 1)
+    helper.process.stdin.write(json.dumps({"type": "cancel", "id": request["id"]}) + "\n")
+    helper.process.stdin.flush()
+    response = json.loads(line(helper.process))
+    helper.transcript.append({"request": request, "response": response})
+    assert response["id"] == request["id"] and response["error"]["code"] == "NATIVE_CANCELLED", response
+    state = wait_for_state(state_file, lambda value: len(value["events"]) >= count + 2)
+    assert [event["type"] for event in state["events"][count:]] == [1, 2], state
+    helper.call("click", {**window, **point})
+    state = wait_for_state(state_file, lambda value: len(value["events"]) >= count + 4)
+    assert [event["type"] for event in state["events"][count:]] == [1, 2, 1, 2], state
 
 
 def main():
@@ -112,12 +153,23 @@ def main():
             call("pressKey", {**owner, "key": "KP_0"})
             call("pressKey", {**owner, "key": "KP_Enter"})
             state = wait_for_state(state_file, lambda value: {82, 76}.issubset({event.get("keyCode") for event in value["events"]}))
+            check_click_holds(helper, owner, window, point, state_file)
+            timed = NativeHelper(transcript, args.helper, ["--timeout-ms", "5000"])
+            try:
+                timed_app = timed.call("getApp", {"selector": str(application)})
+                count = len(json.loads(state_file.read_text())["events"])
+                timed.call("click", {"appHandle": timed_app["appHandle"], "windowId": state["windowId"], **point,
+                                     "holdMs": 60000}, "NATIVE_TIMEOUT")
+                state = wait_for_state(state_file, lambda value: len(value["events"]) >= count + 2)
+                assert [event["type"] for event in state["events"][count:]] == [1, 2], state
+            finally:
+                timed.stop()
             if args.artifacts:
                 args.artifacts.mkdir(parents=True, exist_ok=True)
                 shot = call("screenshot", window)
                 (args.artifacts / "capabilities.png").write_bytes(base64.b64decode(shot["data"]))
                 (args.artifacts / "state.json").write_text(json.dumps(state, ensure_ascii=False, indent=2))
-            print("PASS: stopped-app discovery and launch, repeated Unicode selection, plain/HTML paste, middle/modifier drag and keypad identity")
+            print("PASS: stopped-app discovery and launch, repeated Unicode selection, plain/HTML paste, middle/modifier drag, keypad identity, click holds and cancellation/timeout release")
         finally:
             if pid is None and state_file.exists():
                 pid = json.loads(state_file.read_text())["pid"]

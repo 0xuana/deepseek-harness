@@ -199,7 +199,7 @@ actor AXWorker {
     }
 
     func execute(_ method: String, params: RequestParameters, catalog: ApplicationCatalogSnapshot, installed: InstalledApplication? = nil,
-                 trace: ScreenshotTrace? = nil) throws -> DriverOutcome {
+                 trace: ScreenshotTrace? = nil) async throws -> DriverOutcome {
         try cancellation.check()
         guard !closed else { throw NativeFailure(code: "NATIVE_CLOSED", message: "Helper is closing") }
         let locked = observeSession()
@@ -343,6 +343,7 @@ actor AXWorker {
             }
             try ax().perform(selected, action)
         case "click", "hover":
+            let holdMs = params.contains("holdMs") ? try params.integer("holdMs", in: 1...2147483647) : nil
             let button = try params.optionalString("mouseButton") ?? "left"
             let count = params.contains("clickCount") ? try params.integer("clickCount", in: 1...2) : 1
             guard button == "left" || (["right", "middle"].contains(button) && count == 1) else { throw RequestParameters.invalid("Unsupported mouse button or click count") }
@@ -356,7 +357,7 @@ actor AXWorker {
                 hoverElement = selected
                 if method == "click" {
                     let names = try ax().actions(selected)
-                    let action: String? = !modifiers.isEmpty ? nil : button == "right" && names.contains("AXShowMenu") ? "AXShowMenu"
+                    let action: String? = holdMs != nil || !modifiers.isEmpty ? nil : button == "right" && names.contains("AXShowMenu") ? "AXShowMenu"
                         : (button == "left" && count == 1 ? (names.contains("AXPress") ? "AXPress" : names.contains("AXPick") ? "AXPick" : nil) : nil)
                     if let action {
                         try ax().perform(selected, action)
@@ -387,7 +388,7 @@ actor AXWorker {
                 }
                 return .hover(route, point)
             }
-            try inputs().1.click(in: route, at: point, button: button, count: count, modifiers: modifiers)
+            try await inputs().1.click(in: route, at: point, button: button, count: count, modifiers: modifiers, holdMs: holdMs)
         case "scroll", "drag":
             let id = try params.windowID()
             try coordinateSnapshot(handle, params, id)

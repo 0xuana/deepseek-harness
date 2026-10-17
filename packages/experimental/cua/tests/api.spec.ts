@@ -171,6 +171,21 @@ describe('hover across observations', () => {
 })
 
 describe('pointer buttons and modifiers', () => {
+  it('preserves hold duration for app and window clicks at elements and coordinates', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    const window = await app.getWindow(23)
+    for (const surface of [app, window]) {
+      for (const target of [0, [10, 20] as const]) {
+        await surface.click(target, { holdMs: 800, mouseButton: 'right' })
+        expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'click', params: expect.objectContaining({ holdMs: 800, mouseButton: 'right' }) })
+        f.dispatch.mockClear()
+        await expect(surface.click(target, { holdMs: 0 })).rejects.toThrow('holdMs')
+        expect(f.dispatch).not.toHaveBeenCalled()
+      }
+    }
+  })
+
   it('retains middle-button and modifier intent through click and drag dispatch', async () => {
     const f = fixture()
     const app = await f.api.getApp('Editor')

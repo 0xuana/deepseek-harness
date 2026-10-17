@@ -73,9 +73,9 @@ def stop_group(process):
 
 class NativeHelper:
     """One serial helper whose request transcript remains available on failure."""
-    def __init__(self, transcript, helper_path=None):
+    def __init__(self, transcript, helper_path=None, arguments=()):
         binary = Path(helper_path).resolve() if helper_path is not None else BINARY
-        self.process = subprocess.Popen([str(binary)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        self.process = subprocess.Popen([str(binary), *arguments], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                         text=True, start_new_session=True)
         self.sequence = 0
         self.transcript = transcript
