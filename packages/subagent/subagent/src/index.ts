@@ -77,9 +77,6 @@ import { subagentIdentityProjectionDefinition, subagentTimingProjectionDefinitio
 import { subagentCatalogProjectionDefinition } from './catalog.ts'
 import { deliverSubagentPrompt } from './internal.ts'
 
-export { AllowedModelRouteSchema, assertAllowedModelRoutes } from './model-selection.ts'
-export type { AllowedModelRoute, ModelSelectionPolicy } from './model-selection.ts'
-export { subagentModelSelectionPolicy, subagentModelSelectionProjectionDefinition } from './model-selection-state.ts'
 export type {} from './catalog.ts'
 export * from './out-of-process.ts'
 export { AssistantOutputFold, finalAssistantOutput } from './assistant-output.ts'

@@ -28,11 +28,12 @@ import {
   requestedAgentOptions,
 } from './model-selection.ts'
 import type { DelegationModelRequest } from './model-selection.ts'
+import { registerListSubagentModels } from './list-models.ts'
 import { SubagentPresetSelection, type PresetSelectionConfig, type PresetSelectionRequest } from './preset-selection.ts'
 import {
   subagentModelSelectionProjectionDefinition,
   subagentModelSelectionPolicy,
-} from '@deepseek-ai/dsh-subagent'
+} from './model-selection-state.ts'
 
 export const name = 'tool-subagent'
 export const inject = ['tools', 'subagents', 'systemPrompt', 'sessionProjections']
@@ -57,6 +58,12 @@ export interface Config extends PresetSelectionConfig {
    */
   modelSelection?: boolean
   /**
+   * Register the shared `list_subagent_models` tool for this scope.
+   * Enable on only one instance per scope; defaults to false and does not
+   * enable model selection. Discovery is removed when this instance unloads.
+   */
+  modelDiscovery?: boolean
+  /**
    * Agent options applied to every child; omitted fields use child-loop defaults.
    */
   agentOptions?: AgentOptions
@@ -77,6 +84,7 @@ export const Config: z<Config> = z.object({
   provider: z.string().required(),
   toolName: z.string().default('subagent'),
   modelSelection: z.boolean().default(false),
+  modelDiscovery: z.boolean().default(false),
   // Prevent Schemastery from materializing omitted agentOptions as `{}`.
   agentOptions: z.object({
     provider: z.string(),
@@ -183,6 +191,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   })
   const initialProvider = ctx.subagents.getProvider(config.provider)
   if (initialProvider !== undefined) assertSubagentProviderConfiguration(initialProvider)
+
+  if (config.modelDiscovery === true) registerListSubagentModels(ctx)
 
   const install = (runtimeCtx: Context): void => {
     // Load order and HMR replacement can change provider availability while

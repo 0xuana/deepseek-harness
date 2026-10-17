@@ -1,4 +1,3 @@
-import { assertAllowedModelRoutes } from '@deepseek-ai/dsh-subagent'
 import { mountWorkingDirectoryFixture } from '../../subagent/tests/working-directory-fixture.ts'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -13,8 +12,8 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { MockAdapter } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import * as mock from './scripted-provider.ts'
 import * as tool from '../src/index.ts'
-import * as ControlTools from '@deepseek-ai/dsh-tool-subagent-control'
 import {
+  assertAllowedModelRoutes,
   assertAllowedModelSelection,
   preflightChildLlmRoute,
 } from '../src/model-selection.ts'
@@ -169,7 +168,7 @@ describe('dsh-tool-subagent model selection', () => {
     expect(descriptions()).not.toContain(guidance)
     expect(descriptions()).not.toContain('list_subagent_models')
 
-    const discovery = await ctx.plugin(ControlTools)
+    const discovery = await ctx.plugin(tool, { provider: 'mock', toolName: 'discovery_subagent', modelDiscovery: true })
     expect(descriptions()).toContain(guidance)
     const restore = agent.ctx.tools.restrict({ deny: ['list_subagent_models'] })
     expect(descriptions()).not.toContain(guidance)

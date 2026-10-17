@@ -1,21 +1,21 @@
 ---
 kind: upgrade-guide
-description: Subagent discovery plugins are replaced by the shared subagent-control entry.
+description: Subagent discovery subpath plugins are replaced by their package main entries.
 ---
 
-# Mount subagent control tools once
+# Configure subagent discovery through main entries
 
 English | [中文](guide.zh.md)
 
 ## Change
 
-`@deepseek-ai/dsh-tool-subagent-control` registers `send_message`, `interrupt_agent`, `list_agents`, and `list_subagent_models` together. The separate `@deepseek-ai/dsh-tool-subagent-control/list-agents` and `@deepseek-ai/dsh-tool-subagent/list-models` exports are removed. The shared plugin requires `tools`, `subagents`, `agents`, and `sessionProjections`; model discovery reports an error if `llm` is unavailable.
+`@deepseek-ai/dsh-tool-subagent-control` registers `send_message`, `interrupt_agent`, and `list_agents` together and requires `tools`, `subagents`, and `agents`. `@deepseek-ai/dsh-tool-subagent` registers `list_subagent_models` when its new `modelDiscovery` option is true; the option defaults to false independently of `modelSelection`. The separate `/list-agents` and `/list-models` exports are removed.
 
-The shipped headless, SDK, and ACP profiles now include model discovery through the shared control plugin. Tool presence does not grant model-selection authorization: discovery still uses the calling Session’s recorded policy, or only the current parent route when no policy exists. Web and Desktop retain their model-selection settings and delegation defaults.
+Web and Desktop presets enable discovery on their spawn instance. Headless, SDK, and ACP profiles keep discovery disabled by default. Discovery still reads the calling Session’s authorization and reports an error if `llm` is unavailable. It follows the configured plugin instance’s lifetime, independently of the delegation provider; unloading that instance removes discovery even if other delegation instances remain.
 
 ## Migration
 
-1. Replace the separate discovery rows in custom `cordis.yml` files and patches with one `@deepseek-ai/dsh-tool-subagent-control` row per tool scope. If that row already exists, remove the redundant discovery rows. Direct plugin consumers mount the root entry once.
-2. Remove patches targeting the retired `tool-subagent-list-agents` and `tool-subagent-list-models` row ids. A patch disabling `tool-subagent-control` now disables all four tools; use existing tool restrictions when only selected tools should be hidden.
-3. Provide the required services before mounting the shared plugin. Keep the Host `@deepseek-ai/dsh-tool-subagent/model-selection-settings` service when custom compositions need user-authorized alternative routes.
-4. Verify that the calling Agent sees one definition of each of the four tools and that `list_subagent_models` returns only the Session’s authorized routes or its current parent route.
+1. Replace `/list-agents` rows with one `@deepseek-ai/dsh-tool-subagent-control` row per tool scope, or remove them if that row already exists. Disabling the shared row now disables all three control tools; use tool restrictions to hide individual tools.
+2. Replace each `/list-models` row by setting `modelDiscovery: true` on one `@deepseek-ai/dsh-tool-subagent` instance in the same tool scope. Multiple discovery owners in one scope fail registration. Keep `modelSelection` enabled only on instances that should accept model-selection arguments.
+3. Remove patches targeting the retired discovery row ids and migrate direct plugin consumers to the main entries. Keep the Host `/model-selection-settings` service when custom compositions need user-authorized alternative routes.
+4. Verify one definition of each requested tool, discovery removal when its owning instance unloads, and unchanged tool schemas in compositions that leave discovery disabled.

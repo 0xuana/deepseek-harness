@@ -14148,9 +14148,6 @@ importers:
       '@deepseek-ai/dsh-tool-subagent':
         specifier: workspace:*
         version: link:../tool-subagent
-      '@deepseek-ai/dsh-tool-subagent-control':
-        specifier: workspace:*
-        version: link:../tool-subagent-control
 
   packages/subagent/subagent-fork-in-process:
     dependencies:
@@ -14292,9 +14289,6 @@ importers:
       '@deepseek-ai/dsh-system-prompt':
         specifier: workspace:*
         version: link:../../core/system-prompt
-      '@deepseek-ai/dsh-tool-subagent-control':
-        specifier: workspace:*
-        version: link:../tool-subagent-control
       '@deepseek-ai/dsh-tools':
         specifier: workspace:*
         version: link:../../core/tools
@@ -14347,9 +14341,6 @@ importers:
       '@deepseek-ai/dsh-subagent-spawn-in-process':
         specifier: workspace:*
         version: link:../subagent-spawn-in-process
-      '@deepseek-ai/dsh-tool-subagent':
-        specifier: workspace:*
-        version: link:../tool-subagent
       '@deepseek-ai/dsh-tools':
         specifier: workspace:*
         version: link:../../core/tools

@@ -89,8 +89,6 @@ kind: "package-reference"
 - **兑现即发布。** `startActivation()` 仅在子级已接受且句柄可取消该次执行后返回。
 - **同进程值可信。** 请求、描述符与结果按不可变约定借用；序列化与不可信输入校验属于进程与协议边界。
 
-共享的模型选择辅助函数位于 [`model-selection.ts`](src/model-selection.ts)，用于校验精确的允许路由。[`model-selection-state.ts`](src/model-selection-state.ts) 声明持久策略事件及其采用引用计数的 Session 投影；委派、查询和 Host 设置消费同一定义。
-
 ### 源码地图
 
 | 文件 | 职责 |

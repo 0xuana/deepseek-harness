@@ -93,6 +93,7 @@
                   provider: spawn
                   toolName: subagent
                   modelSelection: true
+                  modelDiscovery: true
               - id: tool-subagent-fork
                 name: '@deepseek-ai/dsh-tool-subagent'
                 config:

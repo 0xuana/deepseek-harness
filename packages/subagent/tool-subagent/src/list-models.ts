@@ -6,8 +6,8 @@ import type { LlmProviderInfo } from '@deepseek-ai/dsh-llm'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { parentAgentOptionsForDelegation } from '@deepseek-ai/dsh-subagent'
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
-import type { ModelSelectionPolicy } from '@deepseek-ai/dsh-subagent'
-import { subagentModelSelectionPolicy, subagentModelSelectionProjectionDefinition } from '@deepseek-ai/dsh-subagent'
+import type { ModelSelectionPolicy } from './model-selection.ts'
+import { subagentModelSelectionPolicy } from './model-selection-state.ts'
 
 interface ListSubagentModelsRequest {
   readonly provider?: string
@@ -100,7 +100,6 @@ async function listSubagentModels(
  * @param ctx - Context carrying the tool registry and Session projections.
  */
 export function registerListSubagentModels(ctx: Context): void {
-  ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
   ctx.tools.register(defineTool({
     name: 'list_subagent_models',
     description:

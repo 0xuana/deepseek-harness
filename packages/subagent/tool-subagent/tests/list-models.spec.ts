@@ -2,7 +2,7 @@ import AgentRegistry from '@deepseek-ai/dsh-agent'
 import { mountWorkingDirectoryFixture } from '../../subagent/tests/working-directory-fixture.ts'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import LlmRuntime, {
+import {
   ToolCallId,
   LlmAdapter,
   ReasoningEffortId,
@@ -18,13 +18,13 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import * as tool from '@deepseek-ai/dsh-tool-subagent'
-import * as ControlTools from '@deepseek-ai/dsh-tool-subagent-control'
+import { createScope, scopeOf } from '@deepseek-ai/dsh-scope'
+import * as tool from '../src/index.ts'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
-import SubagentModelSelectionConfig from '@deepseek-ai/dsh-tool-subagent/model-selection-settings'
-import { modelSelectionSetupAgent, ownContext, setup, testToolSignal, text } from '../../tool-subagent/tests/harness.ts'
+import SubagentModelSelectionConfig from '../src/model-selection-settings.ts'
+import { modelSelectionSetupAgent, ownContext, setup, testToolSignal, text } from './harness.ts'
 
 class CatalogAdapter extends LlmAdapter {
   constructor(private readonly empty = false) {
@@ -79,7 +79,7 @@ async function setupListTool(routes = [
   await ctx.plugin(SubagentModelSelectionConfig, { enabled: true, allowedModels: routes })
   await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
-  await ctx.plugin(ControlTools)
+  await ctx.plugin(tool, { provider: 'unused', modelDiscovery: true })
   const { agent } = await ctx.agents.create({ sessionId: SessionId('discovery-parent') })
   callingAgents.set(ctx, agent)
   return ctx
@@ -106,26 +106,64 @@ function call(ctx: Context, args: unknown, signal = testToolSignal) {
 }
 
 describe('list_subagent_models', () => {
-  it('registers and disposes all four shared tools independently of delegation tools', async () => {
-    const ctx = ownContext(new Context())
-    await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(LlmRuntime)
-    await ctx.plugin(SystemPrompt)
-    await ctx.plugin(ToolRuntime)
-    await mountWorkingDirectoryFixture(ctx)
-    await ctx.plugin(SubagentRuntime)
-    await ctx.plugin(tool, { provider: 'unused' })
+  it('defaults discovery off independently of model selection', async () => {
+    const ctx = await setup({ provider: 'mock', modelSelection: true })
     expect(ctx.tools.get('list_subagent_models')).toBeUndefined()
-    await ctx.plugin(AgentRegistry)
-    const discovery = await ctx.plugin(ControlTools)
-    const names = ['send_message', 'interrupt_agent', 'list_agents', 'list_subagent_models']
-    for (const name of names) expect(ctx.tools.schemas().filter(schema => schema.name === name)).toHaveLength(1)
-    await discovery.dispose()
-    for (const name of names) expect(ctx.tools.get(name)).toBeUndefined()
-    const reloaded = await ctx.plugin(ControlTools)
-    for (const name of names) expect(ctx.tools.schemas().filter(schema => schema.name === name)).toHaveLength(1)
+    const schema = ctx.tools.schemas().find(candidate => candidate.name === 'subagent')!
+    expect(schema.parameters).toHaveProperty('properties.model')
+  })
+
+  it('registers discovery only on its configured owner and removes it on unload', async () => {
+    const ctx = await setup({ provider: 'mock', modelSelection: true })
+    const sibling = await ctx.plugin(tool, {
+      provider: 'mock', toolName: 'other_subagent', modelSelection: true,
+    })
+    expect(ctx.tools.get('list_subagent_models')).toBeUndefined()
+    const discoveryConfig = { provider: 'mock', toolName: 'discovery_subagent', modelDiscovery: true }
+    const owner = await ctx.plugin(tool, discoveryConfig)
+    const schemas = ctx.tools.schemas()
+    expect(schemas.filter(schema => schema.name === 'list_subagent_models')).toHaveLength(1)
+    expect(schemas.find(schema => schema.name === 'discovery_subagent')!.parameters)
+      .not.toHaveProperty('properties.model')
+    await sibling.dispose()
+    expect(ctx.tools.get('list_subagent_models')).toBeDefined()
+    await owner.dispose()
+    expect(ctx.tools.get('list_subagent_models')).toBeUndefined()
+    expect(ctx.tools.get('subagent')).toBeDefined()
+    const reloaded = await ctx.plugin(tool, discoveryConfig)
+    expect(ctx.tools.schemas().filter(schema => schema.name === 'list_subagent_models')).toHaveLength(1)
     await reloaded.dispose()
-    await ctx.fiber.dispose()
+    expect(ctx.tools.get('list_subagent_models')).toBeUndefined()
+  })
+
+  it('rejects a second discovery owner in the same scope without removing the first', async () => {
+    const ctx = await setup({ provider: 'mock', modelDiscovery: true })
+    const definition = ctx.tools.get('list_subagent_models')
+    await expect(ctx.plugin(tool, {
+      provider: 'mock', toolName: 'other_subagent', modelDiscovery: true,
+    })).rejects.toThrow('already registered')
+    expect(ctx.tools.get('list_subagent_models')).toBe(definition)
+    expect(ctx.tools.get('subagent')).toBeDefined()
+  })
+
+  it('keeps discovery registration and disposal local to each tool scope', async () => {
+    const ctx = await setup({ provider: 'mock' })
+    const first = createScope(ctx, { preset: 'first' })
+    const second = createScope(ctx, { preset: 'second' })
+    const config = { provider: 'mock', modelDiscovery: true }
+    const firstOwner = await first.ctx.plugin(tool, config)
+    const secondOwner = await second.ctx.plugin(tool, config)
+    const firstDefinition = ctx.tools.get('list_subagent_models', scopeOf(first.ctx))
+    const secondDefinition = ctx.tools.get('list_subagent_models', scopeOf(second.ctx))
+    expect(firstDefinition).toBeDefined()
+    expect(secondDefinition).toBeDefined()
+    expect(firstDefinition).not.toBe(secondDefinition)
+    expect(ctx.tools.get('list_subagent_models')).toBeUndefined()
+    await firstOwner.dispose()
+    expect(ctx.tools.get('list_subagent_models', scopeOf(first.ctx))).toBeUndefined()
+    expect(ctx.tools.get('list_subagent_models', scopeOf(second.ctx))).toBe(secondDefinition)
+    await secondOwner.dispose()
+    expect(ctx.tools.get('list_subagent_models', scopeOf(second.ctx))).toBeUndefined()
   })
 
   it('requires a calling Agent and an effective parent route', async () => {
@@ -136,7 +174,7 @@ describe('list_subagent_models', () => {
     await ctx.plugin(AgentRegistry)
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
-    await ctx.plugin(ControlTools)
+    await ctx.plugin(tool, { provider: 'unused', modelDiscovery: true })
     expect(text(await call(ctx, {}))).toContain('requires a calling agent')
     await ctx.fiber.dispose()
 
@@ -150,7 +188,7 @@ describe('list_subagent_models', () => {
     expect(text(result)).toContain('without a parent provider and model')
   })
 
-  it('reads the recorded Session allowlist through the shared control plugin', async () => {
+  it('reads the recorded Session allowlist through the delegation plugin', async () => {
     const ctx = await setup({ provider: 'mock', withModelSelection: true })
     ctx.llm.registerAdapter(['alpha', 'secret'], new CatalogAdapter())
     const result = await ctx.tools.execute({
@@ -170,7 +208,7 @@ describe('list_subagent_models', () => {
     await ctx.plugin(AgentRegistry)
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
-    await ctx.plugin(ControlTools)
+    await ctx.plugin(tool, { provider: 'unused', modelDiscovery: true })
     callingAgents.set(ctx, callingAgents.get(parent)!)
     expect(ctx.tools.get('list_subagent_models')).toBeDefined()
     const result = await call(ctx, {})

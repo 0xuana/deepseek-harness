@@ -1,5 +1,5 @@
 ---
-description: "Shared messaging, interruption, child discovery, and model discovery tools for users and maintainers composing or debugging continuable-child control."
+description: "Shared messaging, interruption, and child discovery tools for users and maintainers composing or debugging continuable-child control."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-tool-subagent-control` lets agents message and interrupt subagents, list continuable children, and inspect authorized child models. One plugin instance registers all four tools for a scope shared by multiple delegation backends. Parents and continuable children inherit the same messaging definition and ordering. Tool presence neither selects the delegation lifecycle nor grants permission to use another model.
+`dsh-tool-subagent-control` lets agents message and interrupt subagents and list continuable children. One plugin instance registers all three tools for a scope shared by multiple delegation backends. Parents and continuable children inherit the same messaging definition and ordering. Tool presence does not select the delegation lifecycle.
 
 ## Table of Contents
 
@@ -25,11 +25,11 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this package once per tool scope. It requires `tools`, `subagents`, `agents`, and `sessionProjections`. The optional `llm` service supplies model discovery; an unavailable service causes discovery calls to fail without removing the tools.
+Mount this package once per tool scope. It requires `tools`, `subagents`, and `agents`.
 
 ### Minimal configuration
 
-With the required services available, load the subagent service, a backend, the delegation tool, and this package to expose all four control and discovery tools:
+With the required services available, load the subagent service, a backend, the delegation tool, and this package to expose all three control and discovery tools:
 
 ```yaml
 - name: '@deepseek-ai/dsh-subagent'
@@ -40,7 +40,7 @@ With the required services available, load the subagent service, a backend, the 
 - name: '@deepseek-ai/dsh-tool-subagent-control'
 ```
 
-This package takes no configuration. Its main entry registers `send_message`, `interrupt_agent`, `list_agents`, and `list_subagent_models` together; existing tool restrictions can hide individual tools.
+This package takes no configuration. Its main entry registers `send_message`, `interrupt_agent`, and `list_agents` together; existing tool restrictions can hide individual tools.
 
 ### send_message
 
@@ -80,9 +80,8 @@ The tool forwards its execution signal, which owns admission only until inbox ac
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Shared registration of all four tools |
+| [`src/index.ts`](src/index.ts) | Shared registration of all three tools |
 | [`src/list-agents.ts`](src/list-agents.ts) | `list_agents` registration: direct-child discovery and status refinement |
-| [`src/list-models.ts`](src/list-models.ts) | Model discovery using the shared Session authorization projection |
 
 </details>
 
@@ -106,7 +105,7 @@ Read these pages when the package-level contract is not enough; they move from t
 
 #### What the model sees
 
-The generated [schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent-control): `send_message` takes `agent_id` and `message`; `interrupt_agent` takes `agent_id`; `list_agents` accepts an optional `scope`; `list_subagent_models` accepts optional `provider` and `model` ids.
+The generated [schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent-control): `send_message` takes `agent_id` and `message`; `interrupt_agent` takes `agent_id`; `list_agents` accepts an optional `scope`.
 
 #### Token effect
 
@@ -157,20 +156,6 @@ Grows linearly with the listed continuable children and diagnostics — reachabl
 #### KV Cache effect
 
 Append-only; each result follows the reusable request prefix.
-
-### Model selection and discovery
-
-#### What the model sees
-
-The `list_subagent_models` definition reads the calling Session’s route policy, falling back to the current parent route when no policy is recorded. Calls reject while the optional `ctx.llm` service is unavailable. With a recorded policy, provider model lists intersect the advertised catalog with the Session’s authorized routes. Without one, they resolve only the current parent model, even if the catalog omits it. The discovery tool’s own description instructs the model to query options before selecting a child route; omitting or filtering out discovery removes that guidance. Exact-model queries accept authorized ids absent from the catalog; unauthorized provider/model lookups fail before adapter access. Catalog or exact-model lookup failures and cancellation reject the call. Execution independently enforces the same policy.
-
-#### Token effect
-
-One fixed discovery schema is present wherever this package is mounted, regardless of the Session’s preference or delegation tools; the shipped Web, Desktop, headless, SDK, and ACP profiles include it. Route metadata enters the transcript only when the model calls the tool.
-
-#### KV Cache effect
-
-The schema is prefix-stable across adapter registration and catalog changes. Each discovery result is appended after the reusable prefix.
 
 ## Known Limitations and Deferred Work
 

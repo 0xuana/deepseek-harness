@@ -2,7 +2,7 @@
  * The globally named `list_agents` tool: a thin model-facing adapter over
  * the continuable projection of `ctx.subagents.listChildren()` and, for the
  * `descendants` scope, `ctx.subagents.listDescendants()`. The control plugin owns
- * registration and disposal alongside messaging and model discovery.
+ * registration and disposal alongside messaging and interruption.
  */
 
 import type { Context } from '@deepseek-ai/cordis'

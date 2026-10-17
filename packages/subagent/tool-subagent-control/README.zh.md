@@ -1,5 +1,5 @@
 ---
-description: "供用户与维护者在组合或调试可继续子级控制功能时使用的共享消息、中断、子级发现与模型查询工具。"
+description: "供用户与维护者在组合或调试可继续子级控制功能时使用的共享消息、中断与子级发现工具。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-tool-subagent-control` 让 agent 向子智能体发消息、中断子智能体、列出可继续子级并查询已授权的子级模型。一个插件实例为多个委派后端共享的作用域注册全部四个工具。父级与可继续子级继承相同的消息定义和顺序。工具存在既不选择委派生命周期，也不授予使用其他模型的权限。
+`dsh-tool-subagent-control` 让 agent 向子智能体发消息、中断子智能体、列出可继续子级。一个插件实例为多个委派后端共享的作用域注册全部三个工具。父级与可继续子级继承相同的消息定义和顺序。工具存在不选择委派生命周期。
 
 ## 目录
 
@@ -25,11 +25,11 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-每个工具作用域挂载本包一次。它要求 `tools`、`subagents`、`agents` 和 `sessionProjections`。可选的 `llm` 服务提供模型查询；该服务不可用时，查询调用失败，但工具仍然存在。
+每个工具作用域挂载本包一次。它要求 `tools`、`subagents` 和 `agents`。
 
 ### 最小配置
 
-在所需服务可用后，加载 subagent 服务、一个后端、委派工具与本包，即可公开全部四个控制和发现工具：
+在所需服务可用后，加载 subagent 服务、一个后端、委派工具与本包，即可公开全部三个控制和发现工具：
 
 ```yaml
 - name: '@deepseek-ai/dsh-subagent'
@@ -40,7 +40,7 @@ kind: "package-reference"
 - name: '@deepseek-ai/dsh-tool-subagent-control'
 ```
 
-本包不接收任何配置。主入口一起注册 `send_message`、`interrupt_agent`、`list_agents` 和 `list_subagent_models`；现有工具限制可以隐藏单个工具。
+本包不接收任何配置。主入口一起注册 `send_message`、`interrupt_agent` 和 `list_agents`；现有工具限制可以隐藏单个工具。
 
 ### send_message
 
@@ -80,9 +80,8 @@ kind: "package-reference"
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 统一注册全部四个工具 |
+| [`src/index.ts`](src/index.ts) | 统一注册全部三个工具 |
 | [`src/list-agents.ts`](src/list-agents.ts) | `list_agents` 注册：直接子级发现与状态细化 |
-| [`src/list-models.ts`](src/list-models.ts) | 使用共享 Session 授权投影进行模型查询 |
 
 </details>
 
@@ -106,7 +105,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-已生成的 [schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-subagent-control)：`send_message` 接受 `agent_id` 与 `message`；`interrupt_agent` 接受 `agent_id`；`list_agents` 接受可选的 `scope`；`list_subagent_models` 接受可选的 `provider` 和 `model` ID。
+已生成的 [schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-subagent-control)：`send_message` 接受 `agent_id` 与 `message`；`interrupt_agent` 接受 `agent_id`；`list_agents` 接受可选的 `scope`。
 
 #### Token 影响
 
@@ -157,20 +156,6 @@ kind: "package-reference"
 #### KV Cache 影响
 
 仅追加；每个结果都位于可复用请求前缀之后。
-
-### 模型选择与发现
-
-#### 模型看到什么
-
-`list_subagent_models` 定义读取调用 Session 的路由策略，没有已记录策略时使用当前父级路由。可选的 `ctx.llm` 服务不可用时，调用会被拒绝。有已记录策略时，提供方模型列表取公布目录与 Session 授权路由的交集。没有策略时，只解析当前父级模型，即使目录未列出它。发现工具自身的描述要求模型在选择子级路由前查询选项；未挂载或过滤掉发现工具时，这段指导也不会出现。精确模型查询允许已授权但目录未列出的 ID；未授权的提供方／模型查询会在访问适配器前失败。目录或精确模型查询失败以及取消都会使调用被拒绝。执行过程独立强制同一策略。
-
-#### Token 影响
-
-挂载本包的组合中存在一份固定发现 schema，不受 Session 偏好或委派工具影响；随附 Web、Desktop、headless、SDK 和 ACP profile 均包含它。只有模型调用工具时，路由元数据才进入 transcript。
-
-#### KV Cache 影响
-
-适配器注册与目录变化不会改变 schema 前缀。每个发现结果都追加在可复用前缀之后。
 
 ## 已知限制与延期工作
 

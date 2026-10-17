@@ -216,23 +216,6 @@
       }
     },
     {
-      "name": "list_subagent_models",
-      "description": "Inspect subagent models without changing the current Agent. No arguments: providers; `provider`: allowed models; `provider` + `model`: that model and its reasoning efforts. Inspect options here before selecting a child provider and model; use returned ids for delegation.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "provider": {
-            "type": "string",
-            "description": "Registered LLM provider id."
-          },
-          "model": {
-            "type": "string",
-            "description": "Exact model id; requires provider."
-          }
-        }
-      }
-    },
-    {
       "name": "load_workspace_dependencies",
       "description": "Get absolute paths to bundled Python and library directories, plus bundled Python distribution versions. Node.js and pnpm paths are included when the payload provides them. Python includes numpy, pandas, python-docx, python-pptx, openpyxl, Pillow, lxml, and XlsxWriter. Use these libraries for Office files unless the user or workspace instructions select another environment. When Node.js and pnpm paths are returned, run pnpm with that Node executable and pnpm script path. This does not change PATH or package-manager settings.",
       "parameters": {
