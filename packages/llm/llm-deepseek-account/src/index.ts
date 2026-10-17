@@ -22,7 +22,7 @@ export const inject = ['llm']
 const PROVIDER = 'deepseek-account'
 /** Header carrying the account token on Messages, Files, and model-listing requests. */
 const TOKEN_HEADER = 'x-dsh-auth-token'
-/** Console tag of listing diagnostics; product profiles mount no console exporter for `ctx.logger`. */
+/** Stderr tag of listing diagnostics; product profiles mount no console exporter for `ctx.logger`. */
 const LOG_TAG = '[llm-deepseek-account]'
 
 /** Connection facts of one account operation: protocol settings plus the catalog resolved with them. */
@@ -75,7 +75,7 @@ export function apply(ctx: Context, config: Config): void {
     token: async url => account()?.resolveToken(url),
     load: (url, token, signal) => requestModelListing(url, { [TOKEN_HEADER]: token }, signal),
     now: () => Date.now(),
-    info: (message) => { console.info(LOG_TAG, message) },
+    info: (message) => { console.error(LOG_TAG, message) },
     warn: (message) => { console.warn(LOG_TAG, message) },
   })
   let loggedListing: ModelListing | undefined
