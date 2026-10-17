@@ -1,6 +1,6 @@
 /** Account catalog diagnostics preserve the shipped ACP profile's JSON-RPC stream. */
 import { once } from 'node:events'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { PROTOCOL_VERSION } from '@agentclientprotocol/sdk'
 import { launchAcpTestAgent, type AgentUnderTest, type LaunchedAcpTestAgent } from '@deepseek-ai/dsh-session-snapshot'
 import { expect, it } from 'vitest'
+import { cleanupAcpExampleTest } from './cleanup.ts'
 
 it('keeps account model-listing diagnostics on stderr during API-key session creation', async () => {
   const cwd = await mkdtemp(join(tmpdir(), 'dsh-acp-stdout-'))
@@ -44,7 +45,7 @@ it('keeps account model-listing diagnostics on stderr during API-key session cre
         'deepseek-account-platform/default': { kind: 'grant', payload: { version: 1, token, issuer: origin } },
       },
     }) + '\n', { mode: 0o600 })
-    const configPath = join(cwd, 'catalog.patch.json')
+    const configPath = join(cwd, 'catalog.patch.yml')
     await writeFile(configPath, JSON.stringify([
       { id: 'deepseek-account', config: { platformOrigin: origin, inferenceOrigin: origin, allowLoopbackHttp: true } },
       { id: 'llm-deepseek-account', config: { baseURL: `${origin}/anthropic` } },
@@ -86,14 +87,13 @@ it('keeps account model-listing diagnostics on stderr during API-key session cre
     expect(launched.stderr()).toContain('[llm-deepseek-account] model "deepseek-v4-pro" declares no api_capabilities.anthropic_messages')
     expect(launched.stderr()).not.toContain(token)
   } finally {
-    const cleanup = await Promise.allSettled([launched?.close()])
+    const cleanup = await Promise.allSettled([cleanupAcpExampleTest(launched, cwd)])
     server.closeAllConnections()
     cleanup.push(...await Promise.allSettled([
       server.listening ? new Promise<void>((resolve, reject) => server.close((error) => {
         if (error === undefined) resolve()
         else reject(error)
       })) : undefined,
-      rm(cwd, { recursive: true, force: true }),
     ]))
     const failures: unknown[] = []
     for (const result of cleanup) if (result.status === 'rejected') failures.push(result.reason)
