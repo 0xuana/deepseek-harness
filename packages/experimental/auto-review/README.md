@@ -59,7 +59,7 @@ The headless runner marks tasks admitted while Auto is active with `source.entry
 
 Select `--approval-policy never` after Auto selection so denials are final and retain `AUTO_REVIEW_DENIED` plus the optional raw reason in `tool_result.error`. `AUTO_REVIEW_FAILED` identifies invalid reviewer output or a technical failure. Neither executes the body. Review the task report even when `final.reason` is completed: the model can finish after a denied call.
 
-Resume with the same worktree, `--session-id`, and both policy flags. A supervisor can send an explicit scoped instruction after a denial; a new call receives a fresh review. Headless has no channel for approving a pending call. `ask` uses any composed approval answerer and fails closed when none is available; it does not turn stdin into an approval channel. Profile unloading can migrate live Auto Sessions to Full access, so repeat Auto selection on each unattended invocation.
+Resume with the same worktree, `--session-id`, and both policy flags. A supervisor can send an explicit scoped instruction after a denial; a new call receives a fresh review. Headless has no channel for approving a pending call. `ask` uses any composed approval answerer and fails closed when none is available; it does not turn stdin into an approval channel. Application shutdown preserves Auto. The same integration must be loaded when restoring its Session, even to select another preset. Removing the plugin from a running application still migrates its live Auto Sessions to Full access.
 
 ### What you get
 

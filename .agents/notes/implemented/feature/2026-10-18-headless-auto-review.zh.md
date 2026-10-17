@@ -14,7 +14,7 @@ Status: implemented
 
 Auto 生效时，headless runner 接纳每个任务并在 user source 写入可选字段 `entrypoint: 'headless'`。持久消息在恢复与普通回放时保留此归属。Reviewer 将其文本归为 `caller-instruction`。调用者可以是人或监督 agent；两者都可定义任务，并明确授权 medium 风险动作、准确目标和范围。直接父级指令不能覆盖调用者限制。文件、约束、checkpoint、图片、工具结果和未标记消息不会获得权威。标记来自任务入口，绝不来自提示词内容；不会追补到早期历史。
 
-Headless 在选择权限预设后应用显式 `--approval-policy`。无人值守调用每次都重复 `--permission-mode auto --approval-policy never`，包括恢复时。这保留结构化拒绝，并避免依赖人工应答者。`ask` 仍遵循[审批兜底决策](2026-09-24-auto-review-user-approval-fallback.zh.md)；它不添加 CLI 审批传输。卸载 profile 可能将存活 Auto Session 迁移到 Full access，因此无人值守调用不能只依赖已保存的选择。
+Headless 在选择权限预设后应用显式 `--approval-policy`。无人值守调用每次都重复 `--permission-mode auto --approval-policy never`，包括恢复时。这保留结构化拒绝，并避免依赖人工应答者。`ask` 仍遵循[审批兜底决策](2026-09-24-auto-review-user-approval-fallback.zh.md)；它不添加 CLI 审批传输。应用关闭保留已保存的 Auto 选择。恢复时需要该 integration，即使要选择其他预设也是如此；应用仍运行时移除插件则仍将存活 Session 迁移到 Full access。
 
 JSON 投影在正常输出限制内包含已有的持久错误字段。最终拒绝携带 `AutoReviewDeniedError` / `AUTO_REVIEW_DENIED` 和可选 reviewer 详情；技术或解析失败携带 `AutoReviewFailedError` / `AUTO_REVIEW_FAILED`。两者都不执行工具 body。Agent 执行完成不代表每个请求动作都成功。
 

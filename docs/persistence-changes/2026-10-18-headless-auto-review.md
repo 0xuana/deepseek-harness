@@ -52,7 +52,7 @@ Existing messages without entrypoint remain valid and do not acquire caller auth
 <a id="verification"></a>
 ## Verification
 
-Focused headless and Auto review suites: 161 tests passed with 100% coverage of both changed modules. The shipped headless profile exercised allow, deny, malformed response, provider failure, missing integration, and resumed caller attribution. The recorded headless-auto-review scenario verifies that only the allowed target is written.
+Focused headless and Auto review suites: 163 tests passed with 100% coverage of both changed modules. The shipped headless profile exercised allow, deny, malformed response, provider failure, missing integration, and resumed caller attribution. The recorded headless-auto-review scenario verifies that only the allowed target is written.
 
 <a id="dev-note"></a>
 ## Dev Note

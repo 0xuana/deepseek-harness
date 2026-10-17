@@ -52,7 +52,7 @@ changes:
 <a id="verification"></a>
 ## 验证
 
-聚焦 headless 与 Auto review 套件：161 个测试通过，两个修改模块的覆盖率均为 100%。Shipped headless profile 覆盖允许、拒绝、不合法响应、provider 失败、缺失 integration 与恢复调用者归属。记录的 headless-auto-review 场景验证只写入获准目标。
+聚焦 headless 与 Auto review 套件：163 个测试通过，两个修改模块的覆盖率均为 100%。Shipped headless profile 覆盖允许、拒绝、不合法响应、provider 失败、缺失 integration 与恢复调用者归属。记录的 headless-auto-review 场景验证只写入获准目标。
 
 <a id="dev-note"></a>
 ## 开发备注

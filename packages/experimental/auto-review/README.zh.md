@@ -59,7 +59,7 @@ Headless runner 将 Auto 生效期间接纳的任务标记为 `source.entrypoint
 
 在选择 Auto 后设置 `--approval-policy never`，使拒绝成为最终结果，并在 `tool_result.error` 中保留 `AUTO_REVIEW_DENIED` 及可选原始理由。`AUTO_REVIEW_FAILED` 标识不合法的 reviewer 输出或技术失败。两者都不执行 body。即使 `final.reason` 为 completed，也需审查任务报告：调用被拒绝后模型仍可结束。
 
-恢复时使用相同工作目录、`--session-id` 和两个策略选项。监督者可在拒绝后发送明确且限定范围的指令；新调用会重新接受审查。Headless 没有审批待执行调用的通道。`ask` 使用已组合的审批应答者，没有可用应答者时按拒绝处理；它不会把 stdin 变成审批通道。Profile 卸载可能将存活 Auto Session 迁移到 Full access，因此每次无人值守调用都应重复选择 Auto。
+恢复时使用相同工作目录、`--session-id` 和两个策略选项。监督者可在拒绝后发送明确且限定范围的指令；新调用会重新接受审查。Headless 没有审批待执行调用的通道。`ask` 使用已组合的审批应答者，没有可用应答者时按拒绝处理；它不会把 stdin 变成审批通道。应用关闭保留 Auto。恢复其 Session 时必须加载同一 integration，即使要选择其他预设也是如此。从运行中的应用移除插件仍会将其存活 Auto Session 迁移到 Full access。
 
 ### 获得的能力
 
