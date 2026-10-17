@@ -35,26 +35,25 @@ export { SANDBOX_MODES, setSandboxMode } from './session-mode.ts'
 
 /** Preserve execution-world spelling; enforcing providers resolve filesystem identity on their host. */
 function resolveWorkspaceRoot(path: string): string {
-  if (!isAbsolute(path)) throw new Error('sandbox-policy: workspace root must be an absolute execution-world path')
+  if (!isAbsolute(path) || path.includes('\0')) throw new Error('sandbox-policy: workspace root must be an absolute execution-world path without NUL bytes')
   return path
 }
 
 /**
  * Validate and detach the configured extra writable directories. They stay in
  * their execution-world spelling here: a local host must not canonicalize a
- * remote path, and the enforcing host canonicalizes before granting.
+ * remote path. The enforcing host validates each physical directory before granting.
  * @param roots - the configured extra roots, or the empty schema default.
  * @returns a frozen copy, or `undefined` when no extra grant exists.
  */
 function resolveAdditionalWritableRoots(roots: readonly string[] | undefined): readonly string[] | undefined {
   if (roots === undefined || roots.length === 0) return undefined
-  const resolved = roots.map((root) => {
+  for (const root of roots) {
     if (!isAbsolute(root) || root.includes('\0')) {
       throw new Error('sandbox-policy: additionalWritableRoots entries must be absolute execution-world paths')
     }
-    return root
-  })
-  return Object.freeze([...new Set(resolved)])
+  }
+  return Object.freeze([...new Set(roots)])
 }
 
 /** Render the policy without claiming which capabilities are mounted. */
@@ -101,11 +100,11 @@ export interface Config {
    */
   workspaceRoot?: string
   /**
-   * Extra absolute directories that `workspace-write` may also write under
+   * Extra physical absolute directories that `workspace-write` may also write under
    * (default: none). The supervisor names them explicitly; there is no
    * automatic repository or gitfile discovery. Entries are execution-world
    * paths: this service validates absoluteness and detaches the list, while
-   * the enforcing host canonicalizes them. They grant nothing under
+   * the enforcing host rejects missing, non-directory, or symlinked paths. They grant nothing under
    * `read-only`.
    */
   additionalWritableRoots?: string[]

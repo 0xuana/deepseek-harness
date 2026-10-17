@@ -92,7 +92,7 @@ This section explains the design decisions behind the contract and points at the
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `SandboxProvider` service, mode/enforcement/policy types, fail-closed error |
 | [`src/escalation.ts`](src/escalation.ts) | Escalation vocabulary: wider-mode ladder, argument validation, denial and hint markers, approval choreography |
-| [`src/roots.ts`](src/roots.ts) | Writable-root derivation shared by the Seatbelt profile and the in-process fs fence |
+| [`src/roots.ts`](src/roots.ts) | Shared workspace/extra-root validation and backend-specific temporary-area derivation |
 
 ### Escalation choreography
 
@@ -100,7 +100,7 @@ The ladder is a closed table — `read-only` may escalate to `workspace-write` o
 
 ### Writable roots
 
-`workspace-write` means "the workspace root plus the host temp areas": `writableRoots` derives that allow-list canonically, resolving symlinks and deduplicating, so the Seatbelt profile and the in-process fs fence grant exactly the same roots.
+`workspaceWritableRoots` derives the workspace and explicit extra directories for bwrap and Landlock. `writableRoots` adds the host temporary areas for Seatbelt and the in-process filesystem fence. Both deduplicate roots and reject extra paths that are missing, are not directories, or resolve through symlinks. See the [mode definitions](../../../docs/subsystems/sandbox.md).
 
 </details>
 

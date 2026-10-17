@@ -55,11 +55,11 @@ describe('SandboxPolicyService', () => {
     expect(ctx.sandboxPolicy.workspaceRoot).toBe('/ws/../ws/./sub')
   })
 
-  it('rejects a relative deployment workspace root at load', async () => {
+  it.each(['relative/workspace', '/invalid\0root'])('rejects an invalid deployment workspace root at load: %j', async (workspaceRoot) => {
     const ctx = new Context()
     try {
       await ctx.plugin(SessionProjectionRegistry)
-      await expect(ctx.plugin(SandboxPolicyService, { workspaceRoot: 'relative/workspace' }))
+      await expect(ctx.plugin(SandboxPolicyService, { workspaceRoot }))
         .rejects.toThrow('sandbox-policy: workspace root must be an absolute execution-world path')
       expect(ctx.get('sandboxPolicy')).toBeUndefined()
     } finally {

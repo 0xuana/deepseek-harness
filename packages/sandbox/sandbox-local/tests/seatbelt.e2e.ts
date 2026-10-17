@@ -8,6 +8,7 @@ import { Context } from '@deepseek-ai/cordis'
 import type { SandboxPolicy } from '@deepseek-ai/dsh-sandbox'
 import { LocalSandboxProvider } from '@deepseek-ai/dsh-sandbox-local'
 import { seatbeltProfileArgs } from '../src/profiles.ts'
+import { checkExtraWrites, checkRedirectedRoot } from './extra-roots.ts'
 
 /**
  * Keyless backend integration through `confine()` and a real macOS Seatbelt process, with Linux
@@ -59,6 +60,12 @@ async function runConfined(sandbox: LocalSandboxProvider, command: string, polic
 }
 
 describe.skipIf(!seatbeltUsable)('sandbox-local: real Seatbelt confinement through sandbox-exec', () => {
+  it('grants explicit directories while denying unrelated and read-only writes', async () => {
+    await checkExtraWrites(await provider(), tempDir)
+  })
+  it('rejects a directory grant redirected by a confined command', async () => {
+    await checkRedirectedRoot(await provider(), tempDir)
+  })
   it('read-only denies a write — the file must NOT exist, and the kernel speaks the advertised dialect', async () => {
     const workdir = await tempDir(tmpdir())
     const sandbox = await provider()

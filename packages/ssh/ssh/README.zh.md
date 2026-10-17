@@ -27,7 +27,7 @@ kind: "package-reference"
 
 在自定义 `dsh` 配置组合中，将本服务与 [`fs-ssh`](../fs-ssh/README.zh.md)、[`subprocess-ssh`](../subprocess-ssh/README.zh.md) 和 [`sandbox-ssh`](../sandbox-ssh/README.zh.md) 组合。主机运行 Harness、模型传输和 Session 存储；远端机器提供文件与进程。headless 配置组合支持这种安排。
 
-辅助进程验证线协议中的额外可写根目录，并在远端文件系统上解析它们。只读模式不授予这些目录的写权限。
+辅助进程验证线协议中的额外可写根目录；其执行限制的提供方要求使用远端文件系统中的物理目录路径。只读模式不授予这些目录的写权限。
 
 ### 部署前提
 

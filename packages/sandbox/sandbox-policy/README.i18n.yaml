@@ -21,8 +21,8 @@
   en: 6704447e52ec295b
   zh: 9ed812d9e29d5533
 /deepseek-ai-dsh-sandbox-policy/use-this-package/minimal-configuration:
-  en: 457706649fde245f
-  zh: 117900a8fb1f386f
+  en: 069de80f17900193
+  zh: 2833f134c8dcb2e4
 /deepseek-ai-dsh-sandbox-policy/use-this-package/switching-a-session-s-mode:
   en: 957d72691e470e5c
   zh: c22a3a750af0e4a3
@@ -39,8 +39,8 @@
   en: d13dabff02f2acfd
   zh: f593888b4ffddf36
 /deepseek-ai-dsh-sandbox-policy/understand-the-implementation/model-visible-text:
-  en: 999ecd77b3857811
-  zh: 2cc0a0b2aee08c17
+  en: af0d19c6de17a272
+  zh: d90e538f9ac85b77
 /deepseek-ai-dsh-sandbox-policy/understand-the-implementation/source-map:
   en: cc7dd675c9915f7d
   zh: d719c4f9de39873a
@@ -62,6 +62,9 @@
 /deepseek-ai-dsh-sandbox-policy/model-experience/current-file-sandbox-policy/what-the-model-sees/workspace-write:
   en: 269d494ad304638d
   zh: a879c1d7cc03e6ac
+/deepseek-ai-dsh-sandbox-policy/model-experience/current-file-sandbox-policy/what-the-model-sees/workspace-write-with-extra-directories:
+  en: 4305c3caeef38624
+  zh: aa1c4d2d16248128
 /deepseek-ai-dsh-sandbox-policy/model-experience/current-file-sandbox-policy/what-the-model-sees/danger-full-access:
   en: 4e28324a011422a1
   zh: bf31ffce30f06a09

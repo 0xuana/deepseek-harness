@@ -13,9 +13,36 @@
  * @module dsh-sandbox/roots
  */
 
-import { realpathSync } from 'node:fs'
+import { realpathSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { resolve } from 'node:path'
+import { HarnessError } from '@deepseek-ai/dsh-llm'
 import type { SandboxExecutionPolicy } from './index.ts'
+
+/** An explicit directory grant cannot be enforced without changing the caller's selected path. */
+export class SandboxInvalidRootError extends HarnessError {
+  constructor(path: string, detail: string) {
+    super(`Invalid additional writable directory ${JSON.stringify(path)}: ${detail}`, 'SANDBOX_INVALID_ROOT')
+    this.name = 'SandboxInvalidRootError'
+  }
+}
+
+/** Reject mutable path aliases before they can redirect an explicit grant. */
+function additionalRoot(path: string): string {
+  let physical: string
+  let directory: boolean
+  try {
+    physical = realpathSync.native(path)
+    directory = statSync(physical).isDirectory()
+  } catch (error) {
+    throw new SandboxInvalidRootError(path, `cannot read the directory: ${String(error)}`)
+  }
+  if (!directory) throw new SandboxInvalidRootError(path, 'expected an existing directory')
+  if (physical !== resolve(path)) {
+    throw new SandboxInvalidRootError(path, `use the physical directory path ${JSON.stringify(physical)}; symlinked grants are not supported`)
+  }
+  return physical
+}
 
 /**
  * Resolve a granted root to the path the enforcement layer actually compares:
@@ -50,10 +77,11 @@ export function canonicalPath(path: string): string {
  * grants).
  * @param policy - the file-effect policy to derive the allow-list from.
  * @returns the canonical workspace-owned roots; empty under `read-only`.
+ * @throws {SandboxInvalidRootError} An extra root is missing, is not a directory, or uses a symlink.
  */
 export function workspaceWritableRoots(policy: SandboxExecutionPolicy): string[] {
   if (policy.mode !== 'workspace-write') return []
-  return [...new Set([policy.workspaceRoot, ...policy.additionalWritableRoots ?? []].map(canonicalPath))]
+  return [...new Set([canonicalPath(policy.workspaceRoot), ...(policy.additionalWritableRoots ?? []).map(additionalRoot)])]
 }
 
 /**
@@ -68,5 +96,5 @@ export function workspaceWritableRoots(policy: SandboxExecutionPolicy): string[]
  */
 export function writableRoots(policy: SandboxExecutionPolicy): string[] {
   if (policy.mode !== 'workspace-write') return []
-  return [...new Set([...workspaceWritableRoots(policy), '/tmp', tmpdir()].map(canonicalPath))]
+  return [...new Set([...workspaceWritableRoots(policy), canonicalPath('/tmp'), canonicalPath(tmpdir())])]
 }

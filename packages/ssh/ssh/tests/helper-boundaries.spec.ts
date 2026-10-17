@@ -222,7 +222,7 @@ describe.skipIf(process.platform === 'win32')('SSH helper wire and lifecycle bou
     } finally { close.mockRestore(); await expect(test.close()).rejects.toBe(failure) }
   })
 
-  it('validates and canonicalizes explicit additional writable roots over the wire', async () => {
+  it('validates explicit physical writable roots over the wire without granting aliases', async () => {
     const base = await realpath(await mkdtemp(join(homedir(), '.dsh-ssh-policy-')))
     onTestFinished(() => rm(base, { recursive: true, force: true }))
     const test = await createHelperHarness()
@@ -236,13 +236,20 @@ describe.skipIf(process.platform === 'win32')('SSH helper wire and lifecycle bou
     await mkdir(outside)
     await symlink(extra, alias, 'dir')
     const target = (path: string) => ({ targetKey: path, displayPath: path })
-    const policy = { mode: 'workspace-write' as const, workspaceRoot: workspace, additionalWritableRoots: [alias, extra], sessionId: 'ssh-extra-grant' }
+    const policy = { mode: 'workspace-write' as const, workspaceRoot: workspace, additionalWritableRoots: [extra, extra], sessionId: 'ssh-extra-grant' }
     try {
       const written = await test.client.request('fs.write', {
         target: target(join(extra, 'allowed.txt')), content: 'ok', policy,
       }, writeResultSchema)
       expect(written.operation).toBe('create')
       expect(await readFile(join(extra, 'allowed.txt'), 'utf8')).toBe('ok')
+      await expect(test.client.request('fs.write', {
+        target: target(join(workspace, 'empty-roots.txt')), content: 'ok', policy: { ...policy, additionalWritableRoots: [] },
+      }, writeResultSchema)).resolves.toMatchObject({ operation: 'create' })
+
+      await expect(test.client.request('fs.write', {
+        target: target(join(extra, 'alias.txt')), content: 'no', policy: { ...policy, additionalWritableRoots: [alias] },
+      }, writeResultSchema)).rejects.toThrow('use the physical directory path')
 
       // A sibling directory is still denied under the same widened policy.
       await expect(test.client.request('fs.write', {

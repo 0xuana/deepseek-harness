@@ -90,18 +90,10 @@ export async function runSshHelper(transport: HelperTransport): Promise<void> {
     const parsed = policySchema.parse(raw)
     const { sessionId, additionalWritableRoots: additional, ...fields } = parsed
     const target = await ctx.fs.resolve(parsed.workspaceRoot, { signal })
-    let additionalWritableRoots: string[] | undefined
-    if (additional !== undefined) {
-      additionalWritableRoots = []
-      for (const root of additional) {
-        const resolved = ctx.fs.processPath(await ctx.fs.resolve(root, { signal }))
-        if (!additionalWritableRoots.includes(resolved)) additionalWritableRoots.push(resolved)
-      }
-    }
     return {
       ...fields,
       workspaceRoot: ctx.fs.processPath(target),
-      ...additionalWritableRoots === undefined ? {} : { additionalWritableRoots },
+      ...additional === undefined ? {} : { additionalWritableRoots: additional },
       ...sessionId === undefined ? {} : { sessionId: brandString<NonNullable<SandboxExecutionPolicy['sessionId']>>(sessionId) },
     }
   }

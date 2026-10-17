@@ -365,6 +365,7 @@ export class InMemoryExecution {
     }
     if (!kernel || kernel.closed) {
       if (kernel) this.kernels.delete(kernel)
+      // Direct callers can own mutable policy arrays; the retained process owns its grant snapshot.
       kernel = new Kernel(this.ctx, this.config, {
         ...spec.sandboxPolicy,
         ...spec.sandboxPolicy.additionalWritableRoots === undefined

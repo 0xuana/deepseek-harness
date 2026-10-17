@@ -45,7 +45,7 @@
   config:
     mode: workspace-write
     workspaceRoot: /tmp
-    additionalWritableRoots: [/tmp]
+    additionalWritableRoots: !!js "[process.cwd()]"
 
 - insert:
     - id: llm-replay

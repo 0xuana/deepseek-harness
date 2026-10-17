@@ -24,7 +24,7 @@ export const pathInfoSchema = infoSchema.extend({ type: z.enum(['file', 'directo
 export const policySchema = z.object({
   mode: z.enum(['read-only', 'workspace-write', 'danger-full-access']),
   workspaceRoot: remotePath,
-  additionalWritableRoots: z.array(remotePath).min(1).optional(),
+  additionalWritableRoots: z.array(remotePath).optional(),
   sessionId: z.string().optional(),
 }).strict()
 /** Complete directory entries. */

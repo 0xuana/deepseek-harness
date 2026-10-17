@@ -96,7 +96,7 @@ describe('profile dialects', () => {
 
   it('bwrap workspace-write binds each explicit extra root beside the workspace', () => {
     const ws = mkdtempSync(join(tmpdir(), 'dsh-ws-'))
-    const extra = mkdtempSync(join(tmpdir(), 'dsh-extra-'))
+    const extra = realpathSync.native(mkdtempSync(join(tmpdir(), 'dsh-extra-')))
     tempDirs.push(ws, extra)
     const realWs = realpathSync.native(ws)
     const realExtra = realpathSync.native(extra)
@@ -108,7 +108,7 @@ describe('profile dialects', () => {
 
   it('landlock workspace-write adds each explicit extra root to the writable list', () => {
     const ws = mkdtempSync(join(tmpdir(), 'dsh-ws-'))
-    const extra = mkdtempSync(join(tmpdir(), 'dsh-extra-'))
+    const extra = realpathSync.native(mkdtempSync(join(tmpdir(), 'dsh-extra-')))
     tempDirs.push(ws, extra)
     expect(landlockProfileArgs({ mode: 'workspace-write', workspaceRoot: ws, additionalWritableRoots: [extra] })).toEqual([
       '--ro', '/', '--rw', '/dev/null', '--rw', '/tmp', '--rw', realpathSync.native(ws), '--rw', realpathSync.native(extra),
@@ -139,7 +139,7 @@ describe('profile dialects', () => {
 
   it('seatbelt workspace-write grants every explicit extra root', () => {
     const ws = mkdtempSync(join(tmpdir(), 'dsh-ws-'))
-    const extra = mkdtempSync(join(tmpdir(), 'dsh-extra-'))
+    const extra = realpathSync.native(mkdtempSync(join(tmpdir(), 'dsh-extra-')))
     tempDirs.push(ws, extra)
     const profile = seatbeltProfileArgs({
       mode: 'workspace-write',
