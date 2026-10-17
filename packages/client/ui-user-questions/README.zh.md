@@ -20,6 +20,8 @@ Web 客户端在聊天输入框旁显示 agent（智能体）的提问。用户�
 - [已知限制与延期工作](#known-limitations-and-deferred-work)
 - [开发备注](#dev-note)
 
+`approval` 意图复用共用审批卡片展示固定选项，显示调用方提供的对象信息和本地化文案，不提供文本输入或问题翻页，仍通过现有问答通道返回选中的标签。
+
 -----
 
 <a id="use-this-package"></a>

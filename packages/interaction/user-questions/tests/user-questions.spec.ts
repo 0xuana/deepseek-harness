@@ -901,3 +901,34 @@ describe('late replies', () => {
     await ctx.fiber.dispose()
   })
 })
+
+describe('fixed approval presentation', () => {
+  const question = { id: 'access', question: 'Allow access?', detail: 'Scope of access',
+    options: [{ label: 'Task' }, { label: 'Deny' }, { label: 'Always' }],
+    intent: { kind: 'approval' as const, approve: 'Task', reject: 'Deny', always: 'Always' } }
+  it('preserves the explicit choices for an independent caller policy', async () => {
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    await ctx.plugin(UserQuestionService)
+    const p = provider('Always')
+    registerAnswerer(ctx, p)
+    expect(await ctx.userQuestions.ask({ questions: [question] })).toEqual({ answers: [{ id: 'access', selected: ['Always'] }] })
+    expect(p.seen[0]?.questions[0]?.intent).toEqual(question.intent)
+  })
+  it.each(['unoffered', 'duplicate', 'extra', 'multiple', 'multiselect', 'timed'] as const)('rejects %s approval actions before display', async (kind) => {
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    await ctx.plugin(UserQuestionService)
+    const p = provider()
+    registerAnswerer(ctx, p)
+    const item = structuredClone(question)
+    if (kind === 'unoffered') item.intent.approve = 'Unknown'
+    if (kind === 'duplicate') item.intent.always = 'Task'
+    if (kind === 'extra') item.options.push({ label: 'Something else' })
+    const questions = kind === 'multiple' ? [item, { ...item, id: 'other' }] : [{ ...item, multiSelect: kind === 'multiselect' }]
+    await expect(ctx.userQuestions.ask({ questions,
+      ...(kind === 'timed' ? { wait: { callId: ToolCallId('call') } } : {}),
+    })).rejects.toMatchObject({ code: 'BAD_INTENT' })
+    expect(p.seen).toEqual([])
+  })
+})

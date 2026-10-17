@@ -20,6 +20,8 @@ The Web client shows an agent's question beside the chat input. Users choose opt
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 - [Dev Note](#dev-note)
 
+An `approval` intent reuses the shared approval card for fixed choices. It displays caller-supplied subject metadata and localized copy, with no text field or question pager; the existing question channel still delivers the selected label.
+
 -----
 
 <a id="use-this-package"></a>
