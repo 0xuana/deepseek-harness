@@ -44,6 +44,8 @@ const deepseekDefaultsConfigPath = fileURLToPath(new URL('./fixtures/deepseek-de
 const piAiDefaultsConfigPath = fileURLToPath(new URL('./fixtures/pi-ai-defaults.patch.yml', import.meta.url))
 const piAiConversationUpdatesConfigPath = fileURLToPath(new URL('./fixtures/pi-ai-conversation-updates.patch.yml', import.meta.url))
 const headlessOverlayPath = fileURLToPath(new URL('./fixtures/headless-profile.patch.yml', import.meta.url))
+const autoShutdownOverlayPath = fileURLToPath(new URL('./fixtures/auto-shutdown.patch.yml', import.meta.url))
+const autoIntegrationPath = fileURLToPath(new URL('../../../../../../packages/experimental/auto-review/cordis.patch.yml', import.meta.url))
 const headlessSessionExpected = join(goldensDir, 'headless-profile', 'session.expected.jsonl')
 const headlessReasoningExpected = join(goldensDir, 'headless-profile', 'reasoning.stderr.expected.txt')
 const headlessFailureExpected = join(goldensDir, 'headless-profile', 'stderr.expected.txt')
@@ -298,6 +300,75 @@ async function persistedLogs(cwd: string, root: string = join(cwd, '.sessions'))
 }
 
 describe('headless stream-json snapshots', () => {
+
+  it('preserves Auto through shutdown and requires its integration when reopening', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'headless-auto-shutdown-'))
+    const options = {
+      cwd,
+      binScript: dshBinScript,
+      configPath: autoShutdownOverlayPath,
+      tsconfigPath,
+      env: { DSH_TELEMETRY_DISABLED: '1' },
+    }
+    const args = ['headless', '--patch', autoShutdownOverlayPath]
+    let sessionId = ''
+    try {
+      for (const wake of [1, 2]) {
+        const result = await runLoaderSmoke({
+          ...options,
+          label: `Auto shutdown wake ${wake}`,
+          binArgs: [
+            ...args, '--patch', autoIntegrationPath, '--json',
+            ...wake === 1 ? ['--permission-mode', 'auto'] : ['--session-id', sessionId],
+            'Record this wake without calling tools.',
+          ],
+          inspect: async () => {
+            const logs = await persistedLogs(cwd, join(cwd, '.dsh', 'sessions'))
+            expect(logs).toHaveLength(1)
+            const log = logs[0]!
+            expect(typeof log.header.id).toBe('string')
+            sessionId = log.header.id as string
+            const events = parseJsonl(log.content)
+            expect(events.filter(event => event.type === 'permission/preset').at(-1)?.data)
+              .toEqual({ preset: 'auto' })
+            expect(events.filter(event => event.type === 'turn/end')).toHaveLength(wake)
+          },
+        })
+        expect(parseJsonl(result.stdout).at(-1)).toMatchObject({
+          type: 'final', sessionId, reason: { kind: 'completed' }, text: 'AUTO_SHUTDOWN_OK',
+        })
+      }
+      const unavailable = await runLoaderSmoke({
+        ...options,
+        label: 'Auto restore without its integration',
+        expectedExitCode: 1,
+        binArgs: [...args, '--json', '--session-id', sessionId, '--permission-mode', 'read-only', 'Continue.'],
+      })
+      expect(unavailable.stderr).toContain('cannot restore preset "auto" without its active integration')
+      expect(parseJsonl(unavailable.stdout).some(event => event.type === 'final')).toBe(false)
+      const events = parseJsonl((await persistedLogs(cwd, join(cwd, '.dsh', 'sessions')))[0]!.content)
+      expect(events.filter(event => event.type === 'permission/preset').at(-1)?.data)
+        .toEqual({ preset: 'auto' })
+      expect(events.filter(event => event.type === 'turn/end')).toHaveLength(2)
+      await runLoaderSmoke({
+        ...options,
+        label: 'Change restored Auto to Read only with its integration',
+        binArgs: [
+          ...args, '--patch', autoIntegrationPath, '--json',
+          '--session-id', sessionId, '--permission-mode', 'read-only', 'Continue.',
+        ],
+        inspect: async () => {
+          const log = (await persistedLogs(cwd, join(cwd, '.dsh', 'sessions')))[0]!
+          const restored = parseJsonl(log.content)
+          expect(restored.filter(event => event.type === 'permission/preset').at(-1)?.data)
+            .toEqual({ preset: 'read-only' })
+          expect(restored.filter(event => event.type === 'turn/end')).toHaveLength(3)
+        },
+      })
+    } finally {
+      await rm(cwd, { recursive: true, force: true })
+    }
+  })
 
   it.each(['src', 'lib'] as const)('runs one task through the product headless profile command (%s)', async (mode) => {
     const task = 'Prove the product headless profile path with one real tool round trip.'

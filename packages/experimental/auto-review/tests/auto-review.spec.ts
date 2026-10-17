@@ -1,7 +1,7 @@
 import { externalTestParent } from '../../../subagent/subagent/tests/external-activation-helpers.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { Context } from '@deepseek-ai/cordis'
+import { Context, FiberState } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-instructions'
 import { compactCheckpointSource, CompactionId } from '@deepseek-ai/dsh-compaction'
@@ -25,6 +25,7 @@ import SessionStore, {
   SessionId,
   SessionLogOffset,
   type Session,
+  type SessionEvent,
 } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SubagentRuntime, {
@@ -90,7 +91,7 @@ class RecordingAdapter extends LlmAdapter {
 }
 
 interface PluginFiber {
-  dispose(): Promise<void>
+  readonly dispose: () => Promise<void>
 }
 
 const PRESETS = {
@@ -134,22 +135,27 @@ async function harness(
   const ctx = new Context()
   provideWorkingDirectoryFixture(ctx)
   contexts.push(ctx)
-  await ctx.plugin(LlmRuntime)
-  await ctx.plugin(SessionStore)
-  await ctx.plugin(SessionProjectionRegistry)
-  await ctx.plugin(SystemPrompt, {})
-  await ctx.plugin(ToolRuntime)
-  ctx.provide('shell', {
-    sandboxMode: 'workspace-write',
-    resolve() { throw new Error('auto-review tests do not execute shell requests') },
-    run() { throw new Error('auto-review tests do not execute shell requests') },
-    start() { throw new Error('auto-review tests do not execute shell requests') },
-  })
-  await ctx.plugin(ApprovalService, { policy: 'ask' })
-  await ctx.plugin(PermissionPresetService, permissionConfig)
   const adapter = new RecordingAdapter(script)
-  ctx.llm.registerAdapter(['review'], adapter)
-  const auto = await ctx.plugin(AutoReview)
+  let auto: PluginFiber | undefined
+  await ctx.effect(async function* () {
+    yield (await ctx.plugin(LlmRuntime)).dispose
+    yield (await ctx.plugin(SessionStore)).dispose
+    yield (await ctx.plugin(SessionProjectionRegistry)).dispose
+    yield (await ctx.plugin(SystemPrompt, {})).dispose
+    yield (await ctx.plugin(ToolRuntime)).dispose
+    yield ctx.provide('shell', {
+      sandboxMode: 'workspace-write',
+      resolve() { throw new Error('auto-review tests do not execute shell requests') },
+      run() { throw new Error('auto-review tests do not execute shell requests') },
+      start() { throw new Error('auto-review tests do not execute shell requests') },
+    })
+    yield (await ctx.plugin(ApprovalService, { policy: 'ask' })).dispose
+    yield (await ctx.plugin(PermissionPresetService, permissionConfig)).dispose
+    yield ctx.llm.registerAdapter(['review'], adapter)
+    auto = await ctx.plugin(AutoReview)
+    yield auto.dispose
+  })
+  if (auto === undefined) throw new Error('Auto fixture did not activate')
   return { ctx, adapter, auto }
 }
 
@@ -1304,6 +1310,77 @@ describe('out-of-process delegation boundary', () => {
 })
 
 describe('cancellation and integration teardown', () => {
+  it.each(['allow', 'deny', 'failure'] as const)(
+    'preserves Auto while application shutdown drains a late reviewer %s',
+    async (outcome) => {
+      const entered = Promise.withResolvers<undefined>()
+      const cancelled = Promise.withResolvers<undefined>()
+      const release = Promise.withResolvers<undefined>()
+      const releaseSession = Promise.withResolvers<undefined>()
+      const detached = Promise.withResolvers<undefined>()
+      const controlled = async function* (options: GenerateOptions): AsyncIterable<StreamChunk> {
+        options.signal!.addEventListener('abort', () => { cancelled.resolve(undefined) }, { once: true })
+        entered.resolve(undefined)
+        await release.promise
+        if (outcome === 'failure') throw new Error('provider failed during application shutdown')
+        yield* decisionChunks(`{"risk":"medium","decision":"${outcome}"}`)
+      }
+      const { ctx } = await harness([controlled])
+      const sessions = ctx.sessions
+      const permissionPresets = ctx.permissionPresets
+      const probe = registerProbe(ctx)
+      const session = sessions.prepare(SessionId(`shutdown-${outcome}`), { meta: { cwd: '/workspace' } })
+      const events: SessionEvent[] = []
+      ctx.effect(function* () {
+        const detach = sessions.enter(session)
+        yield () => {
+          detach()
+          detached.resolve(undefined)
+        }
+        yield ctx.on('session/event', (subject, event) => {
+          if (subject === session) events.push(event)
+        })
+        sessions.announce(session)
+        yield () => releaseSession.promise
+      })
+      ctx.permissionPresets.set(session, AUTO_PRESET)
+      const agent = agentFor(session)
+      appendHeader(session, [{ name: 'probe', description: 'probe', parameters: { type: 'object' } }])
+      const callId = ToolCallId(`shutdown-${outcome}-call`)
+      appendAssistant(session, [{ type: 'tool-call', id: callId, name: 'probe', arguments: '{}' }])
+      appendNativeCall(session, callId, 'probe', '{}')
+      const pending = ctx.tools.execute({
+        signal: new AbortController().signal, callId, name: 'probe', arguments: {}, agent,
+      })
+      await entered.promise
+      const beforeShutdown = session.snapshotEvents()
+      let disposed = false
+      const disposal = ctx.fiber.dispose().then(() => { disposed = true })
+      try {
+        await cancelled.promise
+        expect(ctx.root.fiber.state).toBe(FiberState.UNLOADING)
+        expect(disposed).toBe(false)
+        expect(sessions.list()).toContain(session)
+        expect(events).toEqual(beforeShutdown)
+        releaseSession.resolve(undefined)
+        await detached.promise
+        expect(sessions.list()).not.toContain(session)
+        expect(disposed).toBe(false)
+        expect(permissionPresets.names).toContain(AUTO_PRESET)
+      } finally {
+        releaseSession.resolve(undefined)
+        release.resolve(undefined)
+        await disposal
+      }
+      await expect(pending).resolves.toMatchObject({
+        isError: true,
+        error: { info: { name: 'AbortError', code: TOOL_ABORTED_BEFORE_DISPATCH } },
+      })
+      expect(probe.runs()).toBe(0)
+      expect(session.snapshotEvents()).toEqual(beforeShutdown)
+      expect(sessions.list()).not.toContain(session)
+    })
+
   it.each([
     { outcome: 'allow', expected: { info: { code: TOOL_ABORTED_BEFORE_DISPATCH } } },
     { outcome: 'deny', expected: { info: { code: TOOL_ABORTED_BEFORE_DISPATCH } } },

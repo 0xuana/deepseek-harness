@@ -9,7 +9,7 @@
  */
 
 import type {} from '@deepseek-ai/dsh-working-directory'
-import type { Context } from '@deepseek-ai/cordis'
+import { FiberState, type Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-instructions'
 import {
@@ -672,7 +672,7 @@ function failed(exec: ToolExecution, error: unknown): PreToolDecision {
   }
 }
 
-/** Install the Auto preset and its prepended per-call review gate. */
+/** Install the Auto preset and its review gate; preserve Session selection on application shutdown. */
 export function apply(ctx: Context): void {
   // Retain the injected service while this context drains on disposal.
   const permissionPresets = ctx.permissionPresets
@@ -725,9 +725,12 @@ export function apply(ctx: Context): void {
     yield async () => {
       accepting = false
       try {
-        for (const session of ctx.sessions.list()) {
-          if (permissionPresets.current(session) !== AUTO_PRESET) continue
-          permissionPresets.set(session, 'danger-full-access')
+        // Root unload begins before child cleanup; only live plugin removal changes Session policy.
+        if (ctx.root.fiber.state === FiberState.ACTIVE) {
+          for (const session of ctx.sessions.list()) {
+            if (permissionPresets.current(session) !== AUTO_PRESET) continue
+            permissionPresets.set(session, 'danger-full-access')
+          }
         }
       } finally {
         lifecycle.abort(new Error('auto-review integration disposed'))
