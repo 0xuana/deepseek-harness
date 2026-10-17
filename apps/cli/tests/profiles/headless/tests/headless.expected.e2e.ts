@@ -598,14 +598,13 @@ describe('headless stream-json snapshots', () => {
     expect(events[0]?.message).toContain('auto')
   }, LOADER_SMOKE_TEST_TIMEOUT_MS)
 
-  it('resumes an Auto denial with caller instructions and a repeated explicit policy', async () => {
+  it('resumes an Auto denial with caller attribution and saved policy', async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'headless-auto-resume-'))
-    const args = ['--profile', 'headless', '--patch', headlessOverlayPath, '--patch', autoReviewOverlayPath,
-      '--permission-mode', 'auto', '--approval-policy', 'never', '--json']
+    const args = ['--profile', 'headless', '--patch', headlessOverlayPath, '--patch', autoReviewOverlayPath, '--json']
     try {
       const first = await runLoaderSmoke({
         label: 'headless Auto denied wake', cwd, binScript: dshBinScript, configPath: autoReviewOverlayPath,
-        binArgs: [...args, 'Run the CLI probe.'], tsconfigPath,
+        binArgs: [...args, '--permission-mode', 'auto', '--approval-policy', 'never', 'Run the CLI probe.'], tsconfigPath,
         env: { DSH_AUTO_REVIEW_TEST_MODE: 'deny', DSH_TOOLS_MODE: 'native', DSH_TELEMETRY_DISABLED: '1' },
       })
       const sessionId = parseJsonl(first.stdout)[0]?.sessionId
@@ -620,8 +619,13 @@ describe('headless stream-json snapshots', () => {
         inspect: async (directory) => {
           const logs = await persistedLogs(directory, join(directory, '.dsh', 'sessions'))
           expect(logs).toHaveLength(1)
-          expect(logs[0]!.content.match(/"entrypoint":"headless"/g)?.length).toBeGreaterThanOrEqual(2)
-          expect(logs[0]!.content).not.toContain('"type":"approval/asked"')
+          const events = parseJsonl(logs[0]!.content)
+          const sources = events.filter(event => event.type === 'user/message')
+            .map(event => (event.data as { source: { kind: string; entrypoint?: string } }).source)
+            .filter(source => source.kind === 'user')
+          expect(sources).toEqual([{ kind: 'user', entrypoint: 'headless' }, { kind: 'user', entrypoint: 'headless' }])
+          expect(events.filter(event => event.type === 'permission/preset').at(-1)?.data).toEqual({ preset: 'auto' })
+          expect(events.some(event => event.type === 'approval/asked')).toBe(false)
         },
       })
       expect(parseJsonl(second.stdout).at(-1)).toMatchObject({

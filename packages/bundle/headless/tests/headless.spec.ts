@@ -307,6 +307,20 @@ describe('headless runner', () => {
     } finally { await test.ctx.fiber.dispose() }
   })
 
+  it('keeps an equal explicit approval override without appending another policy event', async () => {
+    let before = 0
+    const test = await bench({
+      before(session) { setApprovalPolicy(session, 'never'); before = session.seq },
+      afterPrompt(session, message) {
+        expect(session.seq).toBe(before)
+        appendTurn(session, 1, message, 'done', true)
+      },
+    }, { approvalPolicy: 'never' })
+    await test.ctx.plugin(ApprovalService, { policy: 'ask' })
+    try { expect(await test.run()).toMatchObject({ code: 0 }) }
+    finally { await test.ctx.fiber.dispose() }
+  })
+
   it.each([false, true])('attributes an Auto task to the caller after policy selection (resume=%s)', async (resume) => {
     let selected = resume ? 'auto' : 'workspace-write'
     const test = await bench({ afterPrompt(session, message) {

@@ -12,5 +12,5 @@
     - id: auto-review
       name: '@deepseek-ai/dsh-experimental-auto-review'
     - id: headless-auto-review-fixture
-      name: '../../../apps/cli/tests/profiles/headless/tests/fixtures/auto-review.ts'
+      name: '../../../packages/experimental/auto-review/tests/fixtures/headless-reviewer.ts'
       config: {}

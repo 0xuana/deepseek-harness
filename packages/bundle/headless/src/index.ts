@@ -31,6 +31,7 @@ import type {} from '@deepseek-ai/cordis-plugin-loader'
 import type {} from '@deepseek-ai/dsh-cmdline'
 import type {} from '@deepseek-ai/dsh-session-query'
 import type {} from '@deepseek-ai/dsh-subagent'
+// Optional service peers stay type-only so profiles can omit their packages.
 import type {} from '@deepseek-ai/dsh-permission-presets'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type {} from './startup.ts'
@@ -338,12 +339,13 @@ async function run(ctx: Context, config: Config, io: HeadlessIo): Promise<void> 
   const startup = ctx.get('headlessStartup')
   const permissionMode = startup?.permissionMode ?? config.permissionMode
   const approvalPolicy = startup?.approvalPolicy ?? config.approvalPolicy
+  const approval = ctx.get('approval')
   const permissions = ctx.get('permissionPresets')
   if (permissionMode !== undefined) {
     if (permissions === undefined) throw new Error('headless --permission-mode requires the permissionPresets service')
     permissions.resolve(permissionMode)
   }
-  if (approvalPolicy !== undefined && ctx.get('approval') === undefined) {
+  if (approvalPolicy !== undefined && approval === undefined) {
     throw new Error('headless --approval-policy requires the approval service')
   }
   const requestedRoots = startup?.additionalWritableRoots
@@ -390,7 +392,9 @@ async function run(ctx: Context, config: Config, io: HeadlessIo): Promise<void> 
     assertAdoptable(agent.session.header, liveEvents(agent.session), sessionId, cwd)
   }
   if (permissionMode !== undefined && permissions !== undefined) permissions.set(agent.session, permissionMode)
-  if (approvalPolicy !== undefined) setApprovalPolicy(agent.session, approvalPolicy)
+  if (approvalPolicy !== undefined && approval?.overrideOf(agent.session) !== approvalPolicy) {
+    setApprovalPolicy(agent.session, approvalPolicy)
+  }
   const firstSeq = agent.session.seq
   const projection = config.json === true ? projectJsonRun(ctx, agent, io.stdout, { cwd }) : undefined
   const stopReasoning = projection === undefined ? streamReasoning(ctx, agent, io.stderr) : undefined
