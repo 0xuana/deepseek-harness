@@ -85,7 +85,7 @@ dsh headless --permission-mode workspace-write --add-dir "$git_dir" --json - < t
 
 `--add-dir` 接受可重复的执行环境物理绝对目录路径。共享 Git 目录允许暂存、提交和执行仓库钩子，而不授予父检出目录源文件的写权限。它授权该目录中的所有元数据，包括共享引用、钩子和配置。后续主机 Git 命令可能在沙箱之外执行修改后的钩子或配置；仅对可信任务使用此授权，并在运行主机 Git 操作前审查元数据变更。额外授权仅适用于本次调用，恢复会话时必须再次提供。随附配置档将其传给 `sandbox-policy`；runner 直接检查原始解析出的 CLI 授权。替换策略行的 overlay 必须包含 `ctx.headlessStartup.additionalWritableRoots`，否则 runner 会在模型工作前拒绝请求。[本地沙箱提供方](../../sandbox/sandbox-local/README.zh.md)定义各平台的支持情况。
 
-读取开头的 `session.sessionId`，审查 diff，然后在同一 worktree 中用 `--session-id` 发送修改指令，并再次提供目录授权。`--permission-mode` 通过权限服务选择已有权限预设，并在任务运行前覆盖会话保存的选择；省略时保留正常默认值和已保存策略。两个选项都不会修改已保存的配置档或用户设置。
+读取开头的 `session.sessionId`，审查 diff，然后在同一 worktree 中用 `--session-id` 发送修改指令，并再次提供目录授权。`--permission-mode` 通过权限服务选择已有权限预设，并在任务运行前覆盖 runner 配置和会话保存的选择；省略时保留正常默认值和已保存策略。两个选项都不会修改已保存的配置档或用户设置。
 
 要求 worker 报告工作目录、基线与结果提交、修改文件、精确的检查命令、退出码、日志路径，以及受阻或未运行的检查。审查这些证据并信任已完成检查的报告。仅当修改或新发现使证据失效时再次运行检查。在任务中限制调查范围，并由监督者负责发布。因主机 IPC、外部缓存或嵌套沙箱而受阻的检查，在监督者授权并于合适环境中执行前仍属于未运行。
 

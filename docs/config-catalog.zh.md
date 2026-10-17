@@ -1496,7 +1496,7 @@ export interface Config {
   sessionId?: string
   /** Whether stdout carries the machine-readable event stream instead of final text. */
   json?: boolean
-  /** Permission preset applied before the task; omission keeps the session's current policy. */
+  /** Permission preset applied before the task; an explicit CLI flag takes precedence. Omission keeps current policy. */
   permissionMode?: string
 }
 ```

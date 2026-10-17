@@ -49,6 +49,7 @@ interface BenchOptions {
   sessionId?: string
   json?: boolean
   permissionMode?: string
+  startupPermissionMode?: string
   additionalWritableRoots?: string[]
   observe?: () => Promise<ObservationStub>
   /** Leave the query service unmounted to exercise the fail-loud path. */
@@ -131,10 +132,11 @@ async function bench(script: Script, options: BenchOptions = {}): Promise<{
   run(): Promise<{ code: number; out: string; err: string; order: string[] }>
 }> {
   const ctx = new Context()
-  if (options.additionalWritableRoots !== undefined) {
+  if (options.additionalWritableRoots !== undefined || options.startupPermissionMode !== undefined) {
     ctx.provide('headlessStartup', {
       task: options.task, sessionId: options.sessionId, json: options.json ?? false,
       additionalWritableRoots: options.additionalWritableRoots,
+      permissionMode: options.startupPermissionMode,
     })
   }
   provideWorkingDirectoryFixture(ctx)
@@ -275,12 +277,14 @@ describe('headless runner', () => {
     } finally { await test.ctx.fiber.dispose() }
   })
 
-  it('applies an explicit preset before submitting the task', async () => {
+  it.each([false, true])('applies the explicit CLI preset ahead of runner config (overridden=%s)', async (overridden) => {
     let selected: string | undefined
     const test = await bench({ afterPrompt(session, message) {
       expect(selected).toBe('workspace-write')
       appendTurn(session, 1, message, 'done', true)
-    } }, { permissionMode: 'workspace-write' })
+    } }, overridden
+      ? { permissionMode: 'danger-full-access', startupPermissionMode: 'workspace-write' }
+      : { permissionMode: 'workspace-write' })
     test.ctx.provide('permissionPresets', { resolve() {}, set(_session: Session, name: string) { selected = name } } as never)
     try { expect(await test.run()).toMatchObject({ code: 0 }) }
     finally { await test.ctx.fiber.dispose() }

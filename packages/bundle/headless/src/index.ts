@@ -50,7 +50,7 @@ export interface Config {
   sessionId?: string
   /** Whether stdout carries the machine-readable event stream instead of final text. */
   json?: boolean
-  /** Permission preset applied before the task; omission keeps the session's current policy. */
+  /** Permission preset applied before the task; an explicit CLI flag takes precedence. Omission keeps current policy. */
   permissionMode?: string
 }
 
@@ -331,12 +331,14 @@ async function run(ctx: Context, config: Config, io: HeadlessIo): Promise<void> 
     throw new Error('headless-runner: sessionId must not be blank')
   }
 
+  const startup = ctx.get('headlessStartup')
+  const permissionMode = startup?.permissionMode ?? config.permissionMode
   const permissions = ctx.get('permissionPresets')
-  if (config.permissionMode !== undefined) {
+  if (permissionMode !== undefined) {
     if (permissions === undefined) throw new Error('headless --permission-mode requires the permissionPresets service')
-    permissions.resolve(config.permissionMode)
+    permissions.resolve(permissionMode)
   }
-  const requestedRoots = ctx.get('headlessStartup')?.additionalWritableRoots
+  const requestedRoots = startup?.additionalWritableRoots
   if (requestedRoots !== undefined && requestedRoots.length > 0) {
     const policy = ctx.get('sandboxPolicy')
     if (policy === undefined || requestedRoots.some(root => !policy.additionalWritableRoots?.includes(root))) {
@@ -379,7 +381,7 @@ async function run(ctx: Context, config: Config, io: HeadlessIo): Promise<void> 
     // re-read the log the runner holds before submitting the task.
     assertAdoptable(agent.session.header, liveEvents(agent.session), sessionId, cwd)
   }
-  if (config.permissionMode !== undefined && permissions !== undefined) permissions.set(agent.session, config.permissionMode)
+  if (permissionMode !== undefined && permissions !== undefined) permissions.set(agent.session, permissionMode)
   const firstSeq = agent.session.seq
   const projection = config.json === true ? projectJsonRun(ctx, agent, io.stdout, { cwd }) : undefined
   const stopReasoning = projection === undefined ? streamReasoning(ctx, agent, io.stderr) : undefined
