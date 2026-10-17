@@ -77,6 +77,8 @@ def check_click_holds(helper, owner, window, point, state_file):
         connection = Connection(socket_path, key, timeoutMs=5000 if ending == "timeout" else 30000)
         try:
             app = connection.call("getApp", {"selector": str(observed["pid"])})
+            connection.call("getState", {"appHandle": app["appHandle"], "windowId": window["windowId"],
+                                         "maxElements": 2000, "maxDepth": 25})
             params = {**window, **point, "appHandle": app["appHandle"], "holdMs": 60000}
             count = len(json.loads(state_file.read_text())["events"])
             request = {"id": "held-click", "method": "click", "params": params}
@@ -98,7 +100,7 @@ def check_click_holds(helper, owner, window, point, state_file):
             assert [event["type"] for event in state["events"][count:]] == [1, 2, 1, 2], state
         finally:
             connection.close()
-
+    return state
 
 
 def main():
@@ -173,7 +175,7 @@ def main():
                 call("pressKey", {**owner, "key": "KP_0"})
                 call("pressKey", {**owner, "key": "KP_Enter"})
                 state = wait_for_state(state_file, lambda value: {82, 76}.issubset({event.get("keyCode") for event in value["events"]}))
-            check_click_holds(helper, owner, window, point, state_file)
+            state = check_click_holds(helper, owner, window, point, state_file)
             if args.artifacts:
                 args.artifacts.mkdir(parents=True, exist_ok=True)
                 shot = call("screenshot", window)
