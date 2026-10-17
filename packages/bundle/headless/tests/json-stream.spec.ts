@@ -189,6 +189,20 @@ describe('--json projection', () => {
     expect(test.parsed().map(event => event.type)).toEqual(['session'])
   })
 
+  it('keeps structured failure identity and bounds reviewer detail', () => {
+    const test = harness({ maxStringBytes: 32 })
+    const event = toolResult('denied', [{ type: 'text', text: 'body was not executed' }])
+    if (event.type !== 'tool/result') throw new Error('expected a tool result')
+    event.data.message = { ...event.data.message, isError: true }
+    event.data.error = { name: 'AutoReviewDeniedError', code: 'AUTO_REVIEW_DENIED', reason: 'x'.repeat(64) }
+    test.emitSession(event)
+    expect(test.parsed()[1]).toEqual({
+      type: 'tool_result', callId: 'denied', status: 'error', result: 'body was not executed',
+      error: { name: 'AutoReviewDeniedError', code: 'AUTO_REVIEW_DENIED', reason: 'x'.repeat(32) },
+      truncated: true,
+    })
+  })
+
   it('keeps non-JSON tool arguments raw and bounds nested values', () => {
     const test = harness({ maxStringBytes: 11 }, 's1')
     test.emitSession({

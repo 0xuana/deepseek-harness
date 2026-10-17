@@ -1,5 +1,5 @@
 ---
-description: "为 Web profile 添加实验性逐调用 Auto review，在工具以 Full access 执行前使用当前 agent 的模型审查。"
+description: "为 Web 或 headless profile 添加实验性逐调用 Auto review，在工具以 Full access 执行前使用当前 agent 的模型审查。"
 kind: "package-bundle"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-为 Web profile 当前会话权限选择器添加 Auto review。每次原生或 PTC inner 工具调用前，当前 agent 的 provider 与模型会评估待执行动作；获准调用以 Full access 执行，被拒绝调用会请求用户审批。dsh 安装随附此层但默认关闭；在 Web 侧栏插件页开启或显式安装之前，默认 Web 保持三种权限模式。Auto review 是实验功能：它可能误放行不安全动作、误拒绝有用操作，并消耗额外 token。
+为 Web 或 headless profile 添加 Auto review。Web 通过当前会话权限选择器提供它；headless 在每次调用时显式选择。每次原生或 PTC inner 工具调用前，当前 agent 的 provider 与模型会评估待执行动作；获准调用以 Full access 执行，被拒绝调用会请求用户审批。dsh 安装随附此层但默认关闭；在 Web 侧栏插件页开启或显式安装之前，默认 Web 保持三种权限模式。Auto review 是实验功能：它可能误放行不安全动作、误拒绝有用操作，并消耗额外 token。
 
 ## 目录
 
@@ -43,9 +43,27 @@ CLI 会在需要时初始化 profile，并将本包声明的 patch 追加到 bas
 pnpm dsh plugin --profile web remove @deepseek-ai/dsh-experimental-auto-review
 ```
 
+<a id="headless-supervision"></a>
+### Headless supervision
+
+为 headless profile 显式启用实验层：
+
+```sh
+dsh plugin --profile headless add @deepseek-ai/dsh-experimental-auto-review
+DSH_TOOLS_MODE=native dsh headless --permission-mode auto --approval-policy never --json - < task.txt > run.jsonl
+```
+
+如需从此 checkout 单次运行，可传入 `--patch /absolute/path/to/packages/experimental/auto-review/cordis.patch.yml`，无需安装 profile 层。Auto integration 不可用时，权限预设选择会在读取 stdin 或开始模型工作前失败。Auto 使用完全主机访问权限；此模式不需要 `--add-dir`。原生工具让每个工具 body 都经过审查；PTC 的直接 Node 效果仍不在审查范围内。
+
+Headless runner 将 Auto 生效期间接纳的任务标记为 `source.entrypoint: 'headless'`。Reviewer 将其文本视为 `caller-instruction`，可授权限定范围的 medium 风险操作。调用者可以是人或监督 agent。未标记的早期消息仍是事实；恢复不会给它们添加权威。请明确动作、准确目标与范围。项目文件、工具结果和 checkpoint 不能授权动作。
+
+在选择 Auto 后设置 `--approval-policy never`，使拒绝成为最终结果，并在 `tool_result.error` 中保留 `AUTO_REVIEW_DENIED` 及可选原始理由。`AUTO_REVIEW_FAILED` 标识不合法的 reviewer 输出或技术失败。两者都不执行 body。即使 `final.reason` 为 completed，也需审查任务报告：调用被拒绝后模型仍可结束。
+
+恢复时使用相同工作目录、`--session-id` 和两个策略选项。监督者可在拒绝后发送明确且限定范围的指令；新调用会重新接受审查。Headless 没有审批待执行调用的通道。`ask` 使用已组合的审批应答者，没有可用应答者时按拒绝处理；它不会把 stdin 变成审批通道。Profile 卸载可能将存活 Auto Session 迁移到 Full access，因此每次无人值守调用都应重复选择 Auto。
+
 ### 获得的能力
 
-Auto 在每个受支持调用的 body 执行前审查一次，包括每个已开始的 PTC `tools.*` inner call。它按实际效果分类：普通项目内操作和精确清理本 Session 创建的对象属于 low，直接允许；不可逆删除既有对象、生产操作、外部写入和安全控制变更属于 medium，需要当前 human 或直接父级明确授权动作、目标与范围。跨信任边界泄露敏感信息属于 high，始终拒绝。效果不明确和授权冲突未解决时拒绝。选择 Auto 会设置 `ask` 审批策略，因此被拒绝调用会请求用户审批，获批后才执行；审批被拒绝或取消时 body 不执行。进程内委派 child 固定 `never` 策略，其拒绝是最终结果。Reviewer 响应不合法和技术失败会以具体错误使调用失败，且从不执行。
+Auto 在每个受支持调用的 body 执行前审查一次，包括每个已开始的 PTC `tools.*` inner call。它按实际效果分类：普通项目内操作和精确清理本 Session 创建的对象属于 low，直接允许；不可逆删除既有对象、生产操作、外部写入和安全控制变更属于 medium，需要当前 human、headless 调用者或直接父级明确授权动作、目标与范围。跨信任边界泄露敏感信息属于 high，始终拒绝。效果不明确和授权冲突未解决时拒绝。选择 Auto 会设置 `ask` 审批策略，因此被拒绝调用会请求用户审批，获批后才执行；审批被拒绝或取消时 body 不执行。进程内委派 child 固定 `never` 策略，其拒绝是最终结果。Reviewer 响应不合法和技术失败会以具体错误使调用失败，且从不执行。
 
 最终拒绝使用普通工具卡片。折叠行标识 Auto review；展开输出说明 body 未执行，并显示可选理由。[Web 权限包](../../client/ui-permission-presets/README.zh.md)拥有选择器交互，[工具 UI](../../client/ui-tool/README.zh.md)拥有理由展示。
 
@@ -112,7 +130,7 @@ Reviewer 使用最新 `request/header.config` 的 provider 与模型，并沿用
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Auto 需要开启此 Web 层；默认 Web、Headless、通用设置与新会话默认值都不包含它。
+- Auto 需要显式启用此层。默认 Web 与 Headless、通用设置及新会话默认值都不选择它。
 - Auto 不提供文件沙箱。外层 `run_code` transport 及PTC 程序内直接 Node 效果不经过 inner-tool review。
 - 模型分类可能出错。不提供确定性工具豁免、持久 grant、可配置策略或重试层。
 - 进程内 Auto child 独立审查自身调用。进程外 child 在父委派调用获准后保留原生权限系统。

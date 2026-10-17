@@ -1483,7 +1483,8 @@ export interface Config {
 ## `@deepseek-ai/dsh-headless`
 
 - `inject`: `agentDefaultModel` · `agents` · `sessions`
-- `source`: [`packages/bundle/headless/src/index.ts:46`](../packages/bundle/headless/src/index.ts)
+- `refs`: [`ApprovalPolicy`](subsystems/approval.md)
+- `source`: [`packages/bundle/headless/src/index.ts:47`](../packages/bundle/headless/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: the task and run options resolved from this app's injected provider service. */
@@ -1496,6 +1497,8 @@ export interface Config {
   json?: boolean
   /** Permission preset applied before the task; an explicit CLI flag takes precedence. Omission keeps current policy. */
   permissionMode?: string
+  /** Approval behavior applied after preset selection; an explicit CLI flag takes precedence. Omission keeps current policy. */
+  approvalPolicy?: ApprovalPolicy
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-headless -->

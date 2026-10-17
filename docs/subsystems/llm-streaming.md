@@ -83,7 +83,11 @@ Where a message came from is itself a merge-extensible sum type:
  * producer's kind, and consumers fall through unknown kinds.
  */
 interface MessageSourceMap {
-  user: { kind: 'user' }
+  user: {
+    kind: 'user'
+    /** Trusted task admission by the headless runner for Auto review; absence grants no caller authority. */
+    entrypoint?: 'headless'
+  }
   model: ModelMessageSource
   tool: ToolMessageSource
   'system-prompt': SystemPromptMessageSource

@@ -1299,6 +1299,11 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [],
       },
       {
+        signature: 'approvalPolicy?: ApprovalPolicy',
+        description: 'Approval behavior applied after the permission preset; absent keeps the current policy.',
+        parameters: [],
+      },
+      {
         signature: 'additionalWritableRoots?: string[]',
         description: 'Explicit absolute write grants for this invocation; absent adds no directories.',
         parameters: [],
@@ -6241,7 +6246,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'MessageSourceMap',
-    declaration: 'export interface MessageSourceMap {\n    user: {\n        kind: \'user\';\n    };\n    model: ModelMessageSource;\n    tool: ToolMessageSource;\n    \'system-prompt\': SystemPromptMessageSource;\n}',
+    declaration: 'export interface MessageSourceMap {\n    user: {\n        kind: \'user\';\n        entrypoint?: \'headless\';\n    };\n    model: ModelMessageSource;\n    tool: ToolMessageSource;\n    \'system-prompt\': SystemPromptMessageSource;\n}',
   },
   {
     name: 'ModDefinition',

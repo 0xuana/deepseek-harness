@@ -10,7 +10,7 @@ Full access lets useful project work proceed without repeated approvals, but it 
 
 ## Decision
 
-[`dsh-experimental-auto-review`](../../../../packages/experimental/auto-review/README.md) is an explicitly installed experimental Web layer, published under the [experimental package publication policy](../../../../packages/experimental/README.md). Default Web retains Read Only, Workspace Write, and Full access. The layer contributes current-session `auto`, whose only durable identity is `permission/preset:auto`; it uses Full access's `danger-full-access` sandbox and tool definitions with the approval policy chosen by [the user-approval fallback decision](2026-09-24-auto-review-user-approval-fallback.md). Headless, General settings, and new-session defaults exclude the integration.
+[`dsh-experimental-auto-review`](../../../../packages/experimental/auto-review/README.md) is an explicitly installed experimental profile layer, published under the [experimental package publication policy](../../../../packages/experimental/README.md). Default Web retains Read Only, Workspace Write, and Full access. The layer contributes current-session `auto`, whose only durable identity is `permission/preset:auto`; it uses Full access's `danger-full-access` sandbox and tool definitions with the approval policy chosen by [the user-approval fallback decision](2026-09-24-auto-review-user-approval-fallback.md). Default Headless, General settings, and new-session defaults exclude the integration. [Headless caller admission](2026-10-18-headless-auto-review.md) defines the explicit headless opt-in and its additional instruction role.
 
 Every native call and started PTC `tools.*` inner call receives one review before its body. The outer `run_code` transport and direct Node effects in a PTC program remain outside this guarantee. There are no tool-name exemptions, cached grants, retries, configurable policy, or second authorization check; [the user-approval fallback decision](2026-09-24-auto-review-user-approval-fallback.md) owns what follows a denial. A repeated call receives a fresh review.
 
@@ -21,12 +21,12 @@ The fixed policy follows the allow/soft-deny/hard-deny distinction and classifie
 | Risk | Examples | Decision |
 | --- | --- | --- |
 | `low` | Ordinary project-local reads/writes, analysis, format/lint/test/build, non-destructive Git, and exact cleanup of an object whose retained calls establish creation in this Session | Allow |
-| `medium` | Irreversible deletion of pre-existing state, force push/history rewrite, production reads/writes/deployment, non-sensitive external writes/sends, and permission/security/system changes | Allow only with explicit current human or direct-parent authorization naming action, exact target, and necessary scope |
+| `medium` | Irreversible deletion of pre-existing state, force push/history rewrite, production reads/writes/deployment, non-sensitive external writes/sends, and permission/security/system changes | Allow only with explicit current human, headless-caller, or direct-parent authorization naming action, exact target, and necessary scope |
 | `high` | Sensitive data exfiltration across the current trust boundary and equivalent hard-deny effects | Deny, including an explicitly requested action |
 
-Actual effects that are ambiguous or broader than established scope fail closed. A later instruction clears an earlier conflict only by explicitly revoking or replacing it; direct-parent instructions cannot override human restrictions. History can establish a session-created object but cannot authorize medium work or remove a high-risk prohibition.
+Actual effects that are ambiguous or broader than established scope fail closed. A later instruction clears an earlier conflict only by explicitly revoking or replacing it; direct-parent instructions cannot override human or caller restrictions. History can establish a session-created object but cannot authorize medium work or remove a high-risk prohibition.
 
-The reviewer derives authority from existing Session facts. A shipped Web human instruction has `source.kind === 'user'` and the `rpcId` written at browser prompt admission. A child's initial direct-parent prompt is identified after its own existing creation descriptor; a later `agent-message` is direct-parent instruction only when `senderSessionId` matches `SessionHeader.parentSession`. Human text defines or replaces the task and restrictions. Direct-parent text defines the child task within those restrictions. Project instructions only constrain; checkpoints restore lossy context; images, attachment metadata, and historical calls provide facts. Compaction does not promote a checkpoint into the human authority of text that left the surface.
+The reviewer derives authority from existing Session facts. A shipped Web human instruction has `source.kind === 'user'` and the `rpcId` written at browser prompt admission. A child's initial direct-parent prompt is identified after its own existing creation descriptor; a later `agent-message` is direct-parent instruction only when `senderSessionId` matches `SessionHeader.parentSession`. Human text defines or replaces the task and restrictions. The headless caller role and its admission marker are defined by [headless caller admission](2026-10-18-headless-auto-review.md). Direct-parent text defines the child task within those restrictions. Project instructions only constrain; checkpoints restore lossy context; images, attachment metadata, and historical calls provide facts. Compaction does not promote a checkpoint into the human authority of text that left the surface.
 
 ### One complete reviewer request
 
@@ -37,7 +37,7 @@ The integration uses only the latest `request/header.config` provider/model and 
 | `REVIEW_POLICY` | Fixed classification, source authority, and strict result rules; allow executes immediately with Full access and no later confirmation |
 | `ENVIRONMENT` | Existing Session header `cwd` only |
 | `PROJECT_INSTRUCTIONS` | Visible project instructions with their original sources and constraint role |
-| `FILTERED_HISTORY` | Current compaction surface's sourced human/direct-parent messages, checkpoints, image/attachment facts, and historical call names with logged arguments |
+| `FILTERED_HISTORY` | Current compaction surface's sourced human/caller/direct-parent messages, checkpoints, image/attachment facts, and historical call names with logged arguments |
 | `PENDING_ACTION` | Tool name, description, parameter schema, and parsed arguments |
 
 The reviewer builds those two action sections from the Session's complete action history: an authorization is the earlier call the `REVIEW_POLICY` source rules make eligible, and a duplicate or conflicting identity has to be visible anywhere in the log rather than inside a recent window, so neither the Session projections nor a bounded read serves the decision. The read is the deprecated synchronous `snapshotEvents()` under a line-scoped `typescript/no-deprecated` waiver.
@@ -64,7 +64,7 @@ The [delegation-time policy capture](../../../../packages/subagent/subagent/READ
 
 ## Alternatives considered
 
-**Default or released integration** would make an experimental model approval policy part of every deployment. A private source Web patch keeps opt-in explicit while using the existing plugin installer.
+**Default or released integration** would make an experimental model approval policy part of every deployment. An explicit profile patch keeps opt-in explicit while using the existing plugin installer.
 
 **A new sandbox or approval-policy value** would couple review to enforcement and create combinations without a current consumer. An explicit preset identity preserves the unchanged Full access execution behavior.
 

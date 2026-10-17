@@ -108,7 +108,11 @@ export type ContextFormed =
  * producer's kind, and consumers fall through unknown kinds.
  */
 export interface MessageSourceMap {
-  user: { kind: 'user' }
+  user: {
+    kind: 'user'
+    /** Trusted task admission by the headless runner for Auto review; absence grants no caller authority. */
+    entrypoint?: 'headless'
+  }
   model: ModelMessageSource
   tool: ToolMessageSource
   'system-prompt': SystemPromptMessageSource

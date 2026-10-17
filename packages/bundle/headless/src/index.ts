@@ -19,6 +19,7 @@ import type { Agent, ModelSelectionRef } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
 import type {} from '@deepseek-ai/dsh-fs'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { APPROVAL_POLICIES, setApprovalPolicy, type ApprovalPolicy } from '@deepseek-ai/dsh-user-approval'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
@@ -52,6 +53,8 @@ export interface Config {
   json?: boolean
   /** Permission preset applied before the task; an explicit CLI flag takes precedence. Omission keeps current policy. */
   permissionMode?: string
+  /** Approval behavior applied after preset selection; an explicit CLI flag takes precedence. Omission keeps current policy. */
+  approvalPolicy?: ApprovalPolicy
 }
 
 export const Config: z<Config> = z.object({
@@ -59,6 +62,7 @@ export const Config: z<Config> = z.object({
   sessionId: z.string(),
   json: z.boolean(),
   permissionMode: z.string(),
+  approvalPolicy: z.union([...APPROVAL_POLICIES]),
 })
 
 /** Outcome of one owned run interval. */
@@ -312,7 +316,7 @@ function fail(io: HeadlessIo, error: unknown, json: boolean): void {
  * Run one task through one Agent and request process exit.
  * Live Agent failures require a later durable terminal before a recovered run can succeed.
  * @param ctx - plugin context carrying the Agent, default model, Session, and launcher IO services.
- * @param config - task, exact Session identity, output mode, and permission preset.
+ * @param config - task, exact Session identity, output mode, permission preset, and approval policy.
  * @param io - process-facing effects.
  */
 async function run(ctx: Context, config: Config, io: HeadlessIo): Promise<void> {
@@ -333,10 +337,14 @@ async function run(ctx: Context, config: Config, io: HeadlessIo): Promise<void> 
 
   const startup = ctx.get('headlessStartup')
   const permissionMode = startup?.permissionMode ?? config.permissionMode
+  const approvalPolicy = startup?.approvalPolicy ?? config.approvalPolicy
   const permissions = ctx.get('permissionPresets')
   if (permissionMode !== undefined) {
     if (permissions === undefined) throw new Error('headless --permission-mode requires the permissionPresets service')
     permissions.resolve(permissionMode)
+  }
+  if (approvalPolicy !== undefined && ctx.get('approval') === undefined) {
+    throw new Error('headless --approval-policy requires the approval service')
   }
   const requestedRoots = startup?.additionalWritableRoots
   if (requestedRoots !== undefined && requestedRoots.length > 0) {
@@ -382,6 +390,7 @@ async function run(ctx: Context, config: Config, io: HeadlessIo): Promise<void> 
     assertAdoptable(agent.session.header, liveEvents(agent.session), sessionId, cwd)
   }
   if (permissionMode !== undefined && permissions !== undefined) permissions.set(agent.session, permissionMode)
+  if (approvalPolicy !== undefined) setApprovalPolicy(agent.session, approvalPolicy)
   const firstSeq = agent.session.seq
   const projection = config.json === true ? projectJsonRun(ctx, agent, io.stdout, { cwd }) : undefined
   const stopReasoning = projection === undefined ? streamReasoning(ctx, agent, io.stderr) : undefined
@@ -397,7 +406,9 @@ async function run(ctx: Context, config: Config, io: HeadlessIo): Promise<void> 
     try {
       agent.followup(createUserMessage({
         content: [{ type: 'text', text: task }],
-        source: { kind: 'user' },
+        source: permissions?.current(agent.session) === 'auto'
+          ? { kind: 'user', entrypoint: 'headless' }
+          : { kind: 'user' },
       }))
       const subagents = ctx.get('subagents')
       while (true) {

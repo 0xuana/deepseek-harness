@@ -44,6 +44,7 @@ const deepseekDefaultsConfigPath = fileURLToPath(new URL('./fixtures/deepseek-de
 const piAiDefaultsConfigPath = fileURLToPath(new URL('./fixtures/pi-ai-defaults.patch.yml', import.meta.url))
 const piAiConversationUpdatesConfigPath = fileURLToPath(new URL('./fixtures/pi-ai-conversation-updates.patch.yml', import.meta.url))
 const headlessOverlayPath = fileURLToPath(new URL('./fixtures/headless-profile.patch.yml', import.meta.url))
+const autoReviewOverlayPath = fileURLToPath(new URL('./fixtures/auto-review.patch.yml', import.meta.url))
 const autoShutdownOverlayPath = fileURLToPath(new URL('./fixtures/auto-shutdown.patch.yml', import.meta.url))
 const autoIntegrationPath = fileURLToPath(new URL('../../../../../../packages/experimental/auto-review/cordis.patch.yml', import.meta.url))
 const headlessSessionExpected = join(goldensDir, 'headless-profile', 'session.expected.jsonl')
@@ -541,6 +542,93 @@ describe('headless stream-json snapshots', () => {
     } finally {
       await rm(cwd, { recursive: true, force: true })
     }
+  }, LOADER_SMOKE_TEST_TIMEOUT_MS * 2)
+
+  it.each(['allow', 'deny', 'malformed', 'failed'])('runs Auto review with noninteractive %s results', async (mode) => {
+    const result = await runLoaderSmoke({
+      label: `headless Auto review ${mode}`,
+      tempDirPrefix: 'headless-auto-',
+      binScript: dshBinScript,
+      configPath: autoReviewOverlayPath,
+      binArgs: [
+        '--profile', 'headless', '--patch', headlessOverlayPath, '--patch', autoReviewOverlayPath,
+        '--permission-mode', 'auto', '--approval-policy', 'never', '--json', 'Run the CLI probe.',
+      ],
+      tsconfigPath,
+      env: { DSH_AUTO_REVIEW_TEST_MODE: mode, DSH_TOOLS_MODE: 'native', DSH_TELEMETRY_DISABLED: '1' },
+      inspect: async (cwd) => {
+        const logs = await persistedLogs(cwd, join(cwd, '.dsh', 'sessions'))
+        expect(logs).toHaveLength(1)
+        const events = parseJsonl(logs[0]!.content)
+        expect(events.find(event => event.type === 'user/message')?.data).toMatchObject({
+          source: { kind: 'user', entrypoint: 'headless' },
+        })
+        expect(events.some(event => event.type === 'approval/asked')).toBe(false)
+        expect(events.filter(event => event.type === 'approval/policy').at(-1)?.data).toEqual({ policy: 'never' })
+      },
+    })
+    const events = parseJsonl(result.stdout)
+    const tool = events.find(event => event.type === 'tool_result')
+    if (mode === 'allow') {
+      expect(tool?.status).toBe('completed')
+      expect(tool?.result).toContain('CLI_TOOL_ROUND_TRIP')
+      expect(tool).not.toHaveProperty('error')
+    } else {
+      expect(tool).toMatchObject({
+        status: 'error',
+        error: { code: mode === 'deny' ? 'AUTO_REVIEW_DENIED' : 'AUTO_REVIEW_FAILED' },
+      })
+      if (mode === 'deny') expect(tool?.error).toMatchObject({ reason: 'The caller did not authorize this target.' })
+      expect(tool?.result).toContain('body was not executed')
+      expect(tool?.result).not.toContain('CLI_TOOL_ROUND_TRIP')
+    }
+    expect(events.at(-1)).toMatchObject({ type: 'final', reason: { kind: 'completed' } })
+  }, LOADER_SMOKE_TEST_TIMEOUT_MS)
+
+  it('rejects Auto selection without the experimental integration', async () => {
+    const result = await runLoaderSmoke({
+      label: 'headless absent Auto integration', tempDirPrefix: 'headless-auto-absent-',
+      binScript: dshBinScript, configPath: headlessOverlayPath,
+      binArgs: ['--profile', 'headless', '--patch', headlessOverlayPath, '--permission-mode', 'auto', '--json', 'Do it.'],
+      tsconfigPath, expectedExitCode: 1, env: { DSH_TELEMETRY_DISABLED: '1' },
+    })
+    const events = parseJsonl(result.stdout)
+    expect(events).toHaveLength(1)
+    expect(events[0]?.type).toBe('error')
+    expect(events[0]?.message).toContain('auto')
+  }, LOADER_SMOKE_TEST_TIMEOUT_MS)
+
+  it('resumes an Auto denial with caller instructions and a repeated explicit policy', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'headless-auto-resume-'))
+    const args = ['--profile', 'headless', '--patch', headlessOverlayPath, '--patch', autoReviewOverlayPath,
+      '--permission-mode', 'auto', '--approval-policy', 'never', '--json']
+    try {
+      const first = await runLoaderSmoke({
+        label: 'headless Auto denied wake', cwd, binScript: dshBinScript, configPath: autoReviewOverlayPath,
+        binArgs: [...args, 'Run the CLI probe.'], tsconfigPath,
+        env: { DSH_AUTO_REVIEW_TEST_MODE: 'deny', DSH_TOOLS_MODE: 'native', DSH_TELEMETRY_DISABLED: '1' },
+      })
+      const sessionId = parseJsonl(first.stdout)[0]?.sessionId
+      if (typeof sessionId !== 'string') throw new Error('missing Auto Session identity')
+      expect(parseJsonl(first.stdout).find(event => event.type === 'tool_result')).toMatchObject({
+        error: { code: 'AUTO_REVIEW_DENIED' },
+      })
+      const second = await runLoaderSmoke({
+        label: 'headless Auto authorized wake', cwd, binScript: dshBinScript, configPath: autoReviewOverlayPath,
+        binArgs: [...args, '--session-id', sessionId, 'I authorize the exact CLI probe. Retry it.'], tsconfigPath,
+        env: { DSH_AUTO_REVIEW_TEST_MODE: 'allow', DSH_TOOLS_MODE: 'native', DSH_TELEMETRY_DISABLED: '1' },
+        inspect: async (directory) => {
+          const logs = await persistedLogs(directory, join(directory, '.dsh', 'sessions'))
+          expect(logs).toHaveLength(1)
+          expect(logs[0]!.content.match(/"entrypoint":"headless"/g)?.length).toBeGreaterThanOrEqual(2)
+          expect(logs[0]!.content).not.toContain('"type":"approval/asked"')
+        },
+      })
+      expect(parseJsonl(second.stdout).at(-1)).toMatchObject({
+        type: 'final', sessionId, reason: { kind: 'completed' },
+        text: 'CLI tool round trip complete: CLI_TOOL_ROUND_TRIP',
+      })
+    } finally { await rm(cwd, { recursive: true, force: true }) }
   }, LOADER_SMOKE_TEST_TIMEOUT_MS * 2)
 
   it('prints a terminal model failure through the product headless profile command', async () => {

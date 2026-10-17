@@ -27,11 +27,14 @@
   en: dbaa2fac63910a4c
   zh: 4fd5c17815ca444b
 /deepseek-ai-dsh-headless/use-this-package/supervising-implementation-tasks:
-  en: 894505df28f1b821
-  zh: 846414cf09e4956a
+  en: b10dee3026e8d999
+  zh: 5f35005a75f23872
+/deepseek-ai-dsh-headless/use-this-package/experimental-auto-review:
+  en: ac060bf78cf157b6
+  zh: 5e099abb8c10b96b
 /deepseek-ai-dsh-headless/use-this-package/machine-readable-output:
-  en: df1ffa7f21b89136
-  zh: 52bf016b3c2bc0f9
+  en: c8a90b16023eb04a
+  zh: 58eec3550ea70f34
 /deepseek-ai-dsh-headless/use-this-package/when-to-use-it:
   en: 5262b93dcef0d489
   zh: 1638965b2aabcd38
@@ -42,8 +45,8 @@
   en: be1b73a6d0ee3902
   zh: bdba099685d68b27
 /deepseek-ai-dsh-headless/understand-the-implementation/run-flow:
-  en: c210869730df90e2
-  zh: 1bf5f8fd9a887bac
+  en: b712939aee4eaa04
+  zh: 812852a93bb42f79
 /deepseek-ai-dsh-headless/understand-the-implementation/patch-surface-over-base:
   en: 3e4a814e9fe0344e
   zh: ff192ca8ee9970b5

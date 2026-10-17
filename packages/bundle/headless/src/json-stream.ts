@@ -234,6 +234,7 @@ function addUsage(state: StepUsageState, next: StepUsage | undefined): StepUsage
  * emitted only when the step's `assistant/message` commits them, and the
  * terminal `final` event carries the exact Session identity, the durable turn
  * reason (null without a terminal turn), and the lossless answer. It is not bounded.
+ * Tool results include any durable structured error under the ordinary output bounds.
  * @param ctx - plugin context carrying the live Session feed.
  * @param agent - the exact Agent whose events belong to this invocation.
  * @param sink - stdout sink receiving one JSON object per line.
@@ -307,6 +308,7 @@ export function projectJsonRun(
           callId: message.toolCallId,
           status: message.isError === true ? 'error' : 'completed',
           result: resultText(message.content),
+          ...event.data.error === undefined ? {} : { error: event.data.error },
         })
         return
       }

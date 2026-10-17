@@ -120,6 +120,8 @@ Options:
                               unknown id is an error
   --permission-mode <preset>  select a configured permission preset for this
                               task, including on resume
+  --approval-policy <policy>  set approval behavior after selecting the
+                              permission preset (choices: "ask", "never")
   --add-dir <path>            allow an additional physical absolute directory
                               under workspace-write (repeatable)
   -h, --help                  show this help

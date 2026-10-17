@@ -6,10 +6,11 @@
  * @module @deepseek-ai/dsh-headless/startup
  */
 
-import { Command, CommanderError } from 'commander'
+import { Command, CommanderError, Option } from 'commander'
 import { isAbsolute } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { parseCmdline } from '@deepseek-ai/dsh-cmdline'
+import { APPROVAL_POLICIES, type ApprovalPolicy } from '@deepseek-ai/dsh-user-approval'
 import { boundJsonLine } from './json-stream.ts'
 import { internals } from './startup-internals.ts'
 
@@ -32,6 +33,8 @@ export interface HeadlessStartupValues {
   json: boolean
   /** Permission preset to apply before the task; absent preserves session policy. */
   permissionMode?: string
+  /** Approval behavior applied after the permission preset; absent keeps the current policy. */
+  approvalPolicy?: ApprovalPolicy
   /** Explicit absolute write grants for this invocation; absent adds no directories. */
   additionalWritableRoots?: string[]
 }
@@ -55,6 +58,8 @@ function headlessCommand(): Command {
     .option('--json', 'write newline-delimited run events to stdout instead of the final message')
     .option('--session-id <id>', 'adopt the persisted Session with this id; an unknown id is an error')
     .option('--permission-mode <preset>', 'select a configured permission preset for this task, including on resume')
+    .addOption(new Option('--approval-policy <policy>', 'set approval behavior after selecting the permission preset')
+      .choices([...APPROVAL_POLICIES]))
     .option('--add-dir <path>', 'allow an additional physical absolute directory under workspace-write (repeatable)',
       (value: string, previous?: string[]) => [...previous ?? [], value])
     .argument('[task...]', 'the task text; multiple words are joined by spaces, and `-` reads stdin')
@@ -81,7 +86,7 @@ function jsonRequested(argv: readonly string[]): boolean {
     const argument = argv[index]
     if (argument === '--') return false
     if (argument === '--json') return true
-    if (argument === '--session-id' || argument === '--permission-mode' || argument === '--add-dir') index += 1
+    if (argument === '--session-id' || argument === '--permission-mode' || argument === '--approval-policy' || argument === '--add-dir') index += 1
   }
   return false
 }
@@ -121,7 +126,13 @@ export function apply(ctx: Context): void {
     if (task === undefined && internals.stdinIsTty()) {
       program.error('error: a task is required, for example: dsh --profile headless "run the tests"')
     }
-    const options = program.opts<{ json?: boolean; sessionId?: string; permissionMode?: string; addDir?: string[] }>()
+    const options = program.opts<{
+      json?: boolean
+      sessionId?: string
+      permissionMode?: string
+      approvalPolicy?: ApprovalPolicy
+      addDir?: string[]
+    }>()
     // A SessionId is opaque, so whitespace is part of the identity: validate
     // emptiness on the trimmed value but hand the runner the exact string.
     const sessionId = options.sessionId
@@ -139,6 +150,7 @@ export function apply(ctx: Context): void {
       sessionId,
       json: options.json === true,
       ...options.permissionMode === undefined ? {} : { permissionMode: options.permissionMode.trim() },
+      ...options.approvalPolicy === undefined ? {} : { approvalPolicy: options.approvalPolicy },
       ...options.addDir === undefined ? {} : { additionalWritableRoots: [...new Set(options.addDir)] },
     } satisfies HeadlessStartupValues)
   })

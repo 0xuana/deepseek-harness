@@ -75,6 +75,7 @@ export const apply = ctx => globalThis.__headlessStartupApply(ctx)
     '    task: !!js ctx.headlessStartup.task',
     '    sessionId: !!js ctx.headlessStartup.sessionId',
     '    json: !!js ctx.headlessStartup.json',
+    '    approvalPolicy: !!js ctx.headlessStartup.approvalPolicy',
     '- id: headless-startup',
     `  name: ${pathToFileURL(join(dir, 'startup.mjs')).href}`,
     '',
@@ -127,6 +128,21 @@ describe('headless command-line provider', () => {
     expect(observed.runnerConfig).toMatchObject({ task: 'do it', sessionId: 'session-exact', json: true })
   })
 
+  it.each(['ask', 'never'])('forwards approval policy %s to the runner', async (policy) => {
+    const { task, observed } = await bootStartup(['--approval-policy', policy, 'do it'])
+    expect(task).toMatchObject({ approvalPolicy: policy })
+    expect(observed.runnerConfig).toMatchObject({ approvalPolicy: policy })
+  })
+
+  it('rejects an unsupported approval policy as a JSON usage error', async () => {
+    const { task, observed } = await bootStartup(['--json', '--approval-policy', 'always', 'do it'])
+    expect(task).toBeUndefined()
+    expect(observed.exits).toEqual([1])
+    const event = JSON.parse(observed.out) as Record<string, unknown>
+    expect(event.type).toBe('error')
+    expect(event.message).toContain('approval-policy')
+  })
+
   it('keeps the stdin marker as the task so the runner reads the pipe', async () => {
     const { task } = await bootStartup(['-'], { stdinIsTty: false })
     expect(task).toEqual({ task: '-', sessionId: undefined, json: false })
@@ -171,7 +187,7 @@ describe('headless command-line provider', () => {
     expect(JSON.parse(observed.out)).toMatchObject({ type: 'error' })
   })
 
-  it.each(['--add-dir', '--permission-mode'])('does not treat an operand of %s as the JSON flag', async (option) => {
+  it.each(['--add-dir', '--permission-mode', '--approval-policy'])('does not treat an operand of %s as the JSON flag', async (option) => {
     const { observed } = await bootStartup([option, '--json', 'do it'])
     expect(observed.out).not.toContain('"type":"error"')
   })

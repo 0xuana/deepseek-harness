@@ -17,6 +17,7 @@ import { LlmAttemptId, ToolCallId, createAssistantMessage, createToolResultMessa
 import SessionStore from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
+import ApprovalService, { setApprovalPolicy, type ApprovalPolicy } from '@deepseek-ai/dsh-user-approval'
 import type { Session, SessionId, UserMessage } from '@deepseek-ai/dsh-session'
 import { SessionQueryError } from '@deepseek-ai/dsh-session-query'
 import { createInboxStub, provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
@@ -50,6 +51,8 @@ interface BenchOptions {
   json?: boolean
   permissionMode?: string
   startupPermissionMode?: string
+  approvalPolicy?: ApprovalPolicy
+  startupApprovalPolicy?: ApprovalPolicy
   additionalWritableRoots?: string[]
   observe?: () => Promise<ObservationStub>
   /** Leave the query service unmounted to exercise the fail-loud path. */
@@ -132,11 +135,13 @@ async function bench(script: Script, options: BenchOptions = {}): Promise<{
   run(): Promise<{ code: number; out: string; err: string; order: string[] }>
 }> {
   const ctx = new Context()
-  if (options.additionalWritableRoots !== undefined || options.startupPermissionMode !== undefined) {
+  if (options.additionalWritableRoots !== undefined
+    || options.startupPermissionMode !== undefined || options.startupApprovalPolicy !== undefined) {
     ctx.provide('headlessStartup', {
       task: options.task, sessionId: options.sessionId, json: options.json ?? false,
       additionalWritableRoots: options.additionalWritableRoots,
       permissionMode: options.startupPermissionMode,
+      approvalPolicy: options.startupApprovalPolicy,
     })
   }
   provideWorkingDirectoryFixture(ctx)
@@ -237,6 +242,7 @@ async function bench(script: Script, options: BenchOptions = {}): Promise<{
         ...options.sessionId === undefined ? {} : { sessionId: options.sessionId },
         ...options.json === undefined ? {} : { json: options.json },
         ...options.permissionMode === undefined ? {} : { permissionMode: options.permissionMode },
+        ...options.approvalPolicy === undefined ? {} : { approvalPolicy: options.approvalPolicy },
       })
       return { code: await exited, out, err, order }
     },
@@ -285,7 +291,45 @@ describe('headless runner', () => {
     } }, overridden
       ? { permissionMode: 'danger-full-access', startupPermissionMode: 'workspace-write' }
       : { permissionMode: 'workspace-write' })
-    test.ctx.provide('permissionPresets', { resolve() {}, set(_session: Session, name: string) { selected = name } } as never)
+    test.ctx.provide('permissionPresets', { current() { return selected }, resolve() {}, set(_session: Session, name: string) { selected = name } } as never)
+    try { expect(await test.run()).toMatchObject({ code: 0 }) }
+    finally { await test.ctx.fiber.dispose() }
+  })
+
+  it('rejects an explicit approval policy without its service before reading stdin', async () => {
+    const test = await bench({ afterPrompt() { throw new Error('must not run') } }, {
+      approvalPolicy: 'never', useStdin: true, readStdin() { throw new Error('must not read stdin') },
+    })
+    try {
+      const result = await test.run()
+      expect(result.code).toBe(1)
+      expect(result.err).toContain('requires the approval service')
+    } finally { await test.ctx.fiber.dispose() }
+  })
+
+  it.each([false, true])('attributes an Auto task to the caller after policy selection (resume=%s)', async (resume) => {
+    let selected = resume ? 'auto' : 'workspace-write'
+    const test = await bench({ afterPrompt(session, message) {
+      expect(test.ctx.approval.overrideOf(session)).toBe('never')
+      expect(message.source).toEqual({ kind: 'user', entrypoint: 'headless' })
+      appendTurn(session, 1, message, 'done', true)
+    } }, {
+      approvalPolicy: resume ? 'never' : 'ask',
+      ...resume ? {} : { startupApprovalPolicy: 'never' },
+      ...resume ? {
+        sessionId: 'session-exact',
+        observe: async () => ({ header: { cwd: process.cwd() }, events: [], [Symbol.dispose]() {} }),
+      } : { permissionMode: 'auto' },
+    })
+    await test.ctx.plugin(ApprovalService, { policy: 'ask' })
+    if (resume) test.ctx.sessions.create(brandString<SessionId>('session-exact'), { meta: { cwd: process.cwd() } })
+    test.ctx.provide('permissionPresets', {
+      current() { return selected }, resolve() {},
+      set(session: Session, preset: string) {
+        selected = preset
+        setApprovalPolicy(session, 'ask')
+      },
+    } as never)
     try { expect(await test.run()).toMatchObject({ code: 0 }) }
     finally { await test.ctx.fiber.dispose() }
   })

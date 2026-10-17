@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-18-headless-auto-review.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-10-18-headless-auto-review.md
+/agent-note-headless-caller-authority-for-auto-review:
+  en: 9be347ac387545f7
+  zh: b360764b7d22d1d6
+/agent-note-headless-caller-authority-for-auto-review/problem:
+  en: 20d6e15ab5963b2e
+  zh: 0b02f9b734d7e51d
+/agent-note-headless-caller-authority-for-auto-review/decision:
+  en: b82d3db1eb75f183
+  zh: efc4f6c4102f641b
+/agent-note-headless-caller-authority-for-auto-review/alternatives-considered:
+  en: 5b1070855dcaef30
+  zh: ba056b01e3310f51
+/agent-note-headless-caller-authority-for-auto-review/consequences:
+  en: 708c9335c97f8402
+  zh: 93789ae8015b7ea7

@@ -85,15 +85,21 @@ dsh headless --permission-mode workspace-write --add-dir "$git_dir" --json - < t
 
 `--add-dir` 接受可重复的执行环境物理绝对目录路径。共享 Git 目录允许暂存、提交和执行仓库钩子，而不授予父检出目录源文件的写权限。它授权该目录中的所有元数据，包括共享引用、钩子和配置。后续主机 Git 命令可能在沙箱之外执行修改后的钩子或配置；仅对可信任务使用此授权，并在运行主机 Git 操作前审查元数据变更。额外授权仅适用于本次调用，恢复会话时必须再次提供。随附配置档将其传给 `sandbox-policy`；runner 直接检查原始解析出的 CLI 授权。替换策略行的 overlay 必须包含 `ctx.headlessStartup.additionalWritableRoots`，否则 runner 会在模型工作前拒绝请求。[本地沙箱提供方](../../sandbox/sandbox-local/README.zh.md)定义各平台的支持情况。
 
-读取开头的 `session.sessionId`，审查 diff，然后在同一 worktree 中用 `--session-id` 发送修改指令，并再次提供目录授权。`--permission-mode` 通过权限服务选择已有权限预设，并在任务运行前覆盖 runner 配置和会话保存的选择；省略时保留正常默认值和已保存策略。两个选项都不会修改已保存的配置档或用户设置。
+读取开头的 `session.sessionId`，审查 diff，然后在同一 worktree 中用 `--session-id` 发送修改指令，并再次提供目录授权。`--permission-mode` 通过权限服务选择已有权限预设，并在任务运行前覆盖 runner 配置和会话保存的选择；省略时保留正常默认值和已保存策略。两个选项都不会修改已保存的配置档或用户设置。 `--approval-policy ask|never` 在选择权限预设后生效；`never` 拒绝需要人工审批的调用。恢复无人值守任务时应重复显式策略选项。
 
 要求 worker 报告工作目录、基线与结果提交、修改文件、精确的检查命令、退出码、日志路径，以及受阻或未运行的检查。审查这些证据并信任已完成检查的报告。仅当修改或新发现使证据失效时再次运行检查。在任务中限制调查范围，并由监督者负责发布。因主机 IPC、外部缓存或嵌套沙箱而受阻的检查，在监督者授权并于合适环境中执行前仍属于未运行。
 
 监督者中断进程后，必须等待进程退出再恢复其 Session。非零退出后也要保留事件日志。只有进程退出码为零且 `final.reason.kind === 'completed'` 时，才视为 agent 运行完成；随后单独判断 worker 的任务与检查报告。`tool_result` 的 `completed` 状态表示工具已返回，其中的 shell 命令仍可能以非零退出码结束。
 
+### Experimental Auto review
+
+如需由模型审查后以完全访问权限执行，请显式启用[无界面监督流程的 Auto review](../../experimental/auto-review/README.zh.md#headless-supervision)，选择 `--permission-mode auto --approval-policy never` 并使用原生工具。Auto 在支持的调用执行前进行审查，不提供文件沙箱。其 JSON 拒绝结果让监督者检查失败并通过 `--session-id` 发送限定范围的修订指令。Headless 没有实时审批响应通道。
+
 ### 机器可读输出
 
 `--json` 用按行 JSON 事件流取代 stdout 的最终文本行，stderr 仅保留 `dsh:` 诊断信息。事件流以 `session`（携带本次运行使用的标识）开头、以 `final` 结尾，其间为 `status`、`text`、`thinking`、`tool_call` 与 `tool_result` 事件。`text` 与 `thinking` 只从已提交的 assistant 消息投影，因此被重试或丢弃的尝试不会进入事件流；它们在步骤提交时到达，而不是逐 token 到达，默认模式的 stderr 推理仍是唯一的实时文本通道。终止 `final` 事件携带精确的 `sessionId`、持久化轮次的 `reason`（最后一轮没有终止事件时为 `null`），以及与默认模式相同的无损答案；该事件不做限长；其他每个字符串与对象键上限为 8 KiB，超出时标记 `truncated`，单条事件行（含换行）上限为 32 KiB——超长事件保留标量字段、丢弃结构化字段，极端情况下只剩 `type` 与 `truncated`，嵌套达到 64 层及以上的负载会在该深度被截断。空工具参数字符串会投影为 `{}`，与执行器实际运行的值一致；而 JSON 无法往返的参数——例如溢出为 `Infinity` 的数字 `1e400`——会保留原始文本，而不是 `JSON.stringify` 会报告的 `null`。runner 在轮次之外抛出的失败会写出 `error` 事件并在没有 `final` 的情况下结束事件流，同时向 stderr 写入 `dsh:` 行；若 profile 自身的插件加载失败，进程会在 runner 挂载前退出，该情形只保留 loader 的 stderr 诊断。轮次内失败的运行仍会以 `final` 事件（通常为空）结束且没有 `error` 事件，因此格式良好的事件流也可能描述一次失败的运行：请在判断任务报告前检查进程退出状态和 `final.reason`。
+
+`tool_result.error` 存在时，在相同输出限制内保留持久化的 `{ name, code, reason? }` 错误字段。`AUTO_REVIEW_DENIED` 标识最终策略拒绝；`AUTO_REVIEW_FAILED` 标识 reviewer 失败。两者都不会执行调用 body。截断记录可能省略结构化详情；需要完整理由时读取持久 Session。
 
 ### 何时使用
 
@@ -115,7 +121,7 @@ runner 是核心 API 载体之上的直接驱动器：它确定 Agent 标识—�
 
 ### 运行流程
 
-runner 等待整个应用结算（`ctx.get('loader')?.await()`），确保已组合的工具与适配器不会半挂载，在读取 stdin 前验证请求的权限预设与 CLI 目录授权，解析任务和共享的 [`agentDefaultModel`](../../core/agent-default-model/README.zh.md) 选择，然后确定 Agent 标识：默认是全新的 `session-<uuid>`，或是 `--session-id` 指名的持久化 Session——通过 [`sessionQuery`](../../session-query/session-query/README.zh.md) 沿用，日志不存在时拒绝。它把任务作为普通用户消息提交。不带 `--json` 时，它把该 Agent 的非空推理增量流式写入 stderr；带 `--json` 时改为投影本次运行。它等待子级工作，并在结束前复核父级仍空闲且 Session 序号未变，让结算通知可以驱动父级生成最终答案。收件箱消息处于停放状态的空闲子级不会延迟完成；进程关闭时丢弃这些未领取消息。随后它对会话执行 flush，并把所属区间（从 `firstSeq` 起）折叠为最后一条非空 `assistant/message` 文本与最后一轮的终止原因。未闭合的最后一轮没有终止原因，不能继承更早的完成结果。最后，它把最终文本写入 stdout（或 `final` 事件）并请求退出。
+runner 等待整个应用结算（`ctx.get('loader')?.await()`），确保已组合的工具与适配器不会半挂载，在读取 stdin 前验证请求的权限预设、审批服务与 CLI 目录授权，解析任务和共享的 [`agentDefaultModel`](../../core/agent-default-model/README.zh.md) 选择，然后确定 Agent 标识：默认是全新的 `session-<uuid>`，或是 `--session-id` 指名的持久化 Session——通过 [`sessionQuery`](../../session-query/session-query/README.zh.md) 沿用，日志不存在时拒绝。它先应用所选预设，再应用显式审批策略，然后把任务作为用户消息提交。Auto 生效时，消息记录 headless 调用者入口标记。不带 `--json` 时，它把该 Agent 的非空推理增量流式写入 stderr；带 `--json` 时改为投影本次运行。它等待子级工作，并在结束前复核父级仍空闲且 Session 序号未变，让结算通知可以驱动父级生成最终答案。收件箱消息处于停放状态的空闲子级不会延迟完成；进程关闭时丢弃这些未领取消息。随后它对会话执行 flush，并把所属区间（从 `firstSeq` 起）折叠为最后一条非空 `assistant/message` 文本与最后一轮的终止原因。未闭合的最后一轮没有终止原因，不能继承更早的完成结果。最后，它把最终文本写入 stdout（或 `final` 事件）并请求退出。
 
 ### 基于 base 的 patch 内容
 
