@@ -1,6 +1,6 @@
 /** Native backend checks for explicit directory grants and their denial cases. */
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { expect } from 'vitest'
@@ -16,7 +16,7 @@ async function run(provider: LocalSandboxProvider, command: string, policy: Sand
   const result = spawnSync(confined.argv[0]!, confined.argv.slice(1), { encoding: 'utf8', timeout: 30_000 })
   expect(result.error).toBeUndefined()
   expect(result.signal).toBeNull()
-  return result
+  return { ...result, denialSignatures: confined.denialSignatures }
 }
 
 /**
@@ -35,7 +35,9 @@ export async function checkExtraWrites(provider: LocalSandboxProvider, directory
   expect(result.status, result.stderr).toBe(0)
   expect(readFileSync(allowed, 'utf8')).toBe('allowed')
   const denied = join(outside, 'denied.txt')
-  expect((await run(provider, `printf denied > ${quote(denied)}`, policy)).status).not.toBe(0)
+  const rejected = await run(provider, `printf denied > ${quote(denied)}`, policy)
+  expect(rejected.status).not.toBe(0)
+  expect(rejected.denialSignatures.some(text => rejected.stderr.toLowerCase().includes(text))).toBe(true)
   expect(existsSync(denied)).toBe(false)
   const readOnly = join(extra, 'read-only.txt')
   expect((await run(provider, `printf denied > ${quote(readOnly)}`, { ...policy, mode: 'read-only' })).status).not.toBe(0)
@@ -55,8 +57,18 @@ export async function checkRedirectedRoot(provider: LocalSandboxProvider, direct
   mkdirSync(extra)
   const policy: SandboxPolicy = { mode: 'workspace-write', workspaceRoot, additionalWritableRoots: [extra] }
   const replaced = await run(provider, `rmdir ${quote(extra)} && ln -s ${quote(outside)} ${quote(extra)}`, policy)
-  expect(replaced.status, replaced.stderr).toBe(0)
   const target = join(outside, 'escape.txt')
-  await expect(run(provider, `printf denied > ${quote(target)}`, policy)).rejects.toMatchObject({ code: 'SANDBOX_INVALID_ROOT' })
+  if (replaced.status === 0) {
+    expect(lstatSync(extra).isSymbolicLink()).toBe(true)
+    await expect(run(provider, `printf denied > ${quote(target)}`, policy)).rejects.toMatchObject({ code: 'SANDBOX_INVALID_ROOT' })
+  } else {
+    // bwrap protects the bind mount itself, before the next-call path check.
+    expect(lstatSync(extra).isDirectory()).toBe(true)
+    expect(lstatSync(extra).isSymbolicLink()).toBe(false)
+    expect((await run(provider, `printf allowed > ${quote(join(extra, 'still-granted.txt'))}`, policy)).status).toBe(0)
+    const denied = await run(provider, `printf denied > ${quote(target)}`, policy)
+    expect(denied.status).not.toBe(0)
+    expect(denied.denialSignatures.some(text => denied.stderr.toLowerCase().includes(text))).toBe(true)
+  }
   expect(existsSync(target)).toBe(false)
 }
