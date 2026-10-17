@@ -2,6 +2,7 @@
 import argparse
 import base64
 import json
+import hashlib
 import os
 from pathlib import Path
 import plistlib
@@ -11,7 +12,8 @@ import tempfile
 import time
 import uuid
 
-from native_test_support import ROOT, NativeHelper, line, run_cleanup
+from native_test_support import ROOT, NativeHelper, run_cleanup
+from shared_helper_e2e import Connection
 
 
 def wait_for_state(path, predicate):
@@ -68,21 +70,35 @@ def check_click_holds(helper, owner, window, point, state_file):
             assert events[index + 1]["timestamp"] - events[index]["timestamp"] >= 0.150, events
         assert state["axPresses"] == presses + 1, state
         count += len(types)
-    # Observe the received down event before cancelling; the requested minute cannot expire during this check.
-    request = {"id": "cancel-held-click", "method": "click", "params": {**window, **point, "holdMs": 60000}}
-    helper.process.stdin.write(json.dumps(request) + "\n")
-    helper.process.stdin.flush()
-    wait_for_state(state_file, lambda value: len(value["events"]) == count + 1)
-    helper.process.stdin.write(json.dumps({"type": "cancel", "id": request["id"]}) + "\n")
-    helper.process.stdin.flush()
-    response = json.loads(line(helper.process))
-    helper.transcript.append({"request": request, "response": response})
-    assert response["id"] == request["id"] and response["error"]["code"] == "NATIVE_CANCELLED", response
-    state = wait_for_state(state_file, lambda value: len(value["events"]) >= count + 2)
-    assert [event["type"] for event in state["events"][count:]] == [1, 2], state
-    helper.call("click", {**window, **point})
-    state = wait_for_state(state_file, lambda value: len(value["events"]) >= count + 4)
-    assert [event["type"] for event in state["events"][count:]] == [1, 2, 1, 2], state
+    # Production cancellation travels directly over the socket; the diagnostic stdio proxy exchanges whole requests.
+    key = hashlib.sha256(Path(helper.process.args[0]).read_bytes()).hexdigest()
+    socket_path = Path(f"/tmp/dsh-cua-{os.getuid()}/{key}.sock")
+    for ending in ["cancel", "timeout", "disconnect"]:
+        connection = Connection(socket_path, key, timeoutMs=5000 if ending == "timeout" else 30000)
+        try:
+            app = connection.call("getApp", {"selector": str(observed["pid"])})
+            params = {**window, **point, "appHandle": app["appHandle"], "holdMs": 60000}
+            count = len(json.loads(state_file.read_text())["events"])
+            request = {"id": "held-click", "method": "click", "params": params}
+            connection.send(request)
+            wait_for_state(state_file, lambda value: len(value["events"]) == count + 1)
+            if ending == "disconnect":
+                connection.close()
+            else:
+                if ending == "cancel":
+                    connection.send({"type": "cancel", "id": request["id"]})
+                response = connection.read()
+                helper.transcript.append({"request": request, "response": response})
+                assert response["id"] == request["id"], response
+                assert response["error"]["code"] == ("NATIVE_CANCELLED" if ending == "cancel" else "NATIVE_TIMEOUT"), response
+            state = wait_for_state(state_file, lambda value: len(value["events"]) >= count + 2)
+            assert [event["type"] for event in state["events"][count:]] == [1, 2], state
+            helper.call("click", {**window, **point})
+            state = wait_for_state(state_file, lambda value: len(value["events"]) >= count + 4)
+            assert [event["type"] for event in state["events"][count:]] == [1, 2, 1, 2], state
+        finally:
+            connection.close()
+
 
 
 def main():
@@ -158,22 +174,12 @@ def main():
                 call("pressKey", {**owner, "key": "KP_Enter"})
                 state = wait_for_state(state_file, lambda value: {82, 76}.issubset({event.get("keyCode") for event in value["events"]}))
             check_click_holds(helper, owner, window, point, state_file)
-            timed = NativeHelper(transcript, args.helper, ["--timeout-ms", "5000"])
-            try:
-                timed_app = timed.call("getApp", {"selector": str(application)})
-                count = len(json.loads(state_file.read_text())["events"])
-                timed.call("click", {"appHandle": timed_app["appHandle"], "windowId": state["windowId"], **point,
-                                     "holdMs": 60000}, "NATIVE_TIMEOUT")
-                state = wait_for_state(state_file, lambda value: len(value["events"]) >= count + 2)
-                assert [event["type"] for event in state["events"][count:]] == [1, 2], state
-            finally:
-                timed.stop()
             if args.artifacts:
                 args.artifacts.mkdir(parents=True, exist_ok=True)
                 shot = call("screenshot", window)
                 (args.artifacts / "capabilities.png").write_bytes(base64.b64decode(shot["data"]))
                 (args.artifacts / "state.json").write_text(json.dumps(state, ensure_ascii=False, indent=2))
-            print("PASS: click holds and cancellation/timeout release" if args.click_only else
+            print("PASS: click holds and cancellation/timeout/disconnect release" if args.click_only else
                   "PASS: stopped-app launch, Unicode selection, plain/HTML paste, middle/modifier drag, keypad identity and click holds")
         finally:
             if pid is None and state_file.exists():

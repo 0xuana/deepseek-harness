@@ -178,7 +178,7 @@ describe('pointer buttons and modifiers', () => {
     for (const surface of [app, window]) {
       for (const target of [0, [10, 20] as const]) {
         await surface.click(target, { holdMs: 800, mouseButton: 'right' })
-        expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'click', params: expect.objectContaining({ holdMs: 800, mouseButton: 'right' }) })
+        expect(f.dispatch.mock.calls.at(-1)?.[0]).toMatchObject({ method: 'click', params: { holdMs: 800, mouseButton: 'right' } })
         f.dispatch.mockClear()
         await expect(surface.click(target, { holdMs: 0 })).rejects.toThrow('holdMs')
         expect(f.dispatch).not.toHaveBeenCalled()
