@@ -379,6 +379,44 @@ describe('composer focus handoff', () => {
     // selection itself is asserted in the browser lane.
     expect(lexicalFocus).toHaveBeenCalled()
   })
+
+  it.each<[string, SubmitOutcome]>([
+    ['the Host accepts it', { kind: 'success' }],
+    ['it fails', { kind: 'error', text: 'send failed' }],
+  ])('returns the keyboard to the editor once a sent message settles because %s', async (_label, outcome) => {
+    const { shell, textarea, sink } = bench()
+    writeDraft(shell, 'draft text')
+    act(() => { shell.focus() })
+    let settle!: (outcome: SubmitOutcome) => void
+    sink.mockImplementationOnce(() => new Promise<SubmitOutcome>((resolve) => { settle = resolve }))
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+    expect(textarea.getAttribute('contenteditable')).toBe('false')
+    // A browser moves the keyboard to the body once the focused box stops being editable; jsdom does not.
+    act(() => { textarea.blur() })
+    expect(document.activeElement).toBe(document.body)
+
+    await act(async () => { settle(outcome) })
+
+    expect(textarea.getAttribute('contenteditable')).toBe('true')
+    expect(document.activeElement).toBe(textarea)
+  })
+
+  it('leaves the keyboard with a control the user moved to while a message was sending', async () => {
+    const { shell, textarea, sink } = bench()
+    const other = document.createElement('button')
+    document.body.appendChild(other)
+    onTestFinished(() => { other.remove() })
+    writeDraft(shell, 'draft text')
+    act(() => { shell.focus() })
+    let settle!: (outcome: SubmitOutcome) => void
+    sink.mockImplementationOnce(() => new Promise<SubmitOutcome>((resolve) => { settle = resolve }))
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+    act(() => { other.focus() })
+
+    await act(async () => { settle({ kind: 'success' }) })
+
+    expect(document.activeElement).toBe(other)
+  })
 })
 
 describe('composer placeholder visibility', () => {
@@ -657,13 +695,18 @@ describe('image draft rail', () => {
     sink.mockImplementationOnce(() => new Promise<SubmitOutcome>((resolve) => { settle = resolve }))
     fireEvent.keyDown(textarea, { key: 'Enter' })
     expect(sink).toHaveBeenCalledWith('', ['draft-1'], 'queue', expect.any(AbortSignal))
-    // Optimistic commit: the rail clears at submit, before the admission settles.
-    expect(attachmentOwner(result.slotCalls).attachments).toEqual([])
+    // The rail keeps the sent image, and Send shows progress, until the Host accepts the message.
+    expect(attachmentOwner(result.slotCalls).attachments).toEqual([attachments[0]])
+    const sending = view.getByRole('button', { name: '正在发送消息' }) as HTMLButtonElement
+    expect(sending.disabled).toBe(true)
+    expect(sending.getAttribute('aria-busy')).toBe('true')
+    expect(sending.hasAttribute('data-sending')).toBe(true)
     await act(async () => { settle({ kind: 'success' }) })
     expect(attachmentOwner(result.slotCalls).attachments).toEqual([])
+    expect(view.getByRole('button', { name: '发送消息' }).getAttribute('aria-busy')).toBe('false')
   })
 
-  it('returns an image-only draft to the rail when its admission fails', async () => {
+  it('keeps an image-only draft in the rail when its admission fails', async () => {
     const file = new File([Uint8Array.of(1)], 'pixel.png', { type: 'image/png' })
     const attachments = [
       { kind: 'image' as const, id: 'draft-1' as DraftAttachmentId, file, previewUrl: 'blob:draft-1' },
@@ -673,7 +716,7 @@ describe('image draft rail', () => {
     let fail!: (outcome: SubmitOutcome) => void
     sink.mockImplementationOnce(() => new Promise<SubmitOutcome>((resolve) => { fail = resolve }))
     fireEvent.keyDown(textarea, { key: 'Enter' })
-    expect(attachmentOwner(result.slotCalls).attachments).toEqual([])
+    expect(attachmentOwner(result.slotCalls).attachments).toEqual([attachments[0]])
     await act(async () => { fail({ kind: 'error', text: '图片发送失败' }) })
     await vi.waitFor(() => {
       expect(attachmentOwner(result.slotCalls).attachments).toEqual([attachments[0]])

@@ -66,18 +66,22 @@ export interface ISession {
   /** Host-computed projection values by key (the useProjection seat). */
   readonly projections: ProjectionsFace
   /**
-   * Register one local submission echo in `snapshot.pendingSubmissions`,
-   * synchronously, before the caller serializes and sends the prompt. The
-   * Chat echoes persist until durable admission; transcript identities also
-   * wait for the Inbox claim watermark so stale queue rows stay suppressed.
-   * Queued echoes retire on queue acceptance. Identified failures retire
-   * submissions that have not already reached durable admission.
+   * Register one local submission echo before the caller serializes and sends
+   * the prompt. The echo reconciles against Host events from then on, and
+   * enters `snapshot.pendingSubmissions` once {@link prompt} reports that the
+   * Host accepted the prompt. The Chat echoes persist until durable admission;
+   * transcript identities also wait for the Inbox claim watermark so stale
+   * queue rows stay suppressed. Queued echoes retire on queue acceptance.
+   * Identified failures retire submissions that have not already reached
+   * durable admission.
    * @param input - echo content and the optional settlement callback.
    * @returns the minted identity for {@link prompt} plus the pre-prompt abandon path.
    */
   beginSubmission(input: BeginSubmissionInput): SubmissionHandle
   /**
-   * Send a prompt into the session.
+   * Send a prompt into the session. The Host can hold the prompt at its
+   * admission stage, so the call can stay open; acceptance publishes the
+   * prompt's echo and moves a blank Session to engaging.
    * @param content - text plus browser-owned temporary image uploads.
    * @param mode - 'queue' appends a turn; 'steer' interrupts the running one.
    * @param signal - optional caller cancellation for the complete admission round-trip.

@@ -29,7 +29,7 @@ The Web Session Remote adopts the controller first. `session/prompt` resolves or
 
 Request deduplication stays in the Session Remote. It reads the Session history synchronously, and the [synchronous-read decision](2026-09-09-deprecate-synchronous-session-event-reads.md) prohibits copying such a read into new production code; the controller can take over deduplication once a projection records accepted request ids.
 
-The Web client keeps its existing echo: Enter clears the composer and shows the message at once, and a refusal reaches the client as an ordinary prompt failure, which retires the echo and restores the draft unless new text was typed meanwhile.
+The Web client shows a message only after the Host accepts it. The composer keeps the sent draft, references, and attachments read-only in a `sending` phase, with Send showing progress, until `session/prompt` resolves. Then it clears, and the Session publishes the message's echo and leaves the blank New Session layout. A refusal or failure returns the message to editing unchanged; the composer no longer clears on Enter and restores failed drafts.
 
 ## Alternatives considered
 
@@ -45,7 +45,7 @@ The liveshare proposal in PR #3854 also introduced an admission hook, for caller
 ## Consequences
 
 - A listener that holds one message keeps later messages to the same Agent waiting; other Agents proceed.
-- While a listener holds a Web prompt, the client already shows its echo; a refusal then retires the echo and returns the draft.
+- A Web composer sends one message at a time. Editing waits for the Host's answer, which normally takes one round-trip and lasts as long as a listener holds the message.
 - `prepare` stores attachments before the decision, so a refused prompt can leave a stored attachment unreferenced.
 - Image prompts deliver inside the Session Remote's image admission chain, so a model switch waits while a listener holds an image prompt.
 - Until every outside sender adopts `deliver()`, the stage is not a complete enforcement point.

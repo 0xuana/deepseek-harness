@@ -29,7 +29,7 @@ Web Session Remote 首先接入控制器。`session/prompt` 自己解析或恢�
 
 请求去重留在 Session Remote。它同步读取 Session 历史，而[同步读取决策](2026-09-09-deprecate-synchronous-session-event-reads.zh.md)禁止把这类读取复制到新的生产代码；等有投影记录已接收的请求 id 后，控制器才能接管去重。
 
-Web 客户端保留现有的回显方式：Enter 立即清空 composer 并显示消息；拒绝在客户端表现为一次普通的提示词失败，回显撤下，草稿回到 composer，除非期间已经输入了新内容。
+Web 客户端只在 Host 接收消息后才显示它。composer 在 `sending` 阶段把已发送的草稿、引用和附件保持为只读，Send 显示发送中，直到 `session/prompt` 返回。之后 composer 清空，Session 公开该消息的回显并离开空白的新会话布局。被拒绝或失败时消息原样回到编辑状态；composer 不再在 Enter 时清空并回填失败草稿。
 
 ## 备选方案
 
@@ -45,7 +45,7 @@ PR #3854 中的 liveshare 方案也引入过一个接纳钩子，用于调用方
 ## 影响
 
 - 监听器暂留一条消息时，同一 Agent 之后的消息都要等待；其他 Agent 不受影响。
-- 监听器暂留一条 Web 提示词期间，客户端已经显示其回显；随后被拒绝时，回显撤下，草稿回到 composer。
+- Web composer 同一时刻只发送一条消息。编辑要等 Host 答复，通常只需一次往返，监听器暂留消息时则一直等待。
 - `prepare` 在决定之前存储附件，因此被拒绝的提示词可能留下一个无人引用的已存附件。
 - 图片提示词在 Session Remote 的图片接纳链内投递，因此监听器暂留图片提示词期间，切换模型要等待。
 - 在所有外部发送方都改用 `deliver()` 之前，这个阶段还不是完整的强制执行点。

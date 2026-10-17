@@ -100,7 +100,8 @@ export const InputBar = memo(function InputBar({
   const imageLimits = useProjection('imageLimits')
   // Prompt failures are ordinary failures (no create/attach transaction exists
   // anymore): the toast announces promptError, the draft stays in the machine,
-  // and the user resubmits. A remount over a session whose machine still holds
+  // and the user resubmits. A refusal whose plugin presents its own
+  // explanation adds no toast; another refusal shows the plugin's text. A remount over a session whose machine still holds
   // an unresolved promptError deliberately re-announces it once — the failure
   // is still pending, and a transient banner is its only surface. Attachment
   // rejections show product copy keyed by the wire reason — whichever domain
@@ -111,6 +112,10 @@ export const InputBar = memo(function InputBar({
     const { error } = promptError
     if (error.code === 'session/writer-held') {
       showToast(t('error.sessionInUse'))
+      return
+    }
+    if (error.code === 'session/prompt-rejected') {
+      if (!error.details.presented) showToast(error.message)
       return
     }
     showToast(error.code === 'session/attachment-invalid' || error.code === 'subagent/attachment-invalid'
@@ -144,7 +149,9 @@ export const InputBar = memo(function InputBar({
   // the composer asking for the only thing it prevents. The other reasons to
   // be disabled do lock it — there is no session to choose a model for.
   const modelSeatLocked = removed || inert || !live
-  const machineBusy = input?.phase === 'adjudicating' || input?.phase === 'submitting'
+  const machineBusy = input?.phase === 'adjudicating' || input?.phase === 'submitting' || input?.phase === 'sending'
+  // The message waits for the Host to accept it; Send shows progress instead of the arrow.
+  const sending = input?.phase === 'sending'
   // The no-workspace surface remains the resident DOM node but acts as the
   // existing picker trigger. Message controls stay locked until a Session
   // exists; the trigger itself is read-only rather than disabled so pointer
@@ -181,6 +188,22 @@ export const InputBar = memo(function InputBar({
     if (locked || editor === null) return
     focusDraftEditor(editor, revealSelection)
   }, [locked, sessionId, editor])
+
+  // A busy phase leaves the box read-only, and the browser then moves the
+  // keyboard to the document body. When the phase ends with the keyboard still
+  // there, return it, so the next message can be typed as soon as a send
+  // settles; a control the user moved to meanwhile keeps the keyboard.
+  const busyPhaseSeen = useRef(false)
+  useEffect(() => {
+    if (machineBusy) {
+      busyPhaseSeen.current = true
+      return
+    }
+    if (!busyPhaseSeen.current) return
+    busyPhaseSeen.current = false
+    if (locked || editor === null) return
+    if (document.activeElement === null || document.activeElement === document.body) focusDraftEditor(editor, revealSelection)
+  }, [machineBusy])
 
   // A persisted draft arrives AFTER the unlock effect: DefaultConversationViews
   // adopts it in its own mount effect, and a parent's mount effect runs after
@@ -328,9 +351,11 @@ export const InputBar = memo(function InputBar({
   const plainMessageDraft = !empty && input?.phase === 'plain' && !draft.trimStart().startsWith('/')
   const primaryLabel = primaryStops
     ? t('input.stop')
-    : running && steeringAvailable && !disabled && !uploadsPending && plainMessageDraft
-      ? t(primarySubmitMode === 'steer' ? 'input.send.steer' : 'input.send.queue')
-      : t('input.send')
+    : sending
+      ? t('input.sending')
+      : running && steeringAvailable && !disabled && !uploadsPending && plainMessageDraft
+        ? t(primarySubmitMode === 'steer' ? 'input.send.steer' : 'input.send.queue')
+        : t('input.send')
   const onPrimary = (): void => {
     if (primaryStops) {
       stop?.()
@@ -499,6 +524,8 @@ export const InputBar = memo(function InputBar({
                 type="button"
                 className={css.primary}
                 aria-label={primaryLabel}
+                aria-busy={sending}
+                data-sending={sending ? '' : undefined}
                 disabled={primaryDisabled}
                 onMouseDown={keepFocus}
                 onClick={onPrimary}
@@ -506,6 +533,11 @@ export const InputBar = memo(function InputBar({
                 {primaryStops ? (
                   <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden>
                     <rect x="3" y="3" width="10" height="10" rx="3" fill="currentColor" />
+                  </svg>
+                ) : sending ? (
+                  <svg className={css.sendingSpinner} viewBox="0 0 16 16" width="16" height="16" aria-hidden>
+                    <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeOpacity="0.35" strokeWidth="2" />
+                    <path d="M8 2a6 6 0 0 1 6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                   </svg>
                 ) : (
                   <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden>

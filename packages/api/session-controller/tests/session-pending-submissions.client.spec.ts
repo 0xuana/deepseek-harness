@@ -68,8 +68,21 @@ async function settleFrames(): Promise<void> {
   await new Promise(resolve => setTimeout(resolve, 0))
 }
 
+type BenchSession = Awaited<ReturnType<typeof sessionBench>>
+
+/** Register an echo and let the Host accept its prompt, which publishes the echo. */
+async function submitAccepted(
+  session: BenchSession,
+  input: Parameters<BenchSession['beginSubmission']>[0],
+): Promise<ReturnType<BenchSession['beginSubmission']>> {
+  const handle = session.beginSubmission(input)
+  const result = await session.prompt([{ type: 'text', text: input.text }], input.mode, undefined, handle.requestId)
+  expect(result.ok).toBe(true)
+  return handle
+}
+
 describe('beginSubmission', () => {
-  it('inserts the echo synchronously and flips the engaging edge before any prompt call', async ({ mock, start }) => {
+  it('publishes the echo and the engaging edge only once the Host accepts the prompt', async ({ mock, start }) => {
     const session = await sessionBench(mock, start, SID)
     expect(session.getSnapshot()).toMatchObject({ pendingSubmissions: [], promptAttempted: false })
     const handle = session.beginSubmission({
@@ -79,6 +92,15 @@ describe('beginSubmission', () => {
         type: 'image', value: { previewUrl: 'blob:p1', name: 'a.png', width: 4, height: 3 },
       }],
     })
+    expect(session.getSnapshot()).toMatchObject({ pendingSubmissions: [], promptAttempted: false })
+    expect(mock.log.requests()).toEqual([])
+    const receipt = Promise.withResolvers<{ ok: true; value: { accepted: true } }>()
+    mock.remote.session.prompt.mockImplementationOnce(() => receipt.promise)
+    const inFlight = session.prompt([{ type: 'text', text: '你好' }], 'queue', undefined, handle.requestId)
+    await Promise.resolve()
+    expect(session.getSnapshot()).toMatchObject({ pendingSubmissions: [], promptAttempted: false })
+    receipt.resolve({ ok: true, value: { accepted: true } })
+    expect((await inFlight).ok).toBe(true)
     expect(session.getSnapshot().promptAttempted).toBe(true)
     expect(session.getSnapshot().pendingSubmissions).toMatchObject([{
       requestId: handle.requestId,
@@ -88,15 +110,32 @@ describe('beginSubmission', () => {
         type: 'image', value: { previewUrl: 'blob:p1', name: 'a.png', width: 4, height: 3 },
       }],
     }])
-    expect(mock.log.requests()).toEqual([])
   }, COLD_BOOT_TIMEOUT_MS)
+
+  it('never publishes an echo whose message was observed before the Host receipt', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
+    await session.open()
+    const retirements: PendingSubmissionRetirement[] = []
+    const handle = session.beginSubmission({
+      mode: 'queue', text: '先到', attachments: [], onRetire: retirement => retirements.push(retirement),
+    })
+    const receipt = Promise.withResolvers<{ ok: true; value: { accepted: true } }>()
+    mock.remote.session.prompt.mockImplementationOnce(() => receipt.promise)
+    const inFlight = session.prompt([{ type: 'text', text: '先到' }], 'queue', undefined, handle.requestId)
+    await pushEvent(mock, promptEvent(SessionSeq(0), handle.requestId))
+    await settleFrames()
+    expect(retirements).toEqual([{ reason: 'observed', attachments: [] }])
+    receipt.resolve({ ok: true, value: { accepted: true } })
+    expect((await inFlight).ok).toBe(true)
+    expect(session.getSnapshot().pendingSubmissions).toEqual([])
+  })
 
   it('derives and captures the echo placement from running state and delivery mode', async ({ mock, start }) => {
     const session = await sessionBench(mock, start, SID)
-    session.beginSubmission({ mode: 'queue', text: '空闲', attachments: [] })
+    await submitAccepted(session, { mode: 'queue', text: '空闲', attachments: [] })
     session.handleRunning(true)
-    session.beginSubmission({ mode: 'queue', text: '排队', attachments: [] })
-    session.beginSubmission({ mode: 'steer', text: '纠偏', attachments: [] })
+    await submitAccepted(session, { mode: 'queue', text: '排队', attachments: [] })
+    await submitAccepted(session, { mode: 'steer', text: '纠偏', attachments: [] })
     session.handleRunning(false)
     expect(session.getSnapshot().pendingSubmissions.map(({ text, placement }) => ({ text, placement }))).toEqual([
       { text: '空闲', placement: 'transcript' },
@@ -107,12 +146,12 @@ describe('beginSubmission', () => {
 
   it('keeps rapid ordinary submissions in Chat until the running update arrives', async ({ mock, start }) => {
     const session = await sessionBench(mock, start, SID)
-    for (const text of ['A', 'B', 'C']) session.beginSubmission({ mode: 'queue', text, attachments: [] })
+    for (const text of ['A', 'B', 'C']) await submitAccepted(session, { mode: 'queue', text, attachments: [] })
     expect(session.getSnapshot().pendingSubmissions.map(input => input.placement)).toEqual([
       'transcript', 'transcript', 'transcript',
     ])
     session.handleRunning(true)
-    session.beginSubmission({ mode: 'queue', text: 'D', attachments: [] })
+    await submitAccepted(session, { mode: 'queue', text: 'D', attachments: [] })
     expect(session.getSnapshot().pendingSubmissions.map(input => input.placement)).toEqual([
       'transcript', 'transcript', 'transcript', 'queued',
     ])
@@ -161,8 +200,8 @@ describe('prompt-coupled retirement', () => {
 
   it('an unidentified prompt failure leaves registered echoes alone', async ({ mock, start }) => {
     const session = await sessionBench(mock, start, SID)
+    await submitAccepted(session, { mode: 'queue', text: '还在', attachments: [] })
     mock.remote.session.prompt.mockResolvedValue(err(new RemoteError('session/agent-busy', '忙', { reason: 'busy' })))
-    session.beginSubmission({ mode: 'queue', text: '还在', attachments: [] })
     await session.prompt([{ type: 'text', text: '另一个' }], 'queue')
     expect(session.getSnapshot().pendingSubmissions).toHaveLength(1)
   })
@@ -173,7 +212,7 @@ describe('observed retirement', () => {
     const session = await sessionBench(mock, start, SID)
     await session.open()
     const retirements: PendingSubmissionRetirement[] = []
-    const handle = session.beginSubmission({
+    const handle = await submitAccepted(session, {
       mode: 'queue',
       text: '发送',
       attachments: [{ type: 'image', value: { previewUrl: 'blob:p1' } }],
@@ -193,7 +232,7 @@ describe('observed retirement', () => {
     const session = await sessionBench(mock, start, SID)
     await session.open()
     const onRetire = vi.fn()
-    const handle = session.beginSubmission({ mode: 'steer', text: 'accepted', attachments: [], onRetire })
+    const handle = await submitAccepted(session, { mode: 'steer', text: 'accepted', attachments: [], onRetire })
     const refs = [imageRef('claimed-image')]
     const message = queuedItem(handle.requestId, refs)
     session.projections.apply('inbox', { 'next-turn': [], 'next-step': [message] }, SessionSeq(0))
@@ -229,7 +268,7 @@ describe('observed retirement', () => {
       vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => frames.push(callback))
       const onRetire = vi.fn()
       session.handleRunning(mode === 'steer')
-      const handle = session.beginSubmission({ mode, text: 'local input', attachments: [], onRetire })
+      const handle = await submitAccepted(session, { mode, text: 'local input', attachments: [], onRetire })
       const refs = [imageRef('idle-image'), fileRef('idle-file')]
       const message = queuedItem(handle.requestId, refs)
       const queued = { 'next-turn': [], 'next-step': [], [target]: [message] }
@@ -277,10 +316,10 @@ describe('observed retirement', () => {
       const normalRetired = vi.fn()
       const queueRetired = vi.fn()
       const steerRetired = vi.fn()
-      const normal = session.beginSubmission({ mode: 'queue', text: 'opening', attachments: [], onRetire: normalRetired })
+      const normal = await submitAccepted(session, { mode: 'queue', text: 'opening', attachments: [], onRetire: normalRetired })
       session.handleRunning(true)
-      const queued = session.beginSubmission({ mode: 'queue', text: 'queued', attachments: [], onRetire: queueRetired })
-      const steer = session.beginSubmission({ mode: 'steer', text: 'steering', attachments: [], onRetire: steerRetired })
+      const queued = await submitAccepted(session, { mode: 'queue', text: 'queued', attachments: [], onRetire: queueRetired })
+      const steer = await submitAccepted(session, { mode: 'steer', text: 'steering', attachments: [], onRetire: steerRetired })
       const normalMessage = queuedItem(normal.requestId, [fileRef('opening-file')])
       const queuedMessage = queuedItem(queued.requestId, [imageRef('queued-image')])
       const steerMessage = queuedItem(steer.requestId, [imageRef('steer-image'), fileRef('steer-file')])
@@ -342,7 +381,7 @@ describe('observed retirement', () => {
     await session.open()
     session.handleRunning(true)
     const onRetire = vi.fn()
-    const handle = session.beginSubmission({ mode: 'steer', text: 'accepted', attachments: [], onRetire })
+    const handle = await submitAccepted(session, { mode: 'steer', text: 'accepted', attachments: [], onRetire })
     const refs = [imageRef('steer-image')]
     const message = queuedItem(handle.requestId, refs)
     const echo = session.getSnapshot().pendingSubmissions[0]
@@ -376,9 +415,9 @@ describe('observed retirement', () => {
       session.handleRunning(target === 'next-step')
       const canceled = vi.fn()
       const rejected = vi.fn()
-      const first = session.beginSubmission({ mode: 'steer', text: 'cancel', attachments: [], onRetire: canceled })
-      const second = session.beginSubmission({ mode: 'steer', text: 'reject', attachments: [], onRetire: rejected })
-      const unclaimed = session.beginSubmission({ mode: 'steer', text: 'later', attachments: [] })
+      const first = await submitAccepted(session, { mode: 'steer', text: 'cancel', attachments: [], onRetire: canceled })
+      const second = await submitAccepted(session, { mode: 'steer', text: 'reject', attachments: [], onRetire: rejected })
+      const unclaimed = await submitAccepted(session, { mode: 'steer', text: 'later', attachments: [] })
       const foreign = createUserMessage({ source: { kind: 'user' }, content: [] })
       await pushEvent(mock, {
         type: 'agent/inbox/spliced', seq: SessionSeq(0), time: 1,
@@ -469,7 +508,7 @@ describe('observed retirement', () => {
       await session.open()
       session.handleRunning(target === 'next-step')
       const onRetire = vi.fn()
-      const handle = session.beginSubmission({ mode: 'steer', text: 'accepted', attachments: [], onRetire })
+      const handle = await submitAccepted(session, { mode: 'steer', text: 'accepted', attachments: [], onRetire })
       const refs = [imageRef('steer-image'), fileRef('steer-file')]
       const message = queuedItem(handle.requestId, refs)
       if (target === 'next-turn') {
@@ -481,7 +520,7 @@ describe('observed retirement', () => {
           data: { target, start: 0, inserted: [message] },
         })
       }
-      const unconfirmed = session.beginSubmission({ mode: 'steer', text: 'not accepted yet', attachments: [] })
+      const unconfirmed = await submitAccepted(session, { mode: 'steer', text: 'not accepted yet', attachments: [] })
       const inbox = { 'next-turn': [], 'next-step': [], [target]: pending ? [message] : [] }
       const replacement = {
         ...historyValue([ev.turnEnd(SessionSeq(10), 2)], true),
@@ -572,7 +611,7 @@ describe('observed retirement', () => {
       frames.push(fn)
       return frames.length
     })
-    const handle = session.beginSubmission({ mode: 'queue', text: '帧', attachments: [] })
+    const handle = await submitAccepted(session, { mode: 'queue', text: '帧', attachments: [] })
     await pushEvent(mock, promptEvent(SessionSeq(0), handle.requestId))
     expect(session.getSnapshot().pendingSubmissions).toHaveLength(1)
     expect(frames).toHaveLength(1)
