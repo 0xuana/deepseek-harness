@@ -7,4 +7,4 @@
   config:
     mode: !!js "process.env.DSH_PERMISSION_MODE ?? (process.env.DSH_SNAPSHOT === undefined ? 'workspace-write' : 'danger-full-access')"
     workspaceRoot: /tmp
-    additionalWritableRoots: !!js "[process.cwd()]"
+    additionalWritableRoots: !!js "[process.cwd() + '/extra']"
