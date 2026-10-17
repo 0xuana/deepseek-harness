@@ -263,16 +263,24 @@ class Hmr extends Service {
 
   /** Serialize a caller-owned mutation with all automatic reload paths.
    * @param operation Work that must not overlap module or configuration replacement.
+   * @param signal Cancel admission while queued; an operation already running must finish.
    * @returns The operation result after its asynchronous work completes.
    */
-  runExclusive<T>(operation: () => Promise<T>): Promise<T> {
+  runExclusive<T>(operation: () => Promise<T>, signal?: AbortSignal): Promise<T> {
     if (this.executing.getStore()) return Promise.reject(new Error('HMR transactions cannot be nested'))
+    if (signal?.aborted) return Promise.reject(signal.reason)
+    const result = Promise.withResolvers<T>()
+    const cancel = () => { result.reject(signal?.reason) }
+    signal?.addEventListener('abort', cancel, { once: true })
     const task = this.operations.then(async () => {
+      signal?.removeEventListener('abort', cancel)
+      signal?.throwIfAborted()
       if (this.closing) throw new Error('HMR is disposed')
       return this.executing.run(true, operation)
     })
     this.operations = task.catch(() => {})
-    return task
+    void task.then(result.resolve, result.reject)
+    return result.promise
   }
 
   private runReload(operation: () => Promise<void>): Promise<void> {

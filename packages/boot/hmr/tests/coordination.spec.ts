@@ -59,6 +59,25 @@ it('serializes mutations, rejects nesting and keeps the queue usable after failu
   expect(order).toEqual([1, 2])
 })
 
+it('cancels queued mutations without cancelling an admitted transaction', async () => {
+  const { hmr } = await fixture()
+  const release = Promise.withResolvers<undefined>(), entered = Promise.withResolvers<undefined>()
+  onTestFinished(() => { release.resolve(undefined) })
+  const running = new AbortController(), waiting = new AbortController()
+  const first = hmr.runExclusive(async () => { entered.resolve(undefined); await release.promise; return 'committed' }, running.signal)
+  await entered.promise
+  const operation = vi.fn(async () => 'unwanted')
+  const cancelled = hmr.runExclusive(operation, waiting.signal)
+  waiting.abort(new Error('owner unloaded'))
+  running.abort(new Error('too late to cancel admission'))
+  await expect(cancelled).rejects.toThrow('owner unloaded')
+  await expect(hmr.runExclusive(operation, waiting.signal)).rejects.toThrow('owner unloaded')
+  release.resolve(undefined)
+  await expect(first).resolves.toBe('committed')
+  await hmr.runExclusive(async () => {})
+  expect(operation).not.toHaveBeenCalled()
+})
+
 it('holds configuration handlers behind configuration mutations', async () => {
   const { hmr, dir } = await fixture()
   const filename = join(dir, 'package.json')

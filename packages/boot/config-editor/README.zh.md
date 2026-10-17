@@ -30,7 +30,7 @@ kind: "package-reference"
   name: '@deepseek-ai/dsh-config-editor'
 ```
 
-使用 [settings](../../settings/settings/README.zh.md) 提供只编辑即时字段的表单。编辑完整配置的调用方可使用 `ctx.configEditor.edit()`；普通字段保留 Loader 的正常生命周期。
+使用 [settings](../../settings/settings/README.zh.md) 提供只编辑即时字段的表单。编辑完整配置的调用方可使用 `ctx.configEditor.edit()`；普通字段保留 Loader 的正常生命周期。可选 `signal` 可取消等待 HMR 调度的写入，文件保持不变；已经开始的写入仍会完成。
 
 <a id="understand-the-implementation"></a>
 ## 理解实现
