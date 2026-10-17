@@ -352,12 +352,15 @@ describe('headless stream-json snapshots', () => {
       const afterRejectedRestore = (await persistedLogs(cwd, join(cwd, '.dsh', 'sessions')))[0]!.content
       expect(afterRejectedRestore.startsWith(beforeRejectedRestore)).toBe(true)
       // Restore records its seed boundary before live publication validates the saved permission.
-      expect(parseJsonl(afterRejectedRestore.slice(beforeRejectedRestore.length))).toEqual([{
+      const appended = parseJsonl(afterRejectedRestore.slice(beforeRejectedRestore.length))
+      expect(appended).toHaveLength(1)
+      const { time, ...marker } = appended[0]!
+      expect(typeof time).toBe('number')
+      expect(marker).toEqual({
         type: 'session/end-seed',
         seq: parseJsonl(beforeRejectedRestore).length - 1,
-        time: expect.any(Number),
         data: {},
-      }])
+      })
       await runLoaderSmoke({
         ...options,
         label: 'Change restored Auto to Read only with its integration',
