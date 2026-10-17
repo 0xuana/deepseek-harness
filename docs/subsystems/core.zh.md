@@ -429,6 +429,32 @@ type Branded<B extends string> = string & { readonly [BRAND]: B }
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxagentcontroller--agentcontroller"></a>
+
+### `ctx.agentController` — `AgentController`
+
+Delivers the messages that senders, such as the Web Session Remote, bring on someone's behalf. Messages to one Agent are prepared, decided, and appended one at a time in arrival order; messages to different Agents do not wait for each other. Disposal stops every message that has not entered an inbox.
+
+```ts cordis-catalog
+/**
+ * Deliver one message from outside the Agent: prepare its content, ask the
+ * `agent-controller/admission` stage for a decision, then append an
+ * admitted message with `followup` or `steer`.
+ * @param agent - the receiving Agent.
+ * @param request - delivery mode, source, cancellation, and the sender's content preparation.
+ * @returns the id of the message once it is in the inbox.
+ * @throws {@link AgentAdmissionRejected} when a listener rejects the message
+ * or throws, or when the Agent left the registry first; the error of
+ * `prepare`, `beforeInsert`, `followup`, or `steer` unchanged; the
+ * cancellation reason once the sender cancels or the controller stops.
+ */
+deliver(agent: Agent, request: DeliveryRequest): Promise<MessageId>
+```
+
+Types: [MessageId](llm-streaming.zh.md)
+
+Source: [`packages/core/agent-controller/src/index.ts`](../../packages/core/agent-controller/src/index.ts)
+
 <a id="ctxagentdefaultmodel--agentdefaultmodelconfig"></a>
 
 ### `ctx.agentDefaultModel` — `AgentDefaultModelConfig`
@@ -1074,6 +1100,42 @@ The turn is about to close: the model owes no response (no live tool calls, no f
 Types: [Scoped](scope.zh.md)
 
 Source: [`packages/core/agent/src/runtime-types.ts`](../../packages/core/agent/src/runtime-types.ts)
+
+<a id="agent-controller-events"></a>
+
+### `agent-controller/*` events
+
+<a id="agent-controlleradmission--waterfall"></a>
+
+#### `agent-controller/admission` — waterfall
+
+Decide whether one message from outside an Agent enters its inbox. `ctx.agentController.deliver` runs this stage and appends the message only after the whole chain admitted it; messages the Agent's own machinery produces enter through `followup`, `steer`, or `inject` without it. Listeners run in registration order, and messages to one Agent are decided one at a time in arrival order. A listener admits by returning the decision of `next()`, whose last step admits; awaiting before `next()` holds the message, and returning a `reject` decision refuses it without asking later listeners. A thrown error means the listener's check itself failed. A listener must not wait for a person when the message source is unattended, such as a schedule or a webhook.
+
+```ts cordis-catalog
+/**
+ * Decide whether one message from outside an Agent enters its inbox.
+ * `ctx.agentController.deliver` runs this stage and appends the message
+ * only after the whole chain admitted it; messages the Agent's own
+ * machinery produces enter through `followup`, `steer`, or `inject`
+ * without it. Listeners run in registration order, and messages to one
+ * Agent are decided one at a time in arrival order. A listener admits by
+ * returning the decision of `next()`, whose last step admits; awaiting
+ * before `next()` holds the message, and returning a `reject` decision
+ * refuses it without asking later listeners. A thrown error means the
+ * listener's check itself failed. A listener must not wait for a person
+ * when the message source is unattended, such as a schedule or a webhook.
+ * @param payload.agent - the receiving Agent.
+ * @param payload.message - the message as it will enter the inbox.
+ * @param payload.signal - aborted when the sender cancels or the controller stops.
+ * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): Agent-scoped listeners receive only that Agent.
+ * @mode waterfall
+ */
+'agent-controller/admission'(this: Scoped<Agent>, payload: { agent: Agent; message: UserMessage; signal: AbortSignal }, next: () => Promise<AdmissionDecision>): Promise<AdmissionDecision>
+```
+
+Types: [Scoped](scope.zh.md) · [UserMessage](session.zh.md)
+
+Source: [`packages/core/agent-controller/src/types.ts`](../../packages/core/agent-controller/src/types.ts)
 
 <a id="agent-loop-events"></a>
 

@@ -1,0 +1,49 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/core/agent-controller/README.md
+/:
+  en: 4ce07f9999659fff
+  zh: 4511db86e543aebf
+/deepseek-ai-dsh-agent-controller:
+  en: d0e0dc83964706b1
+  zh: a50fc815c4096c3b
+/deepseek-ai-dsh-agent-controller/summary:
+  en: 9736d739cd1255b3
+  zh: d7badb4d9dee9449
+/deepseek-ai-dsh-agent-controller/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: f14f34fce35a8d90
+/deepseek-ai-dsh-agent-controller/use-this-package:
+  en: 9fc767473d82e29c
+  zh: c9ba0267b0661af7
+/deepseek-ai-dsh-agent-controller/use-this-package/deliver-a-message:
+  en: 8a8e1d299fecd407
+  zh: d6ccdae0e1907e78
+/deepseek-ai-dsh-agent-controller/use-this-package/hold-or-refuse-a-message:
+  en: 5ecd169dd1f3682e
+  zh: 620964ebbc840b75
+/deepseek-ai-dsh-agent-controller/understand-the-implementation:
+  en: 592af7e68423bd1c
+  zh: d7640d838b8bda1f
+/deepseek-ai-dsh-agent-controller/understand-the-implementation/design-concept:
+  en: 8bafd147fa4392bd
+  zh: 7c18eb4762f7b161
+/deepseek-ai-dsh-agent-controller/understand-the-implementation/source-map:
+  en: f5daeafebe5a482b
+  zh: 9360afa7d5a117b7
+/deepseek-ai-dsh-agent-controller/further-exploration:
+  en: e2b9d38dc3bc51a0
+  zh: 7fec4a6bc4ed37cd
+/deepseek-ai-dsh-agent-controller/model-experience:
+  en: 845cdb9c119a58f5
+  zh: 83ba232d8ea1b463
+/deepseek-ai-dsh-agent-controller/model-experience/kv-cache-effect:
+  en: aa1853393a68d5fb
+  zh: 19383b52e8f75af5
+/deepseek-ai-dsh-agent-controller/known-limitations-and-deferred-work:
+  en: 7587c7c8a3968ba5
+  zh: 591171acc60df510
+/deepseek-ai-dsh-agent-controller/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: e88aeb617ffb74ea
