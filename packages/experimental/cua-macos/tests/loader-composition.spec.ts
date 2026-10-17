@@ -129,7 +129,7 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
   expect(events.find(event => event.event === 'state')?.count).toBe(1)
   expect(events.find(event => event.method === 'getState')?.params).toMatchObject({ maxElements: 2000, maxDepth: 25 })
   expect(events.find(event => event.method === 'click')?.params).toMatchObject({ holdMs: 800 })
-  expect(toolCalls[3]?.data.arguments).toMatchObject({ method: 'click', params: { holdMs: 800 } })
+  expect(toolCalls[3]?.data.arguments).toBe(JSON.stringify(calls[3]))
 
   const direct = await context.tools.execute({ agent, signal: new AbortController().signal,
     callId: ToolCallId('programmatic-window'), name: 'cua', arguments: { method: 'screenshot', params: { appHandle: 'fixture-app', windowId: 7 } },
