@@ -6,7 +6,7 @@
   "type": "module",
   "packageManager": "pnpm@11.28.5",
   "engines": {
-    "node": "^22.19.0 || >=24.0.0"
+    "node": ">=24.9.0"
   },
   "workspaces": [
     "vendor/*",
@@ -290,6 +290,8 @@
     "@deepseek-ai/dsh-working-directory": "workspace:*",
     "@deepseek-ai/dsh-experimental-worktree": "workspace:*",
     "@deepseek-ai/dsh-experimental-tool-worktree": "workspace:*",
+    "@deepseek-ai/dsh-experimental-subagent-oar": "workspace:*",
+    "@deepseek-ai/dsh-experimental-tool-subagent-oar": "workspace:*",
     "@deepseek-ai/dsh-experimental-cua-macos": "workspace:*"
   }
 }
