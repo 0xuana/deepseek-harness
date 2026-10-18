@@ -17,8 +17,10 @@ import type { ChatConversationViewNode } from './chat-nodes.ts'
  * `assistant-step` Node places its rows without one: its reasoning row joins
  * the step run and its reply row stands outside it.
  *
- * Whole-Turn folding also exempts every `assistant-step` reply row; the
- * reasoning row stays in the folded process.
+ * Whole-Turn folding also exempts reply rows: with the default Replies After
+ * Collapse choice every `assistant-step` reply row stays visible, and with
+ * Final answer only just the final answer's reply row does. Reasoning rows
+ * stay in the folded process in both choices.
  */
 export type ChatGroupTree = 'exchange' | 'input' | 'turn' | 'process'
 

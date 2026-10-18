@@ -10,7 +10,7 @@ Desktop product events use the optional [product analytics service](../product-a
 
 ## Summary
 
-Use this package to render a browser chat from recorded Session conversations, including historical images, localized actions, and restored scroll position. Work-details modes control reasoning previews and process visibility without hiding final answers; Verbose keeps completed-turn process rows visible. Local transcript and steering submissions appear immediately, remain in their original surface, and disappear atomically when authoritative Session records arrive, while queued submissions stay outside Chat. The package does not assemble or modify model requests.
+Use this package to render a browser chat from recorded Session conversations, including historical images, localized actions, and restored scroll position. Work-details modes control reasoning previews and process visibility without hiding Assistant replies; Verbose keeps completed-turn process rows visible. Local transcript and steering submissions appear immediately, remain in their original surface, and disappear atomically when authoritative Session records arrive, while queued submissions stay outside Chat. The package does not assemble or modify model requests.
 
 File-mention providers receive the viewed Session ID with the closing-turn owner, so links into inherited history can address the fork itself.
 
@@ -90,9 +90,9 @@ During uninterrupted following, local transcript and steering echoes remain moun
 
 When Chat ends with an open Turn control and that Turn has no visible input, the first local transcript echo precedes the control. Other echoes remain at the flow tail. The control and echoes share one keyed list, so arrival of the control preserves the echo's mounted identity. Durable inputs replace their matching echoes in the same render.
 
-Work-details modes control process-group display and reasoning previews. Compact, Standard, and Detailed fold eligible completed Turns without hiding the final answer; Verbose retains the duration/status header without a collapse action and shows historical process rows directly. The [business-rule reference](src/client/conversation-nodes/README.md#display-modes) contains the mode table, title behavior, whole-Turn eligibility, clocks, and disclosure resets.
+Work-details modes control process-group display and reasoning previews. Compact, Standard, and Detailed fold eligible completed Turns while keeping every Assistant reply visible, or only the final answer under Final answer only; Verbose retains the duration/status header without a collapse action and shows historical process rows directly. The [business-rule reference](src/client/conversation-nodes/README.md#display-modes) contains the mode table, title behavior, whole-Turn eligibility, clocks, and disclosure resets.
 
-The Settings row below Work details offers an [independent collapse-timing preference](src/client/conversation-nodes/README.md#collapse-timing), saved through the same Host profile configuration.
+The Settings rows below Work details offer an [independent collapse-timing preference](src/client/conversation-nodes/README.md#collapse-timing) and a [Replies After Collapse preference](src/client/conversation-nodes/README.md#folded-replies) (`ui-chat.foldedReplies`, hidden in Verbose), both saved through the same Host profile configuration.
 
 -----
 

@@ -10,7 +10,7 @@ kind: "package-reference"
 
 ## 概述
 
-使用本包可在浏览器中渲染已记录的 Session 对话，包括历史图片、本地化操作和滚动位置恢复。工作步骤展示模式控制思考预览与过程显隐，不隐藏最终答案；完全展开模式保持已完成轮次的过程行可见。本地 transcript（文本记录）与 steering（中途引导）提交会立即显示并保留在原区域，在权威会话记录到达时原子地消失，而排队中的提交始终不进入 Chat。本包不组装或修改模型请求。
+使用本包可在浏览器中渲染已记录的 Session 对话，包括历史图片、本地化操作和滚动位置恢复。工作步骤展示模式控制思考预览与过程显隐，不隐藏 Assistant 回复；完全展开模式保持已完成轮次的过程行可见。本地 transcript（文本记录）与 steering（中途引导）提交会立即显示并保留在原区域，在权威会话记录到达时原子地消失，而排队中的提交始终不进入 Chat。本包不组装或修改模型请求。
 
 文件提及提供方同时接收当前查看的会话 ID 与收尾轮次的属主信息，因此继承历史中的链接可以指向 fork 自身。
 
@@ -90,9 +90,9 @@ Assistant 尝试结束且没有可见消息时，Chat 隐藏已发布的 Node，
 
 Chat 末尾为进行中的 Turn 控制行，且该轮尚无可见输入时，第一条本地 transcript 回显显示在控制行前。其他回显保留在正文末尾。控制行与回显共用一个 keyed 列表，因此控制行到达时不会重新挂载回显。持久输入在同一次渲染中替换匹配的回显。
 
-工作步骤展示模式控制过程组显示与推理预览。简洁、标准、详细模式收起符合条件的已完成轮次，不隐藏最终答案；完全展开模式保留时长或状态抬头，但不支持收起，历史过程行直接显示。[业务规则明细](src/client/conversation-nodes/README.zh.md#display-modes) 统一说明模式表、组头行为、整轮折叠资格、时钟与开合重置。
+工作步骤展示模式控制过程组显示与推理预览。简洁、标准、详细模式收起符合条件的已完成轮次，保留所有 Assistant 回复可见，选「仅最终回答」时只保留最终答案；完全展开模式保留时长或状态抬头，但不支持收起，历史过程行直接显示。[业务规则明细](src/client/conversation-nodes/README.zh.md#display-modes) 统一说明模式表、组头行为、整轮折叠资格、时钟与开合重置。
 
-工作步骤展示下方的设置行提供[独立的收起时机设置](src/client/conversation-nodes/README.zh.md#collapse-timing)，通过相同的 Host profile 配置保存。
+工作步骤展示下方的设置行提供[独立的收起时机设置](src/client/conversation-nodes/README.zh.md#collapse-timing)和[「收起后显示的回复」设置](src/client/conversation-nodes/README.zh.md#folded-replies)（`ui-chat.foldedReplies`，完全展开模式下隐藏），二者都通过相同的 Host profile 配置保存。
 
 -----
 
