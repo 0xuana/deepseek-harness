@@ -28,7 +28,6 @@
         task: !!js ctx.headlessStartup.task
         sessionId: !!js ctx.headlessStartup.sessionId
         json: !!js ctx.headlessStartup.json
-        permissionMode: !!js ctx.headlessStartup.permissionMode
 
 # Replacing config retains the base mode/root defaults while adding the CLI grants.
 - id: sandbox-policy
