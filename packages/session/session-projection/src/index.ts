@@ -186,7 +186,7 @@ interface ErasedDefinition {
   wire: {
     viewSchema: { parse(value: unknown): unknown }
     view(state: unknown): unknown
-    /** Whether a Session summary carries this unit (false only for a marked key). */
+    /** Whether a Session summary carries this unit (false when the unit declared `summary: false`). */
     summary: boolean
   } | undefined
   stateVersion: number
@@ -313,7 +313,7 @@ export class SessionProjectionRegistry extends Service {
       apply: (state, event) => definition.apply(state as S, event),
       // The summary mark has no runtime representation: `wire.view` and
       // `viewSchema` are already typed with the mark stripped, so this erase
-      // only widens the state type. `summary` carries the interlock outcome
+      // only widens the state type. `summary` carries the declared membership
       // into the erased unit, where the key set reads it.
       wire: wire === undefined
         ? undefined

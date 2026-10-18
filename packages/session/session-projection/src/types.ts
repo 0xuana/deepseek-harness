@@ -13,8 +13,10 @@
  * leaves out. The symbol never exists at runtime: a marked entry keeps its
  * plain JSON value, `SessionProjectionViewValue` strips the mark in the wire
  * and client view types, and the only runtime fact is the `summary: false`
- * declared at registration. A marked key must declare it, and summary reads
- * skip exactly those keys.
+ * declared at registration. A marked key's registration declares
+ * `summary: false` so the runtime key set and the client view type agree, and
+ * `summaryKeys()` skips exactly those keys; the registration types do not
+ * enforce that pairing.
  */
 declare const sessionProjectionSummaryExcluded: unique symbol
 
