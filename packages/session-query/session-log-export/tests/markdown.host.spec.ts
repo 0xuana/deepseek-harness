@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import type { ContentBlock, MessageId, ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent, SessionSeq } from '@deepseek-ai/dsh-session'
+import type {} from '@deepseek-ai/dsh-session-title'
 import { brandNumber, brandString } from '@deepseek-ai/dsh-brand'
 import { formatSessionMarkdown } from '../src/markdown.ts'
 
@@ -9,6 +10,24 @@ const messageId = (value: string): MessageId => brandString<MessageId>(value)
 const callId = (value: string): ToolCallId => brandString<ToolCallId>(value)
 const attachmentId = (value: string): AttachmentId => brandString<AttachmentId>(value)
 const sequence = (value: number): SessionSeq => brandNumber<SessionSeq>(value)
+
+function titleEvent(seq: number, title: string): SessionEvent<'session/title'> {
+  return {
+    type: 'session/title',
+    seq: sequence(seq),
+    time: seq,
+    data: { title, messageSeqs: [], source: { kind: 'fallback' } },
+  }
+}
+
+function renderWithTitle(input: {
+  readonly title: string | undefined
+  readonly events: readonly SessionEvent[]
+}): string {
+  return formatSessionMarkdown(input.title === undefined
+    ? input.events
+    : [titleEvent(0, input.title), ...input.events])
+}
 
 function start(seq: number, turn: number): SessionEvent<'turn/start'> {
   return { type: 'turn/start', seq: sequence(seq), time: seq, data: { turn } }
@@ -134,8 +153,66 @@ function text(value: string): ContentBlock {
 }
 
 describe('formatSessionMarkdown', () => {
+
+  it('selects the latest real session/title event and treats missing or blank titles as untitled', () => {
+    const events = [
+      titleEvent(0, 'Old title'),
+      start(1, 1),
+      user(2, 'Question'),
+      titleEvent(3, 'Latest title'),
+      assistant(4, [text('Answer')]),
+      end(5, 1),
+    ]
+    expect(formatSessionMarkdown(events)).toContain('# Latest title')
+    expect(formatSessionMarkdown(events)).not.toContain('# Old title')
+
+    const blank = [titleEvent(0, '   '), start(1, 1), user(2, 'Question'), end(3, 1)]
+    expect(formatSessionMarkdown(blank)).toBe('# Untitled Session\n\n> Question\n')
+    expect(formatSessionMarkdown([])).toBe('# Untitled Session\n')
+  })
+
+
+  it('emits an exact fenced source path when supplied and omits it otherwise', () => {
+    const events = [
+      titleEvent(0, 'Source path'),
+      start(1, 1),
+      user(2, 'Question'),
+      assistant(3, [text('Answer')]),
+      end(4, 1),
+    ]
+    const sourcePath = '/tmp/Session files/```\nsecond'
+    expect(formatSessionMarkdown(events, sourcePath)).toBe([
+      '# Source path',
+      '',
+      'Session file:',
+      '',
+      '````text',
+      sourcePath,
+      '````',
+      '',
+      '> Question',
+      '',
+      'Answer',
+      '',
+    ].join('\n'))
+    expect(formatSessionMarkdown(events, '')).toBe('# Source path\n\n> Question\n\nAnswer\n')
+    expect(formatSessionMarkdown(events)).toBe('# Source path\n\n> Question\n\nAnswer\n')
+  })
+
+  it('does not mutate a frozen logical event snapshot', () => {
+    const events = Object.freeze([
+      Object.freeze(titleEvent(0, 'Frozen')),
+      Object.freeze(start(1, 1)),
+      Object.freeze(user(2, 'Question')),
+      Object.freeze(assistant(3, [text('Answer')])),
+      Object.freeze(end(4, 1)),
+    ])
+    expect(formatSessionMarkdown(events)).toBe('# Frozen\n\n> Question\n\nAnswer\n')
+    expect(events).toHaveLength(5)
+  })
+
   it('keeps complete chronology across inherited history and a compaction surface replacement', () => {
-    const markdown = formatSessionMarkdown({
+    const markdown = renderWithTitle({
       title: 'Chronology',
       events: [
         start(1, 1),
@@ -170,7 +247,7 @@ describe('formatSessionMarkdown', () => {
   })
 
   it('renders a turn with a collapsible commentary/tool section before the final reply', () => {
-    const markdown = formatSessionMarkdown({
+    const markdown = renderWithTitle({
       title: 'Turn layout',
       events: [
         start(1, 1),
@@ -216,7 +293,7 @@ describe('formatSessionMarkdown', () => {
   })
 
   it('keeps a mid-turn steering message after the activity that preceded it', () => {
-    const markdown = formatSessionMarkdown({
+    const markdown = renderWithTitle({
       title: 'Steering order',
       events: [
         start(1, 1),
@@ -264,7 +341,7 @@ describe('formatSessionMarkdown', () => {
       '',
       'After',
     ].join('\n')
-    const markdown = formatSessionMarkdown({
+    const markdown = renderWithTitle({
       title: 'Authored final',
       events: [start(1, 1), user(2, 'Show details'), assistant(3, [text(authored)]), end(4, 1)],
     })
@@ -275,7 +352,7 @@ describe('formatSessionMarkdown', () => {
   })
 
   it('ignores replacement surface events and keeps original append chronology', () => {
-    const markdown = formatSessionMarkdown({
+    const markdown = renderWithTitle({
       title: 'Replacements',
       events: [
         start(1, 1),
@@ -313,7 +390,7 @@ describe('formatSessionMarkdown', () => {
   })
 
   it('emits no empty assistant section and exactly one trailing newline', () => {
-    const markdown = formatSessionMarkdown({
+    const markdown = renderWithTitle({
       title: 'Whitespace',
       events: [
         start(1, 1),
@@ -329,7 +406,7 @@ describe('formatSessionMarkdown', () => {
 
 
   it('preserves four-space and tab indentation in final and commentary prose', () => {
-    const markdown = formatSessionMarkdown({
+    const markdown = renderWithTitle({
       title: 'Indented code',
       events: [
         start(1, 1),
@@ -347,7 +424,7 @@ describe('formatSessionMarkdown', () => {
   })
 
   it('closes unfinished commentary fences before the generated details closer', () => {
-    const backtick = formatSessionMarkdown({
+    const backtick = renderWithTitle({
       title: 'Backtick fence',
       events: [
         start(1, 1),
@@ -359,7 +436,7 @@ describe('formatSessionMarkdown', () => {
     })
     expect(backtick).toContain('const x = 1\n```\n\n</details>\n\nAfter backtick')
 
-    const tilde = formatSessionMarkdown({
+    const tilde = renderWithTitle({
       title: 'Tilde fence',
       events: [
         start(1, 1),
@@ -371,7 +448,7 @@ describe('formatSessionMarkdown', () => {
     })
     expect(tilde).toContain('const y = 2\n~~~\n\n</details>\n\nAfter tilde')
 
-    const longer = formatSessionMarkdown({
+    const longer = renderWithTitle({
       title: 'Longer fence',
       events: [
         start(1, 1),
@@ -385,7 +462,7 @@ describe('formatSessionMarkdown', () => {
   })
 
   it('does not treat an invalid backtick info string as an open fence', () => {
-    const markdown = formatSessionMarkdown({
+    const markdown = renderWithTitle({
       title: 'Invalid fence',
       events: [
         start(1, 1),
@@ -402,7 +479,7 @@ describe('formatSessionMarkdown', () => {
   })
 
   it('closes an unfinished final fence before the next turn', () => {
-    const markdown = formatSessionMarkdown({
+    const markdown = renderWithTitle({
       title: 'Final fence',
       events: [
         start(1, 1),
@@ -421,7 +498,7 @@ describe('formatSessionMarkdown', () => {
 
 
   it('strips blank edge lines without removing indented code blank lines', () => {
-    const markdown = formatSessionMarkdown({
+    const markdown = renderWithTitle({
       title: 'Edge blanks',
       events: [
         start(1, 1),
@@ -435,7 +512,7 @@ describe('formatSessionMarkdown', () => {
   })
 
   it('escapes wrapper tags outside fences and grows fences past tool backtick runs', () => {
-    const markdown = formatSessionMarkdown({
+    const markdown = renderWithTitle({
       title: 'Escaping',
       events: [
         start(1, 1),
@@ -457,7 +534,7 @@ describe('formatSessionMarkdown', () => {
   })
 
   it('labels attachments and omits reasoning, system prompts, and injected context', () => {
-    const markdown = formatSessionMarkdown({
+    const markdown = renderWithTitle({
       title: 'Hidden input',
       events: [
         start(1, 1),
@@ -499,13 +576,13 @@ describe('formatSessionMarkdown', () => {
   })
 
   it('exports only the heading for a blank Session and escapes title newlines', () => {
-    expect(formatSessionMarkdown({ title: 'One\nTwo', events: [] })).toBe('# One Two\n')
-    expect(formatSessionMarkdown({ title: '  ', events: [] })).toBe('# Untitled Session\n')
-    expect(formatSessionMarkdown({ title: undefined, events: [] })).toBe('# Untitled Session\n')
+    expect(renderWithTitle({ title: 'One\nTwo', events: [] })).toBe('# One Two\n')
+    expect(renderWithTitle({ title: '  ', events: [] })).toBe('# Untitled Session\n')
+    expect(renderWithTitle({ title: undefined, events: [] })).toBe('# Untitled Session\n')
   })
 
   it('renders tool-only and incomplete turns predictably', () => {
-    const markdown = formatSessionMarkdown({
+    const markdown = renderWithTitle({
       title: 'Incomplete',
       events: [
         start(1, 1),
@@ -537,7 +614,7 @@ describe('formatSessionMarkdown', () => {
   })
 
   it('renders assistant-only, user-only, empty, and malformed content predictably', () => {
-    const markdown = formatSessionMarkdown({
+    const markdown = renderWithTitle({
       title: 'Edge content',
       events: [
         // A committed assistant message before the first turn marker still
@@ -597,7 +674,7 @@ describe('formatSessionMarkdown', () => {
   })
 
   it('renders an orphan tool result without inventing a call name', () => {
-    const markdown = formatSessionMarkdown({
+    const markdown = renderWithTitle({
       title: 'Orphan',
       events: [
         start(1, 1),

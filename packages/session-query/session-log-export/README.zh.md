@@ -31,7 +31,7 @@ kind: "package-reference"
 
 `复制为 Markdown` 会把选中的完整 Session 复制为可移植 Markdown，包括客户端尚未加载的历史。记录以最新的日志标题开头。人类用户消息按时间顺序作为引用块，最终的 assistant 回复保持普通 Markdown，每轮中较早的 assistant 说明与工具活动折叠到该轮最终回复之前的 `<details>` 区段。若一轮中最后一条已提交 assistant 消息带有工具调用，该轮没有最终回复，全部活动保持折叠。未完成的一轮渲染其已提交的消息。仅导出 append 消息事件。未完成的 assistant 代码围栏会在消息边界闭合，四空格或制表符缩进的代码保留缩进。
 
-格式化器读取已提交的原始日志，因此压缩产生的表层替换不会移除较早消息，fork 继承的历史只出现一次。标题与正文来自同一个 `readSession` 快照。只复制选中的 Session 及其继承前缀；子会话日志仍只由 ZIP 导出。推理块、system 与 developer 消息、source kind 不是 `user` 的注入用户角色上下文、请求头与上下文以及运行时记录都会被省略。图片与文件变成可读标签；附件字节与认证链接不会进入记录。`Assistant`、`Tool` 和附件占位符等结构性标签有意使用英文；原始消息文本保持不变。文本以恰好一个换行结尾。
+格式化器读取已提交的原始日志，因此压缩产生的表层替换不会移除较早消息，fork 继承的历史只出现一次。标题与正文来自同一个 `readSession` 快照。持久化元数据报告选中的已物化产物时，记录会在标题后添加一个 `Session file:` 围栏文本块，包含该精确路径；没有时省略该块。只复制选中的 Session 及其继承前缀；子会话日志仍只由 ZIP 导出。推理块、system 与 developer 消息、source kind 不是 `user` 的注入用户角色上下文、请求头与上下文以及运行时记录都会被省略。图片与文件变成可读标签；附件字节与认证链接不会进入记录。`Assistant`、`Tool` 和附件占位符等结构性标签有意使用英文；原始消息文本保持不变。文本以恰好一个换行结尾。
 
 剪贴板是浏览器范围的唯一目标，因此本插件实例一次只运行一项复制。在支持 `ClipboardItem` 与 `navigator.clipboard.write` 的宿主上，控制器会在点击时请求延迟的 `ClipboardItem` 写入，同时加载文档相对的 `api/session.markdown?sessionId=<id>` 路由；其他宿主在准备完成后回退到共享剪贴板助手。复制进行中到达的请求会加入该操作，并保留第一次点击的 Session。所有 Session Header 通过 `aria-busy` 反映复制状态，并在操作结束前禁用各自的复制行。成功、准备失败或剪贴板失败通过根 overlay 浮层反馈。释放会中止读取，并阻止后续文本进入由 Promise 提供的 Blob；操作系统已经接受的剪贴板写入无法回滚。
 
@@ -39,7 +39,20 @@ kind: "package-reference"
 
 ### 何时选择
 
-为需要面向用户的会话导出——复制可读的 Markdown 记录与下载 ZIP 归档——的 Web 部署选择它。需要程序化或 Host 侧导出时避免使用：两个操作都把结果留在浏览器中，而非写入 Host 路径。日志从持久化读句柄序列化而来，因此任何已挂载后端都受支持。
+为需要面向用户的会话导出——复制可读的 Markdown 记录与下载 ZIP 归档——的 Web 部署选择它，也适用于已经持有完整已提交逻辑事件快照并需要相同 Markdown 转换的后端调用方。仅需 Host 路径写入时避免使用：浏览器操作把结果留在浏览器中，转换工具不执行 IO。日志从持久化读句柄序列化而来，因此任何已挂载后端都受支持。
+
+### 后端转换
+
+包入口还导出 `formatSessionMarkdown(events, sourcePath?)`：面向已经持有完整已提交逻辑事件快照（按 seq 排序，包含任何继承前缀）的调用方的纯后端工具。它读取最新的 `session/title` 事件，返回以恰好一个换行结尾的 Markdown，不执行 IO、不启动插件或 Session，也不修改事件。可选的、由后端解析的 `sourcePath` 会原样写入标题后的动态围栏 `Session file:` 文本块；省略或空路径不添加该块。缺失或空白标题生成 `Untitled Session`。它只转换传入的事件；不读取子会话日志。
+
+```ts
+import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import { formatSessionMarkdown } from '@deepseek-ai/dsh-session-log-export'
+
+export function convertTranscript(events: readonly SessionEvent[], sourcePath?: string): string {
+  return formatSessionMarkdown(events, sourcePath)
+}
+```
 
 ### 组合
 
@@ -97,7 +110,7 @@ Host 路由是由该功能拥有的精确 Fetch 路由贡献。Connection 应用
 
 ### Markdown 复制流程
 
-Header 向 Markdown 复制控制器请求被点击的 Session。点击期间，控制器在加载文档相对的 `api/session.markdown?sessionId=<id>` 路由的同时请求延迟的 `ClipboardItem` 写入；其他宿主在准备完成后回退到共享剪贴板助手。Host 路由通过 `ctx.sessionQuery.readSession` 读取完整的 live-preferred 逻辑日志，并从同一快照取出最新 `session/title` 事件的 title 字段，再把事件交给纯格式化器。该读取是分离的导出观察：不创建 Agent、不保留 Session，也不写入 Session 数据。Session 不存在时返回 404，其他读取失败返回经过清理的 500。
+Header 向 Markdown 复制控制器请求被点击的 Session。点击期间，控制器在加载文档相对的 `api/session.markdown?sessionId=<id>` 路由的同时请求延迟的 `ClipboardItem` 写入；其他宿主在准备完成后回退到共享剪贴板助手。Host 路由通过 `ctx.sessionQuery.readSession` 读取完整的 live-preferred 逻辑日志，并把事件交给纯格式化器。它另外通过 `ctx.get('sessionPersistence')?.stat` 获取选中已物化产物的路径，并把可选路径传给格式化器；元数据读取失败属于经过清理的准备失败。该读取是分离的导出观察：不创建 Agent、不保留 Session，也不写入 Session 数据。Session 不存在时返回 404，其他读取失败返回经过清理的 500。
 
 控制器持有一个进行中的操作和一个 `shell.overlay` 浮层条目。第二个 Header 请求加入该进行中的操作，因此剪贴板及其提示始终描述第一次点击的 Session。准备 promise 与已接受的剪贴板写入都会被观察，所有拒绝都被包含。释放会中止读取、阻止后续文本进入由 Promise 提供的 Blob、抑制提示，并等待已接受的剪贴板工作完成。
 
@@ -147,6 +160,7 @@ Header 向 Markdown 复制控制器请求被点击的 Session。点击期间，�
 - **Markdown 复制仅限选中的 Session**——子会话日志由 ZIP 下载导出，而不是 Markdown 复制。
 - **记录文本缓冲在内存中**——完整的 Markdown 字符串及其 Blob 在剪贴板接受前都会保留。浏览器剪贴板限制可能拒绝大型导出；本包不增加字节上限，也不截断请求的完整记录。
 - **已接受的剪贴板写入无法回滚**——释放会停止待处理的准备与反馈，但操作系统已经成功的写入会留在剪贴板中。
+- **来源路径是观察到的元数据，不是原子日志声明**——`stat` 标识导出时选中的已物化产物。实时已提交事件可能领先于该文件，未物化的 Session 没有来源路径块。
 
 <a id="dev-note"></a>
 ### 开发备注

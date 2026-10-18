@@ -31,7 +31,7 @@ Use this package when the Web bundle should let users export a session log. It r
 
 `Copy as Markdown` copies the complete selected Session, including history that the client has not loaded, as portable Markdown. The transcript starts with the latest log-backed title. Human user messages are blockquotes in chronological order, final assistant replies remain ordinary Markdown, and earlier assistant commentary and tool activity in each turn are folded into a collapsible `<details>` section before that turn's final reply. A turn whose last committed assistant message carries tool calls has no final reply, so all of its activity stays folded. An incomplete turn renders the committed messages it has. Only append message events are exported. An unfinished assistant code fence is closed at the message boundary, and four-space or tab-indented code keeps its indentation.
 
-The formatter reads the committed raw log, so a compaction surface replacement never removes earlier messages, and fork-inherited history appears once. The title and body come from one `readSession` snapshot. Only the selected Session and its inherited prefix are copied; descendant logs remain ZIP-only. Reasoning blocks, system and developer messages, injected user-role context whose source kind is not `user`, request headers and context, and runtime records are omitted. Images and files become readable labels; attachment bytes and authentication links never enter the transcript. Structural labels such as `Assistant`, `Tool`, and attachment placeholders are intentionally English; original message text stays unchanged. The text ends with exactly one newline.
+The formatter reads the committed raw log, so a compaction surface replacement never removes earlier messages, and fork-inherited history appears once. The title and body come from one `readSession` snapshot. When persistence metadata reports a selected materialized artifact, the transcript adds a `Session file:` fenced text block with that exact path; without one, the block is absent. Only the selected Session and its inherited prefix are copied; descendant logs remain ZIP-only. Reasoning blocks, system and developer messages, injected user-role context whose source kind is not `user`, request headers and context, and runtime records are omitted. Images and files become readable labels; attachment bytes and authentication links never enter the transcript. Structural labels such as `Assistant`, `Tool`, and attachment placeholders are intentionally English; original message text stays unchanged. The text ends with exactly one newline.
 
 The clipboard is one browser-wide destination, so this plugin instance runs one copy at a time. On hosts with `ClipboardItem` and `navigator.clipboard.write`, the write starts synchronously from the click with a promised `text/plain` Blob while the transcript is read; other hosts fall back to the shared clipboard helper after preparation. A request made while a copy is pending joins that operation and keeps the first click's Session. Every Session Header reflects copying in `aria-busy` and disables its copy row until the operation settles. Success, preparation-failure, or clipboard-failure feedback uses the root overlay toast. Disposal aborts the read and prevents later text from reaching the Blob; an operating-system clipboard write already accepted cannot be rolled back.
 
@@ -39,7 +39,20 @@ When `ui-message-feedback` is mounted, the same menu also offers `Feedback`, whi
 
 ### When to choose it
 
-Choose it for a Web deployment that needs user-facing session export: a readable Markdown transcript for copying and a ZIP archive for downloading. Avoid it when a programmatic or Host-side export is needed: both operations keep the result in the browser, not a Host path write. The logs are serialized from persistence read handles, so any mounted backend is supported.
+Choose it for a Web deployment that needs user-facing session export: a readable Markdown transcript for copying and a ZIP archive for downloading, or for a backend caller that already holds a complete committed logical event snapshot and needs the same Markdown conversion. Avoid it when a Host path write is needed: the browser operations keep their result in the browser, and the conversion utility performs no IO. The logs are serialized from persistence read handles, so any mounted backend is supported.
+
+### Backend conversion
+
+The package entry also exports `formatSessionMarkdown(events, sourcePath?)`: a pure backend utility for callers that already hold a complete committed logical event snapshot in seq order, including any inherited prefix. It reads the latest `session/title` event, returns Markdown ending in one newline, performs no IO, starts no plugin or Session, and does not mutate the events. An optional backend-resolved `sourcePath` is emitted verbatim in a dynamic fenced `Session file:` block after the title; omitted or empty paths add no block. Missing or blank titles produce `Untitled Session`. Only the supplied events are converted; descendant Session logs are not read.
+
+```ts
+import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import { formatSessionMarkdown } from '@deepseek-ai/dsh-session-log-export'
+
+export function convertTranscript(events: readonly SessionEvent[], sourcePath?: string): string {
+  return formatSessionMarkdown(events, sourcePath)
+}
+```
 
 ### Composition
 
@@ -97,7 +110,7 @@ The Host route is a feature-owned exact Fetch contribution. Connection applies i
 
 ### Markdown copy flow
 
-The Header asks the Markdown copy controller for the clicked Session. During the click, the controller requests the deferred `ClipboardItem` write while it loads the document-relative `api/session.markdown?sessionId=<id>` route; other hosts fall back to the shared clipboard helper after preparation. The Host route reads the complete live-preferred logical log through `ctx.sessionQuery.readSession` and takes the latest `session/title` event's title field from that same snapshot before passing the events to the pure formatter. The read is a detached export observation: it creates no Agent, retains no Session, and writes no Session data. It answers 404 for an absent Session and a sanitized 500 for every other read failure.
+The Header asks the Markdown copy controller for the clicked Session. During the click, the controller requests the deferred `ClipboardItem` write while it loads the document-relative `api/session.markdown?sessionId=<id>` route; other hosts fall back to the shared clipboard helper after preparation. The Host route reads the complete live-preferred logical log through `ctx.sessionQuery.readSession` and passes those events to the pure formatter. It separately asks `ctx.get('sessionPersistence')?.stat` for the selected materialized artifact path and passes that optional path to the formatter; a metadata-read failure is a sanitized preparation failure. The read is a detached export observation: it creates no Agent, retains no Session, and writes no Session data. It answers 404 for an absent Session and a sanitized 500 for every other read failure.
 
 The controller holds one pending operation and one `shell.overlay` toast entry. A second Header request joins the pending operation, so the clipboard and its notice always describe the first click's Session. Both the preparation promise and the admitted clipboard write are observed; every rejection is contained. Disposal aborts the read, prevents later text from reaching the promised Blob, suppresses notices, and awaits admitted clipboard work.
 
@@ -147,6 +160,7 @@ These limits define when this package is a poor fit or needs special operational
 - **Markdown copy is the selected Session only** — descendant Session logs are exported by the ZIP download, not by the Markdown copy.
 - **Transcript text is buffered in memory** — the complete Markdown string and its Blob are held before the clipboard accepts them. Browser clipboard limits can reject a large export; this package does not add a byte cap or truncate the requested complete transcript.
 - **Accepted clipboard writes cannot be rolled back** — disposal stops pending preparation and feedback, but an operating-system write that already succeeded remains on the clipboard.
+- **The source path is observed metadata, not an atomic log claim** — `stat` identifies the selected materialized artifact at export time. Live committed events can be ahead of that file, and an unmaterialized Session has no source-path block.
 
 <a id="dev-note"></a>
 ### Dev Note

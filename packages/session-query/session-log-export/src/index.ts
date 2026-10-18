@@ -6,7 +6,6 @@ import Schema from '@deepseek-ai/schemastery'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type {} from '@deepseek-ai/dsh-attachment'
 import type { CommandResult } from '@deepseek-ai/dsh-commands'
-import type {} from '@deepseek-ai/dsh-session-title'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
   DEFAULT_SESSION_LOG_COMPRESSION_LEVEL,
@@ -38,6 +37,7 @@ export type {
   SessionLogExportReady,
   SessionLogZipEntry,
 } from './archive.ts'
+export { formatSessionMarkdown } from './markdown.ts'
 
 export const name = 'session-log-download'
 export const inject = ['commands', 'connection']
@@ -122,9 +122,9 @@ function connectionOf(ctx: Context): SessionLogConnection {
  * Produce one complete Session transcript as Markdown from one Session
  * observation. The read is a detached export observation through
  * session-query's live-preferred corpus, so it creates no Agent, retains no
- * Session, and writes no Session data. The title is the latest logged title
- * value from the same event snapshot as the body. Abort is observed before and
- * after the read; the corpus read itself has no cancellation parameter.
+ * Session, and writes no Session data. The formatter reads the latest title from
+ * the same event snapshot as the body. Abort is observed before and after the
+ * read; the corpus read itself has no cancellation parameter.
  * @param ctx - host context carrying Connection and session-query.
  * @param request - authenticated Fetch request with a required `sessionId` query.
  * @returns the Markdown response, or a sanitized status for invalid, missing, or unavailable reads.
@@ -143,8 +143,9 @@ async function sessionMarkdownResponse(ctx: Context, request: Request): Promise<
     request.signal.throwIfAborted()
     const snapshot = await sessionQuery.readSession(sessionId)
     request.signal.throwIfAborted()
-    const title = snapshot.events.findLast(event => event.type === 'session/title')?.data.title
-    return new Response(formatSessionMarkdown({ title, events: snapshot.events }), {
+    const metadata = await ctx.get('sessionPersistence')?.stat(sessionId, { signal: request.signal })
+    request.signal.throwIfAborted()
+    return new Response(formatSessionMarkdown(snapshot.events, metadata?.location?.path), {
       headers: { 'content-type': 'text/markdown; charset=utf-8' },
     })
   } catch (error: unknown) {

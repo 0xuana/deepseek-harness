@@ -4,9 +4,11 @@ import type { BrowserAuth } from '@deepseek-ai/dsh-client-connection/src/browser
 import type { MessageId } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent, SessionHeader, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
+import { SessionPersistenceRevision } from '@deepseek-ai/dsh-session-persistence'
+import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
 import type {} from '@deepseek-ai/dsh-session-title'
 import { brandNumber, brandString } from '@deepseek-ai/dsh-brand'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { apply, inject } from '../src/index.ts'
 import { SESSION_MARKDOWN_EXPORT_PATH } from '../src/routes.ts'
 
@@ -74,14 +76,19 @@ function query(overrides: {
   }
 }
 
-async function mounted(sessionQuery: unknown): Promise<{
+async function mounted(
+  sessionQuery: unknown,
+  persistence?: Pick<SessionPersistence, 'stat'>,
+): Promise<{
   readonly shared: ReturnType<HostConnectionService['createSharedFetchHandler']>
   readonly connection: HostConnectionService
   readonly dispose: () => Promise<void>
 }> {
   const ctx = new Context()
+  onTestFinished(async () => { await ctx.fiber.dispose() })
   ctx.provide('commands', { register: () => () => {} } as never)
   if (sessionQuery !== undefined) ctx.provide('sessionQuery', sessionQuery as never)
+  if (persistence !== undefined) ctx.provide('sessionPersistence', persistence as SessionPersistence)
   const connection = new HostConnectionService(ctx, [], {} as BrowserAuth)
   const fiber = ctx.plugin({ inject: [...inject], apply })
   await fiber
@@ -109,6 +116,7 @@ describe('Session Markdown Fetch route', () => {
     expect(markdown).toContain('# Route title from events')
     expect(markdown).toContain('> Route question')
     expect(markdown).toContain('Route answer')
+    expect(markdown).not.toContain('Session file:')
     expect(markdown.endsWith('\n')).toBe(true)
 
     const head = await shared.fetch(
@@ -124,6 +132,59 @@ describe('Session Markdown Fetch route', () => {
       request(`${SESSION_MARKDOWN_EXPORT_PATH}?sessionId=${SESSION_ID}`),
       connection.browserPeer,
     )).status).toBe(404)
+  })
+
+
+  it('emits the actual selected artifact path from persistence metadata', async () => {
+    const sourcePath = '/tmp/project/session.v4.jsonl'
+    const stat = vi.fn(async (_id: SessionId, _options?: { readonly signal?: AbortSignal }) => ({
+      header: HEADER,
+      revision: SessionPersistenceRevision('test:location'),
+      location: { kind: 'jsonl', path: sourcePath },
+    }))
+    const { shared, connection, dispose } = await mounted(query(), { stat })
+    const response = await shared.fetch(
+      request(`${SESSION_MARKDOWN_EXPORT_PATH}?sessionId=${SESSION_ID}`),
+      connection.browserPeer,
+    )
+    expect(response.status).toBe(200)
+    const markdown = await response.text()
+    expect(markdown).toContain(`Session file:\n\n\`\`\`text\n${sourcePath}\n\`\`\``)
+    const [requestedId, statOptions] = stat.mock.calls[0]!
+    expect(requestedId).toBe(SESSION_ID)
+    expect(statOptions?.signal).toBeInstanceOf(AbortSignal)
+    await dispose()
+  })
+
+  it('omits the source block when metadata has no materialized location', async () => {
+    const stat = vi.fn(async () => ({
+      header: HEADER,
+      revision: SessionPersistenceRevision('test:no-location'),
+    }))
+    const { shared, connection, dispose } = await mounted(query(), { stat })
+    const response = await shared.fetch(
+      request(`${SESSION_MARKDOWN_EXPORT_PATH}?sessionId=${SESSION_ID}`),
+      connection.browserPeer,
+    )
+    expect(response.status).toBe(200)
+    expect(await response.text()).not.toContain('Session file:')
+    await dispose()
+  })
+
+  it('sanitizes a metadata read failure as a preparation failure', async () => {
+    const stat = vi.fn(async () => {
+      throw new Error('metadata failed at /private/host/session.v4.jsonl')
+    })
+    const { shared, connection, dispose } = await mounted(query(), { stat })
+    const response = await shared.fetch(
+      request(`${SESSION_MARKDOWN_EXPORT_PATH}?sessionId=${SESSION_ID}`),
+      connection.browserPeer,
+    )
+    expect(response.status).toBe(500)
+    const detail = await response.text()
+    expect(detail).toBe('session markdown export failed to read the stored log')
+    expect(detail).not.toContain('/private/host')
+    await dispose()
   })
 
   it('validates the query before reporting missing Markdown services', async () => {

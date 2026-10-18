@@ -1,9 +1,11 @@
 /**
- * Renders one complete committed Session log as Markdown for the "Copy as
- * Markdown" action. The raw log is authoritative: compaction surface
- * replacements never remove earlier messages, and fork-inherited history
- * appears once. Reasoning, system and developer messages, injected non-human
- * context, request headers, and runtime records are omitted.
+ * Pure backend converter for one complete committed Session log. The "Copy as
+ * Markdown" Host route uses it, and the package entry exports it for callers
+ * that already hold the logical events. The raw log is authoritative:
+ * compaction surface replacements never remove earlier messages, and
+ * fork-inherited history appears once. Reasoning, system and developer
+ * messages, injected non-human context, request headers, and runtime records
+ * are omitted.
  * @module
  */
 
@@ -13,18 +15,11 @@ import type {
   ToolResultMessage,
   UserMessage,
 } from '@deepseek-ai/dsh-session'
+import type {} from '@deepseek-ai/dsh-session-title'
 import type { FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 
 /** Heading used when the log carries no title and the Session has no name. */
-export const UNTITLED_SESSION_MARKDOWN_TITLE = 'Untitled Session'
-
-/** Input to {@link formatSessionMarkdown}. */
-export interface SessionMarkdownInput {
-  /** Latest log-backed title, or `undefined` when the log has no title event. */
-  readonly title: string | undefined
-  /** Complete committed raw event log in seq order, including inherited history. */
-  readonly events: readonly SessionEvent[]
-}
+const UNTITLED_SESSION_MARKDOWN_TITLE = 'Untitled Session'
 
 interface AssistantEntry {
   readonly kind: 'assistant'
@@ -59,13 +54,23 @@ interface Turn {
 }
 
 /**
- * Format one complete Session log as Markdown.
- * @param input - the latest title and the complete committed event log.
- * @returns Markdown ending in exactly one newline; an empty Session returns its title heading only.
+ * Render one complete committed Session log as Markdown. This is a pure backend
+ * utility: it needs no mounted plugin, reads no storage, and does not mutate the
+ * supplied events. The latest `session/title` event supplies the heading; the
+ * rest of the transcript is derived only from the supplied logical events.
+ * @param events - complete committed logical event snapshot in seq order, including any inherited prefix.
+ * @param sourcePath - optional backend-resolved path to the selected Session artifact; emitted verbatim in a fenced text block.
+ * @returns Markdown ending in exactly one newline; an empty log returns the heading and optional source metadata only.
  */
-export function formatSessionMarkdown(input: SessionMarkdownInput): string {
-  const sections = [`# ${normalizedTitle(input.title)}`]
-  for (const turn of collectTurns(input.events)) {
+export function formatSessionMarkdown(events: readonly SessionEvent[], sourcePath?: string): string {
+  const title = events.findLast(event => event.type === 'session/title')?.data.title
+  const sections = [`# ${normalizedTitle(title)}`]
+  if (sourcePath !== undefined && sourcePath !== '') {
+    sections.push(`Session file:
+
+${fenced(sourcePath, 'text', false)}`)
+  }
+  for (const turn of collectTurns(events)) {
     const finalIndex = finalReplyIndex(turn.segments)
     const end = finalIndex < 0 ? turn.segments.length : finalIndex
     let pending: TurnEntry[] = []
@@ -260,8 +265,8 @@ function jsonArguments(argumentsText: string): string {
   return JSON.stringify(parsed, null, 2)
 }
 
-function fenced(text: string, language = ''): string {
-  const content = text.replace(/\n+$/u, '')
+function fenced(text: string, language = '', trimTrailing = true): string {
+  const content = trimTrailing ? text.replace(/\n+$/u, '') : text
   let longest = 0
   for (const match of content.matchAll(/`+/gu)) longest = Math.max(longest, match[0].length)
   const fence = '`'.repeat(Math.max(3, longest + 1))
