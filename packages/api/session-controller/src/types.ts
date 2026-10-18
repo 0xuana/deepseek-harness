@@ -8,7 +8,7 @@ import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { LlmAttemptId, MessageId } from '@deepseek-ai/dsh-llm/brand'
 import type { TextBlock } from '@deepseek-ai/dsh-llm'
 import type { SessionId, SessionSeqCursor } from '@deepseek-ai/dsh-session/types'
-import type { SessionProjectionMap } from '@deepseek-ai/dsh-session-projection/types'
+import type { SessionProjectionMap, SessionProjectionSummaryExcluded } from '@deepseek-ai/dsh-session-projection/types'
 import type { Principal } from '@deepseek-ai/dsh-typert-protocol'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
@@ -25,8 +25,12 @@ declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionMap {
     /** Persisted facts used to summarize a Session without activating it. */
     sessionListMetadata: SessionListMetadata
-    /** Image-intake limits enforced by the Session prompt endpoint. */
-    imageLimits: ImageAttachmentLimits
+    /**
+     * Image-intake limits enforced by the Session prompt endpoint. Boot
+     * constant, excluded from Session summary payloads: every Session shares
+     * it, so a list row would repeat one host-wide fact.
+     */
+    imageLimits: SessionProjectionSummaryExcluded<ImageAttachmentLimits>
     /** Durable model selection already used and selected for the next request. */
     modelSelection: ModelSelectionProjection
   }

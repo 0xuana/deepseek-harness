@@ -13,13 +13,13 @@ Session 列表行携带每个已注册的客户端视图。其中三个视图从
 Session 摘要就是每个已注册客户端视图，减去 `SessionProjectionMap` 条目带摘要排除标记的键。
 
 - [`packages/session/session-projection/src/types.ts`](../../../../packages/session/session-projection/src/types.ts) 声明类型层标记 `SessionProjectionSummaryExcluded<T>`，它基于一个从不导出、运行时从不存在的 unique symbol。`SessionProjectionViewValue<T>` 以分发方式去掉标记，可空条目因此保留 `null`；`SessionProjectionSummaryExcludedKey` 取非空部分判断；`SessionProjectionSummaryValues` 是全部视图值减去这些键。
-- 每个 owning package 只包装自己的 map 条目：`turnOutline`（session-turn-outline）、`sessionStats`（session-stats）、`todos`（tool-todo）。todo 条目写作 `SessionProjectionSummaryExcluded<TodoItem[]> | null`，因为与 `null` 求交会吞掉 null 成员。
+- 每个 owning package 只包装自己的 map 条目：`turnOutline`（session-turn-outline）、`sessionStats`（session-stats）、`todos`（tool-todo），以及 `imageLimits`（session-controller 的启动常量附件上限，每个 Session 共享）。todo 条目写作 `SessionProjectionSummaryExcluded<TodoItem[]> | null`，因为与 `null` 求交会吞掉 null 成员。
 - 注册是一道互锁：`ProjectionDefinition.wire` 恰好在该键的 map 条目带标记时要求 `summary: false`，其余情况只接受 `summary?: never`。标记唯一的运行时擦除发生在 `SessionProjectionRegistry.register` 的 wire 擦除处，由它记录该单元是否属于摘要。
 - [`packages/session/session-projection/src/index.ts`](../../../../packages/session/session-projection/src/index.ts) 提供 `summaryKeys(): ReadonlySet<key>`，从实时注册派生，只有新键注册或某键最后一个注册者注销时才重建。`cachedSnapshot`、`viewCheckpoint`、`snapshot` 接受 `ProjectionKeySelection`（`readonly Key[] | ReadonlySet<Key>`），传入 Set 时直接使用。
 - [`packages/session/session-projection-cache/src/index.ts`](../../../../packages/session/session-projection-cache/src/index.ts) 原样转发该选择，[`packages/api/session-controller/src/list.ts`](../../../../packages/api/session-controller/src/list.ts) 把 `summaryKeys()` 传给 live 与 cold 两个缓存读取面。`cachedPredecessorTitle` 保持只读 title。
 - 客户端只有类型变化：`SessionSummary.projectionValues` 收窄为 `Partial<SessionProjectionSummaryValues>`，而 `SessionProjectionSnapshot.values` 保留全部视图值。wire 字段、函数名与 UI 名称均不变；打开的 Session 仍通过 `session/follow`、控制基线与 `session.projections` 收到每个键。
 
-估算效果：当 outline 在投影负载中占主导时，三个键估计占几百个 Session 时列表响应的约 60% —— outline 单项约 57%，统计与 todo 合计约 5% —— 占传输压缩后同一响应的约 85%，因为 outline 的唯一文本几乎无法压缩，而其余键可以。
+估算效果：当 outline 在投影负载中占主导时，四个键估计占几百个 Session 时列表响应的约三分之二 —— outline 单项约 57%，统计与 todo 合计约 5%，共享的图片上限约 5% —— 占传输压缩后同一响应的约 85%，因为 outline 的唯一文本几乎无法压缩，而其余键可以。
 
 ## Alternatives considered
 

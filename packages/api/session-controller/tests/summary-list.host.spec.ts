@@ -1,7 +1,7 @@
 /**
  * Session-list summary payloads: a `session.list` row carries every registered
- * wire projection except the three units that declare `summary: false`
- * (`turnOutline`, `sessionStats`, `todos`), while an opened Session's
+ * wire projection except the units that declare `summary: false`
+ * (`turnOutline`, `sessionStats`, `todos`, `imageLimits`), while an opened Session's
  * `session/follow` opening snapshot keeps serving them.
  */
 
@@ -23,7 +23,7 @@ import {
 } from '@deepseek-ai/dsh-tool-todo'
 import { createSessionTestRemote } from './test-remote.ts'
 
-const SUMMARY_EXCLUDED_KEYS = ['turnOutline', 'sessionStats', 'todos'] as const
+const SUMMARY_EXCLUDED_KEYS = ['turnOutline', 'sessionStats', 'todos', 'imageLimits'] as const
 
 const ownedContexts = new Set<Context>()
 afterEach(async () => {
@@ -112,7 +112,7 @@ describe('session.list summary payload', () => {
     expect(row?.projections?.values.sessionListMetadata).toMatchObject({ blank: false })
   })
 
-  it('keeps the three units on an opened Session\'s follow snapshot', async () => {
+  it('keeps the excluded units on an opened Session\'s follow snapshot', async () => {
     const { ctx } = await harness()
     const { id } = seedSession(ctx)
     const session = ctx.sessions.get(id)
@@ -126,9 +126,10 @@ describe('session.list summary payload', () => {
         .toEqual(everyValue[key as keyof typeof everyValue])
     }
     expect(snapshot.projections.values.todos).toEqual([{ content: 'ship it', status: 'in_progress' }])
+    expect(snapshot.projections.values.imageLimits).toEqual(ctx.attachments.imageLimits)
   })
 
-  it('drops the three units from the list while a Session is still attached', async () => {
+  it('drops the excluded units from the list while a Session is still attached', async () => {
     const { ctx } = await harness()
     const { id } = seedSession(ctx)
     // Two consecutive pulls: a refresh must not reintroduce a dropped unit.
@@ -139,6 +140,7 @@ describe('session.list summary payload', () => {
       expect(row?.projections?.values, `attempt ${String(attempt)}`).not.toHaveProperty('turnOutline')
       expect(row?.projections?.values, `attempt ${String(attempt)}`).not.toHaveProperty('sessionStats')
       expect(row?.projections?.values, `attempt ${String(attempt)}`).not.toHaveProperty('todos')
+      expect(row?.projections?.values, `attempt ${String(attempt)}`).not.toHaveProperty('imageLimits')
     }
   })
 })

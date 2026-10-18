@@ -98,6 +98,7 @@ export class ApiSessionList {
         wire: {
           viewSchema: imageLimitsSchema,
           view: () => attachmentCtx.attachments.imageLimits,
+          summary: false,
         },
         stateVersion: 1,
       })
