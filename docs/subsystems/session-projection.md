@@ -119,7 +119,7 @@ A list row carries that summary projection, never the full projection: it promis
 
 ### Summary vocabulary
 
-Each block below is the declaration the summary rule is stated in. The mark, its stripping, the excluded-key test, and the summary value type live in the pure-type outlet; the key selection both read faces accept lives in the service module.
+The declarations below state the summary rule. The mark, its stripping, the excluded-key test, and the summary value type are declared in the pure-type outlet; the key selection both read faces accept is declared in the service module.
 
 ```ts type-equiv
 /**

@@ -6,7 +6,7 @@ Status: implemented
 
 ## Problem
 
-Session 列表行携带每个已注册的客户端视图。其中三个视图从不被行渲染：整份日志的 turn outline、整份日志的会话统计，以及当前 todo 清单。outline 随 Session 日志增长，因此列表响应会随语料规模与日志长度增长，而没有一行展示它。从列表省略取值需要一条规则同时守住 wire 与客户端类型：调用方不能按名请求被省略的键；被省略的值仍要送达打开的 Session；owning package 不得与驱动省略的声明漂移。
+Session 列表行携带每个已注册的客户端视图。其中四个视图从不被行渲染：整份日志的 turn outline、整份日志的会话统计、当前 todo 清单，以及宿主级的图片上限。outline 随 Session 日志增长，因此列表响应会随语料规模与日志长度增长，而没有一行展示它。从列表省略取值需要一条规则同时守住 wire 与客户端类型：摘要消费方不能取得被省略的键；被省略的值仍要送达打开的 Session；owning package 不得与驱动省略的声明漂移。
 
 ## Decision
 
@@ -35,7 +35,7 @@ Session 摘要就是每个已注册客户端视图，减去 `SessionProjectionMa
 
 ## Consequences
 
-换来的：列表响应不再随 outline 长度或日志数量增长；被排除的键无法按名请求；从列表行读取被排除键是类型错误。注册互锁让「带标记却未声明 `summary: false`」（以及反向）成为编译错误，而不是评审发现。
+换来的：列表响应不再随 outline 长度或日志数量增长；摘要消费方无法通过派生集合取得被排除的键（完整读取面仍按显式键提供）；从列表行的类型读取被排除键是类型错误。`wire.summary` 是普通布尔值，因此让带标记的键保持 `false` 是注册方自己的责任，而不是编译错误。
 
 列表行携带的是摘要投影，绝不是全量投影：它只承诺摘要键集合，不承诺更多。已连接 Session 的客户端 store 可能因 control/follow 基线持有更多值，但那不属于列表契约，不得从行上读取；打开的 Session 自身的基线保留全部取值。
 
@@ -45,8 +45,8 @@ Session 摘要就是每个已注册客户端视图，减去 `SessionProjectionMa
 
 ## Testing
 
-- [`packages/api/session-controller/tests/summary-list.host.spec.ts`](../../../../packages/api/session-controller/tests/summary-list.host.spec.ts)：列表行的键等于注册表完整快照减去三个键；`session/follow` 初始快照仍携带这三个键且值相等；连续两次拉取不会重新加入它们。
+- [`packages/api/session-controller/tests/summary-list.host.spec.ts`](../../../../packages/api/session-controller/tests/summary-list.host.spec.ts)：列表行的键等于注册表完整快照减去被标记的键；`session/follow` 初始快照仍携带它们且值相等；连续两次拉取不会重新加入它们。
 - [`packages/session/session-projection/tests/summary.spec.ts`](../../../../packages/session/session-projection/tests/summary.spec.ts)：派生集合、其稳定实例、注册与注销后的重建、经带键读取面的摘要式读取、空摘要集合，以及可空标记。
 - [`packages/session/session-projection-cache/tests/cache.spec.ts`](../../../../packages/session/session-projection-cache/tests/cache.spec.ts)：从持久行读取摘要时省略被标记键，且水位只取自被服务的行。
-- [`packages/api/session-controller/tests/summary-types.client.spec.ts`](../../../../packages/api/session-controller/tests/summary-types.client.spec.ts)：在 `SessionSummary.projectionValues` 上读取三个键触发 `@ts-expect-error`，而完整快照仍暴露它们且 `todos` 仍可空。
+- [`packages/api/session-controller/tests/summary-types.client.spec.ts`](../../../../packages/api/session-controller/tests/summary-types.client.spec.ts)：在 `SessionSummary.projectionValues` 上读取 `turnOutline`、`sessionStats`、`todos` 触发 `@ts-expect-error`，而完整快照仍暴露它们且 `todos` 仍可空。
 - [`packages/api/session-controller/tests/manager.client.spec.ts`](../../../../packages/api/session-controller/tests/manager.client.spec.ts)：断线重连刷新会替换行块，残留的被排除键不会存活。

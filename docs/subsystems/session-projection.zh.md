@@ -116,9 +116,10 @@ Session 摘要包含每个已注册客户端视图，但排除 `SessionProjectio
 `summaryKeys()` 从实时注册派生该集合，并在注册或注销改变 key 表之前持续返回同一实例。摘要消费方把它传给既有的带 key 读取面 —— 缓存 cell 用 `cachedSnapshot(session, keys)`，checkpoint 行用 `viewCheckpoint(rows, keys)`，两者保持各自的水位规则且直接使用 Set、不做复制 —— 因此不存在摘要专用读取面，集合也只有一处定义。
 
 列表行携带的是这个摘要投影，绝不是全量投影：它只承诺摘要键集合，不承诺更多。`snapshot`、`cachedSnapshot` 与 `viewCheckpoint` 在不传 key 子集时仍是完整的，打开的 Session、其 follow 基线与控制基线因此保留每个投影值；`@` 引用只通过同一组带 key 的读取面读取其标签 key。
+
 ### 摘要词汇
 
-以下每块都是摘要规则所依据的声明。标记、其剥离、被排除键的判定与摘要值类型位于纯类型出口；两个读取面共同接受的 key 选择位于服务模块。
+以下声明构成摘要规则。标记、其剥离、被排除键的判定与摘要值类型声明在纯类型出口；两个读取面共同接受的 key 选择声明在服务模块。
 
 ```ts type-equiv
 /**

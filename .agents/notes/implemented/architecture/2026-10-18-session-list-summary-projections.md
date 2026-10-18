@@ -6,7 +6,7 @@ English | [中文](2026-10-18-session-list-summary-projections.zh.md)
 
 ## Problem
 
-A Session-list row carries every registered client view. Three of those views are never rendered by a row: the whole-log turn outline, the whole-log conversation figures, and the current todo list. The outline grows with the Session's log, so a list payload scales with corpus size and log length even though no row shows it. Omitting values from the list needs a rule that keeps the wire and client types honest: a caller must not be able to request an omitted key, a value that is omitted must still reach an opened Session, and the owning packages must not drift from whatever declaration drives the omission.
+A Session-list row carries every registered client view. Four of those views are never rendered by a row: the whole-log turn outline, the whole-log conversation figures, the current todo list, and the host-wide image limits. The outline grows with the Session's log, so a list payload scales with corpus size and log length even though no row shows it. Omitting values from the list needs a rule that keeps the wire and client types honest: a summary consumer must not obtain an omitted key, a value that is omitted must still reach an opened Session, and the owning packages must not drift from whatever declaration drives the omission.
 
 ## Decision
 
@@ -35,7 +35,7 @@ Estimated effect: with logs whose outlines dominate the projection payload, the 
 
 ## Consequences
 
-Bought: a list response no longer scales with outline length or log count, the excluded keys cannot be requested by name, and reading an excluded key from a list row is a type error. The registration interlock makes a marked key without `summary: false` (and the reverse) a compile error rather than a review finding.
+Bought: a list response no longer scales with outline length or log count, a summary consumer cannot obtain an excluded key through the derived set (the complete faces still serve an explicitly named key), and reading an excluded key from a list row's type is a type error. `wire.summary` is a plain boolean, so keeping a marked key at `false` is the registering package's responsibility rather than a compile error.
 
 A list row carries the summary projection, never the full projection: it promises the summary key set and nothing more. A connected Session's client store may hold more values from its control/follow baseline, but those are outside the list contract and must not be read from a row; the opened Session's own baselines keep every value.
 
@@ -45,8 +45,8 @@ Paid: `ProjectionKeySelection` is a new public signature type and `ReadonlySet` 
 
 ## Testing
 
-- [`packages/api/session-controller/tests/summary-list.host.spec.ts`](../../../../packages/api/session-controller/tests/summary-list.host.spec.ts): a list row's keys equal the registry's complete snapshot minus the three, a `session/follow` opening snapshot still carries the three with equal values, and two consecutive pulls do not re-add them.
+- [`packages/api/session-controller/tests/summary-list.host.spec.ts`](../../../../packages/api/session-controller/tests/summary-list.host.spec.ts): a list row's keys equal the registry's complete snapshot minus the marked keys, a `session/follow` opening snapshot still carries them with equal values, and two consecutive pulls do not re-add them.
 - [`packages/session/session-projection/tests/summary.spec.ts`](../../../../packages/session/session-projection/tests/summary.spec.ts): the derived set, its stable identity, its rebuild after registration and disposal, summary-shaped reads through the key-taking faces, an empty summary set, and the nullable mark.
 - [`packages/session/session-projection-cache/tests/cache.spec.ts`](../../../../packages/session/session-projection-cache/tests/cache.spec.ts): a summary read from stored rows omits the marked key and takes its watermark from the served rows only.
-- [`packages/api/session-controller/tests/summary-types.client.spec.ts`](../../../../packages/api/session-controller/tests/summary-types.client.spec.ts): `@ts-expect-error` reads of the three keys on `SessionSummary.projectionValues`, with the full snapshot still exposing them and `todos` still nullable.
+- [`packages/api/session-controller/tests/summary-types.client.spec.ts`](../../../../packages/api/session-controller/tests/summary-types.client.spec.ts): `@ts-expect-error` reads of `turnOutline`, `sessionStats`, and `todos` on `SessionSummary.projectionValues`, with the full snapshot still exposing them and `todos` still nullable.
 - [`packages/api/session-controller/tests/manager.client.spec.ts`](../../../../packages/api/session-controller/tests/manager.client.spec.ts): a reconnect refresh replaces the row block, so a stale excluded key does not survive.
