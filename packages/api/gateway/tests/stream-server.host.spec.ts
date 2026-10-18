@@ -5,6 +5,7 @@ import { remoteErrorOf, type PeerId, type PeerScope } from '@deepseek-ai/dsh-typ
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
 import {
+  MAX_REMOTE_STREAM_FRAME_BYTES,
   RemoteStreamMuxServer,
   type RemoteStreamFailureMapper,
   type RemoteStreamOpener,
@@ -287,8 +288,12 @@ describe('Remote stream mux server carrier lifecycle', () => {
     const client = await connect(entry.url)
     const serverSocket = acceptedSocket(entry.mux)
     const write = Promise.withResolvers<(error?: Error) => void>()
-    const writer = serverSocket as { send(data: unknown, callback: (error?: Error) => void): void }
-    const sending = vi.spyOn(writer, 'send').mockImplementation((_data, callback) => { write.resolve(callback) })
+    const writer = serverSocket as {
+      send(data: unknown, options: unknown, callback: (error?: Error) => void): void
+    }
+    const sending = vi.spyOn(writer, 'send').mockImplementation((_data, _options, callback) => {
+      write.resolve(callback)
+    })
     const connectionFailure = new Error('fixture terminal close failure')
     const cleanupFailure = new Error('fixture Peer close failure')
     const close = serverSocket.close.bind(serverSocket)
@@ -355,7 +360,7 @@ describe('Remote stream mux server Peer binding', () => {
     const entry = await startMux(async (_endpoint, _payload, _uplink, _peer, control) => {
       opened()
       return waitForAbort(control.signal)
-    }, 2_000, 262_144, peer)
+    }, 2_000, 262_144, true, peer)
     const client = new WebSocket(entry.url)
     const closeEvent = await once(client, 'close')
     expect(closeEvent[0]).toBe(1001)
@@ -369,7 +374,7 @@ describe('Remote stream mux server Peer binding', () => {
     const entry = await startMux(async (_endpoint, _payload, _uplink, opened, control) => {
       seen.push(opened)
       return waitForAbort(control.signal)
-    }, 2_000, 262_144, peer)
+    }, 2_000, 262_144, true, peer)
     const client = await connect(entry.url)
     client.send(openFrame('bound'))
     await vi.waitFor(() => { expect(seen).toHaveLength(1) })
@@ -380,6 +385,43 @@ describe('Remote stream mux server Peer binding', () => {
     const closeEvent = await closed
     expect(closeEvent[0]).toBe(1001)
     expect(String(closeEvent[1])).toBe('peer left')
+  })
+})
+
+describe('Remote stream mux server compression', () => {
+  it('negotiates permessage-deflate by default and round-trips frames above the threshold both ways', async () => {
+    const entry = await startMux(async (_endpoint, _payload, uplink) => echoUplink(uplink))
+    const client = await connect(entry.url)
+    expect(client.extensions).toContain('permessage-deflate')
+    await roundTrip(client, 'compressed', 'x'.repeat(2_048))
+  })
+
+  it('negotiates no extension and still exchanges frames when compression is disabled', async () => {
+    const entry = await startMux(async (_endpoint, _payload, uplink) => echoUplink(uplink), 2_000, 262_144, false)
+    const client = await connect(entry.url)
+    expect(client.extensions).toBe('')
+    await roundTrip(client, 'plain', 'x'.repeat(2_048))
+  })
+
+  it('serves a client that offers no compression extension', async () => {
+    const entry = await startMux(async (_endpoint, _payload, uplink) => echoUplink(uplink))
+    const client = new WebSocket(entry.url, { perMessageDeflate: false })
+    await once(client, 'open')
+    expect(client.extensions).toBe('')
+    await roundTrip(client, 'uncompressed', 'x'.repeat(2_048))
+  })
+
+  it('closes a connection whose single frame exceeds the payload ceiling', async () => {
+    const entry = await startMux(async (_endpoint, _payload, uplink) => echoUplink(uplink), 2_000, 1)
+    const client = await connect(entry.url)
+    const closed = once(client, 'close')
+    client.send(JSON.stringify({
+      type: 'cancel',
+      streamId: 'oversized',
+      value: 'x'.repeat(MAX_REMOTE_STREAM_FRAME_BYTES),
+    }))
+    const event = await closed
+    expect(event[0]).toBe(1009)
   })
 })
 
@@ -589,10 +631,15 @@ async function startMux(
   open: RemoteStreamOpener,
   heartbeatIntervalMs = 2_000,
   streamInboxBytes = 262_144,
+  compression = true,
   peer?: PeerScope,
 ): Promise<RunningMux> {
   const admitted = peer ?? await fixturePeer()
-  const mux = new RemoteStreamMuxServer(open, mapFailure, heartbeatIntervalMs, streamInboxBytes)
+  const mux = new RemoteStreamMuxServer(open, mapFailure, {
+    heartbeatIntervalMs,
+    streamInboxBytes,
+    compression,
+  })
   const http = createServer()
   http.on('upgrade', (request, socket, head) => { mux.handleUpgrade(request, socket, head, admitted) })
   await new Promise<void>((resolve, reject) => {
@@ -646,6 +693,22 @@ function collectFrames(client: WebSocket): Record<string, unknown>[] {
   return frames
 }
 
+/** Echo `value` through one fresh logical stream, then close the carrier. */
+async function roundTrip(client: WebSocket, streamId: string, value: string): Promise<void> {
+  const frames = collectFrames(client)
+  client.send(openFrame(streamId))
+  client.send(itemFrame(streamId, value))
+  await vi.waitFor(() => {
+    expect(frames).toEqual([{ type: 'item', streamId, value }])
+  })
+  client.send(endFrame(streamId))
+  await vi.waitFor(() => {
+    expect(frames.at(-1)).toEqual({ type: 'end', streamId })
+  })
+  client.close()
+  await once(client, 'close')
+}
+
 /** Count the text frames the mux has already dispatched, so a test can wait for the Host to hold them. */
 function countMessages(serverSocket: WebSocket): { count: number } {
   const received = { count: 0 }
@@ -655,9 +718,9 @@ function countMessages(serverSocket: WebSocket): { count: number } {
 
 function failWrites(serverSocket: WebSocket): void {
   const mutable = serverSocket as {
-    send(data: unknown, callback: (error?: Error) => void): void
+    send(data: unknown, options: unknown, callback: (error?: Error) => void): void
   }
-  mutable.send = (_data, callback): void => {
+  mutable.send = (_data, _options, callback): void => {
     callback(new Error('fixture ws write failure'))
   }
 }
