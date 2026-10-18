@@ -92,7 +92,7 @@ it.each(['preflight:windows-signing', 'run build:official', 'run sign:primary-ru
 it.each(['--unsigned', '--prepare-only'])('keeps %s hardware-free and creates no release record', async (mode) => {
   const { run, stages } = supervisor()
   await packageTarget(parseDesktopPackageInvocation(['win-x64', mode], 'win32', 'x64'), environment, run)
-  expect(stages[0]).toBe('run build:official')
+  expect(stages[0]).toBe(mode === '--unsigned' ? 'run build --profile local' : 'run build:official')
   expect(stages).not.toContain('preflight:windows-signing')
   expect(stages).not.toContain('run sign:primary-runtime')
   expect(stages).not.toContain('run sign:primary-runtime --dsh')
@@ -100,6 +100,25 @@ it.each(['--unsigned', '--prepare-only'])('keeps %s hardware-free and creates no
   for (const call of run.run.mock.calls) expect(call[3].env).not.toHaveProperty('DSH_DESKTOP_WINDOWS_TOKEN_PIN')
   expect(writeFileSync).not.toHaveBeenCalled()
   expect(stages.includes('exec tsx scripts/smoke-packaged-runtime.ts --unsigned')).toBe(mode === '--unsigned')
+})
+
+it.each(['mac-arm64', 'mac-x64', 'win-x64'] as const)('selects branding from the signing mode for %s', async (target) => {
+  for (const unsigned of [false, true]) {
+    const { run, stages } = supervisor()
+    const platform = target === 'win-x64' ? 'win32' : 'darwin'
+    const invocation = parseDesktopPackageInvocation([target, ...(unsigned ? ['--unsigned'] : [])], platform,
+      platform === 'darwin' ? 'arm64' : 'x64')
+    await packageTarget(invocation, {
+      ...environment,
+      DSH_BUILD_CLIENT_PROFILE: unsigned ? 'official' : 'local',
+      DSH_CLIENT_BUILD_PROFILE: unsigned ? 'official' : 'local',
+      DSH_CLIENT_TITLE: 'Inherited title',
+    }, run)
+    const build = stages.find(stage => stage.startsWith('run build'))
+    expect(build).toBe(unsigned ? 'run build --profile local' : 'run build:official')
+    expect(stages.some(stage => stage.startsWith('exec tsx apps/desktop/scripts/pack-local-packages.ts'))).toBe(unsigned)
+    expect(stages.some(stage => stage.startsWith('run release:pack --family dsh'))).toBe(!unsigned)
+  }
 })
 
 it('checks the assembled macOS runtime before notarizing and recording the release', async () => {

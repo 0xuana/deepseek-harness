@@ -68,16 +68,37 @@ async function packMembers(
 }
 
 /**
- * @returns The validated `--concurrency` value; 1 (the default) packs the
- * members one at a time, exactly as the credentialed publish workflows run it.
+ * Resolve the maximum number of concurrent package packs.
+ * @param raw - Optional decimal worker count from the packing command line.
+ * @returns A positive integer, defaulting to one for serial packing.
+ * @throws If the argument is not a positive safe integer in decimal form.
  */
-function parseConcurrency(raw: string | undefined): number {
+export function parsePackConcurrency(raw: string | undefined): number {
   if (raw === undefined) return 1
   const parsed = Number.parseInt(raw, 10)
   if (!Number.isSafeInteger(parsed) || parsed < 1 || String(parsed) !== raw) {
     throw new Error(`--concurrency must be a positive integer, got ${JSON.stringify(raw)}`)
   }
   return parsed
+}
+
+/**
+ * Replace a staging directory with validated family tarballs without a publication record.
+ * The caller must verify the client build profile and artifact hashes before calling.
+ * @param root - Repository containing the family members.
+ * @param family - Package selection, version, and payload policy.
+ * @param destination - Absolute staging directory owned by this packing invocation.
+ * @param concurrency - Validated maximum number of concurrent package packs.
+ * @returns Tarball filenames in dependency order, after every package passes validation.
+ */
+export async function packFamilyMembers(
+  root: string, family: ReleaseFamily, destination: string, concurrency: number,
+): Promise<string[]> {
+  const members = family.publishOrder(family.members(root)).order
+  family.verifyVersions(members)
+  rmSync(destination, { recursive: true, force: true })
+  mkdirSync(destination, { recursive: true })
+  return packMembers(family, members, destination, concurrency)
 }
 
 /** Pack the family named by `--family` into `--out`. */
@@ -87,19 +108,13 @@ async function main(): Promise<void> {
     allowPositionals: false,
   })
   if (values.family === undefined) throw new Error('usage: pack.ts --family <dsh|vendor> [--out dist/npm] [--concurrency 1]')
-  const concurrency = parseConcurrency(values.concurrency)
+  const concurrency = parsePackConcurrency(values.concurrency)
 
   const family = releaseFamily(values.family)
   const root = process.cwd()
   const destination = resolve(root, values.out ?? DEFAULT_OUTPUT)
-  const members = family.publishOrder(family.members(root)).order
   family.verifyBuildArtifacts(root)
-  family.verifyVersions(members)
-
-  rmSync(destination, { recursive: true, force: true })
-  mkdirSync(destination, { recursive: true })
-
-  const order = await packMembers(family, members, destination, concurrency)
+  const order = await packFamilyMembers(root, family, destination, concurrency)
   writeFileSync(join(destination, PUBLISH_ORDER_FILE), `${order.join('\n')}\n`)
 
   console.log(`release pack: family ${family.id}, ${String(order.length)} tarball(s) in ${values.out ?? DEFAULT_OUTPUT}`)
