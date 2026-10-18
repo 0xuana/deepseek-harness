@@ -60,7 +60,7 @@ Status: implemented
 
 ### 实现
 
-只改"谁是过程成员"这一条规则，并让它跟随设置。`TurnProcessSpec` 及其答案字段（`answerAnchorSeq`、`answerStep`、`inlineReasoning`、`messageCount`）、`latestAnswer` 选取、按答案 Step 保存的手动开合、最终答案的 16px 间距（`compactAnswer`）保持原样；选「仅最终回答」时这些结构照旧生效，行为与原规则一致。
+只改"谁是过程成员"这一条规则，并让它跟随设置。`TurnProcessSpec` 及其答案字段（`answerAnchorSeq`、`answerStep`、`inlineReasoning`、`messageCount`）、`latestAnswer` 选取、按答案 Step 保存的手动开合保持原样；选「仅最终回答」时这些结构照旧生效，行为与原规则一致。
 
 | 位置 | 内容 |
 |---|---|
@@ -99,7 +99,8 @@ Status: implemented
 - 收益：回答之后又有通知、记账或工具调用的 Turn 不再丢失回答；以结构化结果收尾的子任务不再整轮空白；想要原呈现的读者可以一键切回。
 - 收起后的正文按估计在主会话多出约 10%，在子 agent 视图多出约 20%。多出的内容里既有原本被折掉的实际结论，也有一两行动作预告带来的冗余；子 agent 视图阅读频率低，代价按绝对量计较小。
 - 收起后连续的回复之间不再显示过程，几条回复可能被连读成一段；每条回复仍是独立行，保持原有间距。
-- 保留的答案结构在 `all` 下留下两处小的不对称：收起时 16px 间距仍给最终答案，紧跟控件的第一条回复使用普通的 12px 回复间距；`data-turn-process-messages` 仍统计最终答案之前的回复数，尽管它们已可见。把 16px 移给第一条回复会让该行在收起开始时改变间距，产生折叠动画无法抵消的 4px 回跳（`chat-scroll-contract.e2e.ts`）。
+- 收起的 Turn 不再给最终答案额外的控件 16px 间距：两种选项下，与控件之间隔着已收起行的回复都保持 12px 回复间距，只有紧跟控件的那一行得到 16px。折叠结束时没有回复改变间距，最终答案不再在折叠末尾下移约 4px（#6323）。
+- 保留的答案结构在 `all` 下留下一处小的不对称：`data-turn-process-messages` 仍统计最终答案之前的回复数，尽管它们已可见。
 - 上述比例是粗略估计，不同的工作方式和模型下会有差异。
 
 ## Testing
@@ -107,4 +108,4 @@ Status: implemented
 - `packages/client/ui-chat/tests/chat-view.client.spec.tsx`：收起后各 Step 的回复可见、推理与工具收起、无纯文字收尾的 Turn 仍显示回复、只有回复的 Turn 不提供折叠；`all` 与 `final` 实时切换不重建行；把阶段回复当作过程替身的用例改为纯推理行。
 - `packages/client/ui-chat/tests/presentation-policy.client.spec.tsx`：16 种组合的固定策略对象与三项偏好订阅。
 - `packages/client/ui-chat/tests/transcript-view-policy.client.spec.ts`、`transcript-view-row.client.spec.tsx`、`config.host.spec.ts`：默认值、持久化与采纳，设置行位置、中英文案与完全展开时隐藏，Host 配置校验与恢复。
-- Web e2e：`turn-tail-actions.e2e.ts` 与 `chat-flow-layout.e2e.ts` 断言收起后阶段回复以 12px 回复间距紧跟控件；设置页与收起后 aria 黄金快照包含新设置行与阶段回复。
+- Web e2e：`turn-tail-actions.e2e.ts` 与 `chat-flow-layout.e2e.ts` 断言收起后控件之后第一条可见回复保持 12px 回复间距；设置页与收起后 aria 黄金快照包含新设置行与阶段回复。

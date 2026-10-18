@@ -114,10 +114,6 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
   ])
   const controllerInactive = routedNode?.kind === 'turn-process'
     && foldCompleted && !foldable
-  const compactAnswer = processAnswer
-    && foldable
-    && processPresentation.compactAnswer
-    && !processOpen
   const processHidden = controllerInactive || (foldable && processMember && !processOpen)
   const revealProcess = useCallback(() => {
     if (processMember) setOpen(true)
@@ -167,7 +163,6 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
       data-chat-turn={turn}
       data-turn-process-member={processMember || undefined}
       data-turn-process-hidden={processHidden || undefined}
-      data-turn-process-answer={compactAnswer || undefined}
     >
       {renderSlot('conversation.chat.node', routedOwner, {
         entryKey: routedNode.kind,

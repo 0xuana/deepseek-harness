@@ -21,8 +21,7 @@ function samePresentation(
     && left.turnClosed === right.turnClosed
     && left.hasExternalProcess === right.hasExternalProcess
     && left.hasNonReplyProcess === right.hasNonReplyProcess
-    && left.hasInterleavedInput === right.hasInterleavedInput
-    && left.compactAnswer === right.compactAnswer)
+    && left.hasInterleavedInput === right.hasInterleavedInput)
 }
 
 function derivePresentation(
@@ -51,14 +50,12 @@ function derivePresentation(
   let hasExternalProcess = false
   let hasNonReplyProcess = false
   let hasInterleavedInput = false
-  let compactAnswer = true
   for (const key of keys) {
     const node = nodes.get(key) as ChatNode | undefined
     if (node === undefined || !isVisibleChatNode(node) || node.kind === 'turn-process') continue
     if (isAtOrOutside(node, 'input')
       && (openingHumanAnchor === undefined || node.anchorSeq > openingHumanAnchor)) {
       hasInterleavedInput = true
-      if (spec.answerAnchorSeq === null || node.anchorSeq < spec.answerAnchorSeq) compactAnswer = false
     }
     if (isAtOrOutside(node, 'turn')
       || node.anchorSeq < spec.processStartSeq
@@ -80,7 +77,6 @@ function derivePresentation(
     hasExternalProcess,
     hasNonReplyProcess,
     hasInterleavedInput,
-    compactAnswer,
   }
 }
 

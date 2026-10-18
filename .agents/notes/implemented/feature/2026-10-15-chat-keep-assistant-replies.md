@@ -60,7 +60,7 @@ A Turn with replies but no process content keeps the control's title without a c
 
 ### Implementation
 
-Only the rule that decides process membership changes, and it follows the setting. `TurnProcessSpec` with its answer fields (`answerAnchorSeq`, `answerStep`, `inlineReasoning`, `messageCount`), the `latestAnswer` selection, manual disclosure saved per answer Step, and the final answer's 16px spacing (`compactAnswer`) stay as they were; with Final answer only they still apply and the behavior matches the previous rule.
+Only the rule that decides process membership changes, and it follows the setting. `TurnProcessSpec` with its answer fields (`answerAnchorSeq`, `answerStep`, `inlineReasoning`, `messageCount`), the `latestAnswer` selection, and manual disclosure saved per answer Step stay as they were; with Final answer only they still apply and the behavior matches the previous rule.
 
 | Location | Content |
 |---|---|
@@ -99,7 +99,8 @@ The [Chat Node business rules](../../../../packages/client/ui-chat/src/client/co
 - Gains: Turns that receive a notice, record keeping, or a tool call after answering no longer lose the answer; subagent tasks that end with a structured result are no longer blank; readers who want the previous presentation can switch back with one choice.
 - Collapsed text grows by an estimated 10% in main Sessions and 20% in subagent views. The added text includes actual conclusions that previously folded away as well as redundancy from one- or two-line action previews; subagent views are rarely read, so the absolute cost is small.
 - After collapsing, consecutive replies no longer show the process between them and may read as one passage; each reply remains its own row with the original spacing.
-- The retained answer structure leaves two small asymmetries under `all`: the 16px collapsed spacing still goes to the final answer while the first reply after the control uses the ordinary 12px reply gap, and `data-turn-process-messages` still counts the replies before the final answer although they are visible. Moving the 16px to the first reply would change that row's spacing when collapsing starts and produce a 4px reversal the fold animation cannot absorb (`chat-scroll-contract.e2e.ts`).
+- A collapsed Turn no longer gives its final answer the control's 16px clearance: in both choices, a reply separated from the control by folded rows keeps the 12px reply gap, and only a row directly following the control receives 16px. Because no reply changes its spacing when the fold finishes, the final answer no longer moves down about 4px at the end of a fold (#6323).
+- The retained answer structure leaves one small asymmetry under `all`: `data-turn-process-messages` still counts the replies before the final answer although they are visible.
 - These proportions are rough estimates and vary with ways of working and models.
 
 ## Testing
@@ -107,4 +108,4 @@ The [Chat Node business rules](../../../../packages/client/ui-chat/src/client/co
 - `packages/client/ui-chat/tests/chat-view.client.spec.tsx`: replies from every Step stay visible while reasoning and tools fold, a Turn without a text-only ending still shows its replies, and a reply-only Turn offers no collapse; switching between `all` and `final` does not rebuild rows; cases that used an intermediate reply as a process stand-in now use reasoning-only rows.
 - `packages/client/ui-chat/tests/presentation-policy.client.spec.tsx`: fixed policy objects for the 16 combinations and subscriptions to all three preferences.
 - `packages/client/ui-chat/tests/transcript-view-policy.client.spec.ts`, `transcript-view-row.client.spec.tsx`, and `config.host.spec.ts`: default, persistence, and adoption; the settings row's position, Chinese and English copy, and hiding in Verbose; Host configuration validation and restoration.
-- Web e2e: `turn-tail-actions.e2e.ts` and `chat-flow-layout.e2e.ts` assert that an intermediate reply follows a folded control at the 12px reply gap; the settings and folded-Turn aria goldens include the new settings row and intermediate replies.
+- Web e2e: `turn-tail-actions.e2e.ts` and `chat-flow-layout.e2e.ts` assert that the first visible reply after a folded control keeps the 12px reply gap; the settings and folded-Turn aria goldens include the new settings row and intermediate replies.

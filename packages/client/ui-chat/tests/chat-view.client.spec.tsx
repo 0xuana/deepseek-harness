@@ -2740,23 +2740,6 @@ describe('ChatView', () => {
     expect(view.getByText('final answer').closest('[hidden]')).toBeNull()
   })
 
-  it('keeps ordinary spacing when steering separates the process control from its answer', () => {
-    const h = makeHarness({
-      nodes: [
-        user(1, 'question'),
-        reasoningAssistant(2, 'inspect', 1, 1),
-        steering(3, 'also mention safety', 1),
-        assistant(4, 'final answer', 1, 2),
-      ],
-      turnEnds: new Map([[1, 5]]),
-    })
-    const view = render(<h.ChatView {...h.props} />)
-    const answer = view.container.querySelector<HTMLElement>('[data-chat-flow-kind="assistant-step"]:not([hidden])')
-
-    expect(view.getByText('also mention safety')).toBeTruthy()
-    expect(answer?.hasAttribute('data-turn-process-answer')).toBe(false)
-  })
-
   it.each(['compact', 'standard', 'detailed'] as const)(
     'preserves steering-separated process groups in %s mode after Turn completion', (mode) => {
       const nodes = [
@@ -2817,25 +2800,6 @@ describe('ChatView', () => {
       expect(visibleOrder()).toEqual(order)
     },
   )
-
-  it('keeps compact answer spacing after multiple opening steering inputs', () => {
-    const h = makeHarness({
-      nodes: [
-        steering(1, 'question', 1),
-        steering(2, 'also mention safety', 1),
-        reasoningAssistant(3, 'inspect', 1, 1),
-        assistant(4, 'final answer', 1, 2),
-      ],
-      turnEnds: new Map([[1, 5]]),
-    })
-    const view = render(<h.ChatView {...h.props} />)
-    const answer = view.container.querySelector<HTMLElement>('[data-chat-flow-kind="assistant-step"]:not([hidden])')
-
-    expect(view.getByText('also mention safety')).toBeTruthy()
-    expect(answer?.hasAttribute('data-turn-process-answer')).toBe(true)
-    fireEvent.click(turnProcessControl(view.container)!)
-    expect(answer?.hasAttribute('data-turn-process-answer')).toBe(false)
-  })
 
   it('keeps a live Turn expanded and folds it once at turn/end', withClock(3_000, () => {
     const process = reasoningAssistant(2, 'inspect', 1, 1)
