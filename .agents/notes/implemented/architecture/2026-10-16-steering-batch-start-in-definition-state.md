@@ -29,7 +29,7 @@ The lookup costs O(log N) per claim-leading human message, where N is the number
 
 ## Consequences
 
-The decision lives in node data, follows replay and earlier-history loading through existing dependency tracking, and leaves the renderer, Seat, node list, and ui-conversation framework unchanged. It costs one more Definition and one Context per Step with output; each State is one number, and each Context holds references to its Step's evidence events. The slot follows the claim's first human message rather than its first rendered row, so a runtime-context notice logged before that message in the same claim sits above the slot, as the README states.
+The decision lives in node data, follows replay and earlier-history loading through existing dependency tracking, and leaves the renderer, Seat, node list, and ui-conversation framework unchanged. It costs one more Definition and one Context per Step with output; each State is one number, and each Context holds references to its Step's evidence events. The slot follows the claim's first human message rather than its first rendered row, so a runtime-context notice logged before that message in the same claim sits above the slot; this follows from the README's rule that the claim's first human message keeps the slot.
 
 ## Testing
 

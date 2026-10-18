@@ -113,10 +113,13 @@
   }
 }
 
-/* The Turn header has 16px clearance from its input and following content. */
+/* The Turn header has 16px clearance from its input and following content. A
+   running Turn's control renders empty until the Turn closes; an echo after it
+   is still an opening input of that Turn, so it keeps the input gap. */
 .flowItem[data-chat-flow-kind="turn-process"],
 .flowItem[data-turn-process-answer],
-:is(.column, :global([data-slot="conversation.chat.flow"])) > [data-chat-flow-kind="turn-process"] + :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))):not(.running):not(:has(> [data-slot="conversation.chat.node"] > [data-chat-steering-batch])) {
+:is(.column, :global([data-slot="conversation.chat.flow"])) > [data-chat-flow-kind="turn-process"]:not(:empty, :has(> [data-slot="conversation.chat.node"]:empty)) + :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))):not(.running):not(:has(> [data-slot="conversation.chat.node"] > [data-chat-steering-batch])),
+:is(.column, :global([data-slot="conversation.chat.flow"])) > [data-chat-flow-kind="turn-process"] + :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))):not(.running):not([data-submission-echo], [data-pending-steering]):not(:has(> [data-slot="conversation.chat.node"] > [data-chat-steering-batch])) {
   --dsh-chat-flow-gap: 16px;
 }
 
@@ -145,7 +148,9 @@
 
 /* Steering rows keep their full layout from insertion. Only the status moves:
    it enters its new slot below them from one slot higher, independent of how
-   many admitted rows it passes or how tall they are. */
+   many admitted rows it passes or how tall they are. The start therefore sits
+   below the status's previous position by the admitted rows' height; the
+   fade-in covers that difference, so this entrance approximates the move. */
 @media (prefers-reduced-motion: no-preference) {
   :where(.column > :global([data-slot="conversation.chat.flow"]) > .flowItem[data-chat-flow-kind="steering"]) + .running {
     animation: running-enters-slot 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -188,10 +193,12 @@
   }
 
   /* Switches only change the duration of a move its structural change already
-     created, so turning one off never replays a finished move and turning it on
-     completes a running one at once. The structural rules above are wrapped in
-     :where() so these rules outrank them. An input fold runs both moves at zero
-     duration. */
+     created. A duration change applies as if the move had it from its start, so
+     turning a switch off never replays a move whose structural change is older
+     than the move's duration, and plays the remainder of one that is younger;
+     turning a switch on completes a running move at once. The structural rules
+     above are wrapped in :where() so these rules outrank them. An input fold
+     runs both moves at zero duration. */
   .column[data-input-fold] .running {
     animation-duration: 0s;
   }

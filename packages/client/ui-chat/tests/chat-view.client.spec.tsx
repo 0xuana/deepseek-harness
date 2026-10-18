@@ -2082,6 +2082,44 @@ describe('ChatView', () => {
     expect(flow()).toEqual(['s1', 's2', 'next', 'title', 'status'])
   })
 
+  it('keeps the rest of a stopped Turn\'s claim as echoes after the empty control as its rows become durable', () => {
+    const local = (requestId: string, placement: 'steering' | 'transcript', text: string) => ({
+      requestId: requestId as never, placement, time: 1_000, text, attachments: [],
+    })
+    const steers = [local('s1', 'steering', 'steer one'), local('s2', 'steering', 'steer two')]
+    const next = local('next', 'transcript', 'next prompt')
+    const inputs = [...steers, next]
+    const h = makeHarness({ turnTimings: new Map([[1, { startTime: 1_000 }]]) }, {
+      running: true, pendingSubmissions: inputs, testInbox: { 'next-turn': [], 'next-step': [] },
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    const flow = () => [...view.container.querySelectorAll<HTMLElement>(
+      '[data-submission-echo], [data-chat-flow-kind="steering"], [data-chat-flow-kind="user"], '
+      + '[data-chat-flow-kind="turn-process"], [data-chat-running]',
+    )].map(element => element.hasAttribute('data-chat-running') ? 'status'
+      : element.matches('[data-chat-flow-kind="turn-process"]') ? 'title'
+        : String(inputs.find(input => element.textContent?.includes(input.text))?.requestId)
+          + (element.hasAttribute('data-submission-echo') ? '*' : ''))
+    const durableSteering = (seq: number, item: typeof steers[number]) => ({
+      ...steering(seq, item.text, 1), source: { kind: 'user' as const, rpcId: item.requestId },
+    })
+    expect(flow()).toEqual(['s1*', 's2*', 'next*', 'title', 'status'])
+    // The claim logs both steering rows before its prompt. The remaining echoes
+    // follow the running Turn's empty control, which has no height; the
+    // stylesheet keeps them at the input gap (turn-tail-spacing spec).
+    act(() => { h.setChat({ nodes: [durableSteering(2, steers[0]!)] }) })
+    expect(flow()).toEqual(['s1', 'title', 's2*', 'next*', 'status'])
+    act(() => { h.setChat({ nodes: [durableSteering(2, steers[0]!), durableSteering(3, steers[1]!)] }) })
+    expect(flow()).toEqual(['s1', 's2', 'title', 'next*', 'status'])
+    const prompt: UserMessageNode & { turn: number } = {
+      ...user(4, next.text), turn: 1, source: { kind: 'user', rpcId: next.requestId },
+    }
+    act(() => {
+      h.setChat({ nodes: [durableSteering(2, steers[0]!), durableSteering(3, steers[1]!), prompt] })
+    })
+    expect(flow()).toEqual(['s1', 's2', 'next', 'title', 'status'])
+  })
+
   it('leaves an opening echo below an empty historical Turn title', () => {
     const h = makeHarness({ turnTimings: new Map([[1, { startTime: 1_000 }]]), turnEnds: new Map([[1, 2]]) }, {
       pendingSubmissions: [{ requestId: 'opening' as never, placement: 'transcript',

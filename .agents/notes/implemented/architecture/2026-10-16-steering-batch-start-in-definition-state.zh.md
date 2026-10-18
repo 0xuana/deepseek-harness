@@ -29,7 +29,7 @@ Chat 在每次 claim 的第一条插话行上方保留 44px 的位置（等于�
 
 ## 后果
 
-结论保存在节点数据中，借助现有依赖追踪在回放和加载更早历史时保持正确；渲染器、Seat、节点列表和 ui-conversation 框架都不变。代价是多一个 Definition，每个有输出的 Step 多一个 Context：每个 State 只有一个数字，每个 Context 持有该 Step 证据事件的引用。保留的位置跟随 claim 的第一条人类消息，而不是该批第一条渲染出来的行；因此同一次 claim 中记录在它之前的 runtime-context 通知会排在这个位置上方，README 中已写明这一点。
+结论保存在节点数据中，借助现有依赖追踪在回放和加载更早历史时保持正确；渲染器、Seat、节点列表和 ui-conversation 框架都不变。代价是多一个 Definition，每个有输出的 Step 多一个 Context：每个 State 只有一个数字，每个 Context 持有该 Step 证据事件的引用。保留的位置跟随 claim 的第一条人类消息，而不是该批第一条渲染出来的行；因此同一次 claim 中记录在它之前的 runtime-context 通知会排在这个位置上方；这由 README 中“claim 的第一条人类消息保留该位置”的规则推出。
 
 ## 测试
 
