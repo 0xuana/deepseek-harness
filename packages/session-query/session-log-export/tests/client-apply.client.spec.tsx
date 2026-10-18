@@ -85,7 +85,7 @@ describe('session-log-download browser plugin', () => {
     expect(overlay?.options).toMatchObject({ id: 'session-log-download.copy-toast' })
     const overlayInjected = injectedOf(overlay) as SessionMarkdownCopyToastInjected
     await injected.copyMarkdown(SID)
-    expect(injected.hooks.sessionMarkdownCopy.getSnapshot().notice?.kind).toBe('failed')
+    expect(injected.hooks.sessionMarkdownCopy.getSnapshot().notice?.kind).toBe('preparationFailed')
     overlayInjected.dismiss()
     expect(injected.hooks.sessionMarkdownCopy.getSnapshot().notice).toBeNull()
 

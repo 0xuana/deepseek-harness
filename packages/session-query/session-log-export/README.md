@@ -29,11 +29,11 @@ Use this package when the Web bundle should let users export a session log. It r
 
 ### Copy as Markdown
 
-`Copy as Markdown` copies the complete selected Session, including history that the client has not loaded, as portable Markdown. The transcript starts with the latest log-backed title. Human user messages are blockquotes in chronological order, final assistant replies remain ordinary Markdown, and earlier assistant commentary and tool activity in each turn are folded into a collapsible `<details>` section before that turn's final reply. A turn whose last committed assistant message carries tool calls has no final reply, so all of its activity stays folded. An incomplete turn renders the committed messages it has.
+`Copy as Markdown` copies the complete selected Session, including history that the client has not loaded, as portable Markdown. The transcript starts with the latest log-backed title. Human user messages are blockquotes in chronological order, final assistant replies remain ordinary Markdown, and earlier assistant commentary and tool activity in each turn are folded into a collapsible `<details>` section before that turn's final reply. A turn whose last committed assistant message carries tool calls has no final reply, so all of its activity stays folded. An incomplete turn renders the committed messages it has. Only append message events are exported. An unfinished assistant code fence is closed at the message boundary, and four-space or tab-indented code keeps its indentation.
 
-The formatter reads the committed raw log, so a compaction surface replacement never removes earlier messages, and fork-inherited history appears once. Reasoning blocks, system and developer messages, injected user-role context whose source kind is not `user`, request headers and context, and runtime records are omitted. Images and files become readable labels; attachment bytes and authentication links never enter the transcript. The text ends with exactly one newline.
+The formatter reads the committed raw log, so a compaction surface replacement never removes earlier messages, and fork-inherited history appears once. The title and body come from one `readSession` snapshot. Only the selected Session and its inherited prefix are copied; descendant logs remain ZIP-only. Reasoning blocks, system and developer messages, injected user-role context whose source kind is not `user`, request headers and context, and runtime records are omitted. Images and files become readable labels; attachment bytes and authentication links never enter the transcript. Structural labels such as `Assistant`, `Tool`, and attachment placeholders are intentionally English; original message text stays unchanged. The text ends with exactly one newline.
 
-The clipboard is one browser-wide destination, so this plugin instance runs one copy at a time. A request made while a copy is pending joins that operation and keeps the first click's Session. Every Session Header disables its copy row until the operation settles, then restores it. A success or failure toast is shown through the root overlay, so it survives the menu closing or the Session changing.
+The clipboard is one browser-wide destination, so this plugin instance runs one copy at a time. On hosts with `ClipboardItem` and `navigator.clipboard.write`, the write starts synchronously from the click with a promised `text/plain` Blob while the transcript is read; other hosts fall back to the shared clipboard helper after preparation. A request made while a copy is pending joins that operation and keeps the first click's Session. Every Session Header reflects copying in `aria-busy` and disables its copy row until the operation settles. Success, preparation-failure, or clipboard-failure feedback uses the root overlay toast. Disposal aborts the read and prevents later text from reaching the Blob; an operating-system clipboard write already accepted cannot be rolled back.
 
 When `ui-message-feedback` is mounted, the same menu also offers `Feedback`, which opens its existing Session feedback dialog. Opening or dismissing that form does not export the Session or submit feedback. The feedback row follows the feedback plugin's availability; both export actions remain available independently.
 
@@ -48,7 +48,7 @@ Choose it for a Web deployment that needs user-facing session export with a visi
   name: '@deepseek-ai/dsh-session-log-export'
 ```
 
-The Web bundle mounts the package with Connection, `dsh-commands`, `dsh-client-ui-commands`, and `dsh-client-ui-conversation`.
+The Web bundle mounts the package with Connection, `dsh-commands`, `dsh-client-ui-commands`, `dsh-client-ui-conversation`, and `dsh-client-ui-layout`. The layout package declares the `shell.overlay` seat used by copy feedback; the other client packages provide the Header seat, locale, and command surface.
 
 ### Configuration
 
@@ -71,7 +71,7 @@ Attachment collection reads declared content fields of built-in Session events a
 
 ### Failures
 
-The dialog shows a preparation error when the preflight fails before ZIP streaming starts — for example an unreachable or misconfigured host endpoint. A descendant or attachment read failure after the browser accepts the GET is reported by the browser download manager, not by the dialog. A Markdown copy reports a failure toast when the Host route is unavailable or the browser rejects clipboard access; it never reports success for a partial or missing transcript.
+The dialog shows a preparation error when the preflight fails before ZIP streaming starts — for example an unreachable or misconfigured host endpoint. A descendant or attachment read failure after the browser accepts the GET is reported by the browser download manager, not by the dialog. A Markdown preparation failure reports a toast asking the user to retry the Session read; a clipboard write failure reports a separate toast asking the user to check clipboard permission. Neither reports success for a partial or missing transcript, and no pending toast is shown.
 
 -----
 
@@ -97,9 +97,9 @@ The Host route is a feature-owned exact Fetch contribution. Connection applies i
 
 ### Markdown copy flow
 
-The Header asks the Markdown copy controller for the clicked Session. The controller fetches the document-relative `api/session.markdown?sessionId=<id>` route and writes the response text with the shared clipboard helper. The Host route reads the complete live-preferred logical log through `ctx.sessionQuery.readSession`, folds the latest title through the same query service, and passes the raw events to the pure formatter. The read is a detached export observation: it creates no Agent, retains no Session, and writes no Session data. It answers 404 for an absent Session and a sanitized 500 for every other read failure.
+The Header asks the Markdown copy controller for the clicked Session. The controller starts a deferred `ClipboardItem` write synchronously when the host supports it, then fetches the document-relative `api/session.markdown?sessionId=<id>` route; otherwise it fetches first and uses the shared clipboard helper. The Host route reads the complete live-preferred logical log through `ctx.sessionQuery.readSession`, folds the latest title from the same returned events with `foldSessionTitle`, and passes the events to the pure formatter. The read is a detached export observation: it creates no Agent, retains no Session, and writes no Session data. It answers 404 for an absent Session and a sanitized 500 for every other read failure.
 
-The controller holds one pending operation and one `shell.overlay` toast entry. A second Header request joins the pending operation, so the clipboard and its success notice always describe the first click's Session. Disposal aborts the fetch and suppresses a late clipboard write or notice.
+The controller holds one pending operation and one `shell.overlay` toast entry. A second Header request joins the pending operation, so the clipboard and its notice always describe the first click's Session. Both the preparation promise and the admitted clipboard write are observed; every rejection is contained. Disposal aborts the read, prevents later text from reaching the promised Blob, suppresses notices, and awaits admitted clipboard work.
 
 </details>
 
@@ -144,6 +144,9 @@ These limits define when this package is a poor fit or needs special operational
 - **Browser download, not a Host-path writer** — the browser chooses the local destination; no Host path or native folder action is returned.
 - **Preflight reports only pre-stream failures** — a descendant or attachment failure after the browser accepts the GET is reported by the browser download manager, not by the dialog.
 - **Markdown contains committed history only** — an unsettled live token chunk has no committed text, so it is absent from the copied transcript. Compaction and fork inheritance follow the raw log rather than the current model context.
+- **Markdown copy is the selected Session only** — descendant Session logs are exported by the ZIP download, not by the Markdown copy.
+- **Transcript text is buffered in memory** — the complete Markdown string and its Blob are held before the clipboard accepts them. Browser clipboard limits can reject a large export; this package does not add a byte cap or truncate the requested complete transcript.
+- **Accepted clipboard writes cannot be rolled back** — disposal stops pending preparation and feedback, but an operating-system write that already succeeded remains on the clipboard.
 
 <a id="dev-note"></a>
 ### Dev Note

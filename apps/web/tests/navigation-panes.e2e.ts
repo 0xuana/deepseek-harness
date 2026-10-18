@@ -417,6 +417,20 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-navigation-copy-markdown'))
     await ensureSeedOpen(page)
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+    expect(await page.evaluate(() => typeof ClipboardItem)).toBe('function')
+    expect(await page.evaluate(() => typeof navigator.clipboard.write)).toBe('function')
+    await page.evaluate(() => {
+      const clipboard = navigator.clipboard
+      const originalWrite = clipboard.write.bind(clipboard)
+      Reflect.set(globalThis, '__dshClipboardWrites', 0)
+      Object.defineProperty(clipboard, 'write', {
+        configurable: true,
+        value: (...args: Parameters<typeof originalWrite>) => {
+          Reflect.set(globalThis, '__dshClipboardWrites', Number(Reflect.get(globalThis, '__dshClipboardWrites')) + 1)
+          return originalWrite(...args)
+        },
+      })
+    })
     const markdownResponse = page.waitForResponse(response =>
       response.request().method() === 'GET'
       && new URL(response.url()).pathname === '/api/session.markdown', { timeout: 30_000 })
@@ -427,6 +441,7 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     expect(response.status()).toBe(200)
     expect(response.headers()['content-type']).toBe('text/markdown; charset=utf-8')
     await page.getByText('Session copied as Markdown.', { exact: true }).waitFor({ timeout: 30_000 })
+    expect(await page.evaluate(() => Number(Reflect.get(globalThis, '__dshClipboardWrites')))).toBe(1)
 
     const markdown = await page.evaluate(() => navigator.clipboard.readText())
     const normalized = markdown.split(scaffold.workspaceCwd).join('{{cwd}}')

@@ -80,7 +80,7 @@ export function SessionLogDownloadHeaderAction(props: SessionLogDownloadHeaderPr
             aria-label={t('header.more')}
             aria-haspopup="menu"
             aria-expanded={open}
-            aria-busy={busy}
+            aria-busy={busy || copying}
             onClick={() => { setOpen(value => !value) }}
           >
             <IconEllipsisOutlineRegular />

@@ -82,7 +82,9 @@ export function formatSessionMarkdown(input: SessionMarkdownInput): string {
     }
     if (pending.length > 0) sections.push(collapsibleSection(pending))
     const final = turn.segments[finalIndex]
-    const finalText = final?.kind === 'assistant' ? final.text.trim() : ''
+    const finalText = final?.kind === 'assistant'
+      ? closeUnfinishedFence(trimBlankEdgeLines(final.text))
+      : ''
     if (finalText !== '') sections.push(finalText)
   }
   return `${sections.join('\n\n').trimEnd()}\n`
@@ -121,7 +123,7 @@ function collectTurns(events: readonly SessionEvent[]): Turn[] {
         const message = event.data.message
         const text = assistantText(message)
         const toolCalls = message.content.some(block => block.type === 'tool-call')
-        if (text.trim() !== '') active().segments.push({ kind: 'assistant', text, toolCalls })
+        if (trimBlankEdgeLines(text) !== '') active().segments.push({ kind: 'assistant', text, toolCalls })
         break
       }
       case 'tool/call': {
@@ -170,7 +172,10 @@ function collapsibleSection(entries: readonly TurnEntry[]): string {
 
 function renderEntry(entry: TurnEntry): string {
   if (entry.kind === 'assistant') {
-    return `**Assistant**\n\n${escapeWrapperTagsOutsideFences(entry.text.trim())}`
+    const text = escapeWrapperTagsOutsideFences(
+      closeUnfinishedFence(trimBlankEdgeLines(entry.text)),
+    )
+    return `**Assistant**\n\n${text}`
   }
   const heading = `**Tool: \`${escapeWrapperTags(entry.name)}\`**`
   const argumentsText = entry.arguments === ''
@@ -263,38 +268,93 @@ function fenced(text: string, language = ''): string {
   return `${fence}${language}\n${content}\n${fence}`
 }
 
-// Arbitrary commentary inside a generated details section must not close the
-// wrapper; fenced code blocks keep their exact text because their backtick
-// fence already prevents HTML parsing.
-function escapeWrapperTagsOutsideFences(markdown: string): string {
+interface Fence {
+  readonly character: string
+  readonly length: number
+}
+
+interface ScannedLine {
+  readonly text: string
+  readonly code: boolean
+}
+
+interface MarkdownScan {
+  readonly lines: readonly ScannedLine[]
+  readonly openFence: Fence | undefined
+}
+
+// Remove only blank edge lines, preserving the first and last content line's
+// indentation and interior blank lines.
+function trimBlankEdgeLines(text: string): string {
+  const lines = text.replace(/\r\n?/gu, '\n').split('\n')
+  let start = 0
+  let end = lines.length
+  while (start < end && lines[start]?.trim() === '') start += 1
+  while (end > start && lines[end - 1]?.trim() === '') end -= 1
+  return lines.slice(start, end).join('\n')
+}
+
+// Scan fenced and indented code once so wrapper escaping and unfinished-fence
+// closure agree on what is code. This is a narrow Markdown block heuristic, not
+// a parser.
+function scanMarkdown(markdown: string): MarkdownScan {
   const lines = markdown.replace(/\r\n?/gu, '\n').split('\n')
-  let fenceCharacter: string | undefined
-  let fenceLength = 0
-  const output: string[] = []
+  const scanned: ScannedLine[] = []
+  let fence: Fence | undefined
+  let indented = false
   for (const line of lines) {
-    if (fenceCharacter === undefined) {
-      const opening = /^ {0,3}(`{3,}|~{3,})(.*)$/u.exec(line)
-      if (opening !== null) {
-        const marker = String(opening[1])
-        const info = String(opening[2])
-        if (marker.startsWith('~') || !info.includes('`')) {
-          fenceCharacter = marker[0]
-          fenceLength = marker.length
-          output.push(line)
-          continue
-        }
-      }
-      output.push(escapeWrapperTags(line))
+    if (fence !== undefined) {
+      scanned.push({ text: line, code: true })
+      if (closesFence(line, fence)) fence = undefined
       continue
     }
-    const closing = new RegExp(`^ {0,3}${fenceCharacter}{${String(fenceLength)},}\\s*$`, 'u')
-    if (closing.test(line)) {
-      fenceCharacter = undefined
-      fenceLength = 0
+    const opening = openingFence(line)
+    if (opening !== undefined) {
+      fence = opening
+      indented = false
+      scanned.push({ text: line, code: true })
+      continue
     }
-    output.push(line)
+    if (/^(?: {4}|\t)/u.test(line)) {
+      indented = true
+      scanned.push({ text: line, code: true })
+      continue
+    }
+    scanned.push({ text: line, code: indented && line.trim() === '' })
+    if (line.trim() !== '') indented = false
   }
-  return output.join('\n')
+  return { lines: scanned, openFence: fence }
+}
+
+function openingFence(line: string): Fence | undefined {
+  const opening = /^ {0,3}(`{3,}|~{3,})(.*)$/u.exec(line)
+  if (opening === null) return undefined
+  const marker = String(opening[1])
+  const info = String(opening[2])
+  if (marker.startsWith('`') && info.includes('`')) return undefined
+  return { character: marker.slice(0, 1), length: marker.length }
+}
+
+function closesFence(line: string, fence: Fence): boolean {
+  const closing = new RegExp(`^ {0,3}${fence.character}{${String(fence.length)},}\\s*$`, 'u')
+  return closing.test(line)
+}
+
+// Close an assistant message that ended inside a code fence so the next
+// message or generated details closer cannot be swallowed by that block.
+function closeUnfinishedFence(markdown: string): string {
+  const scan = scanMarkdown(markdown)
+  if (scan.openFence === undefined) return markdown
+  const content = markdown.replace(/\n+$/u, '')
+  return `${content}\n${scan.openFence.character.repeat(scan.openFence.length)}`
+}
+
+// Arbitrary commentary inside a generated details section must not close the
+// wrapper. Fenced and indented code keep their exact text.
+function escapeWrapperTagsOutsideFences(markdown: string): string {
+  return scanMarkdown(markdown).lines
+    .map(line => line.code ? line.text : escapeWrapperTags(line.text))
+    .join('\n')
 }
 
 function escapeWrapperTags(text: string): string {

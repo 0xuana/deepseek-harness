@@ -6,12 +6,17 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { GlobalStandardProps, SessionStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { createSnapshotStore, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import { SessionLogDownloadController } from '../src/client/controller.ts'
-import { SessionMarkdownCopyController } from '../src/client/copy-controller.ts'
+import { SessionMarkdownCopyController, type SessionMarkdownClipboard } from '../src/client/copy-controller.ts'
 import { SessionLogDownloadHeaderAction } from '../src/client/HeaderAction.tsx'
 import type { SessionLogDownloadHeaderProps } from '../src/client/HeaderAction.tsx'
 import { en } from '../src/client/locales.ts'
 
 const SID = 'session-export-header' as SessionId
+const clipboard: SessionMarkdownClipboard = {
+  supportsDeferredWrite: () => false,
+  writeDeferred: async () => {},
+  writeText: async () => true,
+}
 const dictionary: Record<string, string> = en
 const translate: SessionLogDownloadHeaderProps['t'] = key => dictionary[key] ?? key
 const unused = (): never => { throw new Error('This isolated component does not consume framework hooks') }
@@ -36,7 +41,7 @@ function bindSnapshot<State>(store: ObservableSnapshot<State>) {
 
 function bench(feedbackAvailable = false, copyController = new SessionMarkdownCopyController(
   async () => new Response('markdown'),
-  async () => true,
+  clipboard,
 )) {
   const controller = new SessionLogDownloadController(async () => new Response('zip'), vi.fn())
   const request = vi.fn((sessionId: SessionId) => controller.download(sessionId))
@@ -115,7 +120,7 @@ describe('Session export Header action', () => {
 
   it('disables only the copy row while a copy is pending', async () => {
     const gate = Promise.withResolvers<Response>()
-    const copyController = new SessionMarkdownCopyController(() => gate.promise, async () => true)
+    const copyController = new SessionMarkdownCopyController(() => gate.promise, clipboard)
     const b = bench(true, copyController)
     const pending = copyController.copy(SID)
     expect(copyController.store.getSnapshot().copying).toBe(true)
@@ -127,12 +132,13 @@ describe('Session export Header action', () => {
     await waitFor(() => { expect((copyItem as HTMLButtonElement).disabled).toBe(true) })
     expect((b.view.getByRole('menuitem', { name: 'Download session log' }) as HTMLButtonElement).disabled).toBe(false)
     expect((b.view.getByRole('menuitem', { name: 'Feedback' }) as HTMLButtonElement).disabled).toBe(false)
-    expect(button.getAttribute('aria-busy')).toBe('false')
+    expect(button.getAttribute('aria-busy')).toBe('true')
 
     gate.resolve(new Response('markdown'))
     await pending
     expect(b.copyController.store.getSnapshot().copying).toBe(false)
     await waitFor(() => { expect((copyItem as HTMLButtonElement).disabled).toBe(false) })
+    expect(button.getAttribute('aria-busy')).toBe('false')
   })
 
   it('opens the more-actions menu and downloads through the shared controller', async () => {

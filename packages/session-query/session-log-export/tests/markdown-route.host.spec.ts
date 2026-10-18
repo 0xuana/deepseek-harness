@@ -4,8 +4,9 @@ import type { BrowserAuth } from '@deepseek-ai/dsh-client-connection/src/browser
 import type { MessageId } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent, SessionHeader, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
+import type {} from '@deepseek-ai/dsh-session-title'
 import { brandNumber, brandString } from '@deepseek-ai/dsh-brand'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { SESSION_MARKDOWN_EXPORT_PATH, apply, inject } from '../src/index.ts'
 
 const SESSION_ID = 'session-markdown-route' as SessionId
@@ -34,9 +35,15 @@ const EVENTS: SessionEvent[] = [
     },
   },
   {
-    type: 'assistant/message',
+    type: 'session/title',
     seq: brandNumber<SessionSeq>(3),
     time: 3,
+    data: { title: 'Route title from events', messageSeqs: [brandNumber<SessionSeq>(2)], source: { kind: 'fallback' } },
+  },
+  {
+    type: 'assistant/message',
+    seq: brandNumber<SessionSeq>(4),
+    time: 4,
     surfaceOp: 'append',
     data: {
       turn: 1,
@@ -50,7 +57,7 @@ const EVENTS: SessionEvent[] = [
       stream: [],
     },
   },
-  { type: 'turn/end', seq: brandNumber<SessionSeq>(4), time: 4, data: { turn: 1, reason: { kind: 'completed' } } },
+  { type: 'turn/end', seq: brandNumber<SessionSeq>(5), time: 5, data: { turn: 1, reason: { kind: 'completed' } } },
 ]
 
 function missingSessionError(): Error {
@@ -59,15 +66,10 @@ function missingSessionError(): Error {
 
 function query(overrides: {
   readonly readSession?: (id: SessionId) => Promise<unknown>
-  readonly readTitle?: (id: SessionId, signal?: AbortSignal) => Promise<unknown>
 } = {}): unknown {
   return {
     readSession: overrides.readSession
       ?? (async () => ({ session: HEADER, inheritedEventCount: 0, events: EVENTS })),
-    readTitle: overrides.readTitle
-      ?? (async () => ({
-        title: 'Route title', messageSeqs: [], source: { kind: 'fallback' }, eventSeq: 2, updatedAt: 2,
-      })),
   }
 }
 
@@ -103,7 +105,7 @@ describe('Session Markdown Fetch route', () => {
     expect(response.status).toBe(200)
     expect(response.headers.get('content-type')).toBe('text/markdown; charset=utf-8')
     const markdown = await response.text()
-    expect(markdown).toContain('# Route title')
+    expect(markdown).toContain('# Route title from events')
     expect(markdown).toContain('> Route question')
     expect(markdown).toContain('Route answer')
     expect(markdown.endsWith('\n')).toBe(true)
@@ -161,16 +163,18 @@ describe('Session Markdown Fetch route', () => {
     await broken.dispose()
   })
 
-  it('returns a sanitized 500 when the title read fails after the log read', async () => {
-    const { shared, connection, dispose } = await mounted(query({
-      readTitle: async () => { throw new Error('title path /private/host') },
-    }))
+  it('folds the title and body from one returned snapshot without a second title read', async () => {
+    const readSession = vi.fn(async () => ({ session: HEADER, inheritedEventCount: 0, events: EVENTS }))
+    const readTitle = vi.fn(async () => { throw new Error('must not read a second observation') })
+    const { shared, connection, dispose } = await mounted({ readSession, readTitle })
     const response = await shared.fetch(
       request(`${SESSION_MARKDOWN_EXPORT_PATH}?sessionId=${SESSION_ID}`),
       connection.browserPeer,
     )
-    expect(response.status).toBe(500)
-    expect(await response.text()).toBe('session markdown export failed to read the stored log')
+    expect(response.status).toBe(200)
+    expect(await response.text()).toContain('# Route title from events')
+    expect(readSession).toHaveBeenCalledOnce()
+    expect(readTitle).not.toHaveBeenCalled()
     await dispose()
   })
 })

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import { IconWarningOutlineRegular, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { SessionMarkdownCopyState } from './copy-controller.ts'
 import { NS } from './locales.ts'
@@ -13,7 +13,8 @@ export interface SessionMarkdownCopyToastInjected {
 }
 
 /** Props of the root overlay copy notice. */
-export type SessionMarkdownCopyToastProps = PropsLocale<typeof NS>
+export type SessionMarkdownCopyToastProps = PropsRuntime<'shell.overlay'>
+  & PropsLocale<typeof NS>
   & InjectFace<SessionMarkdownCopyToastInjected>
 
 /**
@@ -31,7 +32,7 @@ export function SessionMarkdownCopyToast({
     : (
       <Toast
         key={notice.seq}
-        text={t('toast.copyFailed')}
+        text={t(notice.kind === 'preparationFailed' ? 'toast.preparationFailed' : 'toast.clipboardFailed')}
         icon={<IconWarningOutlineRegular />}
         onDone={dismiss}
       />

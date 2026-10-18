@@ -327,6 +327,113 @@ describe('formatSessionMarkdown', () => {
     expect(markdown).toBe('# Whitespace\n\n> Question\n\nAnswer\n')
   })
 
+
+  it('preserves four-space and tab indentation in final and commentary prose', () => {
+    const markdown = formatSessionMarkdown({
+      title: 'Indented code',
+      events: [
+        start(1, 1),
+        user(2, 'Show code'),
+        assistant(3, [text('    <details>\n    <summary>literal code</summary>')]),
+        assistant(4, [text('\tif (ready) {\n\t  run()\n\t}')]),
+        end(5, 1),
+      ],
+    })
+
+    expect(markdown).toContain('**Assistant**\n\n    <details>\n    <summary>literal code</summary>')
+    expect(markdown).toContain('\tif (ready) {\n\t  run()\n\t}')
+    expect(markdown).not.toContain('&lt;details>')
+    expect(markdown.endsWith('\t}\n')).toBe(true)
+  })
+
+  it('closes unfinished commentary fences before the generated details closer', () => {
+    const backtick = formatSessionMarkdown({
+      title: 'Backtick fence',
+      events: [
+        start(1, 1),
+        user(2, 'Question'),
+        assistant(3, [text('Before\n\n```ts\nconst x = 1')]),
+        assistant(4, [text('After backtick')]),
+        end(5, 1),
+      ],
+    })
+    expect(backtick).toContain('const x = 1\n```\n\n</details>\n\nAfter backtick')
+
+    const tilde = formatSessionMarkdown({
+      title: 'Tilde fence',
+      events: [
+        start(1, 1),
+        user(2, 'Question'),
+        assistant(3, [text('~~~js\nconst y = 2')]),
+        assistant(4, [text('After tilde')]),
+        end(5, 1),
+      ],
+    })
+    expect(tilde).toContain('const y = 2\n~~~\n\n</details>\n\nAfter tilde')
+
+    const longer = formatSessionMarkdown({
+      title: 'Longer fence',
+      events: [
+        start(1, 1),
+        user(2, 'Question'),
+        assistant(3, [text('````md\nlonger fence')]),
+        assistant(4, [text('After longer')]),
+        end(5, 1),
+      ],
+    })
+    expect(longer).toContain('longer fence\n````\n\n</details>\n\nAfter longer')
+  })
+
+  it('does not treat an invalid backtick info string as an open fence', () => {
+    const markdown = formatSessionMarkdown({
+      title: 'Invalid fence',
+      events: [
+        start(1, 1),
+        user(2, 'Question'),
+        assistant(3, [text('```bad`info\nstill prose')]),
+        assistant(4, [text('After invalid')]),
+        end(5, 1),
+      ],
+    })
+
+    expect(markdown).toContain('```bad`info\nstill prose')
+    expect(markdown.match(/```/gu)).toHaveLength(1)
+    expect(markdown).toContain('still prose\n\n</details>\n\nAfter invalid')
+  })
+
+  it('closes an unfinished final fence before the next turn', () => {
+    const markdown = formatSessionMarkdown({
+      title: 'Final fence',
+      events: [
+        start(1, 1),
+        user(2, 'First question'),
+        assistant(3, [text('```sh\necho hi')]),
+        end(4, 1),
+        start(5, 2),
+        user(6, 'Second question'),
+        end(7, 2),
+      ],
+    })
+
+    expect(markdown).toContain('echo hi\n```\n\n> Second question')
+    expect(markdown.indexOf('echo hi')).toBeLessThan(markdown.indexOf('> Second question'))
+  })
+
+
+  it('strips blank edge lines without removing indented code blank lines', () => {
+    const markdown = formatSessionMarkdown({
+      title: 'Edge blanks',
+      events: [
+        start(1, 1),
+        user(2, 'Question'),
+        assistant(3, [text('\n    first\n\n    second\n\n')]),
+        end(4, 1),
+      ],
+    })
+
+    expect(markdown).toBe('# Edge blanks\n\n> Question\n\n    first\n\n    second\n')
+  })
+
   it('escapes wrapper tags outside fences and grows fences past tool backtick runs', () => {
     const markdown = formatSessionMarkdown({
       title: 'Escaping',

@@ -3,10 +3,18 @@ import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useSyncExternalStore } from 'react'
 import { createSnapshotStore, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
+import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionMarkdownCopyState } from '../src/client/copy-controller.ts'
 import { SessionMarkdownCopyToast } from '../src/client/CopyToast.tsx'
 import type { SessionMarkdownCopyToastProps } from '../src/client/CopyToast.tsx'
 import { en } from '../src/client/locales.ts'
+
+const unused = (): never => { throw new Error('This isolated component does not consume framework hooks') }
+const standard: GlobalStandardProps = {
+  useSessions: unused, useSessionStatus: unused, useSessionRetainInfo: unused,
+  useSessionAccess: () => true, useRemoteAccess: () => true, useWorkspaceAccess: () => true,
+  usePanelInfo: unused, useResource: unused, useWorkspaces: unused,
+}
 
 function bindSnapshot(store: ObservableSnapshot<SessionMarkdownCopyState>) {
   return function useSessionMarkdownCopy<T>(selector: (state: SessionMarkdownCopyState) => T): T {
@@ -22,6 +30,7 @@ function bench(notice: SessionMarkdownCopyState['notice']) {
   const dismiss = vi.fn()
   const dictionary: Record<string, string> = en
   const props: SessionMarkdownCopyToastProps = {
+    ...standard,
     useSessionMarkdownCopy: bindSnapshot(store),
     dismiss,
     t: key => dictionary[key] ?? key,
@@ -43,10 +52,15 @@ describe('Session Markdown copy toast', () => {
     expect(b.dismiss).toHaveBeenCalledOnce()
   })
 
-  it('shows the failure outcome with its actionable copy', () => {
-    const b = bench({ kind: 'failed', seq: 2 })
-    expect(b.getByRole('alert').textContent).toBe(
-      'Could not copy the Session. Check clipboard access and try again.',
+  it('shows separate preparation and clipboard failure copy', () => {
+    const preparation = bench({ kind: 'preparationFailed', seq: 2 })
+    expect(preparation.getByRole('alert').textContent).toBe(
+      'Could not read the Session for copying. Try again.',
+    )
+    cleanup()
+    const clipboard = bench({ kind: 'clipboardFailed', seq: 3 })
+    expect(clipboard.getByRole('alert').textContent).toBe(
+      'Could not write to the clipboard. Check clipboard permission and try again.',
     )
   })
 

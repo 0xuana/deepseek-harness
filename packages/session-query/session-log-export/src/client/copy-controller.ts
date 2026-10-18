@@ -2,9 +2,14 @@
  * Browser controller for the Session Header's "Copy as Markdown" action. One
  * plugin instance owns one pending copy: the clipboard is a browser-wide
  * destination, so a second request joins the pending operation instead of
- * racing it. The Header disables its copy row from this state; the toast lives
- * in a separate `shell.overlay` entry so it survives the menu closing or the
- * Session changing.
+ * racing it.
+ *
+ * On hosts with `ClipboardItem` and `navigator.clipboard.write`, the controller
+ * starts that write synchronously from the click with a promised text Blob, so
+ * the browser keeps the user activation while the Host prepares the
+ * transcript. Other hosts fall back to `writeClipboard` after preparation. A
+ * disposal aborts the read and prevents later text from reaching the Blob, but
+ * an accepted operating-system clipboard write cannot be rolled back.
  * @module
  */
 
@@ -13,8 +18,8 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
 import { SESSION_MARKDOWN_EXPORT_ROUTE } from '../routes.ts'
 
-/** Whether the latest copy attempt succeeded or failed. */
-export type SessionMarkdownCopyNoticeKind = 'success' | 'failed'
+/** Whether the latest copy attempt succeeded, prepared no transcript, or could not write. */
+export type SessionMarkdownCopyNoticeKind = 'success' | 'preparationFailed' | 'clipboardFailed'
 
 /** One settled copy notice; `seq` keys the toast so a repeat copy restarts it. */
 export interface SessionMarkdownCopyNotice {
@@ -30,12 +35,41 @@ export interface SessionMarkdownCopyState {
   notice: SessionMarkdownCopyNotice | null
 }
 
+/** Browser clipboard operations used by one copy attempt. */
+export interface SessionMarkdownClipboard {
+  /** Whether a deferred write can start inside the click's activation window. */
+  supportsDeferredWrite(): boolean
+  /** Start one deferred text write; the browser observes the data promise as it settles. */
+  writeDeferred(data: Promise<Blob>): Promise<void>
+  /** Write prepared text on hosts without the deferred API; false means the browser rejected it. */
+  writeText(text: string): Promise<boolean>
+}
+
 /** HTTP carrier for the Markdown route. */
 type Fetch = (input: string | URL, init?: RequestInit) => Promise<Response>
-/** Host clipboard write; false means the browser rejected it. */
-type Write = (text: string) => Promise<boolean>
 
 const INITIAL: SessionMarkdownCopyState = { copying: false, notice: null }
+
+const browserClipboard: SessionMarkdownClipboard = {
+  supportsDeferredWrite() {
+    const clipboard: unknown = Reflect.get(navigator, 'clipboard')
+    return typeof globalThis.ClipboardItem === 'function'
+      && typeof clipboard === 'object' && clipboard !== null
+      && typeof Reflect.get(clipboard, 'write') === 'function'
+  },
+  writeDeferred(data) {
+    return navigator.clipboard.write([new ClipboardItem({ 'text/plain': data })])
+  },
+  writeText: writeClipboard,
+}
+
+function startWrite(start: () => Promise<void>): Promise<void> {
+  try {
+    return start()
+  } catch (error) {
+    return Promise.reject(new Error('clipboard write could not start', { cause: error }))
+  }
+}
 
 /** Owns the one pending Markdown copy for this plugin instance. */
 export class SessionMarkdownCopyController {
@@ -48,14 +82,14 @@ export class SessionMarkdownCopyController {
 
   constructor(
     private readonly fetcher: Fetch = (input, init) => fetch(input, init),
-    private readonly write: Write = writeClipboard,
+    private readonly clipboard: SessionMarkdownClipboard = browserClipboard,
   ) {}
 
   /**
    * Copy one Session's complete transcript. A request received while a copy is
    * pending joins that operation and keeps its originally captured Session.
    * @param sessionId - Session captured by the click.
-   * @returns after the clipboard write settles, a failure notice is published, or a late post-disposal request is ignored.
+   * @returns after the clipboard work settles, a failure notice is published, or a late post-disposal request is ignored.
    */
   copy(sessionId: SessionId): Promise<void> {
     if (this.disposed) return Promise.resolve()
@@ -75,9 +109,10 @@ export class SessionMarkdownCopyController {
   }
 
   /**
-   * Abort a pending fetch, suppress a late clipboard write or notice, and
-   * reach quiescence.
-   * @returns after the pending operation settles.
+   * Abort a pending read, suppress a late clipboard write or notice, and reach
+   * quiescence. A write already accepted by the operating system cannot be
+   * undone.
+   * @returns after the pending operation and any admitted clipboard work settle.
    */
   async dispose(): Promise<void> {
     this.disposed = true
@@ -87,23 +122,68 @@ export class SessionMarkdownCopyController {
     this.store.set(INITIAL)
   }
 
-  private async run(sessionId: SessionId, signal: AbortSignal): Promise<void> {
+  private run(sessionId: SessionId, signal: AbortSignal): Promise<void> {
     this.store.update((state) => { state.copying = true })
+    const preparation = this.prepare(sessionId, signal)
+    if (this.clipboard.supportsDeferredWrite()) {
+      const data = preparation.then((markdown) => {
+        if (this.isCancelled() || signal.aborted) throw new Error('Session Markdown copy cancelled')
+        return new Blob([markdown], { type: 'text/plain' })
+      })
+      const write = startWrite(() => this.clipboard.writeDeferred(data))
+      return this.settleDeferred(preparation, data, write)
+    }
+    return this.settleFallback(preparation)
+  }
+
+  private async prepare(sessionId: SessionId, signal: AbortSignal): Promise<string> {
+    const query = new URLSearchParams({ sessionId })
+    const route = `${SESSION_MARKDOWN_EXPORT_ROUTE}?${query.toString()}`
+    const response = await this.fetcher(route, { signal })
+    if (!response.ok) throw new Error(`Session Markdown request failed: HTTP ${String(response.status)}`)
+    return response.text()
+  }
+
+  private async settleDeferred(
+    preparation: Promise<string>,
+    data: Promise<Blob>,
+    write: Promise<void>,
+  ): Promise<void> {
     try {
-      const query = new URLSearchParams({ sessionId })
-      const route = `${SESSION_MARKDOWN_EXPORT_ROUTE}?${query.toString()}`
-      const response = await this.fetcher(route, { signal })
-      if (!response.ok) throw new Error(`Session Markdown request failed: HTTP ${String(response.status)}`)
-      const markdown = await response.text()
-      // The plugin may unload while the fetch or a clipboard call is pending;
-      // never write or report after disposal.
+      const [prepared, blob, written] = await Promise.allSettled([preparation, data, write])
       if (this.isCancelled()) return
-      if (!await this.write(markdown)) throw new Error('the browser rejected the clipboard write')
-      if (this.isCancelled()) return
+      if (prepared.status === 'rejected' || blob.status === 'rejected') {
+        this.publishNotice('preparationFailed')
+        return
+      }
+      if (written.status === 'rejected') {
+        this.publishNotice('clipboardFailed')
+        return
+      }
       this.publishNotice('success')
-    } catch {
+    } finally {
+      this.store.update((state) => { state.copying = false })
+    }
+  }
+
+  private async settleFallback(preparation: Promise<string>): Promise<void> {
+    try {
+      let markdown: string
+      try {
+        markdown = await preparation
+      } catch {
+        if (!this.isCancelled()) this.publishNotice('preparationFailed')
+        return
+      }
       if (this.isCancelled()) return
-      this.publishNotice('failed')
+      let accepted = false
+      try {
+        accepted = await this.clipboard.writeText(markdown)
+      } catch {
+        accepted = false
+      }
+      if (this.isCancelled()) return
+      this.publishNotice(accepted ? 'success' : 'clipboardFailed')
     } finally {
       this.store.update((state) => { state.copying = false })
     }
