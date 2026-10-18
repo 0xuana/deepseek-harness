@@ -36,6 +36,15 @@ function captureConsole(): { log: () => string; error: () => string } {
   return { log: text(log), error: text(error) }
 }
 
+function mapDependencyToSource(root: string): void {
+  const basePath = join(root, 'tsconfig.base.json')
+  const base = JSON.parse(readFileSync(basePath, 'utf8')) as { compilerOptions: Record<string, unknown> }
+  writeFileSync(basePath, JSON.stringify({
+    ...base,
+    compilerOptions: { ...base.compilerOptions, paths: { '@fixture/dep/types': ['./packages/fixture/dep/src/types.ts'] } },
+  }))
+}
+
 function typertOutputs(pkg: string): Record<string, string> {
   const output = join(pkg, 'lib')
   return Object.fromEntries(globSync('typert.*', { cwd: output }).sort()
@@ -110,12 +119,7 @@ describe('bundle-free Typert pass', { timeout: 60_000 }, () => {
     ])
     expect(existsSync(join(pkg, 'lib'))).toBe(false)
 
-    const basePath = join(root, 'tsconfig.base.json')
-    const base = JSON.parse(readFileSync(basePath, 'utf8')) as { compilerOptions: Record<string, unknown> }
-    writeFileSync(basePath, JSON.stringify({
-      ...base,
-      compilerOptions: { ...base.compilerOptions, paths: { '@fixture/dep/types': ['./packages/fixture/dep/src/types.ts'] } },
-    }))
+    mapDependencyToSource(root)
     expect(main([], root)).toBe(0)
     expect(Object.keys(typertOutputs(pkg))).toEqual(['typert.host.d.ts', 'typert.host.js'])
   })
@@ -141,12 +145,7 @@ describe('bundle-free Typert pass', { timeout: 60_000 }, () => {
     const dependency = writeCompiledDependency(root, false)
     writeFileSync(join(dependency, 'src/types.ts'), "export type Shape = import('@fixture/probe/typert').Payload\n")
     symlinkSync(pkg, join(root, 'node_modules/@fixture/probe'), 'junction')
-    const basePath = join(root, 'tsconfig.base.json')
-    const base = JSON.parse(readFileSync(basePath, 'utf8')) as { compilerOptions: Record<string, unknown> }
-    writeFileSync(basePath, JSON.stringify({
-      ...base,
-      compilerOptions: { ...base.compilerOptions, paths: { '@fixture/dep/types': ['./packages/fixture/dep/src/types.ts'] } },
-    }))
+    mapDependencyToSource(root)
     if (compiled) {
       mkdirSync(join(pkg, 'lib'))
       writeFileSync(join(pkg, 'lib/typert.host.d.ts'), 'export interface Payload { value: string }\n')
