@@ -587,7 +587,9 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
   }, 60_000)
 
   it.skipIf(MODE === 'record')('keeps the recorded fixture inventory exact', async () => {
-    await assertFixtureInventory(CODE_CARD_DIR, ['code-card.expected.md', 'command-wrap.expected.md'])
+    await assertFixtureInventory(CODE_CARD_DIR, [
+      'code-card.expected.md', 'command-wrap.expected.md', 'copy-markdown.expected.md',
+    ])
     await assertFixtureInventory(SNAPSHOT_DIR, [
       'session.v3.jsonl', 'search-results.expected.md', 'trajectory.expected.md',
       'terminal-card.expected.md', 'timing.expected.md',
