@@ -1,4 +1,4 @@
-/** Session-log download command and Host-owned streaming route. */
+/** Session export command and Host-owned ZIP download and Markdown copy routes. */
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { CommandDefinitionId } from '@deepseek-ai/dsh-commands/brand'
@@ -73,7 +73,7 @@ const REQUESTED: CommandResult = {
 }
 
 /**
- * Register the Web-only `/export` command and authenticated ZIP download route.
+ * Register the `/export` command and authenticated ZIP download and Markdown copy routes.
  * @param ctx - Host context carrying the human-command registry.
  * @param config - resolved compression policy.
  */
