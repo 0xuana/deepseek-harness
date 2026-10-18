@@ -18,8 +18,8 @@ Status: implemented
 
 | 命令 | 职责 | 步骤 | 调度 | client build record |
 |---|---|---|---|---|
-| `pnpm run build:artifacts` | 产出 `build` 的全部产物；包 project 照常完整类型检查，不检查已配置的聚合根程序 | native + metadata → package/library steps → Web | 依赖顺序 | 开始时删除，全部通过后写入 |
-| `pnpm run build:check` | 只类型检查已配置的聚合根程序 | host-check、client-check | 独立检查并发，无前置步骤 | 不读写 |
+| `pnpm run build:artifacts` | 产出 `build` 的全部产物；包 project 照常完整类型检查，不检查Host 与 Client 聚合程序 | [产物顺序](../../../../docs/development.zh.md#typescript-project-layout) | 依赖顺序 | 开始时删除，全部通过后写入 |
+| `pnpm run build:check` | 只类型检查Host 与 Client 聚合程序 | host-check、client-check | Host 与 Client 检查并发，无前置步骤 | 不读写 |
 | `pnpm run build` | `build:artifacts` 与 `build:check` 的全部步骤 | 下文依赖图 | run-gates 调度器并发执行 | 开始时删除，全部通过后写入 |
 
 `build:check` 不检测、不重建、也不校验 `build:artifacts` 的产物；前置产物缺失或过期时，由编译器自身的诊断（例如 TS6305、TS2307）报告，任何命令都不增加前置检查、守卫或回退逻辑。`build:artifacts` 产出的产物与 record 和 `build` 相同，并取代 `--artifacts-only`；该参数与 `compile-referenced-projects.ts` 的 `libraries` 模式已删除，Python executable builder 使用 `--build-artifacts`。`build:official` 仍是 `tsx scripts/build.ts --profile official`，执行完整的 `build`。
@@ -136,6 +136,6 @@ CI 证据：PR #6005 上，两个运行并发 `pnpm run build` 的必需 lane �
 
 删除或改变 consumers 与 windows-build 两个必需 lane 的 `build`，必须先把两个聚合检查转交另一处阻塞型 owner。typecheck scope 与 lint 类前置步骤不打包即生成 Typert 约定（[本地门禁提速](2026-10-12-local-gate-speedups.zh.md)）；产物 scope 采用[先生成元数据的顺序](2026-10-18-source-first-metadata-builds.zh.md)。
 
-[Typert Remote 方法调用](../architecture/2026-08-02-typert-remote-method-calls.zh.md)描述的“Client 编译前先完成 Host 与 Remote 产物”由 client-src 对 host-bundle 的依赖保证。
+host-src 依赖 host-typert，因此生成的 Remote 声明先于包编译。[Typert Remote 方法调用](../architecture/2026-08-02-typert-remote-method-calls.zh.md)说明生成的贡献。
 
 验证：`scripts/build.spec.ts` 覆盖类型剥离检查、已删除参数与非法范围的拒绝、`--profile` 与 `--scope check` 的冲突、范围选择、步骤依赖与环境；`compile-referenced-projects.spec.ts` 覆盖 project mode 只检查聚合程序、缺失声明的诊断，以及 `tsc -b --dry` 接受 `tsc -p` 写出的 tsbuildinfo；失败传播、输出缓冲与进程树终止沿用 run-gates 的调度实现及其测试；`run-gates.spec.ts`、`ci-workflow.spec.ts`、`preview-workflow.spec.ts`、`build-exe-for-python-sdk.spec.ts`、`dev-web.spec.ts` 与 `tests/ci-release-selfhosted.spec.ts` 固定各调用方的命令。

@@ -53,7 +53,7 @@ const STAGE_ACTIONS: Readonly<Record<TypertGenerationStage, string>> = {
 }
 
 // Host package compilation owns TypeScript diagnostics, as it does for the
-// tsdown plugin; rejecting build outputs lets this pass run beside it.
+// tsdown plugin; rejecting build outputs lets this pass run before package compilation.
 const GENERATION_OPTIONS = { checkDiagnostics: false, rejectBuildOutputs: true } as const
 
 /**

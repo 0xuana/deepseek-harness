@@ -18,8 +18,8 @@ Each command does only its own job.
 
 | Command | Responsibility | Steps | Scheduling | Client build record |
 |---|---|---|---|---|
-| `pnpm run build:artifacts` | Produces every artifact of `build`; package projects are fully type-checked as usual, the configured aggregate root programs are not checked | native + metadata → package/library steps → Web | Dependency order | Deleted at start, written after every step passes |
-| `pnpm run build:check` | Type-checks only the configured aggregate root programs | host-check, client-check | Independent checks concurrent, no prerequisite steps | Neither read nor written |
+| `pnpm run build:artifacts` | Produces every artifact of `build`; package projects are fully type-checked as usual, the Host and Client aggregate programs are not checked | [Artifact order](../../../../docs/development.md#typescript-project-layout) | Dependency order | Deleted at start, written after every step passes |
+| `pnpm run build:check` | Type-checks only the Host and Client aggregate programs | host-check, client-check | Host and Client checks concurrent, no prerequisite steps | Neither read nor written |
 | `pnpm run build` | Every step of `build:artifacts` and `build:check` | The dependency graph below | Concurrent through the run-gates scheduler | Deleted at start, written after every step passes |
 
 `build:check` neither detects, rebuilds, nor validates `build:artifacts` outputs; when prerequisite outputs are missing or stale, the compiler's own diagnostics (for example TS6305 and TS2307) report it, and no command adds prerequisite checks, guards, or fallbacks. `build:artifacts` produces the same artifacts and record as `build` and replaces `--artifacts-only`; that flag and the `libraries` mode of `compile-referenced-projects.ts` are removed, and the Python executable builder uses `--build-artifacts`. `build:official` remains `tsx scripts/build.ts --profile official` and runs the complete `build`.
@@ -136,6 +136,6 @@ Development iterations can skip the two aggregate root programs with `build:arti
 
 Removing or changing `build` in the two required lanes, consumers and windows-build, requires first transferring both aggregate checks to another blocking owner. The typecheck scope and the lint prerequisites generate Typert contracts without bundling ([local gate speed-ups](2026-10-12-local-gate-speedups.md)); artifact scopes use [source-first metadata ordering](2026-10-18-source-first-metadata-builds.md).
 
-client-src's dependency on host-bundle guarantees the "Host and Remote artifacts complete before Client compilation" ordering that [Typert Remote method calls](../architecture/2026-08-02-typert-remote-method-calls.md) describes.
+host-src depends on host-typert, so generated Remote declarations precede package compilation. [Typert Remote method calls](../architecture/2026-08-02-typert-remote-method-calls.md) describes the emitted contributions.
 
 Verification: `scripts/build.spec.ts` covers the type-stripping check, rejection of the removed flag and invalid scopes, the conflict between `--profile` and `--scope check`, scope selection, step dependencies, and the environment; `compile-referenced-projects.spec.ts` covers project mode checking only the aggregate program, the diagnostic for missing declarations, and `tsc -b --dry` accepting the tsbuildinfo that `tsc -p` writes; failure propagation, output buffering, and process-tree termination come from the run-gates scheduler and its tests; `run-gates.spec.ts`, `ci-workflow.spec.ts`, `preview-workflow.spec.ts`, `build-exe-for-python-sdk.spec.ts`, `dev-web.spec.ts`, and `tests/ci-release-selfhosted.spec.ts` pin each caller's command.

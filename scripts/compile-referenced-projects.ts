@@ -146,7 +146,7 @@ function compilerStep(
 // Typert reads workspace packages only from source (generate-typert.ts
 // rejects build outputs), so it needs no compiled package. It runs under tsx's
 // ESM hook rather than through `pnpm exec`, whose startup would lengthen the
-// critical path before Client compilation.
+// critical path before package compilation.
 function typertStep(): LibraryStep {
   return {
     id: 'host-typert',
@@ -208,7 +208,7 @@ function runStep(root: string, step: LibraryStep): void {
   if (result.status !== 0) throw stepFailure(step, result.status ?? result.signal)
 }
 
-function runStepConcurrently(root: string, step: LibraryStep): Promise<void> {
+function runStepAsync(root: string, step: LibraryStep): Promise<void> {
   return new Promise((settle, fail) => {
     const child = spawn(step.command, step.args, { cwd: root, stdio: 'inherit' })
     child.once('error', fail)
@@ -241,7 +241,7 @@ export function buildLibraryArtifacts(root: string, hostOnly: boolean, mode: Com
  * @throws the first failed step's error; dependent compilation does not start after generation fails.
  */
 export async function buildHostContracts(root: string): Promise<void> {
-  for (const step of contractSteps(root, 'host')) await runStepConcurrently(root, step)
+  for (const step of contractSteps(root, 'host')) await runStepAsync(root, step)
 }
 
 if (import.meta.main) {

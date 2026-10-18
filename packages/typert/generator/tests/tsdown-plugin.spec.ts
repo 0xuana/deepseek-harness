@@ -76,7 +76,7 @@ afterEach(() => {
 })
 
 describe('typertPlugin', () => {
-  it.each([typertPlugin, decoratorPlugin])('lowers standard decorators in TypeScript source dependencies through %s', (factory) => {
+  it.each([['typertPlugin', typertPlugin], ['decoratorPlugin', decoratorPlugin]] as const)('lowers standard decorators in TypeScript source dependencies through %s', (_name, factory) => {
     const { transform } = factory()
     expect(transform.handler('export const value = 1\n', '/workspace/src/plain.ts')).toBeUndefined()
     expect(transform.handler('@sealed\nexport class Example {}\n', '/workspace/src/example.ts?raw')?.code)

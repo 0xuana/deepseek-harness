@@ -58,7 +58,7 @@ type GenerationOutcome =
   | { readonly ok: false; readonly error: TypertWorkerError }
 
 /**
- * Lower standard TypeScript decorators when metadata was generated before bundling.
+ * Lower standard TypeScript decorators without reading or writing metadata.
  * @returns a rolldown-compatible transform without metadata generation or artifact writes.
  */
 export function decoratorPlugin(): Pick<TypertPlugin, 'name' | 'transform'> {

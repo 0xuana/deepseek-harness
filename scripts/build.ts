@@ -5,8 +5,8 @@
  * `--scope check` type-checks only the Host and Client aggregate programs against the package
  * declarations already on disk; the default runs both step sets as one dependency graph, so the
  * aggregate checks overlap the remaining artifact steps. `--scope typecheck` (`pnpm run typecheck`)
- * type-checks every package project and both aggregate programs; beside Host compilation it writes
- * the Typert declarations that Client compilation imports, without bundling.
+ * generates Typert declarations before package compilation, then type-checks every package project
+ * and both aggregate programs without bundling.
  */
 
 import { rmSync } from 'node:fs'
@@ -70,8 +70,9 @@ export function parseBuildArguments(args: readonly string[]): BuildArguments {
  * Construct the build steps of one scope as a gate dependency graph.
  * Artifact steps generate Typert from source before Host compilation, then bundle Host,
  * Desktop, and Client artifacts before Web. Native output also precedes Host compilation.
- * The typecheck scope generates Typert before compiling Host and Client packages; it writes no bundle. In the complete and typecheck
- * scopes each aggregate check waits only for its own face's package compilation; alone, the
+ * The typecheck scope generates Typert before compiling Host and Client packages; it writes no
+ * bundle. In complete and typecheck scopes each aggregate check waits only for its own face's
+ * package compilation; alone, the
  * checks have no predecessors and read whatever declarations already exist. The typecheck scope
  * checks aggregates in build mode, which skips a program whose tsbuildinfo is current; the other
  * scopes use project mode, which compiles no reference.

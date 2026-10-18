@@ -12,8 +12,8 @@
   en: a15c7c13f167e5ac
   zh: 63bcc2ef60c2f344
 /agent-note-split-build-artifacts-and-build-check-with-build-running-both-concurrently/decision/commands:
-  en: 3058f44cbcdbb1ea
-  zh: 59cb9a5db6fd1825
+  en: cc797cf688f8de64
+  zh: 5d997b686a435cc5
 /agent-note-split-build-artifacts-and-build-check-with-build-running-both-concurrently/decision/steps-and-dependencies:
   en: c6c77bb1c7acf5e3
   zh: d53c2358bef42502
@@ -36,5 +36,5 @@
   en: 54905b912d17c74e
   zh: 86a298004c8024e3
 /agent-note-split-build-artifacts-and-build-check-with-build-running-both-concurrently/consequences:
-  en: 2e5cf828ac5e2211
-  zh: e3b12f671eb8378d
+  en: 48a8cbb9e8fee654
+  zh: ece1aeaee843b48a
