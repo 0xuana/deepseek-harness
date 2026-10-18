@@ -50,6 +50,7 @@ export { REGION_BEGIN, REGION_END }
  * errors, so the partition can never silently drift from the service API.
  */
 export const SERVICE_PAGE: Record<string, string> = {
+  headlessStartup: 'boot.md',
   translator: 'translation.md',
   cotTranslation: 'translation.md',
   speechToText: 'voice-input.md',
@@ -59,6 +60,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   productAnalytics: 'product-telemetry.md',
   connection: 'web-server.md',
   pluginManager: 'boot.md',
+  pluginMarket: 'boot.md',
   pluginRegistryProbe: 'boot.md',
   configEditor: 'boot.md',
   profileContext: 'boot.md',
@@ -221,6 +223,7 @@ export const EVENT_SCOPE_PAGE: Record<string, string> = {
   'app-boot': 'boot.md',
   hmr: 'boot.md',
   'plugin-manager': 'boot.md',
+  'plugin-market': 'boot.md',
   'agent': 'core.md',
   'agent-loop': 'core.md',
   'agent-preset': 'core.md',
@@ -302,6 +305,11 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   ProfileReconciliation: 'boot.md',
   PluginInfo: 'boot.md',
   BundleInfo: 'boot.md',
+  MarketIndexSummary: 'boot.md',
+  MarketListingEntry: 'boot.md',
+  MarketQuery: 'boot.md',
+  MarketSearchResult: 'boot.md',
+  MarketSort: 'boot.md',
   ChangeResult: 'boot.md',
   InstallBundleOptions: 'boot.md',
   PluginEntryId: 'boot.md',
