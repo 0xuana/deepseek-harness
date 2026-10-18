@@ -1,21 +1,26 @@
-## Motivation
+<!-- 本 PR 正文按 .agents/skills/dsh-pr-description/SKILL.md 填写。 -->
 
-<!-- 用一句话说明需要解决的问题，并以 Fixes #NN 或 Related #NN 引用同仓库 Issue。 -->
+## Motivation
 
 ## Changes
 
-<!-- 高层次说明命令、配置、API、协议或持久化格式的变化；没有则写 None。 -->
-<!-- 高层次说明用户、模型或系统可观察行为的变化；没有则写 None。 -->
-
 ## Testing
 
-<!-- 每种测试方法添加一个条目。方法保持可见，将可复核证据放进对应的 Proof 区域。 -->
+<!-- 测试设计 -->
 
-- <!-- 说明命令或步骤，以及它覆盖的行为。 -->
+- <!-- 测试条目 -->
 
   <details>
   <summary>Proof</summary>
 
-  <!-- 提供测试输出、截图、录屏、日志或其他可复核证据。 -->
-
   </details>
+
+## Human and Agent Roles
+
+Levels and Agent autonomy: <ins>**hint 人工独立**</ins> 0–15%, <ins>**assist 人工主导**</ins> 20–40%, <ins>**pair 人工引导**</ins> 45–60%, <ins>**copilot 人工把关**</ins> 65–85%, <ins>**auto 模型自主**</ins> 90–100%; <ins>**n/a 暂不适用**</ins> marks a stage that does not exist or has not happened yet.
+
+- <ins>**待填级别**</ins> ?% · breakdown 问题拆解 — 待填说明
+- <ins>**待填级别**</ins> ?% · design 方案设计 — 待填说明
+- <ins>**待填级别**</ins> ?% · testing 验收测试 — 待填说明
+- <ins>**待填级别**</ins> ?% · implementation 技术实现 — 待填说明
+- <ins>**待填级别**</ins> ?% · review 评审处理 — 待填说明

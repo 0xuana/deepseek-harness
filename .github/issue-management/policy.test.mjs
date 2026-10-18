@@ -206,19 +206,32 @@ test('keeps Task Issues limited to summary and deliverables', () => {
   )
 })
 
-test('structures the pull request template around motivation, changes, and testing', () => {
+test('keeps the pull request template as the skeleton of the dsh-pr-description skill', () => {
   const source = readFileSync(new URL('../pull_request_template.md', import.meta.url), 'utf8')
-  for (const heading of ['## Motivation', '## Changes', '## Testing']) {
-    assert.match(source, new RegExp(`^${heading.replaceAll('#', '\\#')}$`, 'm'))
-  }
+  const skillPath = '.agents/skills/dsh-pr-description/SKILL.md'
+  const skill = readFileSync(new URL(`../../${skillPath}`, import.meta.url), 'utf8')
+  assert.ok(source.startsWith(`<!-- 本 PR 正文按 ${skillPath} 填写。 -->\n`), 'the template points to the skill')
+  assert.deepEqual(source.match(/^## .+$/gm), [
+    '## Motivation',
+    '## Changes',
+    '## Testing',
+    '## Human and Agent Roles',
+  ])
   assert.doesNotMatch(source, /^### /m)
-  assert.match(
-    source,
-    /<!-- 高层次说明命令[^\n]+ -->\n<!-- 高层次说明用户[^\n]+ -->/,
-  )
   assert.match(source, /- <!-- [^\n]+ -->\n\n  <details>\n  <summary>Proof<\/summary>/)
   assert.equal(source.match(/<details>/g)?.length, 1)
   assert.equal(source.match(/<\/details>/g)?.length, 1)
+
+  const levelLine = /^Levels and Agent autonomy: .+$/m
+  assert.ok(skill.match(levelLine), 'the skill shows the role level line')
+  assert.equal(source.match(levelLine)?.[0], skill.match(levelLine)?.[0], 'the template level line matches the skill')
+  const skillStages = [...skill.matchAll(/^\*\*([a-z]+ \S+)\*\*:/gm)].map(([, stage]) => stage)
+  assert.ok(skillStages.length > 0, 'the skill lists role stages')
+  assert.deepEqual(
+    [...source.matchAll(/^- <ins>\*\*待填级别\*\*<\/ins> \?% · (.+?) — 待填说明$/gm)].map(([, stage]) => stage),
+    skillStages,
+    'the template has one placeholder line per skill stage, in skill order',
+  )
 })
 
 test('ignores Issue title, body presentation, and assignee ownership', () => {
