@@ -9,7 +9,7 @@ description: "Auto review 跨输入传输与已有历史识别 user-source 任�
 
 ## 变更
 
-实验性 Auto review 将 `source.kind: 'user'` 的文本识别为任务指令，不再要求浏览器 `rpcId`。这包括 Headless、SDK、ACP、以用户身份提交内容的自定义生产者，以及已有的 user-source 历史。显式指令可在其声明范围内授权 medium 风险动作。已识别的 child 创建 prompt 和直接父级消息保留从属角色；无法验证的 child 创建 prompt 仍是事实。
+实验性 Auto review 将 `source.kind: 'user'` 的文本识别为任务指令，不再要求浏览器 `rpcId`。这包括 Headless、SDK、ACP、以用户身份提交内容的自定义生产者，以及已有的 user-source 历史。显式指令可在其声明范围内授权 medium 风险动作。Child 自身的创建 prompt 和直接父级消息保留从属角色；继承的创建 prompt 与无法验证的创建 prompt 仍是事实。
 
 ## 迁移
 

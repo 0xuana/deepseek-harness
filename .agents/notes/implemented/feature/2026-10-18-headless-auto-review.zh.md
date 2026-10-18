@@ -12,9 +12,9 @@ Headless、SDK 和 ACP 以 `source.kind: 'user'` 接纳任务。Auto 必须将�
 
 [实验性 Auto 层](../../../../packages/experimental/auto-review/README.zh.md#headless-supervision)支持显式 headless 选择。默认 profile 保持不变。这扩展了[逐工具 Auto review](2026-08-28-auto-review.zh.md)仅限 Web 的范围；其风险分类、完全访问执行、PTC 排除项和生命周期仍具权威性。
 
-Reviewer 将 user-source 文本归为 `user-instruction`，包括已有历史和选择 Auto 前接纳的任务。用户可以是人或监督调用者；两者都可定义任务，并明确授权 medium 风险动作、准确目标和范围。已识别的 child 创建 prompt 和直接父级消息保留从属角色；无法验证的 child 创建 prompt 仍是事实。文件、约束、checkpoint、图片和工具结果不会获得指令权威。输入生产者负责来源归属；任务文本不能选择自己的 source。消息类型和持久字段保持不变。
+Reviewer 将 user-source 文本归为 `user-instruction`，包括已有历史和选择 Auto 前接纳的任务。用户可以是人或监督调用者；两者都可定义任务，并明确授权 medium 风险动作、准确目标和范围。当前 child 的创建 prompt 和直接父级消息保留从属角色；继承的创建 prompt 与无法验证的创建 prompt 仍是事实。文件、约束、checkpoint、图片和工具结果不会获得指令权威。输入生产者负责来源归属；任务文本不能选择自己的 source。消息类型和持久字段保持不变。
 
-Headless 在选择权限预设后应用显式 `--approval-policy`。无人值守调用每次都重复 `--permission-mode auto --approval-policy never`，包括恢复时。这保留结构化拒绝，并避免依赖人工应答者。`ask` 仍遵循[审批兜底决策](2026-09-24-auto-review-user-approval-fallback.zh.md)；它不添加 CLI 审批传输。应用关闭保留已保存的 Auto 选择。恢复时需要该 integration，即使要选择其他预设也是如此；应用仍运行时移除插件则仍将存活 Session 迁移到 Full access。
+Headless 在选择权限预设后应用显式 `--approval-policy`。恢复时省略两个选项会延续已保存的策略。传入 `--permission-mode auto --approval-policy never` 可显式选择无人值守 Auto。这保留结构化拒绝，并避免依赖人工应答者。`ask` 仍遵循[审批兜底决策](2026-09-24-auto-review-user-approval-fallback.zh.md)；它不添加 CLI 审批传输。应用关闭保留已保存的 Auto 选择。恢复时需要该 integration，即使要选择其他预设也是如此；应用仍运行时移除插件则仍将存活 Session 迁移到 Full access。
 
 JSON 投影在正常输出限制内包含已有的持久错误字段。最终拒绝携带 `AutoReviewDeniedError` / `AUTO_REVIEW_DENIED` 和可选 reviewer 详情；技术或解析失败携带 `AutoReviewFailedError` / `AUTO_REVIEW_FAILED`。两者都不执行工具 body。Agent 执行完成不代表每个请求动作都成功。
 

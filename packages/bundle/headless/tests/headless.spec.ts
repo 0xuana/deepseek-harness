@@ -291,7 +291,7 @@ describe('headless runner', () => {
     } }, overridden
       ? { permissionMode: 'danger-full-access', startupPermissionMode: 'workspace-write' }
       : { permissionMode: 'workspace-write' })
-    test.ctx.provide('permissionPresets', { current() { return selected }, resolve() {}, set(_session: Session, name: string) { selected = name } } as never)
+    test.ctx.provide('permissionPresets', { resolve() {}, set(_session: Session, name: string) { selected = name } } as never)
     try { expect(await test.run()).toMatchObject({ code: 0 }) }
     finally { await test.ctx.fiber.dispose() }
   })

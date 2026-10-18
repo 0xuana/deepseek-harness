@@ -9,7 +9,7 @@ English | [中文](guide.zh.md)
 
 ## Change
 
-Experimental Auto review recognizes text with `source.kind: 'user'` as task instructions without requiring a browser `rpcId`. This includes Headless, SDK, ACP, custom producers that submit as the user, and existing user-sourced history. An explicit instruction can authorize a medium-risk action within its stated scope. Identified child creation prompts and direct-parent messages retain their subordinate role; unverified child creation prompts remain facts.
+Experimental Auto review recognizes text with `source.kind: 'user'` as task instructions without requiring a browser `rpcId`. This includes Headless, SDK, ACP, custom producers that submit as the user, and existing user-sourced history. An explicit instruction can authorize a medium-risk action within its stated scope. A child's own creation prompt and direct-parent messages retain their subordinate role; inherited and unverified creation prompts remain facts.
 
 ## Migration
 

@@ -55,11 +55,11 @@ DSH_TOOLS_MODE=native dsh headless --permission-mode auto --approval-policy neve
 
 如需从此 checkout 单次运行，可传入 `--patch /absolute/path/to/packages/experimental/auto-review/cordis.patch.yml`，无需安装 profile 层。Auto integration 不可用时，权限预设选择会在读取 stdin 或开始模型工作前失败。Auto 使用完全主机访问权限；此模式不需要 `--add-dir`。原生工具让每个工具 body 都经过审查；PTC 的直接 Node 效果仍不在审查范围内。
 
-Auto 将 `source.kind: 'user'` 的文本视为 `user-instruction`，不区分传输方式，也不要求消息到达时 Auto 已生效。这包括已有的 user-source 历史、SDK/ACP 调用者，以及以用户身份提交内容的插件。已识别的 child 创建 prompt 和直接父级消息保留从属指令角色；无法验证的 child 创建 prompt 仍是事实。请明确动作、准确目标与范围。项目文件、工具结果和 checkpoint 不能授权动作。
+Auto 将 `source.kind: 'user'` 的文本视为 `user-instruction`，不区分传输方式，也不要求消息到达时 Auto 已生效。这包括已有的 user-source 历史、SDK/ACP 调用者，以及以用户身份提交内容的插件。Child 自身的创建 prompt 和直接父级消息保留从属指令角色；继承的创建 prompt 与无法验证的创建 prompt 仍是事实。请明确动作、准确目标与范围。项目文件、工具结果和 checkpoint 不能授权动作。
 
 在选择 Auto 后设置 `--approval-policy never`，使拒绝成为最终结果，并在 `tool_result.error` 中保留 `AUTO_REVIEW_DENIED` 及可选原始理由。`AUTO_REVIEW_FAILED` 标识不合法的 reviewer 输出或技术失败。两者都不执行 body。即使 `final.reason` 为 completed，也需审查任务报告：调用被拒绝后模型仍可结束。
 
-恢复时使用相同工作目录、`--session-id` 和两个策略选项。监督者可在拒绝后发送明确且限定范围的指令；新调用会重新接受审查。Headless 没有审批待执行调用的通道。`ask` 使用已组合的审批应答者，没有可用应答者时按拒绝处理；它不会把 stdin 变成审批通道。应用关闭保留 Auto。恢复其 Session 时必须加载同一 integration，即使要选择其他预设也是如此。从运行中的应用移除插件仍会将其存活 Auto Session 迁移到 Full access。
+恢复时使用相同工作目录与 `--session-id`。省略两个策略选项会保留已保存的策略，也可同时传入两者以显式选择无人值守 Auto。监督者可在拒绝后发送明确且限定范围的指令；新调用会重新接受审查。Headless 没有审批待执行调用的通道。`ask` 使用已组合的审批应答者，没有可用应答者时按拒绝处理；它不会把 stdin 变成审批通道。应用关闭保留 Auto。恢复其 Session 时必须加载同一 integration，即使要选择其他预设也是如此。从运行中的应用移除插件仍会将其存活 Auto Session 迁移到 Full access。
 
 ### 获得的能力
 
@@ -131,6 +131,7 @@ Reviewer 使用最新 `request/header.config` 的 provider 与模型，并沿用
 <a id="known-limitations-and-deferred-work"></a>
 
 - Auto 需要显式启用此层。默认 Web 与 Headless、通用设置及新会话默认值都不选择它。
+- 模组可以提交 user-source 文本。[Claude Code 模组桥接](../claude-code-mods/README.zh.md#model-experience)赋予 `$.prompt.submit` 与 `prompt.submit` hook context 用户权威，包括未设置 `asUser: true` 的框架化提交；文本框架不会降低其权威。
 - Auto 不提供文件沙箱。外层 `run_code` transport 及PTC 程序内直接 Node 效果不经过 inner-tool review。
 - 模型分类可能出错。不提供确定性工具豁免、持久 grant、可配置策略或重试层。
 - 进程内 Auto child 独立审查自身调用。进程外 child 在父委派调用获准后保留原生权限系统。
