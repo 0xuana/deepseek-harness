@@ -83,12 +83,11 @@ async function harness(rows: readonly Row[], summaryMs = 8, workSliceMs = 8) {
   })
   const listSessions = vi.fn(async (_signal?: AbortSignal) => records)
   ctx.provide('sessionQuery', { listSessions } as never)
-  const cachedRow = (header: SessionRecord['header']) => {
-    recordSummary('cold', header.id)
-    return { asOfSeq: -1, values: { sessionListMetadata: { blank: false, lastPromptAt: null } } }
-  }
   ctx.provide('sessionProjectionCache', {
-    cachedSnapshot: cachedRow,
+    cachedSnapshot: (header: SessionRecord['header']) => {
+      recordSummary('cold', header.id)
+      return { asOfSeq: -1, values: { sessionListMetadata: { blank: false, lastPromptAt: null } } }
+    },
     cachedPredecessorTitle: () => undefined,
   } as never)
   const summaryFor = list.summaryFor.bind(list)

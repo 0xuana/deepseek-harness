@@ -56,15 +56,15 @@ interface ProjectionDefinition<
      * @returns the whole current value for this unit's key.
      */
     view(state: NoInfer<S>): SessionProjectionViewValue<SessionProjectionMap[K]>
-  } & (K extends SessionProjectionSummaryExcludedKey
-    ? {
-      /** Required by this key's summary-exclusion mark: a Session summary omits it. */
-      summary: false
-    }
-    : {
-      /** Set only by a key whose `SessionProjectionMap` entry carries the summary-exclusion mark. */
-      summary?: never
-    }) : never
+    /**
+     * Whether a Session summary carries this unit; omitted means `true`.
+     * Declare `false` on a key whose map entry carries the
+     * `SessionProjectionSummaryExcluded` mark: the runtime key set follows this
+     * field, while the client view type follows the mark.
+     * @default true
+     */
+    summary?: boolean
+  } : never
   /**
    * Persisted-cache invalidation version: bump whenever the serialized state fields or the
    * fold semantics change, so persisted `(sessionId, key, ver, seq, val)`
@@ -111,7 +111,79 @@ type ProjectionChangeListener = (
 
 ## Summary reads
 
-A Session summary carries every registered client view except the keys whose `SessionProjectionMap` entry carries the `SessionProjectionSummaryExcluded<T>` mark. `summaryKeys()` derives that set from the live registrations and keeps returning the same instance until a registration or its disposal changes the key table; a summary consumer passes it to the existing key-taking faces — `cachedSnapshot(session, keys)` for cached cells and `viewCheckpoint(rows, keys)` for checkpoint rows, both keeping their watermark rules and both using a set without copying — so the served keys cannot drift from the marks the owning units declare and no summary-specific read face exists. `snapshot`, `cachedSnapshot`, and `viewCheckpoint` remain complete when called without a key subset and still serve every wire key, including those a summary omits; an opened Session therefore receives every projected value. Summary reads serve the Session list rows; the `@` reference lists Sessions the same way but reads only its label keys through the same key-taking faces. The types require `wire.summary: false` exactly on a key whose map entry carries the mark, and forbid it on every other key.
+A Session summary carries every registered client view except the keys whose `SessionProjectionMap` entry carries the `SessionProjectionSummaryExcluded<T>` mark. The mark has no runtime representation: it decides the client view type, while `wire.summary` decides the runtime key set, with omission meaning `true`. A key whose entry carries the mark declares `wire.summary: false` so the two agree; the field is a plain boolean, so the type does not enforce it.
+
+`summaryKeys()` derives the key set from the live registrations and keeps returning the same instance until a registration or its disposal changes the key table. A summary consumer passes it to the existing key-taking faces — `cachedSnapshot(session, keys)` for cached cells and `viewCheckpoint(rows, keys)` for checkpoint rows, both keeping their watermark rules and both using a set without copying — so there is no summary-specific read face and no second definition of the set.
+
+A list row carries that summary projection, never the full projection: it promises the summary key set and nothing more. `snapshot`, `cachedSnapshot`, and `viewCheckpoint` remain complete when called without a key subset, which is how an opened Session, its follow baseline, and the control baseline keep every projected value; the `@` reference reads only its label keys through the same key-taking faces.
+
+### Summary vocabulary
+
+Each block below is the declaration the summary rule is stated in. The mark, its stripping, the excluded-key test, and the summary value type live in the pure-type outlet; the key selection both read faces accept lives in the service module.
+
+```ts type-equiv
+/**
+ * One `SessionProjectionMap` entry excluded from Session summary payloads
+ * (the Session list row and any other summary read). The mark is type-only;
+ * `T` keeps its exact runtime value and wire representation. Wrap only the
+ * excluded contributor's own map entry, and place a nullable entry's `null`
+ * outside the wrapper (`SessionProjectionSummaryExcluded<Item[]> | null`) so
+ * the required symbol cannot absorb that member.
+ */
+type SessionProjectionSummaryExcluded<T> = T & {
+  readonly [sessionProjectionSummaryExcluded]: true
+}
+```
+
+```ts type-equiv
+/**
+ * One map entry's client view value: the summary mark stripped. The
+ * conditional distributes over a nullable entry's union, so a `| null` member
+ * written outside the wrapper survives unchanged.
+ */
+type SessionProjectionViewValue<T> =
+  T extends SessionProjectionSummaryExcluded<infer Value> ? Value : T
+```
+
+```ts type-equiv
+/** Every client view value, keyed by projection key, with no summary mark. */
+type SessionProjectionViewValues = {
+  [K in keyof SessionProjectionMap]: SessionProjectionViewValue<SessionProjectionMap[K]>
+}
+```
+
+```ts type-equiv
+/**
+ * Keys a Session summary omits: map entries whose non-nullish value carries
+ * the summary mark. Nullish members are ignored, so a nullable entry is still
+ * recognized when its `null` lives outside the wrapper.
+ */
+type SessionProjectionSummaryExcludedKey = {
+  [K in keyof SessionProjectionMap]:
+  NonNullable<SessionProjectionMap[K]> extends SessionProjectionSummaryExcluded<unknown> ? K : never
+}[keyof SessionProjectionMap]
+```
+
+```ts type-equiv
+/**
+ * The client values a Session summary carries: every client view value except
+ * {@link SessionProjectionSummaryExcludedKey}. A summary read returns these
+ * keys only; an opened Session's full snapshot keeps every view value.
+ */
+type SessionProjectionSummaryValues =
+  Omit<SessionProjectionViewValues, SessionProjectionSummaryExcludedKey>
+```
+
+```ts type-equiv
+/**
+ * One read's client-visible key selection: an explicit key list, or a derived
+ * set such as {@link SessionProjectionRegistry.summaryKeys}. A set is used as
+ * given; only a list is copied into one.
+ */
+type ProjectionKeySelection =
+  | readonly Extract<keyof SessionProjectionMap, string>[]
+  | ReadonlySet<Extract<keyof SessionProjectionMap, string>>
+```
 
 ## The registry: `ctx.sessionProjections`
 
@@ -151,7 +223,7 @@ The persisted projection cache service. Opens the `session_projcache` domain at 
  * @returns the viewed block, or `undefined` when no usable row exists for
  *   this lifecycle at the current Session format.
  */
-cachedSnapshot( meta: SessionHeader, keys?: readonly Extract<keyof SessionProjectionMap, string>[] | ReadonlySet<Extract<keyof SessionProjectionMap, string>>, ): ProjectionSnapshot | undefined
+cachedSnapshot( meta: SessionHeader, keys?: ProjectionKeySelection, ): ProjectionSnapshot | undefined
 
 /**
  * Read only a predecessor checkpoint's title as a zero-I/O listing hint.

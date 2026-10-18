@@ -14,7 +14,7 @@ Session 摘要就是每个已注册客户端视图，减去 `SessionProjectionMa
 
 - [`packages/session/session-projection/src/types.ts`](../../../../packages/session/session-projection/src/types.ts) 声明类型层标记 `SessionProjectionSummaryExcluded<T>`，它基于一个从不导出、运行时从不存在的 unique symbol。`SessionProjectionViewValue<T>` 以分发方式去掉标记，可空条目因此保留 `null`；`SessionProjectionSummaryExcludedKey` 取非空部分判断；`SessionProjectionSummaryValues` 是全部视图值减去这些键。
 - 每个 owning package 只包装自己的 map 条目：`turnOutline`（session-turn-outline）、`sessionStats`（session-stats）、`todos`（tool-todo），以及 `imageLimits`（session-controller 的启动常量附件上限，每个 Session 共享）。todo 条目写作 `SessionProjectionSummaryExcluded<TodoItem[]> | null`，因为与 `null` 求交会吞掉 null 成员。
-- 注册是一道互锁：`ProjectionDefinition.wire` 恰好在该键的 map 条目带标记时要求 `summary: false`，其余情况只接受 `summary?: never`。标记唯一的运行时擦除发生在 `SessionProjectionRegistry.register` 的 wire 擦除处，由它记录该单元是否属于摘要。
+- 注册用普通布尔值承载同一决定：`wire.summary` 表示 Session 摘要是否包含该单元，省略即 `true`。map 条目带标记的 key 声明 `false`，让运行时键集合与客户端视图类型一致。标记本身没有运行时表示 —— `wire.view` 与 `viewSchema` 的签名已用 `SessionProjectionViewValue` 去标记，因此 `register` 里的擦除只是放宽状态类型。
 - [`packages/session/session-projection/src/index.ts`](../../../../packages/session/session-projection/src/index.ts) 提供 `summaryKeys(): ReadonlySet<key>`，从实时注册派生，只有新键注册或某键最后一个注册者注销时才重建。`cachedSnapshot`、`viewCheckpoint`、`snapshot` 接受 `ProjectionKeySelection`（`readonly Key[] | ReadonlySet<Key>`），传入 Set 时直接使用。
 - [`packages/session/session-projection-cache/src/index.ts`](../../../../packages/session/session-projection-cache/src/index.ts) 原样转发该选择，[`packages/api/session-controller/src/list.ts`](../../../../packages/api/session-controller/src/list.ts) 把 `summaryKeys()` 传给 live 与 cold 两个缓存读取面。`cachedPredecessorTitle` 保持只读 title。
 - 客户端只有类型变化：`SessionSummary.projectionValues` 收窄为 `Partial<SessionProjectionSummaryValues>`，而 `SessionProjectionSnapshot.values` 保留全部视图值。wire 字段、函数名与 UI 名称均不变；打开的 Session 仍通过 `session/follow`、控制基线与 `session.projections` 收到每个键。
@@ -36,6 +36,10 @@ Session 摘要就是每个已注册客户端视图，减去 `SessionProjectionMa
 ## Consequences
 
 换来的：列表响应不再随 outline 长度或日志数量增长；被排除的键无法按名请求；从列表行读取被排除键是类型错误。注册互锁让「带标记却未声明 `summary: false`」（以及反向）成为编译错误，而不是评审发现。
+
+列表行携带的是摘要投影，绝不是全量投影：它只承诺摘要键集合，不承诺更多。已连接 Session 的客户端 store 可能因 control/follow 基线持有更多值，但那不属于列表契约，不得从行上读取；打开的 Session 自身的基线保留全部取值。
+
+本次没有升级指南记录该变更。外部可感知的部分在 wire：`session/list` 行不再携带四个键，读取 `projectionValues.turnOutline` 的客户端类型不再编译。迁移方式是改读打开的 Session —— 其 `session/follow` 初始快照、`session/control` 基线或 `session.projections` 读取 —— 它们保留全部投影值；包 README 与子系统页写明了该规则。
 
 付出的：`ProjectionKeySelection` 是新的公开签名类型，`ReadonlySet` 也需加入 catalog 的 foundation 类型；`summaryKeys()` 有两个失效点（新键、最后一个 disposer），未来的注册路径不得漏掉；摘要键集合与单元表一样是进程级的，某个 preset 排除的键对所有 Session 都排除；可空值不能直接标记 —— 它的 `null` 必须留在包装之外。
 

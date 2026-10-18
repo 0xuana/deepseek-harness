@@ -141,9 +141,8 @@ describe('sessions.list cold merge', () => {
       stat,
       inspect,
     })
-    const noCachedRow = () => undefined
     ctx.provide('sessionProjectionCache', {
-      cachedSnapshot: noCachedRow,
+      cachedSnapshot: () => undefined,
       cachedPredecessorTitle: (meta: SessionHeader) => meta.id === sid('legacy-title')
         ? { asOfSeq: 2, values: { title: 'Cached predecessor title' } }
         : undefined,
@@ -191,24 +190,23 @@ describe('sessions.list cold merge', () => {
       inspect,
     })
     const cacheCalls: string[] = []
-    const cachedRow = (meta: SessionHeader) => {
-      cacheCalls.push(String(meta.id))
-      if (meta.id === sid('cached-blank')) {
-        return { asOfSeq: 0, values: { sessionListMetadata: { blank: true, lastPromptAt: null } } }
-      }
-      if (meta.id === sid('cached-conversation')) {
-        return { asOfSeq: 1, values: { sessionListMetadata: { blank: false, lastPromptAt: 1000 } } }
-      }
-      if (meta.id === sid('seeded-cold')) {
-        return {
-          asOfSeq: 5,
-          values: { title: 'Forked title', sessionListMetadata: { blank: false, lastPromptAt: 1200 } },
-        }
-      }
-      return undefined
-    }
     ctx.provide('sessionProjectionCache', {
-      cachedSnapshot: cachedRow,
+      cachedSnapshot: (meta: SessionHeader) => {
+        cacheCalls.push(String(meta.id))
+        if (meta.id === sid('cached-blank')) {
+          return { asOfSeq: 0, values: { sessionListMetadata: { blank: true, lastPromptAt: null } } }
+        }
+        if (meta.id === sid('cached-conversation')) {
+          return { asOfSeq: 1, values: { sessionListMetadata: { blank: false, lastPromptAt: 1000 } } }
+        }
+        if (meta.id === sid('seeded-cold')) {
+          return {
+            asOfSeq: 5,
+            values: { title: 'Forked title', sessionListMetadata: { blank: false, lastPromptAt: 1200 } },
+          }
+        }
+        return undefined
+      },
       cachedPredecessorTitle: () => undefined,
     } as never)
     const remote = createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })

@@ -9,7 +9,12 @@ import type { SessionSummary } from '../../types.ts'
 /** Host list summary enriched with the latest Session Controller title projection. */
 export interface TitledSessionSummary extends SessionSummary {
   title?: string
-  /** Current host-computed summary projection values for list consumers. */
+  /**
+   * The row's summary projection values, never the full projection set. A
+   * connected Session's client store may hold more values from its
+   * control/follow baseline; those are outside the list contract and must not
+   * be read here.
+   */
   projectionValues?: Readonly<Partial<SessionProjectionSummaryValues>>
 }
 
@@ -30,7 +35,10 @@ export interface SessionListEntry {
   /** Format classification supplied by the Host list. */
   formatStatus?: SessionSummary['formatStatus']
   cwd?: string
-  /** Current host-computed summary projection values for list consumers. */
+  /**
+   * The row's summary projection values, never the full projection set; see
+   * `TitledSessionSummary.projectionValues`.
+   */
   projectionValues?: Readonly<Partial<SessionProjectionSummaryValues>>
   /** Lineage indent depth: root = 0; the UI just multiplies by the indent width. */
   depth: number

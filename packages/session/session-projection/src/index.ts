@@ -36,7 +36,6 @@ declare module '@deepseek-ai/cordis' {
 import type {
   SessionProjectionMap,
   SessionProjectionStateMap,
-  SessionProjectionSummaryExcludedKey,
   SessionProjectionViewValue,
 } from './types.ts'
 
@@ -95,15 +94,15 @@ export interface ProjectionDefinition<
      * @returns the whole current value for this unit's key.
      */
     view(state: NoInfer<S>): SessionProjectionViewValue<SessionProjectionMap[K]>
-  } & (K extends SessionProjectionSummaryExcludedKey
-    ? {
-      /** Required by this key's summary-exclusion mark: a Session summary omits it. */
-      summary: false
-    }
-    : {
-      /** Set only by a key whose `SessionProjectionMap` entry carries the summary-exclusion mark. */
-      summary?: never
-    }) : never
+    /**
+     * Whether a Session summary carries this unit; omitted means `true`.
+     * Declare `false` on a key whose map entry carries the
+     * `SessionProjectionSummaryExcluded` mark: the runtime key set follows this
+     * field, while the client view type follows the mark.
+     * @default true
+     */
+    summary?: boolean
+  } : never
   /**
    * Persisted-cache invalidation version: bump whenever the serialized state fields or the
    * fold semantics change, so persisted `(sessionId, key, ver, seq, val)`
@@ -125,8 +124,12 @@ export type ProjectionChangeListener = (
   seq: SessionSeq,
 ) => void
 
-/** One read's client-visible key selection: an explicit key list or a derived key set. */
-type ProjectionKeySelection =
+/**
+ * One read's client-visible key selection: an explicit key list, or a derived
+ * set such as {@link SessionProjectionRegistry.summaryKeys}. A set is used as
+ * given; only a list is copied into one.
+ */
+export type ProjectionKeySelection =
   | readonly Extract<keyof SessionProjectionMap, string>[]
   | ReadonlySet<Extract<keyof SessionProjectionMap, string>>
 
@@ -308,8 +311,10 @@ export class SessionProjectionRegistry extends Service {
       stateSchema: definition.stateSchema,
       init: (header, inheritedEventCount) => definition.init(header, inheritedEventCount),
       apply: (state, event) => definition.apply(state as S, event),
-      // The one runtime erasure of the type-only summary mark: the wire view
-      // authors plain JSON, and the erased unit carries the interlock outcome.
+      // The summary mark has no runtime representation: `wire.view` and
+      // `viewSchema` are already typed with the mark stripped, so this erase
+      // only widens the state type. `summary` carries the interlock outcome
+      // into the erased unit, where the key set reads it.
       wire: wire === undefined
         ? undefined
         : { viewSchema: wire.viewSchema, view: state => wire.view(state as S), summary: wire.summary !== false },

@@ -11,10 +11,10 @@
 /**
  * Type-only marker of a `SessionProjectionMap` entry that a Session summary
  * leaves out. The symbol never exists at runtime: a marked entry keeps its
- * plain JSON value, and the only cast that erases the mark is the wire
- * erasure in `SessionProjectionRegistry.register`. A marked key therefore must
- * declare `wire.summary: false` at registration, and summary reads skip exactly
- * those keys.
+ * plain JSON value, `SessionProjectionViewValue` strips the mark in the wire
+ * and client view types, and the only runtime fact is the `summary: false`
+ * declared at registration. A marked key must declare it, and summary reads
+ * skip exactly those keys.
  */
 declare const sessionProjectionSummaryExcluded: unique symbol
 
@@ -35,6 +35,7 @@ export type SessionProjectionSummaryExcluded<T> = T & {
  * cells, and React hooks. Domain packages merge their client-visible key here;
  * values are wire-JSON whole values. How a value is rendered is the slot
  * system's business, never this layer's.
+ *
  */
 export interface SessionProjectionMap {}
 

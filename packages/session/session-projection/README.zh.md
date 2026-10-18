@@ -70,9 +70,9 @@ const { asOfSeq, values } = ctx.sessionProjections.snapshot(session)
 
 ### Session 摘要
 
-Session 摘要包含每个已注册客户端视图，但排除 `SessionProjectionMap` 条目（非空值）带 `SessionProjectionSummaryExcluded<T>` 标记的 key。`summaryKeys()` 返回该集合，从实时注册派生；在注册或注销改变 key 表之前，它保持同一实例。摘要消费方把它传给既有的带 key 读取面 —— 实时 cell 用 `cachedSnapshot(session, keys)`，checkpoint 行用 `viewCheckpoint(rows, keys)`，持久化缓存用 `cachedSnapshot(header, keys)` —— 这些读取面把 Set 视为已选好的集合，因此不存在摘要专用读取面、每次读取无需复制，集合也只有一处定义。由于集合由注册表派生，消费方既无法请求被排除的 key，也不会与各 owning unit 声明的标记漂移。
+Session 摘要包含每个已注册客户端视图，但排除 `SessionProjectionMap` 条目（非空值）带 `SessionProjectionSummaryExcluded<T>` 标记的 key。`summaryKeys()` 返回该集合，从实时注册派生；在注册或注销改变 key 表之前，它保持同一实例。摘要消费方把它传给既有的带 key 读取面 —— 实时 cell 用 `cachedSnapshot(session, keys)`，checkpoint 行用 `viewCheckpoint(rows, keys)`，持久化缓存用 `cachedSnapshot(header, keys)` —— 这些读取面把 Set 视为已选好的集合，因此不存在摘要专用读取面、每次读取无需复制，集合也只有一处定义。由于集合由注册表派生，摘要消费方无法通过该集合请求被排除的 key；完整读取面仍会按显式命名的 key 提供值，打开的 Session 因此保留全部取值。列表行携带的是摘要投影，绝不是全量投影。
 
-标记与注册是一道互锁：map 条目带标记的 key 必须声明 `wire.summary: false`，没有标记的 key 不能声明。可空条目把 `null` 放在包装之外（`SessionProjectionSummaryExcluded<TodoItem[]> | null`），以便首次写入前的值仍可表达。当前被标记的 key 是 `turnOutline`、`sessionStats`、`todos` 和 `imageLimits`：outline 随整份日志增长，列表行不渲染统计或 todo 清单，而图片上限是每个 Session 共享的同一个宿主级启动常量。
+标记决定客户端视图类型，`wire.summary` 决定运行时键集合，省略即 `true`。map 条目带标记的 key 应声明 `wire.summary: false` 以保持一致；该字段就是普通布尔值，而不是类型层的互锁。可空条目把 `null` 放在包装之外（`SessionProjectionSummaryExcluded<TodoItem[]> | null`），以便首次写入前的值仍可表达。当前被标记的 key 是 `turnOutline`、`sessionStats`、`todos` 和 `imageLimits`：outline 随整份日志增长，列表行不渲染统计或 todo 清单，而图片上限是每个 Session 共享的同一个宿主级启动常量。
 
 摘要服务于 Session 列表行，列表无需打开 Session。`@` 引用同样以列表方式枚举 Session，但只通过带 key 的 `snapshot(session, keys)` 与 `cachedSnapshot(header, keys)` 读取其 `title` 和 `subagent` 标签 key。`snapshot`、`cachedSnapshot` 和 `viewCheckpoint` 在不传 key 子集时仍返回每个 wire key，因此打开的 Session 仍会收到全部投影值。
 

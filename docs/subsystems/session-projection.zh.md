@@ -56,15 +56,15 @@ interface ProjectionDefinition<
      * @returns the whole current value for this unit's key.
      */
     view(state: NoInfer<S>): SessionProjectionViewValue<SessionProjectionMap[K]>
-  } & (K extends SessionProjectionSummaryExcludedKey
-    ? {
-      /** Required by this key's summary-exclusion mark: a Session summary omits it. */
-      summary: false
-    }
-    : {
-      /** Set only by a key whose `SessionProjectionMap` entry carries the summary-exclusion mark. */
-      summary?: never
-    }) : never
+    /**
+     * Whether a Session summary carries this unit; omitted means `true`.
+     * Declare `false` on a key whose map entry carries the
+     * `SessionProjectionSummaryExcluded` mark: the runtime key set follows this
+     * field, while the client view type follows the mark.
+     * @default true
+     */
+    summary?: boolean
+  } : never
   /**
    * Persisted-cache invalidation version: bump whenever the serialized state fields or the
    * fold semantics change, so persisted `(sessionId, key, ver, seq, val)`
@@ -111,7 +111,79 @@ type ProjectionChangeListener = (
 
 ## 摘要读取
 
-Session 摘要包含每个已注册客户端视图，但排除 `SessionProjectionMap` 条目带 `SessionProjectionSummaryExcluded<T>` 标记的 key。`summaryKeys()` 从实时注册派生该集合，并在注册或注销改变 key 表之前持续返回同一实例；摘要消费方把它传给既有的带 key 读取面 —— 缓存 cell 用 `cachedSnapshot(session, keys)`，checkpoint 行用 `viewCheckpoint(rows, keys)`，两者保持各自的水位规则且直接使用 Set、不做复制 —— 因此被服务的 key 不会与各 owning unit 声明的标记漂移，也不存在摘要专用读取面。`snapshot`、`cachedSnapshot` 与 `viewCheckpoint` 在不传 key 子集时仍是完整的，仍返回每个 wire key（包括摘要省略的那些）；打开的 Session 因此会收到全部投影值。摘要读取服务于 Session 列表行；`@` 引用同样以列表方式枚举 Session，但只通过同一组带 key 的读取面读取其标签 key。类型要求恰好是：map 条目带标记的 key 声明 `wire.summary: false`，其他 key 一律禁止声明。
+Session 摘要包含每个已注册客户端视图，但排除 `SessionProjectionMap` 条目带 `SessionProjectionSummaryExcluded<T>` 标记的 key。标记没有运行时表示：它决定客户端视图类型，`wire.summary` 决定运行时键集合，省略即 `true`。map 条目带标记的 key 应声明 `wire.summary: false` 以保持一致；该字段是普通布尔值，类型层不做强制。
+
+`summaryKeys()` 从实时注册派生该集合，并在注册或注销改变 key 表之前持续返回同一实例。摘要消费方把它传给既有的带 key 读取面 —— 缓存 cell 用 `cachedSnapshot(session, keys)`，checkpoint 行用 `viewCheckpoint(rows, keys)`，两者保持各自的水位规则且直接使用 Set、不做复制 —— 因此不存在摘要专用读取面，集合也只有一处定义。
+
+列表行携带的是这个摘要投影，绝不是全量投影：它只承诺摘要键集合，不承诺更多。`snapshot`、`cachedSnapshot` 与 `viewCheckpoint` 在不传 key 子集时仍是完整的，打开的 Session、其 follow 基线与控制基线因此保留每个投影值；`@` 引用只通过同一组带 key 的读取面读取其标签 key。
+### 摘要词汇
+
+以下每块都是摘要规则所依据的声明。标记、其剥离、被排除键的判定与摘要值类型位于纯类型出口；两个读取面共同接受的 key 选择位于服务模块。
+
+```ts type-equiv
+/**
+ * One `SessionProjectionMap` entry excluded from Session summary payloads
+ * (the Session list row and any other summary read). The mark is type-only;
+ * `T` keeps its exact runtime value and wire representation. Wrap only the
+ * excluded contributor's own map entry, and place a nullable entry's `null`
+ * outside the wrapper (`SessionProjectionSummaryExcluded<Item[]> | null`) so
+ * the required symbol cannot absorb that member.
+ */
+type SessionProjectionSummaryExcluded<T> = T & {
+  readonly [sessionProjectionSummaryExcluded]: true
+}
+```
+
+```ts type-equiv
+/**
+ * One map entry's client view value: the summary mark stripped. The
+ * conditional distributes over a nullable entry's union, so a `| null` member
+ * written outside the wrapper survives unchanged.
+ */
+type SessionProjectionViewValue<T> =
+  T extends SessionProjectionSummaryExcluded<infer Value> ? Value : T
+```
+
+```ts type-equiv
+/** Every client view value, keyed by projection key, with no summary mark. */
+type SessionProjectionViewValues = {
+  [K in keyof SessionProjectionMap]: SessionProjectionViewValue<SessionProjectionMap[K]>
+}
+```
+
+```ts type-equiv
+/**
+ * Keys a Session summary omits: map entries whose non-nullish value carries
+ * the summary mark. Nullish members are ignored, so a nullable entry is still
+ * recognized when its `null` lives outside the wrapper.
+ */
+type SessionProjectionSummaryExcludedKey = {
+  [K in keyof SessionProjectionMap]:
+  NonNullable<SessionProjectionMap[K]> extends SessionProjectionSummaryExcluded<unknown> ? K : never
+}[keyof SessionProjectionMap]
+```
+
+```ts type-equiv
+/**
+ * The client values a Session summary carries: every client view value except
+ * {@link SessionProjectionSummaryExcludedKey}. A summary read returns these
+ * keys only; an opened Session's full snapshot keeps every view value.
+ */
+type SessionProjectionSummaryValues =
+  Omit<SessionProjectionViewValues, SessionProjectionSummaryExcludedKey>
+```
+
+```ts type-equiv
+/**
+ * One read's client-visible key selection: an explicit key list, or a derived
+ * set such as {@link SessionProjectionRegistry.summaryKeys}. A set is used as
+ * given; only a list is copied into one.
+ */
+type ProjectionKeySelection =
+  | readonly Extract<keyof SessionProjectionMap, string>[]
+  | ReadonlySet<Extract<keyof SessionProjectionMap, string>>
+```
+
 ## 注册表：`ctx.sessionProjections`
 
 `SessionProjectionRegistry`（[签名](#ctxsessionprojections--sessionprojectionregistry)）拥有驱动权：一份 `session/event` 订阅、对每个已注册单元即时调用 `apply`，以及每会话每单元的水位线（watermark）cell。cell 惰性构建：在事件流过之后才注册的单元，或比注册表更早的会话，都在首次触达（事件或读取）时从 `init` 出发在内存日志上折叠。注册是一个 effect，其 disposer 随调用方 fiber 走：领域插件卸载后，其 key（连同缓存的 cell）从后续驱动与快照中消失，客户端将其读作能力缺失；key 以不同 `stateVersion` 重复时直接 throw，同版本注册方则共享一个单元并被计数。领域插件在 `ctx.inject(['sessionProjections'], …)` 下注册，因此不带注册表的 headless 组装完全不受影响。
@@ -150,7 +222,7 @@ The persisted projection cache service. Opens the `session_projcache` domain at 
  * @returns the viewed block, or `undefined` when no usable row exists for
  *   this lifecycle at the current Session format.
  */
-cachedSnapshot( meta: SessionHeader, keys?: readonly Extract<keyof SessionProjectionMap, string>[] | ReadonlySet<Extract<keyof SessionProjectionMap, string>>, ): ProjectionSnapshot | undefined
+cachedSnapshot( meta: SessionHeader, keys?: ProjectionKeySelection, ): ProjectionSnapshot | undefined
 
 /**
  * Read only a predecessor checkpoint's title as a zero-I/O listing hint.

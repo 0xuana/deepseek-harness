@@ -319,7 +319,8 @@ export class ApiSessionList {
 }
 
 /**
- * Wrap one projection block as Session-list hints of the named sequence space.
+ * Wrap one summary projection block as Session-list hints of the named sequence space.
+ * The block is the summary key set's values, not every value the source holds.
  * @param kind - which sequence space the block's watermark belongs to.
  * @param block - the block, or `undefined` when no source served one.
  * @returns the hints, or `undefined` when the block is absent or carries no value.
@@ -329,8 +330,8 @@ function hintsOf(
   block: ProjectionSnapshot | undefined,
 ): SessionProjectionHints | undefined {
   if (block === undefined || Object.keys(block.values).length === 0) return undefined
-  // Listing hints contain every wire value the source currently holds but
-  // remain partial: missing cells and cache rows are never materialized here.
+  // Listing hints contain every summary wire value the source currently holds
+  // but remain partial: missing cells and cache rows are never materialized here.
   return { kind, asOfSeq: block.asOfSeq, values: block.values as SessionProjectionValues }
 }
 

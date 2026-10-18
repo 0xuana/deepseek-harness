@@ -58,7 +58,12 @@ export interface SessionListSnapshot {
 
 }
 
-/** Shared projection values and the lifecycle of their explicit baseline read. */
+/**
+ * Every projection value the store currently holds, with the summary mark
+ * stripped, and the lifecycle of its explicit baseline read. This is the full
+ * attached-Session set, not a list row's summary contract (see
+ * `SessionListEntry.projectionValues`).
+ */
 export interface SessionProjectionSnapshot {
   readonly values: Readonly<Partial<SessionProjectionViewValues>>
   readonly state: 'idle' | 'loading' | 'ready' | 'migration-required' | 'error'

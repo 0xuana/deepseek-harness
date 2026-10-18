@@ -49,7 +49,11 @@ export interface SessionSummary {
    */
   blank: boolean
   updatedAt: number
-  /** Current host-computed summary projection values retained by the object layer. */
+  /**
+   * The row's summary projection values retained by the object layer, never the
+   * full projection set. A connected Session's store may hold more values from
+   * its control/follow baseline; those are outside the list contract.
+   */
   projectionValues?: Readonly<Partial<SessionProjectionSummaryValues>>
 }
 
