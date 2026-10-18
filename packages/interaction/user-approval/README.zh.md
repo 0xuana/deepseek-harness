@@ -112,7 +112,7 @@ kind: "package-reference"
 
 #### 模型看到的内容
 
-首次请求与有效策略每次变化时，都会在保留的历史后追加一份完整运行时上下文快照。在 `ask` 下，审批上下文内容会说明系统可以咨询已配置的应答者，缺少可用应答者时则以拒绝方式关闭。在 `never` 下，它会说明确定性的拒绝与非升权后果。未变化的请求会保留先前快照，不增加另一条消息。
+首次请求与有效策略每次变化时，都会在保留的历史后追加一份完整运行时上下文快照。在 `ask` 下，审批上下文内容会说明系统可以咨询已配置的应答者，缺少可用应答者时则以拒绝方式关闭。在 `never` 下，它会说明确定性的拒绝与非升权后果。未变化的请求会保留先前快照，不增加另一条消息。用户切换运行中 Session 的策略时，下一次模型调用还会收到一条切换通知。
 
 ##### Ask 策略贡献
 
@@ -124,6 +124,12 @@ Approval policy: ask. Operations that require approval may ask through the confi
 
 ```markdown
 Approval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`).
+```
+
+##### 切换通知
+
+```markdown
+The user changed the approval policy from "ask the user for approval" to "never ask the user for approval".
 ```
 
 #### Token 影响
