@@ -54,7 +54,7 @@ Items that Changes lists as None need no test design.
 |---|---|---|
 | Changing the behavior an existing test describes | Why the behavior changed | The Tests describe behavior rule in [root AGENTS.md](../../../AGENTS.md) |
 | Raising a ceiling in `scripts/doc-budgets.manifest.json` | Why the words are necessary | [Wordcount budgets](../../../docs/AGENTS.md#wordcount-budgets) |
-| Changing product-user-visible GUI behavior | An embedded demonstration GIF, with the demonstrated commit, the serving origin, and whether a real model round ran | [record-browser-gif](../record-browser-gif/SKILL.md#every-gui-pull-request-includes-a-gif) |
+| Changing product-user-visible GUI behavior | An embedded demonstration GIF, with the disclosures that record-browser-gif requires beside the embed | [record-browser-gif](../record-browser-gif/SKILL.md#every-gui-pull-request-includes-a-gif) |
 | Using a translation term the terminology list lacks | The source of the rendering, or a proposed rendering under pending terms | [Translation rules](../../../docs/i18n/translation-rules.md) |
 
 ## Human and Agent Roles
@@ -63,7 +63,7 @@ This section records who made the decisions in each stage of the PR, and how aut
 
 ### Levels
 
-<!-- Pending calibration: autonomy ranges. -->
+<!-- TODO: calibrate the autonomy ranges, the stage criteria, and the example together. -->
 
 Levels are ordered from least to most AI involvement; each level pairs an English name with a Chinese name. Autonomy is the Agent's autonomy in that stage, a multiple of 5% within the chosen level's range.
 
@@ -78,8 +78,6 @@ Levels are ordered from least to most AI involvement; each level pairs an Englis
 
 ### Stages and criteria
 
-<!-- Pending calibration: stage criteria. -->
-
 Stages appear in a fixed order; each stage pairs an English name with a Chinese name. The criteria below cover assist through auto; judge hint by its meaning in the level table.
 
 **breakdown 问题拆解**: after the problem appears, whether a human takes part in breaking it down, or the Agent acts on it directly.
@@ -93,8 +91,8 @@ Stages appear in a fixed order; each stage pairs an English name with a Chinese 
 
 - auto 模型自主: a human adopts the Agent's design as proposed, or only confirms an option the Agent recommends.
 - copilot 人工把关: a human chooses among the Agent's designs, or rejects parts of one.
-- pair 人工引导: the Agent proposes the design skeleton; a human gives key constraints, names, or several revisions.
-- assist 人工主导: a human supplies the design skeleton (module split, data flow, or key interfaces); the Agent fills in the mechanism or writes it up.
+- pair 人工引导: the Agent proposes the design structure; a human gives key constraints, names, or several revisions.
+- assist 人工主导: a human supplies the design structure (module split, data flow, or key interfaces); the Agent fills in the mechanism or writes it up.
 
 **testing 验收测试**: who sets the acceptance goals, test cases, and test matrix, and who checks the results. For documentation-only changes, the acceptance goals are content requirements.
 
@@ -149,13 +147,11 @@ Levels and Agent autonomy: <ins>**hint 人工独立**</ins> 0–15%, <ins>**assi
 
 ### Example
 
-<!-- Pending calibration: recalibrate the example's levels and autonomy values together with the ranges and criteria. -->
-
 Filled in from the session and review records of #6013:
 
 ```markdown
 - <ins>**pair 人工引导**</ins> 45% · breakdown 问题拆解 — The author identified two process-specific values that do not belong in the system prompt and pointed to the custom model route; the Agent traced the root cause.
-- <ins>**assist 人工主导**</ins> 25% · design 方案设计 — The author supplied the skeleton: runtime context, frozen legacy sections for old sessions, and a separate package; the Agent filled in the projection matching.
+- <ins>**assist 人工主导**</ins> 25% · design 方案设计 — The author supplied the design structure: runtime context, frozen legacy sections for old sessions, and a separate package; the Agent filled in the projection matching.
 - <ins>**pair 人工引导**</ins> 50% · testing 验收测试 — The author required two scenarios: restoring an old session after upgrade, and changing ports after upgrade; the Agent wrote the cases and snapshots.
 - <ins>**pair 人工引导**</ins> 45% · implementation 技术实现 — The Agent wrote the code and the Agent Note; the author required one revert and specified 3 approaches, such as getOrigin() instead of an origin property.
 - <ins>**pair 人工引导**</ins> 50% · review 评审处理 — The author decided each bot comment, such as no upgrade guide and keeping a devDependency; the Agent fixed and replied.

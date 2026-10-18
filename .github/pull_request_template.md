@@ -2,6 +2,8 @@
 
 ## Motivation
 
+<!-- 引用同仓库 Issue：Fixes #N 或 Refs #N。 -->
+
 ## Changes
 
 ## Testing
@@ -23,4 +25,4 @@ Levels and Agent autonomy: <ins>**hint 人工独立**</ins> 0–15%, <ins>**assi
 - <ins>**待填级别**</ins> ?% · design 方案设计 — 待填说明
 - <ins>**待填级别**</ins> ?% · testing 验收测试 — 待填说明
 - <ins>**待填级别**</ins> ?% · implementation 技术实现 — 待填说明
-- <ins>**待填级别**</ins> ?% · review 评审处理 — 待填说明
+- <ins>**n/a 暂不适用**</ins> · review 评审处理 — 尚无已处理的评审意见。
