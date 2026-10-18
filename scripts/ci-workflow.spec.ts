@@ -668,12 +668,15 @@ describe('CI workflow', () => {
     expect(uploadIndex).toBeGreaterThan(benchmarkIndex)
   })
 
-  it('gives the Wine Host TypeScript compile the repository heap budget', () => {
+  it('generates metadata before the Wine Host TypeScript compile and retains its heap budget', () => {
     const wineGates = readFileSync(resolve(root, 'scripts/wine-windows-gates.sh'), 'utf8')
 
     expect(wineGates).toContain(
       'wine_node "$scratch/logs/host-tsc.log" --max-old-space-size=4096 "$tsc_js" -b tsconfig.host.json --pretty false',
     )
+    const metadata = wineGates.indexOf('wine_node "$scratch/logs/host-typert.log" --import tsx/esm scripts/generate-typert.ts')
+    expect(metadata).toBeGreaterThan(-1)
+    expect(metadata).toBeLessThan(wineGates.indexOf('wine_node "$scratch/logs/host-tsc.log"'))
   })
 
   it('cancels superseded master runs without changing the post-merge job inventory', () => {
