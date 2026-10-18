@@ -63,17 +63,22 @@ it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each([{ format: 'docx', mod
       const pixels = await execa(python!, ['-c', "from pathlib import Path\nfrom PIL import Image\nfiles=list(Path('preview').glob('*.png'))\nassert files\nfor f in files:\n im=Image.open(f).convert('RGBA')\n visible=Image.alpha_composite(Image.new('RGBA',im.size,'white'),im).convert('RGB')\n print('content' if any(a!=b for a,b in visible.getextrema()) else 'blank')"], { cwd })
       expect(pixels.exitCode).toBe(0)
       if (format === 'pdf') expect(pixels.stdout.trim()).toBe('content')
+      const final = events.filter(e => e.type === 'assistant/message').at(-1)?.data.message.content
+        .filter(b => b.type === 'text').map(b => b.text).join(' ')
+      const diagnostic = JSON.stringify({
+        format, mode, callOrder: calls.map(call => call.name), skills, commands, pixels: pixels.stdout, final,
+      }, null, 2)
       const authoring = calls.findIndex(call => call.name === 'skill' && /office-(docx|pptx|xlsx)/u.test(call.arguments))
       if (pixels.stdout.includes('blank')) {
         if (authoring !== -1) {
           const rendered = calls.findIndex(call => (call.name === 'bash' || call.name === 'pwsh') && /\srender\b/u.test(call.arguments))
           expect(authoring, 'content checks after a blank preview may need the format skill').toBeGreaterThan(rendered)
         }
-        const final = events.filter(e => e.type === 'assistant/message').at(-1)?.data.message.content
-          .filter(b => b.type === 'text').map(b => b.text).join(' ')
-        expect(final).toMatch(/visual (?:inspection|check)[^.!?]{0,100}(?:not completed|incomplete|could not be completed|unverified)/iu)
+        expect(final, diagnostic).toMatch(
+          /visual (?:inspection|check)[^.!?]{0,100}(?:not completed|incomplete|could not be completed|unverified)/iu,
+        )
       } else {
-        expect(authoring, JSON.stringify(skills)).toBe(-1)
+        expect(authoring, diagnostic).toBe(-1)
       }
       expect(calls.some(e => e.name === 'read_image')).toBe(true)
     },
