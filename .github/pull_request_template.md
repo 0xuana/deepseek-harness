@@ -19,7 +19,7 @@
 
 ## Human and Agent Roles
 
-Levels and Agent autonomy: <ins>**hint 人工独立**</ins> 0–15%, <ins>**assist 人工主导**</ins> 20–40%, <ins>**pair 人工引导**</ins> 45–60%, <ins>**copilot 人工把关**</ins> 65–85%, <ins>**auto 模型自主**</ins> 90–100%; <ins>**n/a 暂不适用**</ins> marks a stage that does not exist or has not happened yet.
+Levels and Agent autonomy: <ins>**hint 人工独立**</ins> 0–10%, <ins>**assist 人工主导**</ins> 15–25%, <ins>**pair 人工引导**</ins> 30–50%, <ins>**copilot 人工把关**</ins> 55–85%, <ins>**auto 模型自主**</ins> 90–100%; <ins>**n/a 暂不适用**</ins> marks a stage that does not exist or has not happened yet.
 
 - <ins>**待填级别**</ins> ?% · breakdown 问题拆解 — 待填说明
 - <ins>**待填级别**</ins> ?% · design 方案设计 — 待填说明
