@@ -470,6 +470,15 @@ describe('approval policy (the approval/policy fold)', () => {
       }],
       source: { kind: 'user-approval' },
     })
+
+    ctx.approval.setPolicy(liveAgent, 'ask')
+
+    expect(inject.mock.calls[1]?.[0]).toMatchObject({
+      content: [{
+        type: 'text',
+        text: 'The user changed the approval policy from "never ask the user for approval" to "ask the user for approval".',
+      }],
+    })
   })
 
   it('contributes the complete current ask or never policy as cache-safe context', async () => {
