@@ -173,9 +173,10 @@ class RemoteStreamMuxConnection {
 
   /**
    * Serve frames until the socket closes. A Pong, any received frame, and a
-   * downlink write that waited in the local send buffer and then completed
-   * count as peer activity, so a congested link that delays the Pong behind
-   * data keeps its socket. A write that completes at once proves nothing
+   * downlink write that does not complete at once count as peer activity, so
+   * a congested link that delays the Pong behind data keeps its socket. A
+   * frame above the compression threshold deflates asynchronously, so its
+   * completion always counts; a write that completes at once proves nothing
    * about the peer and does not count.
    */
   async run(): Promise<void> {

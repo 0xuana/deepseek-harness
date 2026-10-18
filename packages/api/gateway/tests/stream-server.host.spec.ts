@@ -436,9 +436,11 @@ describe('Remote stream mux server compression', () => {
     await once(client, 'close')
   })
 
-  it('keeps a socket alive while compressed frames are written without a Pong', async () => {
+  it('keeps a socket alive while compressed frames are written without a Pong', { timeout: 20_000 }, async () => {
     const stop = Promise.withResolvers<undefined>()
-    const entry = await startMux(async () => steadyItems(stop.promise, 'x'.repeat(2_048)), 20)
+    // A 500 ms interval leaves a 1 s activity window, so thread-pool deflate
+    // latency cannot trip the two-interval termination before a write lands.
+    const entry = await startMux(async () => steadyItems(stop.promise, 'x'.repeat(2_048)), 500)
     const client = await connect(entry.url, false)
     const terminated = vi.spyOn(acceptedSocket(entry.mux), 'terminate')
     const items = vi.fn()
@@ -451,6 +453,9 @@ describe('Remote stream mux server compression', () => {
     } finally {
       stop.resolve(undefined)
     }
+    // The weakening is bounded: after the compressed downlink stops, the
+    // missing Pongs terminate the socket.
+    await vi.waitFor(() => { expect(terminated).toHaveBeenCalledOnce() }, { timeout: 5_000 })
   })
 })
 
