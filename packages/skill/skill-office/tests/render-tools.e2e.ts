@@ -37,17 +37,22 @@ async function sessionEvents(cwd: string) {
 }
 
 it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each([{ format: 'docx', mode: 'native' }, { format: 'pdf', mode: 'native' }, { format: 'docx', mode: 'ptc' }])('loads the operation skill and renders $format through the shell in $mode mode', async ({ format, mode }) => {
+  let original: Buffer | undefined
   await runLoaderSmoke({
     label: 'Office CLI rendering', tempDirPrefix: 'dsh-office-render-',
     ...launch, env: { ...launch.env, DSH_TOOLS_MODE: mode },
     binArgs: ['--profile', 'headless', '--patch', 'office.patch.json',
-      `Export page 1 of input.${format} as PNG into preview and check that the exported image is readable. Report briefly in English.`],
+      // Source-content verification can require an authoring skill; this case covers image-only inspection.
+      `Export page 1 of input.${format} as PNG into preview. Check only that the exported image is readable; `
+      + 'do not inspect the source document content or metadata, and keep the source file unchanged. Report briefly in English.'],
     async prepare(cwd) {
       await execa(python!, ['-c', "from docx import Document\nd=Document()\nd.add_heading('Quarterly revenue',0)\nd.add_paragraph('Q1: 12; Q2: 18; Total: 30')\nd.save('input.docx')"], { cwd })
       if (format === 'pdf') await execa(python!, ['-c', "from PIL import Image, ImageDraw\nim=Image.new('RGB',(300,200),'white')\nImageDraw.Draw(im).rectangle((30,30,150,100),fill='black')\nim.save('input.pdf','PDF')"], { cwd })
       await prepareOffice(cwd)
+      original = await readFile(join(cwd, `input.${format}`))
     },
     async inspect(cwd) {
+      expect(await readFile(join(cwd, `input.${format}`))).toEqual(original)
       const events = await sessionEvents(cwd)
       const calls = events.flatMap((event) => {
         if (event.type === 'tool/call') return [event.data]
