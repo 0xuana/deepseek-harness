@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useSyncExternalStore } from 'react'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { GlobalStandardProps, SessionStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { createSnapshotStore, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import { SessionLogDownloadController } from '../src/client/controller.ts'
 import { SessionMarkdownCopyController } from '../src/client/copy-controller.ts'
@@ -11,6 +12,18 @@ import type { SessionLogDownloadHeaderProps } from '../src/client/HeaderAction.t
 import { en } from '../src/client/locales.ts'
 
 const SID = 'session-export-header' as SessionId
+const dictionary: Record<string, string> = en
+const translate: SessionLogDownloadHeaderProps['t'] = key => dictionary[key] ?? key
+const unused = (): never => { throw new Error('This isolated component does not consume framework hooks') }
+const standard: GlobalStandardProps & SessionStandardProps = {
+  sessionId: SID, useSession: unused, useProjection: unused, useAccess: () => true,
+  useSessions: unused, useSessionStatus: unused, useSessionRetainInfo: unused,
+  useSessionAccess: () => true, useRemoteAccess: () => true, useWorkspaceAccess: () => true,
+  useConversation: unused, useInput: unused, useChat: unused, useTrajectory: unused,
+  usePanelInfo: unused, useResource: unused, useWorkspaces: unused,
+  inputActions: { captureInsertion: unused, insertText: unused, setDraft: unused, persistDraft: unused,
+    addAttachments: unused, removeAttachment: unused, pruneAttachments: unused, submit: unused },
+}
 
 function bindSnapshot<State>(store: ObservableSnapshot<State>) {
   return function useSnapshot<T>(selector: (state: State) => T): T {
@@ -33,8 +46,8 @@ function bench(feedbackAvailable = false, copyController = new SessionMarkdownCo
   const feedback = createSnapshotStore(feedbackAvailable)
   const useSessionLogDownload = bindSnapshot(controller.store)
   const useSessionMarkdownCopy = bindSnapshot(copyController.store)
-  const props = {
-    sessionId: SID,
+  const props: SessionLogDownloadHeaderProps = {
+    ...standard,
     useSessionLogDownload,
     useSessionMarkdownCopy,
     useFeedbackAvailable: bindSnapshot(feedback),
@@ -42,8 +55,8 @@ function bench(feedbackAvailable = false, copyController = new SessionMarkdownCo
     request,
     copyMarkdown,
     dismiss,
-    t: (key: keyof typeof en): string => en[key],
-  } as unknown as SessionLogDownloadHeaderProps
+    t: translate,
+  }
   const view = render(<SessionLogDownloadHeaderAction {...props} />)
   return { controller, copyController, request, copyMarkdown, openFeedback, feedback, view }
 }
@@ -150,8 +163,8 @@ describe('Session export Header action', () => {
     const pending = new Promise<Response>((resolve) => { release = resolve })
     const controller = new SessionLogDownloadController(() => pending, vi.fn())
     const useSessionLogDownload = bindSnapshot(controller.store)
-    b.view.rerender(<SessionLogDownloadHeaderAction {...({
-      sessionId: SID,
+    const rerendered: SessionLogDownloadHeaderProps = {
+      ...standard,
       useSessionLogDownload,
       useSessionMarkdownCopy: bindSnapshot(b.copyController.store),
       useFeedbackAvailable: bindSnapshot(b.feedback),
@@ -159,8 +172,9 @@ describe('Session export Header action', () => {
       request: (sessionId: SessionId) => controller.download(sessionId),
       copyMarkdown: b.copyMarkdown,
       dismiss: (sessionId: SessionId) => { controller.dismiss(sessionId) },
-      t: (key: keyof typeof en): string => en[key],
-    } as unknown as SessionLogDownloadHeaderProps)} />)
+      t: translate,
+    }
+    b.view.rerender(<SessionLogDownloadHeaderAction {...rerendered} />)
 
     const download = controller.download(SID)
     const button = b.view.getByRole('button', { name: 'More actions' })

@@ -20,11 +20,12 @@ function bindSnapshot(store: ObservableSnapshot<SessionMarkdownCopyState>) {
 function bench(notice: SessionMarkdownCopyState['notice']) {
   const store = createSnapshotStore<SessionMarkdownCopyState>({ copying: false, notice })
   const dismiss = vi.fn()
-  const props = {
+  const dictionary: Record<string, string> = en
+  const props: SessionMarkdownCopyToastProps = {
     useSessionMarkdownCopy: bindSnapshot(store),
     dismiss,
-    t: (key: keyof typeof en): string => en[key],
-  } as unknown as SessionMarkdownCopyToastProps
+    t: key => dictionary[key] ?? key,
+  }
   return { ...render(<SessionMarkdownCopyToast {...props} />), store, dismiss }
 }
 

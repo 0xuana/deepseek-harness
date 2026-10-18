@@ -28,6 +28,11 @@ function declare(slots: SlotRegistry): () => void {
   } as never, () => null)
 }
 
+function injectedOf(entry: { inject?: ((...args: never[]) => object) | undefined } | undefined): object {
+  if (entry?.inject === undefined) throw new Error('slot entry has no injection')
+  return entry.inject()
+}
+
 async function bench() {
   const ctx = new Context()
   await ctx.plugin(SlotRegistry).await()
@@ -43,7 +48,7 @@ describe('session-log-download browser plugin', () => {
   it('follows feedback plugin availability and opens the selected Session form', async () => {
     const b = await bench()
     const entry = b.slots.entries('conversation.session.header.utilities')[0]!
-    const injected = (entry.inject as unknown as () => SessionLogDownloadHeaderInjected)()
+    const injected = injectedOf(entry) as SessionLogDownloadHeaderInjected
     expect(injected.hooks.feedbackAvailable.getSnapshot()).toBe(false)
     injected.openFeedback(SID)
 
@@ -69,7 +74,7 @@ describe('session-log-download browser plugin', () => {
     const entry = b.slots.entries('conversation.session.header.utilities')[0]
     expect(entry?.component).toBe(SessionLogDownloadHeaderAction)
     expect(entry?.options).toMatchObject({ id: 'session-log-download' })
-    const injected = (entry?.inject as unknown as () => SessionLogDownloadHeaderInjected)()
+    const injected = injectedOf(entry) as SessionLogDownloadHeaderInjected
     await injected.request(SID)
     expect(b.ctx.sessionLogDownload.store.getSnapshot().bySession[SID]?.status).toBe('error')
     injected.dismiss(SID)
@@ -78,7 +83,7 @@ describe('session-log-download browser plugin', () => {
     const overlay = b.slots.entries('shell.overlay')[0]
     expect(overlay?.component).toBe(SessionMarkdownCopyToast)
     expect(overlay?.options).toMatchObject({ id: 'session-log-download.copy-toast' })
-    const overlayInjected = (overlay?.inject as unknown as () => SessionMarkdownCopyToastInjected)()
+    const overlayInjected = injectedOf(overlay) as SessionMarkdownCopyToastInjected
     await injected.copyMarkdown(SID)
     expect(injected.hooks.sessionMarkdownCopy.getSnapshot().notice?.kind).toBe('failed')
     overlayInjected.dismiss()
