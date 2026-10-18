@@ -92,8 +92,7 @@ Client waterfall 的 Context 解析保持同步。解析器可以返回借用的
 - 被转发的事件到达 `$on` 时不做业务载荷投影或脱敏。普通通知在重连后不重放；Agent-scoped waterfall 只投影选择 Client Context 所需的顶层 Agent 身份，并自行携带 pending 生命周期。
 - `websocketHeartbeatIntervalMs` 同时是 Ping 周期和活动截止时间。对端连续两个周期没有活动时，Host 会终止连接；如果部署的事件循环或网络可能停顿超过该间隔，必须调大此配置。
 - `websocketCompression` 默认 `'deflate'`，双向协商 `permessage-deflate`。mux 压缩 JSON 文本达到 1024 个字符的帧，更短的帧不压缩，因为 `ws` 在默认上下文接管下会忽略自己的 `threshold` 选项。压缩后的下行写入完成会计入心跳规则中的缓冲活动，而阈值以下的写入仍保持原有含义；换不到带宽的 loopback 部署可设为 `'none'`。
-- 单条 Remote 流帧在压缩前和解压后都受 `max(streamInboxBytes, 1 MiB)` 限制。更大的单帧以 1009 关闭连接，而不是让逻辑流失败，因为该上限是固定的安全边界，不是部署可调项。
-- 排队写入完成只说明 TCP 对端确认了数据。经过带缓冲的反向代理时，该对端是代理，因此持续下行期间 Client 消失，要等代理不再接收数据后才会被检测到。
+- 未压缩的排队写入完成说明 TCP 对端确认了数据；压缩写入则在 `ws` 完成 deflate 并写出后即完成，只证明本地流水线已排空。经过带缓冲的反向代理时，该对端是代理，因此持续下行期间 Client 消失，要等代理不再接收数据后才会被检测到。
 - Gateway 通过 `invocation.uplinkWindow` 提供每条 WebSocket 流的 inbox 容量与 JSON 封装开销；没有编码帧 inbox 限额的载体省略该字段。领域协议可以公布该窗口并通过确认约束在途字节数。Gateway 本身不发放额度：Client 发送快于方法读取，或发给从未取用 uplink 的方法时，其流以 `gateway/uplink-overflow` 失败；上行项不会跨载体代际重放，需要恢复上行的领域在重开的请求里自带确认游标。
 
 

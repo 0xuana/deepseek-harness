@@ -5,7 +5,6 @@ import { remoteErrorOf, type PeerId, type PeerScope } from '@deepseek-ai/dsh-typ
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
 import {
-  MAX_REMOTE_STREAM_FRAME_BYTES,
   RemoteStreamMuxServer,
   type RemoteStreamFailureMapper,
   type RemoteStreamOpener,
@@ -411,17 +410,47 @@ describe('Remote stream mux server compression', () => {
     await roundTrip(client, 'uncompressed', 'x'.repeat(2_048))
   })
 
-  it('closes a connection whose single frame exceeds the payload ceiling', async () => {
-    const entry = await startMux(async (_endpoint, _payload, uplink) => echoUplink(uplink), 2_000, 1)
+  it('compresses frames of 1,024 characters and leaves shorter frames uncompressed', async () => {
+    const entry = await startMux(async (_endpoint, _payload, uplink) => echoUplink(uplink))
     const client = await connect(entry.url)
-    const closed = once(client, 'close')
-    client.send(JSON.stringify({
-      type: 'cancel',
-      streamId: 'oversized',
-      value: 'x'.repeat(MAX_REMOTE_STREAM_FRAME_BYTES),
-    }))
-    const event = await closed
-    expect(event[0]).toBe(1009)
+    const writer = acceptedSocket(entry.mux) as {
+      send(data: string, options: { compress?: boolean }, callback: (error?: Error) => void): void
+    }
+    const sending = vi.spyOn(writer, 'send')
+    const frames = collectFrames(client)
+    const long = 'x'.repeat(2_048)
+    client.send(openFrame('threshold'))
+    client.send(itemFrame('threshold', long))
+    await vi.waitFor(() => {
+      expect(frames).toContainEqual({ type: 'item', streamId: 'threshold', value: long })
+    })
+    client.send(itemFrame('threshold', 'short'))
+    await vi.waitFor(() => {
+      expect(frames).toContainEqual({ type: 'item', streamId: 'threshold', value: 'short' })
+    })
+
+    expect(sending.mock.calls.find(([data]) => data.includes(long))?.[1]).toEqual({ compress: true })
+    expect(sending.mock.calls.find(([data]) => data.includes('"short"'))?.[1]).toEqual({ compress: false })
+    sending.mockRestore()
+    client.close()
+    await once(client, 'close')
+  })
+
+  it('keeps a socket alive while compressed frames are written without a Pong', async () => {
+    const stop = Promise.withResolvers<undefined>()
+    const entry = await startMux(async () => steadyItems(stop.promise, 'x'.repeat(2_048)), 20)
+    const client = await connect(entry.url, false)
+    const terminated = vi.spyOn(acceptedSocket(entry.mux), 'terminate')
+    const items = vi.fn()
+    client.on('message', items)
+    client.send(openFrame('liveness'))
+    try {
+      await pings(client, 4)
+      expect(terminated).not.toHaveBeenCalled()
+      expect(items).toHaveBeenCalled()
+    } finally {
+      stop.resolve(undefined)
+    }
   })
 })
 
@@ -741,11 +770,11 @@ async function *echoUplink(uplink: AsyncIterable<unknown>): AsyncIterable<unknow
   for await (const value of uplink) yield value
 }
 
-/** Yield an item every few milliseconds until `stop` settles. */
-async function *steadyItems(stop: Promise<undefined>): AsyncIterable<string> {
+/** Yield `value` every few milliseconds until `stop` settles. */
+async function *steadyItems(stop: Promise<undefined>, value = 'item'): AsyncIterable<string> {
   const stopped = stop.then(() => true)
   while (!await Promise.race([stopped, new Promise<false>((resolve) => { setTimeout(() => { resolve(false) }, 5) })])) {
-    yield 'item'
+    yield value
   }
 }
 

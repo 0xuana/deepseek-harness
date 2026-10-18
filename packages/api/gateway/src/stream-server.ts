@@ -41,9 +41,6 @@ export type RemoteStreamFailureMapper = (error: unknown) => RemoteStreamFailure
 
 const MAX_MISSED_HEARTBEATS = 2
 
-/** Largest single Remote stream frame the mux accepts, before and after decompression. */
-export const MAX_REMOTE_STREAM_FRAME_BYTES = 1024 * 1024
-
 /** Carrier options for {@link RemoteStreamMuxServer}. */
 export interface RemoteStreamMuxServerOptions {
   /** Interval between WebSocket Ping control frames. */
@@ -79,9 +76,6 @@ export class RemoteStreamMuxServer {
     this.compression = options.compression
     this.server = new WebSocketServer({
       noServer: true,
-      // Bounds each frame both before and after inflation; this is a security
-      // ceiling, not a deployment tunable.
-      maxPayload: Math.max(options.streamInboxBytes, MAX_REMOTE_STREAM_FRAME_BYTES),
       // `ws` ignores its own `threshold` option while context takeover is
       // enabled, so the mux decides per frame in send().
       perMessageDeflate: options.compression ? { zlibDeflateOptions: { level: 1 } } : false,
@@ -340,8 +334,10 @@ class RemoteStreamMuxConnection {
         if (queued) this.alive()
         resolve()
       })
-      // Read after send(): bytes still buffered mean the local send buffer was
-      // full, so their completion requires the peer to acknowledge data.
+      // Read after send(): buffered bytes mean the write did not complete at
+      // once, so its completion counts as peer activity. For a compressed frame
+      // the buffered bytes include ws's deflate queue, not just the TCP send
+      // buffer.
       queued = this.socket.bufferedAmount > 0
     }))
     this.writes = delivery.catch(() => undefined)

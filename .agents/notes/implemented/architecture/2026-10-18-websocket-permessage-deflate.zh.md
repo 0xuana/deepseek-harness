@@ -1,16 +1,16 @@
 # Agent Note: 用 permessage-deflate 压缩 Remote 流 WebSocket
 
-Status: proposed
+Status: implemented
 
 [English](2026-10-18-websocket-permessage-deflate.md) | 中文
 
 ## 问题
 
-Web GUI 的所有实时 Remote 流共用一条物理 WebSocket `/api/remote.mux`：模型 token 增量、session 事件、工具输出、终端输出，以及 `$events` 广播。这条 mux 本身是已实现的 [Remote 双工流](../../implemented/architecture/2026-09-19-remote-duplex-stream.zh.md)设计，本 Note 只给它加一个传输选项。Host 用 `new WebSocketServer({ noServer: true })` 建连接，`ws` 的 `perMessageDeflate` 保持默认的 `false`，链路从不压缩。Host 的 HTTP 面已经有 `compression: 'none' | 'gzip'`，WebSocket 这边没有对应能力。
+Web GUI 的所有实时 Remote 流共用一条物理 WebSocket `/api/remote.mux`：模型 token 增量、session 事件、工具输出、终端输出，以及 `$events` 广播。这条 mux 本身是已实现的 [Remote 双工流](2026-09-19-remote-duplex-stream.zh.md)设计，本 Note 只给它加一个传输选项。Host 的 HTTP 面已经暴露 `compression: 'none' | 'gzip'`；在此选项之前 WebSocket 没有对应能力，链路因此从不压缩。
 
 走隧道、反向代理或被接纳的公网地址时，大 JSON 帧——会话回放、长工具输出、终端滚动历史——占掉的带宽协议本来就能省下来。浏览器在升级握手时本来就会主动 offer `permessage-deflate`，缺的只是服务端这一半。
 
-## 提案
+## 决定
 
 Gateway Config 增加一个字段 `websocketCompression: 'none' | 'deflate'`，默认 `'deflate'`，把解析后的布尔值交给 mux。mux 用以下传输选项构造 `WebSocketServer`，并在发送时逐帧决定是否压缩：
 
@@ -19,9 +19,8 @@ Gateway Config 增加一个字段 `websocketCompression: 'none' | 'deflate'`，�
 | 帧压缩阈值 | `1024` 个 JSON 文本字符，由 mux 在发送路径判定 | `ws` 在开启上下文接管时会忽略自己的 `threshold` 选项（[上游 41ae5631](https://github.com/websockets/ws/commit/41ae5631)），因此 mux 逐帧传入 `compress`；少于 1024 个字符的帧（多数 token 级 `item` 帧）不压缩，也不进入 zlib 线程池 |
 | `perMessageDeflate.zlibDeflateOptions.level` | `1` | 交互帧优先延迟而非压缩率；本仓库 HTTP gzip 默认也是 `1` |
 | 上下文接管 | `ws` 默认（双向开启） | 重复 JSON 压缩率最好，不必逐帧重建字典 |
-| `maxPayload` | `max(streamInboxBytes, 1 MiB)`（`MAX_REMOTE_STREAM_FRAME_BYTES`），固定 | 在压缩前和解压后同时给单帧设上限；这是安全护栏，不是部署可调项 |
 
-mux 构造函数从四个位置参数改为一个 options 对象，携带 `heartbeatIntervalMs`、`streamInboxBytes`、`compression`，因为配置词汇由 Gateway 解析，`stream-server.ts` 不应该认识 `'none' | 'deflate'`。
+mux 构造函数接收一个 options 对象，携带 `heartbeatIntervalMs`、`streamInboxBytes` 与 `compression`，因为配置词汇由 Gateway 解析，`stream-server.ts` 不认识 `'none' | 'deflate'`。
 
 客户端零改动：浏览器 API 本来就会 offer 该扩展，Node 载体用的 `ws` 默认 `perMessageDeflate: true`，完全不 offer 的客户端拿到的就是不压缩的升级响应。
 
@@ -31,15 +30,14 @@ mux 构造函数从四个位置参数改为一个 options 对象，携带 `heart
 |---|---|
 | 浏览器（`client/connection` 打开原生 `WebSocket`） | 协商成功，双向压缩 |
 | Node `ws` 载体（测试、认证的 Desktop 调用方） | 协商成功，双向压缩 |
-| 不 offer 该扩展的客户端 | 升级成功但不带 `Sec-WebSocket-Extensions`，帧与今天完全一致 |
+| 不 offer 该扩展的客户端 | 升级成功但不带 `Sec-WebSocket-Extensions`，帧与不压缩连接一致 |
 | 新 Host 配旧 Client，或反过来 | 没有协议变更；扩展按连接、可选协商 |
-| `websocketCompression: 'none'` | 与今天逐字节一致的行为 |
+| `websocketCompression: 'none'` | 不协商扩展；帧不压缩 |
 
 ### 失败与容量
 
 | 情形 | 行为 |
 |---|---|
-| 单帧超过 `maxPayload` | `ws` 以 1009 关闭连接；不压缩的大帧超过同一上限时行为相同 |
 | 缓冲的上行超过 `streamInboxBytes` | 仍以 `gateway/uplink-overflow` 失败该逻辑流；预算统计的是解压后的帧字节，语义不变 |
 | Ping/Pong 心跳 | Ping 周期不受影响：控制帧从不压缩，活动判据中 Pong 与收到帧这两支不变 |
 | 下行写入活性 | 阈值以下的写入保持同步，只有本机发送缓冲区已满时才计为对端活动；JSON 文本达到 1024 个字符的帧异步压缩，其写入完成会计为缓冲活动 |
@@ -57,18 +55,9 @@ mux 构造函数从四个位置参数改为一个 options 对象，携带 `heart
 
 **只压下行。** 否决：该扩展按连接协商并同时作用于两个方向，单向接受不可表达，何况上行帧本来就小。
 
-**不做帧大小上限。** 否决：压缩让解压炸弹变便宜——线上几 KiB 就能在应用层任何检查之前膨胀到数百 MiB。上限是安全不变量，不是偏好。
+## 后果
 
-## 验收标准
-
-- 默认配置下，真实浏览器升级响应带 `Sec-WebSocket-Extensions: permessage-deflate`，超过阈值的帧双向都能正确往返。
-- `websocketCompression: 'none'` 时升级不带该扩展，行为与当前 Host 一致。
-- 不 offer 扩展的客户端可以连接、收发，并与今天一样失败。
-- 单帧超过 `maxPayload` 时连接以 1009 结束，而预算内的上行溢出仍报 `gateway/uplink-overflow`。
-- Gateway 单测、Config 默认值断言、类型检查、`build:check` 与改动源文件的逐文件覆盖率通过。
-- `packages/api/gateway/README.md`、其中文副本与重新生成的 `docs/config-catalog.md` 描述新字段。
-
-## 风险
+压缩为走隧道、反向代理或被接纳公网地址的大 JSON 帧省下带宽。少于 1024 个字符的帧不进入 zlib 线程池，上下文接管跨消息保留字典，因此重复 JSON 的压缩率好且不必逐帧重建。
 
 **线程池争用。** zlib 与文件 IO 共用 libuv 线程池。1024 字符阈值把小的流式帧挡在外面；线程池打满时被延迟的是压缩帧，事件循环仍不被阻塞。
 
@@ -78,4 +67,6 @@ mux 构造函数从四个位置参数改为一个 options 对象，携带 `heart
 
 **默认值未经测量。** `'deflate'` 这个默认值依据的是 HTTP gzip 的先例与远端场景，不是开/关两态的字节与延迟对比。做过对比后要记录结论，本地开销若明显则重新考虑默认值。
 
-**inflate 先分配再被拒。** `ws` 会先把解压后的消息拼起来，再与 `maxPayload` 比较，所以恶意帧仍可能先分配到上限才断开。上限让最坏情况有界，而不是免费。
+**写入活性被削弱。** 压缩后的下行写入在 `ws` 完成 deflate 并写出时即完成，而不是等到 TCP 对端确认数据，因此持续压缩下行会把写入计为缓冲活动并推迟心跳超时终止。心跳规则及其代码未改动。
+
+Gateway 单测钉住默认协商、不协商、不支持扩展的客户端、逐帧阈值与压缩写入的活性后果；配置默认值与生成的 config catalog 在同一次改动中更新。
