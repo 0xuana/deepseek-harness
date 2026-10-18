@@ -180,6 +180,8 @@ function clientBuildEnvironment(environment: NodeJS.ProcessEnv): ClientBuildEnvi
 
 /**
  * Resolve the exact public environment selected for a complete client build.
+ * Named profiles discard inherited public overrides. Local builds retain the supplied
+ * commit, version, and true dirty marker; repositoryClientBuildEnvironment supplies that metadata.
  * @param environment - parent process environment.
  * @param profile - explicit profile, or the non-public selector when omitted.
  * @returns the inherited public values when no profile is selected, otherwise the named profile.

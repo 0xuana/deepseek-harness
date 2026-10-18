@@ -208,7 +208,7 @@ pnpm run package:desktop:mac:arm64:dir
 pnpm run prepare:desktop
 ```
 
-这条诊断命令是另一种停止位置，并非两条命令构建流程的前半段。之后执行 `package:desktop*` 时仍会重新完成正式构建与准备，避免使用陈旧的 dsh 包、运行时文件或 dsh 内容。
+这条诊断命令是另一种停止位置，并非两条命令构建流程的前半段。之后执行 `package:desktop*` 时仍会重新完成按签名模式选择的构建与全部准备，避免使用陈旧的 dsh 包、运行时文件或 dsh 内容。
 
 <a id="local-official-bundles-from-a-loopback-registry"></a>
 

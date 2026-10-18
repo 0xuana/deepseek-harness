@@ -38,7 +38,7 @@ function supervisor(failure?: string) {
   const run = { directory: 'fixture-record', finish: vi.fn(),
     run: vi.fn(async (stage: string, _executable: string, _args: readonly string[], _options: { env: NodeJS.ProcessEnv }) => {
       stages.push(stage)
-      if (stage === failure) throw new Error('stage refused')
+      if (failure !== undefined && (stage === failure || stage.startsWith(`${failure} `))) throw new Error('stage refused')
     }) }
   return { run, stages }
 }
@@ -103,13 +103,17 @@ it.each(['--unsigned', '--prepare-only'])('keeps %s hardware-free and creates no
 })
 
 it.each(['mac-arm64', 'mac-x64', 'win-x64'] as const)('selects branding from the signing mode for %s', async (target) => {
-  for (const unsigned of [false, true]) {
+  const modes = [[], ['--unsigned'], ['--dir'], ['--unsigned', '--dir'], ['--prepare-only'],
+    ...(target === 'win-x64' ? [] : [['--skip-notarization'], ['--skip-notarization', '--dir']])]
+  for (const flags of modes) {
+    const unsigned = flags.includes('--unsigned')
     const { run, stages } = supervisor()
     const platform = target === 'win-x64' ? 'win32' : 'darwin'
-    const invocation = parseDesktopPackageInvocation([target, ...(unsigned ? ['--unsigned'] : [])], platform,
+    const invocation = parseDesktopPackageInvocation([target, ...flags], platform,
       platform === 'darwin' ? 'arm64' : 'x64')
     await packageTarget(invocation, {
       ...environment,
+      APPLE_KEYCHAIN_PROFILE: 'fixture',
       DSH_BUILD_CLIENT_PROFILE: unsigned ? 'official' : 'local',
       DSH_CLIENT_BUILD_PROFILE: unsigned ? 'official' : 'local',
       DSH_CLIENT_TITLE: 'Inherited title',
@@ -119,6 +123,21 @@ it.each(['mac-arm64', 'mac-x64', 'win-x64'] as const)('selects branding from the
     expect(stages.some(stage => stage.startsWith('exec tsx apps/desktop/scripts/pack-local-packages.ts'))).toBe(unsigned)
     expect(stages.some(stage => stage.startsWith('run release:pack --family dsh'))).toBe(!unsigned)
   }
+})
+
+it.each([
+  ['mac-arm64', 'run build --profile local'],
+  ['win-x64', 'run build --profile local'],
+  ['mac-arm64', 'exec tsx apps/desktop/scripts/pack-local-packages.ts'],
+  ['win-x64', 'exec tsx apps/desktop/scripts/pack-local-packages.ts'],
+] as const)('stops unsigned %s packaging when %s fails', async (target, failure) => {
+  const { run, stages } = supervisor(failure)
+  const invocation = parseDesktopPackageInvocation([target, '--unsigned'],
+    target === 'win-x64' ? 'win32' : 'darwin', target === 'win-x64' ? 'x64' : 'arm64')
+  await expect(packageTarget(invocation, environment, run)).rejects.toThrow('stage refused')
+  expect(stages.at(-1)?.startsWith(failure)).toBe(true)
+  expect(stages.some(stage => stage.startsWith('--dir apps/desktop-host pack'))).toBe(false)
+  expect(writeFileSync).not.toHaveBeenCalled()
 })
 
 it('checks the assembled macOS runtime before notarizing and recording the release', async () => {

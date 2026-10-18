@@ -1,9 +1,9 @@
 /**
- * Pack one release family's whole publish set into a single directory and
- * record its publish order for the publish step. Default serial packs execute
+ * Pack one family's public packages into a staging directory; the release command
+ * also records their publish order. Default serial packs execute
  * in that order; explicitly parallel packs use pnpm's bounded scheduler.
  *
- * The pack step is the release boundary: it runs without credentials, produces
+ * The release command is the release boundary: it runs without credentials, produces
  * every tarball from one commit, and hands the publish step exactly those bytes
  * ([rationale](../../.agents/notes/implemented/process/2026-08-10-npm-release-sequences.md)).
  */
@@ -84,12 +84,12 @@ export function parsePackConcurrency(raw: string | undefined): number {
 
 /**
  * Replace a staging directory with validated family tarballs without a publication record.
- * The caller must verify the client build profile and artifact hashes before calling.
+ * The caller must verify any client build profile and artifact hashes its packaging mode requires.
  * @param root - Repository containing the family members.
  * @param family - Package selection, version, and payload policy.
  * @param destination - Absolute staging directory owned by this packing invocation.
  * @param concurrency - Validated maximum number of concurrent package packs.
- * @returns Tarball filenames in dependency order, after every package passes validation.
+ * @returns Tarball filenames in publish order, after every package passes validation.
  */
 export async function packFamilyMembers(
   root: string, family: ReleaseFamily, destination: string, concurrency: number,
