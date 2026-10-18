@@ -321,11 +321,12 @@ describe('headless runner', () => {
     finally { await test.ctx.fiber.dispose() }
   })
 
-  it.each([false, true])('attributes an Auto task to the caller after policy selection (resume=%s)', async (resume) => {
+  it.each([false, true])('applies Auto and approval policy before submitting a user task (resume=%s)', async (resume) => {
     let selected = resume ? 'auto' : 'workspace-write'
     const test = await bench({ afterPrompt(session, message) {
+      expect(selected).toBe('auto')
       expect(test.ctx.approval.overrideOf(session)).toBe('never')
-      expect(message.source).toEqual({ kind: 'user', entrypoint: 'headless' })
+      expect(message.source).toEqual({ kind: 'user' })
       appendTurn(session, 1, message, 'done', true)
     } }, {
       approvalPolicy: resume ? 'never' : 'ask',
@@ -338,7 +339,7 @@ describe('headless runner', () => {
     await test.ctx.plugin(ApprovalService, { policy: 'ask' })
     if (resume) test.ctx.sessions.create(brandString<SessionId>('session-exact'), { meta: { cwd: process.cwd() } })
     test.ctx.provide('permissionPresets', {
-      current() { return selected }, resolve() {},
+      resolve() {},
       set(session: Session, preset: string) {
         selected = preset
         setApprovalPolicy(session, 'ask')

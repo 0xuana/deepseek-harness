@@ -10,7 +10,7 @@ Full access 让有用的项目工作无需反复审批即可继续，但也允�
 
 ## 决策
 
-[`dsh-experimental-auto-review`](../../../../packages/experimental/auto-review/README.zh.md)是显式安装的实验性 profile 层，按[实验包发布策略](../../../../packages/experimental/README.zh.md)参与发布。默认 Web 保持 Read Only、Workspace Write 与 Full access。此层贡献仅限当前会话的 `auto`，唯一持久身份为 `permission/preset:auto`；它使用 Full access 的 `danger-full-access` 沙箱与工具定义，审批策略由[用户审批兜底决策](2026-09-24-auto-review-user-approval-fallback.zh.md)决定。默认 Headless、通用设置与新会话默认值都排除此 integration。[Headless 调用者入口](2026-10-18-headless-auto-review.zh.md)定义显式 headless 启用方式及其新增指令角色。
+[`dsh-experimental-auto-review`](../../../../packages/experimental/auto-review/README.zh.md)是显式安装的实验性 profile 层，按[实验包发布策略](../../../../packages/experimental/README.zh.md)参与发布。默认 Web 保持 Read Only、Workspace Write 与 Full access。此层贡献仅限当前会话的 `auto`，唯一持久身份为 `permission/preset:auto`；它使用 Full access 的 `danger-full-access` 沙箱与工具定义，审批策略由[用户审批兜底决策](2026-09-24-auto-review-user-approval-fallback.zh.md)决定。默认 Headless、通用设置与新会话默认值都排除此 integration。[Headless 调用者入口](2026-10-18-headless-auto-review.zh.md)定义显式 headless 启用方式与不依赖传输的 user-source 权威。
 
 每个原生调用与已开始的 PTC `tools.*` inner call 都在 body 前接受一次审查。外层 `run_code` transport 与 PTC 程序内直接 Node 效果不在保证范围内。不提供按工具名豁免、缓存 grant、重试、可配置策略或第二授权检查；拒绝之后的行为由[用户审批兜底决策](2026-09-24-auto-review-user-approval-fallback.zh.md)负责。重复调用也重新审查。
 
@@ -21,12 +21,12 @@ Full access 让有用的项目工作无需反复审批即可继续，但也允�
 | 风险 | 示例 | 决定 |
 | --- | --- | --- |
 | `low` | 普通项目内读写、分析、format／lint／test／build、非破坏性 Git，以及保留调用能证明在本 Session 创建的对象的精确清理 | 允许 |
-| `medium` | 不可逆删除既有状态、force push／历史改写、生产读写／部署、非敏感外部写入／发送，以及权限／安全／系统变更 | 只有当前 human、headless 调用者或直接父级明确授权动作、准确目标与必要范围时才允许 |
+| `medium` | 不可逆删除既有状态、force push／历史改写、生产读写／部署、非敏感外部写入／发送，以及权限／安全／系统变更 | 只有当前用户或直接父级明确授权动作、准确目标与必要范围时才允许 |
 | `high` | 敏感数据跨越当前信任边界外泄及等价 hard-deny 效果 | 拒绝，包括显式请求的动作 |
 
-实际效果不明确或超出已确立范围时按拒绝处理。后续指令只有明确撤销或替换旧指令才能消除冲突；直接父级指令不能覆盖 human 或调用者限制。历史可以证明对象由本会话创建，但不能授权 medium 操作或解除 high 禁令。
+实际效果不明确或超出已确立范围时按拒绝处理。后续指令只有明确撤销或替换旧指令才能消除冲突；直接父级指令不能覆盖 用户限制。历史可以证明对象由本会话创建，但不能授权 medium 操作或解除 high 禁令。
 
-Reviewer 从既有 Session 事实派生权威。Shipped Web human 指令具有 `source.kind === 'user'` 和浏览器 prompt admission 写入的 `rpcId`。Child 初始直接父级 prompt 在其自身既有创建 descriptor 之后识别；后续 `agent-message` 只有 `senderSessionId` 与 `SessionHeader.parentSession` 匹配时才属于直接父级指令。Human 文本定义或替换任务与限制。Headless 调用者角色及其入口标记由 [headless 调用者入口](2026-10-18-headless-auto-review.zh.md)定义。直接父级文本在这些限制内定义 child 任务。项目指令只施加约束；checkpoint 恢复有损语境；图片、附件元数据和历史调用提供事实。Compaction 不会把 checkpoint 提升为已经离开 surface 的原文本所拥有的 human 权威。
+Reviewer 从既有 Session 事实派生权威。`source.kind === 'user'` 的文本定义或替换任务与限制，不区分输入传输。Child 初始直接父级 prompt 在其自身既有创建 descriptor 之后识别；后续 `agent-message` 只有 `senderSessionId` 与 `SessionHeader.parentSession` 匹配时才属于直接父级指令。无法验证的 child 创建 prompt 仍是事实。[User-source 接纳](2026-10-18-headless-auto-review.zh.md)定义调用者与恢复历史的语义。直接父级文本在用户限制内定义 child 任务。项目指令只施加约束；checkpoint 恢复有损语境；图片、附件元数据和历史调用提供事实。Compaction 不会把 checkpoint 提升为已经离开 surface 的原文本所拥有的指令权威。
 
 ### 一次完整 reviewer 请求
 
@@ -37,7 +37,7 @@ Integration 只使用最新 `request/header.config` 的 provider／model 与 shi
 | `REVIEW_POLICY` | 固定分类、来源权威与严格结果规则；allow 后立即以 Full access 执行，没有后续确认 |
 | `ENVIRONMENT` | 仅既有 Session header `cwd` |
 | `PROJECT_INSTRUCTIONS` | 可见项目指令，保留原始来源并赋予约束角色 |
-| `FILTERED_HISTORY` | 当前 compaction surface 中带来源的 human／调用者／直接父级消息、checkpoint、图片／附件事实，以及历史调用名称与日志参数 |
+| `FILTERED_HISTORY` | 当前 compaction surface 中带来源的用户／直接父级消息、checkpoint、图片／附件事实，以及历史调用名称与日志参数 |
 | `PENDING_ACTION` | 工具名称、描述、参数 schema 与解析后的 arguments |
 
 reviewer 从 Session 的完整动作历史构建这两个动作分节：授权是符合 `REVIEW_POLICY` 来源规则的那个更早调用，而重复或冲突的身份必须在整份日志的任何位置都可见，而不是只在近期窗口内可见，因此 Session 投影与有界读取都无法支撑该判定。这次读取使用已废弃的同步 `snapshotEvents()`，并带有行级 `typescript/no-deprecated` 豁免。

@@ -561,7 +561,7 @@ describe('headless stream-json snapshots', () => {
         expect(logs).toHaveLength(1)
         const events = parseJsonl(logs[0]!.content)
         expect(events.find(event => event.type === 'user/message')?.data).toMatchObject({
-          source: { kind: 'user', entrypoint: 'headless' },
+          source: { kind: 'user' },
         })
         expect(events.some(event => event.type === 'approval/asked')).toBe(false)
         expect(events.filter(event => event.type === 'approval/policy').at(-1)?.data).toEqual({ policy: 'never' })
@@ -621,9 +621,9 @@ describe('headless stream-json snapshots', () => {
           expect(logs).toHaveLength(1)
           const events = parseJsonl(logs[0]!.content)
           const sources = events.filter(event => event.type === 'user/message')
-            .map(event => (event.data as { source: { kind: string; entrypoint?: string } }).source)
+            .map(event => (event.data as { source: { kind: string } }).source)
             .filter(source => source.kind === 'user')
-          expect(sources).toEqual([{ kind: 'user', entrypoint: 'headless' }, { kind: 'user', entrypoint: 'headless' }])
+          expect(sources).toEqual([{ kind: 'user' }, { kind: 'user' }])
           expect(events.filter(event => event.type === 'permission/preset').at(-1)?.data).toEqual({ preset: 'auto' })
           expect(events.some(event => event.type === 'approval/asked')).toBe(false)
         },

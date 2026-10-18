@@ -22,8 +22,8 @@ export function apply(ctx: Context, config: Config): void {
       return
     }
     const text = options.messages[0]?.content.find(block => block.type === 'text')?.text ?? ''
-    if (!text.includes('"role": "caller-instruction"') || !text.includes('"entrypoint": "headless"')) {
-      throw new Error('headless task has no caller authority')
+    if (!text.includes('"role": "user-instruction"')) {
+      throw new Error('headless task has no user authority')
     }
     const pending = text.slice(text.indexOf('\n\nPENDING_ACTION\n'))
     const mode = config.mode ?? (pending.includes('denied.txt') ? 'deny'

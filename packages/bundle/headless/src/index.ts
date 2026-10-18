@@ -410,9 +410,7 @@ async function run(ctx: Context, config: Config, io: HeadlessIo): Promise<void> 
     try {
       agent.followup(createUserMessage({
         content: [{ type: 'text', text: task }],
-        source: permissions?.current(agent.session) === 'auto'
-          ? { kind: 'user', entrypoint: 'headless' }
-          : { kind: 'user' },
+        source: { kind: 'user' },
       }))
       const subagents = ctx.get('subagents')
       while (true) {

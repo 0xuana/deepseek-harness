@@ -75,7 +75,6 @@ export const apply = ctx => globalThis.__headlessStartupApply(ctx)
     '    task: !!js ctx.headlessStartup.task',
     '    sessionId: !!js ctx.headlessStartup.sessionId',
     '    json: !!js ctx.headlessStartup.json',
-    '    approvalPolicy: !!js ctx.headlessStartup.approvalPolicy',
     '- id: headless-startup',
     `  name: ${pathToFileURL(join(dir, 'startup.mjs')).href}`,
     '',
@@ -128,10 +127,9 @@ describe('headless command-line provider', () => {
     expect(observed.runnerConfig).toMatchObject({ task: 'do it', sessionId: 'session-exact', json: true })
   })
 
-  it.each(['ask', 'never'])('forwards approval policy %s to the runner', async (policy) => {
-    const { task, observed } = await bootStartup(['--approval-policy', policy, 'do it'])
+  it.each(['ask', 'never'])('publishes approval policy %s', async (policy) => {
+    const { task } = await bootStartup(['--approval-policy', policy, 'do it'])
     expect(task).toMatchObject({ approvalPolicy: policy })
-    expect(observed.runnerConfig).toMatchObject({ approvalPolicy: policy })
   })
 
   it('rejects an unsupported approval policy as a JSON usage error', async () => {
