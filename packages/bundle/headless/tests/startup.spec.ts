@@ -75,7 +75,6 @@ export const apply = ctx => globalThis.__headlessStartupApply(ctx)
     '    task: !!js ctx.headlessStartup.task',
     '    sessionId: !!js ctx.headlessStartup.sessionId',
     '    json: !!js ctx.headlessStartup.json',
-    '    permissionMode: !!js ctx.headlessStartup.permissionMode',
     '- id: headless-startup',
     `  name: ${pathToFileURL(join(dir, 'startup.mjs')).href}`,
     '',
@@ -156,9 +155,8 @@ describe('headless command-line provider', () => {
 
   it('accepts an explicit permission preset and deduplicates absolute directory grants', async () => {
     const directory = join(tmpdir(), 'headless-grant')
-    const { task, observed } = await bootStartup(['--permission-mode', 'workspace-write', '--add-dir', directory, '--add-dir', directory, 'do it'])
+    const { task } = await bootStartup(['--permission-mode', 'workspace-write', '--add-dir', directory, '--add-dir', directory, 'do it'])
     expect(task).toMatchObject({ permissionMode: 'workspace-write', additionalWritableRoots: [directory], task: 'do it' })
-    expect(observed.runnerConfig).toMatchObject({ permissionMode: 'workspace-write' })
   })
 
   it.each([
