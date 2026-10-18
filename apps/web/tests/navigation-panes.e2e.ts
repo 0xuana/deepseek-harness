@@ -31,6 +31,7 @@ const TERMINAL_EXPECTED = join(SNAPSHOT_DIR, 'terminal-card.expected.md')
 const CODE_CARD_DIR = fileURLToPath(new URL('./expected/navigation-panes', import.meta.url))
 const COMMAND_WRAP_EXPECTED = join(CODE_CARD_DIR, 'command-wrap.expected.md')
 const CODE_CARD_EXPECTED = join(CODE_CARD_DIR, 'code-card.expected.md')
+const COPY_MARKDOWN_EXPECTED = join(CODE_CARD_DIR, 'copy-markdown.expected.md')
 const MODE = webSnapshotMode()
 const SEED_ID = 'navigation-panes-web-e2e'
 const EXPORTED_LOG_FILE = `session.v${SESSION_FORMAT_VERSION}.jsonl`
@@ -411,6 +412,43 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
       await observer.close()
     }
   }, 120_000)
+
+  it.skipIf(MODE === 'record')('copies the complete Session as Markdown from the Session Header', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-navigation-copy-markdown'))
+    await ensureSeedOpen(page)
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+    const markdownResponse = page.waitForResponse(response =>
+      response.request().method() === 'GET'
+      && new URL(response.url()).pathname === '/api/session.markdown', { timeout: 30_000 })
+    const copyButton = page.getByRole('button', { name: 'More actions' })
+    await copyButton.click()
+    await page.getByRole('menuitem', { name: 'Copy as Markdown' }).click()
+    const response = await markdownResponse
+    expect(response.status()).toBe(200)
+    expect(response.headers()['content-type']).toBe('text/markdown; charset=utf-8')
+    await page.getByText('Session copied as Markdown.', { exact: true }).waitFor({ timeout: 30_000 })
+
+    const markdown = await page.evaluate(() => navigator.clipboard.readText())
+    const normalized = markdown.split(scaffold.workspaceCwd).join('{{cwd}}')
+    // compareOrRefreshGolden appends its own newline; the clipboard text already ends with exactly one.
+    await compareOrRefreshGolden(COPY_MARKDOWN_EXPECTED, normalized.replace(/\n$/u, ''), MODE)
+    expect(normalized).toContain('# NavScenario: first run bash to')
+    expect(normalized).toContain('> NavScenario: first run bash to print exactly NAVIGATION_OK')
+    expect(normalized).toContain('<details><summary>3 previous messages</summary>')
+    expect(normalized).toContain('**Tool: `bash`**')
+    expect(normalized).toContain('NAVIGATION_OK')
+    expect(normalized).toContain('FIRST_DONE')
+    expect(normalized).toContain('Navigation Summary')
+    expect(normalized).not.toContain('The user wants me to follow')
+    expect(normalized).not.toContain('{{system}}')
+    expect(normalized).not.toContain('request/header')
+    expect(normalized.endsWith('\n')).toBe(true)
+    expect(normalized.endsWith('\n\n')).toBe(false)
+
+    await copyButton.click()
+    expect(await page.getByRole('menuitem', { name: 'Copy as Markdown' }).isDisabled()).toBe(false)
+    await page.keyboard.press('Escape')
+  }, 60_000)
 
   it.skipIf(MODE === 'record')('focuses the ledger by dragging an overview interval', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-navigation-timeline'))

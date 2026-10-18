@@ -1,5 +1,5 @@
 ---
-description: "Web Session-log ZIP export: Host streaming, the authenticated download route, the Session Header action, and the /export command."
+description: "Web Session-log ZIP export and Markdown copy: Host streaming, authenticated routes, Session Header actions, and the /export command."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-session-log-export` lets the Web interface download a session's full history: a `Download session log` menu item under the Session Header's more-actions button and an `/export` slash command both hand the session tree — the session, its sub-sessions, and attachments — to the browser as a ZIP download. The package owns the Host archive stream, its authenticated Fetch route, and the browser controls and feedback. The browser chooses the download destination. Setup and usage come first; implementation details follow.
+`dsh-session-log-export` lets the Web interface export a session's complete history. The Session Header's more-actions menu offers `Copy as Markdown` and `Download session log`; an `/export` slash command also starts the ZIP download. The ZIP contains the session, its sub-sessions, and attachments. The package owns both authenticated Host routes, the Markdown transcript formatter, and the browser controls and feedback. The browser chooses the download destination and owns the clipboard. Setup and usage come first; implementation details follow.
 
 ## Table of Contents
 
@@ -25,9 +25,17 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Use this package when the Web bundle should let users export a session log. It requires Connection, the command registry, Session query and persistence, and attachments. Mount the plugin, then choose `Download session log` from the Session Header's more-actions menu or type `/export`; the browser downloads `dsh-session-<id>.zip`.
+Use this package when the Web bundle should let users export a session log. It requires Connection, the command registry, Session query and persistence, and attachments. Mount the plugin, then choose `Copy as Markdown` or `Download session log` from the Session Header's more-actions menu, or type `/export`; the browser copies the transcript or downloads `dsh-session-<id>.zip`.
 
-When `ui-message-feedback` is mounted, the same menu also offers `Feedback`, which opens its existing Session feedback dialog. Opening or dismissing that form does not export the Session or submit feedback. The feedback row follows the feedback plugin's availability; export remains available independently.
+### Copy as Markdown
+
+`Copy as Markdown` copies the complete selected Session, including history that the client has not loaded, as portable Markdown. The transcript starts with the latest log-backed title. Human user messages are blockquotes in chronological order, final assistant replies remain ordinary Markdown, and earlier assistant commentary and tool activity in each turn are folded into a collapsible `<details>` section before that turn's final reply. A turn whose last committed assistant message carries tool calls has no final reply, so all of its activity stays folded. An incomplete turn renders the committed messages it has.
+
+The formatter reads the committed raw log, so a compaction surface replacement never removes earlier messages, and fork-inherited history appears once. Reasoning blocks, system and developer messages, injected user-role context whose source kind is not `user`, request headers and context, and runtime records are omitted. Images and files become readable labels; attachment bytes and authentication links never enter the transcript. The text ends with exactly one newline.
+
+The clipboard is one browser-wide destination, so this plugin instance runs one copy at a time. A request made while a copy is pending joins that operation and keeps the first click's Session. Every Session Header disables its copy row until the operation settles, then restores it. A success or failure toast is shown through the root overlay, so it survives the menu closing or the Session changing.
+
+When `ui-message-feedback` is mounted, the same menu also offers `Feedback`, which opens its existing Session feedback dialog. Opening or dismissing that form does not export the Session or submit feedback. The feedback row follows the feedback plugin's availability; both export actions remain available independently.
 
 ### When to choose it
 
@@ -63,7 +71,7 @@ Attachment collection reads declared content fields of built-in Session events a
 
 ### Failures
 
-The dialog shows a preparation error when the preflight fails before ZIP streaming starts — for example an unreachable or misconfigured host endpoint. A descendant or attachment read failure after the browser accepts the GET is reported by the browser download manager, not by the dialog.
+The dialog shows a preparation error when the preflight fails before ZIP streaming starts — for example an unreachable or misconfigured host endpoint. A descendant or attachment read failure after the browser accepts the GET is reported by the browser download manager, not by the dialog. A Markdown copy reports a failure toast when the Host route is unavailable or the browser rejects clipboard access; it never reports success for a partial or missing transcript.
 
 -----
 
@@ -77,7 +85,7 @@ This section explains how the package wires the export control and points at the
 
 ### Design split
 
-The package has two halves. The Host half ([`src/index.ts`](src/index.ts)) registers the `/export` command and contributes the exact `GET`/`HEAD /api/session.export` Fetch route to Connection; [`src/archive.ts`](src/archive.ts) builds the bounded ZIP stream. The browser half ([`src/client/index.ts`](src/client/index.ts)) provides the shared download controller and UI, and observes `command/executed` so only the submitting browser starts a download.
+The package has two halves. The Host half ([`src/index.ts`](src/index.ts)) registers the `/export` command and contributes the exact `GET`/`HEAD /api/session.export` and `/api/session.markdown` Fetch routes to Connection; [`src/archive.ts`](src/archive.ts) builds the bounded ZIP stream, and [`src/markdown.ts`](src/markdown.ts) renders the Markdown transcript. The browser half ([`src/client/index.ts`](src/client/index.ts)) provides the shared download and Markdown copy controllers and UI, and observes `command/executed` so only the submitting browser starts a download.
 
 The Header’s More action uses the shared compact Button, with a 28px square target and the same radius and hover fill as the right-sidebar expand control.
 
@@ -86,6 +94,12 @@ The Header’s More action uses the shared compact Button, with a 28px square ta
 Both entry paths issue a `HEAD` preflight to the document-relative `api/session.export?...`, then hand the GET route to the browser download manager without buffering the ZIP in JavaScript. One controller owns one in-flight download per session, collapses concurrent gestures into that operation, and cancels the preflight on plugin disposal. Modal state lives in a snapshot store keyed by session, so the button and the command share one dialog per session.
 
 The Host route is a feature-owned exact Fetch contribution. Connection applies its Host/Origin and browser-session checks and bridges the streaming `Response`; this package owns query validation, live-session flushes, handle-based log reads and attachment reads, ZIP generation, and HTTP status semantics.
+
+### Markdown copy flow
+
+The Header asks the Markdown copy controller for the clicked Session. The controller fetches the document-relative `api/session.markdown?sessionId=<id>` route and writes the response text with the shared clipboard helper. The Host route reads the complete live-preferred logical log through `ctx.sessionQuery.readSession`, folds the latest title through the same query service, and passes the raw events to the pure formatter. The read is a detached export observation: it creates no Agent, retains no Session, and writes no Session data. It answers 404 for an absent Session and a sanitized 500 for every other read failure.
+
+The controller holds one pending operation and one `shell.overlay` toast entry. A second Header request joins the pending operation, so the clipboard and its success notice always describe the first click's Session. Disposal aborts the fetch and suppresses a late clipboard write or notice.
 
 </details>
 
@@ -106,19 +120,19 @@ Read these pages when the package-level contract is not enough. They move from t
 <a id="model-experience"></a>
 ## Model Experience
 
-### Human `/export` control
+### Human export and copy controls
 
 #### What the model sees
 
-Nothing. `/export` stays on the human-command plane, and the ZIP download does not enter model history.
+Nothing. `/export` stays on the human-command plane, and the ZIP download does not enter model history. The Markdown copy action is also human-only: it reads the committed log, writes the browser clipboard, and appends no Session event.
 
 #### Token effect
 
-Zero. The command creates no model turn.
+Zero. The command creates no model turn, and neither export control changes a request.
 
 #### KV Cache effect
 
-None. The log-only command lifecycle and browser download do not change the derived request prefix.
+None. The log-only command lifecycle, browser download, and clipboard write do not change the derived request prefix.
 
 ## Known Limitations and Deferred Work
 
@@ -129,6 +143,7 @@ These limits define when this package is a poor fit or needs special operational
 
 - **Browser download, not a Host-path writer** — the browser chooses the local destination; no Host path or native folder action is returned.
 - **Preflight reports only pre-stream failures** — a descendant or attachment failure after the browser accepts the GET is reported by the browser download manager, not by the dialog.
+- **Markdown contains committed history only** — an unsettled live token chunk has no committed text, so it is absent from the copied transcript. Compaction and fork inheritance follow the raw log rather than the current model context.
 
 <a id="dev-note"></a>
 ### Dev Note

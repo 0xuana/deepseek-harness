@@ -1,5 +1,5 @@
 ---
-description: "Web 会话日志 ZIP 导出：Host 流式传输、认证下载路由、Session Header 操作与 /export 命令。"
+description: "Web 会话日志 ZIP 导出与 Markdown 复制：Host 流式传输、认证路由、Session Header 操作与 /export 命令。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-session-log-export` 让 Web 界面可以下载会话的完整历史：Session Header 更多操作按钮下的 `下载 Session 日志` 菜单项与 `/export` 斜杠命令都会把会话树——会话本身、其子会话与附件——作为 ZIP 交给浏览器下载。本包拥有 Host 归档流、经过认证的 Fetch 路由以及浏览器控件和反馈。下载目标位置由浏览器选择。设置与用法在前，随后说明实现细节。
+`dsh-session-log-export` 让 Web 界面导出会话的完整历史。Session Header 的更多操作菜单提供 `复制为 Markdown` 与 `下载 Session 日志`；`/export` 斜杠命令也会启动 ZIP 下载。ZIP 包含会话本身、其子会话与附件。本包拥有两条经过认证的 Host 路由、Markdown 记录格式化器以及浏览器控件和反馈。下载目标位置由浏览器选择，剪贴板由浏览器持有。设置与用法在前，随后说明实现细节。
 
 ## 目录
 
@@ -25,9 +25,17 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-当 Web bundle 需要让用户导出会话日志时使用本包。它需要 Connection、命令注册表、Session 查询与持久化以及附件服务。挂载插件，然后在 Session Header 的更多操作菜单中选择 `下载 Session 日志` 或输入 `/export`；浏览器会下载 `dsh-session-<id>.zip`。
+当 Web bundle 需要让用户导出会话日志时使用本包。它需要 Connection、命令注册表、Session 查询与持久化以及附件服务。挂载插件，然后在 Session Header 的更多操作菜单中选择 `复制为 Markdown` 或 `下载 Session 日志`，或输入 `/export`；浏览器会复制记录或下载 `dsh-session-<id>.zip`。
 
-挂载 `ui-message-feedback` 时，同一菜单还提供“反馈”，打开已有的 Session 反馈弹窗。打开或关闭该弹窗不会导出 Session 或提交反馈。反馈入口随反馈插件的可用状态显示；导出功能保持独立可用。
+### 复制为 Markdown
+
+`复制为 Markdown` 会把选中的完整 Session 复制为可移植 Markdown，包括客户端尚未加载的历史。记录以最新的日志标题开头。人类用户消息按时间顺序作为引用块，最终的 assistant 回复保持普通 Markdown，每轮中较早的 assistant 说明与工具活动折叠到该轮最终回复之前的 `<details>` 区段。若一轮中最后一条已提交 assistant 消息带有工具调用，该轮没有最终回复，全部活动保持折叠。未完成的一轮渲染其已提交的消息。
+
+格式化器读取已提交的原始日志，因此压缩产生的表面替换不会移除较早消息，fork 继承的历史只出现一次。推理块、system 与 developer 消息、source kind 不是 `user` 的注入用户角色上下文、请求头与上下文以及运行时记录都会被省略。图片与文件变成可读标签；附件字节与认证链接不会进入记录。文本以恰好一个换行结尾。
+
+剪贴板是浏览器范围的唯一目标，因此本插件实例一次只运行一项复制。复制进行中到达的请求会加入该操作，并保留第一次点击的 Session。所有 Session Header 在操作结束前禁用各自的复制行，结束后恢复。成功或失败浮层通过根 overlay 显示，因此菜单关闭或 Session 切换后仍然存在。
+
+挂载 `ui-message-feedback` 时，同一菜单还提供“反馈”，打开已有的 Session 反馈弹窗。打开或关闭该弹窗不会导出 Session 或提交反馈。反馈入口随反馈插件的可用状态显示；两个导出操作保持独立可用。
 
 ### 何时选择
 
@@ -63,7 +71,7 @@ Web bundle 将本包与 Connection、`dsh-commands`、`dsh-client-ui-commands` �
 
 ### 失败
 
-当 ZIP 流式传输开始前的预检失败时——例如 Host 端点不可达或配置错误——弹窗显示准备阶段错误。浏览器接受 GET 后发生的子会话或附件读取失败由浏览器下载管理器报告，不通过弹窗报告。
+当 ZIP 流式传输开始前的预检失败时——例如 Host 端点不可达或配置错误——弹窗显示准备阶段错误。浏览器接受 GET 后发生的子会话或附件读取失败由浏览器下载管理器报告，不通过弹窗报告。Host 路由不可用或浏览器拒绝剪贴板访问时，Markdown 复制显示失败浮层；它不会为不完整或缺失的记录报告成功。
 
 -----
 
@@ -77,7 +85,7 @@ Web bundle 将本包与 Connection、`dsh-commands`、`dsh-client-ui-commands` �
 
 ### 设计拆分
 
-本包分为两部分。Host 半包（[`src/index.ts`](src/index.ts)）注册 `/export` 命令，并向 Connection 贡献精确的 `GET`/`HEAD /api/session.export` Fetch 路由；[`src/archive.ts`](src/archive.ts) 构建有界 ZIP 流。浏览器半包（[`src/client/index.ts`](src/client/index.ts)）提供共享下载控制器和 UI，并观察 `command/executed`，因此只有提交命令的浏览器会启动下载。
+本包分为两部分。Host 半包（[`src/index.ts`](src/index.ts)）注册 `/export` 命令，并向 Connection 贡献精确的 `GET`/`HEAD /api/session.export` 与 `/api/session.markdown` Fetch 路由；[`src/archive.ts`](src/archive.ts) 构建有界 ZIP 流，[`src/markdown.ts`](src/markdown.ts) 渲染 Markdown 记录。浏览器半包（[`src/client/index.ts`](src/client/index.ts)）提供共享下载与 Markdown 复制控制器和 UI，并观察 `command/executed`，因此只有提交命令的浏览器会启动下载。
 
 Header 的更多操作入口使用公共紧凑 Button，点击区域为 28px 正方形，与右侧栏展开控件共用圆角和 hover 底色。
 
@@ -86,6 +94,12 @@ Header 的更多操作入口使用公共紧凑 Button，点击区域为 28px 正
 两条入口都会先向文档相对的 `api/session.export?...` 发出 `HEAD` 预检请求，然后把 GET 路由交给浏览器下载管理器，JavaScript 不缓冲 ZIP。一个控制器按会话持有一项进行中的下载，把并发操作折叠进该任务，并在插件释放时取消预检。弹窗状态存放在按会话键控的快照存储中，因此按钮与命令按会话共享一个弹窗。
 
 Host 路由是由该功能拥有的精确 Fetch 路由贡献。Connection 应用 Host/Origin 与浏览器会话检查并桥接流式 `Response`；本包拥有查询校验、活动会话 flush、基于句柄的日志读取与附件读取、ZIP 生成和 HTTP 状态语义。
+
+### Markdown 复制流程
+
+Header 向 Markdown 复制控制器请求被点击的 Session。控制器读取文档相对的 `api/session.markdown?sessionId=<id>` 路由，并用共享剪贴板助手写入响应文本。Host 路由通过 `ctx.sessionQuery.readSession` 读取完整的 live-preferred 逻辑日志，通过同一查询服务折叠最新标题，再把原始事件交给纯格式化器。该读取是分离的导出观察：不创建 Agent、不保留 Session，也不写入 Session 数据。Session 不存在时返回 404，其他读取失败返回经过清理的 500。
+
+控制器持有一个进行中的操作和一个 `shell.overlay` 浮层条目。第二个 Header 请求加入该进行中的操作，因此剪贴板及其成功提示始终描述第一次点击的 Session。释放时中止请求，并抑制迟到的剪贴板写入或提示。
 
 </details>
 
@@ -106,19 +120,19 @@ Host 路由是由该功能拥有的精确 Fetch 路由贡献。Connection 应用
 <a id="model-experience"></a>
 ## 模型体验
 
-### 用户 `/export` 控制
+### 用户导出与复制控制
 
 #### 模型看到什么
 
-无。`/export` 留在用户命令平面，ZIP 下载不会进入模型历史。
+无。`/export` 留在用户命令平面，ZIP 下载不会进入模型历史。Markdown 复制操作同样只属于人类：它读取已提交日志、写入浏览器剪贴板，且不追加 Session 事件。
 
 #### Token 影响
 
-为零。该命令不创建模型轮次。
+为零。该命令不创建模型轮次，两个导出控件也不会改变请求。
 
 #### KV Cache 影响
 
-无。仅日志命令生命周期与浏览器下载不会改变派生请求前缀。
+无。仅日志命令生命周期、浏览器下载与剪贴板写入不会改变派生请求前缀。
 
 ## 已知限制与延期工作
 
@@ -129,6 +143,7 @@ Host 路由是由该功能拥有的精确 Fetch 路由贡献。Connection 应用
 
 - **浏览器下载，而非 Host 路径写入**——目标位置由浏览器选择；不会返回 Host 路径或原生文件夹操作。
 - **预检只报告流式传输前的失败**——浏览器接受 GET 后发生的子会话或附件读取失败由浏览器下载管理器报告，不通过弹窗报告。
+- **Markdown 只包含已提交历史**——未稳定的实时 token 分块没有已提交文本，因此不会出现在复制的记录中。压缩与 fork 继承遵循原始日志，而非当前模型上下文。
 
 <a id="dev-note"></a>
 ### 开发备注
