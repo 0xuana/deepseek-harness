@@ -117,7 +117,7 @@ The first request and each effective policy change append a full runtime-context
 ##### Ask-policy contribution
 
 ```markdown
-Approval policy: ask. Operations that require approval may ask through the configured answerers; without an available answerer, the request fails closed.
+Approval prompts are enabled in this session: operations that require approval may ask through the configured answerers; without an available answerer, the request fails closed.
 ```
 
 ##### Never-policy contribution

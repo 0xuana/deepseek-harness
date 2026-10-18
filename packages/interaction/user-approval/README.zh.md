@@ -117,7 +117,7 @@ kind: "package-reference"
 ##### Ask 策略贡献
 
 ```markdown
-Approval policy: ask. Operations that require approval may ask through the configured answerers; without an available answerer, the request fails closed.
+Approval prompts are enabled in this session: operations that require approval may ask through the configured answerers; without an available answerer, the request fails closed.
 ```
 
 ##### Never 策略贡献
