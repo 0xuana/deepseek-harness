@@ -33,7 +33,7 @@ The startup provider binds stdin EOF to the launcher's bounded successful shutdo
 
 The SDK uses the base `read`, `write`, and `edit` defaults. To add `str_replace_editor`, use the explicit insertion patch in the [base configuration guide](../base/README.md#use-this-package). The standalone `sdk-minimal` profile owns its separate tool selection.
 
-The packaged Python runtime enables the [Office runtime query and skills](../../skill/tool-workspace-dependencies/README.md#use-this-package) by default. `DSH_PRIMARY_RUNTIME` overrides its bundled payload; an empty value disables both rows. Source launches without a carrier default remain opt-in. The tool reads the payload in place. Profile patches can disable `skill-office` or replace its `assetRoot` independently of `workspace-dependencies`; filesystem skills with the same name take precedence over bundled skills. See the [runtime package](../../../python/sdk-runtime/README.md) for packaging and configuration.
+The Python runtime exposes explicitly downloaded authoring resources and Office sidecars to this profile. `DSH_PRIMARY_RUNTIME` overrides the authoring payload; an empty value disables its query. Office skills can use either resource independently. Profile patches can disable `skill-office` or replace its `assetRoot` independently of `workspace-dependencies`; filesystem skills with the same name take precedence. See the [runtime package](../../../python/sdk-runtime/README.md) for downloads and configuration.
 
 -----
 
@@ -44,11 +44,11 @@ The packaged Python runtime enables the [Office runtime query and skills](../../
 
 #### What the model sees
 
-The profile inherits the base system prompt, including the `You are an AI agent powered by DeepSeek Harness.` identity, without adding a task-specific persona. Each Session receives its current directory in required user-role context from [`dsh-working-directory`](../../session/working-directory/README.md). Default file tool schemas include `read`, `write`, and `edit`; they omit `str_replace_editor`.
+The profile inherits the base system prompt, including the `You are an AI agent powered by DeepSeek Harness.` identity, and adds the same model-interpolated coding persona as the Web and headless profiles. Each Session receives its current directory in required user-role context from [`dsh-working-directory`](../../session/working-directory/README.md). Default file tool schemas include `read`, `write`, and `edit`; they omit `str_replace_editor`.
 
 #### Token effect
 
-The base prompt sections and selected tool schemas determine token usage; this profile adds no persona text.
+The base prompt sections and selected tool schemas determine token usage; this profile adds one coding-persona sentence.
 
 #### KV Cache effect
 

@@ -484,6 +484,7 @@ const EXPECTED_TOOLS = [
   'job_list',
   'job_output',
   'list_agents',
+  'list_subagent_models',
   'present',
   'read',
   'read_image',
@@ -689,9 +690,13 @@ it('lets a preset producer reach the background-job registry', async () => {
       },
       agent: handle.agent,
     })
+    const reported = started.content.map(block => block.type === 'text' ? block.text : '').join('')
+    const matched = /^started background job (bash-[0-9a-f]{16})$/.exec(reported)
+    if (matched === null) throw new Error(`background bash reported no job id: ${reported}`)
+    const jobId = matched[1]
     expect({ isError: started.isError, content: started.content }).toEqual({
       isError: false,
-      content: [{ type: 'text', text: 'started background job bash-1' }],
+      content: [{ type: 'text', text: `started background job ${jobId}` }],
     })
 
     // The controller reads what the producer started: same registry, one
@@ -704,9 +709,8 @@ it('lets a preset producer reach the background-job registry', async () => {
       agent: handle.agent,
     })
     expect(listed.isError).toBe(false)
-    expect(listed.content).toEqual([
-      { type: 'text', text: expect.stringContaining('bash-1 [bash]') as unknown as string },
-    ])
+    expect(listed.content).toHaveLength(1)
+    expect(listed.content[0]?.type === 'text' ? listed.content[0].text : '').toContain(`${jobId} [bash]`)
 
     // The full round trip: the output a host-plane producer wrote is collected
     // through a preset-plane control, which is the linkage the realm severed.
@@ -714,7 +718,7 @@ it('lets a preset producer reach the background-job registry', async () => {
       signal,
       callId: ToolCallId('shipped-task-output'),
       name: 'job_output',
-      arguments: { job_id: 'bash-1', wait: true },
+      arguments: { job_id: jobId, wait: true },
       agent: handle.agent,
     })
     expect(collected.isError).toBe(false)
@@ -979,11 +983,11 @@ it('reviews initially authorized, restricted, and cold-resumed child calls indep
       return found
     }
     expect(historyRole(review('subagent', AUTO_PARENT_AUTHORIZED), AUTO_PARENT_AUTHORIZED))
-      .toBe('human-instruction')
+      .toBe('user-instruction')
     expect(historyRole(review('subagent', AUTO_PARENT_CONTINUABLE), AUTO_PARENT_CONTINUABLE))
-      .toBe('human-instruction')
+      .toBe('user-instruction')
     expect(historyRole(review('send_message', AUTO_PARENT_ADJUST), AUTO_PARENT_ADJUST))
-      .toBe('human-instruction')
+      .toBe('user-instruction')
     expect(historyRole(review('bash', AUTO_CHILD_AUTHORIZED), AUTO_CHILD_AUTHORIZED))
       .toBe('direct-parent-instruction')
     expect(historyRole(review('bash', AUTO_CHILD_CONTINUABLE), AUTO_CHILD_CONTINUABLE))
