@@ -7,7 +7,8 @@ import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-title'
 import { brandNumber, brandString } from '@deepseek-ai/dsh-brand'
 import { describe, expect, it, vi } from 'vitest'
-import { SESSION_MARKDOWN_EXPORT_PATH, apply, inject } from '../src/index.ts'
+import { apply, inject } from '../src/index.ts'
+import { SESSION_MARKDOWN_EXPORT_PATH } from '../src/routes.ts'
 
 const SESSION_ID = 'session-markdown-route' as SessionId
 

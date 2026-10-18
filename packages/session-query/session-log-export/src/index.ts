@@ -42,7 +42,7 @@ export type {
 export const name = 'session-log-download'
 export const inject = ['commands', 'connection']
 
-export { SESSION_LOG_EXPORT_PATH, SESSION_MARKDOWN_EXPORT_PATH } from './routes.ts'
+export { SESSION_LOG_EXPORT_PATH } from './routes.ts'
 
 /** Session-log archive policy. */
 export interface Config {
