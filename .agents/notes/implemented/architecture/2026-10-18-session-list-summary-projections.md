@@ -1,0 +1,48 @@
+# Agent Note: Serve Session-list rows from a summary key set
+
+Status: implemented
+
+English | [中文](2026-10-18-session-list-summary-projections.zh.md)
+
+## Problem
+
+A Session-list row carries every registered client view. Three of those views are never rendered by a row: the whole-log turn outline, the whole-log conversation figures, and the current todo list. The outline grows with the Session's log, so a list payload scales with corpus size and log length even though no row shows it. Omitting values from the list needs a rule that keeps the wire and client types honest: a caller must not be able to request an omitted key, a value that is omitted must still reach an opened Session, and the owning packages must not drift from whatever declaration drives the omission.
+
+## Decision
+
+The Session summary is every registered client view except the keys whose `SessionProjectionMap` entry carries the summary-exclusion mark.
+
+- [`packages/session/session-projection/src/types.ts`](../../../../packages/session/session-projection/src/types.ts) declares the type-only mark `SessionProjectionSummaryExcluded<T>` over a unique symbol that is never exported and never present at runtime. `SessionProjectionViewValue<T>` strips it distributively, so a nullable entry keeps its `null`; `SessionProjectionSummaryExcludedKey` tests the non-nullish part; `SessionProjectionSummaryValues` is every view value minus those keys.
+- Each owning package wraps only its own map entry: `turnOutline` (session-turn-outline), `sessionStats` (session-stats), and `todos` (tool-todo). The todo entry is `SessionProjectionSummaryExcluded<TodoItem[]> | null`, because an intersection with `null` would absorb the null member.
+- Registration is an interlock: `ProjectionDefinition.wire` requires `summary: false` exactly when the key's map entry carries the mark, and accepts only `summary?: never` otherwise. The single runtime erasure of the mark is the wire erasure in `SessionProjectionRegistry.register`, which stores whether the unit belongs to summaries.
+- [`packages/session/session-projection/src/index.ts`](../../../../packages/session/session-projection/src/index.ts) exposes `summaryKeys(): ReadonlySet<key>`, derived from the live registrations and rebuilt only when a new key registers or a key's last registrant disposes. `cachedSnapshot`, `viewCheckpoint`, and `snapshot` accept `ProjectionKeySelection` (`readonly Key[] | ReadonlySet<Key>`) and use a passed set as-is.
+- [`packages/session/session-projection-cache/src/index.ts`](../../../../packages/session/session-projection-cache/src/index.ts) forwards that selection unchanged, and [`packages/api/session-controller/src/list.ts`](../../../../packages/api/session-controller/src/list.ts) passes `summaryKeys()` to the live and cold cached faces. `cachedPredecessorTitle` keeps its title-only read.
+- Client types only: `SessionSummary.projectionValues` narrows to `Partial<SessionProjectionSummaryValues>`, while `SessionProjectionSnapshot.values` keeps every view value. No wire field, function, or UI name changes, and an opened Session still receives every key through `session/follow`, the control baseline, and `session.projections`.
+
+Estimated effect: with logs whose outlines dominate the projection payload, the three keys are estimated at roughly 60% of a Session-list response for a few hundred Sessions — the outline alone near 57% and the figures and todo list near 5% together — and at roughly 85% of the same response after transport compression, where the outline's unique text barely compresses while the remaining keys do.
+
+## Alternatives considered
+
+**A summary-specific read face per source** (`viewSummaryRecord` for checkpoint rows and `cachedSummarySnapshot` for live cells). Rejected: the summary key set would then be defined and carried by two read faces plus their call sites, and a caller could still pass explicit keys to the complete faces. The derived set plus the existing key-taking faces keeps one definition, one code path, and no per-read key copy.
+
+**A hardcoded excluded-key list in the session controller.** Rejected: the list would drift from the owning packages, and nothing would fail when a package renamed a key or added a large value.
+
+**Filtering keys after the complete block is built.** Rejected: the per-row state parse and view work would still happen, and the wire type would keep claiming the excluded keys are present.
+
+**Making every projection opt in to summaries.** Rejected: it inverts today's default, requires touching every owning package, and silently drops a new large key from summaries whenever a package forgets to opt in.
+
+**A lazy per-value read for large projections.** Rejected: rows do not need the values at all, and deferring one value per row adds a request shape and loading states the list never had.
+
+## Consequences
+
+Bought: a list response no longer scales with outline length or log count, the excluded keys cannot be requested by name, and reading an excluded key from a list row is a type error. The registration interlock makes a marked key without `summary: false` (and the reverse) a compile error rather than a review finding.
+
+Paid: `ProjectionKeySelection` is a new public signature type and `ReadonlySet` joins the catalog's foundation types; `summaryKeys()` has two invalidation points (a new key, the last disposer) that a future registration path must not miss; the summary key set, like the unit table, is process-wide, so a key excluded by one preset is excluded for every Session; and a nullable value cannot be marked directly — its `null` must stay outside the wrapper.
+
+## Testing
+
+- [`packages/api/session-controller/tests/summary-list.host.spec.ts`](../../../../packages/api/session-controller/tests/summary-list.host.spec.ts): a list row's keys equal the registry's complete snapshot minus the three, a `session/follow` opening snapshot still carries the three with equal values, and two consecutive pulls do not re-add them.
+- [`packages/session/session-projection/tests/summary.spec.ts`](../../../../packages/session/session-projection/tests/summary.spec.ts): the derived set, its stable identity, its rebuild after registration and disposal, summary-shaped reads through the key-taking faces, an empty summary set, and the nullable mark.
+- [`packages/session/session-projection-cache/tests/cache.spec.ts`](../../../../packages/session/session-projection-cache/tests/cache.spec.ts): a summary read from stored rows omits the marked key and takes its watermark from the served rows only.
+- [`packages/api/session-controller/tests/summary-types.client.spec.ts`](../../../../packages/api/session-controller/tests/summary-types.client.spec.ts): `@ts-expect-error` reads of the three keys on `SessionSummary.projectionValues`, with the full snapshot still exposing them and `todos` still nullable.
+- [`packages/api/session-controller/tests/manager.client.spec.ts`](../../../../packages/api/session-controller/tests/manager.client.spec.ts): a reconnect refresh replaces the row block, so a stale excluded key does not survive.
