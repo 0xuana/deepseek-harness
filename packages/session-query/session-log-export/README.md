@@ -39,7 +39,7 @@ When `ui-message-feedback` is mounted, the same menu also offers `Feedback`, whi
 
 ### When to choose it
 
-Choose it for a Web deployment that needs user-facing session export with a visible download dialog. Avoid it when a programmatic or Host-side export is needed: this package produces a browser download, not a Host path write. The logs are serialized from persistence read handles, so any mounted backend is supported.
+Choose it for a Web deployment that needs user-facing session export: a readable Markdown transcript for copying and a ZIP archive for downloading. Avoid it when a programmatic or Host-side export is needed: both operations keep the result in the browser, not a Host path write. The logs are serialized from persistence read handles, so any mounted backend is supported.
 
 ### Composition
 
@@ -97,7 +97,7 @@ The Host route is a feature-owned exact Fetch contribution. Connection applies i
 
 ### Markdown copy flow
 
-The Header asks the Markdown copy controller for the clicked Session. The controller starts a deferred `ClipboardItem` write synchronously when the host supports it, then fetches the document-relative `api/session.markdown?sessionId=<id>` route; otherwise it fetches first and uses the shared clipboard helper. The Host route reads the complete live-preferred logical log through `ctx.sessionQuery.readSession`, folds the latest title from the same returned events with `foldSessionTitle`, and passes the events to the pure formatter. The read is a detached export observation: it creates no Agent, retains no Session, and writes no Session data. It answers 404 for an absent Session and a sanitized 500 for every other read failure.
+The Header asks the Markdown copy controller for the clicked Session. During the click, the controller requests the deferred `ClipboardItem` write while it loads the document-relative `api/session.markdown?sessionId=<id>` route; other hosts fall back to the shared clipboard helper after preparation. The Host route reads the complete live-preferred logical log through `ctx.sessionQuery.readSession` and takes the latest `session/title` event's title field from that same snapshot before passing the events to the pure formatter. The read is a detached export observation: it creates no Agent, retains no Session, and writes no Session data. It answers 404 for an absent Session and a sanitized 500 for every other read failure.
 
 The controller holds one pending operation and one `shell.overlay` toast entry. A second Header request joins the pending operation, so the clipboard and its notice always describe the first click's Session. Both the preparation promise and the admitted clipboard write are observed; every rejection is contained. Disposal aborts the read, prevents later text from reaching the promised Blob, suppresses notices, and awaits admitted clipboard work.
 

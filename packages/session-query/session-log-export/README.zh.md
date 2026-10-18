@@ -31,15 +31,15 @@ kind: "package-reference"
 
 `复制为 Markdown` 会把选中的完整 Session 复制为可移植 Markdown，包括客户端尚未加载的历史。记录以最新的日志标题开头。人类用户消息按时间顺序作为引用块，最终的 assistant 回复保持普通 Markdown，每轮中较早的 assistant 说明与工具活动折叠到该轮最终回复之前的 `<details>` 区段。若一轮中最后一条已提交 assistant 消息带有工具调用，该轮没有最终回复，全部活动保持折叠。未完成的一轮渲染其已提交的消息。仅导出 append 消息事件。未完成的 assistant 代码围栏会在消息边界闭合，四空格或制表符缩进的代码保留缩进。
 
-格式化器读取已提交的原始日志，因此压缩产生的表面替换不会移除较早消息，fork 继承的历史只出现一次。标题与正文来自同一个 `readSession` 快照。只复制选中的 Session 及其继承前缀；子会话日志仍只由 ZIP 导出。推理块、system 与 developer 消息、source kind 不是 `user` 的注入用户角色上下文、请求头与上下文以及运行时记录都会被省略。图片与文件变成可读标签；附件字节与认证链接不会进入记录。`Assistant`、`Tool` 和附件占位符等结构性标签有意使用英文；原始消息文本保持不变。文本以恰好一个换行结尾。
+格式化器读取已提交的原始日志，因此压缩产生的表层替换不会移除较早消息，fork 继承的历史只出现一次。标题与正文来自同一个 `readSession` 快照。只复制选中的 Session 及其继承前缀；子会话日志仍只由 ZIP 导出。推理块、system 与 developer 消息、source kind 不是 `user` 的注入用户角色上下文、请求头与上下文以及运行时记录都会被省略。图片与文件变成可读标签；附件字节与认证链接不会进入记录。`Assistant`、`Tool` 和附件占位符等结构性标签有意使用英文；原始消息文本保持不变。文本以恰好一个换行结尾。
 
-剪贴板是浏览器范围的唯一目标，因此本插件实例一次只运行一项复制。在支持 `ClipboardItem` 与 `navigator.clipboard.write` 的宿主上，写入会在点击时同步开始，并以承诺的 `text/plain` Blob 在读取记录期间继续；其他宿主在准备完成后回退到共享剪贴板助手。复制进行中到达的请求会加入该操作，并保留第一次点击的 Session。所有 Session Header 通过 `aria-busy` 反映复制状态，并在操作结束前禁用各自的复制行。成功、准备失败或剪贴板失败通过根 overlay 浮层反馈。释放会中止读取，并阻止后续文本进入 Blob；操作系统已经接受的剪贴板写入无法回滚。
+剪贴板是浏览器范围的唯一目标，因此本插件实例一次只运行一项复制。在支持 `ClipboardItem` 与 `navigator.clipboard.write` 的宿主上，控制器会在点击时请求延迟的 `ClipboardItem` 写入，同时加载文档相对的 `api/session.markdown?sessionId=<id>` 路由；其他宿主在准备完成后回退到共享剪贴板助手。复制进行中到达的请求会加入该操作，并保留第一次点击的 Session。所有 Session Header 通过 `aria-busy` 反映复制状态，并在操作结束前禁用各自的复制行。成功、准备失败或剪贴板失败通过根 overlay 浮层反馈。释放会中止读取，并阻止后续文本进入由 Promise 提供的 Blob；操作系统已经接受的剪贴板写入无法回滚。
 
 挂载 `ui-message-feedback` 时，同一菜单还提供“反馈”，打开已有的 Session 反馈弹窗。打开或关闭该弹窗不会导出 Session 或提交反馈。反馈入口随反馈插件的可用状态显示；两个导出操作保持独立可用。
 
 ### 何时选择
 
-为需要带可见下载弹窗的面向用户的会话导出的 Web 部署选择它。需要程序化或 Host 侧导出时避免使用：本包产生的是浏览器下载，而非 Host 路径写入。日志从持久化读句柄序列化而来，因此任何已挂载后端都受支持。
+为需要面向用户的会话导出——复制可读的 Markdown 记录与下载 ZIP 归档——的 Web 部署选择它。需要程序化或 Host 侧导出时避免使用：两个操作都把结果留在浏览器中，而非写入 Host 路径。日志从持久化读句柄序列化而来，因此任何已挂载后端都受支持。
 
 ### 组合
 
@@ -97,9 +97,9 @@ Host 路由是由该功能拥有的精确 Fetch 路由贡献。Connection 应用
 
 ### Markdown 复制流程
 
-Header 向 Markdown 复制控制器请求被点击的 Session。宿主支持时，控制器同步开始延迟的 `ClipboardItem` 写入，然后读取文档相对的 `api/session.markdown?sessionId=<id>` 路由；否则先读取，再使用共享剪贴板助手。Host 路由通过 `ctx.sessionQuery.readSession` 读取完整的 live-preferred 逻辑日志，用 `foldSessionTitle` 从同一批返回事件折叠最新标题，再把事件交给纯格式化器。该读取是分离的导出观察：不创建 Agent、不保留 Session，也不写入 Session 数据。Session 不存在时返回 404，其他读取失败返回经过清理的 500。
+Header 向 Markdown 复制控制器请求被点击的 Session。点击期间，控制器在加载文档相对的 `api/session.markdown?sessionId=<id>` 路由的同时请求延迟的 `ClipboardItem` 写入；其他宿主在准备完成后回退到共享剪贴板助手。Host 路由通过 `ctx.sessionQuery.readSession` 读取完整的 live-preferred 逻辑日志，并从同一快照取出最新 `session/title` 事件的 title 字段，再把事件交给纯格式化器。该读取是分离的导出观察：不创建 Agent、不保留 Session，也不写入 Session 数据。Session 不存在时返回 404，其他读取失败返回经过清理的 500。
 
-控制器持有一个进行中的操作和一个 `shell.overlay` 浮层条目。第二个 Header 请求加入该进行中的操作，因此剪贴板及其提示始终描述第一次点击的 Session。准备 promise 与已接受的剪贴板写入都会被观察，所有拒绝都被包含。释放会中止读取、阻止后续文本进入承诺的 Blob、抑制提示，并等待已接受的剪贴板工作完成。
+控制器持有一个进行中的操作和一个 `shell.overlay` 浮层条目。第二个 Header 请求加入该进行中的操作，因此剪贴板及其提示始终描述第一次点击的 Session。准备 promise 与已接受的剪贴板写入都会被观察，所有拒绝都被包含。释放会中止读取、阻止后续文本进入由 Promise 提供的 Blob、抑制提示，并等待已接受的剪贴板工作完成。
 
 </details>
 
