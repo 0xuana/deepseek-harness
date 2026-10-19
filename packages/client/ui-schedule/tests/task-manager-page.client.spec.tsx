@@ -903,6 +903,26 @@ describe('Task manager catalog', () => {
     expect(h.props.onRetry).toHaveBeenCalledOnce()
     h.update({ status: 'ready' })
     expect(screen.getByRole('status').textContent).toContain(en['list.empty'])
+    const illustration = screen.getByRole('status').querySelector('svg')
+    expect(illustration?.getAttribute('aria-hidden')).toBe('true')
+    expect(illustration?.getAttribute('focusable')).toBe('false')
+    expect(illustration?.getAttribute('viewBox')).toBe('0 0 170 170')
+    const illustrationPaths = illustration?.querySelectorAll('path')
+    expect(illustrationPaths).toHaveLength(20)
+    expect(illustrationPaths?.[0]?.getAttribute('fill')).toBe('var(--dsw-alias-illustration-background)')
+    expect(illustrationPaths?.[2]?.getAttribute('fill')).toBe('var(--dsw-alias-illustration-backing)')
+    expect(illustrationPaths?.[3]?.getAttribute('fill')).toBe('var(--dsw-alias-illustration-surface)')
+    expect(illustrationPaths?.[10]?.getAttribute('fill')).toBe('var(--dsw-alias-illustration-shadow)')
+    expect(illustrationPaths?.[17]?.getAttribute('fill')).toBe('var(--dsw-alias-illustration-detail)')
+    expect(illustrationPaths?.[18]?.getAttribute('fill')).toBe('var(--dsw-alias-illustration-clock-face)')
+    expect(new Set(Array.from(illustration?.querySelectorAll('path') ?? [], path => path.getAttribute('fill')))).toEqual(new Set([
+      'var(--dsw-alias-illustration-background)',
+      'var(--dsw-alias-illustration-surface)',
+      'var(--dsw-alias-illustration-backing)',
+      'var(--dsw-alias-illustration-shadow)',
+      'var(--dsw-alias-illustration-clock-face)',
+      'var(--dsw-alias-illustration-detail)',
+    ]))
     // The mock keeps one creation entry in the empty state whether or not a
     // query is active, so the action never disappears behind a filter.
     expect(emptyNewTaskButton().textContent).toBe(en['empty.action'])
@@ -3761,6 +3781,10 @@ describe('Mock detail metrics shared with the task list', () => {
     expect(heading).toMatch(/font-size:\s*14px;/)
     expect(heading).toMatch(/font-weight:\s*400;/)
     expect(rule('emptyGlyph')).toMatch(/margin-bottom:\s*12px;/)
+    expect(rule('emptyIllustration')).toMatch(/width:\s*110px;/)
+    expect(rule('emptyIllustration')).toMatch(/max-width:\s*100%;/)
+    expect(rule('emptyIllustration')).toMatch(/height:\s*auto;/)
+    expect(rule('emptyIllustration')).toMatch(/margin-bottom:\s*12px;/)
     // The mock's `.empty h3 + .btn`.
     expect(rule('emptyAction')).toMatch(/margin-top:\s*16px;/)
   })
