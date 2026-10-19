@@ -19,6 +19,7 @@ import {
 } from './experimental-package-policy.ts'
 import { hasTypertRemoteNavigation, isForbiddenPublicationFile } from './publication-payload.ts'
 import type { DshBundleManifest } from '../packages/util/package-manifest/src/types.ts'
+import { detailPath } from '../packages/util/plugin-detail/src/document.ts'
 import { OPTIONAL_BUNDLES, bundlePatchFiles } from '../packages/boot/app-boot/src/profile.ts'
 import { collectProjectReferenceFaceViolations } from './project-reference-faces.ts'
 
@@ -255,24 +256,30 @@ function sameStringList(actual: readonly string[] | undefined, expected: readonl
 
 /**
  * List the publication entries that locale `meta.detail` documents need: the top-level directory holding
- * each document and its images, or the document itself at the package root.
+ * each document and its images.
  * @param packageDir - absolute package directory.
  * @returns sorted, deduplicated entries.
+ * @throws Error when a declared document is not a package-relative Markdown file in a subdirectory or does not exist,
+ * so a typo cannot publish a directory that holds no document.
  */
 export function detailDocumentFiles(packageDir: string): readonly string[] {
   const entries = new Set<string>()
   for (const file of globSync('locale/*.json', { cwd: packageDir })) {
-    let locale: { meta?: { detail?: unknown } }
+    let meta: unknown
     try {
-      locale = JSON.parse(readFileSync(join(packageDir, file), 'utf8')) as { meta?: { detail?: unknown } }
+      meta = (JSON.parse(readFileSync(join(packageDir, file), 'utf8')) as { meta?: unknown } | null)?.meta
     } catch (error: unknown) {
       // SyntaxError: verify-package-meta reports malformed locale files; this check only adds publication entries.
       void error
       continue
     }
-    const detail = locale.meta?.detail
-    if (typeof detail !== 'string') continue
-    entries.add(detail.includes('/') ? detail.slice(0, detail.indexOf('/')) : detail)
+    const label = `${join(packageDir, file)}: meta.detail`
+    const detail = detailPath(typeof meta === 'object' && meta !== null ? (meta as { detail?: unknown }).detail : undefined, label)
+    if (detail === undefined) continue
+    const slash = detail.indexOf('/')
+    if (slash < 0) throw new Error(`${label} ${JSON.stringify(detail)} must name a file in a subdirectory such as docs/`)
+    if (!existsSync(join(packageDir, detail))) throw new Error(`${label} ${JSON.stringify(detail)} does not exist`)
+    entries.add(detail.slice(0, slash))
   }
   return [...entries].sort()
 }
