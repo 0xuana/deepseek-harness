@@ -159,7 +159,7 @@ export default class PluginRecommendations extends TypertRemoteService {
         source: { kind: 'plugin-recommendation', callId, form: 'notice', summary: boundContextSummary(`Enabled ${proposal.titleEn}`) },
         content: [{ type: 'text', text: JSON.stringify({
           plugin: proposal.name, status: 'enabled', userRequest: proposal.request,
-          instruction: 'The user enabled this plugin from the recommendation card. Continue only work already requested, using the available capability. Enabling is not permission for new account-wide searches, bulk edits, or other scope changes. If the original request only asked to find or enable a plugin, briefly confirm activation and stop; do not turn discovery into an implementation task or ask the user to restate their intent.',
+          instruction: 'The user clicked Enable, which only enables this plugin. First re-read the original user message, not just userRequest above: preserve explicit limits such as "only recommend", "do not execute", or "not yet" even when the request also describes a desired task. In those cases, or when the user only asked to find or enable a plugin, briefly confirm activation and stop without calling tools or asking for another message. Otherwise continue only work already requested, using the available capability. Enabling is not permission for new account-wide searches, bulk edits, or other scope changes.',
         }) }],
       }))
     }
