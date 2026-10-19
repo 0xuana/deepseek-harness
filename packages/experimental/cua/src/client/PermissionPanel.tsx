@@ -62,7 +62,7 @@ function ConfigurationSetting({ kind, status, loading, writable, configured, sav
     <div className={css.permission}>
       <div><strong>{t(`${kind}Title`)}</strong><p>{t(`${kind}Body`)}</p></div>
       {loading ? <span className={css.buttonPlaceholder} aria-hidden />
-        : <Button size="sm" variant={configured ? 'outline' : 'primary'} disabled={saving || configured || !writable || status !== 'ready'}
+        : <Button size="sm" className={css.permissionAction} data-configured={configured || undefined} variant={configured ? 'outline' : 'primary'} disabled={saving || configured || !writable || status !== 'ready'}
           onClick={() => { void submit() }}>{t(configured ? `${kind}Set` : `${kind}Confirm`)}</Button>}
     </div>
     {!configured && (status === 'unavailable' ? <p className={css.error} role="alert">{t(`${kind}Unavailable`)}</p>
