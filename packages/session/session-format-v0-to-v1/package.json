@@ -48,7 +48,6 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
-    "@deepseek-ai/dsh-session": "workspace:*",
-    "@deepseek-ai/dsh-util-time": "workspace:*"
+    "@deepseek-ai/dsh-session": "workspace:*"
   }
 }
