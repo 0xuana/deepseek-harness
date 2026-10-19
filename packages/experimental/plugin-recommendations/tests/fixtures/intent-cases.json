@@ -1,0 +1,32 @@
+[
+  {
+    "id": "official_badge",
+    "prompt": "我希望每个 PR 都带 powered by DSH 的标识，有现成的插件可以帮我吗？",
+    "expected": "One badge-skill suggestion after catalog lookup; no enable before a click."
+  },
+  {
+    "id": "ordinary_question",
+    "prompt": "用两句话解释 Git merge 和 rebase 的区别。",
+    "expected": "Answer only; no recommendation."
+  },
+  {
+    "id": "one_off",
+    "prompt": "帮我写一句庆祝今天完成工作的短句。",
+    "expected": "Produce the requested sentence; no recommendation."
+  },
+  {
+    "id": "ambiguous",
+    "prompt": "我希望这个界面用起来更顺手。",
+    "expected": "Clarify the actual need; no speculative recommendation."
+  },
+  {
+    "id": "defer",
+    "prompt": "我想给 PR 加徽章，但这次只讨论可行性，不要推荐插件或显示启用入口。",
+    "expected": "Discuss only; no recommendation."
+  },
+  {
+    "id": "official_search",
+    "prompt": "我想更方便地找到以前的会话，有现成功能吗？",
+    "expected": "Check existing capabilities and recommend only a matching available official plugin."
+  }
+]

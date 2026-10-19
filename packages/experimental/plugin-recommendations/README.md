@@ -79,6 +79,8 @@ Recommendation facts append to the transcript. Enabling a plugin can change subs
 
 ## Known Limitations and Deferred Work
 
+Intent cases are in `tests/fixtures/intent-cases.json`. Tool guidance asks the Agent to clarify vague needs, respect a request not to recommend, and produce one concise final answer after proposing. These semantic decisions are evaluated with real model runs; they are not keyword guards.
+
 <a id="known-limitations-and-deferred-work"></a>
 
 - Only shipped, optional, official plugins are eligible; missing packages and third-party registries are excluded.

@@ -79,6 +79,8 @@ kind: "package-bundle"
 
 ## 已知限制与后续工作
 
+意图用例见 `tests/fixtures/intent-cases.json`。工具指引要求 Agent 澄清模糊需求、尊重不推荐的要求，并在提出建议后给出一次简洁的最终回答。这些语义决策通过真实模型测试评估，不是关键词硬判断。
+
 <a id="known-limitations-and-deferred-work"></a>
 
 - 仅支持随应用提供的可选官方插件，不支持缺失包或第三方市场。
