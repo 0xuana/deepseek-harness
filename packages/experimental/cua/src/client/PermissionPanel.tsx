@@ -1,6 +1,6 @@
 /** Native permission status and revocable application consent on the existing plugin page. */
 import { useEffect, useState } from 'react'
-import { Button, IconChevronDownOutlineRegular, Menu, Modal, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconSettingsOutlineRegular, Modal, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
@@ -117,18 +117,13 @@ function PermissionAction({ permission, granted, loading, busy, request, openSet
   loading: boolean
   busy: boolean
 }) {
-  const [open, setOpen] = useState(false)
-  useEffect(() => { setOpen(false) }, [busy, loading, granted])
   if (loading) return <span className={css.buttonPlaceholder} aria-hidden />
   if (granted === false) return <Button size="sm" variant="primary" className={css.permissionAction} disabled={busy}
     onClick={() => { request(permission) }}>{t('request')}</Button>
-  return <Menu open={open && !busy} onClose={() => { setOpen(false) }} align="end" portal autoFocus
-    anchor={<Button size="sm" variant="outline" className={css.permissionAction} disabled={busy}
-      aria-haspopup="menu" aria-expanded={open && !busy} onClick={() => { setOpen(value => !value) }}>
-      {t(granted === true ? 'granted' : 'unknown')}<IconChevronDownOutlineRegular size={12} aria-hidden="true" />
-    </Button>}
-    items={[{ id: 'settings', label: t('settings') }]}
-    onSelect={() => { setOpen(false); openSettings(permission) }} />
+  return <Button size="sm" variant="outline" className={css.permissionAction} disabled={busy}
+    title={t('settings')} onClick={() => { openSettings(permission) }}>
+    {t(granted === true ? 'granted' : 'unknown')}<IconSettingsOutlineRegular size={14} aria-hidden="true" />
+  </Button>
 }
 
 /** @param props Host observation and explicit user actions. @returns Permission controls without automatic system prompts. */
