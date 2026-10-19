@@ -12,13 +12,7 @@
       "path": "../../../vendor/cordis"
     },
     {
-      "path": "../scope"
-    },
-    {
       "path": "../tools"
-    },
-    {
-      "path": "../../llm/llm"
     },
     {
       "path": "../../../vendor/cosmokit"
