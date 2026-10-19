@@ -86,7 +86,7 @@ CUA activation and removal change the PTC SDK and system guidance; subsequent re
 <a id="known-limitations-and-deferred-work"></a>
 
 - Source Web and Desktop share permission controls on macOS. Packaged Desktop helper distribution, signing, and permission attribution are deferred.
-- PTC execution is shared by the profile. A Host without HMR applies saved changes at restart.
+- PTC execution is shared by the profile. A Host without HMR applies saved changes at restart. When Coding Tools is off, the existing preset UI restores the new-session default to `standard`; choosing persistent execution leaves Coding Tools off.
 
 <a id="dev-note"></a>
 ### Dev Note

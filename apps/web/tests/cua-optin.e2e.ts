@@ -14,7 +14,11 @@ import { captureStableAria, compareOrRefreshGolden, launchWebScaffold, webSnapsh
 import { connectFreshWorkspaceZh, writeComposerDraft, ZH_BROWSER_LOCALE } from './support.ts'
 
 // The shipped bundle admits only macOS Hosts; unsupported Hosts are exercised in bundle-platform.e2e.ts.
-it.skipIf(process.platform !== 'darwin').each([undefined, 'minimal'] as const)('hot-reloads CUA while preserving Coding Tools and changes the default %s only from its detail page', async (selectedDefault) => {
+it.skipIf(process.platform !== 'darwin').each([
+  { selectedDefault: undefined, codingTools: false },
+  { selectedDefault: undefined, codingTools: true },
+  { selectedDefault: 'minimal', codingTools: true },
+] as const)('preserves Coding Tools=$codingTools and default=$selectedDefault across CUA toggles', async ({ selectedDefault, codingTools }) => {
   const directory = await mkdtemp(join(tmpdir(), 'cua-optin-web-'))
   let ownedScaffold: WebScaffold | undefined
   let browser: Browser | undefined
@@ -28,7 +32,6 @@ it.skipIf(process.platform !== 'darwin').each([undefined, 'minimal'] as const)('
     ] })
     const initialDefault = selectedDefault ?? 'standard'
     if (selectedDefault !== undefined) await scaffold.ctx.settings.update('agent-preset-registry', { selectedDefault })
-    const codingTools = selectedDefault !== undefined
     await scaffold.ctx.settings.update('ui-settings', { enabled: codingTools })
     const settingsPath = join(harnessHome, 'profiles/scaffold/cordis.patch.yml')
     const beforeEnable = await readFile(settingsPath, 'utf8')
@@ -181,6 +184,14 @@ it.skipIf(process.platform !== 'darwin').each([undefined, 'minimal'] as const)('
     await setup.getByRole('button', { name: '前往设置', exact: true }).click()
     await setup.waitFor({ state: 'hidden' })
     await page.getByRole('region', { name: '给 Computer Use 授权', exact: true }).getByRole('alert').waitFor()
+    if (!codingTools) {
+      expect(await readFile(settingsPath, 'utf8')).toBe(saved)
+      expect(scaffold.ctx.settings.describe().find(row => row.ns === 'ui-settings')?.value).toMatchObject({ enabled: false })
+      expect(scaffold.ctx.agentPresets.defaultId).toBe(initialDefault)
+      expect((await runtime.run(runtime.resolve({ program, bindings: [], stateOwner: owner }))).value).toBe(3)
+      await runtime.release(owner)
+      return
+    }
     const defaultSetting = page.getByRole('group', { name: '新会话默认模式', exact: true })
     await expect.poll(() => defaultSetting.getByRole('button', { name: '设为 PTC', exact: true }).isEnabled()).toBe(true)
     await compareOrRefreshGolden(fileURLToPath(new URL('./expected/cua-permissions/default-mode.expected.md', import.meta.url)),

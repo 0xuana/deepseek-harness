@@ -86,7 +86,7 @@ CUA 生效和卸载会改变 PTC SDK 与系统指引，后续请求使用更新�
 <a id="known-limitations-and-deferred-work"></a>
 
 - 源码 Web 与 Desktop 共用 macOS 权限控件。桌面安装包的 helper 分发、签名和权限归属留待后续处理。
-- PTC 执行方式由 profile 共享。未启用 HMR 的 Host 在重启时应用已保存的变更。
+- PTC 执行方式由 profile 共享。未启用 HMR 的 Host 在重启时应用已保存的变更。Coding Tools 关闭时，现有预设界面会将新会话默认值恢复为 `standard`；设置持久化执行方式仍保留 Coding Tools 关闭状态。
 
 <a id="dev-note"></a>
 ### 开发备注
