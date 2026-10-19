@@ -699,8 +699,11 @@ describe('tool-call scheduler: failure quiescence', () => {
     const executed: string[] = []
     ctx.tools.register(defineContentToolFixture({
       name: 'p', description: 'exclusive', parameters: { id: { type: 'string', required: true } },
-      async execute(args) {
+      async execute(args, exec) {
         executed.push(args.id)
+        if (args.id === '1') {
+          exec.deferContext(createUserMessage({ content: [{ type: 'text', text: 'committed context' }], source: { kind: 'p' } }))
+        }
         return [{ type: 'text', text: `done-${args.id}` }]
       },
     }))
@@ -770,7 +773,10 @@ describe('tool-call scheduler: failure quiescence', () => {
         if (message.role === 'user' && block.type === 'text') return [`user:${block.text}`]
         return []
       })
-    })).toEqual(['user:go', 'call:c1', 'call:c2', 'call:c3', 'result:c1', 'result:c2', 'result:c3', 'user:continue'])
+    })).toEqual([
+      'user:go', 'call:c1', 'call:c2', 'call:c3', 'result:c1', 'result:c2', 'result:c3',
+      'user:committed context', 'user:continue',
+    ])
     expect(events(agent).filter(event => event.type === 'tool/result')).toHaveLength(3)
     expect(events(agent).findLast(event => event.type === 'turn/end')?.data.reason.kind).toBe('completed')
     expect(listenerCount()).toBe(idleListenerCount)
