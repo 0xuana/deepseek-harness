@@ -23,7 +23,6 @@ class DeepSeekHarnessConfig:
     model: str = "deepseek-v4-flash"
     reasoning_effort: str | None = None
     max_tokens: int | None = None
-    approval_requests: bool = False
     cwd: str | None = None
     runtime_cwd: str | None = None
     dsh_bin: str | None = None
@@ -36,6 +35,7 @@ class DeepSeekHarnessConfig:
     shutdown_timeout_seconds: float | None = 1.0
     base_url: str | None = None
     api_key: str | None = None
+    approval_requests: bool = False
 
 
 @dataclass(slots=True)
