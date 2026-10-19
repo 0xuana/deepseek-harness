@@ -207,7 +207,7 @@ function renderTab(
 
 describe('PluginManagerPage', () => {
   it('shows no tabs without contributions, and switches between Installed and a contributed tab', () => {
-    const { actions, navigation, setTabs, set } = renderTab({ packages: [pkg()] }, {}, {
+    const { actions, navigation, setTabs } = renderTab({ packages: [pkg()] }, {}, {
       'plugins.tab:discover': (_view, owner) => {
         const tab = owner as PluginTabProps
         return (
@@ -238,13 +238,20 @@ describe('PluginManagerPage', () => {
     setTabs([])
     expect(document.querySelector('[data-plugin-group="bundles"]')).not.toBeNull()
     expect(navigation.getSnapshot().tab).toBe('installed')
-    // Enabling a bundle an install added highlights its card, so the page shows Installed.
+    // A contributed tab that returns can be selected again.
     setTabs([{ id: 'discover', label: 'Discover' }])
     fireEvent.click(screen.getByRole('tab', { name: 'Discover' }))
     expect(screen.getByRole('tabpanel', { name: 'Discover' })).toBeTruthy()
+  })
+
+  it('marks the bundle an install enabled without leaving a contributed tab', () => {
+    const { navigation, set } = renderTab({ packages: [pkg()] }, {}, {}, {}, [{ id: 'discover', label: 'Discover' }])
+    fireEvent.click(screen.getByRole('tab', { name: 'Discover' }))
+    expect(screen.getByRole('tabpanel', { name: 'Discover' })).toBeTruthy()
+    // Enable now publishes the new bundle's mark; the mark scrolls to a visible card and selects no page.
     set({ highlight: 'dsh-better-sidebar' })
-    expect(navigation.getSnapshot().tab).toBe('installed')
-    expect(screen.getByRole('tabpanel', { name: en.installedTab })).toBeTruthy()
+    expect(navigation.getSnapshot().tab).toBe('discover')
+    expect(screen.getByRole('tabpanel', { name: 'Discover' })).toBeTruthy()
   })
 
   it('keeps the Installed tab panel through loading and the More list out of the tabs', () => {
@@ -2307,6 +2314,24 @@ it('dismisses activation guidance until the user enables the bundle again', () =
   fireEvent.click(screen.getByRole('switch'))
   set({ packages: [pkg()] })
   expect(screen.getByText('Later')).toBeTruthy()
+})
+
+it('keeps activation guidance with the Installed list when a contributed tab enables the bundle', () => {
+  const name = 'dsh-better-sidebar'
+  const subject = { spec: `${name}@0.16.0`, status: 'accepted', kind: 'registry', name, bundle: true, registry: null } as const
+  const { set } = renderTab({
+    install: { ...IDLE_INSTALL, open: true, phase: 'done', subject, installed: name },
+  }, { bundles: new Set([name]) }, {
+    [`plugins.bundle.activation:${name}`]: () => <div>Enable guidance</div>,
+  }, {}, [{ id: 'discover', label: 'Discover' }])
+  fireEvent.click(screen.getByRole('button', { name: en.installEnableNow }))
+  set({ install: IDLE_INSTALL, packages: [pkg()] })
+  expect(screen.getByText('Enable guidance')).toBeTruthy()
+  // A contributed tab shows its own content, not guidance for the Installed list.
+  fireEvent.click(screen.getByRole('tab', { name: 'Discover' }))
+  expect(screen.queryByText('Enable guidance')).toBeNull()
+  fireEvent.click(screen.getByRole('tab', { name: en.installedTab }))
+  expect(screen.getByText('Enable guidance')).toBeTruthy()
 })
 
 it('supplies the accepted entry values and atomic mutation action to a custom plugin page', () => {

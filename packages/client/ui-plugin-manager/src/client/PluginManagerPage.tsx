@@ -1516,8 +1516,6 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   // A contributed tab that left the ledger falls back to Installed, and stays there when it returns.
   const tab = tabs.some(item => item.id === selectedTab) ? selectedTab : INSTALLED_TAB
   useEffect(() => { if (tab !== selectedTab) setTab(tab) }, [tab, selectedTab, setTab])
-  // A bundle an install just enabled is shown where its card is.
-  useEffect(() => { if (state.highlight !== null) setTab(INSTALLED_TAB) }, [state.highlight, setTab])
   const tabsId = useId()
   const [activation, setActivation] = useState<string | null>(null)
   useEffect(() => { ensure() }, [ensure])
@@ -1772,7 +1770,8 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
             </div>
           )
         : null}
-      {showsCards && activated !== undefined && !state.install.open
+      {/* Activation guidance belongs beside the Installed list that holds the enabled bundle's card. */}
+      {installedCards && activated !== undefined && !state.install.open
         ? renderSlot('plugins.bundle.activation', {
           packageName: activated.name,
           onDismiss: () => { setActivation(null) },
