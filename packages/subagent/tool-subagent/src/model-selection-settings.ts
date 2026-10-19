@@ -53,8 +53,10 @@ export class SubagentModelSelectionConfig extends Service {
 
   protected async [Service.init](): Promise<void> {
     const ctx = this.ctx
-    const policy = await ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
-    ctx.on('agent/created', ({ agent }) => {
+    const policyReady = ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
+    ctx.on('agent/created', async ({ agent }) => {
+      const policy = await policyReady
+      ctx.fiber.assertActive()
       const target = agent.session
       if (subagentModelSelectionPolicy(policy, target) !== undefined) return
       let allowedModels: AllowedModelRoute[] | undefined
@@ -70,6 +72,7 @@ export class SubagentModelSelectionConfig extends Service {
       }
       if (allowedModels !== undefined) target.append('subagent/model-selection-policy', { allowedModels })
     })
+    await policyReady
   }
 
   /**
