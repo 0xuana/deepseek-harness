@@ -159,7 +159,7 @@ export default class PluginRecommendations extends TypertRemoteService {
         source: { kind: 'plugin-recommendation', callId, form: 'notice', summary: boundContextSummary(`Enabled ${proposal.titleEn}`) },
         content: [{ type: 'text', text: JSON.stringify({
           plugin: proposal.name, status: 'enabled', userRequest: proposal.request,
-          instruction: 'The user enabled this plugin from the recommendation card. Continue their original request using the available capability.',
+          instruction: 'The user enabled this plugin from the recommendation card. Continue only work already requested, using the available capability. Enabling is not permission for new account-wide searches, bulk edits, or other scope changes. If the original request only asked to find or enable a plugin, briefly confirm activation and stop; do not turn discovery into an implementation task or ask the user to restate their intent.',
         }) }],
       }))
     }

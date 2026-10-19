@@ -67,7 +67,7 @@ kind: "package-bundle"
 
 #### 模型可见内容
 
-[`list_official_plugins`](../../../docs/tool-catalog.zh.md#deepseek-aidsh-experimental-plugin-recommendations) 返回符合条件且未启用的插件。`suggest_plugin` 记录一条推荐及其明确需求和解释。用户启用成功后会追加包含原需求的通知，让 Agent 继续处理。工具说明要求仅针对已表达的需求进行推荐；这是语义指导，而不是 Host 强制执行的意图分类器。
+[`list_official_plugins`](../../../docs/tool-catalog.zh.md#deepseek-aidsh-experimental-plugin-recommendations) 返回符合条件且未启用的插件。`suggest_plugin` 记录一条推荐及其明确需求和解释。用户启用成功后会追加包含原需求的通知，指引 Agent 只继续已请求的工作；纯发现请求以简短启用确认结束，不扩展为账户级搜索或批量修改。工具说明要求仅针对已表达的需求进行推荐；这是语义指导，而不是 Host 强制执行的意图分类器。
 
 #### Token 影响
 

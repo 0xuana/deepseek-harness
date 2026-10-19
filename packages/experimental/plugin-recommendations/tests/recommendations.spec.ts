@@ -174,6 +174,10 @@ describe('official recommendations', () => {
     expect(f.manager.setBundleEnabled).toHaveBeenCalledExactlyOnceWith(bundle.name, true)
     expect(f.steer).toHaveBeenCalledOnce()
     expect(f.steer.mock.calls[0]?.[0]).toMatchObject({ source: { kind: 'plugin-recommendation', callId } })
+    expect(f.steer.mock.calls[0]?.[0].content).toEqual([{ type: 'text', text: JSON.stringify({
+      plugin: bundle.name, status: 'enabled', userRequest: 'last week’s conversation',
+      instruction: 'The user enabled this plugin from the recommendation card. Continue only work already requested, using the available capability. Enabling is not permission for new account-wide searches, bulk edits, or other scope changes. If the original request only asked to find or enable a plugin, briefly confirm activation and stop; do not turn discovery into an implementation task or ask the user to restate their intent.',
+    }) }])
     const state = f.events.reduce(
       recommendationProjection.apply, recommendationProjection.init(),
     )

@@ -67,7 +67,7 @@ The catalog and activation reuse `pluginManager`. The main Agent interprets expr
 
 #### What the model sees
 
-[`list_official_plugins`](../../../docs/tool-catalog.md#deepseek-aidsh-experimental-plugin-recommendations) returns disabled eligible plugins. `suggest_plugin` records one proposal with the explicit need and explanation. A successful user activation appends a notice containing that need so the Agent can continue. Tool descriptions restrict recommendations to expressed needs; this is semantic guidance, not an intent classifier enforced by the Host.
+[`list_official_plugins`](../../../docs/tool-catalog.md#deepseek-aidsh-experimental-plugin-recommendations) returns disabled eligible plugins. `suggest_plugin` records one proposal with the explicit need and explanation. A successful user activation appends a notice containing that need. It directs the Agent to continue only already requested work; discovery-only requests end with a brief activation confirmation, without expanding into account-wide searches or bulk edits. Tool descriptions restrict recommendations to expressed needs; this is semantic guidance, not an intent classifier enforced by the Host.
 
 #### Token effect
 
