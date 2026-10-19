@@ -35,6 +35,7 @@ Var InstallerPrimary
 Var InstallerPrimaryHover
 Var InstallerPrimaryPressed
 Var InstallerControlHover
+Var InstallerControlPressed
 Var InstallerTrack
 Var InstallerButtonText
 Var InstallerBorder
@@ -71,6 +72,7 @@ Function InstallerResolveTheme
         StrCpy $InstallerPrimaryHover 0xFFE9ECF2
         StrCpy $InstallerPrimaryPressed 0xFFD4DBE9
         StrCpy $InstallerControlHover 0xFF303034
+        StrCpy $InstallerControlPressed 0xFF45454B
         StrCpy $InstallerTrack 0xFF61666B
         StrCpy $InstallerButtonText 0x15110F
         StrCpy $InstallerBorder 0xFF61666B
@@ -84,6 +86,7 @@ Function InstallerResolveTheme
         StrCpy $InstallerPrimaryHover ${INSTALLER_PRIMARY_HOVER}
         StrCpy $InstallerPrimaryPressed ${INSTALLER_PRIMARY_PRESSED}
         StrCpy $InstallerControlHover ${INSTALLER_CONTROL_HOVER}
+        StrCpy $InstallerControlPressed 0xFFD4DBE9
         StrCpy $InstallerTrack ${INSTALLER_TRACK_COLOR}
         StrCpy $InstallerButtonText 0xFFFFFF
         StrCpy $InstallerBorder 0xFFBBC0C8
