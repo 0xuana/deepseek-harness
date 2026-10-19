@@ -61,6 +61,7 @@ The static prefix is stable for a fixed profile, provider, model, and tool roste
 <a id="known-limitations-and-deferred-work"></a>
 
 - **No graphical client** — file cards, native file opening, and browser state require an embedding client; the SDK starts no Web server.
+- **User time zone is unknown** — the SDK protocol does not carry a user time zone, so time context reports `Browser time zone for this request: unavailable.` The process or container time zone may differ from the user's. The `time-context.timeZone` setting only controls fallback timestamp formatting; it does not establish the user's time zone. Automatic detection and SDK time-zone input are deferred.
 - **Questions require an answerer** — configure `onUserQuestion` in TypeScript or `on_user_question` in Python, or supply a native `user-questions/request` handler; otherwise `ask_user_question` returns `NO_PROVIDER`.
 - **Schedules share the runtime lifetime** — delivery needs a running process and its persistent Session storage.
 - **A profile can omit the SDK server** — a custom profile selected by the TypeScript client must retain this bundle or another `dsh-sdk-jsonrpc-server` row; client initialization fails when no peer answers.

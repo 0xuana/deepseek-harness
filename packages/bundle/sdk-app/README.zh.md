@@ -61,6 +61,7 @@ profile 继承 base 系统提示词，包括 `You are an AI agent powered by Dee
 <a id="known-limitations-and-deferred-work"></a>
 
 - **没有图形客户端**：文件卡片、本地文件打开和浏览器状态需要嵌入客户端；SDK 不启动 Web server。
+- **用户时区未知**：SDK 协议不携带用户时区，因此时间上下文显示 `Browser time zone for this request: unavailable.`。进程或容器的时区可能与用户时区不同。`time-context.timeZone` 配置只控制回退时间戳的显示格式，不能据此确定用户时区。自动检测和 SDK 时区传参暂缓支持。
 - **提问需要回答方**：在 TypeScript 中配置 `onUserQuestion`、在 Python 中配置 `on_user_question`，或提供原生 `user-questions/request` handler；否则 `ask_user_question` 返回 `NO_PROVIDER`。
 - **定时任务依赖运行时生命周期**：投递需要运行中的进程及其持久化 Session 存储。
 - **profile 可能省略 SDK server**：TypeScript client 选择的自定义 profile 必须保留本组合包或另一个 `dsh-sdk-jsonrpc-server` 配置项；没有 peer 响应时，client 初始化会失败。
