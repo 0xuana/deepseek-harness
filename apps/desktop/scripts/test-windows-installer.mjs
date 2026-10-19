@@ -72,10 +72,18 @@ try {
     await execute(progressTest, [], childOptions)
     await execute(presentationTest, [], childOptions)
     const renderResults = []
+    const themeSource = await readFile(join(appRoot, 'installer', 'theme.nsh'), 'utf8')
+    const captionColor = (name) => {
+      const match = themeSource.match(new RegExp(`^!define ${name} (0x[0-9A-Fa-f]{8})\\r?$`, 'm'))
+      if (!match) throw new Error(`Missing installer caption color: ${name}`)
+      return match[1]
+    }
     for (const dpi of [96, 192]) {
       for (const theme of ['light', 'dark']) {
         const brand = theme === 'dark' ? 'brand-dark-2x.bmp' : 'brand-2x.bmp'
-        const result = await execute(renderTest, [join(output, 'ui', brand), String(dpi), theme], childOptions)
+        const prefix = theme === 'dark' ? 'INSTALLER_DARK_CONTROL' : 'INSTALLER_CONTROL'
+        const result = await execute(renderTest, [join(output, 'ui', brand), String(dpi), theme,
+          captionColor(`${prefix}_HOVER`), captionColor(`${prefix}_PRESSED`)], childOptions)
         renderResults.push(result.stdout)
       }
     }

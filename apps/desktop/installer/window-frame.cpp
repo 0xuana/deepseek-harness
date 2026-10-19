@@ -119,6 +119,8 @@ struct ProgressPage {
     HGDIOBJ previousBitmap;
     UINT pressedCommand;
     UINT hoveredCommand;
+    ARGB controlHover;
+    ARGB controlPressed;
     WCHAR captions[5][128];
 
     ~ProgressPage() {
@@ -173,10 +175,8 @@ static void PaintCaptionButtons(Graphics& graphics, const ProgressPage& page) {
     for (UINT command : {SC_MINIMIZE, SC_CLOSE}) {
         const int x = command == SC_MINIMIZE ? 504 : 548;
         if (page.hoveredCommand == command && (!page.pressedCommand || page.pressedCommand == command)) {
-            // Match the secondary caption controls in theme.nsh and pages.nsh.
             const bool pressed = page.pressedCommand == command;
-            SolidBrush fill(page.dark ? (pressed ? Color(255, 69, 69, 75) : Color(255, 48, 48, 52))
-                                     : (pressed ? Color(255, 212, 219, 233) : Color(255, 238, 240, 242)));
+            SolidBrush fill(Color(pressed ? page.controlPressed : page.controlHover));
             GraphicsPath path;
             path.AddArc(x, 8, 20, 20, 180, 90);
             path.AddArc(x + 20, 8, 20, 20, 270, 90);
@@ -253,9 +253,11 @@ static LRESULT CALLBACK ProgressProc(HWND window, UINT message, WPARAM wparam, L
         if (message == WM_CANCELMODE && GetCapture() == window) ReleaseCapture();
         return 0;
     }
-    if (message == WM_PAINT && page) {
-        PAINTSTRUCT paint;
-        HDC dc = BeginPaint(window, &paint);
+    if ((message == WM_PAINT || message == WM_PRINTCLIENT) && page) {
+        PAINTSTRUCT paint = {};
+        const bool printing = message == WM_PRINTCLIENT;
+        HDC dc = printing ? reinterpret_cast<HDC>(wparam) : BeginPaint(window, &paint);
+        if (printing) GetClientRect(window, &paint.rcPaint);
         {
             Graphics graphics(page->buffer);
             graphics.ScaleTransform(page->dpi / 96.0f, page->dpi / 96.0f);
@@ -285,7 +287,7 @@ static LRESULT CALLBACK ProgressProc(HWND window, UINT message, WPARAM wparam, L
         BitBlt(dc, paint.rcPaint.left, paint.rcPaint.top,
                paint.rcPaint.right - paint.rcPaint.left, paint.rcPaint.bottom - paint.rcPaint.top,
                page->bufferDc, paint.rcPaint.left, paint.rcPaint.top, SRCCOPY);
-        EndPaint(window, &paint);
+        if (!printing) EndPaint(window, &paint);
         if (page->progress.value == 100) SetPropW(GetParent(window), L"HarnessInstaller.CompletedPercent", reinterpret_cast<HANDLE>(100));
         return 0;
     }
@@ -297,8 +299,9 @@ static LRESULT CALLBACK ProgressProc(HWND window, UINT message, WPARAM wparam, L
 }
 
 // Runs on the NSIS UI thread; the stock installation section runs on its worker.
+// Caption colors are opaque ARGB from NSIS; failure preserves the stock page's visibility.
 extern "C" __declspec(dllexport) HWND __cdecl InstallerShowProgress(HWND parent, HWND source,
-        BOOL dark, UINT dpi, const WCHAR* brand, const WCHAR* preparing, const WCHAR* extracting,
+        BOOL dark, UINT dpi, ARGB controlHover, ARGB controlPressed, const WCHAR* brand, const WCHAR* preparing, const WCHAR* extracting,
         const WCHAR* copying, const WCHAR* registering, const WCHAR* cleaning) {
     HINSTANCE module = GetModuleHandleW(nullptr);
     WNDCLASSW type = {};
@@ -311,17 +314,14 @@ extern "C" __declspec(dllexport) HWND __cdecl InstallerShowProgress(HWND parent,
     if (!page) return nullptr;
     GdiplusStartupInput startup;
     if (GdiplusStartup(&page->gdiplus, &startup, nullptr) != Ok) { delete page; return nullptr; }
-    HWND stockPage = GetParent(source);
-    if (!SetWindowSubclass(stockPage, HiddenPageProc, 1, 0)) {
-        delete page; return nullptr;
-    }
-    ShowWindow(stockPage, SW_HIDE);
     page->dark = dark != FALSE;
     page->dpi = dpi;
+    page->controlHover = controlHover;
+    page->controlPressed = controlPressed;
     const WCHAR* captions[] = {preparing, extracting, copying, registering, cleaning};
     for (int i = 0; i < 5; ++i) lstrcpynW(page->captions[i], captions[i], 128);
     page->brand = new Image(brand);
-    if (page->brand->GetLastStatus() != Ok) {
+    if (!page->brand || page->brand->GetLastStatus() != Ok) {
         delete page; return nullptr;
     }
     const int size = MulDiv(600, dpi, 96);
@@ -340,7 +340,7 @@ extern "C" __declspec(dllexport) HWND __cdecl InstallerShowProgress(HWND parent,
     if (!page->previousBitmap) { delete page; return nullptr; }
     // Opaque pixels are shared by GDI+ drawing and the window's GDI blit.
     page->buffer = new Bitmap(size, size, size * 4, PixelFormat32bppPARGB, static_cast<BYTE*>(pixels));
-    if (page->buffer->GetLastStatus() != Ok) { delete page; return nullptr; }
+    if (!page->buffer || page->buffer->GetLastStatus() != Ok) { delete page; return nullptr; }
     {
         // Static artwork stays in the buffer for this page's lifetime.
         Graphics graphics(page->buffer);
@@ -354,9 +354,16 @@ extern "C" __declspec(dllexport) HWND __cdecl InstallerShowProgress(HWND parent,
     }
     delete page->brand;
     page->brand = nullptr;
-    HWND window = CreateWindowExW(0, type.lpszClassName, L"", WS_CHILD | WS_VISIBLE,
+    HWND window = CreateWindowExW(0, type.lpszClassName, L"", WS_CHILD,
         0, 0, MulDiv(600, dpi, 96), MulDiv(600, dpi, 96), parent, nullptr, module, page);
-    if (!window) delete page;
+    if (!window) { delete page; return nullptr; }
+    // Keep the stock page available until the replacement is fully constructed.
+    HWND stockPage = GetParent(source);
+    if (!SetWindowSubclass(stockPage, HiddenPageProc, 1, 0)) {
+        DestroyWindow(window); return nullptr;
+    }
+    ShowWindow(stockPage, SW_HIDE);
+    ShowWindow(window, SW_SHOW);
     return window;
 }
 

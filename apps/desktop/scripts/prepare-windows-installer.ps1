@@ -83,8 +83,4 @@ foreach ($asset in @('brand', 'brand-2x', 'brand-dark', 'brand-dark-2x', 'uninst
         } finally { $bitmap.Dispose() }
     } finally { $image.Dispose() }
 }
-if ($TestProgress) {
-    & $renderExecutable (Join-Path $output 'brand-2x.bmp') 192
-    if ($LASTEXITCODE -ne 0) { throw 'Installer rendering regression failed.' }
-}
 Write-Output "Prepared native installer resources: $output"
