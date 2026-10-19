@@ -33,7 +33,6 @@
   "dependencies": {
     "chokidar": "5.0.0",
     "koffi": "3.1.1",
-    "@deepseek-ai/dsh-home-paths": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~"
   },
   "devDependencies": {

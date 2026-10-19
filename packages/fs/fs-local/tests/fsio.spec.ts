@@ -7,7 +7,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { chmod, mkdtemp, readFile, rename, rm, stat, symlink, unlink, writeFile, mkdir, readdir, realpath } from 'node:fs/promises'
-import { homedir, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { isAbsolute, join, parse, relative, resolve } from 'node:path'
 import { createServer } from 'node:net'
 import {
@@ -87,12 +87,6 @@ describe('resolveLocalTarget', () => {
     await writeFile(join(realRoot, 'sub', 'file.txt'), 'hi') // create through the real path
     const after = await resolveLocalTarget(linkRoot, 'sub/file.txt')
     expect(before.targetKey).toBe(after.targetKey)
-  })
-
-  it('resolves a leading tilde against the home directory instead of cwd', async () => {
-    expect((await resolveLocalTarget(dir, '~')).displayPath).toBe(homedir())
-    expect((await resolveLocalTarget(dir, '~/dsh-missing.txt')).displayPath).toBe(join(homedir(), 'dsh-missing.txt'))
-    expect((await resolveLocalTarget(dir, 'a/~/b.txt')).displayPath).toBe(join(dir, 'a', '~', 'b.txt'))
   })
 
   it('rejects a blank path', async () => {
