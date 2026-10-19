@@ -441,6 +441,7 @@
     { "path": "./packages/sandbox/sandbox-windows-acl" },
     { "path": "./packages/shell/bash-sandbox" },
     { "path": "./packages/shell/tool-bash" },
+    { "path": "./packages/deliverables/deliverable-file-references" },
     { "path": "./packages/deliverables/tool-present" },
     { "path": "./packages/deliverables/workspace-changes" },
     { "path": "./packages/fs/fs" },
