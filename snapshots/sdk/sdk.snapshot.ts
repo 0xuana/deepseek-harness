@@ -1068,7 +1068,7 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         const events = results.flatMap(result => result.events)
         const headers = events.filter(event => event.type === 'request/header')
           .map(event => (event.data.header as { tools: { name: string }[] }).tools.map(tool => tool.name))
-        expect(headers).toHaveLength(2)
+        expect(headers, JSON.stringify(events.filter(event => event.type === 'turn/end' || event.type === 'tool/result'))).toHaveLength(2)
         expect(headers[0]).toContain('bash')
         expect(headers[0]).not.toContain('run_code')
         expect(headers[1]).toEqual(['run_code'])

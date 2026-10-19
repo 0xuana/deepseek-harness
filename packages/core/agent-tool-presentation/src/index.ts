@@ -38,6 +38,7 @@ export interface Config {
  * Runtime schema.
  * @deprecated Select the native or PTC executor plugin directly instead of configuring a mode.
  */
+// oxlint-disable-next-line typescript/no-deprecated -- The compatibility schema validates its own deprecated configuration.
 export const Config: z<Config> = z.object({
   mode: z.union(['native', 'ptc'] as const).required(),
 })
@@ -48,6 +49,7 @@ export const Config: z<Config> = z.object({
  * @param config - the selected presentation.
  * @deprecated Mount @deepseek-ai/dsh-tool-executor-native or @deepseek-ai/dsh-tool-executor-ptc directly.
  */
+// oxlint-disable-next-line typescript/no-deprecated -- The compatibility plugin still accepts this configuration.
 export function apply(ctx: Context, config: Config): void {
   ctx.plugin(config.mode === 'native' ? NativeToolExecutor : PtcToolExecutor)
 }

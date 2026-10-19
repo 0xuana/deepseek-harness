@@ -65,7 +65,7 @@ async function load(mode?: string): Promise<{ ctx: Context; root: string; model:
     ['@deepseek-ai/dsh-computer-use', ComputerUse],
     ['@deepseek-ai/dsh-system-prompt', SystemPrompt],
     ['@deepseek-ai/dsh-tools', ToolRuntime],
-      ['@deepseek-ai/dsh-tool-executor-native', NativeToolExecutor],
+    ['@deepseek-ai/dsh-tool-executor-native', NativeToolExecutor],
     ['@deepseek-ai/dsh-llm', LlmRuntime],
     ['@deepseek-ai/dsh-session', SessionStore],
     ['@deepseek-ai/dsh-agent', AgentRegistry],

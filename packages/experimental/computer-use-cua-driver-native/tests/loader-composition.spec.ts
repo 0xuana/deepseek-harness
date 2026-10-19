@@ -67,7 +67,7 @@ it('loads from cordis.yml and logs the native screenshot before the next model r
     ['@deepseek-ai/dsh-session-projection', SessionProjectionRegistry],
     ['@deepseek-ai/dsh-system-prompt', SystemPrompt],
     ['@deepseek-ai/dsh-tools', ToolRuntime],
-      ['@deepseek-ai/dsh-tool-executor-native', NativeToolExecutor],
+    ['@deepseek-ai/dsh-tool-executor-native', NativeToolExecutor],
     ['@deepseek-ai/dsh-agent', AgentRegistry],
     ['@deepseek-ai/dsh-agent-loop', AgentLoop],
     ['@deepseek-ai/dsh-attachment-local', LocalAttachmentStore],

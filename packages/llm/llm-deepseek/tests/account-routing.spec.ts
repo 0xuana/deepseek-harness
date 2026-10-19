@@ -33,7 +33,9 @@ async function harness() {
   const ctx = new Context()
   contexts.push(ctx)
   installAccountTaskCancellation(ctx)
-  for (const plugin of [LlmRuntime, SessionStore, SessionProjectionRegistry, SystemPrompt, ToolRuntime, NativeToolExecutor, AgentRegistry]) {
+  for (const plugin of [
+    LlmRuntime, SessionStore, SessionProjectionRegistry, SystemPrompt, ToolRuntime, NativeToolExecutor, AgentRegistry,
+  ]) {
     await ctx.plugin(plugin)
   }
   await ctx.plugin(AgentLoop, { agents: [] })

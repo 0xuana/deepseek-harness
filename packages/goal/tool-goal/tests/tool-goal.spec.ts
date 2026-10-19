@@ -157,8 +157,9 @@ describe('goal tool registration and presentation', () => {
     const { ctx, fiber } = await harness({ blockedAfterConsecutiveRounds: 5 })
     expect(['create_goal', 'get_goal', 'update_goal'].map(name => ctx.tools.get(name)?.name))
       .toEqual(['create_goal', 'get_goal', 'update_goal'])
+    const pipeline = new ToolExecutionPipeline(ctx, { get: (name, scope) => ctx.tools.get(name, scope) })
     for (const name of ['create_goal', 'get_goal', 'update_goal']) {
-      expect(new ToolExecutionPipeline(ctx, { get: (name, scope) => ctx.tools.get(name, scope) }).executionMode({ signal: testToolSignal, callId: ToolCallId(name), name, arguments: {} }))
+      expect(pipeline.executionMode({ signal: testToolSignal, callId: ToolCallId(name), name, arguments: {} }))
         .toEqual({ kind: 'exclusive' })
     }
     const section = (await ctx.systemPrompt.assemble()).sections.find(item => item.name === 'tool:goal')

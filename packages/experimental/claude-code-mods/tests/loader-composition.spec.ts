@@ -46,7 +46,7 @@ it('loads from cordis.yml, counts the model\'s tool calls, and answers /tally th
     ['@deepseek-ai/dsh-fs-local', LocalFileSystem],
     ['@deepseek-ai/dsh-working-directory', WorkingDirectory],
     ['@deepseek-ai/dsh-tools', ToolRuntime],
-      ['@deepseek-ai/dsh-tool-executor-native', NativeToolExecutor],
+    ['@deepseek-ai/dsh-tool-executor-native', NativeToolExecutor],
     ['@deepseek-ai/dsh-agent', AgentRegistry],
     ['@deepseek-ai/dsh-agent-loop', AgentLoop],
     ['@deepseek-ai/dsh-commands', CommandRuntime],

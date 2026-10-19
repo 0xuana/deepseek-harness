@@ -251,7 +251,8 @@ it('loads the real tool through Cordis, exposes payload paths in place, and unre
     await ctx.plugin(Loader)
     ctx.loader.builtins.include = Include
     Object.assign(ctx.loader.builtins, {
-      agents: AgentRegistry, systemPrompt: SystemPrompt, tools: ToolRuntime, toolExecutor: NativeToolExecutor, dependencies: workspaceDependencies,
+      agents: AgentRegistry, systemPrompt: SystemPrompt, tools: ToolRuntime,
+      toolExecutor: NativeToolExecutor, dependencies: workspaceDependencies,
     })
     const config = join(directory, 'cordis.yml')
     await writeFile(config, `- name: cordis:agents\n- name: cordis:systemPrompt\n- name: cordis:tools\n- name: cordis:toolExecutor\n- name: cordis:dependencies\n  config:\n    source: ${JSON.stringify(source)}\n`)

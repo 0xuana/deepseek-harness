@@ -81,7 +81,7 @@ it('loads browser tools from cordis.yml, logs browser results, and admits the sc
     ['@deepseek-ai/dsh-session-projection', SessionProjectionRegistry],
     ['@deepseek-ai/dsh-system-prompt', SystemPrompt],
     ['@deepseek-ai/dsh-tools', ToolRuntime],
-      ['@deepseek-ai/dsh-tool-executor-native', NativeToolExecutor],
+    ['@deepseek-ai/dsh-tool-executor-native', NativeToolExecutor],
     ['@deepseek-ai/dsh-agent', AgentRegistry],
     ['@deepseek-ai/dsh-agent-loop', AgentLoop],
     ['@deepseek-ai/dsh-attachment-local', LocalAttachmentStore],
