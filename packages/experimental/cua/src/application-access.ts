@@ -191,6 +191,7 @@ export class ApplicationAccess {
           throw this.denied(identity)
         }
       }
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- Awaiting approval can close the native client.
       if (client.disposed) throw new NativeError('NATIVE_CLOSED', 'Helper is closed; acquire fresh application handles')
       const authorized = await this.options.store.withState(signal, async (transaction) => {
         signal.throwIfAborted()
@@ -215,7 +216,7 @@ export class ApplicationAccess {
         return { revoked: next.revoked, revision }
       })
       signal.throwIfAborted()
-      // The awaited user decision can outlive the helper, so re-read its live getter.
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- Persisting consent can close the native client.
       if (client.disposed) throw new NativeError('NATIVE_CLOSED', 'Helper is closed; acquire fresh application handles')
       const state = this.clients.get(client) ?? { agent, handles: new Map<CuaAppHandle, Selection>() }
       const { persistable: _persistable, ...grant } = identity
