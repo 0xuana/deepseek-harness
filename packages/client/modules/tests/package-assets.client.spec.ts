@@ -249,7 +249,7 @@ describe('package asset route', () => {
     const file = writeFile(join(assets, 'large.png'), Buffer.alloc(8 * 1024 * 1024, 7))
     const { port, warnings } = await composeHost()
 
-    await new Promise<void>((resolve, reject) => {
+    await new Promise<void>((resolve) => {
       const outgoing = request({ host: '127.0.0.1', port, path: assetUrl(ASSETS_ID, 'large.png'), agent: false }, (res) => {
         res.once('data', () => {
           outgoing.destroy()
@@ -259,12 +259,14 @@ describe('package asset route', () => {
       // The destroyed request reports its own abort; the cancellation is the point of the test.
       outgoing.on('error', () => undefined)
       outgoing.on('close', () => { resolve() })
-      outgoing.on('timeout', () => { reject(new Error('asset response did not start')) })
       outgoing.end()
     })
-    await expect.poll(() => opened.findLast(entry => entry.path === file)?.stream.destroyed).toBe(true)
-    // Let the server's pipeline settle its rejection before reading the log.
-    await new Promise(resolve => setTimeout(resolve, 50))
+    const stream = opened.findLast(entry => entry.path === file)?.stream
+    if (stream === undefined) throw new Error('the asset route opened no file stream')
+    // events.once would reject on the premature-close error the cancelled pipeline reports; only the close matters here.
+    if (!stream.closed) await new Promise<void>((resolve) => { stream.once('close', () => { resolve() }) })
+    // pipeline settles its rejection in the turn after the file stream closes; the route logs nothing then.
+    await new Promise(resolve => setImmediate(resolve))
     expect(warnings).toEqual([])
   })
 

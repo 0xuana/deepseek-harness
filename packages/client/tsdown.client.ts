@@ -16,6 +16,7 @@
  * Non-experimental client outputs reject experimental module and stylesheet
  * inputs, including origins recorded by chained source maps.
  */
+import { randomBytes } from 'node:crypto'
 import { readFile, readdir, rm, rmdir, stat, utimes } from 'node:fs/promises'
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { createRequire, isBuiltin } from 'node:module'
@@ -525,30 +526,27 @@ function packageAssetCall(reference: string): string {
 }
 
 /**
- * Placeholder the `url()` rewrite writes into stylesheet text instead of a
- * reference: letters, digits, and underscores, which lightningcss never escapes,
- * so a file name with parentheses or quotes still maps back to its reference.
- */
-const STYLESHEET_ASSET_PLACEHOLDER = /__dshPackageAsset\d+__/gu
-
-/**
  * Compile stylesheet text into a JavaScript expression that passes each package-asset
- * reference the `url()` rewrite inserted through the resolver call.
+ * reference the `url()` rewrite inserted through the resolver call. The rewrite writes
+ * a placeholder of letters, digits, and underscores, which lightningcss never escapes,
+ * with a per-stylesheet random part that stylesheet text cannot contain by chance.
  * @param css - stylesheet text after the rewrite.
  * @param references - reference of each placeholder the rewrite inserted into this stylesheet.
  * @returns a string literal, or a concatenation of literals and resolver calls.
+ * @throws {Error} when an inserted placeholder does not appear exactly once.
  */
 function stylesheetSource(css: string, references: ReadonlyMap<string, string>): string {
   if (references.size === 0) return JSON.stringify(css)
   const parts: string[] = []
   let last = 0
-  for (const match of css.matchAll(STYLESHEET_ASSET_PLACEHOLDER)) {
-    const reference = references.get(match[0])
-    /* v8 ignore next -- only the rewrite writes placeholders, and it records each one. */
-    if (reference === undefined) throw new Error(`client bundle compiler: unknown stylesheet asset placeholder ${match[0]}`)
-    parts.push(JSON.stringify(css.slice(last, match.index)), packageAssetCall(reference))
+  const seen = new Set<string>()
+  for (const match of css.matchAll(new RegExp([...references.keys()].join('|'), 'gu'))) {
+    if (seen.has(match[0])) throw new Error(`client bundle compiler: stylesheet asset placeholder ${match[0]} appears twice`)
+    seen.add(match[0])
+    parts.push(JSON.stringify(css.slice(last, match.index)), packageAssetCall(references.get(match[0]) as string))
     last = match.index + match[0].length
   }
+  if (seen.size !== references.size) throw new Error('client bundle compiler: a stylesheet asset placeholder is missing from the transformed stylesheet')
   parts.push(JSON.stringify(css.slice(last)))
   return parts.join(' + ')
 }
@@ -665,6 +663,7 @@ function packageAssets(manifest: PackageManifest, packageDir: string): PackageAs
     },
     urlRewrite(context, stylesheet) {
       const inserted = new Map<string, string>()
+      const nonce = randomBytes(6).toString('hex')
       if (pathBelow(realDirectory(sourceDir), realpathSync(stylesheet)) === undefined) return { options: {}, references: inserted }
       const base = dirname(stylesheet)
       return {
@@ -676,7 +675,7 @@ function packageAssets(manifest: PackageManifest, packageDir: string): PackageAs
               if (/[#?]/u.test(url.url)) {
                 throw new Error(`tsdown: ${name}: ${stylesheet} references ${JSON.stringify(url.url)}; a package asset url() takes no fragment or query`)
               }
-              const placeholder = `__dshPackageAsset${String(inserted.size)}__`
+              const placeholder = `__dshPackageAsset_${nonce}_${String(inserted.size)}__`
               inserted.set(placeholder, reference(context, resolvePath(base, url.url)))
               return { ...url, url: placeholder }
             },

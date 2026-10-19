@@ -40,7 +40,7 @@ A served asset streams from disk on every request; the Host keeps neither its by
 
 ### WebWorker preview
 
-The preview page runs its Host in a Worker, and a page request for a reference never reaches it. Before any Client bundle runs, the page asks the Worker for `GET /__assets__`, answered by tunnel glue like `GET /__boot__`: an uncompressed tar of every file under `lib/assets/` of each image package that declares `"./assets/*": "./lib/assets/*"`, named by its reference. The page turns each entry into a Blob URL with the media type of its extension, and its `resolveAsset` returns that URL, or the reference when the image holds no such file. The base image already carries these files, so no network request is added; each boot still walks the image's packages, archives every asset, and copies each entry into a Blob, enabled or not.
+The preview page runs its Host in a Worker, and a page request for a reference never reaches it. Before any Client bundle runs, the page asks the Worker for `GET /__assets__`, answered by tunnel glue like `GET /__boot__`: an uncompressed tar of every file under `lib/assets/` of each image package that declares `"./assets/*": "./lib/assets/*"`, named by its unencoded `plugins/<package>/assets/<path>`, which fits the ustar name limits the base image already met. The page encodes each entry name into its reference and turns the entry into a Blob URL with the media type of its extension, and its `resolveAsset` returns that URL, or the reference when the image holds no such file. The base image already carries these files, so no network request is added; each boot still walks the image's packages, archives every asset, and copies each entry into a Blob, enabled or not.
 
 ### Changes and package manifests
 

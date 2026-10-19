@@ -74,10 +74,13 @@ export function packageAssetRevisionedPath(assetPath: string, rev: string): stri
  * to the shell document, like every other app-owned route, so it resolves
  * under any document mount and from injected `<style>` text.
  * @param packageName - owning package name, emitted verbatim; a scoped name keeps its `/`.
- * @param emittedPath - {@link packageAssetRevisionedPath} result below `lib/assets/`; each segment is percent-encoded.
+ * @param emittedPath - {@link packageAssetRevisionedPath} result below `lib/assets/`; each segment is
+ *   percent-encoded, including `!`, `'`, `(`, `)`, and `*`, so the reference is also a valid unquoted CSS `url()`.
  * @returns `plugins/<packageName>/assets/<path>`.
  */
 export function packageAssetReference(packageName: string, emittedPath: string): string {
-  const path = emittedPath.split('/').map(segment => encodeURIComponent(segment)).join('/')
+  const path = emittedPath.split('/')
+    .map(segment => encodeURIComponent(segment).replace(/[!'()*]/gu, char => `%${char.charCodeAt(0).toString(16).toUpperCase()}`))
+    .join('/')
   return `plugins/${packageName}/${PACKAGE_ASSET_SEGMENT}/${path}`
 }

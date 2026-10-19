@@ -3,6 +3,7 @@
  * which register their physical files as watch dependencies. Package assets
  * are emitted under `lib/assets/` with revisioned file names and referenced by document-relative URLs.
  */
+import { transform } from 'lightningcss'
 import { runInNewContext } from 'node:vm'
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
@@ -290,6 +291,19 @@ describe('client bundle package asset imports', () => {
       .toThrow(`${join(root, path)} has a node_modules path segment or one containing %, #, ?, \\ or NUL, which the asset route cannot serve; rename it`)
   })
 
+  it('keeps literal placeholder-like text and resolves only the references the rewrite inserted', async () => {
+    const root = await assetPackage({
+      'src/client/assets/whale.png': WHALE,
+      'src/client/theme.css': '.a::after { content: "__dshPackageAsset0__"; } .b { background: url(./assets/whale.png); }',
+    })
+
+    const output = await loadImport(browserPlugins(root)('dsh-css-global-inline'), recordingContext(), './theme.css', join(root, 'src/client/index.ts'))
+
+    const css = stylesheetText(output, reference => `resolved:${reference}`)
+    expect(css).toContain('content:"__dshPackageAsset0__"')
+    expect(css).toContain(`url(resolved:${WHALE_URL})`)
+  })
+
   it('rejects an uppercase extension, which the asset import types do not declare', async () => {
     const root = await assetPackage({ 'src/client/assets/whale.PNG': WHALE })
     const { load } = hooks(browserPlugins(root)('dsh-package-asset'))
@@ -308,8 +322,11 @@ describe('client bundle package asset imports', () => {
     const importer = join(root, 'src/client/index.ts')
 
     const output = await loadImport(plugin, recordingContext(), './View.module.css', importer)
-    expect(stylesheetText(output, reference => `resolved:${reference}`))
-      .toContain(`resolved:plugins/@deepseek-ai/dsh-client-asset-fixture/assets/whale(2x)-${WHALE_REV}.png`)
+    const reference = `plugins/@deepseek-ai/dsh-client-asset-fixture/assets/whale%282x%29-${WHALE_REV}.png`
+    // The served Web app returns the reference unchanged; the text must still parse as one url() declaration.
+    const css = stylesheetText(output, asset => asset)
+    expect(css).toContain(`url(${reference})`)
+    expect(transform({ filename: 'View.css', code: Buffer.from(css), minify: true }).code.toString()).toContain(`mask:url(${reference})`)
     await expect(loadImport(plugin, recordingContext(), './Bad.module.css', importer))
       .rejects.toThrow('a package asset url() takes no fragment or query')
   })

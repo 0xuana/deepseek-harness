@@ -40,7 +40,7 @@ plugins/@deepseek-ai/dsh-client-ui-chat/assets/running-whale%402x-06738fa29b2f.p
 
 ### WebWorker 预览
 
-预览页的 Host 运行在 Worker 中，页面对引用发出的请求到达不了它。在任何 Client bundle 运行之前，页面向 Worker 请求 `GET /__assets__`，它和 `GET /__boot__` 一样由隧道胶水层回答：镜像中每个声明了 `"./assets/*": "./lib/assets/*"` 的包，其 `lib/assets/` 下的所有文件打成一个未压缩的 tar，条目以引用命名。页面把每个条目按扩展名的媒体类型转成 Blob URL，它的 `resolveAsset` 返回这个 URL；镜像里没有对应文件时返回引用本身。基础镜像本来就带着这些文件，所以不增加网络请求；但每次启动仍会遍历镜像中的包、打包全部资源，并把每个条目复制成 Blob，不论包是否启用。
+预览页的 Host 运行在 Worker 中，页面对引用发出的请求到达不了它。在任何 Client bundle 运行之前，页面向 Worker 请求 `GET /__assets__`，它和 `GET /__boot__` 一样由隧道胶水层回答：镜像中每个声明了 `"./assets/*": "./lib/assets/*"` 的包，其 `lib/assets/` 下的所有文件打成一个未压缩的 tar，条目以未编码的 `plugins/<包名>/assets/<路径>` 命名，基础镜像已满足同样的 ustar 名称限制。页面把每个条目名编码为引用，并按扩展名的媒体类型转成 Blob URL，它的 `resolveAsset` 返回这个 URL；镜像里没有对应文件时返回引用本身。基础镜像本来就带着这些文件，所以不增加网络请求；但每次启动仍会遍历镜像中的包、打包全部资源，并把每个条目复制成 Blob，不论包是否启用。
 
 ### 变化与包 manifest
 

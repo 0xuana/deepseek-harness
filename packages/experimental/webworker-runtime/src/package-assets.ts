@@ -79,7 +79,9 @@ export function packageAssetResolver(archive: Uint8Array): (reference: string) =
     const [, name, path] = /^plugins\/((?:@[^/]+\/)?[^/]+)\/assets\/(.+)$/u.exec(entry.name) ?? []
     if (name === undefined || path === undefined) continue
     // The same per-segment encoding the Client build writes into each reference.
-    const reference = `plugins/${name}/assets/${path.split('/').map(encodeURIComponent).join('/')}`
+    const encoded = path.split('/')
+      .map(segment => encodeURIComponent(segment).replace(/[!'()*]/gu, char => `%${char.charCodeAt(0).toString(16).toUpperCase()}`))
+    const reference = `plugins/${name}/assets/${encoded.join('/')}`
     const extension = path.slice(path.lastIndexOf('.')).toLowerCase()
     // A copy detaches the Blob from the archive buffer the entry views.
     urls.set(reference, URL.createObjectURL(new Blob([new Uint8Array(entry.bytes)], { type: ASSET_MEDIA_TYPES.get(extension) ?? '' })))

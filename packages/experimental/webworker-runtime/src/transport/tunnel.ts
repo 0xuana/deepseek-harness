@@ -93,7 +93,7 @@ export interface TunnelSeams {
   readonly directFetch: (request: Request) => Promise<Response>
   /** Boot payload for `GET /__boot__`: the structured index injection table. */
   readonly bootPayload: () => unknown
-  /** Archive for `GET /__assets__`: every package asset of the image, named by its document-relative reference. */
+  /** Archive for `GET /__assets__`: every package asset of the image, named by its unencoded `plugins/<package>/assets/<path>`. */
   readonly packageAssets: () => Uint8Array
   /** Open one decoded Gateway Remote stream without another network carrier; `uplink` carries the page's items. */
   readonly openStream: (

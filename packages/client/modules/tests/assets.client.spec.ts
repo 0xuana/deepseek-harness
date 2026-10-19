@@ -69,6 +69,9 @@ describe('packageAssetReference', () => {
   it('keeps a scoped package name verbatim and encodes each path segment', () => {
     expect(packageAssetReference('@scope/pkg', 'icons/a b#?%-a9993e364706.svg'))
       .toBe('plugins/@scope/pkg/assets/icons/a%20b%23%3F%25-a9993e364706.svg')
+    // Characters encodeURIComponent keeps would end an unquoted CSS url().
+    expect(packageAssetReference('plain', "whale(2x)!'*-a9993e364706.png"))
+      .toBe('plugins/plain/assets/whale%282x%29%21%27%2A-a9993e364706.png')
   })
 
   it('addresses the document-relative form of the plugin asset route without a query', () => {
