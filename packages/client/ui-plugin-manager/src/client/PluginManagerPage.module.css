@@ -3,6 +3,8 @@
 
 .page {
   --plugin-page-inset: clamp(24px, 4vw, 48px);
+  /* Every head row's top inset; the collapsed page bar narrows it. */
+  --plugin-page-top-inset: 28px;
 
   display: flex;
   flex-direction: column;
@@ -23,14 +25,13 @@
 }
 
 .page > .pageBar {
-  --plugin-page-top-inset: 28px;
-
   container: plugin-page-bar / inline-size;
   position: relative;
   display: flex;
   flex-direction: column;
   width: calc(100% + 2 * var(--plugin-page-inset));
   max-width: none;
+  margin-inline: calc(-1 * var(--plugin-page-inset));
   box-sizing: border-box;
   padding-inline: var(--plugin-page-inset);
 }
@@ -1262,9 +1263,9 @@ label.registryOption {
 .detailTop,
 .moreHead {
   display: flex;
-  /* The same 28px top inset `.pageHead` carries, so the row starts at the window's
+  /* The same top inset `.pageHead` carries, so the row starts at the window's
      top edge and the strip above the detail content drags the window. */
-  padding-top: 28px;
+  padding-top: var(--plugin-page-top-inset);
 }
 
 .detailTop {
@@ -1273,7 +1274,7 @@ label.registryOption {
 
 :global([data-platform='darwin']) .detailTop,
 :global([data-platform='darwin']) .moreHead {
-  padding-top: calc(28px + var(--dsh-frame-top-clearance, 0px));
+  padding-top: calc(var(--plugin-page-top-inset) + var(--dsh-frame-top-clearance, 0px));
 }
 
 .crumb {
@@ -1602,8 +1603,14 @@ label.registryOption {
   display: none;
 }
 
+/* Visually hidden rather than removed, so the page keeps its only heading for assistive technology. */
 .pageBarWithTabs[data-compact] .pageHeading {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 .pageBarWithTabs[data-compact] .pageTabs {
@@ -1628,13 +1635,16 @@ label.registryOption {
     padding-inline: 0;
   }
 
+  /* The icon actions keep their width; a wrapped update note stays within the head. */
   .toolbar {
     flex-shrink: 0;
+    max-width: 100%;
   }
 
   .updatesNote {
     order: 3;
     flex-basis: 100%;
+    min-width: 0;
     white-space: normal;
   }
 }

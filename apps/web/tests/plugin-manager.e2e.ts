@@ -107,7 +107,9 @@ describe('web e2e: plugin manager', () => {
     const headerScaffold = await launchWebScaffold()
     try {
       // Pin the extremes; at intermediate widths, the rendered font and locale
-      // determine whether the two intrinsic items fit beside each other.
+      // determine whether the two intrinsic items fit beside each other. Narrow
+      // widths shrink the actions to icons before they wrap; the collapsed-bar case
+      // pins those widths.
       const PINNED_PLACEMENT: Record<number, 'beside' | 'below'> = { 1680: 'beside', 1024: 'beside' }
       for (const language of ['en', 'zh'] as const) {
         const context = await browser.newContext({
@@ -275,7 +277,25 @@ describe('web e2e: plugin manager', () => {
           }
         }), { message: `compact toolbar at ${width}px` }).toEqual({ icons, narrowTabs, wraps, centered: true })
         expect(await add.evaluate(element => element === document.activeElement)).toBe(true)
+        // The collapsed bar hides the title visually but keeps the page's heading for assistive technology.
+        expect(await bar.getByRole('heading', { name: 'Plugins', level: 1, exact: true }).count()).toBe(1)
       }
+      // With tabs, collapsing frees more height than a list just taller than the window scrolls.
+      await probe.setViewportSize({ width: 1280, height: 480 })
+      await body.evaluate((element) => { element.scrollTop = 0 })
+      await expect.poll(() => bar.evaluate(element => element.hasAttribute('data-compact'))).toBe(false)
+      const range = await body.evaluate(element => element.scrollHeight - element.clientHeight)
+      await probe.setViewportSize({ width: 1280, height: 480 + range - 30 })
+      await expect.poll(() => body.evaluate(element => element.scrollHeight - element.clientHeight)).toBe(30)
+      await probe.mouse.move(800, 400)
+      await probe.mouse.wheel(0, 200)
+      await expect.poll(() => bar.evaluate(element => element.hasAttribute('data-compact'))).toBe(true)
+      expect(await bar.evaluate(element => new Promise<number>((resolve) => {
+        let count = 0
+        const observer = new MutationObserver(() => { count++ })
+        observer.observe(element, { attributes: true, attributeFilter: ['data-compact'] })
+        setTimeout(() => { observer.disconnect(); resolve(count) }, 500)
+      }))).toBe(0)
       await probe.setViewportSize({ width: 390, height: 480 })
       await refresh.hover()
       await probe.getByRole('tooltip', { name: 'Refresh', exact: true }).waitFor()

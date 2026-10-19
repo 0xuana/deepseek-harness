@@ -19,7 +19,7 @@ export interface SegmentedTab<Value extends string = string> {
  * Keyboard selection also moves focus; only the selected tab is a tab stop.
  * @param props.label - localized accessible name for the tab list.
  * @param props.className - layout placement; panels remain caller-owned.
- * @param props.size - `sm` uses 30px tabs with a 2px inset; the default `md` uses 34px tabs with a 4px inset.
+ * @param props.size - `sm` draws 30px tabs with a 2px inset (34px tall); the default `md` draws 34px tabs with a 4px inset (42px tall).
  * @returns the tab list, without its panels.
  */
 export function SegmentedTabs<Value extends string>({ items, value, onChange, label, className, size = 'md' }: {

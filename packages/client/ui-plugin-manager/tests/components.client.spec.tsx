@@ -241,7 +241,7 @@ describe('PluginManagerPage', () => {
     setTabs([{ id: 'discover', label: 'Discover' }])
     expect(screen.getByRole('tab', { name: en.installedTab }).getAttribute('aria-selected')).toBe('true')
     // The tabs stay in the pinned page head with the title; the tab panel scrolls in the page body.
-    expect(screen.getByRole('tablist').closest('header')).not.toBeNull()
+    expect(screen.getByRole('tablist').closest('header')?.closest('[data-plugin-bar]')).not.toBeNull()
     expect(document.querySelector('[data-plugin-group="bundles"]')).not.toBeNull()
     fireEvent.click(screen.getByRole('tab', { name: 'Discover' }))
     expect(navigation.getSnapshot().tab).toBe('discover')
@@ -283,7 +283,7 @@ describe('PluginManagerPage', () => {
     expect(bar?.hasAttribute('data-compact')).toBe(false)
     setTabs([{ id: 'discover', label: 'Discover' }])
     // The tabs take the collapsed row beside the actions, so they sit in the pinned head itself.
-    expect(screen.getByRole('tablist').closest('header')).not.toBeNull()
+    expect(screen.getByRole('tablist').closest('header')?.closest('[data-plugin-bar]')).not.toBeNull()
     act(() => {
       if (body === null) throw new Error('the page body is missing')
       body.scrollTop = 160
