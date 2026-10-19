@@ -63,6 +63,8 @@ describe('browser request-zone context', () => {
         return error as Error
       }
     }
+    expect(refusal('').message)
+      .toBe('browser time zone must be canonical UTC or IANA Area/Location: ""')
     expect(refusal('+08:00').message)
       .toBe('browser time zone must be canonical UTC or IANA Area/Location: "+08:00"')
     expect(refusal(' UTC').message)

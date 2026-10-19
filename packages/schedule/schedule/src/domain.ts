@@ -296,21 +296,21 @@ function instantDiagnostic(reason: InstantRejection): string {
  */
 function timeZoneError(reason: TimeZoneRejection, cause?: unknown): ScheduleInputError {
   const options = cause === undefined ? undefined : { cause }
-  // `not_canonical_shape` names a platform-canonical answer outside the Area/Location
-  // profile, which the shared parser's `Intl` step does not produce; this branch keeps
-  // the diagnostic this entry has always returned for that reason.
-  /* v8 ignore next 2 -- the shared parser never answers not_canonical_shape for a canonical zone. */
-  return reason === 'not_canonical_shape'
-    ? new ScheduleInputError(
-      'invalid_time_zone',
-      'time_zone must resolve to UTC or an IANA Area/Location name.',
-      options,
-    )
-    : new ScheduleInputError(
-      'invalid_time_zone',
-      'time_zone must be UTC or a valid IANA Area/Location name.',
-      options,
-    )
+  switch (reason) {
+    case 'blank':
+    case 'padded':
+    case 'not_area_location':
+    case 'unsupported':
+      return new ScheduleInputError('invalid_time_zone', 'time_zone must be UTC or a valid IANA Area/Location name.', options)
+    /* v8 ignore next 2 -- the shared parser does not answer not_canonical_shape for a canonical zone. */
+    case 'not_canonical_shape':
+      return new ScheduleInputError('invalid_time_zone', 'time_zone must resolve to UTC or an IANA Area/Location name.', options)
+    /* v8 ignore next 3 -- TimeZoneRejection is closed; this arm only makes adding a reason a compile error. */
+    default: {
+      const unreachable: never = reason
+      return unreachable
+    }
+  }
 }
 
 /**

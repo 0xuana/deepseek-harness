@@ -42,9 +42,13 @@ const MAX_SPAN_MS = Number.MAX_SAFE_INTEGER
  * One span of time in milliseconds.
  *
  * Instances are frozen, so a span cannot drift after it is built. A span is
- * bounded by the exactly representable millisecond range, which is wider than
- * any interval this harness schedules, and it carries no calendar meaning: a
- * month is not a fixed count of milliseconds.
+ * signed: a negative count builds, because the clock difference that produced it
+ * is real, but `decompose()` refuses it because a negative interval has no single
+ * whole-part split. A caller that reports parts therefore decides its own policy
+ * first, and the elapsed reading clamps a backward clock reading to zero before
+ * it builds the span. A span is bounded by the exactly representable millisecond
+ * range, which is wider than any interval this harness schedules, and it carries
+ * no calendar meaning: a month is not a fixed count of milliseconds.
  */
 export class Duration {
   private readonly span: number
@@ -56,7 +60,9 @@ export class Duration {
 
   /**
    * Build one span from a millisecond count.
-   * @param milliseconds - Count within the exactly representable range (about 285,000 years); fractions are kept.
+   * A negative count is accepted, so a caller can hold a backward clock difference;
+   * such a span cannot be decomposed, and the caller states its own sign policy.
+   * @param milliseconds - Signed count within the exactly representable range (about 285,000 years); fractions are kept.
    * @returns The span.
    * @throws TypeError when the count is not finite, or exceeds the exactly representable millisecond range.
    */

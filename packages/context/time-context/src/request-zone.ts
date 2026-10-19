@@ -34,15 +34,20 @@ function browserTimeZone(message: UserMessage): string | undefined {
     }
     return value
   }
-  if (resolved.reason === 'unsupported') {
-    throw new TypeError(`browser time zone is unsupported: ${JSON.stringify(value)}`, { cause: resolved.cause })
+  switch (resolved.reason) {
+    case 'unsupported':
+      throw new TypeError(`browser time zone is unsupported: ${JSON.stringify(value)}`, { cause: resolved.cause })
+    case 'blank':
+    case 'padded':
+    case 'not_area_location':
+      throw new TypeError(`browser time zone must be canonical UTC or IANA Area/Location: ${JSON.stringify(value)}`)
+    /* v8 ignore next 2 -- Intl answers a canonical Area/Location for every name it accepts. */
+    case 'not_canonical_shape':
+      throw new TypeError(`browser time zone must be canonical: ${JSON.stringify(value)}`)
+    /* v8 ignore next 2 -- TimeZoneRejection is closed; this arm only makes adding a reason a compile error. */
+    default:
+      assertNever(resolved.reason, 'TimeZoneRejection')
   }
-  // `not_canonical_shape` names a platform-canonical answer outside the Area/Location
-  // profile, which the shared vocabulary does not produce for a name it accepts.
-  /* v8 ignore next -- Intl answers a canonical Area/Location for every name it accepts. */
-  throw resolved.reason === 'not_canonical_shape'
-    ? new TypeError(`browser time zone must be canonical: ${JSON.stringify(value)}`)
-    : new TypeError(`browser time zone must be canonical UTC or IANA Area/Location: ${JSON.stringify(value)}`)
 }
 
 /**
