@@ -2061,6 +2061,9 @@ importers:
       execa:
         specifier: ^10.0.1
         version: 10.0.1
+      semver:
+        specifier: ^7.8.5
+        version: 7.8.5
       yaml:
         specifier: ^2.9.0
         version: 2.9.0
@@ -2119,6 +2122,9 @@ importers:
       '@deepseek-ai/dsh-user-approval':
         specifier: workspace:*
         version: link:../../interaction/user-approval
+      '@types/semver':
+        specifier: ^7.8.0
+        version: 7.8.0
       chokidar:
         specifier: ^4.0.3
         version: 4.0.3
