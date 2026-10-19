@@ -10,6 +10,7 @@ import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent, Inbox } from '@deepseek-ai/dsh-agent'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import AgentController, { ADMISSION_AGENT_GONE, ADMISSION_FAILED, AgentAdmissionRejected } from '@deepseek-ai/dsh-agent-controller'
 import type { DeliveryMode, DeliveryRequest } from '@deepseek-ai/dsh-agent-controller'
 
@@ -79,6 +80,7 @@ async function harness(): Promise<{
 }> {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   const controllerFiber = await ctx.plugin(AgentController)
   const recordingAgent = async (rawId: string, deliveries: Delivery[], refusal?: Error) => {

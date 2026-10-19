@@ -363,7 +363,7 @@ describe('Web session model selection', () => {
       if (textOf(message) === 'held') await release.promise
       return await next()
     })
-    const remote = createSessionTestRemote(ctx, {
+    const remote = await createSessionTestRemote(ctx, {
       defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
       cwd: '/tmp',
     })
@@ -392,7 +392,7 @@ describe('Web session model selection', () => {
       await releases.get(textOf(message))?.promise
       return await next()
     })
-    const remote = createSessionTestRemote(ctx, {
+    const remote = await createSessionTestRemote(ctx, {
       defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
       cwd: '/tmp',
     })
@@ -436,7 +436,7 @@ describe('Web session model selection', () => {
         return listing.promise
       }
     }('Gated', []))
-    const remote = createSessionTestRemote(ctx, {
+    const remote = await createSessionTestRemote(ctx, {
       defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
       cwd: '/tmp',
     })
