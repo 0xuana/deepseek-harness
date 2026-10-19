@@ -111,7 +111,7 @@ function expectToolPairs(request: unknown, api: Api): void {
 
 const tool = { name: 'lookup', description: 'Look up a value.', parameters: { type: 'object', properties: { key: { type: 'number' } }, required: ['key'] } }
 const pairs: { a: Api; b: Api | 'deepseek-messages' }[] = [
-  ...apis.flatMap(a => apis.filter(b => b !== a).map(b => ({ a, b }))),
+  ...apis.flatMap(a => apis.map(b => ({ a, b }))),
   ...apis.map(a => ({ a, b: 'deepseek-messages' as const })),
 ]
 
@@ -154,6 +154,9 @@ describe('protocol history round trips', () => {
         { type: 'text', textSignature: JSON.stringify({ v: 1, id: 'msg_empty' }) },
       ])
       expect(original.message.source).toMatchObject({ replayState: { response: { responseId: 'resp_original' }, blocks } })
+    } else {
+      const blocks = (original.message.source as { replayState: { blocks: unknown[] } }).replayState.blocks.filter(block => (block as { type: string }).type === 'tool-call')
+      expect(blocks).toEqual([{ type: 'tool-call', thoughtSignature: 'gemini-signature' }, { type: 'tool-call' }])
     }
     history.push(original.message, ...calls.map(call => createToolResultMessage({
       callId: call.id, content: [{ type: 'text', text: 'value' }], isError: false,
