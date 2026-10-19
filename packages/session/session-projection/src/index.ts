@@ -17,7 +17,7 @@
  * @module @deepseek-ai/dsh-session-projection
  */
 
-import { Context, Service } from '@deepseek-ai/cordis'
+import { Context, FiberState, Service } from '@deepseek-ai/cordis'
 import type { ZodType } from 'zod'
 import { SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type {
@@ -254,6 +254,7 @@ export class SessionProjectionRegistry extends Service {
   /** Stable summary key set; dropped whenever the key table changes. */
   private summaryKeySet: ReadonlySet<Extract<keyof SessionProjectionMap, string>> | undefined
   private readonly listeners = new Set<ProjectionChangeListener>()
+  private readonly compatibilityWarnings = new Set<'register' | 'stateOf'>()
 
   /**
    * Create and install the registry as `ctx.sessionProjections`.
@@ -300,9 +301,75 @@ export class SessionProjectionRegistry extends Service {
   register<K extends string, S>(
     definition: ProjectionDefinition<K, S> & { key: Exclude<K, keyof SessionProjectionMap> },
   ): Promise<ProjectionHandle<S>>
-  async register<K extends string, S>(
+  register<K extends string, S>(
     definition: ProjectionDefinition<K, S>,
   ): Promise<ProjectionHandle<S>> {
+    const owner = this.ctx.fiber
+    let observed = false
+    let disposingHandle = false
+    let dispose: () => Promise<void> = () => {
+      this.warnCompatibility('register')
+      return Promise.resolve()
+    }
+    const ready = (async (): Promise<ProjectionHandle<S>> => {
+      const acquired = this.registerUnit(definition, () => {
+        if (!disposingHandle && owner.state !== FiberState.UNLOADING && owner.state !== FiberState.DISPOSED) {
+          this.warnCompatibility('register')
+        }
+      })
+      dispose = acquired.dispose
+      // Acquisition remains asynchronous even while installing the definition is synchronous.
+      await Promise.resolve()
+      owner.assertActive()
+      return {
+        dispose: async () => {
+          disposingHandle = true
+          try {
+            await dispose()
+          } finally {
+            disposingHandle = false
+          }
+        },
+        stateOf: session => this.cellFor(acquired.registration, session).state as S,
+      }
+    })()
+    if (owner.state === FiberState.LOADING) {
+      // Observe startup without delaying it; the plugin may await registration later in apply().
+      void Promise.allSettled([owner.await(), ready]).then(([activation, result]) => {
+        if (observed) return
+        this.warnCompatibility('register')
+        if (result.status === 'rejected') {
+          if (activation.status === 'fulfilled' || activation.reason !== result.reason) {
+            owner.ctx.logger.error(result.reason)
+          }
+          void owner.dispose().catch((error: unknown) => { owner.ctx.logger.error(error) })
+        }
+      })
+    }
+    const promise: Promise<ProjectionHandle<S>> = {
+      then(onFulfilled, onRejected) {
+        observed = true
+        return ready.then(onFulfilled, onRejected)
+      },
+      catch(onRejected) {
+        observed = true
+        return ready.catch(onRejected)
+      },
+      finally(onFinally) {
+        observed = true
+        return ready.finally(onFinally)
+      },
+      [Symbol.toStringTag]: 'Promise',
+    }
+    // Preserve the exact effect identity so generator effects can adopt its cleanup.
+    return Object.assign(dispose, promise)
+  }
+
+  /** Install one shared definition and its caller-owned release effect. */
+  private registerUnit<K extends string, S>(
+    definition: ProjectionDefinition<K, S>,
+    beforeRelease: () => void,
+  ): { registration: Registration; dispose: () => Promise<void> } {
     const wire = definition.wire as {
       viewSchema: ZodType
       view(state: S): unknown
@@ -349,19 +416,35 @@ export class SessionProjectionRegistry extends Service {
           this.registrations.delete(key)
           this.summaryKeySet = undefined
         }
+        beforeRelease()
       }
     }, 'sessionProjections.register()')
-    // Observe disposal during the asynchronous registration handoff before exposing a reader.
-    await Promise.resolve()
-    this.ctx.fiber.assertActive()
-    return {
-      async dispose() {
-        await dispose()
-      },
-      stateOf: (session) => {
-        return this.cellFor(registration, session).state as S
-      },
-    }
+    return { registration, dispose }
+  }
+
+  /** Report each legacy operation once for this registry's lifetime. */
+  private warnCompatibility(method: 'register' | 'stateOf'): void {
+    if (this.compatibilityWarnings.has(method)) return
+    this.compatibilityWarnings.add(method)
+    const replacement = method === 'register'
+      ? 'Await sessionProjections.register(definition), then use handle.stateOf(session) and handle.dispose().'
+      : 'Read handle.stateOf(session) from an awaited registration, or use the owning domain service.'
+    console.warn(`[dsh-session-projection] Deprecated sessionProjections.${method}() usage. ${replacement}`)
+  }
+
+  /**
+   * Read a currently registered unit by its legacy host-state key.
+   * The returned state is live; do not mutate it. A released key has no value.
+   * @param session - Session whose committed events are folded.
+   * @param key - key of the registered projection.
+   * @returns the current state, or `undefined` when the unit is not registered.
+   * @deprecated Use an awaited registration's `handle.stateOf(session)` or the owning domain service.
+   */
+  stateOf(session: Session, key: string): unknown {
+    this.warnCompatibility('stateOf')
+    const registration = this.registrations.get(key)
+    if (registration === undefined) return undefined
+    return this.cellFor(registration, session).state
   }
 
   /**

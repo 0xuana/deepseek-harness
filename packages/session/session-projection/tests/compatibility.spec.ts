@@ -1,0 +1,245 @@
+/** Legacy projection calls keep their effect ownership while new callers await retained readers. */
+/* oxlint-disable typescript/no-deprecated -- exercise the public compatibility API. */
+import { Context, FiberState } from '@deepseek-ai/cordis'
+import SessionStore from '@deepseek-ai/dsh-session'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
+import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { z } from 'zod'
+
+declare module '@deepseek-ai/dsh-session-projection/types' {
+  interface SessionProjectionMap {
+    'test/legacy': number
+  }
+}
+
+const definition = {
+  key: 'test/legacy',
+  stateSchema: z.number(),
+  stateVersion: 1,
+  init: () => 0,
+  apply: (state: number) => state + 1,
+  wire: { viewSchema: z.number(), view: (state: number) => state },
+} satisfies ProjectionDefinition<'test/legacy', number>
+
+async function setup() {
+  const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  onTestFinished(() => { warning.mockRestore() })
+  const ctx = new Context()
+  onTestFinished(async () => { await ctx.fiber.dispose() })
+  await ctx.plugin(SessionStore)
+  await ctx.plugin(SessionProjectionRegistry)
+  return { ctx, warning, session: ctx.sessions.create() }
+}
+
+/** Exercise calls emitted by plugins compiled against the old disposer return type. */
+function legacyRegistration<T>(registration: Promise<T>): Promise<T> & (() => Promise<void>) {
+  expect(registration).toBeTypeOf('function')
+  return registration as Promise<T> & (() => Promise<void>)
+}
+
+describe('projection registration compatibility', () => {
+  it('awaits modern registration, keeps Promise chaining, and never warns for handle cleanup', async () => {
+    const { ctx, warning, session } = await setup()
+    const settled = vi.fn()
+    const owner = await ctx.plugin({
+      inject: ['sessionProjections'],
+      async apply(inner) {
+        const registration = inner.sessionProjections.register(definition)
+        const handle = await registration.then(value => value).catch(() => { throw new Error('unexpected rejection') })
+        expect(await registration.finally(settled)).toBe(handle)
+        expect(handle.stateOf(session)).toBe(0)
+        await handle.dispose()
+        session.append('turn/start', { turn: 1 })
+        expect(handle.stateOf(session)).toBe(1)
+      },
+    })
+    expect(settled).toHaveBeenCalledOnce()
+    expect(ctx.sessionProjections.snapshot(session).values).toEqual({})
+    await owner.dispose()
+    expect(warning).not.toHaveBeenCalled()
+  })
+
+  it('lets an asynchronous plugin await registration later in its initialization', async () => {
+    const { ctx, warning } = await setup()
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    onTestFinished(() => { release.resolve(undefined) })
+    const owner = ctx.plugin({
+      inject: ['sessionProjections'],
+      async apply(inner) {
+        const registration = inner.sessionProjections.register(definition)
+        entered.resolve(undefined)
+        await release.promise
+        await registration
+      },
+    })
+    await entered.promise
+    release.resolve(undefined)
+    await owner
+    expect(warning).not.toHaveBeenCalled()
+  })
+
+  it('loads an unawaited legacy registration and warns once for registration and keyed reads', async () => {
+    const { ctx, warning, session } = await setup()
+    const mount = () => ctx.plugin({
+      inject: ['sessionProjections'],
+      apply(inner) {
+        void inner.sessionProjections.register(definition)
+      },
+    })
+    const first = await mount()
+    const second = await mount()
+    session.append('turn/start', { turn: 1 })
+    expect(ctx.sessionProjections.stateOf(session, 'test/legacy')).toBe(1)
+    expect(ctx.sessionProjections.stateOf(session, 'test/legacy')).toBe(1)
+    expect(ctx.sessionProjections.stateOf(session, 'test/missing-legacy')).toBeUndefined()
+    expect(warning.mock.calls).toEqual([
+      ['[dsh-session-projection] Deprecated sessionProjections.register() usage. Await sessionProjections.register(definition), then use handle.stateOf(session) and handle.dispose().'],
+      ['[dsh-session-projection] Deprecated sessionProjections.stateOf() usage. Read handle.stateOf(session) from an awaited registration, or use the owning domain service.'],
+    ])
+    await first.dispose()
+    expect(ctx.sessionProjections.stateOf(session, 'test/legacy')).toBe(1)
+    await second.dispose()
+    expect(ctx.sessionProjections.stateOf(session, 'test/legacy')).toBeUndefined()
+    expect(warning).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps callable early disposal idempotent without invalidating an awaited reader', async () => {
+    const { ctx, warning, session } = await setup()
+    const registration = legacyRegistration(ctx.sessionProjections.register(definition))
+    const handle = await registration
+    await registration()
+    await registration()
+    await handle.dispose()
+    session.append('turn/start', { turn: 1 })
+    expect(handle.stateOf(session)).toBe(1)
+    expect(ctx.sessionProjections.snapshot(session).values).toEqual({})
+    expect(warning).toHaveBeenCalledOnce()
+  })
+
+  it('releases a registration called before the asynchronous handle handoff', async () => {
+    const { ctx, warning, session } = await setup()
+    const registration = legacyRegistration(ctx.sessionProjections.register(definition))
+    await registration()
+    const handle = await registration
+    expect(handle.stateOf(session)).toBe(0)
+    expect(ctx.sessionProjections.snapshot(session).values).toEqual({})
+    expect(warning).toHaveBeenCalledOnce()
+  })
+
+  it.each(['return', 'effect', 'generator'] as const)('unloads a legacy %s registration', async (style) => {
+    const { ctx, warning, session } = await setup()
+    const owner = await ctx.plugin({
+      inject: ['sessionProjections'],
+      apply(inner) {
+        if (style === 'return') return legacyRegistration(inner.sessionProjections.register(definition))
+        if (style === 'effect') return void inner.effect(() => legacyRegistration(inner.sessionProjections.register(definition)))
+        inner.effect(function* () { yield legacyRegistration(inner.sessionProjections.register(definition)) })
+      },
+    })
+    expect(ctx.sessionProjections.snapshot(session).values).toEqual({ 'test/legacy': 0 })
+    await owner.dispose()
+    expect(ctx.sessionProjections.snapshot(session).values).toEqual({})
+    expect(warning).toHaveBeenCalledOnce()
+  })
+
+  it('transfers the original disposer into a composed effect and retains it until earlier cleanup settles', async () => {
+    const { ctx, session } = await setup()
+    const release = Promise.withResolvers<undefined>()
+    const closing = Promise.withResolvers<undefined>()
+    onTestFinished(() => { release.resolve(undefined) })
+    const owner = await ctx.plugin({
+      inject: ['sessionProjections'],
+      apply(inner) {
+        inner.effect(function* () {
+          yield legacyRegistration(inner.sessionProjections.register(definition))
+          yield async () => {
+            closing.resolve(undefined)
+            await release.promise
+          }
+        })
+      },
+    })
+    const disposed = owner.dispose()
+    await closing.promise
+    session.append('turn/start', { turn: 1 })
+    expect(ctx.sessionProjections.snapshot(session).values).toEqual({ 'test/legacy': 1 })
+    release.resolve(undefined)
+    await disposed
+    expect(ctx.sessionProjections.snapshot(session).values).toEqual({})
+  })
+
+  it('unloads a legacy plugin after an ignored rejection and releases earlier registrations', async () => {
+    const { ctx, session } = await setup()
+    const reported = Promise.withResolvers<unknown>()
+    const errorLog = vi.spyOn(ctx.logger, 'error').mockImplementation((error: unknown) => { reported.resolve(error) })
+    onTestFinished(() => { errorLog.mockRestore() })
+    const owner = ctx.plugin({
+      inject: ['sessionProjections'],
+      apply(inner) {
+        void inner.sessionProjections.register(definition)
+        void inner.sessionProjections.register({ ...definition, stateVersion: 2 })
+        inner.provide('legacy-failed-provider', {})
+      },
+    })
+    const error = await reported.promise
+    expect(error).toBeInstanceOf(Error)
+    expect(String(error)).toContain('already registered at stateVersion 1')
+    await owner.await()
+    expect(owner.state).toBe(FiberState.DISPOSED)
+    expect(ctx.get('legacy-failed-provider')).toBeUndefined()
+    expect(ctx.sessionProjections.snapshot(session).values).toEqual({})
+  })
+
+  it('preserves explicit rejection handling and returns a harmless legacy disposer for failed acquisition', async () => {
+    const { ctx, warning, session } = await setup()
+    const registration = legacyRegistration(ctx.sessionProjections.register({ ...definition, stateVersion: -1 }))
+    await expect(registration.catch((error: unknown) => error)).resolves.toBeInstanceOf(Error)
+    expect(warning).not.toHaveBeenCalled()
+    await registration()
+    expect(warning).toHaveBeenCalledOnce()
+    expect(ctx.sessionProjections.snapshot(session).values).toEqual({})
+  })
+
+  it('lets a modern plugin handle rejected registration and finish activation', async () => {
+    const { ctx, warning, session } = await setup()
+    const owner = await ctx.plugin({
+      inject: ['sessionProjections'],
+      async apply(inner) {
+        const invalid = inner.sessionProjections.register({ ...definition, stateVersion: -1 })
+        await expect(invalid.catch((error: unknown) => error)).resolves.toBeInstanceOf(Error)
+        await inner.sessionProjections.register(definition)
+      },
+    })
+    expect(owner.state).toBe(FiberState.ACTIVE)
+    expect(ctx.sessionProjections.snapshot(session).values).toEqual({ 'test/legacy': 0 })
+    expect(warning).not.toHaveBeenCalled()
+  })
+
+  it('warns again for a new registry instance without sharing warning state between applications', async () => {
+    const { ctx, warning, session } = await setup()
+    const registration = legacyRegistration(ctx.sessionProjections.register(definition))
+    await registration
+    await registration()
+    const second = new Context()
+    onTestFinished(async () => { await second.fiber.dispose() })
+    await second.plugin(SessionProjectionRegistry)
+    const another = legacyRegistration(second.sessionProjections.register(definition))
+    await another
+    await another()
+    expect(second.sessionProjections.stateOf(session, 'test/legacy')).toBeUndefined()
+    expect(warning).toHaveBeenCalledTimes(3)
+  })
+
+  it('keeps an observed registration owned when its plugin unloads before handoff', async () => {
+    const { ctx, warning, session } = await setup()
+    const owner = await ctx.plugin({ inject: ['sessionProjections'], apply() {} })
+    const registration = owner.ctx.sessionProjections.register(definition)
+    const rejection = expect(Promise.resolve(registration)).rejects.toThrow('inactive context')
+    await owner.dispose()
+    await rejection
+    expect(ctx.sessionProjections.snapshot(session).values).toEqual({})
+    expect(warning).not.toHaveBeenCalled()
+  })
+})

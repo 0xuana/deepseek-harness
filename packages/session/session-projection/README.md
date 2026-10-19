@@ -65,6 +65,15 @@ const { asOfSeq, values } = ctx.sessionProjections.snapshot(session)
 
 A domain that owns projected state declares `sessionProjections` as a Cordis service dependency and keeps its handle private. Consumers inject that domain service and use its methods, such as `ctx.agents.turnBoundaryOf(session)`, without importing definitions or retaining projection readers. Optional contributors may register under `ctx.inject(['sessionProjections'], …)`. Carriers use `ctx.get('sessionProjections')` and omit their block or frames when the registry is absent.
 
+<a id="deprecated-plugin-compatibility"></a>
+### Deprecated plugin compatibility
+
+`register(definition)` keeps its public return type `Promise<ProjectionHandle<S>>`. Its runtime value remains callable for old compiled plugins: awaiting it delivers the retained handle, while calling it releases the registration through the original Cordis effect disposer. Calling the return value is deprecated; use `handle.dispose()` in new code. Legacy `return register(...)`, `ctx.effect(() => register(...))`, and generator yields retain their cleanup ownership. Promise assertions that treat functions as callbacks must wrap the registration in `Promise.resolve(...)`.
+
+Legacy `stateOf(session, key)` is deprecated and returns `unknown`. It reads only currently registered state; after the last release it returns `undefined`, while retained handles remain readable. Compatibility covers runtime calls; TypeScript consumers migrate their type declarations. Each registry instance emits one `console.warn` for legacy registration usage and one for keyed reads, regardless of how many plugins use them. Awaited registrations and handle methods emit none.
+
+Definitions still install synchronously, and handle delivery remains asynchronous. The compatibility layer observes startup through the existing fiber API without delaying activation. After startup settles, an unobserved registration rejection is logged and the calling plugin is disposed; it is not propagated as an activation failure. An explicitly observed rejection remains the caller's responsibility. New plugins await registration before exposing readers. Synchronous `try/catch` cannot catch asynchronous registration errors.
+
 ### Persisted checkpoints
 
 Every unit's state is checkpointed — client-visible and host-only alike — through `checkpoint(session)`, and the sibling [session-projection-cache](../session-projection-cache/README.md) persists those checkpoints so cold reads skip full log loads. Checkpoint watermarks use `SessionSeqCursor` (`-1` for an empty log), while replay starts use `SessionLogOffset`; `restoreFloor` and `restore` implement the read recipe without conflating an existing event with a log gap.

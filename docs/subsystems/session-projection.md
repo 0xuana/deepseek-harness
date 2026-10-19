@@ -26,6 +26,8 @@ interface ProjectionHandle<S> {
 }
 ```
 
+The [compatibility rules](../../packages/session/session-projection/README.md#deprecated-plugin-compatibility) define legacy disposal, keyed reads, and one-time console warnings.
+
 ## The unit
 
 `ProjectionDefinition<K, S>` carries each unit's host state type locally; registration infers `S` from `stateSchema` and returns `ProjectionHandle<S>`. Only client-visible keys merge into `SessionProjectionMap`, which types their whole values. A `wire` block makes a unit client-visible, and rendering belongs to the slot system, never this layer:

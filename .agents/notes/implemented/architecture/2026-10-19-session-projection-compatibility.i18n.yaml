@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-19-session-projection-compatibility.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-19-session-projection-compatibility.md
+/agent-note-deprecated-projection-registration-compatibility:
+  en: 16dafcb465745bda
+  zh: e919e4b1ffe225a9
+/agent-note-deprecated-projection-registration-compatibility/problem:
+  en: bf506a273f12562e
+  zh: 5e97cd5f975f771d
+/agent-note-deprecated-projection-registration-compatibility/decision:
+  en: ed409b59b3364797
+  zh: 9089c8537c215cf7
+/agent-note-deprecated-projection-registration-compatibility/alternatives-considered:
+  en: 9a71e47f7692dfd3
+  zh: 9cd497ede37faca9
+/agent-note-deprecated-projection-registration-compatibility/consequences:
+  en: 28b20cfd57ec9005
+  zh: f747a421f9e98173

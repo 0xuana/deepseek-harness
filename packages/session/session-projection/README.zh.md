@@ -65,6 +65,15 @@ const { asOfSeq, values } = ctx.sessionProjections.snapshot(session)
 
 持有投影状态的领域将 `sessionProjections` 声明为 Cordis 服务依赖，并在内部保留句柄。消费方注入该领域服务并使用其方法，例如 `ctx.agents.turnBoundaryOf(session)`，无需导入定义或保留投影读取句柄。可选贡献方可以在 `ctx.inject(['sessionProjections'], …)` 下注册。载体使用 `ctx.get('sessionProjections')`，注册表缺席时省略自己的块或帧。
 
+<a id="deprecated-plugin-compatibility"></a>
+### 已弃用的插件兼容接口
+
+`register(definition)` 的公开返回类型保持为 `Promise<ProjectionHandle<S>>`。运行时值仍可被旧的已编译插件调用：等待它会得到保留的句柄，调用它则通过原有 Cordis effect disposer 释放注册。调用返回值的用法已弃用；新代码使用 `handle.dispose()`。旧的 `return register(...)`、`ctx.effect(() => register(...))` 和生成器 yield 保留原有清理所有权。把函数视为回调的 Promise 断言需要用 `Promise.resolve(...)` 包装注册返回值。
+
+旧的 `stateOf(session, key)` 已弃用，返回类型为 `unknown`。它仅返回当前已注册的状态；最后一个注册释放后返回 `undefined`，保留的句柄则仍可读取。兼容范围限于运行时调用；TypeScript 消费方仍需迁移类型声明。每个 registry 实例针对旧注册用法和按键读取各输出一次 `console.warn`，不随使用它们的插件数量增加。等待注册和调用句柄方法不产生警告。
+
+定义仍同步安装，句柄交付保持异步。兼容层通过现有 fiber API 观察启动结果，不延迟激活。启动结束后，未被观察的注册拒绝会被记录，并触发调用方插件卸载；它不会作为激活失败向上传播。被显式观察的拒绝仍由调用方负责。新插件在提供读取操作前等待注册完成。同步 `try/catch` 无法捕获异步注册错误。
+
 ### 持久检查点
 
 系统通过 `checkpoint(session)` 为每个单元的状态创建检查点，client-visible 与 host-only 一视同仁；同级包 [session-projection-cache](../session-projection-cache/README.zh.md) 持久化这些检查点，使冷读跳过全量日志加载。检查点水位使用 `SessionSeqCursor`（空日志为 `-1`），回放起点使用 `SessionLogOffset`；`restoreFloor` 与 `restore` 实现读取流程，且不会混淆已有事件与日志间隙。

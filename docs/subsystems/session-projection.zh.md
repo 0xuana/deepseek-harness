@@ -26,6 +26,8 @@ interface ProjectionHandle<S> {
 }
 ```
 
+[兼容规则](../../packages/session/session-projection/README.zh.md#deprecated-plugin-compatibility)规定旧释放操作、按键读取和一次性控制台警告。
+
 ## 投影单元
 
 `ProjectionDefinition<K, S>` 在各单元内部携带宿主状态类型；注册从 `stateSchema` 推导 `S`，并返回 `ProjectionHandle<S>`。只有客户端可见的 key 合并到 `SessionProjectionMap`，由它约束对应的全量值。`wire` 块使单元对客户端可见，渲染归 slot 体系管，永远不归本层：
