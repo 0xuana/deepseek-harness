@@ -115,6 +115,8 @@ function validateRefreshInterval(refreshIntervalMs: number): void {
 
 /**
  * Register a prepended pre-step listener for the lifetime of `ctx`.
+ * Steps admitted during activation await the projection registration; a
+ * registration failure or owner disposal prevents the request from proceeding.
  * @param ctx - plugin context; the listener is disposed with it.
  * @param config - time zone and durable refresh scheduling configuration.
  * @throws when the refresh interval is invalid or the configured or process time zone cannot be resolved.
@@ -145,7 +147,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     return created
   }
 
-  const timeContextProjectionHandle = await ctx.sessionProjections.register({
+  const projectionReady = ctx.sessionProjections.register({
     key: 'timeContext',
     stateVersion: 2,
     stateSchema: timeContextStateSchema,
@@ -177,6 +179,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     { agent, turn, step, signal },
     next,
   ): Promise<PreStepDecision> => {
+    const timeContextProjectionHandle = await projectionReady
+    ctx.fiber.assertActive()
     const decision = await next()
     if (decision.kind === 'reject' || signal.aborted) return decision
     const now = Date.now()
@@ -214,4 +218,5 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       ],
     }
   }, { prepend: true })
+  await projectionReady
 }
