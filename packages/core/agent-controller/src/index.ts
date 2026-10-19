@@ -49,25 +49,46 @@ export class AgentAdmissionRejected extends Error {
 }
 
 /**
+ * Follow a delivery until its sender cancels. The sender's wait ends with the
+ * cancellation reason at once; the delivery keeps its place in the Agent's
+ * order and stops at its next cancellation check, before any append.
+ */
+async function untilCancelled<T>(delivery: Promise<T>, signal: AbortSignal): Promise<T> {
+  signal.throwIfAborted()
+  const cancelled = Promise.withResolvers<never>()
+  const onAbort = (): void => { cancelled.reject(signal.reason) }
+  signal.addEventListener('abort', onAbort, { once: true })
+  try {
+    return await Promise.race([delivery, cancelled.promise])
+  } finally {
+    signal.removeEventListener('abort', onAbort)
+  }
+}
+
+/**
  * Delivers the messages that senders, such as the Web Session Remote, bring
  * on someone's behalf. Messages to one Agent are prepared, decided, and
  * appended one at a time in arrival order; messages to different Agents do
  * not wait for each other. Disposal stops every message that has not entered
- * an inbox.
+ * an inbox and finishes once each delivery it stopped has settled.
  */
 export class AgentController extends Service {
   static inject = ['agents']
 
   /** Per Agent, the settlement of its latest delivery; the next message waits for it. */
   private readonly deliveries = new WeakMap<Agent, Promise<void>>()
+  /** Settlements of the deliveries that have not finished; disposal waits for them. */
+  private readonly pending = new Set<Promise<void>>()
   /** Aborted on disposal; stops the messages that have not entered an inbox. */
   private readonly lifetime = new AbortController()
 
   /** @param ctx - Host context carrying the Agent registry. */
   constructor(ctx: Context) {
     super(ctx, 'agentController')
-    ctx.effect(() => () => {
+    ctx.effect(() => async () => {
       this.lifetime.abort(new Error('The agent controller stopped before the message entered the inbox.'))
+      // Preparation and listeners observe the abort; the Agent registry stays available until they settle.
+      await Promise.all(this.pending)
     }, 'agent-controller.lifetime')
   }
 
@@ -80,13 +101,18 @@ export class AgentController extends Service {
    * @returns the id of the message once it is in the inbox.
    * @throws {@link AgentAdmissionRejected} when a listener rejects the message
    * or throws, or when the Agent left the registry first; the error of
-   * `prepare`, `beforeInsert`, `followup`, or `steer` unchanged; the
-   * cancellation reason once the sender cancels or the controller stops.
+   * `prepare`, `beforeInsert`, `followup`, or `steer` unchanged; the sender's
+   * cancellation reason as soon as it cancels, also while the message waits
+   * behind another one; the stop reason once the controller stops.
    */
-  deliver(agent: Agent, request: DeliveryRequest): Promise<MessageId> {
+  async deliver(agent: Agent, request: DeliveryRequest): Promise<MessageId> {
+    this.lifetime.signal.throwIfAborted()
     const delivery = (this.deliveries.get(agent) ?? Promise.resolve()).then(() => this.run(agent, request))
-    this.deliveries.set(agent, delivery.then(() => undefined, () => undefined))
-    return delivery
+    const settled = delivery.then(() => undefined, () => undefined)
+    this.deliveries.set(agent, settled)
+    this.pending.add(settled)
+    void settled.then(() => { this.pending.delete(settled) })
+    return await untilCancelled(delivery, request.signal)
   }
 
   private async run(agent: Agent, request: DeliveryRequest): Promise<MessageId> {

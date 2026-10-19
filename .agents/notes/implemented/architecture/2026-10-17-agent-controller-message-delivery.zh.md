@@ -18,7 +18,7 @@ core 包 `dsh-agent-controller` 负责来自 Agent 外部的消息如何进入�
 | 发送方的工作 | `prepare` 在该 Agent 的投递顺序内把发送方的内容转成持久的消息内容；可选的 `beforeInsert` 紧挨在放入之前同步运行，用于必须先于 Agent 唤醒完成的登记 |
 | 监听器 | 按注册顺序运行，按 Agent 作用域过滤，拿到 Agent、消息和一个在发送方取消或控制器停止时中止的信号；返回 `next()` 的决定即放行，在 `next()` 前 await 即暂留，返回 `{ kind: 'reject', reason, message, presented }` 即拒绝且不再询问后面的监听器；只在检查本身执行失败时抛出异常 |
 | 投递方式 | 留在发送方，监听器看不到，因为目前没有按投递方式区分的准入策略 |
-| 顺序 | 同一个 Agent 的消息按到达顺序逐条准备、决定并放入；在放入之前取消的发送方不会被接纳，销毁控制器会停止所有尚未进入收件箱的消息 |
+| 顺序 | 同一个 Agent 的消息按到达顺序逐条准备、决定并放入；在放入之前取消的发送方不会被接纳，并立即结束等待，即使排在被暂留的消息之后；销毁控制器会停止所有尚未进入收件箱的消息，并在这些投递结束后才完成 |
 | 失败 | 拒绝时抛出带其 reason 与 `presented` 的 `AgentAdmissionRejected`；监听器抛出异常时 reason 为 `agent-controller/admission-failed`，Agent 离开注册表时为 `agent-controller/agent-gone`；`prepare`、`beforeInsert`、`followup()` 与 `steer()` 的错误原样抛出；消息进入收件箱之后不再有监听器运行 |
 
 只有代表他人送来工作的发送方调用 `deliver()`。Agent 自身机制产生的消息，例如后台任务结果、goal 轮次、plan 切换和问题答复，继续使用 `followup()`、`steer()` 与 `inject()`：它们属于已经接纳的工作。消息来源无人值守时（例如定时任务或 webhook），监听器不得等待人来处理，只能放行或拒绝。

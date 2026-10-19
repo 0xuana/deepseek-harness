@@ -318,8 +318,10 @@ export class SessionCommandController {
    * attachment storage) in the Agent's delivery order and binds the upload
    * receipts immediately before the message enters the inbox. A repeated
    * request identity is acknowledged without delivering it again. An image
-   * prompt waits for model selection changes, so the selection it was checked
-   * against is the one it runs with.
+   * prompt takes the Session's image admission turn when its preparation
+   * starts and keeps it until the prompt settles, so a model selection lands
+   * either before its image check or after it entered the inbox; a selection
+   * waits while a listener holds that image prompt.
    * @param request - Session identity, prompt content, and delivery mode.
    * @param source - the `user-rpc` source recorded on the accepted message.
    * @param signal - the requesting client's cancellation; it stops a prompt that waits for its turn or is held at the admission stage.
@@ -330,35 +332,38 @@ export class SessionCommandController {
     const agent = await this.resolveAgent(request.sessionId)
     if (hasPromptRequest(agent, request.requestId)) return { accepted: true }
     const hasImage = request.content.some(part => part.type === 'image')
-    const deliver = async (): Promise<SessionPromptValue> => {
-      const uploads: { receiptIds: readonly FileUploadReceiptId[]; binding?: PromptFileBinding } = { receiptIds: [] }
-      try {
-        await this.ctx.agentController.deliver(agent, {
-          mode: request.mode === 'steer' ? 'steer' : 'followup',
-          source,
-          signal,
-          prepare: async () => {
-            if (hasImage) await this.requireImageInput(agent)
-            const admission = resolvePromptFileReceipts(
-              request.content,
-              receiptId => this.ctx.fileUploads.resolve(agent, receiptId),
-            )
-            uploads.receiptIds = admission.receiptIds
-            return await this.ctx.attachments.admitPromptContent(admission.content)
-          },
-          beforeInsert: () => {
-            uploads.binding = this.ctx.fileUploads.bindPrompt(agent, uploads.receiptIds, request.requestId)
-          },
-        })
-        uploads.binding?.commit()
-      } catch (error) {
-        throw promptFailure(agent, error, signal)
-      } finally {
-        uploads.binding?.[Symbol.dispose]()
-      }
-      return { accepted: true }
+    const uploads: { receiptIds: readonly FileUploadReceiptId[]; binding?: PromptFileBinding } = { receiptIds: [] }
+    const imageTurn: { release?: () => void } = {}
+    try {
+      await this.ctx.agentController.deliver(agent, {
+        mode: request.mode === 'steer' ? 'steer' : 'followup',
+        source,
+        signal,
+        prepare: async (preparing) => {
+          if (hasImage) {
+            // Taken in the Agent's delivery order, so a waiting image prompt keeps its place among the others.
+            imageTurn.release = await this.agents.acquireImageAdmission(agent, preparing)
+            await this.requireImageInput(agent)
+          }
+          const admission = resolvePromptFileReceipts(
+            request.content,
+            receiptId => this.ctx.fileUploads.resolve(agent, receiptId),
+          )
+          uploads.receiptIds = admission.receiptIds
+          return await this.ctx.attachments.admitPromptContent(admission.content)
+        },
+        beforeInsert: () => {
+          uploads.binding = this.ctx.fileUploads.bindPrompt(agent, uploads.receiptIds, request.requestId)
+        },
+      })
+      uploads.binding?.commit()
+    } catch (error) {
+      throw promptFailure(agent, error, signal)
+    } finally {
+      uploads.binding?.[Symbol.dispose]()
+      imageTurn.release?.()
     }
-    return hasImage ? this.agents.serializeImageAdmission(agent, deliver) : deliver()
+    return { accepted: true }
   }
 
   /** Refuse an image prompt when the Session's current model does not declare image input. */

@@ -50,6 +50,14 @@ function request(text: string, overrides: Partial<DeliveryRequest> = {}): Delive
   }
 }
 
+/** A preparation that records its text, then returns it as the message content. */
+function recordingPrepare(prepared: string[], text: string): DeliveryRequest['prepare'] {
+  return () => {
+    prepared.push(text)
+    return Promise.resolve([{ type: 'text', text }])
+  }
+}
+
 /** Let pending deliveries run as far as they can. */
 async function settle(): Promise<void> {
   await new Promise<void>((resolve) => { setImmediate(resolve) })
@@ -149,10 +157,7 @@ describe('agent controller delivery', () => {
       if (textOf(message) === 'first') await release.promise
       return await next()
     })
-    const prepareText = (text: string): DeliveryRequest['prepare'] => () => {
-      prepared.push(text)
-      return Promise.resolve([{ type: 'text', text }])
-    }
+    const prepareText = (text: string): DeliveryRequest['prepare'] => recordingPrepare(prepared, text)
 
     const first = ctx.agentController.deliver(agent, request('first', { prepare: prepareText('first') }))
     const second = ctx.agentController.deliver(agent, request('second', { prepare: prepareText('second') }))
@@ -347,6 +352,75 @@ describe('agent controller delivery', () => {
 
     expect(seen).toEqual(['held', 'blocking', 'unheeded'])
     expect(delivered.map(delivery => delivery.text)).toEqual(['blocking'])
+  })
+
+  it('ends the wait of a message whose sender cancels behind a held one, keeping later messages in order', async () => {
+    const { ctx, agent, delivered } = await harness()
+    const release = Promise.withResolvers<undefined>()
+    const prepared: string[] = []
+    ctx.on('agent-controller/admission', async ({ message, signal }, next) => {
+      if (textOf(message) === 'held') {
+        // Holds until released, and lets a stopping controller end the hold.
+        await new Promise<void>((resolve, reject) => {
+          void release.promise.then(() => { resolve() })
+          signal.addEventListener('abort', () => { reject(signal.reason as Error) }, { once: true })
+        })
+      }
+      return await next()
+    })
+    const prepareText = (text: string): DeliveryRequest['prepare'] => recordingPrepare(prepared, text)
+
+    const held = ctx.agentController.deliver(agent, request('held', { prepare: prepareText('held') }))
+    const queuedSender = new AbortController()
+    const queued = refusalOf(ctx.agentController.deliver(agent, request('queued', {
+      signal: queuedSender.signal, prepare: prepareText('queued'),
+    })))
+    const goneSender = new AbortController()
+    const goneReason = new Error('sender left before delivering')
+    goneSender.abort(goneReason)
+    const gone = refusalOf(ctx.agentController.deliver(agent, request('gone', {
+      signal: goneSender.signal, prepare: prepareText('gone'),
+    })))
+    const later = ctx.agentController.deliver(agent, request('later', { prepare: prepareText('later') }))
+    await settle()
+    const queuedReason = new Error('queued sender left')
+    queuedSender.abort(queuedReason)
+    // Both senders hear their own reason while the held message still blocks the Agent.
+    expect(await Promise.race([queued, settle().then(() => 'still waiting')])).toBe(queuedReason)
+    expect(await gone).toBe(goneReason)
+    expect(prepared).toEqual(['held'])
+
+    release.resolve(undefined)
+    await Promise.all([held, later])
+    expect(prepared).toEqual(['held', 'later'])
+    expect(delivered.map(delivery => delivery.text)).toEqual(['held', 'later'])
+  })
+
+  it('finishes disposal only after the deliveries it stopped have settled', async () => {
+    const { ctx, controller, disposeController, agent, delivered } = await harness()
+    const cleanup = Promise.withResolvers<undefined>()
+    const steps: string[] = []
+    ctx.on('agent-controller/admission', async ({ signal }, next) => {
+      await new Promise<void>((resolve) => { signal.addEventListener('abort', () => { resolve() }, { once: true }) })
+      steps.push('stop observed')
+      await cleanup.promise
+      steps.push('cleaned up')
+      return await next()
+    })
+
+    const held = refusalOf(controller.deliver(agent, request('held')))
+    await settle()
+    let disposed = false
+    const disposal = disposeController().then(() => { disposed = true })
+    await settle()
+    expect(steps).toEqual(['stop observed'])
+    expect(disposed).toBe(false)
+
+    cleanup.resolve(undefined)
+    await disposal
+    expect(steps).toEqual(['stop observed', 'cleaned up'])
+    expect(await held).toHaveProperty('message', expect.stringContaining('agent controller stopped'))
+    expect(delivered).toEqual([])
   })
 
   it('stops every message that has not entered the inbox when the controller is disposed', async () => {
