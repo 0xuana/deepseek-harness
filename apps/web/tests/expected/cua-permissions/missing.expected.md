@@ -4,6 +4,10 @@
     - strong: Default mode for new sessions
     - paragraph: Computer Use is available only in PTC mode.
     - button "Set to PTC"
+  - group "PTC execution mode":
+    - strong: PTC execution mode
+    - paragraph: Keep variables and application objects across tool calls. Switching restarts the PTC runtime.
+    - button "Use persistent mode"
   - group "Accessibility":
     - strong: Accessibility
     - paragraph: In System Settings, allow Visual Studio Code.app to read interface controls, click, and type.

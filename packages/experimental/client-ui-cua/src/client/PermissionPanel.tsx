@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { Button, Modal, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
-import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { ConfigForm, ConfigFormSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { CuaApplicationGrant, CuaSystemPermissionState } from '@deepseek-ai/dsh-cua/types'
 import type { PermissionFace } from './controller.ts'
 import type { NS } from './locales.ts'
@@ -21,34 +21,53 @@ type DefaultPresetProps = PropsLocale<typeof NS> & InjectFace<{
   setPtcDefault: () => Promise<boolean>
 }>
 
-/** The detail page owns the optional new-session default action. */
-export type PermissionPanelProps = PermissionProps & DefaultPresetProps
+type PersistentPtcProps = PropsLocale<typeof NS> & InjectFace<{
+  hooks: { cuaPtcRuntime: ConfigForm<{ executionMode?: 'per-call' | 'persistent-in-memory' }> }
+  setPersistentPtc: () => Promise<boolean>
+}>
+
+/** The detail page owns explicit preset and execution-mode settings. */
+export type PermissionPanelProps = PermissionProps & DefaultPresetProps & PersistentPtcProps
 
 function DefaultPresetSetting(props: DefaultPresetProps) {
-  const { t } = props
   const preset = props.useCuaDefaultPreset(value => value)
-  const isPtc = (preset.value?.selectedDefault ?? preset.value?.default) === 'ptc'
-  const loading = preset.value === undefined && preset.status === 'loading'
+  return <ConfigurationSetting kind="default" setting={preset} t={props.t} save={props.setPtcDefault}
+    configured={(preset.value?.selectedDefault ?? preset.value?.default) === 'ptc'} />
+}
+
+function PersistentPtcSetting(props: PersistentPtcProps) {
+  const runtime = props.useCuaPtcRuntime(value => value)
+  return <ConfigurationSetting kind="persistent" setting={runtime} t={props.t} save={props.setPersistentPtc}
+    configured={runtime.value?.executionMode === 'persistent-in-memory'} />
+}
+
+function ConfigurationSetting({ kind, setting, configured, save, t }: PropsLocale<typeof NS> & {
+  kind: 'default' | 'persistent'
+  setting: ConfigFormSnapshot<unknown>
+  configured: boolean
+  save: () => Promise<boolean>
+}) {
+  const loading = setting.value === undefined && setting.status === 'loading'
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const setDefault = async (): Promise<void> => {
+  const submit = async (): Promise<void> => {
     setSaving(true)
     setError(null)
     try {
-      if (!await props.setPtcDefault()) setError(t('defaultNotSaved'))
+      if (!await save()) setError(t(`${kind}NotSaved`))
     } catch (error) {
-      setError(t('defaultFailed', { message: error instanceof Error ? error.message : String(error) }))
+      setError(t(`${kind}Failed`, { message: error instanceof Error ? error.message : String(error) }))
     } finally { setSaving(false) }
   }
-  return <div className={css.defaultSetting} role="group" aria-label={t('defaultTitle')}>
+  return <div className={css.defaultSetting} role="group" aria-label={t(`${kind}Title`)}>
     <div className={css.permission}>
-      <div><strong>{t('defaultTitle')}</strong><p>{t('defaultBody')}</p></div>
+      <div><strong>{t(`${kind}Title`)}</strong><p>{t(`${kind}Body`)}</p></div>
       {loading ? <span className={css.buttonPlaceholder} aria-hidden />
-        : <Button size="sm" variant={isPtc ? 'outline' : 'primary'} disabled={saving || isPtc || !preset.writable || preset.status !== 'ready'}
-          onClick={() => { void setDefault() }}>{t(isPtc ? 'defaultSet' : 'defaultConfirm')}</Button>}
+        : <Button size="sm" variant={configured ? 'outline' : 'primary'} disabled={saving || configured || !setting.writable || setting.status !== 'ready'}
+          onClick={() => { void submit() }}>{t(configured ? `${kind}Set` : `${kind}Confirm`)}</Button>}
     </div>
-    {!isPtc && (preset.status === 'unavailable' ? <p className={css.error} role="alert">{t('defaultUnavailable')}</p>
-      : preset.status === 'ready' && !preset.writable && <p className={css.error} role="alert">{t('defaultReadOnly')}</p>)}
+    {!configured && (setting.status === 'unavailable' ? <p className={css.error} role="alert">{t(`${kind}Unavailable`)}</p>
+      : setting.status === 'ready' && !setting.writable && <p className={css.error} role="alert">{t(`${kind}ReadOnly`)}</p>)}
     {error !== null && <p className={css.error} role="alert">{error}</p>}
   </div>
 }
@@ -113,6 +132,7 @@ export function PermissionPanel(props: PermissionPanelProps) {
       <h3>{t('title')}</h3>
       <div className={css.card}>
         <DefaultPresetSetting {...props} />
+        <PersistentPtcSetting {...props} />
         {!busy && state.system.error !== null && <div className={css.notice} role="alert">
           <span className={css.error}>{t('queryFailed', { message: state.system.error })}</span>
           <Button size="sm" variant="outline" disabled={state.system.busy} onClick={refresh}>{t('retry')}</Button>

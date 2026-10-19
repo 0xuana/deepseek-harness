@@ -1,4 +1,4 @@
-/** Optional CUA uses existing plugin activation without changing the shared PTC runtime. */
+/** Optional CUA uses existing plugin activation and offers a separate persistent PTC action. */
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -12,7 +12,7 @@ import { expect, it } from 'vitest'
 import { launchWebScaffold, type WebScaffold } from './scaffold.ts'
 import { connectFreshWorkspaceZh, ZH_BROWSER_LOCALE } from './support.ts'
 
-it.each([undefined, 'minimal'] as const)('adds CUA to PTC sessions while preserving default %s and runtime configuration', async (selectedDefault) => {
+it.each([undefined, 'minimal'] as const)('adds CUA to PTC sessions while preserving default %s until the explicit persistent-runtime action', async (selectedDefault) => {
   const directory = await mkdtemp(join(tmpdir(), 'cua-optin-web-'))
   let ownedScaffold: WebScaffold | undefined
   let browser: Browser | undefined
@@ -92,11 +92,30 @@ it.each([undefined, 'minimal'] as const)('adds CUA to PTC sessions while preserv
     const saved = await readFile(settingsPath, 'utf8')
     expect(saved).toContain('selectedDefault: ptc')
     expect(saved).not.toContain('executionMode:')
+    const persistent = panel.getByRole('group', { name: 'PTC 执行方式', exact: true })
+    await persistent.getByRole('button', { name: '设为持久化', exact: true }).click()
+    await persistent.getByRole('button', { name: '已设为持久化', exact: true }).waitFor()
+    expect(scaffold.ctx.ptcRuntime.programFormat).toBe('repl')
+    expect(runtimeFiber() === originalRuntimeFiber).toBe(false)
+    const persistentRuntimeFiber = runtimeFiber()
+    const runtime = scaffold.ctx.ptcRuntime, owner = {}
+    const program = 'globalThis.counter = (globalThis.counter ?? 0) + 1'
+    expect((await runtime.run(runtime.resolve({ program, bindings: [], stateOwner: owner }))).value).toBe(1)
+    const configured = await readFile(settingsPath, 'utf8')
+    expect(configured).toContain('executionMode: persistent-in-memory')
+    expect(scaffold.ctx.agentPresets.defaultId).toBe('ptc')
+    expect(scaffold.ctx.agentPresets.composedPreset(originalAgent.ctx)).toBe(initialDefault)
     await detailToggle.click()
     await detailToggle.and(page.locator('[aria-checked="false"]')).waitFor({ state: 'visible' })
-    expect(await readFile(settingsPath, 'utf8')).toBe(saved)
-    expect(runtimeFiber() === originalRuntimeFiber).toBe(true)
-    expect(scaffold.ctx.ptcRuntime.programFormat).toBe('function-body')
+    expect(await readFile(settingsPath, 'utf8')).toBe(configured)
+    expect(runtimeFiber() === persistentRuntimeFiber).toBe(true)
+    expect((await runtime.run(runtime.resolve({ program, bindings: [], stateOwner: owner }))).value).toBe(2)
+    await detailToggle.click()
+    await detailToggle.and(page.locator('[aria-checked="true"]')).waitFor({ state: 'visible' })
+    expect(await readFile(settingsPath, 'utf8')).toBe(configured)
+    expect(runtimeFiber() === persistentRuntimeFiber).toBe(true)
+    expect((await runtime.run(runtime.resolve({ program, bindings: [], stateOwner: owner }))).value).toBe(3)
+    await runtime.release(owner)
   } finally {
     try { await browser?.close() } finally {
       try { await ownedScaffold?.close() } finally { await rm(directory, { recursive: true, force: true }) }
