@@ -690,9 +690,10 @@ async function toggleOptionalBundles(page: Page): Promise<void> {
   const cua = result.toggles.find(toggle => toggle.name === '@deepseek-ai/dsh-cua-bundle')!
   expect(cua).toMatchObject({
     enable: 'failed', disable: 'applied',
-    error: { code: 'operation-error', diagnostic: expect.stringContaining('Computer Use currently requires macOS') },
+    error: { code: 'operation-error' },
     restored: true,
   })
+  expect(cua.error).toHaveProperty('diagnostic', expect.stringContaining('Computer Use currently requires macOS'))
   expect(cua.changed).toBeGreaterThan(0)
   expect(cua.inactive).toContain('@deepseek-ai/dsh-experimental-cua-macos true failed')
   const supported = result.toggles.filter(toggle => toggle.name !== '@deepseek-ai/dsh-cua-bundle')
