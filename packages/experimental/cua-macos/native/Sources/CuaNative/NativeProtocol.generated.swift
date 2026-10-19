@@ -4,7 +4,7 @@ enum NativeProtocol {
     static let fields: [String: Set<String>] = [
         "activate": ["appHandle"],
         "applicationIcons": ["paths"],
-        "click": ["appHandle", "clickCount", "elementIndex", "modifiers", "mouseButton", "snapshotId", "windowId", "x", "y"],
+        "click": ["appHandle", "clickCount", "elementIndex", "holdMs", "modifiers", "mouseButton", "snapshotId", "windowId", "x", "y"],
         "drag": ["appHandle", "durationMs", "fromX", "fromY", "modifiers", "mouseButton", "snapshotId", "steps", "toX", "toY", "windowId"],
         "findApps": ["maxAppMatches", "query"],
         "getApp": ["selector"],
