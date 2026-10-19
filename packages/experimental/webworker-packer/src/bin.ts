@@ -2,11 +2,10 @@
 /**
  * Pack a Preview deployment from this repository: materialize and lower the
  * base image for one shipped profile, write its lazy chunk archives beside it,
- * write the package assets under the page root that serves the preview page,
  * then write each named fixture overlay and their manifest.
  *
- * Usage: dsh-pack-vfs-image --out <file> --page-root <dir> [--profile web] [--root /dsh]
- *        node --import tsx/esm src/bin.ts --out ../../apps/web/dist/preview/vfs-image.tar.gz --page-root ../../apps/web/dist
+ * Usage: dsh-pack-vfs-image --out <file> [--profile web] [--root /dsh]
+ *        node --import tsx/esm src/bin.ts --out ../../apps/web/dist/preview/vfs-image.tar.gz
  * @module @deepseek-ai/dsh-experimental-webworker-packer/src/bin
  */
 import { mkdirSync, writeFileSync } from 'node:fs'
@@ -45,8 +44,6 @@ const repoRoot = fileURLToPath(new URL('../../../../', import.meta.url))
 const profile = flag('profile', 'web')
 const out = flag('out')
 const outputFile = isAbsolute(out) ? out : resolve(process.cwd(), out)
-const pageRootFlag = flag('page-root')
-const pageRoot = isAbsolute(pageRootFlag) ? pageRootFlag : resolve(process.cwd(), pageRootFlag)
 
 const result = packRepositoryImage(repoRoot, profile, flag('root', '/dsh'))
 
@@ -61,12 +58,6 @@ for (const archive of result.lazyArchives) {
   const path = join(dirname(outputFile), archive.name)
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, archive.image)
-}
-// Page asset paths are relative to the preview page, whose document resolves the bundles' asset URLs.
-for (const [pagePath, bytes] of Object.entries(result.pageFiles)) {
-  const path = join(pageRoot, pagePath)
-  mkdirSync(dirname(path), { recursive: true })
-  writeFileSync(path, bytes)
 }
 
 const fixtureDefinitions = previewFixtures(repoRoot)

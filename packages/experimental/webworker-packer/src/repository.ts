@@ -279,7 +279,6 @@ export function describePack(result: PackResult, repoRoot: string, outputFile: s
     `  compressed          ${megabytes(result.image.byteLength)}`,
     `  config + presets    ${megabytes(sizeOf('config/'))}`,
     `  lazy archives       ${String(result.lazyArchives.length)} (${megabytes(result.lazyArchives.reduce((sum, archive) => sum + archive.image.byteLength, 0))} compressed)`,
-    `  page assets         ${String(Object.keys(result.pageFiles).length)} (${megabytes(Object.values(result.pageFiles).reduce((sum, bytes) => sum + bytes.byteLength, 0))})`,
     ...result.lazyArchives.map(archive =>
       `    ${megabytes(archive.image.byteLength).padStart(9)}  ${archive.name}  ${archive.files.join(', ')}`),
     `  javascript entries  ${String(result.javascriptEntries)} (dropped ${String(result.executables.length)} executable scripts, ${String(result.pageBundles.length)} page bundles verbatim)`,
