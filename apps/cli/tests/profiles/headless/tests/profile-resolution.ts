@@ -214,7 +214,7 @@ export function testProfileResolution(mode: ExampleMode): void {
           '      sourceToolsInstance: ctx.tools instanceof SourceTools,',
           `      profileToolsCjs: ${toolsCjsExpression},`,
           '      sourceToolsCjs, sourceLeafCjs, sourceLeafExplicitCjs,',
-          "      executor: typeof ctx.tools.prepare().execute === 'function',",
+          "      executor: typeof ctx.tools.execute === 'function',",
           '      modules: [...ctx.loader.internal.loadCache.keys()]',
           '        .filter(url => /\\/packages\\/core\\/(?:tools|agent-loop)\\//.test(url)),',
           '    }',
