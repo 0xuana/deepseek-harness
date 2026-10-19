@@ -1,0 +1,623 @@
+/* Performance table: turn totals, expandable step rows, time bars, tool accordion. */
+
+.root {
+  box-sizing: border-box;
+  padding: 12px 20px 48px;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xxs-12);
+}
+
+.empty {
+  padding: 24px 0;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* Table shared by the turn rows and their nested step rows. */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  border-spacing: 0;
+  font: var(--dsw-font-xxs-12);
+  font-variant-numeric: tabular-nums;
+}
+
+.thLeft,
+.th {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  box-sizing: border-box;
+  height: 30px;
+  padding: 0 8px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-specific-sidebar-fill);
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.thLeft {
+  text-align: left;
+}
+
+.th {
+  text-align: right;
+}
+
+/* Turn row: the whole row toggles its steps. */
+.turnRow {
+  cursor: pointer;
+}
+
+.turnCell,
+.turnMetric,
+.turnDid,
+.promptCellTurn {
+  padding: 6px 8px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  white-space: nowrap;
+}
+
+.turnCell {
+  font-weight: 600;
+}
+
+.turnMetric {
+  font-weight: 600;
+  text-align: right;
+}
+
+.turnDid {
+  white-space: nowrap;
+}
+
+.stepCount {
+  color: var(--dsw-alias-label-secondary);
+  font-weight: 400;
+}
+
+.toggle {
+  border-bottom: 0.5px dotted var(--dsw-alias-border-l2);
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-11);
+  font-weight: 400;
+}
+
+.turnClock {
+  color: var(--dsw-alias-label-tertiary);
+  font-weight: 400;
+}
+
+/* Step row: the left inset rule ties it to the turn above. */
+.stepRowClickable {
+  cursor: pointer;
+}
+
+.stepRowError {
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 8%, transparent);
+}
+
+.stepCell {
+  box-sizing: border-box;
+  height: 30px;
+  padding: 0 8px 0 22px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  box-shadow: inset 2px 0 0 var(--dsw-alias-border-l1);
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}
+
+.stepMetric,
+.stepDid,
+.promptCell {
+  box-sizing: border-box;
+  height: 30px;
+  padding: 0 8px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  white-space: nowrap;
+}
+
+.stepMetric {
+  text-align: right;
+}
+
+/* Scope markers appended to the row label. */
+.stateRunning {
+  margin-left: 6px;
+  color: var(--dsw-alias-state-business-primary);
+  font-weight: 400;
+}
+
+.stateWarn {
+  margin-left: 6px;
+  color: var(--dsw-alias-state-warn-primary);
+  font-weight: 400;
+}
+
+.stateMuted {
+  margin-left: 6px;
+  color: var(--dsw-alias-label-secondary);
+  font-weight: 400;
+}
+
+.partialHint {
+  color: var(--dsw-alias-state-warn-primary);
+  font: var(--dsw-font-xxxs-11);
+  font-weight: 400;
+}
+
+.detailHint {
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+  font-weight: 400;
+}
+
+/* User question: one clipped line, full text in the title. */
+.promptText {
+  display: inline-block;
+  max-width: 260px;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+/* Did column: tool names, hints, and output sizes. */
+.didClip {
+  display: inline-block;
+  max-width: 380px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+.toolName {
+  color: var(--perf-tool-color, var(--dsw-alias-label-secondary));
+  font-weight: 500;
+}
+
+.didHint {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.didSep {
+  margin: 0 4px;
+  color: var(--dsw-alias-label-caption);
+}
+
+.didStat {
+  color: var(--dsw-alias-label-primary);
+}
+
+.added {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.removed {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.countBadge {
+  display: inline-flex;
+  align-items: center;
+  height: 19px;
+  margin: 0 3px;
+  padding: 0 5px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 2px;
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 14px;
+  vertical-align: bottom;
+}
+
+.failPill {
+  display: inline-flex;
+  align-items: center;
+  height: 19px;
+  margin-right: 6px;
+  padding: 0 6px;
+  border-radius: 2px;
+  background: var(--dsw-alias-state-error-primary);
+  color: var(--dsw-alias-bg-base);
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 14px;
+  vertical-align: bottom;
+}
+
+/* Turn did column: tool pills over the composition bar. */
+.pills {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  max-width: 380px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 19px;
+  padding: 0 6px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 2px;
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.pillMuted {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  corner-shape: round;
+  background: var(--perf-tool-color, var(--dsw-alias-label-secondary));
+}
+
+.mix {
+  display: flex;
+  height: 4px;
+  max-width: 380px;
+  margin-top: 5px;
+  border-radius: 2px;
+  background: var(--dsw-alias-bg-layer-2);
+  overflow: hidden;
+}
+
+.mixSegment {
+  display: block;
+  background: var(--perf-tool-color, var(--dsw-alias-label-secondary));
+}
+
+/* Tool tone classes only set the shared custom property. */
+.tone0 {
+  --perf-tool-color: var(--dsw-alias-state-business-primary);
+}
+
+.tone1 {
+  --perf-tool-color: var(--dsw-alias-state-success-primary);
+}
+
+.tone2 {
+  --perf-tool-color: var(--dsw-alias-state-warn-primary);
+}
+
+.tone3 {
+  --perf-tool-color: var(--dsw-alias-state-error-secondary);
+}
+
+.tone4 {
+  --perf-tool-color: var(--dsw-alias-brand-primary-new-colorprimary-new-color);
+}
+
+.tone5 {
+  --perf-tool-color: var(--dsw-alias-state-success-secondary);
+}
+
+.tone6 {
+  --perf-tool-color: var(--dsw-alias-state-warn-label);
+}
+
+.tone7 {
+  --perf-tool-color: var(--dsw-alias-label-caption);
+}
+
+/* Numeric columns: a fixed-width number with the context delta beside it. */
+.num {
+  display: inline-block;
+  min-width: 62px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.numDelta {
+  display: inline-block;
+  min-width: 62px;
+  font: var(--dsw-font-xxxs-11);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.deltaUp {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.deltaDown {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* Time composition: turn bars are tall and outlined, step bars short and bare. */
+.timeWrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.barTurn {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 150px;
+  height: 14px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 2px;
+  background: var(--dsw-alias-bg-layer-2);
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.barStep {
+  display: inline-block;
+  width: 104px;
+  height: 6px;
+  border-radius: 2px;
+  background: var(--dsw-alias-bg-layer-2);
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.barFill {
+  display: flex;
+  height: 100%;
+}
+
+.barSegment {
+  display: block;
+  height: 100%;
+}
+
+.barTtft {
+  background: var(--dsw-alias-state-business-primary);
+  opacity: 0.5;
+}
+
+.barDecode {
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.barTool {
+  background: var(--dsw-alias-state-warn-primary);
+}
+
+.barRest {
+  background: var(--dsw-alias-label-caption);
+}
+
+.timeValue {
+  min-width: 58px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.timeRunning {
+  min-width: 58px;
+  color: var(--dsw-alias-state-business-primary);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* Step-list controls of a long turn. */
+.moreCell {
+  padding: 2px 8px 8px;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-11);
+  line-height: 1.9;
+  white-space: normal;
+}
+
+.moreText {
+  margin-right: 10px;
+}
+
+.chip,
+.chipOn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 19px;
+  margin-right: 8px;
+  padding: 0 6px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 2px;
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.chipOn {
+  border-color: var(--dsw-alias-state-business-primary);
+}
+
+.chip:focus-visible,
+.chipOn:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+/* Tool detail accordion: one block per call. */
+.detailCell {
+  padding: 6px 8px 12px 22px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  box-shadow: inset 2px 0 0 var(--dsw-alias-border-l1);
+  font: var(--dsw-font-xs-13);
+}
+
+.detailHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 8px;
+}
+
+.detailTitle {
+  font: var(--dsw-font-xs-strong-13);
+}
+
+.detailActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.block {
+  margin-bottom: 10px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.blockHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 8px;
+  background: var(--dsw-alias-bg-layer-2);
+  font: var(--dsw-font-xxs-12);
+}
+
+.blockHint {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.blockMeta {
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+  white-space: nowrap;
+}
+
+.blockSub {
+  padding: 4px 8px 0;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.blockEmpty {
+  display: block;
+  padding: 6px 8px;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.copy {
+  height: 18px;
+  margin-left: auto;
+  padding: 0 8px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  font: var(--dsw-font-xxxs-11);
+}
+
+.copy:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
+.copy:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+/* Body text: monospaced, indentation preserved, capped height with scoped scroll. */
+.code {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 6px 8px;
+  max-height: 320px;
+  overflow: auto;
+  font: 12px/18px var(--ds-font-family-code);
+  tab-size: 2;
+  white-space: pre;
+}
+
+.codeWrap {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.codeLine,
+.diffAdd,
+.diffDel {
+  display: block;
+  white-space: pre;
+}
+
+.codeWrap .codeLine,
+.codeWrap .diffAdd,
+.codeWrap .diffDel {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.diffAdd {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.diffDel {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* Footer controls: pagination plus expand/collapse everything. */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  font: var(--dsw-font-xxs-12);
+}
+
+.pageInfo {
+  margin-right: auto;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.button {
+  padding: 4px 10px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.button:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.button:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+.buttonOff {
+  padding: 4px 10px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: default;
+  font-size: 12px;
+}

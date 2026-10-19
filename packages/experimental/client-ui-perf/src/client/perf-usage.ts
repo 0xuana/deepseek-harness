@@ -1,0 +1,85 @@
+/** Token accounting helpers shared by the performance table's step and turn levels. */
+
+import type { PerfUsage } from './perf-contract.ts'
+
+/**
+ * Whether a value is a finite number.
+ * @param value - candidate value.
+ * @returns true when the value is a finite number.
+ */
+export function isNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+/**
+ * Counts are non-negative; a negative value counts as unreported.
+ * @param value - candidate token count.
+ * @returns true when the value is a usable count.
+ */
+export function isCount(value: unknown): value is number {
+  return isNumber(value) && value >= 0
+}
+
+/**
+ * Whether one usage object carries any token count.
+ * @param value - candidate usage object.
+ * @returns true when at least one count was reported.
+ */
+export function isUsage(value: unknown): value is PerfUsage {
+  if (value === null || typeof value !== 'object') return false
+  const usage = value as PerfUsage
+  return isCount(usage.inputTokens) || isCount(usage.outputTokens)
+    || isCount(usage.cacheReadTokens) || isCount(usage.cacheWriteTokens)
+}
+
+/**
+ * Prompt length: input, cache read, and cache write do not overlap.
+ * @param usage - usage reported by one assistant message.
+ * @returns prompt token count, or null when nothing was reported.
+ */
+export function contextTokens(usage: PerfUsage | null): number | null {
+  if (!isUsage(usage)) return null
+  return (isCount(usage.inputTokens) ? usage.inputTokens : 0)
+    + (isCount(usage.cacheReadTokens) ? usage.cacheReadTokens : 0)
+    + (isCount(usage.cacheWriteTokens) ? usage.cacheWriteTokens : 0)
+}
+
+/**
+ * Output tokens reported by one usage object.
+ * @param usage - usage reported by one assistant message.
+ * @returns output token count, or null when unreported.
+ */
+export function outputTokens(usage: PerfUsage | null): number | null {
+  return isUsage(usage) && isCount(usage.outputTokens) ? usage.outputTokens : null
+}
+
+/**
+ * Cache-read tokens reported by one usage object.
+ * @param usage - usage reported by one assistant message.
+ * @returns cache-read token count, or null when unreported.
+ */
+export function cacheReadTokens(usage: PerfUsage | null): number | null {
+  return isUsage(usage) && isCount(usage.cacheReadTokens) ? usage.cacheReadTokens : null
+}
+
+/**
+ * Cache-write tokens reported by one usage object.
+ * @param usage - usage reported by one assistant message.
+ * @returns cache-write token count, or null when unreported.
+ */
+export function cacheWriteTokens(usage: PerfUsage | null): number | null {
+  return isUsage(usage) && isCount(usage.cacheWriteTokens) ? usage.cacheWriteTokens : null
+}
+
+/**
+ * Share of the prompt served from cache; null when nothing was reported.
+ * @param usage - usage reported by one assistant message.
+ * @returns cache hit rate in [0, 1], or null when it cannot be derived.
+ */
+export function cacheHitRate(usage: PerfUsage | null): number | null {
+  const context = contextTokens(usage)
+  if (context === null || context <= 0) return null
+  const read = cacheReadTokens(usage)
+  if (read === null) return null
+  return Math.min(1, read / context)
+}
