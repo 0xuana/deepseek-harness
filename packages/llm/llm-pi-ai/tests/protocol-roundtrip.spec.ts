@@ -66,7 +66,11 @@ function frames(api: Api, tools = false): (string | ReturnType<typeof anthropicF
       role: 'assistant', content: tools ? 'source text' : 'reply',
       ...tools ? {
         reasoning_content: 'source reasoning',
-        tool_calls: [0, 1].map(index => ({ index, id: `call_${index}`, type: 'function', function: { name: 'lookup', arguments: JSON.stringify({ key: index }) } })),
+        tool_calls: [0, 1].map(index => ({
+          index, id: `call_${index}`, type: 'function', function: { name: 'lookup', arguments: JSON.stringify({ key: index }) },
+          // Gemini's OpenAI-compatible endpoints sign only the first call of each step.
+          ...index === 0 ? { extra_content: { google: { thought_signature: 'gemini-signature' } } } : {},
+        })),
       } : {},
     }, finish_reason: null }] }),
     JSON.stringify({ choices: [{ index: 0, delta: {}, finish_reason: tools ? 'tool_calls' : 'stop' }], usage: { prompt_tokens: 3, completion_tokens: 1 } }),
@@ -167,6 +171,10 @@ describe('protocol history round trips', () => {
     } else if (a === 'openai-responses') {
       expect(JSON.stringify(baseline)).toContain('encrypted-reasoning')
       expect(JSON.stringify(baseline)).toContain('fc_0')
+    } else {
+      const calls = baseline.flatMap(message => (message as { tool_calls?: unknown[] }).tool_calls ?? [])
+      expect(calls).toMatchObject([{ extra_content: { google: { thought_signature: 'gemini-signature' } } }, {}])
+      expect(calls[1]).not.toHaveProperty('extra_content')
     }
     const foreign = await assemble(ctx, { provider: targetProvider, model: 'model', messages: history, tools: [tool] })
     expect(foreign.finish).toEqual({ kind: 'stop' })
@@ -175,6 +183,7 @@ describe('protocol history round trips', () => {
     expect(JSON.stringify(target.requests[0])).not.toContain('encrypted-reasoning')
     expect(JSON.stringify(target.requests[0])).not.toContain('encrypted-redacted-reasoning')
     expect(JSON.stringify(target.requests[0])).not.toContain('signed-reasoning')
+    expect(JSON.stringify(target.requests[0])).not.toContain('gemini-signature')
     history.push(foreign.message, createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: 'Continue with the original model.' }] }))
     history = JSON.parse(JSON.stringify(history)) as Message[]
     expect(history.slice(0, -2)).toEqual(JSON.parse(saved))
