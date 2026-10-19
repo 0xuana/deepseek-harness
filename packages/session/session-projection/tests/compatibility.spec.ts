@@ -1,5 +1,6 @@
 /** Legacy projection calls keep their effect ownership while new callers await retained readers. */
 /* oxlint-disable typescript/no-deprecated -- exercise the public compatibility API. */
+import { setImmediate } from 'node:timers/promises'
 import { Context, FiberState } from '@deepseek-ai/cordis'
 import SessionStore from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
@@ -47,6 +48,8 @@ describe('projection registration compatibility', () => {
       inject: ['sessionProjections'],
       async apply(inner) {
         const registration = inner.sessionProjections.register(definition)
+        expect(registration).not.toBeInstanceOf(Promise)
+        expect(Promise.resolve(registration)).toBeInstanceOf(Promise)
         const handle = await registration.then(value => value).catch(() => { throw new Error('unexpected rejection') })
         expect(await registration.finally(settled)).toBe(handle)
         expect(handle.stateOf(session)).toBe(0)
@@ -138,6 +141,23 @@ describe('projection registration compatibility', () => {
     expect(hostInit).toHaveBeenCalledOnce()
   })
 
+  it('warns for startup registration even when the caller awaits it after activation', async () => {
+    const { ctx, warning } = await setup()
+    const warned = Promise.withResolvers<undefined>()
+    warning.mockImplementation(() => { warned.resolve(undefined) })
+    let registration!: ReturnType<SessionProjectionRegistry['register']>
+    await ctx.plugin({
+      inject: ['sessionProjections'],
+      apply(inner) {
+        registration = inner.sessionProjections.register(definition)
+      },
+    })
+    await warned.promise
+    const handle = await registration
+    await handle.dispose()
+    expect(warning).toHaveBeenCalledOnce()
+  })
+
   it('keeps callable early disposal idempotent without invalidating an awaited reader', async () => {
     const { ctx, warning, session } = await setup()
     const registration = legacyRegistration(ctx.sessionProjections.register(definition))
@@ -175,6 +195,24 @@ describe('projection registration compatibility', () => {
     await owner.dispose()
     expect(ctx.sessionProjections.snapshot(session).values).toEqual({})
     expect(warning).toHaveBeenCalledOnce()
+  })
+
+  it('rejects an async plugin that returns the legacy registration as a disposer', async () => {
+    const { ctx, warning, session } = await setup()
+    const errorLog = vi.spyOn(ctx.logger, 'error').mockImplementation(() => {})
+    onTestFinished(() => { errorLog.mockRestore() })
+    const owner = ctx.plugin({
+      inject: ['sessionProjections'],
+      async apply(inner) {
+        // Compiled legacy callers see a disposer type; async return still assimilates its runtime then().
+        return legacyRegistration(inner.sessionProjections.register(definition)) as () => Promise<void>
+      },
+    })
+    await expect(owner.await()).rejects.toThrow('Invalid effect')
+    expect(owner.state).toBe(FiberState.FAILED)
+    expect(ctx.sessionProjections.snapshot(session).values).toEqual({})
+    expect(errorLog).toHaveBeenCalledOnce()
+    expect(warning).not.toHaveBeenCalled()
   })
 
   it('transfers the original disposer into a composed effect and retains it until earlier cleanup settles', async () => {
@@ -273,6 +311,26 @@ describe('projection registration compatibility', () => {
     await owner.dispose()
     await rejection
     expect(ctx.sessionProjections.snapshot(session).values).toEqual({})
+    expect(warning).not.toHaveBeenCalled()
+  })
+
+  it('silently releases an unobserved registration when its plugin cancels before handoff', async () => {
+    const { ctx, warning, session } = await setup()
+    const errorLog = vi.spyOn(ctx.logger, 'error').mockImplementation(() => {})
+    onTestFinished(() => { errorLog.mockRestore() })
+    const owner = ctx.plugin({
+      inject: ['sessionProjections'],
+      apply(inner) {
+        void inner.sessionProjections.register(definition)
+        void inner.fiber.dispose()
+      },
+    })
+    await owner.await()
+    // The next event-loop turn includes startup observation and any unhandled-rejection delivery.
+    await setImmediate()
+    expect(owner.state).toBe(FiberState.DISPOSED)
+    expect(ctx.sessionProjections.snapshot(session).values).toEqual({})
+    expect(errorLog).not.toHaveBeenCalled()
     expect(warning).not.toHaveBeenCalled()
   })
 })

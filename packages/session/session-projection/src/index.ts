@@ -284,7 +284,7 @@ export class SessionProjectionRegistry extends Service {
    * Retained handles remain readable after release.
    * Callers must await registration before publishing consumers; registration may perform asynchronous work.
    * @param definition - key, state schema, pure unit functions, and stateVersion.
-   * @returns a ready handle with synchronous state reads and the effect disposer.
+   * @returns an awaitable yielding a ready handle; the callable runtime value is deprecated.
    */
   register<K extends keyof SessionProjectionMap, S>(
     definition: Omit<ProjectionDefinition<K, S>, 'wire'> & {
@@ -296,11 +296,12 @@ export class SessionProjectionRegistry extends Service {
    * and always checkpointed like every other unit.
    * Callers must await registration before publishing consumers; registration may perform asynchronous work.
    * @param definition - key, state schema, pure unit functions, and stateVersion.
-   * @returns a ready handle with synchronous state reads and the effect disposer.
+   * @returns an awaitable yielding a ready handle; the callable runtime value is deprecated.
    */
   register<K extends string, S>(
     definition: ProjectionDefinition<K, S> & { key: Exclude<K, keyof SessionProjectionMap> },
   ): Promise<ProjectionHandle<S>>
+  /** Legacy runtime behavior: [plugin compatibility](../README.md#deprecated-plugin-compatibility). */
   register<K extends string, S>(
     definition: ProjectionDefinition<K, S>,
   ): Promise<ProjectionHandle<S>> {
@@ -335,14 +336,12 @@ export class SessionProjectionRegistry extends Service {
     })()
     if (owner.state === FiberState.LOADING) {
       // Observe startup without delaying it; the plugin may await registration later in apply().
-      void Promise.allSettled([owner.await(), ready]).then(([activation, result]) => {
-        if (observed) return
+      void Promise.allSettled([owner.await(), ready]).then(([, result]) => {
+        if (observed || owner.state === FiberState.UNLOADING || owner.state === FiberState.DISPOSED) return
         this.warnCompatibility('register')
         if (result.status === 'rejected') {
-          if (activation.status === 'fulfilled' || activation.reason !== result.reason) {
-            owner.ctx.logger.error(result.reason)
-          }
-          void owner.dispose().catch((error: unknown) => { owner.ctx.logger.error(error) })
+          owner.ctx.logger.error(result.reason)
+          void Promise.resolve(owner.dispose()).catch((error: unknown) => { owner.ctx.logger.error(error) })
         }
       })
     }
@@ -361,7 +360,7 @@ export class SessionProjectionRegistry extends Service {
       },
       [Symbol.toStringTag]: 'Promise',
     }
-    // Preserve the exact effect identity so generator effects can adopt its cleanup.
+    // Keep the original disposer for composed cleanup; replace its then() so awaiting yields the handle.
     return Object.assign(dispose, promise)
   }
 
