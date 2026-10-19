@@ -86,7 +86,7 @@ export function ChatView({
   const fileImages = useMemo(() => ({
     resolve: (path: string) => fileMediaUrl(document.baseURI, resolveWorkspacePath(cwd, path)),
     labels: {
-      open: t('image.open'), loading: t('image.loading'), failed: t('image.failed'),
+      dragFailed: t('image.dragFailed'), open: t('image.open'), loading: t('image.loading'), failed: t('image.failed'),
       dialog: t('image.dialog'), close: t('image.close'),
     },
   }), [cwd, t])

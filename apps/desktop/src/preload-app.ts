@@ -14,6 +14,13 @@ function createProductApi(): DshDesktopProductApi {
   return {
     protocolVersion: 1,
     browser: createDesktopBrowserBridge(),
+    imageDrag: {
+      prepare: (bytes, name, mediaType) => ipcRenderer.invoke(DESKTOP_IPC.imageDragPrepare, bytes, name, mediaType) as Promise<string>,
+      start: handle => ipcRenderer.invoke(DESKTOP_IPC.imageDragStart, handle) as Promise<boolean>,
+      release: (handle) => { void ipcRenderer.invoke(DESKTOP_IPC.imageDragRelease, handle).catch((_error: unknown) => {
+        // Main-process shutdown also releases every prepared file.
+      }) },
+    },
     deviceInfo: () => ipcRenderer.invoke(DESKTOP_IPC.deviceInfo) as Promise<string>,
     keyboard: {
       closeWindow: revision => ipcRenderer.invoke(DESKTOP_IPC.shortcutsCloseWindow, revision) as Promise<void>,

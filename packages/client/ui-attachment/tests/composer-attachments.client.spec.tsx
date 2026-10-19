@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render } from '@testing-library/react'
+import { cleanup, fireEvent, render as renderBare } from '@testing-library/react'
+import { ImageDragProvider } from '@deepseek-ai/dsh-client-ui-primitives'
+const render = (ui: import('react').ReactNode) => renderBare(ui, { wrapper: ImageDragProvider })
 import type {
   ComposerAttachment, ComposerAttachmentsOwnerProps, ComposerAttachmentsProps,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -305,4 +307,28 @@ describe('ComposerAttachments file drafts', () => {
     })} />)
     expect(view.getByTitle('.env').textContent).toContain('ENV 3B')
   })
+})
+
+it('accepts only the current app image token without showing an external-file overlay', async () => {
+  const { DraggableImage } = await import('@deepseek-ai/dsh-client-ui-primitives')
+  const file = new File([Uint8Array.of(1, 2)], 'original.png', { type: 'image/png' })
+  function Source() {
+    return <DraggableImage alt="drag source" src="blob:original" name={file.name} failureText="拖放失败，请重试" original={file} />
+  }
+  const onAddFiles = vi.fn()
+  const view = render(<ImageDragProvider><Source /><ComposerAttachments {...props({ onAddFiles })} /></ImageDragProvider>)
+  const data = new Map<string, string>()
+  const transfer = {
+    types: ['application/x-dsh-image'], items: Object.assign([], { clear: vi.fn() }), files: [],
+    getData: (key: string) => data.get(key) ?? '', setData: (key: string, value: string) => data.set(key, value),
+  }
+  fireEvent.pointerEnter(view.getByAltText('drag source'))
+  fireEvent.dragStart(view.getByAltText('drag source'), { dataTransfer: transfer })
+  fireEvent.dragEnter(document.body, { dataTransfer: transfer })
+  expect(view.queryByText('文件或图片拖动到此处即可添加')).toBeNull()
+  fireEvent.drop(document.body, { dataTransfer: transfer })
+  expect(onAddFiles).toHaveBeenCalledExactlyOnceWith([file], new Set())
+  data.set('application/x-dsh-image', 'foreign')
+  fireEvent.drop(document.body, { dataTransfer: transfer })
+  expect(onAddFiles).toHaveBeenCalledOnce()
 })

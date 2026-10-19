@@ -2,7 +2,9 @@
 /** Image Blob ownership, media types, pane-contained rendering, and failure states. */
 import { useSyncExternalStore } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render as renderBare, screen } from '@testing-library/react'
+import { ImageDragProvider } from '@deepseek-ai/dsh-client-ui-primitives'
+const render = (ui: import('react').ReactNode) => renderBare(ui, { wrapper: ImageDragProvider })
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
 import { ImageBody, imageMediaType, type ImageBodyProps } from '../src/client/image/ImageBody.tsx'
@@ -83,13 +85,13 @@ describe('ImageBody', () => {
     expect(revoke).toHaveBeenCalledExactlyOnceWith('blob:https://preview.invalid/1')
   })
 
-  it('keeps the image non-draggable, then shows it after decoding succeeds', async () => {
+  it('allows a contained image to drag, then shows it after decoding succeeds', async () => {
     render(<ImageBody {...props('photo.svg')} />)
     const image = await screen.findByRole('img', { hidden: true })
     Object.defineProperty(image, 'naturalWidth', { configurable: true, value: 50 })
     expect(image.getAttribute('alt')).toBe('Image preview: photo.svg')
     expect(image.getAttribute('decoding')).toBe('async')
-    expect(image.getAttribute('draggable')).toBe('false')
+    expect(image.getAttribute('draggable')).toBe('true')
     expect(image.getAttribute('referrerpolicy')).toBe('no-referrer')
     expect(image.parentElement?.hasAttribute('hidden')).toBe(true)
     fireEvent.load(image)

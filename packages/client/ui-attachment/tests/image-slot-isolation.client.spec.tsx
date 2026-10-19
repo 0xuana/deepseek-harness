@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 /** Independent domain image positions with one shared official gallery Factory. */
+import { ImageDragProvider } from '@deepseek-ai/dsh-client-ui-primitives'
+import { render } from '@testing-library/react'
 import { act, cleanup, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { AttachmentId } from '@deepseek-ai/dsh-attachment'
@@ -20,6 +22,7 @@ const SLOTS = [
 
 async function bench() {
   const runtime = await SlotTestRuntime.create()
+  vi.spyOn(runtime, 'renderRoot').mockImplementation(() => render(<ImageDragProvider>{runtime.slots.renderSlot('root', {})}</ImageDragProvider>))
   onTestFinished(() => runtime.dispose())
   const locale = new LocaleRuntime(runtime.ctx)
   locale.register('conversation', { en, zh })
