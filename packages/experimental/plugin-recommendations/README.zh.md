@@ -25,7 +25,7 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用此包
 
-在插件页的实验性插件分组中启用“插件推荐”。应用默认关闭此实验性插件，插件没有配置字段。
+打开插件 → 更多 → 实验性插件，启用“插件推荐”。应用默认关闭此实验性插件。启用后在插件一级页显示，关闭后仅保留在二级页。插件没有配置字段。
 
 ```yaml
 - name: @deepseek-ai/dsh-experimental-plugin-recommendations

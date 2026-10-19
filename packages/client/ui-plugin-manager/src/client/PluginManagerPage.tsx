@@ -114,6 +114,7 @@ const EXTENSION_BUNDLES = [
 ]
 /** The optional bundles the main list holds back until the profile picks them; the More list shows them from the start. */
 const MORE_BUNDLES = [
+  '@deepseek-ai/dsh-experimental-plugin-recommendations',
   '@deepseek-ai/dsh-experimental-tool-worktree',
   '@deepseek-ai/dsh-experimental-cot-translation-bundle',
   '@deepseek-ai/dsh-experimental-terminal-bundle',
