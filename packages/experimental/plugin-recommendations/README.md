@@ -43,7 +43,7 @@ Enable requires permission to modify the profile. The Host rechecks catalog elig
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The catalog and activation reuse `pluginManager`. The main Agent interprets expressed needs; Host code enforces the official shipped catalog and a separate human action. Trusted catalog text is persisted in tool-result metadata, while a Session projection folds decision receipts. Concurrent actions on one card share an operation, and disposal drains admitted changes. Profile files own installation state; experimental Session records only own the historical decision. Removing the bundle withdraws tools, cards and its generated Remote contribution.
+The catalog and activation reuse `pluginManager`. The main Agent interprets expressed needs; Host code enforces the official shipped catalog, one successful proposal per Turn, and a separate human action. Concurrent proposals reserve the Turn before catalog lookup; failed proposals release that reservation. Replaying a settled proposal preserves the limit after reload, while a later Turn can recommend again. Trusted catalog text is persisted in tool-result metadata, while a Session projection folds decision receipts. Concurrent actions on one card share an operation, and disposal drains admitted changes. Profile files own installation state; experimental Session records only own the historical decision. Removing the bundle withdraws tools, cards and its generated Remote contribution.
 
 - [Source](src/index.ts) — registration and service entry.
 - [Tests](tests/) — actions, recovery and lifecycle evidence.

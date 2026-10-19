@@ -24,6 +24,7 @@ const viewSchema = z.object({ decisions: z.record(z.string(), outcomeSchema) })
 export const stateSchema = z.object({
   proposals: z.record(z.string(), recommendationSchema),
   view: viewSchema,
+  turn: z.number(), firstCall: z.string().nullable(),
 })
 
 /** Validated proposals and durable card decisions. */
@@ -44,10 +45,11 @@ export function recommendationOf(event: SessionEvent): PluginRecommendation | un
 /** Whole-log fold; late decisions survive card pagination and reconnect. */
 export const recommendationProjection = {
   key: 'pluginRecommendations',
-  stateVersion: 1,
+  stateVersion: 2,
   stateSchema,
-  init: (): RecommendationState => ({ proposals: {}, view: { decisions: {} } }),
+  init: (): RecommendationState => ({ proposals: {}, view: { decisions: {} }, turn: 0, firstCall: null }),
   apply: (state, event) => {
+    if (event.type === 'turn/start') return { ...state, turn: event.data.turn, firstCall: null }
     const record = pluginRecordOf(event)
     if (record?.type === 'plugin:plugin-recommendations/decision') {
       const decision = z.object({ callId: z.string().min(1), outcome: outcomeSchema }).parse(record.data)
@@ -55,7 +57,8 @@ export const recommendationProjection = {
     }
     const recommendation = recommendationOf(event)
     return recommendation === undefined ? state
-      : { ...state, proposals: { ...state.proposals, [recommendation.callId]: recommendation } }
+      : { ...state, firstCall: state.firstCall ?? recommendation.callId,
+        proposals: { ...state.proposals, [recommendation.callId]: recommendation } }
   },
   wire: {
     summary: false,

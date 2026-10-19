@@ -36,12 +36,14 @@ export default class PluginRecommendations extends TypertRemoteService {
   static inject = ['tools', 'pluginManager', 'agents', 'sessionProjections', 'remoteAccess']
   private projection!: ProjectionHandle<RecommendationState>
   private readonly operations = new Map<string, Promise<RecommendationActionResult>>()
+  private readonly proposals = new Map<string, { turn: number; callId: ToolCallId }>()
   private closing = false
 
   constructor(ctx: Context) { super(ctx, 'pluginRecommendations') }
 
   protected async [Service.init](): Promise<void> {
     this.projection = await this.ctx.sessionProjections.register(recommendationProjection)
+    this.ctx.on('agent/disposed', ({ agent }) => { this.proposals.delete(agent.id) })
     this.ctx.effect(() => async () => {
       this.closing = true
       await Promise.allSettled([...this.operations.values()])
@@ -83,19 +85,32 @@ export default class PluginRecommendations extends TypertRemoteService {
         if (request === '' || args.reason.trim() === '') {
           throw new PluginRecommendationError('Describe the explicit user need and explain how the plugin helps.', 'RECOMMENDATION_NEED')
         }
-        const bundle = (await this.ctx.pluginManager.listBundles()).find(item => item.name === args.name)
-        exec.signal.throwIfAborted()
-        if (bundle === undefined || !eligible(bundle) || bundle.enabled) {
-          throw new PluginRecommendationError('This plugin is not an available, disabled built-in official plugin. Read list_official_plugins again.', 'RECOMMENDATION_UNAVAILABLE')
+        const state = this.projection.stateOf(agent.session)
+        const pending = this.proposals.get(agent.id)
+        const first = state.firstCall ?? (pending?.turn === state.turn ? pending.callId : undefined)
+        if (first !== undefined && first !== exec.callId) {
+          throw new PluginRecommendationError('This turn already has a recommendation. Finish the answer.', 'RECOMMENDATION_LIMIT')
         }
-        const recommendation: PluginRecommendation = {
-          callId: exec.callId, name: bundle.name, request, reason: args.reason.trim(),
-          titleEn: localized(bundle.meta?.title, 'en', bundle.name),
-          titleZh: localized(bundle.meta?.title, 'zh', bundle.name),
-          descriptionEn: localized(bundle.meta?.description, 'en', bundle.description ?? ''),
-          descriptionZh: localized(bundle.meta?.description, 'zh', bundle.description ?? ''),
+        const reservation = { turn: state.turn, callId: exec.callId }
+        this.proposals.set(agent.id, reservation)
+        try {
+          const bundle = (await this.ctx.pluginManager.listBundles()).find(item => item.name === args.name)
+          exec.signal.throwIfAborted()
+          if (bundle === undefined || !eligible(bundle) || bundle.enabled) {
+            throw new PluginRecommendationError('This plugin is not an available, disabled built-in official plugin. Read list_official_plugins again.', 'RECOMMENDATION_UNAVAILABLE')
+          }
+          const recommendation: PluginRecommendation = {
+            callId: exec.callId, name: bundle.name, request, reason: args.reason.trim(),
+            titleEn: localized(bundle.meta?.title, 'en', bundle.name),
+            titleZh: localized(bundle.meta?.title, 'zh', bundle.name),
+            descriptionEn: localized(bundle.meta?.description, 'en', bundle.description ?? ''),
+            descriptionZh: localized(bundle.meta?.description, 'zh', bundle.description ?? ''),
+          }
+          return JSON.stringify(recommendation)
+        } catch (error) {
+          if (this.proposals.get(agent.id) === reservation) this.proposals.delete(agent.id)
+          throw error
         }
-        return JSON.stringify(recommendation)
       },
     }))
   }

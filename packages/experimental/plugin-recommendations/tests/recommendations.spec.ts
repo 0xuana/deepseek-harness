@@ -19,7 +19,7 @@ async function fixture() {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
   await mountAgentLoopTestDependencies(ctx)
-  const harness = await mountAgentLoopTestHarness(ctx)
+  await mountAgentLoopTestHarness(ctx)
   await ctx.plugin(RemoteAccess)
   const manager = {
     listBundles: vi.fn(async (): Promise<BundleInfo[]> => [bundle]),
@@ -27,7 +27,8 @@ async function fixture() {
   }
   ctx.provide('pluginManager', manager)
   const fiber = await ctx.plugin(PluginRecommendations)
-  const agent = await harness.create(SessionId('recommendations'))
+  const handle = await ctx.agents.create({ sessionId: SessionId('recommendations') })
+  const agent = handle.agent
   const events: SessionEvent[] = []
   ctx.on('session/event', (session, event) => { if (session === agent.session) events.push(event) })
   const steer = vi.spyOn(agent, 'steer').mockImplementation(() => {})
@@ -47,10 +48,59 @@ async function fixture() {
     }, { surfaceOp: 'append' })
     return result
   }
-  return { ctx, agent, manager, fiber, execute, propose, steer, events }
+  return { ctx, agent, handle, manager, fiber, execute, propose, steer, events }
 }
 
 describe('official recommendations', () => {
+  it('admits one proposal per turn when this experiment is enabled alone, including concurrent calls and retries', async () => {
+    const f = await fixture()
+    f.agent.session.append('turn/start', { turn: 1 })
+    const gate = Promise.withResolvers<BundleInfo[]>()
+    const entered = Promise.withResolvers<undefined>()
+    f.manager.listBundles.mockImplementationOnce(() => { entered.resolve(undefined); return gate.promise })
+    const execute = (id: string, name = bundle.name) => f.ctx.tools.execute({
+      name: 'suggest_plugin', arguments: { name, request: 'history search', reason: 'find past work' },
+      agent: f.agent, callId: ToolCallId(id), signal: new AbortController().signal,
+    })
+    const first = execute('first')
+    await entered.promise
+    const second = await execute('parallel')
+    gate.resolve([bundle])
+    const result = await first
+    expect(second.isError).toBe(true)
+    expect(result.isError).toBe(false)
+    f.agent.session.append('tool/result', { turn: 1, step: 1,
+      message: createToolResultMessage({ callId: ToolCallId('first'), content: result.content, isError: false }),
+      ...result.meta === undefined ? {} : { meta: result.meta },
+    }, { surfaceOp: 'append' })
+    await f.fiber.dispose()
+    await f.ctx.plugin(PluginRecommendations)
+    expect((await execute('after-reload')).isError).toBe(true)
+    f.agent.session.append('turn/start', { turn: 2 })
+    expect((await execute('invalid', 'missing')).isError).toBe(true)
+    expect((await execute('next-turn')).isError).toBe(false)
+    await f.handle.dispose()
+  })
+
+  it('does not release a newer turn reservation when an older lookup fails late', async () => {
+    const f = await fixture()
+    const gate = Promise.withResolvers<BundleInfo[]>()
+    const entered = Promise.withResolvers<undefined>()
+    f.manager.listBundles.mockImplementationOnce(() => { entered.resolve(undefined); return gate.promise })
+    const execute = (id: string) => f.ctx.tools.execute({
+      name: 'suggest_plugin', arguments: { name: bundle.name, request: 'search', reason: 'history' },
+      agent: f.agent, callId: ToolCallId(id), signal: new AbortController().signal,
+    })
+    f.agent.session.append('turn/start', { turn: 1 })
+    const old = execute('old')
+    await entered.promise
+    f.agent.session.append('turn/start', { turn: 2 })
+    expect((await execute('new')).isError).toBe(false)
+    gate.resolve([])
+    expect((await old).isError).toBe(true)
+    expect((await execute('duplicate')).isError).toBe(true)
+  })
+
   it('uses catalog fallbacks when translations or descriptions are absent', async () => {
     const f = await fixture()
     const noMeta = { ...bundle }
