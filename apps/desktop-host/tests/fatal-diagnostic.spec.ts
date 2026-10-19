@@ -1,6 +1,36 @@
-import { expect, it } from 'vitest'
-import { StartupError } from '@deepseek-ai/dsh-app-boot'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { expect, it, onTestFinished } from 'vitest'
+import { boot, StartupError } from '@deepseek-ai/dsh-app-boot'
 import { formatFatalDiagnostic, MAX_FATAL_DIAGNOSTIC_CHARS } from '../src/fatal-diagnostic.ts'
+import { renderCrashReport } from '../../desktop/src/crash-report.ts'
+
+it.each([
+  ['import', 'throw new Error("qualification-import-failure")'],
+  ['initialize', 'export function apply() { throw new Error("qualification-initialize-failure", { cause: new Error("qualification-root-cause") }) }'],
+])('retains real plugin %s failure evidence in the Desktop report after Loader disposal', async (stage, source) => {
+  const directory = await mkdtemp(join(tmpdir(), 'desktop-plugin-failure-'))
+  onTestFinished(async () => { await rm(directory, { recursive: true, force: true }) })
+  await writeFile(join(directory, 'failure.mjs'), source + '\n')
+  const config = join(directory, 'cordis.yml')
+  await writeFile(config, '- id: agent-loop\n  name: ./failure.mjs\n')
+  const failure: unknown = await boot('diagnostic-test', config).then(async (ctx) => {
+    await ctx.fiber.dispose()
+    throw new Error('Expected fixture plugin to fail startup')
+  }, (error: unknown) => error)
+  expect(failure).toBeInstanceOf(StartupError)
+  const diagnostic = formatFatalDiagnostic(failure)
+  const report = renderCrashReport({ source: 'host', phase: 'startup', error: failure,
+    hostDiagnostic: diagnostic, rendererConsole: [], operationHistoryPlanned: true,
+    time: new Date('2026-10-19T00:00:00Z'),
+    app: { name: 'qualification', version: 'test', platform: 'win32', arch: 'x64', electron: 'test', node: process.version, locale: 'zh-CN' },
+  })
+  expect(report).toContain(`qualification-${stage}-failure`)
+  expect(report).toContain('./failure.mjs')
+  expect(report).toContain('--- startup composition ---')
+  if (stage === 'initialize') expect(report).toContain('qualification-root-cause')
+})
 
 it('includes non-enumerable startup entries without copying arbitrary startup logger arguments', () => {
   const error = new StartupError('required plugin did not activate', [{

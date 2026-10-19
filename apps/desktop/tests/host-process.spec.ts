@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { DesktopHostFatalError, DesktopHostProcess, DesktopHostUncleanExitError, QUIT_INSPECTION_DEADLINE_MS } from '../src/host-process.ts'
 import { OperationJournal } from '../src/operation-journal.ts'
 import { readOperationHistory } from '../src/operation-history.ts'
+import { renderCrashReport } from '../src/crash-report.ts'
 
 const roots: string[] = []
 const hosts: DesktopHostProcess[] = []
@@ -75,6 +76,30 @@ afterEach(async () => {
 })
 
 describe('desktop host process', () => {
+  it.each([
+    ['exception', 'queueMicrotask(() => { throw new Error("qualification-exception", { cause: new Error("qualification-runtime-cause") }) })'],
+    ['rejection', 'Promise.reject(new Error("qualification-rejection"))'],
+    ['exit', 'process.stderr.write("qualification-exit", () => process.exit(7))'],
+  ])('retains real child %s evidence in the final report after readiness', async (kind, trigger) => {
+    const failed = Promise.withResolvers<Error>()
+    const runtime = projectWithHost(`
+process.send({ type: 'ready', url: 'http://127.0.0.1:3080/' }, () => { ${trigger} })
+`)
+    const host = hostProcess(runtime, runtime, failed.resolve)
+    await host.start()
+    const failure = await failed.promise
+    await host.stop()
+    const report = renderCrashReport({ source: 'host', phase: 'running', error: failure,
+      rendererConsole: [], operationHistoryPlanned: true, time: new Date('2026-10-19T00:00:00Z'),
+      app: { name: 'qualification', version: 'test', platform: process.platform, arch: process.arch,
+        electron: 'not-running', node: process.version, locale: 'zh-CN' },
+    })
+    expect(report).toContain(`qualification-${kind}`)
+    expect(report).toContain('phase: running')
+    if (kind === 'exception') expect(report).toContain('qualification-runtime-cause')
+    if (kind === 'exit') expect(report).toContain('7')
+  })
+
   it('persists validated operation IPC across Host lifetimes and isolates a failing diagnostic sink', async () => {
     const record = {
       runId: 'c254ab28-97c9-4382-95e6-2db9c66f98c8', transportDropped: 0,
