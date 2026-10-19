@@ -1,5 +1,11 @@
 /** Application decisions are checked at dispatch and revocation cancels owned work. */
 import { Context } from '@deepseek-ai/cordis'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import Storage from '@deepseek-ai/dsh-storage'
+import * as JsonStorage from '@deepseek-ai/dsh-storage-json'
+import * as Domains from '@deepseek-ai/dsh-storage-domain'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import UserQuestions, { UserQuestionError, type AskUserQuestionAnswer } from '@deepseek-ai/dsh-user-questions'
@@ -9,6 +15,7 @@ import type { CuaApplicationGrant } from '../src/application-types.ts'
 import type { CuaAppHandle } from '../src/types.ts'
 import { NativeClient } from '../src/native-client.ts'
 import { permissionFixture } from './permission-fixture.ts'
+import { CuaPermissionStore } from '../src/permission-store.ts'
 
 const native = vi.hoisted(() => ({ instances: [] as Array<{
   disposed: boolean
@@ -358,4 +365,38 @@ it('retains conversation consent when the provider is recreated over the same st
   const client = new NativeClient(f.ctx, nativeConfig, unusedConnector)
   await access.select(f.agent, client, handle, identity, signal)
   expect(f.answer).toHaveBeenCalledOnce()
+})
+
+it('restores consent after a complete context restart only for the original conversation', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'cua-conversation-consent-'))
+  const directory = join(root, 'profile')
+  await mkdir(directory)
+  const contexts: Context[] = []
+  onTestFinished(async () => {
+    for (const ctx of contexts) await ctx.fiber.dispose()
+    await rm(root, { recursive: true, force: true })
+  })
+  const open = async () => {
+    const f = await setup()
+    contexts.push(f.ctx)
+    f.ctx.provide('profileContext', { dir: directory })
+    await f.ctx.plugin(Storage)
+    await f.ctx.plugin(JsonStorage, { root: join(root, 'storages') })
+    await f.ctx.plugin(Domains, { backend: 'json' })
+    const access = new ApplicationAccess(f.ctx, { store: new CuaPermissionStore(f.ctx, [], 1000) })
+    return { ...f, access }
+  }
+  const first = await open()
+  await first.access.select(first.agent, first.client, handle, identity, signal)
+  expect(first.answer).toHaveBeenCalledOnce()
+  await first.ctx.fiber.dispose()
+  const restored = await open()
+  await restored.access.select(restored.agent, restored.client, handle, identity, signal)
+  expect(restored.answer).not.toHaveBeenCalled()
+  await expect(restored.access.run(restored.client, handle, signal, async () => 'read')).resolves.toBe('read')
+  const other = await restored.ctx.agents.create({ sessionId: SessionId('another-conversation') })
+  const client = new NativeClient(restored.ctx, nativeConfig, unusedConnector)
+  await restored.access.select(other.agent, client, handle, identity, signal)
+  expect(restored.answer).toHaveBeenCalledOnce()
+  expect((await restored.access.status()).allowedApps).toEqual([])
 })
