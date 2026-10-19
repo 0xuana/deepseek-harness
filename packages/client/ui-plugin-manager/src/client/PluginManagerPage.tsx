@@ -815,9 +815,6 @@ function PackageDetail({
             </section>
           )
           : null}
-        <VersionSection
-          pkg={pkg} check={versions} t={t} busy={busy} onEnsure={onEnsureVersions} onCheck={onCheckVersions} onUpdate={onUpdateVersion}
-        />
         {pkg.availability === 'missing' ? null : (<RowsSection
           rows={pkg.rows}
           t={t}
@@ -825,6 +822,9 @@ function PackageDetail({
           toggle={pkg.enabled ? { busy: row => busy || rowBusy(row), onSetEnabled: onSetRowEnabled } : undefined}
           configure={configure}
         />)}
+        <VersionSection
+          pkg={pkg} check={versions} t={t} busy={busy} onEnsure={onEnsureVersions} onCheck={onCheckVersions} onUpdate={onUpdateVersion}
+        />
         <SourceSection pkg={pkg} t={t} />
         {renderSlot('plugins.detail.section', { subject })}
       </div>
