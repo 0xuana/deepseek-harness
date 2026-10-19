@@ -1786,30 +1786,50 @@ describe('desktop main startup', () => {
     expect(host.stop).not.toHaveBeenCalled()
   })
 
-  it('waits for macOS to leave fullscreen before showing installation confirmation or stopping the Host', async () => {
+  it.each([false, true])('waits for macOS to leave fullscreen before installation confirmation, mandatory: %s', async (mandatory) => {
     vi.stubGlobal('process', { ...process, platform: 'darwin' })
+    if (mandatory) {
+      harness.embeddedPolicy = { origin: 'https://policy.example.com', allowedPageOrigins: ['https://downloads.example.com'] }
+      vi.stubGlobal('fetch', vi.fn(async () => Response.json({ code: 40005, data: {
+        show_content: { title: 'Update required', detail: 'Please update' }, desktop_app_link: 'https://downloads.example.com/',
+      } })))
+    }
     const host = await readyForUpdate()
+    if (mandatory) await harness.policyBlocked.promise
     const window = harness.windows[0]!
+    const dialogOwner = mandatory ? harness.windows.find(item => item.urls.includes('dsh-app://shell/mandatory-update.html'))! : window
+    const baseline = { leave: window.listenerCount('leave-full-screen'), closed: window.listenerCount('closed') }
     window.fullscreen = true
     window.setFullScreen.mockImplementation(() => {})
     harness.dialog.showMessageBox.mockResolvedValueOnce({ response: 0 })
     const preparing = harness.prepareUpdate()
     await vi.waitFor(() => { expect(window.setFullScreen).toHaveBeenCalledWith(false) })
     expect(harness.dialog.showMessageBox).not.toHaveBeenCalled()
+    if (mandatory) expect(harness.handlers.get(MANDATORY_IPC.status)!({ sender: dialogOwner.webContents, senderFrame: dialogOwner.webContents.mainFrame })).not.toHaveProperty('confirmation')
     expect(host.stop).not.toHaveBeenCalled()
     expect(host.updateTasks.mock.calls).toEqual([['inspect']])
     window.fullscreen = false
     window.emit('leave-full-screen')
+    if (mandatory) await answerMandatory('install', dialogOwner)
     await host.stopping.promise
     host.exited.resolve()
     await expect(preparing).resolves.toBe(true)
-    expect(window.listenerCount('leave-full-screen')).toBe(1)
+    expect(window.listenerCount('leave-full-screen')).toBe(baseline.leave)
+    expect(window.listenerCount('closed')).toBe(baseline.closed)
   })
 
-  it('cancels installation if the fullscreen owner closes during the native transition', async () => {
+  it.each([false, true])('cancels installation when the fullscreen product window closes, mandatory: %s', async (mandatory) => {
     vi.stubGlobal('process', { ...process, platform: 'darwin' })
+    if (mandatory) {
+      harness.embeddedPolicy = { origin: 'https://policy.example.com', allowedPageOrigins: ['https://downloads.example.com'] }
+      vi.stubGlobal('fetch', vi.fn(async () => Response.json({ code: 40005, data: {
+        show_content: { title: 'Update required', detail: 'Please update' }, desktop_app_link: 'https://downloads.example.com/',
+      } })))
+    }
     const host = await readyForUpdate()
+    if (mandatory) await harness.policyBlocked.promise
     const window = harness.windows[0]!
+    const baseline = { leave: window.listenerCount('leave-full-screen'), closed: window.listenerCount('closed') }
     window.fullscreen = true
     window.setFullScreen.mockImplementation(() => {})
     const preparing = harness.prepareUpdate()
@@ -1818,7 +1838,7 @@ describe('desktop main startup', () => {
     await expect(preparing).resolves.toBe(false)
     expect(harness.dialog.showMessageBox).not.toHaveBeenCalled()
     expect(host.stop).not.toHaveBeenCalled()
-    expect(window.listenerCount('leave-full-screen')).toBe(1)
+    expect(window.listenerCount('leave-full-screen')).toBe(baseline.leave)
   })
 
   it('waits for Platform storage cleanup before the installer takes over', async () => {
@@ -1865,8 +1885,7 @@ describe('desktop main startup', () => {
     expect(host.stop).not.toHaveBeenCalled()
   })
 
-  async function answerMandatory(action: 'install' | 'later') {
-    const modal = harness.windows[0]!
+  async function answerMandatory(action: 'install' | 'later', modal = harness.windows[0]!) {
     const event = { sender: modal.webContents, senderFrame: modal.webContents.mainFrame }
     await vi.waitFor(() => {
       expect(harness.handlers.get(MANDATORY_IPC.status)!(event)).toHaveProperty('confirmation')

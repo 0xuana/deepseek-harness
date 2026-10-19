@@ -267,7 +267,7 @@ Use `node apps/desktop/scripts/test-windows-installer.mjs --uninstall-only --com
 
 On Windows, the downloaded-update confirmation explains that the application closes during installation, reopens automatically, and should not be launched again while updating. An installer restart carrying `--updated` raises and focuses the main window once when startup opens the workspace directly, without enabling always-on-top. Startup into the welcome page discards that request so a later login keeps its normal activation behavior. Ordinary launches and other platforms do not use this foregrounding step.
 
-On macOS, installation preparation waits for the confirmation owner to leave fullscreen before displaying the restart confirmation. Cancelling leaves the window in normal mode; destroying it during the native transition cancels installation before task teardown. This keeps installation failure recovery in a usable normal window.
+On macOS, installation preparation waits for the product window to leave fullscreen before displaying the restart confirmation. Cancelling leaves the window in normal mode; destroying it during the native transition cancels installation before task teardown. If macOS does not report completion within five seconds, preparation fails without stopping the Host; exit fullscreen and retry. Installation failure recovery uses the normal window.
 
 Native update overlays wait for a ready document and a visible parent, and reappear when that parent is shown again. Closing an overlay releases its input interception and parent listeners. The [local window qualification](tests/README.md#verification-overlay) exercises these transitions without starting a workspace.
 
