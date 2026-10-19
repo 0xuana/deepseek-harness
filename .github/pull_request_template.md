@@ -20,7 +20,7 @@
 ## AI Usage
 
 <!-- ai-declaration:start -->
-[![AI-DECLARATION: 待填级别](https://img.shields.io/badge/䷼%20AI--DECLARATION-待填级别-lightgrey)](https://ai-declaration.md)
+[![AI-DECLARATION: 待填级别](https://img.shields.io/badge/䷼%20AI--DECLARATION-待填级别-e5e7eb?labelColor=e5e7eb)](https://ai-declaration.md)
 
 **AI declaration** ([v0.1.2](https://ai-declaration.md/en/0.1.2)): `待填级别`
 <!-- ai-declaration:end -->
