@@ -33,6 +33,10 @@ Use it when you compose or build a browser client plugin: the package turns a pa
 
 A browser plugin package declares `dsh.client` in its `package.json` with `platform: 'web'`, exports a `./client` bundle, and lists any non-baseline module requests under `dsh.client.external`. The host half turns each declaration into a served bundle under `/plugins`, ordered so dynamic providers load before their consumers.
 
+### Package assets
+
+The same `/plugins` route serves the images a client package publishes through its `"./assets/*": "./lib/assets/*"` export. The build emits each referenced asset with its content revision, the first 12 hexadecimal digits of the SHA-1 digest of its bytes, inserted before the extension, and turns the import into the document-relative reference `plugins/<package>/assets/<emitted path>`, so one URL always names one content. Any `/plugins/<package>/assets/` path is answered by the asset route alone: for an active client row, the Host percent-decodes the path once and resolves `<package>/assets/<path>` with Node's `require.resolve` from the package's own manifest, so the package's exports decide which files exist. A path that does not resolve, a resolved file whose extension is not `.svg`, `.png`, `.webp`, `.jpg`, or `.jpeg`, a malformed escape, and an inactive package answer 404; the query selects nothing. A served asset streams from disk on every request without caching and carries its media type, the bundle `cache-control: public, max-age=31536000, immutable`, `etag: "<requested path>"`, and `x-content-type-options: nosniff`; an SVG additionally carries `content-security-policy: script-src 'none'`, so an SVG opened directly runs no script. An `If-None-Match` equal to that tag answers 304 without opening the file, and `HEAD` answers without a body. `fetchBundle()` returns the same responses, with a streamed body that closes the file when cancelled.
+
 ### What the browser loads
 
 The application combo scripts carry only each plugin's `client.js` entry and register those factories once during boot; module bodies remain lazy and run only at first import or materialization. A source `import()` split by tsdown compiles to `require.async("./client.<name>.js")`; its versioned sibling script arrives only when that expression runs. Rows that share a combo URL share one in-flight script task. A combo whose `<script>` fails to load is requested once more; a combo that loads without registering a row is never re-executed, because the batch script registers its packages in sequence and a replay would stop at the first duplicate registration. In both cases each still-missing row then loads its own one-resource combo URL, so one failed batch costs at most three requests per missing row and leaves the rows it did register untouched. The module system records the last import failure per row (transport, registration, dependency cascade, or factory execution); the Web boot audit reports that text per entry. HMR switches one changed row to its revisioned one-resource combo URL. `<id>/client` and the bare id resolve to the same exports, because a plugin bundle is its package's client half.
@@ -92,6 +96,7 @@ The host contributes structured index rows that inject, into `<head>`: the `wind
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Node half: `ClientModuleRegistry`, scan, artifact snapshots, optional combo route, structured index rows |
+| [`src/assets.ts`](src/assets.ts) | Package-asset media types, export, content revision, revisioned file name, and browser reference shared by the build preset, the asset route, and gates |
 | [`src/client/index.ts`](src/client/index.ts) | Browser half: bootstrap export, `ctx.modules` enrollment |
 | [`src/client/system.ts`](src/client/system.ts) | `ClientModuleSystem`: load/materialize/invalidate machinery |
 | [`src/client/entries.ts`](src/client/entries.ts) | Page entry reconciliation, retries and code replacement |
@@ -138,6 +143,8 @@ These limits define what the module system does not do. They are current package
 - **Bootstrap and code replacement limits** — the page retains its modules bootstrap and static platform identities. Removing or replacing the bootstrap requires a page reload; live replacement requests report a page-local error while retaining its fiber and exports; replacing package code and all existing consumers is outside ordinary enable/disable synchronization.
 - **Lazy delivery retains requested bodies** — the Host holds each bundle and lazy response plan; a script or map body remains cached after its first `GET`, and HMR additionally retains one prior startup generation. Memory grows only for response bodies that clients request while preserving one-generation race tolerance.
 - **An unrequested prior-generation map reads the current map file** — combo revisions track executable bundles, not debug artifacts. If HMR rebuilds a map before the retained prior URL receives its first map `GET`, that response uses the current authored map with the prior bundle offsets; requesting the map before the rebuild fixes that URL's response.
+- **WebWorker preview cannot load package assets** — the preview reaches `/plugins` only through its tunnel, so an `<img>` or CSS `url()` request never reaches the Host running in the Worker; the WebWorker runtime owns serving them.
+- **Desktop re-reads package assets on every display** — the Desktop forwarder rewrites every `/plugins/` cache header to `no-store`, so the immutable asset headers do not reach its browser cache.
 
 <a id="dev-note"></a>
 ### Dev Note

@@ -224,7 +224,7 @@ async function routeRequest(route: Promise<WebRoute>, url: string, method = 'GET
       return response
     },
   } as unknown as ServerResponse
-  await (await route).handler({ method, url } as IncomingMessage, response)
+  await (await route).handler({ method, url, headers: {} } as IncomingMessage, response)
   return { status, headers, body }
 }
 

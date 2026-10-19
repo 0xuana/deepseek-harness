@@ -3,7 +3,8 @@
  * the host Loader's entries for packages declaring `dsh.client`, composes the
  * `window.__DSH_BOOT__` entry graph (wire single source: {@link WebBootEntry}
  * in `./client/manifest.ts`) in module-graph order, serves one-or-more-plugin
- * combo scripts plus their source maps,
+ * combo scripts plus their source maps, package-local chunks, and the
+ * content-revisioned `./assets/*` exports of active client packages,
  * contributes the registration facade, application preloads, bootstrap scripts,
  * and graph to the webserver's index injection table, and provides the
  * `clientModules` service (the HMR node half's registration/notification
@@ -24,16 +25,19 @@
  */
 
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync, statSync } from 'node:fs'
+import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createRequire } from 'node:module'
 import { dirname, isAbsolute, join } from 'node:path'
+import { Readable } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Entry } from '@deepseek-ai/cordis-plugin-loader'
 import type { IndexInjection } from '@deepseek-ai/dsh-host-webserver'
+import { PACKAGE_ASSET_SEGMENT, packageAssetMediaType } from './assets.ts'
 import { exactPackageSpecifier, parseDshClient, stripClientSuffix } from './client/manifest.ts'
 import type { WebBootBatch, WebBootBatchPhase, WebBootEntry, WebBootGraph, WebBootRelease } from './client/manifest.ts'
 
@@ -72,6 +76,8 @@ export interface ClientArtifactBaseline {
 /** Resolved metadata cached for one Loader specifier and owning-tree base URL until restart. */
 interface PkgMeta extends WebBootRowFields {
   clientPath: string
+  /** The package's own manifest; package-asset requests resolve against it as a self-reference. */
+  manifestPath: string
 }
 
 interface ResolvedPkgMeta {
@@ -224,6 +230,24 @@ function artifactRevision(baseline: ClientArtifactBaseline): string {
 
 /** Absolute route prefix serving every plugin resource. */
 const PLUGIN_ROUTE = '/plugins'
+
+/** `/plugins/<package>/assets/<path>`; a package name holds at most one `/`, after its `@scope`. */
+const PACKAGE_ASSET_PATH = /^\/plugins\/((?:@[^/]+\/)?[^/]+)\/assets\/(.*)$/
+
+/** Expose a Node read stream as a shell-carrier Response body; cancelling the body closes the stream. */
+function transforStreamBody(stream: Readable): ReadableStream<Uint8Array> {
+  const chunks: AsyncIterator<Uint8Array> = stream[Symbol.asyncIterator]()
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      const next = await chunks.next()
+      if (next.done === true) controller.close()
+      else controller.enqueue(next.value)
+    },
+    async cancel() {
+      await chunks.return?.()
+    },
+  })
+}
 
 /** Combo query addressing one ordered plugin-file list. */
 function comboSearch(ids: readonly string[], rev: string, sourceMap = false): string {
@@ -595,8 +619,8 @@ window.__ModuleLoader__={
 
 /**
  * The web plugin table service: incremental `dsh.client` scan + wire composition
- * + bundle route + index injection rows. Construction runs the activation scan
- * synchronously — a malformed declaration or missing bundle among the
+ * + bundle and package-asset route + index injection rows. Construction runs
+ * the activation scan synchronously — a malformed declaration or missing bundle among the
  * already-loaded entries aggregates into one loud throw (FAILED fiber; the
  * boot activation audit reports it).
  */
@@ -690,16 +714,19 @@ export class ClientModuleRegistry extends Service {
   }
 
   /**
-   * Serve an advertised revisioned bundle or source map without a Web server.
-   * Unknown URLs return 404, unsupported methods return 405, and `HEAD`
-   * returns the same immutable headers without materializing a body. Each body
-   * is built once on its first `GET`; script construction never reads maps.
+   * Serve an advertised revisioned bundle, source map, chunk, or package asset
+   * without a Web server. Unknown URLs return 404, unsupported methods return
+   * 405, and `HEAD` returns the same immutable headers without materializing a
+   * body. Each bundle body is built once on its first `GET`; script
+   * construction never reads maps. A package asset is read on every request
+   * and answers 304 without a body when `If-None-Match` equals its entity tag.
    * @param request - shell-carrier request for a `/plugins` resource.
    * @returns the exact response also exposed by the optional Web route.
    */
   async fetchBundle(request: Request): Promise<Response> {
-    const resource = await this.bundleResource(request.method, request.url)
-    const body = resource.body === undefined ? null : Uint8Array.from(resource.body)
+    const resource = await this.bundleResource(request.method, request.url, request.headers.get('if-none-match') ?? undefined)
+    const body = resource.body === undefined ? null
+      : resource.body instanceof Readable ? transforStreamBody(resource.body) : Uint8Array.from(resource.body)
     return new Response(body, {
       status: resource.status,
       ...(resource.headers === undefined ? {} : { headers: resource.headers }),
@@ -869,6 +896,7 @@ export class ClientModuleRegistry extends Service {
     }
     const meta: PkgMeta = {
       clientPath: join(dirname(pkgPath), clientRel),
+      manifestPath: pkgPath,
       ...(decl.inject !== undefined ? { inject: decl.inject } : {}),
       external: decl.external ?? [],
       immediately: decl.immediately === true,
@@ -1150,13 +1178,71 @@ export class ClientModuleRegistry extends Service {
     return response
   }
 
-  private async bundleResource(method: string | undefined, url: string): Promise<{
+  /**
+   * Answer one package-asset request. Node's `require.resolve` applies the
+   * package's `./assets/*` export as a self-reference, so unexported,
+   * `.`/`..`, missing, and directory paths answer 404. The build writes each
+   * asset's content revision into its file name, so a served path names one
+   * content: the body streams from disk on every request, and the path is the
+   * entity tag.
+   * @param method - request method.
+   * @param record - the active row of the addressed package, or undefined when it is not active.
+   * @param assetPath - percent-encoded path below the package's `assets/` route segment.
+   * @param ifNoneMatch - request `If-None-Match` field.
+   * @returns the route answer.
+   */
+  private assetResponse(
+    method: 'GET' | 'HEAD',
+    record: WebPluginRecord | undefined,
+    assetPath: string,
+    ifNoneMatch: string | undefined,
+  ): {
     status: number
     headers?: Record<string, string>
-    body?: Buffer
+    body?: Readable
+  } {
+    if (record === undefined || assetPath === '') return { status: 404 }
+    let file: string
+    try {
+      file = createRequire(record.meta.manifestPath)
+        .resolve(`${record.entry.id}/${PACKAGE_ASSET_SEGMENT}/${decodeURIComponent(assetPath)}`)
+    } catch {
+      // Unresolvable or malformed paths name no asset.
+      return { status: 404 }
+    }
+    // The resolved file decides the type: Node reads `#` and `?` in the subpath as URL syntax.
+    const mediaType = packageAssetMediaType(file)
+    if (mediaType === undefined) return { status: 404 }
+    const headers: Record<string, string> = {
+      'content-type': mediaType,
+      'cache-control': IMMUTABLE_CACHE,
+      etag: `"${assetPath}"`,
+      'x-content-type-options': 'nosniff',
+      // A directly opened SVG document runs no script.
+      ...(mediaType === 'image/svg+xml' ? { 'content-security-policy': "script-src 'none'" } : {}),
+    }
+    if (ifNoneMatch === headers.etag) return { status: 304, headers }
+    return { status: 200, headers, ...(method === 'HEAD' ? {} : { body: createReadStream(file) }) }
+  }
+
+  /**
+   * Answer one `/plugins` request. A `/plugins/<package>/assets/` path is
+   * answered by the package-asset route alone; any other path is an advertised
+   * combo or its map, a prior startup generation, or a current-revision
+   * package-local chunk, in that order, and otherwise 404.
+   */
+  private async bundleResource(method: string | undefined, url: string, ifNoneMatch: string | undefined): Promise<{
+    status: number
+    headers?: Record<string, string>
+    body?: Buffer | Readable
   }> {
     if (method !== 'GET' && method !== 'HEAD') return { status: 405 }
     const requestUrl = new URL(url, 'http://x')
+    const asset = PACKAGE_ASSET_PATH.exec(requestUrl.pathname)
+    if (asset !== null) {
+      const [, packageName = '', assetPath = ''] = asset
+      return this.assetResponse(method, this.table.get(packageName), assetPath, ifNoneMatch)
+    }
     const resourceUrl = `${requestUrl.pathname}${requestUrl.search}`
     const response = this.responses.get(resourceUrl)
       ?? this.previousBatchResponses.get(resourceUrl)
@@ -1175,9 +1261,10 @@ export class ClientModuleRegistry extends Service {
 
   private readonly serveBundle = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     /* v8 ignore next -- `?? '/'` arm: node:http always sets url on server requests. */
-    const response = await this.bundleResource(req.method, req.url ?? '/')
+    const response = await this.bundleResource(req.method, req.url ?? '/', req.headers['if-none-match'])
     res.writeHead(response.status, response.headers)
-    res.end(response.body)
+    if (response.body instanceof Readable) await pipeline(response.body, res)
+    else res.end(response.body)
   }
 }
 
