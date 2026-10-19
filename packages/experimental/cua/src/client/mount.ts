@@ -32,28 +32,7 @@ export async function mountCuaPermissions(ctx: Context, contribution: TypertRemo
   const transport = ctx.plugin(async (owner) => { await owner.remote.$mount(contribution) })
   const ui = ctx.inject(['remote.cuaAccess', 'slots', 'locale'], (ctx) => {
     ctx.effect(() => ctx.locale.register(NS, { en, zh }))
-    const controller = new PermissionController({
-      readRuntime: async () => {
-        const result = await ctx.remote.cuaAccess.ptcConfiguration(); if (!result.ok) throw result.error; return result.value
-      },
-      readSystem: async () => {
-        const result = await ctx.remote.cuaAccess.systemStatus(); if (!result.ok) throw result.error; return result.value
-      },
-      readApplications: async () => {
-        const result = await ctx.remote.cuaAccess.applications(); if (!result.ok) throw result.error; return result.value
-      },
-      readIcons: async () => {
-        const result = await ctx.remote.cuaAccess.applicationIcons(); if (!result.ok) throw result.error; return result.value
-      },
-      request: async (permission) => {
-        const result = await ctx.remote.cuaAccess.requestPermission(permission); if (!result.ok) throw result.error
-      },
-      openSettings: async (permission) => {
-        const result = await ctx.remote.cuaAccess.openSettings(permission); if (!result.ok) throw result.error
-      },
-      revoke: async (id) => { const result = await ctx.remote.cuaAccess.revoke(id); if (!result.ok) throw result.error },
-      retryApproval: async (id) => { const result = await ctx.remote.cuaAccess.retryApproval(id); if (!result.ok) throw result.error },
-    })
+    const controller = new PermissionController(ctx.remote.cuaAccess)
     const face = controller.face()
     const preset = ctx.configForms.get<{ default: string; selectedDefault?: string }>('agent-preset-registry')
     const settings = {
