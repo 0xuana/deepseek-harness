@@ -44,9 +44,38 @@ it('places dynamic Session menu rows by order among the shipped ones and removes
     await row.waitFor({ timeout: 20_000 })
     const trigger = row.getByRole('button', { name: `Session actions for ${SESSION_TITLE}` })
 
+    const trailing = row.locator('[data-session-trailing]')
+    const observations: { stage: string; icons: string[]; actions: boolean }[] = []
+    const observe = async (stage: string, iconsVisible: boolean, actionsVisible: boolean): Promise<void> => {
+      await expect.poll(() => trailing.first().isVisible()).toBe(iconsVisible)
+      await expect.poll(() => trigger.isVisible()).toBe(actionsVisible)
+      observations.push({
+        stage,
+        icons: await trailing.filter({ visible: true }).evaluateAll(elements => elements.map(element => element.getAttribute('aria-label')!)),
+        actions: await trigger.isVisible(),
+      })
+    }
+    await expect.poll(() => trailing.count()).toBe(2)
+    expect(await trailing.evaluateAll(elements => elements.map(element => element.getAttribute('data-session-trailing'))))
+      .toEqual([sessionId, sessionId])
+    await page.mouse.move(0, 0)
+    await observe('resting', true, false)
+    await page.emulateMedia({ colorScheme: 'dark' })
+    await expect.poll(() => page.locator('body').evaluate(element => element.hasAttribute('data-ds-dark-theme'))).toBe(true)
+    await observe('dark', true, false)
+    await page.emulateMedia({ colorScheme: 'light' })
+    await expect.poll(() => page.locator('body').evaluate(element => element.hasAttribute('data-ds-dark-theme'))).toBe(false)
+    const titleWidth = await row.locator('[class*="title"]').evaluate(element => element.getBoundingClientRect().width)
     await row.hover()
-    await trigger.focus()
+    await observe('hover', false, true)
+    await page.mouse.move(0, 0)
+    await observe('pointer-left', true, false)
+    await row.focus()
+    await observe('focus', false, true)
+    await page.keyboard.press('Tab')
+    expect(await trigger.evaluate(element => element === document.activeElement)).toBe(true)
     await trigger.click()
+    await observe('menu-open', false, true)
     const menu = page.getByRole('menu')
     await menu.waitFor()
     expect(await menu.getByRole('separator').count()).toBe(1)
@@ -64,10 +93,57 @@ it('places dynamic Session menu rows by order among the shipped ones and removes
       title: document.documentElement.dataset.sessionActionTitle,
     }))).toEqual({ action: 'fixture.export-session', id: sessionId, title: SESSION_TITLE })
 
+    await page.getByRole('button', { name: 'Account menu', exact: true }).focus()
+    await page.mouse.move(0, 0)
+    await observe('blur', true, false)
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.getByRole('button', { name: 'Open sidebar', exact: true }).first().click()
+    await page.mouse.move(0, 0)
+    await observe('narrow', true, false)
+    const bounds = await row.evaluate((element) => {
+      const title = element.querySelector('[class*="title"]')!.getBoundingClientRect()
+      const icons = [...element.querySelectorAll('[data-session-trailing]')].map(icon => icon.getBoundingClientRect())
+      return {
+        titleRight: title.right, firstIconLeft: icons[0]!.left, lastIconRight: icons.at(-1)!.right,
+        rowRight: element.getBoundingClientRect().right,
+      }
+    })
+    expect(bounds.titleRight).toBeLessThanOrEqual(bounds.firstIconLeft)
+    expect(bounds.lastIconRight).toBeLessThanOrEqual(bounds.rowRight)
+    await page.setViewportSize({ width: 1680, height: 1000 })
+    const touchPage = await browser.newPage({
+      viewport: { width: 390, height: 844 }, locale: 'en-US', isMobile: true, hasTouch: true,
+    })
+    try {
+      const touchConsole = watchConsole(touchPage)
+      await touchPage.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+      await touchPage.getByRole('button', { name: 'Open sidebar', exact: true }).first().click()
+      const touchRow = touchPage.getByRole('treeitem').filter({ has: touchPage.getByText(SESSION_TITLE, { exact: true }) })
+      const touchTrigger = touchRow.getByRole('button', { name: `Session actions for ${SESSION_TITLE}` })
+      await touchTrigger.waitFor()
+      expect(await touchPage.evaluate(() => matchMedia('(hover: hover)').matches)).toBe(false)
+      expect(await touchRow.locator('[data-session-trailing]').first().isVisible()).toBe(false)
+      await touchTrigger.tap()
+      await touchPage.getByRole('menu').waitFor()
+      await touchPage.keyboard.press('Escape')
+      expect(await touchTrigger.isVisible()).toBe(true)
+      observations.push({ stage: 'touch', icons: [], actions: true })
+      expect(touchConsole.pageErrors).toEqual([])
+    } finally {
+      await touchPage.close()
+    }
     scaffold.ctx.loader.remove(entryId)
     await expect.poll(() => page.evaluate(
       () => document.documentElement.dataset.liveDisposals,
     )).toBe('1')
+    await expect.poll(() => trailing.count()).toBe(0)
+    await expect.poll(() => row.locator('[class*="title"]').evaluate(element => element.getBoundingClientRect().width))
+      .toBeGreaterThan(titleWidth)
+    await compareOrRefreshGolden(
+      join(EXPECTED, 'session-trailing.expected.json'),
+      JSON.stringify(observations, null, 2),
+      webSnapshotMode(),
+    )
     await row.hover()
     await trigger.click()
     await menu.waitFor()
@@ -86,7 +162,7 @@ it('places dynamic Session menu rows by order among the shipped ones and removes
     expect(console.pageErrors).toEqual([])
     await assertFixtureInventory(EXPECTED, [
       'bootstrap-rebuild.expected.md', 'enabled.expected.md', 'recovered.expected.md',
-      'session-actions.expected.md',
+      'session-actions.expected.md', 'session-trailing.expected.json',
     ])
   } finally {
     await browser.close()

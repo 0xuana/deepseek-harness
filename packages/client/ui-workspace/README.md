@@ -107,6 +107,8 @@ An entry receives only the row identity (`sessionId`, `displayTitle`) and owns e
 
 The existing notice overlay dispatches `workspace.toast` by notice kind. Keyed registrations inject localized display mappings and their own actions; only archive notices subscribe to the viewing filter. They render the package-local `workspace.toast.content` Factory, which reuses the Toast primitive once for all presentations. The existing notice state, display sequence, latest-notice replacement, and dismissal remain shared; locale or filter changes do not restart the same notice's timer.
 
+The root-scoped `sidebar.session.row.trailing` list accepts non-interactive icons in ascending `order`, after the time label and before the pin marker. Each entry receives `sessionId` and reads its own data without retaining the Session. Blank rows omit the slot; an empty slot adds no spacing. Hover, focus within the row, or an open row menu replaces these details with the existing action buttons. Touch devices keep the action buttons visible. Mouse-hover styles apply only on hover-capable devices; keyboard users can focus a row, open it with Enter or Space, and Tab into its actions.
+
 #### Packaged client plugin
 
 Declare `ui-workspace`, `ui-slots`, `ui-renderer`, `client-locale`, and `ui-primitives` as browser/type development dependencies according to the Client dependency policy. The type-only `ui-workspace/client` import loads this package's `SlotMap` declaration; without it, an independently compiled plugin does not know the slot keys. Keep the Component at module scope and own visible copy in the contributing package's locale namespace.

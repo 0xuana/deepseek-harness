@@ -11,8 +11,7 @@
   color: var(--dsw-alias-label-primary);
 }
 
-.projectRow:hover,
-.sessionRow:hover {
+.projectRow:hover {
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
@@ -261,10 +260,10 @@
 }
 
 .projectRow:hover .rowActions,
-.sessionRow:hover .rowActions,
 .searchResultRow:hover .rowActions,
 .projectRow.menuOpen .rowActions,
-.sessionRow.menuOpen .rowActions {
+.sessionRow.menuOpen .rowActions,
+.sessionRow:focus-within .rowActions {
   display: inline-flex;
 }
 
@@ -274,15 +273,20 @@
   margin-left: auto;
 }
 
-.sessionRow:hover .time,
-.sessionRow.menuOpen .time {
-  display: none;
+.rowResting {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dsw-alias-label-tertiary);
 }
 
-/* Hover swaps the trailing cell to the action buttons, which already carry
-   the pin/archive glyphs — hide the static markers so they do not double. */
-.sessionRow:hover .pinIndicator,
-.sessionRow.menuOpen .pinIndicator {
+.rowResting .pinIndicator {
+  margin-left: 0;
+}
+
+.sessionRow.menuOpen .rowResting,
+.sessionRow:focus-within .rowResting {
   display: none;
 }
 
@@ -291,9 +295,31 @@
    latches `:hover` on the row after the title has already returned: an
    unguarded rule would strand that row without its ellipsis. */
 @media (hover: hover) {
+  .sessionRow:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+
+  .sessionRow:hover .rowActions {
+    display: inline-flex;
+  }
+
+  .sessionRow:hover .rowResting {
+    display: none;
+  }
+
   .sessionRow:hover .title,
   .sessionRow.menuOpen .title {
     text-overflow: clip;
+  }
+}
+
+@media (hover: none) {
+  .sessionRow .rowActions {
+    display: inline-flex;
+  }
+
+  .sessionRow .rowResting {
+    display: none;
   }
 }
 

@@ -1,0 +1,62 @@
+[
+  {
+    "stage": "resting",
+    "icons": [
+      "Fixture badge",
+      "Fixture section"
+    ],
+    "actions": false
+  },
+  {
+    "stage": "dark",
+    "icons": [
+      "Fixture badge",
+      "Fixture section"
+    ],
+    "actions": false
+  },
+  {
+    "stage": "hover",
+    "icons": [],
+    "actions": true
+  },
+  {
+    "stage": "pointer-left",
+    "icons": [
+      "Fixture badge",
+      "Fixture section"
+    ],
+    "actions": false
+  },
+  {
+    "stage": "focus",
+    "icons": [],
+    "actions": true
+  },
+  {
+    "stage": "menu-open",
+    "icons": [],
+    "actions": true
+  },
+  {
+    "stage": "blur",
+    "icons": [
+      "Fixture badge",
+      "Fixture section"
+    ],
+    "actions": false
+  },
+  {
+    "stage": "narrow",
+    "icons": [
+      "Fixture badge",
+      "Fixture section"
+    ],
+    "actions": false
+  },
+  {
+    "stage": "touch",
+    "icons": [],
+    "actions": true
+  }
+]

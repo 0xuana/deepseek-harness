@@ -107,6 +107,8 @@ Session 行的 "..." 菜单和行尾悬停按钮是 WorkspaceBrowser 注册项�
 
 现有通知浮层按通知 kind 分派 `workspace.toast`。各 keyed 注册注入本地化展示映射与自己的操作，只有归档通知订阅查看筛选状态。它们渲染包内的 `workspace.toast.content` Factory，所有展示共用一处 Toast primitive。现有通知状态、显示序号、最新提示替换及关闭逻辑仍共享；语言或筛选变化不会重新启动同一条提示的计时。
 
+根作用域的 `sidebar.session.row.trailing` 列表按 `order` 升序放置非交互图标，位置在时间标签之后、置顶标记之前。每个条目接收 `sessionId`，自行读取数据，不保留 Session 引用。空白行不渲染此 slot；空 slot 不增加间距。悬停、行内聚焦或行菜单打开时，这些信息由现有操作按钮替代。触屏设备始终显示操作按钮。鼠标悬停样式仅适用于支持悬停的设备；键盘用户可聚焦行，用 Enter 或空格打开，并用 Tab 移到操作按钮。
+
 #### 打包客户端插件
 
 按照 Client 依赖规则，将 `ui-workspace`、`ui-slots`、`ui-renderer`、`client-locale` 与 `ui-primitives` 声明为浏览器／类型开发依赖。纯类型的 `ui-workspace/client` import 会加载本包的 `SlotMap` 声明；缺少该 import 时，独立编译的插件不会知道这些 slot key。Component 保持模块级稳定身份；用户可见文案由贡献包自己的 locale namespace 持有。
