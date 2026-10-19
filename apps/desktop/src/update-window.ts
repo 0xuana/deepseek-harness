@@ -30,6 +30,6 @@ export async function prepareDesktopUpdateWindow(window: UpdateWindow): Promise<
     window.once('leave-full-screen', left)
     window.once('closed', closed)
     try { window.setFullScreen(false) }
-    catch (error) { cleanup(); reject(error) }
+    catch (error) { cleanup(); throw error }
   })
 }
