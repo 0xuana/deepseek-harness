@@ -19,7 +19,8 @@ export function distinguishingPathSuffixes<Id>(
     const peers = rows.filter(other => other !== row && other.title === row.title)
     if (peers.length === 0) continue
     let count = 1
-    while (2 * count - 1 < row.parts.length && peers.some(peer => suffix(peer.parts, count) === suffix(row.parts, count))) count++
+    // A root path (`/`, `C:\`) ends in an empty segment; grow past it.
+    while (2 * count - 1 < row.parts.length && (suffix(row.parts, count) === '' || peers.some(peer => suffix(peer.parts, count) === suffix(row.parts, count)))) count++
     suffixes.set(row.id, suffix(row.parts, count))
   }
   return suffixes

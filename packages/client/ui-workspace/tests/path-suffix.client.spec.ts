@@ -37,4 +37,13 @@ describe('distinguishingPathSuffixes', () => {
       [3, 'y\\w'],
     ])
   })
+
+  it('names a root Workspace by its whole path instead of an empty suffix', () => {
+    expect(suffixes(['disk', '/'], ['disk', '/srv/disk'], ['c', 'C:\\'], ['c', 'D:\\c'])).toEqual([
+      [0, '/'],
+      [1, 'disk'],
+      [2, 'C:\\'],
+      [3, 'c'],
+    ])
+  })
 })

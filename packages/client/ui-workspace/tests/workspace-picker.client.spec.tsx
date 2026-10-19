@@ -133,6 +133,9 @@ describe('WorkspacePicker', () => {
     ])
     expect(screen.getAllByRole('menuitem').map(entry => entry.textContent))
       .toEqual(['Shared one/a/Shared', 'Shared two/a/Shared', 'Alone', '添加工作区…'])
+    // The full path stays reachable when a narrow menu truncates the row.
+    expect(screen.getByText('two/a/Shared').parentElement?.title).toBe('/two/a/Shared')
+    expect(screen.getByRole('menuitem', { name: 'Alone' }).querySelector('[title]')).toBeNull()
     fireEvent.click(screen.getByRole('menuitem', { name: 'Shared two/a/Shared' }))
     expect(b.onPick).toHaveBeenCalledWith(wid('beta'))
   })
