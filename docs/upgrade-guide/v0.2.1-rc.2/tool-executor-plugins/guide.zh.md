@@ -9,7 +9,7 @@ description: "工具执行模式从 dsh-tools 配置移至显式执行器插件�
 
 ## 变更
 
-`@deepseek-ai/dsh-tools` 保留工具注册和执行器选择，但加载时会拒绝已移除的 `mode` 和 `maxParallelSubCalls` 配置字段。原生和 PTC 执行分别要求 `@deepseek-ai/dsh-tool-executor-native` 或 `@deepseek-ai/dsh-tool-executor-ptc`。内置 profile 已挂载执行器，自定义组合必须添加一个。现有 `dsh-agent-tool-presentation` 选择器仍受支持，但已弃用。启用的 `tool-executor-native` 和 `tool-executor-ptc` 条目属于启动必需项；无效的执行器配置会终止启动。
+`@deepseek-ai/dsh-tools` 保留工具注册和执行器选择，但加载时会拒绝已移除的 `mode` 和 `maxParallelSubCalls` 配置字段。原生和 PTC 执行分别要求 `@deepseek-ai/dsh-tool-executor-native` 或 `@deepseek-ai/dsh-tool-executor-ptc`。内置 profile 已挂载执行器，自定义组合必须添加一个。现有 `dsh-agent-tool-presentation` 选择器仍受支持，但已弃用。启用的 `tool-executor-native` 和 `tool-executor-ptc` 条目属于启动必需项；无效的执行器配置会终止启动。Web 与 headless 不再读取 `DSH_TOOLS_MODE`，均继承 base 的原生执行。
 
 ## 迁移
 
@@ -19,3 +19,17 @@ description: "工具执行模式从 dsh-tools 配置移至显式执行器插件�
 4. 从 `@deepseek-ai/dsh-tool-executor-ptc` 导入 PTC SDK 渲染器和 `CodeRunFailedError`。用所选交互模式运行任务，确认工具结果出现在 Session 中。
 5. 从 `@deepseek-ai/dsh-tools/pipeline` 导入 `ToolExecutionPipeline` 和 `executeToolBatch`。完整执行（包括单次调用）使用批次；自定义调度器直接调用 `prepare`、`dispatch` 和 `complete`。把 `@deepseek-ai/dsh-tool-testkit` 添加为开发依赖，并从该包导入工具 fixture。工具注册表主入口不再导出这些成员。
 6. 使用 `import type` 从 PTC 执行器包导入 `PtcDispatchLog`。独立 Session 读取者通过 `@deepseek-ai/dsh-tool-executor-ptc/types` 获取持久化分派事件；PTC 实时策略与消息来源声明由执行器包主入口提供。
+
+7. 从启动环境中移除 `DSH_TOOLS_MODE`。需要 PTC 时，将以下内容保存为 `ptc.yml` 并通过 `--patch` 加载；原生执行无需 overlay。同一补丁也适用于 `--profile web`。确认 PTC 模式下模型只收到 `run_code`。
+
+```yaml
+- id: tool-executor-native
+  disabled: true
+
+- id: tool-executor-ptc
+  disabled: false
+```
+
+```bash
+dsh --profile headless --patch ./ptc.yml "task"
+```

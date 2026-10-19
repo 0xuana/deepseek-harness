@@ -50,7 +50,7 @@ Enable the experimental layer explicitly for the headless profile:
 
 ```sh
 dsh plugin --profile headless add @deepseek-ai/dsh-experimental-auto-review
-DSH_TOOLS_MODE=native dsh headless --permission-mode auto --approval-policy never --json - < task.txt > run.jsonl
+dsh headless --permission-mode auto --approval-policy never --json - < task.txt > run.jsonl
 ```
 
 For a one-off run from this checkout, pass `--patch /absolute/path/to/packages/experimental/auto-review/cordis.patch.yml` instead of installing a profile layer. An unavailable Auto integration fails preset selection before reading stdin or starting model work. Auto uses full host access; `--add-dir` is unnecessary in this mode. Native tools keep every tool body on the review path; direct Node effects in PTC remain outside it.

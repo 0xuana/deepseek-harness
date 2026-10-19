@@ -15,7 +15,7 @@ const python = runtime && join(runtime, 'dependencies/python', process.platform 
 const launch = {
   binScript: join(repo, 'apps/cli/src/bin.ts'), sourceImport: 'tsx/esm' as const, tsconfigPath: join(repo, 'tsconfig.base.json'),
   configPath: 'office.patch.json', processTimeoutMs: 110_000,
-  env: { DSH_PRIMARY_RUNTIME: runtime, DSH_PERMISSION_MODE: 'danger-full-access', DSH_TELEMETRY_DISABLED: '1', DSH_TOOLS_MODE: 'native',
+  env: { DSH_PRIMARY_RUNTIME: runtime, DSH_PERMISSION_MODE: 'danger-full-access', DSH_TELEMETRY_DISABLED: '1',
     HTTP_PROXY: process.env.DSH_OFFICE_TEST_PROXY, HTTPS_PROXY: process.env.DSH_OFFICE_TEST_PROXY },
 }
 
@@ -39,8 +39,9 @@ async function sessionEvents(cwd: string) {
 it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each([{ format: 'docx', mode: 'native' }, { format: 'pdf', mode: 'native' }, { format: 'docx', mode: 'ptc' }])('loads the operation skill and renders $format through the shell in $mode mode', async ({ format, mode }) => {
   await runLoaderSmoke({
     label: 'Office CLI rendering', tempDirPrefix: 'dsh-office-render-',
-    ...launch, env: { ...launch.env, DSH_TOOLS_MODE: mode },
+    ...launch,
     binArgs: ['--profile', 'headless', '--patch', 'office.patch.json',
+      ...mode === 'ptc' ? ['--patch', join(repo, 'apps/cli/config/examples/ptc.yml')] : [],
       `Export page 1 of input.${format} as PNG into preview and check that the exported image is readable. Report briefly in English.`],
     async prepare(cwd) {
       await execa(python!, ['-c', "from docx import Document\nd=Document()\nd.add_heading('Quarterly revenue',0)\nd.add_paragraph('Q1: 12; Q2: 18; Total: 30')\nd.save('input.docx')"], { cwd })
