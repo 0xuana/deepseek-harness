@@ -19,7 +19,6 @@ import type {
   SessionListMetadata, SessionProjectionHints, SessionSearchItem,
   SessionSearchValue, SessionSummary,
 } from './types.ts'
-import type { SessionProjectionSummaryValues } from '@deepseek-ai/dsh-session-projection/types'
 
 const SEARCH_PROVIDER_CALL_LIMIT = 100
 const SESSION_SEARCH_QUERY_MAX_CHARS = 500
@@ -333,7 +332,7 @@ function hintsOf(
   if (block === undefined || Object.keys(block.values).length === 0) return undefined
   // Listing hints contain every summary wire value the source currently holds
   // but remain partial: missing cells and cache rows are never materialized here.
-  return { kind, asOfSeq: block.asOfSeq, values: block.values as Partial<SessionProjectionSummaryValues> }
+  return { kind, asOfSeq: block.asOfSeq, values: block.values }
 }
 
 function normalizeSearchQuery(query: string): string {
