@@ -528,6 +528,8 @@ interface PackageAssets {
  * extension, and be published by the `./assets/*` export; it is emitted once
  * per build under `lib/assets/` at its relative path with the content revision
  * inserted before the extension, and the reference becomes its document-relative URL.
+ * A one-shot build deletes files under `lib/assets/` that it did not emit; a
+ * watch build keeps them for pages still running an earlier generation.
  * @param manifest - the package's own manifest, naming the URL owner and declaring the asset export.
  * @param packageDir - the package's own directory.
  * @returns the plugin and stylesheet visitor sharing the per-build emission record.
@@ -585,7 +587,9 @@ function packageAssets(manifest: PackageManifest, packageDir: string): PackageAs
         return `export default ${JSON.stringify(reference(this, id))};`
       },
       async writeBundle(outputOptions, bundle) {
-        if (outputOptions.dir === undefined) return
+        // A watch rebuild keeps earlier files: the Host still serves the previous
+        // bundle generation, and pages running it request those asset names.
+        if (this.meta.watchMode || outputOptions.dir === undefined) return
         const outDir = outputOptions.dir
         const assets = resolvePath(outDir, ASSET_OUTPUT_DIR)
         if (!existsSync(assets)) return

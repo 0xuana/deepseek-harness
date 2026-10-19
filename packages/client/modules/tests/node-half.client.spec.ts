@@ -967,6 +967,20 @@ describe('client bundle activation', () => {
     expect((await routeRequest(route, url.replace(`rev=${row.rev}`, 'rev=stale'))).status).toBe(404)
   })
 
+  it('serves a chunk of a package named @scope/assets instead of treating it as an asset request', async () => {
+    const packageName = '@fixture/assets'
+    const clientPath = writePackage(packageName)
+    mkdirSync(dirname(clientPath), { recursive: true })
+    writeFileSync(clientPath, 'module.exports = {}\n')
+    writeFileSync(join(dirname(clientPath), 'client.extra.js'), 'module.exports = { marker: "extra chunk" }\n')
+    const { service, route } = constructWithRoute([packageName])
+    const row = service.graph().entries[0]!
+
+    const chunk = await routeRequest(route, chunkReference(packageName, 'client.extra.js', row.rev))
+    expect(chunk.status).toBe(200)
+    expect(chunk.body.toString('utf8')).toContain('extra chunk')
+  })
+
   it('reads a package-local chunk and its map body only through the asynchronous filesystem face', async () => {
     const packageName = '@fixture/async-chunk'
     const clientPath = writePackage(packageName)
@@ -1263,10 +1277,15 @@ describe('package manifest refresh', () => {
     const before = service.graph().entries[0]!
     const changed = vi.fn()
     service.onGraphChanged(changed)
+    const warning = vi.spyOn(context.logger, 'warn')
+    // An unchanged restart compares bundle metadata and never reads the bundle.
+    syncRefused.add(service.clientPath(packageName)!)
 
     emitLoaderEntryChange(context, packageName)
     await Promise.resolve()
     expect(changed).not.toHaveBeenCalled()
+    expect(warning).not.toHaveBeenCalled()
+    syncRefused.delete(service.clientPath(packageName)!)
 
     writeManifest(packageName, clientManifest({ external: ['scheduler'], inject: ['@fixture/slots'] }))
     emitLoaderEntryChange(context, packageName)

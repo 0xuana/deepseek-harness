@@ -29,7 +29,7 @@ interface BundlePlugin {
   buildStart?: (this: PluginContext) => void
   resolveId?: (source: string, importer?: string) => string | null
   load?: (this: PluginContext, id: string) => string | null | Promise<string | null>
-  writeBundle?: (outputOptions: { dir?: string }, bundle: Record<string, unknown>) => Promise<void>
+  writeBundle?: (this: { meta: { watchMode: boolean } }, outputOptions: { dir?: string }, bundle: Record<string, unknown>) => Promise<void>
 }
 
 type PluginName = 'dsh-css-modules-inline' | 'dsh-css-global-inline' | 'dsh-css-text-inline' | 'dsh-package-asset'
@@ -362,8 +362,9 @@ describe('client bundle asset output', () => {
     const { writeBundle } = browserPlugins(root)('dsh-package-asset')
     if (writeBundle === undefined) throw new Error('asset plugin has no writeBundle hook')
     const out = join(root, 'lib')
+    const build = { meta: { watchMode: false } }
 
-    await writeBundle({ dir: out }, { 'client.js': {}, 'assets/whale.png': {}, 'assets/icons/kept.svg': {} })
+    await writeBundle.call(build, { dir: out }, { 'client.js': {}, 'assets/whale.png': {}, 'assets/icons/kept.svg': {} })
 
     expect(['client.js', 'assets/whale.png', 'assets/icons/kept.svg', 'assets/icons/stale.svg', 'assets/old']
       .map(path => [path, existsSync(join(out, path))]))
@@ -375,8 +376,22 @@ describe('client bundle asset output', () => {
         ['assets/old', false],
       ])
 
-    await writeBundle({ dir: out }, { 'client.js': {} })
+    await writeBundle.call(build, { dir: out }, { 'client.js': {} })
     expect([existsSync(join(out, 'client.js')), existsSync(join(out, 'assets'))]).toEqual([true, false])
-    await writeBundle({ dir: out }, { 'client.js': {} })
+    await writeBundle.call(build, { dir: out }, { 'client.js': {} })
+  })
+
+  it('keeps earlier lib/assets files in a watch rebuild for pages running the previous generation', async () => {
+    const root = await assetPackage({
+      'lib/client.js': '',
+      'lib/assets/whale-000000000000.png': WHALE,
+    })
+    const { writeBundle } = browserPlugins(root)('dsh-package-asset')
+    if (writeBundle === undefined) throw new Error('asset plugin has no writeBundle hook')
+    const out = join(root, 'lib')
+
+    await writeBundle.call({ meta: { watchMode: true } }, { dir: out }, { 'client.js': {}, 'assets/whale-111111111111.png': {} })
+
+    expect(existsSync(join(out, 'assets/whale-000000000000.png'))).toBe(true)
   })
 })

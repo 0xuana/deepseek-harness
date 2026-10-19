@@ -16,11 +16,12 @@
  * against the live loader entries. The activation pass seeds the same dirty
  * set with all current entries and flushes synchronously, so first scan and
  * steady state share one implementation. Each reconciliation reads the
- * package manifest and bundle again, so an entry that restarts after its
- * package was reinstalled or moved publishes them as they are now. The
+ * package manifest and the bundle metadata again, so an entry that restarts
+ * after its package was reinstalled or moved publishes them as they are now;
+ * an unchanged result publishes nothing and does not read the bundle. The
  * manifest package name identifies the browser module; distinct active Loader
- * sources for that package are a composition error. Bundle content changes
- * reach the graph only through {@link ClientModuleRegistry.rebuilt}.
+ * sources for that package are a composition error. Bundle rebuilds outside
+ * an entry restart reach the graph through {@link ClientModuleRegistry.rebuilt}.
  * @module @deepseek-ai/dsh-client-modules
  */
 
@@ -92,7 +93,7 @@ interface ClientPackageSource extends ResolvedPkgMeta {
   loaderName: string
   /** Resolution base of the config tree that owns the row. */
   baseUrl: string
-  /** Stable cache and contribution key for this source. */
+  /** Stable source identity and contribution key. */
   sourceKey: string
 }
 
@@ -232,8 +233,12 @@ function artifactRevision(baseline: ClientArtifactBaseline): string {
 /** Absolute route prefix serving every plugin resource. */
 const PLUGIN_ROUTE = '/plugins'
 
-/** `/plugins/<package>/assets/<path>`; a package name holds at most one `/`, after its `@scope`. */
-const PACKAGE_ASSET_PATH = /^\/plugins\/((?:@[^/]+\/)?[^/]+)\/assets\/(.*)$/
+/**
+ * `/plugins/<package>/assets/<path>`. A scoped package name spans two segments
+ * (`@scope/name`); an unscoped name never starts with `@`, so `@scope/assets/…`
+ * stays a chunk request of the package `@scope/assets`.
+ */
+const PACKAGE_ASSET_PATH = /^\/plugins\/(@[^/]+\/[^/]+|[^@/][^/]*)\/assets\/(.*)$/
 
 /** Expose a Node read stream as a shell-carrier Response body; cancelling the body closes the stream. */
 function transforStreamBody(stream: Readable): ReadableStream<Uint8Array> {
@@ -746,7 +751,7 @@ export class ClientModuleRegistry extends Service {
 
   /**
    * Publish one completed bundle generation (the HMR watch's registration
-   * hook — the only entry point through which build changes reach the graph).
+   * hook; an entry restart publishes through reconciliation instead).
    * Unchanged mtime, ctime and size preserve the graph without reading the bundle.
    * @param id - entry id (package name).
    * @returns the current artifact rev, or undefined for an unknown id.
@@ -985,20 +990,16 @@ export class ClientModuleRegistry extends Service {
   }
 
   /**
-   * Read the activation-time bundle snapshot.
+   * Run one filesystem read of a declared client bundle.
    * @param pkgName - package that declares the client bundle.
    * @param clientPath - absolute path of the built client artifact.
-   * @returns the immutable bytes plus the pre-read filesystem baseline.
+   * @param read - the stat or read of `clientPath`.
+   * @returns the read's result.
    * @throws {MissingClientBundleError} when the read fails with `ENOENT`; other filesystem errors are rethrown unchanged.
    */
-  private initialBundleSnapshot(pkgName: string, clientPath: string): {
-    bundle: Buffer
-    baseline: ClientArtifactBaseline
-  } {
+  private readClientBundle<T>(pkgName: string, clientPath: string, read: () => T): T {
     try {
-      const baseline = this.captureArtifactBaseline(clientPath)
-      const bundle = readFileSync(clientPath)
-      return { bundle, baseline }
+      return read()
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
       throw new MissingClientBundleError(pkgName, clientPath, error)
@@ -1071,12 +1072,12 @@ export class ClientModuleRegistry extends Service {
     }
     const source = sources[0]
     if (source === undefined) return this.table.delete(packageName)
+    const { clientPath } = source.meta
     // Startup and HMR share revisions so unchanged artifacts survive a server restart.
-    const snapshot = this.initialBundleSnapshot(packageName, source.meta.clientPath)
-    const rev = artifactRevision(snapshot.baseline)
-    const entry = graphRow(packageName, rev, source.meta)
+    const baseline = this.readClientBundle(packageName, clientPath, () => this.captureArtifactBaseline(clientPath))
+    const entry = graphRow(packageName, artifactRevision(baseline), source.meta)
     const current = this.table.get(packageName)
-    // A restart that reads the same manifest and bundle leaves the published graph as it is.
+    // A restart that finds the same manifest and bundle metadata leaves the published graph as it is, unread.
     const unchanged = current?.sourceKey === source.sourceKey
       && isDeepStrictEqual(current.meta, source.meta) && isDeepStrictEqual(current.entry, entry)
     if (unchanged) return false
@@ -1085,8 +1086,8 @@ export class ClientModuleRegistry extends Service {
       loaderName: source.loaderName,
       sourceKey: source.sourceKey,
       meta: source.meta,
-      bundle: snapshot.bundle,
-      baseline: snapshot.baseline,
+      bundle: this.readClientBundle(packageName, clientPath, () => readFileSync(clientPath)),
+      baseline,
     })
     return true
   }
@@ -1257,8 +1258,16 @@ export class ClientModuleRegistry extends Service {
     /* v8 ignore next -- `?? '/'` arm: node:http always sets url on server requests. */
     const response = await this.bundleResource(req.method, req.url ?? '/', req.headers['if-none-match'])
     res.writeHead(response.status, response.headers)
-    if (response.body instanceof Readable) await pipeline(response.body, res)
-    else res.end(response.body)
+    if (!(response.body instanceof Readable)) {
+      res.end(response.body)
+      return
+    }
+    try {
+      await pipeline(response.body, res)
+    } catch (error) {
+      // The browser cancelled the request, as leaving an onboarding step does; pipeline already closed the file.
+      if ((error as NodeJS.ErrnoException).code !== 'ERR_STREAM_PREMATURE_CLOSE') throw error
+    }
   }
 }
 

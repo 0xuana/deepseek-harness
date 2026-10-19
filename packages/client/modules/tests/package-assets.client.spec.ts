@@ -6,7 +6,7 @@ import { request } from 'node:http'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { Context } from '@deepseek-ai/cordis'
+import { Context, LoggerLevel } from '@deepseek-ai/cordis'
 import { ModuleLoader } from '@deepseek-ai/cordis-plugin-loader'
 import WebServer from '@deepseek-ai/dsh-host-webserver'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -115,6 +115,10 @@ interface AssetRequestInit {
 /** Composed Host: the modules service and a requester through both carriers. */
 interface Host {
   service: ClientModuleRegistry
+  /** Port of the real Web server. */
+  port: number
+  /** Warnings any plugin of the composed Host logged. */
+  warnings: unknown[][]
   /** Send one raw request target through the Web route and the shell carrier and require identical answers. */
   both: (path: string, init?: AssetRequestInit) => Promise<Answer>
 }
@@ -125,6 +129,8 @@ async function composeHost(): Promise<Host> {
   if (internal === undefined) throw new Error('package-asset tests require the Node module loader internals')
   const context = new Context()
   contexts.push(context)
+  const warnings: unknown[][] = []
+  context.logger.exporter({ levels: { default: LoggerLevel.WARN }, export: (message) => { if (message.type === 'warn') warnings.push(message.args) } })
   const baseUrl = pathToFileURL(fixtureRoot()).href + '/'
   context.baseUrl = baseUrl
   context.provide('loader', {
@@ -163,7 +169,7 @@ async function composeHost(): Promise<Host> {
   }
   // The Web route registers once the injected webServer is ready.
   await expect.poll(async () => (await http(assetUrl(ASSETS_ID, 'photo.png'))).status).toBe(200)
-  return { service, both }
+  return { service, port, warnings, both }
 }
 
 /** Absolute route the browser requests for the document-relative build reference to an emitted file. */
@@ -236,6 +242,30 @@ describe('package asset route', () => {
     const answer = await both(assetUrl(ASSETS_ID, 'large.png'))
     expect(answer.status).toBe(200)
     expect(answer.body.equals(large)).toBe(true)
+  })
+
+  it('logs nothing when the browser cancels a streamed asset response', async () => {
+    const assets = writeFixture()
+    const file = writeFile(join(assets, 'large.png'), Buffer.alloc(8 * 1024 * 1024, 7))
+    const { port, warnings } = await composeHost()
+
+    await new Promise<void>((resolve, reject) => {
+      const outgoing = request({ host: '127.0.0.1', port, path: assetUrl(ASSETS_ID, 'large.png'), agent: false }, (res) => {
+        res.once('data', () => {
+          outgoing.destroy()
+          resolve()
+        })
+      })
+      // The destroyed request reports its own abort; the cancellation is the point of the test.
+      outgoing.on('error', () => undefined)
+      outgoing.on('close', () => { resolve() })
+      outgoing.on('timeout', () => { reject(new Error('asset response did not start')) })
+      outgoing.end()
+    })
+    await expect.poll(() => opened.findLast(entry => entry.path === file)?.stream.destroyed).toBe(true)
+    // Let the server's pipeline settle its rejection before reading the log.
+    await new Promise(resolve => setTimeout(resolve, 50))
+    expect(warnings).toEqual([])
   })
 
   it('closes the file stream when a shell-carrier body is cancelled', async () => {
