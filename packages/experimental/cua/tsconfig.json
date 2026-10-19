@@ -42,6 +42,9 @@
       "path": "../../ptc-runtime/ptc-runtime"
     },
     {
+      "path": "../../typert/protocol"
+    },
+    {
       "path": "../../settings/settings"
     },
     {
@@ -55,6 +58,12 @@
     },
     {
       "path": "../../llm/llm"
+    },
+    {
+      "path": "../../core/scope"
+    },
+    {
+      "path": "../../preset/agent-preset-registry"
     }
   ]
 }

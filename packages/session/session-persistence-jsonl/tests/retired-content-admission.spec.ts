@@ -1,13 +1,13 @@
 /** Interpreted retired content must fail before migration publication or recoverable native-tail suppression. */
 import { Context } from '@deepseek-ai/cordis'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, SessionId } from '@deepseek-ai/dsh-session'
 import { SessionFormatUnsupportedError, SessionPersistenceCorruptionError } from '@deepseek-ai/dsh-session-persistence'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { describe, expect, it, onTestFinished } from 'vitest'
-import { generationLogPath } from '../src/format.ts'
+import { generationLogPath, SessionLogScanner } from '../src/format.ts'
 import { compressZstdFrame } from '../src/zstd.ts'
 
 const id = SessionId('retired-content-admission')
@@ -54,4 +54,13 @@ describe.each(modes)('retired content in JSONL ($compression, $access)', ({ comp
     try { expect((await handle.read()).events).toEqual([expected]) } finally { await handle.close() }
     expect(await readFile(path)).toEqual(bytes)
   })
+})
+
+it.each(['strict', 'recoverable'] as const)('classifies retired native PTC tags as unsupported during %s scanning', (recovery) => {
+  const header = { type: 'session', version: SESSION_FORMAT_VERSION, id, createdAt: 1, isSeeded: false, delegationDepth: 0 }
+  for (const type of ['tool/code-dispatch-start', 'tool/code-dispatch']) {
+    const scanner = new SessionLogScanner(Buffer.from(JSON.stringify(header) + '\n'), recovery)
+    const row = { type, seq: 0, time: 1, data: {} }
+    expect(() => { scanner.write(Buffer.from(JSON.stringify(row) + '\n')) }).toThrow(SessionFormatUnsupportedError)
+  }
 })

@@ -2482,7 +2482,7 @@ export interface PlanModeConfig {
 ## `@deepseek-ai/dsh-plugin-manager`
 
 - `inject`: `loader` · `profileContext`
-- `source`: [`packages/boot/plugin-manager/src/index.ts:42`](../packages/boot/plugin-manager/src/index.ts)
+- `source`: [`packages/boot/plugin-manager/src/index.ts:43`](../packages/boot/plugin-manager/src/index.ts)
 
 ```ts config-catalog
 /** The pnpm executable, registries, and limits for diagnostics, lookups and connection checks. */
@@ -4684,6 +4684,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-client-ui-commands` | — | [`packages/client/ui-commands/src/index.ts`](../packages/client/ui-commands/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-conversation` | — | [`packages/client/ui-conversation/src/index.ts`](../packages/client/ui-conversation/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-cordis` | — | [`packages/extensions/ui-cordis/src/index.ts`](../packages/extensions/ui-cordis/src/index.ts) |
+| `@deepseek-ai/dsh-client-ui-cua` | — | [`packages/experimental/client-ui-cua/src/index.ts`](../packages/experimental/client-ui-cua/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-deepseek-model-label-1017` | — | [`packages/client/ui-deepseek-model-label-1017/src/index.ts`](../packages/client/ui-deepseek-model-label-1017/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-deliverables` | `systemPrompt` · `connection` · `sessionQuery` · `sessionController` · `workspaceFiles` · `fs` · `sandboxPolicy` · `workspaceChanges` | [`packages/client/ui-deliverables/src/index.ts`](../packages/client/ui-deliverables/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-directory-picker-browse` | — | [`packages/client/ui-directory-picker-browse/src/index.ts`](../packages/client/ui-directory-picker-browse/src/index.ts) |
@@ -4821,6 +4822,7 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 | `@deepseek-ai/dsh-client-web` | — | [`packages/client/web/src/index.ts`](../packages/client/web/src/index.ts) |
 | `@deepseek-ai/dsh-cmdline` | — | [`packages/boot/cmdline/src/index.ts`](../packages/boot/cmdline/src/index.ts) |
 | `@deepseek-ai/dsh-cua` | — | [`packages/experimental/cua/src/index.ts`](../packages/experimental/cua/src/index.ts) |
+| `@deepseek-ai/dsh-cua-bundle` | — | [`packages/experimental/cua-bundle/src/index.ts`](../packages/experimental/cua-bundle/src/index.ts) |
 | `@deepseek-ai/dsh-deque` | — | [`packages/util/deque/src/index.ts`](../packages/util/deque/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-agent-team-profile` | — | [`packages/experimental/agent-team-profile/src/index.ts`](../packages/experimental/agent-team-profile/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-badge-skill-bundle` | — | [`packages/experimental/badge-skill-bundle/src/index.ts`](../packages/experimental/badge-skill-bundle/src/index.ts) |

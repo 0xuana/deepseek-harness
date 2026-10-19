@@ -107,7 +107,8 @@ export function verifyDefaultProductIsolation(root: string): ProductIsolationRes
   const sources = new Set<string>()
   const configs = new Set<string>()
   let webPluginCount = 0
-  const isExperimental = (pkg: Package): boolean => isExperimentalPackageName(pkg.manifest.name)
+  const isExperimental = (pkg: Package): boolean => pkg.manifest.dsh?.bundle?.experimental === true
+    || isExperimentalPackageName(pkg.manifest.name)
     || display(pkg.directory).startsWith('packages/experimental/')
   const add = (pkg: Package, origin: string): void => {
     if (isExperimental(pkg)) {

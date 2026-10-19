@@ -1,7 +1,7 @@
 import { defineConfig } from 'tsdown'
 
 export default defineConfig(Object.entries({
-  index: 'lib/types/index.js', api: 'lib/types/api.js', bridge: 'lib/types/bridge.js',
+  index: 'lib/types/index.js', types: 'lib/types/types.js', api: 'lib/types/api.js', bridge: 'lib/types/bridge.js',
   'native-client': 'lib/types/native-client.js', protocol: 'lib/types/protocol.js',
 }).map(([name, path]) => ({
   entry: { [name]: path },

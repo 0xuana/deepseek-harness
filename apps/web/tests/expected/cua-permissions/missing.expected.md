@@ -1,0 +1,26 @@
+- region "Authorize Computer Use":
+  - heading "Authorize Computer Use" [level=3]
+  - group "Default mode for new sessions":
+    - strong: Default mode for new sessions
+    - paragraph: Computer Use is available only in PTC mode.
+    - button "Set to PTC"
+  - group "Accessibility":
+    - strong: Accessibility
+    - paragraph: In System Settings, allow Visual Studio Code.app to read interface controls, click, and type.
+    - text: Not allowed
+    - button "Request permission"
+    - button "Open System Settings"
+  - group "Screen Recording":
+    - strong: Screen Recording
+    - paragraph: In System Settings, allow Visual Studio Code.app to capture application windows.
+    - text: Not allowed
+    - button "Request permission"
+    - button "Open System Settings"
+  - paragraph: Enable the application in System Settings. Follow the macOS prompt if it names another application.
+- region "Manage applications Computer Use can access":
+  - heading "Manage applications Computer Use can access" [level=3]
+  - heading "Always-allowed applications" [level=4]
+  - list:
+    - listitem:
+      - strong: Fixture
+      - button "Revoke"
