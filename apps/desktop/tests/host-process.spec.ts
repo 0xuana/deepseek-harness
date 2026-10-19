@@ -76,6 +76,18 @@ afterEach(async () => {
 })
 
 describe('desktop host process', () => {
+  it('retains the announced run identity when startup fails before readiness', async () => {
+    const runtime = projectWithHost(`
+process.send({ type: 'starting', runId: 'c254ab28-97c9-4382-95e6-2db9c66f98c8' })
+process.send({ type: 'fatal', message: 'profile startup failed', diagnostic: 'required plugin failed' }, () => process.disconnect())
+`)
+    const host = hostProcess(runtime)
+    const failure: unknown = await host.start().catch((error: unknown) => error)
+    await host.stop()
+    expect(failure).toBeInstanceOf(DesktopHostFatalError)
+    expect(failure).toHaveProperty('hostRunId', 'c254ab28-97c9-4382-95e6-2db9c66f98c8')
+  })
+
   it.each([
     ['exception', 'queueMicrotask(() => { throw new Error("qualification-exception", { cause: new Error("qualification-runtime-cause") }) })'],
     ['rejection', 'Promise.reject(new Error("qualification-rejection"))'],
@@ -83,6 +95,7 @@ describe('desktop host process', () => {
   ])('retains real child %s evidence in the final report after readiness', async (kind, trigger) => {
     const failed = Promise.withResolvers<Error>()
     const runtime = projectWithHost(`
+process.send({ type: 'starting', runId: 'c254ab28-97c9-4382-95e6-2db9c66f98c8' })
 process.send({ type: 'ready', url: 'http://127.0.0.1:3080/' }, () => { ${trigger} })
 `)
     const host = hostProcess(runtime, runtime, failed.resolve)
@@ -96,6 +109,7 @@ process.send({ type: 'ready', url: 'http://127.0.0.1:3080/' }, () => { ${trigger
     })
     expect(report).toContain(`qualification-${kind}`)
     expect(report).toContain('phase: running')
+    expect(report).toContain("hostRunId: 'c254ab28-97c9-4382-95e6-2db9c66f98c8'")
     if (kind === 'exception') expect(report).toContain('qualification-runtime-cause')
     if (kind === 'exit') expect(report).toContain('7')
   })
@@ -108,6 +122,7 @@ process.send({ type: 'ready', url: 'http://127.0.0.1:3080/' }, () => { ${trigger
       secret: 'not-persisted',
     }
     const runtime = projectWithHost(`
+process.send({ type: 'starting', runId: ${JSON.stringify(record.runId)} })
 process.send({ type: 'plugin-operation', record: { invalid: true } })
 process.send({ type: 'plugin-operation', record: ${JSON.stringify(record)} })
 ${HTTP_HOST}`)

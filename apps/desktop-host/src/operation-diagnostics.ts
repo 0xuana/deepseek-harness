@@ -1,19 +1,18 @@
 /** Bounded delivery of management facts to the shell which owns durable diagnostics. */
-import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
-import { parsePluginOperationRecord, type PluginOperationRecord } from '@deepseek-ai/dsh-plugin-manager/diagnostic'
+import { parsePluginOperationRecord, type PluginOperationRecord, type PluginOperationRunId } from '@deepseek-ai/dsh-plugin-manager/diagnostic'
 
 /**
  * Observe manager operations after Host startup, with bounded concurrent IPC deliveries.
  * @param ctx - Context owning the subscription and its pending deliveries.
  * @param send - IPC transport promise which settles when delivery succeeds or fails.
  * @param maxPending - Maximum number of outstanding deliveries; excess events are counted and omitted.
+ * @param runId - Host lifetime identity announced before profile startup.
  */
 export function installOperationDiagnostics(
-  ctx: Context, send: (record: PluginOperationRecord) => Promise<void>, maxPending: number,
+  ctx: Context, send: (record: PluginOperationRecord) => Promise<void>, maxPending: number, runId: PluginOperationRunId,
 ): void {
   if (!Number.isSafeInteger(maxPending) || maxPending < 1) throw new RangeError('Invalid diagnostic delivery budget')
-  const runId = randomUUID()
   const pending = new Set<Promise<void>>()
   let dropped = 0
   let closed = false
