@@ -6,7 +6,8 @@ import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import { expect, it, onTestFinished, vi } from 'vitest'
-import { apply, inject } from '../src/client/index.ts'
+import { mountRecommendations, inject } from '../src/client/mount.ts'
+const apply = (ctx: Context) => mountRecommendations(ctx, { package: '@deepseek-ai/dsh-experimental-plugin-recommendations', descriptors: [] })
 import { apply as hostApply } from '../src/index.ts'
 import type { RecommendationTailInjected } from '../src/client/Card.tsx'
 

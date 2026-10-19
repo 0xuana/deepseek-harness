@@ -76,3 +76,5 @@ The card adds no model context. Its Enable action can change subsequent tool dec
 None.
 
 </details>
+
+Cards use the application font, a distinct title and compact body scale, and a separate action footer. The built entry supplies generated Remote descriptors to the source-tested mount lifecycle.
