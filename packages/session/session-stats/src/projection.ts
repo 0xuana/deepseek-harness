@@ -202,5 +202,6 @@ export const sessionStatsProjectionDefinition = {
       decodeMs: state.decodeMs,
       decodeTokens: state.decodeTokens,
     }),
+    summary: false,
   },
 } satisfies ProjectionDefinition<'sessionStats', SessionStatsState>

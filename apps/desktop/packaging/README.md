@@ -67,6 +67,8 @@ The installer embeds `DSH_DESKTOP_UPDATE_CHANNEL` (`nightly` by default, or `lat
 
 ## Configuration and local builds
 
+Unsigned macOS and Windows packages use the same localized **DSH Local Build** label and version/commit badge as local Web builds. Signed packages keep official branding, including test deployments and macOS builds that skip notarization. Native application and installer names are unchanged.
+
 Set `DSH_PACKAGING_CONFIG_DIR` to the absolute machine configuration directory and `DSH_PACKAGING_PRESET` to `test` or `production` for local Windows commands. The loader reads `presets/<preset>.env`; signed commands additionally read `secrets/windows-signing.env`. Relative certificate and SignTool paths resolve beside the file declaring them. Public presets reject credentials, and the signing file cannot override public settings. Missing configuration fails without falling back to `.env.windows`; commands without a preset retain the existing dotenv behavior. Unsigned and preparation-only presets never read the signing file. Cache maintenance also reads only public preset settings. Test signed packages also require the existing download origin and release ID, but no upload credentials. Local preset commands with `--build-version auto` number from local artifacts only; Actions uses its run number and attempt.
 
 Both manual packaging workflows accept `test_release_id`. Blank uses the machine preset; a nonblank value must contain 32 lowercase hexadecimal characters and requires the test preset. The loader applies it through `PACKAGE_TEST_RELEASE_ID` without changing the preset file. Keep the same value for successive upgrade tests on that platform. Rotating the default affects future builds only: installed clients retain their original update address, and old objects remain accessible until separately removed. A random prefix reduces discoverability but does not authenticate downloads.
@@ -103,7 +105,9 @@ Each target owns its packed package inputs, prepared runtime, package set, dsh t
 
 ## Windows Actions packaging
 
-The `Package Desktop · Windows` [manual workflow](../../../.github/workflows/windows-package.yml) selects the dedicated Windows x64 runner label `dsh-win-package-trial` and the machine preset `test` or `production`. Choose `unsigned` (default) or `signed`; signed mode uses the existing EV token preflight, signature cache and failure interlock. It does not publish or upload a release. `build_version` defaults to `auto`, using the CI identifier in [Release versions](#release-versions); an explicit value may be the checkout's product version or an extended build version such as `0.2.1-alpha.1.20261009.1` for product `0.2.1-alpha.1`. The version prefix must match the selected checkout; validation errors show its current example. Manifests remain unchanged.
+For supervised runner startup and recovery, follow [Windows runner machine setup](../windows-signing/README.md#machine-setup).
+
+The `Package Desktop · Windows` [manual workflow](../../../.github/workflows/windows-package.yml) selects the dedicated Windows x64 runner label `dsh-win-package-trial` and the machine preset `test` or `production`. Choose `signed` (default) or `unsigned`; signed mode uses the existing EV token preflight, signature cache and failure interlock. It does not publish or upload a release. `build_version` defaults to `auto`, using the CI identifier in [Release versions](#release-versions); an explicit value may be the checkout's product version or an extended build version such as `0.2.1-alpha.1.20261009.1` for product `0.2.1-alpha.1`. The version prefix must match the selected checkout; validation errors show its current example. Manifests remain unchanged.
 
 Select the workflow in Actions, choose the source branch, preset, signing mode and version, then click Run workflow. Before merging input changes, test the pushed branch with `gh workflow run windows-package.yml --ref <branch> -f preset=test -f signing=unsigned -f build_version=auto`; verify the web form after merging. There is no push or PR trigger. Logs and successful EXEs are retained for 14 days. Inspect the retained logs and installer before relying on packaging; installation is separate. Before checkout, Node removes the runner-owned source directory without following dependency junctions; the workflow validates its location and rejects linked ancestors. Never point it at a development checkout. Runs share one concurrency group without cancelling an active build; only one run remains pending, and a newer dispatch replaces it. Diagnostics upload requires a successful clean checkout. Machine settings stay outside the checkout and are never uploaded as artifacts.
 
@@ -204,7 +208,7 @@ To inspect or troubleshoot the prepared host-target resources without invoking e
 pnpm run prepare:desktop
 ```
 
-This diagnostic command is an alternative stopping point, not the first half of a two-command build. A later `package:desktop*` command repeats the official build and preparation so it cannot consume stale dsh packages, runtime files, or dsh content.
+This diagnostic command is an alternative stopping point, not the first half of a two-command build. A later `package:desktop*` command repeats the build selected by its signing mode and all preparation so it cannot consume stale dsh packages, runtime files, or dsh content.
 
 <a id="local-official-bundles-from-a-loopback-registry"></a>
 

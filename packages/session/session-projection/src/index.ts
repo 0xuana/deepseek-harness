@@ -33,9 +33,19 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-import type { SessionProjectionMap } from './types.ts'
+import type {
+  SessionProjectionMap,
+  SessionProjectionViewValue,
+} from './types.ts'
 
-export type { SessionProjectionMap } from './types.ts'
+export type {
+  SessionProjectionMap,
+  SessionProjectionSummaryExcluded,
+  SessionProjectionSummaryExcludedKey,
+  SessionProjectionSummaryValues,
+  SessionProjectionViewValue,
+  SessionProjectionViewValues,
+} from './types.ts'
 
 /** An effect-owned registration with a reader retained independently of registration. */
 export interface ProjectionHandle<S> {
@@ -85,7 +95,7 @@ export interface ProjectionDefinition<K extends string, S> {
   /** Client view. Omit for host-only units. */
   wire?: K extends keyof SessionProjectionMap ? {
     /** Validates the wire payload before it leaves the host. */
-    viewSchema: ZodType<SessionProjectionMap[K]>
+    viewSchema: ZodType<SessionProjectionViewValue<SessionProjectionMap[K]>>
     /**
      * State → wire payload (the read-side projection). The live drive keeps
      * the two latest raw results and compares them with `Object.is`; an
@@ -94,7 +104,15 @@ export interface ProjectionDefinition<K extends string, S> {
      * @param state - the current state.
      * @returns the whole current value for this unit's key.
      */
-    view(state: NoInfer<S>): SessionProjectionMap[K]
+    view(state: NoInfer<S>): SessionProjectionViewValue<SessionProjectionMap[K]>
+    /**
+     * Whether a Session summary carries this unit; omitted means `true`.
+     * Declare `false` on a key whose map entry carries the
+     * `SessionProjectionSummaryExcluded` mark: the runtime key set follows this
+     * field, while the client view type follows the mark.
+     * @default true
+     */
+    summary?: boolean
   } : never
   /**
    * Persisted-cache invalidation version: bump whenever the serialized state fields or the
@@ -116,6 +134,27 @@ export type ProjectionChangeListener = (
   value: unknown,
   seq: SessionSeq,
 ) => void
+
+/**
+ * One read's client-visible key selection: an explicit key list, or a derived
+ * set such as {@link SessionProjectionRegistry.summaryKeys}. A set is used as
+ * given; only a list is copied into one.
+ */
+export type ProjectionKeySelection =
+  | readonly Extract<keyof SessionProjectionMap, string>[]
+  | ReadonlySet<Extract<keyof SessionProjectionMap, string>>
+
+/**
+ * Narrow one key selection to the set a read loop consults. A caller that
+ * already holds a set (such as `summaryKeys()`) is served without a copy; only
+ * an explicit list allocates.
+ * @param keys - the caller's selection, or `undefined` for every key.
+ * @returns the selection as a set, or `undefined` when no selection was given.
+ */
+function selectedKeys(keys: ProjectionKeySelection | undefined): ReadonlySet<string> | undefined {
+  if (keys === undefined) return undefined
+  return keys instanceof Set ? keys : new Set<string>(keys)
+}
 
 /**
  * One consistent read cut over every registered client-visible unit for one session.
@@ -155,7 +194,12 @@ interface ErasedDefinition {
   stateSchema: { parse(value: unknown): unknown }
   init(header: SessionHeader, inheritedEventCount: SessionLogOffset): unknown
   apply(state: unknown, event: SessionEvent): unknown
-  wire: { viewSchema: { parse(value: unknown): unknown }; view(state: unknown): unknown } | undefined
+  wire: {
+    viewSchema: { parse(value: unknown): unknown }
+    view(state: unknown): unknown
+    /** Whether a Session summary carries this unit (false when the unit declared `summary: false`). */
+    summary: boolean
+  } | undefined
   stateVersion: number
 }
 
@@ -207,6 +251,8 @@ function cursorBefore(offset: SessionLogOffset): SessionSeqCursor {
  */
 export class SessionProjectionRegistry extends Service {
   private readonly registrations = new Map<string, Registration>()
+  /** Stable summary key set; dropped whenever the key table changes. */
+  private summaryKeySet: ReadonlySet<Extract<keyof SessionProjectionMap, string>> | undefined
   private readonly listeners = new Set<ProjectionChangeListener>()
 
   /**
@@ -260,15 +306,20 @@ export class SessionProjectionRegistry extends Service {
     const wire = definition.wire as {
       viewSchema: ZodType
       view(state: S): unknown
+      summary?: boolean
     } | undefined
     const erased: ErasedDefinition = {
       key: definition.key,
       stateSchema: definition.stateSchema,
       init: (header, inheritedEventCount) => definition.init(header, inheritedEventCount),
       apply: (state, event) => definition.apply(state as S, event),
+      // The summary mark has no runtime representation: `wire.view` and
+      // `viewSchema` are already typed with the mark stripped, so this erase
+      // only widens the state type. `summary` carries the declared membership
+      // into the erased unit, where the key set reads it.
       wire: wire === undefined
         ? undefined
-        : { viewSchema: wire.viewSchema, view: state => wire.view(state as S) },
+        : { viewSchema: wire.viewSchema, view: state => wire.view(state as S), summary: wire.summary !== false },
       stateVersion: definition.stateVersion,
     }
     if (!Number.isSafeInteger(definition.stateVersion) || definition.stateVersion < 0) {
@@ -281,16 +332,23 @@ export class SessionProjectionRegistry extends Service {
       if (existing === undefined) {
         registration = { def: erased, cells: new WeakMap(), refs: 1 }
         this.registrations.set(key, registration)
+        this.summaryKeySet = undefined
       } else {
         if (existing.def.stateVersion !== erased.stateVersion) {
           throw new Error(`session projection key ${JSON.stringify(key)} is already registered at stateVersion ${String(existing.def.stateVersion)}; refusing to share it with stateVersion ${String(erased.stateVersion)}`)
+        }
+        if (existing.def.wire?.summary !== erased.wire?.summary) {
+          throw new Error(`session projection key ${JSON.stringify(key)} is already registered with summary=${String(existing.def.wire?.summary)}; refusing to share it with summary=${String(erased.wire?.summary)}`)
         }
         existing.refs += 1
         registration = existing
       }
       return () => {
         registration.refs -= 1
-        if (registration.refs === 0) this.registrations.delete(key)
+        if (registration.refs === 0) {
+          this.registrations.delete(key)
+          this.summaryKeySet = undefined
+        }
       }
     }, 'sessionProjections.register()')
     // Observe disposal during the asynchronous registration handoff before exposing a reader.
@@ -333,10 +391,10 @@ export class SessionProjectionRegistry extends Service {
    */
   snapshot(
     session: Session,
-    keys?: readonly Extract<keyof SessionProjectionMap, string>[],
+    keys?: ProjectionKeySelection,
   ): ProjectionSnapshot {
     const values: Record<string, unknown> = {}
-    const selected = keys === undefined ? undefined : new Set<string>(keys)
+    const selected = selectedKeys(keys)
     this.materializeCells(session)
     for (const registration of this.registrations.values()) {
       if (registration.def.wire === undefined) continue
@@ -357,11 +415,11 @@ export class SessionProjectionRegistry extends Service {
    */
   cachedSnapshot(
     session: Session,
-    keys?: readonly Extract<keyof SessionProjectionMap, string>[],
+    keys?: ProjectionKeySelection,
   ): ProjectionSnapshot | undefined {
     const values: Record<string, unknown> = {}
     let asOfSeq: SessionSeqCursor | undefined
-    const selected = keys === undefined ? undefined : new Set<string>(keys)
+    const selected = selectedKeys(keys)
     for (const registration of this.registrations.values()) {
       if (registration.def.wire === undefined) continue
       if (selected !== undefined && !selected.has(registration.def.key)) continue
@@ -373,6 +431,30 @@ export class SessionProjectionRegistry extends Service {
       }
     }
     return asOfSeq === undefined ? undefined : { asOfSeq, values }
+  }
+
+  /**
+   * The keys a Session summary carries: every registered client-visible key
+   * whose unit does not declare `summary: false`. The returned set is stable —
+   * the same instance on every call — until a registration or its disposal
+   * changes the key table, so a consumer may hold it across rows. Callers pass
+   * it to a key-taking read face such as `cachedSnapshot(session, summaryKeys())`
+   * or `viewCheckpoint(rows, summaryKeys())`; those faces use the set as-is.
+   * @returns the current summary key set; do not mutate it.
+   */
+  summaryKeys(): ReadonlySet<Extract<keyof SessionProjectionMap, string>> {
+    this.summaryKeySet ??= this.deriveSummaryKeys()
+    return this.summaryKeySet
+  }
+
+  /** Rebuild the summary key set from the current registrations. */
+  private deriveSummaryKeys(): ReadonlySet<Extract<keyof SessionProjectionMap, string>> {
+    const keys = new Set<Extract<keyof SessionProjectionMap, string>>()
+    for (const registration of this.registrations.values()) {
+      if (registration.def.wire === undefined || !registration.def.wire.summary) continue
+      keys.add(registration.def.key as Extract<keyof SessionProjectionMap, string>)
+    }
+    return keys
   }
 
   /**
@@ -443,10 +525,10 @@ export class SessionProjectionRegistry extends Service {
    */
   viewCheckpoint(
     checkpoint: ProjectionCheckpoint,
-    keys?: readonly Extract<keyof SessionProjectionMap, string>[],
+    keys?: ProjectionKeySelection,
   ): Partial<SessionProjectionMap> {
     const values: Record<string, unknown> = {}
-    const selected = keys === undefined ? undefined : new Set<string>(keys)
+    const selected = selectedKeys(keys)
     for (const registration of this.registrations.values()) {
       const def = registration.def
       if (def.wire === undefined) continue

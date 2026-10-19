@@ -54,7 +54,6 @@ const viewSchema = z.object({ sessionOrdinal: z.number().int(), rows: z.number()
 type ProjectionState = z.infer<typeof stateSchema>
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionStateMap { syntheticProjectionList: ProjectionState }
   interface SessionProjectionMap { syntheticProjectionList: z.infer<typeof viewSchema> }
 }
 

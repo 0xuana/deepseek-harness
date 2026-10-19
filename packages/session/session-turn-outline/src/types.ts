@@ -8,6 +8,7 @@
  */
 
 import type { SessionSeq } from '@deepseek-ai/dsh-session/types'
+import type { SessionProjectionSummaryExcluded } from '@deepseek-ai/dsh-session-projection/types'
 
 export {}
 
@@ -39,7 +40,12 @@ export interface TurnOutlineState {
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionMap {
-    /** Every started turn with its `turn/start` seq and bounded previews, strictly increasing by turn; see {@link TurnOutlineEntry}. */
-    turnOutline: readonly TurnOutlineEntry[]
+    /**
+     * Every started turn with its `turn/start` seq and bounded previews,
+     * strictly increasing by turn; see {@link TurnOutlineEntry}. Excluded from
+     * Session summary payloads: the outline grows with the whole log and no
+     * list row renders it.
+     */
+    turnOutline: SessionProjectionSummaryExcluded<readonly TurnOutlineEntry[]>
   }
 }
