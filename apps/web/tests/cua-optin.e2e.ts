@@ -34,6 +34,7 @@ it.each([undefined, 'minimal'] as const)('adds CUA to PTC sessions while preserv
       setup: async (ctx) => { await scaffold.ctx.agentPresets.mount(ctx, 'ptc') },
     })).agent
     const runtimeFiber = () => [...scaffold.ctx.loader.entries()].find(entry => entry.options.id === 'ptc-runtime')?.fiber
+    const originalRuntime = scaffold.ctx.ptcRuntime
     const originalRuntimeFiber = runtimeFiber()
     expect(originalRuntimeFiber).toBeDefined()
     expect(scaffold.ctx.ptcRuntime.programFormat).toBe('function-body')
@@ -96,7 +97,7 @@ it.each([undefined, 'minimal'] as const)('adds CUA to PTC sessions while preserv
     await persistent.getByRole('button', { name: '设为持久化', exact: true }).click()
     await persistent.getByRole('button', { name: '已设为持久化', exact: true }).waitFor()
     expect(scaffold.ctx.ptcRuntime.programFormat).toBe('repl')
-    expect(runtimeFiber() === originalRuntimeFiber).toBe(false)
+    expect(scaffold.ctx.ptcRuntime === originalRuntime).toBe(false)
     const persistentRuntimeFiber = runtimeFiber()
     const runtime = scaffold.ctx.ptcRuntime, owner = {}
     const program = 'globalThis.counter = (globalThis.counter ?? 0) + 1'
