@@ -16,7 +16,7 @@ import type { ApplicationApprovalProps } from '../src/client/ApplicationApproval
 const contribution: TypertRemoteContribution = { package: '@deepseek-ai/dsh-cua', descriptors: [] }
 const value: CuaApplicationState & { system: CuaSystemPermissionState } = {
   system: { accessibility: false, screenRecording: false, helper: { pid: 2 }, parent: { pid: 1 } },
-  allowedApps: [], blockedApps: [], settingsNamespace: 'cua', persistentAvailable: true }
+  allowedApps: [], blockedApps: [], persistentAvailable: true }
 
 function actionsOf(value: Record<string, unknown>): asserts value is Record<string, unknown> & PermissionFace {
   assert(typeof value.setActive === 'function')
@@ -27,8 +27,7 @@ function actionsOf(value: Record<string, unknown>): asserts value is Record<stri
 }
 
 async function fixture(fail = false) {
-  const ctx = new Context(), unmount = vi.fn(async () => {}), unsubscribe = vi.fn()
-  let settingsListener: ((namespace: string, revision: number) => void) | undefined
+  const ctx = new Context(), unmount = vi.fn(async () => {})
   class Remote extends Service {
     constructor() { super(ctx, 'remote') }
     async $mount(received: TypertRemoteContribution) {
@@ -36,7 +35,6 @@ async function fixture(fail = false) {
       const owned = this.ctx.effect(() => unmount)
       return () => owned()
     }
-    $on(_event: string, listener: (namespace: string, revision: number) => void) { settingsListener = listener; return unsubscribe }
   }
   new Remote()
   const setDefault = vi.fn(async () => true)
@@ -68,9 +66,8 @@ async function fixture(fail = false) {
     'conversation.composer': { kind: 'chain', scope: 'session' },
   } } as never, () => null)
   if (fail) vi.spyOn(ctx.slots, 'inject').mockImplementationOnce(() => { throw new Error('slot unavailable') })
-  return { ctx, unmount, unsubscribe, status, systemStatus, applicationIcons,
+  return { ctx, unmount, status, systemStatus, applicationIcons,
     requestPermission, openSettings, revoke, retryApproval, setDefault, setPersistent, runtimeConfiguration,
-    updateSettings(namespace: string) { settingsListener!(namespace, 1) },
   }
 }
 
@@ -141,7 +138,6 @@ it('withdraws the permission Remote and all controls with the optional plugin', 
     expect(f.ctx.slots.entries('conversation.composer')).toHaveLength(0)
     expect(f.ctx.slots.entries('plugins.bundle.config')).toHaveLength(0)
     expect(f.ctx.slots.entries('shell.overlay')).toHaveLength(0)
-    expect(f.unsubscribe).toHaveBeenCalledOnce()
     expect(f.unmount).toHaveBeenCalledOnce()
   } finally { await f.ctx.fiber.dispose() }
 })
@@ -181,22 +177,11 @@ it.each(['plugin', 'root'])('keeps the Remote mounted until an accepted revoke c
   }
 })
 
-it('refreshes only the settings namespace reported by the permission owner', async () => {
+it('refreshes application storage on reconnect', async () => {
   const f = await fixture()
-  f.status.mockResolvedValue({ ok: true, value: { ...value, settingsNamespace: 'custom-cua-entry' } })
   try {
     await f.ctx.plugin({ inject: [...inject], apply: ctx => mountCuaPermissions(ctx, contribution) })
-    const actions = f.ctx.slots.entries('plugins.bundle.config')[0]!.inject!()
-    actionsOf(actions)
-    f.updateSettings('locale')
-    expect(f.status).not.toHaveBeenCalled()
-    actions.refresh()
-    await vi.waitFor(() => { expect(actions.hooks.cuaPermissions.getSnapshot().busy).toBe(false) })
-    expect(f.status).toHaveBeenCalledOnce()
-    f.updateSettings('cua')
-    f.updateSettings('locale')
-    expect(f.status).toHaveBeenCalledOnce()
-    f.updateSettings('custom-cua-entry')
-    await vi.waitFor(() => { expect(f.status).toHaveBeenCalledTimes(2) })
+    f.ctx.emit('connection/reset')
+    await vi.waitFor(() => { expect(f.status).toHaveBeenCalledOnce() })
   } finally { await f.ctx.fiber.dispose() }
 })

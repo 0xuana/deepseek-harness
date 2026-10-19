@@ -88,7 +88,7 @@ Browser controls for provider-owned native permission and application decisions.
  * Read application decisions without waiting for the native helper.
  * @returns Saved grants and refused applications with their persistence owner.
  */
-@Remote applications(): CuaApplicationState
+@Remote applications(): Promise<CuaApplicationState>
 
 /**
  * Inspect system privileges independently of application decisions and icons.

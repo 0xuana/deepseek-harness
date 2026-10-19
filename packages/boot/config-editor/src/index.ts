@@ -82,16 +82,13 @@ export class ConfigEditor extends Service {
   /** Validate, persist, and reconcile a plugin's next config; ordinary fields keep normal lifecycle rules.
    * @param entry Current Loader entry, also used to detect replacement during the write.
    * @param change Derive a raw config from the current entry and its inherited layer.
-   * @param signal Cancel while waiting for HMR admission; admitted writes finish normally.
    * @returns Fulfillment after Loader reconciliation completes.
    */
   async edit(
     entry: Entry,
     change: (current: Record<string, unknown>, inherited: Record<string, unknown>) => Record<string, unknown>,
-    signal?: AbortSignal,
   ): Promise<void> {
     const run = async (): Promise<void> => {
-      signal?.throwIfAborted()
       const path = this.documentPath
       await withFileLock(join(this.ownerContext.profileContext.dir, 'package.json'), async () => {
         if (!this.entries().includes(entry) || entry.fiber === undefined) throw new Error('Configuration entry is no longer available')
@@ -153,7 +150,7 @@ export class ConfigEditor extends Service {
       })
     }
     const hmr = this.ownerContext.get('hmr')
-    await (hmr === undefined ? run() : hmr.runExclusive(run, signal))
+    await (hmr === undefined ? run() : hmr.runExclusive(run))
   }
 }
 

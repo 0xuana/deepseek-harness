@@ -731,9 +731,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'Detached layer values alongside their Loader entries.',
       },
       {
-        signature: 'async edit( entry: Entry, change: (current: Record<string, unknown>, inherited: Record<string, unknown>) => Record<string, unknown>, signal?: AbortSignal, ): Promise<void>',
+        signature: 'async edit( entry: Entry, change: (current: Record<string, unknown>, inherited: Record<string, unknown>) => Record<string, unknown>, ): Promise<void>',
         description: 'Validate, persist, and reconcile a plugin\'s next config; ordinary fields keep normal lifecycle rules.',
-        parameters: [{ name: 'entry', description: 'Current Loader entry, also used to detect replacement during the write.' }, { name: 'change', description: 'Derive a raw config from the current entry and its inherited layer.' }, { name: 'signal', description: 'Cancel while waiting for HMR admission; admitted writes finish normally.' }],
+        parameters: [{ name: 'entry', description: 'Current Loader entry, also used to detect replacement during the write.' }, { name: 'change', description: 'Derive a raw config from the current entry and its inherited layer.' }],
         returns: 'Fulfillment after Loader reconciliation completes.',
       },
     ],
@@ -928,7 +928,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'Completion after the shared runtime reload; already-persistent runtimes are left intact.',
       },
       {
-        signature: '@Remote applications(): CuaApplicationState',
+        signature: '@Remote applications(): Promise<CuaApplicationState>',
         description: 'Read application decisions without waiting for the native helper.',
         parameters: [],
         returns: 'Saved grants and refused applications with their persistence owner.',
@@ -1382,9 +1382,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [],
       },
       {
-        signature: 'runExclusive<T>(operation: () => Promise<T>, signal?: AbortSignal): Promise<T>',
+        signature: 'runExclusive<T>(operation: () => Promise<T>): Promise<T>',
         description: 'Serialize a caller-owned mutation with all automatic reload paths.',
-        parameters: [{ name: 'operation', description: 'Work that must not overlap module or configuration replacement.' }, { name: 'signal', description: 'Cancel admission while queued; an operation already running must finish.' }],
+        parameters: [{ name: 'operation', description: 'Work that must not overlap module or configuration replacement.' }],
         returns: 'The operation result after its asynchronous work completes.',
       },
       {
@@ -2785,9 +2785,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'ns', description: 'Profile entry id.' }, { name: 'section', description: 'Complete form values.' }, { name: 'expectedRevision', description: 'Revision returned by describe.' }],
       },
       {
-        signature: 'async mutate(ns: string, ops: readonly SettingsPathOp[], expectedRevision?: number, signal?: AbortSignal): Promise<void>',
+        signature: 'async mutate(ns: string, ops: readonly SettingsPathOp[], expectedRevision?: number): Promise<void>',
         description: 'Apply field edits without restating redacted secrets; unsetting an array index removes its element.',
-        parameters: [{ name: 'ns', description: 'Profile entry id.' }, { name: 'ops', description: 'Ordered form edits.' }, { name: 'expectedRevision', description: 'Revision returned by describe.' }, { name: 'signal', description: 'Cancel while waiting for HMR admission; admitted writes finish normally.' }],
+        parameters: [{ name: 'ns', description: 'Profile entry id.' }, { name: 'ops', description: 'Ordered form edits.' }, { name: 'expectedRevision', description: 'Revision returned by describe.' }],
       },
     ],
   },
@@ -5417,7 +5417,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CuaApplicationState',
-    declaration: 'export interface CuaApplicationState {\n    settingsNamespace: string | null;\n    allowedApps: readonly CuaApplicationGrant[];\n    blockedApps: readonly CuaApplicationGrant[];\n    persistentAvailable: boolean;\n}',
+    declaration: 'export interface CuaApplicationState {\n    allowedApps: readonly CuaApplicationGrant[];\n    blockedApps: readonly CuaApplicationGrant[];\n    persistentAvailable: boolean;\n}',
   },
   {
     name: 'CuaPermissionProcess',

@@ -1,5 +1,5 @@
 /** Built permission UI talks to the real provider; the isolated helper substitutes only macOS privilege observations. */
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -42,8 +42,6 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
     profile: { packages: [{ dir: bundle, enabled: true }, { dir: fixtureBundle, enabled: true }] },
   })
   resources.scaffold = scaffold
-  await scaffold.ctx.settings.mutate('cua', [{ op: 'set', path: ['allowedApps'],
-    value: [{ id: 'a'.repeat(64), name: 'Fixture', executablePath: '/Applications/Fixture.app' }] }])
   const browser = await chromium.launch()
   resources.browser = browser
   const page = await newEnglishPage(browser), tripwire = watchConsole(page)
@@ -53,7 +51,6 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   const agent = scaffold.ctx.agents.list()[0]!
   await scaffold.ctx.agentPresets.select(agent, 'ptc')
   scaffold.ctx.approval.setPolicy(agent, 'never')
-  await scaffold.ctx.settings.mutate('cua', [{ op: 'set', path: ['allowedApps'], value: [] }])
   // Application consent remains independent of the session's tool-approval policy.
   const grant = scaffold.ctx.tools.execute({ agent, signal: new AbortController().signal,
     callId: ToolCallId('cua-app-approval'), name: 'run_code',
@@ -145,7 +142,10 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   await panel.getByRole('button', { name: 'Allow asking again', exact: true }).click()
   await panel.getByText('Fixture', { exact: true }).waitFor({ state: 'hidden' })
   const saved = await readFile(join(scaffold.harnessHome, 'profiles/scaffold/cordis.patch.yml'), 'utf8')
-  expect(saved).toContain('allowedApps: []')
+  expect(saved).not.toContain('allowedApps:')
+  const files = await readdir(join(scaffold.harnessHome, 'storages'))
+  expect(files.some(file => file.startsWith('cua_permissions_') && file.endsWith('.json'))).toBe(true)
+  expect((await scaffold.ctx.cuaAccess.applications()).allowedApps).toEqual([])
   const events = (await readFile(audit, 'utf8')).trim().split('\n').map(line => JSON.parse(line) as { event: string; method: string; params: object })
     .filter(record => record.event === 'call').map(({ method, params }) => ({ method, params }))
   expect(events).toContainEqual({ method: 'requestPermission', params: { permission: 'accessibility' } })

@@ -2,7 +2,7 @@
 - group "Approval details":
   - strong: Fixture
   - text: Allow Computer Use to launch, read, capture and control this application?
-  - paragraph: Session access lasts until DSH restarts or Computer Use is disabled.
+  - paragraph: Session access applies only to this conversation.
 - button "Reject"
 - button "Allow for this session"
 - button "Always allow"

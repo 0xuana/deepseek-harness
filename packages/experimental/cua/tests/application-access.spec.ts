@@ -1,5 +1,4 @@
 /** Application decisions are checked at dispatch and revocation cancels owned work. */
-import { setImmediate } from 'node:timers/promises'
 import { Context } from '@deepseek-ai/cordis'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { SessionId } from '@deepseek-ai/dsh-session'
@@ -9,6 +8,7 @@ import { ApplicationAuthorizationResult, ApplicationAccess } from '../src/applic
 import type { CuaApplicationGrant } from '../src/application-types.ts'
 import type { CuaAppHandle } from '../src/types.ts'
 import { NativeClient } from '../src/native-client.ts'
+import { permissionFixture } from './permission-fixture.ts'
 
 const native = vi.hoisted(() => ({ instances: [] as Array<{
   disposed: boolean
@@ -46,14 +46,10 @@ async function setup(choice = 'Allow for this session', options: { writable?: bo
   const owner = await ctx.agents.create({ sessionId: SessionId('cua-access-test') })
   const answer = vi.fn<() => Promise<AskUserQuestionAnswer>>(async () => ({ answers: [{ id: 'cua-app-access', selected: [choice] }] }))
   ctx.on('user-questions/request', answer)
-  let grants: readonly CuaApplicationGrant[] = options.initial ?? []
-  const save = vi.fn(async (next: readonly CuaApplicationGrant[]) => { grants = next })
-  let writable = options.writable !== false
-  const access = new ApplicationAccess(ctx, { grants: () => grants, get save() { return writable ? save : undefined } })
+  const permissions = permissionFixture(ctx, options.initial, options.writable)
+  const access = new ApplicationAccess(ctx, { store: permissions.store })
   const client = new NativeClient(ctx, nativeConfig, unusedConnector)
-  return { ctx, owner, agent: owner.agent, answer, save, access, client, grants: () => grants,
-    setWritable(value: boolean) { writable = value },
-  }
+  return { ctx, owner, agent: owner.agent, answer, access, client, ...permissions }
 }
 
 it('refuses raw handle dispatch until getApp obtains consent', async () => {
@@ -63,7 +59,7 @@ it('refuses raw handle dispatch until getApp obtains consent', async () => {
   expect(dispatch).not.toHaveBeenCalled()
 })
 
-it('reuses session consent across application handles and connections without saving it', async () => {
+it('reuses session consent across application handles and connections without granting global access', async () => {
   const f = await setup()
   await f.access.select(f.agent, f.client, handle, identity, signal)
   await expect(f.access.run(f.client, handle, signal, async () => 'read')).resolves.toBe('read')
@@ -157,24 +153,14 @@ it('merges a concurrently saved decision using the latest grant list', async () 
   expect(f.grants()).toEqual([{ id: identity.id, name: identity.name, executablePath: identity.executablePath }])
 })
 
-it('refuses queued persistence when the profile writer disappears', async () => {
+it('rejects a long-term choice when storage becomes unavailable during the question', async () => {
   const f = await setup('Always allow')
-  const saving: PromiseWithResolvers<void> = Promise.withResolvers()
-  const release: PromiseWithResolvers<void> = Promise.withResolvers()
-  onTestFinished(() => { release.resolve() })
-  f.save.mockImplementationOnce(async () => { saving.resolve(); await release.promise })
-  const first = f.access.select(f.agent, f.client, handle, identity, signal)
-  await saving.promise
-  const other = { ...identity, id: 'b'.repeat(64) as typeof identity.id }
-  const second = f.access.select(f.agent, f.client, 'second' as CuaAppHandle, other, signal)
-  const refused = expect(second).rejects.toThrow('cannot be saved')
-  await vi.waitFor(() => { expect(f.answer).toHaveBeenCalledTimes(2) })
-  await setImmediate()
-  f.setWritable(false)
-  release.resolve()
-  await first
-  await refused
-  expect(f.save).toHaveBeenCalledOnce()
+  f.answer.mockImplementationOnce(async () => {
+    f.setWritable(false)
+    return { answers: [{ id: 'cua-app-access', selected: ['Always allow'] }] }
+  })
+  await expect(f.access.select(f.agent, f.client, handle, identity, signal)).rejects.toThrow('APP_ACCESS_DENIED')
+  expect(f.save).not.toHaveBeenCalled()
 })
 
 it('serializes duplicate application questions and rejects every waiting selection after denial', async () => {
@@ -239,7 +225,7 @@ it('enforces a removed saved grant before its configuration notification arrives
   expect(f.client.disposed).toBe(true)
 })
 
-it('cancels native work when saved consent is removed from configuration', async () => {
+it('cancels native work when saved consent is revoked', async () => {
   const f = await setup('Always allow')
   await f.access.select(f.agent, f.client, handle, identity, signal)
   const entered = Promise.withResolvers<undefined>()
@@ -251,9 +237,7 @@ it('cancels native work when saved consent is removed from configuration', async
   })
   const rejected = expect(pending).rejects.toThrow('APP_ACCESS_DENIED')
   await entered.promise
-  await f.save([])
-  f.ctx.emit('loader/volatile-update', [['allowedApps']])
-  f.ctx.emit('loader/volatile-update', [['allowedApps']])
+  await f.access.revoke(identity.id)
   await rejected
   expect(f.client.disposed).toBe(true)
   await expect(f.access.run(f.client, handle, signal, async () => null)).rejects.toThrow('APP_ACCESS_REVOKED')
@@ -294,7 +278,6 @@ it('refuses closed helpers and forgets one task without removing another task', 
   const owner = await f.ctx.agents.create({ sessionId: SessionId('other-consented-task') })
   const other = new NativeClient(f.ctx, nativeConfig, unusedConnector)
   await f.access.select(owner.agent, other, handle, identity, signal)
-  f.ctx.emit('loader/volatile-update', [['allowedApps']])
   f.access.forget(f.agent)
   await expect(f.access.run(other, handle, signal, async () => 'kept')).resolves.toBe('kept')
   other.invalidate()
@@ -367,12 +350,12 @@ it('revokes session consent even after its agent and connection are released', a
   expect(f.answer).toHaveBeenCalledTimes(2)
 })
 
-it('clears session consent when the provider is disabled and recreated', async () => {
+it('retains conversation consent when the provider is recreated over the same store', async () => {
   const f = await setup()
   await f.access.select(f.agent, f.client, handle, identity, signal)
   await f.access.dispose()
-  const access = new ApplicationAccess(f.ctx, { grants: f.grants, save: f.save })
+  const access = new ApplicationAccess(f.ctx, { store: f.store })
   const client = new NativeClient(f.ctx, nativeConfig, unusedConnector)
   await access.select(f.agent, client, handle, identity, signal)
-  expect(f.answer).toHaveBeenCalledTimes(2)
+  expect(f.answer).toHaveBeenCalledOnce()
 })

@@ -41,7 +41,7 @@ Computer Use is available only on a macOS DSH Host. Other Hosts refuse enablemen
 
 If preparation fails, the saved selection remains, while CUA operations stay unavailable. Refresh or reopen the plugin page to read the component diagnostic, correct its cause, then restart DSH.
 
-Explicit activation runs a read-only permission check, which may start a helper without opening a system dialog. Open the [permission page](../client-ui-cua/README.md) for system requests, settings navigation and automatic refresh. Tasks ask separately before accessing an application. Saved application decisions use the existing profile configuration; session decisions remain in memory across turns and connections until DSH restarts or Computer Use is disabled. Revoke access on the same page.
+Explicit activation runs a read-only permission check, which may start a helper without opening a system dialog. Open the [permission page](../client-ui-cua/README.md) for system requests, settings navigation and automatic refresh. Tasks ask separately before accessing an application. Saved application decisions use profile-scoped domain storage. Conversation decisions survive turns, connections, DSH restarts and Computer Use disablement without applying to another conversation. Revoke access on the same page.
 
 -----
 

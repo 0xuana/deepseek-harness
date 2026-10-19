@@ -6,7 +6,7 @@ import { PermissionController } from '../src/client/controller.ts'
 
 const value: CuaSystemPermissionState = { accessibility: true, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } }
 const applications: CuaApplicationState = {
-  allowedApps: [], blockedApps: [], settingsNamespace: 'cua', persistentAvailable: true }
+  allowedApps: [], blockedApps: [], persistentAvailable: true }
 function fixture() {
   const actions = {
     readRuntime: vi.fn(async () => ({ persistent: false, writable: true })),

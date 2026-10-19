@@ -35,7 +35,7 @@ Observation methods emit and return their result. Use `void await app.getAXState
 
 `tools.cua` returns operation values directly. Screenshot values retain the encoded image Base64 and add a durable `attachment` reference for the tool renderer; model content contains coordinate metadata and one image, without the encoded bytes. Before capture, the tool requires an attachment store and a resolved model route declaring image input. Admission and storage failures reject the call. The object bridge preserves the screenshot bytes and validated metadata without uploading or emitting the same image again.
 
-Application consent precedes launch, observation, capture, and input. Session access is kept in memory by session and application identity, survives agent and helper replacement, and expires when DSH restarts or Computer Use is disabled. Saved grants require platform-verified executable identity. Refusal and revocation close affected Agent connections, so their old objects require fresh selection. No input is replayed after cancellation, timeout, or reconnect.
+Application consent precedes launch, observation, capture, and input. Session access is stored by conversation and application identity and survives DSH restart and Computer Use disablement. Other conversations require their own consent. Saved grants require platform-verified executable identity. Refusal and revocation close affected Agent connections, so their old objects require fresh selection. No input is replayed after cancellation, timeout, or reconnect.
 
 Actions return `dispatched:true, verified:false`; read fresh state to verify the result. Coordinate actions default to pixels in the latest returned screenshot; `relative: true` accepts integers from 0 to 1000 after a successful window observation. The Host resolves attachment normalization and the selected model route’s image projection before returning the screenshot, then converts input to native window points. Resizing invalidates the screenshot mapping; `SCREENSHOT_REQUIRED` requires a new screenshot for absolute coordinates. Resizing rejects old coordinates with `WINDOW_CHANGED`; movement alone preserves window-local coordinates.
 
@@ -49,13 +49,17 @@ Actions return `dispatched:true, verified:false`; read fresh state to verify the
 <details>
 <summary>Shared execution and platform ownership</summary>
 
+The [permission store](src/permission-store.ts) uses `storageDomain` with the configured backend. The default JSON backend writes `$DSH_HOME/storages/cua_permissions_<sha256>.json`, where the digest identifies the canonical profile directory. Each authorized native operation opens fresh state under the profile's file lock and closes its domain afterward. Revocation waits for operations already admitted by another process; after it completes, every process rejects old handles. Files on different machines or PID namespaces must not share this lock.
+
+Legacy `allowedApps` are imported on first store access and never reapplied after migration. The old configuration can be removed after checking the permission page. Grants, denials and the option to ask again are durable; the page still omits conversation-only grants. Standalone compositions without a profile retain only process-local decisions; a profile without domain storage refuses authorization operations.
+
 The permission Remote also exposes `ptcConfiguration()` and `enablePersistentPtc()` for the detail-page runtime setting. Reads inspect the existing runtime and editable profile entry. Explicit writes use `configEditor.edit()` to preserve other fields and apply normal Loader reload; an already-persistent runtime is left intact. This setting is separate from system and application authorization.
 
 The provider calls [installCua](src/index.ts) with its prepared helper, connection factory, and guidance. [NativeClient](src/native-client.ts) owns request correlation, byte limits, cancellation acknowledgement, and failure settlement. The platform connector owns startup and connection cleanup. The shared executor retains one connection per Agent and joins in-flight image writes during disposal.
 
 `agentPreset` defaults to `ptc`, restricting tools and guidance to Agents bound to that preset. The provider uses the existing `agent/created` and `agent-preset/selected` events and Agent-owned scopes, including Agents already present when it loads. Provider unload and Agent disposal release those registrations. Preset definitions may register after the provider; a preset name filters bound Agents and supplies no tools until a matching Agent exists. Set `agentPreset: false` for global registration in standalone compositions without presets. The Host continues to own permissions, native connections and cancellation; preset definitions remain unchanged.
 
-[The operation schema](src/protocol.ts) is the authority for model parameters and separately declared Host-only fields. Native implementations enforce target identity, window geometry, resource limits, and operating-system access at execution. No invariant companion is published because this library has no separately projected registry or durable state.
+[The operation schema](src/protocol.ts) is the authority for model parameters and separately declared Host-only fields. Native implementations enforce target identity, window geometry, resource limits, and operating-system access at execution. The permission store owns durable consent separately from the native protocol.
 
 </details>
 
@@ -66,6 +70,7 @@ The provider calls [installCua](src/index.ts) with its prepared helper, connecti
 
 - [macOS provider](../cua-macos/README.md)
 - [Object interfaces](src/types.ts)
+- [Consent storage migration](../../../docs/upgrade-guide/v0.2.1-rc.2/cua-consent-storage/guide.md)
 
 -----
 
@@ -90,7 +95,7 @@ Results append to history. Retaining objects does not rewrite previous messages;
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- In-memory session decisions have no capacity limit or eviction. They remain until the provider unloads, so a long-running Host retains entries for every session/application pair that requested access.
+- Conversation decisions have no automatic retention limit or deletion when a conversation is removed. Revocation removes permission, while its generation remains to reject older handles and pending approvals.
 - Native execution currently uses the macOS provider. Windows support is planned as a separate provider package with a C# helper, retaining the shared app/window API, authorization, snapshot validity, and action-result semantics. Its implementation must document system-specific limitations and distinguish cross-compilation evidence from Windows desktop validation.
 - Persistent variables do not reserve an application across a sequence of operations. Other Agents and the user can change its state. Hover and observations do not restore the previous pointer position; [continuous interaction](../../../.agents/notes/implemented/architecture/2026-10-13-cua-continuous-hover.md) uses no cross-call ownership.
 - The package stays in `experimental` until Windows support and platform validation permit promotion to the `computer-use` group.

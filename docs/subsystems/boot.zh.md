@@ -85,10 +85,9 @@ configuration(): Array<{ entry: Entry; inherited: Record<string, unknown>; overr
 /** Validate, persist, and reconcile a plugin's next config; ordinary fields keep normal lifecycle rules.
  * @param entry Current Loader entry, also used to detect replacement during the write.
  * @param change Derive a raw config from the current entry and its inherited layer.
- * @param signal Cancel while waiting for HMR admission; admitted writes finish normally.
  * @returns Fulfillment after Loader reconciliation completes.
  */
-async edit( entry: Entry, change: (current: Record<string, unknown>, inherited: Record<string, unknown>) => Record<string, unknown>, signal?: AbortSignal, ): Promise<void>
+async edit( entry: Entry, change: (current: Record<string, unknown>, inherited: Record<string, unknown>) => Record<string, unknown>, ): Promise<void>
 ```
 
 Source: [`packages/boot/config-editor/src/index.ts`](../../packages/boot/config-editor/src/index.ts)
@@ -110,10 +109,9 @@ Hot reload service with Cordis-compatible module configuration and events.
 ```ts cordis-catalog
 /** Serialize a caller-owned mutation with all automatic reload paths.
  * @param operation Work that must not overlap module or configuration replacement.
- * @param signal Cancel admission while queued; an operation already running must finish.
  * @returns The operation result after its asynchronous work completes.
  */
-runExclusive<T>(operation: () => Promise<T>, signal?: AbortSignal): Promise<T>
+runExclusive<T>(operation: () => Promise<T>): Promise<T>
 
 /** Watch a configuration path through the same queue as module replacement.
  * @param filename Absolute path, which may not exist yet.

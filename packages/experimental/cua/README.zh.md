@@ -35,7 +35,7 @@ kind: "package-library"
 
 `tools.cua` 直接返回操作结果。截图结果保留图片 Base64，并增加供工具渲染使用的持久 `attachment` 引用；模型内容只包含坐标元数据和一张图片，不包含编码字节。截图前要求附件服务可用，并确认当前模型支持图片输入。图片接入或保存失败会拒绝调用。对象桥接保留截图字节和已校验的元数据，不重复上传或输出同一张图片。
 
-应用授权发生在启动、观察、截图和输入之前。会话许可按会话和应用身份保存在内存中，Agent 或 helper 重建后仍可复用，重启 DSH 或关闭 Computer Use 后失效。长期许可要求平台验证可执行文件身份。拒绝或撤销会关闭受影响的 Agent 连接，因此旧对象必须重新选择目标。取消、超时或重新连接后均不重放输入。
+应用授权发生在启动、观察、截图和输入之前。会话许可按对话和应用身份持久化，重启 DSH 或关闭 Computer Use 后仍可复用，其他对话需要单独授权。长期许可要求平台验证可执行文件身份。拒绝或撤销会关闭受影响的 Agent 连接，因此旧对象必须重新选择目标。取消、超时或重新连接后均不重放输入。
 
 动作返回 `dispatched:true, verified:false`；请读取新状态以验证结果。坐标操作默认使用最近返回截图中的像素；成功观察窗口后，传入 `relative: true` 可使用 0～1000 的整数比例。Host 在返回截图前解析附件归一化和当前模型的图片缩放规则，再将输入换算为原生窗口 point。窗口尺寸变化会使截图映射失效，绝对坐标遇到 `SCREENSHOT_REQUIRED` 时需要重新截图。窗口缩放后以 `WINDOW_CHANGED` 拒绝旧坐标；单纯移动窗口不改变窗口内坐标。
 
@@ -49,13 +49,17 @@ kind: "package-library"
 <details>
 <summary>共享执行与平台职责</summary>
 
+[授权存储](src/permission-store.ts)复用 `storageDomain` 和配置的后端。默认 JSON 后端写入 `$DSH_HOME/storages/cua_permissions_<sha256>.json`，摘要对应 profile 的真实目录。每次原生操作在该 profile 的文件锁内打开并读取最新状态，结束后关闭存储域。撤销会等待其他进程已获准执行的操作结束；撤销完成后，各进程都拒绝旧句柄。不同电脑或 PID 命名空间不能共享这把锁。
+
+旧 `allowedApps` 只在首次访问存储时导入，迁移后不再应用。确认权限页显示正确后，可以删除旧配置。授权、拒绝和允许再次询问均持久化，页面仍不显示仅对某个会话生效的许可。没有 profile 的独立组合只保留进程内决定；有 profile 但缺少域存储的组合会拒绝授权操作。
+
 权限 Remote 还通过 `ptcConfiguration()` 和 `enablePersistentPtc()` 支持详情页的执行方式设置。查询读取现有执行器和可编辑的 profile 条目。显式写入使用 `configEditor.edit()` 保留其他字段并按正常 Loader 规则重载；已是持久化模式的执行器保持不变。此设置独立于系统权限和应用授权。
 
 提供方将准备好的 helper、连接工厂和指引传给 [installCua](src/index.ts)。[NativeClient](src/native-client.ts) 负责请求关联、字节上限、取消确认和失败处理。平台连接器负责启动和连接清理。共享执行器为每个 Agent 保留一个连接，并在销毁时等待进行中的图像写入。
 
 `agentPreset` 默认为 `ptc`，将工具和指引限制到绑定该 preset 的 Agent。提供方使用现有 `agent/created`、`agent-preset/selected` 事件及 Agent 拥有的作用域，也处理启用前已存在的 Agent。提供方卸载和 Agent 销毁都会释放这些注册。preset 定义可以晚于提供方注册；名称用于筛选已绑定的 Agent，在匹配的 Agent 出现前不提供工具。不使用 preset 的独立组合可设置 `agentPreset: false` 来全局注册。Host 仍拥有权限、本机连接和取消操作，preset 定义保持不变。
 
-[操作 schema](src/protocol.ts) 定义模型参数，并单独声明 Host 专用字段。原生实现在执行时检查目标身份、窗口几何、资源上限和操作系统访问条件。本库没有独立投影的注册表或持久状态，因此不发布 invariant 模块。
+[操作 schema](src/protocol.ts) 定义模型参数，并单独声明 Host 专用字段。原生实现在执行时检查目标身份、窗口几何、资源上限和操作系统访问条件。授权存储独立于原生协议保存持久许可。
 
 </details>
 
@@ -66,6 +70,7 @@ kind: "package-library"
 
 - [macOS 提供方](../cua-macos/README.zh.md)
 - [对象接口](src/types.ts)
+- [授权存储迁移](../../../docs/upgrade-guide/v0.2.1-rc.2/cua-consent-storage/guide.zh.md)
 
 -----
 
@@ -90,7 +95,7 @@ kind: "package-library"
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 会话授权决策保存在内存中，没有容量上限或淘汰机制，直到提供方卸载才清空。长期运行的 Host 会保留每个曾请求访问的会话与应用组合。
+- 会话决定没有自动保留期限，也不会随对话删除而自动清理。撤销会移除许可，但保留撤销代次，用于拒绝旧句柄和先前尚未完成的审批。
 - 当前原生执行使用 macOS 提供方。Windows 支持计划使用独立的提供方包和 C# helper，保留共享应用与窗口 API、授权、快照有效性和动作结果语义。实现须说明系统特有的限制，并区分交叉编译证据和 Windows 桌面验证。
 - 持久变量不会在一组连续操作期间独占应用。其他 Agent 和用户可能改变其状态。 悬停和观察不恢复先前的鼠标位置；[连续交互](../../../.agents/notes/implemented/architecture/2026-10-13-cua-continuous-hover.zh.md)不分配跨调用所有权。
 - 本包保留在 `experimental`，Windows 支持和平台验证完成后可迁至 `computer-use` 组。
