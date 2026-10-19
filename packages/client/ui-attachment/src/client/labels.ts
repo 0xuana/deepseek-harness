@@ -21,7 +21,6 @@ export function lightboxLabels(t: TranslateNS<'conversation'>): ImageLightboxLab
  */
 export function messageImageLabels(t: TranslateNS<'conversation'>): MessageImageLabels {
   return {
-    dragFailed: t('image.dragFailed'),
     image: t('image.label'),
     open: t('image.openOriginal'),
     openNamed: label => t('image.openOriginalLabel', { label }),

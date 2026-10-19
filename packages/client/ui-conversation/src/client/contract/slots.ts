@@ -131,8 +131,6 @@ export interface MessageImageLabels {
   loading: string
   /** Retry-control label shown when the load fails. */
   loadFailed: string
-  /** Failed original-image drag, with retry guidance. */
-  dragFailed: string
   /** Lightbox strings forwarded to the opened preview. */
   lightbox: ImageLightboxLabels
 }

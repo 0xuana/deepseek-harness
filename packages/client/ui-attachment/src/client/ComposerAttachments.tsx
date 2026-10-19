@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   ComposerAttachment, ComposerAttachmentsProps, ComposerImageAttachment,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { IconCloseFillRegular, ImageDrop } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconCloseFillRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import { AttachmentRail } from '../AttachmentRail.tsx'
 import type { AttachmentRailItem } from '../AttachmentRail.tsx'
 import { DropOverlay } from '../DropOverlay.tsx'
@@ -29,8 +29,8 @@ export function ComposerAttachments({
     if (preview !== null && !attachments.some(attachment => attachment.id === preview.id)) setPreview(null)
   }, [attachments, preview])
 
-  const bindDrop = useCallback((readImageDrag: (transfer: DataTransfer) => File | undefined) => {
-    return installDocumentDropEvents(canAcceptDrop, onAddFiles, dragDepth, setDragActive, readImageDrag)
+  useEffect(() => {
+    return installDocumentDropEvents(canAcceptDrop, onAddFiles, dragDepth, setDragActive)
   }, [canAcceptDrop, onAddFiles])
 
   const railItems = useMemo<ComposerRailItem[]>(() => attachments.map(attachment => ({
@@ -40,7 +40,6 @@ export function ComposerAttachments({
 
   return (
     <>
-      <ImageDrop bind={bindDrop} />
       {dragActive && (
         <DropOverlay
           disabled={!canAcceptDrop}

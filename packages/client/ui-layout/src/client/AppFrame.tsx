@@ -20,7 +20,6 @@ import type {
   PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore,
 } from '@deepseek-ai/dsh-client-ui-slots'
 import { CENTER_MIN, clampWidth, computeColumns, RIGHTBAR_DEFAULT_RATIO, RIGHTBAR_MAX_RATIO, RIGHTBAR_MIN, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_COLLAPSED, SIDEBAR_DEFAULT } from './columns.ts'
-import { ImageDragProvider } from '@deepseek-ai/dsh-client-ui-primitives'
 import { DocumentTitle } from './DocumentTitle.tsx'
 import type { createLayoutStore } from './stores.ts'
 import css from './AppFrame.module.css'
@@ -257,54 +256,52 @@ export function AppFrame({
   const leadingMounted = darwin && sidebarCollapsed
 
   return (
-    <ImageDragProvider>
-      <div
-        ref={frameRef}
-        className={css.frame}
-        style={{
-          ...(document.documentElement.hasAttribute('data-windows-titlebar')
-            ? { '--dsh-windows-sidebar-width': `${cols.sidebar}px` } : {}),
-          gridTemplateColumns:
-            `${cols.sidebar}px minmax(${cols.rightbar === 0 ? 0 : CENTER_MIN}px, 1fr) minmax(0px, ${rightbarMax}px)`,
-        }}
-        data-sidebar-collapsed={sidebarCollapsed || undefined}
-        data-rightbar-collapsed={cols.rightbar === 0 || undefined}
-        data-rightbar-fullscreen={layoutInfo.rightbarFullscreen || undefined}
-        data-rightbar-instant={layoutInfo.rightbarInstant || undefined}
-        data-dragging={dragging || undefined}
-        data-animating={animating > 0 || undefined}
-      >
-        <DocumentTitle
-          productTitle={productTitle}
-          useSessions={useSessions}
-          usePanelInfo={usePanelInfo}
-        />
-        <div className={css.sidebarCol}>
-          {sidebar}
-        </div>
-        <>
-          <CenterColumn>{main}</CenterColumn>
-          <RightbarColumn>
-            {renderSlot('rightbar', { width: normal.rightbar, viewportWidth: viewport, canShow: normal.rightbar > 0 })}
-          </RightbarColumn>
-        </>
-        <div className={css.bottomRow} data-shell-bottom>
-          {renderSlot('shell.bottom', {})}
-        </div>
-        <div className={css.overlayLayer} data-shell-overlay>
-          {overlays}
-        </div>
-        {leadingMounted && (
-          <div className={css.leadingSeat} data-shell-leading>
-            {leading}
-          </div>
-        )}
-        {/* The collapsed rail is fixed-width: no resize handle while closed. */}
-        {!sidebarCollapsed && <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />}
-        {layoutInfo.rightbarShown && !layoutInfo.rightbarFullscreen && normal.rightbar > 0 && (
-          <DragHandle side="rightbar" left={viewport - normal.rightbar} onStart={onRightbarStart} onDrag={onRightbarDrag} onEnd={onDragEnd} />
-        )}
+    <div
+      ref={frameRef}
+      className={css.frame}
+      style={{
+        ...(document.documentElement.hasAttribute('data-windows-titlebar')
+          ? { '--dsh-windows-sidebar-width': `${cols.sidebar}px` } : {}),
+        gridTemplateColumns:
+          `${cols.sidebar}px minmax(${cols.rightbar === 0 ? 0 : CENTER_MIN}px, 1fr) minmax(0px, ${rightbarMax}px)`,
+      }}
+      data-sidebar-collapsed={sidebarCollapsed || undefined}
+      data-rightbar-collapsed={cols.rightbar === 0 || undefined}
+      data-rightbar-fullscreen={layoutInfo.rightbarFullscreen || undefined}
+      data-rightbar-instant={layoutInfo.rightbarInstant || undefined}
+      data-dragging={dragging || undefined}
+      data-animating={animating > 0 || undefined}
+    >
+      <DocumentTitle
+        productTitle={productTitle}
+        useSessions={useSessions}
+        usePanelInfo={usePanelInfo}
+      />
+      <div className={css.sidebarCol}>
+        {sidebar}
       </div>
-    </ImageDragProvider>
+      <>
+        <CenterColumn>{main}</CenterColumn>
+        <RightbarColumn>
+          {renderSlot('rightbar', { width: normal.rightbar, viewportWidth: viewport, canShow: normal.rightbar > 0 })}
+        </RightbarColumn>
+      </>
+      <div className={css.bottomRow} data-shell-bottom>
+        {renderSlot('shell.bottom', {})}
+      </div>
+      <div className={css.overlayLayer} data-shell-overlay>
+        {overlays}
+      </div>
+      {leadingMounted && (
+        <div className={css.leadingSeat} data-shell-leading>
+          {leading}
+        </div>
+      )}
+      {/* The collapsed rail is fixed-width: no resize handle while closed. */}
+      {!sidebarCollapsed && <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />}
+      {layoutInfo.rightbarShown && !layoutInfo.rightbarFullscreen && normal.rightbar > 0 && (
+        <DragHandle side="rightbar" left={viewport - normal.rightbar} onStart={onRightbarStart} onDrag={onRightbarDrag} onEnd={onDragEnd} />
+      )}
+    </div>
   )
 }
