@@ -31,13 +31,6 @@ import { createTimestampFormatter, formatTimestamp } from './timestamp.ts'
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'time-context'
 
-declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionStateMap {
-    /** Latest time-context readings. */
-    timeContext: TimeContextProjection
-  }
-}
-
 const timeContextStateSchema = zod.object({
   /** Time of the latest model-visible event (user/assistant message, tool result), or null. */
   lastMessageTime: zod.number().nullable(),
@@ -46,9 +39,6 @@ const timeContextStateSchema = zod.object({
   /** Latest injection time in the open turn, or null before that turn receives one. */
   lastTurnInjectionTime: zod.number().nullable(),
 })
-
-/** Folded time-context readings. */
-type TimeContextProjection = zod.infer<typeof timeContextStateSchema>
 
 /** The agent registry that owns pre-step processing. */
 export const inject = ['agents', 'sessionProjections']
@@ -128,11 +118,14 @@ function validateRefreshInterval(refreshIntervalMs: number): void {
 
 /**
  * Register a prepended pre-step listener for the lifetime of `ctx`.
+ * Steps admitted during activation await the projection registration; a
+ * registration failure or owner disposal prevents the request from proceeding.
  * @param ctx - plugin context; the listener is disposed with it.
  * @param config - time zone and durable refresh scheduling configuration.
  * @throws when the refresh interval is invalid or the configured or process time zone cannot be resolved.
+ * @returns when the plugin is ready.
  */
-export function apply(ctx: Context, config: Config): void {
+export async function apply(ctx: Context, config: Config): Promise<void> {
   const timeZone = config.timeZone
   const refreshIntervalMs = config.refreshIntervalMs ?? 600_000
   validateRefreshInterval(refreshIntervalMs)
@@ -157,7 +150,7 @@ export function apply(ctx: Context, config: Config): void {
     return created
   }
 
-  ctx.sessionProjections.register({
+  const projectionReady = ctx.sessionProjections.register({
     key: 'timeContext',
     stateVersion: 2,
     stateSchema: timeContextStateSchema,
@@ -189,10 +182,12 @@ export function apply(ctx: Context, config: Config): void {
     { agent, turn, step, signal },
     next,
   ): Promise<PreStepDecision> => {
+    const timeContextProjectionHandle = await projectionReady
+    ctx.fiber.assertActive()
     const decision = await next()
     if (decision.kind === 'reject' || signal.aborted) return decision
     const now = Date.now()
-    const state = ctx.sessionProjections.stateOf(agent.session, 'timeContext') as TimeContextProjection
+    const state = timeContextProjectionHandle.stateOf(agent.session)
     if (refreshIntervalMs > 0) {
       const lastInjection = state.lastInjectionTime
       if (lastInjection != null
@@ -226,4 +221,5 @@ export function apply(ctx: Context, config: Config): void {
       ],
     }
   }, { prepend: true })
+  await projectionReady
 }
