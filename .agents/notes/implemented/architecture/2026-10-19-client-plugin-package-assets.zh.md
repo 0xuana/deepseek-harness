@@ -36,7 +36,7 @@ plugins/@deepseek-ai/dsh-client-ui-chat/assets/running-whale%402x-06738fa29b2f.p
 
 `bundleResource` 先于 bundle 表匹配 `/plugins/<包名>/assets/<路径>`，这类路径只由资源路由回答。对启用中的 client 行，路径解码一次后，`createRequire(<包的 manifest>).resolve('<包名>/assets/<路径>')` 套用包自己的 exports，未导出路径、`.` 和 `..` 段、不存在的文件和目录都解析不出来。媒体类型按解析出的文件扩展名判断，因为 Node 会把子路径中的 `#` 和 `?` 当作 URL 语法。任何解析失败、未启用的包和不支持的类型都返回 404；查询串不参与选择。
 
-被提供的资源每次请求都从磁盘流式读取，Host 既不保存字节也不保存 hash；浏览器中途取消的请求直接结束，不记 warning。响应带媒体类型、与 bundle 相同的 `cache-control: public, max-age=31536000, immutable`、等于请求路径的 `etag`、`x-content-type-options: nosniff`；SVG 另带 `content-security-policy: script-src 'none'`。`If-None-Match` 等于该 tag 时返回 304，且不打开文件；`HEAD` 不带 body。`fetchBundle()` 返回同样的响应，body 为流，取消时关闭文件。
+被提供的资源每次请求都从磁盘流式读取，Host 既不保存字节也不保存 hash；浏览器中途取消的请求直接结束，不记 warning。响应带媒体类型、与 bundle 相同的 `cache-control: public, max-age=31536000, immutable`、等于请求路径的 `etag`、`x-content-type-options: nosniff`；SVG 另带 `content-security-policy: script-src 'none'`。`If-None-Match` 等于该 tag 时返回 304，且不打开文件；`HEAD` 不带 body。`fetchBundle()` 返回同样的响应，body 为流，取消时关闭文件。WebWorker 预览的 Host 运行在 Worker 中，页面的 `<img>` 和 CSS 请求到达不了它，因此由它的 [packer](../../../../packages/experimental/webworker-packer/README.zh.md) 把包资源移出 VFS 镜像，由静态部署在预览页旁的 `plugins/<包名>/assets/` 提供。
 
 ### 变化与包 manifest
 
@@ -71,7 +71,7 @@ plugins/@deepseek-ai/dsh-client-ui-chat/assets/running-whale%402x-06738fa29b2f.p
 ## Consequences
 
 - ui-settings-account 的 `client.js` 为 214 KB，账户、Plugin Manager 和 ui-chat 的 bundle 都不再含图片 data URL；图片显示时多一次同源请求，可能晚于布局出现。
-- WebWorker 预览只经隧道到达 `/plugins`，`<img>` 和 CSS 请求到不了 Worker 内的 Host；由 WebWorker runtime 负责提供。
+- WebWorker 预览由静态部署提供镜像中所有包的资源，不论该包在预览中是否启用；VFS 镜像不再携带这些文件。
 - Desktop 转发层把 `/plugins/` 的缓存头改写为 `no-store`，Desktop 每次显示都会重新读取资源。
 - Host 不比对文件内容与文件名中的 revision：原地修改 `lib/assets/` 下的文件会保留它的 immutable 缓存。这个目录只由构建写入。
 - `require.resolve` 在每次请求时同步执行；本机实测文件存在约 43 µs，不存在约 170 µs。它经 Node 的包配置缓存读取 exports，因此原地修改的 `./assets/*` 导出要等 boot HMR 让该包失效或 Host 重启后才生效。路由不检查解析结果的真实路径，所以 `lib/assets/` 下指向包外的符号链接会被提供。
@@ -85,4 +85,4 @@ plugins/@deepseek-ai/dsh-client-ui-chat/assets/running-whale%402x-06738fa29b2f.p
 - [assets.client.spec.ts](../../../../packages/client/modules/tests/assets.client.spec.ts) 覆盖媒体类型、revision、产出文件名和引用；[client-asset-types.spec.ts](../../../../scripts/client-asset-types.spec.ts) 保证类型根与类型表一致。
 - [client-bundle-css.spec.ts](../../../../scripts/client-bundle-css.spec.ts) 覆盖产出文件名和 URL、CSS 改写与保留形式、每种构建拒绝、Node face 守卫、一次性构建的清理，以及 watch 重建保留旧文件。
 - 各门禁的 spec 拒绝每种无效的 manifest 或引用形式；[node-half.client.spec.ts](../../../../packages/client/modules/tests/node-half.client.spec.ts) 覆盖条目重启后的声明更新、导出移动、client 声明的增减、未变化的重启既不发布也不读取 bundle，以及名为 `@scope/assets` 的包的分片。
-- [desktop-onboarding.e2e.ts](../../../../apps/web/tests/desktop-onboarding.e2e.ts) 和 [reasoning-preview.e2e.ts](../../../../apps/web/tests/reasoning-preview.e2e.ts) 断言包资源 URL，并在浏览器中解码这些图片。
+- [desktop-onboarding.e2e.ts](../../../../apps/web/tests/desktop-onboarding.e2e.ts) 和 [reasoning-preview.e2e.ts](../../../../apps/web/tests/reasoning-preview.e2e.ts) 断言包资源 URL，并在浏览器中解码这些图片；[preview-boot.e2e.ts](../../../../apps/web/tests/preview-boot.e2e.ts) 解码 WebWorker 部署以静态方式提供的功能配图，packer 的 [page-assets.spec.ts](../../../../packages/experimental/webworker-packer/tests/page-assets.spec.ts) 覆盖哪些文件移出镜像。

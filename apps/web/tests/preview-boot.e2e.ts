@@ -173,6 +173,8 @@ function requireVfsAssets(): PreviewAssets {
     image = packed.image
     writeAsset(`preview/${IMAGE_FILE_NAME}`, packed.image)
     for (const archive of packed.lazyArchives) writeAsset(`preview/${archive.name}`, archive.image)
+    // `build:preview` writes these beside the page in `dist/`; the static site serves them from the same paths.
+    for (const [path, bytes] of Object.entries(packed.pageFiles)) writeAsset(path, bytes)
   }
   const manifestEntry = parseTar(gunzipSync(image)).find(entry => entry.name === IMAGE_MANIFEST_PATH)
   if (manifestEntry === undefined) throw new Error('preview boot: the base image carries no manifest')
@@ -611,6 +613,14 @@ async function toggleOptionalBundles(page: Page): Promise<void> {
   await cards.first().waitFor({ timeout: 30_000 })
   const listed = await cards.evaluateAll(nodes => nodes.map(node => node.getAttribute('data-plugin-package')))
   expect(listed.filter(name => name !== null && OPTIONAL_BUNDLES.includes(name)).length).toBeGreaterThan(0)
+  // A Client package asset loads from the static deployment beside the page: the bundle's feature preview decodes.
+  await panel.getByRole('button', { name: 'More', exact: true }).click()
+  await panel.getByRole('button', { name: 'View DSH badge skill', exact: true }).click()
+  const preview = panel.locator('[data-plugin-detail]').getByRole('img', { name: 'DSH badge skill feature preview', exact: true })
+  await preview.waitFor()
+  await preview.evaluate(async (image: HTMLImageElement) => { await image.decode() })
+  expect(await preview.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(640)
+  await panel.getByRole('button', { name: 'Back to Experimental plugins', exact: true }).click()
   const result = await page.evaluate(async () => {
     type Result<T> = { result: { ok: true; value: T } | { ok: false; error: { message: string } } }
     const transport = (globalThis as typeof globalThis & {

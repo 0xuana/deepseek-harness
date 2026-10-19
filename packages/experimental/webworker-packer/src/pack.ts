@@ -137,6 +137,12 @@ export interface PackResult {
   readonly executables: readonly string[]
   /** Page bundles left out of the transform; like every JavaScript entry they carry the trailing debugger name. */
   readonly pageBundles: readonly string[]
+  /**
+   * Package assets moved out of the base image, keyed by the page-relative path
+   * `plugins/<package>/assets/<path>` that Client bundles reference; the static
+   * deployment serves them beside the preview page.
+   */
+  readonly pageFiles: ImageFiles
   /** JavaScript entries the image carries. */
   readonly javascriptEntries: number
   /** JavaScript candidates no root reaches, dropped from the image. */
@@ -633,6 +639,42 @@ function lazyChunksOf(files: ImageFiles, eager: ReadonlySet<string>): string[] {
   return [...lazy].sort()
 }
 
+/** Image path of a file a package publishes through its `./assets/*` export. */
+const PACKAGE_ASSET_FILE = /^node_modules\/((?:@[^/]+\/)?[^/]+)\/lib\/assets\/(.+)$/
+
+/**
+ * Move every package asset out of the image. Client bundles reference an asset
+ * as the document-relative URL `plugins/<package>/assets/<path>`, which the
+ * Worker never answers: the page requests it from the static deployment, so
+ * the file belongs to the page tree, not to the Worker filesystem.
+ * @param files - Image entries after the sweep; asset entries are deleted.
+ * @returns Page-relative paths to bytes.
+ */
+function takePageAssets(files: ImageFiles): ImageFiles {
+  const decoder = new TextDecoder()
+  const publishes = new Map<string, boolean>()
+  const exportsAssets = (name: string): boolean => {
+    let known = publishes.get(name)
+    if (known === undefined) {
+      const bytes = files[`node_modules/${name}/package.json`]
+      const manifest = bytes === undefined ? {} : JSON.parse(decoder.decode(bytes)) as { exports?: Record<string, unknown> }
+      // The export target client-modules and the client build preset require.
+      known = manifest.exports?.['./assets/*'] === './lib/assets/*'
+      publishes.set(name, known)
+    }
+    return known
+  }
+  const pageFiles: ImageFiles = {}
+  for (const [path, bytes] of Object.entries(files)) {
+    const match = PACKAGE_ASSET_FILE.exec(path)
+    if (match === null || path.endsWith('/') || !exportsAssets(match[1] as string)) continue
+    pageFiles[`plugins/${match[1] as string}/assets/${match[2] as string}`] = bytes
+    // eslint-disable-next-line @typescript-eslint/no-dynamic-delete -- the image is a plain path map
+    delete files[path]
+  }
+  return pageFiles
+}
+
 /** Gzip header byte that records the packing platform; RFC 1952 §2.3.1 spells 255 "unknown". */
 const GZIP_OS_UNKNOWN = 255
 
@@ -666,6 +708,7 @@ function compressImage(archive: Uint8Array): Uint8Array {
  * rather than downgrading the image, because a mostly-transformed image boots into
  * errors far from their cause. Page chunks requested through `require.async` leave
  * the base image for deterministic archives named by their content digest, which the manifest registers.
+ * Package assets leave it for the page tree the static deployment serves.
  * @param options - Roster, installation, package index, and paths.
  * @returns The compressed image, its lazy archives, and what went into them.
  * @throws When a config tree or workspace directory named in the options is missing,
@@ -705,6 +748,7 @@ export function packVfsImage(options: PackOptions): PackResult {
   const rootPackages = [...packages.keys()].filter(name => options.workspaces.has(name))
   const { swept, transform, javascriptEntries, droppedJavascriptEntries, unresolvedExternalRequests } =
     sweepImage(files, options, rootPackages, root)
+  const pageFiles = takePageAssets(swept)
 
   const lazyArchives: PackedLazyArchive[] = []
   const lazy: ImageLazyArchive[] = []
@@ -744,6 +788,7 @@ export function packVfsImage(options: PackOptions): PackResult {
     missing,
     executables,
     pageBundles: Object.keys(swept).filter(name => pageAsset(name)),
+    pageFiles,
     javascriptEntries: manifest.javascriptEntries,
     droppedJavascriptEntries,
     unresolvedExternalRequests,
