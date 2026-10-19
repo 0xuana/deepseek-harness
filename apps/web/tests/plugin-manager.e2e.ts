@@ -121,7 +121,7 @@ describe('web e2e: plugin manager', () => {
           const title = language === 'en' ? 'Plugins' : '插件'
           await probe.getByRole('button', { name: title, exact: true }).click()
           const panel = probe.locator('[data-plugin-panel]')
-          const header = panel.locator(':scope > div > header')
+          const header = panel.locator('[data-plugin-bar] > header')
           await header.getByRole('heading', { name: title, exact: true }).waitFor()
           await probe.evaluate(() => document.fonts.ready)
           const add = header.getByRole('button', { name: language === 'en' ? 'Add plugin' : '添加插件', exact: true })
@@ -236,33 +236,40 @@ describe('web e2e: plugin manager', () => {
 
   it('keeps the plugin page title and actions pinned while the cards scroll', async () => {
     await page.setViewportSize({ width: 1000, height: 480 })
+    const panel = await openPluginsPanel()
+    const body = panel.locator('[data-plugin-body]')
     try {
-      const panel = await openPluginsPanel()
       await panel.locator('[data-plugin-package]').first().waitFor()
-      const headerTop = () => panel.evaluate(element => element.querySelector(':scope > div > header')!.getBoundingClientRect().top)
+      const headerTop = () => panel.locator('[data-plugin-bar] > header').evaluate(element => element.getBoundingClientRect().top)
       const resting = await headerTop()
       expect(resting).toBe(await panel.evaluate(element => element.getBoundingClientRect().top))
-      // Scroll the first card switch below the bar under the add button: the bar must stay in place and paint over it.
-      const add = (await panel.locator(':scope > div > header').getByRole('button', { name: '添加插件', exact: true }).boundingBox())!
-      const covered = await panel.evaluate((element, addY) => {
-        const bar = element.firstElementChild!.getBoundingClientRect()
-        const target = Array.from(element.querySelectorAll('[data-plugin-package] [role="switch"]'))
-          .find(item => item.getBoundingClientRect().top > bar.bottom)!
-        const box = target.getBoundingClientRect()
-        element.scrollTop += box.top + box.height / 2 - addY
-        const moved = target.getBoundingClientRect()
-        const hit = document.elementFromPoint(moved.left + moved.width / 2, moved.top + moved.height / 2)
-        return {
-          scrolled: element.scrollTop,
-          centred: Math.abs(moved.top + moved.height / 2 - addY) < 1,
-          hitBar: element.firstElementChild!.contains(hit),
-        }
-      }, add.y + add.height / 2)
-      expect(covered.scrolled).toBeGreaterThan(100)
-      expect(covered.centred).toBe(true)
+      await body.evaluate((element) => { element.scrollTop = element.scrollHeight })
+      const bottom = await body.evaluate(element => element.scrollTop)
+      expect(bottom).toBeGreaterThan(100)
       expect(await headerTop()).toBe(resting)
-      expect(covered.hitBar).toBe(true)
+      // Reverse keyboard navigation scrolls each focused control into view below the bar, never under it.
+      await panel.locator('[data-plugin-package] [role="switch"]').last().focus()
+      const barBottom = await panel.locator('[data-plugin-bar]').evaluate(element => element.getBoundingClientRect().bottom)
+      const hidden: string[] = []
+      for (let step = 0; step < 30; step++) {
+        await page.keyboard.press('Shift+Tab')
+        const focus = await page.evaluate(() => {
+          const element = document.activeElement
+          const box = element?.getBoundingClientRect()
+          return {
+            inBody: element?.closest('[data-plugin-body]') !== null,
+            top: box?.top ?? 0,
+            name: element?.getAttribute('aria-label') ?? element?.textContent ?? '',
+          }
+        })
+        if (!focus.inBody) break
+        if (focus.top < barBottom) hidden.push(`${focus.name} at ${String(focus.top)}`)
+      }
+      expect(hidden).toEqual([])
+      expect(await body.evaluate(element => element.scrollTop)).toBeLessThan(bottom)
+      expect(await headerTop()).toBe(resting)
     } finally {
+      await body.evaluate((element) => { element.scrollTop = 0 })
       await page.setViewportSize({ width: 1680, height: 1000 })
     }
   })
@@ -296,7 +303,7 @@ describe('web e2e: plugin manager', () => {
         expect(await skeleton.getAttribute('role')).toBe('status')
         expect(await skeleton.getAttribute('aria-label')).toBe('正在读取插件…')
         expect(await panel.getAttribute('aria-busy')).toBe('true')
-        const actions = panel.locator(':scope > div > header > div:last-child button')
+        const actions = panel.locator('[data-plugin-bar] > header > div:last-child button')
         expect(await actions.count()).toBe(3)
         for (const action of await actions.all()) expect(await action.isDisabled()).toBe(true)
         expect(await panel.getByRole('button', { name: '插件说明' }).isEnabled()).toBe(true)
@@ -311,7 +318,7 @@ describe('web e2e: plugin manager', () => {
             return { x, y, width, height }
           }
           return {
-            pageHeader: rect(element.closest('[data-plugin-panel]')?.querySelector(':scope > div > header')),
+            pageHeader: rect(element.closest('[data-plugin-panel]')?.querySelector('[data-plugin-bar] > header')),
             groupHeader: rect(element.firstElementChild),
             rows: Array.from(element.querySelectorAll(selector)).slice(0, 4).map((row) => {
               const head = row.firstElementChild

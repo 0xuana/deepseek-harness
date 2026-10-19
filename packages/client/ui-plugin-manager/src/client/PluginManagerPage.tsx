@@ -1649,7 +1649,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
     <section className={css.page} data-plugin-panel aria-busy={state.status === 'loading' || refreshing}>
       {showsMainList
         ? (
-          <div className={css.pageBar}>
+          <div className={css.pageBar} data-plugin-bar>
             <header className={css.pageHead} data-window-drag>
               <div className={css.pageHeading}>
                 <h1 className={css.pageTitle}>{t('title')}</h1>
@@ -1697,16 +1697,6 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
           </div>
         )
         : null}
-      {!onInstalled
-        ? (
-          <div role="tabpanel" id={`${tabsId}-${tab}-panel`} aria-labelledby={`${tabsId}-${tab}`} className={css.tabPanel}>
-            {renderSlot('plugins.tab', {
-              install: props.installFrom,
-              openPackage: (name) => { setTab(INSTALLED_TAB); setView({ kind: 'package', name }) },
-            }, { only: tab })}
-          </div>
-        )
-        : null}
       {showsMoreList ? (
         <header className={css.moreHead} data-window-drag>
           <Button size="sm" className={css.moreBack} aria-label={t('backToList')} onClick={() => { setView({ kind: 'list' }) }}>
@@ -1715,117 +1705,130 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
           <h1 className={css.pageTitle}>{t('moreTitle')}</h1>
         </header>
       ) : null}
-      {installedCards && !loaded ? (
-        <div className={css.installedPanel} {...installedPanel}>
-          {state.status === 'loading' ? <ListSkeleton label={t('loading')} /> : null}
-          {state.status === 'unavailable' ? (
-            <p className={`${css.status} ${css.statusWithDot}`} role="status">
-              <StateDot state="idle" />{t('unavailable')}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-      {state.notice === null || noticeLine === null
-        ? null
-        : (
-          <Toast
-            key={state.notice.seq}
-            text={noticeLine}
-            icon={<IconWarningOutlineRegular />}
-            holdMs={toastHoldMs(noticeLine)}
-            onDone={props.dismissNotice}
-          />
-        )}
-      {!showsCards && state.status === 'error' && !refreshing
-        ? (
-          <div className={css.failure}>
-            <p className={css.statusWithDot} role="alert">
-              <StateDot state="error" />{t(state.refreshStatus === 'failed' ? 'refreshError' : 'error')}
-            </p>
-            <Button variant="outline" size="sm" onClick={props.refresh}>{t('retry')}</Button>
-          </div>
-        )
-        : null}
-      {onInstalled && loaded && openPkg !== undefined && openRow !== undefined
-        ? (
-          <RowDetail
-            pkg={openPkg}
-            row={openRow}
-            form={formFor(openRow.rowId)}
-            t={t}
-            resolveText={resolveText}
-            renderSlot={renderSlot}
-            onBack={() => { setView({ kind: 'package', name: openPkg.name, ...openPkgInMore ? { from: 'more' } : {} }) }}
-          />
-        )
-        : null}
-      {onInstalled && loaded && openPkg !== undefined && openRow === undefined
-        ? (
-          <PackageDetail
-            pkg={openPkg}
-            t={t}
-            resolveText={resolveText}
-            busy={packageBusy(openPkg)}
-            rowBusy={row => row.entryId !== undefined && state.busy.includes(rowKey(row.entryId))}
-            configured={ledger.bundles.has(openPkg.name)}
-            configure={configure(openPkg)}
-            renderSlot={renderSlot}
-            inMore={openPkgInMore}
-            onBack={() => { setView({ kind: openPkgInMore ? 'more' : 'list' }) }}
-            onSetEnabled={(enabled) => { props.setEnabled(openPkg.name, enabled) }}
-            onUninstall={() => { props.uninstall(openPkg.name) }}
-            onUpdate={() => { props.update(openPkg.name) }}
-            onSetRowEnabled={setRowEnabled}
-            versions={state.versions[openPkg.name]}
-            onEnsureVersions={props.ensureVersions}
-            onCheckVersions={() => { props.checkVersions(openPkg.name) }}
-            onUpdateVersion={(version) => { props.openUpdate(openPkg.name, version) }}
-          />
-        )
-        : null}
-      {onInstalled && loaded && openItem !== undefined
-        ? <ItemDetail form={formFor(openItem.id)} item={openItem} t={t} renderSlot={renderSlot} onBack={() => { setView({ kind: 'list' }) }} />
-        : null}
-      {loaded && installedCards
-        ? basicCards.length === 0 && official.length === 0 && mine.length === 0 && state.status !== 'error'
-          ? <div className={css.installedPanel} {...installedPanel}><p className={css.empty}>{t('empty')}</p></div>
-          : (
-            <div className={css.installedPanel} {...installedPanel}>
-              {showsMoreList ? (
-                <section className={css.group} data-plugin-scope="global" data-plugin-group="more">
-                  <ul className={css.cards}>{more.map(packageCard)}</ul>
-                </section>
-              ) : (
-                <>
-                  {renderGroup('basic', t('basicTitle'), basicCards)}
-                  {renderGroup('extensions', t('extensionsTitle'), extensions.map(packageCard))}
-                  {renderGroup('bundles', t('bundlesTitle'), mine.map(packageCard))}
-                </>
-              )}
-              {/* A failed package read trails the groups it left incomplete: right under the groups on a
-                  first-load failure, and after the kept cards when a refresh fails over stale data. */}
-              {state.status === 'error' && !refreshing
-                ? (
-                  <div className={css.failure}>
-                    <p className={css.statusWithDot} role="alert">
-                      <StateDot state="error" />{t(state.refreshStatus === 'failed' ? 'refreshError' : 'error')}
-                    </p>
-                    <Button variant="outline" size="sm" onClick={props.refresh}>{t('retry')}</Button>
-                  </div>
-                )
-                : null}
+      {/* The page bar and the More list's head stay put; everything below scrolls. */}
+      <div className={css.pageBody} data-plugin-body>
+        {!onInstalled
+          ? (
+            <div role="tabpanel" id={`${tabsId}-${tab}-panel`} aria-labelledby={`${tabsId}-${tab}`} className={css.tabPanel}>
+              {renderSlot('plugins.tab', {
+                install: props.installFrom,
+                openPackage: (name) => { setTab(INSTALLED_TAB); setView({ kind: 'package', name }) },
+              }, { only: tab })}
             </div>
           )
-        : null}
-      {showsCards && activated !== undefined && !state.install.open
-        ? renderSlot('plugins.bundle.activation', {
-          packageName: activated.name,
-          onDismiss: () => { setActivation(null) },
-          onOpenDetails: () => {
-            setActivation(null)
-            setView({ kind: 'package', name: activated.name, ...showsMoreList ? { from: 'more' } : {} })
-          },
-        }, { entryKey: activated.name }) : null}
+          : null}
+        {installedCards && !loaded ? (
+          <div className={css.installedPanel} {...installedPanel}>
+            {state.status === 'loading' ? <ListSkeleton label={t('loading')} /> : null}
+            {state.status === 'unavailable' ? (
+              <p className={`${css.status} ${css.statusWithDot}`} role="status">
+                <StateDot state="idle" />{t('unavailable')}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+        {state.notice === null || noticeLine === null
+          ? null
+          : (
+            <Toast
+              key={state.notice.seq}
+              text={noticeLine}
+              icon={<IconWarningOutlineRegular />}
+              holdMs={toastHoldMs(noticeLine)}
+              onDone={props.dismissNotice}
+            />
+          )}
+        {!showsCards && state.status === 'error' && !refreshing
+          ? (
+            <div className={css.failure}>
+              <p className={css.statusWithDot} role="alert">
+                <StateDot state="error" />{t(state.refreshStatus === 'failed' ? 'refreshError' : 'error')}
+              </p>
+              <Button variant="outline" size="sm" onClick={props.refresh}>{t('retry')}</Button>
+            </div>
+          )
+          : null}
+        {onInstalled && loaded && openPkg !== undefined && openRow !== undefined
+          ? (
+            <RowDetail
+              pkg={openPkg}
+              row={openRow}
+              form={formFor(openRow.rowId)}
+              t={t}
+              resolveText={resolveText}
+              renderSlot={renderSlot}
+              onBack={() => { setView({ kind: 'package', name: openPkg.name, ...openPkgInMore ? { from: 'more' } : {} }) }}
+            />
+          )
+          : null}
+        {onInstalled && loaded && openPkg !== undefined && openRow === undefined
+          ? (
+            <PackageDetail
+              pkg={openPkg}
+              t={t}
+              resolveText={resolveText}
+              busy={packageBusy(openPkg)}
+              rowBusy={row => row.entryId !== undefined && state.busy.includes(rowKey(row.entryId))}
+              configured={ledger.bundles.has(openPkg.name)}
+              configure={configure(openPkg)}
+              renderSlot={renderSlot}
+              inMore={openPkgInMore}
+              onBack={() => { setView({ kind: openPkgInMore ? 'more' : 'list' }) }}
+              onSetEnabled={(enabled) => { props.setEnabled(openPkg.name, enabled) }}
+              onUninstall={() => { props.uninstall(openPkg.name) }}
+              onUpdate={() => { props.update(openPkg.name) }}
+              onSetRowEnabled={setRowEnabled}
+              versions={state.versions[openPkg.name]}
+              onEnsureVersions={props.ensureVersions}
+              onCheckVersions={() => { props.checkVersions(openPkg.name) }}
+              onUpdateVersion={(version) => { props.openUpdate(openPkg.name, version) }}
+            />
+          )
+          : null}
+        {onInstalled && loaded && openItem !== undefined
+          ? <ItemDetail form={formFor(openItem.id)} item={openItem} t={t} renderSlot={renderSlot} onBack={() => { setView({ kind: 'list' }) }} />
+          : null}
+        {loaded && installedCards
+          ? basicCards.length === 0 && official.length === 0 && mine.length === 0 && state.status !== 'error'
+            ? <div className={css.installedPanel} {...installedPanel}><p className={css.empty}>{t('empty')}</p></div>
+            : (
+              <div className={css.installedPanel} {...installedPanel}>
+                {showsMoreList ? (
+                  <section className={css.group} data-plugin-scope="global" data-plugin-group="more">
+                    <ul className={css.cards}>{more.map(packageCard)}</ul>
+                  </section>
+                ) : (
+                  <>
+                    {renderGroup('basic', t('basicTitle'), basicCards)}
+                    {renderGroup('extensions', t('extensionsTitle'), extensions.map(packageCard))}
+                    {renderGroup('bundles', t('bundlesTitle'), mine.map(packageCard))}
+                  </>
+                )}
+                {/* A failed package read trails the groups it left incomplete: right under the groups on a
+                    first-load failure, and after the kept cards when a refresh fails over stale data. */}
+                {state.status === 'error' && !refreshing
+                  ? (
+                    <div className={css.failure}>
+                      <p className={css.statusWithDot} role="alert">
+                        <StateDot state="error" />{t(state.refreshStatus === 'failed' ? 'refreshError' : 'error')}
+                      </p>
+                      <Button variant="outline" size="sm" onClick={props.refresh}>{t('retry')}</Button>
+                    </div>
+                  )
+                  : null}
+              </div>
+            )
+          : null}
+        {showsCards && activated !== undefined && !state.install.open
+          ? renderSlot('plugins.bundle.activation', {
+            packageName: activated.name,
+            onDismiss: () => { setActivation(null) },
+            onOpenDetails: () => {
+              setActivation(null)
+              setView({ kind: 'package', name: activated.name, ...showsMoreList ? { from: 'more' } : {} })
+            },
+          }, { entryKey: activated.name }) : null}
+      </div>
       {state.update === null ? null : (
         <UpdateDialog
           update={state.update}
