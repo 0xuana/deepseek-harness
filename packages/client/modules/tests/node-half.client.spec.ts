@@ -1245,3 +1245,67 @@ describe('module graph order', () => {
       .toThrow('module graph cycle @fixture/cycle-a -> @fixture/cycle-b -> @fixture/cycle-a')
   })
 })
+
+describe('package manifest refresh', () => {
+  /** Rewrite a fixture package's manifest; its client bundle is left as it is. */
+  const writeManifest = (packageName: string, manifest: Record<string, unknown>): void => {
+    writeFileSync(join(root!, 'node_modules', ...packageName.split('/'), 'package.json'), JSON.stringify({ name: packageName, ...manifest }))
+  }
+  const clientManifest = (client: Record<string, unknown>, clientExport = './lib/client.js'): Record<string, unknown> => ({
+    exports: { './client': clientExport, './package.json': './package.json' },
+    dsh: { client: { platform: 'web', ...client } },
+  })
+
+  it('publishes a reinstalled declaration when its Loader entry restarts, and nothing for an unchanged restart', async () => {
+    const packageName = '@fixture/refresh-declaration'
+    writeBuiltPackage(packageName, { external: ['react'] })
+    const { context, service } = constructWithRoute([packageName])
+    const before = service.graph().entries[0]!
+    const changed = vi.fn()
+    service.onGraphChanged(changed)
+
+    emitLoaderEntryChange(context, packageName)
+    await Promise.resolve()
+    expect(changed).not.toHaveBeenCalled()
+
+    writeManifest(packageName, clientManifest({ external: ['scheduler'], inject: ['@fixture/slots'] }))
+    emitLoaderEntryChange(context, packageName)
+    await Promise.resolve()
+    expect(changed).toHaveBeenCalledTimes(1)
+    expect(service.graph().entries[0]).toMatchObject({ rev: before.rev, external: ['scheduler'], inject: ['@fixture/slots'] })
+  })
+
+  it('reads a moved client export as a new bundle generation when its Loader entry restarts', async () => {
+    const packageName = '@fixture/refresh-moved'
+    writeBuiltPackage(packageName, {})
+    const { context, service } = constructWithRoute([packageName])
+    const before = service.graph().entries[0]!
+    const moved = join(root!, 'node_modules', '@fixture', 'refresh-moved', 'dist', 'client.js')
+    mkdirSync(dirname(moved), { recursive: true })
+    writeFileSync(moved, 'module.exports = { moved: true }\n')
+    writeManifest(packageName, clientManifest({}, './dist/client.js'))
+
+    emitLoaderEntryChange(context, packageName)
+    await Promise.resolve()
+    expect(service.clientPath(packageName)).toBe(moved)
+    expect(service.graph().entries[0]!.rev).not.toBe(before.rev)
+  })
+
+  it('adds or removes the row when a restarted package gains or loses its client declaration', async () => {
+    const packageName = '@fixture/refresh-membership'
+    writeBuiltPackage(packageName, {})
+    writeManifest(packageName, { exports: { './package.json': './package.json' } })
+    const { context, service } = constructWithRoute([packageName])
+    expect(service.graph().entries).toEqual([])
+
+    writeManifest(packageName, clientManifest({}))
+    emitLoaderEntryChange(context, packageName)
+    await Promise.resolve()
+    expect(service.graph().entries.map(entry => entry.id)).toEqual([packageName])
+
+    writeManifest(packageName, { exports: { './package.json': './package.json' } })
+    emitLoaderEntryChange(context, packageName)
+    await Promise.resolve()
+    expect(service.graph().entries).toEqual([])
+  })
+})
