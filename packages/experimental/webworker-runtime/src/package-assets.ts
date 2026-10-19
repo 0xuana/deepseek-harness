@@ -47,7 +47,8 @@ function packageDirectories(vfs: MemoryVfs, modules: string): string[] {
  * Archive every file a package of the image publishes through `"./assets/*": "./lib/assets/*"`.
  * @param vfs - Mounted image filesystem.
  * @param root - Image root holding `node_modules`.
- * @returns An uncompressed tar whose entries are named by their document-relative reference.
+ * @returns An uncompressed tar whose entries are named `plugins/<package>/assets/<path>` with the path unencoded,
+ * so every name fits the ustar limits the base image already met.
  */
 export function packPackageAssets(vfs: MemoryVfs, root: string): Uint8Array {
   const files: Record<string, Uint8Array> = {}
@@ -60,9 +61,7 @@ export function packPackageAssets(vfs: MemoryVfs, root: string): Uint8Array {
     const assets = join(directory, 'lib', 'assets')
     if (!vfs.existsSync(assets)) continue
     for (const path of filesBelow(vfs, assets)) {
-      // The same per-segment encoding the Client build writes into each reference.
-      const reference = `plugins/${manifest.name}/assets/${path.split('/').map(encodeURIComponent).join('/')}`
-      files[reference] = vfs.readFileSync(join(assets, path)) as Uint8Array
+      files[`plugins/${manifest.name}/assets/${path}`] = vfs.readFileSync(join(assets, path)) as Uint8Array
     }
   }
   return packTar(files)
@@ -77,9 +76,13 @@ export function packPackageAssets(vfs: MemoryVfs, root: string): Uint8Array {
 export function packageAssetResolver(archive: Uint8Array): (reference: string) => string {
   const urls = new Map<string, string>()
   for (const entry of parseTar(archive)) {
-    const extension = entry.name.slice(entry.name.lastIndexOf('.')).toLowerCase()
+    const [, name, path] = /^plugins\/((?:@[^/]+\/)?[^/]+)\/assets\/(.+)$/u.exec(entry.name) ?? []
+    if (name === undefined || path === undefined) continue
+    // The same per-segment encoding the Client build writes into each reference.
+    const reference = `plugins/${name}/assets/${path.split('/').map(encodeURIComponent).join('/')}`
+    const extension = path.slice(path.lastIndexOf('.')).toLowerCase()
     // A copy detaches the Blob from the archive buffer the entry views.
-    urls.set(entry.name, URL.createObjectURL(new Blob([new Uint8Array(entry.bytes)], { type: ASSET_MEDIA_TYPES.get(extension) ?? '' })))
+    urls.set(reference, URL.createObjectURL(new Blob([new Uint8Array(entry.bytes)], { type: ASSET_MEDIA_TYPES.get(extension) ?? '' })))
   }
   return reference => urls.get(reference) ?? reference
 }

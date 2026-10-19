@@ -525,19 +525,28 @@ function packageAssetCall(reference: string): string {
 }
 
 /**
+ * Placeholder the `url()` rewrite writes into stylesheet text instead of a
+ * reference: letters, digits, and underscores, which lightningcss never escapes,
+ * so a file name with parentheses or quotes still maps back to its reference.
+ */
+const STYLESHEET_ASSET_PLACEHOLDER = /__dshPackageAsset\d+__/gu
+
+/**
  * Compile stylesheet text into a JavaScript expression that passes each package-asset
  * reference the `url()` rewrite inserted through the resolver call.
  * @param css - stylesheet text after the rewrite.
- * @param references - the references the rewrite inserted into this stylesheet.
+ * @param references - reference of each placeholder the rewrite inserted into this stylesheet.
  * @returns a string literal, or a concatenation of literals and resolver calls.
  */
-function stylesheetSource(css: string, references: ReadonlySet<string>): string {
+function stylesheetSource(css: string, references: ReadonlyMap<string, string>): string {
   if (references.size === 0) return JSON.stringify(css)
-  const inserted = new RegExp([...references].map(escapeSpecifier).join('|'), 'gu')
   const parts: string[] = []
   let last = 0
-  for (const match of css.matchAll(inserted)) {
-    parts.push(JSON.stringify(css.slice(last, match.index)), packageAssetCall(match[0]))
+  for (const match of css.matchAll(STYLESHEET_ASSET_PLACEHOLDER)) {
+    const reference = references.get(match[0])
+    /* v8 ignore next -- only the rewrite writes placeholders, and it records each one. */
+    if (reference === undefined) throw new Error(`client bundle compiler: unknown stylesheet asset placeholder ${match[0]}`)
+    parts.push(JSON.stringify(css.slice(last, match.index)), packageAssetCall(reference))
     last = match.index + match[0].length
   }
   parts.push(JSON.stringify(css.slice(last)))
@@ -548,8 +557,8 @@ function stylesheetSource(css: string, references: ReadonlySet<string>): string 
 interface StylesheetAssets {
   /** lightningcss options; empty when the stylesheet lies outside the package's own `src`. */
   readonly options: { readonly visitor?: Visitor<CustomAtRules> }
-  /** References inserted during the transform that uses {@link options}. */
-  readonly references: ReadonlySet<string>
+  /** Reference of each placeholder inserted during the transform that uses {@link options}. */
+  readonly references: ReadonlyMap<string, string>
 }
 
 /** Browser-face package assets: the import plugin and the stylesheet `url()` rewrite share one per-build emission record. */
@@ -599,8 +608,12 @@ function packageAssets(manifest: PackageManifest, packageDir: string): PackageAs
     const below = pathBelow(realDirectory(assetsDir), realPath)
     if (below === undefined) throw new Error(`tsdown: ${name}: ${file} is outside src/client/assets; move the asset there`)
     const assetPath = below.split(sep).join('/')
-    if (assetPath.split('/').some(segment => UNSERVABLE_ASSET_SEGMENT.test(segment))) {
-      throw new Error(`tsdown: ${name}: ${file} has a path segment containing %, #, ?, \\ or NUL, which the asset route cannot serve; rename it`)
+    if (assetPath.split('/').some(segment => UNSERVABLE_ASSET_SEGMENT.test(segment) || segment.toLowerCase() === 'node_modules')) {
+      throw new Error(`tsdown: ${name}: ${file} has a node_modules path segment or one containing %, #, ?, \\ or NUL, which the asset route cannot serve; rename it`)
+    }
+    const extension = posix.extname(assetPath)
+    if (extension !== extension.toLowerCase()) {
+      throw new Error(`tsdown: ${name}: ${file} has an uppercase extension; asset imports are typed by lowercase extensions, so rename it`)
     }
     if (manifest.exports?.[PACKAGE_ASSET_EXPORT] !== PACKAGE_ASSET_EXPORT_TARGET) {
       throw new Error(
@@ -651,7 +664,7 @@ function packageAssets(manifest: PackageManifest, packageDir: string): PackageAs
       },
     },
     urlRewrite(context, stylesheet) {
-      const inserted = new Set<string>()
+      const inserted = new Map<string, string>()
       if (pathBelow(realDirectory(sourceDir), realpathSync(stylesheet)) === undefined) return { options: {}, references: inserted }
       const base = dirname(stylesheet)
       return {
@@ -660,9 +673,12 @@ function packageAssets(manifest: PackageManifest, packageDir: string): PackageAs
             Url(url) {
               // Empty values, fragments, root-relative paths, and schemes such as `data:` name no package file.
               if (url.url === '' || url.url.startsWith('#') || url.url.startsWith('/') || URL_SCHEME.test(url.url)) return
-              const resolved = reference(context, resolvePath(base, url.url))
-              inserted.add(resolved)
-              return { ...url, url: resolved }
+              if (/[#?]/u.test(url.url)) {
+                throw new Error(`tsdown: ${name}: ${stylesheet} references ${JSON.stringify(url.url)}; a package asset url() takes no fragment or query`)
+              }
+              const placeholder = `__dshPackageAsset${String(inserted.size)}__`
+              inserted.set(placeholder, reference(context, resolvePath(base, url.url)))
+              return { ...url, url: placeholder }
             },
           },
         },

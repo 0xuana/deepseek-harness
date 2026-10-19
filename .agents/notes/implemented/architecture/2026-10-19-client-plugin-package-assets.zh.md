@@ -30,7 +30,7 @@ plugins/@deepseek-ai/dsh-client-ui-chat/assets/running-whale%402x-06738fa29b2f.p
 
 ### 构建
 
-动态浏览器 face 的 `dsh-package-asset` 插件按源码位置解析 import。以下情况构建失败：文件真实路径不在本包 `src/client/assets/` 内（他包或依赖里的图片也因此被拒绝）；`exports["./assets/*"]` 不是恰好 `./lib/assets/*`；扩展名不受支持；路径段含 Host 路由无法提供的 `%`、`#`、`?`、`\` 或 NUL。每个文件每次构建只产出一次，并登记为监听输入。三条 CSS 管线（CSS Modules、全局样式、`?inline`）对本包 `src/` 内的样式表，经 lightningcss visitor 改写相对 `url()`；`data:`、片段、带协议、以 `/` 开头和空的 URL 保持不变，依赖包的样式表不改写。双 face 包的 Node Client face 拒绝资源 import。浏览器 face 是 `lib/assets/` 的唯一写入方：一次性构建会删除本次没有产出的文件，watch 重建则保留它们，因为 Host 仍在提供上一代 bundle，运行它的页面会请求那些文件名。
+动态浏览器 face 的 `dsh-package-asset` 插件按源码位置解析 import。以下情况构建失败：文件真实路径不在本包 `src/client/assets/` 内（他包或依赖里的图片也因此被拒绝）；`exports["./assets/*"]` 不是恰好 `./lib/assets/*`；扩展名不受支持；路径段为 `node_modules` 或含 Host 路由无法提供的 `%`、`#`、`?`、`\` 或 NUL；扩展名不是小写（导入类型只声明小写扩展名）。每个文件每次构建只产出一次，并登记为监听输入。三条 CSS 管线（CSS Modules、全局样式、`?inline`）对本包 `src/` 内的样式表，经 lightningcss visitor 改写相对 `url()`；`data:`、片段、带协议、以 `/` 开头和空的 URL 保持不变，带片段或查询串的相对文件引用会让构建失败，依赖包的样式表不改写。改写时先写入 lightningcss 从不转义的标识符占位，因此含括号或引号的文件名仍会变成对应的解析调用。双 face 包的 Node Client face 拒绝资源 import。浏览器 face 是 `lib/assets/` 的唯一写入方：一次性构建会删除本次没有产出的文件，watch 重建则保留它们，因为 Host 仍在提供上一代 bundle，运行它的页面会请求那些文件名。
 
 ### Host 路由
 
@@ -40,7 +40,7 @@ plugins/@deepseek-ai/dsh-client-ui-chat/assets/running-whale%402x-06738fa29b2f.p
 
 ### WebWorker 预览
 
-预览页的 Host 运行在 Worker 中，页面对引用发出的请求到达不了它。在任何 Client bundle 运行之前，页面向 Worker 请求 `GET /__assets__`，它和 `GET /__boot__` 一样由隧道胶水层回答：镜像中每个声明了 `"./assets/*": "./lib/assets/*"` 的包，其 `lib/assets/` 下的所有文件打成一个未压缩的 tar，条目以引用命名。页面把每个条目按扩展名的媒体类型转成 Blob URL，它的 `resolveAsset` 返回这个 URL；镜像里没有对应文件时返回引用本身。基础镜像本来就带着这些文件，所以这个归档只跨越线程边界。
+预览页的 Host 运行在 Worker 中，页面对引用发出的请求到达不了它。在任何 Client bundle 运行之前，页面向 Worker 请求 `GET /__assets__`，它和 `GET /__boot__` 一样由隧道胶水层回答：镜像中每个声明了 `"./assets/*": "./lib/assets/*"` 的包，其 `lib/assets/` 下的所有文件打成一个未压缩的 tar，条目以引用命名。页面把每个条目按扩展名的媒体类型转成 Blob URL，它的 `resolveAsset` 返回这个 URL；镜像里没有对应文件时返回引用本身。基础镜像本来就带着这些文件，所以不增加网络请求；但每次启动仍会遍历镜像中的包、打包全部资源，并把每个条目复制成 Blob，不论包是否启用。
 
 ### 变化与包 manifest
 

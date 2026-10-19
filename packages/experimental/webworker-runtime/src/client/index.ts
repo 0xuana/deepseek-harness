@@ -155,8 +155,7 @@ export async function connectWorkerHost(worker: Worker, options?: WorkerHostConn
       new URL(options?.image ?? IMAGE_FILE_NAME, document.baseURI).href,
       (options?.overlays ?? []).map(overlay => new URL(overlay, document.baseURI).href),
     )
-    const payload = await tunnel.bootPayload()
-    const resolveAsset = await tunnel.packageAssets()
+    const [payload, resolveAsset] = await Promise.all([tunnel.bootPayload(), tunnel.packageAssets()])
     ;(globalThis as ClientTransportGlobal).__DSH_TRANSPORT__ = {
       fetch: (input, init) => tunnel.fetch(input, init),
       openStream: (endpoint, payload, signal, uplink) => tunnel.open(endpoint, payload, signal, uplink),

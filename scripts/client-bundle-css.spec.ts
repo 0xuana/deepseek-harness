@@ -280,12 +280,38 @@ describe('client bundle package asset imports', () => {
     expect(() => load.call(recordingContext(), asset)).toThrow(`${PACKAGE_NAME}: cannot resolve asset ${asset}`)
   })
 
-  it.each(['src/client/assets/100%.png', 'src/client/assets/icons#1/whale.png'])('rejects %s, which the asset route cannot serve', async (path) => {
+  it.each([
+    'src/client/assets/100%.png', 'src/client/assets/icons#1/whale.png', 'src/client/assets/Node_Modules/whale.png',
+  ])('rejects %s, which the asset route cannot serve', async (path) => {
     const root = await assetPackage({ [path]: WHALE })
     const { load } = hooks(browserPlugins(root)('dsh-package-asset'))
 
     expect(() => load.call(recordingContext(), join(root, path)))
-      .toThrow(`${join(root, path)} has a path segment containing %, #, ?, \\ or NUL, which the asset route cannot serve; rename it`)
+      .toThrow(`${join(root, path)} has a node_modules path segment or one containing %, #, ?, \\ or NUL, which the asset route cannot serve; rename it`)
+  })
+
+  it('rejects an uppercase extension, which the asset import types do not declare', async () => {
+    const root = await assetPackage({ 'src/client/assets/whale.PNG': WHALE })
+    const { load } = hooks(browserPlugins(root)('dsh-package-asset'))
+    const asset = join(root, 'src/client/assets/whale.PNG')
+
+    expect(() => load.call(recordingContext(), asset)).toThrow(`${asset} has an uppercase extension`)
+  })
+
+  it('passes a file name lightningcss escapes through the resolver call, and rejects a fragment or query', async () => {
+    const root = await assetPackage({
+      'src/client/assets/whale(2x).png': WHALE,
+      'src/client/View.module.css': '.a { mask: url(\'./assets/whale(2x).png\'); }',
+      'src/client/Bad.module.css': '.b { mask: url(\'./assets/whale(2x).png#part\'); }',
+    })
+    const plugin = browserPlugins(root)('dsh-css-modules-inline')
+    const importer = join(root, 'src/client/index.ts')
+
+    const output = await loadImport(plugin, recordingContext(), './View.module.css', importer)
+    expect(stylesheetText(output, reference => `resolved:${reference}`))
+      .toContain(`resolved:plugins/@deepseek-ai/dsh-client-asset-fixture/assets/whale(2x)-${WHALE_REV}.png`)
+    await expect(loadImport(plugin, recordingContext(), './Bad.module.css', importer))
+      .rejects.toThrow('a package asset url() takes no fragment or query')
   })
 
   it('rejects asset imports in the Node Client face', async () => {
