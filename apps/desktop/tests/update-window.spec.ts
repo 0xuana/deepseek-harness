@@ -61,8 +61,9 @@ it('rejects a stalled native transition and allows a later attempt to complete',
 it('releases native listeners when requesting the transition throws', async () => {
   vi.useFakeTimers()
   const f = setup()
-  f.window.setFullScreen.mockImplementation(() => { throw new Error('native window unavailable') })
-  await expect(f.prepare()).rejects.toThrow('native window unavailable')
+  const nativeError = new Error('native window unavailable')
+  f.window.setFullScreen.mockImplementation(() => { throw nativeError })
+  await expect(f.prepare()).rejects.toBe(nativeError)
   expect(f.window.eventNames()).toEqual([])
   expect(vi.getTimerCount()).toBe(0)
 })
