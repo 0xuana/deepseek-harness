@@ -109,6 +109,20 @@ it('ignores stale toast completion after the permission UI is disposed', async (
   expect(f.controller.state.getSnapshot()).toBe(before)
 })
 
+it.each(['success', 'failure'])('settles an in-flight action %s after disposal without publishing', async (outcome) => {
+  const f = fixture(), pending = Promise.withResolvers<undefined>(), entered = Promise.withResolvers<undefined>()
+  onTestFinished(async () => { pending.resolve(undefined); await f.controller.dispose() })
+  f.actions.request.mockImplementationOnce(() => { entered.resolve(undefined); return pending.promise })
+  f.face.request('accessibility')
+  await entered.promise
+  const before = f.controller.state.getSnapshot(), closed = f.controller.dispose()
+  if (outcome === 'failure') pending.reject(new Error('permission request ended after withdrawal'))
+  else pending.resolve(undefined)
+  await closed
+  expect(f.controller.state.getSnapshot()).toBe(before)
+  expect(f.actions.readSystem).not.toHaveBeenCalled()
+})
+
 it('contains a late read rejection and supports errors without an Error instance', async () => {
   const f = fixture()
   f.actions.readSystem.mockRejectedValueOnce('offline')
