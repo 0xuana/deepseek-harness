@@ -35,7 +35,7 @@ kind: "package-reference"
 
 ### 包资源
 
-同一个 `/plugins` 路由也提供客户端包通过其 `"./assets/*": "./lib/assets/*"` 导出发布的图片。构建会产出每个被引用的资源，在扩展名之前插入其内容 revision（资源字节 SHA-1 摘要的前 12 位十六进制数字），并把 import 转换为文档相对引用 `plugins/<package>/assets/<emitted path>`，因此一个 URL 始终对应一份内容。任何 `/plugins/<package>/assets/` 路径都只由资源路由响应：对于活动的客户端 row，Host 对路径做一次百分号解码，并从该包自身的 manifest（元数据清单）出发，用 Node 的 `require.resolve` 解析 `<package>/assets/<path>`，因此由包的导出决定哪些文件存在。无法解析的路径、扩展名不是 `.svg`、`.png`、`.webp`、`.jpg` 或 `.jpeg` 的已解析文件、格式错误的转义以及未激活的包都返回 404；查询串不参与选择。提供的资源每次请求都从磁盘流式读取且不缓存，并携带其媒体类型、与 bundle 相同的 `cache-control: public, max-age=31536000, immutable`、`etag: "<requested path>"` 和 `x-content-type-options: nosniff`；SVG 还额外携带 `content-security-policy: script-src 'none'`，因此直接打开的 SVG 不会运行脚本。`If-None-Match` 等于该 etag 时返回 304 且不打开文件，`HEAD` 的响应不带 body。`fetchBundle()` 返回相同的响应，其流式 body 在取消时关闭文件。
+同一个 `/plugins` 路由也提供客户端包通过其 `"./assets/*": "./lib/assets/*"` 导出发布的图片。构建会产出每个被引用的资源，在扩展名之前插入其内容 revision（资源字节 SHA-1 摘要的前 12 位十六进制数字），并把 import 或样式表 `url()` 编译成对 bundle 模块加载器的同步调用 `require.asset("plugins/<package>/assets/<emitted path>")`，因此一个 URL 始终对应一份内容。除非页面的载体提供了 `resolveAsset`，这个调用都返回文档相对引用；WebWorker 预览的页面无法请求该引用，它把引用映射为 Worker 镜像中对应字节的 Blob URL。任何 `/plugins/<package>/assets/` 路径都只由资源路由响应：对于活动的客户端 row，Host 对路径做一次百分号解码，并从该包自身的 manifest（元数据清单）出发，用 Node 的 `require.resolve` 解析 `<package>/assets/<path>`，因此由包的导出决定哪些文件存在。无法解析的路径、扩展名不是 `.svg`、`.png`、`.webp`、`.jpg` 或 `.jpeg` 的已解析文件、格式错误的转义以及未激活的包都返回 404；查询串不参与选择。提供的资源每次请求都从磁盘流式读取且不缓存，并携带其媒体类型、与 bundle 相同的 `cache-control: public, max-age=31536000, immutable`、`etag: "<requested path>"` 和 `x-content-type-options: nosniff`；SVG 还额外携带 `content-security-policy: script-src 'none'`，因此直接打开的 SVG 不会运行脚本。`If-None-Match` 等于该 etag 时返回 304 且不打开文件，`HEAD` 的响应不带 body。`fetchBundle()` 返回相同的响应，其流式 body 在取消时关闭文件。
 
 ### 浏览器加载什么
 
@@ -145,7 +145,6 @@ bundle 路由随注入的 `webServer` 生命周期注册：服务就绪时注册
 - **惰性提供会保留已请求的 body**——Host 在内存中保留每个 bundle 与惰性响应计划；脚本或 map body 在首次 `GET` 后保留缓存，HMR 还会保留上一代启动响应。内存仅随客户端实际请求的响应 body 增长，同时保留一代竞态容忍。
 - **从未请求的上一代 map 会读取当前 map 文件**——combo revision 跟踪可执行 bundle，而不跟踪调试产物。若 HMR 在保留的旧 URL 首次收到 map `GET` 前重建 map，该响应会把当前 authored map 与旧 bundle offset 组合；在重建前请求 map 会固定该 URL 的响应。
 - **仅编辑 manifest 不会被察觉**——Host 在包的 Loader 条目启动或重启时读取包 manifest；只编辑 `package.json` 要到下一次条目重启或 Host 重启时才生效。资源路由经 Node 的包配置缓存解析，因此原地修改的 `./assets/*` 导出要等 boot HMR 让该包的缓存失效、或 Host 重启后才生效。
-- **WebWorker 预览无法加载包资源**——预览只能经由其隧道访问 `/plugins`，因此 `<img>` 或 CSS `url()` 请求永远到达不了运行在 Worker 中的 Host；提供这些资源由 WebWorker 运行时负责。
 - **Desktop 每次显示都重新读取包资源**——Desktop 转发器把每个 `/plugins/` 缓存头改写为 `no-store`，因此不可变的资源响应头到达不了其浏览器缓存。
 
 <a id="dev-note"></a>

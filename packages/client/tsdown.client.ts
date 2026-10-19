@@ -50,7 +50,10 @@ const INLINE_CSS_VIRTUAL_PREFIX = '\0dsh-inline-css:'
 const CSS_VIRTUAL_SUFFIX = '.mjs'
 const INLINE_CSS_QUERY = '?inline'
 
-/** Emit one plugin-owned style injector and an optional CSS Modules export. */
+/**
+ * Emit one plugin-owned style injector and an optional CSS Modules export.
+ * @param css - JavaScript expression yielding the stylesheet text; see {@link stylesheetSource}.
+ */
 function styleInjectionModule(
   id: string,
   fileId: string,
@@ -58,7 +61,7 @@ function styleInjectionModule(
   classMap?: Readonly<Record<string, string>>,
 ): string {
   const source = [
-    `const css = ${JSON.stringify(css)};`,
+    `const css = ${css};`,
     `const tagId = ${JSON.stringify(`${id}/${basename(fileId)}`)};`,
     'if (typeof document !== \'undefined\' && document.querySelector(\'style[data-plugin-css=\' + JSON.stringify(tagId) + \']\') === null) {',
     '  const tag = document.createElement(\'style\');',
@@ -508,6 +511,47 @@ const UNSERVABLE_ASSET_SEGMENT = /[%#?\\\0]/
 /** A `url()` value with a scheme, such as `data:` or `https:`, which names no package file. */
 const URL_SCHEME = /^[a-z][a-z\d+.-]*:/i
 
+/**
+ * Free identifier an asset reference compiles to before rendering; the CommonJS
+ * render turns each call into `require.asset(...)`, the module loader's
+ * synchronous asset resolver, which returns the reference unchanged unless its
+ * carrier maps it.
+ */
+const PACKAGE_ASSET_CALL = '__dshPackageAsset'
+
+/** Compile one asset reference into the resolver call. */
+function packageAssetCall(reference: string): string {
+  return `${PACKAGE_ASSET_CALL}(${JSON.stringify(reference)})`
+}
+
+/**
+ * Compile stylesheet text into a JavaScript expression that passes each package-asset
+ * reference the `url()` rewrite inserted through the resolver call.
+ * @param css - stylesheet text after the rewrite.
+ * @param references - the references the rewrite inserted into this stylesheet.
+ * @returns a string literal, or a concatenation of literals and resolver calls.
+ */
+function stylesheetSource(css: string, references: ReadonlySet<string>): string {
+  if (references.size === 0) return JSON.stringify(css)
+  const inserted = new RegExp([...references].map(escapeSpecifier).join('|'), 'gu')
+  const parts: string[] = []
+  let last = 0
+  for (const match of css.matchAll(inserted)) {
+    parts.push(JSON.stringify(css.slice(last, match.index)), packageAssetCall(match[0]))
+    last = match.index + match[0].length
+  }
+  parts.push(JSON.stringify(css.slice(last)))
+  return parts.join(' + ')
+}
+
+/** One stylesheet's `url()` rewrite: the lightningcss options and the references they insert while transforming. */
+interface StylesheetAssets {
+  /** lightningcss options; empty when the stylesheet lies outside the package's own `src`. */
+  readonly options: { readonly visitor?: Visitor<CustomAtRules> }
+  /** References inserted during the transform that uses {@link options}. */
+  readonly references: ReadonlySet<string>
+}
+
 /** Browser-face package assets: the import plugin and the stylesheet `url()` rewrite share one per-build emission record. */
 interface PackageAssets {
   /** `dsh-package-asset`: resolves asset imports, emits referenced files, and prunes stale `lib/assets` files after writing. */
@@ -516,10 +560,11 @@ interface PackageAssets {
    * Select the lightningcss options that rewrite one stylesheet's relative `url()` values.
    * @param context - plugin context of the stylesheet loader, which emits each referenced asset.
    * @param stylesheet - physical stylesheet path.
-   * @returns a `url()` visitor when the stylesheet lies inside the package's own `src`, otherwise no options.
+   * @returns a `url()` visitor when the stylesheet lies inside the package's own `src`, otherwise no options,
+   *   and the references the visitor inserts.
    * @throws {Error} from the visitor when a relative `url()` does not name a publishable package asset.
    */
-  urlRewrite(context: AssetContext, stylesheet: string): { readonly visitor?: Visitor<CustomAtRules> }
+  urlRewrite(context: AssetContext, stylesheet: string): StylesheetAssets
 }
 
 /**
@@ -527,7 +572,8 @@ interface PackageAssets {
  * file must lie under the package's own `src/client/assets/`, have a supported
  * extension, and be published by the `./assets/*` export; it is emitted once
  * per build under `lib/assets/` at its relative path with the content revision
- * inserted before the extension, and the reference becomes its document-relative URL.
+ * inserted before the extension, and the reference compiles to the module loader's
+ * synchronous resolver call on its document-relative URL.
  * A one-shot build deletes files under `lib/assets/` that it did not emit; a
  * watch build keeps them for pages still running an earlier generation.
  * @param manifest - the package's own manifest, naming the URL owner and declaring the asset export.
@@ -584,7 +630,15 @@ function packageAssets(manifest: PackageManifest, packageDir: string): PackageAs
       },
       load(id) {
         if (!isAbsolute(id) || packageAssetMediaType(id) === undefined) return null
-        return `export default ${JSON.stringify(reference(this, id))};`
+        return `export default ${packageAssetCall(reference(this, id))};`
+      },
+      renderChunk(code, _chunk, outputOptions) {
+        if (outputOptions.format !== 'cjs' || !code.includes(PACKAGE_ASSET_CALL)) return null
+        const transformed = new Rolldown.RolldownMagicString(code)
+        for (const match of code.matchAll(new RegExp(`\\b${PACKAGE_ASSET_CALL}\\(`, 'gu'))) {
+          transformed.overwrite(match.index, match.index + match[0].length, 'require.asset(')
+        }
+        return transformed
       },
       async writeBundle(outputOptions, bundle) {
         // A watch rebuild keeps earlier files: the Host still serves the previous
@@ -597,16 +651,22 @@ function packageAssets(manifest: PackageManifest, packageDir: string): PackageAs
       },
     },
     urlRewrite(context, stylesheet) {
-      if (pathBelow(realDirectory(sourceDir), realpathSync(stylesheet)) === undefined) return {}
+      const inserted = new Set<string>()
+      if (pathBelow(realDirectory(sourceDir), realpathSync(stylesheet)) === undefined) return { options: {}, references: inserted }
       const base = dirname(stylesheet)
       return {
-        visitor: {
-          Url(url) {
-            // Empty values, fragments, root-relative paths, and schemes such as `data:` name no package file.
-            if (url.url === '' || url.url.startsWith('#') || url.url.startsWith('/') || URL_SCHEME.test(url.url)) return
-            return { ...url, url: reference(context, resolvePath(base, url.url)) }
+        options: {
+          visitor: {
+            Url(url) {
+              // Empty values, fragments, root-relative paths, and schemes such as `data:` name no package file.
+              if (url.url === '' || url.url.startsWith('#') || url.url.startsWith('/') || URL_SCHEME.test(url.url)) return
+              const resolved = reference(context, resolvePath(base, url.url))
+              inserted.add(resolved)
+              return { ...url, url: resolved }
+            },
           },
         },
+        references: inserted,
       }
     },
   }
@@ -780,18 +840,19 @@ function clientConfig(
         // The virtual id otherwise hides the physical stylesheet from Rolldown's watch graph.
         this.addWatchFile(fileId)
         const source = await readFile(fileId)
+        const stylesheetAssets = assets.urlRewrite(this, fileId)
         const { code, exports: cssExports } = transform({
           filename: fileId,
           code: source,
           cssModules: { pattern: '[hash]_[local]' },
           minify: true,
-          ...assets.urlRewrite(this, fileId),
+          ...stylesheetAssets.options,
         })
         const classMap: Record<string, string> = {}
         const exportEntries = Object.entries(cssExports ?? {})
           .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
         for (const [local, exp] of exportEntries) classMap[local] = exp.name
-        return styleInjectionModule(id, fileId, code.toString(), classMap)
+        return styleInjectionModule(id, fileId, stylesheetSource(code.toString(), stylesheetAssets.references), classMap)
       },
     }, {
       name: 'dsh-css-text-inline',
@@ -806,8 +867,9 @@ function clientConfig(
         const fileId = virtualId.slice(INLINE_CSS_VIRTUAL_PREFIX.length, -CSS_VIRTUAL_SUFFIX.length)
         this.addWatchFile(fileId)
         const source = await readFile(fileId)
-        const { code } = transform({ filename: fileId, code: source, minify: true, ...assets.urlRewrite(this, fileId) })
-        return `export default ${JSON.stringify(code.toString())};`
+        const stylesheetAssets = assets.urlRewrite(this, fileId)
+        const { code } = transform({ filename: fileId, code: source, minify: true, ...stylesheetAssets.options })
+        return `export default ${stylesheetSource(code.toString(), stylesheetAssets.references)};`
       },
     }, {
       name: 'dsh-css-global-inline',
@@ -821,8 +883,9 @@ function clientConfig(
         const fileId = virtualId.slice(GLOBAL_CSS_VIRTUAL_PREFIX.length, -CSS_VIRTUAL_SUFFIX.length)
         this.addWatchFile(fileId)
         const source = await readFile(fileId)
-        const { code } = transform({ filename: fileId, code: source, minify: true, ...assets.urlRewrite(this, fileId) })
-        return styleInjectionModule(id, fileId, code.toString())
+        const stylesheetAssets = assets.urlRewrite(this, fileId)
+        const { code } = transform({ filename: fileId, code: source, minify: true, ...stylesheetAssets.options })
+        return styleInjectionModule(id, fileId, stylesheetSource(code.toString(), stylesheetAssets.references))
       },
     }, assets.plugin],
     outputOptions: {

@@ -9,17 +9,20 @@
   en: 159de908b09780eb
   zh: 8d15ca2f15b8846a
 /agent-note-client-plugin-package-assets-served-by-url/decision:
-  en: 42d5a78134c944d5
-  zh: 5118bfc6b041a67f
+  en: 8ffcd355ec5e8271
+  zh: 2932530bf783e3f7
 /agent-note-client-plugin-package-assets-served-by-url/decision/references-and-file-names:
-  en: 4f2daba2e01c9460
-  zh: 37177d73b3842255
+  en: 69ca2e4ba27b2841
+  zh: cb7d7c1bec1adf7b
 /agent-note-client-plugin-package-assets-served-by-url/decision/build:
   en: 1751930093d55cea
   zh: 8e92e2de062edb96
 /agent-note-client-plugin-package-assets-served-by-url/decision/host-route:
   en: 151b7300f5b27a9f
   zh: fae9adff942c2ce8
+/agent-note-client-plugin-package-assets-served-by-url/decision/webworker-preview:
+  en: 54acdc86819cee80
+  zh: 28abe4517cf14182
 /agent-note-client-plugin-package-assets-served-by-url/decision/changes-and-package-manifests:
   en: eedff52d04763c50
   zh: 203bfcf81242b8fe
@@ -27,11 +30,11 @@
   en: 1e4d83d0de2d47c9
   zh: dc2c2876c73d3b1c
 /agent-note-client-plugin-package-assets-served-by-url/alternatives-considered:
-  en: 23cca9b55c4252bd
-  zh: a7afb8d1dd943a8b
+  en: 98960e10634ee536
+  zh: f0fdb0b0cdf9511c
 /agent-note-client-plugin-package-assets-served-by-url/consequences:
-  en: f2ec2d1773c3c57c
-  zh: cec2c0455ff26064
+  en: 898262f39c0243ae
+  zh: e30f2161f5b669fe
 /agent-note-client-plugin-package-assets-served-by-url/testing:
-  en: b1b95226919615c6
-  zh: c928aedf738d2b40
+  en: d2ef6b4e95a9c6fd
+  zh: 7fcd77971bd20be5

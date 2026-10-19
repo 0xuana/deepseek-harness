@@ -3,6 +3,7 @@
  * which register their physical files as watch dependencies. Package assets
  * are emitted under `lib/assets/` with revisioned file names and referenced by document-relative URLs.
  */
+import { runInNewContext } from 'node:vm'
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -30,6 +31,7 @@ interface BundlePlugin {
   resolveId?: (source: string, importer?: string) => string | null
   load?: (this: PluginContext, id: string) => string | null | Promise<string | null>
   writeBundle?: (this: { meta: { watchMode: boolean } }, outputOptions: { dir?: string }, bundle: Record<string, unknown>) => Promise<void>
+  renderChunk?: (code: string, chunk: unknown, outputOptions: { format: string }) => { toString(): string } | null
 }
 
 type PluginName = 'dsh-css-modules-inline' | 'dsh-css-global-inline' | 'dsh-css-text-inline' | 'dsh-package-asset'
@@ -39,6 +41,20 @@ const ASSET_EXPORTS = { './client': './lib/client.js', './assets/*': './lib/asse
 const WHALE = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3])
 const WHALE_REV = packageAssetRevision(WHALE)
 const WHALE_URL = `plugins/@deepseek-ai/dsh-client-asset-fixture/assets/whale-${WHALE_REV}.png`
+
+/**
+ * Evaluate the stylesheet text an emitted style module or inline-text module computes.
+ * @param output - emitted module source.
+ * @param resolve - stands in for the module loader's asset resolver.
+ * @returns the stylesheet text with each resolved reference.
+ */
+function stylesheetText(output: string | null, resolve: (reference: string) => string): string {
+  if (output === null) throw new Error('stylesheet module was not emitted')
+  const body = output
+    .replace(/^export default (.*);$/mu, 'return typeof css === "undefined" ? $1 : css;')
+    .replace(/^export \{\};$/mu, 'return css;')
+  return runInNewContext(`(() => {\n${body}\n})()`, { __dshPackageAsset: resolve, document: undefined }) as string
+}
 
 const temporaryRoots: string[] = []
 
@@ -184,7 +200,7 @@ describe('client bundle package asset imports', () => {
     const first = await load.call(context, id)
     const second = await load.call(context, id)
 
-    const expected = `export default "plugins/@deepseek-ai/dsh-client-asset-fixture/assets/icons/whale%402x-${WHALE_REV}.png";`
+    const expected = `export default __dshPackageAsset("plugins/@deepseek-ai/dsh-client-asset-fixture/assets/icons/whale%402x-${WHALE_REV}.png");`
     expect(id).toBe(asset)
     expect([first, second]).toEqual([expected, expected])
     expect(emittedFiles(context)).toEqual([{
@@ -198,6 +214,18 @@ describe('client bundle package asset imports', () => {
     plugin.buildStart?.call(context)
     expect(await load.call(context, id)).toBe(expected)
     expect(context.emitted).toHaveLength(2)
+  })
+
+  it('renders each resolver call as the module loader require.asset in the CommonJS bundle only', async () => {
+    const root = await assetPackage({ 'src/client/assets/whale.png': WHALE })
+    const { renderChunk } = browserPlugins(root)('dsh-package-asset')
+    if (renderChunk === undefined) throw new Error('asset plugin has no renderChunk hook')
+    const code = `const a = __dshPackageAsset("${WHALE_URL}");\nconst css = "x" + __dshPackageAsset("${WHALE_URL}") + "y";\n`
+
+    expect(renderChunk(code, {}, { format: 'cjs' })?.toString())
+      .toBe(`const a = require.asset("${WHALE_URL}");\nconst css = "x" + require.asset("${WHALE_URL}") + "y";\n`)
+    expect(renderChunk(code, {}, { format: 'es' })).toBeNull()
+    expect(renderChunk('const a = 1;\n', {}, { format: 'cjs' })).toBeNull()
   })
 
   it('ignores imports and modules that are not supported assets', async () => {
@@ -289,9 +317,11 @@ describe('client bundle stylesheet url()', () => {
 
     const output = await loadImport(browserPlugins(root)('dsh-css-modules-inline'), context, './View.module.css', join(root, 'src/client/index.ts'))
 
-    expect(output).toContain(`url(${WHALE_URL})`)
+    expect(output).toContain(`url(" + __dshPackageAsset(${JSON.stringify(WHALE_URL)}) + ")`)
+    const css = stylesheetText(output, reference => `resolved:${reference}`)
+    expect(css).toContain(`url(resolved:${WHALE_URL})`)
     for (const preserved of ['(mask-image:url(\'\'))', 'background:url()', 'url(data:image/svg+xml,%3Csvg%3E)', 'url(#mask)', 'url(/static/a.png)', 'url(https://example.com/a.png)']) {
-      expect(output).toContain(preserved)
+      expect(css).toContain(preserved)
     }
     expect(emittedFiles(context)).toEqual([{
       type: 'asset',
@@ -313,7 +343,7 @@ describe('client bundle stylesheet url()', () => {
 
     const output = await loadImport(browserPlugins(root)(name), context, source, join(root, 'src/client/index.ts'))
 
-    expect(output).toContain(`url(${WHALE_URL})`)
+    expect(stylesheetText(output, reference => `resolved:${reference}`)).toContain(`url(resolved:${WHALE_URL})`)
     expect(context.emitted.map(file => file.fileName)).toEqual([`assets/whale-${WHALE_REV}.png`])
   })
 

@@ -12,11 +12,11 @@ The embedded bytes were downloaded and parsed with the JavaScript whether or not
 
 ## Decision
 
-A Client plugin package keeps raw images under `src/client/assets/`. The shared preset emits each referenced image under `lib/assets/` and turns the reference into a document-relative URL; the package publishes the emitted files with `"exports": { "./assets/*": "./lib/assets/*" }` and `lib/assets` in `files`; the client-modules Host serves them at `/plugins/<package>/assets/<emitted path>`.
+A Client plugin package keeps raw images under `src/client/assets/`. The shared preset emits each referenced image under `lib/assets/` and turns the reference into a synchronous `require.asset(<document-relative URL>)` call on the bundle's module loader; the package publishes the emitted files with `"exports": { "./assets/*": "./lib/assets/*" }` and `lib/assets` in `files`; the client-modules Host serves them at `/plugins/<package>/assets/<emitted path>`.
 
 ### References and file names
 
-Client code imports an image (`import art from './assets/a.webp'`), and the package's own stylesheets reference one with a relative `url()`. Both compile to the same string. The emitted file name inserts the content revision, the first 12 hexadecimal digits of the SHA-1 digest of the bytes, before the extension, so one URL always names one content:
+Client code imports an image (`import art from './assets/a.webp'`), and the package's own stylesheets reference one with a relative `url()`. Both compile to a `require.asset(reference)` call whose argument is the same reference; a stylesheet becomes string literals joined with those calls, which run when its injected text is built. The module system answers each call through its `resolveAsset` option, which returns the reference unchanged unless a carrier supplies one. The emitted file name inserts the content revision, the first 12 hexadecimal digits of the SHA-1 digest of the bytes, before the extension, so one URL always names one content:
 
 ```text
 src/client/assets/running-whale@2x.png
@@ -24,7 +24,7 @@ lib/assets/running-whale@2x-06738fa29b2f.png
 plugins/@deepseek-ai/dsh-client-ui-chat/assets/running-whale%402x-06738fa29b2f.png
 ```
 
-Each path segment is percent-encoded and the package name is emitted verbatim. The URL is relative to the shell document, like every app-owned route, so it resolves under any mount and from injected `<style>` text. Components need no hook, injected value, or service: the URL is a module constant.
+Each path segment is percent-encoded and the package name is emitted verbatim. The URL is relative to the shell document, like every app-owned route, so it resolves under any mount and from injected `<style>` text. Components need no hook, injected value, or service: the URL is a module constant computed when the module first runs.
 
 The supported extensions are `.svg`, `.png`, `.webp`, `.jpg`, and `.jpeg`. [`src/assets.ts`](../../../../packages/client/modules/src/assets.ts) in client-modules owns the media-type table, the export key and target, the revision, the emitted name, and the URL, and the preset, the route, and the gates read them from there. The shared Client type root [`scripts/types/client-assets`](../../../../scripts/types/client-assets/index.d.ts), registered in [`tsconfig.base.client.json`](../../../../tsconfig.base.client.json), declares each extension as a module with a string default export; a test keeps it equal to the table.
 
@@ -37,6 +37,10 @@ The `dsh-package-asset` plugin of the dynamic browser face resolves an import ag
 `bundleResource` matches `/plugins/<package>/assets/<path>` before the bundle tables, and such a path is answered by the asset route alone. For an active client row, the path is percent-decoded once and `createRequire(<package manifest>).resolve('<package>/assets/<path>')` applies the package's own exports, so unexported paths, `.` and `..` segments, missing files, and directories do not resolve. The media type comes from the resolved file's extension, because Node reads `#` and `?` in the subpath as URL syntax. Any resolution failure, an inactive package, and an unsupported type answer 404; the query selects nothing.
 
 A served asset streams from disk on every request; the Host keeps neither its bytes nor a hash, and a request the browser cancels mid-stream ends without a warning. It carries the media type, the bundle `cache-control: public, max-age=31536000, immutable`, `etag` equal to the requested path, `x-content-type-options: nosniff`, and, for SVG, `content-security-policy: script-src 'none'`. An `If-None-Match` equal to the tag answers 304 without opening the file; `HEAD` answers without a body. `fetchBundle()` returns the same responses with a streamed body that closes the file when cancelled.
+
+### WebWorker preview
+
+The preview page runs its Host in a Worker, and a page request for a reference never reaches it. Before any Client bundle runs, the page asks the Worker for `GET /__assets__`, answered by tunnel glue like `GET /__boot__`: an uncompressed tar of every file under `lib/assets/` of each image package that declares `"./assets/*": "./lib/assets/*"`, named by its reference. The page turns each entry into a Blob URL with the media type of its extension, and its `resolveAsset` returns that URL, or the reference when the image holds no such file. The base image already carries these files, so the archive crosses only the thread boundary.
 
 ### Changes and package manifests
 
@@ -52,7 +56,7 @@ Images that third-party libraries load themselves (PDF.js fonts, cmaps, wasm, an
 
 **Keep data URLs.** No route is needed, but the bytes travel and parse with the JavaScript, and every package that styles with an image writes its own build plugin.
 
-**A runtime helper such as `require.asset(path)` on the factory `require`.** The URL is known at build time, so a helper only adds a nonstandard code-generation target; Vite and webpack asset modules also give an import a URL string.
+**A plain URL string with no runtime helper.** The served Web app needs nothing more, but the WebWorker preview page cannot request the URL, and changing it afterwards means copying the files to a static deployment or rewriting strings found in bundle text. A static copy is a build-time snapshot that bypasses the Host's rules and misses packages installed at runtime; finding strings in bundle text guesses at code. A synchronous call keeps the build output explicit and lets each carrier decide the URL.
 
 **A Client Cordis service such as `ctx.assets.url(path)`.** Current consumers reference fixed files; a runtime lookup also cannot know the content revision without publishing a per-package asset list.
 
@@ -71,11 +75,11 @@ Images that third-party libraries load themselves (PDF.js fonts, cmaps, wasm, an
 ## Consequences
 
 - The ui-settings-account `client.js` is 214 KB, and the account and ui-chat bundles contain no image data URLs; an image costs one same-origin request when shown and may appear after layout.
-- The WebWorker preview reaches `/plugins` only through its tunnel, so `<img>` and CSS requests do not reach the Host running in the Worker; the WebWorker runtime owns serving them.
+- `require.asset` belongs to the bundle factory contract beside `require.async`; a package built outside this repository must emit the call. The WebWorker preview creates a Blob URL for every package asset of its image at boot, enabled or not, and keeps them for the page's lifetime.
 - The Desktop forwarder rewrites `/plugins/` cache headers to `no-store`, so Desktop reads an asset again on each display.
 - The Host does not compare file contents with the revision in the name: a file under `lib/assets/` edited in place keeps its immutable cache entries. Only the build writes that directory.
 - `require.resolve` runs synchronously on each request; a local measurement took about 43 µs for an existing file and 170 µs for a missing one. It reads exports through Node's package configuration cache, so an `./assets/*` export edited in place takes effect after boot HMR expires that package or the Host restarts. The route does not check the resolved file's real path, so a symbolic link under `lib/assets/` that leads outside the package is served.
-- A package outside this repository must reproduce the emitted-name rule; the Client module system README records it.
+- A package outside this repository must reproduce the emitted-name rule and the `require.asset` call; the Client module system README records them.
 - A development session leaves earlier asset files under `lib/assets/` until the next one-shot build removes them; that pruning assumes the browser face is the directory's only writer.
 - An entry restart reads its manifest and stats its bundle; only a changed result reads the bundle and broadcasts a graph frame (about 30 KB for 69 rows). Editing only `package.json`, without an entry restart, still takes effect at the next entry or Host restart.
 
@@ -83,6 +87,6 @@ Images that third-party libraries load themselves (PDF.js fonts, cmaps, wasm, an
 
 - [package-assets.client.spec.ts](../../../../packages/client/modules/tests/package-assets.client.spec.ts) composes the real Web server and compares every answer with `fetchBundle()`: headers including the SVG policy, 304 without opening the file, `HEAD`, 405, multi-chunk streaming, stream closing on cancel, a browser cancellation that logs nothing, and 404 for excluded subpaths, missing exports and files, `..`, `%2e%2e`, encoded `..`, an empty path, malformed escapes, decoded `%` and `#`, unsupported types, directories, and inactive packages.
 - [assets.client.spec.ts](../../../../packages/client/modules/tests/assets.client.spec.ts) covers media types, the revision, emitted names, and references; [client-asset-types.spec.ts](../../../../scripts/client-asset-types.spec.ts) keeps the type root equal to the table.
-- [client-bundle-css.spec.ts](../../../../scripts/client-bundle-css.spec.ts) covers emitted names and URLs, CSS rewriting and preserved forms, each build rejection, the Node face guard, one-shot pruning, and watch rebuilds that keep earlier files.
+- [client-bundle-css.spec.ts](../../../../scripts/client-bundle-css.spec.ts) covers emitted names, resolver calls in scripts and stylesheet text, their CommonJS rendering, preserved `url()` forms, each build rejection, the Node face guard, one-shot pruning, and watch rebuilds that keep earlier files; [loader.client.spec.ts](../../../../packages/client/modules/tests/loader.client.spec.ts) covers the default and carrier resolvers.
 - The gate specs reject each invalid manifest or reference form, and [node-half.client.spec.ts](../../../../packages/client/modules/tests/node-half.client.spec.ts) covers declarations, moved exports, and added or removed client declarations after an entry restart, an unchanged restart that publishes nothing and reads no bundle, and a chunk of a package named `@scope/assets`.
-- [desktop-onboarding.e2e.ts](../../../../apps/web/tests/desktop-onboarding.e2e.ts) and [reasoning-preview.e2e.ts](../../../../apps/web/tests/reasoning-preview.e2e.ts) assert the package-asset URLs and decode the images in a browser.
+- [desktop-onboarding.e2e.ts](../../../../apps/web/tests/desktop-onboarding.e2e.ts) and [reasoning-preview.e2e.ts](../../../../apps/web/tests/reasoning-preview.e2e.ts) assert the package-asset URLs and decode the images in a browser; [preview-boot.e2e.ts](../../../../apps/web/tests/preview-boot.e2e.ts) decodes the ui-chat mask the WebWorker preview resolves to a Blob URL, and the runtime's [package-assets.spec.ts](../../../../packages/experimental/webworker-runtime/tests/package-assets.spec.ts) covers the archive and resolver.
