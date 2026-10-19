@@ -8,7 +8,7 @@ import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { LlmAttemptId, MessageId } from '@deepseek-ai/dsh-llm/brand'
 import type { TextBlock } from '@deepseek-ai/dsh-llm'
 import type { SessionId, SessionSeqCursor } from '@deepseek-ai/dsh-session/types'
-import type { SessionProjectionMap, SessionProjectionSummaryExcluded } from '@deepseek-ai/dsh-session-projection/types'
+import type { SessionProjectionMap, SessionProjectionSummaryExcluded, SessionProjectionSummaryValues } from '@deepseek-ai/dsh-session-projection/types'
 import type { Principal } from '@deepseek-ai/dsh-typert-protocol'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
@@ -55,10 +55,11 @@ export interface SessionListMetadata {
 }
 
 /**
- * Every available wire value a Session-list row carries as partial, possibly
- * stale hints. `kind` and `asOfSeq` are independent facts: `kind` says which
- * sequence space `asOfSeq` belongs to, and therefore how a client may merge
- * the block; `asOfSeq` is the producer's watermark in that space.
+ * Every available summary wire value a Session-list row carries as partial,
+ * possibly stale hints. The block omits the keys whose unit declares
+ * `summary: false`. `kind` and `asOfSeq` are independent facts: `kind` says
+ * which sequence space `asOfSeq` belongs to, and therefore how a client may
+ * merge the block; `asOfSeq` is the producer's watermark in that space.
  */
 export interface SessionProjectionHints {
   /**
@@ -71,8 +72,8 @@ export interface SessionProjectionHints {
   readonly kind: 'cached' | 'sequenced'
   /** Watermark of the block in the sequence space named by `kind`. */
   readonly asOfSeq: number
-  /** Provider-validated values present in the block; omitted keys remain unknown. */
-  readonly values: SessionProjectionValues
+  /** Provider-validated summary values present in the block; omitted keys remain unknown. */
+  readonly values: Partial<SessionProjectionSummaryValues>
 }
 
 /** Complete projection values at an exact Session event cursor. */

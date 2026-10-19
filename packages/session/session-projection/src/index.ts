@@ -304,7 +304,7 @@ export class SessionProjectionRegistry extends Service {
     const wire = definition.wire as {
       viewSchema: ZodType
       view(state: S): unknown
-      summary?: false
+      summary?: boolean
     } | undefined
     const erased: ErasedDefinition = {
       key: definition.key,
@@ -332,6 +332,9 @@ export class SessionProjectionRegistry extends Service {
       } else {
         if (existing.def.stateVersion !== erased.stateVersion) {
           throw new Error(`session projection key ${JSON.stringify(key)} is already registered at stateVersion ${String(existing.def.stateVersion)}; refusing to share it with stateVersion ${String(erased.stateVersion)}`)
+        }
+        if (existing.def.wire?.summary !== erased.wire?.summary) {
+          throw new Error(`session projection key ${JSON.stringify(key)} is already registered with summary=${String(existing.def.wire?.summary)}; refusing to share it with summary=${String(erased.wire?.summary)}`)
         }
         existing.refs += 1
       }

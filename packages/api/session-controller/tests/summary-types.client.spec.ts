@@ -24,13 +24,16 @@ function contract(summary: SessionSummary, full: SessionProjectionSnapshot): voi
   void summary.projectionValues?.sessionStats
   // @ts-expect-error todos is excluded from Session summary values
   void summary.projectionValues?.todos
+  // @ts-expect-error imageLimits is excluded from Session summary values
+  void summary.projectionValues?.imageLimits
 
   // Included keys stay readable, and the full snapshot keeps the excluded ones
   // (with `todos` still nullable).
   const title: string | null | undefined = summary.projectionValues?.title
   const outline: readonly unknown[] | undefined = full.values.turnOutline
   const todos: readonly TodoItem[] | null | undefined = full.values.todos
-  void [title, outline, todos]
+  const limits = full.values.imageLimits
+  void [title, outline, todos, limits]
 }
 
 describe('session summary projection types', () => {

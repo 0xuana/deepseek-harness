@@ -88,6 +88,19 @@ describe('session projection summary keys', () => {
     }
   })
 
+  it('refuses a second registration of one key with a different summary membership', async () => {
+    const { ctx, registry } = await mount()
+    try {
+      registry.register(keptUnit())
+      expect(() => registry.register({
+        ...keptUnit(),
+        wire: { ...keptUnit().wire, summary: false },
+      })).toThrow(/test\/summary-kept.*already registered with summary=true/)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('rebuilds the summary set only when a registration or its disposal changes the key table', async () => {
     const { ctx, registry } = await mount()
     try {
@@ -156,7 +169,7 @@ describe('session projection summary keys', () => {
     }
   })
 
-  it('reports an empty summary set for a registry with only marked wire units', async () => {
+  it('reports an empty summary set while the complete face still serves only marked units', async () => {
     const { ctx, registry } = await mount()
     try {
       registry.register(excludedUnit())

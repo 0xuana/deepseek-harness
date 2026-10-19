@@ -7372,7 +7372,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionProjectionHints',
-    declaration: 'export interface SessionProjectionHints {\n    readonly kind: \'cached\' | \'sequenced\';\n    readonly asOfSeq: number;\n    readonly values: SessionProjectionValues;\n}',
+    declaration: 'export interface SessionProjectionHints {\n    readonly kind: \'cached\' | \'sequenced\';\n    readonly asOfSeq: number;\n    readonly values: Partial<SessionProjectionSummaryValues>;\n}',
   },
   {
     name: 'SessionProjectionMap',
@@ -7389,6 +7389,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SessionProjectionSummaryExcluded',
     declaration: 'export type SessionProjectionSummaryExcluded<T> = T & {\n    readonly [sessionProjectionSummaryExcluded]: true;\n};',
+  },
+  {
+    name: 'SessionProjectionSummaryExcludedKey',
+    declaration: 'export type SessionProjectionSummaryExcludedKey = {\n    [K in keyof SessionProjectionMap]: NonNullable<SessionProjectionMap[K]> extends SessionProjectionSummaryExcluded<unknown> ? K : never;\n}[keyof SessionProjectionMap];',
+  },
+  {
+    name: 'SessionProjectionSummaryValues',
+    declaration: 'export type SessionProjectionSummaryValues = Omit<SessionProjectionViewValues, SessionProjectionSummaryExcludedKey>;',
   },
   {
     name: 'SessionProjectionsValue',
@@ -7409,6 +7417,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SessionProjectionViewValue',
     declaration: 'export type SessionProjectionViewValue<T> = T extends SessionProjectionSummaryExcluded<infer Value> ? Value : T;',
+  },
+  {
+    name: 'SessionProjectionViewValues',
+    declaration: 'export type SessionProjectionViewValues = {\n    [K in keyof SessionProjectionMap]: SessionProjectionViewValue<SessionProjectionMap[K]>;\n};',
   },
   {
     name: 'SessionPromptRequest',

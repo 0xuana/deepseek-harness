@@ -51,7 +51,7 @@ async function opening(
 }
 
 /**
- * Mount the registry plus the three summary-excluded units and one ordinary
+ * Mount the registry plus the four summary-excluded units and one ordinary
  * wire unit. The tool plugin needs a tool registry; the list path never
  * executes a tool, so a registration sink is enough.
  */
@@ -89,7 +89,7 @@ function seedSession(ctx: Context): { id: SessionId } {
 }
 
 describe('session.list summary payload', () => {
-  it('carries every registered wire key except the three summary-excluded units', async () => {
+  it('carries every registered wire key except the summary-excluded units', async () => {
     const { ctx } = await harness()
     const { id } = seedSession(ctx)
     const session = ctx.sessions.get(id)
