@@ -23,7 +23,7 @@ import { createRequire, isBuiltin } from 'node:module'
 import { basename, dirname, isAbsolute, join, posix, relative, resolve as resolvePath, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Rolldown, type TsdownPlugin, type UserConfig } from 'tsdown'
-import { transform, type CustomAtRules, type Visitor } from 'lightningcss'
+import { transform, type CustomAtRules, type Url, type Visitor } from 'lightningcss'
 import {
   PACKAGE_ASSET_EXPORT,
   PACKAGE_ASSET_EXPORT_TARGET,
@@ -530,9 +530,9 @@ function packageAssetCall(reference: string): string {
  * reference the `url()` rewrite inserted through the resolver call. The rewrite writes
  * a placeholder of letters, digits, and underscores, which lightningcss never escapes,
  * with a per-stylesheet random part that stylesheet text cannot contain by chance.
- * @param css - stylesheet text after the rewrite.
  * A placeholder may appear several times or not at all, as when minification copies
  * or drops a declaration.
+ * @param css - stylesheet text after the rewrite.
  * @param references - reference of each placeholder the rewrite inserted into this stylesheet.
  * @returns a string literal, or a concatenation of literals and resolver calls.
  */
@@ -663,18 +663,29 @@ function packageAssets(manifest: PackageManifest, packageDir: string): PackageAs
       const nonce = randomBytes(6).toString('hex')
       if (pathBelow(realDirectory(sourceDir), realpathSync(stylesheet)) === undefined) return { options: {}, references: inserted }
       const base = dirname(stylesheet)
+      const rewrite = (url: Url): Url | undefined => {
+        // Empty values, fragments, root-relative paths, schemes such as `data:`, and placeholders name no package file.
+        if (url.url === '' || url.url.startsWith('#') || url.url.startsWith('/') || URL_SCHEME.test(url.url)) return undefined
+        if (url.url.startsWith('__dshPackageAsset_')) return undefined
+        if (/[#?]/u.test(url.url)) {
+          throw new Error(`tsdown: ${name}: ${stylesheet} references ${JSON.stringify(url.url)}; a package asset url() takes no fragment or query`)
+        }
+        const placeholder = `__dshPackageAsset_${nonce}_${String(inserted.size)}__`
+        inserted.set(placeholder, reference(context, resolvePath(base, url.url)))
+        return { ...url, url: placeholder }
+      }
       return {
         options: {
           visitor: {
-            Url(url) {
-              // Empty values, fragments, root-relative paths, and schemes such as `data:` name no package file.
-              if (url.url === '' || url.url.startsWith('#') || url.url.startsWith('/') || URL_SCHEME.test(url.url)) return
-              if (/[#?]/u.test(url.url)) {
-                throw new Error(`tsdown: ${name}: ${stylesheet} references ${JSON.stringify(url.url)}; a package asset url() takes no fragment or query`)
-              }
-              const placeholder = `__dshPackageAsset_${nonce}_${String(inserted.size)}__`
-              inserted.set(placeholder, reference(context, resolvePath(base, url.url)))
-              return { ...url, url: placeholder }
+            Url: url => rewrite(url),
+            // lightningcss does not visit the urls inside image-set(), so its options are rewritten here.
+            Image(image) {
+              if (image.type !== 'image-set') return undefined
+              const options = image.value.options.map((option) => {
+                const url = option.image.type === 'url' ? rewrite(option.image.value) : undefined
+                return url === undefined ? option : { ...option, image: { type: 'url' as const, value: url } }
+              })
+              return { ...image, value: { ...image.value, options } }
             },
           },
         },

@@ -81,7 +81,8 @@ function writeFixture(): string {
   writeFile(join(assets, 'icon.svg'), SVG)
   writeFile(join(assets, 'photo.png'), PNG)
   writeFile(join(assets, 'nested', 'a b.webp'), WEBP)
-  writeFile(join(assets, "whale(2x)!'*.png"), PNG)
+  // `*` is covered by the reference unit test; Windows cannot create it on disk.
+  writeFile(join(assets, "whale(2x)!'.png"), PNG)
   writeFile(join(assets, 'notes.txt'), 'text\n')
   writeFile(join(assets, 'folder.png', 'inner.png'), PNG)
   writeFile(join(assets, 'private', 'hidden.png'), PNG)
@@ -207,8 +208,8 @@ describe('package asset route', () => {
     const nested = await both(assetUrl(ASSETS_ID, 'nested/a b.webp'))
     expect([nested.status, nested.headers.etag, nested.body]).toEqual([200, '"nested/a%20b.webp"', WEBP])
     // The reference encodes the characters an unquoted CSS url() rejects; the route decodes them back.
-    const special = await both(assetUrl(ASSETS_ID, "whale(2x)!'*.png"))
-    expect([special.status, special.body]).toEqual([200, PNG])
+    const special = await both(assetUrl(ASSETS_ID, "whale(2x)!'.png"))
+    expect([special.status, special.headers.etag, special.body]).toEqual([200, '"whale%282x%29%21%27.png"', PNG])
     // The revision lives in the emitted name; a query does not select content.
     expect((await both(`${assetUrl(ASSETS_ID, 'photo.png')}?rev=anything`)).body).toEqual(PNG)
   })

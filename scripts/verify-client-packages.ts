@@ -173,6 +173,13 @@ export function collectStylesheetAssetUrls(path: string, source: string): string
         Url(url) {
           if (isRelativeStylesheetUrl(url.url)) urls.push(url.url)
         },
+        // lightningcss does not visit the urls inside image-set(), so its options are read here.
+        Image(image) {
+          if (image.type !== 'image-set') return
+          for (const option of image.value.options) {
+            if (option.image.type === 'url' && isRelativeStylesheetUrl(option.image.value.url)) urls.push(option.image.value.url)
+          }
+        },
       },
     })
   } catch (error) {

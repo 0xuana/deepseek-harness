@@ -291,7 +291,7 @@ describe('client bundle package asset imports', () => {
       .toThrow(`${join(root, path)} has a node_modules path segment or one containing %, #, ?, \\ or NUL, which the asset route cannot serve; rename it`)
   })
 
-  it('resolves every copy of a reference and tolerates one minification drops', async () => {
+  it('resolves every copy of a reference and tolerates a minifier dropping one', async () => {
     const root = await assetPackage({
       'src/client/assets/whale.png': WHALE,
       'src/client/assets/old.png': WHALE,
@@ -302,7 +302,24 @@ describe('client bundle package asset imports', () => {
 
     const css = stylesheetText(output, reference => `resolved:${reference}`)
     expect(css.split(`url(resolved:${WHALE_URL})`)).toHaveLength(3)
+    // lightningcss keeps only the last background, so the placeholder of old.png is missing from the text.
+    expect(css).not.toContain('old-')
     expect(css).not.toContain('__dshPackageAsset')
+  })
+
+  it('rewrites the urls inside image-set()', async () => {
+    const root = await assetPackage({
+      'src/client/assets/whale.png': WHALE,
+      'src/client/theme.css': '.a { background-image: image-set(url(./assets/whale.png) 1x, url("data:image/png;base64,AA==") 2x); }',
+    })
+    const context = recordingContext()
+
+    const output = await loadImport(browserPlugins(root)('dsh-css-global-inline'), context, './theme.css', join(root, 'src/client/index.ts'))
+
+    const css = stylesheetText(output, reference => `resolved:${reference}`)
+    expect(css).toContain(`resolved:${WHALE_URL}`)
+    expect(css).toContain('data:image/png;base64,AA==')
+    expect(context.emitted.map(file => file.fileName)).toEqual([`assets/whale-${WHALE_REV}.png`])
   })
 
   it('keeps literal placeholder-like text and resolves only the references the rewrite inserted', async () => {

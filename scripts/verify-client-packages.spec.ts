@@ -331,7 +331,8 @@ describe('package assets', () => {
       '.network { background: url(//cdn.example.com/x.png); }',
       ".remote { background: url('https://example.com/x.png'); }",
       "@supports (mask-image: url('')) { .nested { mask: url(./nested.svg); } }",
-    ].join('\n'))).toEqual(['./x.png', '../assets/x.png', './bare.svg', './nested.svg'])
+      ".set { background-image: image-set(url('./set@1x.png') 1x, url('data:image/png;base64,AA==') 2x); }",
+    ].join('\n'))).toEqual(['./x.png', '../assets/x.png', './bare.svg', './nested.svg', './set@1x.png'])
   })
 
   it('rejects an unparsable stylesheet with its path', () => {
