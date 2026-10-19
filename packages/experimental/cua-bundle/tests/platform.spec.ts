@@ -21,7 +21,7 @@ it.each(['darwin', 'win32', 'linux'])('loads the native provider only on Darwin 
   })
   try {
     for (const row of patch[0]!.insert) {
-      await ctx.loader.create({ ...row, disabled: interpolate({ process: { platform } }, row.disabled) })
+      await ctx.loader.create({ ...row, disabled: Boolean(interpolate({ process: { platform } }, row.disabled)) })
     }
     await ctx.loader.await()
     const imports = imported.mock.calls.map(call => call[0])

@@ -92,7 +92,8 @@ it('revokes access while icons are pending, serializes writes, and joins reads o
   f.actions.applicationIcons.mockImplementationOnce(async () => ({ ok: true, value: await icons.promise }))
   f.actions.revoke.mockImplementationOnce(async () => {
     entered.resolve(undefined)
-    return { ok: true, value: await action.promise }
+    await action.promise
+    return { ok: true, value: undefined }
   })
   f.face.refresh()
   await vi.waitFor(() => { expect(f.controller.state.getSnapshot().applications.busy).toBe(false) })

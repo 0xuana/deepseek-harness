@@ -139,7 +139,7 @@ it.each([{ os: 'darwin' }, { cpu: [42] }])('rejects malformed platform constrain
 
 it('copies no macOS tarball into the Windows package set', () => {
   const root = mkdtempSync(join(tmpdir(), 'desktop-platform-packages-'))
-  onTestFinished(() => rmSync(root, { recursive: true, force: true }))
+  onTestFinished(() => { rmSync(root, { recursive: true, force: true }) })
   const inputs = join(root, 'inputs')
   mkdirSync(inputs)
   for (const [name, entry] of targetManifests()) {

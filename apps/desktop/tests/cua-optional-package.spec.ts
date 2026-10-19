@@ -12,7 +12,7 @@ const repository = resolve(import.meta.dirname, '../../..')
 const providerName = '@deepseek-ai/dsh-experimental-cua-macos'
 const bundleName = '@deepseek-ai/dsh-cua-bundle'
 const readManifest = async (path: string): Promise<Record<string, unknown>> =>
-  JSON.parse(await readFile(join(repository, path, 'package.json'), 'utf8'))
+  JSON.parse(await readFile(join(repository, path, 'package.json'), 'utf8')) as Record<string, unknown>
 
 it('fetches the macOS optional tarball only for Darwin, with an empty cache for every target', async () => {
   const root = await mkdtemp(join(tmpdir(), 'cua-cold-install-'))
@@ -93,7 +93,7 @@ it('fetches the macOS optional tarball only for Darwin, with an empty cache for 
   })
   onTestFinished(async () => {
     server.closeAllConnections()
-    await new Promise<void>((resolve, reject) => { server.close(error => error ? reject(error) : resolve()) })
+    await new Promise<void>((resolve, reject) => { server.close((error) => { if (error) reject(error); else resolve() }) })
   })
   await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve) })
   const address = server.address()
