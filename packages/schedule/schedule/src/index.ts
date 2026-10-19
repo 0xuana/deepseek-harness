@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import z from '@deepseek-ai/schemastery'
 import { Context, Service } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import type {} from '@deepseek-ai/dsh-api-session-controller'
 import { TypertRemoteService, Remote } from '@deepseek-ai/dsh-typert-protocol'
 import type { Domain } from '@deepseek-ai/dsh-storage-domain'
 import { delegationDepthOf } from '@deepseek-ai/dsh-subagent'
@@ -120,6 +121,7 @@ export class ScheduleService extends TypertRemoteService {
   private readonly initialized: PromiseLike<unknown>
   private chain: Promise<unknown> = Promise.resolve()
   private runtime: ScheduleRuntime | undefined
+  private resolveWebAgent: ((sessionId: SessionId) => Promise<Agent>) | undefined
   private stopping = false
 
   /**
@@ -128,6 +130,18 @@ export class ScheduleService extends TypertRemoteService {
    */
   constructor(ctx: Context, config: Config) {
     super(ctx, 'schedule')
+    ctx.inject(['sessionController'], (webCtx) => {
+      webCtx.effect(() => {
+        this.resolveWebAgent = async (sessionId) => {
+          const resolved = await webCtx.sessionController.resolveAgent(sessionId)
+          if ('error' in resolved) throw resolved.error
+          return resolved.agent
+        }
+        // Resume overdue tasks when the Web activation provider becomes ready.
+        this.runtime?.requestDrive()
+        return () => { this.resolveWebAgent = undefined }
+      })
+    })
     this.retention = {
       days: config.deliveryHistoryDays ?? DEFAULT_DELIVERY_HISTORY_DAYS,
       records: config.deliveryHistoryRecords ?? DEFAULT_DELIVERY_HISTORY_RECORDS,
@@ -169,7 +183,11 @@ export class ScheduleService extends TypertRemoteService {
           await tasks.put(task.record.id, task)
           this.emitChanged()
         },
-        this.retention)
+        this.retention,
+        (sessionId) => {
+          if (this.resolveWebAgent === undefined) throw new Error('schedule: no Session activation provider')
+          return this.resolveWebAgent(sessionId)
+        })
       this.runtime.requestDrive()
       return cleanup
     })
@@ -408,8 +426,8 @@ export class ScheduleService extends TypertRemoteService {
   /**
    * Refuse a Session no delivery can reach because a delegated child owns it.
    *
-   * Delivery resolves the bound Session through `ctx.sessionController.resolveAgent`,
-   * which rejects the live Agent of a delegated child; a stored task for such a Session
+   * Delivery uses `schedule/resolve-agent`; the Web fallback rejects the live Agent
+   * of a delegated child; a stored task for such a Session
    * would stay permanently overdue and retry on every drive. Both operations that can
    * arm a delivery read that same fact here instead of restating it: a delegated child
    * is one whose {@link delegationDepthOf} is above zero, the accounting the delegation

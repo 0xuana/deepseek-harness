@@ -138,7 +138,6 @@
     # which declare them in their own scope.
     - id: schedule
       name: '@deepseek-ai/dsh-schedule'
-      inject: [sessionController]
 
     # Configuration-surface reads and writes over Typert Remote. Each method
     # reports an actionable error when its settings-domain provider is absent.
