@@ -591,7 +591,11 @@ async function runScenario(scenario: CorpusScenario): Promise<{
   const patchRoot = join(cwd, '.snapshot-patches')
   await mkdir(patchRoot, { recursive: true })
   const assertions = SDK_ASSERTIONS[scenario.name] ?? {}
-  const patches = [...authoredPatches(scenario, !recording), ...assertions.patches ?? []]
+  const patches = [
+    ...authoredPatches(scenario, !recording),
+    ...assertions.patches ?? [],
+    ...scenario.name === 'session-resume' && !recording ? [join(scenario.dir, 'replay.cordis.yml')] : [],
+  ]
     .map((patch, index) => materializeProfilePatch(patch, cwd, scenario.manifest.profile, patchRoot, index))
   let childSessionsRoot: string | undefined
   let childEnvironment: Record<string, string> = {}
