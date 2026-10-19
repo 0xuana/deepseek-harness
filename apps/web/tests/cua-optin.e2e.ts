@@ -51,9 +51,9 @@ it.each([undefined, 'minimal'] as const)('adds CUA to PTC sessions while preserv
     await setup.getByRole('button', { name: '稍后', exact: true }).click()
     expect(selected()).toContain('@deepseek-ai/dsh-cua-bundle')
     expect(await readFile(settingsPath, 'utf8')).toBe(before)
-    expect(scaffold.ctx.ptcRuntime).toBe(originalRuntime)
+    expect(scaffold.ctx.ptcRuntime === originalRuntime).toBe(true)
     expect(scaffold.ctx.agentPresets.defaultId).toBe(initialDefault)
-    expect(scaffold.ctx.agents.get(originalAgent.id)).toBe(originalAgent)
+    expect(scaffold.ctx.agents.get(originalAgent.id) === originalAgent).toBe(true)
     expect(scaffold.ctx.tools.schemas(originalAgent).some(tool => tool.name === 'cua')).toBe(false)
     expect(scaffold.ctx.tools.schemas(ptcAgent).some(tool => tool.name === 'cua')).toBe(true)
     expect((await scaffold.ctx.systemPrompt.assemble({ scope: ptcAgent })).tools.map(tool => tool.name)).toEqual(['run_code'])
@@ -65,7 +65,7 @@ it.each([undefined, 'minimal'] as const)('adds CUA to PTC sessions while preserv
     await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('false')
     expect(scaffold.ctx.get('computerUse')).toBeUndefined()
     for (const agent of [ptcAgent, fresh.agent]) expect(scaffold.ctx.tools.schemas(agent).some(tool => tool.name === 'cua')).toBe(false)
-    expect(scaffold.ctx.ptcRuntime).toBe(originalRuntime)
+    expect(scaffold.ctx.ptcRuntime === originalRuntime).toBe(true)
     expect(await readFile(settingsPath, 'utf8')).toBe(before)
     await card.getByRole('button', { name: '查看 Computer Use', exact: true }).click()
     const detailToggle = page.locator('[data-plugin-panel]').getByRole('switch', { name: '启用 Computer Use', exact: true })
@@ -78,7 +78,7 @@ it.each([undefined, 'minimal'] as const)('adds CUA to PTC sessions while preserv
     await defaultSetting.getByRole('button', { name: '设为 PTC', exact: true }).click()
     await expect.poll(() => scaffold.ctx.agentPresets.defaultId).toBe('ptc')
     expect(scaffold.ctx.agentPresets.composedPreset(originalAgent.ctx)).toBe(initialDefault)
-    expect(scaffold.ctx.ptcRuntime).toBe(originalRuntime)
+    expect(scaffold.ctx.ptcRuntime === originalRuntime).toBe(true)
     const confirmed = await scaffold.ctx.agents.create({ sessionId: SessionId('cua-confirmed-default'),
       setup: async (ctx) => { await scaffold.ctx.agentPresets.mount(ctx) },
     })
@@ -89,7 +89,7 @@ it.each([undefined, 'minimal'] as const)('adds CUA to PTC sessions while preserv
     await detailToggle.click()
     await expect.poll(() => detailToggle.getAttribute('aria-checked')).toBe('false')
     expect(await readFile(settingsPath, 'utf8')).toBe(saved)
-    expect(scaffold.ctx.ptcRuntime).toBe(originalRuntime)
+    expect(scaffold.ctx.ptcRuntime === originalRuntime).toBe(true)
   } finally {
     try { await browser?.close() } finally {
       try { await ownedScaffold?.close() } finally { await rm(directory, { recursive: true, force: true }) }
