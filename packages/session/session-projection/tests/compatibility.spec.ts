@@ -205,7 +205,8 @@ describe('projection registration compatibility', () => {
       inject: ['sessionProjections'],
       apply(inner) {
         disposeEffect = inner.effect(async function* () {
-          yield legacyRegistration(inner.sessionProjections.register(definition))
+          // Compiled legacy callers see a disposer type; the async yield still assimilates its runtime then().
+          yield legacyRegistration(inner.sessionProjections.register(definition)) as () => Promise<void>
         })
       },
     })
