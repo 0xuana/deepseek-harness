@@ -12,7 +12,7 @@ description: "Session 投影注册异步解析为保留读取能力的句柄；�
 
 注册表级 `stateOf(session, key): unknown` 已弃用。当前没有任何插件注册该 key 时它返回 `undefined`：所属插件未组合、尚未执行到注册，或已释放最后一次注册。`SessionProjectionStateMap` 已移除；宿主状态类型保留在各自的 `ProjectionDefinition<K, S>` 中，并从 `stateSchema` 推导。最后一次注册释放后，该投影单元不再参与快照、检查点和实时通知，但保留的句柄仍可按需折叠 Session 事件。[运行时兼容说明](../../../../packages/session/session-projection/README.zh.md#deprecated-plugin-compatibility)详述这些已弃用调用。
 
-`@deepseek-ai/dsh-agent` 与 `@deepseek-ai/dsh-subagent` 依赖 `sessionProjections`。AgentRegistry 持有轮次和步骤状态，并提供 `ctx.agents.turnBoundaryOf(session)`；`@deepseek-ai/dsh-agent-loop` 不再导出 `turnBoundaryProjectionDefinition`。包括 Claude Code mods 桥接在内的轮次状态消费方依赖 `agents`。预设与上下文压力分别通过 `ctx.agentPresets.presetForSession(session)` 和 `ctx.tokenMeter.contextPressure(session)` 读取。`@deepseek-ai/dsh-api-session-controller` 移除了 `installModelSelectionProjection`。
+`@deepseek-ai/dsh-agent` 与 `@deepseek-ai/dsh-subagent` 依赖 `sessionProjections`。AgentRegistry 持有轮次和步骤状态，并提供 `ctx.agents.turnBoundaryOf(session)`；`@deepseek-ai/dsh-agent-loop` 不再导出 `turnBoundaryProjectionDefinition`。包括 Claude Code mods 桥接在内的轮次状态消费方依赖 `agents`。预设与上下文压力分别通过 `ctx.agentPresets.presetForSession(session)` 和 `ctx.tokenMeter.contextPressure(session)` 读取。API 控制器与 mods 桥接不再独立注册这些定义；所属服务缺席时采用各自的可选服务行为。`@deepseek-ai/dsh-api-session-controller` 移除了 `installModelSelectionProjection`。
 
 ## 迁移
 

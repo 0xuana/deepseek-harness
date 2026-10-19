@@ -312,8 +312,9 @@ export class SessionProjectionRegistry extends Service {
     const ready = this.acquire(definition, (release) => { dispose = release })
     let observed = false
     // A legacy caller may never observe the result. Report its rejection instead of leaving an
-    // unhandled rejection once the current turn has had a chance to observe it; an owner that
-    // is no longer loading or active cannot use the handle, so its rejection is dropped.
+    // unhandled rejection once the current macrotask and its microtasks have had a chance to
+    // observe it; an owner that is no longer loading or active cannot use the handle, so its
+    // rejection is dropped.
     void ready.catch((error: unknown) => {
       setImmediate(() => {
         if (observed) return
@@ -337,6 +338,8 @@ export class SessionProjectionRegistry extends Service {
       [Symbol.toStringTag]: 'Promise',
     }
     // Return the effect disposer itself, as the synchronous API did, so a composing effect adopts it.
+    // The assigned then() replaces the disposer's own awaitable disposal: awaiting yields the handle.
+    // The toStringTag completes the Promise members, so Object.prototype.toString reports a Promise.
     return Object.assign(dispose, promise)
   }
 

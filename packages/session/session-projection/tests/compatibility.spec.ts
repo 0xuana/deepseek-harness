@@ -198,6 +198,24 @@ describe('projection registration compatibility', () => {
     expect(warning).not.toHaveBeenCalled()
   })
 
+  it('leaves an async generator yield owned by the plugin instead of the composed effect', async () => {
+    const { ctx, session } = await setup()
+    let disposeEffect!: () => Promise<void>
+    const owner = await ctx.plugin({
+      inject: ['sessionProjections'],
+      apply(inner) {
+        disposeEffect = inner.effect(async function* () {
+          yield legacyRegistration(inner.sessionProjections.register(definition))
+        })
+      },
+    })
+    expect(owner.state).toBe(FiberState.ACTIVE)
+    await expect(disposeEffect()).rejects.toThrow('Invalid effect')
+    expect(ctx.sessionProjections.snapshot(session).values).toEqual({ 'test/legacy': 0 })
+    await owner.dispose()
+    expect(ctx.sessionProjections.snapshot(session).values).toEqual({})
+  })
+
   it('transfers the original disposer into a composed effect and retains it until earlier cleanup settles', async () => {
     const { ctx, session } = await setup()
     const release = Promise.withResolvers<undefined>()
