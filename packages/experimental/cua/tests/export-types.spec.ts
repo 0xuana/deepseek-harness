@@ -1,5 +1,7 @@
 /** CUA's public types distinguish object consumers from its generated permission transport. */
-import { expectTypeOf, it } from 'vitest'
+import { expect, expectTypeOf, it } from 'vitest'
+import { Context } from '@deepseek-ai/cordis'
+import * as Cua from '../src/index.ts'
 import type { CuaApi } from '@deepseek-ai/dsh-cua/api'
 import type { CuaApplicationState } from '@deepseek-ai/dsh-cua/types'
 // @ts-expect-error Permission payloads are not part of the platform-provider root entry.
@@ -15,4 +17,13 @@ it('keeps application operations and the necessary Remote payload types availabl
   expectTypeOf<CuaApi>().toHaveProperty('getApp')
   expectTypeOf<CuaApplicationState>().toHaveProperty('allowedApps')
   expectTypeOf<[RemovedRoot, RemovedApi, RemovedTypes, RemovedGrant]>().toBeArray()
+})
+
+it('mounts the Host marker without installing native or browser services', async () => {
+  const ctx = new Context()
+  try {
+    await ctx.plugin(Cua)
+    expect(ctx.get('cuaAccess')).toBeUndefined()
+    expect(ctx.get('computerUse')).toBeUndefined()
+  } finally { await ctx.fiber.dispose() }
 })

@@ -10,7 +10,6 @@ import type { CuaApplicationState, CuaSystemPermissionState } from '../src/acces
 import { expect, it, vi } from 'vitest'
 import type { PermissionFace } from '../src/client/controller.ts'
 import { mountCuaPermissions, inject } from '../src/client/mount.ts'
-import { apply as hostApply } from '../src/index.ts'
 
 const contribution: TypertRemoteContribution = { package: '@deepseek-ai/dsh-cua', descriptors: [] }
 const value: CuaApplicationState & { system: CuaSystemPermissionState } = {
@@ -72,7 +71,6 @@ async function fixture(fail = false) {
 }
 
 it('withdraws the permission Remote and all controls with the optional plugin', async () => {
-  hostApply()
   const f = await fixture()
   try {
     const fiber = f.ctx.plugin({ inject: [...inject], apply: ctx => mountCuaPermissions(ctx, contribution) })
