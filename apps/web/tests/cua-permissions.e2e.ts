@@ -33,13 +33,12 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
     icon: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC' }
   await writeFile(state, JSON.stringify({ accessibility: false, screenRecording: false, launchApplication }))
   await writeFile(join(root, 'observe-helper'), '')
-  const fixtureBundle = join(root, 'fixture-bundle')
-  await mkdir(fixtureBundle)
-  await writeFile(join(fixtureBundle, 'package.json'), JSON.stringify({ name: 'cua-permission-fixture', version: '1.0.0',
-    dsh: { bundle: { patch: 'cordis.patch.yml' } } }))
-  await writeFile(join(fixtureBundle, 'cordis.patch.yml'), `- id: cua\n  config: ${JSON.stringify({ helperPath: helper })}\n`)
+  const fixturePatch = join(root, 'native-fixture.yml')
+  // Keep the external helper override above bundle order changes when CUA is re-enabled.
+  await writeFile(fixturePatch, JSON.stringify([{ id: 'cua', config: { helperPath: helper } }]))
   const scaffold = await launchWebScaffold({
-    profile: { packages: [{ dir: bundle, enabled: true }, { dir: fixtureBundle, enabled: true }] },
+    profile: { packages: [{ dir: bundle, enabled: true }] },
+    extraOverlayPath: fixturePatch,
   })
   resources.scaffold = scaffold
   const browser = await chromium.launch()
@@ -166,23 +165,12 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   })
   try {
     const toggle = page.locator('[data-plugin-panel]').getByRole('switch', { name: 'Enable Computer Use', exact: true })
-    const policy = Reflect.get(scaffold.ctx.cuaAccess, 'policy')
     for (let cycle = 0; cycle < 3; cycle++) {
       await toggle.click()
       await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('false')
       await expect.poll(() => toggle.isEnabled()).toBe(true)
       await toggle.click()
-      try {
-        await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
-      } catch (error) {
-        console.error('CUA enable diagnostics', {
-          cycle, active: policy.active.size, clients: policy.clients.size, pending: policy.options.store.pending.size,
-          entries: [...scaffold.ctx.loader.entries()].filter(entry => /cua|hmr/.test(entry.options.name)).map(entry => ({
-            id: entry.id, disabled: entry.disabled, state: entry.fiber?.state, pending: entry.fiber?.inertia !== undefined,
-          })),
-        })
-        throw error
-      }
+      await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
       const setup = page.getByRole('dialog', { name: 'Set up Computer Use before use', exact: true })
       await setup.getByRole('button', { name: 'Later', exact: true }).click()
       await expect.poll(() => panel.getAttribute('aria-busy')).toBe('false')
