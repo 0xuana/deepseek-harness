@@ -433,7 +433,8 @@ export class SessionProjectionRegistry extends Service {
   }
 
   /**
-   * Read a currently registered unit by its legacy host-state key.
+   * Read a currently registered unit after materializing every registered
+   * unit at the Session cursor. Unrelated wire views are not produced.
    * The returned state is live; do not mutate it. A released key has no value.
    * @param session - Session whose committed events are folded.
    * @param key - key of the registered projection.
@@ -444,6 +445,7 @@ export class SessionProjectionRegistry extends Service {
     this.warnCompatibility('stateOf')
     const registration = this.registrations.get(key)
     if (registration === undefined) return undefined
+    this.materializeCells(session)
     return this.cellFor(registration, session).state
   }
 

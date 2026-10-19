@@ -10,6 +10,7 @@ import { z } from 'zod'
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionMap {
     'test/legacy': number
+    'test/legacy-unread-wire': number
   }
 }
 
@@ -103,6 +104,38 @@ describe('projection registration compatibility', () => {
     await second.dispose()
     expect(ctx.sessionProjections.stateOf(session, 'test/legacy')).toBeUndefined()
     expect(warning).toHaveBeenCalledTimes(2)
+  })
+
+  it('materializes every registered unit on a legacy keyed read without producing unrelated wire views', async () => {
+    const { ctx, session } = await setup()
+    session.append('turn/start', { turn: 1 })
+    session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+    const unrelatedView = vi.fn((state: number) => state)
+    const hostInit = vi.fn(() => 0)
+    await ctx.sessionProjections.register(definition)
+    await ctx.sessionProjections.register({
+      ...definition,
+      key: 'test/legacy-unread-wire',
+      wire: { viewSchema: z.number(), view: unrelatedView },
+    })
+    await ctx.sessionProjections.register({
+      key: 'test/legacy-unread-host',
+      stateSchema: definition.stateSchema,
+      stateVersion: definition.stateVersion,
+      init: hostInit,
+      apply: definition.apply,
+    })
+    expect(ctx.sessionProjections.stateOf(session, 'test/missing-legacy')).toBeUndefined()
+    expect(ctx.sessionProjections.cachedSnapshot(session)).toBeUndefined()
+    expect(hostInit).not.toHaveBeenCalled()
+
+    expect(ctx.sessionProjections.stateOf(session, 'test/legacy')).toBe(2)
+    expect(unrelatedView).not.toHaveBeenCalled()
+    expect(ctx.sessionProjections.cachedSnapshot(session)).toEqual({
+      asOfSeq: 1,
+      values: { 'test/legacy': 2, 'test/legacy-unread-wire': 2 },
+    })
+    expect(hostInit).toHaveBeenCalledOnce()
   })
 
   it('keeps callable early disposal idempotent without invalidating an awaited reader', async () => {
