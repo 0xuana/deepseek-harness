@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, expect, it, vi } from 'vitest'
-import { DesktopUpdateFullscreenTimeoutError, prepareDesktopUpdateWindow } from '../src/update-window.ts'
+import { prepareDesktopUpdateWindow } from '../src/update-window.ts'
+import { en } from '../src/locale.ts'
 
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals() })
 
@@ -11,7 +12,7 @@ function setup(platform = 'darwin', fullscreen = true, destroyed = false) {
     isFullScreen: () => fullscreen,
     setFullScreen: vi.fn(),
   })
-  return { window, prepare: () => prepareDesktopUpdateWindow(window) }
+  return { window, prepare: () => prepareDesktopUpdateWindow(window, en.updateFullscreenTimeout) }
 }
 
 it.each(['darwin', 'win32', 'linux'])('does not transition an ordinary %s window', async (platform) => {
@@ -20,10 +21,13 @@ it.each(['darwin', 'win32', 'linux'])('does not transition an ordinary %s window
   expect(f.window.setFullScreen).not.toHaveBeenCalled()
 })
 
-it('preserves Windows fullscreen and refuses a destroyed product window', async () => {
+it('preserves Windows fullscreen', async () => {
   const windows = setup('win32')
   await expect(windows.prepare()).resolves.toBe(true)
   expect(windows.window.setFullScreen).not.toHaveBeenCalled()
+})
+
+it('refuses a destroyed product window', async () => {
   const destroyed = setup('darwin', true, true)
   await expect(destroyed.prepare()).resolves.toBe(false)
   expect(destroyed.window.setFullScreen).not.toHaveBeenCalled()
@@ -43,7 +47,7 @@ it.each(['leave-full-screen', 'closed'])('settles on %s and releases both listen
 it('rejects a stalled native transition and allows a later attempt to complete', async () => {
   vi.useFakeTimers()
   const f = setup()
-  const failure = expect(f.prepare()).rejects.toBeInstanceOf(DesktopUpdateFullscreenTimeoutError)
+  const failure = expect(f.prepare()).rejects.toMatchObject({ kind: 'fullscreen-timeout', message: en.updateFullscreenTimeout })
   await vi.advanceTimersByTimeAsync(5000)
   await failure
   expect(f.window.eventNames()).toEqual([])
