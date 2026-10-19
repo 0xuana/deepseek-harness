@@ -620,8 +620,10 @@ describe('prompt and cancel errors', () => {
       blank: true, promptAttempted: false, awaitingFirstTurn: false,
     })
     const inFlight = session.prompt([{ type: 'text', text: '要发的' }], 'queue')
+    // An unrelated update rebuilds the snapshot while the Host has not answered yet.
+    session.handleAgentError('unrelated live failure')
     expect(session.getSnapshot()).toMatchObject({
-      blank: true, promptAttempted: false, awaitingFirstTurn: false,
+      blank: true, promptAttempted: false, awaitingFirstTurn: false, lastAgentError: 'unrelated live failure',
     })
     const result = await inFlight
     expect(result.ok).toBe(true)

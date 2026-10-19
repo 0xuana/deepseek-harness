@@ -919,7 +919,8 @@ export class Session implements SessionFace {
       blank: this.blankBit,
       lastAgentError: this.lastAgentError,
       promptAttempted: this.promptAttempted,
-      awaitingFirstTurn: this.firstPromptPendingTurn,
+      // The flag is set before the receipt; the Session leaves blank only once the Host accepted the prompt.
+      awaitingFirstTurn: this.firstPromptPendingTurn && !this.blankBit,
     }
   }
 
