@@ -84,7 +84,8 @@ it.skipIf(process.platform !== 'darwin').each([undefined, 'minimal'] as const)('
       enableCall.mockRestore()
       await applying
     }
-    await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
+    // Bundle transitions await native cleanup under the browser action deadline.
+    await toggle.and(page.locator('[aria-checked="true"]')).waitFor({ state: 'visible' })
     await card.getByRole('status', { name: '正在应用 Computer Use 的更改', exact: true }).waitFor({ state: 'hidden' })
     const setup = page.getByRole('dialog', { name: '使用 Computer Use 前需要设置', exact: true })
     await setup.waitFor()
@@ -149,7 +150,7 @@ it.skipIf(process.platform !== 'darwin').each([undefined, 'minimal'] as const)('
     const program = 'globalThis.counter = (globalThis.counter ?? 0) + 1'
     expect((await runtime.run(runtime.resolve({ program, bindings: [], stateOwner: owner }))).value).toBe(1)
     await toggle.click()
-    await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('false')
+    await toggle.and(page.locator('[aria-checked="false"]')).waitFor({ state: 'visible' })
     expect(scaffold.ctx.get('computerUse')).toBeUndefined()
     expect([...scaffold.ctx.loader.entries()].find(entry => entry.options.id === 'ptc-runtime')!.fiber === runtimeFiber).toBe(true)
     expect(scaffold.ctx.agentPresets.defaultId).toBe(initialDefault)
@@ -163,7 +164,7 @@ it.skipIf(process.platform !== 'darwin').each([undefined, 'minimal'] as const)('
     await card.getByRole('button', { name: '查看 Computer Use', exact: true }).click()
     toggle = page.locator('[data-plugin-panel]').getByRole('switch', { name: '启用 Computer Use', exact: true })
     await toggle.click()
-    await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
+    await toggle.and(page.locator('[aria-checked="true"]')).waitFor({ state: 'visible' })
     await setup.waitFor()
     expect(await setup.getByText('Computer Use 插件已开启，但暂时无法检测系统权限。请前往插件详情页查看原因并重试。', { exact: true }).count()).toBe(1)
     expect(scaffold.ctx.agentPresets.defaultId).toBe(initialDefault)
@@ -192,9 +193,9 @@ it.skipIf(process.platform !== 'darwin').each([undefined, 'minimal'] as const)('
       expect.objectContaining({ id: 'agent-preset-registry', config: { default: 'standard', selectedDefault: 'ptc' } }),
     ]))
     await toggle.click()
-    await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('false')
+    await toggle.and(page.locator('[aria-checked="false"]')).waitFor({ state: 'visible' })
     await toggle.click()
-    await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
+    await toggle.and(page.locator('[aria-checked="true"]')).waitFor({ state: 'visible' })
     await setup.waitFor()
     expect(await setup.getByText('Computer Use 插件已开启，但暂时无法检测系统权限。请前往插件详情页查看原因并重试。', { exact: true }).count()).toBe(1)
     expect(await setup.getByRole('button', { name: '设为 PTC', exact: true }).count()).toBe(0)
