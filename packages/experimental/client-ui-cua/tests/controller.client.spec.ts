@@ -8,7 +8,9 @@ const value: CuaSystemPermissionState = { accessibility: true, screenRecording: 
 const applications: CuaApplicationState = {
   allowedApps: [], blockedApps: [], settingsNamespace: 'cua', persistentAvailable: true }
 function fixture() {
-  const actions = { readSystem: vi.fn(async () => value), readApplications: vi.fn(async () => applications),
+  const actions = {
+    readRuntime: vi.fn(async () => ({ persistent: false, writable: true })),
+    readSystem: vi.fn(async () => value), readApplications: vi.fn(async () => applications),
     readIcons: vi.fn(async (): Promise<Record<string, string>> => ({})), request: vi.fn(async () => {}),
     openSettings: vi.fn(async () => {}), revoke: vi.fn(async () => {}), retryApproval: vi.fn(async () => {}) }
   const controller = new PermissionController(actions)

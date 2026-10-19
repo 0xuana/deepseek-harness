@@ -74,6 +74,16 @@ Source: [`packages/computer-use/computer-use/src/index.ts`](../../packages/compu
 Browser controls for provider-owned native permission and application decisions.
 
 ```ts cordis-catalog
+/** Read PTC execution state separately from native permission checks.
+ * @returns Whether the shared runtime retains memory and has an editable profile entry.
+ */
+@Remote ptcConfiguration(): { persistent: boolean; writable: boolean }
+
+/** Persist in-memory PTC execution through the existing profile editor and Loader lifecycle.
+ * @returns Completion after the shared runtime reload; already-persistent runtimes are left intact.
+ */
+@Remote async enablePersistentPtc(): Promise<void>
+
 /**
  * Read application decisions without waiting for the native helper.
  * @returns Saved grants and refused applications with their persistence owner.

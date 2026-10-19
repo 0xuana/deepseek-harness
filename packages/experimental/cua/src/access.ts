@@ -1,5 +1,7 @@
 /** Browser controls for the provider's application decisions and native permission work. */
 import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-config-editor'
+import type {} from '@deepseek-ai/dsh-ptc-runtime'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { ApplicationAccess, type AccessOptions } from './application-access.ts'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
@@ -39,6 +41,29 @@ export class CuaAccess extends TypertRemoteService {
    */
   constructor(ctx: Context, private readonly policy: ApplicationAccess,
     private readonly settingsNamespace: string | null, private readonly control: Control) { super(ctx, 'cuaAccess') }
+
+  /** Read PTC execution state separately from native permission checks.
+   * @returns Whether the shared runtime retains memory and has an editable profile entry.
+   */
+  @Remote
+  ptcConfiguration(): { persistent: boolean; writable: boolean } {
+    return {
+      persistent: this.ctx.get('ptcRuntime')?.programFormat === 'repl',
+      writable: this.ctx.get('configEditor')?.entries().some(entry => entry.options.id === 'ptc-runtime') ?? false,
+    }
+  }
+
+  /** Persist in-memory PTC execution through the existing profile editor and Loader lifecycle.
+   * @returns Completion after the shared runtime reload; already-persistent runtimes are left intact.
+   */
+  @Remote
+  async enablePersistentPtc(): Promise<void> {
+    if (this.ptcConfiguration().persistent) return
+    const editor = this.ctx.get('configEditor')
+    const entry = editor?.entries().find(entry => entry.options.id === 'ptc-runtime')
+    if (editor === undefined || entry === undefined) throw new Error('PTC runtime has no editable profile entry')
+    await editor.edit(entry, current => ({ ...current, executionMode: 'persistent-in-memory' }))
+  }
 
   /**
    * Read application decisions without waiting for the native helper.

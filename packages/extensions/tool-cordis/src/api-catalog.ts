@@ -916,6 +916,18 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Browser controls for provider-owned native permission and application decisions.',
     methods: [
       {
+        signature: '@Remote ptcConfiguration(): { persistent: boolean; writable: boolean }',
+        description: 'Read PTC execution state separately from native permission checks.',
+        parameters: [],
+        returns: 'Whether the shared runtime retains memory and has an editable profile entry.',
+      },
+      {
+        signature: '@Remote async enablePersistentPtc(): Promise<void>',
+        description: 'Persist in-memory PTC execution through the existing profile editor and Loader lifecycle.',
+        parameters: [],
+        returns: 'Completion after the shared runtime reload; already-persistent runtimes are left intact.',
+      },
+      {
         signature: '@Remote applications(): CuaApplicationState',
         description: 'Read application decisions without waiting for the native helper.',
         parameters: [],

@@ -35,6 +35,9 @@ export async function mountCuaPermissions(ctx: Context, contribution: TypertRemo
   const ui = ctx.inject(['remote.cuaAccess', 'slots', 'locale'], (ctx) => {
     ctx.effect(() => ctx.locale.register(NS, { en, zh }))
     const controller = new PermissionController({
+      readRuntime: async () => {
+        const result = await ctx.remote.cuaAccess.ptcConfiguration(); if (!result.ok) throw result.error; return result.value
+      },
       readSystem: async () => {
         const result = await ctx.remote.cuaAccess.systemStatus(); if (!result.ok) throw result.error; return result.value
       },
@@ -60,12 +63,15 @@ export async function mountCuaPermissions(ctx: Context, contribution: TypertRemo
       inject: () => ({ resolveText: (text: { en: string; [locale: string]: string }) => ctx.locale.resolveText(text) }),
     }, ApplicationApproval))
     const preset = ctx.configForms.get<{ default: string; selectedDefault?: string }>('agent-preset-registry')
-    const runtime = ctx.configForms.get<{ executionMode?: 'per-call' | 'persistent-in-memory' }>('ptc-runtime')
     const settings = {
       ...face,
-      hooks: { ...face.hooks, cuaDefaultPreset: preset, cuaPtcRuntime: runtime },
+      hooks: { ...face.hooks, cuaDefaultPreset: preset },
       setPtcDefault: () => preset.set('selectedDefault', 'ptc'),
-      setPersistentPtc: () => runtime.set('executionMode', 'persistent-in-memory'),
+      setPersistentPtc: async () => {
+        const result = await ctx.remote.cuaAccess.enablePersistentPtc(); if (!result.ok) throw result.error
+        face.refresh()
+        return true
+      },
     }
     ctx.effect(() => () => controller.dispose())
     ctx.on('connection/reset', face.refresh)

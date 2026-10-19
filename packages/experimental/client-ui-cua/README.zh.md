@@ -47,7 +47,7 @@ kind: "package-reference"
 
 可选浏览器插件挂载原生 provider 的权限 Remote，复用插件页的启用引导和配置插槽。四排使用条件始终可见，未加载的字段保留占位。默认模式、执行方式、系统权限、应用列表和应用图标分别查询，结果返回后各自显示。应用名称和操作按钮不等待图标，图标位置保留空位。用户操作按顺序执行，不等待尚未完成的查询；卸载时等待操作和查询全部结束，再释放独立持有的 Remote 挂载。查询错误只显示在对应部分，启用引导只等待系统权限结果。面板复用插件管理器的忙碌状态，在启停期间暂停查询，完成后再刷新；上一次启用期间的迟到结果会被丢弃。一个控制器把查询结果投影到页面和设置弹窗；重新连接或 Host 返回的配置 namespace 更新时刷新状态。操作提示挂载到 shell overlay，关闭页面后仍可显示。provider 负责权限检查、持久授权和取消；浏览器不保存授权决定。
 
-详情页通过现有 `configForms` 服务读取实际默认值（`selectedDefault ?? default`）。默认模式按钮仅写入 `selectedDefault`；执行方式按钮仅写入 `ptc-runtime` 的 `executionMode`。两者沿用表单带版本检查的设置写入流程和现有 HMR。设置仍在加载、只读或不可用时不能提交；写入失败时在设置旁显示错误，供用户重试。
+详情页通过现有 `configForms` 服务读取实际默认值（`selectedDefault ?? default`）。默认模式按钮仅写入 `selectedDefault`，沿用表单带版本检查的设置写入流程。执行方式一行调用 CUA 的 `ptcConfiguration()` 和 `enablePersistentPtc()`：Host 通过现有配置编辑器仅修改 `ptc-runtime.executionMode`，保留普通 Loader 重载规则。权限检查和执行方式状态独立返回。设置仍在加载、只读或不可用时不能提交；写入失败时在设置旁显示错误，供用户重试。
 
 </details>
 

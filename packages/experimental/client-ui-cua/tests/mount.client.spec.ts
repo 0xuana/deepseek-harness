@@ -43,7 +43,6 @@ async function fixture(fail = false) {
   const preset = createSnapshotStore({ status: 'ready' as const, value: { default: 'standard' },
     base: {}, user: {}, revision: 1, writable: true })
   ctx.provide('configForms', { get: (namespace: string) => {
-    if (namespace === 'ptc-runtime') return { ...preset, set: setPersistent }
     expect(namespace).toBe('agent-preset-registry')
     return { ...preset, set: setDefault }
   } })
@@ -55,7 +54,10 @@ async function fixture(fail = false) {
   const openSettings = vi.fn<() => Promise<RemoteResult<void>>>().mockResolvedValue({ ok: true, value: undefined })
   const revoke = vi.fn<() => Promise<RemoteResult<void>>>().mockResolvedValue({ ok: true, value: undefined })
   const retryApproval = vi.fn<() => Promise<RemoteResult<void>>>().mockResolvedValue({ ok: true, value: undefined })
-  ctx.provide('remote.cuaAccess', { applications: status, systemStatus, applicationIcons, requestPermission, openSettings, revoke, retryApproval })
+  ctx.provide('remote.cuaAccess', {
+    ptcConfiguration: vi.fn(async () => ({ ok: true, value: { persistent: false, writable: true } })),
+    enablePersistentPtc: async () => { await setPersistent(); return { ok: true, value: undefined } },
+    applications: status, systemStatus, applicationIcons, requestPermission, openSettings, revoke, retryApproval })
   ctx.provide('locale', new LocaleRuntime(ctx))
   await ctx.plugin(SlotRegistry)
   ctx.slots.register({ name: 'root', children: {
@@ -128,7 +130,7 @@ it('withdraws the permission Remote and all controls with the optional plugin', 
     expect(f.ctx.slots.entries('plugins.bundle.activation')[0]!.inject!()).not.toHaveProperty('setPersistentPtc')
     expect(f.setPersistent).not.toHaveBeenCalled()
     await (settings.setPersistentPtc as () => Promise<boolean>)()
-    expect(f.setPersistent).toHaveBeenCalledExactlyOnceWith('executionMode', 'persistent-in-memory')
+    expect(f.setPersistent).toHaveBeenCalledExactlyOnceWith()
     await fiber.dispose()
     expect(f.ctx.slots.entries('conversation.composer')).toHaveLength(0)
     expect(f.ctx.slots.entries('plugins.bundle.config')).toHaveLength(0)

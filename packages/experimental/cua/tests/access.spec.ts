@@ -408,3 +408,24 @@ it('omits session-only grants from the permission page and retains their access 
   expect(state.blockedApps).toEqual([])
   await expect(f.access.run(f.client, handle, signal, async () => 'still allowed')).resolves.toBe('still allowed')
 })
+
+it('configures persistent PTC through the existing profile editor only on explicit request', async () => {
+  const f = await setup()
+  expect(f.ctx.cuaAccess.ptcConfiguration()).toEqual({ persistent: false, writable: false })
+  await expect(f.ctx.cuaAccess.enablePersistentPtc()).rejects.toThrow('no editable profile entry')
+  const entry = { options: { id: 'ptc-runtime' } }
+  const runtime = { programFormat: 'function-body' }
+  const edit = vi.fn(async (received: object, change: (current: Record<string, unknown>) => Record<string, unknown>) => {
+    expect(received).toBe(entry)
+    expect(change({ timeoutMs: 4200 })).toEqual({ timeoutMs: 4200, executionMode: 'persistent-in-memory' })
+    runtime.programFormat = 'repl'
+  })
+  f.ctx.provide('ptcRuntime', runtime)
+  f.ctx.provide('configEditor', { entries: () => [entry], edit })
+  expect(f.ctx.cuaAccess.ptcConfiguration()).toEqual({ persistent: false, writable: true })
+  expect(edit).not.toHaveBeenCalled()
+  await f.ctx.cuaAccess.enablePersistentPtc()
+  expect(f.ctx.cuaAccess.ptcConfiguration()).toEqual({ persistent: true, writable: true })
+  await f.ctx.cuaAccess.enablePersistentPtc()
+  expect(edit).toHaveBeenCalledOnce()
+})
