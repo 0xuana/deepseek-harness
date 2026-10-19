@@ -25,6 +25,8 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
+`InitializeParams.approvalRequests: true` enables `approval/request` server requests, indexed by `HarnessSdkClientRequestMap`. `ApprovalRequestParams` contains `sessionId`, `toolName`, optional `callId`, and optional `reason`; `ApprovalRequestResult` is `{ outcome: "allowed-once" | "rejected" | "cancelled" }`. Omission or `false` leaves existing answerers in control. Only `allowed-once` grants one operation. Cancellation discards the pending request and late responses; shutdown and transport loss fail pending decisions closed. The client must keep reading and answering requests while waiting for an Agent to finish.
+
 Use this package when you build or debug an SDK wire end — the serving plugin, a client library, or custom tooling that speaks the SDK protocol. It gives you one transport for JSON-RPC 2.0 over caller-owned byte streams and the typed shapes for every SDK method and notification.
 
 ### Framing and transport
@@ -33,7 +35,7 @@ Wire one JSON-RPC 2.0 message per `\n`-terminated line over byte streams you own
 
 ### The SDK methods
 
-Both wire ends share one method set: seven client-to-server requests and four server-to-client notifications.
+Both wire ends share one method set: client-to-server requests, opt-in server-to-client requests, and server notifications.
 
 | Direction | Method | Payload types |
 |---|---|---|

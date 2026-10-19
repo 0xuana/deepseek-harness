@@ -25,6 +25,8 @@ kind: "package-library"
 <a id="use-this-package"></a>
 ## 使用本包
 
+`InitializeParams.approvalRequests: true` 启用由 `HarnessSdkClientRequestMap` 索引的服务端请求 `approval/request`。`ApprovalRequestParams` 包含 `sessionId`、`toolName`，以及可选的 `callId` 和 `reason`；`ApprovalRequestResult` 为 `{ outcome: "allowed-once" | "rejected" | "cancelled" }`。省略或设为 `false` 时保留现有应答链。只有 `allowed-once` 批准单次操作。取消会丢弃待处理请求及迟到响应；shutdown 和传输断开使待处理决定拒绝放行。客户端等待 Agent 完成期间，必须继续读取并回答请求。
+
 当你构建或调试 SDK 协议端——服务插件、客户端库或使用该协议的自定义工具——时使用本包。它为你提供一个在调用方持有的字节流上承载 JSON-RPC 2.0 的传输，以及每个 SDK 方法与通知的类型化结构。
 
 ### 分帧与传输
@@ -33,7 +35,7 @@ kind: "package-library"
 
 ### SDK 方法
 
-两个协议端共享同一套方法：七个客户端到服务端请求与四个服务端到客户端通知。
+两个协议端共享同一套方法：客户端到服务端请求、显式启用的服务端到客户端请求，以及服务端通知。
 
 | 方向 | 方法 | 载荷类型 |
 |---|---|---|

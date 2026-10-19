@@ -245,7 +245,17 @@ const reader = createInterface({ input: process.stdin })
 const settledSessions = new Set<string>()
 reader.on('line', (line) => {
   if (line.trim().length === 0) return
-  const frame = JSON.parse(line) as { id?: string | number; method?: string; params?: Record<string, unknown> }
+  const frame = JSON.parse(line) as {
+    id?: string | number
+    method?: string
+    params?: Record<string, unknown>
+    result?: unknown
+    error?: unknown
+  }
+  if (frame.id === 'approval-client-test') {
+    notify('approval/response', { result: frame.result, error: frame.error })
+    return
+  }
   if (frame.method === undefined || frame.id === undefined) return
   const respond = (result: object): void => { write({ jsonrpc: '2.0', id: frame.id, result }) }
   switch (frame.method) {
@@ -282,6 +292,7 @@ reader.on('line', (line) => {
         return
       }
       respond({ serverInfo: { name: 'deepseek-harness-sdk-runtime', version: '0.0.1' } })
+      if (env.FAKE_APPROVAL !== undefined) write({ jsonrpc: '2.0', id: 'approval-client-test', method: 'approval/request', params: { sessionId: 'main', toolName: 'bash' } })
       return
     case 'session/resume':
       if (env.FAKE_RESUME_ERROR !== undefined) {

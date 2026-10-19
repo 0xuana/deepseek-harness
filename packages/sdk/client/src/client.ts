@@ -269,6 +269,18 @@ export class HarnessClient {
   }
 
   /**
+   * Install the server-request handler on a started client, replacing the prior handler.
+   * @param handler - receives wire parameters and returns the JSON-RPC result; rejection sends an error.
+   * @throws when the client has not started or has already closed.
+   */
+  onRequest(handler: (method: string, params: Record<string, unknown>) => Promise<unknown>): void {
+    if (this.transport === undefined || this.closeTask !== undefined) {
+      throw new TransportClosedError('start the SDK client before installing a request handler')
+    }
+    this.transport.onRequest(handler)
+  }
+
+  /**
    * Perform the process-wide handshake.
    * @param params - workspace cwd plus the provider/model route.
    * @returns the runtime's wire identity.

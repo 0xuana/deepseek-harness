@@ -23,6 +23,7 @@ class DeepSeekHarnessConfig:
     model: str = "deepseek-v4-flash"
     reasoning_effort: str | None = None
     max_tokens: int | None = None
+    approval_requests: bool = False
     cwd: str | None = None
     runtime_cwd: str | None = None
     dsh_bin: str | None = None
@@ -110,6 +111,7 @@ class DeepSeekHarness:
             model=self.config.model,
             reasoning_effort=self.config.reasoning_effort,
             max_tokens=self.config.max_tokens,
+            approval_requests=self.config.approval_requests,
         )
         self._initialized = True
 
