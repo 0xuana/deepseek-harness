@@ -84,17 +84,18 @@ describe('persistence snapshot text', () => {
 
   it('rejects tampered node keys, unknown references, orphan nodes, and digest mismatches', () => {
     const text = encodePersistenceSnapshot(inventory())
-    const [first, second] = Object.keys((JSON.parse(text) as SnapshotJson).nodes) as [string, string]
+    const rootKey = inventory().roots[0]!.digest.slice(0, 16)
+    const second = Object.keys((JSON.parse(text) as SnapshotJson).nodes).find(key => key !== rootKey)!
     expect(() => parsePersistenceSnapshot(edit(text, (value) => {
-      value.nodes = Object.fromEntries(Object.entries(value.nodes).map(([key, node]) => [key === first ? 'f'.repeat(16) : key, node]))
-    }))).toThrow(/key does not match|unknown schema node/u)
-    expect(() => parsePersistenceSnapshot(edit(text, (value) => { value.nodes[first] = { kind: 'array', element: '0'.repeat(16) } })))
+      value.nodes = Object.fromEntries(Object.entries(value.nodes).map(([key, node]) => [key === rootKey ? 'f'.repeat(16) : key, node]))
+    }))).toThrow('key does not match')
+    expect(() => parsePersistenceSnapshot(edit(text, (value) => { value.nodes[rootKey] = { kind: 'array', element: '0'.repeat(16) } })))
       .toThrow('unknown schema node')
     expect(() => parsePersistenceSnapshot(edit(text, (value) => { value.nodes[second] = { kind: 'primitive', type: 'number' } })))
       .toThrow('key does not match')
     expect(() => parsePersistenceSnapshot(edit(encodePersistenceSnapshot({ ...inventory(), roots: [] }), (value) => { value.types = [] })))
       .toThrow('not reachable from any root or type')
-    expect(() => parsePersistenceSnapshot(edit(text, (value) => { value.roots[0]!.digest = 'f'.repeat(64) }))).toThrow('unknown schema node')
+    expect(() => parsePersistenceSnapshot(edit(text, (value) => { value.roots[0]!.digest = 'f'.repeat(64) }))).toThrow('no schema node for digest prefix')
   })
 
   it('rejects node entries whose properties or union members are not in canonical order', () => {

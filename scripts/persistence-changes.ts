@@ -289,7 +289,9 @@ function parseSnapshot(text: string, historical: boolean): PersistenceSchemaInve
   }
   const used = new Set<number>()
   const graphOf = (graphDigest: string, label: string): CanonicalSchema => {
-    const index = position(graphDigest.slice(0, SCHEMA_NODE_KEY_LENGTH), label)
+    const prefix = graphDigest.slice(0, SCHEMA_NODE_KEY_LENGTH)
+    const index = positions.get(prefix)
+    if (index === undefined) throw new Error(`${label}: no schema node for digest prefix ${prefix}`)
     const pending = [index]
     while (pending.length > 0) {
       const next = pending.pop() as number
@@ -665,7 +667,7 @@ function readPersistenceEntries(root: string, allowIncompleteId?: string): Persi
     const change = parseDocument(source, filename, allowIncomplete)
     const snapshotName = `${change.id}.schema.json`
     if (!snapshots.delete(snapshotName)) throw new Error(`${filename}: missing schema snapshot ${snapshotName}`)
-    const snapshot = parsePersistenceSnapshot(readFileSync(join(directory, snapshotName), 'utf8'))
+    const snapshot = parsePersistenceSnapshot(readFileSync(join(directory, snapshotName), 'utf8').replaceAll('\r\n', '\n'))
     const translatedName = `${change.id}.zh.md`
     if (!files.includes(translatedName)) throw new Error(`${filename}: missing Chinese counterpart`)
     const translated = readFileSync(join(directory, translatedName), 'utf8').replaceAll('\r\n', '\n')
