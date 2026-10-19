@@ -27,8 +27,8 @@ async function harness(withPlanMode: boolean): Promise<Bench> {
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(UserQuestionService)
-  await ctx.plugin(AgentRegistry)
   await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(AgentRegistry)
   if (withPlanMode) await ctx.plugin(PlanModeController, { section: 'plan policy' })
   const session = ctx.sessions.create()
   await ctx.agents.register({ id: session.id, session, status: 'idle', ctx } as Agent)
@@ -120,22 +120,22 @@ describe('plan projection unit', () => {
     const bench = await harness(true)
     commitPlanMode(bench.session, true, 0)
     expect(bench.values().plan).toEqual({ active: true, pending: false })
-    expect(bench.ctx.sessionProjections.stateOf(bench.session, 'plan')?.activeAtLastHeader).toBeNull()
+    expect(bench.ctx.sessionProjections.checkpoint(bench.session).plan?.val).toMatchObject({ activeAtLastHeader: null })
     bench.session.append('request/header', {
       header: { config: { provider: 'test', model: 'test-model' } },
       reason: 'initial',
     })
     expect(bench.values().plan).toEqual({ active: true, pending: false })
-    expect(bench.ctx.sessionProjections.stateOf(bench.session, 'plan')?.activeAtLastHeader).toBe(true)
+    expect(bench.ctx.sessionProjections.checkpoint(bench.session).plan?.val).toMatchObject({ activeAtLastHeader: true })
     commitPlanMode(bench.session, false, 1)
     expect(bench.values().plan).toEqual({ active: false, pending: false })
-    expect(bench.ctx.sessionProjections.stateOf(bench.session, 'plan')?.activeAtLastHeader).toBe(true)
+    expect(bench.ctx.sessionProjections.checkpoint(bench.session).plan?.val).toMatchObject({ activeAtLastHeader: true })
     bench.session.append('request/header', {
       header: { config: { provider: 'test', model: 'test-model' } },
       reason: 'change',
     })
     expect(bench.values().plan).toEqual({ active: false, pending: false })
-    expect(bench.ctx.sessionProjections.stateOf(bench.session, 'plan')?.activeAtLastHeader).toBe(false)
+    expect(bench.ctx.sessionProjections.checkpoint(bench.session).plan?.val).toMatchObject({ activeAtLastHeader: false })
   })
 
   it('has no plan key when plan-mode is not composed', async () => {

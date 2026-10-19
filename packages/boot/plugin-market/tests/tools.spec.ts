@@ -9,6 +9,9 @@ import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import PluginMarket from '../src/index.ts'
 import * as tool from '../src/tools.ts'
 
+/** Clone cache directory of services whose tests read no repository; nothing creates it. */
+const UNUSED_CACHE = '/nonexistent/plugin-market-detail-cache'
+
 const URL_A = 'https://market.example/index.json'
 
 afterEach(() => { vi.unstubAllGlobals() })
@@ -28,7 +31,7 @@ async function fixture() {
     listVersionExemptions() { return { exemptions: {}, warnings: [] } }
   }
   await ctx.plugin(Manager)
-  await ctx.plugin(PluginMarket, { indexes: [URL_A] })
+  await ctx.plugin(PluginMarket, { indexes: [URL_A], detailCacheDir: UNUSED_CACHE })
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
@@ -171,7 +174,7 @@ it('registers the tool only while the pluginMarket service is mounted', async ()
   await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(tool)
   expect(ctx.tools.get('plugin_market')).toBeUndefined()
-  const market = await ctx.plugin(PluginMarket, { indexes: [] })
+  const market = await ctx.plugin(PluginMarket, { indexes: [], detailCacheDir: UNUSED_CACHE })
   await vi.waitFor(() => { expect(ctx.tools.get('plugin_market')).toBeDefined() })
   await market.dispose()
   await vi.waitFor(() => { expect(ctx.tools.get('plugin_market')).toBeUndefined() })

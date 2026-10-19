@@ -2183,6 +2183,11 @@
     },
     {
       "doc": "docs/subsystems/session-projection.md",
+      "symbol": "ProjectionHandle",
+      "source": "packages/session/session-projection/src/index.ts"
+    },
+    {
+      "doc": "docs/subsystems/session-projection.md",
       "symbol": "ProjectionDefinition",
       "source": "packages/session/session-projection/src/index.ts"
     },
@@ -2506,6 +2511,16 @@
       "doc": "docs/subsystems/tools.md",
       "symbol": "ToolExecutor",
       "source": "packages/core/tools/src/executor.ts"
+    },
+    {
+      "doc": "docs/subsystems/core.md",
+      "symbol": "TurnBoundaryProjection",
+      "source": "packages/core/agent/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/token-meter.md",
+      "symbol": "ContextPressureProjection",
+      "source": "packages/llm/token-meter/src/projection.ts"
     },
     {
       "doc": "docs/subsystems/session-projection.md",

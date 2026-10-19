@@ -1,4 +1,6 @@
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import { agentPresetProjectionDefinition } from '@deepseek-ai/dsh-agent-preset-registry'
+import { subagentModelSelectionProjectionDefinition } from '@deepseek-ai/dsh-tool-subagent/src/model-selection-state.ts'
 import { createRequire } from 'node:module'
 import { randomUUID } from 'node:crypto'
 import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
@@ -328,13 +330,14 @@ describe('the shipped Web composition', () => {
       sessionId: SessionId('preset-model-selection-enabled'),
       setup: agentCtx => ctx.agentPresets.mount(agentCtx, 'standard').then(() => undefined),
     })
+    const policy = await ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
     try {
       expect(toolNames(ctx, disabled.agent)).toContain('list_subagent_models')
       expect(toolParameterNames(ctx, disabled.agent, 'subagent')).toEqual(expect.arrayContaining([
         'model', 'provider', 'reasoning_effort',
       ]))
-      expect(ctx.sessionProjections.stateOf(disabled.agent.session, 'subagentModelSelectionPolicy')).toBeNull()
-      expect(ctx.sessionProjections.stateOf(enabled.agent.session, 'subagentModelSelectionPolicy')).toEqual([
+      expect(policy.stateOf(disabled.agent.session)).toBeNull()
+      expect(policy.stateOf(enabled.agent.session)).toEqual([
         { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
       ])
       expect(toolNames(ctx, enabled.agent)).toContain('list_subagent_models')
@@ -345,6 +348,7 @@ describe('the shipped Web composition', () => {
         expect(toolParameterNames(ctx, agent, 'subagent_fork')).toEqual(['cwd', 'description', 'prompt'])
       }
     } finally {
+      await policy.dispose()
       await ctx.settings.update(SUBAGENT_MODEL_SELECTION_SETTINGS_NAMESPACE, { enabled: false })
       await enabled.dispose()
       await disabled.dispose()
@@ -880,7 +884,7 @@ describe('a switch survives the session', () => {
 
       // The header keeps the creation fact; the log carries what it runs.
       expect(handle.agent.session.header.agentPreset).toBe('standard')
-      expect(ctx.sessionProjections.stateOf(handle.agent.session, 'agentPreset')).toBe('minimal')
+      expect(ctx.sessionProjections.checkpoint(handle.agent.session).agentPreset?.val).toBe('minimal')
     } finally {
       await handle.dispose()
     }
@@ -895,7 +899,8 @@ describe('a forked session', () => {
       meta: { agentPreset: 'minimal' },
       setup: agentCtx => ctx.agentPresets.mount(agentCtx, 'minimal').then(() => undefined),
     })
-    const inherited = ctx.sessionProjections.stateOf(parent.agent.session, 'agentPreset') ?? undefined
+    const projection = await ctx.sessionProjections.register(agentPresetProjectionDefinition)
+    const inherited = projection.stateOf(parent.agent.session) ?? undefined
     const child = await ctx.agents.create({
       sessionId: SessionId('preset-fork-child'),
       seed: [],

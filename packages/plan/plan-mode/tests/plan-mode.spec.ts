@@ -17,7 +17,6 @@ import UserQuestionService, {
 import CommandRuntime from '@deepseek-ai/dsh-commands'
 import { PtcRuntime, type PtcRunRequest, type PtcRunResult } from '@deepseek-ai/dsh-ptc-runtime'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import { turnBoundaryProjectionDefinition } from '@deepseek-ai/dsh-agent-loop'
 import PlanModeController, { EXIT_PLAN_MODE, planProjectionDefinition, resolveConfig } from '../src/index.ts'
 import type { PlanModeConfig } from '../src/index.ts'
 import type { PlanUnitState } from '../src/types.ts'
@@ -93,7 +92,7 @@ function foldPlanMode(events: readonly SessionEvent[], end = events.length): boo
 
 async function mountProjectionSeam(ctx: Context): Promise<void> {
   await ctx.plugin(SessionProjectionRegistry)
-  ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
+  await ctx.plugin(AgentRegistry)
 }
 
 async function setup(config: PlanModeConfig = PLAN_CONFIG): Promise<Context> {
@@ -235,26 +234,6 @@ describe('ctx.planMode: get/set', () => {
     await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(PlanModeController, PLAN_CONFIG)
     expect(ctx.get('planMode')).toBeUndefined()
-  })
-
-  it('fails when the required plan projection key is absent', async () => {
-    const ctx = await setup()
-    const agent = await agentWithSession(ctx, 'missing-plan-projection')
-    vi.spyOn(ctx.sessionProjections, 'stateOf').mockReturnValue(undefined)
-    expect(() => ctx.planMode.get(agent)).toThrow('plan-mode requires the plan session projection')
-  })
-
-  it('registers plan state directly but requires turnBoundary state', async () => {
-    const ctx = new Context()
-    await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(SystemPrompt)
-    await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
-    const agent = await agentWithSession(ctx, 'missing-plan-projection-keys')
-    const planMode = new PlanModeController(ctx, PLAN_CONFIG)
-    await new Promise(resolve => setImmediate(resolve))
-    expect(planMode.get(agent)).toEqual({ active: false })
-    expect(() => planMode.set(agent, true)).toThrow('plan-mode requires the turnBoundary session projection')
   })
 
   it('reads the folded state', async () => {
@@ -802,7 +781,6 @@ describe('/plan', () => {
 describe('exit_plan_mode', () => {
   async function setupWithReview(answer?: { selected: string[]; custom?: string }) {
     const ctx = await setup()
-    await ctx.plugin(AgentRegistry)
     await ctx.plugin(UserQuestionService)
     const asked: AskUserQuestionRequest[] = []
     if (answer !== undefined) {
@@ -882,7 +860,6 @@ describe('exit_plan_mode', () => {
 
   it('rejects review from a runtime-owned agent with consumer-neutral guidance', async () => {
     const ctx = await setup()
-    await ctx.plugin(AgentRegistry)
     await ctx.plugin(UserQuestionService)
     const ask = vi.fn(async () => ({ answers: [{ id: 'plan-review', selected: ['Approve'] }] }))
     registerQuestionAnswerer(ctx, { ask })
@@ -940,7 +917,6 @@ describe('exit_plan_mode', () => {
     provideWorkingDirectoryFixture(ctx)
     await mountProjectionSeam(ctx)
     await ctx.plugin(PlanModeController, PLAN_CONFIG)
-    await ctx.plugin(AgentRegistry)
     await ctx.plugin(UserQuestionService)
     const asked: AskUserQuestionRequest[] = []
     registerQuestionAnswerer(ctx, {
@@ -1120,7 +1096,6 @@ describe('exit_plan_mode', () => {
     await ctx.plugin(NativeToolExecutor)
     await mountProjectionSeam(ctx)
     const fiber = await ctx.plugin(PlanModeController, PLAN_CONFIG)
-    await ctx.plugin(AgentRegistry)
     await ctx.plugin(UserQuestionService)
     let answer!: (value: { answers: { id: string; selected: string[] }[] }) => void
     registerQuestionAnswerer(ctx, {
