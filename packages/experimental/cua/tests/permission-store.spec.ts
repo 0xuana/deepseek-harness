@@ -77,8 +77,9 @@ it('reloads another process’s writes instead of reusing an in-memory authoriza
   const f = await setup(), a = await f.open(f.directory, [grant])
   await a.store.withState(signal, transaction => transaction.state)
   const controller = new AbortController()
-  const running = promisify(execFile)(process.execPath, ['--import', 'tsx/esm',
-    fileURLToPath(new URL('./fixtures/permission-store-worker.ts', import.meta.url)), f.storageRoot, f.directory, grant.id,
+  const file = join(f.storageRoot, (await readdir(f.storageRoot))[0]!)
+  const running = promisify(execFile)(process.execPath, [
+    fileURLToPath(new URL('./fixtures/permission-store-worker.ts', import.meta.url)), file, grant.id,
   ], { cwd: process.cwd(), env: { PATH: process.env.PATH }, signal: controller.signal })
   onTestFinished(async () => { controller.abort(); await running.catch(() => {}) })
   expect((await running).stdout).toBe('saved\n')

@@ -1,26 +1,16 @@
-/** Independent process used to verify fresh authorization reads over the production JSON backend. */
-import { Context } from '@deepseek-ai/cordis'
-import Storage from '@deepseek-ai/dsh-storage'
-import * as JsonStorage from '@deepseek-ai/dsh-storage-json'
-import * as Domains from '@deepseek-ai/dsh-storage-domain'
-import { CuaPermissionStore } from '../../src/permission-store.ts'
-import type { CuaApplicationId } from '../../src/application-types.ts'
+/** External file writer used to verify that an open provider reloads durable authorization. */
+import { readFile, rename, writeFile } from 'node:fs/promises'
 
-const [root, directory, id] = process.argv.slice(2)
-if (!root || !directory || !id) throw new Error('Expected storage root, profile directory and application id')
-const ctx = new Context()
-try {
-  ctx.provide('profileContext', { dir: directory })
-  await ctx.plugin(Storage)
-  await ctx.plugin(JsonStorage, { root })
-  await ctx.plugin(Domains, { backend: 'json' })
-  const store = new CuaPermissionStore(ctx, [], 30_000)
-  await store.withState(new AbortController().signal, async (transaction) => {
-    const existing = transaction.state.applications[id]
-    await transaction.save({ ...transaction.state, applications: { ...transaction.state.applications,
-      [id]: { revoked: (existing?.revoked ?? 0) + 1, sessions: {},
-        always: { id: id as CuaApplicationId, name: 'Other process', executablePath: '/other' } },
-    } })
-  })
-  process.stdout.write('saved\n')
-} finally { await ctx.fiber.dispose() }
+const [file, id] = process.argv.slice(2)
+if (!file || !id) throw new Error('Expected storage file and application id')
+const record = JSON.parse(await readFile(file, 'utf8'))
+const existing = record.global.applications[id]
+record.global.applications[id] = {
+  revoked: (existing?.revoked ?? 0) + 1,
+  sessions: {},
+  always: { id, name: 'Other process', executablePath: '/other' },
+}
+const temporary = `${file}.writer-${process.pid}`
+await writeFile(temporary, JSON.stringify(record))
+await rename(temporary, file)
+process.stdout.write('saved\n')
