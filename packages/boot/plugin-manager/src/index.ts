@@ -10,7 +10,12 @@ import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import z from '@deepseek-ai/schemastery'
 import semver from 'semver'
-import { TypertRemoteService, Remote } from '@deepseek-ai/dsh-typert-protocol'
+import { TypertRemoteService, Remote, RemoteError, remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
+import { detailImageResponse, NPM_FILE_SOURCES } from '@deepseek-ai/dsh-plugin-detail'
+import type { NpmFileSource } from '@deepseek-ai/dsh-plugin-detail/types'
+import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
+import type {} from '@deepseek-ai/dsh-client-connection'
+import { readBundleDocument, readBundleImage, type BundleDetailOptions } from './bundle-detail.ts'
 import { pluginEntryId, readPluginInventory } from '@deepseek-ai/dsh-host-plugin-inventory'
 import {
   readPluginMeta, readProfileManifest, resolveBundleDir, loadOverlayPatches, composeEntries,
@@ -32,8 +37,8 @@ import { approveBuilds, recordPendingBuilds } from './build-approval.ts'
 import { checkGithubConnection } from './github-connection.ts'
 import { newerVersions, VERSION_FIELDS, VERSION_LIST_FIELDS, versionFacts } from './versions.ts'
 import type {
-  BundleInfo, BundleRowInfo, ChangeResult, InspectOptions, InstallBundleOptions, ListVersionsOptions, ManagementError, PackageResult,
-  PluginChange, PluginEntryId, PluginInfo, PluginInstallCancellation, PluginInstallProgress, PluginInstallRequestId,
+  BundleDetail, BundleInfo, BundleRowInfo, ChangeResult, InspectOptions, InstallBundleOptions, ListVersionsOptions, ManagementError,
+  PackageResult, PluginChange, PluginEntryId, PluginInfo, PluginInstallCancellation, PluginInstallProgress, PluginInstallRequestId,
   PluginRegistries, PluginSpecInspection, PluginUpdateResult, PluginUpdateStep, PluginVersion, PluginVersionList, Registry,
   RegistryAttempt, UpdateBundleOptions,
 } from './types.ts'
@@ -67,7 +72,18 @@ export interface Config {
   versionListLimit?: number
   /** How many single-version registry lookups a version listing runs at once. */
   versionLookupConcurrency?: number
+  /** Largest bundle detail document, and largest locale file read for one, in bytes. */
+  detailMaxBytes?: number
+  /** Largest image served beside a bundle detail document, in bytes. */
+  detailImageMaxBytes?: number
+  /** Deadline of one npm file CDN request for an offered bundle's detail document. */
+  detailFetchTimeoutMs?: number
+  /** npm file CDNs that offered bundles are read from, in order; a read's `npmFileSources` moves the CDNs it names first. */
+  detailNpmFileSources?: NpmFileSource[]
 }
+
+/** The Fetch route serving images beside bundle detail documents. */
+const DETAIL_FILE_PATH = '/api/plugin-manager/detail-file'
 
 /** An http(s) URL, as pnpm's `--registry` takes it. */
 const REGISTRY_URL = /^https?:\/\/\S+$/
@@ -288,6 +304,10 @@ export class PluginManager extends TypertRemoteService {
     fallbackRegistries: z.array(z.string().pattern(REGISTRY_URL)).default([NPMMIRROR_REGISTRY]),
     versionListLimit: z.number().step(1).min(1).default(20),
     versionLookupConcurrency: z.number().step(1).min(1).default(4),
+    detailMaxBytes: z.natural().min(1).default(1024 * 1024),
+    detailImageMaxBytes: z.natural().min(1).default(5 * 1024 * 1024),
+    detailFetchTimeoutMs: z.natural().min(1).max(MAX_TIMER_DELAY_MS).default(15000),
+    detailNpmFileSources: z.array(z.union(NPM_FILE_SOURCES)).min(1).default([...NPM_FILE_SOURCES]),
   })
   /** Management bundles remain protected if their files become unreadable. */
   private readonly managementBundles = new Set<string>()
@@ -312,6 +332,7 @@ export class PluginManager extends TypertRemoteService {
   private readonly abort = new AbortController()
   /** Installations by request id, from their call until it settles. */
   private readonly installs = new Map<PluginInstallRequestId, InstallControl>()
+  private readonly detail: BundleDetailOptions
 
   constructor(ctx: Context, config: Config) {
     super(ctx, 'pluginManager')
@@ -331,10 +352,64 @@ export class PluginManager extends TypertRemoteService {
       registry: config.registry === undefined ? null : normalizeRegistry(config.registry),
       fallbackRegistries: (config as Required<Config>).fallbackRegistries.map(normalizeRegistry),
     }
+    const required = config as Required<Config>
+    this.detail = {
+      profile: this.profile, maxDocumentBytes: required.detailMaxBytes, maxImageBytes: required.detailImageMaxBytes,
+      npmFileSources: required.detailNpmFileSources, timeoutMs: required.detailFetchTimeoutMs, lifetime: this.abort.signal,
+    }
     ctx.effect(() => async () => {
       this.abort.abort()
       await Promise.allSettled([...this.packageOperations])
     }, 'plugin-manager: package cancellation')
+    ctx.inject(['connection'], (scope) => {
+      scope.effect(() => scope.connection.fetch.register({
+        path: DETAIL_FILE_PATH, methods: ['GET'], requestBody: 'buffered', fetch: request => this.serveDetailFile(request),
+      }), `plugin-manager: ${DETAIL_FILE_PATH}`)
+    })
+  }
+
+  /**
+   * Read a bundle's long description: the Markdown file its locale `meta.detail` names in `language`, otherwise its
+   * README. An installed bundle is read from its directory without network access; an official bundle the installation
+   * offers before it is installed is read from the npm file CDNs at its offered version. Nothing is cached.
+   * @param name - the bundle's package name, as `listBundles()` lists it.
+   * @param language - the display language, such as `zh-CN`; documents fall back through its prefixes to English.
+   * @param options - `npmFileSources` names npm file CDNs to ask first for an offered bundle, in order, such as the one
+   *   a Client measured as fastest; configured CDNs it omits follow, and CDNs that are not configured are not asked.
+   * @returns the document with its origin and path, or `none`.
+   * @throws {RemoteError} `plugin-manager/unknown-bundle`, `plugin-manager/invalid-language`, or
+   *   `plugin-manager/detail-unavailable`.
+   */
+  @Remote
+  async readBundleDetail(name: string, language: string, options?: { npmFileSources?: NpmFileSource[] }): Promise<BundleDetail> {
+    return await readBundleDocument(await this.listedBundle(name), language, options?.npmFileSources ?? [], this.detail)
+  }
+
+  private async listedBundle(name: string): Promise<BundleInfo> {
+    const bundle = (await this.listBundles()).find(candidate => candidate.name === name)
+    if (bundle === undefined) throw new RemoteError('plugin-manager/unknown-bundle', `No such bundle: ${name}`, { name })
+    return bundle
+  }
+
+  /**
+   * Answer `GET ${DETAIL_FILE_PATH}?bundle=<name>&document=<path>&path=<destination>[&sources=<cdn>,...]` with one image
+   * beside a bundle document; `sources` names npm file CDNs to ask first for an offered bundle, as `readBundleDetail` does.
+   */
+  private async serveDetailFile(request: Request): Promise<Response> {
+    const params = new URL(request.url).searchParams
+    const [bundle, document, path] = [params.get('bundle'), params.get('document'), params.get('path')]
+    // Images are read again on every request, so a reinstalled bundle shows its own.
+    const cache = 'no-store'
+    if (bundle === null || document === null || path === null) return detailImageResponse('invalid', cache)
+    try {
+      const image = await readBundleImage(await this.listedBundle(bundle), document, path, params.get('sources')?.split(',') ?? [], this.detail)
+      return detailImageResponse(image, cache)
+    } catch (error) {
+      const failure = remoteErrorOf(error)
+      if (failure?.code === 'plugin-manager/unknown-bundle') return detailImageResponse(undefined, cache)
+      if (failure?.code === 'plugin-manager/detail-unavailable') return detailImageResponse(failure.details.reason, cache)
+      throw error
+    }
   }
 
   /** Read exact plugin-version exemptions saved in this profile.

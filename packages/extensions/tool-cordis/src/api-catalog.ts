@@ -1752,6 +1752,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Manage profile files and apply their declared reload lifecycle.',
     methods: [
       {
+        signature: '@Remote async readBundleDetail(name: string, language: string, options?: { npmFileSources?: NpmFileSource[] }): Promise<BundleDetail>',
+        description: 'Read a bundle\'s long description: the Markdown file its locale `meta.detail` names in `language`, otherwise its README. An installed bundle is read from its directory without network access; an official bundle the installation offers before it is installed is read from the npm file CDNs at its offered version. Nothing is cached.',
+        parameters: [{ name: 'name', description: 'the bundle\'s package name, as `listBundles()` lists it.' }, { name: 'language', description: 'the display language, such as `zh-CN`; documents fall back through its prefixes to English.' }, { name: 'options', description: '`npmFileSources` names npm file CDNs to ask first for an offered bundle, in order, such as the one a Client measured as fastest; configured CDNs it omits follow, and CDNs that are not configured are not asked.' }],
+        returns: 'the document with its origin and path, or `none`.',
+        throws: ['{RemoteError} `plugin-manager/unknown-bundle`, `plugin-manager/invalid-language`, or `plugin-manager/detail-unavailable`.'],
+      },
+      {
         signature: '@Remote listVersionExemptions(): { exemptions: Record<string, string[]>; warnings: string[] }',
         description: 'Read exact plugin-version exemptions saved in this profile.',
         parameters: [],
@@ -1867,6 +1874,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'url', description: 'a configured index URL.' }, { name: 'name', description: 'the plugin\'s package name.' }],
         returns: 'the plugin with its default version, installation status, and annotated versions; undefined when the index does not list it.',
         throws: ['{RemoteError} `plugin-market/unknown-index`, `plugin-market/invalid-index-url`, `plugin-market/fetch-failed`, or `plugin-market/invalid-index`.'],
+      },
+      {
+        signature: '@Remote async readEntryDetail( url: string, name: string, version: string, language: string, options?: { refresh?: boolean; npmFileSources?: NpmFileSource[] }, ): Promise<PluginDetail>',
+        description: 'Read the long description of one listed version of a plugin market entry, from the version\'s source: the npm file CDNs for a public npm version, or its pinned Git commit. The Markdown file the package\'s locale `meta.detail` names in `language` comes first, then the package\'s README, then the README of the entry\'s `repository`, or for an npm version without one, of its `package.json` `repository`, at the default branch. An npm version from another registry has no readable package files, so only the entry\'s `repository` is read.',
+        parameters: [{ name: 'url', description: 'a configured index URL.' }, { name: 'name', description: 'the plugin\'s package name.' }, { name: 'version', description: 'one listed version.' }, { name: 'language', description: 'the display language, such as `zh-CN`; documents fall back through its prefixes to English.' }, { name: 'options', description: '`refresh` reads again instead of reusing a result cached for `cacheTtlMs`; `npmFileSources` names npm file CDNs to ask first for an npm version, in order; configured CDNs it omits follow, and CDNs that are not configured are not asked.' }],
+        returns: 'the document with its origin and image document id, or `none`.',
+        throws: ['{RemoteError} the failures of `search`, `plugin-market/unknown-plugin` for an unlisted plugin or version, `plugin-market/invalid-query`, or `plugin-market/detail-unavailable`.'],
       },
     ],
   },
@@ -5051,6 +5065,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type BrowserUseProviderName = Branded<\'BrowserUseProviderName\'>;',
   },
   {
+    name: 'BundleDetail',
+    declaration: 'export type BundleDetail = {\n    readonly status: \'found\';\n    readonly origin: \'locale\' | \'readme\';\n    readonly path: string;\n    readonly markdown: string;\n} | {\n    readonly status: \'none\';\n};',
+  },
+  {
     name: 'BundleInfo',
     declaration: 'export interface BundleInfo {\n    name: string;\n    official: boolean;\n    availability: \'installation\' | \'profile\' | \'missing\';\n    installTarget?: {\n        spec: string;\n        version: string;\n    };\n    version?: string;\n    meta?: PluginLocalizedMeta;\n    description?: string;\n    enabled: boolean;\n    installed: boolean;\n    source?: string;\n    optional: boolean;\n    removable: boolean;\n    updatable: boolean;\n    readOnlyReason?: ReadOnlyReason;\n    error?: ManagementError;\n    rows: BundleRowInfo[];\n    overrides: string[];\n}',
   },
@@ -6367,6 +6385,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface NotFutureError {\n    readonly code: \'not_future\';\n    readonly message: string;\n}',
   },
   {
+    name: 'NpmFileSource',
+    declaration: 'export type NpmFileSource = \'jsdelivr\' | \'unpkg\' | \'npmmirror\';',
+  },
+  {
     name: 'ObjectJsonSchema',
     declaration: 'export type ObjectJsonSchema = JsonSchemaNode & {\n    type: \'object\';\n};',
   },
@@ -6465,6 +6487,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'PluginChange',
     declaration: 'export interface PluginChange {\n    readonly reason: \'plugin\' | \'bundle\' | \'install\' | \'remove\';\n}',
+  },
+  {
+    name: 'PluginDetail',
+    declaration: 'export type PluginDetail = {\n    readonly status: \'found\';\n    readonly origin: PluginDetailOrigin;\n    readonly markdown: string;\n    readonly document: PluginDetailDocumentId;\n} | {\n    readonly status: \'none\';\n};',
+  },
+  {
+    name: 'PluginDetailDocumentId',
+    declaration: 'export type PluginDetailDocumentId = Branded<\'PluginDetailDocumentId\'>;',
+  },
+  {
+    name: 'PluginDetailOrigin',
+    declaration: 'export type PluginDetailOrigin = \'locale\' | \'readme\' | \'repository\';',
   },
   {
     name: 'PluginEntryId',

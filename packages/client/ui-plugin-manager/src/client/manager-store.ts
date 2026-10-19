@@ -41,6 +41,8 @@ import type { ConfigLedger } from './config-ledger.ts'
 import type { PluginTabInstall } from './slot-contract.ts'
 import type { PluginTab } from './tab-ledger.ts'
 import { shortName } from './presentation.ts'
+import { BundleDetailController, type BundleDetailsState } from './detail-store.ts'
+import type { LocaleSnapshot } from '@deepseek-ai/dsh-client-locale/client'
 
 /** The action a failed notice names. */
 export type FailedAction = 'enable' | 'disable' | 'uninstall' | 'rowEnable' | 'rowDisable'
@@ -389,7 +391,17 @@ export interface PluginManagerFace {
     configLedger: HostObservable<ConfigLedger>
     /** Tabs other plugins contribute, bound by the renderer as usePluginTabs. */
     pluginTabs: HostObservable<readonly PluginTab[]>
+    /** Bundle detail reads, bound by the renderer as useBundleDetails. */
+    bundleDetails: SnapshotStore<BundleDetailsState>
+    /** The active locale, bound as useLocale, for the language detail documents are read in. */
+    locale: HostObservable<LocaleSnapshot>
   }
+  /** Read a bundle's detail document unless the read already ran or runs. */
+  loadDetail: BundleDetailController['load']
+  /** Read a bundle's detail document again. */
+  retryDetail: BundleDetailController['retry']
+  /** The URL of an image beside a bundle's detail document, or undefined for a destination the page loads as written. */
+  detailImage: BundleDetailController['image']
   /** Read the Host once the tab first renders. */
   ensure: () => void
   /** Read the Host again, then check every updatable package for newer versions. */
@@ -631,6 +643,8 @@ export class PluginManagerController {
   private registryRead: RegistryRead | undefined
   /** A Discover entry chose the dialog's registry; that choice applies to this dialog only and is never remembered. */
   private transientRegistry = false
+  /** Bundle detail documents the page shows. */
+  readonly details: BundleDetailController
   /** The registry last used from this browser, kept across dialogs and page loads; null until one was used. */
   private readonly registryMemory: SnapshotStore<RegistryChoice | null> = createSnapshotStore<RegistryChoice | null>(null, {
     persist: { name: 'dsh.plugin-manager.install-registry' },
@@ -642,6 +656,7 @@ export class PluginManagerController {
   constructor(
     private readonly ctx: ClientContext,
   ) {
+    this.details = new BundleDetailController(ctx, () => document.baseURI)
     this.store = createSnapshotStore<PluginManagerState>({
       status: 'idle', refreshStatus: 'idle', packages: [], busy: [], notice: null,
       install: IDLE_INSTALL, confirm: null, highlight: null, versions: {}, update: null,
@@ -659,6 +674,7 @@ export class PluginManagerController {
   /** Stop publishing and drop every late settlement. */
   dispose(): void {
     this.disposed = true
+    this.details.dispose()
     this.registryRead = undefined
     this.request = undefined
     this.generation += 1
@@ -674,9 +690,16 @@ export class PluginManagerController {
   inject(
     configLedger: HostObservable<ConfigLedger>, pluginTabs: HostObservable<readonly PluginTab[]>, resolveText: PluginManagerFace['resolveText'],
   ): PluginManagerFace {
+    const details = this.details
     return {
       resolveText,
-      hooks: { pluginManager: this.store, configLedger, pluginTabs, configurations: this.ctx.configForms.describe() },
+      hooks: {
+        pluginManager: this.store, configLedger, pluginTabs, configurations: this.ctx.configForms.describe(),
+        bundleDetails: details.store, locale: this.ctx.locale,
+      },
+      loadDetail: (name, version, language, fromNpm) => { details.load(name, version, language, fromNpm) },
+      retryDetail: (name, version, language, fromNpm) => { details.retry(name, version, language, fromNpm) },
+      detailImage: (name, document, destination, fromNpm) => details.image(name, document, destination, fromNpm),
       configForm: id => this.ctx.configForms.get(id),
       ensure: () => { if (this.getSnapshot().status === 'idle') void this.load() },
       refresh: () => { void this.refresh() },
