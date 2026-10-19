@@ -35,7 +35,7 @@ Add this row to a composition with `dsh-tools` mounted. The nearest scoped execu
 
 Root `run_code` calls are exclusive and execute serially. `maxParallelSubCalls` limits parallel-safe nested calls within each program and defaults to `10`; it must be a positive integer, with `1` selecting serial execution. Exclusive calls form barriers.
 
-This package also requires `ctx.ptcRuntime` and `ctx.systemPrompt`; Agent-owned programs need `ctx.workingDirectory`. A missing runtime rejects prompt assembly or execution; the selected PTC executor never falls back to native execution.
+This package declares `ctx.ptcRuntime` and `ctx.systemPrompt` as required injections; Agent-owned programs need `ctx.workingDirectory`. The executor activates only after its runtime is available and withdraws when that runtime unloads. An enabled PTC executor without a runtime stops application startup. A withdrawn PTC selection never falls back to native execution.
 
 Import durable event payloads from `@deepseek-ai/dsh-tool-executor-ptc/types`; this entry is safe for detached readers and client compilation. Host policy extensions import `PtcDispatchLog`, `tools/ptc-dispatch-log`, and the `ptc-mode` message-source declaration through a type-only import of the package entry, without mounting an executor.
 

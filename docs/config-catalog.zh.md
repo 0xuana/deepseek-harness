@@ -3829,7 +3829,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-tool-executor-ptc`
 
-- `inject`: `tools` · `systemPrompt`
+- `inject`: `tools` · `systemPrompt` · `ptcRuntime`
 - `source`: [`packages/core/tool-executor-ptc/src/config.ts:5`](../packages/core/tool-executor-ptc/src/config.ts)
 
 ```ts config-catalog

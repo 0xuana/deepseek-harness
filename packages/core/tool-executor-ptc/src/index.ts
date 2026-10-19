@@ -70,8 +70,8 @@ export { jsonSchemaToPy, renderToolsSdkPy } from './py-types.ts'
 
 /** Cordis plugin name. */
 export const name = 'ptc-tool-executor'
-/** Register the selected executor even when its runtime is unavailable. */
-export const inject = ['tools', 'systemPrompt']
+/** Activate the executor only while its registry, prompt service, and runtime are available. */
+export const inject = ['tools', 'systemPrompt', 'ptcRuntime']
 
 /**
  * Select PTC execution in the mounting scope.

@@ -198,6 +198,31 @@ it('logs detached frozen nested metadata without changing the binding value or l
 })
 
 describe('mode-aware wire contribution', () => {
+  it('waits for its runtime and follows runtime withdrawal and replacement', async () => {
+    const ctx = new Context()
+    onTestFinished(async () => { await ctx.fiber.dispose() })
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRuntime)
+    const executor = await ctx.plugin(PtcToolExecutor)
+
+    await expect(runCode(ctx, 'return 1')).rejects.toThrow('selected tool executor is unavailable')
+
+    const runtime = await ctx.plugin(FakeRuntime)
+    await executor.await()
+    const first = await ctx.systemPrompt.assemble()
+    expect(first.tools.map(tool => tool.name)).toEqual([RUN_CODE_NAME])
+    expect(first.tools[0]?.description).toContain('TypeScript')
+
+    await runtime.dispose()
+    await expect(runCode(ctx, 'return 1')).rejects.toThrow('selected tool executor is unavailable')
+
+    await ctx.plugin(FakeRuntime, { language: 'python' })
+    await executor.await()
+    const replacement = await ctx.systemPrompt.assemble()
+    expect(replacement.tools.map(tool => tool.name)).toEqual([RUN_CODE_NAME])
+    expect(replacement.tools[0]?.description).toContain('Python')
+  })
+
   it('rejects a non-positive PTC concurrency limit in configuration', () => {
     expect(() => PtcToolExecutor.Config({ maxParallelSubCalls: 0 })).toThrow()
   })
@@ -2536,12 +2561,17 @@ describe('PTC state ownership', () => {
   })
 })
 
-it.each([false, true])('settles nested calls after the PTC executor fiber unloads (Agent: %s)', async (owned) => {
+it.each([
+  { owned: false, unload: 'executor' },
+  { owned: true, unload: 'executor' },
+  { owned: false, unload: 'runtime' },
+  { owned: true, unload: 'runtime' },
+] as const)('settles nested calls after the PTC $unload fiber unloads (Agent: $owned)', async ({ owned, unload }) => {
   const ctx = new Context()
   provideWorkingDirectoryFixture(ctx)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(FakeRuntime)
+  const runtimeProvider = await ctx.plugin(FakeRuntime)
   const provider = ctx.plugin(PtcToolExecutor)
   await provider
   ctx.tools.register(defineTool({
@@ -2567,7 +2597,7 @@ it.each([false, true])('settles nested calls after the PTC executor fiber unload
   const pending = ctx.tools.execute(input)
   try {
     await entered.promise
-    await provider.dispose()
+    await (unload === 'runtime' ? runtimeProvider : provider).dispose()
     await expect(ctx.tools.execute(input)).rejects.toThrow('selected tool executor is unavailable')
     release.resolve(undefined)
     expect((await pending).results[0]?.result).toMatchObject({ isError: false, value: { logs: [], result: 'settled' } })

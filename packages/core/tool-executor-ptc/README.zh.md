@@ -35,7 +35,7 @@ kind: "package-reference"
 
 根 `run_code` 调用是独占调用，按串行执行。`maxParallelSubCalls` 限制每个程序中并行安全的嵌套调用数，默认值为 `10`；值必须是正整数，`1` 表示串行执行。独占调用构成屏障。
 
-本包还要求 `ctx.ptcRuntime` 和 `ctx.systemPrompt`；带 Agent 的程序要求 `ctx.workingDirectory`。缺少运行时时，提示词组装或执行会失败；选中的 PTC 执行器不会回退到原生执行。
+本包将 `ctx.ptcRuntime` 和 `ctx.systemPrompt` 声明为必需注入；带 Agent 的程序要求 `ctx.workingDirectory`。执行器在运行时可用后才激活，并在运行时卸载时撤回。启用 PTC 执行器但未提供运行时会阻止应用启动。已撤回的 PTC 选择不会回退到原生执行。
 
 持久化事件载荷从 `@deepseek-ai/dsh-tool-executor-ptc/types` 导入；该入口可用于独立读取者与 Client 编译。Host 策略扩展通过包主入口的仅类型导入获取 `PtcDispatchLog`、`tools/ptc-dispatch-log` 与 `ptc-mode` 消息来源声明，无需挂载执行器。
 
