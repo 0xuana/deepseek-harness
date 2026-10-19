@@ -74,9 +74,9 @@ Legacy synchronous `return register(...)`, `ctx.effect(() => register(...))`, an
 
 Legacy `stateOf(session, key)` is deprecated and returns `unknown`. Reading a registered key materializes every registered unit at the Session cursor without producing unrelated wire views. An unregistered or fully released key returns `undefined`, while retained handles remain readable. Compatibility covers runtime calls; TypeScript consumers migrate their type declarations.
 
-Each registry instance emits at most one `console.warn` for legacy registration and one for keyed reads; these warnings bypass logger filtering. A registration created during plugin initialization warns if it remains unobserved when startup settles. Awaiting or chaining it before startup completes suppresses that warning; awaiting it afterward may be too late. Registrations created after activation warn only when directly called as disposers. Handle methods and owner cleanup do not warn.
+The first legacy `stateOf(session, key)` read of each key logs one `ctx.logger.warn` deprecation warning per registry instance. Registration, calls to its result, handle methods, and owner cleanup do not warn.
 
-Definitions install synchronously, and handle delivery remains asynchronous. The compatibility layer observes startup without delaying activation. An unobserved rejection is logged after startup and the plugin is disposed: its services can briefly become visible, and its final state is `DISPOSED`, not `FAILED`; recovery requires loading the plugin again rather than updating that fiber. A plugin already unloading or disposed needs no additional warning or failure report. Explicitly observed rejections remain the caller's responsibility. New plugins await registration before exposing readers. Synchronous `try/catch` cannot catch asynchronous registration errors.
+Definitions install synchronously, and handle delivery remains asynchronous. Registration errors reject the returned value; a plugin that ignores it leaves an unhandled rejection. New plugins await registration before exposing readers. Synchronous `try/catch` cannot catch asynchronous registration errors.
 
 ### Persisted checkpoints
 
@@ -153,6 +153,7 @@ These limits define where the projection registry needs care at scale. They are 
 - **Eager drive touches every unit per event** — cheap by construction (whole-value rule and state/view reference gates), but a hot path would justify per-unit event-type prefilters.
 - **Registry cells live in memory only** — a restart rebuilds by folding the log on first touch; compositions that mount `dsh-session-projection-cache` seed that fold from persisted rows instead.
 - **Synchronous unit discipline is only partially mechanical** — `wire.viewSchema.parse` rejects a Promise-returning view, but an `apply` that blocks or reads torn non-session state is a review concern.
+- **A legacy plugin that ignores a failed registration is not contained** — the old API threw inside `apply()`, failing only that plugin; the returned value now rejects, so an unobserved key conflict, invalid `stateVersion`, or owner unload before handoff becomes an unhandled rejection, which a `dsh` profile turns into a process exit.
 
 <a id="dev-note"></a>
 ### Dev Note

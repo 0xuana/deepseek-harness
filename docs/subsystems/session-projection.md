@@ -26,7 +26,7 @@ interface ProjectionHandle<S> {
 }
 ```
 
-The [compatibility rules](../../packages/session/session-projection/README.md#deprecated-plugin-compatibility) define legacy disposal, keyed reads, and one-time console warnings.
+The [compatibility rules](../../packages/session/session-projection/README.md#deprecated-plugin-compatibility) define legacy disposal, keyed reads, and their once-per-key deprecation warnings.
 
 ## The unit
 

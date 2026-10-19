@@ -26,7 +26,7 @@ interface ProjectionHandle<S> {
 }
 ```
 
-[兼容规则](../../packages/session/session-projection/README.zh.md#deprecated-plugin-compatibility)规定旧释放操作、按键读取和一次性控制台警告。
+[兼容规则](../../packages/session/session-projection/README.zh.md#deprecated-plugin-compatibility)规定旧释放操作、按键读取及其每个键一次的弃用警告。
 
 ## 投影单元
 
