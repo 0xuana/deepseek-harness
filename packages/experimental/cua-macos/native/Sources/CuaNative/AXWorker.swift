@@ -78,16 +78,18 @@ actor AXWorker {
     private let cancellation: CancellationLatch
     private let axTimeout: Float
     private let textEventInterval: Double
+    private let maxClickHoldMs: Int
     private var access: AXAccess?
     private var keyboard: KeyboardInput?
     private var pointer: WindowPointerInput?
     private var hovers: [String: AXHover] = [:]
     private var closed = false
 
-    init(cancellation: CancellationLatch, axTimeout: Float, textEventInterval: Double) {
+    init(cancellation: CancellationLatch, axTimeout: Float, textEventInterval: Double, maxClickHoldMs: Int) {
         self.cancellation = cancellation
         self.axTimeout = axTimeout
         self.textEventInterval = textEventInterval
+        self.maxClickHoldMs = maxClickHoldMs
     }
     private func identifier(_ kind: String) throws -> String {
         guard generation < UInt64.max else { throw NativeFailure(code: "NATIVE_ERROR", message: "Native identity space exhausted") }
@@ -343,7 +345,7 @@ actor AXWorker {
             }
             try ax().perform(selected, action)
         case "click", "hover":
-            let holdMs = params.contains("holdMs") ? try params.integer("holdMs", in: 1...5000) : nil
+            let holdMs = params.contains("holdMs") ? try params.integer("holdMs", in: 0...maxClickHoldMs) : nil
             let button = try params.optionalString("mouseButton") ?? "left"
             let count = params.contains("clickCount") ? try params.integer("clickCount", in: 1...2) : 1
             guard button == "left" || (["right", "middle"].contains(button) && count == 1) else { throw RequestParameters.invalid("Unsupported mouse button or click count") }

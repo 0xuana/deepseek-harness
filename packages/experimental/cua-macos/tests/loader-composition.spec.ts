@@ -111,6 +111,7 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
   expect(toolMessages.filter(message => message.isError)).toEqual([])
   expect(JSON.stringify(model.requests[0])).toContain('getCapabilities')
   expect(JSON.stringify(model.requests[0])).toContain('appHandle')
+  expect(JSON.stringify(model.requests[0])).toContain('Maximum click holdMs: 5000 ms.')
   expect(JSON.stringify(model.requests[0])).not.toContain('preloaded')
   expect(JSON.stringify(model.requests[5]?.messages)).toContain('Count: 1')
   const image = toolMessages.at(-1)?.content.find(block => block.type === 'image')

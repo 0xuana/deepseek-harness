@@ -11,7 +11,7 @@ const app = { appHandle: z.string().min(1) }
 const pointer = { mouseButton: z.enum(['left', 'right', 'middle']).optional(),
   modifiers: z.array(z.enum(['command', 'control', 'option', 'shift', 'fn'])).optional() }
 const click = { ...pointer, clickCount: z.union([z.literal(1), z.literal(2)]).optional(),
-  holdMs: z.number().int().min(1).max(5000).optional()
+  holdMs: z.number().int().nonnegative().optional()
     .describe('Milliseconds between each mouse press and release; omitted for an ordinary click.') }
 const window = { ...app, windowId: id }
 const snapshot = { ...app, snapshotId: z.string().min(1), elementIndex: z.number().int().nonnegative() }

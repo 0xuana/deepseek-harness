@@ -171,16 +171,16 @@ describe('hover across observations', () => {
 })
 
 describe('pointer buttons and modifiers', () => {
-  it('preserves hold duration for app and window clicks at elements and coordinates', async () => {
+  it.each([0, 800])('preserves %d ms for app and window clicks at elements and coordinates', async (holdMs) => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
     const window = await app.getWindow(23)
     for (const surface of [app, window]) {
       for (const target of [0, [10, 20] as const]) {
-        await surface.click(target, { holdMs: 800, mouseButton: 'right' })
-        expect(f.dispatch.mock.calls.at(-1)?.[0]).toMatchObject({ method: 'click', params: { holdMs: 800, mouseButton: 'right' } })
+        await surface.click(target, { holdMs, mouseButton: 'right' })
+        expect(f.dispatch.mock.calls.at(-1)?.[0]).toMatchObject({ method: 'click', params: { holdMs, mouseButton: 'right' } })
         f.dispatch.mockClear()
-        await expect(surface.click(target, { holdMs: 0 })).rejects.toThrow('holdMs')
+        await expect(surface.click(target, { holdMs: -1 })).rejects.toThrow('holdMs')
         expect(f.dispatch).not.toHaveBeenCalled()
       }
     }

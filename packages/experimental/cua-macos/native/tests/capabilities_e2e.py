@@ -55,10 +55,11 @@ def check_click_holds(helper, owner, window, point, state_file):
     helper.call("click", target)
     state = wait_for_state(state_file, lambda value: value["axPresses"] == presses + 1)
     count = len(state["events"])
-    for invalid in [0, -1, 1.5, 5001, "800", None]:
+    for invalid in [-1, 1.5, 5001, "800", None]:
         helper.call("click", {**target, "holdMs": invalid}, "INVALID_ARGUMENT")
     assert json.loads(state_file.read_text())["axPresses"] == presses + 1
-    for params, types in [({**target, "holdMs": 150}, [1, 2]),
+    for params, types in [({**target, "holdMs": 0}, [1, 2]),
+                          ({**target, "holdMs": 150}, [1, 2]),
                           ({**window, **point, "holdMs": 150, "mouseButton": "right"}, [3, 4]),
                           ({**window, **point, "holdMs": 150, "mouseButton": "middle"}, [25, 26]),
                           ({**window, **point, "holdMs": 150, "clickCount": 2}, [1, 2, 1, 2])]:
@@ -67,20 +68,21 @@ def check_click_holds(helper, owner, window, point, state_file):
         events = state["events"][count:]
         assert [event["type"] for event in events] == types, events
         for index in range(0, len(events), 2):
-            assert events[index + 1]["timestamp"] - events[index]["timestamp"] >= 0.150, events
+            assert events[index + 1]["timestamp"] - events[index]["timestamp"] >= params["holdMs"] / 1000, events
         assert state["axPresses"] == presses + 1, state
         count += len(types)
     # Production cancellation travels directly over the socket; the diagnostic stdio proxy exchanges whole requests.
     key = hashlib.sha256(Path(helper.process.args[0]).read_bytes()).hexdigest()
     socket_path = Path(f"/tmp/dsh-cua-{os.getuid()}/{key}.sock")
     for ending in ["cancel", "timeout", "disconnect"]:
-        connection = Connection(socket_path, key, timeoutMs=2000 if ending == "timeout" else 30000)
+        connection = Connection(socket_path, key, maxClickHoldMs=7000, timeoutMs=2000 if ending == "timeout" else 30000)
         try:
             app = connection.call("getApp", {"selector": str(observed["pid"])})
             connection.call("getState", {"appHandle": app["appHandle"], "windowId": window["windowId"],
                                          "maxElements": 2000, "maxDepth": 25})
-            params = {**window, **point, "appHandle": app["appHandle"], "holdMs": 5000}
+            params = {**window, **point, "appHandle": app["appHandle"], "holdMs": 6000}
             count = len(json.loads(state_file.read_text())["events"])
+            connection.call("click", {**params, "holdMs": 7001}, error="INVALID_ARGUMENT")
             request = {"id": "held-click", "method": "click", "params": params}
             connection.send(request)
             wait_for_state(state_file, lambda value: len(value["events"]) == count + 1)
@@ -100,6 +102,19 @@ def check_click_holds(helper, owner, window, point, state_file):
             assert [event["type"] for event in state["events"][count:]] == [1, 2, 1, 2], state
         finally:
             connection.close()
+    connection = Connection(socket_path, key, maxClickHoldMs=0)
+    try:
+        app = connection.call("getApp", {"selector": str(observed["pid"])})
+        connection.call("getState", {"appHandle": app["appHandle"], "windowId": window["windowId"],
+                                     "maxElements": 2000, "maxDepth": 25})
+        count = len(state["events"])
+        params = {**window, **point, "appHandle": app["appHandle"]}
+        connection.call("click", {**params, "holdMs": 1}, error="INVALID_ARGUMENT")
+        connection.call("click", {**params, "holdMs": 0})
+        state = wait_for_state(state_file, lambda value: len(value["events"]) >= count + 2)
+        assert [event["type"] for event in state["events"][count:]] == [1, 2], state
+    finally:
+        connection.close()
     return state
 
 

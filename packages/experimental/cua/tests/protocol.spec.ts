@@ -23,11 +23,11 @@ it.each([
   { appHandle: 'app', windowId: 23, x: 1, y: 2 },
   { appHandle: 'app', windowId: 23, x: 1, y: 2, relative: true },
 ])('validates optional per-press hold duration for %j', (params) => {
-  for (const holdMs of [1, 800, 5000]) {
+  for (const holdMs of [0, 1, 800, 5000, 7000]) {
     const request = { method: 'click', params: { ...params, holdMs } }
     expect(Request.parse(request)).toEqual(request)
   }
-  for (const holdMs of [0, -1, 1.5, 5001, Infinity, NaN, '800', null]) {
+  for (const holdMs of [-1, 1.5, Infinity, NaN, '800', null]) {
     expect(Request.safeParse({ method: 'click', params: { ...params, holdMs } }).success).toBe(false)
   }
 })
