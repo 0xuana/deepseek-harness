@@ -396,3 +396,15 @@ it.each([en, zh])('keeps one control per permission row and closes a granted men
   expect(f.props.openSettings).not.toHaveBeenCalled()
   expect(f.props.revoke).not.toHaveBeenCalled()
 })
+
+
+it('retains the previous single control while a stale query error is being refreshed', () => {
+  const f = fixture()
+  f.publish(observe(value))
+  render(<PermissionPanel {...f.props} />)
+  f.publish({ system: { value: value.system, busy: true, error: 'stale error' }, busy: true })
+  expect(screen.getByRole('button', { name: en.request }).hasAttribute('disabled')).toBe(true)
+  expect(screen.getByRole('button', { name: en.granted }).hasAttribute('disabled')).toBe(true)
+  expect(screen.queryByRole('alert')).toBeNull()
+  expect(screen.queryByRole('menu')).toBeNull()
+})

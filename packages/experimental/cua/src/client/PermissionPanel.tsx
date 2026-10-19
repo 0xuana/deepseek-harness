@@ -162,7 +162,8 @@ export function PermissionPanel(props: PermissionPanelProps) {
             <strong>{t(permission)}</strong>
             <PermissionDescription application={application} permission={permission} loading={loading} t={t} />
           </div>
-          <PermissionAction permission={permission} granted={observed === null || state.system.error !== null ? null : observed[permission]}
+          <PermissionAction permission={permission}
+            granted={observed === null || (!busy && state.system.error !== null) ? null : observed[permission]}
             loading={loading} busy={busy} request={props.request} openSettings={props.openSettings} t={t} />
         </div>)}
       </div>
