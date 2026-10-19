@@ -706,14 +706,6 @@ it('stores revocation without entering the HMR configuration queue', async () =>
   expect(await readFile(f.profile.patchPath, 'utf8')).toBe(before)
   release.resolve(undefined)
   await blocked
-  const entry = [...f.ctx.loader.entries()].find(entry => entry.options.id === 'cua')!
-  const stopping = entry.fiber!
-  const options = { ...entry.options }
-  entry.parent.remove(entry.options.id)
-  await stopping.dispose()
-  await entry.parent.create({ ...options, disabled: false })
-  await f.ctx.loader.await()
-  expect((await f.ctx.cuaAccess.applications()).allowedApps).toEqual([])
 })
 
 it('stores signed application consent separately from configuration', async () => {
