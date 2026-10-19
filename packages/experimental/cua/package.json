@@ -55,6 +55,8 @@
   },
   "files": [
     "lib/index.js",
+    "lib/client.js",
+    "lib/remote-types.js",
     "lib/api.js",
     "lib/bridge.js",
     "lib/native-client.js",
@@ -63,9 +65,7 @@
     "lib/typert.host.js",
     "lib/typert.host.d.ts",
     "lib/typert.remote-client.js",
-    "lib/typert.remote-client.d.ts",
-    "lib/remote-types.js",
-    "lib/client.js"
+    "lib/typert.remote-client.d.ts"
   ],
   "license": "MIT",
   "peerDependencies": {
