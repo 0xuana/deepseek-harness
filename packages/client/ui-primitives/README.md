@@ -60,6 +60,7 @@ Check this table before writing a control in a feature package. A plugin cannot 
 | `RiskConfirmation` | Sensitive action gated behind an explicit checkbox. |
 | `Tooltip` | Hover and keyboard-focus text anchored to a cloned child; optional `delayMs` controls hover delay and `focusDelayMs` controls keyboard-focus delay, both defaulting to 0 ms. Optional `portal` rendering escapes clipping containers and ancestor stacking contexts that cap the bubble's z-index. |
 | `HoverCard`, `HoverCardGroup` | Readable, optionally copyable hover preview; a physical list can opt cards into shared first-display dwell and exclusive display. |
+| `DraggableImage` | Original-image gestures with explicit transfer and feedback callbacks. |
 | `ImageLightbox` | Shared image modal with focus restoration and Escape dismissal. |
 | `Toast` | Transient top-center banner held for the owner's `holdMs`. |
 | `SettingsForm`, `SettingsValueField`, `SettingsSecretField` | The frame and the controls of a plugin's settings page: the frame takes its copy as `labels`, saves only on its button, and discards on unmount; a value field shows staged text with the overridden badge and reset; a secret field starts blank, requests no saved-password autofill, and reports only whether a value is configured. |
@@ -111,6 +112,8 @@ The nearest `MarkdownDelegateProvider` supplies optional `openExternalLink` and 
 `JsonTree` clamps collapsed strings to `collapsedStringLines` (three by default). Expanded strings show raw text, retain sibling commas, and fit within the window and outer scrolling containers. Resize and ancestor-scroll events update that limit. Row copy feedback updates independently of JSON value rendering; pending clipboard writes cannot update a different row or an unmounted tree.
 
 `ImageLightbox` is the shared original-image modal with focus restoration and Escape dismissal. Like `Modal`, its mask leaves the Windows caption unpainted, and its close control sits 20px below the caption. The internal thumbnail renderer receives loading/failure labels from its owner. `HoverCard.inline` keeps a file link in the text flow and uses the shared menu material, keyboard-visible focus, and placement above or below the anchor without covering it. Escape closes an open thumbnail even when focus is elsewhere; subsequent Escape presses reach the owner. `MarkdownDelegateProvider.fileImages` supplies a decoded-path resolver and complete image labels: settled image links gain hover previews, and standalone images gain lightbox activation. Image-only anchors retain their single navigation target. The parser recovers only complete, unescaped, standalone local image references with bare spaces and an unambiguous supported image suffix; code and ambiguous destinations remain literal.
+
+`DraggableImage` requires explicit `imageDrag: ImageDragActions` callbacks, also supplied through `MarkdownDelegateProvider.fileImages.imageDrag` for managed Markdown images. The [image-drag plugin](../ui-image-drag/README.md) owns cross-entry transfers and feedback; the primitive owns only its image preparation and gesture lifecycle. Original bytes are prepared on hover or primary pointer down, never on mount, and obsolete preparations are cancelled. Managed Web transfers carry an application-local token plus Chromium’s `DownloadURL`; only the owning application resolves the token to the original `File`. These managed transfers do not place internal URLs or alt text in `text/plain`.
 
 ### Localizing copy
 
@@ -200,6 +203,7 @@ None; this package neither assembles nor sends a provider request.
 
 These limits define how the atoms behave at the edges; they are current package constraints, not a component roadmap.
 
+- **Browser image transfers** — external targets depend on Chromium `DownloadURL` and the receiving application; native file delivery is provided by Desktop. Web tokens do not transfer between windows or tabs. Unreadable cross-origin images retain browser-native dragging, as do linked Markdown images and Markdown without `fileImages`; those native paths may include URLs.
 - **Diff search is bounded, input processing is linear** — the edit-distance limit trades precise alignment for a coarse replacement on heavily changed fragments. Normalization, fallback rows, and copied output still scale with input size; the height cap limits visible rows, not those allocations.
 - **Known-site marks are a fixed list** — only the named hosts resolve to their own mark, and every other external host keeps the globe; recognizing an arbitrary site would require fetching its icon over the network.
 - **Streaming defers cross-boundary reference resolution** — a reference-style link or footnote whose definition sits on the other side of the incremental freeze boundary renders as literal text while the reply streams; the settled full parse at finalize resolves it.

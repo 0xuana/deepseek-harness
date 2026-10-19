@@ -119,6 +119,9 @@
     },
     {
       "path": "../product-analytics/tsconfig.client.json"
+    },
+    {
+      "path": "../ui-image-drag"
     }
   ],
   "exclude": [

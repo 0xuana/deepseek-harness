@@ -80,6 +80,7 @@ function sectionOperations(account: AccountSnapshot, pages: PlatformPages): Acco
 async function bench() {
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   const runtime = await SlotTestRuntime.create()
+  runtime.ctx.provide('imageDrag', { actions: { desktop: undefined, begin: () => 'token', end: () => {}, report: () => {} }, read: () => undefined })
   disposers.push(() => runtime.dispose())
   const forms = new Map<string, ReturnType<typeof stubConfigForm>['scope']>()
   const formFor = (namespace: string) => {

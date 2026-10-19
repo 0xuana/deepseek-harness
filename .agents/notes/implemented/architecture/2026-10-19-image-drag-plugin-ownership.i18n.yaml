@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-19-image-drag-plugin-ownership.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-19-image-drag-plugin-ownership.md
+/agent-note-image-drag-ownership-outside-the-application-layout:
+  en: 094f036caf9062fd
+  zh: 71c0837748922a1f
+/agent-note-image-drag-ownership-outside-the-application-layout/problem:
+  en: 557edc1db9bee8d8
+  zh: 20f47c78c8b0078b
+/agent-note-image-drag-ownership-outside-the-application-layout/decision:
+  en: d40e8d31fe2fca0c
+  zh: ae8bd790cd80a640
+/agent-note-image-drag-ownership-outside-the-application-layout/alternatives-considered:
+  en: 32d570f71930fcad
+  zh: 85886d87a58d11ca
+/agent-note-image-drag-ownership-outside-the-application-layout/consequences:
+  en: 5259dd44c9118e19
+  zh: 022f64b1baa3030f

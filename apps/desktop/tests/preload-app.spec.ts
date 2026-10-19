@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import type { DesktopImageDrag } from '../../../packages/client/ui-primitives/src/image-drag.ts'
 import { JSDOM } from 'jsdom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { installMandatoryUpdateOverlay } from '../src/preload-mandatory-overlay.ts'
@@ -254,3 +255,25 @@ it('forwards browser guest input only for the focused live webview lease', async
   expect(listener).toHaveBeenCalledOnce()
   off()
 })
+
+it('prepares original image bytes and starts native drags without renderer filesystem paths', async () => {
+  vi.stubGlobal('location', new URL('dsh-app://app/'))
+  await import('../src/preload-app.ts')
+  const api = electron.contextBridge.exposeInMainWorld.mock.calls.find(([name]) => name === 'dshDesktop')?.[1] as DshDesktopProductApi
+  const bytes = new Uint8Array([137, 80, 78, 71])
+  electron.ipcRenderer.invoke.mockResolvedValueOnce('image-handle').mockResolvedValueOnce(true).mockResolvedValueOnce(undefined)
+  await expect(api.imageDrag.prepare(bytes, 'original.png', 'image/png')).resolves.toBe('image-handle')
+  await expect(api.imageDrag.start('image-handle')).resolves.toBe(true)
+  api.imageDrag.release('image-handle')
+  expect(electron.ipcRenderer.invoke.mock.calls).toEqual([
+    [DESKTOP_IPC.imageDragPrepare, bytes, 'original.png', 'image/png'],
+    [DESKTOP_IPC.imageDragStart, 'image-handle'],
+    [DESKTOP_IPC.imageDragRelease, 'image-handle'],
+  ])
+})
+
+// The Host and Client compiler faces share no runtime entry; this assignment checks their image protocol.
+const imageProtocol = (value: import('../src/ipc.ts').DshDesktopProductApi['imageDrag']): DesktopImageDrag => value
+const imageProtocolBack = (value: DesktopImageDrag): import('../src/ipc.ts').DshDesktopProductApi['imageDrag'] => value
+void imageProtocol
+void imageProtocolBack

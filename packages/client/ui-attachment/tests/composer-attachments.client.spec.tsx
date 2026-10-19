@@ -74,7 +74,9 @@ function fileDraft(id: string, name = `${id}.pdf`): ComposerAttachment {
   }
 }
 
-function props(overrides: Partial<ComposerAttachmentsOwnerProps> = {}): ComposerAttachmentsProps {
+type AttachmentProps = ComposerAttachmentsProps & { readImageDrag: (transfer: DataTransfer) => File | undefined }
+
+function props(overrides: Partial<ComposerAttachmentsOwnerProps> = {}): AttachmentProps {
   return {
     attachments: [],
     canAcceptDrop: true,
@@ -84,7 +86,8 @@ function props(overrides: Partial<ComposerAttachmentsOwnerProps> = {}): Composer
     onRetryFile: () => {},
     t,
     ...overrides,
-  } as unknown as ComposerAttachmentsProps
+    readImageDrag: () => undefined,
+  } as AttachmentProps
 }
 
 describe('ComposerAttachments', () => {
@@ -306,3 +309,29 @@ describe('ComposerAttachments file drafts', () => {
     expect(view.getByTitle('.env').textContent).toContain('ENV 3B')
   })
 })
+
+it('accepts only the current app image token without showing an external-file overlay', async () => {
+  const { DraggableImage } = await import('@deepseek-ai/dsh-client-ui-primitives')
+  const file = new File([Uint8Array.of(1, 2)], 'original.png', { type: 'image/png' })
+  function Source() {
+    return <DraggableImage imageDrag={imageDrag} alt="drag source" src="blob:original" name={file.name} failureText="拖放失败，请重试" original={file} />
+  }
+  const onAddFiles = vi.fn()
+  const view = render(<><Source /><ComposerAttachments {...props({ onAddFiles })} readImageDrag={transfer => transfer.getData('application/x-dsh-image') === 'token' ? file : undefined} /></>)
+  const data = new Map<string, string>()
+  const transfer = {
+    types: ['application/x-dsh-image'], items: Object.assign([], { clear: vi.fn() }), files: [],
+    getData: (key: string) => data.get(key) ?? '', setData: (key: string, value: string) => data.set(key, value),
+  }
+  fireEvent.pointerEnter(view.getByAltText('drag source'))
+  fireEvent.dragStart(view.getByAltText('drag source'), { dataTransfer: transfer })
+  fireEvent.dragEnter(document.body, { dataTransfer: transfer })
+  expect(view.queryByText('文件或图片拖动到此处即可添加')).toBeNull()
+  fireEvent.drop(document.body, { dataTransfer: transfer })
+  expect(onAddFiles).toHaveBeenCalledExactlyOnceWith([file], new Set())
+  data.set('application/x-dsh-image', 'foreign')
+  fireEvent.drop(document.body, { dataTransfer: transfer })
+  expect(onAddFiles).toHaveBeenCalledOnce()
+})
+
+const imageDrag = { desktop: undefined, begin: vi.fn(() => 'token'), end: vi.fn(), report: vi.fn() }
