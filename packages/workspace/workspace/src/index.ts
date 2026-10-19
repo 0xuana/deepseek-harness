@@ -19,6 +19,7 @@ import { defaultWorkspaceTitle, fullyQualifiedWorkspacePath, realpathNormalize }
 import { workspaceDomainSpec } from './spec.ts'
 import type { WorkspaceDomainState, WorkspaceRecord } from './spec.ts'
 import type { SessionActivity, Workspace, WorkspaceId as WorkspaceIdBrand } from './types.ts'
+import { storedInstant } from './stored-instant.ts'
 
 export type {
   SessionActivity, SessionActivityItem, SessionActivityKind, SessionActivityKindMap, Workspace,
@@ -516,7 +517,7 @@ export class WorkspaceRegistry extends Service {
     const table = this.requireTable()
     const state = this.requireState()
     const id = WorkspaceId(randomUUID())
-    const now = new Date().toISOString()
+    const now = storedInstant(Date.now())
     const record: WorkspaceRecord = {
       path: canonical,
       title: workspaceName,
@@ -680,7 +681,7 @@ export class WorkspaceRegistry extends Service {
           .filter(sessionId => !accounted.has(sessionId))
         if (sessionIds.length === 0) continue
         id = WorkspaceId(randomUUID())
-        const createdAt = new Date(group.newestAt).toISOString()
+        const createdAt = storedInstant(group.newestAt)
         const record: WorkspaceRecord = {
           path: group.path,
           title: defaultWorkspaceTitle(group.path),
@@ -707,7 +708,7 @@ export class WorkspaceRegistry extends Service {
       await table.update(id, record => ({
         ...record,
         sessionIds,
-        updatedAt: new Date().toISOString(),
+        updatedAt: storedInstant(Date.now()),
       }))
       for (const sessionId of historical) accounted.set(sessionId, id)
     }

@@ -115,7 +115,7 @@ Workspace 注册不意味着拥有其目录。未来的破坏性文件系统操�
 
 ### 持久形态
 
-注册表打开 `workspace` 领域（版本 2）：一张以 `WorkspaceId` 为键的 `workspaces` 表，加上一个持有 `workspaceIds`（权威显示顺序）、`archivedSessionIds`、`pinnedSessionIds`、可选的首次使用身份 `defaultWorkspaceId` 与可选 `pendingMutation` 标记的全局状态。归档与置顶集合存储会话 id 字符串，默认值为空，不包含逐项对象或时间戳；置顶数组把最近置顶的 id 放在前面。归档在同一次全局状态写入中清除置顶，但不改变 Workspace 成员关系。取消归档不做会话存在性探测，因为从集合中移除 id 不可能引入未知 id，而归档会在加入前校验会话。
+注册表打开 `workspace` 领域（版本 2）：一张以 `WorkspaceId` 为键的 `workspaces` 表，加上一个持有 `workspaceIds`（权威显示顺序）、`archivedSessionIds`、`pinnedSessionIds`、可选的首次使用身份 `defaultWorkspaceId` 与可选 `pendingMutation` 标记的全局状态。`createdAt` 与 `updatedAt` 携带的是其它所有持久边界都会读取的规范四位年份 UTC 时刻；写入会拒绝该剖面无法表示的纪元，而不是把它截断或写成扩展年份。归档与置顶集合存储会话 id 字符串，默认值为空，不包含逐项对象或时间戳；置顶数组把最近置顶的 id 放在前面。归档在同一次全局状态写入中清除置顶，但不改变 Workspace 成员关系。取消归档不做会话存在性探测，因为从集合中移除 id 不可能引入未知 id，而归档会在加入前校验会话。
 
 ### 生命周期
 

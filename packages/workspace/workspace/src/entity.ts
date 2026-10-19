@@ -14,6 +14,7 @@ import type { KvTable } from '@deepseek-ai/dsh-storage-domain'
 import type { WorkspaceRecord } from './spec.ts'
 import type { Workspace, WorkspaceId } from './types.ts'
 import { realpathNormalize } from './paths.ts'
+import { storedInstant } from './stored-instant.ts'
 
 /** An insertSessionBefore request named a session or anchor not on the account (storage failures stay plain errors). */
 export class WorkspaceMoveInvalidError extends Error {
@@ -211,7 +212,7 @@ export class WorkspaceEntity implements Workspace {
         if (changed === current && sessionIds.length === current.sessionIds.length) {
           throw unchangedSentinel
         }
-        return { ...changed, sessionIds, updatedAt: new Date().toISOString() }
+        return { ...changed, sessionIds, updatedAt: storedInstant(Date.now()) }
       })
     } catch (error) {
       if (error === unchangedSentinel) return

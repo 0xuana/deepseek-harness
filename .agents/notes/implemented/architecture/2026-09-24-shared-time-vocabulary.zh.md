@@ -22,6 +22,8 @@ Schedule 消费它，并保留全部域内决策。`canonicalizeTimeZone`、`dec
 
 最后一份规范时刻剖面副本也一并迁移。`packages/session/session-format-v0-to-v1/src/payload-validation.ts` 原本用自己的一段正则与往返比对校验持久记录里的调度时刻；共享的 `fourDigitYearEpoch` 拥有同一剖面，因此该迁移改为询问它，并保留自己的错误类型与文案。由于这个迁移要读取已发布的日志，其接受集由一份差分固定：覆盖规范形式、四位年份两端，以及只靠正则会被放进来的字符串（`2026-02-30`、四位小数、数字偏移、首尾空白）。
 
+Workspace 记录的时间戳采用同一剖面。`dsh-workspace` 原先用平台的 `toISOString` 写 `createdAt` 与 `updatedAt`——它会把小数纪元截断，并在 9999 之后写成扩展年份；这些字符串是持久的，于是记录里可能存下其它边界都会拒绝的四位年份剖面之外的时刻。现在写入经由 `formatFourDigitYearInstant` 与一个本地 `storedInstant`，后者对该剖面无法表示的两种输入抛 `RangeError`；这两种输入从 `Date.now()` 与 `SessionHeader` 的纪元出发都不可达。对每个可表示的纪元，渲染结果逐字节不变。
+
 受维护的 `@js-temporal/polyfill` 0.5.1 在成为 `dsh-schedule` 运行时依赖之外，也成为 `dsh-util-time` 的运行时依赖。本地解析继续使用它，因此缺口与重叠仍由宿主 IANA 数据决定，也没有调用方需要自己实现偏移采样。`util/time` 自身的描述与 README 去掉了 `zero-dependency` 这一说法，因为它容易被误读：该组的约定禁止的是 harness 依赖（以便任何组都能依赖 util），并不禁止外部包；因此 `packages/README.md` 与 `AGENTS.md` 里的 `util/` 一行保留该说法，而 `packages/util/README.md` 与本包自己的描述写明它加载了什么。
 
 可观察行为不变。每个被接受的输入解析出相同的纪元值，每个被拒绝的输入抛出相同的 `ScheduleInputError` 或 `ScheduleLogError` 错误码与相同的消息，存储的 `scheduledAt` 剖面不变，因此没有持久记录或录制快照需要重录。Schedule 的测试断言错误码以及少量无关的消息子串，因此本次在 `packages/schedule/schedule/tests/domain.spec.ts` 新增的断言是唯一固定这三条本地日历消息的地方。`packages/util/time/tests/instant.spec.ts` 直接覆盖新增入口，包含逐文件 100% 覆盖。
