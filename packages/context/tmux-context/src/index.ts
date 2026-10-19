@@ -210,16 +210,18 @@ const tmuxContextStateSchema = zod.object({
 
 /**
  * Register a prepended pre-step listener for the lifetime of `ctx`.
+ * Steps admitted during activation await the projection registration; a
+ * registration failure or owner disposal prevents the request from proceeding.
  * @param ctx - plugin context; the listener is disposed with it.
  * @param config - durable refresh scheduling configuration.
- * @returns when the listener is registered.
+ * @returns when the listener and projection are ready.
  * @throws when the refresh interval is invalid.
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
   const refreshIntervalMs = config.refreshIntervalMs
   validateRefreshInterval(refreshIntervalMs)
 
-  const tmuxContextProjectionHandle = await ctx.sessionProjections.register({
+  const projectionReady = ctx.sessionProjections.register({
     key: 'tmuxContext',
     stateVersion: 1,
     stateSchema: tmuxContextStateSchema,
@@ -239,6 +241,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     { agent, turn, step, signal },
     next,
   ): Promise<PreStepDecision> => {
+    const tmuxContextProjectionHandle = await projectionReady
+    ctx.fiber.assertActive()
     const decision = await next()
     if (decision.kind === 'reject' || signal.aborted || step !== 1) return decision
     const bash = ctx.get('shell')
@@ -264,4 +268,5 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       ],
     }
   }, { prepend: true })
+  await projectionReady
 }
