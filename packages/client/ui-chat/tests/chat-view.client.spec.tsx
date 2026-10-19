@@ -1829,8 +1829,9 @@ describe('ChatView', () => {
     expect(within(pendingBubble as HTMLElement).queryByRole('button', { name: '在新对话中分支' })).toBeNull()
     expect(turnProcessControl(view.container)).toBeNull()
     expect(runningContent(view.container)?.textContent).toMatch(/^深度求索中，用时 \d+秒 ···$/)
+    // The status stays on the running Turn's tail; the steering waiting for the next Step follows it.
     expect(view.getByRole('status').compareDocumentPosition(view.getByText('interrupt now'))
-      & Node.DOCUMENT_POSITION_PRECEDING).not.toBe(0)
+      & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
 
     act(() => {
       h.setSession({ testInbox: { 'next-turn': [queued], 'next-step': [] } })
@@ -2055,6 +2056,69 @@ describe('ChatView', () => {
       expect(view.getAllByText(`input ${hostOrder[0]}`)).toHaveLength(1)
     },
   )
+
+  it('keeps steering a stopped Turn left pending ahead of the next opening echo, in claim order', () => {
+    const local = (requestId: string, placement: 'steering' | 'transcript', text: string) => ({
+      requestId: requestId as never, placement, time: 1_000, text, attachments: [],
+    })
+    const steers = [local('s1', 'steering', 'steer one'), local('s2', 'steering', 'steer two')]
+    const next = local('next', 'transcript', 'next prompt')
+    const inbox: InboxState = { 'next-turn': [], 'next-step': steers.map(item => ({
+      id: item.requestId, role: 'user', source: { kind: 'user', rpcId: item.requestId },
+      content: [{ type: 'text', text: item.text }],
+    })) }
+    const h = makeHarness({}, { pendingSubmissions: [...steers, next], testInbox: inbox })
+    const view = render(<h.ChatView {...h.props} />)
+    const flow = () => [...view.container.querySelectorAll<HTMLElement>(
+      '[data-submission-echo], [data-chat-flow-kind="turn-process"], [data-chat-running]',
+    )].map(element => element.hasAttribute('data-chat-running') ? 'status'
+      : element.matches('[data-chat-flow-kind="turn-process"]') ? 'title'
+        : String([...steers, next].find(input => element.textContent?.includes(input.text))?.requestId))
+    // The next Turn's first claim logs the pending steering before the prompt.
+    expect(flow()).toEqual(['s1', 's2', 'next'])
+    act(() => { h.setSession({ running: true }) })
+    expect(flow()).toEqual(['s1', 's2', 'next', 'status'])
+    act(() => { h.setChat({ turnTimings: new Map([[1, { startTime: 1_000 }]]) }) })
+    expect(flow()).toEqual(['s1', 's2', 'next', 'title', 'status'])
+  })
+
+  it('keeps the rest of a stopped Turn\'s claim as echoes after the empty control as its rows become durable', () => {
+    const local = (requestId: string, placement: 'steering' | 'transcript', text: string) => ({
+      requestId: requestId as never, placement, time: 1_000, text, attachments: [],
+    })
+    const steers = [local('s1', 'steering', 'steer one'), local('s2', 'steering', 'steer two')]
+    const next = local('next', 'transcript', 'next prompt')
+    const inputs = [...steers, next]
+    const h = makeHarness({ turnTimings: new Map([[1, { startTime: 1_000 }]]) }, {
+      running: true, pendingSubmissions: inputs, testInbox: { 'next-turn': [], 'next-step': [] },
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    const flow = () => [...view.container.querySelectorAll<HTMLElement>(
+      '[data-submission-echo], [data-chat-flow-kind="steering"], [data-chat-flow-kind="user"], '
+      + '[data-chat-flow-kind="turn-process"], [data-chat-running]',
+    )].map(element => element.hasAttribute('data-chat-running') ? 'status'
+      : element.matches('[data-chat-flow-kind="turn-process"]') ? 'title'
+        : String(inputs.find(input => element.textContent?.includes(input.text))?.requestId)
+          + (element.hasAttribute('data-submission-echo') ? '*' : ''))
+    const durableSteering = (seq: number, item: typeof steers[number]) => ({
+      ...steering(seq, item.text, 1), source: { kind: 'user' as const, rpcId: item.requestId },
+    })
+    expect(flow()).toEqual(['s1*', 's2*', 'next*', 'title', 'status'])
+    // The claim logs both steering rows before its prompt. The remaining echoes
+    // follow the running Turn's empty control, which has no height; the
+    // stylesheet keeps them at the input gap (turn-tail-spacing spec).
+    act(() => { h.setChat({ nodes: [durableSteering(2, steers[0]!)] }) })
+    expect(flow()).toEqual(['s1', 'title', 's2*', 'next*', 'status'])
+    act(() => { h.setChat({ nodes: [durableSteering(2, steers[0]!), durableSteering(3, steers[1]!)] }) })
+    expect(flow()).toEqual(['s1', 's2', 'title', 'next*', 'status'])
+    const prompt: UserMessageNode & { turn: number } = {
+      ...user(4, next.text), turn: 1, source: { kind: 'user', rpcId: next.requestId },
+    }
+    act(() => {
+      h.setChat({ nodes: [durableSteering(2, steers[0]!), durableSteering(3, steers[1]!), prompt] })
+    })
+    expect(flow()).toEqual(['s1', 's2', 'next', 'title', 'status'])
+  })
 
   it('leaves an opening echo below an empty historical Turn title', () => {
     const h = makeHarness({ turnTimings: new Map([[1, { startTime: 1_000 }]]), turnEnds: new Map([[1, 2]]) }, {
@@ -4403,5 +4467,22 @@ describe('ChatView', () => {
     expect(status?.querySelector('animate')).toBeNull()
     act(() => { h.setSession({ running: false }) })
     expect(column.querySelector('[data-chat-running]')).toBeNull()
+  })
+
+  it('marks the steering row whose data carries a batch start, and no other input', () => {
+    const batchStart = (seq: number, text: string) => ({ ...steering(seq, text, 1), batchStart: true as const })
+    const h = makeHarness({
+      nodes: [
+        userInTurn(1, 'question', 1), assistant(2, 'working', 1, 1),
+        batchStart(3, 'first direction'),
+        steering(4, 'second direction', 1),
+        assistant(5, 'answer', 1, 2),
+      ],
+      turnTimings: new Map([[1, { startTime: 0 }]]),
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    const rows = [...view.container.querySelectorAll('[data-chat-steering-batch="start"]')]
+      .map(element => element.closest<HTMLElement>('[data-chat-node-key]')?.dataset.chatNodeKey)
+    expect(rows).toEqual(['fixture:steering:3'])
   })
 })
