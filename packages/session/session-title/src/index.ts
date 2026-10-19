@@ -345,29 +345,11 @@ export class SessionTitleService extends Service {
       this.work.clear()
     }, 'sessionTitle lifecycle')
 
-    await ctx.sessionProjections.register(titleProjectionDefinition)
-
-    this.titleInputProjectionHandle = await ctx.sessionProjections.register<'titleInput', TitleInputState>({
-      key: 'titleInput',
-      stateVersion: 3,
-      stateSchema: titleInputStateSchema,
-      init: () => EMPTY_TITLE_INPUT,
-      apply: (state, event) => {
-        const message = sessionTitleUserMessageOf(event)
-        if (message === undefined) return state
-        return {
-          first: state.first ?? message,
-          count: state.count + 1,
-          lastSeq: message.seq,
-        }
-      },
-    })
-
+    // oxlint-disable-next-line typescript/no-misused-promises -- session/event reports rejected observer promises without awaiting them.
     ctx.on('session/event', (session, event) => {
       switch (event.type) {
         case 'user/message':
-          this.onUserMessage(session, event)
-          break
+          return this.onUserMessage(session, event)
         case 'request/header':
           this.onRequestHeader(session, event)
           break
@@ -384,6 +366,24 @@ export class SessionTitleService extends Service {
       if (state === undefined) return
       state.active?.controller.abort(new Error('session disposed during title generation'))
       this.work.delete(session)
+    })
+
+    await ctx.sessionProjections.register(titleProjectionDefinition)
+
+    this.titleInputProjectionHandle = await ctx.sessionProjections.register<'titleInput', TitleInputState>({
+      key: 'titleInput',
+      stateVersion: 3,
+      stateSchema: titleInputStateSchema,
+      init: () => EMPTY_TITLE_INPUT,
+      apply: (state, event) => {
+        const message = sessionTitleUserMessageOf(event)
+        if (message === undefined) return state
+        return {
+          first: state.first ?? message,
+          count: state.count + 1,
+          lastSeq: message.seq,
+        }
+      },
     })
   }
 
@@ -506,10 +506,15 @@ export class SessionTitleService extends Service {
     return dispose
   }
 
-  /** Schedule fallback creation and any provider cadence for one eligible event. */
-  private onUserMessage(session: Session, event: Extract<SessionEvent, { type: 'user/message' }>): void {
-    if (!this.serviceActive()) return
+  /** Schedule current-provider work; activation-time messages only request the fallback. */
+  private async onUserMessage(session: Session, event: Extract<SessionEvent, { type: 'user/message' }>): Promise<void> {
     if (event.data.source.kind !== 'user' || sessionTitleUserMessageOf(event) === undefined) return
+    if (this.ownerFiber.state === FiberState.LOADING) {
+      await this.ownerFiber.await()
+      if (this.serviceActive() && this.ctx.sessions.get(session.id) === session) await this.ensureFallback(session)
+      return
+    }
+    if (!this.serviceActive()) return
     // A user rename pins the title: no automatic revision may override it.
     if (this.get(session)?.source.kind === 'user') return
     const registration = this.registration
