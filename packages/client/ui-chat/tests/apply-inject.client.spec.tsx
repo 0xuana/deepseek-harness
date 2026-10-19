@@ -271,9 +271,13 @@ describe('Chat inject API', () => {
     await b.runtime.sessions.setProjection(ROOT, 'workingDirectory', '/proj/.agents/worktrees/w')
     await injected.openFile('src/a.ts')
     expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1/.agents/worktrees/w/src/a.ts')
+    // A leading `./` names the same file, so the Sidebar reuses its tab.
+    await injected.openFile('./src/a.ts')
+    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1/.agents/worktrees/w/src/a.ts')
     await injected.openFile('/proj/src/a.ts')
     expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1/src/a.ts')
 
+    // Outside the workspace, the address carries the absolute path after the Session id.
     await b.runtime.sessions.setProjection(ROOT, 'workingDirectory', '/elsewhere')
     await injected.openFile('src/a.ts')
     expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1//elsewhere/src/a.ts')
