@@ -1,5 +1,5 @@
-import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 /** Real Loader, AgentLoop and helper-process transport; only desktop and model responses are fixtures. */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

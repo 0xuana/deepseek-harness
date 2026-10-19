@@ -1,5 +1,5 @@
-import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 /** Real Loader composition preserves retrievable source text outside the bounded preview. */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'

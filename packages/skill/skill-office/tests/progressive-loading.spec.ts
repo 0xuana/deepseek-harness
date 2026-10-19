@@ -38,7 +38,7 @@ async function setup(mode: 'native' | 'ptc', names: string[]) {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt, { personaPrefix: '', personaSuffix: '' })
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin((mode) === 'ptc' ? PtcToolExecutor : NativeToolExecutor)
+  await ctx.plugin(mode === 'ptc' ? PtcToolExecutor : NativeToolExecutor)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(SkillRegistry)

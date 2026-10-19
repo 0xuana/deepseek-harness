@@ -1,10 +1,10 @@
-import { executeToolFixture, executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 /**
  * End-to-end tool-registry tests against the real local backend. The policy deployment verifies
  * observed-state and guarded mutation; the bare deployment proves unconditional tools have no
  * policy-service dependency. Assertions read files back byte-for-byte rather than trusting tool
  * messages.
  */
+import { executeToolFixture, executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
@@ -451,7 +451,7 @@ describe('per-session cwd', () => {
 
 // --------------------------------------------------------------------------
 // Abort-through-the-tool, tool-tier concurrency, and the fs/observed contract —
-// all through executeToolFixture(ctx, ) against the REAL backend + policy.
+// all through executeToolFixture() against the REAL backend + policy.
 // --------------------------------------------------------------------------
 describe('signal, concurrency, and the fs/observed contract', () => {
   beforeEach(async () => {

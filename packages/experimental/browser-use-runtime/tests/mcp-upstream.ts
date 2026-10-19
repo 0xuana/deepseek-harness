@@ -1,5 +1,5 @@
-import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 /** Real upstream MCP browser checks against private loopback pages and disposable Chromium. */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'

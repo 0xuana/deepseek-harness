@@ -1,10 +1,10 @@
-import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 /**
  * Tests for the mcp-client connection supervisor: crash-driven reconnection
  * with bounded backoff, generation-safe tool re-registration, the failure
  * cap, the stability-window budget reset, and disposal stopping reconnection.
  * Isolated file so vi.mock of the MCP SDK doesn't pollute other test suites.
  */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'

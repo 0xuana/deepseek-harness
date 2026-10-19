@@ -1,5 +1,5 @@
-import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 /** Built bridge imports and retained objects from a project outside the Harness installation. */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { existsSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

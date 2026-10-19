@@ -1,7 +1,7 @@
+/** Real SDK negotiation, subscription, and cancellation through the connection supervisor. */
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { z } from 'zod'
-/** Real SDK negotiation, subscription, and cancellation through the connection supervisor. */
 
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'

@@ -1,5 +1,3 @@
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
-import { ToolCallId, createUserMessage, expandAssistantStream } from '@deepseek-ai/dsh-llm'
 /**
  * Tests for the queue-aware `Agent.cancel()` primitive. The default clears
  * queued and steering work, while `keepInbox` preserves pending input for a
@@ -8,6 +6,8 @@ import { ToolCallId, createUserMessage, expandAssistantStream } from '@deepseek-
  * the cause each cancelled turn records.
  * @module dsh-agent-loop/tests/cancel
  */
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import { ToolCallId, createUserMessage, expandAssistantStream } from '@deepseek-ai/dsh-llm'
 
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'

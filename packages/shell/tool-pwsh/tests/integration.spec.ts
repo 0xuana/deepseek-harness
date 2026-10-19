@@ -1,7 +1,6 @@
-import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 /**
  * Integration tests: the REAL `@deepseek-ai/dsh-pwsh-local` executor plus the
- * `pwsh` tool, exercised through `executeToolFixture(ctx, )` with a real PowerShell
+ * `pwsh` tool, exercised through `executeToolFixture()` with a real PowerShell
  * process. These verify the world — actual commands run, stdout/stderr come
  * back, exit codes render, timeouts abort, background jobs settle through the
  * generic job runtime, and per-session cwd resolution works. The suite
@@ -9,6 +8,7 @@ import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
  * PowerShell); the fake-executor suite (tools.spec.ts) carries the coverage
  * gate.
  */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'

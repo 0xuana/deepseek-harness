@@ -1,4 +1,3 @@
-import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 /**
  * End-to-end tests for dsh-mcp-client. Exercises the REAL MCP protocol against:
  * 1. A self-written fixture server over stdio (controlled edge cases)
@@ -8,6 +7,7 @@ import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
  *
  * No API key needed — all servers are local/keyless.
  */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'

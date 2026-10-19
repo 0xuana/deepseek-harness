@@ -1,5 +1,5 @@
-import { executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 /** Producer-to-UI regression for shell results bounded by the real spill policy. */
+import { executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
 import { Context } from '@deepseek-ai/cordis'

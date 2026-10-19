@@ -1,12 +1,12 @@
-import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 /**
  * Showcase integration: the real `web_fetch` tool + the real spill stack
  * (`dsh-spill-local` backend + `dsh-spill-policy`), exercised through
- * `executeToolFixture(ctx, )`. Proves the Agent Note's default local-backend path — a large
+ * `executeToolFixture()`. Proves the Agent Note's default local-backend path — a large
  * formatted fetch result is automatically retained and spilled with NO
  * tool-specific spill code, and the model-facing text changes ONLY by the
  * deliberate spill notice (the full formatted result lands in the spill file).
  */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

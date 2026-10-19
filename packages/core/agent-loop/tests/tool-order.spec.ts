@@ -1,5 +1,3 @@
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
 /**
  * Loop-level tool-order determinism: the request/header event — and therefore the frozen
  * request the adapter receives — carries the assembly's canonical tool order (system-prompt's
@@ -7,6 +5,8 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
  * happened to register in. Registration order is a concurrent loading artifact
  * and must not leak downstream.
  */
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'

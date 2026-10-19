@@ -1,5 +1,5 @@
-import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 /** Native browser ownership through real Agent, Session, and ToolRuntime services. */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { StagehandDrainError } from '../src/native.ts'

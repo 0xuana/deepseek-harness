@@ -1,5 +1,5 @@
-import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 /** Opt-in installed Stagehand smoke against an owned local page and optional real model. */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import { createServer } from 'node:http'
 import { execFile, spawn } from 'node:child_process'

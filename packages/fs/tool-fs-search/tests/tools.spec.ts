@@ -1,7 +1,6 @@
-import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 /**
  * Consumer-surface tests for the search tools over a FAKE subprocess service
- * and a FAKE spill backend, exercised through `executeToolFixture(ctx, )` so nothing
+ * and a FAKE spill backend, exercised through `executeToolFixture()` so nothing
  * bypasses the tool registry. The fake service makes every seam outcome
  * scriptable — spawn failure, truncated stdout with/without a raw spill path,
  * abort/timeout kills, signal kills, ripgrep exit codes — so these tests
@@ -10,6 +9,7 @@ import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
  * formatted-result spill handoff, and the no-background-job invariant.
  * Real-`rg` behavior is pinned separately in integration.spec.ts.
  */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'

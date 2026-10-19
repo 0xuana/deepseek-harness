@@ -40,7 +40,7 @@ async function setup(mode: ('native' | 'ptc') = 'native') {
   roots.push(ctx)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin((mode) === 'ptc' ? PtcToolExecutor : NativeToolExecutor)
+  await ctx.plugin(mode === 'ptc' ? PtcToolExecutor : NativeToolExecutor)
   if (mode !== 'native') await ctx.plugin(BindingProbe)
   await ctx.plugin(McpResources)
   return ctx

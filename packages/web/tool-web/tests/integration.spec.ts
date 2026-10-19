@@ -1,12 +1,12 @@
-import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 /**
  * Integration: the real fetch backend (`dsh-web-fetch-http`) + a real search provider
  * (`dsh-web-search-exa`) + the real seam (`dsh-web`) + the model tool (`dsh-tool-web`) + the
- * tool-call timeout policy (`dsh-tool-call-timeout-policy`), exercised through `executeToolFixture(ctx, )` —
+ * tool-call timeout policy (`dsh-tool-call-timeout-policy`), exercised through `executeToolFixture()` —
  * nothing bypasses the tool registry. Fetch verifies world effects against loopback HTTP with
  * public-address resolution replaced by the fixture address; search uses the real Exa provider
  * with only its network boundary stubbed.
  */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

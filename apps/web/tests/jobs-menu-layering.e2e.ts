@@ -1,5 +1,5 @@
-import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 /** Background-job menu geometry over the normal Browser dock in the shipped Web composition. */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'

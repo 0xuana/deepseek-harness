@@ -1,5 +1,5 @@
-import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 /** Provider unload owns screenshot admission as well as the native call. */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

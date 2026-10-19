@@ -1,4 +1,3 @@
-import { executeToolFixture, executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 /**
  * Tests for the spill-policy PLUGIN. It registers no service, only the
  * `tools/post-execute` transformer. We drive real tools through
@@ -8,6 +7,7 @@ import { executeToolFixture, executeModelToolFixture } from '@deepseek-ai/dsh-to
  * `saveText` failure / missing backend / missing owner all preserve the original
  * result without an `isError`.
  */
+import { executeToolFixture, executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'

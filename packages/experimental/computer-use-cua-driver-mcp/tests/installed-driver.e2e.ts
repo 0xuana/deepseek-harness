@@ -1,5 +1,5 @@
-import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 /** Explicit opt-in compatibility check against an installed Cua Driver executable. */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { isAbsolute } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'

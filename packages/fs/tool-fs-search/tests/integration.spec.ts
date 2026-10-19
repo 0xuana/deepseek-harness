@@ -1,7 +1,6 @@
-import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 /**
  * Integration tests: the REAL local subprocess service plus the PACKAGED
- * ripgrep binary (`@vscode/ripgrep`), exercised through `executeToolFixture(ctx, )`.
+ * ripgrep binary (`@vscode/ripgrep`), exercised through `executeToolFixture()`.
  * These verify the WORLD — actual files on disk are discovered and grepped,
  * hostile patterns stay inert (they are plain argv elements; there is no
  * shell layer to escape), and real `rg` stderr classifies into the
@@ -9,6 +8,7 @@ import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
  * suite runs on every platform without a system `rg` install; the
  * fake-service suite (tools.spec.ts) carries the coverage gate.
  */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'

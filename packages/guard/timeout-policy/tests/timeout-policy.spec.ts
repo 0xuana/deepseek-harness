@@ -1,4 +1,3 @@
-import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 /**
  * Unit + real-load-path coverage for @deepseek-ai/dsh-tool-call-timeout-policy. The
  * timeout-wins cases drive the deadline under fake timers (deterministic — no
@@ -6,6 +5,7 @@ import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
  * `exec.signal` aborts, mirroring how a real capability forwards the signal and
  * reaches quiescence.
  */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

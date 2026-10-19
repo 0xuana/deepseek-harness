@@ -1,7 +1,6 @@
-import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 /**
  * Consumer-surface tests for the `pwsh` tool over a FAKE bash executor,
- * exercised through `executeToolFixture(ctx, )` so nothing bypasses the tool
+ * exercised through `executeToolFixture()` so nothing bypasses the tool
  * registry. The fake executor makes every seam outcome scriptable — output
  * text, truncation, timeout, abort, nonzero exits, background handles — so
  * these tests verify the schema, argument validation, workdir derivation,
@@ -10,6 +9,7 @@ import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
  * background job wiring, and the UI presenters. Real-pwsh behavior
  * is pinned separately in integration.spec.ts.
  */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
