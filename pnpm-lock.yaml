@@ -2576,6 +2576,9 @@ importers:
       '@deepseek-ai/dsh-cmdline':
         specifier: workspace:*
         version: link:../../boot/cmdline
+      '@deepseek-ai/dsh-deliverable-file-references':
+        specifier: workspace:*
+        version: link:../../deliverables/deliverable-file-references
       '@deepseek-ai/dsh-file-reference-local':
         specifier: workspace:*
         version: link:../../context/file-reference-local
@@ -2974,6 +2977,9 @@ importers:
       '@deepseek-ai/dsh-cordis-host-runner':
         specifier: workspace:*
         version: link:../../extensions/cordis-host-runner
+      '@deepseek-ai/dsh-deliverable-file-references':
+        specifier: workspace:*
+        version: link:../../deliverables/deliverable-file-references
       '@deepseek-ai/dsh-file-reference':
         specifier: workspace:*
         version: link:../../context/file-reference
@@ -7471,6 +7477,15 @@ importers:
         specifier: workspace:*
         version: link:../../host/webserver
 
+  packages/deliverables/deliverable-file-references:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-system-prompt':
+        specifier: workspace:*
+        version: link:../../core/system-prompt
+
   packages/deliverables/tool-present:
     dependencies:
       '@deepseek-ai/schemastery':
@@ -7507,9 +7522,6 @@ importers:
       '@deepseek-ai/dsh-session-projection':
         specifier: workspace:*
         version: link:../../session/session-projection
-      '@deepseek-ai/dsh-system-prompt':
-        specifier: workspace:*
-        version: link:../../core/system-prompt
       '@deepseek-ai/dsh-tools':
         specifier: workspace:*
         version: link:../../core/tools

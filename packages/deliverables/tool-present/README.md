@@ -25,7 +25,7 @@ Use `present` to declare final files accessible through the Session filesystem, 
 <a id="use-this-package"></a>
 ## Use this package
 
-The `./prompt` plugin registers the shared desktop file-reference guidance using only `systemPrompt`. The Web and `sdk` bundles mount it separately from the tool, so the same guidance is available without a Web server.
+Shared output and file-link guidance comes from [`dsh-deliverable-file-references`](../deliverable-file-references/README.md), mounted separately by Web and SDK bundles.
 
 `present` validates paths against the Session's current working directory and records absolute paths, so later directory changes do not redirect delivered files.
 
@@ -84,26 +84,6 @@ One tool schema per mounted agent and one result line per delivered file. File b
 #### KV Cache effect
 
 The tool schema is static for the mount lifetime. Delivery result text extends the conversation without rewriting its prompt prefix.
-
-### Clickable file-reference guidance
-
-#### What the model sees
-
-The separate `./prompt` entry registers this static guidance for desktop file references.
-
-##### Shared guidance
-
-```markdown
-Prefer showing the primary results within your final response alongside a brief explanation. Use ![Description](<path/to/image.png>) when an image supports an explanation or comparison. Use [Description](<path/to/image.png>) when referring to an image or listing files. Enclose Markdown file destinations in angle brackets, especially paths containing spaces. Do not call present just to list edited source files, or run commands to check whether a diff view will appear. Use present to publish complete deliverables, including images, Office documents, spreadsheets, and slide decks, when separate access helps the user. Hosts that support file cards can show the presented file with preview and open actions. Avoid repeating results already shown inline unless the separate card adds useful access. Outside commands, configuration expressions, and code blocks, link every mention of an existing file, including repeats and tables, to its full path relative to the working directory or absolute; append #L24 or #L24-L30 to the target for known lines. Use the filename or a clear alias as the label, adding only enough parent directories to distinguish files; keep full paths out of labels. Default to the name alone; when precise locations matter, append :24 or :24–30, with no # or L in the line suffix.
-```
-
-#### Token effect
-
-One fixed paragraph containing output-selection, rendering, and file-reference guidance whenever the separate `./prompt` plugin is mounted. The tool schema is independent of this prompt entry.
-
-#### KV Cache effect
-
-The section is static at first-party order 9000 for the lifetime of the `./prompt` mount, so it remains in the reusable prompt prefix and does not change across Turns.
 
 ## Known Limitations and Deferred Work
 

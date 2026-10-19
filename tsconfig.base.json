@@ -364,7 +364,6 @@
       "@deepseek-ai/dsh-compaction-image-offload/projection": ["./packages/compaction/compaction-image-offload/src/projection.ts"],
       "@deepseek-ai/dsh-session-format-catalog/message-projections": ["./packages/session/session-format-catalog/src/message-projections.ts"],
       "@deepseek-ai/dsh-native-command/types": ["./packages/util/native-command/src/types.ts"],
-      "@deepseek-ai/dsh-tool-present/prompt": ["./packages/deliverables/tool-present/src/prompt.ts"],
       // BEGIN generated package aliases — pnpm run gen-tsconfig-paths
       "@deepseek-ai/dsh-acp": ["./packages/acp/acp/src"],
       "@deepseek-ai/dsh-acp-app": ["./packages/bundle/acp-app/src"],
@@ -400,6 +399,7 @@
       "@deepseek-ai/dsh-credentials": ["./packages/credentials/credentials/src"],
       "@deepseek-ai/dsh-credentials-local": ["./packages/credentials/credentials-local/src"],
       "@deepseek-ai/dsh-deepseek-llm-api-extensions": ["./packages/llm/deepseek-llm-api-extensions/src"],
+      "@deepseek-ai/dsh-deliverable-file-references": ["./packages/deliverables/deliverable-file-references/src"],
       "@deepseek-ai/dsh-deque": ["./packages/util/deque/src"],
       "@deepseek-ai/dsh-file-reference": ["./packages/context/file-reference/src"],
       "@deepseek-ai/dsh-file-reference-local": ["./packages/context/file-reference-local/src"],

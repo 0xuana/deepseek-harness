@@ -75,4 +75,4 @@
       name: '@deepseek-ai/dsh-file-reference-local'
 
     - id: deliverable-file-references
-      name: '@deepseek-ai/dsh-tool-present/prompt'
+      name: '@deepseek-ai/dsh-deliverable-file-references'

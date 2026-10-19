@@ -348,7 +348,7 @@
       name: '@deepseek-ai/dsh-client-ui-cordis'
 
     - id: deliverable-file-references
-      name: '@deepseek-ai/dsh-tool-present/prompt'
+      name: '@deepseek-ai/dsh-deliverable-file-references'
 
     # Turn tail: the changed-files card and delivery cards under each closing
     # assistant message. Remove this entry to turn the surface off; the tail

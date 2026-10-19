@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises'
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it } from 'vitest'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import { apply, inject } from '../src/prompt.ts'
+import { apply, inject } from '../src/index.ts'
 
 let ctx: Context | undefined
 
@@ -27,6 +27,11 @@ describe('desktop file-reference prompt', () => {
     // Only live request pins track current guidance; seeded sessions retain their recorded prompt.
     for (const scenario of ['fresh-round-trip', 'ptc-round']) {
       const sidecar = await readFile(new URL(`../../../../snapshots/web/${scenario}/system-prompt.expected.md`, import.meta.url), 'utf8')
+      expect(sidecar, scenario).toContain(section!.text)
+    }
+
+    for (const scenario of ['desktop-context', 'desktop-ptc-context']) {
+      const sidecar = await readFile(new URL(`../../../../snapshots/sdk/${scenario}/system-prompt.expected.md`, import.meta.url), 'utf8')
       expect(sidecar, scenario).toContain(section!.text)
     }
 

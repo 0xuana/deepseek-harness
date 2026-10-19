@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-`./prompt` 插件仅依赖 `systemPrompt`，注册共用的桌面文件引用指导。Web 和 `sdk` bundle 将其与工具分别挂载，因此不启动 Web 服务也能获得相同指导。
+共用的输出与文件链接指导由 [`dsh-deliverable-file-references`](../deliverable-file-references/README.zh.md) 提供，Web 与 SDK bundle 单独挂载该插件。
 
 `present` 按 Session 的当前工作目录校验路径并记录绝对路径，因此后续目录切换不会让已交付文件指向其他位置。
 
@@ -84,26 +84,6 @@ kind: "package-reference"
 #### KV Cache 影响
 
 工具 schema 在挂载期间保持静态。交付结果文本扩展对话，不重写提示词前缀。
-
-### 可点击文件引用指引
-
-#### 模型看到的内容
-
-独立的 `./prompt` 入口注册以下桌面文件引用静态指导。
-
-##### 共用指导
-
-```markdown
-Prefer showing the primary results within your final response alongside a brief explanation. Use ![Description](<path/to/image.png>) when an image supports an explanation or comparison. Use [Description](<path/to/image.png>) when referring to an image or listing files. Enclose Markdown file destinations in angle brackets, especially paths containing spaces. Do not call present just to list edited source files, or run commands to check whether a diff view will appear. Use present to publish complete deliverables, including images, Office documents, spreadsheets, and slide decks, when separate access helps the user. Hosts that support file cards can show the presented file with preview and open actions. Avoid repeating results already shown inline unless the separate card adds useful access. Outside commands, configuration expressions, and code blocks, link every mention of an existing file, including repeats and tables, to its full path relative to the working directory or absolute; append #L24 or #L24-L30 to the target for known lines. Use the filename or a clear alias as the label, adding only enough parent directories to distinguish files; keep full paths out of labels. Default to the name alone; when precise locations matter, append :24 or :24–30, with no # or L in the line suffix.
-```
-
-#### Token 影响
-
-挂载独立的 `./prompt` 插件时，加入一个包含输出选择、渲染和文件引用指导的固定段落。工具 schema 与此提示入口相互独立。
-
-#### KV Cache 影响
-
-该段落在`./prompt` 插件挂载期间始终以 first-party 顺序 9000 保持静态，因此留在可复用的提示词前缀中，不会随轮次改变。
 
 ## 已知限制与延期工作
 

@@ -34,7 +34,7 @@ kind: "package-reference"
 
 `present` 工具的准备阶段是带文档图标的不可展开单行。记录的调用提供参数前，该行不显示文件名、不创建交付卡片，也不启用文件操作。
 
-Web 的 `standard`、`ptc` 与 `cordis` preset 提供 `present`，用于声明会话文件系统可访问的最终文件，包括通过 Bash 创建的文件。创建后以 `files: [{ path, description? }]` 调用。[present 工具](../../deliverables/tool-present/README.zh.md)拥有文件数量限制和会话声明。单个交付占满一行，多个交付使用双列网格，超过四个时默认收起。卡片显示文件名、说明或文件类型，以及共享的原生打开控件。交付和改动文件卡片的图标底块在浅色主题下使用 50% 不透明度的白色，深色主题下为 5%。图标底块与单文件改动卡片的外框使用与交付卡片相同的描边。点击卡片会在右侧 Sidebar 预览文件。控件打开默认应用，并列出关联应用，文件定位始终放在最后。匹配的行内代码引用也打开 Sidebar 预览。重复声明使用收尾回复之前最近一次的说明。
+Web 的 `standard`、`ptc` 与 `cordis` preset 提供 `present`，用于声明会话文件系统可访问的最终文件，包括通过 Bash 创建的文件。创建后以 `files: [{ path, description? }]` 调用。[present 工具](../../deliverables/deliverable-file-references/README.zh.md)拥有文件数量限制和会话声明。单个交付占满一行，多个交付使用双列网格，超过四个时默认收起。卡片显示文件名、说明或文件类型，以及共享的原生打开控件。交付和改动文件卡片的图标底块在浅色主题下使用 50% 不透明度的白色，深色主题下为 5%。图标底块与单文件改动卡片的外框使用与交付卡片相同的描边。点击卡片会在右侧 Sidebar 预览文件。控件打开默认应用，并列出关联应用，文件定位始终放在最后。匹配的行内代码引用也打开 Sidebar 预览。重复声明使用收尾回复之前最近一次的说明。
 
 `present` 工具行在执行、成功、失败和中断状态下保留文档图标及记录的结果。原生操作共享等待状态，并在卡片显示进度或可重试错误。打开或定位成功的反馈显示五秒后，在 200ms 内淡出并恢复文件说明；失败信息保留到下次尝试。卡片挂载时读取桌面信息，连接更换时清除缓存。Host 没有桌面时，卡片保留 Sidebar 预览并隐藏原生控件；元数据读取失败时提供重试。交付卡片和变更对比页通过 `deliverables.file.actions` 和 `deliverables.review.file.actions` 使用 [ui-open-in-app](../ui-open-in-app/README.zh.md) 提供的控件。关联应用 GET 查询与原生 POST 操作都会先校验记录中的文件坐标及会话文件系统映射，再调用 Host 桌面。
 
@@ -64,7 +64,7 @@ Web 的 `standard`、`ptc` 与 `cordis` preset 提供 `present`，用于声明�
 <details>
 <summary>实现细节——点击展开</summary>
 
-Node 半部注册[模型体验](#model-experience)所述的静态 `ui:deliverable-file-references` 系统提示词段。显式 Markdown 链接使用共享的 [Markdown 渲染器](../ui-primitives/README.zh.md)；行内代码匹配仍仅限产出或交付文件。浏览器半部把组合改动文件卡片与显式交付的包装组件注册进 chat 视图的 `conversation.chat.turnTail` 列表，与其他功能产物并列。`deliverablesDefinition` 把每个轮次最新且通过校验的 `workspace/changes` 宣告的序号折叠进 `DeliverablesTurnData.changes`，卡片按它向 Host 读取摘要并缓存到连接被替换为止，把 `deliverables/presented` 事件折叠为交付，并根据 `write`、`edit` 和有修改作用的 `str_replace_editor` 命令中经过校验的原始参数与结果记录的绝对 `meta.path` 把成功的第一方修改调用折叠为产出路径及精确参数别名；产出路径只供正文提及解析器使用。不带该字段的成功根调用保留历史参数回退；格式错误的相对目标不产生猜测路径。读取、删除、不受支持的工具、格式错误的调用、格式错误的事件和失败结果不贡献任何条目。每一行通过 `ctx.sidebarRight.openResource` 打开 `dsh-resource://changes-review/session/<sessionId>/<seq>/<turn>`，并以文件下标作为 `changes-review` 的导航参数；本包在 `builtin` 档为该模式注册 `changes-review` tab 类型，把其 body 连同一个按 tab 保存选择的独占 store 注册到按键的 `sidebar.right.pane.tab` 座位下，body 通过经过认证的路由把摘要和对比读进连接更换时清空的 store。本包还提供 chat 视图按收尾消息查询的 `chatFileMentions` 服务；把插件组合出去会移除全部表面，视图的空列表以零成本留下。
+Node 半部提供经过身份验证的原生文件打开；共用指导由[模型体验](#model-experience)所述的独立文件引用插件提供。显式 Markdown 链接使用共享的 [Markdown 渲染器](../ui-primitives/README.zh.md)；行内代码匹配仍仅限产出或交付文件。浏览器半部把组合改动文件卡片与显式交付的包装组件注册进 chat 视图的 `conversation.chat.turnTail` 列表，与其他功能产物并列。`deliverablesDefinition` 把每个轮次最新且通过校验的 `workspace/changes` 宣告的序号折叠进 `DeliverablesTurnData.changes`，卡片按它向 Host 读取摘要并缓存到连接被替换为止，把 `deliverables/presented` 事件折叠为交付，并根据 `write`、`edit` 和有修改作用的 `str_replace_editor` 命令中经过校验的原始参数与结果记录的绝对 `meta.path` 把成功的第一方修改调用折叠为产出路径及精确参数别名；产出路径只供正文提及解析器使用。不带该字段的成功根调用保留历史参数回退；格式错误的相对目标不产生猜测路径。读取、删除、不受支持的工具、格式错误的调用、格式错误的事件和失败结果不贡献任何条目。每一行通过 `ctx.sidebarRight.openResource` 打开 `dsh-resource://changes-review/session/<sessionId>/<seq>/<turn>`，并以文件下标作为 `changes-review` 的导航参数；本包在 `builtin` 档为该模式注册 `changes-review` tab 类型，把其 body 连同一个按 tab 保存选择的独占 store 注册到按键的 `sidebar.right.pane.tab` 座位下，body 通过经过认证的路由把摘要和对比读进连接更换时清空的 store。本包还提供 chat 视图按收尾消息查询的 `chatFileMentions` 服务；把插件组合出去会移除全部表面，视图的空列表以零成本留下。
 
 原生打开使用经过认证的 POST，通过当前查看的会话、事件序号和原始文件索引定位声明；review tab 对改动文件的原生打开使用同一组坐标。对声明，Host 读取事件及当前查看的会话 header，将其中的 cwd 传给 `workspaceFiles.stat`，未记录 cwd 时使用部署的工作目录；对改动文件，传的是所提供摘要携带的工作目录。它与侧栏预览使用同一组合文件系统，无需启动 Agent，子会话也适用。原生操作要求规范化的进程路径能从 Host 路径映射回同一进程路径。提供方没有这种映射时返回 422，之后 review tab 隐藏原生打开；Host 上存在同名文件并不足够。同一份桌面可用性配置同时约束信息查询和实际执行。编辑会影响后续打开的内容；删除后返回错误。不创建文件内容副本或附件。插件释放时取消并等待进行中的原生打开请求。
 
@@ -93,7 +93,7 @@ Node 半部注册[模型体验](#model-experience)所述的静态 `ui:deliverabl
 
 #### 模型看到的内容
 
-Web 组合挂载共用的 [`dsh-tool-present/prompt`](../../deliverables/tool-present/README.zh.md#model-experience) 指导。本 UI 包渲染相应的文件引用和卡片。
+Web 组合挂载共用的 [`dsh-deliverable-file-references`](../../deliverables/deliverable-file-references/README.zh.md#model-experience) 指导。本 UI 包渲染相应的文件引用和卡片。
 
 #### Token 影响
 
