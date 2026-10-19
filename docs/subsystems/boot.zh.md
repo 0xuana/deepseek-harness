@@ -425,6 +425,23 @@ An installation moved between its Host phases. `installing` is announced once pe
 
 Source: [`packages/boot/plugin-manager/src/types.ts`](../../packages/boot/plugin-manager/src/types.ts)
 
+<a id="plugin-manageroperation--emit"></a>
+
+#### `plugin-manager/operation` — emit
+
+One manager invocation started or ended; raw installation specs and error messages are excluded.
+
+```ts cordis-catalog
+/**
+ * One manager invocation started or ended; raw installation specs and error messages are excluded.
+ * @mode emit
+ * @param operation - Correlated operation facts; a start without an end has an unknown outcome.
+ */
+'plugin-manager/operation'(operation: PluginOperation): void
+```
+
+Source: [`packages/boot/plugin-manager/src/types.ts`](../../packages/boot/plugin-manager/src/types.ts)
+
 <a id="plugin-market-events"></a>
 
 ### `plugin-market/*` events

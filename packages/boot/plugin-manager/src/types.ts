@@ -257,8 +257,40 @@ export interface PluginChange {
   readonly reason: 'plugin' | 'bundle' | 'install' | 'remove'
 }
 
+/** Identifies one manager invocation, including time spent waiting for its profile lock. */
+export type PluginOperationId = Branded<'PluginOperationId'>
+
+/** Management facts for diagnostic consumers; recent operations do not establish a crash's cause. */
+export type PluginOperation = {
+  readonly id: PluginOperationId
+  readonly time: string
+  readonly reason: PluginChange['reason']
+  /** Entry id or package name; installation specs are omitted until the package is resolved. */
+  readonly target: string | null
+  readonly stage: ChangeResult['stage']
+  readonly enabled?: boolean | undefined
+} & (
+  | { readonly phase: 'started' }
+  | {
+    readonly phase: 'settled'
+    readonly application: ChangeResult['application']
+    readonly changed: boolean
+    readonly version?: string | undefined
+    readonly errorCode?: ManagementError['code'] | undefined
+    readonly restartReason?: RestartReason | undefined
+  }
+  /** An exception escaped the operation result; persisted or applied changes cannot be inferred. */
+  | { readonly phase: 'unknown' }
+)
+
 declare module '@deepseek-ai/cordis' {
   interface Events {
+    /**
+     * One manager invocation started or ended; raw installation specs and error messages are excluded.
+     * @mode emit
+     * @param operation - Correlated operation facts; a start without an end has an unknown outcome.
+     */
+    'plugin-manager/operation'(operation: PluginOperation): void
     /**
      * The profile's plugins, bundles, or composition changed: a manager
      * operation completed. A patch generation applied outside the manager,

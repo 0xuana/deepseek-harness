@@ -33,6 +33,7 @@ import type {
   BundleInfo, BundleRowInfo, ChangeResult, InspectOptions, InstallBundleOptions, ManagementError, PackageResult, PluginChange,
   PluginEntryId, PluginInfo, PluginInspectProblem, PluginInstallCancellation, PluginInstallProgress, PluginInstallRequestId,
   PluginRegistries, PluginSpecInspection, Registry,
+  PluginOperation, PluginOperationId,
 } from './types.ts'
 export type * from './types.ts'
 export { classifyInstallFailure, type InstallFailureFacts } from './install-failure.ts'
@@ -900,29 +901,55 @@ export class PluginManager extends TypertRemoteService {
     request: Pick<ChangeResult, 'stage' | 'target' | 'enabled'>,
     reason: PluginChange['reason'],
   ): Promise<ChangeResult> {
-    return withFileLock(join(this.profile.dir, 'package.json'), async () => {
-      this.abort.signal.throwIfAborted()
-      const before = this.diskState()
-      const result: ChangeResult = { ...request, changed: false,
-        ...this.ownerContext.get('hmr') !== undefined ? { application: 'applied' } : { application: 'restart-required', restartReason: 'no-hmr' } }
-      try {
-        const outcome = await operation(result)
-        if (outcome !== undefined) result.application = outcome
-        // A reload that waits for a restart leaves the change saved but not applied.
-        else if (result.application === 'applied' && result.restartReason !== undefined) result.application = 'restart-required'
-      } catch (error) {
-        if (error instanceof InstallCancelledError) {
-          result.application = 'cancelled'
-        } else {
-          result.application = 'failed'
-          result.error = managementError(error)
+    const id = randomUUID() as PluginOperationId
+    const facts = { id, reason, stage: request.stage,
+      target: reason === 'install' ? null : request.target,
+      ...request.enabled === undefined ? {} : { enabled: request.enabled } }
+    this.reportOperation({ ...facts, time: new Date().toISOString(), phase: 'started' })
+    let settled: ChangeResult
+    try {
+      settled = await withFileLock(join(this.profile.dir, 'package.json'), async () => {
+        this.abort.signal.throwIfAborted()
+        const before = this.diskState()
+        const result: ChangeResult = { ...request, changed: false,
+          ...this.ownerContext.get('hmr') !== undefined ? { application: 'applied' } : { application: 'restart-required', restartReason: 'no-hmr' } }
+        try {
+          const outcome = await operation(result)
+          if (outcome !== undefined) result.application = outcome
+          // A reload that waits for a restart leaves the change saved but not applied.
+          else if (result.application === 'applied' && result.restartReason !== undefined) result.application = 'restart-required'
+        } catch (error) {
+          if (error instanceof InstallCancelledError) {
+            result.application = 'cancelled'
+          } else {
+            result.application = 'failed'
+            result.error = managementError(error)
+          }
         }
-      }
-      if (result.application !== 'restart-required') delete result.restartReason
-      result.changed = before !== this.diskState()
-      this.ownerContext.emit('plugin-manager/changed', { reason })
-      return result
-    }, { waitMs: this.lockWaitMs })
+        if (result.application !== 'restart-required') delete result.restartReason
+        result.changed = before !== this.diskState()
+        this.ownerContext.emit('plugin-manager/changed', { reason })
+        return result
+      }, { waitMs: this.lockWaitMs })
+    } catch (error) {
+      this.reportOperation({ ...facts, time: new Date().toISOString(), phase: 'unknown' })
+      throw error
+    }
+    this.reportOperation({ ...facts, time: new Date().toISOString(), phase: 'settled',
+      stage: settled.stage, target: settled.bundle ?? facts.target,
+      application: settled.application, changed: settled.changed,
+      ...settled.version === undefined ? {} : { version: settled.version },
+      ...settled.error === undefined ? {} : { errorCode: settled.error.code },
+      ...settled.restartReason === undefined ? {} : { restartReason: settled.restartReason } })
+    return settled
+  }
+
+  private reportOperation(operation: PluginOperation): void {
+    try { this.ownerContext.emit('plugin-manager/operation', operation) }
+    catch (_error) {
+      // Diagnostic subscribers cannot change a management result or prevent the operation.
+      console.error('dsh plugin-manager: operation diagnostic delivery failed')
+    }
   }
 
   private diskState(): string {

@@ -16,6 +16,7 @@ import {
   type ProfileContext, type RuntimeResolution,
 } from '@deepseek-ai/dsh-app-boot'
 import PluginManager, { type Config, type PluginChange, type PluginInstallLogChunk, type PluginInstallProgress, type PluginInstallRequestId } from '../src/index.ts'
+import type { PluginOperation } from '../src/types.ts'
 import Hmr from '@deepseek-ai/dsh-hmr'
 import Timer from '@deepseek-ai/cordis-plugin-timer'
 import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
@@ -456,6 +457,52 @@ it.each([
     name: 'unnamed', version: '1.0.0', source: 'unnamed@1.0.0', enabled: false, installed: true, official: false, availability: 'profile', optional: false, removable: true,
     rows: [], overrides: [], ...expected,
   })
+})
+
+it('correlates diagnostic operation starts with persisted toggle results', async () => {
+  const { manager, ctx, dir } = await fixture('startup')
+  const facts: PluginOperation[] = []
+  ctx.on('plugin-manager/operation', (event) => { facts.push(event) })
+  await manager.setBundleEnabled('extra', false)
+  expect(readProfileManifest('test', dir).dsh?.profile?.bundles).not.toContain('extra')
+  expect(facts).toHaveLength(2)
+  expect(facts[0]).toMatchObject({ phase: 'started', reason: 'bundle', target: 'extra', enabled: false })
+  expect(facts[1]).toMatchObject({ id: facts[0]!.id, phase: 'settled', changed: true, application: 'restart-required' })
+  await manager.setBundleEnabled('extra', true)
+  expect(facts[2]!.id).not.toBe(facts[0]!.id)
+})
+
+it('excludes raw install specs and error diagnostics from operation facts', async () => {
+  const { manager, ctx } = await fixture('startup')
+  const facts: PluginOperation[] = []
+  ctx.on('plugin-manager/operation', (event) => { facts.push(event) })
+  await manager.installBundle('--https://user:secret@example.invalid/private?token=secret')
+  expect(facts).toHaveLength(2)
+  expect(facts[1]).toMatchObject({ phase: 'settled', target: null, application: 'failed', errorCode: 'invalid-spec' })
+  expect(JSON.stringify(facts)).not.toMatch(/secret|example|diagnostic|packageResult/)
+})
+
+it('reports unknown outcomes when profile inspection rejects before a result exists', async () => {
+  const { manager, ctx, dir } = await fixture('startup')
+  const facts: PluginOperation[] = []
+  ctx.on('plugin-manager/operation', (event) => { facts.push(event) })
+  const patch = join(dir, 'cordis.patch.yml')
+  rmSync(patch, { force: true })
+  mkdirSync(patch)
+  await expect(manager.setBundleEnabled('extra', false)).rejects.toThrow()
+  expect(facts.map(event => event.phase)).toEqual(['started', 'unknown'])
+  expect(facts[1]!.id).toBe(facts[0]!.id)
+  expect(facts[1]).not.toHaveProperty('changed')
+})
+
+it('preserves management results when a diagnostic subscriber throws', async () => {
+  const { manager, ctx, dir } = await fixture('startup')
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  onTestFinished(() => { errors.mockRestore() })
+  ctx.on('plugin-manager/operation', () => { throw new Error('diagnostic sink unavailable') })
+  expect(await manager.setBundleEnabled('extra', false)).toMatchObject({ changed: true, application: 'restart-required' })
+  expect(readProfileManifest('test', dir).dsh?.profile?.bundles).not.toContain('extra')
+  expect(errors).toHaveBeenCalledWith('dsh plugin-manager: operation diagnostic delivery failed')
 })
 
 it('turns a plugin off and on without leaving a patch override the bundle already implies', async () => {

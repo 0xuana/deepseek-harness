@@ -103,6 +103,8 @@ A service run whose captured output stays silent for `idleTimeoutMs` is terminat
 
 Results contain the last attempted stage, target, saved-state change, application status and error codes. Web dictionaries render management text; pnpm and Loader diagnostics remain unmodified. Unrelated pre-existing inactive entries return warnings; new or changed failures and inactive explicit enablement targets fail the operation. A failed or cancelled package run, or failed bundle validation, restores the manifest and lockfile snapshotted before pnpm ran ([rationale](../../../.agents/notes/implemented/architecture/2026-09-15-guided-plugin-installation.md)); later failures retain saved changes as described in [Failure behavior](#failure-behavior). Installations are tracked by request id until their call settles, so a cancellation names one run and joins its settlement without taking the profile lock. The CLI inherits authentication variables and terminal descriptors; service operations use a scrubbed environment and captured output.
 
+The `plugin-manager/operation` event correlates each service invocation with its start and observed result, or an unknown outcome when an exception escapes result construction. It excludes raw installation specs and error text. Diagnostic consumers own persistence and delivery limits; synchronous subscriber failures do not change management results. Direct CLI package operations do not emit this service event.
+
 </details>
 
 -----
