@@ -274,7 +274,10 @@ export class HarnessClient {
    * @throws when the client has not started or has already closed.
    */
   onRequest(handler: (method: string, params: Record<string, unknown>) => Promise<unknown>): void {
-    if (this.transport === undefined || this.closeTask !== undefined) {
+    if (this.closeTask !== undefined) {
+      throw new TransportClosedError('DeepSeek Harness runtime client is closed; create a new client to install a request handler')
+    }
+    if (this.transport === undefined) {
       throw new TransportClosedError('start the SDK client before installing a request handler')
     }
     this.transport.onRequest(handler)

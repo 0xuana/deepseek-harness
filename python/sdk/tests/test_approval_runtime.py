@@ -23,7 +23,7 @@ def test_python_approval_controls_runtime_operation(tmp_path: Path, outcome: str
     binary = repo / "apps/cli/lib/bin.js"
     if node is None or not binary.exists():
         pytest.skip("requires Node and built dsh CLI")
-    fixture = repo / "apps/cli/tests/profiles/sdk/fixtures/approval.mjs"
+    fixture = repo / "packages/sdk/server/tests/fixtures/approval.mjs"
     marker = tmp_path / "approved.txt"
     patch = tmp_path / "approval.patch.yml"
     patch.write_text("- insert:\n    - id: approval-fixture\n      name: " + json.dumps(str(fixture))

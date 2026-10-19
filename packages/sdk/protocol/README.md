@@ -25,9 +25,9 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-`InitializeParams.approvalRequests: true` enables `approval/request` server requests, indexed by `HarnessSdkClientRequestMap`. `ApprovalRequestParams` contains `sessionId`, `toolName`, optional `callId`, and optional `reason`; `ApprovalRequestResult` is `{ outcome: "allowed-once" | "rejected" | "cancelled" }`. Omission or `false` leaves existing answerers in control. Only `allowed-once` grants one operation. Cancellation discards the pending request and late responses; shutdown and transport loss fail pending decisions closed. The client must keep reading and answering requests while waiting for an Agent to finish.
-
 Use this package when you build or debug an SDK wire end — the serving plugin, a client library, or custom tooling that speaks the SDK protocol. It gives you one transport for JSON-RPC 2.0 over caller-owned byte streams and the typed shapes for every SDK method and notification.
+
+`InitializeParams.approvalRequests: true` enables `approval/request` server requests, indexed by `HarnessSdkClientRequestMap`. `ApprovalRequestParams` contains `sessionId`, `toolName`, optional `callId`, and optional `reason`; `ApprovalRequestResult` is `{ outcome: "allowed-once" | "rejected" | "cancelled" }`. Omission or `false` leaves existing answerers in control. Only `allowed-once` grants one operation. Cancellation discards the pending request and late responses; shutdown and transport loss fail pending decisions closed. The client must keep reading and answering requests while waiting for an Agent to finish.
 
 ### Framing and transport
 
@@ -46,12 +46,13 @@ Both wire ends share one method set: client-to-server requests, opt-in server-to
 | client→server | `session/working-directory/get` | `SessionWorkingDirectoryParams` → `SessionWorkingDirectoryResult` |
 | client→server | `session/working-directory/set` | `SessionWorkingDirectorySetParams` → `SessionWorkingDirectoryResult` |
 | client→server | `shutdown` | no params → `{}` |
+| server→client | `approval/request` | `ApprovalRequestParams` → `ApprovalRequestResult` |
 | server→client | `session.event` | `SessionEventNotification` (every session in the runtime, unfiltered) |
 | server→client | `session.status` | `SessionStatusNotification` (whole-agent `running`/`idle` transition) |
 | server→client | `subagent.started` | `SubagentStartedNotification` |
 | server→client | `subagent.finished` | `SubagentFinishedNotification` (in-process runs only) |
 
-`HarnessSdkRequestMap` and `HarnessSdkNotificationMap` index these shapes by method name; the package root exports them together with the transport.
+`HarnessSdkRequestMap`, `HarnessSdkClientRequestMap`, and `HarnessSdkNotificationMap` index these shapes by method name; the package root exports them together with the transport.
 
 `session/wait` accepts `{ sessionId }` for an existing SDK-owned session and returns `{}` after the root stays idle and progressing managed descendant work finishes. Idle descendants with parked input remain resident without blocking this wait. Unknown ids and live Agent failures without a newer committed terminal are rejected. Notifications committed during the wait precede its response on the same transport; raw `session.status` transitions retain their whole-agent meaning.
 

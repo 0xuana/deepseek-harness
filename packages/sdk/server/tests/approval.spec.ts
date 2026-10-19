@@ -1,7 +1,7 @@
 /** SDK approvals use the real bidirectional wire and the internal audit service. */
 import { PassThrough } from 'node:stream'
 import { Context } from '@deepseek-ai/cordis'
-import { describe, expect, it, onTestFinished } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { SessionId } from '@deepseek-ai/dsh-session'
@@ -42,7 +42,7 @@ async function setup(enabled?: boolean) {
   await client.request('session/working-directory/get', { sessionId: 'main' })
   const agent = ctx.agents.get(SessionId('main'))!
   agent.session.append('turn/start', { turn: 1 })
-  return { ctx, server, serverWire, client, agent }
+  return { ctx, server, serverWire, client, agent, input }
 }
 
 describe('SDK approval bridge', () => {
@@ -115,7 +115,11 @@ describe('SDK approval bridge', () => {
     else if (action === 'shutdown') await h.server.shutdown()
     else h.serverWire.close()
     await expect(pending).resolves.toBe(action === 'cancel' ? 'cancelled' : 'unavailable')
+    const delivered = Promise.withResolvers<Buffer>()
+    h.input.once('data', delivered.resolve)
+    onTestFinished(() => { h.input.off('data', delivered.resolve) })
     answer.resolve({ outcome: 'allowed-once' })
+    expect(JSON.parse(String(await delivered.promise))).toMatchObject({ result: { outcome: 'allowed-once' } })
     expect(h.agent.session.snapshotEvents().filter(e => e.type === 'approval/decided').map(e => e.data.outcome))
       .toEqual([action === 'cancel' ? 'cancelled' : 'unavailable'])
   })
@@ -125,7 +129,11 @@ describe('SDK approval bridge', () => {
     const foreign = await h.ctx.agents.create({ sessionId: SessionId('foreign'), meta: { cwd: process.cwd() } })
     onTestFinished(() => foreign.dispose())
     foreign.agent.session.append('turn/start', { turn: 1 })
-    await expect(h.ctx.approval.request({ agent: foreign.agent, toolName: 'bash' })).resolves.toBe('unavailable')
+    const clientDecision = vi.fn(async () => ({ outcome: 'allowed-once' }))
+    h.client.onRequest(clientDecision)
+    h.ctx.on('approval/request', () => Promise.resolve('rejected'))
+    await expect(h.ctx.approval.request({ agent: foreign.agent, toolName: 'bash' })).resolves.toBe('rejected')
+    expect(clientDecision).not.toHaveBeenCalled()
   })
 
   it('serves in-process descendants and preserves never policy', async () => {

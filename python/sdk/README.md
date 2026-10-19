@@ -76,7 +76,7 @@ with HarnessClient(HarnessConfig(dsh_home="/absolute/path/to/dsh-home")) as clie
         print(question.toolName, question.reason)
         client.respond(request.id, {"outcome": "rejected"})
     else:
-        client.respond_error(request.id, -32601, "Unsupported client request")
+        client.respond_error(request.id, code=-32601, message="Unsupported client request")
 ```
 
 ## Customize plugins

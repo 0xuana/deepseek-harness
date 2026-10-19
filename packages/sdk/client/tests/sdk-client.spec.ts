@@ -768,7 +768,6 @@ describe('pure helpers', () => {
   })
 })
 
-
 describe('server-to-client SDK requests', () => {
   it('requires a started client and returns client decisions over the wire', async () => {
     const client = processClient(fakeLaunch({ FAKE_APPROVAL: '1' }))
@@ -785,10 +784,9 @@ describe('server-to-client SDK requests', () => {
     expect(await notifications.next()).toMatchObject({ method: 'approval/response', params: { result: { outcome: 'rejected' } } })
     notifications.close()
     await client.close()
-    expect(() => { client.onRequest(async () => ({})) }).toThrow('start the SDK client')
+    expect(() => { client.onRequest(async () => ({})) }).toThrow('client is closed; create a new client')
   })
 })
-
 
 describe('SDK cancellation reason projection', () => {
   it.each(['user', 'parent', 'disposed', 'legacy'])('retains the %s cancellation cause', async (kind) => {
