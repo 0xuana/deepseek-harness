@@ -923,6 +923,67 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'cuaAccess',
+    summary: 'Browser controls for provider-owned native permission and application decisions.',
+    description: 'Browser controls for provider-owned native permission and application decisions.',
+    methods: [
+      {
+        signature: '@Remote ptcConfiguration(): { persistent: boolean; writable: boolean }',
+        description: 'Read PTC execution state separately from native permission checks.',
+        parameters: [],
+        returns: 'Whether the shared runtime retains memory and has an editable profile entry.',
+      },
+      {
+        signature: '@Remote async enablePersistentPtc(): Promise<void>',
+        description: 'Persist in-memory PTC execution through the existing profile editor and Loader lifecycle.',
+        parameters: [],
+        returns: 'Completion after the shared runtime reload; already-persistent runtimes are left intact.',
+      },
+      {
+        signature: '@Remote applications(): CuaApplicationState',
+        description: 'Read application decisions without waiting for the native helper.',
+        parameters: [],
+        returns: 'Saved grants and refused applications with their persistence owner.',
+      },
+      {
+        signature: '@Remote async systemStatus(): Promise<CuaSystemPermissionState>',
+        description: 'Inspect system privileges independently of application decisions and icons.',
+        parameters: [],
+        returns: 'Fresh native preflight and launch metadata.',
+      },
+      {
+        signature: '@Remote async applicationIcons(): Promise<Record<string, string>>',
+        description: 'Load presentation icons separately from application decisions.',
+        parameters: [],
+        returns: 'Optional native PNG icons keyed by executable path for saved and blocked applications.',
+      },
+      {
+        signature: '@Remote async requestPermission(permission: CuaSystemPermission): Promise<CuaSystemPermissionState>',
+        description: 'Request a system privilege explicitly selected by the user.',
+        parameters: [{ name: 'permission', description: 'macOS privilege to request.' }],
+        returns: 'Preflight state after requesting; a false value never implies consent.',
+      },
+      {
+        signature: '@Remote async openSettings(permission: CuaSystemPermission): Promise<void>',
+        description: 'Open the macOS privacy pane selected by the user.',
+        parameters: [{ name: 'permission', description: 'Corresponding system privilege.' }],
+        returns: 'Completion after macOS accepted the open request.',
+      },
+      {
+        signature: '@Remote revoke(id: CuaApplicationId): Promise<void>',
+        description: 'Remove saved and session access and join affected operations.',
+        parameters: [{ name: 'id', description: 'Application identity displayed on the permission page.' }],
+        returns: 'Completion after persistence and cancellation; dispatched input cannot be undone.',
+      },
+      {
+        signature: '@Remote async retryApproval(id: CuaApplicationId): Promise<void>',
+        description: 'Clear this application\'s refusals across sessions so each session may ask for access again.',
+        parameters: [{ name: 'id', description: 'Refused or revoked application displayed on the permission page.' }],
+        returns: 'Completion after clearing refusals; no permission is granted and no action is replayed.',
+      },
+    ],
+  },
+  {
     key: 'deepseekAccount',
     summary: 'Account operations; only Host consumers can obtain a request credential.',
     description: 'Account operations; only Host consumers can obtain a request credential.',
@@ -5405,6 +5466,30 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'CronScheduleRecord',
     declaration: 'export interface CronScheduleRecord {\n    readonly id: ScheduleId;\n    readonly kind: \'cron\';\n    readonly title: string;\n    readonly prompt: string;\n    readonly expression: string;\n    readonly timeZone: string;\n    readonly scheduledAt: string;\n}',
+  },
+  {
+    name: 'CuaApplicationGrant',
+    declaration: 'export interface CuaApplicationGrant {\n    id: CuaApplicationId;\n    name: string;\n    executablePath: string;\n}',
+  },
+  {
+    name: 'CuaApplicationId',
+    declaration: 'export type CuaApplicationId = Branded<\'CuaApplicationId\'>;',
+  },
+  {
+    name: 'CuaApplicationState',
+    declaration: 'export interface CuaApplicationState {\n    settingsNamespace: string | null;\n    allowedApps: readonly CuaApplicationGrant[];\n    blockedApps: readonly CuaApplicationGrant[];\n    persistentAvailable: boolean;\n}',
+  },
+  {
+    name: 'CuaPermissionProcess',
+    declaration: 'export interface CuaPermissionProcess {\n    pid: number;\n    path?: string | undefined;\n    name?: string | undefined;\n}',
+  },
+  {
+    name: 'CuaSystemPermission',
+    declaration: 'export type CuaSystemPermission = \'accessibility\' | \'screenRecording\';',
+  },
+  {
+    name: 'CuaSystemPermissionState',
+    declaration: 'export interface CuaSystemPermissionState {\n    accessibility: boolean;\n    screenRecording: boolean;\n    helper: CuaPermissionProcess;\n    parent: CuaPermissionProcess;\n    launchApplication?: {\n        name: string;\n        path: string;\n        icon?: string | undefined;\n    } | undefined;\n}',
   },
   {
     name: 'DailyInput',

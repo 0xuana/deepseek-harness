@@ -87,5 +87,8 @@
   },
   "scripts": {
     "build:native": "swift build --package-path native --configuration release"
-  }
+  },
+  "os": [
+    "darwin"
+  ]
 }
