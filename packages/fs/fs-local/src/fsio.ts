@@ -12,6 +12,7 @@ import type { BigIntStats, Dirent, Stats } from 'node:fs'
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path'
 import { TextDecoder, promisify } from 'node:util'
 import { FsError, FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
+import { expandHomePath } from '@deepseek-ai/dsh-home-paths'
 import { copyFileDaclWin32, replaceFileWin32 } from './win32.ts'
 
 const BINARY_SAMPLE_BYTES = 8192
@@ -138,11 +139,13 @@ export interface LocalDirEntry {
 
 /**
  * Anchor a path using native drive semantics and POSIX physical parent traversal.
+ * A leading `~`, `~/`, or `~\` names the host user's home directory, not a child of `cwd`.
  * @param cwd - provider base directory for relative paths.
- * @param path - non-empty requested path.
+ * @param requested - non-empty requested path.
  * @returns absolute display spelling shared by target resolution and no-follow metadata.
  */
-export function localDisplayPath(cwd: string, path: string): string {
+export function localDisplayPath(cwd: string, requested: string): string {
+  const path = expandHomePath(requested)
   const absoluteCwd = isAbsolute(cwd) ? cwd : `${process.cwd()}${sep}${cwd}`
   const raw = isAbsolute(path) ? path : `${absoluteCwd}${sep}${path}`
   const physicalSpelling = /(?:^|[\\/])\.\.(?:[\\/]|$)/u.test(raw) ? raw : resolve(cwd, path)
