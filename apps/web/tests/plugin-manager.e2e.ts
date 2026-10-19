@@ -293,6 +293,38 @@ describe('web e2e: plugin manager', () => {
     }
   })
 
+  it('keeps the collapsed bar steady when collapsing lets a barely scrolling list fit', async () => {
+    await page.setViewportSize({ width: 1000, height: 480 })
+    const panel = await openPluginsPanel()
+    const body = panel.locator('[data-plugin-body]')
+    const compact = () => panel.locator('[data-plugin-bar]').evaluate(element => element.hasAttribute('data-compact'))
+    try {
+      await panel.locator('[data-plugin-package]').first().waitFor()
+      // Size the window so the resting bar leaves the list 12px of scroll range, less than collapsing frees.
+      const range = await body.evaluate(element => element.scrollHeight - element.clientHeight)
+      await page.setViewportSize({ width: 1000, height: 480 + range - 12 })
+      await expect.poll(() => body.evaluate(element => element.scrollHeight - element.clientHeight)).toBe(12)
+      await page.mouse.move(500, 400)
+      await page.mouse.wheel(0, 200)
+      await expect.poll(compact).toBe(true)
+      expect(await body.evaluate(element => element.scrollHeight - element.clientHeight)).toBeLessThanOrEqual(0)
+      // The clamp back to the top must not reopen the bar and loop the layout.
+      const flips = await panel.locator('[data-plugin-bar]').evaluate(element => new Promise<number>((resolve) => {
+        let count = 0
+        const observer = new MutationObserver(() => { count++ })
+        observer.observe(element, { attributes: true, attributeFilter: ['data-compact'] })
+        setTimeout(() => { observer.disconnect(); resolve(count) }, 500)
+      }))
+      expect(flips).toBe(0)
+      expect(await compact()).toBe(true)
+      await page.mouse.wheel(0, -200)
+      await expect.poll(compact).toBe(false)
+    } finally {
+      await body.evaluate((element) => { element.scrollTop = 0 })
+      await page.setViewportSize({ width: 1680, height: 1000 })
+    }
+  })
+
   it('keeps the plugin page title and actions pinned while the cards scroll', async () => {
     await page.setViewportSize({ width: 1000, height: 480 })
     const panel = await openPluginsPanel()

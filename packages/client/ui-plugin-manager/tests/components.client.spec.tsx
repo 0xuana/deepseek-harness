@@ -292,10 +292,40 @@ describe('PluginManagerPage', () => {
     expect(bar?.hasAttribute('data-compact')).toBe(true)
     act(() => {
       if (body === null) throw new Error('the page body is missing')
+      Object.defineProperties(body, { scrollHeight: { configurable: true, value: 900 }, clientHeight: { configurable: true, value: 400 } })
       body.scrollTop = 0
       fireEvent.scroll(body)
     })
     expect(bar?.hasAttribute('data-compact')).toBe(false)
+  })
+
+  it('keeps the collapsed bar when collapsing makes the list fit, and reopens it on an upward scroll', () => {
+    renderTab({ packages: [pkg()] })
+    const bar = document.querySelector('[data-plugin-bar]')
+    const body = document.querySelector<HTMLElement>('[data-plugin-body]')
+    if (body === null) throw new Error('the page body is missing')
+    const range = (scrollHeight: number): void => {
+      Object.defineProperties(body, {
+        scrollHeight: { configurable: true, value: scrollHeight },
+        clientHeight: { configurable: true, value: 400 },
+      })
+    }
+    range(440)
+    act(() => { body.scrollTop = 20; fireEvent.scroll(body) })
+    expect(bar?.hasAttribute('data-compact')).toBe(true)
+    // The taller body now holds the whole list, and the browser clamps the scroll position to 0.
+    range(400)
+    act(() => { body.scrollTop = 0; fireEvent.scroll(body) })
+    expect(bar?.hasAttribute('data-compact')).toBe(true)
+    act(() => { fireEvent.wheel(body, { deltaY: 40 }) })
+    expect(bar?.hasAttribute('data-compact')).toBe(true)
+    act(() => { fireEvent.wheel(body, { deltaY: -40 }) })
+    expect(bar?.hasAttribute('data-compact')).toBe(false)
+    // A wheel over a list that still scrolls leaves the bar to the scroll position.
+    range(900)
+    act(() => { body.scrollTop = 20; fireEvent.scroll(body) })
+    act(() => { fireEvent.wheel(body, { deltaY: -40 }) })
+    expect(bar?.hasAttribute('data-compact')).toBe(true)
   })
 
   it('keeps the Installed tab panel through loading and the More list out of the tabs', () => {

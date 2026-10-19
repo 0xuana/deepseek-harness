@@ -1728,7 +1728,18 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
       ) : null}
       {/* The page bar and the More list's head stay put; everything below scrolls. */}
       <div className={css.pageBody} data-plugin-body
-        onScroll={(event) => { setCompactBar(event.currentTarget.scrollTop > COMPACT_BAR_SCROLL_TOP) }}>
+        onScroll={(event) => {
+          const body = event.currentTarget
+          if (body.scrollTop > COMPACT_BAR_SCROLL_TOP) setCompactBar(true)
+          // Collapsing grows the body, so a list that only just scrolled can fit and clamp to 0 without
+          // the person scrolling up; the bar reopens at the top only while the list still scrolls.
+          else if (body.scrollTop === 0 && body.scrollHeight > body.clientHeight) setCompactBar(false)
+        }}
+        onWheel={(event) => {
+          // A list that fits only under the collapsed bar has no scroll range; scrolling up reopens the bar.
+          const body = event.currentTarget
+          if (event.deltaY < 0 && body.scrollHeight <= body.clientHeight) setCompactBar(false)
+        }}>
         {!onInstalled
           ? (
             <div role="tabpanel" id={`${tabsId}-${tab}-panel`} aria-labelledby={`${tabsId}-${tab}`} className={css.tabPanel}>
