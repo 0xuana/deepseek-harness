@@ -497,7 +497,7 @@ describe('tool-terminal task integration', () => {
     stub.sessions[0]!.autoSettle = false
     const controller = new AbortController()
     const pending = callWithSignal(ctx, 'terminal_send', { sessionId: 'pty-1', text: 'sleep' }, agent, controller.signal)
-    await Promise.resolve()
+    await expect.poll(() => stub.sessions[0]!.operation).toBeDefined()
     controller.abort()
     stub.sessions[0]!.operation?.cancel()
     expect((await pending).isError).toBe(true)

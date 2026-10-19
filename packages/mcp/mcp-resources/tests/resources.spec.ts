@@ -1,4 +1,4 @@
-import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import { executeToolFixture, executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
 import { setImmediate as nextEventLoopTurn } from 'node:timers/promises'
@@ -59,7 +59,8 @@ function visibleResourceTools(ctx: Context, agent?: Agent): string[] {
 }
 
 function call(ctx: Context, name: string, args: unknown, agent?: Agent) {
-  return executeToolFixture(ctx, {
+  const execute = name === 'run_code' ? executeModelToolFixture : executeToolFixture
+  return execute(ctx, {
     name, arguments: args, callId: ToolCallId('resource-test'),
     signal: new AbortController().signal,
     ...agent === undefined ? {} : { agent },

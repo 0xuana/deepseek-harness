@@ -1,4 +1,4 @@
-import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import { executeToolFixture, executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -171,7 +171,7 @@ describe('in-process structured output', () => {
       return blocked ? { kind: 'block', feedback: [{ type: 'text', text: 'Result policy rejected capture.' }] } : next()
     })
     const run = await startTestActivation(ctx, 'spawn', structuredRequest(parent))
-    const execution = executeToolFixture(ctx, {
+    const execution = executeModelToolFixture(ctx, {
       signal: testToolSignal,
       callId: ToolCallId('capture'),
       name: toolName,

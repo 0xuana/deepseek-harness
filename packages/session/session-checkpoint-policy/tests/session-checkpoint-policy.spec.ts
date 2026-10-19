@@ -110,14 +110,17 @@ describe('session-checkpoint-policy request boundary', () => {
 })
 
 describe('session-checkpoint-policy tool and step boundaries', () => {
-  it('awaits the checkpoint before a top-level tool body', async () => {
+  it('awaits the checkpoint before a top-level tool body', async ({ onTestFinished }) => {
     const ctx = await setup()
     const session = ctx.sessions.create(SessionId('tool-checkpoint'))
     const agent = { session } as Agent
     const gate = Promise.withResolvers<undefined>()
+    onTestFinished(() => { gate.resolve(undefined) })
+    const entered = Promise.withResolvers<undefined>()
     const order: string[] = []
     ctx.on('session/flush', async () => {
       order.push('flush:start')
+      entered.resolve(undefined)
       await gate.promise
       order.push('flush:end')
     })
@@ -131,22 +134,25 @@ describe('session-checkpoint-policy tool and step boundaries', () => {
       callId: ToolCallId('write-1'), name: 'write', arguments: {}, agent,
       signal: new AbortController().signal,
     })
-    await Promise.resolve()
+    await entered.promise
     expect(order).toEqual(['flush:start'])
     gate.resolve(undefined)
     await expect(pending).resolves.toMatchObject({ isError: false })
     expect(order).toEqual(['flush:start', 'flush:end', 'tool'])
   })
 
-  it('does not dispatch when cancellation lands during the tool checkpoint', async () => {
+  it('does not dispatch when cancellation lands during the tool checkpoint', async ({ onTestFinished }) => {
     const ctx = await setup()
     const session = ctx.sessions.create(SessionId('tool-checkpoint-cancel'))
     const agent = { session } as Agent
     const controller = new AbortController()
     const gate = Promise.withResolvers<undefined>()
+    onTestFinished(() => { gate.resolve(undefined) })
+    const entered = Promise.withResolvers<undefined>()
     const order: string[] = []
     ctx.on('session/flush', async () => {
       order.push('flush:start')
+      entered.resolve(undefined)
       await gate.promise
       order.push('flush:end')
     })
@@ -160,7 +166,7 @@ describe('session-checkpoint-policy tool and step boundaries', () => {
       callId: ToolCallId('write-cancelled'), name: 'write', arguments: {}, agent,
       signal: controller.signal,
     })
-    await Promise.resolve()
+    await entered.promise
     expect(order).toEqual(['flush:start'])
     controller.abort('cancelled during checkpoint')
     gate.resolve(undefined)

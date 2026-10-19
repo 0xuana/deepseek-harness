@@ -120,7 +120,7 @@ describe('bash tool through the agent loop', () => {
         }
       }
       await ctx.plugin(BashBindingRuntime)
-      agent.ctx.plugin(PtcToolExecutor)
+      await agent.ctx.plugin(PtcToolExecutor)
       const result = await executeModelToolFixture(ctx, {
         callId: ToolCallId('nested-shell-root'), agent, signal: new AbortController().signal, name: 'run_code',
         arguments: { code: 'return await tools.bash({ command: "pwd", description: "Print launch directory" })', description: 'Inspect current directory' },

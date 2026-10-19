@@ -1,4 +1,4 @@
-import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import { executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 /** Producer-to-UI regression for shell results bounded by the real spill policy. */
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
@@ -80,7 +80,7 @@ async function executeShell(text: string, nested: boolean, name = 'bash', maxInl
     // Nested PTC registers retained-environment cleanup on the owning context.
     const agent = { ctx, session } as Agent
     const callId = ToolCallId('shell-call')
-    const result = await executeToolFixture(ctx, {
+    const result = await executeModelToolFixture(ctx, {
       callId,
       agent,
       signal: new AbortController().signal,

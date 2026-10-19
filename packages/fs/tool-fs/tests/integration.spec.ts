@@ -623,7 +623,7 @@ describe('current working directory', () => {
         }
       }
       await ctx.plugin(ReadBindingRuntime)
-      agent.ctx.plugin(PtcToolExecutor)
+      await agent.ctx.plugin(PtcToolExecutor)
       const nested = await executeModelToolFixture(ctx, {
         signal: testToolSignal, callId: ToolCallId('ptc-read-current'), name: 'run_code',
         arguments: { code: 'return await tools.read({file_path: "note.txt"})', description: 'Read the current note' }, agent,

@@ -1,5 +1,5 @@
 import { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
-import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import { executeToolFixture, executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 /**
  * The `read_image` tool over the REAL local filesystem and attachment store:
  * extension routing, extension-less content sniffing (attachment object paths
@@ -150,7 +150,8 @@ function agentOn(model: string | undefined, provider = 'visual', messages: reado
 
 let callCounter = 0
 function call(ctx: Context, name: string, args: unknown, agent?: object) {
-  return executeToolFixture(ctx, {
+  const execute = name === RUN_CODE_NAME ? executeModelToolFixture : executeToolFixture
+  return execute(ctx, {
     signal: testToolSignal,
     callId: ToolCallId(`img-call-${++callCounter}`),
     name,
