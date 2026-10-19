@@ -40,7 +40,7 @@ it.skipIf(process.platform !== 'darwin').each([undefined, 'minimal'] as const)('
     await toggle.waitFor()
     expect(await toggle.getAttribute('aria-checked')).toBe('false')
     expect(await card.getByText('实验性', { exact: true }).count()).toBe(1)
-    expect(await card.textContent()).toContain('将 PTC 模式改为可持久化')
+    expect(await card.textContent()).not.toContain('将 PTC 模式改为可持久化')
     expect(await card.textContent()).toContain('请切换到 PTC 模式')
     expect(await card.textContent()).toContain('Windows 支持正在开发中')
     expect(await card.textContent()).not.toContain('Swift')
