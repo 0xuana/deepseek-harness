@@ -197,6 +197,9 @@ describe('ui-plugin-manager browser plugin', () => {
     b.remote.emit('plugin-manager/install-log', [{ jobId: 'j', argv: ['pnpm', 'add', 'pkg'], cwd: '/p', stream: 'stdout', text: 'early' }])
     b.remote.emit('plugin-manager/install-state', [{ requestId: 'foreign', phase: 'installing' }])
     expect(face.hooks.pluginManager.getSnapshot().install.runs).toEqual([])
+    // Update progress reaches only the update this page started.
+    b.remote.emit('plugin-manager/update-state', [{ requestId: 'foreign', step: 'checking' }])
+    expect(face.hooks.pluginManager.getSnapshot().update).toBeNull()
 
     await fiber.dispose()
     expect(b.ctx.get('pluginNavigation')).toBeUndefined()
