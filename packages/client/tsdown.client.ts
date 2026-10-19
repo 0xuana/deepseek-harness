@@ -516,10 +516,11 @@ const URL_SCHEME = /^[a-z][a-z\d+.-]*:/i
  * Free identifier an asset reference compiles to before rendering; the CommonJS
  * render turns each call into `require.asset(...)`, the module loader's
  * synchronous asset resolver, which returns the reference unchanged unless its
- * carrier maps it. The random part keeps plugin strings that happen to contain
- * the fixed prefix out of that rewrite.
+ * carrier maps it. The fixed hexadecimal suffix keeps plugin strings that happen
+ * to contain the shorter prefix out of that rewrite, and, unlike a per-build
+ * value, keeps the source maps that carry the loaded module text byte-stable.
  */
-const PACKAGE_ASSET_CALL = `__dshPackageAsset_${randomBytes(6).toString('hex')}`
+const PACKAGE_ASSET_CALL = '__dshPackageAsset_5f8e2c1a9b7d'
 
 /** Compile one asset reference into the resolver call. */
 function packageAssetCall(reference: string): string {

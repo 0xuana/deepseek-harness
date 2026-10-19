@@ -9,7 +9,7 @@ import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import type { UserConfig } from 'tsdown'
+import { build, type TsdownBundle, type UserConfig } from 'tsdown'
 import { afterEach, describe, expect, it } from 'vitest'
 import { packageAssetRevision } from '../packages/client/modules/src/assets.ts'
 import { clientBundle } from '../packages/client/tsdown.client.ts'
@@ -242,6 +242,30 @@ describe('client bundle package asset imports', () => {
       .toBe(`const a = require.asset("${WHALE_URL}");\nconst css = "x" + require.asset("${WHALE_URL}") + "y";\n${literal}`)
     expect(renderChunk(code, {}, { format: 'es' })).toBeNull()
     expect(renderChunk('const a = 1;\n', {}, { format: 'cjs' })).toBeNull()
+  })
+
+  it('builds an asset import into require.asset and keeps plugin strings that share the prefix', async () => {
+    const root = await assetPackage({
+      'src/client/assets/whale.png': WHALE,
+      'lib/types/client/index.js': 'import whale from "./assets/whale.png"\nexport const url = whale\nexport const text = "__dshPackageAsset("\n',
+    })
+    const config = clientFaceConfigs(root).find(candidate => candidate.platform === 'browser')
+    if (config === undefined) throw new Error('browser config missing')
+
+    let builds: TsdownBundle[] = []
+    try {
+      builds = await build({
+        ...config, cwd: root, config: false, tsconfig: false,
+        write: false, clean: false, exports: false, report: false, logLevel: 'silent',
+      })
+      const output = builds.flatMap(bundle => bundle.chunks).find(chunk => chunk.type === 'chunk' && chunk.fileName === 'client.js')
+      const code = output?.type === 'chunk' ? output.code : ''
+      expect(code).toContain(`require.asset(${JSON.stringify(WHALE_URL)})`)
+      expect(code).not.toContain('__dshPackageAsset_')
+      expect(code).toContain('"__dshPackageAsset("')
+    } finally {
+      for (const bundle of builds) await bundle[Symbol.asyncDispose]()
+    }
   })
 
   it('ignores imports and modules that are not supported assets', async () => {
