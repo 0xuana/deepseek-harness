@@ -18,7 +18,6 @@ const value: CuaApplicationState & { system: CuaSystemPermissionState } = {
   allowedApps: [], blockedApps: [], settingsNamespace: 'cua', persistentAvailable: true }
 
 function actionsOf(value: Record<string, unknown>): asserts value is Record<string, unknown> & PermissionFace {
-  assert(typeof value.setActive === 'function')
   assert(typeof value.refresh === 'function' && typeof value.request === 'function' && typeof value.openSettings === 'function')
   assert(typeof value.revoke === 'function' && typeof value.dismissToast === 'function')
   assert(typeof value.retryApproval === 'function')

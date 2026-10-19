@@ -32,7 +32,7 @@ function fixture() {
   const refresh = vi.fn()
   const props = { useCuaPermissions: bindSnapshotSelector(state), t: makeTranslate(en),
     useCuaDefaultPreset: bindSnapshotSelector(preset), setPtcDefault: vi.fn(async () => true),
-    refresh, setActive: vi.fn((active: boolean) => { if (active) refresh() }), request: vi.fn(), openSettings: vi.fn(), revoke: vi.fn(),
+    refresh, request: vi.fn(), openSettings: vi.fn(), revoke: vi.fn(),
     retryApproval: vi.fn(), dismissToast: vi.fn(),
   } satisfies PermissionPanelProps
   return { state, preset, props,

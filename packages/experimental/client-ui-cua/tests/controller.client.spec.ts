@@ -105,7 +105,7 @@ it('ignores stale toast completion after the permission UI is disposed', async (
   await f.controller.dispose()
   const before = f.controller.state.getSnapshot()
   f.face.dismissToast()
-  f.face.setActive(true)
+  f.face.refresh()
   expect(f.controller.state.getSnapshot()).toBe(before)
 })
 
@@ -161,45 +161,6 @@ it('keeps a user-action failure visible when a refresh is queued behind it', asy
 })
 
 
-it.each(['success', 'failure'])('drops a permission read %s from the previous bundle activation', async (outcome) => {
-  const f = fixture()
-  f.face.setActive(true)
-  await vi.waitFor(() => { expect(f.controller.state.getSnapshot().busy).toBe(false) })
-  const pending = Promise.withResolvers<CuaSystemPermissionState>(), entered = Promise.withResolvers<undefined>()
-  onTestFinished(async () => { pending.resolve(value); await f.controller.dispose() })
-  f.actions.readSystem.mockImplementationOnce(() => { entered.resolve(undefined); return pending.promise })
-  f.face.refresh()
-  await entered.promise
-  f.face.setActive(false)
-  f.face.setActive(false)
-  expect(f.controller.state.getSnapshot()).toMatchObject({ busy: true, system: { error: null, value } })
-  f.face.request('accessibility')
-  expect(f.actions.request).not.toHaveBeenCalled()
-  if (outcome === 'failure') pending.reject(new Error('old helper stopped'))
-  else pending.resolve({ ...value, screenRecording: true })
-  await Promise.allSettled([pending.promise])
-  expect(f.controller.state.getSnapshot()).toMatchObject({ busy: true, system: { error: null, value } })
-  f.face.setActive(true)
-  await vi.waitFor(() => { expect(f.controller.state.getSnapshot().busy).toBe(false) })
-  expect(f.controller.state.getSnapshot()).toMatchObject({ system: { error: null, value } })
-  expect(f.actions.readSystem).toHaveBeenCalledTimes(3)
-})
-
-it.each(['success', 'failure'])('does not publish a user-action %s after its bundle is replaced', async (outcome) => {
-  const f = fixture(), pending = Promise.withResolvers<undefined>(), entered = Promise.withResolvers<undefined>()
-  onTestFinished(async () => { pending.resolve(undefined); await f.controller.dispose() })
-  f.actions.request.mockImplementationOnce(() => { entered.resolve(undefined); return pending.promise })
-  f.face.request('accessibility')
-  await entered.promise
-  f.face.setActive(false)
-  if (outcome === 'failure') pending.reject(new Error('old request cancelled'))
-  else pending.resolve(undefined)
-  f.face.setActive(true)
-  await vi.waitFor(() => { expect(f.controller.state.getSnapshot().busy).toBe(false) })
-  expect(f.controller.state.getSnapshot()).toMatchObject({ toast: null, system: { error: null, value } })
-  expect(f.actions.readSystem).toHaveBeenCalledOnce()
-})
-
 it('publishes each observation before the other queries finish', async () => {
   const f = fixture()
   const system = Promise.withResolvers<CuaSystemPermissionState>()
@@ -236,18 +197,4 @@ it('keeps application decisions available when system inspection fails', async (
     applications: { value: applications, error: null, busy: false },
   })
   await f.controller.dispose()
-})
-
-it.each(['success', 'failure'])('drops old icon %s after disabling and reenabling the bundle', async (outcome) => {
-  const f = fixture(), pending = Promise.withResolvers<Record<string, string>>()
-  onTestFinished(async () => { pending.resolve({}); await f.controller.dispose() })
-  f.actions.readIcons.mockReturnValueOnce(pending.promise)
-  f.face.refresh()
-  await vi.waitFor(() => { expect(f.controller.state.getSnapshot().system.busy).toBe(false) })
-  f.face.setActive(false)
-  f.face.setActive(true)
-  if (outcome === 'success') pending.resolve({ '/old/app': 'old-icon' })
-  else pending.reject(new Error('old helper stopped'))
-  await vi.waitFor(() => { expect(f.controller.state.getSnapshot().busy).toBe(false) })
-  expect(f.controller.state.getSnapshot().icons).toEqual({ value: {}, error: null, busy: false })
 })

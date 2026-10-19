@@ -94,7 +94,7 @@ function PermissionDescription({ application, permission, loading, t }: Pick<Per
 
 /** @param props Host observation and explicit user actions. @returns Permission controls without automatic system prompts. */
 export function PermissionPanel(props: PermissionPanelProps) {
-  const { t, refresh, setActive } = props
+  const { t, refresh } = props
   const state = props.useCuaPermissions(value => value)
   const observed = state.system.value
   const apps = state.applications.value
@@ -103,10 +103,10 @@ export function PermissionPanel(props: PermissionPanelProps) {
   const loading = observed === null && (busy || state.system.error === null)
   const application = !busy && state.system.error !== null ? undefined : observed?.launchApplication
   useEffect(() => {
-    setActive(true)
+    refresh()
     window.addEventListener('focus', refresh)
     return () => { window.removeEventListener('focus', refresh) }
-  }, [refresh, setActive])
+  }, [refresh])
   return <div className={css.panels} data-cua-settings aria-busy={state.busy || loading}>
     <section className={css.panel} aria-label={t('title')}>
       <h3>{t('title')}</h3>
@@ -158,9 +158,9 @@ export function PermissionPanel(props: PermissionPanelProps) {
  * @param props Permission observation and activation navigation callbacks.
  * @returns Setup guidance when system permissions need attention.
  */
-export function PermissionSetup({ t, setActive, useCuaPermissions, onDismiss, onOpenDetails }: PermissionSetupProps) {
+export function PermissionSetup({ t, refresh, useCuaPermissions, onDismiss, onOpenDetails }: PermissionSetupProps) {
   const state = useCuaPermissions(value => value.system)
-  useEffect(() => { setActive(true) }, [setActive])
+  useEffect(() => { refresh() }, [refresh])
   const ready = state.value !== null && state.error === null
     && state.value.accessibility && state.value.screenRecording
   useEffect(() => { if (ready && !state.busy) onDismiss() }, [ready, state.busy, onDismiss])

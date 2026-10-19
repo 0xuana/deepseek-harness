@@ -31,8 +31,6 @@ export type PermissionView = { [K in keyof PermissionData]: Query<PermissionData
 /** Slot actions and the renderer-bound permission projection. */
 export interface PermissionFace {
   hooks: { cuaPermissions: SnapshotStore<PermissionView> }
-  /** Pause observation during bundle changes, or resume with a fresh read. */
-  setActive: (active: boolean) => void
   refresh: () => void
   request: (permission: CuaSystemPermission) => void
   openSettings: (permission: CuaSystemPermission) => void
@@ -53,8 +51,6 @@ export class PermissionController {
   private tail: Promise<void> = Promise.resolve()
   private reads: Promise<void> = Promise.resolve()
   private closed = false
-  private active = true
-  private epoch = 0
   private sequence = 0
   /** @param actions Browser-owned Remote calls that reject on failed responses. */
   constructor(private readonly actions: PermissionActions) {}
@@ -65,17 +61,6 @@ export class PermissionController {
   face(): PermissionFace {
     return {
       hooks: { cuaPermissions: this.state },
-      setActive: (active) => {
-        if (this.closed) return
-        if (active !== this.active) { this.active = active; this.epoch++ }
-        if (active) this.enqueue()
-        else this.state.update((state) => {
-          state.busy = true
-          for (const key of ['system', 'applications', 'icons'] as const) {
-            state[key].busy = true; state[key].error = null
-          }
-        })
-      },
       refresh: () => { this.enqueue() },
       request: (permission) => { this.enqueue(() => this.actions.request(permission), 'requested') },
       openSettings: (permission) => { this.enqueue(() => this.actions.openSettings(permission), 'opened') },
@@ -87,9 +72,8 @@ export class PermissionController {
   /** Prevent publication after UI withdrawal and join the accepted Remote work. */
   async dispose(): Promise<void> { this.closed = true; await this.tail; await this.reads }
   private enqueue(action?: () => Promise<void>, kind?: 'requested' | 'opened' | 'revoked' | 'retryAllowed'): void {
-    if (this.closed || !this.active) return
-    const epoch = this.epoch
-    const current = () => !this.closed && this.active && epoch === this.epoch
+    if (this.closed) return
+    const current = () => !this.closed
     const sequence = ++this.sequence
     this.state.update((state) => {
       state.busy = true
