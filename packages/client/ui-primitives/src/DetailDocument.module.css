@@ -10,6 +10,8 @@
   /* A long README scrolls inside the section instead of pushing the page's later sections out of reach. */
   max-height: min(560px, 60vh);
   overflow-y: auto;
+  /* Without a frame, keep the scrollbar off the text and the text width independent of overflow. */
+  scrollbar-gutter: stable;
   padding: 4px 0;
   overflow-wrap: anywhere;
 }
