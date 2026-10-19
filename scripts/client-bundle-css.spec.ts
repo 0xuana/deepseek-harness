@@ -43,6 +43,16 @@ const WHALE = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1
 const WHALE_REV = packageAssetRevision(WHALE)
 const WHALE_URL = `plugins/@deepseek-ai/dsh-client-asset-fixture/assets/whale-${WHALE_REV}.png`
 
+/** The per-build resolver call identifier a compiled module emits before rendering. */
+const RESOLVER_CALL = /__dshPackageAsset_[0-9a-f]{12}(?=\()/u
+
+/** Read the resolver call identifier from one compiled module. */
+function resolverCall(output: string | null): string {
+  const call = RESOLVER_CALL.exec(output ?? '')?.[0]
+  if (call === undefined) throw new Error('compiled module carries no resolver call')
+  return call
+}
+
 /**
  * Evaluate the stylesheet text an emitted style module or inline-text module computes.
  * @param output - emitted module source.
@@ -51,10 +61,11 @@ const WHALE_URL = `plugins/@deepseek-ai/dsh-client-asset-fixture/assets/whale-${
  */
 function stylesheetText(output: string | null, resolve: (reference: string) => string): string {
   if (output === null) throw new Error('stylesheet module was not emitted')
+  const call = RESOLVER_CALL.exec(output)?.[0]
   const body = output
     .replace(/^export default (.*);$/mu, 'return typeof css === "undefined" ? $1 : css;')
     .replace(/^export \{\};$/mu, 'return css;')
-  return runInNewContext(`(() => {\n${body}\n})()`, { __dshPackageAsset: resolve, document: undefined }) as string
+  return runInNewContext(`(() => {\n${body}\n})()`, { ...call === undefined ? {} : { [call]: resolve }, document: undefined }) as string
 }
 
 const temporaryRoots: string[] = []
@@ -201,7 +212,7 @@ describe('client bundle package asset imports', () => {
     const first = await load.call(context, id)
     const second = await load.call(context, id)
 
-    const expected = `export default __dshPackageAsset("plugins/@deepseek-ai/dsh-client-asset-fixture/assets/icons/whale%402x-${WHALE_REV}.png");`
+    const expected = `export default ${resolverCall(first)}("plugins/@deepseek-ai/dsh-client-asset-fixture/assets/icons/whale%402x-${WHALE_REV}.png");`
     expect(id).toBe(asset)
     expect([first, second]).toEqual([expected, expected])
     expect(emittedFiles(context)).toEqual([{
@@ -219,12 +230,16 @@ describe('client bundle package asset imports', () => {
 
   it('renders each resolver call as the module loader require.asset in the CommonJS bundle only', async () => {
     const root = await assetPackage({ 'src/client/assets/whale.png': WHALE })
-    const { renderChunk } = browserPlugins(root)('dsh-package-asset')
+    const plugin = browserPlugins(root)('dsh-package-asset')
+    const { renderChunk } = plugin
     if (renderChunk === undefined) throw new Error('asset plugin has no renderChunk hook')
-    const code = `const a = __dshPackageAsset("${WHALE_URL}");\nconst css = "x" + __dshPackageAsset("${WHALE_URL}") + "y";\n`
+    const call = resolverCall(await hooks(plugin).load.call(recordingContext(), join(root, 'src/client/assets/whale.png')))
+    // Plugin data that only shares the fixed prefix stays as written.
+    const literal = 'const text = "__dshPackageAsset(";\n'
+    const code = `const a = ${call}("${WHALE_URL}");\nconst css = "x" + ${call}("${WHALE_URL}") + "y";\n${literal}`
 
     expect(renderChunk(code, {}, { format: 'cjs' })?.toString())
-      .toBe(`const a = require.asset("${WHALE_URL}");\nconst css = "x" + require.asset("${WHALE_URL}") + "y";\n`)
+      .toBe(`const a = require.asset("${WHALE_URL}");\nconst css = "x" + require.asset("${WHALE_URL}") + "y";\n${literal}`)
     expect(renderChunk(code, {}, { format: 'es' })).toBeNull()
     expect(renderChunk('const a = 1;\n', {}, { format: 'cjs' })).toBeNull()
   })
@@ -325,7 +340,11 @@ describe('client bundle package asset imports', () => {
   it('keeps literal placeholder-like text and resolves only the references the rewrite inserted', async () => {
     const root = await assetPackage({
       'src/client/assets/whale.png': WHALE,
-      'src/client/theme.css': '.a::after { content: "__dshPackageAsset0__"; } .b { background: url(./assets/whale.png); }',
+      'src/client/assets/__dshPackageAsset_logo.png': WHALE,
+      'src/client/theme.css': [
+        '.a::after { content: "__dshPackageAsset0__"; } .b { background: url(./assets/whale.png); }',
+        '.c { background: url(./assets/__dshPackageAsset_logo.png); }',
+      ].join('\n'),
     })
 
     const output = await loadImport(browserPlugins(root)('dsh-css-global-inline'), recordingContext(), './theme.css', join(root, 'src/client/index.ts'))
@@ -333,6 +352,8 @@ describe('client bundle package asset imports', () => {
     const css = stylesheetText(output, reference => `resolved:${reference}`)
     expect(css).toContain('content:"__dshPackageAsset0__"')
     expect(css).toContain(`url(resolved:${WHALE_URL})`)
+    // A real file whose name shares the placeholder prefix is still a package asset.
+    expect(css).toContain(`url(resolved:plugins/@deepseek-ai/dsh-client-asset-fixture/assets/__dshPackageAsset_logo-${WHALE_REV}.png)`)
   })
 
   it('rejects an uppercase extension, which the asset import types do not declare', async () => {
@@ -391,7 +412,7 @@ describe('client bundle stylesheet url()', () => {
 
     const output = await loadImport(browserPlugins(root)('dsh-css-modules-inline'), context, './View.module.css', join(root, 'src/client/index.ts'))
 
-    expect(output).toContain(`url(" + __dshPackageAsset(${JSON.stringify(WHALE_URL)}) + ")`)
+    expect(output).toContain(`url(" + ${resolverCall(output)}(${JSON.stringify(WHALE_URL)}) + ")`)
     const css = stylesheetText(output, reference => `resolved:${reference}`)
     expect(css).toContain(`url(resolved:${WHALE_URL})`)
     for (const preserved of ['(mask-image:url(\'\'))', 'background:url()', 'url(data:image/svg+xml,%3Csvg%3E)', 'url(#mask)', 'url(/static/a.png)', 'url(https://example.com/a.png)']) {

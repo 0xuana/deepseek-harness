@@ -516,9 +516,10 @@ const URL_SCHEME = /^[a-z][a-z\d+.-]*:/i
  * Free identifier an asset reference compiles to before rendering; the CommonJS
  * render turns each call into `require.asset(...)`, the module loader's
  * synchronous asset resolver, which returns the reference unchanged unless its
- * carrier maps it.
+ * carrier maps it. The random part keeps plugin strings that happen to contain
+ * the fixed prefix out of that rewrite.
  */
-const PACKAGE_ASSET_CALL = '__dshPackageAsset'
+const PACKAGE_ASSET_CALL = `__dshPackageAsset_${randomBytes(6).toString('hex')}`
 
 /** Compile one asset reference into the resolver call. */
 function packageAssetCall(reference: string): string {
@@ -666,7 +667,7 @@ function packageAssets(manifest: PackageManifest, packageDir: string): PackageAs
       const rewrite = (url: Url): Url | undefined => {
         // Empty values, fragments, root-relative paths, schemes such as `data:`, and placeholders name no package file.
         if (url.url === '' || url.url.startsWith('#') || url.url.startsWith('/') || URL_SCHEME.test(url.url)) return undefined
-        if (url.url.startsWith('__dshPackageAsset_')) return undefined
+        if (inserted.has(url.url)) return undefined
         if (/[#?]/u.test(url.url)) {
           throw new Error(`tsdown: ${name}: ${stylesheet} references ${JSON.stringify(url.url)}; a package asset url() takes no fragment or query`)
         }
