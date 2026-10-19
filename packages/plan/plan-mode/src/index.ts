@@ -171,13 +171,15 @@ export const planProjectionDefinition = {
  * `ctx.planMode`: owns logged plan state, applies and narrates selected state at step start,
  * the `plan:policy` section, the `/plan` command, and the stable exit tool.
  * Client carriers expose the projection's cropped `{ active, pending }` view.
+ * Agent prompt assembly fails while the projection reader is not ready;
+ * callers must await plugin activation before running an agent.
  */
 export class PlanModeController extends Service {
   static inject = ['tools', 'systemPrompt', 'sessionProjections', 'agents']
 
   /** Validated deployment-owned guidance. */
   private readonly section: string
-  private planProjectionHandle!: ProjectionHandle<PlanUnitState>
+  private planProjectionHandle: ProjectionHandle<PlanUnitState> | undefined
 
   /**
    * Latest selection per session awaiting the next accepted in-turn pre-step.
@@ -193,6 +195,15 @@ export class PlanModeController extends Service {
 
   protected async [Service.init](): Promise<void> {
     const ctx = this.ctx
+    ctx.systemPrompt.section({
+      name: 'plan:policy',
+      order: ctx.systemPrompt.getSectionOrder('PLAN_POLICY'),
+      text: (context) => {
+        if (context.agent === undefined) return ''
+        const pending = this.pendingIntents.get(context.agent.session)
+        return (pending?.active ?? this.loggedActive(context.agent.session)) ? this.section : ''
+      },
+    })
     this.planProjectionHandle = await ctx.sessionProjections.register(planProjectionDefinition)
     let disposed = false
     // Pre-step is outside Session.append publication, so it can append the
@@ -218,16 +229,6 @@ export class PlanModeController extends Service {
         : { ...decision, messages: [...decision.messages, narration] }
     })
     ctx.effect(() => () => { disposed = true }, 'dsh-plan-mode: close service lifetime')
-
-    ctx.systemPrompt.section({
-      name: 'plan:policy',
-      order: ctx.systemPrompt.getSectionOrder('PLAN_POLICY'),
-      text: (context) => {
-        if (context.agent === undefined) return ''
-        const pending = this.pendingIntents.get(context.agent.session)
-        return (pending?.active ?? this.loggedActive(context.agent.session)) ? this.section : ''
-      },
-    })
 
     // The command child activates only when a command registry is composed.
     ctx.inject(['commands'], (commandCtx) => {
@@ -389,6 +390,9 @@ export class PlanModeController extends Service {
   }
 
   private planState(session: Session): PlanUnitState {
+    if (this.planProjectionHandle === undefined) {
+      throw new Error('plan mode is not ready; await plugin activation before running an agent')
+    }
     return this.planProjectionHandle.stateOf(session)
   }
 
