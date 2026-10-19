@@ -71,7 +71,7 @@ it('fetches the macOS optional tarball only for Darwin, with an empty cache for 
     }
   }
   const requests: string[] = []
-  let omitOs = false
+  let unrestricted = false
   const server = createServer((request, response) => {
     const path = decodeURIComponent(request.url ?? '')
     requests.push(path)
@@ -81,7 +81,8 @@ it('fetches the macOS optional tarball only for Darwin, with an empty cache for 
     if (!entry) { response.writeHead(404); response.end(); return }
     if (tarball) { response.end(entry.bytes); return }
     const manifest = { ...entry.manifest }
-    if (omitOs) delete manifest.os
+    // pnpm also infers macOS from this package name; an explicit any overrides that inference.
+    if (unrestricted && name === providerName) manifest.os = ['any']
     response.setHeader('Content-Type', 'application/json')
     response.end(JSON.stringify({ name, 'dist-tags': { latest: version }, versions: {
       [version]: { ...manifest, dist: {
@@ -97,13 +98,13 @@ it('fetches the macOS optional tarball only for Darwin, with an empty cache for 
   await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve) })
   const address = server.address()
   if (!address || typeof address === 'string') throw new Error('fixture registry has no TCP address')
-  for (const target of ['darwin', 'win32', 'linux', 'linux-without-os']) {
-    omitOs = target === 'linux-without-os'
+  for (const target of ['darwin', 'win32', 'linux', 'linux-unrestricted']) {
+    unrestricted = target === 'linux-unrestricted'
     const project = join(root, target)
     await mkdir(project)
     await writeFile(join(project, 'package.json'), JSON.stringify({ private: true, dependencies: { [String(cli.name)]: version } }))
     await writeFile(join(project, 'pnpm-workspace.yaml'), [
-      'autoInstallPeers: false', 'supportedArchitectures:', `  os: [${omitOs ? 'linux' : target}]`,
+      'autoInstallPeers: false', 'supportedArchitectures:', `  os: [${unrestricted ? 'linux' : target}]`,
       '  cpu: [arm64]', 'minimumReleaseAge: 0', '',
     ].join('\n'))
     requests.length = 0
@@ -115,6 +116,6 @@ it('fetches the macOS optional tarball only for Darwin, with an empty cache for 
     expect(requests).toContain(`/${bundleName}.tgz`)
     expect(requests).toContain('/@deepseek-ai/dsh-cua.tgz')
     expect(requests.includes(`/${providerName}.tgz`), `${target}: ${JSON.stringify(requests)}\n${output}`)
-      .toBe(target === 'darwin' || omitOs)
+      .toBe(target === 'darwin' || unrestricted)
   }
 }, 120_000)

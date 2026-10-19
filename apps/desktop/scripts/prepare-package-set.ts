@@ -48,7 +48,7 @@ function supportsTarget(manifest: Readonly<Record<string, unknown>>, field: 'os'
     throw new Error(`desktop package set: ${String(manifest.name)} has invalid ${field}`)
   }
   if (values.includes(`!${target}`)) return false
-  return values.length === 0 || values.includes('any') || values.includes(target)
+  return values.length === 0 || (values.length === 1 && values[0] === 'any') || values.includes(target)
     || values.every(value => value.startsWith('!'))
 }
 
