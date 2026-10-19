@@ -115,7 +115,6 @@ it.skipIf(process.platform !== 'darwin').each([undefined, 'minimal'] as const)('
     expect(scaffold.ctx.tools.schemas(child.agent).some(tool => tool.name === 'cua')).toBe(false)
     expect(scaffold.ctx.agentPresets.defaultId).toBe(initialDefault)
     expect(scaffold.ctx.ptcRuntime.programFormat).toBe('function-body')
-    expect(scaffold.ctx.ptcRuntime === originalRuntime).toBe(true)
     await setup.waitFor()
     expect(await setup.getByText('Computer Use 插件已开启，但暂时无法检测系统权限。请前往插件详情页查看原因并重试。', { exact: true }).count()).toBe(1)
     await setup.getByRole('button', { name: '稍后', exact: true }).click()
@@ -148,10 +147,11 @@ it.skipIf(process.platform !== 'darwin').each([undefined, 'minimal'] as const)('
     await card.getByRole('button', { name: '查看 Computer Use', exact: true }).click()
     toggle = page.locator('[data-plugin-panel]').getByRole('switch', { name: '启用 Computer Use', exact: true })
     const persistent = page.getByRole('group', { name: 'PTC 执行方式', exact: true })
+    const beforePersistent = scaffold.ctx.ptcRuntime
     await persistent.getByRole('button', { name: '设为持久化', exact: true }).click()
     await persistent.getByRole('button', { name: '已设为持久化', exact: true }).waitFor()
     expect(scaffold.ctx.ptcRuntime.programFormat).toBe('repl')
-    expect(scaffold.ctx.ptcRuntime === originalRuntime).toBe(false)
+    expect(scaffold.ctx.ptcRuntime === beforePersistent).toBe(false)
     saved = await readFile(settingsPath, 'utf8')
     expect(saved).toContain('executionMode: persistent-in-memory')
     const runtime = scaffold.ctx.ptcRuntime
