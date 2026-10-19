@@ -1,6 +1,6 @@
-![Discover tab listing plugins from a team market](preview.svg)
+![The Discover tab listing plugins from an added market index](preview.svg)
 
-A team publishes its plugins in a market index; anyone who adds the index can install them from DSH. No market is built in.
+A plugin market is an index file at a URL that lists plugins. Add the URL, and its plugins appear in **Discover**, where you can browse and install them. DSH comes with no market; you choose which indexes to add.
 
 ## How to use
 

@@ -1,12 +1,12 @@
-![An agent opens a terminal, starts a dev server, and later reads its new output](preview.svg)
+![One tool call starts a dev server in a terminal; a later tool call reads its new output](preview.svg)
 
-Agents can start a dev server, a file watcher, a debugger, or a REPL in a terminal, keep working, and come back later to read new output or type more input.
+This plugin gives the agent terminal tools. With them, the agent can start a dev server, a file watcher, a debugger, or a REPL in a terminal, make other tool calls while it runs, and come back later to read new output or type more input.
 
 ## How to use
 
 - Ask for work that keeps running, for example "start the dev server in a terminal and check its output after the edit".
-- The conversation shows each step: **Open terminal**, a terminal card with the text sent and its output, **Read terminal**, **Signal terminal**, **List terminals**, and **Close terminal**.
-- Only the agent that opened a terminal can use it. macOS and Linux use Bash; Windows uses PowerShell.
+- Each terminal step appears in the conversation as a tool call: **Open terminal**, a terminal card with the text sent and its output, **Read terminal**, **Signal terminal**, **List terminals**, and **Close terminal**.
+- The terminals belong to the agent: you see them through these tool calls and cannot type into them yourself. The sidebar terminal is separate: it is your own shell, and the agent does not see it. Only the agent that opened a terminal can use it. macOS and Linux use Bash; Windows uses PowerShell.
 
 ## Good to know
 

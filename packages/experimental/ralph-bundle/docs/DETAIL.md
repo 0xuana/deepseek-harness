@@ -1,10 +1,10 @@
-![A Run ralph loop result after three fresh-agent rounds, with the worker's completion report](preview.svg)
+![A Ralph loop that ran three rounds with fresh agents until the last round reported the goal met](preview.svg)
 
-New agents work on one goal round after round until one reports it done. Each round's agent sees only the goal, the workspace files, and the previous round's short report, not the conversation.
+Ask for a Ralph loop with a goal, and the agent starts a fresh agent on it, round after round, until a round reports the goal met or a blocker, or the round limit is reached. Each round sees only the goal, the workspace files, and the last round's short report, not the conversation.
 
 ## How to use
 
-- Ask for it by name and give a goal an agent can check from the files, for example: "Run a Ralph loop until pnpm lint passes with zero warnings. Give it at most 5 rounds."
+- Say "Ralph loop" and give a goal that can be checked from the files, for example: "Run a Ralph loop until pnpm lint passes with zero warnings. Give it at most 5 rounds."
 - The loop appears in the conversation as **Run ralph loop**, marked **Worker reported completion**, **Worker reported a blocker**, or **Round limit reached**. Expand it to see the last report, **Rounds**, any **Remaining work**, and the **Task**.
 
 ## Good to know

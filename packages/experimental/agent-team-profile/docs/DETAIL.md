@@ -1,4 +1,4 @@
-![Agent Team panel with two members and two shared tasks](preview.svg)
+![A conversation titled Add rate limiting with its Agent Team button, and the panel it opens: two members and two shared tasks](preview.svg)
 
 Ask the agent you are talking to, the lead, to split a job. It creates named teammates, puts the work on a shared task board, waits for their results, and reports back.
 
