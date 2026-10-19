@@ -7,6 +7,7 @@
   padding: 0 8px;
   padding-inline-start: calc(8px + var(--dsh-workspace-indent, 0px));
   cursor: pointer;
+  -webkit-user-select: none;
   user-select: none;
   color: var(--dsw-alias-label-primary);
 }
@@ -17,6 +18,14 @@
 
 .sessionRow.selected {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dragPreview {
+  position: fixed;
+  top: 0;
+  /* WebKit fills transparent snapshot pixels white, including rounded corners. */
+  background: var(--dsw-specific-sidebar-fill);
+  pointer-events: none;
 }
 
 .searchResultRow {

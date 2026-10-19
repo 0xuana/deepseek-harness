@@ -26,6 +26,7 @@ import { abbreviateHomePath } from '@deepseek-ai/dsh-util-workspace-path'
 import type { MenuOpenState, WorkspaceBrowserProps } from '../contract/slots.ts'
 import type { GroupNode, SearchResultNode, SessionNode } from '../tree.ts'
 import css from './Rows.module.css'
+import { useRowDragPreview } from './useRowDragPreview.ts'
 
 /** The standard locale seat, prop-passed from the browser root. */
 type RowTranslate = WorkspaceBrowserProps['t']
@@ -236,6 +237,7 @@ export function ProjectRowItem({ group, containsCurrentDescendant = false, onTog
   const label = row.workspaceId === undefined ? t('group.ungrouped') : row.label
   const active = containsCurrentDescendant || (group.expanded && group.containsCurrent)
   const [menuOpen, setMenuOpen] = useState(false)
+  const dragPreview = useRowDragPreview()
   const workspaceMenuItems = [
     { id: 'rename', label: t('rename'), icon: <IconEditOutlineRegular /> },
     { id: 'delete', label: t('delete.workspace'), icon: <IconTrashOutlineRegular />, danger: true },
@@ -253,9 +255,10 @@ export function ProjectRowItem({ group, containsCurrentDescendant = false, onTog
         : (e) => {
           e.dataTransfer.effectAllowed = 'move'
           e.dataTransfer.setData('text/plain', row.key)
+          dragPreview.start(e)
           drag.start()
         }}
-      onDragEnd={drag?.end}
+      onDragEnd={() => { dragPreview.clear(); drag?.end() }}
     >
       <span className={clsx(css.slot, css.folder, active && css.folderActive)}>
         {row.expanded ? <IconFolderOpenRegular /> : <IconFolderCloseRegular />}
@@ -583,6 +586,7 @@ export function SessionNodeItem({
   // their drop targets to fellow pinned rows.
   const draggable = drag !== undefined && !row.blank && !row.archived
   const [menuOpen, setMenuOpen] = useState(false)
+  const dragPreview = useRowDragPreview()
   // The menu's open state, bound into the row entries' `useMenuOpenState` hook.
   const menuOpenState = useMemo((): MenuOpenState => [menuOpen, setMenuOpen], [menuOpen])
   const rowRef = useRef<HTMLDivElement>(null)
@@ -622,9 +626,10 @@ export function SessionNodeItem({
         : (e) => {
           e.dataTransfer.effectAllowed = 'move'
           e.dataTransfer.setData('text/plain', node.id)
+          dragPreview.start(e)
           drag.start()
         }}
-      onDragEnd={!draggable ? undefined : drag.end}
+      onDragEnd={() => { dragPreview.clear(); drag?.end() }}
       onDragOver={drag === undefined
         ? undefined
         : (e) => {
