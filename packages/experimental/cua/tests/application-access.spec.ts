@@ -222,7 +222,7 @@ it('keeps another task allowed when the same application is denied in a new task
   await expect(f.access.run(f.client, handle, signal, async () => 'still allowed')).resolves.toBe('still allowed')
 })
 
-it('enforces a removed saved grant before its configuration notification arrives', async () => {
+it('enforces a removed saved grant from fresh storage before dispatch', async () => {
   const f = await setup('Always allow')
   await f.access.select(f.agent, f.client, handle, identity, signal)
   await f.save([])
@@ -352,7 +352,7 @@ it('revokes session consent even after its agent and connection are released', a
   const replacement = new NativeClient(f.ctx, nativeConfig, unusedConnector)
   await expect(f.access.select(f.agent, replacement, handle, identity, signal)).rejects.toThrow('APP_ACCESS_DENIED')
   expect(f.answer).toHaveBeenCalledOnce()
-  f.access.retryApproval(identity.id)
+  await f.access.retryApproval(identity.id)
   await f.access.select(f.agent, replacement, handle, identity, signal)
   expect(f.answer).toHaveBeenCalledTimes(2)
 })
@@ -399,4 +399,85 @@ it('restores consent after a complete context restart only for the original conv
   await restored.access.select(other.agent, client, handle, identity, signal)
   expect(restored.answer).toHaveBeenCalledOnce()
   expect((await restored.access.status()).allowedApps).toEqual([])
+})
+
+
+it('revokes an unselected application and clears only refused conversations', async () => {
+  const f = await setup()
+  await f.access.revoke(identity.id)
+  await f.access.retryApproval(identity.id)
+  await f.access.select(f.agent, f.client, handle, identity, signal)
+  const owner = await f.ctx.agents.create({ sessionId: SessionId('refused-conversation') })
+  const client = new NativeClient(f.ctx, nativeConfig, unusedConnector)
+  f.answer.mockResolvedValueOnce({ answers: [{ id: 'cua-app-access', selected: ['Deny'] }] })
+  await expect(f.access.select(owner.agent, client, handle, identity, signal)).rejects.toThrow('APP_ACCESS_DENIED')
+  await f.access.retryApproval(identity.id)
+  await expect(f.access.run(f.client, handle, signal, async () => 'still allowed')).resolves.toBe('still allowed')
+  await f.access.select(owner.agent, new NativeClient(f.ctx, nativeConfig, unusedConnector), handle, identity, signal)
+  expect(f.answer).toHaveBeenCalledTimes(3)
+})
+
+it.each(['revoked', 'session revision'])('rejects a delayed answer after another store writer changes %s', async (change) => {
+  const f = await setup()
+  const answer = Promise.withResolvers<AskUserQuestionAnswer>()
+  const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+  onTestFinished(() => { answer.resolve({ answers: [{ id: 'cua-app-access', selected: ['Deny'] }] }) })
+  f.answer.mockImplementationOnce(() => { entered.resolve(); return answer.promise })
+  const pending = f.access.select(f.agent, f.client, handle, identity, signal)
+  const rejected = expect(pending).rejects.toThrow('APP_ACCESS_REVOKED')
+  await entered.promise
+  const { persistable: _persistable, ...grant } = identity
+  await f.store.withState(signal, transaction => transaction.save({ migrated: true, applications: {
+    [identity.id]: { revoked: change === 'revoked' ? 1 : 0, sessions: change === 'session revision' ? {
+      [f.agent.id]: { identity: grant, decision: 'deny', revision: 1 },
+    } : {} },
+  } }))
+  answer.resolve({ answers: [{ id: 'cua-app-access', selected: ['Allow for this session'] }] })
+  await rejected
+  const dispatch = vi.fn(async () => null)
+  await expect(f.access.run(f.client, handle, signal, dispatch)).rejects.toThrow('APP_ACCESS_REQUIRED')
+  expect(dispatch).not.toHaveBeenCalled()
+})
+
+it('does not store a cancellation decision after provider disposal starts', async () => {
+  const f = await setup()
+  const answer = Promise.withResolvers<AskUserQuestionAnswer>()
+  const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+  onTestFinished(() => { answer.resolve({ answers: [{ id: 'cua-app-access', selected: ['Deny'] }] }) })
+  f.answer.mockImplementationOnce(() => { entered.resolve(); return answer.promise })
+  const pending = f.access.select(f.agent, f.client, handle, identity, signal)
+  const rejected = expect(pending).rejects.toThrow()
+  await entered.promise
+  const closing = f.access.dispose()
+  answer.reject(new UserQuestionError('provider stopped', 'ASK_CANCELLED'))
+  await rejected; await closing
+  expect(await f.store.withState(signal, transaction => transaction.state.applications)).toEqual({})
+})
+
+it('rejects persistent consent when storage capability disappears before the commit', async () => {
+  const f = await setup('Always allow')
+  const original = vi.mocked(f.store.withState).getMockImplementation()!
+  vi.mocked(f.store.withState).mockImplementationOnce(original).mockImplementationOnce((signal, operation) => {
+    f.setWritable(false)
+    return original(signal, operation)
+  })
+  await expect(f.access.select(f.agent, f.client, handle, identity, signal)).rejects.toThrow('APP_ACCESS_DENIED')
+  expect(f.grants()).toEqual([])
+})
+
+it('does not attach a native handle that closes while its durable grant is committing', async () => {
+  const f = await setup('Always allow')
+  const save = f.save.getMockImplementation()!
+  f.save.mockImplementationOnce(async (...args) => { await save(...args); f.client.invalidate() })
+  await expect(f.access.select(f.agent, f.client, handle, identity, signal)).rejects.toThrow('NATIVE_CLOSED')
+  await expect(f.access.run(f.client, handle, signal, async () => null)).rejects.toThrow('APP_ACCESS_REQUIRED')
+})
+
+it('denies existing handles when the stored application record is removed', async () => {
+  const f = await setup()
+  await f.access.select(f.agent, f.client, handle, identity, signal)
+  await f.store.withState(signal, transaction => transaction.save({ migrated: true, applications: {} }))
+  const dispatch = vi.fn(async () => null)
+  await expect(f.access.run(f.client, handle, signal, dispatch)).rejects.toThrow('APP_ACCESS_REVOKED')
+  expect(dispatch).not.toHaveBeenCalled()
 })

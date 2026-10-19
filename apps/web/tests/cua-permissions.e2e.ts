@@ -143,7 +143,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   await panel.getByText('Fixture', { exact: true }).waitFor({ state: 'hidden' })
   const saved = await readFile(join(scaffold.harnessHome, 'profiles/scaffold/cordis.patch.yml'), 'utf8')
   expect(saved).not.toContain('allowedApps:')
-  const files = await readdir(join(scaffold.harnessHome, 'storages'))
+  const files = await readdir(join(scaffold.workspaceCwd, '.dsh-storages'))
   expect(files.some(file => file.startsWith('cua_permissions_') && file.endsWith('.json'))).toBe(true)
   expect((await scaffold.ctx.cuaAccess.applications()).allowedApps).toEqual([])
   const events = (await readFile(audit, 'utf8')).trim().split('\n').map(line => JSON.parse(line) as { event: string; method: string; params: object })
