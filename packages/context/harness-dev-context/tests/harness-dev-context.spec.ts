@@ -1,7 +1,6 @@
 /** Prompt stability of the harness checkout and Web GUI URL across processes, checkouts, and ports. */
 
-import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import { existsSync } from 'node:fs'
+import { describe, expect, it, onTestFinished } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
@@ -13,19 +12,16 @@ import { SessionId, type Session } from '@deepseek-ai/dsh-session'
 import { renderContextSnapshot, renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import * as HarnessDevContext from '../src/index.ts'
 
-vi.mock('node:fs', { spy: true })
-
-const SOURCE_PROMPT = 'The runtime context states whether a DeepSeek Harness implementation checkout is available and names its path when provided. The checkout location and current working directory are separate values and may differ; never infer the working directory from the checkout path. Use pwd to determine the current working directory. Use this checkout only to inspect or extend DSH itself.'
-const WEB_GUIDANCE = 'When a Web GUI is provided and the user refers to "this page", "this GUI", or "this app" without naming another target, they mean that GUI. '
+const SOURCE_PROMPT = 'The runtime context names the DeepSeek Harness implementation checkout. The checkout location and current working directory are separate values and may differ; never infer the working directory from the checkout path. Use pwd to determine the current working directory. Use this checkout only to inspect or extend DSH itself.'
+const WEB_GUIDANCE = 'When the user refers to "this page", "this GUI", or "this app" without naming another target, they mean this GUI. '
   + 'The browser provides no implicit DOM, route, or screenshot context. '
-  + 'Client-plugin changes reload without a refresh only when the browser HMR receiver is active and '
-  + '`pnpm run dev:web` is running from this same checkout to rebuild their bundles; verify both before promising automatic updates. '
-  + 'Server plugin/configuration HMR is independent of the browser receiver and the build watcher, and can be enabled in a headless runtime. '
+  + 'The client-plugin HMR receiver is active, but client-plugin changes reload without a refresh only while '
+  + '`pnpm run dev:web` is also running from this same checkout to rebuild their bundles; verify that watcher before promising automatic updates. '
   + 'Every other change — the apps/web shell and plain packages — requires rebuilding the affected Web artifacts and verifying this existing URL after a page refresh. '
   + 'Starting another server does not update this GUI. '
   + 'The apps/web Vite entry builds the shell but is not a standalone application because only dsh web injects window.__DSH_BOOT__. '
   + 'Do not start a replacement server unless the user asks; if one is needed, use a managed background job and verify its exact URL.'
-const WEB_PROMPT = `The runtime context states whether a DeepSeek Harness Web GUI is available and names its URL when provided. ${WEB_GUIDANCE}`
+const WEB_PROMPT = `You are interacting with the user through the DeepSeek Harness Web GUI whose URL the runtime context names. ${WEB_GUIDANCE}`
 
 /** The value-bearing paragraphs earlier releases rendered. */
 const LEGACY_SOURCE = 'The DeepSeek Harness implementation checkout is at /old/checkout/. The checkout location and current working directory are separate values and may differ; never infer the working directory from this path. Use pwd to determine the current working directory. Use this checkout only to inspect or extend DSH itself.'
@@ -134,22 +130,6 @@ function requestSystemPrompts(request: GenerateOptions | undefined): string[] {
 }
 
 describe('harness-dev-context', () => {
-  it.each([0, 1])('reports no checkout when source marker %i is absent and probes only at activation', async (missingMarker) => {
-    const ctx = new Context()
-    onTestFinished(() => ctx.fiber.dispose())
-    await mountAgentLoopTestDependencies(ctx)
-    const probe = vi.mocked(existsSync)
-    onTestFinished(() => { probe.mockRestore() })
-    if (missingMarker === 1) probe.mockReturnValueOnce(true)
-    probe.mockReturnValueOnce(false)
-    await ctx.plugin(HarnessDevContext)
-    const probes = probe.mock.calls.length
-    expect(renderContextSnapshot(await ctx.systemPrompt.assemble()))
-      .toContain('Current DeepSeek Harness implementation checkout: not available.')
-    await ctx.systemPrompt.assemble()
-    expect(probe).toHaveBeenCalledTimes(probes)
-  })
-
   it('registers value-free sections and reports the checkout and Web GUI URL as runtime context', async () => {
     const ctx = new Context()
     onTestFinished(() => ctx.fiber.dispose())
@@ -170,21 +150,6 @@ describe('harness-dev-context', () => {
     const disposed = await ctx.systemPrompt.assemble()
     expect(disposed.sections.some(entry => entry.name === 'harness:source' || entry.name === 'app:web-surface')).toBe(false)
     expect(disposed.contexts).toEqual([])
-  })
-
-  it.each([
-    { config: { checkout: false as const }, expected: ['not available', 'not available'] },
-    { config: { checkout: '/embedding/source', guiUrl: 'http://127.0.0.1:4312' }, expected: ['"/embedding/source"', '"http://127.0.0.1:4312"'] },
-  ])('renders SDK desktop context without a Web server: $config', async ({ config, expected }) => {
-    const ctx = new Context()
-    onTestFinished(() => ctx.fiber.dispose())
-    await mountAgentLoopTestDependencies(ctx)
-    await ctx.plugin(HarnessDevContext, config)
-    const assembly = await ctx.systemPrompt.assemble()
-    expect(assembly.sections.filter(entry => entry.name === 'harness:source' || entry.name === 'app:web-surface')
-      .map(entry => entry.text)).toEqual([SOURCE_PROMPT, WEB_PROMPT])
-    expect(renderContextSnapshot(assembly)).toContain(`Current DeepSeek Harness implementation checkout: ${expected[0]}.`)
-    expect(renderContextSnapshot(assembly)).toContain(`Current DeepSeek Harness Web GUI URL: ${expected[1]}.`)
   })
 
   it.each([

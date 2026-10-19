@@ -35,8 +35,5 @@
 - id: deliverable-file-references
   disabled: true
 
-- id: harness-dev-context
-  disabled: true
-
 - id: time-context
   disabled: true

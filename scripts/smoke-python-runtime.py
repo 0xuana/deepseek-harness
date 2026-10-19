@@ -82,7 +82,6 @@ LEGACY_CUSTOM_DISABLED_ROWS = (
     "command-goal",
     "plan-mode",
     "present",
-    "harness-dev-context",
     "skill",
     "skill-filesystem",
     "skill-office",

@@ -25,11 +25,11 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-Web 和 `sdk` bundle 挂载 `harness-dev-context` 行。它依赖 `systemPrompt` 和 `sessionProjections`，`webApp` 为可选服务。将 `checkout` 设为宿主提供的实现源码路径；省略时检测安装中是否包含 CLI 和 Agent 源码树，设为 `false` 则关闭检测。检测仅在激活时执行一次；不含这些源码的打包运行时不会被当作 checkout。将 `guiUrl` 设为嵌入应用的 GUI URL；否则插件在服务可用时读取 `webApp.getAdvertisedUrl()`。缺失值显示为 `not available`。GUI 和浏览器 HMR 说明以相应能力可用为前提；headless 运行时不会声称浏览器或客户端 HMR 接收器已启用。服务端插件/配置 HMR、浏览器接收器和构建 watcher 是独立的能力。禁用该行会同时省略两个提示段和上下文。
+随附的 Web bundle 以 `harness-dev-context` 行挂载此插件。不希望 agent 得知 harness checkout 或 GUI URL 时，在 profile patch 中禁用该行。插件不接受配置，只在每个注入服务都存在时激活：`systemPrompt`、`sessionProjections`，以及 Web 运行时的 `webApp` 服务，因此 `--help` 与非 Web 组合永远不会挂载它。
 
 ### 模型得到什么
 
-两个系统提示词段落说明 checkout 与工作目录不同、「this page」指此 GUI，并给出 GUI 的更新约定。两行运行时上下文给出当前值：检测到或宿主提供的实现 checkout（若可用），以及 `webApp.getAdvertisedUrl()` 给出的 Web GUI 公告 URL，与 `DSH_WEB_URL` 和启动 URL 相同。运行时上下文遵循共享的快照规则：值不变不追加内容，值变化时在本步输入之前追加一份快照，而不是改写更早的消息。
+两个系统提示词段落说明 checkout 与工作目录不同、「this page」指此 GUI，并给出 GUI 的更新约定。两行运行时上下文给出当前值：本包上方四层目录处的安装根，以及 `webApp.getAdvertisedUrl()` 给出的 Web GUI 公告 URL，与 `DSH_WEB_URL` 和启动 URL 相同。运行时上下文遵循共享的快照规则：值不变不追加内容，值变化时在本步输入之前追加一份快照，而不是改写更早的消息。
 
 ### 早期版本的会话
 
@@ -87,9 +87,9 @@ Web 和 `sdk` bundle 挂载 `harness-dev-context` 行。它依赖 `systemPrompt`
 ##### 系统提示词段落
 
 ```markdown
-The runtime context states whether a DeepSeek Harness implementation checkout is available and names its path when provided. The checkout location and current working directory are separate values and may differ; never infer the working directory from the checkout path. Use pwd to determine the current working directory. Use this checkout only to inspect or extend DSH itself.
+The runtime context names the DeepSeek Harness implementation checkout. The checkout location and current working directory are separate values and may differ; never infer the working directory from the checkout path. Use pwd to determine the current working directory. Use this checkout only to inspect or extend DSH itself.
 
-The runtime context states whether a DeepSeek Harness Web GUI is available and names its URL when provided. When a Web GUI is provided and the user refers to "this page", "this GUI", or "this app" without naming another target, they mean that GUI. The browser provides no implicit DOM, route, or screenshot context. Client-plugin changes reload without a refresh only when the browser HMR receiver is active and `pnpm run dev:web` is running from this same checkout to rebuild their bundles; verify both before promising automatic updates. Server plugin/configuration HMR is independent of the browser receiver and the build watcher, and can be enabled in a headless runtime. Every other change — the apps/web shell and plain packages — requires rebuilding the affected Web artifacts and verifying this existing URL after a page refresh. Starting another server does not update this GUI. The apps/web Vite entry builds the shell but is not a standalone application because only dsh web injects window.__DSH_BOOT__. Do not start a replacement server unless the user asks; if one is needed, use a managed background job and verify its exact URL.
+You are interacting with the user through the DeepSeek Harness Web GUI whose URL the runtime context names. When the user refers to "this page", "this GUI", or "this app" without naming another target, they mean this GUI. The browser provides no implicit DOM, route, or screenshot context. The client-plugin HMR receiver is active, but client-plugin changes reload without a refresh only while `pnpm run dev:web` is also running from this same checkout to rebuild their bundles; verify that watcher before promising automatic updates. Every other change — the apps/web shell and plain packages — requires rebuilding the affected Web artifacts and verifying this existing URL after a page refresh. Starting another server does not update this GUI. The apps/web Vite entry builds the shell but is not a standalone application because only dsh web injects window.__DSH_BOOT__. Do not start a replacement server unless the user asks; if one is needed, use a managed background job and verify its exact URL.
 ```
 
 ##### 运行时上下文行

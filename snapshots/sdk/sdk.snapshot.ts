@@ -130,9 +130,8 @@ const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
   'desktop-context': {
     expectedFinalResponse: 'SDK snapshot OK',
     runtimeContext: {
-      includes: ['Current DeepSeek Harness implementation checkout: "',
-        'Current DeepSeek Harness Web GUI URL: not available.'],
-      excludes: ['/Users/'],
+      includes: ['Current working directory:'],
+      excludes: ['Current DeepSeek Harness implementation checkout:', 'Current DeepSeek Harness Web GUI URL:'],
     },
   },
   'desktop-ptc-context': { expectedFinalResponse: 'SDK snapshot OK' },
@@ -350,29 +349,6 @@ function assembledRuntimeContexts(log: PersistedLog): string[] {
       || event.data?.source?.kind !== 'runtime-context') return []
     return event.data.content?.flatMap(block => block.type === 'text' && typeof block.text === 'string' ? [block.text] : []) ?? []
   })
-}
-
-/** Tokenize only the runtime checkout fact; preserve missing values and ordinary user/tool text. */
-function normalizeHarnessCheckout(content: string): string {
-  return content.split('\n').map((line) => {
-    if (line.trim() === '') return line
-    const event = JSON.parse(line) as {
-      type?: string
-      data?: { source?: { kind?: string; sections?: { name: string; text: string }[] }; content?: { type: string; text?: string }[] }
-    }
-    if (event.type !== 'user/message' || event.data?.source?.kind !== 'runtime-context') return line
-    const normalize = (text: string) => text.replace(
-      /Current DeepSeek Harness implementation checkout: "(?:[^"\\]|\\.)*"\./gu,
-      'Current DeepSeek Harness implementation checkout: "{{sourceRoot}}".',
-    )
-    for (const block of event.data.content ?? []) {
-      if (block.type === 'text' && block.text !== undefined) block.text = normalize(block.text)
-    }
-    for (const section of event.data.source.sections ?? []) {
-      if (section.name === 'harness:source') section.text = normalize(section.text)
-    }
-    return JSON.stringify(event)
-  }).join('\n')
 }
 
 function contextOf(logs: readonly { content: string; header: Record<string, unknown> }[], cwd: string): NormalizeContext {
@@ -1003,8 +979,7 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         expect(writerFiles, 'native writer oracle inventory').toEqual(retained
           ? files.map((_, index) => writerSnapshotName(index)).sort() : [])
       }
-      const { results, notifications, observedMethods, logs: capturedLogs, initialWorkspace, finalWorkspace, cwd } = await runScenario(scenario)
-      const logs = capturedLogs.map(log => ({ ...log, content: normalizeHarnessCheckout(log.content) }))
+      const { results, notifications, observedMethods, logs, initialWorkspace, finalWorkspace, cwd } = await runScenario(scenario)
       const ordered = orderLogs(
         logs,
         recording ? logs.length : files.length,

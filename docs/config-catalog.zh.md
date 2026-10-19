@@ -1485,25 +1485,6 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-goal -->
 
-<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-harness-dev-context -->
-<a id="deepseek-aidsh-harness-dev-context"></a>
-
-## `@deepseek-ai/dsh-harness-dev-context`
-
-- `inject`: `systemPrompt` · `sessionProjections`
-- `source`: [`packages/context/harness-dev-context/src/index.ts:31`](../packages/context/harness-dev-context/src/index.ts)
-
-```ts config-catalog
-/** Desktop context supplied by a host or an SDK embedding. */
-export interface Config {
-  /** Implementation checkout; omission detects a source tree, false disables detection. */
-  checkout?: string | false
-  /** GUI URL; omit to use the mounted Web application when available. */
-  guiUrl?: string
-}
-```
-<!-- END GENERATED config-catalog:@deepseek-ai/dsh-harness-dev-context -->
-
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-headless -->
 <a id="deepseek-aidsh-headless"></a>
 
@@ -4765,6 +4746,7 @@ export interface Config {
 | `@deepseek-ai/dsh-fs-observation-policy` | — | [`packages/fs/fs-observation-policy/src/index.ts`](../packages/fs/fs-observation-policy/src/index.ts) |
 | `@deepseek-ai/dsh-fs-ssh` | `ssh` · `sandboxPolicy` | [`packages/ssh/fs-ssh/src/index.ts`](../packages/ssh/fs-ssh/src/index.ts) |
 | `@deepseek-ai/dsh-goal-round-driver` | `agents` · `goals` · `sessions` | [`packages/goal/goal-round-driver/src/index.ts`](../packages/goal/goal-round-driver/src/index.ts) |
+| `@deepseek-ai/dsh-harness-dev-context` | `systemPrompt` · `sessionProjections` · `webApp` | [`packages/context/harness-dev-context/src/index.ts`](../packages/context/harness-dev-context/src/index.ts) |
 | `@deepseek-ai/dsh-host-directory-picker-auto` | `webServer` · `connection` · `loader` | [`packages/host/directory-picker-auto/src/index.ts`](../packages/host/directory-picker-auto/src/index.ts) |
 | `@deepseek-ai/dsh-host-directory-picker-native` | — | [`packages/host/directory-picker-native/src/index.ts`](../packages/host/directory-picker-native/src/index.ts) |
 | `@deepseek-ai/dsh-host-plugin-inventory` | `loader` | [`packages/host/plugin-inventory/src/index.ts`](../packages/host/plugin-inventory/src/index.ts) |

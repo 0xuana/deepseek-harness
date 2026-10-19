@@ -185,10 +185,11 @@ describe('Python SDK dsh profile keyless smoke', () => {
         expect(toolNames).not.toContain('list_subagent_models')
       }
       for (const text of ['Tokens prefixed with @', 'Prefer showing the primary results',
-        'Current DeepSeek Harness implementation checkout:', 'Current DeepSeek Harness Web GUI URL:',
         'Time sampled while preparing']) {
         expect(requestText.includes(text), text).toBe(true)
       }
+      expect(requestText).not.toContain('Current DeepSeek Harness implementation checkout:')
+      expect(requestText).not.toContain('Current DeepSeek Harness Web GUI URL:')
 
       child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'shutdown' })}\n`)
       const shutdown = await waitForLine(lines, value => value.id === 3, () => stderr)

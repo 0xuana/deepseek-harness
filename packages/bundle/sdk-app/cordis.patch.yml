@@ -76,6 +76,3 @@
 
     - id: deliverable-file-references
       name: '@deepseek-ai/dsh-tool-present/prompt'
-
-    - id: harness-dev-context
-      name: '@deepseek-ai/dsh-harness-dev-context'

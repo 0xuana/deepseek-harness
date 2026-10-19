@@ -9,10 +9,10 @@ English | [中文](guide.zh.md)
 
 ## Change
 
-The existing `sdk` profile now includes `present`, `ask_user_question`, schedule tools, file-reference guidance, checkout/GUI context, and time context. It does not start a Web server. Standard tool calling remains the default; `DSH_TOOLS_MODE=ptc` selects programmatic tool calling in the same profile. `sdk-minimal` is unchanged.
+The existing `sdk` profile now includes `present`, `ask_user_question`, schedule tools, file-reference guidance and time context. It does not start a Web server. Standard tool calling remains the default; `DSH_TOOLS_MODE=ptc` selects programmatic tool calling in the same profile. `sdk-minimal` is unchanged.
 
 ## Migration
 
 1. Keep selecting `sdk`. Provide `onUserQuestion` (TypeScript) or `on_user_question` (Python) to answer built-in questions over the native protocol, or retain an in-process `user-questions/request` answerer; without one, the tool reports `NO_PROVIDER`.
-2. Set `checkout` and `guiUrl` on `harness-dev-context` only when your embedding provides them. The checkout is detected only when the installation contains the CLI and Agent source trees; a GUI URL remains unavailable unless provided. Working directory and model still come from SDK initialization.
-3. Custom compositions that need the previous model-visible tool/context roster can disable the `present`, `tool-ask-user`, `tool-schedule`, `file-reference-local`, `deliverable-file-references`, `harness-dev-context`, and `time-context` rows. Review any pinned prompts and tool schemas before upgrading.
+2. Working directory and model still come from SDK initialization. The SDK profile does not mount the Web-specific checkout and GUI development context.
+3. Custom compositions that need the previous model-visible tool/context roster can disable the `present`, `tool-ask-user`, `tool-schedule`, `file-reference-local`, `deliverable-file-references`, and `time-context` rows. Review any pinned prompts and tool schemas before upgrading.
