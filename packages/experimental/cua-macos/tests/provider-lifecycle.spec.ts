@@ -1,10 +1,16 @@
 /** Native helper replacement is synchronized with Agent and provider disposal. */
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { setImmediate } from 'node:timers/promises'
 import { Context, FiberState } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
+import Timer from '@deepseek-ai/cordis-plugin-timer'
+import { initProfile, mountRootInclude, readProfilePatches, type ProfileContext } from '@deepseek-ai/dsh-app-boot'
+import ConfigEditor from '@deepseek-ai/dsh-config-editor'
+import Settings from '@deepseek-ai/dsh-settings'
+import Hmr from '@deepseek-ai/dsh-hmr'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
@@ -644,4 +650,79 @@ it('rejects an unsupported native host before starting preparation', async () =>
   native.prepare.mockReset()
   await expect(NativeProvider.apply(f.ctx, { ...automaticConfig, allowedApps: { get: () => [] } })).rejects.toThrow('unsupported host')
   expect(native.prepare).not.toHaveBeenCalled()
+})
+
+it('stores signed application consent in the current profile and refuses unavailable settings', async () => {
+  const f = await setup()
+  await f.provider.dispose()
+  const home = await mkdtemp(join(tmpdir(), 'cua-grant-profile-')), dir = join(home, 'profile')
+  onTestFinished(async () => { await f.ctx.fiber.dispose(); await rm(home, { recursive: true, force: true }) })
+  initProfile(dir, ['permission-fixture-bundle'])
+  const bundle = join(dir, 'node_modules', 'permission-fixture-bundle')
+  await mkdir(bundle, { recursive: true })
+  await writeFile(join(home, 'package.json'), '{"name":"test-installation"}\n')
+  await writeFile(join(bundle, 'package.json'), JSON.stringify({ name: 'permission-fixture-bundle', version: '1.0.0',
+    dsh: { bundle: { patch: 'cordis.patch.yml' } } }))
+  await writeFile(join(bundle, 'cordis.patch.yml'), JSON.stringify([{ insert: [{ id: 'cua', name: 'cordis:cua', config }] }]))
+  await writeFile(join(dir, 'cordis.yml'), '[]\n')
+  const profile: ProfileContext = { name: 'test', startedBundles: ['permission-fixture-bundle'], dir,
+    patchPath: join(dir, 'cordis.patch.yml'), installAnchor: join(home, 'package.json'), cwd: home, home,
+    overlays: [], telemetryDisabledEnv: undefined }
+  f.ctx.baseUrl = pathToFileURL(home).href + '/'
+  f.ctx.provide('profileContext', profile)
+  f.ctx.provide('appReady', { onReady: (listener: () => void) => { listener(); return () => {} } })
+  await f.ctx.plugin(Loader)
+  f.ctx.loader.builtins.cua = NativeProvider
+  await f.ctx.plugin(ConfigEditor)
+  await mountRootInclude(f.ctx, join(dir, 'cordis.yml'), readProfilePatches('test', profile))
+  await f.ctx.loader.await()
+  await f.ctx.plugin(UserQuestions)
+  const answer = vi.fn(async () => ({ answers: [{ id: 'cua-app-access', selected: ['Allow for this session'] }] }))
+  f.ctx.on('user-questions/request', answer)
+  native.request.mockResolvedValue({ appHandle: 'task-app', pid: 17, name: 'Fixture',
+    authorization: { id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app', persistable: true } })
+  expect((await f.execute('getApp', { selector: 'Fixture' })).isError).toBe(false)
+  await f.ctx.plugin(Settings)
+  await f.ctx.plugin(Timer)
+  await f.ctx.plugin(Hmr, { root: [], ignored: [], debounce: 0 })
+  await f.ctx.hmr.runExclusive(async () => {})
+  expect(f.ctx.settings.describe().find(row => row.ns === 'cua')?.autoGenerate).toBe(false)
+  answer.mockResolvedValue({ answers: [{ id: 'cua-app-access', selected: ['Always allow'] }] })
+  const authorization = { id: 'b'.repeat(64), name: 'Fixture', executablePath: '/fixture/app', persistable: true }
+  native.request.mockResolvedValue({ appHandle: 'signed-app', pid: 17, name: 'Fixture', authorization })
+  expect((await f.execute('getApp', { selector: 'Fixture' })).isError).toBe(false)
+  expect(await readFile(profile.patchPath, 'utf8')).toContain(authorization.id)
+  const settings = f.ctx.settings.describe().find(row => row.ns === 'cua')!
+  await f.ctx.settings.mutate('cua', [{ op: 'set', path: ['allowedApps'], value: [] }], settings.revision)
+  expect(await readFile(profile.patchPath, 'utf8')).toContain('allowedApps: []')
+  const revoked = await f.execute('getState', { appHandle: 'signed-app' })
+  expect(revoked.isError).toBe(true)
+  expect(JSON.stringify(revoked.content)).toContain('APP_ACCESS_REVOKED')
+  vi.spyOn(f.ctx.settings, 'describe').mockReturnValue([])
+  native.request.mockResolvedValue({ appHandle: 'different-app', pid: 18, name: 'Other fixture', authorization: { ...authorization, id: 'c'.repeat(64) } })
+  const unavailable = await f.execute('getApp', { selector: 'Fixture' })
+  expect(unavailable.isError).toBe(true)
+  expect(JSON.stringify(unavailable.content)).toContain('APP_ACCESS_DENIED')
+})
+
+it('rejects an application handle before any helper or consent has been acquired', async () => {
+  const f = await setup()
+  const result = await f.execute('getState', { appHandle: 'unselected-app' })
+  expect(result.isError).toBe(true)
+  expect(JSON.stringify(result.content)).toContain('APP_ACCESS_REQUIRED')
+  expect(native.instances).toHaveLength(0)
+  expect(native.request).not.toHaveBeenCalled()
+})
+
+it('uses configured signed application grants without requesting a human answer', async () => {
+  const f = await setup()
+  await f.provider.dispose()
+  const grant = { id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app' }
+  await f.ctx.plugin(NativeProvider, { ...config, allowedApps: [grant] })
+  native.request.mockResolvedValueOnce({ appHandle: 'saved-app', pid: 17, name: 'Fixture', authorization: { ...grant, persistable: true } })
+  expect((await f.execute('getApp', { selector: 'Fixture' })).isError).toBe(false)
+  native.request.mockResolvedValue({ dispatched: true, verified: false })
+  expect((await f.execute('activate', { appHandle: 'saved-app' })).isError).toBe(false)
+  expect(native.instances).toHaveLength(1)
+  expect(native.request).toHaveBeenCalledTimes(2)
 })
