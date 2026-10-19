@@ -1562,9 +1562,11 @@ label.registryOption {
 
 /* A bundle's Versions section: one summary row that unfolds into the newer versions or the registries asked. */
 .versionPanel {
+  container-type: inline-size;
   overflow: hidden;
-  border: 0.5px solid var(--dsw-alias-border-l3);
-  border-radius: var(--dsw-radius-lg);
+  border: 0.5px solid var(--dsw-alias-settings-card-stroke);
+  border-radius: var(--dsw-radius-xl);
+  background: var(--dsw-alias-settings-card-fill);
 }
 
 .versionSummary {
@@ -1588,6 +1590,10 @@ button.versionSummary {
 
 button.versionSummary:hover {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.versionSummary[aria-expanded='true'] {
+  background: var(--dsw-alias-bg-module-platform);
 }
 
 button.versionSummary:focus-visible {
@@ -1661,10 +1667,11 @@ button.versionSummary:focus-visible {
   gap: 8px;
   font-size: 12.5px;
   color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
 }
 
 .versionBody {
-  padding: 4px 16px 12px;
+  padding: 0 16px;
   border-top: 0.5px solid var(--dsw-alias-border-l2);
 }
 
@@ -1677,11 +1684,12 @@ button.versionSummary:focus-visible {
 }
 
 .versionRow {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content 56px;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   min-height: 28px;
-  padding: 10px 0;
+  padding: 12px 0;
   border-bottom: 0.5px solid var(--dsw-alias-border-l2);
 }
 
@@ -1722,7 +1730,7 @@ button.versionSummary:focus-visible {
   margin: 0;
   font-size: 12px;
   line-height: 18px;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
 }
 
 .versionNote[data-tone='warn'] {
@@ -1760,7 +1768,7 @@ button.versionSummary:focus-visible {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 24px;
-  padding-top: 12px;
+  padding: 12px 0;
   border-top: 0.5px solid var(--dsw-alias-border-l2);
 }
 
@@ -1809,7 +1817,7 @@ button.versionSummary:focus-visible {
 .updateBody {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
   min-width: 0;
 }
 
@@ -1818,14 +1826,15 @@ button.versionSummary:focus-visible {
   align-items: center;
   justify-content: center;
   gap: 16px;
-  padding: 14px 16px;
+  padding: 20px 16px;
   border-radius: var(--dsw-radius-md);
   background: var(--dsw-alias-bg-module-platform);
   color: var(--dsw-alias-label-tertiary);
 }
 
 .updateVersions .versionNumber {
-  font-size: 15px;
+  font-size: 16px;
+  line-height: 24px;
   color: var(--dsw-alias-label-primary);
 }
 
@@ -1864,9 +1873,11 @@ button.versionSummary:focus-visible {
 .updateSteps {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   margin: 0;
-  padding: 0;
+  padding: 12px 16px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-module-platform);
   list-style: none;
 }
 
@@ -1876,6 +1887,11 @@ button.versionSummary:focus-visible {
   gap: 10px;
   font-size: 13px;
   line-height: 20px;
+}
+
+.updateStep > :last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .updateStepDot {
@@ -1902,4 +1918,38 @@ button.versionSummary:focus-visible {
 
 .updateStep[data-state='unknown'] .updateStepDot {
   border: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+@container (max-width: 460px) {
+  .versionRow {
+    grid-template-columns: minmax(0, 1fr) 56px;
+    gap: 4px 12px;
+  }
+
+  .versionMain {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .versionDate {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .versionAction {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+
+  .versionMeta {
+    gap: 8px 16px;
+  }
+
+  .versionMeta > label {
+    flex-basis: 100%;
+  }
+
+  .versionSpacer {
+    display: none;
+  }
 }
