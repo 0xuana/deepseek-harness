@@ -16,10 +16,11 @@
  * scrollbar indirection away while it is elsewhere, so a list the user is not
  * pointing at carries no bar.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import clsx from 'clsx'
 import {
   FishLogo, IconNewChatOutlineMedium, IconNewChatOutlineRegular, IconPanelLeftOutlineRegular, isDarwinDesktop, ShortcutKeys, Tooltip,
+  writeClipboard,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
@@ -37,6 +38,9 @@ const COLLAPSE_SETTLE_MS = 150
  * edge — on the way to the conversation, or around a portalled menu.
  */
 const SCROLLBAR_LINGER_MS = 2000
+
+/** How long the local-build badge shows the copied label after a successful copy. */
+const VERSION_COPIED_MS = 1000
 
 /** Format complete-build metadata for the local brand badge. */
 function localBuildVersion(): string | undefined {
@@ -170,6 +174,17 @@ export function SidebarRoot({
   }, [pointerInside])
 
   const buildVersion = localBuildVersion()
+  // The local-build fallbacks copy the badge text instead of starting a
+  // session; occupied brand slots keep the New Session click.
+  const [versionCopied, setVersionCopied] = useState(false)
+  const copyVersion = (version: string) => (event: MouseEvent): void => {
+    event.stopPropagation()
+    void writeClipboard(version).then((ok) => {
+      if (!ok) return
+      setVersionCopied(true)
+      window.setTimeout(() => { setVersionCopied(false) }, VERSION_COPIED_MS)
+    })
+  }
 
   const darwinDesktop = isDarwinDesktop()
   // Rail resting state is the whale mark; hovering swaps in the panel icon
@@ -222,16 +237,20 @@ export function SidebarRoot({
           const identity = (
             <span className={css.brandIdentity} aria-hidden="true">
               <span className={css.brandMark}>
-                {renderSlot('sidebar.brand.mark', { size: 24 }, { fallback: <FishLogo size={24} /> })}
+                {renderSlot('sidebar.brand.mark', { size: 24 }, {
+                  fallback: buildVersion === undefined
+                    ? <FishLogo size={24} />
+                    : <span className={css.copyVersion} onClick={copyVersion(buildVersion)}><FishLogo size={24} /></span>,
+                })}
               </span>
               <span className={css.brandName}>
                 {renderSlot('sidebar.brand.name', {}, {
                   fallback: buildVersion === undefined
                     ? <span className={css.fallbackBrandName}>{t('brand.localBuild')}</span>
                     : (
-                      <span className={css.localBuildBrand}>
+                      <span className={clsx(css.localBuildBrand, css.copyVersion)} onClick={copyVersion(buildVersion)}>
                         <span className={css.localBuildTitle}>{t('brand.localBuild')}</span>
-                        <span className={css.buildVersion}>{buildVersion}</span>
+                        <span className={css.buildVersion}>{versionCopied ? t('copied') : buildVersion}</span>
                       </span>
                     ),
                 })}

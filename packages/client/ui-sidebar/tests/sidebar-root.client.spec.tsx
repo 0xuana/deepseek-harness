@@ -176,6 +176,47 @@ describe('SidebarRoot shell', () => {
     expect(screen.getByText(expected)).toBeTruthy()
   })
 
+  it.each([false, true])('copies the local-build version from the fallback mark and name (darwin=%s)', async (darwin) => {
+    if (darwin) document.documentElement.dataset.platform = 'darwin'
+    vi.stubEnv('DSH_CLIENT_COMMIT_HASH', 'abcdef0')
+    vi.stubEnv('DSH_CLIENT_VERSION', '1.2.3')
+    const writeText = vi.fn<(text: string) => Promise<void>>()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('denied'))
+      .mockResolvedValueOnce(undefined)
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+    const startSession = vi.fn()
+    render(<SidebarRoot
+      collapsed={false} width={300}
+      useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
+      usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])} useShortcuts={selector => selector([])}
+      useResource={useResource} useWorkspaces={neverHook}
+      {...allowAllAccess}
+      startSession={startSession} toggleSidebar={vi.fn()} t={t}
+      renderSlot={((_key: string, _owner: unknown, options?: { fallback?: ReactNode }) =>
+        options?.fallback ?? null) as SidebarRootComponentProps['renderSlot']}
+    />)
+    vi.useFakeTimers()
+
+    await act(async () => { fireEvent.click(screen.getByText('DSH Local Build')) })
+    expect(writeText).toHaveBeenLastCalledWith('1.2.3-abcdef0')
+    expect(screen.getByText('Copied')).toBeTruthy()
+    act(() => { vi.advanceTimersByTime(1000) })
+    expect(screen.getByText('1.2.3-abcdef0')).toBeTruthy()
+
+    // A refused write claims no success.
+    await act(async () => { fireEvent.click(screen.getByText('1.2.3-abcdef0')) })
+    expect(screen.queryByText('Copied')).toBeNull()
+
+    // The fallback mark copies too; the rail toggle's mark is not in the brand row.
+    const mark = screen.getByText('DSH Local Build').closest('[aria-hidden]')!.querySelector('svg')!
+    await act(async () => { fireEvent.click(mark) })
+    expect(writeText).toHaveBeenCalledTimes(3)
+    expect(screen.getByText('Copied')).toBeTruthy()
+    expect(startSession).not.toHaveBeenCalled()
+    Reflect.deleteProperty(navigator, 'clipboard')
+  })
+
   it('retains the local-build fallback without complete build metadata', () => {
     render(<SidebarRoot
       collapsed={false} width={300}
