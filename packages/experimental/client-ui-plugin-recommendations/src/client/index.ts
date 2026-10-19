@@ -5,6 +5,7 @@ import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import remote from '@deepseek-ai/dsh-experimental-plugin-recommendations/remote'
 import type {} from '@deepseek-ai/dsh-experimental-plugin-recommendations/types'
 import { RecommendationTail, type RecommendationTailInjected } from './Card.tsx'
@@ -16,7 +17,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 /** Registries available before this plugin mounts its optional Remote. */
-export const inject = ['slots', 'uiConversation', 'sessions', 'locale', 'remote']
+export const inject = ['slots', 'uiConversation', 'sessions', 'locale', 'remote', 'pluginNavigation']
 
 /** Mount the optional Remote and UI for the same plugin lifetime.
  * @param ctx - Client plugin context.
@@ -39,6 +40,7 @@ function registerUi(ctx: Context): void {
       if (binding === undefined) throw new Error(`plugin-recommendations: unknown session "${sessionId}"`)
       const chat = ctx.uiConversation.binding(binding).target('chat')
       return {
+        openDetails: (packageName) => { ctx.pluginNavigation.openBundle(packageName) },
         keyedHooks: { recommendations: (turn) => {
           const snapshot = chat.getSnapshot()
           if (snapshot === undefined) throw new Error('plugin-recommendations: Chat target is unavailable')

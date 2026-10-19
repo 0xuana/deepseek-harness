@@ -2,6 +2,7 @@
 export const zh = {
   heading: '推荐插件',
   official: '官方',
+  details: '查看详情',
   enable: '启用',
   dismiss: '暂不需要',
   enabling: '正在处理…',
@@ -28,6 +29,7 @@ export type RecommendationKey = keyof typeof zh
 export const en = {
   heading: 'Recommended plugin',
   official: 'Official',
+  details: 'View details',
   enable: 'Enable',
   dismiss: 'Not now',
   enabling: 'Working…',

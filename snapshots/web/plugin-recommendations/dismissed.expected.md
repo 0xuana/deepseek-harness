@@ -1,6 +1,6 @@
 - region "Recommended plugin":
   - text: Recommended plugin Official
-  - strong: Session search
-  - paragraph: Search your saved conversations from this workspace.
-  - paragraph: Give Agents tools to search and read earlier sessions from the current workspace.
+  - 'button "View details: Session search"':
+    - strong: Session search
+    - text: Search your saved conversations from this workspace. Give Agents tools to search and read earlier sessions from the current workspace. View details →
   - status: Dismissed

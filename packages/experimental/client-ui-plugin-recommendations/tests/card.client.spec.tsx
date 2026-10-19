@@ -20,6 +20,7 @@ function props(outcome?: RecommendationOutcome, chinese = true): Props {
     useProjection: () => ({ decisions: outcome === undefined ? {} : { 'rec-1': outcome } }),
     useChinese: <Value,>(selector: (value: boolean) => Value) => selector(chinese),
     act: vi.fn(async () => ({ status: 'settled', outcome: 'applied' })),
+    openDetails: vi.fn(),
     t: (key: RecommendationKey) => (chinese ? zh : en)[key],
   } as Props
 }
@@ -29,7 +30,7 @@ it('shows at most one card at the completed turn tail and none when no proposal 
   const value = props()
   const useRecommendations = vi.fn<(turn: string) => readonly Props['recommendation'][] | undefined>(() => undefined)
   const tail: Tail = {
-    ...value, useRecommendations: useRecommendations as Tail['useRecommendations'],
+    ...value, useRecommendations,
     turn: {
       turn: 1, start: undefined, end: undefined, status: 'closed', steps: [],
       data: { get: () => undefined, source: () => ({ getSnapshot: () => undefined, subscribe: () => () => {} }) },
@@ -62,15 +63,20 @@ it('allows dismissal and disables both actions until the request settles', async
   value.act = vi.fn(() => pending.promise)
   render(<RecommendationCard {...value} />)
   fireEvent.click(screen.getByRole('button', { name: '暂不需要' }))
-  expect(screen.getAllByRole('button').every(button => (button as HTMLButtonElement).disabled)).toBe(true)
+  expect(screen.getByRole('button', { name: '正在处理…' }).hasAttribute('disabled')).toBe(true)
+  expect(screen.getByRole('button', { name: '暂不需要' }).hasAttribute('disabled')).toBe(true)
   expect(value.act).toHaveBeenCalledWith('rec-1', 'dismiss')
   await act(async () => { pending.resolve({ status: 'settled', outcome: 'dismissed' }) })
 })
 
-it.each(['applied', 'dismissed', 'restart-required', 'overridden'] as const)('restores %s from the session without action buttons', (outcome) => {
-  render(<RecommendationCard {...props(outcome)} />)
+it.each(['applied', 'dismissed', 'restart-required', 'overridden'] as const)('restores %s and keeps details available without repeating the decision', (outcome) => {
+  const value = props(outcome)
+  render(<RecommendationCard {...value} />)
   expect(screen.getByRole('status').textContent).toBe(zh[outcome])
-  expect(screen.queryByRole('button')).toBeNull()
+  expect(screen.getAllByRole('button')).toHaveLength(1)
+  fireEvent.click(screen.getByRole('button', { name: '查看详情: 会话搜索' }))
+  expect(value.openDetails).toHaveBeenCalledWith('official-search')
+  expect(value.act).not.toHaveBeenCalled()
 })
 
 it.each(['failed', 'cancelled'] as const)('keeps a retry available after %s', async (outcome) => {
@@ -99,5 +105,8 @@ it('does not offer a writable card before its projection arrives', () => {
   const value = props()
   value.useProjection = (() => undefined)
   render(<RecommendationCard {...value} />)
-  expect(screen.getAllByRole('button').every(button => (button as HTMLButtonElement).disabled)).toBe(true)
+  expect(screen.getByRole('button', { name: '启用' }).hasAttribute('disabled')).toBe(true)
+  expect(screen.getByRole('button', { name: '暂不需要' }).hasAttribute('disabled')).toBe(true)
+  fireEvent.click(screen.getByRole('button', { name: '查看详情: 会话搜索' }))
+  expect(value.openDetails).toHaveBeenCalledWith('official-search')
 })

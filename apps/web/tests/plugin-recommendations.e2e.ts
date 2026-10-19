@@ -63,9 +63,12 @@ describe('official plugin recommendation in a conversation', () => {
     await card.getByRole('status').getByText('Dismissed', { exact: true }).waitFor()
     acknowledgeReloadConnectionLoss(tripwire, warnings)
     expect(await card.count()).toBe(1)
-    expect(await card.getByRole('button').count()).toBe(0)
+    expect(await card.getByRole('button').count()).toBe(1)
     expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === '@deepseek-ai/dsh-experimental-session-search')?.enabled).toBe(false)
     await compareOrRefreshGolden(join(directory, 'dismissed.expected.md'), await captureStableAria(page, '[data-plugin-recommendation]', scaffold.workspaceCwd), scaffold.mode)
+    await card.getByRole('button', { name: 'View details: Session search', exact: true }).click()
+    await page.locator('[data-plugin-detail="@deepseek-ai/dsh-experimental-session-search"]').waitFor({ state: 'visible' })
+    expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === '@deepseek-ai/dsh-experimental-session-search')?.enabled).toBe(false)
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
     if (scaffold.mode === 'replay') await assertFixtureInventory(directory, [

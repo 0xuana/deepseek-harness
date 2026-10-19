@@ -12,6 +12,7 @@ import css from './Card.module.css'
 /** Session-bound callbacks and language, without a service in the component. */
 export interface CardInjected {
   act: (callId: ToolCallId, action: 'enable' | 'dismiss') => Promise<RecommendationActionResult | undefined>
+  openDetails: (packageName: string) => void
   hooks: { chinese: HostObservable<boolean> }
 }
 
@@ -37,7 +38,7 @@ export function RecommendationTail({ turn, useRecommendations, ...props }: Pick<
  * @param props - Session-bound recommendation, actions and locale.
  * @returns the card below its completed answer.
  */
-export function RecommendationCard({ recommendation, useProjection, useChinese, act, t }: CardProps) {
+export function RecommendationCard({ recommendation, useProjection, useChinese, act, openDetails, t }: CardProps) {
   const chinese = useChinese(value => value)
   const decisions = useProjection('pluginRecommendations')
   const outcome = decisions?.decisions[recommendation.callId]
@@ -59,9 +60,13 @@ export function RecommendationCard({ recommendation, useProjection, useChinese, 
   return <section className={css.card} aria-label={t('heading')} data-plugin-recommendation={recommendation.callId}>
     <header className={css.header}><span>{t('heading')}</span><span className={css.badge}>{t('official')}</span></header>
     <div className={css.body}>
-      <strong className={css.title}>{chinese ? recommendation.titleZh : recommendation.titleEn}</strong>
-      <p className={css.reason}>{recommendation.reason}</p>
-      <p className={css.description}>{chinese ? recommendation.descriptionZh : recommendation.descriptionEn}</p>
+      <button type="button" className={css.details} onClick={() => { openDetails(recommendation.name) }}
+        aria-label={`${t('details')}: ${chinese ? recommendation.titleZh : recommendation.titleEn}`}>
+        <strong className={css.title}>{chinese ? recommendation.titleZh : recommendation.titleEn}</strong>
+        <span className={css.reason}>{recommendation.reason}</span>
+        <span className={css.description}>{chinese ? recommendation.descriptionZh : recommendation.descriptionEn}</span>
+        <span className={css.detailHint}>{t('details')} →</span>
+      </button>
       {outcome !== undefined && <p role="status" className={css.status}>{t(outcome)}</p>}
       {error !== undefined && <p role="alert" className={css.status}>{t(error)}</p>}
       {open && <footer className={css.footer}>

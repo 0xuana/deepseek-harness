@@ -22,6 +22,8 @@ it('binds actions to the displayed session and removes registrations on unload',
   ctx.provide('uiConversation', { events, binding: () => ({ target: () => ({ getSnapshot }) }) })
   const binding = vi.fn<() => object | undefined>(() => ({}))
   ctx.provide('sessions', { binding })
+  const openBundle = vi.fn()
+  ctx.provide('pluginNavigation', { openBundle })
   await ctx.plugin(SlotRegistry)
   const slots = ctx.slots
   slots.register({ name: 'root', children: { 'conversation.chat.turnTail': {
@@ -37,6 +39,8 @@ it('binds actions to the displayed session and removes registrations on unload',
   const entry = slots.entries('conversation.chat.turnTail')[0]!
   const resolve = entry.inject as NonNullable<typeof entry.inject> & ((sessionId: SessionId) => RecommendationTailInjected)
   const bound = resolve(SessionId('session-one'))
+  bound.openDetails('@deepseek-ai/dsh-experimental-badge-skill-bundle')
+  expect(openBundle).toHaveBeenCalledWith('@deepseek-ai/dsh-experimental-badge-skill-bundle')
   expect(bound.keyedHooks.recommendations('3')).toBe(source)
   expect(turnDataSource).toHaveBeenCalledWith(3, 'plugin-recommendation')
   getSnapshot.mockReturnValueOnce(undefined)

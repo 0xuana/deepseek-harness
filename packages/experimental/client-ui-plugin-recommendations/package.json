@@ -34,7 +34,8 @@
         "@deepseek-ai/dsh-client-locale",
         "@deepseek-ai/dsh-client-ui-conversation",
         "@deepseek-ai/dsh-client-ui-chat",
-        "@deepseek-ai/dsh-client-ui-session"
+        "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-client-ui-plugin-manager"
       ]
     }
   },
@@ -55,7 +56,8 @@
     "@deepseek-ai/dsh-client-ui-primitives": "workspace:*",
     "react": "^18.2.0",
     "@deepseek-ai/dsh-experimental-plugin-recommendations": "workspace:*",
-    "@deepseek-ai/dsh-client-store": "workspace:*"
+    "@deepseek-ai/dsh-client-store": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-plugin-manager": "workspace:*"
   },
   "files": [
     "lib/index.js",

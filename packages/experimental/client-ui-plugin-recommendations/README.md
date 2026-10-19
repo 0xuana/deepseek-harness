@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Users see one plugin recommendation below the completed answer. Enable and Not now are explicit choices. Decisions remain visible after reconnecting.
+Users see one plugin recommendation below the completed answer. Clicking its title or description opens that plugin's details in Plugins without enabling it or changing the current Session. Enable and Not now remain separate choices. Decisions and the details link remain available after reconnecting.
 
 ## Table of Contents
 
