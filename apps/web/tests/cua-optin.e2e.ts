@@ -19,10 +19,13 @@ it.each([undefined, 'minimal'] as const)('adds CUA to PTC sessions while preserv
   try {
     const patch = join(directory, 'native-fixture.yml')
     // The executable cannot answer native permission queries, so setup must offer retry in the detail page.
-    await writeFile(patch, JSON.stringify([{ id: 'cua', config: { helperPath: process.execPath } }]))
-    const scaffold = ownedScaffold = await launchWebScaffold({ harnessHome: join(directory, 'home'), extraOverlayPath: [
-      fileURLToPath(new URL('./pin-browse-picker.overlay.yml', import.meta.url)), patch,
-    ] })
+    await writeFile(patch, JSON.stringify([{ id: 'cua', disabled: false, config: { helperPath: process.execPath } }]))
+    // Install the test provider explicitly so the helper override also exercises session wiring on Linux.
+    const scaffold = ownedScaffold = await launchWebScaffold({
+      profile: { packages: [{ dir: fileURLToPath(new URL('../../../packages/experimental/cua-macos', import.meta.url)), enabled: false }] },
+      harnessHome: join(directory, 'home'), extraOverlayPath: [
+        fileURLToPath(new URL('./pin-browse-picker.overlay.yml', import.meta.url)), patch,
+      ] })
     const initialDefault = selectedDefault ?? 'standard'
     if (selectedDefault !== undefined) await scaffold.ctx.settings.update('agent-preset-registry', { selectedDefault })
     browser = await chromium.launch()
