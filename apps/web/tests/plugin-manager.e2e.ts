@@ -121,7 +121,7 @@ describe('web e2e: plugin manager', () => {
           const title = language === 'en' ? 'Plugins' : '插件'
           await probe.getByRole('button', { name: title, exact: true }).click()
           const panel = probe.locator('[data-plugin-panel]')
-          const header = panel.locator(':scope > header')
+          const header = panel.locator(':scope > div > header')
           await header.getByRole('heading', { name: title, exact: true }).waitFor()
           await probe.evaluate(() => document.fonts.ready)
           const add = header.getByRole('button', { name: language === 'en' ? 'Add plugin' : '添加插件', exact: true })
@@ -234,6 +234,39 @@ describe('web e2e: plugin manager', () => {
     }
   })
 
+  it('keeps the plugin page title and actions pinned while the cards scroll', async () => {
+    await page.setViewportSize({ width: 1000, height: 480 })
+    try {
+      const panel = await openPluginsPanel()
+      await panel.locator('[data-plugin-package]').first().waitFor()
+      const headerTop = () => panel.evaluate(element => element.querySelector(':scope > div > header')!.getBoundingClientRect().top)
+      const resting = await headerTop()
+      expect(resting).toBe(await panel.evaluate(element => element.getBoundingClientRect().top))
+      // Scroll the first card switch below the bar under the add button: the bar must stay in place and paint over it.
+      const add = (await panel.locator(':scope > div > header').getByRole('button', { name: '添加插件', exact: true }).boundingBox())!
+      const covered = await panel.evaluate((element, addY) => {
+        const bar = element.firstElementChild!.getBoundingClientRect()
+        const target = Array.from(element.querySelectorAll('[data-plugin-package] [role="switch"]'))
+          .find(item => item.getBoundingClientRect().top > bar.bottom)!
+        const box = target.getBoundingClientRect()
+        element.scrollTop += box.top + box.height / 2 - addY
+        const moved = target.getBoundingClientRect()
+        const hit = document.elementFromPoint(moved.left + moved.width / 2, moved.top + moved.height / 2)
+        return {
+          scrolled: element.scrollTop,
+          centred: Math.abs(moved.top + moved.height / 2 - addY) < 1,
+          hitBar: element.firstElementChild!.contains(hit),
+        }
+      }, add.y + add.height / 2)
+      expect(covered.scrolled).toBeGreaterThan(100)
+      expect(covered.centred).toBe(true)
+      expect(await headerTop()).toBe(resting)
+      expect(covered.hitBar).toBe(true)
+    } finally {
+      await page.setViewportSize({ width: 1680, height: 1000 })
+    }
+  })
+
   it('aligns the first-read skeleton with the loaded plugin cards', async () => {
     const facts: string[] = []
     let aria = ''
@@ -263,7 +296,7 @@ describe('web e2e: plugin manager', () => {
         expect(await skeleton.getAttribute('role')).toBe('status')
         expect(await skeleton.getAttribute('aria-label')).toBe('正在读取插件…')
         expect(await panel.getAttribute('aria-busy')).toBe('true')
-        const actions = panel.locator(':scope > header > div:last-child button')
+        const actions = panel.locator(':scope > div > header > div:last-child button')
         expect(await actions.count()).toBe(3)
         for (const action of await actions.all()) expect(await action.isDisabled()).toBe(true)
         expect(await panel.getByRole('button', { name: '插件说明' }).isEnabled()).toBe(true)
@@ -278,7 +311,7 @@ describe('web e2e: plugin manager', () => {
             return { x, y, width, height }
           }
           return {
-            pageHeader: rect(element.closest('[data-plugin-panel]')?.querySelector(':scope > header')),
+            pageHeader: rect(element.closest('[data-plugin-panel]')?.querySelector(':scope > div > header')),
             groupHeader: rect(element.firstElementChild),
             rows: Array.from(element.querySelectorAll(selector)).slice(0, 4).map((row) => {
               const head = row.firstElementChild

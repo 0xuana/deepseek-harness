@@ -1649,49 +1649,51 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
     <section className={css.page} data-plugin-panel aria-busy={state.status === 'loading' || refreshing}>
       {showsMainList
         ? (
-          <header className={css.pageHead} data-window-drag>
-            <div className={css.pageHeading}>
-              <h1 className={css.pageTitle}>{t('title')}</h1>
-              <div className={css.pageIntro}>
-                <span>{t('intro')}</span>
-                <Tooltip label={t('infoDescription')} side="bottom" delayMs={300} maxWidth={300} portal openOnClick>
-                  <Button variant="ghost" size="sm" className={css.infoButton} aria-label={t('infoLabel')}>
-                    <IconInfoOutlineRegular size={11} aria-hidden="true" />
+          <div className={css.pageBar}>
+            <header className={css.pageHead} data-window-drag>
+              <div className={css.pageHeading}>
+                <h1 className={css.pageTitle}>{t('title')}</h1>
+                <div className={css.pageIntro}>
+                  <span>{t('intro')}</span>
+                  <Tooltip label={t('infoDescription')} side="bottom" delayMs={300} maxWidth={300} portal openOnClick>
+                    <Button variant="ghost" size="sm" className={css.infoButton} aria-label={t('infoLabel')}>
+                      <IconInfoOutlineRegular size={11} aria-hidden="true" />
+                    </Button>
+                  </Tooltip>
+                </div>
+              </div>
+              <div className={css.toolbar} hidden={!onInstalled}>
+                {updates === undefined ? null : <span className={css.updatesNote} data-tone={updates.tone}>{updates.text}</span>}
+                <Tooltip label={t('refresh')} delayMs={500} focusDelayMs={500} side="bottom" portal disabled={!loaded || refreshing}>
+                  <Button variant="outline" size="sm" className={css.addButton} aria-label={t('refresh')} aria-busy={refreshing}
+                    disabled={!loaded || refreshing} onClick={props.refresh}
+                    icon={refreshing ? <StateDot state="ongoing" size={13} /> : <IconRefreshOutlineRegular size={13} />}>
+                    {t('refresh')}
                   </Button>
                 </Tooltip>
+                {state.install.requestId === undefined
+                  ? <AddPluginMenu t={t} disabled={!loaded} openInstall={props.openInstall} renderSlot={renderSlot} />
+                  : <Button variant="primary" size="sm" className={css.addButton} icon={<IconPlusOutlineRegular size={13} />} disabled={!loaded} onClick={props.openInstall}>
+                    {t('installViewTask')}
+                  </Button>}
               </div>
-            </div>
-            <div className={css.toolbar} hidden={!onInstalled}>
-              {updates === undefined ? null : <span className={css.updatesNote} data-tone={updates.tone}>{updates.text}</span>}
-              <Tooltip label={t('refresh')} delayMs={500} focusDelayMs={500} side="bottom" portal disabled={!loaded || refreshing}>
-                <Button variant="outline" size="sm" className={css.addButton} aria-label={t('refresh')} aria-busy={refreshing}
-                  disabled={!loaded || refreshing} onClick={props.refresh}
-                  icon={refreshing ? <StateDot state="ongoing" size={13} /> : <IconRefreshOutlineRegular size={13} />}>
-                  {t('refresh')}
-                </Button>
-              </Tooltip>
-              {state.install.requestId === undefined
-                ? <AddPluginMenu t={t} disabled={!loaded} openInstall={props.openInstall} renderSlot={renderSlot} />
-                : <Button variant="primary" size="sm" className={css.addButton} icon={<IconPlusOutlineRegular size={13} />} disabled={!loaded} onClick={props.openInstall}>
-                  {t('installViewTask')}
-                </Button>}
-            </div>
-          </header>
-        )
-        : null}
-      {showsMainList && tabs.length > 0
-        ? (
-          <div className={css.pageTabs}>
-            <SegmentedTabs
-              className={css.pageTabList}
-              label={t('tabsLabel')}
-              value={tab}
-              onChange={(next) => { setTab(next) }}
-              items={[
-                { value: INSTALLED_TAB, label: t('installedTab'), id: `${tabsId}-${INSTALLED_TAB}`, panelId: `${tabsId}-${INSTALLED_TAB}-panel` },
-                ...tabs.map(item => ({ value: item.id, label: item.label, id: `${tabsId}-${item.id}`, panelId: `${tabsId}-${item.id}-panel` })),
-              ]}
-            />
+            </header>
+            {tabs.length > 0
+              ? (
+                <div className={css.pageTabs}>
+                  <SegmentedTabs
+                    className={css.pageTabList}
+                    label={t('tabsLabel')}
+                    value={tab}
+                    onChange={(next) => { setTab(next) }}
+                    items={[
+                      { value: INSTALLED_TAB, label: t('installedTab'), id: `${tabsId}-${INSTALLED_TAB}`, panelId: `${tabsId}-${INSTALLED_TAB}-panel` },
+                      ...tabs.map(item => ({ value: item.id, label: item.label, id: `${tabsId}-${item.id}`, panelId: `${tabsId}-${item.id}-panel` })),
+                    ]}
+                  />
+                </div>
+              )
+              : null}
           </div>
         )
         : null}

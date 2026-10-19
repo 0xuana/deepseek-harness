@@ -20,6 +20,25 @@
   max-width: 960px;
 }
 
+/* The title, actions, and tabs stay pinned while the page scrolls. The bottom padding keeps scrolled content
+   clear of the tabs; the matching negative margin keeps the resting layout. */
+.pageBar,
+.moreHead {
+  position: sticky;
+  top: 0;
+  /* Above the cards' raised action column (`.cardEnd`). */
+  z-index: 2;
+  padding-bottom: 16px;
+  margin-bottom: -16px;
+  background: var(--dsw-alias-bg-base);
+}
+
+.pageBar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .pageHead {
   display: flex;
   flex-wrap: wrap;
@@ -1520,11 +1539,9 @@ label.registryOption {
   display: none;
 }
 
-/* Installed and contributed tabs under the page header, aligned with the title; the negative margin halves
-   the page's 32px row gap, so the tabs read as part of the header. */
+/* Installed and contributed tabs under the page header, aligned with the title. */
 .pageTabs {
   display: flex;
-  margin-top: -16px;
 }
 
 .pageTabList {
