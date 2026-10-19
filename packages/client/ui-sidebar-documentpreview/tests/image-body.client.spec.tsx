@@ -2,7 +2,9 @@
 /** Image Blob ownership, media types, pane-contained rendering, and failure states. */
 import { useSyncExternalStore } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render as renderBare, screen } from '@testing-library/react'
+import { ImageDragProvider } from '@deepseek-ai/dsh-client-ui-primitives'
+const render = (ui: import('react').ReactNode) => renderBare(ui, { wrapper: ImageDragProvider })
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
 import { ImageBody, imageMediaType, type ImageBodyProps } from '../src/client/image/ImageBody.tsx'

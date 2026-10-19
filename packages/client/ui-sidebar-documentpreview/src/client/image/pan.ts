@@ -2,11 +2,12 @@
 
 /**
  * Bind image panning to its existing scrollport without changing zoom or replacing the image.
- * @param image - mounted preview image.
+ * @param image - mounted preview image inside a document zoom scrollport.
  * @returns cleanup releasing observation, pointer capture, and window listeners.
  */
 export function bindImagePan(image: HTMLImageElement): () => void {
-  const scrollport = image.closest<HTMLElement>('[data-document-zoom-scrollport]') as HTMLElement
+  const scrollport = image.closest<HTMLElement>('[data-document-zoom-scrollport]')
+  if (scrollport === null) throw new Error('Image panning requires a document zoom scrollport')
   let pointer: { id: number; x: number; y: number; pan: boolean } | undefined
   const overflowing = (): boolean => scrollport.scrollWidth > scrollport.clientWidth
     || scrollport.scrollHeight > scrollport.clientHeight

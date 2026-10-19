@@ -28,6 +28,7 @@ function pointer(image: HTMLImageElement, type: string, values: Partial<PointerE
 }
 
 it('pans a fit-width long image on its overflowing axis and leaves no pointer capture after release', () => {
+  vi.stubGlobal('ResizeObserver', undefined)
   const { image, scrollport, captured } = viewport(400, 900)
   const dispose = bindImagePan(image)
   try {
@@ -81,4 +82,56 @@ it('lets contained images drag as files, and switches mode when their viewport c
   expect(image.dataset.pan).toBe('available')
   dispose()
   expect(disconnect).toHaveBeenCalledOnce()
+})
+
+it('rejects a missing scrollport with an explicit error', () => {
+  expect(() => bindImagePan(document.createElement('img'))).toThrow('Image panning requires a document zoom scrollport')
+})
+
+it('ignores unrelated pointers and releases capture when the mouse button is no longer held', () => {
+  const { image, scrollport, captured } = viewport(800, 600)
+  const dispose = bindImagePan(image)
+  try {
+    pointer(image, 'pointerdown', { button: 2 })
+    expect(captured()).toBeUndefined()
+    pointer(image, 'pointerdown', { clientX: 100, clientY: 100 })
+    pointer(image, 'pointerup', { pointerId: 2 })
+    pointer(image, 'pointermove', { pointerId: 2, clientX: 0 })
+    expect(captured()).toBe(1)
+    expect(scrollport.scrollLeft).toBe(0)
+    pointer(image, 'pointermove', { buttons: 0 })
+    expect(captured()).toBeUndefined()
+    expect(image.dataset.pan).toBe('available')
+  } finally { dispose() }
+})
+
+it('blocks native dragging only for a pan and retains the selected mode until release', () => {
+  const { image, scrollport } = viewport(400, 300)
+  const dispose = bindImagePan(image)
+  const drag = () => {
+    const event = new Event('dragstart', { cancelable: true })
+    image.dispatchEvent(event)
+    return event.defaultPrevented
+  }
+  try {
+    expect(drag()).toBe(false)
+    pointer(image, 'pointerdown')
+    pointer(image, 'pointermove', { clientX: 30 })
+    Object.defineProperty(scrollport, 'scrollWidth', { value: 800 })
+    expect(drag()).toBe(false)
+    image.dispatchEvent(new Event('dragend'))
+    expect(drag()).toBe(true)
+    pointer(image, 'pointerdown')
+    expect(drag()).toBe(true)
+    pointer(image, 'pointercancel')
+    expect(image.dataset.pan).toBe('available')
+  } finally { dispose() }
+})
+
+it('does not end an idle pan for a foreign pointer release', () => {
+  const { image } = viewport(800, 600)
+  const dispose = bindImagePan(image)
+  pointer(image, 'pointerup', { pointerId: 2 })
+  expect(image.dataset.pan).toBe('available')
+  dispose()
 })

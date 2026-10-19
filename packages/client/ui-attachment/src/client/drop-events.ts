@@ -46,10 +46,11 @@ export function installDocumentDropEvents(
     setDragActive(false)
   }
   const onDragEnter = (event: globalThis.DragEvent): void => {
-    if (fileTransfer(event) === null) return
+    const dataTransfer = fileTransfer(event)
+    if (dataTransfer === null) return
     event.preventDefault()
     dragDepth.current += 1
-    setDragActive(true)
+    if (!dataTransfer.types.includes(IMAGE_DRAG_TYPE)) setDragActive(true)
   }
   const onDragOver = (event: globalThis.DragEvent): void => {
     const dataTransfer = fileTransfer(event)
@@ -73,7 +74,7 @@ export function installDocumentDropEvents(
     if (canAcceptDrop) {
       const image = dataTransfer.types.includes(IMAGE_DRAG_TYPE) ? readImageDrag(dataTransfer) : undefined
       const files = image === undefined ? [...dataTransfer.files] : [image]
-      onAddFiles(files, droppedDirectories(dataTransfer, files))
+      if (files.length > 0) onAddFiles(files, droppedDirectories(dataTransfer, files))
     }
   }
   document.addEventListener('dragenter', onDragEnter)

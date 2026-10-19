@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import type { DesktopImageDrag } from '../../../packages/client/ui-primitives/src/image-drag.ts'
 import { JSDOM } from 'jsdom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { installMandatoryUpdateOverlay } from '../src/preload-mandatory-overlay.ts'
@@ -270,3 +271,9 @@ it('prepares original image bytes and starts native drags without renderer files
     [DESKTOP_IPC.imageDragRelease, 'image-handle'],
   ])
 })
+
+// The Host and Client compiler faces share no runtime entry; this assignment checks their image protocol.
+const imageProtocol = (value: import('../src/ipc.ts').DshDesktopProductApi['imageDrag']): DesktopImageDrag => value
+const imageProtocolBack = (value: DesktopImageDrag): import('../src/ipc.ts').DshDesktopProductApi['imageDrag'] => value
+void imageProtocol
+void imageProtocolBack

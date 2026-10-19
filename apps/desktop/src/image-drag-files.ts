@@ -7,12 +7,13 @@ const IMAGE_EXTENSIONS: Readonly<Record<string, string>> = {
   'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp',
   'image/bmp': 'bmp', 'image/x-icon': 'ico', 'image/vnd.microsoft.icon': 'ico', 'image/svg+xml': 'svg',
 }
-// Limits the memory and temporary storage accepted from one renderer IPC request.
+// Bounds aggregate original bytes in preparation and retained temporary files.
 const MAX_IMAGE_BYTES = 64 * 1024 * 1024
 
 interface ImageDragFile {
   readonly directory: string
   readonly path: string
+  readonly bytes: number
   used: boolean
 }
 
@@ -20,6 +21,8 @@ interface ImageDragFile {
 export class ImageDragFiles {
   private readonly files = new Map<string, ImageDragFile>()
   private readonly pending = new Set<Promise<string>>()
+  private readonly releasing = new Map<string, Promise<void>>()
+  private stagedBytes = 0
   private disposed = false
 
   /** @param temporaryDirectory - OS temporary directory in which private export directories are allocated. */
@@ -27,7 +30,7 @@ export class ImageDragFiles {
 
   /**
    * Validate renderer bytes and stage one original file without accepting renderer filesystem paths.
-   * @param bytes - complete image bytes.
+   * @param bytes - complete image bytes; all pending and retained files share a 64 MiB budget.
    * @param name - suggested filename; directory characters and platform-reserved characters are removed.
    * @param mediaType - supported image MIME type, which owns the output suffix.
    * @returns application-local opaque handle; failures retain no usable handle or partial file.
@@ -35,12 +38,17 @@ export class ImageDragFiles {
   prepare(bytes: unknown, name: unknown, mediaType: unknown): Promise<string> {
     const extension = typeof mediaType === 'string' && Object.hasOwn(IMAGE_EXTENSIONS, mediaType)
       ? IMAGE_EXTENSIONS[mediaType] : undefined
-    if (this.disposed || !(bytes instanceof Uint8Array) || bytes.byteLength === 0 || bytes.byteLength > MAX_IMAGE_BYTES
+    if (this.disposed || !(bytes instanceof Uint8Array) || bytes.byteLength === 0 || bytes.byteLength > MAX_IMAGE_BYTES - this.stagedBytes
       || typeof name !== 'string' || typeof mediaType !== 'string' || extension === undefined) {
       return Promise.reject(new Error('Invalid image transfer'))
     }
-    const stem = name.replace(/\.[^.]*$/u, '').replace(/[<>:"/\\|?*\x00-\x1f]/gu, '_').replace(/^[. ]+|[. ]+$/gu, '').slice(0, 120) || 'image'
-    const operation = this.write(bytes, `${stem}.${extension}`)
+    let stem = name.replace(/\.[^.]*$/u, '').replace(/[<>:"/\\|?*\x00-\x1f]/gu, '_').replace(/^[. ]+|[. ]+$/gu, '').slice(0, 120) || 'image'
+    if (/^(con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?:\.|$)/iu.test(stem)) stem = `_${stem}`
+    this.stagedBytes += bytes.byteLength
+    const operation = this.write(bytes, `${stem}.${extension}`).catch((error: unknown) => {
+      this.stagedBytes -= bytes.byteLength
+      throw error
+    })
     this.pending.add(operation)
     void operation.then(() => { this.pending.delete(operation) }, () => { this.pending.delete(operation) })
     return operation
@@ -53,7 +61,7 @@ export class ImageDragFiles {
       await writeFile(path, bytes, { flag: 'wx', mode: 0o600 })
       if (this.disposed) throw new Error('Image transfer closed')
       const handle = randomUUID()
-      this.files.set(handle, { directory, path, used: false })
+      this.files.set(handle, { directory, path, bytes: bytes.byteLength, used: false })
       return handle
     } catch (error) {
       await rm(directory, { recursive: true, force: true })
@@ -64,12 +72,13 @@ export class ImageDragFiles {
   /**
    * Resolve and retain a prepared file for an OS-owned drag.
    * @param handle - handle created by this application's preparation operation.
-   * @param retain - whether the OS is taking ownership; false only during preparation.
+   * @param retain - whether the OS accepted the file; false while preparing or attempting a drag.
    * @returns original file path, or undefined after release/disposal or for a foreign handle.
    */
   take(handle: unknown, retain = true): string | undefined {
-    const file = typeof handle === 'string' ? this.files.get(handle) : undefined
-    if (file === undefined || this.disposed) return undefined
+    if (typeof handle !== 'string') return undefined
+    const file = this.files.get(handle)
+    if (file === undefined || this.disposed || this.releasing.has(handle)) return undefined
     if (retain) file.used = true
     return file.path
   }
@@ -79,18 +88,30 @@ export class ImageDragFiles {
    * @param handle - application-local handle; OS-used files stay until disposal.
    */
   async release(handle: unknown): Promise<void> {
-    const file = typeof handle === 'string' ? this.files.get(handle) : undefined
+    if (typeof handle !== 'string') return
+    const file = this.files.get(handle)
     if (file === undefined || file.used) return
-    this.files.delete(handle as string)
-    await rm(file.directory, { recursive: true, force: true })
+    await this.remove(handle, file)
   }
 
-  /** Stop preparation, await pending writes, and remove all owned files after native drags finish. */
+  private remove(handle: string, file: ImageDragFile): Promise<void> {
+    const existing = this.releasing.get(handle)
+    if (existing !== undefined) return existing
+    const operation = rm(file.directory, { recursive: true, force: true }).then(() => {
+      this.files.delete(handle)
+      this.stagedBytes -= file.bytes
+    }).finally(() => { this.releasing.delete(handle) })
+    this.releasing.set(handle, operation)
+    return operation
+  }
+
+  /** Stop preparation, await writes and releases, and report removal failure only after all files settle. */
   async dispose(): Promise<void> {
     this.disposed = true
     await Promise.allSettled(this.pending)
-    const files = [...this.files.values()]
-    this.files.clear()
-    await Promise.all(files.map(file => rm(file.directory, { recursive: true, force: true })))
+    await Promise.allSettled(this.releasing.values())
+    const results = await Promise.allSettled([...this.files].map(([handle, file]) => this.remove(handle, file)))
+    const failure = results.find(result => result.status === 'rejected')
+    if (failure?.status === 'rejected') throw failure.reason
   }
 }

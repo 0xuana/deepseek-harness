@@ -22,7 +22,7 @@ async function fixture() {
   onTestFinished(async () => { await rm(root, { recursive: true, force: true }) })
   electron.getPath.mockReturnValue(root)
   const icon: NativeImage = Object.assign({} as NativeImage, { isEmpty: () => false, resize: () => icon })
-  electron.createFromPath.mockReturnValue(icon)
+  electron.getFileIcon.mockResolvedValue(icon)
   const frame = Object.assign({} as WebFrameMain, { url: 'dsh-app://app/' })
   const window = Object.assign({} as BrowserWindow, { isDestroyed: () => false,
     webContents: Object.assign({} as WebContents, { mainFrame: frame, startDrag: vi.fn() }) })
@@ -57,6 +57,7 @@ it('rejects foreign senders, subframes, revoked handles and native failures', as
   const handle = await f.call(DESKTOP_IPC.imageDragPrepare, new Uint8Array([1]), 'x.png', 'image/png')
   f.window.webContents.startDrag.mockImplementationOnce(() => { throw new Error('OS rejected drag') })
   expect(f.call(DESKTOP_IPC.imageDragStart, handle)).toBe(false)
+  await vi.waitFor(async () => { expect(await readdir(f.root)).toEqual([]) })
   f.frame.url = 'https://other.test/'
   expect(() => f.call(DESKTOP_IPC.imageDragStart, handle)).toThrow('unowned renderer')
   f.frame.url = 'dsh-app://app/'
@@ -68,9 +69,8 @@ it('rejects foreign senders, subframes, revoked handles and native failures', as
   expect(() => f.call(DESKTOP_IPC.imageDragStart, handle)).toThrow('Unowned image drag request')
 })
 
-it('prepares the fallback icon before accepting a gesture and cancels late work on shutdown', async () => {
+it('cancels icon preparation on shutdown without waiting for the icon service', async () => {
   const f = await fixture()
-  electron.createFromPath.mockReturnValue({ isEmpty: () => true })
   const pending = Promise.withResolvers<NativeImage>()
   electron.getFileIcon.mockReturnValue(pending.promise)
   const prepare = f.call(DESKTOP_IPC.imageDragPrepare, new Uint8Array([1]), 'x.svg', 'image/svg+xml')
@@ -78,11 +78,11 @@ it('prepares the fallback icon before accepting a gesture and cancels late work 
   await vi.waitFor(() => { expect(electron.getFileIcon).toHaveBeenCalledOnce() })
   let stopped = false
   const stopping = f.dispose().then(() => { stopped = true })
-  await Promise.resolve()
-  expect(stopped).toBe(false)
-  pending.resolve(f.icon)
   await rejected
   await stopping
+  expect(stopped).toBe(true)
+  pending.resolve(f.icon)
+  await pending.promise
   expect(f.window.webContents.startDrag).not.toHaveBeenCalled()
   expect(await readdir(f.root)).toEqual([])
 })

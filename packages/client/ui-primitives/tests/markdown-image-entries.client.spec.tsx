@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render as renderBare, screen } from '@testing-library/react'
+import { ImageDragProvider } from '@deepseek-ai/dsh-client-ui-primitives'
+const render = (ui: import('react').ReactNode) => renderBare(ui, { wrapper: ImageDragProvider })
 import { afterEach, expect, it, vi } from 'vitest'
 import { fileMediaUrl } from '@deepseek-ai/dsh-util-workspace-path'
 import { MarkdownDelegateProvider } from '../src/markdown/MarkdownDelegate.tsx'
@@ -146,4 +148,9 @@ it.each([parseGfm, parseGfmWithMath])('uses the shared image categories for bare
       .toMatchObject({ children: [{ type: 'image', url: `/work/test dir/photo.${extension}` }] })
   }
   expect(JSON.stringify(parse('![report](/work/test dir/report.pdf)'))).not.toContain('"type":"image"')
+})
+
+it('uses the fallback filename for an external image URL without a path', () => {
+  mount('![Remote](https://example.com/)')
+  expect(screen.getByRole('img').getAttribute('src')).toBe('https://example.com/')
 })

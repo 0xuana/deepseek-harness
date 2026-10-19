@@ -16,6 +16,7 @@ export interface DesktopImageDrag {
 interface PreparedImage {
   readonly file: File
   readonly handle?: string
+  readonly release?: () => void
 }
 
 interface ImageDragHandlers {
@@ -28,6 +29,7 @@ interface ImageDragHandlers {
 
 /**
  * Prepare original bytes on hover and supply them synchronously when dragging begins.
+ * Requires an ancestor ImageDragProvider; it owns transfer bytes and feedback across source unmounts.
  * @param src - authorized image URL; changing it retires pending preparation.
  * @param name - suggested original filename, without a directory.
  * @param failureText - localized failure message, including a retry action.
@@ -35,11 +37,16 @@ interface ImageDragHandlers {
  * @returns drag handlers; cancellation never starts a late drag.
  */
 export function useImageDrag(src: string, name: string, failureText: string, original?: File): ImageDragHandlers {
-  const desktop = (globalThis as typeof globalThis & { dshDesktop?: { imageDrag?: DesktopImageDrag } }).dshDesktop?.imageDrag
-  const state = useRef<{ source: string; prepared?: PreparedImage; pending?: Promise<void> | undefined; abort: AbortController }>()
+  const state = useRef<{
+    source: string
+    prepared?: PreparedImage | undefined
+    pending?: Promise<void> | undefined
+    abort: AbortController
+  }>()
   const dragged = useRef(false)
   const transfer = useImageDragTransfer()
   const reportFailure = transfer.report
+  const desktop = transfer.desktop
   const prepare = useCallback((): void => {
     const current = state.current
     if (src === '' || current === undefined || current.source !== src || current.pending !== undefined || current.prepared !== undefined) return
@@ -53,13 +60,16 @@ export function useImageDrag(src: string, name: string, failureText: string, ori
         file = new File([blob], name, { type: blob.type })
       }
       if (current.abort.signal.aborted) return
-      const handle = desktop === undefined ? undefined
-        : await desktop.prepare(new Uint8Array(await file.arrayBuffer()), file.name, file.type)
-      if (state.current !== current) {
-        if (handle !== undefined) desktop?.release(handle)
+      if (desktop === undefined) {
+        current.prepared = { file }
         return
       }
-      current.prepared = { file, ...handle === undefined ? {} : { handle } }
+      const handle = await desktop.prepare(new Uint8Array(await file.arrayBuffer()), file.name, file.type)
+      if (state.current !== current) {
+        desktop.release(handle)
+        return
+      }
+      current.prepared = { file, handle, release: () => { desktop.release(handle) } }
     })().catch((_error: unknown) => {
       // Preparation is speculative; a failed user gesture reports through the owning image.
     }).finally(() => { current.pending = undefined })
@@ -67,19 +77,19 @@ export function useImageDrag(src: string, name: string, failureText: string, ori
   useEffect(() => {
     const current: NonNullable<typeof state.current> = { source: src, abort: new AbortController() }
     state.current = current
-    if (src !== '' && (original !== undefined || new URL(src, location.href).origin === location.origin)) prepare()
     return () => {
       current.abort.abort()
-      const prepared = current.prepared
-      if (prepared?.handle !== undefined) desktop?.release(prepared.handle)
+      current.prepared?.release?.()
       state.current = undefined
     }
   }, [src, name, original, desktop, prepare])
   const onDragStart = useCallback((event: DragEvent<HTMLImageElement>): void => {
-    if (event.defaultPrevented) return
+    if (event.defaultPrevented || src === '') return
     dragged.current = true
     const prepared = state.current?.source === src ? state.current.prepared : undefined
     if (prepared === undefined) {
+      const url = new URL(src, location.href)
+      if (original === undefined && (url.protocol === 'https:' || url.protocol === 'http:') && url.origin !== location.origin) return
       event.preventDefault()
       prepare()
       reportFailure(failureText)
@@ -89,8 +99,11 @@ export function useImageDrag(src: string, name: string, failureText: string, ori
     event.dataTransfer.effectAllowed = 'copy'
     if (desktop !== undefined && prepared.handle !== undefined) {
       event.preventDefault()
-      void desktop.start(prepared.handle).then((started) => { if (!started) reportFailure(failureText) },
-        () => { reportFailure(failureText) })
+      const failed = (): void => {
+        if (state.current?.prepared === prepared) state.current.prepared = undefined
+        reportFailure(failureText)
+      }
+      void desktop.start(prepared.handle).then((started) => { if (!started) failed() }, failed)
       return
     }
     event.dataTransfer.setData(IMAGE_DRAG_TYPE, transfer.begin(prepared.file))
@@ -101,6 +114,7 @@ export function useImageDrag(src: string, name: string, failureText: string, ori
     if (event.button === 0) prepare()
   }, [prepare])
   const onClickCapture = useCallback((event: MouseEvent): void => {
+    if (event.detail === 0) { dragged.current = false; return }
     if (!dragged.current) return
     event.preventDefault()
     event.stopPropagation()

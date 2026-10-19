@@ -46,3 +46,18 @@ it('releases unused preparations and waits for a concurrent write before cleanup
   await rejected
   expect(await readdir(root)).toEqual([])
 })
+
+it.each(['CON', 'prn', 'AUX', 'NUL', 'COM1', 'LPT9', 'COM¹', 'CON.extra'])('sanitizes the Windows device filename %s', async (name) => {
+  const { store } = await files()
+  const handle = await store.prepare(new Uint8Array([1]), `${name}.png`, 'image/png')
+  expect(basename(store.take(handle, false)!)).toBe(`_${name}.png`)
+})
+
+it('bounds all retained bytes, including pending writes, and frees unused capacity', async () => {
+  const { store } = await files()
+  const pending = store.prepare(new Uint8Array(64 * 1024 * 1024), 'large.png', 'image/png')
+  await expect(store.prepare(new Uint8Array([1]), 'extra.png', 'image/png')).rejects.toThrow('Invalid image transfer')
+  const handle = await pending
+  await store.release(handle)
+  await expect(store.prepare(new Uint8Array([1]), 'extra.png', 'image/png')).resolves.toEqual(expect.any(String))
+})

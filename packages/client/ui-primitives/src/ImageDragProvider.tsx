@@ -1,21 +1,20 @@
 /** Application-lifetime feedback for image drag operations. */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Toast } from './Toast.tsx'
+import type { DesktopImageDrag } from './image-drag.ts'
 
 /** Browser drag token; file bytes remain in the owning mounted application. */
 export const IMAGE_DRAG_TYPE = 'application/x-dsh-image'
 
 interface ImageTransfer {
+  desktop: DesktopImageDrag | undefined
   report: (text: string) => void
   begin: (file: File) => string
   end: () => void
   read: (transfer: DataTransfer) => File | undefined
 }
 
-const missingProvider = (): never => { throw new Error('Image dragging requires ImageDragProvider') }
-const ImageDragFeedback = createContext<ImageTransfer>({
-  report: missingProvider, begin: missingProvider, end: missingProvider, read: missingProvider,
-})
+const ImageDragFeedback = createContext<ImageTransfer | undefined>(undefined)
 
 /**
  * Keep drag failures visible when their source image or conversation unmounts.
@@ -23,6 +22,10 @@ const ImageDragFeedback = createContext<ImageTransfer>({
  * @returns children and the current localized failure toast.
  */
 export function ImageDragProvider({ children }: { readonly children: ReactNode }): ReactNode {
+  const [desktop] = useState(() => {
+    const bridge = (globalThis as typeof globalThis & { dshDesktop?: { protocolVersion: number; imageDrag?: DesktopImageDrag } }).dshDesktop
+    return bridge?.protocolVersion === 1 ? bridge.imageDrag : undefined
+  })
   const active = useRef<{ token: string; file: File }>()
   const sequence = useRef(0)
   const [failure, setFailure] = useState<{ text: string; sequence: number }>()
@@ -42,19 +45,33 @@ export function ImageDragProvider({ children }: { readonly children: ReactNode }
     const current = active.current
     return current !== undefined && current.token === transfer.getData(IMAGE_DRAG_TYPE) ? current.file : undefined
   }, [])
-  const value = useMemo(() => ({ report, begin, end, read }), [report, begin, end, read])
+  const value = useMemo(() => ({ desktop, report, begin, end, read }), [desktop, report, begin, end, read])
   return <ImageDragFeedback.Provider value={value}>
     {children}
     {failure !== undefined && <Toast key={failure.sequence} text={failure.text} onDone={dismiss} />}
   </ImageDragFeedback.Provider>
 }
 
-/** @returns the mounted application's image transfer owner. */
+/** Requires ImageDragProvider; @returns the mounted application's image transfer owner. */
 export function useImageDragTransfer(): ImageTransfer {
-  return useContext(ImageDragFeedback)
+  const transfer = useContext(ImageDragFeedback)
+  if (transfer === undefined) throw new Error('Image dragging requires ImageDragProvider')
+  return transfer
 }
 
-/** @returns a reader that resolves only this application's active original-image drag. */
+/** Requires ImageDragProvider; @returns a reader for this application's active original-image drag. */
 export function useImageDrop(): (transfer: DataTransfer) => File | undefined {
   return useImageDragTransfer().read
+}
+
+/**
+ * Bind a drop target to its application's original-image reader without exposing React context.
+ * Requires an ancestor ImageDragProvider.
+ * @param props - listener installer; its cleanup runs on replacement or unmount.
+ * @returns no visible content.
+ */
+export function ImageDrop({ bind }: { readonly bind: (read: (transfer: DataTransfer) => File | undefined) => () => void }): ReactNode {
+  const read = useImageDrop()
+  useEffect(() => bind(read), [bind, read])
+  return null
 }

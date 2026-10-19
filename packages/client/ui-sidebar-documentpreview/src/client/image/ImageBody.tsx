@@ -1,6 +1,6 @@
 /** Complete image bytes rendered in a shared zoom viewport. */
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { useImageDrag } from '@deepseek-ai/dsh-client-ui-primitives'
+import { DraggableImage } from '@deepseek-ai/dsh-client-ui-primitives'
 import { bindImagePan } from './pan.ts'
 import type { PropsLocale, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import { pathPartsOf } from '@deepseek-ai/dsh-util-workspace-path'
@@ -74,8 +74,9 @@ export function ImageBody(props: ImageBodyProps): ReactNode {
     if (data === undefined || mediaType === undefined) return
     let url: string | undefined
     try {
-      url = URL.createObjectURL(new Blob([data], { type: mediaType }))
-      setSource({ kind: 'ready', data, mediaType, url, file: new File([data], pathPartsOf(path).name, { type: mediaType }) })
+      const file = new File([data], pathPartsOf(path).name, { type: mediaType })
+      url = URL.createObjectURL(file)
+      setSource({ kind: 'ready', data, mediaType, url, file })
     } catch {
       setSource({ kind: 'failed', data, mediaType })
     }
@@ -113,7 +114,6 @@ function LoadedImage({ url, name, file, preference, onPreference, labels, signal
   readonly scrollportRef: ImageBodyProps['scrollportRef']
   readonly t: ImageBodyProps['t']
 }): ReactNode {
-  const drag = useImageDrag(url, name, t('dragFailed'), file)
   const releasePan = useRef<() => void>()
   const attachImage = useCallback((image: HTMLImageElement | null): void => {
     releasePan.current?.()
@@ -128,15 +128,13 @@ function LoadedImage({ url, name, file, preference, onPreference, labels, signal
       {state === 'failed' && <p className={css.status} role="alert">{t('failed')}</p>}
       <div className={`${css.surface} ${zoomSurfaceClass}`} data-document-zoom-surface
         style={{ '--document-zoom-width': `${width ?? 0}px` } as CSSProperties} hidden={state !== 'ready'}>
-        <img
+        <DraggableImage
           ref={attachImage}
           className={css.image}
           src={url}
           alt={t('preview', { name })}
           decoding="async"
-          onPointerEnter={drag.onPointerEnter}
-          onPointerDown={drag.onPointerDown}
-          onDragStart={drag.onDragStart} onDragEnd={drag.onDragEnd}
+          name={name} original={file} failureText={t('dragFailed')}
           referrerPolicy="no-referrer"
           onLoad={(event) => { setWidth(event.currentTarget.naturalWidth); setState('ready') }}
           onError={() => { setState('failed') }}

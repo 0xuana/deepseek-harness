@@ -345,6 +345,17 @@ async function main(): Promise<void> {
   let workspaceRecovery: Promise<void> | undefined
   let mainWindow: BrowserWindow | undefined
   let welcomeWindow: BrowserWindow | undefined
+  const imageDragCleanups = new Set([installDesktopImageDrag(() => mainWindow)])
+  let imageDragStopped = false
+  const disposeImageDrag = async (): Promise<void> => {
+    imageDragStopped = true
+    const results = await Promise.allSettled([...imageDragCleanups].map(async (release) => {
+      await release()
+      imageDragCleanups.delete(release)
+    }))
+    const failure = results.find(result => result.status === 'rejected')
+    if (failure?.status === 'rejected') throw failure.reason
+  }
   let enteredWorkspace = false
   // NSIS passes --updated when it launches the application after installation.
   let raiseAfterUpdate = process.platform === 'win32' && process.argv.includes('--updated')
@@ -537,6 +548,10 @@ async function main(): Promise<void> {
       window.webContents.send(DESKTOP_IPC.updatesPresentation, presentDesktopUpdate(state))
     }
     if (state.phase === 'error' && state.failedOperation !== 'check') {
+      if (state.failedOperation === 'install' && imageDragStopped && !quitting) {
+        imageDragCleanups.add(installDesktopImageDrag(() => mainWindow))
+        imageDragStopped = false
+      }
       const restoreHost = state.failedOperation === 'install' && updateStoppedHost && !quitting
       shellInstallerOwnsQuit = false
       updateStoppedHost = false
@@ -621,6 +636,7 @@ async function main(): Promise<void> {
         mandatoryUI?.preparingRestart(stillActive)
         // The embedded Platform document holds credentials issued by the Host that is about to stop.
         await platformView.closeAndWait()
+        await disposeImageDrag()
         requireCleanStop = true
         updateStopFailure = undefined
         await backend.stop()
@@ -683,9 +699,6 @@ async function main(): Promise<void> {
   })
 
   installDesktopDirectoryPicker(() => mainWindow)
-  const disposeImageDrag = installDesktopImageDrag(() => mainWindow)
-  let installerImageCleanup: Promise<void> | undefined
-  let installerImagesReleased = false
   installMicrophonePermissions(session.defaultSession, () => mainWindow?.webContents)
   const shortcuts = installDesktopShortcuts(() => mainWindow, app.getPath('userData'),
     process.platform === 'darwin' ? 'macos' : process.platform === 'win32' ? 'windows' : 'linux', () => { refreshApplicationMenu() }, window => updateOverlays.input(window))
@@ -1264,18 +1277,11 @@ async function main(): Promise<void> {
     mandatoryUI?.dispose()
     void Promise.all([Promise.resolve(mandatoryPolicy?.dispose()).then(() => policyAuth?.dispose()), backend.close(),
       // A Platform cleanup failure is logged without cutting the remaining Host shutdown short.
-      platformView.dispose().catch((error: unknown) => { console.error(error) }), disposeImageDrag()])
+      platformView.dispose().catch((error: unknown) => { console.error(error) }),
+      disposeImageDrag().catch((error: unknown) => { console.error(error) })])
       .catch((error: unknown) => { console.error(error) }).finally(() => { app.quit() })
   }
   app.on('before-quit', (event) => {
-    if (shellInstallerOwnsQuit && !installerImagesReleased) {
-      event.preventDefault()
-      installerImageCleanup ??= disposeImageDrag().catch((error: unknown) => { console.error(error) }).then(() => {
-        installerImagesReleased = true
-        app.quit()
-      })
-      return
-    }
     if (shellInstallerOwnsQuit) {
       shuttingDown = true
       quitConfirmation.dispose()

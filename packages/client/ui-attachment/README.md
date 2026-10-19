@@ -39,9 +39,11 @@ Trajectory attachment rows request 48px square thumbnails that contain the compl
 
 Loaded conversation images can be dragged into the composer as image attachments or to another application as original files. Dragging does not open the lightbox. The shared image-transfer owner retains Web drag bytes until the gesture ends; Desktop uses the system file drag. A failed preparation or drag keeps the image visible and reports a localized retry message.
 
+Internal Web image drags do not show the full-page overlay. A foreign or expired image token without actual files is ignored. Browser transfer limitations are documented by [ui-primitives](../ui-primitives/README.md#known-limitations-and-deferred-work).
+
 ### Drop overlay
 
-While a file drag is over the page, the full-viewport overlay announces the drop: illustration, title, and a limits line when drops are accepted. The overlay only shows state — the owner's document-level listeners decide accept or reject, and the drop handler reports which dropped members are directories through the entry API so the owner can cite or refuse them.
+While an external file drag is over the page, the full-viewport overlay announces the drop: illustration, title, and a limits line when drops are accepted. The overlay only shows state — the owner's document-level listeners decide accept or reject, and the drop handler reports which dropped members are directories through the entry API so the owner can cite or refuse them.
 
 -----
 

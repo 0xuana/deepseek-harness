@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.1-rc.2/image-drag-labels/guide.md
+/:
+  en: 0f508094085d53cd
+  zh: c4ed2bc22a35ca88
+/image-drag-labels:
+  en: 0ff7158e0569f72f
+  zh: c7e157db1d84abc9
+/image-drag-labels/change:
+  en: 82caa20a5d75c5fc
+  zh: 5f7b01a74c055336
+/image-drag-labels/migration:
+  en: c355c2ce5478973a
+  zh: 9e29643003f1d367
