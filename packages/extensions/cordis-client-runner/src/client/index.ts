@@ -49,7 +49,6 @@ export { DynamicCordisStyles, evaluateClientHalf, isDynamicCordisPlugin } from '
 export type { DynamicCordisClosureEnv, DynamicCordisEvaluatedPlugin } from './evaluator.ts'
 export { dynamicCordisContext } from './guard.ts'
 export type { DynamicCordisGuardEnv, DynamicCordisSlotLedgerRow } from './guard.ts'
-export { TimerService as ClientTimerService } from '@deepseek-ai/cordis-plugin-timer'
 // Re-exported so consumers of the service face and the two events can name
 // their subjects without reaching into the wire contract themselves.
 export type {

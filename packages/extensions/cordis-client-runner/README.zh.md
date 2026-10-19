@@ -55,7 +55,7 @@ kind: "package-reference"
 
 ### 源码地图
 
-入口在 runner 的上下文中安装与 Host 共用的 vendored Cordis `TimerService`。浏览器包内联 Timer，并使用模块表中的 Cordis 实例。定时任务归调用插件的 fiber 所有，释放该 fiber 会取消尚未执行的任务。`ClientTimerService` 是 `TimerService` 的导出别名。
+入口在 runner 的上下文中安装与 Host 共用的 vendored Cordis `TimerService`。浏览器包内联 Timer，并使用模块表中的 Cordis 实例。定时任务归调用插件的 fiber 所有，释放该 fiber 会取消尚未执行的任务。
 
 | 文件 | 职责 |
 |---|---|

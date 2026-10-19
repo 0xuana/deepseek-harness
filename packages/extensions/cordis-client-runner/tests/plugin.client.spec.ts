@@ -201,7 +201,6 @@ describe('browser half', () => {
     try {
       const bench = await boot(ctx)
       expect(bench.ctx.timer).toBeInstanceOf(TimerService)
-      expect(ClientHalf.ClientTimerService).toBe(TimerService)
       const timeout = vi.fn()
       const interval = vi.fn()
       const delayed = vi.fn()

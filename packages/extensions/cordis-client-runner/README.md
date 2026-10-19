@@ -55,7 +55,7 @@ The browser half is built on one principle: a dynamic package must ride the same
 
 ### Source map
 
-The entry installs the vendored Cordis `TimerService`, shared with the Host, in the runner's context. The browser bundle inlines Timer and uses the module table's Cordis instance. Timer calls belong to the calling plugin's fiber; disposing it cancels pending work. `ClientTimerService` is an export alias of `TimerService`.
+The entry installs the vendored Cordis `TimerService`, shared with the Host, in the runner's context. The browser bundle inlines Timer and uses the module table's Cordis instance. Timer calls belong to the calling plugin's fiber; disposing it cancels pending work.
 
 | File | Role |
 |---|---|
