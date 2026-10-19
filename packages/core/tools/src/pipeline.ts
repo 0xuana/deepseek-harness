@@ -56,7 +56,12 @@ interface FusedToolSignal {
  * for complete calls, including a single-call batch.
  */
 export class ToolExecutionPipeline {
-  constructor(private readonly ctx: Context, private readonly source: ToolExecutionSource) {}
+  private readonly tools: Context['tools']
+
+  constructor(private readonly ctx: Context, private readonly source: ToolExecutionSource) {
+    // Accepted calls retain their event subject while the service is withdrawn during shutdown.
+    this.tools = ctx.tools
+  }
 
   private resolveExecution(name: string, scope: ScopeKey | undefined, nested: boolean): ToolDefinition | undefined {
     const tool = this.source.get(name, scope)
@@ -177,7 +182,7 @@ export class ToolExecutionPipeline {
       return { kind: 'final-result', exec, result: toolAbortedBeforeDispatchResult() }
     }
     try {
-      const carrier = scopeTarget(this.ctx.tools, exec.agent)
+      const carrier = scopeTarget(this.tools, exec.agent)
       const gate = await this.ctx.waterfall(
         carrier, 'tools/pre-execute', exec,
         () => Promise.resolve<PreToolDecision>({ kind: 'allow' }),
@@ -192,7 +197,7 @@ export class ToolExecutionPipeline {
       if (decision.kind === 'cancel') {
         return { kind: 'post-result', exec, result: toolAbortedBeforeDispatchResult() }
       }
-      const denialReason = decision.kind === 'allow' ? this.ctx.tools.checkGuards(exec) : decision.reason
+      const denialReason = decision.kind === 'allow' ? this.tools.checkGuards(exec) : decision.reason
       const denialInfo = decision.kind === 'deny' ? decision.info : undefined
       if (denialReason !== undefined) {
         return {
@@ -277,7 +282,7 @@ export class ToolExecutionPipeline {
   async dispatch(exec: ToolRunContext): Promise<ScheduledToolDispatch> {
     try {
       const mutableExec = exec as MutableToolRunContext
-      const carrier = scopeTarget(this.ctx.tools, exec.agent)
+      const carrier = scopeTarget(this.tools, exec.agent)
       const result = await this.ctx.waterfall(
         carrier, 'tools/execute', mutableExec,
         () => this.dispatchToolBody(mutableExec),
@@ -388,7 +393,7 @@ export class ToolExecutionPipeline {
       this.ctx.logger.warn(`tool "${toolName}" (${callId}): tools/result observer failed: ${toolErrorMessage(error)}`)
     }
     const callbacks = this.ctx.events.dispatch('emit', [
-      scopeTarget(this.ctx.tools, exec.agent), 'tools/result', exec, result,
+      scopeTarget(this.tools, exec.agent), 'tools/result', exec, result,
     ])
     for (const callback of callbacks) {
       try {
@@ -467,7 +472,7 @@ export class ToolExecutionPipeline {
    */
   private async postExecute(exec: ToolExecution, result: ToolExecutionResult): Promise<ToolExecutionResult> {
     const decision = await this.ctx.waterfall(
-      scopeTarget(this.ctx.tools, exec.agent), 'tools/post-execute', exec, result,
+      scopeTarget(this.tools, exec.agent), 'tools/post-execute', exec, result,
       () => Promise.resolve<PostToolDecision>({ kind: 'accept' }),
     )
     const decisionContexts = decision.additionalContexts ?? []
