@@ -517,8 +517,8 @@ const URL_SCHEME = /^[a-z][a-z\d+.-]*:/i
  * render turns each call into `require.asset(...)`, the module loader's
  * synchronous asset resolver, which returns the reference unchanged unless its
  * carrier maps it. The fixed hexadecimal suffix keeps plugin strings that happen
- * to contain the shorter prefix out of that rewrite, and, unlike a per-build
- * value, keeps the source maps that carry the loaded module text byte-stable.
+ * to contain the shorter prefix out of that rewrite, and keeps the source maps
+ * that carry the loaded module text byte-stable across builds.
  */
 const PACKAGE_ASSET_CALL = '__dshPackageAsset_5f8e2c1a9b7d'
 

@@ -43,7 +43,7 @@ const WHALE = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1
 const WHALE_REV = packageAssetRevision(WHALE)
 const WHALE_URL = `plugins/@deepseek-ai/dsh-client-asset-fixture/assets/whale-${WHALE_REV}.png`
 
-/** The per-build resolver call identifier a compiled module emits before rendering. */
+/** The resolver call identifier a compiled module emits before rendering. */
 const RESOLVER_CALL = /__dshPackageAsset_[0-9a-f]{12}(?=\()/u
 
 /** Read the resolver call identifier from one compiled module. */
@@ -94,7 +94,7 @@ async function assetPackage(
   exports: Readonly<Record<string, string>> = ASSET_EXPORTS,
 ): Promise<string> {
   const root = await temporaryDirectory('dsh-client-asset-')
-  await writeFiles(root, { 'package.json': JSON.stringify({ name: PACKAGE_NAME, exports }), ...files })
+  await writeFiles(root, { 'package.json': JSON.stringify({ name: PACKAGE_NAME, type: 'module', exports }), ...files })
   return root
 }
 
