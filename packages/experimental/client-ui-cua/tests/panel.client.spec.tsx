@@ -290,7 +290,7 @@ it('keeps content mounted and pauses observation while the bundle changes', () =
   f.publish({ ...observe(value), system: { value: value.system, busy: false, error: 'provider is reloading' }, busy: false })
   const view = render(<PermissionPanel {...f.props} busy />)
   const requirements = screen.getByRole('region', { name: en.title })
-  expect(within(requirements).getAllByRole('group')).toHaveLength(3)
+  expect(within(requirements).getAllByRole('group')).toHaveLength(4)
   expect(screen.queryByRole('alert')).toBeNull()
   expect(f.props.setActive).toHaveBeenLastCalledWith(false)
   expect(screen.getByRole('button', { name: en.request }).hasAttribute('disabled')).toBe(true)

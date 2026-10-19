@@ -31,13 +31,13 @@ export type PermissionPanelProps = PermissionProps & DefaultPresetProps & Persis
 
 function DefaultPresetSetting(props: DefaultPresetProps) {
   const preset = props.useCuaDefaultPreset(value => value)
-  return <ConfigurationSetting kind="default" setting={preset} t={props.t} busy={props.busy} save={props.setPtcDefault}
+  return <ConfigurationSetting kind="default" setting={preset} t={props.t} busy={props.busy === true} save={props.setPtcDefault}
     configured={(preset.value?.selectedDefault ?? preset.value?.default) === 'ptc'} />
 }
 
 function PersistentPtcSetting(props: PersistentPtcProps) {
   const runtime = props.useCuaPtcRuntime(value => value)
-  return <ConfigurationSetting kind="persistent" setting={runtime} t={props.t} busy={props.busy} save={props.setPersistentPtc}
+  return <ConfigurationSetting kind="persistent" setting={runtime} t={props.t} busy={props.busy === true} save={props.setPersistentPtc}
     configured={runtime.value?.executionMode === 'persistent-in-memory'} />
 }
 
