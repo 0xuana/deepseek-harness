@@ -151,6 +151,7 @@ it.skipIf(process.platform !== 'darwin').each([undefined, 'minimal'] as const)('
     await persistent.getByRole('button', { name: '设为持久化', exact: true }).click()
     await persistent.getByRole('button', { name: '已设为持久化', exact: true }).waitFor()
     expect(scaffold.ctx.ptcRuntime.programFormat).toBe('repl')
+    expect(scaffold.ctx.ptcRuntime === originalRuntime).toBe(false)
     saved = await readFile(settingsPath, 'utf8')
     expect(saved).toContain('executionMode: persistent-in-memory')
     const runtime = scaffold.ctx.ptcRuntime
