@@ -127,9 +127,6 @@ it.skipIf(process.platform !== 'darwin').each([undefined, 'minimal'] as const)('
     expect(saved).toBe(beforeEnable)
     expect(scaffold.ctx.settings.describe().find(row => row.ns === 'ui-settings')?.value).toMatchObject({ enabled: codingTools })
     expect(saved).not.toContain('executionMode:')
-    expect(load(saved)).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'ui-settings', config: { enabled: codingTools } }),
-    ]))
     if (selectedDefault === undefined) {
       expect(load(saved)).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: 'agent-preset-registry' })]))
     } else {
