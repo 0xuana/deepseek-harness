@@ -727,11 +727,12 @@ describe('web e2e: plugin manager', () => {
     }
     expect(await preview.getAttribute('src')).toBe(chineseSource)
     await panel.getByRole('button', { name: '返回 实验性插件', exact: true }).click()
-    await panel.getByRole('button', { name: '查看 智能体团队', exact: true }).click()
-    // Detail icons have alt=""; this bundle's README detail document has no images.
+    await panel.getByRole('button', { name: '返回插件', exact: true }).click()
+    await panel.getByRole('button', { name: '查看 @fixture/bundle', exact: true }).click()
+    // A bundle without meta.detail still shows its README; this one has no images.
     await panel.locator('[data-detail-document] h1').waitFor()
     expect(await panel.getByRole('img').count()).toBe(0)
-    await panel.getByRole('button', { name: '返回 实验性插件', exact: true }).click()
+    await panel.getByRole('button', { name: '返回插件', exact: true }).click()
     expect(tripwire.pageErrors).toEqual([])
   })
 
@@ -747,6 +748,9 @@ describe('web e2e: plugin manager', () => {
     expect(await search.getByText('搜索工作区中的文件。', { exact: true }).count()).toBe(1)
     expect(await review.getByText('审查工作区中的改动。', { exact: true }).count()).toBe(1)
     await panel.getByText('Registry description for the fixture bundle.', { exact: true }).first().waitFor()
+    // The README detail document loads asynchronously after the description.
+    const readmeHeading = panel.locator('[data-detail-document]').getByRole('heading', { name: 'Fixture bundle', exact: true })
+    await readmeHeading.waitFor()
     expect([...scaffold.ctx.loader.entries()].some(entry => entry.options.name.startsWith('@fixture/bundle'))).toBe(false)
     await compareOrRefreshGolden(EXPORTS_EXPECTED, await captureStableAria(page, '[data-plugin-panel]', scaffold.workspaceCwd, {
       replacements: [[FIXTURE_PLUGINS, '{{fixtures}}']],
@@ -757,6 +761,7 @@ describe('web e2e: plugin manager', () => {
       expect(await review.getByText('@fixture/bundle/review', { exact: true }).count()).toBeGreaterThan(0)
       expect(await search.getByText('Search package introduction.', { exact: true }).count()).toBe(0)
       expect(await review.getByText('审查工作区中的改动。', { exact: true }).count()).toBe(0)
+      await readmeHeading.waitFor()
       await compareOrRefreshGolden(EXPORTS_EN_EXPECTED, await captureStableAria(page, '[data-plugin-panel]', scaffold.workspaceCwd, {
         replacements: [[FIXTURE_PLUGINS, '{{fixtures}}']],
       }), MODE)
