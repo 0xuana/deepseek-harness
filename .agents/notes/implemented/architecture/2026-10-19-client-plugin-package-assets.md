@@ -8,7 +8,7 @@ English | [中文](2026-10-19-client-plugin-package-assets.zh.md)
 
 The browser half of a dynamic Client plugin is a lazy-CJS factory built by the [client build preset](../../../../packages/client/tsdown.client.ts) and loaded through the `/plugins` route of the [Client module system](../../../../packages/client/modules/README.md). That route served only `client.js` and package-local chunks, so an image that plugin code referenced had to be embedded in the bundle as a base64 data URL, and an image used by a stylesheet needed a package-level build plugin that rewrote it into the inlined style.
 
-The embedded bytes were downloaded and parsed with the JavaScript whether or not the image was shown, and base64 adds a third to their size: the onboarding illustrations made the ui-settings-account `client.js` about 3.4 MB. The Plugin Manager feature previews were embedded the same way, and ui-chat carried its own [tsdown plugin](../../../../packages/client/ui-chat/tsdown.config.ts) for one mask image.
+The embedded bytes were downloaded and parsed with the JavaScript whether or not the image was shown, and base64 adds a third to their size: the onboarding illustrations made the ui-settings-account `client.js` about 3.4 MB. ui-chat carried its own [tsdown plugin](../../../../packages/client/ui-chat/tsdown.config.ts) for one mask image.
 
 ## Decision
 
@@ -44,7 +44,7 @@ A rebuilt image produces a new file name in a rebuilt `client.js`, which reaches
 
 ### Gates and migration
 
-[`check-workspace-constraints`](../../../../scripts/check-workspace-constraints.ts) requires `lib/assets` in `files` when the export is declared. [`verify-client-packages`](../../../../scripts/verify-client-packages.ts) requires the exact export target, allows the export only on dynamic Web Client packages, and keeps the export and the package's references (imports, and `url()` in the stylesheets its Client sources import) consistent in both directions. [`verify-package-dependencies`](../../../../scripts/verify-package-dependencies.ts) treats `./assets/*` as a non-code export. ui-settings-account, ui-plugin-manager, and ui-chat moved to package assets, and ui-chat's tsdown plugin is gone.
+[`check-workspace-constraints`](../../../../scripts/check-workspace-constraints.ts) requires `lib/assets` in `files` when the export is declared. [`verify-client-packages`](../../../../scripts/verify-client-packages.ts) requires the exact export target, allows the export only on dynamic Web Client packages, and keeps the export and the package's references (imports, and `url()` in the stylesheets its Client sources import) consistent in both directions. [`verify-package-dependencies`](../../../../scripts/verify-package-dependencies.ts) treats `./assets/*` as a non-code export. ui-settings-account and ui-chat moved to package assets, and ui-chat's tsdown plugin is gone.
 
 Images that third-party libraries load themselves (PDF.js fonts, cmaps, wasm, and workers), plugin metadata icons, detail-document images, and static-linked packages keep their own delivery.
 
@@ -70,7 +70,7 @@ Images that third-party libraries load themselves (PDF.js fonts, cmaps, wasm, an
 
 ## Consequences
 
-- The ui-settings-account `client.js` is 214 KB, and the account, Plugin Manager, and ui-chat bundles contain no image data URLs; an image costs one same-origin request when shown and may appear after layout.
+- The ui-settings-account `client.js` is 214 KB, and the account and ui-chat bundles contain no image data URLs; an image costs one same-origin request when shown and may appear after layout.
 - The WebWorker preview serves every package asset in its image from the static deployment, whether or not the package is enabled in the preview, and its VFS image no longer carries them.
 - The Desktop forwarder rewrites `/plugins/` cache headers to `no-store`, so Desktop reads an asset again on each display.
 - The Host does not compare file contents with the revision in the name: a file under `lib/assets/` edited in place keeps its immutable cache entries. Only the build writes that directory.
@@ -85,4 +85,4 @@ Images that third-party libraries load themselves (PDF.js fonts, cmaps, wasm, an
 - [assets.client.spec.ts](../../../../packages/client/modules/tests/assets.client.spec.ts) covers media types, the revision, emitted names, and references; [client-asset-types.spec.ts](../../../../scripts/client-asset-types.spec.ts) keeps the type root equal to the table.
 - [client-bundle-css.spec.ts](../../../../scripts/client-bundle-css.spec.ts) covers emitted names and URLs, CSS rewriting and preserved forms, each build rejection, the Node face guard, one-shot pruning, and watch rebuilds that keep earlier files.
 - The gate specs reject each invalid manifest or reference form, and [node-half.client.spec.ts](../../../../packages/client/modules/tests/node-half.client.spec.ts) covers declarations, moved exports, and added or removed client declarations after an entry restart, an unchanged restart that publishes nothing and reads no bundle, and a chunk of a package named `@scope/assets`.
-- [desktop-onboarding.e2e.ts](../../../../apps/web/tests/desktop-onboarding.e2e.ts) and [reasoning-preview.e2e.ts](../../../../apps/web/tests/reasoning-preview.e2e.ts) assert the package-asset URLs and decode the images in a browser; [preview-boot.e2e.ts](../../../../apps/web/tests/preview-boot.e2e.ts) decodes a feature preview the WebWorker deployment serves statically, and the packer's [page-assets.spec.ts](../../../../packages/experimental/webworker-packer/tests/page-assets.spec.ts) covers which files leave the image.
+- [desktop-onboarding.e2e.ts](../../../../apps/web/tests/desktop-onboarding.e2e.ts) and [reasoning-preview.e2e.ts](../../../../apps/web/tests/reasoning-preview.e2e.ts) assert the package-asset URLs and decode the images in a browser; [preview-boot.e2e.ts](../../../../apps/web/tests/preview-boot.e2e.ts) decodes the ui-chat mask image the WebWorker deployment serves statically, and the packer's [page-assets.spec.ts](../../../../packages/experimental/webworker-packer/tests/page-assets.spec.ts) covers which files leave the image.

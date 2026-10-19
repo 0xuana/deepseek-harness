@@ -8,7 +8,7 @@ Status: implemented
 
 动态 Client 插件的浏览器半侧由 [client 打包预设](../../../../packages/client/tsdown.client.ts) 打成 lazy-CJS factory，经 [Client 模块系统](../../../../packages/client/modules/README.zh.md) 的 `/plugins` 路由加载。这条路由过去只提供 `client.js` 和包内分片，所以插件代码引用的图片只能以 base64 data URL 打进 bundle，样式里用到的图片则要靠包级构建插件替换成内联样式。
 
-不管图片显不显示，这些字节都随 JavaScript 一起下载和解析，base64 还会让体积大三分之一：引导插图使 ui-settings-account 的 `client.js` 达到约 3.4 MB。Plugin Manager 的功能预览也以同样方式打进 bundle，ui-chat 还为一张遮罩图维护了自己的 [tsdown 插件](../../../../packages/client/ui-chat/tsdown.config.ts)。
+不管图片显不显示，这些字节都随 JavaScript 一起下载和解析，base64 还会让体积大三分之一：引导插图使 ui-settings-account 的 `client.js` 达到约 3.4 MB。ui-chat 还为一张遮罩图维护了自己的 [tsdown 插件](../../../../packages/client/ui-chat/tsdown.config.ts)。
 
 ## Decision
 
@@ -44,7 +44,7 @@ plugins/@deepseek-ai/dsh-client-ui-chat/assets/running-whale%402x-06738fa29b2f.p
 
 ### 门禁与迁移
 
-[`check-workspace-constraints`](../../../../scripts/check-workspace-constraints.ts) 要求声明导出时 `files` 含 `lib/assets`。[`verify-client-packages`](../../../../scripts/verify-client-packages.ts) 要求导出目标精确匹配，只允许动态 Web Client 包声明该导出，并要求导出与包内引用（import，以及其 Client 源码所 import 的样式表中的 `url()`）双向一致。[`verify-package-dependencies`](../../../../scripts/verify-package-dependencies.ts) 把 `./assets/*` 视为非代码导出。ui-settings-account、ui-plugin-manager 和 ui-chat 已迁移到包资源，ui-chat 的 tsdown 插件已删除。
+[`check-workspace-constraints`](../../../../scripts/check-workspace-constraints.ts) 要求声明导出时 `files` 含 `lib/assets`。[`verify-client-packages`](../../../../scripts/verify-client-packages.ts) 要求导出目标精确匹配，只允许动态 Web Client 包声明该导出，并要求导出与包内引用（import，以及其 Client 源码所 import 的样式表中的 `url()`）双向一致。[`verify-package-dependencies`](../../../../scripts/verify-package-dependencies.ts) 把 `./assets/*` 视为非代码导出。ui-settings-account 和 ui-chat 已迁移到包资源，ui-chat 的 tsdown 插件已删除。
 
 三方库自己加载的资源（PDF.js 的字体、cmap、wasm 和 worker）、插件元数据图标、详情文档图片，以及 static-linked 包，保留各自的交付方式。
 
@@ -70,7 +70,7 @@ plugins/@deepseek-ai/dsh-client-ui-chat/assets/running-whale%402x-06738fa29b2f.p
 
 ## Consequences
 
-- ui-settings-account 的 `client.js` 为 214 KB，账户、Plugin Manager 和 ui-chat 的 bundle 都不再含图片 data URL；图片显示时多一次同源请求，可能晚于布局出现。
+- ui-settings-account 的 `client.js` 为 214 KB，账户和 ui-chat 的 bundle 都不再含图片 data URL；图片显示时多一次同源请求，可能晚于布局出现。
 - WebWorker 预览由静态部署提供镜像中所有包的资源，不论该包在预览中是否启用；VFS 镜像不再携带这些文件。
 - Desktop 转发层把 `/plugins/` 的缓存头改写为 `no-store`，Desktop 每次显示都会重新读取资源。
 - Host 不比对文件内容与文件名中的 revision：原地修改 `lib/assets/` 下的文件会保留它的 immutable 缓存。这个目录只由构建写入。
@@ -85,4 +85,4 @@ plugins/@deepseek-ai/dsh-client-ui-chat/assets/running-whale%402x-06738fa29b2f.p
 - [assets.client.spec.ts](../../../../packages/client/modules/tests/assets.client.spec.ts) 覆盖媒体类型、revision、产出文件名和引用；[client-asset-types.spec.ts](../../../../scripts/client-asset-types.spec.ts) 保证类型根与类型表一致。
 - [client-bundle-css.spec.ts](../../../../scripts/client-bundle-css.spec.ts) 覆盖产出文件名和 URL、CSS 改写与保留形式、每种构建拒绝、Node face 守卫、一次性构建的清理，以及 watch 重建保留旧文件。
 - 各门禁的 spec 拒绝每种无效的 manifest 或引用形式；[node-half.client.spec.ts](../../../../packages/client/modules/tests/node-half.client.spec.ts) 覆盖条目重启后的声明更新、导出移动、client 声明的增减、未变化的重启既不发布也不读取 bundle，以及名为 `@scope/assets` 的包的分片。
-- [desktop-onboarding.e2e.ts](../../../../apps/web/tests/desktop-onboarding.e2e.ts) 和 [reasoning-preview.e2e.ts](../../../../apps/web/tests/reasoning-preview.e2e.ts) 断言包资源 URL，并在浏览器中解码这些图片；[preview-boot.e2e.ts](../../../../apps/web/tests/preview-boot.e2e.ts) 解码 WebWorker 部署以静态方式提供的功能配图，packer 的 [page-assets.spec.ts](../../../../packages/experimental/webworker-packer/tests/page-assets.spec.ts) 覆盖哪些文件移出镜像。
+- [desktop-onboarding.e2e.ts](../../../../apps/web/tests/desktop-onboarding.e2e.ts) 和 [reasoning-preview.e2e.ts](../../../../apps/web/tests/reasoning-preview.e2e.ts) 断言包资源 URL，并在浏览器中解码这些图片；[preview-boot.e2e.ts](../../../../apps/web/tests/preview-boot.e2e.ts) 解码 WebWorker 部署以静态方式提供的 ui-chat 遮罩图，packer 的 [page-assets.spec.ts](../../../../packages/experimental/webworker-packer/tests/page-assets.spec.ts) 覆盖哪些文件移出镜像。

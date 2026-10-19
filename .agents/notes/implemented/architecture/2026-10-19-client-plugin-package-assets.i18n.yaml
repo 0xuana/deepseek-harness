@@ -6,8 +6,8 @@
   en: 5505b948511a2d52
   zh: dae985d67e5c5935
 /agent-note-client-plugin-package-assets-served-by-url/problem:
-  en: 835224eecdb7506f
-  zh: f258d7e9d5849dbc
+  en: 159de908b09780eb
+  zh: 8d15ca2f15b8846a
 /agent-note-client-plugin-package-assets-served-by-url/decision:
   en: 42d5a78134c944d5
   zh: 5118bfc6b041a67f
@@ -24,14 +24,14 @@
   en: eedff52d04763c50
   zh: 203bfcf81242b8fe
 /agent-note-client-plugin-package-assets-served-by-url/decision/gates-and-migration:
-  en: 9374c00288b9e317
-  zh: 7a92b40421929093
+  en: 1e4d83d0de2d47c9
+  zh: dc2c2876c73d3b1c
 /agent-note-client-plugin-package-assets-served-by-url/alternatives-considered:
   en: 23cca9b55c4252bd
   zh: a7afb8d1dd943a8b
 /agent-note-client-plugin-package-assets-served-by-url/consequences:
-  en: 9420e23be80a79c4
-  zh: b8c21578be241ed4
+  en: 90f279d7f488d323
+  zh: df07115c3fa546d5
 /agent-note-client-plugin-package-assets-served-by-url/testing:
-  en: d92353d99b3e16c1
-  zh: e5fe2f1cee74878d
+  en: 82b3ce0e29724804
+  zh: c27c103fb2feb8f8

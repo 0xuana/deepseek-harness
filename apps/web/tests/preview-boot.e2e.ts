@@ -613,14 +613,19 @@ async function toggleOptionalBundles(page: Page): Promise<void> {
   await cards.first().waitFor({ timeout: 30_000 })
   const listed = await cards.evaluateAll(nodes => nodes.map(node => node.getAttribute('data-plugin-package')))
   expect(listed.filter(name => name !== null && OPTIONAL_BUNDLES.includes(name)).length).toBeGreaterThan(0)
-  // A Client package asset loads from the static deployment beside the page: the bundle's feature preview decodes.
-  await panel.getByRole('button', { name: 'More', exact: true }).click()
-  await panel.getByRole('button', { name: 'View DSH badge skill', exact: true }).click()
-  const preview = panel.locator('[data-plugin-detail]').getByRole('img', { name: 'DSH badge skill feature preview', exact: true })
-  await preview.waitFor()
-  await preview.evaluate(async (image: HTMLImageElement) => { await image.decode() })
-  expect(await preview.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(640)
-  await panel.getByRole('button', { name: 'Back to Experimental plugins', exact: true }).click()
+  // A Client package asset loads from the static deployment beside the page: the mask image ui-chat's
+  // injected stylesheet references decodes from its document-relative URL.
+  const mask = await page.evaluate(async () => {
+    const styles = [...document.querySelectorAll('style')].map(style => style.textContent).join('\n')
+    const reference = /url\(["']?(plugins\/[^"')]+\/assets\/running-whale[^"')]+)["']?\)/u.exec(styles)?.[1]
+    if (reference === undefined) return { reference: null, width: 0 }
+    const image = new Image()
+    image.src = new URL(reference, document.baseURI).href
+    await image.decode()
+    return { reference, width: image.naturalWidth }
+  })
+  expect(mask.reference).toMatch(/^plugins\/@deepseek-ai\/dsh-client-ui-chat\/assets\/running-whale%402x-[0-9a-f]{12}\.png$/u)
+  expect(mask.width).toBeGreaterThan(0)
   const result = await page.evaluate(async () => {
     type Result<T> = { result: { ok: true; value: T } | { ok: false; error: { message: string } } }
     const transport = (globalThis as typeof globalThis & {
