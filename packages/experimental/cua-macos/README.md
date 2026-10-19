@@ -29,6 +29,8 @@ The shared helper queries the process macOS considers responsible for it and cap
 <a id="use-this-package"></a>
 ## Use this package
 
+This package is an optional dependency restricted to macOS. Prepare the matching executable under `native/bin` before packing; that directory is included in the archive. Installed packages require the prepared helper and do not compile Swift.
+
 For repository Web use, enable [Computer Use](../cua-bundle/README.md) in Plugins. This prepares the local executable on macOS 14 or later; Windows support is in development. Subsequent builds check it while the existing Web profile keeps the bundle selected. Disabled profiles do not prepare native components. Explicit source composition is also available:
 
 ```sh

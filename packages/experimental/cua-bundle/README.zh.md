@@ -37,7 +37,7 @@ pnpm dsh web
 
 关闭会卸载提供方，并从其 Agent 作用域中撤回 CUA 工具。执行器配置、新会话默认值和已保存的授权保留。会话级应用授权随提供方卸载而失效。
 
-Computer Use 要求 DSH Host 运行在 macOS 上。其他系统可以显示入口，但原生提供方启动会失败。其他操作系统上的浏览器可以连接受支持的 Mac Host。
+Computer Use 要求 DSH Host 运行在 macOS 上。其他系统安装时跳过可选的 macOS 提供方，组合包也不加载该提供方。共享 CUA 逻辑和权限页入口仍保留，Computer Use 操作需要提供方才能使用。其他操作系统上的浏览器可以连接受支持的 Mac Host。
 
 准备失败时，已保存的选择保留，CUA 操作不可用。查看 Host 的启动诊断，修复原因后重启 DSH。
 

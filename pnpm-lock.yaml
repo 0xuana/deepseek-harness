@@ -8658,9 +8658,6 @@ importers:
       '@deepseek-ai/dsh-cua':
         specifier: workspace:*
         version: link:../cua
-      '@deepseek-ai/dsh-experimental-cua-macos':
-        specifier: workspace:*
-        version: link:../cua-macos
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:~
@@ -8668,9 +8665,16 @@ importers:
       '@deepseek-ai/cordis-plugin-include':
         specifier: workspace:~
         version: link:../../../vendor/include
+      '@deepseek-ai/cordis-plugin-loader':
+        specifier: workspace:~
+        version: link:../../../vendor/loader
       js-yaml:
         specifier: ^4.2.0
         version: 4.3.2
+    optionalDependencies:
+      '@deepseek-ai/dsh-experimental-cua-macos':
+        specifier: workspace:*
+        version: link:../cua-macos
 
   packages/experimental/cua-macos:
     dependencies:

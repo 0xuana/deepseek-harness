@@ -29,6 +29,8 @@ helper 为权限页的应用列表提供 64 像素 PNG 图标。读取图标不�
 <a id="use-this-package"></a>
 ## 使用本包
 
+本包是仅限 macOS 的可选依赖。打包前需在 `native/bin` 下准备对应架构的可执行文件，该目录会包含在发布包中。安装版需要准备好的 helper，不会编译 Swift。
+
 从仓库运行 Web 时，在插件页开启 [Computer Use](../cua-bundle/README.zh.md)。首次启用会在 macOS 14 及以上准备本机组件，Windows 支持正在开发中。现有 Web profile 保持选中时，后续构建继续检查更新。未开启的 profile 不准备原生组件。也可以显式加载源码覆盖层：
 
 ```sh
