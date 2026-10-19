@@ -1,6 +1,6 @@
-![One tool call starts a dev server in a terminal; a later tool call reads its new output](preview.svg)
+![A dev server keeps running in the agent's terminal; a later tool call reads its new output](preview.svg)
 
-This plugin gives the agent terminal tools. With them, the agent can start a dev server, a file watcher, a debugger, or a REPL in a terminal, make other tool calls while it runs, and come back later to read new output or type more input.
+This plugin gives the agent terminal tools that keep a persistent background and environment: processes keep running in the background, and the current directory, exported variables, and shell functions carry over between tool calls. The agent can start a dev server, a file watcher, a debugger, or a REPL, make other tool calls while it runs, and come back later to read new output or type more input.
 
 ## How to use
 
