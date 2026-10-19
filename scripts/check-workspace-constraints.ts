@@ -254,11 +254,36 @@ function sameStringList(actual: readonly string[] | undefined, expected: readonl
 }
 
 /**
- * Compute canonical publication patterns, including declared and exported icon paths and exported locale JSON resources.
- * @param manifest - workspace package manifest.
- * @returns the icon and deduplicated locale targets followed by runtime and declaration payloads.
+ * List the publication entries that locale `meta.detail` documents need: the top-level directory holding
+ * each document and its images, or the document itself at the package root.
+ * @param packageDir - absolute package directory.
+ * @returns sorted, deduplicated entries.
  */
-export function expectedDshPackageFiles(manifest: PackageManifest): readonly string[] {
+export function detailDocumentFiles(packageDir: string): readonly string[] {
+  const entries = new Set<string>()
+  for (const file of globSync('locale/*.json', { cwd: packageDir })) {
+    let locale: { meta?: { detail?: unknown } }
+    try {
+      locale = JSON.parse(readFileSync(join(packageDir, file), 'utf8')) as { meta?: { detail?: unknown } }
+    } catch (error: unknown) {
+      // SyntaxError: verify-package-meta reports malformed locale files; this check only adds publication entries.
+      void error
+      continue
+    }
+    const detail = locale.meta?.detail
+    if (typeof detail !== 'string') continue
+    entries.add(detail.includes('/') ? detail.slice(0, detail.indexOf('/')) : detail)
+  }
+  return [...entries].sort()
+}
+
+/**
+ * Compute canonical publication patterns, including declared and exported icon paths, exported locale JSON resources, and detail documents.
+ * @param manifest - workspace package manifest.
+ * @param detailFiles - entries from {@link detailDocumentFiles}.
+ * @returns the icon, deduplicated locale targets, and detail documents followed by runtime and declaration payloads.
+ */
+export function expectedDshPackageFiles(manifest: PackageManifest, detailFiles: readonly string[] = []): readonly string[] {
   const localeFiles = new Set<string>()
   for (const resource of Object.keys(manifest.exports ?? {})) {
     if (!/^\.\/(?:.+\/)?locale\/[^/]+\.json$/u.test(resource)) continue
@@ -282,6 +307,7 @@ export function expectedDshPackageFiles(manifest: PackageManifest): readonly str
   return [
     ...new Set(icons),
     ...[...localeFiles].sort(),
+    ...detailFiles,
     'lib/index.js',
     ...manifest.bin ? ['lib/bin.js'] : [],
     // Worker-thread packages ship a CJS worker entry; the browser worker
@@ -537,7 +563,7 @@ export function checkWorkspaceManifest({ dir, manifest }: WorkspaceManifest): st
     if (rootEntry?.default !== './lib/index.js') {
       errors.push(`${label}: package.json exports["."].default must be "./lib/index.js"`)
     }
-    const expectedFiles = expectedDshPackageFiles(manifest)
+    const expectedFiles = expectedDshPackageFiles(manifest, detailDocumentFiles(join(root, dir)))
     if (!sameStringList(manifest.files, expectedFiles)) {
       errors.push(`${label}: package.json files must be ${JSON.stringify(expectedFiles)}`)
     }

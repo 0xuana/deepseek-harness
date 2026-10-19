@@ -16,6 +16,7 @@ import {
   checkExperimentalDependencyIsolation,
   checkExperimentalManifest,
   checkExperimentalNameExceptions,
+  detailDocumentFiles,
   expectedDshPackageFiles,
   readWorkspaceManifests,
   type WorkspaceManifest,
@@ -325,6 +326,30 @@ describe('package payload constraints', () => {
     expect(expectedDshPackageFiles({ name: '@deepseek-ai/dsh-localized', exports })).toEqual([
       ...resources, 'lib/index.js', 'lib/types/**/*.d.ts',
     ])
+  })
+
+  it('publishes the directory of each locale detail document after the locale resources', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dsh-detail-files-'))
+    onTestFinished(() => { rmSync(dir, { recursive: true, force: true }) })
+    mkdirSync(join(dir, 'locale'))
+    writeFileSync(join(dir, 'locale/en.json'), JSON.stringify({ meta: { title: 'T', detail: 'docs/DETAIL.md' } }))
+    writeFileSync(join(dir, 'locale/zh.json'), JSON.stringify({ meta: { title: 'T', detail: 'docs/guide/DETAIL.zh.md' } }))
+    writeFileSync(join(dir, 'locale/fr.json'), JSON.stringify({ meta: { title: 'T', detail: 'DETAIL.fr.md' } }))
+    writeFileSync(join(dir, 'locale/de.json'), JSON.stringify({ meta: { title: 'T' } }))
+    writeFileSync(join(dir, 'locale/ja.json'), '{')
+    const detailFiles = detailDocumentFiles(dir)
+    expect(detailFiles).toEqual(['DETAIL.fr.md', 'docs'])
+    expect(expectedDshPackageFiles({ exports: { './locale/*.json': './locale/*.json' } }, detailFiles)).toEqual([
+      'locale/*.json', 'DETAIL.fr.md', 'docs', 'lib/index.js', 'lib/types/**/*.d.ts',
+    ])
+  })
+
+  it('rejects a bundle whose locale detail document is missing from its publication files', () => {
+    const dir = 'packages/experimental/badge-skill-bundle'
+    const manifest = JSON.parse(readFileSync(join(import.meta.dirname, '..', dir, 'package.json'), 'utf8')) as WorkspaceManifest['manifest']
+    expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])
+    const files = (manifest.files ?? []).filter(file => file !== 'docs')
+    expect(checkWorkspaceManifest({ dir, manifest: { ...manifest, files } }).join('\n')).toContain('"docs"')
   })
 
   it('does not infer locale payloads from unrelated or non-JSON exports', () => {
