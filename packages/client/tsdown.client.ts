@@ -531,22 +531,19 @@ function packageAssetCall(reference: string): string {
  * a placeholder of letters, digits, and underscores, which lightningcss never escapes,
  * with a per-stylesheet random part that stylesheet text cannot contain by chance.
  * @param css - stylesheet text after the rewrite.
+ * A placeholder may appear several times or not at all, as when minification copies
+ * or drops a declaration.
  * @param references - reference of each placeholder the rewrite inserted into this stylesheet.
  * @returns a string literal, or a concatenation of literals and resolver calls.
- * @throws {Error} when an inserted placeholder does not appear exactly once.
  */
 function stylesheetSource(css: string, references: ReadonlyMap<string, string>): string {
   if (references.size === 0) return JSON.stringify(css)
   const parts: string[] = []
   let last = 0
-  const seen = new Set<string>()
   for (const match of css.matchAll(new RegExp([...references.keys()].join('|'), 'gu'))) {
-    if (seen.has(match[0])) throw new Error(`client bundle compiler: stylesheet asset placeholder ${match[0]} appears twice`)
-    seen.add(match[0])
     parts.push(JSON.stringify(css.slice(last, match.index)), packageAssetCall(references.get(match[0]) as string))
     last = match.index + match[0].length
   }
-  if (seen.size !== references.size) throw new Error('client bundle compiler: a stylesheet asset placeholder is missing from the transformed stylesheet')
   parts.push(JSON.stringify(css.slice(last)))
   return parts.join(' + ')
 }

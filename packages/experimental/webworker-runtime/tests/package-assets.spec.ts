@@ -45,6 +45,7 @@ it('maps each archived file to a Blob URL under the reference and media type the
     'lib/assets/mark-0123456789ab.svg': '<svg/>',
     'lib/assets/data-0123456789ab.bin': 'raw',
     [`lib/assets/${long}`]: 'png',
+    "lib/assets/whale(2x)!'*-0123456789ab.png": 'special',
     ...Object.fromEntries([...PACKAGE_ASSET_MEDIA_TYPES.keys()].map(extension => [`lib/assets/types/a${extension}`, extension])),
   })
   const blobs: Blob[] = []
@@ -63,6 +64,7 @@ it('maps each archived file to a Blob URL under the reference and media type the
   for (const [extension, type] of PACKAGE_ASSET_MEDIA_TYPES) {
     expect(blobOf(resolve(packageAssetReference('@fixture/ui', `types/a${extension}`)))?.type).toBe(type)
   }
+  expect(await blobOf(resolve(packageAssetReference('@fixture/ui', "whale(2x)!'*-0123456789ab.png")))?.text()).toBe('special')
   // A name whose encoded reference exceeds a ustar name segment still archives and resolves.
   expect(await blobOf(resolve(packageAssetReference('@fixture/ui', long)))?.text()).toBe('png')
   const svg = resolve('plugins/@fixture/ui/assets/mark-0123456789ab.svg')

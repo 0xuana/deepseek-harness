@@ -291,6 +291,20 @@ describe('client bundle package asset imports', () => {
       .toThrow(`${join(root, path)} has a node_modules path segment or one containing %, #, ?, \\ or NUL, which the asset route cannot serve; rename it`)
   })
 
+  it('resolves every copy of a reference and tolerates one minification drops', async () => {
+    const root = await assetPackage({
+      'src/client/assets/whale.png': WHALE,
+      'src/client/assets/old.png': WHALE,
+      'src/client/theme.css': '.a { background: url(./assets/old.png); background: url(./assets/whale.png); } .b { mask: url(./assets/whale.png); }',
+    })
+
+    const output = await loadImport(browserPlugins(root)('dsh-css-global-inline'), recordingContext(), './theme.css', join(root, 'src/client/index.ts'))
+
+    const css = stylesheetText(output, reference => `resolved:${reference}`)
+    expect(css.split(`url(resolved:${WHALE_URL})`)).toHaveLength(3)
+    expect(css).not.toContain('__dshPackageAsset')
+  })
+
   it('keeps literal placeholder-like text and resolves only the references the rewrite inserted', async () => {
     const root = await assetPackage({
       'src/client/assets/whale.png': WHALE,

@@ -24,7 +24,7 @@ lib/assets/running-whale@2x-06738fa29b2f.png
 plugins/@deepseek-ai/dsh-client-ui-chat/assets/running-whale%402x-06738fa29b2f.png
 ```
 
-Each path segment is percent-encoded and the package name is emitted verbatim. The URL is relative to the shell document, like every app-owned route, so it resolves under any mount and from injected `<style>` text. Components need no hook, injected value, or service: the URL is a module constant computed when the module first runs.
+Each path segment is percent-encoded with `encodeURIComponent` and then `!`, `'`, `(`, `)`, and `*`, so the reference is also a valid unquoted CSS `url()`, and the package name is emitted verbatim. The URL is relative to the shell document, like every app-owned route, so it resolves under any mount and from injected `<style>` text. Components need no hook, injected value, or service: the URL is a module constant computed when the module first runs.
 
 The supported extensions are `.svg`, `.png`, `.webp`, `.jpg`, and `.jpeg`. [`src/assets.ts`](../../../../packages/client/modules/src/assets.ts) in client-modules owns the media-type table, the export key and target, the revision, the emitted name, and the URL, and the preset, the route, and the gates read them from there. The shared Client type root [`scripts/types/client-assets`](../../../../scripts/types/client-assets/index.d.ts), registered in [`tsconfig.base.client.json`](../../../../tsconfig.base.client.json), declares each extension as a module with a string default export; a test keeps it equal to the table.
 
