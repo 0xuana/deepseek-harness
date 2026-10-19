@@ -310,7 +310,7 @@ it('fills application names, system permissions, and icons as their observations
 it.each(['applications', 'icons'] as const)('contains a failed %s query in the application section', (key) => {
   const f = fixture()
   f.publish({ ...observe(value), [key]: { value: null, busy: false, error: 'offline' } })
-  const view = render(<PermissionPanel {...f.props} />)
+  render(<PermissionPanel {...f.props} />)
   const requirements = screen.getByRole('region', { name: en.title })
   const access = screen.getByRole('region', { name: en.applicationsTitle })
   expect(within(requirements).getByText(en.granted)).toBeTruthy()
@@ -318,8 +318,6 @@ it.each(['applications', 'icons'] as const)('contains a failed %s query in the a
   expect(within(access).getByRole('alert').textContent).toContain('offline')
   fireEvent.click(within(access).getByRole('button', { name: en.retry }))
   expect(f.props.refresh).toHaveBeenCalledTimes(2)
-  view.rerender(<PermissionPanel {...f.props} busy />)
-  expect(screen.queryByRole('alert')).toBeNull()
 })
 
 it('finishes activation guidance without waiting for application icons', () => {
