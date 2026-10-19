@@ -1,5 +1,3 @@
-import { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
-import { executeToolFixture, executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 /**
  * The `read_image` tool over the REAL local filesystem and attachment store:
  * extension routing, extension-less content sniffing (attachment object paths
@@ -7,6 +5,8 @@ import { executeToolFixture, executeModelToolFixture } from '@deepseek-ai/dsh-to
  * commit + image-block rendering, attachment admission failures, and the
  * regression that `read` keeps its text-only contract.
  */
+import { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
+import { executeToolFixture, executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
@@ -840,7 +840,7 @@ describe('registration surface', () => {
 
   it('declares read_image parallel-safe and presents a read-family card', async () => {
     const ctx = await setup()
-    expect(new ToolExecutionPipeline(ctx, { get: (name, scope) => ctx.tools.get(name, scope) }).executionMode({
+    expect(new ToolExecutionPipeline(ctx).executionMode({
       signal: testToolSignal, callId: ToolCallId('img-parallel'), name: 'read_image', arguments: { file_path: 'a.png' },
     })).toEqual({ kind: 'parallel' })
     expect(ctx.tools.get('read_image')?.presentCall?.({ file_path: 'shot.png' })).toEqual({

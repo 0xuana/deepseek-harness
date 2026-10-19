@@ -45,7 +45,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### What PTC mode requires
 
-Selecting `ptc` needs a composed PTC runtime (`ctx.ptcRuntime`) whose language has a registered SDK renderer — the TypeScript runtime ships via [`dsh-ptc-runtime-node`](../../ptc-runtime/ptc-runtime-node/README.md), and both the TypeScript and Python SDK renderers are built into `dsh-tool-executor-ptc`. A preset that selects a PTC mode against a deployment composing no such runtime refuses to mount, naming this row, so the failure lands where the operator can act instead of at the session's first request.
+Selecting `ptc` needs a composed PTC runtime (`ctx.ptcRuntime`) whose language has a registered SDK renderer — the TypeScript runtime ships via [`dsh-ptc-runtime-node`](../../ptc-runtime/ptc-runtime-node/README.md), and both the TypeScript and Python SDK renderers are built into `dsh-tool-executor-ptc`. Selection takes effect even when the runtime is missing; prompt assembly or program execution then reports the missing runtime instead of inheriting native execution.
 
 ### One presentation per agent
 
@@ -73,7 +73,7 @@ The tool registry cannot move into a preset: its consumers are all host-plane �
 
 ### Behavior notes
 
-`native` applies immediately. A PTC mode instead waits for `ctx.ptcRuntime`, a host-plane service: a preset selecting PTC mode against a deployment composing no runtime holds this row pending, and `dsh-agent-preset-registry` refuses the mount naming this id. `setExecutor` is itself the effect, so the declaration unwinds with this row without a second wrapper owning it.
+Both modes mount their executor immediately. PTC checks runtime availability when describing or executing a program. The mounted executor owns its scoped registration, which is withdrawn with this selector's plugin lifetime.
 
 </details>
 

@@ -162,7 +162,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-agent-tool-presentation`
 
 - `inject`: `tools`
-- `source`: [`packages/core/agent-tool-presentation/src/index.ts:26`](../packages/core/agent-tool-presentation/src/index.ts)
+- `source`: [`packages/core/agent-tool-presentation/src/index.ts:25`](../packages/core/agent-tool-presentation/src/index.ts)
 
 ```ts config-catalog
 /**
@@ -3822,40 +3822,19 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-bash-persistent -->
 
-<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-executor-native -->
-<a id="deepseek-aidsh-tool-executor-native"></a>
-
-## `@deepseek-ai/dsh-tool-executor-native`
-
-- `inject`: `tools`
-- `refs`: `Volatile` (`@deepseek-ai/cosmokit`)
-- `source`: [`packages/core/tool-executor-native/src/index.ts:14`](../packages/core/tool-executor-native/src/index.ts)
-
-```ts config-catalog
-/** Native batch concurrency configuration. */
-export interface Config {
-  /** Maximum overlapping concurrency-safe calls in one batch. */
-  maxParallelToolCalls: Volatile<number>
-}
-```
-<!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-executor-native -->
-
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-executor-ptc -->
 <a id="deepseek-aidsh-tool-executor-ptc"></a>
 
 ## `@deepseek-ai/dsh-tool-executor-ptc`
 
-- `inject`: `tools` · `systemPrompt` · `ptcRuntime`
-- `refs`: `Volatile` (`@deepseek-ai/cosmokit`)
-- `source`: [`packages/core/tool-executor-ptc/src/index.ts:19`](../packages/core/tool-executor-ptc/src/index.ts)
+- `inject`: `tools` · `systemPrompt`
+- `source`: [`packages/core/tool-executor-ptc/src/config.ts:5`](../packages/core/tool-executor-ptc/src/config.ts)
 
 ```ts config-catalog
 /** Program execution limits. */
 export interface Config {
-  /** Maximum overlapping concurrency-safe calls in one model batch. */
-  maxParallelToolCalls: Volatile<number>
   /** Maximum overlapping concurrency-safe program subcalls. */
-  maxParallelSubCalls?: number
+  maxParallelSubCalls: number
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-executor-ptc -->
@@ -4769,6 +4748,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-terminal` | — | [`packages/terminal/terminal/src/index.ts`](../packages/terminal/terminal/src/index.ts) |
 | `@deepseek-ai/dsh-tool-call-timeout-policy` | `tools` | [`packages/guard/timeout-policy/src/index.ts`](../packages/guard/timeout-policy/src/index.ts) |
 | `@deepseek-ai/dsh-tool-cordis` | `tools` · `cordisInspect` | [`packages/extensions/tool-cordis/src/index.ts`](../packages/extensions/tool-cordis/src/index.ts) |
+| `@deepseek-ai/dsh-tool-executor-native` | `tools` | [`packages/core/tool-executor-native/src/index.ts`](../packages/core/tool-executor-native/src/index.ts) |
 | `@deepseek-ai/dsh-tool-schedule` | `tools` | [`packages/schedule/tool-schedule/src/index.ts`](../packages/schedule/tool-schedule/src/index.ts) |
 | `@deepseek-ai/dsh-tool-subagent-control` | `tools` · `subagents` · `agents` | [`packages/subagent/tool-subagent-control/src/index.ts`](../packages/subagent/tool-subagent-control/src/index.ts) |
 | `@deepseek-ai/dsh-tool-working-directory` | `tools` · `workingDirectory` | [`packages/session/tool-working-directory/src/index.ts`](../packages/session/tool-working-directory/src/index.ts) |

@@ -29,13 +29,9 @@ kind: "package-reference"
 
 ```yaml
 - name: '@deepseek-ai/dsh-tool-executor-native'
-  config:
-    maxParallelToolCalls: 10
 ```
 
-Agent 步骤使用 [agent-loop 并发配置](../agent-loop/README.zh.md)，循环始终向 `execute()` 传入解析后的上限。只有调用方未传入上限时，才使用执行器的 `maxParallelToolCalls`。这个后备配置是 volatile 字段，默认值为 `10`，在下一个工具组开始时读取。值必须是正整数；`1` 表示串行执行。
-
-[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-tool-executor-native)
+Agent 步骤使用 [agent-loop 并发配置](../agent-loop/README.zh.md)，循环在每个批次开始时读取一次上限。本插件没有配置字段。直接构造 `NativeToolExecutor` 的调用方可以传入回调，默认返回 `10`；批次未指定 `maxParallelToolCalls` 时，每个工具组读取该回调。上限必须是正整数；`1` 表示串行执行。
 
 -----
 
@@ -47,7 +43,7 @@ Agent 步骤使用 [agent-loop 并发配置](../agent-loop/README.zh.md)，循�
 
 执行器接收完整的原始调用批次，负责解析、调度、取消和可选的模型步骤日志。它复用共享调用流水线来执行策略、工具和结果通知。中止后，它等待已开始的工作完成，并为跳过的调用返回有序错误结果。
 
-- [`src/index.ts`](src/index.ts) — 配置校验和作用域注册；工具描述和批次执行。
+- [`src/index.ts`](src/index.ts) — 作用域执行器注册；工具描述和批次执行。
 
 </details>
 

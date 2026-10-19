@@ -52,6 +52,48 @@ const echoTool = defineTool({
 })
 
 describe('ToolRuntime', () => {
+  it.each([{ mode: 'ptc' }, { maxParallelSubCalls: 4 }])('rejects removed execution configuration %j during plugin mounting', async (config) => {
+    const ctx = new Context()
+    try {
+      await ctx.plugin(SystemPrompt)
+      // @ts-expect-error Removed fields can still arrive from untyped configuration files.
+      await expect(ctx.plugin(ToolRuntime, config).await()).rejects.toThrow('invalid config')
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('settles accepted calls after the actual native executor fiber unloads', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRuntime)
+    const provider = ctx.plugin(NativeToolExecutor)
+    await provider
+    ctx.tools.register(echoTool)
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    ctx.on('tools/pre-execute', async (exec, next) => {
+      if (exec.callId === 'first') { entered.resolve(undefined); await release.promise }
+      return next()
+    })
+    const input = {
+      calls: ['first', 'second'].map(id => ({ type: 'tool-call' as const, id: ToolCallId(id), name: 'echo', arguments: JSON.stringify({ text: id }) })),
+      signal: new AbortController().signal,
+    }
+    const pending = ctx.tools.execute(input)
+    try {
+      await entered.promise
+      await provider.dispose()
+      await expect(ctx.tools.execute(input)).rejects.toThrow('selected tool executor is unavailable')
+      release.resolve(undefined)
+      expect((await pending).results.map(({ result }) => result)).toMatchObject([
+        { isError: false, value: 'first' }, { isError: false, value: 'second' },
+      ])
+    } finally {
+      release.resolve(undefined)
+      await Promise.allSettled([pending])
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('preserves deferred loading through registry and prompt schema projection', async () => {
     const ctx = await setup()
     try {

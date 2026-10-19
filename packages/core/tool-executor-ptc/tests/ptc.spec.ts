@@ -83,7 +83,7 @@ async function setup(options: SetupOptions = {}) {
     runtime = ctx.ptcRuntime as FakeRuntime
   }
   return { ctx, tools: {
-    get: (name: string, scope?: ScopeKey) => executor instanceof PtcExecutor ? executor['get'](name, scope) : ctx.tools.get(name, scope),
+    get: (name: string, scope?: ScopeKey) => executor instanceof PtcExecutor && name === RUN_CODE_NAME ? executor['requirePtcTransport']() : ctx.tools.get(name, scope),
     execute: (input: ToolExecutionInput) => executeCall(ctx, input),
   }, systemPrompt: ctx.systemPrompt, runtime: runtime! }
 }
@@ -490,7 +490,7 @@ describe('mode-aware wire contribution', () => {
   it.each(['typescript', 'python'])('lists code before description for a %s runtime', async (language) => {
     const { ctx, systemPrompt } = await setup({ mode: 'ptc', runtime: { language } })
     try {
-      const parameters = new PtcExecutor(ctx)['get'](RUN_CODE_NAME)!.parameters
+      const parameters = new PtcExecutor(ctx)['requirePtcTransport']().parameters
       expect(Object.keys(parameters.properties as Record<string, unknown>).slice(0, 2))
         .toEqual(['code', 'description'])
       expect(parameters).toHaveProperty('required', ['code', 'description'])
@@ -558,17 +558,17 @@ describe('mode-aware wire contribution', () => {
 
   it.each(['ruby', 'constructor'])('rejects transport schema reads for unsupported runtime language %s', async (language) => {
     const { ctx } = await setup({ mode: 'ptc', runtime: { language } })
-    const definition = new PtcExecutor(ctx)['get'](RUN_CODE_NAME)
+    const definition = new PtcExecutor(ctx)['requirePtcTransport']()
     const message = `no SDK renderer registered for runtime language "${language}" (known: "typescript", "python")`
-    expect(() => definition?.description).toThrow(message)
-    expect(() => definition?.parameters).toThrow(message)
+    expect(() => definition.description).toThrow(message)
+    expect(() => definition.parameters).toThrow(message)
   })
 
   it('rejects transport schema reads when no runtime is mounted', async () => {
     const { ctx } = await setup({ mode: 'ptc', runtime: false })
-    const definition = new PtcExecutor(ctx)['get'](RUN_CODE_NAME)
-    expect(() => definition?.description).toThrow('requires a PTC runtime')
-    expect(() => definition?.parameters).toThrow('requires a PTC runtime')
+    const definition = new PtcExecutor(ctx)['requirePtcTransport']()
+    expect(() => definition.description).toThrow('requires a PTC runtime')
+    expect(() => definition.parameters).toThrow('requires a PTC runtime')
   })
 
   it("rejects the assembly when toolOrder names a native tool that mode 'ptc' no longer contributes", async () => {
@@ -584,7 +584,7 @@ describe('mode-aware wire contribution', () => {
     await ctx.plugin(FakeRuntime, {})
     const fiber = await ctx.plugin(ToolRuntime)
     await ctx.plugin(PtcToolExecutor)
-    expect(new PtcExecutor(ctx)['get'](RUN_CODE_NAME)).toBeDefined()
+    expect(new PtcExecutor(ctx)['requirePtcTransport']()).toBeDefined()
     await fiber.dispose()
     const assembly = await ctx.systemPrompt.assemble()
     expect(assembly.tools).toEqual([])
@@ -718,14 +718,8 @@ describe('the sub-dispatch scheduler (native concurrency contract)', () => {
     const gated = registerGated(ctx, 'safe_read', true)
     runtime.behavior = async (request) => {
       const tools = request.bindings[0]!.functions
-      const all = Promise.all([
-        tools.safe_read!({ id: 'a' }),
-        tools.safe_read!({ id: 'b' }),
-        tools.safe_read!({ id: 'c' }),
-      ])
+      const all = Promise.all(Array.from({ length: 3 }, (_, i) => tools.safe_read!({ id: String(i) })))
       await expect.poll(() => gated.pending()).toBe(2)
-      // The third call waits for a slot.
-      expect(gated.pending()).toBe(2)
       gated.release()
       await expect.poll(() => gated.pending()).toBe(2)
       gated.releaseAll()
@@ -733,7 +727,6 @@ describe('the sub-dispatch scheduler (native concurrency contract)', () => {
       return { logs: [], value: 'capped' }
     }
     const result = await runCode(ctx, 'program')
-    if (result.isError) console.error('CAP-FAIL:', (result.content[0] as { text: string }).text)
     expect(result.isError).toBe(false)
     expect(gated.peakLive()).toBe(2)
   })
@@ -1659,7 +1652,7 @@ describe('the run_code dispatch bridge', () => {
 
   it('presents the model-authored description as the execute-card title over the program input', async () => {
     const { ctx } = await setup({ mode: 'ptc' })
-    const tool = new PtcExecutor(ctx)['get'](RUN_CODE_NAME)!
+    const tool = new PtcExecutor(ctx)['requirePtcTransport']()
     // The description labels the card (the bash description precedent); the
     // program itself remains the expanded raw input.
     expect(tool.presentCall?.({ code: 'return 1', description: 'Return the constant one' })).toEqual({
@@ -1687,7 +1680,7 @@ describe('the run_code dispatch bridge', () => {
     runtime.behavior = () => Promise.resolve(output)
 
     const result = await runCode(ctx, 'return 1')
-    const tool = new PtcExecutor(ctx)['get'](RUN_CODE_NAME)!
+    const tool = new PtcExecutor(ctx)['requirePtcTransport']()
 
     expect(result.content).toEqual([{ type: 'text', text }])
     // Presenters keep the pending program title and render this durable content
@@ -1706,7 +1699,7 @@ describe('the run_code dispatch bridge', () => {
     })
 
     const result = await runCode(ctx, 'return 1')
-    const tool = new PtcExecutor(ctx)['get'](RUN_CODE_NAME)!
+    const tool = new PtcExecutor(ctx)['requirePtcTransport']()
 
     expect(result.content).toEqual([{ type: 'text', text: preview }])
     expect('presentResult' in tool).toBe(false)
@@ -1720,7 +1713,7 @@ describe('the run_code dispatch bridge', () => {
     })
 
     const result = await runCode(ctx, 'return 1')
-    const tool = new PtcExecutor(ctx)['get'](RUN_CODE_NAME)!
+    const tool = new PtcExecutor(ctx)['requirePtcTransport']()
 
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{
@@ -2000,21 +1993,21 @@ describe('the run_code dispatch bridge', () => {
     expect(derived[0]?.role).toBe('user')
   })
 
-  it('direct construction rejects a non-positive parallel sub-call cap at load', async () => {
+  it('direct construction rejects a non-positive parallel subcall limit', async () => {
     const ctx = new Context()
-    provideWorkingDirectoryFixture(ctx)
-    await ctx.plugin(SystemPrompt, {})
-    expect(() => new PtcExecutor(ctx, { maxParallelSubCalls: 0 }))
-      .toThrow('maxParallelSubCalls must be a positive integer')
+    try {
+      await ctx.plugin(SystemPrompt)
+      expect(() => new PtcExecutor(ctx, { maxParallelSubCalls: 0 })).toThrow('maxParallelSubCalls')
+    } finally { await ctx.fiber.dispose() }
   })
 
-  it('direct construction in PTC mode defaults the parallel sub-call cap', async () => {
+  it('direct construction exposes the PTC transport without configuration', async () => {
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SystemPrompt, {})
     await ctx.plugin(ToolRuntime)
     const registry = new PtcExecutor(ctx)
-    expect(registry['get'](RUN_CODE_NAME)).toBeDefined()
+    expect(registry['requirePtcTransport']()).toBeDefined()
   })
 
   it('defaults to native mode under direct construction with no config', async () => {
@@ -2541,4 +2534,48 @@ describe('PTC state ownership', () => {
       expect(description).not.toContain('TypeScript')
     } finally { format.mockRestore(); instructions.mockRestore(); await ctx.fiber.dispose() }
   })
+})
+
+it.each([false, true])('settles nested calls after the PTC executor fiber unloads (Agent: %s)', async (owned) => {
+  const ctx = new Context()
+  provideWorkingDirectoryFixture(ctx)
+  await ctx.plugin(SystemPrompt)
+  await ctx.plugin(ToolRuntime)
+  await ctx.plugin(FakeRuntime)
+  const provider = ctx.plugin(PtcToolExecutor)
+  await provider
+  ctx.tools.register(defineTool({
+    name: 'echo', description: 'Retained capability.', parameters: {},
+    output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
+    execute: async () => 'settled',
+  }))
+  const entered = Promise.withResolvers<undefined>()
+  const release = Promise.withResolvers<undefined>()
+  const runtime = ctx.ptcRuntime as FakeRuntime
+  runtime.behavior = async (request) => {
+    entered.resolve(undefined)
+    await release.promise
+    return { logs: [], value: await request.bindings[0]!.functions.echo!({}) }
+  }
+  const agent = { ctx, id: SessionId('unloading-ptc'), session: Session.create(SessionId('unloading-ptc')) } as Agent
+  const input = {
+    calls: [{ type: 'tool-call' as const, id: ToolCallId('unloading-program'), name: RUN_CODE_NAME,
+      arguments: JSON.stringify({ code: 'return await tools.echo({})', description: 'Invoke retained tool after unload' }) }],
+    signal: new AbortController().signal,
+    ...owned ? { agent } : {},
+  }
+  const pending = ctx.tools.execute(input)
+  try {
+    await entered.promise
+    await provider.dispose()
+    await expect(ctx.tools.execute(input)).rejects.toThrow('selected tool executor is unavailable')
+    release.resolve(undefined)
+    expect((await pending).results[0]?.result).toMatchObject({ isError: false, value: { logs: [], result: 'settled' } })
+    if (owned) expect(agent.session.snapshotEvents().filter(event => event.type === 'tool/ptc-dispatch'))
+      .toMatchObject([{ data: { name: 'echo', isError: false, content: [{ type: 'text', text: 'settled' }] } }])
+  } finally {
+    release.resolve(undefined)
+    await Promise.allSettled([pending])
+    await ctx.fiber.dispose()
+  }
 })

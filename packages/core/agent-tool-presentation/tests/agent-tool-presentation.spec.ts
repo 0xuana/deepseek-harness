@@ -1,9 +1,8 @@
 /**
  * The row an agent preset carries to pick its tool presentation. What it owes
  * its caller: the choice reaches THIS agent and no other, it unwinds with the
- * agent, and a code mode composed against a deployment with no PTC runtime
- * stops at mount — where a preset's activation audit can name it — rather
- * than at the first prompt assembly.
+ * agent, and a missing PTC runtime rejects the selected scope's prompt
+ * instead of inheriting the native executor.
  */
 
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
@@ -68,8 +67,7 @@ describe('the tool-presentation row', () => {
   })
 
   it('declares the services it uses without holding a PTC runtime hostage', () => {
-    // A `native` row must mount where no runtime is composed, so the wait is
-    // conditional inside apply rather than static metadata.
+    // Native execution does not require a program runtime.
     expect(inject).toEqual(['tools'])
   })
 
@@ -95,17 +93,13 @@ describe('the tool-presentation row', () => {
     await expect(ctx.systemPrompt.assemble({ scope: agent })).rejects.toThrow('selected tool executor is unavailable')
   })
 
-  it('waits for a PTC runtime the deployment does not compose', async () => {
+  it('rejects PTC assembly when the deployment does not compose its runtime', async () => {
     const ctx = await host({ runtime: false })
 
     const { agent, row } = await mount(ctx, { mode: 'ptc' })
 
-    // Pending, not applied: `dsh-agent-preset-registry` rejects a mount holding a row
-    // that never reached a usable state, naming this id — so the preset fails
-    // where the operator can act, instead of at the first request.
     expect(row.ctx.get('ptcRuntime')).toBeUndefined()
-    const assembly = await ctx.systemPrompt.assemble({ scope: agent })
-    expect(assembly.tools.map(tool => tool.name)).toEqual(['echo'])
+    await expect(ctx.systemPrompt.assemble({ scope: agent })).rejects.toThrow('requires a PTC runtime')
   })
 
   it('applies once the runtime arrives', async () => {

@@ -111,13 +111,13 @@ describe('dsh-tool-subagent', () => {
 
   it('classifies delegations as concurrency-safe', async () => {
     const ctx = await setup({ provider: 'mock' })
-    expect(new ToolExecutionPipeline(ctx, { get: (name, scope) => ctx.tools.get(name, scope) }).executionMode({
+    expect(new ToolExecutionPipeline(ctx).executionMode({
       signal: testToolSignal,
       callId: ToolCallId('subagent-first'),
       name: 'subagent',
       arguments: { description: 'do work', prompt: 'Reply OK' },
     })).toEqual({ kind: 'parallel' })
-    expect(new ToolExecutionPipeline(ctx, { get: (name, scope) => ctx.tools.get(name, scope) }).executionMode({
+    expect(new ToolExecutionPipeline(ctx).executionMode({
       signal: testToolSignal,
       callId: ToolCallId('subagent-second'),
       name: 'subagent',
@@ -696,7 +696,7 @@ describe('dsh-tool-subagent local activation', () => {
 
   it('classifies local activations concurrency-safe', async () => {
     const { ctx } = await continuableSetup()
-    expect(new ToolExecutionPipeline(ctx, { get: (name, scope) => ctx.tools.get(name, scope) }).executionMode({
+    expect(new ToolExecutionPipeline(ctx).executionMode({
       signal: testToolSignal,
       callId: ToolCallId('subagent-continuable'),
       name: 'subagent',

@@ -1,4 +1,4 @@
-import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import { executeToolFixture, executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 // Boots the shipped Web composition over the built dist this lane already uses
 // and asserts its catalog, defaults, Loader lifecycle, and one complete Auto
 // producer-to-tool path. Browser scenarios in this lane own visual behavior.
@@ -680,7 +680,7 @@ it('lets a preset producer reach the background-job registry', async () => {
     // `tool-bash` is a preset row and `tasks` is a host registry; the producer
     // resolves it with `ctx.get`, so a registry hidden behind a preset realm
     // fails here — with every task control still listed in the catalog above.
-    const started = await executeToolFixture(ctx, {
+    const started = await executeModelToolFixture(ctx, {
       signal,
       callId: ToolCallId('shipped-bash-background'),
       name: 'bash',

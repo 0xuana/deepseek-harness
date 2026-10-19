@@ -3489,7 +3489,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'setExecutor(executor: ToolExecutor): () => void',
-        description: 'Provide the executor for the calling scope; an unscoped contribution is the deployment default.',
+        description: 'Provide the executor for the calling scope; an unscoped contribution is the deployment default. Rendering any executor-owned section requires the viewing scope\'s selection to remain available.',
         parameters: [{ name: 'executor', description: 'initialized provider owned by the contributing plugin.' }],
         returns: 'the effect disposer. Unloading leaves the selection unavailable until it is replaced.',
       },
@@ -8394,7 +8394,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ToolsService',
-    declaration: 'export class ToolsService extends Service {\n    static inject;\n    constructor(ctx: Context);\n    register(definition: ToolDefinition): () => void;\n    restrict(filter: ToolRestriction): () => void;\n    get(name: string, scope?: ScopeKey): ToolDefinition | undefined;\n    definitions(scope?: ScopeKey): readonly ToolDefinition[];\n    schemas(scope?: ScopeKey): ToolSchema[];\n    setExecutor(executor: ToolExecutor): () => void;\n    async execute(input: ToolBatchInput): Promise<ToolBatchResult>;\n    guard(guard: ToolGuard): () => void;\n    checkGuards(exec: ToolExecution): string | undefined;\n}',
+    declaration: 'export class ToolsService extends Service {\n    static inject;\n    static Config;\n    constructor(ctx: Context);\n    register(definition: ToolDefinition): () => void;\n    restrict(filter: ToolRestriction): () => void;\n    get(name: string, scope?: ScopeKey): ToolDefinition | undefined;\n    definitions(scope?: ScopeKey): readonly ToolDefinition[];\n    schemas(scope?: ScopeKey): ToolSchema[];\n    setExecutor(executor: ToolExecutor): () => void;\n    async execute(input: ToolBatchInput): Promise<ToolBatchResult>;\n    guard(guard: ToolGuard): () => void;\n    checkGuards(exec: ToolExecution): string | undefined;\n}',
   },
   {
     name: 'ToolUpdate',

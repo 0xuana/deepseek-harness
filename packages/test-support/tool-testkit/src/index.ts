@@ -60,7 +60,7 @@ export function defineContentToolFixture<const S extends ParameterSchemaSpec>(
  * @internal
  */
 export async function executeToolFixture(ctx: Context, input: ToolExecutionInput): Promise<ToolExecutionResult> {
-  const pipeline = new ToolExecutionPipeline(ctx, { get: (name, scope) => ctx.tools.get(name, scope) })
+  const pipeline = new ToolExecutionPipeline(ctx)
   const prepared = await pipeline.prepare(input)
   const outcome = prepared.kind === 'dispatch' ? await pipeline.dispatch(prepared.exec) : prepared
   return pipeline.complete(prepared.exec, outcome)

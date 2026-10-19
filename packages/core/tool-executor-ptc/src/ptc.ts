@@ -19,7 +19,7 @@ import type {} from '@deepseek-ai/dsh-user-approval'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import { deepFreeze, snapshotJsonValue, type JsonValue } from '@deepseek-ai/dsh-util-values'
-import { defineTool, parameterSchemaSpecToJsonSchema } from '@deepseek-ai/dsh-tools'
+import { defineTool, parameterSchemaSpecToJsonSchema, RUN_CODE_NAME } from '@deepseek-ai/dsh-tools'
 import type { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
 import { toolErrorMessage } from '@deepseek-ai/dsh-tools/pipeline'
 import { scopeTarget } from '@deepseek-ai/dsh-scope'
@@ -29,8 +29,7 @@ import type { ToolDefinition, ToolExecutionResult, ToolRunContext } from '@deeps
 import type {} from './session-types.ts'
 
 /** The model-facing name of the PTC mode tool. */
-export { RUN_CODE_NAME } from '@deepseek-ai/dsh-tools'
-import { RUN_CODE_NAME } from '@deepseek-ai/dsh-tools'
+export { RUN_CODE_NAME }
 
 /** Language-specific tool and code-parameter descriptions. */
 interface RunCodeFlavor {
@@ -264,19 +263,6 @@ function resolveSandboxPolicy(ctx: Context, exec: ToolRunContext): SandboxExecut
   return policy.resolve(exec.agent === undefined ? {} : { session: exec.agent.session })
 }
 
-/** A failed log-content listener preserves the settled content and cannot fail the dispatch. */
-async function shapeDispatchLog(ctx: Context, dispatch: PtcDispatchLog): Promise<ContentBlock[]> {
-  try {
-    return await ctx.waterfall(
-      scopeTarget(ctx.tools, dispatch.agent), 'tools/ptc-dispatch-log', dispatch,
-      () => Promise.resolve(dispatch.content),
-    )
-  } catch (error: unknown) {
-    ctx.logger.warn(`tools: ptc-dispatch-log listener failed for ${dispatch.name}: ${toolErrorMessage(error)}; logging the original settled content`)
-    return dispatch.content
-  }
-}
-
 /**
  * Build the reserved `run_code` transport outside registered capabilities.
  * @param ctx - executor context owning policy listeners and active program cleanup.
@@ -289,6 +275,23 @@ export function createRunCodeTool(
   executor: ToolExecutionPipeline,
   maxParallel: number,
 ): ToolDefinition {
+  // Retain services for log settlement after the executor context becomes inactive.
+  const tools = ctx.tools
+  const logger = ctx.logger
+
+  /** A failed log-content listener preserves the settled content and cannot fail the dispatch. */
+  async function shapeDispatchLog(dispatch: PtcDispatchLog): Promise<ContentBlock[]> {
+    try {
+      return await ctx.waterfall(
+        scopeTarget(tools, dispatch.agent), 'tools/ptc-dispatch-log', dispatch,
+        () => Promise.resolve(dispatch.content),
+      )
+    } catch (error: unknown) {
+      logger.warn(`tools: ptc-dispatch-log listener failed for ${dispatch.name}: ${toolErrorMessage(error)}; logging the original settled content`)
+      return dispatch.content
+    }
+  }
+
   const stateOwners = new WeakMap<object, WeakSet<PtcRuntime>>()
   const calls = new PtcCalls(ctx)
   const definition = defineTool({
@@ -536,7 +539,7 @@ export function createRunCodeTool(
                 // The listener may replace the durable copy with a preview and
                 // locator; the program's value and model-visible result are
                 // untouched.
-                const logged = await shapeDispatchLog(ctx, {
+                const logged = await shapeDispatchLog({
                   exec, agent, subCallId, name, isError: result.isError,
                   // The registry deep-froze this projection at result
                   // finalization; append snapshots the final copy again, so
@@ -645,7 +648,7 @@ export function createRunCodeTool(
         // restricted globals vanish) — the same view the SDK section declared,
         // so a program can bind exactly what its prompt promised; sub-dispatch
         // re-resolves per call through the same view (exec.agent threads down).
-        for (const schema of ctx.tools.schemas(exec.agent)) {
+        for (const schema of tools.schemas(exec.agent)) {
           Object.defineProperty(functions, schema.name, { enumerable: true, value: binding(deepFreeze(schema)) })
         }
 

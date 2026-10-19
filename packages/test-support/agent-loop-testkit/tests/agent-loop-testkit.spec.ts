@@ -43,6 +43,17 @@ describe('dsh-agent-loop-testkit', () => {
     }
   })
 
+  it('mounts the PTC executor with its runtime', async () => {
+    const ctx = new Context()
+    try {
+      await ctx.plugin(FixtureRuntime)
+      await mountAgentLoopTestDependencies(ctx, { tools: { mode: 'ptc' } })
+      expect((await ctx.systemPrompt.assemble()).tools.map(tool => tool.name)).toEqual(['run_code'])
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('rejects mutations through an unsupported Agent stub Inbox', () => {
     const inbox = unsupportedInbox()
 

@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-当模型应通过 `run_code` 程序调用工具时，使用此执行器。先挂载兼容的 PTC 运行时和工具注册表。作用域限制决定生成的 SDK；只有 `run_code` 能被直接调用。根调用和程序子调用的并发限制分别配置。
+当模型应通过 `run_code` 程序调用工具时，使用此执行器。先挂载兼容的 PTC 运行时和工具注册表。作用域限制决定生成的 SDK；只有 `run_code` 能被直接调用。可配置并行安全的程序子调用并发上限。
 
 ## 目录
 
@@ -30,13 +30,12 @@ kind: "package-reference"
 ```yaml
 - name: '@deepseek-ai/dsh-tool-executor-ptc'
   config:
-    maxParallelToolCalls: 10
     maxParallelSubCalls: 10
 ```
 
-Agent 步骤使用 [agent-loop 并发配置](../agent-loop/README.zh.md)，循环始终向 `execute()` 传入解析后的上限。只有调用方未传入上限时，才使用执行器的 `maxParallelToolCalls`。这个后备配置是 volatile 字段，默认值为 `10`，在下一个工具组开始时读取。值必须是正整数；`1` 表示串行执行。
+根 `run_code` 调用是独占调用，按串行执行。`maxParallelSubCalls` 限制每个程序中并行安全的嵌套调用数，默认值为 `10`；值必须是正整数，`1` 表示串行执行。独占调用构成屏障。
 
-本包还要求 `ctx.ptcRuntime` 和 `ctx.systemPrompt`；带 Agent 的程序要求 `ctx.workingDirectory`。`maxParallelSubCalls` 限制每个程序内重叠的并行安全调用，默认值为 `10`。
+本包还要求 `ctx.ptcRuntime` 和 `ctx.systemPrompt`；带 Agent 的程序要求 `ctx.workingDirectory`。缺少运行时时，提示词组装或执行会失败；选中的 PTC 执行器不会回退到原生执行。
 
 持久化事件载荷从 `@deepseek-ai/dsh-tool-executor-ptc/types` 导入；该入口可用于独立读取者与 Client 编译。Host 策略扩展通过包主入口的仅类型导入获取 `PtcDispatchLog`、`tools/ptc-dispatch-log` 与 `ptc-mode` 消息来源声明，无需挂载执行器。
 
@@ -50,7 +49,7 @@ Agent 步骤使用 [agent-loop 并发配置](../agent-loop/README.zh.md)，循�
 <details>
 <summary>实现细节——点击展开</summary>
 
-执行器接收完整的原始调用批次，负责解析、调度、取消和可选的模型步骤日志。它复用共享调用流水线来执行策略、工具和结果通知。中止后，它等待已开始的工作完成，并为跳过的调用返回有序错误结果。
+执行器接收完整的原始调用批次，负责解析、调度、取消和可选的模型步骤日志。它复用共享调用流水线来执行策略、工具和结果通知。中止后，它等待已开始的工作完成，并为跳过的调用返回有序错误结果。卸载执行器会中止运行中的沙箱程序，并等待其嵌套调用结束。已接纳批次仍由该执行器结算，但可能返回取消错误。
 
 ### PTC mode
 

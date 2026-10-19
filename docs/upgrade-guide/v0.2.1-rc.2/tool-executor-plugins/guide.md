@@ -9,7 +9,7 @@ English | [中文](guide.zh.md)
 
 ## Change
 
-`@deepseek-ai/dsh-tools` keeps tool registration and executor selection, but no longer accepts `mode` or `maxParallelSubCalls`. Native and PTC execution require `@deepseek-ai/dsh-tool-executor-native` or `@deepseek-ai/dsh-tool-executor-ptc`. Shipped profiles mount an executor; custom compositions must add one. The existing `dsh-agent-tool-presentation` selector remains supported but is deprecated. Enabled `tool-executor-native` and `tool-executor-ptc` rows are required at startup; invalid executor configuration now stops startup.
+`@deepseek-ai/dsh-tools` keeps tool registration and executor selection, but rejects the removed `mode` and `maxParallelSubCalls` configuration fields at load time. Native and PTC execution require `@deepseek-ai/dsh-tool-executor-native` or `@deepseek-ai/dsh-tool-executor-ptc`. Shipped profiles mount an executor; custom compositions must add one. The existing `dsh-agent-tool-presentation` selector remains supported but is deprecated. Enabled `tool-executor-native` and `tool-executor-ptc` rows are required at startup; invalid executor configuration now stops startup.
 
 ## Migration
 

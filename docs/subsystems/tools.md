@@ -293,7 +293,7 @@ interface ToolExecutionInput {
    * mode sets this on SDK sub-dispatches so commit-style observers can wait for
    * the outer `run_code` outcome without receiving its live mutable execution.
    * The token also marks the call as a transport sub-dispatch rather than a
-   * model-direct call: under `mode: 'ptc'`, only calls WITH a parent may
+   * model-direct call: with the PTC executor selected, only calls with a parent may
    * execute a native tool name — a model-direct call (no parent) is denied as
    * `UNKNOWN_TOOL` before the policy pipeline.
    */
@@ -635,6 +635,7 @@ schemas(scope?: ScopeKey): ToolSchema[]
 
 /**
  * Provide the executor for the calling scope; an unscoped contribution is the deployment default.
+ * Rendering any executor-owned section requires the viewing scope's selection to remain available.
  * @param executor - initialized provider owned by the contributing plugin.
  * @returns the effect disposer. Unloading leaves the selection unavailable until it is replaced.
  */

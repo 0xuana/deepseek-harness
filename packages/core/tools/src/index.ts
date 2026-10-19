@@ -1,5 +1,6 @@
 /** Tool definitions and scoped dispatch to plugin-owned executors. @module */
 import { Context, Service } from '@deepseek-ai/cordis'
+import z from '@deepseek-ai/schemastery'
 import { AnonymousEntries, NamedEntries, ScopedLayers, scopeOf, scopeChainOf } from '@deepseek-ai/dsh-scope'
 import type { ScopeKey, ScopeLayer } from '@deepseek-ai/dsh-scope'
 import { ToolExecutorUnavailableError } from './executor.ts'
@@ -79,6 +80,10 @@ class GuardLayer {
 /** Concrete tool registry and scoped executor dispatcher. */
 export class ToolsService extends Service {
   static inject = ['systemPrompt']
+  static Config = z.object({
+    mode: z.never().description('Removed. Mount a native or PTC tool executor instead.'),
+    maxParallelSubCalls: z.never().description('Moved to the PTC tool executor configuration.'),
+  })
 
   private readonly layers = new ScopedLayers(scope => new ToolLayer(scope), () => { this.ctx.emit('tools/change') })
   private readonly scoped = new WeakMap<ScopeKey, Registration>()
@@ -231,6 +236,7 @@ export class ToolsService extends Service {
   }
   /**
    * Provide the executor for the calling scope; an unscoped contribution is the deployment default.
+   * Rendering any executor-owned section requires the viewing scope's selection to remain available.
    * @param executor - initialized provider owned by the contributing plugin.
    * @returns the effect disposer. Unloading leaves the selection unavailable until it is replaced.
    */

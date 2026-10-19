@@ -45,7 +45,7 @@ kind: "package-reference"
 
 ### PTC 模式需要什么
 
-选择 `ptc` 需要已组合的 PTC 运行时（`ctx.ptcRuntime`），且其语言有已注册的 SDK 渲染器——TypeScript 运行时经 [`dsh-ptc-runtime-node`](../../ptc-runtime/ptc-runtime-node/README.zh.md) 交付，TypeScript 与 Python 的 SDK 渲染器都内置在 `dsh-tools` 中。针对未组装此类运行时的部署选择 PTC 模式的 preset 会拒绝挂载并点名这一行，使失败落在操作者可以行动的地方，而不是落在会话的第一次请求上。
+选择 `ptc` 需要已组合的 PTC 运行时（`ctx.ptcRuntime`），且其语言有已注册的 SDK 渲染器——TypeScript 运行时经 [`dsh-ptc-runtime-node`](../../ptc-runtime/ptc-runtime-node/README.zh.md) 交付，TypeScript 与 Python 的 SDK 渲染器都内置在 `dsh-tool-executor-ptc` 中。即使缺少运行时，选择也会生效；随后提示词组装或程序执行会报告缺少运行时，而不会继承原生执行方式。
 
 ### 每个 agent 只声明一次呈现方式
 
@@ -73,7 +73,7 @@ kind: "package-reference"
 
 ### 行为说明
 
-`native` 立即生效。PTC 模式则等待 `ctx.ptcRuntime`——这是一个宿主平面服务：针对未组装运行时的部署选择 PTC mode 的 preset 会让这一行停在 pending，`dsh-agent-preset-registry` 会指名此 id 拒绝挂载。`setExecutor` 本身就是 effect，因此该声明随这一行撤销，无需第二个包装层拥有它。
+两种模式都会立即挂载各自的执行器。PTC 在描述或执行程序时检查运行时是否可用。挂载的执行器拥有作用域注册，并随此选择器的插件生命周期一同撤销。
 
 </details>
 

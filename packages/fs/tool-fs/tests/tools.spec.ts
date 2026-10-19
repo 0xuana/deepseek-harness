@@ -1,9 +1,9 @@
-import { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
-import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 /**
  * Consumer API tests over a fake provider and the real policy collaborator: schemas,
  * validation, formatting, typed errors, intent dispatch, and observation-driven authorization.
  */
+import { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
@@ -198,11 +198,11 @@ describe('registration', () => {
 
   it('declares read parallel-safe while write/edit remain exclusive', async () => {
     const { ctx } = await setup()
-    expect(new ToolExecutionPipeline(ctx, { get: (name, scope) => ctx.tools.get(name, scope) }).executionMode({ signal: testToolSignal, callId: ToolCallId('read-safe'), name: 'read', arguments: { file_path: 'a.txt' } }))
+    expect(new ToolExecutionPipeline(ctx).executionMode({ signal: testToolSignal, callId: ToolCallId('read-safe'), name: 'read', arguments: { file_path: 'a.txt' } }))
       .toEqual({ kind: 'parallel' })
-    expect(new ToolExecutionPipeline(ctx, { get: (name, scope) => ctx.tools.get(name, scope) }).executionMode({ signal: testToolSignal, callId: ToolCallId('write-exclusive'), name: 'write', arguments: { file_path: 'a.txt', content: 'x' } }))
+    expect(new ToolExecutionPipeline(ctx).executionMode({ signal: testToolSignal, callId: ToolCallId('write-exclusive'), name: 'write', arguments: { file_path: 'a.txt', content: 'x' } }))
       .toEqual({ kind: 'exclusive' })
-    expect(new ToolExecutionPipeline(ctx, { get: (name, scope) => ctx.tools.get(name, scope) }).executionMode({ signal: testToolSignal, callId: ToolCallId('edit-exclusive'), name: 'edit', arguments: { file_path: 'a.txt', old_string: 'x', new_string: 'y' } }))
+    expect(new ToolExecutionPipeline(ctx).executionMode({ signal: testToolSignal, callId: ToolCallId('edit-exclusive'), name: 'edit', arguments: { file_path: 'a.txt', old_string: 'x', new_string: 'y' } }))
       .toEqual({ kind: 'exclusive' })
   })
 
@@ -1149,7 +1149,7 @@ describe('scope-aware PTC guidance', () => {
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(GuidancePtcRuntime)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin((mode) === 'ptc' ? PtcToolExecutor : NativeToolExecutor)
+    await ctx.plugin(mode === 'ptc' ? PtcToolExecutor : NativeToolExecutor)
     await ctx.plugin(FakeFs)
     await ctx.plugin(ToolFs)
     const { key, scope } = await guidanceScope(ctx)

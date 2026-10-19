@@ -9,7 +9,7 @@ description: "工具执行模式从 dsh-tools 配置移至显式执行器插件�
 
 ## 变更
 
-`@deepseek-ai/dsh-tools` 保留工具注册和执行器选择，但不再接受 `mode` 或 `maxParallelSubCalls`。原生和 PTC 执行分别要求 `@deepseek-ai/dsh-tool-executor-native` 或 `@deepseek-ai/dsh-tool-executor-ptc`。内置 profile 已挂载执行器，自定义组合必须添加一个。现有 `dsh-agent-tool-presentation` 选择器仍受支持，但已弃用。 启用的 `tool-executor-native` 和 `tool-executor-ptc` 条目属于启动必需项；无效的执行器配置会终止启动。
+`@deepseek-ai/dsh-tools` 保留工具注册和执行器选择，但加载时会拒绝已移除的 `mode` 和 `maxParallelSubCalls` 配置字段。原生和 PTC 执行分别要求 `@deepseek-ai/dsh-tool-executor-native` 或 `@deepseek-ai/dsh-tool-executor-ptc`。内置 profile 已挂载执行器，自定义组合必须添加一个。现有 `dsh-agent-tool-presentation` 选择器仍受支持，但已弃用。启用的 `tool-executor-native` 和 `tool-executor-ptc` 条目属于启动必需项；无效的执行器配置会终止启动。
 
 ## 迁移
 

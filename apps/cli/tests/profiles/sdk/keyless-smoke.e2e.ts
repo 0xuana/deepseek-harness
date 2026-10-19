@@ -399,7 +399,7 @@ describe('Python SDK dsh profile keyless smoke', () => {
     const patch = join(root, 'failure.yml')
     await mkdir(home)
     if (blocked) await writeFile(join(home, 'logs'), 'blocked')
-    await writeFile(patch, '- id: tool-executor-native\n  config:\n    maxParallelToolCalls: 0\n')
+    await writeFile(patch, '- id: agent-loop\n  config:\n    maxParallelToolCalls: 0\n')
     const child = execa(launch.command, [
       ...launch.args, '--profile', 'sdk', '--patch', patch,
     ], {

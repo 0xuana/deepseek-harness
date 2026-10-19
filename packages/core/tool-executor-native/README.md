@@ -29,13 +29,9 @@ Add this row to a composition with `dsh-tools` mounted. The nearest scoped execu
 
 ```yaml
 - name: '@deepseek-ai/dsh-tool-executor-native'
-  config:
-    maxParallelToolCalls: 10
 ```
 
-For Agent steps, configure [agent-loop concurrency](../agent-loop/README.md); the loop always forwards its resolved limit to `execute()`. The executor's `maxParallelToolCalls` supplies the limit only when the caller omits it. This fallback is volatile, defaults to `10`, and is sampled for the next tool group. It must be a positive integer; `1` selects serial execution.
-
-[Configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-tool-executor-native)
+Configure [agent-loop concurrency](../agent-loop/README.md) for Agent steps; the loop reads the limit once per batch. This plugin has no configuration fields. Direct `NativeToolExecutor` callers may pass a constructor callback, defaulting to `10`, which is sampled for each tool group when the batch omits `maxParallelToolCalls`. Limits must be positive integers; `1` selects serial execution.
 
 -----
 
@@ -47,7 +43,7 @@ For Agent steps, configure [agent-loop concurrency](../agent-loop/README.md); th
 
 The executor receives the entire raw call batch and owns parsing, scheduling, cancellation, and optional model-step logging. It reuses the shared invocation pipeline for policy, tool bodies, and result notifications. After abort, it waits for started work and returns ordered error results for skipped calls.
 
-- [`src/index.ts`](src/index.ts) — Validated configuration and scoped registration; tool descriptions and batch execution.
+- [`src/index.ts`](src/index.ts) — Scoped executor registration; tool descriptions and batch execution.
 
 </details>
 

@@ -816,7 +816,7 @@ describe('a user preset declared from the shipped cordis rows', () => {
           expect(queriedText).toContain(`"name": "${toolName}"`)
         }
 
-        // The `Config` provider reads the booted profile tree: the executor selector declares a Config,
+        // The `Config` provider reads the booted profile tree: the Agent loop declares a Config,
         // and the bootstrap include row is a carrier. The name filter keeps each page small.
         type ConfigRow = { id: string; patchId: string; name: string; status: string }
         type ConfigPage = { data: { entries: ConfigRow[]; total: number; nextOffset: number | null } }
@@ -831,9 +831,9 @@ describe('a user preset declared from the shipped cordis rows', () => {
           expect(page.isError, resultText(page)).toBe(false)
           return (JSON.parse(resultText(page)) as ConfigPage).data
         }
-        const toolsRows = await listConfigs({ name: '@deepseek-ai/dsh-tool-executor-native' }, 'copied-preset-inspect-configs')
+        const toolsRows = await listConfigs({ name: '@deepseek-ai/dsh-agent-loop' }, 'copied-preset-inspect-configs')
         const toolsRow = toolsRows.entries[0]
-        expect(toolsRow).toMatchObject({ patchId: 'tool-executor-native', status: 'schema' })
+        expect(toolsRow).toMatchObject({ patchId: 'agent-loop', status: 'schema' })
         expect(toolsRows).toMatchObject({ total: 1, nextOffset: null })
         const includes = await listConfigs({ name: 'cordis:include' }, 'copied-preset-inspect-includes')
         expect(includes.entries.find(entry => entry.patchId === 'include')).toMatchObject({ status: 'tree' })

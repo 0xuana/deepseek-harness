@@ -38,7 +38,6 @@
     "@deepseek-ai/dsh-output-retention": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
     "@deepseek-ai/dsh-spill": "workspace:*",
-    "@deepseek-ai/dsh-tool-executor-ptc": "workspace:*",
     "@deepseek-ai/dsh-tools": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-attachment": "workspace:*",

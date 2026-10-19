@@ -1,5 +1,5 @@
-import { executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 /** Executor plugins follow the Loader-owned preset revision lifetime. */
+import { executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -91,7 +91,7 @@ class ProgramFixture extends PtcRuntime {
   }
 }
 
-it('loads the separate executor packages through cordis.yml presets and logs PTC subcalls', async () => {
+it.each([true, false])('loads cordis.yml executor presets with runtime availability %s', async (hasRuntime) => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-executor-packages-'))
   const ctx = await harness()
   onTestFinished(async () => {
@@ -99,7 +99,7 @@ it('loads the separate executor packages through cordis.yml presets and logs PTC
   })
   await ctx.plugin(FsLocal)
   await ctx.plugin(WorkingDirectory, { defaultDirectory: root })
-  await ctx.plugin(ProgramFixture)
+  if (hasRuntime) await ctx.plugin(ProgramFixture)
   ctx.tools.register(defineTool({
     name: 'echo', description: 'Shared capability.', parameters: { value: { type: 'string', required: true } },
     output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
@@ -127,6 +127,15 @@ it('loads the separate executor packages through cordis.yml presets and logs PTC
   const native = await agentOn(ctx, 'native-package', 'standard')
   const ptc = await agentOn(ctx, 'ptc-package', 'ptc')
   expect((await ctx.systemPrompt.assemble({ scope: native })).tools.map(tool => tool.name)).toEqual(['echo'])
+  if (!hasRuntime) {
+    await expect(ctx.systemPrompt.assemble({ scope: ptc })).rejects.toThrow('requires a PTC runtime')
+    const batch = await ctx.tools.execute({
+      agent: ptc, calls: [{ type: 'tool-call', id: ToolCallId('missing-runtime'), name: 'echo', arguments: '{}' }],
+      signal: new AbortController().signal,
+    })
+    expect(batch.results[0]?.result).toMatchObject({ isError: true, error: { info: { code: 'UNKNOWN_TOOL' } } })
+    return
+  }
   expect((await ctx.systemPrompt.assemble({ scope: ptc })).tools.map(tool => tool.name)).toEqual(['run_code'])
   const signal = new AbortController().signal
   expect(await executeModelToolFixture(ctx, {

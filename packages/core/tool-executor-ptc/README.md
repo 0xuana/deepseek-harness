@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use this executor when models should call tools through `run_code` programs. Mount a compatible PTC runtime and tool registry first. Scoped restrictions determine the generated SDK; only `run_code` is directly callable. Configure root-call and program-subcall concurrency independently.
+Use this executor when models should call tools through `run_code` programs. Mount a compatible PTC runtime and tool registry first. Scoped restrictions determine the generated SDK; only `run_code` is directly callable. Configure concurrency for parallel-safe program subcalls.
 
 ## Table of Contents
 
@@ -30,13 +30,12 @@ Add this row to a composition with `dsh-tools` mounted. The nearest scoped execu
 ```yaml
 - name: '@deepseek-ai/dsh-tool-executor-ptc'
   config:
-    maxParallelToolCalls: 10
     maxParallelSubCalls: 10
 ```
 
-For Agent steps, configure [agent-loop concurrency](../agent-loop/README.md); the loop always forwards its resolved limit to `execute()`. The executor's `maxParallelToolCalls` supplies the limit only when the caller omits it. This fallback is volatile, defaults to `10`, and is sampled for the next tool group. It must be a positive integer; `1` selects serial execution.
+Root `run_code` calls are exclusive and execute serially. `maxParallelSubCalls` limits parallel-safe nested calls within each program and defaults to `10`; it must be a positive integer, with `1` selecting serial execution. Exclusive calls form barriers.
 
-This package also requires `ctx.ptcRuntime` and `ctx.systemPrompt`; Agent-owned programs need `ctx.workingDirectory`. `maxParallelSubCalls` limits overlapping parallel-safe calls within each program and defaults to `10`.
+This package also requires `ctx.ptcRuntime` and `ctx.systemPrompt`; Agent-owned programs need `ctx.workingDirectory`. A missing runtime rejects prompt assembly or execution; the selected PTC executor never falls back to native execution.
 
 Import durable event payloads from `@deepseek-ai/dsh-tool-executor-ptc/types`; this entry is safe for detached readers and client compilation. Host policy extensions import `PtcDispatchLog`, `tools/ptc-dispatch-log`, and the `ptc-mode` message-source declaration through a type-only import of the package entry, without mounting an executor.
 
@@ -50,7 +49,7 @@ Import durable event payloads from `@deepseek-ai/dsh-tool-executor-ptc/types`; t
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The executor receives the entire raw call batch and owns parsing, scheduling, cancellation, and optional model-step logging. It reuses the shared invocation pipeline for policy, tool bodies, and result notifications. After abort, it waits for started work and returns ordered error results for skipped calls.
+The executor receives the entire raw call batch and owns parsing, scheduling, cancellation, and optional model-step logging. It reuses the shared invocation pipeline for policy, tool bodies, and result notifications. After abort, it waits for started work and returns ordered error results for skipped calls. Unloading the executor aborts active sandboxed programs and waits for their nested calls to settle. Accepted batches still settle through that executor, potentially with cancellation errors.
 
 ### PTC mode
 

@@ -9,12 +9,13 @@ import type {} from '@deepseek-ai/dsh-user-approval'
 import { assertNever, deepFreeze, snapshotJsonValue, type JsonValue } from '@deepseek-ai/dsh-util-values'
 import { TOOL_ABORTED, TOOL_ABORTED_BEFORE_DISPATCH, ToolNotFoundError, ToolOutputError } from './contracts.ts'
 import { validateJsonSchemaValue } from './json-schema.ts'
+import type { ToolsService } from './index.ts'
 import type { ToolDefinition, ToolExecutionInput, ToolExecutionMode, ToolExecution, ToolRunContext, ToolExecutionResult, ToolExecutionSuccess, ToolErrorInfo, ToolExecutionToken, PreToolDecision, PostToolDecision } from './contracts.ts'
 
 /** Executor-owned lookup and restrictions applied before extensible execution policy. */
 export interface ToolExecutionSource {
-  /** Read the live definition visible to the calling scope. */
-  get(name: string, scope?: ScopeKey): ToolDefinition | undefined
+  /** Override registry lookup for executor-owned capabilities; omitted uses the retained registry. */
+  get?(name: string, scope?: ScopeKey): ToolDefinition | undefined
   /** Reject an otherwise visible invocation before policy; omitted permits it. */
   reject?(name: string, nested: boolean): Error | undefined
 }
@@ -56,15 +57,19 @@ interface FusedToolSignal {
  * for complete calls, including a single-call batch.
  */
 export class ToolExecutionPipeline {
-  private readonly tools: Context['tools']
+  private readonly tools: ToolsService
 
-  constructor(private readonly ctx: Context, private readonly source: ToolExecutionSource) {
+  constructor(private readonly ctx: Context, private readonly source: ToolExecutionSource = {}) {
     // Accepted calls retain their event subject while the service is withdrawn during shutdown.
     this.tools = ctx.tools
   }
 
+  private get(name: string, scope?: ScopeKey): ToolDefinition | undefined {
+    return this.source.get === undefined ? this.tools.get(name, scope) : this.source.get(name, scope)
+  }
+
   private resolveExecution(name: string, scope: ScopeKey | undefined, nested: boolean): ToolDefinition | undefined {
-    const tool = this.source.get(name, scope)
+    const tool = this.get(name, scope)
     return tool !== undefined && this.source.reject?.(name, nested) === undefined ? tool : undefined
   }
 
@@ -111,7 +116,7 @@ export class ToolExecutionPipeline {
     const parent = exec.parent
     const signal = exec.signal
     // Executor refusals precede extensible policy; unknown tools retain dispatch-stage handling.
-    const visible = this.source.get(name, agent)
+    const visible = this.get(name, agent)
     const rejection = visible === undefined ? undefined : this.source.reject?.(name, parent !== undefined)
     const rejected = rejection !== undefined
     const concludingExecutions = this.concludingExecutions

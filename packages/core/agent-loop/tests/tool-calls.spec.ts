@@ -1,8 +1,8 @@
-import type { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
 /**
  * Exercises scheduler ordering and cancellation with deterministic gated tools.
  * ACP expected outputs own transcript-facing coverage.
  */
+import type { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
 
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
@@ -37,13 +37,13 @@ async function harness(adapter: MockAdapter, maxParallelToolCalls?: number, exec
   await ctx.plugin(ToolRuntime)
   let toolPipeline!: ToolExecutionPipeline
   await ctx.plugin({
-    inject: ['tools'], Config: NativeToolExecutor.Config,
-    apply(owner: Context, config: NativeToolExecutor.Config) {
-      const executor = new NativeToolExecutor.NativeToolExecutor(owner, () => config.maxParallelToolCalls.get())
+    inject: ['tools'],
+    apply(owner: Context) {
+      const executor = new NativeToolExecutor.NativeToolExecutor(owner, () => executorLimit ?? 10)
       toolPipeline = executor['pipeline']
       owner.tools.setExecutor(executor)
     },
-  }, { ...executorLimit === undefined ? {} : { maxParallelToolCalls: executorLimit } })
+  })
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(AgentLoop, {
     agents: [],
