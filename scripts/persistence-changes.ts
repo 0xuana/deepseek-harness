@@ -259,7 +259,8 @@ export function parseHistoricalPersistenceSnapshot(text: string): PersistenceSch
 }
 
 function parseSnapshot(text: string, historical: boolean): PersistenceSchemaInventory {
-  const input = record(JSON.parse(text) as unknown, 'schema inventory')
+  const parsed: unknown = JSON.parse(text)
+  const input = record(parsed, 'schema inventory')
   keys(input, ['formatVersion', 'roots', 'types', 'nodes'], 'schema inventory')
   const formatVersion = input.formatVersion
   if (formatVersion !== 1 && formatVersion !== 2) throw new Error('unsupported persistence schema normalization version')
