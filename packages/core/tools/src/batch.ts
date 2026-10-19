@@ -257,7 +257,11 @@ class BatchSettlement {
         message: createToolResultMessage({ callId: block.id, content: result.content, isError: result.isError }),
         ...result.error?.info ? { error: result.error.info } : {},
         ...result.meta !== undefined ? { meta: result.meta } : {},
-      }, { surfaceOp: 'append', ...callSeq === undefined ? {} : { sourceEventSeqs: [callSeq] } })
+      }, {
+        surfaceOp: 'append',
+        // oxlint-disable-next-line typescript/no-non-null-assertion -- start records a call seq whenever this batch logs results
+        sourceEventSeqs: [callSeq!],
+      })
     }
     this.results.push({ callId: block.id, result })
     this.contexts.push(...result.additionalContexts ?? [])

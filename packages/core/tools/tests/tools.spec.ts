@@ -1,4 +1,5 @@
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -1759,6 +1760,25 @@ describe('ToolRuntime', () => {
       error: { message: 'tool execution arguments must be losslessly JSON-serializable' },
     })
     expect(observed).toBe(1)
+  })
+
+  it('reports cancellation before an executor refusal without entering policy', async ({ onTestFinished }) => {
+    const ctx = await setup()
+    onTestFinished(() => ctx.fiber.dispose())
+    let policyCalls = 0
+    ctx.on('tools/pre-execute', async (_exec, next) => { policyCalls += 1; return next() })
+    const pipeline = new ToolExecutionPipeline(ctx, {
+      get: () => echoTool,
+      reject: () => new Error('executor refuses direct calls'),
+    })
+    const prepared = await pipeline.prepare({
+      callId: ToolCallId('cancelled-refusal'), name: 'echo', arguments: {}, signal: AbortSignal.abort(),
+    })
+    expect(prepared.kind).toBe('final-result')
+    if (prepared.kind === 'dispatch') throw new Error('cancelled call was dispatched')
+    const result = await pipeline.complete(prepared.exec, prepared)
+    expect(result.error?.info?.code).toBe(TOOL_ABORTED_BEFORE_DISPATCH)
+    expect(policyCalls).toBe(0)
   })
 
   it('a pre-execute deny short-circuits before tools/execute (the seam never runs)', async () => {
