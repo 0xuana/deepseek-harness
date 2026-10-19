@@ -10,7 +10,7 @@
 .permission { min-height: 80px; box-sizing: border-box; }
 .defaultSetting > p { margin: 0 16px 16px; }
 .permission > div:first-child, .apps li > div { flex: 1; min-width: 140px; }
-.actions, .notice { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.notice { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .group { display: grid; gap: 4px; }
 .apps { display: grid; padding: 0; margin: 0; list-style: none; }
 .apps li { padding: 12px 0; }
@@ -33,15 +33,14 @@
 }
 .applicationBadge img { flex-shrink: 0; object-fit: contain; }
 .applicationBadge > span { min-width: 0; overflow-wrap: anywhere; }
-.permissionStatus { min-width: 72px; }
-.buttonPlaceholder, .statusPlaceholder, .appPlaceholder, .appsPlaceholder {
+.permissionAction { min-width: 120px; }
+.buttonPlaceholder, .appPlaceholder, .appsPlaceholder {
   display: inline-block;
   max-width: 100%;
   border-radius: var(--dsw-radius-xs);
   background: var(--dsw-alias-bg-skeleton);
 }
 .buttonPlaceholder { width: 120px; height: 28px; }
-.statusPlaceholder { width: 64px; height: 12px; }
 .appPlaceholder { width: 160px; height: 20px; }
 .appsPlaceholder { width: 240px; height: 40px; }
 

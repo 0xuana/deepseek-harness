@@ -83,7 +83,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   await expect.poll(() => plugins.evaluate(element => element.scrollTop)).toBe(0)
   const panel = page.locator('[data-cua-settings]')
   const accessibility = panel.getByRole('group', { name: 'Accessibility', exact: true })
-  await accessibility.getByText('Not allowed', { exact: true }).waitFor()
+  await accessibility.getByRole('button', { name: 'Request permission', exact: true }).waitFor()
   expect(await plugins.evaluate(element => element.scrollTop)).toBe(0)
   expect(await panel.getByRole('region', { name: 'Authorize Computer Use', exact: true }).getByRole('group').count()).toBe(4)
   expect(await panel.getByRole('region', { name: 'Manage applications Computer Use can access', exact: true }).count()).toBe(1)
@@ -127,13 +127,16 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   }
   await accessibility.getByRole('button', { name: 'Request permission', exact: true }).click()
   await expect.poll(() => panel.getAttribute('aria-busy')).toBe('false')
-  expect(await accessibility.getByText('Not allowed', { exact: true }).count()).toBe(1)
+  expect(await accessibility.getByRole('button', { name: 'Request permission', exact: true }).count()).toBe(1)
   await writeFile(state, JSON.stringify({ accessibility: true, screenRecording: false, launchApplication }))
   // Headless pages retain document focus; model returning from System Settings at the window-event boundary.
   await page.evaluate(() => { window.dispatchEvent(new Event('focus')) })
   await accessibility.getByText('Allowed', { exact: true }).waitFor()
   const screen = panel.getByRole('group', { name: 'Screen Recording', exact: true })
-  await screen.getByRole('button', { name: 'Open System Settings', exact: true }).click()
+  expect(await accessibility.getByRole('button').count()).toBe(1)
+  await accessibility.getByRole('button', { name: 'Allowed', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Open System Settings', exact: true }).click()
+  expect(await screen.getByRole('button').count()).toBe(1)
   await expect.poll(() => panel.getAttribute('aria-busy')).toBe('false')
   await panel.getByRole('button', { name: 'Revoke', exact: true }).click()
   await panel.getByRole('heading', { name: 'Always-allowed applications', exact: true }).waitFor({ state: 'hidden' })
@@ -149,7 +152,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
     .filter(record => record.event === 'call').map(({ method, params }) => ({ method, params }))
   expect(events).toContainEqual({ method: 'requestPermission', params: { permission: 'accessibility' } })
   expect(events.filter(event => event.method === 'openPermissionSettings')).toEqual([
-    { method: 'openPermissionSettings', params: { permission: 'screenRecording' } },
+    { method: 'openPermissionSettings', params: { permission: 'accessibility' } },
   ])
   expect(events.every(event => ['permissionStatus', 'requestPermission', 'openPermissionSettings', 'applicationIcons', 'getApp'].includes(event.method))).toBe(true)
   const trace = await page.evaluateHandle(() => {
