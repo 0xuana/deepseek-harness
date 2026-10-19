@@ -4,6 +4,7 @@ import type { CuaApplicationId, CuaApplicationState, CuaSystemPermission, CuaSys
 
 /** Host operations available to the permission UI. */
 export interface PermissionActions {
+  readRuntime: () => Promise<{ persistent: boolean; writable: boolean }>
   readSystem: () => Promise<CuaSystemPermissionState>
   readApplications: () => Promise<CuaApplicationState>
   readIcons: () => Promise<Record<string, string>>
@@ -13,6 +14,7 @@ export interface PermissionActions {
   retryApproval: (id: CuaApplicationId) => Promise<void>
 }
 interface PermissionData {
+  runtime: { persistent: boolean; writable: boolean }
   system: CuaSystemPermissionState
   applications: CuaApplicationState
   icons: Record<string, string>
@@ -43,6 +45,7 @@ export interface PermissionFace {
 export class PermissionController {
   /** Last observed permissions and the lifetime of the current refresh/action. */
   readonly state = createSnapshotStore<PermissionView>({
+    runtime: { value: null, busy: false, error: null },
     system: { value: null, busy: false, error: null },
     applications: { value: null, busy: false, error: null },
     icons: { value: null, busy: false, error: null },
@@ -77,7 +80,7 @@ export class PermissionController {
     const sequence = ++this.sequence
     this.state.update((state) => {
       state.busy = true
-      for (const key of ['system', 'applications', 'icons'] as const) state[key].busy = true
+      for (const key of ['runtime', 'system', 'applications', 'icons'] as const) state[key].busy = true
     })
     this.tail = this.tail.then(async () => {
       if (!current()) return
@@ -92,6 +95,7 @@ export class PermissionController {
       }
       const latest = () => current() && this.sequence === sequence
       const refresh = Promise.all([
+        this.read('runtime', this.actions.readRuntime, latest),
         this.read('system', this.actions.readSystem, latest),
         this.read('applications', this.actions.readApplications, latest),
         this.read('icons', this.actions.readIcons, latest),

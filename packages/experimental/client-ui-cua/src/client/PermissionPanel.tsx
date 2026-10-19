@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { Button, Modal, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
-import type { ConfigForm, ConfigFormSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { CuaApplicationGrant, CuaSystemPermissionState } from '@deepseek-ai/dsh-cua/types'
 import type { PermissionFace } from './controller.ts'
 import type { NS } from './locales.ts'
@@ -21,33 +21,32 @@ type DefaultPresetProps = PropsLocale<typeof NS> & InjectFace<{
   setPtcDefault: () => Promise<boolean>
 }>
 
-type PersistentPtcProps = PropsLocale<typeof NS> & InjectFace<{
-  hooks: { cuaPtcRuntime: ConfigForm<{ executionMode?: 'per-call' | 'persistent-in-memory' }> }
-  setPersistentPtc: () => Promise<boolean>
-}>
+type PersistentPtcProps = PermissionProps & { setPersistentPtc: () => Promise<boolean> }
 
 /** The detail page owns explicit preset and execution-mode settings. */
 export type PermissionPanelProps = PermissionProps & DefaultPresetProps & PersistentPtcProps
 
 function DefaultPresetSetting(props: DefaultPresetProps) {
   const preset = props.useCuaDefaultPreset(value => value)
-  return <ConfigurationSetting kind="default" setting={preset} t={props.t} save={props.setPtcDefault}
+  return <ConfigurationSetting kind="default" status={preset.status} loading={preset.value === undefined && preset.status === 'loading'} writable={preset.writable} t={props.t} save={props.setPtcDefault}
     configured={(preset.value?.selectedDefault ?? preset.value?.default) === 'ptc'} />
 }
 
 function PersistentPtcSetting(props: PersistentPtcProps) {
-  const runtime = props.useCuaPtcRuntime(value => value)
-  return <ConfigurationSetting kind="persistent" setting={runtime} t={props.t} save={props.setPersistentPtc}
-    configured={runtime.value?.executionMode === 'persistent-in-memory'} />
+  const runtime = props.useCuaPermissions(value => value.runtime)
+  return <ConfigurationSetting kind="persistent" loading={runtime.value === null && (runtime.busy || runtime.error === null)}
+    status={runtime.busy ? 'loading' : runtime.error === null && runtime.value !== null ? 'ready' : 'unavailable'} writable={!runtime.busy && runtime.value?.writable === true} t={props.t} save={props.setPersistentPtc}
+    configured={runtime.value?.persistent === true} />
 }
 
-function ConfigurationSetting({ kind, setting, configured, save, t }: PropsLocale<typeof NS> & {
+function ConfigurationSetting({ kind, status, loading, writable, configured, save, t }: PropsLocale<typeof NS> & {
   kind: 'default' | 'persistent'
-  setting: ConfigFormSnapshot<unknown>
+  status: 'loading' | 'ready' | 'unavailable'
+  loading: boolean
+  writable: boolean
   configured: boolean
   save: () => Promise<boolean>
 }) {
-  const loading = setting.value === undefined && setting.status === 'loading'
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const submit = async (): Promise<void> => {
@@ -63,11 +62,11 @@ function ConfigurationSetting({ kind, setting, configured, save, t }: PropsLocal
     <div className={css.permission}>
       <div><strong>{t(`${kind}Title`)}</strong><p>{t(`${kind}Body`)}</p></div>
       {loading ? <span className={css.buttonPlaceholder} aria-hidden />
-        : <Button size="sm" variant={configured ? 'outline' : 'primary'} disabled={saving || configured || !setting.writable || setting.status !== 'ready'}
+        : <Button size="sm" variant={configured ? 'outline' : 'primary'} disabled={saving || configured || !writable || status !== 'ready'}
           onClick={() => { void submit() }}>{t(configured ? `${kind}Set` : `${kind}Confirm`)}</Button>}
     </div>
-    {!configured && (setting.status === 'unavailable' ? <p className={css.error} role="alert">{t(`${kind}Unavailable`)}</p>
-      : setting.status === 'ready' && !setting.writable && <p className={css.error} role="alert">{t(`${kind}ReadOnly`)}</p>)}
+    {!configured && (status === 'unavailable' ? <p className={css.error} role="alert">{t(`${kind}Unavailable`)}</p>
+      : status === 'ready' && !writable && <p className={css.error} role="alert">{t(`${kind}ReadOnly`)}</p>)}
     {error !== null && <p className={css.error} role="alert">{error}</p>}
   </div>
 }

@@ -22,6 +22,7 @@ function observe(value: CuaApplicationState & { system: CuaSystemPermissionState
 
 function fixture() {
   const state = createSnapshotStore<PermissionView>({
+    runtime: { value: { persistent: false, writable: true }, busy: false, error: null },
     system: { value: null, busy: true, error: null }, applications: { value: null, busy: true, error: null },
     icons: { value: null, busy: true, error: null }, busy: true, toast: null,
   })
@@ -29,17 +30,14 @@ function fixture() {
     status: 'ready', value: { default: 'standard', selectedDefault: 'ptc' },
     base: {}, user: {}, revision: 1, writable: true,
   })
-  const runtime = createSnapshotStore<ConfigFormSnapshot<{ executionMode?: 'per-call' | 'persistent-in-memory' }>>({
-    status: 'ready', value: { executionMode: 'per-call' }, base: {}, user: {}, revision: 1, writable: true,
-  })
   const refresh = vi.fn()
   const props = { useCuaPermissions: bindSnapshotSelector(state), t: makeTranslate(en),
-    useCuaPtcRuntime: bindSnapshotSelector(runtime), setPersistentPtc: vi.fn(async () => true),
+    setPersistentPtc: vi.fn(async () => true),
     useCuaDefaultPreset: bindSnapshotSelector(preset), setPtcDefault: vi.fn(async () => true),
     refresh, request: vi.fn(), openSettings: vi.fn(), revoke: vi.fn(),
     retryApproval: vi.fn(), dismissToast: vi.fn(),
   } satisfies PermissionPanelProps
-  return { state, preset, runtime, props,
+  return { state, preset, props,
     publish(patch: Partial<PermissionView>) { act(() => { state.set({ ...state.getSnapshot(), ...patch }) }) },
   }
 }
@@ -345,21 +343,21 @@ it.each([en, zh])('saves persistent PTC only from its own row and retains failur
   expect(within(row).getByRole('alert').textContent).toBe(dictionary.persistentNotSaved)
   fireEvent.click(within(row).getByRole('button'))
   await waitFor(() => { expect(within(row).queryByRole('alert')).toBeNull() })
-  act(() => { f.runtime.set({ ...f.runtime.getSnapshot(), value: { executionMode: 'persistent-in-memory' } }) })
+  f.publish({ runtime: { value: { persistent: true, writable: true }, busy: false, error: null } })
   expect(within(row).getByRole('button', { name: dictionary.persistentSet }).hasAttribute('disabled')).toBe(true)
   expect(f.props.setPtcDefault).not.toHaveBeenCalled()
 })
 
 it('loads the runtime setting independently and reports unavailable and read-only configurations', () => {
   const f = fixture()
-  f.runtime.set({ ...f.runtime.getSnapshot(), status: 'loading', value: undefined })
+  f.publish({ runtime: { value: null, busy: true, error: null } })
   render(<PermissionPanel {...f.props} />)
   const row = screen.getByRole('group', { name: en.persistentTitle })
   expect(within(row).queryByRole('button')).toBeNull()
   expect(screen.getByRole('button', { name: en.defaultSet })).toBeTruthy()
-  act(() => { f.runtime.set({ ...f.runtime.getSnapshot(), status: 'unavailable', writable: false }) })
+  f.publish({ runtime: { value: null, busy: false, error: 'offline' } })
   expect(within(row).getByRole('alert').textContent).toBe(en.persistentUnavailable)
-  act(() => { f.runtime.set({ ...f.runtime.getSnapshot(), status: 'ready', value: {}, writable: false }) })
+  f.publish({ runtime: { value: { persistent: false, writable: false }, busy: false, error: null } })
   expect(within(row).getByRole('alert').textContent).toBe(en.persistentReadOnly)
   expect(within(row).getByRole('button').hasAttribute('disabled')).toBe(true)
   expect(f.props.setPersistentPtc).not.toHaveBeenCalled()
