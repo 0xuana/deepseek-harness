@@ -138,7 +138,6 @@ function renderTab(
     dismissNotice: vi.fn(),
     checkVersions: vi.fn(),
     ensureVersions: vi.fn(),
-    checkAllVersions: vi.fn(),
     openUpdate: vi.fn(),
     runUpdate: vi.fn(),
     closeUpdate: vi.fn(),
@@ -2563,12 +2562,10 @@ describe('registry versions and updates', () => {
     expect(actions.ensureVersions).not.toHaveBeenCalled()
   })
 
-  it('checks every updatable package from the toolbar and says what the checks found', () => {
-    const { actions, set } = renderTab({ packages: [updatable(), pkg({ name: 'dsh-linked' })] })
-    fireEvent.click(screen.getByRole('button', { name: en.checkUpdates }))
-    expect(actions.checkAllVersions).toHaveBeenCalledOnce()
+  it('says in the toolbar what the version checks found', () => {
+    const { set } = renderTab({ packages: [updatable(), pkg({ name: 'dsh-linked' })] })
     set({ versions: { 'dsh-better-sidebar': { phase: 'checking' } } })
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: en.checkingUpdates }).disabled).toBe(true)
+    expect(screen.queryByText(en.updatesNone)).toBeNull()
     set({ versions: { 'dsh-better-sidebar': listed([v('1.0.0')]) } })
     expect(screen.getByText('Updates available: 1')).toBeTruthy()
     set({ versions: { 'dsh-better-sidebar': listed([]) } })

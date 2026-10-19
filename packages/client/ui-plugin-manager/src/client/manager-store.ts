@@ -392,7 +392,7 @@ export interface PluginManagerFace {
   }
   /** Read the Host once the tab first renders. */
   ensure: () => void
-  /** Read the Host again. */
+  /** Read the Host again, then check every updatable package for newer versions. */
   refresh: () => void
   openInstall: () => void
   /**
@@ -441,8 +441,6 @@ export interface PluginManagerFace {
   checkVersions: (packageName: string) => void
   /** Check a package's versions once: a package already checked or being checked is left as it is. */
   ensureVersions: (packageName: string) => void
-  /** Check every updatable package in turn. */
-  checkAllVersions: () => void
   /** Ask before replacing a package's installed version with a listed newer one. */
   openUpdate: (packageName: string, version: string) => void
   /** Start the confirmed update. */
@@ -796,7 +794,6 @@ export class PluginManagerController {
       ensureVersions: (packageName) => {
         if (this.getSnapshot().versions[packageName] === undefined) void this.checkVersions(packageName)
       },
-      checkAllVersions: () => { void this.checkAllVersions() },
       openUpdate: (packageName, version) => {
         const check = this.getSnapshot().versions[packageName]
         if (this.getSnapshot().update?.phase === 'running' || check?.phase !== 'done' || check.list.status !== 'listed') return
@@ -978,7 +975,10 @@ export class PluginManagerController {
     return run
   }
 
-  /** Keep manual refresh feedback until its coalesced reads settle, without clearing cached cards. */
+  /**
+   * Keep manual refresh feedback until its coalesced reads and the version checks of the updatable packages settle,
+   * without clearing cached cards; a failed read checks nothing.
+   */
   private async refresh(): Promise<void> {
     if (this.disposed || this.getSnapshot().refreshStatus === 'refreshing') return
     const startedAt = Date.now()
@@ -988,6 +988,7 @@ export class PluginManagerController {
     })
     try {
       await this.load()
+      if (this.getSnapshot().status !== 'error') await this.checkAllVersions()
     } catch (_error) {
       // A rejected transport request leaves the cached cards available for retry.
       this.patch({ status: 'error' })

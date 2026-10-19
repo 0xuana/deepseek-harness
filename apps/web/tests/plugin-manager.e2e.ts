@@ -374,7 +374,7 @@ describe('web e2e: plugin manager', () => {
       await probe.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
       await probe.getByRole('navigation', { name: '全局面板' }).getByRole('button', { name: '插件', exact: true }).click()
       const panel = probe.locator('[data-plugin-panel]')
-      const refresh = panel.getByRole('button', { name: '刷新', exact: true })
+      const refresh = panel.getByRole('button', { name: '刷新并检查更新', exact: true })
       const add = panel.getByRole('button', { name: '添加插件', exact: true })
       await panel.getByRole('button', { name: '查看 @fixture/bundle', exact: true }).waitFor()
       await expect.poll(() => refresh.isEnabled()).toBe(true)
@@ -382,7 +382,7 @@ describe('web e2e: plugin manager', () => {
       const cards = panel.locator('[data-plugin-package], [data-plugin-item]')
       const cardText = await cards.allTextContents()
       expect(cardText.length).toBeGreaterThan(0)
-      const tooltip = probe.getByRole('tooltip').filter({ hasText: '刷新' })
+      const tooltip = probe.getByRole('tooltip').filter({ hasText: '刷新并检查更新' })
       const trace: string[] = []
       const recordRefresh = async (phase: string) => {
         trace.push(phase, await refresh.ariaSnapshot(), JSON.stringify({

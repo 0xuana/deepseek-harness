@@ -2103,16 +2103,27 @@ describe('version checks and updates', () => {
     expect(state().versions).toEqual({})
   })
 
-  it('checks every updatable package in turn', async () => {
+  it('checks every updatable package in turn on a manual refresh and keeps the spinner until the checks settle', async () => {
     const order: string[] = []
-    const listVersions = vi.fn(async (name: string) => { order.push(name); return ok(LISTED) })
+    const last = deferred<ReturnType<typeof ok<typeof LISTED>>>()
+    const listVersions = vi.fn(async (name: string) => { order.push(name); return name === 'dsh-better-sidebar' ? last.promise : ok(LISTED) })
     const listBundles = vi.fn(() => Promise.resolve(ok([UPDATABLE, { ...UPDATABLE, name: 'dsh-a' }, { ...BUNDLE, name: 'dsh-linked' }])))
-    const { controller, face, state } = bench({ listVersions, listBundles })
-    await controller.load()
-    face.checkAllVersions()
-    await vi.waitFor(() => { expect(Object.keys(state().versions).sort()).toEqual(['dsh-a', 'dsh-better-sidebar']) })
-    await vi.waitFor(() => { expect(state().versions['dsh-a']?.phase).toBe('done') })
-    expect(order).toEqual(['dsh-a', 'dsh-better-sidebar'])
+    const { face, state } = bench({ listVersions, listBundles })
+    face.refresh()
+    await vi.waitFor(() => { expect(order).toEqual(['dsh-a', 'dsh-better-sidebar']) })
+    expect(state().refreshStatus).toBe('refreshing')
+    last.resolve(ok(LISTED))
+    await vi.waitFor(() => { expect(state().refreshStatus).toBe('idle') })
+    expect(state().versions['dsh-better-sidebar']?.phase).toBe('done')
+  })
+
+  it('checks no versions after a failed refresh', async () => {
+    const listVersions = vi.fn(() => Promise.resolve(ok(LISTED)))
+    const listBundles = vi.fn(() => Promise.resolve(refused('gateway/internal', 'offline')))
+    const { face, state } = bench({ listVersions, listBundles })
+    face.refresh()
+    await vi.waitFor(() => { expect(state().refreshStatus).toBe('failed') })
+    expect(listVersions).not.toHaveBeenCalled()
   })
 
   it('confirms, runs, and keeps an update\'s steps and outcome, then checks the package again', async () => {
@@ -2152,7 +2163,6 @@ describe('version checks and updates', () => {
     expect(state().update?.to).toBe('0.17.0')
     // A check of the package being replaced waits for the update.
     face.checkVersions('dsh-better-sidebar')
-    face.checkAllVersions()
     expect(listVersions).toHaveBeenCalledOnce()
     const reads = plugins.listBundles.mock.calls.length
     answer.resolve(ok(UPDATED))

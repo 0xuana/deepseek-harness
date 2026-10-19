@@ -1607,7 +1607,6 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
     has: row => ledger.rows.has(rowConfigKey(pkg.name, row.rowId)),
     open: (row) => { setView({ kind: 'row', name: pkg.name, rowId: row.rowId, ...openPkgInMore ? { from: 'more' } : {} }) },
   })
-  const checkingUpdates = mine.some(pkg => state.versions[pkg.name]?.phase === 'checking')
   const updates = updatesNote(mine, state.versions, t)
   const updatePkg = state.update === null ? undefined : state.packages.find(pkg => pkg.name === state.update?.packageName)
   const packageBusy = (pkg: PackageView): boolean => state.busy.includes(pkg.name) || state.update?.packageName === pkg.name
@@ -1664,12 +1663,6 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
             </div>
             <div className={css.toolbar} hidden={!onInstalled}>
               {updates === undefined ? null : <span className={css.updatesNote} data-tone={updates.tone}>{updates.text}</span>}
-              {mine.some(pkg => pkg.updatable) ? (
-                <Button variant="outline" size="sm" className={css.addButton} disabled={!loaded || checkingUpdates}
-                  icon={checkingUpdates ? <StateDot state="ongoing" size={13} /> : <IconRefreshOutlineRegular size={13} />} onClick={props.checkAllVersions}>
-                  {t(checkingUpdates ? 'checkingUpdates' : 'checkUpdates')}
-                </Button>
-              ) : null}
               <Tooltip label={t('refresh')} delayMs={500} focusDelayMs={500} side="bottom" portal disabled={!loaded || refreshing}>
                 <button type="button" className={css.iconButton} aria-label={t('refresh')} aria-busy={refreshing} disabled={!loaded || refreshing} onClick={props.refresh}>
                   <span className={css.iconWrap} aria-hidden="true">

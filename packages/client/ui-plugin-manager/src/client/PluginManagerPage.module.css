@@ -1543,6 +1543,8 @@ label.registryOption {
   display: flex;
   flex-direction: column;
   gap: 24px;
+}
+
 /* The list toolbar's sentence about the last update check. */
 .updatesNote {
   font-size: 12px;
