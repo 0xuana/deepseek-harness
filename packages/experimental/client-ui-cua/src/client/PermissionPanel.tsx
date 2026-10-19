@@ -80,15 +80,16 @@ function PermissionDescription({ application, permission, loading, t }: Pick<Per
   loading: boolean
 }) {
   if (!loading && application === undefined) return <p>{t(permission === 'accessibility' ? 'accessibilityUse' : 'screenRecordingUse')}</p>
+  const [before, after] = t(permission === 'accessibility' ? 'accessibilityPermission' : 'screenRecordingPermission').split('{application}')
   return <p>
-    {t('permissionPrefix')}{' '}
+    {before}
     <span className={css.applicationBadge}>
       {application === undefined ? <span className={css.appPlaceholder} aria-hidden /> : <>
         {application.icon !== undefined && <img src={application.icon} alt="" width={20} height={20} draggable={false} />}
         <span>{application.name}</span>
       </>}
-    </span>{' '}
-    {t(permission === 'accessibility' ? 'accessibilityAction' : 'screenRecordingAction')}
+    </span>
+    {after}
   </p>
 }
 
