@@ -201,29 +201,29 @@ describe('SidebarRoot shell', () => {
     />)
     vi.useFakeTimers()
 
+    const copiedToasts = () => screen.queryAllByRole('alert').map(toast => toast.textContent)
     await act(async () => { fireEvent.click(screen.getByText('DSH Local Build')) })
     expect(writeText).toHaveBeenLastCalledWith('1.2.3-abcdef0')
-    expect(screen.getByText('Copied')).toBeTruthy()
-    act(() => { vi.advanceTimersByTime(1000) })
+    expect(copiedToasts()).toEqual(['Copied'])
+    // The brand itself keeps its title and version.
+    expect(screen.getByText('DSH Local Build')).toBeTruthy()
     expect(screen.getByText('1.2.3-abcdef0')).toBeTruthy()
+    act(() => { vi.advanceTimersByTime(4000) })
+    expect(copiedToasts()).toEqual([])
 
     // A refused write claims no success.
     await act(async () => { fireEvent.click(screen.getByText('1.2.3-abcdef0')) })
-    expect(screen.queryByText('Copied')).toBeNull()
+    expect(copiedToasts()).toEqual([])
 
-    // The fallback mark copies too; the rail toggle's mark is not in the brand row.
-    const mark = screen.getByText('DSH Local Build').closest('[aria-hidden]')!.querySelector('svg')!
-    await act(async () => { fireEvent.click(mark) })
-    expect(writeText).toHaveBeenCalledTimes(3)
-    expect(screen.getByText('Copied')).toBeTruthy()
-    // A repeated click during the feedback neither copies again nor
-    // falls through to New Session; the click still reaches document.
+    // The fallback mark copies too, and its click still reaches document.
     const documentClick = vi.fn()
     document.addEventListener('click', documentClick)
-    await act(async () => { fireEvent.click(screen.getByText('1.2.3-abcdef0')) })
+    const mark = screen.getByText('DSH Local Build').closest('[aria-hidden]')!.querySelector('svg')!
+    await act(async () => { fireEvent.click(mark) })
     document.removeEventListener('click', documentClick)
     expect(documentClick).toHaveBeenCalledOnce()
     expect(writeText).toHaveBeenCalledTimes(3)
+    expect(copiedToasts()).toEqual(['Copied'])
     expect(startSession).not.toHaveBeenCalled()
 
     // The rest of the brand button still starts a session.

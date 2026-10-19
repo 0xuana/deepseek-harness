@@ -19,7 +19,7 @@
 import { useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
-  FishLogo, IconNewChatOutlineMedium, IconNewChatOutlineRegular, IconPanelLeftOutlineRegular, isDarwinDesktop, ShortcutKeys, Tooltip,
+  FishLogo, IconNewChatOutlineMedium, IconNewChatOutlineRegular, IconPanelLeftOutlineRegular, isDarwinDesktop, ShortcutKeys, Toast, Tooltip,
   writeClipboard,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -38,9 +38,6 @@ const COLLAPSE_SETTLE_MS = 150
  * edge — on the way to the conversation, or around a portalled menu.
  */
 const SCROLLBAR_LINGER_MS = 2000
-
-/** How long the local-build badge shows the copied label after a successful copy. */
-const VERSION_COPIED_MS = 1000
 
 /** Format complete-build metadata for the local brand badge. */
 function localBuildVersion(): string | undefined {
@@ -177,13 +174,11 @@ export function SidebarRoot({
   // The local-build fallbacks copy the badge text; the brand button below
   // skips New Session for clicks inside them. The click still bubbles, so
   // document-level outside-click listeners see it.
-  const [versionCopied, setVersionCopied] = useState(false)
+  // Each successful copy bumps the key so a repeated copy replays the toast.
+  const [copiedToast, setCopiedToast] = useState<number | null>(null)
   const copyVersion = (version: string) => (): void => {
-    if (versionCopied) return
     void writeClipboard(version).then((ok) => {
-      if (!ok) return
-      setVersionCopied(true)
-      window.setTimeout(() => { setVersionCopied(false) }, VERSION_COPIED_MS)
+      if (ok) setCopiedToast(seq => (seq ?? 0) + 1)
     })
   }
 
@@ -251,11 +246,7 @@ export function SidebarRoot({
                     ? <span className={css.fallbackBrandName}>{t('brand.localBuild')}</span>
                     : (
                       <span className={clsx(css.localBuildBrand, css.copyVersion)} data-copy-version onClick={copyVersion(buildVersion)}>
-                        {/* The feedback shares the title's grid cell, so the copy target keeps its width. */}
-                        <span className={css.localBuildTitle}>
-                          <span className={versionCopied ? css.concealed : undefined}>{t('brand.localBuild')}</span>
-                          {versionCopied && <span>{t('copied')}</span>}
-                        </span>
+                        <span className={css.localBuildTitle}>{t('brand.localBuild')}</span>
                         <span className={css.buildVersion}>{buildVersion}</span>
                       </span>
                     ),
@@ -328,6 +319,10 @@ export function SidebarRoot({
           expandSidebar: () => { if (collapsed) toggleSidebar() },
         })}
       </div>
+
+      {copiedToast !== null && (
+        <Toast key={copiedToast} tone="success" text={t('copied')} onDone={() => { setCopiedToast(null) }} />
+      )}
 
       {/* Footer actions stack above Settings in both sidebar widths. */}
       <div className={css.footArea}>

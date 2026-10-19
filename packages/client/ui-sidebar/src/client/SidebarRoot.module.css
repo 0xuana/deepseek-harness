@@ -318,18 +318,9 @@
 }
 
 .localBuildTitle {
-  display: grid;
   font-size: 12px;
   line-height: 13px;
   letter-spacing: 0;
-}
-
-.localBuildTitle > * {
-  grid-area: 1 / 1;
-}
-
-.concealed {
-  visibility: hidden;
 }
 
 .iconButton {
