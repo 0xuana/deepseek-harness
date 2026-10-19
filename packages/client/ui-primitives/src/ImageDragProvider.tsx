@@ -3,8 +3,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { Toast } from './Toast.tsx'
 import type { DesktopImageDrag } from './image-drag.ts'
 
-/** Browser drag token; file bytes remain in the owning mounted application. */
-export const IMAGE_DRAG_TYPE = 'application/x-dsh-image'
+/** DataTransfer type for an application-local drag token; file bytes remain in the owning mounted application. */
+export const IMAGE_DRAG_TOKEN_TYPE = 'application/x-dsh-image'
 
 interface ImageTransfer {
   desktop: DesktopImageDrag | undefined
@@ -43,7 +43,7 @@ export function ImageDragProvider({ children }: { readonly children: ReactNode }
   }, [end])
   const read = useCallback((transfer: DataTransfer): File | undefined => {
     const current = active.current
-    return current !== undefined && current.token === transfer.getData(IMAGE_DRAG_TYPE) ? current.file : undefined
+    return current !== undefined && current.token === transfer.getData(IMAGE_DRAG_TOKEN_TYPE) ? current.file : undefined
   }, [])
   const value = useMemo(() => ({ desktop, report, begin, end, read }), [desktop, report, begin, end, read])
   return <ImageDragFeedback.Provider value={value}>

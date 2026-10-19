@@ -1,7 +1,7 @@
 /** Original image files supplied to browser and native drag sessions. */
 import { useCallback, useEffect, useRef, type DragEvent, type MouseEvent, type PointerEvent } from 'react'
 
-import { IMAGE_DRAG_TYPE, useImageDragTransfer } from './ImageDragProvider.tsx'
+import { IMAGE_DRAG_TOKEN_TYPE, useImageDragTransfer } from './ImageDragProvider.tsx'
 
 /** Application-owned native image transfer; prepared handles never expose host paths. */
 export interface DesktopImageDrag {
@@ -106,7 +106,7 @@ export function useImageDrag(src: string, name: string, failureText: string, ori
       void desktop.start(prepared.handle).then((started) => { if (!started) failed() }, failed)
       return
     }
-    event.dataTransfer.setData(IMAGE_DRAG_TYPE, transfer.begin(prepared.file))
+    event.dataTransfer.setData(IMAGE_DRAG_TOKEN_TYPE, transfer.begin(prepared.file))
     event.dataTransfer.setData('DownloadURL', `${prepared.file.type}:${prepared.file.name}:${src}`)
   }, [src, desktop, prepare, reportFailure, failureText, transfer])
   const onPointerDown = useCallback((event: PointerEvent<HTMLImageElement>): void => {

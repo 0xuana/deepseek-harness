@@ -3,12 +3,14 @@ import { randomUUID } from 'node:crypto'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-const IMAGE_EXTENSIONS: Readonly<Record<string, string>> = {
+// Keep supported MIME types in sync with IMAGE_MEDIA_TYPES in
+// packages/client/ui-sidebar-documentpreview/src/client/image/ImageBody.tsx (extensions: adjacent index.ts).
+const DRAG_FILE_EXTENSION_BY_MIME: Readonly<Record<string, string>> = {
   'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp',
   'image/bmp': 'bmp', 'image/x-icon': 'ico', 'image/vnd.microsoft.icon': 'ico', 'image/svg+xml': 'svg',
 }
 // Bounds aggregate original bytes in preparation and retained temporary files.
-const MAX_IMAGE_BYTES = 64 * 1024 * 1024
+const MAX_TOTAL_DRAG_FILE_BYTES = 64 * 1024 * 1024
 
 interface ImageDragFile {
   readonly directory: string
@@ -36,16 +38,17 @@ export class ImageDragFiles {
    * @returns application-local opaque handle; failures retain no usable handle or partial file.
    */
   prepare(bytes: unknown, name: unknown, mediaType: unknown): Promise<string> {
-    const extension = typeof mediaType === 'string' && Object.hasOwn(IMAGE_EXTENSIONS, mediaType)
-      ? IMAGE_EXTENSIONS[mediaType] : undefined
-    if (this.disposed || !(bytes instanceof Uint8Array) || bytes.byteLength === 0 || bytes.byteLength > MAX_IMAGE_BYTES - this.stagedBytes
-      || typeof name !== 'string' || typeof mediaType !== 'string' || extension === undefined) {
+    const outputExtension = typeof mediaType === 'string' && Object.hasOwn(DRAG_FILE_EXTENSION_BY_MIME, mediaType)
+      ? DRAG_FILE_EXTENSION_BY_MIME[mediaType] : undefined
+    if (this.disposed || !(bytes instanceof Uint8Array) || bytes.byteLength === 0
+      || bytes.byteLength > MAX_TOTAL_DRAG_FILE_BYTES - this.stagedBytes
+      || typeof name !== 'string' || typeof mediaType !== 'string' || outputExtension === undefined) {
       return Promise.reject(new Error('Invalid image transfer'))
     }
     let stem = name.replace(/\.[^.]*$/u, '').replace(/[<>:"/\\|?*\x00-\x1f]/gu, '_').replace(/^[. ]+|[. ]+$/gu, '').slice(0, 120) || 'image'
     if (/^(con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?:\.|$)/iu.test(stem)) stem = `_${stem}`
     this.stagedBytes += bytes.byteLength
-    const operation = this.write(bytes, `${stem}.${extension}`).catch((error: unknown) => {
+    const operation = this.write(bytes, `${stem}.${outputExtension}`).catch((error: unknown) => {
       this.stagedBytes -= bytes.byteLength
       throw error
     })

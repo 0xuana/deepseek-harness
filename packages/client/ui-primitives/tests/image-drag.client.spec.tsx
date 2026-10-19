@@ -3,7 +3,7 @@ import { useEffect } from 'react'
 import { File as NodeFile } from 'node:buffer'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { IMAGE_DRAG_TYPE, ImageDragProvider, useImageDrop } from '../src/ImageDragProvider.tsx'
+import { IMAGE_DRAG_TOKEN_TYPE, ImageDragProvider, useImageDrop } from '../src/ImageDragProvider.tsx'
 import { DraggableImage } from '../src/DraggableImage.tsx'
 import { useImageDrag, type DesktopImageDrag } from '../src/image-drag.ts'
 
@@ -36,7 +36,7 @@ it('hands original bytes to the browser without alt text or an internal URI payl
   await act(async () => { fireEvent.dragStart(screen.getByRole('img'), { dataTransfer }) })
   expect(dataTransfer.items.add).not.toHaveBeenCalled()
   expect(dataTransfer.items.clear).toHaveBeenCalledOnce()
-  expect(dataTransfer.setData).toHaveBeenCalledWith(IMAGE_DRAG_TYPE, expect.any(String))
+  expect(dataTransfer.setData).toHaveBeenCalledWith(IMAGE_DRAG_TOKEN_TYPE, expect.any(String))
   expect(dataTransfer.effectAllowed).toBe('copy')
   expect(dataTransfer.setData).toHaveBeenCalledWith('DownloadURL', 'image/png:original.png:blob:original')
   fireEvent.click(screen.getByRole('img'), { detail: 1 })
@@ -169,7 +169,7 @@ it('fetches a readable source once and rejects a foreign drag token', async () =
   expect(fetchImage).toHaveBeenCalledOnce()
   const dataTransfer = transfer()
   fireEvent.dragStart(screen.getByRole('img'), { dataTransfer })
-  dataTransfer.setData(IMAGE_DRAG_TYPE, 'foreign')
+  dataTransfer.setData(IMAGE_DRAG_TOKEN_TYPE, 'foreign')
   fireEvent.drop(screen.getByTestId('drop'), { dataTransfer })
   expect(receive).toHaveBeenCalledWith(undefined)
 })

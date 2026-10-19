@@ -1,5 +1,5 @@
 /** Document drag-and-drop listeners owned by one mounted attachment view. */
-import { IMAGE_DRAG_TYPE } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IMAGE_DRAG_TOKEN_TYPE } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ComposerAttachmentsProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 
 /**
@@ -38,7 +38,7 @@ export function installDocumentDropEvents(
 ): () => void {
   const fileTransfer = (event: globalThis.DragEvent): DataTransfer | null => {
     const dataTransfer = event.dataTransfer
-    if (dataTransfer === null || (!dataTransfer.types.includes('Files') && !dataTransfer.types.includes(IMAGE_DRAG_TYPE))) return null
+    if (dataTransfer === null || (!dataTransfer.types.includes('Files') && !dataTransfer.types.includes(IMAGE_DRAG_TOKEN_TYPE))) return null
     return dataTransfer
   }
   const reset = (): void => {
@@ -50,7 +50,7 @@ export function installDocumentDropEvents(
     if (dataTransfer === null) return
     event.preventDefault()
     dragDepth.current += 1
-    if (!dataTransfer.types.includes(IMAGE_DRAG_TYPE)) setDragActive(true)
+    if (!dataTransfer.types.includes(IMAGE_DRAG_TOKEN_TYPE)) setDragActive(true)
   }
   const onDragOver = (event: globalThis.DragEvent): void => {
     const dataTransfer = fileTransfer(event)
@@ -72,7 +72,7 @@ export function installDocumentDropEvents(
     event.preventDefault()
     reset()
     if (canAcceptDrop) {
-      const image = dataTransfer.types.includes(IMAGE_DRAG_TYPE) ? readImageDrag(dataTransfer) : undefined
+      const image = dataTransfer.types.includes(IMAGE_DRAG_TOKEN_TYPE) ? readImageDrag(dataTransfer) : undefined
       const files = image === undefined ? [...dataTransfer.files] : [image]
       if (files.length > 0) onAddFiles(files, droppedDirectories(dataTransfer, files))
     }
