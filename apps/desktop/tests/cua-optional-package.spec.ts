@@ -25,7 +25,9 @@ it('fetches the macOS optional tarball only for Darwin, with an empty cache for 
   const [pnpm, ...prefix] = pnpmCommand()
   const command = async (args: string[], cwd: string) => {
     const result = await execa(pnpm, [...prefix, `--config.userconfig=${userconfig}`, ...args], {
-      cwd, env: { ...environment, CI: 'true' }, extendEnv: false, reject: false, timeout: 60_000,
+      cwd, env: { ...environment, CI: 'true', XDG_CACHE_HOME: join(cwd, 'xdg-cache'),
+        XDG_DATA_HOME: join(cwd, 'xdg-data'), XDG_STATE_HOME: join(cwd, 'xdg-state'),
+        XDG_CONFIG_HOME: join(cwd, 'xdg-config') }, extendEnv: false, reject: false, timeout: 60_000,
     })
     expect(result.timedOut, result.stderr).toBe(false)
     expect(result.signal, result.stderr).toBeUndefined()
@@ -105,14 +107,14 @@ it('fetches the macOS optional tarball only for Darwin, with an empty cache for 
       '  cpu: [arm64]', 'minimumReleaseAge: 0', '',
     ].join('\n'))
     requests.length = 0
-    await command([
+    const output = await command([
       'install', '--ignore-scripts', '--config.enable-global-virtual-store=false',
       `--config.registry=http://127.0.0.1:${address.port}/`, `--config.store-dir=${join(project, 'store')}`,
       `--config.cache-dir=${join(project, 'cache')}`, `--config.state-dir=${join(project, 'state')}`,
     ], project)
     expect(requests).toContain(`/${bundleName}.tgz`)
     expect(requests).toContain('/@deepseek-ai/dsh-cua.tgz')
-    expect(requests.includes(`/${providerName}.tgz`), `${target}: ${JSON.stringify(requests)}`)
+    expect(requests.includes(`/${providerName}.tgz`), `${target}: ${JSON.stringify(requests)}\n${output}`)
       .toBe(target === 'darwin' || omitOs)
   }
 }, 120_000)

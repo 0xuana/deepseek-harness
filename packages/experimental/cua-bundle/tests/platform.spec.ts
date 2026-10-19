@@ -12,6 +12,7 @@ it.each(['darwin', 'win32', 'linux'])('loads the native provider only on Darwin 
   }) as { insert: EntryOptions[] }[]
   const ctx = new Context()
   await ctx.plugin(Loader)
+  if (!ctx.loader.internal) throw new Error('Loader module importer is unavailable')
   const imported = vi.spyOn(ctx.loader.internal, 'import').mockImplementation(async (name) => {
     if (platform !== 'darwin' && name === '@deepseek-ai/dsh-experimental-cua-macos') {
       throw new Error('native provider is absent from this installation')
