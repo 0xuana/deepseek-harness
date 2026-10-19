@@ -49,6 +49,9 @@
     },
     {
       "path": "../../client/ui-plugin-manager/tsconfig.client.json"
+    },
+    {
+      "path": "../../typert/protocol"
     }
   ]
 }
