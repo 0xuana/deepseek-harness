@@ -198,10 +198,11 @@ describe('web e2e: macOS window drag coverage', () => {
   })
 
   /**
-   * Open a darwin-marked page in the shipped composition.
+   * Open a desktop-marked page in the shipped composition.
+   * @param platform - Desktop CSS and preload platform to emulate in Chromium.
    * @returns the page and its console tripwire.
    */
-  async function darwinPage(): Promise<{ page: Page; tripwire: ReturnType<typeof watchConsole> }> {
+  async function desktopPage(platform: 'darwin' | 'win32' = 'darwin'): Promise<{ page: Page; tripwire: ReturnType<typeof watchConsole> }> {
     const page = await newEnglishPage(browser)
     await page.addInitScript(({ value, snapshot }) => {
       // The Desktop platform marker requires the preload's keyboard and preference capabilities.
@@ -211,18 +212,68 @@ describe('web e2e: macOS window drag coverage', () => {
           subscribe: () => () => {}, recording: async () => {},
           edit: async () => ({ status: 'not-ready', snapshot }) },
       } })
-      const mark = (): void => { document.documentElement.setAttribute('data-platform', value) }
+      const mark = (): void => {
+        document.documentElement.setAttribute('data-platform', value)
+        if (value === 'win32') {
+          document.documentElement.setAttribute('data-windows-titlebar', '')
+          document.documentElement.style.setProperty('--dsh-windows-titlebar-height', '40px')
+        }
+      }
       if (document.documentElement === null) document.addEventListener('DOMContentLoaded', mark, { once: true })
       else mark()
-    }, { value: 'darwin', snapshot: initialShortcutConfig() })
+    }, { value: platform, snapshot: initialShortcutConfig() })
     const tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
     return { page, tripwire }
   }
 
+  it.each(['darwin', 'win32'] as const)('%s keeps compact Plugins controls below native chrome in both sidebar states', async (platform) => {
+    const { page, tripwire } = await desktopPage(platform)
+    try {
+      await page.setViewportSize({ width: 1280, height: 480 })
+      await page.getByRole('button', { name: 'Plugins', exact: true }).click()
+      await page.locator('[data-plugin-package]').first().waitFor()
+      const bar = page.locator('[data-plugin-bar]')
+      const body = page.locator('[data-plugin-body]')
+      const toolbarGeometry = () => bar.evaluate((element) => {
+        const header = element.querySelector('header')!
+        const bounds = element.getBoundingClientRect()
+        const buttons = Array.from(element.querySelectorAll('button'))
+          .filter(button => button.textContent?.trim() === 'Refresh' || button.textContent?.trim() === 'Add plugin')
+        return {
+          top: bounds.top,
+          padding: Number.parseFloat(getComputedStyle(header).paddingTop),
+          buttons: buttons.map((button) => { const rect = button.getBoundingClientRect(); return { x: rect.x, y: rect.y } }),
+        }
+      })
+      for (const collapsed of [false, true]) {
+        if (collapsed) {
+          await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click()
+        }
+        await settled(page)
+        await body.evaluate((element) => { element.scrollTop = 0 })
+        await page.waitForFunction(() => !document.querySelector('[data-plugin-bar]')?.hasAttribute('data-compact'))
+        const before = await toolbarGeometry()
+        expect(before.top).toBe(platform === 'darwin' ? 0 : 40)
+        expect(before.padding).toBe(platform === 'darwin' ? 76 : 28)
+        expect(before.buttons).toHaveLength(2)
+        await body.evaluate((element) => { element.scrollTop = 120 })
+        await page.waitForFunction(() => document.querySelector('[data-plugin-bar]')?.hasAttribute('data-compact'))
+        const after = await toolbarGeometry()
+        expect(after.padding).toBe(platform === 'darwin' ? 64 : 16)
+        expect(after.buttons).toEqual(before.buttons.map(button => ({ ...button, y: button.y - 12 })))
+        expect(after.buttons.every(button => button.y >= (platform === 'darwin' ? 48 : 40))).toBe(true)
+        expect(await body.evaluate(element => element.getBoundingClientRect().top))
+          .toBe(await bar.evaluate(element => element.getBoundingClientRect().bottom))
+        if (platform === 'darwin') expect(swallowedBoxes(await collectedRegions(page, INTERACTIVE_SELECTOR))).toEqual([])
+      }
+      expect(tripwire.pageErrors).toEqual([])
+    } finally { await page.close() }
+  })
+
   it('leaves no interactive box inside the drag surface, and keeps the panel strip row draggable', async () => {
-    const { page, tripwire } = await darwinPage()
+    const { page, tripwire } = await desktopPage()
     try {
       await connectFreshWorkspace(page, scaffold.workspaceCwd)
       const agent = scaffold.ctx.agents.list()[0]
@@ -338,7 +389,7 @@ describe('web e2e: macOS window drag coverage', () => {
   }, 180_000)
 
   it('keeps the Conversation header draggable over the collapsed column, and the seat out of it', async () => {
-    const { page, tripwire } = await darwinPage()
+    const { page, tripwire } = await desktopPage()
     try {
       await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click()
       await page.locator('[data-shell-leading]').waitFor({ state: 'visible', timeout: 15_000 })
@@ -369,7 +420,7 @@ describe('web e2e: macOS window drag coverage', () => {
   }, 120_000)
 
   it('keeps an entry page’s chrome row draggable', async () => {
-    const { page, tripwire } = await darwinPage()
+    const { page, tripwire } = await desktopPage()
     try {
       await page.getByRole('button', { name: 'Plugins', exact: true }).click()
       const head = page.locator('[class*="pageHead"]').first()
@@ -406,7 +457,7 @@ describe('web e2e: macOS window drag coverage', () => {
   }, 120_000)
 
   it('keeps a detail page’s head row draggable and its body out of the drag surface', async () => {
-    const { page, tripwire } = await darwinPage()
+    const { page, tripwire } = await desktopPage()
     try {
       await page.getByRole('button', { name: 'Plugins', exact: true }).click()
       const cards = page.locator('[data-plugin-package], [data-plugin-item]')
@@ -472,7 +523,7 @@ describe('web e2e: macOS window drag coverage', () => {
   }, 120_000)
 
   it('keeps a covering overlay out of the drag surface', async () => {
-    const { page, tripwire } = await darwinPage()
+    const { page, tripwire } = await desktopPage()
     try {
       await page.getByRole('button', { name: 'Account menu', exact: true }).click()
       await page.getByRole('menuitem', { name: 'Settings', exact: true }).click()

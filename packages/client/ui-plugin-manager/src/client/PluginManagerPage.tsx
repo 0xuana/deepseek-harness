@@ -68,10 +68,12 @@ function AddPluginMenu({ t, disabled, openInstall, renderSlot }: {
   const onDismiss = (): void => { setOpen(false) }
   return (
     <span className={css.addGroup} role="group" aria-label={t('addPlugin')}>
-      <Button variant="primary" size="sm" className={css.addPrimary} icon={<IconPlusOutlineRegular size={13} />}
-        disabled={disabled} onClick={() => { onDismiss(); openInstall() }}>
-        {t('addPlugin')}
-      </Button>
+      <Tooltip label={t('addPlugin')} side="bottom" delayMs={500} focusDelayMs={500} portal disabled={disabled}>
+        <Button variant="primary" size="sm" className={css.addPrimary} icon={<IconPlusOutlineRegular size={13} />}
+          aria-label={t('addPlugin')} disabled={disabled} onClick={() => { onDismiss(); openInstall() }}>
+          <span className={css.toolbarLabel}>{t('addPlugin')}</span>
+        </Button>
+      </Tooltip>
       <Menu open={open} onClose={onDismiss} align="end" portal autoFocus listClassName={css.addMenu}
         anchor={(
           <Button variant="primary" size="sm" className={css.addMore}
@@ -97,6 +99,9 @@ function AddPluginMenu({ t, disabled, openInstall, renderSlot }: {
 
 /** How long the list marks a package an install just enabled. */
 const HIGHLIGHT_MS = 2_400
+
+/** Scrolled distance past which the page bar collapses to one row. */
+const COMPACT_BAR_SCROLL_TOP = 8
 
 /** Built-in profile bundles stay out of this page even when the profile declares them as dependencies. */
 const BUILTIN_PROFILE_BUNDLES = new Set([
@@ -1555,6 +1560,8 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   useEffect(() => { if (state.highlight !== null) setTab(INSTALLED_TAB) }, [state.highlight, setTab])
   const tabsId = useId()
   const [activation, setActivation] = useState<string | null>(null)
+  // The bar keeps one row while the list is scrolled, as the page heading only needs its resting height at the top.
+  const [compactBar, setCompactBar] = useState(false)
   useEffect(() => { ensure() }, [ensure])
   // Installation highlights visible cards without changing the user's current page.
   const { highlight, clearHighlight } = { highlight: state.highlight, clearHighlight: props.clearHighlight }
@@ -1649,7 +1656,11 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
     <section className={css.page} data-plugin-panel aria-busy={state.status === 'loading' || refreshing}>
       {showsMainList
         ? (
-          <div className={css.pageBar} data-plugin-bar>
+          <div
+            className={`${css.pageBar}${tabs.length > 0 ? ` ${css.pageBarWithTabs}` : ''}`}
+            data-plugin-bar
+            data-compact={compactBar ? '' : undefined}
+          >
             <header className={css.pageHead} data-window-drag>
               <div className={css.pageHeading}>
                 <h1 className={css.pageTitle}>{t('title')}</h1>
@@ -1662,38 +1673,44 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
                   </Tooltip>
                 </div>
               </div>
-              <div className={css.toolbar} hidden={!onInstalled}>
+              <div className={css.toolbar} data-plugin-toolbar hidden={!onInstalled}>
                 {updates === undefined ? null : <span className={css.updatesNote} data-tone={updates.tone}>{updates.text}</span>}
                 <Tooltip label={t('refresh')} delayMs={500} focusDelayMs={500} side="bottom" portal disabled={!loaded || refreshing}>
                   <Button variant="outline" size="sm" className={css.addButton} aria-label={t('refresh')} aria-busy={refreshing}
                     disabled={!loaded || refreshing} onClick={props.refresh}
                     icon={refreshing ? <StateDot state="ongoing" size={13} /> : <IconRefreshOutlineRegular size={13} />}>
-                    {t('refresh')}
+                    <span className={css.toolbarLabel}>{t('refresh')}</span>
                   </Button>
                 </Tooltip>
                 {state.install.requestId === undefined
                   ? <AddPluginMenu t={t} disabled={!loaded} openInstall={props.openInstall} renderSlot={renderSlot} />
-                  : <Button variant="primary" size="sm" className={css.addButton} icon={<IconPlusOutlineRegular size={13} />} disabled={!loaded} onClick={props.openInstall}>
-                    {t('installViewTask')}
-                  </Button>}
+                  : (
+                    <Tooltip label={t('installViewTask')} side="bottom" delayMs={500} focusDelayMs={500} portal disabled={!loaded}>
+                      <Button variant="primary" size="sm" className={css.addButton} icon={<IconPlusOutlineRegular size={13} />}
+                        aria-label={t('installViewTask')} disabled={!loaded} onClick={props.openInstall}>
+                        <span className={css.toolbarLabel}>{t('installViewTask')}</span>
+                      </Button>
+                    </Tooltip>
+                  )}
               </div>
+              {tabs.length > 0
+                ? (
+                  <div className={css.pageTabs}>
+                    <SegmentedTabs
+                      size="sm"
+                      className={css.pageTabList}
+                      label={t('tabsLabel')}
+                      value={tab}
+                      onChange={(next) => { setTab(next) }}
+                      items={[
+                        { value: INSTALLED_TAB, label: t('installedTab'), id: `${tabsId}-${INSTALLED_TAB}`, panelId: `${tabsId}-${INSTALLED_TAB}-panel` },
+                        ...tabs.map(item => ({ value: item.id, label: item.label, id: `${tabsId}-${item.id}`, panelId: `${tabsId}-${item.id}-panel` })),
+                      ]}
+                    />
+                  </div>
+                )
+                : null}
             </header>
-            {tabs.length > 0
-              ? (
-                <div className={css.pageTabs}>
-                  <SegmentedTabs
-                    className={css.pageTabList}
-                    label={t('tabsLabel')}
-                    value={tab}
-                    onChange={(next) => { setTab(next) }}
-                    items={[
-                      { value: INSTALLED_TAB, label: t('installedTab'), id: `${tabsId}-${INSTALLED_TAB}`, panelId: `${tabsId}-${INSTALLED_TAB}-panel` },
-                      ...tabs.map(item => ({ value: item.id, label: item.label, id: `${tabsId}-${item.id}`, panelId: `${tabsId}-${item.id}-panel` })),
-                    ]}
-                  />
-                </div>
-              )
-              : null}
           </div>
         )
         : null}
@@ -1706,7 +1723,8 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
         </header>
       ) : null}
       {/* The page bar and the More list's head stay put; everything below scrolls. */}
-      <div className={css.pageBody} data-plugin-body>
+      <div className={css.pageBody} data-plugin-body
+        onScroll={(event) => { setCompactBar(event.currentTarget.scrollTop > COMPACT_BAR_SCROLL_TOP) }}>
         {!onInstalled
           ? (
             <div role="tabpanel" id={`${tabsId}-${tab}-panel`} aria-labelledby={`${tabsId}-${tab}`} className={css.tabPanel}>

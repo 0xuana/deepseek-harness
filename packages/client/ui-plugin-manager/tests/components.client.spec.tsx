@@ -230,8 +230,8 @@ describe('PluginManagerPage', () => {
     expect(screen.queryByRole('tablist')).toBeNull()
     setTabs([{ id: 'discover', label: 'Discover' }])
     expect(screen.getByRole('tab', { name: en.installedTab }).getAttribute('aria-selected')).toBe('true')
-    // The tabs stay in the pinned page bar with the title; the tab panel scrolls in the page body.
-    expect(screen.getByRole('tablist').closest('[data-plugin-bar]')).not.toBeNull()
+    // The tabs stay in the pinned page head with the title; the tab panel scrolls in the page body.
+    expect(screen.getByRole('tablist').closest('header')).not.toBeNull()
     expect(document.querySelector('[data-plugin-group="bundles"]')).not.toBeNull()
     fireEvent.click(screen.getByRole('tab', { name: 'Discover' }))
     expect(navigation.getSnapshot().tab).toBe('discover')
@@ -257,6 +257,28 @@ describe('PluginManagerPage', () => {
     set({ highlight: 'dsh-better-sidebar' })
     expect(navigation.getSnapshot().tab).toBe('installed')
     expect(screen.getByRole('tabpanel', { name: en.installedTab })).toBeTruthy()
+  })
+
+  it('collapses the page bar to one row while the page body is scrolled', () => {
+    const { setTabs } = renderTab({ packages: [pkg()] })
+    const bar = document.querySelector('[data-plugin-bar]')
+    const body = document.querySelector('[data-plugin-body]')
+    expect(bar?.hasAttribute('data-compact')).toBe(false)
+    setTabs([{ id: 'discover', label: 'Discover' }])
+    // The tabs take the collapsed row beside the actions, so they sit in the pinned head itself.
+    expect(screen.getByRole('tablist').closest('header')).not.toBeNull()
+    act(() => {
+      if (body === null) throw new Error('the page body is missing')
+      body.scrollTop = 160
+      fireEvent.scroll(body)
+    })
+    expect(bar?.hasAttribute('data-compact')).toBe(true)
+    act(() => {
+      if (body === null) throw new Error('the page body is missing')
+      body.scrollTop = 0
+      fireEvent.scroll(body)
+    })
+    expect(bar?.hasAttribute('data-compact')).toBe(false)
   })
 
   it('keeps the Installed tab panel through loading and the More list out of the tabs', () => {
