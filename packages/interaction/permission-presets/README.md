@@ -92,7 +92,7 @@ The observable behavior is covered in [Use this package](#use-this-package); thi
 
 ### Session pinning and blank reuse
 
-Mounting pins every live and future session: a genuinely fresh session gains the configured default preset and both knob facts, while seeded or partially initialized sessions keep their effective knob values and gain only missing durable facts. The projection-owned seed marker makes this decision from the same incremental state as the knob values. A stored `auto` identity fails publication when the Auto integration is absent or rejects admission; the service neither rewrites it nor silently derives Full access.
+Mounting pins every live and future session: a genuinely fresh session gains the configured default preset and both knob facts, while seeded or partially initialized sessions keep their effective knob values and gain only missing durable facts. The projection-owned seed marker makes this decision from the same incremental state as the knob values. The synchronous creation listener is installed before projection registration starts. While its reader is not ready, Session creation fails and Agent creation rolls back; callers must await plugin activation before creating or restoring sessions. A stored `auto` identity fails publication when the Auto integration is absent or rejects admission; the service neither rewrites it nor silently derives Full access.
 
 ### Catalog, projection, and optional command
 

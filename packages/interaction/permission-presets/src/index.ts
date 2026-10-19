@@ -197,7 +197,7 @@ export class PermissionPresetService extends TypertRemoteService {
   private autoAdmit: (() => void) | undefined
   private defaultSettings: () => PermissionSettings
 
-  private permissionProjectionHandle!: ProjectionHandle<PermissionProjectionState>
+  private permissionProjectionHandle: ProjectionHandle<PermissionProjectionState> | undefined
 
   constructor(ctx: Context, config: Config) {
     super(ctx, 'permissionPresets')
@@ -229,6 +229,9 @@ export class PermissionPresetService extends TypertRemoteService {
 
   protected async [Service.init](): Promise<void> {
     const ctx = this.ctx
+    ctx.on('session/created', (session) => {
+      this.pinInitialPermission(session)
+    })
     const selectionSchema = zod.object({
       currentValue: zod.string().min(1),
     }) as zod.ZodType<PermissionSelection>
@@ -239,9 +242,6 @@ export class PermissionPresetService extends TypertRemoteService {
       init: () => ({ ...EMPTY_KNOBS, seeded: false }),
       apply: applyPermissionEvent,
       wire: { viewSchema: selectionSchema, view: state => ({ currentValue: this.derive(state) }) },
-    })
-    ctx.on('session/created', (session) => {
-      this.pinInitialPermission(session)
     })
     for (const session of ctx.sessions.list()) {
       this.pinInitialPermission(session)
@@ -324,6 +324,9 @@ export class PermissionPresetService extends TypertRemoteService {
   }
 
   private permissionState(session: Session): PermissionProjectionState {
+    if (this.permissionProjectionHandle === undefined) {
+      throw new Error('permission: presets are not ready; await plugin activation before creating or restoring a session')
+    }
     return this.permissionProjectionHandle.stateOf(session)
   }
 
@@ -419,7 +422,8 @@ export class PermissionPresetService extends TypertRemoteService {
    * initialized sessions preserve their effective knob values and only gain
    * the missing durable facts. A stored Auto identity requires its live
    * integration and passes its admission check before
-   * publication.
+   * publication. Creation while the permission reader is still registering
+   * fails synchronously so the publishing caller can roll back.
    */
   private pinInitialPermission(session: Session): void {
     const state = this.permissionState(session)
