@@ -43,6 +43,7 @@ export interface DesktopElectronBuilderConfig {
     }
   }
   readonly nsis: {
+    readonly uninstallDisplayName: '${productName}'
     readonly include: string
     readonly oneClick: false
     readonly perMachine: false
