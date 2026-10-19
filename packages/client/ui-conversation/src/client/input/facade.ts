@@ -709,12 +709,7 @@ export class SessionInputShell implements SessionInput {
         out += draft.slice(cursor)
         this.settleSink(attempt, this.deps.defaultSink(out.trim(), attachmentIds, mode, attempt.signal))
       },
-      (error: unknown) => {
-        if (this.dead(attempt)) return
-        this.dispatchRun(({
-          type: 'sink-settled', attempt, ok: false, command: this.projection.command, message: errorText(error),
-        }))
-      },
+      (error: unknown) => { this.failSink(attempt, error) },
     )
   }
 
@@ -744,13 +739,16 @@ export class SessionInputShell implements SessionInput {
         }
         this.dispatchRun(({ type: 'sink-settled', attempt, ok: accepted, command: this.projection.command, outcome }))
       },
-      (error: unknown) => {
-        if (this.dead(attempt)) return
-        this.dispatchRun(({
-          type: 'sink-settled', attempt, ok: false, command: this.projection.command, message: errorText(error),
-        }))
-      },
+      (error: unknown) => { this.failSink(attempt, error) },
     )
+  }
+
+  /** Settle a send that ended without a Host outcome; the draft stays for correction. */
+  private failSink(attempt: SubmitAttempt, error: unknown): void {
+    if (this.dead(attempt)) return
+    this.dispatchRun(({
+      type: 'sink-settled', attempt, ok: false, command: this.projection.command, message: errorText(error),
+    }))
   }
 
   /** Enter adjudication: poll the session controller; failure = notice + draft retained (never a silent downgrade). */
