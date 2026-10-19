@@ -33,7 +33,7 @@ pnpm dsh web
 
 For the source Desktop launcher and its separate development profile, follow [Desktop development](../../../apps/desktop/README.md). Enable Computer Use in each profile that needs it.
 
-The switch saves bundle selection in the profile’s `package.json`. Computer Use is installed only in PTC sessions. Enabling from the plugin list offers setup guidance when system permissions need attention; enabling from its detail page displays the permission controls directly. The detail page offers **Set to PTC** for the new-session default; existing sessions keep their preset. The switch leaves PTC execution mode and other settings unchanged. The detail page’s **Use persistent mode** action separately enables in-memory state across PTC calls; its effects and reload behavior are described in the [permission page](../client-ui-cua/README.md). Native preparation runs when the provider loads and reuses the source-hashed executable when available.
+The switch saves bundle selection in the profile’s `package.json`. Computer Use is installed only in PTC sessions. Enabling from the plugin list offers setup guidance when system permissions need attention; enabling from its detail page displays the permission controls directly. The detail page offers **Set to PTC** for the new-session default; existing sessions keep their preset. The switch leaves PTC execution mode and other settings unchanged. The detail page’s **Use persistent mode** action separately enables in-memory state across PTC calls; its effects and reload behavior are described in the [permission page](../cua/README.md). Native preparation runs when the provider loads and reuses the source-hashed executable when available.
 
 Disabling unloads the provider and withdraws CUA tools from its Agent scopes. Runtime configuration, the new-session default and saved grants remain. Session-only application decisions end with provider disposal.
 
@@ -41,7 +41,7 @@ Computer Use requires a macOS DSH Host. Other operating systems can display the 
 
 If preparation fails, the saved selection remains and CUA operations stay unavailable. Read the Host startup diagnostic, correct its cause, then restart DSH.
 
-Explicit activation runs a read-only permission check, which may start a helper without opening a system dialog. Open the [permission page](../client-ui-cua/README.md) for system requests, settings navigation and automatic refresh. Tasks ask separately before accessing an application. Saved application decisions use the existing profile configuration; session decisions remain in memory across turns and connections until DSH restarts or Computer Use is disabled. Revoke access on the same page.
+Explicit activation runs a read-only permission check, which may start a helper without opening a system dialog. Open the [permission page](../cua/README.md) for system requests, settings navigation and automatic refresh. Tasks ask separately before accessing an application. Saved application decisions use the existing profile configuration; session decisions remain in memory across turns and connections until DSH restarts or Computer Use is disabled. Revoke access on the same page.
 
 -----
 

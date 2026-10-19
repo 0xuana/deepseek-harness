@@ -333,7 +333,7 @@ export default defineConfig({
         'packages/experimental/client-ui-voice-input/src/client/index.ts',
         // The permission entry binds generated Remote code; cua-permissions.e2e.ts covers
         // its built entry, while source tests exercise mountCuaPermissions and its UI.
-        'packages/experimental/client-ui-cua/src/client/index.ts',
+        'packages/experimental/cua/src/client/index.ts',
         // The mods band entry imports the bridge's generated Remote contribution, which exists only in lib;
         // the Web snapshot exercises the built entry, while source tests cover mountModsBand.
         'packages/experimental/client-ui-claude-code-mods/src/client/index.ts',

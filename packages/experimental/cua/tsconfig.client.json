@@ -2,10 +2,15 @@
   "extends": "../../../tsconfig.base.client.json",
   "compilerOptions": {
     "rootDir": "src",
-    "outDir": "lib/types"
+    "outDir": "lib/types",
+    "tsBuildInfoFile": "lib/tsconfig.client.tsbuildinfo"
   },
   "include": [
-    "src"
+    "src/client",
+    "src/css-modules.d.ts",
+    "src/access-types.ts",
+    "src/application-types.ts",
+    "src/remote-types.ts"
   ],
   "references": [
     {
@@ -42,10 +47,10 @@
       "path": "../../api/gateway/tsconfig.client.json"
     },
     {
-      "path": "../cua"
+      "path": "../../typert/protocol"
     },
     {
-      "path": "../../typert/protocol"
+      "path": "../../util/brand"
     }
   ]
 }

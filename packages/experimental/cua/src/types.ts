@@ -1,5 +1,4 @@
 /** Native application objects independent of evaluator ownership and persistence. */
-export type * from './access-types.ts'
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { z } from 'zod'

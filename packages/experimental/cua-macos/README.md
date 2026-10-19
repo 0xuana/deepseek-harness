@@ -216,7 +216,7 @@ The queue orders individual native requests. Holding an app object does not rese
 - macOS Stage Manager can reduce background window bounds and screenshots to thumbnails. Full-window observation and coordinate input in this state are not guaranteed; model guidance requires explaining foreground needs and avoiding repeated focus reclamation.
 - Background input depends on private SkyLight symbols; macOS updates can make them unavailable. Validate each target OS version.
 - Observed failures include dispatched Unicode text not appearing in Blender and background Command+A not selecting all text in AppKit. Inspect application state after input; a successful tool result confirms dispatch only.
-- Native binaries require a local build. Signing and Desktop distribution remain future work. The [permission page](../client-ui-cua/README.md) offers macOS prompts and app revocation; packaged Desktop permission attribution remains deferred.
+- Native binaries require a local build. Signing and Desktop distribution remain future work. The [permission page](../cua/README.md) offers macOS prompts and app revocation; packaged Desktop permission attribution remains deferred.
 - Persistent PTC is an external dependency assumption, not an implementation in this package. Real-model task success requires separate evaluation beyond native and protocol fixtures.
 
 -----

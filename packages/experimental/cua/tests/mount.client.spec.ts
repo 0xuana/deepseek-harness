@@ -6,7 +6,7 @@ import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { RemoteError, type RemoteResult, type TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
-import type { CuaApplicationState, CuaSystemPermissionState } from '@deepseek-ai/dsh-cua/types'
+import type { CuaApplicationState, CuaSystemPermissionState } from '../src/access-types.ts'
 import { expect, it, vi } from 'vitest'
 import type { PermissionFace } from '../src/client/controller.ts'
 import { mountCuaPermissions, inject } from '../src/client/mount.ts'
@@ -86,17 +86,17 @@ it('withdraws the permission Remote and all controls with the optional plugin', 
     await vi.waitFor(() => { expect(actions.hooks.cuaPermissions.getSnapshot().toast?.kind).toBe('requested') })
     actions.openSettings('screenRecording')
     await vi.waitFor(() => { expect(actions.hooks.cuaPermissions.getSnapshot().toast?.kind).toBe('opened') })
-    actions.revoke('a'.repeat(64) as import('@deepseek-ai/dsh-cua/types').CuaApplicationId)
+    actions.revoke('a'.repeat(64) as import('../src/access-types.ts').CuaApplicationId)
     await vi.waitFor(() => { expect(actions.hooks.cuaPermissions.getSnapshot().toast?.kind).toBe('revoked') })
-    actions.retryApproval('a'.repeat(64) as import('@deepseek-ai/dsh-cua/types').CuaApplicationId)
+    actions.retryApproval('a'.repeat(64) as import('../src/access-types.ts').CuaApplicationId)
     await vi.waitFor(() => { expect(actions.hooks.cuaPermissions.getSnapshot().toast?.kind).toBe('retryAllowed') })
     const failed = { ok: false as const, error: new RemoteError('gateway/internal', 'offline', {}) }
     for (const [target, invoke] of [
       [f.runtimeConfiguration, actions.refresh], [f.status, actions.refresh], [f.systemStatus, actions.refresh],
       [f.applicationIcons, actions.refresh], [f.requestPermission, () => { actions.request('accessibility') }],
       [f.openSettings, () => { actions.openSettings('accessibility') }],
-      [f.revoke, () => { actions.revoke('a'.repeat(64) as import('@deepseek-ai/dsh-cua/types').CuaApplicationId) }],
-      [f.retryApproval, () => { actions.retryApproval('a'.repeat(64) as import('@deepseek-ai/dsh-cua/types').CuaApplicationId) }],
+      [f.revoke, () => { actions.revoke('a'.repeat(64) as import('../src/access-types.ts').CuaApplicationId) }],
+      [f.retryApproval, () => { actions.retryApproval('a'.repeat(64) as import('../src/access-types.ts').CuaApplicationId) }],
     ] as const) {
       actions.refresh()
       await vi.waitFor(() => { expect(actions.hooks.cuaPermissions.getSnapshot().busy).toBe(false) })
@@ -156,7 +156,7 @@ it.each(['plugin', 'root'])('keeps the Remote mounted until an accepted revoke c
     const fiber = await f.ctx.plugin({ inject: [...inject], apply: ctx => mountCuaPermissions(ctx, contribution) })
     const actions = f.ctx.slots.entries('plugins.bundle.config')[0]!.inject!()
     actionsOf(actions)
-    actions.revoke('a'.repeat(64) as import('@deepseek-ai/dsh-cua/types').CuaApplicationId)
+    actions.revoke('a'.repeat(64) as import('../src/access-types.ts').CuaApplicationId)
     await entered.promise
     let closed = false
     closing = Promise.resolve(owner === 'plugin' ? fiber.dispose() : f.ctx.fiber.dispose()).then(() => { closed = true })

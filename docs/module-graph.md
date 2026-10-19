@@ -246,7 +246,6 @@ flowchart TD
     pkg_office_to_pdf["office-to-pdf"]
   end
   subgraph group_experimental["packages/experimental"]
-    pkg_client_ui_cua["client-ui-cua"]
     pkg_cua["cua"]
     pkg_cua_bundle["cua-bundle"]
     pkg_experimental_agent_team["experimental-agent-team"]
@@ -1544,7 +1543,6 @@ flowchart TD
 | [`client-web`](../packages/client/web) | `client` | — |
 | [`credentials`](../packages/credentials/credentials) | `credentials` | — |
 | [`office-to-pdf`](../packages/document/office-to-pdf) | `document` | — |
-| [`client-ui-cua`](../packages/experimental/client-ui-cua) | `experimental` | — |
 | [`cua-bundle`](../packages/experimental/cua-bundle) | `experimental` | — |
 | [`experimental-agent-team-profile`](../packages/experimental/agent-team-profile) | `experimental` | — |
 | [`experimental-badge-skill-bundle`](../packages/experimental/badge-skill-bundle) | `experimental` | — |

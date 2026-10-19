@@ -3,8 +3,8 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/cua/README.md
 /:
-  en: aa3d316ef17feae7
-  zh: 5a30d743ce257d5b
+  en: ed2539c6d12f814a
+  zh: 55a6c9d7f0d21fb7
 /deepseek-ai-dsh-cua:
   en: 0ef7ee882840cf1b
   zh: 01b9e768eff2d302
@@ -15,11 +15,14 @@
   en: 4081cf444a77bf20
   zh: def91d58969ec281
 /deepseek-ai-dsh-cua/use-this-package:
-  en: 577e1b18dd220c73
-  zh: bde0692c6695d749
+  en: ceb54d964dc355b6
+  zh: 0892066fbceef7b9
+/deepseek-ai-dsh-cua/use-this-package/permission-controls:
+  en: 6873925322180290
+  zh: 218cada140ec90b1
 /deepseek-ai-dsh-cua/understand-the-implementation:
-  en: 727a4ec9b5cd1789
-  zh: 000a6a34b29e1008
+  en: 68fc12448f1f1fc0
+  zh: ea1d489c263c6d71
 /deepseek-ai-dsh-cua/further-exploration:
   en: b8b0aece886fadaa
   zh: ecd8c88d601f2179

@@ -1,6 +1,6 @@
 /** One query projection for the permission page and activation guidance. */
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { CuaApplicationId, CuaApplicationState, CuaSystemPermission, CuaSystemPermissionState } from '@deepseek-ai/dsh-cua/types'
+import type { CuaApplicationId, CuaApplicationState, CuaSystemPermission, CuaSystemPermissionState } from '../access-types.ts'
 
 /** Host operations available to the permission UI. */
 export interface PermissionActions {
