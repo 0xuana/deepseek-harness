@@ -78,11 +78,14 @@ export async function prepareBundleConfiguration(
       && document.getIn([index, 'id']) === id && !item.has('insert')
       && (!item.has('name') || document.getIn([index, 'name']) === name))
     const previous = sequence.items[index]
-    let anchored = false
+    const anchors: string[] = []
     if (isNode(previous)) visit(previous, { Node(_key, node) {
-      if ('anchor' in node && node.anchor) anchored = true
+      if ('anchor' in node && node.anchor) {
+        anchors.push(node.anchor)
+        return visit.BREAK
+      }
     } })
-    if (index < 0 || anchored) document.add(document.createNode({ id, name, config }))
+    if (index < 0 || anchors.length > 0) document.add(document.createNode({ id, name, config }))
     else document.setIn([index, 'config'], document.createNode(config))
   }
   visit(document, { Map(_key, node) {

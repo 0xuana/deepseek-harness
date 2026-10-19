@@ -69,7 +69,7 @@ it('uses the original question cancellation and refuses late approval', async ()
   const pending = new PendingQuestion('s1' as SessionId, [{ id: 'cua-app-access', question: 'Allow?',
     intent: { kind: 'approval', approve: 'Allow', reject: 'Deny' } }])
   const controller = new AbortController()
-  const request = createWaterfallRequest(undefined, controller.signal, channel => pending.detachWaterfall(channel))
+  const request = createWaterfallRequest(undefined, controller.signal, (channel) => { pending.detachWaterfall(channel) })
   pending.attachWaterfall(request.channel)
   const factory = vi.fn((_name: string, _input: ApprovalCardInput) => null)
   render(<ApplicationApproval {...{ matched: selectApplicationApproval(pending)!, renderFactorySlot: factory,

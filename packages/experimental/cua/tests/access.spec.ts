@@ -13,7 +13,7 @@ import { NativeClient } from '../src/native-client.ts'
 const native = vi.hoisted(() => ({ instances: [] as Array<{
   disposed: boolean
   request: ReturnType<typeof vi.fn>
-  dispose: ReturnType<typeof vi.fn>
+  dispose: ReturnType<typeof vi.fn<() => Promise<void>>>
 }> }))
 
 vi.mock('../src/native-client.ts', async original => ({

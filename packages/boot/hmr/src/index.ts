@@ -268,6 +268,7 @@ class Hmr extends Service {
    */
   runExclusive<T>(operation: () => Promise<T>, signal?: AbortSignal): Promise<T> {
     if (this.executing.getStore()) return Promise.reject(new Error('HMR transactions cannot be nested'))
+    // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- Preserve the caller's arbitrary AbortSignal reason.
     if (signal?.aborted) return Promise.reject(signal.reason)
     const result = Promise.withResolvers<T>()
     const cancel = () => { result.reject(signal?.reason) }

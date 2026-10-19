@@ -11,6 +11,7 @@ import { expect, it, vi } from 'vitest'
 import type { PermissionFace } from '../src/client/controller.ts'
 import { mountCuaPermissions, inject } from '../src/client/mount.ts'
 import { apply as hostApply } from '../src/index.ts'
+import type { ApplicationApprovalProps } from '../src/client/ApplicationApproval.tsx'
 
 const contribution: TypertRemoteContribution = { package: '@deepseek-ai/dsh-cua', descriptors: [] }
 const value: CuaApplicationState & { system: CuaSystemPermissionState } = {
@@ -77,8 +78,7 @@ it('withdraws the permission Remote and all controls with the optional plugin', 
     const approval = f.ctx.slots.entries('conversation.composer')[0]!
     const select = approval.select as (owner: { pendingInteraction: undefined }) => unknown
     expect(select({ pendingInteraction: undefined })).toBeNull()
-    const presentation = approval.inject!()
-    assert(typeof presentation.resolveText === 'function')
+    const presentation = approval.inject!() as Pick<ApplicationApprovalProps, 'resolveText'>
     expect(presentation.resolveText({ en: 'Localized', zh: 'Localized' })).toBe('Localized')
     const entry = f.ctx.slots.entries('plugins.bundle.config')[0]!
     const actions = entry.inject!()
