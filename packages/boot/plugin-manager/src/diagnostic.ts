@@ -20,13 +20,14 @@ const fields = {
   target: z.string().max(256).nullable(),
   stage: z.enum(['install', 'enable', 'remove']),
   enabled: z.boolean().optional(),
+  version: z.string().max(128).optional(),
 }
 const operation: z.ZodType<PluginOperation> = z.discriminatedUnion('phase', [
   z.object({ ...fields, phase: z.literal('started') }),
   z.object({ ...fields, phase: z.literal('unknown') }),
   z.object({ ...fields, phase: z.literal('settled'),
     application: z.enum(['applied', 'restart-required', 'overridden', 'failed', 'cancelled']),
-    changed: z.boolean(), version: z.string().max(128).optional(),
+    changed: z.boolean(),
     errorCode: z.enum(['management-required', 'unaddressable', 'unknown-plugin', 'invalid-spec', 'already-installed',
       'ambiguous-install', 'not-bundle', 'not-removable', 'stop-profile', 'bundle-in-use', 'stale-approval',
       'incompatible-version', 'operation-error']).optional(),

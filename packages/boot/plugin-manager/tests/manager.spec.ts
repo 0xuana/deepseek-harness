@@ -466,10 +466,25 @@ it('correlates diagnostic operation starts with persisted toggle results', async
   await manager.setBundleEnabled('extra', false)
   expect(readProfileManifest('test', dir).dsh?.profile?.bundles).not.toContain('extra')
   expect(facts).toHaveLength(2)
-  expect(facts[0]).toMatchObject({ phase: 'started', reason: 'bundle', target: 'extra', enabled: false })
-  expect(facts[1]).toMatchObject({ id: facts[0]!.id, phase: 'settled', changed: true, application: 'restart-required' })
+  expect(facts[0]).toMatchObject({ phase: 'started', reason: 'bundle', target: 'extra', enabled: false, version: '1.0.0' })
+  expect(facts[1]).toMatchObject({ id: facts[0]!.id, phase: 'settled', changed: true, application: 'restart-required', version: '1.0.0' })
   await manager.setBundleEnabled('extra', true)
   expect(facts[2]!.id).not.toBe(facts[0]!.id)
+})
+
+it('retains an observed version for a refused removal and leaves damaged metadata unknown', async () => {
+  const { manager, ctx, dir } = await fixture('startup')
+  const facts: PluginOperation[] = []
+  ctx.on('plugin-manager/operation', (event) => { facts.push(event) })
+  expect(await manager.removeBundle('extra')).toMatchObject({ application: 'failed', error: { code: 'stop-profile' } })
+  expect(facts).toEqual([
+    expect.objectContaining({ phase: 'started', reason: 'remove', version: '1.0.0' }),
+    expect.objectContaining({ phase: 'settled', reason: 'remove', version: '1.0.0', application: 'failed' }),
+  ])
+  writeFileSync(join(dir, 'node_modules', 'extra', 'package.json'), '{')
+  expect(await manager.setBundleEnabled('extra', false)).toMatchObject({ changed: true, application: 'restart-required' })
+  expect(facts[2]).not.toHaveProperty('version')
+  expect(facts[3]).not.toHaveProperty('version')
 })
 
 it('excludes raw install specs and error diagnostics from operation facts', async () => {

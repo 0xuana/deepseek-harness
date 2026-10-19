@@ -21,3 +21,9 @@ it('rejects unsupported phases, oversized identifiers and invalid result fields'
   expect(parsePluginOperationRecord({ ...input, transportDropped: -1 })).toBeUndefined()
   expect(parsePluginOperationRecord({ ...input, runId: '' })).toBeUndefined()
 })
+
+it('retains an observed version before an operation settles', () => {
+  const started = { ...input, operation: { ...input.operation, phase: 'started', version: '1.2.3' } }
+  expect(parsePluginOperationRecord(started)?.operation).toMatchObject({ phase: 'started', version: '1.2.3' })
+  expect(parsePluginOperationRecord({ ...started, operation: { ...started.operation, version: 'x'.repeat(129) } })).toBeUndefined()
+})

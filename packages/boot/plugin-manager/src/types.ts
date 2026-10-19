@@ -269,13 +269,14 @@ export type PluginOperation = {
   readonly target: string | null
   readonly stage: ChangeResult['stage']
   readonly enabled?: boolean | undefined
+  /** Observed package version; absence means unavailable, never the latest registry version. */
+  readonly version?: string | undefined
 } & (
   | { readonly phase: 'started' }
   | {
     readonly phase: 'settled'
     readonly application: ChangeResult['application']
     readonly changed: boolean
-    readonly version?: string | undefined
     readonly errorCode?: ManagementError['code'] | undefined
     readonly restartReason?: RestartReason | undefined
   }

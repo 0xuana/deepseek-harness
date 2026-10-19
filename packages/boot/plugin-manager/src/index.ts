@@ -902,8 +902,10 @@ export class PluginManager extends TypertRemoteService {
     reason: PluginChange['reason'],
   ): Promise<ChangeResult> {
     const id = randomUUID() as PluginOperationId
+    const version = this.operationVersion(reason, request.target)
     const facts = { id, reason, stage: request.stage,
       target: reason === 'install' ? null : request.target,
+      ...version === undefined ? {} : { version },
       ...request.enabled === undefined ? {} : { enabled: request.enabled } }
     this.reportOperation({ ...facts, time: new Date().toISOString(), phase: 'started' })
     let settled: ChangeResult
@@ -949,6 +951,21 @@ export class PluginManager extends TypertRemoteService {
     catch (_error) {
       // Diagnostic subscribers cannot change a management result or prevent the operation.
       console.error('dsh plugin-manager: operation diagnostic delivery failed')
+    }
+  }
+
+  /** Read the pre-operation package version without preventing recovery from damaged metadata. */
+  private operationVersion(reason: PluginChange['reason'], target: string): string | undefined {
+    if (reason === 'install') return undefined
+    try {
+      if (reason !== 'plugin') return bundleManifest(target, this.profile.dir, this.profile.installAnchor)?.version
+      const entry = [...this.ctx.loader.entries()].find(row => row.id === target)
+      const source = entry?.parent.tree.ctx.baseUrl
+      if (entry === undefined || source === undefined) return undefined
+      return this.ownerContext.get('pluginPackages')?.packageOf(entry.options.name, source)?.version
+    } catch (_error) {
+      // Disabling or removing a broken package must not depend on diagnostic metadata being readable.
+      return undefined
     }
   }
 
