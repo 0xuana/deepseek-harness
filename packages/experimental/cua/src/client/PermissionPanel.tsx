@@ -1,6 +1,6 @@
 /** Native permission status and revocable application consent on the existing plugin page. */
 import { useEffect, useState } from 'react'
-import { Button, Modal, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconChevronDownOutlineRegular, Menu, Modal, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
@@ -111,6 +111,26 @@ function PermissionDescription({ application, permission, loading, t }: Pick<Per
   </p>
 }
 
+function PermissionAction({ permission, granted, loading, busy, request, openSettings, t }: Pick<PermissionProps, 'request' | 'openSettings' | 't'> & {
+  permission: 'accessibility' | 'screenRecording'
+  granted: boolean | null
+  loading: boolean
+  busy: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  useEffect(() => { setOpen(false) }, [busy, loading, granted])
+  if (loading) return <span className={css.buttonPlaceholder} aria-hidden />
+  if (granted === false) return <Button size="sm" variant="primary" className={css.permissionAction} disabled={busy}
+    onClick={() => { request(permission) }}>{t('request')}</Button>
+  return <Menu open={open && !busy} onClose={() => { setOpen(false) }} align="end" portal autoFocus
+    anchor={<Button size="sm" variant="outline" className={css.permissionAction} disabled={busy}
+      aria-haspopup="menu" aria-expanded={open && !busy} onClick={() => { setOpen(value => !value) }}>
+      {t(granted === true ? 'granted' : 'unknown')}<IconChevronDownOutlineRegular size={12} aria-hidden="true" />
+    </Button>}
+    items={[{ id: 'settings', label: t('settings') }]}
+    onSelect={() => { setOpen(false); openSettings(permission) }} />
+}
+
 /** @param props Host observation and explicit user actions. @returns Permission controls without automatic system prompts. */
 export function PermissionPanel(props: PermissionPanelProps) {
   const { t, refresh } = props
@@ -142,13 +162,8 @@ export function PermissionPanel(props: PermissionPanelProps) {
             <strong>{t(permission)}</strong>
             <PermissionDescription application={application} permission={permission} loading={loading} t={t} />
           </div>
-          <span className={css.permissionStatus}>{loading ? <span className={css.statusPlaceholder} aria-hidden />
-            : t(observed === null || state.system.error !== null ? 'unknown' : observed[permission] ? 'granted' : 'missing')}</span>
-          <div className={css.actions}>
-            {loading ? <span className={css.buttonPlaceholder} aria-hidden />
-              : observed?.[permission] === false && <Button size="sm" variant="primary" disabled={busy} onClick={() => { props.request(permission) }}>{t('request')}</Button>}
-            <Button size="sm" variant="outline" disabled={busy || loading} onClick={() => { props.openSettings(permission) }}>{t('settings')}</Button>
-          </div>
+          <PermissionAction permission={permission} granted={observed === null || state.system.error !== null ? null : observed[permission]}
+            loading={loading} busy={busy} request={props.request} openSettings={props.openSettings} t={t} />
         </div>)}
       </div>
       {observed !== null && (!observed.accessibility || !observed.screenRecording) && <p>
