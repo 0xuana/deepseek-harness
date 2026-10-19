@@ -16,7 +16,7 @@
  * scrollbar indirection away while it is elsewhere, so a list the user is not
  * pointing at carries no bar.
  */
-import { useEffect, useRef, useState, type MouseEvent } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
   FishLogo, IconNewChatOutlineMedium, IconNewChatOutlineRegular, IconPanelLeftOutlineRegular, isDarwinDesktop, ShortcutKeys, Tooltip,
@@ -174,11 +174,12 @@ export function SidebarRoot({
   }, [pointerInside])
 
   const buildVersion = localBuildVersion()
-  // The local-build fallbacks copy the badge text instead of starting a
-  // session; occupied brand slots keep the New Session click.
+  // The local-build fallbacks copy the badge text; the brand button below
+  // skips New Session for clicks inside them. The click still bubbles, so
+  // document-level outside-click listeners see it.
   const [versionCopied, setVersionCopied] = useState(false)
-  const copyVersion = (version: string) => (event: MouseEvent): void => {
-    event.stopPropagation()
+  const copyVersion = (version: string) => (): void => {
+    if (versionCopied) return
     void writeClipboard(version).then((ok) => {
       if (!ok) return
       setVersionCopied(true)
@@ -232,7 +233,8 @@ export function SidebarRoot({
         {/* Expanded, the brand doubles as a New Session shortcut — except on
             macOS, where it stays part of the logo row's window-drag surface
             (a button would subtract itself through the global no-drag rule);
-            the collapsed rail's logo is the expand toggle below instead. */}
+            the collapsed rail's logo is the expand toggle below instead.
+            Mouse clicks on the local-build fallbacks copy the version instead. */}
         {wide && (() => {
           const identity = (
             <span className={css.brandIdentity} aria-hidden="true">
@@ -240,7 +242,7 @@ export function SidebarRoot({
                 {renderSlot('sidebar.brand.mark', { size: 24 }, {
                   fallback: buildVersion === undefined
                     ? <FishLogo size={24} />
-                    : <span className={css.copyVersion} onClick={copyVersion(buildVersion)}><FishLogo size={24} /></span>,
+                    : <span className={css.copyVersion} data-copy-version onClick={copyVersion(buildVersion)}><FishLogo size={24} /></span>,
                 })}
               </span>
               <span className={css.brandName}>
@@ -248,9 +250,13 @@ export function SidebarRoot({
                   fallback: buildVersion === undefined
                     ? <span className={css.fallbackBrandName}>{t('brand.localBuild')}</span>
                     : (
-                      <span className={clsx(css.localBuildBrand, css.copyVersion)} onClick={copyVersion(buildVersion)}>
-                        <span className={css.localBuildTitle}>{t('brand.localBuild')}</span>
-                        <span className={css.buildVersion}>{versionCopied ? t('copied') : buildVersion}</span>
+                      <span className={clsx(css.localBuildBrand, css.copyVersion)} data-copy-version onClick={copyVersion(buildVersion)}>
+                        {/* The feedback shares the title's grid cell, so the copy target keeps its width. */}
+                        <span className={css.localBuildTitle}>
+                          <span className={versionCopied ? css.concealed : undefined}>{t('brand.localBuild')}</span>
+                          {versionCopied && <span>{t('copied')}</span>}
+                        </span>
+                        <span className={css.buildVersion}>{buildVersion}</span>
                       </span>
                     ),
                 })}
@@ -265,7 +271,10 @@ export function SidebarRoot({
                 className={clsx(css.brand, css.wide)}
                 aria-label={t('session.new.label')}
                 aria-keyshortcuts={newShortcut?.aria}
-                onClick={() => { startSession() }}
+                onClick={(event) => {
+                  if ((event.target as Element).closest('[data-copy-version]') !== null) return
+                  startSession()
+                }}
               >
                 {identity}
               </button>

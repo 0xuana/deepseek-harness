@@ -26,6 +26,7 @@ afterEach(() => {
   delete document.documentElement.dataset.platform
   vi.unstubAllEnvs()
   vi.useRealTimers()
+  Reflect.deleteProperty(navigator, 'clipboard')
 })
 
 // The shell never reads the global hooks itself, but they ride the standard
@@ -124,6 +125,8 @@ describe('SidebarRoot shell', () => {
     expect(Array.from(screen.getByRole('tooltip').querySelectorAll('kbd'), key => key.textContent)).toEqual(['Ctrl', 'N'])
   })
   it('routes New Session (capsule + wordmark) and the column toggle', () => {
+    // Occupied brand slots keep New Session even when the build carries a version.
+    vi.stubEnv('DSH_CLIENT_VERSION', '1.2.3')
     const b = mountShell()
     expect(screen.getByTestId('custom-brand-mark')).toBeTruthy()
     expect(screen.getByTestId('custom-brand-name')).toBeTruthy()
@@ -213,8 +216,21 @@ describe('SidebarRoot shell', () => {
     await act(async () => { fireEvent.click(mark) })
     expect(writeText).toHaveBeenCalledTimes(3)
     expect(screen.getByText('Copied')).toBeTruthy()
+    // A repeated click during the feedback neither copies again nor
+    // falls through to New Session; the click still reaches document.
+    const documentClick = vi.fn()
+    document.addEventListener('click', documentClick)
+    await act(async () => { fireEvent.click(screen.getByText('1.2.3-abcdef0')) })
+    document.removeEventListener('click', documentClick)
+    expect(documentClick).toHaveBeenCalledOnce()
+    expect(writeText).toHaveBeenCalledTimes(3)
     expect(startSession).not.toHaveBeenCalled()
-    Reflect.deleteProperty(navigator, 'clipboard')
+
+    // The rest of the brand button still starts a session.
+    if (!darwin) {
+      fireEvent.click(screen.getAllByRole('button', { name: 'New session' })[0]!)
+      expect(startSession).toHaveBeenCalledOnce()
+    }
   })
 
   it('retains the local-build fallback without complete build metadata', () => {
