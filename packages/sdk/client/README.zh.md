@@ -62,7 +62,7 @@ console.log(result.finalResponse)
 <a id="native-user-questions"></a>
 ### 原生用户问答
 
-向 `DeepSeekHarness` 或 `HarnessClient` 传入 `onUserQuestion`，即可通过原生 SDK 协议回答内建的 `ask_user_question` 工具。回调接收 `{ requestId, sessionId, questions }` 与 `{ signal }`；返回 `{ answers: [{ id, selected, custom? }] }`，每个问题 id 对应一项。应用自行提供 UI 或模拟用户策略。SDK 在初始化时自动声明此回调，也能在其他请求待决时接收答案。
+向 `DeepSeekHarness` 或 `HarnessClient` 传入 `onUserQuestion`，即可通过原生 SDK 协议回答内建的 `ask_user_question` 工具。回调接收 `{ requestId, sessionId, questions }` 与 `{ signal }`；返回 `{ answers: [{ id, selected, custom? }] }`，每个问题 id 对应一项。应用自行提供 UI 或模拟用户策略。SDK 在初始化时自动声明此回调，也能在其他请求待决时接收答案。`HarnessClient.initialize()` 会在需要时启动进程，无需显式调用 `start()`。
 
 运行时取消问题、断开连接或客户端关闭时，应响应 signal 释放宿主工作。SDK 停止等待已取消的回调，并忽略晚到答案。回调抛错会报告提供方错误；缺失或格式错误的答案均不构成批准。未提供回调时，原生进程内回答方仍可用，缺少回答方则报告 `NO_PROVIDER`。
 

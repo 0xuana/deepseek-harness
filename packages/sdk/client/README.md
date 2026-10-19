@@ -62,7 +62,7 @@ The client exports typed errors for every failure mode: `JsonRpcResponseError` (
 <a id="native-user-questions"></a>
 ### Native user questions
 
-Pass `onUserQuestion` to `DeepSeekHarness` or `HarnessClient` to answer the built-in `ask_user_question` tool through the native SDK protocol. The callback receives `{ requestId, sessionId, questions }` and `{ signal }`; return `{ answers: [{ id, selected, custom? }] }`, using one item per question id. Your application owns the UI or simulated-user policy. The SDK automatically advertises the callback at initialization and can receive answers while other requests are pending.
+Pass `onUserQuestion` to `DeepSeekHarness` or `HarnessClient` to answer the built-in `ask_user_question` tool through the native SDK protocol. The callback receives `{ requestId, sessionId, questions }` and `{ signal }`; return `{ answers: [{ id, selected, custom? }] }`, using one item per question id. Your application owns the UI or simulated-user policy. The SDK automatically advertises the callback at initialization and can receive answers while other requests are pending. `HarnessClient.initialize()` starts the process when needed; an explicit `start()` is optional.
 
 Observe the signal to release host work when the runtime cancels the question, disconnects, or the client closes. The SDK stops awaiting cancelled callbacks and ignores their later answers. A throwing callback reports a provider error; missing or malformed answers never count as approval. Without a callback, native in-process answerers remain available, and a missing answerer reports `NO_PROVIDER`.
 

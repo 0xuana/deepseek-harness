@@ -3,7 +3,7 @@ import { expect, it, onTestFinished } from 'vitest'
 import type { HarnessClientOptions } from '../src/types.ts'
 import { createProcessHarnessClient } from '../src/client.ts'
 
-async function client(onUserQuestion?: HarnessClientOptions['onUserQuestion']) {
+async function client(onUserQuestion?: HarnessClientOptions['onUserQuestion'], explicitStart = true) {
   const result = createProcessHarnessClient({
     command: process.execPath,
     args: [fileURLToPath(new URL('./fixtures/user-questions.ts', import.meta.url))],
@@ -12,20 +12,20 @@ async function client(onUserQuestion?: HarnessClientOptions['onUserQuestion']) {
   })
   onTestFinished(() => result.close())
   if (onUserQuestion !== undefined) result.options.onUserQuestion = onUserQuestion
-  result.start()
+  if (explicitStart) result.start()
   const initialized = await result.initialize({ cwd: process.cwd(), provider: 'mock', model: 'mock' })
   const capabilities: unknown = JSON.parse(initialized.serverInfo.version)
   return { client: result, capabilities }
 }
 
-it('advertises a callback and answers a runtime request during an outbound request', async () => {
+it.each([false, true])('advertises a callback and answers a runtime request with explicit start: %s', async (explicitStart) => {
   const answer = { answers: [{ id: 'format', selected: ['CSV'] }] }
   const seen: string[] = []
   const f = await client(async (request, { signal }) => {
     seen.push(request.sessionId)
     expect(signal.aborted).toBe(false)
     return answer
-  })
+  }, explicitStart)
   expect(f.capabilities).toEqual({ userQuestions: true })
   await expect(f.client.request('test/question', {})).resolves.toEqual({ answer, error: null })
   expect(seen).toEqual(['main'])

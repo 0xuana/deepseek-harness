@@ -305,11 +305,12 @@ export class HarnessClient {
   }
 
   /**
-   * Perform the process-wide handshake.
+   * Start the runtime if needed, then perform the process-wide handshake.
    * @param params - workspace cwd plus the provider/model route.
    * @returns the runtime's wire identity.
    */
   async initialize(params: InitializeParams): Promise<InitializeResult> {
+    this.start()
     const result = await this.request('initialize', {
       ...params,
       ...this.userQuestionHandler === undefined ? {} : { capabilities: { ...params.capabilities, userQuestions: true } },
