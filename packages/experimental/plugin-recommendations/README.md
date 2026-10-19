@@ -25,7 +25,7 @@ Users can discover a relevant built-in plugin while discussing a concrete need. 
 <a id="use-this-package"></a>
 ## Use this package
 
-Enable Plugin recommendations in the Plugins page’s Official group. Shipped profiles leave this experimental bundle disabled. It has no configuration fields.
+Enable Plugin recommendations in the Plugins page’s Experimental plugins group. Shipped profiles leave this experimental bundle disabled. It has no configuration fields.
 
 ```yaml
 - name: @deepseek-ai/dsh-experimental-plugin-recommendations
