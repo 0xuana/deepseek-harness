@@ -1323,6 +1323,43 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'headlessStartup',
+    summary: 'What the runner row reads from HEADLESS_STARTUP_SERVICE.',
+    description: 'What the runner row reads from HEADLESS_STARTUP_SERVICE.',
+    methods: [
+      {
+        signature: 'task: string | undefined',
+        description: 'The task text this invocation asked for; absent when the runner reads stdin.',
+        parameters: [],
+      },
+      {
+        signature: 'sessionId: string | undefined',
+        description: 'Exact Session identity to adopt; absent for a fresh random identity.',
+        parameters: [],
+      },
+      {
+        signature: 'json: boolean',
+        description: 'Whether stdout carries the machine-readable event stream instead of final text.',
+        parameters: [],
+      },
+      {
+        signature: 'permissionMode?: string',
+        description: 'Permission preset to apply before the task; absent preserves session policy.',
+        parameters: [],
+      },
+      {
+        signature: 'approvalPolicy?: ApprovalPolicy',
+        description: 'Approval behavior applied after the permission preset; absent keeps the current policy.',
+        parameters: [],
+      },
+      {
+        signature: 'additionalWritableRoots?: string[]',
+        description: 'Explicit absolute write grants for this invocation; absent adds no directories.',
+        parameters: [],
+      },
+    ],
+  },
+  {
     key: 'hmr',
     summary: 'Hot reload service with Cordis-compatible module configuration and events.',
     description: 'Hot reload service with Cordis-compatible module configuration and events.',
@@ -2042,6 +2079,11 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       {
         signature: 'readonly workspaceRoot: string',
         description: 'The absolute `workspace-write` fallback root for calls without a session cwd.',
+        parameters: [],
+      },
+      {
+        signature: 'readonly additionalWritableRoots: readonly string[] | undefined',
+        description: 'The frozen extra writable directories shared by every resolved policy, or `undefined` for none.',
         parameters: [],
       },
       {
@@ -3050,16 +3092,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'subagentModelSelection',
-    summary: 'Singleton settings owner read when delegation tools are composed for a Session.',
-    description: 'Singleton settings owner read when delegation tools are composed for a Session.',
-    methods: [
-      {
-        signature: 'current(): SubagentModelSelectionSettings',
-        description: 'Read a detached selection preference for the next eligible Session composition.',
-        parameters: [],
-        returns: 'the enabled state and exact allowed routes.',
-      },
-    ],
+    summary: 'Host settings owner that records Session authorization before the first model request.',
+    description: 'Host settings owner that records Session authorization before the first model request.',
+    methods: [],
   },
   {
     key: 'subagents',
@@ -6912,7 +6947,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SandboxExecutionPolicy',
-    declaration: 'export interface SandboxExecutionPolicy {\n    mode: SandboxMode;\n    workspaceRoot: string;\n    sessionId?: SessionId;\n}',
+    declaration: 'export interface SandboxExecutionPolicy {\n    mode: SandboxMode;\n    workspaceRoot: string;\n    additionalWritableRoots?: readonly string[];\n    sessionId?: SessionId;\n}',
   },
   {
     name: 'SandboxMode',
