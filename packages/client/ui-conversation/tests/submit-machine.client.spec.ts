@@ -60,7 +60,7 @@ describe('submit-machine: plain × enter', () => {
     expect(m.state.phase).toBe('plain')
   })
 
-  it('non-command text is sent with the draft and mode and stays until the Host accepts it', () => {
+  it('sends non-command text with the draft and mode and holds another send until the Host accepts it', () => {
     const m = new SubmitMachine()
     const attachmentIds = [attachmentId('image-1')]
     const fx = m.dispatch({ type: 'enter', mode: 'queue', draft: 'hello', occurrences: [], attachmentIds })
@@ -70,29 +70,48 @@ describe('submit-machine: plain × enter', () => {
     expect(sink.mode).toBe('queue')
     expect(sink.attempt).toMatchObject({ draftSnapshot: 'hello', attachmentIds })
     expect(m.state.phase).toBe('sending')
+    expect(m.sendingAttempt).toBe(sink.attempt)
     expect(m.dispatch({ type: 'enter', mode: 'queue', draft: 'again', occurrences: [], attachmentIds: [] })).toEqual([])
 
-    const accepted = m.dispatch({ type: 'sink-settled', attempt: sink.attempt, ok: true, outcome: { kind: 'success' } })
-    expect(effectAt(accepted, 0, 'commit-draft').retainSuffixOf).toBeNull()
+    const accepted = m.dispatch({
+      type: 'sink-settled', attempt: sink.attempt, ok: true, command: undefined, outcome: { kind: 'success' },
+    })
+    expect(effectAt(accepted, 0, 'commit-draft').submitted).toBe('hello')
     expect(m.state.phase).toBe('plain')
+    expect(m.sendingAttempt).toBeUndefined()
   })
 
   it('returns a refused or failed message to editing unchanged with its notice', () => {
     const m = new SubmitMachine()
     const refused = effectAt(m.dispatch({ type: 'enter', mode: 'queue', draft: 'kept', occurrences: [], attachmentIds: [] }), 0, 'default-sink')
-    expect(m.dispatch({ type: 'sink-settled', attempt: refused.attempt, ok: false, outcome: { kind: 'error' } })).toEqual([])
+    expect(m.dispatch({
+      type: 'sink-settled', attempt: refused.attempt, ok: false, command: undefined, outcome: { kind: 'error' },
+    })).toEqual([])
     expect(m.state.phase).toBe('plain')
 
     const failed = effectAt(m.dispatch({ type: 'enter', mode: 'queue', draft: 'kept', occurrences: [], attachmentIds: [] }), 0, 'default-sink')
-    expect(m.dispatch({ type: 'sink-settled', attempt: failed.attempt, ok: false, message: 'offline' }))
+    expect(m.dispatch({ type: 'sink-settled', attempt: failed.attempt, ok: false, command: undefined, message: 'offline' }))
       .toEqual([{ type: 'notice', level: 'error', text: 'offline' }])
     expect(m.state.phase).toBe('plain')
 
     const informed = effectAt(m.dispatch({ type: 'enter', mode: 'queue', draft: 'sent', occurrences: [], attachmentIds: [] }), 0, 'default-sink')
     expect(m.dispatch({
-      type: 'sink-settled', attempt: informed.attempt, ok: true, outcome: { kind: 'success', text: 'queued' },
-    })).toEqual([{ type: 'commit-draft', retainSuffixOf: null }, { type: 'notice', level: 'info', text: 'queued' }])
-    expect(m.dispatch({ type: 'sink-settled', attempt: informed.attempt, ok: true })).toEqual([])
+      type: 'sink-settled', attempt: informed.attempt, ok: true, command: undefined, outcome: { kind: 'success', text: 'queued' },
+    })).toEqual([{ type: 'commit-draft', submitted: 'sent' }, { type: 'notice', level: 'info', text: 'queued' }])
+    expect(m.dispatch({ type: 'sink-settled', attempt: informed.attempt, ok: true, command: undefined })).toEqual([])
+  })
+
+  it.each([true, false])('applies the command chip the user left while a message was sent (accepted: %s)', (ok) => {
+    const m = new SubmitMachine()
+    const goal = claimOf('goal')
+    const sink = effectAt(m.dispatch({ type: 'enter', mode: 'queue', draft: '', occurrences: [], attachmentIds: [attachmentId('image')] }), 0, 'default-sink')
+    // The draft stays editable, but the claim waits for the settlement.
+    expect(m.dispatch({ type: 'claim', claim: goal })).toEqual([])
+    expect(m.dispatch({ type: 'draft-changed', command: goal })).toEqual([])
+    expect(m.state).toEqual({ phase: 'sending' })
+    expect(m.dispatch({ type: 'sink-settled', attempt: sink.attempt, ok, command: goal }))
+      .toEqual(ok ? [{ type: 'commit-draft', submitted: '' }] : [])
+    expect(m.state).toMatchObject({ phase: 'claimed', claim: { name: 'goal', token: goal.token } })
   })
 
   it('sends an attachment-only draft as a message', () => {
@@ -304,7 +323,7 @@ describe('submit-machine: submitting transaction', () => {
       type: 'submit-settled', attempt, ok: true, command: undefined,
       outcome: { kind: 'success', text: 'goal saved' },
     })
-    expect(effectAt(fx, 0, 'commit-draft').retainSuffixOf).toBe('/goal x')
+    expect(effectAt(fx, 0, 'commit-draft').submitted).toBe('/goal x')
     expect(effectAt(fx, 1, 'notice')).toMatchObject({ level: 'info', text: 'goal saved' })
     expect(m.state.phase).toBe('plain')
     expect(m.state.claim).toBeUndefined()
@@ -374,7 +393,7 @@ describe('submit-machine: submitting transaction', () => {
     const sink = effectAt(m.dispatch({ type: 'enter', mode: 'queue', draft: 'gone', occurrences: [], attachmentIds: [] }), 0, 'default-sink')
     m.dispatch({ type: 'release' })
     expect(sink.attempt.signal.aborted).toBe(true)
-    expect(m.dispatch({ type: 'sink-settled', attempt: sink.attempt, ok: true })).toEqual([])
+    expect(m.dispatch({ type: 'sink-settled', attempt: sink.attempt, ok: true, command: undefined })).toEqual([])
     expect(m.state.phase).toBe('plain')
   })
 })

@@ -123,8 +123,11 @@ describe('web e2e: queued image submission', () => {
     try {
       await input.fill(QUEUED_TEXT)
       await input.press('Enter')
-      // The composer keeps the text and image, read-only, until the Host accepts the prompt.
-      await expect.poll(() => input.getAttribute('contenteditable'), { timeout: 15_000 }).toBe('false')
+      // The composer keeps the text and image, still editable, until the Host accepts the prompt.
+      const sending = page.getByRole('button', { name: 'Sending message', exact: true })
+      await expect.poll(() => sending.getAttribute('aria-busy'), { timeout: 15_000 }).toBe('true')
+      expect(await input.getAttribute('contenteditable')).toBe('true')
+      expect(await input.textContent()).toBe(QUEUED_TEXT)
       expect(await page.getByRole('img', { name: 'queued.png' }).count()).toBe(1)
       expect(await page.locator('[data-queue-dock] [data-submission-echo]').count()).toBe(0)
       releasePrompt.resolve(undefined)

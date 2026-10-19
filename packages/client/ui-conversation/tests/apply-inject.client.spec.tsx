@@ -547,6 +547,27 @@ describe('Conversation inject API', () => {
     await b.runtime.dispose()
   })
 
+  it('leaves a draft whose message is still being sent with its Session', async () => {
+    const b = await bench()
+    const pending = Promise.withResolvers<Awaited<ReturnType<ISession['prompt']>>>()
+    b.sessionFake.prompt.mockReturnValueOnce(pending.promise)
+    const { state, actions } = b.inputApi(ROOT)
+    actions.setDraft('in flight')
+    actions.submit()
+    await vi.waitFor(() => { expect(b.sessionFake.prompt).toHaveBeenCalledOnce() })
+    expect(state.getSnapshot().phase).toBe('sending')
+    const other = 'sending-target' as SessionId
+    await b.runtime.sessions.add({ id: other, session: {} })
+    b.connectWorkspace.mockResolvedValueOnce(other)
+    await b.residentApi(ROOT).selectWorkspace('workspace-sending' as WorkspaceId)
+    expect(b.opened).toHaveBeenCalledWith(other)
+    expect(b.inputApi(other).state.getSnapshot().draft).toBe('')
+    expect(state.getSnapshot().draft).toBe('in flight')
+    pending.resolve({ ok: true, value: { accepted: true } })
+    await vi.waitFor(() => { expect(state.getSnapshot()).toMatchObject({ phase: 'plain', draft: '' }) })
+    await b.runtime.dispose()
+  })
+
   it('carries structured references through Workspace selection without flattening them', async () => {
     const b = await bench()
     const draft = {

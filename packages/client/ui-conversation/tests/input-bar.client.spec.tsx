@@ -25,7 +25,7 @@ import type { ContextPressureProjection } from '@deepseek-ai/dsh-token-meter/cli
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { SubmitOutcome } from '../src/client/contract/input.ts'
+import type { CommandClaim, SubmitOutcome } from '../src/client/contract/input.ts'
 import { SessionInputShell } from '../src/client/input/facade.ts'
 import { $replaceDetectSpanWithText, $selectDetectSpan } from '../src/client/input/editor/span-map.ts'
 import type {
@@ -383,19 +383,41 @@ describe('composer focus handoff', () => {
   it.each<[string, SubmitOutcome]>([
     ['the Host accepts it', { kind: 'success' }],
     ['it fails', { kind: 'error', text: 'send failed' }],
-  ])('returns the keyboard to the editor once a sent message settles because %s', async (_label, outcome) => {
+  ])('keeps the editor editable and focused while a message is sent until %s', async (_label, outcome) => {
     const { shell, textarea, sink } = bench()
     writeDraft(shell, 'draft text')
     act(() => { shell.focus() })
     let settle!: (outcome: SubmitOutcome) => void
     sink.mockImplementationOnce(() => new Promise<SubmitOutcome>((resolve) => { settle = resolve }))
     fireEvent.keyDown(textarea, { key: 'Enter' })
+    expect(shell.snapshot.phase).toBe('sending')
+    expect(textarea.getAttribute('contenteditable')).toBe('true')
+    expect(document.activeElement).toBe(textarea)
+    // Enter waits for the Host instead of sending again.
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+    expect(sink).toHaveBeenCalledOnce()
+
+    await act(async () => { settle(outcome) })
+
+    expect(textarea.getAttribute('contenteditable')).toBe('true')
+    expect(document.activeElement).toBe(textarea)
+  })
+
+  it('returns the keyboard to the editor once a command leaves the box read-only', async () => {
+    const { shell, textarea } = bench()
+    const result = Promise.withResolvers<SubmitOutcome>()
+    const claim: CommandClaim = { name: 'goal', token: '/goal ', submit: () => result.promise }
+    writeDraft(shell, '/goal')
+    act(() => { shell.beginCommand(claim, { start: 0, end: '/goal'.length, draftRev: shell.snapshot.draftRev }) })
+    act(() => { shell.focus() })
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+    expect(shell.snapshot.phase).toBe('submitting')
     expect(textarea.getAttribute('contenteditable')).toBe('false')
     // A browser moves the keyboard to the body once the focused box stops being editable; jsdom does not.
     act(() => { textarea.blur() })
     expect(document.activeElement).toBe(document.body)
 
-    await act(async () => { settle(outcome) })
+    await act(async () => { result.resolve({ kind: 'success' }) })
 
     expect(textarea.getAttribute('contenteditable')).toBe('true')
     expect(document.activeElement).toBe(textarea)
@@ -695,8 +717,10 @@ describe('image draft rail', () => {
     sink.mockImplementationOnce(() => new Promise<SubmitOutcome>((resolve) => { settle = resolve }))
     fireEvent.keyDown(textarea, { key: 'Enter' })
     expect(sink).toHaveBeenCalledWith('', ['draft-1'], 'queue', expect.any(AbortSignal))
-    // The rail keeps the sent image, and Send shows progress, until the Host accepts the message.
+    // The rail keeps the sent image, and Send shows progress, until the Host accepts the message;
+    // the rail still takes files for the next message meanwhile.
     expect(attachmentOwner(result.slotCalls).attachments).toEqual([attachments[0]])
+    expect(attachmentOwner(result.slotCalls).canAcceptDrop).toBe(true)
     const sending = view.getByRole('button', { name: '正在发送消息' }) as HTMLButtonElement
     expect(sending.disabled).toBe(true)
     expect(sending.getAttribute('aria-busy')).toBe('true')
@@ -1079,6 +1103,25 @@ describe('running and lock semantics', () => {
     expect(sink).toHaveBeenCalledWith('排队消息2', [], 'queue', expect.any(AbortSignal))
     await vi.waitFor(() => { expect(button.getAttribute('aria-label')).toBe('停止生成') })
     expect(stop).toHaveBeenCalledTimes(1)
+  })
+
+  it('running keeps Stop beside the sending control until the Host accepts the message', async () => {
+    const { view, textarea, stop, sink, shell } = bench({ running: true, draft: '排队消息' })
+    let settle!: (outcome: SubmitOutcome) => void
+    sink.mockImplementationOnce(() => new Promise<SubmitOutcome>((resolve) => { settle = resolve }))
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+    const sending = view.getByRole('button', { name: '正在发送消息' }) as HTMLButtonElement
+    expect(sending.disabled).toBe(true)
+    fireEvent.click(view.getByRole('button', { name: '停止生成' }))
+    expect(stop).toHaveBeenCalledTimes(1)
+    // An emptied draft keeps the sending control while the message waits.
+    writeDraft(shell, '')
+    expect(view.getByRole('button', { name: '正在发送消息' })).toBe(sending)
+
+    await act(async () => { settle({ kind: 'success' }) })
+
+    expect(view.queryByRole('button', { name: '正在发送消息' })).toBeNull()
+    expect(view.getAllByRole('button', { name: '停止生成' })).toHaveLength(1)
   })
 
   it('running Send follows the busy-state Steer preference and labels the delivery', () => {

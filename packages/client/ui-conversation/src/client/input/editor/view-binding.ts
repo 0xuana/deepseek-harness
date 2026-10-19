@@ -9,6 +9,9 @@ import { registerComposerKeymap } from './keymap.ts'
 
 interface DraftViewGate {
   locked: boolean
+  /** A command holds the draft read-only. */
+  commandBusy: boolean
+  /** A command or a message is in flight, so another send waits. */
   machineBusy: boolean
   canSteerQueue: boolean
   running: boolean
@@ -111,7 +114,7 @@ export function installDraftKeymap(
   return registerComposerKeymap(editor, {
     arbitrate: (key, composing) => keyboard.arbitrate(key, composing),
     space: () => {
-      if (gate.current.machineBusy || gate.current.locked) return false
+      if (gate.current.commandBusy || gate.current.locked) return false
       return keyboard.space()
     },
     dismissPopup: () => { keyboard.dismissPopup() },
@@ -138,7 +141,7 @@ export function installDraftKeymap(
     },
     intakeFiles: (files, directories) => { gate.current.intakeFiles(files, directories) },
     pasteText: (text) => {
-      if (gate.current.machineBusy || gate.current.locked) return
+      if (gate.current.commandBusy || gate.current.locked) return
       keyboard.paste(text)
     },
   })

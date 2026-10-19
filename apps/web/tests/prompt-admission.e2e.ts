@@ -1,7 +1,8 @@
 // Keyless browser coverage for Agent admission through the shipped Web
-// composition and the real wire: a Host `agent-controller/admission` listener holds a
-// sent message, so the composer stays read-only behind the sending control
-// until the listener admits it, and a refusal leaves the message in the
+// composition and the real wire: a Host `agent-controller/admission` listener
+// holds a sent message, so the composer keeps it behind the sending control
+// and stays editable for the next message; once the listener admits it, only
+// the admitted text leaves the composer. A refusal leaves the message in the
 // composer, announced by a toast unless the refusing plugin presents it.
 import { fileURLToPath } from 'node:url'
 import type { Browser } from 'playwright'
@@ -63,19 +64,22 @@ describe('web e2e: prompt admission', () => {
     await held.promise
     const sending = page.getByRole('button', { name: 'Sending message', exact: true })
     await expect.poll(() => sending.getAttribute('aria-busy')).toBe('true')
-    expect(await input.getAttribute('contenteditable')).toBe('false')
+    expect(await input.getAttribute('contenteditable')).toBe('true')
     expect(await input.textContent()).toBe(HELD)
+    // The next message can be typed at once; Enter waits for the Host instead of sending it.
+    await page.keyboard.press('Shift+Enter')
+    await page.keyboard.type(FOLLOW_UP)
+    await expect.poll(() => input.textContent()).toBe(`${HELD}${FOLLOW_UP}`)
+    await page.keyboard.press('Enter')
     expect(await page.locator('[data-submission-echo]').count()).toBe(0)
     expect(userMessages()).toBe(0)
 
     const settled = host.whenTurnSettled()
     gate.resolve(undefined)
     await settled
-    await expect.poll(() => input.textContent()).toBe('')
-    expect(await input.getAttribute('contenteditable')).toBe('true')
-    // The keyboard returns to the composer, so the next message can be typed at once.
-    await page.keyboard.type(FOLLOW_UP)
+    // Only the admitted text leaves the composer; the line typed meanwhile stays, and so does the keyboard.
     await expect.poll(() => input.textContent()).toBe(FOLLOW_UP)
+    expect(await input.evaluate(element => element === document.activeElement)).toBe(true)
     await page.locator('[data-chat-flow-kind="user"]', { hasText: HELD }).waitFor()
     expect(userMessages()).toBe(1)
     disposeHold()

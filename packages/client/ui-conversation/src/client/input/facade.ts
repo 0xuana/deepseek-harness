@@ -74,18 +74,22 @@ export interface SessionInputDeps {
   }
 }
 
-/** Guard tier from the machine phase. */
-function guardOf(phase: InputState['phase']): 'plain' | 'claimed' | 'frozen' {
+/**
+ * Guard tier from the machine phase. A message being sent leaves the draft
+ * editable, so its tier follows the leading command chip like an idle draft.
+ */
+function guardOf(phase: InputState['phase'], command: CommandClaim | undefined): 'plain' | 'claimed' | 'frozen' {
   switch (phase) {
     case 'plain': return 'plain'
     case 'claimed': return 'claimed'
-    default: return 'frozen' // adjudicating / submitting / sending
+    case 'sending': return command === undefined ? 'plain' : 'claimed'
+    default: return 'frozen' // adjudicating / submitting
   }
 }
 
-/** Whether an attempt owns the draft: the editor and attachments are read-only until it settles. */
-function frozen(phase: InputState['phase']): boolean {
-  return phase === 'adjudicating' || phase === 'submitting' || phase === 'sending'
+/** Whether a command attempt owns the draft: the editor and attachments are read-only until it settles. */
+function locked(phase: InputState['phase']): boolean {
+  return phase === 'adjudicating' || phase === 'submitting'
 }
 
 /** Whether two projections differ in content (selection and caret excluded). */
@@ -127,7 +131,7 @@ export class SessionInputShell implements SessionInput {
   readonly actions: InputActions = {
     captureInsertion: () => ({ ...this.caretSpan(), draftRev: this.rev }),
     insertText: (text, span) => {
-      if (frozen(this.snapshot.phase) || this.disposed) return false
+      if (locked(this.snapshot.phase) || this.disposed) return false
       if (span.draftRev !== this.rev) return false
       return this.draftEditor.insertAsyncText(span, text)
     },
@@ -190,7 +194,7 @@ export class SessionInputShell implements SessionInput {
     const caret = this.projection.caret
     if (caret !== null) {
       this.deps.inputTriggers?.()?.track(
-        this.projection.detectText, caret, { tier: guardOf(this.core.state.phase) }, this.rev,
+        this.projection.detectText, caret, { tier: guardOf(this.core.state.phase, this.projection.command) }, this.rev,
       )
     }
   }
@@ -284,12 +288,13 @@ export class SessionInputShell implements SessionInput {
   }
 
   private draftInitializationBlocked(): boolean {
-    return this.disposed || frozen(this.core.state.phase)
+    const { phase } = this.core.state
+    return this.disposed || (phase !== 'plain' && phase !== 'claimed')
   }
 
-  /** Append ordered attachment ids unless an admission transaction is locked. */
+  /** Append ordered attachment ids unless a command attempt holds the draft. */
   addAttachments(ids: readonly DraftAttachmentId[]): boolean {
-    if (frozen(this.snapshot.phase)) return false
+    if (locked(this.snapshot.phase)) return false
     if (ids.length === 0) return true
     this.attachmentIds = [...this.attachmentIds, ...ids]
     this.publish()
@@ -297,13 +302,13 @@ export class SessionInputShell implements SessionInput {
   }
 
   /**
-   * Add validated file references and attachment ids while admission is editable.
+   * Add validated file references and attachment ids while the draft is editable.
    * @param references - reference chips in source order.
    * @param ids - newly allocated attachment ids.
-   * @returns false when admission is locked or the editor refuses the insertion.
+   * @returns false when a command attempt holds the draft or the editor refuses the insertion.
    */
   addFiles(references: readonly ReferenceInsert[], ids: readonly DraftAttachmentId[]): boolean {
-    if (frozen(this.snapshot.phase)) return false
+    if (locked(this.snapshot.phase)) return false
     if (!this.draftEditor.insertFileReferences(references)) return false
     this.attachmentIds = [...this.attachmentIds, ...ids]
     this.publish()
@@ -311,12 +316,13 @@ export class SessionInputShell implements SessionInput {
   }
 
   /**
-   * Remove one attachment id from this draft. Busy admission phases refuse, like
-   * {@link addAttachments}: a removal landing while a send serializes would
-   * otherwise vanish from the rail yet still ride the in-flight send.
+   * Remove one attachment id from this draft. A command attempt refuses every
+   * removal, and a message being sent refuses the removal of its own
+   * attachments: such a removal would vanish from the rail while the
+   * attachment still rides the in-flight send.
    */
   removeAttachment(id: DraftAttachmentId): boolean {
-    if (frozen(this.snapshot.phase)) return false
+    if (locked(this.snapshot.phase) || this.core.sendingAttempt?.attachmentIds.includes(id) === true) return false
     const next = this.attachmentIds.filter(candidate => candidate !== id)
     if (next.length === this.attachmentIds.length) return false
     this.attachmentIds = next
@@ -351,8 +357,9 @@ export class SessionInputShell implements SessionInput {
    * Enter adjudication + submit transaction + default sink with the draft, its
    * reference chips, and its attachments as the user sent them. Effects fan
    * out from the machine; this method only feeds the event. Lock entry
-   * (adjudicating/submitting/sending) force-closes the transient layers: the
-   * popup dismisses and the menu tracks frozen.
+   * (adjudicating/submitting) force-closes the transient layers: the popup
+   * dismisses and the menu tracks frozen. A message being sent leaves them to
+   * the editable draft.
    */
   submit(mode: InputSubmitMode = 'queue', source?: 'click' | 'enter'): void {
     if (this.disposed) return
@@ -381,7 +388,7 @@ export class SessionInputShell implements SessionInput {
       attachmentIds: [...this.attachmentIds],
       submission,
     })
-    if (frozen(this.snapshot.phase)) {
+    if (locked(this.snapshot.phase)) {
       this.deps.popup?.()?.dismiss()
       this.deps.inputTriggers?.()?.track(this.projection.detectText, 0, { tier: 'frozen' }, this.rev)
     }
@@ -465,8 +472,7 @@ export class SessionInputShell implements SessionInput {
    * @returns whether the edit applied.
    */
   private applyClaim(claim: CommandClaim, span: TokenSpan, mergeHistory: boolean): boolean {
-    const phase = this.core.state.phase
-    if (phase !== 'plain' && phase !== 'claimed') return false
+    if (locked(this.core.state.phase)) return false
     if (span.draftRev !== this.rev) return false
     // Leading-trigger contract: only whitespace may precede the span; the
     // whitespace prefix is dropped so the chip takes the leading seat.
@@ -487,8 +493,7 @@ export class SessionInputShell implements SessionInput {
    * @returns whether the edit applied.
    */
   insertReference(ref: ReferenceInsert, span: TokenSpan): boolean {
-    const phase = this.core.state.phase
-    if (phase !== 'plain' && phase !== 'claimed') return false
+    if (locked(this.core.state.phase)) return false
     if (span.draftRev !== this.rev) return false
     const tail = this.projection.detectText.slice(span.end, span.end + 1)
     return this.draftEditor.insertReference(span, ref, tail)
@@ -648,25 +653,19 @@ export class SessionInputShell implements SessionInput {
         return
       }
       case 'commit-draft': {
-        this.commitDraft(fx.retainSuffixOf)
+        this.commitDraft(fx.submitted)
         return
       }
     }
   }
 
   /**
-   * Execute the commit-draft effect: clear the committed content (retaining
-   * a pure typed-during-flight suffix when the snapshot allows) and cut the
-   * undo history so sent content cannot resurrect.
+   * Execute the commit-draft effect: remove the submitted text the editor
+   * still holds, and cut the undo history after a removal so submitted
+   * content cannot come back.
    */
-  private commitDraft(retainSuffixOf: string | null): void {
-    this.draftEditor.clearCommittedDraft((clip) => {
-      if (retainSuffixOf !== null && clip !== retainSuffixOf && clip.startsWith(retainSuffixOf)) {
-        return retainSuffixOf.length
-      }
-      return null
-    })
-    this.draftEditor.clearHistory()
+  private commitDraft(submitted: string): void {
+    if (this.draftEditor.removeSubmittedDraft(submitted)) this.draftEditor.clearHistory()
   }
 
   /**
@@ -712,7 +711,9 @@ export class SessionInputShell implements SessionInput {
       },
       (error: unknown) => {
         if (this.dead(attempt)) return
-        this.dispatchRun(({ type: 'sink-settled', attempt, ok: false, message: errorText(error) }))
+        this.dispatchRun(({
+          type: 'sink-settled', attempt, ok: false, command: this.projection.command, message: errorText(error),
+        }))
       },
     )
   }
@@ -724,9 +725,10 @@ export class SessionInputShell implements SessionInput {
 
   /**
    * Settle the message being sent. Once the Host accepts it, its attachments
-   * leave the draft before the editor clears; ConversationController releases
-   * them when the message's echo retires. Any other outcome keeps the draft
-   * and its attachments for correction.
+   * leave the draft before its text leaves the editor; ConversationController
+   * releases them when the message's echo retires. Any other outcome keeps
+   * the draft and its attachments for correction. Both carry the leading
+   * command chip the user may have inserted while the message was sent.
    */
   private settleSink(
     attempt: SubmitAttempt,
@@ -740,11 +742,13 @@ export class SessionInputShell implements SessionInput {
           const sent = new Set(attempt.attachmentIds)
           this.attachmentIds = this.attachmentIds.filter(id => !sent.has(id))
         }
-        this.dispatchRun(({ type: 'sink-settled', attempt, ok: accepted, outcome }))
+        this.dispatchRun(({ type: 'sink-settled', attempt, ok: accepted, command: this.projection.command, outcome }))
       },
       (error: unknown) => {
         if (this.dead(attempt)) return
-        this.dispatchRun(({ type: 'sink-settled', attempt, ok: false, message: errorText(error) }))
+        this.dispatchRun(({
+          type: 'sink-settled', attempt, ok: false, command: this.projection.command, message: errorText(error),
+        }))
       },
     )
   }
