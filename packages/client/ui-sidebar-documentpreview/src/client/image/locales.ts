@@ -4,7 +4,6 @@ import { zoomEn, zoomZh } from '../zoom/locales.ts'
 export const zh = {
   ...zoomZh,
   title: '图片',
-  dragFailed: '拖放失败，请重试',
   preview: '图片预览：{name}',
   loading: '文档渲染中...',
   failed: '无法显示这张图片',
@@ -18,7 +17,6 @@ export type ImagePreviewKey = keyof typeof zh
 export const en = {
   ...zoomEn,
   title: 'Image',
-  dragFailed: 'Drag failed. Try again.',
   preview: 'Image preview: {name}',
   loading: 'Rendering document...',
   failed: 'This image could not be displayed.',

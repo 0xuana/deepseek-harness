@@ -3,9 +3,7 @@
 import { useState } from 'react'
 import type { PropsRenderFactories, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
-import { act, cleanup, fireEvent, render as renderBare, waitFor } from '@testing-library/react'
-import { ImageDragProvider } from '@deepseek-ai/dsh-client-ui-primitives'
-const render = (ui: import('react').ReactNode) => renderBare(ui, { wrapper: ImageDragProvider })
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
@@ -20,7 +18,6 @@ afterEach(cleanup)
 
 const labels: MessageImageLabels = {
   image: '图片',
-  dragFailed: '拖放失败，请重试',
   open: '查看原图',
   openNamed: label => `${label}，点击查看原图`,
   loading: '图片加载中…',
@@ -273,7 +270,6 @@ describe('ImageGallery', () => {
 
   it('uses complete Factory labels unchanged and restores defaults without remounting the image', async () => {
     const runtime = await SlotTestRuntime.create()
-    vi.spyOn(runtime, 'renderRoot').mockImplementation(() => render(runtime.slots.renderSlot('root', {})))
     onTestFinished(() => runtime.dispose())
     const locale = new LocaleRuntime(runtime.ctx)
     locale.register('conversation', { en, zh })
@@ -312,7 +308,6 @@ describe('ImageGallery', () => {
 
   it('renders the conversation slot entry with translated labels', async () => {
     const runtime = await SlotTestRuntime.create()
-    vi.spyOn(runtime, 'renderRoot').mockImplementation(() => render(runtime.slots.renderSlot('root', {})))
     onTestFinished(() => runtime.dispose())
     const locale = new LocaleRuntime(runtime.ctx)
     locale.register('conversation', { en, zh })

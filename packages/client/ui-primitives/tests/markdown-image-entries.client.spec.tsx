@@ -1,7 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render as renderBare, screen } from '@testing-library/react'
-import { ImageDragProvider } from '@deepseek-ai/dsh-client-ui-primitives'
-const render = (ui: import('react').ReactNode) => renderBare(ui, { wrapper: ImageDragProvider })
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { fileMediaUrl } from '@deepseek-ai/dsh-util-workspace-path'
 import { MarkdownDelegateProvider } from '../src/markdown/MarkdownDelegate.tsx'
@@ -9,7 +7,7 @@ import { MarkdownText } from './markdown-test-components.tsx'
 import { parseGfm, parseGfmWithMath } from '../src/markdown/parse.ts'
 
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks() })
-const labels = { dragFailed: 'Image drag failed', open: 'View full image', dialog: 'Image preview', close: 'Close preview', loading: 'Loading image', failed: 'Image unavailable' }
+const labels = { open: 'View full image', dialog: 'Image preview', close: 'Close preview', loading: 'Loading image', failed: 'Image unavailable' }
 const fileImages = { resolve: (path: string) => `https://example.com/api/file?path=${encodeURIComponent('/workspace/' + path)}`, labels }
 function mount(text: string, streaming = false) {
   const openFile = vi.fn()
@@ -148,9 +146,4 @@ it.each([parseGfm, parseGfmWithMath])('uses the shared image categories for bare
       .toMatchObject({ children: [{ type: 'image', url: `/work/test dir/photo.${extension}` }] })
   }
   expect(JSON.stringify(parse('![report](/work/test dir/report.pdf)'))).not.toContain('"type":"image"')
-})
-
-it('uses the fallback filename for an external image URL without a path', () => {
-  mount('![Remote](https://example.com/)')
-  expect(screen.getByRole('img').getAttribute('src')).toBe('https://example.com/')
 })

@@ -21,9 +21,6 @@ export const DESKTOP_IPC = {
   browserRelease: 'dsh-desktop:browser-release',
   browserOpenRequested: 'dsh-desktop:browser-open-requested',
   directoryPick: 'dsh-desktop:directory-pick',
-  imageDragPrepare: 'dsh-desktop:image-drag-prepare',
-  imageDragStart: 'dsh-desktop:image-drag-start',
-  imageDragRelease: 'dsh-desktop:image-drag-release',
   deviceInfo: 'dsh-desktop:device-info',
   localeBootstrap: 'dsh-desktop:locale-bootstrap',
   localeChanged: 'dsh-desktop:locale-changed',
@@ -76,11 +73,6 @@ export interface DesktopUpdatePresentation {
 export interface DshDesktopProductApi {
   readonly protocolVersion: 1
   readonly browser: DesktopBrowserBridge
-  readonly imageDrag: {
-    prepare(bytes: Uint8Array, name: string, mediaType: string): Promise<string>
-    start(handle: string): Promise<boolean>
-    release(handle: string): void
-  }
   readonly keyboard: DesktopKeyboardApi
   readonly shortcuts: DesktopShortcutsApi
   /**
