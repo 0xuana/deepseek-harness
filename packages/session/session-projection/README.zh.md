@@ -68,7 +68,7 @@ const { asOfSeq, values } = ctx.sessionProjections.snapshot(session)
 <a id="deprecated-plugin-compatibility"></a>
 ### 已弃用的插件兼容接口
 
-`register(definition)` 的公开返回类型保持为 `Promise<ProjectionHandle<S>>`，但运行时值是可调用的 thenable，并非原生 `Promise`（`typeof` 为 `"function"`，`instanceof Promise` 为 false）。等待它会得到保留的句柄，调用它则通过原有 Cordis effect disposer 释放注册。调用返回值的用法已弃用；新代码使用 `handle.dispose()`。API 要求原生 Promise 或把函数视为回调时，包括 Vitest 的 Promise 断言，使用 `Promise.resolve(registration)`。参见[升级指南](../../../docs/upgrade-guide/v0.2.1-rc.2/session-projection-registration/guide.zh.md)。
+`register(definition)` 的公开返回类型保持为 `Promise<ProjectionHandle<S>>`，但运行时值是可调用的 thenable，并非原生 `Promise`（`typeof` 为 `"function"`，`instanceof Promise` 为 false）。等待它会得到保留的句柄，调用它则通过原有 Cordis effect disposer 释放注册。调用返回值的用法已弃用；新代码使用 `handle.dispose()`。API 要求原生 Promise 或把函数视为回调时，包括 Vitest 的 Promise 断言，使用 `Promise.resolve(registration)`。参见[升级指南](../../../docs/upgrade-guide/v0.2.1-rc.2/session-projection-handles/guide.zh.md)。
 
 旧的同步 `return register(...)`、`ctx.effect(() => register(...))` 和同步生成器 yield 保留原有清理所有权。通过异步函数返回或异步生成器 yield 注册值时，thenable 会被吸收为句柄，Cordis 会以 `Invalid effect` 拒绝它。异步插件和 effect 等待注册完成后返回 `void`；所属 fiber 会自动释放注册。
 
