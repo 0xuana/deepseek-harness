@@ -1786,6 +1786,41 @@ describe('desktop main startup', () => {
     expect(host.stop).not.toHaveBeenCalled()
   })
 
+  it('waits for macOS to leave fullscreen before showing installation confirmation or stopping the Host', async () => {
+    vi.stubGlobal('process', { ...process, platform: 'darwin' })
+    const host = await readyForUpdate()
+    const window = harness.windows[0]!
+    window.fullscreen = true
+    window.setFullScreen.mockImplementation(() => {})
+    harness.dialog.showMessageBox.mockResolvedValueOnce({ response: 0 })
+    const preparing = harness.prepareUpdate()
+    await vi.waitFor(() => { expect(window.setFullScreen).toHaveBeenCalledWith(false) })
+    expect(harness.dialog.showMessageBox).not.toHaveBeenCalled()
+    expect(host.stop).not.toHaveBeenCalled()
+    expect(host.updateTasks.mock.calls).toEqual([['inspect']])
+    window.fullscreen = false
+    window.emit('leave-full-screen')
+    await host.stopping.promise
+    host.exited.resolve()
+    await expect(preparing).resolves.toBe(true)
+    expect(window.listenerCount('leave-full-screen')).toBe(1)
+  })
+
+  it('cancels installation if the fullscreen owner closes during the native transition', async () => {
+    vi.stubGlobal('process', { ...process, platform: 'darwin' })
+    const host = await readyForUpdate()
+    const window = harness.windows[0]!
+    window.fullscreen = true
+    window.setFullScreen.mockImplementation(() => {})
+    const preparing = harness.prepareUpdate()
+    await vi.waitFor(() => { expect(window.setFullScreen).toHaveBeenCalledWith(false) })
+    window.destroy()
+    await expect(preparing).resolves.toBe(false)
+    expect(harness.dialog.showMessageBox).not.toHaveBeenCalled()
+    expect(host.stop).not.toHaveBeenCalled()
+    expect(window.listenerCount('leave-full-screen')).toBe(1)
+  })
+
   it('waits for Platform storage cleanup before the installer takes over', async () => {
     const host = await readyForUpdate()
     harness.dialog.showMessageBox.mockResolvedValueOnce({ response: 0 })
