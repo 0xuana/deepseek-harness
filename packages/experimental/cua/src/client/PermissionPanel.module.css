@@ -33,14 +33,15 @@
 }
 .applicationBadge img { flex-shrink: 0; object-fit: contain; }
 .applicationBadge > span { min-width: 0; overflow-wrap: anywhere; }
-.permissionAction { min-width: 120px; }
+.permissionAction, .buttonPlaceholder { width: 168px; flex-shrink: 0; }
+.permissionAction[data-configured]:disabled { opacity: 1; color: var(--dsw-alias-label-primary); cursor: default; }
 .buttonPlaceholder, .appPlaceholder, .appsPlaceholder {
   display: inline-block;
   max-width: 100%;
   border-radius: var(--dsw-radius-xs);
   background: var(--dsw-alias-bg-skeleton);
 }
-.buttonPlaceholder { width: 120px; height: 28px; }
+.buttonPlaceholder { height: 28px; }
 .appPlaceholder { width: 160px; height: 20px; }
 .appsPlaceholder { width: 240px; height: 40px; }
 

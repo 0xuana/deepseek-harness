@@ -42,7 +42,6 @@
     }
   },
   "dependencies": {
-    "@deepseek-ai/dsh-experimental-cua-macos": "workspace:*",
     "@deepseek-ai/dsh-computer-use": "workspace:*",
     "@deepseek-ai/dsh-cua": "workspace:*"
   },
@@ -52,6 +51,10 @@
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/cordis-plugin-include": "workspace:~",
-    "js-yaml": "^4.2.0"
+    "js-yaml": "^4.2.0",
+    "@deepseek-ai/cordis-plugin-loader": "workspace:~"
+  },
+  "optionalDependencies": {
+    "@deepseek-ai/dsh-experimental-cua-macos": "workspace:*"
   }
 }

@@ -135,7 +135,6 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   const screen = panel.getByRole('group', { name: 'Screen Recording', exact: true })
   expect(await accessibility.getByRole('button').count()).toBe(1)
   await accessibility.getByRole('button', { name: 'Allowed', exact: true }).click()
-  await page.getByRole('menuitem', { name: 'Open System Settings', exact: true }).click()
   expect(await screen.getByRole('button').count()).toBe(1)
   await expect.poll(() => panel.getAttribute('aria-busy')).toBe('false')
   await panel.getByRole('button', { name: 'Revoke', exact: true }).click()

@@ -198,6 +198,7 @@ describe('UserQuestionService', () => {
 
   it('rejects a live runtime-owned agent before reaching the provider', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(UserQuestionService)
     const p = { ask: vi.fn(async () => ({ answers: [] })) }
@@ -220,6 +221,7 @@ describe('UserQuestionService', () => {
 
   it('reaches the provider for a lineage-bearing session resumed as a runtime root', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(UserQuestionService)
     const p = provider('yes')
@@ -250,6 +252,7 @@ describe('UserQuestionService', () => {
 
   it('rejects a stale agent object that reuses a live id', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(UserQuestionService)
     const p = { ask: vi.fn(async () => ({ answers: [] })) }
@@ -391,8 +394,8 @@ function liveAgent(id: string): LiveAgent {
 
 async function timedContext(): Promise<Context> {
   const ctx = new Context()
-  await ctx.plugin(AgentRegistry)
   await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(AgentRegistry)
   await ctx.plugin(UserQuestionService)
   return ctx
 }
@@ -836,10 +839,12 @@ describe('late replies', () => {
 
   it('answers nothing when the composition carries no Session projections', async () => {
     const ctx = new Context()
-    await ctx.plugin(AgentRegistry)
-    await ctx.plugin(UserQuestionService)
     const agent = liveAgent('late-no-projections')
-    ctx.agents.enter(agent, undefined)
+    ctx.provide('agents', {
+      get: (id: SessionId) => id === agent.id ? agent : undefined,
+      roots: () => [agent],
+    } as never)
+    await ctx.plugin(UserQuestionService)
     askInLog(agent, timedCallId)
     continueInLog(agent, timedCallId)
 
@@ -897,7 +902,7 @@ describe('late replies', () => {
       error: { name: 'SessionFormatError', code: TOOL_OUTCOME_UNKNOWN },
     }, { surfaceOp: 'append' })
 
-    expect(ctx.sessionProjections.stateOf(agent.session, 'userQuestions')?.questions).toEqual({ active: [], settled: [] })
+    expect(ctx.sessionProjections.checkpoint(agent.session).userQuestions?.val).toMatchObject({ questions: { active: [], settled: [] } })
     expect(ctx.userQuestions.answer(agent, timedCallId, { answers: [{ id: 'scope', selected: [] }] })).toBe(false)
     expect(agent.steer).not.toHaveBeenCalled()
     await ctx.fiber.dispose()

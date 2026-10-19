@@ -37,7 +37,7 @@ The switch saves bundle selection in the profile’s `package.json`. Enabling pr
 
 Disabling unloads the provider and withdraws CUA tools from its Agent scopes. It retains the selected default, runtime configuration and retained PTC variables. Enabling again does not recreate the runtime. Explicitly changing from per-call to persistent execution replaces the shared runtime through HMR and can interrupt an active PTC call.
 
-Computer Use is available only on a macOS DSH Host. Other Hosts refuse enablement before saving settings. An already selected bundle is skipped at startup with a diagnostic and remains available for deselection; saved user settings remain. A browser on another operating system can connect to a supported Mac Host.
+Computer Use is available only on a macOS DSH Host. The native provider is an optional dependency installed only on macOS; shared CUA and Client packages remain in the installation. Other Hosts refuse enablement before saving settings. An already selected bundle is skipped at startup with a diagnostic and remains available for deselection; saved user settings remain. A browser on another operating system can connect to a supported Mac Host.
 
 If preparation fails, the saved selection remains, while CUA operations stay unavailable. Refresh or reopen the plugin page to read the component diagnostic, correct its cause, then restart DSH.
 

@@ -376,7 +376,8 @@ function readPackageManifest(anchor: string): ProfileManifest {
 
 /** Return dependency names that may be imported by a loader-visible plugin. */
 function profileDependencyNames(manifest: ProfileManifest): string[] {
-  return [...Object.keys(manifest.dependencies ?? {}), ...Object.keys(manifest.peerDependencies ?? {})]
+  return [...Object.keys(manifest.dependencies ?? {}), ...Object.keys(manifest.peerDependencies ?? {}),
+    ...Object.keys(manifest.optionalDependencies ?? {})]
 }
 
 /** Resolve the installation packages that the runtime resolver supplies to every profile. */
