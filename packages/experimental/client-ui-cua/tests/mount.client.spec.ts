@@ -37,7 +37,7 @@ async function fixture(fail = false) {
     $on(_event: string, listener: (namespace: string, revision: number) => void) { settingsListener = listener; return unsubscribe }
   }
   new Remote()
-  const setDefault = vi.fn(async () => true)
+  const setDefault = vi.fn(async () => true), setPersistent = vi.fn(async () => true)
   const preset = createSnapshotStore({ status: 'ready' as const, value: { default: 'standard' },
     base: {}, user: {}, revision: 1, writable: true })
   ctx.provide('configForms', { get: (namespace: string) => {
@@ -52,7 +52,10 @@ async function fixture(fail = false) {
   const openSettings = vi.fn<() => Promise<RemoteResult<void>>>().mockResolvedValue({ ok: true, value: undefined })
   const revoke = vi.fn<() => Promise<RemoteResult<void>>>().mockResolvedValue({ ok: true, value: undefined })
   const retryApproval = vi.fn<() => Promise<RemoteResult<void>>>().mockResolvedValue({ ok: true, value: undefined })
-  ctx.provide('remote.cuaAccess', { applications: status, systemStatus, applicationIcons, requestPermission, openSettings, revoke, retryApproval })
+  ctx.provide('remote.cuaAccess', {
+    ptcConfiguration: vi.fn(async () => ({ ok: true, value: { persistent: false, writable: true } })),
+    enablePersistentPtc: async () => { await setPersistent(); return { ok: true, value: undefined } },
+    applications: status, systemStatus, applicationIcons, requestPermission, openSettings, revoke, retryApproval })
   ctx.provide('locale', new LocaleRuntime(ctx))
   await ctx.plugin(SlotRegistry)
   ctx.slots.register({ name: 'root', children: {
@@ -61,7 +64,7 @@ async function fixture(fail = false) {
   } } as never, () => null)
   if (fail) vi.spyOn(ctx.slots, 'inject').mockImplementationOnce(() => { throw new Error('slot unavailable') })
   return { ctx, unmount, unsubscribe, status, systemStatus, applicationIcons,
-    requestPermission, openSettings, revoke, retryApproval, setDefault,
+    requestPermission, openSettings, revoke, retryApproval, setDefault, setPersistent,
     updateSettings(namespace: string) { settingsListener!(namespace, 1) },
   }
 }
@@ -115,6 +118,11 @@ it('withdraws the permission Remote and all controls with the optional plugin', 
     expect(f.setDefault).not.toHaveBeenCalled()
     await (settings.setPtcDefault as () => Promise<boolean>)()
     expect(f.setDefault).toHaveBeenCalledExactlyOnceWith('selectedDefault', 'ptc')
+    assert(typeof settings.setPersistentPtc === 'function')
+    expect(f.ctx.slots.entries('plugins.bundle.activation')[0]!.inject!()).not.toHaveProperty('setPersistentPtc')
+    expect(f.setPersistent).not.toHaveBeenCalled()
+    await (settings.setPersistentPtc as () => Promise<boolean>)()
+    expect(f.setPersistent).toHaveBeenCalledExactlyOnceWith()
     await fiber.dispose()
     expect(f.ctx.slots.entries('conversation.composer')).toHaveLength(0)
     expect(f.ctx.slots.entries('plugins.bundle.config')).toHaveLength(0)

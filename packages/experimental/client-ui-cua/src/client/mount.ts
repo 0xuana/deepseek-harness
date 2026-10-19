@@ -33,6 +33,9 @@ export async function mountCuaPermissions(ctx: Context, contribution: TypertRemo
   const ui = ctx.inject(['remote.cuaAccess', 'slots', 'locale'], (ctx) => {
     ctx.effect(() => ctx.locale.register(NS, { en, zh }))
     const controller = new PermissionController({
+      readRuntime: async () => {
+        const result = await ctx.remote.cuaAccess.ptcConfiguration(); if (!result.ok) throw result.error; return result.value
+      },
       readSystem: async () => {
         const result = await ctx.remote.cuaAccess.systemStatus(); if (!result.ok) throw result.error; return result.value
       },
@@ -57,6 +60,11 @@ export async function mountCuaPermissions(ctx: Context, contribution: TypertRemo
       ...face,
       hooks: { ...face.hooks, cuaDefaultPreset: preset },
       setPtcDefault: () => preset.set('selectedDefault', 'ptc'),
+      setPersistentPtc: async () => {
+        const result = await ctx.remote.cuaAccess.enablePersistentPtc(); if (!result.ok) throw result.error
+        face.refresh()
+        return true
+      },
     }
     ctx.effect(() => () => controller.dispose())
     ctx.on('connection/reset', face.refresh)

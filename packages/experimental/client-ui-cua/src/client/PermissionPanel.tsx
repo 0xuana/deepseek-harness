@@ -21,34 +21,52 @@ type DefaultPresetProps = PropsLocale<typeof NS> & InjectFace<{
   setPtcDefault: () => Promise<boolean>
 }>
 
-/** The detail page owns the optional new-session default action. */
-export type PermissionPanelProps = PermissionProps & DefaultPresetProps
+type PersistentPtcProps = PermissionProps & { setPersistentPtc: () => Promise<boolean> }
+
+/** The detail page owns explicit preset and execution-mode settings. */
+export type PermissionPanelProps = PermissionProps & DefaultPresetProps & PersistentPtcProps
 
 function DefaultPresetSetting(props: DefaultPresetProps) {
-  const { t } = props
   const preset = props.useCuaDefaultPreset(value => value)
-  const isPtc = (preset.value?.selectedDefault ?? preset.value?.default) === 'ptc'
-  const loading = preset.value === undefined && preset.status === 'loading'
+  return <ConfigurationSetting kind="default" status={preset.status} loading={preset.value === undefined && preset.status === 'loading'} writable={preset.writable} t={props.t} save={props.setPtcDefault}
+    configured={(preset.value?.selectedDefault ?? preset.value?.default) === 'ptc'} />
+}
+
+function PersistentPtcSetting(props: PersistentPtcProps) {
+  const runtime = props.useCuaPermissions(value => value.runtime)
+  return <ConfigurationSetting kind="persistent" loading={runtime.value === null && (runtime.busy || runtime.error === null)}
+    status={runtime.busy ? 'loading' : runtime.error === null && runtime.value !== null ? 'ready' : 'unavailable'} writable={!runtime.busy && runtime.value?.writable === true} t={props.t} save={props.setPersistentPtc}
+    configured={runtime.value?.persistent === true} />
+}
+
+function ConfigurationSetting({ kind, status, loading, writable, configured, save, t }: PropsLocale<typeof NS> & {
+  kind: 'default' | 'persistent'
+  status: 'loading' | 'ready' | 'unavailable'
+  loading: boolean
+  writable: boolean
+  configured: boolean
+  save: () => Promise<boolean>
+}) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const setDefault = async (): Promise<void> => {
+  const submit = async (): Promise<void> => {
     setSaving(true)
     setError(null)
     try {
-      if (!await props.setPtcDefault()) setError(t('defaultNotSaved'))
+      if (!await save()) setError(t(`${kind}NotSaved`))
     } catch (error) {
-      setError(t('defaultFailed', { message: error instanceof Error ? error.message : String(error) }))
+      setError(t(`${kind}Failed`, { message: error instanceof Error ? error.message : String(error) }))
     } finally { setSaving(false) }
   }
-  return <div className={css.defaultSetting} role="group" aria-label={t('defaultTitle')}>
+  return <div className={css.defaultSetting} role="group" aria-label={t(`${kind}Title`)}>
     <div className={css.permission}>
-      <div><strong>{t('defaultTitle')}</strong><p>{t('defaultBody')}</p></div>
+      <div><strong>{t(`${kind}Title`)}</strong><p>{t(`${kind}Body`)}</p></div>
       {loading ? <span className={css.buttonPlaceholder} aria-hidden />
-        : <Button size="sm" variant={isPtc ? 'outline' : 'primary'} disabled={saving || isPtc || !preset.writable || preset.status !== 'ready'}
-          onClick={() => { void setDefault() }}>{t(isPtc ? 'defaultSet' : 'defaultConfirm')}</Button>}
+        : <Button size="sm" variant={configured ? 'outline' : 'primary'} disabled={saving || configured || !writable || status !== 'ready'}
+          onClick={() => { void submit() }}>{t(configured ? `${kind}Set` : `${kind}Confirm`)}</Button>}
     </div>
-    {!isPtc && (preset.status === 'unavailable' ? <p className={css.error} role="alert">{t('defaultUnavailable')}</p>
-      : preset.status === 'ready' && !preset.writable && <p className={css.error} role="alert">{t('defaultReadOnly')}</p>)}
+    {!configured && (status === 'unavailable' ? <p className={css.error} role="alert">{t(`${kind}Unavailable`)}</p>
+      : status === 'ready' && !writable && <p className={css.error} role="alert">{t(`${kind}ReadOnly`)}</p>)}
     {error !== null && <p className={css.error} role="alert">{error}</p>}
   </div>
 }
@@ -113,6 +131,7 @@ export function PermissionPanel(props: PermissionPanelProps) {
       <h3>{t('title')}</h3>
       <div className={css.card}>
         <DefaultPresetSetting {...props} />
+        <PersistentPtcSetting {...props} />
         {!busy && state.system.error !== null && <div className={css.notice} role="alert">
           <span className={css.error}>{t('queryFailed', { message: state.system.error })}</span>
           <Button size="sm" variant="outline" disabled={state.system.busy} onClick={refresh}>{t('retry')}</Button>
