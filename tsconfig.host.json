@@ -297,6 +297,7 @@
     { "path": "./vendor/logger-console" },
     { "path": "./packages/util/brand" },
     { "path": "./packages/util/package-manifest" },
+    { "path": "./packages/util/plugin-detail" },
     { "path": "./packages/util/plugin-market-index" },
     { "path": "./packages/util/http-proxy" },
     { "path": "./packages/util/launch-environment" },

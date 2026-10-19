@@ -2443,8 +2443,8 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     key: 'plugins.detail.section',
     kind: 'list',
     scope: 'root',
-    summary: 'Sections under a detail page\'s own content: after the rows on a bundle\'s page, after the configuration on a row\'s or an official plugin\'s page.',
-    doc: 'Sections under a detail page\'s own content: after the rows on a bundle\'s\npage, after the configuration on a row\'s or an official plugin\'s page.\nAn entry draws its own section chrome and renders null for a subject it\nhas nothing for.',
+    summary: 'Sections under a detail page\'s own content: after the source on a bundle\'s page, after the configuration on a row\'s or an official plugin\'s page.',
+    doc: 'Sections under a detail page\'s own content: after the source on a bundle\'s\npage, after the configuration on a row\'s or an official plugin\'s page.\nAn entry draws its own section chrome and renders null for a subject it\nhas nothing for.',
     registerOptions: [
       {
         name: 'id',

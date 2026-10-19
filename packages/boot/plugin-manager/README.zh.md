@@ -92,6 +92,21 @@ CLI 提供 `dsh plugin --profile <profile> version-exemptions`、`allow-version 
 | `versionListLimit` | `20` | 版本列表读取并返回的、比已安装版本新的最新版本个数。 |
 | `versionLookupConcurrency` | `4` | 版本列表同时运行的单版本注册表查询个数。 |
 | `idleTimeoutMs` | `600000` | service 包操作允许持续无捕获输出的最长毫秒数，达到即被管理器终止；继承描述符运行的 `dsh plugin` 不受此上界约束。 |
+| `detailMaxBytes` | `1048576` | 组合包详细介绍文档的最大大小，以及为读取它而读取的 locale 文件的最大大小，单位字节。 |
+| `detailImageMaxBytes` | `5242880` | 与组合包详细介绍文档一同提供的图片的最大大小，单位字节。 |
+| `detailFetchTimeoutMs` | `15000` | 为读取当前安装提供、尚未安装的组合包的详细介绍文档而发出的单次 npm 文件 CDN 请求的时限。 |
+| `detailNpmFileSources` | `['jsdelivr', 'unpkg', 'npmmirror']` | 读取当前安装提供、尚未安装的组合包时按顺序使用的 npm 文件 CDN；一次读取的 `npmFileSources` 把其中列出的 CDN 移到最前。 |
+
+<a id="bundle-detail-documents"></a>
+### 组合包详细介绍文档
+
+`readBundleDetail(name, language, { npmFileSources? })` 为 `listBundles()` 列出的组合包读取**插件**页中该组合包页面显示的详细介绍：locale `meta.detail` 文件，否则为 README，即[文档顺序](../../util/plugin-detail/README.zh.md#document-order)第 1 步和第 2 步的定义。两者都没有时，结果为 `{ status: 'none' }`；不读取组合包声明的仓库。`npmFileSources` 按顺序列出读取当前安装提供、尚未安装的组合包时先请求的 npm 文件 CDN；它未列出的已配置 CDN 排在其后，`detailNpmFileSources` 未列出的 CDN 不会被请求。找到的文档携带其 `origin`（`locale` 或 `readme`）、在包内的 `path`，以及去掉开头 YAML front matter 块后的 Markdown 内容。
+
+已安装的组合包从其目录读取，不访问网络。当前安装提供、尚未安装的官方组合包按其提供的版本从 npm 文件 CDN 读取；以开发链接形式提供的组合包没有文档。结果不被缓存，因此重新安装的组合包显示其自身的文档。
+
+`GET /api/plugin-manager/detail-file?bundle=<name>&document=<path>&path=<destination>`（加上 `&sources=<cdn>,...` 时先请求这些 CDN）向已通过认证的 owner 连接提供组合包文档旁的图片。目标路径相对于该文档；以 `/` 开头时相对于包根目录。只提供包内的 PNG、JPEG、GIF、WebP、AVIF 和 SVG 文件，响应带有 `Content-Security-Policy: sandbox`、`X-Content-Type-Options: nosniff` 和 `Cache-Control: no-store`；其他路径或未列出的组合包返回 404。
+
+失败：`listBundles()` 未列出或无法解析其目录的组合包为 `plugin-manager/unknown-bundle`；无效语言为 `plugin-manager/invalid-language`；`plugin-manager/detail-unavailable` 携带 `reason`，取值为 `too-large`、`network`，或在 locale 文件或 `meta.detail` 格式错误、指定的文件不存在时为 `invalid`。图片路由对这些失败依次返回 404、413、502 和 400。
 
 -----
 

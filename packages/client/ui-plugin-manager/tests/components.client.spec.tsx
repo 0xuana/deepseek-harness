@@ -10,6 +10,8 @@ import type { ConfigForm, ConfigFormSnapshot, SettingsMirrorSnapshot } from '@de
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { MenuItemButton } from '@deepseek-ai/dsh-client-ui-primitives'
 import { StrictMode, type ReactNode } from 'react'
+import type { LocaleSnapshot } from '@deepseek-ai/dsh-client-locale/client'
+import { bundleDetailKey, type BundleDetailsState } from '../src/client/detail-store.ts'
 import { createNavigationStore } from '../src/client/navigation-store.ts'
 import { PluginManagerPage } from '../src/client/PluginManagerPage.tsx'
 import { PluginRefreshToast } from '../src/client/PluginRefreshToast.tsx'
@@ -111,6 +113,7 @@ function renderTab(
   const store = createSnapshotStore<PluginManagerState>({ ...READY, ...state })
   const ledger = createSnapshotStore<ConfigLedger>({ ...NO_CONFIG, ...config })
   const tabLedger = createSnapshotStore<readonly PluginTab[]>(tabs)
+  const bundleDetails = createSnapshotStore<BundleDetailsState>({})
   const actions = {
     ensure: vi.fn(),
     refresh: vi.fn(),
@@ -142,6 +145,10 @@ function renderTab(
     runUpdate: vi.fn(),
     closeUpdate: vi.fn(),
     toggleUpdateOutput: vi.fn(),
+    loadDetail: vi.fn(),
+    retryDetail: vi.fn(),
+    detailImage: vi.fn((name: string, document: string, destination: string, _fromNpm: boolean) =>
+      `https://dsh.example/api/plugin-manager/detail-file?bundle=${name}&document=${document}&path=${destination}`),
   }
   const unusedStandardHook = (): never => { throw new Error('Plugin manager fixture does not provide global state') }
   const standard = {
@@ -163,6 +170,8 @@ function renderTab(
     usePluginManager: bindSnapshotSelector(store),
     useConfigLedger: bindSnapshotSelector(ledger),
     usePluginTabs: bindSnapshotSelector(tabLedger),
+    useBundleDetails: bindSnapshotSelector(bundleDetails),
+    useLocale: bindSnapshotSelector(createSnapshotStore<LocaleSnapshot>({ active: 'en', locales: [], revision: 0 })),
     useConfigurations: bindSnapshotSelector(createSnapshotStore<SettingsMirrorSnapshot>({
       status: 'ready', error: null,
       view: { writable: true, hasDocument: true, namespaces: Object.keys(forms).map(ns => ({
@@ -206,6 +215,7 @@ function renderTab(
     store,
     actions,
     set: (next: Partial<PluginManagerState>) => { act(() => { store.set({ ...store.getSnapshot(), ...next }) }) },
+    setDetails: (next: BundleDetailsState) => { act(() => { bundleDetails.set(next) }) },
     setLanguage: (dict: typeof en) => {
       locale.setLocale(dict === zh ? 'zh' : 'en')
       currentT = translate(dict)
@@ -216,7 +226,7 @@ function renderTab(
 
 describe('PluginManagerPage', () => {
   it('shows no tabs without contributions, and switches between Installed and a contributed tab', () => {
-    const { actions, navigation, setTabs, set } = renderTab({ packages: [pkg()] }, {}, {
+    const { actions, navigation, setTabs } = renderTab({ packages: [pkg()] }, {}, {
       'plugins.tab:discover': (_view, owner) => {
         const tab = owner as PluginTabProps
         return (
@@ -250,13 +260,20 @@ describe('PluginManagerPage', () => {
     setTabs([])
     expect(document.querySelector('[data-plugin-group="bundles"]')).not.toBeNull()
     expect(navigation.getSnapshot().tab).toBe('installed')
-    // Enabling a bundle an install added highlights its card, so the page shows Installed.
+    // A contributed tab that returns can be selected again.
     setTabs([{ id: 'discover', label: 'Discover' }])
     fireEvent.click(screen.getByRole('tab', { name: 'Discover' }))
     expect(screen.getByRole('tabpanel', { name: 'Discover' })).toBeTruthy()
+  })
+
+  it('marks the bundle an install enabled without leaving a contributed tab', () => {
+    const { navigation, set } = renderTab({ packages: [pkg()] }, {}, {}, {}, [{ id: 'discover', label: 'Discover' }])
+    fireEvent.click(screen.getByRole('tab', { name: 'Discover' }))
+    expect(screen.getByRole('tabpanel', { name: 'Discover' })).toBeTruthy()
+    // Enable now publishes the new bundle's mark; the mark scrolls to a visible card and selects no page.
     set({ highlight: 'dsh-better-sidebar' })
-    expect(navigation.getSnapshot().tab).toBe('installed')
-    expect(screen.getByRole('tabpanel', { name: en.installedTab })).toBeTruthy()
+    expect(navigation.getSnapshot().tab).toBe('discover')
+    expect(screen.getByRole('tabpanel', { name: 'Discover' })).toBeTruthy()
   })
 
   it('collapses the page bar to one row while the page body is scrolled', () => {
@@ -452,6 +469,34 @@ describe('PluginManagerPage', () => {
     expect(document.querySelector('[data-plugin-package="dsh-better-sidebar"]')).not.toBeNull()
   })
 
+  it('shows a bundle\'s detail document first among its sections, and its failures with a retry', () => {
+    const b = renderTab({ packages: [pkg()] })
+    act(() => { b.navigation.actions.setView({ kind: 'package', name: 'dsh-better-sidebar' }) })
+    expect(b.actions.loadDetail).toHaveBeenCalledWith('dsh-better-sidebar', '0.16.0', 'en', false)
+    expect(screen.getByRole('status', { name: en.detailLoading })).toBeTruthy()
+    const key = bundleDetailKey('dsh-better-sidebar', '0.16.0', 'en')
+    b.setDetails({ [key]: { status: 'ready', detail: { status: 'found', origin: 'locale', path: 'guide/DETAIL.md', markdown: '# Sidebar\n\n![shot](img/a.png)' } } })
+    const sections = [...document.querySelectorAll('[data-plugin-detail="dsh-better-sidebar"] section')]
+    const order = sections.map(section => section.hasAttribute('data-detail-document') ? 'detail' : section.hasAttribute('data-plugin-source') ? 'source' : 'other')
+    expect(order[0]).toBe('detail')
+    expect(order).toContain('source')
+    expect(screen.getByRole('heading', { name: 'Sidebar' })).toBeTruthy()
+    expect(screen.getByRole('img', { name: 'shot' }).getAttribute('src'))
+      .toBe('https://dsh.example/api/plugin-manager/detail-file?bundle=dsh-better-sidebar&document=guide/DETAIL.md&path=img/a.png')
+    const failures = [['too-large', en.detailTooLarge], ['network', en.detailNetwork], ['denied', en.detailFailed], ['invalid', en.detailInvalid], ['other', en.detailFailed]] as const
+    for (const [failure, text] of failures) {
+      b.setDetails({ [key]: { status: 'error', failure } })
+      expect(screen.getByRole('alert').textContent).toBe(text)
+    }
+    fireEvent.click(screen.getByRole('button', { name: en.retry }))
+    expect(b.actions.retryDetail).toHaveBeenCalledWith('dsh-better-sidebar', '0.16.0', 'en', false)
+    b.setDetails({ [key]: { status: 'ready', detail: { status: 'none' } } })
+    expect(document.querySelector('[data-detail-document]')).toBeNull()
+    // A read the controller forgot, after a profile change, starts again.
+    b.setDetails({})
+    expect(b.actions.loadDetail).toHaveBeenCalledTimes(2)
+  })
+
   it('says where a bundle comes from: the spec that installs it, or built in, with its version', () => {
     const b = renderTab({ packages: [
       pkg({ source: 'github:someone/dsh-better-sidebar' }),
@@ -470,6 +515,8 @@ describe('PluginManagerPage', () => {
     expect(facts()).toEqual([en.sourceSpec, en.sourceBuiltIn])
     act(() => { b.navigation.actions.setView({ kind: 'package', name: 'dsh-missing' }) })
     expect(facts()).toEqual([en.sourceSpec, en.sourceNotInstalled])
+    // A bundle whose files are not installed is read from the npm file CDNs.
+    expect(b.actions.loadDetail).toHaveBeenLastCalledWith('dsh-missing', undefined, 'en', true)
   })
 
   it('preserves the requested bundle through StrictMode effect replay and page remounts', () => {
@@ -830,12 +877,12 @@ describe('PluginManagerPage', () => {
     expect(chinese.getAttribute('src')).toMatch(/badge-skill-preview\.zh\.svg$/)
     fireEvent.error(chinese)
     expect(screen.queryByRole('img')).toBeNull()
-    expect(screen.getByRole('status').textContent).toBe(zh.previewUnavailable)
+    expect(screen.getByText(zh.previewUnavailable).getAttribute('role')).toBe('status')
     fireEvent.click(screen.getByRole('switch', { name: zh.enableToggle.replace('{name}', name) }))
     expect(actions.setEnabled).toHaveBeenCalledWith(name, true)
     setLanguage(en)
     expect(screen.getByRole('img').getAttribute('src')).toBe(english)
-    expect(screen.queryByRole('status')).toBeNull()
+    expect(screen.queryByText(en.previewUnavailable)).toBeNull()
   })
 
   it('shows no preview for bundles without one', () => {
@@ -2341,6 +2388,24 @@ it('dismisses activation guidance until the user enables the bundle again', () =
   fireEvent.click(screen.getByRole('switch'))
   set({ packages: [pkg()] })
   expect(screen.getByText('Later')).toBeTruthy()
+})
+
+it('keeps activation guidance with the Installed list when a contributed tab enables the bundle', () => {
+  const name = 'dsh-better-sidebar'
+  const subject = { spec: `${name}@0.16.0`, status: 'accepted', kind: 'registry', name, bundle: true, registry: null } as const
+  const { set } = renderTab({
+    install: { ...IDLE_INSTALL, open: true, phase: 'done', subject, installed: name },
+  }, { bundles: new Set([name]) }, {
+    [`plugins.bundle.activation:${name}`]: () => <div>Enable guidance</div>,
+  }, {}, [{ id: 'discover', label: 'Discover' }])
+  fireEvent.click(screen.getByRole('button', { name: en.installEnableNow }))
+  set({ install: IDLE_INSTALL, packages: [pkg()] })
+  expect(screen.getByText('Enable guidance')).toBeTruthy()
+  // A contributed tab shows its own content, not guidance for the Installed list.
+  fireEvent.click(screen.getByRole('tab', { name: 'Discover' }))
+  expect(screen.queryByText('Enable guidance')).toBeNull()
+  fireEvent.click(screen.getByRole('tab', { name: en.installedTab }))
+  expect(screen.getByText('Enable guidance')).toBeTruthy()
 })
 
 it('supplies the accepted entry values and atomic mutation action to a custom plugin page', () => {

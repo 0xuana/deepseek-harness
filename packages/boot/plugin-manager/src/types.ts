@@ -4,6 +4,23 @@ import type { PluginLocalizedMeta } from '@deepseek-ai/dsh-package-manifest'
 import type { PluginInventoryEntry } from '@deepseek-ai/dsh-host-plugin-inventory/types'
 export type { PluginEntryId } from '@deepseek-ai/dsh-host-plugin-inventory/types'
 import type { PluginEntryId } from '@deepseek-ai/dsh-host-plugin-inventory/types'
+import type {} from '@deepseek-ai/dsh-typert-protocol'
+import type { DetailFailureReason } from '@deepseek-ai/dsh-plugin-detail/types'
+
+declare module '@deepseek-ai/dsh-typert-protocol' {
+  interface RemoteErrorDetailsMap {
+    /** The profile lists no such bundle, or its directory cannot be resolved. */
+    'plugin-manager/unknown-bundle': { readonly name: string }
+    /** The display language is not a BCP 47 language id. */
+    'plugin-manager/invalid-language': { readonly language: string }
+    /**
+     * A bundle's detail document or image exists but cannot be read: `too-large` beyond a size limit, `network` when the
+     * npm file CDNs cannot be reached, `invalid` for a malformed locale file or `meta.detail`, or a named file that does
+     * not exist. Bundle files come from local directories and public CDNs, which never answer `denied`.
+     */
+    'plugin-manager/detail-unavailable': { readonly reason: DetailFailureReason }
+  }
+}
 
 /** Reasons a profile control cannot modify its target. */
 export type ReadOnlyReason = 'management-required' | 'unaddressable'
@@ -340,6 +357,22 @@ export interface PluginInstallLogChunk {
   /** Present on the run's last chunk: pnpm's exit code, null when it ended without one. */
   readonly exitCode?: number | null
 }
+
+/**
+ * A bundle's long description, or `none` when it has neither a `meta.detail` file nor a README. Images resolve beside
+ * `path` through `GET /api/plugin-manager/detail-file?bundle=<name>&document=<path>&path=<destination>`.
+ */
+export type BundleDetail =
+  | {
+    readonly status: 'found'
+    /** `locale` for the file locale `meta.detail` names, `readme` for the package's README. */
+    readonly origin: 'locale' | 'readme'
+    /** `/`-separated path of the document inside the package. */
+    readonly path: string
+    /** Markdown text without a byte order mark or a leading YAML front matter block. */
+    readonly markdown: string
+  }
+  | { readonly status: 'none' }
 
 /** What changed in the profile, for consumers that show it. */
 export interface PluginChange {

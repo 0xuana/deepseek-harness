@@ -14,6 +14,8 @@
 
 `InstallBundleOptions.saveExact` 向共享包安装器传入 `--save-exact`。`InstallBundleOptions.enabled` 默认为 true，false 表示安装但不选择组合包层。`approvedBuilds` 在安装前向指定的待审批包名授予持久脚本权限。`registry` 指定首先询问的注册表；缺省为配置的那个。
 
+`BundleDetail` 是 profile 中组合包的详细介绍：`{ status: 'found' }` 携带其 `origin`（`locale` 或 `readme`）、在包内的 `path` 和 `markdown`；否则为 `{ status: 'none' }`。[`readBundleDetail`](../../packages/boot/plugin-manager/README.zh.md#bundle-detail-documents) 说明读取顺序和图片路由。`NpmFileSource` 指定一个公共 npm 文件 CDN：`jsdelivr`、`unpkg` 或 `npmmirror`；一次读取的 `npmFileSources` 列出先请求的 CDN。
+
 `PluginRegistries` 携带配置的第一个注册表（`null` 即 pnpm 自身配置指定的那个）、随后依次询问的备选注册表，以及 `resolved`——pnpm 自身配置指向的 URL，未读到时为 `null`。`InspectOptions.registry` 指定一次查询首先询问的注册表。
 
 `ChangeResult.changed` 报告磁盘修改，独立于 `application`：`applied`、`restart-required`、`overridden` 或 `failed`。可选的 `error` 包含可本地化的错误码和外部诊断。`packageResult` 记录 pnpm 退出码、有界输出、截断标志及完整诊断日志路径；当管理器终止了一个停止打印的运行，还记录 `timedOut`。被终止的运行不论信号留下什么退出状态都归类为 `timeout`，因此安装与删除都报告失败而非成功，也不会再询问下一个注册表。`pendingBuilds` 列出整个 profile 尚未决定的包；`approvedBuilds` 记录本次操作授予权限的包名；`registries` 按顺序列出一次安装问过的注册表；`bundle` 与 `version` 给出完成的安装新增的包及其清单版本；`failedAt` 说明最后一次失败的运行连不上的是所问的注册表，还是 git 或 tarball spec 自身拉取的主机。
@@ -25,6 +27,8 @@
 `MarketIndexSummary` 携带一个已配置的索引 URL，以及最近一次成功读取得到的 `title` 和 `description`；最近一次读取失败时，还携带其 `error`。
 
 `MarketQuery` 选择索引的一页：模糊匹配的 `text`、一个 `category`、必须全部具备的 `labels`、一个 `MarketSort`、`offset`、不超过 100 的 `limit`、表示重新获取而不使用缓存文档的 `refresh`，以及用于继续读取同一文档后续页的 `fetchedAt`。`MarketSearchResult` 携带索引 URL、`title`、可选的 `description`、市场 `metadata`、该文档的 `fetchedAt`、本页的 `entries`、匹配总数 `total` 和 `nextOffset`。每个 `MarketListingEntry` 额外携带 `defaultVersion`，即默认安装的版本，以及 `installation`，即该包名在当前 profile 中的状态；其 `versions` 中的每个版本额外携带 `install`，即交给 `installBundle` 的精确 spec 和可选的首选 registry，以及 `compatibility`，即包含版本豁免在内的 `engines.dsh` 评估结果。
+
+`PluginDetail` 是市场条目的详细介绍：`{ status: 'found' }` 携带其 `origin`（`locale`、`readme` 或 `repository`）、`markdown`，以及一个 `document` id，该文档中的图片由 `GET /api/plugin-market/detail-file` 提供；否则为 `{ status: 'none' }`。读取其来源的顺序见[插件市场的说明](../../packages/boot/plugin-market/README.zh.md#plugin-detail-documents)。
 
 ## Profile 重新组合
 
@@ -151,6 +155,20 @@ Source: [`packages/boot/hmr/src/index.ts`](../../packages/boot/hmr/src/index.ts)
 Manage profile files and apply their declared reload lifecycle.
 
 ```ts cordis-catalog
+/**
+ * Read a bundle's long description: the Markdown file its locale `meta.detail` names in `language`, otherwise its
+ * README. An installed bundle is read from its directory without network access; an official bundle the installation
+ * offers before it is installed is read from the npm file CDNs at its offered version. Nothing is cached.
+ * @param name - the bundle's package name, as `listBundles()` lists it.
+ * @param language - the display language, such as `zh-CN`; documents fall back through its prefixes to English.
+ * @param options - `npmFileSources` names npm file CDNs to ask first for an offered bundle, in order, such as the one
+ *   a Client measured as fastest; configured CDNs it omits follow, and CDNs that are not configured are not asked.
+ * @returns the document with its origin and path, or `none`.
+ * @throws {RemoteError} `plugin-manager/unknown-bundle`, `plugin-manager/invalid-language`, or
+ *   `plugin-manager/detail-unavailable`.
+ */
+@Remote async readBundleDetail(name: string, language: string, options?: { npmFileSources?: NpmFileSource[] }): Promise<BundleDetail>
+
 /** Read exact plugin-version exemptions saved in this profile.
  * @returns Accepted package-name@version keys with the runtime versions they may run on, and any
  * record or file problem the reader rejected, which the caller reports instead of failing.
@@ -312,6 +330,25 @@ Fetches, validates, and caches configured market indexes; annotates entries with
  *   or `plugin-market/invalid-index`.
  */
 async entry(url: string, name: string): Promise<MarketListingEntry | undefined>
+
+/**
+ * Read the long description of one listed version of a plugin market entry, from the version's source: the npm file
+ * CDNs for a public npm version, or its pinned Git commit. The Markdown file the package's locale `meta.detail` names
+ * in `language` comes first, then the package's README, then the README of the entry's `repository`, or for an npm
+ * version without one, of its `package.json` `repository`, at the default branch. An npm version from another
+ * registry has no readable package files, so only the entry's `repository` is read.
+ * @param url - a configured index URL.
+ * @param name - the plugin's package name.
+ * @param version - one listed version.
+ * @param language - the display language, such as `zh-CN`; documents fall back through its prefixes to English.
+ * @param options - `refresh` reads again instead of reusing a result cached for `cacheTtlMs`; `npmFileSources` names
+ *   npm file CDNs to ask first for an npm version, in order; configured CDNs it omits follow, and CDNs that are not
+ *   configured are not asked.
+ * @returns the document with its origin and image document id, or `none`.
+ * @throws {RemoteError} the failures of `search`, `plugin-market/unknown-plugin` for an unlisted plugin or version,
+ *   `plugin-market/invalid-query`, or `plugin-market/detail-unavailable`.
+ */
+@Remote async readEntryDetail( url: string, name: string, version: string, language: string, options?: { refresh?: boolean; npmFileSources?: NpmFileSource[] }, ): Promise<PluginDetail>
 ```
 
 Source: [`packages/boot/plugin-market/src/index.ts`](../../packages/boot/plugin-market/src/index.ts)
