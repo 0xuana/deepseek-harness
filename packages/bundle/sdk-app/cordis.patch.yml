@@ -55,11 +55,9 @@
     - id: workspace
       name: '@deepseek-ai/dsh-workspace'
 
-    - id: session-controller
-      name: '@deepseek-ai/dsh-api-session-controller'
-
     - id: schedule
       name: '@deepseek-ai/dsh-schedule'
+      inject: [sdkSessionActivation]
 
     - id: time-context
       name: '@deepseek-ai/dsh-time-context'
@@ -81,5 +79,3 @@
 
     - id: harness-dev-context
       name: '@deepseek-ai/dsh-harness-dev-context'
-      config:
-        checkout: false

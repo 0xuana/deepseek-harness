@@ -13,6 +13,6 @@ The existing `sdk` profile now includes `present`, `ask_user_question`, schedule
 
 ## Migration
 
-1. Keep selecting `sdk`. Supply an answerer for `user-questions/request` if your application exposes questions; without one, the tool reports `NO_PROVIDER`.
-2. Set `checkout` and `guiUrl` on `harness-dev-context` only when your embedding provides them. The defaults report them as unavailable. Working directory and model still come from SDK initialization.
+1. Keep selecting `sdk`. Provide `onUserQuestion` (TypeScript) or `on_user_question` (Python) to answer built-in questions over the native protocol, or retain an in-process `user-questions/request` answerer; without one, the tool reports `NO_PROVIDER`.
+2. Set `checkout` and `guiUrl` on `harness-dev-context` only when your embedding provides them. The checkout is detected only when the installation contains the CLI and Agent source trees; a GUI URL remains unavailable unless provided. Working directory and model still come from SDK initialization.
 3. Custom compositions that need the previous model-visible tool/context roster can disable the `present`, `tool-ask-user`, `tool-schedule`, `file-reference-local`, `deliverable-file-references`, `harness-dev-context`, and `time-context` rows. Review any pinned prompts and tool schemas before upgrading.

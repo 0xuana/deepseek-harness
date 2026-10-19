@@ -2,6 +2,7 @@
 import { randomUUID } from 'node:crypto'
 import z from '@deepseek-ai/schemastery'
 import { Context, Service } from '@deepseek-ai/cordis'
+import type { Agent } from '@deepseek-ai/dsh-agent'
 import { TypertRemoteService, Remote } from '@deepseek-ai/dsh-typert-protocol'
 import type { Domain } from '@deepseek-ai/dsh-storage-domain'
 import { delegationDepthOf } from '@deepseek-ai/dsh-subagent'
@@ -62,6 +63,15 @@ export {
 
 
 declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /**
+     * Restore a reminder's Session through its embedding's owning controller.
+     * Call next() to use the Web Session controller.
+     * @param sessionId - Original Session receiving the reminder.
+     * @mode waterfall
+     */
+    'schedule/resolve-agent'(sessionId: SessionId, next: () => Promise<Agent>): Promise<Agent>
+  }
   interface Context {
     /** Durable Host-wide reminder management. */
     schedule: ScheduleService
@@ -97,7 +107,7 @@ const DEFAULT_DELIVERY_HISTORY_RECORDS = 200
  * service is the plugin that registers that listener.
  */
 export class ScheduleService extends TypertRemoteService {
-  static inject = ['agents', 'sessions', 'storageDomain', 'sessionController', 'sessionPersistence']
+  static inject = ['agents', 'sessions', 'storageDomain', 'sessionPersistence']
 
   static Config: z<Config> = z.object({
     deliveryHistoryDays: z.number().step(1).min(1).max(3650).default(DEFAULT_DELIVERY_HISTORY_DAYS),

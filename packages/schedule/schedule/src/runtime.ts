@@ -98,8 +98,13 @@ export class ScheduleRuntime {
       let admitted = group
       const committed = new Set<ScheduleTask['record']['id']>()
       try {
-        const resolved = await this.ctx.sessionController.resolveAgent(task.sessionId)
-        if ('error' in resolved) throw resolved.error
+        const agent = await this.ctx.waterfall('schedule/resolve-agent', task.sessionId, async () => {
+          const controller = this.ctx.get('sessionController')
+          if (controller === undefined) throw new Error('schedule: no Session activation provider')
+          const resolved = await controller.resolveAgent(task.sessionId)
+          if ('error' in resolved) throw resolved.error
+          return resolved.agent
+        })
         // oxlint-disable-next-line typescript/no-unnecessary-condition -- Disposal can run while Session restoration is awaited.
         if (this.stopping) return
         const now = Date.now()
@@ -120,8 +125,8 @@ export class ScheduleRuntime {
           content: [{ type: 'text', text }], source: { kind: 'schedule' },
         })
         // followup synchronously appends the inbox splice before flush observes the Session.
-        resolved.agent.followup(message)
-        const flushed = await this.ctx.sessions.flush(resolved.agent.session)
+        agent.followup(message)
+        const flushed = await this.ctx.sessions.flush(agent.session)
         if (!flushed) throw new Error('Session persistence did not acknowledge the reminder')
         const deliveredAt = new Date(Date.now()).toISOString()
         if (!isRecurringScheduleRecord(task.record)) {

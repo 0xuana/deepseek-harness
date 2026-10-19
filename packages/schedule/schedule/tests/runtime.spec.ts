@@ -18,8 +18,8 @@ afterEach(async () => {
   await Promise.all(tests.splice(0).map(test => test.ctx.fiber.dispose()))
   vi.useRealTimers()
 })
-async function setup(tasks: ScheduleTask[]) {
-  const test = await harness(); tests.push(test)
+async function setup(tasks: ScheduleTask[], options: Parameters<typeof harness>[0] = {}) {
+  const test = await harness(options); tests.push(test)
   const agent = agentFor(test.ctx)
   const followup = vi.fn<Agent['followup']>()
   agent.followup = followup
@@ -59,6 +59,33 @@ it('seeds legacy history only from its actual receipt and appends through wall-c
 })
 
 describe('Host Schedule timer', () => {
+  it('keeps reminders unacknowledged when no Session activation provider is mounted', async () => {
+    const tasks = [task(createAfterScheduleRecord(ScheduleId('unavailable'), 'Remember', 2, Date.now(), 'Remember'))]
+    const test = await setup(tasks, { sessionController: false })
+    const warn = vi.spyOn(test.ctx.logger, 'warn').mockImplementation(() => {})
+    try {
+      test.runtime.requestDrive()
+      await vi.advanceTimersByTimeAsync(2000)
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('no Session activation provider'))
+      expect(test.followup).not.toHaveBeenCalled()
+      expect(test.commit).not.toHaveBeenCalled()
+      expect(tasks[0]?.status).toBe('active')
+    } finally { warn.mockRestore() }
+  })
+
+  it('uses the embedding activation handler instead of the Web controller', async () => {
+    const tasks = [task(createAfterScheduleRecord(ScheduleId('embedded'), 'Remember', 2, Date.now(), 'Remember'))]
+    const test = await setup(tasks)
+    const activate = vi.fn(async () => test.agent)
+    test.ctx.on('schedule/resolve-agent', activate)
+    test.runtime.requestDrive()
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(activate).toHaveBeenCalledWith(SessionId('original'), expect.any(Function))
+    expect(test.resolve).not.toHaveBeenCalled()
+    expect(test.followup).toHaveBeenCalledOnce()
+    expect(tasks[0]?.status).toBe('inactive')
+  })
+
   it('restores the original Session and retains an ended one-shot with its flushed message receipt', async () => {
     const tasks = [task(createAfterScheduleRecord(ScheduleId('once'), 'Remember', 2, Date.now(), 'Remember'))]
     const test = await setup(tasks)

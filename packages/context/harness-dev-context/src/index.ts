@@ -10,6 +10,8 @@
  */
 
 import { fileURLToPath } from 'node:url'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { z as zod } from 'zod'
 import z from '@deepseek-ai/schemastery'
@@ -27,7 +29,7 @@ export const inject = ['systemPrompt', 'sessionProjections']
 
 /** Desktop context supplied by a host or an SDK embedding. */
 export interface Config {
-  /** Implementation checkout; omit for this installation, or false when unavailable. */
+  /** Implementation checkout; omission detects a source tree, false disables detection. */
   checkout?: string | false
   /** GUI URL; omit to use the mounted Web application when available. */
   guiUrl?: string
@@ -52,18 +54,19 @@ const HARNESS_SOURCE_GUIDANCE = 'The checkout location and current working direc
   + 'never infer the working directory from the checkout path. Use pwd to determine the current working directory. '
   + 'Use this checkout only to inspect or extend DSH itself.'
 
-const HARNESS_SOURCE_PROMPT = `The runtime context names the DeepSeek Harness implementation checkout. ${HARNESS_SOURCE_GUIDANCE}`
+const HARNESS_SOURCE_PROMPT = `The runtime context states whether a DeepSeek Harness implementation checkout is available and names its path when provided. ${HARNESS_SOURCE_GUIDANCE}`
 
-const WEB_SURFACE_GUIDANCE = 'When the user refers to "this page", "this GUI", or "this app" without naming another target, they mean this GUI. '
+const WEB_SURFACE_GUIDANCE = 'When a Web GUI is provided and the user refers to "this page", "this GUI", or "this app" without naming another target, they mean that GUI. '
   + 'The browser provides no implicit DOM, route, or screenshot context. '
-  + 'The client-plugin HMR receiver is active, but client-plugin changes reload without a refresh only while '
-  + '`pnpm run dev:web` is also running from this same checkout to rebuild their bundles; verify that watcher before promising automatic updates. '
+  + 'Client-plugin changes reload without a refresh only when the browser HMR receiver is active and '
+  + '`pnpm run dev:web` is running from this same checkout to rebuild their bundles; verify both before promising automatic updates. '
+  + 'Server plugin/configuration HMR is independent of the browser receiver and the build watcher, and can be enabled in a headless runtime. '
   + 'Every other change — the apps/web shell and plain packages — requires rebuilding the affected Web artifacts and verifying this existing URL after a page refresh. '
   + 'Starting another server does not update this GUI. '
   + 'The apps/web Vite entry builds the shell but is not a standalone application because only dsh web injects window.__DSH_BOOT__. '
   + 'Do not start a replacement server unless the user asks; if one is needed, use a managed background job and verify its exact URL.'
 
-const WEB_SURFACE_PROMPT = `You are interacting with the user through the DeepSeek Harness Web GUI whose URL the runtime context names. ${WEB_SURFACE_GUIDANCE}`
+const WEB_SURFACE_PROMPT = `The runtime context states whether a DeepSeek Harness Web GUI is available and names its URL when provided. ${WEB_SURFACE_GUIDANCE}`
 
 /**
  * Fixed text around the value in each paragraph that embedded it, frozen as
@@ -142,6 +145,9 @@ const ADMITS_NOTHING: LegacyPrompt = { source: null, web: null }
  * @param config - optional embedding checkout and GUI URL.
  */
 export function apply(ctx: Context, config: Config = {}): void {
+  // Inspect only at activation. A packaged runtime is not necessarily a source checkout.
+  const checkout = config.checkout ?? (existsSync(join(SOURCE_ROOT, 'apps/cli/src/bin.ts'))
+    && existsSync(join(SOURCE_ROOT, 'packages/core/agent/src/index.ts')) ? SOURCE_ROOT : false)
   ctx.sessionProjections.register({
     key: LEGACY_PROMPT,
     stateVersion: 1,
@@ -164,8 +170,8 @@ export function apply(ctx: Context, config: Config = {}): void {
     name: HARNESS_SOURCE,
     order: ctx.systemPrompt.getContextOrder('HARNESS_SOURCE'),
     interpolate: false,
-    text: `Current DeepSeek Harness implementation checkout: ${config.checkout === false
-      ? 'not provided for this SDK session' : JSON.stringify(config.checkout ?? SOURCE_ROOT)}.`,
+    text: `Current DeepSeek Harness implementation checkout: ${checkout === false
+      ? 'not available' : JSON.stringify(checkout)}.`,
   })
   ctx.systemPrompt.section({
     name: WEB_SURFACE,
@@ -180,7 +186,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     text: () => {
       const url = config.guiUrl ?? ctx.get('webApp')?.getAdvertisedUrl()
       return `Current DeepSeek Harness Web GUI URL: ${url === undefined
-        ? 'not provided for this SDK session' : JSON.stringify(url)}.`
+        ? 'not available' : JSON.stringify(url)}.`
     },
   })
 }

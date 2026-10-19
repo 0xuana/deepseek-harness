@@ -1437,12 +1437,12 @@ export interface Config {
 ## `@deepseek-ai/dsh-harness-dev-context`
 
 - `inject`: `systemPrompt` · `sessionProjections`
-- `source`: [`packages/context/harness-dev-context/src/index.ts:29`](../packages/context/harness-dev-context/src/index.ts)
+- `source`: [`packages/context/harness-dev-context/src/index.ts:31`](../packages/context/harness-dev-context/src/index.ts)
 
 ```ts config-catalog
 /** Desktop context supplied by a host or an SDK embedding. */
 export interface Config {
-  /** Implementation checkout; omit for this installation, or false when unavailable. */
+  /** Implementation checkout; omission detects a source tree, false disables detection. */
   checkout?: string | false
   /** GUI URL; omit to use the mounted Web application when available. */
   guiUrl?: string
@@ -2723,8 +2723,8 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-schedule`
 
-- `inject`: `agents` · `sessions` · `storageDomain` · `sessionController` · `sessionPersistence`
-- `source`: [`packages/schedule/schedule/src/index.ts:72`](../packages/schedule/schedule/src/index.ts)
+- `inject`: `agents` · `sessions` · `storageDomain` · `sessionPersistence`
+- `source`: [`packages/schedule/schedule/src/index.ts:82`](../packages/schedule/schedule/src/index.ts)
 
 ```ts config-catalog
 /** Configuration for the Host Schedule domain. */

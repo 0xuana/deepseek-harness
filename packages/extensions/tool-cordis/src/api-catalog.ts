@@ -4422,6 +4422,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [],
   },
   {
+    name: 'schedule/resolve-agent',
+    mode: 'waterfall',
+    signature: '\'schedule/resolve-agent\'(sessionId: SessionId, next: () => Promise<Agent>): Promise<Agent>',
+    summary: 'Restore a reminder\'s Session through its embedding\'s owning controller.',
+    description: 'Restore a reminder\'s Session through its embedding\'s owning controller. Call next() to use the Web Session controller.',
+    parameters: [{ name: 'sessionId', description: 'Original Session receiving the reminder.' }],
+  },
+  {
     name: 'session-telemetry/record',
     mode: 'waterfall',
     signature: '\'session-telemetry/record\'(record: SessionTelemetryRecord, next: () => SessionTelemetryRecord): SessionTelemetryRecord',

@@ -10,6 +10,8 @@ import { execa } from 'execa'
 import { describe, expect, it, onTestFinished } from 'vitest'
 import { workspaceDependencyPaths, type PrimaryRuntimeManifest } from '@deepseek-ai/dsh-tool-workspace-dependencies'
 
+import { messagesResponse } from './fixtures/messages-response.ts'
+
 const repoRoot = fileURLToPath(new URL('../../../../../', import.meta.url))
 const launch = resolveExampleLaunch({
   srcBin: fileURLToPath(new URL('../../../src/bin.ts', import.meta.url)),
@@ -17,16 +19,6 @@ const launch = resolveExampleLaunch({
 })
 const decompress = promisify(zstdDecompress)
 
-/** Frame one text or tool response from the local Messages endpoint. */
-function messagesResponse(content: Record<string, unknown>, stopReason: 'end_turn' | 'max_tokens' | 'tool_use'): string {
-  return [
-    { type: 'message_start', message: { id: 'sdk-smoke-response', model: 'deepseek-v4-pro', usage: { input_tokens: 3, output_tokens: 0 } } },
-    { type: 'content_block_start', index: 0, content_block: content },
-    { type: 'content_block_stop', index: 0 },
-    { type: 'message_delta', delta: { stop_reason: stopReason }, usage: { output_tokens: 1 } },
-    { type: 'message_stop' },
-  ].map(event => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`).join('')
-}
 
 function waitForLine(
   lines: string[],

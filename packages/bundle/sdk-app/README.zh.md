@@ -46,7 +46,7 @@ Python 运行时向本 profile 提供显式下载的创作资源和 Office sidec
 
 #### 模型看到什么
 
-profile 继承 base 系统提示词，包括 `You are an AI agent powered by DeepSeek Harness.` 身份说明，并添加与 Web 和 headless profile 相同、按当前模型插值的 coding persona。每个 Session 通过 [`dsh-working-directory`](../../session/working-directory/README.zh.md) 提供的必需 user-role 上下文接收当前目录。默认文件工具 schema 包含 `read`、`write` 和 `edit`，不包含 `str_replace_editor`。模型还会收到 `present`、`ask_user_question`、定时任务工具、共用文件引用说明和时间上下文。子 agent 不能使用定时任务工具。[`harness-dev-context`](../../context/harness-dev-context/README.zh.md) 配置项接受 `checkout` 和 `guiUrl`；默认两者均不可用。[`time-context`](../../context/time-context/README.zh.md) 配置项接受回退时区。Skills 使用上述配置的资源。
+profile 继承 base 系统提示词，包括 `You are an AI agent powered by DeepSeek Harness.` 身份说明，并添加与 Web 和 headless profile 相同、按当前模型插值的 coding persona。每个 Session 通过 [`dsh-working-directory`](../../session/working-directory/README.zh.md) 提供的必需 user-role 上下文接收当前目录。默认文件工具 schema 包含 `read`、`write` 和 `edit`，不包含 `str_replace_editor`。模型还会收到 `present`、`ask_user_question`、定时任务工具、共用文件引用说明和时间上下文。子 agent 不能使用定时任务工具。[`harness-dev-context`](../../context/harness-dev-context/README.zh.md) 配置项接受 `checkout` 和 `guiUrl`；安装中包含 CLI 和 Agent 源码树时自动识别 checkout；没有嵌入方提供的 URL 时 GUI 不可用。[`time-context`](../../context/time-context/README.zh.md) 配置项接受回退时区。Skills 使用上述配置的资源。
 
 #### Token 影响
 
@@ -61,7 +61,7 @@ profile 继承 base 系统提示词，包括 `You are an AI agent powered by Dee
 <a id="known-limitations-and-deferred-work"></a>
 
 - **没有图形客户端**：文件卡片、本地文件打开和浏览器状态需要嵌入客户端；SDK 不启动 Web server。
-- **提问需要回答方**：嵌入方必须提供原生 `user-questions/request` handler，否则 `ask_user_question` 返回 `NO_PROVIDER`。
+- **提问需要回答方**：在 TypeScript 中配置 `onUserQuestion`、在 Python 中配置 `on_user_question`，或提供原生 `user-questions/request` handler；否则 `ask_user_question` 返回 `NO_PROVIDER`。
 - **定时任务依赖运行时生命周期**：投递需要运行中的进程及其持久化 Session 存储。
 - **profile 可能省略 SDK server**：TypeScript client 选择的自定义 profile 必须保留本组合包或另一个 `dsh-sdk-jsonrpc-server` 配置项；没有 peer 响应时，client 初始化会失败。
 - **用户插件可以破坏 stdout 纯净性**：profile 与逐次启动 patch 属于受信任应用组合。随附组合包不会向 stdout 写入非协议内容，但无法约束任意插入插件。

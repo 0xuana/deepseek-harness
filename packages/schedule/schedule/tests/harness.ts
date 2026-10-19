@@ -67,6 +67,7 @@ export async function harness(options: {
   pool?: MemoryMediaPool
   backend?: StorageBackend
   direct?: true
+  sessionController?: false
   config?: Config
 } = {}) {
   const ctx = new Context()
@@ -87,7 +88,7 @@ export async function harness(options: {
     return async () => { await facility.closeAll(); unmount() }
   })
   const resolve = vi.fn<Context['sessionController']['resolveAgent']>(async () => { throw new Error('missing Session') })
-  ctx.provide('sessionController', { resolveAgent: resolve } as never)
+  if (options.sessionController !== false) ctx.provide('sessionController', { resolveAgent: resolve } as never)
   const flush = vi.fn(async () => {})
   ctx.on('session/flush', flush)
   // This fixture supplies flush behavior above; Schedule does not invoke persistence methods directly.
