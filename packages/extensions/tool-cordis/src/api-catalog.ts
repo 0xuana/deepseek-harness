@@ -929,9 +929,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: '@Remote applications(): Promise<CuaApplicationState>',
-        description: 'Read application decisions without waiting for the native helper.',
+        description: 'Read fresh stored application decisions without issuing a native request.',
         parameters: [],
-        returns: 'Saved grants and refused applications with their persistence owner.',
+        returns: 'Saved grants, refused applications and durable-storage availability.',
       },
       {
         signature: '@Remote async systemStatus(): Promise<CuaSystemPermissionState>',

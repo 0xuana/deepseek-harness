@@ -64,7 +64,7 @@ export class CuaPermissionStore {
   /**
    * Serialize a read, write, or authorized dispatch against all other users of this profile.
    * @param signal Cancellation while waiting; admitted operations own their cancellation.
-   * @param operation Work using fresh state. Native dispatch keeps the lock until it settles.
+   * @param operation Work using fresh state. Native dispatch uses its separate application lease.
    * @returns The operation's result after its domain handle has closed.
    */
   withState<T>(signal: AbortSignal, operation: (transaction: PermissionTransaction) => T | Promise<T>): Promise<T> {
@@ -73,6 +73,25 @@ export class CuaPermissionStore {
     void pending.finally(() => { this.pending.delete(pending) }).catch(() => {})
     return pending
   }
+  /**
+   * Coordinate native dispatch and whole-application revocation without blocking other applications.
+   * @param id Validated native application identity.
+   * @param signal Cancellation while waiting for admission.
+   * @param operation Authorized dispatch or revocation, after checking fresh state separately.
+   * @returns Result after releasing the application lease.
+   */
+  withApplication<T>(id: CuaApplicationId, signal: AbortSignal, operation: () => Promise<T>): Promise<T> {
+    const pending = (async () => {
+      signal.throwIfAborted()
+      if (this.directory === undefined) return operation()
+      const directory = await realpath(this.directory)
+      return withFileLock(join(directory, `cua-application-${id}`), operation, { signal, waitMs: this.waitMs })
+    })()
+    this.pending.add(pending)
+    void pending.finally(() => { this.pending.delete(pending) }).catch(() => {})
+    return pending
+  }
+
   /** Join accepted operations before withdrawing this provider. */
   async drain(): Promise<void> { await Promise.allSettled(this.pending) }
 

@@ -135,3 +135,21 @@ it('uses temporary decisions only without a profile and fails when profile stora
   await a.domain.dispose()
   await expect(a.store.withState(signal, transaction => transaction.state)).rejects.toThrow('require storageDomain')
 })
+
+it('keeps storage reads and other applications available while one native operation holds its lease', async () => {
+  const f = await setup(), a = await f.open(), b = await f.open()
+  const entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
+  onTestFinished(() => { release.resolve(undefined) })
+  const active = a.store.withApplication(grant.id, signal, async () => { entered.resolve(undefined); await release.promise })
+  await entered.promise
+  expect(await b.store.withState(signal, transaction => transaction.state.migrated)).toBe(true)
+  expect(await b.store.withApplication('b'.repeat(64) as CuaApplicationId, signal, async () => 'independent')).toBe('independent')
+  const waiting = new AbortController()
+  const blocked = b.store.withApplication(grant.id, waiting.signal, async () => 'must not run')
+  const rejected = expect(blocked).rejects.toThrow('cancelled')
+  waiting.abort(new Error('cancelled'))
+  await rejected
+  release.resolve(undefined); await active
+  await expect(b.store.withApplication(grant.id, signal, async () => { throw new Error('dispatch failed') })).rejects.toThrow('dispatch failed')
+  expect(await a.store.withApplication(grant.id, signal, async () => 'released')).toBe('released')
+})

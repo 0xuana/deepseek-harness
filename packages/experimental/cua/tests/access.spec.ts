@@ -423,3 +423,24 @@ it('configures persistent PTC through the existing profile editor only on explic
   await f.ctx.cuaAccess.enablePersistentPtc()
   expect(edit).toHaveBeenCalledOnce()
 })
+
+it('rejects invalid application identities before a permission file or native handle can be touched', async () => {
+  const f = await setup()
+  const invalid = '../another-profile' as import('../src/application-types.ts').CuaApplicationId
+  await expect(f.ctx.cuaAccess.revoke(invalid)).rejects.toThrow()
+  await expect(f.ctx.cuaAccess.retryApproval(invalid)).rejects.toThrow()
+  expect(f.save).not.toHaveBeenCalled()
+  expect(f.client.disposed).toBe(false)
+})
+
+it('does not reactivate old handles when stored permission was revoked and later restored', async () => {
+  const f = await setup('Always allow')
+  await f.access.select(f.agent, f.client, handle, identity, signal)
+  await f.save([])
+  await f.save([{ id: identity.id, name: identity.name, executablePath: identity.executablePath }])
+  await expect(f.access.select(f.agent, f.client, handle, identity, signal)).rejects.toThrow('APP_ACCESS_REVOKED')
+  expect(f.client.disposed).toBe(true)
+  const replacement = new NativeClient(f.ctx, nativeConfig, unusedConnector)
+  await f.access.select(f.agent, replacement, handle, identity, signal)
+  expect(f.answer).toHaveBeenCalledOnce()
+})

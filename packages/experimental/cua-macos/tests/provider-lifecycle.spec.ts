@@ -709,6 +709,7 @@ it('stores revocation without entering the HMR configuration queue', async () =>
   const entry = [...f.ctx.loader.entries()].find(entry => entry.options.id === 'cua')!
   await entry.update({ disabled: true })
   await entry.update({ disabled: false })
+  await f.ctx.loader.await()
   expect((await f.ctx.cuaAccess.applications()).allowedApps).toEqual([])
 })
 

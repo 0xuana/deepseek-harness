@@ -86,15 +86,17 @@ export class ApplicationAccess {
    */
   async revoke(id: CuaApplicationId): Promise<void> {
     this.lifetime.signal.throwIfAborted()
+    id = ApplicationAuthorizationResult.shape.id.parse(id)
     const clients = this.invalidate(id)
-    const before = await this.read(id)
-    if (before.always && !this.options.store.persistent) throw new Error('Application permissions cannot be saved in this composition')
-    await this.options.store.withState(this.lifetime.signal, async (transaction) => {
-      const app = transaction.state.applications[id] ?? this.empty()
-      await this.save(transaction, id, { revoked: app.revoked + 1, sessions: Object.fromEntries(
-        Object.entries(app.sessions).map(([sessionId, session]) => [sessionId, { ...session, decision: 'deny' as const, revision: session.revision + 1 }]),
-      ) })
-    })
+    await this.options.store.withApplication(id, this.lifetime.signal, () =>
+      this.options.store.withState(this.lifetime.signal, async (transaction) => {
+        const app = transaction.state.applications[id] ?? this.empty()
+        if (app.always && !this.options.store.persistent) throw new Error('Application permissions cannot be saved in this composition')
+        await this.save(transaction, id, { revoked: app.revoked + 1, sessions: Object.fromEntries(
+          Object.entries(app.sessions).map(([sessionId, session]) => [sessionId, { ...session, decision: 'deny' as const, revision: session.revision + 1 }]),
+        ) })
+      }),
+    )
     const results = await Promise.allSettled([
       ...clients.map(client => client.dispose()),
       ...[...this.active].filter(operation => operation.identity.id === id).map(operation => operation.done.promise),
@@ -109,6 +111,7 @@ export class ApplicationAccess {
    * @returns Completion after the new asking policy is durable.
    */
   async retryApproval(id: CuaApplicationId): Promise<void> {
+    id = ApplicationAuthorizationResult.shape.id.parse(id)
     await this.options.store.withState(this.lifetime.signal, async (transaction) => {
       const app = transaction.state.applications[id]
       if (!app || !Object.values(app.sessions).some(session => session.decision === 'deny')) return
@@ -134,7 +137,11 @@ export class ApplicationAccess {
       signal.throwIfAborted()
       const observed = await this.read(identity.id, signal)
       const existing = this.clients.get(client)?.handles.get(handle)
-      if (!client.disposed && existing && this.permitted(existing, observed)) return
+      if (!client.disposed && existing) {
+        if (this.permitted(existing, observed)) return
+        this.invalidate(identity.id, agent)
+        throw new NativeError('APP_ACCESS_REVOKED', 'Application access changed; acquire a fresh application handle after consent')
+      }
       const saved = identity.persistable && observed.always !== undefined
       const decision = observed.sessions[agent.id]
       let scope: Selection['scope'] = saved ? 'persistent' : 'session'
@@ -184,6 +191,7 @@ export class ApplicationAccess {
           throw this.denied(identity)
         }
       }
+      if (client.disposed) throw new NativeError('NATIVE_CLOSED', 'Helper is closed; acquire fresh application handles')
       const authorized = await this.options.store.withState(signal, async (transaction) => {
         signal.throwIfAborted()
         const app = transaction.state.applications[identity.id] ?? this.empty()
@@ -236,8 +244,10 @@ export class ApplicationAccess {
     if (!state || !selected) throw new NativeError('APP_ACCESS_REQUIRED', 'Select the application with getApp and obtain user consent before reading or controlling it')
     if (selected.lifetime.signal.aborted) throw new NativeError('APP_ACCESS_REVOKED', 'Application access was revoked; stop using this application')
     const lifetime = AbortSignal.any([signal, this.lifetime.signal, selected.lifetime.signal])
-    return this.options.store.withState(lifetime, async ({ state: permissions }) => {
-      if (!this.permitted(selected, permissions.applications[selected.identity.id] ?? this.empty())) {
+    return this.options.store.withApplication(selected.identity.id, lifetime, async () => {
+      const permitted = await this.options.store.withState(lifetime, ({ state: permissions }) =>
+        this.permitted(selected, permissions.applications[selected.identity.id] ?? this.empty()))
+      if (!permitted) {
         this.invalidate(selected.identity.id, state.agent)
         throw new NativeError('APP_ACCESS_REVOKED', 'Application access was revoked; stop using this application')
       }
