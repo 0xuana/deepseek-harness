@@ -20,6 +20,8 @@ Claude Code and Codex install on demand through the separate `ON_DEMAND_BUNDLES`
 
 Computer Use is a shipped optional bundle in the experimental group. Its repository-owned native component is prepared only for enabled profiles, without an external Cua Driver runtime. It declares `dsh.bundle.experimental: true` for the experimental card label; existing experimental package names retain their labels.
 
+The CUA bundle and client plugin use the explicit naming exceptions `@deepseek-ai/dsh-cua-bundle` and `@deepseek-ai/dsh-client-ui-cua`, alongside `@deepseek-ai/dsh-cua`. These names preserve profile references when the capability moves package groups; the experimental classification still controls isolation and promotion.
+
 ## Alternatives considered
 
 **Ship every provider as an optional bundle.** Composes and displays correctly, but grows every install by provider runtimes for a capability most installations never switch on; voice input's `sherpa-onnx-node` is the one accepted precedent.

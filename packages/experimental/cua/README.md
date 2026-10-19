@@ -51,7 +51,7 @@ Actions return `dispatched:true, verified:false`; read fresh state to verify the
 
 The provider calls [installCua](src/index.ts) with its prepared helper, connection factory, and guidance. [NativeClient](src/native-client.ts) owns request correlation, byte limits, cancellation acknowledgement, and failure settlement. The platform connector owns startup and connection cleanup. The shared executor retains one connection per Agent and joins in-flight image writes during disposal.
 
-`agentPreset` defaults to `ptc`, restricting tools and guidance to Agents bound to that preset. The provider uses the existing `agent/created` and `agent-preset/selected` events and Agent-owned scopes, including Agents already present when it loads. Provider unload and Agent disposal release those registrations. Set `agentPreset: false` for global registration in standalone compositions without presets. The Host continues to own permissions, native connections and cancellation; preset definitions remain unchanged.
+`agentPreset` defaults to `ptc`, restricting tools and guidance to Agents bound to that preset. The provider uses the existing `agent/created` and `agent-preset/selected` events and Agent-owned scopes, including Agents already present when it loads. Provider unload and Agent disposal release those registrations. Preset definitions may register after the provider; a preset name filters bound Agents and supplies no tools until a matching Agent exists. Set `agentPreset: false` for global registration in standalone compositions without presets. The Host continues to own permissions, native connections and cancellation; preset definitions remain unchanged.
 
 [The operation schema](src/protocol.ts) is the authority for model parameters and separately declared Host-only fields. Native implementations enforce target identity, window geometry, resource limits, and operating-system access at execution. No invariant companion is published because this library has no separately projected registry or durable state.
 
@@ -88,6 +88,7 @@ Results append to history. Retaining objects does not rewrite previous messages;
 
 <a id="known-limitations-and-deferred-work"></a>
 
+- In-memory session decisions have no capacity limit or eviction. They remain until the provider unloads, so a long-running Host retains entries for every session/application pair that requested access.
 - Native execution currently uses the macOS provider. Windows support is planned as a separate provider package with a C# helper, retaining the shared app/window API, authorization, snapshot validity, and action-result semantics. Its implementation must document system-specific limitations and distinguish cross-compilation evidence from Windows desktop validation.
 - Persistent variables do not reserve an application across a sequence of operations. Other Agents and the user can change its state. Hover and observations do not restore the previous pointer position; [continuous interaction](../../../.agents/notes/implemented/architecture/2026-10-13-cua-continuous-hover.md) uses no cross-call ownership.
 - The package stays in `experimental` until Windows support and platform validation permit promotion to the `computer-use` group.
