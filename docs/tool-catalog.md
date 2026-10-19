@@ -15,6 +15,7 @@ This table connects model-visible tool names to the plugin package and service s
 
 | Tool package | Model-visible names | Requires | Writes / affects | Shipped aliases | Deployment note |
 | --- | --- | --- | --- | --- | --- |
+| `@deepseek-ai/dsh-experimental-plugin-recommendations` | `list_official_plugins`, `suggest_plugin` | `ctx.tools`, `ctx.pluginManager`, `ctx.agents`, `ctx.sessionProjections`, `ctx.remoteAccess` | `tool/call`, `tool/result`, `plugin:plugin-recommendations/decision`, `user/message after successful activation` | - | - |
 | `@deepseek-ai/dsh-plugin-manager` | `plugin_manager` | `ctx.tools`, `ctx.pluginManager`, `ctx.sandboxPolicy` | `tool/call`, `tool/result`, `user/message` | - | - |
 | `@deepseek-ai/dsh-plugin-market` | `plugin_market` | `ctx.tools`, `ctx.pluginMarket` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-mcp-resources` | `list_mcp_resource_templates`, `list_mcp_resources`, `read_mcp_resource` | `ctx.tools`, `ctx.mcpResources` | `tool/call`, `tool/result` | - | - |
@@ -49,6 +50,54 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`, `ctx.workflowEngine`, `ctx.systemPrompt`, `a calling Agent (exec.agent parents the script children)` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-workspace-dependencies` | `load_workspace_dependencies` | `ctx.tools` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`, `web_search` | `ctx.tools`, `ctx.web`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps. |
+
+<a id="deepseek-aidsh-experimental-plugin-recommendations"></a>
+
+## `@deepseek-ai/dsh-experimental-plugin-recommendations`
+
+### `list_official_plugins`
+
+Read the built-in optional DSH plugins that can help with a current explicit user need. This is read-only and does not enable anything. Match the user request semantically against these descriptions. Do not discover unexpressed needs or recommend unrelated plugins.
+
+```json
+{
+  "type": "object",
+  "properties": {}
+}
+```
+
+Source: [`packages/experimental/plugin-recommendations/src/index.ts`](../packages/experimental/plugin-recommendations/src/index.ts)
+
+### `suggest_plugin`
+
+Offer one built-in official plugin in a conversation card for the current explicit user need. Read list_official_plugins first; use an exact catalog name, summarize the expressed need using conversation context, and explain the benefit in the user's language. Do not call for unexpressed needs, already enabled plugins, or third-party packages. This only proposes: the user must click Enable. Do not enable it through another tool or claim it is enabled. Offer at most one plugin per response. Answer the user before finishing the turn; the card appears below the completed answer; a successful click sends confirmation so you can continue the original task.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Exact official catalog name."
+    },
+    "request": {
+      "type": "string",
+      "description": "Explicit user need this capability addresses, including relevant conversation context."
+    },
+    "reason": {
+      "type": "string",
+      "description": "Brief benefit tied to that need, in the user's language."
+    }
+  },
+  "required": [
+    "name",
+    "request",
+    "reason"
+  ]
+}
+```
+
+Source: [`packages/experimental/plugin-recommendations/src/index.ts`](../packages/experimental/plugin-recommendations/src/index.ts)
 
 <a id="deepseek-aidsh-plugin-manager"></a>
 

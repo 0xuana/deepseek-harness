@@ -353,6 +353,29 @@ async entry(url: string, name: string): Promise<MarketListingEntry | undefined>
 
 Source: [`packages/boot/plugin-market/src/index.ts`](../../packages/boot/plugin-market/src/index.ts)
 
+<a id="ctxpluginrecommendations--pluginrecommendations"></a>
+
+### `ctx.pluginRecommendations` — `PluginRecommendations`
+
+Owns the catalog tools, durable decisions, and idempotent card actions.
+
+```ts cordis-catalog
+/**
+ * Decide one logged recommendation. Concurrent actions on the same card share
+ * one operation; a settled success or dismissal never enables twice. Failed
+ * activation remains retryable. Profile selection survives session disposal.
+ * @param agent - Exact live root resolved by the Gateway from the Session id.
+ * @param callId - Proposal stored by suggest_plugin, never a package supplied by the browser.
+ * @param action - Human choice.
+ * @returns The observed application outcome or a refusal with no profile mutation.
+ */
+@Remote act(agent: Agent, callId: ToolCallId, action: 'enable' | 'dismiss'): Promise<RecommendationActionResult>
+```
+
+Types: [Agent](core.zh.md) · [ToolCallId](core.zh.md)
+
+Source: [`packages/experimental/plugin-recommendations/src/index.ts`](../../packages/experimental/plugin-recommendations/src/index.ts)
+
 <a id="ctxpluginregistryprobe--pluginregistryprobe"></a>
 
 ### `ctx.pluginRegistryProbe` — `PluginRegistryProbe`

@@ -108,6 +108,14 @@ const GROUP_ORDER = [
 
 const SERVICE_ROLES: ServiceRole[] = [
   {
+    key: 'pluginRecommendations',
+    pkg: 'experimental-plugin-recommendations',
+    title: 'Explicit-need plugin recommendations',
+    mode: 'service',
+    consumers: ['experimental-client-ui-plugin-recommendations'],
+    note: 'Offers official catalog entries and records explicit user activation through the profile plugin manager.',
+  },
+  {
     key: 'headlessStartup',
     pkg: 'headless',
     title: 'Headless invocation options',

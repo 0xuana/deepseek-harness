@@ -36,6 +36,8 @@ kind: "package-group"
 
 | 包 | 职责 | ctx 键 |
 |---|---|---|
+| [`plugin-recommendations`](plugin-recommendations/README.zh.md) | 针对明确需求在会话内推荐官方插件 | `ctx.pluginRecommendations` |
+| [`client-ui-plugin-recommendations`](client-ui-plugin-recommendations/README.zh.md) | 回答末尾的推荐卡片和用户操作 | — |
 | [`tool-session-query`](tool-session-query/README.zh.md) | 按工作区授权的模型会话搜索、追踪与事件读取 | — |
 | [`session-search`](session-search/README.zh.md) | 可选实验性全局会话搜索工具 | — |
 | [`ralph-bundle`](ralph-bundle/README.zh.md) | 带隔离 workflow 引擎的可选重复委派 | — |

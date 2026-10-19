@@ -19,6 +19,7 @@
 
 | 工具包 | 模型可见名称 | 依赖 | 写入／影响 | 随产品发布的别名 | 部署说明 |
 | --- | --- | --- | --- | --- | --- |
+| `@deepseek-ai/dsh-experimental-plugin-recommendations` | `list_official_plugins`, `suggest_plugin` | `ctx.tools`, `ctx.pluginManager`, `ctx.agents`, `ctx.sessionProjections`, `ctx.remoteAccess` | `tool/call`, `tool/result`, `plugin:plugin-recommendations/decision`, `user/message after successful activation` | - | - |
 | `@deepseek-ai/dsh-plugin-manager` | `plugin_manager` | `ctx.tools`, `ctx.pluginManager`, `ctx.sandboxPolicy` | `tool/call`, `tool/result`, `user/message` | - | - |
 | `@deepseek-ai/dsh-plugin-market` | `plugin_market` | `ctx.tools`, `ctx.pluginMarket` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-mcp-resources` | `list_mcp_resource_templates`, `list_mcp_resources`, `read_mcp_resource` | `ctx.tools`, `ctx.mcpResources` | `tool/call`, `tool/result` | - | - |
@@ -53,6 +54,54 @@
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`、`ctx.workflowEngine`、`ctx.systemPrompt`、`a calling Agent (exec.agent parents the script children)` | `tool/call`、`tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-workspace-dependencies` | `load_workspace_dependencies` | `ctx.tools` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`、`web_search` | `ctx.tools`、`ctx.web`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可见 schema 在更换后端时保持稳定。 |
+
+<a id="deepseek-aidsh-experimental-plugin-recommendations"></a>
+
+## `@deepseek-ai/dsh-experimental-plugin-recommendations`
+
+### `list_official_plugins`
+
+读取能满足用户当前明确需求的内置可选 DSH 插件。此操作只读，不启用插件。根据插件描述和用户需求进行语义匹配；不要挖掘未表达的需求或推荐无关插件。
+
+```json
+{
+  "type": "object",
+  "properties": {}
+}
+```
+
+源码：[`packages/experimental/plugin-recommendations/src/index.ts`](../packages/experimental/plugin-recommendations/src/index.ts)
+
+### `suggest_plugin`
+
+针对用户当前明确需求，在会话卡片中推荐一个内置官方插件。先调用 list_official_plugins，使用清单中的准确名称，结合上下文总结需求，并用用户的语言说明用途。不要推荐未表达的需求、已启用插件或第三方包。这里只提出建议：用户必须点击启用；不要通过其他工具启用或声称已启用。每轮最多推荐一个插件。先完成回答，卡片会显示在回答下方；启用成功后会收到确认，以便继续原任务。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Exact official catalog name."
+    },
+    "request": {
+      "type": "string",
+      "description": "Explicit user need this capability addresses, including relevant conversation context."
+    },
+    "reason": {
+      "type": "string",
+      "description": "Brief benefit tied to that need, in the user's language."
+    }
+  },
+  "required": [
+    "name",
+    "request",
+    "reason"
+  ]
+}
+```
+
+源码：[`packages/experimental/plugin-recommendations/src/index.ts`](../packages/experimental/plugin-recommendations/src/index.ts)
 
 <a id="deepseek-aidsh-plugin-manager"></a>
 

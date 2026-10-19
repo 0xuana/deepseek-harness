@@ -1,0 +1,11 @@
+.card { margin: 12px 0; border: 0.5px solid var(--dsw-alias-border-l1); border-radius: var(--dsw-radius-lg); overflow: hidden; color: var(--dsw-alias-label-primary); }
+.header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; background: var(--dsw-alias-bg-module-platform); font-size: 12px; color: var(--dsw-alias-label-secondary); }
+.badge { font-size: 11px; }
+.body { padding: 16px; }
+.title { font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
+.reason { margin: 8px 0 4px; font-size: 13px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.description { margin: 0; font-size: 12px; line-height: 1.6; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+.footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+.scope { font-size: 11px; color: var(--dsw-alias-label-tertiary); }
+.actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.status { margin: 12px 0 0; font-size: 12px; line-height: 1.6; color: var(--dsw-alias-label-secondary); }

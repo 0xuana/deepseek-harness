@@ -36,6 +36,8 @@ Promotion requires a named product role, documented public behavior and limitati
 
 | Package | Role | ctx key |
 |---|---|---|
+| [`plugin-recommendations`](plugin-recommendations/README.md) | Explicit-need official plugin recommendations in conversations | `ctx.pluginRecommendations` |
+| [`client-ui-plugin-recommendations`](client-ui-plugin-recommendations/README.md) | Completed-answer recommendation cards and user choices | — |
 | [`tool-session-query`](tool-session-query/README.md) | Workspace-authorized model session search, trace, and event reads | — |
 | [`session-search`](session-search/README.md) | Optional experimental global session search tools | — |
 | [`ralph-bundle`](ralph-bundle/README.md) | Optional repeated delegation with an isolated workflow engine | — |
