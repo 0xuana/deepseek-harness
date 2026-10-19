@@ -18,7 +18,7 @@ Bundle 插入普通 Host 行；可选模型工具注册到全局工具层，因�
 
 Claude Code 与 Codex 通过独立的 `ON_DEMAND_BUNDLES` 目录按需安装，其成本、版本与离线发现取舍由[按需原生 bundle 决策](2026-10-05-official-on-demand-bundles.zh.md)管理。
 
-Computer Use 是 experimental 包组内随安装提供的可选组合包。提供方加载时准备仓库自有的本机组件，无需外部 Cua Driver 运行时。
+Computer Use 是 experimental 包组内随安装提供的可选组合包。组合包和前端插件与 `@deepseek-ai/dsh-cua` 一起采用显式命名例外 `@deepseek-ai/dsh-cua-bundle`、`@deepseek-ai/dsh-client-ui-cua`，在能力移动分组时保留配置引用。依赖隔离和晋升仍由实验性分类约束。提供方加载时准备仓库自有的本机组件，无需外部 Cua Driver 运行时。
 
 ## 考虑过的替代方案
 

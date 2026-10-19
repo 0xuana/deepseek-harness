@@ -18,7 +18,7 @@ Bundles insert ordinary Host rows; optional model tools register in the global t
 
 Claude Code and Codex install on demand through the separate `ON_DEMAND_BUNDLES` catalog; the [on-demand native-bundle decision](2026-10-05-official-on-demand-bundles.md) owns the cost, version, and offline-discovery trade-offs.
 
-Computer Use is a shipped optional bundle in the experimental group. Its repository-owned native component is prepared when the provider loads, without an external Cua Driver runtime.
+Computer Use is a shipped optional bundle in the experimental group. Its bundle and client plugin use the explicit naming exceptions `@deepseek-ai/dsh-cua-bundle` and `@deepseek-ai/dsh-client-ui-cua`, alongside `@deepseek-ai/dsh-cua`. These names preserve profile references when the capability moves package groups; the experimental classification still controls isolation and promotion. Its repository-owned native component is prepared when the provider loads, without an external Cua Driver runtime.
 
 ## Alternatives considered
 
