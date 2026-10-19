@@ -101,7 +101,7 @@ export class CuaPermissionStore {
         signal.throwIfAborted()
         return operation({ state: this.memory, save: (next) => { this.memory = next; return Promise.resolve() } })
       }
-      const pending = this.tail.then(run, run)
+      const pending = this.tail.then(run)
       this.tail = pending.then(() => {}, () => {})
       return pending
     }

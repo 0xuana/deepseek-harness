@@ -438,7 +438,7 @@ it('does not reactivate old handles when stored permission was revoked and later
   await f.access.select(f.agent, f.client, handle, identity, signal)
   await f.save([])
   await f.save([{ id: identity.id, name: identity.name, executablePath: identity.executablePath }])
-  await expect(f.access.select(f.agent, f.client, handle, identity, signal)).rejects.toThrow('APP_ACCESS_REVOKED')
+  await expect(f.access.select(f.agent, f.client, handle, identity, signal)).rejects.toThrow('APP_ACCESS_DENIED')
   expect(f.client.disposed).toBe(true)
   const replacement = new NativeClient(f.ctx, nativeConfig, unusedConnector)
   await f.access.select(f.agent, replacement, handle, identity, signal)
