@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Users can discover a relevant built-in plugin while discussing a concrete need. The Agent answers first, then offers one card at the completed Turn’s end; the user can open its plugin details, choose Enable, or choose Not now. Enabling changes the whole profile and persists across restarts. Only an immediately applied change resumes the original request.
+Users can discover a relevant built-in plugin while discussing a concrete need. The Agent answers first, then offers one card at the completed Turn’s end; the user can open its plugin details, choose Enable, or choose Not now. Enable applies through HMR and automatically notifies the Agent; no page refresh or follow-up message is needed. Enabling changes the whole profile and persists across restarts. Only an immediately applied change resumes the original request. Users can later disable or remove the plugin from its details page.
 
 ## Table of Contents
 
