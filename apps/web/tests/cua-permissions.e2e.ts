@@ -97,7 +97,13 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
       for (const colorScheme of ['light', 'dark'] as const) {
         await page.emulateMedia({ colorScheme })
         await expect.poll(() => page.evaluate(() => document.body.hasAttribute('data-ds-dark-theme'))).toBe(colorScheme === 'dark')
-        expect(await panel.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+        const layout = await panel.evaluate(element => ({
+          clientWidth: element.clientWidth, scrollWidth: element.scrollWidth,
+          overflowing: [...element.querySelectorAll('*')].filter(child =>
+            child.getBoundingClientRect().right > element.getBoundingClientRect().right + 1,
+          ).map(child => ({ tag: child.tagName, className: child.className, text: child.textContent?.slice(0, 80) })),
+        }))
+        expect(layout.scrollWidth, JSON.stringify({ width, colorScheme, ...layout })).toBeLessThanOrEqual(layout.clientWidth)
         if (webSnapshotMode() === 'refresh') {
           const directory = fileURLToPath(new URL('../../../.artifacts', import.meta.url))
           await mkdir(directory, { recursive: true })
