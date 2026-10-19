@@ -216,7 +216,7 @@ Use selectText only on controls advertising selectionWritable. It selects a uniq
 - macOS 台前调度可能将后台窗口的尺寸与截图变为缩略图，当前无法保证这种状态下的完整画面与坐标输入；模型指引要求说明前台需求并避免反复抢回焦点。
 - 后台输入依赖私有 SkyLight 符号，macOS 升级可能使其不可用，需在目标系统版本验证。
 - 实测 Blender Unicode 输入曾出现分派成功但界面未显示文本，后台 AppKit 的 Command+A 曾未选中全文。输入后必须检查应用状态；工具返回成功只表示已分派。
-- 原生二进制需要本地构建，签名和桌面分发留待后续。[权限页面](../client-ui-cua/README.zh.md)提供 macOS 申请入口和应用授权撤销；桌面安装包的权限归属留待后续处理。
+- 原生二进制需要本地构建，签名和桌面分发留待后续。[权限页面](../cua/README.zh.md)提供 macOS 申请入口和应用授权撤销；桌面安装包的权限归属留待后续处理。
 - 持久 PTC 是对外部运行环境的假设，本包不实现它。真实模型任务成功率需要在原生测试和协议测试之外单独评估。
 
 -----

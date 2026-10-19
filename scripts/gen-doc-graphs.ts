@@ -225,7 +225,7 @@ const SERVICE_ROLES: ServiceRole[] = [
   },
   {
     key: 'cuaAccess', pkg: 'cua', title: 'Computer Use permission controls',
-    mode: 'core', consumers: ['client-ui-cua'],
+    mode: 'core', consumers: ['cua'],
     note: 'The native provider owns application consent and cancellation; the optional Client page queries and changes those decisions through its Remote.',
   },
   {

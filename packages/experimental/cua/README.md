@@ -1,6 +1,6 @@
 ---
 description: "Reuse Computer Use application and window objects with authorized, logged platform operations."
-kind: "package-library"
+kind: "package-reference"
 ---
 
 # @deepseek-ai/dsh-cua
@@ -41,6 +41,18 @@ Actions return `dispatched:true, verified:false`; read fresh state to verify the
 
 `click(target, { holdMs: 800 })` holds the mouse button for 800 milliseconds before release. `holdMs` accepts nonnegative integers and applies to each press of a double-click; zero releases without an additional hold. The provider config `maxClickHoldMs` limits explicit holds and defaults to 5000 ms. Explicit holds use pointer input for both AX indices and coordinates; omission preserves ordinary click behavior. The operation deadline includes the hold, and cancellation or timeout releases the button. Received input cannot be undone; forced helper termination cannot guarantee release.
 
+### Permission controls
+
+The [Computer Use bundle](../cua-bundle/README.md) mounts this page with its native provider. **Authorize Computer Use** groups the new-session default, PTC execution mode, Accessibility, and Screen Recording inside one border, with dividers between the rows. Each system-permission row shows the system-reported responsible application’s `.app` bundle filename and icon together in a bordered label. **Manage applications Computer Use can access** places the application lists inside a separate bordered group. Choose **Request permission**, find that application in the macOS permission list, and enable its switch; if macOS names another application, follow that prompt. With no detected source, the page directs the user to the application named by macOS. **Open System Settings** opens the corresponding privacy pane. The page refreshes on entry, when the window regains focus, and after permission actions. A failed query offers **Retry**. Follow any macOS quit-and-reopen prompt and restart DSH as needed.
+
+System-permission operations affect the computer running DSH. When accessing DSH remotely, complete authorization on that computer.
+
+Enabling shows setup guidance when system permissions need attention, with **Later** and **Open settings** actions. The dialog navigates to the plugin details without changing the default mode. The detail page provides **Set to PTC** under **Default mode for new sessions**; only this action saves the default. Existing sessions keep their preset. **Use persistent mode** in the **PTC execution mode** row separately saves `ptc-runtime.executionMode: persistent-in-memory`. Switching reloads the shared PTC runtime and may interrupt an active call; subsequent calls retain variables and application objects in memory. Already-persistent runtimes show a disabled **Persistent mode enabled** button.
+
+The page lists always-allowed applications and refusals from any session. A refusal in one session does not cancel another session’s grant or prevent a new session from asking. Session-only grants remain effective within their sessions and are omitted from this page. **Revoke** removes the selected application's access and cancels affected work. Input already delivered to an application cannot be undone; observe the application before any further action. **Allow asking again** clears that application’s refusal records across all sessions; the next application selection still requires a new decision.
+
+The Host marker has no configurable fields; platform providers own native configuration.
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -61,6 +73,12 @@ The provider calls [installCua](src/index.ts) with its prepared helper, connecti
 
 [The operation schema](src/protocol.ts) is the authority for model parameters and separately declared Host-only fields. Native implementations enforce target identity, window geometry, resource limits, and operating-system access at execution. The permission store owns durable consent separately from the native protocol.
 
+
+The root Host entry exports `installCua`, `CuaConfig`, and the Typert-discovered `CuaAccess` service; its `apply()` only marks the optional Client contribution. `/client` loads the permission UI through the existing module loader. Separate Host and Client compiler projects keep React, CSS, and browser registrations out of headless imports. `/api` owns the app/window API and its types; `/bridge`, `/native-client`, and `/protocol` retain runtime and platform consumers. `/types` exports only the four named boundary types required by generated Remote declarations. The Client uses package-local types. `/typert` supplies Host reflection and `/remote` supplies generated browser descriptors and codecs; permission authority remains on the Host.
+
+The optional browser contribution mounts the native provider's permission Remote and reuses the Plugins activation and configuration slots. The four setup rows remain visible while unknown fields use placeholders. The default-mode form, runtime configuration, system checks, application decisions, and application icons fill in as each query completes. Application names and actions do not wait for icons; icon positions retain their space. User actions run in order without waiting for pending observation queries. Disposal waits for both actions and queries to settle before releasing the separately owned Remote mount. Query errors stay with the affected section, and activation guidance depends only on system checks. Plugin Manager’s pending state pauses observation during bundle changes and resumes it afterward; late results from the previous activation are discarded. One controller projects queries into the page and setup dialog; reconnects refresh it. Page entry, focus and completed actions read the current permission store. Operation notices live in the shell overlay, so closing the page does not remove them. The provider owns permission checks, persisted decisions, and cancellation; the browser owns no authorization state.
+
+The detail page reads the effective default (`selectedDefault ?? default`) from the existing `configForms` service. The default button writes only `selectedDefault` through the form's revision-checked settings path. The execution-mode row uses CUA's `ptcConfiguration()` and `enablePersistentPtc()` controls: the Host edits only `ptc-runtime.executionMode` through the existing configuration editor, preserving its ordinary Loader reload lifecycle. Permission checks and runtime state settle independently. Loading, read-only and unavailable settings cannot submit a change; a failed write remains beside the setting for retry.
 </details>
 
 -----

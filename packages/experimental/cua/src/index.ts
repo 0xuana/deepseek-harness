@@ -29,7 +29,6 @@ import type {} from '@deepseek-ai/dsh-ptc-runtime'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 
 export { CuaAccess } from './access.ts'
-export type * from './access-types.ts'
 
 /** Native executable and per-operation resource bounds. */
 export interface CuaConfig {
@@ -366,3 +365,6 @@ var cua = connectCua(() => tools.cua, text => console.log(text));`,
     }
   }, 'dsh-cua.runtime')
 }
+
+/** Host marker for the optional Client contribution; platform providers install native execution separately. */
+export function apply(): void {}

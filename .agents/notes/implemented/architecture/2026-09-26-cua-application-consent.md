@@ -12,7 +12,7 @@ macOS privileges authorize an execution host, not a user's choice of target appl
 
 The CUA executor owns application consent for every object-API and native-tool dispatch. It uses the existing User Questions service for human decisions and profile-scoped domain storage for saved grants. Its fixed approval presentation reuses the tool-approval card without adopting the session's tool-approval policy. Native icons and names are presentation metadata, excluded from saved identities and model results. General tool approval and operating-system privileges remain separate requirements. Arbitrary persistent PTC code and separately authorized shell tools retain their own execution authority.
 
-System-permission buttons call the native helper on the DSH host and remain available to remote browsers. The [usage documentation](../../../../packages/experimental/client-ui-cua/README.md#use-this-package) explains where to complete authorization; the page has no persistent remote-access notice.
+System-permission buttons call the native helper on the DSH host and remain available to remote browsers. The [usage documentation](../../../../packages/experimental/cua/README.md#use-this-package) explains where to complete authorization; the page has no persistent remote-access notice.
 
 A saved identity combines the canonical executable path with a verified designated signing requirement, represented by a SHA-256 digest. The path prevents authorization from following a copied application, and the signing requirement distinguishes replacements while allowing matching signed updates. Unverifiable and ad-hoc applications receive session access only, tied to a process instance. Labels do not establish identity.
 

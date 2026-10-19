@@ -8,7 +8,7 @@ Computer use lets a model observe and operate the local desktop through a config
 
 The [`macOS CUA provider`](../../packages/experimental/cua-macos/README.md) uses the [shared CUA objects and executor](../../packages/experimental/cua/README.md), which enforce application consent through User Questions and profile configuration.
 
-The CUA provider owns `ctx.cuaAccess` for system-permission status, explicit system requests, and application revocation. Its [permission page](../../packages/experimental/client-ui-cua/README.md) projects these controls; app/window operations enforce the provider's consent policy before dispatch.
+The CUA provider owns `ctx.cuaAccess` for system-permission status, explicit system requests, and application revocation. Its [permission page](../../packages/experimental/cua/README.md) projects these controls; app/window operations enforce the provider's consent policy before dispatch.
 
 | Permission type | Meaning |
 |---|---|

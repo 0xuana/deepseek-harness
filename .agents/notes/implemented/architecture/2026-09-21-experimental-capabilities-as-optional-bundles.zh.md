@@ -20,7 +20,7 @@ Claude Code 与 Codex 通过独立的 `ON_DEMAND_BUNDLES` 目录按需安装，�
 
 Computer Use 是 experimental 包组内随安装提供的可选组合包。其仓库自有原生组件只为已启用的配置档准备，不引入外部 Cua Driver 运行时。它通过 `dsh.bundle.experimental: true` 显示实验性卡片标签；已有实验包名保留对应标签。
 
-CUA 组合包和前端插件与 `@deepseek-ai/dsh-cua` 一起采用显式命名例外 `@deepseek-ai/dsh-cua-bundle`、`@deepseek-ai/dsh-client-ui-cua`，在能力移动分组时保留配置引用。依赖隔离和晋升仍由实验性分类约束。
+CUA 组合包与 `@deepseek-ai/dsh-cua` 一起采用显式命名例外 `@deepseek-ai/dsh-cua-bundle`，在能力移动分组时保留配置引用。依赖隔离和晋升仍由实验性分类约束。
 
 ## 考虑过的替代方案
 
