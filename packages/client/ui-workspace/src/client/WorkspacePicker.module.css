@@ -1,5 +1,6 @@
 /* The adoption error dialog's footer and message styles; the dialog itself is
- * the shared Modal (same figma dialog family as the browser's own dialogs). */
+ * the shared Modal (same figma dialog family as the browser's own dialogs).
+ * `.pathSuffix` is the menu-row path that tells same-titled Workspaces apart. */
 .modalAction {
   min-width: 72px;
 }
@@ -15,6 +16,7 @@
   color: var(--dsw-alias-state-error-primary);
 }
 
-.menuStatus {
+.menuStatus,
+.pathSuffix {
   color: var(--dsw-alias-label-secondary);
 }

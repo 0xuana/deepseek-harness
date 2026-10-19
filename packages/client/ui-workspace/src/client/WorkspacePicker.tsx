@@ -19,6 +19,7 @@ import type {
 import { workspaceDisplayTitle } from '@deepseek-ai/dsh-api-workspace-controller/default-workspace'
 import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
 import type { DirectoryFlowOwnerProps, WorkspacePickerProps } from './contract/slots.ts'
+import { distinguishingPathSuffixes } from './path-suffix.ts'
 import css from './WorkspacePicker.module.css'
 
 const ADD_WORKSPACE = '::add-workspace'
@@ -109,13 +110,22 @@ export function WorkspacePickFlow({
   // With workspaces listed, the add action pins below the scroll region
   // (divider + always visible); otherwise it IS the menu.
   const pinAdd = !addOnly && workspaces.length > 0
+  const listed = workspaces.map(workspace => ({
+    id: workspace.workspaceId,
+    title: workspaceDisplayTitle(workspace.title, t('workspace.defaultName')),
+    path: workspace.path,
+  }))
+  const suffixes = distinguishingPathSuffixes(listed)
   const items: MenuEntry[] = pinAdd
-    ? workspaces.map(workspace => ({
-      id: workspace.workspaceId,
-      label: workspaceDisplayTitle(workspace.title, t('workspace.defaultName')),
-      icon: <IconFolderCloseRegular size={16} />,
-      disabled: flowBusy,
-    }))
+    ? listed.map(({ id, title }) => {
+      const suffix = suffixes.get(id)
+      return {
+        id,
+        label: suffix === undefined ? title : <>{title} <span className={css.pathSuffix}>{suffix}</span></>,
+        icon: <IconFolderCloseRegular size={16} />,
+        disabled: flowBusy,
+      }
+    })
     : addEntries
   // Nothing listed and nothing to add with (a composition that mounts this
   // package without any directory-picker): an empty popover would claim a
