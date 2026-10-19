@@ -99,6 +99,8 @@ async function uploadHarness(origin?: 'subagent'): Promise<{
     selectionFor: () => selection,
     serializeImageAdmission: <Value>(_agent: Agent, operation: () => Promise<Value>) => operation(),
   } as unknown as ApiSessionAgentController
+  // Image prompts take their admission turn at once; no model selection competes in these tests.
+  Object.assign(agents, { acquireImageAdmission: () => Promise.resolve(() => {}) })
   const uploads = new FileUploads(ctx)
   if (uploadRoute === undefined) throw new Error('file upload route was not registered')
   return {

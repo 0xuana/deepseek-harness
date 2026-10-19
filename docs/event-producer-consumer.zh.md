@@ -10,7 +10,7 @@
 <!-- BEGIN GENERATED event-producer-consumer:events -->
 | Event | Mode | Declared in | Dispatchers | Listeners |
 | --- | --- | --- | --- | --- |
-| `agent-controller/admission` | `waterfall` | [`packages/core/agent-controller/src/types.ts:78`](../packages/core/agent-controller/src/types.ts) | [`agent-controller`](../packages/core/agent-controller) (`waterfall`) | - |
+| `agent-controller/admission` | `waterfall` | [`packages/core/agent-controller/src/types.ts:79`](../packages/core/agent-controller/src/types.ts) | [`agent-controller`](../packages/core/agent-controller) (`waterfall`) | - |
 | `agent-loop/config-start-failed` | `emit` | [`packages/core/agent-loop/src/index.ts:249`](../packages/core/agent-loop/src/index.ts) | [`agent-loop`](../packages/core/agent-loop) (`events.dispatch`) | - |
 | `agent-preset/selected` | `emit` | [`packages/preset/agent-preset-registry/src/types.ts:69`](../packages/preset/agent-preset-registry/src/types.ts) | [`agent-preset-registry`](../packages/preset/agent-preset-registry) (`emit`) | `remotes` |
 | `agent/assistant-stream` | `emit` | [`packages/core/agent/src/runtime-types.ts:363`](../packages/core/agent/src/runtime-types.ts) | [`agent-loop`](../packages/core/agent-loop) (`emit`) | [`headless`](../packages/bundle/headless), `session-controller` |

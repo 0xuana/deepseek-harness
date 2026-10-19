@@ -43,11 +43,11 @@ const messageId = await ctx.agentController.deliver(agent, {
 
 `prepare` 在发给同一 Agent 的更早消息结算之后才运行，因此内容准入按到达顺序进行；它的错误原样交给发送方。`beforeInsert` 在接纳之后同步运行，紧挨在消息进入收件箱之前，用于发送方在 Agent 被唤醒前必须完成的登记。它抛出异常时消息不会进入收件箱，`deliver()` 失败时由发送方撤销自己做过的改动。
 
-以下情况 `deliver()` 抛出 `AgentAdmissionRejected`：监听器拒绝消息（带监听器给出的 `reason` 与 `presented`）；监听器抛出异常（reason 为 `agent-controller/admission-failed`，`cause` 为原异常）；消息进入收件箱之前 Agent 已离开注册表（reason 为 `agent-controller/agent-gone`）。发送方取消时得到其取消原因；`prepare`、`beforeInsert`、`followup()` 与 `steer()` 的错误原样抛出。Web Session Remote 把这些失败映射为 `session/prompt-rejected` 及其他 Session 错误。
+以下情况 `deliver()` 抛出 `AgentAdmissionRejected`：监听器拒绝消息（带监听器给出的 `reason` 与 `presented`）；监听器抛出异常（reason 为 `agent-controller/admission-failed`，`cause` 为原异常）；消息进入收件箱之前 Agent 已离开注册表（reason 为 `agent-controller/agent-gone`）。发送方取消时立即得到其取消原因，消息排在被暂留的消息之后时也是如此；`prepare`、`beforeInsert`、`followup()` 与 `steer()` 的错误原样抛出。Web Session Remote 把这些失败映射为 `session/prompt-rejected` 及其他 Session 错误。
 
 ### 暂留或拒绝一条消息
 
-`agent-controller/admission` waterfall 的监听器按注册顺序运行，返回 `AdmissionDecision`。监听器放行时返回 `next()` 的决定，链的最后一步是 `{ kind: 'admit' }`；在调用 `next()` 前 await 即暂留消息；不调用 `next()`、直接返回 `{ kind: 'reject', reason, message, presented }` 即拒绝它。`reason` 标明拒绝原因，`presented` 表示拒绝它的插件是否在自己的界面里给出说明。监听器只在自身的检查执行失败时抛出异常；消息来源无人值守时（例如定时任务或 webhook），监听器不得等待人来处理。
+`agent-controller/admission` waterfall 的监听器按注册顺序运行，返回 `AdmissionDecision`。监听器放行时返回 `next()` 的决定，链的最后一步是 `{ kind: 'admit' }`；在调用 `next()` 前 await 即暂留消息；不调用 `next()`、直接返回 `{ kind: 'reject', reason, message, presented }` 即拒绝它。`reason` 标明拒绝原因，`presented` 表示拒绝它的插件是否在自己的界面里给出说明。监听器只在自身的检查执行失败时抛出异常；消息来源无人值守时（例如定时任务或 webhook），监听器不得等待人来处理。载荷里的 `signal` 在发送方取消或控制器停止时中止；暂留消息的监听器必须在它中止后结束。
 
 ```text
 ctx.on('agent-controller/admission', async ({ agent, message, signal }, next) => {
@@ -70,7 +70,7 @@ ctx.on('agent-controller/admission', async ({ agent, message, signal }, next) =>
 
 ### 设计思路
 
-控制器把每个 Agent 的投递串在同一个 promise 上，因此被暂留的消息会让同一 Agent 后续的消息等待，其他 Agent 不受影响。这条串行包住准备、决定和放入，所以消息按到达顺序进入收件箱。准备之前，以及接纳阶段返回之后，控制器都会检查是否已取消、注册表是否仍持有该 Agent；随后调用 `beforeInsert` 和 `followup()` 或 `steer()`，中间没有 await。因此监听器不会在消息进入收件箱之后运行；需要对已接纳消息作出反应的插件监听 `agent/inbox/inserted`。销毁控制器会中止所有待处理投递共同观察的信号，尚未进入收件箱的消息因此被拒绝。
+控制器把每个 Agent 的投递串在同一个 promise 上，因此被暂留的消息会让同一 Agent 后续的消息等待，其他 Agent 不受影响。这条串行包住准备、决定和放入，所以消息按到达顺序进入收件箱。准备之前，以及接纳阶段返回之后，控制器都会检查是否已取消、注册表是否仍持有该 Agent；随后调用 `beforeInsert` 和 `followup()` 或 `steer()`，中间没有 await。因此监听器不会在消息进入收件箱之后运行；需要对已接纳消息作出反应的插件监听 `agent/inbox/inserted`。排队期间被发送方取消的消息保留它在串行中的位置，轮到它时被丢弃，其余消息的顺序不变。销毁控制器会中止所有待处理投递共同观察的信号，尚未进入收件箱的消息因此被拒绝；所有待处理投递（包括其准备和监听器）都结束之后，销毁才完成。
 
 ### 源码地图
 

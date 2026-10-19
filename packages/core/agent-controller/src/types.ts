@@ -19,14 +19,14 @@ export interface DeliveryRequest {
   readonly mode: DeliveryMode
   /** Durable attribution recorded on the message. */
   readonly source: MessageSource
-  /** The sender's cancellation; it stops a message that has not entered the inbox. */
+  /** The sender's cancellation; it ends the sender's wait at once and stops a message that has not entered the inbox. */
   readonly signal: AbortSignal
   /**
    * Turn the sender's content into durable message content, such as by
    * storing attachments. It runs in the Agent's delivery order, after the
    * earlier messages to the same Agent settled; its failure reaches the
    * sender unchanged.
-   * @param signal - aborted when the sender cancels or the controller stops.
+   * @param signal - aborted when the sender cancels or the controller stops; controller disposal waits for the preparation to settle.
    * @returns the content of the message.
    */
   readonly prepare: (signal: AbortSignal) => Promise<UserMessage['content']>
@@ -71,7 +71,8 @@ declare module '@deepseek-ai/cordis' {
      * when the message source is unattended, such as a schedule or a webhook.
      * @param payload.agent - the receiving Agent.
      * @param payload.message - the message as it will enter the inbox.
-     * @param payload.signal - aborted when the sender cancels or the controller stops.
+     * @param payload.signal - aborted when the sender cancels or the controller stops; a holding
+     * listener must settle once it aborts, because controller disposal waits for it.
      * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): Agent-scoped listeners receive only that Agent.
      * @mode waterfall
      */
