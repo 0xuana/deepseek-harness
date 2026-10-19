@@ -456,8 +456,8 @@ it('does not store a cancellation decision after provider disposal starts', asyn
 
 it('rejects persistent consent when storage capability disappears before the commit', async () => {
   const f = await setup('Always allow')
-  const original = vi.mocked(f.store.withState).getMockImplementation()!
-  vi.mocked(f.store.withState).mockImplementationOnce(original).mockImplementationOnce((signal, operation) => {
+  const original = f.withState.getMockImplementation()!
+  f.withState.mockImplementationOnce(original).mockImplementationOnce((signal, operation) => {
     f.setWritable(false)
     return original(signal, operation)
   })

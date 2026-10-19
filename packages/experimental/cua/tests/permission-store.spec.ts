@@ -117,7 +117,7 @@ it('rejects malformed or identity-mismatched data without replacing it with lega
   await writeFile(file, '{broken')
   await expect(a.store.withState(signal, transaction => transaction.state)).rejects.toThrow()
   expect(await readFile(file, 'utf8')).toBe('{broken')
-  const altered: { global: { applications: Record<string, { always: CuaApplicationGrant }> } } = JSON.parse(valid)
+  const altered = JSON.parse(valid) as { global: { applications: Record<string, { always: CuaApplicationGrant }> } }
   altered.global.applications[grant.id]!.always.id = 'b'.repeat(64) as CuaApplicationId
   const mismatch = JSON.stringify(altered); await writeFile(file, mismatch)
   await expect(a.store.withState(signal, transaction => transaction.state)).rejects.toMatchObject({ code: 'invalid-record' })

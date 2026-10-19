@@ -32,7 +32,7 @@ export function permissionFixture(ctx: Context, initial: readonly CuaApplication
       observed = [...grants]
     })
   })
-  vi.spyOn(store, 'withState').mockImplementation((signal, operation) => original(signal, async (transaction) => {
+  const withState = vi.spyOn(store, 'withState').mockImplementation((signal, operation) => original(signal, async (transaction) => {
     observed = grantsOf(transaction.state)
     return operation({ ...transaction, save: async (next) => {
       const nextGrants = grantsOf(next)
@@ -41,7 +41,7 @@ export function permissionFixture(ctx: Context, initial: readonly CuaApplication
       else await save(nextGrants, commit)
     } })
   }))
-  return { store, save, grants: () => observed,
+  return { store, save, withState, grants: () => observed,
     setWritable(value: boolean) { writable = value; capability.mockImplementation(() => writable) },
   }
 }
