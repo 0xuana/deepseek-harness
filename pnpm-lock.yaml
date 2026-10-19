@@ -8679,9 +8679,6 @@ importers:
       '@deepseek-ai/dsh-experimental-cua-macos':
         specifier: workspace:*
         version: link:../cua-macos
-      '@deepseek-ai/dsh-ptc-runtime-node':
-        specifier: workspace:*
-        version: link:../../ptc-runtime/ptc-runtime-node
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:~

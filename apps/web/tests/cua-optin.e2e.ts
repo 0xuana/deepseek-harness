@@ -14,7 +14,7 @@ import { captureStableAria, compareOrRefreshGolden, launchWebScaffold, webSnapsh
 import { connectFreshWorkspaceZh, writeComposerDraft, ZH_BROWSER_LOCALE } from './support.ts'
 
 // The shipped bundle admits only macOS Hosts; unsupported Hosts are exercised in bundle-platform.e2e.ts.
-it.skipIf(process.platform !== 'darwin').each([undefined, 'minimal'] as const)('hot-reloads CUA and changes the default %s only from its detail page', async (selectedDefault) => {
+it.skipIf(process.platform !== 'darwin').each([undefined, 'minimal'] as const)('hot-reloads CUA while preserving Coding Tools and changes the default %s only from its detail page', async (selectedDefault) => {
   const directory = await mkdtemp(join(tmpdir(), 'cua-optin-web-'))
   let ownedScaffold: WebScaffold | undefined
   let browser: Browser | undefined
@@ -28,6 +28,10 @@ it.skipIf(process.platform !== 'darwin').each([undefined, 'minimal'] as const)('
     ] })
     const initialDefault = selectedDefault ?? 'standard'
     if (selectedDefault !== undefined) await scaffold.ctx.settings.update('agent-preset-registry', { selectedDefault })
+    const codingTools = selectedDefault !== undefined
+    await scaffold.ctx.settings.update('ui-settings', { enabled: codingTools })
+    const settingsPath = join(harnessHome, 'profiles/scaffold/cordis.patch.yml')
+    const beforeEnable = await readFile(settingsPath, 'utf8')
     browser = await chromium.launch()
     const page = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
@@ -119,11 +123,12 @@ it.skipIf(process.platform !== 'darwin').each([undefined, 'minimal'] as const)('
     expect(await setup.getByText('Computer Use 插件已开启，但暂时无法检测系统权限。请前往插件详情页查看原因并重试。', { exact: true }).count()).toBe(1)
     await setup.getByRole('button', { name: '稍后', exact: true }).click()
     await setup.waitFor({ state: 'hidden' })
-    const settingsPath = join(harnessHome, 'profiles/scaffold/cordis.patch.yml')
     let saved = await readFile(settingsPath, 'utf8')
+    expect(saved).toBe(beforeEnable)
+    expect(scaffold.ctx.settings.describe().find(row => row.ns === 'ui-settings')?.value).toMatchObject({ enabled: codingTools })
     expect(saved).not.toContain('executionMode:')
     expect(load(saved)).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'ui-settings', config: { enabled: true } }),
+      expect.objectContaining({ id: 'ui-settings', config: { enabled: codingTools } }),
     ]))
     if (selectedDefault === undefined) {
       expect(load(saved)).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: 'agent-preset-registry' })]))
@@ -208,6 +213,7 @@ it.skipIf(process.platform !== 'darwin').each([undefined, 'minimal'] as const)('
     expect(await setup.getByText('Computer Use 插件已开启，但暂时无法检测系统权限。请前往插件详情页查看原因并重试。', { exact: true }).count()).toBe(1)
     expect(await setup.getByRole('button', { name: '设为 PTC', exact: true }).count()).toBe(0)
     expect(await readFile(settingsPath, 'utf8')).toBe(confirmedSettings)
+    expect(scaffold.ctx.settings.describe().find(row => row.ns === 'ui-settings')?.value).toMatchObject({ enabled: codingTools })
     await runtime.release(owner)
   } finally {
     try { await browser?.close() } finally {

@@ -33,7 +33,7 @@ pnpm dsh web
 
 源码 Desktop 的启动方式和独立开发配置档见[桌面开发说明](../../../apps/desktop/README.zh.md)。需要使用 Computer Use 的配置档分别开启该功能。
 
-开关将组合包选择保存到 profile 的 `package.json`。开启时保留 PTC 执行方式。详情页的“设为持久化”按钮将 `ptc-runtime.executionMode: persistent-in-memory` 保存到用户的 `cordis.patch.yml`；已配置为持久化时禁用按钮。Computer Use 针对 PTC 模式设计，仅安装在 PTC 会话中。系统权限尚未就绪时，启用引导会进入插件详情页。详情页提供“设为 PTC”按钮来修改新会话默认模式；已有会话保留原 preset。HMR 维护这些设置和提供方的会话工具注册。本机组件在启用及源码启动时准备，后续 `pnpm run build` 检查已选中 Web profile 的本机增量构建。首次准备需要本机编译工具，失败保留诊断且不发布新的可执行文件。
+开关将组合包选择保存到 profile 的 `package.json`。开启时保留 Coding Tools 设置和 PTC 执行方式。详情页的“设为持久化”按钮将 `ptc-runtime.executionMode: persistent-in-memory` 保存到用户的 `cordis.patch.yml`；已配置为持久化时禁用按钮。Computer Use 针对 PTC 模式设计，仅安装在 PTC 会话中。系统权限尚未就绪时，启用引导会进入插件详情页。详情页提供“设为 PTC”按钮来修改新会话默认模式；已有会话保留原 preset。HMR 维护这些设置和提供方的会话工具注册。本机组件在启用及源码启动时准备，后续 `pnpm run build` 检查已选中 Web profile 的本机增量构建。首次准备需要本机编译工具，失败保留诊断且不发布新的可执行文件。
 
 关闭会卸载提供方，并从其 Agent 作用域中撤回 CUA 工具。用户选择的默认值、执行器配置和变量均保留。再次开启不会重建执行器。用户显式从 per-call 切换为持久化执行时，HMR 会重载共享执行器，可能中断正在执行的 PTC 调用。
 
@@ -51,7 +51,7 @@ Computer Use 仅支持 macOS DSH Host。其他 Host 会在保存设置前拒绝�
 <details>
 <summary>维护者说明</summary>
 
-组合包 patch 通过 `agentPreset: ptc` 挂载共享原生提供方和权限界面。提供方在现有 Agent 作用域中注册工具，其他 preset 不获得 CUA 工具或指引，preset 文档保持不变。`configureOnEnable` 通过[插件管理器](../../boot/plugin-manager/README.zh.md)保存 `ui-settings.enabled: true`。详情页按钮复用现有设置表单，仅在用户点击后保存 `agent-preset-registry.selectedDefault: ptc`，保留部署级 `default`。即使旧授权配置没有声明作用域字段，提供方也默认只为 PTC 会话注册工具。[CUA](../cua/README.zh.md)负责注册和销毁。
+组合包 patch 通过 `agentPreset: ptc` 挂载共享原生提供方和权限界面。提供方在现有 Agent 作用域中注册工具，其他 preset 不获得 CUA 工具或指引，preset 文档保持不变。详情页按钮复用现有设置表单，仅在用户点击后保存 `agent-preset-registry.selectedDefault: ptc`，保留部署级 `default`。即使旧授权配置没有声明作用域字段，提供方也默认只为 PTC 会话注册工具。[CUA](../cua/README.zh.md)负责注册和销毁。
 
 </details>
 

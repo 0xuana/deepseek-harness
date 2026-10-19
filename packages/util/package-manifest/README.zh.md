@@ -52,7 +52,6 @@ const manifest: DshPackageManifest = {
 | `dsh.manifestVersion` | manifest（元数据清单）格式标识；声明的格式为 `1`，独立于 npm 包版本和 Session 格式版本。 |
 | `dsh.bundle.platforms` | 可选的非空 Node Host 平台名称列表，例如 `["darwin"]`；省略时允许所有操作系统。启动器和插件管理器在组合或选择该组合包前检查此字段。 |
 | `dsh.bundle.experimental` | 在插件页显示实验性标签，不改变包名或启用状态。 |
-| `dsh.bundle.configureOnEnable` | 以条目 id 为键的 JSON 配置字段映射，由插件管理器在显式启用时保存。通过正常 profile 重组生效，关闭保留；见[插件管理器](../../boot/plugin-manager/README.zh.md)。 |
 | `engines.dsh` | 作者声明的兼容 DSH 版本，使用 SemVer 范围，也可填写精确的预发布版本。此字段与 `engines.node`、`engines.npm` 并列；engines 对象可省略 `dsh`。 |
 
 `LocalizedText` 携带字面文本或带必需英文回退值的语言映射。`PluginLocalizedMeta` 携带已安装插件的可选展示标题、描述、从包根 `package.json.icon` 或导出的 `<标识>/icon` 解析的图片 data URL，以及元信息诊断。[App boot](../../boot/app-boot/README.zh.md) 读取这些值；本包只提供其类型。
