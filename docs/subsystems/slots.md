@@ -10,7 +10,7 @@ This page documents slot ownership, component inputs, extension APIs, and the sh
 
 The plugin catalog declares `plugins.add.actions`, a root-scoped list for `MenuItemButton` rows after installation in the Add plugin menu. Its owner supplies `onDismiss()` to close the menu before starting an action. The slot follows the owning Plugins page declaration lifetime.
 
-Session rows declare the root-scoped `sidebar.session.row.trailing` list for non-interactive icons beside the time and pin marker. Each entry receives `sessionId`; [ui-workspace](../../packages/client/ui-workspace/README.md) owns visibility and keyboard behavior.
+[ui-workspace](../../packages/client/ui-workspace/README.md#understand-the-implementation) documents Session-row extension positions, visibility, and keyboard behavior.
 
 ## Declaration and lifecycle
 

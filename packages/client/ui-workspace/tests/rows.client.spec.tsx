@@ -784,7 +784,12 @@ describe('workspace browser rows', () => {
     expect(rendered).toHaveBeenCalledWith(
       'sidebar.workspaces.session.menu.item', { sessionId: node.id, displayTitle: 'One' }, [true, expect.any(Function)],
     )
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Export' }))
+    const entry = screen.getByRole('menuitem', { name: 'Export' })
+    expect(screen.getByRole('treeitem').contains(entry)).toBe(false)
+    entry.focus()
+    expect(fireEvent.keyDown(entry, { key: 'Enter', code: 'Enter' })).toBe(true)
+    expect(onOpen).not.toHaveBeenCalled()
+    fireEvent.click(entry)
     expect(onEntry).toHaveBeenCalledWith(node.id, 'One', true)
     // The entry dismissed the menu through the state pair; the list returns focus.
     expect(screen.queryByRole('menu')).toBeNull()

@@ -139,7 +139,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * Non-interactive icons after the row's time label, before its pin marker,
      * in ascending `order`. Hidden on hoverless devices and while the row is
      * hovered, contains focus, or has an open action menu. Blank Sessions omit
-     * the slot. Occupants receive only the Session id and must not retain it.
+     * the slot. Occupants address their own data by Session id; they must not
+     * bind or retain the Session.
      */
     'sidebar.session.row.trailing': { kind: 'list'; scope: 'root'; inline: true; owner: SessionRowTrailingOwnerProps }
     /**

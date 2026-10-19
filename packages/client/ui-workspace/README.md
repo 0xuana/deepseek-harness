@@ -91,7 +91,11 @@ The package injects the Client `remoteAccess` service and provides the root stan
 
 The package is one composition: both target slots are declared by other plugins, so `apply` uses `slots.inject()` to register for each declaration lifetime and re-register after a declaring slot is restored.
 
-The browser entry also declares two root-scoped `list` child seats on each Session row: `sidebar.session.row.leading`, rendered only while that row's primary status is idle and left blank on an archived row, and `sidebar.session.row.hover`, mounted only while that row's hover card is open. Both take the row's Session identity and nothing else, so an occupant reads its own data by that id; a Session-scoped seat would force a Session binding, which would activate and retain every listed Session.
+The browser entry declares three root-scoped `list` child seats on each Session row: `sidebar.session.row.leading`, `sidebar.session.row.trailing`, and `sidebar.session.row.hover`. All receive only `sessionId`, which occupants use to address their own data without creating a Session binding. A Session-scoped seat would activate and retain every listed Session.
+
+The leading seat occupies the status cell only while the row's primary status is idle and leaves archived rows blank. The trailing seat accepts non-interactive icons in ascending `order`, after the time label and before the pin marker. Blank rows omit the trailing seat; an empty seat adds no spacing. The hover seat mounts only while the row's hover card is open.
+
+On hover-capable devices, hovering a Session row, focusing it or a descendant, or opening its menu replaces the time, trailing icons, and pin marker with action buttons. Hoverless devices always show the action buttons and hide those static details. Session rows accept Tab focus and open with Enter or Space; Tab also reaches their action buttons.
 
 Client callers can pass `prompt` and `clearPreviousDraft` in the second argument to `uiWorkspace.startSession`. A prompt is plain text; structured drafts are handled internally during restoration and Workspace transfer. Without clearing, existing text or attachments are preserved; explicit clearing replaces only the target Session's text and inline references, leaving attachments intact. Option values are captured before asynchronous creation and applied to the exact retained binding before navigation commits. Superseded navigation does not write content; a submission-blocked input refuses preparation and keeps the previous selection. Calls without options create a fresh Session using the current Agent preset definition. Workspace reconnection and explicit draft preparation may reuse an existing blank Session. The [draft initialization decision](../../../.agents/notes/implemented/architecture/2026-09-30-structured-draft-initialization.md) describes the input owner's data flow.
 
@@ -106,8 +110,6 @@ The Session row's "..." menu and its hover buttons are two `list` slots declared
 An entry receives only the row identity (`sessionId`, `displayTitle`) and owns everything else. It reads the Host state it cares about through its own injected hooks (the pin and archive sets, as Sets derived once per Workspace snapshot), decides its own visibility (pin renders nothing on an archived row, because the Host keeps the two sets exclusive, and fork renders nothing when `useSessionAccess(sessionId, 'session/fork')` is false), carries its whole behavior in its registration's `inject` face (a pin also fronts the Session in its saved orders; an archive raises the notice), and raises its own surfaces: the rename dialog, the stop-and-archive dialog, and the row-action notice are this package's `shell.overlay` entries, fed by the requests the actions inject. A menu entry renders one `role="menuitem"` button (this package's rows use `MenuItemButton` from ui-primitives, which adds the host styling and `separatorBefore` for a group start; the hairline comes and goes with the row) and dismisses the menu through the slot-level `useMenuOpenState` hook, the menu's own open state bound from the row's render occurrence; a hover button entry renders one icon button, and the strip keeps its clicks from opening the row. The browser passes no action callbacks to its rows; its remaining verbs are the search results' restore button and the title double-click, which raises the same rename request.
 
 The existing notice overlay dispatches `workspace.toast` by notice kind. Keyed registrations inject localized display mappings and their own actions; only archive notices subscribe to the viewing filter. They render the package-local `workspace.toast.content` Factory, which reuses the Toast primitive once for all presentations. The existing notice state, display sequence, latest-notice replacement, and dismissal remain shared; locale or filter changes do not restart the same notice's timer.
-
-The root-scoped `sidebar.session.row.trailing` list accepts non-interactive icons in ascending `order`, after the time label and before the pin marker. Each entry receives `sessionId` and reads its own data without retaining the Session. Blank rows omit the slot; an empty slot adds no spacing. Hover, focus within the row, or an open row menu replaces these details with the existing action buttons. Touch devices keep the action buttons visible. Mouse-hover styles apply only on hover-capable devices; keyboard users can focus a row, open it with Enter or Space, and Tab into its actions.
 
 #### Packaged client plugin
 
@@ -218,11 +220,12 @@ None; this package neither assembles nor sends a provider request.
 <a id="known-limitations-and-deferred-work"></a>
 
 
-These limits define the search depth, the archive surface, and the picking carrier; they are current package constraints.
+These limits cover search, navigation, archival, and folder selection.
 
 - **No fuzzy content search or event deep links** — the content backend uses literal token/phrase matching, and selecting a result opens the Session rather than the matching event.
 - **No Session deletion** — sessions can be archived but never deleted; archived rows stay recoverable in place through the archived view filter and the search results' unarchive action, and Workspace registration deletion does not delete Sessions.
 - **Pending user interaction is not aggregated into collapsed groups** — a waiting row inside a collapsed group lights no group-header indicator and becomes visible only after that group is expanded.
+- **Tree keyboard navigation is incomplete** — Workspace and search-result rows do not accept Tab focus, and the browser tree does not implement arrow-key navigation.
 - **Native folder selection depends on the local Host carrier** — under the `-native` composition, in-process or remote browser deployments cannot open a local operating-system dialog; remote-capable picking is the `-browse` composition's in-app flow.
 
 <a id="dev-note"></a>

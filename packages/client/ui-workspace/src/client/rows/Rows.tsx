@@ -533,6 +533,8 @@ export function SearchResultItem({ result, currentId, onOpen, onUnarchive, t }: 
  * keeps that cell and renders no seat, so an ambient automation mark never
  * appears beside the row's own state dot. An archived row keeps the cell blank:
  * neither marker renders there, and its live status stays on the hover card.
+ * The row accepts Tab focus and opens with Enter or Space; descendant controls
+ * handle their own activation without opening the row.
  * @param props.node - derived session node.
  * @param props.currentId - selected session id (row highlight).
  * @param props.now - epoch ms for relative-time formatting.
@@ -657,6 +659,8 @@ export function SessionNodeItem({
       >
         {title}
       </span>
+      {/* Blank rows have no first prompt, so neither trailing details nor
+          actions for existing content are available. */}
       {!row.blank && (
         <span className={css.rowResting}>
           <span

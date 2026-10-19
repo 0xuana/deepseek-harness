@@ -85,7 +85,7 @@ it('places dynamic Session menu rows by order among the shipped ones and removes
       webSnapshotMode(),
     )
 
-    await menu.getByRole('menuitem', { name: 'Export session' }).click()
+    await menu.getByRole('menuitem', { name: 'Export session' }).press('Enter')
     await expect.poll(() => menu.count()).toBe(0)
     expect(await page.evaluate(() => ({
       action: document.documentElement.dataset.sessionAction,
