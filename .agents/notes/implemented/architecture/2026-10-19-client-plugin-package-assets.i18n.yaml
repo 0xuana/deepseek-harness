@@ -1,0 +1,37 @@
+# Bilingual-pair consistency record for 2026-10-19-client-plugin-package-assets.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-19-client-plugin-package-assets.md
+/agent-note-client-plugin-package-assets-served-by-url:
+  en: 5505b948511a2d52
+  zh: dae985d67e5c5935
+/agent-note-client-plugin-package-assets-served-by-url/problem:
+  en: 835224eecdb7506f
+  zh: f258d7e9d5849dbc
+/agent-note-client-plugin-package-assets-served-by-url/decision:
+  en: 42d5a78134c944d5
+  zh: 5118bfc6b041a67f
+/agent-note-client-plugin-package-assets-served-by-url/decision/references-and-file-names:
+  en: 4f2daba2e01c9460
+  zh: 37177d73b3842255
+/agent-note-client-plugin-package-assets-served-by-url/decision/build:
+  en: eaa81b65fb4b726e
+  zh: fd899dcb9069b626
+/agent-note-client-plugin-package-assets-served-by-url/decision/host-route:
+  en: c66185f2021f60f2
+  zh: e9144ae6255766e5
+/agent-note-client-plugin-package-assets-served-by-url/decision/changes-and-package-manifests:
+  en: 31a2107b6d22fbb4
+  zh: 390ef5748cdd4049
+/agent-note-client-plugin-package-assets-served-by-url/decision/gates-and-migration:
+  en: 9374c00288b9e317
+  zh: 7a92b40421929093
+/agent-note-client-plugin-package-assets-served-by-url/alternatives-considered:
+  en: 23cca9b55c4252bd
+  zh: a7afb8d1dd943a8b
+/agent-note-client-plugin-package-assets-served-by-url/consequences:
+  en: c265a6f63bcbb48b
+  zh: 5bea0140fb721b1a
+/agent-note-client-plugin-package-assets-served-by-url/testing:
+  en: dc8b3edecb693bd9
+  zh: d8a3d1049a62f48c
