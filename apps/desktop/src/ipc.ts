@@ -21,6 +21,9 @@ export const DESKTOP_IPC = {
   browserRelease: 'dsh-desktop:browser-release',
   browserOpenRequested: 'dsh-desktop:browser-open-requested',
   directoryPick: 'dsh-desktop:directory-pick',
+  imageDragPrepare: 'dsh-desktop:image-drag-prepare',
+  imageDragStart: 'dsh-desktop:image-drag-start',
+  imageDragRelease: 'dsh-desktop:image-drag-release',
   deviceInfo: 'dsh-desktop:device-info',
   localeBootstrap: 'dsh-desktop:locale-bootstrap',
   localeChanged: 'dsh-desktop:locale-changed',
@@ -34,7 +37,7 @@ export const DESKTOP_IPC = {
 } as const
 
 /** Desktop release update state rendered by desktop-owned UI. */
-export type DesktopUpdatePreparationFailureKind = 'stop-failed' | 'tasks-changed' | 'tasks-unavailable'
+export type DesktopUpdatePreparationFailureKind = 'stop-failed' | 'tasks-changed' | 'tasks-unavailable' | 'fullscreen-timeout'
 
 export interface DesktopUpdateState {
   readonly phase: 'idle' | 'checking' | 'available' | 'downloading' | 'verifying' | 'installing' | 'ready' | 'error'
@@ -59,6 +62,7 @@ export type DesktopUpdateFailureKind =
   | 'stop-failed'
   | 'tasks-changed'
   | 'tasks-unavailable'
+  | 'fullscreen-timeout'
 
 /** Semantic status content; actions open main-process confirmation dialogs only. */
 export interface DesktopUpdatePresentation {
@@ -72,6 +76,11 @@ export interface DesktopUpdatePresentation {
 export interface DshDesktopProductApi {
   readonly protocolVersion: 1
   readonly browser: DesktopBrowserBridge
+  readonly imageDrag: {
+    prepare(bytes: Uint8Array, name: string, mediaType: string): Promise<string>
+    start(handle: string): Promise<boolean>
+    release(handle: string): void
+  }
   readonly keyboard: DesktopKeyboardApi
   readonly shortcuts: DesktopShortcutsApi
   /**

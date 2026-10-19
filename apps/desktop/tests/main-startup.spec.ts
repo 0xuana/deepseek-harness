@@ -16,6 +16,9 @@ import { writeCrashReport } from '../src/crash-report.ts'
 type InvokeEvent = { sender?: unknown; senderFrame: { url: string } }
 type InvokeHandler = (event: InvokeEvent, ...args: unknown[]) => unknown
 
+const imageDrag = vi.hoisted(() => ({ dispose: vi.fn<() => Promise<void>>(), install: vi.fn() }))
+vi.mock('../src/image-drag.ts', () => ({ installDesktopImageDrag: () => { imageDrag.install(); return imageDrag.dispose } }))
+
 vi.mock('../src/web-document.ts', () => ({ authenticateWebHost: async () => 'test-cookie', serveWebDocument: vi.fn(), forwardWebRequest: vi.fn() }))
 // Report persistence has its own unit tests; here it resolves within microtasks so the fatal
 // dialog never outlives the test that triggered it.
@@ -259,6 +262,8 @@ const harness = await vi.hoisted(async () => {
       navigated = deferred(); dialogShown = deferred(); quitCompleted = deferred()
       policyBlocked = deferred()
       embeddedPolicy = undefined
+      imageDrag.install.mockReset()
+      imageDrag.dispose.mockReset().mockResolvedValue(undefined)
       platformDisposeDeferred = undefined
       platformCloseDeferred = undefined
     },
@@ -1478,6 +1483,33 @@ describe('desktop main startup', () => {
     expect(harness.app.quit).toHaveBeenCalledTimes(2)
   })
 
+  it('reports image cleanup failure without ending Host shutdown early', async () => {
+    const host = await readyForUpdate()
+    const failure = new Error('image cleanup failed')
+    imageDrag.dispose.mockRejectedValueOnce(failure)
+    harness.app.quit()
+    await host.stopping.promise
+    await vi.waitFor(() => { expect(console.error).toHaveBeenCalledWith(failure) })
+    expect(harness.app.quit).toHaveBeenCalledOnce()
+    host.exited.resolve()
+    await harness.quitCompleted.promise
+    expect(harness.app.quit).toHaveBeenCalledTimes(2)
+  })
+
+  it('waits for image cleanup before stopping the Host for installation', async () => {
+    const host = await readyForUpdate()
+    const cleanup = Promise.withResolvers<undefined>()
+    imageDrag.dispose.mockReturnValueOnce(cleanup.promise)
+    harness.dialog.showMessageBox.mockResolvedValueOnce({ response: 0 })
+    const preparing = harness.prepareUpdate()
+    await vi.waitFor(() => { expect(imageDrag.dispose).toHaveBeenCalledOnce() })
+    expect(host.stop).not.toHaveBeenCalled()
+    cleanup.resolve(undefined)
+    await host.stopping.promise
+    host.exited.resolve()
+    await expect(preparing).resolves.toBe(true)
+  })
+
   it('finishes quitting when the native window is destroyed before its closed listener clears ownership', async () => {
     const host = await readyForUpdate()
     const window = harness.windows[0]!
@@ -1786,6 +1818,84 @@ describe('desktop main startup', () => {
     expect(host.stop).not.toHaveBeenCalled()
   })
 
+  it.each([false, true])('waits for macOS to leave fullscreen before installation confirmation, mandatory: %s', async (mandatory) => {
+    vi.stubGlobal('process', { ...process, platform: 'darwin' })
+    if (mandatory) {
+      harness.embeddedPolicy = { origin: 'https://policy.example.com', allowedPageOrigins: ['https://downloads.example.com'] }
+      vi.stubGlobal('fetch', vi.fn(async () => Response.json({ code: 40005, data: {
+        show_content: { title: 'Update required', detail: 'Please update' }, desktop_app_link: 'https://downloads.example.com/',
+      } })))
+    }
+    const host = await readyForUpdate()
+    if (mandatory) await harness.policyBlocked.promise
+    const window = harness.windows[0]!
+    const dialogOwner = mandatory ? harness.windows.find(item => item.urls.includes('dsh-app://shell/mandatory-update.html'))! : window
+    const baseline = { leave: window.listenerCount('leave-full-screen'), closed: window.listenerCount('closed') }
+    window.fullscreen = true
+    window.setFullScreen.mockImplementation(() => {})
+    harness.dialog.showMessageBox.mockResolvedValueOnce({ response: 0 })
+    const preparing = harness.prepareUpdate()
+    await vi.waitFor(() => { expect(window.setFullScreen).toHaveBeenCalledWith(false) })
+    expect(harness.dialog.showMessageBox).not.toHaveBeenCalled()
+    if (mandatory) expect(harness.handlers.get(MANDATORY_IPC.status)!({ sender: dialogOwner.webContents, senderFrame: dialogOwner.webContents.mainFrame })).not.toHaveProperty('confirmation')
+    expect(host.stop).not.toHaveBeenCalled()
+    expect(host.updateTasks.mock.calls).toEqual([['inspect']])
+    window.fullscreen = false
+    window.emit('leave-full-screen')
+    if (mandatory) await answerMandatory('install', dialogOwner)
+    await host.stopping.promise
+    host.exited.resolve()
+    await expect(preparing).resolves.toBe(true)
+    expect(window.listenerCount('leave-full-screen')).toBe(baseline.leave)
+    expect(window.listenerCount('closed')).toBe(baseline.closed)
+  })
+
+  it('keeps the Host running after a fullscreen timeout and accepts a later retry', async () => {
+    vi.stubGlobal('process', { ...process, platform: 'darwin' })
+    const host = await readyForUpdate()
+    const window = harness.windows[0]!
+    window.fullscreen = true
+    window.setFullScreen.mockImplementation(() => {})
+    const preparing = harness.prepareUpdate()
+    const rejected = expect(preparing).rejects.toMatchObject({ kind: 'fullscreen-timeout',
+      message: 'Could not exit fullscreen. Exit fullscreen, then retry the update.' })
+    await vi.waitFor(() => { expect(window.setFullScreen).toHaveBeenCalledWith(false) })
+    await vi.advanceTimersByTimeAsync(5000)
+    await rejected
+    expect(harness.dialog.showMessageBox).not.toHaveBeenCalled()
+    expect(host.updateTasks.mock.calls).toEqual([['inspect']])
+    expect(host.stop).not.toHaveBeenCalled()
+    window.setFullScreen.mockImplementation((flag) => { window.fullscreen = flag; window.emit('leave-full-screen') })
+    harness.dialog.showMessageBox.mockResolvedValueOnce({ response: 0 })
+    const retrying = harness.prepareUpdate()
+    await host.stopping.promise
+    host.exited.resolve()
+    await expect(retrying).resolves.toBe(true)
+  })
+
+  it.each([false, true])('cancels installation when the fullscreen product window closes, mandatory: %s', async (mandatory) => {
+    vi.stubGlobal('process', { ...process, platform: 'darwin' })
+    if (mandatory) {
+      harness.embeddedPolicy = { origin: 'https://policy.example.com', allowedPageOrigins: ['https://downloads.example.com'] }
+      vi.stubGlobal('fetch', vi.fn(async () => Response.json({ code: 40005, data: {
+        show_content: { title: 'Update required', detail: 'Please update' }, desktop_app_link: 'https://downloads.example.com/',
+      } })))
+    }
+    const host = await readyForUpdate()
+    if (mandatory) await harness.policyBlocked.promise
+    const window = harness.windows[0]!
+    const baseline = { leave: window.listenerCount('leave-full-screen'), closed: window.listenerCount('closed') }
+    window.fullscreen = true
+    window.setFullScreen.mockImplementation(() => {})
+    const preparing = harness.prepareUpdate()
+    await vi.waitFor(() => { expect(window.setFullScreen).toHaveBeenCalledWith(false) })
+    window.destroy()
+    await expect(preparing).resolves.toBe(false)
+    expect(harness.dialog.showMessageBox).not.toHaveBeenCalled()
+    expect(host.stop).not.toHaveBeenCalled()
+    expect(window.listenerCount('leave-full-screen')).toBe(baseline.leave)
+  })
+
   it('waits for Platform storage cleanup before the installer takes over', async () => {
     const host = await readyForUpdate()
     harness.dialog.showMessageBox.mockResolvedValueOnce({ response: 0 })
@@ -1830,8 +1940,7 @@ describe('desktop main startup', () => {
     expect(host.stop).not.toHaveBeenCalled()
   })
 
-  async function answerMandatory(action: 'install' | 'later') {
-    const modal = harness.windows[0]!
+  async function answerMandatory(action: 'install' | 'later', modal = harness.windows[0]!) {
     const event = { sender: modal.webContents, senderFrame: modal.webContents.mainFrame }
     await vi.waitFor(() => {
       expect(harness.handlers.get(MANDATORY_IPC.status)!(event)).toHaveProperty('confirmation')
@@ -1901,6 +2010,7 @@ describe('desktop main startup', () => {
     const restarted = harness.nextHostStart()
     harness.publishUpdate({ phase: 'error', version: '1.0.1-nightly.1', failedOperation: 'install', message: 'Installer failed' })
     await restarted
+    expect(imageDrag.install).toHaveBeenCalledTimes(2)
     const replacement = harness.hosts[1]!
     replacement.url = 'http://127.0.0.1:3099/?token=replacement'
     if (mandatory) replacement.updateTasks.mockResolvedValue(true)
