@@ -1,5 +1,7 @@
 /** Complete image bytes rendered in a shared zoom viewport. */
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useImageDrag } from '@deepseek-ai/dsh-client-ui-primitives'
+import { bindImagePan } from './pan.ts'
 import type { PropsLocale, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import { pathPartsOf } from '@deepseek-ai/dsh-util-workspace-path'
 import type { DocumentPreviewProps } from '../document/contract.ts'
@@ -33,6 +35,7 @@ type ImageSource =
     readonly data: Uint8Array<ArrayBuffer>
     readonly mediaType: ImageMediaType
     readonly url: string
+    readonly file: File
   }
   | { readonly kind: 'failed'; readonly data: Uint8Array<ArrayBuffer>; readonly mediaType: ImageMediaType }
 
@@ -72,14 +75,14 @@ export function ImageBody(props: ImageBodyProps): ReactNode {
     let url: string | undefined
     try {
       url = URL.createObjectURL(new Blob([data], { type: mediaType }))
-      setSource({ kind: 'ready', data, mediaType, url })
+      setSource({ kind: 'ready', data, mediaType, url, file: new File([data], pathPartsOf(path).name, { type: mediaType }) })
     } catch {
       setSource({ kind: 'failed', data, mediaType })
     }
     return () => {
       if (url !== undefined) URL.revokeObjectURL(url)
     }
-  }, [data, mediaType])
+  }, [data, mediaType, path])
 
   if (data === undefined || mediaType === undefined) {
     return <p className={css.status} role="alert">{t('unsupported')}</p>
@@ -93,15 +96,16 @@ export function ImageBody(props: ImageBodyProps): ReactNode {
     controls: t('zoomControls'), menu: t('zoomMenu'), out: t('zoomOut'), into: t('zoomIn'),
     fitWidth: t('zoomFitWidth'), value: percent => t('zoomValue', { percent }),
   }
-  return <LoadedImage key={source.url} url={source.url} name={name} preference={preference}
+  return <LoadedImage key={source.url} url={source.url} name={name} file={source.file} preference={preference}
     onPreference={setPreference} labels={labels} signal={tab.signal}
     scrollportRef={props.scrollportRef} t={t} />
 }
 
 /** SVG stays in the browser's static image mode because its bytes only reach an img Blob URL. */
-function LoadedImage({ url, name, preference, onPreference, labels, signal, scrollportRef, t }: {
+function LoadedImage({ url, name, file, preference, onPreference, labels, signal, scrollportRef, t }: {
   readonly url: string
   readonly name: string
+  readonly file: File
   readonly preference: ZoomPreference
   readonly onPreference: (preference: ZoomPreference) => void
   readonly labels: ZoomLabels
@@ -109,6 +113,12 @@ function LoadedImage({ url, name, preference, onPreference, labels, signal, scro
   readonly scrollportRef: ImageBodyProps['scrollportRef']
   readonly t: ImageBodyProps['t']
 }): ReactNode {
+  const drag = useImageDrag(url, name, t('dragFailed'), file)
+  const releasePan = useRef<() => void>()
+  const attachImage = useCallback((image: HTMLImageElement | null): void => {
+    releasePan.current?.()
+    releasePan.current = image === null ? undefined : bindImagePan(image)
+  }, [])
   const [state, setState] = useState<'loading' | 'ready' | 'failed'>('loading')
   const [width, setWidth] = useState<number>()
   return <ZoomViewport preference={preference} intrinsicWidth={width} horizontalInset={24}
@@ -119,11 +129,14 @@ function LoadedImage({ url, name, preference, onPreference, labels, signal, scro
       <div className={`${css.surface} ${zoomSurfaceClass}`} data-document-zoom-surface
         style={{ '--document-zoom-width': `${width ?? 0}px` } as CSSProperties} hidden={state !== 'ready'}>
         <img
+          ref={attachImage}
           className={css.image}
           src={url}
           alt={t('preview', { name })}
           decoding="async"
-          draggable={false}
+          onPointerEnter={drag.onPointerEnter}
+          onPointerDown={drag.onPointerDown}
+          onDragStart={drag.onDragStart} onDragEnd={drag.onDragEnd}
           referrerPolicy="no-referrer"
           onLoad={(event) => { setWidth(event.currentTarget.naturalWidth); setState('ready') }}
           onError={() => { setState('failed') }}

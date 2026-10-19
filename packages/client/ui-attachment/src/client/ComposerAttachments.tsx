@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   ComposerAttachment, ComposerAttachmentsProps, ComposerImageAttachment,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { IconCloseFillRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconCloseFillRegular, useImageDrop } from '@deepseek-ai/dsh-client-ui-primitives'
 import { AttachmentRail } from '../AttachmentRail.tsx'
 import type { AttachmentRailItem } from '../AttachmentRail.tsx'
 import { DropOverlay } from '../DropOverlay.tsx'
@@ -23,6 +23,7 @@ export function ComposerAttachments({
 }: ComposerAttachmentsProps) {
   const [preview, setPreview] = useState<ComposerImageAttachment | null>(null)
   const [dragActive, setDragActive] = useState(false)
+  const readImageDrag = useImageDrop()
   const dragDepth = useRef(0)
   const closePreview = useCallback(() => { setPreview(null) }, [])
   useEffect(() => {
@@ -30,8 +31,8 @@ export function ComposerAttachments({
   }, [attachments, preview])
 
   useEffect(() => {
-    return installDocumentDropEvents(canAcceptDrop, onAddFiles, dragDepth, setDragActive)
-  }, [canAcceptDrop, onAddFiles])
+    return installDocumentDropEvents(canAcceptDrop, onAddFiles, dragDepth, setDragActive, readImageDrag)
+  }, [canAcceptDrop, onAddFiles, readImageDrag])
 
   const railItems = useMemo<ComposerRailItem[]>(() => attachments.map(attachment => ({
     id: attachment.id,

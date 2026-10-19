@@ -1870,7 +1870,7 @@ describe('desktop main startup', () => {
     harness.app.quit()
     await harness.quitCompleted.promise
     expect(modal.isDestroyed()).toBe(true)
-    expect(harness.app.quit).toHaveBeenCalledTimes(2)
+    expect(harness.app.quit).toHaveBeenCalledTimes(3)
     // The installer owns the exit, so Platform cleanup starts without holding the quit open.
     expect(harness.platformDispose).toHaveBeenCalledOnce()
     inspected.resolve({ activeTasks: true, scheduledTasks: true })
@@ -1878,7 +1878,7 @@ describe('desktop main startup', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(harness.dialog.showMessageBox).toHaveBeenCalledTimes(pendingPhase === 'dialog' ? 1 : 0)
     expect(harness.platformDispose).toHaveBeenCalledOnce()
-    expect(harness.app.quit).toHaveBeenCalledTimes(2)
+    expect(harness.app.quit).toHaveBeenCalledTimes(3)
     disposal.resolve()
   })
 

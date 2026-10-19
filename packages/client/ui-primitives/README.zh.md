@@ -111,6 +111,8 @@ kind: "package-library"
 
 `ImageLightbox` 是共享原图浮层，支持焦点恢复与 Esc 关闭。与 `Modal` 相同，其遮罩不覆盖 Windows 顶栏，关闭按钮位于顶栏下方 20px。包内缩略图渲染器由调用方提供加载及失败文案。`HoverCard.inline` 使文件链接保持在文本流内，并使用共享菜单材质、键盘可见焦点，并在锚点上方或下方定位而不遮挡锚点。即使焦点位于其他位置，Esc 也会关闭已打开的缩略图；后续 Esc 按键继续传给 owner。`MarkdownDelegateProvider.fileImages` 提供已解码路径解析器与完整图片文案：消息落定后的图片链接支持悬停预览，独立图片支持点击放大。仅包含图片的链接保留单一导航目标。解析器仅恢复完整、未转义、独立成段且带明确图片扩展名的含裸空格本地图片引用；代码与有歧义的目标保持原文。
 
+`ImageDragProvider` 包裹应用，持有当前 Web 图片传递状态和失败提示。`useImageDrag` 从已授权来源或传入的 `File` 准备原图字节，取消过期准备，并在 Desktop 桥接存在时使用它。Web 拖放携带应用内令牌和 Chromium 的 `DownloadURL`；`useImageDrop` 仅将当前令牌解析为原始 `File`。浏览器向外部拖放的结果取决于浏览器和接收应用的支持。拖放不会将内部 URL 或 alt 文本放入 `text/plain`。
+
 ### 本地化文案
 
 这些原子组件无法读取应用 locale，因此每段面向用户的文案都必须通过 label prop 提供。`HoverCard`、`TerminalBlock`、`JsonTree`、`CodeBlock`、`MarkdownText`、`JsonBlock`、`ConnectionIndicator`、`Modal`、`DiffBlock`、`ReadBlock`、`SearchBlock` 与 `WebBlock` 接收完整的本地化 label。本包不拥有语言回退；遗漏会导致类型检查失败，各功能会把带类型的 `t` 席位映射到 primitive 的 label 接口。

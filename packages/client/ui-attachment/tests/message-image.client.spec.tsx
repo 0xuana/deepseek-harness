@@ -18,6 +18,7 @@ afterEach(cleanup)
 
 const labels: MessageImageLabels = {
   image: '图片',
+  dragFailed: '图片尚未准备好拖出，请重试',
   open: '查看原图',
   openNamed: label => `${label}，点击查看原图`,
   loading: '图片加载中…',

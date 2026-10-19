@@ -7,7 +7,7 @@ import { MarkdownText } from './markdown-test-components.tsx'
 import { parseGfm, parseGfmWithMath } from '../src/markdown/parse.ts'
 
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks() })
-const labels = { open: 'View full image', dialog: 'Image preview', close: 'Close preview', loading: 'Loading image', failed: 'Image unavailable' }
+const labels = { dragFailed: 'Image drag failed', open: 'View full image', dialog: 'Image preview', close: 'Close preview', loading: 'Loading image', failed: 'Image unavailable' }
 const fileImages = { resolve: (path: string) => `https://example.com/api/file?path=${encodeURIComponent('/workspace/' + path)}`, labels }
 function mount(text: string, streaming = false) {
   const openFile = vi.fn()

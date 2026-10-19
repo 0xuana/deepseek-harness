@@ -29,6 +29,7 @@ import { renderTexToReact } from './katex.tsx'
 import { LinkIconMedium, classifyLinkPath } from '../LinkIcon.tsx'
 import { useMarkdownDelegate } from './MarkdownDelegate.tsx'
 import { HoverCard } from '../HoverCard.tsx'
+import { useImageDrag } from '../image-drag.ts'
 import { ImageLightbox } from '../ImageLightbox.tsx'
 import { ImagePreview } from '../ImagePreview.tsx'
 import type { PositionedBlock } from './incremental.ts'
@@ -650,14 +651,17 @@ function LoadedMarkdownImage({ src, alt, destination, preview }: {
   const [failed, setFailed] = useState(false)
   const [open, setOpen] = useState(false)
   const close = useCallback(() => { setOpen(false) }, [])
+  const drag = useImageDrag(preview === undefined ? '' : src, destination.split('/').at(-1)?.split(/[?#]/u)[0] || 'image', preview?.labels.dragFailed ?? '')
   if (failed) return <span className={css.imageAlt}>{preview === undefined ? '' : `${preview.labels.failed} · `}{alt || destination}</span>
   const img = <img className={css.image} src={src} alt={alt}
+    {...preview === undefined ? {} : { draggable: true, onPointerEnter: drag.onPointerEnter,
+      onPointerDown: drag.onPointerDown, onDragStart: drag.onDragStart, onDragEnd: drag.onDragEnd }}
     onError={() => { setFailed(true) }} loading="lazy" decoding="async" referrerPolicy="no-referrer" />
   if (preview === undefined) return img
   return <>
     <button type="button" className={css.imageButton} title={preview.labels.open}
       aria-label={alt ? `${preview.labels.open}: ${alt}` : preview.labels.open}
-      onClick={() => { setOpen(true) }}>{img}</button>
+      onClickCapture={drag.onClickCapture} onClick={() => { setOpen(true) }}>{img}</button>
     {open && <ImageLightbox src={src} alt={alt} labels={preview.labels} onClose={close} />}
   </>
 }

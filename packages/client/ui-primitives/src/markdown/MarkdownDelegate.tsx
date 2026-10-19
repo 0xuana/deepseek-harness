@@ -14,7 +14,7 @@ export interface MarkdownDelegate {
   /** Image previews for decoded local paths in this owner's workspace. */
   readonly fileImages?: {
     resolve: (path: string) => string | undefined
-    labels: ImageLightboxLabels & { open: string; loading: string; failed: string }
+    labels: ImageLightboxLabels & { open: string; loading: string; failed: string; dragFailed: string }
   } | undefined
   /** Ordinary HTTP(S) activation; absent handlers retain native anchor behavior. */
   readonly openExternalLink?: MarkdownExternalLinkHandler | undefined

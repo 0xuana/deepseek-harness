@@ -26,6 +26,7 @@ import { resolveDesktopPaths } from './paths.ts'
 import { DesktopProjectManager } from './project-manager.ts'
 import { DesktopHostFatalError, DesktopHostProcess, DesktopHostUncleanExitError } from './host-process.ts'
 import { DesktopPlatformView, PLATFORM_IPC, platformBounds } from './platform-view.ts'
+import { installDesktopImageDrag } from './image-drag.ts'
 import { installDesktopDirectoryPicker } from './directory-picker.ts'
 import { installMicrophonePermissions } from './microphone-permissions.ts'
 import { DesktopBackendController } from './backend-controller.ts'
@@ -682,6 +683,9 @@ async function main(): Promise<void> {
   })
 
   installDesktopDirectoryPicker(() => mainWindow)
+  const disposeImageDrag = installDesktopImageDrag(() => mainWindow)
+  let installerImageCleanup: Promise<void> | undefined
+  let installerImagesReleased = false
   installMicrophonePermissions(session.defaultSession, () => mainWindow?.webContents)
   const shortcuts = installDesktopShortcuts(() => mainWindow, app.getPath('userData'),
     process.platform === 'darwin' ? 'macos' : process.platform === 'win32' ? 'windows' : 'linux', () => { refreshApplicationMenu() }, window => updateOverlays.input(window))
@@ -1260,10 +1264,18 @@ async function main(): Promise<void> {
     mandatoryUI?.dispose()
     void Promise.all([Promise.resolve(mandatoryPolicy?.dispose()).then(() => policyAuth?.dispose()), backend.close(),
       // A Platform cleanup failure is logged without cutting the remaining Host shutdown short.
-      platformView.dispose().catch((error: unknown) => { console.error(error) })])
+      platformView.dispose().catch((error: unknown) => { console.error(error) }), disposeImageDrag()])
       .catch((error: unknown) => { console.error(error) }).finally(() => { app.quit() })
   }
   app.on('before-quit', (event) => {
+    if (shellInstallerOwnsQuit && !installerImagesReleased) {
+      event.preventDefault()
+      installerImageCleanup ??= disposeImageDrag().catch((error: unknown) => { console.error(error) }).then(() => {
+        installerImagesReleased = true
+        app.quit()
+      })
+      return
+    }
     if (shellInstallerOwnsQuit) {
       shuttingDown = true
       quitConfirmation.dispose()

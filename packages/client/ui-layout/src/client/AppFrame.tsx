@@ -20,6 +20,7 @@ import type {
   PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore,
 } from '@deepseek-ai/dsh-client-ui-slots'
 import { CENTER_MIN, clampWidth, computeColumns, RIGHTBAR_DEFAULT_RATIO, RIGHTBAR_MAX_RATIO, RIGHTBAR_MIN, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_COLLAPSED, SIDEBAR_DEFAULT } from './columns.ts'
+import { ImageDragProvider } from '@deepseek-ai/dsh-client-ui-primitives'
 import { DocumentTitle } from './DocumentTitle.tsx'
 import type { createLayoutStore } from './stores.ts'
 import css from './AppFrame.module.css'
@@ -256,7 +257,7 @@ export function AppFrame({
   const leadingMounted = darwin && sidebarCollapsed
 
   return (
-    <div
+    <ImageDragProvider><div
       ref={frameRef}
       className={css.frame}
       style={{
@@ -302,6 +303,6 @@ export function AppFrame({
       {layoutInfo.rightbarShown && !layoutInfo.rightbarFullscreen && normal.rightbar > 0 && (
         <DragHandle side="rightbar" left={viewport - normal.rightbar} onStart={onRightbarStart} onDrag={onRightbarDrag} onEnd={onDragEnd} />
       )}
-    </div>
+    </div></ImageDragProvider>
   )
 }
