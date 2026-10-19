@@ -17,7 +17,7 @@
  * @module @deepseek-ai/dsh-session-projection
  */
 
-import { Context, Service } from '@deepseek-ai/cordis'
+import { Context, FiberState, Service } from '@deepseek-ai/cordis'
 import type { ZodType } from 'zod'
 import { SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type {
@@ -306,16 +306,38 @@ export class SessionProjectionRegistry extends Service {
   register<K extends string, S>(
     definition: ProjectionDefinition<K, S>,
   ): Promise<ProjectionHandle<S>> {
+    const owner = this.ctx
     // Replaced by the effect disposer unless registration fails before its effect exists.
     let dispose: () => Promise<void> = () => Promise.resolve()
     const ready = this.acquire(definition, (release) => { dispose = release })
-    // Return the effect disposer itself, as the synchronous API did, so a composing effect adopts it.
-    return Object.assign(dispose, {
-      then: ready.then.bind(ready),
-      catch: ready.catch.bind(ready),
-      finally: ready.finally.bind(ready),
-      [Symbol.toStringTag]: 'Promise',
+    let observed = false
+    // A legacy caller may never observe the result. Report its rejection instead of leaving an
+    // unhandled rejection once the current turn has had a chance to observe it; an owner that
+    // is no longer loading or active cannot use the handle, so its rejection is dropped.
+    void ready.catch((error: unknown) => {
+      setImmediate(() => {
+        if (observed) return
+        if (owner.fiber.state !== FiberState.LOADING && owner.fiber.state !== FiberState.ACTIVE) return
+        owner.logger.error(error)
+      })
     })
+    const promise: Promise<ProjectionHandle<S>> = {
+      then(onFulfilled, onRejected) {
+        observed = true
+        return ready.then(onFulfilled, onRejected)
+      },
+      catch(onRejected) {
+        observed = true
+        return ready.catch(onRejected)
+      },
+      finally(onFinally) {
+        observed = true
+        return ready.finally(onFinally)
+      },
+      [Symbol.toStringTag]: 'Promise',
+    }
+    // Return the effect disposer itself, as the synchronous API did, so a composing effect adopts it.
+    return Object.assign(dispose, promise)
   }
 
   /** Install one unit; `onEffect` receives its release before the asynchronous handoff. */

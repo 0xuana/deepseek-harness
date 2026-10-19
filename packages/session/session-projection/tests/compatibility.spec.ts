@@ -1,5 +1,6 @@
 /** Legacy projection calls keep their effect ownership while new callers await retained readers. */
 /* oxlint-disable typescript/no-deprecated -- exercise the public compatibility API. */
+import { setImmediate } from 'node:timers/promises'
 import { Context, FiberState } from '@deepseek-ai/cordis'
 import SessionStore from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
@@ -225,11 +226,36 @@ describe('projection registration compatibility', () => {
 
   it('preserves explicit rejection handling and returns a harmless legacy disposer for failed acquisition', async () => {
     const { ctx, warning, session } = await setup()
+    const errorLog = vi.spyOn(ctx.logger, 'error').mockImplementation(() => {})
+    onTestFinished(() => { errorLog.mockRestore() })
     const registration = legacyRegistration(ctx.sessionProjections.register({ ...definition, stateVersion: -1 }))
     await expect(registration.catch((error: unknown) => error)).resolves.toBeInstanceOf(Error)
     await registration()
+    await setImmediate()
     expect(ctx.sessionProjections.snapshot(session).values).toEqual({})
+    expect(errorLog).not.toHaveBeenCalled()
     expect(warning).not.toHaveBeenCalled()
+  })
+
+  it('logs an ignored legacy registration rejection and keeps the plugin active', async () => {
+    const { ctx, session } = await setup()
+    const reported = Promise.withResolvers<unknown>()
+    const errorLog = vi.spyOn(ctx.logger, 'error').mockImplementation((error: unknown) => { reported.resolve(error) })
+    onTestFinished(() => { errorLog.mockRestore() })
+    const owner = await ctx.plugin({
+      inject: ['sessionProjections'],
+      apply(inner) {
+        void inner.sessionProjections.register(definition)
+        void inner.sessionProjections.register({ ...definition, stateVersion: 2 })
+        inner.provide('legacy-failed-provider', {})
+      },
+    })
+    const error = await reported.promise
+    expect(String(error)).toContain('already registered at stateVersion 1')
+    expect(errorLog).toHaveBeenCalledOnce()
+    expect(owner.state).toBe(FiberState.ACTIVE)
+    expect(ctx.get('legacy-failed-provider')).toBeDefined()
+    expect(ctx.sessionProjections.snapshot(session).values).toEqual({ 'test/legacy': 0 })
   })
 
   it('lets a modern plugin handle rejected registration and finish activation', async () => {
@@ -261,6 +287,25 @@ describe('projection registration compatibility', () => {
     expect(second.sessionProjections.stateOf(session, 'test/legacy')).toBeUndefined()
     expect(secondWarning).toHaveBeenCalledOnce()
     expect(warning).toHaveBeenCalledOnce()
+  })
+
+  it('drops an ignored rejection when its plugin unloads before handoff', async () => {
+    const { ctx, warning, session } = await setup()
+    const errorLog = vi.spyOn(ctx.logger, 'error').mockImplementation(() => {})
+    onTestFinished(() => { errorLog.mockRestore() })
+    const owner = ctx.plugin({
+      inject: ['sessionProjections'],
+      apply(inner) {
+        void inner.sessionProjections.register(definition)
+        void inner.fiber.dispose()
+      },
+    })
+    await owner.await()
+    await setImmediate()
+    expect(owner.state).toBe(FiberState.DISPOSED)
+    expect(ctx.sessionProjections.snapshot(session).values).toEqual({})
+    expect(errorLog).not.toHaveBeenCalled()
+    expect(warning).not.toHaveBeenCalled()
   })
 
   it('keeps an observed registration owned when its plugin unloads before handoff', async () => {

@@ -76,7 +76,7 @@ const { asOfSeq, values } = ctx.sessionProjections.snapshot(session)
 
 每个 registry 实例对每个键的首次旧式 `stateOf(session, key)` 读取输出一次 `ctx.logger.warn` 弃用警告。注册、调用其返回值、句柄方法和 owner 清理不产生警告。
 
-定义同步安装，句柄交付保持异步。注册错误使返回值拒绝；忽略返回值的插件会留下未处理的拒绝。新插件在提供读取操作前等待注册完成。同步 `try/catch` 无法捕获异步注册错误。
+定义同步安装，句柄交付保持异步。注册错误使返回值拒绝。当前轮次结束前没有调用方观察该拒绝时，registry 通过调用方插件的 logger 记录它，而不留下未处理的拒绝，插件保持激活但缺少该单元；owner 已不在加载或激活状态的拒绝会被丢弃。新插件在提供读取操作前等待注册完成。同步 `try/catch` 无法捕获异步注册错误。
 
 ### 持久检查点
 
@@ -153,7 +153,6 @@ Session 摘要包含每个已注册客户端视图，但排除 `SessionProjectio
 - **主动驱动逐事件触达每个单元**——按构造开销很低（全量值规则与 state/view 引用闸门），但若出现热点路径，可加按单元的事件类型预过滤。
 - **注册表 cell 只活在内存里**——重启后首次触达时靠折叠日志重建；挂载了 `dsh-session-projection-cache` 的组合改由持久行播种该折叠。
 - **单元同步纪律只有部分可机械把关**——`wire.viewSchema.parse` 能拒绝返回 Promise 的 view，但阻塞的 `apply`、或读取撕裂的非会话状态的 `apply`，只能靠评审把关。
-- **忽略注册失败的旧插件无法被隔离**——旧 API 在 `apply()` 内同步抛错，只令该插件失败；现在返回值会拒绝，因此未被观察的键冲突、非法 `stateVersion` 或交付句柄前 owner 卸载都会成为未处理的拒绝，`dsh` profile 会将其转为进程退出。
 
 <a id="dev-note"></a>
 ### 开发备注
