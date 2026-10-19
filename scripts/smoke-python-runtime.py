@@ -89,7 +89,6 @@ LEGACY_CUSTOM_DISABLED_ROWS = (
     "tool-skill",
     "tool-str-replace-editor",
     "tool-subagent-control",
-    "tool-subagent-list-agents",
     "tool-subagent-fork",
     "tool-todo",
     "tool-web",
@@ -949,7 +948,6 @@ def _smoke_sdk_authoring_cached(base_url: str, executable: Path, update_snapshot
                 subprocess.run([
                     str(python), "-I", "-B", str(Path(__file__).parent / "primary-runtime/smoke.py"),
                     json.dumps(manifest["pythonPackages"]), manifest["python"],
-                    str(resources / "office-skills/scripts/check_office.py"),
                 ], check=True, timeout=120,
                     env={name: value for name, value in os.environ.items()
                          if not re.search(r"KEY|SECRET|TOKEN|PASSWORD", name, re.I)})

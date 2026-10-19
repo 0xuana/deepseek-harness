@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { loadDesktopPackageEnvironment } from '../scripts/desktop-package-environment.mjs'
+import { resolveWindowsPackageSettings } from '../scripts/windows-package-settings.mjs'
 
 async function withPreset(run: (root: string) => Promise<void>) {
   const root = await mkdtemp(join(tmpdir(), 'dsh-windows-preset-'))
@@ -31,6 +32,18 @@ it('loads unsigned public settings without requiring the signing secret file or 
     expect(prepared.DSH_PACKAGING_PRESET).toBe('test')
     expect(() => loadDesktopPackageEnvironment('win32', { DSH_PACKAGING_CONFIG_DIR: root, DSH_PACKAGING_PRESET: 'test' }))
       .toThrow(/cannot read/u)
+  })
+})
+
+it('loads pack concurrency from the public preset and rejects an invalid worker count', async () => {
+  await withPreset(async (root) => {
+    const env = { DSH_PACKAGING_CONFIG_DIR: root, DSH_PACKAGING_PRESET: 'test', DSH_DESKTOP_WINDOWS_PACK_CONCURRENCY: '8' }
+    const load = () => resolveWindowsPackageSettings(loadDesktopPackageEnvironment('win32', env, root, { unsigned: true }))
+    expect(load().packConcurrency).toBe(4)
+    await writeFile(join(root, 'presets/test.env'), 'DSH_DESKTOP_AUTO_UPDATE_ENV=test\nDSH_DESKTOP_WINDOWS_PACK_CONCURRENCY=2\n')
+    expect(load().packConcurrency).toBe(2)
+    await writeFile(join(root, 'presets/test.env'), 'DSH_DESKTOP_AUTO_UPDATE_ENV=test\nDSH_DESKTOP_WINDOWS_PACK_CONCURRENCY=0\n')
+    expect(load).toThrow('PACK_CONCURRENCY')
   })
 })
 
@@ -88,5 +101,25 @@ it('cache maintenance reaches cache path validation without a signing file', asy
     expect(result.status).toBe(1)
     expect(result.stderr).toContain('absolute local')
     expect(result.stderr).not.toContain('cannot read')
+  })
+})
+
+it.each(['win32', 'darwin'] as const)('applies an explicit test channel override on %s without changing the preset file', async (platform) => {
+  await withPreset(async (root) => {
+    const path = join(root, 'presets/test.env')
+    const original = 'a'.repeat(32)
+    await writeFile(path, `DSH_DESKTOP_AUTO_UPDATE_ENV=test\nDOWNLOAD_TEST_RELEASE_ID=${original}\n`)
+    const env = { DSH_PACKAGING_CONFIG_DIR: root, DSH_PACKAGING_PRESET: 'test' }
+    const select = (id: string) => loadDesktopPackageEnvironment(platform,
+      { ...env, PACKAGE_TEST_RELEASE_ID: id }, root, { unsigned: true })
+    expect(select('b'.repeat(32)).DOWNLOAD_TEST_RELEASE_ID).toBe('b'.repeat(32))
+    expect(select('').DOWNLOAD_TEST_RELEASE_ID).toBe(original)
+    expect(select('   ').DOWNLOAD_TEST_RELEASE_ID).toBe(original)
+    expect(() => select('../other')).toThrow(/32 lowercase hexadecimal/u)
+    expect(() => select('A'.repeat(32))).toThrow(/32 lowercase hexadecimal/u)
+    await writeFile(join(root, 'presets/production.env'), 'DSH_DESKTOP_AUTO_UPDATE_ENV=production\n')
+    expect(() => loadDesktopPackageEnvironment(platform,
+      { ...env, DSH_PACKAGING_PRESET: 'production', PACKAGE_TEST_RELEASE_ID: original }, root, { unsigned: true }))
+      .toThrow(/requires the test preset/u)
   })
 })
