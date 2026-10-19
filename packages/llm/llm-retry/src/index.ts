@@ -110,6 +110,8 @@ const llmRetryStateSchema: zod.ZodType<LlmRetryState> = zod.record(zod.string(),
 
 /**
  * Install provider-routed normal or unbounded request recovery.
+ * Recovery admitted during activation awaits projection registration. A
+ * registration failure propagates; cancellation or disposal suppresses retries.
  * @param ctx - plugin context that owns the listener and active waits.
  * @param config - empty executor config; provider registrations own policy.
  * @param internals - non-serializable deterministic hooks for tests.
@@ -117,7 +119,7 @@ const llmRetryStateSchema: zod.ZodType<LlmRetryState> = zod.record(zod.string(),
  */
 export async function apply(ctx: Context, config: Config = {}, internals: RetryInternals = {}): Promise<void> {
   validateConfig(config)
-  const llmRetryProjectionHandle = await ctx.sessionProjections.register({
+  const projectionReady = ctx.sessionProjections.register({
     key: 'llmRetry',
     stateVersion: 1,
     stateSchema: llmRetryStateSchema,
@@ -155,7 +157,6 @@ export async function apply(ctx: Context, config: Config = {}, internals: RetryI
     signal: AbortSignal,
   ): Promise<RequestErrorAction> {
     const fusedSignal = AbortSignal.any([signal, lifetime.signal])
-    if (fusedSignal.aborted) return
     const eventData: LlmRetryEventData = policy.mode === 'normal'
       ? {
         retryId,
@@ -191,8 +192,9 @@ export async function apply(ctx: Context, config: Config = {}, internals: RetryI
     next: () => Promise<RequestErrorAction>,
   ): Promise<RequestErrorAction> {
     if (policy === undefined) return next()
+    const llmRetryProjectionHandle = await projectionReady
+    if (signal.aborted || ctx.fiber.uid === null || lifetime.signal.aborted) return
     if (policy.mode === 'always') {
-      if (signal.aborted || lifetime.signal.aborted) return
       const fusedSignal = AbortSignal.any([signal, lifetime.signal])
       // The loop and plugin lifetime stay open until delegated recovery settles.
       // An abort then wins before the decision or fallback can mutate later state.
@@ -251,4 +253,5 @@ export async function apply(ctx: Context, config: Config = {}, internals: RetryI
     lifetime.abort(new Error('llm-retry plugin disposed'))
     await Promise.allSettled([...active])
   }, 'llm-retry: abort and drain active recovery')
+  await projectionReady
 }
