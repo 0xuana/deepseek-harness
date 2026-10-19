@@ -1,10 +1,10 @@
 /** Reject one scheduler preparation to exercise the terminal internal-failure path. */
-import { NativeToolExecutor } from '@deepseek-ai/dsh-tool-executor-native'
-
-export const inject = ['tools']
+export const inject = ['tools', 'loader']
 
 /** @param {import('@deepseek-ai/cordis').Context} ctx - Scenario-owned runtime. */
-export function apply(ctx) {
+export async function apply(ctx) {
+  // Resolve through the running profile so packaged runs share the bundled error classes.
+  const { NativeToolExecutor } = await ctx.loader.import('@deepseek-ai/dsh-tool-executor-native')
   ctx.on('agent/created', ({ agent }) => {
     const executor = new NativeToolExecutor(agent.ctx)
     const scheduler = executor.pipeline
