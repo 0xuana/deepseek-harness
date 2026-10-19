@@ -180,7 +180,6 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
           entries: [...scaffold.ctx.loader.entries()].filter(entry => /cua|hmr/.test(entry.options.name)).map(entry => ({
             id: entry.id, disabled: entry.disabled, state: entry.fiber?.state, pending: entry.fiber?.inertia !== undefined,
           })),
-          page: await panel.textContent(),
         })
         throw error
       }
