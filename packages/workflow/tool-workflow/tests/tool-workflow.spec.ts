@@ -1,3 +1,5 @@
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -103,6 +105,7 @@ async function setup(config?: { toolName?: string; maxResultChars?: number }) {
   const ctx = new Context()
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(StubEngine)
   await ctx.plugin(toolWorkflow, config ?? {})
   const engine = ctx.workflowEngine as StubEngine
@@ -119,7 +122,7 @@ function execute(ctx: Context, args: unknown, extra?: {
   signal?: AbortSignal
   parent?: ToolExecutionToken
 }): Promise<ToolExecutionResult> {
-  return ctx.tools.execute({
+  return executeToolFixture(ctx, {
     signal: testToolSignal,
     callId: ToolCallId('call-1'),
     name: 'workflow',
@@ -394,6 +397,7 @@ describe('dsh-tool-workflow', () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(StubEngine)
     const fiber = await ctx.plugin(toolWorkflow, { toolName: 'orchestrate' })
     expect(ctx.tools.get('orchestrate')).toBeDefined()
@@ -449,6 +453,7 @@ describe('dsh-tool-workflow', () => {
       onTestFinished(async () => { await ctx.fiber.dispose() })
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
+      await ctx.plugin(NativeToolExecutor)
       await ctx.plugin(AgentRegistry)
       await ctx.plugin(LocalJobRegistry)
       await ctx.plugin(ToolTasks)
@@ -497,7 +502,7 @@ describe('dsh-tool-workflow', () => {
       // Narration is observer-only: every chunk rides the log channel, so the
       // model's job_output before settlement sees status only.
       expect(jobs.readAt(job.id, 0, parent.id).chunks.map(chunk => chunk.channel)).toEqual(['log', 'log', 'log', 'log'])
-      const early = await ctx.tools.execute({
+      const early = await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('call-early-read'),
         name: 'job_output',
@@ -626,6 +631,7 @@ describe('dsh-tool-workflow', () => {
       onTestFinished(async () => { await ctx.fiber.dispose() })
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
+      await ctx.plugin(NativeToolExecutor)
       await ctx.plugin(SessionProjectionRegistry)
       provideWorkingDirectoryFixture(ctx)
       await ctx.plugin(SubagentRuntime)
@@ -659,6 +665,7 @@ describe('dsh-tool-workflow', () => {
       onTestFinished(async () => { await ctx.fiber.dispose() })
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
+      await ctx.plugin(NativeToolExecutor)
       await ctx.plugin(AgentRegistry)
       await ctx.plugin(LocalJobRegistry)
       await ctx.plugin(ToolTasks)

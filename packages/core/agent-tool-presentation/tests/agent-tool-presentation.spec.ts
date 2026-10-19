@@ -6,6 +6,7 @@
  * than at the first prompt assembly.
  */
 
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createScope } from '@deepseek-ai/dsh-scope'
@@ -33,7 +34,8 @@ class StubRuntime extends PtcRuntime {
 async function host(options: { runtime?: boolean } = {}) {
   const ctx = new Context()
   await ctx.plugin(SystemPrompt, {})
-  await ctx.plugin(ToolRuntime, {})
+  await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
   if (options.runtime !== false) await ctx.plugin(StubRuntime)
   ctx.tools.register(defineTool({
     name: 'echo',
@@ -82,17 +84,13 @@ describe('the tool-presentation row', () => {
     expect(plainAssembly.tools.map(tool => tool.name)).toEqual(['echo'])
   })
 
-  it('restores the deployment default when the agent unloads', async () => {
+  it('rejects the selected scope after its provider unloads', async () => {
     const ctx = await host()
     const { agent, row } = await mount(ctx, { mode: 'ptc' })
 
     await row.dispose()
 
-    // HMR safety: the preset subtree is torn down with its agent, and the
-    // presentation must go with it rather than outliving the composition.
-    const assembly = await ctx.systemPrompt.assemble({ scope: agent })
-    expect(assembly.tools.map(tool => tool.name)).toEqual(['echo'])
-    expect(assembly.sections.some(section => section.name === 'tools:sdk')).toBe(false)
+    await expect(ctx.systemPrompt.assemble({ scope: agent })).rejects.toThrow('selected tool executor is unavailable')
   })
 
   it('waits for a PTC runtime the deployment does not compose', async () => {

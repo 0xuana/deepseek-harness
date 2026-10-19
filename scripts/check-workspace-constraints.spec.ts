@@ -327,6 +327,36 @@ describe('package payload constraints', () => {
     ])
   })
 
+  it('publishes tools entry points and shared runtime chunks', () => {
+    const dir = 'packages/core/tools'
+    const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
+    expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])
+    const emittedTesting = {
+      ...manifest,
+      exports: {
+        ...manifest.exports,
+        './testing': { types: './lib/types/testing.d.ts', default: './lib/types/testing.js' },
+      },
+    }
+    expect(checkWorkspaceManifest({ dir, manifest: {
+      ...emittedTesting, files: [...expectedDshPackageFiles(emittedTesting)],
+    } })).toEqual([])
+    for (const omitted of ['lib/pipeline.js', 'lib/shared-*.js']) {
+      expect(checkWorkspaceManifest({ dir, manifest: {
+        ...manifest, files: manifest.files!.filter(file => file !== omitted),
+      } })).toEqual([expect.stringContaining('package.json files must be')])
+    }
+    for (const entry of ['testing', 'pipeline']) {
+      expect(checkWorkspaceManifest({ dir, manifest: {
+        ...manifest,
+        exports: {
+          ...manifest.exports,
+          [`./${entry}`]: { types: `./lib/types/${entry}.d.ts`, default: './lib/index.js' },
+        },
+      } })).toContainEqual(expect.stringContaining(`exports["./${entry}"] must expose`))
+    }
+  })
+
   it('does not infer locale payloads from unrelated or non-JSON exports', () => {
     expect(expectedDshPackageFiles({
       exports: {

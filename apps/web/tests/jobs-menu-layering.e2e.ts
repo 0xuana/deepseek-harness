@@ -1,3 +1,4 @@
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 /** Background-job menu geometry over the normal Browser dock in the shipped Web composition. */
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
@@ -116,7 +117,7 @@ describe.skipIf(MODE === 'record')('web e2e: jobs menu layering', () => {
     const opened = scaffold.ctx.agents.get(SEED_ID)
     if (opened === undefined) throw new Error('opened session has no live Agent')
     agent = opened
-    const started = await scaffold.ctx.tools.execute({
+    const started = await executeToolFixture(scaffold.ctx, {
       signal: new AbortController().signal,
       callId: ToolCallId('jobs-menu-layering-e2e'),
       name: 'bash',

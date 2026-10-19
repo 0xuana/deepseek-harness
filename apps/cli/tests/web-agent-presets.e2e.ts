@@ -1,3 +1,4 @@
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { createRequire } from 'node:module'
 import { randomUUID } from 'node:crypto'
 import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
@@ -619,7 +620,7 @@ describe('the shipped Web composition', () => {
       expect(scoped).toContain('project-proof')
 
       // The preset's own loader tool resolves the global-layer skill.
-      const loaded = await ctx.tools.execute({
+      const loaded = await executeToolFixture(ctx, {
         callId: ToolCallId('preset-skills-load'),
         name: 'skill',
         arguments: { name: 'dsh-badge' },
@@ -777,7 +778,7 @@ describe('a user preset declared from the shipped cordis rows', () => {
           ]))
         }
         const signal = new AbortController().signal
-        const listed = await copyCtx.tools.execute({
+        const listed = await executeToolFixture(copyCtx, {
           callId: ToolCallId('copied-preset-inspect-list'),
           name: 'cordis_inspect_list',
           arguments: {},
@@ -792,7 +793,7 @@ describe('a user preset declared from the shipped cordis rows', () => {
         // The `Tool` provider is the one built over the host context: it
         // answers with the shared registry's view of the REQUESTING agent,
         // so the copy sees its own preset's tools, not the host's empty set.
-        const queried = await copyCtx.tools.execute({
+        const queried = await executeToolFixture(copyCtx, {
           callId: ToolCallId('copied-preset-inspect-tools'),
           name: 'cordis_inspect_query',
           arguments: { platform: 'host', provider: 'Tool', method: 'listTools' },
@@ -809,12 +810,12 @@ describe('a user preset declared from the shipped cordis rows', () => {
           expect(queriedText).toContain(`"name": "${toolName}"`)
         }
 
-        // The `Config` provider reads the booted profile tree: the shipped `tools` row declares a Config,
+        // The `Config` provider reads the booted profile tree: the executor selector declares a Config,
         // and the bootstrap include row is a carrier. The name filter keeps each page small.
         type ConfigRow = { id: string; patchId: string; name: string; status: string }
         type ConfigPage = { data: { entries: ConfigRow[]; total: number; nextOffset: number | null } }
         const listConfigs = async (input: Record<string, string | number>, callId: string): Promise<ConfigPage['data']> => {
-          const page = await copyCtx.tools.execute({
+          const page = await executeToolFixture(copyCtx, {
             callId: ToolCallId(callId),
             name: 'cordis_inspect_query',
             arguments: { platform: 'host', provider: 'Config', method: 'listConfigs', input },
@@ -824,16 +825,16 @@ describe('a user preset declared from the shipped cordis rows', () => {
           expect(page.isError, resultText(page)).toBe(false)
           return (JSON.parse(resultText(page)) as ConfigPage).data
         }
-        const toolsRows = await listConfigs({ name: '@deepseek-ai/dsh-tools' }, 'copied-preset-inspect-configs')
+        const toolsRows = await listConfigs({ name: '@deepseek-ai/dsh-agent-tool-presentation' }, 'copied-preset-inspect-configs')
         const toolsRow = toolsRows.entries[0]
-        expect(toolsRow).toMatchObject({ patchId: 'tools', status: 'schema' })
+        expect(toolsRow).toMatchObject({ patchId: 'tool-executor-native', status: 'schema' })
         expect(toolsRows).toMatchObject({ total: 1, nextOffset: null })
         const includes = await listConfigs({ name: 'cordis:include' }, 'copied-preset-inspect-includes')
         expect(includes.entries.find(entry => entry.patchId === 'include')).toMatchObject({ status: 'tree' })
         const firstPage = await listConfigs({ limit: 5 }, 'copied-preset-inspect-page')
         expect(firstPage.entries).toHaveLength(5)
         expect(firstPage.nextOffset).toBe(5)
-        const projected = await copyCtx.tools.execute({
+        const projected = await executeToolFixture(copyCtx, {
           callId: ToolCallId('copied-preset-inspect-config'),
           name: 'cordis_inspect_query',
           arguments: { platform: 'host', provider: 'Config', method: 'listConfigs', input: { entry: toolsRow!.id } },
@@ -943,7 +944,7 @@ describe('a delegated child', () => {
       ] as const
       for (const [name, args] of calls) {
         expect(toolNames(ctx, child.agent)).toContain(name)
-        const result = await ctx.tools.execute({
+        const result = await executeToolFixture(ctx, {
           callId: ToolCallId(`child-${name}`), signal: new AbortController().signal,
           name, arguments: args, agent: child.agent,
         })

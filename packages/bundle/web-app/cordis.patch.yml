@@ -29,13 +29,17 @@
     path: ':memory:'
     openAt: never
 
-- id: tools
-  config:
-    # TEMPORARY workaround: DSH_TOOLS_MODE (native|ptc) opts a whole dsh
-    # process into PTC mode while per-session tool-presentation selection is being
-    # designed; unset keeps the schema default (native). Remove the env seam
-    # once the web UI owns the choice per session.
-    mode: !!js process.env.DSH_TOOLS_MODE
+- id: tool-executor-native
+  name: '@deepseek-ai/dsh-tool-executor-native'
+  disabled: !!js |
+    (() => {
+      const mode = process.env.DSH_TOOLS_MODE ?? 'native'
+      if (mode !== 'native' && mode !== 'ptc') throw new Error('DSH_TOOLS_MODE must be native or ptc')
+      return mode === 'ptc'
+    })()
+
+- id: tool-executor-ptc
+  disabled: !!js process.env.DSH_TOOLS_MODE !== 'ptc'
 
 # ── web-only host rows, the transport layer, and the browser roster ─────────
 

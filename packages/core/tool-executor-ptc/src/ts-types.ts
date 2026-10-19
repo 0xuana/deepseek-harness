@@ -7,12 +7,12 @@
  */
 
 import type { ToolSchema } from '@deepseek-ai/dsh-llm'
-import { assertSupportedJsonSchema } from './json-schema.ts'
-import type { JsonSchemaNode, JsonSchemaScalar } from './json-schema.ts'
+import { assertSupportedJsonSchema } from '@deepseek-ai/dsh-tools'
+import type { JsonSchemaNode, JsonSchemaScalar } from '@deepseek-ai/dsh-tools'
 /** Internal PTC mode projection: the model-facing schema plus the canonical output schema. */
-export interface ToolSdkSchema extends ToolSchema {
+export interface ToolSdkSchema extends Readonly<ToolSchema> {
   /** Validated canonical value returned by the tool binding. */
-  output: JsonSchemaNode
+  readonly output: JsonSchemaNode
 }
 
 /** Property names that are valid bare TS identifiers; anything else is quoted. */
@@ -309,7 +309,7 @@ function renderBashExample(schemas: ToolSdkSchema[], programFormat: 'function-bo
  * @param programFormat - Runtime syntax; function bodies support returning a result, REPLs print it.
  * @returns the complete section text.
  */
-export function renderToolsSdk(schemas: ToolSdkSchema[], programFormat: 'function-body' | 'repl' = 'function-body'): string {
+export function renderToolsSdk(schemas: readonly ToolSdkSchema[], programFormat: 'function-body' | 'repl' = 'function-body'): string {
   const sorted = [...schemas].sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
   const argsMembers: string[] = []
   const outputMembers: string[] = []

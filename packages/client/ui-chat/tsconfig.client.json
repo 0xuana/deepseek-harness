@@ -43,9 +43,6 @@
       "path": "../../core/session"
     },
     {
-      "path": "../../core/tools"
-    },
-    {
       "path": "../../interaction/commands"
     },
     {
@@ -116,6 +113,9 @@
     },
     {
       "path": "../product-analytics/tsconfig.client.json"
+    },
+    {
+      "path": "../../core/tool-executor-ptc"
     }
   ],
   "exclude": [

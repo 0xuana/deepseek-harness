@@ -1,3 +1,4 @@
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 /** Provider unload owns screenshot admission as well as the native call. */
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -63,7 +64,7 @@ it('aborts model admission on unload, restores caller cancellation, and closes t
     return next()
   })
   const controller = new AbortController()
-  const result = ctx.tools.execute({
+  const result = executeToolFixture(ctx, {
     agent, signal: controller.signal, callId: ToolCallId('native-admission'),
     name: 'cua_driver_native__get_window_state', arguments: { pid: 9, window_id: 7 },
   })

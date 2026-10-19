@@ -1,7 +1,7 @@
 /**
- * Durable Tool event vocabulary shared with type-only consumers.
+ * Durable PTC dispatch events shared with type-only readers.
  *
- * @module @deepseek-ai/dsh-tools/types
+ * @module @deepseek-ai/dsh-tool-executor-ptc/types
  */
 
 import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'

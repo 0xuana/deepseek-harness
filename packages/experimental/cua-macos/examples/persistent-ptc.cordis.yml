@@ -1,6 +1,5 @@
 - id: ptc-runtime
   config:
     executionMode: persistent-in-memory
-- id: tools
-  config:
-    mode: ptc
+- id: tool-executor-native
+  name: '@deepseek-ai/dsh-tool-executor-ptc'

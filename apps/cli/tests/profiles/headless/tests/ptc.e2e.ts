@@ -1,3 +1,4 @@
+import { executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -96,7 +97,7 @@ function runCode(
   signal: AbortSignal = testToolSignal,
   agent?: Agent,
 ): Promise<ToolExecutionResult> {
-  return harness.tools.execute({
+  return executeModelToolFixture(harness, {
     callId: ToolCallId(`keyless-code-${++keylessCall}`),
     name: RUN_CODE_NAME,
     arguments: { code, description: 'Run the e2e program' },

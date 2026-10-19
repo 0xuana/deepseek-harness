@@ -31,13 +31,13 @@ import type { EpochHeader, RequestContext, Session, SessionId, SessionSeq, TurnE
 import { canonicalHeader, headerEquals, ToolCallRecovery } from '@deepseek-ai/dsh-session'
 import { joinContextSections, renderContextSections, renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import type { PromptAssembly } from '@deepseek-ai/dsh-system-prompt'
+import { ToolBatchExecutionError } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import type { Context } from '@deepseek-ai/cordis'
 import { ReactLoopInbox } from './inbox.ts'
 import { RuntimeContextProjection } from './runtime-context.ts'
 import { AssistantStreamAttempt } from './assistant-stream.ts'
 import { SystemPromptProjection } from './runtime-context.ts'
-import { executeToolCalls } from './tool-calls.ts'
 
 type Phase =
   | { kind: 'idle'; lastTurn: number }
@@ -548,11 +548,23 @@ export class ReactLoopAgent implements Agent {
 
         const toolCalls = message.content.filter(block => block.type === 'tool-call')
         if (toolCalls.length === 0) return { kind: 'completed' }
-        const { concluded } = await executeToolCalls(
-          this.loopCtx, turn, step, toolCalls, signal,
-          context => this.inbox.splice('next-step', this.inbox.nextStep.length, 0, [context]),
-        )
-        return concluded ? { kind: 'completed' } : null
+        const maxParallelToolCalls = this.loopCtx.agentLoop.config.maxParallelToolCalls.get()
+        try {
+          const result = await this.loopCtx.tools.execute({
+            calls: toolCalls, signal, agent: this, log: { turn, step },
+            maxParallelToolCalls,
+          })
+          for (const context of result.additionalContexts) {
+            this.inbox.splice('next-step', this.inbox.nextStep.length, 0, [context])
+          }
+          return result.concluded ? { kind: 'completed' } : null
+        } catch (error: unknown) {
+          if (!(error instanceof ToolBatchExecutionError)) throw error
+          for (const context of error.partial.additionalContexts) {
+            this.inbox.splice('next-step', this.inbox.nextStep.length, 0, [context])
+          }
+          throw error.cause
+        }
       } catch (error: unknown) {
         if (!live.ended) live.abandon()
         throw error

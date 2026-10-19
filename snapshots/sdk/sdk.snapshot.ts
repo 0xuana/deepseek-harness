@@ -1086,7 +1086,8 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         }
       }
       if (assertions.expectedFinalResponse !== undefined) {
-        expect(results.at(-1)?.finalResponse, `${scenario.name}: final response`).toBe(assertions.expectedFinalResponse)
+        const failures = results.flatMap(result => result.events).filter(event => event.type === 'turn/end' || event.type === 'tool/result')
+        expect(results.at(-1)?.finalResponse, `${scenario.name}: final response; outcomes: ${JSON.stringify(failures)}`).toBe(assertions.expectedFinalResponse)
         const parent = ordered[0]
         if (parent === undefined) throw new Error(`${scenario.name}: no primary session log`)
         const turnEnds = records(parent.content).filter(record => record.type === 'turn/end')

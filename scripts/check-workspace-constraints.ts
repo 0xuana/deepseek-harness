@@ -178,6 +178,8 @@ export function readWorkspaceManifests(repositoryRoot: string): WorkspaceManifes
 }
 
 const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
+  // Tools entry points share error classes and invocation stages through runtime chunks.
+  '@deepseek-ai/dsh-tools': ['lib/pipeline.js', 'lib/shared-*.js'],
   // CUA publishes its client API and attributed native source for local macOS builds.
   '@deepseek-ai/dsh-cua': ['lib/api.js', 'lib/bridge.js', 'lib/native-client.js', 'lib/protocol.js'],
   '@deepseek-ai/dsh-experimental-cua-macos': ['native/bin', 'native/Package.swift', 'native/Sources', 'native/tests/swift', 'native/tests/test_swift.py', 'native/LICENSE.cua-driver', 'native/upstream.json', 'native/README.md', 'native/README.zh.md', 'native/protocol.schema.json'],
@@ -282,6 +284,7 @@ export function expectedDshPackageFiles(manifest: PackageManifest): readonly str
     ...[...localeFiles].sort(),
     'lib/index.js',
     ...manifest.bin ? ['lib/bin.js'] : [],
+    ...exportDefault(manifest, './testing') === './lib/testing.js' ? ['lib/testing.js'] : [],
     // Worker-thread packages ship a CJS worker entry; the browser worker
     // bundle is an ES module a page loads with `new Worker(type: 'module')`.
     // Keyed on the artifact path, like ./client below.
@@ -534,6 +537,15 @@ export function checkWorkspaceManifest({ dir, manifest }: WorkspaceManifest): st
     }
     if (rootEntry?.default !== './lib/index.js') {
       errors.push(`${label}: package.json exports["."].default must be "./lib/index.js"`)
+    }
+    if (manifest.exports?.['./testing'] !== undefined
+      && !hasExportPair(manifest, './testing', './lib/types/testing.d.ts', './lib/testing.js')
+      && !hasExportPair(manifest, './testing', './lib/types/testing.d.ts', './lib/types/testing.js')) {
+      errors.push(`${label}: exports["./testing"] must expose lib/types/testing.d.ts with lib/testing.js or lib/types/testing.js`)
+    }
+    if (manifest.name === '@deepseek-ai/dsh-tools'
+      && !hasExportPair(manifest, './pipeline', './lib/types/pipeline.d.ts', './lib/pipeline.js')) {
+      errors.push(`${label}: exports["./pipeline"] must expose lib/types/pipeline.d.ts and lib/pipeline.js`)
     }
     const expectedFiles = expectedDshPackageFiles(manifest)
     if (!sameStringList(manifest.files, expectedFiles)) {
