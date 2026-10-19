@@ -96,7 +96,8 @@ describe('web e2e: queued image submission', () => {
     await input.press('Enter')
     await expect.poll(() => existsSync(readyFile), { timeout: 15_000 }).toBe(true)
 
-    // A just-submitted composer is read-only for the prompt round-trip.
+    // The composer keeps the sent prompt, still editable, until the Host accepts it.
+    await expect.poll(() => input.textContent(), { timeout: 10_000 }).toBe('')
     await page.locator('[data-composer-input][contenteditable="true"]').first().waitFor({ timeout: 10_000 })
     await pasteImage(page, await readFile(PNG))
     await page.getByRole('img', { name: 'queued.png' }).waitFor({ timeout: 10_000 })
