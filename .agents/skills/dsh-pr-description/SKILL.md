@@ -18,7 +18,7 @@ This skill defines what a deepseek-harness PR description contains, how to write
 
 The description uses four second-level headings, in this order: `## Motivation`, `## Changes`, `## Testing`, and `## AI Usage`.
 
-Write all headings and labels, such as **Interface changes**, **Behavior changes**, **Test design**, and **Test entries**, in English. Write the rest of the description in Chinese unless a human asked for another language for this PR.
+Write fixed section headings and labels, such as **Interface changes**, **Behavior changes**, **Test design**, and **Test entries**, in English. Write table headers and the rest of the description in the PR description's language, Chinese unless a human asked for another language.
 
 ### Motivation
 
@@ -131,7 +131,7 @@ Stages appear in a fixed order; each stage pairs an English name with a Chinese 
 
 ### Badge URLs
 
-The AI-DECLARATION block pins specification version 0.1.2. Use the badge for the highest level among the stage rows; a stage with n/a 暂不适用 does not affect the highest level.
+The AI-DECLARATION block pins specification version 0.1.2. Use the badge URL for the level selected in [Section format](#section-format); the badges follow [AI-DECLARATION](https://ai-declaration.md).
 
 | Level | Badge URL |
 |---|---|
@@ -141,7 +141,7 @@ The AI-DECLARATION block pins specification version 0.1.2. Use the badge for the
 | copilot 人工把关 | `https://img.shields.io/badge/䷼%20AI--DECLARATION-copilot-fee2e2?labelColor=fee2e2` |
 | auto 模型自主 | `https://img.shields.io/badge/䷼%20AI--DECLARATION-auto-ede9fe?labelColor=ede9fe` |
 
-When the upstream specification changes, update this version and the version link in the declaration block together.
+When the upstream specification changes, update every version reference in this skill and the PR template.
 
 ### Section format
 
@@ -161,10 +161,9 @@ The section starts with the AI-DECLARATION block, followed by one table row per 
 | <stage English name> <stage Chinese name> | <level English name> <level Chinese name> | <AI involvement> | <description> |
 ```
 
-- The badge level is the highest level among the stage rows; ignore rows with n/a 暂不适用.
+- The badge level is the level with the most AI involvement among the stage rows; ignore rows with n/a 暂不适用. This follows the [specification's rule](https://ai-declaration.md) that the global level is the highest declared level.
 - Keep the `ai-declaration` markers so an existing declaration can be replaced in place without duplicating it.
 - Write the description in the PR description's language, in one or two sentences of at most 80 Chinese characters or 40 English words. State who made which decisions: name one or two representative decisions, and give only a count for the rest.
-- Write `—` for the AI involvement of a stage with n/a 暂不适用.
 - State the description as settled fact, without hedges such as "not seen in the session" or "pending author confirmation".
 - Refer to people as the author or a reviewer, never by username. Leave out judgments, session times, session ids, direct quotes, and the running or handling of checks and CI (local skips, hooks, reruns, unrelated failures).
 
@@ -201,5 +200,5 @@ Filled in from the session and review records of #6013:
 ## Creating and updating the description
 
 1. Write the description to a file that git ignores, such as `.artifacts/pr/body.md`. Create the PR with `gh pr create --body-file <file>`, or update it with `gh pr edit <number> --body-file <file>`; when the description embeds a GIF, follow [record-browser-gif](../record-browser-gif/SKILL.md) and use `--attach`.
-2. Before an update, save the current description with `gh pr view <number> --json body --jq .body`, and change only the sections that need it: keep content and media the author wrote, replace only the contents of an existing `ai-declaration` block, and remove statements that no longer match the code.
-3. After writing, read the description back and confirm that all four sections are present and that AI Usage matches the current code and review state.
+2. Before an update, save the current description with `gh pr view <number> --json body --jq .body`, and change only the sections that need it: keep content and media the author wrote, replace only the contents of an existing `ai-declaration` block, and remove statements that no longer match the code. When the description still has the old `## Human and Agent Roles` heading, replace that heading and its level line with `## AI Usage` and the block; keep only one AI Usage section.
+3. After writing, read the description back and confirm that all four sections are present, that AI Usage matches the current code and review state, and that no old `## Human and Agent Roles` section remains.
