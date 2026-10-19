@@ -75,7 +75,6 @@
     "apps/web/tests/input-plugin-extensions.e2e.ts",
     "apps/web/tests/plugin-manager.e2e.ts",
     "apps/web/tests/cua-optin.e2e.ts",
-    "apps/web/tests/bundle-platform.e2e.ts",
     "apps/web/tests/cua-permissions.e2e.ts",
     "apps/web/tests/schedule-header.e2e.ts",
     "apps/web/tests/worktree-opt-in.e2e.ts",
