@@ -2484,7 +2484,8 @@ export interface PlanModeConfig {
 ## `@deepseek-ai/dsh-plugin-manager`
 
 - `inject`: `loader` · `profileContext`
-- `source`: [`packages/boot/plugin-manager/src/index.ts:45`](../packages/boot/plugin-manager/src/index.ts)
+- `refs`: [`NpmFileSource`](subsystems/boot.zh.md)
+- `source`: [`packages/boot/plugin-manager/src/index.ts:50`](../packages/boot/plugin-manager/src/index.ts)
 
 ```ts config-catalog
 /** The pnpm executable, registries, and limits for diagnostics, lookups and connection checks. */
@@ -2513,6 +2514,14 @@ export interface Config {
   versionListLimit?: number
   /** How many single-version registry lookups a version listing runs at once. */
   versionLookupConcurrency?: number
+  /** Largest bundle detail document, and largest locale file read for one, in bytes. */
+  detailMaxBytes?: number
+  /** Largest image served beside a bundle detail document, in bytes. */
+  detailImageMaxBytes?: number
+  /** Deadline of one npm file CDN request for an offered bundle's detail document. */
+  detailFetchTimeoutMs?: number
+  /** npm file CDNs that offered bundles are read from, in order; a read's `npmFileSources` moves the CDNs it names first. */
+  detailNpmFileSources?: NpmFileSource[]
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-plugin-manager -->
@@ -2523,8 +2532,8 @@ export interface Config {
 ## `@deepseek-ai/dsh-plugin-market`
 
 - `inject`: `pluginManager`
-- `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/boot/plugin-market/src/index.ts:32`](../packages/boot/plugin-market/src/index.ts)
+- `refs`: [`NpmFileSource`](subsystems/boot.zh.md) · `Volatile` (`@deepseek-ai/cordis`)
+- `source`: [`packages/boot/plugin-market/src/index.ts:43`](../packages/boot/plugin-market/src/index.ts)
 
 ```ts config-catalog
 /** Index sources and fetch limits. */
@@ -2535,8 +2544,24 @@ export interface Config {
   fetchTimeoutMs: number
   /** Largest accepted index body in bytes. */
   maxBytes: number
-  /** Lifetime of a successfully read index document. */
+  /** Lifetime of a successfully read index document, a detail read result, and a repository's default-branch commit. */
   cacheTtlMs: number
+  /** Largest detail document in bytes. */
+  detailMaxBytes: number
+  /** Largest image beside a detail document in bytes. */
+  detailImageMaxBytes: number
+  /** Largest amount in bytes one Git command adds to a partial clone; a repository whose fetch adds more is not read. */
+  detailRepositoryMaxBytes: number
+  /** Largest total size of the partial clones; least recently used ones are deleted beyond it. */
+  detailCacheMaxBytes: number
+  /** Directory of the partial clones, relative to the profile directory; absent means `.plugin-market/repositories`. */
+  detailCacheDir?: string
+  /** Deadline of one Git command of the clone fallback. */
+  detailGitTimeoutMs: number
+  /** npm file CDNs read in order; a read's `npmFileSources` moves the CDNs it names first. */
+  detailNpmFileSources: NpmFileSource[]
+  /** Hosts serving the GitLab repository files API. */
+  detailGitlabHosts: string[]
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-plugin-market -->
@@ -4852,6 +4877,7 @@ export interface Config {
 | `@deepseek-ai/dsh-native-command` | — | [`packages/util/native-command/src/index.ts`](../packages/util/native-command/src/index.ts) |
 | `@deepseek-ai/dsh-output-retention` | — | [`packages/util/output-retention/src/index.ts`](../packages/util/output-retention/src/index.ts) |
 | `@deepseek-ai/dsh-package-manifest` | — | [`packages/util/package-manifest/src/index.ts`](../packages/util/package-manifest/src/index.ts) |
+| `@deepseek-ai/dsh-plugin-detail` | — | [`packages/util/plugin-detail/src/index.ts`](../packages/util/plugin-detail/src/index.ts) |
 | `@deepseek-ai/dsh-plugin-market-index` | — | [`packages/util/plugin-market-index/src/index.ts`](../packages/util/plugin-market-index/src/index.ts) |
 | `@deepseek-ai/dsh-remote-mock` | — | [`packages/test-support/remote-mock/src/index.ts`](../packages/test-support/remote-mock/src/index.ts) |
 | `@deepseek-ai/dsh-sandbox-windows-acl` | — | [`packages/sandbox/sandbox-windows-acl/src/index.ts`](../packages/sandbox/sandbox-windows-acl/src/index.ts) |

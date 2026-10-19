@@ -84,6 +84,8 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => {
     // A page never rendered holds no snapshot to refresh.
     const refresh = (): void => {
+      // A profile change can replace a bundle's files, and a restarted Host is read afresh.
+      controller.details.reset()
       if (controller.getSnapshot().status !== 'idle') void controller.load()
     }
     const disposers = [
