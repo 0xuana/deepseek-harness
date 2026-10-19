@@ -463,6 +463,4 @@ export class HarnessSdkJsonRpcServer {
   private hasAdapterFor(provider: string): boolean {
     return this.ctx.get('llm')?.listProviders().some(entry => entry.id === provider) ?? false
   }
-
-
 }
