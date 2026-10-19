@@ -166,12 +166,24 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   })
   try {
     const toggle = page.locator('[data-plugin-panel]').getByRole('switch', { name: 'Enable Computer Use', exact: true })
+    const policy = Reflect.get(scaffold.ctx.cuaAccess, 'policy')
     for (let cycle = 0; cycle < 3; cycle++) {
       await toggle.click()
       await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('false')
       await expect.poll(() => toggle.isEnabled()).toBe(true)
       await toggle.click()
-      await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
+      try {
+        await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
+      } catch (error) {
+        console.error('CUA enable diagnostics', {
+          cycle, active: policy.active.size, clients: policy.clients.size, pending: policy.options.store.pending.size,
+          entries: [...scaffold.ctx.loader.entries()].filter(entry => /cua|hmr/.test(entry.options.name)).map(entry => ({
+            id: entry.id, disabled: entry.disabled, state: entry.fiber?.state, pending: entry.fiber?.inertia !== undefined,
+          })),
+          page: await panel.textContent(),
+        })
+        throw error
+      }
       const setup = page.getByRole('dialog', { name: 'Set up Computer Use before use', exact: true })
       await setup.getByRole('button', { name: 'Later', exact: true }).click()
       await expect.poll(() => panel.getAttribute('aria-busy')).toBe('false')
