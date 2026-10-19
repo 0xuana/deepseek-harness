@@ -42,6 +42,7 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 
 | 字段 | 默认值 | 含义 |
 | --- | --- | --- |
+| `agentPreset` | `ptc` | 仅为绑定该 preset 的 Agent 注册工具和指引；`false` 表示全局注册。 |
 | `allowedApps` | `[]` | 当前配置档的动态应用授权，绑定可执行文件路径和已验证的代码签名要求。 |
 | `helperPath` | 包内可执行文件 | 可选的原生可执行文件绝对路径覆盖。 |
 | `buildTimeoutMs` | `300000` | 原生组件准备的最长时间。 |

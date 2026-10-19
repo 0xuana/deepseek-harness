@@ -23,7 +23,7 @@ const provider = {
   },
 }
 
-async function setup() {
+async function setup(presetIds = ['standard', 'ptc']) {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
   ctx.baseUrl = import.meta.url
@@ -33,7 +33,7 @@ async function setup() {
   await ctx.plugin(ComputerUseRegistry)
   await ctx.plugin(Subprocess, [])
   await ctx.plugin(AgentPresets, { default: 'standard' })
-  for (const id of ['standard', 'ptc']) {
+  for (const id of presetIds) {
     await ctx.plugin({ inject: ['agentPresets'], async* apply(owner: Context) {
       yield await owner.agentPresets.register({ id, plugins: [] })
     } })
@@ -92,4 +92,15 @@ it('ignores unloaded Session selections and reports a failed live scope update',
   expect(ctx.tools.get('cua', handle.agent)).toBeDefined()
   await ctx.agentPresets.select(handle.agent, 'standard')
   await expect.poll(() => ctx.tools.get('cua', handle.agent)).toBeUndefined()
+})
+
+it('accepts a matching preset registered after the CUA provider', async () => {
+  const { ctx, create } = await setup([])
+  await ctx.plugin(provider, {})
+  expect(ctx.tools.get('cua')).toBeUndefined()
+  await ctx.plugin({ inject: ['agentPresets'], async* apply(owner: Context) {
+    yield await owner.agentPresets.register({ id: 'ptc', plugins: [] })
+  } })
+  const handle = await create('late-preset', 'ptc')
+  expect(ctx.tools.get('cua', handle.agent)).toBeDefined()
 })

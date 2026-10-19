@@ -42,6 +42,7 @@ The dump command checks profile composition without a model request. For a real 
 
 | Field | Default | Meaning |
 | --- | --- | --- |
+| `agentPreset` | `ptc` | Register tools and guidance only for Agents bound to this preset; `false` registers globally. |
 | `allowedApps` | `[]` | Live profile-local application consent, keyed by executable path and verified signing requirement. |
 | `helperPath` | package-owned executable | Optional absolute native executable override. |
 | `buildTimeoutMs` | `300000` | Maximum native preparation time. |
