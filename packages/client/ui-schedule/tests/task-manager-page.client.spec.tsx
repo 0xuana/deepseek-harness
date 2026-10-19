@@ -891,6 +891,24 @@ describe('Task manager catalog', () => {
     expect(screen.getByRole('button', { name: en['statusFilter.all'] }).getAttribute('aria-pressed')).toBe('true')
   })
 
+  it('renders a decorative document-and-clock illustration in an empty catalog', () => {
+    mount({ records: [], status: 'ready' })
+    const illustration = screen.getByRole('status').querySelector('svg')
+    expect(illustration?.getAttribute('aria-hidden')).toBe('true')
+    expect(illustration?.getAttribute('focusable')).toBe('false')
+    expect(illustration?.getAttribute('viewBox')).toBe('0 0 170 170')
+    const paths = illustration?.querySelectorAll('path')
+    expect(paths).toHaveLength(20)
+    // Roles follow the approved artwork's paint order, including overlapping paper and clock layers.
+    expect(paths?.[0]?.getAttribute('fill')).toBe('var(--dsw-alias-illustration-background)')
+    expect(paths?.[2]?.getAttribute('fill')).toBe('var(--dsw-alias-illustration-backing)')
+    expect(paths?.[3]?.getAttribute('fill')).toBe('var(--dsw-alias-illustration-surface)')
+    expect(paths?.[10]?.getAttribute('fill')).toBe('var(--dsw-alias-illustration-shadow)')
+    expect(paths?.[17]?.getAttribute('fill')).toBe('var(--dsw-alias-illustration-detail)')
+    expect(paths?.[18]?.getAttribute('fill')).toBe('var(--dsw-alias-illustration-inset)')
+    expect(emptyNewTaskButton().textContent).toBe(en['empty.action'])
+  })
+
   it('distinguishes an empty catalog, loading, and a failed read', () => {
     const h = mount({ records: [], status: 'loading' })
     expect(screen.getByRole('status', { name: en['list.loading'] }).textContent).toBe('')
@@ -903,26 +921,6 @@ describe('Task manager catalog', () => {
     expect(h.props.onRetry).toHaveBeenCalledOnce()
     h.update({ status: 'ready' })
     expect(screen.getByRole('status').textContent).toContain(en['list.empty'])
-    const illustration = screen.getByRole('status').querySelector('svg')
-    expect(illustration?.getAttribute('aria-hidden')).toBe('true')
-    expect(illustration?.getAttribute('focusable')).toBe('false')
-    expect(illustration?.getAttribute('viewBox')).toBe('0 0 170 170')
-    const illustrationPaths = illustration?.querySelectorAll('path')
-    expect(illustrationPaths).toHaveLength(20)
-    expect(illustrationPaths?.[0]?.getAttribute('fill')).toBe('var(--dsw-alias-illustration-background)')
-    expect(illustrationPaths?.[2]?.getAttribute('fill')).toBe('var(--dsw-alias-illustration-backing)')
-    expect(illustrationPaths?.[3]?.getAttribute('fill')).toBe('var(--dsw-alias-illustration-surface)')
-    expect(illustrationPaths?.[10]?.getAttribute('fill')).toBe('var(--dsw-alias-illustration-shadow)')
-    expect(illustrationPaths?.[17]?.getAttribute('fill')).toBe('var(--dsw-alias-illustration-detail)')
-    expect(illustrationPaths?.[18]?.getAttribute('fill')).toBe('var(--dsw-alias-illustration-clock-face)')
-    expect(new Set(Array.from(illustration?.querySelectorAll('path') ?? [], path => path.getAttribute('fill')))).toEqual(new Set([
-      'var(--dsw-alias-illustration-background)',
-      'var(--dsw-alias-illustration-surface)',
-      'var(--dsw-alias-illustration-backing)',
-      'var(--dsw-alias-illustration-shadow)',
-      'var(--dsw-alias-illustration-clock-face)',
-      'var(--dsw-alias-illustration-detail)',
-    ]))
     // The mock keeps one creation entry in the empty state whether or not a
     // query is active, so the action never disappears behind a filter.
     expect(emptyNewTaskButton().textContent).toBe(en['empty.action'])

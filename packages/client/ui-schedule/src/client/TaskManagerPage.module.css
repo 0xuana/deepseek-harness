@@ -389,7 +389,6 @@
 }
 
 .emptyIllustration {
-  display: block;
   flex: none;
   width: 110px;
   max-width: 100%;

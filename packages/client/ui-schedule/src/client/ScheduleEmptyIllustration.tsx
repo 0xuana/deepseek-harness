@@ -1,11 +1,15 @@
 /** Decorative document-and-clock artwork with theme-owned colors. */
 
+interface ScheduleEmptyIllustrationProps {
+  readonly className?: string | undefined
+}
+
 /**
  * Render the empty-state illustration without adding an accessible announcement.
- * @param props - page-owned illustration sizing and spacing.
- * @returns the same vector paths in either theme.
+ * @param props - optional CSS class applied to the root SVG.
+ * @returns the decorative inline SVG element.
  */
-export function ScheduleEmptyIllustration({ className }: { className: string | undefined }) {
+export function ScheduleEmptyIllustration({ className }: ScheduleEmptyIllustrationProps) {
   return (
     <svg className={className} width="170" height="170" viewBox="0 0 170 170" fill="none" aria-hidden="true" focusable="false">
       <path d="M163.819 97.9382C163.819 126.572 144.48 135.329 115.847 135.329C87.2129 135.329 60.1276 126.572 60.1276 97.9382C60.1276 69.3047 101.003 46.0927 129.637 46.0927C158.27 46.0927 163.819 69.3047 163.819 97.9382Z" fill="var(--dsw-alias-illustration-background)" />
@@ -26,7 +30,7 @@ export function ScheduleEmptyIllustration({ className }: { className: string | u
       <path d="M124.522 3.63379C124.522 2.54381 124.634 1.45326 124.86 0.363281C124.886 0.242199 124.913 0.121083 124.941 2.19411e-08L125.442 0C125.47 0.121082 125.497 0.242199 125.523 0.363281C125.749 1.45326 125.861 2.54381 125.861 3.63379C125.861 4.72362 125.749 5.81349 125.523 6.90332C125.497 7.02442 125.47 7.1455 125.442 7.2666H124.941C124.913 7.1455 124.886 7.02442 124.86 6.90332C124.634 5.81349 124.522 4.72362 124.522 3.63379Z" fill="var(--dsw-alias-illustration-detail)" />
       <path d="M144.509 33.3101C144.509 31.7544 144.622 30.1987 144.848 28.6431C144.873 28.4702 144.9 28.2974 144.928 28.1245H145.43C145.458 28.2974 145.485 28.4702 145.51 28.6431C145.736 30.1987 145.849 31.7544 145.849 33.3101C145.849 34.8659 145.736 36.4222 145.51 37.978C145.485 38.1509 145.458 38.3237 145.43 38.4966H144.928C144.9 38.3237 144.873 38.1509 144.848 37.978C144.622 36.4222 144.509 34.8659 144.509 33.3101Z" fill="var(--dsw-alias-illustration-detail)" />
       <path d="M149.05 98.8527C149.05 112.66 137.857 123.853 124.05 123.853C110.242 123.853 99.0496 112.66 99.0496 98.8527C99.0496 85.0455 110.242 73.8527 124.05 73.8527C137.857 73.8527 149.05 85.0455 149.05 98.8527Z" fill="var(--dsw-alias-illustration-detail)" />
-      <path d="M144.192 98.8529C144.192 109.978 135.174 118.997 124.049 118.997C112.923 118.997 103.905 109.978 103.905 98.8529C103.905 87.7278 112.923 78.709 124.049 78.709C135.174 78.709 144.192 87.7278 144.192 98.8529Z" fill="var(--dsw-alias-illustration-clock-face)" />
+      <path d="M144.192 98.8529C144.192 109.978 135.174 118.997 124.049 118.997C112.923 118.997 103.905 109.978 103.905 98.8529C103.905 87.7278 112.923 78.709 124.049 78.709C135.174 78.709 144.192 87.7278 144.192 98.8529Z" fill="var(--dsw-alias-illustration-inset)" />
       <path d="M125.124 86.7281L125.123 99.2824L134.923 104.132L132.824 108.375L122.76 103.395C121.309 102.677 120.39 101.197 120.39 99.5782L120.389 86.7275L125.124 86.7281Z" fill="var(--dsw-alias-illustration-detail)" />
     </svg>
   )
