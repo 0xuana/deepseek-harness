@@ -1,5 +1,5 @@
 ---
-description: "Enable experimental Computer Use and persistent PTC from the plugin page."
+description: "Enable experimental Computer Use and configure PTC from the plugin page."
 kind: "package-bundle"
 ---
 
@@ -33,9 +33,9 @@ pnpm dsh web
 
 For the source Desktop launcher and its separate development profile, follow [Desktop development](../../../apps/desktop/README.md). Enable Computer Use in each profile that needs it.
 
-The switch saves bundle selection in the profile’s `package.json`. Enabling configures persistent PTC in the user’s `cordis.patch.yml`; matching values are left unchanged. Computer Use is designed for PTC and installed only in PTC sessions. When system permissions need attention, activation guidance opens the plugin details. The detail page offers **Set to PTC** for the new-session default; existing sessions keep their preset. HMR maintains these settings and the provider’s session tool registrations. Native components prepare on activation and source startup; subsequent `pnpm run build` checks the selected Web profile’s incremental native build. First preparation requires local compiler tools, and failure preserves diagnostics without publishing a new executable.
+The switch saves bundle selection in the profile’s `package.json`. Enabling preserves PTC execution mode. The detail page’s **Use persistent mode** action saves `ptc-runtime.executionMode: persistent-in-memory` in the user’s `cordis.patch.yml`. Already-persistent runtimes show a disabled button. Computer Use is designed for PTC and installed only in PTC sessions. When system permissions need attention, activation guidance opens the plugin details. The detail page offers **Set to PTC** for the new-session default; existing sessions keep their preset. HMR maintains these settings and the provider’s session tool registrations. Native components prepare on activation and source startup; subsequent `pnpm run build` checks the selected Web profile’s incremental native build. First preparation requires local compiler tools, and failure preserves diagnostics without publishing a new executable.
 
-Disabling unloads the provider and withdraws CUA tools from its Agent scopes. It retains the selected default, runtime configuration and retained PTC variables. Enabling again does not recreate a runtime already configured as persistent. A first change from per-call execution replaces the shared runtime through HMR and can interrupt an active PTC call.
+Disabling unloads the provider and withdraws CUA tools from its Agent scopes. It retains the selected default, runtime configuration and retained PTC variables. Enabling again does not recreate the runtime. Explicitly changing from per-call to persistent execution replaces the shared runtime through HMR and can interrupt an active PTC call.
 
 Computer Use is available only on a macOS DSH Host. Other Hosts refuse enablement before saving settings. An already selected bundle is skipped at startup with a diagnostic and remains available for deselection; saved user settings remain. A browser on another operating system can connect to a supported Mac Host.
 
@@ -51,7 +51,7 @@ Explicit activation runs a read-only permission check, which may start a helper 
 <details>
 <summary>Maintainer details</summary>
 
-The bundle patch mounts the shared native provider and permission UI with `agentPreset: ptc`. The provider registers tools through existing Agent scopes, so other presets receive no CUA tool or guidance. Preset documents remain unchanged. `configureOnEnable` persists `ui-settings.enabled: true` and `ptc-runtime.executionMode: persistent-in-memory` through [Plugin Manager](../../boot/plugin-manager/README.md). The detail-page action uses the existing settings form to save `agent-preset-registry.selectedDefault: ptc` only when clicked, preserving the deployment `default`. The provider defaults to PTC scope even when a saved grants override omits that field. [CUA](../cua/README.md) owns registration and disposal.
+The bundle patch mounts the shared native provider and permission UI with `agentPreset: ptc`. The provider registers tools through existing Agent scopes, so other presets receive no CUA tool or guidance. Preset documents remain unchanged. `configureOnEnable` persists `ui-settings.enabled: true` through [Plugin Manager](../../boot/plugin-manager/README.md). The detail-page action uses the existing settings form to save `agent-preset-registry.selectedDefault: ptc` only when clicked, preserving the deployment `default`. The provider defaults to PTC scope even when a saved grants override omits that field. [CUA](../cua/README.md) owns registration and disposal.
 
 </details>
 
@@ -75,7 +75,7 @@ Existing and new PTC sessions receive `cua` through the generated SDK and `run_c
 
 #### Token effect
 
-CUA activation adds its guidance. Disabling removes that guidance and retains persistent PTC instructions.
+CUA activation adds its guidance. Disabling removes that guidance and retains the configured PTC instructions.
 
 #### KV Cache effect
 

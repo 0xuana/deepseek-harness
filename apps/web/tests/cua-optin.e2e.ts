@@ -114,15 +114,16 @@ it.skipIf(process.platform !== 'darwin').each([undefined, 'minimal'] as const)('
     await child.dispose()
     expect(scaffold.ctx.tools.schemas(child.agent).some(tool => tool.name === 'cua')).toBe(false)
     expect(scaffold.ctx.agentPresets.defaultId).toBe(initialDefault)
-    expect(scaffold.ctx.ptcRuntime.programFormat).toBe('repl')
+    expect(scaffold.ctx.ptcRuntime.programFormat).toBe('function-body')
+    expect(scaffold.ctx.ptcRuntime === originalRuntime).toBe(true)
     await setup.waitFor()
     expect(await setup.getByText('Computer Use 插件已开启，但暂时无法检测系统权限。请前往插件详情页查看原因并重试。', { exact: true }).count()).toBe(1)
     await setup.getByRole('button', { name: '稍后', exact: true }).click()
     await setup.waitFor({ state: 'hidden' })
     const settingsPath = join(harnessHome, 'profiles/scaffold/cordis.patch.yml')
-    const saved = await readFile(settingsPath, 'utf8')
+    let saved = await readFile(settingsPath, 'utf8')
+    expect(saved).not.toContain('executionMode:')
     expect(load(saved)).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'ptc-runtime', config: { executionMode: 'persistent-in-memory' } }),
       expect.objectContaining({ id: 'ui-settings', config: { enabled: true } }),
     ]))
     if (selectedDefault === undefined) {
@@ -144,6 +145,14 @@ it.skipIf(process.platform !== 'darwin').each([undefined, 'minimal'] as const)('
     })).agent
     expect(scaffold.ctx.agentPresets.composedPreset(fresh.ctx)).toBe('ptc')
     expect(scaffold.ctx.tools.schemas(fresh).some(tool => tool.name === 'cua')).toBe(true)
+    await card.getByRole('button', { name: '查看 Computer Use', exact: true }).click()
+    toggle = page.locator('[data-plugin-panel]').getByRole('switch', { name: '启用 Computer Use', exact: true })
+    const persistent = page.getByRole('group', { name: 'PTC 执行方式', exact: true })
+    await persistent.getByRole('button', { name: '设为持久化', exact: true }).click()
+    await persistent.getByRole('button', { name: '已设为持久化', exact: true }).waitFor()
+    expect(scaffold.ctx.ptcRuntime.programFormat).toBe('repl')
+    saved = await readFile(settingsPath, 'utf8')
+    expect(saved).toContain('executionMode: persistent-in-memory')
     const runtime = scaffold.ctx.ptcRuntime
     const runtimeFiber = [...scaffold.ctx.loader.entries()].find(entry => entry.options.id === 'ptc-runtime')!.fiber
     const owner = {}
@@ -161,8 +170,6 @@ it.skipIf(process.platform !== 'darwin').each([undefined, 'minimal'] as const)('
     }
     expect((await runtime.run(runtime.resolve({ program, bindings: [], stateOwner: owner }))).value).toBe(2)
     expect(await readFile(settingsPath, 'utf8')).toBe(saved)
-    await card.getByRole('button', { name: '查看 Computer Use', exact: true }).click()
-    toggle = page.locator('[data-plugin-panel]').getByRole('switch', { name: '启用 Computer Use', exact: true })
     await toggle.click()
     await toggle.and(page.locator('[aria-checked="true"]')).waitFor({ state: 'visible' })
     await setup.waitFor()

@@ -60,10 +60,12 @@ export async function mountCuaPermissions(ctx: Context, contribution: TypertRemo
       inject: () => ({ resolveText: (text: { en: string; [locale: string]: string }) => ctx.locale.resolveText(text) }),
     }, ApplicationApproval))
     const preset = ctx.configForms.get<{ default: string; selectedDefault?: string }>('agent-preset-registry')
+    const runtime = ctx.configForms.get<{ executionMode?: 'per-call' | 'persistent-in-memory' }>('ptc-runtime')
     const settings = {
       ...face,
-      hooks: { ...face.hooks, cuaDefaultPreset: preset },
+      hooks: { ...face.hooks, cuaDefaultPreset: preset, cuaPtcRuntime: runtime },
       setPtcDefault: () => preset.set('selectedDefault', 'ptc'),
+      setPersistentPtc: () => runtime.set('executionMode', 'persistent-in-memory'),
     }
     ctx.effect(() => () => controller.dispose())
     ctx.on('connection/reset', face.refresh)

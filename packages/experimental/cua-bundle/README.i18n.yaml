@@ -3,8 +3,8 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/cua-bundle/README.md
 /:
-  en: 6a4efed7f053f52c
-  zh: 9135d38515947b44
+  en: 84e3dc6f31301114
+  zh: 6d5cad8cbe82552f
 /deepseek-ai-dsh-cua-bundle:
   en: 9084fb48d0f6489c
   zh: ce692972d91cf663
@@ -15,11 +15,11 @@
   en: b563e4ec4727d0de
   zh: d0228da978238e05
 /deepseek-ai-dsh-cua-bundle/use-this-package:
-  en: 5b315d6902074bdd
-  zh: b904b76441f44088
+  en: c493c75904aea7c4
+  zh: 40e8e7b162270a48
 /deepseek-ai-dsh-cua-bundle/understand-the-implementation:
-  en: 1d592dc9112502fe
-  zh: a922cd0878b6c27d
+  en: 504f9d26fa575e15
+  zh: 2b8b7af4767b52b0
 /deepseek-ai-dsh-cua-bundle/further-exploration:
   en: 9f15d56b5b16e1ca
   zh: 75eb08e8828c8877
@@ -33,8 +33,8 @@
   en: 591af735d1eb92f6
   zh: 3632bffa33c77b28
 /deepseek-ai-dsh-cua-bundle/model-experience/computer-use-and-persistent-ptc/token-effect:
-  en: 09a8fd5d9ab27cea
-  zh: 05de759d1f4f33c5
+  en: 4781f86555eb9a82
+  zh: be437d25cc0a6783
 /deepseek-ai-dsh-cua-bundle/model-experience/computer-use-and-persistent-ptc/kv-cache-effect:
   en: 417c40acd93df532
   zh: 69cc5cf7140c75a9

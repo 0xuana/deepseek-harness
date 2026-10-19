@@ -29,13 +29,17 @@ function fixture() {
     status: 'ready', value: { default: 'standard', selectedDefault: 'ptc' },
     base: {}, user: {}, revision: 1, writable: true,
   })
+  const runtime = createSnapshotStore<ConfigFormSnapshot<{ executionMode?: 'per-call' | 'persistent-in-memory' }>>({
+    status: 'ready', value: { executionMode: 'per-call' }, base: {}, user: {}, revision: 1, writable: true,
+  })
   const refresh = vi.fn()
   const props = { useCuaPermissions: bindSnapshotSelector(state), t: makeTranslate(en),
+    useCuaPtcRuntime: bindSnapshotSelector(runtime), setPersistentPtc: vi.fn(async () => true),
     useCuaDefaultPreset: bindSnapshotSelector(preset), setPtcDefault: vi.fn(async () => true),
     refresh, setActive: vi.fn((active: boolean) => { if (active) refresh() }), request: vi.fn(), openSettings: vi.fn(), revoke: vi.fn(),
     retryApproval: vi.fn(), dismissToast: vi.fn(),
   } satisfies PermissionPanelProps
-  return { state, preset, props,
+  return { state, preset, runtime, props,
     publish(patch: Partial<PermissionView>) { act(() => { state.set({ ...state.getSnapshot(), ...patch }) }) },
   }
 }
@@ -220,13 +224,13 @@ it('shows application icons and names while keeping the executable path in the t
   expect(identity.querySelector('img')?.getAttribute('src')).toBe('data:image/png;base64,aWNvbg==')
 })
 
-it.each([en, zh])('shows three requirements with the target application beside each system permission', (dictionary) => {
+it.each([en, zh])('shows four requirements with the target application beside each system permission', (dictionary) => {
   const f = fixture()
   render(<PermissionPanel {...f.props} t={makeTranslate(dictionary)} />)
   const application = { name: 'Visual Studio Code.app', path: '/Applications/Visual Studio Code.app', icon: 'data:image/png;base64,aWNvbg==' }
   f.publish({ ...observe({ ...value, system: { ...value.system, parent: { pid: 1, path: '/sbin/launchd' }, launchApplication: application } }) })
   const requirements = screen.getByRole('region', { name: dictionary.title })
-  expect(within(requirements).getAllByRole('group')).toHaveLength(3)
+  expect(within(requirements).getAllByRole('group')).toHaveLength(4)
   expect(screen.getByRole('region', { name: dictionary.applicationsTitle })).toBeTruthy()
   const accessibility = within(requirements).getByRole('group', { name: dictionary.accessibility })
   expect(within(accessibility).getByText(application.name)).toBeTruthy()
@@ -271,11 +275,11 @@ it('omits setup instructions once both system permissions are granted', () => {
 })
 
 
-it('keeps all three requirements visible before the first permission response', () => {
+it('keeps all four requirements visible before the first permission response', () => {
   const f = fixture()
   render(<PermissionPanel {...f.props} />)
   const requirements = screen.getByRole('region', { name: en.title })
-  expect(within(requirements).getAllByRole('group')).toHaveLength(3)
+  expect(within(requirements).getAllByRole('group')).toHaveLength(4)
   expect(screen.queryByRole('alert')).toBeNull()
   expect(screen.queryByRole('button', { name: en.request })).toBeNull()
   for (const button of screen.getAllByRole('button', { name: en.settings })) expect(button.hasAttribute('disabled')).toBe(true)
@@ -348,4 +352,37 @@ it('finishes activation guidance without waiting for application icons', () => {
   expect(onDismiss).toHaveBeenCalledOnce()
   expect(screen.queryByRole('dialog')).toBeNull()
   expect(f.state.getSnapshot().icons.busy).toBe(true)
+})
+
+it.each([en, zh])('saves persistent PTC only from its own row and retains failures for retry', async (dictionary) => {
+  const f = fixture()
+  render(<PermissionPanel {...f.props} t={makeTranslate(dictionary)} />)
+  const row = screen.getByRole('group', { name: dictionary.persistentTitle })
+  expect(f.props.setPersistentPtc).not.toHaveBeenCalled()
+  const write = Promise.withResolvers<boolean>()
+  f.props.setPersistentPtc.mockReturnValueOnce(write.promise)
+  fireEvent.click(within(row).getByRole('button', { name: dictionary.persistentConfirm }))
+  expect(within(row).getByRole('button').hasAttribute('disabled')).toBe(true)
+  await act(async () => { write.resolve(false); await write.promise })
+  expect(within(row).getByRole('alert').textContent).toBe(dictionary.persistentNotSaved)
+  fireEvent.click(within(row).getByRole('button'))
+  await waitFor(() => { expect(within(row).queryByRole('alert')).toBeNull() })
+  act(() => { f.runtime.set({ ...f.runtime.getSnapshot(), value: { executionMode: 'persistent-in-memory' } }) })
+  expect(within(row).getByRole('button', { name: dictionary.persistentSet }).hasAttribute('disabled')).toBe(true)
+  expect(f.props.setPtcDefault).not.toHaveBeenCalled()
+})
+
+it('loads the runtime setting independently and reports unavailable and read-only configurations', () => {
+  const f = fixture()
+  f.runtime.set({ ...f.runtime.getSnapshot(), status: 'loading', value: undefined })
+  render(<PermissionPanel {...f.props} />)
+  const row = screen.getByRole('group', { name: en.persistentTitle })
+  expect(within(row).queryByRole('button')).toBeNull()
+  expect(screen.getByRole('button', { name: en.defaultSet })).toBeTruthy()
+  act(() => { f.runtime.set({ ...f.runtime.getSnapshot(), status: 'unavailable', writable: false }) })
+  expect(within(row).getByRole('alert').textContent).toBe(en.persistentUnavailable)
+  act(() => { f.runtime.set({ ...f.runtime.getSnapshot(), status: 'ready', value: {}, writable: false }) })
+  expect(within(row).getByRole('alert').textContent).toBe(en.persistentReadOnly)
+  expect(within(row).getByRole('button').hasAttribute('disabled')).toBe(true)
+  expect(f.props.setPersistentPtc).not.toHaveBeenCalled()
 })

@@ -36,4 +36,4 @@ CUA 组合包和前端插件与 `@deepseek-ai/dsh-cua` 一起采用显式命名�
 
 官方发现不表示实验性状态，也不引入不同的插件生命周期。关闭 bundle 保留已安装文件；激活失败保留现有的已保存选择行为。Bundle 行是普通 Host 行，使用常规开关。独立与组合测试覆盖 Host 行及每个预设的工具目录；实时切换与已记录 Session 覆盖激活和模型可见行为。
 
-Computer Use 将权限服务和原生提供方保留在 Host，在已绑定 `ptc` preset 的 Agent 作用域中注册工具。沿用 browser-use runtime 的所有权方式，通过现有 Agent 事件和 `createScope()` 维护当前、新建和恢复的 Agent。preset 声明和保留版本保持不变，无需 preset 扩展注册表。启用保存 PTC 执行方式。若新会话默认模式不是 PTC，启用弹窗会说明仅针对 PTC 的设计并询问是否切换，确认后才通过现有设置表单保存默认值。关闭保留这些设置。Web 回归覆盖默认值的两种选择、即时启用、空白会话切换 preset、继承 preset 的子 Agent、销毁，以及反复开关时保留 PTC 状态。
+Computer Use 将权限服务和原生提供方保留在 Host，在已绑定 `ptc` preset 的 Agent 作用域中注册工具。现有 Agent 事件和 `createScope()` 维护当前、新建和恢复的 Agent，preset 声明保持不变。详情页通过独立按钮分别设置新会话默认模式和持久化 PTC 执行方式，两者复用现有设置表单。启用开关保留这些设置，关闭保留已选执行方式和内存状态。Web 回归覆盖两种默认选择、运行时启停、空会话切换 preset、子会话继承与销毁，以及反复启停后 PTC 状态保留。

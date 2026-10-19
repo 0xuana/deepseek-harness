@@ -40,7 +40,7 @@
     - switch "启用 开发者工具"
   - listitem:
     - button "查看 Computer Use": Computer Use
-    - text: 实验性 目前仅支持 macOS，Windows 支持正在开发中。开启会将 PTC 模式改为可持久化，并为已有及新建 PTC 会话加载 Computer Use。请切换到 PTC 模式来使用 Computer Use，并授予辅助功能和屏幕录制权限。
+    - text: 实验性 目前仅支持 macOS，Windows 支持正在开发中。为已有及新建 PTC 会话加载 Computer Use。请切换到 PTC 模式来使用，并授予辅助功能和屏幕录制权限。
     - switch "启用 Computer Use"
 - heading "已安装插件" [level=3]
 - list:
