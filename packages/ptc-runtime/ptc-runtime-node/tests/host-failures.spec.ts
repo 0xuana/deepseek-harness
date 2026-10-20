@@ -11,7 +11,7 @@ import { SandboxUnavailableError } from '@deepseek-ai/dsh-sandbox'
 import type { ConfinedArgv } from '@deepseek-ai/dsh-sandbox'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import type { Config } from '../src/index.ts'
-import { JsonChannel } from '../src/channel.ts'
+import { rawPeer } from './raw-peer.ts'
 import { encodePtcJsonWire } from '../src/json-wire.ts'
 import { mountRuntime } from './setup.ts'
 
@@ -58,11 +58,14 @@ async function setup(config: Config = {}, mode: 'read-only' | 'danger-full-acces
     waitForExit,
   }
   const writes = new Set<Promise<void>>()
+  let runId = ''
   let receive: (message: unknown) => void = () => {}
-  const peer = new JsonChannel(childControl, 1024 * 1024, (message) => {
+  const peer = rawPeer(childControl, (message) => {
+    if (typeof message === 'object' && message !== null && 't' in message && message.t === 'q'
+      && 'm' in message && message.m === 'run' && 'i' in message && typeof message.i === 'string') runId = message.i
     messages.push(message)
     receive(message)
-  }, () => {})
+  })
   const emit = (message: unknown): void => {
     const write = peer.send(message).catch(() => {}).finally(() => { writes.delete(write) })
     writes.add(write)
@@ -77,25 +80,26 @@ async function setup(config: Config = {}, mode: 'read-only' | 'danger-full-acces
     direct.resolve({ exitCode: 0, signal: null })
     await Promise.all(writes)
   })
-  const start = (input: PtcRunRequest = request, first: unknown = { type: 'ready' }) => {
+  const start = (input: PtcRunRequest = request, first: unknown = { t: 'q', m: 'ready', a: [] }) => {
     const result = runtime.run(runtime.resolve(input))
     if (first !== NO_INITIAL_FRAME) queueMicrotask(() => { emit(first) })
     return result
   }
   const onBoot = (callback: () => void): void => {
     receive = (message) => {
-      if (typeof message === 'object' && message !== null && 'type' in message && message.type === 'boot') callback()
+      if (typeof message === 'object' && message !== null && 'm' in message && message.m === 'run') callback()
     }
   }
   return {
     ctx, runtime, handle, terminate, waitForExit, direct, stdout, stderr, control, peer, messages,
     spawn, resolveExecutable, emit, start, onBoot,
+    complete: (result: unknown) => { emit({ t: 's', i: runId, r: result }) },
     receive: (callback: typeof receive) => { receive = callback },
   }
 }
 
 function call(id: number, value: string = '') {
-  return { type: 'call', id, global: 'tools', name: 'test', args: encodePtcJsonWire(value) }
+  return { t: 'q', i: String(id), m: 'invoke', a: [1, 'tools', 'test', encodePtcJsonWire(value)] }
 }
 
 function withBinding(fn: PtcBindingFunction): PtcRunRequest {
@@ -117,7 +121,6 @@ describe('Node runtime host failures', () => {
     [{ maxOutputBytes: 3 }, 'maxOutputBytes'],
     [{ maxOutputBytes: 4.5 }, 'maxOutputBytes'],
     [{ maxMessageBytes: 1.5 }, 'maxMessageBytes'],
-    [{ maxMessageBytes: 0x1_0000_0000 }, 'maxMessageBytes'],
     [{ maxPendingCalls: 1.5 }, 'maxPendingCalls'],
     [{ maxOldGenerationSizeMb: 1.5 }, 'maxOldGenerationSizeMb'],
     [{ launch: { kind: 'node-script', executable: '' } }, 'launch.executable'],
@@ -149,14 +152,14 @@ describe('Node runtime host failures', () => {
   it('keeps partial enforcement separate from a successful program', async () => {
     const h = await setup({}, 'read-only')
     vi.spyOn(h.ctx.sandbox, 'confine').mockImplementation(async argv => confinement([...argv]))
-    h.onBoot(() => { h.emit({ type: 'done', value: encodePtcJsonWire(42) }) })
+    h.onBoot(() => { h.complete({ value: encodePtcJsonWire(42) }) })
     expect(await h.start()).toEqual({ logs: [], value: 42, sandbox: { mode: 'read-only', denied: false, enforcement: 'partial' } })
   })
 
   it.each([['EACCES: blocked', true], ['EPERM: unrelated dialect', false]] as const)('uses only the selected denial dialect for %s', async (message, denied) => {
     const h = await setup({}, 'read-only')
     vi.spyOn(h.ctx.sandbox, 'confine').mockImplementation(async argv => confinement([...argv]))
-    h.onBoot(() => { h.emit({ type: 'done', error: { kind: 'exception', message } }) })
+    h.onBoot(() => { h.complete({ error: { kind: 'exception', message } }) })
     const result = await h.start()
     expect(result.error).toEqual({ kind: 'exception', message })
     expect(result.sandbox).toEqual({ mode: 'read-only', denied, enforcement: 'partial' })
@@ -298,7 +301,7 @@ describe('Node runtime host failures', () => {
 
   it('classifies invalid UTF-8 on the live control stream as a protocol failure', async () => {
     const h = await setup()
-    h.onBoot(() => { h.control.push(Buffer.from([0, 0, 0, 1, 0xff])) })
+    h.onBoot(() => { h.control.push(Buffer.from([0xff, 10])) })
     expect((await h.start()).error?.kind).toBe('protocol')
   })
 
@@ -306,35 +309,36 @@ describe('Node runtime host failures', () => {
     const h = await setup()
     const binding = vi.fn(async () => null)
     const result = await h.start(withBinding(binding), call(1))
-    expect(result.error?.message).toContain('before bootstrap readiness')
+    expect(result.error?.message).toContain('active PTC evaluation')
     expect(binding).not.toHaveBeenCalled()
   })
 
   it.each<[unknown, string]>([
-    [null, 'invalid control frame'],
-    [{ type: 'log', text: 1 }, 'invalid log frame'],
-    [{ type: 'done', error: null }, 'invalid terminal error'],
-    [{ type: 'done', error: { kind: 'exception', message: 1 } }, 'invalid terminal error'],
-    [{ type: 'done', error: { kind: 'timeout', message: 'forged' } }, 'invalid terminal error'],
-    [{ type: 'call', id: 0, global: 'tools', name: 'test' }, 'invalid binding call identity'],
-    [{ ...call(1), name: 'constructor' }, 'undeclared binding'],
-    [{ type: 'call', id: 1, global: 'tools', name: 'test' }, 'arguments must be lossless JSON'],
-    [{ type: 'unknown' }, 'unknown control message'],
-  ])('rejects malformed program frame %j', async (frame, message) => {
+    [null, 'invalid RPC frame'],
+    [{ t: 'q', m: 'ready', a: [] }, 'duplicate program readiness'],
+    [{ t: 'q', m: 'log', a: [1, 1] }, 'invalid program log'],
+    [{ t: 'q', m: 'outputLimit', a: [0] }, 'invalid program output limit'],
+    [{ t: 'q', m: 'invoke', a: [1, null, 'test', []], i: 'call' }, 'invalid binding call identity'],
+    [{ t: 'q', m: 'invoke', a: [0, 'tools', 'test', []], i: 'call' }, 'active PTC evaluation'],
+    [{ t: 'q', m: 'invoke', a: [1, 'tools', 'constructor', []], i: 'call' }, 'undeclared binding'],
+    [{ t: 'q', m: 'invoke', a: [1, 'tools', 'test'], i: 'call' }, 'arguments must be lossless JSON'],
+    [{ t: 'q', m: 'constructor', a: [] }, 'invalid RPC method call'],
+    [{ t: 'q', m: 'toString', a: [] }, 'invalid RPC method call'],
+    [{ t: 'unknown' }, 'unknown RPC message'],
+  ])('rejects malformed program traffic %j', async (frame, message) => {
     const h = await setup()
     const binding = vi.fn(async () => null)
     h.onBoot(() => { h.emit(frame) })
     const result = await h.start(withBinding(binding))
-    expect(result.error).toEqual({ kind: 'protocol', message: expect.stringContaining(message) as unknown })
+    expect(result.error?.kind).toBe('protocol')
+    expect(result.error?.message).toContain(message)
     expect(binding).not.toHaveBeenCalled()
   })
 
-  it('refuses a repeated call id instead of dispatching it twice', async () => {
+  it.each([null, { error: null }, { error: { kind: 'exception', message: 1 } }, { error: { kind: 'timeout', message: 'forged' } }])('rejects malformed run results %j', async (raw) => {
     const h = await setup()
-    const binding = vi.fn(async () => null)
-    h.onBoot(() => { h.emit(call(1)); h.emit(call(1)) })
-    expect((await h.start(withBinding(binding))).error?.kind).toBe('protocol')
-    expect(binding).toHaveBeenCalledOnce()
+    h.onBoot(() => { h.complete(raw) })
+    expect((await h.start()).error?.kind).toBe('protocol')
   })
 
   it.each<Config>([{ maxPendingCalls: 1 }, { maxMessageBytes: 512 }])('bounds unresolved host calls with %j', async (config) => {
@@ -351,37 +355,37 @@ describe('Node runtime host failures', () => {
 
   it('rejects an untransferable completion instead of returning a substituted value', async () => {
     const h = await setup()
-    h.onBoot(() => { h.emit({ type: 'done', value: { invalid: true } }) })
+    h.onBoot(() => { h.complete({ value: { invalid: true } }) })
     expect((await h.start()).error?.kind).toBe('invalid-output')
   })
 
   it('returns non-lossless binding resolutions as program-visible binding failures', async () => {
     const h = await setup()
     h.receive((message) => {
-      if (typeof message !== 'object' || message === null || !('type' in message)) return
-      if (message.type === 'boot') h.emit(call(1))
-      if (message.type === 'reply') h.emit({ type: 'done' })
+      if (typeof message !== 'object' || message === null || !('t' in message)) return
+      if ('m' in message && message.m === 'run') h.emit(call(1))
+      if (message.t === 's') h.complete({})
     })
     expect((await h.start(withBinding(async () => Number.NaN))).error).toBeUndefined()
-    expect(h.messages).toContainEqual({ type: 'reply', id: 1, ok: false, message: expect.stringContaining('lossless JSON') as unknown })
+    expect(h.messages).toContainEqual({ t: 's', i: '1', e: { message: 'binding resolution must be lossless JSON' } })
   })
 
   it('does not publish a late binding reply after the program has settled', async () => {
     const h = await setup()
     const release = Promise.withResolvers<null>()
     onTestFinished(() => { release.resolve(null) })
-    h.onBoot(() => { h.emit(call(1)); h.emit({ type: 'done' }) })
+    h.onBoot(() => { h.emit(call(1)); h.complete({}) })
     expect((await h.start(withBinding(async () => await release.promise))).error).toBeUndefined()
     release.resolve(null)
     await setImmediate()
-    expect(h.messages).not.toContainEqual(expect.objectContaining({ type: 'reply' }))
+    expect(h.messages).not.toContainEqual(expect.objectContaining({ t: 's' }))
     expect(h.control.destroyed).toBe(true)
   })
 
   it('reports failed managed cleanup even when the program returns successfully', async () => {
     const h = await setup()
     vi.mocked(h.waitForExit).mockRejectedValue(new Error('range cannot be observed'))
-    h.onBoot(() => { h.emit({ type: 'done', value: encodePtcJsonWire(42) }) })
+    h.onBoot(() => { h.complete({ value: encodePtcJsonWire(42) }) })
     expect((await h.start()).error).toEqual({ kind: 'worker-exit', message: 'managed process cleanup failed: range cannot be observed' })
   })
 
@@ -397,11 +401,26 @@ describe('Node runtime host failures', () => {
     expect(result.error).toEqual({ kind: 'protocol', message: 'control output exceeds 256 queued bytes' })
   })
 
+  it('keeps an output overflow delivered beside the program result', async () => {
+    const h = await setup({ maxOutputBytes: 64 }, 'read-only')
+    vi.spyOn(h.ctx.sandbox, 'confine').mockImplementation(async argv => confinement([...argv]))
+    h.receive((message) => {
+      const run = message as { m?: string; i?: string }
+      if (run.m !== 'run') return
+      const result = { t: 's', i: run.i, r: { error: { kind: 'exception', message: 'EACCES: blocked' } } }
+      const log = { t: 'q', m: 'log', a: [1, 'x'.repeat(100)] }
+      h.control.push(Buffer.from(`${JSON.stringify(result)}\n${JSON.stringify(log)}\n`))
+    })
+    const result = await h.start()
+    expect(result.error?.kind).toBe('output-limit')
+    expect(result.sandbox?.denied).toBe(false)
+  })
+
   it('retains admitted logs when the program reports its own output limit', async () => {
     const h = await setup()
     h.onBoot(() => {
-      h.emit({ type: 'log', text: 'retained' })
-      h.emit({ type: 'done', error: { kind: 'output-limit', message: 'child ledger exhausted' } })
+      h.emit({ t: 'q', m: 'log', a: [1, 'retained'] })
+      h.complete({ error: { kind: 'output-limit', message: 'child ledger exhausted' } })
     })
     const result = await h.start()
     expect(result.error?.kind).toBe('output-limit')
@@ -413,7 +432,7 @@ describe('Node runtime host failures', () => {
     const cleaning = Promise.withResolvers<undefined>()
     vi.mocked(h.terminate).mockImplementation(() => { h.direct.resolve({ exitCode: 0, signal: null }) })
     vi.mocked(h.waitForExit).mockImplementation(async () => { cleaning.resolve(undefined); return true })
-    h.onBoot(() => { h.emit(failure === undefined ? { type: 'done' } : { type: 'done', error: failure }) })
+    h.onBoot(() => { h.complete(failure === undefined ? {} : { error: failure }) })
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     try {
       const pending = h.start()
@@ -434,7 +453,7 @@ describe('Node runtime host failures', () => {
         stream.write(Buffer.from([0x82, 0xac]))
         stream.end(Buffer.from([0xe2]))
       }
-      h.emit({ type: 'done' })
+      h.complete({})
     })
     const result = await h.start()
     expect(result.error).toBeUndefined()
@@ -489,7 +508,7 @@ describe('Node runtime host failures', () => {
     vi.stubEnv('TMP', 'fixture-tmp-second')
     vi.stubEnv('ELECTRON_RUN_AS_NODE', '1')
     vi.stubEnv('DSH_TEST_RUNTIME_SECRET', 'must-not-inherit')
-    h.onBoot(() => { h.emit({ type: 'done' }) })
+    h.onBoot(() => { h.complete({}) })
     expect((await h.start()).error).toBeUndefined()
     const env = h.spawn.mock.calls[0]?.[0].env ?? {}
     expect(Object.hasOwn(env, 'TEMP')).toBe(false)
@@ -501,7 +520,7 @@ describe('Node runtime host failures', () => {
 
   it('selects the remote embedded bootstrap without leaking ambient environment', async () => {
     const h = await setup({ launch: { kind: 'embedded', executable: process.execPath } })
-    h.onBoot(() => { h.emit({ type: 'done' }) })
+    h.onBoot(() => { h.complete({}) })
     expect((await h.start()).error).toBeUndefined()
     const spec = h.spawn.mock.calls[0]?.[0]
     expect(spec?.env?.DSH_PTC_RUNTIME_NODE).toBe('1')
@@ -516,7 +535,7 @@ it('keeps failed per-call cleanup registered until process observation succeeds'
   const h = await setup()
   const session = h.ctx.sessions.create(SessionId('per-call-cleanup-retry'))
   h.waitForExit.mockRejectedValue(new Error('range cannot be observed'))
-  h.onBoot(() => { h.emit({ type: 'done', value: encodePtcJsonWire(42) }) })
+  h.onBoot(() => { h.complete({ value: encodePtcJsonWire(42) }) })
   const result = await h.start({ ...request, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }) })
   expect(result.error?.kind).toBe('worker-exit')
   setSandboxMode(session, 'read-only')
@@ -541,9 +560,9 @@ it('preserves execution context for bindings delivered by an external control st
   const session = h.ctx.sessions.create(SessionId('external-binding-context'))
   const booted = Promise.withResolvers<undefined>()
   h.receive((raw) => {
-    const message = raw as { type: string; ok?: boolean; value?: unknown }
-    if (message.type === 'boot') booted.resolve(undefined)
-    if (message.type === 'reply') h.emit({ type: 'done', value: message.value })
+    const message = raw as { t: string; m?: string; r?: unknown }
+    if ('m' in message && message.m === 'run') booted.resolve(undefined)
+    if (message.t === 's') h.complete({ value: message.r })
   })
   const context = new AsyncLocalStorage<string>()
   const pending = context.run('binding context', () => h.start({ ...request, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }),

@@ -109,11 +109,13 @@ The host owns policy, deadlines, binding lookup and process cleanup. The child o
 
 For per-call execution, the host strips erasable types, resolves the executable and bootstrap in the configured execution world, awaits argv confinement through `ctx.sandbox`, then spawns through `ctx.subprocess`. Cancellation is checked again after confinement, so a provider returning after cancellation cannot start the program. After adopting the inherited control channel, the child retains only executable-search, Windows system, and temporary paths in its OS environment and replaces the program-visible `process.env` with an empty dictionary. Windows ACL setup receives the parent's distinct `TEMP` and `TMP` values for shared grant locks, then replaces both with its private directory before starting the program. These native paths keep nested process creation and native temporary-file APIs functional. The host preserves `ELECTRON_RUN_AS_NODE` only for child startup so the Desktop executable runs the Node bootstrap; the bootstrap removes the selector before evaluating model code. The heap limit uses Node argv or a provider-created `NODE_OPTIONS` value for packaged executables; ambient loader and inspector flags are discarded.
 
-Length-framed JSON travels separately from stdout/stderr. The host bounds frames and queued writes, validates call identity and declared binding names before dispatch, and refuses invalid traffic. The child flushes its terminal frame and keeps the control channel open until the host closes it. After submitting that frame, it ignores later binding replies and sends no further program control messages. Output capture meters serialized logs plus the completion or diagnostic; fixed result-envelope fields and sandbox metadata are outside that ledger.
+The host calls the child’s `run()` method through birpc; injected bindings call the host’s `invoke()` method, and captured output uses notifications. birpc owns request correlation, remote results, and rejection delivery. Newline-delimited JSON travels over the inherited control pipe separately from stdout/stderr. The RPC adapter bounds incomplete messages and the native write queue, validates UTF-8 and exposed methods, and rejects pending calls when the pipe closes. The host validates evaluation identity, binding names and lossless JSON before dispatch. Execution deadlines remain host-owned, including calls that await approval.
+
+Per-call completion rejects unfinished binding waits and stops captured output notifications. The child keeps the control pipe open until the host receives its result and closes the pipe. Output capture meters serialized logs plus the completion or diagnostic; fixed result-envelope fields and sandbox metadata are outside that ledger.
 
 ### Source and built bootstraps
 
-Source execution loads an erasable-only bootstrap closure without relying on sibling built exports. Built script execution uses `process.js` for per-call programs or `persistent-process.js` for retained REPL environments. Persistent mode requires a `node-script` launch. A remote script deployment supplies the matching `launch.bootstrapPath`. Embedded carriers launch their private worker through `launch.executable`. `resolveLaunch()` selects the local default during construction; an explicit remote invocation never depends on whether the client itself is packaged. A host path is never assumed to name the same remote file.
+Source execution loads erasable TypeScript and its installed birpc dependency without relying on sibling built exports. Built process scripts bundle birpc so a preinstalled bootstrap needs no adjacent dependency installation. Built script execution uses `process.js` for per-call programs or `persistent-process.js` for retained REPL environments. Persistent mode requires a `node-script` launch. A remote script deployment supplies the matching `launch.bootstrapPath`. Embedded carriers launch their private worker through `launch.executable`. `resolveLaunch()` selects the local default during construction; an explicit remote invocation never depends on whether the client itself is packaged. A host path is never assumed to name the same remote file.
 
 ### Source map
 
@@ -127,7 +129,8 @@ Source execution loads an erasable-only bootstrap closure without relying on sib
 | [`src/launch.ts`](src/launch.ts) | Executable/bootstrap arguments and execution-world asset mapping |
 | [`src/process.ts`](src/process.ts) | Child handshake, environment clearing and program lifecycle |
 | [`src/bootstrap.ts`](src/bootstrap.ts) | Program evaluation, binding proxies and output capture |
-| [`src/channel.ts`](src/channel.ts) | Framing, bounded writes and protocol failures |
+| [`src/rpc.ts`](src/rpc.ts) | Typed birpc transport, message limits and connection lifetime |
+| [`src/result.ts`](src/result.ts) | Validation of untrusted program completions |
 | [`src/output-ledger.ts`](src/output-ledger.ts) | Host accounting for the outer result |
 
 </details>

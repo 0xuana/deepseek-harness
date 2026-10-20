@@ -235,10 +235,10 @@ describe('Node program process', () => {
   })
 
   it.each([
-    'const fs = await import("node:fs"); const b=Buffer.alloc(4); b.writeUInt32BE(4294967295); fs.writeSync(7,b); await new Promise(()=>{});',
-    'const fs = await import("node:fs"); const body=Buffer.from(JSON.stringify({type:"call",id:1,global:"tools",name:"undeclared",args:[]})); const h=Buffer.alloc(4); h.writeUInt32BE(body.length); fs.writeSync(7,Buffer.concat([h,body])); await new Promise(()=>{});',
+    'const fs = await import("node:fs"); fs.writeSync(7,"x".repeat(2048)); await new Promise(()=>{});',
+    'const fs = await import("node:fs"); fs.writeSync(7,JSON.stringify({t:"q",i:"forged",m:"invoke",a:[1,"tools","undeclared",[]]})+"\\n"); await new Promise(()=>{});',
   ])('refuses hostile program control traffic', async (program) => {
-    const { run } = await setup()
+    const { run } = await setup({ maxMessageBytes: 1024 })
     expect((await run({ program, bindings: [] })).error?.kind).toBe('protocol')
   })
 
