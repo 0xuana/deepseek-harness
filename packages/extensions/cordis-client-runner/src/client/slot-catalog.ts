@@ -4346,7 +4346,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'sidebar.session.row.hover\', () => ctx.slots.register(\n      { name: \'sidebar.session.row.hover\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-workspace/src/client/contract/slots.ts:150',
+    source: 'packages/client/ui-workspace/src/client/contract/slots.ts:151',
   },
   {
     key: 'sidebar.session.row.leading',
@@ -4407,7 +4407,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     kind: 'list',
     scope: 'root',
     summary: 'Non-interactive icons after the row\'s time label, before its pin marker, in ascending `order`.',
-    doc: 'Non-interactive icons after the row\'s time label, before its pin marker,\nin ascending `order`. Hidden on hoverless devices and while the row is\nhovered, contains focus, or has an open action menu. Blank Sessions omit\nthe slot. Occupants address their own data by Session id; they must not\nbind or retain the Session.',
+    doc: 'Non-interactive icons after the row\'s time label, before its pin marker,\nin ascending `order`. On hover-capable devices, hidden while the row is\nhovered, has keyboard focus on itself or its actions, or has an open menu.\nHoverless devices keep the icons beside the menu trigger. Blank Sessions\nomit the slot. Occupants address their own data by Session id; they must not\nbind or retain the Session.',
     registerOptions: [
       {
         name: 'id',
@@ -4452,7 +4452,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     occupants: [],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'sidebar.session.row.trailing\', () => ctx.slots.register(\n      { name: \'sidebar.session.row.trailing\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-workspace/src/client/contract/slots.ts:145',
+    source: 'packages/client/ui-workspace/src/client/contract/slots.ts:146',
   },
   {
     key: 'sidebar.settings',
@@ -4641,14 +4641,14 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    const copyLabel = \'Copy session title\' // Localize in the contributing package.\n    ctx.slots.inject(\'sidebar.workspaces.session.menu.item\', () => ctx.slots.register(\n      { name: \'sidebar.workspaces.session.menu.item\', id: \'copy-session-title\', order: 500 },\n      ({ displayTitle, useMenuOpenState }) => {\n        const [, setMenuOpen] = useMenuOpenState()\n        return React.createElement(\n          \'button\',\n          {\n            type: \'button\', role: \'menuitem\',\n            onClick: () => { setMenuOpen(false); void navigator.clipboard.writeText(displayTitle) },\n          },\n          copyLabel,\n        )\n      },\n    ))\n  },\n}',
-    source: 'packages/client/ui-workspace/src/client/contract/slots.ts:185',
+    source: 'packages/client/ui-workspace/src/client/contract/slots.ts:186',
   },
   {
     key: 'sidebar.workspaces.session.row.action',
     kind: 'list',
     scope: 'root',
     summary: 'The hover buttons at the end of one Session row, in ascending `order`, after the "..." menu trigger.',
-    doc: 'The hover buttons at the end of one Session row, in ascending `order`,\nafter the "..." menu trigger. ui-workspace registers `archive` (100) and\n`pin` (200) here. An entry renders one icon button (or nothing, when its\naction does not apply to the row) and owns the action it performs. Clicks\ninside the strip stay in the strip, so the button needs no propagation\nhandling to keep the row from opening.',
+    doc: 'The hover buttons at the end of one Session row, in ascending `order`,\nafter the "..." menu trigger. ui-workspace registers `archive` (100) and\n`pin` (200) here. An entry renders one icon button (or nothing, when its\naction does not apply to the row) and owns the action it performs. Clicks\ninside the strip stay in the strip, so the button needs no propagation\nhandling to keep the row from opening. Hoverless devices hide this slot;\ncontribute the action to the menu list as well for touch access.',
     registerOptions: [
       {
         name: 'id',
@@ -4696,7 +4696,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'sidebar.workspaces.session.row.action\', () => ctx.slots.register(\n      { name: \'sidebar.workspaces.session.row.action\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-workspace/src/client/contract/slots.ts:203',
+    source: 'packages/client/ui-workspace/src/client/contract/slots.ts:205',
   },
   {
     key: 'tool.call.images',

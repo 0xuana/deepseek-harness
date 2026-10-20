@@ -1199,6 +1199,19 @@ describe('session row decoration seats', () => {
     expect(onOpen).toHaveBeenCalledTimes(2)
   })
 
+  it.each(['Enter', ' '])('leaves modified %j available to global shortcuts', (key) => {
+    const onOpen = vi.fn()
+    render(<SessionNodeItem node={idle} currentId={undefined} now={0} onOpen={onOpen} t={t} />)
+    const row = screen.getByRole('treeitem')
+    for (const modifiers of [
+      { altKey: true }, { ctrlKey: true }, { metaKey: true }, { shiftKey: true },
+      { ctrlKey: true, altKey: true, shiftKey: true },
+    ]) {
+      expect(fireEvent.keyDown(row, { key, ...modifiers })).toBe(true)
+    }
+    expect(onOpen).not.toHaveBeenCalled()
+  })
+
   it('offers the leading seat only while the row is idle, and no state dot beside it', () => {
     const renderSlot = seatSpy()
     const view = renderRow(idle, renderSlot)

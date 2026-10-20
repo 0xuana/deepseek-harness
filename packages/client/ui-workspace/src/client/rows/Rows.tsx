@@ -533,7 +533,7 @@ export function SearchResultItem({ result, currentId, onOpen, onUnarchive, t }: 
  * keeps that cell and renders no seat, so an ambient automation mark never
  * appears beside the row's own state dot. An archived row keeps the cell blank:
  * neither marker renders there, and its live status stays on the hover card.
- * The row accepts Tab focus and opens with Enter or Space; descendant controls
+ * The row accepts Tab focus and opens with unmodified Enter or Space; descendant controls
  * handle their own activation without opening the row.
  * @param props.node - derived session node.
  * @param props.currentId - selected session id (row highlight).
@@ -610,6 +610,7 @@ export function SessionNodeItem({
       onClick={() => { onOpen(node.id) }}
       onKeyDown={(event) => {
         if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return
+        if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
         event.preventDefault()
         onOpen(node.id)
       }}
@@ -700,7 +701,9 @@ export function SessionNodeItem({
               { hookContext: menuOpenState },
             )}
           </Menu>
-          {renderSlot('sidebar.workspaces.session.row.action', { sessionId: node.id, displayTitle: row.title })}
+          <span className={css.rowQuickActions}>
+            {renderSlot('sidebar.workspaces.session.row.action', { sessionId: node.id, displayTitle: row.title })}
+          </span>
         </span>
       )}
     </div>

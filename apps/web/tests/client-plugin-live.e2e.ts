@@ -45,14 +45,20 @@ it('places dynamic Session menu rows by order among the shipped ones and removes
     const trigger = row.getByRole('button', { name: `Session actions for ${SESSION_TITLE}` })
 
     const trailing = row.locator('[data-session-trailing]')
-    const observations: { stage: string; icons: string[]; actions: boolean }[] = []
-    const observe = async (stage: string, iconsVisible: boolean, actionsVisible: boolean): Promise<void> => {
-      await expect.poll(() => trailing.first().isVisible()).toBe(iconsVisible)
-      await expect.poll(() => trigger.isVisible()).toBe(actionsVisible)
+    const observations: { stage: string; icons: string[]; time: boolean; pinned: boolean; actions: boolean }[] = []
+    const observe = async (stage: string, iconsVisible: boolean, actionsVisible: boolean, target = row): Promise<void> => {
+      const icons = target.locator('[data-session-trailing]')
+      const actions = target.getByRole('button', { name: `Session actions for ${SESSION_TITLE}` })
+      const time = target.locator('[class*="time"]')
+      await expect.poll(() => icons.first().isVisible()).toBe(iconsVisible)
+      await expect.poll(() => time.isVisible()).toBe(iconsVisible)
+      await expect.poll(() => actions.isVisible()).toBe(actionsVisible)
       observations.push({
         stage,
-        icons: await trailing.filter({ visible: true }).evaluateAll(elements => elements.map(element => element.getAttribute('aria-label')!)),
-        actions: await trigger.isVisible(),
+        icons: await icons.filter({ visible: true }).evaluateAll(elements => elements.map(element => element.getAttribute('aria-label')!)),
+        time: await time.isVisible(),
+        pinned: await target.getByRole('img', { name: 'Pinned', exact: true }).isVisible(),
+        actions: await actions.isVisible(),
       })
     }
     await expect.poll(() => trailing.count()).toBe(2)
@@ -70,10 +76,20 @@ it('places dynamic Session menu rows by order among the shipped ones and removes
     await observe('hover', false, true)
     await page.mouse.move(0, 0)
     await observe('pointer-left', true, false)
-    await row.focus()
+    await row.click()
+    await expect.poll(() => page.locator('[data-composer-input][contenteditable="true"]')
+      .evaluate(element => element === document.activeElement)).toBe(true)
+    await row.click()
+    await page.mouse.move(0, 0)
+    expect(await row.evaluate(element => element === document.activeElement)).toBe(true)
+    await observe('clicked-current-row', true, false)
+    expect(await row.locator('[data-slot="sidebar.session.row.leading"]').evaluate(element => element.tagName)).toBe('SPAN')
+    await page.keyboard.press('Shift+Tab')
+    await page.keyboard.press('Tab')
+    expect(await row.evaluate(element => element === document.activeElement)).toBe(true)
     await observe('focus', false, true)
     await page.keyboard.press('Tab')
-    expect(await trigger.evaluate(element => element === document.activeElement)).toBe(true)
+    expect(await row.evaluate(element => element.querySelector('button') === document.activeElement)).toBe(true)
     await trigger.click()
     await observe('menu-open', false, true)
     const menu = page.getByRole('menu')
@@ -122,12 +138,42 @@ it('places dynamic Session menu rows by order among the shipped ones and removes
       const touchTrigger = touchRow.getByRole('button', { name: `Session actions for ${SESSION_TITLE}` })
       await touchTrigger.waitFor()
       expect(await touchPage.evaluate(() => matchMedia('(hover: hover)').matches)).toBe(false)
-      expect(await touchRow.locator('[data-session-trailing]').first().isVisible()).toBe(false)
+      await observe('touch', true, true, touchRow)
+      expect(await touchRow.getByRole('button', { name: 'Archive session', exact: true }).isVisible()).toBe(false)
+      expect(await touchRow.getByRole('button', { name: 'Pin session', exact: true }).isVisible()).toBe(false)
       await touchTrigger.tap()
       await touchPage.getByRole('menu').waitFor()
+      await observe('touch-menu-open', true, true, touchRow)
       await touchPage.keyboard.press('Escape')
-      expect(await touchTrigger.isVisible()).toBe(true)
-      observations.push({ stage: 'touch', icons: [], actions: true })
+      await observe('touch-menu-closed', true, true, touchRow)
+      await touchTrigger.tap()
+      await touchPage.getByRole('menuitem', { name: 'Pin session', exact: true }).tap()
+      await touchRow.getByRole('img', { name: 'Pinned', exact: true }).waitFor()
+      await observe('touch-pinned', true, true, touchRow)
+      const touchBounds = await touchRow.evaluate((element) => {
+        const title = element.querySelector('[class*="title"]')!.getBoundingClientRect()
+        const resting = element.querySelector('[class*="rowResting"]')!.getBoundingClientRect()
+        const actions = element.querySelector('[class*="rowActions"]')!.getBoundingClientRect()
+        return { titleRight: title.right, restingLeft: resting.left, restingRight: resting.right,
+          actionsLeft: actions.left, actionsRight: actions.right, rowRight: element.getBoundingClientRect().right }
+      })
+      expect(touchBounds.titleRight).toBeLessThanOrEqual(touchBounds.restingLeft)
+      expect(touchBounds.restingRight).toBeLessThanOrEqual(touchBounds.actionsLeft)
+      expect(touchBounds.actionsRight).toBeLessThanOrEqual(touchBounds.rowRight)
+      await touchTrigger.tap()
+      await touchPage.getByRole('menuitem', { name: 'Archive session', exact: true }).tap()
+      await expect.poll(() => touchRow.count()).toBe(0)
+      expect(scaffold.ctx.workspaceRegistry.archivedSessionIds.includes(sessionId)).toBe(true)
+
+      await page.getByRole('button', { name: 'View options', exact: true }).click()
+      await page.getByRole('menuitem', { name: 'All conversations (show archived)', exact: true }).click()
+      await row.click()
+      await page.getByRole('alert').filter({ hasText: 'Archived sessions cannot be opened' }).waitFor()
+      await page.mouse.move(0, 0)
+      expect(await row.evaluate(element => element === document.activeElement)).toBe(true)
+      await observe('clicked-archived-row', true, false)
+      await scaffold.ctx.workspaceRegistry.unarchiveSession(sessionId)
+      await observe('touch-unarchived', true, true, touchRow)
       expect(touchConsole.pageErrors).toEqual([])
     } finally {
       await touchPage.close()

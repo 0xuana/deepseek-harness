@@ -261,10 +261,12 @@
 
 .projectRow:hover .rowActions,
 .searchResultRow:hover .rowActions,
-.projectRow.menuOpen .rowActions,
-.sessionRow.menuOpen .rowActions,
-.sessionRow:focus-within .rowActions {
+.projectRow.menuOpen .rowActions {
   display: inline-flex;
+}
+
+.rowQuickActions {
+  display: contents;
 }
 
 /* The search heading has no trailing time cell, so the unarchive action
@@ -285,11 +287,6 @@
   margin-left: 0;
 }
 
-.sessionRow.menuOpen .rowResting,
-.sessionRow:focus-within .rowResting {
-  display: none;
-}
-
 /* The unclipped hover state drops the ellipsis, which would otherwise cover
    the characters the marquee reached. Guarded because a touch tap
    latches `:hover` on the row after the title has already returned: an
@@ -299,11 +296,15 @@
     background: var(--dsw-alias-interactive-bg-hover);
   }
 
-  .sessionRow:hover .rowActions {
+  .sessionRow:hover .rowActions,
+  .sessionRow.menuOpen .rowActions,
+  :global(html[data-input-modality='keyboard']) .sessionRow:focus-within .rowActions {
     display: inline-flex;
   }
 
-  .sessionRow:hover .rowResting {
+  .sessionRow:hover .rowResting,
+  .sessionRow.menuOpen .rowResting,
+  :global(html[data-input-modality='keyboard']) .sessionRow:focus-within .rowResting {
     display: none;
   }
 
@@ -318,7 +319,7 @@
     display: inline-flex;
   }
 
-  .sessionRow .rowResting {
+  .sessionRow .rowQuickActions {
     display: none;
   }
 }
