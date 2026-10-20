@@ -764,11 +764,12 @@ describe('PluginManagerPage', () => {
   })
 
   it.each([
-    '@deepseek-ai/dsh-experimental-agent-team-profile',
-    '@deepseek-ai/dsh-experimental-auto-review',
-    '@deepseek-ai/dsh-experimental-fixture-input',
-    '@acme/dsh-local-tools',
-  ])('localizes Host metadata for %s across cards, details, switches, and uninstall confirmation', (name) => {
+    ['@deepseek-ai/dsh-experimental-agent-team-profile', true],
+    ['@deepseek-ai/dsh-experimental-auto-review', true],
+    ['@deepseek-ai/dsh-experimental-fixture-input', false],
+    ['@deepseek-ai/dsh-cua-bundle', false],
+    ['@acme/dsh-local-tools', false],
+  ] as const)('localizes Host metadata for %s across cards, details, switches, and uninstall confirmation', (name, experimental) => {
     const meta = {
       title: { en: 'Installed tools', zh: '已安装工具' },
       description: { en: 'Tools on this host.', zh: '本机工具。' },
@@ -783,7 +784,7 @@ describe('PluginManagerPage', () => {
       expect(document.getElementById(card.getAttribute('aria-describedby')!)?.textContent).toBe(description(dict))
       expect(screen.getByRole('switch', { name: dict.enableToggle.replace('{name}', title(dict)) })).toBeTruthy()
       expect(screen.queryByText('Original metadata.')).toBeNull()
-      expect(screen.queryByText(dict.statusBeta) !== null).toBe(name.startsWith('@deepseek-ai/dsh-experimental-'))
+      expect(screen.queryByText(dict.statusBeta) !== null).toBe(experimental)
     }
     assertCard(en)
     setLanguage(zh)
@@ -796,6 +797,7 @@ describe('PluginManagerPage', () => {
       expect(screen.getByRole('heading', { level: 3 }).textContent).toBe(title(dict))
       expect(screen.getByText(description(dict))).toBeTruthy()
       expect(document.querySelector('[data-plugin-name]')?.textContent).toBe(name)
+      expect(screen.queryByText(dict.statusBeta) !== null).toBe(experimental)
       expect(screen.getByRole('switch', { name: dict.enableToggle.replace('{name}', title(dict)) })).toBeTruthy()
       expect(screen.getByRole('button', { name: dict.uninstallLabel.replace('{name}', title(dict)) })).toBeTruthy()
     }
