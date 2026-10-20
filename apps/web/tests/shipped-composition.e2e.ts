@@ -468,8 +468,8 @@ function assertLeanChildRecord(agent: Agent): void {
  * gaps: the `cordis_*` toolset executes model-written JavaScript that no
  * sandbox row confines, `mcp_*` servers spawn outside `ctx.shell`, and `ralph`
  * runs unsupervised rounds whose completion is a worker self-report.
- * `web_fetch` is present because public-address enforcement and one-shot
- * approval now confine its model-selected request target. The composition
+ * `web_fetch` is present because it adds no network reach beyond the
+ * mounted shell tools. The composition
  * Agent Note owns the rationale and its sources.
  */
 const EXPECTED_TOOLS = [
@@ -484,6 +484,7 @@ const EXPECTED_TOOLS = [
   'job_list',
   'job_output',
   'list_agents',
+  'list_subagent_models',
   'present',
   'read',
   'read_image',
@@ -982,11 +983,11 @@ it('reviews initially authorized, restricted, and cold-resumed child calls indep
       return found
     }
     expect(historyRole(review('subagent', AUTO_PARENT_AUTHORIZED), AUTO_PARENT_AUTHORIZED))
-      .toBe('human-instruction')
+      .toBe('user-instruction')
     expect(historyRole(review('subagent', AUTO_PARENT_CONTINUABLE), AUTO_PARENT_CONTINUABLE))
-      .toBe('human-instruction')
+      .toBe('user-instruction')
     expect(historyRole(review('send_message', AUTO_PARENT_ADJUST), AUTO_PARENT_ADJUST))
-      .toBe('human-instruction')
+      .toBe('user-instruction')
     expect(historyRole(review('bash', AUTO_CHILD_AUTHORIZED), AUTO_CHILD_AUTHORIZED))
       .toBe('direct-parent-instruction')
     expect(historyRole(review('bash', AUTO_CHILD_CONTINUABLE), AUTO_CHILD_CONTINUABLE))

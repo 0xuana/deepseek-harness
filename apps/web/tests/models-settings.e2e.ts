@@ -241,14 +241,14 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
-  it('filters the discovered model catalog and clears hidden selections', async () => {
+  it('filters the discovered model catalog and deselects only visible candidates', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-models-picker'))
     const settingsDialog = page.getByRole('dialog', { name: '设置' })
     await settingsDialog.getByRole('button', { name: '编辑 minimax-cn' }).click()
     await settingsDialog.getByText('自定义设置').click()
     await settingsDialog.getByRole('button', { name: '获取可用模型' }).click()
 
-    const picker = page.getByRole('dialog', { name: '选择要添加的模型' })
+    const picker = page.getByRole('dialog', { name: '选择模型' })
     await picker.waitFor({ timeout: 10_000 })
     const boxes = picker.getByRole('checkbox')
     const count = await boxes.count()
@@ -268,12 +268,13 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     await search.fill('')
     await expect.poll(async () => boxes.count()).toBe(count)
     const restored = await boxes.evaluateAll(nodes => nodes.map(node => (node as HTMLInputElement).checked))
-    expect(restored).toEqual(Array.from({ length: count }, () => false))
+    expect(restored.filter(checked => !checked)).toHaveLength(1)
+    expect(await picker.getByRole('checkbox', { name: 'MiniMax-M2.7-highspeed', exact: true }).isChecked()).toBe(false)
     await picker.getByRole('button', { name: '全选' }).waitFor()
     await picker.getByRole('button', { name: '全选' }).click()
     const snapshot = await captureStableAria(
       page,
-      '[role="dialog"][aria-label="选择要添加的模型"]',
+      '[role="dialog"][aria-label="选择模型"]',
       scaffold.workspaceCwd,
     )
     await compareOrRefreshGolden(MODEL_PICKER_EXPECTED, snapshot, MODE)
@@ -308,6 +309,8 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     await custom.getByRole('button', { name: '添加模型', exact: true }).click()
     await custom.getByLabel('模型 ID 1').fill('acme-large')
     await custom.getByRole('button', { name: '模型选项 1' }).click()
+    expect(await custom.getByLabel('上下文窗口 1').getAttribute('placeholder')).toBe('1M')
+    expect(await custom.getByLabel('最大输出 token 数 1').getAttribute('placeholder')).toBe('128K')
     expect(await custom.getByRole('group', { name: '输入类型 1' }).getByRole('checkbox', { name: '图片' }).isChecked()).toBe(false)
     await custom.getByRole('group', { name: '输入类型 1' }).getByRole('checkbox', { name: '图片' }).check()
     // The switch seeds off, low, medium, and high rows; this route serves no medium.
@@ -322,6 +325,7 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     expect(document).toContain('acme-gateway:')
     expect(document).toContain('reasoningEfforts:')
     await expect(scaffold.ctx.llm.resolveModelInfo('acme-gateway', 'acme-large')).resolves.toMatchObject({
+      context: { contextWindow: 1_000_000 },
       inputModalities: ['text', 'image'],
       reasoning: { efforts: [{ id: 'off', name: 'Off' }, { id: 'low', name: 'Low' }, { id: 'high', name: 'High' }] },
     })
@@ -514,11 +518,11 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
 
       await dialog.getByRole('button', { name: '删除模型 1' }).click()
       await dialog.getByRole('button', { name: '获取可用模型' }).click()
-      const picker = page.getByRole('dialog', { name: '选择要添加的模型' })
+      const picker = page.getByRole('dialog', { name: '选择模型' })
       await picker.getByRole('button', { name: '取消全选' }).click()
       await picker.getByRole('searchbox', { name: '搜索模型' }).fill('gpt-6-astra')
       await picker.getByRole('checkbox', { name: 'gpt-6-astra', exact: true }).check()
-      await picker.getByRole('button', { name: '添加所选' }).click()
+      await picker.getByRole('button', { name: '更新列表' }).click()
       await dialog.getByRole('button', { name: '模型选项 1' }).click()
       expect(await image.isChecked()).toBe(true)
       await dialog.getByRole('button', { name: '保存', exact: true }).click()
@@ -527,7 +531,7 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     } finally {
       await scaffold.ctx.settings.mutate('llm-pi-ai', [{ op: 'unset', path: ['providers', 'openai'] }])
       await edit.waitFor({ state: 'detached' })
-      await page.getByRole('dialog', { name: '选择要添加的模型' }).waitFor({ state: 'detached' })
+      await page.getByRole('dialog', { name: '选择模型' }).waitFor({ state: 'detached' })
     }
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
