@@ -349,13 +349,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'forkSession( sessionId: SessionId, onCreated?: (childId: SessionId) => void, options?: Pick<Parameters<ISessions[\'fork\']>[0], \'allowMigration\'>, ): Promise<SessionId>',
-        description: 'Fork a Session without changing the current selection.',
+        description: 'Fork a Session. Pages whose access snapshot includes renaming it increment the child title without selecting it; other pages leave the title unchanged and open the child once it is listed.',
         parameters: [{ name: 'sessionId', description: 'source Session.' }, { name: 'onCreated', description: 'observer before the optional child-title update.' }, { name: 'options', description: 'optional permission to start source migration; omission preserves the Host default.' }],
-        returns: 'the child SessionId after creation and inherited-title increment.',
+        returns: 'the child SessionId after creation and any permitted inherited-title increment.',
       },
       {
         signature: 'connectWorkspace(workspaceId: WorkspaceId, options?: Pick<StartSessionOptions, \'agentPreset\'>): Promise<SessionId>',
-        description: 'Resolve the Session for a new conversation in a Workspace: navigation names the first reusable blank member, skipping blanks that list a preset other than a requested one, and the Host reuses it under the requested preset or its default, or creates another Session.',
+        description: 'Resolve the Session for a new conversation in a Workspace: the Host reuses the first listed blank member while it is reusable and otherwise creates one, Resolve the Session for a new conversation in a Workspace: navigation names the first reusable blank member, skipping blanks that list a preset other than a requested one, and the Host reuses it under the requested preset or its default, or creates another Session.',
         parameters: [{ name: 'workspaceId', description: 'target Workspace.' }, { name: 'options', description: 'choices for the created or reused Session.' }],
         returns: 'a Session already addressable through the Session Controller.',
       },

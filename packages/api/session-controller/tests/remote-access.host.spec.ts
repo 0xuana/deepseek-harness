@@ -42,6 +42,11 @@ const READER: RemoteAccessRole<'session'> = {
 }
 const LIST_CALLS: RemoteAccessBinding = { role: LISTER, resource: { kind: 'global' } }
 const READS_SHARED: RemoteAccessBinding = { role: READER, resource: { kind: 'session', id: SHARED } }
+/** Drives one shared Session: prompts it and cancels its turn. */
+const DRIVES_SHARED: RemoteAccessBinding = {
+  role: { name: 'test:session-driver', resource: 'session', actions: ['session/prompt', 'session/cancel'] },
+  resource: { kind: 'session', id: SHARED },
+}
 const SEARCH_CALLS: RemoteAccessBinding = {
   role: { name: 'test:session-searcher', resource: 'global', actions: ['session/search'] },
   resource: { kind: 'global' },
@@ -190,7 +195,8 @@ describe('Session Controller access', () => {
   })
 
   it('records a non-owner caller on the prompt source and leaves owner sources unchanged', async () => {
-    const { shared, as } = await harness()
+    const { ctx, shared, as } = await harness()
+    guestPolicy(ctx, DRIVES_SHARED)
     const signal = new AbortController().signal
     const prompt = (principal: Principal, requestId: string) => as(principal, 'prompt').sessionController.prompt({
       sessionId: SHARED,

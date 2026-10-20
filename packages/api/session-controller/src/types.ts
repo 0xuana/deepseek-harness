@@ -197,6 +197,11 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'session/steer-unavailable': { readonly itemId: MessageId }
     'session/title-invalid': { readonly sessionId: SessionId }
     'session/fork-unavailable': { readonly sessionId: SessionId }
+    'session/fork-conflict': {
+      readonly childSessionId: SessionId
+      readonly sourceSessionId: SessionId
+    }
+    'session/request-conflict': { readonly requestId: SessionRequestId }
     'session/migration-required': { readonly sessionId: SessionId }
     'subagent/not-found': {
       readonly parentSessionId: SessionId
@@ -304,6 +309,8 @@ export interface SessionForkRequest {
   readonly atSeq?: number
   /** False asks the Host to check for required migration before forking. Defaults to true. */
   readonly allowMigration?: boolean
+  /** Child identity the caller's earlier attempt should have materialized; omission mints one. */
+  readonly childSessionId?: SessionId
 }
 
 /** Identity of a newly forked Session. */

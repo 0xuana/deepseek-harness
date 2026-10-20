@@ -471,14 +471,28 @@ export class SessionController extends TypertRemoteService {
       )
     }
     // The caller is recorded only when it is not the owner, so owner messages keep their exact source.
-    const principal = principalOf(this.ctx.invocation)
+    const invocation = this.ctx.invocation
+    const principal = principalOf(invocation)
     const source: MessageSource = {
       kind: 'user',
       rpcId: request.requestId,
       ...(clientTimeZone === undefined ? {} : { clientTimeZone }),
       ...(principal === undefined ? {} : { principal }),
     }
-    return this.commands.prompt(request, source)
+    // The caller's access and cancellation are read after every await and immediately before delivery:
+    // a prompt queued while a share still allowed it must not deliver once that share was narrowed.
+    return this.commands.prompt(request, source, () => {
+      if (signal.aborted || invocation?.peer.signal.aborted) {
+        throw new RemoteError('gateway/cancelled', 'prompt cancelled during admission', {})
+      }
+      if (principal === undefined) return true
+      return this.ctx.remoteAccess.decide({
+        principal,
+        action: 'session/prompt',
+        resources: [{ kind: 'session', id: request.sessionId }],
+        args: { request },
+      }).kind === 'allow'
+    })
   }
 
   /**
@@ -508,6 +522,14 @@ export class SessionController extends TypertRemoteService {
    */
   @Remote('cancel')
   cancel(request: SessionCancelRequest): SessionCancelValue {
+    // The Gateway admitted this call earlier; a caller that lost access meanwhile must not cancel.
+    if (!this.ctx.remoteAccess.allows({ kind: 'session', id: request.sessionId })) {
+      throw new RemoteError(
+        'remote-access/denied',
+        'remote access: session/cancel: access was withdrawn before cancellation',
+        { action: 'session/cancel', reason: 'access-withdrawn' },
+      )
+    }
     return this.commands.cancel(request)
   }
 

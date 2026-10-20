@@ -23,7 +23,11 @@ import type { SettingsDocumentActionInjected } from '../src/client/SettingsDocum
 
 const SELF = '@deepseek-ai/dsh-client-ui-settings-general'
 const SIDEBAR = '@deepseek-ai/dsh-client-ui-sidebar'
-const it = createClientTest({ roster: webApp })
+// The browser entry-customization entry needs `pluginNavigation`, which this settings-only roster does
+// not provide; these tests cover the settings shell gate, so leave that entry out of the boot.
+const it = createClientTest({
+  roster: webApp.without(['@deepseek-ai/dsh-client-ui-entry-customization']),
+})
 /** The whole roster's first boot pays the cold module transform of every plugin package. */
 const COLD_BOOT_TIMEOUT_MS = 60_000
 /** Dictionary namespace this plugin owns; every seat it fills declares it. */
