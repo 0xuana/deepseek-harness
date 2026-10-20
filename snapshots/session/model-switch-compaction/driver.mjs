@@ -1,6 +1,6 @@
 /** Test-only request routing from a large model to a smaller model after tool execution. */
 export const name = 'model-switch-compaction-driver'
-export const inject = ['tools', 'agentModel']
+export const inject = ['tools']
 
 /**
  * Select the smaller model after the first tool call, before the next step prepares.
@@ -11,7 +11,7 @@ export function apply(ctx) {
     const result = await next()
     if (exec.name === 'bash' && !result.isError) {
       if (exec.agent === undefined) throw new Error('model-switch compaction requires a calling Agent')
-      ctx.agentModel.select(exec.agent, { provider: 'deepseek-official', model: 'deepseek-v4-pro' })
+      exec.agent.model.select({ provider: 'deepseek-official', model: 'deepseek-v4-pro' })
     }
     return result
   })

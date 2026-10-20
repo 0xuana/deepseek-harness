@@ -69,6 +69,8 @@ interface Agent {
   readonly options: AgentOptions
   /** The live session this agent drives; its log is the durable source of truth. */
   readonly session: Session
+  /** Agent-owned access to durable model selection for future steps. */
+  readonly model: Model
   /** Agent-owned access to durable pending work. */
   readonly inbox: Inbox
   /** The current lifecycle state, mirrored on every `agent/status` transition. */
@@ -216,7 +218,31 @@ interface AgentOptions {
 
 步骤准备在提示词组装前要求 `provider` 与 `model` 都存在。已弃用的 `agent/request` hook 可以更改请求控制参数，但必须保留该路由。显式 `reasoningEffort` 会为该路由的首次请求提供初始值；确切模型解析会校验该值，省略时则允许填入适配器默认值。提供 `maxTokens` 时，它必须是正安全整数，并限制每次对话模型请求的输出；省略时，系统会在写入请求 header 前填入确切模型的适配器默认值，否则提供方行为保持不变。agent 作用域的 `deployment:persona-prefix` 提示词段落可以遮蔽全局默认 persona。
 
-`dsh-agent-model` 在 `ctx.sessionProjections` 上注册 `modelSelection`。`model/selection` 记录完整选择，但不进入模型历史。匹配的请求头会清除 `pending`，最近请求仍保留为 `lastUsed`。适配器默认的推理强度会被省略，使后续请求重新解析默认值。只有尚未记录选择或请求时，`next` 才为 null，此时由 `AgentOptions` 提供路由。[模型选择包](../../packages/core/agent-model/README.zh.md)说明选择优先级与恢复策略。
+`AgentLoop` 在 `ctx.sessionProjections` 上注册 `modelSelection`，并通过每个 `agent.model` 实例提供选择操作。`model/selection` 记录完整选择，但不进入模型历史。匹配的请求头会清除 `pending`，最近请求仍保留为 `lastUsed`。适配器默认的推理强度会被省略，使后续请求重新解析默认值。只有尚未记录选择或请求时，`next` 才为 null，此时由 `AgentOptions` 提供路由。[Agent 模型 API](../../packages/core/agent/README.zh.md)说明选择优先级与恢复策略。
+
+```ts type-equiv
+/** Agent-owned access to the model choice for future steps. */
+interface Model {
+  /**
+   * Resolve the choice for the next step to begin preparation. Recorded choices
+   * take precedence over the last request and then the Agent's live options.
+   * This read neither starts a step nor changes an already-prepared step.
+   * @returns a detached choice, or undefined when no source names both provider and model.
+   */
+  current(): Readonly<ModelSelection> | undefined
+
+  /**
+   * Replace the next step's complete selection. Omitted effort follows adapter
+   * defaults without inheriting a previous effort or resolving defaults here.
+   * An equal recorded choice is a no-op; an options-only fallback is
+   * always recorded. Callers own model availability and capability validation.
+   * The append uses the Session's existing persistence and failure guarantees.
+   * @param selection - complete provider, model, and optional explicit effort.
+   */
+  select(selection: Readonly<ModelSelection>): void
+
+}
+```
 
 ```ts type-equiv
 /** Complete provider, model, and optional reasoning effort chosen for one Session's model steps. */
@@ -232,7 +258,7 @@ interface ModelSelection {
 
 ```ts type-equiv
 /**
- * Durable model-selection fold for one Session. An effort the adapter
+ * Durable model-selection state for one Session. An effort the adapter
  * defaulted on a recorded request is omitted, so later requests resolve the
  * default again instead of pinning it as a choice.
  */
@@ -555,45 +581,6 @@ async resume(ownerCtx: Context, options: ResumeAgentOptions): Promise<AgentHandl
 Types: [SessionHeader](persistence.zh.md)
 
 Source: [`packages/core/agent-loop/src/index.ts`](../../packages/core/agent-loop/src/index.ts)
-
-<a id="ctxagentmodel--agentmodel"></a>
-
-### `ctx.agentModel` — `AgentModel`
-
-Read and record Session model choices without resolving adapter defaults.
-
-```ts cordis-catalog
-/**
- * Resolve the choice for the next step to begin preparation. Recorded choices
- * take precedence over the last request and then the Agent's live options.
- * This read neither starts a step nor changes an already-prepared step.
- * @param agent - Agent whose Session and fallback options are read.
- * @returns a detached choice, or undefined when no source names both provider and model.
- */
-resolveForNextStep(agent: Agent): Readonly<ModelSelection> | undefined
-
-/**
- * Replace the next step's complete selection. Omitted effort follows adapter
- * defaults. An equal recorded choice is a no-op; an options-only fallback is
- * always recorded. Callers own model availability and capability validation.
- * The append uses the Session's existing persistence and failure guarantees.
- * @param agent - Agent whose Session receives the model/selection event.
- * @param selection - complete provider, model, and optional explicit effort.
- */
-select(agent: Agent, selection: Readonly<ModelSelection>): void
-
-/**
- * Apply an explicit deployment route, including on Session resume. An omitted
- * effort inherits the current explicit effort only for the same route;
- * otherwise it follows adapter defaults. Call only when the entry point
- * explicitly overrides recorded selection, not for ordinary resume fallback.
- * @param agent - Agent whose Session receives the configured choice.
- * @param selection - complete configured provider/model and optional effort.
- */
-applyConfiguredRoute(agent: Agent, selection: Readonly<ModelSelection>): void
-```
-
-Source: [`packages/core/agent-model/src/service.ts`](../../packages/core/agent-model/src/service.ts)
 
 <a id="ctxagentpresets--agentpresetregistry"></a>
 

@@ -16,7 +16,6 @@ import ToolRuntime, { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import * as AgentModelPlugin from '@deepseek-ai/dsh-agent-model'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { MockAdapter, textResponse, toolCallResponse } from './mock-adapter.ts'
 
@@ -40,7 +39,6 @@ async function harnessRoutes(
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
-  await ctx.plugin(AgentModelPlugin)
   await ctx.plugin(SystemPrompt, { personaPrefix: persona })
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(AgentRegistry)
@@ -222,7 +220,7 @@ describe('request stability across the loop', () => {
     const agent = await ctx.agentLoop.create(SessionId('effort'), { provider: 'mock', model: 'mock' })
     send(agent, 'first')
     await waitForIdle(ctx, agent)
-    ctx.agentModel.select(agent, {
+    agent.model.select({
       provider: 'mock', model: 'mock', reasoningEffort: ReasoningEffortId('max'),
     })
     send(agent, 'second')
@@ -253,7 +251,9 @@ describe('request stability across the loop', () => {
         sessionId: SessionId(`effort-${model}`),
         seed: structuredClone(agent.session.snapshotEvents()),
         agentOptions: { provider: 'mock', model },
-        setup: (_ctx, agent) => { resumedCtx.agentModel.applyConfiguredRoute(agent, { provider: 'mock', model }) },
+        setup: (_ctx, agent) => {
+          if (model !== 'mock') agent.model.select({ provider: 'mock', model })
+        },
       })
       send(resumedHandle.agent, 'resumed')
       await waitForIdle(resumedCtx, resumedHandle.agent)
@@ -297,7 +297,7 @@ describe('request stability across the loop', () => {
     })
     send(agent, 'first')
     await waitForIdle(ctx, agent)
-    ctx.agentModel.select(agent, { provider: 'other', model: 'other-model' })
+    agent.model.select({ provider: 'other', model: 'other-model' })
     send(agent, 'second')
     await waitForIdle(ctx, agent)
 
@@ -325,7 +325,7 @@ describe('request stability across the loop', () => {
     })
     send(agent, 'first')
     await waitForIdle(ctx, agent)
-    ctx.agentModel.select(agent, { provider: 'other', model: 'other-model' })
+    agent.model.select({ provider: 'other', model: 'other-model' })
     send(agent, 'second')
     await waitForIdle(ctx, agent)
 
@@ -341,7 +341,6 @@ describe('request stability across the loop', () => {
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(SystemPrompt, { personaPrefix: 'stable base' })
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(AgentRegistry)
@@ -461,7 +460,6 @@ describe('request stability across the loop', () => {
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(SystemPrompt, { personaPrefix: 'stable base' })
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(AgentRegistry)
@@ -939,7 +937,7 @@ describe('request/context capacity records', () => {
 
     send(agent, 'first')
     await waitForIdle(ctx, agent)
-    ctx.agentModel.select(agent, { provider: 'mock', model: 'large' })
+    agent.model.select({ provider: 'mock', model: 'large' })
     send(agent, 'second')
     await waitForIdle(ctx, agent)
 
@@ -966,7 +964,7 @@ describe('request/context capacity records', () => {
     const agent = await ctx.agentLoop.create(SessionId('capacity-clear'), { provider: 'mock', model: 'known' })
     send(agent, 'first')
     await waitForIdle(ctx, agent)
-    ctx.agentModel.select(agent, { provider: 'mock', model: 'unknown' })
+    agent.model.select({ provider: 'mock', model: 'unknown' })
     send(agent, 'second')
     await waitForIdle(ctx, agent)
 

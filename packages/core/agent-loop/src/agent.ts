@@ -11,13 +11,14 @@ import type {
   AgentOptions,
   AgentStatus,
   CancelOptions,
-  InboxTarget,
   ModelSelection,
+  ModelSelectionProjectionState,
+  InboxTarget,
   InboxState,
   PreStepDecision,
   RequestErrorAction,
 } from '@deepseek-ai/dsh-agent'
-import { agentEvents, assembleContextFor } from '@deepseek-ai/dsh-agent'
+import { AgentModel, agentEvents, assembleContextFor } from '@deepseek-ai/dsh-agent'
 import type { GenerateOptions, LlmCallConfig, Message, PreparedLlmCall } from '@deepseek-ai/dsh-llm'
 import {
   LlmError,
@@ -98,6 +99,7 @@ function abortedCancelCause(signal: AbortSignal): AgentCancelCause | undefined {
 
 /** Drives one session through turn and step boundaries. */
 export class ReactLoopAgent implements Agent {
+  readonly model: AgentModel
   readonly inbox: ReactLoopInbox
   private phase: Phase
   private activityDone: Promise<void> = Promise.resolve()
@@ -126,6 +128,7 @@ export class ReactLoopAgent implements Agent {
     public readonly id: SessionId,
     public readonly options: AgentOptions,
     public readonly session: Session,
+    readModel: () => ModelSelectionProjectionState,
     readInbox: () => InboxState,
     lastTurn: number,
   ) {
@@ -133,6 +136,7 @@ export class ReactLoopAgent implements Agent {
     this.dispatch = agentEvents(loopCtx, this)
     this.scope = createScope(loopCtx, this)
     this.ctx = this.scope.ctx
+    this.model = new AgentModel(readModel, session, options)
     this.inbox = new ReactLoopInbox(readInbox, session, this.dispatch)
     this.phase = { kind: 'idle', lastTurn }
     this.runtimeContext = new RuntimeContextProjection(this.ctx, session)
@@ -271,7 +275,7 @@ export class ReactLoopAgent implements Agent {
     if (this.phase.kind !== 'running') throw new Error(`agent "${this.id}": pre-step outside running phase`)
     const signal = this.phase.abort.signal
     const claimed = this.inbox.claim(target, position.turn)
-    const selection = this.loopCtx.agentModel.resolveForNextStep(this)
+    const selection = this.model.current()
     if (selection === undefined) {
       throw new Error(`agent "${this.id}" has no provider/model: set AgentOptions.provider and AgentOptions.model or record a model selection`)
     }
@@ -592,10 +596,10 @@ export class ReactLoopAgent implements Agent {
     )
     signal.throwIfAborted()
     if (proposedConfig.provider !== selection.provider || proposedConfig.model !== selection.model) {
-      throw new Error(`agent "${this.id}": agent/request proposed "${proposedConfig.provider}/${proposedConfig.model}" after step preparation fixed "${selection.provider}/${selection.model}"; use ctx.agentModel.select() before step preparation`)
+      throw new Error(`agent "${this.id}": agent/request proposed "${proposedConfig.provider}/${proposedConfig.model}" after step preparation fixed "${selection.provider}/${selection.model}"; use agent.model.select() before step preparation`)
     }
     if (proposedConfig.reasoningEffort !== selection.reasoningEffort) {
-      throw new Error(`agent "${this.id}": agent/request proposed reasoning effort "${proposedConfig.reasoningEffort ?? 'adapter default'}" after step preparation fixed "${selection.reasoningEffort ?? 'adapter default'}"; use ctx.agentModel.select() before step preparation`)
+      throw new Error(`agent "${this.id}": agent/request proposed reasoning effort "${proposedConfig.reasoningEffort ?? 'adapter default'}" after step preparation fixed "${selection.reasoningEffort ?? 'adapter default'}"; use agent.model.select() before step preparation`)
     }
     let config: LlmCallConfig
     let preparedCall: PreparedLlmCall | undefined

@@ -11,7 +11,7 @@ import {
   type StopReason,
 } from '@agentclientprotocol/sdk'
 import type { Agent, AgentHandle, AgentOptions, AgentStatus } from '@deepseek-ai/dsh-agent'
-import * as ModelSwitchNotice from '@deepseek-ai/dsh-agent-model/notice'
+import { installModelSelection } from '@deepseek-ai/dsh-agent'
 import { createUserMessage, errorChain, type UserMessage } from '@deepseek-ai/dsh-llm'
 import { type Session, type SessionEvent, type SessionId, type TurnEndReason } from '@deepseek-ai/dsh-session'
 import { AcpContentError, admitAcpPrompt } from './content.ts'
@@ -80,7 +80,7 @@ function internalError(detail: string): RequestError {
  * @param options - workspace and MCP servers requested for the session.
  */
 async function composeAgent(agentCtx: Context, options: AcpSessionBuildOptions): Promise<void> {
-  await agentCtx.plugin(ModelSwitchNotice)
+  installModelSelection(agentCtx)
   await mountAcpMcpServers(agentCtx, options.mcpServers, options.cwd)
 }
 
@@ -103,7 +103,7 @@ export class AcpSession {
     private readonly notify: (notification: SessionNotification) => Promise<void>,
   ) {
     this.agent = handle.agent
-    this.modelControl = new AcpModelControl(ctx.llm, ctx.agentModel, handle.agent)
+    this.modelControl = new AcpModelControl(ctx.llm, handle.agent.model)
     this.disposeAgent = () => handle.dispose()
   }
 

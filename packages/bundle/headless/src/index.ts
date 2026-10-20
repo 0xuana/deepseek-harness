@@ -16,8 +16,7 @@ import z from '@deepseek-ai/schemastery'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Agent, AgentOptions } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
-import type {} from '@deepseek-ai/dsh-agent-model'
-import * as ModelSwitchNotice from '@deepseek-ai/dsh-agent-model/notice'
+import { installModelSelection } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-fs'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { APPROVAL_POLICIES, setApprovalPolicy, type ApprovalPolicy } from '@deepseek-ai/dsh-user-approval'
@@ -43,7 +42,7 @@ import { projectJsonRun, boundJsonLine } from './json-stream.ts'
 export const name = 'headless-runner'
 
 /** Core services required before the one-shot turn can start. */
-export const inject = ['agentDefaultModel', 'agents', 'agentModel', 'sessions']
+export const inject = ['agentDefaultModel', 'agents', 'sessions']
 
 /** Plugin config: the task and run options resolved from this app's injected provider service. */
 export interface Config {
@@ -370,10 +369,19 @@ async function run(ctx: Context, config: Config, io: HeadlessIo): Promise<void> 
   // host plane and the agent reads them from the global layer. A deployment
   // that DOES configure one has to join it here first
   // (@deepseek-ai/dsh-agent-preset-registry README, "Composing a child agent").
-  const setup = async (agentCtx: Context, agent: Agent): Promise<void> => {
+  const setup = (agentCtx: Context, agent: Agent): void => {
     // A resumed Session continues with this run's configured model.
-    if (config.sessionId !== undefined) ctx.agentModel.applyConfiguredRoute(agent, selection)
-    await agentCtx.plugin(ModelSwitchNotice)
+    if (config.sessionId !== undefined) {
+      const previous = agent.model.current()
+      const configured = { ...selection }
+      if (configured.reasoningEffort === undefined && previous !== undefined
+        && previous.provider === configured.provider && previous.model === configured.model
+        && previous.reasoningEffort !== undefined) {
+        configured.reasoningEffort = previous.reasoningEffort
+      }
+      agent.model.select(configured)
+    }
+    installModelSelection(agentCtx)
   }
   const sessionId = brandString<SessionId>(config.sessionId ?? `session-${randomUUID()}`)
   const fs = ctx.get('fs')

@@ -1,3 +1,4 @@
+import { unsupportedModel } from '@deepseek-ai/dsh-agent-loop-testkit'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { describe, expect, expectTypeOf, it, onTestFinished } from 'vitest'
 import { Context, Service, symbols } from '@deepseek-ai/cordis'
@@ -22,6 +23,7 @@ function stubAgent(rawId: string, overrides: Partial<Agent> = {}): Agent {
     id,
     options: {},
     session,
+    model: unsupportedModel(),
     inbox: {
       nextTurn: [], nextStep: [],
     } as never,

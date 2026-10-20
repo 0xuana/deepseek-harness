@@ -104,9 +104,6 @@
     },
     {
       "path": "../product-analytics/tsconfig.client.json"
-    },
-    {
-      "path": "../../core/agent-model"
     }
   ],
   "exclude": [

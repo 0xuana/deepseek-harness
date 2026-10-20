@@ -1,8 +1,7 @@
 /** Standard ACP session configuration over one Agent's model selection. */
 
 import type { SessionConfigOption, SessionConfigValueId } from '@agentclientprotocol/sdk'
-import { type Agent, type ModelSelection } from '@deepseek-ai/dsh-agent'
-import type { AgentModel } from '@deepseek-ai/dsh-agent-model'
+import { type Model, type ModelSelection } from '@deepseek-ai/dsh-agent'
 import { ReasoningEffortId, type LlmCallConfig, type LlmRuntime } from '@deepseek-ai/dsh-llm'
 
 const MODEL_CONFIG_ID = 'model'
@@ -39,8 +38,7 @@ export class AcpModelControl {
 
   constructor(
     private readonly llm: LlmRuntime,
-    private readonly agentModel: AgentModel,
-    private readonly agent: Agent,
+    private readonly model: Model,
   ) {}
 
   /**
@@ -48,7 +46,7 @@ export class AcpModelControl {
    * @returns a detached selection, or undefined when neither the Session nor the deployment names a route.
    */
   current(): ModelSelection | undefined {
-    return this.agentModel.resolveForNextStep(this.agent)
+    return this.model.current()
   }
 
   /**
@@ -77,7 +75,7 @@ export class AcpModelControl {
         const selected = state.choices.get(value)
         if (selected === undefined) throw new AcpModelConfigError(`unknown model option: ${value}`)
         await this.resolveSelection(selected, signal)
-        this.agentModel.select(this.agent, selected)
+        this.model.select(selected)
       } else if (configId === REASONING_CONFIG_ID) {
         const info = await this.llm.resolveModelInfo(current.provider, current.model, signal)
         const providerDefault = value === PROVIDER_DEFAULT_REASONING_VALUE
@@ -88,7 +86,7 @@ export class AcpModelControl {
         ) {
           throw new AcpModelConfigError(`unknown reasoning effort for ${current.provider}/${current.model}: ${value}`)
         }
-        this.agentModel.select(this.agent, await this.resolveSelection({
+        this.model.select(await this.resolveSelection({
           provider: current.provider,
           model: current.model,
           ...providerDefault ? {} : { reasoningEffort: ReasoningEffortId(value) },

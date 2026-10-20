@@ -50,6 +50,27 @@ export interface CancelOptions {
   keepInbox?: boolean | undefined
 }
 
+/** Agent-owned access to the model choice for future steps. */
+export interface Model {
+  /**
+   * Resolve the choice for the next step to begin preparation. Recorded choices
+   * take precedence over the last request and then the Agent's live options.
+   * This read neither starts a step nor changes an already-prepared step.
+   * @returns a detached choice, or undefined when no source names both provider and model.
+   */
+  current(): Readonly<ModelSelection> | undefined
+
+  /**
+   * Replace the next step's complete selection. Omitted effort follows adapter
+   * defaults without inheriting a previous effort or resolving defaults here.
+   * An equal recorded choice is a no-op; an options-only fallback is
+   * always recorded. Callers own model availability and capability validation.
+   * The append uses the Session's existing persistence and failure guarantees.
+   * @param selection - complete provider, model, and optional explicit effort.
+   */
+  select(selection: Readonly<ModelSelection>): void
+}
+
 /** Agent-owned access to pending work; concrete storage belongs to the driver. */
 export interface Inbox {
   /** Prompts awaiting individual turns. */
@@ -172,6 +193,8 @@ declare module './types.ts' {
     readonly options: AgentOptions
     /** The live session this agent drives; its log is the durable source of truth. */
     readonly session: Session
+    /** Agent-owned access to durable model selection for future steps. */
+    readonly model: Model
     /** Agent-owned access to durable pending work. */
     readonly inbox: Inbox
     /** The current lifecycle state, mirrored on every `agent/status` transition. */
@@ -337,7 +360,7 @@ declare module '@deepseek-ai/cordis' {
      * governs prompt admission. Model-visible content must use logged channels;
      * this waterfall cannot mutate messages.
      * @deprecated Retained for existing listeners; do not add new listeners.
-     * Use ctx.agentModel.select() before step preparation for model and reasoning
+     * Use agent.model.select() before step preparation for model and reasoning
      * choices, and AgentOptions.maxTokens for the output cap. Other per-request
      * control overrides have no replacement API.
      * @param payload.agent - the agent making the model call.

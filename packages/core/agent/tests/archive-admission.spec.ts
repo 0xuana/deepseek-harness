@@ -1,3 +1,4 @@
+import { unsupportedModel } from '@deepseek-ai/dsh-agent-loop-testkit'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -19,6 +20,7 @@ async function liveAgent(ctx: Context, rawId: string, initial: AgentStatus): Pro
     id,
     options: {},
     session: Session.create(id),
+    model: unsupportedModel(),
     inbox: { nextTurn: [], nextStep: [] } as never,
     get status() { return status },
     ctx,

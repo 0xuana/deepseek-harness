@@ -19,9 +19,11 @@ import type {
   CreateAgentOptions,
   ResumeAgentOptions,
   SessionStartSource,
+  ModelSelection,
+  ModelSelectionProjectionState,
   InboxState,
 } from '@deepseek-ai/dsh-agent'
-import type {} from '@deepseek-ai/dsh-agent-model'
+import { modelSelectionProjectionDefinition } from '@deepseek-ai/dsh-agent'
 import { errorChain, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { interruptedTurnClosers, SessionLogOffset, SessionPreparation } from '@deepseek-ai/dsh-session'
 import type { Session, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
@@ -287,7 +289,7 @@ function validateConfiguredAgents(agents: Config['agents']): void {
 
 /** Concrete agent factory and driver service. */
 export class AgentLoop extends Service implements AgentFactory {
-  static inject = ['agentModel', 'agents', 'sessions', 'llm', 'tools', 'systemPrompt', 'sessionProjections']
+  static inject = ['agents', 'sessions', 'llm', 'tools', 'systemPrompt', 'sessionProjections']
 
   /** Runtime schema for declarative agents. */
   static Config: z<{ agents?: Config['agents']; maxParallelToolCalls?: number }, Config> = z.object({
@@ -309,6 +311,7 @@ export class AgentLoop extends Service implements AgentFactory {
   private readonly ownership: FactoryOwnership
   /** Plain holder prevents Cordis from re-tracing the factory's dependency context through a caller shadow. */
   private readonly runtime: { ctx: Context }
+  private modelProjectionHandle!: ProjectionHandle<ModelSelectionProjectionState>
   private inboxProjectionHandle!: ProjectionHandle<InboxState>
 
   constructor(ctx: Context, config: Config) {
@@ -326,8 +329,9 @@ export class AgentLoop extends Service implements AgentFactory {
   protected async [Service.init](): Promise<void> {
     const ctx = this.runtime.ctx
     const ownership = this.ownership
-    // The inbox remains readable until agent teardown finishes.
+    // Agent projections remain readable until teardown finishes.
     ctx.effect(() => () => ownership.dispose(), 'agentLoop.transactions()')
+    this.modelProjectionHandle = await ctx.sessionProjections.register(modelSelectionProjectionDefinition)
     this.inboxProjectionHandle = await ctx.sessionProjections.register(inboxProjectionDefinition)
     ctx.effect(() => ctx.agents.setFactory(this), 'agentLoop.setFactory()')
     ctx.systemPrompt.variable('provider', context => context.callConfig?.provider ?? context.agent?.options.provider)
@@ -368,9 +372,15 @@ export class AgentLoop extends Service implements AgentFactory {
 
   private applyConfiguredRoute(agent: Agent, options: AgentOptions): void {
     const { provider, model, reasoningEffort } = options
-    if (provider && model) this.runtime.ctx.agentModel.applyConfiguredRoute(agent, {
-      provider, model, ...reasoningEffort === undefined ? {} : { reasoningEffort },
-    })
+    if (!provider || !model) return
+    const previous = agent.model.current()
+    const selection: ModelSelection = { provider, model, ...reasoningEffort === undefined ? {} : { reasoningEffort } }
+    if (selection.reasoningEffort === undefined && previous !== undefined
+      && previous.provider === selection.provider && previous.model === selection.model
+      && previous.reasoningEffort !== undefined) {
+      selection.reasoningEffort = previous.reasoningEffort
+    }
+    agent.model.select(selection)
   }
 
   /** Report a contained declarative-start failure to identity-bound consumers. */
@@ -556,10 +566,16 @@ export class AgentLoop extends Service implements AgentFactory {
       }
     }
     const untrack = this.ownership.track(dispose)
+    const modelProjectionHandle = this.modelProjectionHandle
     const inboxProjectionHandle = this.inboxProjectionHandle
     try {
       unfollowOwner = ownerCtx.effect(function* () {
-        const created = machine = new ReactLoopAgent(loopCtx, id, options, session, () => inboxProjectionHandle.stateOf(session), lastTurn)
+        const created = machine = new ReactLoopAgent(
+          loopCtx, id, options, session,
+          () => modelProjectionHandle.stateOf(session),
+          () => inboxProjectionHandle.stateOf(session),
+          lastTurn,
+        )
         machineReady.resolve()
         // Adopt the scope on its original fiber so it cannot unload before teardown.
         // A loop already unloading during minting owns the provisional scope itself.

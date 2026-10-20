@@ -15,11 +15,14 @@
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-agent/use-this-package:
-  en: b6c8c72ca3596169
-  zh: 2e6e81c529f7803a
+  en: 7d1ae2375bd4fbfc
+  zh: b6b4b2e943174cb2
 /deepseek-ai-dsh-agent/use-this-package/create-or-resume-an-agent:
-  en: cb45db3b7202461a
-  zh: a002e1b07e12172e
+  en: 65b145c363fa6017
+  zh: 9c8d830772ad0113
+/deepseek-ai-dsh-agent/use-this-package/select-a-model:
+  en: 85b0ff72a187110f
+  zh: 3f61c1568d27b8bc
 /deepseek-ai-dsh-agent/use-this-package/drive-an-agent-s-conversation:
   en: 71e258897e2e7d73
   zh: abf0991012faa17e
@@ -41,9 +44,12 @@
 /deepseek-ai-dsh-agent/understand-the-implementation/durable-inbox:
   en: 8f3fe9303468d735
   zh: 52162010ae1ed29e
+/deepseek-ai-dsh-agent/understand-the-implementation/durable-model-selection:
+  en: 692ec951bbb16b33
+  zh: 5a650805ae8943c3
 /deepseek-ai-dsh-agent/understand-the-implementation/source-map:
-  en: 6c4b27402462be8c
-  zh: 466730834fa82810
+  en: bdeb146a53d8eee6
+  zh: 38024efe70a2776f
 /deepseek-ai-dsh-agent/understand-the-implementation/registry-and-lifecycle:
   en: df92e97cedd0d02e
   zh: f6040c145bffd933
@@ -63,8 +69,8 @@
   en: 962c598672b0eed6
   zh: d05b3bc936685ad3
 /deepseek-ai-dsh-agent/model-experience/user-steering-and-injected-messages/what-the-model-sees:
-  en: 1da09e174588443f
-  zh: f6168d519339ac7b
+  en: 2383fe2ec2859ac5
+  zh: 4211b6083cf58ecb
 /deepseek-ai-dsh-agent/model-experience/user-steering-and-injected-messages/token-effect:
   en: 95ed6c912ead0fba
   zh: d5ad3d7257f7836c
@@ -78,11 +84,23 @@
   en: 09a31923f42fcadf
   zh: c52117c2afbca7c6
 /deepseek-ai-dsh-agent/model-experience/agent-scoped-request-composition/token-effect:
-  en: dfebf42b629656d9
+  en: b25f4a4bb14fdfce
   zh: 9369ace52f58a579
 /deepseek-ai-dsh-agent/model-experience/agent-scoped-request-composition/kv-cache-effect:
-  en: 07a408b32e49ecaf
-  zh: 9684b80cb3c0e75c
+  en: 0d6f538ede133159
+  zh: 4f32f218e06fa432
+/deepseek-ai-dsh-agent/model-experience/optional-model-switch-notice:
+  en: 43e32660a38f9ea1
+  zh: 334d24a453b14322
+/deepseek-ai-dsh-agent/model-experience/optional-model-switch-notice/what-the-model-sees:
+  en: d7de2f137ff3b9b6
+  zh: 53e9098d97832b70
+/deepseek-ai-dsh-agent/model-experience/optional-model-switch-notice/token-effect:
+  en: e38815dd2b8cf92e
+  zh: ec449b3b5ce10bf1
+/deepseek-ai-dsh-agent/model-experience/optional-model-switch-notice/kv-cache-effect:
+  en: 2aba63100fcafc58
+  zh: 7484f7981d8cc955
 /deepseek-ai-dsh-agent/known-limitations-and-deferred-work:
   en: 00a2d12980ffe756
   zh: c8bf69d06d165b36

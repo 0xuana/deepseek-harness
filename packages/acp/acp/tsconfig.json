@@ -40,9 +40,6 @@
     },
     {
       "path": "../../interaction/user-approval"
-    },
-    {
-      "path": "../../core/agent-model"
     }
   ]
 }

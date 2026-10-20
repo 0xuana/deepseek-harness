@@ -17,7 +17,7 @@ import { subagentIdentityProjectionDefinition } from '@deepseek-ai/dsh-subagent/
 import { describe, expect, it, vi } from 'vitest'
 import { ApiSessionAgentController } from '../src/agent.ts'
 import { SessionCommandController } from '../src/commands.ts'
-import { createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { unsupportedModel, createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { installSessionReadTestServices, testSessionPersistence } from './test-remote.ts'
 
 declare module '@deepseek-ai/dsh-llm' {
@@ -92,6 +92,7 @@ async function commandHarness(
     send: vi.fn(),
     inject: vi.fn(),
     session,
+    model: unsupportedModel(),
     inbox,
     status: 'running',
     ctx,

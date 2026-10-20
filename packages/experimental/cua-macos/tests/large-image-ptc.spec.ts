@@ -8,7 +8,6 @@ import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import * as AgentModelPlugin from '@deepseek-ai/dsh-agent-model'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
@@ -65,7 +64,7 @@ it.skipIf(process.platform === 'win32')('delivers a valid PNG larger than 4 MiB 
     bounds: { x: 0, y: 0, width: 1024, height: 512 },
   }))
   const modules = {
-    llm: LlmRuntime, session: SessionStore, projection: SessionProjectionRegistry, agentModel: AgentModelPlugin,
+    llm: LlmRuntime, session: SessionStore, projection: SessionProjectionRegistry,
     systemPrompt: SystemPrompt, tools: ToolRuntime, agents: AgentRegistry, agentLoop: AgentLoop,
     attachments: LocalAttachmentStore, fs: FileSystem, subprocess: SubprocessLocal,
     sandbox: Sandbox, sandboxPolicy: SandboxPolicy, ptc: NodePtcRuntime,

@@ -85,6 +85,21 @@ export interface ModelSelection {
   reasoningEffort?: ReasoningEffortId
 }
 
+/** Client view of the durable model-selection fold. */
+export interface ModelSelectionProjection {
+  /** Selection used by the latest recorded model request. */
+  readonly lastUsed: ModelSelection | null
+  /** Selection the next model step uses; null while the Agent's initial options supply the route. */
+  readonly next: ModelSelection | null
+}
+
+declare module '@deepseek-ai/dsh-session-projection/types' {
+  interface SessionProjectionMap {
+    /** Recorded model selection for the next model step and the latest request. */
+    modelSelection: ModelSelectionProjection
+  }
+}
+
 declare module '@deepseek-ai/dsh-session/types' {
   interface SessionEventMap {
     /**

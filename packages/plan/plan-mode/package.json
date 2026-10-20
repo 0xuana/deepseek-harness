@@ -69,7 +69,6 @@
     "@deepseek-ai/dsh-tools": "workspace:*",
     "@deepseek-ai/dsh-user-questions": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
-    "@deepseek-ai/dsh-agent-loop-testkit": "workspace:*",
-    "@deepseek-ai/dsh-agent-model": "workspace:*"
+    "@deepseek-ai/dsh-agent-loop-testkit": "workspace:*"
   }
 }

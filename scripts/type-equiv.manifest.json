@@ -148,6 +148,11 @@
     },
     {
       "doc": "docs/subsystems/core.md",
+      "symbol": "Model",
+      "source": "packages/core/agent/src/runtime-types.ts"
+    },
+    {
+      "doc": "docs/subsystems/core.md",
       "symbol": "InboxTarget",
       "source": "packages/core/agent/src/types.ts"
     },
@@ -2495,12 +2500,12 @@
     {
       "doc": "docs/subsystems/core.md",
       "symbol": "ModelSelectionProjectionState",
-      "source": "packages/core/agent-model/src/types.ts"
+      "source": "packages/core/agent/src/model-selection.ts"
     },
     {
       "doc": "docs/subsystems/core.md",
       "symbol": "ModelSelectionProjection",
-      "source": "packages/core/agent-model/src/types.ts"
+      "source": "packages/core/agent/src/types.ts"
     },
     {
       "doc": "docs/subsystems/core.md",

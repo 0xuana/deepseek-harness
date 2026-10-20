@@ -31,7 +31,6 @@ import {
   mountAgentLoopTestDependencies,
   mountAgentLoopTestHarness,
 } from '@deepseek-ai/dsh-agent-loop-testkit'
-import * as AgentModelPlugin from '@deepseek-ai/dsh-agent-model'
 import { createSessionTestRemote, testSessionPersistence, type TestSessionRemote } from './test-remote.ts'
 
 const ownedContexts = new Set<Context>()
@@ -163,7 +162,6 @@ describe('session.history projections block', () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(AgentRegistry)
     const parent = ctx.sessions.create(SessionId('wire-seed-parent'), { meta: { cwd: '/workspace' } })
     parent.append('turn/start', { turn: 1 })
@@ -581,7 +579,6 @@ describe('session.list projections column', () => {
       await ctx.plugin(StorageDomain, { backend: 'json' })
       await ctx.plugin(SessionStore)
       await ctx.plugin(SessionProjectionRegistry)
-      await ctx.plugin(AgentModelPlugin)
       await ctx.plugin(AgentRegistry)
       await ctx.sessionProjections.register(privatePromptUnit())
       await ctx.plugin(SessionProjectionCache, { writeEveryEvents: 100, writeIntervalMs: 60_000 })
@@ -637,7 +634,6 @@ describe('session.list projections column', () => {
       await ctx.plugin(StorageDomain, { backend: 'json' })
       await ctx.plugin(SessionStore)
       await ctx.plugin(SessionProjectionRegistry)
-      await ctx.plugin(AgentModelPlugin)
       await ctx.plugin(AgentRegistry)
       await ctx.sessionProjections.register(titleProjectionDefinition)
       await ctx.plugin(SessionProjectionCache, { writeEveryEvents: 100, writeIntervalMs: 60_000 })

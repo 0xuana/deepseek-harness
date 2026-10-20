@@ -8,7 +8,6 @@ import ToolRuntime, { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import * as AgentModelPlugin from '@deepseek-ai/dsh-agent-model'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
 
@@ -44,7 +43,6 @@ async function loopHarness(): Promise<Context> {
   await created.plugin(LlmRuntime)
   await created.plugin(SessionStore)
   await created.plugin(SessionProjectionRegistry)
-  await created.plugin(AgentModelPlugin)
   await created.plugin(SystemPrompt, { personaPrefix: SYSTEM })
   await created.plugin(ToolRuntime)
   await created.plugin(AgentRegistry)

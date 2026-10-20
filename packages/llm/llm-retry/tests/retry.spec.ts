@@ -20,7 +20,6 @@ import ToolRuntime, { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent, RequestErrorAction } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import * as AgentModelPlugin from '@deepseek-ai/dsh-agent-model'
 import type { Config as retryConfig, RetryInternals as retryRetryInternals } from '../src/index.ts'
 import * as retry from '../src/index.ts'
 
@@ -111,7 +110,6 @@ async function harness(
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
-  await ctx.plugin(AgentModelPlugin)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(AgentRegistry)
@@ -540,7 +538,7 @@ describe('provider-routed retry policy', () => {
       provider: 'mock',
       model: 'mock',
     })
-    context.agentModel.select(agent, { provider: 'other', model: 'mock' })
+    agent.model.select({ provider: 'other', model: 'mock' })
     const scheduled = waitForRetry(context, agent, 1)
 
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'reroute' }], source: { kind: 'user' } }))
@@ -581,7 +579,7 @@ describe('provider-routed retry policy', () => {
     context.tools.register(defineContentToolFixture({
       name: 'switch_provider', description: '', parameters: {},
       execute: async () => {
-        agent.ctx.agentModel.select(agent, { provider: 'other', model: 'mock' })
+        agent.model.select({ provider: 'other', model: 'mock' })
         return [{ type: 'text', text: 'switched' }]
       },
     }))

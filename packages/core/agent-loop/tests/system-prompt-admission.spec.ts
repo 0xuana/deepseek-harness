@@ -2,8 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { type Agent, type ModelSelection } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import * as AgentModelPlugin from '@deepseek-ai/dsh-agent-model'
-import * as ModelSwitchNotice from '@deepseek-ai/dsh-agent-model/notice'
+import { installModelSelection } from '@deepseek-ai/dsh-agent'
 import LlmRuntime, { createUserMessage, LlmError, ReasoningEffortId, type GenerateOptions } from '@deepseek-ai/dsh-llm'
 import { toPiContext } from '@deepseek-ai/dsh-llm-pi-ai/src/context.ts'
 import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
@@ -29,7 +28,6 @@ async function harness(capable = new MockAdapter(Array.from({ length: 8 }, () =>
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
-  await ctx.plugin(AgentModelPlugin)
   await ctx.plugin(SystemPrompt, { personaPrefix: '', personaSuffix: '' })
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(AgentRegistry)
@@ -43,7 +41,7 @@ async function harness(capable = new MockAdapter(Array.from({ length: 8 }, () =>
     ...await next(), sections: [{ name: 'test', text: prompt, order: 0 }],
   }))
   const agent = await ctx.agentLoop.create(SessionId('admission'), { provider: 'capable', model: 'model' })
-  await agent.ctx.plugin(ModelSwitchNotice)
+  installModelSelection(agent.ctx)
   ctx.on('llm/stream', (request, next) => {
     // Rebuild from copied source events, not the live projection's cached state.
     const subject = ctx.agents.get(request.sessionId!)!
@@ -185,7 +183,7 @@ describe('prepared-route prompt admission', () => {
     h.setPrompt('prompt three')
     await send(h.agent, 'third')
     expect(systemTexts(h.capable.requests[2]!)).toHaveLength(3)
-    h.ctx.agentModel.select(h.agent, { provider, model: 'model' })
+    h.agent.model.select({ provider, model: 'model' })
     h.setPrompt('')
     await send(h.agent, 'clear')
     const adapter = provider === 'capable' ? h.capable : h.plain
@@ -289,7 +287,7 @@ describe('prepared-route prompt admission', () => {
     h.setPrompt('prompt two')
     await send(h.agent, 'second')
     expect(systemTexts(h.capable.requests[1]!)).toHaveLength(2)
-    h.ctx.agentModel.select(h.agent, { provider: 'plain', model: 'model' })
+    h.agent.model.select({ provider: 'plain', model: 'model' })
     if (changed) h.setPrompt('prompt three')
     await send(h.agent, 'third')
     expectPlain(h.plain.requests[0]!, changed ? 'prompt three' : 'prompt two')
@@ -307,9 +305,9 @@ describe('prepared-route prompt admission', () => {
 
   it('appends on the first capable request after a plain route', async () => {
     const h = await harness()
-    h.ctx.agentModel.select(h.agent, { provider: 'plain', model: 'model' })
+    h.agent.model.select({ provider: 'plain', model: 'model' })
     await send(h.agent, 'first')
-    h.ctx.agentModel.select(h.agent, { provider: 'capable', model: 'model' })
+    h.agent.model.select({ provider: 'capable', model: 'model' })
     h.setPrompt('prompt two')
     await send(h.agent, 'second')
     expect(systemTexts(h.capable.requests[0]!)).toEqual([
@@ -369,7 +367,7 @@ describe('prepared-route prompt admission', () => {
       sessionId: SessionId('resumed'),
       agentOptions: { provider: 'plain', model: 'model' },
       seed: [...seed],
-      setup: (_ctx, agent) => { h.ctx.agentModel.applyConfiguredRoute(agent, { provider: 'plain', model: 'model' }) },
+      setup: (_ctx, agent) => { agent.model.select({ provider: 'plain', model: 'model' }) },
     })
     await send(resumed, 'resume')
     expectPlain(h.plain.requests[0]!, 'prompt two')
@@ -415,7 +413,7 @@ describe('prepared-route prompt admission', () => {
       defaultEffort: ReasoningEffortId('low'),
     })
     const h = await harness(adapter)
-    h.ctx.agentModel.select(h.agent, {
+    h.agent.model.select({
       provider: 'capable', model: 'model', ...selected === undefined ? {} : { reasoningEffort: selected },
     })
     h.ctx.on('agent/request', async (_payload, next) => {
@@ -429,7 +427,7 @@ describe('prepared-route prompt admission', () => {
     expect(events.filter(event => ['request/header', 'user/message', 'system/message'].includes(event.type))).toEqual([])
     expect(events.at(-1)).toMatchObject({
       type: 'turn/end', data: { reason: { kind: 'error', error: {
-        message: `agent "admission": agent/request proposed reasoning effort "${proposed ?? 'adapter default'}" after step preparation fixed "${selected ?? 'adapter default'}"; use ctx.agentModel.select() before step preparation`,
+        message: `agent "admission": agent/request proposed reasoning effort "${proposed ?? 'adapter default'}" after step preparation fixed "${selected ?? 'adapter default'}"; use agent.model.select() before step preparation`,
       } } },
     })
   })
@@ -441,7 +439,7 @@ describe('prepared-route prompt admission', () => {
     ], { efforts: [{ id: ReasoningEffortId('high'), name: 'High' }] })
     const h = await harness(adapter)
     const selection = { provider: 'capable', model: 'model', reasoningEffort: ReasoningEffortId('high') }
-    h.ctx.agentModel.select(h.agent, selection)
+    h.agent.model.select(selection)
     const prepared: (Readonly<ModelSelection> | undefined)[] = []
     h.ctx.on('system-prompt/assemble', (_assembly, context, next) => {
       prepared.push(context.callConfig)
@@ -452,7 +450,7 @@ describe('prepared-route prompt admission', () => {
       return next()
     })
     h.ctx.on('agent/request-error', () => {
-      h.ctx.agentModel.select(h.agent, { provider: 'plain', model: 'next-model' })
+      h.agent.model.select({ provider: 'plain', model: 'next-model' })
       return Promise.resolve({ kind: 'retry' as const })
     })
 
@@ -461,7 +459,7 @@ describe('prepared-route prompt admission', () => {
     expect(adapter.requests.map(({ provider, model, reasoningEffort }) => ({ provider, model, reasoningEffort })))
       .toEqual([selection, selection])
     expect(h.plain.requests).toHaveLength(0)
-    expect(h.ctx.agentModel.resolveForNextStep(h.agent))
+    expect(h.agent.model.current())
       .toEqual({ provider: 'plain', model: 'next-model' })
 
     await send(h.agent, 'use the pending choice')
@@ -476,7 +474,7 @@ describe('prepared-route prompt admission', () => {
     h.setPrompt('prompt two')
     h.ctx.on('agent/request', async (_payload, next) => {
       const config = await next()
-      h.ctx.agentModel.select(h.agent, { provider: 'plain', model: 'model' })
+      h.agent.model.select({ provider: 'plain', model: 'model' })
       return { ...config, temperature: 0.5, maxTokens: 100 }
     })
     await send(h.agent, 'second')

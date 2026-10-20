@@ -8,6 +8,6 @@
 /event-producer-and-consumer-matrix:
   en: 19f30fda81e73345
   zh: a8505006244f5619
-/event-producer-and-consumer-matrix/events-outside-the-current-harness-api-catalog:
-  en: 6a87a4da78bd7170
-  zh: 45b1dc20d153587f
+/event-producer-and-consumer-matrix/non-harness-or-undeclared-event-strings-seen-in-package-source:
+  en: 96dc0ff1580e5741
+  zh: 96dc0ff1580e5741

@@ -68,7 +68,6 @@
     "@deepseek-ai/dsh-sandbox": "workspace:*",
     "@deepseek-ai/dsh-sandbox-policy": "workspace:*",
     "@deepseek-ai/dsh-working-directory": "workspace:*",
-    "@deepseek-ai/dsh-agent-loop-testkit": "workspace:*",
-    "@deepseek-ai/dsh-agent-model": "workspace:*"
+    "@deepseek-ai/dsh-agent-loop-testkit": "workspace:*"
   }
 }

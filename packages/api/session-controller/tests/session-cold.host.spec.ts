@@ -3,6 +3,7 @@
  * metadata-only listing, Agent-free history reads, subagent ownership
  * isolation, and prompt failure mapping.
  */
+import { AgentModel, modelSelectionProjectionDefinition } from '@deepseek-ai/dsh-agent'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 
 import { SESSION_FORMAT_VERSION, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
@@ -17,8 +18,7 @@ import { createUserMessage, MessageId } from '@deepseek-ai/dsh-llm'
 import { snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
 import { createInboxStub, mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { Agent, Inbox } from '@deepseek-ai/dsh-agent'
-import * as AgentModelPlugin from '@deepseek-ai/dsh-agent-model'
-import type { SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
+import type { Session, SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import AttachmentStore from '@deepseek-ai/dsh-attachment'
 import type { SessionPromptRequest, SessionRequestId } from '../src/types.ts'
 import {
@@ -84,7 +84,6 @@ describe('sessions.list cold merge', () => {
     try {
       await ctx.plugin(SessionStore)
       await ctx.plugin(SessionProjectionRegistry)
-      await ctx.plugin(AgentModelPlugin)
       await ctx.plugin(AgentRegistry)
       const historical = header('format-historical', 100)
       const current = header('format-current', 200)
@@ -251,7 +250,6 @@ describe('attached updatedAt tracks human prompts', () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(AgentRegistry)
     const remote = await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
     await new Promise(resolve => setTimeout(resolve, 0))
@@ -397,7 +395,6 @@ describe('Remote Agent and Session lookup policy', () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(AgentRegistry)
     const remote = await createSessionTestRemote(ctx, {
       defaultModelSelection: () => ({ provider: 'p', model: 'm' }),
@@ -419,7 +416,6 @@ describe('Remote Agent and Session lookup policy', () => {
     await ctx.plugin(TypertRegistry)
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(AgentRegistry)
     const sessionId = sid('session-remote-cold')
     const meta = header(sessionId, 1000)
@@ -461,7 +457,6 @@ describe('Remote Agent and Session lookup policy', () => {
     await ctx.plugin(TypertRegistry)
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(AgentRegistry)
     const coldId = sid('session-remote-cold-child')
     const coldMeta = header(coldId, 1000, {
@@ -507,7 +502,6 @@ describe('Remote Agent and Session lookup policy', () => {
     await ctx.plugin(TypertRegistry)
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(AgentRegistry)
     const sessionId = sid('session-remote-resumed-child')
     const meta = header(sessionId, 1000)
@@ -544,7 +538,6 @@ describe('subagent ownership fence', () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(AgentRegistry)
     const sessionId = sid('session-child')
     const meta = header('session-child', 1000, {
@@ -624,7 +617,6 @@ describe('subagent ownership fence', () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(AgentRegistry)
     const sessionId = sid('session-legacy-child')
     const meta = header('session-legacy-child', 1000, {
@@ -663,7 +655,6 @@ describe('subagent ownership fence', () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(AgentRegistry)
     const parentSession = ctx.sessions.create(sid('session-parent'), { meta: { cwd: '/proj' } })
     const parent = { id: parentSession.id, session: parentSession, status: 'idle', ctx } as Agent
@@ -724,7 +715,6 @@ describe('subagent ownership fence', () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(AgentRegistry)
     const session = ctx.sessions.create(sid('session-ordinary-fork'), {
       seed: [{
@@ -737,9 +727,14 @@ describe('subagent ownership fence', () => {
       inheritedEventCount: SessionLogOffset(1),
     })
     const followup = vi.fn()
-    const agent = {
-      id: session.id, session, inbox: inboxFor(), status: 'idle', ctx, followup,
-    } as unknown as Agent
+    const agent: Agent = {
+      id: session.id, session, model: await modelFor(ctx, session),
+      options: { provider: 'p', model: 'm' },
+      inbox: inboxFor(), status: 'idle', ctx, followup,
+      cancel: vi.fn(), whenIdle: () => Promise.resolve(),
+      runMaintenance: async () => { throw new Error('unexpected maintenance') },
+      send: vi.fn(), inject: vi.fn(), steer: vi.fn(),
+    }
     await ctx.agents.register(agent)
     const remote = await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
 
@@ -756,13 +751,17 @@ describe('subagent ownership fence', () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(AgentRegistry)
     const session = ctx.sessions.create(sid('session-browser-zone'), { meta: { cwd: '/proj' } })
     const followup = vi.fn()
-    const agent = {
-      id: session.id, session, inbox: inboxFor(), status: 'idle', ctx, followup,
-    } as unknown as Agent
+    const agent: Agent = {
+      id: session.id, session, model: await modelFor(ctx, session),
+      options: { provider: 'p', model: 'm' },
+      inbox: inboxFor(), status: 'idle', ctx, followup,
+      cancel: vi.fn(), whenIdle: () => Promise.resolve(),
+      runMaintenance: async () => { throw new Error('unexpected maintenance') },
+      send: vi.fn(), inject: vi.fn(), steer: vi.fn(),
+    }
     await ctx.agents.register(agent)
     const remote = await createSessionTestRemote(ctx, {
       defaultModelSelection: () => ({ provider: 'p', model: 'm' }),
@@ -829,7 +828,6 @@ describe('degenerate composition (no persistence, no factory)', () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(AgentRegistry)
     const remote = await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
 
@@ -852,7 +850,6 @@ describe('degenerate composition (no persistence, no factory)', () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(AgentRegistry)
     const inspect = vi.fn()
     const stat = vi.fn(() => Promise.resolve(undefined))
@@ -875,25 +872,31 @@ describe('degenerate composition (no persistence, no factory)', () => {
   })
 })
 
+async function modelFor(ctx: Context, session: Session): Promise<AgentModel> {
+  const projection = await ctx.sessionProjections.register(modelSelectionProjectionDefinition)
+  return new AgentModel(() => projection.stateOf(session), session, { provider: 'p', model: 'm' })
+}
+
 describe('sessions.prompt synchronous rejection', () => {
   it('rejects content without non-whitespace text or an attachment before delivery or Session events', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(AgentRegistry)
     const session = ctx.sessions.create(sid('session-empty-prompt'))
+    const options = { provider: 'p', model: 'm' }
     const followup = vi.fn()
     const steer = vi.fn()
     await ctx.agents.register({
       id: session.id,
-      options: { provider: 'p', model: 'm' },
+      options,
       whenIdle: vi.fn(() => Promise.resolve()),
       runMaintenance: async () => { throw new Error('unexpected maintenance') },
       send: vi.fn(),
       inject: vi.fn(),
       cancel: vi.fn(),
       session,
+      model: await modelFor(ctx, session),
       inbox: inboxFor(),
       status: 'idle',
       ctx,
@@ -984,7 +987,6 @@ describe('sessions.prompt synchronous rejection', () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(AgentRegistry)
     const session = ctx.sessions.create(sid('session-throwing'))
     // A live structural stub whose delivery verbs throw synchronously, the
@@ -992,12 +994,17 @@ describe('sessions.prompt synchronous rejection', () => {
     await ctx.agents.register({
       id: session.id,
       session,
+      model: await modelFor(ctx, session),
       inbox: inboxFor(),
       status: 'idle',
       ctx,
+      options: { provider: 'p', model: 'm' },
+      cancel: vi.fn(), whenIdle: () => Promise.resolve(),
+      runMaintenance: async () => { throw new Error('unexpected maintenance') },
+      send: vi.fn(), inject: vi.fn(),
       followup: () => { throw new Error('agent "session-throwing" lifecycle disposed') },
       steer: () => { throw new Error('agent "session-throwing" lifecycle disposed') },
-    } as unknown as Agent)
+    })
     const remote = await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
 
     for (const mode of ['queue', 'steer'] as const) {
@@ -1019,7 +1026,6 @@ describe('sessions.prompt synchronous rejection', () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(AgentRegistry)
     const sessionId = sid('race-resume')
     const meta: SessionHeader = header('race-resume', 1000)

@@ -65,6 +65,8 @@ interface Agent {
   readonly options: AgentOptions
   /** The live session this agent drives; its log is the durable source of truth. */
   readonly session: Session
+  /** Agent-owned access to durable model selection for future steps. */
+  readonly model: Model
   /** Agent-owned access to durable pending work. */
   readonly inbox: Inbox
   /** The current lifecycle state, mirrored on every `agent/status` transition. */
@@ -212,7 +214,31 @@ interface AgentOptions {
 
 Step preparation requires `provider` and `model` before prompt assembly. The deprecated `agent/request` hook may change request controls but must preserve that route. An explicit `reasoningEffort` seeds the first request on that route; exact-model resolution validates it, while omission allows the adapter default to materialize. When present, `maxTokens` must be a positive safe integer and caps every conversation-model request; omission allows the exact-model adapter default to materialize before the request header, or otherwise leaves provider behavior unchanged. An agent-scoped `deployment:persona-prefix` prompt section may shadow the global default persona.
 
-`dsh-agent-model` registers `modelSelection` on `ctx.sessionProjections`. `model/selection` records a complete choice without entering model history. A matching request header clears `pending`; the latest request remains `lastUsed`. Adapter-defaulted effort is omitted so later requests resolve the default again. `next` is null only before either a choice or a request is recorded; in that case `AgentOptions` supplies the route. The [model-selection package](../../packages/core/agent-model/README.md) describes selection precedence and resume policy.
+`AgentLoop` registers `modelSelection` on `ctx.sessionProjections` and exposes selection operations through each `agent.model` instance. `model/selection` records a complete choice without entering model history. A matching request header clears `pending`; the latest request remains `lastUsed`. Adapter-defaulted effort is omitted so later requests resolve the default again. `next` is null only before either a choice or a request is recorded; in that case `AgentOptions` supplies the route. The [Agent model API](../../packages/core/agent/README.md) describes selection precedence and resume policy.
+
+```ts type-equiv
+/** Agent-owned access to the model choice for future steps. */
+interface Model {
+  /**
+   * Resolve the choice for the next step to begin preparation. Recorded choices
+   * take precedence over the last request and then the Agent's live options.
+   * This read neither starts a step nor changes an already-prepared step.
+   * @returns a detached choice, or undefined when no source names both provider and model.
+   */
+  current(): Readonly<ModelSelection> | undefined
+
+  /**
+   * Replace the next step's complete selection. Omitted effort follows adapter
+   * defaults without inheriting a previous effort or resolving defaults here.
+   * An equal recorded choice is a no-op; an options-only fallback is
+   * always recorded. Callers own model availability and capability validation.
+   * The append uses the Session's existing persistence and failure guarantees.
+   * @param selection - complete provider, model, and optional explicit effort.
+   */
+  select(selection: Readonly<ModelSelection>): void
+
+}
+```
 
 ```ts type-equiv
 /** Complete provider, model, and optional reasoning effort chosen for one Session's model steps. */
@@ -228,7 +254,7 @@ interface ModelSelection {
 
 ```ts type-equiv
 /**
- * Durable model-selection fold for one Session. An effort the adapter
+ * Durable model-selection state for one Session. An effort the adapter
  * defaulted on a recorded request is omitted, so later requests resolve the
  * default again instead of pinning it as a choice.
  */
@@ -543,45 +569,6 @@ async resume(ownerCtx: Context, options: ResumeAgentOptions): Promise<AgentHandl
 Types: [SessionHeader](persistence.md)
 
 Source: [`packages/core/agent-loop/src/index.ts`](../../packages/core/agent-loop/src/index.ts)
-
-<a id="ctxagentmodel--agentmodel"></a>
-
-### `ctx.agentModel` — `AgentModel`
-
-Read and record Session model choices without resolving adapter defaults.
-
-```ts cordis-catalog
-/**
- * Resolve the choice for the next step to begin preparation. Recorded choices
- * take precedence over the last request and then the Agent's live options.
- * This read neither starts a step nor changes an already-prepared step.
- * @param agent - Agent whose Session and fallback options are read.
- * @returns a detached choice, or undefined when no source names both provider and model.
- */
-resolveForNextStep(agent: Agent): Readonly<ModelSelection> | undefined
-
-/**
- * Replace the next step's complete selection. Omitted effort follows adapter
- * defaults. An equal recorded choice is a no-op; an options-only fallback is
- * always recorded. Callers own model availability and capability validation.
- * The append uses the Session's existing persistence and failure guarantees.
- * @param agent - Agent whose Session receives the model/selection event.
- * @param selection - complete provider, model, and optional explicit effort.
- */
-select(agent: Agent, selection: Readonly<ModelSelection>): void
-
-/**
- * Apply an explicit deployment route, including on Session resume. An omitted
- * effort inherits the current explicit effort only for the same route;
- * otherwise it follows adapter defaults. Call only when the entry point
- * explicitly overrides recorded selection, not for ordinary resume fallback.
- * @param agent - Agent whose Session receives the configured choice.
- * @param selection - complete configured provider/model and optional effort.
- */
-applyConfiguredRoute(agent: Agent, selection: Readonly<ModelSelection>): void
-```
-
-Source: [`packages/core/agent-model/src/service.ts`](../../packages/core/agent-model/src/service.ts)
 
 <a id="ctxagentpresets--agentpresetregistry"></a>
 

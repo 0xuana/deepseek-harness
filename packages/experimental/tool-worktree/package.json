@@ -55,8 +55,7 @@
     "@deepseek-ai/dsh-tools": "workspace:*",
     "@deepseek-ai/dsh-working-directory": "workspace:*",
     "@deepseek-ai/dsh-experimental-worktree": "workspace:*",
-    "@deepseek-ai/dsh-agent-loop": "workspace:*",
-    "@deepseek-ai/dsh-agent-model": "workspace:*"
+    "@deepseek-ai/dsh-agent-loop": "workspace:*"
   },
   "icon": "./icon.svg",
   "dsh": {

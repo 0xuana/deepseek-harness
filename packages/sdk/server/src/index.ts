@@ -12,14 +12,13 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Readable, Writable } from 'node:stream'
 import Schema from '@deepseek-ai/schemastery'
-import type {} from '@deepseek-ai/dsh-agent-model'
 import { JsonRpcLineTransport } from '@deepseek-ai/dsh-sdk-protocol'
 import { HarnessSdkJsonRpcServer } from './server.ts'
 
 export * from './server.ts'
 
 export const name = 'sdk-jsonrpc-server'
-export const inject = ['agents', 'agentModel', 'workingDirectory']
+export const inject = ['agents', 'workingDirectory']
 
 /** JSON-RPC deployment config plus runtime-only test hooks. */
 export interface JsonRpcConfig {

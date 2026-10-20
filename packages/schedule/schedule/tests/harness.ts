@@ -2,7 +2,7 @@
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { Context, Service } from '@deepseek-ai/cordis'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
-import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { unsupportedModel, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import type { CreateSessionOptions } from '@deepseek-ai/dsh-session'
@@ -135,7 +135,8 @@ export interface HarnessAgent extends Agent {
 export function agentFor(ctx: Context, id = 'original', meta?: CreateSessionOptions['meta']): HarnessAgent {
   const session = ctx.sessions.create(SessionId(id), meta === undefined ? undefined : { meta })
   return {
-    id: session.id, session, ctx: ctx.extend(), options: {}, status: 'idle', inbox: unsupportedInbox(),
+    id: session.id, session, ctx: ctx.extend(), options: {}, status: 'idle', model: unsupportedModel(),
+    inbox: unsupportedInbox(),
     send() {}, followup: vi.fn<(message: UserMessage) => void>(), steer() {}, inject() {}, cancel() {},
     whenIdle: async () => {}, runMaintenance: operation => operation(new AbortController().signal),
   }

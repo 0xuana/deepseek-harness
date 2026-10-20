@@ -25,7 +25,7 @@ Use `dsh-agent` to create or resume live agents, send follow-up or steering inpu
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount `dsh-agent` with `dsh-session-projection`: it provides `ctx.agents`, the `Agent` handle, and `turnBoundaryOf(session)` for recorded turn and step positions. Creating or resuming an Agent also requires a driver to register a factory; the shipped driver is `dsh-agent-loop`. [Session model selection](../agent-model/README.md) is provided separately.
+Mount `dsh-agent` with `dsh-session-projection`: it provides `ctx.agents`, the `Agent` handle, and `turnBoundaryOf(session)` for recorded turn and step positions. Creating or resuming an Agent also requires a driver to register a factory; the shipped driver is `dsh-agent-loop`. [Session model selection](#model-selection) is available on each handle as `agent.model`.
 
 ### Create or resume an agent
 
@@ -42,7 +42,16 @@ await handle.dispose()   // stops the loop, unregisters, removes the session, un
 
 `AgentOptions` supplies the initial provider/model route, optional adapter-owned `reasoningEffort`, and optional positive `maxTokens` output cap. The loop validates exact-model reasoning support, resolves adapter defaults, records the effective values in the request header, and applies them to each conversation request. An optional `setup(agentCtx, agent)` callback composes the agent's scoped world before it is published: `agentCtx` owns registrations, while the explicit unpublished Agent provides its Session; the Context has no reverse Agent property. Scoped tools, prompt sections, and listeners exist before any creation announcement. Setup is composition-only: drive the agent only after creation resolves.
 
-The [model-selection service](../agent-model/README.md) resolves recorded choices before the Agent options fallback and owns explicit selection changes and configured resume overrides.
+<a id="model-selection"></a>
+### Select a model
+
+`agent.model` implements `Model`, alongside `agent.inbox`. `current()` returns a detached selection: the pending choice, then the latest request's choice, then live `agent.options`; it returns `undefined` when no source supplies both provider and model. Reading does not pin a choice or change a prepared step.
+
+`select({ provider, model, reasoningEffort? })` assigns the complete choice for the next step whose preparation has not begun. Omitted effort uses adapter defaults; selection neither inherits old effort nor queries defaults. An equal recorded choice is a no-op, but a choice equal only to initial options is recorded as `model/selection`. Callers validate availability and capabilities; append failures retain the Session's existing guarantees.
+
+Ordinary resume keeps the recorded choice. An entry point explicitly overriding the model first builds a complete selection, retaining the previous explicit effort only when the configured route is unchanged and omits effort, then calls `select()`. Web and ACP user selections call `select()` directly, so omitted effort means Auto. Selecting a Session model does not change deployment defaults.
+
+For scoped switch notices, call `installModelSelection(agentCtx)` from `dsh-agent` during Agent setup. The scope owns the listener and removes it on disposal.
 
 ### Drive an agent's conversation
 
@@ -94,6 +103,10 @@ The package is built on one separation: the public `Agent` surface and registry 
 
 `Inbox` exposes pending `nextTurn` and `nextStep` messages and mutates them through `append`, `prepend`, `replace`, `remove`, `clear`, and `splice`. Ordinary removals and `clear()` are durable cancellations. At a step boundary, the loop's internal implementation claims pending input through pure deletion splices. Live notifications are deliberately per-message and minimal: `agent/inbox/inserted { message }`, `agent/inbox/claimed { message, turn }`, and `agent/inbox/discarded { message }`.
 
+### Durable model selection
+
+`Model` and the `modelSelection` projection types live here. The default driver creates each `AgentModel` and owns projection registration alongside its inbox. Each instance binds the Session, live options, and a projection reader; it holds no second copy of the choice. The loop captures a detached selection before step preparation and retains it across retries.
+
 ### Source map
 
 | File | Role |
@@ -102,6 +115,7 @@ The package is built on one separation: the public `Agent` surface and registry 
 | [`src/runtime-types.ts`](src/runtime-types.ts) | `Agent`, structural `Inbox`, `AgentStatus`, and the `agent/*` event declarations |
 | [`src/types.ts`](src/types.ts) | `AgentOptions`, cancellation causes, and inbox projection vocabulary |
 | [`src/dispatch.ts`](src/dispatch.ts) | `agentEvents` fused dispatcher and `assembleContextFor(agent)` |
+| [`src/model-selection.ts`](src/model-selection.ts) | `AgentModel`, its durable projection, and `installModelSelection` switch notices |
 | [`src/consumed-work.ts`](src/consumed-work.ts) | `foldConsumedWork(events)`: what the log's consumed work became |
 | [`src/archive-admission.ts`](src/archive-admission.ts) | The `turn` family of the Workspace registry's archive admission: a running turn and its user-cause cancel |
 
@@ -143,7 +157,7 @@ The package-level contract is enough for most consumers; read these when you nee
 
 #### What the model sees
 
-`followup`, `steer`, and `inject` feed the owning session as identified user-role messages; accepted content becomes part of the derived history the model reads on later steps. `agent/pre-step` and the other declared events let plugins reject a proposed step or add durable request material. Optional [model-switch notices](../agent-model/README.md#model-experience) are owned by the selection package.
+`followup`, `steer`, and `inject` feed the owning session as identified user-role messages; accepted content becomes part of the derived history the model reads on later steps. `agent/pre-step` and the other declared events let plugins reject a proposed step or add durable request material. The optional scoped model-switch listener adds the notice described below.
 
 #### Token effect
 
@@ -161,11 +175,25 @@ Registrations through `agent.ctx` can shadow prompt sections or tools and can in
 
 #### Token effect
 
-Each provider/model switch adds one short retained user-role notice. Other scoped contributions affect only that agent and disappear on disposal.
+Scoped contributions affect only that agent and disappear on disposal.
 
 #### KV Cache effect
 
-The switch notice appends after the previous history, preserving that prefix, while the route change can prevent the new provider or model from reusing it. Setup or reload that changes prompt sections, tool definitions, or request listeners may invalidate reuse from the first affected request token.
+Setup or reload that changes prompt sections, tool definitions, or request listeners may invalidate reuse from the first affected request token.
+
+### Optional model-switch notice
+
+#### What the model sees
+
+The scoped listener appends `[model changed: assistant turns above this point were generated by <previous>; the session continues with <next>]` when an accepted step's fixed route differs from the last request. Labels include providers only for cross-provider switches. Initial requests, effort-only changes, rejected steps, and empty no-request decisions add nothing. Failure before header persistence causes the next request step to repeat the notice.
+
+#### Token effect
+
+Each admitted notice adds retained user-message text; selection events themselves add no prompt text.
+
+#### KV Cache effect
+
+Notices append without replacing earlier history. Switching models may prevent reuse of the previous model's cache; cache availability is provider-owned.
 
 ## Known Limitations and Deferred Work
 

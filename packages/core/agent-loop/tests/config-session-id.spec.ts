@@ -15,7 +15,6 @@ import type { SessionHandle } from '@deepseek-ai/dsh-session-persistence'
 
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import AgentLoop, { CONFIGURED_AGENT_IDENTITIES_KEY } from '@deepseek-ai/dsh-agent-loop'
-import * as AgentModelPlugin from '@deepseek-ai/dsh-agent-model'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { MockAdapter, textResponse } from './mock-adapter.ts'
 
@@ -41,7 +40,6 @@ async function makeCoreContext(): Promise<Context> {
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
-  await ctx.plugin(AgentModelPlugin)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(AgentRegistry)
@@ -373,7 +371,6 @@ describe('config-driven session id', () => {
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(AgentRegistry)
@@ -397,7 +394,6 @@ describe('config-driven session id', () => {
     await ctx1.plugin(LlmRuntime)
     await ctx1.plugin(SessionStore)
     await ctx1.plugin(SessionProjectionRegistry)
-    await ctx1.plugin(AgentModelPlugin)
     await ctx1.plugin(SystemPrompt)
     await ctx1.plugin(ToolRuntime)
     await ctx1.plugin(AgentRegistry)
@@ -421,7 +417,6 @@ describe('config-driven session id', () => {
     await ctx2.plugin(LlmRuntime)
     await ctx2.plugin(SessionStore)
     await ctx2.plugin(SessionProjectionRegistry)
-    await ctx2.plugin(AgentModelPlugin)
     await ctx2.plugin(SystemPrompt)
     await ctx2.plugin(ToolRuntime)
     await ctx2.plugin(AgentRegistry)
@@ -448,7 +443,6 @@ describe('config-driven session id', () => {
     await ctx1.plugin(LlmRuntime)
     await ctx1.plugin(SessionStore)
     await ctx1.plugin(SessionProjectionRegistry)
-    await ctx1.plugin(AgentModelPlugin)
     await ctx1.plugin(SystemPrompt)
     await ctx1.plugin(ToolRuntime)
     await ctx1.plugin(AgentRegistry)
@@ -467,7 +461,6 @@ describe('config-driven session id', () => {
     await ctx2.plugin(LlmRuntime)
     await ctx2.plugin(SessionStore)
     await ctx2.plugin(SessionProjectionRegistry)
-    await ctx2.plugin(AgentModelPlugin)
     await ctx2.plugin(SystemPrompt)
     await ctx2.plugin(ToolRuntime)
     await ctx2.plugin(AgentRegistry)
@@ -500,7 +493,7 @@ describe('config-driven session id', () => {
     const h1 = await ctx1.agents.create({ sessionId: SessionId('sticky-route'), agentOptions: { provider: 'mock', model: 'mock' } })
     h1.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'remember me' }], source: { kind: 'user' } }))
     await waitForIdle(ctx1, h1.agent)
-    ctx1.agentModel.select(h1.agent, { provider: 'mock', model: 'mock', reasoningEffort: ReasoningEffortId('high') })
+    h1.agent.model.select({ provider: 'mock', model: 'mock', reasoningEffort: ReasoningEffortId('high') })
     await h1.dispose()
     await ctx1.fiber.dispose()
 
@@ -509,7 +502,7 @@ describe('config-driven session id', () => {
     await ctx2.plugin(AgentLoop, { agents: [{ id: SessionId('main'), ...route, resumeSessionId: SessionId('sticky-route') }] })
     await expect.poll(() => ctx2.agents.get(SessionId('sticky-route')), { timeout: 5_000 }).toBeDefined()
     const resumed = ctx2.agents.get(SessionId('sticky-route'))!
-    expect(ctx2.agentModel.resolveForNextStep(resumed)).toEqual(expected)
+    expect(resumed.model.current()).toEqual(expected)
     expect(resumed.session.snapshotEvents().filter(event => event.type === 'model/selection')).toHaveLength(1 + appended)
     await ctx2.fiber.dispose()
   })
@@ -521,7 +514,6 @@ describe('config-driven session id', () => {
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(AgentModelPlugin)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(AgentRegistry)

@@ -4,6 +4,7 @@
  * catalog injection, unavailable-model refusals, and the prompt-assembly
  * boundary for a running selection change.
  */
+import { AgentModel, modelSelectionProjectionDefinition } from '@deepseek-ai/dsh-agent'
 import { createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 
@@ -11,7 +12,6 @@ import { describe, expect, it, vi, onTestFinished } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import * as AgentModelPlugin from '@deepseek-ai/dsh-agent-model'
 import AttachmentStore from '@deepseek-ai/dsh-attachment'
 import LlmRuntime, { LlmAdapter, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type {
@@ -99,7 +99,6 @@ async function harness(logged?: {
   await ctx.plugin(SystemPrompt, { personaPrefix: '' })
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SessionProjectionRegistry)
-  await ctx.plugin(AgentModelPlugin)
   await ctx.plugin(AgentRegistry)
   ctx.llm.registerAdapter(['deepseek-official'], new CatalogAdapter('DeepSeek', [
     { provider: 'deepseek-official', id: 'deepseek-chat', name: 'DeepSeek Chat' },
@@ -128,13 +127,16 @@ async function harness(logged?: {
       reason: 'initial',
     })
   }
+  const projection = await ctx.sessionProjections.register(modelSelectionProjectionDefinition)
+  const options = {
+    get provider() { return ctx.agentDefaultModel.currentSelection().provider },
+    get model() { return ctx.agentDefaultModel.currentSelection().model },
+    get reasoningEffort() { return ctx.agentDefaultModel.currentSelection().reasoningEffort },
+  }
   const agent = {
     id: session.id,
-    options: {
-      get provider() { return ctx.agentDefaultModel.currentSelection().provider },
-      get model() { return ctx.agentDefaultModel.currentSelection().model },
-      get reasoningEffort() { return ctx.agentDefaultModel.currentSelection().reasoningEffort },
-    },
+    options,
+    model: new AgentModel(() => projection.stateOf(session), session, options),
     session,
     status: 'running',
     ctx,
@@ -520,7 +522,7 @@ describe('Web session model selection', () => {
       model: 'deepseek-reasoner',
       reasoningEffort: 'max',
     })
-    expect(ctx.agentModel.resolveForNextStep(agent)).toEqual(selected.selected)
+    expect(agent.model.current()).toEqual(selected.selected)
     expect(agent.session.snapshotEvents().at(-1)).toMatchObject({
       type: 'model/selection', data: selected.selected,
     })
@@ -581,7 +583,10 @@ describe('Web session model selection', () => {
     ctx.agents.setFactory({
       async createAgent(ownerCtx, options) {
         const session = ctx.sessions.create(options.sessionId)
-        const agent: Agent = { ...template, id: session.id, session, ctx: ownerCtx, options: options.agentOptions ?? {} }
+        const agentOptions = options.agentOptions ?? {}
+        const projection = await ownerCtx.sessionProjections.register(modelSelectionProjectionDefinition)
+        const model = new AgentModel(() => projection.stateOf(session), session, agentOptions)
+        const agent: Agent = { ...template, id: session.id, session, ctx: ownerCtx, options: agentOptions, model }
         await options.setup?.(ownerCtx, agent)
         await ctx.agents.register(agent)
         return { agent, dispose: () => Promise.resolve() }
@@ -591,9 +596,9 @@ describe('Web session model selection', () => {
     const first = expectValue(await remote.create({ cwd: '/tmp' }))
     const second = expectValue(await remote.create({ cwd: '/tmp' }))
     const agent = ctx.agents.get(first.sessionId)!
-    expect(ctx.agentModel.resolveForNextStep(agent)).toEqual(stored)
+    expect(agent.model.current()).toEqual(stored)
     stored = { provider: 'deepseek-official', model: 'deepseek-reasoner' }
-    expect(ctx.agentModel.resolveForNextStep(agent)).toEqual(stored)
+    expect(agent.model.current()).toEqual(stored)
     const selection = { ...stored, reasoningEffort: ReasoningEffortId('high') }
     // The explicit selection is identical to the live fallback, including effort.
     stored = selection
@@ -601,7 +606,7 @@ describe('Web session model selection', () => {
     expect(agent.session.snapshotEvents().filter(event => event.type === 'model/selection'))
       .toMatchObject([{ data: selection }])
     expectValue(await remote.selectModel({ sessionId: second.sessionId, provider: 'deepseek-official', model: 'deepseek-chat' }))
-    expect(ctx.agentModel.resolveForNextStep(agent)).toEqual(selection)
+    expect(agent.model.current()).toEqual(selection)
     expect(currentSelection(ctx, first.sessionId)).toEqual(selection)
   })
 
@@ -634,7 +639,7 @@ describe('Web session model selection', () => {
       cwd: '/tmp',
     })
 
-    expect(ctx.agentModel.resolveForNextStep(agent))
+    expect(agent.model.current())
       .toEqual({ provider: 'deepseek-official', model: 'deepseek-chat' })
     await ctx.fiber.dispose()
   })

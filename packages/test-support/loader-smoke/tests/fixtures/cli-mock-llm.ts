@@ -1,5 +1,4 @@
 import type { Context } from '@deepseek-ai/cordis'
-import type {} from '@deepseek-ai/dsh-agent-model'
 import {
   ToolCallId,
   LlmAdapter,
@@ -69,16 +68,16 @@ class CliMockAdapter extends LlmAdapter {
 }
 
 export const name = 'cli-mock-llm'
-export const inject = ['llm', 'agentModel', 'tools']
+export const inject = ['llm', 'tools']
 
 /** Register the keyless `cli-mock` adapter and select `off` effort for the step after a tool call. */
 export function apply(ctx: Context): void {
   ctx.llm.registerAdapter(['cli-mock'], new CliMockAdapter())
   ctx.on('tools/execute', async (exec, next) => {
     const result = await next()
-    const current = exec.agent === undefined ? undefined : ctx.agentModel.resolveForNextStep(exec.agent)
+    const current = exec.agent === undefined ? undefined : exec.agent.model.current()
     if (exec.agent !== undefined && current !== undefined) {
-      ctx.agentModel.select(exec.agent, { provider: current.provider, model: current.model, reasoningEffort: OFF })
+      exec.agent.model.select({ provider: current.provider, model: current.model, reasoningEffort: OFF })
     }
     return result
   })

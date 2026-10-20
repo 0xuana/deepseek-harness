@@ -862,7 +862,7 @@ describe('automation-only ACP bridge', () => {
 
     expect(created.configOptions).toEqual([])
     const agent = harness.ctx.agents.get(SessionId(created.sessionId))!
-    harness.ctx.agentModel.select(agent, { provider: 'mock', model: 'mock' })
+    agent.model.select({ provider: 'mock', model: 'mock' })
     await expect(harness.client.prompt({
       sessionId: created.sessionId,
       prompt: [{ type: 'text', text: 'route me' }],

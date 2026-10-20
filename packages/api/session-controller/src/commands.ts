@@ -173,7 +173,7 @@ export class SessionCommandController {
             ? {}
             : { reasoningEffort: resolved.reasoningEffort }),
         }
-        this.ctx.agentModel.select(agent, selected)
+        agent.model.select(selected)
         void this.ctx.agentDefaultModel.saveSelection(selected).catch((error: unknown) => {
           this.ctx.logger.warn(
             `session-controller: model selection changed for the Session but the default was not saved: ${String(error)}`,
@@ -323,7 +323,7 @@ export class SessionCommandController {
     const admit = async (): Promise<SessionPromptValue> => {
       try {
         if (hasImage) {
-          const current = this.ctx.agentModel.resolveForNextStep(agent)
+          const current = agent.model.current()
           if (current !== undefined) {
             const model = await this.ctx.llm.resolveModelInfo(current.provider, current.model)
             if (model.inputModalities !== undefined && !model.inputModalities.includes('image')) {

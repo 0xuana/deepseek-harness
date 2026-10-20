@@ -1,6 +1,6 @@
 /** Browser-safe request, result, and lifecycle vocabulary for the Session Remote service. */
 
-import type {} from '@deepseek-ai/dsh-agent-model/types'
+import type {} from '@deepseek-ai/dsh-agent/types'
 import type { NativeFileApplication } from '@deepseek-ai/dsh-native-command/types'
 import type {
   AttachmentIdType, ImageAttachmentLimits, ImageAttachmentRef, ImageMediaType,

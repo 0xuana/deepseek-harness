@@ -3,7 +3,7 @@
 const SELECTED = { provider: 'deepseek-official', model: 'deepseek-v4-pro', reasoningEffort: 'max' }
 
 export const name = 'model-switch-driver'
-export const inject = ['tools', 'agentModel']
+export const inject = ['tools']
 
 /**
  * Record an explicit initial choice and a switch after `todo_write`.
@@ -11,10 +11,10 @@ export const inject = ['tools', 'agentModel']
  */
 export function apply(ctx) {
   ctx.on('agent/created', ({ agent }) => {
-    const initial = ctx.agentModel.resolveForNextStep(agent)
+    const initial = agent.model.current()
     if (initial === undefined) throw new Error('model-switch driver requires an initial route')
-    ctx.agentModel.select(agent, initial)
-    ctx.agentModel.select(agent, initial)
+    agent.model.select(initial)
+    agent.model.select(initial)
   })
   ctx.on('agent/pre-step', ({ callConfig }, next) => {
     if (callConfig.model === SELECTED.model && callConfig.reasoningEffort !== SELECTED.reasoningEffort) {
@@ -26,7 +26,7 @@ export function apply(ctx) {
     const result = await next()
     if (exec.name === 'todo_write' && !result.isError) {
       if (exec.agent === undefined) throw new Error('model-switch driver requires a calling Agent')
-      ctx.agentModel.select(exec.agent, SELECTED)
+      exec.agent.model.select(SELECTED)
     }
     return result
   })

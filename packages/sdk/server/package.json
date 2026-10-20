@@ -42,7 +42,6 @@
     "@deepseek-ai/dsh-session": "workspace:*",
     "@deepseek-ai/dsh-subagent": "workspace:*",
     "@deepseek-ai/dsh-working-directory": "workspace:*",
-    "@deepseek-ai/dsh-agent-model": "workspace:*",
     "@deepseek-ai/dsh-user-questions": "workspace:*"
   },
   "devDependencies": {
@@ -62,7 +61,6 @@
     "@deepseek-ai/dsh-session-projection": "workspace:*",
     "@deepseek-ai/dsh-subagent": "workspace:*",
     "@deepseek-ai/dsh-working-directory": "workspace:*",
-    "@deepseek-ai/dsh-agent-model": "workspace:*",
     "@deepseek-ai/dsh-user-questions": "workspace:*"
   }
 }

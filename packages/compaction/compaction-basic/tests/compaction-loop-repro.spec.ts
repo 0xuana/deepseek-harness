@@ -212,7 +212,7 @@ describe('CBR-001: a real-loop checkpoint is a valid boundary on both sides', ()
         provider: 'unconfigured-agent-fallback',
         model: 'unconfigured-agent-fallback',
       })
-      ctx.agentModel.select(agent, { provider: 'mock', model: 'mock' })
+      agent.model.select({ provider: 'mock', model: 'mock' })
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'do a routed multi-step task' }], source: { kind: 'user' } }))
       await waitForIdle(ctx, agent)
 
@@ -397,7 +397,7 @@ describe('context-overflow recovery across the real loop and compaction-basic', 
           },
         })
 
-        ctx.agentModel.select(agent, { provider: 'mock', model: 'mock' })
+        agent.model.select({ provider: 'mock', model: 'mock' })
         agent.followup(createUserMessage({ content: [{ type: 'text', text: 'continue from history' }], source: { kind: 'user' } }))
         await agent.whenIdle()
 

@@ -4,7 +4,6 @@ import { performance } from 'node:perf_hooks'
 import { scheduler } from 'node:timers/promises'
 import { Context } from '@deepseek-ai/cordis'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import * as AgentModelPlugin from '@deepseek-ai/dsh-agent-model'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { agentPresetProjectionDefinition } from '@deepseek-ai/dsh-agent-preset-registry'
 import SessionStore, {
@@ -162,7 +161,6 @@ class SessionBenchmarkHost {
     else {
       await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(AgentRegistry)
-      await ctx.plugin(AgentModelPlugin)
       await ctx.plugin(SessionStore)
     }
     await installProjectionSet(ctx)

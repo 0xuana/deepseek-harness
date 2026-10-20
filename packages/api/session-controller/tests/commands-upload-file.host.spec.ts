@@ -1,9 +1,9 @@
+import { AgentModel, modelSelectionProjectionDefinition } from '@deepseek-ai/dsh-agent'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { Context, FiberState } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import { createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import * as AgentModelPlugin from '@deepseek-ai/dsh-agent-model'
 import AttachmentStore, { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import type {
   FileAttachmentRef, ImageAttachmentRef, SaveFileAttachment, SaveFileStreamAttachment,
@@ -38,7 +38,6 @@ async function uploadHarness(origin?: 'subagent'): Promise<{
   onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
-  await ctx.plugin(AgentModelPlugin)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(CommandRuntime)
   const session = ctx.sessions.create(SESSION, {
@@ -46,14 +45,17 @@ async function uploadHarness(origin?: 'subagent'): Promise<{
   })
   const inbox = createInboxStub()
   const followup = vi.fn()
+  const options = { provider: 'fixture', model: 'fixture-model' }
+  const projection = await ctx.sessionProjections.register(modelSelectionProjectionDefinition)
   const agent = {
     id: session.id,
-    options: { provider: 'fixture', model: 'fixture-model' },
+    options,
     whenIdle: vi.fn(() => Promise.resolve()),
     runMaintenance: async () => { throw new Error('unexpected maintenance') },
     send: vi.fn(),
     inject: vi.fn(),
     session,
+    model: new AgentModel(() => projection.stateOf(session), session, options),
     inbox,
     status: 'idle',
     ctx,

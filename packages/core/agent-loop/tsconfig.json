@@ -40,9 +40,6 @@
     },
     {
       "path": "../../session/session-projection"
-    },
-    {
-      "path": "../../core/agent-model"
     }
   ]
 }

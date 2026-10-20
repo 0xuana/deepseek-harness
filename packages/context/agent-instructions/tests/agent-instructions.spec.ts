@@ -58,7 +58,6 @@ import {
   mountAgentLoopTestDependencies,
   mountAgentLoopTestHarness,
 } from '@deepseek-ai/dsh-agent-loop-testkit'
-import * as AgentModelPlugin from '@deepseek-ai/dsh-agent-model'
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -4279,7 +4278,6 @@ describe('dynamic nested workspace context injection', () => {
       await ctx.plugin(LlmRuntime)
       await ctx.plugin(SessionStore)
       await ctx.plugin(SessionProjectionRegistry)
-      await ctx.plugin(AgentModelPlugin)
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
       await ctx.plugin(AgentRegistry)

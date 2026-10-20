@@ -1,3 +1,4 @@
+import { unsupportedModel } from '@deepseek-ai/dsh-agent-loop-testkit'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -87,6 +88,7 @@ function stubAgent(id: string, delegationDepth = 0): Agent {
     session: Session.create(agentId, [], {
       version: SESSION_FORMAT_VERSION, id: agentId, createdAt: 0, isSeeded: false, delegationDepth,
     }),
+    model: unsupportedModel(),
     inbox: {
       nextTurn: [], nextStep: [], clear() {}, append() {}, prepend() {},
       replace: () => false, remove: () => false, splice: () => [],

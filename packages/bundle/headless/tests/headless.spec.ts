@@ -20,8 +20,8 @@ import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
 import ApprovalService, { setApprovalPolicy, type ApprovalPolicy } from '@deepseek-ai/dsh-user-approval'
 import type { Session, SessionId, UserMessage } from '@deepseek-ai/dsh-session'
 import { SessionQueryError } from '@deepseek-ai/dsh-session-query'
+import { AgentModel, modelSelectionProjectionDefinition } from '@deepseek-ai/dsh-agent'
 import { createInboxStub, provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
-import * as AgentModelPlugin from '@deepseek-ai/dsh-agent-model'
 import { apply, Config } from '../src/index.ts'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import { internals } from '../src/runner-internals.ts'
@@ -165,9 +165,12 @@ async function bench(script: Script, options: BenchOptions = {}): Promise<{
     const inbox = createInboxStub()
     let idle = Promise.resolve()
     let running = false
+    const agentOptions = createOptions.agentOptions ?? {}
+    const projection = await ownerCtx.sessionProjections.register(modelSelectionProjectionDefinition)
     const agent: Agent = {
       id: session.id,
-      options: createOptions.agentOptions ?? {},
+      options: agentOptions,
+      model: new AgentModel(() => projection.stateOf(session), session, agentOptions),
       session,
       inbox,
       get status() { return running ? 'running' : 'idle' },
@@ -196,7 +199,6 @@ async function bench(script: Script, options: BenchOptions = {}): Promise<{
 
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
-  await ctx.plugin(AgentModelPlugin)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(AgentDefaultModelConfig, { provider: 'test-provider', model: 'test-model' })
   ctx.agents.setFactory({
@@ -876,7 +878,7 @@ describe('headless runner', () => {
   it.each(['test-model', 'other-model'])('restores explicit effort only for the declared route (%s)', async (savedModel) => {
     const test = await bench({
       afterPrompt(session, message, agent) {
-        expect(test.ctx.agentModel.resolveForNextStep(agent)).toEqual({
+        expect(agent.model.current()).toEqual({
           provider: 'test-provider', model: 'test-model',
           ...savedModel === 'test-model' ? { reasoningEffort: 'high' } : {},
         })

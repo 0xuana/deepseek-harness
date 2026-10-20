@@ -1,5 +1,5 @@
 /**
- * Shared service mounting, real AgentLoop drivers, and structural Inbox stubs
+ * Shared service mounting, real AgentLoop drivers, and structural Agent stubs
  * for agent-loop tests. Callers retain ownership of their contexts, adapters,
  * optional plugins, agents, and teardown.
  * @module @deepseek-ai/dsh-agent-loop-testkit
@@ -9,7 +9,6 @@ import type { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentOptions, Inbox, InboxTarget } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import * as AgentModelPlugin from '@deepseek-ai/dsh-agent-model'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import SessionStore from '@deepseek-ai/dsh-session'
 import type { SessionHeader, SessionId, UserMessage } from '@deepseek-ai/dsh-session'
@@ -22,6 +21,7 @@ import FsLocal from '@deepseek-ai/dsh-fs-local'
 import WorkingDirectory from '@deepseek-ai/dsh-working-directory'
 
 export { createInboxStub, unsupportedInbox } from './inbox.ts'
+export { unsupportedModel } from './model.ts'
 export { provideWorkingDirectoryFixture } from './working-directory-fixture.ts'
 
 interface DriverInbox extends Inbox {
@@ -77,7 +77,6 @@ export async function mountAgentLoopTestDependencies(
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
-  await ctx.plugin(AgentModelPlugin)
   await ctx.plugin(SystemPrompt, options.systemPrompt ?? {})
   if (options.workingDirectory) {
     if (ctx.get('fs') === undefined) await ctx.plugin(FsLocal)

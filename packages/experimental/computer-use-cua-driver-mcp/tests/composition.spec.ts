@@ -16,7 +16,6 @@ import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepse
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import * as AgentModelPlugin from '@deepseek-ai/dsh-agent-model'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import * as Provider from '../src/index.ts'
@@ -69,7 +68,7 @@ async function load(mode?: string): Promise<{ ctx: Context; root: string; model:
     ['@deepseek-ai/dsh-agent', AgentRegistry],
     ['@deepseek-ai/dsh-agent-loop', AgentLoop],
     ['@deepseek-ai/dsh-session-projection', SessionProjectionRegistry],
-    ['@deepseek-ai/dsh-agent-model', AgentModelPlugin],
+
     ['@deepseek-ai/dsh-attachment-local', LocalAttachmentStore],
     ['@fixture/model', { inject: ['llm'], apply(ctx: Context) { ctx.effect(() => ctx.llm.registerAdapter(['fixture'], model)) } }],
     ['@deepseek-ai/dsh-experimental-computer-use-cua-driver-mcp', Provider],
