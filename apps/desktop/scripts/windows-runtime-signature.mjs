@@ -101,7 +101,7 @@ async function inspectWindowsCode(files, inspect) {
  * Preserve valid signatures and sign unsigned PE files with a supervised signer.
  * @param {string} root - Owned final runtime directory.
  * @param {import('./windows-runtime-signature.mjs').WindowsCodeSigningOptions} options - Supervised signer, certificate identity, audit sink.
- * @returns {Promise<void>} Resolves after bounded cache restores and sequential hardware signing, each with verification; failures drain active restores before rejecting.
+ * @returns {Promise<void>} Resolves after bounded cache restores, batched target verification and sequential hardware signing; failures drain active work before rejecting.
  */
 export async function signWindowsCode(root, options) {
   const inspect = options.inspect ?? inspectWindowsRuntimeSignature
@@ -116,12 +116,15 @@ export async function signWindowsCode(root, options) {
     else if (signature.status !== 'Valid') throw new Error(`Windows code: refusing ${signature.status} signature: ${path}`)
   }
   options.record({ type: 'windows-code-signing-plan', files: files.length, unsigned: unsigned.length })
-  async function verifySigned(path) {
-    const signature = await inspect(path)
-    if (signature.status !== 'Valid' || !signature.timestamped || signature.thumbprint?.toUpperCase() !== options.thumbprint.toUpperCase()) {
-      throw new Error(`Windows code: signing verification failed: ${path}`)
+  async function verifySigned(paths) {
+    const verified = await inspectWindowsCode(paths, inspect)
+    for (const [index, path] of paths.entries()) {
+      const signature = verified[index]
+      if (signature.status !== 'Valid' || !signature.timestamped || signature.thumbprint?.toUpperCase() !== options.thumbprint.toUpperCase()) {
+        throw new Error(`Windows code: signing verification failed: ${path}`)
+      }
+      options.record({ type: 'windows-code-signature-verified', path, ...signature })
     }
-    options.record({ type: 'windows-code-signature-verified', path, ...signature })
   }
   const restored = new Set()
   if (options.cache) {
@@ -132,7 +135,6 @@ export async function signWindowsCode(root, options) {
         const path = unsigned[next++]
         try {
           if (await options.cache.restore({ path, hash: 'sha256', isNest: false })) {
-            await verifySigned(path)
             restored.add(path)
           }
         } catch (error) { failure ??= { error } }
@@ -140,11 +142,12 @@ export async function signWindowsCode(root, options) {
     }
     await Promise.all(Array.from({ length: Math.min(options.cache.concurrency, unsigned.length) }, worker))
     if (failure !== undefined) throw failure.error
+    await verifySigned(unsigned.filter(path => restored.has(path)))
   }
   for (const path of unsigned) {
     if (restored.has(path)) continue
     await options.sign({ path, hash: 'sha256', isNest: false })
-    await verifySigned(path)
+    await verifySigned([path])
   }
 }
 
