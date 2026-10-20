@@ -40,6 +40,9 @@
     },
     {
       "path": "../ui-file-drag"
+    },
+    {
+      "path": "../../util/file-drag"
     }
   ]
 }

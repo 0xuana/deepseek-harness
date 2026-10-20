@@ -2,8 +2,7 @@
 import { File as NodeFile, Blob as NodeBlob } from 'node:buffer'
 import { webcrypto } from 'node:crypto'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { FILE_DRAG_TOKEN_TYPE } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { DesktopFileDrag, FileDragHandle } from '@deepseek-ai/dsh-file-drag'
+import { FILE_DRAG_TOKEN_TYPE, type DesktopFileDrag, type FileDragHandle } from '@deepseek-ai/dsh-file-drag'
 import { FileTransfers } from '../src/client/transfers.ts'
 
 const revokeUrl = vi.fn<(url: string) => void>()

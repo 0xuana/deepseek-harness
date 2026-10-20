@@ -1,6 +1,9 @@
-/** File export naming and the native bridge's byte-or-resource requests. */
+/** File export naming, browser transfer token type, and native byte-or-resource requests. */
 import mime from 'mime'
 import type { Branded } from '@deepseek-ai/dsh-brand'
+
+/** Browser transfer token type; original bytes stay with the application owner. */
+export const FILE_DRAG_TOKEN_TYPE = 'application/x-dsh-file'
 
 /** Opaque preparation identity, minted and resolved only by the desktop main process. */
 export type FileDragHandle = Branded<'FileDragHandle'>

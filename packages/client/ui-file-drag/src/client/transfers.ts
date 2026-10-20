@@ -1,7 +1,10 @@
 /** File transport selected once per plugin activation; sources only receive prepared operations. */
-import type { DesktopFileDrag, DesktopFileSource, FileDragHandle, FileDragRequestId } from '@deepseek-ai/dsh-file-drag'
+import {
+  FILE_DRAG_TOKEN_TYPE, resolveDragFileName,
+  type DesktopFileDrag, type DesktopFileSource, type FileDragHandle, type FileDragRequestId,
+} from '@deepseek-ai/dsh-file-drag'
 import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
-import { resolveDragFileName, FILE_DRAG_TOKEN_TYPE, type FileDragSource, type PreparedFileDrag } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { FileDragSource, PreparedFileDrag } from '@deepseek-ai/dsh-client-ui-primitives'
 
 /** Application-local browser transfer owner, including detached source-node drag end. */
 export class FileTransfers {

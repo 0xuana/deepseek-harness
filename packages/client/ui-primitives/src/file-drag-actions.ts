@@ -1,9 +1,6 @@
 /** Stable file preparation callbacks supplied by a transfer-owning plugin. */
 import type { DragFileName } from '@deepseek-ai/dsh-file-drag'
 
-/** Browser transfer token type; original bytes stay with the application owner. */
-export const FILE_DRAG_TOKEN_TYPE = 'application/x-dsh-file'
-
 /** Content source and optional Host-verifiable identity of its unmodified local original. */
 export type FileDragSource = DragFileName & { readonly resourceAddress?: string | undefined } & (
   | { readonly kind: 'blob'; readonly blob: Blob }
