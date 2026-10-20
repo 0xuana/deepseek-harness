@@ -273,6 +273,17 @@ it('skips Apple credentials but still requires signing credentials for unnotariz
   })
 })
 
+it('takes ZIP compression from the Mac file instead of ambient release settings', async () => {
+  await withDirectory(async (directory) => {
+    await writeFile(join(directory, '.env.macos'), 'DSH_DESKTOP_MACOS_ZIP_COMPRESSION_LEVEL=5\n')
+    const loaded = loadDesktopPackageEnvironment('darwin', { DSH_DESKTOP_MACOS_ZIP_COMPRESSION_LEVEL: '9' }, directory)
+    expect(loaded.DSH_DESKTOP_MACOS_ZIP_COMPRESSION_LEVEL).toBe('5')
+    await writeFile(join(directory, '.env.macos'), '')
+    expect(loadDesktopPackageEnvironment('darwin', { DSH_DESKTOP_MACOS_ZIP_COMPRESSION_LEVEL: '9' }, directory))
+      .not.toHaveProperty('DSH_DESKTOP_MACOS_ZIP_COMPRESSION_LEVEL')
+  })
+})
+
 it.each(['', 'relative-cache'])('rejects invalid build cache paths during preflight (%s)', (cache) => {
   expect(() => { validateDesktopPackageEnvironment({ ...RELEASE, DSH_DESKTOP_PACKAGE_CACHE_DIR: cache }, MACOS, { unsigned: true }) })
     .toThrow('DSH_DESKTOP_PACKAGE_CACHE_DIR must be absolute')

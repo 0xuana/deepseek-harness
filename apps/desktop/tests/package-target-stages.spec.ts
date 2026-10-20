@@ -271,3 +271,19 @@ it('fails debugging packages when runtime verification fails', async () => {
   expect(stages.at(-1)).toBe(failure)
   expect(writeFileSync).not.toHaveBeenCalled()
 })
+
+it.each([undefined, '7'])('applies file-owned compression only to the final notarized ZIP (%s)', async (level) => {
+  const { run } = supervisor()
+  vi.mocked(packageMacOSArtifacts).mockImplementationOnce(async (_request, build) => {
+    await build({ format: 'dmg', appPath: '/fixture/app', output: '/fixture/dmg' })
+    await build({ format: 'zip', appPath: '/fixture/app', output: '/fixture/zip' })
+  })
+  const settings = { ...environment, ELECTRON_BUILDER_COMPRESSION_LEVEL: '9',
+    ...(level === undefined ? {} : { DSH_DESKTOP_MACOS_ZIP_COMPRESSION_LEVEL: level }) }
+  await packageTarget(parseDesktopPackageInvocation(['mac-arm64'], 'darwin', 'arm64'), settings, run)
+  const zip = run.run.mock.calls.find(call => call[0].includes('--mac zip'))
+  const dmg = run.run.mock.calls.find(call => call[0].includes('--mac dmg'))
+  expect(zip?.[3].env.ELECTRON_BUILDER_COMPRESSION_LEVEL).toBe(level ?? '3')
+  expect(dmg?.[3].env.ELECTRON_BUILDER_COMPRESSION_LEVEL).toBe('9')
+  expect(writeFileSync).toHaveBeenCalledOnce()
+})

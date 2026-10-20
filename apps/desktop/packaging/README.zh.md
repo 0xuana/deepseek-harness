@@ -186,6 +186,7 @@ Mac 打包从 `.env.macos` 读取三个调优字段：
 | 设置 | 默认值 | 作用范围 |
 |---|---|---|
 | `DSH_DESKTOP_MACOS_PACK_CONCURRENCY` | `4` | 第一方与 vendor workspace tarball 的打包 worker 数；必须是正整数。 |
+| `DSH_DESKTOP_MACOS_ZIP_COMPRESSION_LEVEL` | `3` | 最终更新 ZIP 的压缩等级，整数 `0`–`9`；较低等级以更大的下载体积换取更短的构建时间。App 公证归档和 DMG 压缩不变。 |
 | `DSH_DESKTOP_MACOS_DOWNLOAD_PROXY` | 空 | Electron、运行时资源、pnpm 安装及 builder 下载使用的 HTTP/HTTPS 代理 origin。 |
 | `DSH_DESKTOP_MACOS_NOTARIZATION_PROXY` | 空 | 通过临时系统代理设置供 Apple 工具使用的 HTTP 代理 origin。 |
 

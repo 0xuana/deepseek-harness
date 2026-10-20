@@ -186,6 +186,7 @@ Mac packaging reads three tuning fields from `.env.macos`:
 | Setting | Default | Scope |
 |---|---|---|
 | `DSH_DESKTOP_MACOS_PACK_CONCURRENCY` | `4` | Workers for first-party and vendor workspace tarballs; requires a positive integer. |
+| `DSH_DESKTOP_MACOS_ZIP_COMPRESSION_LEVEL` | `3` | Final update ZIP compression, integer `0`–`9`; lower levels trade larger downloads for shorter builds. App notarization archives and DMG compression are unchanged. |
 | `DSH_DESKTOP_MACOS_DOWNLOAD_PROXY` | Empty | HTTP/HTTPS proxy origin for Electron, runtime assets, pnpm installation and builder downloads. |
 | `DSH_DESKTOP_MACOS_NOTARIZATION_PROXY` | Empty | HTTP proxy origin for Apple tools through temporary system proxy settings. |
 
