@@ -437,13 +437,12 @@ describe('ChangesTab layout', () => {
     expect(m.section('src/app.ts').querySelector(`.${css.code}`)).not.toBeNull()
 
     const first = m.section('data/huge-1.txt')
-    expect(within(first).getByText(en['diff.oversized'])).toBeTruthy()
-    fireEvent.click(within(first).getByRole('button', { name: en['diff.showAnyway'] }))
+    fireEvent.click(within(first).getByRole('button', { name: 'Large file: 1,001 changed lines collapsed' }))
     // A file with additions only keeps one column in the side-by-side layout.
     expect(first.querySelectorAll('[data-diff-line="add"]')).toHaveLength(1001)
     expect(first.querySelector('[data-diff-pair]')).toBeNull()
     fireEvent.click(within(m.section('data/huge-6.txt')).getByRole('button', { name: 'Expand huge-6.txt' }))
-    expect(within(m.section('data/huge-6.txt')).getByText(en['diff.oversized'])).toBeTruthy()
+    expect(within(m.section('data/huge-6.txt')).getByRole('button', { name: 'Large file: 1,001 changed lines collapsed' })).toBeTruthy()
   })
 
   it('collapses every file from the toolbar while any is expanded, and expands every file once all are collapsed', async () => {

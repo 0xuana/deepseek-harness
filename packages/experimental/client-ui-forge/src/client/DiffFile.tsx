@@ -7,7 +7,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
-  Button, FileTypeIcon, IconChevronDownOutlineRegular, IconChevronsUpDownOutlineRegular, IconEllipsisOutlineRegular,
+  FileTypeIcon, IconChevronDownOutlineRegular, IconChevronsUpDownOutlineRegular, IconEllipsisOutlineRegular,
   languageForPath, Menu, MenuItemButton, PathLabel, useCodeHighlighter, type CodeHighlighter, type HighlightSpan,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
@@ -177,15 +177,16 @@ function Lines({ file, text, open, onExpand, split, wrap, t }: Pick<DiffFileProp
 
 function Body(props: DiffFileProps): ReactNode {
   const { file, large, revealed, onReveal, t } = props
-  if (file.binary) return <p className={css.fileMessage}>{t('diff.binary')}</p>
-  if (file.oversized) return <p className={css.fileMessage}>{t('diff.fileTooLarge')}</p>
+  if (file.binary) return <p className={css.fileNote}>{t('diff.binary')}</p>
+  if (file.oversized) return <p className={css.fileNote}>{t('diff.fileTooLarge')}</p>
   if (file.hunks.length === 0) return null
   if (large && !revealed) {
+    // A large file starts as one collapsed strip, drawn and opened like the collapsed unchanged lines.
     return (
-      <div className={css.fileMessage}>
-        <span>{t('diff.oversized')}</span>
-        <Button size="sm" variant="outline" onClick={onReveal}>{t('diff.showAnyway')}</Button>
-      </div>
+      <button type="button" className={css.gap} onClick={onReveal}>
+        <IconChevronsUpDownOutlineRegular size={12} />
+        {t('diff.largeCollapsed', { count: (file.additions + file.deletions).toLocaleString('en-US') })}
+      </button>
     )
   }
   return <Lines {...props} />
