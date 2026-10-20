@@ -1,5 +1,5 @@
 /** Built permission UI talks to the real provider; the isolated helper substitutes only macOS privilege observations. */
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
