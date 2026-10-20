@@ -257,5 +257,31 @@
     "setup": "Offer a page but do not click Create. Send a follow-up user message.",
     "prompt": "刚才的方案改成只在当前会话使用。",
     "expected": "Expire the unstarted old card, refuse stale Create calls and offer a fresh plan when needed. Refresh or background context alone never expires a card; started/cancelled runs retain retry."
+  },
+  {
+    "id": "artifact_html_file",
+    "prompt": "帮我写一个能离线打开的 HTML 单文件，用来输入摄氏度并换算华氏度。我会自己保存到电脑上，给我完整代码。",
+    "expected": "Return a self-contained HTML file/code; no personalized-pages skill or plugin-installation proposal."
+  },
+  {
+    "id": "artifact_svg_diagram",
+    "prompt": "请给我一张 SVG 流程图：读取文件 → 校验格式 → 保存结果。把完整 SVG 代码发我，放进现有文档。",
+    "expected": "Provide requested SVG code; no page-installation proposal."
+  },
+  {
+    "id": "artifact_recurring_meal_record",
+    "prompt": "我每周都要回来补记午饭花费，想慢慢比较。本周周一23元、周二18元、周三26元，先帮我算总计，整理成表。",
+    "expected": "Answer 67元 and a table; may offer a global manual record for continued entry/comparison, preserving three values and not promising automatic collection."
+  },
+  {
+    "id": "artifact_handoff_context",
+    "prompt": "现在把这些做成当前会话右侧的小页面，我能手动切换这两种状态。先给方案。",
+    "expected": "Turn1 list only. Turn2 right card with exact two items/states and meaningful labels; brief and initialContent define what “回看项” means without needing previous chat.",
+    "setup": "Earlier user message: 我们这里把需要复查的条目叫“回看项”。当前有两条：登录跳转（待查），空列表提示（已确认）。先帮我原样列出来。"
+  },
+  {
+    "id": "dsh_ui_customization_addition",
+    "prompt": "在 DSH 的会话页面旁边留个验收清单吧：空列表提示、刷新后保留数据、深色模式文字可读。我边聊边一项项打勾。",
+    "expected": "Recognize DSH UI customization without asking the user to select Creator mode. One sidebar-right proposal with exact checklist, no source edits or creation before click."
   }
 ]
