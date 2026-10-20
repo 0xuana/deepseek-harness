@@ -664,6 +664,7 @@ describe('web e2e: resident question composer round trip', () => {
         { width: 640, height: 420 },
         { width: 512, height: 336 },
         { width: 427, height: 280 },
+        { width: 390, height: 700 },
       ]) {
         await page.setViewportSize(viewport)
         const readMetrics = () => composer.evaluate((card) => {
@@ -689,6 +690,16 @@ describe('web e2e: resident question composer round trip', () => {
           expect(await composer.getByRole('button', { name: 'Show details for “Move the package”' }).count())
             .toBe(viewport.width === 427 ? 1 : 0)
         }
+        const descriptions = composer.locator('[data-option-description]')
+        const textMetrics = await descriptions.evaluateAll(nodes => nodes.map((node) => {
+          const style = getComputedStyle(node)
+          const rect = node.getBoundingClientRect()
+          return { fontSize: style.fontSize, lineHeight: style.lineHeight,
+            singleLine: rect.height <= 20.5, fitsViewport: rect.left >= 0 && rect.right <= innerWidth }
+        }))
+        expect(textMetrics).toEqual(Array.from({ length: 3 }, () => ({
+          fontSize: '13px', lineHeight: '20px', singleLine: true, fitsViewport: true,
+        })))
         const questionLines = await composer.getByRole('heading', { name: question }).evaluate((title) => {
           const style = getComputedStyle(title)
           return title.getBoundingClientRect().height / parseFloat(style.lineHeight)

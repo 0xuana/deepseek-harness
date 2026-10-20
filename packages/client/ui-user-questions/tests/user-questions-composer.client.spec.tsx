@@ -327,6 +327,41 @@ describe('QuestionComposer', () => {
     }
   })
 
+  it('shows details only for overflow and removes them when the description fits after resizing', ({ onTestFinished }) => {
+    let availableWidth = 300
+    const scrollWidth = vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(200)
+    const clientWidth = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => availableWidth)
+    const disconnect = vi.fn()
+    let resize = (): void => {}
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(callback: () => void) { resize = callback }
+      observe(): void {}
+      disconnect = disconnect
+    })
+    onTestFinished(() => {
+      cleanup()
+      scrollWidth.mockRestore()
+      clientWidth.mockRestore()
+      vi.unstubAllGlobals()
+    })
+    const description = 'An explanation that fits in a wide row.'
+    const { carrier } = wait([{
+      id: 'size', question: 'Which option?', options: [{ label: 'Option', description }],
+    }])
+    const { unmount } = render(<QuestionComposer matched={carrier} {...kit} />)
+    const text = screen.getByText(description)
+    expect(screen.queryByRole('button', { name: '查看“Option”的选项说明' })).toBeNull()
+    availableWidth = 100
+    act(() => { resize() })
+    expect(screen.getByRole('button', { name: '查看“Option”的选项说明' })).toBeTruthy()
+    availableWidth = 300
+    act(() => { resize() })
+    expect(screen.queryByRole('button', { name: '查看“Option”的选项说明' })).toBeNull()
+    expect(screen.getByText(description)).toBe(text)
+    unmount()
+    expect(disconnect).toHaveBeenCalledOnce()
+  })
+
   it('opens a full option description without choosing the option', ({ onTestFinished }) => {
     const width = vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(function (this: HTMLElement) {
       return this.hasAttribute('data-option-description') ? 500 : 0
