@@ -538,10 +538,7 @@ describe('Chat inject API', () => {
   it('fails loud when a Chat View inject resolves no Session', async () => {
     const b = await bench()
     const entry = b.runtime.slots.entries('conversation.view')[0]!
-    const injectView = entry.inject as unknown as (
-      sessionId: SessionId,
-      actions: ChatActions,
-    ) => ChatViewInjected
+    const injectView = entry.inject! as (...args: [SessionId, ChatActions]) => Record<string, unknown>
     expect(() => injectView('never-listed' as SessionId, {} as ChatActions))
       .toThrow(/unknown session/)
     const flowEntry = b.runtime.slots.entries('conversation.chat.flow')[0]!
