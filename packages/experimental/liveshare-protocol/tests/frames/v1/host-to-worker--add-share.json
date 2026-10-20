@@ -12,7 +12,7 @@
       "gatewayToken": "token-one",
       "ownerDisplayName": "Owner",
       "allowedSubjectIds": [
-        "ou_viewer",
+        "user_viewer",
         "example:tenant-a:user-other"
       ],
       "sessionMode": "write",

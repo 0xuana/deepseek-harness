@@ -12,7 +12,7 @@
     "actor": {
       "providerId": "example",
       "tenantId": "tenant-a",
-      "subjectId": "ou_viewer"
+      "subjectId": "user_viewer"
     }
   },
   "refusal": null
