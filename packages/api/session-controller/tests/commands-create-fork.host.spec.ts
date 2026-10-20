@@ -336,6 +336,61 @@ describe('Session fork named children', () => {
     await ctx.fiber.dispose()
   })
 
+  it('finishes the Workspace attach an interrupted named fork left pending', async () => {
+    const ctx = await baseContext()
+    const workspace = {
+      id: 'workspace-1' as WorkspaceId,
+      path: '/workspace',
+      sessionIds: [] as SessionId[],
+      attachSession: vi.fn(async (childId: SessionId) => { workspace.sessionIds = [...workspace.sessionIds, childId] }),
+    }
+    workspace.attachSession.mockRejectedValueOnce(new Error('workspace write failed'))
+    ctx.provide('workspaceRegistry', { list: () => [workspace] } as never)
+    const source = completedSession(ctx, 'named-workspace-source', '/workspace')
+    // The Workspace is resolved by the source Session's membership.
+    workspace.sessionIds = [source.id]
+    vi.spyOn(ctx.agents, 'create').mockImplementation(seededChildCreate(ctx))
+    const controller = new SessionCommandController(ctx, controllerAgents(ctx), '/default')
+    const child = SessionId('named-workspace-child')
+
+    // The child is durable but the attach failed, so the first attempt reports the partial failure.
+    await expectFailure(controller.fork({ sessionId: source.id, childSessionId: child }), 'session/workspace-attach-failed')
+    expect(workspace.attachSession).toHaveBeenCalledOnce()
+    expect(workspace.sessionIds).toEqual([source.id])
+
+    // The retry adopts the stored child and retries the missing attach instead of skipping it.
+    await expect(controller.fork({ sessionId: source.id, childSessionId: child })).resolves.toEqual({ sessionId: child })
+    expect(workspace.attachSession).toHaveBeenCalledTimes(2)
+    expect(workspace.sessionIds).toEqual([source.id, child])
+
+    // A retry of an already attached child is idempotent: nothing is attached again.
+    await expect(controller.fork({ sessionId: source.id, childSessionId: child })).resolves.toEqual({ sessionId: child })
+    expect(workspace.attachSession).toHaveBeenCalledTimes(2)
+    await ctx.fiber.dispose()
+  })
+
+  it('never reports success while a retry still cannot attach the named child', async () => {
+    const ctx = await baseContext()
+    const workspace = {
+      id: 'workspace-1' as WorkspaceId,
+      path: '/workspace',
+      sessionIds: [] as SessionId[],
+      attachSession: vi.fn(() => Promise.reject(new Error('workspace still read-only'))),
+    }
+    ctx.provide('workspaceRegistry', { list: () => [workspace] } as never)
+    const source = completedSession(ctx, 'named-stuck-source', '/workspace')
+    workspace.sessionIds = [source.id]
+    vi.spyOn(ctx.agents, 'create').mockImplementation(seededChildCreate(ctx))
+    const controller = new SessionCommandController(ctx, controllerAgents(ctx), '/default')
+    const child = SessionId('named-stuck-child')
+
+    await expectFailure(controller.fork({ sessionId: source.id, childSessionId: child }), 'session/workspace-attach-failed')
+    await expectFailure(controller.fork({ sessionId: source.id, childSessionId: child }), 'session/workspace-attach-failed')
+    expect(workspace.attachSession).toHaveBeenCalledTimes(2)
+    expect(workspace.sessionIds).toEqual([source.id])
+    await ctx.fiber.dispose()
+  })
+
   it('refuses a named child another Session holds, and one seeded at another cut', async () => {
     const foreign = await baseContext()
     foreign.provide('workspaceRegistry', { list: () => [] } as never)
