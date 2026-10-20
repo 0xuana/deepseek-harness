@@ -618,6 +618,66 @@ describe('image draft rail', () => {
     expect(within.view.queryByRole('alert')).toBeNull()
   })
 
+  it.each([
+    ['count', { maxImagesPerMessage: 1, maxMessageImageBytes: 4 * 1024 * 1024 }, 16, 16],
+    ['total size', { maxImagesPerMessage: 5, maxMessageImageBytes: 2 * 1024 * 1024 }, 1.5 * 1024 * 1024, 1024 * 1024],
+  ])('checks a new image against the next message\'s %s limit while a message is sent', async (_limit, caps, sentBytes, nextBytes) => {
+    const limits = {
+      maxImageBytes: 2 * 1024 * 1024,
+      ...caps,
+      maxImagePixels: 40_000_000,
+      maxImageDimension: 2000,
+      mediaTypes: ['image/png'] as const,
+    }
+    const sent = {
+      kind: 'image' as const, id: 'draft-1' as DraftAttachmentId,
+      file: new File([new ArrayBuffer(sentBytes)], 'sent.png', { type: 'image/png' }), previewUrl: 'blob:draft-1',
+    }
+    const addFiles = vi.fn(() => null)
+    const result = bench({ attachments: [sent], imageLimits: limits, addFiles })
+    let settle!: (outcome: SubmitOutcome) => void
+    result.sink.mockImplementationOnce(() => new Promise<SubmitOutcome>((resolve) => { settle = resolve }))
+    fireEvent.keyDown(result.textarea, { key: 'Enter' })
+    expect(attachmentOwner(result.slotCalls).sendingAttachmentIds).toEqual(['draft-1'])
+    const next = new File([new ArrayBuffer(nextBytes)], 'next.png', { type: 'image/png' })
+    act(() => { attachmentOwner(result.slotCalls).onAddFiles([next]) })
+    expect(addFiles).toHaveBeenCalledWith([next], undefined)
+    expect(result.view.queryByRole('alert')).toBeNull()
+    await act(async () => { settle({ kind: 'success' }) })
+    expect(attachmentOwner(result.slotCalls).sendingAttachmentIds).toEqual([])
+  })
+
+  it('counts the images of a refused message against the next addition again', async () => {
+    const sent = {
+      kind: 'image' as const, id: 'draft-1' as DraftAttachmentId,
+      file: new File([Uint8Array.of(1)], 'sent.png', { type: 'image/png' }), previewUrl: 'blob:draft-1',
+    }
+    const addFiles = vi.fn(() => null)
+    const result = bench({
+      attachments: [sent],
+      addFiles,
+      imageLimits: {
+        maxImageBytes: 1024 * 1024,
+        maxImagesPerMessage: 1,
+        maxMessageImageBytes: 1024 * 1024,
+        maxImagePixels: 40_000_000,
+        maxImageDimension: 2000,
+        mediaTypes: ['image/png'] as const,
+      },
+    })
+    let refuse!: (outcome: SubmitOutcome) => void
+    result.sink.mockImplementationOnce(() => new Promise<SubmitOutcome>((resolve) => { refuse = resolve }))
+    fireEvent.keyDown(result.textarea, { key: 'Enter' })
+    await act(async () => { refuse({ kind: 'error' }) })
+    // The refused message's image stays in the draft, so the next message would carry it too.
+    expect(attachmentOwner(result.slotCalls).sendingAttachmentIds).toEqual([])
+    act(() => {
+      attachmentOwner(result.slotCalls).onAddFiles([new File([Uint8Array.of(2)], 'next.png', { type: 'image/png' })])
+    })
+    expect(addFiles).not.toHaveBeenCalled()
+    expect(result.view.getByRole('alert').textContent).toContain('一条消息最多添加 1 张图片')
+  })
+
   it('announces the format problem before any limit when the batch holds a non-image', () => {
     const addFiles = vi.fn(() => '仅支持 PNG、JPG、WebP、GIF 格式的图片')
     const result = bench({

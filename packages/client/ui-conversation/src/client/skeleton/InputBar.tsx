@@ -28,6 +28,7 @@ import type {} from '@deepseek-ai/dsh-goal/client'
 // wire types: apiproxy's sessions contract declares it, and client-runtime's
 // api-remotes import already places it in every client program.
 import type { Translate } from '@deepseek-ai/dsh-client-ui-slots'
+import type { DraftAttachmentId } from '../contract/input.ts'
 import type { ComposerBarProps } from '../contract/slots.ts'
 import { DraftEditor } from '../input/editor/DraftEditor.tsx'
 import {
@@ -42,6 +43,8 @@ import { observeControlRow } from './control-row-layout.ts'
 import css from './InputBar.module.css'
 
 export type InputBarProps = ComposerBarProps
+
+const NO_ATTACHMENTS: readonly DraftAttachmentId[] = []
 
 export const InputBar = memo(function InputBar({
   useSession, useInput, inputActions, keyboard, addFiles, removeAttachment, resolveDraftAttachments,
@@ -78,6 +81,7 @@ export const InputBar = memo(function InputBar({
     () => input === undefined || resolveDraftAttachments === undefined ? [] : resolveDraftAttachments(input.attachmentIds),
     [resolveDraftAttachments, input?.attachmentIds],
   )
+  const sendingAttachmentIds = input?.sendingAttachmentIds ?? NO_ATTACHMENTS
   const empty = draft.trim() === '' && attachments.length === 0
   const uploads = useFileUploads(snapshot => snapshot)
   // Send waits for every picked file: uploading and failed drafts both hold
@@ -233,8 +237,9 @@ export const InputBar = memo(function InputBar({
   // refused as a whole batch, announced immediately, and never enters the
   // rail. Only the image subset is limit-checked: generic files carry no
   // client-side size or count limit and upload as soon as they are picked.
-  // The host enforces the same image limits at submit for callers that bypass
-  // this composer.
+  // The images of a message being sent belong to that message, so the limits
+  // count only the images of the next one. The host enforces the same image
+  // limits at submit for callers that bypass this composer.
   const intakeFiles = useCallback((files: readonly File[], directories?: ReadonlySet<File>): void => {
     if (locked || commandBusy || (subagent !== null && !continuable) || addFiles === undefined || files.length === 0) return
     const rejected = ((): string | null => {
@@ -246,7 +251,8 @@ export const InputBar = memo(function InputBar({
       if (imageLimits !== undefined) {
         const mediaTypes = imageLimits.mediaTypes as readonly string[]
         const images = files.filter(file => mediaTypes.includes(file.type))
-        const imageAttachments = attachments.filter(attachment => attachment.kind === 'image')
+        const imageAttachments = attachments.filter(attachment => attachment.kind === 'image'
+          && !sendingAttachmentIds.includes(attachment.id))
         if (imageAttachments.length + images.length > imageLimits.maxImagesPerMessage) {
           return t('image.tooMany', { count: imageLimits.maxImagesPerMessage })
         }
@@ -262,7 +268,7 @@ export const InputBar = memo(function InputBar({
       return addFiles(files, directories)
     })()
     if (rejected !== null) showToast(rejected)
-  }, [locked, commandBusy, subagent, continuable, addFiles, attachments, imageLimits, showToast, t])
+  }, [locked, commandBusy, subagent, continuable, addFiles, attachments, sendingAttachmentIds, imageLimits, showToast, t])
 
   const canAcceptDrop = (subagent === null || continuable) && !locked && !commandBusy && addFiles !== undefined
 
@@ -438,6 +444,7 @@ export const InputBar = memo(function InputBar({
           canAcceptDrop,
           onAddFiles: intakeFiles,
           onRemoveAttachment: (id) => { removeAttachment?.(id) },
+          sendingAttachmentIds,
           uploads,
           onRetryFile: (id) => { retryFileUpload?.(id) },
           dropLimits: imageLimits === undefined ? undefined : {

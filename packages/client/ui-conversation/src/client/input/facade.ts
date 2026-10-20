@@ -110,6 +110,8 @@ function errorText(error: unknown): string {
 
 const EMPTY_QUEUE: InboxState['next-turn'] = []
 
+const EMPTY_ATTACHMENTS: readonly DraftAttachmentId[] = []
+
 /** Unavailable catalogs contain no named text references. */
 const EMPTY_LEXICON: ReadonlyMap<'/' | '@', readonly string[]> = new Map()
 
@@ -826,6 +828,7 @@ export class SessionInputShell implements SessionInput {
       attachmentIds: this.attachmentIds,
       draftRev: this.rev,
       phase: core.phase,
+      sendingAttachmentIds: this.core.sendingAttempt?.attachmentIds ?? EMPTY_ATTACHMENTS,
       ...(core.claim !== undefined ? { claim: core.claim } : {}),
       occurrences: this.projection.occurrences,
       queue: this.deps.inbox?.getSnapshot()?.['next-turn'] ?? EMPTY_QUEUE,

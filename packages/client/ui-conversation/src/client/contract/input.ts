@@ -295,6 +295,12 @@ export interface InputState {
    * send waits, and the attachments of the message being sent stay attached.
    */
   readonly phase: 'plain' | 'adjudicating' | 'claimed' | 'submitting' | 'sending'
+  /**
+   * Attachments of the message being sent, in order; empty unless `phase` is
+   * `sending`. They stay in `attachmentIds` and cannot be removed until the
+   * send settles; attachments added meanwhile belong to the next message.
+   */
+  readonly sendingAttachmentIds: readonly DraftAttachmentId[]
   /** Present exactly while claimed/submitting (claim snapshot during flight; submit closure withheld). */
   readonly claim?: { readonly name: string; readonly token: string; readonly hint?: string; readonly attachments?: boolean }
   /** Reference occurrence view of the editor's chips, sorted by offset. */

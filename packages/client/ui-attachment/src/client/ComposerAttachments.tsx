@@ -19,7 +19,7 @@ interface ComposerRailItem extends AttachmentRailItem {
 
 /** Draft image previews, pending-file cards, drop target, and original-image preview. */
 export function ComposerAttachments({
-  attachments, canAcceptDrop, onAddFiles, onRemoveAttachment, uploads, onRetryFile, dropLimits, t,
+  attachments, canAcceptDrop, onAddFiles, onRemoveAttachment, sendingAttachmentIds, uploads, onRetryFile, dropLimits, t,
 }: ComposerAttachmentsProps) {
   const [preview, setPreview] = useState<ComposerImageAttachment | null>(null)
   const [dragActive, setDragActive] = useState(false)
@@ -53,6 +53,7 @@ export function ComposerAttachments({
             labels={attachmentRailLabels(t)}
             renderItem={(item) => {
               const attachment = item.attachment
+              const removable = !sendingAttachmentIds.includes(attachment.id)
               if (attachment.kind === 'file') {
                 const upload = uploads[attachment.id]
                 return (
@@ -66,7 +67,7 @@ export function ComposerAttachments({
                       ? { progress: upload.loaded / upload.total }
                       : {}}
                     labels={fileCardLabels(t, attachment.file.name)}
-                    onRemove={() => { onRemoveAttachment(attachment.id) }}
+                    onRemove={removable ? () => { onRemoveAttachment(attachment.id) } : undefined}
                     onRetry={() => { onRetryFile(attachment.id) }}
                   />
                 )
@@ -81,14 +82,16 @@ export function ComposerAttachments({
                   >
                     <img src={attachment.previewUrl} alt={attachment.file.name || t('image.pending')} />
                   </button>
-                  <button
-                    type="button"
-                    className={css.remove}
-                    aria-label={t('image.remove', { name: attachment.file.name })}
-                    onClick={() => { onRemoveAttachment(attachment.id) }}
-                  >
-                    <IconCloseFillRegular size={12} />
-                  </button>
+                  {removable && (
+                    <button
+                      type="button"
+                      className={css.remove}
+                      aria-label={t('image.remove', { name: attachment.file.name })}
+                      onClick={() => { onRemoveAttachment(attachment.id) }}
+                    >
+                      <IconCloseFillRegular size={12} />
+                    </button>
+                  )}
                 </div>
               )
             }}
