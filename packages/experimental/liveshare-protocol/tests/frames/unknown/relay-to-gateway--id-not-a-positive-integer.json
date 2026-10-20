@@ -10,7 +10,7 @@
       "body": {}
     },
     "actor": {
-      "providerId": "feishu",
+      "providerId": "example",
       "tenantId": "tenant-a",
       "subjectId": "ou_viewer"
     }

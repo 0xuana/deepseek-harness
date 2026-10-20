@@ -32,7 +32,7 @@ export interface IdentityExchangeRequest {
   readonly redirectUri: string
 }
 
-/** Generic browser OAuth contract implemented by Feishu and local mocks. */
+/** Generic browser OAuth contract a deployment's identity adapter implements; the protocol's mock implements it for local runs. */
 export interface IdentityProvider {
   readonly id: string
   readonly scopes: readonly string[]

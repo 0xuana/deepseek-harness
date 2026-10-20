@@ -5,7 +5,7 @@
     "type": "share-rpc",
     "id": 7,
     "body": { "op": "call", "path": "/__share/context", "body": {} },
-    "actor": { "providerId": "feishu", "tenantId": "tenant-a", "subjectId": "ou_viewer" }
+    "actor": { "providerId": "example", "tenantId": "tenant-a", "subjectId": "ou_viewer" }
   },
   "required": ["id", "body", "actor"],
   "optional": []

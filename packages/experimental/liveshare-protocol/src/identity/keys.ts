@@ -38,7 +38,7 @@ export function identityFromKey(key: string): IdentityTriple | undefined {
 
 /**
  * Tenant id recorded for a provider that issues no tenant of its own, such as a
- * DeepSeek account adapter. Providers that own a tenant must reject an empty
+ * An account adapter whose provider issues no tenant of its own must reject an empty
  * tenant instead of using this placeholder; see {@link requireIdentityTenant}.
  */
 export const IDENTITY_TENANT_PLACEHOLDER = 'default'

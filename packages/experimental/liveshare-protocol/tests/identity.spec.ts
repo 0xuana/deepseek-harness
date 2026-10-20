@@ -9,7 +9,7 @@ import {
 } from '@deepseek-ai/dsh-experimental-liveshare-protocol/identity'
 
 const actor: IdentityActor = {
-  providerId: 'feishu',
+  providerId: 'example',
   tenantId: 'tenant/a',
   subjectId: 'user:one',
   displayName: 'Alice',
@@ -17,7 +17,7 @@ const actor: IdentityActor = {
 
 describe('identity keys', () => {
   it('derives one stable, encoded identity key from the provider triple', () => {
-    expect(identityKeyOf(actor)).toBe('feishu:tenant%2Fa:user%3Aone')
+    expect(identityKeyOf(actor)).toBe('example:tenant%2Fa:user%3Aone')
     expect(identityKeyOf(actor)).toBe(identityKeyOf({
       providerId: actor.providerId,
       tenantId: actor.tenantId,
@@ -28,28 +28,28 @@ describe('identity keys', () => {
       tenantId: actor.tenantId,
       subjectId: actor.subjectId,
     })
-    expect(identityFromKey('feishu:only-two')).toBeUndefined()
-    expect(identityFromKey('feishu:%E0%A4%A:user')).toBeUndefined()
+    expect(identityFromKey('example:only-two')).toBeUndefined()
+    expect(identityFromKey('example:%E0%A4%A:user')).toBeUndefined()
   })
 
   it('fills the placeholder tenant only for a provider that issues none', () => {
-    expect(normalizeIdentity({ providerId: 'deepseek', tenantId: '', subjectId: 'user' }))
-      .toEqual({ providerId: 'deepseek', tenantId: IDENTITY_TENANT_PLACEHOLDER, subjectId: 'user' })
-    expect(normalizeIdentity({ providerId: 'deepseek', tenantId: 'tenant-a', subjectId: 'user' }))
-      .toEqual({ providerId: 'deepseek', tenantId: 'tenant-a', subjectId: 'user' })
+    expect(normalizeIdentity({ providerId: 'example', tenantId: '', subjectId: 'user' }))
+      .toEqual({ providerId: 'example', tenantId: IDENTITY_TENANT_PLACEHOLDER, subjectId: 'user' })
+    expect(normalizeIdentity({ providerId: 'example', tenantId: 'tenant-a', subjectId: 'user' }))
+      .toEqual({ providerId: 'example', tenantId: 'tenant-a', subjectId: 'user' })
     expect(normalizeIdentity({ providerId: '', tenantId: '', subjectId: 'user' })).toBeUndefined()
-    expect(normalizeIdentity({ providerId: 'deepseek', tenantId: '', subjectId: '' })).toBeUndefined()
-    expect(normalizeIdentity({ providerId: 'deepseek', tenantId: '', subjectId: 'user' }, ''))
+    expect(normalizeIdentity({ providerId: 'example', tenantId: '', subjectId: '' })).toBeUndefined()
+    expect(normalizeIdentity({ providerId: 'example', tenantId: '', subjectId: 'user' }, ''))
       .toBeUndefined()
-    expect(normalizeIdentity({ providerId: 'deepseek', tenantId: '', subjectId: 'user' }, 'tenant-b'))
-      .toEqual({ providerId: 'deepseek', tenantId: 'tenant-b', subjectId: 'user' })
+    expect(normalizeIdentity({ providerId: 'example', tenantId: '', subjectId: 'user' }, 'tenant-b'))
+      .toEqual({ providerId: 'example', tenantId: 'tenant-b', subjectId: 'user' })
   })
 
   it('rejects any triple whose provider must issue a tenant but left it empty', () => {
-    expect(requireIdentityTenant({ providerId: 'feishu', tenantId: 'tenant-a', subjectId: 'user' }))
-      .toEqual({ providerId: 'feishu', tenantId: 'tenant-a', subjectId: 'user' })
-    expect(requireIdentityTenant({ providerId: 'feishu', tenantId: '', subjectId: 'user' })).toBeUndefined()
+    expect(requireIdentityTenant({ providerId: 'example', tenantId: 'tenant-a', subjectId: 'user' }))
+      .toEqual({ providerId: 'example', tenantId: 'tenant-a', subjectId: 'user' })
+    expect(requireIdentityTenant({ providerId: 'example', tenantId: '', subjectId: 'user' })).toBeUndefined()
     expect(requireIdentityTenant({ providerId: '', tenantId: 'tenant-a', subjectId: 'user' })).toBeUndefined()
-    expect(requireIdentityTenant({ providerId: 'feishu', tenantId: 'tenant-a', subjectId: '' })).toBeUndefined()
+    expect(requireIdentityTenant({ providerId: 'example', tenantId: 'tenant-a', subjectId: '' })).toBeUndefined()
   })
 })

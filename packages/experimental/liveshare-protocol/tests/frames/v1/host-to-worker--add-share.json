@@ -11,7 +11,7 @@
       "relay": "wss://relay.example",
       "gatewayToken": "token-one",
       "ownerDisplayName": "Owner",
-      "allowedSubjectIds": ["ou_viewer", "feishu:tenant-a:ou_other"],
+      "allowedSubjectIds": ["ou_viewer", "example:tenant-a:user-other"],
       "sessionMode": "write",
       "allowsFork": true,
       "allowsFileUpload": true,

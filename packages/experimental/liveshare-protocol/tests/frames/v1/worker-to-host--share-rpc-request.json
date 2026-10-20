@@ -6,7 +6,7 @@
     "id": 7,
     "shareId": "share-one",
     "body": { "op": "stream-open", "id": 1, "endpoint": "trajectory", "payload": {} },
-    "actor": { "providerId": "feishu", "tenantId": "tenant-a", "subjectId": "ou_viewer" }
+    "actor": { "providerId": "example", "tenantId": "tenant-a", "subjectId": "ou_viewer" }
   },
   "required": ["type", "id", "shareId", "actor"],
   "optional": ["body"]
