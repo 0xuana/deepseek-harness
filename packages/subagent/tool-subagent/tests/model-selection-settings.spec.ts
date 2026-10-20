@@ -1,5 +1,5 @@
-import { mountWorkingDirectoryFixture } from '../../subagent/tests/working-directory-fixture.ts'
 /** Default-off settings and per-session model-selection decisions. */
+import { mountWorkingDirectoryFixture } from '../../subagent/tests/working-directory-fixture.ts'
 
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -172,16 +172,16 @@ describe('SubagentModelSelectionConfig', () => {
     await ctx.fiber.dispose()
   })
 
-  it('installs a direct Agent setup before Session publication', async () => {
+  it('installs a direct Agent setup before Agent publication', async () => {
     const ctx = await boot(false)
     await selectionConfigs.get(ctx)!.update({
       enabled: true,
       allowedModels: ALLOWED_MODELS,
     })
     let prepared: Awaited<ReturnType<Context['agents']['create']>>['agent'] | undefined
-    let visibleAtSessionCreated = false
-    ctx.on('session/created', () => {
-      visibleAtSessionCreated = prepared !== undefined && selectable(ctx, prepared)
+    let visibleAtAgentCreated = false
+    ctx.on('agent/created', () => {
+      visibleAtAgentCreated = prepared !== undefined && selectable(ctx, prepared)
     })
 
     const handle = await ctx.agents.create({
@@ -199,7 +199,7 @@ describe('SubagentModelSelectionConfig', () => {
       },
     })
 
-    expect(visibleAtSessionCreated).toBe(true)
+    expect(visibleAtAgentCreated).toBe(true)
     expect(selectable(ctx, handle.agent)).toBe(true)
     await handle.dispose()
     await ctx.fiber.dispose()
