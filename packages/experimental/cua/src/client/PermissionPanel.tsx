@@ -16,26 +16,28 @@ export type PermissionProps = InjectFace<PermissionFace> & PropsLocale<typeof NS
 export type PermissionSetupProps = PermissionProps
   & Pick<PropsRuntime<'plugins.bundle.activation'>, 'onDismiss' | 'onOpenDetails'>
 
-type DefaultPresetProps = PropsLocale<typeof NS> & Pick<PropsRuntime<'plugins.bundle.config'>, 'busy'> & InjectFace<{
+type DefaultPresetProps = PermissionProps & InjectFace<{
   hooks: { cuaDefaultPreset: ConfigForm<{ default: string; selectedDefault?: string }> }
   setPtcDefault: () => Promise<boolean>
 }>
 
-type PersistentPtcProps = PermissionProps & Pick<PropsRuntime<'plugins.bundle.config'>, 'busy'> & { setPersistentPtc: () => Promise<boolean> }
+type PersistentPtcProps = PermissionProps & { setPersistentPtc: () => Promise<boolean> }
 
 /** The detail page owns explicit preset and execution-mode settings. */
 export type PermissionPanelProps = PermissionProps & DefaultPresetProps & PersistentPtcProps
 
 function DefaultPresetSetting(props: DefaultPresetProps) {
   const preset = props.useCuaDefaultPreset(value => value)
-  return <ConfigurationSetting kind="default" status={preset.status} loading={preset.value === undefined && (props.busy === true || preset.status === 'loading')} writable={preset.writable} t={props.t} busy={props.busy === true} save={props.setPtcDefault}
+  const changing = props.useCuaPermissions(value => value.changing)
+  return <ConfigurationSetting kind="default" status={preset.status} loading={preset.value === undefined && (changing || preset.status === 'loading')} writable={preset.writable} t={props.t} busy={changing} save={props.setPtcDefault}
     configured={(preset.value?.selectedDefault ?? preset.value?.default) === 'ptc'} />
 }
 
 function PersistentPtcSetting(props: PersistentPtcProps) {
   const runtime = props.useCuaPermissions(value => value.runtime)
+  const changing = props.useCuaPermissions(value => value.changing)
   return <ConfigurationSetting kind="persistent" loading={runtime.value === null && (runtime.busy || runtime.error === null)}
-    status={runtime.busy ? 'loading' : runtime.error === null && runtime.value !== null ? 'ready' : 'unavailable'} writable={!runtime.busy && runtime.value?.writable === true} t={props.t} busy={props.busy === true} save={props.setPersistentPtc}
+    status={runtime.busy ? 'loading' : runtime.error === null && runtime.value !== null ? 'ready' : 'unavailable'} writable={!runtime.busy && runtime.value?.writable === true} t={props.t} busy={changing || runtime.busy} save={props.setPersistentPtc}
     configured={runtime.value?.persistent === true} />
 }
 
@@ -129,21 +131,20 @@ function PermissionAction({ permission, granted, loading, busy, request, openSet
 
 /** @param props Host observation and explicit user actions. @returns Permission controls without automatic system prompts. */
 export function PermissionPanel(props: PermissionPanelProps) {
-  const { t, refresh, setActive } = props
+  const { t, refresh } = props
   const state = props.useCuaPermissions(value => value)
   const observed = state.system.value
   const apps = state.applications.value
-  const transitioning = props.busy === true
+  const transitioning = state.changing
   const busy = transitioning || state.system.busy
   const appsBusy = transitioning || state.applications.busy
   const loading = observed === null && (busy || state.system.error === null)
   const application = !busy && state.system.error !== null ? undefined : observed?.launchApplication
   useEffect(() => {
-    setActive(!transitioning)
-    if (transitioning) return
+    refresh()
     window.addEventListener('focus', refresh)
     return () => { window.removeEventListener('focus', refresh) }
-  }, [transitioning, refresh, setActive])
+  }, [refresh])
   return <div className={css.panels} data-cua-settings aria-busy={transitioning || state.busy || loading}>
     <section className={css.panel} aria-label={t('title')}>
       <h3>{t('title')}</h3>
@@ -193,9 +194,9 @@ export function PermissionPanel(props: PermissionPanelProps) {
  * @param props Permission observation and activation navigation callbacks.
  * @returns Setup guidance when system permissions need attention.
  */
-export function PermissionSetup({ t, setActive, useCuaPermissions, onDismiss, onOpenDetails }: PermissionSetupProps) {
+export function PermissionSetup({ t, refresh, useCuaPermissions, onDismiss, onOpenDetails }: PermissionSetupProps) {
   const state = useCuaPermissions(value => value.system)
-  useEffect(() => { setActive(true) }, [setActive])
+  useEffect(() => { refresh() }, [refresh])
   const ready = state.value !== null && state.error === null
     && state.value.accessibility && state.value.screenRecording
   useEffect(() => { if (ready && !state.busy) onDismiss() }, [ready, state.busy, onDismiss])

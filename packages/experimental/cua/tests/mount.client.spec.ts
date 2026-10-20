@@ -36,6 +36,11 @@ async function fixture(fail = false) {
     $on(_event: string, listener: (namespace: string, revision: number) => void) { settingsListener = listener; return unsubscribe }
   }
   new Remote()
+  const changes = createSnapshotStore(false)
+  ctx.provide('pluginChanges', { bundle: (name) => {
+    expect(name).toBe('@deepseek-ai/dsh-cua-bundle')
+    return changes
+  } })
   const setDefault = vi.fn(async () => true)
   const setPersistent = vi.fn<() => Promise<RemoteResult<void>>>().mockResolvedValue({ ok: true, value: undefined })
   const runtimeConfiguration = vi.fn<() => Promise<RemoteResult<{ persistent: boolean; writable: boolean }>>>()
@@ -64,7 +69,7 @@ async function fixture(fail = false) {
     'plugins.bundle.config': { kind: 'keyed', scope: 'root' }, 'shell.overlay': { kind: 'list', scope: 'root' },
   } } as never, () => null)
   if (fail) vi.spyOn(ctx.slots, 'inject').mockImplementationOnce(() => { throw new Error('slot unavailable') })
-  return { ctx, unmount, unsubscribe, status, systemStatus, applicationIcons,
+  return { ctx, changes, unmount, unsubscribe, status, systemStatus, applicationIcons,
     requestPermission, openSettings, revoke, retryApproval, setDefault, setPersistent, runtimeConfiguration,
     updateSettings(namespace: string) { settingsListener!(namespace, 1) },
   }
@@ -188,5 +193,27 @@ it('refreshes only the settings namespace reported by the permission owner', asy
     expect(f.status).toHaveBeenCalledOnce()
     f.updateSettings('custom-cua-entry')
     await vi.waitFor(() => { expect(f.status).toHaveBeenCalledTimes(2) })
+  } finally { await f.ctx.fiber.dispose() }
+})
+
+
+it('resumes queries when a management operation settles without a mounted permission page', async () => {
+  const f = await fixture()
+  try {
+    f.changes.set(true)
+    const fiber = await f.ctx.plugin({ inject: [...inject], apply: ctx => mountCuaPermissions(ctx, contribution) })
+    const actions = f.ctx.slots.entries('plugins.bundle.config')[0]!.inject!()
+    actionsOf(actions)
+    expect(actions.hooks.cuaPermissions.getSnapshot().changing).toBe(true)
+    actions.refresh()
+    f.ctx.emit('connection/reset')
+    expect(f.status).not.toHaveBeenCalled()
+    f.changes.set(false)
+    await vi.waitFor(() => { expect(actions.hooks.cuaPermissions.getSnapshot().busy).toBe(false) })
+    expect(f.status).toHaveBeenCalledOnce()
+    f.changes.set(true)
+    await fiber.dispose()
+    f.changes.set(false)
+    expect(f.status).toHaveBeenCalledOnce()
   } finally { await f.ctx.fiber.dispose() }
 })
