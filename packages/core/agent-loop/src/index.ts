@@ -433,10 +433,10 @@ export class AgentLoop extends Service implements AgentFactory {
 
   /**
    * Own initialization and teardown from an acquired Session to a published Agent.
-   * The factory and caller own cleanup before scope construction can reenter.
+   * Registers factory teardown and caller cancellation before constructing the scope.
    * Failed initialization drains cleanup while retaining stored events and inbox input.
    * @param ownerCtx - caller context that owns the Agent lifecycle.
-   * @param options - acquired Session/write handle, loop options, setup, and cancellation.
+   * @param options - acquired Session/write handle, loop options, start source, parent Agent, setup, and cancellation.
    * @returns the initialized Agent and its shared disposer.
    */
   private async initializeAgent(
