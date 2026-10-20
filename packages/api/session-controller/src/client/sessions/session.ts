@@ -146,6 +146,7 @@ export class Session implements SessionFace {
     admitted?: readonly (ImageAttachmentRef | FileAttachmentRef)[]
     /** Whether the Host accepted the prompt; the echo is published only from then on. */
     accepted: boolean
+    readonly onAccept?: (() => void) | undefined
     readonly onRetire?: ((retirement: PendingSubmissionRetirement) => void) | undefined
     retiring: boolean
   }>()
@@ -225,7 +226,8 @@ export class Session implements SessionFace {
   /**
    * Register one local submission echo (see the ISession declaration). The
    * echo reconciles against Host events from now on, but it enters the
-   * snapshot only once {@link prompt} reports that the Host accepted it.
+   * snapshot only once the prompt receipt or an Inbox row carrying its
+   * request id shows that the Host accepted it.
    * @param input - echo content and the optional settlement callback.
    * @returns the minted identity for {@link prompt} plus the pre-prompt abandon path.
    */
@@ -239,7 +241,9 @@ export class Session implements SessionFace {
       text: input.text,
       attachments: input.attachments,
     }]
-    this.submissionSettlements.set(requestId, { placement, accepted: false, onRetire: input.onRetire, retiring: false })
+    this.submissionSettlements.set(requestId, {
+      placement, accepted: false, onAccept: input.onAccept, onRetire: input.onRetire, retiring: false,
+    })
     return { requestId, abandon: () => { this.retireFailedSubmission(requestId) } }
   }
 
@@ -307,7 +311,21 @@ export class Session implements SessionFace {
       this.notifier.markDirty()
       return result
     }
+    this.acceptPrompt(requestId)
+    return result
+  }
+
+  /**
+   * Apply the Host's acceptance of one prompt: publish its echo, move a blank
+   * Session to engaging, and tell the submitter. The prompt receipt and an
+   * Inbox row carrying the prompt's request id both prove acceptance.
+   * Whichever arrives first publishes the echo; a later proof for an echo
+   * still pending changes nothing.
+   * @param requestId - identity from {@link beginSubmission}; absent for a prompt sent without an echo.
+   */
+  private acceptPrompt(requestId: SessionRequestId | undefined): void {
     const settlement = requestId === undefined ? undefined : this.submissionSettlements.get(requestId)
+    if (settlement?.accepted === true) return
     if (settlement !== undefined) {
       settlement.accepted = true
       this.refreshAcceptedSubmissions()
@@ -316,7 +334,7 @@ export class Session implements SessionFace {
     this.blankBit = false
     this.notifier.markDirty()
     this.options.onEngaged?.(this)
-    return result
+    settlement?.onAccept?.()
   }
 
   /**
@@ -803,6 +821,8 @@ export class Session implements SessionFace {
       if (settlement === undefined || settlement.placement === 'queued'
         || settlement.retiring || (settlement.receipt?.seq ?? -1) > seq) continue
       settlement.receipt = { target, seq, index: start + index, attachments: attachmentRefsIn(message.content) }
+      // An Inbox row can reach the Client before the prompt receipt.
+      this.acceptPrompt(source.rpcId)
     }
   }
 

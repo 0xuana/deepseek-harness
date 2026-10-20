@@ -29,7 +29,7 @@ The Web Session Remote adopts the controller first. `session/prompt` resolves or
 
 Request deduplication stays in the Session Remote. It reads the Session history synchronously, and the [synchronous-read decision](2026-09-09-deprecate-synchronous-session-event-reads.md) prohibits copying such a read into new production code; the controller can take over deduplication once a projection records accepted request ids.
 
-The Web client shows a message only after the Host accepts it. While the Host decides, the composer is in a `sending` phase: Send shows progress and another send waits, but the editor stays editable for the next message and a running Turn keeps its Stop. When `session/prompt` resolves, the sent text and attachments leave the composer while text added after them stays, and the Session publishes the message's echo and leaves the blank New Session layout. A refusal or failure leaves the draft as it is; the composer no longer clears on Enter and restores failed drafts.
+The Web client shows a message only after the Host accepts it. While the Host decides, the composer is in a `sending` phase: Send shows progress and another send waits, but the editor stays editable for the next message and a running Turn keeps its Stop. Once the Host has accepted the message, as the `session/prompt` reply or an Inbox row carrying its request id shows, whichever reaches the client first, the Session publishes the message's echo and leaves the blank New Session layout, and in the same update the sent text and attachments leave the composer while text added after them stays. A refusal or failure leaves the draft as it is; the composer no longer clears on Enter and restores failed drafts.
 
 ## Alternatives considered
 

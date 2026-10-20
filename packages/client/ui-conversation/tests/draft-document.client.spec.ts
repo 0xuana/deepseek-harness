@@ -615,6 +615,35 @@ describe('draft documents in the input shell', () => {
     },
   )
 
+  it('settles a message the moment its sink reports the Host acceptance, before the sink resolves', async () => {
+    const outcome = Promise.withResolvers<SubmitOutcome>()
+    let accept: (() => void) | undefined
+    const sink = vi.fn<SessionInputDeps['defaultSink']>((_text, _ids, _mode, _signal, onAccept) => {
+      accept = onAccept
+      return outcome.promise
+    })
+    const shell = makeShell({ defaultSink: sink })
+    const sentAttachment = 'sent-image' as DraftAttachmentId
+    try {
+      shell.addAttachments([sentAttachment])
+      shell.setDraft('accepted early')
+      shell.submit()
+      await vi.waitFor(() => { expect(accept).toBeDefined() })
+      expect(shell.snapshot.phase).toBe('sending')
+      accept?.()
+      // In the same call, so the editor has shrunk before the Session renders the echo.
+      expect(shell.snapshot).toMatchObject({ phase: 'plain', draft: '', attachmentIds: [], sendingAttachmentIds: [] })
+      outcome.resolve({ kind: 'success' })
+      await outcome.promise
+      await Promise.resolve()
+      expect(shell.snapshot).toMatchObject({ phase: 'plain', draft: '', attachmentIds: [] })
+    } finally {
+      shell.dispose()
+      outcome.resolve({ kind: 'error' })
+      await outcome.promise
+    }
+  })
+
   it.each([
     {
       change: 'adds text after it',

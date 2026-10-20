@@ -29,7 +29,7 @@ Web Session Remote 首先接入控制器。`session/prompt` 自己解析或恢�
 
 请求去重留在 Session Remote。它同步读取 Session 历史，而[同步读取决策](2026-09-09-deprecate-synchronous-session-event-reads.zh.md)禁止把这类读取复制到新的生产代码；等有投影记录已接收的请求 id 后，控制器才能接管去重。
 
-Web 客户端只在 Host 接收消息后才显示它。Host 做决定期间 composer 处于 `sending` 阶段：Send 显示发送中，下一次发送需要等待，但编辑器保持可编辑，可以接着写下一条消息，运行中的轮次也保留 Stop。`session/prompt` 返回后，已发送的文字和附件离开 composer，期间在其后追加的文字保留，Session 公开该消息的回显并离开空白的新会话布局。被拒绝或失败时草稿保持当时的样子；composer 不再在 Enter 时清空并回填失败草稿。
+Web 客户端只在 Host 接收消息后才显示它。Host 做决定期间 composer 处于 `sending` 阶段：Send 显示发送中，下一次发送需要等待，但编辑器保持可编辑，可以接着写下一条消息，运行中的轮次也保留 Stop。Host 接收消息后，Session 公开该消息的回显并离开空白的新会话布局，已发送的文字和附件也在同一次更新中离开 composer，期间在其后追加的文字保留；`session/prompt` 的返回和带有该请求 id 的 Inbox 行都能表明已接收，以先到达客户端的为准。被拒绝或失败时草稿保持当时的样子；composer 不再在 Enter 时清空并回填失败草稿。
 
 ## 备选方案
 
