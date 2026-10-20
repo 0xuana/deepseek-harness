@@ -35,6 +35,8 @@ Open Plugins → More → Experimental plugins and enable Personalized pages. Sh
 
 The left entry and its global page form one placement, including global streaming tools. Default selection distinguishes global from Session scope first; Session streaming dialogue takes the tab, while other viewers and editors take the right sidebar. Unclear scope calls for clarification before a recommendation.
 
+Personalized pages works with the plugin recommendation experiment disabled or absent. When discovery finds an existing plugin, tool guidance directs the Agent to its Plugins entry instead of creating a duplicate. If the recommendation experiment is also enabled, it can offer that plugin through `suggest_plugin`; both experiments share the one-card-per-turn limit.
+
 ### Outcomes and recovery
 
 Creation requires a live root conversation and permission to modify the profile. Cancel is available during generation; retry waits for the child’s cleanup. Once installation starts, the card shows Completing installation and lets the accepted operation finish. Closing or leaving the conversation does not uninstall a completed plugin. Receipts survive reconnects; interrupted or uncertain runs are reconciled with the installed bundle before retry. Failed removal preserves the existing receipt and its application outcome for retry. Unloading this recommendation bundle stops its Creator work and local follow-up. Plugin Manager owns accepted profile changes and may finish after reload; reopening checks the installed profile before retrying. Installed plugins remain. Recovery confirms installation only; it does not infer runtime activation from the profile’s enabled flag.
