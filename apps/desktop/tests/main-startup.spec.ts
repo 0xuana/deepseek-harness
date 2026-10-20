@@ -1,3 +1,5 @@
+import { parsePluginOperationRecord } from '@deepseek-ai/dsh-plugin-manager/diagnostic'
+import type { DesktopHostProcess } from '../src/host-process.ts'
 import type { AccountView } from '@deepseek-ai/dsh-deepseek-account/types'
 import { WINDOWS_TITLEBAR_HEIGHT } from '../src/windows-layout.ts'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -150,6 +152,8 @@ const harness = await vi.hoisted(async () => {
       readonly inspectPort?: number, readonly environment?: NodeJS.ProcessEnv, readonly onFailure?: (error: Error) => void,
       readonly primaryRuntime?: string,
       readonly packageManager?: { pnpm: string; nodeBin: string },
+      readonly onPlatformSession?: ConstructorParameters<typeof DesktopHostProcess>[8],
+      readonly onPluginOperation?: ConstructorParameters<typeof DesktopHostProcess>[9],
     ) { hosts.push(this) }
   }
   const app = Object.assign(new EventEmitter(), {
@@ -2136,6 +2140,19 @@ describe('desktop main startup', () => {
     expect(harness.hosts).toHaveLength(0)
   })
 
+  it('writes operation history under the instance userData instead of the shared logs directory', async () => {
+    await import('../src/main.ts')
+    await harness.preparing.promise
+    harness.prepared.resolve()
+    await harness.hostStarted.promise
+    const record = parsePluginOperationRecord({ runId: 'c254ab28-97c9-4382-95e6-2db9c66f98c8', transportDropped: 0,
+      operation: { id: 'c254ab28-97c9-4382-95e6-2db9c66f98c9', time: '2026-10-20T00:00:00.000Z',
+        reason: 'bundle', phase: 'started', target: 'test', stage: 'enable' } })!
+    harness.hosts[0]!.onPluginOperation!(record)
+    const file = join(harness.app.getPath('userData'), 'plugin-operations', 'operations.jsonl')
+    await vi.waitFor(() => { expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual(record) })
+  })
+
   it('writes the Host\'s own diagnostic into a startup-phase crash report when the Host reports a fatal error before ready', async () => {
     await import('../src/main.ts')
     await harness.preparing.promise
@@ -2157,7 +2174,7 @@ describe('desktop main startup', () => {
     expect(report.error).toBeInstanceOf(DesktopHostFatalError)
     expect(report.hostDiagnostic).toBe(diagnostic)
     expect(runOperationReportJob).toHaveBeenCalledWith({
-      reportPath: 'desktop-test-logs/crash-test.log', directory: join('desktop-test-logs', 'plugin-operations'),
+      reportPath: 'desktop-test-logs/crash-test.log', directory: join(harness.app.getPath('userData'), 'plugin-operations'),
       limits: { bytes: 65536, recordBytes: 4096, records: 100, outputBytes: 65536 }, journal: null,
     }, 500)
     expect((harness.dialog.showMessageBox.mock.calls[0]![0] as MessageBoxOptions).detail).toContain('profile has no cordis.yml')

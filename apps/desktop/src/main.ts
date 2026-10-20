@@ -130,7 +130,7 @@ function persistCrashReport(error: unknown, source: CrashReportSource): Promise<
   })
   void report.then((path) => {
     if (path !== undefined && operationReportJob === undefined) {
-      operationReportJob = runOperationReportJob({ reportPath: path, directory: join(directory, 'plugin-operations'),
+      operationReportJob = runOperationReportJob({ reportPath: path, directory: join(app.getPath('userData'), 'plugin-operations'),
         limits: { bytes: 64 * 1024, recordBytes: 4096, records: 100, outputBytes: 64 * 1024 },
         journal: operationJournal?.status() ?? null,
       }, 500)
@@ -468,7 +468,7 @@ async function main(): Promise<void> {
       hostInspectPort, { ...hostEnvironment, DSH_CLIENT_VERSION: desktopClientVersion() }, onFailure,
       primaryRuntime,
       resources, (next) => { platformView.setSession(next) }, (record) => {
-        operationJournal ??= new OperationJournal(join(app.getPath('logs'), 'plugin-operations'), {
+        operationJournal ??= new OperationJournal(join(app.getPath('userData'), 'plugin-operations'), {
           segmentBytes: 256 * 1024, recordBytes: 4096, queuedBytes: 64 * 1024,
         })
         operationJournal.enqueue(JSON.stringify(record))

@@ -168,4 +168,5 @@ it.each(['absent', 'empty', 'nonempty'])('reports omitted bytes at an exact budg
     { ...limits, bytes: Buffer.byteLength(current), records: 1 }, new AbortController().signal)
   expect(result.records).toEqual([record(1)])
   expect(result.truncated).toBe(previous === 'nonempty')
+  expect(result.filesRead).toBe(1)
 })

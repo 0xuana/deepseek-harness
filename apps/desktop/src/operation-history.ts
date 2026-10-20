@@ -14,6 +14,7 @@ export interface OperationHistoryReadLimits {
 export interface OperationHistoryReadResult {
   readonly records: readonly PluginOperationRecord[]
   readonly bytesRead: number
+  /** Distinct files from which at least one byte was read. */
   readonly filesRead: number
   readonly truncated: boolean
   readonly invalidRecords: number
@@ -52,7 +53,6 @@ export async function readOperationHistory(
       if (!stat.isFile()) { unavailableFiles++; continue }
       const identity = `${String(stat.dev)}:${String(stat.ino)}`
       if (seenFiles.has(identity)) { truncated = true; continue }
-      seenFiles.add(identity)
       if (stat.size > 0 && (bytesRead >= limits.bytes || records.length >= limits.records)) { truncated = true; break }
       const length = Math.min(stat.size, limits.bytes - bytesRead)
       const start = stat.size - length
@@ -64,6 +64,7 @@ export async function readOperationHistory(
         if (read.bytesRead === 0) break
         offset += read.bytesRead
       }
+      if (offset > 0) seenFiles.add(identity)
       if (cancelled()) break
       truncated ||= start > 0 || offset < length
       // An unterminated last record can still be in flight; never parse it as a committed record.

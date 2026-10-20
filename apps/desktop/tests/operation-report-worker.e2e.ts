@@ -10,7 +10,9 @@ import { expect, it, onTestFinished } from 'vitest'
 const job = new URL('../lib/types/operation-report-job.js', import.meta.url)
 const worker = new URL('../lib/operation-report-worker.js', import.meta.url)
 
-it.skipIf(!existsSync(job) || !existsSync(worker))('appends operation history through the built job and packaged Worker', async () => {
+it.skipIf(!existsSync(new URL('../lib/types/', import.meta.url)))('appends operation history through the built job and packaged Worker', async () => {
+  expect(existsSync(job), 'built report job').toBe(true)
+  expect(existsSync(worker), 'packaged report Worker').toBe(true)
   const directory = await mkdtemp(join(tmpdir(), 'desktop-operation-worker-'))
   onTestFinished(async () => { await rm(directory, { recursive: true, force: true }) })
   const record = { runId: 'c254ab28-97c9-4382-95e6-2db9c66f98c8', transportDropped: 0,

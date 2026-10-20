@@ -972,7 +972,10 @@ export class PluginManager extends TypertRemoteService {
   }
 
   private operationTarget(reason: PluginChange['reason'], target: string): string | null {
-    if (reason !== 'plugin') return installOperationTarget(target)
+    if (reason !== 'plugin') {
+      const name = installOperationTarget(target)
+      return reason === 'install' || name === target ? name : null
+    }
     return target.length <= 256 && [...this.ctx.loader.entries()].some(entry => entry.id === target) ? target : null
   }
 

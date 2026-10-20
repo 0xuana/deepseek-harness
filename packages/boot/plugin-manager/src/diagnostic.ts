@@ -21,13 +21,13 @@ const fields = {
     'bundle': 'bundle',
     'install': 'install',
     'remove': 'remove',
-  } satisfies Record<PluginChange['reason'], PluginChange['reason']>),
+  } satisfies { [K in PluginChange['reason']]: K }),
   target: z.string().max(256).nullable(),
   stage: z.enum({
     'install': 'install',
     'enable': 'enable',
     'remove': 'remove',
-  } satisfies Record<ChangeResult['stage'], ChangeResult['stage']>),
+  } satisfies { [K in ChangeResult['stage']]: K }),
   enabled: z.boolean().optional(),
   version: z.string().max(128).optional(),
 }
@@ -41,7 +41,7 @@ const operation: z.ZodType<PluginOperation> = z.discriminatedUnion('phase', [
       'overridden': 'overridden',
       'failed': 'failed',
       'cancelled': 'cancelled',
-    } satisfies Record<ChangeResult['application'], ChangeResult['application']>),
+    } satisfies { [K in ChangeResult['application']]: K }),
     changed: z.boolean(),
     errorCode: z.enum({
       'management-required': 'management-required',
@@ -57,14 +57,14 @@ const operation: z.ZodType<PluginOperation> = z.discriminatedUnion('phase', [
       'stale-approval': 'stale-approval',
       'incompatible-version': 'incompatible-version',
       'operation-error': 'operation-error',
-    } satisfies Record<ManagementError['code'], ManagementError['code']>).optional(),
+    } satisfies { [K in ManagementError['code']]: K }).optional(),
     restartReason: z.enum({
       'no-hmr': 'no-hmr',
       'package-moved': 'package-moved',
       'host-module': 'host-module',
       'unmanaged-plugin': 'unmanaged-plugin',
       'module-comparison': 'module-comparison',
-    } satisfies Record<RestartReason, RestartReason>).optional(),
+    } satisfies { [K in RestartReason]: K }).optional(),
   }),
 ])
 const record = z.object({

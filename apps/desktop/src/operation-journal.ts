@@ -159,7 +159,6 @@ export class OperationJournal {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     }
     this.abort.signal.throwIfAborted()
-    let incomplete = false
     {
       await using handle = await open(current, 'r+').catch((error: unknown) => {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
@@ -175,14 +174,22 @@ export class OperationJournal {
       } else if (size > 0) {
         const byte = Buffer.alloc(1)
         const read = await handle.read(byte, 0, 1, size - 1)
-        incomplete = read.bytesRead !== 1 || byte[0] !== 10
+        if (read.bytesRead !== 1 || byte[0] !== 10) {
+          const buffer = Buffer.alloc(size)
+          let offset = 0
+          while (offset < size) {
+            this.abort.signal.throwIfAborted()
+            const chunk = await handle.read(buffer, offset, size - offset, offset)
+            if (chunk.bytesRead === 0) break
+            offset += chunk.bytesRead
+          }
+          this.abort.signal.throwIfAborted()
+          // Keep committed lines in both segments; only the unfinished append is discarded.
+          await handle.truncate(buffer.subarray(0, offset).lastIndexOf(10) + 1)
+          this.repairedSegments++
+        }
       }
     }
     this.abort.signal.throwIfAborted()
-    // Preserve complete earlier records, but do not join a new event to a previous process's partial append.
-    if (incomplete) {
-      await rename(current, previous)
-      this.repairedSegments++
-    }
   }
 }

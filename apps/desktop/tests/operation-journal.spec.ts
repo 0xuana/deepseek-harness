@@ -55,15 +55,16 @@ it('disables persistence after a write failure without rejecting producers or cl
   expect(await readFile(blocked, 'utf8')).toBe('untouched')
 })
 
-it('starts a fresh segment after a previous process left a partial record', async () => {
+it.each(['', '{"old":1}\n'])('preserves both segments when repairing a partial append after %j', async (prefix) => {
   const directory = await fixture()
-  const partial = '{"old":1}\n{"partial":'
-  await writeFile(join(directory, 'operations.jsonl'), partial)
+  const previous = '{"previous":0}\n'
+  await writeFile(join(directory, 'operations.previous.jsonl'), previous)
+  await writeFile(join(directory, 'operations.jsonl'), prefix + '{"partial":')
   const journal = new OperationJournal(directory, { recordBytes: 32, segmentBytes: 64, queuedBytes: 64 })
   expect(journal.enqueue('{"new":2}')).toBe(true)
   await journal.close()
-  expect(await readFile(join(directory, 'operations.jsonl'), 'utf8')).toBe('{"new":2}\n')
-  expect(await readFile(join(directory, 'operations.previous.jsonl'), 'utf8')).toBe(partial)
+  expect(await readFile(join(directory, 'operations.jsonl'), 'utf8')).toBe(prefix + '{"new":2}\n')
+  expect(await readFile(join(directory, 'operations.previous.jsonl'), 'utf8')).toBe(previous)
   expect(journal.status()).toMatchObject({ repairedSegments: 1, disabled: false })
 })
 

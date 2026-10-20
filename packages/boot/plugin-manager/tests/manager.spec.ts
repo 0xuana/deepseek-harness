@@ -523,6 +523,19 @@ it.each(['bundle', 'remove', 'plugin'] as const)('excludes credential-bearing ta
   expect(JSON.stringify(facts)).not.toMatch(/user|secret|example|private/)
 })
 
+it.each(['extra@9.9.9', ' extra', 'extra '])('does not attribute a non-name target %j to an installed bundle', async (target) => {
+  const { manager, ctx } = await fixture('startup')
+  const facts: PluginOperation[] = []
+  ctx.on('plugin-manager/operation', (event) => { facts.push(event) })
+  await manager.setBundleEnabled(target, false)
+  await manager.removeBundle(target)
+  expect(facts).toHaveLength(4)
+  for (const event of facts) {
+    expect(event.target).toBeNull()
+    expect(event).not.toHaveProperty('version')
+  }
+})
+
 it('reports unknown outcomes when profile inspection rejects before a result exists', async () => {
   const { manager, ctx, dir } = await fixture('startup')
   const facts: PluginOperation[] = []
