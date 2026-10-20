@@ -61,7 +61,7 @@ async function bench() {
   installSessionReadTestServices(ctx)
   provideWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
-  const controller = createSessionTestController(ctx, defaults)
+  const controller = await createSessionTestController(ctx, defaults)
   return { ctx, controller }
 }
 
@@ -198,7 +198,7 @@ describe('SessionController subagent catalog', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     installSessionReadTestServices(ctx)
-    const controller = createSessionTestController(ctx, defaults)
+    const controller = await createSessionTestController(ctx, defaults)
     const session = ctx.sessions.create(PARENT, { meta: { cwd: '/workspace' } })
     const expected = ctx.sessionProjections.snapshot(session)
     expect(expected.values.subagentCatalog).toBeUndefined()

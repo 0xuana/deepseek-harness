@@ -5,8 +5,10 @@
  * @module @deepseek-ai/dsh-agent-model
  */
 import { FiberState, type Context, type Fiber } from '@deepseek-ai/cordis'
+import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import { AgentModel } from './service.ts'
 import { modelSelectionProjectionDefinition } from './projection.ts'
+import type { ModelSelectionProjectionState } from './types.ts'
 
 export { AgentModel } from './service.ts'
 export type { ModelSelectionProjection } from './types.ts'
@@ -17,12 +19,14 @@ export const name = 'agent-model'
 export const inject = ['sessionProjections']
 
 /**
- * Register the fold before publishing the selection service. Service withdrawal
- * awaits dependent consumers before removing the projection registration.
+ * Await fold registration before publishing the selection service. Retain its
+ * reader until dependent consumers finish cleanup.
  * @param ctx - provider scope owning the projection and service child.
  * @returns after the selection service has activated.
  */
 export async function apply(ctx: Context): Promise<void> {
+  const projection = await ctx.sessionProjections.register(modelSelectionProjectionDefinition)
+  const runtime: { projection: ProjectionHandle<ModelSelectionProjectionState> | undefined } = { projection }
   let service: Fiber | undefined
   const draining = new Set<Fiber>()
   ctx.effect(function* () {
@@ -33,11 +37,14 @@ export async function apply(ctx: Context): Promise<void> {
       if (fiber.state !== FiberState.UNLOADING) draining.delete(fiber)
       else if (service !== undefined && fiber.store?.agentModel?.fiber.dispose === service.dispose) draining.add(fiber)
     })
-    yield ctx.sessionProjections.register(modelSelectionProjectionDefinition)
+    yield () => {
+      runtime.projection = undefined
+      return projection.dispose()
+    }
     yield async () => {
       while (draining.size > 0) await Promise.allSettled([...draining].map(fiber => fiber.await()))
     }
-    service = ctx.plugin(AgentModel)
+    service = ctx.plugin(AgentModel, runtime)
     yield service.dispose
   }, 'agentModel.lifecycle()')
   // The synchronous effect assigns the child before returning.

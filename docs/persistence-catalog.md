@@ -185,7 +185,7 @@ Sources: [`packages/core/session/src/types.ts:432`](../packages/core/session/src
 }
 ```
 
-Source: [`packages/core/agent/src/types.ts:107`](../packages/core/agent/src/types.ts)
+Source: [`packages/core/agent/src/types.ts:95`](../packages/core/agent/src/types.ts)
 
 ### `agent-preset/*`
 
@@ -700,7 +700,7 @@ Source: [`packages/llm/llm-retry/src/types.ts:11`](../packages/llm/llm-retry/src
 'model/selection': ModelSelection
 ```
 
-Source: [`packages/core/agent/src/types.ts:118`](../packages/core/agent/src/types.ts)
+Source: [`packages/core/agent/src/types.ts:106`](../packages/core/agent/src/types.ts)
 
 ### `permission/*`
 
@@ -718,7 +718,7 @@ Source: [`packages/core/agent/src/types.ts:118`](../packages/core/agent/src/type
 'permission/preset': { preset: string }
 ```
 
-Source: [`packages/interaction/permission-presets/src/index.ts:59`](../packages/interaction/permission-presets/src/index.ts)
+Source: [`packages/interaction/permission-presets/src/index.ts:52`](../packages/interaction/permission-presets/src/index.ts)
 
 ### `plan/*`
 
@@ -4337,7 +4337,7 @@ Sources: [`packages/llm/llm/src/message.ts:24`](../packages/llm/llm/src/message.
 
 SHA-256: `f09e5e7acf5ff5ccd193ff2eeec015fa2ff7c29d98bc465f8c3302058d47e29b`
 
-Sources: [`packages/core/agent/src/types.ts:91`](../packages/core/agent/src/types.ts)
+Sources: [`packages/core/agent/src/types.ts:79`](../packages/core/agent/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -6377,7 +6377,7 @@ Sources: [`packages/core/session/src/types.ts:428`](../packages/core/session/src
 
 SHA-256: `fa106c5b33b657e8ef16e8cbf39f3b7d44e5cbcdf4f9303d9db6410f28951e42`
 
-Sources: [`packages/core/agent/src/types.ts:107`](../packages/core/agent/src/types.ts)
+Sources: [`packages/core/agent/src/types.ts:95`](../packages/core/agent/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -7790,7 +7790,7 @@ Sources: [`packages/interaction/user-approval/src/index.ts:40`](../packages/inte
 
 SHA-256: `8a9c990773f798eac10ca8878e6bcc531ee080bc589cac956730e462cc6a09ad`
 
-Sources: [`packages/interaction/permission-presets/src/index.ts:59`](../packages/interaction/permission-presets/src/index.ts)
+Sources: [`packages/interaction/permission-presets/src/index.ts:52`](../packages/interaction/permission-presets/src/index.ts)
 
 | Property | Presence | Type |
 |---|---|---|

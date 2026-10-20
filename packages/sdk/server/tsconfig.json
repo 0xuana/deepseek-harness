@@ -40,6 +40,12 @@
     },
     {
       "path": "../../core/agent-model"
+    },
+    {
+      "path": "../../schedule/schedule"
+    },
+    {
+      "path": "../../interaction/user-questions"
     }
   ]
 }

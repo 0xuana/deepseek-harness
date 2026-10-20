@@ -187,7 +187,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 }
 ```
 
-来源：[`packages/core/agent/src/types.ts:107`](../packages/core/agent/src/types.ts)
+来源：[`packages/core/agent/src/types.ts:95`](../packages/core/agent/src/types.ts)
 
 ### `agent-preset/*`
 
@@ -702,7 +702,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'model/selection': ModelSelection
 ```
 
-来源：[`packages/core/agent/src/types.ts:118`](../packages/core/agent/src/types.ts)
+来源：[`packages/core/agent/src/types.ts:106`](../packages/core/agent/src/types.ts)
 
 ### `permission/*`
 
@@ -720,7 +720,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'permission/preset': { preset: string }
 ```
 
-来源：[`packages/interaction/permission-presets/src/index.ts:59`](../packages/interaction/permission-presets/src/index.ts)
+来源：[`packages/interaction/permission-presets/src/index.ts:52`](../packages/interaction/permission-presets/src/index.ts)
 
 ### `plan/*`
 
@@ -4339,7 +4339,7 @@ SHA-256: `719c51f67074f97034a6c94297fe1f4b5d3c8d392c57586dab732aa5398c7a91`
 
 SHA-256: `f09e5e7acf5ff5ccd193ff2eeec015fa2ff7c29d98bc465f8c3302058d47e29b`
 
-来源：[`packages/core/agent/src/types.ts:91`](../packages/core/agent/src/types.ts)
+来源：[`packages/core/agent/src/types.ts:79`](../packages/core/agent/src/types.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
@@ -6379,7 +6379,7 @@ SHA-256: `17d1afb770d9941936130996da00dc86782cfef731d8d6526162c301256a4ac3`
 
 SHA-256: `fa106c5b33b657e8ef16e8cbf39f3b7d44e5cbcdf4f9303d9db6410f28951e42`
 
-来源：[`packages/core/agent/src/types.ts:107`](../packages/core/agent/src/types.ts)
+来源：[`packages/core/agent/src/types.ts:95`](../packages/core/agent/src/types.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
@@ -7792,7 +7792,7 @@ SHA-256: `11f70b595aa76897fc4e25a352bfa718c659f44b799e5aa14e84e5a38fe72912`
 
 SHA-256: `8a9c990773f798eac10ca8878e6bcc531ee080bc589cac956730e462cc6a09ad`
 
-来源：[`packages/interaction/permission-presets/src/index.ts:59`](../packages/interaction/permission-presets/src/index.ts)
+来源：[`packages/interaction/permission-presets/src/index.ts:52`](../packages/interaction/permission-presets/src/index.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|

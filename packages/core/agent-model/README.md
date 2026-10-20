@@ -49,10 +49,10 @@ To enable switch notices for one Agent, import `* as ModelSwitchNotice` from `@d
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The provider registers one pure fold before publishing its Service. The Session log is authoritative; the projection registry owns fold caches, and the selection service holds no second per-Agent choice. A request header clears only its matching pending selection and omits adapter-defaulted effort from the retained choice. The loop captures a detached choice before assembly and owns that step snapshot through retries.
+The provider awaits registration of one pure fold before publishing its Service and retains the returned reader through consumer teardown. The Session log is authoritative; the projection registry owns fold caches, and the selection service holds no second per-Agent choice. A request header clears only its matching pending selection and omits adapter-defaulted effort from the retained choice. The loop captures a detached choice before assembly and owns that step snapshot through retries.
 
 - [`src/service.ts`](src/service.ts) owns selection reads, replacement, and configured-route application.
-- [`src/projection.ts`](src/projection.ts) owns the durable fold and client view; [`src/types.ts`](src/types.ts) exports only the client view type.
+- [`src/projection.ts`](src/projection.ts) owns the durable fold and client view; [`src/types.ts`](src/types.ts) exports the fold state and client view types.
 - [`src/index.ts`](src/index.ts) owns projection registration and service lifetime.
 - [`src/notice.ts`](src/notice.ts) compares the prepared step route with the previous request header without reading a newer pending choice.
 

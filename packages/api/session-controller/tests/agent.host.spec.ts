@@ -38,12 +38,14 @@ async function harness(): Promise<{ ctx: Context; agents: ApiSessionAgentControl
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   installSessionReadTestServices(ctx)
-  ctx.sessionProjections.register(agentPresetProjectionDefinition)
+  await ctx.sessionProjections.register(agentPresetProjectionDefinition)
   ctx.provide('agentDefaultModel', {
     currentSelection: () => ({ provider: 'fixture', model: 'fixture-model' }),
     saveSelection: () => Promise.resolve(),
   } as never)
-  return { ctx, agents: new ApiSessionAgentController(ctx) }
+  const agents = new ApiSessionAgentController(ctx)
+  agents.initialize()
+  return { ctx, agents }
 }
 
 function header(id: string, cwd: string | null = '/workspace'): SessionHeader {

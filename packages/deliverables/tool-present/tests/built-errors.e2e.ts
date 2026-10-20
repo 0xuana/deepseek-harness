@@ -13,7 +13,6 @@ import assert from 'node:assert/strict'
 import { Context } from './vendor/cordis/lib/index.js'
 import AgentRegistry from './packages/core/agent/lib/index.js'
 import SessionProjectionRegistry from './packages/session/session-projection/lib/index.js'
-import { turnBoundaryProjectionDefinition } from './packages/core/agent-loop/lib/index.js'
 import LocalFileSystem from './packages/fs/fs-local/lib/index.js'
 import SystemPrompt from './packages/core/system-prompt/lib/index.js'
 import ToolRuntime from './packages/core/tools/lib/index.js'
@@ -31,7 +30,6 @@ try {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(LocalFileSystem, { cwd: root })
-  ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
   await ctx.plugin(Present, { maxFiles: 2 })
   const scope = ctx.plugin(() => {})
   const session = Session.create('built-present', [], { version: SESSION_FORMAT_VERSION, id: 'built-present', createdAt: 0, cwd: root, isSeeded: false })

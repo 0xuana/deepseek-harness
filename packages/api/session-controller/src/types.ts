@@ -15,12 +15,6 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionStateMap {
-    /** Host state persisted for cold Session list summaries. */
-    sessionListMetadata: SessionListMetadata
-    /** Host state for the boot-constant image-limit view. */
-    imageLimits: null
-  }
   interface SessionProjectionMap {
     /** Persisted facts used to summarize a Session without activating it. */
     sessionListMetadata: SessionListMetadata
@@ -191,6 +185,12 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'session/projections-unavailable': Record<string, never>
     'session/writer-held': { readonly sessionId: SessionId }
     'session/agent-busy': { readonly reason: string }
+    'session/prompt-rejected': {
+      /** Code of the refusal, owned by the plugin that refused, such as `forgePanel/worktree-missing`. */
+      readonly reason: string
+      /** Whether the refusing plugin shows its own explanation, so the client adds no notice. */
+      readonly presented: boolean
+    }
     'session/invalid-time-zone': { readonly value: string }
     'session/workspace-attach-failed': { readonly sessionId: SessionId; readonly workspaceId: string }
     'agent-preset/conflict': {

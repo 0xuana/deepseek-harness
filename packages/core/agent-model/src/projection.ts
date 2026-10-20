@@ -4,7 +4,7 @@ import { ReasoningEffortId } from '@deepseek-ai/dsh-llm/brand'
 import type { EpochHeader } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 import { z } from 'zod'
-import type {} from './types.ts'
+import type { ModelSelectionProjectionState } from './types.ts'
 import { sameModelSelection, toSelection } from './selection.ts'
 
 /** Selection a recorded request used, omitting an effort the adapter defaulted. */
@@ -22,7 +22,7 @@ const selectionSchema = z.object({
  * Session selection fold: recorded selections become
  * the pending choice, and each request header retires a matching one.
  */
-export const modelSelectionProjectionDefinition: Required<ProjectionDefinition<'modelSelection'>> = {
+export const modelSelectionProjectionDefinition: Required<ProjectionDefinition<'modelSelection', ModelSelectionProjectionState>> = {
   key: 'modelSelection',
   stateVersion: 3,
   stateSchema: z.object({ lastUsed: selectionSchema, pending: selectionSchema }),

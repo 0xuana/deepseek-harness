@@ -11,11 +11,11 @@ English | [中文](guide.zh.md)
 
 ACP model and reasoning changes take effect at the next model step, including a tool continuation in the current turn. Previously, ACP pinned the selection for the complete prompt turn. A prepared step and its retries retain their captured selection. Image admission checks the route selected when admission begins; a later option change can select a different route before the step starts.
 
-`dsh-agent-model` provides `ctx.agentModel` and owns the durable `modelSelection` projection. The Agent registry no longer registers it. Programmatic resume restores recorded choices, including unused selections, before falling back to `AgentOptions`. Configured Agent-loop resumes, headless adoption, and SDK resume record their deployment route; an omitted effort preserves saved explicit effort only for the same route.
+`dsh-agent-model` provides `ctx.agentModel` and owns the durable `modelSelection` projection. The API Session controller no longer registers it. Programmatic resume restores recorded choices, including unused selections, before falling back to `AgentOptions`. Configured Agent-loop resumes, headless adoption, and SDK resume record their deployment route; an omitted effort preserves saved explicit effort only for the same route.
 
 Plugins must select provider, model, and optional explicit reasoning effort before prompt assembly. `agent/request` is deprecated. Existing listeners still run on each main-loop request attempt and can adjust other controls, but cannot change provider or model, or add, change, or clear reasoning effort. Absent effort still resolves through adapter defaults on each attempt. Auxiliary calls such as compaction do not dispatch this event. `installModelSelection` and `ModelSelectionRef` are removed.
 
-The client projection type moves to `dsh-agent-model/types`; API package re-exports and the named Host projection-state export are removed.
+The client projection and Host state types move to `dsh-agent-model/types`; the API package no longer exports them.
 
 ## Migration
 

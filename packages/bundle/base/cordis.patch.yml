@@ -84,6 +84,10 @@
 
     - id: agent-model
       name: '@deepseek-ai/dsh-agent-model'
+    # Delivers messages from outside an Agent into its inbox after the admission
+    # stage; entry points such as the Web Session Remote deliver through it.
+    - id: agent-controller
+      name: '@deepseek-ai/dsh-agent-controller'
 
     - id: plugin-package-inventory-deepseek
       name: '@deepseek-ai/dsh-plugin-package-inventory-deepseek'

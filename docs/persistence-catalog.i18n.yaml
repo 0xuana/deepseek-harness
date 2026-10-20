@@ -21,8 +21,8 @@
   en: 9188862058c6986b
   zh: 9188862058c6986b
 /session-persistence-event-catalog/events/agent/agent-inbox-spliced-log-only:
-  en: 83f3d60e1cf13127
-  zh: 620989a3c84f20ee
+  en: 825bef0fa148788c
+  zh: 26c4e5d564c7af14
 /session-persistence-event-catalog/events/agent-preset:
   en: 49891ca9be5ac123
   zh: 49891ca9be5ac123
@@ -141,14 +141,14 @@
   en: 9edf4ef31e60e880
   zh: 9edf4ef31e60e880
 /session-persistence-event-catalog/events/model/model-selection-log-only:
-  en: 0cd15df61a3175b5
-  zh: a2730b18b83c7f4b
+  en: 7cec7fcca2fde7be
+  zh: 5952ada542599c75
 /session-persistence-event-catalog/events/permission:
   en: 19917bc5438e60af
   zh: 19917bc5438e60af
 /session-persistence-event-catalog/events/permission/permission-preset-log-only:
-  en: 41de5f6e1dad8620
-  zh: 92cb5d5e87a23405
+  en: 54423cb464a0a495
+  zh: 8b3a9595255184f0
 /session-persistence-event-catalog/events/plan:
   en: 4294f78d26ed985b
   zh: 4294f78d26ed985b
@@ -1146,8 +1146,8 @@
   en: 5f9154ca34235ab9
   zh: a833105910ebfa82
 /session-persistence-event-catalog/resolved-persistence-types/modelselection:
-  en: 571888ccc2c3f2ce
-  zh: 974c016a090d36fa
+  en: 6e301c0ea35d9e0e
+  zh: 6fbf1d318db9a4e0
 /session-persistence-event-catalog/resolved-persistence-types/oneshotscheduledispatchchange:
   en: a3300babe57b6b67
   zh: 4aaf06a149b399c3
@@ -1524,8 +1524,8 @@
   en: 8a9199b1784c70f5
   zh: 76c98bc74686fda0
 /session-persistence-event-catalog/resolved-persistence-types/inserted-outcome-removedcount-start:
-  en: a6aabaa5aa9ef880
-  zh: 01d74ee2ceebda7c
+  en: 60afe0b0ffb06f19
+  zh: b223f77cb78ee702
 /session-persistence-event-catalog/resolved-persistence-types/interrupted-message-step-stream:
   en: ec10cd8e9c202a81
   zh: e08f859bcb13f0d4
@@ -1887,8 +1887,8 @@
   en: 00f1d435f82d2753
   zh: c2ab108ad2748a6c
 /session-persistence-event-catalog/resolved-persistence-types/preset:
-  en: f60ecbd156c6f063
-  zh: c9149679bbacff21
+  en: 26cf71c850765c59
+  zh: 7a436be430e04898
 /session-persistence-event-catalog/resolved-persistence-types/reason-turn:
   en: a4ba4d0ee1396381
   zh: b6f595f8a696d512

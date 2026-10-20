@@ -43,6 +43,7 @@ it.each([true, false])('reports an unversioned package by name alongside a versi
   await writeFile(configPath, [
     '- name: cordis:session-projections',
     '- name: cordis:agents',
+    '- name: cordis:projections',
     '- name: cordis:deepseek-extensions',
     '- name: cordis:plugin-inventory',
     `- name: ${JSON.stringify(privateUrl)}`,
@@ -57,6 +58,7 @@ it.each([true, false])('reports an unversioned package by name alongside a versi
   ctx.loader.builtins.include = Include
   ctx.loader.builtins['session-projections'] = SessionProjectionRegistry
   ctx.loader.builtins.agents = AgentRegistry
+  ctx.loader.builtins.projections = SessionProjectionRegistry
   ctx.loader.builtins['deepseek-extensions'] = DeepSeekLlmApiExtensionRegistry
   ctx.loader.builtins['plugin-inventory'] = PluginInventory
   await ctx.loader.create({ name: 'cordis:include', config: { path: pathToFileURL(configPath).href } })

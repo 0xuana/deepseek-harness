@@ -151,6 +151,46 @@ async function harness(logged?: {
   return { ctx, agent, sessionId: session.id }
 }
 
+/** An image store whose saved attachments are one-pixel PNGs. */
+function provideImageStore(ctx: Context): void {
+  const attachments = {
+    imageLimits: {
+      maxImageBytes: 4,
+      maxImagesPerMessage: 2,
+      maxMessageImageBytes: 4,
+      maxImagePixels: 4,
+      maxImageDimension: 2000,
+      mediaTypes: ['image/png'],
+    },
+    validateImage: () => Promise.resolve(),
+    saveImage: (input: { data: Uint8Array; mediaType: 'image/png' }) => Promise.resolve({
+      attachmentId: `att-${String(input.data[0])}`, mediaType: input.mediaType, bytes: input.data.byteLength, width: 1, height: 1,
+    }),
+  }
+  ctx.provide('attachments', Object.setPrototypeOf(attachments, AttachmentStore.prototype) as never)
+}
+
+/** A queued prompt with its text, after a one-pixel image when `withImage` is set. */
+function imagePrompt(sessionId: SessionId, text: string, withImage: boolean): SessionPromptRequest {
+  return promptRequest({
+    sessionId,
+    mode: 'queue',
+    content: [
+      ...withImage ? [{ type: 'image' as const, mediaType: 'image/png' as const, data: 'AQ==' }] : [],
+      { type: 'text' as const, text },
+    ],
+  })
+}
+
+function textOf(message: UserMessage): string {
+  return message.content.map(block => block.type === 'text' ? block.text : '').join('')
+}
+
+/** Let pending prompts run as far as they can. */
+async function settle(): Promise<void> {
+  await new Promise<void>((resolve) => { setImmediate(resolve) })
+}
+
 function expectValue<T>(result: { ok: true; value: T } | { ok: false }): T {
   if (!result.ok) throw new Error('expected successful response')
   return result.value
@@ -199,7 +239,7 @@ describe('Web session model selection', () => {
     ctx.provide('attachments', Object.setPrototypeOf(attachments, AttachmentStore.prototype) as never)
     const followup = vi.fn()
     Object.assign(agent, { followup })
-    const remote = createSessionTestRemote(ctx, {
+    const remote = await createSessionTestRemote(ctx, {
       defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
       cwd: '/tmp',
     })
@@ -267,7 +307,7 @@ describe('Web session model selection', () => {
     const steer = vi.fn()
     const followup = vi.fn()
     Object.assign(agent, { steer, followup })
-    const remote = createSessionTestRemote(ctx, {
+    const remote = await createSessionTestRemote(ctx, {
       defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
       cwd: '/tmp',
     })
@@ -296,7 +336,7 @@ describe('Web session model selection', () => {
   it('allows a text-only selection while durable or pending images remain available for later models', async () => {
     const { ctx, agent, sessionId } = await harness()
     registerTextOnly(ctx)
-    const remote = createSessionTestRemote(ctx, {
+    const remote = await createSessionTestRemote(ctx, {
       defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
       cwd: '/tmp',
     })
@@ -327,6 +367,110 @@ describe('Web session model selection', () => {
     await ctx.fiber.dispose()
   })
 
+  it('admits image prompts in arrival order behind an image prompt that a listener holds', async () => {
+    const { ctx, agent, sessionId } = await harness()
+    provideImageStore(ctx)
+    const followed: string[] = []
+    Object.assign(agent, { followup: (message: UserMessage) => { followed.push(textOf(message)) } })
+    const release = Promise.withResolvers<undefined>()
+    ctx.on('agent-controller/admission', async ({ message }, next) => {
+      if (textOf(message) === 'held') await release.promise
+      return await next()
+    })
+    const remote = await createSessionTestRemote(ctx, {
+      defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
+      cwd: '/tmp',
+    })
+
+    const prompts = [
+      remote.prompt(imagePrompt(sessionId, 'held', true)),
+      remote.prompt(imagePrompt(sessionId, 'second image', true)),
+      remote.prompt(imagePrompt(sessionId, 'third text', false)),
+    ]
+    await settle()
+    expect(followed).toEqual([])
+    release.resolve(undefined)
+    expect((await Promise.all(prompts)).map(result => result.ok)).toEqual([true, true, true])
+    expect(followed).toEqual(['held', 'second image', 'third text'])
+    await ctx.fiber.dispose()
+  })
+
+  it('keeps a model selection behind the image prompt being admitted but not behind one still queued', async () => {
+    const { ctx, agent, sessionId } = await harness()
+    registerTextOnly(ctx)
+    provideImageStore(ctx)
+    const events: string[] = []
+    Object.assign(agent, { followup: (message: UserMessage) => { events.push(`admitted ${textOf(message)}`) } })
+    const releases = new Map([['held image', Promise.withResolvers<undefined>()], ['held text', Promise.withResolvers<undefined>()]])
+    ctx.on('agent-controller/admission', async ({ message }, next) => {
+      await releases.get(textOf(message))?.promise
+      return await next()
+    })
+    const remote = await createSessionTestRemote(ctx, {
+      defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
+      cwd: '/tmp',
+    })
+    const select = () => remote.selectModel(request({ sessionId, provider: 'text-only', model: 'plain' }))
+      .then((result) => { events.push('selected'); return result })
+
+    // A held image prompt was checked against the current model, so the selection waits for its append.
+    const heldImage = remote.prompt(imagePrompt(sessionId, 'held image', true))
+    await settle()
+    const first = select()
+    await settle()
+    expect(events).toEqual([])
+    releases.get('held image')?.resolve(undefined)
+    expect((await heldImage).ok).toBe(true)
+    expect((await first).ok).toBe(true)
+    expect(events).toEqual(['admitted held image', 'selected'])
+
+    // An image prompt queued behind a held text prompt has not been checked yet, so the selection does not wait for it.
+    const heldText = remote.prompt(imagePrompt(sessionId, 'held text', false))
+    const queuedImage = remote.prompt(imagePrompt(sessionId, 'queued image', true))
+    await settle()
+    expect((await select()).ok).toBe(true)
+    expect(events).toEqual(['admitted held image', 'selected', 'selected'])
+    releases.get('held text')?.resolve(undefined)
+    expect((await heldText).ok).toBe(true)
+    expect(await queuedImage).toMatchObject({
+      ok: false, error: { code: 'session/attachment-invalid', details: { reason: 'MODEL_DOES_NOT_SUPPORT_IMAGES' } },
+    })
+    expect(events).toEqual(['admitted held image', 'selected', 'selected', 'admitted held text'])
+    await ctx.fiber.dispose()
+  })
+
+  it('passes the image admission turn on when the sender of a waiting image prompt leaves', async () => {
+    const { ctx, agent, sessionId } = await harness()
+    provideImageStore(ctx)
+    const followed: string[] = []
+    Object.assign(agent, { followup: (message: UserMessage) => { followed.push(textOf(message)) } })
+    const listing = Promise.withResolvers<readonly LlmModelInfo[]>()
+    ctx.llm.registerAdapter(['gated'], new class extends CatalogAdapter {
+      override listModels(): Promise<readonly LlmModelInfo[]> {
+        return listing.promise
+      }
+    }('Gated', []))
+    const remote = await createSessionTestRemote(ctx, {
+      defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
+      cwd: '/tmp',
+    })
+
+    // The selection holds the image admission turn while the provider lists its models.
+    const selection = remote.selectModel(request({ sessionId, provider: 'gated', model: 'slow' }))
+    await settle()
+    const sender = new AbortController()
+    const leaving = remote.prompt(imagePrompt(sessionId, 'left', true), sender.signal)
+    await settle()
+    sender.abort(new Error('client left'))
+    expect(await leaving).toMatchObject({ ok: false, error: { code: 'gateway/cancelled' } })
+
+    listing.resolve([{ provider: 'gated', id: 'slow', name: 'Slow' }])
+    expect((await selection).ok).toBe(true)
+    expect((await remote.prompt(imagePrompt(sessionId, 'after', true))).ok).toBe(true)
+    expect(followed).toEqual(['after'])
+    await ctx.fiber.dispose()
+  })
+
   it('authorizes attachment bytes only when the session event stream references the id', async () => {
     const { ctx, agent, sessionId } = await harness()
     const ref = {
@@ -334,7 +478,7 @@ describe('Web session model selection', () => {
     }
     const readImage = vi.fn(() => Promise.resolve({ ref, data: Uint8Array.of(1, 2) }))
     ctx.provide('attachments', { readImage } as never)
-    const remote = createSessionTestRemote(ctx, {
+    const remote = await createSessionTestRemote(ctx, {
       defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
       cwd: '/tmp',
     })
@@ -410,7 +554,7 @@ describe('Web session model selection', () => {
       value: { providers: { custom: { apiKeyEnv: 'CUSTOM_API_KEY', models: [] } } },
     }])
     await ctx.agentDefaultModel.saveSelection({ provider: 'removed', model: 'saved' })
-    const controller = createSessionTestController(ctx, {
+    const controller = await createSessionTestController(ctx, {
       defaultModelSelection: () => ctx.agentDefaultModel.currentSelection(), cwd: '/tmp',
     })
     await controller.initializeDefaultModel()
@@ -427,7 +571,7 @@ describe('Web session model selection', () => {
       model: 'private-preview',
       reasoningEffort: ReasoningEffortId('max'),
     })
-    const remote = createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }), cwd: '/tmp' })
+    const remote = await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }), cwd: '/tmp' })
 
     const catalog = expectValue(await remote.modelCatalog())
     expect(currentSelection(ctx, sessionId)).toEqual({
@@ -476,7 +620,7 @@ describe('Web session model selection', () => {
         return Promise.reject('string catalog failure')
       }
     }('String Failure', []))
-    createSessionTestRemote(ctx, {
+    await createSessionTestRemote(ctx, {
       defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
       cwd: '/tmp',
     })
@@ -504,7 +648,7 @@ describe('Web session model selection', () => {
 
   it('rejects unlisted models and records validated selections for the next step', async () => {
     const { ctx, agent, sessionId } = await harness()
-    const remote = createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }), cwd: '/tmp' })
+    const remote = await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }), cwd: '/tmp' })
 
     expect(currentSelection(ctx, sessionId))
       .toEqual({ provider: 'deepseek-official', model: 'deepseek-chat' })
@@ -573,7 +717,7 @@ describe('Web session model selection', () => {
     const { ctx, agent: template } = await harness()
     onTestFinished(() => ctx.fiber.dispose())
     let stored = { provider: 'deepseek-official', model: 'deepseek-chat' }
-    const remote = createSessionTestRemote(ctx, {
+    const remote = await createSessionTestRemote(ctx, {
       defaultModelSelection: () => stored,
       saveDefaultModelSelection: (selection) => { stored = selection },
       cwd: '/tmp',
@@ -611,7 +755,7 @@ describe('Web session model selection', () => {
       model: 'deepseek-chat',
     })
     let stored = { provider: 'deepseek-official', model: 'deepseek-chat' }
-    createSessionTestRemote(ctx, {
+    await createSessionTestRemote(ctx, {
       defaultModelSelection: () => stored,
       cwd: '/tmp',
     })
@@ -629,7 +773,7 @@ describe('Web session model selection', () => {
       reasoningEffort: ReasoningEffortId('high'),
       adapterDefaults: { reasoningEffort: true },
     })
-    createSessionTestRemote(ctx, {
+    await createSessionTestRemote(ctx, {
       defaultModelSelection: () => ({ provider: 'duplicate', model: 'same' }),
       cwd: '/tmp',
     })
@@ -649,7 +793,7 @@ describe('Web session model selection', () => {
       await Promise.allSettled([...operations, ...saves])
       await ctx.fiber.dispose()
     })
-    const remote = createSessionTestRemote(ctx, {
+    const remote = await createSessionTestRemote(ctx, {
       defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
       saveDefaultModelSelection: () => {
         saves.push(release.promise)
@@ -675,7 +819,7 @@ describe('Web session model selection', () => {
     onTestFinished(() => { warn.mockRestore() })
     const saved: unknown[] = []
     let reject = false
-    const remote = createSessionTestRemote(ctx, {
+    const remote = await createSessionTestRemote(ctx, {
       defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
       saveDefaultModelSelection: (selection) => {
         saved.push(selection)
@@ -714,7 +858,7 @@ describe('Web session model selection', () => {
     const { ctx, sessionId, agent } = await harness()
     const followup = vi.fn()
     Object.assign(agent, { followup })
-    const remote = createSessionTestRemote(ctx, {
+    const remote = await createSessionTestRemote(ctx, {
       defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }), cwd: '/tmp',
     })
     const list = vi.spyOn(ctx.llm, 'listModels')
@@ -738,7 +882,7 @@ describe('Web session model selection', () => {
     }())
     try {
       await expect(ctx.llm.resolveModelInfo('uncatalogued', 'custom-model')).resolves.toMatchObject({ id: 'custom-model' })
-      const remote = createSessionTestRemote(ctx, {
+      const remote = await createSessionTestRemote(ctx, {
         defaultModelSelection: () => ({ provider: 'uncatalogued', model: 'custom-model' }), cwd: '/tmp',
       })
       expect(await remote.selectModel({ sessionId, provider: 'uncatalogued', model: 'custom-model' }))
@@ -752,7 +896,7 @@ describe('Web session model selection', () => {
     const { ctx, sessionId, agent } = await harness()
     const followup = vi.fn()
     Object.assign(agent, { followup })
-    const remote = createSessionTestRemote(ctx, {
+    const remote = await createSessionTestRemote(ctx, {
       defaultModelSelection: () => ({ provider: 'deleted-gateway', model: 'deleted-model' }),
       cwd: '/tmp',
     })
@@ -774,7 +918,7 @@ describe('Web session model selection', () => {
 
   it('admits a removed model without changing its saved selection', async () => {
     const { ctx, sessionId, agent } = await harness({ provider: 'deepseek-official', model: 'removed-model' })
-    const remote = createSessionTestRemote(ctx, {
+    const remote = await createSessionTestRemote(ctx, {
       defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }), cwd: '/tmp',
     })
     const events = [...agent.session.snapshotEvents()]
@@ -790,7 +934,7 @@ describe('Web session model selection', () => {
 
   it('serves a session and its catalog when the stored default names a route that is gone', async () => {
     const { ctx, sessionId } = await harness()
-    createSessionTestRemote(ctx, {
+    await createSessionTestRemote(ctx, {
       // What a Models-page removal leaves behind: the settings document still
       // names the route the user last picked, and nothing serves it.
       defaultModelSelection: () => ({ provider: 'deleted-gateway', model: 'deleted-model' }),
@@ -838,7 +982,7 @@ describe('Web session model selection', () => {
     }, AttachmentStore.prototype) as never)
     const followup = vi.fn()
     Object.assign(agent, { followup })
-    const remote = createSessionTestRemote(ctx, {
+    const remote = await createSessionTestRemote(ctx, {
       defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
       cwd: '/tmp',
     })
@@ -909,7 +1053,7 @@ it('initializes the account model without reasoning metadata and rejects an empt
   const dispose = ctx.llm.registerAdapter(['deepseek-account'], new CatalogAdapter('Account', [
     { provider: 'deepseek-account', id: 'basic', name: 'Basic' },
   ]))
-  const controller = createSessionTestController(ctx, {
+  const controller = await createSessionTestController(ctx, {
     defaultModelSelection: () => ctx.agentDefaultModel.currentSelection(), cwd: '/tmp',
   })
   await controller.initializeDefaultModel()

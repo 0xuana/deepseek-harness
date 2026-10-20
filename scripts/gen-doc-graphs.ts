@@ -224,6 +224,11 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'One provider-owned name per service instance. Each provider also owns its model tools; the service has no common action API, runtime selection, or Session workflow lock.',
   },
   {
+    key: 'cuaAccess', pkg: 'cua', title: 'Computer Use permission controls',
+    mode: 'core', consumers: ['cua'],
+    note: 'The native provider owns application consent and cancellation; the optional Client page queries and changes those decisions through its Remote.',
+  },
+  {
     key: 'officeToPdf', pkg: 'office-to-pdf', title: 'Office to PDF conversion',
     mode: 'core', consumers: ['client-ui-sidebar-documentpreview'],
     note: 'Authorized Office bytes are converted on the Host using the declared native target engine, or Node WASM when no native target is declared.',
@@ -643,6 +648,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     mode: 'core',
     consumers: ['agent-loop', 'api-session-controller', 'acp', 'sdk-jsonrpc-server', 'headless'],
     note: 'Reads and records Session model choices; owns the modelSelection projection and optional scoped route-switch notices.',
+  },
+  {
+    key: 'agentController',
+    pkg: 'agent-controller',
+    title: 'Outside-message delivery',
+    mode: 'core',
+    consumers: ['api-session-controller'],
+    note: 'Prepares, admits through the agent-controller/admission stage, and appends messages that senders bring on someone\'s behalf, one at a time per Agent.',
   },
   {
     key: 'agentDefaultModel',

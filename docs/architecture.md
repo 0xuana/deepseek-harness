@@ -61,6 +61,7 @@ Electron starts the private Desktop Host in Electron Node mode. The Host invokes
 | [`core/tools`](subsystems/tools.md) | The scoped tool registry and guarded execution pipeline | `ctx.tools` |
 | [`core/agent`](subsystems/core.md) | The `Agent` interface, live registry, and `agent/*` events | `ctx.agents` |
 | [`core/agent-loop`](subsystems/core.md) | The default driver implementing that interface | `ctx.agentLoop` |
+| [`core/agent-controller`](subsystems/core.md#messages-from-outside-an-agent) | Admission and delivery of outside messages | `ctx.agentController` |
 | [`core/scope`](subsystems/scope.md) | The per-agent scoped-registration primitive | library, no key |
 | [`llm/llm`](subsystems/llm-streaming.md) | Message and stream vocabulary plus the adapter seam | `ctx.llm` |
 
@@ -70,6 +71,7 @@ Events are the extension points, and picking the right domain is the first decis
 
 - **Session events** are durable facts appended to the log and broadcast through `session/event`. Use one when the fact must survive a reload.
 - **Agent events** (`agent/*`) carry a live `Agent`: inbox, step, status, request, validation, continuation. Use one to observe or intercept work in flight.
+- **Delivery admission** (`agent-controller/admission`) holds or refuses outside input before it enters the inbox.
 - **Capability events** attach policy and adapters to a seam (`fs/*`, `tools/*`, `telemetry/*`) without importing the loop.
 
 AgentLoop awaits serial `agent/created` before queued work and rolls back failed initialization. Unload retains resources through Agent teardown; [agent-loop](../packages/core/agent-loop/README.md#understand-the-implementation) defines ordering.
@@ -123,7 +125,7 @@ Session consumers know only the current logical format. Header-only `stat` and `
 
 **Model-visible means logged.** Every model request must be reconstructable from the log. New model-visible inputs require session events. Plugins changing existing message content register [pure message projections](subsystems/session.md#plugin-owned-message-projections); detached readers supply the same definitions explicitly. Tool changes are capability-independent; [Session tool history](../packages/core/session/README.md) supplies provider declarations.
 
-**Projection seam.** `dsh-session-projection` owns `ctx.sessionProjections`: registered units fold committed events incrementally, host consumers read one typed state with `stateOf()`, and carriers batch cropped client views with `snapshot()`. A host reader either requires this service during activation or fails explicitly when the registry or required key is absent. Contributors may retain `ctx.inject(['sessionProjections'], ...)` registration without silently defaulting a missing host value. `dsh-agent-model` owns `modelSelection`; the agent loop registers shared `turnBoundary` state for its readers ([decision](../.agents/notes/implemented/architecture/2026-08-19-session-projection-mandatory-seam.md)).
+**Projection seam.** `dsh-session-projection` owns `ctx.sessionProjections`: registered units fold committed events incrementally, and carriers batch cropped client views with `snapshot()`. Domain services await registration during activation, retain private handles, and expose business methods for other plugins. Releasing registration removes global participation; retained handles continue folding Session events. `AgentRegistry` owns turn and step state and exposes `turnBoundaryOf(session)` ([registration lifecycle](../packages/session/session-projection/README.md)). `dsh-agent-model` owns `modelSelection`.
 
 [Working directories](subsystems/working-directory.md) supply user context and execution paths without changing original project identity, sandbox write roots, or existing process directories.
 

@@ -835,15 +835,18 @@ describe('late replies', () => {
     await ctx.fiber.dispose()
   })
 
-  it('rejects a late reply without a live Agent registry', async () => {
+  it('answers nothing when the composition carries no Session projections', async () => {
     const ctx = new Context()
-    await ctx.plugin(UserQuestionService)
     const agent = liveAgent('late-no-projections')
+    ctx.provide('agents', {
+      get: (id: SessionId) => id === agent.id ? agent : undefined,
+      roots: () => [agent],
+    } as never)
+    await ctx.plugin(UserQuestionService)
     askInLog(agent, timedCallId)
     continueInLog(agent, timedCallId)
 
-    expect(() => ctx.userQuestions.answer(agent, timedCallId, { answers: [] }))
-      .toThrow(expect.objectContaining({ code: 'CALLER_NOT_LIVE' }))
+    expect(ctx.userQuestions.answer(agent, timedCallId, { answers: [] })).toBe(false)
     expect(agent.steer).not.toHaveBeenCalled()
     await ctx.fiber.dispose()
   })
@@ -897,7 +900,7 @@ describe('late replies', () => {
       error: { name: 'SessionFormatError', code: TOOL_OUTCOME_UNKNOWN },
     }, { surfaceOp: 'append' })
 
-    expect(ctx.sessionProjections.stateOf(agent.session, 'userQuestions')?.questions).toEqual({ active: [], settled: [] })
+    expect(ctx.sessionProjections.checkpoint(agent.session).userQuestions?.val).toMatchObject({ questions: { active: [], settled: [] } })
     expect(ctx.userQuestions.answer(agent, timedCallId, { answers: [{ id: 'scope', selected: [] }] })).toBe(false)
     expect(agent.steer).not.toHaveBeenCalled()
     await ctx.fiber.dispose()

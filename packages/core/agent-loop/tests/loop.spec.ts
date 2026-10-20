@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import LlmRuntime, { createUserMessage, ToolCallId, LlmError, ReasoningEffortId, StreamChunk, expandAssistantStream } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
@@ -1901,6 +1901,7 @@ describe('agent loop', () => {
       defaultEffort: effort,
     })
     const ctx = new Context()
+    onTestFinished(async () => { await ctx.fiber.dispose() })
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
@@ -1913,6 +1914,7 @@ describe('agent loop', () => {
     })
     ctx.llm.registerAdapter(['mock'], adapter)
 
+    await vi.waitFor(() => { expect(ctx.agents.list()).toHaveLength(1) })
     const agent = ctx.agents.list()[0]!
     expect(agent).toBeDefined()
     expect(agent.id).toBe(agent.session.id)
@@ -1930,6 +1932,7 @@ describe('agent loop', () => {
 
   it('attaches config agent cwd to the fresh session header', async () => {
     const ctx = new Context()
+    onTestFinished(async () => { await ctx.fiber.dispose() })
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
@@ -1941,6 +1944,7 @@ describe('agent loop', () => {
       agents: [{ id: SessionId('config-agent'), provider: 'mock', model: 'mock', cwd: '/work/project' }],
     })
 
+    await vi.waitFor(() => { expect(ctx.agents.list()).toHaveLength(1) })
     const agent = ctx.agents.list()[0]!
     expect(agent.session.header.cwd).toBe('/work/project')
   })

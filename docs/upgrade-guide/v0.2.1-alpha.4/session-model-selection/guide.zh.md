@@ -11,11 +11,11 @@ description: "Session 模型选择在步骤准备时固定，投影类型移至�
 
 ACP（Agent Client Protocol）的模型与推理强度变更从下一个模型步骤开始生效，包括当前轮次的工具后续步骤。此前，ACP 会在整个提示词轮次中固定选择。已准备的步骤及其重试保留捕获的选择。图片准入检查准入开始时选择的路由；后续选项变更可能在步骤开始前选中另一条路由。
 
-`dsh-agent-model` 提供 `ctx.agentModel`，并拥有持久 `modelSelection` 投影。Agent 注册表不再注册该投影。程序化恢复优先还原记录中的选择，包括尚未使用的选择，然后才回退到 `AgentOptions`。配置式 Agent-loop 恢复、headless 接管与 SDK 恢复会记录各自的部署路由；省略推理强度时，仅在路由相同的情况下保留已保存的显式强度。
+`dsh-agent-model` 提供 `ctx.agentModel`，并拥有持久 `modelSelection` 投影。API Session 控制器不再注册该投影。程序化恢复优先还原记录中的选择，包括尚未使用的选择，然后才回退到 `AgentOptions`。配置式 Agent-loop 恢复、headless 接管与 SDK 恢复会记录各自的部署路由；省略推理强度时，仅在路由相同的情况下保留已保存的显式强度。
 
 插件必须在提示词组装前选定提供方、模型及可选的显式推理强度。`agent/request` 已弃用。现有监听器仍在主循环的每次请求尝试中运行，可以调整其他控制参数，但不能改变提供方或模型，也不能添加、修改或清除推理强度。未指定的强度仍在每次尝试时通过适配器默认值解析。压缩等辅助调用不会分发该事件。`installModelSelection` 与 `ModelSelectionRef` 已移除。
 
-客户端投影类型移至 `dsh-agent-model/types`；API 包的转导出与具名 Host 投影状态导出已移除。
+客户端投影与 Host 状态类型移至 `dsh-agent-model/types`；API 包不再导出这些类型。
 
 ## 迁移
 

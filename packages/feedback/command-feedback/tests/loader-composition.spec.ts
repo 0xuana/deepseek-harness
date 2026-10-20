@@ -59,6 +59,7 @@ describe('/feedback real Loader composition through cordis.yml', () => {
     await writeFile(configPath, [
       "- name: '@deepseek-ai/dsh-session-projection'",
       "- name: '@deepseek-ai/dsh-agent'",
+      "- name: '@deepseek-ai/dsh-session-projection'",
       "- name: '@deepseek-ai/dsh-session'",
       "- name: '@deepseek-ai/dsh-commands'",
       "- name: '@deepseek-ai/dsh-command-feedback'",
@@ -72,6 +73,7 @@ describe('/feedback real Loader composition through cordis.yml', () => {
     const modules = new Map<string, unknown>([
       ['@deepseek-ai/dsh-session-projection', SessionProjectionRegistry],
       ['@deepseek-ai/dsh-agent', AgentRegistry],
+      ['@deepseek-ai/dsh-session-projection', SessionProjectionRegistry],
       ['@deepseek-ai/dsh-session', SessionStore],
       ['@deepseek-ai/dsh-commands', CommandRuntime],
       ['@deepseek-ai/dsh-command-feedback', CommandFeedback],

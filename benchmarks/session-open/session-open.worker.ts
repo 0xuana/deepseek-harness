@@ -3,7 +3,8 @@
 import { performance } from 'node:perf_hooks'
 import { scheduler } from 'node:timers/promises'
 import { Context } from '@deepseek-ai/cordis'
-import AgentLoop, { turnBoundaryProjectionDefinition } from '@deepseek-ai/dsh-agent-loop'
+import AgentLoop from '@deepseek-ai/dsh-agent-loop'
+import * as AgentModelPlugin from '@deepseek-ai/dsh-agent-model'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { agentPresetProjectionDefinition } from '@deepseek-ai/dsh-agent-preset-registry'
 import SessionStore, {
@@ -127,11 +128,9 @@ function memoryDelta(
   }
 }
 
-async function installProjectionSet(ctx: Context, agentLoopOwnsBoundary: boolean): Promise<void> {
+async function installProjectionSet(ctx: Context): Promise<void> {
   // Mirrors projection owners mounted by the base and web-app bundles without timing profile boot.
-  if (!agentLoopOwnsBoundary) ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
-  ctx.sessionProjections.register(agentPresetProjectionDefinition)
-  if (!agentLoopOwnsBoundary) await ctx.plugin(AgentRegistry)
+  await ctx.sessionProjections.register(agentPresetProjectionDefinition)
   await ctx.plugin(SessionTitleService, {
     fallbackMaxWords: 5,
     fallbackMaxBytes: 40,
@@ -162,9 +161,11 @@ class SessionBenchmarkHost {
     if (agentScenario) await mountAgentLoopTestDependencies(ctx)
     else {
       await ctx.plugin(SessionProjectionRegistry)
+      await ctx.plugin(AgentRegistry)
+      await ctx.plugin(AgentModelPlugin)
       await ctx.plugin(SessionStore)
     }
-    await installProjectionSet(ctx, agentScenario)
+    await installProjectionSet(ctx)
     await ctx.plugin(JsonlSessionPersistence, { root, compression: 'zstd' })
     let history: SessionHistoryController | undefined
     if (scenario === 'first-history') {

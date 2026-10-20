@@ -49,10 +49,10 @@ kind: "package-reference"
 <details>
 <summary>实现内部机制——点击展开</summary>
 
-提供方先注册一个纯折叠，再发布 Service。Session 日志是权威记录；投影注册表拥有折叠缓存，选择服务不再保存另一份每个 Agent 的选择。请求头仅清除与其匹配的待用选择，并从保留的选择中省略由适配器默认补齐的强度。循环在组装前捕获独立的选择，并在重试期间持有该步骤快照。
+提供方等待一个纯折叠注册完成后再发布 Service，并在消费方清理期间保留返回的读取句柄。Session 日志是权威记录；投影注册表拥有折叠缓存，选择服务不再保存另一份每个 Agent 的选择。请求头仅清除与其匹配的待用选择，并从保留的选择中省略由适配器默认补齐的强度。循环在组装前捕获独立的选择，并在重试期间持有该步骤快照。
 
 - [`src/service.ts`](src/service.ts) 负责选择读取、替换与配置路由应用。
-- [`src/projection.ts`](src/projection.ts) 负责持久折叠和客户端视图；[`src/types.ts`](src/types.ts) 仅导出客户端视图类型。
+- [`src/projection.ts`](src/projection.ts) 负责持久折叠和客户端视图；[`src/types.ts`](src/types.ts) 导出折叠状态与客户端视图类型。
 - [`src/index.ts`](src/index.ts) 负责投影注册与服务生命周期。
 - [`src/notice.ts`](src/notice.ts) 比较已准备步骤的路由与上次请求头，不读取更新的待用选择。
 

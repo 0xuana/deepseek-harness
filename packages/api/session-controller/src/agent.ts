@@ -164,7 +164,13 @@ export class ApiSessionAgentController {
   private readonly imageAdmissionChains = new WeakMap<Agent, Promise<void>>()
 
   /** @param ctx - Host context carrying Agent, model, persistence, and Typert services. */
-  constructor(private readonly ctx: Context) {
+  constructor(private readonly ctx: Context) {}
+
+  /**
+   * Configure Session and Agent lookups for Typert.
+   */
+  initialize(): void {
+    const ctx = this.ctx
     ctx.typert.lookups.configure('agent', async (sessionId: SessionId) => {
       const found = await this.resolveAgent(sessionId)
       if ('error' in found) throw found.error
@@ -274,10 +280,10 @@ export class ApiSessionAgentController {
   /**
    * Read the current Agent preset from the Session projection.
    * @param session - live Session whose projection state is available.
-   * @returns the current preset, or undefined when the capability is absent.
+   * @returns the current preset, or undefined without a preset service or recorded selection.
    */
   presetForSession(session: Session): string | undefined {
-    return this.ctx.sessionProjections.stateOf(session, 'agentPreset') ?? undefined
+    return this.ctx.get('agentPresets')?.presetForSession(session) ?? undefined
   }
 
   /**
@@ -290,6 +296,27 @@ export class ApiSessionAgentController {
     const result = (this.imageAdmissionChains.get(agent) ?? Promise.resolve()).then(operation)
     this.imageAdmissionChains.set(agent, result.then(() => undefined, () => undefined))
     return result
+  }
+
+  /**
+   * Take the image admission turn for one Agent: wait until earlier image
+   * admissions and model selections settled, then hold the turn until the
+   * returned release runs.
+   * @param agent - live Agent that owns the serialization chain.
+   * @param signal - the waiting caller's cancellation; a caller cancelled by its turn passes the turn on.
+   * @returns the release, which the caller runs once its image prompt settled.
+   * @throws the cancellation reason when the caller was cancelled by its turn.
+   */
+  acquireImageAdmission(agent: Agent, signal: AbortSignal): Promise<() => void> {
+    const previous = this.imageAdmissionChains.get(agent) ?? Promise.resolve()
+    const held = Promise.withResolvers<undefined>()
+    this.imageAdmissionChains.set(agent, previous.then(() => held.promise))
+    const release = (): void => { held.resolve(undefined) }
+    return previous.then(() => {
+      if (signal.aborted) release()
+      signal.throwIfAborted()
+      return release
+    })
   }
 
   /**
@@ -455,8 +482,8 @@ export class ApiSessionAgentController {
 
   /** Whether no turn has started, by the predicate the preset registry's `select` enforces. */
   private isBlank(session: Session): boolean {
-    const boundary = this.ctx.sessionProjections.stateOf(session, 'turnBoundary')
-    return boundary === undefined || (boundary.openTurnStartSeq === null && boundary.lastTurn === 0)
+    const boundary = this.ctx.agents.turnBoundaryOf(session)
+    return boundary.openTurnStartSeq === null && boundary.lastTurn === 0
   }
 
   /** Without a roster, reuse cannot apply a named preset. */

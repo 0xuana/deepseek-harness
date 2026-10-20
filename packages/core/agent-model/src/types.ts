@@ -8,7 +8,7 @@ import type { ModelSelection } from '@deepseek-ai/dsh-agent/types'
  * defaulted on a recorded request is omitted, so later requests resolve the
  * default again instead of pinning it as a choice.
  */
-interface ModelSelectionProjectionState {
+export interface ModelSelectionProjectionState {
   /** Selection used by the latest recorded model request. */
   readonly lastUsed: ModelSelection | null
   /** Later recorded selection not yet used by a matching model request. */
@@ -24,10 +24,6 @@ export interface ModelSelectionProjection {
 }
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionStateMap {
-    /** Recorded model selection and the selection used by the latest request. */
-    modelSelection: ModelSelectionProjectionState
-  }
   interface SessionProjectionMap {
     /** Recorded model selection for the next model step and the latest request. */
     modelSelection: ModelSelectionProjection

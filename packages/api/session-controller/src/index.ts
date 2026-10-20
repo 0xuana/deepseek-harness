@@ -5,7 +5,7 @@ import { resolve } from 'node:path'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-model'
 import type {} from '@deepseek-ai/dsh-fs'
-import { Context } from '@deepseek-ai/cordis'
+import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { errorChain, ReasoningEffortId, type MessageSource } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-client-file-upload'
@@ -118,6 +118,7 @@ export interface SessionControllerInternals {
 /** Host service backing the generated `ctx.remote.session` namespace. */
 export class SessionController extends TypertRemoteService {
   static inject = [
+    'agentController',
     'agentDefaultModel',
     'agents',
     'attachments',
@@ -138,16 +139,17 @@ export class SessionController extends TypertRemoteService {
     listWorkSliceMs: z.natural().min(1).default(16),
   })
 
-  private readonly agents: ApiSessionAgentController
-  private readonly commands: SessionCommandController
-  private readonly controlState: SessionControlController
-  private readonly history: SessionHistoryController
-  private readonly listState: ApiSessionList
+  private agents!: ApiSessionAgentController
+  private commands!: SessionCommandController
+  private controlState!: SessionControlController
+  private history!: SessionHistoryController
+  private listState!: ApiSessionList
   private readonly openPath: (path: string, signal: AbortSignal) => Promise<void>
   private readonly fileApplications: typeof nativeFileApplications
   private readonly openFileApplication: typeof openNativeFileApplication
   private readonly revealPath: (path: string, signal: AbortSignal) => Promise<void>
   private readonly canOpenPath: () => boolean
+  private readonly listWorkSliceMs: number
   private readonly promotions = new Set<Promise<void>>()
 
   /**
@@ -157,9 +159,20 @@ export class SessionController extends TypertRemoteService {
    */
   constructor(ctx: Context, config: Config, internals: SessionControllerInternals = {}) {
     super(ctx, 'sessionController', { namespace: 'session' })
+    this.listWorkSliceMs = SessionController.Config(config).listWorkSliceMs
+    this.fileApplications = internals.fileApplications ?? nativeFileApplications
+    this.openFileApplication = internals.openFileApplication ?? openNativeFileApplication
+    this.openPath = internals.openPath ?? openNativeAssociatedPath
+    this.revealPath = internals.revealPath ?? revealNativePath
+    this.canOpenPath = internals.canOpenPath
+      ?? (() => config.nativeOpen ?? (internals.openPath !== undefined || canOpenNativePath()))
+  }
+
+  protected async [Service.init](): Promise<void> {
+    const ctx = this.ctx
     ctx.typert.resources.register('session', { field: 'sessionId' })
-    const resolved = SessionController.Config(config)
     this.agents = new ApiSessionAgentController(ctx)
+    this.agents.initialize()
     this.commands = new SessionCommandController(ctx, this.agents, process.cwd())
     ctx.effect(() => ctx.fileUploads.registerAgentResolver(async (sessionId) => {
       const result = await this.agents.resolveAgent(sessionId)
@@ -173,13 +186,8 @@ export class SessionController extends TypertRemoteService {
       await Promise.allSettled([...this.promotions])
     }, 'session-controller.promotions')
     this.history = new SessionHistoryController(ctx, (observation) => { this.promote(observation) })
-    this.listState = new ApiSessionList(ctx, resolved.listWorkSliceMs)
-    this.fileApplications = internals.fileApplications ?? nativeFileApplications
-    this.openFileApplication = internals.openFileApplication ?? openNativeFileApplication
-    this.openPath = internals.openPath ?? openNativeAssociatedPath
-    this.revealPath = internals.revealPath ?? revealNativePath
-    this.canOpenPath = internals.canOpenPath
-      ?? (() => config.nativeOpen ?? (internals.openPath !== undefined || canOpenNativePath()))
+    this.listState = new ApiSessionList(ctx, this.listWorkSliceMs)
+    await this.listState.initialize()
     ctx.plugin(SessionFileReferences)
     ctx.plugin(SessionMediaReferences)
     ctx.plugin(SessionSkillCatalog)
@@ -444,10 +452,14 @@ export class SessionController extends TypertRemoteService {
   }
 
   /**
-   * Admit one prompt after explicitly resuming its Session.
+   * Admit one prompt after explicitly resuming its Session. The prompt is
+   * delivered through `ctx.agentController`, whose `agent-controller/admission`
+   * stage runs before it enters the inbox, so the call can wait for a listener
+   * that holds it.
    * @param request - Session identity, prompt content, source metadata, and delivery mode.
-   * @param signal - caller cancellation before prompt admission begins.
+   * @param signal - caller cancellation; it also stops a prompt waiting for or held at the admission stage.
    * @returns acknowledgement that the Agent accepted the prompt.
+   * @throws `session/prompt-rejected` when an admission listener refuses the prompt or fails.
    */
   @Remote('prompt')
   async prompt(request: SessionPromptRequest, signal: AbortSignal): Promise<SessionPromptValue> {
@@ -473,7 +485,7 @@ export class SessionController extends TypertRemoteService {
       ...(clientTimeZone === undefined ? {} : { clientTimeZone }),
       ...(principal === undefined ? {} : { principal }),
     }
-    return this.commands.prompt(request, source)
+    return this.commands.prompt(request, source, signal)
   }
 
   /**

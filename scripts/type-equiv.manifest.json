@@ -2183,6 +2183,11 @@
     },
     {
       "doc": "docs/subsystems/session-projection.md",
+      "symbol": "ProjectionHandle",
+      "source": "packages/session/session-projection/src/index.ts"
+    },
+    {
+      "doc": "docs/subsystems/session-projection.md",
       "symbol": "ProjectionDefinition",
       "source": "packages/session/session-projection/src/index.ts"
     },
@@ -2498,6 +2503,16 @@
       "source": "packages/core/agent-model/src/types.ts"
     },
     {
+      "doc": "docs/subsystems/core.md",
+      "symbol": "TurnBoundaryProjection",
+      "source": "packages/core/agent/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/token-meter.md",
+      "symbol": "ContextPressureProjection",
+      "source": "packages/llm/token-meter/src/projection.ts"
+    },
+    {
       "doc": "docs/subsystems/session-projection.md",
       "symbol": "SessionProjectionSummaryExcluded",
       "source": "packages/session/session-projection/src/types.ts"
@@ -2526,6 +2541,21 @@
       "doc": "docs/subsystems/session-projection.md",
       "symbol": "ProjectionKeySelection",
       "source": "packages/session/session-projection/src/index.ts"
+    },
+    {
+      "doc": "docs/subsystems/core.md",
+      "symbol": "DeliveryMode",
+      "source": "packages/core/agent-controller/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/core.md",
+      "symbol": "DeliveryRequest",
+      "source": "packages/core/agent-controller/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/core.md",
+      "symbol": "AdmissionDecision",
+      "source": "packages/core/agent-controller/src/types.ts"
     }
   ]
 }

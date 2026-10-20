@@ -56,7 +56,7 @@ describe('SessionController facade', () => {
       bindPrompt: () => ({ commit: () => {}, [Symbol.dispose]: () => {} }),
       retirePrompt: () => {},
     } as never)
-    const controller = createSessionTestController(ctx, defaults)
+    const controller = await createSessionTestController(ctx, defaults)
     const status = vi.fn()
     const failure = vi.fn()
     const activity = vi.fn()
@@ -115,8 +115,8 @@ describe('SessionController facade', () => {
       header: { config: { provider: 'fixture', model: 'fixture-model' } },
       reason: 'initial',
     })
-    expect(ctx.sessionProjections.stateOf(session, 'modelSelection')).toEqual({
-      lastUsed: { provider: 'fixture', model: 'fixture-model' }, pending: null,
+    expect(ctx.sessionProjections.snapshot(session).values.modelSelection).toEqual({
+      lastUsed: { provider: 'fixture', model: 'fixture-model' }, next: { provider: 'fixture', model: 'fixture-model' },
     })
     const unowned = ctx.sessions.create(SessionId('controller-unowned'), {
       meta: { cwd: '/workspace' },
@@ -125,8 +125,8 @@ describe('SessionController facade', () => {
       header: { config: { provider: 'fixture', model: 'other-model' } },
       reason: 'initial',
     })
-    expect(ctx.sessionProjections.stateOf(unowned, 'modelSelection')).toEqual({
-      lastUsed: { provider: 'fixture', model: 'other-model' }, pending: null,
+    expect(ctx.sessionProjections.snapshot(unowned).values.modelSelection).toEqual({
+      lastUsed: { provider: 'fixture', model: 'other-model' }, next: { provider: 'fixture', model: 'other-model' },
     })
 
     const abort = new AbortController()
@@ -160,7 +160,7 @@ describe('SessionController facade', () => {
           events: [],
         }),
       }) as never)
-      const controller = createSessionTestController(ctx, defaults)
+      const controller = await createSessionTestController(ctx, defaults)
       const agents = (controller as unknown as { agents: ApiSessionAgentController }).agents
       const apiError = vi.fn()
       ctx.on('api-session/error', apiError)
@@ -217,7 +217,7 @@ describe('SessionController facade', () => {
         events: [],
       }),
     }) as never)
-    const controller = createSessionTestController(ctx, defaults)
+    const controller = await createSessionTestController(ctx, defaults)
     const agents = (controller as unknown as { agents: ApiSessionAgentController }).agents
     const started = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()

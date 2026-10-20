@@ -15,7 +15,6 @@ import Llm, { LlmAdapter, ToolCallId, createUserMessage } from '@deepseek-ai/dsh
 import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
 import Sessions, { SessionId } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import Agents from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
@@ -150,7 +149,7 @@ it('waits for SystemPrompt and ToolRuntime before reserving the provider', async
   const ctx = new Context()
   contexts.push(ctx)
   await ctx.plugin(BrowserUse)
-  await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(Projections)
   await ctx.plugin(AgentModelPlugin)
   await ctx.plugin(Agents)
   provideWorkingDirectoryFixture(ctx)

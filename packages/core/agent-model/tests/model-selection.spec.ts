@@ -1,4 +1,4 @@
-import { describe, expect, it, onTestFinished } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import {
   agentEvents,
@@ -11,6 +11,7 @@ import * as ModelSwitchNotice from '@deepseek-ai/dsh-agent-model/notice'
 import { createUserMessage, ReasoningEffortId, type UserMessage } from '@deepseek-ai/dsh-llm'
 import SessionStore, { Session, SessionId, type EpochHeader } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
+import { modelSelectionProjectionDefinition } from '../src/projection.ts'
 
 const INITIAL = { provider: 'alpha', model: 'a0' }
 const SIGNAL = new AbortController().signal
@@ -25,6 +26,8 @@ async function harness(options: AgentOptions = INITIAL) {
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
   const fiber = await ctx.plugin(AgentModelPlugin)
+  const projection = await ctx.sessionProjections.register(modelSelectionProjectionDefinition)
+  await projection.dispose()
   const session = ctx.sessions.create(SessionId('model-selection'))
   const agent = { id: session.id, session, ctx, options } as Agent
   const current = () => ctx.agentModel.resolveForNextStep(agent)
@@ -32,7 +35,7 @@ async function harness(options: AgentOptions = INITIAL) {
   const header = (config: ModelSelection, adapterDefaults?: EpochHeader['adapterDefaults']) => session.append('request/header', {
     header: { config, ...adapterDefaults === undefined ? {} : { adapterDefaults } }, reason: 'initial',
   })
-  return { ctx, agent, session, fiber, current, record, header }
+  return { ctx, agent, session, fiber, current, record, header, state: () => projection.stateOf(session) }
 }
 
 function expectedNotice(from: string, to: string) {
@@ -60,6 +63,28 @@ async function preStep(
 }
 
 describe('Session model selection', () => {
+  it('publishes the service only after projection registration is ready', async () => {
+    const ctx = new Context()
+    const ready = Promise.withResolvers<undefined>()
+    const entered = Promise.withResolvers<undefined>()
+    onTestFinished(async () => {
+      ready.resolve(undefined)
+      await ctx.fiber.dispose()
+    })
+    await ctx.plugin(SessionProjectionRegistry)
+    const registration = ctx.sessionProjections.register(modelSelectionProjectionDefinition)
+    vi.spyOn(ctx.sessionProjections, 'register').mockImplementationOnce(() => {
+      entered.resolve(undefined)
+      return ready.promise.then(() => registration)
+    })
+    const loading = ctx.plugin(AgentModelPlugin)
+    await entered.promise
+    expect(ctx.get('agentModel')).toBeUndefined()
+    ready.resolve(undefined)
+    await loading
+    expect(ctx.get('agentModel')).toBeDefined()
+  })
+
   it('uses initial options only until a selection or request is recorded and returns detached values', async () => {
     const h = await harness({})
     expect(h.current()).toBeUndefined()
@@ -94,16 +119,16 @@ describe('Session model selection', () => {
       { ...selected, reasoningEffort: ReasoningEffortId('low') },
     ]) {
       h.header(config)
-      expect(h.ctx.sessionProjections.stateOf(h.session, 'modelSelection')?.pending).toEqual(selected)
+      expect(h.state()?.pending).toEqual(selected)
     }
     const restored = { ...h.agent, session: Session.create(SessionId('restored'), h.session.snapshotEvents()) }
     expect(h.ctx.agentModel.resolveForNextStep(restored)).toEqual(selected)
     h.header(selected)
-    expect(h.ctx.sessionProjections.stateOf(h.session, 'modelSelection')).toEqual({ lastUsed: selected, pending: null })
+    expect(h.state()).toEqual({ lastUsed: selected, pending: null })
     expect(h.current()).toEqual(selected)
-    const state = h.ctx.sessionProjections.stateOf(h.session, 'modelSelection')
+    const state = h.state()
     h.header(selected)
-    expect(h.ctx.sessionProjections.stateOf(h.session, 'modelSelection')).toBe(state)
+    expect(h.state()).toBe(state)
   })
 
   it('leaves adapter-defaulted reasoning unselected while retaining explicit effort', async () => {
@@ -111,7 +136,7 @@ describe('Session model selection', () => {
     const selected = { provider: 'beta', model: 'b1' }
     h.record(selected)
     h.header({ ...selected, reasoningEffort: ReasoningEffortId('high') }, { reasoningEffort: true })
-    expect(h.ctx.sessionProjections.stateOf(h.session, 'modelSelection')).toEqual({ lastUsed: selected, pending: null })
+    expect(h.state()).toEqual({ lastUsed: selected, pending: null })
     expect(h.current()).toEqual(selected)
     expect(h.ctx.sessionProjections.snapshot(h.session).values.modelSelection).toEqual({ lastUsed: selected, next: selected })
     h.header({ ...selected, reasoningEffort: ReasoningEffortId('low') })
@@ -122,10 +147,10 @@ describe('Session model selection', () => {
     const h = await harness()
     const selected = { provider: 'beta', model: 'b1' }
     h.record(selected)
-    const state = h.ctx.sessionProjections.stateOf(h.session, 'modelSelection')
+    const state = h.state()
     h.session.append('model/selection', selected)
     h.session.append('user/message', INPUT, { surfaceOp: 'append' })
-    expect(h.ctx.sessionProjections.stateOf(h.session, 'modelSelection')).toBe(state)
+    expect(h.state()).toBe(state)
   })
 
   it('applies configured routes and inherits explicit effort only for the same route', async () => {
@@ -141,12 +166,12 @@ describe('Session model selection', () => {
     expect(h.current()?.reasoningEffort).toBe('low')
   })
 
-  it.each(['provider', 'root', 'consumer-then-provider', 'consumer-then-root'] as const)('retains the projection through %s teardown until consumer cleanup settles', async (owner) => {
+  it.each(['provider', 'root', 'consumer-then-provider', 'consumer-then-root'] as const)('keeps selection readable through %s teardown until consumer cleanup settles', async (owner) => {
     const h = await harness()
     const entered = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
     onTestFinished(() => { release.resolve(undefined) })
-    const projections = h.ctx.sessionProjections
+    const retained = h.ctx.agentModel
     let cleaned = false
     let cleanupError: unknown
     const consumer = await h.ctx.plugin({
@@ -176,7 +201,7 @@ describe('Session model selection', () => {
     await new Promise<void>(resolve => setImmediate(resolve))
     try {
       expect(settled).toBe(false)
-      expect(projections.stateOf(h.session, 'modelSelection')).toBeDefined()
+      expect(retained.resolveForNextStep(h.agent)).toEqual(INITIAL)
     } finally {
       release.resolve(undefined)
       await disposal

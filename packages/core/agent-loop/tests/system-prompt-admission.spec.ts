@@ -461,12 +461,13 @@ describe('prepared-route prompt admission', () => {
     expect(adapter.requests.map(({ provider, model, reasoningEffort }) => ({ provider, model, reasoningEffort })))
       .toEqual([selection, selection])
     expect(h.plain.requests).toHaveLength(0)
-    expect(h.ctx.sessionProjections.stateOf(h.agent.session, 'modelSelection')?.pending)
+    expect(h.ctx.agentModel.resolveForNextStep(h.agent))
       .toEqual({ provider: 'plain', model: 'next-model' })
 
     await send(h.agent, 'use the pending choice')
     expect(h.plain.requests[0]).toMatchObject({ provider: 'plain', model: 'next-model' })
-    expect(h.ctx.sessionProjections.stateOf(h.agent.session, 'modelSelection')?.pending).toBeNull()
+    expect(h.ctx.sessionProjections.snapshot(h.agent.session).values.modelSelection)
+      .toEqual({ lastUsed: { provider: 'plain', model: 'next-model' }, next: { provider: 'plain', model: 'next-model' } })
   })
 
   it('keeps generic config changes and concurrent selection on the same prepared route', async () => {

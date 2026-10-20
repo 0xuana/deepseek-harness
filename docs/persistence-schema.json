@@ -24518,7 +24518,7 @@
       "digest": "8a9c990773f798eac10ca8878e6bcc531ee080bc589cac956730e462cc6a09ad",
       "names": [],
       "sources": [
-        "packages/interaction/permission-presets/src/index.ts:59"
+        "packages/interaction/permission-presets/src/index.ts:52"
       ]
     },
     {
@@ -25916,7 +25916,7 @@
         "packages/core/agent/src/types.ts#ModelSelection"
       ],
       "sources": [
-        "packages/core/agent/src/types.ts:91"
+        "packages/core/agent/src/types.ts:79"
       ]
     },
     {
@@ -26079,7 +26079,7 @@
       "digest": "fa106c5b33b657e8ef16e8cbf39f3b7d44e5cbcdf4f9303d9db6410f28951e42",
       "names": [],
       "sources": [
-        "packages/core/agent/src/types.ts:107"
+        "packages/core/agent/src/types.ts:95"
       ]
     },
     {

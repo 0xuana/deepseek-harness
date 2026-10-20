@@ -1,8 +1,8 @@
 /** Session selection operations; the provider owns projection registration. */
 import { Service, type Context } from '@deepseek-ai/cordis'
 import type { Agent, ModelSelection } from '@deepseek-ai/dsh-agent/types'
-import type { SessionProjectionRegistry } from '@deepseek-ai/dsh-session-projection'
-import type {} from './types.ts'
+import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
+import type { ModelSelectionProjectionState } from './types.ts'
 import { sameModelSelection, sameRoute, toSelection } from './selection.ts'
 
 declare module '@deepseek-ai/cordis' {
@@ -20,11 +20,11 @@ export class AgentModel extends Service {
    * Provider-bound projection reader, usable while dependent callers drain. The
    * plain holder keeps Cordis from re-tracing it through each caller's context.
    */
-  private readonly runtime: { projections: SessionProjectionRegistry }
+  private readonly runtime: { projection: ProjectionHandle<ModelSelectionProjectionState> | undefined }
 
-  constructor(ctx: Context) {
+  constructor(ctx: Context, runtime: { projection: ProjectionHandle<ModelSelectionProjectionState> | undefined }) {
     super(ctx, 'agentModel')
-    this.runtime = { projections: ctx.sessionProjections }
+    this.runtime = runtime
   }
 
   /**
@@ -69,8 +69,9 @@ export class AgentModel extends Service {
   }
 
   private recordedSelection(agent: Agent): ModelSelection | null {
-    const state = this.runtime.projections.stateOf(agent.session, 'modelSelection')
-    if (state === undefined) throw new Error('agent-model: used after its provider unloaded the modelSelection projection')
+    const projection = this.runtime.projection
+    if (projection === undefined) throw new Error('agent-model: used after its provider unloaded the modelSelection projection')
+    const state = projection.stateOf(agent.session)
     return state.pending ?? state.lastUsed
   }
 }
