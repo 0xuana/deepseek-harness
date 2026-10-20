@@ -74,10 +74,28 @@ function fileDraft(id: string, name = `${id}.pdf`): ComposerAttachment {
   }
 }
 
-type AttachmentProps = ComposerAttachmentsProps & { readImageDrag: (transfer: DataTransfer) => File | undefined }
+type AttachmentProps = ComposerAttachmentsProps & import('@deepseek-ai/dsh-client-ui-slots').InjectFace<import('../src/client/ComposerAttachments.tsx').ComposerAttachmentsInjected>
+
+const unusedHook = (): never => { throw new Error('Attachment view must use its supplied owner props') }
 
 function props(overrides: Partial<ComposerAttachmentsOwnerProps> = {}): AttachmentProps {
   return {
+    sessionId: undefined,
+    useSession: unusedHook,
+    useProjection: unusedHook,
+    useAccess: unusedHook,
+    useConversation: unusedHook,
+    useInput: unusedHook,
+    inputActions: undefined,
+    useSessions: unusedHook,
+    useSessionStatus: unusedHook,
+    useSessionRetainInfo: unusedHook,
+    useSessionAccess: unusedHook,
+    useWorkspaces: unusedHook,
+    useWorkspaceAccess: unusedHook,
+    useRemoteAccess: unusedHook,
+    useResource: unusedHook,
+    usePanelInfo: unusedHook,
     attachments: [],
     canAcceptDrop: true,
     onAddFiles: () => {},
@@ -86,8 +104,8 @@ function props(overrides: Partial<ComposerAttachmentsOwnerProps> = {}): Attachme
     onRetryFile: () => {},
     t,
     ...overrides,
-    readImageDrag: () => undefined,
-  } as AttachmentProps
+    readFileDrag: () => undefined,
+  }
 }
 
 describe('ComposerAttachments', () => {
@@ -310,28 +328,27 @@ describe('ComposerAttachments file drafts', () => {
   })
 })
 
-it('accepts only the current app image token without showing an external-file overlay', async () => {
-  const { DraggableImage } = await import('@deepseek-ai/dsh-client-ui-primitives')
-  const file = new File([Uint8Array.of(1, 2)], 'original.png', { type: 'image/png' })
-  function Source() {
-    return <DraggableImage imageDrag={imageDrag} alt="drag source" src="blob:original" name={file.name} failureText="拖放失败，请重试" original={file} />
-  }
+it('accepts internal file tokens only inside the composer without the full-page overlay', () => {
+  const file = new File([Uint8Array.of(1, 2)], 'original.pdf', { type: 'application/pdf' })
   const onAddFiles = vi.fn()
-  const view = render(<><Source /><ComposerAttachments {...props({ onAddFiles })} readImageDrag={transfer => transfer.getData('application/x-dsh-image') === 'token' ? file : undefined} /></>)
-  const data = new Map<string, string>()
+  const view = render(<div data-composer-card data-testid="composer"><ComposerAttachments {...props({ onAddFiles })}
+    readFileDrag={transfer => transfer.getData('application/x-dsh-file') === 'token' ? file : undefined} /></div>)
+  const data = new Map([['application/x-dsh-file', 'token']])
   const transfer = {
-    types: ['application/x-dsh-image'], items: Object.assign([], { clear: vi.fn() }), files: [],
-    getData: (key: string) => data.get(key) ?? '', setData: (key: string, value: string) => data.set(key, value),
+    types: ['application/x-dsh-file'], items: [], files: [],
+    getData: (key: string) => data.get(key) ?? '',
   }
-  fireEvent.pointerEnter(view.getByAltText('drag source'))
-  fireEvent.dragStart(view.getByAltText('drag source'), { dataTransfer: transfer })
   fireEvent.dragEnter(document.body, { dataTransfer: transfer })
+  fireEvent.dragOver(document.body, { dataTransfer: transfer })
+  fireEvent.drop(document.body, { dataTransfer: transfer })
+  expect(onAddFiles).not.toHaveBeenCalled()
+  const target = view.getByTestId('composer')
+  fireEvent.dragEnter(target, { dataTransfer: transfer })
+  fireEvent.dragOver(target, { dataTransfer: transfer })
   expect(view.queryByText('文件或图片拖动到此处即可添加')).toBeNull()
-  fireEvent.drop(document.body, { dataTransfer: transfer })
+  fireEvent.drop(target, { dataTransfer: transfer })
   expect(onAddFiles).toHaveBeenCalledExactlyOnceWith([file], new Set())
-  data.set('application/x-dsh-image', 'foreign')
-  fireEvent.drop(document.body, { dataTransfer: transfer })
+  data.set('application/x-dsh-file', 'foreign')
+  fireEvent.drop(target, { dataTransfer: transfer })
   expect(onAddFiles).toHaveBeenCalledOnce()
 })
-
-const imageDrag = { desktop: undefined, begin: vi.fn(() => 'token'), end: vi.fn(), report: vi.fn() }

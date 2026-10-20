@@ -14,6 +14,7 @@ flowchart TD
     pkg_brand["brand"]
     pkg_chunked_list["chunked-list"]
     pkg_deque["deque"]
+    pkg_file_drag["file-drag"]
     pkg_home_paths["home-paths"]
     pkg_http_proxy["http-proxy"]
     pkg_launch_environment["launch-environment"]
@@ -171,6 +172,7 @@ flowchart TD
     pkg_client_ui_directory_picker_native["client-ui-directory-picker-native"]
     pkg_client_ui_dockkit["client-ui-dockkit"]
     pkg_client_ui_entry_customization["client-ui-entry-customization"]
+    pkg_client_ui_file_drag["client-ui-file-drag"]
     pkg_client_ui_goal["client-ui-goal"]
     pkg_client_ui_input_trigger["client-ui-input-trigger"]
     pkg_client_ui_jobs["client-ui-jobs"]
@@ -1451,6 +1453,7 @@ flowchart TD
 | [`brand`](../packages/util/brand) | `util` | — |
 | [`chunked-list`](../packages/util/chunked-list) | `util` | — |
 | [`deque`](../packages/util/deque) | `util` | — |
+| [`file-drag`](../packages/util/file-drag) | `util` | — |
 | [`home-paths`](../packages/util/home-paths) | `util` | — |
 | [`http-proxy`](../packages/util/http-proxy) | `util` | — |
 | [`launch-environment`](../packages/util/launch-environment) | `util` | — |
@@ -1499,6 +1502,7 @@ flowchart TD
 | [`client-ui-directory-picker-native`](../packages/client/ui-directory-picker-native) | `client` | — |
 | [`client-ui-dockkit`](../packages/client/ui-dockkit) | `client` | — |
 | [`client-ui-entry-customization`](../packages/client/ui-entry-customization) | `client` | — |
+| [`client-ui-file-drag`](../packages/client/ui-file-drag) | `client` | — |
 | [`client-ui-goal`](../packages/client/ui-goal) | `client` | — |
 | [`client-ui-input-trigger`](../packages/client/ui-input-trigger) | `client` | — |
 | [`client-ui-jobs`](../packages/client/ui-jobs) | `client` | — |

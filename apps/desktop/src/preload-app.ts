@@ -9,15 +9,16 @@ import { syncNativeTheme } from './preload-theme.ts'
 import { syncWindowsAppearance } from './preload-windows.ts'
 import { installMandatoryUpdateOverlay } from './preload-mandatory-overlay.ts'
 import { createDesktopBrowserBridge } from './preload-browser.ts'
+import type { FileDragHandle } from '@deepseek-ai/dsh-file-drag'
 
 function createProductApi(): DshDesktopProductApi {
   return {
     protocolVersion: 1,
     browser: createDesktopBrowserBridge(),
-    imageDrag: {
-      prepare: (bytes, name, mediaType) => ipcRenderer.invoke(DESKTOP_IPC.imageDragPrepare, bytes, name, mediaType) as Promise<string>,
-      start: handle => ipcRenderer.invoke(DESKTOP_IPC.imageDragStart, handle) as Promise<boolean>,
-      release: (handle) => { void ipcRenderer.invoke(DESKTOP_IPC.imageDragRelease, handle).catch((_error: unknown) => {
+    fileDrag: {
+      prepare: source => ipcRenderer.invoke(DESKTOP_IPC.fileDragPrepare, source) as Promise<FileDragHandle | undefined>,
+      start: handle => ipcRenderer.invoke(DESKTOP_IPC.fileDragStart, handle) as Promise<boolean>,
+      release: (handle) => { void ipcRenderer.invoke(DESKTOP_IPC.fileDragRelease, handle).catch((_error: unknown) => {
         // Main-process shutdown also releases every prepared file.
       }) },
     },

@@ -1,88 +1,128 @@
-import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import type { BrowserWindow, IpcMainInvokeEvent, NativeImage, WebContents, WebFrameMain } from 'electron'
-import { DESKTOP_IPC } from '../src/ipc.ts'
+import { DESKTOP_IPC, assertDesktopSender } from '../src/ipc.ts'
 
 const electron = vi.hoisted(() => ({
-  handle: vi.fn(), removeHandler: vi.fn(), getPath: vi.fn(), getFileIcon: vi.fn(), createFromPath: vi.fn(),
+  handle: vi.fn(), removeHandler: vi.fn(), getPath: vi.fn(), getFileIcon: vi.fn(),
 }))
-vi.mock('electron', () => ({
-  app: electron,
-  ipcMain: electron,
-  nativeImage: { createFromPath: electron.createFromPath },
-}))
-const { installDesktopImageDrag } = await import('../src/image-drag.ts')
+vi.mock('electron', () => ({ app: electron, ipcMain: electron }))
+const { installDesktopFileDrag } = await import('../src/file-drag.ts')
 afterEach(() => { vi.resetAllMocks() })
 
 type Handler = (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown
 async function fixture() {
-  const root = await mkdtemp(join(tmpdir(), 'dsh-native-image-drag-'))
+  const root = await mkdtemp(join(tmpdir(), 'dsh-native-file-drag-'))
   onTestFinished(async () => { await rm(root, { recursive: true, force: true }) })
   electron.getPath.mockReturnValue(root)
-  const icon: NativeImage = Object.assign({} as NativeImage, { isEmpty: () => false, resize: () => icon })
+  const icon = {} as NativeImage
   electron.getFileIcon.mockResolvedValue(icon)
   const frame = Object.assign({} as WebFrameMain, { url: 'dsh-app://app/' })
   const window = Object.assign({} as BrowserWindow, { isDestroyed: () => false,
     webContents: Object.assign({} as WebContents, { mainFrame: frame, startDrag: vi.fn() }) })
   let current: BrowserWindow | undefined = window
-  const dispose = installDesktopImageDrag(() => current)
+  const resolve = vi.fn<Parameters<typeof installDesktopFileDrag>[1]>(async () => null)
+  const owner = (event: IpcMainInvokeEvent): BrowserWindow => {
+    assertDesktopSender(event, ['app'])
+    if (current === undefined || event.sender !== current.webContents || event.senderFrame !== frame) throw new Error('Unowned file drag request')
+    return current
+  }
+  const dispose = installDesktopFileDrag(owner, resolve)
   onTestFinished(dispose)
   const handlers = new Map<string, Handler>(electron.handle.mock.calls.map(([channel, handler]) => [channel, handler]))
   const event = Object.assign({} as IpcMainInvokeEvent, { sender: window.webContents, senderFrame: frame })
   const call = (channel: string, ...args: unknown[]) => (handlers.get(channel) as Handler)(event, ...args)
-  return { root, window, frame, event, icon, call, dispose, detach: () => { current = undefined } }
+  const prepare = (bytes: Uint8Array, name = 'original.pdf', mediaType = 'application/pdf') => call(DESKTOP_IPC.fileDragPrepare, { kind: 'bytes', bytes, name, mediaType })
+  return { root, window, frame, event, icon, call, prepare, dispose, resolve, detach: () => { current = undefined } }
 }
 
-it('stages original bytes before the gesture and synchronously starts an OS copy drag', async () => {
+it('delivers original PDF bytes and filename through native copy drag', async () => {
   const f = await fixture()
-  const bytes = new Uint8Array([137, 80, 78, 71])
-  const handle = await f.call(DESKTOP_IPC.imageDragPrepare, bytes, 'original.png', 'image/png')
+  const bytes = new TextEncoder().encode('%PDF-1.4\noriginal\n%%EOF')
+  const handle = await f.prepare(bytes, '报告.pdf')
   expect(f.window.webContents.startDrag).not.toHaveBeenCalled()
-  expect(f.call(DESKTOP_IPC.imageDragStart, handle)).toBe(true)
+  expect(await f.call(DESKTOP_IPC.fileDragStart, handle)).toBe(true)
   const [request] = f.window.webContents.startDrag.mock.calls[0] as [{ file: string; icon: NativeImage }]
   expect(request.icon).toBe(f.icon)
+  expect(request.file).toContain('报告.pdf')
   expect(new Uint8Array(await readFile(request.file))).toEqual(bytes)
-  await f.call(DESKTOP_IPC.imageDragRelease, handle)
+  await f.call(DESKTOP_IPC.fileDragRelease, handle)
   expect(new Uint8Array(await readFile(request.file))).toEqual(bytes)
-  expect(f.call(DESKTOP_IPC.imageDragStart, handle)).toBe(false)
+  expect(await f.call(DESKTOP_IPC.fileDragStart, handle)).toBe(false)
   await f.dispose()
   expect(await readdir(f.root)).toEqual([])
 })
 
-it('rejects foreign senders, subframes, revoked handles and native failures', async () => {
+it('uses shared sender authorization and releases failed native starts', async () => {
   const f = await fixture()
-  expect(f.call(DESKTOP_IPC.imageDragStart, 'foreign')).toBe(false)
-  const handle = await f.call(DESKTOP_IPC.imageDragPrepare, new Uint8Array([1]), 'x.png', 'image/png')
+  expect(await f.call(DESKTOP_IPC.fileDragStart, 'foreign')).toBe(false)
+  const handle = await f.prepare(new Uint8Array([1]))
   f.window.webContents.startDrag.mockImplementationOnce(() => { throw new Error('OS rejected drag') })
-  expect(f.call(DESKTOP_IPC.imageDragStart, handle)).toBe(false)
+  expect(await f.call(DESKTOP_IPC.fileDragStart, handle)).toBe(false)
   await vi.waitFor(async () => { expect(await readdir(f.root)).toEqual([]) })
   f.frame.url = 'https://other.test/'
-  expect(() => f.call(DESKTOP_IPC.imageDragStart, handle)).toThrow('unowned renderer')
+  await expect(f.call(DESKTOP_IPC.fileDragStart, handle)).rejects.toThrow('unowned renderer')
   f.frame.url = 'dsh-app://app/'
   Object.assign(f.event, { senderFrame: { url: 'dsh-app://app/' } })
-  expect(() => f.call(DESKTOP_IPC.imageDragStart, handle)).toThrow('Unowned image drag request')
+  await expect(f.call(DESKTOP_IPC.fileDragStart, handle)).rejects.toThrow('Unowned file drag request')
   Object.assign(f.event, { senderFrame: f.frame, sender: {} })
-  expect(() => f.call(DESKTOP_IPC.imageDragStart, handle)).toThrow('Unowned image drag request')
+  await expect(f.call(DESKTOP_IPC.fileDragStart, handle)).rejects.toThrow('Unowned file drag request')
   f.detach()
-  expect(() => f.call(DESKTOP_IPC.imageDragStart, handle)).toThrow('Unowned image drag request')
+  await expect(f.call(DESKTOP_IPC.fileDragStart, handle)).rejects.toThrow('Unowned file drag request')
 })
 
 it('cancels icon preparation on shutdown without waiting for the icon service', async () => {
   const f = await fixture()
   const pending = Promise.withResolvers<NativeImage>()
   electron.getFileIcon.mockReturnValue(pending.promise)
-  const prepare = f.call(DESKTOP_IPC.imageDragPrepare, new Uint8Array([1]), 'x.svg', 'image/svg+xml')
-  const rejected = expect(prepare).rejects.toThrow('Unowned image drag request')
+  const rejected = expect(f.prepare(new Uint8Array([1]))).rejects.toThrow('File transfer closed')
   await vi.waitFor(() => { expect(electron.getFileIcon).toHaveBeenCalledOnce() })
-  let stopped = false
-  const stopping = f.dispose().then(() => { stopped = true })
+  await f.dispose()
   await rejected
-  await stopping
-  expect(stopped).toBe(true)
   pending.resolve(f.icon)
   await pending.promise
-  expect(f.window.webContents.startDrag).not.toHaveBeenCalled()
   expect(await readdir(f.root)).toEqual([])
+})
+
+it('borrows only authorized unchanged files with the requested export name, never deleting the source', async () => {
+  const f = await fixture()
+  const bytes = Buffer.from('original PDF bytes')
+  const path = join(f.root, 'report.pdf')
+  await writeFile(path, bytes)
+  const sha256 = createHash('sha256').update(bytes).digest('hex')
+  f.resolve.mockResolvedValue({ path, size: bytes.length, sha256 })
+  const request = { kind: 'resource', address: 'dsh-resource://file/session/s/report.pdf', name: 'report.pdf', mediaType: 'application/pdf', sha256, size: bytes.length }
+  const handle = await f.call(DESKTOP_IPC.fileDragPrepare, request)
+  expect(f.resolve).toHaveBeenCalledWith(request.address)
+  expect(await readdir(f.root)).toEqual(['report.pdf'])
+  expect(await f.call(DESKTOP_IPC.fileDragStart, handle)).toBe(true)
+  expect(f.window.webContents.startDrag).toHaveBeenCalledWith({ file: path, icon: f.icon })
+  await f.dispose()
+  expect(await readFile(path)).toEqual(bytes)
+})
+
+it('requests a copy for renamed, changed, and nonlocal resources', async () => {
+  const f = await fixture()
+  const path = join(f.root, 'report.pdf')
+  const bytes = Buffer.from('PDF')
+  await writeFile(path, bytes)
+  const sha256 = createHash('sha256').update(bytes).digest('hex')
+  f.resolve.mockResolvedValue({ path, size: bytes.length, sha256 })
+  const request = { kind: 'resource', address: 'dsh-resource://file/session/s/report.pdf', name: 'renamed.pdf', mediaType: 'application/pdf' }
+  expect(await f.call(DESKTOP_IPC.fileDragPrepare, request)).toBeUndefined()
+  expect(await f.call(DESKTOP_IPC.fileDragPrepare, { ...request, name: 'report.pdf', sha256: '0'.repeat(64) })).toBeUndefined()
+  expect(await f.call(DESKTOP_IPC.fileDragPrepare, { ...request, name: 'report.pdf', size: 100 })).toBeUndefined()
+  const handle = await f.call(DESKTOP_IPC.fileDragPrepare, { ...request, name: 'report.pdf' })
+  await writeFile(path, 'changed')
+  expect(await f.call(DESKTOP_IPC.fileDragStart, handle)).toBe(false)
+  f.resolve.mockResolvedValue(null)
+  expect(await f.call(DESKTOP_IPC.fileDragPrepare, request)).toBeUndefined()
+})
+
+it.each([null, {}, { kind: 'bytes', bytes: '/private/path', mediaType: 'text/plain' }, { kind: 'resource', address: '/private/path', mediaType: 1 }])('rejects malformed wire requests', async (value) => {
+  const f = await fixture()
+  await expect(f.call(DESKTOP_IPC.fileDragPrepare, value)).rejects.toThrow('Invalid file drag request')
 })

@@ -45,7 +45,10 @@ export function bindImagePan(image: HTMLImageElement): () => void {
     pointer.y = event.clientY
   }
   const up = (event: PointerEvent): void => { if (event.pointerId === pointer?.id) finish() }
-  const drag = (event: DragEvent): void => { if (pointer?.pan ?? overflowing()) event.preventDefault() }
+  const drag = (event: DragEvent): void => {
+    if (pointer?.pan ?? overflowing()) event.preventDefault()
+    else finish()
+  }
   const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure)
   observer?.observe(image)
   observer?.observe(scrollport)

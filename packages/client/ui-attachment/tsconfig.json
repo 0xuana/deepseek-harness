@@ -39,7 +39,7 @@
       "path": "../locale/tsconfig.client.json"
     },
     {
-      "path": "../ui-image-drag"
+      "path": "../ui-file-drag"
     }
   ]
 }

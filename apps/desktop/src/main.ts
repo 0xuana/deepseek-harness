@@ -26,7 +26,7 @@ import { resolveDesktopPaths } from './paths.ts'
 import { DesktopProjectManager } from './project-manager.ts'
 import { DesktopHostFatalError, DesktopHostProcess, DesktopHostUncleanExitError } from './host-process.ts'
 import { DesktopPlatformView, PLATFORM_IPC, platformBounds } from './platform-view.ts'
-import { installDesktopImageDrag } from './image-drag.ts'
+import { installDesktopFileDrag } from './file-drag.ts'
 import { installDesktopDirectoryPicker } from './directory-picker.ts'
 import { installMicrophonePermissions } from './microphone-permissions.ts'
 import { DesktopBackendController } from './backend-controller.ts'
@@ -346,13 +346,21 @@ async function main(): Promise<void> {
   let workspaceRecovery: Promise<void> | undefined
   let mainWindow: BrowserWindow | undefined
   let welcomeWindow: BrowserWindow | undefined
-  const imageDragCleanups = new Set([installDesktopImageDrag(() => mainWindow)])
-  let imageDragStopped = false
-  const disposeImageDrag = async (): Promise<void> => {
-    imageDragStopped = true
-    const results = await Promise.allSettled([...imageDragCleanups].map(async (release) => {
+  const installFileDrag = (): (() => Promise<void>) => installDesktopFileDrag(
+    event => assertProductSender(event),
+    (address) => {
+      const host = backend.host
+      if (host === undefined) return Promise.reject(new Error('File drag Host unavailable'))
+      return host.resolveDragResource(address)
+    },
+  )
+  const fileDragCleanups = new Set([installFileDrag()])
+  let fileDragStopped = false
+  const disposeFileDrag = async (): Promise<void> => {
+    fileDragStopped = true
+    const results = await Promise.allSettled([...fileDragCleanups].map(async (release) => {
       await release()
-      imageDragCleanups.delete(release)
+      fileDragCleanups.delete(release)
     }))
     const failure = results.find(result => result.status === 'rejected')
     if (failure?.status === 'rejected') throw failure.reason
@@ -431,12 +439,13 @@ async function main(): Promise<void> {
   let returnedAttempt: string | undefined
   let pendingWelcomeNotice: WelcomeNotice | undefined
   let previousAccountStatus: string | undefined
-  const assertProductSender = (event: IpcMainInvokeEvent): void => {
+  const assertProductSender = (event: IpcMainInvokeEvent): BrowserWindow => {
     assertDesktopSender(event, ['app'])
     if (mainWindow === undefined || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents
       || event.senderFrame === null || event.senderFrame !== mainWindow.webContents.mainFrame) {
       throw new Error('dsh desktop: rejected IPC from an unowned renderer')
     }
+    return mainWindow
   }
   let navigation: { window: BrowserWindow; url: string; promise: Promise<void> } | undefined
   const navigateMain = (url: string): Promise<void> => {
@@ -522,6 +531,7 @@ async function main(): Promise<void> {
       },
       updateTasks: (action: 'inspect' | 'lock' | 'unlock') => host.updateTasks(action),
       inspectQuit: () => host.inspectQuit(),
+      resolveDragResource: (address: string) => host.resolveDragResource(address),
     }
   }, (state) => {
     if (state.phase === 'error') reportFatal(state.failure, 'host')
@@ -549,9 +559,9 @@ async function main(): Promise<void> {
       window.webContents.send(DESKTOP_IPC.updatesPresentation, presentDesktopUpdate(state))
     }
     if (state.phase === 'error' && state.failedOperation !== 'check') {
-      if (state.failedOperation === 'install' && imageDragStopped && !quitting) {
-        imageDragCleanups.add(installDesktopImageDrag(() => mainWindow))
-        imageDragStopped = false
+      if (state.failedOperation === 'install' && fileDragStopped && !quitting) {
+        fileDragCleanups.add(installFileDrag())
+        fileDragStopped = false
       }
       const restoreHost = state.failedOperation === 'install' && updateStoppedHost && !quitting
       shellInstallerOwnsQuit = false
@@ -637,7 +647,7 @@ async function main(): Promise<void> {
         mandatoryUI?.preparingRestart(stillActive)
         // The embedded Platform document holds credentials issued by the Host that is about to stop.
         await platformView.closeAndWait()
-        await disposeImageDrag()
+        await disposeFileDrag().catch((error: unknown) => { console.error(error) })
         requireCleanStop = true
         updateStopFailure = undefined
         await backend.stop()
@@ -1279,7 +1289,7 @@ async function main(): Promise<void> {
     void Promise.all([Promise.resolve(mandatoryPolicy?.dispose()).then(() => policyAuth?.dispose()), backend.close(),
       // A Platform cleanup failure is logged without cutting the remaining Host shutdown short.
       platformView.dispose().catch((error: unknown) => { console.error(error) }),
-      disposeImageDrag().catch((error: unknown) => { console.error(error) })])
+      disposeFileDrag().catch((error: unknown) => { console.error(error) })])
       .catch((error: unknown) => { console.error(error) }).finally(() => { app.quit() })
   }
   app.on('before-quit', (event) => {

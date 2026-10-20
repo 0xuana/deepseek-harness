@@ -3,6 +3,7 @@
 import type { DesktopKeyboardApi, DesktopShortcutsApi } from '@deepseek-ai/dsh-client-shortcuts/protocol'
 import type { IpcMainInvokeEvent } from 'electron'
 import type { DesktopBrowserBridge } from '@deepseek-ai/dsh-client-ui-sidebar-browser/types'
+import type { DesktopFileDrag } from '@deepseek-ai/dsh-file-drag'
 
 /** IPC channel names kept private to the desktop application bundle. */
 export const DESKTOP_IPC = {
@@ -21,9 +22,9 @@ export const DESKTOP_IPC = {
   browserRelease: 'dsh-desktop:browser-release',
   browserOpenRequested: 'dsh-desktop:browser-open-requested',
   directoryPick: 'dsh-desktop:directory-pick',
-  imageDragPrepare: 'dsh-desktop:image-drag-prepare',
-  imageDragStart: 'dsh-desktop:image-drag-start',
-  imageDragRelease: 'dsh-desktop:image-drag-release',
+  fileDragPrepare: 'dsh-desktop:file-drag-prepare',
+  fileDragStart: 'dsh-desktop:file-drag-start',
+  fileDragRelease: 'dsh-desktop:file-drag-release',
   deviceInfo: 'dsh-desktop:device-info',
   localeBootstrap: 'dsh-desktop:locale-bootstrap',
   localeChanged: 'dsh-desktop:locale-changed',
@@ -76,11 +77,7 @@ export interface DesktopUpdatePresentation {
 export interface DshDesktopProductApi {
   readonly protocolVersion: 1
   readonly browser: DesktopBrowserBridge
-  readonly imageDrag: {
-    prepare(bytes: Uint8Array, name: string, mediaType: string): Promise<string>
-    start(handle: string): Promise<boolean>
-    release(handle: string): void
-  }
+  readonly fileDrag: DesktopFileDrag
   readonly keyboard: DesktopKeyboardApi
   readonly shortcuts: DesktopShortcutsApi
   /**

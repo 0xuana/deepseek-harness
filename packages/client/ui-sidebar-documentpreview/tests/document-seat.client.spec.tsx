@@ -38,7 +38,7 @@ afterEach(async () => {
 
 async function boot() {
   const rt = await SlotTestRuntime.create()
-  rt.ctx.provide('imageDrag', { actions: { desktop: undefined, begin: () => 'token', end: () => {}, report: () => {} }, read: () => undefined })
+  rt.ctx.provide('fileDrag', { actions: { desktop: undefined, begin: () => 'token', end: () => {}, report: () => {} }, read: () => undefined })
   runtime = rt
   rt.ctx.provide('configForms', { developerTools: { enabled: createSnapshotStore(true) } } as never)
   rt.ctx.provide('layout', { openRightbar: vi.fn(), closeRightbar: vi.fn(), panelInfo: rt.panelInfo } as never)

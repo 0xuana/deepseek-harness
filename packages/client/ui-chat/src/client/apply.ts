@@ -1,5 +1,5 @@
 /** Register the Chat Conversation target, renderers, stats, and details surface. */
-import type {} from '@deepseek-ai/dsh-client-ui-image-drag/client'
+import type {} from '@deepseek-ai/dsh-client-ui-file-drag/client'
 import type {} from '@deepseek-ai/dsh-client-product-analytics/client'
 import type { Context } from '@deepseek-ai/cordis'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
@@ -76,7 +76,7 @@ export const CHAT_NODE_INJECT: ChatNodeInjected = {
 /** Services required by the Chat target and its presentation registrations. */
 export const inject = [
   'slots', 'sessions', 'uiWorkspace', 'uiSession', 'uiConversation', 'locale',
-  'configForms', 'connection', 'remote', 'remote.session', 'sidebarRight', 'imageDrag',
+  'configForms', 'connection', 'remote', 'remote.session', 'sidebarRight', 'fileDrag',
 ]
 
 /**
@@ -251,7 +251,7 @@ export function apply(ctx: Context): void {
         const chat = chatSource(binding)
         return {
           ...nodeSources(binding),
-          imageDrag: ctx.imageDrag.actions,
+          fileDrag: ctx.fileDrag.actions,
           fileMentions: (owner: TurnTailOwnerProps) => ctx.get('chatFileMentions')?.forClosing(owner, sessionId),
           // Files open in the right Sidebar, not in a desktop application: the
           // content stays in the product, beside the conversation that produced

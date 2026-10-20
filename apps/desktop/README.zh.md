@@ -142,7 +142,7 @@ Electron 拥有 `$DSH_HOME/profiles/desktop`。其 `dependencies` 包含 pnpm �
 
 应用 preload 只向 `dsh-app://app` 文档暴露启动就绪、致命启动失败上报、原生目录选择、用于 composer 路径引用的 `__DSH_HOST_PATHS__` 桥接和租约范围内的 Browser 桥接。同一个 preload 通过 `dshDesktop.deviceInfo()` 转发主进程采集的机器描述，按 `name=value` 字段以 `; ` 分隔：`platform`、`os`、`app_arch`（应用二进制实际运行的架构，模拟运行时与硬件架构不同）、`cpu` 和 `memory_gib`（物理内存总量，GiB，保留一位小数）。取值不可用时省略对应字段。该描述不包含主机名、用户名或序列号。产品页面还获得 Desktop 标记、更新展示数据和打开原生确认的操作，不能选择安装产物或授权安装。插件管理使用 Web 应用经过认证的 HTTP API；Electron 在 `dsh-app://shell/` 本地提供更新弹窗文档和资源，不依赖 Host 就绪。Electron 不提供插件管理 IPC 或独立管理页面。任何渲染进程都不会获得文件系统访问、原始 Electron IPC、shell 或任意 pnpm 参数。
 
-图片拖放桥接只接受主应用所属主框架传入的 PNG、JPEG、GIF、WebP、BMP、ICO 或 SVG 原图字节。准备中及保留的文件共享 64 MiB 上限；达到上限后，新准备会失败，直到未使用文件被释放或应用重启。桥接在 `startDrag` 前准备私有临时文件和异步系统文件图标，只暴露不透明句柄，不接受渲染进程指定的文件系统路径，也不在主进程解码完整图片。未使用文件随来源图片释放；已交给操作系统的文件保留到退出，因为接收方可能在拖动返回后继续读取。退出等待进行中的写入和释放，并重试失败的删除，但不等待系统图标服务。更新准备在启动安装器前完成清理；安装失败后恢复桥接。清理错误不会中断 Host 关闭。原生拖放错误使用应用的本地化图片反馈。
+文件拖放桥接接受所属主应用主框架传入的任意文件字节或 Session 资源地址。Host 通过组合的文件系统授权读取、确认本地映射并返回私有内容摘要；主进程检查内容与统一解析的导出名后借用源文件。借用文件不会被删除。改名、转换、远程或 Blob 内容使用私有临时副本。MIME 数据补全名称，不限制文件类型；`.jpeg` 等兼容后缀保持不变。临时准备、部分写入及保留的导出共享 64 MiB；指针移开释放未使用文件，已交给系统的副本在 60 秒后过期。空间耗尽时显示通用重试提示，容量回收后可重试。退出等待写入和释放，重试失败的删除，但不等待图标服务。更新准备在停止 Host 前尝试清理；清理失败只记录日志，不阻断安装或退出。安装失败后恢复桥接。异步系统文件图标避免主进程解码原图。
 
 只有主应用窗口启用 `<webview>`。guest 挂载必须匹配主进程签发的租约和分区；guest 保持 sandbox、context isolation 和 Web security，不启用 Node integration 或 guest preload。Browser IPC 监听只为应用文档创建。[Sidebar Browser](../../packages/client/ui-sidebar-browser/README.zh.md) 说明存储分组和 guest 限制；Host 鉴权仍独立于 URL 过滤而必需。
 

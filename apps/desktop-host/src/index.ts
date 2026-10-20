@@ -9,6 +9,7 @@ import type {} from '@deepseek-ai/dsh-host-webserver'
 import type {} from '@deepseek-ai/dsh-deepseek-account'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import * as desktopOffice from './office.ts'
+import { localDragResource } from './file-drag.ts'
 
 import { installDesktopUpdateTaskControl } from './update-tasks.ts'
 import { installDesktopQuitInspection } from './quit-inspection.ts'
@@ -62,6 +63,23 @@ async function main(): Promise<void> {
   process.on('message', (message: unknown) => {
     if (typeof message !== 'object' || message === null || !('type' in message)) return
     if (message.type === 'shutdown') { void stop(); return }
+    if (message.type === 'file-drag-resource') {
+      if (!('requestId' in message) || !Number.isSafeInteger(message.requestId)
+        || !('address' in message) || typeof message.address !== 'string') return
+      const { requestId, address } = message
+      void (async () => {
+        try {
+          if (stopping !== undefined) throw new Error('Host stopping')
+          const { ctx } = await application
+          const resource = await localDragResource(ctx, address)
+          await send({ type: 'file-drag-resource', requestId, resource })
+        } catch (error) {
+          console.error(error)
+          await send({ type: 'file-drag-resource', requestId, resource: null, error: 'File drag resource unavailable' })
+        }
+      })().catch((error: unknown) => { console.error(error) })
+      return
+    }
     if (message.type === 'quit-inspection') {
       if (!('requestId' in message) || !Number.isSafeInteger(message.requestId)) return
       const requestId = message.requestId

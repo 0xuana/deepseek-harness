@@ -44,7 +44,7 @@ const SID = 'session-1' as SessionId
 
 async function bench() {
   const runtime = await SlotTestRuntime.create()
-  runtime.ctx.provide('imageDrag', { actions: { desktop: undefined, begin: () => 'token', end: () => {}, report: () => {} }, read: () => undefined })
+  runtime.ctx.provide('fileDrag', { actions: { desktop: undefined, begin: () => 'token', end: () => {}, report: () => {} }, read: () => undefined })
   const chatSettings = stubConfigForm<ChatSettings>()
   runtime.ctx.provide('configForms', {
     developerTools: { enabled: createSnapshotStore(true) },

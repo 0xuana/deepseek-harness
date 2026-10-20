@@ -25,7 +25,7 @@ This package renders everything the conversation UI shows about attachments: one
 <a id="use-this-package"></a>
 ## Use this package
 
-Image drag actions and the composer’s original-file reader arrive through slot injection from [ui-image-drag](../ui-image-drag/README.md). The image gallery Factory also receives these actions through its declared inject face; custom Factory replacements must supply that face.
+Image drag actions and the composer’s original-file reader arrive through slot injection from [ui-file-drag](../ui-file-drag/README.md). The image gallery Factory also receives these actions through its declared inject face; custom Factory replacements must supply that face.
 
 Mount this plugin alongside [`ui-conversation`](../ui-conversation/README.md) and [`ui-tool`](../ui-tool/README.md) when tool results need an image gallery. It waits for their slot declarations and registers its components into them. Users then see the mixed draft-attachment rail, DeepSeek Web file cards with upload controls, the drop overlay with its limits line, message images sized by count, the tool card's gallery, and the Escape/mask/close lightbox.
 

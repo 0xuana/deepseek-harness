@@ -28,7 +28,7 @@ type ImageMediaType = typeof IMAGE_MEDIA_TYPES[keyof typeof IMAGE_MEDIA_TYPES]
 
 /** Image-only operations injected alongside the shared zoom lifecycle. */
 export interface ImageBodyInjected extends ZoomInjected {
-  readonly imageDrag: import('@deepseek-ai/dsh-client-ui-primitives').ImageDragActions
+  readonly fileDrag: import('@deepseek-ai/dsh-client-ui-primitives').FileDragActions
 }
 
 /** Standard document props plus the image renderer's dictionary. */
@@ -102,17 +102,29 @@ export function ImageBody(props: ImageBodyProps): ReactNode {
     controls: t('zoomControls'), menu: t('zoomMenu'), out: t('zoomOut'), into: t('zoomIn'),
     fitWidth: t('zoomFitWidth'), value: percent => t('zoomValue', { percent }),
   }
-  return <LoadedImage imageDrag={props.imageDrag} key={source.url} url={source.url} name={name} file={source.file} preference={preference}
-    onPreference={setPreference} labels={labels} signal={tab.signal}
-    scrollportRef={props.scrollportRef} t={t} />
+  return <LoadedImage
+    fileDrag={props.fileDrag}
+    resourceAddress={resourceAddress}
+    key={source.url}
+    url={source.url}
+    name={name}
+    file={source.file}
+    preference={preference}
+    onPreference={setPreference}
+    labels={labels}
+    signal={tab.signal}
+    scrollportRef={props.scrollportRef}
+    t={t}
+  />
 }
 
 /** SVG stays in the browser's static image mode because its bytes only reach an img Blob URL. */
-function LoadedImage({ url, name, file, preference, onPreference, labels, signal, scrollportRef, t, imageDrag }: {
-  readonly imageDrag: ImageBodyInjected['imageDrag']
+function LoadedImage({ url, name, file, resourceAddress, preference, onPreference, labels, signal, scrollportRef, t, fileDrag }: {
+  readonly fileDrag: ImageBodyInjected['fileDrag']
   readonly url: string
   readonly name: string
   readonly file: File
+  readonly resourceAddress: string
   readonly preference: ZoomPreference
   readonly onPreference: (preference: ZoomPreference) => void
   readonly labels: ZoomLabels
@@ -127,20 +139,30 @@ function LoadedImage({ url, name, file, preference, onPreference, labels, signal
   }, [])
   const [state, setState] = useState<'loading' | 'ready' | 'failed'>('loading')
   const [width, setWidth] = useState<number>()
-  return <ZoomViewport preference={preference} intrinsicWidth={width} horizontalInset={24}
-    labels={labels} signal={signal} scrollportRef={scrollportRef} onPreference={onPreference}>
+  return <ZoomViewport
+    preference={preference}
+    intrinsicWidth={width}
+    horizontalInset={24}
+    labels={labels}
+    signal={signal}
+    scrollportRef={scrollportRef}
+    onPreference={onPreference}
+  >
     <div className={css.frame} data-image-preview>
       {state === 'loading' && <LoadingIndicator label={t('loading')} />}
       {state === 'failed' && <p className={css.status} role="alert">{t('failed')}</p>}
       <div className={`${css.surface} ${zoomSurfaceClass}`} data-document-zoom-surface
         style={{ '--document-zoom-width': `${width ?? 0}px` } as CSSProperties} hidden={state !== 'ready'}>
-        <DraggableImage imageDrag={imageDrag}
+        <DraggableImage
+          fileDrag={fileDrag}
+          resourceAddress={resourceAddress}
           ref={attachImage}
           className={css.image}
           src={url}
           alt={t('preview', { name })}
           decoding="async"
-          name={name} original={file} failureText={t('dragFailed')}
+          name={name}
+          original={file}
           referrerPolicy="no-referrer"
           onLoad={(event) => { setWidth(event.currentTarget.naturalWidth); setState('ready') }}
           onError={() => { setState('failed') }}

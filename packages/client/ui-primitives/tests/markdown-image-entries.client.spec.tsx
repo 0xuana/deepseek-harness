@@ -7,9 +7,9 @@ import { MarkdownText } from './markdown-test-components.tsx'
 import { parseGfm, parseGfmWithMath } from '../src/markdown/parse.ts'
 
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks() })
-const imageDrag = { desktop: undefined, begin: vi.fn(() => 'token'), end: vi.fn(), report: vi.fn() }
+const fileDrag = { prepare: vi.fn(async () => ({ start: () => true, release: () => {} })), reportFailure: vi.fn() }
 const labels = { dragFailed: 'Image drag failed', open: 'View full image', dialog: 'Image preview', close: 'Close preview', loading: 'Loading image', failed: 'Image unavailable' }
-const fileImages = { imageDrag, resolve: (path: string) => `https://example.com/api/file?path=${encodeURIComponent('/workspace/' + path)}`, labels }
+const fileImages = { fileDrag, resolve: (path: string) => `https://example.com/api/file?path=${encodeURIComponent('/workspace/' + path)}`, labels }
 function mount(text: string, streaming = false) {
   const openFile = vi.fn()
   const view = render(<MarkdownDelegateProvider openFile={openFile} fileImages={fileImages}>
@@ -22,7 +22,7 @@ it('loads Desktop inline and hover previews through the file route after streami
   vi.useFakeTimers()
   const path = '/work/测试 图片#100%.png'
   const src = fileMediaUrl('dsh-app://app/', path)!
-  const images = { imageDrag, resolve: (value: string) => fileMediaUrl('dsh-app://app/', value), labels }
+  const images = { fileDrag, resolve: (value: string) => fileMediaUrl('dsh-app://app/', value), labels }
   const text = `![图片](<${encodeURI(path).replace('#', '%23')}>)\n\n[打开图片](<${encodeURI(path).replace('#', '%23')}>)`
   const openFile = vi.fn()
   const content = (streaming: boolean) => <MarkdownDelegateProvider fileImages={images} openFile={openFile}>

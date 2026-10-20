@@ -662,8 +662,13 @@ function LoadedMarkdownImage({ src, alt, destination, preview }: {
   const imageProps = { className: css.image, src, alt, onError: () => { setFailed(true) },
     loading: 'lazy' as const, decoding: 'async' as const, referrerPolicy: 'no-referrer' as const }
   if (preview === undefined) return <img {...imageProps} />
-  const img = <DraggableImage imageDrag={preview.imageDrag} {...imageProps} name={destination.split('/').at(-1)?.split(/[?#]/u)[0] || 'image'}
-    failureText={preview.labels.dragFailed} />
+  const file = parseFileLink(destination)
+  const img = <DraggableImage
+    fileDrag={preview.fileDrag}
+    {...imageProps}
+    resourceAddress={file === undefined ? undefined : preview.resourceAddress?.(file.path)}
+    name={destination.split('/').at(-1)?.split(/[?#]/u)[0] || 'image'}
+  />
   return <>
     <button type="button" className={css.imageButton} title={preview.labels.open}
       aria-label={alt ? `${preview.labels.open}: ${alt}` : preview.labels.open}

@@ -1,5 +1,5 @@
 /** Builtin image metadata and keyed document-body registration. */
-import type {} from '@deepseek-ai/dsh-client-ui-image-drag/client'
+import type {} from '@deepseek-ai/dsh-client-ui-file-drag/client'
 import type { Context } from '@deepseek-ai/cordis'
 import type { BoundActions } from '@deepseek-ai/dsh-client-store'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -49,7 +49,7 @@ export function apply(ctx: Context): void {
   ctx.effect(() => ctx.slots.inject('sidebar.right.tab.document', () => ctx.slots.register({
     name: 'sidebar.right.tab.document', key: IMAGE_BODY_ID, locale: 'sidebarImage', store,
     inject: (_sessionId: SessionId, actions: BoundActions<ZoomStore>): ImageBodyInjected => ({
-      imageDrag: ctx.imageDrag.actions,
+      fileDrag: ctx.fileDrag.actions,
       retainTab: (tabId, signal) => { retainTab(tabId, signal, actions.forget) },
     }),
   }, ImageBody)), 'document-image: body')

@@ -33,7 +33,7 @@ kind: "package-reference"
 <a id="reference-previews"></a>
 ## 引用预览
 
-图片拖放回调通过图片入口的注入接口从 [ui-image-drag](../ui-image-drag/README.zh.md) 获取。
+图片拖放回调通过图片入口的注入接口从 [ui-file-drag](../ui-file-drag/README.zh.md) 获取。
 
 已发送的普通文件附件保留草稿中的[文件卡片圆角](../../../docs/ui-radius.zh.md#radius-scale)。
 

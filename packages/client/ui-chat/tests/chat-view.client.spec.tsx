@@ -467,7 +467,7 @@ function makeHarness(
   const useConnectionState = bindSnapshotSelector(connection)
   const SessionProviderStub: ChatViewSlotProps['SessionProvider'] = ({ children }) => <>{children}</>
   const props: HarnessStandardProps = {
-    imageDrag,
+    fileDrag,
     renderFactorySlot,
     usePanelInfo: selector => selector({ activePanelId: null }),
     sessionId: SID,
@@ -4602,4 +4602,4 @@ describe('ChatView', () => {
   })
 })
 
-const imageDrag = { desktop: undefined, begin: vi.fn(() => 'token'), end: vi.fn(), report: vi.fn() }
+const fileDrag = { prepare: vi.fn(async () => ({ start: () => true, release: () => {} })), reportFailure: vi.fn() }

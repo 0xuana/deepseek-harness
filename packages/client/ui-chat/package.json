@@ -42,7 +42,7 @@
         "@deepseek-ai/dsh-client-ui-settings",
         "@deepseek-ai/dsh-client-ui-sidebar-right",
         "@deepseek-ai/dsh-client-ui-workspace",
-        "@deepseek-ai/dsh-client-ui-image-drag"
+        "@deepseek-ai/dsh-client-ui-file-drag"
       ],
       "platform": "web"
     }
@@ -97,7 +97,7 @@
     "react-dom": "^18.2.0",
     "@deepseek-ai/dsh-settings": "workspace:*",
     "@deepseek-ai/dsh-client-product-analytics": "workspace:*",
-    "@deepseek-ai/dsh-client-ui-image-drag": "workspace:*"
+    "@deepseek-ai/dsh-client-ui-file-drag": "workspace:*"
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "workspace:~"

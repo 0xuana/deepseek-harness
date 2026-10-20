@@ -43,7 +43,7 @@ function props(path = 'asset.png', data: Uint8Array<ArrayBuffer> = new Uint8Arra
     return selector(useSyncExternalStore(subscribe, snapshot))
   }
   return {
-    imageDrag,
+    fileDrag,
     resourceAddress: `dsh-resource://file/session/image/${path}`,
     content: { kind: 'bytes', data },
     wrap: false,
@@ -153,4 +153,4 @@ describe('ImageBody', () => {
   })
 })
 
-const imageDrag = { desktop: undefined, begin: vi.fn(() => 'token'), end: vi.fn(), report: vi.fn() }
+const fileDrag = { prepare: vi.fn(async () => ({ start: () => true, release: () => {} })), reportFailure: vi.fn() }

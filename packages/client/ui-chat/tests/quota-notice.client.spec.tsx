@@ -46,7 +46,7 @@ const quotaEntry = (seq: number, code: string): SessionLiveEventEntry => ({
  */
 async function bench() {
   const runtime = await SlotTestRuntime.create()
-  runtime.ctx.provide('imageDrag', { actions: { desktop: undefined, begin: () => 'token', end: () => {}, report: () => {} }, read: () => undefined })
+  runtime.ctx.provide('fileDrag', { actions: { desktop: undefined, begin: () => 'token', end: () => {}, report: () => {} }, read: () => undefined })
   disposers.push(() => runtime.dispose())
   const chatSettings = stubConfigForm<ChatSettings>()
   runtime.ctx.provide('configForms', {

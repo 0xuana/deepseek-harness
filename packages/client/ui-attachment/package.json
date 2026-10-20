@@ -35,7 +35,7 @@
         "@deepseek-ai/dsh-client-ui-renderer",
         "@deepseek-ai/dsh-client-ui-trajectory",
         "@deepseek-ai/dsh-client-ui-tool",
-        "@deepseek-ai/dsh-client-ui-image-drag"
+        "@deepseek-ai/dsh-client-ui-file-drag"
       ],
       "platform": "web"
     }
@@ -59,7 +59,7 @@
     "@deepseek-ai/dsh-attachment": "workspace:*",
     "@deepseek-ai/dsh-client-ui-tool": "workspace:*",
     "clsx": "^2.0.0",
-    "@deepseek-ai/dsh-client-ui-image-drag": "workspace:*"
+    "@deepseek-ai/dsh-client-ui-file-drag": "workspace:*"
   },
   "files": [
     "locale/*.json",

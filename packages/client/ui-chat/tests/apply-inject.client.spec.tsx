@@ -62,7 +62,7 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
   } as never)
   const layout = { closeRightbar: vi.fn(), openRightbar: vi.fn() }
   runtime.ctx.provide('connection', { state: createSnapshotStore('connected') } as never)
-  runtime.ctx.provide('imageDrag', { actions: imageDrag, read: () => undefined })
+  runtime.ctx.provide('fileDrag', { actions: fileDrag, read: () => undefined })
   runtime.ctx.provide('layout', layout as never)
   const sidebarRight = {
     openResource: vi.fn<(address: string) => void>(),
@@ -493,4 +493,4 @@ describe('Chat inject API', () => {
   })
 })
 
-const imageDrag = { desktop: undefined, begin: vi.fn(() => 'token'), end: vi.fn(), report: vi.fn() }
+const fileDrag = { prepare: vi.fn(async () => ({ start: () => true, release: () => {} })), reportFailure: vi.fn() }

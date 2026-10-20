@@ -24,6 +24,11 @@ interface PlatformSessionEvent {
 }
 
 type DesktopHostEvent = ReadyEvent | FatalEvent | PlatformSessionEvent | { readonly type: 'shutdown-complete' } | {
+  readonly type: 'file-drag-resource'
+  readonly requestId: number
+  readonly resource: { readonly path: string; readonly sha256: string; readonly size: number } | null
+  readonly error?: string
+} | {
   readonly type: 'update-tasks'
   readonly requestId: number
   readonly active: boolean
@@ -82,6 +87,13 @@ function isDesktopHostEvent(message: unknown): message is DesktopHostEvent {
     case 'update-tasks':
       return Number.isSafeInteger(candidate.requestId) && typeof candidate.active === 'boolean'
         && (candidate.error === undefined || typeof candidate.error === 'string')
+    case 'file-drag-resource': {
+      const resource = candidate.resource
+      return Number.isSafeInteger(candidate.requestId) && (candidate.error === undefined || typeof candidate.error === 'string')
+        && (resource === null || (typeof resource === 'object' && 'path' in resource && typeof resource.path === 'string'
+          && 'sha256' in resource && typeof resource.sha256 === 'string' && /^[a-f0-9]{64}$/u.test(resource.sha256)
+          && 'size' in resource && typeof resource.size === 'number' && Number.isSafeInteger(resource.size) && resource.size >= 0))
+    }
     case 'quit-inspection':
       return Number.isSafeInteger(candidate.requestId) && typeof candidate.activeTasks === 'boolean'
         && typeof candidate.scheduledTasks === 'boolean' && (candidate.error === undefined || typeof candidate.error === 'string')
@@ -257,8 +269,16 @@ export class DesktopHostProcess {
     return { activeTasks: response.activeTasks, scheduledTasks: response.scheduledTasks }
   }
 
+  /** @param address - Session-scoped file reference. @returns privately authorized local resource, or null when nonlocal. */
+  async resolveDragResource(address: string): Promise<{ readonly path: string; readonly sha256: string; readonly size: number } | null> {
+    const response = await this.control({ type: 'file-drag-resource', address }, 12_000, 'File drag authorization timed out')
+    if (response.type !== 'file-drag-resource') throw new Error('Host returned a different control response')
+    return response.resource
+  }
+
   private async control(
-    request: { readonly type: 'update-tasks'; readonly action: 'inspect' | 'lock' | 'unlock' } | { readonly type: 'quit-inspection' },
+    request: { readonly type: 'update-tasks'; readonly action: 'inspect' | 'lock' | 'unlock' } | { readonly type: 'quit-inspection' }
+      | { readonly type: 'file-drag-resource'; readonly address: string },
     deadlineMs: number, deadlineMessage: string,
   ): Promise<DesktopHostControlResponse> {
     const child = this.child

@@ -1,120 +1,74 @@
-/** Original image files supplied to browser and native drag sessions. */
-import { useCallback, useEffect, useRef, type DragEvent, type MouseEvent, type PointerEvent } from 'react'
+/** Image gestures delegate file preparation and transport to the owning feature. */
+import { useCallback, useEffect, useMemo, useRef, type DragEvent, type MouseEvent, type PointerEvent, type ImgHTMLAttributes } from 'react'
+import type { FileDragActions, FileDragSource, PreparedFileDrag } from './file-drag-actions.ts'
 
-import { IMAGE_DRAG_TOKEN_TYPE, type ImageDragActions } from './image-drag-actions.ts'
-
-/** Application-owned native image transfer; prepared handles never expose host paths. */
-export interface DesktopImageDrag {
-  /** @returns an opaque handle for the original file, retained until release or application exit. */
-  prepare: (bytes: Uint8Array, name: string, mediaType: string) => Promise<string>
-  /** Start a system copy drag from an already prepared handle. */
-  start: (handle: string) => Promise<boolean>
-  /** Release an unused handle; files already handed to the OS survive until application exit. */
-  release: (handle: string) => void
-}
-
-interface PreparedImage {
-  readonly file: File
-  readonly handle?: string
-  readonly release?: () => void
-}
-
-interface ImageDragHandlers {
-  onPointerEnter: () => void
-  onPointerDown: (event: PointerEvent<HTMLImageElement>) => void
-  onDragStart: (event: DragEvent<HTMLImageElement>) => void
-  onDragEnd: () => void
-  onClickCapture: (event: MouseEvent) => void
-}
+interface Preparation { abort: AbortController; prepared?: PreparedFileDrag; failed: boolean }
+type ImageGestures = Required<Pick<ImgHTMLAttributes<HTMLImageElement>,
+  'onPointerEnter' | 'onPointerDown' | 'onPointerLeave' | 'onPointerUp' | 'onDragStart' | 'onDragEnd' | 'onClickCapture'>>
 
 /**
- * Prepare original bytes on hover and supply them synchronously when dragging begins.
- * The supplied actions own transfer bytes and feedback across source unmounts.
- * @param transfer - application-owned native, transfer, and feedback callbacks.
- * @param src - authorized image URL; changing it retires pending preparation.
- * @param name - suggested original filename, without a directory.
- * @param failureText - localized failure message, including a retry action.
- * @param original - already loaded original file; omitted sources are read from their image URL.
- * @returns drag handlers; cancellation never starts a late drag.
+ * Prepare on drag intent, release on pointer leave, and never start after cancellation.
+ * @param actions - stable file preparation and error callbacks.
+ * @param src - displayed image URL.
+ * @param name - proposed export name.
+ * @param original - already loaded original bytes.
+ * @param resourceAddress - verifiable reference to an unmodified local original.
+ * @returns image gesture handlers; overflowing images remain owned by their pan handler.
  */
 export function useImageDrag(
-  transfer: ImageDragActions, src: string, name: string, failureText: string, original?: File,
-): ImageDragHandlers {
-  const state = useRef<{
-    source: string
-    prepared?: PreparedImage | undefined
-    pending?: Promise<void> | undefined
-    abort: AbortController
-  }>()
+  actions: FileDragActions, src: string, name: string, original?: File, resourceAddress?: string,
+): ImageGestures {
+  const source = useMemo<FileDragSource>(() => original === undefined
+    ? { kind: 'url', url: src, name, mediaType: '', resourceAddress }
+    : { kind: 'blob', blob: original, name, mediaType: original.type, resourceAddress }, [src, name, original, resourceAddress])
+  const state = useRef<Preparation>()
   const dragged = useRef(false)
-  const reportFailure = transfer.report
-  const desktop = transfer.desktop
+  const release = useCallback((): void => {
+    const previous = state.current
+    state.current = undefined
+    previous?.abort.abort()
+    previous?.prepared?.release()
+  }, [])
+  useEffect(() => release, [release, source, actions])
   const prepare = useCallback((): void => {
-    const current = state.current
-    if (src === '' || current === undefined || current.source !== src || current.pending !== undefined || current.prepared !== undefined) return
-    current.pending = (async () => {
-      let file = original
-      if (file === undefined) {
-        const response = await fetch(src, { signal: current.abort.signal, referrerPolicy: 'no-referrer' })
-        if (!response.ok) throw new Error('Image read failed')
-        const blob = await response.blob()
-        if (!blob.type.startsWith('image/')) throw new Error('Image media type unavailable')
-        file = new File([blob], name, { type: blob.type })
-      }
-      if (current.abort.signal.aborted) return
-      if (desktop === undefined) {
-        current.prepared = { file }
-        return
-      }
-      const handle = await desktop.prepare(new Uint8Array(await file.arrayBuffer()), file.name, file.type)
-      if (state.current !== current) {
-        desktop.release(handle)
-        return
-      }
-      current.prepared = { file, handle, release: () => { desktop.release(handle) } }
-    })().catch((_error: unknown) => {
-      // Preparation is speculative; a failed user gesture reports through the owning image.
-    }).finally(() => { current.pending = undefined })
-  }, [src, name, original, desktop])
-  useEffect(() => {
-    const current: NonNullable<typeof state.current> = { source: src, abort: new AbortController() }
+    if (src === '' || state.current !== undefined) return
+    const current: Preparation = { abort: new AbortController(), failed: false }
     state.current = current
-    return () => {
-      current.abort.abort()
-      current.prepared?.release?.()
-      state.current = undefined
-    }
-  }, [src, name, original, desktop, prepare])
+    window.addEventListener('pointerup', release, { once: true, signal: current.abort.signal })
+    window.addEventListener('blur', release, { once: true, signal: current.abort.signal })
+    void actions.prepare(source, current.abort.signal).then((prepared) => {
+      if (current.abort.signal.aborted) prepared.release()
+      else current.prepared = prepared
+    }, (_error: unknown) => {
+      // Speculation stays quiet; only a later failed gesture presents retry feedback.
+      current.failed = true
+    })
+  }, [src, actions, source, release])
+  const intent = useCallback((event: PointerEvent<HTMLImageElement>): void => {
+    if (!event.defaultPrevented && event.currentTarget.draggable) prepare()
+  }, [prepare])
   const onDragStart = useCallback((event: DragEvent<HTMLImageElement>): void => {
     if (event.defaultPrevented || src === '') return
     dragged.current = true
-    const prepared = state.current?.source === src ? state.current.prepared : undefined
-    if (prepared === undefined) {
-      const url = new URL(src, location.href)
-      if (original === undefined && (url.protocol === 'https:' || url.protocol === 'http:') && url.origin !== location.origin) return
-      event.preventDefault()
-      prepare()
-      reportFailure(failureText)
+    const current = state.current
+    if (current?.prepared !== undefined) {
+      if (!current.prepared.start(event.dataTransfer, event.currentTarget)) { event.preventDefault(); release() }
       return
     }
-    event.dataTransfer.items.clear()
-    event.dataTransfer.effectAllowed = 'copy'
-    if (desktop !== undefined && prepared.handle !== undefined) {
-      event.preventDefault()
-      const failed = (): void => {
-        if (state.current?.prepared === prepared) state.current.prepared = undefined
-        reportFailure(failureText)
-      }
-      void desktop.start(prepared.handle).then((started) => { if (!started) failed() }, failed)
-      return
-    }
-    event.dataTransfer.setData(IMAGE_DRAG_TOKEN_TYPE, transfer.begin(prepared.file))
-    event.dataTransfer.setData('DownloadURL', `${prepared.file.type}:${prepared.file.name}:${src}`)
-  }, [src, desktop, prepare, reportFailure, failureText, transfer])
+    const url = new URL(src, location.href)
+    if (original === undefined && (url.protocol === 'https:' || url.protocol === 'http:') && url.origin !== location.origin) return
+    event.preventDefault()
+    if (current?.failed === true) { actions.reportFailure(); release() }
+    prepare()
+  }, [src, original, actions, prepare, release])
   const onPointerDown = useCallback((event: PointerEvent<HTMLImageElement>): void => {
     dragged.current = false
-    if (event.button === 0) prepare()
-  }, [prepare])
+    if (event.button === 0) intent(event)
+  }, [intent])
+  const onPointerLeave = useCallback((event: PointerEvent<HTMLImageElement>): void => {
+    // Browsers may leave a small image before dispatching its dragstart.
+    if (event.buttons !== 1) release()
+  }, [release])
   const onClickCapture = useCallback((event: MouseEvent): void => {
     if (event.detail === 0) { dragged.current = false; return }
     if (!dragged.current) return
@@ -122,5 +76,5 @@ export function useImageDrag(
     event.stopPropagation()
     dragged.current = false
   }, [])
-  return { onPointerEnter: prepare, onPointerDown, onDragStart, onDragEnd: transfer.end, onClickCapture }
+  return { onPointerEnter: intent, onPointerDown, onPointerLeave, onPointerUp: release, onDragStart, onDragEnd: release, onClickCapture }
 }

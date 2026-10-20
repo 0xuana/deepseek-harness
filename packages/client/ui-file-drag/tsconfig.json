@@ -25,6 +25,15 @@
     },
     {
       "path": "../ui-layout"
+    },
+    {
+      "path": "../../util/file-drag"
+    },
+    {
+      "path": "../../util/crypto"
+    },
+    {
+      "path": "../locale/tsconfig.client.json"
     }
   ]
 }

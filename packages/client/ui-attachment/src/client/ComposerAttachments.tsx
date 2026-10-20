@@ -10,6 +10,7 @@ import { FileCard } from '../FileCard.tsx'
 import { ImageLightbox } from '@deepseek-ai/dsh-client-ui-primitives'
 import { attachmentRailLabels, dropOverlayLabels, fileCardLabels, lightboxLabels } from './labels.ts'
 import { installDocumentDropEvents } from './drop-events.ts'
+import type { InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
 import css from './ComposerAttachments.module.css'
 
 /** Rail item retaining its browser-owned attachment for callbacks. */
@@ -17,10 +18,15 @@ interface ComposerRailItem extends AttachmentRailItem {
   attachment: ComposerAttachment
 }
 
+/** File transfer lookup injected by this attachment implementation. */
+export interface ComposerAttachmentsInjected {
+  readonly readFileDrag: (transfer: DataTransfer) => File | undefined
+}
+
 /** Draft image previews, pending-file cards, drop target, and original-image preview. */
 export function ComposerAttachments({
-  attachments, canAcceptDrop, onAddFiles, onRemoveAttachment, uploads, onRetryFile, dropLimits, t, readImageDrag,
-}: ComposerAttachmentsProps & { readonly readImageDrag: (transfer: DataTransfer) => File | undefined }) {
+  attachments, canAcceptDrop, onAddFiles, onRemoveAttachment, uploads, onRetryFile, dropLimits, t, readFileDrag,
+}: ComposerAttachmentsProps & InjectFace<ComposerAttachmentsInjected>) {
   const [preview, setPreview] = useState<ComposerImageAttachment | null>(null)
   const [dragActive, setDragActive] = useState(false)
   const dragDepth = useRef(0)
@@ -30,8 +36,8 @@ export function ComposerAttachments({
   }, [attachments, preview])
 
   useEffect(() => {
-    return installDocumentDropEvents(canAcceptDrop, onAddFiles, dragDepth, setDragActive, readImageDrag)
-  }, [canAcceptDrop, onAddFiles, readImageDrag])
+    return installDocumentDropEvents(canAcceptDrop, onAddFiles, dragDepth, setDragActive, readFileDrag)
+  }, [canAcceptDrop, onAddFiles, readFileDrag])
 
   const railItems = useMemo<ComposerRailItem[]>(() => attachments.map(attachment => ({
     id: attachment.id,

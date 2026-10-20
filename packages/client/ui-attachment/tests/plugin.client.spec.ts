@@ -33,7 +33,7 @@ async function bench() {
       'tool.call.images': { kind: 'single', scope: 'session' },
     },
   } as never, () => null)
-  ctx.provide('imageDrag', { actions: imageDrag, read: () => undefined })
+  ctx.provide('fileDrag', { actions: fileDrag, read: () => undefined })
   const registerFactory = vi.spyOn(ctx.slots, 'registerFactory')
   const fiber = ctx.plugin({ inject: [...inject], apply })
   await fiber.await()
@@ -47,7 +47,7 @@ describe('attachment plugin', () => {
 
   it('registers all entries and removes them with the plugin fiber', async () => {
     const { ctx, fiber, registerFactory } = await bench()
-    expect(inject).toEqual(['slots', 'imageDrag'])
+    expect(inject).toEqual(['slots', 'fileDrag'])
     expect(registerFactory.mock.calls[0]?.[0]).toMatchObject({
       name: 'conversation.images.content', scope: 'root', locale: 'conversation',
     })
@@ -67,4 +67,4 @@ describe('attachment plugin', () => {
   })
 })
 
-const imageDrag = { desktop: undefined, begin: vi.fn(() => 'token'), end: vi.fn(), report: vi.fn() }
+const fileDrag = { prepare: vi.fn(async () => ({ start: () => true, release: () => {} })), reportFailure: vi.fn() }

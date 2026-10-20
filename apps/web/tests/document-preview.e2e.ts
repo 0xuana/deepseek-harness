@@ -1113,6 +1113,39 @@ else process.exit(1);
     expect(Buffer.from(draggedBytes)).toEqual(TINY_PNG)
     expect(await input.innerText()).toBe('')
     await page.getByRole('button', { name: 'Remove image tiny.png', exact: true }).click()
+    const endedDrag = await tinyImage.evaluateHandle((node) => {
+      const proof = { token: '', started: false, ended: false }
+      window.addEventListener('dragstart', (event) => {
+        proof.token = event.dataTransfer!.getData('application/x-dsh-file')
+        proof.started = event.isTrusted && proof.token !== ''
+      }, { once: true })
+      node.addEventListener('dragend', (event) => { proof.ended = event.isTrusted && !node.isConnected }, { once: true })
+      return proof
+    })
+    const tinyRect = (await tinyImage.boundingBox())!
+    const inputRect = (await input.boundingBox())!
+    await page.mouse.move(tinyRect.x + tinyRect.width / 2, tinyRect.y + tinyRect.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(tinyRect.x - 20, tinyRect.y, { steps: 4 })
+    await expect.poll(() => endedDrag.evaluate(proof => proof.started)).toBe(true)
+    const tinyTab = column.locator('[data-dockkit-tab]').filter({ has: page.getByText('tiny.png', { exact: true }) })
+    await tinyTab.locator('[data-dockkit-tab-close]').evaluate((button: HTMLElement) => { button.click() })
+    await tinyImage.waitFor({ state: 'detached' })
+    await page.mouse.move(inputRect.x + inputRect.width / 2, inputRect.y + inputRect.height / 2, { steps: 5 })
+    await page.mouse.up()
+    await draggedPreview.waitFor({ state: 'visible', timeout: 5000 })
+    expect(Buffer.from(await draggedPreview.evaluate(async (node: HTMLImageElement) =>
+      Array.from(new Uint8Array(await (await fetch(node.src)).arrayBuffer()))))).toEqual(TINY_PNG)
+    await expect.poll(() => endedDrag.evaluate(proof => proof.ended)).toBe(true)
+    await page.getByRole('button', { name: 'Remove image tiny.png', exact: true }).click()
+    const retiredToken = await endedDrag.evaluate(proof => proof.token)
+    await input.evaluate((node, token) => {
+      const dataTransfer = new DataTransfer()
+      dataTransfer.setData('application/x-dsh-file', token)
+      node.dispatchEvent(new DragEvent('drop', { bubbles: true, dataTransfer }))
+    }, retiredToken)
+    expect(await draggedPreview.count()).toBe(0)
+    await endedDrag.dispose()
     await openFile('large.svg')
     await expect.poll(() => viewer.innerText()).toBe('Image')
     await viewer.click()

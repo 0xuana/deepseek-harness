@@ -28,7 +28,7 @@ kind: "package-reference"
 <a id="what-it-registers"></a>
 ## 注册了什么
 
-图片拖放回调通过图片入口的注入接口从 [ui-image-drag](../ui-image-drag/README.zh.md) 获取。
+图片拖放回调通过图片入口的注入接口从 [ui-file-drag](../ui-file-drag/README.zh.md) 获取。
 
 - **类型** —— `ctx.sidebarRightTabs.register(...)`，id 为 `@deepseek-ai/dsh-client-ui-sidebar-documentpreview`（这个实现在 tab 系统中的身份，也是其正文注册所用的键），kind `text`，匹配完整文件资源地址的 pattern，档位 `fallback`。`canOpen` 只接受 Session 地址，其中路径可为相对或绝对路径；不认领裸 `absolute` 地址。在 `extension` 或 `builtin` 档以更窄 pattern（比如 `*.png`）注册的类型接走那些地址；其他受支持文件落到这里。整个地址就是内容身份，所以不同目录下同名的两个文件、或同一路径在两个会话之下，是两个 tab；解码后的 basename 是 tab 标题，keyed slot `sidebar.right.pane.tab.title` 会在标题前放置按扩展名选择的 `FileTypeIcon`。
 - **正文** —— keyed slot `sidebar.right.pane.tab`，键为类型的 id。固定头部在可用时显示 Host 的绝对路径，否则显示请求路径；共享的 [`PathLabel`](../ui-primitives/README.zh.md#component-catalog) 弱化目录颜色，以左侧渐隐保留被裁剪路径的尾部字符，并在悬停时展示完整值。有多个受支持的渲染器时才显示下拉菜单。仅文本兼容的源文件提供纯文本选项；只有一个渲染器时不显示查看器控件。已知的二进制容器后缀没有注册渲染器时，在路径头部下方显示文件类型图标和不支持预览的说明，并且不会发起读取。两个 Session 作用域的 list 子 slot 在文件元数据报出 Host 路径后把当前文件交给其他插件，owner prop 为 `absolutePath`：`sidebar.right.tab.document.actions` 在每个显示头部的状态里渲染在头部自有控件之后；`sidebar.right.tab.document.unpreviewable` 渲染在不支持预览的空态里，以及可读但本预览无法渲染的文件（`not-text`、`too-large`）的空态里，占据原本放重试的位置；载体或未分类的读取失败仍保留重试，不存在或非普通文件的路径只给说明。两者已发布的占位者都是 [`ui-open-in-app`](../ui-open-in-app/README.zh.md)。仅当所选渲染器声明 `wrap: true` 时显示换行开关；图标表示点击后切换到的模式，该偏好按 tab 保存，初始开启。重新载入仍在此头部，不放入 Sidebar 的 tab 条。自动刷新默认开启；独立开关暂时隐藏，状态、文案、样式与切换逻辑保留。正文贴合格的每条边，各渲染器自行提供内容留白，并可拥有内部滚动区。这与 Files tab 右侧预留 2px 滚动条间距的布局有意不同：Preview 使用格的完整宽度，使贴边 HTML 与代码滚动区终止于格的边缘。
