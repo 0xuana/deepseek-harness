@@ -1,6 +1,6 @@
 # Session streaming tab
 
-Use this location for interactive, streaming work tied to the current Session. Inspect `conversation.view` and its registration props, and the relevant Session services. Register a package-prefixed list entry through `ctx.slots.inject('conversation.view', ...)`, with a localized label. This adds a tab beside Chat and Trajectory; preserve both existing tabs.
+Use this location for streaming output or interaction tied to the current Session, including live task logs. Inspect `conversation.view` and its registration props, and the relevant Session services. Register a package-prefixed list entry through `ctx.slots.inject('conversation.view', ...)`, with a localized label. This adds a tab beside Chat and Trajectory; preserve both existing tabs.
 
 Resolve the Session binding from the registration's `sessionId`. Keep conversation data and pending actions scoped to that Session; switching Sessions must not show another Session's data or send an action to it. Use the supported Session event/projection interfaces for streaming state, not DOM scraping or an unbounded transcript scan. Read `references/user-actions.md` from the `cordis-plugin-development` skill when the tab initiates model work.
 

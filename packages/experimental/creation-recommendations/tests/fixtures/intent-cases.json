@@ -125,5 +125,77 @@
     "id": "ordinary_coding",
     "prompt": "给我一个 TypeScript 函数，接收数字数组并返回平均值；空数组返回 null。只贴代码。",
     "expected": "Answer the coding request without personalized-pages, a plugin-catalog lookup or a creation card."
+  },
+  {
+    "id": "data_projects",
+    "prompt": "把这些已有数据做成当前会话右侧可反复查看、手动改状态的小页面：登录改造进行中，小陈负责；埋点修复待开始，小李负责；文档更新已完成，小王负责。先给方案，不要开始创建。",
+    "expected": "Short brief plus initialContent preserves all three project/owner/status triples; no generation before click."
+  },
+  {
+    "id": "data_budget",
+    "prompt": "我想要左侧打开的全局月度预算页，能手动改金额并显示余额。本月数据：收入12000元、房租3500元、餐饮1800元、通勤320元。用这些数值初始化，之后本地保存，先给方案不要做。",
+    "expected": "sidebar-left; initialContent preserves the four supplied amounts and units; no invented category or extra automation."
+  },
+  {
+    "id": "cancelled_status_question",
+    "setup": "Offer a counter, click Create, then Cancel before installation. Wait for the cancelled receipt.",
+    "prompt": "刚才那个计数器现在是什么状态？我需要做什么？",
+    "expected": "Report that background generation was cancelled before installation. Direct any retry to the existing card; no replacement proposal or automatic restart."
+  },
+  {
+    "id": "wish_research",
+    "prompt": "我已经整理了几份竞品资料，但每次都得翻聊天才能找到，太麻烦了。我想以后随时能打开看，也能自己补充链接。",
+    "expected": "One minimal empty editable global page card, manual link entry, no promised automatic import or request for old material."
+  },
+  {
+    "id": "solo_checklist",
+    "prompt": "把这次讨论的验收清单一直放在这个会话旁边，我做完一项勾一项：检查空列表提示、验证刷新后数据保留、检查深色模式文字可读。",
+    "expected": "One sidebar-right card; preserve three supplied items; no assignees, collaboration, execution or invented items."
+  },
+  {
+    "id": "solo_reading",
+    "prompt": "我想有个自己的读书记录，换个会话也能接着记。我自己填书名和一句读后感就够了。",
+    "expected": "One sidebar-left card; only title and short personal note with local persistence; no ratings, dates or collaboration."
+  },
+  {
+    "id": "streaming_logs",
+    "prompt": "我在当前会话跑一个本地任务时，想边看实时日志边继续聊天，日志是这个任务已经输出的内容，不要新执行命令。能给我一个这样的界面方案吗？",
+    "expected": "One page/session-tab card, preserve source and no-new-command constraint; no speculative API promises or actual execution."
+  },
+  {
+    "id": "report_dashboard",
+    "prompt": "我每周都会在这个会话更新活动数据。这三周报名人数分别为120、150、135，实际到场人数分别为90、105、108。帮我写个简短趋势报告，算一下到场率，说说变化。",
+    "expected": "Complete report first with rates 75%,70%,80%; optional reusable dashboard card with exact six values and units, no assignees or automatic data collection."
+  },
+  {
+    "id": "text_only_checklist",
+    "prompt": "帮我整理验收清单：空列表提示、刷新保留数据、深色模式文字可读。先给文字清单，不要做页面也不要推荐创建。",
+    "expected": "Normal text response, no card or creation."
+  },
+  {
+    "id": "quoted_wish",
+    "prompt": "把这句话译成英文：“我想做一个所有会话都能打开的读书记录页面。”只要译文。",
+    "expected": "Translation only; no personalized-pages skill or card."
+  },
+  {
+    "id": "oneoff_report",
+    "prompt": "下面这三周报名人数是120、150、135，实际到场人数是90、105、108。帮我写一段100字左右的总结，我看完就存进报告，这次不用做别的。",
+    "expected": "One-off report: normal answer, no page card."
+  },
+  {
+    "id": "prefill_missing",
+    "prompt": "把我昨天另一个会话里整理的所有竞品资料，完整预填到一个全局资料页。每条原链接和备注都必须保留；不要给空页面。",
+    "expected": "Clarify missing source content, no invented data or empty-page card."
+  },
+  {
+    "id": "implicit_training",
+    "prompt": "我每周都记跑步训练，可记录散在不同聊天里，很难回头比较。想有个一直能打开的地方，我自己填每次的距离和用时。",
+    "expected": "Recognize implicit recurring need; one global manual-entry record, no invented workout data, automation or extra required fields."
+  },
+  {
+    "id": "unstarted_card_expiry",
+    "setup": "Offer a page but do not click Create. Send a follow-up user message.",
+    "prompt": "刚才的方案改成只在当前会话使用。",
+    "expected": "Expire the unstarted old card, refuse stale Create calls and offer a fresh plan when needed. Refresh or background context alone never expires a card; started/cancelled runs retain retry."
   }
 ]

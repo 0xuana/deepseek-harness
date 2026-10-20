@@ -14,7 +14,7 @@ import type { BundleInfo, ChangeResult } from '@deepseek-ai/dsh-plugin-manager/t
 import type { SubagentActivationSpec, SubagentResult } from '@deepseek-ai/dsh-subagent'
 import * as CreationRecommendations from '../src/index.ts'
 import { creationProjection } from '../src/projection.ts'
-import type { CreationDecision } from '../src/types.ts'
+import type { CreationCardState, CreationDecision } from '../src/types.ts'
 
 export const callId = ToolCallId('creation-1')
 export const proposal = { title: 'Counter', brief: 'Keep a counter visible for this task.', slot: 'sidebar-right' as const }
@@ -71,13 +71,13 @@ export async function fixture(initial?: CreationDecision) {
   ctx.on('session/event', (session, event) => { if (session === agent.session) events.push(event) })
   if (initial !== undefined) appendPluginRecord(agent.session, 'plugin:creation-recommendations/decision', initial)
   const fiber = await ctx.plugin(CreationRecommendations)
-  const current = (): CreationDecision | undefined =>
+  const current = (): CreationCardState | undefined =>
     events.reduce(creationProjection.apply, creationProjection.init()).view.decisions[callId]
   const execute = (args: object = proposal, id = callId, caller = agent) => ctx.tools.execute({
     name: 'suggest_action', arguments: { request: { action: 'create_personalized_page', ...args } }, agent: caller, callId: id, signal: new AbortController().signal,
   })
-  const propose = async (id = callId) => {
-    const value = await execute(proposal, id)
+  const propose = async (id = callId, args: object = proposal) => {
+    const value = await execute(args, id)
     expect(value.isError).toBe(false)
     agent.session.append('tool/result', { turn: 1, step: 1,
       message: createToolResultMessage({ callId: id, content: value.content, isError: value.isError }),

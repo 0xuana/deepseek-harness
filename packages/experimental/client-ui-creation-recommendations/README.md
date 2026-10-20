@@ -29,6 +29,8 @@ Enable the [Personalized pages bundle](../creation-recommendations/README.md). T
 
 ### Outcomes and recovery
 
+Sending another user message expires an unstarted card. It stays in history with an Expired label and no creation or location controls. Started tasks retain their progress and retry actions. The Host projection owns this state, so reload does not reactivate a card.
+
 Creation, installation, retention and removal receipts come from the Session projection. The card restores them after reconnecting. A lost action reply shows an actionable error; retry uses the Host’s recorded state. Pending requests disable repeated actions. During generation, Cancel stops the child and waits for cleanup before retry. Accepted installations finish without cancellation. The information disclosure contains the source directory and explains that Undo keeps those files.
 
 Write your own reveals a placement field, limited to 1,000 characters; blank input cannot start creation. Choosing a preset ignores that custom text. Accepted requests persist it with the receipt for reconnect and retry, and Creator receives it with the full brief. Editing the draft, opening the menu and reading the cost notice make no model request. Dismissing the notice or choosing Create/Not now acknowledges it in browser-local storage; a new browser or cleared/unavailable storage can show it again. Historical settled cards keep the notice collapsed.
@@ -72,7 +74,7 @@ Rendering and changing the location do not affect the model cache.
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- The brief is model-authored and must include the context the Creator needs.
+- The displayed brief is model-authored. Necessary existing data travels separately in the proposal’s optional `initialContent`.
 - Historical receipts do not continuously track later manual changes on the Plugins page.
 
 <a id="dev-note"></a>

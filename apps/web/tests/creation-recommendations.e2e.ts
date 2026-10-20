@@ -111,6 +111,13 @@ describe('creation recommendation after an explicit wish', () => {
     expect(await card.getByRole('button', { name: 'View full plan', exact: true }).isVisible()).toBe(true)
     expect((await scaffold.ctx.pluginManager.listBundles()).some(bundle => bundle.name.startsWith('@dsh-local/view-'))).toBe(false)
     await compareOrRefreshGolden(join(directory, 'dismissed.expected.md'), await captureStableAria(page, '[data-creation-recommendation]', scaffold.workspaceCwd), scaffold.mode)
+    const statusSettled = scaffold.whenTurnSettled()
+    await input.fill(fixtureUserPrompts(await readFile(fixture, 'utf8'))[1]!)
+    await input.press('Enter')
+    await statusSettled
+    await page.getByText('The counter proposal was dismissed. Creation never started.', { exact: true }).waitFor()
+    expect(await card.count()).toBe(1)
+    expect(await card.getByRole('button', { name: 'Create', exact: true }).count()).toBe(0)
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
     if (scaffold.mode === 'replay') await assertFixtureInventory(directory, [

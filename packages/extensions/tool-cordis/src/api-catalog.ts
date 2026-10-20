@@ -5452,7 +5452,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CreationActionResult',
-    declaration: 'export type CreationActionResult = {\n    readonly status: \'accepted\';\n} | {\n    readonly status: \'settled\';\n    readonly decision: CreationDecision;\n} | {\n    readonly status: \'refused\';\n    readonly reason: \'unknown\' | \'access-denied\' | \'not-live-root\' | \'closing\' | \'unavailable\' | \'invalid-location\';\n} | {\n    readonly status: \'unconfirmed\';\n    readonly reason: \'closing\';\n};',
+    declaration: 'export type CreationActionResult = {\n    readonly status: \'accepted\';\n} | {\n    readonly status: \'settled\';\n    readonly decision: CreationCardState;\n} | {\n    readonly status: \'refused\';\n    readonly reason: \'unknown\' | \'access-denied\' | \'not-live-root\' | \'closing\' | \'unavailable\' | \'invalid-location\';\n} | {\n    readonly status: \'unconfirmed\';\n    readonly reason: \'closing\';\n};',
+  },
+  {
+    name: 'CreationCardState',
+    declaration: 'export type CreationCardState = CreationDecision | (Omit<CreationDecision, \'phase\'> & {\n    readonly phase: \'expired\';\n});',
   },
   {
     name: 'CreationDecision',

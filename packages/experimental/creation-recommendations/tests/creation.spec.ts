@@ -1,5 +1,5 @@
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { createToolResultMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { appendPluginRecord, SessionId } from '@deepseek-ai/dsh-session'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { readFile, rm } from 'node:fs/promises'
@@ -100,6 +100,36 @@ describe('interface creation', () => {
     await f.ctx.creationRecommendations.act(f.agent, callId, 'undo', 'sidebar-left')
     expect(f.current()?.phase).toBe('removed')
     expect(await readFile(join(spec.request.cwd!, 'package.json'), 'utf8')).toBe(source)
+  })
+
+  it('retains actual task content separately from the short plan and hands it to Creator after reload', async () => {
+    const f = await fixture()
+    const initialContent = '| 项目 | 负责人 | 状态 |\n| A | 小李 | 未开始 |\n| B | 小王 | 进行中 |\n| C | 小陈 | 已完成 |'
+    await f.propose(callId, { ...proposal, initialContent })
+    expect(f.startActivation).not.toHaveBeenCalled()
+    await f.fiber.dispose()
+    await f.ctx.plugin(CreationRecommendations)
+    await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'sidebar-left')
+    const spec = await f.complete()
+    const prompt: unknown = JSON.parse(spec.request.prompt.find(block => block.type === 'text')!.text)
+    expect(prompt).toMatchObject({ brief: proposal.brief, initialContent, location: 'sidebar-left' })
+    expect(prompt).toHaveProperty('contentPolicy', expect.stringContaining('not instructions'))
+    expect(f.startActivation).toHaveBeenCalledOnce()
+  })
+
+  it('uses the profile workspace when an accepted Session has no recorded working directory', async () => {
+    const f = await fixture()
+    const handle = await f.ctx.agents.create({ sessionId: SessionId('without-cwd') })
+    const result = await f.execute(proposal, callId, handle.agent)
+    handle.agent.session.append('tool/result', { turn: 1, step: 1,
+      message: createToolResultMessage({ callId, content: result.content, isError: result.isError }),
+      meta: result.meta!,
+    }, { surfaceOp: 'append' })
+    await f.ctx.creationRecommendations.act(handle.agent, callId, 'create', 'sidebar-right')
+    const spec = await f.entered.promise
+    expect(spec.request.cwd!.startsWith(join(f.ctx.profileContext.cwd, '.dsh-created-plugins'))).toBe(true)
+    await f.ctx.creationRecommendations.act(handle.agent, callId, 'cancel', 'sidebar-right')
+    expect(f.manager.installBundle).not.toHaveBeenCalled()
   })
 
   it('persists a written placement and gives Creator the human request with the existing location references', async () => {

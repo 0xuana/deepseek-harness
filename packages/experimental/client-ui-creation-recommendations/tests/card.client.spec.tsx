@@ -4,14 +4,14 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, expect, it, vi } from 'vitest'
 import { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import { SessionSeq } from '@deepseek-ai/dsh-session/types'
-import type { CreationDecision } from '@deepseek-ai/dsh-experimental-creation-recommendations/types'
+import type { CreationCardState } from '@deepseek-ai/dsh-experimental-creation-recommendations/types'
 import { RecommendationCard, RecommendationTail } from '../src/client/Card.tsx'
 import { en, zh, type RecommendationKey } from '../src/client/locales.ts'
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 type Props = ComponentProps<typeof RecommendationCard>
 const callId = ToolCallId('creation-1')
-function props(decision?: CreationDecision, chinese = true): Props {
+function props(decision?: CreationCardState, chinese = true): Props {
   return { recommendation: { callId, title: 'Counter', brief: 'Keep my task count visible.', slot: 'sidebar-right' },
     useProjection: () => ({ decisions: decision === undefined ? {} : { [callId]: decision } }),
     act: vi.fn(async () => ({ status: 'accepted' })),
@@ -120,7 +120,7 @@ it('disables pending decisions and supports dismissal without starting a child',
   await act(async () => { pending.resolve({ status: 'settled', decision: { callId, phase: 'dismissed', slot: 'sidebar-right' } }) })
 })
 
-it.each(['installing', 'dismissed', 'removed'] as const)('restores %s without repeat actions', (phase) => {
+it.each(['installing', 'dismissed', 'removed', 'expired'] as const)('restores %s without repeat actions', (phase) => {
   render(<RecommendationCard {...props({ callId, phase, slot: 'sidebar-left' }, false)} />)
   expect(screen.getByRole('status').textContent).toBe(en[phase])
   expect(screen.getAllByRole('button')).toEqual([screen.getByRole('button', { name: en.creationInfo })])

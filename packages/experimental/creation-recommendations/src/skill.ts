@@ -9,7 +9,7 @@ import { BUNDLED_SKILL_RANK, type SkillCandidate } from '@deepseek-ai/dsh-skill'
 export function registerCreationSkill(ctx: Context): void {
   const candidate: SkillCandidate = {
     name: 'personalized-pages',
-    description: 'Plan a reusable page or small interactive tool when the user wants one, including requests to reuse an existing capability if possible. Also consider clearly reusable results already obtained in the current task. The included catalog is only for page-plan duplicate checks. Questions only about existing features, ordinary coding, one-off answers, quoted wishes, discussion-only requests and declined recommendations do not qualify.',
+    description: 'Plan an optional reusable page or small interactive tool. Use for explicit interface wishes, clear recurring viewing/editing difficulties, and task results the user intends to revisit, update or interact with—even without saying page. Check existing capabilities before proposing a new page. Existing-feature questions alone, ordinary coding, one-off answers, quoted wishes, discussion-only requests and declined recommendations do not qualify.',
     provider: 'dsh-personalized-pages', source: 'bundled', rank: BUNDLED_SKILL_RANK, locator: null,
     invocation: { modelInvocable: true, userInvocable: false },
   }

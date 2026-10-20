@@ -18,6 +18,9 @@ it('folds native and PTC metadata, ignores failed or malformed proposals, and re
       meta: { creationRecommendation: proposal } } }
   const card = { ...native, data: { ...native.data, meta: { actionCard: { action: 'create_personalized_page', callId, data: proposal } } } }
   expect(creationOf(card)).toEqual(proposal)
+  expect(creationOf({ ...card, data: { ...card.data,
+    meta: { actionCard: { action: 'create_personalized_page', callId, data: { ...proposal, initialContent: 'A: 小李，未开始' } } },
+  } })).toEqual({ ...proposal, initialContent: 'A: 小李，未开始' })
   expect(creationOf({ ...ptc, data: { ...ptc.data, meta: card.data.meta } })).toEqual(proposal)
   expect(creationProjection.apply(empty, card).proposals[callId]).toEqual(proposal)
   const other = { ...card, data: { ...card.data, meta: { actionCard: { action: 'other', callId: 'other-card', data: {} } } } }

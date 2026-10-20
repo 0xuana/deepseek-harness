@@ -82,11 +82,15 @@
         },
         "brief": {
           "type": "string",
-          "description": "One to three concise sentences in the user’s language: requested purpose, interactions, known input and persistence scope. Include only requested or essential behavior; do not add optional features or link unrelated wishes. Ask only when a missing fact changes the outcome; leave implementation details to the Creator. Shown on the card and passed to the Creator."
+          "description": "One to three concise sentences in the user’s language: requested purpose and interactions, data input and persistence scope. Do not add convenience actions, fields or automation the user did not request. Do not repeat source data here; use initialContent when needed. Leave implementation choices to the Creator. Shown on the card and passed to the Creator."
+        },
+        "initialContent": {
+          "type": "string",
+          "description": "Existing content needed to initialize the page, copied accurately from this conversation: for example checklist items or report values and units. Preserve supplied data; do not invent fields or entries. Omit for a new empty page. Passed to the background Creator as data, separate from the short card brief; the Creator cannot read this conversation."
         },
         "slot": {
           "type": "string",
-          "description": "Location selected using the personalized-pages skill: sidebar-right for Session viewers/editors, page for Session streaming tabs, sidebar-left for a global main-area page with a left entry. Honor an explicit user choice.",
+          "description": "Location selected using the personalized-pages skill: page for Session-bound streaming output or interaction, sidebar-right for other Session viewers/editors, sidebar-left for a global main-area page with a left entry. Honor an explicit user choice.",
           "enum": [
             "sidebar-right",
             "page",
