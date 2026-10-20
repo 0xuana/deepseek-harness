@@ -412,8 +412,8 @@ function EnableSwitch({ pkg, title, t, busy, onSetEnabled }: {
 }): ReactNode {
   return (
     <span className={css.bundleToggle}>
-      <span className={css.toggleProgress} role={busy ? 'status' : undefined}
-        aria-label={busy ? t('applyingChange', { name: title }) : undefined}>
+      <span className={css.toggleProgress} role="status">
+        <span className={css.progressAnnouncement}>{busy ? t('applyingChange', { name: title }) : ''}</span>
         {busy ? <StateDot state="ongoing" /> : null}
       </span>
       <Switch
