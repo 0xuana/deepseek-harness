@@ -156,6 +156,20 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   expect(events.every(event => ['permissionStatus', 'requestPermission', 'openPermissionSettings', 'applicationIcons', 'getApp'].includes(event.method))).toBe(true)
   const trace = await page.evaluateHandle(() => {
     const errors: string[] = []
+    const layouts: { height: number; sections: number[]; groups: number[] }[] = []
+    let frame = 0
+    const measure = () => {
+      const settings = document.querySelector('[data-cua-settings]')
+      if (settings) {
+        const height = settings.getBoundingClientRect().height
+        if (layouts.at(-1)?.height !== height) layouts.push({ height,
+          sections: [...settings.querySelectorAll('section')].map(node => node.getBoundingClientRect().height),
+          groups: [...settings.querySelectorAll('[role="group"]')].map(node => node.getBoundingClientRect().height),
+        })
+      }
+      frame = requestAnimationFrame(measure)
+    }
+    measure()
     const observer = new MutationObserver(() => {
       for (const node of document.querySelectorAll('[data-cua-settings] [role="alert"]')) {
         const text = node.textContent?.trim()
@@ -163,7 +177,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
       }
     })
     observer.observe(document.body, { childList: true, subtree: true, characterData: true })
-    return { errors, stop: () => { observer.disconnect() } }
+    return { errors, layouts, stop: () => { observer.disconnect(); cancelAnimationFrame(frame) } }
   })
   try {
     const toggle = page.locator('[data-plugin-panel]').getByRole('switch', { name: 'Enable Computer Use', exact: true })
@@ -178,6 +192,10 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
       await expect.poll(() => panel.getAttribute('aria-busy')).toBe('false')
       expect(await trace.evaluate(value => value.errors)).toEqual([])
     }
+    const layouts = await trace.evaluate(value => value.layouts)
+    expect(layouts.length).toBeGreaterThan(0)
+    const heights = layouts.map(layout => layout.height)
+    expect(Math.max(...heights) - Math.min(...heights), JSON.stringify(layouts)).toBeLessThanOrEqual(1)
   } finally {
     await trace.evaluate((value) => { value.stop() })
     await trace.dispose()

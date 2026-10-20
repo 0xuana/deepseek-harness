@@ -165,9 +165,10 @@ export function PermissionPanel(props: PermissionPanelProps) {
             loading={loading} busy={busy} request={props.request} openSettings={props.openSettings} t={t} />
         </div>)}
       </div>
-      {observed !== null && (!observed.accessibility || !observed.screenRecording) && <p>
-        {t(application === undefined ? 'permissionHintUnknown' : 'permissionHint')}
-      </p>}
+      <p className={css.permissionHint}>
+        {observed !== null && (!observed.accessibility || !observed.screenRecording)
+          ? t(application === undefined ? 'permissionHintUnknown' : 'permissionHint') : null}
+      </p>
     </section>
     <section className={css.panel} aria-label={t('applicationsTitle')}>
       <h3>{t('applicationsTitle')}</h3>
