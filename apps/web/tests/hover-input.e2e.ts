@@ -6,6 +6,46 @@ import { launchWebScaffold, seedSession, watchConsole } from './scaffold.ts'
 import { createChatScrollFixture } from './chat-scroll-fixture.ts'
 import { connectFreshWorkspace, saveFailureShot } from './support.ts'
 
+it.each([false, true])('shows the new-session shortcut on keyboard focus with touch=%s', async (hasTouch) => {
+  const scaffold = await launchWebScaffold()
+  onTestFinished(() => scaffold.close())
+  const browser = await chromium.launch()
+  onTestFinished(() => browser.close())
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, hasTouch, locale: 'en-US' })
+  await context.addInitScript(() => { Object.defineProperty(navigator, 'platform', { value: 'MacIntel' }) })
+  const page = await context.newPage()
+  onTestFailed(() => saveFailureShot(page, `new-session-focus-${String(hasTouch)}`))
+  await page.goto(scaffold.authenticatedUrl)
+  const button = page.getByRole('button', { name: 'New session', exact: true }).filter({ has: page.locator('kbd') })
+  await button.waitFor()
+  const shortcut = button.locator('[class*="newSessionShortcut"]')
+  const mask = button.locator('[class*="newSessionLabelMask"]')
+  const opacity = () => shortcut.evaluate(element => getComputedStyle(element).opacity)
+  const maskImage = () => mask.evaluate(element => getComputedStyle(element).maskImage)
+  expect(await page.evaluate(() => matchMedia('(hover: none)').matches)).toBe(hasTouch)
+  expect(await opacity()).toBe('0')
+  expect(await maskImage()).toBe('none')
+  await button.focus()
+  await page.keyboard.press('Shift+Tab')
+  await page.keyboard.press('Tab')
+  expect(await button.evaluate(element => element === document.activeElement && element.matches(':focus-visible'))).toBe(true)
+  expect(await opacity()).toBe('1')
+  expect(await maskImage()).not.toBe('none')
+  await page.keyboard.press('Tab')
+  expect(await opacity()).toBe('0')
+  expect(await maskImage()).toBe('none')
+  if (hasTouch) {
+    await button.tap()
+    expect(await button.evaluate(element => element.matches(':focus-visible'))).toBe(false)
+    expect(await opacity()).toBe('0')
+    expect(await maskImage()).toBe('none')
+  } else {
+    await button.hover()
+    expect(await opacity()).toBe('1')
+    expect(await maskImage()).not.toBe('none')
+  }
+})
+
 it.each([false, true])('keeps workspace and archived search actions reachable with touch=%s', async (hasTouch) => {
   const scaffold = await launchWebScaffold()
   onTestFinished(() => scaffold.close())
