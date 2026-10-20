@@ -1085,6 +1085,24 @@ describe('clearing inactive tasks', () => {
     expect(document.activeElement).toBe(rebuilt)
   })
 
+  it('moves focus to the heading when a late readback removes the trigger', async () => {
+    const pending = Promise.withResolvers<undefined>()
+    const onClearEnded = vi.fn(() => pending.promise)
+    const h = mount({ records: [at, endedTask] }, en, { onClearEnded })
+    const trigger = screen.getByRole('button', { name: en['clear.action'] })
+    trigger.focus()
+    fireEvent.click(trigger)
+    fireEvent.click(screen.getByRole('button', { name: en['clear.confirm'] }))
+    // The removal settles while the catalog still lists the ended row: the
+    // dialog closes and focus returns to the trigger.
+    await act(async () => { pending.resolve(undefined) })
+    expect(document.activeElement).toBe(trigger)
+    // A readback superseded by `schedule/changed` publishes afterwards and takes
+    // the trigger with its row; focus must not stay on the document body.
+    act(() => { h.update({ records: [at] }) })
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 }))
+  })
+
   it('closes only the confirmation on Escape while a task detail is open', () => {
     mount({ records: [at, endedTask] })
     fireEvent.click(screen.getByRole('button', { name: 'Review release' }))

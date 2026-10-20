@@ -70,6 +70,9 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
   // Set when the confirmation opens: its settled removal can hide the trigger
   // before the Modal returns focus, and so can another client's cleanup.
   const clearFocusPending = useRef(false)
+  // Set when the removal settles: a readback superseded by `schedule/changed`
+  // can publish its rows after the dialog closed, removing the trigger then.
+  const clearSettled = useRef(false)
   const confirming = records.find(record => record.id === confirmId)
   // The bulk action's target and count come from the complete catalog, not from
   // the filtered rows: it removes every ended task, whatever the view shows.
@@ -124,13 +127,26 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
   // The Modal restores focus to the element it captured when it opened; the
   // trigger can be removed or rebuilt while the confirmation is open, so the
   // page points focus at the current control, or the heading when it is gone.
+  // A settled removal whose readback lands later unmounts the trigger after the
+  // dialog closed, which drops focus to the document body; that handoff is
+  // caught by the same effect watching the ended count.
   useEffect(() => {
-    if (clearConfirm || !clearFocusPending.current) return
-    clearFocusPending.current = false
-    const trigger = clearTriggerRef.current
-    const target = trigger?.isConnected === true ? trigger : headingRef.current
-    target?.focus()
-  }, [clearConfirm])
+    if (clearConfirm) return
+    if (clearFocusPending.current) {
+      clearFocusPending.current = false
+      const trigger = clearTriggerRef.current
+      if (trigger?.isConnected === true) {
+        trigger.focus()
+        return
+      }
+      clearSettled.current = false
+      headingRef.current?.focus()
+      return
+    }
+    if (!clearSettled.current || endedCount > 0 || document.activeElement !== document.body) return
+    clearSettled.current = false
+    headingRef.current?.focus()
+  }, [clearConfirm, endedCount])
 
   const confirmClearEnded = (): void => {
     // The confirmation button stays focusable while the removal runs, so a
@@ -138,6 +154,7 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
     if (clearing) return
     setClearing(true)
     void onClearEnded().finally(() => {
+      clearSettled.current = true
       setClearing(false)
       setClearConfirm(false)
     })
