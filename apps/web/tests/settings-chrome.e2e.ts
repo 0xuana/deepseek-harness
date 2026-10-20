@@ -336,8 +336,9 @@ describe('web e2e: settings modal and General preferences', () => {
     const last = cells.last()
     expect(await last.evaluate(el => el === document.activeElement)).toBe(true)
     const lastBox = await last.boundingBox()
-    expect(lastBox!.x).toBeGreaterThanOrEqual(0)
-    expect(lastBox!.x + lastBox!.width).toBeLessThanOrEqual(390)
+    // Scroll offsets can round while glyph widths remain fractional.
+    expect(Math.round(lastBox!.x)).toBeGreaterThanOrEqual(0)
+    expect(Math.round(lastBox!.x + lastBox!.width)).toBeLessThanOrEqual(390)
     await last.click()
     await expect.poll(() => last.getAttribute('aria-current')).toBe('true')
     await phone.keyboard.press('Escape')
