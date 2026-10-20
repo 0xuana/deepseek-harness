@@ -469,7 +469,7 @@ describe('PluginManagerPage', () => {
     expect(document.querySelector('[data-detail-document]')).toBeNull()
     // A read the controller forgot, after a profile change, starts again.
     b.setDetails({})
-    expect(b.actions.loadDetail).toHaveBeenCalledTimes(2)
+    expect(b.actions.loadDetail).toHaveBeenLastCalledWith('dsh-better-sidebar', '0.16.0', 'en', false)
   })
 
   it('says where a bundle comes from: the spec that installs it, or built in, with its version', () => {
