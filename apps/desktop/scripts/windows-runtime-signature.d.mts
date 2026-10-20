@@ -41,7 +41,7 @@ export interface WindowsCodeSigningOptions {
 /**
  * Enumerate PE files by content without following links.
  * @param root Materialized directory to scan.
- * @returns Sorted PE paths; rejects malformed Windows executables and links.
+ * @returns Sorted PE paths; eight bounded readers reject links or malformed executables and drain open handles before failure.
  */
 export function windowsRuntimeCode(root: string): Promise<string[]>
 

@@ -90,6 +90,8 @@ Windows 打包命令通过 `DESKTOP_PACKAGING_RECORD` 输出 `.desktop-build/pac
 
 缓存命中的复制、摘要和逐文件候选信任检查使用 `.env.windows` 中的 `DSH_DESKTOP_WINDOWS_SIGNATURE_CACHE_CONCURRENCY` 个工作任务（默认 `4`，整数 `1`–`8`）。所有恢复完成后，有界 PowerShell 批次逐项验证恢复目标的信任、时间戳和证书，通过后未命中项才进入串行硬件签名。恢复失败会停止派发新的恢复任务并等待在途工作结束；目标验签失败会等待当前检查批次结束并阻止硬件签名。运行时 smoke 检查和最终完整性校验仍须执行。
 
+PE 发现会读取每个普通文件的头部，同时最多打开八个文件，拒绝链接和损坏的 Windows 可执行文件，并在报告失败前等待在途读取和关闭结束。打包将 `windows:enumerate-code` 与 `windows:inspect-signatures` 记录为签名和产物验证的嵌套阶段；其耗时已包含在外层阶段中。
+
 Windows 打包从 `.env.windows` 或所选预设读取 `DSH_DESKTOP_WINDOWS_PACK_CONCURRENCY`：必须为正整数，默认 `4`。Windows 使用有界 worker 批量打包第一方和 vendor tarball，随后校验每个产物并记录发布顺序。设为 `1` 时串行打包；独立的 `release:pack` 默认使用 `1`。
 
 每个运行时阶段向标准输出及打包日志写入 `SIGNATURE_CACHE_SUMMARY`，包含实际目录、策略标识、命中及未命中数、新发布及保留项数、签名请求数、省去的签名请求数和验证失败数。计时区分签名、恢复文件和新签名文件的信任验证及恢复；恢复耗时包含其信任检查和暂存清理。这些统计不包含预检、最终产物签名及外层运行时验签。阶段锁事件单独记录等待时间。 并发计时累加逐文件工作耗时，不代表阶段墙钟时间。

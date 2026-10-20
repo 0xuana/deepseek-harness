@@ -6,6 +6,7 @@ import { promisify } from 'node:util'
 import { scrubWindowsSigningEnvironment } from './windows-sign.mjs'
 import { recordPackagingEvent } from './packaging-run.mjs'
 import { inspectSignaturesBatched } from './windows-signature-batch.mjs'
+import { packagingStep } from './packaging-step.mjs'
 
 /**
  * Read Windows trust, timestamp and signer identity using the engine's bundled modules, without accessing the private key.
@@ -52,17 +53,32 @@ export async function preserveWindowsRuntimeSignature(path, options) {
 /**
  * Enumerate Windows code without following links or treating foreign .node files as PE binaries.
  * @param {string} root - Owned, materialized runtime directory.
- * @returns {Promise<string[]>} Sorted real PE files; rejects links and malformed Windows executable files.
+ * @returns {Promise<string[]>} Sorted real PE files; eight bounded readers reject links or malformed executables and drain open handles before failure.
  */
 export async function windowsRuntimeCode(root) {
-  const rootStat = await lstat(root)
-  if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) throw new Error('Windows code: expected a real directory')
+  return packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'windows:enumerate-code', async () => {
+    const candidates = []
+    async function collect(directory) {
+      const rootStat = await lstat(directory)
+      if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) throw new Error('Windows code: expected a real directory')
+      for (const entry of await readdir(directory, { withFileTypes: true })) {
+        const path = join(directory, entry.name)
+        if (entry.isSymbolicLink()) throw new Error(`Windows code: directory links are not signable: ${path}`)
+        if (entry.isDirectory()) await collect(path)
+        else if (entry.isFile()) candidates.push(path)
+      }
+    }
+    await collect(root)
+    return inspectPortableExecutables(candidates)
+  })
+}
+
+/** Close every active file before returning a sorted inventory or the first inspection failure. */
+async function inspectPortableExecutables(candidates) {
   const files = []
-  for (const entry of await readdir(root, { withFileTypes: true })) {
-    const path = join(root, entry.name)
-    if (entry.isSymbolicLink()) throw new Error(`Windows code: directory links are not signable: ${path}`)
-    if (entry.isDirectory()) { files.push(...await windowsRuntimeCode(path)); continue }
-    if (!entry.isFile()) continue
+  let next = 0
+  let failure
+  async function inspect(path) {
     const file = await open(path, 'r')
     let portableExecutable = false
     let windowsCandidate = false
@@ -80,11 +96,26 @@ export async function windowsRuntimeCode(root) {
     if (portableExecutable) files.push(path)
     else if (windowsCandidate || ['.exe', '.dll', '.pyd'].includes(extname(path).toLowerCase())) throw new Error(`Windows code: invalid PE file: ${path}`)
   }
+  async function worker() {
+    while (failure === undefined && next < candidates.length) {
+      const path = candidates[next++]
+      try { await inspect(path) }
+      catch (error) { failure ??= { error } }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(8, candidates.length) }, worker))
+  if (failure !== undefined) throw failure.error
   return files.sort()
 }
 
 /** Drain each public-key verification batch before signing or reporting a failure. */
 async function inspectWindowsCode(files, inspect) {
+  return packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'windows:inspect-signatures',
+    () => inspectWindowsCodeBatch(files, inspect))
+}
+
+/** Complete bounded inspections without allowing callers to proceed past an active failed batch. */
+async function inspectWindowsCodeBatch(files, inspect) {
   if (inspect === inspectWindowsRuntimeSignature) return inspectSignaturesBatched(files)
   const signatures = []
   for (let offset = 0; offset < files.length; offset += 4) {
