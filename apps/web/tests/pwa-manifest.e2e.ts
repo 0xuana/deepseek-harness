@@ -2,18 +2,47 @@ import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { chromium } from 'playwright'
-import { pngSize } from './png-size.ts'
-import { ICON_OUTPUT_DIRECTORY, TILE_SOURCE, tileDocument } from '../scripts/render-app-icons.ts'
+import { chromium, type Page } from 'playwright'
+import {
+  APP_ICON_VARIANTS, ICON_OUTPUT_DIRECTORY, MASKABLE_ARTWORK_SCALE, MASKABLE_SAFE_RADIUS_RATIO,
+  TILE_SOURCE, renderAppIcons, tileDocument,
+} from '../scripts/render-app-icons.ts'
 
 const DIST_ROOT = fileURLToPath(new URL('../dist', import.meta.url))
 
-/** One install icon the manifest declares. */
-interface ManifestIcon {
-  readonly src: string
-  readonly sizes: string
-  readonly type: string
-  readonly purpose: string
+async function pixels(page: Page, url: string, size: number) {
+  return page.evaluate(async ({ url, size }) => {
+    const image = new Image()
+    image.src = url
+    await image.decode()
+    const canvas = document.createElement('canvas')
+    canvas.width = canvas.height = size
+    const context = canvas.getContext('2d')!
+    context.drawImage(image, 0, 0, size, size)
+    const { data } = context.getImageData(0, 0, size, size)
+    let radius = 0
+    let ink = 0
+    for (let y = 0; y < size; y += 1) {
+      for (let x = 0; x < size; x += 1) {
+        const at = (y * size + x) * 4
+        if (data[at + 3] === 0 || data[at]! + data[at + 1]! + data[at + 2]! >= 384) continue
+        ink += 1
+        radius = Math.max(radius, Math.hypot(x - (size - 1) / 2, y - (size - 1) / 2))
+      }
+    }
+    return {
+      width: image.naturalWidth, height: image.naturalHeight, radius, ink,
+      corners: [0, size - 1, (size - 1) * size, size * size - 1].map(index => data[index * 4 + 3]),
+    }
+  }, { url, size })
+}
+
+function pngUrl(png: Buffer): string {
+  return `data:image/png;base64,${png.toString('base64')}`
+}
+
+function svgUrl(svg: string): string {
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
 }
 
 it('ships install metadata with the built web application', async () => {
@@ -50,19 +79,33 @@ it('ships install metadata with the built web application', async () => {
   })
 })
 
-it('ships every declared install icon as a raster of its declared size', async () => {
-  // A launcher has no fallback: an icon the manifest names but the build does
-  // not carry is an install that silently shows nothing.
-  const manifest = JSON.parse(
-    await readFile(join(DIST_ROOT, 'manifest.webmanifest'), 'utf8'),
-  ) as { icons: ManifestIcon[] }
-  expect(manifest.icons).not.toHaveLength(0)
-  for (const icon of manifest.icons) {
-    const [edge] = icon.sizes.split('x')
-    expect(pngSize(await readFile(join(DIST_ROOT, icon.src))))
-      .toEqual([Number(edge), Number(edge)])
-  }
-  expect(pngSize(await readFile(join(DIST_ROOT, 'apple-touch-icon.png')))).toEqual([180, 180])
+it('decodes every generated and shipped icon with its full artwork and opaque corners', async () => {
+  const browser = await chromium.launch({ headless: true })
+  try {
+    const page = await browser.newPage()
+    const source = await readFile(TILE_SOURCE, 'utf8')
+    const generated = await renderAppIcons(source)
+    const manifest = JSON.parse(await readFile(join(DIST_ROOT, 'manifest.webmanifest'), 'utf8')) as {
+      icons: readonly { src: string; sizes: string }[]
+    }
+    const declared = [...manifest.icons, { src: 'apple-touch-icon.png', sizes: '180x180' }]
+    expect(generated.map(({ variant }) => [variant.file, `${variant.size}x${variant.size}`]))
+      .toEqual(declared.map(icon => [icon.src, icon.sizes]))
+    for (const { variant, png } of generated) {
+      const reference = await pixels(page, svgUrl(tileDocument(source)), variant.size)
+      expect(reference.ink).toBeGreaterThan(0)
+      const scale = variant.kind === 'maskable' ? MASKABLE_ARTWORK_SCALE : 1
+      for (const bytes of [png, await readFile(join(DIST_ROOT, variant.file))]) {
+        const image = await pixels(page, pngUrl(bytes), variant.size)
+        expect([image.width, image.height], variant.file).toEqual([variant.size, variant.size])
+        expect(image.corners, variant.file).toEqual([255, 255, 255, 255])
+        expect(image.ink, variant.file).toBeGreaterThan(0)
+        // Two pixels allow rasterizer and downsampling differences without
+        // accepting missing or undersized artwork in the published PNG.
+        expect(Math.abs(image.radius - reference.radius * scale), variant.file).toBeLessThan(2)
+      }
+    }
+  } finally { await browser.close() }
 })
 
 it('ships fixed-color favicons selected by document media queries', async () => {
@@ -122,30 +165,13 @@ it('keeps the shipped maskable artwork inside its opaque platform safe zone', as
     const page = await browser.newPage()
     const maskable = await readFile(join(DIST_ROOT, 'icon-maskable-512.png'))
     const tile = tileDocument(await readFile(TILE_SOURCE, 'utf8'))
-    const [scaled, unscaled] = await page.evaluate(async (sources) => {
-      return Promise.all(sources.map(async (source) => {
-        const image = new Image()
-        image.src = source
-        await image.decode()
-        const canvas = document.createElement('canvas')
-        canvas.width = canvas.height = 512
-        const context = canvas.getContext('2d')!
-        context.drawImage(image, 0, 0, 512, 512)
-        const { data } = context.getImageData(0, 0, 512, 512)
-        let radius = 0
-        for (let y = 0; y < 512; y += 1) {
-          for (let x = 0; x < 512; x += 1) {
-            const at = (y * 512 + x) * 4
-            if (data[at + 3] === 0 || data[at]! + data[at + 1]! + data[at + 2]! >= 384) continue
-            radius = Math.max(radius, Math.hypot(x - 255.5, y - 255.5))
-          }
-        }
-        return { radius, corners: [0, 511, 511 * 512, 512 * 512 - 1].map(index => data[index * 4 + 3]) }
-      }))
-    }, [`data:image/png;base64,${maskable.toString('base64')}`, `data:image/svg+xml;base64,${Buffer.from(tile).toString('base64')}`])
-    expect(scaled!.radius).toBeLessThanOrEqual(0.4 * 512)
-    expect(scaled!.corners).toEqual([255, 255, 255, 255])
-    expect(unscaled!.radius).toBeGreaterThan(0.4 * 512)
+    const size = APP_ICON_VARIANTS.find(variant => variant.kind === 'maskable')!.size
+    const scaled = await pixels(page, pngUrl(maskable), size)
+    const unscaled = await pixels(page, svgUrl(tile), size)
+    expect(scaled.radius).toBeLessThanOrEqual(MASKABLE_SAFE_RADIUS_RATIO * size)
+    expect(scaled.radius).toBeGreaterThan(unscaled.radius * MASKABLE_ARTWORK_SCALE - 2)
+    expect(scaled.corners).toEqual([255, 255, 255, 255])
+    expect(unscaled.radius).toBeGreaterThan(MASKABLE_SAFE_RADIUS_RATIO * size)
   } finally {
     await browser.close()
   }

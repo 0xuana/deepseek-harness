@@ -12,7 +12,7 @@ A launcher masks the icon it puts on the home screen and chooses that icon itsel
 
 `apps/web/public/` carries four install icons: a 192px and a 512px `any` raster, a 512px `maskable` raster, and a 180px `apple-touch-icon`. [`render-app-icons.ts`](../../../../apps/web/scripts/render-app-icons.ts) renders all four from the official application tile in `apps/desktop/resources/icon.svg`, and `pnpm --filter @deepseek-ai/dsh-web-frontend run render:app-icons` regenerates the committed files. Each variant preserves the whale's geometry, gradients, opacity, and filters. Rendering first produces a bitmap at no less than the 1024px source extent and four times the output edge, then reduces it with Lanczos3. This separate rasterization retains the original shading while smoothing the small icon's curves. Every variant crops the tile's desktop drop shadow. The maskable variant scales the whale about the tile centre by `MASKABLE_ARTWORK_SCALE` while the tile's gradient keeps its own extent, so the border a mask may crop is still the real tile rather than a flat colour meeting it at a seam.
 
-[`pwa-manifest.e2e.ts`](../../../../apps/web/tests/pwa-manifest.e2e.ts) uses the browser image decoder to measure the committed maskable whale's ink radius and fails when it leaves the circle a platform mask is guaranteed to show; the unscaled rendering is its negative control, so the assertion cannot pass vacuously.
+[`pwa-manifest.e2e.ts`](../../../../apps/web/tests/pwa-manifest.e2e.ts) uses the browser image decoder to measure the committed maskable whale’s ink radius and rejects artwork outside the platform safe zone or smaller than the intended scale. The unscaled tile exceeds that zone and serves as the negative control.
 
 The manifest requests `display: "standalone"`, names `#ffffff` as its `theme_color` and `background_color`, and lists the three rasters. `apps/web/index.html` adds the `apple-touch-icon` link, `mobile-web-app-capable`, and `apple-mobile-web-app-title`. It adds no `theme-color`: `ThemePresenter` owns the single such node and follows the resolved in-application theme, which a static media query cannot. The tab favicons are unchanged.
 
@@ -20,7 +20,7 @@ This supersedes the icon entry and the display mode in the [archived Web install
 
 ## Alternatives considered
 
-**Keep `favicon.svg` as the only icon.** It leaves iOS, which reads no manifest icon, with a generic tile, and the mark already reaches its own edges, so a launcher's mask crops it. The generator spec keeps that overflow as its negative control.
+**Keep `favicon.svg` as the only icon.** It leaves iOS, which reads no manifest icon, with a generic tile, and the mark already reaches its own edges, so a launcher's mask crops it. `pwa-manifest.e2e.ts` keeps the unscaled tile’s overflow as its browser-pixel negative control.
 
 **Commit the rasters without a generator.** The tile artwork moves with the desktop application's icon. A hand-exported set drifts silently and records neither the crop nor the safe-zone scale that makes it installable.
 
@@ -32,10 +32,10 @@ This supersedes the icon entry and the display mode in the [archived Web install
 
 ## Consequences
 
-The repository carries four committed rasters, all rendered by one script from `apps/desktop/resources/icon.svg`. Changing the desktop tile means rerunning that script and reviewing the PNG diff. Unit tests inspect committed PNG dimensions without loading the native renderer. Browser tests check the committed maskable safe zone and opaque corners, with an unscaled SVG as the negative control. They also check fractional coverage along the Apple icon's curves against direct small-size SVG rendering, which retains the source's hard pixel edges. No automated check compares committed pixels with freshly generated output.
+The repository carries four committed rasters, all rendered by one script from `apps/desktop/resources/icon.svg`. Changing the desktop tile means rerunning that script and reviewing the PNG diff. Unit tests inspect committed PNG dimensions without loading the native renderer. Browser tests execute the generator and decode its output and all four built PNGs, checking declared edges, opaque corners, and artwork extents against the source tile with a two-pixel rasterization tolerance. Maskable checks bound its artwork above and below, with the unscaled tile as the safe-zone negative control. Tests also compare fractional coverage along the Apple icon’s curves against direct small-size SVG rendering, which retains the source’s hard pixel edges.
 
 The manifest's `theme_color` is one value and cannot follow the in-application theme, so a user whose theme differs from the system scheme sees that value until `ThemePresenter` writes the synchronized node shortly after boot. The presenter stays the only owner of `meta[name="theme-color"]`: a second static node wins document order and desynchronizes surrounding browser chrome from the rendered palette, which `settings-chrome.e2e.ts` pins.
 
 iOS ignores `background_color` and masks the touch icon with its own rounded rectangle; the tile's own margins keep the whale clear of that mask. Android selects the maskable raster for the home screen and an `any` raster for the install surface. The install icons are not a service worker: an installed Web App still needs the Host reachable.
 
-Verification covers each declared edge, the maskable safe zone with its negative control, opaque maskable corners, and the built `dist/` shipping every icon the manifest declares at the size it declares. Real-device installation, launch display, and window mode remain a device check.
+Real-device installation, launch display, and window mode remain a device check.

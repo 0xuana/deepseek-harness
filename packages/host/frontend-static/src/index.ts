@@ -42,9 +42,7 @@ const MIME: Record<string, string> = {
   '.html': HTML_MIME,
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
-  // The install icons are the only images the shell serves directly. A launcher
-  // reads them through a Content-Type that names an image, so the entries the
-  // Web build emits are declared here rather than left to octet-stream.
+  // Launchers require an image Content-Type for the install icons.
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
   '.json': 'application/json',

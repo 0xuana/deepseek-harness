@@ -23,6 +23,7 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { assertNever } from '@deepseek-ai/dsh-util-values'
 
 /** Vector source owned by the desktop application; 1104 units square with the tile inset. */
 export const TILE_SOURCE = fileURLToPath(new URL('../../desktop/resources/icon.svg', import.meta.url))
@@ -31,7 +32,7 @@ export const TILE_SOURCE = fileURLToPath(new URL('../../desktop/resources/icon.s
 export const ICON_OUTPUT_DIRECTORY = fileURLToPath(new URL('../public/', import.meta.url))
 
 /** Tile edge in source units; every render density is expressed against it. */
-export const TILE_EDGE = 1024
+const TILE_EDGE = 1024
 
 /** Tile inset in the source canvas: the drop shadow occupies the surrounding band. */
 const TILE_INSET = { x: 40, y: 32 } as const
@@ -154,6 +155,14 @@ async function renderPng(document: string, size: number): Promise<Buffer> {
     .toBuffer()
 }
 
+function documentForVariant(source: string, kind: AppIconVariant['kind']): string {
+  switch (kind) {
+    case 'tile': return tileDocument(source)
+    case 'maskable': return maskableDocument(source)
+    default: return assertNever(kind)
+  }
+}
+
 /**
  * Render every install icon from the tile source.
  * @param source - complete `icon.svg` document.
@@ -163,7 +172,7 @@ export async function renderAppIcons(source: string): Promise<readonly { variant
   return Promise.all(APP_ICON_VARIANTS.map(async variant => ({
     variant,
     png: await renderPng(
-      variant.kind === 'maskable' ? maskableDocument(source) : tileDocument(source),
+      documentForVariant(source, variant.kind),
       variant.size,
     ),
   })))
