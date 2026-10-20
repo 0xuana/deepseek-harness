@@ -25,7 +25,7 @@ const fixture = await vi.hoisted(async () => {
       mainFrame: { url: 'dsh-app://shell/update-dialog.html' },
       setWindowOpenHandler: vi.fn<(handler: () => { action: 'deny' }) => void>(),
       isDestroyed: () => this.destroyed,
-      loadURL: vi.fn(async () => { if (load.failure) throw new Error('load failed') }),
+      loadURL: vi.fn(async () => { if (load.failure) throw new Error('load failed'); this.webContents.emit('did-finish-load') }),
       close: vi.fn(() => { this.destroyed = true; this.webContents.emit('destroyed') }),
     })
     readonly setBackgroundColor = vi.fn()

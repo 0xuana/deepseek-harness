@@ -69,6 +69,7 @@ const harness = await vi.hoisted(async () => {
   const menu = Object.assign(menuBuilder, { buildFromTemplate: menuBuilder, setApplicationMenu: vi.fn() })
   class FakeWindow extends EventEmitter {
     destroyed = false
+    readonly contentView = { addChildView: vi.fn(), removeChildView: vi.fn() }
     readonly urls: string[] = []
     readonly webContents = Object.assign(new EventEmitter(), {
       id: 42,
@@ -127,6 +128,18 @@ const harness = await vi.hoisted(async () => {
       const event = { preventDefault: vi.fn() }
       this.emit('close', event)
       if (event.preventDefault.mock.calls.length === 0) this.destroy()
+    }
+  }
+  const views: FakeView[] = []
+  class FakeView extends FakeWindow {
+    constructor() {
+      super({ show: false })
+      windows.pop()
+      views.push(this)
+      Object.assign(this.webContents, {
+        loadURL: (url: string) => this.loadURL(url),
+        close: () => { this.destroy(); this.webContents.emit('destroyed') },
+      })
     }
   }
   class FakeHost {
@@ -191,7 +204,7 @@ const harness = await vi.hoisted(async () => {
   const shellDialog = { isOpen: false, focus: vi.fn() }
   return {
     failWindow(error: Error) { windowFailure = error },
-    windows, hosts, handlers, app, FakeWindow, FakeHost, powerMonitor, nativeTheme, analytics,
+    windows, views, hosts, handlers, app, FakeWindow, FakeView, FakeHost, powerMonitor, nativeTheme, analytics,
     trays, FakeTray, backgroundNotice, shellDialog,
     menu, popup, socketHeaders: vi.fn(), loginShell, readLoginShell, updateCheck, updateDownload, updateInstall,
     platformDispose,
@@ -238,7 +251,8 @@ const harness = await vi.hoisted(async () => {
     set closeWindowsOnQuit(value: boolean) { closeWindowsOnQuit = value },
     reset() {
       accountListener = undefined
-      windows.length = 0; hosts.length = 0; handlers.clear(); app.removeAllListeners()
+      windows.length = 0
+      views.length = 0; hosts.length = 0; handlers.clear(); app.removeAllListeners()
       trays.length = 0
       backgroundNotice.markerPath = undefined
       shellDialog.isOpen = false
@@ -277,6 +291,7 @@ vi.mock('../src/policy-test-auth.ts', () => ({ DesktopPolicyTestAuth: class {
 vi.mock('electron', () => ({
   app: harness.app,
   BrowserWindow: harness.FakeWindow,
+  WebContentsView: harness.FakeView,
   dialog: harness.dialog,
   shell: { openExternal: harness.openExternal },
   nativeTheme: harness.nativeTheme,
@@ -1281,6 +1296,23 @@ describe('desktop main startup', () => {
     expect(harness.trays[0]!.setContextMenu.mock.calls.length).toBe(relabels + 1)
   })
 
+  it('routes closing a macOS owner with a mandatory view through application quit', async () => {
+    vi.stubGlobal('process', { ...process, platform: 'darwin' })
+    harness.embeddedPolicy = { origin: 'https://policy.example.com', allowedPageOrigins: ['https://downloads.example.com'] }
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ code: 40005, data: {
+      show_content: { title: 'Update required', detail: 'Please update' }, desktop_app_link: 'https://downloads.example.com/',
+    } })))
+    const host = await readyWorkspace()
+    await harness.policyBlocked.promise
+    harness.windows[0]!.close()
+    expect(harness.app.quit).toHaveBeenCalled()
+    expect(harness.backgroundNotice.close).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(host.inspectQuit).toHaveBeenCalledOnce()
+    host.exited.resolve()
+    await harness.quitCompleted.promise
+  })
+
   it('keeps the workspace visible while acknowledgement is pending and ignores a destroyed window', async () => {
     await readyWorkspace()
     const window = harness.windows[0]!
@@ -1798,7 +1830,7 @@ describe('desktop main startup', () => {
     const host = await readyForUpdate()
     if (mandatory) await harness.policyBlocked.promise
     const window = harness.windows[0]!
-    const dialogOwner = mandatory ? harness.windows.find(item => item.urls.includes('dsh-app://shell/mandatory-update.html'))! : window
+    const dialogOwner = mandatory ? harness.views.find(item => item.urls.includes('dsh-app://shell/mandatory-update.html'))! : window
     const baseline = { leave: window.listenerCount('leave-full-screen'), closed: window.listenerCount('closed') }
     window.fullscreen = true
     window.setFullScreen.mockImplementation(() => {})

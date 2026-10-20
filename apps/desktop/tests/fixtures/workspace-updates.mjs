@@ -100,6 +100,11 @@ async function windowAt(url) {
   if (process.platform === 'win32' && url === 'dsh-app://shell/mandatory-update.html') {
     return mandatoryFrameDriver(await windowAt('dsh-app://app/'))
   }
+  if (process.platform !== 'win32' && url === 'dsh-app://shell/mandatory-update.html') {
+    let contents
+    await waitFor(() => { contents = webContents.getAllWebContents().find(candidate => candidate.getURL() === url); return contents !== undefined }, 'mandatory view document')
+    return { webContents: contents, isDestroyed: () => contents.isDestroyed() }
+  }
   const existing = BrowserWindow.getAllWindows().find(window => window.webContents.getURL() === url)
   if (existing) return existing
   return new Promise((resolve, reject) => {

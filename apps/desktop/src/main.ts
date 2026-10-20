@@ -1084,6 +1084,7 @@ async function main(): Promise<void> {
     window.on('close', (event) => {
       if (quitting || shellInstallerOwnsQuit || sessionEnding) return
       event.preventDefault()
+      if (process.platform !== 'win32' && isMandatory()) { app.quit(); return }
       if (updateDialog.isOpen) { updateDialog.focus(); return }
       const hide = (): void => {
         if (!quitting && !shellInstallerOwnsQuit && !sessionEnding && !window.isDestroyed()) hideMainWindow(window)
