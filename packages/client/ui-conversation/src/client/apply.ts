@@ -164,8 +164,6 @@ export function apply(ctx: Context, config: Config = Config({})): void {
   const maxConcurrentFileUploads = config.maxConcurrentFileUploads as number
   const workspaceNavigation = ctx.get('uiWorkspace') as WorkspaceNavigation
   const uiConversation = new UiConversation(ctx, sessions)
-  // File intake is its own access question: a page may prompt a Session whose files it may not upload.
-  const fileIntakeOf = (id: SessionId) => ctx.remoteAccess.source('session', id, 'fileUploads/upload')
   uiConversation.userText.register(sessionReferenceRule)
   uiConversation.userText.register(collapseWhitespaceRule)
   uiConversation.userText.register(trimWhitespaceRule)
@@ -511,12 +509,12 @@ export function apply(ctx: Context, config: Config = Config({})): void {
       const shell = inputHub.shell(sessionId)
       const inputTriggers = inputHub.inputTriggers(sessionId)
       const bridge = hostPathBridge()
-      const fileIntake = fileIntakeOf(sessionId)
       const cancelAccess = ctx.remoteAccess.source('session', sessionId, 'session/cancel')
       return {
         keyboard: shell,
         addFiles: (files, directories = new Set()) => {
-          if (!fileIntake.getSnapshot()) return t('attachment.dropBlocked')
+          // The user copy belongs to this caller; the live answer belongs to the input hub.
+          if (!inputHub.canIntakeFiles(sessionId)) return t('attachment.dropBlocked')
           if (sessions.binding(sessionId) === undefined) return t('file.sessionUnavailable')
           if (shell.snapshot.phase === 'adjudicating' || shell.snapshot.phase === 'submitting') {
             return t('attachment.dropBlocked')
@@ -586,7 +584,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
         hooks: {
           stopShortcut,
           busyEnter: submissionPolicy.busyEnter,
-          fileIntake,
+          fileIntake: inputHub.fileIntake(sessionId),
           fileUploads: conversation.fileUploads,
           notices: shell.notices,
           lexicon: shell.lexicon,
