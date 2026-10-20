@@ -25,7 +25,7 @@ import type { createNavigationStore } from './navigation-store.ts'
 import { rowConfigKey, type OfficialItem } from './config-ledger.ts'
 import { INSTALL_GIT_EXAMPLE, INSTALL_PATH_EXAMPLE, type PluginManagerLocaleKey } from './locales.ts'
 import {
-  asksMirror, githubRecoveryRegistry, isInstallPending, offeredRegistries, rowKey, updateCandidate,
+  bundleBusy, asksMirror, githubRecoveryRegistry, isInstallPending, offeredRegistries, rowKey, updateCandidate,
   type InstallInputError, type InstallState, type InstallSubject, type PackageRow, type PackageView,
   type PluginManagerFace, type PluginManagerState, type RegistryChoice, type VersionCheck,
 } from './manager-store.ts'
@@ -411,13 +411,19 @@ function EnableSwitch({ pkg, title, t, busy, onSetEnabled }: {
   readonly onSetEnabled: (enabled: boolean) => void
 }): ReactNode {
   return (
-    <Switch
-      checked={pkg.enabled}
-      label={t('enableToggle', { name: title })}
-      disabled={busy || pkg.readOnlyReason !== undefined || (!pkg.enabled && pkg.error !== undefined && !(pkg.availability === 'missing' && pkg.installTarget !== undefined))}
-      {...pkg.readOnlyReason === undefined ? {} : { title: managementText({ code: pkg.readOnlyReason }, t) }}
-      onChange={onSetEnabled}
-    />
+    <span className={css.bundleToggle}>
+      <span className={css.toggleProgress} role="status">
+        <span className={css.progressAnnouncement}>{busy ? t('applyingChange', { name: title }) : ''}</span>
+        {busy ? <StateDot state="ongoing" /> : null}
+      </span>
+      <Switch
+        checked={pkg.enabled}
+        label={t('enableToggle', { name: title })}
+        disabled={busy || pkg.readOnlyReason !== undefined || (!pkg.enabled && pkg.error !== undefined && !(pkg.availability === 'missing' && pkg.installTarget !== undefined))}
+        {...pkg.readOnlyReason === undefined ? {} : { title: managementText({ code: pkg.readOnlyReason }, t) }}
+        onChange={onSetEnabled}
+      />
+    </span>
   )
 }
 
@@ -1578,6 +1584,9 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   const showsMainList = showsCards && !showsMoreList
   const installedCards = onInstalled && showsCards
   const openPkgInMore = openPkg !== undefined && openPkg.official && detailFromMore
+  const returnTab = view.kind === 'package' || view.kind === 'row' ? view.returnTab : undefined
+  const backToMore = openPkgInMore && returnTab === undefined
+  const pkgOrigin = returnTab !== undefined ? { returnTab } : backToMore ? { from: 'more' as const } : {}
   // The Installed tab's panel, whatever it currently shows; the More list is not a tab panel.
   const installedPanel = tabs.length === 0 || showsMoreList
     ? {}
@@ -1589,12 +1598,11 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   }
   const configure = (pkg: PackageView): RowConfigure => ({
     has: row => ledger.rows.has(rowConfigKey(pkg.name, row.rowId)),
-    open: (row) => { setView({ kind: 'row', name: pkg.name, rowId: row.rowId, ...openPkgInMore ? { from: 'more' } : {} }) },
+    open: (row) => { setView({ kind: 'row', name: pkg.name, rowId: row.rowId, ...pkgOrigin }) },
   })
   const updates = updatesNote(mine, state.versions, t)
   const updatePkg = state.update === null ? undefined : state.packages.find(pkg => pkg.name === state.update?.packageName)
-  const packageBusy = (pkg: PackageView): boolean => state.busy.includes(pkg.name) || state.update?.packageName === pkg.name
-    || (state.install.subject?.name === pkg.name && (isInstallPending(state.install.phase) || state.install.phase === 'checking'))
+  const packageBusy = (pkg: PackageView): boolean => bundleBusy(state, pkg.name)
   const packageCard = (pkg: PackageView): ReactNode => (
     <PackageCard
       key={pkg.name}
@@ -1684,7 +1692,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
           <div role="tabpanel" id={`${tabsId}-${tab}-panel`} aria-labelledby={`${tabsId}-${tab}`} className={css.tabPanel}>
             {renderSlot('plugins.tab', {
               install: props.installFrom,
-              openPackage: (name) => { setTab(INSTALLED_TAB); setView({ kind: 'package', name }) },
+              openPackage: (name) => { setTab(INSTALLED_TAB); setView({ kind: 'package', name, returnTab: tab }) },
             }, { only: tab })}
           </div>
         )
@@ -1737,7 +1745,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
             t={t}
             resolveText={resolveText}
             renderSlot={renderSlot}
-            onBack={() => { setView({ kind: 'package', name: openPkg.name, ...openPkgInMore ? { from: 'more' } : {} }) }}
+            onBack={() => { setView({ kind: 'package', name: openPkg.name, ...pkgOrigin }) }}
           />
         )
         : null}
@@ -1752,13 +1760,16 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
             configured={ledger.bundles.has(openPkg.name)}
             configure={configure(openPkg)}
             renderSlot={renderSlot}
-            inMore={openPkgInMore}
+            inMore={backToMore}
             detail={(
               <BundleDetailSection name={openPkg.name} version={openPkg.version} fromNpm={openPkg.availability === 'missing'}
                 language={language} details={bundleDetails} t={t}
                 load={props.loadDetail} retry={props.retryDetail} image={props.detailImage} />
             )}
-            onBack={() => { setView({ kind: openPkgInMore ? 'more' : 'list' }) }}
+            onBack={() => {
+              if (returnTab !== undefined) setTab(returnTab)
+              setView({ kind: backToMore ? 'more' : 'list' })
+            }}
             onSetEnabled={(enabled) => { props.setEnabled(openPkg.name, enabled) }}
             onUninstall={() => { props.uninstall(openPkg.name) }}
             onUpdate={() => { props.update(openPkg.name) }}

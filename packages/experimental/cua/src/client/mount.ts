@@ -41,6 +41,15 @@ export async function mountCuaPermissions(ctx: Context, contribution: TypertRemo
       select: ({ pendingInteraction }: ComposerChainProps) => selectApplicationApproval(pendingInteraction),
       inject: () => ({ resolveText: (text: { en: string; [locale: string]: string }) => ctx.locale.resolveText(text) }),
     }, ApplicationApproval))
+    ctx.inject(['pluginChanges'], (scope) => {
+      const changes = scope.pluginChanges.bundle('@deepseek-ai/dsh-cua-bundle')
+      const synchronize = () => { controller.setChanging(changes.getSnapshot()) }
+      synchronize()
+      scope.effect(() => {
+        const unsubscribe = changes.subscribe(synchronize)
+        return () => { unsubscribe(); controller.setChanging(false) }
+      })
+    })
     const preset = ctx.configForms.get<{ default: string; selectedDefault?: string }>('agent-preset-registry')
     const settings = {
       ...face,
