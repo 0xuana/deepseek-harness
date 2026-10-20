@@ -13,7 +13,7 @@ import {
   mountAgentLoopTestDependencies, mountAgentLoopTestHarness, type AgentLoopTestHarness,
 } from '@deepseek-ai/dsh-agent-loop-testkit'
 import TypertGatewayService from '@deepseek-ai/dsh-api-gateway'
-import type { RemoteAccessBinding, RemoteAccessRole } from '@deepseek-ai/dsh-api-remote-access'
+import type { RemoteAccessBinding, RemoteAccessCondition, RemoteAccessRole } from '@deepseek-ai/dsh-api-remote-access'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { remoteMethods, type PeerId, type PeerScope, type Principal, type RemoteInvocation } from '@deepseek-ai/dsh-typert-protocol'
@@ -335,10 +335,35 @@ describe('Session Controller access', () => {
     } catch (error) {
       failure = error
     }
+    // The concrete decision reports the policy's own refusal reason.
     expect(failure).toMatchObject({
       code: 'remote-access/denied',
-      details: { action: 'session/cancel', reason: 'access-withdrawn' },
+      details: { action: 'session/cancel', reason: 'no-allow' },
     })
+  })
+
+  it('cancels a shared Session for a caller that still holds the Session role', async () => {
+    const { ctx, as } = await harness()
+    guestPolicy(ctx, DRIVES_SHARED)
+    expect(as(GUEST, 'cancel').sessionController.cancel({ sessionId: SHARED })).toEqual({ accepted: true })
+  })
+
+  it('lets an args-dependent policy admit the caller\'s own cancel request', async () => {
+    const { ctx, as } = await harness()
+    // A policy may narrow cancel to the request it names; only a concrete decide() carries
+    // `args.request`, so an allows()-based recheck would refuse this legitimate caller forever.
+    const condition: RemoteAccessCondition<'session'> = ({ args }) => {
+      const request = args?.request as { readonly sessionId?: unknown } | undefined
+      return request?.sessionId === SHARED
+        ? { kind: 'allow' }
+        : { kind: 'deny', reason: 'not-this-request' }
+    }
+    guestPolicy(ctx, {
+      role: { name: 'test:session-cancel-args', resource: 'session', actions: ['session/cancel'] },
+      resource: { kind: 'session', id: SHARED },
+      condition,
+    })
+    expect(as(GUEST, 'cancel').sessionController.cancel({ sessionId: SHARED })).toEqual({ accepted: true })
   })
 
   it('lets a non-owner read projections only in a Session its Session role names', async () => {

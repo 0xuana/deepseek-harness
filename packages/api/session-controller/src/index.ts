@@ -510,12 +510,25 @@ export class SessionController extends TypertRemoteService {
   @Remote('cancel')
   cancel(request: SessionCancelRequest): SessionCancelValue {
     // The Gateway admitted this call earlier; a caller that lost access meanwhile must not cancel.
-    if (!this.ctx.remoteAccess.allows({ kind: 'session', id: request.sessionId })) {
-      throw new RemoteError(
-        'remote-access/denied',
-        'remote access: session/cancel: access was withdrawn before cancellation',
-        { action: 'session/cancel', reason: 'access-withdrawn' },
-      )
+    // Ask the concrete decision rather than the list-filter view: a policy condition that reads
+    // `args.request` never sees arguments through `allows()`, so using it here would refuse a
+    // legitimate caller as withdrawn forever.
+    const invocation = this.ctx.invocation
+    const principal = principalOf(invocation)
+    if (principal !== undefined) {
+      const decision = this.ctx.remoteAccess.decide({
+        principal,
+        action: 'session/cancel',
+        resources: [{ kind: 'session', id: request.sessionId }],
+        args: { request },
+      })
+      if (decision.kind !== 'allow') {
+        throw new RemoteError(
+          'remote-access/denied',
+          'remote access: session/cancel: access was withdrawn before cancellation',
+          { action: 'session/cancel', reason: decision.reason },
+        )
+      }
     }
     return this.commands.cancel(request)
   }
