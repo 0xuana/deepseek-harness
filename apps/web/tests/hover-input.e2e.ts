@@ -1,10 +1,69 @@
 /** Pointer, keyboard, and resize behavior in the assembled client. */
 import { fileURLToPath } from 'node:url'
-import { chromium } from 'playwright'
+import { chromium, type Locator } from 'playwright'
 import { expect, it, onTestFailed, onTestFinished } from 'vitest'
 import { launchWebScaffold, seedSession, watchConsole } from './scaffold.ts'
 import { createChatScrollFixture } from './chat-scroll-fixture.ts'
 import { connectFreshWorkspace, saveFailureShot } from './support.ts'
+
+it.each([false, true])('keeps workspace and archived search actions reachable with touch=%s', async (hasTouch) => {
+  const scaffold = await launchWebScaffold()
+  onTestFinished(() => scaffold.close())
+  const fixture = createChatScrollFixture({ markerPrefix: 'ROW_ACTIONS', title: 'Archived row actions', turns: 1 })
+  const id = await seedSession(scaffold, fixture.log, 'row-actions')
+  const browser = await chromium.launch()
+  onTestFinished(() => browser.close())
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, hasTouch, locale: 'en-US' })
+  onTestFailed(() => saveFailureShot(page, `row-actions-${String(hasTouch)}`))
+  const activate = async (target: Locator) => {
+    if (hasTouch) await target.tap()
+    else await target.click()
+  }
+  const openFixture = async () => {
+    await activate(page.getByRole('button', { name: 'Search sessions', exact: true }))
+    await page.getByRole('textbox', { name: 'Search session names', exact: true }).fill(fixture.markers.user(1))
+    await activate(page.getByRole('tree', { name: 'Search results' }).getByRole('treeitem'))
+    await expect.poll(() => row.getAttribute('aria-selected')).toBe('true')
+  }
+  const row = page.locator(`[data-row-key="session:${id}"]`)
+  await page.goto(scaffold.authenticatedUrl)
+  await connectFreshWorkspace(page, scaffold.workspaceCwd)
+  await openFixture()
+  await activate(page.getByRole('button', { name: 'View options', exact: true }))
+  await activate(page.getByRole('menuitem', { name: 'WorkSpace', exact: true }))
+  const menu = page.getByRole('button', { name: 'Workspace actions for workspace', exact: true, includeHidden: true })
+  const project = page.locator('[data-row-key^="workspace:"]').filter({ has: menu })
+  await page.mouse.move(0, 0)
+  expect(await page.evaluate(() => matchMedia('(hover: none)').matches)).toBe(hasTouch)
+  expect(await menu.isVisible()).toBe(hasTouch)
+  if (!hasTouch) await project.hover()
+  await activate(menu)
+  await page.getByRole('menuitem', { name: 'Rename', exact: true }).waitFor()
+  await page.keyboard.press('Escape')
+  if (!hasTouch) await project.hover()
+  await activate(page.getByRole('button', { name: 'New session in workspace', exact: true }))
+  await expect.poll(() => row.getAttribute('aria-selected')).not.toBe('true')
+  expect(await project.getAttribute('aria-expanded')).toBe('true')
+  await openFixture()
+  if (!hasTouch) await row.hover()
+  await activate(row.getByRole('button', { name: /^Session actions for / }))
+  await activate(page.getByRole('menuitem', { name: 'Archive session', exact: true }))
+  await row.waitFor({ state: 'detached' })
+  await activate(page.getByRole('button', { name: 'View options', exact: true }))
+  await activate(page.getByRole('menuitem', { name: 'All conversations (show archived)', exact: true }))
+  await activate(page.getByRole('button', { name: 'Search sessions', exact: true }))
+  await page.getByRole('textbox', { name: 'Search session names', exact: true }).fill(fixture.markers.user(1))
+  const result = page.getByRole('tree', { name: 'Search results' }).getByRole('treeitem')
+  await result.waitFor()
+  const restore = result.getByRole('button', { name: 'Unarchive session', exact: true, includeHidden: true })
+  expect(await restore.isVisible()).toBe(hasTouch)
+  if (!hasTouch) await result.hover()
+  await activate(restore)
+  await expect.poll(() => scaffold.ctx.workspaceRegistry.archivedSessionIds.includes(id)).toBe(false)
+  await restore.waitFor({ state: 'detached' })
+  await activate(result)
+  await expect.poll(() => row.getAttribute('aria-selected')).toBe('true')
+})
 
 it.each([false, true])('keeps actions and focus usable with touch=%s across layout widths', async (hasTouch) => {
   const scaffold = await launchWebScaffold()

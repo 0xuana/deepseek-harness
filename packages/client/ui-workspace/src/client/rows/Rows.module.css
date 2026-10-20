@@ -327,6 +327,8 @@
 }
 
 @media (hover: none) {
+  .projectRow .rowActions,
+  .searchResultRow .rowActions,
   .sessionRow .rowActions {
     display: inline-flex;
   }
