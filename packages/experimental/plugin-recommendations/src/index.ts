@@ -9,6 +9,7 @@ import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type { BundleInfo, ManagementError } from '@deepseek-ai/dsh-plugin-manager/types'
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
 import type {} from '@deepseek-ai/dsh-plugin-manager'
+import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-api-remote-access'
 import { recommendationProjection, type RecommendationState } from './projection.ts'
 import type { PluginRecommendation, RecommendationActionResult, RecommendationOutcome } from './types.ts'
@@ -33,7 +34,7 @@ export class PluginRecommendationError extends HarnessError {}
 
 /** Owns the catalog tools, durable decisions, and idempotent card actions. */
 export default class PluginRecommendations extends TypertRemoteService {
-  static inject = ['tools', 'pluginManager', 'agents', 'sessionProjections', 'remoteAccess']
+  static inject = ['tools', 'pluginManager', 'agents', 'sessionProjections', 'remoteAccess', 'systemPrompt']
   private projection!: ProjectionHandle<RecommendationState>
   private readonly operations = new Map<string, Promise<RecommendationActionResult>>()
   private readonly proposals = new Map<string, { turn: number; callId: ToolCallId }>()
@@ -44,6 +45,15 @@ export default class PluginRecommendations extends TypertRemoteService {
 
   protected async [Service.init](): Promise<void> {
     this.projection = await this.ctx.sessionProjections.register(recommendationProjection)
+    this.ctx.systemPrompt.section({
+      name: 'recommendations:official-plugins',
+      order: this.ctx.systemPrompt.getSectionOrder('TOOL_PLUGIN_RECOMMENDATIONS'),
+      text: ({ agent }) => agent !== undefined && this.ctx.agents.roots().includes(agent)
+        && this.ctx.tools.get('list_official_plugins', agent) !== undefined
+        && this.ctx.tools.get('suggest_plugin', agent) !== undefined
+        ? 'When a user expresses a concrete need about DSH\'s interface, workflow or available capabilities, first read list_official_plugins. Everyday wishes count even without a plugin name or the word "plugin". Match the intended outcome against the catalog descriptions. A wish for different behavior does not authorize changing DSH source, settings or instruction files. If a plugin can help, use suggest_plugin, explain its benefit and any remaining gap, and finish the answer. The catalog is sufficient for this recommendation; do not inspect source, profiles or instruction files to elaborate it or find a workaround. Investigate or edit those files only when the human explicitly requests that implementation work. Display translation does not guarantee a different internal reasoning language. The user chooses whether to enable the plugin. For vague wishes, clarify before lookup. For ordinary tasks or requests not to recommend, answer the request without offering plugins; discussion-only requests stay at product level.'
+        : '',
+    })
     this.ctx.on('agent/disposed', ({ agent }) => { this.proposals.delete(agent.id) })
     this.ctx.on('tools/result', (exec, result) => {
       if (result.isError && exec.agent !== undefined && this.proposals.get(exec.agent.id)?.callId === exec.callId) {

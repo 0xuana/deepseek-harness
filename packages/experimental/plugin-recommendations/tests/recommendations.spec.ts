@@ -1,3 +1,5 @@
+import { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
+import { assembleContextFor } from '@deepseek-ai/dsh-agent'
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { createUserMessage, createToolResultMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
@@ -53,6 +55,24 @@ async function fixture() {
 }
 
 describe('official recommendations', () => {
+  it('provides discovery-first guidance only to roots with both tools and withdraws it on unload', async () => {
+    const f = await fixture()
+    const text = async () => renderPrompt(await f.ctx.systemPrompt.assemble(assembleContextFor(f.agent)))
+    expect(await text()).toContain('first read list_official_plugins')
+    expect(renderPrompt(await f.ctx.systemPrompt.assemble())).not.toContain('read list_official_plugins')
+    const child = await f.agent.ctx.agents.create({ sessionId: SessionId('recommendations-child'), parentAgent: f.agent })
+    expect(renderPrompt(await f.ctx.systemPrompt.assemble(assembleContextFor(child.agent)))).not.toContain('read list_official_plugins')
+    await child.dispose()
+    for (const name of ['list_official_plugins', 'suggest_plugin']) {
+      const restore = f.agent.ctx.tools.restrict({ deny: [name] })
+      expect(await text()).not.toContain('read list_official_plugins')
+      restore()
+    }
+    expect(await text()).toContain('read list_official_plugins')
+    await f.fiber.dispose()
+    expect(await text()).not.toContain('read list_official_plugins')
+  })
+
   it('admits one proposal per turn when this experiment is enabled alone, including concurrent calls and retries', async () => {
     const f = await fixture()
     f.agent.session.append('turn/start', { turn: 1 })

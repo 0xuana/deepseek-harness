@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Computer Use",
-    "description": "Currently supports macOS; Windows support is in development. Loads Computer Use for existing and new PTC sessions. Switch to PTC mode and grant Accessibility and Screen Recording permissions to use it."
+    "description": "Let agents view and operate macOS application interfaces for tasks that need clicks and text entry. Requires PTC mode, Accessibility and Screen Recording permissions; Windows Hosts are not yet supported."
   }
 }

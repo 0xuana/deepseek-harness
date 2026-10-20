@@ -34,6 +34,9 @@
     },
     {
       "path": "../../api/remote-access/tsconfig.host.json"
+    },
+    {
+      "path": "../../core/system-prompt"
     }
   ],
   "files": [

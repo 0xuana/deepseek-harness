@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "语音输入",
-    "description": "在本机使用 SenseVoice 转写录音，首次使用需安装依赖。",
+    "description": "用说话代替打字，将录音在本机转成输入框文字，适合口述较长需求；使用 SenseVoice，首次使用需下载模型并安装依赖。",
     "detail": "docs/DETAIL.zh.md"
   }
 }

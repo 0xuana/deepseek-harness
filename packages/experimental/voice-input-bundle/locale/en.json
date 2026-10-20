@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Voice input",
-    "description": "Transcribe recordings locally with SenseVoice; first use requires installing dependencies",
+    "description": "Speak instead of typing: transcribe recordings locally into the composer for longer dictated requests. Uses SenseVoice; first use requires downloading models and installing dependencies.",
     "detail": "docs/DETAIL.md"
   }
 }

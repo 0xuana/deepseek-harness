@@ -2,5 +2,5 @@
   - text: Recommended plugin Official
   - 'button "View details: Session search"':
     - strong: Session search
-    - text: Search your saved conversations from this workspace. Give Agents tools to search and read earlier sessions from the current workspace. View details →
+    - text: Search your saved conversations from this workspace. Let agents search and read earlier sessions in the current workspace to recover past plans, decisions or errors. Sidebar search is unchanged. View details →
   - status: Dismissed
