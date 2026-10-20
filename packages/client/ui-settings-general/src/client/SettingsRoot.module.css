@@ -86,8 +86,8 @@
    and clear of the strip.
    The four shell seats are direct children placed by area: the rail's title
    and the content header share the first row, the rail's cells and the active
-   section the second. The mobile block at the end of this file rearranges the
-   same areas into the horizontal layout, so only the areas move. */
+   section the second. Narrow browser windows use a full-viewport panel and
+   rearrange these areas into a horizontal layout. */
 .panel {
   position: relative;
   z-index: 1;
@@ -125,17 +125,16 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 0 12px;
+  padding: 10px 12px 0;
   box-sizing: border-box;
 }
 
 /* Title row (figma 501:29959): 16/500 lh24, at the rail's 24px text inset.
-   The rail's own 22px top padding and 18px gap below the title become this
-   seat's padding, so the first grid row measures the 64px the title and gap
-   occupied rather than the 54px content header beside it. */
+   Its 54px row aligns with the content header; the nav adds the remaining
+   10px before the first cell. */
 .navTitle {
   grid-area: title;
-  padding: 22px 12px 18px 24px;
+  padding: 22px 12px 8px 24px;
   font-size: 16px;
   line-height: 24px;
   font-weight: 500;
@@ -217,6 +216,7 @@
 
 /* Compact close control. */
 .close {
+  flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -245,15 +245,11 @@
   overflow-y: auto;
 }
 
-/* Phones and narrow windows, under the 768px boundary ui-sidebar-right's
-   fullscreen rule and PlanPreview already use: the panel takes the viewport and
-   the rail becomes the horizontal tab strip the Web product uses. The title
-   shares the first row with the header's action and close seats, the registered
-   section cells scroll sideways on the second, and the active section fills the
-   rest. Cells keep their labels whole and the strip scrolls instead of
-   truncating, so a registrant's label length or section count cannot wrap or
-   clip a name; the active cell carries data-modal-autofocus, so opening the
-   panel scrolls it into view. */
+/* Browsers below 768px use the full-viewport panel and horizontal navigation.
+   Windows custom captions and macOS native titlebars retain the desktop rail;
+   their independent root markers exclude both window-chrome layouts. Linux
+   follows the browser layout. The selected cell receives initial focus and
+   scrolls into view when the panel opens. */
 @media (max-width: 767px) {
   :global(html:not([data-windows-titlebar]):not([data-platform='darwin'])) .overlay {
     position: absolute;

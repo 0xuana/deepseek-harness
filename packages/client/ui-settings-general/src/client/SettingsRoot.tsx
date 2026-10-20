@@ -1,7 +1,8 @@
 /**
  * Settings shell root: the sidebar-foot trigger row plus the centered modal
- * panel (figma 2552:26025, 760x500) with the section nav rail; below 768px
- * the panel takes the viewport and the rail turns into a horizontal strip
+ * panel with the section nav rail. In browsers below 768px the panel fills
+ * the viewport and the rail turns into a horizontal strip; Windows and macOS
+ * desktop windows retain the rail
  * (SettingsRoot.module.css). The shell is a pure composition face —
  * slot-owned text (trigger label, panel title, close label, sections) arrives
  * from registrants through slots; accessible names resolve from localized
@@ -75,13 +76,6 @@ function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelP
             navigation and the active section the second. */}
         <div className={css.navTitle} id={titleId} tabIndex={-1}
           data-modal-autofocus={active === undefined ? '' : undefined}>{renderSlot('settings.header', {})}</div>
-        <div className={css.header}>
-          <div className={css.actions}>{renderSlot('settings.action', {})}</div>
-          <button type="button" className={css.close} onClick={onClose}>
-            <IconCloseOutlineRegular size={14} />
-            <span className={css.hiddenLabel}>{renderSlot('settings.close', {})}</span>
-          </button>
-        </div>
         <nav className={css.nav}>
           <div className={css.navList}>
             {rows.map(row => (
@@ -91,6 +85,7 @@ function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelP
                 className={clsx(css.navCell, row.id === active && css.active)}
                 aria-current={row.id === active ? 'true' : undefined}
                 data-modal-autofocus={row.id === active ? '' : undefined}
+                onFocus={(event) => { event.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest' }) }}
                 onClick={() => { onSelect(row.id) }}
               >
                 {navIcon(row.id)}
@@ -99,6 +94,13 @@ function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelP
             ))}
           </div>
         </nav>
+        <div className={css.header}>
+          <div className={css.actions}>{renderSlot('settings.action', {})}</div>
+          <button type="button" className={css.close} onClick={onClose}>
+            <IconCloseOutlineRegular size={14} />
+            <span className={css.hiddenLabel}>{renderSlot('settings.close', {})}</span>
+          </button>
+        </div>
         <div className={css.options}>
           {active !== undefined && renderSlot('settings.section', { close: onClose }, { only: active })}
         </div>
