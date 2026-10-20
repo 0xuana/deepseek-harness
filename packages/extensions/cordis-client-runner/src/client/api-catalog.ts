@@ -348,9 +348,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['on failure; a refused creation is also shown through the Workspace notice unless a later navigation or disposal superseded the request.'],
       },
       {
-        signature: 'forkSession( sessionId: SessionId, onCreated?: (childId: SessionId) => void, options?: Pick<Parameters<ISessions[\'fork\']>[0], \'allowMigration\'>, ): Promise<SessionId>',
-        description: 'Fork a Session. Pages whose access snapshot includes renaming it increment the child title without selecting it; other pages leave the title unchanged and open the child once it is listed.',
-        parameters: [{ name: 'sessionId', description: 'source Session.' }, { name: 'onCreated', description: 'observer before the optional child-title update.' }, { name: 'options', description: 'optional permission to start source migration; omission preserves the Host default.' }],
+        signature: 'forkSession( sessionId: SessionId, onCreated?: (childId: SessionId) => void, options?: ForkSessionOptions, ): Promise<SessionId>',
+        description: 'Fork a Session. Pages whose access snapshot includes renaming it increment the child title; other pages leave the title unchanged and present the child only once the Host lists it.',
+        parameters: [{ name: 'sessionId', description: 'source Session.' }, { name: 'onCreated', description: 'observer after creation, before the optional child-title update.' }, { name: 'options', description: 'branch boundary, migration permission, and how the child is presented.' }],
         returns: 'the child SessionId after creation and any permitted inherited-title increment.',
       },
       {
@@ -630,6 +630,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'FontSizes',
     declaration: 'export type FontSizes = Readonly<Record<FontRole, number>>;',
+  },
+  {
+    name: 'ForkSessionOptions',
+    declaration: 'export interface ForkSessionOptions extends Pick<Parameters<ISessions[\'fork\']>[0], \'atSeq\' | \'allowMigration\'> {\n    readonly present?: \'selected\' | \'listed\';\n}',
   },
   {
     name: 'GlobalStandardProps',

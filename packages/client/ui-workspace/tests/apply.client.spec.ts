@@ -1002,6 +1002,13 @@ describe('ui-workspace apply', () => {
     await vi.waitFor(() => { expect(b.retain).toHaveBeenCalledWith('forked', { source: 'mainView' }) })
   })
 
+  /** Fork as a branch surface does on a page that may branch but not rename the source Session. */
+  async function forkReaderBranch(b: Awaited<ReturnType<typeof bench>>, childId: SessionId): Promise<void> {
+    provideReaderAnswers(b)
+    b.fork.mockResolvedValueOnce(childId)
+    await b.ctx.uiWorkspace.forkSession(sid('session'), undefined, { present: 'selected' })
+  }
+
   it('opens a row published synchronously during subscription and detaches the wait', async () => {
     const b = await bench()
     await b.ctx.plugin({ inject: [...inject], apply }).await()
@@ -1012,7 +1019,7 @@ describe('ui-workspace apply', () => {
       b.setSummary('raced', { id: sid('raced') })
       return stop
     } })
-    b.ctx.uiWorkspace.openListedBranch(sid('raced'))
+    await forkReaderBranch(b, sid('raced'))
     expect(b.retain).toHaveBeenCalledWith('raced', { source: 'mainView' })
     b.setSummary('raced', { title: 'later' })
     expect(b.retain.mock.calls.filter(([id]) => id === 'raced')).toHaveLength(1)
@@ -1026,12 +1033,12 @@ describe('ui-workspace apply', () => {
     b.refresh.mockImplementation(() => new Promise<undefined>(() => {}))
     const fiber = b.ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
-    b.ctx.uiWorkspace.openListedBranch(sid('late'))
+    await forkReaderBranch(b, sid('late'))
     navigation.abort()
     b.setSummary('late', { id: sid('late') })
     expect(b.retain).not.toHaveBeenCalledWith('late', { source: 'mainView' })
     Object.assign(b.ctx.layout, { beginNavigation: () => new AbortController().signal })
-    b.ctx.uiWorkspace.openListedBranch(sid('later'))
+    await forkReaderBranch(b, sid('later'))
     await fiber.dispose()
     b.setSummary('later', { id: sid('later') })
     expect(b.retain).not.toHaveBeenCalledWith('later', { source: 'mainView' })
@@ -1041,12 +1048,12 @@ describe('ui-workspace apply', () => {
     const b = await bench()
     declare(b.slots, 'shell.overlay')
     await b.ctx.plugin({ inject: [...inject], apply }).await()
-    b.ctx.uiWorkspace.openListedBranch(sid('missing'))
+    await forkReaderBranch(b, sid('missing'))
     await Promise.resolve()
     b.setSummary('missing', { id: sid('missing') })
     expect(b.retain).not.toHaveBeenCalledWith('missing', { source: 'mainView' })
     b.refresh.mockRejectedValueOnce(new Error('list refused'))
-    b.ctx.uiWorkspace.openListedBranch(sid('refused'))
+    await forkReaderBranch(b, sid('refused'))
     await Promise.resolve()
     const toast = faceOf(entry(b.slots, 'shell.overlay', 'workspace.row-toast')) as RowToastInjected
     expect(toast.hooks.toast.getSnapshot()).toMatchObject({ kind: 'createFailed', message: 'list refused' })
@@ -1058,7 +1065,7 @@ describe('ui-workspace apply', () => {
     const navigation = new AbortController()
     navigation.abort()
     Object.assign(b.ctx.layout, { beginNavigation: () => navigation.signal })
-    b.ctx.uiWorkspace.openListedBranch(sid('cancelled'))
+    await forkReaderBranch(b, sid('cancelled'))
     expect(b.refresh).not.toHaveBeenCalled()
     expect(b.retain).not.toHaveBeenCalledWith('cancelled', { source: 'mainView' })
   })
@@ -1074,7 +1081,7 @@ describe('ui-workspace apply', () => {
       if (cancel) navigation.abort()
       throw new Error('branch opening refused')
     })
-    b.ctx.uiWorkspace.openListedBranch(sid('broken'))
+    await forkReaderBranch(b, sid('broken'))
     const toast = faceOf(entry(b.slots, 'shell.overlay', 'workspace.row-toast')) as RowToastInjected
     expect(toast.hooks.toast.getSnapshot()).toEqual(cancel ? null
       : { kind: 'createFailed', message: 'branch opening refused', seq: 1 })
@@ -1089,7 +1096,7 @@ describe('ui-workspace apply', () => {
     Object.assign(b.ctx.layout, { beginNavigation: () => navigation.signal })
     const refreshed = Promise.withResolvers<undefined>()
     b.refresh.mockImplementationOnce(() => refreshed.promise)
-    b.ctx.uiWorkspace.openListedBranch(sid('late-refresh'))
+    await forkReaderBranch(b, sid('late-refresh'))
     if (end === 'opened') b.setSummary('late-refresh', { id: sid('late-refresh') })
     else navigation.abort()
     refreshed.reject(new Error('late refresh refused'))

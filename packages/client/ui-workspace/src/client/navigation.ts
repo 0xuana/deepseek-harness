@@ -59,24 +59,18 @@ export interface UiWorkspace {
     options?: Pick<StartSessionOptions, 'agentPreset'>,
   ): Promise<void>
   /**
-   * Fork a Session. Pages whose access snapshot includes renaming it increment the child title without
-   * selecting it; other pages leave the title unchanged and open the child once it is listed.
+   * Fork a Session. Pages whose access snapshot includes renaming it increment the child title; other
+   * pages leave the title unchanged and present the child only once the Host lists it.
    * @param sessionId - source Session.
-   * @param onCreated - observer before the optional child-title update.
-   * @param options - optional permission to start source migration; omission preserves the Host default.
+   * @param onCreated - observer after creation, before the optional child-title update.
+   * @param options - branch boundary, migration permission, and how the child is presented.
    * @returns the child SessionId after creation and any permitted inherited-title increment.
    */
   forkSession(
     sessionId: SessionId,
     onCreated?: (childId: SessionId) => void,
-    options?: Pick<Parameters<ISessions['fork']>[0], 'allowMigration'>,
+    options?: ForkSessionOptions,
   ): Promise<SessionId>
-  /**
-   * Open a created Session once its id is known to the list. Later navigation or plugin disposal
-   * cancels the wait; a completed refresh without that id or a failed refresh leaves selection intact.
-   * @param childId - Session the Host created.
-   */
-  openListedBranch(childId: SessionId): void
   /**
    * Resolve the Session for a new conversation in a Workspace: navigation names the first reusable
    * blank member — listed in the Workspace, not archived, and listing no preset or the requested one —
@@ -157,6 +151,89 @@ declare module '@deepseek-ai/cordis' {
     /** Cross-Controller Workspace navigation and directory UI capability. */
     uiWorkspace: UiWorkspace
   }
+}
+
+/** What one branch fork asks of the Workspace navigation service. */
+export interface ForkSessionOptions extends Pick<Parameters<ISessions['fork']>[0], 'atSeq' | 'allowMigration'> {
+  /**
+   * How the caller presents the child. `selected` opens it immediately when the page may rename the
+   * source Session and otherwise once the Host lists it; `listed` (the default, the row-action path)
+   * never selects it immediately and opens it once listed only when the page could not name it.
+   */
+  readonly present?: 'selected' | 'listed'
+}
+
+/** Where one wait for a listed branch reveals it, and where a failed list refresh is reported. */
+interface ListedBranchNavigation {
+  /** Supersession signal of the page navigation this open belongs to. */
+  readonly signal: AbortSignal
+  /**
+   * Reveal one listed Session as the main selection.
+   * @param sessionId - Session the Host listed.
+   * @param signal - the navigation signal; a superseded navigation must not reveal.
+   */
+  reveal(sessionId: SessionId, signal: AbortSignal): void
+  /**
+   * Report a failed refresh that may have kept the child out of the list.
+   * @param error - the refresh rejection.
+   */
+  fail(error: unknown): void
+}
+
+/**
+ * Open a created Session once the Host lists it.
+ *
+ * A page that may not rename the Session it branched presents the child only once the Host's own
+ * summary of it is on the list; opening sooner assembles a view of a branch it cannot describe. The
+ * wait ends on a list change, a completed refresh, supersession, or disposal; a failed refresh is
+ * reported through the navigation's failure seat and leaves the selection as it was.
+ * @param navigation - Supersession signal plus the reveal and failure seats.
+ * @param sessions - Session controller holding the list and refresh.
+ * @param childId - Session the Host created.
+ */
+function openListedBranch(
+  navigation: ListedBranchNavigation,
+  sessions: ISessions,
+  childId: SessionId,
+): void {
+  const { signal } = navigation
+  if (signal.aborted) return
+  let stop = (): void => {}
+  let settled = false
+  const finish = (): void => {
+    settled = true
+    stop()
+    signal.removeEventListener('abort', finish)
+  }
+  const open = (): void => {
+    if (settled || signal.aborted || sessions.list.getSnapshot().byId[childId] === undefined) return
+    finish()
+    try {
+      navigation.reveal(childId, signal)
+    } catch (error: unknown) {
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- reveal may synchronously abort navigation before throwing.
+      if (!signal.aborted) navigation.fail(error)
+    }
+  }
+  stop = sessions.list.subscribe(open)
+  signal.addEventListener('abort', finish, { once: true })
+  // Registration may synchronously publish the row; always recheck after the disposer is owned.
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- subscribe may synchronously call open and finish.
+  if (settled) {
+    stop()
+    signal.removeEventListener('abort', finish)
+    return
+  }
+  open()
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- open synchronously settles a listed child.
+  if (settled) return
+  void sessions.refresh().then(() => {
+    open()
+    finish()
+  }, (error: unknown) => {
+    if (!settled && !signal.aborted) navigation.fail(error)
+    finish()
+  })
 }
 
 /** Structured directory failure exposed to directory UI consumers. */
@@ -331,22 +408,31 @@ class UiWorkspaceService extends Service implements UiWorkspace {
   async forkSession(
     sessionId: SessionId,
     onCreated?: (childId: SessionId) => void,
-    options?: Pick<Parameters<ISessions['fork']>[0], 'allowMigration'>,
+    options: ForkSessionOptions = {},
   ): Promise<SessionId> {
     // Naming a branch renames the child. A page whose access snapshot excludes renaming the source
     // Session leaves the name to the Host — asking for it would fail the fork it just made.
     const namesBranch = this.ctx.remoteAccess.source('session', sessionId, 'session/rename').getSnapshot()
     const childId = await this.sessions.fork({
       sessionId,
+      ...options.atSeq === undefined ? {} : { atSeq: options.atSeq },
       increaseTitle: namesBranch,
       ...onCreated === undefined ? {} : { onCreated },
-      ...options?.allowMigration === undefined ? {} : { allowMigration: options.allowMigration },
+      ...options.allowMigration === undefined ? {} : { allowMigration: options.allowMigration },
     })
-    if (!namesBranch) {
-      // A page that may not rename the Session it branched presents the child only once the Host's own
-      // summary of it is on the list; opening sooner assembles a view of a branch it cannot describe.
-      this.openListedBranch(childId)
+    if (namesBranch) {
+      // A branch surface asks to land on the child its page could describe; the row action leaves the
+      // selection alone.
+      if (options.present === 'selected') this.openSession(childId)
+      return childId
     }
+    // A page that may not rename the Session it branched presents the child only once the Host's own
+    // summary of it is on the list; opening sooner assembles a view of a branch it cannot describe.
+    openListedBranch({
+      signal: AbortSignal.any([this.ctx.layout.beginNavigation(), this.lifetime.signal]),
+      reveal: (listedId, signal) => { this.replaceMain(listedId, signal, 'reveal') },
+      fail: (error) => { this.notify({ kind: 'createFailed', message: creationFailureMessage(error) }) },
+    }, this.sessions, childId)
     return childId
   }
 

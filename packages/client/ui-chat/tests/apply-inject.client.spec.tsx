@@ -91,7 +91,15 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
       openSession(ROOT)
     }),
     openSession,
-    openListedBranch: vi.fn((_childId: SessionId) => {}),
+    // The branch surface delegates naming and presentation to Workspace navigation.
+    forkSession: vi.fn(async (
+      _sessionId: SessionId,
+      onCreated?: (childId: SessionId) => void,
+      _options?: { readonly atSeq?: number; readonly present?: 'selected' | 'listed' },
+    ) => {
+      onCreated?.(ROOT)
+      return ROOT
+    }),
   }
   runtime.ctx.provide('uiWorkspace', uiWorkspace as never)
   const session = sessionFakeFor()
@@ -251,7 +259,7 @@ describe('Chat inject API', () => {
     }
   })
 
-  it('loads older history and forks through the Session Controller', async () => {
+  it('delegates the branch point, its analytics, and the child presentation to Workspace navigation', async () => {
     const b = await bench()
     const { injected } = b.chatViewApi(b.rootReference)
     injected.loadOlder()
@@ -262,8 +270,11 @@ describe('Chat inject API', () => {
 
     const track = vi.fn()
     b.runtime.ctx.provide('productAnalytics', { track } as never)
-    const forkCreated = vi.spyOn(b.runtime.sessions, 'fork').mockImplementation(async (input) => { input.onCreated?.(ROOT); return ROOT })
     injected.forkAt(17)
+    // The page owns only its branch point and analytics; naming and presentation belong to Workspace.
+    expect(b.uiWorkspace.forkSession).toHaveBeenCalledWith(ROOT, expect.any(Function) as (childId: SessionId) => void, {
+      atSeq: 17, present: 'selected',
+    })
     expect(track).toHaveBeenCalledWith('branch_session_click', { session_id: ROOT, parent_session_id: ROOT, click_position: 'footer' })
     await b.runtime.sessions.replaceEvents(ROOT, [
       { type: 'event', event: { type: 'turn/start', seq: SessionSeq(10), time: 10, data: { turn: 1 } } },
@@ -275,20 +286,12 @@ describe('Chat inject API', () => {
     ])
     injected.forkAt(17)
     expect(track).toHaveBeenLastCalledWith('branch_session_click', { session_id: ROOT, parent_session_id: ROOT, parent_message_id: 'reply', click_position: 'footer' })
-    forkCreated.mockRestore()
-    injected.forkAt(17)
-    await vi.waitFor(() => {
-      expect(b.openSession).toHaveBeenCalledWith(ROOT)
-    })
-    expect(b.runtime.sessions.calls).toContainEqual({
-      method: 'fork', args: [{ sessionId: ROOT, atSeq: 17, increaseTitle: true, onCreated: expect.any(Function) as (childId: SessionId) => void }],
-    })
-
-    const fork = vi.spyOn(b.runtime.sessions, 'fork').mockRejectedValueOnce(new Error('fork failed'))
+    // A rejected branch is reported on this Session's composer; the page adds no retry of its own.
+    vi.spyOn(b.uiWorkspace, 'forkSession').mockRejectedValueOnce(new Error('fork failed'))
     injected.forkAt(18)
     await vi.waitFor(() => {
-      expect(fork).toHaveBeenCalledWith({
-        sessionId: ROOT, atSeq: 18, increaseTitle: true, onCreated: expect.any(Function) as (childId: SessionId) => void,
+      expect(b.uiWorkspace.forkSession).toHaveBeenLastCalledWith(ROOT, expect.any(Function) as (childId: SessionId) => void, {
+        atSeq: 18, present: 'selected',
       })
     })
     await b.runtime.dispose()
@@ -311,7 +314,7 @@ describe('Chat inject API', () => {
     const { injected } = b.chatViewApi(b.rootReference)
     // The Host's own message reaches the reader with the stable code beside it, and the Session it was
     // asked of is the one that shows it.
-    vi.spyOn(b.runtime.sessions, 'fork').mockRejectedValueOnce({
+    vi.spyOn(b.uiWorkspace, 'forkSession').mockRejectedValueOnce({
       rpcError: { code: 'boundary-not-committed', message: 'boundary is not committed' },
     })
     injected.forkAt(18)
@@ -321,34 +324,11 @@ describe('Chat inject API', () => {
       )
     })
     // A rejection that named no code keeps its own message and gains no placeholder.
-    vi.spyOn(b.runtime.sessions, 'fork').mockRejectedValueOnce(new Error('fork child rename failed'))
+    vi.spyOn(b.uiWorkspace, 'forkSession').mockRejectedValueOnce(new Error('fork child rename failed'))
     injected.forkAt(19)
     await vi.waitFor(() => {
       expect(noticeOf(ROOT)).toBe('未能完成分支：fork child rename failed')
     })
-    await b.runtime.dispose()
-  })
-
-  it('leaves a branch unnamed and opens it once listed while access excludes renaming the Session', async () => {
-    const b = await bench()
-    const source = vi.spyOn(b.runtime.ctx.remoteAccess, 'source')
-    source.mockImplementation((_kind, _id, endpoint) => createSnapshotStore(endpoint !== 'session/rename'))
-    const { injected } = b.chatViewApi(b.rootReference)
-    injected.forkAt(17)
-    // Naming a branch renames it, which this page may not do: asking for the rename would fail the
-    // fork after the Host already made the child, so the page forks an unnamed branch.
-    await vi.waitFor(() => {
-      expect(b.runtime.sessions.calls).toContainEqual({
-        method: 'fork', args: [{ sessionId: ROOT, atSeq: 17, increaseTitle: false, onCreated: expect.any(Function) as (childId: SessionId) => void }],
-      })
-    })
-    // The child's own list item is what says the branch is this page's own, so the page asks the
-    // Workspace navigation to open it then — that service waits for the item rather than assembling
-    // a view of a child the page cannot yet describe.
-    expect(b.uiWorkspace.openListedBranch).toHaveBeenCalledWith(ROOT)
-    expect(b.runtime.sessions.calls).not.toContainEqual({ method: 'open', args: [ROOT] })
-    expect(source).toHaveBeenCalledWith('session', ROOT, 'session/rename')
-    source.mockRestore()
     await b.runtime.dispose()
   })
 
