@@ -16,7 +16,7 @@ const bundle = fileURLToPath(new URL('../../../packages/experimental/cua-bundle'
 const expected = fileURLToPath(new URL('./expected/cua-permissions/missing.expected.md', import.meta.url))
 
 // System-permission onboarding belongs to the macOS-only bundle; rendering and policy units remain portable.
-it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fresh observation and persists application revocation', async () => {
+it.skipIf(process.platform !== 'darwin').each([false, true])('keeps system requests pending until fresh observation and persists application revocation (read-only runtime: %s)', async (readOnlyRuntime) => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-cua-permissions-web-'))
   const resources: { scaffold?: WebScaffold; browser?: Browser; closeFixture?: () => Promise<void> } = {}
   onTestFinished(async () => {
@@ -38,8 +38,11 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   await writeFile(join(fixtureBundle, 'package.json'), JSON.stringify({ name: 'cua-permission-fixture', version: '1.0.0',
     dsh: { bundle: { patch: 'cordis.patch.yml' } } }))
   await writeFile(join(fixtureBundle, 'cordis.patch.yml'), `- id: cua\n  config: ${JSON.stringify({ helperPath: helper })}\n`)
+  const runtimePatch = join(root, 'readonly-runtime.yml')
+  await writeFile(runtimePatch, JSON.stringify([{ id: 'ptc-runtime', config: { executionMode: 'per-call' } }]))
   const scaffold = await launchWebScaffold({
     profile: { packages: [{ dir: bundle, enabled: true }, { dir: fixtureBundle, enabled: true }] },
+    ...(readOnlyRuntime ? { extraOverlayPath: runtimePatch } : {}),
   })
   resources.scaffold = scaffold
   await scaffold.ctx.settings.mutate('cua', [{ op: 'set', path: ['allowedApps'],
@@ -90,7 +93,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   expect(await panel.getByRole('group', { name: 'Screen Recording', exact: true }).getByText('Visual Studio Code.app', { exact: true }).count()).toBe(1)
   await expect.poll(() => accessibility.locator('img').evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(1)
   await expect.poll(() => panel.getAttribute('aria-busy')).toBe('false')
-  await compareOrRefreshGolden(expected, await captureStableAria(page, '[data-cua-settings]', scaffold.workspaceCwd), webSnapshotMode())
+  if (!readOnlyRuntime) await compareOrRefreshGolden(expected, await captureStableAria(page, '[data-cua-settings]', scaffold.workspaceCwd), webSnapshotMode())
   try {
     for (const width of [1680, 390]) {
       await page.setViewportSize({ width, height: 1000 })
@@ -148,6 +151,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   expect(events.every(event => ['permissionStatus', 'requestPermission', 'openPermissionSettings', 'applicationIcons', 'getApp'].includes(event.method))).toBe(true)
   const trace = await page.evaluateHandle(() => {
     const errors: string[] = []
+    const stable = [...document.querySelectorAll('[data-cua-settings] [role="alert"]')].map(node => node.textContent?.trim())
     const layouts: { height: number; sections: number[]; groups: number[] }[] = []
     let frame = 0
     const measure = () => {
@@ -165,7 +169,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
     const observer = new MutationObserver(() => {
       for (const node of document.querySelectorAll('[data-cua-settings] [role="alert"]')) {
         const text = node.textContent?.trim()
-        if (text && errors.at(-1) !== text) errors.push(text)
+        if (text && !stable.includes(text) && errors.at(-1) !== text) errors.push(text)
       }
     })
     observer.observe(document.body, { childList: true, subtree: true, characterData: true })
@@ -173,19 +177,23 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   })
   try {
     const toggle = page.locator('[data-plugin-panel]').getByRole('switch', { name: 'Enable Computer Use', exact: true })
-    for (let cycle = 0; cycle < 3; cycle++) {
-      await toggle.click()
-      await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('false')
-      await expect.poll(() => toggle.isEnabled()).toBe(true)
-      await toggle.click()
-      await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
-      await expect.poll(() => panel.getAttribute('aria-busy')).toBe('false')
-      expect(await trace.evaluate(value => value.errors)).toEqual([])
+    for (const width of [1680, 390]) {
+      await page.setViewportSize({ width, height: 1000 })
+      await trace.evaluate((value) => { value.layouts.length = 0 })
+      for (let cycle = 0; cycle < 3; cycle++) {
+        await toggle.click()
+        await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('false')
+        await expect.poll(() => toggle.isEnabled()).toBe(true)
+        await toggle.click()
+        await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
+        await expect.poll(() => panel.getAttribute('aria-busy')).toBe('false')
+        expect(await trace.evaluate(value => value.errors)).toEqual([])
+      }
+      const layouts = await trace.evaluate(value => value.layouts)
+      expect(layouts.length).toBeGreaterThan(0)
+      const heights = layouts.map(layout => layout.height)
+      expect(Math.max(...heights) - Math.min(...heights), JSON.stringify(layouts)).toBeLessThanOrEqual(1)
     }
-    const layouts = await trace.evaluate(value => value.layouts)
-    expect(layouts.length).toBeGreaterThan(0)
-    const heights = layouts.map(layout => layout.height)
-    expect(Math.max(...heights) - Math.min(...heights), JSON.stringify(layouts)).toBeLessThanOrEqual(1)
   } finally {
     await trace.evaluate((value) => { value.stop() })
     await trace.dispose()

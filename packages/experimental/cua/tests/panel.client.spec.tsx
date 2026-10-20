@@ -241,7 +241,7 @@ it.each([en, zh])('shows four requirements with the target application beside ea
   expect(within(requirements).getByText(dictionary.permissionHint)).toBeTruthy()
   f.publish({ system: { ...f.state.getSnapshot().system, error: 'offline' } })
   expect(screen.queryByText(application.name)).toBeNull()
-  expect(within(requirements).getByText(dictionary.permissionHintUnknown)).toBeTruthy()
+  expect(within(requirements).getByText(dictionary.permissionHint)).toBeTruthy()
 })
 
 it('names the authorization target even when its icon is unavailable', () => {
@@ -265,12 +265,12 @@ it('waits for the first current observation instead of opening setup with a stal
 })
 
 
-it('omits setup instructions once both system permissions are granted', () => {
+it('keeps permission management guidance after both permissions are granted', () => {
   const f = fixture()
   render(<PermissionPanel {...f.props} />)
   f.publish({ ...observe({ ...value, system: { ...value.system, accessibility: true, screenRecording: true } }) })
   expect(screen.getAllByText(en.granted)).toHaveLength(2)
-  expect(screen.queryByText(en.permissionHintUnknown)).toBeNull()
+  expect(screen.getByText(en.permissionHint)).toBeTruthy()
 })
 
 
@@ -291,8 +291,8 @@ it('keeps content mounted and disables actions while management changes are pend
   const view = render(<PermissionPanel {...f.props} />)
   const requirements = screen.getByRole('region', { name: en.title })
   expect(within(requirements).getAllByRole('group')).toHaveLength(4)
-  expect(screen.queryByRole('alert')).toBeNull()
-  expect(screen.getByRole('button', { name: en.request }).hasAttribute('disabled')).toBe(true)
+  expect(screen.getByRole('alert').textContent).toContain('provider is reloading')
+  expect(screen.getByRole('button', { name: en.unknown }).hasAttribute('disabled')).toBe(true)
   fireEvent.focus(window)
   expect(f.props.refresh).toHaveBeenCalledTimes(2)
   f.publish({ system: { ...f.state.getSnapshot().system, busy: true, error: null }, busy: true })
@@ -342,7 +342,7 @@ it.each(['applications', 'icons'] as const)('contains a failed %s query in the a
   expect(f.props.refresh).toHaveBeenCalledTimes(2)
   f.publish({ changing: true })
   view.rerender(<PermissionPanel {...f.props} />)
-  expect(screen.queryByRole('alert')).toBeNull()
+  expect(within(access).getByRole('alert').textContent).toContain('offline')
 })
 
 it('finishes activation guidance without waiting for application icons', () => {
@@ -396,4 +396,21 @@ it('retains the previous single control while a stale query error is being refre
   expect(screen.getByRole('button', { name: en.request }).hasAttribute('disabled')).toBe(true)
   expect(screen.getByRole('button', { name: en.granted }).hasAttribute('disabled')).toBe(true)
   expect(screen.queryByRole('alert')).toBeNull()
+})
+
+
+it('retains a known read-only configuration and query failure throughout management and refresh', () => {
+  const f = fixture()
+  f.publish({ ...observe(value), runtime: { value: { persistent: false, writable: false }, busy: false, error: null },
+    applications: { value, busy: false, error: 'offline' } })
+  const view = render(<PermissionPanel {...f.props} />)
+  const readonly = screen.getByText(en.persistentReadOnly)
+  const query = screen.getByText(en.applicationsFailed.replace('{message}', 'offline'))
+  f.publish({ changing: true, busy: true,
+    runtime: { ...f.state.getSnapshot().runtime, busy: true },
+    applications: { ...f.state.getSnapshot().applications, busy: true } })
+  expect(screen.getByText(en.persistentReadOnly)).toBe(readonly)
+  expect(screen.getByText(en.applicationsFailed.replace('{message}', 'offline'))).toBe(query)
+  view.unmount()
+  expect(f.state.getSnapshot().changing).toBe(true)
 })
