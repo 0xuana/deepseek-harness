@@ -36,6 +36,15 @@ export async function mountCuaPermissions(ctx: Context, contribution: TypertRemo
     ctx.effect(() => ctx.locale.register(NS, { en, zh }))
     const controller = new PermissionController(ctx.remote.cuaAccess)
     const face = controller.face()
+    ctx.inject(['pluginChanges'], (scope) => {
+      const changes = scope.pluginChanges.bundle('@deepseek-ai/dsh-cua-bundle')
+      const synchronize = () => { controller.setChanging(changes.getSnapshot()) }
+      synchronize()
+      scope.effect(() => {
+        const unsubscribe = changes.subscribe(synchronize)
+        return () => { unsubscribe(); controller.setChanging(false) }
+      })
+    })
     ctx.slots.inject('conversation.composer', () => ctx.slots.register({
       name: 'conversation.composer', priority: -1, locale: NS,
       select: ({ pendingInteraction }: ComposerChainProps) => selectApplicationApproval(pendingInteraction),

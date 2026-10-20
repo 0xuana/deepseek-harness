@@ -36,6 +36,11 @@ async function fixture(fail = false) {
     }
   }
   new Remote()
+  const changes = createSnapshotStore(false)
+  ctx.provide('pluginChanges', { bundle: (name) => {
+    expect(name).toBe('@deepseek-ai/dsh-cua-bundle')
+    return changes
+  } })
   const setDefault = vi.fn(async () => true)
   const setPersistent = vi.fn<() => Promise<RemoteResult<void>>>().mockResolvedValue({ ok: true, value: undefined })
   const runtimeConfiguration = vi.fn<() => Promise<RemoteResult<{ persistent: boolean; writable: boolean }>>>()
@@ -65,7 +70,7 @@ async function fixture(fail = false) {
     'conversation.composer': { kind: 'chain', scope: 'session' },
   } } as never, () => null)
   if (fail) vi.spyOn(ctx.slots, 'inject').mockImplementationOnce(() => { throw new Error('slot unavailable') })
-  return { ctx, unmount, status, systemStatus, applicationIcons,
+  return { ctx, changes, unmount, status, systemStatus, applicationIcons,
     requestPermission, openSettings, revoke, retryApproval, setDefault, setPersistent, runtimeConfiguration,
   }
 }
@@ -181,5 +186,27 @@ it('refreshes application storage on reconnect', async () => {
     await f.ctx.plugin({ inject: [...inject], apply: ctx => mountCuaPermissions(ctx, contribution) })
     f.ctx.emit('connection/reset')
     await vi.waitFor(() => { expect(f.status).toHaveBeenCalledOnce() })
+  } finally { await f.ctx.fiber.dispose() }
+})
+
+
+it('resumes queries when a management operation settles without a mounted permission page', async () => {
+  const f = await fixture()
+  try {
+    f.changes.set(true)
+    const fiber = await f.ctx.plugin({ inject: [...inject], apply: ctx => mountCuaPermissions(ctx, contribution) })
+    const actions = f.ctx.slots.entries('plugins.bundle.config')[0]!.inject!()
+    actionsOf(actions)
+    expect(actions.hooks.cuaPermissions.getSnapshot().changing).toBe(true)
+    actions.refresh()
+    f.ctx.emit('connection/reset')
+    expect(f.status).not.toHaveBeenCalled()
+    f.changes.set(false)
+    await vi.waitFor(() => { expect(actions.hooks.cuaPermissions.getSnapshot().busy).toBe(false) })
+    expect(f.status).toHaveBeenCalledOnce()
+    f.changes.set(true)
+    await fiber.dispose()
+    f.changes.set(false)
+    expect(f.status).toHaveBeenCalledOnce()
   } finally { await f.ctx.fiber.dispose() }
 })

@@ -2359,13 +2359,14 @@ it.each([false, true])('shows progress only for the changing bundle and clears i
   const name = 'dsh-better-sidebar'
   const { set, setLanguage, actions } = renderTab({ packages: [pkg({ enabled }), pkg({ name: 'dsh-other' })] })
   const toggle = screen.getByRole('switch', { name: `Enable ${name}` })
-  expect(screen.queryByRole('status')).toBeNull()
+  const status = within(toggle.parentElement!).getByRole('status')
+  expect(status.textContent).toBe('')
   fireEvent.click(toggle)
   expect(actions.setEnabled).toHaveBeenCalledExactlyOnceWith(name, !enabled)
   set({ busy: [name] })
   for (const dict of [en, zh]) {
     setLanguage(dict)
-    const status = screen.getByRole('status', { name: dict.applyingChange.replace('{name}', name) })
+    expect(status.textContent).toBe(dict.applyingChange.replace('{name}', name))
     expect(status.querySelector('[data-state="ongoing"]')).not.toBeNull()
   }
   expect(toggle).toHaveProperty('disabled', true)
@@ -2373,7 +2374,8 @@ it.each([false, true])('shows progress only for the changing bundle and clears i
   expect(actions.setEnabled).toHaveBeenCalledOnce()
   expect(screen.getByRole('switch', { name: '启用 dsh-other' })).toHaveProperty('disabled', false)
   set({ busy: [] })
-  expect(screen.queryByRole('status')).toBeNull()
+  expect(within(toggle.parentElement!).getByRole('status')).toBe(status)
+  expect(status.textContent).toBe('')
   expect(toggle).toHaveProperty('disabled', false)
 })
 
@@ -2580,19 +2582,19 @@ it('uses the same activation guidance from a package detail switch', () => {
 })
 
 
-it('keeps bundle configuration mounted while reporting its pending operation', () => {
+it('keeps bundle configuration mounted while its operation is pending', () => {
   const name = 'dsh-better-sidebar'
   const { set } = renderTab({ packages: [pkg()] }, { bundles: new Set([name]) }, {
-    [`plugins.bundle.config:${name}`]: (_view, owner) => <div data-testid="bundle-config">{String((owner as { busy?: boolean }).busy)}</div>,
+    [`plugins.bundle.config:${name}`]: () => <div data-testid="bundle-config">Configuration</div>,
   })
   fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', name) }))
   const panel = screen.getByTestId('bundle-config')
-  expect(panel.textContent).toBe('false')
+  expect(panel.textContent).toBe('Configuration')
   set({ busy: [name] })
   expect(screen.getByTestId('bundle-config')).toBe(panel)
-  expect(panel.textContent).toBe('true')
+  expect(panel.textContent).toBe('Configuration')
   set({ busy: [] })
-  expect(panel.textContent).toBe('false')
+  expect(panel.textContent).toBe('Configuration')
 })
 
 describe('registry versions and updates', () => {
