@@ -1,5 +1,5 @@
 /** Explicit-need recommendations; only a human card action enables a plugin. */
-import { Service, type Context } from '@deepseek-ai/cordis'
+import { FiberState, Service, type Context } from '@deepseek-ai/cordis'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { createUserMessage, boundContextSummary, HarnessError, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import { defineTool } from '@deepseek-ai/dsh-tools'
@@ -14,6 +14,8 @@ import type {} from '@deepseek-ai/dsh-api-remote-access'
 import { recommendationProjection, type RecommendationState } from './projection.ts'
 import type { PluginRecommendation, RecommendationActionResult, RecommendationOutcome } from './types.ts'
 export type * from './types.ts'
+
+export const name = 'plugin-recommendations'
 
 declare module '@deepseek-ai/cordis' {
   interface Context { pluginRecommendations: PluginRecommendations }
@@ -32,16 +34,20 @@ function localized(text: LocalizedText | undefined, language: 'en' | 'zh', fallb
 /** Tool refusals have stable identities and cause no profile mutation. */
 export class PluginRecommendationError extends HarnessError {}
 
-/** Owns the catalog tools, durable decisions, and idempotent card actions. */
-export default class PluginRecommendations extends TypertRemoteService {
+/** Internal Remote and effect owner assembled by the plugin-recommendation feature. */
+export class PluginRecommendations extends TypertRemoteService {
   static inject = ['tools', 'pluginManager', 'agents', 'sessionProjections', 'remoteAccess', 'systemPrompt']
   private projection!: ProjectionHandle<RecommendationState>
   private readonly operations = new Map<string, Promise<RecommendationActionResult>>()
   private readonly proposals = new Map<string, { turn: number; callId: ToolCallId }>()
   private readonly stopped = Promise.withResolvers<undefined>()
   private closing = false
+  private readonly owner: Context['fiber']
 
-  constructor(ctx: Context) { super(ctx, 'pluginRecommendations') }
+  constructor(ctx: Context) {
+    super(ctx, 'pluginRecommendations')
+    this.owner = ctx.fiber
+  }
 
   protected async [Service.init](): Promise<void> {
     this.projection = await this.ctx.sessionProjections.register(recommendationProjection)
@@ -51,7 +57,7 @@ export default class PluginRecommendations extends TypertRemoteService {
       text: ({ agent }) => agent !== undefined && this.ctx.agents.roots().includes(agent)
         && this.ctx.tools.get('list_official_plugins', agent) !== undefined
         && this.ctx.tools.get('suggest_plugin', agent) !== undefined
-        ? 'For a concrete DSH interface, workflow or capability need, first read list_official_plugins for the need selected this turn. Everyday wishes count without naming a plugin. Select at most ONE recommendation across all recommendation tools before calling any of them, even when the user asks for multiple cards. Follow the user’s explicit priority; otherwise prefer a suitable existing plugin over creating a new interface. Discuss other independent needs briefly in the answer, clarifying missing requirements rather than combining them or inventing a purpose or data source. Do not batch multiple recommendations. Match catalog descriptions to the selected need. If a plugin fits, use suggest_plugin and finish; do not query another catalog just to plan an unselected creation. If the selected need requires creation, check existing capabilities through the available creation discovery tool. A wish does not authorize changing DSH source, settings or instructions; inspect those only when the human requests implementation work. Display translation does not change internal reasoning language. For vague wishes, clarify before lookup. For ordinary tasks, answer directly. If the current answer already yields a clearly reusable result, such as a changing task list or recurring status table, available creation tools may offer an optional page under their own guidance. This does not justify unrelated plugin discovery or extra research. Quoted requests and discussion-only requests that decline recommendations get no discovery or cards. Report only successful proposals; do not promise an automatic later card or require enabling one plugin to discuss another need.'
+        ? 'DSH product-use requests: when the user wants a different interface or capability, your first action is list_official_plugins unless personalized-pages already supplied the current catalog this turn. Do not repeat catalog lookup without a state change. This includes the language or readability of displayed thinking, input methods and finding past work. A wish to use DSH differently is not an instruction to develop DSH, even when runtime context includes its checkout. Do not read source, files or configuration for discovery. Match the desired outcome using catalog descriptions; display translation can address readability without changing reasoning generation, so explain that limit. For an enabled match, explain how to use it without a card. For a disabled match, call suggest_plugin and stop discovery; do not load page-creation skills for an existing-plugin recommendation. Consider ALL independent needs before selecting one card. Follow explicit priority; otherwise prefer a suitable existing plugin, even if a creation wish is mentioned first or described in more detail. If creation is selected and no existing capability fits it, load the available personalized-pages skill. Briefly acknowledge other needs without another lookup, invented connections or a promised later card. Answer in the user’s language; leave the detailed plan on the card. Do not claim installation before the user acts, or ask for a reply or refresh afterward. Skip discovery for ordinary tasks, quoted or vague wishes and declined recommendations. Available creation guidance may allow an optional page for a clearly reusable result already obtained. Explicit requests to implement or debug source may use development tools.'
         : '',
     })
     this.ctx.on('agent/disposed', ({ agent }) => { this.proposals.delete(agent.id) })
@@ -67,22 +73,23 @@ export default class PluginRecommendations extends TypertRemoteService {
     }, 'plugin-recommendations: drain card actions')
     this.ctx.tools.register(defineTool({
       name: 'list_official_plugins',
-      description: 'Read the built-in optional DSH plugins that can help with a current explicit user need. This is read-only and does not enable anything. Match the user request semantically against these descriptions. Do not discover unexpressed needs or recommend unrelated plugins.',
+      description: 'Read the built-in optional DSH plugins and their enabled state for an explicit product-use need before inspecting source, configuration or instruction files. Catalog descriptions are sufficient to choose a recommendation; do not research implementation or setup steps. Match the desired user outcome semantically and explain any material limit. For a suitable disabled entry use suggest_plugin; for an enabled entry explain that it is already enabled and how to use it, without another card. This is read-only and enables nothing. Skip ordinary tasks, quoted wishes, declined or unrelated needs.',
       parameters: {},
       output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
       execute: async (_args, exec) => {
         const bundles = await this.ctx.pluginManager.listBundles()
         exec.signal.throwIfAborted()
-        return JSON.stringify(bundles.filter(bundle => eligible(bundle) && !bundle.enabled).map(bundle => ({
+        return JSON.stringify(bundles.filter(eligible).map(bundle => ({
           name: bundle.name,
           title: bundle.meta?.title ?? bundle.name,
           description: bundle.meta?.description ?? bundle.description ?? '',
+          enabled: bundle.enabled,
         })))
       },
     }))
     this.ctx.tools.register(defineTool({
       name: 'suggest_plugin',
-      description: 'Propose one disabled built-in official plugin for an explicit user need. Read list_official_plugins first and use an exact catalog name. Select ONE recommendation per turn across suggest_plugin and suggest_view, even if multiple cards are requested; never batch recommendations. Honor explicit priority; otherwise prefer an existing plugin over creating an interface. Explain remaining independent needs in the answer without another recommendation call or a promise of an automatic later card. Clarify missing requirements; do not invent connections between needs. Do not call for vague, unexpressed or declined needs, already enabled plugins, or third-party packages. Call before the final answer, then answer concisely in the user’s language using only successful results. A rejected call created no card. The card appears below the completed answer. This only proposes: the user must click Enable. Never enable through another tool or claim it is enabled. Clicking Enable completes activation and automatically sends confirmation; never ask the user to report back or refresh. Enabling authorizes this plugin only, not another recommendation or unrelated work. The user can later disable or remove it from its details page.',
+      description: 'Propose one disabled built-in official plugin for an explicit user need. Use an exact name from the current catalog supplied by list_official_plugins or personalized-pages; do not repeat discovery in the same turn. Select ONE recommendation per turn across suggest_plugin and suggest_action, even if multiple cards are requested; never batch recommendations. Honor explicit priority; otherwise prefer an existing plugin over creating an interface. Explain remaining independent needs in the answer without another recommendation call or a promise of an automatic later card. Clarify missing requirements; do not invent connections between needs. Do not call for vague, unexpressed or declined needs, already enabled plugins, or third-party packages. Call before the final answer, then answer concisely in the user’s language using only successful results. A rejected call created no card. The card appears below the completed answer. This only proposes: the user must click Enable. Never enable through another tool or claim it is enabled. Clicking Enable applies the plugin and automatically sends confirmation; never ask the user to report back, refresh or reopen. Include only setup requirements stated in the catalog; do not invent installation steps or inspect source to add them. The card reports any actual restart requirement. Enabling authorizes this plugin only, not another recommendation or unrelated work. The user can later disable or remove it from its details page.',
       parameters: {
         name: { type: 'string', required: true, description: 'Exact official catalog name.' },
         request: { type: 'string', required: true, description: 'Only the selected explicit need this plugin addresses and its relevant context; keep other independent wishes separate.' },
@@ -157,8 +164,16 @@ export default class PluginRecommendations extends TypertRemoteService {
     return operation
   }
 
-  /** Read live lifecycle state after awaits rather than narrowing it to a stale value. */
-  private isStopping(): boolean { return this.closing }
+  /** Parent disposal starts before its child effects drain. */
+  private isStopping(): boolean {
+    let owner = this.owner
+    while (true) {
+      if (owner.uid === null || owner.state === FiberState.UNLOADING) return true
+      const parent = owner.parent.fiber
+      if (parent === owner) return this.closing
+      owner = parent
+    }
+  }
 
   private async decide(agent: Agent, callId: ToolCallId, action: 'enable' | 'dismiss'): Promise<RecommendationActionResult> {
     const state = this.projection.stateOf(agent.session)
@@ -199,4 +214,12 @@ export default class PluginRecommendations extends TypertRemoteService {
     }
     return { status: 'settled', outcome, ...errorCode === undefined ? {} : { errorCode } }
   }
+}
+
+/**
+ * Assemble the feature-owned Remote; disposing the feature also disposes its effects.
+ * @param ctx - Owning feature context.
+ */
+export async function apply(ctx: Context): Promise<void> {
+  await ctx.plugin(PluginRecommendations)
 }

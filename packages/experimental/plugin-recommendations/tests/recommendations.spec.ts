@@ -7,7 +7,7 @@ import { appendPluginRecord, SessionId, SessionSeq, type SessionEvent } from '@d
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { BundleInfo, ChangeResult } from '@deepseek-ai/dsh-plugin-manager/types'
 import RemoteAccess from '@deepseek-ai/dsh-api-remote-access'
-import PluginRecommendations from '../src/index.ts'
+import * as PluginRecommendations from '../src/index.ts'
 import { recommendationProjection } from '../src/projection.ts'
 import type { RecommendationDecision } from '../src/types.ts'
 
@@ -58,24 +58,24 @@ describe('official recommendations', () => {
   it('provides discovery-first guidance only to roots with both tools and withdraws it on unload', async () => {
     const f = await fixture()
     const text = async () => renderPrompt(await f.ctx.systemPrompt.assemble(assembleContextFor(f.agent)))
-    expect(await text()).toContain('first read list_official_plugins')
+    expect(await text()).toContain('your first action is list_official_plugins')
     expect({
       prompt: await text(),
       proposal: f.ctx.tools.get('suggest_plugin', f.agent)?.description,
       parameters: f.ctx.tools.get('suggest_plugin', f.agent)?.parameters,
     }).toMatchSnapshot('one selected need and accurate proposal outcomes')
-    expect(renderPrompt(await f.ctx.systemPrompt.assemble())).not.toContain('read list_official_plugins')
+    expect(renderPrompt(await f.ctx.systemPrompt.assemble())).not.toContain('action is list_official_plugins')
     const child = await f.agent.ctx.agents.create({ sessionId: SessionId('recommendations-child'), parentAgent: f.agent })
-    expect(renderPrompt(await f.ctx.systemPrompt.assemble(assembleContextFor(child.agent)))).not.toContain('read list_official_plugins')
+    expect(renderPrompt(await f.ctx.systemPrompt.assemble(assembleContextFor(child.agent)))).not.toContain('action is list_official_plugins')
     await child.dispose()
     for (const name of ['list_official_plugins', 'suggest_plugin']) {
       const restore = f.agent.ctx.tools.restrict({ deny: [name] })
-      expect(await text()).not.toContain('read list_official_plugins')
+      expect(await text()).not.toContain('action is list_official_plugins')
       restore()
     }
-    expect(await text()).toContain('read list_official_plugins')
+    expect(await text()).toContain('action is list_official_plugins')
     await f.fiber.dispose()
-    expect(await text()).not.toContain('read list_official_plugins')
+    expect(await text()).not.toContain('action is list_official_plugins')
   })
 
   it('admits one proposal per turn when this experiment is enabled alone, including concurrent calls and retries', async () => {
@@ -186,7 +186,7 @@ describe('official recommendations', () => {
     expect(recommendationProjection.apply(state, { ...event, data: { ...event.data, isError: true } })).toBe(state)
   })
 
-  it('lists only disabled, usable shipped official plugins without side effects', async () => {
+  it('lists usable shipped official plugins with enabled state without side effects', async () => {
     const f = await fixture()
     f.manager.listBundles.mockResolvedValue([
       bundle, { ...bundle, name: 'custom', official: false }, { ...bundle, name: 'enabled', enabled: true },
@@ -195,7 +195,10 @@ describe('official recommendations', () => {
       { ...bundle, name: 'failed', error: { code: 'operation-error', diagnostic: 'load failed' } },
     ])
     const result = await f.execute('list_official_plugins', {})
-    expect(result.value).toBe(JSON.stringify([{ name: bundle.name, title: bundle.meta?.title, description: bundle.meta?.description }]))
+    expect(result.value).toBe(JSON.stringify([
+      { name: bundle.name, title: bundle.meta?.title, description: bundle.meta?.description, enabled: false },
+      { name: 'enabled', title: bundle.meta?.title, description: bundle.meta?.description, enabled: true },
+    ]))
     expect(f.manager.setBundleEnabled).not.toHaveBeenCalled()
   })
 
@@ -276,18 +279,20 @@ describe('official recommendations', () => {
     expect((await f.execute('suggest_plugin', { name: bundle.name, request: 'search', reason: 'history' })).isError).toBe(true)
   })
 
-  it.each(['plugin', 'agent'] as const)('does not start activation after the %s leaves during catalog lookup', async (target) => {
+  it.each(['plugin', 'plugin-reload', 'agent'] as const)('does not start activation after the %s leaves during catalog lookup', async (target) => {
     const f = await fixture()
     await f.propose()
     const entered = Promise.withResolvers<undefined>()
     const gate = Promise.withResolvers<BundleInfo[]>()
+    onTestFinished(() => { gate.resolve([bundle]) })
     f.manager.listBundles.mockImplementationOnce(() => { entered.resolve(undefined); return gate.promise })
     const action = f.ctx.pluginRecommendations.act(f.agent, callId, 'enable')
     await entered.promise
-    const disposal = target === 'plugin' ? f.fiber.dispose() : f.handle.dispose()
+    const disposal = target === 'agent' ? f.handle.dispose()
+      : target === 'plugin' ? f.fiber.dispose() : f.fiber.restart()
     if (target === 'agent') await disposal
     gate.resolve([bundle])
-    expect(await action).toEqual({ status: 'refused', reason: target === 'plugin' ? 'closing' : 'not-live-root' })
+    expect(await action).toEqual({ status: 'refused', reason: target === 'agent' ? 'not-live-root' : 'closing' })
     await disposal
     expect(f.manager.setBundleEnabled).not.toHaveBeenCalled()
   })

@@ -16,7 +16,7 @@ import Llm, { LlmAdapter, createToolResultMessage, ToolCallId, type GenerateOpti
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import Tools from '@deepseek-ai/dsh-tools'
 import Access from '@deepseek-ai/dsh-api-remote-access'
-import Recommendations from '../src/index.ts'
+import * as Recommendations from '../src/index.ts'
 
 class Model extends LlmAdapter {
   readonly requests: GenerateOptions[] = []
@@ -101,6 +101,9 @@ it.each(['normal', 'consumer-unload'] as const)('enables through the real Loader
     release.resolve(undefined)
     await reload
     expect(await action).toEqual({ status: 'unconfirmed', reason: 'closing' })
+    expect(ctx.get('pluginRecommendations')).toBeUndefined()
+    expect(ctx.tools.get('list_official_plugins')).toBeUndefined()
+    expect(ctx.tools.get('suggest_plugin')).toBeUndefined()
     await ctx.hmr.runExclusive(async () => {})
     expect(readProfileManifest('test', dir).dsh?.profile?.bundles).toContain(name)
     expect((await ctx.pluginManager.listBundles()).find(bundle => bundle.name === name)?.enabled).toBe(true)
