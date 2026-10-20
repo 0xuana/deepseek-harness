@@ -154,12 +154,16 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
     { method: 'openPermissionSettings', params: { permission: 'accessibility' } },
   ])
   expect(events.every(event => ['permissionStatus', 'requestPermission', 'openPermissionSettings', 'applicationIcons', 'getApp'].includes(event.method))).toBe(true)
+  await plugins.locator('[data-detail-document] h1').waitFor()
   const trace = await page.evaluateHandle(() => {
     const errors: string[] = []
     const stable = [...document.querySelectorAll('[data-cua-settings] [role="alert"]')].map(node => node.textContent?.trim())
     const layouts: { height: number; sections: number[]; groups: number[] }[] = []
+    const documents: number[] = []
     let frame = 0
     const measure = () => {
+      const documentHeight = document.querySelector('[data-plugin-detail] [data-detail-document]')?.getBoundingClientRect().height ?? 0
+      if (documents.at(-1) !== documentHeight) documents.push(documentHeight)
       const settings = document.querySelector('[data-cua-settings]')
       if (settings) {
         const height = settings.getBoundingClientRect().height
@@ -178,7 +182,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
       }
     })
     observer.observe(document.body, { childList: true, subtree: true, characterData: true })
-    return { errors, layouts, stop: () => { observer.disconnect(); cancelAnimationFrame(frame) } }
+    return { errors, layouts, documents, stop: () => { observer.disconnect(); cancelAnimationFrame(frame) } }
   })
   try {
     const toggle = page.locator('[data-plugin-panel]').getByRole('switch', { name: 'Enable Computer Use', exact: true })
@@ -186,7 +190,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
       await page.setViewportSize({ width, height: 1000 })
       if (width === 390) await page.locator('[data-sidebar-collapsed]').waitFor({ state: 'attached' })
       await page.locator('[data-animating]').waitFor({ state: 'hidden' })
-      await trace.evaluate((value) => { value.layouts.length = 0 })
+      await trace.evaluate((value) => { value.layouts.length = 0; value.documents.length = 0 })
       for (let cycle = 0; cycle < 3; cycle++) {
         await toggle.click()
         await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('false')
@@ -200,6 +204,9 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
       }
       const layouts = await trace.evaluate(value => value.layouts)
       expect(layouts.length).toBeGreaterThan(0)
+      const documentHeights = await trace.evaluate(value => value.documents)
+      expect(documentHeights.length).toBeGreaterThan(0)
+      expect(Math.max(...documentHeights) - Math.min(...documentHeights)).toBeLessThanOrEqual(1)
       const heights = layouts.map(layout => layout.height)
       expect(Math.max(...heights) - Math.min(...heights), JSON.stringify(layouts)).toBeLessThanOrEqual(1)
     }
