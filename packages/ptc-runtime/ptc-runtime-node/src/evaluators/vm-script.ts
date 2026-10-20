@@ -67,16 +67,18 @@ async function evaluateScript(code: string, context: Context): Promise<unknown> 
   }
 }
 
-/** Native scripts bypass conversion; only compilation failures enter the await transformer. */
+/** Detect top-level await before native compilation can interpret await as an identifier. */
 function compileScript(code: string, options: ScriptOptions): { script: Script; transformed: boolean } {
-  try {
-    return { script: new Script(code, options), transformed: false }
-  } catch (error: unknown) {
-    if (!(error instanceof SyntaxError)) throw error
+  if (code.includes('await')) {
     // Complete submissions need no REPL continuation; the newline terminates trailing comments.
     const source = code.startsWith('#!') ? `//${code.slice(2)}` : code
-    const transformed = processTopLevelAwait(`${source}\n`)
-    if (transformed === null) throw error
-    return { script: new Script(transformed, options), transformed: true }
+    let transformed: string | null
+    try { transformed = processTopLevelAwait(`${source}\n`) } catch (error: unknown) {
+      // Parser diagnostics describe the program; transformer stack frames do not.
+      if (error instanceof SyntaxError) error.stack = `${error.name}: ${error.message}`
+      throw error
+    }
+    if (transformed !== null) return { script: new Script(transformed, options), transformed: true }
   }
+  return { script: new Script(code, options), transformed: false }
 }

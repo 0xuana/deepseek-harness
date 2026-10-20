@@ -2,7 +2,7 @@
  * Node REPL top-level-await transformation adapted for complete Script submissions.
  * Source: Node.js v26.6.0, lib/internal/repl/await.js:
  * https://github.com/nodejs/node/blob/v26.6.0/lib/internal/repl/await.js
- * Uses public Acorn and a local walker; incomplete input is a SyntaxError.
+ * Uses public Acorn and acorn-walk; incomplete input is a SyntaxError.
  */
 /*! @license
  * Copyright Node.js contributors. All rights reserved.
@@ -27,11 +27,7 @@
  */
 import { Parser } from 'acorn'
 import type { AnyNode, BlockStatement, Pattern, Position, Program, Statement, VariableDeclarator } from 'acorn'
-
-type Walk = (node: AnyNode, state: TransformState) => void
-type Visitor<K extends AnyNode['type'] = AnyNode['type']> = (
-  node: Extract<AnyNode, { type: K }>, state: TransformState, c: Walk,
-) => void
+import * as walk from 'acorn-walk'
 
 interface TransformState {
   body: BlockStatement
@@ -49,7 +45,8 @@ function isTopLevelDeclaration(state: TransformState): boolean {
 }
 
 const noop = (): void => {}
-const visitorsWithoutAncestors: { [K in AnyNode['type']]?: Visitor<K> } = {
+const base = walk.base as Required<walk.RecursiveVisitors<TransformState>>
+const visitorsWithoutAncestors: walk.RecursiveVisitors<TransformState> = {
   ClassDeclaration(node, state, c) {
     if (node.id === null) throw new SyntaxError('Script declarations must be named')
     if (isTopLevelDeclaration(state)) {
@@ -57,13 +54,13 @@ const visitorsWithoutAncestors: { [K in AnyNode['type']]?: Visitor<K> } = {
       state.hoistedDeclarationStatements.push(`let ${node.id.name}; `)
     }
 
-    visitChildren(node, state, c)
+    base.ClassDeclaration(node, state, c)
   },
   ForOfStatement(node, state, c) {
     if (node.await) {
       state.containsAwait = true
     }
-    visitChildren(node, state, c)
+    base.ForOfStatement(node, state, c)
   },
   FunctionDeclaration(node, state) {
     if (node.id === null) throw new SyntaxError('Script declarations must be named')
@@ -72,15 +69,18 @@ const visitorsWithoutAncestors: { [K in AnyNode['type']]?: Visitor<K> } = {
   },
   FunctionExpression: noop,
   ArrowFunctionExpression: noop,
-  MethodDefinition: noop,
+  MethodDefinition(node, state, c) {
+    // Computed keys execute while the class is defined; method bodies do not.
+    if (node.computed) c(node.key, state)
+  },
   StaticBlock: noop,
   AwaitExpression(node, state, c) {
     state.containsAwait = true
-    visitChildren(node, state, c)
+    base.AwaitExpression(node, state, c)
   },
   ReturnStatement(node, state, c) {
     state.containsReturn = true
-    visitChildren(node, state, c)
+    base.ReturnStatement(node, state, c)
   },
   VariableDeclaration(node, state, c) {
     const variableKind = node.kind
@@ -155,33 +155,24 @@ const visitorsWithoutAncestors: { [K in AnyNode['type']]?: Visitor<K> } = {
       })
     }
 
-    visitChildren(node, state, c)
+    base.VariableDeclaration(node, state, c)
   },
 }
 
-/** Acorn's child nodes provide the recursive traversal without an acorn-walk dependency. */
-function visitChildren(node: AnyNode, state: TransformState, c: Walk): void {
-  const visit = (value: unknown): void => {
-    if (value !== null && typeof value === 'object' && 'type' in value) c(value as AnyNode, state)
-  }
-  for (const value of Object.values(node as AnyNode & Record<string, unknown>)) {
-    if (Array.isArray(value)) value.forEach(visit)
-    else visit(value)
-  }
-}
-
-function recursive(node: AnyNode, state: TransformState): void {
-  // Indexing by node.type selects the visitor accepting this exact Acorn node type.
-  const callback = (visitorsWithoutAncestors[node.type] ?? visitChildren) as Visitor
-  const isNew = node !== state.ancestors[state.ancestors.length - 1]
-  if (isNew) {
-    state.ancestors.push(node)
-  }
-  callback(node, state, recursive)
-  if (isNew) {
-    state.ancestors.pop()
-  }
-}
+type Visitor = (node: AnyNode, state: TransformState, c: walk.WalkerCallback<TransformState>) => void
+const visitors: walk.RecursiveVisitors<TransformState> = Object.fromEntries(
+  Object.entries({ ...base, ...visitorsWithoutAncestors }).map(([type, visitor]) => {
+    // acorn-walk selects the callback by the matching node or aggregate type.
+    const callback = visitor as Visitor
+    const withAncestors: Visitor = (node, state, c) => {
+      const isNew = node !== state.ancestors[state.ancestors.length - 1]
+      if (isNew) state.ancestors.push(node)
+      callback(node, state, c)
+      if (isNew) state.ancestors.pop()
+    }
+    return [type, withAncestors]
+  }),
+)
 
 /** Keep the native-Node bootstrap independent of workspace packages' built exports. */
 function assertNever(value: never): never {
@@ -205,7 +196,6 @@ export function processTopLevelAwait(src: string): string | null {
     if (!(error instanceof SyntaxError)) throw error
     // Acorn syntax errors include offsets and positions; batches cannot request more REPL input.
     const e = error as SyntaxError & { pos: number; loc: Position }
-    if (e.message.startsWith('Unterminated ')) throw e
     // If the parse error is before the first "await", then use the execution
     // error. Otherwise we must emit this parse error, making it look like a
     // proper syntax error.
@@ -253,7 +243,7 @@ export function processTopLevelAwait(src: string): string | null {
     containsReturn: false,
   }
 
-  recursive(body, state)
+  walk.recursive(body, state, visitors)
 
   // Do not transform if
   // 1. False alarm: there isn't actually an await expression.

@@ -127,9 +127,9 @@ Host 擦除可擦除类型；需要启动进程时，在配置的执行世界中
 
 ### 源代码与构建后 bootstrap
 
-源代码执行加载仅含可擦除语法的 bootstrap 依赖，不依赖同级包的构建后导出。构建后脚本在所有模式下都使用 `process.js`；`persistent-process.js` 委托同一个循环，供未指定程序语法的宿主默认使用 REPL。保留模式要求 `node-script` 启动方式。远端脚本部署提供对应的 `launch.bootstrapPath`。内嵌载体通过 `launch.executable` 启动私有 worker。`resolveLaunch()` 在构造时选择本地默认值；显式的远端调用不依赖客户端自身是否打包。不会假设 Host 路径对应同一个远程文件。
+源代码执行加载仅含可擦除语法的 bootstrap 依赖，不依赖同级包的构建后导出；执行世界中必须提供求值器模块和已安装的 Acorn 依赖。构建后脚本在所有模式下都使用 `process.js`；`persistent-process.js` 委托同一个循环，供未指定程序语法的宿主默认使用 REPL。保留模式要求 `node-script` 启动方式。远端脚本部署提供对应的 `launch.bootstrapPath`。内嵌载体通过 `launch.executable` 启动私有 worker。`resolveLaunch()` 在构造时选择本地默认值；显式的远端调用不依赖客户端自身是否打包。不会假设 Host 路径对应同一个远程文件。
 
-原生编译器接受的脚本直接执行。当编译需要顶层 await 支持时，Acorn 解析包住源码的异步函数。转换沿用 Node REPL 的 visitor、声明提升和按字符位置修改源码的方式，包括对末尾表达式结果的包装；求值器解包后等待该值。局部 AST 遍历器使新增依赖仍只有 Acorn。动态 `import()` 表达式保持原生形式，使用编译该 Script 时的 `importModuleDynamically` 选项。两个私有进程 bundle 都包含 Acorn；源码执行直接导入该包。
+包含 `await` 的源码会在原生编译前检查顶层 await，否则原生编译可能将 `await` 当作标识符。Acorn 解析包住源码的异步函数，acorn-walk 沿用 Node REPL 的 visitor、声明提升和按字符位置修改源码的方式进行遍历。类方法的计算属性名参与遍历，方法体仍独立求值。转换包装末尾表达式，求值器解包并等待其值。无需转换的源码使用原生编译；不含 `await` 的提交保留原生语法诊断。动态 `import()` 表达式保持原生形式，使用编译该 Script 时的 `importModuleDynamically` 选项。两个私有进程 bundle 都包含 Acorn 和 acorn-walk；源码执行导入已安装的包。
 
 ### 源码索引
 
@@ -188,6 +188,8 @@ Host 擦除可擦除类型；需要启动进程时，在配置的执行世界中
 - **清理继承子进程的可观测范围**——使用 fallback 的平台上，逃逸的后代可能仍在受管范围之外；参见子进程提供方声明的限制。
 - **默认执行是一次性的**：保留状态需要设置 `persistent-in-memory` 模式，或在 Script 模式下启用 `scriptPersistence: true`；所有模式都不提供 yield/wait API。
 - **await 转换放宽声明语义**——转换后程序的顶层 `let`、`const` 和 `class` 绑定可修改，且在执行前初始化为 `undefined`，不再具有原生暂时性死区。执行到函数声明时才会为其设置保留的全局变量；没有初始化器的 `var` 声明会将其绑定重置为 `undefined`。直接 eval 中的声明仅在本次求值内有效。不接受顶层 `using` 声明；可释放绑定需放在块内。运行时堆栈位置指向转换后的源码。无需转换即可编译的脚本保持原生语义。
+- **原生词法初始化失败可能占用名称**——顶层 `let`、`const` 或 `class` 的初始化器在完成绑定初始化前抛错时，该名称会在保留的 Script context 中持续处于未初始化状态。读取、赋值和重新声明都会失败；应使用新名称，或释放并重新创建环境。
+- **Script 值可能跨 realm**——绑定结果、绑定拒绝类和导入模块可能使用 Script context 之外的构造器。这些值的 `instanceof Array` 或 `instanceof Error` 可能为 false；应使用 `Array.isArray` 和声明的绑定错误类。
 - **内存保留环境为每个存活所有者保留一个进程**——空闲所有者保留进程及堆内存，直到显式释放、所有者销毁或执行失败。并行创建多个所有者会保留多个进程；空闲过期机制留待后续处理。
 - **输出上限拒绝超量内容，而不保留每个字节**——溢出只能保存本提供方交付的有界结果。
 - **绑定在传输接纳时受限**——控制限制不约束 Host 绑定生成结果期间分配的内存。
