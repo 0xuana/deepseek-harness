@@ -1,5 +1,5 @@
 - bundle: 开发者工具
-  description: 查看调试会话原始数据、聊天消息分组数据，以及调试 NodeJS 后端
+  description: 在 DSH 内查看会话原始日志和消息分组，调试 NodeJS 后端，适合排查会话或界面异常；启用后会捕获未脱敏的 Host 网络请求。
 - component: NodeJS 诊断
   description: 按 Ctrl/Cmd+Shift+. 在底部面板打开 Chrome DevTools 进行开发调试
 - component: 会话数据诊断

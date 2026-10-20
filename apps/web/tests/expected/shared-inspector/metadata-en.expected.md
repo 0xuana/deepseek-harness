@@ -1,5 +1,5 @@
 - bundle: Developer Tools
-  description: Inspect and debug raw session data, grouped chat messages, and the NodeJS backend.
+  description: Inspect raw session logs and grouped messages and debug the NodeJS backend when investigating conversation or UI problems. Enabling also captures unredacted Host network requests.
 - component: NodeJS Inspector
   description: Press Ctrl/Cmd+Shift+. to open Chrome DevTools in the bottom panel for development and debugging.
 - component: Session Log
