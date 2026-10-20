@@ -336,7 +336,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       name: 'computer-use:dsh-cua', order: ctx.systemPrompt.getSectionOrder('TOOL_COMPUTER_USE'),
       text: () => {
         const runtime = ctx.get('ptcRuntime')
-        return runtime?.programFormat !== 'repl' && !runtime?.retainsState ? guidance : `${guidance}
+        return !runtime?.retainsState ? guidance : `${guidance}
 
 Persistent PTC initialization:
 var { connectCua } = await import(${JSON.stringify(new URL('../lib/bridge.js', import.meta.url).href)});
