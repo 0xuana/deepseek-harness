@@ -663,11 +663,14 @@ function LoadedMarkdownImage({ src, alt, destination, preview }: {
     loading: 'lazy' as const, decoding: 'async' as const, referrerPolicy: 'no-referrer' as const }
   if (preview === undefined) return <img {...imageProps} />
   const file = parseFileLink(destination)
+  const localFileName = file?.path.split(/[\\/]/u).at(-1)
+  const urlFileName = destination.split('/').at(-1)?.split(/[?#]/u)[0]
+  const exportName = localFileName || urlFileName || 'image'
   const img = <DraggableImage
     fileDrag={preview.fileDrag}
     {...imageProps}
     resourceAddress={file === undefined ? undefined : preview.resourceAddress?.(file.path)}
-    name={file?.path.split(/[\\/]/u).at(-1) || destination.split('/').at(-1)?.split(/[?#]/u)[0] || 'image'}
+    name={exportName}
   />
   return <>
     <button type="button" className={css.imageButton} title={preview.labels.open}
