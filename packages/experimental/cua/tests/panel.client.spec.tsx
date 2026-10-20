@@ -400,15 +400,19 @@ it('retains uncertainty and the diagnostic until a refresh succeeds', () => {
 
 it('retains a known read-only configuration and query failure throughout management and refresh', () => {
   const f = fixture()
+  f.preset.set({ ...f.preset.getSnapshot(), value: { default: 'standard' }, writable: false })
   f.publish({ ...observe(value), runtime: { value: { persistent: false, writable: false }, busy: false, error: null },
     applications: { value, busy: false, error: 'offline' } })
   const view = render(<PermissionPanel {...f.props} />)
   const readonly = screen.getByText(en.persistentReadOnly)
+  const defaultReadonly = screen.getByText(en.defaultReadOnly)
+  act(() => { f.preset.set({ ...f.preset.getSnapshot(), status: 'loading' }) })
   const query = screen.getByText(en.applicationsFailed.replace('{message}', 'offline'))
   f.publish({ changing: true, busy: true,
     runtime: { ...f.state.getSnapshot().runtime, busy: true },
     applications: { ...f.state.getSnapshot().applications, busy: true } })
   expect(screen.getByText(en.persistentReadOnly)).toBe(readonly)
+  expect(screen.getByText(en.defaultReadOnly)).toBe(defaultReadonly)
   expect(screen.getByText(en.applicationsFailed.replace('{message}', 'offline'))).toBe(query)
   view.unmount()
   expect(f.state.getSnapshot().changing).toBe(true)

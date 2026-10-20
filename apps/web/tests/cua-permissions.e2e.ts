@@ -7,7 +7,7 @@ import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-user-approval'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import { chromium, type Browser } from 'playwright'
-import { expect, it, onTestFailed, onTestFinished } from 'vitest'
+import { expect, it, onTestFailed, onTestFinished, vi } from 'vitest'
 import { captureStableAria, compareOrRefreshGolden, launchWebScaffold, webSnapshotMode, watchConsole, type WebScaffold } from './scaffold.ts'
 import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
 import { installNativeFixture, startFixtureHost } from '../../../packages/experimental/cua-macos/tests/native-fixture.ts'
@@ -16,7 +16,7 @@ const bundle = fileURLToPath(new URL('../../../packages/experimental/cua-bundle'
 const expected = fileURLToPath(new URL('./expected/cua-permissions/missing.expected.md', import.meta.url))
 
 // System-permission onboarding belongs to the macOS-only bundle; rendering and policy units remain portable.
-it.skipIf(process.platform !== 'darwin').each([false, true])('keeps system requests pending until fresh observation and persists application revocation (read-only runtime: %s)', async (readOnlyRuntime) => {
+it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fresh observation and persists application revocation', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-cua-permissions-web-'))
   const resources: { scaffold?: WebScaffold; browser?: Browser; closeFixture?: () => Promise<void> } = {}
   onTestFinished(async () => {
@@ -36,11 +36,9 @@ it.skipIf(process.platform !== 'darwin').each([false, true])('keeps system reque
   const fixturePatch = join(root, 'native-fixture.yml')
   // Keep the external helper override above bundle order changes when CUA is re-enabled.
   await writeFile(fixturePatch, JSON.stringify([{ id: 'cua', config: { helperPath: helper } }]))
-  const runtimePatch = join(root, 'readonly-runtime.yml')
-  await writeFile(runtimePatch, JSON.stringify([{ id: 'ptc-runtime', config: { executionMode: 'per-call' } }]))
   const scaffold = await launchWebScaffold({
     profile: { packages: [{ dir: bundle, enabled: true }] },
-    extraOverlayPath: [fixturePatch, ...(readOnlyRuntime ? [runtimePatch] : [])],
+    extraOverlayPath: fixturePatch,
   })
   resources.scaffold = scaffold
   const browser = await chromium.launch()
@@ -97,7 +95,7 @@ it.skipIf(process.platform !== 'darwin').each([false, true])('keeps system reque
   expect(await panel.getByRole('group', { name: 'Screen Recording', exact: true }).getByText('Visual Studio Code.app', { exact: true }).count()).toBe(1)
   await expect.poll(() => accessibility.locator('img').evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(1)
   await expect.poll(() => panel.getAttribute('aria-busy')).toBe('false')
-  if (!readOnlyRuntime) await compareOrRefreshGolden(expected, await captureStableAria(page, '[data-cua-settings]', scaffold.workspaceCwd), webSnapshotMode())
+  await compareOrRefreshGolden(expected, await captureStableAria(page, '[data-cua-settings]', scaffold.workspaceCwd), webSnapshotMode())
   try {
     for (const width of [1680, 390]) {
       await page.setViewportSize({ width, height: 1000 })
@@ -186,6 +184,8 @@ it.skipIf(process.platform !== 'darwin').each([false, true])('keeps system reque
     const toggle = page.locator('[data-plugin-panel]').getByRole('switch', { name: 'Enable Computer Use', exact: true })
     for (const width of [1680, 390]) {
       await page.setViewportSize({ width, height: 1000 })
+      if (width === 390) await page.locator('[data-sidebar-collapsed]').waitFor({ state: 'attached' })
+      await page.locator('[data-animating]').waitFor({ state: 'hidden' })
       await trace.evaluate((value) => { value.layouts.length = 0 })
       for (let cycle = 0; cycle < 3; cycle++) {
         await toggle.click()
@@ -207,5 +207,39 @@ it.skipIf(process.platform !== 'darwin').each([false, true])('keeps system reque
     await trace.evaluate((value) => { value.stop() })
     await trace.dispose()
   }
+  await writeFile(state, JSON.stringify({ accessibility: 'unavailable', screenRecording: false }))
+  await page.evaluate(() => { window.dispatchEvent(new Event('focus')) })
+  const diagnostic = panel.getByRole('alert')
+  await diagnostic.waitFor()
+  const diagnosticText = await diagnostic.innerText()
+  const height = await panel.evaluate(element => element.getBoundingClientRect().height)
+  const rowToggle = plugins.getByRole('switch', { name: 'Enable component @deepseek-ai/dsh-experimental-cua-macos', exact: true })
+  const entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
+  const changeRow = scaffold.ctx.pluginManager.setPluginEnabled.bind(scaffold.ctx.pluginManager)
+  let changing: ReturnType<typeof changeRow> | undefined
+  const hold = vi.spyOn(scaffold.ctx.pluginManager, 'setPluginEnabled').mockImplementationOnce((entryId, enabled) => {
+    entered.resolve(undefined)
+    changing = release.promise.then(() => changeRow(entryId, enabled))
+    return changing
+  })
+  try {
+    await rowToggle.click()
+    await entered.promise
+    await expect.poll(() => panel.getAttribute('aria-busy')).toBe('true')
+    expect(await diagnostic.innerText()).toBe(diagnosticText)
+    expect(await diagnostic.getByRole('button', { name: 'Retry', exact: true }).isEnabled()).toBe(false)
+    expect(await panel.evaluate(element => element.getBoundingClientRect().height)).toBe(height)
+  } finally {
+    release.resolve(undefined)
+    hold.mockRestore()
+    await changing
+  }
+  await expect.poll(() => rowToggle.getAttribute('aria-checked')).toBe('false')
+  await expect.poll(() => rowToggle.isEnabled()).toBe(true)
+  await writeFile(state, JSON.stringify({ accessibility: false, screenRecording: false, launchApplication }))
+  await rowToggle.click()
+  await expect.poll(() => rowToggle.getAttribute('aria-checked')).toBe('true')
+  await expect.poll(() => panel.getAttribute('aria-busy')).toBe('false')
+  await diagnostic.waitFor({ state: 'hidden' })
   expect(tripwire.pageErrors).toEqual([])
 }, 60_000)
