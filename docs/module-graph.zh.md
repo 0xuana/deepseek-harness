@@ -491,7 +491,6 @@ flowchart TD
   pkg_remote_mock --> pkg_typert_protocol
   pkg_typert_loader --> pkg_typert_registry
   pkg_skill_office --> pkg_skill
-  pkg_web_fetch_http --> pkg_http_proxy
   pkg_web_fetch_http --> pkg_timeout
   pkg_web_fetch_http --> pkg_web
   pkg_web_search_exa --> pkg_launch_environment
@@ -1602,7 +1601,7 @@ flowchart TD
 | [`remote-mock`](../packages/test-support/remote-mock) | `test-support` | [`typert-protocol`](../packages/typert/protocol) |
 | [`typert-loader`](../packages/typert/loader) | `typert` | [`typert-registry`](../packages/typert/registry) |
 | [`skill-office`](../packages/skill/skill-office) | `skill` | [`skill`](../packages/skill/skill) |
-| [`web-fetch-http`](../packages/web/web-fetch-http) | `web` | [`http-proxy`](../packages/util/http-proxy), [`timeout`](../packages/util/timeout), [`web`](../packages/web/web) |
+| [`web-fetch-http`](../packages/web/web-fetch-http) | `web` | [`timeout`](../packages/util/timeout), [`web`](../packages/web/web) |
 | [`web-search-exa`](../packages/web/web-search-exa) | `web` | [`launch-environment`](../packages/util/launch-environment), [`web`](../packages/web/web) |
 | [`web-search-perplexity`](../packages/web/web-search-perplexity) | `web` | [`launch-environment`](../packages/util/launch-environment), [`web`](../packages/web/web) |
 | [`spill`](../packages/spill/spill) | `spill` | [`brand`](../packages/util/brand), [`llm`](../packages/llm/llm), [`session`](../packages/core/session) |
