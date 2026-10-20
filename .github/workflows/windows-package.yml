@@ -154,6 +154,8 @@ jobs:
       - name: Install locked dependencies
         working-directory: ${{ steps.build_workspace.outputs.directory }}
         run: |
+          node -e "const os=require('node:os'); console.log(JSON.stringify({node:process.version,availableParallelism:os.availableParallelism(),logicalCpus:os.cpus().length,totalMemoryBytes:os.totalmem(),freeMemoryBytes:os.freemem()}))"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pnpm store path
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pnpm install --frozen-lockfile
