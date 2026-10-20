@@ -72,11 +72,39 @@ async function main() {
     parent.destroy()
   }
 
+  async function qualifyBackgroundVisibility() {
+    phase = 'background overlay load'
+    const parent = new BrowserWindow({ show: true, width: 800, height: 600 })
+    windows.push(parent)
+    await parent.loadURL('data:text/html,<h1>Overlay owner</h1>')
+    const overlay = new DesktopUpdateOverlays().create(parent, undefined, 'Background overlay', false)
+    windows.push(overlay)
+    const shown = once(overlay, 'show')
+    await overlay.loadURL('data:text/html,<h1>Update result</h1>')
+    await shown
+    const other = new BrowserWindow({ show: false, width: 600, height: 400 })
+    windows.push(other)
+    await other.loadURL('data:text/html,<h1>Other window</h1>')
+    phase = 'background overlay visibility notification'
+    const focused = once(other, 'focus')
+    other.show()
+    await focused
+    // macOS reports unocclusion through the same event as an explicit show.
+    parent.emit('show')
+    await overlay.webContents.executeJavaScript('document.readyState')
+    assert.equal(other.isFocused(), true, 'A parent visibility notification must not focus its existing overlay')
+    cases.push({ backgroundOverlay: { otherFocused: other.isFocused(), overlayVisible: overlay.isVisible() } })
+    other.destroy()
+    overlay.destroy()
+    parent.destroy()
+  }
+
   try {
     await app.whenReady()
     await qualify(true)
     await qualify(false)
     await qualify(true, true)
+    await qualifyBackgroundVisibility()
     await writeFile(join(root, 'result.json'), `${JSON.stringify(cases, null, 2)}\n`)
     const expected = JSON.parse(await readFile(new URL('../expected/update-overlay-visibility.json', import.meta.url), 'utf8'))
     assert.deepEqual(cases, expected)

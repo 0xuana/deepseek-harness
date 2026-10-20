@@ -18,6 +18,7 @@ const fixture = await vi.hoisted(async () => {
       removeInsertedCSS: vi.fn(async () => {}),
     })
     readonly focus = vi.fn()
+    readonly isFocused = vi.fn(() => true)
     readonly show = vi.fn()
     readonly hide = vi.fn()
     readonly setBounds = vi.fn()
@@ -102,6 +103,7 @@ it('follows the parent geometry and removes listeners when closed or replaced', 
   const first = f.show()
   const window = fixture.windows.at(-1)!
   expect(window.options).toMatchObject({ frame: false, transparent: true, modal: process.platform !== 'darwin', width: 900, height: 650 })
+  vi.spyOn(window, 'isVisible').mockReturnValue(false)
   window.emit('ready-to-show')
   expect(window.show).toHaveBeenCalledOnce()
   f.parent.emit('resize')

@@ -9,16 +9,19 @@ vi.mock('electron', () => ({ BrowserWindow: function (options: object) { return 
 afterEach(() => { vi.restoreAllMocks() })
 
 function visibilityFixture(visible = true) {
-  const visibility = { visible }
+  const visibility = { visible, focused: true }
   const parent: ParentFixture & Pick<BrowserWindow, 'isVisible'> = Object.assign(new EventEmitter(), {
     getContentBounds: () => ({ x: 0, y: 0, width: 1000, height: 700 }),
     webContents: Object.assign(new EventEmitter(), { insertCSS: vi.fn(async () => 'blur'), removeInsertedCSS: vi.fn(async () => {}) }),
     isDestroyed: (): boolean => false,
     isVisible: () => visibility.visible,
+    isFocused: () => visibility.focused,
   })
   const window = Object.assign(new EventEmitter(), {
-    destroyed: false,
-    webContents: { setWindowOpenHandler: vi.fn() }, show: vi.fn(), focus: vi.fn(),
+    destroyed: false, visible: false,
+    webContents: { setWindowOpenHandler: vi.fn() },
+    show: vi.fn(() => { window.visible = true }), showInactive: vi.fn(() => { window.visible = true }), focus: vi.fn(),
+    isVisible: () => window.visible,
     setMenu: vi.fn(), setBounds: vi.fn(), isDestroyed: () => window.destroyed,
   })
   native.create.mockReturnValue(window)
@@ -32,6 +35,7 @@ it('restores a ready overlay each time its parent is shown and releases visibili
   expect(window.show).toHaveBeenCalledOnce()
   for (let index = 0; index < 2; index++) {
     visibility.visible = false
+    window.visible = false
     parent.emit('hide')
     visibility.visible = true
     parent.emit('show')
@@ -47,6 +51,32 @@ it('restores a ready overlay each time its parent is shown and releases visibili
   expect(parent.webContents.removeInsertedCSS).not.toHaveBeenCalled()
   parent.emit('show')
   expect(window.show).toHaveBeenCalledTimes(3)
+})
+
+it('does not reactivate an already visible background overlay when macOS reports its parent as unoccluded', () => {
+  const { parent, window, visibility } = visibilityFixture()
+  window.emit('ready-to-show')
+  visibility.focused = false
+  parent.emit('show')
+  expect(window.show).toHaveBeenCalledOnce()
+  expect(window.showInactive).not.toHaveBeenCalled()
+  expect(window.focus).not.toHaveBeenCalled()
+})
+
+it('shows a late-loading or restored overlay without activation while its parent is in the background', () => {
+  const { parent, window, visibility } = visibilityFixture()
+  visibility.focused = false
+  window.emit('ready-to-show')
+  expect(window.show).not.toHaveBeenCalled()
+  expect(window.showInactive).toHaveBeenCalledOnce()
+  visibility.visible = false
+  window.visible = false
+  parent.emit('hide')
+  visibility.visible = true
+  parent.emit('show')
+  expect(window.show).not.toHaveBeenCalled()
+  expect(window.showInactive).toHaveBeenCalledTimes(2)
+  expect(window.focus).not.toHaveBeenCalled()
 })
 
 it('waits for both a visible parent and a ready document, in either order', async () => {

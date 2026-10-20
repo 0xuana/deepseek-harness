@@ -20,7 +20,8 @@ export class DesktopUpdateOverlays {
    * @param preload - Isolated shell-only preload.
    * @param title - Localized window title.
    * @param nativeModal - Use a native modal; false keeps overlays out of macOS sheets.
-   * @returns A transparent child that follows its parent's bounds and visibility after loading and releases its listeners on close.
+   * @returns A transparent child that follows its parent's bounds and visibility without background activation;
+   * closing it releases its listeners.
    */
   create(parent: BrowserWindow, preload: string, title: string, nativeModal = true): BrowserWindow {
     const window = new BrowserWindow({
@@ -51,7 +52,10 @@ export class DesktopUpdateOverlays {
     window.once('closed', () => { parent.off('move', follow); parent.off('resize', follow) })
     let ready = false
     const show = (): void => {
-      if (ready && !window.isDestroyed() && !parent.isDestroyed() && parent.isVisible()) window.show()
+      if (!ready || window.isDestroyed() || parent.isDestroyed() || !parent.isVisible() || window.isVisible()) return
+      // macOS also emits show when an existing window becomes unoccluded.
+      if (parent.isFocused()) window.show()
+      else window.showInactive()
     }
     parent.on('show', show)
     window.once('closed', () => { parent.off('show', show) })

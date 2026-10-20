@@ -11,5 +11,6 @@
     "restored": { "parent": true, "overlay": true, "filter": "none" },
     "released": { "filter": "none", "showListenersRestored": true, "keyboardListeners": 0 }
   },
-  { "parentDestroyed": true, "overlayDestroyed": true }
+  { "parentDestroyed": true, "overlayDestroyed": true },
+  { "backgroundOverlay": { "otherFocused": true, "overlayVisible": true } }
 ]
