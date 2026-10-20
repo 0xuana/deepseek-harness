@@ -321,7 +321,7 @@ export class NodePtcRuntime extends PtcRuntime {
       })
       channel = transport
       void launched.done.then((outcome) => {
-        // Allow queued control-frame callbacks to run before classifying a command exit.
+        // Allow queued control messages to run before classifying a command exit.
         setImmediate(() => { processFinished(outcome) })
       }, (error: unknown) => { finish({ kind: confined !== undefined && isRunnerSpawnFailure(error, confined.argv[0], spec.cwd) ? 'sandbox-unavailable' : 'worker-exit', message: messageOf(error) }) })
     } catch (error: unknown) {

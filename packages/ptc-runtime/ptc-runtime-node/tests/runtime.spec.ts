@@ -103,6 +103,15 @@ describe('Node program process', () => {
     expect(result.value).toEqual({ value: { n: 42 }, rejected: [true, 'ToolCallError', 'fail', 'denied'] })
   })
 
+  it('returns cleanly while an unawaited binding call is still running', async () => {
+    const { run } = await setup()
+    const release = Promise.withResolvers<null>()
+    onTestFinished(() => { release.resolve(null) })
+    const result = await run({ program: 'void tools.slow({}); return 1', bindings: bindings({ slow: () => release.promise }) })
+    expect(result).toMatchObject({ logs: [], value: 1 })
+    expect(result.error).toBeUndefined()
+  })
+
   it('retains raw native stdout and stderr separately from control frames', async () => {
     const { run } = await setup()
     const result = await run({ program: 'const fs = await import("node:fs"); fs.writeSync(1,"native-out你好"); fs.writeSync(2,"native-err🙂"); return 42;', bindings: [] })

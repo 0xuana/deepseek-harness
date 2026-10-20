@@ -11,6 +11,8 @@ import type { Duplex } from 'node:stream'
 export function rawPeer(stream: Duplex, receive: (message: unknown) => void) {
   const lines = createInterface({ input: stream, crlfDelay: Infinity })
   lines.on('line', (line) => { receive(JSON.parse(line)) })
+  // The endpoint under test can destroy the shared stream pair; it reports that failure itself.
+  lines.on('error', (error: Error) => { void error })
   return {
     send: (message: unknown): Promise<void> => new Promise((resolve, reject) => {
       stream.write(`${JSON.stringify(message)}\n`, (error) => { if (error) reject(error); else resolve() })

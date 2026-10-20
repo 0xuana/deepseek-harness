@@ -51,7 +51,7 @@ Configure the provider row after its required services are available:
 | `maxTimeoutMs` | `600,000` | Elapsed deadline ceiling applied by the resolver |
 | `maxOutputBytes` | `67,108,864` | Combined serialized logs and completion or diagnostic budget |
 | `maxOldGenerationSizeMb` | `512` | V8 old-generation heap limit in MiB |
-| `maxMessageBytes` | `134,217,728` | Limit for a control frame, outstanding argument bytes and queued control writes |
+| `maxMessageBytes` | `134,217,728` | Limit for a control message, outstanding binding-argument bytes and queued control writes |
 | `maxPendingCalls` | `128` | Maximum simultaneous host binding calls |
 | `graceMs` | `3,000` | Managed termination and output-drain grace |
 | `launch` | Local carrier | Explicit `{ kind: "node-script", executable, bootstrapPath? }` or `{ kind: "embedded", executable }` in the subprocess world |
@@ -111,7 +111,7 @@ For per-call execution, the host strips erasable types, resolves the executable 
 
 The host calls the child’s `run()` method through birpc; injected bindings call the host’s `invoke()` method, and captured output uses notifications. birpc owns request correlation, remote results, and rejection delivery. Newline-delimited JSON travels over the inherited control pipe separately from stdout/stderr. The RPC adapter bounds incomplete messages and the native write queue, validates UTF-8 and exposed methods, and rejects pending calls when the pipe closes. The host validates binding names and lossless JSON before dispatch; one pipe delivers each evaluation's messages before its result, so messages carry no evaluation identity. Execution deadlines remain host-owned, including calls that await approval.
 
-Per-call completion rejects unfinished binding waits and stops captured output notifications. The child keeps the control pipe open until the host receives its result and closes the pipe. Output capture meters serialized logs plus the completion or diagnostic; fixed result-envelope fields and sandbox metadata are outside that ledger.
+Per-call completion leaves unfinished binding waits pending and stops binding calls and captured output notifications. The child keeps the control pipe open until the host receives its result and closes the pipe. Output capture meters serialized logs plus the completion or diagnostic; fixed result-envelope fields and sandbox metadata are outside that ledger.
 
 ### Source and built bootstraps
 
@@ -171,6 +171,7 @@ These limits qualify the execution guarantees and retained output.
 - **In-memory environments retain one process per live owner** — idle owners keep their process and heap until explicit release, owner disposal or failure. Fan-out can retain many processes; idle expiration remains deferred.
 - **Output caps reject rather than retain every byte** — spill can preserve only the bounded result delivered by this provider.
 - **Bindings are bounded at transport admission** — control limits do not bound the memory a host binding allocates while producing its result.
+- **The control protocol has no version handshake** — a preinstalled `launch.bootstrapPath` or SSH helper must come from the client's release; another release's bootstrap fails at its first control message.
 - **The console shim has five methods** — `log`, `info`, `warn`, `error` and `debug`.
 
 <a id="dev-note"></a>

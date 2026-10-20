@@ -55,12 +55,12 @@ it('clears the environment and returns a binding result after captured output', 
   expect(h.state.exitCode).toBeUndefined()
 })
 
-it('rejects unfinished calls and suppresses later logs while awaiting host shutdown', async () => {
+it('keeps unfinished calls pending and suppresses later logs while awaiting host shutdown', async () => {
   const h = await setup()
   const release = Promise.withResolvers<ReturnType<typeof encodePtcJsonWire>>()
   h.methods.invoke = () => release.promise
   try {
-    expect(decodePtcJsonWire((await h.run('void tools.echo({}).catch(() => console.log("late rejection")); setImmediate(() => console.log("late timer")); return 42;')).value)).toBe(42)
+    expect(decodePtcJsonWire((await h.run('void tools.echo({}); void tools.echo({}).catch(() => console.log("late rejection")); setImmediate(() => console.log("late timer")); return 42;')).value)).toBe(42)
     await nextTurn()
     expect(h.child.destroyed).toBe(false)
     release.resolve(encodePtcJsonWire(42))

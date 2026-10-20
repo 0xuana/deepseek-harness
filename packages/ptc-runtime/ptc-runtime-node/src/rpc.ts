@@ -45,8 +45,8 @@ export function createProcessRpc<Remote extends object, Local extends object>(
       else stream.write(line)
     },
     deserialize: (line: string) => {
-      const message: unknown = parse(line)
-      if (!record(message)) throw new Error('invalid RPC frame')
+      // A line that parses after the leading-brace check is a JSON object.
+      const message = parse(line) as Record<string, unknown>
       if (message.t === 'q') {
         if (typeof message.m !== 'string' || !Object.hasOwn(functions, message.m) || !Array.isArray(message.a)) throw new Error('invalid RPC method call')
       } else if (message.t !== 's') {
@@ -68,6 +68,8 @@ export function createProcessRpc<Remote extends object, Local extends object>(
   let parts: Buffer[] = []
   let size = 0
   const buffer = (part: Buffer): void => {
+    // Every message is a JSON object; another release's length-prefixed frame would otherwise wait for a newline.
+    if (size === 0 && part.length > 0 && part[0] !== 0x7b) throw new Error('control message is not a JSON object; the Node bootstrap may be from another release')
     size += part.length
     if (size > maxMessageBytes) throw new Error(`RPC message exceeds ${maxMessageBytes} bytes`)
     parts.push(part)

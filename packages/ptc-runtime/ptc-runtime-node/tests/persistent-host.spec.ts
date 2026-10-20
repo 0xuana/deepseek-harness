@@ -345,6 +345,24 @@ describe('persistent PTC host protocol', () => {
     expect(result.error?.message).toContain('fatal output')
   })
 
+  it('does not send a late binding result into the next evaluation', async () => {
+    const h = await setup({ maxMessageBytes: 1024 })
+    const release = Promise.withResolvers<string>()
+    onTestFinished(() => { release.resolve('') })
+    const slow = { ...request, bindings: [{ global: 'tools', functions: { test: () => release.promise } }] }
+    h.onBoot(() => { h.emit(call()); h.complete({}) })
+    expect((await h.start(slow)).error).toBeUndefined()
+    const booted = Promise.withResolvers<undefined>()
+    h.onBoot(() => { booted.resolve(undefined) })
+    const next = h.start(slow, NO_INITIAL_FRAME)
+    await booted.promise
+    release.resolve('x'.repeat(2000))
+    await setImmediate()
+    h.complete({ value: encodePtcJsonWire(2) })
+    expect(await next).toMatchObject({ value: 2 })
+    expect(h.messages).toContainEqual({ t: 's', i: '1', e: { message: 'PTC evaluation ended before the binding completed' } })
+  })
+
   it('terminates the process when the control pipe fails during an evaluation', async () => {
     const h = await setup()
     h.onBoot(() => { h.control.emit('error', new Error('control transport failed')) })

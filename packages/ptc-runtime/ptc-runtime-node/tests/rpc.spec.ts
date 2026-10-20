@@ -49,7 +49,7 @@ it('does not invoke a method received beside traffic that closed the endpoint', 
   const allowed = vi.fn()
   const endpoint = createProcessRpc(local, 4096, { allowed }, [], (_error, kind) => { failure.resolve(kind) })
   onTestFinished(() => { endpoint.$close() })
-  remote.write(`null\n${JSON.stringify({ t: 'q', m: 'allowed', a: [] })}\n`)
+  remote.write(`${JSON.stringify({ t: 'unknown' })}\n${JSON.stringify({ t: 'q', m: 'allowed', a: [] })}\n`)
   expect(await failure.promise).toBe('protocol')
   await new Promise(resolve => setImmediate(resolve))
   expect(allowed).not.toHaveBeenCalled()
@@ -137,7 +137,8 @@ it.each([
   [Buffer.from([0xff, 10]), false],
   [Buffer.from('{'), true],
   [Buffer.from([0xe2]), true],
-  [Buffer.from('x'.repeat(65)), false],
+  [Buffer.from(`{${'x'.repeat(64)}`), false],
+  [Buffer.from([0, 0, 0, 2, 123, 125]), false],
 ])('rejects invalid or oversized JSON lines before dispatch (%j, EOF %s)', async (bytes, eof) => {
   const { local, remote } = endpoints()
   const failed = Promise.withResolvers<string>()

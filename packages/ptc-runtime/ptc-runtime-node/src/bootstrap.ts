@@ -281,9 +281,8 @@ export function makeNamespaces(
           const errorClass = errorClasses.get(global)
           try {
             let detached: ReturnType<typeof snapshotPtcJsonValue>
-            try { detached = snapshotPtcJsonValue(args) } catch (error: unknown) {
+            try { detached = snapshotPtcJsonValue(args) } catch {
               // Model-defined getters can fail while arguments are detached.
-              void error
               detached = undefined
             }
             if (detached === undefined) throw new CapturedError('binding arguments must be lossless JSON')

@@ -247,7 +247,12 @@ class Kernel {
         const fn = functions !== undefined && Object.hasOwn(functions, name) ? functions[name] : undefined
         evaluation.pending += 1
         evaluation.pendingBytes += bytes
-        try { return await evaluation.invoke(fn, args) } finally {
+        try {
+          const value = await evaluation.invoke(fn, args)
+          // The child already rejected this wait; a late result must not fill the pipe shared with the next evaluation.
+          if (this.active !== evaluation) throw new Error('PTC evaluation ended before the binding completed')
+          return value
+        } finally {
           evaluation.pending -= 1
           evaluation.pendingBytes -= bytes
         }
@@ -259,7 +264,7 @@ class Kernel {
     void handle.done.then(async (outcome) => {
       this.exitOutcome = outcome
       await Promise.all([drainOutput(handle.stdout, this.config.graceMs), drainOutput(handle.stderr, this.config.graceMs)])
-      // The terminal control frame can already be queued when process exit arrives.
+      // The run result can already be queued when process exit arrives.
       setImmediate(() => {
         if (!this.closed) this.fail(this.confined !== undefined && classifyRunnerFailure(outcome.exitCode, this.stderr, this.confined.runnerFailureRules) !== undefined ? 'sandbox-unavailable' : 'worker-exit', this.exitMessage(outcome))
       })

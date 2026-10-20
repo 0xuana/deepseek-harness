@@ -299,6 +299,20 @@ describe('Node runtime host failures', () => {
     expect((await h.start()).error).toEqual({ kind: 'worker-exit', message: 'control transport closed' })
   })
 
+  it('fails at once when a bootstrap from another release sends a length-prefixed frame', async () => {
+    const h = await setup()
+    const body = Buffer.from(JSON.stringify({ type: 'ready' }))
+    const header = Buffer.alloc(4)
+    header.writeUInt32BE(body.length)
+    h.spawn.mockImplementation(() => {
+      queueMicrotask(() => { h.control.push(Buffer.concat([header, body])) })
+      return h.handle
+    })
+    expect((await h.start(request, NO_INITIAL_FRAME)).error).toEqual({
+      kind: 'protocol', message: 'control message is not a JSON object; the Node bootstrap may be from another release',
+    })
+  })
+
   it('classifies invalid UTF-8 on the live control stream as a protocol failure', async () => {
     const h = await setup()
     h.onBoot(() => { h.control.push(Buffer.from([0xff, 10])) })
@@ -306,7 +320,7 @@ describe('Node runtime host failures', () => {
   })
 
   it.each<[unknown, string]>([
-    [null, 'invalid RPC frame'],
+    [null, 'not a JSON object'],
     [{ t: 'q', m: 'ready', a: [] }, 'duplicate program readiness'],
     [{ t: 'q', m: 'log', a: [1] }, 'invalid program log'],
     [{ t: 'q', m: 'invoke', a: [null, 'test', []], i: 'call' }, 'undeclared binding'],
