@@ -111,7 +111,7 @@ describe('SidebarRoot shell', () => {
       expect(button.getAttribute('aria-keyshortcuts')).toBe('Control+N')
     }
     const expanded = screen.getAllByRole('button', { name: 'New session' }).find(button => button.querySelector('kbd') !== null)!
-    fireEvent.mouseEnter(expanded)
+    fireEvent.pointerEnter(expanded)
     fireEvent.focus(expanded)
     expect(screen.queryByRole('tooltip')).toBeNull()
     expect(Array.from(expanded.querySelectorAll('kbd'), key => key.textContent)).toEqual(['Ctrl', 'N'])
@@ -307,17 +307,17 @@ describe('SidebarRoot shell', () => {
         : null) as SidebarRootComponentProps['renderSlot']}
     />)
     const toggle = screen.getByRole('button', { name: 'Open sidebar' })
-    fireEvent.mouseEnter(toggle)
+    fireEvent.pointerEnter(toggle)
     act(() => { vi.advanceTimersByTime(500) })
     expect(screen.getByRole('tooltip').textContent).toBe('Open sidebar')
     // The badge's own bubble replaces the toggle's rather than stacking on it,
     // even after the toggle's longer hover delay has elapsed.
-    fireEvent.mouseEnter(screen.getByTestId('badge'))
+    fireEvent.pointerEnter(screen.getByTestId('badge'))
     act(() => { vi.advanceTimersByTime(500) })
     expect(screen.getAllByRole('tooltip').map(bubble => bubble.textContent)).toEqual(['Update — V1.2.3'])
-    fireEvent.mouseLeave(screen.getByTestId('badge'), { relatedTarget: toggle })
+    fireEvent.pointerLeave(screen.getByTestId('badge'), { relatedTarget: toggle })
     expect(screen.getByRole('tooltip').textContent).toBe('Open sidebar')
-    fireEvent.mouseLeave(toggle)
+    fireEvent.pointerLeave(toggle)
     expect(screen.queryByRole('tooltip')).toBeNull()
   })
 })
@@ -350,7 +350,7 @@ describe('Windows caption tooltips', () => {
   afterEach(() => { document.documentElement.removeAttribute('data-windows-titlebar') })
 
   const hover = (button: HTMLElement): void => {
-    fireEvent.mouseEnter(button)
+    fireEvent.pointerEnter(button)
     act(() => { vi.advanceTimersByTime(500) })
   }
 

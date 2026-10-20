@@ -3534,8 +3534,13 @@ describe('ChatView', () => {
     expect(chat.locations.getTurn(1)).toContain(later.key)
     const branch = view.getByRole('button', { name: '在新对话中分支' })
     expect(branch.getAttribute('aria-disabled')).toBe('true')
+    fireEvent.pointerDown(branch, { pointerType: 'touch' })
     fireEvent.click(branch)
     expect(h.forkAt).not.toHaveBeenCalled()
+    expect(view.getByRole('tooltip', { hidden: true }).textContent).toBe(h.props.t('message.branchUnavailable'))
+    fireEvent.pointerDown(branch, { pointerType: 'touch' })
+    fireEvent.click(branch)
+    expect(view.queryByRole('tooltip', { hidden: true })).toBeNull()
   })
 
   it('keeps final content actions but disables branch when Tool and interrupted Think follow it', () => {
