@@ -208,7 +208,6 @@ export class ApplicationAccess {
    * @param client Helper owning the application handle.
    * @param handle Selected application.
    * @param signal Calling tool lifetime.
-   * @param icon Native application icon for the permission card; never saved as an identity.
    * @param dispatch One native operation, with revocation cancellation.
    * @returns The native result, with no implicit retry after consent or cancellation.
    */
