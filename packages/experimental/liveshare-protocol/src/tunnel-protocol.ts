@@ -489,6 +489,9 @@ export function parseTunnelWorkerEvent(value: unknown): TunnelWorkerEvent | unde
 
 /**
  * Validate one share spec the owner host asked its worker to carry.
+ *
+ * Optional fields are checked against the same rules the frame parsers apply; an expiry must be a
+ * parseable ISO time, so a registration cannot carry a deadline no reader can enforce.
  * @param value Candidate spec.
  * @returns True when every required field is present with the declared type.
  */
@@ -514,7 +517,8 @@ function isTunnelShareSpec(value: unknown): value is TunnelShareSpec {
     && (value.ownerCredential === undefined || typeof value.ownerCredential === 'string')
     && Array.isArray(value.allowedSubjectIds)
     && value.allowedSubjectIds.every(subject => typeof subject === 'string' && subject !== '')
-    && (value.expiresAt === undefined || typeof value.expiresAt === 'string')
+    && (value.expiresAt === undefined
+      || (typeof value.expiresAt === 'string' && Number.isFinite(Date.parse(value.expiresAt))))
 }
 
 /**
