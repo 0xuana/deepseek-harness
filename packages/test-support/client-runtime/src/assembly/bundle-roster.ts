@@ -130,7 +130,10 @@ function readManifest(path: string): PackageManifest {
   return JSON.parse(readFileSync(path, 'utf8')) as PackageManifest
 }
 
-/** Resolve package manifests to real paths so linked bundles use their own dependency directories. */
+/**
+ * Prefer an anchor manifest with the requested package name, then search dependencies by depth and anchor order.
+ * Return real paths so linked bundles use their own dependency directories.
+ */
 function locateManifest(anchors: readonly string[], name: string): string | undefined {
   for (const anchor of anchors) {
     if (basename(anchor) === 'package.json' && readManifest(anchor).name === name) return realpathSync(anchor)
