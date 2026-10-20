@@ -100,6 +100,7 @@ export function apply(ctx: unknown, config: Config): void {}
   it.each([false, true])('checks a class Config imported from a sibling module (invalid field: %s)', (invalid) => {
     const { root, write } = fixture()
     write('packages/test/provider/src/config.ts', `
+import Schema from '@deepseek-ai/schemastery'
 export interface Config {
   /** Maximum result count. */
   limit: number

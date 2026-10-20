@@ -548,7 +548,10 @@ describe('model-relative reference budgets', () => {
     if (firstContext === undefined) throw new Error('expected reference context')
     expect(bytes({ content: [], additionalContext: firstContext })).toBe(160_000)
     expect(resolve).toHaveBeenLastCalledWith('selected', 'large', signal)
-    await enter('small')
+    resolve.mockResolvedValue({ provider: 'selected', id: 'small', name: 'small', context: { contextWindow: 8_000 } })
+    const second = await enter('small')
+    if (second.kind !== 'enter' || second.messages[1] === undefined) throw new Error('expected reference context')
+    expect(bytes({ content: [], additionalContext: second.messages[1] })).toBe(65_536)
     expect(resolve).toHaveBeenLastCalledWith('selected', 'small', signal)
   })
 
