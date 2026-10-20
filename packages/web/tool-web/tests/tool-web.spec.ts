@@ -22,7 +22,6 @@ import {
   fetchMetaFromResult,
   WEB_SEARCH_MAX_QUERIES,
   WEB_SEARCH_MAX_RESULTS,
-  WEB_SEARCH_SUMMARY_MAX_CHARS,
 } from '@deepseek-ai/dsh-tool-web'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { ToolResult } from '@deepseek-ai/dsh-tools'
@@ -900,9 +899,8 @@ describe('searchSummaryMaxChars is plugin config', () => {
   const withSummary = (summary: string) => ({ truncated: false, sources: [{ url: 'https://a.test', summary }] })
 
   it('caps each summary at the default length, counting the ellipsis', async () => {
-    expect(await boundedValue('x'.repeat(WEB_SEARCH_SUMMARY_MAX_CHARS + 1)))
-      .toEqual(withSummary(`${'x'.repeat(WEB_SEARCH_SUMMARY_MAX_CHARS - 1)}…`))
-    expect(WEB_SEARCH_SUMMARY_MAX_CHARS).toBe(800)
+    expect(await boundedValue('x'.repeat(801)))
+      .toEqual(withSummary(`${'x'.repeat(799)}…`))
   })
 
   it('keeps a summary of exactly the configured length', async () => {
