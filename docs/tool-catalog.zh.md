@@ -61,7 +61,7 @@
 
 ### `suggest_action`
 
-在正常最终回答前，提供一张可选操作卡片。通过动作的 Skill 加载适用条件和规划策略。调用只提交建议，用户点击卡片后才开始；不要直接执行、等待、轮询、声称已开始或完成，也不要要求用户报告完成。卡片承载方案；简短回答用户并指向卡片，不重复功能清单或内部卡片限制。仅依据成功结果回答；调用被拒绝时不产生卡片。
+提交一张可选操作卡片，在最终回答之后显示。遵循所选动作的 Skill 判断适用条件并规划。调用只保存建议；用户必须点击卡片才开始。不要仅凭提案执行动作或声称已执行。成功结果提供卡片；被拒绝时不产生卡片。
 
 ```json
 {
@@ -69,7 +69,7 @@
   "properties": {
     "request": {
       "type": "object",
-      "description": "Offer an optional plan for a reusable page or interactive tool. Load personalized-pages to plan it and check for existing capabilities; do not use this action for questions about existing features. At most one recommendation per turn. The user starts background creation from the card.",
+      "description": "Propose creating a new personalized page. Load personalized-pages for this action’s policy. The user’s click authorizes background generation and installation.",
       "additionalProperties": false,
       "properties": {
         "action": {
@@ -82,15 +82,15 @@
         },
         "brief": {
           "type": "string",
-          "description": "One to three concise sentences in the user’s language: requested purpose and interactions, data input and persistence scope. Do not add convenience actions, fields or automation the user did not request. Do not repeat source data here; use initialContent when needed. Leave implementation choices to the Creator. Shown on the card and passed to the Creator."
+          "description": "One-to-three-sentence plan in the user’s language, shown on the card and passed to the background Creator. Follow personalized-pages for scope and handoff; put source content in initialContent."
         },
         "initialContent": {
           "type": "string",
-          "description": "Existing content needed to initialize the page, copied accurately from this conversation: for example checklist items or report values and units. Preserve supplied data; do not invent fields or entries. Omit for a new empty page. Passed to the background Creator as data, separate from the short card brief; the Creator cannot read this conversation."
+          "description": "Optional verbatim source content needed to initialize the page, preserving supplied values, units and gaps. Passed as data to the background Creator, which cannot read this conversation. Omit for an empty page."
         },
         "slot": {
           "type": "string",
-          "description": "Location selected using the personalized-pages skill: sidebar-right for content viewed while chatting or other Session viewers/editors; otherwise page for Session-bound streaming output or interaction. sidebar-left opens a global main-area page with a left entry. Honor an explicit user choice.",
+          "description": "Suggested location: sidebar-right is the conversation’s right panel; page is a Session tab; sidebar-left is a global page with a left entry. Choose using personalized-pages; the user can change it on the card.",
           "enum": [
             "sidebar-right",
             "page",

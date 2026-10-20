@@ -1,18 +1,20 @@
 # Personalized pages
 
-Use this workflow in the main conversation to plan an optional persistent page or small interactive tool. The user's need can concern any task or result, not just DSH itself. Wanting a page is not an instruction to develop the application shell, even if the workspace contains its checkout.
+Use this workflow in the main conversation to plan an optional new page or small tool. The user's need can concern any task or result, not just DSH itself. Wanting a page is not an instruction to develop the application shell, even if the workspace contains its checkout.
 
 Page planning and duplicate checks use only the user's known context and the included catalog. Do not call other tools to verify that the proposed data source, current task or integration exists: a plan can name the requested source without inspecting it. Do not inspect workspace files, source, configuration or APIs to validate a page idea or explain a catalog match. The background Creator handles implementation research after the user clicks Create.
 
 ## Choose the smallest useful response
 
-First decide whether a page would serve the current request. An explicit wish for a reusable interface qualifies, including a request to reuse something existing if possible; load this skill to check that page need before deciding to build. A clearly reusable result already obtained for the current task can also qualify: something the user will revisit, update or interact with. First answer the actual request. Ordinary coding tasks, one-off answers, incidental static tables, quoted wishes, discussion-only requests and declined recommendations need no page.
+First choose the useful output: a normal answer, document or file, or a page. An explicit request for a visual or interactive interface qualifies even for a single task; repeated visits, changing data and independence from the Session are not prerequisites. A request to use something existing if possible still enters duplicate checking before deciding to build. A one-off answer is different from a requested one-off interface. Ordinary explanations, writing, coding and incidental static tables stay in the answer or requested file.
 
-When the user states that they will keep revisiting or updating the result, consider a small optional viewer or editor even if the immediate request is a report or summary. Base it on the actual result and requested manual interactions; a static table alone is not enough. Complete the requested analysis in the answer and keep the optional page plan in one card.
+Without an explicit interface request, offer a page only when the known task gives it concrete continuing value: what the user will return to view, maintain or interact with. First complete the requested report or other answer, then optionally offer a small viewer or editor based on that result. Structure, length or being a table alone is not enough. Do not fetch extra data just to find a recommendation opportunity.
 
 A recurring difficulty viewing or editing information can express an interface need without the words page or dashboard. If the desired behavior is clear, check existing capabilities and then offer a minimal plan for the unmet need. A vague complaint alone does not justify inventing a tool; clarify only what would change its purpose or scope.
 
-Questions asking only what already exists, how to use a feature or where to open it do not enter page planning. Do not load this skill just to discover plugins. If it is already loaded, those questions still get no creation card. Do not fetch extra data or inspect source/configuration to find a recommendation opportunity. Explicit implementation or debugging requests can still use development tools.
+Editing a page that already exists is not a new-page request. This action creates a separate plugin; it cannot modify the original. Do not offer a replacement copy or claim the original was changed. If the user only asks how to change it, explain the change without searching files or plugins and leave unknown details explicit. Use the normal development workflow only when implementation is requested, preserving the original page's identity. Ask for its location or source only if needed for that work.
+
+Questions asking only what already exists, how to use a feature or where to open it do not enter page planning. Do not load this skill just to discover plugins. If it is already loaded, those questions still get no creation card. Quoted wishes, discussion-only requests and declined recommendations also get no card. Explicit implementation or debugging requests can still use development tools.
 
 ## Check for an existing capability
 
@@ -26,9 +28,11 @@ Consider ALL independent needs before choosing ONE card for this turn, even if t
 
 Write one to three sentences in the user's language covering the requested purpose, interactions, input and persistence scope. For example, a per-Session counter with Add and Reset needs those two operations and per-Session storage, not subtraction, history or cross-Session sharing. Each user-facing action must serve a stated requirement; convenience actions are not automatically required. Keep acceptance criteria tied to those requested behaviors. Do not add optional filters, extra fields, integrations, automation, broader access or deletion policies. Leave source/API research to the background Creator.
 
-When the page uses content already supplied or obtained in this task, copy only the content needed to initialize it into `request.initialContent`: for example the actual checklist items or report values with their units, rather than merely describing columns. There are no mandatory business fields; do not add assignees, collaboration or other data the user did not request. The background Creator cannot read the main conversation. Do not invent missing data or copy unrelated conversation history. Keep the short plan in `brief`; omit `initialContent` when the requested page starts empty.
+When a source is named but not inspected, state it as an unverified dependency. Leave its response shape, connection setup and update behavior unresolved for the Creator after authorization. Missing technical details are not extra fields or controls to add to the page.
 
-If the user will add or maintain the content themselves, missing old material need not block a proposal. Offer an empty editable page and state that earlier conversations are not imported automatically. Ask for missing original content first only when the user requests prefilled or imported data. Do not promise scheduled collection, automatic updates or integrations unless requested.
+When the page uses content already supplied or obtained in this task, copy only the content needed to initialize it into `request.initialContent`: for example the actual checklist items or report values with their supplied units, rather than merely describing columns. Keep those items as display content; do not reinterpret their wording as features or acceptance requirements for the new page. Preserve the source values; do not fill missing rows or units, or present derived summaries as supplied data. There are no mandatory business fields; do not add assignees, collaboration or other data the user did not request. The background Creator cannot read the main conversation. Do not copy unrelated conversation history. Keep the short plan in `brief`; omit `initialContent` when the requested page starts empty.
+
+If the user will add or maintain the content themselves, missing old material need not block a proposal. Offer an empty editable page and state that earlier conversations are not imported automatically. Ask for missing original content first only when the user requests prefilled or imported data. Saving a page, manually updating its data, refreshing a source when opened and collecting updates while closed are separate behaviors. Include only the requested behavior; persistence alone does not imply live refresh, scheduled collection or an integration.
 
 Honor a location explicitly requested by the user. Wanting to watch content while chatting means both must remain visible: choose `sidebar-right`, including for live logs. Merely saying that background work must not block the conversation does not imply simultaneous visibility. Otherwise:
 
@@ -36,7 +40,7 @@ Honor a location explicitly requested by the user. Wanting to watch content whil
 - `page`: Session-bound streaming output or interaction, including live task logs, in a tab beside Chat and Trajectory. Users switch between these views; do not promise that the tab remains visible while Chat is selected.
 - `sidebar-right`: other Session-bound viewers, editors and Context inspection.
 
-For an optional page based on the current result, preserve its known scope. Session-local viewers use `sidebar-right`. Ask only if missing scope or interaction changes the outcome.
+For an optional page based on the current result, an ongoing personal record not tied to a task or Session defaults to `sidebar-left`, even without an explicit cross-Session requirement. Supplying its data in this conversation alone does not make it Session-bound. Task- or Session-local viewers use `sidebar-right`. An explicit user location still wins. Ask only if missing scope or interaction changes the outcome.
 
 ## Offer without starting creation
 

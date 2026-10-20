@@ -33,7 +33,7 @@ export function registerActionCard<const S extends ParameterSchemaSpec>(
     let active = true
     const removeTool = ctx.tools.register(defineTool({
       name: 'suggest_action',
-      description: 'Offer an optional action card before your normal final answer. Load the action’s skill for eligibility and planning. This only proposes an action; the user must click its card to start. Do not execute, wait, poll, claim work has started or completed, or ask the user to report back. The card carries the plan; briefly answer the request and refer to it without repeating its feature list or internal card limits. Use successful results only; a rejection creates no card.',
+      description: 'Propose an optional action card, displayed after your final answer. Follow the selected action’s skill for eligibility and planning. Submission saves a proposal only; the user must click its card to start. Do not execute or claim execution from a proposal. A successful result supplies the card; a rejection creates none.',
       parameters: { request: {
         type: 'object', additionalProperties: false, description: definition.description, required: true,
         properties: { action: { type: 'string', const: definition.name, required: true }, ...definition.parameters },

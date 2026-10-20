@@ -1,5 +1,40 @@
 [
   {
+    "id": "ongoing_personal_record_default",
+    "prompt": "本周的阅读记录：周一 20 页、周二 35 页、周三 15 页。先帮我总结一下。我每周都会回来看，而且想自己补后面的每天页数。",
+    "expected": "Complete the summary first. An optional reading tracker defaults to sidebar-left because it is an ongoing personal record, even without an explicit cross-Session requirement. Preserve the supplied values; do not infer automated collection."
+  },
+  {
+    "id": "task_record_default",
+    "prompt": "这次任务的验收项是空列表提示、刷新保留数据、深色模式可读。我只想在当前会话里打勾记录进度，先给页面方案。",
+    "expected": "Offer one sidebar-right card for this Session's checklist, preserving all three items. Do not turn the explicitly Session-bound checklist into a global personal tracker."
+  },
+  {
+    "id": "personal_record_explicit_right",
+    "prompt": "想持续记录自己每天读了多少页，手动输入就好。虽然会一直用，但这次请明确放在当前会话右侧，先给方案。",
+    "expected": "Offer one sidebar-right card. The user's explicit location takes precedence over the default global placement of ongoing personal records."
+  },
+  {
+    "id": "explicit_one_off_calculator",
+    "prompt": "我只在今天这次讨论里用：想在右侧放一个报价计算器，输入单价和数量就显示总价。不需要保存历史，也不打算以后再用。先给我方案。",
+    "expected": "Load personalized-pages and offer one sidebar-right card. An explicitly requested one-off interface qualifies without repeated use, changing data or independence from the Session. Keep only the requested calculation; no creation before click."
+  },
+  {
+    "id": "explicit_one_off_visual_page",
+    "prompt": "把这两种方案做成一个方便并排看的对比页面，放当前会话右侧：A 方案成本 2 万、耗时 3 天；B 方案成本 3 万、耗时 2 天。只看这一次，不要加编辑、筛选或自动更新。",
+    "expected": "Offer one sidebar-right comparison page. A requested visual page does not require interaction or future reuse. Carry the two supplied rows in initialContent without adding a currency unit or extra controls."
+  },
+  {
+    "id": "edit_existing_page",
+    "prompt": "我之前已经做了一个读书记录页面。现在想把原页面里的数字评分改成五星选择，其他都保持原样。你先说一下这个改动怎么做。",
+    "expected": "Discuss changing the existing page; do not offer create_personalized_page, make a replacement copy or claim an update occurred. Do not invent the original schema, score range or existing controls. Ask for source or location only when needed for implementation."
+  },
+  {
+    "id": "proposal_with_unverified_source",
+    "prompt": "想在当前会话右侧看我的构建状态，来源是我自己的构建 API，接口地址还没整理好。先只给一个页面方案，不要开始实现，也不用现在检查接口。",
+    "expected": "Offer one minimal sidebar-right plan using the requested but unverified API source. No workspace, source or API probe just to propose the page; no invented response schema or update schedule. Creator verifies the source after authorization."
+  },
+  {
     "id": "wish_counter",
     "prompt": "我想要一个一直留在右侧栏的小计数器，可以加一和归零，还能保存数字。",
     "expected": "Load personalized-pages skill then suggest_action create_personalized_page sidebar-right; no generation before click."
