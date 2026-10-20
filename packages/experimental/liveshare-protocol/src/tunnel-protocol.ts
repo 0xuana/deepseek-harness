@@ -11,7 +11,7 @@ export type TunnelRequestToken = Branded<'TunnelRequestToken'>
 export type TunnelRegistrationToken = Branded<'TunnelRegistrationToken'>
 
 /** Relay wire version; Host/worker IPC ships together and is not negotiated by this number. */
-export const LIVESHARE_PROTOCOL_VERSION = 1
+export const LIVESHARE_PROTOCOL_VERSION = 2
 
 /**
  * Optional behaviors this build offers the Relay, beyond the frames themselves.

@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.1-rc.2/liveshare-wire-protocol-version-2/guide.md
+/:
+  en: d6d74981a90a107b
+  zh: 2445aa783257140f
+/move-the-liveshare-wire-protocol-to-version-2:
+  en: d263ba44f18b66b6
+  zh: dfbccc1489a3ab82
+/move-the-liveshare-wire-protocol-to-version-2/change:
+  en: 2ae8697061400929
+  zh: a8e84b8069767352
+/move-the-liveshare-wire-protocol-to-version-2/migration:
+  en: 6b35e5397da2e12d
+  zh: 2beb152b15493f48
