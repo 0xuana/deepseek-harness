@@ -547,6 +547,18 @@ describe('viewer carrier forwarded page routes', () => {
     expect(direct).toHaveBeenCalledExactlyOnceWith('health', undefined)
   })
 
+  it('keeps the receiver of the page fetch it replaced', async () => {
+    const receivers: unknown[] = []
+    const direct = vi.fn(function (this: unknown, input: unknown) {
+      receivers.push(this)
+      return Promise.resolve(new Response(`direct:${String(input)}`))
+    })
+    vi.stubGlobal('fetch', direct)
+    installViewerCarrier(OPTIONS)
+    await globalThis.fetch('health')
+    expect(receivers).toEqual([globalThis])
+  })
+
   it('does not forward a route that acts on the owner\u2019s machine', async () => {
     const direct = directFetch()
     expect(await (await globalThis.fetch('open-in-app/open', { method: 'POST', body: '{"app":"finder"}' })).text())

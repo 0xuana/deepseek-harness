@@ -179,7 +179,7 @@ export function installViewerCarrier(options: ViewerCarrierOptions): void {
       pathname = undefined
     }
     const path = pathname === undefined ? undefined : forwardedRoute(pathname, method)
-    return path === undefined ? await pageFetch(input, init) : await forwardRoute(path, init)
+    return path === undefined ? await pageFetch.call(globalThis, input, init) : await forwardRoute(path, init)
   }
   globalThis.fetch = carrierFetch
 
