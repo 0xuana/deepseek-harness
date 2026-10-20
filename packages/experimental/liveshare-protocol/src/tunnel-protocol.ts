@@ -373,9 +373,20 @@ export function parseTunnelWorkerCommand(value: unknown): TunnelWorkerCommand | 
       return typeof value.shareId === 'string' && value.shareId !== ''
         ? { type: 'remove-share', shareId: value.shareId }
         : undefined
-    case 'add-share':
-      return isRegistrationToken(value.registrationToken) && isTunnelShareSpec(value.share)
-        ? { type: 'add-share', registrationToken: value.registrationToken, share: value.share } : undefined
+    case 'add-share': {
+      if (!isRegistrationToken(value.registrationToken) || !isTunnelShareSpec(value.share)) return undefined
+      const share = value.share
+      return {
+        type: 'add-share',
+        registrationToken: value.registrationToken,
+        share: {
+          ...share,
+          ...(share.sessionMode === undefined
+            ? {}
+            : { sessionMode: normalizeShareSessionMode(share.sessionMode) }),
+        },
+      }
+    }
     case 'share-rpc-response': {
       if (!isTunnelRequestIdentity(value) || !Number.isSafeInteger(value.status)
         || Number(value.status) < 100 || Number(value.status) > 599) return undefined
@@ -441,6 +452,15 @@ export function parseTunnelWorkerEvent(value: unknown): TunnelWorkerEvent | unde
  * @param value Candidate spec.
  * @returns True when every required field is present with the declared type.
  */
+/**
+ * Read the withdrawn `fork-readonly` tier as `view`; the forking half is `allowsFork`.
+ * @param mode - Tier a wire or IPC value names.
+ * @returns The current tier name.
+ */
+function normalizeShareSessionMode(mode: 'view' | 'fork-readonly' | 'write'): 'view' | 'write' {
+  return mode === 'fork-readonly' ? 'view' : mode
+}
+
 function isTunnelShareSpec(value: unknown): value is TunnelShareSpec {
   if (!isRecord(value)) return false
   const mode = value.sessionMode
@@ -511,7 +531,7 @@ export function parseShareAccessState(value: unknown): ShareAccessStateFrame | u
     return undefined
   }
   return { type: 'share-access-state', version: Number(value.version), accessMode: value.accessMode,
-    allowedSubjectIds: [...value.allowedSubjectIds], sessionMode: value.sessionMode,
+    allowedSubjectIds: [...value.allowedSubjectIds], sessionMode: normalizeShareSessionMode(value.sessionMode),
     ...(value.allowsFork === undefined ? {} : { allowsFork: value.allowsFork }),
     ...(value.expiresAt === undefined ? {} : { expiresAt: value.expiresAt }) }
 }

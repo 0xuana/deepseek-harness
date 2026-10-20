@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { parseTunnelWorkerCommand, parseTunnelWorkerEvent } from '../src/tunnel-protocol.ts'
 
@@ -60,5 +61,17 @@ describe('Host/worker registration identity', () => {
       '12345678-1234-1123-8123-123456789abc', '12345678-1234-4123-0123-123456789abc']) {
       expect(decode({ ...frame, registrationToken: token })).toBeUndefined()
     }
+  })
+})
+
+describe('withdrawn tier at the IPC boundary', () => {
+  it('reads fork-readonly back as view and keeps the caller switch', () => {
+    const share = {
+      shareId: 'share', sessionId: 'session', sessionTitle: 'Source', accessMode: 'selected' as const,
+      relay: 'https://relay.test', gatewayToken: 'token', ownerDisplayName: 'Owner',
+      sessionMode: 'fork-readonly' as const, allowsFork: true, allowedSubjectIds: [],
+    }
+    const parsed = parseTunnelWorkerCommand({ type: 'add-share', registrationToken: randomUUID(), share })
+    expect(parsed).toMatchObject({ share: { sessionMode: 'view', allowsFork: true } })
   })
 })

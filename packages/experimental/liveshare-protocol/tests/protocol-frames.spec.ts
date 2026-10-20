@@ -4,6 +4,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  LIVESHARE_PROTOCOL_VERSION,
   parseGatewayFrame,
   parseRelayFrame,
   parseTunnelWorkerCommand,
@@ -173,5 +174,11 @@ describe('recorded frames', () => {
       expect(() => parseGatewayFrame(text), text).not.toThrow()
       expect(parseGatewayFrame(text), text).toBeUndefined()
     }
+  })
+})
+
+describe('wire protocol version', () => {
+  it('states protocol version 2 for the narrowed access-mode vocabulary', () => {
+    expect(LIVESHARE_PROTOCOL_VERSION).toBe(2)
   })
 })

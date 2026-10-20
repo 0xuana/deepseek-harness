@@ -31,52 +31,18 @@ export type ViewerState =
 export type ViewerStateReach = 'retryable' | 'terminal'
 
 /**
- * One answer that carries exactly one condition.
+ * Whether the page may ask again, or the answer is the peer's verdict, for every condition.
  *
- * The two carriers are the two places a viewer page learns anything: a refused read, and the copy the
- * served page states for a failure that never reached the Relay.
+ * This is the whole vocabulary the protocol layer publishes: HTTP statuses and error codes belong to
+ * the Relay, and copy keys belong to the client. A page, a test, and an operator read one name per
+ * condition from here and get the retry decision with it.
  */
-export type ViewerStateAnswer =
-  | {
-    readonly wire: 'http'
-    readonly state: ViewerState
-    /** HTTP status of the refused read. */
-    readonly status: number
-    /** `error` code the JSON body carries. */
-    readonly code: string
-    readonly reach: ViewerStateReach
-  }
-  | {
-    readonly wire: 'page'
-    readonly state: ViewerState
-    /** Copy the served page states when the failure never reached the Relay. */
-    readonly copy: string
-    readonly reach: ViewerStateReach
-  }
-
-/**
- * Every answer a viewer page must tell apart, one entry per condition and carrier.
- *
- * This list is the whole of it: a page that knows these names can state what happened, and a check
- * over this list proves no two conditions share an answer.
- */
-export const VIEWER_STATE_ANSWERS: readonly ViewerStateAnswer[] = [
-  { wire: 'http', state: 'share-not-found', status: 404, code: 'share-not-found', reach: 'terminal' },
-  { wire: 'http', state: 'share-stopped', status: 410, code: 'share-stopped', reach: 'terminal' },
-  { wire: 'http', state: 'share-expired', status: 403, code: 'share-expired', reach: 'terminal' },
-  { wire: 'http', state: 'owner-offline', status: 503, code: 'owner-offline', reach: 'retryable' },
-  { wire: 'http', state: 'sign-in-expired', status: 401, code: 'authentication-required', reach: 'terminal' },
-  { wire: 'http', state: 'access-denied', status: 403, code: 'access-denied', reach: 'terminal' },
-  { wire: 'page', state: 'relay-unreachable', copy: 'accessDeniedTitle', reach: 'retryable' },
-]
-
-/**
- * The state one refused read carries.
- * @param status - HTTP status the read was refused with.
- * @param code - `error` code of the refusing body, when it carried one.
- * @returns The state that answer means, or undefined for an answer outside this vocabulary.
- */
-export function viewerStateOfRefusal(status: number, code: string | undefined): ViewerState | undefined {
-  return VIEWER_STATE_ANSWERS.find(answer =>
-    answer.wire === 'http' && answer.status === status && answer.code === code)?.state
+export const VIEWER_STATE_REACH: Readonly<Record<ViewerState, ViewerStateReach>> = {
+  'share-not-found': 'terminal',
+  'share-stopped': 'terminal',
+  'share-expired': 'terminal',
+  'owner-offline': 'retryable',
+  'sign-in-expired': 'terminal',
+  'access-denied': 'terminal',
+  'relay-unreachable': 'retryable',
 }
