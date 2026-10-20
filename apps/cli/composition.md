@@ -42,8 +42,6 @@ flowchart LR
   cfg --> plugin_dsh_base_agent
   plugin_dsh_base_agent_model["agent-model<br/>@deepseek-ai/dsh-agent-model"]
   cfg --> plugin_dsh_base_agent_model
-  plugin_dsh_base_agent_controller["agent-controller<br/>@deepseek-ai/dsh-agent-controller"]
-  cfg --> plugin_dsh_base_agent_controller
   plugin_dsh_base_plugin_package_inventory_deepseek["plugin-package-inventory-deepseek<br/>@deepseek-ai/dsh-plugin-package-inventory-deepseek"]
   cfg --> plugin_dsh_base_plugin_package_inventory_deepseek
   plugin_dsh_base_agent_default_model["agent-default-model<br/>@deepseek-ai/dsh-agent-default-model"]
@@ -223,7 +221,6 @@ flowchart LR
 | `user-questions` | `@deepseek-ai/dsh-user-questions` |
 | `agent` | `@deepseek-ai/dsh-agent` |
 | `agent-model` | `@deepseek-ai/dsh-agent-model` |
-| `agent-controller` | `@deepseek-ai/dsh-agent-controller` |
 | `plugin-package-inventory-deepseek` | `@deepseek-ai/dsh-plugin-package-inventory-deepseek` |
 | `agent-default-model` | `@deepseek-ai/dsh-agent-default-model` |
 | `jobs` | `@deepseek-ai/dsh-jobs-local` |

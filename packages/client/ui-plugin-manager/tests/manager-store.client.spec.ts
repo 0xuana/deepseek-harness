@@ -2204,3 +2204,33 @@ describe('version checks and updates', () => {
     expect(state().update?.phase).toBe('running')
   })
 })
+
+
+it.each(['bundle', 'row'] as const)('publishes %s activity before dispatch and settles it without a mounted page', async (kind) => {
+  const f = bench()
+  await f.controller.load()
+  const activity = f.controller.observeChanges(BUNDLE.name)
+  const other = f.controller.observeChanges('another-bundle')
+  const response = Promise.withResolvers<ReturnType<typeof ok<ChangeResult>>>()
+  onTestFinished(() => { response.resolve(ok(APPLIED)) })
+  const remote = kind === 'bundle' ? f.plugins.setBundleEnabled : f.plugins.setPluginEnabled
+  remote.mockImplementationOnce(() => {
+    expect(activity.getSnapshot()).toBe(true)
+    expect(other.getSnapshot()).toBe(false)
+    return response.promise
+  })
+  const observations: boolean[] = []
+  const unsubscribe = activity.subscribe(() => { observations.push(activity.getSnapshot()) })
+  onTestFinished(unsubscribe)
+  expect(activity.getSnapshot()).toBe(false)
+  if (kind === 'bundle') f.face.setEnabled(BUNDLE.name, true)
+  else f.face.setRowEnabled(ROW_ENTRY, false)
+  expect(observations).toContain(true)
+  response.resolve(ok(APPLIED))
+  await vi.waitFor(() => { expect(activity.getSnapshot()).toBe(false) })
+  expect(observations.at(-1)).toBe(false)
+  unsubscribe()
+  const count = observations.length
+  await f.controller.load()
+  expect(observations).toHaveLength(count)
+})

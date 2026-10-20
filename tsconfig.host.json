@@ -8,6 +8,7 @@
     "rewriteRelativeImportExtensions": false
   },
   "include": [
+    "apps/web/tests/hover-input.e2e.ts",
     "apps/web/tests/collapse-timing.e2e.ts",
     "apps/web/tests/notice-wake-tail.e2e.ts",
     "apps/web/tests/fold-blank-matrix.e2e.ts",
@@ -381,7 +382,6 @@
     { "path": "./packages/core/system-prompt" },
     { "path": "./packages/core/agent" },
     { "path": "./packages/core/agent-model" },
-    { "path": "./packages/core/agent-controller" },
     { "path": "./packages/core/agent-default-model" },
     { "path": "./packages/interaction/commands" },
     { "path": "./packages/goal/goal" },
