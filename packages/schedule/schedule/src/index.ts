@@ -388,7 +388,8 @@ export class ScheduleService extends TypertRemoteService {
       let failure: Error | undefined
       for (const id of ended) {
         try {
-          // A row another queued write already removed is not this call's removal.
+          // Only a row this call removed is counted: the domain answers false
+          // when the row is already absent.
           if (await tasks.delete(id)) deleted += 1
         } catch (error: unknown) {
           // Every row is attempted, so one failed delete does not leave the rest

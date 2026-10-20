@@ -98,16 +98,17 @@ export function ScheduleDeleteToast({ useToast, dismiss, t }: ScheduleDeleteToas
     case 'deleteFailed':
       return <Toast key={key} text={t('toast.deleteFailed')} icon={<IconWarningOutlineRegular />} onDone={dismiss} />
     case 'cleared':
-      // A removal that found nothing states that instead of a zero count: the
-      // ended rows can leave between the confirmation and the request.
-      return <Toast
-        key={key}
-        text={toast.count === 0
-          ? t('toast.clearedNone')
-          : t(toast.count === 1 ? 'toast.cleared.one' : 'toast.cleared.other', { count: toast.count })}
-        tone="success"
-        onDone={dismiss}
-      />
+      // A removal that found nothing states that instead of a zero count, and
+      // without the success tone: the ended rows can leave between the
+      // confirmation and the request.
+      return toast.count === 0
+        ? <Toast key={key} text={t('toast.clearedNone')} onDone={dismiss} />
+        : <Toast
+          key={key}
+          text={t(toast.count === 1 ? 'toast.cleared.one' : 'toast.cleared.other', { count: toast.count })}
+          tone="success"
+          onDone={dismiss}
+        />
     case 'clearFailed':
       return <Toast key={key} text={t('toast.clearFailed')} icon={<IconWarningOutlineRegular />} onDone={dismiss} />
     /* v8 ignore next -- the store publishes only the union's members, so the default holds no reachable statement. */

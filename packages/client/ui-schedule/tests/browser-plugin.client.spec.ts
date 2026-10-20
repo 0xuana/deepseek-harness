@@ -11,7 +11,9 @@ import { apply as applyNode } from '../src/index.ts'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
-import type { ScheduleId, ScheduleCatalogEntry, ScheduleUpdateRequest, ScheduleUpdateResult } from '@deepseek-ai/dsh-schedule/client'
+import type {
+  ScheduleId, ScheduleCatalogEntry, ScheduleDeleteInactiveResult, ScheduleUpdateRequest, ScheduleUpdateResult,
+} from '@deepseek-ai/dsh-schedule/client'
 import type { RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
 import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import type { CatalogInjected } from '../src/client/catalog-source.ts'
@@ -515,6 +517,39 @@ describe('ui-schedule browser half', () => {
     } finally {
       await fiber.dispose()
       owner()
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('reports a settled bulk removal after the page registration is gone', async () => {
+    const catalog = vi.fn().mockResolvedValue({ ok: true, value: [] })
+    const removal = Promise.withResolvers<{ ok: true; value: ScheduleDeleteInactiveResult }>()
+    const deleteInactive = vi.fn(() => removal.promise)
+    const ctx = await baseContext({ schedule: { catalog, deleteInactive }, $on: () => () => {} })
+    const owner = ctx.slots.register({
+      name: 'root',
+      children: {
+        main: { kind: 'keyed', scope: 'root' },
+        'shell.overlay': { kind: 'list', scope: 'root' },
+      },
+    } as never, Empty)
+    const fiber = ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    let claimed = false
+    try {
+      const face = injectedFace(ctx.slots.entries('main')[0]!, undefined as never) as TaskManagerInjected
+      const toast = injectedFace(ctx.slots.entries('shell.overlay')[0]!) as Omit<DeleteToastSource, 'report' | 'reportClear'>
+      const clearing = face.onClearEnded()
+      // The page panel can unmount while the Host removal is still in flight;
+      // the notice store belongs to the plugin, so the outcome still publishes.
+      owner()
+      claimed = true
+      removal.resolve({ ok: true, value: { deleted: 2 } })
+      await clearing
+      expect(toast.hooks.toast.getSnapshot()).toEqual({ kind: 'cleared', count: 2, seq: 1 })
+    } finally {
+      if (!claimed) owner()
+      await fiber.dispose()
       await ctx.fiber.dispose()
     }
   })

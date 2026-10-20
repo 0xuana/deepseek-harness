@@ -1328,10 +1328,11 @@ describe.skipIf(MODE === 'record')('web e2e: active Schedule catalog', () => {
       expect(tripwire.pageErrors).toEqual([])
     } finally {
       // The shared page and Host outlive a failed assertion: remove every row
-      // this scenario introduced so the next one starts from the same state.
-      for (const id of [kept.id, ...endedIds]) {
-        await scaffold.ctx.schedule.delete({ sessionId: endedSession, id })
-      }
+      // this scenario introduced so the next one starts from the same state. A
+      // teardown rejection must not mask the assertion that failed first.
+      await Promise.allSettled(
+        [kept.id, ...endedIds].map(id => scaffold.ctx.schedule.delete({ sessionId: endedSession, id })),
+      )
     }
   }, 60_000)
 })

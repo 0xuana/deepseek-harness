@@ -1015,6 +1015,37 @@ describe('clearing ended tasks', () => {
     expect(document.activeElement).toBe(trigger)
   })
 
+  it('falls back to the page heading when the settled cleanup hides its trigger', async () => {
+    const pending = Promise.withResolvers<undefined>()
+    const onClearEnded = vi.fn(() => pending.promise)
+    const h = mount({ records: [at, endedTask] }, en, { onClearEnded })
+    const trigger = screen.getByRole('button', { name: en['clear.action'] })
+    trigger.focus()
+    fireEvent.click(trigger)
+    fireEvent.click(screen.getByRole('button', { name: en['clear.confirm'] }))
+    // The acknowledged removal's readback drops the ended rows, and with them the
+    // trigger the Modal captured when it opened.
+    act(() => { h.update({ records: [at] }) })
+    expect(screen.queryByRole('button', { name: en['clear.action'] })).toBeNull()
+    await act(async () => { pending.resolve(undefined) })
+    expect(screen.queryByRole('dialog', { name: en['clear.title'] })).toBeNull()
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 }))
+  })
+
+  it('falls back to the page heading when another cleanup removes the trigger', () => {
+    const h = mount({ records: [at, endedTask] })
+    const trigger = screen.getByRole('button', { name: en['clear.action'] })
+    trigger.focus()
+    fireEvent.click(trigger)
+    // Another client's cleanup removes the ended rows while this confirmation
+    // is open, so the control the Modal captured is unmounted too.
+    act(() => { h.update({ records: [at] }) })
+    expect(screen.queryByRole('button', { name: en['clear.action'] })).toBeNull()
+    fireEvent.keyDown(screen.getByRole('dialog', { name: en['clear.title'] }), { key: 'Escape' })
+    expect(screen.queryByRole('dialog', { name: en['clear.title'] })).toBeNull()
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 }))
+  })
+
   it('closes only the confirmation on Escape while a task detail is open', () => {
     mount({ records: [at, endedTask] })
     fireEvent.click(screen.getByRole('button', { name: 'Review release' }))

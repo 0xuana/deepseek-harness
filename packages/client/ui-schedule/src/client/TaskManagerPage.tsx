@@ -66,6 +66,10 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
   const { record: catalogRecord, task: selected, id: detailId, confirmId, setConfirmId, setTab } = detail
   const rowRef = useRef<HTMLButtonElement | null>(null)
   const headingRef = useRef<HTMLHeadingElement>(null)
+  const clearTriggerRef = useRef<HTMLButtonElement | null>(null)
+  // Set when the confirmation opens: its settled removal can hide the trigger
+  // before the Modal returns focus, and so can another client's cleanup.
+  const clearFocusPending = useRef(false)
   const confirming = records.find(record => record.id === confirmId)
   // The bulk action's target and count come from the complete catalog, not from
   // the filtered rows: it removes every ended task, whatever the view shows.
@@ -115,6 +119,16 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
     setSelectedId(null)
   }
 
+  // The Modal returns focus to the control that opened it only while that
+  // control still exists; a cleanup that removes every ended row unmounts the
+  // trigger before the confirmation closes, so the page heading takes the focus.
+  useEffect(() => {
+    if (clearConfirm || !clearFocusPending.current) return
+    clearFocusPending.current = false
+    if (clearTriggerRef.current?.isConnected === true) return
+    headingRef.current?.focus()
+  }, [clearConfirm])
+
   const confirmClearEnded = (): void => {
     setClearing(true)
     void onClearEnded().finally(() => {
@@ -129,9 +143,11 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
       aria-label={t('title')}
       data-testid="task-manager-page"
       onKeyDown={(event) => {
-        // Escape belongs to the surface it closed: the Menu primitive consumes it
-        // during the document capture phase, and the Modal layer consumes it while
-        // a confirmation is open. This handler must not also close the detail.
+        // An Escape that closed a dropdown is already consumed by the Menu's
+        // document capture listener. A confirmation's own Escape reaches the
+        // Modal's document bubble listener, which runs after this React handler,
+        // so the `clearConfirm` guard is what keeps this page from also closing
+        // the detail while the dialog closes.
         if (event.key !== 'Escape' || event.defaultPrevented || confirmId !== null || clearConfirm
           || selectedId === null) return
         event.preventDefault()
@@ -146,10 +162,14 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
               <h1 ref={headingRef} tabIndex={-1}>{t('title')}</h1>
               <div className={css.creationActions}>
                 {endedCount > 0 && <Button
+                  ref={clearTriggerRef}
                   variant="outline"
                   size="sm"
                   className={css.headerAction}
-                  onClick={() => { setClearConfirm(true) }}
+                  onClick={() => {
+                    clearFocusPending.current = true
+                    setClearConfirm(true)
+                  }}
                 >{t('clear.action')}</Button>}
                 <Button variant="primary" size="sm" className={css.headerAction} icon={<IconPlusOutlineRegular size={13} />} onClick={onNewTask}>{t('new.action')}</Button>
               </div>

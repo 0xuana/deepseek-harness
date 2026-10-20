@@ -24,8 +24,8 @@ export interface ClearEndedDependencies {
  *
  * The call names no task ids: the Host owns which rows are ended, and a
  * delivery can have moved the catalog between the confirmation and the
- * request. The readback follows the acknowledged removal, so the list the page
- * renders next agrees with the count the notice states.
+ * request. The readback follows the acknowledged removal and supersedes a read
+ * issued before it, so the list follows the removal rather than a stale read.
  * @param deps - Remote removal and its catalog readback.
  * @returns a callback that resolves once the settled outcome is available.
  */
