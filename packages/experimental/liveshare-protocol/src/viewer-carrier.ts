@@ -135,17 +135,36 @@ export function installViewerCarrier(options: ViewerCarrierOptions): void {
    */
   const forwardedRoutes = ['/open-in-app/apps', '/api/present.host']
   /**
-   * Owner path one page request forwards, matched by suffix because the page URL carries the Relay's own
-   * base path in front of it.
+   * Offset at which `route` starts a path segment run, ignoring a Relay base path in front of it.
    * @param pathname - Resolved request pathname.
+   * @param route - Owner route to find.
+   * @returns The offset, or undefined when the route appears only inside a longer segment.
+   */
+  const segmentOffset = (pathname: string, route: string): number | undefined => {
+    let from = 0
+    for (;;) {
+      const at = pathname.indexOf(route, from)
+      if (at === -1) return undefined
+      // The route starts with '/', so its own slash is the segment boundary; only the tail decides
+      // whether a longer segment (e.g. `/api/present.hostile`) merely shares the prefix.
+      const next = pathname[at + route.length]
+      if (next === undefined || next === '/') return at
+      from = at + 1
+    }
+  }
+  /**
+   * Owner path one page request forwards, matched at path-segment boundaries because the page URL carries
+   * the Relay's own base path in front of it. Prefix-neighbouring paths such as `/api/present.hostile` or
+   * `/x/open-in-app/apps-foo` are not this route.
+   * @param pathname - Resolved request pathname (query and hash already excluded).
    * @param method - Request method, already upper-cased.
    * @returns The owner path to post, or undefined when this request is not one of the forwarded routes.
    */
   const forwardedRoute = (pathname: string, method: string): string | undefined => {
     if (method !== 'GET') return undefined
     for (const route of forwardedRoutes) {
-      const at = pathname.lastIndexOf(route)
-      if (at !== -1) return pathname.slice(at)
+      const at = segmentOffset(pathname, route)
+      if (at !== undefined) return pathname.slice(at)
     }
     return undefined
   }

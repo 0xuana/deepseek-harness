@@ -541,6 +541,29 @@ describe('viewer carrier forwarded page routes', () => {
     expect(posted[0]).toMatchObject({ op: 'call', path: '/open-in-app/apps' })
   })
 
+  it('forwards a route only when it starts a path segment', async () => {
+    const below = carrier(() => json({ apps: ['finder'] }))
+    expect(await (await globalThis.fetch('/relay/s/abc/open-in-app/apps/foo')).json()).toEqual({ apps: ['finder'] })
+    expect(below.posted[0]).toMatchObject({ op: 'call', path: '/open-in-app/apps/foo' })
+    const exact = carrier(() => json({ name: 'owner-host' }))
+    expect(await (await globalThis.fetch('/relay/s/abc/api/present.host')).json()).toEqual({ name: 'owner-host' })
+    expect(exact.posted[0]).toMatchObject({ op: 'call', path: '/api/present.host' })
+  })
+
+  it('does not forward a prefix neighbour of a forwarded route', async () => {
+    const direct = directFetch()
+    expect(await (await globalThis.fetch('/api/present.hostile')).text()).toBe('direct:/api/present.hostile')
+    expect(await (await globalThis.fetch('/x/open-in-app/apps-foo')).text()).toBe('direct:/x/open-in-app/apps-foo')
+    expect(await (await globalThis.fetch('/api/present.hostile?x=1')).text()).toBe('direct:/api/present.hostile?x=1')
+    expect(direct).toHaveBeenCalledTimes(3)
+  })
+
+  it('forwards a hit whose page URL carries a query without passing it to the owner', async () => {
+    const { posted } = carrier(() => json({ name: 'owner-host', available: true, fileManager: 'finder' }))
+    expect(await (await globalThis.fetch('/relay/s/abc/api/present.host?x=1#frag')).json()).toMatchObject({ name: 'owner-host' })
+    expect(posted[0]).toMatchObject({ op: 'call', path: '/api/present.host' })
+  })
+
   it('leaves every other request to the page\u2019s own fetch', async () => {
     const direct = directFetch()
     expect(await (await globalThis.fetch('health')).text()).toBe('direct:health')
