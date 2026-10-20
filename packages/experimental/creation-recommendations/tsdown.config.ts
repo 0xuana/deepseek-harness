@@ -1,6 +1,6 @@
 import { defineConfig } from 'tsdown'
 
-/** Build the package root as a self-contained bundle. */
+/** Build the creation plugin and its internal proposal implementation. */
 export default defineConfig([
   {
     entry: ['lib/types/index.js'],

@@ -21,7 +21,8 @@ export function recommendationOf(event: { readonly type: string; readonly data: 
   const result = event.type === 'tool/result' && record(event.data.message) ? { ...event.data, isError: event.data.message.isError }
     : event.type === 'tool/ptc-dispatch' ? event.data : undefined
   if (!record(result) || result.isError || !record(result.meta)) return undefined
-  const value = result.meta.creationRecommendation
+  const card = result.meta.actionCard
+  const value = record(card) && card.action === 'create_personalized_page' ? card.data : result.meta.creationRecommendation
   if (!record(value) || typeof value.callId !== 'string' || value.callId === ''
     || typeof value.title !== 'string' || value.title === '' || typeof value.brief !== 'string' || value.brief === ''
     || value.slot !== 'sidebar-right' && value.slot !== 'page' && value.slot !== 'sidebar-left') return undefined

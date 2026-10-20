@@ -35,8 +35,13 @@ export type CreationState = z.infer<typeof stateSchema>
  */
 export function creationOf(event: SessionEvent): CreationRecommendation | undefined {
   const result = settlement(event)
-  const parsed = z.object({ creationRecommendation: proposalSchema }).safeParse(result?.meta)
-  return parsed.success ? parsed.data.creationRecommendation : undefined
+  const parsed = z.union([
+    z.object({ actionCard: z.object({ action: z.literal('create_personalized_page'), data: proposalSchema }) })
+      .transform(value => value.actionCard.data),
+    // Existing experiment sessions retain their original card receipts.
+    z.object({ creationRecommendation: proposalSchema }).transform(value => value.creationRecommendation),
+  ]).safeParse(result?.meta)
+  return parsed.success ? parsed.data : undefined
 }
 
 function settlement(event: SessionEvent) {
@@ -47,7 +52,7 @@ function settlement(event: SessionEvent) {
 
 /** Full-session fold; later explicit needs may offer another card in another turn. */
 export const creationProjection = {
-  key: 'creationRecommendations', stateVersion: 3, stateSchema,
+  key: 'creationRecommendations', stateVersion: 4, stateSchema,
   init: (): CreationState => ({ proposals: {}, view: { decisions: {} }, turn: 0, firstCall: null }),
   apply: (state, event) => {
     if (event.type === 'turn/start') return { ...state, turn: event.data.turn, firstCall: null }
@@ -57,8 +62,11 @@ export const creationProjection = {
       return { ...state, view: { decisions: { ...state.view.decisions, [decision.callId]: decision } } }
     }
     const proposal = creationOf(event)
-    const foreign = z.object({ pluginRecommendation: z.object({ callId: z.string().min(1) }) }).safeParse(settlement(event)?.meta)
-    const firstCall = state.firstCall ?? proposal?.callId ?? (foreign.success ? foreign.data.pluginRecommendation.callId : null)
+    const foreign = z.union([
+      z.object({ pluginRecommendation: z.object({ callId: z.string().min(1) }) }).transform(value => value.pluginRecommendation.callId),
+      z.object({ actionCard: z.object({ action: z.string(), callId: z.string().min(1) }) }).transform(value => value.actionCard.callId),
+    ]).safeParse(settlement(event)?.meta)
+    const firstCall = state.firstCall ?? proposal?.callId ?? (foreign.success ? foreign.data : null)
     return proposal === undefined ? firstCall === state.firstCall ? state : { ...state, firstCall }
       : { ...state, firstCall, proposals: { ...state.proposals, [proposal.callId]: proposal } }
   },

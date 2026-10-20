@@ -16,6 +16,13 @@ it('folds native and PTC metadata, ignores failed or malformed proposals, and re
   const native: SessionEvent<'tool/result'> = { type: 'tool/result', seq: SessionSeq(2), time: 0, surfaceOp: 'append',
     data: { turn: 1, step: 1, message: createToolResultMessage({ callId, content: [], isError: false }),
       meta: { creationRecommendation: proposal } } }
+  const card = { ...native, data: { ...native.data, meta: { actionCard: { action: 'create_personalized_page', callId, data: proposal } } } }
+  expect(creationOf(card)).toEqual(proposal)
+  expect(creationOf({ ...ptc, data: { ...ptc.data, meta: card.data.meta } })).toEqual(proposal)
+  expect(creationProjection.apply(empty, card).proposals[callId]).toEqual(proposal)
+  const other = { ...card, data: { ...card.data, meta: { actionCard: { action: 'other', callId: 'other-card', data: {} } } } }
+  expect(creationOf(other)).toBeUndefined()
+  expect(creationProjection.apply(empty, other).firstCall).toBe('other-card')
   const state = creationProjection.apply(empty, native)
   expect(state.proposals[callId]).toEqual(proposal)
   expect(creationProjection.wire.view(state)).toEqual({ decisions: {} })

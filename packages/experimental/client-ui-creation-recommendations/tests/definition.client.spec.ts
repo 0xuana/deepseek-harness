@@ -11,6 +11,10 @@ it('reads identical proposal facts from native and nested PTC results', () => {
   const ptc = { type: 'tool/ptc-dispatch', data: { isError: false, meta: { creationRecommendation: value } } }
   expect(recommendationOf(native)).toEqual(value)
   expect(recommendationOf(ptc)).toEqual(value)
+  for (const event of [native, ptc]) {
+    expect(recommendationOf({ ...event, data: { ...event.data, meta: { actionCard: { action: 'create_personalized_page', callId: value.callId, data: value } } } })).toEqual(value)
+    expect(recommendationOf({ ...event, data: { ...event.data, meta: { actionCard: { action: 'another_action', callId: value.callId, data: value } } } })).toBeUndefined()
+  }
 })
 
 it('falls back for unrelated, failed, missing, and malformed data', () => {

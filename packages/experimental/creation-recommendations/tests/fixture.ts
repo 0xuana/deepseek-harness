@@ -7,10 +7,12 @@ import { expect, onTestFinished, vi } from 'vitest'
 import { createToolResultMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { appendPluginRecord, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
+import Skills from '@deepseek-ai/dsh-skill'
+import * as SkillTool from '@deepseek-ai/dsh-tool-skill'
 import RemoteAccess from '@deepseek-ai/dsh-api-remote-access'
 import type { BundleInfo, ChangeResult } from '@deepseek-ai/dsh-plugin-manager/types'
 import type { SubagentActivationSpec, SubagentResult } from '@deepseek-ai/dsh-subagent'
-import CreationRecommendations from '../src/index.ts'
+import * as CreationRecommendations from '../src/index.ts'
 import { creationProjection } from '../src/projection.ts'
 import type { CreationDecision } from '../src/types.ts'
 
@@ -33,9 +35,11 @@ export async function fixture(initial?: CreationDecision) {
   const directory = await mkdtemp(join(tmpdir(), 'dsh-creation-'))
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose(); await rm(directory, { recursive: true, force: true }) })
-  await mountAgentLoopTestDependencies(ctx)
+  await mountAgentLoopTestDependencies(ctx, { workingDirectory: true })
   const harness = await mountAgentLoopTestHarness(ctx)
   await ctx.plugin(RemoteAccess)
+  await ctx.plugin(Skills)
+  await ctx.plugin(SkillTool)
   const bundles: BundleInfo[] = []
   const manager = {
     listBundles: vi.fn(async (): Promise<BundleInfo[]> => bundles),
@@ -70,7 +74,7 @@ export async function fixture(initial?: CreationDecision) {
   const current = (): CreationDecision | undefined =>
     events.reduce(creationProjection.apply, creationProjection.init()).view.decisions[callId]
   const execute = (args: object = proposal, id = callId, caller = agent) => ctx.tools.execute({
-    name: 'suggest_view', arguments: args, agent: caller, callId: id, signal: new AbortController().signal,
+    name: 'suggest_action', arguments: { request: { action: 'create_personalized_page', ...args } }, agent: caller, callId: id, signal: new AbortController().signal,
   })
   const propose = async (id = callId) => {
     const value = await execute(proposal, id)

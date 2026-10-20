@@ -19,7 +19,7 @@
 
 | 工具包 | 模型可见名称 | 依赖 | 写入／影响 | 随产品发布的别名 | 部署说明 |
 | --- | --- | --- | --- | --- | --- |
-| `@deepseek-ai/dsh-experimental-creation-recommendations` | `list_creation_plugins`, `suggest_view` | `ctx.tools`, `ctx.pluginManager`, `ctx.agents`, `ctx.sessionProjections`, `ctx.remoteAccess`, `ctx.subagents`, `ctx.profileContext` | `tool/call`, `tool/result`, `plugin:creation-recommendations/decision`, `Creator child session`, `profile bundle selection` | - | - |
+| `@deepseek-ai/dsh-experimental-creation-recommendations` | `suggest_action` | `ctx.tools`, `ctx.pluginManager`, `ctx.agents`, `ctx.sessionProjections`, `ctx.remoteAccess`, `ctx.subagents`, `ctx.profileContext`, `ctx.skills` | `tool/call`, `tool/result`, `plugin:creation-recommendations/decision`, `Creator child session`, `profile bundle selection` | - | - |
 | `@deepseek-ai/dsh-plugin-manager` | `plugin_manager` | `ctx.tools`, `ctx.pluginManager`, `ctx.sandboxPolicy` | `tool/call`, `tool/result`, `user/message` | - | - |
 | `@deepseek-ai/dsh-plugin-market` | `plugin_market` | `ctx.tools`, `ctx.pluginMarket` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-mcp-resources` | `list_mcp_resource_templates`, `list_mcp_resources`, `read_mcp_resource` | `ctx.tools`, `ctx.mcpResources` | `tool/call`, `tool/result` | - | - |
@@ -59,49 +59,51 @@
 
 ## `@deepseek-ai/dsh-experimental-creation-recommendations`
 
-### `list_creation_plugins`
+### `suggest_action`
 
-为持久界面提出建议前，读取随应用提供的 DSH 插件及启用状态。先选定一个明确界面需求，或当前任务已得到且适合反复使用、查看变化数据或交互的明显可复用结果；遵循明确优先级，否则优先使用现成插件。如果 list_official_plugins 已找到合适插件，直接使用，不再重复查询。一次性回答、偶然出现的静态表格、模糊或引用的愿望、拒绝推荐的请求，以及已经出卡后，都不应查询。不为发现推荐机会额外获取数据。仅澄清会改变功能结果的缺失信息。这是插件目录，并非所有内置功能的完整索引。规划只处理产品行为；源码和 API 调研留给用户点击创建后的 Creator。
-
-```json
-{
-  "type": "object",
-  "properties": {}
-}
-```
-
-源码： [`packages/experimental/creation-recommendations/src/index.ts`](../packages/experimental/creation-recommendations/src/index.ts)
-
-### `suggest_view`
-
-为明确界面需求提出持久 DSH 界面；也可为当前任务已得到的明显可复用结果顺带推荐，例如持续变化的任务清单、定期状态表、数据查看器或可复用控件。正常完成用户要求的回答，不把每张表都变成页面，也不为推荐而额外取数。一次性解释、偶然出现的静态表格和普通编码任务无需卡片。针对选定需求读取 list_creation_plugins；已有合适能力时优先使用，suggest_plugin 可用且符合推荐条件时通过它出卡，否则说明插件页入口。调用前从两类工具中选定本轮唯一卡片，即使用户要求多张也一样。遵循明确优先级，否则优先使用现成插件。简述其他需求，不合并需求，也不承诺以后自动出卡。仅澄清会改变功能结果的缺失信息，不从另一个愿望推断用途或数据。基于已知输入规划最小可用版本，不编造实时集成、自动化或更广的数据权限；源码、API 调研和实现选择交给 Creator。要求先给方案或暂不开始生成仍允许出卡，包括只读模式；模糊或引用的愿望、只讨论的请求以及明确拒绝推荐则不出卡。方案保持几句话，避免未请求的自动化或删除数据规则；出卡前不要求文字确认，正文也不重复完整方案。最终回答前调用，再用用户的语言简洁回答当前问题；可选卡片显示在回答下方。只报告成功建议，被拒绝的调用不生成卡片。本工具不启动工作。卡片的信息按钮说明生成可能耗时较长并消耗大量 token。用户点击创建后，后台 Creator 子 Agent 生成并安装新的可卸载插件，不修改已有插件。用户可继续在这里聊天，进度显示在卡片中。不要等待、轮询、要求切换模式或让用户报告完成。安装自动应用，卡片会说明实际需要重启的情况，不要求刷新或重新打开会话；点击前不能声称已开始生成，完成结果出现前不能声称成功。
+在正常最终回答前，提供一张可选操作卡片。通过动作的 Skill 加载适用条件和规划策略。调用只提交建议，用户点击卡片后才开始；不要直接执行、等待、轮询、声称完成或要求用户报告完成。仅依据成功结果回答；调用被拒绝时不产生卡片。
 
 ```json
 {
   "type": "object",
   "properties": {
-    "title": {
-      "type": "string",
-      "description": "Short name in the user’s language."
-    },
-    "brief": {
-      "type": "string",
-      "description": "A few sentences describing the smallest useful plan for the selected need: purpose, essential interactions, known data/input and scope, and completion criteria, in the user’s language. Use relevant context without inventing links to other wishes. Ask only when a missing fact changes the outcome; leave implementation details to the Creator. Shown on the card and passed to the Creator."
-    },
-    "slot": {
-      "type": "string",
-      "description": "Apply this order: (1) Honor a location explicitly requested by the user. (2) A global feature uses sidebar-left: one left entry opens a standalone main-area page without Chat/Trajectory tabs, including global streaming tools. (3) A Session-bound streaming dialogue or interactive assistant uses page: a tab beside Chat and Trajectory; Session scope is not a reason to put streaming dialogue in the right sidebar. (4) Other Session-bound viewers, editors and Context inspection use sidebar-right. Do not invent a right-sidebar preference to replace the streaming-tab rule. For an optional page based on the current result, keep its known data scope; a Session-local viewer defaults to sidebar-right. Clarify only if missing scope or interaction changes the outcome.",
-      "enum": [
-        "sidebar-right",
-        "page",
-        "sidebar-left"
+    "request": {
+      "type": "object",
+      "description": "Create a persistent removable page using the background Creator. First load personalized-pages for policy, the current official-plugin catalog, and placement. Prefer an existing plugin unless the user explicitly prioritizes an unmet page need. At most one recommendation per turn.",
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "type": "string",
+          "const": "create_personalized_page"
+        },
+        "title": {
+          "type": "string",
+          "description": "Short name in the user’s language."
+        },
+        "brief": {
+          "type": "string",
+          "description": "A few sentences describing the smallest useful plan for the selected need: purpose, essential interactions, known data/input and scope, and completion criteria, in the user’s language. Use relevant context without inventing links to other wishes. Ask only when a missing fact changes the outcome; leave implementation details to the Creator. Shown on the card and passed to the Creator."
+        },
+        "slot": {
+          "type": "string",
+          "description": "Location selected using the personalized-pages skill: sidebar-right for Session viewers/editors, page for Session streaming tabs, sidebar-left for a global main-area page with a left entry. Honor an explicit user choice.",
+          "enum": [
+            "sidebar-right",
+            "page",
+            "sidebar-left"
+          ]
+        }
+      },
+      "required": [
+        "action",
+        "title",
+        "brief",
+        "slot"
       ]
     }
   },
   "required": [
-    "title",
-    "brief",
-    "slot"
+    "request"
   ]
 }
 ```

@@ -43,7 +43,7 @@ Plan disclosure depends on omitted text, not rendered height. Long previews coll
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-Successful native and PTC result metadata become hidden Conversation nodes. The completed-Turn tail reads its indexed proposals and displays only the first. The component receives session-bound callbacks and a framework-bound notice preference rather than accessing services. The shared Menu handles portal positioning, keyboard selection and dismissal. Its optional Remote, locale, event definition and slot registration share one plugin lifetime.
+Successful native and PTC `actionCard` metadata for `create_personalized_page` becomes a hidden Conversation node. Existing experiment sessions using `creationRecommendation` metadata remain readable; unrelated action kinds use their own renderers. The completed-Turn tail reads its indexed proposals and displays only the first. The component receives session-bound callbacks and a framework-bound notice preference rather than accessing services. The shared Menu handles portal positioning, keyboard selection and dismissal. Its optional Remote, locale, event definition and slot registration share one plugin lifetime.
 
 - [Source](src/client/index.ts)
 - [Tests](tests/)

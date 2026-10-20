@@ -13,11 +13,12 @@ import Projections from '@deepseek-ai/dsh-session-projection'
 import Agents from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import Llm, { createToolResultMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import Skills from '@deepseek-ai/dsh-skill'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import Tools from '@deepseek-ai/dsh-tools'
 import Access from '@deepseek-ai/dsh-api-remote-access'
 import type { SubagentActivation, SubagentActivationSpec } from '@deepseek-ai/dsh-subagent'
-import Recommendations from '../src/index.ts'
+import * as Recommendations from '../src/index.ts'
 import type { CreationView } from '../src/types.ts'
 import { writeBundle } from './fixture.ts'
 
@@ -34,7 +35,7 @@ it.each(['portable-bundle', 'foreign-nested-row'] as const)('validates and insta
     dsh: { bundle: { patch: './cordis.patch.yml' } } }))
   await writeFile(join(base, 'cordis.patch.yml'), JSON.stringify([{ insert: [
     ['session', 'sessions'], ['projection', 'projections'], ['llm', 'llm'], ['prompt', 'prompt'],
-    ['tools', 'tools'], ['agents', 'agents'], ['access', 'access'], ['manager', 'manager'],
+    ['tools', 'tools'], ['skills', 'skills'], ['agents', 'agents'], ['access', 'access'], ['manager', 'manager'],
     ['recommendations', 'recommendations'],
   ].map(([id, name]) => ({ id, name: 'cordis:' + name! })) }]))
   initProfile(dir, ['fixture-base'])
@@ -71,7 +72,7 @@ it.each(['portable-bundle', 'foreign-nested-row'] as const)('validates and insta
         result: Promise.resolve({ output: [], stopReason: 'completed', structured: { ready: true } }) }
     } })
     Object.assign(ctx.loader.builtins, { sessions: Sessions, projections: Projections, llm: Llm, prompt: SystemPrompt,
-      tools: Tools, agents: Agents, access: Access, manager: PluginManager, recommendations: Recommendations })
+      tools: Tools, skills: Skills, agents: Agents, access: Access, manager: PluginManager, recommendations: Recommendations })
   })
   await ctx.plugin(Timer)
   await ctx.plugin(Hmr, { root: [], ignored: [], debounce: 0 })
@@ -79,8 +80,8 @@ it.each(['portable-bundle', 'foreign-nested-row'] as const)('validates and insta
   await ctx.plugin(AgentLoop, { agents: [] })
   const agent = await ctx.agentLoop.create(SessionId('creation-live'))
   const callId = ToolCallId('create-live')
-  const result = await ctx.tools.execute({ name: 'suggest_view', callId, agent, signal: new AbortController().signal,
-    arguments: { title: 'Counter', brief: 'Keep a counter in the right sidebar.', slot: 'sidebar-right' } })
+  const result = await ctx.tools.execute({ name: 'suggest_action', callId, agent, signal: new AbortController().signal,
+    arguments: { request: { action: 'create_personalized_page', title: 'Counter', brief: 'Keep a counter in the right sidebar.', slot: 'sidebar-right' } } })
   expect(result.isError).toBe(false)
   agent.session.append('tool/result', { turn: 1, step: 1,
     message: createToolResultMessage({ callId, content: result.content, isError: result.isError }),
@@ -117,4 +118,10 @@ it.each(['portable-bundle', 'foreign-nested-row'] as const)('validates and insta
   expect(live()).toBeUndefined()
   expect(readProfileManifest('test', dir).dsh?.profile?.bundles).toEqual(['fixture-base'])
   expect((await ctx.pluginManager.listBundles()).find(bundle => bundle.name === name)?.installed).not.toBe(true)
+  const feature = [...ctx.loader.entries()].find(entry => entry.options.id === 'recommendations')
+  expect(feature?.fiber).toBeDefined()
+  await feature!.fiber!.dispose()
+  expect(ctx.get('creationRecommendations')).toBeUndefined()
+  expect(ctx.tools.get('suggest_action')).toBeUndefined()
+  expect(await ctx.skills.list()).toEqual([])
 }, 30_000)

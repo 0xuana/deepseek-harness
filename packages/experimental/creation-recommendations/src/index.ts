@@ -4,10 +4,10 @@ import { cp, mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { z } from 'zod'
-import { Service, type Context } from '@deepseek-ai/cordis'
+import { FiberState, Service, type Context } from '@deepseek-ai/cordis'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { HarnessError, type ToolCallId } from '@deepseek-ai/dsh-llm'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import type {} from '@deepseek-ai/dsh-tools'
 import { appendPluginRecord, SessionId } from '@deepseek-ai/dsh-session'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
@@ -15,10 +15,15 @@ import type {} from '@deepseek-ai/dsh-plugin-manager'
 import type {} from '@deepseek-ai/dsh-api-remote-access'
 import type {} from '@deepseek-ai/dsh-subagent'
 import type {} from '@deepseek-ai/dsh-app-boot'
+import type {} from '@deepseek-ai/dsh-skill'
+import { registerCreationSkill } from './skill.ts'
+import { registerActionCard } from './action-cards.ts'
 import { creationProjection, customLocationSchema, slotSchema, type CreationState } from './projection.ts'
 import { validateGeneratedBundle } from './generated-bundle.ts'
 import type { CreationActionResult, CreationDecision, CreationRecommendation, CreationSlot } from './types.ts'
 export type * from './types.ts'
+
+export const name = 'creation-recommendations'
 
 declare module '@deepseek-ai/cordis' {
   interface Context { creationRecommendations: CreationRecommendations }
@@ -35,20 +40,25 @@ interface CreationJob {
 /** Invalid proposals never start a child or change the profile. */
 export class CreationRecommendationError extends HarnessError {}
 
-/** Owns accepted Creator runs and the durable receipts for their new bundles. */
-export default class CreationRecommendations extends TypertRemoteService {
-  static inject = ['tools', 'pluginManager', 'agents', 'sessionProjections', 'remoteAccess', 'subagents', 'profileContext']
+/** Internal Remote and effect owner assembled by the personalized-pages plugin. */
+export class CreationRecommendations extends TypertRemoteService {
+  static inject = ['tools', 'pluginManager', 'agents', 'sessionProjections', 'remoteAccess', 'subagents', 'profileContext', 'skills']
   private projection!: ProjectionHandle<CreationState>
   private readonly actions = new Map<string, Promise<CreationActionResult>>()
   private readonly jobs = new Map<string, CreationJob>()
   private readonly reservations = new Map<string, { turn: number; callId: ToolCallId }>()
   private readonly stopped = Promise.withResolvers<undefined>()
   private closing = false
+  private readonly owner: Context['fiber']
 
-  constructor(ctx: Context) { super(ctx, 'creationRecommendations') }
+  constructor(ctx: Context) {
+    super(ctx, 'creationRecommendations')
+    this.owner = ctx.fiber
+  }
 
   protected async [Service.init](): Promise<void> {
     this.projection = await this.ctx.sessionProjections.register(creationProjection)
+    registerCreationSkill(this.ctx)
     this.ctx.effect(() => async () => {
       this.closing = true
       this.stopped.resolve(undefined)
@@ -71,7 +81,7 @@ export default class CreationRecommendations extends TypertRemoteService {
       if (creator && exec.name === 'plugin_manager' && !z.object({ action: z.enum(['list_plugins', 'list_bundles', 'list_version_exemptions']) }).safeParse(exec.arguments).success) {
         return 'Generate the new bundle files only. The caller installs them after validation.'
       }
-      if (exec.name !== 'suggest_view' && exec.name !== 'suggest_plugin') return undefined
+      if (exec.name !== 'suggest_action' && exec.name !== 'suggest_plugin') return undefined
       const state = this.projection.stateOf(exec.agent.session)
       const reserved = this.reservations.get(exec.agent.id)
       const first = state.firstCall ?? (reserved?.turn === state.turn ? reserved.callId : undefined)
@@ -84,46 +94,21 @@ export default class CreationRecommendations extends TypertRemoteService {
         this.reservations.delete(exec.agent.id)
       }
     })
-    this.ctx.tools.register(defineTool({
-      name: 'list_creation_plugins',
-      description: 'Read shipped DSH plugins and their enabled state before proposing a persistent interface. Select one expressed interface need or a clearly reusable result already obtained for the current task that benefits from repeated use, changing data or interaction; follow explicit priority, otherwise prefer an existing plugin. If list_official_plugins already found a suitable plugin, use it without this extra lookup. Skip discovery for one-off answers, incidental static tables, vague or quoted wishes, declined recommendations, or after offering a card. Do not fetch extra data just to find a recommendation opportunity. Clarify only missing facts that change the requested outcome. This is a plugin catalog, not an exhaustive index of built-in features. Keep planning at product level; source and API inspection belong to the Creator after the user clicks Create.',
-      // jscpd:ignore-start -- Each independent experiment owns its catalog tool declaration.
-      parameters: {},
-      output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
-      // jscpd:ignore-end
-      execute: async (_args, exec) => {
-        const bundles = await this.ctx.pluginManager.listBundles()
-        exec.signal.throwIfAborted()
-        return JSON.stringify(bundles.filter(bundle => bundle.official).map(bundle => ({
-          name: bundle.name, title: bundle.meta?.title ?? bundle.name,
-          description: bundle.meta?.description ?? bundle.description ?? '', enabled: bundle.enabled,
-        })))
-      },
-    }))
-    this.ctx.tools.register(defineTool({
-      name: 'suggest_view',
-      description: 'Propose a persistent DSH interface for an expressed interface need, or optionally for a clearly reusable result already obtained in the current task: a changing task list, recurring status table, data explorer or reusable control. Finish the requested answer normally; do not turn every table into a page or fetch more data just to recommend one. One-off explanations, incidental static tables and ordinary coding tasks need no card. Read list_creation_plugins for the selected need; use a suitable existing capability instead, through suggest_plugin when eligible and available, otherwise explain its Plugins entry. Select ONE card per turn across both tools before calling either, even if multiple cards are requested. Follow explicit priority; otherwise prefer an existing plugin. Mention other needs briefly without merging them or promising automatic later cards. Clarify only missing facts that change the outcome, never infer purpose or data from another wish. Plan the smallest useful version using known inputs; do not invent live integrations, automation or broader data access. Leave source/API research and implementation choices to the Creator. A request for a plan or to not start generating still permits a proposal card, even in read-only mode. Suppress cards for vague or quoted wishes, discussion-only requests, or an explicit refusal of recommendations. Keep the plan to a few sentences; avoid unrequested automation or data deletion policies. Do not ask for a text confirmation before offering the card or repeat its full plan in the answer. Call before the final answer, then answer the current request concisely in the user’s language; the optional card appears below it. Report only successful proposals; rejection creates no card. This tool starts no work. The card’s info button explains potentially long generation and substantial token use. Clicking Create starts a background Creator subagent to build and install a new removable plugin; existing plugins stay unchanged. The user can keep chatting here while it runs, with progress on the card. Do not wait, poll, require switching modes or ask the user to report completion. Installation applies automatically; the card reports any restart requirement. Do not require refreshing or reopening the conversation. Do not claim generation has started before the click or that it succeeded before a completed result.',
+    registerActionCard(this.ctx, {
+      name: 'create_personalized_page',
+      description: 'Create a persistent removable page using the background Creator. First load personalized-pages for policy, the current official-plugin catalog, and placement. Prefer an existing plugin unless the user explicitly prioritizes an unmet page need. At most one recommendation per turn.',
       parameters: {
         title: { type: 'string', required: true, description: 'Short name in the user’s language.' },
         brief: { type: 'string', required: true, description: 'A few sentences describing the smallest useful plan for the selected need: purpose, essential interactions, known data/input and scope, and completion criteria, in the user’s language. Use relevant context without inventing links to other wishes. Ask only when a missing fact changes the outcome; leave implementation details to the Creator. Shown on the card and passed to the Creator.' },
-        slot: { type: 'string', enum: ['sidebar-right', 'page', 'sidebar-left'], required: true, description: 'Apply this order: (1) Honor a location explicitly requested by the user. (2) A global feature uses sidebar-left: one left entry opens a standalone main-area page without Chat/Trajectory tabs, including global streaming tools. (3) A Session-bound streaming dialogue or interactive assistant uses page: a tab beside Chat and Trajectory; Session scope is not a reason to put streaming dialogue in the right sidebar. (4) Other Session-bound viewers, editors and Context inspection use sidebar-right. Do not invent a right-sidebar preference to replace the streaming-tab rule. For an optional page based on the current result, keep its known data scope; a Session-local viewer defaults to sidebar-right. Clarify only if missing scope or interaction changes the outcome.' },
+        slot: { type: 'string', enum: ['sidebar-right', 'page', 'sidebar-left'], required: true, description: 'Location selected using the personalized-pages skill: sidebar-right for Session viewers/editors, page for Session streaming tabs, sidebar-left for a global main-area page with a left entry. Honor an explicit user choice.' },
       },
-      output: {
-        schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }],
-        presentationMeta: (_args, value) => ({ creationRecommendation: { ...(JSON.parse(value) as CreationRecommendation) } }),
-      },
-      execute: (args, exec) => {
-        if (exec.agent === undefined || !this.ctx.agents.roots().includes(exec.agent)) {
-          throw new CreationRecommendationError('Creation recommendations require a live root conversation.', 'CREATION_CALLER')
-        }
+      prepare: (args, callId) => {
         if (args.title.trim() === '' || args.brief.trim() === '') {
           throw new CreationRecommendationError('Describe the user need and the proposed interface.', 'CREATION_NEED')
         }
-        return Promise.resolve(JSON.stringify({
-          callId: exec.callId, title: args.title.trim(), brief: args.brief.trim(), slot: slotSchema.parse(args.slot),
-        }))
+        return { callId, title: args.title.trim(), brief: args.brief.trim(), slot: slotSchema.parse(args.slot) }
       },
-    }))
+    })
     for (const agent of this.ctx.agents.roots()) await this.recoverOnOpen(agent)
   }
 
@@ -182,8 +167,16 @@ export default class CreationRecommendations extends TypertRemoteService {
     }
   }
 
-  /** Read live lifecycle state after awaits rather than narrowing it to a stale value. */
-  private isStopping(): boolean { return this.closing }
+  /** Parent disposal starts before its child effects drain. */
+  private isStopping(): boolean {
+    let owner = this.owner
+    while (true) {
+      if (owner.uid === null || owner.state === FiberState.UNLOADING) return true
+      const parent = owner.parent.fiber
+      if (parent === owner) return this.closing
+      owner = parent
+    }
+  }
 
   private async decide(agent: Agent, callId: ToolCallId, action: 'create' | 'dismiss' | 'keep' | 'undo' | 'cancel', slot: CreationSlot, key: string, customLocation?: string): Promise<CreationActionResult> {
     try { await this.recover(agent) }
@@ -320,4 +313,12 @@ export default class CreationRecommendations extends TypertRemoteService {
       if (current !== undefined) this.record(current, { ...decision, phase })
     }
   }
+}
+
+/**
+ * Assemble the feature-owned Remote; disposing the feature also disposes its effects.
+ * @param ctx - Owning feature context.
+ */
+export async function apply(ctx: Context): Promise<void> {
+  await ctx.plugin(CreationRecommendations)
 }

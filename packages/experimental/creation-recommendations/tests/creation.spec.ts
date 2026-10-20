@@ -6,7 +6,7 @@ import { readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { ChangeResult } from '@deepseek-ai/dsh-plugin-manager/types'
-import CreationRecommendations from '../src/index.ts'
+import * as CreationRecommendations from '../src/index.ts'
 import { fixture, callId, proposal, installedBundle, writeBundle } from './fixture.ts'
 import type { CreationSlot, CreationView } from '../src/types.ts'
 
@@ -22,23 +22,29 @@ describe('interface creation', () => {
     )
     expect(f.ctx.tools.get('list_official_plugins')).toBeUndefined()
     expect(f.ctx.tools.get('plugin_manager')).toBeUndefined()
+    expect(f.ctx.tools.get('list_creation_plugins')).toBeUndefined()
     expect({
-      discovery: f.ctx.tools.get('list_creation_plugins', f.agent)?.description,
-      proposal: f.ctx.tools.get('suggest_view', f.agent)?.description,
-      parameters: f.ctx.tools.get('suggest_view', f.agent)?.parameters,
-    }).toMatchSnapshot('one selected need without invented requirements')
-    const result = await f.ctx.tools.execute({ name: 'list_creation_plugins', arguments: {}, agent: f.agent,
+      proposal: f.ctx.tools.get('suggest_action', f.agent)?.description,
+      parameters: f.ctx.tools.get('suggest_action', f.agent)?.parameters,
+    }).toMatchSnapshot('one card tool')
+    expect(await f.ctx.skills.list()).toMatchSnapshot('skill discovery')
+    const result = await f.ctx.tools.execute({ name: 'skill', arguments: { name: 'personalized-pages' }, agent: f.agent,
       callId: ToolCallId('discovery'), signal: new AbortController().signal })
-    expect(result.value).toBe(JSON.stringify([
-      { name: 'enabled', title: 'Existing view', description: 'Inspect current work', enabled: true },
-      { name: 'disabled', title: 'disabled', description: 'Optional view', enabled: false },
-      { name: 'empty', title: 'empty', description: '', enabled: true },
-      { name: 'localized', title: { en: 'Counter', zh: '计数器' }, description: { en: 'Count tasks', zh: '统计任务' }, enabled: true },
-    ]))
+    expect(result.isError, JSON.stringify(result.content)).toBe(false)
+    expect(result.value).toMatchSnapshot('skill policy and current catalog')
+    f.bundles[0] = { ...f.bundles[0]!, enabled: false }
+    const changed = await f.ctx.skills.get('personalized-pages')
+    expect(changed?.content).toContain('"name":"enabled","title":"Existing view","description":"Inspect current work","enabled":false')
+    const controller = new AbortController()
+    f.manager.listBundles.mockImplementationOnce(async () => { controller.abort(); return f.bundles })
+    await expect(f.ctx.skills.get('personalized-pages', { signal: controller.signal })).rejects.toThrow()
     expect(f.manager.installBundle).not.toHaveBeenCalled()
     expect(f.startActivation).not.toHaveBeenCalled()
     await f.fiber.dispose()
     expect(f.ctx.tools.get('list_creation_plugins')).toBeUndefined()
+    expect(f.ctx.tools.get('suggest_action')).toBeUndefined()
+    expect(f.ctx.get('creationRecommendations')).toBeUndefined()
+    expect(await f.ctx.skills.list()).toEqual([])
   })
 
   it('requires a logged proposal and explicit user creation, then reuses Creator with the chosen location', async () => {
@@ -220,7 +226,7 @@ describe('interface creation', () => {
     expect(calls.filter(result => !result.isError)).toHaveLength(1)
     expect(calls.find(result => result.isError)?.content).toMatchSnapshot('rejected extra proposal does not promise a card')
     expect((await f.execute(proposal, ToolCallId('third'))).isError).toBe(true)
-    const result = await f.ctx.tools.execute({ name: 'suggest_view', arguments: proposal,
+    const result = await f.ctx.tools.execute({ name: 'suggest_action', arguments: { request: { action: 'create_personalized_page', ...proposal } },
       callId, signal: new AbortController().signal })
     expect(result.isError).toBe(true)
   })
@@ -503,7 +509,7 @@ describe('interface creation', () => {
     expect(f.dispose).toHaveBeenCalledOnce()
   })
 
-  it.each(['lookup', 'remove'] as const)('releases Undo when the plugin unloads during %s', async (stage) => {
+  it.each(['lookup', 'lookup-reload', 'remove'] as const)('releases Undo when the plugin unloads during %s', async (stage) => {
     const f = await fixture()
     await f.propose()
     await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')
@@ -512,14 +518,15 @@ describe('interface creation', () => {
     const lookup = Promise.withResolvers<ReturnType<typeof installedBundle>[]>()
     const removing = Promise.withResolvers<ChangeResult>()
     onTestFinished(() => { lookup.resolve(f.bundles); removing.resolve({ application: 'applied', changed: true, stage: 'remove', target: 'fixture' }) })
-    if (stage === 'lookup') f.manager.listBundles.mockImplementationOnce(() => { entered.resolve(undefined); return lookup.promise })
+    if (stage !== 'remove') f.manager.listBundles.mockImplementationOnce(() => { entered.resolve(undefined); return lookup.promise })
     else f.manager.removeBundle.mockImplementationOnce(() => { entered.resolve(undefined); return removing.promise })
     const result = f.ctx.creationRecommendations.act(f.agent, callId, 'undo', 'page')
     await entered.promise
-    const disposing = f.fiber.dispose()
+    const disposing = stage === 'lookup-reload' ? f.fiber.restart() : f.fiber.dispose()
     lookup.resolve(f.bundles)
     await disposing
-    expect(await result).toEqual({ status: stage === 'lookup' ? 'refused' : 'unconfirmed', reason: 'closing' })
+    expect(await result).toEqual({ status: stage === 'remove' ? 'unconfirmed' : 'refused', reason: 'closing' })
+    if (stage !== 'remove') expect(f.manager.removeBundle).not.toHaveBeenCalled()
     removing.resolve({ application: 'applied', changed: true, stage: 'remove', target: 'fixture' })
     await removing.promise
     expect(f.current()?.phase).toBe('installed')
