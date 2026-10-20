@@ -80,16 +80,17 @@ for (const fixture of fixtures) {
   packages.push({ name: fixture.name, archive, description: fixture.description })
 }
 await writeFile(join(root, 'fixtures.json'), JSON.stringify({ delayMs, packages }, null, 2) + '\n')
-await writeFile(join(root, 'README.txt'), `Desktop 故障诊断手测夹具
+await writeFile(join(root, 'README.txt'), `Desktop 故障诊断测试包
 
-仅用于隔离测试配置或虚拟机。不要安装到日常使用的配置，也不要发布这些包。
+这些测试插件会故意触发启动失败、运行异常或 Host 退出，用于检查故障报告和恢复操作。
+仅在独立测试配置或虚拟机中安装，不要安装到日常使用的配置，也不要发布这些包。
 每个 .tgz 都是一个独立 bundle；源码位于同名目录的 package 子目录。
 fixtures.json 记录包名、文件路径和故障类型。生成成功不代表客户端验收通过。
 
 预期故障：
 - disabled-services：禁用 agent、session、llm、tools 四个核心提供者，启动失败。
-- import：模块导入抛错，并让 agent-loop 等待夹具服务；核对原始错误和缺失服务。
-- initialize：插件初始化抛错，并让 agent-loop 等待夹具服务；核对 cause。
+- import：模块导入抛错，并让 agent-loop 等待测试服务；核对原始错误和缺失服务。
+- initialize：插件初始化抛错，并让 agent-loop 等待测试服务；核对 cause。
 - async：appReady 后 10 秒抛出异步异常；核对原始错误和 cause。
 - exit：appReady 后 10 秒将 Host 以退出码 23 结束；核对退出码和 stderr 标记。
 - restart：要求 disabled-services 已安装但未启用；通过 pluginManager 启用它，接受即时应用或要求重启的成功结果后抛错，再次启动应出现核心提供者缺失。
