@@ -209,7 +209,6 @@ it('rejects a retained call when its provider unloads during earlier policy clea
 describe('persistent PTC host protocol', () => {
   it.each([
     null,
-    { t: 'q', m: 'other', a: [] },
     { t: 'q', m: 'log', a: [1] },
     call(1, 'not a wire value'),
   ])('rejects invalid process traffic %j', async (raw) => {
@@ -228,7 +227,7 @@ describe('persistent PTC host protocol', () => {
 
   it('requires the readiness handshake and all requested pipes', async () => {
     const h = await setup()
-    expect((await h.start(request, { t: 'q', m: 'other', a: [] })).error?.kind).toBe('protocol')
+    expect((await h.start(request, null)).error?.kind).toBe('protocol')
     const missing = await setup()
     missing.spawn.mockReturnValue({ ...missing.handle, control: undefined })
     expect((await missing.start(request, NO_INITIAL_FRAME)).error?.message).toContain('did not supply')

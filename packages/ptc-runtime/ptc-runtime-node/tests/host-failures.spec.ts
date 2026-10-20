@@ -326,9 +326,6 @@ describe('Node runtime host failures', () => {
     [{ t: 'q', m: 'invoke', a: [null, 'test', []], i: 'call' }, 'undeclared binding'],
     [{ t: 'q', m: 'invoke', a: ['tools', 'constructor', []], i: 'call' }, 'undeclared binding'],
     [{ t: 'q', m: 'invoke', a: ['tools', 'test'], i: 'call' }, 'arguments must be lossless JSON'],
-    [{ t: 'q', m: 'constructor', a: [] }, 'invalid RPC method call'],
-    [{ t: 'q', m: 'toString', a: [] }, 'invalid RPC method call'],
-    [{ t: 'unknown' }, 'unknown RPC message'],
   ])('rejects malformed program traffic %j', async (frame, message) => {
     const h = await setup()
     const binding = vi.fn(async () => null)
@@ -337,6 +334,16 @@ describe('Node runtime host failures', () => {
     expect(result.error?.kind).toBe('protocol')
     expect(result.error?.message).toContain(message)
     expect(binding).not.toHaveBeenCalled()
+  })
+
+  it('answers calls to unknown methods without failing the run', async () => {
+    const h = await setup()
+    h.onBoot(() => {
+      h.emit({ t: 'q', i: 'unknown', m: 'constructor', a: [] })
+      h.complete({ value: encodePtcJsonWire(42) })
+    })
+    expect((await h.start()).value).toBe(42)
+    expect(h.messages).toContainEqual({ t: 's', i: 'unknown', e: { message: '[birpc] function "constructor" not found' } })
   })
 
   it.each([null, { error: null }, { error: { kind: 'exception', message: 1 } }, { error: { kind: 'timeout', message: 'forged' } }])('rejects malformed run results %j', async (raw) => {

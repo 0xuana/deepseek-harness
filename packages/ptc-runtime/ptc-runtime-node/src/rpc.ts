@@ -5,9 +5,7 @@ import { createBirpc, type BirpcReturn } from 'birpc'
 
 const stringify = JSON.stringify
 const parse = JSON.parse
-
-const record = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
-const toError = (value: unknown): Error => value instanceof Error ? value : new Error(String(value))
+const messageOf = (error: unknown): string => error instanceof Error ? error.message : String(error)
 
 /**
  * Connect typed methods over one control endpoint; execution owns all deadlines.
@@ -28,7 +26,8 @@ export function createProcessRpc<Remote extends object, Local extends object>(
   const fail = (error: unknown, kind: 'io' | 'protocol'): void => {
     if (rpc.$closed) return
     rpc.$close()
-    failure(toError(error), kind)
+    // Streams, the JSON parser and the line checks fail only with Error objects.
+    failure(error as Error, kind)
   }
   let receive: ((line: string) => void) | undefined
   const rpc = createBirpc<Remote, Local>(functions, {
@@ -37,7 +36,7 @@ export function createProcessRpc<Remote extends object, Local extends object>(
     on: (listener) => { receive = listener },
     off: () => { receive = undefined; stream.destroy() },
     // JSON drops Error fields; the peer receives only the diagnostic.
-    serialize: (message: Record<string, unknown>) => `${stringify(message.e instanceof Error ? { ...message, e: { message: message.e.message } } : message)}\n`,
+    serialize: (message: { e?: unknown }) => `${stringify(message.e === undefined ? message : { ...message, e: { message: messageOf(message.e) } })}\n`,
     post: (line: string) => {
       // A binding can settle after the endpoint closes; the Writable owns already queued bytes.
       if (rpc.$closed) return
@@ -46,25 +45,16 @@ export function createProcessRpc<Remote extends object, Local extends object>(
     },
     deserialize: (line: string) => {
       // A line that parses after the leading-brace check is a JSON object.
-      const message = parse(line) as Record<string, unknown>
-      if (message.t === 'q') {
-        if (typeof message.m !== 'string' || !Object.hasOwn(functions, message.m) || !Array.isArray(message.a)) throw new Error('invalid RPC method call')
-      } else if (message.t !== 's') {
-        throw new Error('unknown RPC message')
-      } else if (message.e !== undefined) {
-        if (!record(message.e) || typeof message.e.message !== 'string') throw new Error('invalid RPC error')
-        return { ...message, e: new Error(message.e.message) }
-      }
+      const message = parse(line) as { e?: { message?: unknown } }
+      if (message.e) message.e = new Error(String(message.e.message))
       return message
     },
-    // Every line of a chunk dispatches before an earlier handler can close the endpoint.
-    resolver: (_name, fn) => async (...args: unknown[]) => {
-      if (rpc.$closed) return undefined
-      // birpc treats a falsy thrown value as success.
-      try { return await fn.apply(functions, args) } catch (error: unknown) { throw toError(error) }
-    },
+    // Only own methods are callable, and none runs once the endpoint closes,
+    // including calls that arrived in the same chunk as the closing message.
+    resolver: (name, fn) => Object.hasOwn(functions, name)
+      ? (...args: unknown[]) => rpc.$closed ? undefined : fn.apply(functions, args)
+      : undefined,
   })
-  const decoder = new TextDecoder('utf-8', { fatal: true })
   let parts: Buffer[] = []
   let size = 0
   const buffer = (part: Buffer): void => {
@@ -79,7 +69,7 @@ export function createProcessRpc<Remote extends object, Local extends object>(
       let start = 0
       for (let end = chunk.indexOf(10); end !== -1; end = chunk.indexOf(10, start)) {
         buffer(chunk.subarray(start, end))
-        const line = decoder.decode(Buffer.concat(parts, size))
+        const line = Buffer.concat(parts, size).toString('utf8')
         parts = []
         size = 0
         start = end + 1

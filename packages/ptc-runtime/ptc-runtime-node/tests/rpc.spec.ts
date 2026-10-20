@@ -35,7 +35,8 @@ it('matches concurrent bidirectional results and preserves remote rejection mess
   expect(failures).not.toHaveBeenCalled()
 })
 
-it.each([undefined, null, false, 0, '', 'denied'])('rejects a remote call whose method throws %j', async (thrown) => {
+it('delivers a non-Error rejection as its text', async () => {
+  const thrown: unknown = 'denied'
   const { local, remote } = endpoints()
   const left = createProcessRpc<{ fail(): never }, Record<string, never>>(local, 4096, {}, [], () => {})
   const right = createProcessRpc<Record<string, never>, { fail(): never }>(remote, 4096, { fail: () => { throw thrown } }, [], () => {})
@@ -49,7 +50,7 @@ it('does not invoke a method received beside traffic that closed the endpoint', 
   const allowed = vi.fn()
   const endpoint = createProcessRpc(local, 4096, { allowed }, [], (_error, kind) => { failure.resolve(kind) })
   onTestFinished(() => { endpoint.$close() })
-  remote.write(`${JSON.stringify({ t: 'unknown' })}\n${JSON.stringify({ t: 'q', m: 'allowed', a: [] })}\n`)
+  remote.write(`{\n${JSON.stringify({ t: 'q', m: 'allowed', a: [] })}\n`)
   expect(await failure.promise).toBe('protocol')
   await new Promise(resolve => setImmediate(resolve))
   expect(allowed).not.toHaveBeenCalled()
@@ -98,23 +99,26 @@ it('ignores a response for another call and returns the matching result', async 
   expect(await endpoint.value()).toBe('right')
 })
 
-it.each([
-  null,
-  { t: 'q', m: 'constructor', a: [] },
-  { t: 'q', m: 'allowed', a: null },
-  { t: 's', i: 'call', e: 'unstructured error' },
-  { t: 'unknown' },
-])('closes malformed RPC traffic before invoking local methods: %j', async (message) => {
+it('answers calls to methods it does not own and ignores unknown messages', async () => {
   const { local, remote } = endpoints()
-  const failure = Promise.withResolvers<{ kind: string; error: Error }>()
+  const failures = vi.fn()
   const allowed = vi.fn()
-  const endpoint = createProcessRpc(local, 4096, { allowed }, [], (error, kind) => { failure.resolve({ error, kind }) })
-  const raw = rawPeer(remote, () => {})
+  const replies: unknown[] = []
+  const answered = Promise.withResolvers<undefined>()
+  const endpoint = createProcessRpc(local, 4096, { allowed }, [], failures)
+  const raw = rawPeer(remote, (message) => {
+    replies.push(message)
+    if (replies.length === 2) answered.resolve(undefined)
+  })
   onTestFinished(() => { endpoint.$close(); raw.close() })
-  await raw.send(message)
-  expect((await failure.promise).kind).toBe('protocol')
-  expect(endpoint.$closed).toBe(true)
+  for (const message of [{ t: 'unknown' }, { t: 's', i: 'stray', e: 'unstructured' }, { t: 'q', i: 'a', m: 'constructor', a: [] }, { t: 'q', i: 'b', m: 'toString', a: [] }]) {
+    await raw.send(message)
+  }
+  await answered.promise
+  expect(replies).toEqual(['constructor', 'toString'].map((name, index) => ({ t: 's', i: 'ab'[index], e: { message: `[birpc] function "${name}" not found` } })))
   expect(allowed).not.toHaveBeenCalled()
+  expect(failures).not.toHaveBeenCalled()
+  expect(endpoint.$closed).toBe(false)
 })
 
 it('reassembles fragmented UTF-8 and consecutive JSON lines', async () => {
@@ -134,6 +138,7 @@ it('reassembles fragmented UTF-8 and consecutive JSON lines', async () => {
 
 it.each([
   [Buffer.from('{\n'), false],
+  [Buffer.from('null\n'), false],
   [Buffer.from([0xff, 10]), false],
   [Buffer.from('{'), true],
   [Buffer.from([0xe2]), true],

@@ -42,7 +42,7 @@ export async function probeRestrictedWorker(
   const control = streams[SUBPROCESS_CONTROL_FD]
   assert(control instanceof Duplex)
   const code = `const fs=await import('node:fs/promises'); const denied=[]; for(const path of ${JSON.stringify([join(checkout, 'package.json'), hostNode])}) { try { await fs.readFile(path); denied.push('readable') } catch(error) { denied.push(error.code) } } return {executable:process.execPath,env:Object.keys(process.env),denied};`
-  // Accepting only readiness rejects any other worker message as a protocol failure.
+  // The probe program calls no bindings and prints nothing, so the host serves only readiness.
   const channel = createProcessRpc<ProgramMethods, Pick<HostMethods, 'ready'>>(control, 1_048_576, {
     ready() {
       void channel.run(workspace, { code, namespaces: [], maxOutputBytes: 65_536 }).then((result) => {
