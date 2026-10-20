@@ -32,10 +32,28 @@ export const LIVESHARE_CAPABILITIES: readonly string[] = [
   'file-upload',
 ]
 
+/**
+ * The permission facts a share publishes.
+ *
+ * The owner asks for them in {@link TunnelShareSpec}; the Relay commits them in
+ * {@link ShareAccessStateFrame}. The committed frame is the authority: a reader follows it, not the
+ * request that produced it. `allowsFileUpload` is optional here because a request may omit the switch,
+ * while a committed frame always states it.
+ */
+export interface SharePermissions {
+  readonly accessMode: 'open' | 'selected'
+  readonly allowedSubjectIds: readonly string[]
+  readonly sessionMode?: 'view' | 'write'
+  readonly allowsFork?: boolean
+  readonly allowsFileUpload?: boolean
+  readonly expiresAt?: string
+}
+
 /** One share the owner host asks its gateway worker to carry to the Relay. */
-export interface TunnelShareSpec {
+export interface TunnelShareSpec extends SharePermissions {
   readonly shareId: string
   readonly sessionId: string
+  /** Display-only share title; the host refreshes it with `reconcileShareTitles()` when renamed. */
   readonly sessionTitle: string
   readonly accessMode: 'open' | 'selected'
   readonly relay: string
@@ -43,9 +61,12 @@ export interface TunnelShareSpec {
   readonly ownerProviderId?: string
   readonly ownerTenantId?: string
   readonly ownerDisplayName: string
-  /** Version of the owner's DSH build, shown on the Relay share picker. */
+  /** Display-only: the owner's DSH version shown on the Relay share picker. */
   readonly dshVersion?: string
-  /** Stable id of the owner DSH instance that published this share. */
+  /**
+   * Stable id of the owner DSH instance that published this share. Not display-only: the Relay groups
+   * shares of the same owner instance by it.
+   */
   readonly ownerInstanceId?: string
   /**
    * Whether this share lets an admitted viewer fork it.
@@ -179,7 +200,7 @@ export interface ShareRpcCancelFrame {
 }
 
 /** Committed Relay authority for one share, scoped to the socket carrying it. */
-export interface ShareAccessStateFrame {
+export interface ShareAccessStateFrame extends SharePermissions {
   readonly type: 'share-access-state'
   /** Monotonic durable Relay store revision. */
   readonly version: number
