@@ -40,7 +40,7 @@ Check this table before writing a control in a feature package. A plugin cannot 
 
 | Export | What it is |
 |---|---|
-| `Button` | Clickable action; `variant` selects `primary`, `ghost`, `outline`, or `toolbar`. Its ref targets the native button for focus and overlay anchoring. |
+| `Button` | Clickable action; `variant` selects `primary`, `ghost`, `outline`, or `toolbar`. Outlined actions use an inset hairline. Its ref targets the native button for focus and overlay anchoring. |
 | `Switch` | Two-state toggle, 36×20. The off-state thumb reads `--dsw-alias-switch-thumb` so it stays light in both themes, and the on-state thumb contrasts with the brand track. Disabled controls use half opacity. `label` is required, so the control cannot ship unnamed. |
 | `SegmentedControl` | Tablist of two or more equal-width segments with one sliding indicator, for switching a card or panel between a few modes; the owner holds the selection and `label` names the list. `id` seeds each tab's id (`<id>-<value>`) and the panel it controls (`<id>-<value>-panel`), which the owner renders and points back at the tab with `aria-labelledby`; a segment may be `disabled` with a `title`, and `disabled` on the control locks every segment while the shown panel has work in flight. |
 | `Checkbox` | Labeled native checkbox with controlled state, keyboard interaction, and disabled styling; the caller supplies localized `label` text. |
@@ -121,7 +121,7 @@ The atoms cannot read the application locale, so every piece of user-facing copy
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
-`Button` uses H36/R12 for `md` and H28/R8 for `sm`, including outlined controls. `outlineRendering` defaults to `border`; `inset` affects only `variant="outline"`, keeps a transparent layout border, and paints the stroke with an inset shadow. The inset width uses ui-theme's DPR-aware `--dsh-hairline-width`, with a 0.5px fallback outside the theme. Inset controls own their border color and box-shadow; feature classes must preserve both. Menus and cards follow the [shared radius rules](../../../docs/web-styling.md#corner-radii-and-settings-cards); feature classes preserve control geometry.
+`Button` uses H36/R12 for `md` and H28/R8 for `sm`, including outlined controls. The `outline` variant preserves a transparent 0.5px layout border and paints its stroke with an inset shadow. The stroke reads ui-theme's DPR-aware `--dsh-hairline-width`, with a 0.5px fallback outside the theme. Feature classes customize its color through `--dsh-button-outline-color` and preserve the border width, transparent border color, and box-shadow. Menus and cards follow the [shared radius rules](../../../docs/web-styling.md#corner-radii-and-settings-cards); feature classes preserve control geometry.
 
 `Menu.listClassName` styles the menu card independently of the anchor wrapper, including in portal mode. Leading icons use the `--dsw-alias-menu-icon` color; destructive icons retain their error color.
 
