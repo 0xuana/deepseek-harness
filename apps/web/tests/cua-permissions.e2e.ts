@@ -59,13 +59,20 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
     callId: ToolCallId('cua-app-approval'), name: 'run_code',
     arguments: { code: 'return await tools.cua({ method: "getApp", params: { selector: "Fixture" } })',
       description: 'Request application access' } })
-  const approval = page.locator('[data-question-key]')
+  const approval = page.locator('[data-approval-key]')
   await Promise.race([approval.waitFor(), grant.then((result) => {
     throw new Error(`Application selection completed before consent: ${JSON.stringify(result)}`)
   })])
-  expect(await approval.textContent()).toContain('Fixture')
-  await approval.getByRole('radio', { name: 'Always allow', exact: true }).click()
-  await approval.getByRole('button', { name: 'Submit', exact: true }).click()
+  expect(await approval.getByText('Fixture', { exact: true }).count()).toBe(1)
+  expect(await approval.getByRole('textbox').count()).toBe(0)
+  expect(await approval.locator('[data-approval-scroll]').evaluate(element => getComputedStyle(element).textAlign)).toBe('left')
+  expect(await approval.getByRole('button', { name: 'Always allow', exact: true })
+    .evaluate(button => getComputedStyle(button.parentElement!).flexWrap)).toBe('wrap')
+  await expect.poll(() => approval.locator('img').evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(1)
+  expect(await approval.getByText('/Applications/Fixture.app', { exact: true }).count()).toBe(0)
+  await compareOrRefreshGolden(fileURLToPath(new URL('./expected/cua-permissions/application-approval.expected.md', import.meta.url)),
+    await captureStableAria(page, '[data-approval-key]', scaffold.workspaceCwd), webSnapshotMode())
+  await approval.getByRole('button', { name: 'Always allow', exact: true }).click()
   expect((await grant).isError).toBe(false)
   await approval.waitFor({ state: 'hidden' })
   await page.getByRole('button', { name: 'Plugins', exact: true }).click()

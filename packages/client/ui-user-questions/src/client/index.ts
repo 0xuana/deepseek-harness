@@ -383,7 +383,8 @@ export function apply(ctx: ClientContext): void {
     {
       name: 'conversation.composer',
       select: ({ pendingInteraction }: ComposerChainProps): PendingQuestion | null =>
-        pendingInteraction instanceof PendingQuestion ? pendingInteraction : null,
+        pendingInteraction instanceof PendingQuestion && pendingInteraction.questions[0]?.intent?.kind !== 'approval'
+          ? pendingInteraction : null,
       locale: NS,
       store: questionDraftStore,
       inject: () => ({ keyedHooks: { questionCard: (key: string) => cards.source(key) } }),
