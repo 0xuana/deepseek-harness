@@ -348,10 +348,10 @@ async function main(): Promise<void> {
   let welcomeWindow: BrowserWindow | undefined
   const installFileDrag = (): (() => Promise<void>) => installDesktopFileDrag(
     event => assertProductSender(event),
-    (address) => {
+    (address, signal) => {
       const host = backend.host
       if (host === undefined) return Promise.reject(new Error('File drag Host unavailable'))
-      return host.resolveDragResource(address)
+      return host.resolveDragResource(address, signal)
     },
   )
   const fileDragCleanups = new Set([installFileDrag()])
@@ -531,7 +531,7 @@ async function main(): Promise<void> {
       },
       updateTasks: (action: 'inspect' | 'lock' | 'unlock') => host.updateTasks(action),
       inspectQuit: () => host.inspectQuit(),
-      resolveDragResource: (address: string) => host.resolveDragResource(address),
+      resolveDragResource: (address: string, signal?: AbortSignal) => host.resolveDragResource(address, signal),
     }
   }, (state) => {
     if (state.phase === 'error') reportFatal(state.failure, 'host')

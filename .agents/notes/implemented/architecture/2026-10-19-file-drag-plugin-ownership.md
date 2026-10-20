@@ -1,8 +1,8 @@
-# Agent Note: Image drag ownership outside the application layout
+# Agent Note: File drag ownership outside the application layout
 
 Status: implemented
 
-English | [中文](2026-10-19-image-drag-plugin-ownership.zh.md)
+English | [中文](2026-10-19-file-drag-plugin-ownership.zh.md)
 
 ## Problem
 
@@ -22,4 +22,4 @@ The [file-drag plugin](../../../../packages/client/ui-file-drag/README.md) owns 
 
 ## Consequences
 
-One plugin lifetime governs transfer state, a native source-node end listener, and drop completion. The source listener remains attached after React unmount. Independent render roots can share a transfer without sharing a React ancestor. Custom compositions must load the service and declare the feedback slot; custom image Factory registrations supply the required callbacks. Internal drops are accepted only over the composer. Plugin disposal removes feedback and clears retained files. Loader-backed browser scenarios cover source removal and delivery, while focused tests cover local resource authorization and cleanup failures.
+One plugin lifetime governs transfer state, a native source-node end listener, and drop completion. The source listener remains attached after React unmount. Independent render roots can share a transfer without sharing a React ancestor. Custom compositions must load the service and declare the feedback slot; custom image Factory registrations supply the required callbacks. Application-local browser tokens are accepted only over the composer; native Desktop files retain the full-page drop overlay. Plugin disposal removes feedback and clears retained files. Loader-backed browser scenarios cover source removal and delivery, while focused tests cover local resource authorization and cleanup failures.

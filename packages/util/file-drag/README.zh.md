@@ -20,9 +20,9 @@ kind: "package-library"
 <a id="use-this-package"></a>
 ## 使用此包
 
-`resolveDragFileName({ name, mediaType, outputExtension })` 清理路径分隔符、保留字符与 Windows 设备名。显式输出后缀优先；否则保留兼容的已有后缀，已知冲突按声明 MIME 替换，缺失后缀从持续维护的 `mime` 数据库补全。未知类型保留调用方名称或后缀，无名内容以 `file` 命名。Desktop 在调用此类型化解析器前验证跨进程输入。
+`resolveDragFileName({ name, mediaType, outputExtension })` 清理路径分隔符、保留字符与 Windows 设备名。显式输出后缀优先；否则保留兼容的已有后缀，已知冲突按声明 MIME 替换，缺失后缀从持续维护的 `mime` 数据库补全。未知类型保留调用方名称或后缀，无名内容以 `file` 命名。名称不超过 255 个 UTF-8 字节，保留后缀和完整 Unicode 字符。Desktop 在调用此类型化解析器前验证跨进程输入。
 
-`DesktopFileDrag` 接受完整字节或 Session 资源地址，返回不透明句柄。资源借用必须经过 Host 授权与主进程的内容、名称检查；无法借用时，调用方回退到字节准备。[插件](../../client/ui-file-drag/README.zh.md) 负责浏览器准备，[Desktop](../../../apps/desktop/README.zh.md) 负责原生交付。
+`DesktopFileDrag.prepare(source, requestId)` 接受完整字节或 Session 资源地址，返回不透明句柄。`cancel(requestId)` 可在句柄返回前停止未完成的准备。资源借用必须经过 Host 授权与主进程的内容、名称检查；无法借用时，调用方回退到字节准备。[插件](../../client/ui-file-drag/README.zh.md) 负责浏览器准备，[Desktop](../../../apps/desktop/README.zh.md) 负责原生交付。
 
 ## 已知限制与后续工作
 

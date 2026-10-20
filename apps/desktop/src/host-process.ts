@@ -253,7 +253,7 @@ export class DesktopHostProcess {
    * an unanswered drain fails at the control-request deadline without authorizing installation.
    */
   async updateTasks(action: 'inspect' | 'lock' | 'unlock'): Promise<boolean> {
-    const response = await this.control({ type: 'update-tasks', action }, 10_000, 'desktop update: task inspection timed out')
+    const response = await this.control({ type: 'update-tasks', action }, 10_000, 'desktop update: task inspection timed out', 'desktop update')
     if (response.type !== 'update-tasks') throw new Error('desktop update: Host answered with a different control response')
     return response.active
   }
@@ -264,14 +264,20 @@ export class DesktopHostProcess {
    * {@link QUIT_INSPECTION_DEADLINE_MS}, and the shell then asks before quitting.
    */
   async inspectQuit(): Promise<DesktopQuitInspection> {
-    const response = await this.control({ type: 'quit-inspection' }, QUIT_INSPECTION_DEADLINE_MS, 'desktop quit: inspection timed out')
+    const response = await this.control({ type: 'quit-inspection' }, QUIT_INSPECTION_DEADLINE_MS, 'desktop quit: inspection timed out', 'desktop quit')
     if (response.type !== 'quit-inspection') throw new Error('desktop quit: Host answered with a different control response')
     return { activeTasks: response.activeTasks, scheduledTasks: response.scheduledTasks }
   }
 
-  /** @param address - Session-scoped file reference. @returns privately authorized local resource, or null when nonlocal. */
-  async resolveDragResource(address: string): Promise<{ readonly path: string; readonly sha256: string; readonly size: number } | null> {
-    const response = await this.control({ type: 'file-drag-resource', address }, 12_000, 'File drag authorization timed out')
+  /**
+   * @param address - Session-scoped file reference.
+   * @param signal - preparation cancellation.
+   * @returns privately authorized local resource, or null when nonlocal.
+   */
+  async resolveDragResource(address: string, signal?: AbortSignal): Promise<
+    { readonly path: string; readonly sha256: string; readonly size: number } | null
+  > {
+    const response = await this.control({ type: 'file-drag-resource', address }, 12_000, 'File drag authorization timed out', 'file drag', signal)
     if (response.type !== 'file-drag-resource') throw new Error('Host returned a different control response')
     return response.resource
   }
@@ -279,22 +285,32 @@ export class DesktopHostProcess {
   private async control(
     request: { readonly type: 'update-tasks'; readonly action: 'inspect' | 'lock' | 'unlock' } | { readonly type: 'quit-inspection' }
       | { readonly type: 'file-drag-resource'; readonly address: string },
-    deadlineMs: number, deadlineMessage: string,
+    deadlineMs: number, deadlineMessage: string, operation: string, signal?: AbortSignal,
   ): Promise<DesktopHostControlResponse> {
     const child = this.child
     if (child === undefined || !child.connected || this.failureReported || this.stopping) {
-      throw new Error(`${request.type === 'update-tasks' ? 'desktop update' : 'desktop quit'}: Host is unavailable`)
+      throw new Error(`${operation}: Host is unavailable`)
     }
+    signal?.throwIfAborted()
     const requestId = this.nextControlId++
     let timer: ReturnType<typeof setTimeout> | undefined
+    const abort = (): void => {
+      if (request.type === 'file-drag-resource' && child.connected) child.send({ type: 'file-drag-cancel', requestId }, (_error) => {
+        // The request still rejects locally if the Host has disconnected.
+      })
+      const reason: unknown = signal?.reason
+      this.controlRequests.get(requestId)?.reject(reason instanceof Error ? reason : new Error(deadlineMessage))
+    }
     try {
       return await new Promise<DesktopHostControlResponse>((resolve, reject) => {
         this.controlRequests.set(requestId, { resolve, reject })
-        timer = setTimeout(() => { reject(new Error(deadlineMessage)) }, deadlineMs)
+        timer = setTimeout(abort, deadlineMs)
+        signal?.addEventListener('abort', abort, { once: true })
         child.send({ ...request, requestId }, (error) => { if (error !== null) reject(error) })
       })
     } finally {
       clearTimeout(timer)
+      signal?.removeEventListener('abort', abort)
       this.controlRequests.delete(requestId)
     }
   }

@@ -1,5 +1,5 @@
 /** File transport selected once per plugin activation; sources only receive prepared operations. */
-import type { DesktopFileDrag, FileDragHandle } from '@deepseek-ai/dsh-file-drag'
+import type { DesktopFileDrag, DesktopFileSource, FileDragHandle, FileDragRequestId } from '@deepseek-ai/dsh-file-drag'
 import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import { resolveDragFileName, FILE_DRAG_TOKEN_TYPE, type FileDragSource, type PreparedFileDrag } from '@deepseek-ai/dsh-client-ui-primitives'
 
@@ -8,6 +8,7 @@ export class FileTransfers {
   private active: { token: string; file: File; end: () => void } | undefined
   private readonly prepared = new Set<() => void>()
   private disposed = false
+  private readonly lifetime = new AbortController()
 
   /** @param desktop - verified native bridge, absent in Web. @param reportFailure - localized plugin feedback. */
   constructor(private readonly desktop: DesktopFileDrag | undefined, private readonly reportFailure: () => void) {}
@@ -23,7 +24,17 @@ export class FileTransfers {
 
   private assertOpen(signal: AbortSignal): void {
     signal.throwIfAborted()
-    if (this.disposed) throw new Error('File transfers disposed')
+  }
+
+  private async prepareNative(
+    desktop: DesktopFileDrag, source: DesktopFileSource, signal: AbortSignal,
+  ): Promise<FileDragHandle | undefined> {
+    this.assertOpen(signal)
+    const requestId = randomUUID() as FileDragRequestId
+    const cancel = (): void => { desktop.cancel(requestId) }
+    signal.addEventListener('abort', cancel, { once: true })
+    try { return await desktop.prepare(source, requestId) }
+    finally { signal.removeEventListener('abort', cancel) }
   }
 
   /**
@@ -33,6 +44,7 @@ export class FileTransfers {
    * @returns synchronous drag startup and preparation release.
    */
   async prepare(source: FileDragSource, signal: AbortSignal): Promise<PreparedFileDrag> {
+    signal = AbortSignal.any([signal, this.lifetime.signal])
     this.assertOpen(signal)
     const desktop = this.desktop
     if (desktop === undefined) {
@@ -47,17 +59,20 @@ export class FileTransfers {
         const hash = bytes === undefined ? undefined
           : Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), byte => byte.toString(16).padStart(2, '0')).join('')
         this.assertOpen(signal)
-        handle = await desktop.prepare({
+        try { handle = await this.prepareNative(desktop, {
           kind: 'resource', address: source.resourceAddress, name: source.name,
           mediaType: source.mediaType, outputExtension: source.outputExtension,
           ...(hash === undefined ? {} : { sha256: hash }),
           ...(source.kind === 'blob' ? { size: source.blob.size } : {}),
-        })
+        }, signal) } catch (_error) {
+          // Borrowing is optional; the Blob or authorized URL remains the source for a copy.
+          this.assertOpen(signal)
+        }
       }
       if (handle === undefined) {
         const file = await this.readSource(source, signal)
-        handle = await desktop.prepare({ kind: 'bytes', bytes: new Uint8Array(await file.arrayBuffer()),
-          name: file.name, mediaType: file.type, outputExtension: source.outputExtension })
+        handle = await this.prepareNative(desktop, { kind: 'bytes', bytes: new Uint8Array(await file.arrayBuffer()),
+          name: file.name, mediaType: file.type, outputExtension: source.outputExtension }, signal)
         if (handle === undefined) throw new Error('File preparation unavailable')
       }
       this.assertOpen(signal)
@@ -112,7 +127,10 @@ export class FileTransfers {
         this.active?.end()
         started = true
         const token = randomUUID()
+        let ended = false
         const end = (): void => {
+          if (ended) return
+          ended = true
           source.removeEventListener('dragend', end)
           window.removeEventListener('drop', dropped)
           this.active = undefined
@@ -126,7 +144,7 @@ export class FileTransfers {
         transfer.items.clear()
         transfer.effectAllowed = 'copy'
         transfer.setData(FILE_DRAG_TOKEN_TYPE, token)
-        transfer.setData('DownloadURL', `${file.type}:${file.name}:${url}`)
+        transfer.setData('DownloadURL', `${file.type || 'application/octet-stream'}:${file.name}:${url}`)
         return true
       },
       release,
@@ -136,6 +154,7 @@ export class FileTransfers {
   /** End active transfers and retire every preparation, including sources detached during dragging. */
   dispose(): void {
     this.disposed = true
+    this.lifetime.abort(new Error('File transfers disposed'))
     this.active?.end()
     for (const release of this.prepared) release()
   }

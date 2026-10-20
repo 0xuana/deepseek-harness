@@ -64,6 +64,17 @@ it('opens inline images in the shared lightbox, restores focus, and never opens 
   expect(openFile).not.toHaveBeenCalled()
 })
 
+it.each([
+  ['assets/my%20photo.png', 'my photo.png'],
+  ['assets/%E5%9B%BE%E7%89%87.png', '图片.png'],
+  ['C:%5Cassets%5Cmy%20photo.png', 'my photo.png'],
+])('prepares the decoded basename for %s', async (destination, name) => {
+  fileDrag.prepare.mockClear()
+  mount(`![source](${destination})`)
+  await act(async () => { fireEvent.pointerEnter(screen.getByRole('img')) })
+  expect(fileDrag.prepare).toHaveBeenCalledWith(expect.objectContaining({ name }), expect.any(AbortSignal))
+})
+
 it('loads a link preview only after hover dwell and keeps its existing sidebar activation', () => {
   vi.useFakeTimers()
   const { openFile } = mount('[View comparison](.artifacts/对比%20image.png)')

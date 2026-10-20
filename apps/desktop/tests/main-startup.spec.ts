@@ -1483,7 +1483,7 @@ describe('desktop main startup', () => {
     expect(harness.app.quit).toHaveBeenCalledTimes(2)
   })
 
-  it('reports image cleanup failure without ending Host shutdown early', async () => {
+  it('reports file cleanup failure without ending Host shutdown early', async () => {
     const host = await readyForUpdate()
     const failure = new Error('image cleanup failed')
     fileDrag.dispose.mockRejectedValueOnce(failure)
@@ -1510,7 +1510,7 @@ describe('desktop main startup', () => {
     await expect(preparing).resolves.toBe(true)
   })
 
-  it('continues installation after reporting image cleanup failure', async () => {
+  it('continues installation after reporting file cleanup failure', async () => {
     const host = await readyForUpdate()
     const failure = new Error('temporary file busy')
     fileDrag.dispose.mockRejectedValueOnce(failure)

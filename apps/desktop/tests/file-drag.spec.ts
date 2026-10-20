@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -34,7 +34,10 @@ async function fixture() {
   onTestFinished(dispose)
   const handlers = new Map<string, Handler>(electron.handle.mock.calls.map(([channel, handler]) => [channel, handler]))
   const event = Object.assign({} as IpcMainInvokeEvent, { sender: window.webContents, senderFrame: frame })
-  const call = (channel: string, ...args: unknown[]) => (handlers.get(channel) as Handler)(event, ...args)
+  const call = (channel: string, ...args: unknown[]) => Promise.resolve().then(() => {
+    const identity = channel === DESKTOP_IPC.fileDragPrepare && args.length === 1 ? [randomUUID()] : []
+    return (handlers.get(channel) as Handler)(event, ...args, ...identity)
+  })
   const prepare = (bytes: Uint8Array, name = 'original.pdf', mediaType = 'application/pdf') => call(DESKTOP_IPC.fileDragPrepare, { kind: 'bytes', bytes, name, mediaType })
   return { root, window, frame, event, icon, call, prepare, dispose, resolve, detach: () => { current = undefined } }
 }
@@ -87,6 +90,40 @@ it('cancels icon preparation on shutdown without waiting for the icon service', 
   expect(await readdir(f.root)).toEqual([])
 })
 
+it('cancels stalled icon preparation and returns its storage budget before the icon completes', async () => {
+  const f = await fixture()
+  const icon = Promise.withResolvers<NativeImage>()
+  electron.getFileIcon.mockReturnValueOnce(icon.promise)
+  const preparing = f.call(DESKTOP_IPC.fileDragPrepare,
+    { kind: 'bytes', bytes: new Uint8Array(64 * 1024 * 1024), name: 'large.pdf', mediaType: 'application/pdf' }, 'cancelled')
+  const rejected = expect(preparing).rejects.toThrow('cancelled')
+  await vi.waitFor(() => { expect(electron.getFileIcon).toHaveBeenCalledOnce() })
+  await f.call(DESKTOP_IPC.fileDragCancel, 'cancelled')
+  await rejected
+  expect(await readdir(f.root)).toEqual([])
+  const next = await f.prepare(new Uint8Array([2]))
+  expect(next).toEqual(expect.any(String))
+  icon.resolve(f.icon)
+  await icon.promise
+})
+
+it('aborts pending Host authorization when the bridge closes', async () => {
+  const f = await fixture()
+  const resource = Promise.withResolvers<null>()
+  f.resolve.mockReturnValue(resource.promise)
+  const preparing = f.call(DESKTOP_IPC.fileDragPrepare,
+    { kind: 'resource', address: 'dsh-resource://file/session/s/file.pdf', name: 'file.pdf', mediaType: 'application/pdf' })
+  const rejected = expect(preparing).rejects.toThrow('File transfer closed')
+  await vi.waitFor(() => { expect(f.resolve).toHaveBeenCalledOnce() })
+  const signal = f.resolve.mock.calls[0]![1]
+  await f.dispose()
+  await rejected
+  expect(signal.aborted).toBe(true)
+  resource.resolve(null)
+  await resource.promise
+  expect(await readdir(f.root)).toEqual([])
+})
+
 it('borrows only authorized unchanged files with the requested export name, never deleting the source', async () => {
   const f = await fixture()
   const bytes = Buffer.from('original PDF bytes')
@@ -96,7 +133,7 @@ it('borrows only authorized unchanged files with the requested export name, neve
   f.resolve.mockResolvedValue({ path, size: bytes.length, sha256 })
   const request = { kind: 'resource', address: 'dsh-resource://file/session/s/report.pdf', name: 'report.pdf', mediaType: 'application/pdf', sha256, size: bytes.length }
   const handle = await f.call(DESKTOP_IPC.fileDragPrepare, request)
-  expect(f.resolve).toHaveBeenCalledWith(request.address)
+  expect(f.resolve).toHaveBeenCalledWith(request.address, expect.any(AbortSignal))
   expect(await readdir(f.root)).toEqual(['report.pdf'])
   expect(await f.call(DESKTOP_IPC.fileDragStart, handle)).toBe(true)
   expect(f.window.webContents.startDrag).toHaveBeenCalledWith({ file: path, icon: f.icon })

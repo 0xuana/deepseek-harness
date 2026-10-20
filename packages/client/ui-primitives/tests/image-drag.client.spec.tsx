@@ -64,6 +64,38 @@ it('releases an abandoned preparation when the window loses focus', async () => 
   expect(f.prepared.release).toHaveBeenCalledOnce()
 })
 
+it('keeps preparation after clicking without leaving so the next drag starts immediately', async () => {
+  vi.stubGlobal('PointerEvent', MouseEvent)
+  const f = fixture()
+  await act(async () => { fireEvent.pointerEnter(f.image) })
+  fireEvent.pointerDown(f.image, { button: 0, buttons: 1 })
+  fireEvent.pointerUp(f.image)
+  expect(f.prepared.release).not.toHaveBeenCalled()
+  fireEvent.pointerDown(f.image, { button: 0, buttons: 1 })
+  fireEvent.dragStart(f.image, { dataTransfer: {} })
+  expect(f.actions.prepare).toHaveBeenCalledOnce()
+  expect(f.prepared.start).toHaveBeenCalledOnce()
+})
+
+it('retains a pending local preparation after release inside the image for a later drag', async () => {
+  vi.stubGlobal('PointerEvent', MouseEvent)
+  const f = fixture()
+  const pending = Promise.withResolvers<PreparedFileDrag>()
+  f.actions.prepare.mockReturnValue(pending.promise)
+  f.view.rerender(<DraggableImage fileDrag={f.actions} src="/image.png" name="image.png" resourceAddress="dsh-resource://file/session/s/image.png" alt="source" />)
+  const image = f.view.getByRole('img')
+  fireEvent.pointerEnter(image)
+  expect(f.actions.prepare).not.toHaveBeenCalled()
+  fireEvent.pointerDown(image, { button: 0, buttons: 1 })
+  expect(fireEvent.dragStart(image, { dataTransfer: {} })).toBe(false)
+  fireEvent.pointerUp(image)
+  await act(async () => { pending.resolve(f.prepared); await pending.promise })
+  expect(f.prepared.release).not.toHaveBeenCalled()
+  fireEvent.pointerDown(image, { button: 0, buttons: 1 })
+  fireEvent.dragStart(image, { dataTransfer: {} })
+  expect(f.prepared.start).toHaveBeenCalledOnce()
+})
+
 it('reports a settled preparation failure only on the next drag and retries', async () => {
   const f = fixture()
   f.actions.prepare.mockRejectedValueOnce(new Error('unreadable'))
@@ -122,6 +154,7 @@ it('does not prepare panned, right-button, or empty images', async () => {
 })
 
 it('keeps already-cancelled gestures inert and forwards loaded original bytes', async () => {
+  vi.stubGlobal('PointerEvent', MouseEvent)
   const f = fixture()
   const file = new File(['data'], 'loaded.png', { type: 'image/png' })
   f.view.rerender(<div onDragStartCapture={(event) => { event.preventDefault() }}>
@@ -131,5 +164,7 @@ it('keeps already-cancelled gestures inert and forwards loaded original bytes', 
   expect(fireEvent.dragStart(image, { dataTransfer: {} })).toBe(false)
   expect(f.prepared.start).not.toHaveBeenCalled()
   await act(async () => { fireEvent.pointerEnter(image) })
+  expect(f.actions.prepare).not.toHaveBeenCalled()
+  await act(async () => { fireEvent.pointerDown(image, { button: 0 }) })
   expect(f.actions.prepare).toHaveBeenCalledWith(expect.objectContaining({ kind: 'blob', blob: file, resourceAddress: 'dsh-resource://file/session/s/a.png' }), expect.any(AbortSignal))
 })

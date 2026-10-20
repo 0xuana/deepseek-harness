@@ -30,7 +30,12 @@ server.listen(0, '127.0.0.1', () => {
   process.send({ type: 'ready', url: 'http://127.0.0.1:' + server.address().port + '/?token=fixture' })
 })
 process.on('message', message => {
+  if (message.type === 'file-drag-cancel') {
+    process.send({ type: 'file-drag-resource', requestId: message.requestId, resource: null })
+    return
+  }
   if (message.type === 'file-drag-resource') {
+    if (message.address === 'pending') return
     if (message.address === 'invalid') {
       process.send({ type: 'file-drag-resource', requestId: message.requestId, resource: { path: '/invalid', sha256: 'bad', size: -1 } })
       return
@@ -90,7 +95,18 @@ describe('desktop host process', () => {
       .toEqual([{ path: '/authorized/report.pdf', sha256: 'a'.repeat(64), size: 42 }, null])
     await expect(host.resolveDragResource('denied')).rejects.toThrow('File read denied')
     await host.stop(true)
-    await expect(host.resolveDragResource('local')).rejects.toThrow('Host is unavailable')
+    await expect(host.resolveDragResource('local')).rejects.toThrow('file drag: Host is unavailable')
+  })
+
+  it('cancels a pending resource request without invalidating later Host requests', async () => {
+    const host = hostProcess(projectWithHost())
+    await host.start()
+    const abort = new AbortController()
+    const pending = host.resolveDragResource('pending', abort.signal)
+    const rejected = expect(pending).rejects.toThrow('cancelled')
+    abort.abort(new Error('cancelled'))
+    await rejected
+    await expect(host.resolveDragResource('local')).resolves.toMatchObject({ path: '/authorized/report.pdf' })
   })
 
   it('rejects malformed file authorization responses and terminates the Host', async () => {

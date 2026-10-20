@@ -19,5 +19,13 @@ it.each([
 })
 
 it('bounds the filename without cutting off its extension', () => {
-  expect(resolveDragFileName({ name: `${'a'.repeat(500)}.pdf`, mediaType: 'application/pdf' })).toBe(`${'a'.repeat(120)}.pdf`)
+  expect(resolveDragFileName({ name: `${'a'.repeat(500)}.pdf`, mediaType: 'application/pdf' })).toBe(`${'a'.repeat(251)}.pdf`)
+})
+
+it.each(['图'.repeat(90), '😀'.repeat(100)])('bounds Unicode names by UTF-8 bytes without splitting characters', (name) => {
+  const output = resolveDragFileName({ name: `${name}.pdf`, mediaType: 'application/pdf' })
+  expect(new TextEncoder().encode(output).length).toBeLessThanOrEqual(255)
+  expect(output.endsWith('.pdf')).toBe(true)
+  expect(output).not.toContain('\uFFFD')
+  expect(output.isWellFormed()).toBe(true)
 })

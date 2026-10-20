@@ -16,7 +16,11 @@ function createProductApi(): DshDesktopProductApi {
     protocolVersion: 1,
     browser: createDesktopBrowserBridge(),
     fileDrag: {
-      prepare: source => ipcRenderer.invoke(DESKTOP_IPC.fileDragPrepare, source) as Promise<FileDragHandle | undefined>,
+      prepare: (source, requestId) => ipcRenderer.invoke(DESKTOP_IPC.fileDragPrepare, source, requestId) as
+        Promise<FileDragHandle | undefined>,
+      cancel: (requestId) => { void ipcRenderer.invoke(DESKTOP_IPC.fileDragCancel, requestId).catch((_error: unknown) => {
+        // Main-process shutdown cancels any remaining preparations.
+      }) },
       start: handle => ipcRenderer.invoke(DESKTOP_IPC.fileDragStart, handle) as Promise<boolean>,
       release: (handle) => { void ipcRenderer.invoke(DESKTOP_IPC.fileDragRelease, handle).catch((_error: unknown) => {
         // Main-process shutdown also releases every prepared file.

@@ -667,7 +667,7 @@ function LoadedMarkdownImage({ src, alt, destination, preview }: {
     fileDrag={preview.fileDrag}
     {...imageProps}
     resourceAddress={file === undefined ? undefined : preview.resourceAddress?.(file.path)}
-    name={destination.split('/').at(-1)?.split(/[?#]/u)[0] || 'image'}
+    name={file?.path.split(/[\\/]/u).at(-1) || destination.split('/').at(-1)?.split(/[?#]/u)[0] || 'image'}
   />
   return <>
     <button type="button" className={css.imageButton} title={preview.labels.open}

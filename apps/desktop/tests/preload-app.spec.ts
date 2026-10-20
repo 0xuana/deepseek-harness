@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import type { DesktopFileDrag, FileDragHandle } from '@deepseek-ai/dsh-file-drag'
+import type { DesktopFileDrag, FileDragHandle, FileDragRequestId } from '@deepseek-ai/dsh-file-drag'
 import { JSDOM } from 'jsdom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { installMandatoryUpdateOverlay } from '../src/preload-mandatory-overlay.ts'
@@ -262,13 +262,15 @@ it('prepares original image bytes and starts native drags without renderer files
   const api = electron.contextBridge.exposeInMainWorld.mock.calls.find(([name]) => name === 'dshDesktop')?.[1] as DshDesktopProductApi
   const bytes = new Uint8Array([137, 80, 78, 71])
   electron.ipcRenderer.invoke.mockResolvedValueOnce('image-handle').mockResolvedValueOnce(true).mockResolvedValueOnce(undefined)
-  await expect(api.fileDrag.prepare({ kind: 'bytes', bytes, name: 'original.png', mediaType: 'image/png' })).resolves.toBe('image-handle')
+  await expect(api.fileDrag.prepare({ kind: 'bytes', bytes, name: 'original.png', mediaType: 'image/png' }, 'request' as FileDragRequestId)).resolves.toBe('image-handle')
   await expect(api.fileDrag.start('image-handle' as FileDragHandle)).resolves.toBe(true)
   api.fileDrag.release('image-handle' as FileDragHandle)
+  api.fileDrag.cancel('request' as FileDragRequestId)
   expect(electron.ipcRenderer.invoke.mock.calls).toEqual([
-    [DESKTOP_IPC.fileDragPrepare, { kind: 'bytes', bytes, name: 'original.png', mediaType: 'image/png' }],
+    [DESKTOP_IPC.fileDragPrepare, { kind: 'bytes', bytes, name: 'original.png', mediaType: 'image/png' }, 'request'],
     [DESKTOP_IPC.fileDragStart, 'image-handle'],
     [DESKTOP_IPC.fileDragRelease, 'image-handle'],
+    [DESKTOP_IPC.fileDragCancel, 'request'],
   ])
 })
 

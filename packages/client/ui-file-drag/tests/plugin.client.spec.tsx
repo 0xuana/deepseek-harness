@@ -67,7 +67,9 @@ it('retains bytes after source unmount and releases on the detached node dragend
 it('reports a late native failure after source unmount using the plugin dictionary', async () => {
   const pending = Promise.withResolvers<boolean>()
   const handle = 'handle' as FileDragHandle
-  const desktop: DesktopFileDrag = { prepare: vi.fn(async () => handle), start: vi.fn(() => pending.promise), release: vi.fn() }
+  const desktop: DesktopFileDrag = {
+    prepare: vi.fn(async () => handle), cancel: vi.fn(), start: vi.fn(() => pending.promise), release: vi.fn(),
+  }
   vi.stubGlobal('dshDesktop', { protocolVersion: 1, fileDrag: desktop })
   const { service } = await bench()
   vi.stubGlobal('dshDesktop', { protocolVersion: 2 })

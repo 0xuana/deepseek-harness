@@ -4,10 +4,11 @@ import type { FileDragActions, FileDragSource, PreparedFileDrag } from './file-d
 
 interface Preparation { abort: AbortController; prepared?: PreparedFileDrag; failed: boolean }
 type ImageGestures = Required<Pick<ImgHTMLAttributes<HTMLImageElement>,
-  'onPointerEnter' | 'onPointerDown' | 'onPointerLeave' | 'onPointerUp' | 'onDragStart' | 'onDragEnd' | 'onClickCapture'>>
+  'onPointerEnter' | 'onPointerDown' | 'onPointerLeave' | 'onDragStart' | 'onDragEnd' | 'onClickCapture'>>
 
 /**
- * Prepare on drag intent, release on pointer leave, and never start after cancellation.
+ * Prepare resource-backed images on primary press, other images also on hover; release on leave.
+ * Releasing inside the image retains preparation for the next gesture; cancelled drags never start late.
  * @param actions - stable file preparation and error callbacks.
  * @param src - displayed image URL.
  * @param name - proposed export name.
@@ -30,11 +31,13 @@ export function useImageDrag(
     previous?.prepared?.release()
   }, [])
   useEffect(() => release, [release, source, actions])
-  const prepare = useCallback((): void => {
+  const prepare = useCallback((image: HTMLImageElement): void => {
     if (src === '' || state.current !== undefined) return
     const current: Preparation = { abort: new AbortController(), failed: false }
     state.current = current
-    window.addEventListener('pointerup', release, { once: true, signal: current.abort.signal })
+    window.addEventListener('pointerup', (event) => {
+      if (event.target !== image) release()
+    }, { signal: current.abort.signal })
     window.addEventListener('blur', release, { once: true, signal: current.abort.signal })
     void actions.prepare(source, current.abort.signal).then((prepared) => {
       if (current.abort.signal.aborted) prepared.release()
@@ -45,8 +48,9 @@ export function useImageDrag(
     })
   }, [src, actions, source, release])
   const intent = useCallback((event: PointerEvent<HTMLImageElement>): void => {
-    if (!event.defaultPrevented && event.currentTarget.draggable) prepare()
-  }, [prepare])
+    if (!event.defaultPrevented && event.currentTarget.draggable
+      && (resourceAddress === undefined || event.type === 'pointerdown')) prepare(event.currentTarget)
+  }, [prepare, resourceAddress])
   const onDragStart = useCallback((event: DragEvent<HTMLImageElement>): void => {
     if (event.defaultPrevented || src === '') return
     dragged.current = true
@@ -59,7 +63,7 @@ export function useImageDrag(
     if (original === undefined && (url.protocol === 'https:' || url.protocol === 'http:') && url.origin !== location.origin) return
     event.preventDefault()
     if (current?.failed === true) { actions.reportFailure(); release() }
-    prepare()
+    prepare(event.currentTarget)
   }, [src, original, actions, prepare, release])
   const onPointerDown = useCallback((event: PointerEvent<HTMLImageElement>): void => {
     dragged.current = false
@@ -76,5 +80,5 @@ export function useImageDrag(
     event.stopPropagation()
     dragged.current = false
   }, [])
-  return { onPointerEnter: intent, onPointerDown, onPointerLeave, onPointerUp: release, onDragStart, onDragEnd: release, onClickCapture }
+  return { onPointerEnter: intent, onPointerDown, onPointerLeave, onDragStart, onDragEnd: release, onClickCapture }
 }

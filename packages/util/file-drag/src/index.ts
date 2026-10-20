@@ -5,6 +5,9 @@ import type { Branded } from '@deepseek-ai/dsh-brand'
 /** Opaque preparation identity, minted and resolved only by the desktop main process. */
 export type FileDragHandle = Branded<'FileDragHandle'>
 
+/** Caller-minted identity for cancelling a native preparation before it returns a handle. */
+export type FileDragRequestId = Branded<'FileDragRequestId'>
+
 /** Caller-supplied export naming, shared by Web and Desktop. */
 export interface DragFileName {
   readonly name?: string | undefined
@@ -20,8 +23,14 @@ export type DesktopFileSource = DragFileName & (
 
 /** Native file operations; no request accepts a raw renderer filesystem path. */
 export interface DesktopFileDrag {
-  /** @param source - bytes or a verifiable resource. @returns a handle, or undefined if the resource needs a byte copy. */
-  prepare(this: void, source: DesktopFileSource): Promise<FileDragHandle | undefined>
+  /**
+   * @param source - bytes or a verifiable resource.
+   * @param requestId - cancellation identity.
+   * @returns a handle, or undefined if the resource needs a byte copy.
+   */
+  prepare(this: void, source: DesktopFileSource, requestId: FileDragRequestId): Promise<FileDragHandle | undefined>
+  /** Cancel unfinished preparation and release its unused resources. @param requestId - preparation identity. */
+  cancel(this: void, requestId: FileDragRequestId): void
   /** @param handle - prepared file. @returns whether the OS accepted the drag. */
   start(this: void, handle: FileDragHandle): Promise<boolean>
   /** Release unused preparation; OS-delivered temporary files receive a bounded read grace period. @param handle - prepared file. */
@@ -48,5 +57,17 @@ export function resolveDragFileName(request: DragFileName): string {
   if (/^(con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?:\.|$)/iu.test(clean)) clean = `_${clean}`
   const finalDot = clean.lastIndexOf('.')
   const tail = finalDot < 0 ? '' : clean.slice(finalDot)
-  return `${(finalDot < 0 ? clean : clean.slice(0, finalDot)).slice(0, 120)}${tail.slice(0, 32)}`
+  const encoder = new TextEncoder()
+  const truncate = (value: string, bytes: number): string => {
+    let result = ''
+    for (const character of value) {
+      const length = encoder.encode(character).length
+      if (length > bytes) break
+      result += character
+      bytes -= length
+    }
+    return result
+  }
+  const extensionTail = truncate(tail, 32)
+  return `${truncate(finalDot < 0 ? clean : clean.slice(0, finalDot), 255 - encoder.encode(extensionTail).length)}${extensionTail}`
 }

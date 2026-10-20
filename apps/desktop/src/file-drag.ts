@@ -1,6 +1,6 @@
 /** Native copy drags authorized only for the product main frame and the active Host. */
 import { createHash } from 'node:crypto'
-import { createReadStream } from 'node:fs'
+import { createReadStream, statSync, type Stats } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { app, ipcMain, type BrowserWindow, type IpcMainInvokeEvent, type NativeImage } from 'electron'
@@ -30,61 +30,77 @@ function requestOf(value: unknown): DesktopFileSource {
   throw new Error('Invalid file drag request')
 }
 
-async function unchanged(resource: LocalResource): Promise<boolean> {
+function sameVersion(before: Stats, after: Stats): boolean {
+  return after.isFile() && before.dev === after.dev && before.ino === after.ino
+    && before.mtimeMs === after.mtimeMs && before.ctimeMs === after.ctimeMs && before.size === after.size
+}
+
+async function verifiedVersion(resource: LocalResource, signal: AbortSignal): Promise<Stats | undefined> {
+  signal.throwIfAborted()
   const info = await stat(resource.path)
-  if (!info.isFile() || info.size !== resource.size) return false
+  if (!info.isFile() || info.size !== resource.size) return undefined
   const hash = createHash('sha256')
-  const stream = createReadStream(resource.path)
+  const stream = createReadStream(resource.path, { signal })
   const chunks: AsyncIterable<unknown> = stream
   for await (const chunk of chunks) {
     if (!(chunk instanceof Uint8Array)) throw new Error('File stream returned non-binary data')
     hash.update(chunk)
   }
   const after = await stat(resource.path)
-  return info.dev === after.dev && info.ino === after.ino && info.mtimeMs === after.mtimeMs
-    && after.size === resource.size && hash.digest('hex') === resource.sha256
+  return sameVersion(info, after) && hash.digest('hex') === resource.sha256 ? after : undefined
+}
+
+async function cancellable<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+  signal.throwIfAborted()
+  const cancelled = Promise.withResolvers<never>()
+  const abort = (): void => { cancelled.reject(signal.reason) }
+  signal.addEventListener('abort', abort, { once: true })
+  try { return await Promise.race([operation, cancelled.promise]) }
+  finally { signal.removeEventListener('abort', abort) }
 }
 
 /**
  * Register file preparation and native dragging.
  * @param owner - shared product sender authorization, returning its window.
- * @param resolveResource - private Host authorization; renderer paths are never used directly.
- * @returns cleanup awaiting tracked writes/removals without waiting for the system icon service.
+ * @param resolveResource - cancellable private Host authorization; renderer paths are never used directly.
+ * @returns cleanup aborting resource reads and awaiting tracked writes/removals without waiting for the system icon service.
  */
 export function installDesktopFileDrag(
   owner: (event: IpcMainInvokeEvent) => BrowserWindow,
-  resolveResource: (address: string) => Promise<LocalResource | null>,
+  resolveResource: (address: string, signal: AbortSignal) => Promise<LocalResource | null>,
 ): () => Promise<void> {
   let disposed = false
-  const closed = Promise.withResolvers<void>()
+  const preparations = new Map<string, AbortController>()
   const files = new DragFiles(app.getPath('temp'))
   const pending = new Set<Promise<FileDragHandle | undefined>>()
   const icons = new Map<string, NativeImage>()
-  const borrowed = new Map<string, LocalResource>()
+  const borrowed = new Map<string, { resource: LocalResource; version: Stats }>()
   const authorize = (event: IpcMainInvokeEvent): BrowserWindow => {
     if (disposed) throw new Error('File transfer closed')
     return owner(event)
   }
-  const prepare = async (event: IpcMainInvokeEvent, value: unknown): Promise<FileDragHandle | undefined> => {
+  const prepare = async (event: IpcMainInvokeEvent, value: unknown, signal: AbortSignal): Promise<FileDragHandle | undefined> => {
     authorize(event)
     const source = requestOf(value)
     let handle: FileDragHandle
     if (source.kind === 'bytes') handle = await files.prepare(source.bytes, source)
     else {
-      const resource = await resolveResource(source.address)
+      const resource = await cancellable(resolveResource(source.address, signal), signal)
       authorize(event)
       if (resource === null || basename(resource.path) !== resolveDragFileName(source)
         || (source.sha256 !== undefined && source.sha256 !== resource.sha256)
-        || (source.size !== undefined && source.size !== resource.size) || !await unchanged(resource)) return undefined
+        || (source.size !== undefined && source.size !== resource.size)) return undefined
+      const version = await verifiedVersion(resource, signal)
+      if (version === undefined) return undefined
       handle = files.borrow(resource.path)
-      borrowed.set(handle, resource)
+      borrowed.set(handle, { resource, version })
     }
     try {
+      signal.throwIfAborted()
       const file = files.take(handle, false)
       if (file === undefined) throw new Error('File transfer closed')
-      const icon = await Promise.race([app.getFileIcon(file, { size: 'normal' }), closed.promise])
+      const icon = await cancellable(app.getFileIcon(file, { size: 'normal' }), signal)
       authorize(event)
-      if (icon === undefined) throw new Error('File transfer closed')
       icons.set(handle, icon)
       return handle
     } catch (error) {
@@ -93,21 +109,29 @@ export function installDesktopFileDrag(
       throw error
     }
   }
-  ipcMain.handle(DESKTOP_IPC.fileDragPrepare, (event, source: unknown) => {
-    const operation = prepare(event, source)
+  ipcMain.handle(DESKTOP_IPC.fileDragPrepare, (event, source: unknown, requestId: unknown) => {
+    authorize(event)
+    if (typeof requestId !== 'string' || requestId.length === 0 || requestId.length > 128 || preparations.has(requestId)) throw new Error('Invalid file preparation identity')
+    const abort = new AbortController()
+    preparations.set(requestId, abort)
+    const operation = prepare(event, source, abort.signal).finally(() => { preparations.delete(requestId) })
     pending.add(operation)
     void operation.then(() => { pending.delete(operation) }, () => { pending.delete(operation) })
     return operation
   })
-  ipcMain.handle(DESKTOP_IPC.fileDragStart, async (event, handle: unknown) => {
+  ipcMain.handle(DESKTOP_IPC.fileDragCancel, (event, requestId: unknown) => {
+    authorize(event)
+    if (typeof requestId === 'string') preparations.get(requestId)?.abort(new Error('File preparation cancelled'))
+  })
+  ipcMain.handle(DESKTOP_IPC.fileDragStart, (event, handle: unknown) => {
     const window = authorize(event)
     const icon = typeof handle === 'string' ? icons.get(handle) : undefined
     if (icon === undefined || typeof handle !== 'string') return false
     const file = files.take(handle, false)
     if (file === undefined) return false
     try {
-      const resource = borrowed.get(handle)
-      if (resource !== undefined && !await unchanged(resource)) throw new Error('File changed before dragging')
+      const original = borrowed.get(handle)
+      if (original !== undefined && !sameVersion(original.version, statSync(original.resource.path))) throw new Error('File changed before dragging')
       authorize(event)
       window.webContents.startDrag({ file, icon })
       files.take(handle)
@@ -129,8 +153,9 @@ export function installDesktopFileDrag(
   return async () => {
     if (!disposed) {
       disposed = true
-      closed.resolve()
+      for (const abort of preparations.values()) abort.abort(new Error('File transfer closed'))
       ipcMain.removeHandler(DESKTOP_IPC.fileDragPrepare)
+      ipcMain.removeHandler(DESKTOP_IPC.fileDragCancel)
       ipcMain.removeHandler(DESKTOP_IPC.fileDragStart)
       ipcMain.removeHandler(DESKTOP_IPC.fileDragRelease)
     }
