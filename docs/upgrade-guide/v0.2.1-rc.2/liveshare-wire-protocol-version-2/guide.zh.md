@@ -11,6 +11,8 @@ description: "Liveshare 线协议升到版本 2：accessMode 词表为 open|sele
 
 `LIVESHARE_PROTOCOL_VERSION` 现在是 `2`。Relay 注册声明该版本，Relay 拒绝已声明的版本不匹配；本构建不提供逐版本翻译。同一发布里 access-mode 词表是 `open | selected`：仍发送已退场 `approval` 名称的注册会被当作非法值拒绝（fail-closed），而不会被重新解释为 `open` 或 `selected`。以已退场名称存储的分享保留其 ACL 与可读性；跨站 `share-access-state` 帧以收窄后的 `selected` 名称上报它，并保留读者已经持有的访问。
 
+协议版本仍为 `2`：新增的可选 `allowsFileUpload` 分享/access-state 字段与 `file-upload` 能力是增量的，缺少该字段的帧读作上传关闭。
+
 ## 迁移
 
 1. 同时升级 owner Host、它的 gateway worker 与 Relay。仍声明协议版本 1 的 owner worker 或 Relay 会在注册时被以声明的版本不匹配拒绝（owner worker 为 HTTP 426，分享为 Relay 的注册拒绝），因此在服务 viewer 之前先升级每个会注册或应答分享的 peer。

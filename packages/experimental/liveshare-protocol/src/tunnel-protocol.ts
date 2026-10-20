@@ -29,6 +29,7 @@ export const LIVESHARE_CAPABILITIES: readonly string[] = [
   'scoped-rpc-response',
   'unsupported-frame-refusal',
   'share-access-state',
+  'file-upload',
 ]
 
 /** One share the owner host asks its gateway worker to carry to the Relay. */
@@ -62,6 +63,12 @@ export interface TunnelShareSpec {
    * Absent means the share predates tiers and reads as `view`.
    */
   readonly sessionMode?: 'view' | 'fork-readonly' | 'write'
+  /**
+   * Whether an admitted viewer may attach uploaded files in this share's Session and its own forks.
+   *
+   * Independent of the tier and of {@link TunnelShareSpec.allowsFork}; absent means no file uploads.
+   */
+  readonly allowsFileUpload?: boolean
   /**
    * Relay-issued owner credential proving which logged-in subject publishes this share. The Relay
    * refuses a new share without it and ignores self-reported identity fields when it is present.
@@ -194,6 +201,8 @@ export interface ShareAccessStateFrame {
    * tier stands for it: that is what the withdrawn name granted.
    */
   readonly allowsFork?: boolean
+  /** Whether this share permits viewer file uploads; always present after parsing, absent means false. */
+  readonly allowsFileUpload: boolean
   readonly expiresAt?: string
 }
 
@@ -483,6 +492,7 @@ function isTunnelShareSpec(value: unknown): value is TunnelShareSpec {
     && (value.ownerInstanceId === undefined || typeof value.ownerInstanceId === 'string')
     && (value.allowsFork === undefined || typeof value.allowsFork === 'boolean')
     && (mode === undefined || mode === 'view' || mode === 'fork-readonly' || mode === 'write')
+    && (value.allowsFileUpload === undefined || typeof value.allowsFileUpload === 'boolean')
     && (value.ownerCredential === undefined || typeof value.ownerCredential === 'string')
     && Array.isArray(value.allowedSubjectIds)
     && value.allowedSubjectIds.every(subject => typeof subject === 'string' && subject !== '')
@@ -533,12 +543,14 @@ export function parseShareAccessState(value: unknown): ShareAccessStateFrame | u
     || !isSubjectIds(value.allowedSubjectIds)
     || (value.sessionMode !== 'view' && value.sessionMode !== 'fork-readonly' && value.sessionMode !== 'write')
     || (value.allowsFork !== undefined && typeof value.allowsFork !== 'boolean')
+    || (value.allowsFileUpload !== undefined && typeof value.allowsFileUpload !== 'boolean')
     || (value.expiresAt !== undefined && (typeof value.expiresAt !== 'string' || !Number.isFinite(Date.parse(value.expiresAt))))) {
     return undefined
   }
   return { type: 'share-access-state', version: Number(value.version), accessMode: value.accessMode,
     allowedSubjectIds: [...value.allowedSubjectIds], sessionMode: normalizeShareSessionMode(value.sessionMode),
     ...(value.sessionMode === 'fork-readonly' && value.allowsFork === undefined ? { allowsFork: true } : {}),
+    allowsFileUpload: value.allowsFileUpload === true,
     ...(value.allowsFork === undefined ? {} : { allowsFork: value.allowsFork }),
     ...(value.expiresAt === undefined ? {} : { expiresAt: value.expiresAt }) }
 }

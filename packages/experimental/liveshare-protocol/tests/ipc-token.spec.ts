@@ -42,7 +42,7 @@ const registrationFrames = [
   { type: 'share-closed', registrationToken, shareId: 'share' },
   { type: 'share-error', registrationToken, shareId: 'share', message: 'offline' },
   { type: 'share-access-state', registrationToken, shareId: 'share', version: 1, accessMode: 'open',
-    allowedSubjectIds: [], sessionMode: 'view' },
+    allowedSubjectIds: [], sessionMode: 'view', allowsFileUpload: false },
 ]
 
 describe('Host/worker registration identity', () => {
