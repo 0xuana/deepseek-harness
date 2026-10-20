@@ -8,15 +8,15 @@ import type {
 import { z } from 'zod'
 import { isSegment } from './urls.ts'
 
-const PULL_REQUEST_FIELDS = `number url title state isDraft updatedAt
+const PULL_REQUEST_FIELDS = `number url title state isDraft updatedAt closedAt
   author { login }
-  headRefName headRefOid baseRefName mergeable reviewDecision
+  headRefName headRefOid baseRefName additions deletions mergeable reviewDecision
   reviewThreads(first: 100) { nodes { isResolved } }
   commits(last: 1) { nodes { commit { statusCheckRollup { state contexts(first: 100) {
     pageInfo { hasNextPage }
     nodes {
       __typename
-      ... on CheckRun { name status conclusion detailsUrl checkSuite { workflowRun { workflow { name } } } }
+      ... on CheckRun { name status conclusion detailsUrl startedAt completedAt checkSuite { workflowRun { workflow { name } } } }
       ... on StatusContext { context state targetUrl }
     }
   } } } } }`
@@ -35,6 +35,8 @@ const checkRunSchema = z.object({
   status: z.string(),
   conclusion: z.string().nullable(),
   detailsUrl: z.string().nullable(),
+  startedAt: z.string().nullable(),
+  completedAt: z.string().nullable(),
   checkSuite: z.object({
     workflowRun: z.object({ workflow: z.object({ name: z.string() }) }).nullable(),
   }).nullable(),
@@ -53,10 +55,13 @@ const pullRequestSchema = z.object({
   state: z.enum(['OPEN', 'CLOSED', 'MERGED']),
   isDraft: z.boolean(),
   updatedAt: z.string(),
+  closedAt: z.string().nullable(),
   author: z.object({ login: z.string() }).nullable(),
   headRefName: z.string(),
   headRefOid: z.string(),
   baseRefName: z.string(),
+  additions: z.number().int().nonnegative(),
+  deletions: z.number().int().nonnegative(),
   mergeable: z.string(),
   reviewDecision: z.string().nullable(),
   reviewThreads: z.object({ nodes: z.array(z.object({ isResolved: z.boolean() })) }),
@@ -193,12 +198,21 @@ function toSnapshot(ref: ChangeRequestRef, node: PullRequestNode): ChangeRequest
         state: checkRunState(run.data.status, run.data.conclusion),
         url: run.data.detailsUrl,
         workflow: run.data.checkSuite?.workflowRun?.workflow.name ?? null,
+        startedAt: run.data.startedAt,
+        completedAt: run.data.completedAt,
       })
       continue
     }
     const status = statusContextSchema.safeParse(context)
     if (status.success) {
-      checks.push({ name: status.data.context, state: statusContextState(status.data.state), url: status.data.targetUrl, workflow: null })
+      checks.push({
+        name: status.data.context,
+        state: statusContextState(status.data.state),
+        url: status.data.targetUrl,
+        workflow: null,
+        startedAt: null,
+        completedAt: null,
+      })
     }
   }
   return {
@@ -211,6 +225,8 @@ function toSnapshot(ref: ChangeRequestRef, node: PullRequestNode): ChangeRequest
     headBranch: node.headRefName,
     headSha: node.headRefOid,
     baseBranch: node.baseRefName,
+    additions: node.additions,
+    deletions: node.deletions,
     mergeability: mergeability(node.mergeable),
     reviewDecision: reviewDecision(node.reviewDecision),
     checks,
@@ -218,6 +234,7 @@ function toSnapshot(ref: ChangeRequestRef, node: PullRequestNode): ChangeRequest
     checksTruncated: rollup?.contexts.pageInfo.hasNextPage ?? false,
     unresolvedThreads: node.reviewThreads.nodes.filter(thread => !thread.isResolved).length,
     updatedAt: node.updatedAt,
+    closedAt: node.closedAt,
   }
 }
 

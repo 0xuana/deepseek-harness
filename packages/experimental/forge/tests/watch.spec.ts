@@ -187,6 +187,40 @@ describe('forge watch', () => {
     expect(context.forge.latest(ref(1))).toBeUndefined()
   })
 
+  it('refreshes a watched change request at once, including after a terminal state', async () => {
+    const provider = new FakeProvider()
+    provider.results.set(key, snapshot(ref(1), { state: 'closed' }))
+    const context = await setup(provider)
+    collect(context)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(provider.fetches).toHaveLength(1)
+
+    context.forge.refresh(ref(1))
+    context.forge.refresh(ref(9))
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(provider.fetches).toEqual([[ref(1)], [ref(1)]])
+  })
+
+  it('lets a fetch already in flight serve a refresh', async () => {
+    const provider = new FakeProvider()
+    const release = held(provider, target => snapshot(target))
+    const context = await setup(provider)
+    const { updates } = collect(context)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.fetches).toHaveLength(1)
+
+    context.forge.refresh(ref(1))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.fetches).toHaveLength(1)
+    release()
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(updates).toHaveLength(1)
+    await vi.advanceTimersByTimeAsync(4_999)
+    expect(provider.fetches).toHaveLength(1)
+  })
+
   it('keeps notifying other listeners when one listener throws', async () => {
     const provider = new FakeProvider()
     provider.results.set(key, snapshot(ref(1)))

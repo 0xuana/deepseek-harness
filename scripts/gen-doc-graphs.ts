@@ -184,7 +184,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Code host change requests',
     mode: 'seam',
     implementations: ['experimental-forge-github'],
-    consumers: ['experimental-forge-session'],
+    consumers: ['experimental-forge-session', 'experimental-client-ui-forge'],
     note: 'Providers map remote and change request URLs, look up change requests by head branch, and read status in batches; watchers of one change request share one polling loop.',
   },
   {
@@ -192,7 +192,15 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'experimental-forge-session',
     title: 'Session change request bindings',
     mode: 'service',
-    note: 'A host-only projection derives bindings from shell results and binding records; push results trigger head-branch discovery, and Session watchers poll bound change requests through the forge registry.',
+    consumers: ['experimental-client-ui-forge'],
+    note: 'A Session projection derives bindings from shell results and binding records and publishes their URLs without status to clients; push results trigger head-branch discovery, and Session watchers poll bound change requests through the forge registry.',
+  },
+  {
+    key: 'forgePanel',
+    pkg: 'experimental-client-ui-forge',
+    title: 'Forge panel Remote',
+    mode: 'service',
+    note: 'Streams one panel state per followed Session: a read-only Git inspection in the Session sandbox, the recognized code host and its sign-in, and the bound change requests with polled status.',
   },
   {
     key: 'worktrees',

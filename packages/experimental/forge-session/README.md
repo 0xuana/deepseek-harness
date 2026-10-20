@@ -86,7 +86,7 @@ None. Binding records are ignorable plugin records outside the model-visible con
 
 - **Textual command recognition** — only `bash` and `pwsh` commands containing `gh pr create`, `gh pr new`, or `git push` count, and only `/pull/<number>` URLs bind. Scripts, aliases, `gh api` calls, other CLIs such as `glab`, and `git push --porcelain` output are not recognized; `track` binds such change requests.
 - **Push-triggered discovery** — a change request opened elsewhere after the latest push appears only after another push or a `track`.
-- **Host API only** — no client view or model tool reads the bindings yet.
+- **No model tool** — the model cannot read or change bindings yet.
 - **Per-Session bindings** — subagent Sessions keep their own bindings; a parent Session does not aggregate them.
 - **Silent lookup failures** — lookup failures reach the host log only; neither the Session nor its watchers see them.
 

@@ -2,8 +2,9 @@
 
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
-  ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeFailure, ForgeProvider, ForgeRepository,
+  ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeFailure, ForgeProvider, ForgeReadiness, ForgeRepository,
 } from '@deepseek-ai/dsh-experimental-forge'
+import { GhUnavailableError } from './gh.ts'
 import type { GhRunner } from './gh.ts'
 import { HEAD_QUERY, mapHeadResponse, mapSnapshotResponse, snapshotQuery } from './graphql.ts'
 import { parsePullRequestUrl, parseRemoteUrl } from './urls.ts'
@@ -65,6 +66,17 @@ export class GitHubProvider implements ForgeProvider {
     const body = parseJson(output.stdout)
     if (body === undefined) throw new Error(`forge-github: head branch lookup failed: ${firstLine(output.stderr) ?? `gh exited with ${output.exitCode}`}`)
     return mapHeadResponse(body, repository, branch)
+  }
+
+  async readiness(host: string, signal: AbortSignal): Promise<ForgeReadiness> {
+    try {
+      const output = await this.gh(['auth', 'status', '--hostname', host], signal)
+      if (output.exitCode === 0) return { state: 'ready', message: null }
+      return { state: 'unauthenticated', message: firstLine(output.stderr) ?? firstLine(output.stdout) ?? `gh is not signed in to ${host}` }
+    } catch (error) {
+      if (error instanceof GhUnavailableError) return { state: 'unavailable', message: error.message }
+      throw error
+    }
   }
 
   private async fetchHost(

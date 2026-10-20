@@ -32,9 +32,9 @@ kind: "package-reference"
 - name: '@deepseek-ai/dsh-experimental-forge-github'
 ```
 
-`ctx.forge.register(provider)` 是调用方 fiber 上的 effect，返回对应的 disposer。一个提供方服务一个 forge 家族；为同一家族注册第二个提供方会抛错。`repositoryFromRemote(url)` 与 `changeRequestFromUrl(url)` 按注册顺序询问提供方并返回第一个匹配结果。`changeRequestUrl(ref)` 与 `findByHead(repository, branch, signal)` 委托给引用所属 forge 的提供方；没有注册提供方时抛错。
+`ctx.forge.register(provider)` 是调用方 fiber 上的 effect，返回对应的 disposer。一个提供方服务一个 forge 家族；为同一家族注册第二个提供方会抛错。`repositoryFromRemote(url)` 与 `changeRequestFromUrl(url)` 按注册顺序询问提供方并返回第一个匹配结果。`changeRequestUrl(ref)`、`findByHead(repository, branch, signal)` 与 `readiness(repository, signal)` 委托给引用所属 forge 的提供方，没有注册提供方时抛错；`readiness` 报告提供方能否用当前凭据访问该主机。
 
-`ctx.forge.watch(ref, listener)` 同样是 effect。变更请求的第一个监听方会立即触发轮询；`latest(ref)` 返回最近一次结果。每个 forge 同时最多只有一次读取在进行，这次读取包含该 forge 所有到期的变更请求。打开状态的变更请求在检查未完成或可合并性未知时每 `activeIntervalMs` 轮询一次，否则每 `idleIntervalMs` 轮询一次。已关闭和已合并的变更请求不再轮询。读取失败后，重试间隔为 `activeIntervalMs` 按连续失败次数翻倍，最长 `maxBackoffMs`。读取超过 `fetchTimeoutMs` 时，以消息中包含 `FORGE_FETCH_TIMEOUT` 的 `unavailable` 失败结束。注销提供方会让其被监听的变更请求以 `unavailable` 结束。最后一个监听方离开后轮询停止。默认值见[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-forge)。
+`ctx.forge.watch(ref, listener)` 同样是 effect。变更请求的第一个监听方会立即触发轮询；`latest(ref)` 返回最近一次结果。每个 forge 同时最多只有一次读取在进行，这次读取包含该 forge 所有到期的变更请求。打开状态的变更请求在检查未完成或可合并性未知时每 `activeIntervalMs` 轮询一次，否则每 `idleIntervalMs` 轮询一次。已关闭和已合并的变更请求不再轮询。`refresh(ref)` 立即轮询一个被监听的变更请求，已结束的也包括在内；该 forge 已有读取在进行时，由这次读取满足请求。读取失败后，重试间隔为 `activeIntervalMs` 按连续失败次数翻倍，最长 `maxBackoffMs`。读取超过 `fetchTimeoutMs` 时，以消息中包含 `FORGE_FETCH_TIMEOUT` 的 `unavailable` 失败结束。注销提供方会让其被监听的变更请求以 `unavailable` 结束。最后一个监听方离开后轮询停止。默认值见[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-forge)。
 
 -----
 
@@ -80,7 +80,7 @@ kind: "package-reference"
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **仅轮询**——状态在下一次计划轮询时才送达监听方；没有 webhook 接入、手动刷新或提供方就绪探测。凭据缺失会在读取后表现为 `unauthenticated` 失败。
+- **仅轮询**——状态在下一次计划轮询或 `refresh` 时才送达监听方；没有 webhook 接入。
 - **结果只在进程内**——最近结果保存在内存中，重启后丢失；下一个监听方会重新轮询。
 
 <a id="dev-note"></a>

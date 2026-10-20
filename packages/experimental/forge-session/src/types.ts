@@ -1,7 +1,7 @@
 /** Session binding vocabulary, the binding plugin record, and the host-only projection state. */
 
-import type { ChangeRequestRef, ChangeRequestUpdate } from '@deepseek-ai/dsh-experimental-forge'
-import type { SessionSeq } from '@deepseek-ai/dsh-session'
+import type { ChangeRequestRef, ChangeRequestUpdate } from '@deepseek-ai/dsh-experimental-forge/types'
+import type { SessionSeq } from '@deepseek-ai/dsh-session/types'
 
 /**
  * How a change request became bound to a Session: `created` when a

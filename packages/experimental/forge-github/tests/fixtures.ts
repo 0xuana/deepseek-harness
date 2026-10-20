@@ -16,6 +16,8 @@ export function checkRun(name: string, status: string, conclusion: string | null
     status,
     conclusion,
     detailsUrl: `https://github.com/octo/demo/actions/runs/1/job/${name}`,
+    startedAt: status === 'QUEUED' ? null : '2026-10-09T01:00:00Z',
+    completedAt: status === 'COMPLETED' ? '2026-10-09T01:02:07Z' : null,
     checkSuite: workflow === null ? { workflowRun: null } : { workflowRun: { workflow: { name: workflow } } },
   }
 }
@@ -34,10 +36,13 @@ export function pullRequestNode(number: number, overrides: Record<string, unknow
     state: 'OPEN',
     isDraft: false,
     updatedAt: '2026-10-09T01:02:03Z',
+    closedAt: null,
     author: { login: 'octo' },
     headRefName: `topic-${number}`,
     headRefOid: 'f'.repeat(40),
     baseRefName: 'master',
+    additions: 128,
+    deletions: 14,
     mergeable: 'MERGEABLE',
     reviewDecision: null,
     reviewThreads: { nodes: [{ isResolved: true }, { isResolved: false }, { isResolved: false }] },

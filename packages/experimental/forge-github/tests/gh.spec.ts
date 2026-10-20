@@ -2,7 +2,7 @@ import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ghRunner } from '../src/gh.ts'
+import { GhUnavailableError, ghRunner } from '../src/gh.ts'
 
 let root = ''
 
@@ -74,7 +74,9 @@ describe.skipIf(process.platform === 'win32')('gh runner', () => {
 
   it('reports an executable that cannot start', async () => {
     const run = ghRunner({ ghCommand: join(root, 'missing-gh'), timeoutMs: 5_000, maxOutputBytes: 1_000 })
+    const result = run([], new AbortController().signal)
 
-    await expect(run([], new AbortController().signal)).rejects.toThrow(/^gh could not start: /)
+    await expect(result).rejects.toBeInstanceOf(GhUnavailableError)
+    await expect(result).rejects.toThrow(/^gh could not start: /)
   })
 })

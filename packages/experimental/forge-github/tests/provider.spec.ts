@@ -1,5 +1,6 @@
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import { describe, expect, it } from 'vitest'
+import { GhUnavailableError } from '../src/gh.ts'
 import type { GhOutput, GhRunner } from '../src/gh.ts'
 import { GitHubProvider } from '../src/provider.ts'
 import { demo, pull, pullRequestNode } from './fixtures.ts'
@@ -114,5 +115,29 @@ describe('GitHub provider head branch lookup', () => {
       .rejects.toThrow('forge-github: head branch lookup failed: HTTP 502')
     await expect(provider(fakeGh(() => output('', 2)).run).findByHead(demo, 'topic', signal))
       .rejects.toThrow('forge-github: head branch lookup failed: gh exited with 2')
+  })
+})
+
+describe('GitHub provider readiness', () => {
+  it('is ready when gh auth status succeeds for the host', async () => {
+    const gh = fakeGh(() => output('Logged in to github.com'))
+
+    await expect(provider(gh.run).readiness('github.com', signal)).resolves.toEqual({ state: 'ready', message: null })
+    expect(gh.calls).toEqual([['auth', 'status', '--hostname', 'github.com']])
+  })
+
+  it('reports the first diagnostic line when gh is not signed in', async () => {
+    await expect(provider(fakeGh(() => output('', 1, 'You are not logged into any GitHub hosts.\nRun gh auth login')).run).readiness('github.com', signal))
+      .resolves.toEqual({ state: 'unauthenticated', message: 'You are not logged into any GitHub hosts.' })
+    await expect(provider(fakeGh(() => output('github.com\n  X Failed to log in', 1)).run).readiness('github.com', signal))
+      .resolves.toEqual({ state: 'unauthenticated', message: 'github.com' })
+    await expect(provider(fakeGh(() => output('', 1)).run).readiness('github.com', signal))
+      .resolves.toEqual({ state: 'unauthenticated', message: 'gh is not signed in to github.com' })
+  })
+
+  it('is unavailable when gh cannot start and rethrows other failures', async () => {
+    await expect(provider(() => Promise.reject(new GhUnavailableError('gh could not start: spawn gh ENOENT')))
+      .readiness('github.com', signal)).resolves.toEqual({ state: 'unavailable', message: 'gh could not start: spawn gh ENOENT' })
+    await expect(provider(() => Promise.reject(new Error('timed out'))).readiness('github.com', signal)).rejects.toThrow('timed out')
   })
 })

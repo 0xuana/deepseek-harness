@@ -3,7 +3,7 @@ import type { Fiber } from '@deepseek-ai/cordis'
 import ForgeService, { changeRequestKey } from '../src/index.ts'
 import type { Config } from '../src/index.ts'
 import type {
-  ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeFailure, ForgeProvider, ForgeRepository,
+  ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeFailure, ForgeProvider, ForgeReadiness, ForgeRepository,
 } from '../src/types.ts'
 
 type FetchResult = ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>
@@ -28,6 +28,8 @@ export function snapshot(target: ChangeRequestRef, overrides: Partial<ChangeRequ
     headBranch: 'topic',
     headSha: 'a'.repeat(40),
     baseBranch: 'main',
+    additions: 12,
+    deletions: 3,
     mergeability: 'mergeable',
     reviewDecision: 'none',
     checks: [],
@@ -35,6 +37,7 @@ export function snapshot(target: ChangeRequestRef, overrides: Partial<ChangeRequ
     checksTruncated: false,
     unresolvedThreads: 0,
     updatedAt: '2026-10-09T00:00:00Z',
+    closedAt: null,
     ...overrides,
   }
 }
@@ -47,6 +50,7 @@ export class FakeProvider implements ForgeProvider {
   readonly results = new Map<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>()
   readonly heads = new Map<string, readonly ChangeRequestRef[]>()
   fetchImpl: ((refs: readonly ChangeRequestRef[], signal: AbortSignal) => Promise<FetchResult>) | undefined
+  readinessResult: ForgeReadiness = { state: 'ready', message: null }
 
   constructor(forge = 'fake') {
     this.forge = forge
@@ -84,6 +88,9 @@ export class FakeProvider implements ForgeProvider {
     return this.heads.get(`${repository.owner}/${repository.name}:${branch}`) ?? []
   }
 
+  async readiness(): Promise<ForgeReadiness> {
+    return this.readinessResult
+  }
 }
 
 /** Boot a context with only the forge service. */

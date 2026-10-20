@@ -26,11 +26,13 @@ describe('forge registry', () => {
     ctx = await forgeContext()
     const provider = new FakeProvider()
     provider.heads.set('Octo/Demo:topic', [ref(3)])
+    provider.readinessResult = { state: 'unauthenticated', message: 'run gh auth login' }
     await provide(ctx, provider)
     const signal = new AbortController().signal
 
     expect(ctx.forge.changeRequestUrl(ref(3))).toBe('https://fake.test/Octo/Demo/change/3')
     await expect(ctx.forge.findByHead(demo, 'topic', signal)).resolves.toEqual([ref(3)])
+    await expect(ctx.forge.readiness(demo, signal)).resolves.toEqual({ state: 'unauthenticated', message: 'run gh auth login' })
   })
 
   it('rejects operations for a forge without a provider', async () => {
@@ -40,6 +42,7 @@ describe('forge registry', () => {
 
     expect(() => ctx!.forge.changeRequestUrl(ref(1, elsewhere))).toThrow('forge: no provider is registered for "missing"')
     await expect(ctx.forge.findByHead(elsewhere, 'topic', signal)).rejects.toThrow('forge: no provider is registered for "missing"')
+    await expect(ctx.forge.readiness(elsewhere, signal)).rejects.toThrow('forge: no provider is registered for "missing"')
   })
 
   it('refuses a second provider for the same forge', async () => {

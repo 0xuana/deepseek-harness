@@ -1,7 +1,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import ForgeService, { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
-  ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeFailure, ForgeProvider, ForgeRepository,
+  ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeFailure, ForgeProvider, ForgeReadiness, ForgeRepository,
 } from '@deepseek-ai/dsh-experimental-forge'
 import { createAssistantMessage, createToolResultMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import SessionStore from '@deepseek-ai/dsh-session'
@@ -35,6 +35,8 @@ export function snapshot(ref: ChangeRequestRef, overrides: Partial<ChangeRequest
     headBranch: 'feat',
     headSha: 'a'.repeat(40),
     baseBranch: 'main',
+    additions: 12,
+    deletions: 3,
     mergeability: 'mergeable',
     reviewDecision: 'none',
     checks: [],
@@ -42,6 +44,7 @@ export function snapshot(ref: ChangeRequestRef, overrides: Partial<ChangeRequest
     checksTruncated: false,
     unresolvedThreads: 0,
     updatedAt: '2026-10-09T00:00:00Z',
+    closedAt: null,
     ...overrides,
   }
 }
@@ -81,6 +84,10 @@ export class FakeProvider implements ForgeProvider {
     this.lookups.push({ repository, branch, signal })
     if (this.findImpl !== undefined) return this.findImpl(branch, signal)
     return Promise.resolve(this.heads.get(branch) ?? [])
+  }
+
+  readiness(): Promise<ForgeReadiness> {
+    return Promise.resolve({ state: 'ready', message: null })
   }
 }
 

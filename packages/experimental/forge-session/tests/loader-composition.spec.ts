@@ -53,10 +53,13 @@ const node = (number) => ({
   state: 'OPEN',
   isDraft: false,
   updatedAt: '2026-10-09T00:00:00Z',
+  closedAt: null,
   author: { login: 'octo' },
   headRefName: number === 7 ? 'feat' : 'other',
   headRefOid: 'a'.repeat(40),
   baseRefName: 'main',
+  additions: 1,
+  deletions: 0,
   mergeable: 'MERGEABLE',
   reviewDecision: null,
   reviewThreads: { nodes: [] },
@@ -64,7 +67,7 @@ const node = (number) => ({
     state: number === 7 ? 'PENDING' : 'SUCCESS',
     contexts: { pageInfo: { hasNextPage: false }, nodes: [{
       __typename: 'CheckRun', name: 'test', status: number === 7 ? 'IN_PROGRESS' : 'COMPLETED', conclusion: number === 7 ? null : 'SUCCESS',
-      detailsUrl: null, checkSuite: { workflowRun: { workflow: { name: 'ci' } } },
+      detailsUrl: null, startedAt: null, completedAt: null, checkSuite: { workflowRun: { workflow: { name: 'ci' } } },
     }] },
   } } }] },
 })

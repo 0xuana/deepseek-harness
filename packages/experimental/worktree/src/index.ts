@@ -1,19 +1,20 @@
-/** Creates a new Git branch and checkout, then changes the calling Session's working directory. */
+/** Creates a new Git branch and checkout, then changes the calling Session's working directory; restores a removed checkout. */
 
 import { randomUUID } from 'node:crypto'
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-fs'
+import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { PREPARE_DIRECTORY } from './directory.ts'
 import { runCommand } from './process.ts'
 import type { ProcessConfig } from './process.ts'
-import type { CreatedWorktree, CreateWorktreeRequest } from './types.ts'
+import type { CreatedWorktree, CreateWorktreePhase, CreateWorktreeRequest, RestoredWorktree, RestoreWorktreeRequest } from './types.ts'
 
-export type { CreatedWorktree, CreateWorktreeRequest } from './types.ts'
+export type { CreatedWorktree, CreateWorktreePhase, CreateWorktreeRequest, RestoredWorktree, RestoreWorktreeRequest } from './types.ts'
 
 /** Worktree location, generated names, executables, and subprocess resource limits. */
 export interface Config {
@@ -39,6 +40,9 @@ interface WorktreeSpec {
   branch: string
   revision: string
 }
+
+/** Runs one confined Git command; output with an exit code outside `allowedExitCodes` throws. */
+type GitRun = (directory: string, args: string[], allowedExitCodes?: number[], env?: NodeJS.ProcessEnv) => ReturnType<typeof runCommand>
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -68,7 +72,7 @@ export class WorktreeService extends Service {
 
   private readonly config: ResolvedConfig
   private readonly lifetime = new AbortController()
-  private readonly pending = new Set<Promise<CreatedWorktree>>()
+  private readonly pending = new Set<Promise<unknown>>()
 
   constructor(ctx: Context, config: Config) {
     super(ctx, 'worktrees')
@@ -102,12 +106,43 @@ export class WorktreeService extends Service {
    * @param agent - caller whose current directory selects the source repository and file policy.
    * @param request - optional new name and local revision; defaults are generated name and HEAD.
    * @param signal - cancellation of lookup, creation, and working-directory publication.
+   * @param onPhase - receives each stage before it begins; it must not throw.
    * @returns canonical checkout path, branch name, pinned commit, and source repository root.
    */
-  async create(agent: Agent, request: CreateWorktreeRequest = {}, signal?: AbortSignal): Promise<CreatedWorktree> {
+  async create(
+    agent: Agent,
+    request: CreateWorktreeRequest = {},
+    signal?: AbortSignal,
+    onPhase?: (phase: CreateWorktreePhase) => void,
+  ): Promise<CreatedWorktree> {
     const operationSignal = signal === undefined ? this.lifetime.signal : AbortSignal.any([this.lifetime.signal, signal])
     operationSignal.throwIfAborted()
-    const operation = this.createCheckout(agent, this.resolve(request), operationSignal)
+    const operation = this.createCheckout(agent, this.resolve(request), operationSignal, onPhase)
+    this.pending.add(operation)
+    try {
+      return await operation
+    } finally {
+      this.pending.delete(operation)
+    }
+  }
+
+  /**
+   * Check out a removed worktree again at its recorded directory: its branch
+   * when the branch still exists, otherwise a new branch of the same name at
+   * `baseCommit`. Stale worktree registrations are pruned first, and an
+   * existing directory fails. Changes that were never committed are not
+   * recovered. Checkout disables configured clean, smudge, and process filters,
+   * as creation does. The calling Session's working directory does not change.
+   * Failures may retain newly allocated Git/filesystem artifacts.
+   * @param agent - caller whose sandbox policy confines the commands.
+   * @param request - recorded directory, branch, base commit, and source repository root.
+   * @param signal - cancellation of the restoration.
+   * @returns the directory and whether the branch was created again.
+   */
+  async restore(agent: Agent, request: RestoreWorktreeRequest, signal?: AbortSignal): Promise<RestoredWorktree> {
+    const operationSignal = signal === undefined ? this.lifetime.signal : AbortSignal.any([this.lifetime.signal, signal])
+    operationSignal.throwIfAborted()
+    const operation = this.restoreCheckout(agent, request, operationSignal)
     this.pending.add(operation)
     try {
       return await operation
@@ -124,14 +159,16 @@ export class WorktreeService extends Service {
     return { branch, revision }
   }
 
-  private async createCheckout(agent: Agent, { branch, revision }: WorktreeSpec, signal: AbortSignal): Promise<CreatedWorktree> {
+  private async createCheckout(
+    agent: Agent,
+    { branch, revision }: WorktreeSpec,
+    signal: AbortSignal,
+    onPhase: ((phase: CreateWorktreePhase) => void) | undefined,
+  ): Promise<CreatedWorktree> {
+    onPhase?.('prepare')
     const cwd = await this.ctx.workingDirectory.ensure(agent, signal)
     const policy = this.ctx.sandboxPolicy.resolve({ session: agent.session })
-    const run = (directory: string, args: string[], allowedExitCodes?: number[], env?: NodeJS.ProcessEnv) => runCommand(
-      this.ctx, this.config, policy, directory,
-      [this.config.gitCommand, '-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', ...args],
-      signal, allowedExitCodes, env,
-    )
+    const run = this.gitRunner(policy, signal)
     await run(cwd, ['check-ref-format', `refs/heads/${branch}`])
     const rootOutput = await run(cwd, ['rev-parse', '--show-toplevel'])
     const rootTarget = await this.ctx.fs.resolve(rootOutput.stdout.replace(/\r?\n$/, ''), { cwd, signal })
@@ -146,26 +183,10 @@ export class WorktreeService extends Service {
     const path = this.ctx.fs.processPath(destination)
     if (await this.ctx.fs.lstat(path, undefined, signal) !== undefined) throw new Error(`worktree path already exists: ${path}`)
     try {
-      await runCommand(this.ctx, this.config, policy, repositoryRoot,
-        [this.config.nodeCommand, '--input-type=module', '-e', PREPARE_DIRECTORY, poolPath, path], signal)
+      await this.prepareDirectory(policy, repositoryRoot, poolPath, path, signal)
       await run(repositoryRoot, ['--work-tree', repositoryRoot, 'worktree', 'add', '--no-checkout', '-b', branch, '--', path, baseCommit])
-      const configured = await run(path, ['config', '--null', '--name-only', '--get-regexp', '^filter\\.'], [0, 1])
-      const drivers = new Set<string>()
-      for (const key of configured.stdout.split('\0')) {
-        const separator = key.lastIndexOf('.')
-        if (separator > 'filter.'.length && ['clean', 'smudge', 'process', 'required'].includes(key.slice(separator + 1))) {
-          drivers.add(key.slice('filter.'.length, separator))
-        }
-      }
-      const overrides: NodeJS.ProcessEnv = { GIT_CONFIG_COUNT: String(drivers.size * 4) }
-      let index = 0
-      for (const driver of drivers) {
-        for (const attribute of ['clean', 'smudge', 'process', 'required']) {
-          overrides[`GIT_CONFIG_KEY_${index}`] = `filter.${driver}.${attribute}`
-          overrides[`GIT_CONFIG_VALUE_${index}`] = attribute === 'required' ? 'false' : ''
-          index++
-        }
-      }
+      const overrides = await filterOverrides(run, path)
+      onPhase?.('checkout')
       await run(path, ['--work-tree', path, 'reset', '--hard', '--no-recurse-submodules', baseCommit], undefined, overrides)
       const canonicalPath = await this.ctx.workingDirectory.set(agent, path, signal)
       return { path: canonicalPath, branch, baseCommit, repositoryRoot }
@@ -173,6 +194,81 @@ export class WorktreeService extends Service {
       throw new Error(`Could not finish worktree ${branch} at ${path}. Any created checkout and branch are retained. ${error instanceof Error ? error.message : String(error)}`, { cause: error })
     }
   }
+
+  private async restoreCheckout(
+    agent: Agent,
+    { path, branch, baseCommit, repositoryRoot }: RestoreWorktreeRequest,
+    signal: AbortSignal,
+  ): Promise<RestoredWorktree> {
+    const policy = this.ctx.sandboxPolicy.resolve({ session: agent.session })
+    const run = this.gitRunner(policy, signal)
+    if (await this.ctx.fs.lstat(path, undefined, signal) !== undefined) throw new Error(`worktree path already exists: ${path}`)
+    await run(repositoryRoot, ['worktree', 'prune'])
+    const existing = await run(repositoryRoot, ['show-ref', '--verify', '--quiet', `refs/heads/${branch}`], [0, 1])
+    const branchRecreated = existing.exitCode !== 0
+    const pool = await this.ctx.fs.resolve(this.config.directory, { cwd: repositoryRoot, signal })
+    try {
+      await this.prepareDirectory(policy, repositoryRoot, this.ctx.fs.processPath(pool), path, signal)
+      await run(repositoryRoot, [
+        '--work-tree', repositoryRoot, 'worktree', 'add', '--no-checkout',
+        ...branchRecreated ? ['-b', branch, '--', path, baseCommit] : ['--', path, branch],
+      ])
+      const overrides = await filterOverrides(run, path)
+      await run(path, ['--work-tree', path, 'reset', '--hard', '--no-recurse-submodules', 'HEAD'], undefined, overrides)
+      return { path, branchRecreated }
+    } catch (error) {
+      throw new Error(`Could not restore worktree ${branch} at ${path}. Any created checkout and branch are retained. ${error instanceof Error ? error.message : String(error)}`, { cause: error })
+    }
+  }
+
+  /** Confine Git commands to the caller's sandbox policy, with hooks and the filesystem monitor disabled. */
+  private gitRunner(policy: SandboxExecutionPolicy, signal: AbortSignal): GitRun {
+    return (directory, args, allowedExitCodes, env) => runCommand(
+      this.ctx, this.config, policy, directory,
+      [this.config.gitCommand, '-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', ...args],
+      signal, allowedExitCodes, env,
+    )
+  }
+
+  /** Allocate the checkout directory exclusively inside the pool, creating a self-ignoring pool when it is new. */
+  private async prepareDirectory(
+    policy: SandboxExecutionPolicy,
+    repositoryRoot: string,
+    poolPath: string,
+    path: string,
+    signal: AbortSignal,
+  ): Promise<void> {
+    await runCommand(this.ctx, this.config, policy, repositoryRoot,
+      [this.config.nodeCommand, '--input-type=module', '-e', PREPARE_DIRECTORY, poolPath, path], signal)
+  }
+}
+
+/**
+ * Build the environment that disables every configured clean, smudge, and
+ * process filter of the checkout for one command, without changing Git config.
+ * @param run - confined Git runner.
+ * @param path - checkout directory.
+ * @returns `GIT_CONFIG_*` overrides.
+ */
+async function filterOverrides(run: GitRun, path: string): Promise<NodeJS.ProcessEnv> {
+  const configured = await run(path, ['config', '--null', '--name-only', '--get-regexp', '^filter\\.'], [0, 1])
+  const drivers = new Set<string>()
+  for (const key of configured.stdout.split('\0')) {
+    const separator = key.lastIndexOf('.')
+    if (separator > 'filter.'.length && ['clean', 'smudge', 'process', 'required'].includes(key.slice(separator + 1))) {
+      drivers.add(key.slice('filter.'.length, separator))
+    }
+  }
+  const overrides: NodeJS.ProcessEnv = { GIT_CONFIG_COUNT: String(drivers.size * 4) }
+  let index = 0
+  for (const driver of drivers) {
+    for (const attribute of ['clean', 'smudge', 'process', 'required']) {
+      overrides[`GIT_CONFIG_KEY_${index}`] = `filter.${driver}.${attribute}`
+      overrides[`GIT_CONFIG_VALUE_${index}`] = attribute === 'required' ? 'false' : ''
+      index++
+    }
+  }
+  return overrides
 }
 
 export default WorktreeService

@@ -1,0 +1,490 @@
+/* Forge tab body: one scrolling column with the checkout row on top and the
+   Session's change request cards below, at the sidebar's 13px row size. */
+.root {
+  --forge-fill: var(--dsw-static-neutral-50);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+  padding: 12px;
+  overflow-y: auto;
+  color: var(--dsw-alias-label-primary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: 20px;
+}
+
+:global(body[data-ds-dark-theme]) .root {
+  --forge-fill: var(--dsw-static-neutral-850);
+}
+
+/* Loading and disconnected states of a panel without state yet. */
+.centered {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 24px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  text-align: center;
+}
+
+.disconnected {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.checkout {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--forge-fill);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.checkout:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 2px;
+}
+
+.checkoutIcon {
+  flex: none;
+}
+
+.checkoutBranch {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font-family: var(--ds-font-family-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.checkoutNote {
+  flex: none;
+  margin-left: auto;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 2px 0;
+}
+
+.sectionTitle {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.iconButton {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.iconButton:hover,
+.iconButton:focus-visible {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.banner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--forge-fill);
+  color: var(--dsw-alias-label-primary);
+}
+
+.bannerDetail {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.bannerCommand {
+  max-width: 100%;
+  color: var(--dsw-alias-label-secondary);
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.bannerAction {
+  flex: none;
+}
+
+.empty {
+  padding: 32px 16px;
+  text-align: center;
+}
+
+.emptyTitle {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+}
+
+.emptyHint {
+  margin: 4px 0 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.change {
+  min-width: 0;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+/* The whole summary is the expansion toggle. */
+.changeHead {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 10px 10px 10px 12px;
+  border: 0;
+  border-radius: var(--dsw-radius-md);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.changeHead:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.changeHead:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+}
+
+.headRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Lifecycle tone of the change request glyph, which draws in the current color. */
+.glyph {
+  display: inline-flex;
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.glyph[data-tone='open'] {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.glyph[data-tone='merged'] {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.glyph[data-tone='closed'] {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.changeTitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chevron {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  transition: transform 120ms ease;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+/* Number, branch, and status lines align with the title past the 15px glyph and its 8px gap. */
+.metaRow,
+.summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding-left: 23px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.summary {
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.code {
+  font-family: var(--ds-font-family-code);
+}
+
+.ellipsis {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diff {
+  display: inline-flex;
+  gap: 6px;
+  font-family: var(--ds-font-family-code);
+}
+
+.added {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.deleted {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.ci {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.ci[data-tone='error'],
+.flag[data-flag='changesRequested'],
+.flag[data-flag='conflicting'] {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.flag {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.finished {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.finished[data-tone='merged'] {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+/* Read failure or unsupported host below the toggle, with its one action. */
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 10px 10px 35px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.details {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 4px 6px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.linkRow {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.linkRow .item {
+  flex: 1;
+}
+
+/* One detail row: a 15px glyph, the label, and a right-aligned value. */
+.item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  text-align: left;
+}
+
+button.item {
+  cursor: pointer;
+}
+
+button.item:hover,
+button.item:focus-visible {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.item svg {
+  flex: none;
+}
+
+.item[data-tone='error'] {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+button.item[data-tone='error']:hover,
+button.item[data-tone='error']:focus-visible {
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+}
+
+.value {
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.value[data-tone='error'] {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.separator {
+  height: 0.5px;
+  margin: 4px 6px;
+  background: var(--dsw-alias-border-l2);
+}
+
+.checks {
+  display: flex;
+  flex-direction: column;
+  margin: 0 6px 4px 34px;
+  padding: 2px 0;
+  border-left: 0.5px solid var(--dsw-alias-border-l2);
+  list-style: none;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+
+button.check {
+  cursor: pointer;
+}
+
+button.check:hover,
+button.check:focus-visible {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.check svg {
+  flex: none;
+}
+
+.check .value {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.pass {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.fail {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.truncated {
+  padding: 4px 10px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+}
+
+.titleIcon {
+  flex: none;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.titleText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

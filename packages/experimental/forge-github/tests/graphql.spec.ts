@@ -43,14 +43,33 @@ describe('snapshot mapping', () => {
       headBranch: 'topic-1',
       headSha: 'f'.repeat(40),
       baseBranch: 'master',
+      additions: 128,
+      deletions: 14,
       mergeability: 'mergeable',
       reviewDecision: 'none',
-      checks: [{ name: 'lint', state: 'success', url: 'https://github.com/octo/demo/actions/runs/1/job/lint', workflow: 'ci' }],
+      checks: [{
+        name: 'lint',
+        state: 'success',
+        url: 'https://github.com/octo/demo/actions/runs/1/job/lint',
+        workflow: 'ci',
+        startedAt: '2026-10-09T01:00:00Z',
+        completedAt: '2026-10-09T01:02:07Z',
+      }],
       checksRollup: 'success',
       checksTruncated: false,
       unresolvedThreads: 2,
       updatedAt: '2026-10-09T01:02:03Z',
+      closedAt: null,
     })
+  })
+
+  it('keeps the merge or close time of a finished pull request', () => {
+    expect(single(pullRequestNode(1, { state: 'MERGED', closedAt: '2026-10-09T02:00:00Z' })).closedAt).toBe('2026-10-09T02:00:00Z')
+  })
+
+  it('keeps the start time of a running check and no times for a queued one', () => {
+    const snapshot = single(pullRequestNode(1, {}, [checkRun('build', 'IN_PROGRESS', null), checkRun('test', 'QUEUED', null)]))
+    expect(snapshot.checks.map(check => [check.startedAt, check.completedAt])).toEqual([['2026-10-09T01:00:00Z', null], [null, null]])
   })
 
   it.each([
@@ -102,7 +121,9 @@ describe('snapshot mapping', () => {
     ['PENDING', 'pending'],
     ['EXPECTED', 'pending'],
   ])('maps status context %s to %s', (state, expected) => {
-    expect(single(pullRequestNode(1, {}, [statusContext('deploy', state)])).checks).toEqual([{ name: 'deploy', state: expected, url: null, workflow: null }])
+    expect(single(pullRequestNode(1, {}, [statusContext('deploy', state)])).checks).toEqual([{
+      name: 'deploy', state: expected, url: null, workflow: null, startedAt: null, completedAt: null,
+    }])
   })
 
   it.each([

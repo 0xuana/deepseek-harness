@@ -41,6 +41,10 @@ export interface ChangeRequestCheck {
   readonly url: string | null
   /** Workflow that produced the check, or null when the host reports none. */
   readonly workflow: string | null
+  /** ISO 8601 time the check started, or null before it starts and when the host reports none. */
+  readonly startedAt: string | null
+  /** ISO 8601 time the check completed, or null while it runs and when the host reports none. */
+  readonly completedAt: string | null
 }
 
 /** Combined outcome of all checks on the head commit. */
@@ -72,6 +76,10 @@ export interface ChangeRequestSnapshot {
   readonly headSha: string
   /** Branch the change request merges into. */
   readonly baseBranch: string
+  /** Lines the change request adds. */
+  readonly additions: number
+  /** Lines the change request deletes. */
+  readonly deletions: number
   /** Merge conflict status; `unknown` while the host computes it. */
   readonly mergeability: Mergeability
   /** Aggregate review outcome. */
@@ -86,6 +94,8 @@ export interface ChangeRequestSnapshot {
   readonly unresolvedThreads: number
   /** ISO 8601 time of the host's last update to the change request. */
   readonly updatedAt: string
+  /** ISO 8601 time the change request was merged or closed, or null while it is open. */
+  readonly closedAt: string | null
 }
 
 /** Why a provider could not read a change request. */
@@ -110,6 +120,14 @@ export type ChangeRequestUpdate = {
   readonly failure: ForgeFailure
 })
 
+/** Whether a provider can reach one host with the current credentials. */
+export interface ForgeReadiness {
+  /** `ready`, `unauthenticated` (sign-in needed), or `unavailable` (tool missing or host unreachable). */
+  readonly state: 'ready' | 'unauthenticated' | 'unavailable'
+  /** Human-readable detail, or null when ready. */
+  readonly message: string | null
+}
+
 /**
  * Host-specific access registered with `ctx.forge`. One provider serves one
  * forge family; methods that take a signal must stop work when it aborts.
@@ -130,6 +148,8 @@ export interface ForgeProvider {
   ): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>
   /** Find open change requests whose head is `branch` in `repository`, excluding the default branch and forks. */
   findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]>
+  /** Report whether the provider can reach `host` with current credentials. */
+  readiness(host: string, signal: AbortSignal): Promise<ForgeReadiness>
 }
 
 /**

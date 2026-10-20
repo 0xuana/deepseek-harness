@@ -26,6 +26,11 @@ export interface GhConfig {
   readonly maxOutputBytes: number
 }
 
+/** Thrown when the `gh` executable cannot start, for example because it is not installed. */
+export class GhUnavailableError extends Error {
+  override name = 'GhUnavailableError'
+}
+
 /**
  * Build a runner for `gh` on the host. The child inherits the scrubbed parent
  * environment, so variables whose names contain KEY, PASSWORD, SECRET, or
@@ -50,7 +55,7 @@ export function ghRunner(config: GhConfig): GhRunner {
     if (result.timedOut) throw new Error(`${command} timed out after ${config.timeoutMs}ms`)
     if (result.isMaxBuffer) throw new Error(`${command} output exceeds maxOutputBytes`)
     // A result without an exit code failed before the process ran; execa then always sets shortMessage.
-    if (result.exitCode === undefined) throw new Error(`gh could not start: ${String(result.shortMessage)}`)
+    if (result.exitCode === undefined) throw new GhUnavailableError(`gh could not start: ${String(result.shortMessage)}`)
     return { exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr }
   }
 }

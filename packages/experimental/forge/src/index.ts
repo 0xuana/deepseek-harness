@@ -7,7 +7,7 @@ import { changeRequestKey } from './keys.ts'
 import { nextPollDelay } from './schedule.ts'
 import type {
   ChangeRequestKey, ChangeRequestListener, ChangeRequestRef, ChangeRequestSnapshot, ChangeRequestUpdate, Config,
-  ForgeFailure, ForgeProvider, ForgeRepository,
+  ForgeFailure, ForgeProvider, ForgeReadiness, ForgeRepository,
 } from './types.ts'
 
 export { changeRequestKey } from './keys.ts'
@@ -151,6 +151,17 @@ export class ForgeService extends Service {
   }
 
   /**
+   * Report whether the provider can reach the repository's host with current credentials.
+   * @param repository - repository served by a registered provider.
+   * @param signal - cancellation for the probe.
+   * @returns the provider's readiness for the host.
+   * @throws when no provider serves the repository's forge.
+   */
+  async readiness(repository: ForgeRepository, signal: AbortSignal): Promise<ForgeReadiness> {
+    return await this.provider(repository.forge).readiness(repository.host, signal)
+  }
+
+  /**
    * Watch one change request as an effect on the calling fiber. The first
    * watcher starts polling at once; listeners receive every later result,
    * and `latest` returns the current one. Polling stops when the last watcher
@@ -179,6 +190,19 @@ export class ForgeService extends Service {
       }
     }, 'forge.watch()')
     return () => void dispose()
+  }
+
+  /**
+   * Poll a watched change request at once, including after a terminal state.
+   * A fetch already in flight for its forge serves the request; an unwatched
+   * change request is unchanged.
+   * @param ref - change request to poll.
+   */
+  refresh(ref: ChangeRequestRef): void {
+    const watch = this.watches.get(changeRequestKey(ref))
+    if (watch === undefined) return
+    watch.dueAt = Date.now()
+    this.schedule()
   }
 
   /**

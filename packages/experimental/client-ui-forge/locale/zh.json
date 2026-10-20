@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "PR 面板",
+    "description": "在侧栏标签页中显示会话的 Pull Request，并让新会话可以在工作树中开始。"
+  }
+}

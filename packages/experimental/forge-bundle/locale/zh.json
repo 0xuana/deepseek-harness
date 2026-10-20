@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "PR 与工作树",
+    "description": "跟踪每个会话创建的 Pull Request 及其检查与评审，新会话也可以在 Git 工作树中开始；GitHub 通过 gh 命令行访问"
+  }
+}

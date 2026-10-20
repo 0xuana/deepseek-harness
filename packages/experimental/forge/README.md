@@ -32,9 +32,9 @@ Mount the registry with at least one provider package, such as the GitHub provid
 - name: '@deepseek-ai/dsh-experimental-forge-github'
 ```
 
-`ctx.forge.register(provider)` is an effect on the calling fiber and returns its disposer. One provider serves one forge family; registering a second provider for the same family throws. `repositoryFromRemote(url)` and `changeRequestFromUrl(url)` ask providers in registration order and return the first match. `changeRequestUrl(ref)` and `findByHead(repository, branch, signal)` delegate to the provider of the reference's forge and throw when none is registered.
+`ctx.forge.register(provider)` is an effect on the calling fiber and returns its disposer. One provider serves one forge family; registering a second provider for the same family throws. `repositoryFromRemote(url)` and `changeRequestFromUrl(url)` ask providers in registration order and return the first match. `changeRequestUrl(ref)`, `findByHead(repository, branch, signal)`, and `readiness(repository, signal)` delegate to the provider of the reference's forge and throw when none is registered; `readiness` reports whether the provider can reach the host with current credentials.
 
-`ctx.forge.watch(ref, listener)` is also an effect. The first watcher of a change request polls it at once; `latest(ref)` returns the most recent result. Each forge has at most one fetch in flight, and that fetch includes every due change request of the forge. An open change request is polled every `activeIntervalMs` while checks are pending or mergeability is unknown, and every `idleIntervalMs` otherwise. Closed and merged change requests are not polled again. A failed read repeats after `activeIntervalMs` doubled for each consecutive failure, up to `maxBackoffMs`. A fetch that exceeds `fetchTimeoutMs` settles as an `unavailable` failure whose message names `FORGE_FETCH_TIMEOUT`. Unregistering a provider settles its watched change requests as `unavailable`. Polling stops when the last watcher leaves. The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-experimental-forge) lists the defaults.
+`ctx.forge.watch(ref, listener)` is also an effect. The first watcher of a change request polls it at once; `latest(ref)` returns the most recent result. Each forge has at most one fetch in flight, and that fetch includes every due change request of the forge. An open change request is polled every `activeIntervalMs` while checks are pending or mergeability is unknown, and every `idleIntervalMs` otherwise. Closed and merged change requests are not polled again. `refresh(ref)` polls a watched change request at once, including after a terminal state; a fetch already in flight for its forge serves the request. A failed read repeats after `activeIntervalMs` doubled for each consecutive failure, up to `maxBackoffMs`. A fetch that exceeds `fetchTimeoutMs` settles as an `unavailable` failure whose message names `FORGE_FETCH_TIMEOUT`. Unregistering a provider settles its watched change requests as `unavailable`. Polling stops when the last watcher leaves. The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-experimental-forge) lists the defaults.
 
 -----
 
@@ -80,7 +80,7 @@ None. No model request contains data from this package.
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **Polling only** — status reaches watchers on the next scheduled poll; there is no webhook intake, manual refresh, or provider readiness probe. Missing credentials appear as an `unauthenticated` failure after a fetch.
+- **Polling only** — status reaches watchers on the next scheduled poll or `refresh`; there is no webhook intake.
 - **Process-local results** — latest results live in memory and are lost on restart; the next watcher polls again.
 
 <a id="dev-note"></a>

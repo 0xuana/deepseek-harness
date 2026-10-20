@@ -42,6 +42,10 @@
     - button "查看 Computer Use": Computer Use
     - text: 目前仅支持 macOS，Windows 支持正在开发中。为已有及新建 PTC 会话加载 Computer Use。请切换到 PTC 模式来使用，并授予辅助功能和屏幕录制权限。
     - switch "启用 Computer Use"
+  - listitem:
+    - button "查看 PR 与工作树": PR 与工作树
+    - text: 实验性 跟踪每个会话创建的 Pull Request 及其检查与评审，新会话也可以在 Git 工作树中开始；GitHub 通过 gh 命令行访问
+    - switch "启用 PR 与工作树"
 - heading "已安装插件" [level=3]
 - list:
   - listitem:

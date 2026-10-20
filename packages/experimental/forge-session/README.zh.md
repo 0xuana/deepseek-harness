@@ -86,7 +86,7 @@ kind: "package-reference"
 
 - **按文本识别命令**——只有包含 `gh pr create`、`gh pr new` 或 `git push` 的 `bash` 与 `pwsh` 命令计入，也只有 `/pull/<number>` URL 会被绑定。脚本、别名、`gh api` 调用、`glab` 等其他 CLI 以及 `git push --porcelain` 输出都无法识别；这类变更请求需用 `track` 绑定。
 - **仅由推送触发发现**——最近一次推送之后在别处打开的变更请求，要等到下一次推送或 `track` 才会出现。
-- **只有宿主 API**——目前还没有客户端视图或模型工具读取这些绑定。
+- **没有模型工具**——模型目前还不能读取或修改绑定。
 - **按 Session 绑定**——subagent 的 Session 保有自己的绑定；父 Session 不会汇总它们。
 - **查找失败不可见**——查找失败只写入宿主日志；Session 与其监听方都看不到。
 

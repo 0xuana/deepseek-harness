@@ -1,9 +1,10 @@
-import { mkdir, readdir, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import { join, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import WorktreeService from '../src/index.ts'
+import type { RestoreWorktreeRequest } from '../src/index.ts'
 import { contents, git, harness, repository, testAgent } from './harness.ts'
 
 let ctx: Context | undefined
@@ -47,6 +48,20 @@ describe('creating and entering retained worktrees', () => {
     await ctx.workingDirectory.set(agent, root)
     expect(await git(root, 'rev-parse', 'topic')).toBe(baseCommit)
     expect(await contents(join(result.path, 'tracked.txt'))).toBe('initial\n')
+  })
+
+  it('reports the prepare stage, then the checkout stage, before each begins', async () => {
+    const root = await repo()
+    ctx = await harness(root)
+    const agent = testAgent(ctx, root)
+    const phases: string[] = []
+
+    const result = await ctx.worktrees.create(agent, { name: 'staged' }, undefined, (phase) => {
+      phases.push(`${phase}:${String(ctx?.workingDirectory.get(agent.session) === root)}`)
+    })
+
+    expect(phases).toEqual(['prepare:true', 'checkout:true'])
+    expect(ctx.workingDirectory.get(agent.session)).toBe(result.path)
   })
 
   it('uses current cwd for repository discovery and accepts an annotated local tag', async () => {
@@ -334,5 +349,141 @@ describe('creating and entering retained worktrees', () => {
     } finally {
       probe.mockRestore()
     }
+  })
+})
+
+describe('restoring removed worktrees', () => {
+  /** The checkout directories Git registers for `root`, in Git's notation. */
+  async function registered(root: string): Promise<string[]> {
+    return (await git(root, 'worktree', 'list', '--porcelain')).split('\n')
+      .filter(line => line.startsWith('worktree ')).map(line => line.slice('worktree '.length))
+  }
+
+  /** `path` in the notation Git prints. */
+  function gitPath(path: string): string {
+    return path.split(sep).join('/')
+  }
+
+  /** Commit one new file on the branch checked out at `checkout`. */
+  async function commitIn(checkout: string, file: string): Promise<string> {
+    await writeFile(join(checkout, file), `${file}\n`)
+    await git(checkout, 'add', file)
+    await git(checkout, 'commit', '-m', file)
+    return await git(checkout, 'rev-parse', 'HEAD')
+  }
+
+  it('checks the branch out again at its latest commit after pruning stale registrations, without entering the checkout', async () => {
+    const root = await repo()
+    ctx = await harness(root)
+    const agent = testAgent(ctx, root)
+    const created = await ctx.worktrees.create(agent, { name: 'topic' })
+    const tip = await commitIn(created.path, 'later.txt')
+    const abandoned = await ctx.worktrees.create(testAgent(ctx, root, 'abandoned'), { name: 'abandoned' })
+    await ctx.workingDirectory.set(agent, root)
+    await rm(created.path, { recursive: true, force: true })
+    await rm(abandoned.path, { recursive: true, force: true })
+
+    const restored = await ctx.worktrees.restore(agent, created)
+
+    expect(restored).toEqual({ path: created.path, branchRecreated: false })
+    expect(await git(created.path, 'symbolic-ref', '--short', 'HEAD')).toBe('topic')
+    expect(await git(created.path, 'rev-parse', 'HEAD')).toBe(tip)
+    expect(await contents(join(created.path, 'later.txt'))).toBe('later.txt\n')
+    expect(await git(created.path, 'status', '--porcelain')).toBe('')
+    expect(await registered(root)).toEqual([gitPath(root), gitPath(created.path)])
+    expect(await git(root, 'branch', '--list', 'abandoned')).toContain('abandoned')
+    expect(ctx.workingDirectory.get(agent.session)).toBe(root)
+  })
+
+  it('creates a deleted branch again at its base commit, without the commits it had gained', async () => {
+    const root = await repo()
+    ctx = await harness(root)
+    const agent = testAgent(ctx, root)
+    const created = await ctx.worktrees.create(agent, { name: 'topic' })
+    await commitIn(created.path, 'later.txt')
+    await commitIn(root, 'advanced.txt')
+    await git(root, 'worktree', 'remove', '--force', created.path)
+    await git(root, 'branch', '-D', 'topic')
+
+    const restored = await ctx.worktrees.restore(agent, created)
+
+    expect(restored).toEqual({ path: created.path, branchRecreated: true })
+    expect(await git(root, 'rev-parse', 'topic')).toBe(created.baseCommit)
+    expect(await git(created.path, 'symbolic-ref', '--short', 'HEAD')).toBe('topic')
+    expect(await contents(join(created.path, 'tracked.txt'))).toBe('initial\n')
+    await expect(access(join(created.path, 'later.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(access(join(created.path, 'advanced.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(ctx.workingDirectory.get(agent.session)).toBe(created.path)
+  })
+
+  it('refuses a directory that exists before running any command', async () => {
+    const root = await repo()
+    ctx = await harness(root)
+    const agent = testAgent(ctx, root)
+    const created = await ctx.worktrees.create(agent, { name: 'topic' })
+    const spawn = vi.spyOn(ctx.subprocess, 'spawn')
+
+    await expect(ctx.worktrees.restore(agent, created)).rejects.toThrow(`worktree path already exists: ${created.path}`)
+
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
+  it('names the branch and directory of a failed checkout and retains what it allocated', async () => {
+    const root = await repo()
+    ctx = await harness(root)
+    const agent = testAgent(ctx, root)
+    const path = join(root, '.agents/worktrees/vanished')
+    const request: RestoreWorktreeRequest = { path, branch: 'vanished', baseCommit: 'f'.repeat(40), repositoryRoot: root }
+    const commandFailure: unknown = expect.stringMatching(/^worktree command failed \(128\): fatal: /)
+    const cause: unknown = expect.objectContaining({ message: commandFailure })
+
+    const failure = ctx.worktrees.restore(agent, request)
+
+    await expect(failure).rejects.toThrow(`Could not restore worktree vanished at ${path}. Any created checkout and branch are retained. `
+      + 'worktree command failed (128): fatal: ')
+    await expect(failure).rejects.toMatchObject({ cause })
+    expect(await readdir(path)).toEqual([])
+    expect(await git(root, 'branch', '--list', 'vanished')).toBe('')
+    expect(ctx.workingDirectory.get(agent.session)).toBe(root)
+  })
+
+  it('retains a caller cancellation reason when restoration is cancelled before its allocation starts', async () => {
+    const root = await repo()
+    ctx = await harness(root)
+    const agent = testAgent(ctx, root)
+    const created = await ctx.worktrees.create(agent, { name: 'topic' })
+    await rm(created.path, { recursive: true, force: true })
+    const controller = new AbortController()
+    const resolveExecutable = ctx.subprocess.resolveExecutable.bind(ctx.subprocess)
+    const probe = vi.spyOn(ctx.subprocess, 'resolveExecutable').mockImplementation(async (command, env, signal) => {
+      if (command === 'node') controller.abort('caller stopped')
+      return resolveExecutable(command, env, signal)
+    })
+    try {
+      await expect(ctx.worktrees.restore(agent, created, controller.signal))
+        .rejects.toThrow(`Could not restore worktree topic at ${created.path}. Any created checkout and branch are retained. caller stopped`)
+      await expect(access(created.path)).rejects.toMatchObject({ code: 'ENOENT' })
+    } finally {
+      probe.mockRestore()
+    }
+  })
+
+  it('rejects a cancelled restoration, and every restoration after service disposal, before running any command', async () => {
+    const root = await repo()
+    ctx = await harness(root)
+    const agent = testAgent(ctx, root)
+    const request: RestoreWorktreeRequest = {
+      path: join(root, '.agents/worktrees/topic'), branch: 'topic', baseCommit: await git(root, 'rev-parse', 'HEAD'), repositoryRoot: root,
+    }
+    const service = ctx.worktrees
+    const [fiber] = [...ctx.registry.get(WorktreeService)!.fibers]
+    const spawn = vi.spyOn(ctx.subprocess, 'spawn')
+
+    await expect(service.restore(agent, request, AbortSignal.abort(new Error('cancelled')))).rejects.toThrow('cancelled')
+    await fiber!.dispose()
+    await expect(service.restore(agent, request)).rejects.toThrow('worktree service disposed')
+
+    expect(spawn).not.toHaveBeenCalled()
+    expect(await readdir(root)).toEqual(['.git', 'tracked.txt'])
   })
 })
