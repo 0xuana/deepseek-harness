@@ -55,7 +55,8 @@ export const InputBar = memo(function InputBar({
 }: InputBarProps) {
   const input = useInput(s => s)
   const notice = useNotices(s => s)
-  const acceptsFiles = useFileIntake(allowed => allowed)
+  // An optional seat means this bar cannot prove live intake permission; offer no file controls then.
+  const acceptsFiles = useFileIntake?.(allowed => allowed) ?? false
   const busyEnter = useBusyEnter(s => s)
   const stopKeys = useStopShortcut(keys => keys)
   // A page whose access snapshot excludes prompting or stopping this Session is offered no Send or
