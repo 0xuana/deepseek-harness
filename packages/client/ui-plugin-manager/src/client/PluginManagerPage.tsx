@@ -411,13 +411,19 @@ function EnableSwitch({ pkg, title, t, busy, onSetEnabled }: {
   readonly onSetEnabled: (enabled: boolean) => void
 }): ReactNode {
   return (
-    <Switch
-      checked={pkg.enabled}
-      label={t('enableToggle', { name: title })}
-      disabled={busy || pkg.readOnlyReason !== undefined || (!pkg.enabled && pkg.error !== undefined && !(pkg.availability === 'missing' && pkg.installTarget !== undefined))}
-      {...pkg.readOnlyReason === undefined ? {} : { title: managementText({ code: pkg.readOnlyReason }, t) }}
-      onChange={onSetEnabled}
-    />
+    <span className={css.bundleToggle}>
+      <span className={css.toggleProgress} role={busy ? 'status' : undefined}
+        aria-label={busy ? t('applyingChange', { name: title }) : undefined}>
+        {busy ? <StateDot state="ongoing" /> : null}
+      </span>
+      <Switch
+        checked={pkg.enabled}
+        label={t('enableToggle', { name: title })}
+        disabled={busy || pkg.readOnlyReason !== undefined || (!pkg.enabled && pkg.error !== undefined && !(pkg.availability === 'missing' && pkg.installTarget !== undefined))}
+        {...pkg.readOnlyReason === undefined ? {} : { title: managementText({ code: pkg.readOnlyReason }, t) }}
+        onChange={onSetEnabled}
+      />
+    </span>
   )
 }
 
@@ -795,7 +801,7 @@ function PackageDetail({
         {configured
           ? (
             <section className={css.detailSection} data-plugin-config>
-              {renderSlot('plugins.bundle.config', { view: 'page' }, { entryKey: pkg.name })}
+              {renderSlot('plugins.bundle.config', { view: 'page', busy }, { entryKey: pkg.name })}
             </section>
           )
           : null}

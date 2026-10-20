@@ -2345,6 +2345,28 @@ describe('PluginManagerPage', () => {
   })
 })
 
+it.each([false, true])('shows progress only for the changing bundle and clears it when settled (enabled=%s)', (enabled) => {
+  const name = 'dsh-better-sidebar'
+  const { set, setLanguage, actions } = renderTab({ packages: [pkg({ enabled }), pkg({ name: 'dsh-other' })] })
+  const toggle = screen.getByRole('switch', { name: `Enable ${name}` })
+  expect(screen.queryByRole('status')).toBeNull()
+  fireEvent.click(toggle)
+  expect(actions.setEnabled).toHaveBeenCalledExactlyOnceWith(name, !enabled)
+  set({ busy: [name] })
+  for (const dict of [en, zh]) {
+    setLanguage(dict)
+    const status = screen.getByRole('status', { name: dict.applyingChange.replace('{name}', name) })
+    expect(status.querySelector('[data-state="ongoing"]')).not.toBeNull()
+  }
+  expect(toggle).toHaveProperty('disabled', true)
+  fireEvent.click(toggle)
+  expect(actions.setEnabled).toHaveBeenCalledOnce()
+  expect(screen.getByRole('switch', { name: '启用 dsh-other' })).toHaveProperty('disabled', false)
+  set({ busy: [] })
+  expect(screen.queryByRole('status')).toBeNull()
+  expect(toggle).toHaveProperty('disabled', false)
+})
+
 it.each([false, true])('opens activation guidance details and returns to the originating list (experimental: %s)', (fromMore) => {
   const name = fromMore ? '@deepseek-ai/dsh-experimental-terminal-bundle' : 'dsh-better-sidebar'
   const bundle = pkg({ name, official: fromMore })
@@ -2525,6 +2547,21 @@ describe('on-demand Official bundles', () => {
     expect(within(detail).queryByRole('button', { name: en.uninstallLabel.replace('{name}', title) })).toBeNull()
     expect(detail.querySelector('[data-plugin-rows]')).toBeNull()
   })
+})
+
+it('keeps bundle configuration mounted while reporting its pending operation', () => {
+  const name = 'dsh-better-sidebar'
+  const { set } = renderTab({ packages: [pkg()] }, { bundles: new Set([name]) }, {
+    [`plugins.bundle.config:${name}`]: (_view, owner) => <div data-testid="bundle-config">{String((owner as { busy?: boolean }).busy)}</div>,
+  })
+  fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', name) }))
+  const panel = screen.getByTestId('bundle-config')
+  expect(panel.textContent).toBe('false')
+  set({ busy: [name] })
+  expect(screen.getByTestId('bundle-config')).toBe(panel)
+  expect(panel.textContent).toBe('true')
+  set({ busy: [] })
+  expect(panel.textContent).toBe('false')
 })
 
 describe('registry versions and updates', () => {
