@@ -1304,7 +1304,7 @@ describe('Weighted approval workflow', () => {
     expect(revokeIndex).toBeLessThan(setupIndex)
     expect(steps[revokeIndex]?.run).toBe('node .github/review-ownership/check-approval.mjs revoke')
     expect(steps.at(-1)).toMatchObject({
-      if: "failure() || (cancelled() && steps.publish.outcome != 'success')",
+      if: "(failure() || cancelled()) && steps.publish.outputs.concluded == ''",
       run: 'node .github/review-ownership/check-approval.mjs failure',
     })
     const pythonJob = workflowJob(loadWorkflow('.github/workflows/ci.yml'), 'python-sdk')

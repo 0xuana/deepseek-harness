@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import test from 'node:test'
 
 import {
@@ -531,24 +533,42 @@ test('updates the head\'s GitHub Actions decision check run instead of creating 
   }
 })
 
-test('setup failure keeps the evaluation failure title published for the same run', async () => {
-  const calls = []
-  const checkRuns = [
-    { id: 7, app: { slug: 'github-actions' }, conclusion: 'failure', details_url: 'https://github.example/run/1' },
-    { id: 8, app: { slug: 'github-actions' }, conclusion: 'failure', details_url: 'https://github.example/old-run' },
-    { id: 9, app: { slug: 'github-actions' }, conclusion: 'action_required', details_url: 'https://github.example/run/1' },
-  ]
-  await publishApprovalPhase({
-    event: pullRequestEvent(), runUrl: 'https://github.example/run/1', phase: 'failure',
-    api: async (path, options) => {
-      if (!isCheckRunsList(path)) calls.push({ path, method: options?.method })
-      return isCheckRunsList(path) ? { total_count: checkRuns.length, check_runs: checkRuns } : {}
-    },
-  })
-  assert.deepEqual(calls, [
-    { path: '/repos/deepseek-harness/deepseek-harness/check-runs/8', method: 'PATCH' },
-    { path: '/repos/deepseek-harness/deepseek-harness/check-runs/9', method: 'PATCH' },
-  ])
+test('records the concluded decision so the failure step never replaces it', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'approval-output-'))
+  const output = join(directory, 'output')
+  writeFileSync(output, '')
+  const previous = process.env.GITHUB_OUTPUT
+  process.env.GITHUB_OUTPUT = output
+  const api = async (path, options) => {
+    if (isCheckRunsList(path)) return emptyCheckRuns
+    if (path.includes('/reviews?')) return [review('turtle2099', 'APPROVED')]
+    if (path.includes('/permission')) return { permission: 'write' }
+    if (path.includes('/comments?')) return []
+    assert.match(path, /\/check-runs$/u)
+    return {}
+  }
+  try {
+    await runApprovalCheck({
+      event: pullRequestEvent(), policySource, runUrl: 'https://github.example/run/1', api, write: () => {},
+    })
+    assert.match(readFileSync(output, 'utf8'), /^concluded=success$/mu)
+    writeFileSync(output, '')
+    await assert.rejects(runApprovalCheck({
+      event: pullRequestEvent(), policySource, runUrl: 'https://github.example/run/2', write: () => {},
+      getMergedCount: async () => { throw new Error('history unavailable') },
+      api: async path => {
+        if (isCheckRunsList(path)) return emptyCheckRuns
+        if (path.includes('/reviews?')) return []
+        if (path.includes('/comments?')) return []
+        return {}
+      },
+    }), /history unavailable/u)
+    assert.match(readFileSync(output, 'utf8'), /^concluded=failure$/mu)
+  } finally {
+    if (previous === undefined) delete process.env.GITHUB_OUTPUT
+    else process.env.GITHUB_OUTPUT = previous
+    rmSync(directory, { recursive: true, force: true })
+  }
 })
 
 for (const [mergedCount, credit] of [[0, 0], [1, 0.011], [50, 0.55], [99, 1.089], [100, 1.1], [101, 1.1], [200, 1.1]]) {

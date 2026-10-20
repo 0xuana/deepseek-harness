@@ -22,15 +22,15 @@ commit status 只提供 `pending`、`success`、`failure` 和 `error`。`pending
 | 已 ready、达到阈值且没有阻塞性评审 | `completed`，conclusion 为 `success` |
 | 安装、评估或取消导致的失败 | `completed`，conclusion 为 `failure` |
 
-已经到达 `completed` 的 check run 不会再回到 `in_progress` 或 `queued`：GitHub 对该更新返回 `200`，但让 run 保持已完成，因此只有 conclusion 可变。publisher 因此在依赖安装前用阻塞性 conclusion 撤销已发布的成功，覆盖冷启动中占主要耗时的安装与历史拉取。同一 head 上只保留一个同名 GitHub Actions run：publisher 更新 head 上已有的 run，仅在不存在时创建一个。列表不完整或 run 没有有效 ID 时发布失败。决策已发布后被取消的 run 保留该决策；其余失败或被取消的 run 都以 `failure` 结束。
+已经到达 `completed` 的 check run 不会再回到 `in_progress` 或 `queued`：GitHub 对该更新返回 `200`，但让 run 保持已完成，因此只有 conclusion 可变。publisher 因此在依赖安装前用阻塞性 conclusion 撤销已发布的成功，覆盖冷启动中占主要耗时的安装与历史拉取。同一 head 上只保留一个同名 GitHub Actions run：publisher 更新 head 上已有的 run，仅在不存在时创建一个。列表不完整或 run 没有有效 ID 时发布失败。publish 步骤把自己写入的 conclusion 记录到 step output，安装失败步骤只在该 output 未记录时运行：已发布的决策在之后的失败或取消中保留，而在该写入之前被取消的 run 以 `failure` 结束。重新评估期间，先前的 conclusion 与标题会一直显示到新决策写入为止。
 
 阻塞性评审的优先级高于点数总和，因此即使计入的批准已经达到阈值，conclusion 仍为 `action_required`。GitHub 只接受 `success`、`neutral` 和 `skipped` 作为必需检查的通过结果，因此 `action_required` 会阻止合并，同时让该检查处于完成状态。
 
 ## 验证
 
-[批准策略测试](../../../../.github/review-ownership/check-approval.test.mjs)锁定已达到阈值但仍有 blocker 的场景、准确发布的 check run payload、通过 conclusion 撤销已发布的成功、更新已有 run 而不是另建一个、安装失败步骤跟在评估失败之后时保留该标题，以及无效的列表响应。[工作流测试](../../../../scripts/ci-workflow.spec.ts)锁定 `checks: write` 权限、`revoke` 和 `failure` 阶段命令、publish 步骤的身份，以及运行失败或在发布前被取消时执行的兜底步骤。
+[批准策略测试](../../../../.github/review-ownership/check-approval.test.mjs)锁定已达到阈值但仍有 blocker 的场景、准确发布的 check run payload、通过 conclusion 撤销已发布的成功、更新已有 run 而不是另建一个、记录安装失败步骤所读的 conclusion，以及无效的列表响应。[工作流测试](../../../../scripts/ci-workflow.spec.ts)锁定 `checks: write` 权限、`revoke` 和 `failure` 阶段命令、publish 步骤的身份，以及运行失败或在发布前被取消时执行的兜底步骤。
 
-转换矩阵与该兜底条件于 2026-09-30 在本仓库用一次性 tag 运行实测，使用的是与 publisher 相同的 GitHub Actions token。以 `in_progress` 创建、以 `success` 完成的 run，接受 `status: in_progress` 和 `status: queued` 的更新时都返回 `200` 并保持 `completed`；只改 conclusion 的更新把它依次改为 `action_required`、`success` 和 `failure`。兜底步骤在发布失败以及在发布步骤执行期间被取消时运行，而在决策发布之后才取消 job 时不运行。
+转换矩阵与该兜底条件于 2026-09-30 在本仓库用一次性 tag 运行实测，使用的是与 publisher 相同的 GitHub Actions token。以 `in_progress` 创建、以 `success` 完成的 run，接受 `status: in_progress` 和 `status: queued` 的更新时都返回 `200` 并保持 `completed`；只改 conclusion 的更新把它依次改为 `action_required`、`success` 和 `failure`。兜底步骤在发布失败以及在发布步骤执行期间被取消时运行，而在决策发布之后才取消 job 时不运行。`timeout-minutes` 取消路径于 2026-10-20 单独实测：一个在一次性 `push` 分支上超过一分钟超时的 job 仍然执行了 `cancelled()` 步骤，因此安装失败步骤在该路径上同样会运行。
 
 列表响应中的 `total_count` 统计的是经 `check_name` 过滤后的 run，而不是该 head 上的全部检查：2026-10-20 实测，一个带有 33 个 check run 的 head，对不匹配任何 run 的名称返回 `total_count` 0，对已存在的名称返回 2，因此用 `total_count` 与返回数组长度相等来拒绝被截断的分页是有效的。
 
@@ -56,4 +56,4 @@ commit status 只提供 `pending`、`success`、`failure` 和 `error`。`pending
 
 重新评估已经发布 `success` 的 head 时，在新决策写入前会报告 `action_required`，因此在该窗口内轮询的监视工具会看到失败的检查。
 
-分支规则切换后，对切换以来 publisher 尚未评估过的 head 存在两个缺口。没有该决策 check run 的 head 会把必需检查报告为 expected，直到一次 push、一次评审，或重跑其最新的 publisher run 创建它。同时也带有先前 `weighted approval` commit status 的 head 会一直保留那个 pending status 直到同一事件：combined status 对每个 context 取最新的 status，因此 rollout 对每个开放 head 发布该 context 的终态 `success` status，而不是等它下一次 push。
+分支规则切换后，对切换以来 publisher 尚未评估过的 head 存在两个缺口。没有该决策 check run 的 head 会把必需检查报告为 expected，直到下一次 publisher 事件创建它；重跑切换前的 run 不能完成迁移，因为重跑会回放该 run 当时的 workflow 文件，而它调用的 `pending` 阶段已被新脚本拒绝。2026-10-20 对切换前 run 的重跑执行的是切换前的步骤名，没有写入 check run。同时也带有先前 `weighted approval` commit status 的 head 会一直保留那个 pending status 直到同一事件：combined status 对每个 context 取最新的 status，因此 rollout 对每个开放 head 发布该 context 的终态 `success` status，而不是等它下一次 push。

@@ -59,10 +59,11 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: node .github/review-ownership/check-approval.mjs
-      # A failed or cancelled run must not leave an earlier conclusion standing. A job cancelled
-      # after the decision was published keeps that decision instead of overwriting it with failure.
+      # A failed or cancelled run must not leave an earlier conclusion standing. The publish step
+      # records the conclusion it wrote, so a decision already published survives a later failure or
+      # cancellation, and a cancelled publish step that wrote nothing still concludes failure.
       - name: Publish approval setup failure
-        if: failure() || (cancelled() && steps.publish.outcome != 'success')
+        if: (failure() || cancelled()) && steps.publish.outputs.concluded == ''
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

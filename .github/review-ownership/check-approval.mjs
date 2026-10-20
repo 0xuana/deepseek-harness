@@ -331,6 +331,7 @@ export async function runApprovalCheck({ event, policySource, api, runUrl, getOw
     }
   } catch (error) {
     await publishCheck(api, pull, 'failure', 'Approval evaluation failed.', runUrl)
+    recordConclusion('failure')
     throw error
   }
   write(result.authorCredit
@@ -342,6 +343,7 @@ export async function runApprovalCheck({ event, policySource, api, runUrl, getOw
   writeList(write, 'Blocking change requests', result.blockers.map(login => `@${login}`))
   writeList(write, 'Ignored reviewers without write access', result.ignoredReviewers.map(login => `@${login}`))
   await publishCheck(api, pull, result.state, result.description, runUrl)
+  recordConclusion(result.state)
   write(`Published ${JSON.stringify(CHECK_NAME)} check run ${JSON.stringify(result.state)}.`)
   try {
     await requestDelegatedReviews(result, api, write)
@@ -359,12 +361,7 @@ export async function runApprovalCheck({ event, policySource, api, runUrl, getOw
 export async function publishApprovalPhase({ event, api, runUrl, phase }) {
   const pull = pullRequestFromEvent(event)
   if (phase === 'revoke') return revokeApproval(api, pull, runUrl)
-  // The setup-failure step runs after an evaluation failure already concluded this run as failure
-  // with a title that names what failed; keep that write instead of replacing its title.
-  if (phase === 'failure') {
-    return publishCheck(api, pull, 'failure', 'Approval setup or evaluation failed.', runUrl,
-      run => run.conclusion === 'failure' && run.details_url === runUrl)
-  }
+  if (phase === 'failure') return publishCheck(api, pull, 'failure', 'Approval setup or evaluation failed.', runUrl)
   throw new Error('invalid approval setup phase')
 }
 
@@ -474,7 +471,7 @@ async function reviewerPermission(api, repository, login) {
 
 // One decision per head keeps branch rules and CI watchers unambiguous; the head's existing GitHub
 // Actions run is updated and a run is created only when none exists.
-async function publishCheck(api, pull, conclusion, title, runUrl, keep = () => false) {
+async function publishCheck(api, pull, conclusion, title, runUrl) {
   requireHttpsRunUrl(runUrl)
   const body = { status: 'completed', conclusion, details_url: runUrl, output: { title, summary: `${title} [Workflow run](${runUrl})` } }
   const runs = await decisionRuns(api, pull)
@@ -482,10 +479,9 @@ async function publishCheck(api, pull, conclusion, title, runUrl, keep = () => f
     await api(`/repos/${pull.repository}/check-runs`, { method: 'POST', body: { name: CHECK_NAME, head_sha: pull.headSha, ...body } })
     return
   }
-  for (const run of runs) {
-    if (!Number.isSafeInteger(run.id)) throw new Error('check run has no valid id')
-    if (keep(run)) continue
-    await api(`/repos/${pull.repository}/check-runs/${run.id}`, { method: 'PATCH', body })
+  for (const { id } of runs) {
+    if (!Number.isSafeInteger(id)) throw new Error('check run has no valid id')
+    await api(`/repos/${pull.repository}/check-runs/${id}`, { method: 'PATCH', body })
   }
 }
 
@@ -505,7 +501,8 @@ async function revokeApproval(api, pull, runUrl) {
   }
   for (const { id, conclusion } of runs) {
     if (!Number.isSafeInteger(id)) throw new Error('check run has no valid id')
-    // Only a published success satisfies the branch rule; every other conclusion already blocks it.
+    // This publisher concludes a run success only when the policy is met, so a published success is
+    // the only conclusion here that satisfies the branch rule; it never writes neutral or skipped.
     if (conclusion !== 'success') continue
     await api(`/repos/${pull.repository}/check-runs/${id}`, {
       method: 'PATCH',
@@ -522,6 +519,12 @@ async function decisionRuns(api, pull) {
     throw new Error('check-run list response is invalid or incomplete')
   }
   return listed.check_runs.filter(run => isRecord(run) && isRecord(run.app) && run.app.slug === 'github-actions')
+}
+
+// The setup-failure step reads this output so it replaces a conclusion only when this run did not
+// already publish one; a cancelled run cannot rely on the step outcome for that distinction.
+function recordConclusion(conclusion) {
+  if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `concluded=${conclusion}\n`)
 }
 
 function requireHttpsRunUrl(runUrl) {
