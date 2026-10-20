@@ -53,7 +53,7 @@ it.each([undefined, 'minimal'] as const)('adds CUA to PTC sessions while preserv
     expect(await card.getByText('实验性', { exact: true }).count()).toBe(1)
     const toggle = card.getByRole('switch', { name: '启用 Computer Use', exact: true })
     expect(await toggle.getAttribute('aria-checked')).toBe('false')
-    expect(await card.textContent()).toContain('请切换到 PTC 模式')
+    expect(await card.textContent()).toContain('需切换到 PTC 模式')
     // Bundle transitions await native cleanup under the browser action deadline.
     await toggle.click()
     await toggle.and(page.locator('[aria-checked="true"]')).waitFor({ state: 'visible' })
