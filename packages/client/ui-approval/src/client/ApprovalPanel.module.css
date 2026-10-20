@@ -64,6 +64,6 @@
   .reject:hover:not(:disabled) {
     background: var(--dsw-alias-interactive-bg-hover-danger);
     color: var(--dsw-alias-state-error-primary);
-    border-color: transparent;
+    --dsh-button-outline-color: transparent;
   }
 }
