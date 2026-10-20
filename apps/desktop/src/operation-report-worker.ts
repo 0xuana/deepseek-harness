@@ -11,5 +11,13 @@ const input = z.object({
     repairedSegments: z.number().int().nonnegative(), queuedBytes: z.number().int().nonnegative(), disabled: z.boolean() }).nullable(),
 }).parse(workerData)
 
-const appended = await appendOperationReport(input.reportPath, input.directory, input.limits, new AbortController().signal, input.journal)
-parentPort?.postMessage(appended)
+const cancellation = new AbortController()
+const cancel = (message: unknown): void => { if (message === 'cancel') cancellation.abort() }
+parentPort?.on('message', cancel)
+try {
+  const appended = await appendOperationReport(input.reportPath, input.directory, input.limits, cancellation.signal, input.journal)
+  parentPort?.postMessage(appended)
+} finally {
+  parentPort?.off('message', cancel)
+  parentPort?.close()
+}

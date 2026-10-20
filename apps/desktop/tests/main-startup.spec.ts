@@ -20,7 +20,7 @@ type InvokeEvent = { sender?: unknown; senderFrame: { url: string } }
 type InvokeHandler = (event: InvokeEvent, ...args: unknown[]) => unknown
 
 vi.mock('../src/web-document.ts', () => ({ authenticateWebHost: async () => 'test-cookie', serveWebDocument: vi.fn(), forwardWebRequest: vi.fn() }))
-vi.mock('../src/operation-report-job.ts', () => ({ runOperationReportJob: vi.fn(async () => ({ appended: false, timedOut: false })) }))
+vi.mock('../src/operation-report-job.ts', () => ({ runOperationReportJob: vi.fn(async () => ({ appended: false, timedOut: false, cancelled: false })) }))
 // Report persistence has its own unit tests; here it resolves within microtasks so the fatal
 // dialog never outlives the test that triggered it.
 vi.mock('../src/crash-report.ts', async importOriginal => ({
@@ -2176,7 +2176,7 @@ describe('desktop main startup', () => {
     expect(runOperationReportJob).toHaveBeenCalledWith({
       reportPath: 'desktop-test-logs/crash-test.log', directory: join(harness.app.getPath('userData'), 'plugin-operations'),
       limits: { bytes: 65536, recordBytes: 4096, records: 100, outputBytes: 65536 }, journal: null,
-    }, 500)
+    }, { timeoutMs: 500, cancellationGraceMs: 100 }, expect.any(AbortSignal))
     expect((harness.dialog.showMessageBox.mock.calls[0]![0] as MessageBoxOptions).detail).toContain('profile has no cordis.yml')
   })
 
@@ -2211,7 +2211,14 @@ describe('desktop main startup', () => {
     await harness.quitCompleted.promise
   })
 
-  it.each([0, 1, 2])('waits for Host exit before recovery action %s', async (response) => {
+  it.each([{ response: 0, stuck: false }, { response: 1, stuck: false }, { response: 2, stuck: false },
+    { response: 0, stuck: true }])('waits for Host exit and bounds Worker cleanup for recovery $response (stuck=$stuck)', async ({ response, stuck }) => {
+    let finishReport!: (result: { appended: boolean; timedOut: boolean; cancelled: boolean }) => void
+    let reportSignal: AbortSignal | undefined
+    vi.mocked(runOperationReportJob).mockImplementationOnce(async (_input, _options, signal) => {
+      reportSignal = signal
+      return new Promise((resolve) => { finishReport = resolve })
+    })
     harness.dialog.showMessageBox.mockResolvedValue({ response, checkboxChecked: false })
     await import('../src/main.ts')
     await harness.preparing.promise
@@ -2225,7 +2232,16 @@ describe('desktop main startup', () => {
     expect(harness.app.relaunch).not.toHaveBeenCalled()
     expect(harness.disableAllPlugins).not.toHaveBeenCalled()
     host.exited.resolve()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(reportSignal?.aborted).toBe(true)
+    expect(harness.app.quit).not.toHaveBeenCalled()
+    if (stuck) await vi.advanceTimersByTimeAsync(500)
+    else finishReport({ appended: false, timedOut: false, cancelled: true })
     await harness.quitCompleted.promise
+    if (stuck) {
+      expect(console.error).toHaveBeenCalledWith('dsh desktop: operation report Worker has not exited; continuing shutdown')
+      finishReport({ appended: false, timedOut: false, cancelled: true })
+    }
     expect(harness.app.relaunch).toHaveBeenCalledTimes(response === 0 ? 0 : 1)
     expect(harness.disableAllPlugins).toHaveBeenCalledTimes(response === 2 ? 1 : 0)
     if (response === 2) {

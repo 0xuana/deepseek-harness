@@ -1,6 +1,7 @@
 /** Bounded, cancellable reads of Desktop-owned plugin operation history. */
 import { open } from 'node:fs/promises'
 import { join } from 'node:path'
+import { setImmediate } from 'node:timers/promises'
 import { parsePluginOperationRecord, type PluginOperationRecord } from '@deepseek-ai/dsh-plugin-manager/diagnostic'
 
 /** Resource budgets for auxiliary history collection, independent of basic crash report writing. */
@@ -24,7 +25,8 @@ export interface OperationHistoryReadResult {
 
 /**
  * Read only the bounded tails of the two owned history files, newest segment first.
- * Cancellation stops subsequent I/O and parsing; an already-issued OS read must settle before its handle closes.
+ * Cancellation is observed between bounded records after yielding to Worker messages and stops subsequent I/O and parsing.
+ * An already-issued OS read must settle before its handle closes.
  * @param directory - Desktop's operation history directory; unrelated files are never enumerated.
  * @param limits - Positive byte, record-size and record-count budgets.
  * @param signal - Caller-owned collection deadline or shutdown cancellation.
@@ -36,6 +38,7 @@ export async function readOperationHistory(
   if (![limits.bytes, limits.recordBytes, limits.records].every(value => Number.isSafeInteger(value) && value > 0)) {
     throw new RangeError('Operation history budgets must be positive safe integers')
   }
+  await setImmediate()
   const cancelled = (): boolean => signal.aborted
   const records: PluginOperationRecord[] = []
   let bytesRead = 0
@@ -72,6 +75,8 @@ export async function readOperationHistory(
       let end = buffer.lastIndexOf(10, offset - 1)
       if (end !== offset - 1) truncated = true
       while (end >= 0 && records.length < limits.records && !cancelled()) {
+        await setImmediate()
+        if (cancelled()) break
         const preceding = end === 0 ? -1 : buffer.lastIndexOf(10, end - 1)
         if (preceding < 0 && start > 0) { truncated = true; break }
         const size = end - preceding - 1

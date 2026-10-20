@@ -1,5 +1,6 @@
 /** Best-effort operation history appended only after the independent basic report exists. */
 import { writeFile } from 'node:fs/promises'
+import { setImmediate } from 'node:timers/promises'
 import { readOperationHistory, type OperationHistoryReadLimits } from './operation-history.ts'
 import type { OperationJournalStatus } from './operation-journal.ts'
 
@@ -24,8 +25,9 @@ export async function appendOperationReport(
 ): Promise<boolean> {
   try {
     if (!Number.isSafeInteger(limits.outputBytes) || limits.outputBytes < 1) return false
+    const cancelled = (): boolean => signal.aborted
     const history = await readOperationHistory(directory, limits, signal)
-    if (signal.aborted) return false
+    if (cancelled()) return false
     const { records, ...facts } = history
     const header = (omitted: number): string => '\n--- recent plugin operations (context, not proof of cause) ---\n'
       + JSON.stringify({ journal, ...facts, outputRecordsOmitted: omitted }).slice(0, -1) + ',"records":['
@@ -34,6 +36,8 @@ export async function appendOperationReport(
     if (bytes > limits.outputBytes) return false
     const retained: string[] = []
     for (const record of records) {
+      await setImmediate()
+      if (cancelled()) return false
       const encoded = JSON.stringify(record)
       const addition = Buffer.byteLength(encoded) + (retained.length === 0 ? 0 : 1)
       if (bytes + addition > limits.outputBytes) break
@@ -41,6 +45,8 @@ export async function appendOperationReport(
       bytes += addition
     }
     const section = header(records.length - retained.length) + retained.join(',') + footer
+    await setImmediate()
+    if (cancelled()) return false
     await writeFile(reportPath, section, { flag: 'a', signal })
     return true
   } catch (_error) {

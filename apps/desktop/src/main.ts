@@ -66,7 +66,7 @@ import { DesktopTray } from './tray.ts'
 import { DesktopBackgroundNotice } from './background-notice.ts'
 
 let focusPrimaryWindow = (): void => {}
-let stopForRecovery = async (): Promise<void> => {}
+let stopForRecovery = async (): Promise<void> => { await stopOperationReports() }
 let shuttingDown = false
 /**
  * Set by quit entries that must not ask: crash recovery exit and restart, and the
@@ -112,11 +112,34 @@ const recovery = new DesktopFatalRecovery({
 
 let operationJournal: OperationJournal | undefined
 let operationReportJob: Promise<OperationReportJobResult> | undefined
+let operationReportAbort: AbortController | undefined
+let operationReportsStopping = false
+let operationReportStop: Promise<void> | undefined
+
+/** Bound application shutdown waiting without claiming that an unresponsive Worker has exited. */
+function stopOperationReports(): Promise<void> {
+  operationReportStop ??= waitForOperationReports()
+  return operationReportStop
+}
+
+async function waitForOperationReports(): Promise<void> {
+  operationReportsStopping = true
+  operationReportAbort?.abort()
+  const job = operationReportJob
+  if (job === undefined) return
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    const exited = await Promise.race([job.then(() => true), new Promise<false>((resolve) => {
+      timer = setTimeout(() => { resolve(false) }, 500)
+    })])
+    if (!exited) console.error('dsh desktop: operation report Worker has not exited; continuing shutdown')
+  } finally { clearTimeout(timer) }
+}
 
 function persistCrashReport(error: unknown, source: CrashReportSource): Promise<string | undefined> {
   const directory = app.getPath('logs')
   const report = writeCrashReport(directory, {
-    operationHistoryPlanned: true,
+    operationHistoryPlanned: !shuttingDown && !operationReportsStopping,
     source,
     phase: backendReady ? 'running' : 'startup',
     error,
@@ -129,12 +152,13 @@ function persistCrashReport(error: unknown, source: CrashReportSource): Promise<
     time: new Date(),
   })
   void report.then((path) => {
-    if (path !== undefined && operationReportJob === undefined) {
+    if (path !== undefined && operationReportJob === undefined && !shuttingDown && !operationReportsStopping) {
+      operationReportAbort = new AbortController()
       operationReportJob = runOperationReportJob({ reportPath: path, directory: join(app.getPath('userData'), 'plugin-operations'),
         limits: { bytes: 64 * 1024, recordBytes: 4096, records: 100, outputBytes: 64 * 1024 },
         journal: operationJournal?.status() ?? null,
-      }, 500)
-      void operationReportJob.finally(() => { operationReportJob = undefined })
+      }, { timeoutMs: 500, cancellationGraceMs: 100 }, operationReportAbort.signal)
+      void operationReportJob.finally(() => { operationReportJob = undefined; operationReportAbort = undefined })
     }
   }).catch((_error: unknown) => { /* Basic persistence failure is owned by fatal recovery. */ })
   return report
@@ -147,7 +171,12 @@ function reportFatal(error: unknown, source: CrashReportSource): void {
     void persistCrashReport(error, source)
     return
   }
-  void recovery.report(error, source).catch((failure: unknown) => { console.error(failure); app.exit(1) })
+  void recovery.report(error, source).catch(async (failure: unknown) => {
+    console.error(failure)
+    shuttingDown = true
+    await stopOperationReports()
+    app.exit(1)
+  })
 }
 
 protocol.registerSchemesAsPrivileged([{
@@ -562,6 +591,10 @@ async function main(): Promise<void> {
     }
     if (state.phase === 'error' && state.failedOperation !== 'check') {
       const restoreHost = state.failedOperation === 'install' && updateStoppedHost && !quitting
+      if (state.failedOperation === 'install' && !quitting) {
+        operationReportsStopping = shuttingDown
+        operationReportStop = undefined
+      }
       shellInstallerOwnsQuit = false
       updateStoppedHost = false
       if (restoreHost) {
@@ -591,8 +624,9 @@ async function main(): Promise<void> {
     return welcomeBackend.read()
   }
   stopForRecovery = async () => {
+    const reports = stopOperationReports()
     try { await backend.close() }
-    finally { await operationJournal?.drain(500) }
+    finally { await Promise.all([operationJournal?.drain(500), reports]) }
   }
 
   const reconcileBackend = (): Promise<void> => {
@@ -650,7 +684,7 @@ async function main(): Promise<void> {
         await platformView.closeAndWait()
         requireCleanStop = true
         updateStopFailure = undefined
-        await backend.stop()
+        await Promise.all([backend.stop(), stopOperationReports()])
         updateStoppedHost = true
         // The backend's async cleanup callback can assign this after the reset above.
         const stopFailure = updateStopFailure as DesktopHostUncleanExitError | undefined
@@ -659,6 +693,8 @@ async function main(): Promise<void> {
         updateJournal?.action('install-confirmed')
         shellInstallerOwnsQuit = true
       } catch (error) {
+        operationReportsStopping = shuttingDown
+        operationReportStop = undefined
         if (!updateStoppedHost) await host.updateTasks('unlock').catch((unlockError: unknown) => { console.error(unlockError) })
         throw error
       } finally {
@@ -1287,7 +1323,7 @@ async function main(): Promise<void> {
     updateSchedule.dispose()
     updateDialog.dispose()
     mandatoryUI?.dispose()
-    void Promise.all([Promise.resolve(mandatoryPolicy?.dispose()).then(() => policyAuth?.dispose()),
+    void Promise.all([stopOperationReports(), Promise.resolve(mandatoryPolicy?.dispose()).then(() => policyAuth?.dispose()),
       backend.close().then(async () => { await operationJournal?.drain(500) }, async (error: unknown) => {
         await operationJournal?.drain(500)
         throw error
@@ -1383,7 +1419,9 @@ if (ownsDesktopInstance) void app.whenReady().then(main).catch(async (error: unk
     await writeFile(diagnosticFile, `${error instanceof Error ? error.stack ?? message : message}\n`).catch(() => undefined)
   }
   reportFatal(error, 'main')
-}).catch((error: unknown) => {
+}).catch(async (error: unknown) => {
   console.error(error)
+  shuttingDown = true
+  await stopOperationReports()
   app.exit(1)
 })
