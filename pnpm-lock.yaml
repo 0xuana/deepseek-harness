@@ -15472,6 +15472,9 @@ importers:
 
   packages/web/tool-web:
     dependencies:
+      '@deepseek-ai/dsh-output-retention':
+        specifier: workspace:*
+        version: link:../../util/output-retention
       '@deepseek-ai/dsh-util-values':
         specifier: workspace:*
         version: link:../../util/values
