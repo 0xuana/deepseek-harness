@@ -1,14 +1,16 @@
 /**
  * One change request as a card: its title links to the host, a one-line
- * summary shows while collapsed, and the checks, review, merge state, diff
- * size, and the ready-for-review or merge action show while expanded.
+ * summary shows while collapsed, and while expanded one row per fact (checks,
+ * review, merge state, and the changed lines, which open its changes) above
+ * the ready-for-review or merge action.
  */
 
 import { useState, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
-  Button, IconChevronDownOutlineRegular, IconCloseOutlineRegular, IconCopyOutlineRegular, IconRightUpOutlineRegular,
-  Menu, MenuItemButton, StateDot, Tooltip, type MenuEntry,
+  Button, IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconCloseOutlineRegular, IconCopyOutlineRegular,
+  IconListPenOutlineRegular, IconRightUpOutlineRegular, IconUserOutlineRegular, Menu, MenuItemButton, StateDot, Tooltip,
+  type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
@@ -18,12 +20,12 @@ import type { ForgePanelChangeRequest } from '../types.ts'
 import { formatAgo, formatDuration } from './format.ts'
 import { ChangeRequestGlyph, CheckGlyph } from './glyphs.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
-import { checkCounts, checkDuration, ciSummary, flagOf, numberOf, toneOf, type ChangeRequestTone } from './status.ts'
+import { checkCounts, checkDuration, ciSummary, flagOf, numberOf, TONE_LABEL, toneOf } from './status.ts'
 import css from './ForgeTab.module.css'
 
 type Translate = PropsLocale<typeof NS>['t']
 
-/** What a card can do; a surface without a Session binding omits `remove`, `markReady`, and `merge`. */
+/** What a card can do; a surface without a Session binding omits `remove`, `markReady`, `merge`, and `viewChanges`. */
 export interface ChangeRequestActions {
   /** Open a URL outside the app. */
   readonly openLink: (url: string) => void
@@ -37,6 +39,8 @@ export interface ChangeRequestActions {
   readonly markReady?: ((entry: ForgePanelChangeRequest) => Promise<void>) | undefined
   /** Merge the change request as `request` describes; settles once the outcome is reported. */
   readonly merge?: ((entry: ForgePanelChangeRequest, request: MergeRequest) => Promise<void>) | undefined
+  /** Open the changes view of the change request. */
+  readonly viewChanges?: ((entry: ForgePanelChangeRequest) => void) | undefined
 }
 
 /** Props of one change request card. */
@@ -55,15 +59,6 @@ export interface ChangeRequestCardProps {
   readonly t: Translate
 }
 
-const STATE: Record<ChangeRequestTone, ForgePanelKey> = {
-  open: 'change.state.open',
-  blocked: 'change.state.blocked',
-  draft: 'change.state.draft',
-  merged: 'change.state.merged',
-  closed: 'change.state.closed',
-  unknown: 'change.state.unknown',
-}
-
 const REVIEW: Record<ChangeRequestSnapshot['reviewDecision'], ForgePanelKey> = {
   'approved': 'change.review.approved',
   'changes-requested': 'change.review.changesRequested',
@@ -74,6 +69,7 @@ const REVIEW: Record<ChangeRequestSnapshot['reviewDecision'], ForgePanelKey> = {
 const FAILURE: Record<ForgeFailure['code'], ForgePanelKey> = {
   'not-found': 'change.failure.notFound',
   'unauthenticated': 'change.failure.unauthenticated',
+  'too-large': 'change.failure.unavailable',
   'unavailable': 'change.failure.unavailable',
 }
 
@@ -109,6 +105,40 @@ function DiffSize({ snapshot }: { readonly snapshot: ChangeRequestSnapshot }): R
       <span className={css.added}>{`+${snapshot.additions.toLocaleString('en-US')}`}</span>
       <span className={css.deleted}>{`−${snapshot.deletions.toLocaleString('en-US')}`}</span>
     </span>
+  )
+}
+
+/** The changed lines, as a row that opens the changes view when the provider serves the change request. */
+function ChangesRow({ entry, snapshot, name, actions, t }: {
+  readonly entry: ForgePanelChangeRequest
+  readonly snapshot: ChangeRequestSnapshot
+  readonly name: string
+  readonly actions: ChangeRequestActions
+  readonly t: Translate
+}): ReactNode {
+  const { viewChanges } = actions
+  const parts = (
+    <>
+      <span className={css.rowIcon}><IconListPenOutlineRegular size={16} /></span>
+      <span className={css.rowLabel}>{t('change.row.changes')}</span>
+      <span className={css.rowValue}><DiffSize snapshot={snapshot} /></span>
+    </>
+  )
+  if (viewChanges === undefined || entry.ref === null) return <div className={css.row}>{parts}</div>
+  return (
+    <button
+      type="button"
+      className={clsx(css.row, css.rowButton)}
+      aria-label={t('change.viewChangesAria', {
+        name,
+        added: snapshot.additions.toLocaleString('en-US'),
+        deleted: snapshot.deletions.toLocaleString('en-US'),
+      })}
+      onClick={() => { viewChanges(entry) }}
+    >
+      {parts}
+      <IconChevronRightOutlineRegular size={12} className={css.rowChevron} />
+    </button>
   )
 }
 
@@ -149,7 +179,7 @@ function Target({ snapshot, t }: { readonly snapshot: ChangeRequestSnapshot; rea
   return (
     <>
       {snapshot.state === 'open' && snapshot.draft && <span>{t('change.state.draft')}</span>}
-      <span className={clsx(css.code, css.ellipsis)}>{`${snapshot.headBranch} → ${snapshot.baseBranch}`}</span>
+      <span className={css.ellipsis}>{`${snapshot.headBranch} → ${snapshot.baseBranch}`}</span>
     </>
   )
 }
@@ -163,6 +193,7 @@ function ChecksRow({ snapshot, openLink, t }: {
   if (snapshot.checks.length === 0) {
     return (
       <div className={css.row}>
+        <span className={css.rowIcon}><CheckGlyph state="neutral" /></span>
         <span className={css.rowLabel}>{t('change.row.checks')}</span>
         <span className={css.rowValue}>{t('change.ci.none')}</span>
       </div>
@@ -187,12 +218,12 @@ function ChecksRow({ snapshot, openLink, t }: {
       listClassName={css.checksList}
       anchor={(
         <button type="button" className={clsx(css.row, css.rowButton)} aria-haspopup="menu" aria-expanded={open} onClick={() => { setOpen(!open) }}>
+          <span className={css.rowIcon}><CheckGlyph state={ROLLUP[snapshot.checksRollup]} /></span>
           <span className={css.rowLabel}>{t('change.row.checks')}</span>
           <span className={css.rowValue} data-tone={counts.failed > 0 ? 'error' : undefined}>
-            <CheckGlyph state={ROLLUP[snapshot.checksRollup]} size={14} />
             <span className={css.ellipsis}>{summary}</span>
           </span>
-          <IconChevronDownOutlineRegular size={12} className={clsx(css.chevron, open && css.chevronOpen)} />
+          <IconChevronRightOutlineRegular size={12} className={css.rowChevron} />
         </button>
       )}
       {...snapshot.checksTruncated ? { footer: truncated } : {}}
@@ -255,7 +286,15 @@ function MergeMenu({ snapshot, name, usual, busy, onMerge, t }: {
       portal
       align="end"
       anchor={(
-        <Button size="sm" variant="primary" aria-haspopup="menu" aria-expanded={open} disabled={busy} onClick={() => { setOpen(!open) }}>
+        <Button
+          size="sm"
+          variant="primary"
+          className={css.primaryAction}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          disabled={busy}
+          onClick={() => { setOpen(!open) }}
+        >
           {t('change.merge')}
           <IconChevronDownOutlineRegular size={12} className={clsx(css.chevron, open && css.chevronOpen)} />
         </Button>
@@ -277,7 +316,7 @@ function MergeMenu({ snapshot, name, usual, busy, onMerge, t }: {
   )
 }
 
-/** The footer action of an open change request: mark a draft ready, or merge one the host would merge now. */
+/** The footer with the action of an open change request: mark a draft ready, or merge one the host would merge now. */
 function Primary({ entry, snapshot, name, actions, t }: {
   readonly entry: ForgePanelChangeRequest
   readonly snapshot: ChangeRequestSnapshot
@@ -296,37 +335,46 @@ function Primary({ entry, snapshot, name, actions, t }: {
   if (snapshot.draft) {
     if (markReady === undefined) return null
     return (
-      <Button size="sm" variant="primary" disabled={busy} onClick={() => { run(() => markReady(entry)) }}>
-        {t('change.markReady')}
-      </Button>
+      <div className={css.footer}>
+        <Button size="sm" variant="outline" className={css.primaryAction} disabled={busy} onClick={() => { run(() => markReady(entry)) }}>
+          {t('change.markReady')}
+        </Button>
+      </div>
     )
   }
   const [usual] = snapshot.mergeMethods
   if (!snapshot.mergeReady || usual === undefined || merge === undefined) return null
   return (
-    <MergeMenu
-      snapshot={snapshot}
-      name={name}
-      usual={usual}
-      busy={busy}
-      onMerge={(method) => { run(() => merge(entry, { method, headSha: snapshot.headSha })) }}
-      t={t}
-    />
+    <div className={css.footer}>
+      <MergeMenu
+        snapshot={snapshot}
+        name={name}
+        usual={usual}
+        busy={busy}
+        onMerge={(method) => { run(() => merge(entry, { method, headSha: snapshot.headSha })) }}
+        t={t}
+      />
+    </div>
   )
 }
 
-function Details({ snapshot, now, actions, t }: {
+function Details({ entry, snapshot, name, now, actions, t }: {
+  readonly entry: ForgePanelChangeRequest
   readonly snapshot: ChangeRequestSnapshot
+  readonly name: string
   readonly now: number
   readonly actions: ChangeRequestActions
   readonly t: Translate
 }): ReactNode {
+  const changes = <ChangesRow entry={entry} snapshot={snapshot} name={name} actions={actions} t={t} />
   if (snapshot.state !== 'open') {
     return (
       <div className={css.rows}>
         <div className={css.row}>
-          <span className={css.rowValue} data-tone={snapshot.state}>{finished(snapshot, now, t)}</span>
+          <span className={css.rowIcon}><ChangeRequestGlyph tone={snapshot.state} tinted={false} size={16} /></span>
+          <span className={clsx(css.rowValue, css.rowWide)} data-tone={snapshot.state}>{finished(snapshot, now, t)}</span>
         </div>
+        {changes}
       </div>
     )
   }
@@ -339,15 +387,18 @@ function Details({ snapshot, now, actions, t }: {
     <div className={css.rows}>
       <ChecksRow snapshot={snapshot} openLink={actions.openLink} t={t} />
       <div className={css.row}>
+        <span className={css.rowIcon}><IconUserOutlineRegular size={16} /></span>
         <span className={css.rowLabel}>{t('change.row.review')}</span>
         <span className={css.rowValue} data-tone={reviewTone}>
           {snapshot.unresolvedThreads > 0 ? t('change.review.threads', { review, count: snapshot.unresolvedThreads }) : review}
         </span>
       </div>
       <div className={css.row}>
+        <span className={css.rowIcon}><ChangeRequestGlyph tone="merged" tinted={false} size={16} /></span>
         <span className={css.rowLabel}>{t('change.row.merge')}</span>
         <span className={css.rowValue} data-tone={snapshot.mergeability === 'conflicting' ? 'error' : undefined}>{merge}</span>
       </div>
+      {changes}
     </div>
   )
 }
@@ -373,7 +424,7 @@ export function ChangeRequestCard({ entry, expanded, onToggle, now, actions, t }
   return (
     <li className={css.change} data-forge-change={entry.url} data-expanded={expanded ? '' : undefined}>
       <div className={css.changeHead}>
-        <ChangeRequestGlyph tone={tone} label={t('change.stateAria', { state: t(STATE[tone]) })} />
+        <ChangeRequestGlyph tone={tone} size={16} label={t('change.stateAria', { state: t(TONE_LABEL[tone]) })} />
         <div className={css.headText}>
           <a
             className={css.changeTitle}
@@ -389,20 +440,23 @@ export function ChangeRequestCard({ entry, expanded, onToggle, now, actions, t }
           </a>
           {(number !== null || meta !== null) && (
             <div className={css.meta}>
-              {number !== null && <span className={css.code}>{t('change.number', { number })}</span>}
+              {number !== null && <span>{t('change.number', { number })}</span>}
               {number !== null && meta !== null && <span aria-hidden="true">·</span>}
               {meta}
             </div>
           )}
         </div>
-        {expanded && (
-          <Tooltip label={t('change.view')} side="top">
-            <button type="button" className={css.iconButton} aria-label={t('change.view')} onClick={() => { actions.openLink(url) }}>
-              <IconRightUpOutlineRegular size={14} />
-            </button>
-          </Tooltip>
-        )}
-        {expanded && remove !== undefined && (
+        <Tooltip label={t('change.view')} side="top">
+          <button type="button" className={css.iconButton} aria-label={t('change.view')} onClick={() => { actions.openLink(url) }}>
+            <IconRightUpOutlineRegular size={14} />
+          </button>
+        </Tooltip>
+        <Tooltip label={t('change.copy')} side="top">
+          <button type="button" className={css.iconButton} aria-label={t('change.copy')} onClick={() => { actions.copyLink(url) }}>
+            <IconCopyOutlineRegular size={14} />
+          </button>
+        </Tooltip>
+        {remove !== undefined && (
           <Tooltip label={t('change.remove')} side="top">
             <button type="button" className={css.iconButton} aria-label={t('change.removeAria', { name })} onClick={() => { remove(entry) }}>
               <IconCloseOutlineRegular size={14} />
@@ -427,18 +481,8 @@ export function ChangeRequestCard({ entry, expanded, onToggle, now, actions, t }
             : <Button size="sm" variant="outline" onClick={actions.retry}>{t('retry')}</Button>}
         </div>
       )}
-      {expanded && snapshot !== null && <Details snapshot={snapshot} now={now} actions={actions} t={t} />}
-      {expanded && (
-        <div className={css.footer}>
-          {snapshot !== null && <DiffSize snapshot={snapshot} />}
-          <Tooltip label={t('change.copy')} side="top">
-            <button type="button" className={clsx(css.iconButton, css.footerEnd)} aria-label={t('change.copy')} onClick={() => { actions.copyLink(url) }}>
-              <IconCopyOutlineRegular size={14} />
-            </button>
-          </Tooltip>
-          {snapshot !== null && <Primary entry={entry} snapshot={snapshot} name={name} actions={actions} t={t} />}
-        </div>
-      )}
+      {expanded && snapshot !== null && <Details entry={entry} snapshot={snapshot} name={name} now={now} actions={actions} t={t} />}
+      {expanded && snapshot !== null && <Primary entry={entry} snapshot={snapshot} name={name} actions={actions} t={t} />}
     </li>
   )
 }

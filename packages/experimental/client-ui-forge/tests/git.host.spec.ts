@@ -2,16 +2,11 @@ import { access, mkdir, readFile, stat, symlink, writeFile } from 'node:fs/promi
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import { SandboxUnavailableError } from '@deepseek-ai/dsh-sandbox'
 import LocalSandbox from '@deepseek-ai/dsh-sandbox-local'
-import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
-import { Session, SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import { hasBranch, inspectCheckout, listBranches } from '../src/git.ts'
 import type { GitConfig } from '../src/git.ts'
-import { commitAt, git, RecordingSandbox, repository, sandboxRecord, scratch, script } from './harness.ts'
+import { commitAt, git, gitContext, plainSession, repository, sandboxRecord, scratch, script } from './harness.ts'
 import type { SandboxRecord } from './harness.ts'
 
 const CONFIG: GitConfig = { gitCommand: 'git', gitTimeoutMs: 10_000, graceMs: 500, maxOutputBytes: 1_048_576 }
@@ -30,20 +25,11 @@ async function directory(prefix = 'dsh-forge-git-'): Promise<string> {
   return path
 }
 
-function session(cwd: string): Session {
-  const id = SessionId('forge-git')
-  return Session.create(id, [], { version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false, cwd })
-}
+const session = plainSession
 
 async function context(record: SandboxRecord, root: string, real = false): Promise<Context> {
-  const ctx = new Context()
+  const ctx = await gitContext(record, root, real)
   cleanups.push(() => ctx.fiber.dispose())
-  await ctx.plugin(SessionProjectionRegistry)
-  await ctx.plugin(LocalFileSystem, { cwd: root })
-  await ctx.plugin(LocalSubprocessRuntime)
-  if (real) await ctx.plugin(LocalSandbox)
-  else await ctx.plugin(RecordingSandbox, record)
-  await ctx.plugin(SandboxPolicyService, { mode: 'workspace-write', workspaceRoot: root })
   return ctx
 }
 

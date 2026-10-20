@@ -1,11 +1,15 @@
 // @vitest-environment jsdom
-/** Session header entry, forge tab title, and action toast rendering. */
+/** Session header entry, forge and changes tab titles, and action toast rendering. */
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import toastCss from '@deepseek-ai/dsh-client-ui-primitives/src/Toast.module.css'
+import type { PaneId, SidebarRightTabInfo, TabId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
+import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { ActionToast } from '../src/client/ActionToast.tsx'
+import { changesAddress } from '../src/client/changes-address.ts'
+import { ChangesTabTitle } from '../src/client/ChangesTabTitle.tsx'
 import { ForgeTabTitle } from '../src/client/ForgeTabTitle.tsx'
 import { HeaderButton } from '../src/client/HeaderButton.tsx'
 import { en } from '../src/client/locales.ts'
@@ -88,6 +92,34 @@ describe('ForgeTabTitle', () => {
     const view = render(<ForgeTabTitle t={t} />)
     expect(view.getByText(en['tab.title'])).toBeTruthy()
     expect(view.container.querySelector('svg')).not.toBeNull()
+  })
+})
+
+describe('ChangesTabTitle', () => {
+  const unused = (): never => { throw new Error('the title does not call tab actions') }
+
+  function title(contentId: string) {
+    const info: SidebarRightTabInfo = {
+      sidebar: { expanded: true, fullscreen: false },
+      panel: { id: 'pane-1' as PaneId },
+      tab: {
+        id: 'tab-1' as TabId, kind: 'forge-changes', contentId, title: 'Captured', visible: true,
+        navigation: { address: contentId, params: undefined, revision: 1 },
+        signal: new AbortController().signal,
+        actions: { bindCommands: () => () => {}, openResource: unused, openTab: unused, close: unused },
+      },
+    }
+    return render(<ChangesTabTitle useTabInfo={() => info} t={t} />)
+  }
+
+  it('names the view from its address in the current language', () => {
+    const view = title(changesAddress({ sessionId: SessionId('s1'), source: { kind: 'change', url: 'https://github.com/octo/demo/pull/7' } }))
+    expect(view.container.textContent).toBe('Changes in #7')
+    expect(view.container.querySelector('svg')).not.toBeNull()
+  })
+
+  it('keeps the captured title of an address it did not mint', () => {
+    expect(title('dsh-resource://forge-changes/s1/remote').container.textContent).toBe('Captured')
   })
 })
 

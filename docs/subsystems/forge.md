@@ -59,6 +59,12 @@ interface ForgeProvider {
   markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
   /** Merge a change request while its head is still `request.headSha`, resolving to undefined once merged. */
   merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
+  /** Read the changes of a change request as the host computes them, as one unified patch with `a/` and `b/` path prefixes. */
+  diff(ref: ChangeRequestRef, signal: AbortSignal): Promise<string | ForgeFailure>
+  /** Read the text of `path` at `commit` in the change request's repository. */
+  fileText(ref: ChangeRequestRef, commit: string, path: string, signal: AbortSignal): Promise<string | ForgeFailure>
+  /** Build the web page of `path` at `commit` in the change request's repository. */
+  fileUrl(ref: ChangeRequestRef, commit: string, path: string): string
 }
 ```
 
@@ -124,6 +130,20 @@ interface ChangeRequestSnapshot {
   readonly updatedAt: string
   /** ISO 8601 time the change request was merged or closed, or null while it is open. */
   readonly closedAt: string | null
+}
+```
+
+```ts type-equiv
+/** Why a provider could not read a change request. */
+interface ForgeFailure {
+  /**
+   * `not-found`: the host does not expose it; `unauthenticated`: credentials are missing or rejected;
+   * `too-large`: the host or the provider refuses an answer over its size limit, so reading again fails
+   * the same way; `unavailable`: any other failure.
+   */
+  readonly code: 'not-found' | 'unauthenticated' | 'too-large' | 'unavailable'
+  /** Human-readable cause. */
+  readonly message: string
 }
 ```
 
@@ -397,6 +417,11 @@ interface ForgePanelState {
   readonly changeRequests: readonly ForgePanelChangeRequest[]
   /** Worktree request and creation state. */
   readonly worktree: ForgePanelWorktree
+  /**
+   * Files the `branch` scope changes, or null before the first inspection,
+   * outside a checkout, and without a fork point.
+   */
+  readonly local: ForgeLocalChanges | null
 }
 ```
 
@@ -407,6 +432,122 @@ interface ForgeBranches {
   readonly current: string | null
   /** Local branch names, `current` first and then most recently committed first, at most `maxBranches`. */
   readonly branches: readonly string[]
+}
+```
+
+The changes view reads through the same Remote. `localDiff` reads one `ForgeLocalScope` of the Session's checkout, and `changeRequestDiff` reads a bound change request at the head of its latest status through the provider's `diff`; both return files that the Host parsed into `ForgeDiffFile` hunks. `localText` and `changeRequestText` read the new side of one file, which supplies the unchanged lines between hunks. Each inspection also sizes the `branch` scope as `ForgePanelState.local` for the panel's local changes card.
+
+```ts type-equiv
+/** Which local changes a diff covers; each reads the Session's checkout through Git. */
+type ForgeLocalScope =
+  /**
+   * The working tree and untracked files against the fork point: the base commit of the worktree the
+   * Session created, else the merge base of HEAD with the default branch of the code host remote.
+   */
+  | { readonly kind: 'branch' }
+  /** The working tree and untracked files against HEAD. */
+  | { readonly kind: 'uncommitted' }
+  /** The working tree and untracked files against the index. */
+  | { readonly kind: 'unstaged' }
+  /** The index against HEAD. */
+  | { readonly kind: 'staged' }
+```
+
+```ts type-equiv
+/** One hunk of a file diff. */
+interface ForgeDiffHunk {
+  /** First old line the hunk covers, or the old line it comes before when it covers none. */
+  readonly oldStart: number
+  /** Old lines the hunk covers. */
+  readonly oldLines: number
+  /** First new line the hunk covers, or the new line it comes before when it covers none. */
+  readonly newStart: number
+  /** New lines the hunk covers. */
+  readonly newLines: number
+  /** Lines in patch form: a leading space for context, `+` for added, `-` for deleted, and `\` for a missing final newline. */
+  readonly lines: readonly string[]
+}
+```
+
+```ts type-equiv
+/** How one file changed. */
+type ForgeDiffStatus = 'added' | 'deleted' | 'modified' | 'renamed'
+```
+
+```ts type-equiv
+/** One changed file of a diff. */
+interface ForgeDiffFile {
+  /** Path relative to the repository root after the change, or before it for a deleted file. */
+  readonly path: string
+  /** Path before a rename, else null. */
+  readonly previousPath: string | null
+  /** How the file changed. */
+  readonly status: ForgeDiffStatus
+  /** Whether the content is binary, which carries no hunks. */
+  readonly binary: boolean
+  /** Whether an untracked file exceeds `maxDiffBytes`, so it carries no hunks. */
+  readonly oversized: boolean
+  /** Whether Git does not track the file yet; only local diffs list such files. */
+  readonly untracked: boolean
+  /** Lines added. */
+  readonly additions: number
+  /** Lines deleted. */
+  readonly deletions: number
+  /** Hunks in file order; none for a binary file or a change of mode or name only. */
+  readonly hunks: readonly ForgeDiffHunk[]
+}
+```
+
+```ts type-equiv
+/** Local changes of the Session's checkout in one scope. */
+interface ForgeLocalDiff {
+  /** Ref or abbreviated commit the `branch` scope compares with, such as `origin/master`; null for other scopes. */
+  readonly base: string | null
+  /** Changed files in Git's path order, untracked files last. */
+  readonly files: readonly ForgeDiffFile[]
+  /** Untracked files left out beyond `maxUntrackedFiles`. */
+  readonly omitted: number
+}
+```
+
+```ts type-equiv
+/** Changes of a change request as its code host computes them. */
+interface ForgeChangeRequestDiff {
+  /** Head commit the diff describes. */
+  readonly headSha: string
+  /** Changed files in the host's order. */
+  readonly files: readonly ForgeDiffFile[]
+  /**
+   * Commits the checkout's branch has beyond the head when that branch is the change request's head
+   * branch and the head commit is present locally; null otherwise.
+   */
+  readonly localAhead: number | null
+  /** Web page of each changed file at the head commit, by path. */
+  readonly fileUrls: Readonly<Record<string, string>>
+}
+```
+
+```ts type-equiv
+/** One file the `branch` scope changes, without its hunks. */
+interface ForgeChangedFile {
+  /** Path relative to the repository root after the change. */
+  readonly path: string
+  /** Lines added, or 0 for a binary file. */
+  readonly additions: number
+  /** Lines deleted, or 0 for a binary file. */
+  readonly deletions: number
+  /** Whether the content is binary. */
+  readonly binary: boolean
+}
+```
+
+```ts type-equiv
+/** Size of the `branch` scope, which the panel's local changes card shows. */
+interface ForgeLocalChanges {
+  /** Ref or abbreviated commit the scope compares with. */
+  readonly base: string
+  /** Changed files in Git's path order, untracked files last, at most `maxUntrackedFiles` of those. */
+  readonly files: readonly ForgeChangedFile[]
 }
 ```
 
@@ -497,6 +638,36 @@ async markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeAction
 async merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
 
 /**
+ * Read the changes of a change request as its host computes them.
+ * @param ref - change request served by a registered provider.
+ * @param signal - cancellation of the read.
+ * @returns one unified patch with `a/` and `b/` path prefixes, or why the host did not provide it.
+ * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+ */
+async diff(ref: ChangeRequestRef, signal: AbortSignal): Promise<string | ForgeFailure>
+
+/**
+ * Read the text of one file at a commit of a change request's repository.
+ * @param ref - change request served by a registered provider.
+ * @param commit - commit object name.
+ * @param path - path relative to the repository root.
+ * @param signal - cancellation of the read.
+ * @returns the text, or why the host did not provide it.
+ * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+ */
+async fileText(ref: ChangeRequestRef, commit: string, path: string, signal: AbortSignal): Promise<string | ForgeFailure>
+
+/**
+ * Build the web page of one file at a commit of a change request's repository.
+ * @param ref - change request served by a registered provider.
+ * @param commit - commit object name.
+ * @param path - path relative to the repository root.
+ * @returns the provider's URL.
+ * @throws when no provider serves the change request's forge.
+ */
+fileUrl(ref: ChangeRequestRef, commit: string, path: string): string
+
+/**
  * Watch one change request as an effect on the calling fiber. The first
  * watcher starts polling at once; listeners receive every later result,
  * and `latest` returns the current one. Polling stops when the last watcher
@@ -573,8 +744,64 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * change requests at once; an unfollowed Session is unchanged.
  * @param session - Session whose panel refreshes.
  * @param signal - request cancellation.
+ * @returns settles once the inspection and the sign-in probe have ended; poll results reach the panel stream later.
  */
 @Remote async refresh(session: Session, signal: AbortSignal): Promise<void>
+
+/**
+ * Read the changes one scope covers in the checkout of the Session's
+ * current directory, with Git confined to the Session's read-only sandbox.
+ * @param session - Session whose checkout is read.
+ * @param scope - which changes to read.
+ * @param signal - request cancellation.
+ * @returns the files, the base of the `branch` scope, and the untracked files left out.
+ * @throws `forgePanel/not-a-checkout` outside a checkout; `forgePanel/no-fork-point` for the `branch`
+ * scope of a checkout without one; `forgePanel/diff-too-large` over `maxDiffBytes`; the Git error when Git fails.
+ */
+@Remote async localDiff(session: Session, scope: ForgeLocalScope, signal: AbortSignal): Promise<ForgeLocalDiff>
+
+/**
+ * Read the new side of one changed file in a scope, which supplies the
+ * unchanged lines between its hunks: the index for `staged`, else the working tree.
+ * @param session - Session whose checkout is read.
+ * @param scope - the scope the diff was read in.
+ * @param path - path relative to the checkout's top-level directory, as the diff names it.
+ * @param signal - request cancellation.
+ * @returns the text.
+ * @throws `forgePanel/not-a-checkout` outside a checkout; `forgePanel/diff-too-large` over `maxDiffBytes`;
+ * an error for a path outside the checkout, binary content, or a failed read.
+ */
+@Remote async localText(session: Session, scope: ForgeLocalScope, path: string, signal: AbortSignal): Promise<string>
+
+/**
+ * Read the changes of a change request of a Session as its code host
+ * computes them, at the head commit of its latest status. A patch already
+ * read at the same head commit and base branch is reused from memory, for
+ * any Session, until `maxCachedDiffBytes` evicts it.
+ * @param session - Session the change request is bound to.
+ * @param url - binding URL of the change request.
+ * @param signal - request cancellation.
+ * @returns the files, the head commit, each file's web page, and the commits the checkout has beyond the head.
+ * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+ * `forgePanel/diff-too-large` when the host or its provider refuses the diff over a size limit;
+ * `forgePanel/diff-failed` before its status was read and when the host does not provide the diff otherwise.
+ */
+@Remote async changeRequestDiff(session: Session, url: string, signal: AbortSignal): Promise<ForgeChangeRequestDiff>
+
+/**
+ * Read one file of a change request's repository at a commit, which
+ * supplies the unchanged lines between the hunks of its diff.
+ * @param session - Session the change request is bound to.
+ * @param url - binding URL of the change request.
+ * @param commit - commit object name, the head commit of the diff.
+ * @param path - path relative to the repository root.
+ * @param signal - request cancellation.
+ * @returns the text.
+ * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+ * `forgePanel/diff-too-large` when the host or its provider refuses the file over a size limit;
+ * `forgePanel/diff-failed` when the host does not provide the file otherwise.
+ */
+@Remote async changeRequestText(session: Session, url: string, commit: string, path: string, signal: AbortSignal): Promise<string>
 
 /**
  * Mark a draft change request of a Session ready for review; the change

@@ -92,6 +92,14 @@
   margin-left: auto;
 }
 
+/* Smaller than the card actions, with negative block margins, so the row keeps the height of its text;
+   the descendant selector outranks `.iconButton`, which this button also carries. */
+.checkout .checkoutCopy {
+  width: 24px;
+  height: 24px;
+  margin: -3px -4px -3px 0;
+}
+
 .section {
   display: flex;
   flex-direction: column;
@@ -205,17 +213,22 @@
 }
 
 /* Glyph, title link with the number line below it, then the expanded card's
-   open and remove buttons and the expansion toggle. */
+   open, copy, and remove buttons and the expansion toggle. */
 .changeHead {
   display: flex;
   align-items: flex-start;
   gap: 2px;
   min-width: 0;
-  padding: 8px 6px 4px 12px;
+  padding: 12px 8px 10px 14px;
 }
 
 .changeHead > .glyph {
-  margin: 3px 6px 0 0;
+  margin: 3px 10px 0 0;
+}
+
+/* The buttons center on the title's first line. */
+.changeHead > .iconButton {
+  margin-top: -3px;
 }
 
 .headText {
@@ -265,6 +278,7 @@
   padding: 1px 0;
   color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
   line-height: 18px;
 }
 
@@ -305,10 +319,6 @@
   transform: rotate(180deg);
 }
 
-.code {
-  font-family: var(--ds-font-family-code);
-}
-
 .ellipsis {
   min-width: 0;
   overflow: hidden;
@@ -318,9 +328,8 @@
 
 .diff {
   display: inline-flex;
-  gap: 6px;
-  font-family: var(--ds-font-family-code);
-  font-size: 12px;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
 }
 
 .added {
@@ -368,37 +377,39 @@
   line-height: 18px;
 }
 
-/* Expanded rows aligned with the title: a 36px label column and the value. */
+/* Expanded facts, one row each: an icon under the glyph, the label, the value,
+   and a chevron on a row that opens something. */
 .rows {
   display: flex;
   flex-direction: column;
-  padding: 0 10px 6px 33px;
+  gap: 2px;
+  padding: 4px 6px 6px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
 }
 
 .row {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) auto;
+  grid-template-columns: 16px 32px minmax(0, 1fr) 12px;
   align-items: center;
-  gap: 8px;
+  column-gap: 10px;
   box-sizing: border-box;
   width: 100%;
-  min-height: 30px;
+  min-height: 34px;
+  margin: 0;
+  padding: 0 10px 0 8px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
   color: var(--dsw-alias-label-primary);
   font: inherit;
   text-align: left;
 }
 
-.row > .rowValue:only-child {
-  grid-column: 1 / -1;
+.rowWide {
+  grid-column: 2 / 4;
 }
 
 .rowButton {
-  width: calc(100% + 12px);
-  margin: 0 -6px;
-  padding: 0 6px;
-  border: 0;
-  border-radius: var(--dsw-radius-sm);
-  background: transparent;
   cursor: pointer;
 }
 
@@ -407,9 +418,17 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
-.rowLabel {
+.rowIcon {
+  display: inline-flex;
   color: var(--dsw-alias-label-tertiary);
-  font-size: 12px;
+}
+
+.rowLabel {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.rowChevron {
+  color: var(--dsw-alias-label-tertiary);
 }
 
 .rowValue {
@@ -477,16 +496,19 @@
   color: var(--dsw-alias-state-warn-primary);
 }
 
+/* The action of an open change request below its rows. */
 .footer {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 6px 6px 33px;
-  border-top: 0.5px solid var(--dsw-alias-border-l2);
+  padding: 2px 14px 12px;
 }
 
-.footerEnd {
-  margin-left: auto;
+.primaryAction {
+  height: 32px;
+  padding: 0 14px;
+  font-size: 13px;
+  line-height: 20px;
 }
 
 /* A merge method row: its name with the note on what it does below. */

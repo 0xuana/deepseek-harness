@@ -168,6 +168,11 @@ export interface ForgePanelState {
   readonly changeRequests: readonly ForgePanelChangeRequest[]
   /** Worktree request and creation state. */
   readonly worktree: ForgePanelWorktree
+  /**
+   * Files the `branch` scope changes, or null before the first inspection,
+   * outside a checkout, and without a fork point.
+   */
+  readonly local: ForgeLocalChanges | null
 }
 
 /** Local branches offered as the base of a new worktree. */
@@ -176,6 +181,104 @@ export interface ForgeBranches {
   readonly current: string | null
   /** Local branch names, `current` first and then most recently committed first, at most `maxBranches`. */
   readonly branches: readonly string[]
+}
+
+/** Which local changes a diff covers; each reads the Session's checkout through Git. */
+export type ForgeLocalScope =
+  /**
+   * The working tree and untracked files against the fork point: the base commit of the worktree the
+   * Session created, else the merge base of HEAD with the default branch of the code host remote.
+   */
+  | { readonly kind: 'branch' }
+  /** The working tree and untracked files against HEAD. */
+  | { readonly kind: 'uncommitted' }
+  /** The working tree and untracked files against the index. */
+  | { readonly kind: 'unstaged' }
+  /** The index against HEAD. */
+  | { readonly kind: 'staged' }
+
+/** One hunk of a file diff. */
+export interface ForgeDiffHunk {
+  /** First old line the hunk covers, or the old line it comes before when it covers none. */
+  readonly oldStart: number
+  /** Old lines the hunk covers. */
+  readonly oldLines: number
+  /** First new line the hunk covers, or the new line it comes before when it covers none. */
+  readonly newStart: number
+  /** New lines the hunk covers. */
+  readonly newLines: number
+  /** Lines in patch form: a leading space for context, `+` for added, `-` for deleted, and `\` for a missing final newline. */
+  readonly lines: readonly string[]
+}
+
+/** How one file changed. */
+export type ForgeDiffStatus = 'added' | 'deleted' | 'modified' | 'renamed'
+
+/** One changed file of a diff. */
+export interface ForgeDiffFile {
+  /** Path relative to the repository root after the change, or before it for a deleted file. */
+  readonly path: string
+  /** Path before a rename, else null. */
+  readonly previousPath: string | null
+  /** How the file changed. */
+  readonly status: ForgeDiffStatus
+  /** Whether the content is binary, which carries no hunks. */
+  readonly binary: boolean
+  /** Whether an untracked file exceeds `maxDiffBytes`, so it carries no hunks. */
+  readonly oversized: boolean
+  /** Whether Git does not track the file yet; only local diffs list such files. */
+  readonly untracked: boolean
+  /** Lines added. */
+  readonly additions: number
+  /** Lines deleted. */
+  readonly deletions: number
+  /** Hunks in file order; none for a binary file or a change of mode or name only. */
+  readonly hunks: readonly ForgeDiffHunk[]
+}
+
+/** Local changes of the Session's checkout in one scope. */
+export interface ForgeLocalDiff {
+  /** Ref or abbreviated commit the `branch` scope compares with, such as `origin/master`; null for other scopes. */
+  readonly base: string | null
+  /** Changed files in Git's path order, untracked files last. */
+  readonly files: readonly ForgeDiffFile[]
+  /** Untracked files left out beyond `maxUntrackedFiles`. */
+  readonly omitted: number
+}
+
+/** Changes of a change request as its code host computes them. */
+export interface ForgeChangeRequestDiff {
+  /** Head commit the diff describes. */
+  readonly headSha: string
+  /** Changed files in the host's order. */
+  readonly files: readonly ForgeDiffFile[]
+  /**
+   * Commits the checkout's branch has beyond the head when that branch is the change request's head
+   * branch and the head commit is present locally; null otherwise.
+   */
+  readonly localAhead: number | null
+  /** Web page of each changed file at the head commit, by path. */
+  readonly fileUrls: Readonly<Record<string, string>>
+}
+
+/** One file the `branch` scope changes, without its hunks. */
+export interface ForgeChangedFile {
+  /** Path relative to the repository root after the change. */
+  readonly path: string
+  /** Lines added, or 0 for a binary file. */
+  readonly additions: number
+  /** Lines deleted, or 0 for a binary file. */
+  readonly deletions: number
+  /** Whether the content is binary. */
+  readonly binary: boolean
+}
+
+/** Size of the `branch` scope, which the panel's local changes card shows. */
+export interface ForgeLocalChanges {
+  /** Ref or abbreviated commit the scope compares with. */
+  readonly base: string
+  /** Changed files in Git's path order, untracked files last, at most `maxUntrackedFiles` of those. */
+  readonly files: readonly ForgeChangedFile[]
 }
 
 /** Host settings of the forge panel Remote. */
@@ -197,6 +300,12 @@ export interface Config {
    * hexadecimal digits of the Session id's UUID, a hyphen, and four random hexadecimal digits follow it.
    */
   worktreePrefix?: string
+  /** Largest diff, or file read to show unchanged lines, in bytes. */
+  maxDiffBytes?: number
+  /** Most untracked files a local diff or the local changes card includes. */
+  maxUntrackedFiles?: number
+  /** Most UTF-8 bytes of change request diffs kept in memory for later reads at the same head commit and base branch. */
+  maxCachedDiffBytes?: number
 }
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
@@ -221,6 +330,17 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'forgePanel/stale-head': Record<string, never>
     /** The code host refused the change or could not be reached; the message gives the host's reason. */
     'forgePanel/action-failed': Record<string, never>
+    /** The Session's directory is not inside a Git checkout, so it has no local changes. */
+    'forgePanel/not-a-checkout': Record<string, never>
+    /** No remote names a default branch that HEAD shares history with, and the checkout is not a worktree the Session created. */
+    'forgePanel/no-fork-point': Record<string, never>
+    /**
+     * The patch, the untracked file list, or the file exceeds `maxDiffBytes`, or the code host
+     * or its provider refuses a change request's diff or file over a size limit.
+     */
+    'forgePanel/diff-too-large': Record<string, never>
+    /** The code host did not provide the change request's diff or file, or its status has not been read yet; the message says why. */
+    'forgePanel/diff-failed': Record<string, never>
   }
 }
 

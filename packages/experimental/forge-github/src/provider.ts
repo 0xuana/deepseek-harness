@@ -5,8 +5,8 @@ import type {
   ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeFailure, ForgeProvider, ForgeReadiness,
   ForgeRepository, MergeRequest,
 } from '@deepseek-ai/dsh-experimental-forge'
-import { GhUnavailableError } from './gh.ts'
-import type { GhRunner } from './gh.ts'
+import { GhOutputLimitError, GhTimeoutError, GhUnavailableError } from './gh.ts'
+import type { GhOutput, GhRunner } from './gh.ts'
 import { HEAD_QUERY, mapHeadResponse, mapSnapshotResponse, snapshotQuery } from './graphql.ts'
 import { checkedRepository, parsePullRequestUrl, parseRemoteUrl } from './urls.ts'
 
@@ -14,6 +14,12 @@ const AUTHENTICATION = /gh auth login|authentication|bad credentials|HTTP 401/i
 
 /** Status code `gh api` appends to the message of a failed request. */
 const HTTP_STATUS = /\(HTTP (\d{3})\)/
+
+/**
+ * GitHub's error code for an answer over its size limits, such as a diff over
+ * 300 files: `gh pr diff` prints it after the field, and `gh api` returns it in the JSON error body.
+ */
+const TOO_LARGE = /\btoo_large\b/
 
 /** A full SHA-1 or SHA-256 object name. */
 const COMMIT = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i
@@ -99,6 +105,27 @@ export class GitHubProvider implements ForgeProvider {
     ], signal)
   }
 
+  /** Read the pull request's diff with `gh pr diff`, which GitHub computes against the merge base. */
+  async diff(ref: ChangeRequestRef, signal: AbortSignal): Promise<string | ForgeFailure> {
+    const { host, owner, name } = checkedRepository(ref)
+    return await this.read(['pr', 'diff', String(ref.number), '--repo', `${host}/${owner}/${name}`, '--color', 'never'], signal)
+  }
+
+  /** Read one file at a commit through the contents API in its raw form. */
+  async fileText(ref: ChangeRequestRef, commit: string, path: string, signal: AbortSignal): Promise<string | ForgeFailure> {
+    const { host, owner, name } = checkedRepository(ref)
+    if (!COMMIT.test(commit)) throw new Error(`forge-github: invalid commit ${JSON.stringify(commit)}`)
+    return await this.read([
+      'api', '--hostname', host, '-H', 'Accept: application/vnd.github.raw+json',
+      `repos/${owner}/${name}/contents/${encodedPath(path)}?ref=${commit}`,
+    ], signal)
+  }
+
+  fileUrl(ref: ChangeRequestRef, commit: string, path: string): string {
+    const { host, owner, name } = ref.repository
+    return `https://${host}/${owner}/${name}/blob/${commit}/${encodedPath(path)}`
+  }
+
   async readiness(host: string, signal: AbortSignal): Promise<ForgeReadiness> {
     try {
       const output = await this.gh(['auth', 'status', '--hostname', host], signal)
@@ -110,21 +137,46 @@ export class GitHubProvider implements ForgeProvider {
     }
   }
 
-  /** Run one changing `gh` command; a refusal or a `gh` that cannot start becomes a failure. */
-  private async act(args: readonly string[], signal: AbortSignal): Promise<ForgeActionFailure | undefined> {
-    let output
+  /**
+   * Run one reading `gh` command, returning its output. A refusal, a `gh` that
+   * cannot start, output over `maxOutputBytes`, and a run past `timeoutMs` become failures.
+   */
+  private async read(args: readonly string[], signal: AbortSignal): Promise<string | ForgeFailure> {
+    let output: GhOutput | GhUnavailableError
     try {
-      output = await this.gh(args, signal)
+      output = await this.attempt(args, signal)
     } catch (error) {
-      if (error instanceof GhUnavailableError) return { code: 'failed', message: error.message }
+      if (error instanceof GhOutputLimitError) return { code: 'too-large', message: error.message }
+      if (error instanceof GhTimeoutError) return { code: 'unavailable', message: error.message }
       throw error
     }
+    if (output instanceof GhUnavailableError) return { code: 'unavailable', message: output.message }
+    if (output.exitCode === 0) return output.stdout
+    const { message, status } = refusal(output)
+    if (AUTHENTICATION.test(output.stderr)) return { code: 'unauthenticated', message }
+    if (TOO_LARGE.test(output.stderr) || TOO_LARGE.test(output.stdout)) return { code: 'too-large', message }
+    return { code: status === '404' || /could not resolve to a pullrequest/i.test(output.stderr) ? 'not-found' : 'unavailable', message }
+  }
+
+  /** Run one changing `gh` command; a refusal or a `gh` that cannot start becomes a failure. */
+  private async act(args: readonly string[], signal: AbortSignal): Promise<ForgeActionFailure | undefined> {
+    const output = await this.attempt(args, signal)
+    if (output instanceof GhUnavailableError) return { code: 'failed', message: output.message }
     if (output.exitCode === 0) return undefined
-    const message = hostMessage(output.stdout) ?? firstLine(output.stderr) ?? `gh exited with ${output.exitCode}`
-    const status = HTTP_STATUS.exec(output.stderr)?.[1]
+    const { message, status } = refusal(output)
     if (status === '409') return { code: 'stale', message }
     if (AUTHENTICATION.test(output.stderr)) return { code: 'unauthenticated', message }
     return { code: 'failed', message }
+  }
+
+  /** Run one `gh` command; a `gh` that cannot start resolves to its error, and every other rejection passes on. */
+  private async attempt(args: readonly string[], signal: AbortSignal): Promise<GhOutput | GhUnavailableError> {
+    try {
+      return await this.gh(args, signal)
+    } catch (error) {
+      if (error instanceof GhUnavailableError) return error
+      throw error
+    }
   }
 
   private async fetchHost(
@@ -144,11 +196,24 @@ export class GitHubProvider implements ForgeProvider {
   }
 }
 
+/** Why `gh` refused: GitHub's message, else its first diagnostic line, with the HTTP status it names. */
+function refusal(output: GhOutput): { readonly message: string; readonly status: string | undefined } {
+  return {
+    message: hostMessage(output.stdout) ?? firstLine(output.stderr) ?? `gh exited with ${output.exitCode}`,
+    status: HTTP_STATUS.exec(output.stderr)?.[1],
+  }
+}
+
 /** The `message` of the JSON error body `gh api` prints for a failed request. */
 function hostMessage(stdout: string): string | undefined {
   const body = parseJson(stdout)
   if (typeof body !== 'object' || body === null || !('message' in body) || typeof body.message !== 'string') return undefined
   return body.message.trim().length > 0 ? body.message : undefined
+}
+
+/** A repository path with each segment percent-encoded, for an API path or a web URL. */
+function encodedPath(path: string): string {
+  return path.split('/').map(segment => encodeURIComponent(segment)).join('/')
 }
 
 function parseJson(text: string): unknown {

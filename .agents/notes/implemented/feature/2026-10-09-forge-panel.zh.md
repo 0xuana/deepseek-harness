@@ -12,7 +12,7 @@ Status: implemented
 
 [`dsh-experimental-client-ui-forge`](../../../../packages/experimental/client-ui-forge/README.zh.md) 是一个双端包。宿主端的 `forgePanel` Remote 把面板为一个 Session 展示的全部内容组装成一条流式状态；forge 注册表与绑定服务只保留各自的领域操作。客户端包括一个右侧边栏标签页、一个显示或隐藏它的 Session 标题栏按钮、一个标题栏分支标签、一个新会话选项、一张位于输入框上方的创建卡片，以及一个 toast。所有界面都把已绑定的条目称为变更请求（forge 注册表的术语），不随代码托管平台的叫法变化。[forge 套件](../../../../packages/experimental/forge-bundle/README.zh.md)把面板、forge 注册表、GitHub 提供方、绑定服务与一个隔离的 worktree 服务作为插件页中默认禁用的一个条目发布。
 
-Remote 通过 Session 的子进程提供方、在 Session 的只读沙箱策略下检查检出，因此它读到的与 Session 命令看到的相同，且无法写入。检查只读取 ref 与配置：顶层目录、Git 目录与公共 Git 目录、分支或缩写的 HEAD 提交、上游与远端。它在 Session 被关注时、每个 `working-directory/change`、`tool/result` 与 `sandbox/mode` 事件之后以及刷新时运行，一次只运行一个，最多再追加一次。
+Remote 通过 Session 的子进程提供方、在 Session 的只读沙箱策略下检查检出，因此它读到的与 Session 命令看到的相同，且无法写入。检查读取顶层目录、Git 目录与公共 Git 目录、分支或缩写的 HEAD 提交、上游与远端，以及分支相对于其分叉点的变更规模。它在 Session 被关注时、每个 `working-directory/change`、`tool/result` 与 `sandbox/mode` 事件之后以及刷新时运行，一次只运行一个，最多再追加一次。
 
 状态轮询跟随面板订阅：只有该 Session 的某个界面挂载时才监听其绑定，注册表停止轮询无人监听的变更请求。每张卡片保留最近一次轮询得到的快照，因此短暂的失败不会让标题与编号消失。Session 只有一个打开的变更请求时，它的卡片默认展开；有多个时全部折叠；用户第一次展开或收起卡片后，以用户的选择为准。
 
@@ -24,6 +24,8 @@ Session 所在的 worktree 可能在 Session 之外被删除。每次检查都�
 
 面板不再在现有 worktree 之间移动 Session。移除变更请求会追加一条 `dismiss` 记录，它的 toast 通过 `track` 提供“撤销”。
 
+面板还通过变更视图展示 Session 工作背后的变更；变更视图是本包的一个资源标签页类型。Remote 在宿主上把每个 diff 解析成文件与 hunk，因此浏览器无需补丁解析器即可绘制，每次读取都受 `maxDiffBytes` 与 `maxUntrackedFiles` 约束。本地变更来自 Session 执行环境中受限的 `git diff`，范围由用户选择：默认是分支相对于分叉点的变更，也可以是未提交、未暂存或已暂存的变更；未跟踪文件经 Session 的文件系统读取，显示为新文件。变更请求的变更来自代码托管平台，取自绑定最新状态中的 head，经 forge seam 新增的两个提供方读取操作 `diff` 与 `fileText` 获得。Host 为每个变更请求保留最近读到的补丁，按 head 提交与目标分支区分，总量受 `maxCachedDiffBytes` 约束，因此在同一 head 下重新打开、刷新与导航都不会再次下载；托管平台或提供方因结果超过其大小上限而拒绝时报告 forge 失败 `too-large`，视图随之提供变更请求的网页而不是重试。hunk 之间未变更的行从文件的新版本展开，即工作树、暂存区或 head 提交，并且只在该文本仍与 hunk 吻合时展开。每次检查还会为变更卡片统计分支的变更规模；没有打开中的变更请求以当前检出分支为源分支时才显示该卡片。卡片上的“创建变更请求”向 Session 发送一条用户消息，由 Agent 用自己的工具创建变更请求，绑定像其他变更请求一样来自 `gh pr create`。
+
 ## Deferred
 
 在左侧导航“插件”“自动化任务”旁边新增代码审查页、列出用户在所选提供方上的 pull request 或 merge request，这项工作推迟。它的接入不需要改动本包面向 Session 的界面：
@@ -32,6 +34,8 @@ Session 所在的 worktree 可能在 Session 之外被删除。每次检查都�
 - **Remote**——一条类似 `follow` 的流，以提供方与筛选条件而不是 Session 为键，通过同一个 `ctx.forge.watch` 轮询。
 - **客户端**——在本包中以 `sidebar.panellist` 条目加一个 `main` 页面实现（与 `ui-schedule` 相同），渲染接收变更请求、其快照与可选操作的 `ChangeRequestCard`。
 - **设置**——在套件的配置页中选择提供方与主机。
+
+变更视图目前还没有单个提交与上一轮的范围；两者将是经 `localDiff` 读取的更多 `ForgeLocalScope` 种类。
 
 ## Alternatives considered
 
@@ -63,6 +67,16 @@ Session 所在的 worktree 可能在 Session 之外被删除。每次检查都�
 
 **Session 行悬停分区与手动粘贴 URL 跟踪。** 二者都与标签页重复。绑定来自 `gh pr create` 与推送，`track` 保留给“撤销”使用。
 
+**在浏览器中解析补丁。** Remote 将传输不受限的补丁文本，浏览器也需要补丁解析器；宿主约束读取并只解析一次。
+
+**复用代码审查标签页的文件对比。** 它属于另一个插件，本包在运行时不能导入；把它移入共享基础组件又会为一个使用方改动共享包。变更视图改用共享的高亮器、菜单、路径标签与 diff 颜色 token 构建。
+
+**从本地仓库读取变更请求的 diff。** 当前检出分支可能领先或落后于托管平台，基准分支也可能没有拉取；评审者看到的是托管平台的 diff。视图改为在当前检出分支有超出 head 的提交时给出说明。
+
+**在面板里根据失败信息识别 diff 过大。** 失败信息属于提供方及其托管平台，会随它们变化；失败代码让每个提供方报告自己的上限，面板只按代码分支。
+
+**直接在卡片上创建变更请求。** 面板需要推送分支并撰写标题与描述；发送消息让 Agent 用自己的工具和用户的指示完成这两件事，绑定变更请求的方式也只保留一种。
+
 ## Consequences
 
-面板只在打开时显示当前状态；没有任何界面挂载时检查结束不会有通知。Session 之外的改动要等到刷新或下一个工具结果才会出现。每次检查最多在 Session 的执行环境中启动七个短暂的 Git 进程。只有在第一步之前提出请求的 Session 才会有 worktree，失败或被取消的尝试可能留下它的分支或检出。目前只有 Web Session Remote 接纳消息；其他发送方在第一轮之内创建 worktree，也会向已删除的 worktree 发送消息。恢复会丢失从未提交的修改。要求合并队列的基准分支无法从面板合并。同时启用 Git Worktrees 时会存在两个互不影响的 worktree 服务；模型的工具看不到面板的服务。
+面板只在打开时显示当前状态；没有任何界面挂载时检查结束不会有通知。Session 之外的改动要等到刷新或下一个工具结果才会出现。只有一个远端时，每次检查最多在 Session 的执行环境中启动十一个短暂的 Git 进程；为寻找分叉点每多尝试一个远端，就多启动两个。只有在第一步之前提出请求的 Session 才会有 worktree，失败或被取消的尝试可能留下它的分支或检出。目前只有 Web Session Remote 接纳消息；其他发送方在第一轮之内创建 worktree，也会向已删除的 worktree 发送消息。恢复会丢失从未提交的修改。要求合并队列的基准分支无法从面板合并。同时启用 Git Worktrees 时会存在两个互不影响的 worktree 服务；模型的工具看不到面板的服务。本地或变更请求的 diff 超过 `maxDiffBytes`，或被托管平台拒绝时，不显示任何文件。展开变更请求中未变更的行时，每个文件只从托管平台读取一次。

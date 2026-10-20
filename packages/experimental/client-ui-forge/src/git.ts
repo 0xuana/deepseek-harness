@@ -35,14 +35,20 @@ export interface Inspection {
   readonly remotes: readonly GitRemote[]
 }
 
-interface GitOutput {
+/** Complete output of one Git command that exited with an allowed code. */
+export interface GitOutput {
   readonly stdout: string
   readonly stderr: string
   readonly exitCode: number
 }
 
 /** Runs one Git subcommand in a fixed directory; output with an exit code outside `allowedExitCodes` throws. */
-type Git = (name: string, args: readonly string[], allowedExitCodes?: readonly number[]) => Promise<GitOutput>
+export type Git = (name: string, args: readonly string[], allowedExitCodes?: readonly number[]) => Promise<GitOutput>
+
+/** Thrown when a Git command prints more than `maxOutputBytes` on standard output. */
+export class GitOutputTooLarge extends Error {
+  override name = 'GitOutputTooLarge'
+}
 
 /**
  * Clear inherited repository, configuration, and replacement-ref selectors;
@@ -166,7 +172,18 @@ export async function hasBranch(
   return ref.exitCode === 0
 }
 
-function gitIn(ctx: Context, config: GitConfig, session: Session, directory: string, signal: AbortSignal): Git {
+/**
+ * Bind the confined Git runner to one Session and directory: every command
+ * runs under a read-only confinement of the Session's sandbox policy with the
+ * scrubbed environment, the fixed command prefix, and `config`'s limits.
+ * @param ctx - context that provides `subprocess`, `sandbox`, and `sandboxPolicy`.
+ * @param config - executable and process limits.
+ * @param session - Session whose sandbox policy and execution world apply.
+ * @param directory - working directory of every command.
+ * @param signal - cancellation of every command.
+ * @returns the runner.
+ */
+export function gitIn(ctx: Context, config: GitConfig, session: Session, directory: string, signal: AbortSignal): Git {
   const policy: SandboxPolicy = { ...ctx.sandboxPolicy.resolve({ session, mode: 'read-only' }), mode: 'read-only' }
   return (name, args, allowedExitCodes = [0]) => runGit(ctx, config, policy, directory, name, args, signal, allowedExitCodes)
 }
@@ -223,7 +240,7 @@ async function runGit(
     if (outcome.exitCode === null || !allowedExitCodes.includes(outcome.exitCode)) {
       throw new Error(`git ${name} failed (${outcome.signal ?? outcome.exitCode}): ${firstLine(stderr.text)}`)
     }
-    if (stdout.lossy) throw new Error(`git ${name} output exceeds maxOutputBytes`)
+    if (stdout.lossy) throw new GitOutputTooLarge(`git ${name} output exceeds maxOutputBytes`)
     return { stdout: stdout.text, stderr: stderr.text, exitCode: outcome.exitCode }
   } finally {
     child.terminate()

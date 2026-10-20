@@ -1,7 +1,7 @@
 /** Session header entry that shows or hides the forge tab and marks change requests that need attention. */
 
 import type { ReactNode } from 'react'
-import { StateDot, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, StateDot, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { HostObservable, InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { ChangeRequestGlyph } from './glyphs.tsx'
@@ -52,8 +52,8 @@ export function HeaderButton({ usePanel, useVisible, toggle, t }: HeaderButtonPr
   const label = t(attention ? 'header.attention' : 'header.label')
   return (
     <Tooltip label={label} side="bottom">
-      <button
-        type="button"
+      <Button
+        size="sm"
         className={css.trigger}
         aria-label={label}
         aria-pressed={pressed}
@@ -62,7 +62,7 @@ export function HeaderButton({ usePanel, useVisible, toggle, t }: HeaderButtonPr
       >
         <ChangeRequestGlyph tone="open" tinted={false} size={16} />
         {attention && <StateDot state="error" size={6} className={css.dot} />}
-      </button>
+      </Button>
     </Tooltip>
   )
 }

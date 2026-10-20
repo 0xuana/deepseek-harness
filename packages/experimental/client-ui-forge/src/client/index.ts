@@ -1,4 +1,7 @@
-/** Browser entry of the forge panel: the sidebar tab, the header entries, the worktree option and creation card, and their Remote. */
+/**
+ * Browser entry of the forge panel: the sidebar tab, the changes view, the
+ * header entries, the worktree option and creation card, and their Remote.
+ */
 
 import type { Context } from '@deepseek-ai/cordis'
 import remote from '@deepseek-ai/dsh-experimental-client-ui-forge/remote'
@@ -8,6 +11,11 @@ export { inject } from './mount.ts'
 export type { ForgePanelKey } from './locales.ts'
 export type { BranchChipInjected, BranchChipProps } from './BranchChip.tsx'
 export type { ChangeRequestActions, ChangeRequestCardProps } from './ChangeRequestCard.tsx'
+export type { ChangesParams, ChangesSource, ChangesTarget } from './changes-address.ts'
+export type { ChangesTabInjected, ChangesTabProps } from './ChangesTab.tsx'
+export type { ChangesTabTitleProps } from './ChangesTabTitle.tsx'
+export type { DiffFileAction, DiffFileProps, DiffFileText } from './DiffFile.tsx'
+export type { LocalChangesCardProps } from './LocalChangesCard.tsx'
 export type { ForgeTabInjected, ForgeTabProps } from './ForgeTab.tsx'
 export type { HeaderButtonInjected, HeaderButtonProps } from './HeaderButton.tsx'
 export type { WorktreeProgressInjected, WorktreeProgressProps } from './WorktreeProgress.tsx'

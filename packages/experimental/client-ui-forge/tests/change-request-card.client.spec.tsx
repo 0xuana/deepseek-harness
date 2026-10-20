@@ -106,17 +106,21 @@ describe('ChangeRequestCard head', () => {
 })
 
 describe('collapsed ChangeRequestCard', () => {
-  it('summarizes an open change request by its number and checks, without its actions or diff size', () => {
+  it('summarizes an open change request by its number and checks beside its header actions, without its rows', () => {
     const b = card(entry(7, snapshot(7)))
     const meta = metaOf(b)
     expect(within(meta).getByText('#7')).toBeTruthy()
     expect(within(meta).getByText('·')).toBeTruthy()
     expect(within(meta).getByText(en['change.ci.passed']).querySelector('[data-forge-check]')?.getAttribute('data-forge-check')).toBe('success')
     expect(meta.querySelector('[data-flag]')).toBeNull()
+    expect(within(b.item).queryByText(en['change.row.changes'])).toBeNull()
     expect(within(b.item).queryByText('+12')).toBeNull()
-    for (const name of [en['change.view'], en['change.copy'], 'Remove #7 from this Session']) {
-      expect(within(b.item).queryByRole('button', { name })).toBeNull()
-    }
+    fireEvent.click(within(b.head).getByRole('button', { name: en['change.view'] }))
+    fireEvent.click(within(b.head).getByRole('button', { name: en['change.copy'] }))
+    fireEvent.click(within(b.head).getByRole('button', { name: 'Remove #7 from this Session' }))
+    expect(b.openLink).toHaveBeenCalledWith('https://github.com/octo/demo/pull/7')
+    expect(b.copyLink).toHaveBeenCalledWith('https://github.com/octo/demo/pull/7')
+    expect(b.remove).toHaveBeenCalledOnce()
   })
 
   it.each([
@@ -226,7 +230,7 @@ describe('expanded ChangeRequestCard', () => {
     expect(within(b.item).getByText(`${MINUS}3`)).toBeTruthy()
 
     fireEvent.click(within(b.head).getByRole('button', { name: en['change.view'] }))
-    fireEvent.click(within(b.item).getByRole('button', { name: en['change.copy'] }))
+    fireEvent.click(within(b.head).getByRole('button', { name: en['change.copy'] }))
     fireEvent.click(within(b.head).getByRole('button', { name: 'Remove #7 from this Session' }))
     expect(b.openLink).toHaveBeenCalledWith('https://github.com/octo/demo/pull/7#web')
     expect(b.copyLink).toHaveBeenCalledWith('https://github.com/octo/demo/pull/7#web')
@@ -289,7 +293,8 @@ describe('expanded ChangeRequestCard', () => {
     const summary = rowValue(b.item, en['change.row.checks'])
     expect(summary.textContent).toBe('1 failed · 2 running · 2 passed · 3 other')
     expect(summary.getAttribute('data-tone')).toBe('error')
-    expect(summary.querySelector('[data-forge-check]')?.getAttribute('data-forge-check')).toBe('failure')
+    // The row leads with the combined outcome.
+    expect(toggle.querySelector('[data-forge-check]')?.getAttribute('data-forge-check')).toBe('failure')
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
     expect(checkRows()).toEqual([])
 
@@ -348,7 +353,7 @@ describe('expanded ChangeRequestCard', () => {
     expect(metaOf(b).textContent).toBe('#1')
     expect(within(b.item).queryByText(en['change.row.checks'])).toBeNull()
     expect(within(b.item).queryByText('+12')).toBeNull()
-    fireEvent.click(within(b.item).getByRole('button', { name: en['change.copy'] }))
+    fireEvent.click(within(b.head).getByRole('button', { name: en['change.copy'] }))
     expect(b.copyLink).toHaveBeenCalledWith('https://github.com/octo/demo/pull/1')
   })
 
@@ -487,5 +492,49 @@ describe('ChangeRequestCard actions', () => {
       expect(within(b.item).queryAllByRole('button', { name: new RegExp(`^(${en['change.markReady']}|${en['change.merge']})$`) })).toEqual([])
       cleanup()
     }
+  })
+})
+
+describe('ChangeRequestCard changes', () => {
+  it('opens the changes of a served change request from its diff size', () => {
+    const value = entry(7, snapshot(7, { additions: 12345 }))
+    const viewChanges = vi.fn<(entry: ForgePanelChangeRequest) => void>()
+    const b = card(value, { expanded: true, actions: { viewChanges } })
+    const button = within(b.item).getByRole('button', { name: 'View the changes of #7: 12,345 lines added, 3 lines deleted' })
+    expect(button.textContent).toBe(`${en['change.row.changes']}+12,345${MINUS}3`)
+    fireEvent.click(button)
+    expect(viewChanges).toHaveBeenCalledWith(value)
+  })
+
+  it('shows only the diff size of a change request no provider serves', () => {
+    const viewChanges = vi.fn<(entry: ForgePanelChangeRequest) => void>()
+    const b = card({ ...unserved('https://example.test/review/9'), snapshot: snapshot(9) }, { expanded: true, actions: { viewChanges } })
+    expect(within(b.item).queryByRole('button', { name: /View the changes/ })).toBeNull()
+    expect(within(b.item).getByText('+12')).toBeTruthy()
+  })
+})
+
+describe('ChangeRequestCard layout', () => {
+  it('shows the action row only for a change request with an action', () => {
+    const waiting = card(entry(7, snapshot(7)), { expanded: true, actions: { merge: vi.fn(async () => {}) } })
+    expect(waiting.item.querySelector(`.${css.footer}`)).toBeNull()
+    cleanup()
+    const draft = card(entry(8, snapshot(8, { draft: true })), { expanded: true, actions: { markReady: vi.fn(async () => {}) } })
+    const footer = draft.item.querySelector(`.${css.footer}`)
+    if (!(footer instanceof HTMLElement)) throw new Error('no action row')
+    expect(within(footer).getByRole('button').textContent).toBe(en['change.markReady'])
+  })
+
+  it('shows the changed lines of a finished change request below its end', () => {
+    const b = card(entry(9, snapshot(9, { state: 'closed', closedAt: null })), { expanded: true })
+    const rows = b.item.querySelector(`.${css.rows}`)
+    if (!(rows instanceof HTMLElement)) throw new Error('no rows')
+    expect([...rows.children].map(row => row.textContent)).toEqual([en['change.state.closed'], `${en['change.row.changes']}+12${MINUS}3`])
+  })
+
+  it('shows a neutral check glyph without checks', () => {
+    const b = card(entry(1, snapshot(1, { checksRollup: 'none' })), { expanded: true })
+    expect(rowValue(b.item, en['change.row.checks']).textContent).toBe(en['change.ci.none'])
+    expect(b.item.querySelector('[data-forge-check]')?.getAttribute('data-forge-check')).toBe('neutral')
   })
 })

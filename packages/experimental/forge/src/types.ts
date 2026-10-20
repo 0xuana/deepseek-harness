@@ -110,8 +110,12 @@ export interface ChangeRequestSnapshot {
 
 /** Why a provider could not read a change request. */
 export interface ForgeFailure {
-  /** `not-found`: the host does not expose it; `unauthenticated`: credentials are missing or rejected; `unavailable`: any other failure. */
-  readonly code: 'not-found' | 'unauthenticated' | 'unavailable'
+  /**
+   * `not-found`: the host does not expose it; `unauthenticated`: credentials are missing or rejected;
+   * `too-large`: the host or the provider refuses an answer over its size limit, so reading again fails
+   * the same way; `unavailable`: any other failure.
+   */
+  readonly code: 'not-found' | 'unauthenticated' | 'too-large' | 'unavailable'
   /** Human-readable cause. */
   readonly message: string
 }
@@ -183,6 +187,12 @@ export interface ForgeProvider {
   markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
   /** Merge a change request while its head is still `request.headSha`, resolving to undefined once merged. */
   merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
+  /** Read the changes of a change request as the host computes them, as one unified patch with `a/` and `b/` path prefixes. */
+  diff(ref: ChangeRequestRef, signal: AbortSignal): Promise<string | ForgeFailure>
+  /** Read the text of `path` at `commit` in the change request's repository. */
+  fileText(ref: ChangeRequestRef, commit: string, path: string, signal: AbortSignal): Promise<string | ForgeFailure>
+  /** Build the web page of `path` at `commit` in the change request's repository. */
+  fileUrl(ref: ChangeRequestRef, commit: string, path: string): string
 }
 
 /**

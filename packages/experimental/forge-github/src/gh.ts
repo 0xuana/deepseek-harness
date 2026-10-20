@@ -31,6 +31,16 @@ export class GhUnavailableError extends Error {
   override name = 'GhUnavailableError'
 }
 
+/** Thrown when one invocation outlives `timeoutMs`; the process is killed. */
+export class GhTimeoutError extends Error {
+  override name = 'GhTimeoutError'
+}
+
+/** Thrown when an output stream exceeds `maxOutputBytes`; the process is killed. */
+export class GhOutputLimitError extends Error {
+  override name = 'GhOutputLimitError'
+}
+
 /**
  * Build a runner for `gh` on the host. The child inherits the scrubbed parent
  * environment, so variables whose names contain KEY, PASSWORD, SECRET, or
@@ -52,8 +62,8 @@ export function ghRunner(config: GhConfig): GhRunner {
     })
     const command = ['gh', ...args.slice(0, 1)].join(' ')
     if (result.isCanceled) throw signal.reason
-    if (result.timedOut) throw new Error(`${command} timed out after ${config.timeoutMs}ms`)
-    if (result.isMaxBuffer) throw new Error(`${command} output exceeds maxOutputBytes`)
+    if (result.timedOut) throw new GhTimeoutError(`${command} timed out after ${config.timeoutMs}ms`)
+    if (result.isMaxBuffer) throw new GhOutputLimitError(`${command} output exceeds maxOutputBytes`)
     // A result without an exit code failed before the process ran; execa then always sets shortMessage.
     if (result.exitCode === undefined) throw new GhUnavailableError(`gh could not start: ${String(result.shortMessage)}`)
     return { exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr }

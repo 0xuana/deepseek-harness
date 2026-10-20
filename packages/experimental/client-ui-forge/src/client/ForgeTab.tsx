@@ -1,8 +1,8 @@
-/** Body of the forge sidebar tab: where the Session works and the change requests it created or pushed. */
+/** Body of the forge sidebar tab: where the Session works, its local changes, and the change requests it created or pushed. */
 
 import { useEffect, useState, type ReactNode } from 'react'
 import {
-  Button, IconBranchOutlineRegular, IconRefreshOutlineRegular, IconWarningTriangleOutlineRegular, StateDot, Tooltip,
+  Button, IconBranchOutlineRegular, IconCopyOutlineRegular, IconWarningTriangleOutlineRegular, StateDot, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
@@ -10,11 +10,14 @@ import type { MergeRequest } from '@deepseek-ai/dsh-experimental-forge/types'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { ForgePanelChangeRequest, ForgePanelState } from '../types.ts'
+import { changesAddress, type ChangesSource } from './changes-address.ts'
 import { ChangeRequestCard, type ChangeRequestActions } from './ChangeRequestCard.tsx'
 import { checkoutLabel } from './checkout.ts'
+import { LocalChangesCard } from './LocalChangesCard.tsx'
 import type { NS } from './locales.ts'
+import { RefreshGlyph } from './RefreshGlyph.tsx'
 import type { PanelSnapshot } from './source.ts'
-import { defaultExpanded } from './status.ts'
+import { defaultExpanded, openChangeRequestOf } from './status.ts'
 import css from './ForgeTab.module.css'
 
 /** Business face of the tab body. */
@@ -23,8 +26,11 @@ export interface ForgeTabInjected {
   readonly hooks: { readonly panel: HostObservable<PanelSnapshot>; readonly host: HostObservable<RemoteHostFacts> }
   /** Open the stream again after it ended. */
   readonly reconnect: () => void
-  /** Reinspect the checkout, probe sign-in, and poll the change requests. */
-  readonly refresh: () => void
+  /**
+   * Reinspect the checkout, probe sign-in, and poll the change requests;
+   * settles once the Host has inspected and probed, after reporting a failure.
+   */
+  readonly refresh: () => Promise<void>
   /** Remove a change request from the Session, offering to undo it. */
   readonly remove: (entry: ForgePanelChangeRequest) => void
   /** Mark a draft ready for review; settles once the outcome is reported. */
@@ -37,22 +43,27 @@ export interface ForgeTabInjected {
   readonly openLink: (url: string) => void
   /** Copy text to the clipboard and report the outcome. */
   readonly copyText: (text: string) => void
+  /** Copy a path to the clipboard and report the outcome. */
+  readonly copyPath: (path: string) => void
   /** Record whether the tab is visible, for the header entry's pressed state. */
   readonly reportVisible: (visible: boolean) => void
+  /** Ask the Session's Agent to create a change request for its changes, reporting the outcome. */
+  readonly createChangeRequest: () => void
 }
 
 /** Full props of the tab body. */
 export type ForgeTabProps =
-  Pick<PropsRuntime<'sidebar.right.pane.tab'>, 'useTabInfo'>
+  Pick<PropsRuntime<'sidebar.right.pane.tab'>, 'useTabInfo' | 'sessionId'>
   & InjectFace<ForgeTabInjected>
   & PropsLocale<typeof NS>
 
 type Translate = ForgeTabProps['t']
 
-function Checkout({ state, home, restore, t }: {
+function Checkout({ state, home, restore, copyPath, t }: {
   readonly state: ForgePanelState
   readonly home: string | undefined
   readonly restore: () => void
+  readonly copyPath: (path: string) => void
   readonly t: Translate
 }): ReactNode {
   const checkout = state.checkout
@@ -66,6 +77,7 @@ function Checkout({ state, home, restore, t }: {
       </Tooltip>
     )
   }
+  const copyLabel = t(label.worktree ? 'checkout.copyWorktreePath' : 'checkout.copyProjectPath')
   return (
     <div className={css.checkout} data-forge-checkout="" data-missing={label.missing ? '' : undefined}>
       <Tooltip label={label.tooltip} side="bottom">
@@ -79,6 +91,11 @@ function Checkout({ state, home, restore, t }: {
         </span>
       </Tooltip>
       <span className={css.checkoutNote}>{label.kind}</span>
+      <Tooltip label={copyLabel} side="bottom">
+        <button type="button" className={`${css.iconButton} ${css.checkoutCopy}`} aria-label={copyLabel} onClick={() => { copyPath(label.path) }}>
+          <IconCopyOutlineRegular size={14} />
+        </button>
+      </Tooltip>
       {label.missing && <Button size="sm" variant="outline" onClick={restore}>{t('checkout.restore')}</Button>}
     </div>
   )
@@ -114,19 +131,23 @@ function SignIn({ state, copyText, t }: {
 }
 
 /**
- * Render the forge tab of one Session. The only open change request starts
- * expanded; once the user expands or collapses a card, the panel keeps that
- * choice across later updates.
+ * Render the forge tab of one Session. The local changes card shows while the
+ * `branch` scope changes files and no open change request has the checked-out
+ * branch as its head. The only open change request starts expanded; once the
+ * user expands or collapses a card, the panel keeps that choice across later updates.
  * @param props - tab information, panel snapshot and Host facts hooks, actions, and copy.
  * @returns the tab body.
  */
 export function ForgeTab({
-  useTabInfo, usePanel, useHost, reconnect, refresh, remove, markReady, merge, restore, openLink, copyText, reportVisible, t,
+  useTabInfo, sessionId, usePanel, useHost, reconnect, refresh, remove, markReady, merge, restore, openLink, copyText, copyPath,
+  reportVisible, createChangeRequest, t,
 }: ForgeTabProps): ReactNode {
   const snapshot = usePanel(current => current)
   const home = useHost(facts => facts.home)
-  const visible = useTabInfo().tab.visible
+  const { tab } = useTabInfo()
+  const visible = tab.visible
   const [chosen, setChosen] = useState<ReadonlySet<string> | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
   useEffect(() => {
     reportVisible(visible)
   }, [reportVisible, visible])
@@ -139,7 +160,19 @@ export function ForgeTab({
     </div>
   )
   if (state === null) return <div className={css.centered}>{disconnected || <StateDot state="ongoing" />}</div>
-  const actions: ChangeRequestActions = { openLink, copyLink: copyText, retry: refresh, remove, markReady, merge }
+  const viewChanges = (source: ChangesSource, path?: string): void => {
+    tab.actions.openResource(changesAddress({ sessionId, source }), path === undefined ? undefined : { params: { path } })
+  }
+  const startRefresh = (): void => {
+    if (refreshing) return
+    setRefreshing(true)
+    void refresh().finally(() => { setRefreshing(false) })
+  }
+  const actions: ChangeRequestActions = {
+    openLink, copyLink: copyText, retry: startRefresh, remove, markReady, merge,
+    viewChanges: (entry) => { viewChanges({ kind: 'change', url: entry.url }) },
+  }
+  const local = state.local !== null && state.local.files.length > 0 && openChangeRequestOf(state) === undefined ? state.local : null
   const expanded = chosen ?? defaultExpanded(state.changeRequests)
   const toggle = (url: string): void => {
     const next = new Set(expanded)
@@ -152,13 +185,22 @@ export function ForgeTab({
   return (
     <div className={css.root} data-forge-panel="">
       {disconnected}
-      <Checkout state={state} home={home} restore={restore} t={t} />
+      <Checkout state={state} home={home} restore={restore} copyPath={copyPath} t={t} />
+      {local !== null && (
+        <LocalChangesCard
+          local={local}
+          creatable={state.repository !== null}
+          view={(path) => { viewChanges({ kind: 'local' }, path) }}
+          create={createChangeRequest}
+          t={t}
+        />
+      )}
       <section className={css.section}>
         <div className={css.sectionHeader}>
           <h3 className={css.sectionTitle}>{t('changes.title', { count })}</h3>
           <Tooltip label={t('refresh')} side="top">
-            <button type="button" className={css.iconButton} aria-label={t('refresh')} onClick={refresh}>
-              <IconRefreshOutlineRegular size={14} />
+            <button type="button" className={css.iconButton} aria-label={t('refresh')} aria-disabled={refreshing} onClick={startRefresh}>
+              <RefreshGlyph busy={refreshing} size={14} />
             </button>
           </Tooltip>
         </div>

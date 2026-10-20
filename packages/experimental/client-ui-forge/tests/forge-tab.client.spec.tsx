@@ -1,12 +1,17 @@
 // @vitest-environment jsdom
-/** Forge tab body: connection states, the checkout row, the sign-in banner, the change request list, and tab visibility. */
+/**
+ * Forge tab body: connection states, the checkout row, the local changes card,
+ * the sign-in banner, the change request list, and tab visibility.
+ */
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
 import type { MergeRequest } from '@deepseek-ai/dsh-experimental-forge/types'
-import type { PaneId, SidebarRightTabInfo, TabId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
+import type { PaneId, SidebarRightTabActions, SidebarRightTabInfo, TabId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { SessionId } from '@deepseek-ai/dsh-session/types'
+import { changesAddress } from '../src/client/changes-address.ts'
 import { ForgeTab, type ForgeTabProps } from '../src/client/ForgeTab.tsx'
 import { en } from '../src/client/locales.ts'
 import type { PanelSnapshot } from '../src/client/source.ts'
@@ -17,10 +22,11 @@ import { created, entry, ready, removed, snapshot, worktree } from './client-fix
 afterEach(cleanup)
 
 const t = makeTranslate(en)
+const SESSION = SessionId('s1')
 const unused = (): never => { throw new Error('the forge tab does not call this tab action') }
 
 /** Tab information of a forge tab whose visibility the test sets. */
-function tabInfo(visible: boolean): SidebarRightTabInfo {
+function tabInfo(visible: boolean, openResource: SidebarRightTabActions['openResource']): SidebarRightTabInfo {
   return {
     sidebar: { expanded: true, fullscreen: false },
     panel: { id: 'pane-1' as PaneId },
@@ -32,7 +38,7 @@ function tabInfo(visible: boolean): SidebarRightTabInfo {
       visible,
       navigation: { address: 'sidebar://forge-panel', params: undefined, revision: 0 },
       signal: new AbortController().signal,
-      actions: { bindCommands: () => () => {}, openResource: unused, openTab: unused, close: unused },
+      actions: { bindCommands: () => () => {}, openResource, openTab: unused, close: unused },
     },
   }
 }
@@ -43,23 +49,38 @@ function tab(state: ForgePanelState | null, options: { disconnected?: boolean; v
   const visibility = createSnapshotStore<boolean>(options.visible ?? true)
   const useVisibility = bindSnapshotSelector(visibility)
   const reconnect = vi.fn<() => void>()
-  const refresh = vi.fn<() => void>()
+  const refresh = vi.fn<() => Promise<void>>(async () => {})
   const remove = vi.fn<(entry: ForgePanelChangeRequest) => void>()
   const markReady = vi.fn<(entry: ForgePanelChangeRequest) => Promise<void>>(async () => {})
   const merge = vi.fn<(entry: ForgePanelChangeRequest, request: MergeRequest) => Promise<void>>(async () => {})
   const restore = vi.fn<() => void>()
   const openLink = vi.fn<(url: string) => void>()
   const copyText = vi.fn<(text: string) => void>()
+  const copyPath = vi.fn<(path: string) => void>()
   const reportVisible = vi.fn<(visible: boolean) => void>()
+  const createChangeRequest = vi.fn<() => void>()
+  const openResource = vi.fn<SidebarRightTabActions['openResource']>()
   const props: ForgeTabProps = {
-    useTabInfo: () => tabInfo(useVisibility(current => current)),
+    useTabInfo: () => tabInfo(useVisibility(current => current), openResource),
+    sessionId: SESSION,
     usePanel: bindSnapshotSelector(panel),
     useHost: bindSnapshotSelector(host),
-    reconnect, refresh, remove, markReady, merge, restore, openLink, copyText, reportVisible,
+    reconnect, refresh, remove, markReady, merge, restore, openLink, copyText, copyPath, reportVisible, createChangeRequest,
     t,
   }
   const view = render(<ForgeTab {...props} />)
-  return { view, panel, visibility, reconnect, refresh, remove, markReady, merge, restore, openLink, copyText, reportVisible }
+  return {
+    view, panel, visibility, reconnect, refresh, remove, markReady, merge, restore, openLink, copyText, copyPath, reportVisible,
+    createChangeRequest, openResource,
+  }
+}
+
+/**
+ * Fire an animation event under the name React DOM listens for here: jsdom
+ * has no `AnimationEvent` but declares `WebkitAnimation`, so React DOM uses the WebKit-prefixed names.
+ */
+function animation(element: Element, phase: 'Start' | 'Iteration'): void {
+  fireEvent(element, new Event(`webkitAnimation${phase}`, { bubbles: true }))
 }
 
 /** The checkout row, or null when the tab shows none. */
@@ -134,6 +155,9 @@ describe('ForgeTab checkout', () => {
     expect(row.textContent).toBe(`main${en['checkout.project']}`)
     fireEvent.mouseEnter(row.querySelector(`.${css.checkoutName}`)!)
     expect(b.view.getByRole('tooltip').textContent).toBe('Project directory: ~/repo')
+    // The copied path keeps the home directory the tooltip abbreviates.
+    fireEvent.click(within(row).getByRole('button', { name: en['checkout.copyProjectPath'] }))
+    expect(b.copyPath).toHaveBeenCalledWith('/work/repo')
   })
 
   it('names a detached HEAD with its commit', () => {
@@ -143,7 +167,11 @@ describe('ForgeTab checkout', () => {
 
   it('calls a linked worktree another tool created a worktree', () => {
     const b = tab(ready({}, { linked: true }))
-    expect(checkoutRow(b.view)?.textContent).toBe(`main${en['checkout.worktree']}`)
+    const row = checkoutRow(b.view)
+    if (row === null) throw new Error('no checkout row')
+    expect(row.textContent).toBe(`main${en['checkout.worktree']}`)
+    fireEvent.click(within(row).getByRole('button', { name: en['checkout.copyWorktreePath'] }))
+    expect(b.copyPath).toHaveBeenCalledWith('/work/repo')
   })
 
   it.each([
@@ -151,7 +179,11 @@ describe('ForgeTab checkout', () => {
     ['the commit it started from', created({ path: '/work/repo-dsh', from: null, baseCommit: '0123456789abcdef' }), 'Worktree · from 0123456'],
   ])('names the worktree this Session created with %s', (_label, made, kind) => {
     const b = tab(ready({ directory: '/work/repo-dsh', worktree: worktree({ created: made }) }, { root: '/work/repo-dsh', branch: 'other', linked: true }))
-    expect(checkoutRow(b.view)?.textContent).toBe(`dsh/0a1b2c3d${kind}`)
+    const row = checkoutRow(b.view)
+    if (row === null) throw new Error('no checkout row')
+    expect(row.textContent).toBe(`dsh/0a1b2c3d${kind}`)
+    fireEvent.click(within(row).getByRole('button', { name: en['checkout.copyWorktreePath'] }))
+    expect(b.copyPath).toHaveBeenCalledWith('/work/repo-dsh')
   })
 
   it('names a removed worktree and restores it on request', () => {
@@ -163,6 +195,51 @@ describe('ForgeTab checkout', () => {
     expect(within(row).getByText(en['missing.title'])).toBeTruthy()
     fireEvent.click(within(row).getByRole('button', { name: en['checkout.restore'] }))
     expect(b.restore).toHaveBeenCalledOnce()
+    // A removed worktree still offers the path it was created at.
+    fireEvent.click(within(row).getByRole('button', { name: en['checkout.copyWorktreePath'] }))
+    expect(b.copyPath).toHaveBeenCalledWith('/work/repo-dsh')
+  })
+})
+
+describe('ForgeTab local changes', () => {
+  const local = { base: 'origin/main', files: [{ path: 'src/a.ts', additions: 3, deletions: 1, binary: false }] }
+  const LOCAL_ADDRESS = changesAddress({ sessionId: SESSION, source: { kind: 'local' } })
+
+  it('shows the changes of the checkout, opens them, and asks for a change request', () => {
+    const b = tab(ready({ local }))
+    const card = b.view.container.querySelector('[data-forge-local]')
+    if (!(card instanceof HTMLElement)) throw new Error('no local changes card')
+    expect(within(card).getByText('HEAD → origin/main')).toBeTruthy()
+    fireEvent.click(within(card).getByRole('button', { name: 'View the changes of this Session: 1 files, 3 lines added, 1 lines deleted' }))
+    expect(b.openResource).toHaveBeenLastCalledWith(LOCAL_ADDRESS, undefined)
+    fireEvent.click(within(card).getByRole('button', { name: en['changes.local.title'] }))
+    fireEvent.click(within(card).getByRole('button', { name: 'src/a.ts+3−1' }))
+    expect(b.openResource).toHaveBeenLastCalledWith(LOCAL_ADDRESS, { params: { path: 'src/a.ts' } })
+    fireEvent.click(within(card).getByRole('button', { name: en['changes.local.create'] }))
+    expect(b.createChangeRequest).toHaveBeenCalledOnce()
+  })
+
+  it('offers no change request for a checkout without a code host repository', () => {
+    const b = tab(ready({ local, repository: null }))
+    expect(b.view.container.querySelector('[data-forge-local]')).not.toBeNull()
+    expect(b.view.queryByRole('button', { name: en['changes.local.create'] })).toBeNull()
+  })
+
+  it.each([
+    ['before the branch scope is read', ready()],
+    ['while the branch scope changes nothing', ready({ local: { base: 'origin/main', files: [] } })],
+    ['once an open change request carries the checked-out branch', ready({ local, changeRequests: [entry(7, snapshot(7, { headBranch: 'main' }))] })],
+  ])('hides the card %s', (_label, state) => {
+    const b = tab(state)
+    expect(b.view.container.querySelector('[data-forge-local]')).toBeNull()
+  })
+
+  it('keeps the card while the change request of the branch is closed or the HEAD is detached', () => {
+    const closed = tab(ready({ local, changeRequests: [entry(7, snapshot(7, { headBranch: 'main', state: 'closed' }))] }))
+    expect(closed.view.container.querySelector('[data-forge-local]')).not.toBeNull()
+    cleanup()
+    const detached = tab(ready({ local, changeRequests: [entry(7, snapshot(7, { headBranch: 'main' }))] }, { branch: null }))
+    expect(detached.view.container.querySelector('[data-forge-local]')).not.toBeNull()
   })
 })
 
@@ -209,13 +286,38 @@ describe('ForgeTab sign-in banner', () => {
 })
 
 describe('ForgeTab change requests', () => {
-  it('shows the empty state and refreshes on request', () => {
+  it('shows the empty state and refreshes on request', async () => {
     const b = tab(ready())
     expect(b.view.getByText('Change requests of this Session · 0')).toBeTruthy()
     expect(b.view.getByText(en['changes.empty'])).toBeTruthy()
     expect(b.view.getByText(en['changes.emptyHint'])).toBeTruthy()
     fireEvent.click(b.view.getByRole('button', { name: en.refresh }))
     expect(b.refresh).toHaveBeenCalledOnce()
+    await act(async () => {})
+  })
+
+  it('turns the refresh glyph until the refresh settles and its turn ends, ignoring clicks meanwhile', async () => {
+    const pending = Promise.withResolvers<undefined>()
+    const b = tab(ready())
+    b.refresh.mockReturnValueOnce(pending.promise)
+    const button = b.view.getByRole('button', { name: en.refresh })
+    const glyph = button.firstElementChild
+    if (!(glyph instanceof HTMLElement)) throw new Error('no refresh glyph')
+    expect(glyph.hasAttribute('data-turning')).toBe(false)
+
+    fireEvent.click(button)
+    animation(glyph, 'Start')
+    fireEvent.click(button)
+    expect(b.refresh).toHaveBeenCalledOnce()
+    expect(button.getAttribute('aria-disabled')).toBe('true')
+    animation(glyph, 'Iteration')
+    expect(glyph.hasAttribute('data-turning')).toBe(true)
+
+    await act(async () => { pending.resolve(undefined) })
+    expect(button.getAttribute('aria-disabled')).toBe('false')
+    expect(glyph.hasAttribute('data-turning')).toBe(true)
+    animation(glyph, 'Iteration')
+    expect(glyph.hasAttribute('data-turning')).toBe(false)
   })
 
   it.each([
@@ -243,7 +345,7 @@ describe('ForgeTab change requests', () => {
     expect(expansion(b.view)).toEqual([false, true])
   })
 
-  it('wires the card actions to the tab actions', () => {
+  it('wires the card actions to the tab actions', async () => {
     const value = entry(7, snapshot(7))
     const b = tab(ready({ changeRequests: [value, entry(8, { code: 'unavailable', message: 'down' })] }))
     const card = b.view.container.querySelector('[data-forge-change="https://github.com/octo/demo/pull/7"]')
@@ -252,11 +354,16 @@ describe('ForgeTab change requests', () => {
     fireEvent.click(within(card).getByRole('button', { name: en['change.view'] }))
     fireEvent.click(within(card).getByRole('button', { name: en['change.copy'] }))
     fireEvent.click(within(card).getByRole('button', { name: 'Remove #7 from this Session' }))
+    fireEvent.click(within(card).getByRole('button', { name: 'View the changes of #7: 12 lines added, 3 lines deleted' }))
     fireEvent.click(b.view.getByRole('button', { name: en.retry }))
+    expect(b.openResource).toHaveBeenCalledWith(
+      changesAddress({ sessionId: SESSION, source: { kind: 'change', url: 'https://github.com/octo/demo/pull/7' } }), undefined,
+    )
     expect(b.openLink).toHaveBeenCalledWith('https://github.com/octo/demo/pull/7')
     expect(b.copyText).toHaveBeenCalledWith('https://github.com/octo/demo/pull/7')
     expect(b.remove).toHaveBeenCalledWith(value)
     expect(b.refresh).toHaveBeenCalledOnce()
+    await act(async () => {})
   })
 
   it('wires ready for review and merge to the tab actions', async () => {

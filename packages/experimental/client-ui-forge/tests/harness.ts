@@ -21,9 +21,10 @@ import WorktreeService from '@deepseek-ai/dsh-experimental-worktree'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import { createAssistantMessage, createToolResultMessage, createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import SandboxProvider from '@deepseek-ai/dsh-sandbox'
+import LocalSandbox from '@deepseek-ai/dsh-sandbox-local'
 import type { ConfinedArgv, SandboxPolicy } from '@deepseek-ai/dsh-sandbox'
 import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
-import SessionStore, { pluginRecordOf, SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { pluginRecordOf, Session as SessionRecord, SESSION_FORMAT_VERSION, SessionId } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent, UserMessage } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
@@ -136,6 +137,35 @@ export async function repository(parent: string, name = 'repo'): Promise<string>
 }
 
 /**
+ * A Session outside any store whose current directory is `cwd`.
+ * @param cwd - the Session's directory.
+ * @returns the Session.
+ */
+export function plainSession(cwd: string): Session {
+  const id = SessionId('forge-git')
+  return SessionRecord.create(id, [], { version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false, cwd })
+}
+
+/**
+ * A context with projections, the local filesystem, the local subprocess runtime, a sandbox, and a
+ * workspace-write policy rooted at `root`; the caller disposes its fiber.
+ * @param record - confinements of the recording sandbox.
+ * @param root - workspace root of the policy and default directory of the filesystem.
+ * @param real - use the platform sandbox instead of the recording one.
+ * @returns the context.
+ */
+export async function gitContext(record: SandboxRecord, root: string, real = false): Promise<Context> {
+  const ctx = new Context()
+  await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(LocalFileSystem, { cwd: root })
+  await ctx.plugin(LocalSubprocessRuntime)
+  if (real) await ctx.plugin(LocalSandbox)
+  else await ctx.plugin(RecordingSandbox, record)
+  await ctx.plugin(SandboxPolicyService, { mode: 'workspace-write', workspaceRoot: root })
+  return ctx
+}
+
+/**
  * Write an executable POSIX script.
  * @param path - script file.
  * @param body - shell commands after the shebang.
@@ -244,11 +274,19 @@ export class FakeProvider implements ForgeProvider {
   readonly probes: string[] = []
   /** Polling failures returned instead of snapshots, by change request number. */
   readonly failures = new Map<number, ForgeFailure>()
+  /** Snapshot fields that replace the defaults, by change request number. */
+  readonly overrides = new Map<number, Partial<ChangeRequestSnapshot>>()
   readinessImpl: (host: string, signal: AbortSignal) => Promise<ForgeReadiness> = () => Promise.resolve({ state: 'ready', message: null })
   /** Every action in call order, such as `ready 7` or `merge 7 squash <sha>`. */
   readonly actions: string[] = []
   /** Outcome of the next actions; undefined reports success. */
   actionResult: ForgeActionFailure | undefined
+  /** Patches or failures the change request diff returns, by number; others return a not-found failure. */
+  readonly patches = new Map<number, string | ForgeFailure>()
+  /** Change request numbers in the order their diffs were read. */
+  readonly diffs: number[] = []
+  /** File texts or failures by `<commit>:<path>`; others return a not-found failure. */
+  readonly texts = new Map<string, string | ForgeFailure>()
 
   repositoryFromRemote(url: string): ForgeRepository | undefined {
     const [, host = '', owner = '', name = ''] = /^https:\/\/([a-z.]+\.test)\/([^/]+)\/([^/]+?)\.git$/.exec(url) ?? []
@@ -266,7 +304,9 @@ export class FakeProvider implements ForgeProvider {
 
   fetch(refs: readonly ChangeRequestRef[]): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>> {
     this.fetches.push(refs.map(ref => ref.number))
-    return Promise.resolve(new Map(refs.map(ref => [changeRequestKey(ref), this.failures.get(ref.number) ?? snapshot(ref)])))
+    return Promise.resolve(new Map(refs.map(ref => [
+      changeRequestKey(ref), this.failures.get(ref.number) ?? { ...snapshot(ref), ...this.overrides.get(ref.number) },
+    ])))
   }
 
   findByHead(): Promise<readonly ChangeRequestRef[]> {
@@ -286,6 +326,19 @@ export class FakeProvider implements ForgeProvider {
   merge(ref: ChangeRequestRef, request: MergeRequest): Promise<ForgeActionFailure | undefined> {
     this.actions.push(`merge ${ref.number} ${request.method} ${request.headSha}`)
     return Promise.resolve(this.actionResult)
+  }
+
+  diff(ref: ChangeRequestRef): Promise<string | ForgeFailure> {
+    this.diffs.push(ref.number)
+    return Promise.resolve(this.patches.get(ref.number) ?? { code: 'not-found', message: `no diff of #${ref.number}` })
+  }
+
+  fileText(_ref: ChangeRequestRef, commit: string, path: string): Promise<string | ForgeFailure> {
+    return Promise.resolve(this.texts.get(`${commit}:${path}`) ?? { code: 'not-found', message: `no ${path} at ${commit}` })
+  }
+
+  fileUrl(ref: ChangeRequestRef, commit: string, path: string): string {
+    return `${pullUrl(ref.number)}/files/${commit}/${path}`
   }
 }
 

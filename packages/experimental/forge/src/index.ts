@@ -190,6 +190,42 @@ export class ForgeService extends Service {
   }
 
   /**
+   * Read the changes of a change request as its host computes them.
+   * @param ref - change request served by a registered provider.
+   * @param signal - cancellation of the read.
+   * @returns one unified patch with `a/` and `b/` path prefixes, or why the host did not provide it.
+   * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+   */
+  async diff(ref: ChangeRequestRef, signal: AbortSignal): Promise<string | ForgeFailure> {
+    return await this.provider(ref.repository.forge).diff(ref, signal)
+  }
+
+  /**
+   * Read the text of one file at a commit of a change request's repository.
+   * @param ref - change request served by a registered provider.
+   * @param commit - commit object name.
+   * @param path - path relative to the repository root.
+   * @param signal - cancellation of the read.
+   * @returns the text, or why the host did not provide it.
+   * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+   */
+  async fileText(ref: ChangeRequestRef, commit: string, path: string, signal: AbortSignal): Promise<string | ForgeFailure> {
+    return await this.provider(ref.repository.forge).fileText(ref, commit, path, signal)
+  }
+
+  /**
+   * Build the web page of one file at a commit of a change request's repository.
+   * @param ref - change request served by a registered provider.
+   * @param commit - commit object name.
+   * @param path - path relative to the repository root.
+   * @returns the provider's URL.
+   * @throws when no provider serves the change request's forge.
+   */
+  fileUrl(ref: ChangeRequestRef, commit: string, path: string): string {
+    return this.provider(ref.repository.forge).fileUrl(ref, commit, path)
+  }
+
+  /**
    * Watch one change request as an effect on the calling fiber. The first
    * watcher starts polling at once; listeners receive every later result,
    * and `latest` returns the current one. Polling stops when the last watcher

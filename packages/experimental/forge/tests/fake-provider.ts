@@ -57,6 +57,8 @@ export class FakeProvider implements ForgeProvider {
   /** Every action in call order, such as `ready 7` or `merge 7 squash <sha>`. */
   readonly actions: string[] = []
   actionResult: ForgeActionFailure | undefined
+  /** Patch or file text the reads return. */
+  readResult: string | ForgeFailure = ''
 
   constructor(forge = 'fake') {
     this.forge = forge
@@ -106,6 +108,20 @@ export class FakeProvider implements ForgeProvider {
   async merge(target: ChangeRequestRef, request: MergeRequest): Promise<ForgeActionFailure | undefined> {
     this.actions.push(`merge ${target.number} ${request.method} ${request.headSha}`)
     return this.actionResult
+  }
+
+  async diff(target: ChangeRequestRef): Promise<string | ForgeFailure> {
+    this.actions.push(`diff ${target.number}`)
+    return this.readResult
+  }
+
+  async fileText(target: ChangeRequestRef, commit: string, path: string): Promise<string | ForgeFailure> {
+    this.actions.push(`text ${target.number} ${commit} ${path}`)
+    return this.readResult
+  }
+
+  fileUrl(target: ChangeRequestRef, commit: string, path: string): string {
+    return `https://${target.repository.host}/${target.repository.owner}/${target.repository.name}/file/${commit}/${path}`
   }
 }
 

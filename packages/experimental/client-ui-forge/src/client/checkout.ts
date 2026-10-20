@@ -19,6 +19,10 @@ export interface CheckoutLabel {
   readonly tooltip: string
   /** Whether the worktree the Session works in is gone. */
   readonly missing: boolean
+  /** Full path of the directory, home not abbreviated; a removed worktree keeps the path it was created at. */
+  readonly path: string
+  /** Whether the directory is a worktree rather than the project directory. */
+  readonly worktree: boolean
 }
 
 /**
@@ -35,7 +39,15 @@ export function checkoutLabel(state: ForgePanelState | null, home: string | unde
   const created = state.worktree.created
   if (state.worktree.missing !== null && created !== null) {
     const path = abbreviateHomePath(created.path, home)
-    return { name: created.branch, detached: false, kind: t('missing.title'), tooltip: t('branch.missing', { path }), missing: true }
+    return {
+      name: created.branch,
+      detached: false,
+      kind: t('missing.title'),
+      tooltip: t('branch.missing', { path }),
+      missing: true,
+      path: created.path,
+      worktree: true,
+    }
   }
   if (state.checkout.state !== 'ready') return undefined
   const { root, branch, linked, commit } = state.checkout.checkout
@@ -48,6 +60,8 @@ export function checkoutLabel(state: ForgePanelState | null, home: string | unde
       kind: t('checkout.worktreeFrom', { base }),
       tooltip: t('branch.worktree', { base, path }),
       missing: false,
+      path: root,
+      worktree: true,
     }
   }
   return {
@@ -56,5 +70,7 @@ export function checkoutLabel(state: ForgePanelState | null, home: string | unde
     kind: t(linked ? 'checkout.worktree' : 'checkout.project'),
     tooltip: t(linked ? 'branch.linked' : 'branch.project', { path }),
     missing: false,
+    path: root,
+    worktree: linked,
   }
 }

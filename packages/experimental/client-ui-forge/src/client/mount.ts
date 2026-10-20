@@ -2,6 +2,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
+import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
@@ -15,6 +16,10 @@ import type { RemoteResult, TypertRemoteContribution } from '@deepseek-ai/dsh-ty
 import type { ForgePanelChangeRequest } from '../types.ts'
 import { ActionToast } from './ActionToast.tsx'
 import { BranchChip, type BranchChipInjected } from './BranchChip.tsx'
+import { CHANGES_ID, changesDefinition } from './changes-address.ts'
+import { createChangesStore } from './changes-store.ts'
+import { ChangesTab, type ChangesTabInjected } from './ChangesTab.tsx'
+import { ChangesTabTitle } from './ChangesTabTitle.tsx'
 import { ForgeTab, type ForgeTabInjected } from './ForgeTab.tsx'
 import { ForgeTabTitle } from './ForgeTabTitle.tsx'
 import { HeaderButton, type HeaderButtonInjected } from './HeaderButton.tsx'
@@ -77,10 +82,25 @@ function registerUi(ctx: Context): void {
     notices.report(codes[result.error.code] ?? failure)
     return false
   }
-  const copyText = (text: string): void => {
+  const copy = (text: string, copied: ForgePanelKey): void => {
     void navigator.clipboard.writeText(text).then(
-      () => { notices.report('toast.copied', { tone: 'success' }) },
+      () => { notices.report(copied, { tone: 'success' }) },
       () => { notices.report('toast.copyFailed') },
+    )
+  }
+  const copyText = (text: string): void => { copy(text, 'toast.copied') }
+  const copyPath = (path: string): void => { copy(path, 'toast.pathCopied') }
+  /** Send the request for a change request to the Session as a message from the user. */
+  const createChangeRequest = (sessionId: SessionId): void => {
+    const text = t('changes.local.prompt')
+    const conversation = ctx.get('sessions')?.scope(sessionId)?.get('conversation')
+    if (conversation === undefined) {
+      notices.report('toast.promptFailed')
+      return
+    }
+    void conversation.send(text).then(
+      () => { notices.report('toast.prompted', { tone: 'success', params: { text } }) },
+      () => { notices.report('toast.promptFailed') },
     )
   }
   /** How toasts name a change request: its number, else its title, else its URL. */
@@ -118,8 +138,8 @@ function registerUi(ctx: Context): void {
     return {
       hooks: { panel: store.panel.hooks.panel, host },
       reconnect: store.panel.reconnect,
-      refresh: () => {
-        void ctx.remote.forgePanel.refresh(sessionId).then(result => settled(result, 'toast.refreshFailed'))
+      refresh: async () => {
+        settled(await ctx.remote.forgePanel.refresh(sessionId), 'toast.refreshFailed')
       },
       remove: (entry) => { remove(sessionId, entry) },
       markReady: async (entry) => {
@@ -140,7 +160,24 @@ function registerUi(ctx: Context): void {
       },
       openLink,
       copyText,
+      copyPath,
       reportVisible: store.visibility.set,
+      createChangeRequest: () => { createChangeRequest(sessionId) },
+    }
+  }
+  const changesFace = (sessionId: SessionId): ChangesTabInjected => {
+    const store = storesOf(sessionId)
+    return {
+      hooks: { panel: store.panel.hooks.panel },
+      reconnect: store.panel.reconnect,
+      localDiff: (scope, signal) => ctx.remote.forgePanel.localDiff(sessionId, scope, signal),
+      localText: (scope, path) => ctx.remote.forgePanel.localText(sessionId, scope, path),
+      changeRequestDiff: (url, signal) => ctx.remote.forgePanel.changeRequestDiff(sessionId, url, signal),
+      changeRequestText: (url, commit, path) => ctx.remote.forgePanel.changeRequestText(sessionId, url, commit, path),
+      openLink,
+      copyPath,
+      createChangeRequest: () => { createChangeRequest(sessionId) },
+      report: (key, params) => { notices.report(key, params === undefined ? {} : { params }) },
     }
   }
   const progressFace = (sessionId: SessionId): WorktreeProgressInjected => {
@@ -179,6 +216,13 @@ function registerUi(ctx: Context): void {
   ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register({
     name: 'sidebar.right.pane.tab.title', key: TAB_ID, locale: NS,
   }, ForgeTabTitle))
+  ctx.effect(() => ctx.sidebarRightTabs.register(changesDefinition(t)), 'forge-panel: changes tab')
+  ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({
+    name: 'sidebar.right.pane.tab', key: CHANGES_ID, locale: NS, store: createChangesStore(), inject: changesFace,
+  }, ChangesTab))
+  ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register({
+    name: 'sidebar.right.pane.tab.title', key: CHANGES_ID, locale: NS,
+  }, ChangesTabTitle))
   ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register({
     name: 'conversation.session.header.utilities',
     id: 'forge-panel',

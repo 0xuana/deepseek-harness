@@ -12,7 +12,7 @@ English | [中文](2026-10-09-forge-panel.zh.md)
 
 [`dsh-experimental-client-ui-forge`](../../../../packages/experimental/client-ui-forge/README.md) is a two-face package. Its Host half, the `forgePanel` Remote, assembles everything the panel shows for one Session into one streamed state; the forge registry and the binding service keep only their domain operations. Its Client half is a right-sidebar tab, a Session header button that shows or hides it, a header branch label, a New Session option, a creation card above the composer, and a toast. Every surface calls a bound item a change request, the forge registry's term, whatever its code host calls it. The [forge bundle](../../../../packages/experimental/forge-bundle/README.md) ships the panel, the forge registry, the GitHub provider, the bindings, and an isolated worktree service as one default-disabled Plugins page entry.
 
-The Remote inspects the checkout through the Session's subprocess provider under the Session's read-only sandbox policy, so it reads what the Session's commands see and cannot write. Inspection reads refs and configuration only: the top-level, Git, and common Git directories, the branch or the abbreviated HEAD commit, the upstream, and the remotes. It runs when a Session is followed, after each `working-directory/change`, `tool/result`, and `sandbox/mode` event, and on refresh, one at a time with one trailing rerun.
+The Remote inspects the checkout through the Session's subprocess provider under the Session's read-only sandbox policy, so it reads what the Session's commands see and cannot write. Inspection reads the top-level, Git, and common Git directories, the branch or the abbreviated HEAD commit, the upstream, the remotes, and the size of the branch's changes against its fork point. It runs when a Session is followed, after each `working-directory/change`, `tool/result`, and `sandbox/mode` event, and on refresh, one at a time with one trailing rerun.
 
 Status polling follows panel subscriptions: a Session's bindings are watched only while one of its surfaces is mounted, and the registry stops polling change requests nobody watches. Each card keeps the last snapshot a poll returned, so a transient failure keeps the title and number visible. A Session's only open change request starts expanded, and with several every card starts collapsed; the user's first toggle replaces this default.
 
@@ -24,6 +24,8 @@ The worktree a Session works in can be removed outside it. Each inspection check
 
 The panel no longer moves a Session between existing worktrees. Removing a change request appends a `dismiss` record, and its toast offers Undo through `track`.
 
+The panel also shows the changes behind a Session's work in a changes view, a resource tab type of this package. The Remote parses every diff on the Host into files and hunks, so the browser draws them without a patch parser, and bounds each read with `maxDiffBytes` and `maxUntrackedFiles`. Local changes come from confined `git diff` in the Session's execution world, in a scope the user picks: the branch against its fork point by default, or the uncommitted, unstaged, or staged changes; untracked files are read through the Session's filesystem and shown as new files. A change request's changes come from its code host at the head of the binding's latest status, through two provider reads the forge seam gained, `diff` and `fileText`. The Host keeps the patch it read last for each change request, keyed by the head commit and base branch and bounded by `maxCachedDiffBytes`, so reopening, refreshing, and navigating at the same head download nothing again; a host or provider that refuses an answer over its size limit reports the forge failure `too-large`, and the view then offers the change request's web page instead of a retry. Unchanged lines between hunks expand from the file's new side, which is the working tree, the index, or the head commit, and only while that text still matches the hunks. Each inspection also sizes the branch's changes for a local changes card, shown while no open change request carries the checked-out branch; its Create change request sends the Session a user message, so the Agent creates the change request with its own tools and the binding follows from `gh pr create` as for any other.
+
 ## Deferred
 
 A left-navigation review page next to Plugins and Scheduled tasks, listing the user's pull requests or merge requests on the selected provider, is deferred. It attaches without changing this package's Session surfaces:
@@ -32,6 +34,8 @@ A left-navigation review page next to Plugins and Scheduled tasks, listing the u
 - **Remote** — a stream like `follow` that is keyed by provider and filter instead of a Session and polls through the same `ctx.forge.watch`.
 - **Client** — a `sidebar.panellist` entry with a `main` page in this package, as `ui-schedule` does, rendering `ChangeRequestCard`, which takes a change request, its snapshot, and optional actions.
 - **Settings** — provider choice and hosts on the bundle's configuration page.
+
+The changes view offers no scope for one commit or for the last turn yet; both would be further `ForgeLocalScope` kinds read through `localDiff`.
 
 ## Alternatives considered
 
@@ -63,6 +67,16 @@ A left-navigation review page next to Plugins and Scheduled tasks, listing the u
 
 **A Session-row hover section and manual URL tracking.** Both duplicated the tab. Bindings come from `gh pr create` and pushes, and `track` remains for Undo.
 
+**Parsing patches in the browser.** The Remote would carry unbounded patch text, and the browser would need a patch parser; the Host bounds the read and parses it once.
+
+**Reusing the review tab's file comparison.** It belongs to another plugin, which this package may not import at run time, and moving it into the shared primitives would change a shared package for one consumer; the view is built from the shared highlighter, menu, path label, and diff color tokens instead.
+
+**Reading a change request's diff from the local repository.** The checked-out branch can be ahead of or behind the host, and the base may not be fetched; the host's diff is what reviewers see. The view says when the checked-out branch has commits beyond the head instead.
+
+**Recognizing a too-large diff from the failure message in the panel.** The message belongs to the provider and its host and changes with them; a failure code lets each provider report its own limits, and the panel branches on the code.
+
+**Creating the change request from the card.** The panel would need to push the branch and compose the title and description; a message lets the Agent do both with its tools and the user's instructions, and keeps one way to bind change requests.
+
 ## Consequences
 
-The panel shows current status only while it is open; checks that finish while nothing is mounted produce no notification. Changes made outside the Session appear after Refresh or the next tool result. Every inspection spawns up to seven short Git processes in the Session's execution world. A worktree exists only for a Session that requested it before its first step, and a failed or cancelled attempt can leave its branch or checkout behind. Only the Web Session Remote admits messages so far; other senders create the worktree within the first turn and send into a removed worktree. Restoring loses changes that were never committed. A base branch that requires a merge queue cannot merge from the panel. With Git Worktrees also enabled, two independent worktree services exist; the model's tool never sees the panel's service.
+The panel shows current status only while it is open; checks that finish while nothing is mounted produce no notification. Changes made outside the Session appear after Refresh or the next tool result. Every inspection spawns up to eleven short Git processes in the Session's execution world with one remote, and two more for each further remote it tries for a fork point. A worktree exists only for a Session that requested it before its first step, and a failed or cancelled attempt can leave its branch or checkout behind. Only the Web Session Remote admits messages so far; other senders create the worktree within the first turn and send into a removed worktree. Restoring loses changes that were never committed. A base branch that requires a merge queue cannot merge from the panel. With Git Worktrees also enabled, two independent worktree services exist; the model's tool never sees the panel's service. A local or change request diff over `maxDiffBytes`, or one the host refuses, shows no files. Expanding unchanged lines of a change request reads each file from the code host once.

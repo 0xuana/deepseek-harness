@@ -4,18 +4,26 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { AdmissionDecision } from '@deepseek-ai/dsh-agent-controller'
-import type { ChangeRequestRef, ForgeActionFailure, MergeMethod } from '@deepseek-ai/dsh-experimental-forge'
-import type {} from '@deepseek-ai/dsh-experimental-forge-session'
+import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
+import type { ForgeActionFailure, ForgeFailure, MergeMethod } from '@deepseek-ai/dsh-experimental-forge'
+import type { SessionChangeRequest } from '@deepseek-ai/dsh-experimental-forge-session'
 import type {} from '@deepseek-ai/dsh-experimental-worktree'
 import { appendPluginRecord } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
-import { listBranches } from './git.ts'
+import { gitIn, inspectCheckout, listBranches } from './git.ts'
+import type { Inspection } from './git.ts'
+import { parseDiff } from './diff.ts'
+import { aheadOf, DiffTooLarge, forkPoint, localDiff, localText, NoForkPoint } from './local-diff.ts'
 import { missingWorktree, SessionPanel } from './panel.ts'
+import { PatchCache } from './patch-cache.ts'
 import type { PanelConfig } from './panel.ts'
-import type { Config, ForgeBranches, ForgeMissingWorktree, ForgePanelState, ForgeSessionWorktree, ForgeWorktreeState } from './types.ts'
+import type {
+  Config, ForgeBranches, ForgeChangeRequestDiff, ForgeLocalDiff, ForgeLocalScope, ForgeMissingWorktree, ForgePanelState,
+  ForgeSessionWorktree, ForgeWorktreeState,
+} from './types.ts'
 import { forgeWorktreeProjection, refusal, WORKTREE_RECORD, WorktreeCreations } from './worktree.ts'
 
 export type * from './types.ts'
@@ -58,6 +66,9 @@ export class ForgePanelController extends TypertRemoteService {
     readinessTimeoutMs: z.number().default(15_000),
     maxBranches: z.number().default(50),
     worktreePrefix: z.string().default('dsh-'),
+    maxDiffBytes: z.number().default(8_388_608),
+    maxUntrackedFiles: z.number().default(100),
+    maxCachedDiffBytes: z.number().default(16_777_216),
   })
 
   private readonly home: Context
@@ -65,6 +76,7 @@ export class ForgePanelController extends TypertRemoteService {
   private readonly panels = new Map<Session, SessionPanel>()
   private worktreeStates!: ProjectionHandle<ForgeWorktreeState>
   private creations!: WorktreeCreations
+  private readonly patches: PatchCache
 
   constructor(ctx: Context, config: Config) {
     super(ctx, 'forgePanel')
@@ -76,12 +88,13 @@ export class ForgePanelController extends TypertRemoteService {
         throw new Error(`forge-panel: ${key} must be a positive integer no greater than ${MAX_TIMER_DELAY_MS}`)
       }
     }
-    if (!Number.isSafeInteger(resolved.maxBranches) || resolved.maxBranches <= 0) {
-      throw new Error('forge-panel: maxBranches must be a positive integer')
+    for (const key of ['maxBranches', 'maxDiffBytes', 'maxUntrackedFiles', 'maxCachedDiffBytes'] as const) {
+      if (!Number.isSafeInteger(resolved[key]) || resolved[key] <= 0) throw new Error(`forge-panel: ${key} must be a positive integer`)
     }
     if (!branchPrefix(resolved.worktreePrefix)) throw new Error('forge-panel: worktreePrefix must start a valid Git branch name')
     this.home = ctx
     this.config = resolved
+    this.patches = new PatchCache(resolved.maxCachedDiffBytes)
     ctx.effect(() => async () => {
       const panels = [...this.panels.values()]
       this.panels.clear()
@@ -168,11 +181,116 @@ export class ForgePanelController extends TypertRemoteService {
    * change requests at once; an unfollowed Session is unchanged.
    * @param session - Session whose panel refreshes.
    * @param signal - request cancellation.
+   * @returns settles once the inspection and the sign-in probe have ended; poll results reach the panel stream later.
    */
   @Remote
   async refresh(session: Session, signal: AbortSignal): Promise<void> {
     signal.throwIfAborted()
-    this.panels.get(session)?.refresh()
+    await this.panels.get(session)?.refresh()
+  }
+
+  /**
+   * Read the changes one scope covers in the checkout of the Session's
+   * current directory, with Git confined to the Session's read-only sandbox.
+   * @param session - Session whose checkout is read.
+   * @param scope - which changes to read.
+   * @param signal - request cancellation.
+   * @returns the files, the base of the `branch` scope, and the untracked files left out.
+   * @throws `forgePanel/not-a-checkout` outside a checkout; `forgePanel/no-fork-point` for the `branch`
+   * scope of a checkout without one; `forgePanel/diff-too-large` over `maxDiffBytes`; the Git error when Git fails.
+   */
+  @Remote
+  async localDiff(session: Session, scope: ForgeLocalScope, signal: AbortSignal): Promise<ForgeLocalDiff> {
+    signal.throwIfAborted()
+    const inspection = await this.checkoutOf(session, signal)
+    const root = inspection.checkout.root
+    const fork = scope.kind === 'branch'
+      ? await forkPoint(gitIn(this.home, this.config, session, root, signal), inspection, this.worktreeState(session).created)
+      : null
+    return await diffing(localDiff(this.home, this.config, session, root, fork, scope, signal))
+  }
+
+  /**
+   * Read the new side of one changed file in a scope, which supplies the
+   * unchanged lines between its hunks: the index for `staged`, else the working tree.
+   * @param session - Session whose checkout is read.
+   * @param scope - the scope the diff was read in.
+   * @param path - path relative to the checkout's top-level directory, as the diff names it.
+   * @param signal - request cancellation.
+   * @returns the text.
+   * @throws `forgePanel/not-a-checkout` outside a checkout; `forgePanel/diff-too-large` over `maxDiffBytes`;
+   * an error for a path outside the checkout, binary content, or a failed read.
+   */
+  @Remote
+  async localText(session: Session, scope: ForgeLocalScope, path: string, signal: AbortSignal): Promise<string> {
+    signal.throwIfAborted()
+    const inspection = await this.checkoutOf(session, signal)
+    return await diffing(localText(this.home, this.config, session, inspection.checkout.root, scope, path, signal))
+  }
+
+  /**
+   * Read the changes of a change request of a Session as its code host
+   * computes them, at the head commit of its latest status. A patch already
+   * read at the same head commit and base branch is reused from memory, for
+   * any Session, until `maxCachedDiffBytes` evicts it.
+   * @param session - Session the change request is bound to.
+   * @param url - binding URL of the change request.
+   * @param signal - request cancellation.
+   * @returns the files, the head commit, each file's web page, and the commits the checkout has beyond the head.
+   * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+   * `forgePanel/diff-too-large` when the host or its provider refuses the diff over a size limit;
+   * `forgePanel/diff-failed` before its status was read and when the host does not provide the diff otherwise.
+   */
+  @Remote
+  async changeRequestDiff(session: Session, url: string, signal: AbortSignal): Promise<ForgeChangeRequestDiff> {
+    signal.throwIfAborted()
+    const { ref, update } = this.bound(session, url)
+    if (update === null || !('snapshot' in update)) {
+      throw new RemoteError('forgePanel/diff-failed', 'The change request status has not been read yet', {})
+    }
+    const { headSha, headBranch, baseBranch } = update.snapshot
+    const key = changeRequestKey(ref)
+    const version = JSON.stringify([headSha, baseBranch])
+    let patch = this.patches.get(key, version)
+    if (patch === undefined) {
+      const read = await this.home.forge.diff(ref, signal)
+      if (typeof read !== 'string') throw readError(read)
+      this.patches.set(key, version, read)
+      patch = read
+    }
+    const files = parseDiff(patch)
+    let localAhead: number | null = null
+    try {
+      localAhead = await aheadOf(
+        gitIn(this.home, this.config, session, this.home.workingDirectory.get(session), signal), headBranch, headSha,
+      )
+    } catch (_error) {
+      // The count only adds a notice; without Git the view still shows the host's diff.
+    }
+    signal.throwIfAborted()
+    const fileUrls = Object.fromEntries(files.map(file => [file.path, this.home.forge.fileUrl(ref, headSha, file.path)]))
+    return { headSha, files, localAhead, fileUrls }
+  }
+
+  /**
+   * Read one file of a change request's repository at a commit, which
+   * supplies the unchanged lines between the hunks of its diff.
+   * @param session - Session the change request is bound to.
+   * @param url - binding URL of the change request.
+   * @param commit - commit object name, the head commit of the diff.
+   * @param path - path relative to the repository root.
+   * @param signal - request cancellation.
+   * @returns the text.
+   * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+   * `forgePanel/diff-too-large` when the host or its provider refuses the file over a size limit;
+   * `forgePanel/diff-failed` when the host does not provide the file otherwise.
+   */
+  @Remote
+  async changeRequestText(session: Session, url: string, commit: string, path: string, signal: AbortSignal): Promise<string> {
+    signal.throwIfAborted()
+    const text = await this.home.forge.fileText(this.bound(session, url).ref, commit, path, signal)
+    if (typeof text !== 'string') throw readError(text)
+    return text
   }
 
   /**
@@ -187,7 +305,7 @@ export class ForgePanelController extends TypertRemoteService {
   @Remote
   async markReady(session: Session, url: string, signal: AbortSignal): Promise<void> {
     signal.throwIfAborted()
-    const failure = await this.home.forge.markReady(this.boundRef(session, url), signal)
+    const failure = await this.home.forge.markReady(this.bound(session, url).ref, signal)
     if (failure !== undefined) throw actionError(failure)
   }
 
@@ -206,7 +324,7 @@ export class ForgePanelController extends TypertRemoteService {
   @Remote
   async merge(session: Session, url: string, method: MergeMethod, headSha: string, signal: AbortSignal): Promise<void> {
     signal.throwIfAborted()
-    const failure = await this.home.forge.merge(this.boundRef(session, url), { method, headSha }, signal)
+    const failure = await this.home.forge.merge(this.bound(session, url).ref, { method, headSha }, signal)
     if (failure !== undefined) throw actionError(failure)
   }
 
@@ -341,11 +459,18 @@ export class ForgePanelController extends TypertRemoteService {
       : refusal('forge/worktree-missing', 'The worktree this Session works in was removed; restore it before sending', presented)
   }
 
-  /** The provider reference of a visible binding of the Session, which actions are limited to. */
-  private boundRef(session: Session, url: string): ChangeRequestRef {
-    const ref = this.home.forgeSession.changeRequests(session).find(entry => entry.url === url)?.ref ?? null
-    if (ref === null) throw new RemoteError('forgePanel/not-bound', 'The change request is not bound to this Session or no provider serves it', {})
-    return ref
+  /** Inspect the checkout of the Session's current directory, which local diffs read. */
+  private async checkoutOf(session: Session, signal: AbortSignal): Promise<Inspection> {
+    const inspection = await inspectCheckout(this.home, this.config, session, this.home.workingDirectory.get(session), signal)
+    if (inspection === undefined) throw new RemoteError('forgePanel/not-a-checkout', 'The Session\'s directory is not inside a Git checkout', {})
+    return inspection
+  }
+
+  /** A visible binding of the Session that a provider serves, which actions and reads are limited to. */
+  private bound(session: Session, url: string): SessionChangeRequest & { readonly ref: NonNullable<SessionChangeRequest['ref']> } {
+    const entry = this.home.forgeSession.changeRequests(session).find(candidate => candidate.url === url)
+    if (entry?.ref == null) throw new RemoteError('forgePanel/not-bound', 'The change request is not bound to this Session or no provider serves it', {})
+    return { ...entry, ref: entry.ref }
   }
 
   private worktreeState(session: Session): ForgeWorktreeState {
@@ -396,6 +521,30 @@ export class ForgePanelController extends TypertRemoteService {
       this.panels.set(session, panel)
     }
     return panel
+  }
+}
+
+/**
+ * Report why the code host did not provide a diff or file.
+ * @param failure - the provider's failure.
+ * @returns `forgePanel/diff-too-large` for an answer over a size limit, else `forgePanel/diff-failed`, with the provider's message.
+ */
+function readError(failure: ForgeFailure): RemoteError {
+  return new RemoteError(failure.code === 'too-large' ? 'forgePanel/diff-too-large' : 'forgePanel/diff-failed', failure.message, {})
+}
+
+/**
+ * Settle a diff read, reporting its size limit and a missing fork point as Remote errors.
+ * @param reading - the read.
+ * @returns what the read returned.
+ */
+async function diffing<T>(reading: Promise<T>): Promise<T> {
+  try {
+    return await reading
+  } catch (error) {
+    if (error instanceof DiffTooLarge) throw new RemoteError('forgePanel/diff-too-large', error.message, {}, { cause: error })
+    if (error instanceof NoForkPoint) throw new RemoteError('forgePanel/no-fork-point', error.message, {}, { cause: error })
+    throw error
   }
 }
 

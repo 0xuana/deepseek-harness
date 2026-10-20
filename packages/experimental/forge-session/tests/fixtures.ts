@@ -100,6 +100,18 @@ export class FakeProvider implements ForgeProvider {
   merge(): Promise<ForgeActionFailure | undefined> {
     return Promise.resolve(undefined)
   }
+
+  diff(): Promise<string | ForgeFailure> {
+    return Promise.resolve('')
+  }
+
+  fileText(): Promise<string | ForgeFailure> {
+    return Promise.resolve('')
+  }
+
+  fileUrl(ref: ChangeRequestRef, commit: string, path: string): string {
+    return `https://fake.test/${ref.repository.owner}/${ref.repository.name}/blob/${commit}/${path}`
+  }
 }
 
 /** Live services and one store-created Session. */

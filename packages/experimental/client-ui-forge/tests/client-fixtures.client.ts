@@ -109,7 +109,7 @@ export function worktree(overrides: Partial<ForgePanelWorktree> = {}): ForgePane
   return { editable: false, blocker: null, request: null, created: null, creation: null, failure: null, missing: null, ...overrides }
 }
 
-/** Ready panel state of `/work/repo` recognized as `octo/demo`, signed in, without change requests or a worktree. */
+/** Ready panel state of `/work/repo` recognized as `octo/demo`, signed in, without change requests, a worktree, or local changes. */
 export function ready(overrides: Partial<ForgePanelState> = {}, checkoutOverrides: Partial<ForgeCheckout> = {}): ForgePanelState {
   return {
     directory: '/work/repo',
@@ -118,6 +118,7 @@ export function ready(overrides: Partial<ForgePanelState> = {}, checkoutOverride
     readiness: { state: 'ready', message: null },
     changeRequests: [],
     worktree: worktree(),
+    local: null,
     ...overrides,
   }
 }

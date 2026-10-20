@@ -1,13 +1,24 @@
-/** Status derivations shared by the header entry and the change request cards. */
+/** Status derivations shared by the header entry, the change request cards, and the changes view. */
 
 import type { ChangeRequestCheck, ChangeRequestSnapshot, ChecksRollup } from '@deepseek-ai/dsh-experimental-forge/types'
-import type { ForgePanelChangeRequest } from '../types.ts'
+import type { ForgePanelChangeRequest, ForgePanelState } from '../types.ts'
+import type { ForgePanelKey } from './locales.ts'
 
 /**
  * Glyph tone of a change request: its lifecycle state, `blocked` for an open
  * one that needs its author, or `unknown` before the first snapshot.
  */
 export type ChangeRequestTone = 'open' | 'blocked' | 'draft' | 'merged' | 'closed' | 'unknown'
+
+/** Dictionary key of each tone's state name. */
+export const TONE_LABEL: Record<ChangeRequestTone, ForgePanelKey> = {
+  open: 'change.state.open',
+  blocked: 'change.state.blocked',
+  draft: 'change.state.draft',
+  merged: 'change.state.merged',
+  closed: 'change.state.closed',
+  unknown: 'change.state.unknown',
+}
 
 /** Combined check outcome shown on a collapsed card. */
 export type CiSummary =
@@ -109,6 +120,17 @@ export function needsAttention(entry: ForgePanelChangeRequest): boolean {
 export function defaultExpanded(entries: readonly ForgePanelChangeRequest[]): ReadonlySet<string> {
   const open = entries.filter(entry => entry.snapshot?.state === 'open')
   return new Set(open.length === 1 ? open.map(entry => entry.url) : [])
+}
+
+/**
+ * Find the open change request, drafts included, whose head is the checked-out branch.
+ * @param state - panel state of the Session.
+ * @returns the change request, or undefined without one or while HEAD is detached.
+ */
+export function openChangeRequestOf(state: ForgePanelState): ForgePanelChangeRequest | undefined {
+  const branch = state.checkout.state === 'ready' ? state.checkout.checkout.branch : null
+  if (branch === null) return undefined
+  return state.changeRequests.find(entry => entry.snapshot?.state === 'open' && entry.snapshot.headBranch === branch)
 }
 
 /**

@@ -13,16 +13,18 @@ import { deadline } from '@deepseek-ai/dsh-timeout'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import { hasBranch, inspectCheckout } from './git.ts'
 import type { GitConfig, Inspection } from './git.ts'
+import { localChanges } from './local-diff.ts'
+import type { DiffConfig } from './local-diff.ts'
 import { remoteOrder } from './parse.ts'
 import type {
-  ForgeCheckoutState, ForgeMissingWorktree, ForgePanelChangeRequest, ForgePanelState, ForgePanelWorktree, ForgeSessionWorktree,
-  ForgeWorktreeBlocker, ForgeWorktreeState,
+  ForgeCheckoutState, ForgeLocalChanges, ForgeMissingWorktree, ForgePanelChangeRequest, ForgePanelState, ForgePanelWorktree,
+  ForgeSessionWorktree, ForgeWorktreeBlocker, ForgeWorktreeState,
 } from './types.ts'
 import { WORKTREE_RECORD } from './worktree.ts'
 import type { WorktreeCreations } from './worktree.ts'
 
-/** Git limits plus the sign-in probe deadline. */
-export interface PanelConfig extends GitConfig {
+/** Git and diff limits plus the sign-in probe deadline. */
+export interface PanelConfig extends DiffConfig {
   /** Deadline in milliseconds for one provider sign-in probe. */
   readonly readinessTimeoutMs: number
 }
@@ -37,8 +39,9 @@ export interface PanelConfig extends GitConfig {
  * request keeps the latest snapshot a poll returned while later polls fail. The
  * worktree facts follow the `forgeWorktree` projection, the live creation, and the last failed one;
  * each inspection also decides whether the Session's sandbox can write the
- * checkout and its shared Git directory, which a new worktree needs, and
- * whether the worktree the Session created and works in is gone.
+ * checkout and its shared Git directory, which a new worktree needs, whether
+ * the worktree the Session created and works in is gone, and how many lines
+ * the `branch` scope changes; a measurement that fails leaves that null.
  */
 export class SessionPanel {
   private current: ForgePanelState
@@ -49,8 +52,8 @@ export class SessionPanel {
   private readonly snapshots = new Map<string, ChangeRequestSnapshot>()
   private blocker: ForgeWorktreeBlocker | null = null
   private missing: ForgeMissingWorktree | null = null
-  private inspecting = false
-  private inspectAgain = false
+  private inspection: Promise<void> | null = null
+  private rerun: Promise<void> | null = null
 
   /**
    * @param ctx - service context that provides the forge, Session, directory, and process services.
@@ -75,11 +78,12 @@ export class SessionPanel {
       readiness: null,
       changeRequests: this.entries(ctx.forgeSession.changeRequests(session)),
       worktree: this.worktree(),
+      local: null,
     }
     this.stopWatching = ctx.forgeSession.watch(session, (changeRequests) => {
       this.publish({ ...this.current, changeRequests: this.entries(changeRequests) })
     })
-    this.inspect()
+    void this.inspect()
   }
 
   /**
@@ -122,10 +126,10 @@ export class SessionPanel {
    */
   observe(event: SessionEvent): void {
     if (event.type === 'working-directory/change') {
-      this.publish({ ...this.current, directory: event.data.cwd, checkout: { state: 'pending' } })
-      this.inspect()
+      this.publish({ ...this.current, directory: event.data.cwd, checkout: { state: 'pending' }, local: null })
+      void this.inspect()
     } else if (event.type === 'tool/result' || event.type === 'sandbox/mode') {
-      this.inspect()
+      void this.inspect()
     } else if (event.type === 'turn/start' || event.type === 'step/start' || pluginRecordOf(event)?.type === WORKTREE_RECORD) {
       this.updateWorktree()
     }
@@ -139,7 +143,7 @@ export class SessionPanel {
 
   /** Reinspect the checkout, such as after its directory was created again. */
   reinspect(): void {
-    this.inspect()
+    void this.inspect()
   }
 
   /**
@@ -161,13 +165,17 @@ export class SessionPanel {
     return missing
   }
 
-  /** Reinspect the checkout, probe sign-in again, and poll every bound change request at once. */
-  refresh(): void {
-    this.inspect()
-    if (this.current.repository !== null) this.probe(this.current.repository)
+  /**
+   * Reinspect the checkout, probe sign-in again, and poll every bound change request at once.
+   * @returns settles once the inspection and the sign-in probe have ended; each poll publishes its result when it finishes.
+   */
+  async refresh(): Promise<void> {
+    const inspection = this.inspect()
+    const probe = this.current.repository === null ? undefined : this.probe(this.current.repository)
     for (const entry of this.current.changeRequests) {
       if (entry.ref !== null) this.ctx.forge.refresh(entry.ref)
     }
+    await Promise.all([inspection, probe])
   }
 
   /**
@@ -205,25 +213,29 @@ export class SessionPanel {
     for (const notify of [...this.followers]) notify()
   }
 
-  private run(task: Promise<void>): void {
+  /** Track `task` for disposal; the returned promise resolves once it settles, whatever the outcome. */
+  private run(task: Promise<void>): Promise<void> {
     this.tasks.add(task)
     const settle = (): void => { this.tasks.delete(task) }
-    void task.then(settle, settle)
+    return task.then(settle, settle)
   }
 
-  private inspect(): void {
-    if (this.lifetime.signal.aborted) return
-    if (this.inspecting) {
-      this.inspectAgain = true
-      return
+  /**
+   * Inspect the checkout, one inspection at a time; calls during an
+   * inspection share one trailing rerun.
+   * @returns resolves once an inspection that started after the call has ended.
+   */
+  private inspect(): Promise<void> {
+    if (this.lifetime.signal.aborted) return Promise.resolve()
+    if (this.inspection === null) {
+      this.inspection = this.run(this.inspectOnce()).then(() => { this.inspection = null })
+      return this.inspection
     }
-    this.inspecting = true
-    this.run(this.inspectOnce().finally(() => {
-      this.inspecting = false
-      if (!this.inspectAgain) return
-      this.inspectAgain = false
-      this.inspect()
-    }))
+    this.rerun ??= this.inspection.then(() => {
+      this.rerun = null
+      return this.inspect()
+    })
+    return this.rerun
   }
 
   private async inspectOnce(): Promise<void> {
@@ -231,6 +243,7 @@ export class SessionPanel {
     let checkout: ForgeCheckoutState
     let repository: ForgeRepository | null = null
     let blocker: ForgeWorktreeBlocker | null = null
+    let local: ForgeLocalChanges | null = null
     try {
       const inspection = await inspectCheckout(this.ctx, this.config, this.session, directory, this.lifetime.signal)
       if (inspection === undefined) {
@@ -240,6 +253,7 @@ export class SessionPanel {
         checkout = { state: 'ready', checkout: inspection.checkout }
         repository = this.recognize(inspection)
         blocker = await this.blockerOf(inspection)
+        local = await this.localOf(inspection)
       }
     } catch (error) {
       checkout = { state: 'failed', message: error instanceof Error ? error.message : String(error) }
@@ -255,8 +269,9 @@ export class SessionPanel {
     this.blocker = blocker
     this.missing = missing
     const sameHost = repository !== null && this.current.repository !== null && hostOf(repository) === hostOf(this.current.repository)
-    this.publish({ ...this.current, checkout, repository, readiness: sameHost ? this.current.readiness : null, worktree: this.worktree() })
-    if (repository !== null && !sameHost) this.probe(repository)
+    const readiness = sameHost ? this.current.readiness : null
+    this.publish({ ...this.current, checkout, repository, readiness, worktree: this.worktree(), local })
+    if (repository !== null && !sameHost) void this.probe(repository)
   }
 
   /** Decide whether the Session's sandbox lets the worktree service write the checkout and its shared Git directory. */
@@ -266,6 +281,16 @@ export class SessionPanel {
     if (policy.mode === 'read-only') return 'read-only'
     const root = this.ctx.fs.processPath(await this.ctx.fs.resolve(policy.workspaceRoot, { signal: this.lifetime.signal }))
     return within(root, inspection.checkout.root) && within(root, inspection.commonDir) ? null : 'outside-writable-root'
+  }
+
+  /** Measure the `branch` scope; a failed measurement only hides the local changes card. */
+  private async localOf(inspection: Inspection): Promise<ForgeLocalChanges | null> {
+    try {
+      return await localChanges(this.ctx, this.config, this.session, inspection, this.worktree().created, this.lifetime.signal)
+    } catch (_error) {
+      // The changes view reads and reports the same changes itself.
+      return null
+    }
   }
 
   private recognize(inspection: Inspection): ForgeRepository | null {
@@ -278,9 +303,10 @@ export class SessionPanel {
     return null
   }
 
-  private probe(repository: ForgeRepository): void {
+  /** Probe sign-in on the repository's host; resolves once the probe has ended. */
+  private probe(repository: ForgeRepository): Promise<void> {
     const host = hostOf(repository)
-    this.run((async () => {
+    return this.run((async () => {
       let readiness: ForgeReadiness
       try {
         using timeout = deadline(this.lifetime.signal, this.config.readinessTimeoutMs, 'FORGE_PANEL_READINESS_TIMEOUT')

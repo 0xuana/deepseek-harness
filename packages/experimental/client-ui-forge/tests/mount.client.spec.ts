@@ -1,5 +1,8 @@
 // @vitest-environment jsdom
-/** Forge panel registration: the Remote mount, slot entries, per-Session stores, actions and their notices, and unload. */
+/**
+ * Forge panel registration: the Remote mount, slot entries, per-Session stores,
+ * actions and their notices, the changes view, and unload.
+ */
 import assert from 'node:assert/strict'
 import { Context, Service } from '@deepseek-ai/cordis'
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
@@ -11,6 +14,9 @@ import { RemoteError, type RemoteResult, type TypertRemoteContribution } from '@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ActionToast } from '../src/client/ActionToast.tsx'
 import { BranchChip, type BranchChipInjected } from '../src/client/BranchChip.tsx'
+import { CHANGES_ID, CHANGES_KIND } from '../src/client/changes-address.ts'
+import { ChangesTab, type ChangesTabInjected } from '../src/client/ChangesTab.tsx'
+import { ChangesTabTitle } from '../src/client/ChangesTabTitle.tsx'
 import { ForgeTab, type ForgeTabInjected } from '../src/client/ForgeTab.tsx'
 import { ForgeTabTitle } from '../src/client/ForgeTabTitle.tsx'
 import { HeaderButton, type HeaderButtonInjected } from '../src/client/HeaderButton.tsx'
@@ -19,13 +25,15 @@ import { inject, mountForgePanel, TAB_ID, TAB_KIND } from '../src/client/mount.t
 import type { NoticeSource } from '../src/client/source.ts'
 import { WorktreeProgress, type WorktreeProgressInjected } from '../src/client/WorktreeProgress.tsx'
 import { WorktreeToggle, type WorktreeToggleInjected } from '../src/client/WorktreeToggle.tsx'
-import type { ForgeBranches, ForgePanelState } from '../src/types.ts'
+import type { ForgeBranches, ForgeChangeRequestDiff, ForgeLocalDiff, ForgeLocalScope, ForgePanelState } from '../src/types.ts'
 import { entry, ready, snapshot, unserved } from './client-fixtures.client.ts'
 
 const REMOTE: TypertRemoteContribution = { package: '@deepseek-ai/dsh-experimental-client-ui-forge', descriptors: [] }
 const S1 = SessionId('s1')
 const S2 = SessionId('s2')
 const BRANCHES: ForgeBranches = { current: 'main', branches: ['main', 'release'] }
+const LOCAL: ForgeLocalDiff = { base: 'origin/main', files: [], omitted: 0 }
+const CHANGE: ForgeChangeRequestDiff = { headSha: 'a'.repeat(40), files: [], localAhead: null, fileUrls: {} }
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -57,6 +65,9 @@ function stream(signal: AbortSignal) {
 
 const OK: RemoteResult<void> = { ok: true, value: undefined }
 
+/** What a Remote read resolves to. */
+type Read<T> = Promise<RemoteResult<T>>
+
 const REFUSED = {
   started: { ok: false, error: new RemoteError('forgePanel/session-started', 'started', {}) },
   unavailable: { ok: false, error: new RemoteError('forgePanel/worktrees-unavailable', 'unavailable', {}) },
@@ -82,6 +93,10 @@ function isWorktreeFace(value: Record<string, unknown>): value is Record<string,
 function isProgressFace(value: Record<string, unknown>): value is Record<string, unknown> & WorktreeProgressInjected {
   return typeof value.stop === 'function' && typeof value.withdraw === 'function'
     && typeof value.restore === 'function' && typeof value.leave === 'function'
+}
+
+function isChangesFace(value: Record<string, unknown>): value is Record<string, unknown> & ChangesTabInjected {
+  return typeof value.localDiff === 'function' && typeof value.createChangeRequest === 'function'
 }
 
 function isBranchFace(value: Record<string, unknown>): value is Record<string, unknown> & BranchChipInjected {
@@ -127,6 +142,12 @@ async function base() {
     restoreWorktree: vi.fn(async (_sessionId: SessionId): Promise<RemoteResult<void>> => OK),
     continueInProject: vi.fn(async (_sessionId: SessionId): Promise<RemoteResult<void>> => OK),
     branches: vi.fn(async (_sessionId: SessionId): Promise<RemoteResult<ForgeBranches>> => ({ ok: true, value: BRANCHES })),
+    localDiff: vi.fn(async (_sessionId: SessionId, _scope: ForgeLocalScope, _signal?: AbortSignal): Read<ForgeLocalDiff> =>
+      ({ ok: true, value: LOCAL })),
+    localText: vi.fn(async (_sessionId: SessionId, _scope: ForgeLocalScope, _path: string): Read<string> => ({ ok: true, value: 'a\n' })),
+    changeRequestDiff: vi.fn(async (_sessionId: SessionId, _url: string, _signal?: AbortSignal): Read<ForgeChangeRequestDiff> =>
+      ({ ok: true, value: CHANGE })),
+    changeRequestText: vi.fn(async (_sessionId: SessionId, _url: string, _commit: string, _path: string): Read<string> => ({ ok: true, value: 'b\n' })),
   }
   ctx.provide('remote.forgePanel', forgePanel)
   ctx.provide('locale', new LocaleRuntime(ctx))
@@ -160,16 +181,22 @@ async function fixture() {
   const entry = (slot: Parameters<typeof b.ctx.slots.entries>[0], component: unknown) =>
     b.ctx.slots.entries(slot).find(candidate => candidate.component === component)
   const tabInject = entry('sidebar.right.pane.tab', ForgeTab)?.inject
+  const changesInject = entry('sidebar.right.pane.tab', ChangesTab)?.inject
   const headerInject = entry('conversation.session.header.utilities', HeaderButton)?.inject
   const worktreeInject = entry('conversation.hero.options', WorktreeToggle)?.inject
   const progressInject = entry('conversation.input.dock', WorktreeProgress)?.inject
   const branchInject = entry('conversation.session.header.actions', BranchChip)?.inject
   const toastInject = entry('shell.overlay', ActionToast)?.inject
   assert(tabInject !== undefined && headerInject !== undefined && worktreeInject !== undefined && toastInject !== undefined)
-  assert(progressInject !== undefined && branchInject !== undefined)
+  assert(progressInject !== undefined && branchInject !== undefined && changesInject !== undefined)
   const tab = (sessionId: SessionId): ForgeTabInjected => {
     const value = tabInject(sessionId as never)
     assert(isTabFace(value))
+    return value
+  }
+  const changes = (sessionId: SessionId): ChangesTabInjected => {
+    const value = changesInject(sessionId as never)
+    assert(isChangesFace(value))
     return value
   }
   const header = (sessionId: SessionId): HeaderButtonInjected => {
@@ -198,7 +225,7 @@ async function fixture() {
     return value
   }
   const notice = () => toast().hooks.notice.getSnapshot()
-  return { ...b, dispose, entry, tab, header, worktree, progress, branch, toast, notice }
+  return { ...b, dispose, entry, tab, changes, header, worktree, progress, branch, toast, notice }
 }
 
 describe('mountForgePanel registration', () => {
@@ -206,14 +233,18 @@ describe('mountForgePanel registration', () => {
     expect(inject).toEqual(['remote', 'slots', 'locale', 'sidebarRightTabs', 'sidebarRight'])
   })
 
-  it('registers the tab type, its body and title, the header entries, the worktree option and card, and the toast', async () => {
+  it('registers the tab types, their bodies and titles, the header entries, the worktree option and card, and the toast', async () => {
     const f = await fixture()
-    expect(f.sidebarRightTabs.register).toHaveBeenCalledOnce()
+    expect(f.sidebarRightTabs.register).toHaveBeenCalledTimes(2)
     const type = f.sidebarRightTabs.register.mock.calls[0]?.[0]
     expect(type).toMatchObject({ id: TAB_ID, kind: TAB_KIND })
     expect([en['tab.title'], zh['tab.title']]).toContain(type?.title())
+    expect(f.sidebarRightTabs.register.mock.calls[1]?.[0]).toMatchObject({ id: CHANGES_ID, kind: CHANGES_KIND })
     expect(f.entry('sidebar.right.pane.tab', ForgeTab)).toMatchObject({ options: { key: TAB_ID }, locale: NS })
     expect(f.entry('sidebar.right.pane.tab.title', ForgeTabTitle)).toMatchObject({ options: { key: TAB_ID }, locale: NS })
+    expect(f.entry('sidebar.right.pane.tab', ChangesTab)).toMatchObject({ options: { key: CHANGES_ID }, locale: NS })
+    expect(f.entry('sidebar.right.pane.tab', ChangesTab)?.store).toBeDefined()
+    expect(f.entry('sidebar.right.pane.tab.title', ChangesTabTitle)).toMatchObject({ options: { key: CHANGES_ID }, locale: NS })
     expect(f.entry('conversation.session.header.utilities', HeaderButton)).toMatchObject({ options: { id: 'forge-panel', order: -8 }, locale: NS })
     expect(f.entry('conversation.session.header.actions', BranchChip)).toMatchObject({ options: { id: 'forge-panel.branch', order: 10 }, locale: NS })
     expect(f.entry('conversation.hero.options', WorktreeToggle)).toMatchObject({ options: { id: 'forge-panel.worktree' }, locale: NS })
@@ -239,6 +270,8 @@ describe('mountForgePanel registration', () => {
     for (const [slot, component] of [
       ['sidebar.right.pane.tab', ForgeTab],
       ['sidebar.right.pane.tab.title', ForgeTabTitle],
+      ['sidebar.right.pane.tab', ChangesTab],
+      ['sidebar.right.pane.tab.title', ChangesTabTitle],
       ['conversation.session.header.utilities', HeaderButton],
       ['conversation.session.header.actions', BranchChip],
       ['conversation.hero.options', WorktreeToggle],
@@ -355,16 +388,27 @@ describe('mountForgePanel tab actions', () => {
     await f.dispose()
   })
 
+  it('copies a checkout path to the clipboard and confirms it', async () => {
+    const f = await fixture()
+    const writeText = vi.fn(async (_text: string) => {})
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+
+    f.tab(S1).copyPath('/work/repo-dsh')
+    await settle()
+
+    expect(writeText).toHaveBeenCalledWith('/work/repo-dsh')
+    expect(f.notice()).toMatchObject({ key: 'toast.pathCopied', tone: 'success', params: {}, undo: undefined })
+    await f.dispose()
+  })
+
   it('refreshes through the Remote and reports only a failure', async () => {
     const f = await fixture()
-    f.tab(S1).refresh()
-    await settle()
+    await f.tab(S1).refresh()
     expect(f.forgePanel.refresh).toHaveBeenCalledWith(S1)
     expect(f.notice()).toBeNull()
 
     f.forgePanel.refresh.mockResolvedValueOnce(REFUSED.failed)
-    f.tab(S1).refresh()
-    await settle()
+    await f.tab(S1).refresh()
     expect(f.notice()).toMatchObject({ key: 'toast.refreshFailed', tone: 'failure' })
     await f.dispose()
   })
@@ -547,6 +591,75 @@ describe('mountForgePanel worktree card actions', () => {
     f.progress(S1).leave()
     await settle()
     expect(f.notice()).toMatchObject({ key: 'toast.leaveFailed', tone: 'failure' })
+    await f.dispose()
+  })
+})
+
+describe('mountForgePanel changes view', () => {
+  it('reads the changes of the Session through the Remote and shares its panel stream', async () => {
+    const f = await fixture()
+    const view = f.changes(S1)
+    expect(view.hooks.panel).toBe(f.tab(S1).hooks.panel)
+    const signal = new AbortController().signal
+    expect(await view.localDiff({ kind: 'staged' }, signal)).toEqual({ ok: true, value: LOCAL })
+    expect(await view.localText({ kind: 'staged' }, 'src/a.ts')).toEqual({ ok: true, value: 'a\n' })
+    expect(await view.changeRequestDiff('https://github.com/octo/demo/pull/7', signal)).toEqual({ ok: true, value: CHANGE })
+    expect(await view.changeRequestText('https://github.com/octo/demo/pull/7', 'a'.repeat(40), 'src/a.ts')).toEqual({ ok: true, value: 'b\n' })
+    expect(f.forgePanel.localDiff).toHaveBeenCalledWith(S1, { kind: 'staged' }, signal)
+    expect(f.forgePanel.localText).toHaveBeenCalledWith(S1, { kind: 'staged' }, 'src/a.ts')
+    expect(f.forgePanel.changeRequestDiff).toHaveBeenCalledWith(S1, 'https://github.com/octo/demo/pull/7', signal)
+    expect(f.forgePanel.changeRequestText).toHaveBeenCalledWith(S1, 'https://github.com/octo/demo/pull/7', 'a'.repeat(40), 'src/a.ts')
+    view.reconnect()
+    expect(f.forgePanel.follow).not.toHaveBeenCalled()
+    await f.dispose()
+  })
+
+  it('opens links outside the app, reports what the view asks for, and copies paths', async () => {
+    const f = await fixture()
+    const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    f.changes(S1).openLink('https://github.com/octo/demo/blob/main/a.ts')
+    expect(open).toHaveBeenCalledWith('https://github.com/octo/demo/blob/main/a.ts', '_blank', 'noopener,noreferrer')
+    f.changes(S1).report('toast.expandStale')
+    expect(f.notice()).toMatchObject({ key: 'toast.expandStale', tone: 'failure', params: {} })
+    f.changes(S1).report('toast.expandFailed', { message: 'gone' })
+    expect(f.notice()).toMatchObject({ key: 'toast.expandFailed', tone: 'failure', params: { message: 'gone' } })
+
+    const writeText = vi.fn(async (_text: string) => {})
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+    f.changes(S1).copyPath('src/a.ts')
+    await settle()
+    expect(writeText).toHaveBeenCalledWith('src/a.ts')
+    expect(f.notice()).toMatchObject({ key: 'toast.pathCopied', tone: 'success' })
+    await f.dispose()
+  })
+
+  it('sends the request for a change request to the Session as a message and confirms it', async () => {
+    const f = await fixture()
+    const send = vi.fn(async (_text: string) => {})
+    f.ctx.provide('sessions', { scope: (sessionId: SessionId) => sessionId === S1 ? { get: (name: string) => name === 'conversation' ? { send } : undefined } : undefined })
+    f.changes(S1).createChangeRequest()
+    await settle()
+    const text = send.mock.calls[0]?.[0]
+    expect([en['changes.local.prompt'], zh['changes.local.prompt']]).toContain(text)
+    expect(f.notice()).toMatchObject({ key: 'toast.prompted', tone: 'success', params: { text } })
+
+    send.mockRejectedValueOnce(new Error('rejected'))
+    f.tab(S1).createChangeRequest()
+    await settle()
+    expect(send).toHaveBeenCalledTimes(2)
+    expect(f.notice()).toMatchObject({ key: 'toast.promptFailed', tone: 'failure' })
+    await f.dispose()
+  })
+
+  it.each([
+    ['without a sessions service', undefined],
+    ['for a Session without a scope', { scope: () => undefined }],
+    ['for a Session scope without a conversation', { scope: () => ({ get: () => undefined }) }],
+  ])('reports that the request cannot be sent %s', async (_label, sessions) => {
+    const f = await fixture()
+    if (sessions !== undefined) f.ctx.provide('sessions', sessions)
+    f.changes(S1).createChangeRequest()
+    expect(f.notice()).toMatchObject({ key: 'toast.promptFailed', tone: 'failure' })
     await f.dispose()
   })
 })
