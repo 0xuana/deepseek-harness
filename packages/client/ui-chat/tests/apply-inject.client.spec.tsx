@@ -13,7 +13,7 @@ import type { SessionBehaviorOverrides } from '@deepseek-ai/dsh-client-test-runt
 import type { ClientRemote } from '@deepseek-ai/dsh-api-remotes/client'
 import {
   apply as applyConversation, inject as injectConversation,
-  type GroupKey,
+  type ComposerBarInjected, type GroupKey,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import {
   apply as applyChat, inject as injectChat, type ChatFlowDataInjected, type ChatViewInjected,
@@ -295,12 +295,14 @@ describe('Chat inject API', () => {
   })
 
   it('states why a refused branch failed, on the Session it was asked of', async () => {
-    /** The notice the addressed Session's composer currently carries, as the page would show it. */
+    /** The notice the addressed Session's composer bar consumes, as the page would show it. */
     const noticeOf = (sessionId: SessionId): string | undefined => {
-      const scope = b.runtime.sessions.scope(sessionId)
-      if (scope === undefined) return undefined
-      const input = scope.get('conversation')?.input.for(scope)
-      return input?.notices.getSnapshot()?.text
+      const entry = b.runtime.slots.entries('conversation.composer.bar')[0]
+      if (entry?.inject === undefined) return undefined
+      const composer = (entry.inject as unknown as (
+        id: SessionId | undefined,
+      ) => ComposerBarInjected)(sessionId)
+      return composer.hooks.notices.getSnapshot()?.text
     }
     const b = await bench()
     const { injected } = b.chatViewApi(b.rootReference)
