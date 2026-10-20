@@ -12,7 +12,8 @@ import { expect, it, vi } from 'vitest'
 import { captureStableAria, compareOrRefreshGolden, launchWebScaffold, webSnapshotMode, type WebScaffold } from './scaffold.ts'
 import { connectFreshWorkspaceZh, ZH_BROWSER_LOCALE } from './support.ts'
 
-it.each([undefined, 'minimal'] as const)('adds CUA to PTC sessions while preserving default %s until the explicit persistent-runtime action', async (selectedDefault) => {
+// The shipped bundle admits only macOS Hosts; unsupported Hosts are exercised in bundle-platform.e2e.ts.
+it.skipIf(process.platform !== 'darwin').each([undefined, 'minimal'] as const)('adds CUA to PTC sessions while preserving default %s until the explicit persistent-runtime action', async (selectedDefault) => {
   const directory = await mkdtemp(join(tmpdir(), 'cua-optin-web-'))
   let ownedScaffold: WebScaffold | undefined
   let browser: Browser | undefined
