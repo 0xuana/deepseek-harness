@@ -30,6 +30,17 @@
 - 使用中性 `--dsw-alias-border-*` token 的平面边框与分割线一律 `0.5px`——按钮、输入框、卡片、行分割线，以及以填充盒绘制的分隔线（菜单分隔、对话标题栏接缝、markdown `hr`、竖向轨道线）共用发丝线粗细，Chromium 将其绘制为一个设备像素。dashed 记号与状态色 border 保持 1px；spinner 圆环经 spec 的显式豁免保留原宽度。更宽的中性 solid border 会被 ui-theme elevation spec 拒绝。
 - 可点击产物链接（Markdown 锚点、正文文件引用、网页来源与抓取链接、产物 chips、workflow 成员链接）经 `--dsw-alias-link` 着色、`font-weight: 500`，默认无下划线，hover/focus 时为 3px offset 的点状下划线。紧凑 Thinking Markdown 保持 tertiary 文字色和默认点状下划线（[紧凑展示](../packages/client/ui-primitives/README.zh.md#rendering-agent-output)）。带文字的锚点另以 ui-primitives 的 `LinkIconMedium` 分类图形（随 `currentColor`）作前置；目的地是已知外部站点时改用该站点自己的标记而非地球；workflow 成员链接与只包图片的锚点不带图形，工具行文件链接保持其灰色点线示能。
 
+<a id="input-capabilities"></a>
+## 输入能力
+
+`pointer` 与 `hover` 描述浏览器选定的主指针，`any-hover` 则考虑所有可用指针。三者都不检测物理键盘。
+
+- `(pointer: coarse)` 用于依赖指针精度的呈现，例如适合触摸的控件和文本框尺寸。
+- CSS 悬停效果保留在 `(hover: hover)` 下，使以触屏为主的布局无需悬停也能使用。
+- JavaScript 悬停预览在接受 mouse 进入事件时使用 `(any-hover: hover)`，并忽略 touch 进入事件。因此，即使触屏仍是主指针，外接鼠标也能打开预览。如果通过 `any-hover` 启用全部 CSS 悬停样式，触摸产生的 `:hover` 状态也会应用这些样式。
+
+混合输入设备上，鼠标预览可以出现，而基于主指针的 CSS 悬停样式保持关闭。键盘焦点和快捷键提示根据实际键盘交互显示，不依赖这些能力查询；共享行为见 [Menu 与输入方式](../packages/client/ui-primitives/README.zh.md#input-modality)。
+
 <a id="corner-radii-and-settings-cards"></a>
 ## 圆角与设置卡片
 

@@ -209,7 +209,7 @@
 }
 
 @media (pointer: coarse) {
-  .shortcut {
+  :global(html:not([data-input-modality='keyboard'])) .shortcut {
     display: none;
   }
 }

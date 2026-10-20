@@ -54,6 +54,7 @@ it.each([false, true])('keeps workspace and archived search actions reachable wi
   const browser = await chromium.launch()
   onTestFinished(() => browser.close())
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, hasTouch, locale: 'en-US' })
+  await page.addInitScript(() => { Object.defineProperty(navigator, 'platform', { value: 'MacIntel' }) })
   onTestFailed(() => saveFailureShot(page, `row-actions-${String(hasTouch)}`))
   const activate = async (target: Locator) => {
     if (hasTouch) await target.tap()
@@ -86,8 +87,34 @@ it.each([false, true])('keeps workspace and archived search actions reachable wi
   expect(await project.getAttribute('aria-expanded')).toBe('true')
   await openFixture()
   if (!hasTouch) await row.hover()
-  await activate(row.getByRole('button', { name: /^Session actions for / }))
-  await activate(page.getByRole('menuitem', { name: 'Archive session', exact: true }))
+  const actions = row.getByRole('button', { name: /^Session actions for / })
+  await activate(actions)
+  const archive = page.getByRole('menuitem', { name: 'Archive session', exact: true })
+  const shortcut = archive.locator('[aria-hidden="true"]').filter({ has: page.locator('kbd') })
+  await archive.waitFor()
+  expect(await shortcut.count()).toBe(1)
+  expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(hasTouch)
+  expect(await shortcut.isVisible()).toBe(!hasTouch)
+  for (const key of ['ArrowDown', 'Tab']) {
+    await page.keyboard.press(key)
+    expect(await page.locator('html').getAttribute('data-input-modality')).toBe('keyboard')
+    expect(await page.getByRole('menu').evaluate(menu => menu.contains(document.activeElement))).toBe(true)
+    expect(await shortcut.isVisible()).toBe(true)
+    if (hasTouch) {
+      await page.setViewportSize({ width: 390, height: 900 })
+      await expect.poll(() => shortcut.evaluate((element) => {
+        const bounds = element.getBoundingClientRect()
+        return bounds.left >= 0 && bounds.right <= window.innerWidth
+      })).toBe(true)
+      await page.setViewportSize({ width: 1280, height: 900 })
+    }
+    await page.keyboard.press('Escape')
+    if (!hasTouch) await row.hover()
+    await activate(actions)
+    await archive.waitFor()
+    expect(await shortcut.isVisible()).toBe(!hasTouch)
+  }
+  await activate(archive)
   await row.waitFor({ state: 'detached' })
   await activate(page.getByRole('button', { name: 'View options', exact: true }))
   await activate(page.getByRole('menuitem', { name: 'All conversations (show archived)', exact: true }))
