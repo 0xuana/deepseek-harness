@@ -61,7 +61,9 @@ it('routes manual packaging to the dedicated runner with explicit preset and sig
   expect(Object.keys(workflow.on)).toEqual(['workflow_dispatch'])
   expect(workflow.jobs.package).not.toHaveProperty('name')
   expect(job['runs-on']).toBe('dsh-win-package-trial')
-  expect(job.env.DSH_DESKTOP_PACKAGE_CACHE_DIR).toBe('${{ runner.tool_cache }}/dsh-desktop-package-cache')
+  expect(JSON.stringify(job.env)).not.toContain('runner.')
+  expect(job.steps.find(step => step.name === 'Configure persistent pnpm store')?.env?.DSH_DESKTOP_PACKAGE_CACHE_DIR)
+    .toBe('${{ runner.tool_cache }}/dsh-desktop-package-cache')
   expect(workflow.concurrency).toEqual({ group: 'windows-desktop-package', 'cancel-in-progress': false })
   expect(workflow.permissions).toEqual({ contents: 'read' })
   expect(Object.keys(workflow.on.workflow_dispatch!.inputs).sort()).toEqual([
@@ -120,12 +122,15 @@ it.skipIf(process.platform !== 'win32')('keeps the dependency store stable acros
       const environmentFile = resolve(directory, run + '.env')
       execFileSync('pwsh', ['-NoProfile', '-File', script], {
         env: { ...process.env, GITHUB_WORKSPACE: 'D:\\runner\\_work\\repo\\repo',
-          PACKAGE_CACHE_NAMESPACE: '', PNPM_HOME: resolve(directory, run, 'pnpm'), GITHUB_ENV: environmentFile },
+          PACKAGE_CACHE_NAMESPACE: '', DSH_DESKTOP_PACKAGE_CACHE_DIR: 'D:\\tool-cache\\desktop',
+          PNPM_HOME: resolve(directory, run, 'pnpm'), GITHUB_ENV: environmentFile },
         stdio: 'pipe',
       })
       return readFileSync(environmentFile, 'utf8').trim()
     })
-    expect(outputs).toEqual(['PNPM_CONFIG_STORE_DIR=D:\\.pnpm-store', 'PNPM_CONFIG_STORE_DIR=D:\\.pnpm-store'])
+    expect(outputs.map(output => output.split(/\r?\n/u))).toEqual(Array.from({ length: 2 }, () => [
+      'DSH_DESKTOP_PACKAGE_CACHE_DIR=D:\\tool-cache\\desktop', 'PNPM_CONFIG_STORE_DIR=D:\\.pnpm-store',
+    ]))
     const runNamespace = (namespace: string) => {
       const output = resolve(directory, 'namespace.env')
       rmSync(output, { force: true })
