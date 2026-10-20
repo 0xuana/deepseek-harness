@@ -31,6 +31,8 @@ Open Plugins → More → Experimental plugins and enable Plugin recommendations
 - name: @deepseek-ai/dsh-experimental-plugin-recommendations
 ```
 
+For multiple independent needs, guidance selects one proposal before any recommendation call: explicit user priority wins; otherwise an existing plugin precedes a new interface. Remaining needs stay in the answer, and missing requirements require clarification rather than an inferred connection. The limit covers both recommendation tools, including calls submitted together. Rejected calls create no card and do not schedule a later one. An already selected existing plugin does not require another catalog lookup merely to plan an unselected creation. These are semantic instructions; the Host still enforces the one-successful-card limit independently.
+
 ### Outcomes and recovery
 
 Enable requires permission to modify the profile. The Host rechecks catalog eligibility before changing it. A saved selection can require restart or be overridden; those outcomes do not resume the Agent. Failed and cancelled changes can be retried. A lost response leaves the outcome uncertain until the Session projection reconnects; repeated card actions are idempotent.

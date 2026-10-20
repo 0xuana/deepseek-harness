@@ -59,6 +59,11 @@ describe('official recommendations', () => {
     const f = await fixture()
     const text = async () => renderPrompt(await f.ctx.systemPrompt.assemble(assembleContextFor(f.agent)))
     expect(await text()).toContain('first read list_official_plugins')
+    expect({
+      prompt: await text(),
+      proposal: f.ctx.tools.get('suggest_plugin', f.agent)?.description,
+      parameters: f.ctx.tools.get('suggest_plugin', f.agent)?.parameters,
+    }).toMatchSnapshot('one selected need and accurate proposal outcomes')
     expect(renderPrompt(await f.ctx.systemPrompt.assemble())).not.toContain('read list_official_plugins')
     const child = await f.agent.ctx.agents.create({ sessionId: SessionId('recommendations-child'), parentAgent: f.agent })
     expect(renderPrompt(await f.ctx.systemPrompt.assemble(assembleContextFor(child.agent)))).not.toContain('read list_official_plugins')
@@ -89,6 +94,7 @@ describe('official recommendations', () => {
     gate.resolve([bundle])
     const result = await first
     expect(second.isError).toBe(true)
+    expect(second.content).toMatchSnapshot('rejected extra proposal does not promise a card')
     expect(result.isError).toBe(false)
     f.agent.session.append('tool/result', { turn: 1, step: 1,
       message: createToolResultMessage({ callId: ToolCallId('first'), content: result.content, isError: false }),

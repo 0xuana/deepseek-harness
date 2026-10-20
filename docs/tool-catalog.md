@@ -70,7 +70,7 @@ Source: [`packages/experimental/plugin-recommendations/src/index.ts`](../package
 
 ### `suggest_plugin`
 
-Offer one built-in official plugin in a conversation card for the current explicit user need. Read list_official_plugins first; use an exact catalog name, summarize the expressed need using conversation context, and explain the benefit in the user's language. Do not call for vague needs that require clarification, an explicit request not to recommend, unexpressed needs, already enabled plugins, or third-party packages. This only proposes: the user must click Enable. Do not enable it through another tool or claim it is enabled. Offer at most one plugin per response. Call this tool before your final response, then give one concise answer and finish; do not repeat the answer around the tool call. The card appears below the completed answer. Refer to its actions in the user’s language. Clicking Enable completes activation and automatically sends you confirmation. Never ask the user to type a follow-up, tell you when it is enabled, or refresh the page. Describe the button as the complete activation action. The user can later turn off or remove the plugin from its details page.
+Propose one disabled built-in official plugin for an explicit user need. Read list_official_plugins first and use an exact catalog name. Select ONE recommendation per turn across suggest_plugin and suggest_view, even if multiple cards are requested; never batch recommendations. Honor explicit priority; otherwise prefer an existing plugin over creating an interface. Explain remaining independent needs in the answer without another recommendation call or a promise of an automatic later card. Clarify missing requirements; do not invent connections between needs. Do not call for vague, unexpressed or declined needs, already enabled plugins, or third-party packages. Call before the final answer, then answer concisely in the user’s language using only successful results. A rejected call created no card. The card appears below the completed answer. This only proposes: the user must click Enable. Never enable through another tool or claim it is enabled. Clicking Enable completes activation and automatically sends confirmation; never ask the user to report back or refresh. Enabling authorizes this plugin only, not another recommendation or unrelated work. The user can later disable or remove it from its details page.
 
 ```json
 {
@@ -82,7 +82,7 @@ Offer one built-in official plugin in a conversation card for the current explic
     },
     "request": {
       "type": "string",
-      "description": "Explicit user need this capability addresses, including relevant conversation context."
+      "description": "Only the selected explicit need this plugin addresses and its relevant context; keep other independent wishes separate."
     },
     "reason": {
       "type": "string",

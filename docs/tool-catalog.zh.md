@@ -74,7 +74,7 @@
 
 ### `suggest_plugin`
 
-针对用户当前明确需求，在会话卡片中推荐一个内置官方插件。先调用 list_official_plugins，使用清单中的准确名称，结合上下文总结需求，并用用户的语言说明用途。不要为需要澄清的模糊需求、明确拒绝推荐的请求、未表达的需求、已启用插件或第三方包调用此工具。这里只提出建议：用户必须点击启用；不要通过其他工具启用或声称已启用。每轮最多推荐一个插件。在最终回答之前调用工具，再给出一次简洁回答并结束，避免在工具调用前后重复回答；卡片会显示在完整回答下方。使用用户的语言称呼卡片操作。点击启用后完成启用，并自动发送确认。不要让用户补发消息、启用后再告诉你或刷新页面；应说明点击按钮即可完成启用。用户之后可在插件详情页关闭或移除插件。
+针对明确需求，提出一个尚未启用的内置官方插件建议。先读取 list_official_plugins，并使用清单中的准确名称。每轮从 suggest_plugin 与 suggest_view 中选定一条推荐，即使用户要求多张卡也不得同批提交多个建议。遵循明确优先级，否则优先使用现成插件。其余独立需求在正文说明，不再调用推荐工具，也不承诺以后自动出卡。缺少信息时先澄清，不推断需求间的关联。不要为模糊、未表达或已拒绝的需求、已启用插件或第三方包调用工具。在最终回答前调用，再用用户的语言根据成功结果简洁作答；被拒绝的调用不会生成卡片。卡片显示在完整回答下方。这里只提出建议，用户必须点击启用；不要通过其他工具启用或声称已启用。点击启用后完成激活并自动发送确认，无需用户补发消息或刷新。启用只授权这一个插件，不授权其他推荐或无关工作。用户可在详情页关闭或移除插件。
 
 ```json
 {
@@ -86,7 +86,7 @@
     },
     "request": {
       "type": "string",
-      "description": "Explicit user need this capability addresses, including relevant conversation context."
+      "description": "Only the selected explicit need this plugin addresses and its relevant context; keep other independent wishes separate."
     },
     "reason": {
       "type": "string",
