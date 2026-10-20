@@ -87,7 +87,7 @@ kind: "package-reference"
     executionMode: persistent-in-memory
 ```
 
-保存补丁，在使用 PTC 工具展示的配置中通过 `dsh headless --patch <path>` 加载。`per-call` 模式和 `scriptPersistence: false` 的 Script 模式不跨调用保留程序内存。修改配置会重载提供方并释放其执行资源。单文件打包宿主使用内存保留模式时，需要使用 `node-script` 启动方式，将 `launch.executable` 指向 Node，并将 `launch.bootstrapPath` 指向本包构建出的 `persistent-process.js`。
+保存补丁，在使用 PTC 工具展示的配置中通过 `dsh headless --patch <path>` 加载。`per-call` 模式和 `scriptPersistence: false` 的 Script 模式不跨调用保留程序内存。修改配置会重载提供方并释放其执行资源。单文件打包宿主使用内存保留模式时，需要使用 `node-script` 启动方式，将 `launch.executable` 指向 Node，并将 `launch.bootstrapPath` 指向本包构建出的 `process.js`。
 
 在 REPL 模式下，每个存活 Agent 保留独立进程，跨 `run_code` 调用和轮次保留顶层变量、函数及导入模块。使用 `await import(...)`、`console.log(...)` 和末尾 JSON 表达式；不支持顶层 `return`。Node REPL 使用非严格模式，给未声明的名称赋值会创建保留的全局变量。`_` 和 `_error` 是普通的保留全局变量，不使用交互式 REPL 的结果设置器。声明遵循 Node REPL 规则，包括重复声明已有 `let`、`const` 或 `class` 名称时报错；应给可变绑定赋值或选择新名称。开头的 `{ ... }` 按语句块执行，可以包含顶层 await 和临时声明；需要返回对象表达式时，用圆括号包裹。保留的函数和工具方法引用调用当前执行的绑定。必须等待所有工具调用；已完成执行的回调不能在后续执行中调用工具。
 
@@ -117,17 +117,17 @@ PTC 消费方按 [dsh-tools](../../core/tools/README.zh.md#ptc-mode) 的说明�
 
 Host 负责策略、截止时间、绑定查找和进程清理。子进程负责程序求值与绑定代理；即使使用预期的控制描述符，模型编写的代码仍是不可信对端。
 
-`createExecution()` 在提供方加载时一次性确定配置对应的语法、类型擦除、模型指导和进程生命周期。提供方处理执行准入与取消，再委托单次或保留进程的所有者执行。两个子进程入口都使用 `createProgramEvaluator()`；异步函数、REPL 和 Script 实现共用全局变量、求值与清理操作。进程所有权代码不选择或解释程序语法。
+`createExecution()` 在提供方加载时一次性确定配置对应的语法、类型擦除、模型指导和进程生命周期。提供方处理执行准入与取消。统一的执行所有者创建临时进程，或在启用状态保留时复用所有者的进程；二者都由 `ProgramWorker` 负责启动、截止时间、绑定分派和清理。共用的子进程循环根据本次执行数据选择 `createProgramEvaluator()`；异步函数、REPL 和 Script 实现提供全局变量、求值与清理操作，与进程生命周期独立。
 
 ### 启动与控制
 
-Host 擦除可擦除类型，在配置的执行世界中解析可执行文件与 bootstrap，通过 `ctx.sandbox` 等待 argv 限制准备完成，再通过 `ctx.subprocess` 启动。限制准备完成后会再次检查取消状态，因此提供方在取消后返回也无法启动程序。接管继承的控制通道后，子进程在 OS 环境中只保留可执行文件搜索路径、Windows 系统路径和临时路径，并将程序可见的 `process.env` 替换为空字典。Windows ACL 初始化接收父进程各自的 `TEMP` 和 `TMP` 值以使用共享授权锁，然后在启动程序前将二者替换为私有目录。这些原生路径使嵌套进程创建和原生临时文件 API 仍可正常工作。Host 仅在子进程启动时保留 `ELECTRON_RUN_AS_NODE`，使桌面端可执行文件运行 Node bootstrap；bootstrap 在求值模型代码前删除该选择变量。堆上限通过 Node argv 或为打包可执行文件由提供方构造的 `NODE_OPTIONS` 值传递；环境中的加载器和调试器标志会被丢弃。
+Host 擦除可擦除类型；需要启动进程时，在配置的执行世界中解析可执行文件与 bootstrap，通过 `ctx.sandbox` 等待 argv 限制准备完成，再通过 `ctx.subprocess` 启动。限制准备完成后会再次检查取消状态，因此提供方在取消后返回也无法启动程序。接管继承的控制通道后，子进程在 OS 环境中只保留可执行文件搜索路径、Windows 系统路径和临时路径，并将程序可见的 `process.env` 替换为空字典。Windows ACL 初始化接收父进程各自的 `TEMP` 和 `TMP` 值以使用共享授权锁，然后在启动程序前将二者替换为私有目录。这些原生路径使嵌套进程创建和原生临时文件 API 仍可正常工作。Host 仅在子进程启动时保留 `ELECTRON_RUN_AS_NODE`，使桌面端可执行文件运行 Node bootstrap；bootstrap 在求值模型代码前删除该选择变量。堆上限通过 Node argv 或为打包可执行文件由提供方构造的 `NODE_OPTIONS` 值传递；环境中的加载器和调试器标志会被丢弃。
 
-带长度分帧的 JSON 与 stdout/stderr 分开传输。Host 限制帧与排队写入，在分派前验证调用身份和已声明的绑定名，并拒绝无效通信。子进程刷新终态帧后仍保持控制通道打开，直到 Host 关闭通道。提交终态帧后，子进程忽略后续绑定回复，不再发送程序控制消息。输出捕获计量序列化日志加完成值或诊断；固定结果信封字段与沙箱元数据不计入该账本。
+带长度分帧的 JSON 与 stdout/stderr 分开传输。每次执行都通过同一种 run 协议携带标识、cwd、语法和绑定声明。Host 限制帧与排队写入，在分派前验证调用身份和绑定查找，并拒绝无效通信。子进程在执行间保持通道打开，直到 Host 关闭通道。提交某次执行的终态帧后，子进程忽略该次执行后续的绑定回复，其回调也不能再发送绑定调用或捕获的日志。`JsonChannel` 统一跟踪写入并等待排空；解码后的回复直接结算绑定调用。输出捕获计量序列化日志加完成值或诊断；固定结果信封字段与沙箱元数据不计入该账本。
 
 ### 源代码与构建后 bootstrap
 
-源代码执行加载仅含可擦除语法的 bootstrap 依赖，不依赖同级包的构建后导出。构建后脚本通过 `process.js` 运行单次程序，通过 `persistent-process.js` 运行保留状态的 REPL 和 Script 环境。保留模式要求 `node-script` 启动方式。远端脚本部署提供对应的 `launch.bootstrapPath`。内嵌载体通过 `launch.executable` 启动私有 worker。`resolveLaunch()` 在构造时选择本地默认值；显式的远端调用不依赖客户端自身是否打包。不会假设 Host 路径对应同一个远程文件。
+源代码执行加载仅含可擦除语法的 bootstrap 依赖，不依赖同级包的构建后导出。构建后脚本在所有模式下都使用 `process.js`；`persistent-process.js` 委托同一个循环，供未指定程序语法的宿主默认使用 REPL。保留模式要求 `node-script` 启动方式。远端脚本部署提供对应的 `launch.bootstrapPath`。内嵌载体通过 `launch.executable` 启动私有 worker。`resolveLaunch()` 在构造时选择本地默认值；显式的远端调用不依赖客户端自身是否打包。不会假设 Host 路径对应同一个远程文件。
 
 原生编译器接受的脚本直接执行。当编译需要顶层 await 支持时，Acorn 解析包住源码的异步函数。转换沿用 Node REPL 的 visitor、声明提升和按字符位置修改源码的方式，包括对末尾表达式结果的包装；求值器解包后等待该值。局部 AST 遍历器使新增依赖仍只有 Acorn。动态 `import()` 表达式保持原生形式，使用编译该 Script 时的 `importModuleDynamically` 选项。两个私有进程 bundle 都包含 Acorn；源码执行直接导入该包。
 
@@ -137,10 +137,9 @@ Host 擦除可擦除类型，在配置的执行世界中解析可执行文件与
 |---|---|
 | [`src/index.ts`](src/index.ts) | Node 提供方：统一执行准入、取消与服务委托 |
 | [`src/config.ts`](src/config.ts) | 执行模式、限制校验与默认值 |
-| [`src/execution.ts`](src/execution.ts) | 模式选择、类型擦除、模型指导与进程所有者选择 |
-| [`src/per-call.ts`](src/per-call.ts) | 单次进程执行与清理 |
-| [`src/persistent.ts`](src/persistent.ts) | 内存保留模式的进程所有权、执行截止与清理 |
-| [`src/persistent-process.ts`](src/persistent-process.ts) | 保留状态的子进程生命周期与当前绑定分派 |
+| [`src/execution.ts`](src/execution.ts) | 模式选择、请求解析及临时或保留进程的所有权 |
+| [`src/worker.ts`](src/worker.ts) | 共用的进程启动、执行截止、绑定分派与清理 |
+| [`src/persistent-process.ts`](src/persistent-process.ts) | 默认使用 REPL 的已安装入口，委托共用子进程循环 |
 | [`src/evaluators/index.ts`](src/evaluators/index.ts) | 三种求值器的统一选择入口 |
 | [`src/evaluators/async-function.ts`](src/evaluators/async-function.ts) | AsyncFunction：严格模式异步函数体 |
 | [`src/evaluators/repl.ts`](src/evaluators/repl.ts) | Node REPL：交互式声明与保留的 context |
@@ -148,7 +147,7 @@ Host 擦除可擦除类型，在配置的执行世界中解析可执行文件与
 | [`src/evaluators/vm-script-await.ts`](src/evaluators/vm-script-await.ts) | VM Script 的顶层 await 转换与声明保留 |
 | [`src/output-stream.ts`](src/output-stream.ts) | 有界流捕获与进程输出排空 |
 | [`src/launch.ts`](src/launch.ts) | 可执行文件／bootstrap 参数与执行世界资源映射 |
-| [`src/process.ts`](src/process.ts) | 子进程握手、环境清空与程序生命周期 |
+| [`src/process.ts`](src/process.ts) | 共用的子进程握手、求值器生命周期与直接绑定回复 |
 | [`src/bootstrap.ts`](src/bootstrap.ts) | 程序求值、绑定代理与输出捕获 |
 | [`src/channel.ts`](src/channel.ts) | 分帧、有界写入与协议失败 |
 | [`src/output-ledger.ts`](src/output-ledger.ts) | Host 外层结果计量 |

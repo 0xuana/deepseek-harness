@@ -1,13 +1,15 @@
-/** Resolve evaluation syntax and process lifetime once for the Node provider. */
+/** Select program syntax and own temporary or retained Node processes. */
 import { stripTypeScriptTypes } from 'node:module'
+import { isAbsolute } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { PtcRunRequest, PtcRunResult, PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
+import { clampTimeout } from '@deepseek-ai/dsh-timeout'
 import type { ResolvedConfig } from './config.ts'
 import type { ProgramFormat } from './evaluators/types.ts'
-import { PerCallExecution } from './per-call.ts'
-import { InMemoryExecution } from './persistent.ts'
+import { validateBindings } from './bindings.ts'
 import type { PolicyProcesses } from './policy-processes.ts'
+import { ProgramWorker } from './worker.ts'
 
 /** Syntax, state retention and model guidance selected during provider construction. */
 export interface ExecutionMode {
@@ -25,52 +27,123 @@ export interface ExecutionMode {
   stripTypes(program: string): string
 }
 
-/** A resolved run carrying provider cancellation as well as caller cancellation. */
-export type AdmittedRun = PtcRunSpec & { signal: AbortSignal }
+/**
+ * Select program semantics and create their shared process owner.
+ * @param ctx - Provider lifecycle and execution services.
+ * @param config - Validated configuration with loader defaults.
+ * @param processes - Policy invalidation and process cleanup coordination.
+ * @returns Mode selection and temporary or retained execution through one process implementation.
+ */
+export function createExecution(ctx: Context, config: ResolvedConfig, processes: PolicyProcesses): NodeExecution {
+  return new NodeExecution(ctx, config, processes, resolveMode(config))
+}
 
-/** Process ownership shared by one-shot and retained execution. */
-export interface ExecutionRunner {
+/** Temporary processes and optional object-owned reuse share one process implementation. */
+class NodeExecution {
+  private readonly owners = new WeakMap<object, ProgramWorker>()
+  private readonly workers = new Set<ProgramWorker>()
+
   /**
-   * Resolve policy, directory and elapsed budget.
-   * @param request - Program and optional execution settings.
-   * @returns Complete inputs for run.
+   * Own process instances and optional owner lookup for one provider.
+   * @param ctx - Provider lifecycle and execution services.
+   * @param config - Validated limits and selected executable.
+   * @param processes - Provider-owned policy invalidation and cleanup.
+   * @param mode - Program syntax and TypeScript erasure.
    */
-  resolve(request: PtcRunRequest): PtcRunSpec
+  constructor(
+    private readonly ctx: Context, private readonly config: ResolvedConfig,
+    private readonly processes: PolicyProcesses, readonly mode: ExecutionMode,
+  ) {
+    if (mode.retainsState && this.config.launch.kind === 'embedded') throw new Error('Persistent PTC requires a node-script launch')
+  }
+
+  /** Stop every owned process, retaining failed cleanup for a later retry. */
+  async dispose(): Promise<void> {
+    const results = await Promise.allSettled([...this.workers].map(async (worker) => {
+      await worker.dispose()
+      this.workers.delete(worker)
+    }))
+    const failed = results.find(result => result.status === 'rejected')
+    if (failed?.status === 'rejected') throw failed.reason
+  }
+
   /**
-   * Execute an admitted call under the selected process lifetime.
-   * @param spec - Resolved inputs with combined cancellation.
-   * @param controller - Provider-owned cancellation, also used for one-shot deadlines.
-   * @returns Captured output or a structured execution failure after required cleanup.
+   * Resolve the common file policy, directory and deadline defaults.
+   * @param request - Program, bindings, owner, directory and elapsed budget.
+   * @returns Resolved inputs with the selected file policy.
    */
-  run(spec: AdmittedRun, controller: AbortController): Promise<PtcRunResult>
+  resolve(request: PtcRunRequest): PtcRunSpec {
+    const sandboxPolicy = request.sandboxPolicy ?? this.ctx.sandboxPolicy.resolve()
+    const cwd = request.cwd ?? sandboxPolicy.workspaceRoot
+    if (!isAbsolute(cwd)) throw new Error(`${this.mode.retainsState ? 'persistent PTC' : 'ptc-runtime-node'}: cwd must be absolute`)
+    return { ...request, sandboxPolicy, cwd, timeoutMs: request.timeoutMs === null ? null : clampTimeout(request.timeoutMs, this.config.timeoutMs, this.config.maxTimeoutMs, this.mode.retainsState ? 'persistent PTC timeoutMs' : 'ptc-runtime-node: timeoutMs') }
+  }
+
   /**
-   * Release resources retained for a caller-owned object.
+   * Evaluate in a temporary process or reuse an enabled state owner's process.
+   * @param spec - Resolved request; concurrent calls for one owner are rejected.
+   * @returns Captured logs, JSON completion, or a structured execution failure.
+   */
+  async run(spec: PtcRunSpec): Promise<PtcRunResult> {
+    if (spec.sandboxPolicy === undefined) throw new Error('ptc-runtime-node: run requires a resolved sandbox policy')
+    if (!isAbsolute(spec.cwd) || (spec.timeoutMs !== null && (!Number.isFinite(spec.timeoutMs) || spec.timeoutMs <= 0 || spec.timeoutMs > this.config.maxTimeoutMs))) throw new Error('ptc-runtime-node: run requires resolved cwd and timeout')
+    const bindings = validateBindings(spec)
+    const owner = this.mode.retainsState ? spec.stateOwner : undefined
+    let worker = owner === undefined ? undefined : this.owners.get(owner)
+    worker?.assertIdle()
+    if (worker && !worker.closed && (worker.policy.mode !== spec.sandboxPolicy.mode
+      || worker.policy.workspaceRoot !== spec.sandboxPolicy.workspaceRoot
+      || worker.policy.sessionId !== spec.sandboxPolicy.sessionId
+      || !sameAdditionalRoots(worker.policy.additionalWritableRoots, spec.sandboxPolicy.additionalWritableRoots))) {
+      throw new Error('persistent PTC: release the retained environment before changing its sandbox policy')
+    }
+    if (!worker || worker.closed) {
+      if (worker) this.workers.delete(worker)
+      // Direct callers can own mutable policy arrays; the retained process owns its grant snapshot.
+      worker = new ProgramWorker(this.ctx, this.config, {
+        ...spec.sandboxPolicy,
+        ...spec.sandboxPolicy.additionalWritableRoots === undefined
+          ? {}
+          : { additionalWritableRoots: [...spec.sandboxPolicy.additionalWritableRoots] },
+      }, this.processes, this.mode)
+      this.workers.add(worker)
+      if (owner !== undefined) this.owners.set(owner, worker)
+    }
+    try { return await worker.run(spec, bindings) } finally {
+      if (owner === undefined && worker.cleanupComplete) this.workers.delete(worker)
+    }
+  }
+
+  /**
+   * Release retained state and await its process cleanup.
    * @param owner - Exact object supplied to run.
-   * @returns Completion after owned processes stop; immediate for one-shot execution.
+   * @returns Completion after the owned process and output streams stop.
    */
-  release(owner: object): Promise<void>
+  async release(owner: object): Promise<void> {
+    const worker = this.owners.get(owner)
+    if (!worker) return
+    await worker.dispose()
+    if (this.owners.get(owner) === worker) this.owners.delete(owner)
+    this.workers.delete(worker)
+  }
+}
+
+/**
+ * Compare requested extra grants without resolving paths in another execution world.
+ * @param left - one policy's additional roots.
+ * @param right - the other policy's additional roots.
+ * @returns whether both contain the same paths, ignoring order and duplicates.
+ */
+function sameAdditionalRoots(left: readonly string[] | undefined, right: readonly string[] | undefined): boolean {
+  const effective = (roots: readonly string[] | undefined): string[] => [...new Set(roots ?? [])].sort()
+  const a = effective(left)
+  const b = effective(right)
+  return a.length === b.length && a.every((root, index) => root === b[index])
 }
 
 const STRIP_PREFIX = 'async function __dsh_program__() {\n'
 const STRIP_SUFFIX = '\n}'
 const RETAINED_STATE_INSTRUCTIONS = 'Changing the session sandbox mode clears retained variables. An approved sandbox escalation runs in a separate temporary environment: it cannot access retained variables, and its declarations are discarded afterward. Restart, Agent disposal, cancellation, timeout, output overflow, or process failure clears the environment. If a variable is undefined, recreate it and reacquire its resources. State is not restored from the conversation, and failed evaluations can leave earlier mutations in memory. Redeclaring an existing let, const, or class name fails; assign to a mutable binding or use a new name. Await all tool calls; background callbacks cannot call tools after their evaluation ends. Await child-process completion before ending an evaluation; raw subprocess output belongs to whichever evaluation is active when it arrives.'
-
-/**
- * Select the configured evaluator and its process owner.
- * @param ctx - Provider lifecycle and execution services.
- * @param config - Validated configuration with loader defaults.
- * @param processes - Policy invalidation and process cleanup coordination.
- * @returns Immutable mode selection and the corresponding execution runner.
- */
-export function createExecution(
-  ctx: Context, config: ResolvedConfig, processes: PolicyProcesses,
-): { mode: ExecutionMode; runner: ExecutionRunner } {
-  const mode = resolveMode(config)
-  const runner = mode.retainsState
-    ? new InMemoryExecution(ctx, config, processes, mode)
-    : new PerCallExecution(ctx, config, processes, mode)
-  return { mode, runner }
-}
 
 function resolveMode(config: ResolvedConfig): ExecutionMode {
   switch (config.executionMode) {

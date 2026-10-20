@@ -3,7 +3,6 @@ import { dirname, isAbsolute, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import type { FileSystem } from '@deepseek-ai/dsh-fs'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
-import type { ProgramFormat } from './evaluators/types.ts'
 
 /** Deployment-owned worker invocation in the subprocess execution world. */
 export type LaunchConfig = {
@@ -39,27 +38,24 @@ export function resolveLaunch(config?: LaunchConfig): LaunchConfig {
  * @param fs - Filesystem mapping host bootstrap assets into the process world.
  * @param config - resolved worker invocation.
  * @param maxMessageBytes - Validated frame and queued-write limit.
- * @param persistent - Whether the process serves sequential evaluations.
- * @param format - Retained evaluator syntax; one-shot programs carry it in their boot payload.
+ * @param persistent - Whether the selected mode requires retained-process launch support.
  * @returns Arguments following the resolved Node executable.
  */
-export function bootstrapArgs(fs: Pick<FileSystem, 'processPathFromHostPath'>, config: LaunchConfig, maxMessageBytes: number, persistent: boolean = false, format: ProgramFormat = 'repl'): string[] {
+export function bootstrapArgs(fs: Pick<FileSystem, 'processPathFromHostPath'>, config: LaunchConfig, maxMessageBytes: number, persistent: boolean = false): string[] {
   switch (config.kind) {
     case 'embedded':
       if (persistent) throw new Error('Persistent PTC requires a node-script launch')
       return [String(maxMessageBytes)]
-    case 'node-script': return scriptBootstrapArgs(fs, config.bootstrapPath, maxMessageBytes, persistent, format)
+    case 'node-script': return scriptBootstrapArgs(fs, config.bootstrapPath, maxMessageBytes)
     /* v8 ignore next -- Callers supply the resolved, closed LaunchConfig union. */
     default: return assertNever(config)
   }
 }
 
 function scriptBootstrapArgs(
-  fs: Pick<FileSystem, 'processPathFromHostPath'>, bootstrapPath: string | undefined, maxMessageBytes: number, persistent: boolean, format: ProgramFormat,
+  fs: Pick<FileSystem, 'processPathFromHostPath'>, bootstrapPath: string | undefined, maxMessageBytes: number,
 ): string[] {
-  const moduleName = persistent ? 'persistent-process' : 'process'
-  const formatArgs = persistent && format !== 'repl' ? [format] : []
-  if (bootstrapPath !== undefined) return [bootstrapPath, String(maxMessageBytes), ...formatArgs]
+  if (bootstrapPath !== undefined) return [bootstrapPath, String(maxMessageBytes)]
   const mapped = (path: string): string => {
     const result = fs.processPathFromHostPath(path)
     if (result === undefined) throw new Error(`PTC runtime bootstrap is unavailable in the subprocess execution world: ${path}`)
@@ -67,13 +63,11 @@ function scriptBootstrapArgs(
   }
   /* v8 ignore next 3 -- built-lib.e2e.ts executes the bundled provider and sibling process.js under plain Node. */
   if (!new URL(import.meta.url).pathname.endsWith('.ts')) {
-    return [mapped(fileURLToPath(new URL(`./${moduleName}.js`, import.meta.url))), String(maxMessageBytes), ...formatArgs]
+    return [mapped(fileURLToPath(new URL('./process.js', import.meta.url))), String(maxMessageBytes)]
   }
-  const entry = mapped(fileURLToPath(new URL(`./${moduleName}.ts`, import.meta.url)))
+  const entry = mapped(fileURLToPath(new URL('./process.ts', import.meta.url)))
   const subprocess = dirname(fileURLToPath(import.meta.resolve('@deepseek-ai/dsh-subprocess/package.json')))
   const helper = mapped(resolve(subprocess, 'src/control.ts'))
-  const main = persistent ? 'runPersistentMain' : 'runNodeMain'
-  const formatArgument = formatArgs.length > 0 ? `,${JSON.stringify(format)}` : ''
-  const source = `const {openInheritedControlChannel}=await import(${JSON.stringify(pathToFileURL(helper).href)});const {${main}}=await import(${JSON.stringify(pathToFileURL(entry).href)});await ${main}(openInheritedControlChannel(),${maxMessageBytes},process${formatArgument});`
+  const source = `const {openInheritedControlChannel}=await import(${JSON.stringify(pathToFileURL(helper).href)});const {runNodeMain}=await import(${JSON.stringify(pathToFileURL(entry).href)});await runNodeMain(openInheritedControlChannel(),${maxMessageBytes},process);`
   return ['--input-type=module', '--eval', source]
 }

@@ -41,14 +41,16 @@ export class NodePtcRuntime extends PtcRuntime {
       this.disposed = true
       const active = [...this.live]
       for (const run of active) run.controller.abort('runtime disposed')
-      await Promise.all(active.map(run => run.finished))
+      const results = await Promise.allSettled([this.execution.dispose(), ...active.map(run => run.finished)])
+      const failed = results.find(result => result.status === 'rejected')
+      if (failed?.status === 'rejected') throw failed.reason
     }, 'Node ptc-runtime cleanup')
   }
 
   override get sandboxMode(): SandboxMode | undefined { return this.ctx.sandboxPolicy.defaultMode }
 
   override release(owner: object): Promise<void> {
-    return this.execution.runner.release(owner)
+    return this.execution.release(owner)
   }
 
   override get timeout(): { defaultMs: number; maxMs: number } {
@@ -65,7 +67,7 @@ export class NodePtcRuntime extends PtcRuntime {
       const source = this.retainsState ? 'persistent PTC' : 'ptc-runtime-node'
       throw new Error(`${source}: resolve after disposal`)
     }
-    return this.execution.runner.resolve(request)
+    return this.execution.resolve(request)
   }
 
   /**
@@ -86,8 +88,11 @@ export class NodePtcRuntime extends PtcRuntime {
     this.live.add(live)
     try {
       await this.processes.wait(spec.sandboxPolicy?.sessionId)
+      // Disposal can begin while a previous policy's process cleanup is pending.
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
+      if (this.disposed) throw new Error(`${this.retainsState ? 'persistent PTC' : 'ptc-runtime-node'}: run after disposal`)
       const signal = spec.signal === undefined ? controller.signal : AbortSignal.any([spec.signal, controller.signal])
-      return await this.execution.runner.run({ ...spec, signal }, controller)
+      return await this.execution.run({ ...spec, signal })
     } finally {
       unregister?.()
       this.live.delete(live)

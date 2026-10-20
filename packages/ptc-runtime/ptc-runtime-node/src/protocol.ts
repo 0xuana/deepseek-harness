@@ -7,11 +7,11 @@
 import type { ProgramFormat } from './evaluators/types.ts'
 import type { PtcJsonWire } from './json-wire.ts'
 
-/** What the host hands the program at spawn, after the readiness handshake. */
+/** One evaluation's source, binding declarations and output budget. */
 export interface ProgramBootData {
   /** The type-stripped (plain JS) program. */
   code: string
-  /** One-shot evaluation syntax; omitted preserves async-function-body execution. */
+  /** Evaluation syntax; omitted uses the installed bootstrap's default. */
   programFormat?: ProgramFormat
   /** Binding namespaces to materialize; functions themselves stay host-side. */
   namespaces: {
@@ -21,6 +21,16 @@ export interface ProgramBootData {
   }[]
   /** Hard cap for the combined serialized outer logs plus completion value or failure diagnostic. */
   maxOutputBytes: number
+}
+
+/** Host → program: one evaluation in a temporary or owner-retained process. */
+export interface RunMessage {
+  type: 'run'
+  /** Process-local evaluation identity, increasing for each use of a retained process. */
+  id: number
+  /** Directory applied before evaluation in the child process world. */
+  cwd: string
+  data: ProgramBootData
 }
 
 /** Program → host: one bridged binding call. */
