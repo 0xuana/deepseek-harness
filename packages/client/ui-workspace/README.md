@@ -91,7 +91,15 @@ The package injects the Client `remoteAccess` service and provides the root stan
 
 The package is one composition: both target slots are declared by other plugins, so `apply` uses `slots.inject()` to register for each declaration lifetime and re-register after a declaring slot is restored.
 
-The browser entry also declares two root-scoped `list` child seats on each Session row: `sidebar.session.row.leading`, rendered only while that row's primary status is idle and left blank on an archived row, and `sidebar.session.row.hover`, mounted only while that row's hover card is open. Both take the row's Session identity and nothing else, so an occupant reads its own data by that id; a Session-scoped seat would force a Session binding, which would activate and retain every listed Session.
+The browser entry declares three root-scoped `list` child seats on each Session row: `sidebar.session.row.leading`, `sidebar.session.row.trailing`, and `sidebar.session.row.hover`. All receive only `sessionId`, which occupants use to address their own data without creating a Session binding. A Session-scoped seat would activate and retain every listed Session.
+
+The leading seat occupies the status cell only while the row's primary status is idle and leaves archived rows blank. The trailing seat accepts non-interactive icons in ascending `order`, after the time label and before the pin marker. Blank rows omit the trailing seat; an empty seat adds no spacing. The hover seat mounts only while the row's hover card is open.
+
+On hover-capable devices, hovering a Session row, giving keyboard focus to the row or its actions, or opening its menu replaces the time, trailing icons, and pin marker with action buttons. A pointer click does not keep the buttons visible after the pointer leaves.
+
+Hoverless devices keep the static details and the More menu trigger visible, including while the menu is open; pin and archive remain available in that menu.
+
+Session rows accept Tab focus and open with unmodified Enter or Space; Tab also reaches their action buttons, while modified keys remain available to global shortcuts.
 
 Client callers can pass `prompt` and `clearPreviousDraft` in the second argument to `uiWorkspace.startSession`. A prompt is plain text; structured drafts are handled internally during restoration and Workspace transfer. Without clearing, existing text or attachments are preserved; explicit clearing replaces only the target Session's text and inline references, leaving attachments intact. Option values are captured before asynchronous creation and applied to the exact retained binding before navigation commits. Superseded navigation does not write content; a submission-blocked input refuses preparation and keeps the previous selection. Calls without options create a fresh Session using the current Agent preset definition. Workspace reconnection and explicit draft preparation may reuse an existing blank Session. The [draft initialization decision](../../../.agents/notes/implemented/architecture/2026-09-30-structured-draft-initialization.md) describes the input owner's data flow.
 
@@ -184,7 +192,7 @@ Row motion belongs to [AnimatedRows](src/client/rows/AnimatedRows.tsx). It measu
 
 ### Hover cards
 
-Workspace and Session hover cards copy the value their row clips: activating a Workspace card writes its full directory path, while activating a non-blank Session card writes its full display title. A provisional blank New Session card remains read-only because its localized label is a placeholder rather than session content. A Session card also renders its `sidebar.session.row.hover` seat between the relative time and the trailing status lines whenever the card is open, independent of the row's own state. The first Workspace or Session card in a physical list waits 800ms; after a card is displayed, moving to another Workspace or Session in the same list replaces it immediately. The list and its active portaled card form one pointer interaction: entering the card to read or copy preserves immediate handoff to a neighboring Workspace or Session. After the pointer leaves both, the shared dwell resets when the active card closes through its existing pointer-grace and close lifecycle, with no separate group timer. Leaving a list with no active card resets the dwell immediately. Small action tooltips coexist with the right-side hover card; pin, archive, Workspace new-session, and search-result unarchive tooltips use portals to stay above it. Hovering actions, including More, preserves the card; opening the More menu or starting a Session drag dismisses it.
+Workspace and Session hover cards copy the value their row clips: activating a Workspace card writes its full directory path, while activating a non-blank Session card writes its full display title. A provisional blank New Session card remains read-only because its localized label is a placeholder rather than session content. A Session card, including a blank New Session card, shows its working directory below the title, abbreviating a POSIX home prefix as `~`, and omits that line when the Host reports no directory or an empty one. A Session card also renders its `sidebar.session.row.hover` seat between the relative time and the trailing status lines whenever the card is open, independent of the row's own state. The first Workspace or Session card in a physical list waits 800ms; after a card is displayed, moving to another Workspace or Session in the same list replaces it immediately. The list and its active portaled card form one pointer interaction: entering the card to read or copy preserves immediate handoff to a neighboring Workspace or Session. After the pointer leaves both, the shared dwell resets when the active card closes through its existing pointer-grace and close lifecycle, with no separate group timer. Leaving a list with no active card resets the dwell immediately. Small action tooltips coexist with the right-side hover card; pin, archive, Workspace new-session, and search-result unarchive tooltips use portals to stay above it. Hovering actions, including More, preserves the card; opening the More menu or starting a Session drag dismisses it.
 
 </details>
 
@@ -216,11 +224,12 @@ None; this package neither assembles nor sends a provider request.
 <a id="known-limitations-and-deferred-work"></a>
 
 
-These limits define the search depth, the archive surface, and the picking carrier; they are current package constraints.
+These limits cover search, navigation, archival, and folder selection.
 
 - **No fuzzy content search or event deep links** — the content backend uses literal token/phrase matching, and selecting a result opens the Session rather than the matching event.
 - **No Session deletion** — sessions can be archived but never deleted; archived rows stay recoverable in place through the archived view filter and the search results' unarchive action, and Workspace registration deletion does not delete Sessions.
 - **Pending user interaction is not aggregated into collapsed groups** — a waiting row inside a collapsed group lights no group-header indicator and becomes visible only after that group is expanded.
+- **Tree keyboard navigation is incomplete** — Workspace and search-result rows do not accept Tab focus, and the browser tree does not implement arrow-key navigation.
 - **Native folder selection depends on the local Host carrier** — under the `-native` composition, in-process or remote browser deployments cannot open a local operating-system dialog; remote-capable picking is the `-browse` composition's in-app flow.
 
 <a id="dev-note"></a>
