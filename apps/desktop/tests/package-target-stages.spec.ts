@@ -122,29 +122,6 @@ it.each(['pack', 'runtime'] as const)('drains the other Windows preparation afte
   }
 })
 
-it.each([
-  { target: 'win-x64', platform: 'win32', arch: 'x64', pool: undefined, expected: '8' },
-  { target: 'win-x64', platform: 'win32', arch: 'x64', pool: '2', expected: '2' },
-  { target: 'mac-arm64', platform: 'darwin', arch: 'arm64', pool: undefined, expected: undefined },
-  { target: 'mac-arm64', platform: 'darwin', arch: 'arm64', pool: '16', expected: '16' },
-] as const)('selects the I/O pool for $target assembly without changing compiler or pack settings ($pool)', async ({ target, platform, arch, pool, expected }) => {
-  const { run } = supervisor()
-  await packageTarget(parseDesktopPackageInvocation([target, '--unsigned'], platform, arch), {
-    ...environment, ...(pool === undefined ? {} : { UV_THREADPOOL_SIZE: pool }),
-  }, run)
-  const preparation = run.run.mock.calls.filter(([stage]) => stage.startsWith('run prepare:'))
-  const builder = run.run.mock.calls.find(([stage]) => stage.startsWith('exec electron-builder '))
-  const smoke = run.run.mock.calls.find(([stage]) => stage.startsWith('exec tsx scripts/smoke-packaged-runtime.ts'))
-  expect(preparation).toHaveLength(3)
-  expect(builder).toBeDefined()
-  expect(smoke).toBeDefined()
-  for (const call of [...preparation, builder!, smoke!]) expect(call[3].env.UV_THREADPOOL_SIZE).toBe(expected)
-  const compilationAndPacking = run.run.mock.calls.filter(([stage]) => !stage.startsWith('run prepare:')
-    && !stage.startsWith('exec electron-builder ') && !stage.startsWith('exec tsx scripts/smoke-packaged-runtime.ts'))
-  expect(compilationAndPacking.length).toBeGreaterThan(0)
-  for (const call of compilationAndPacking) expect(call[3].env.UV_THREADPOOL_SIZE).toBe(pool)
-})
-
 it.each([undefined, '3'])('passes the package cache and selected compression to their subprocesses (%s)', async (level) => {
   const { run } = supervisor()
   const cache = resolve('fixture-package-cache')

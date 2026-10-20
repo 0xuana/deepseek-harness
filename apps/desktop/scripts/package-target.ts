@@ -441,7 +441,6 @@ export async function packageTarget(
     DSH_DESKTOP_TARGET_PLATFORM: target.platform,
     DSH_DESKTOP_TARGET_ARCH: target.arch,
   }
-  if (target.platform === 'win32') targetEnv.UV_THREADPOOL_SIZE ??= '8'
   const downloadEnv = macOSDownloadEnvironment(targetEnv, mac?.downloadProxy)
   const electronBuilderEnv = desktopElectronBuilderEnvironment(downloadEnv, invocation.unsigned)
   if (target.platform === 'win32') {
