@@ -2617,7 +2617,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       },
     ],
     ownerProps: [
-      '/** Owner props of a page tab another plugin contributes, such as Discover. */\nexport interface PluginTabProps {\n  /**\n   * Install an exact version the person already confirmed: the page\'s install dialog opens at its check and progress\n   * screens, without the spec form, and names the plugin and version above the spec.\n   * @param target - the spec, optional registry, and display text.\n   */\n  readonly install: (target: PluginTabInstall) => void\n  /**\n   * Switch to the Installed tab and open a bundle\'s page.\n   * @param packageName - npm package name of the bundle.\n   */\n  readonly openPackage: (packageName: string) => void\n}',
+      '/** Owner props of a page tab another plugin contributes, such as Discover. */\nexport interface PluginTabProps {\n  /**\n   * Install an exact version the person already confirmed: the page\'s install dialog opens at its check and progress\n   * screens, without the spec form, and names the plugin and version above the spec.\n   * @param target - the spec, optional registry, and display text.\n   */\n  readonly install: (target: PluginTabInstall) => void\n  /**\n   * Switch to the Installed tab and open a bundle\'s page, whose back button returns to the calling tab.\n   * @param packageName - npm package name of the bundle.\n   */\n  readonly openPackage: (packageName: string) => void\n}',
     ],
     ownerPropsReferences: [
       'PluginTabInstall',

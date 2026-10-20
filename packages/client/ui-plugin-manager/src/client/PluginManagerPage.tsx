@@ -1577,10 +1577,9 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   const showsMainList = showsCards && !showsMoreList
   const installedCards = onInstalled && showsCards
   const openPkgInMore = openPkg !== undefined && openPkg.official && detailFromMore
-  // A bundle page opened from a contributed tab returns to that tab instead of the Installed lists.
   const returnTab = view.kind === 'package' || view.kind === 'row' ? view.returnTab : undefined
   const backToMore = openPkgInMore && returnTab === undefined
-  const pkgOrigin = { ...openPkgInMore ? { from: 'more' as const } : {}, ...returnTab === undefined ? {} : { returnTab } }
+  const pkgOrigin = returnTab !== undefined ? { returnTab } : backToMore ? { from: 'more' as const } : {}
   // The Installed tab's panel, whatever it currently shows; the More list is not a tab panel.
   const installedPanel = tabs.length === 0 || showsMoreList
     ? {}
