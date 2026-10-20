@@ -67,7 +67,7 @@ describe('reference submission', () => {
     restored.setDraft(mirror.mock.calls.at(-1)?.[0] as string)
     restored.submit()
     await vi.waitFor(() => {
-      expect(sink).toHaveBeenCalledWith(spacedMention, [], 'queue', expect.any(AbortSignal))
+      expect(sink).toHaveBeenCalledWith(spacedMention, [], 'queue', expect.any(AbortSignal), expect.any(Function))
     })
   })
 
@@ -104,7 +104,7 @@ describe('reference submission', () => {
     await vi.waitFor(() => {
       expect(shell.snapshot.phase).toBe('plain')
     })
-    expect(sink).toHaveBeenNthCalledWith(1, mention, [], 'queue', expect.any(AbortSignal))
+    expect(sink).toHaveBeenNthCalledWith(1, mention, [], 'queue', expect.any(AbortSignal), expect.any(Function))
     expect(shell.snapshot).toMatchObject({
       draft: `${mention} `,
       occurrences: [{ source: 'reference', ref: mention, label: 'Research', offset: 0, length: mention.length }],
@@ -119,7 +119,7 @@ describe('reference submission', () => {
     await vi.waitFor(() => {
       expect(shell.snapshot.draft).toBe('')
     })
-    expect(sink).toHaveBeenNthCalledWith(2, mention, [], 'queue', expect.any(AbortSignal))
+    expect(sink).toHaveBeenNthCalledWith(2, mention, [], 'queue', expect.any(AbortSignal), expect.any(Function))
     expect(shell.snapshot.occurrences).toEqual([])
     expect(serializeReference).toHaveBeenCalledTimes(2)
   })

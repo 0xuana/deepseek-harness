@@ -85,12 +85,14 @@ describe('beginSubmission', () => {
   it('publishes the echo and the engaging edge only once the Host accepts the prompt', async ({ mock, start }) => {
     const session = await sessionBench(mock, start, SID)
     expect(session.getSnapshot()).toMatchObject({ pendingSubmissions: [], promptAttempted: false })
+    const onAccept = vi.fn()
     const handle = session.beginSubmission({
       mode: 'queue',
       text: '你好',
       attachments: [{
         type: 'image', value: { previewUrl: 'blob:p1', name: 'a.png', width: 4, height: 3 },
       }],
+      onAccept,
     })
     expect(session.getSnapshot()).toMatchObject({ pendingSubmissions: [], promptAttempted: false })
     expect(mock.log.requests()).toEqual([])
@@ -99,8 +101,10 @@ describe('beginSubmission', () => {
     const inFlight = session.prompt([{ type: 'text', text: '你好' }], 'queue', undefined, handle.requestId)
     await Promise.resolve()
     expect(session.getSnapshot()).toMatchObject({ pendingSubmissions: [], promptAttempted: false })
+    expect(onAccept).not.toHaveBeenCalled()
     receipt.resolve({ ok: true, value: { accepted: true } })
     expect((await inFlight).ok).toBe(true)
+    expect(onAccept).toHaveBeenCalledOnce()
     expect(session.getSnapshot().promptAttempted).toBe(true)
     expect(session.getSnapshot().pendingSubmissions).toMatchObject([{
       requestId: handle.requestId,
@@ -111,6 +115,55 @@ describe('beginSubmission', () => {
       }],
     }])
   }, COLD_BOOT_TIMEOUT_MS)
+
+  for (const { mode, running, target, placement } of [
+    { mode: 'queue', running: false, target: 'next-turn', placement: 'transcript' },
+    { mode: 'steer', running: true, target: 'next-step', placement: 'steering' },
+  ] as const) {
+    for (const path of ['projection', 'durable event'] as const) {
+      it(`accepts a ${placement} prompt once the Inbox holds it, ahead of the Host receipt (${path})`, async ({ mock, start }) => {
+        const onEngaged = vi.fn()
+        const session = await sessionBench(mock, start, SID, { onEngaged })
+        await session.open()
+        session.handleBlank(!running)
+        session.handleRunning(running)
+        const onAccept = vi.fn()
+        const handle = session.beginSubmission({ mode, text: '先进收件箱', attachments: [], onAccept })
+        const receipt = Promise.withResolvers<{ ok: true; value: { accepted: true } }>()
+        mock.remote.session.prompt.mockImplementationOnce(() => receipt.promise)
+        const inFlight = session.prompt([{ type: 'text', text: '先进收件箱' }], mode, undefined, handle.requestId)
+        const empty = { 'next-turn': [], 'next-step': [] }
+        // Projection faces notify in a microtask.
+        session.projections.apply('inbox', { ...empty, [target]: [queuedItem('another-request' as SessionRequestId)] }, -1)
+        await Promise.resolve()
+        expect(session.getSnapshot()).toMatchObject({ pendingSubmissions: [], blank: !running, promptAttempted: false })
+        expect(onAccept).not.toHaveBeenCalled()
+        const message = queuedItem(handle.requestId)
+        if (path === 'projection') {
+          session.projections.apply('inbox', { ...empty, [target]: [message] }, SessionSeq(0))
+          await Promise.resolve()
+        } else {
+          await pushEvent(mock, {
+            type: 'agent/inbox/spliced', seq: SessionSeq(0), time: 1,
+            data: { target, start: 0, inserted: [message] },
+          })
+        }
+        expect(session.getSnapshot()).toMatchObject({
+          pendingSubmissions: [{ requestId: handle.requestId, placement, text: '先进收件箱' }],
+          blank: false,
+          promptAttempted: true,
+          ...running ? {} : { awaitingFirstTurn: true },
+        })
+        expect(onEngaged).toHaveBeenCalledOnce()
+        expect(onAccept).toHaveBeenCalledOnce()
+        receipt.resolve({ ok: true, value: { accepted: true } })
+        expect((await inFlight).ok).toBe(true)
+        expect(session.getSnapshot().pendingSubmissions).toHaveLength(1)
+        expect(onEngaged).toHaveBeenCalledOnce()
+        expect(onAccept).toHaveBeenCalledOnce()
+      })
+    }
+  }
 
   it('never publishes an echo whose message was observed before the Host receipt', async ({ mock, start }) => {
     const session = await sessionBench(mock, start, SID)

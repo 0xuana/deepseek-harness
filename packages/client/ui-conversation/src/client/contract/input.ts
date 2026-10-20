@@ -222,7 +222,7 @@ export interface SessionInputResolver {
   /**
    * Prepare the exact retained Session before navigation publishes it.
    * @param binding - target Session generation, already retained by the caller.
-   * @param options - content to adopt and explicit permission to replace existing text.
+   * @param options - content to adopt and the handling of an existing draft.
    * @returns applied, preserved, or blocked by a pending submission or disposal.
    * @throws when binding is not the currently retained Session generation.
    */
@@ -232,7 +232,15 @@ export interface SessionInputResolver {
 /** Initial text for a target Session; attachments remain under their existing owner. */
 export interface DraftInitializationOptions {
   readonly prompt?: string
+  /** `true` acts as `whenDraftExists: 'replace'`; ignored when `whenDraftExists` is set. */
   readonly clearPreviousDraft?: boolean
+  /**
+   * Handling of a target that already has text or attachments: `replace` swaps the text and
+   * inline references for the prompt (or clears them without one), `append` adds the prompt
+   * as new paragraphs after the existing text, and `keep` leaves the draft unchanged. Omitted,
+   * it is `replace` when `clearPreviousDraft` is true and `keep` otherwise.
+   */
+  readonly whenDraftExists?: 'replace' | 'append' | 'keep'
 }
 
 /** An initialization request never waits for a React mount or a remote catalog. */
@@ -295,6 +303,12 @@ export interface InputState {
    * send waits, and the attachments of the message being sent stay attached.
    */
   readonly phase: 'plain' | 'adjudicating' | 'claimed' | 'submitting' | 'sending'
+  /**
+   * Attachments of the message being sent, in order; empty unless `phase` is
+   * `sending`. They stay in `attachmentIds` and cannot be removed until the
+   * send settles; attachments added meanwhile belong to the next message.
+   */
+  readonly sendingAttachmentIds: readonly DraftAttachmentId[]
   /** Present exactly while claimed/submitting (claim snapshot during flight; submit closure withheld). */
   readonly claim?: { readonly name: string; readonly token: string; readonly hint?: string; readonly attachments?: boolean }
   /** Reference occurrence view of the editor's chips, sorted by offset. */

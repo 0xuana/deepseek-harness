@@ -611,6 +611,29 @@ describe('sendSession submission echo', () => {
     await b.runtime.dispose()
   })
 
+  it('reports success once the Session accepts the prompt, ahead of a receipt that later fails', async () => {
+    const b = await echoBench()
+    try {
+      const session = b.runtime.sessions.binding('s1')!.session
+      const receipt = Promise.withResolvers<{ ok: true; value: { accepted: true } }>()
+      b.prompt.mockImplementationOnce(() => receipt.promise)
+      const accept = vi.fn()
+      const sending = b.root.sendSession(session, '收件箱先到', [], 'queue', undefined, accept)
+      const echo = await b.begun
+      await vi.waitFor(() => { expect(b.prompt).toHaveBeenCalledOnce() })
+      echo.onAccept?.()
+      // The composer settles inside the Session's acceptance, before the echo renders.
+      expect(accept).toHaveBeenCalledOnce()
+      await expect(sending).resolves.toEqual({ kind: 'success' })
+      // The Host already holds the message, so a receipt lost afterwards changes nothing.
+      receipt.reject(new Error('connection closed after the Host accepted the prompt'))
+      await new Promise(resolve => setTimeout(resolve, 0))
+    } finally {
+      b.restore()
+    }
+    await b.runtime.dispose()
+  })
+
   it('passes each delivery mode before image serialization', async () => {
     const b = await echoBench()
     try {

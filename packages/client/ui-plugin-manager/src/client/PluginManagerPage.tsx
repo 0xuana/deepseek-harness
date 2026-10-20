@@ -35,10 +35,6 @@ import type { ConfigPageForm } from './slot-contract.ts'
 import { UpdateDialog, VersionSection } from './versions.tsx'
 import { BundleDetailSection } from './BundleDetailSection.tsx'
 import css from './PluginManagerPage.module.css'
-import badgeSkillPreview from './assets/badge-skill-preview.svg'
-import badgeSkillPreviewZh from './assets/badge-skill-preview.zh.svg'
-import voiceInputPreview from './assets/voice-input-preview.svg'
-import voiceInputPreviewZh from './assets/voice-input-preview.zh.svg'
 
 /** Full component props assembled by the main slot renderer. */
 export type PluginManagerPageProps =
@@ -118,6 +114,7 @@ const EXTENSION_BUNDLES = [
 ]
 /** The optional bundles the main list holds back until the profile picks them; the More list shows them from the start. */
 const MORE_BUNDLES = [
+  '@deepseek-ai/dsh-cua-bundle',
   '@deepseek-ai/dsh-experimental-tool-worktree',
   '@deepseek-ai/dsh-experimental-cot-translation-bundle',
   '@deepseek-ai/dsh-experimental-terminal-bundle',
@@ -160,12 +157,6 @@ function optionalBundleRank(name: string): number {
 function orderOptionalBundles(packages: readonly PackageView[]): PackageView[] {
   return [...packages].sort((a, b) => optionalBundleRank(a.name) - optionalBundleRank(b.name))
 }
-
-/** Feature previews of official bundles, shown on their detail pages and selected by UI language. */
-const BUNDLE_PREVIEWS = new Map<string, Readonly<Record<'en' | 'zh', string>>>([
-  ['@deepseek-ai/dsh-experimental-badge-skill-bundle', { en: badgeSkillPreview, zh: badgeSkillPreviewZh }],
-  ['@deepseek-ai/dsh-experimental-voice-input-bundle', { en: voiceInputPreview, zh: voiceInputPreviewZh }],
-])
 
 /** How long a toast holds: long enough to read a failure that names what broke. */
 function toastHoldMs(text: string): number {
@@ -248,14 +239,6 @@ function PackageArtwork({ src, row = false, size = row ? ROW_ARTWORK_SIZE : CARD
   return src === undefined || src === failedSource
     ? <Fallback size={size} />
     : <img className={css.packageImage} src={src} width={size} height={size} alt="" onError={() => { setFailedSource(src) }} />
-}
-
-/** A bundle's feature preview; a failed decode is reported in place without blocking management. */
-function PackagePreview({ src, title, t }: { readonly src: string; readonly title: string; readonly t: Translate }): ReactNode {
-  const [failedSource, setFailedSource] = useState<string>()
-  return src === failedSource
-    ? <p className={css.reason} role="status">{t('previewUnavailable')}</p>
-    : <img className={css.packagePreview} src={src} alt={t('previewAlt', { name: title })} onError={() => { setFailedSource(src) }} />
 }
 
 /** A row's switch: locked, saying why, when the Host refuses to address the row through the profile patch. */
@@ -749,8 +732,6 @@ function PackageDetail({
   const { title, description, beta } = packageText(pkg, resolveText)
   const newer = versionUpdate(versions)
   const status = packageStatus(pkg)
-  const previews = BUNDLE_PREVIEWS.get(pkg.name)
-  const preview = previews === undefined ? undefined : resolveText(previews)
   const subject: PluginsSubject = { kind: 'bundle', pkg: packageRef(pkg) }
   return (
     <div className={css.detail} data-plugin-detail={pkg.name}>
@@ -809,7 +790,6 @@ function PackageDetail({
       <MetadataError error={pkg.meta?.error} t={t} />
       {pkg.error === undefined ? null : <p className={css.reason} role="status">{t('reasonLabel')}: {managementText(pkg.error, t)}</p>}
       {pkg.readOnlyReason === undefined ? null : <p className={css.reason} role="status">{managementText({ code: pkg.readOnlyReason }, t)}</p>}
-      {preview === undefined ? null : <PackagePreview src={preview} title={title} t={t} />}
       <div className={css.detailSections}>
         {detail}
         {configured
@@ -1598,6 +1578,9 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   const showsMainList = showsCards && !showsMoreList
   const installedCards = onInstalled && showsCards
   const openPkgInMore = openPkg !== undefined && openPkg.official && detailFromMore
+  const returnTab = view.kind === 'package' || view.kind === 'row' ? view.returnTab : undefined
+  const backToMore = openPkgInMore && returnTab === undefined
+  const pkgOrigin = returnTab !== undefined ? { returnTab } : backToMore ? { from: 'more' as const } : {}
   // The Installed tab's panel, whatever it currently shows; the More list is not a tab panel.
   const installedPanel = tabs.length === 0 || showsMoreList
     ? {}
@@ -1609,7 +1592,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   }
   const configure = (pkg: PackageView): RowConfigure => ({
     has: row => ledger.rows.has(rowConfigKey(pkg.name, row.rowId)),
-    open: (row) => { setView({ kind: 'row', name: pkg.name, rowId: row.rowId, ...openPkgInMore ? { from: 'more' } : {} }) },
+    open: (row) => { setView({ kind: 'row', name: pkg.name, rowId: row.rowId, ...pkgOrigin }) },
   })
   const updates = updatesNote(mine, state.versions, t)
   const updatePkg = state.update === null ? undefined : state.packages.find(pkg => pkg.name === state.update?.packageName)
@@ -1704,7 +1687,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
           <div role="tabpanel" id={`${tabsId}-${tab}-panel`} aria-labelledby={`${tabsId}-${tab}`} className={css.tabPanel}>
             {renderSlot('plugins.tab', {
               install: props.installFrom,
-              openPackage: (name) => { setTab(INSTALLED_TAB); setView({ kind: 'package', name }) },
+              openPackage: (name) => { setTab(INSTALLED_TAB); setView({ kind: 'package', name, returnTab: tab }) },
             }, { only: tab })}
           </div>
         )
@@ -1757,7 +1740,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
             t={t}
             resolveText={resolveText}
             renderSlot={renderSlot}
-            onBack={() => { setView({ kind: 'package', name: openPkg.name, ...openPkgInMore ? { from: 'more' } : {} }) }}
+            onBack={() => { setView({ kind: 'package', name: openPkg.name, ...pkgOrigin }) }}
           />
         )
         : null}
@@ -1772,13 +1755,16 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
             configured={ledger.bundles.has(openPkg.name)}
             configure={configure(openPkg)}
             renderSlot={renderSlot}
-            inMore={openPkgInMore}
+            inMore={backToMore}
             detail={(
               <BundleDetailSection name={openPkg.name} version={openPkg.version} fromNpm={openPkg.availability === 'missing'}
                 language={language} details={bundleDetails} t={t}
                 load={props.loadDetail} retry={props.retryDetail} image={props.detailImage} />
             )}
-            onBack={() => { setView({ kind: openPkgInMore ? 'more' : 'list' }) }}
+            onBack={() => {
+              if (returnTab !== undefined) setTab(returnTab)
+              setView({ kind: backToMore ? 'more' : 'list' })
+            }}
             onSetEnabled={(enabled) => { props.setEnabled(openPkg.name, enabled) }}
             onUninstall={() => { props.uninstall(openPkg.name) }}
             onUpdate={() => { props.update(openPkg.name) }}
