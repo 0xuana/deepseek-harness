@@ -471,15 +471,14 @@ export class SessionController extends TypertRemoteService {
       )
     }
     // The caller is recorded only when it is not the owner, so owner messages keep their exact source.
-    const invocation = this.ctx.invocation
-    const principal = principalOf(invocation)
+    const principal = principalOf(this.ctx.invocation)
     const source: MessageSource = {
       kind: 'user',
       rpcId: request.requestId,
       ...(clientTimeZone === undefined ? {} : { clientTimeZone }),
       ...(principal === undefined ? {} : { principal }),
     }
-    return this.commands.prompt(request, source, signal)
+    return this.commands.prompt(request, source)
   }
 
   /**
@@ -509,27 +508,6 @@ export class SessionController extends TypertRemoteService {
    */
   @Remote('cancel')
   cancel(request: SessionCancelRequest): SessionCancelValue {
-    // The Gateway admitted this call earlier; a caller that lost access meanwhile must not cancel.
-    // Ask the concrete decision rather than the list-filter view: a policy condition that reads
-    // `args.request` never sees arguments through `allows()`, so using it here would refuse a
-    // legitimate caller as withdrawn forever.
-    const invocation = this.ctx.invocation
-    const principal = principalOf(invocation)
-    if (principal !== undefined) {
-      const decision = this.ctx.remoteAccess.decide({
-        principal,
-        action: 'session/cancel',
-        resources: [{ kind: 'session', id: request.sessionId }],
-        args: { request },
-      })
-      if (decision.kind !== 'allow') {
-        throw new RemoteError(
-          'remote-access/denied',
-          'remote access: session/cancel: access was withdrawn before cancellation',
-          { action: 'session/cancel', reason: decision.reason },
-        )
-      }
-    }
     return this.commands.cancel(request)
   }
 

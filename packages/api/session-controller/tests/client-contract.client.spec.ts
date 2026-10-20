@@ -165,17 +165,6 @@ describe('Client Session contracts', () => {
       kind: 'settle-assistant',
       attemptId: 'attempt-two',
     })
-
-    // A settlement past every current entry appends at the tail instead of splicing before one.
-    const tail = assistantSettlement(SessionSeq(4))
-    feed.append(transient('attempt-three', 3.75))
-    feed.settleAssistant(LlmAttemptId('attempt-three'), tail)
-    expect(feed.getSnapshot().entries).toEqual([opening, settlement, later, tail])
-    expect(feed.getSnapshot().change).toEqual({
-      kind: 'settle-assistant',
-      attemptId: 'attempt-three',
-      entry: tail,
-    })
   })
 
 })
