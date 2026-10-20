@@ -422,7 +422,11 @@ export function parseTunnelWorkerCommand(value: unknown): TunnelWorkerCommand | 
         : undefined
     case 'add-share':
       return isRegistrationToken(value.registrationToken) && isTunnelShareSpec(value.share)
-        ? { type: 'add-share', registrationToken: value.registrationToken, share: value.share } : undefined
+        ? {
+          type: 'add-share',
+          registrationToken: value.registrationToken,
+          share: { ...value.share, connection: value.share.connection ?? { mode: 'relay' } },
+        } : undefined
     case 'share-rpc-response': {
       if (!isTunnelRequestIdentity(value) || !Number.isSafeInteger(value.status)
         || Number(value.status) < 100 || Number(value.status) > 599) return undefined

@@ -35,7 +35,8 @@ describe('Host/worker request tokens', () => {
 })
 
 const share = { shareId: 'share', sessionId: 'session', sessionTitle: 'Session', accessMode: 'open',
-  relay: 'http://relay.invalid', gatewayToken: 'gateway', ownerDisplayName: 'Owner', allowedSubjectIds: [] }
+  relay: 'http://relay.invalid', gatewayToken: 'gateway', ownerDisplayName: 'Owner', allowedSubjectIds: [],
+  connection: { mode: 'relay' } }
 const registrationFrames = [
   { type: 'add-share', registrationToken, share },
   { type: 'share-connected', registrationToken, shareId: 'share' },

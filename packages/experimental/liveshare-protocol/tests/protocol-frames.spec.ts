@@ -182,3 +182,28 @@ describe('wire protocol version', () => {
     expect(LIVESHARE_PROTOCOL_VERSION).toBe(1)
   })
 })
+
+describe('additive wire fields reject invalid values', () => {
+  const actor = { providerId: 'example', tenantId: 'tenant-a', subjectId: 'user-one' }
+  const request = (overrides: Record<string, unknown>) => {
+    const text = JSON.stringify({ type: 'share-rpc', id: 1, body: {}, actor: { ...actor, ...overrides } })
+    return parseGatewayFrame(text) ?? parseRelayFrame(text)
+  }
+
+  it('accepts an absent actor credential and refuses a non-string one', () => {
+    expect(request({})).toMatchObject({ actor })
+    expect(request({ credential: 123 })).toBeUndefined()
+  })
+
+  it('refuses an unknown connection mode and defaults an absent one to relay', () => {
+    const share = {
+      shareId: 'share', sessionId: 'session', sessionTitle: 'Source', accessMode: 'selected',
+      relay: 'wss://relay.test', gatewayToken: 'token', ownerDisplayName: 'Owner', allowedSubjectIds: [],
+    }
+    const token = '12345678-1234-4123-8123-123456789abc'
+    expect(parseTunnelWorkerCommand({ type: 'add-share', registrationToken: token,
+      share: { ...share, connection: { mode: 'bogus' } } })).toBeUndefined()
+    expect(parseTunnelWorkerCommand({ type: 'add-share', registrationToken: token, share }))
+      .toMatchObject({ share: { connection: { mode: 'relay' } } })
+  })
+})
