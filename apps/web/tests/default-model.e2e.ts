@@ -201,10 +201,12 @@ describe('web e2e: the composer model switch is the default for later sessions',
 
   it.each([
     { device: 'iPhone', userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1', automatic: false },
+    { device: 'Android Chrome', userAgent: 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 Chrome/119.0.0.0 Mobile Safari/537.36', automatic: false },
+    { device: 'iPhone Chrome', userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 CriOS/139.0.0.0 Mobile/15E148 Safari/604.1', automatic: false },
     { device: 'narrow desktop', userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.6 Safari/605.1.15', automatic: true },
-  ])('respects $device search focus when opening /model', async ({ userAgent, automatic }) => {
+  ])('respects $device viewport and search focus when opening /model', async ({ userAgent, automatic }) => {
     const context = await browser.newContext({
-      userAgent, viewport: { width: 390, height: 844 }, locale: ZH_BROWSER_LOCALE,
+      userAgent, viewport: { width: 390, height: 844 }, locale: ZH_BROWSER_LOCALE, hasTouch: !automatic,
     })
     try {
       const devicePage = await context.newPage()
@@ -213,14 +215,19 @@ describe('web e2e: the composer model switch is the default for later sessions',
       await devicePage.getByRole('textbox', { name: '选择工作区' }).click()
       const composer = devicePage.locator('[data-composer-input][contenteditable="true"]').first()
       await composer.waitFor()
+      expect(await composer.evaluate(element => getComputedStyle(element).fontSize)).toBe(automatic ? '14px' : '16px')
       await composer.fill('/model')
       await devicePage.getByRole('option', { name: /^模型/ }).click()
       const search = devicePage.getByRole('textbox', { name: '筛选选项', exact: true })
       await search.waitFor()
       await devicePage.getByRole('option', { name: /Origin Large/ }).waitFor()
+      expect(await devicePage.locator('meta[name="viewport"]').getAttribute('content')).toBe(
+        'width=device-width, initial-scale=1, viewport-fit=cover',
+      )
       expect(await search.evaluate(input => document.activeElement === input)).toBe(automatic)
       await search.click()
       expect(await search.evaluate(input => document.activeElement === input)).toBe(true)
+      expect(await devicePage.evaluate(() => window.visualViewport?.scale)).toBe(1)
       await search.fill('Origin')
       await devicePage.getByRole('option', { name: /Origin Large/ }).waitFor()
       expect(await devicePage.getByRole('option', { name: /Acme/ }).count()).toBe(0)

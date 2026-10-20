@@ -55,21 +55,25 @@ async function exerciseKeyboardViewport(page: Page): Promise<string> {
     const scroll = window.scrollY
     const offset = Object.getOwnPropertyDescriptor(viewport, 'offsetTop')
     style.setProperty('height', `${window.innerHeight * 2}px`)
-    window.scrollTo(0, window.innerHeight)
+    const input = document.querySelector<HTMLElement>('[data-composer-input]')!
+    window.scrollTo(0, input.getBoundingClientRect().top + scroll - window.innerHeight / 4)
     // Safari can report the keyboard's page displacement as offsetTop even
     // though DOM rectangles already account for that page scroll.
     Object.defineProperty(viewport, 'offsetTop', { configurable: true, get: () => window.scrollY })
+    window.dispatchEvent(new Event('scroll'))
     return () => {
       if (offset === undefined) Reflect.deleteProperty(viewport, 'offsetTop')
       else Object.defineProperty(viewport, 'offsetTop', offset)
       if (height === '') style.removeProperty('height')
       else style.setProperty('height', height, priority)
       window.scrollTo(0, scroll)
+      window.dispatchEvent(new Event('scroll'))
     }
   })
   try {
     const before = await input.evaluate(el => ({ top: el.getBoundingClientRect().top, scroll: window.scrollY }))
     expect(before.scroll).toBeGreaterThan(0)
+    expect(before.top).toBeGreaterThanOrEqual(0)
     await page.keyboard.insertText('z')
     const after = await input.evaluate(el => new Promise<{ top: number; scroll: number }>((resolve) => {
       requestAnimationFrame(() => requestAnimationFrame(() => {

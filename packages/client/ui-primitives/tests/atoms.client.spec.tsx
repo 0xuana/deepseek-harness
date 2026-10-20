@@ -4,8 +4,19 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Button, ConnectionIndicator, Input, Menu, MenuItemButton, Modal, Pill } from '@deepseek-ai/dsh-client-ui-primitives'
 import { POINTER_GRACE_MS } from '../src/pointer-grace.ts'
+import { focusWithoutRing } from '../src/focus.ts'
 
 afterEach(cleanup)
+
+it('retains automatic focus styling while typing and restores it for keyboard navigation', () => {
+  render(<button>Automatic destination</button>)
+  const button = screen.getByRole('button')
+  focusWithoutRing(button)
+  fireEvent.keyDown(button, { key: 'a' })
+  expect(button.hasAttribute('data-dsh-automatic-focus')).toBe(true)
+  fireEvent.keyDown(button, { key: 'ArrowDown' })
+  expect(button.hasAttribute('data-dsh-automatic-focus')).toBe(false)
+})
 
 describe('Button', () => {
   it('exposes its native button for focus and releases the ref on unmount', () => {

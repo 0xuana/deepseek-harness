@@ -8,6 +8,30 @@ body,
   margin: 0;
 }
 
+html,
+body {
+  overflow: hidden;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Inner panes own scrolling. The browser pans focused inputs without resizing
+   the application or recentering its content when the keyboard opens. */
+#root {
+  --dsh-safe-area-top: env(safe-area-inset-top, 0px);
+  --dsh-safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  padding-inline: env(safe-area-inset-left, 0px) env(safe-area-inset-right, 0px);
+}
+
 body {
   font-family: var(
     --dsw-font-family,

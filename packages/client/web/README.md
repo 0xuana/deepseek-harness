@@ -31,7 +31,18 @@ Static application pages install `__DSH_BOOT_READY__` before the entry runs. The
 
 The shell base styles apply automatic CJK/Latin spacing to ordinary content in supporting browsers. Semantic code and terminal, diff, read, and search output containers retain literal source spacing and column alignment; browsers without `text-autospace` support ignore both declarations.
 
+The shell sets text-size adjustment to 100%, so mobile browsers render configured font sizes without automatically enlarging text after viewport changes. Application font-size preferences still apply.
+
 Web and Desktop mathematical rendering requires WOFF2 support. The [Web build](../../../apps/web/katex-fonts.ts) retains every KaTeX font face in WOFF2 and omits WOFF/TTF fallbacks; a face without WOFF2 rejects the build. Font glyphs, weights, styles, and layout rules are preserved.
+
+<a id="viewport-sizing"></a>
+### Viewport sizing
+
+The root fills the CSS layout viewport with absolute positioning. Opening the keyboard retains the application's layout height, so the homepage and navigation drawer do not resize with the keyboard. The browser pans the page to reveal focused inputs; inner panes own content scrolling.
+
+The root applies horizontal safe-area padding and publishes `--dsh-safe-area-top` and `--dsh-safe-area-bottom` for frame content padding.
+
+The [Web application entry](../../../apps/web/index.html) declares `width=device-width, initial-scale=1, viewport-fit=cover` without limiting user zoom. Touch inputs use a minimum font size of 16px to avoid focus-triggered page enlargement.
 
 ### What boot looks like
 

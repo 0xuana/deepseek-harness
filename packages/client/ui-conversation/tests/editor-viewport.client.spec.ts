@@ -23,7 +23,7 @@ function fixture(viewport: { height: number; offsetTop: number; pageTop: number 
   document.body.append(root)
   const runtime: DraftEditorRuntime = new DraftEditorRuntime({
     onUpdate: () => { runtime.refreshProjection() },
-    openReference: () => false, activeClaimToken: () => null,
+    openReference: () => false,
     lexicon: () => new Map(), resolveLexicon: () => undefined,
   })
   const dispose = runtime.register()
