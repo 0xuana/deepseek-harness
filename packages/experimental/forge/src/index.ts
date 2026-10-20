@@ -1,0 +1,278 @@
+/** Registry of code-host providers with provider-neutral change requests and shared status polling. */
+
+import { Context, Service } from '@deepseek-ai/cordis'
+import z from '@deepseek-ai/schemastery'
+import { deadline, MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
+import { changeRequestKey } from './keys.ts'
+import { nextPollDelay } from './schedule.ts'
+import type {
+  ChangeRequestKey, ChangeRequestListener, ChangeRequestRef, ChangeRequestSnapshot, ChangeRequestUpdate, Config,
+  ForgeFailure, ForgeProvider, ForgeRepository,
+} from './types.ts'
+
+export { changeRequestKey } from './keys.ts'
+export type * from './types.ts'
+
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    forge: ForgeService
+  }
+}
+
+type FetchResults = ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>
+
+interface Watch {
+  readonly key: ChangeRequestKey
+  readonly ref: ChangeRequestRef
+  readonly listeners: Set<ChangeRequestListener>
+  latest: ChangeRequestUpdate | undefined
+  /** Epoch milliseconds of the next poll; undefined while in flight or after a terminal state. */
+  dueAt: number | undefined
+  failures: number
+}
+
+/**
+ * Registry of forge providers. Watchers of one change request share a single
+ * polling loop; each forge has at most one fetch in flight, which batches
+ * every due change request of that forge.
+ */
+export class ForgeService extends Service {
+  static Config: z<Config> = z.object({
+    activeIntervalMs: z.number().default(30_000),
+    idleIntervalMs: z.number().default(120_000),
+    maxBackoffMs: z.number().default(600_000),
+    fetchTimeoutMs: z.number().default(30_000),
+  })
+
+  private readonly config: Required<Config>
+  private readonly providers = new Map<string, ForgeProvider>()
+  private readonly watches = new Map<ChangeRequestKey, Watch>()
+  private readonly fetching = new Set<string>()
+  private readonly pending = new Set<Promise<void>>()
+  private readonly lifetime = new AbortController()
+  private timer: ReturnType<typeof setTimeout> | undefined
+
+  constructor(ctx: Context, config: Config) {
+    super(ctx, 'forge')
+    this.config = config as Required<Config>
+    for (const key of ['activeIntervalMs', 'idleIntervalMs', 'maxBackoffMs', 'fetchTimeoutMs'] as const) {
+      const value = this.config[key]
+      if (!Number.isSafeInteger(value) || value <= 0 || value > MAX_TIMER_DELAY_MS) {
+        throw new Error(`forge: ${key} must be a positive integer no greater than ${MAX_TIMER_DELAY_MS}`)
+      }
+    }
+    ctx.effect(() => async () => {
+      this.lifetime.abort(new Error('forge service disposed'))
+      clearTimeout(this.timer)
+      this.timer = undefined
+      await Promise.allSettled(this.pending)
+    }, 'forge: stop polling')
+  }
+
+  /**
+   * Register the provider of one forge family as an effect on the calling
+   * fiber. Watches of that forge receive an `unavailable` failure when the
+   * registration ends.
+   * @param provider - provider to serve `provider.forge`.
+   * @returns the disposer that unregisters the provider.
+   * @throws when another provider already serves the same forge.
+   */
+  register(provider: ForgeProvider): () => void {
+    const dispose = this.ctx.effect(() => {
+      if (this.providers.has(provider.forge)) throw new Error(`forge: a provider for "${provider.forge}" is already registered`)
+      this.providers.set(provider.forge, provider)
+      return () => {
+        this.providers.delete(provider.forge)
+        for (const watch of this.watches.values()) {
+          if (watch.ref.repository.forge === provider.forge) this.settle(watch, this.missing(provider.forge))
+        }
+        this.schedule()
+      }
+    }, `forge.register(${provider.forge})`)
+    return () => void dispose()
+  }
+
+  /**
+   * Map a Git remote URL to a repository through the first provider that serves it.
+   * @param url - fetch or push URL as Git reports it.
+   * @returns the repository, or undefined when no provider serves the URL.
+   */
+  repositoryFromRemote(url: string): ForgeRepository | undefined {
+    for (const provider of this.providers.values()) {
+      const repository = provider.repositoryFromRemote(url)
+      if (repository !== undefined) return repository
+    }
+    return undefined
+  }
+
+  /**
+   * Map a change request web URL through the first provider that serves it.
+   * @param url - web URL of a pull or merge request.
+   * @returns the change request, or undefined when no provider serves the URL.
+   */
+  changeRequestFromUrl(url: string): ChangeRequestRef | undefined {
+    for (const provider of this.providers.values()) {
+      const ref = provider.changeRequestFromUrl(url)
+      if (ref !== undefined) return ref
+    }
+    return undefined
+  }
+
+  /**
+   * Build the canonical web URL of a change request.
+   * @param ref - change request served by a registered provider.
+   * @returns the provider's canonical URL.
+   * @throws when no provider serves the change request's forge.
+   */
+  changeRequestUrl(ref: ChangeRequestRef): string {
+    return this.provider(ref.repository.forge).changeRequestUrl(ref)
+  }
+
+  /**
+   * Find open change requests whose head is `branch`, excluding the default branch and forks.
+   * @param repository - repository served by a registered provider.
+   * @param branch - head branch name on the host.
+   * @param signal - cancellation for the lookup.
+   * @returns matching change requests, newest first as the provider reports them.
+   * @throws when no provider serves the repository's forge or the lookup fails.
+   */
+  async findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]> {
+    return await this.provider(repository.forge).findByHead(repository, branch, signal)
+  }
+
+  /**
+   * Watch one change request as an effect on the calling fiber. The first
+   * watcher starts polling at once; listeners receive every later result,
+   * and `latest` returns the current one. Polling stops when the last watcher
+   * leaves. Listeners must not throw; a thrown error is logged and skipped.
+   * @param ref - change request to poll.
+   * @param listener - receives each polling result.
+   * @returns the disposer that stops this watch.
+   */
+  watch(ref: ChangeRequestRef, listener: ChangeRequestListener): () => void {
+    const key = changeRequestKey(ref)
+    const dispose = this.ctx.effect(() => {
+      let watch = this.watches.get(key)
+      if (watch === undefined) {
+        watch = { key, ref, listeners: new Set(), latest: undefined, dueAt: Date.now(), failures: 0 }
+        this.watches.set(key, watch)
+        this.schedule()
+      }
+      const owned = watch
+      owned.listeners.add(listener)
+      return () => {
+        owned.listeners.delete(listener)
+        if (owned.listeners.size === 0 && this.watches.get(key) === owned) {
+          this.watches.delete(key)
+          this.schedule()
+        }
+      }
+    }, 'forge.watch()')
+    return () => void dispose()
+  }
+
+  /**
+   * Read the latest polling result of a watched change request.
+   * @param ref - change request to read.
+   * @returns the latest result, or undefined before the first result or without a watch.
+   */
+  latest(ref: ChangeRequestRef): ChangeRequestUpdate | undefined {
+    return this.watches.get(changeRequestKey(ref))?.latest
+  }
+
+  private provider(forge: string): ForgeProvider {
+    const provider = this.providers.get(forge)
+    if (provider === undefined) throw new Error(`forge: ${this.missing(forge).message}`)
+    return provider
+  }
+
+  private missing(forge: string): ForgeFailure {
+    return { code: 'unavailable', message: `no provider is registered for "${forge}"` }
+  }
+
+  private schedule(): void {
+    clearTimeout(this.timer)
+    this.timer = undefined
+    if (this.lifetime.signal.aborted) return
+    let next: number | undefined
+    for (const watch of this.watches.values()) {
+      if (watch.dueAt === undefined || this.fetching.has(watch.ref.repository.forge)) continue
+      next = next === undefined ? watch.dueAt : Math.min(next, watch.dueAt)
+    }
+    if (next === undefined) return
+    this.timer = setTimeout(() => {
+      this.timer = undefined
+      this.poll()
+    }, Math.max(0, next - Date.now()))
+  }
+
+  private poll(): void {
+    const now = Date.now()
+    const due = new Map<string, Watch[]>()
+    for (const watch of this.watches.values()) {
+      const forge = watch.ref.repository.forge
+      if (watch.dueAt === undefined || watch.dueAt > now || this.fetching.has(forge)) continue
+      const batch = due.get(forge)
+      if (batch === undefined) due.set(forge, [watch])
+      else batch.push(watch)
+    }
+    for (const [forge, batch] of due) {
+      const task = this.fetch(forge, batch)
+      this.pending.add(task)
+      void task.then(() => this.pending.delete(task))
+    }
+    this.schedule()
+  }
+
+  /** Fetch one forge's batch; never rejects. */
+  private async fetch(forge: string, batch: readonly Watch[]): Promise<void> {
+    this.fetching.add(forge)
+    for (const watch of batch) watch.dueAt = undefined
+    let results: FetchResults | undefined
+    let failure: ForgeFailure | undefined
+    try {
+      const provider = this.providers.get(forge)
+      if (provider === undefined) {
+        failure = this.missing(forge)
+      } else {
+        using timeout = deadline(this.lifetime.signal, this.config.fetchTimeoutMs, 'FORGE_FETCH_TIMEOUT')
+        results = await provider.fetch(batch.map(watch => watch.ref), timeout.signal)
+      }
+    } catch (error) {
+      failure = { code: 'unavailable', message: error instanceof Error ? error.message : String(error) }
+    } finally {
+      this.fetching.delete(forge)
+    }
+    if (this.lifetime.signal.aborted) return
+    for (const watch of batch) {
+      if (this.watches.get(watch.key) !== watch) continue
+      const result = failure ?? results?.get(watch.key) ?? { code: 'unavailable', message: `provider returned no result for ${watch.key}` }
+      this.settle(watch, result)
+    }
+    this.schedule()
+  }
+
+  private settle(watch: Watch, result: ChangeRequestSnapshot | ForgeFailure): void {
+    const fetchedAt = Date.now()
+    let update: ChangeRequestUpdate
+    if ('code' in result) {
+      watch.failures++
+      update = { key: watch.key, fetchedAt, failure: result }
+    } else {
+      watch.failures = 0
+      update = { key: watch.key, fetchedAt, snapshot: result }
+    }
+    watch.latest = update
+    const delay = nextPollDelay(result, watch.failures, this.config)
+    watch.dueAt = delay === undefined ? undefined : fetchedAt + delay
+    for (const listener of [...watch.listeners]) {
+      try {
+        listener(update)
+      } catch (error) {
+        this.ctx.logger.warn(`forge: change request listener failed: ${String(error)}`)
+      }
+    }
+  }
+}
+
+export default ForgeService

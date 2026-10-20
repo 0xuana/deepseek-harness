@@ -2478,6 +2478,56 @@
       "source": "packages/experimental/worktree/src/types.ts"
     },
     {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeRepository",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ChangeRequestRef",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeProvider",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ChangeRequestSnapshot",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ChangeRequestUpdate",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "BindingOrigin",
+      "source": "packages/experimental/forge-session/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "BindingRecord",
+      "source": "packages/experimental/forge-session/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "SessionChangeRequest",
+      "source": "packages/experimental/forge-session/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ChangeRequestListener",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "SessionChangeRequestsListener",
+      "source": "packages/experimental/forge-session/src/types.ts"
+    },
+    {
       "doc": "docs/subsystems/boot.md",
       "symbol": "ProfileReconciliation",
       "source": "packages/boot/hmr/src/index.ts"

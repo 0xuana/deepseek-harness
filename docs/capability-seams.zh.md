@@ -31,6 +31,11 @@ flowchart LR
   svc_connection["ctx.connection<br/>Authenticated browser transport"]
   pkg_api_gateway["api-gateway"]
   pkg_host_frontend_static["host-frontend-static"]
+  pkg_experimental_forge["experimental-forge"]
+  svc_forge["ctx.forge<br/>Code host change requests"]
+  pkg_experimental_forge_github["experimental-forge-github"]
+  pkg_experimental_forge_session["experimental-forge-session"]
+  svc_forgeSession["ctx.forgeSession<br/>Session change request bindings"]
   pkg_experimental_worktree["experimental-worktree"]
   svc_worktrees["ctx.worktrees<br/>Git worktree creation"]
   pkg_experimental_tool_worktree["experimental-tool-worktree"]
@@ -354,6 +359,9 @@ flowchart LR
   pkg_experimental_client_ui_cot_translation --> svc_cotTranslation
   pkg_experimental_computer_use_cua_driver_mcp --> svc_computerUse
   pkg_experimental_computer_use_cua_driver_native --> svc_computerUse
+  pkg_experimental_forge --> svc_forge
+  pkg_experimental_forge_github --> svc_forge
+  pkg_experimental_forge_session --> svc_forgeSession
   pkg_experimental_ptc_runtime_python --> svc_ptcRuntime
   pkg_experimental_speech_to_text --> svc_speechToText
   pkg_experimental_speech_to_text_sensevoice --> svc_speechToText
@@ -501,6 +509,7 @@ flowchart LR
   svc_dynamicCordisRunner --> pkg_tool_cordis
   svc_fileReferences --> pkg_api_session_controller
   svc_fileUploads --> pkg_api_session_controller
+  svc_forge --> pkg_experimental_forge_session
   svc_fs --> pkg_tool_fs
   svc_headlessStartup --> pkg_headless
   svc_hmr --> pkg_app_boot
@@ -633,6 +642,8 @@ flowchart LR
 | `ctx.pluginMarket` | `core` | [`plugin-market`](../packages/boot/plugin-market) | - | [`client-ui-plugin-market`](../packages/client/ui-plugin-market), [`plugin-market`](../packages/boot/plugin-market) | - | 获取并校验用户配置的索引源；安装通过插件管理器完成。 |
 | `ctx.profileContext` | `core` | [`app-boot`](../packages/boot/app-boot) | - | [`plugin-manager`](../packages/boot/plugin-manager) | - | dsh launcher 提供纯数据形式的 profile 位置与组合输入；重载调度由 dsh-hmr 负责。 |
 | `ctx.connection` | `core` | [`client-connection`](../packages/client/connection) | - | [`api-gateway`](../packages/api/gateway), [`host-frontend-static`](../packages/host/frontend-static) | - | 负责浏览器认证与共享 HTTP 请求分发；API 适配器注册端点和流。 |
+| `ctx.forge` | `seam` | [`experimental-forge`](../packages/experimental/forge) | [`experimental-forge-github`](../packages/experimental/forge-github) | [`experimental-forge-session`](../packages/experimental/forge-session) | - | 提供方映射远端与变更请求 URL、按 head 分支查找变更请求并批量读取状态；同一变更请求的监听方共享一个轮询循环。 |
+| `ctx.forgeSession` | `service` | [`experimental-forge-session`](../packages/experimental/forge-session) | - | - | - | 仅宿主侧的投影从 shell 结果与绑定记录派生绑定；推送结果触发按 head 分支的发现，Session 监听方通过 forge 注册表轮询已绑定的变更请求。 |
 | `ctx.worktrees` | `seam` | [`experimental-worktree`](../packages/experimental/worktree) | [`experimental-worktree`](../packages/experimental/worktree) | [`experimental-tool-worktree`](../packages/experimental/tool-worktree) | - | 显式实验组合从固定的本地提交创建工作树。检出目录与共享 Git 元数据受现有写权限约束；工作目录服务拥有创建后的 Session 目录。 |
 | `ctx.workingDirectory` | `seam` | [`working-directory`](../packages/session/working-directory) | [`working-directory`](../packages/session/working-directory) | [`tool-working-directory`](../packages/session/tool-working-directory), [`tool-fs`](../packages/fs/tool-fs), [`tool-bash`](../packages/shell/tool-bash), [`tool-pwsh`](../packages/shell/tool-pwsh), [`subagent`](../packages/subagent/subagent), [`sdk-jsonrpc-server`](../packages/sdk/server) | - | 一个 Session 投影拥有有效执行目录。文件系统验证变更，用户上下文报告目录信息，原始元数据与写入授权保持不变。 |
 | `ctx.mcpResources` | `seam` | [`mcp-resources`](../packages/mcp/mcp-resources) | [`mcp-client`](../packages/mcp/mcp-client) | [`mcp-resources`](../packages/mcp/mcp-resources) | - | 连接所有者提供的操作在调用 agent 的作用域内服务于共享资源工具。 |

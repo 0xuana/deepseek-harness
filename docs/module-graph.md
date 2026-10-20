@@ -268,6 +268,9 @@ flowchart TD
     pkg_experimental_computer_use_cua_driver_native["experimental-computer-use-cua-driver-native"]
     pkg_experimental_cot_translation_bundle["experimental-cot-translation-bundle"]
     pkg_experimental_cua_macos["experimental-cua-macos"]
+    pkg_experimental_forge["experimental-forge"]
+    pkg_experimental_forge_github["experimental-forge-github"]
+    pkg_experimental_forge_session["experimental-forge-session"]
     pkg_experimental_inspector["experimental-inspector"]
     pkg_experimental_inspector_profile["experimental-inspector-profile"]
     pkg_experimental_plugin_market_bundle["experimental-plugin-market-bundle"]
@@ -504,6 +507,8 @@ flowchart TD
   pkg_hmr --> pkg_app_boot
   pkg_hmr --> pkg_cmdline
   pkg_experimental_computer_use_cua_driver_mcp --> pkg_computer_use
+  pkg_experimental_forge_github --> pkg_experimental_forge
+  pkg_experimental_forge_github --> pkg_subprocess
   pkg_experimental_webworker_runtime --> pkg_client_connection
   pkg_experimental_webworker_runtime --> pkg_client_modules
   pkg_experimental_webworker_runtime --> pkg_host_webserver
@@ -543,6 +548,9 @@ flowchart TD
   pkg_session_log_export --> pkg_session_persistence
   pkg_config_editor --> pkg_app_boot
   pkg_config_editor --> pkg_hmr
+  pkg_experimental_forge_session --> pkg_experimental_forge
+  pkg_experimental_forge_session --> pkg_session
+  pkg_experimental_forge_session --> pkg_session_projection
   pkg_experimental_speech_to_text --> pkg_settings
   pkg_experimental_translator --> pkg_credentials
   pkg_experimental_translator --> pkg_launch_environment
@@ -1545,6 +1553,7 @@ flowchart TD
 | [`experimental-client-ui-claude-code-mods`](../packages/experimental/client-ui-claude-code-mods) | `experimental` | — |
 | [`experimental-client-ui-voice-input`](../packages/experimental/client-ui-voice-input) | `experimental` | — |
 | [`experimental-cot-translation-bundle`](../packages/experimental/cot-translation-bundle) | `experimental` | — |
+| [`experimental-forge`](../packages/experimental/forge) | `experimental` | — |
 | [`experimental-inspector`](../packages/experimental/inspector) | `experimental` | — |
 | [`experimental-inspector-profile`](../packages/experimental/inspector-profile) | `experimental` | — |
 | [`experimental-plugin-market-bundle`](../packages/experimental/plugin-market-bundle) | `experimental` | — |
@@ -1603,6 +1612,7 @@ flowchart TD
 | [`attachment-local`](../packages/attachment/attachment-local) | `attachment` | [`attachment`](../packages/attachment/attachment), [`home-paths`](../packages/util/home-paths) |
 | [`hmr`](../packages/boot/hmr) | `boot` | [`app-boot`](../packages/boot/app-boot), [`cmdline`](../packages/boot/cmdline) |
 | [`experimental-computer-use-cua-driver-mcp`](../packages/experimental/computer-use-cua-driver-mcp) | `experimental` | [`computer-use`](../packages/computer-use/computer-use) |
+| [`experimental-forge-github`](../packages/experimental/forge-github) | `experimental` | [`experimental-forge`](../packages/experimental/forge), [`subprocess`](../packages/subprocess/subprocess) |
 | [`experimental-webworker-runtime`](../packages/experimental/webworker-runtime) | `experimental` | [`client-connection`](../packages/client/connection), [`client-modules`](../packages/client/modules), [`host-webserver`](../packages/host/webserver) |
 | [`skill-badge`](../packages/experimental/skill-badge) | `experimental` | [`skill`](../packages/skill/skill) |
 | [`host-directory-picker-auto`](../packages/host/directory-picker-auto) | `host` | [`client-connection`](../packages/client/connection), [`client-ui-directory-picker-browse`](../packages/client/ui-directory-picker-browse), [`client-ui-directory-picker-native`](../packages/client/ui-directory-picker-native), [`host-directory-picker-browse`](../packages/host/directory-picker-browse), [`host-directory-picker-native`](../packages/host/directory-picker-native), [`host-webserver`](../packages/host/webserver) |
@@ -1622,6 +1632,7 @@ flowchart TD
 | [`spill-local`](../packages/spill/spill-local) | `spill` | [`spill`](../packages/spill/spill) |
 | [`session-log-export`](../packages/session-query/session-log-export) | `session-query` | [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence) |
 | [`config-editor`](../packages/boot/config-editor) | `boot` | [`app-boot`](../packages/boot/app-boot), [`hmr`](../packages/boot/hmr) |
+| [`experimental-forge-session`](../packages/experimental/forge-session) | `experimental` | [`experimental-forge`](../packages/experimental/forge), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection) |
 | [`experimental-speech-to-text`](../packages/experimental/speech-to-text) | `experimental` | [`settings`](../packages/settings/settings) |
 | [`experimental-translator`](../packages/experimental/translator) | `experimental` | [`credentials`](../packages/credentials/credentials), [`launch-environment`](../packages/util/launch-environment), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence), [`timeout`](../packages/util/timeout), [`util-values`](../packages/util/values) |
 | [`host-product-telemetry-otel`](../packages/host/product-telemetry-otel) | `host` | [`otel`](../packages/telemetry/otel) |

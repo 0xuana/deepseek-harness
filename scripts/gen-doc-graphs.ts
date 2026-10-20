@@ -179,6 +179,22 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Owns browser authentication and shared HTTP request dispatch; API adapters register endpoints and streams.',
   },
   {
+    key: 'forge',
+    pkg: 'experimental-forge',
+    title: 'Code host change requests',
+    mode: 'seam',
+    implementations: ['experimental-forge-github'],
+    consumers: ['experimental-forge-session'],
+    note: 'Providers map remote and change request URLs, look up change requests by head branch, and read status in batches; watchers of one change request share one polling loop.',
+  },
+  {
+    key: 'forgeSession',
+    pkg: 'experimental-forge-session',
+    title: 'Session change request bindings',
+    mode: 'service',
+    note: 'A host-only projection derives bindings from shell results and binding records; push results trigger head-branch discovery, and Session watchers poll bound change requests through the forge registry.',
+  },
+  {
     key: 'worktrees',
     pkg: 'experimental-worktree',
     title: 'Git worktree creation',
