@@ -11,8 +11,7 @@
   color: var(--dsw-alias-label-primary);
 }
 
-.projectRow:hover,
-.sessionRow:hover {
+.projectRow:hover {
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
@@ -252,22 +251,22 @@
   flex: none;
 }
 
-/* Trailing action buttons surface on hover only (figma 27:4668 / 27:4656):
-   bare 16px glyphs, tertiary grey; the figma gap 12 reads too airy beside
-   the 16px glyphs, so the buttons sit at 10. */
+/* Trailing action buttons surface on hover with bare 16px glyphs. */
 .rowActions {
   flex: none;
   display: none;
   align-items: center;
-  gap: 10px;
+  gap: 15px;
 }
 
 .projectRow:hover .rowActions,
-.sessionRow:hover .rowActions,
 .searchResultRow:hover .rowActions,
-.projectRow.menuOpen .rowActions,
-.sessionRow.menuOpen .rowActions {
+.projectRow.menuOpen .rowActions {
   display: inline-flex;
+}
+
+.rowQuickActions {
+  display: contents;
 }
 
 /* The search heading has no trailing time cell, so the unarchive action
@@ -276,16 +275,16 @@
   margin-left: auto;
 }
 
-.sessionRow:hover .time,
-.sessionRow.menuOpen .time {
-  display: none;
+.rowResting {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dsw-alias-label-tertiary);
 }
 
-/* Hover swaps the trailing cell to the action buttons, which already carry
-   the pin/archive glyphs — hide the static markers so they do not double. */
-.sessionRow:hover .pinIndicator,
-.sessionRow.menuOpen .pinIndicator {
-  display: none;
+.rowResting .pinIndicator {
+  margin-left: 0;
 }
 
 /* The unclipped hover state drops the ellipsis, which would otherwise cover
@@ -293,9 +292,35 @@
    latches `:hover` on the row after the title has already returned: an
    unguarded rule would strand that row without its ellipsis. */
 @media (hover: hover) {
+  .sessionRow:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+
+  .sessionRow:hover .rowActions,
+  .sessionRow.menuOpen .rowActions,
+  :global(html[data-input-modality='keyboard']) .sessionRow:focus-within .rowActions {
+    display: inline-flex;
+  }
+
+  .sessionRow:hover .rowResting,
+  .sessionRow.menuOpen .rowResting,
+  :global(html[data-input-modality='keyboard']) .sessionRow:focus-within .rowResting {
+    display: none;
+  }
+
   .sessionRow:hover .title,
   .sessionRow.menuOpen .title {
     text-overflow: clip;
+  }
+}
+
+@media (hover: none) {
+  .sessionRow .rowActions {
+    display: inline-flex;
+  }
+
+  .sessionRow .rowQuickActions {
+    display: none;
   }
 }
 

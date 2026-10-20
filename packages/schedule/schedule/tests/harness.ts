@@ -1,9 +1,11 @@
 /** Host Schedule tests use real domain storage and an explicit Session resolver. */
 import { Context, Service } from '@deepseek-ai/cordis'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import type { CreateSessionOptions } from '@deepseek-ai/dsh-session'
 import Storage, { type KvUnit, type KvUnitDescriptor, type StorageBackend } from '@deepseek-ai/dsh-storage'
 import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -66,11 +68,13 @@ export async function harness(options: {
   pool?: MemoryMediaPool
   backend?: StorageBackend
   direct?: true
+  sessionController?: false
   config?: Config
 } = {}) {
   const ctx = new Context()
   options.onContext?.(ctx)
   await ctx.plugin(SessionStore)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(SystemPrompt, {})
   await ctx.plugin(ToolRuntime)
@@ -86,7 +90,7 @@ export async function harness(options: {
     return async () => { await facility.closeAll(); unmount() }
   })
   const resolve = vi.fn<Context['sessionController']['resolveAgent']>(async () => { throw new Error('missing Session') })
-  ctx.provide('sessionController', { resolveAgent: resolve } as never)
+  if (options.sessionController !== false) ctx.provide('sessionController', { resolveAgent: resolve } as never)
   const flush = vi.fn(async () => {})
   ctx.on('session/flush', flush)
   // This fixture supplies flush behavior above; Schedule does not invoke persistence methods directly.
@@ -100,7 +104,14 @@ export async function harness(options: {
   } else {
     fiber = await ctx.plugin(ScheduleService, options.config)
   }
-  return { ctx, service: ctx.schedule, pool, resolve, flush, fiber }
+  const resolveAgent = async (sessionId: SessionId): Promise<Agent> => {
+    const controller = ctx.get('sessionController')
+    if (controller === undefined) throw new Error('schedule: no Session activation provider')
+    const result = await controller.resolveAgent(sessionId)
+    if ('error' in result) throw result.error
+    return result.agent
+  }
+  return { ctx, service: ctx.schedule, pool, resolve, resolveAgent, flush, fiber }
 }
 
 /**
@@ -118,10 +129,11 @@ export interface HarnessAgent extends Agent {
 /** Build an unregistered Agent for a test-owned Session.
  * @param ctx - Services owning the Session.
  * @param id - Unique Session identity within the test Context.
+ * @param meta - Optional Session creation metadata, such as subagent lineage.
  * @returns Agent whose follow-up entry is a spy.
  */
-export function agentFor(ctx: Context, id = 'original'): HarnessAgent {
-  const session = ctx.sessions.create(SessionId(id))
+export function agentFor(ctx: Context, id = 'original', meta?: CreateSessionOptions['meta']): HarnessAgent {
+  const session = ctx.sessions.create(SessionId(id), meta === undefined ? undefined : { meta })
   return {
     id: session.id, session, ctx: ctx.extend(), options: {}, status: 'idle', inbox: unsupportedInbox(),
     send() {}, followup: vi.fn<(message: UserMessage) => void>(), steer() {}, inject() {}, cancel() {},

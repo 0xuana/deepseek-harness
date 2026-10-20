@@ -36,7 +36,7 @@ describe('web e2e: requested SVG is explicitly delivered', () => {
       replayOverride = join(replayRoot, 'replay.override.json')
       const script = deriveReplayScript(parseSessionLog(await readFile(FIXTURE, 'utf8')))
       // Recorded absolute paths must follow each isolated Session's working directory.
-      const cwdToken = '{{fromRequest:Your working directory is ([^\\n]+)\\.}}'
+      const cwdToken = '{{fromRequest:Current working directory: "([^"]+)"}}'
       await writeFile(replayOverride, JSON.stringify(script).replaceAll('{{cwd}}', JSON.stringify(cwdToken).slice(1, -1)))
     }
     scaffold = await launchWebScaffold({
@@ -129,7 +129,8 @@ describe('web e2e: requested SVG is explicitly delivered', () => {
     expect(await changes.getByRole('list').count()).toBe(0)
     expect(await changes.locator('svg').evaluate(icon => icon.innerHTML))
       .toBe(await card.locator('svg').evaluate(icon => icon.innerHTML))
-    expect(await changes.evaluate(element => element.getBoundingClientRect().height)).toBe(62)
+    await expect.poll(() => changes.evaluate(element => element.isConnected
+      ? element.getBoundingClientRect().height : undefined), { timeout: 10_000 }).toBe(62)
     const appearance = await page.evaluate(() => {
       const previous = document.body.getAttribute('data-ds-dark-theme')
       try {

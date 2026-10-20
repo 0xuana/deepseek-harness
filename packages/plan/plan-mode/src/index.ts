@@ -16,8 +16,7 @@
  * or leaving plan mode changes only the prompt section, not the request tool
  * catalog.
  *
- * Agent Note:
- * - .agents/notes/implemented/simplification/2026-07-22-plan-specific-collaboration-state.md
+ * See packages/plan/plan-mode/README.md.
  *
  * @module @deepseek-ai/dsh-plan-mode
  */
@@ -31,10 +30,10 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import type { Session, UserMessage } from '@deepseek-ai/dsh-session'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { UserQuestionError } from '@deepseek-ai/dsh-user-questions'
+import { UserQuestionError, type AskUserQuestionAnswer } from '@deepseek-ai/dsh-user-questions'
 import type { CommandDefinitionId, CommandId } from '@deepseek-ai/dsh-commands'
 import type {} from '@deepseek-ai/dsh-session-projection'
-import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
+import type { ProjectionDefinition, ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type { PlanProjection, PlanUnitState } from './types.ts'
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -172,12 +171,15 @@ export const planProjectionDefinition = {
  * `ctx.planMode`: owns logged plan state, applies and narrates selected state at step start,
  * the `plan:policy` section, the `/plan` command, and the stable exit tool.
  * Client carriers expose the projection's cropped `{ active, pending }` view.
+ * Agent prompt assembly fails while the projection reader is not ready;
+ * callers must await plugin activation before running an agent.
  */
 export class PlanModeController extends Service {
-  static inject = ['tools', 'systemPrompt', 'sessionProjections']
+  static inject = ['tools', 'systemPrompt', 'sessionProjections', 'agents']
 
   /** Validated deployment-owned guidance. */
   private readonly section: string
+  private planProjectionHandle: ProjectionHandle<PlanUnitState> | undefined
 
   /**
    * Latest selection per session awaiting the next accepted in-turn pre-step.
@@ -189,6 +191,20 @@ export class PlanModeController extends Service {
   constructor(ctx: Context, config: PlanModeConfig = { section: '' }) {
     super(ctx, 'planMode')
     this.section = resolveConfig(config).section
+  }
+
+  protected async [Service.init](): Promise<void> {
+    const ctx = this.ctx
+    ctx.systemPrompt.section({
+      name: 'plan:policy',
+      order: ctx.systemPrompt.getSectionOrder('PLAN_POLICY'),
+      text: (context) => {
+        if (context.agent === undefined) return ''
+        const pending = this.pendingIntents.get(context.agent.session)
+        return (pending?.active ?? this.loggedActive(context.agent.session)) ? this.section : ''
+      },
+    })
+    this.planProjectionHandle = await ctx.sessionProjections.register(planProjectionDefinition)
     let disposed = false
     // Pre-step is outside Session.append publication, so it can append the
     // log-only mode event inside an open turn without re-entering the session.
@@ -213,18 +229,6 @@ export class PlanModeController extends Service {
         : { ...decision, messages: [...decision.messages, narration] }
     })
     ctx.effect(() => () => { disposed = true }, 'dsh-plan-mode: close service lifetime')
-
-    ctx.systemPrompt.section({
-      name: 'plan:policy',
-      order: ctx.systemPrompt.getSectionOrder('PLAN_POLICY'),
-      text: (context) => {
-        if (context.agent === undefined) return ''
-        const pending = this.pendingIntents.get(context.agent.session)
-        return (pending?.active ?? this.loggedActive(context.agent.session)) ? this.section : ''
-      },
-    })
-
-    ctx.sessionProjections.register(planProjectionDefinition)
 
     // The command child activates only when a command registry is composed.
     ctx.inject(['commands'], (commandCtx) => {
@@ -286,10 +290,15 @@ export class PlanModeController extends Service {
           type: 'object',
           additionalProperties: false,
           properties: {
-            approved: { type: 'boolean', const: true, required: true },
+            approved: { type: 'boolean', required: true },
           },
         },
-        render: () => [{ type: 'text', text: 'Plan approved — plan mode exited; carry out the plan starting with your next step.' }],
+        render: (_args, { approved }) => [{
+          type: 'text',
+          text: approved
+            ? 'Plan approved — plan mode exited; carry out the plan starting with your next step.'
+            : 'The user dismissed the plan review to reply in their own words; plan mode remains active.',
+        }],
       },
       execute: async (args, exec) => {
         const agent = exec.agent
@@ -304,35 +313,37 @@ export class PlanModeController extends Service {
         if (interaction === undefined) {
           throw new Error('no user-questions channel is available to review the plan; ask the user to switch the session mode instead')
         }
-        const answer = await interaction.ask({
-          questions: [{
-            id: REVIEW_ID,
-            header: 'Plan review',
-            question: 'Approve this plan and leave plan mode?',
-            detail: args.plan,
-            options: [
-              { label: APPROVE_LABEL, description: 'Leave plan mode; the plan is carried out from the next step.' },
-              { label: KEEP_PLANNING_LABEL, description: 'Stay in plan mode; feedback goes back to the model.' },
-            ],
-            // Presentation only: a capable UI renders the plan as a review
-            // decision instead of a generic question, and answers with one of
-            // the labels above either way.
-            intent: { kind: 'plan-review', approve: APPROVE_LABEL, callId: exec.callId },
-          }],
-          agent,
-          signal: exec.signal,
-        }).catch((cause: unknown) => {
+        let answer: AskUserQuestionAnswer
+        try {
+          answer = await interaction.ask({
+            questions: [{
+              id: REVIEW_ID,
+              header: 'Plan review',
+              question: 'Approve this plan and leave plan mode?',
+              detail: args.plan,
+              options: [
+                { label: APPROVE_LABEL, description: 'Leave plan mode; the plan is carried out from the next step.' },
+                { label: KEEP_PLANNING_LABEL, description: 'Stay in plan mode; feedback goes back to the model.' },
+              ],
+              // Presentation only: a capable UI renders the plan as a review
+              // decision instead of a generic question, and answers with one of
+              // the labels above either way.
+              intent: { kind: 'plan-review', approve: APPROVE_LABEL, callId: exec.callId },
+            }],
+            agent,
+            signal: exec.signal,
+          })
+        } catch (cause: unknown) {
           // A dismissed review is not a failed one: the user took the turn back
-          // to say something the two options do not cover. Say so, because the
-          // generic channel message names ask_user_question, which the model
-          // never called. An abort (turn cancel, provider teardown) keeps its
-          // own message — there is no user to wait for.
+          // to say something the two options do not cover, so the turn ends
+          // here instead of spending a model request on waiting. An abort (turn
+          // cancel, provider teardown) keeps its own failure.
           if (cause instanceof UserQuestionError && cause.code === 'ASK_CANCELLED') {
-            throw new Error('The user dismissed the plan review to speak instead; '
-              + 'stay in plan mode, stop here, and wait for their message.')
+            exec.concludeTurn()
+            return { approved: false }
           }
           throw cause
-        })
+        }
         // A review may outlive this plugin fiber. Without its pre-step listener,
         // an approved selection could never be appended, so fail and keep planning.
         if (disposed) {
@@ -371,20 +382,18 @@ export class PlanModeController extends Service {
   }
 
   private hasOpenTurn(session: Session): boolean {
-    const state = this.ctx.sessionProjections.stateOf(session, 'turnBoundary')
-    if (state === undefined) throw new Error('plan-mode requires the turnBoundary session projection')
-    return state.openTurnStartSeq !== null
+    return this.ctx.agents.turnBoundaryOf(session).openTurnStartSeq !== null
   }
 
   private loggedActiveAtLastHeader(session: Session): boolean | undefined {
     return this.planState(session).activeAtLastHeader ?? undefined
   }
 
-  /** Read the required plan projection state or fail at the first service access. */
   private planState(session: Session): PlanUnitState {
-    const state = this.ctx.sessionProjections.stateOf(session, 'plan')
-    if (state === undefined) throw new Error('plan-mode requires the plan session projection')
-    return state
+    if (this.planProjectionHandle === undefined) {
+      throw new Error('plan mode is not ready; await plugin activation before running an agent')
+    }
+    return this.planProjectionHandle.stateOf(session)
   }
 
   /**
