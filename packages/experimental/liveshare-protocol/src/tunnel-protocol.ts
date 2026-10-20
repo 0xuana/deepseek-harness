@@ -11,7 +11,7 @@ export type TunnelRequestToken = Branded<'TunnelRequestToken'>
 export type TunnelRegistrationToken = Branded<'TunnelRegistrationToken'>
 
 /** Relay wire version; Host/worker IPC ships together and is not negotiated by this number. */
-export const LIVESHARE_PROTOCOL_VERSION = 2
+export const LIVESHARE_PROTOCOL_VERSION = 1
 
 /**
  * Optional behaviors this build offers the Relay, beyond the frames themselves.
@@ -58,11 +58,9 @@ export interface TunnelShareSpec {
    * Tier this share was created with.
    *
    * `view` reads the shared Session and drives its loop inside the granted workspace without writing it;
-   * `write` also modifies the files inside that workspace. `fork-readonly` is the withdrawn tier an older
-   * owner still names, and it reads back as `view` with that owner's switch deciding the forking half.
-   * Absent means the share predates tiers and reads as `view`.
+   * `write` also modifies the files inside that workspace. Absent reads as `view`.
    */
-  readonly sessionMode?: 'view' | 'fork-readonly' | 'write'
+  readonly sessionMode?: 'view' | 'write'
   /**
    * Whether an admitted viewer may attach uploaded files in this share's Session and its own forks.
    *
@@ -190,15 +188,13 @@ export interface ShareAccessStateFrame {
   /**
    * Tier the share carries.
    *
-   * `fork-readonly` is the withdrawn tier an older Relay or a stored row may still name; a reader of
-   * this frame treats it as `view`, because the forking half is {@link ShareAccessStateFrame.allowsFork}.
+   * The current tiers are `view` and `write`; any other value is rejected.
    */
-  readonly sessionMode: 'view' | 'fork-readonly' | 'write'
+  readonly sessionMode: 'view' | 'write'
   /**
    * Whether this share lets an admitted viewer fork it.
    *
-   * Absent on a Relay older than the split between the tier and the switch, and then a `fork-readonly`
-   * tier stands for it: that is what the withdrawn name granted.
+   * Absent means no forking.
    */
   readonly allowsFork?: boolean
   /** Whether this share permits viewer file uploads; always present after parsing, absent means false. */
@@ -382,26 +378,9 @@ export function parseTunnelWorkerCommand(value: unknown): TunnelWorkerCommand | 
       return typeof value.shareId === 'string' && value.shareId !== ''
         ? { type: 'remove-share', shareId: value.shareId }
         : undefined
-    case 'add-share': {
-      if (!isRegistrationToken(value.registrationToken) || !isTunnelShareSpec(value.share)) return undefined
-      const share = value.share
-      return {
-        type: 'add-share',
-        registrationToken: value.registrationToken,
-        share: {
-          ...share,
-          ...(share.sessionMode === undefined
-            ? {}
-            : {
-              sessionMode: normalizeShareSessionMode(share.sessionMode),
-              // The withdrawn name granted forking; keep that half when the value named no switch.
-              ...(share.sessionMode === 'fork-readonly' && share.allowsFork === undefined
-                ? { allowsFork: true }
-                : {}),
-            }),
-        },
-      }
-    }
+    case 'add-share':
+      return isRegistrationToken(value.registrationToken) && isTunnelShareSpec(value.share)
+        ? { type: 'add-share', registrationToken: value.registrationToken, share: value.share } : undefined
     case 'share-rpc-response': {
       if (!isTunnelRequestIdentity(value) || !Number.isSafeInteger(value.status)
         || Number(value.status) < 100 || Number(value.status) > 599) return undefined
@@ -467,15 +446,6 @@ export function parseTunnelWorkerEvent(value: unknown): TunnelWorkerEvent | unde
  * @param value Candidate spec.
  * @returns True when every required field is present with the declared type.
  */
-/**
- * Read the withdrawn `fork-readonly` tier as `view`; the forking half is `allowsFork`.
- * @param mode - Tier a wire or IPC value names.
- * @returns The current tier name.
- */
-function normalizeShareSessionMode(mode: 'view' | 'fork-readonly' | 'write'): 'view' | 'write' {
-  return mode === 'fork-readonly' ? 'view' : mode
-}
-
 function isTunnelShareSpec(value: unknown): value is TunnelShareSpec {
   if (!isRecord(value)) return false
   const mode = value.sessionMode
@@ -491,7 +461,7 @@ function isTunnelShareSpec(value: unknown): value is TunnelShareSpec {
     && (value.dshVersion === undefined || typeof value.dshVersion === 'string')
     && (value.ownerInstanceId === undefined || typeof value.ownerInstanceId === 'string')
     && (value.allowsFork === undefined || typeof value.allowsFork === 'boolean')
-    && (mode === undefined || mode === 'view' || mode === 'fork-readonly' || mode === 'write')
+    && (mode === undefined || mode === 'view' || mode === 'write')
     && (value.allowsFileUpload === undefined || typeof value.allowsFileUpload === 'boolean')
     && (value.ownerCredential === undefined || typeof value.ownerCredential === 'string')
     && Array.isArray(value.allowedSubjectIds)
@@ -541,15 +511,14 @@ export function parseShareAccessState(value: unknown): ShareAccessStateFrame | u
     || !Number.isSafeInteger(value.version) || Number(value.version) < 0
     || (value.accessMode !== 'open' && value.accessMode !== 'selected')
     || !isSubjectIds(value.allowedSubjectIds)
-    || (value.sessionMode !== 'view' && value.sessionMode !== 'fork-readonly' && value.sessionMode !== 'write')
+    || (value.sessionMode !== 'view' && value.sessionMode !== 'write')
     || (value.allowsFork !== undefined && typeof value.allowsFork !== 'boolean')
     || (value.allowsFileUpload !== undefined && typeof value.allowsFileUpload !== 'boolean')
     || (value.expiresAt !== undefined && (typeof value.expiresAt !== 'string' || !Number.isFinite(Date.parse(value.expiresAt))))) {
     return undefined
   }
   return { type: 'share-access-state', version: Number(value.version), accessMode: value.accessMode,
-    allowedSubjectIds: [...value.allowedSubjectIds], sessionMode: normalizeShareSessionMode(value.sessionMode),
-    ...(value.sessionMode === 'fork-readonly' && value.allowsFork === undefined ? { allowsFork: true } : {}),
+    allowedSubjectIds: [...value.allowedSubjectIds], sessionMode: value.sessionMode,
     allowsFileUpload: value.allowsFileUpload === true,
     ...(value.allowsFork === undefined ? {} : { allowsFork: value.allowsFork }),
     ...(value.expiresAt === undefined ? {} : { expiresAt: value.expiresAt }) }

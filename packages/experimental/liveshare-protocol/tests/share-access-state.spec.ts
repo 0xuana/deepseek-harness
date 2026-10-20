@@ -15,7 +15,7 @@ describe('Relay authority snapshot frame', () => {
     expect(LIVESHARE_CAPABILITIES).toContain('share-access-state')
   })
   it.each([
-    { version: -1 }, { version: 0.5 }, { accessMode: 'approval' }, { sessionMode: 'future' },
+    { version: -1 }, { version: 0.5 }, { accessMode: 'future' }, { sessionMode: 'future' },
     { allowedSubjectIds: [1] }, { allowedSubjectIds: [''] }, { expiresAt: 'not-a-time' },
   ])('refuses malformed authority fields %j', (fields) => {
     expect(parseRelayFrame(JSON.stringify({ ...state, ...fields }))).toBeUndefined()

@@ -178,7 +178,7 @@ describe('recorded frames', () => {
 })
 
 describe('wire protocol version', () => {
-  it('states protocol version 2 for the narrowed access-mode vocabulary', () => {
-    expect(LIVESHARE_PROTOCOL_VERSION).toBe(2)
+  it('states the initial wire protocol version', () => {
+    expect(LIVESHARE_PROTOCOL_VERSION).toBe(1)
   })
 })

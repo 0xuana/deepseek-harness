@@ -64,14 +64,13 @@ describe('Host/worker registration identity', () => {
   })
 })
 
-describe('withdrawn tier at the IPC boundary', () => {
-  it('reads fork-readonly back as view and keeps the caller switch', () => {
+describe('unknown tier at the IPC boundary', () => {
+  it('rejects a tier the current vocabulary does not name', () => {
     const share = {
       shareId: 'share', sessionId: 'session', sessionTitle: 'Source', accessMode: 'selected' as const,
       relay: 'https://relay.test', gatewayToken: 'token', ownerDisplayName: 'Owner',
-      sessionMode: 'fork-readonly' as const, allowsFork: true, allowedSubjectIds: [],
+      sessionMode: 'future', allowsFork: true, allowedSubjectIds: [],
     }
-    const parsed = parseTunnelWorkerCommand({ type: 'add-share', registrationToken: randomUUID(), share })
-    expect(parsed).toMatchObject({ share: { sessionMode: 'view', allowsFork: true } })
+    expect(parseTunnelWorkerCommand({ type: 'add-share', registrationToken: randomUUID(), share })).toBeUndefined()
   })
 })
