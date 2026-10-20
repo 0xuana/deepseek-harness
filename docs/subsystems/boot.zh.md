@@ -357,7 +357,7 @@ Source: [`packages/boot/plugin-market/src/index.ts`](../../packages/boot/plugin-
 
 ### `ctx.pluginRecommendations` — `PluginRecommendations`
 
-Owns the catalog tools, durable decisions, and idempotent card actions.
+Internal Remote and effect owner assembled by the plugin-recommendation feature.
 
 ```ts cordis-catalog
 /**

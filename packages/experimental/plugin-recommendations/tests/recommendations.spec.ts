@@ -58,24 +58,24 @@ describe('official recommendations', () => {
   it('provides discovery-first guidance only to roots with both tools and withdraws it on unload', async () => {
     const f = await fixture()
     const text = async () => renderPrompt(await f.ctx.systemPrompt.assemble(assembleContextFor(f.agent)))
-    expect(await text()).toContain('your first action is list_official_plugins')
+    expect(await text()).toContain('Recommendation eligibility comes first:')
     expect({
       prompt: await text(),
       proposal: f.ctx.tools.get('suggest_plugin', f.agent)?.description,
       parameters: f.ctx.tools.get('suggest_plugin', f.agent)?.parameters,
     }).toMatchSnapshot('one selected need and accurate proposal outcomes')
-    expect(renderPrompt(await f.ctx.systemPrompt.assemble())).not.toContain('action is list_official_plugins')
+    expect(renderPrompt(await f.ctx.systemPrompt.assemble())).not.toContain('Recommendation eligibility comes first:')
     const child = await f.agent.ctx.agents.create({ sessionId: SessionId('recommendations-child'), parentAgent: f.agent })
-    expect(renderPrompt(await f.ctx.systemPrompt.assemble(assembleContextFor(child.agent)))).not.toContain('action is list_official_plugins')
+    expect(renderPrompt(await f.ctx.systemPrompt.assemble(assembleContextFor(child.agent)))).not.toContain('Recommendation eligibility comes first:')
     await child.dispose()
     for (const name of ['list_official_plugins', 'suggest_plugin']) {
       const restore = f.agent.ctx.tools.restrict({ deny: [name] })
-      expect(await text()).not.toContain('action is list_official_plugins')
+      expect(await text()).not.toContain('Recommendation eligibility comes first:')
       restore()
     }
-    expect(await text()).toContain('action is list_official_plugins')
+    expect(await text()).toContain('Recommendation eligibility comes first:')
     await f.fiber.dispose()
-    expect(await text()).not.toContain('action is list_official_plugins')
+    expect(await text()).not.toContain('Recommendation eligibility comes first:')
   })
 
   it('admits one proposal per turn when this experiment is enabled alone, including concurrent calls and retries', async () => {

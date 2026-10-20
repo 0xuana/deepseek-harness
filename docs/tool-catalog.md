@@ -57,7 +57,7 @@ This table connects model-visible tool names to the plugin package and service s
 
 ### `list_official_plugins`
 
-Read the built-in optional DSH plugins and their enabled state for an explicit product-use need before inspecting source, configuration or instruction files. Catalog descriptions are sufficient to choose a recommendation; do not research implementation or setup steps. Match the desired user outcome semantically and explain any material limit. For a suitable disabled entry use suggest_plugin; for an enabled entry explain that it is already enabled and how to use it, without another card. This is read-only and enables nothing. Skip ordinary tasks, quoted wishes, declined or unrelated needs.
+Skip this tool for declined recommendations, discussion-only requests, quotes and ordinary tasks. Also skip when personalized-pages or this tool already supplied the current catalog this turn; use those names and descriptions directly, without a confirmation lookup. Otherwise read built-in optional DSH plugins and their enabled state for an explicit product-use need, before inspecting source, configuration or instruction files. Re-query only after installation state changes. Catalog descriptions are sufficient; do not research implementation or setup steps. Match the desired user outcome semantically and explain any material limit. For a suitable disabled entry use suggest_plugin; for an enabled entry explain that it is already enabled and how to use it, without another card. This is read-only and enables nothing. Skip ordinary tasks, quoted wishes, declined or unrelated needs.
 
 ```json
 {

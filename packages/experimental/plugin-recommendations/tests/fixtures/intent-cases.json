@@ -1,0 +1,18 @@
+[
+  {
+    "id": "agent_history_capability",
+    "prompt": "我想让你帮我从旧会话里找以前讨论过的方案、决定或报错，希望能给你搜索和读取当前工作区历史会话的能力。这轮先只推荐能提供这种能力的插件，不要实际搜索。",
+    "expected": "Recommend the disabled official session-search plugin, using one current catalog. Do not perform the search before or after enabling unless separately authorized."
+  },
+  {
+    "id": "manual_history_search",
+    "prompt": "我经常找不到前几天聊过的内容，想按关键词查旧会话。先只推荐能用的功能，不要现在搜索。",
+    "expected": "May explain the already available sidebar search rather than offer a plugin. Distinguish manual UI search from giving the Agent access to history; do not claim the optional session-search plugin is enabled."
+  },
+  {
+    "id": "declined_capability_discussion",
+    "setup": "Both experiments enabled.",
+    "prompt": "我想让英文思考显示中文，也希望加一个全局读书清单。这轮只讨论好处和代价，不要推荐入口，也不要改配置。",
+    "expected": "Answer the discussion without loading recommendation skills, querying the catalog or offering a card."
+  }
+]
