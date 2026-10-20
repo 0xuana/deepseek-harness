@@ -77,12 +77,17 @@ function remoteImageUrl(url: string): string | undefined {
   }
 }
 
-/** Rewritten images may use Web media protocols or the Desktop application's file route. */
+/** Authenticated Host media routes as the Desktop application addresses them. */
+const DESKTOP_MEDIA_ROUTES = [
+  'dsh-app://app/api/file?', 'dsh-app://app/api/plugin-market/detail-file?', 'dsh-app://app/api/plugin-manager/detail-file?',
+]
+
+/** Rewritten images may use Web media protocols or the Desktop application's media routes. */
 function vocabularyImageUrl(url: string): string | undefined {
   try {
     const protocol = new URL(url).protocol
     return protocol === 'http:' || protocol === 'https:' || protocol === 'blob:' || protocol === 'data:'
-      || url.startsWith('dsh-app://app/api/file?')
+      || DESKTOP_MEDIA_ROUTES.some(route => url.startsWith(route))
       ? url
       : undefined
   } catch {
@@ -115,18 +120,18 @@ let imageLoads = 0
 const nextImageLoad = (): number => ++imageLoads
 
 /**
- * Tag a rewritten local image URL with its mount's load number. Browsers reuse
+ * Tag a Host file-route image URL with its mount's load number. Browsers reuse
  * a same-URL image within one document despite `no-store`, so without the tag
  * a newly rendered image of a rewritten file would show the earlier bytes.
- * @param url - Absolute rewritten image URL; data and blob URLs stay unchanged.
+ * @param url - Absolute resolved image URL; URLs outside the `api/file` route stay unchanged.
  * @param load - Number allocated once per mounted image or file link.
- * @returns The URL with a `load` query parameter; unparsable URLs stay unchanged.
+ * @returns The URL with a `load` query parameter, or the unchanged URL.
  */
 function freshImageUrl(url: string, load: number): string {
   let fresh: URL
   try { fresh = new URL(url) }
   catch { return url } // Only an unparsable owner-supplied URL throws; it is emitted as before.
-  if (fresh.protocol === 'data:' || fresh.protocol === 'blob:') return url
+  if (!fresh.pathname.endsWith('/api/file')) return url
   // Appending preserves the resolver's existing query encoding.
   fresh.search = `${fresh.search === '' ? '?' : `${fresh.search}&`}load=${load}`
   return fresh.href
@@ -184,8 +189,7 @@ export interface MarkdownPathImages {
    * @param value - The destination exactly as the markdown author wrote it.
    * @returns A displayable absolute URL, or undefined when the destination
    * names no displayable image — it then stays inert alt text. The renderer
-   * appends a per-mount `load` query parameter to results other than data and
-   * blob URLs.
+   * appends a per-mount `load` query parameter to `api/file` route results.
    */
   resolve(value: string): string | undefined
 }
@@ -220,6 +224,8 @@ export interface MarkdownRenderContext {
   readonly fileMentions: MarkdownFileMentions | undefined
   /** Local-path image vocabulary; absent wherever no rewriting owner exists. */
   readonly pathImages: MarkdownPathImages | undefined
+  /** Raw HTML renders nothing instead of literal text. */
+  readonly omitHtml: boolean
   /** Inside an anchor's children: interactive mentions must not nest there. */
   readonly inLink?: boolean
   /** Reference targets visible to this pass. */
@@ -358,8 +364,8 @@ function renderNode(node: Md.RootContent, key: Key, context: MarkdownRenderConte
       return <code key={key}>{value}</code>
     }
     case 'html':
-      // No HTML parser enters the pipeline: raw HTML stays literal text.
-      return node.value
+      // No HTML parser enters the pipeline: raw HTML is literal text, or nothing where the owner omits it.
+      return context.omitHtml ? null : node.value
     case 'code':
       return renderCode(node, key, context)
     case 'math':

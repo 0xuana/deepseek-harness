@@ -26,7 +26,7 @@ describe('MarkdownText local-path images', () => {
     const pathImages: MarkdownPathImages = { resolve: mapping }
     const { container } = render(<MarkdownText text={LOCAL_IMAGE} pathImages={pathImages} />)
     const image = container.querySelector('img')
-    expect(resolverSrc(image)).toBe('https://cdn.example.com/graph.png')
+    expect(image?.getAttribute('src')).toBe('https://cdn.example.com/graph.png')
     expect(image?.getAttribute('alt')).toBe('diagram')
   })
 
@@ -78,14 +78,21 @@ describe('MarkdownText local-path images', () => {
     }
   })
 
-  it('accepts only the Desktop file route from a local image resolver', () => {
+  it('accepts only the Desktop media routes from a local image resolver', () => {
     const src = 'dsh-app://app/api/file?path=%2Ftmp%2Fgraph.png'
     const view = render(<MarkdownText text={LOCAL_IMAGE} streaming pathImages={{ resolve: () => src }} />)
     expect(view.container.querySelector('img')).toBeNull()
     view.rerender(<MarkdownText text={LOCAL_IMAGE} pathImages={{ resolve: () => src }} />)
     expect(resolverSrc(view.getByRole('img'))).toBe(src)
+    const detail = 'dsh-app://app/api/plugin-market/detail-file?document=d&path=a.png'
+    const bundle = 'dsh-app://app/api/plugin-manager/detail-file?bundle=b&document=README.md&path=a.png'
+    for (const route of [detail, bundle]) {
+      view.rerender(<MarkdownText text={LOCAL_IMAGE} pathImages={{ resolve: () => route }} />)
+      expect(view.getByRole('img').getAttribute('src')).toBe(route)
+    }
     for (const result of ['dsh-app://shell/api/file?path=x', 'dsh-app://app/assets/image.png',
-      'dsh-app://app/api/file-other?path=x', 'dsh-app://app.example/api/file?path=x']) {
+      'dsh-app://app/api/file-other?path=x', 'dsh-app://app.example/api/file?path=x', 'dsh-app://app/api/plugin-market/other?path=x',
+      'dsh-app://app/api/plugin-manager/other?path=x']) {
       view.rerender(<MarkdownText text={LOCAL_IMAGE} pathImages={{ resolve: () => result }} />)
       expect(view.container.querySelector('img')).toBeNull()
     }
@@ -102,6 +109,8 @@ describe('MarkdownText local-path images', () => {
     expect(first.container.querySelector('img')?.getAttribute('src')).toBe(src)
     const second = render(<MarkdownText text={LOCAL_IMAGE} pathImages={pathImages} />)
     expect(second.container.querySelector('img')?.getAttribute('src')).not.toBe(src)
+    const bare = render(<MarkdownText text={LOCAL_IMAGE} pathImages={{ resolve: () => 'https://example.com/api/file' }} />)
+    expect(bare.container.querySelector('img')?.getAttribute('src')).toMatch(/^https:\/\/example\.com\/api\/file\?load=\d+$/u)
   })
 
   it('leaves remote images untouched even when the vocabulary maps them', () => {

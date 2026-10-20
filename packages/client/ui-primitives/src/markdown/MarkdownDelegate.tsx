@@ -13,7 +13,7 @@ export type MarkdownExternalLinkHandler = (href: string) => void
 export interface MarkdownDelegate {
   /**
    * Image previews for decoded local paths in this owner's workspace. The renderer
-   * appends a per-mount `load` query parameter to parsable non-data, non-blob URLs.
+   * appends a per-mount `load` query parameter to `api/file` route URLs.
    */
   readonly fileImages?: {
     resolve: (path: string) => string | undefined
