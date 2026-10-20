@@ -2,21 +2,21 @@
 # section, a hash of its English and Chinese blocks outside code blocks and generated regions.
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-10-20-weighted-approval-status-gate-with-check-run-label.md
-/agent-note-weighted-approval-gates-through-its-commit-status-and-labels-the-conclusion-on-a-check-run:
-  en: 389309e9253d3532
-  zh: f5cad648638a4100
-/agent-note-weighted-approval-gates-through-its-commit-status-and-labels-the-conclusion-on-a-check-run/problem:
-  en: 9c16ee916119b666
-  zh: 3439316523a1c511
-/agent-note-weighted-approval-gates-through-its-commit-status-and-labels-the-conclusion-on-a-check-run/decision:
-  en: 328f76470112d929
-  zh: ae79d0324a32407c
-/agent-note-weighted-approval-gates-through-its-commit-status-and-labels-the-conclusion-on-a-check-run/verification:
-  en: 042b2c27d05cdc76
-  zh: a8d4ba72a5ac8615
-/agent-note-weighted-approval-gates-through-its-commit-status-and-labels-the-conclusion-on-a-check-run/alternatives-considered:
-  en: fb1a3c04b18d572f
-  zh: 762d369c2dfbf2a7
-/agent-note-weighted-approval-gates-through-its-commit-status-and-labels-the-conclusion-on-a-check-run/consequences:
-  en: 13840701ab2681c7
-  zh: 738b647187ef8a5f
+/agent-note-weighted-approval-keeps-its-commit-status-gate-and-adds-a-decision-check-run:
+  en: a1f0f9fd657c7d35
+  zh: c178a026d5f1735c
+/agent-note-weighted-approval-keeps-its-commit-status-gate-and-adds-a-decision-check-run/problem:
+  en: 06b0f3159c4a6c79
+  zh: 6f3ed495fcb690a4
+/agent-note-weighted-approval-keeps-its-commit-status-gate-and-adds-a-decision-check-run/decision:
+  en: 117b62dac44dc1ef
+  zh: 0208c72371e569a2
+/agent-note-weighted-approval-keeps-its-commit-status-gate-and-adds-a-decision-check-run/verification:
+  en: 8298cff64cce6467
+  zh: c5b81fba7326302e
+/agent-note-weighted-approval-keeps-its-commit-status-gate-and-adds-a-decision-check-run/alternatives-considered:
+  en: 197255cd82aabef7
+  zh: dc03f4bf77150f22
+/agent-note-weighted-approval-keeps-its-commit-status-gate-and-adds-a-decision-check-run/consequences:
+  en: 0b020353f92e1292
+  zh: 3e7713747301dca6

@@ -124,7 +124,7 @@ For GitHub PRs, inspect remote CI after the push:
 gh pr checks
 ```
 
-Report pending checks as pending. Inspect failures before attributing them to the branch or the environment. The required gate is the `weighted approval` commit status: it concludes `failure` while the policy is unmet, so a failed `weighted approval` is an approval wait, not a broken branch. The `weighted approval decision` check run names the reason: `ACTION_REQUIRED` is an approval wait, while its `FAILURE` conclusion is a publisher fault, so read the `weighted approval publisher` job before attributing that to the branch.
+Report pending checks as pending. Inspect failures before attributing them to the branch or the environment.
 
 When `gh pr checks` reports "no checks reported" and `/actions/runs?head_sha=<sha>` returns `total_count: 0`, read mergeability before suspecting the push or a dropped GitHub event:
 

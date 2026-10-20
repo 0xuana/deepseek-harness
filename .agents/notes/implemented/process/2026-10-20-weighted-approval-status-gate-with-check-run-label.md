@@ -1,4 +1,4 @@
-# Agent Note: Weighted approval gates through its commit status and labels the conclusion on a check run
+# Agent Note: Weighted approval keeps its commit status gate and adds a decision check run
 
 Status: implemented
 
@@ -6,37 +6,32 @@ English | [中文](2026-10-20-weighted-approval-status-gate-with-check-run-label
 
 ## Problem
 
-The approval gate must block merging until the policy holds, complete so tools that wait for pull-request checks to finish can end, and name the blocked state for readers. A commit status has no action-required state, so a `pending` status conflates an approval wait with running checks and makes `gh pr checks --watch` wait for reviewers. A check run can carry `action_required`, but a check run published with the default-branch workflow's token is not matched by this repository's branch rules: after the gate was moved to a required check run, the API and `gh pr checks` reported the run complete while the merge box kept showing `Expected — Waiting for status to be reported`, and two pull requests needed an administrator bypass to merge. That change was reverted.
+The `weighted approval` commit status is the record this repository's branch rules require, and below the approval threshold it stays `pending`. A commit status has no action-required state, so readers cannot tell an approval wait from running work. Moving the gate to a check run does not work: after that change, the check run completed as `success` on the pull-request head and both the REST API and `gh pr checks` listed it, while the merge box kept reporting the same context as `Expected — Waiting for status to be reported`, and two pull requests needed an administrator bypass. That change was reverted.
 
 ## Decision
 
-The publisher writes two records for every evaluation:
+The publisher keeps writing the `weighted approval` commit status exactly as before: `pending` while the policy is unmet, `success` when it holds, and `error` when setup or evaluation fails. Branch rules keep requiring that status.
 
-- The required `weighted approval` commit status carries the gate. It concludes `success` only when the policy holds and `failure` when it does not, so it always completes instead of waiting as `pending`.
-- The `weighted approval decision` check run carries the label. It concludes `action_required` when the policy is unmet, `success` when it holds, and `failure` when setup or evaluation fails. It is not required.
+The publisher additionally writes a `weighted approval decision` check run for the same evaluation: `action_required` while the policy is unmet, `success` when it holds, and `failure` when setup or evaluation fails. The check run's title carries the score or the blocker. Branch rules do not require it, so it never blocks a merge; it names the blocked state beside the status that does.
 
-Branch rules require the commit status with GitHub Actions as its expected source, which is the record this workflow publishes and the ruleset matched before this change.
-
-The publisher republishes the status as `pending` before Python setup or lexer installation, so a failed setup or an interrupted history fetch cannot leave a previous success in place. It records the conclusion it wrote in a step output, and the setup-failure step runs only when no conclusion was recorded, so a published decision survives a later failure or cancellation while a run cancelled before that write concludes `failure`. The decision check run keeps one GitHub Actions run per head: the publisher updates the head's existing run and creates one only when none exists, and revokes a published success through its conclusion because GitHub accepts but does not apply a return to `in_progress`.
+A head keeps one GitHub Actions run with the check-run name: the publisher updates the head's existing run and creates one only when none exists. The setup phase creates the run as `in_progress` on a head without one and deals with a published success by rewriting its conclusion to `action_required`, because GitHub accepts but does not apply a return to `in_progress`. The publisher revokes every conclusion a required check accepts (`success`, `neutral`, `skipped`) so a same-named run from another workflow cannot stand as the decision.
 
 ## Verification
 
-[Approval policy tests](../../../../.github/review-ownership/check-approval.test.mjs) pin the status conclusion for each policy outcome, the check-run payloads, revoking a published success through its conclusion, updating an existing check run instead of creating another, recording the published conclusion, and invalid list responses. [Workflow tests](../../../../scripts/ci-workflow.spec.ts) pin both write permissions, the `revoke` and `failure` phase commands, the publish step identity, and the conclusion-gated fallback.
+[Approval policy tests](../../../../.github/review-ownership/check-approval.test.mjs) pin the unchanged status states, the check-run conclusion for a met and an unmet policy, the phase writes, revoking a published success through its conclusion, one run per head, and invalid list responses. [Workflow tests](../../../../scripts/ci-workflow.spec.ts) pin the `checks: write` and `statuses: write` permissions and the setup phase commands.
 
-The check-run limit was measured on 2026-10-20 with the previous design on this repository: the `weighted approval decision` check run completed as `success` on the pull-request head, the REST API and `gh pr checks` listed it, and the merge box kept reporting the same context as expected; merging required an administrator bypass.
+The check-run limit was measured on 2026-10-20 with the reverted attempt on this repository: the `weighted approval decision` check run completed as `success` on the pull-request head, the REST API and `gh pr checks` listed it, and the merge box kept reporting the same context as expected.
 
 ## Alternatives considered
 
-**Require the check run instead of the commit status.** This is what the reverted change did; the measurement above shows the ruleset does not match it, so the gate cannot be satisfied.
+**Require the check run instead of the commit status.** Measured above: the ruleset does not match a check run published through the default-branch workflow's token, so the gate cannot be satisfied.
 
-**Publish the commit status as `pending` while the policy is unmet.** Branch rules block correctly, but watchers cannot distinguish an approval wait from running checks and do not finish.
+**Publish the commit status as `failure` while the policy is unmet.** The status would complete, but this changes the required record's meaning and would report an unmet, reversible condition as a malfunction.
 
-**Publish only the check run.** The label is right, but nothing the branch rules match carries the gate.
+**Publish only the check run and leave the status untouched.** The status would keep its last state from an earlier evaluation, so the gate and the label could disagree.
 
-**Publish the commit status as `success` for every completed evaluation.** The gate would pass while the policy is unmet.
-
-**Publish the required check run from a dedicated GitHub App.** A check run whose app the ruleset names would carry an action-required conclusion on the required entry itself. The repository has no App with the checks permission, so this change uses the commit status for the gate and the check run for the label; adding an App would let the label move onto the required record.
+**Publish the required check run from a dedicated GitHub App.** A check run whose app the ruleset names would let the required entry carry the action-required conclusion itself. The repository has no App with the checks permission; with one, the label could move onto the required record and the status could be retired.
 
 ## Consequences
 
-The merge box reports `weighted approval` as failed while reviewers are pending, next to the `weighted approval decision` entry that reads `action_required`. Readers distinguishing the two records see the gate and the label; `gh pr checks` lists both and finishes because both are complete. A previous evaluation's `success` is revoked by rewriting the status to `pending` and, once the policy is decided, to its new conclusion.
+While reviewers are pending, the merge box reports `weighted approval` as pending (the gate) and the `weighted approval decision` entry as `action_required`, with the score or blocker in its title; `gh pr checks` lists both. A published success is revoked by rewriting the check run's conclusion, and the status follows the unchanged policy states.

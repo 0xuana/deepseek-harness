@@ -1,4 +1,4 @@
-# Agent Note: Weighted approval claims its commit status and aggregates conclusions on a check run
+# Agent Note: Weighted approval preserves the commit-status gate and adds a decision check run
 
 Status: implemented
 
@@ -6,37 +6,32 @@ Status: implemented
 
 ## 问题
 
-批准门禁必须在策略满足前阻止合并、在检查完成后让等待检查的工具结束，并把被阻止的状态命名给读者。commit status 没有 action-required 状态，因此 `pending` 会把等待批准与正在运行的检查混在一起，使 `gh pr checks --watch` 一直等待评审人。check run 可以承载 `action_required`，但用默认分支 workflow 的 token 发布的 check run 不被本仓库的分支规则匹配：把门禁改到必需 check run 之后，API 与 `gh pr checks` 都报告该 run 已完成，而合并框一直显示 `Expected — Waiting for status to be reported`，两个 PR 需要管理员绕过才能合并。该改动已回退。
+`weighted approval` commit status 是本仓库分支规则要求的记录，在批准阈值下方时保持 `pending`。commit status 没有 action-required 状态，读者无法区分等待批准与正在运行的工作。把门禁改成 check run 并不可行：该改动后 check run 在 PR head 上以 `success` 完成，REST API 与 `gh pr checks` 都能列出它，而合并框始终把同一上下文报告为 `Expected — Waiting for status to be reported`，两个 PR 需要管理员绕过才能合并。该改动已回退。
 
 ## 决定
 
-publisher 每次评估写两条记录：
+publisher 继续完全按原样写 `weighted approval` commit status：策略未满足时为 `pending`，满足时为 `success`，安装或评估失败时为 `error`。分支规则继续要求该 status。
 
-- 必需的 `weighted approval` commit status 承载门禁：仅在策略满足时结论为 `success`，否则为 `failure`，因此它总是完成，不会以 `pending` 等待。
-- `weighted approval decision` check run 承载标签：策略未满足时为 `action_required`，满足时为 `success`，安装或评估失败时为 `failure`。它不是必需的。
+publisher 为同一次评估额外写一个 `weighted approval decision` check run：策略未满足时为 `action_required`，满足时为 `success`，安装或评估失败时为 `failure`。check run 的标题携带分数或 blocker。分支规则不要求它，因此它从不阻止合并；它在会阻止合并的那条 status 旁边命名被阻止的状态。
 
-分支规则要求该 commit status，且以 GitHub Actions 为期望来源——这正是本 workflow 发布的记录，也是本次变更前 ruleset 匹配的记录。
-
-publisher 在 Python 安装或 lexer 安装前把 status 重新发布为 `pending`，因此安装失败或历史拉取中断不会留下旧的 success。它把自己写入的结论记录到 step output，安装失败步骤只在没有记录结论时运行，因此已发布的决策能在之后的失败或取消中保留，而在该写入之前被取消的 run 以 `failure` 结束。决策 check run 每个 head 只保留一个 GitHub Actions run：publisher 更新 head 上已有的 run，仅在不存在时创建；撤销已发布的成功时改写其 conclusion，因为 GitHub 接受但不执行改回 `in_progress` 的更新。
+每个 head 只保留一个同名 GitHub Actions run：publisher 更新 head 上已有的 run，仅在不存在时创建。setup 阶段对没有 run 的 head 以 `in_progress` 创建，并把已发布的 success 的 conclusion 改写为 `action_required`，因为 GitHub 接受但不执行改回 `in_progress` 的更新。publisher 撤销必需检查接受的所有 conclusion（`success`、`neutral`、`skipped`），使其它 workflow 产生的同名 run 不会冒充决策。
 
 ## 验证
 
-[批准策略测试](../../../../.github/review-ownership/check-approval.test.mjs)锁定每个策略结果对应的 status 结论、check run payload、通过 conclusion 撤销已发布的成功、更新已有 check run 而不是另建一个、记录已发布的结论，以及无效的列表响应。[工作流测试](../../../../scripts/ci-workflow.spec.ts)锁定两个写权限、`revoke` 与 `failure` 阶段命令、publish 步骤的身份，以及按结论控制的兜底。
+[批准策略测试](../../../../.github/review-ownership/check-approval.test.mjs)锁定未改动的 status 状态、策略满足与未满足两种情况下 check run 的 conclusion、阶段写入、通过 conclusion 撤销已发布的成功、每个 head 只有一个 run，以及无效的列表响应。[工作流测试](../../../../scripts/ci-workflow.spec.ts)锁定 `checks: write` 与 `statuses: write` 权限以及 setup 阶段命令。
 
-check run 的限制于 2026-10-20 在本仓库用上一版设计实测：`weighted approval decision` check run 在 PR head 上以 `success` 完成，REST API 与 `gh pr checks` 都能列出它，而合并框始终把同一上下文报告为 expected；合并需要管理员绕过。
+check run 的限制于 2026-10-20 在本仓库用被回退的尝试实测：`weighted approval decision` check run 在 PR head 上以 `success` 完成，REST API 与 `gh pr checks` 都能列出它，而合并框始终把同一上下文报告为 expected。
 
 ## 考虑过的替代方案
 
-**把 check run 作为必需检查。** 这正是被回退的改动；上面的实测表明 ruleset 不匹配它，因此门禁无法满足。
+**把 check run 作为必需检查。** 见上面的实测：ruleset 不匹配默认分支 workflow 的 token 发布的 check run，门禁无法满足。
 
-**策略未满足时把 commit status 发布为 `pending`。** 分支规则能正确阻止合并，但监控工具无法区分等待批准与检查仍在运行，因此不会结束。
+**策略未满足时把 commit status 发布为 `failure`。** status 会完成，但改变了必需记录的含义，并把尚未满足且可撤销的条件报告为故障。
 
-**只发布 check run。** 标签正确，但没有任何被分支规则匹配的记录承载门禁。
+**只发布 check run 而不动 status。** status 会保留上一次评估的状态，门禁与标签可能不一致。
 
-**每次评估完成都把 commit status 发布为 `success`。** 策略未满足时门禁也会通过。
-
-**由专用 GitHub App 发布必需 check run。** 由 ruleset 指定 app 的 check run 可以让必需条目本身携带 action-required 结论。本仓库没有具备 checks 权限的 App，因此本次变更用 commit status 承载门禁、用 check run 承载标签；新增 App 后可以把标签移到必需记录上。
+**由专用 GitHub App 发布必需 check run。** 由 ruleset 指定 app 的 check run 可以让必需条目本身携带 action-required 结论。本仓库没有具备 checks 权限的 App；有了之后可以把标签移到必需记录上并停用 status。
 
 ## 后果
 
-评审未完成时，合并框把 `weighted approval` 报告为失败，旁边是显示 `action_required` 的 `weighted approval decision` 条目。区分这两条记录的读者能同时看到门禁与标签；`gh pr checks` 会列出两者，并且因为二者都已完成而结束。上一次评估的 `success` 通过把 status 改写为 `pending` 撤销，在策略决定后改写为新结论。
+评审未完成时，合并框把 `weighted approval` 报告为 pending（门禁），并把 `weighted approval decision` 条目报告为 `action_required`，标题里是分数或 blocker；`gh pr checks` 会列出两者。已发布的 success 通过改写 check run 的 conclusion 撤销，status 继续按未改动的策略状态变化。
