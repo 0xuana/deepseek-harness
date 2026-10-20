@@ -23,14 +23,14 @@ const STYLES = [
 ] as const
 
 /**
- * Mount the global theme sheets and publish the DPR-aware 0.5px stroke width for the owning plugin lifetime.
+ * Mount global theme sheets; window-backed documents also publish the DPR-aware stroke width.
  * @param ctx - Owning plugin context.
  */
 export function installThemeStyles(ctx: Context): void {
   if (typeof document === 'undefined') return
-  ctx.effect(() => {
+  const view = document.defaultView
+  if (view !== null) ctx.effect(() => {
     const root = document.documentElement
-    const view = document.defaultView as Window
     const previousWidth = root.style.getPropertyValue(HAIRLINE_WIDTH)
     const previousPriority = root.style.getPropertyPriority(HAIRLINE_WIDTH)
     const matchMedia = typeof view.matchMedia === 'function' ? view.matchMedia.bind(view) : undefined

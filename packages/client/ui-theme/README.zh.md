@@ -59,7 +59,7 @@ Desktop 的固定快捷键 `Cmd`/`Ctrl` + `+`（或 `=`）和 `Cmd`/`Ctrl` + `-`
 
 ### 样式表
 
-样式安装器在 document 根节点发布 `--dsh-hairline-width`，并通过一个设备像素比监听器更新它。该宽度对应 0.5px 边框向下取整到整物理像素后的结果，最小为一个物理像素。只有显式读取该变量的样式会使用这一宽度；插件卸载时释放监听器并恢复根节点上原有的声明。
+当 document 有关联的 window 时，样式安装器在 document 根节点发布 `--dsh-hairline-width`，并通过一个设备像素比监听器更新它。没有 window 的文档仍安装样式表，并使用 CSS fallback 宽度。该宽度对应 0.5px 边框向下取整到整物理像素后的结果，最小为一个物理像素。只有显式读取该变量的样式会使用这一宽度；插件卸载时释放监听器并恢复根节点上原有的声明。
 
 `base.css` 持有共享圆角尺度、字体 token 与设置卡片材质别名。`--dsh-font-family-text-default` 与 `--dsh-font-family-code-default` 在 `:root` 上保存内置字体栈；在 `body` 上，`--dsw-font-family` 与 `--ds-font-family-code` 把 `--dsh-font-family-text` 与 `--dsh-font-family-code` 排在这些字体栈之前，未设置的列表解析为内置字体栈（重复一次，字体匹配会忽略重复项）。材质别名在 `body` 上随当前色板解析。组件圆角选择遵循 [Web 样式参考](../../../docs/web-styling.zh.md#corner-radii-and-settings-cards)。
 

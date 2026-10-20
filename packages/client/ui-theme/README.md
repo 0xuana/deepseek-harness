@@ -59,7 +59,7 @@ The service owns theme, font-size, and font-family state and publishes snapshots
 
 ### Stylesheets
 
-The style installer publishes `--dsh-hairline-width` on the document root and updates it through one device-pixel-ratio listener. Its width matches a 0.5px border rounded down to whole device pixels, with a one-device-pixel minimum. Only styles that explicitly consume this variable use the width; plugin disposal releases the listener and restores the previous root declaration.
+The style installer publishes `--dsh-hairline-width` on the document root and updates it through one device-pixel-ratio listener when the document has a window. Documents without a window receive the stylesheets and use the CSS fallback width. Its width matches a 0.5px border rounded down to whole device pixels, with a one-device-pixel minimum. Only styles that explicitly consume this variable use the width; plugin disposal releases the listener and restores the previous root declaration.
 
 `base.css` owns the shared radius scale, the font tokens, and settings-card material aliases. `--dsh-font-family-text-default` and `--dsh-font-family-code-default` hold the built-in stacks on `:root`; on `body`, `--dsw-font-family` and `--ds-font-family-code` place `--dsh-font-family-text` and `--dsh-font-family-code` ahead of those stacks, and an unset list resolves to the built-in stack (repeated once, which font matching ignores). The material aliases resolve on `body`, alongside the active palette. Follow [Web styling](../../../docs/web-styling.md#corner-radii-and-settings-cards) when choosing component radii.
 

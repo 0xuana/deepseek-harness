@@ -60,6 +60,21 @@ describe('ui-theme client styles', () => {
     expect(document.documentElement.style.getPropertyValue(HAIRLINE_WIDTH)).toBe('0.5px')
   })
 
+  it('mounts and releases styles without publishing a DPR width for a detached document', async () => {
+    const detached = document.implementation.createHTMLDocument('')
+    vi.stubGlobal('document', detached)
+    try {
+      const fiber = await mountStyles()
+      expect(detached.defaultView).toBeNull()
+      expect(detached.head.querySelectorAll(`style[data-plugin="${PLUGIN_ID}"]`)).toHaveLength(8)
+      expect(detached.documentElement.style.getPropertyValue(HAIRLINE_WIDTH)).toBe('')
+      await fiber.dispose()
+      expect(detached.head.querySelectorAll(`style[data-plugin="${PLUGIN_ID}"]`)).toHaveLength(0)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('acquires nothing without a browser document', () => {
     const ctx = new Context()
     contexts.add(ctx)
