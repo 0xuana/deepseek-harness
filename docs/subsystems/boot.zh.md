@@ -100,7 +100,7 @@ Source: [`packages/boot/config-editor/src/index.ts`](../../packages/boot/config-
 
 ### `ctx.creationRecommendations` — `CreationRecommendations`
 
-Owns accepted Creator runs and the durable receipts for their new bundles.
+Internal Remote and effect owner assembled by the personalized-pages plugin.
 
 ```ts cordis-catalog
 /** Apply a human decision to a logged proposal.

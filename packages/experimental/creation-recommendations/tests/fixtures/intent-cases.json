@@ -27,7 +27,7 @@
   {
     "id": "defer_creation",
     "prompt": "我想要右侧计数器，但这次只讨论可行性，不要推荐插件或创建入口。",
-    "expected": "Discussion only; no card or generation."
+    "expected": "Discussion only; no catalog or recommendation skill lookup, card or generation."
   },
   {
     "id": "two_cards_ambiguous_counter",
@@ -82,5 +82,11 @@
     "id": "recurring_result_declines_page",
     "prompt": "我每天手动更新项目状态：登录改造进行中，埋点修复待开始，文档更新已完成。帮我整理状态表，这次只看表格，不要推荐页面或插件。",
     "expected": "Answer with the status table and no lookup or card despite recurring data."
+  },
+  {
+    "id": "existing_plugin_without_recommendation_experiment",
+    "setup": "Only personalized pages is enabled; thinking translation is disabled.",
+    "prompt": "我希望模型思考过程能是中文的，目前有时候是英文的。",
+    "expected": "Load personalized-pages once, explain the existing thinking-display translation plugin and its limit, and stop. No source/configuration inspection, new page, prompt-file edit or claim that model reasoning language changed."
   }
 ]

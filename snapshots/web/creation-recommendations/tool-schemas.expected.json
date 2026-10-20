@@ -781,7 +781,7 @@
     },
     {
       "name": "suggest_action",
-      "description": "Offer a card for a registered action before your normal final answer. Load the action’s skill for eligibility and planning. This only proposes an action; the user must click its card to start. Do not execute, wait, poll, claim completion or ask the user to report back. Use successful results only; a rejection creates no card.",
+      "description": "Offer an optional action card before your normal final answer. Load the action’s skill for eligibility and planning. This only proposes an action; the user must click its card to start. Do not execute, wait, poll, claim completion or ask the user to report back. Use successful results only; a rejection creates no card.",
       "parameters": {
         "type": "object",
         "properties": {
