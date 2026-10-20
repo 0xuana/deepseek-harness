@@ -3,6 +3,7 @@
 .card { min-width: 0; border: 0.5px solid var(--dsw-alias-border-l1); border-radius: var(--dsw-radius-md); }
 .card > * + * { border-top: 0.5px solid var(--dsw-alias-border-l1); }
 .panel p { margin: 0; color: var(--dsw-alias-label-secondary); line-height: 1.6; }
+.permissionHint { min-height: 1.6em; }
 .panel h3 { margin: 0; font-size: 14px; font-weight: 500; }
 .panel h4 { margin: 0; font-size: 13px; font-weight: 500; color: var(--dsw-alias-label-secondary); }
 .permission, .apps li { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
