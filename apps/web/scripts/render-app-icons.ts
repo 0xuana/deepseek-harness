@@ -42,6 +42,9 @@ const TILE_CENTER = { x: TILE_INSET.x + TILE_EDGE / 2, y: TILE_INSET.y + TILE_ED
 /** Density at which the source's own 1:1 scale renders. */
 const SOURCE_DENSITY = 72
 
+/** Samples per output pixel along each axis before reduction. */
+const RENDER_SCALE = 4
+
 /**
  * Fraction of a maskable icon the artwork keeps: the platform may crop the
  * border outside it. The tile's own ink reaches 0.461 of its edge from the
@@ -138,12 +141,15 @@ export function maskableDocument(source: string): string {
  * @returns the PNG bytes.
  */
 async function renderPng(document: string, size: number): Promise<Buffer> {
-  // Render at the source scale the requested edge needs, then resize as a
-  // guarantee: the rasterizer must see the target density, not a large bitmap
-  // it would have to antialias down.
   const { default: sharp } = await import('sharp')
-  return sharp(Buffer.from(document), { density: SOURCE_DENSITY * size / TILE_EDGE })
-    .resize(size, size)
+  const renderSize = Math.max(TILE_EDGE, size * RENDER_SCALE)
+  // A separate raster preserves the source's filters at full resolution and
+  // prevents SVG resize optimizations from bypassing the downsampling step.
+  const raster = await sharp(Buffer.from(document), { density: SOURCE_DENSITY * renderSize / TILE_EDGE })
+    .png()
+    .toBuffer()
+  return sharp(raster)
+    .resize(size, size, { kernel: 'lanczos3' })
     .png()
     .toBuffer()
 }
