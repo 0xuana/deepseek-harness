@@ -310,7 +310,7 @@ export interface LaunchOptions {
   openInAppEnvironment?: LaunchEnvironmentSnapshot
   /** Compare the replayed root Session; `read-only` also forbids refresh writes to a borrowed fixture. */
   compareReplaySession?: boolean | 'read-only'
-  /** Fixed JSON-quoted workspace path length for compaction estimates and bounded previews; omitted uses the ordinary prefix. */
+  /** Fixed JSON-quoted workspace path length for compaction estimates; omitted values use the ordinary prefix. */
   workspacePathLength?: number
   /**
    * Optional product overlay applied after the shipped Web surface and before
@@ -522,7 +522,7 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
   if (options.workspacePathLength !== undefined) {
     // mkdtemp appends six characters; JSON quoting is part of the runtime-context text.
     const paddingLength = options.workspacePathLength - JSON.stringify(join(workspaceParent, `${workspacePrefix}XXXXXX`)).length
-    if (paddingLength < 0) throw new Error('snapshot temporary root exceeds its fixed cwd text length')
+    if (paddingLength < 0) throw new Error('compaction snapshot temporary root exceeds its fixed cwd text length')
     workspacePrefix += '-'.repeat(paddingLength)
   }
   const workspaceCwd = await realpath(await mkdtemp(join(workspaceParent, workspacePrefix)))
