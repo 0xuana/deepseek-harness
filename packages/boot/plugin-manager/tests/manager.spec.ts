@@ -497,6 +497,19 @@ it('excludes raw install specs and error diagnostics from operation facts', asyn
   expect(JSON.stringify(facts)).not.toMatch(/secret|example|diagnostic|packageResult/)
 })
 
+it('keeps credential-bearing tarball addresses out of failed installation facts', async () => {
+  const { manager, ctx } = await fixture('startup')
+  const facts: PluginOperation[] = []
+  ctx.on('plugin-manager/operation', (event) => { facts.push(event) })
+  const install = vi.spyOn(operations, 'runProfilePnpm').mockRejectedValue(new Error('private download failed'))
+  onTestFinished(() => { install.mockRestore() })
+  expect(await manager.installBundle('https://user:secret@example.invalid/private/archive.tgz'))
+    .toMatchObject({ application: 'failed' })
+  expect(facts).toHaveLength(2)
+  expect(facts.map(event => event.target)).toEqual([null, null])
+  expect(JSON.stringify(facts)).not.toMatch(/user|secret|example|private|archive/)
+})
+
 it('reports unknown outcomes when profile inspection rejects before a result exists', async () => {
   const { manager, ctx, dir } = await fixture('startup')
   const facts: PluginOperation[] = []
@@ -1541,16 +1554,20 @@ it.each(['live', 'startup'] as const)('requires exact risk acknowledgement and p
   if (mode === 'live') expect(managed()).toBeUndefined()
 })
 
-it('reports a package run refused for compatibility as a typed refusal', async () => {
-  const { manager } = await fixture()
+it.each(['dsh-x', 'dsh-x@^2.0.0'])('retains the refused package identity for %s', async (spec) => {
+  const { manager, ctx } = await fixture()
+  const facts: PluginOperation[] = []
+  ctx.on('plugin-manager/operation', (event) => { facts.push(event) })
   const incompatible = [{ name: 'dsh-x', version: '2.0.0', runtimeVersion: getDshRuntimeVersion(), requirements: { '@deepseek-ai/dsh': '999.0.0' } }]
   const install = vi.spyOn(operations, 'runProfilePnpm').mockResolvedValue({
     exitCode: 1, output: 'dsh: installation rejected', truncated: false, logPath: 'pnpm.log', kind: 'unknown', incompatible,
   })
   onTestFinished(() => { install.mockRestore() })
-  const result = await manager.installBundle('dsh-x')
+  const result = await manager.installBundle(spec)
   expect(result).toMatchObject({ application: 'failed', changed: false, error: { code: 'incompatible-version', incompatible } })
   expect(install).toHaveBeenCalledTimes(1)
+  expect(facts[0]).toMatchObject({ phase: 'started', target: 'dsh-x' })
+  expect(facts[1]).toMatchObject({ phase: 'settled', target: 'dsh-x', version: '2.0.0', errorCode: 'incompatible-version' })
 })
 
 it.each([false, true])('rechecks installed bundle peers before accepting a disabled installation (exempted=%s)', async (exempted) => {

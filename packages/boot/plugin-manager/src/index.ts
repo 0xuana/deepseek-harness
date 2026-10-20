@@ -197,6 +197,14 @@ function parsedForRegistry(spec: string): ParsedInstallSpec {
   }
 }
 
+/** Only registry package names are retained before installation resolves its target. */
+function installOperationTarget(spec: string): string | null {
+  let parsed: ParsedInstallSpec
+  try { parsed = parseInstallSpec(spec) }
+  catch (_error) { return null /* Invalid specs remain private; installation owns their refusal. */ }
+  return parsed.kind === 'registry' ? parsed.name : null
+}
+
 declare module '@deepseek-ai/cordis' {
   interface Context {
     /** Persistent management of the current profile's composition and packages. */
@@ -904,7 +912,7 @@ export class PluginManager extends TypertRemoteService {
     const id = randomUUID() as PluginOperationId
     const version = this.operationVersion(reason, request.target)
     const facts = { id, reason, stage: request.stage,
-      target: reason === 'install' ? null : request.target,
+      target: reason === 'install' ? installOperationTarget(request.target) : request.target,
       ...version === undefined ? {} : { version },
       ...request.enabled === undefined ? {} : { enabled: request.enabled } }
     this.reportOperation({ ...facts, time: new Date().toISOString(), phase: 'started' })
@@ -937,10 +945,14 @@ export class PluginManager extends TypertRemoteService {
       this.reportOperation({ ...facts, time: new Date().toISOString(), phase: 'unknown' })
       throw error
     }
+    const refusedVersion = reason === 'install'
+      ? settled.error?.incompatible?.find(plugin => plugin.name === facts.target)?.version
+      : undefined
+    const observedVersion = settled.version ?? refusedVersion
     this.reportOperation({ ...facts, time: new Date().toISOString(), phase: 'settled',
       stage: settled.stage, target: settled.bundle ?? facts.target,
       application: settled.application, changed: settled.changed,
-      ...settled.version === undefined ? {} : { version: settled.version },
+      ...observedVersion === undefined ? {} : { version: observedVersion },
       ...settled.error === undefined ? {} : { errorCode: settled.error.code },
       ...settled.restartReason === undefined ? {} : { restartReason: settled.restartReason } })
     return settled
