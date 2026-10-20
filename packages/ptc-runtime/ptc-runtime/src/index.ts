@@ -122,7 +122,10 @@ export abstract class PtcRuntime extends Service {
   abstract readonly isolation: string
 
   /** Source evaluation form, independent of whether the provider retains state for an owner. */
-  get programFormat(): 'function-body' | 'repl' { return 'function-body' }
+  get programFormat(): 'function-body' | 'repl' | 'script' { return 'function-body' }
+
+  /** Whether this provider retains program memory across runs for the same stateOwner. */
+  get retainsState(): boolean { return false }
 
   /**
    * Release an owner's retained environment and await its execution resources.

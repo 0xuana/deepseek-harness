@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use `dsh-ptc-runtime` to execute model programs against host-provided asynchronous functions. Requests return lossless JSON, captured logs, or structured failures; rejected promises indicate caller misuse. Providers isolate distinct state owners and declare whether source is an async function body or REPL statements. A provider may retain memory for an explicit owner until release; it never restores that memory from a Session. Language and isolation descriptors identify syntax and execution substrate, not security guarantees.
+Use `dsh-ptc-runtime` to execute model programs against host-provided asynchronous functions. Requests return lossless JSON, captured logs, or structured failures; rejected promises indicate caller misuse. Providers isolate distinct state owners and declare whether source is an async function body, REPL statements, or a script. `retainsState` reports whether a provider retains memory for an explicit owner until release; it never restores that memory from a Session. Language and isolation descriptors identify syntax and execution substrate, not security guarantees.
 
 ## Table of Contents
 
@@ -29,7 +29,7 @@ Choose this package when you compose a deployment that executes model-written pr
 
 ### Run a program
 
-Call `resolve(request)` followed by `run(spec)` with a program and binding namespaces. Resolution validates cwd, timeout and sandbox choices and applies provider defaults. `programFormat` selects an async function body with top-level `await` and `return`, or REPL statements with top-level declarations, `await`, and a final expression. Lossless-JSON completion becomes `result.value`, text becomes `result.logs`, and failures become `result.error`.
+Call `resolve(request)` followed by `run(spec)` with a program and binding namespaces. Resolution validates cwd, timeout and sandbox choices and applies provider defaults. `programFormat` selects an async function body with top-level `await` and `return`, or REPL/Script statements with top-level declarations, `await`, and a final expression. The Node Script provider lowers top-level await and awaits the completion value; its [declaration limitations](../ptc-runtime-node/README.md#known-limitations-and-deferred-work) apply to transformed programs. Lossless-JSON completion becomes `result.value`, text becomes `result.logs`, and failures become `result.error`.
 
 ```text
 const spec = ctx.ptcRuntime.resolve({
