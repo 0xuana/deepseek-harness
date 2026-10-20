@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "Agent Teams",
-    "description": "Let agents divide work, communicate and share a member roster and task board when a task needs ongoing coordination. Team tools replace ordinary subagent delegation while enabled."
+    "description": "Let agents divide work, communicate and share a member roster and task board when a task needs ongoing coordination. Team tools replace ordinary subagent delegation while enabled.",
+    "detail": "docs/DETAIL.md"
   }
 }

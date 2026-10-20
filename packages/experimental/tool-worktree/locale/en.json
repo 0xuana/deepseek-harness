@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "Git Worktrees",
-    "description": "Let agents create and enter a new Git branch and worktree to keep current work separate while developing another change. Disabling leaves existing branches and checkouts intact."
+    "description": "Let agents create and enter a new Git branch and worktree to keep current work separate while developing another change. Disabling leaves existing branches and checkouts intact.",
+    "detail": "docs/DETAIL.md"
   }
 }

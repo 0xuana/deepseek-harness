@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "Machine translation of reasoning",
-    "description": "Read expanded reasoning in Chinese or another target language when the original is hard to follow. Displays a translation with the original still available; source text is sent to the selected translation service."
+    "description": "Read expanded reasoning in Chinese or another target language when the original is hard to follow. Displays a translation with the original still available; source text is sent to the selected translation service.",
+    "detail": "docs/DETAIL.md"
   }
 }

@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "Persistent terminals",
-    "description": "Let agents reuse one terminal across tool calls to preserve shell state or continue sending input to an interactive program."
+    "description": "Let agents reuse one terminal across tool calls to preserve shell state or continue sending input to an interactive program.",
+    "detail": "docs/DETAIL.md"
   }
 }

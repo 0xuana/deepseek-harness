@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "Developer Tools",
-    "description": "Inspect raw session logs and grouped messages and debug the NodeJS backend when investigating conversation or UI problems. Enabling also captures unredacted Host network requests."
+    "description": "Inspect raw session logs and grouped messages and debug the NodeJS backend when investigating conversation or UI problems. Enabling also captures unredacted Host network requests.",
+    "detail": "docs/DETAIL.md"
   }
 }

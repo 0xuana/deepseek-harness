@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "持久终端",
-    "description": "让智能体跨多次工具调用复用同一个终端，适合保留 shell 状态或持续向交互程序发送输入。"
+    "description": "让智能体跨多次工具调用复用同一个终端，适合保留 shell 状态或持续向交互程序发送输入。",
+    "detail": "docs/DETAIL.zh.md"
   }
 }

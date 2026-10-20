@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "Session search",
-    "description": "Let agents search and read earlier sessions in the current workspace to recover past plans, decisions or errors. Sidebar search is unchanged."
+    "description": "Let agents search and read earlier sessions in the current workspace to recover past plans, decisions or errors. Sidebar search is unchanged.",
+    "detail": "docs/DETAIL.md"
   }
 }

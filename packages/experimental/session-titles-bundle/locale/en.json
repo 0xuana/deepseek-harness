@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "Conversation-following titles",
-    "description": "Keep generated session titles aligned with new messages as the topic changes, making conversations easier to recognize later. User-pinned titles are preserved."
+    "description": "Keep generated session titles aligned with new messages as the topic changes, making conversations easier to recognize later. User-pinned titles are preserved.",
+    "detail": "docs/DETAIL.md"
   }
 }
