@@ -218,7 +218,7 @@ describe('approval Remote Event consumer', () => {
     expect(next).toHaveBeenCalledOnce()
     expect(bench.pending.getSnapshot()).toEqual([])
     expect(bench.register).toHaveBeenCalledOnce()
-    expect(bench.shortcuts.mock.calls.map(([entry]) => entry.label())).toEqual(['allowOnce', 'reject'])
+    expect(bench.shortcuts.mock.calls.map(([entry]) => entry.label())).toEqual(['allow', 'reject'])
   })
 
   it('publishes one scoped takeover, returns the answer, and keeps stable registrations', async () => {
@@ -514,21 +514,30 @@ describe('package entries', () => {
   })
 })
 
-it.each(['allow', 'reject', 'always'] as const)('settles a fixed application decision through %s without free text', async (choice) => {
+it.each(['allow', 'reject', 'always', 'keyboard'] as const)('settles a fixed application decision through %s without free text', async (choice) => {
   const onAllow = vi.fn(async () => {}), onReject = vi.fn(async () => {}), onAlways = vi.fn(async () => {})
   const actions = { allow: onAllow, reject: onReject, always: onAlways }
   render(<ApprovalCard {...{
     requestKey: 'app-approval', title: 'Control this app?', description: 'Only for this task.',
-    subject: { name: 'Calculator', icon: 'data:image/png;base64,aWNvbg==' }, allowLabel: 'Allow for this task',
+    subject: { name: 'Calculator', ...choice === 'keyboard' ? {} : { icon: 'data:image/png;base64,aWNvbg==' } }, allowLabel: 'Allow for this task',
     canAnswer: () => true, onAllow, onReject, onAlways, renderSlot: vi.fn(() => null),
     t: (key: string) => ({ reject: 'Reject', allowAlways: 'Always allow' })[key] ?? key,
   } as FactoryComponentPropsOf<'conversation.approval.card'>} />)
   expect(screen.getByText('Calculator')).toBeTruthy()
-  expect(document.querySelector('img')?.getAttribute('src')).toBe('data:image/png;base64,aWNvbg==')
+  if (choice === 'keyboard') expect(document.querySelector('img')).toBeNull()
+  else expect(document.querySelector('img')?.getAttribute('src')).toBe('data:image/png;base64,aWNvbg==')
   expect(screen.queryByRole('textbox')).toBeNull()
-  const label = { allow: 'Allow for this task', reject: 'Reject', always: 'Always allow' }[choice]
-  fireEvent.click(screen.getByRole('button', { name: label }))
-  fireEvent.click(screen.getByRole('button', { name: label }))
-  await waitFor(() => { expect(actions[choice]).toHaveBeenCalledOnce() })
-  expect(Object.values(actions).filter(action => action.mock.calls.length > 0)).toEqual([actions[choice]])
+  const action = choice === 'keyboard' ? 'allow' : choice
+  if (choice === 'keyboard') {
+    const detail = screen.getByRole('group')
+    detail.focus()
+    fireEvent.keyDown(detail, { key: 'Enter', code: 'Enter' })
+    fireEvent.keyDown(detail, { key: 'Enter', code: 'Enter' })
+  } else {
+    const label = { allow: 'Allow for this task', reject: 'Reject', always: 'Always allow' }[choice]
+    fireEvent.click(screen.getByRole('button', { name: label }))
+    fireEvent.click(screen.getByRole('button', { name: label }))
+  }
+  await waitFor(() => { expect(actions[action]).toHaveBeenCalledOnce() })
+  expect(Object.values(actions).filter(callback => callback.mock.calls.length > 0)).toEqual([actions[action]])
 })

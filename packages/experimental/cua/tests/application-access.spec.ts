@@ -8,7 +8,7 @@ import * as JsonStorage from '@deepseek-ai/dsh-storage-json'
 import * as Domains from '@deepseek-ai/dsh-storage-domain'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import UserQuestions, { UserQuestionError, type AskUserQuestionAnswer } from '@deepseek-ai/dsh-user-questions'
+import UserQuestions, { UserQuestionError, type AskUserQuestionAnswer, type AskUserQuestionRequest } from '@deepseek-ai/dsh-user-questions'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { ApplicationAuthorizationResult, ApplicationAccess } from '../src/application-access.ts'
 import type { CuaApplicationGrant } from '../src/application-types.ts'
@@ -51,7 +51,7 @@ async function setup(choice = 'Allow for this session', options: { writable?: bo
   await mountAgentLoopTestHarness(ctx)
   if (options.questions !== false) await ctx.plugin(UserQuestions)
   const owner = await ctx.agents.create({ sessionId: SessionId('cua-access-test') })
-  const answer = vi.fn<() => Promise<AskUserQuestionAnswer>>(async () => ({ answers: [{ id: 'cua-app-access', selected: [choice] }] }))
+  const answer = vi.fn<(request: AskUserQuestionRequest) => Promise<AskUserQuestionAnswer>>(async () => ({ answers: [{ id: 'cua-app-access', selected: [choice] }] }))
   ctx.on('user-questions/request', answer)
   const permissions = permissionFixture(ctx, options.initial, options.writable)
   const access = new ApplicationAccess(ctx, { store: permissions.store })
@@ -64,6 +64,40 @@ it('refuses raw handle dispatch until getApp obtains consent', async () => {
   const dispatch = vi.fn(async () => null)
   await expect(f.access.run(f.client, handle, signal, dispatch)).rejects.toThrow('APP_ACCESS_REQUIRED')
   expect(dispatch).not.toHaveBeenCalled()
+})
+
+it.each([
+  { persistable: true, writable: true, withIcon: true, offeredAlways: true },
+  { persistable: false, writable: true, withIcon: false, offeredAlways: false },
+  { persistable: true, writable: false, withIcon: true, offeredAlways: false },
+])('describes fixed approval for %j', async ({ persistable, writable, withIcon, offeredAlways }) => {
+  const f = await setup('Allow for this session', { writable })
+  const icon = 'data:image/png;base64,aWNvbg=='
+  await f.access.select(f.agent, f.client, handle, { ...identity, persistable }, signal, withIcon ? icon : undefined)
+  const request = f.answer.mock.calls[0]![0]
+  const question = request.questions[0]!
+  expect(question).toMatchObject({
+    id: 'cua-app-access',
+    question: 'Allow Computer Use to launch if needed, read, capture, and control Test application?',
+    detail: 'Session access applies only to this conversation.',
+    intent: { kind: 'approval', approve: 'Allow for this session', reject: 'Deny',
+      subject: { name: 'Test application' }, display: {
+        question: { en: 'Allow Computer Use to launch, read, capture and control this application?',
+          zh: '允许 Computer Use 启动、读取、截图和控制此应用吗？' },
+        detail: { en: 'Session access applies only to this conversation.',
+          zh: '会话授权仅在当前对话中生效。' },
+        approve: { en: 'Allow for this session', zh: '本会话允许' },
+      },
+    },
+  })
+  expect(question.options).toEqual(offeredAlways
+    ? [{ label: 'Allow for this session' }, { label: 'Deny' }, { label: 'Always allow' }]
+    : [{ label: 'Allow for this session' }, { label: 'Deny' }])
+  if (offeredAlways) expect(question.intent).toHaveProperty('always', 'Always allow')
+  else expect(question.intent).not.toHaveProperty('always')
+  if (withIcon) expect(question.intent).toHaveProperty('subject.icon', icon)
+  else expect(question.intent).not.toHaveProperty('subject.icon')
+  expect(f.grants()).toEqual([])
 })
 
 it('reuses session consent across application handles and connections without granting global access', async () => {

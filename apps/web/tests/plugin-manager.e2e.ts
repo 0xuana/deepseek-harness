@@ -585,8 +585,27 @@ describe('web e2e: plugin manager', () => {
     await panel.getByRole('heading', { name: '实验性插件', exact: true, level: 1 }).waitFor()
     expect(await panel.locator('[data-plugin-group="more"] [data-plugin-package]').count())
       .toBe(OPTIONAL_BUNDLES.length + ON_DEMAND_BUNDLES.length)
-    expect(await panel.getByText('实验性', { exact: true }).count())
-      .toBe((await scaffold.ctx.pluginManager.listBundles()).filter(bundle => bundle.optional && (bundle.experimental === true || bundle.name.startsWith('@deepseek-ai/dsh-experimental-'))).length)
+    const cards = await panel.locator('[data-plugin-group="more"] [data-plugin-package]').all()
+    expect(await Promise.all(cards.map(async card => [
+      await card.getAttribute('data-plugin-package'),
+      await card.getByText('实验性', { exact: true }).count(),
+    ]))).toEqual([
+      ['@deepseek-ai/dsh-experimental-agent-team-profile', 1],
+      ['@deepseek-ai/dsh-experimental-voice-input-bundle', 1],
+      ['@deepseek-ai/dsh-experimental-auto-review', 1],
+      ['@deepseek-ai/dsh-experimental-inspector-profile', 1],
+      ['@deepseek-ai/dsh-cua-bundle', 1],
+      ['@deepseek-ai/dsh-experimental-tool-worktree', 1],
+      ['@deepseek-ai/dsh-experimental-cot-translation-bundle', 1],
+      ['@deepseek-ai/dsh-experimental-terminal-bundle', 1],
+      ['@deepseek-ai/dsh-experimental-session-search', 1],
+      ['@deepseek-ai/dsh-experimental-session-titles-bundle', 1],
+      ['@deepseek-ai/dsh-experimental-badge-skill-bundle', 1],
+      ['@deepseek-ai/dsh-experimental-ralph-bundle', 1],
+      ['@deepseek-ai/dsh-experimental-plugin-market-bundle', 1],
+      ['@deepseek-ai/dsh-subagent-codex', 0],
+      ['@deepseek-ai/dsh-subagent-claude-code', 0],
+    ])
     expect(await panel.locator('[data-plugin-group="bundles"]').count()).toBe(0)
     await panel.getByRole('button', { name: '返回插件', exact: true }).click()
     expect(await panel.locator('[data-plugin-group="bundles"] [data-plugin-package]').count()).toBe(2)
