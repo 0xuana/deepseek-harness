@@ -130,7 +130,7 @@ Source execution loads erasable TypeScript and its installed birpc dependency wi
 | [`src/process.ts`](src/process.ts) | Child handshake, environment clearing and program lifecycle |
 | [`src/bootstrap.ts`](src/bootstrap.ts) | Program evaluation, binding proxies and output capture |
 | [`src/rpc.ts`](src/rpc.ts) | Typed birpc transport, message limits and connection lifetime |
-| [`src/result.ts`](src/result.ts) | Validation of untrusted program completions |
+| [`src/protocol.ts`](src/protocol.ts) | Host and program methods, and validation of untrusted program results |
 | [`src/output-ledger.ts`](src/output-ledger.ts) | Host accounting for the outer result |
 
 </details>

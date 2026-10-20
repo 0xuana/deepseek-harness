@@ -32,7 +32,7 @@ export interface PatchableStream {
 
 /**
  * Ordered text capture under the shared outer JSON-byte budget, delivered to
- * a sink as each item lands (the real sink streams text over the port eagerly,
+ * a sink as each item lands (the real sink sends text to the host eagerly,
  * so captured output survives a mid-run termination). It includes the log
  * array syntax and string escaping in its accounting. Once exhausted it emits
  * the fitting prefix and reports the limit once; the host turns that condition

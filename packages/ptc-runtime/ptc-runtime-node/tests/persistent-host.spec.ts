@@ -1,97 +1,20 @@
-import { Duplex, PassThrough } from 'node:stream'
 import { setImmediate } from 'node:timers/promises'
 import { Context } from '@deepseek-ai/cordis'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { PtcBindingFunction, PtcRunRequest } from '@deepseek-ai/dsh-ptc-runtime'
-import type { SubprocessHandle, SubprocessOutcome } from '@deepseek-ai/dsh-subprocess'
 import type { Config } from '../src/index.ts'
 import { mountRuntime } from './setup.ts'
-import { rawPeer } from './raw-peer.ts'
+import { fakeChild, NO_INITIAL_FRAME } from './fake-child.ts'
 import { encodePtcJsonWire } from '../src/json-wire.ts'
 
 const request: PtcRunRequest = { program: '1', bindings: [], stateOwner: {} }
-const NO_INITIAL_FRAME = Symbol('no initial frame')
 async function setup(config: Config = {}) {
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose() })
   const { runtime, fiber } = await mountRuntime(ctx, { ...config, executionMode: config.executionMode ?? 'persistent-in-memory' })
-  const control = new Duplex({
-    read() {},
-    write(chunk: Buffer, _encoding, callback) {
-      if (childControl.destroyed) { callback(new Error('peer closed')); return }
-      childControl.push(chunk)
-      callback()
-    },
-  })
-  const childControl = new Duplex({
-    read() {},
-    write(chunk: Buffer, _encoding, callback) {
-      if (control.destroyed) { callback(new Error('peer closed')); return }
-      control.push(chunk)
-      callback()
-    },
-  })
-  const stdout = new PassThrough()
-  const stderr = new PassThrough()
-  const direct = Promise.withResolvers<SubprocessOutcome>()
-  const messages: unknown[] = []
-  const terminate = vi.fn(() => {
-    stdout.end()
-    stderr.end()
-    direct.resolve({ exitCode: 0, signal: null })
-  })
-  const waitForExit = vi.fn(async () => true)
-  const handle: SubprocessHandle = {
-    stdin: undefined,
-    stdout,
-    stderr,
-    control,
-    collected: {},
-    done: direct.promise,
-    terminate,
-    waitForExit,
-  }
-  const writes = new Set<Promise<void>>()
-  let runId = ''
-  let receive: (message: unknown) => void = () => {}
-  const peer = rawPeer(childControl, (message) => {
-    if (typeof message === 'object' && message !== null && 't' in message && message.t === 'q'
-      && 'm' in message && message.m === 'run' && 'i' in message && typeof message.i === 'string') runId = message.i
-    messages.push(message)
-    receive(message)
-  })
-  const emit = (message: unknown): void => {
-    const write = peer.send(message).catch(() => {}).finally(() => { writes.delete(write) })
-    writes.add(write)
-  }
-  const resolveExecutable = vi.spyOn(ctx.subprocess, 'resolveExecutable').mockResolvedValue(process.execPath)
-  const spawn = vi.spyOn(ctx.subprocess, 'spawn').mockReturnValue(handle)
-  onTestFinished(async () => {
-    peer.close()
-    control.destroy()
-    stdout.destroy()
-    stderr.destroy()
-    direct.resolve({ exitCode: 0, signal: null })
-    await Promise.all(writes)
-  })
-  const start = (input: PtcRunRequest = request, first: unknown = { t: 'q', m: 'ready', a: [] }) => {
-    const result = runtime.run(runtime.resolve(input))
-    if (first !== NO_INITIAL_FRAME) queueMicrotask(() => { emit(first) })
-    return result
-  }
-  const onBoot = (callback: () => void): void => {
-    receive = (message) => {
-      if (typeof message === 'object' && message !== null && 'm' in message && message.m === 'run') callback()
-    }
-  }
-  return {
-    ctx, fiber, runtime, handle, terminate, waitForExit, direct, stdout, stderr, control, peer, messages,
-    spawn, resolveExecutable, emit, start, onBoot,
-    complete: (result: unknown) => { emit({ t: 's', i: runId, r: result }) },
-    receive: (callback: typeof receive) => { receive = callback },
-  }
+  return { ctx, fiber, runtime, ...fakeChild(ctx, runtime, request) }
 }
 
 function call(id = 1, args: unknown = encodePtcJsonWire(null)) { return { t: 'q', i: String(id), m: 'invoke', a: ['tools', 'test', args] } }

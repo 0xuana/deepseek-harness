@@ -130,7 +130,7 @@ Host 通过 birpc 调用子进程的 `run()` 方法；注入的绑定调用 Host
 | [`src/process.ts`](src/process.ts) | 子进程握手、环境清空与程序生命周期 |
 | [`src/bootstrap.ts`](src/bootstrap.ts) | 程序求值、绑定代理与输出捕获 |
 | [`src/rpc.ts`](src/rpc.ts) | 类型化 birpc 传输、消息限制与连接生命周期 |
-| [`src/result.ts`](src/result.ts) | 不可信程序完成值的校验 |
+| [`src/protocol.ts`](src/protocol.ts) | Host 与程序方法，以及不可信程序结果的校验 |
 | [`src/output-ledger.ts`](src/output-ledger.ts) | Host 外层结果计量 |
 
 </details>

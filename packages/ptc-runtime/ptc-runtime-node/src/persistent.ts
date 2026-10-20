@@ -13,13 +13,12 @@ import type { PolicyProcesses } from './policy-processes.ts'
 import type { ResolvedConfig } from './config.ts'
 import { invokeBinding, validateBindings } from './bindings.ts'
 import { createProcessRpc } from './rpc.ts'
-import { readProgramResult } from './result.ts'
 import { bootstrapArgs } from './launch.ts'
 import { STARTUP_ENVIRONMENT_NAMES } from './environment.ts'
 import { decodePtcJsonWire } from './json-wire.ts'
 import { OutputLedger } from './output-ledger.ts'
 import { drainOutput, terminateProcess } from './output-stream.ts'
-import type { ProgramBootData, ProgramMethods, HostMethods } from './protocol.ts'
+import { readProgramResult, type ProgramBootData, type ProgramMethods, type HostMethods } from './protocol.ts'
 
 const messageOf = (error: unknown): string => error instanceof Error ? error.message : String(error)
 
