@@ -175,7 +175,7 @@ export function PermissionPanel(props: PermissionPanelProps) {
           <span className={css.error}>{t(key === 'applications' ? 'applicationsFailed' : 'iconsFailed', { message: state[key].error })}</span>
           <Button size="sm" variant="outline" disabled={transitioning || state[key].busy} onClick={refresh}>{t('retry')}</Button>
         </div>)}
-        {apps === null ? <div className={css.emptyState}><span className={css.appsPlaceholder} aria-hidden /></div> : <>
+        {apps === null ? <p className={css.emptyState}><span className={css.appsPlaceholder} aria-hidden>{t('noApps')}</span></p> : <>
           {apps.allowedApps.length === 0 && apps.blockedApps.length === 0 && <p className={css.emptyState}>{t('noApps')}</p>}
           {apps.allowedApps.length > 0 && <Applications title={t('allowedApps')} apps={apps.allowedApps} icons={state.icons.value}
             onAction={props.revoke} label={t('revoke')} disabled={appsBusy || !apps.persistentAvailable} />}
