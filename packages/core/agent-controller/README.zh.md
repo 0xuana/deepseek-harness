@@ -43,7 +43,7 @@ const messageId = await ctx.agentController.deliver(agent, {
 
 `prepare` 在发给同一 Agent 的更早消息结算之后才运行，因此内容准入按到达顺序进行；它的错误原样交给发送方。`beforeInsert` 在接纳之后同步运行，紧挨在消息进入收件箱之前，用于发送方在 Agent 被唤醒前必须完成的登记。它抛出异常时消息不会进入收件箱，`deliver()` 失败时由发送方撤销自己做过的改动。
 
-以下情况 `deliver()` 抛出 `AgentAdmissionRejected`：监听器拒绝消息（带监听器给出的 `reason` 与 `presented`）；监听器抛出异常（reason 为 `agent-controller/admission-failed`，`cause` 为原异常）；消息进入收件箱之前 Agent 已离开注册表（reason 为 `agent-controller/agent-gone`）。发送方取消时立即得到其取消原因，消息排在被暂留的消息之后时也是如此；`prepare`、`beforeInsert`、`followup()` 与 `steer()` 的错误原样抛出。Web Session Remote 把这些失败映射为 `session/prompt-rejected` 及其他 Session 错误。
+以下情况 `deliver()` 抛出 `AgentAdmissionRejected`：监听器拒绝消息（带监听器给出的 `reason` 与 `presented`）；监听器抛出异常（reason 为 `agent-controller/admission-failed`，`cause` 为原异常）；消息进入收件箱之前 Agent 已离开注册表（reason 为 `agent-controller/agent-gone`）。这些错误都是 `HarnessError`，`code` 为 `AGENT_ADMISSION_REJECTED`（`ADMISSION_REJECTED_CODE`）；发送方按这个 code 与 `reason` 识别拒绝，而不是按类判断，因此错误来自本包的另一份副本时判断同样成立。发送方取消时立即得到其取消原因，消息排在被暂留的消息之后时也是如此；`prepare`、`beforeInsert`、`followup()` 与 `steer()` 的错误原样抛出。Web Session Remote 把这些失败映射为 `session/prompt-rejected` 及其他 Session 错误。
 
 ### 暂留或拒绝一条消息
 
@@ -76,7 +76,7 @@ ctx.on('agent-controller/admission', async ({ agent, message, signal }, next) =>
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | `AgentController`、固定的拒绝原因与 `AgentAdmissionRejected` |
+| [`src/index.ts`](src/index.ts) | `AgentController`、拒绝 code 与固定的拒绝原因，以及 `AgentAdmissionRejected` |
 | [`src/types.ts`](src/types.ts) | `DeliveryRequest`、`AdmissionDecision` 与 `agent-controller/admission` 事件 |
 
 </details>

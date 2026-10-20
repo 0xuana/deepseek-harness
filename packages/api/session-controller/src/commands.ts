@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Agent, ModelSelection as AgentModelSelection } from '@deepseek-ai/dsh-agent'
-import { ADMISSION_AGENT_GONE, AgentAdmissionRejected } from '@deepseek-ai/dsh-agent-controller'
+import type { ADMISSION_AGENT_GONE, ADMISSION_REJECTED_CODE, AgentAdmissionRejected } from '@deepseek-ai/dsh-agent-controller'
 import { AttachmentError } from '@deepseek-ai/dsh-attachment'
 import type {
   AttachmentAdmissionPart, FileAttachmentRef, ImageAttachmentRef,
@@ -577,6 +577,15 @@ export class SessionCommandController {
   }
 }
 
+// Typed by the agent-controller constants, so a changed value fails this module's build while it imports no agent-controller value.
+const ADMISSION_REJECTED: typeof ADMISSION_REJECTED_CODE = 'AGENT_ADMISSION_REJECTED'
+const AGENT_GONE: typeof ADMISSION_AGENT_GONE = 'agent-controller/agent-gone'
+
+/** Recognize an admission refusal by the code that the error of every copy of the agent-controller module carries. */
+function isAdmissionRejected(error: unknown): error is AgentAdmissionRejected {
+  return error instanceof Error && 'code' in error && error.code === ADMISSION_REJECTED
+}
+
 /**
  * Map a failed prompt admission onto the Session Remote's failures: Remote
  * failures and the client's own cancellation pass unchanged, and an admission
@@ -584,8 +593,8 @@ export class SessionCommandController {
  */
 function promptFailure(agent: Agent, error: unknown, signal: AbortSignal): unknown {
   if (remoteErrorOf(error) !== undefined || signal.aborted) return error
-  if (error instanceof AgentAdmissionRejected) {
-    if (error.reason === ADMISSION_AGENT_GONE) {
+  if (isAdmissionRejected(error)) {
+    if (error.reason === AGENT_GONE) {
       return new RemoteError('session/not-found', `session "${agent.id}" was disposed during prompt admission`, {
         sessionId: agent.id,
       })

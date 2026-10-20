@@ -192,7 +192,11 @@ describe('agent controller delivery', () => {
     const refusal = await refusalOf(ctx.agentController.deliver(agent, request('refused')))
     expect(refusal).toBeInstanceOf(AgentAdmissionRejected)
     expect(refusal).toMatchObject({
-      name: 'AgentAdmissionRejected', reason: 'fixture/missing', presented: true, message: 'The fixture is missing.',
+      name: 'AgentAdmissionRejected',
+      code: 'AGENT_ADMISSION_REJECTED',
+      reason: 'fixture/missing',
+      presented: true,
+      message: 'The fixture is missing.',
     })
     expect(delivered).toEqual([])
     expect(later).toBe(0)
@@ -215,7 +219,7 @@ describe('agent controller delivery', () => {
     })
 
     const refusal = await refusalOf(ctx.agentController.deliver(agent, request('broken')))
-    expect(refusal).toMatchObject({ reason: ADMISSION_FAILED, presented: false, cause: broken })
+    expect(refusal).toMatchObject({ code: 'AGENT_ADMISSION_REJECTED', reason: ADMISSION_FAILED, presented: false, cause: broken })
     expect(refusal).toHaveProperty('message', expect.stringContaining('listener broke'))
     expect(delivered).toEqual([])
   })
@@ -270,7 +274,7 @@ describe('agent controller delivery', () => {
     await settle()
     await dispose()
     release.resolve(undefined)
-    expect(await pending).toMatchObject({ reason: ADMISSION_AGENT_GONE, presented: false })
+    expect(await pending).toMatchObject({ code: 'AGENT_ADMISSION_REJECTED', reason: ADMISSION_AGENT_GONE, presented: false })
     expect(delivered).toEqual([])
   })
 
