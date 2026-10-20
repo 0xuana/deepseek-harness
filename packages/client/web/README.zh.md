@@ -40,7 +40,7 @@ Web 和 Desktop 的数学公式渲染要求支持 WOFF2。[Web 构建](../../../
 
 根容器通过绝对定位铺满 CSS 布局视口。浏览器平移页面以露出获得焦点的输入框，内容滚动由内部面板负责。
 
-根容器应用左右安全区边距，并发布 `--dsh-safe-area-top` 和 `--dsh-safe-area-bottom`，供框架为内容保留上下边距。
+根容器应用左右安全区边距，并发布 `--dsh-safe-area-top` 和 `--dsh-safe-area-bottom`。布局框架将这两个值用于上下内边距，使侧栏和包含输入框的会话区域位于安全区内。
 
 [Web 应用入口](../../../apps/web/index.html)声明 `width=device-width, initial-scale=1, viewport-fit=cover`，不限制用户缩放。触摸输入框使用至少 16px 的字号，避免获得焦点时自动放大页面。
 
