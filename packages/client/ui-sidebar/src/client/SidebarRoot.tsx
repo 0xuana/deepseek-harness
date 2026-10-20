@@ -321,7 +321,7 @@ export function SidebarRoot({
       </div>
 
       {copiedToast !== null && (
-        <Toast key={copiedToast} tone="success" text={t('copied')} onDone={() => { setCopiedToast(null) }} />
+        <Toast key={copiedToast} tone="success" text={t('version.copied')} onDone={() => { setCopiedToast(null) }} />
       )}
 
       {/* Footer actions stack above Settings in both sidebar widths. */}

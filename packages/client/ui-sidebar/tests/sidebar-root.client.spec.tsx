@@ -204,7 +204,7 @@ describe('SidebarRoot shell', () => {
     const copiedToasts = () => screen.queryAllByRole('alert').map(toast => toast.textContent)
     await act(async () => { fireEvent.click(screen.getByText('DSH Local Build')) })
     expect(writeText).toHaveBeenLastCalledWith('1.2.3-abcdef0')
-    expect(copiedToasts()).toEqual(['Copied'])
+    expect(copiedToasts()).toEqual(['Version copied'])
     // The brand itself keeps its title and version.
     expect(screen.getByText('DSH Local Build')).toBeTruthy()
     expect(screen.getByText('1.2.3-abcdef0')).toBeTruthy()
@@ -223,7 +223,7 @@ describe('SidebarRoot shell', () => {
     document.removeEventListener('click', documentClick)
     expect(documentClick).toHaveBeenCalledOnce()
     expect(writeText).toHaveBeenCalledTimes(3)
-    expect(copiedToasts()).toEqual(['Copied'])
+    expect(copiedToasts()).toEqual(['Version copied'])
     expect(startSession).not.toHaveBeenCalled()
 
     // The rest of the brand button still starts a session.
