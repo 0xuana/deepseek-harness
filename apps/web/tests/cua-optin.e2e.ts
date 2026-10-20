@@ -65,7 +65,7 @@ it.skipIf(process.platform !== 'darwin').each([undefined, 'minimal'] as const)('
     })
     try {
       await toggle.click()
-      await card.getByRole('status', { name: '正在应用 Computer Use 的更改', exact: true }).waitFor()
+      await card.getByRole('status').getByText('正在应用 Computer Use 的更改', { exact: true }).waitFor()
       expect(await toggle.isEnabled()).toBe(false)
       await compareOrRefreshGolden(fileURLToPath(new URL('./expected/cua-permissions/enabling.expected.md', import.meta.url)),
         await captureStableAria(page, '[data-plugin-package="@deepseek-ai/dsh-cua-bundle"]', scaffold.workspaceCwd), webSnapshotMode())
@@ -76,7 +76,7 @@ it.skipIf(process.platform !== 'darwin').each([undefined, 'minimal'] as const)('
     }
     // Bundle transitions await native cleanup under the browser action deadline.
     await toggle.and(page.locator('[aria-checked="true"]')).waitFor({ state: 'visible' })
-    await card.getByRole('status', { name: '正在应用 Computer Use 的更改', exact: true }).waitFor({ state: 'hidden' })
+    await card.getByRole('status').getByText('正在应用 Computer Use 的更改', { exact: true }).waitFor({ state: 'hidden' })
     const setup = page.getByRole('dialog', { name: '使用 Computer Use 前需要设置', exact: true })
     await setup.waitFor()
     expect(await setup.getByText('Computer Use 插件已开启，但暂时无法检测系统权限。请前往插件详情页查看原因并重试。', { exact: true }).count()).toBe(1)
