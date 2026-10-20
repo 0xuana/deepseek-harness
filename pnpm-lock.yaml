@@ -15586,9 +15586,6 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: link:../../../vendor/schemastery
         version: link:../../../vendor/schemastery
-      ipaddr.js:
-        specifier: ^2.5.0
-        version: 2.5.0
       undici:
         specifier: 8.11.2
         version: 8.11.2

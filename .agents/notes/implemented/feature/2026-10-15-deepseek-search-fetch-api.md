@@ -32,7 +32,7 @@ Direct retrieval emits no auxiliary model-request event because Harness makes no
 
 Fetch sends a URL and returns Markdown without an extra Harness summarization request. The API supplies neither a final redirected URL nor a target HTTP status, and the shared result has no title field. The provider keeps the requested URL, returns the Markdown body, and reports HTTP 200 for a successful response: the Fetch API answers 404 when the URL is unavailable, blocked by site policy, or returns an error, or when no Markdown can be extracted. On 2026-10-16 an unresolvable host returned HTTP 500 instead, so every non-success status is a retrieval failure rather than a specific target diagnosis. The shared fetch result and its consumers stay unchanged.
 
-The HTTP provider retains its own public-address validation, connection pinning, and resource limits. Selecting DeepSeek delegates page retrieval and target access policy to that service; Harness rejects redirects of the API request and retains cancellation and bounded tool output. The reported HTTP 200 therefore means the service retrieved the page, not that Harness observed the target response. The guide's Fetch 403 means crawler-policy rejection, while 404 means no usable page content.
+The HTTP provider retains its own URL validation and resource limits. Selecting DeepSeek delegates page retrieval and target access policy to that service; Harness rejects redirects of the API request and retains cancellation and bounded tool output. The reported HTTP 200 therefore means the service retrieved the page, not that Harness observed the target response. The guide's Fetch 403 means crawler-policy rejection, while 404 means no usable page content.
 
 ### Default migration
 

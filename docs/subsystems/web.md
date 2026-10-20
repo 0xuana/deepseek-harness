@@ -128,7 +128,7 @@ Selection never depends on registration, config, or HMR order: a capability has 
 
 The shipped Cordis, Code, and Standard presets expose `web_fetch` in every sandbox and approval mode without per-call confirmation. File sandbox presets do not govern Web network access. A deployment that needs confirmation must add a `tools/pre-execute` policy or disable fetch.
 
-The HTTP provider resolves each actual request, rejects non-public answers including private IPv4 reached through the active DNS64 prefix, pins the validated address set, and repeats enforcement for each same-origin redirect. A cross-origin redirect requires a new tool call and fresh public-address validation. Hostname answers inside operator-configured fake-IP ranges are the one exception, because the fake-IP proxy resolves the real host. These checks prevent SSRF access to non-public destinations but do not stop a model from sending data to a public URL.
+The HTTP provider does not restrict destination addresses: `web_fetch` reaches loopback, private-network, and cloud metadata hosts like any other host, and a model can send data to any URL it can reach. A cross-origin redirect requires a new tool call. A deployment that must keep the model away from private destinations needs network confinement, a `tools/pre-execute` policy, or no fetch tool.
 
 ## Errors
 
@@ -136,7 +136,7 @@ The HTTP provider resolves each actual request, rejects non-public answers inclu
 
 ## The service
 
-`WebRuntime` registers search and fetch providers, rejects duplicate ids with `WEB_DUPLICATE_PROVIDER`, and resolves providers at execution time with structured selection errors. The local fetch backend accepts only HTTP(S), rejects credentials, resolves each hostname once, rejects any answer set containing a non-public IPv4 or IPv6 destination or an active-prefix NAT64 translation to non-public IPv4, pins the request connection to the validated addresses, repeats those checks for every same-origin redirect hop, caps redirects, bytes, characters, and time, and decodes the body; the tool owns presentation.
+`WebRuntime` registers search and fetch providers, rejects duplicate ids with `WEB_DUPLICATE_PROVIDER`, and resolves providers at execution time with structured selection errors. The local fetch backend accepts only HTTP(S), rejects credentials, sends each request through the installed proxy policy, repeats URL validation for every same-origin redirect hop, caps redirects, bytes, characters, and time, and decodes the body; the tool owns presentation.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
