@@ -173,6 +173,45 @@ describe('forgePanel.follow', () => {
     expect(opened.provider.probes).toEqual(['fake.test'])
   })
 
+  it('binds the open change requests of the upstream branch once per remote and branch, and looks again on refresh', async () => {
+    const { repo } = await project()
+    await git(repo, 'checkout', '-b', 'feat')
+    await git(repo, 'update-ref', 'refs/remotes/origin/feat', 'HEAD')
+    await git(repo, 'branch', '--set-upstream-to=origin/feat')
+    const opened = await open(repo)
+    opened.provider.heads.set('feat', [7])
+    const follower = reader(opened)
+    const on = (name: string) => (state: ForgePanelState): boolean => state.checkout.state === 'ready' && state.checkout.checkout.branch === name
+
+    const bound = await follower.until(state => state.changeRequests.some(entry => entry.url === pullUrl(7)))
+    expect(bound.changeRequests).toMatchObject([{ url: pullUrl(7), origin: 'discovered' }])
+    expect(opened.provider.lookups).toEqual(['octo/demo feat'])
+
+    // Leaving for a branch without an upstream and coming back looks up nothing more.
+    await git(repo, 'checkout', '-b', 'other')
+    shellTurn(opened.session, 1, [{ callId: 'leave', command: 'git checkout -b other', output: '' }])
+    await follower.next(on('other'))
+    await git(repo, 'checkout', 'feat')
+    shellTurn(opened.session, 2, [{ callId: 'back', command: 'git checkout feat', output: '' }])
+    await follower.next(on('feat'))
+    expect(opened.provider.lookups).toEqual(['octo/demo feat'])
+
+    await opened.ctx.forgePanel.refresh(opened.session, signal)
+    await vi.waitFor(() => { expect(opened.provider.lookups).toEqual(['octo/demo feat', 'octo/demo feat']) })
+  })
+
+  it('looks up nothing for an upstream on a remote that no provider recognizes', async () => {
+    const { repo } = await project()
+    await git(repo, 'remote', 'add', 'mirror', 'https://example.invalid/octo/demo.git')
+    await git(repo, 'update-ref', 'refs/remotes/mirror/main', 'HEAD')
+    await git(repo, 'branch', '--set-upstream-to=mirror/main')
+    const opened = await open(repo)
+    opened.provider.heads.set('main', [7])
+
+    await reader(opened).until(ready)
+    expect(opened.provider.lookups).toEqual([])
+  })
+
   it('keeps the latest snapshot of a change request while later polls fail', async () => {
     const { repo } = await project()
     const opened = await open(repo)

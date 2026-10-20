@@ -61,7 +61,7 @@ describe('forgeChangeRequests projection', () => {
     const session = Session.create(SessionId('failed'))
     shellTurn(session, [
       { callId: 'failed', command: 'gh pr create --fill', output: created(1), isError: true },
-      { callId: 'view', command: 'gh pr view 2', output: pullUrl(2) },
+      { callId: 'list', command: 'gh pr list --json url', output: pullUrl(2) },
     ])
 
     expect(fold(session)).toEqual({ pending: [], bindings: [], pushes: [] })
@@ -119,6 +119,40 @@ describe('forgeChangeRequests projection', () => {
     expect(state.pushes.map(push => push.branch)).toEqual(['feat'])
   })
 
+  it('binds the change request a view, edit, or checkout names or prints as its own, and no other links', () => {
+    const session = Session.create(SessionId('referenced'))
+    shellTurn(session, [
+      { callId: 'view', command: 'gh pr view 7', output: ['title:\tAdd it', `url:\t${pullUrl(7)}`, '--', `Stacked on ${pullUrl(8)}`].join('\n') },
+      { callId: 'json', command: 'gh pr view 6 --json number,url,body', output: JSON.stringify({ number: 6, url: pullUrl(6), body: `see ${pullUrl(8)}` }) },
+      { callId: 'checkout', command: `gh pr checkout ${pullUrl(5)}`, output: "Switched to branch 'feat'" },
+      { callId: 'edit', command: 'gh pr edit 4 --add-label bug', output: `${pullUrl(4)}\n` },
+    ])
+
+    expect(fold(session).bindings).toEqual([
+      { url: pullUrl(7), origin: 'referenced', dismissed: false },
+      { url: pullUrl(6), origin: 'referenced', dismissed: false },
+      { url: pullUrl(5), origin: 'referenced', dismissed: false },
+      { url: pullUrl(4), origin: 'referenced', dismissed: false },
+    ])
+  })
+
+  it('keeps a dismissed change request hidden from later references, binds as created alongside a create, and binds nothing from a failed execution', () => {
+    const session = Session.create(SessionId('referenced-rules'))
+    shellTurn(session, [{ callId: 'view', command: `gh pr view ${pullUrl(1)}`, output: `url:\t${pullUrl(1)}` }])
+    appendPluginRecord(session, 'plugin:forge-session/binding', { action: 'dismiss', url: pullUrl(1) })
+    shellTurn(session, [
+      { callId: 'again', command: `gh pr view ${pullUrl(1)}`, output: `url:\t${pullUrl(1)}` },
+      { callId: 'both', command: `gh pr create --fill && gh pr view ${pullUrl(2)}`, output: `${pullUrl(2)}\n${pullUrl(3)}` },
+      { callId: 'failed', command: `gh pr checkout ${pullUrl(9)}`, output: 'boom', isError: true },
+    ])
+
+    expect(fold(session).bindings).toEqual([
+      { url: pullUrl(1), origin: 'referenced', dismissed: true },
+      { url: pullUrl(2), origin: 'created', dismissed: false },
+      { url: pullUrl(3), origin: 'created', dismissed: false },
+    ])
+  })
+
   it('folds only the first result of a call and drops calls without results at turn end', () => {
     const session = Session.create(SessionId('pending'))
     shellTurn(session, [{ callId: 'create', command: 'gh pr create --fill', output: created(1) }])
@@ -145,7 +179,7 @@ describe('forgeChangeRequests projection', () => {
     }, { surfaceOp: 'append' })
     session.append('tool/call', { turn: 2, step: 1, callId: ToolCallId('orphan'), name: 'bash', arguments: '{"command":"git push"}' })
     const open = fold(session)
-    expect(open.pending).toEqual([{ callId: 'orphan', kind: 'push' }])
+    expect(open.pending).toEqual([{ callId: 'orphan', urls: null, pushes: true, named: [] }])
 
     session.append('step/end', { turn: 2, step: 1 })
     session.append('turn/end', { turn: 2, reason: { kind: 'completed' } })

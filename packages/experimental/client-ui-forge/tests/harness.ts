@@ -287,6 +287,10 @@ export class FakeProvider implements ForgeProvider {
   readonly diffs: number[] = []
   /** File texts or failures by `<commit>:<path>`; others return a not-found failure. */
   readonly texts = new Map<string, string | ForgeFailure>()
+  /** Open change request numbers that a head lookup returns, by head branch. */
+  readonly heads = new Map<string, readonly number[]>()
+  /** Head lookups in call order, as `<owner>/<name> <branch>`. */
+  readonly lookups: string[] = []
 
   repositoryFromRemote(url: string): ForgeRepository | undefined {
     const [, host = '', owner = '', name = ''] = /^https:\/\/([a-z.]+\.test)\/([^/]+)\/([^/]+?)\.git$/.exec(url) ?? []
@@ -309,8 +313,9 @@ export class FakeProvider implements ForgeProvider {
     ])))
   }
 
-  findByHead(): Promise<readonly ChangeRequestRef[]> {
-    return Promise.resolve([])
+  findByHead(repository: ForgeRepository, branch: string): Promise<readonly ChangeRequestRef[]> {
+    this.lookups.push(`${repository.owner}/${repository.name} ${branch}`)
+    return Promise.resolve((this.heads.get(branch) ?? []).map(number => ({ repository, number })))
   }
 
   readiness(host: string, signal: AbortSignal): Promise<ForgeReadiness> {

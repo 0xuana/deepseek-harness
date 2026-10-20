@@ -27,7 +27,10 @@ import WorkingDirectoryService from '@deepseek-ai/dsh-working-directory'
 import ForgeSessionService from '../src/index.ts'
 import type { SessionChangeRequest, SessionChangeRequestsListener } from '../src/index.ts'
 
-/** GitHub CLI fixture: `pr create` prints PR 8; `api graphql` answers the head lookup and snapshot queries. */
+/**
+ * GitHub CLI fixture: `pr create` prints PR 8; `pr view` prints PR 9, whose description links PR 6;
+ * `api graphql` answers the head lookup and snapshot queries.
+ */
 const FAKE_GH = String.raw`
 import { appendFileSync } from 'node:fs'
 const args = process.argv.slice(2)
@@ -36,6 +39,10 @@ const reply = (data) => { process.stdout.write(JSON.stringify({ data })); proces
 if (args[0] === 'pr' && args[1] === 'create') {
   process.stdout.write('https://github.com/octo/demo/pull/8\n')
   process.stderr.write('\nCreating pull request for other into main in octo/demo\n\n')
+  process.exit(0)
+}
+if (args[0] === 'pr' && args[1] === 'view') {
+  process.stdout.write('title:\tChange 9\nstate:\tOPEN\nurl:\thttps://github.com/octo/demo/pull/9\n--\nStacked on https://github.com/octo/demo/pull/6\n')
   process.exit(0)
 }
 if (args[0] !== 'api' || args[1] !== 'graphql') {
@@ -126,7 +133,7 @@ afterEach(async () => {
 const suite = process.platform === 'win32' ? describe.skip : describe
 
 suite('forge-session through a real cordis.yml Loader composition', () => {
-  it('binds the pull requests that bash pushes discover and creates, and polls them through the GitHub provider', async () => {
+  it('binds the pull requests that bash pushes discover, creates, and views, and polls them through the GitHub provider', async () => {
     root = await realpath(await mkdtemp(join(tmpdir(), 'dsh-forge-session-loader-')))
     const bin = join(root, 'bin')
     await mkdir(bin)
@@ -178,7 +185,7 @@ suite('forge-session through a real cordis.yml Loader composition', () => {
     for (const entry of ctx.loader.entries()) await entry.fiber?.await()
 
     const path = `PATH=${JSON.stringify(`${bin}:`)}"$PATH"`
-    const model = new ScriptedModel([`${path} git push -u origin feat`, `${path} gh pr create --fill --head other`])
+    const model = new ScriptedModel([`${path} git push -u origin feat`, `${path} gh pr create --fill --head other`, `${path} gh pr view 9`])
     ctx.llm.registerAdapter(['fixture'], model)
     const agent = await ctx.agentLoop.create(SessionId('forge-session-loader'), { provider: 'fixture', model: 'fixture' }, { cwd: root })
     const idle: PromiseWithResolvers<void> = Promise.withResolvers()
@@ -189,7 +196,7 @@ suite('forge-session through a real cordis.yml Loader composition', () => {
     await idle.promise
     stop()
 
-    expect(model.requests).toHaveLength(3)
+    expect(model.requests).toHaveLength(4)
     const github = (number: number) => ({ repository: { forge: 'github', host: 'github.com', owner: 'octo', name: 'demo' }, number })
     const records = () => agent.session.snapshotEvents().flatMap((event) => {
       const record = pluginRecordOf(event)
@@ -202,6 +209,7 @@ suite('forge-session through a real cordis.yml Loader composition', () => {
     expect(byUrl(ctx.forgeSession.changeRequests(agent.session))).toEqual([
       { url: 'https://github.com/octo/demo/pull/7', origin: 'discovered', ref: github(7), update: null },
       { url: 'https://github.com/octo/demo/pull/8', origin: 'created', ref: github(8), update: null },
+      { url: 'https://github.com/octo/demo/pull/9', origin: 'referenced', ref: github(9), update: null },
     ])
     const lookups = (await readFile(join(root, 'gh.log'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as string[])
     expect(lookups.find(args => args.includes('branch=feat'))).toEqual(expect.arrayContaining(['--hostname', 'github.com', 'owner=octo', 'name=demo']))
@@ -210,7 +218,7 @@ suite('forge-session through a real cordis.yml Loader composition', () => {
     ctx.forgeSession.watch(agent.session, listener)
     await vi.waitFor(() => { expect(byUrl(listener.mock.lastCall?.[0] ?? []).map(entry => entry.update !== null && 'snapshot' in entry.update
       ? [entry.update.snapshot.title, entry.update.snapshot.checksRollup]
-      : null)).toEqual([['Change 7', 'pending'], ['Change 8', 'success']]) })
+      : null)).toEqual([['Change 7', 'pending'], ['Change 8', 'success'], ['Change 9', 'success']]) })
 
     const entry = [...ctx.loader.entries()].find(candidate => candidate.options.name === 'cordis:@deepseek-ai/dsh-experimental-forge-session')
     await entry?.fiber?.dispose()

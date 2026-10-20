@@ -5,29 +5,35 @@ import type { SessionSeq } from '@deepseek-ai/dsh-session/types'
 
 /**
  * How a change request became bound to a Session: `created` when a
- * `gh pr create` result printed its URL, `discovered` when a lookup after a
- * `git push` found it for the pushed branch, `tracked` when a caller bound it
- * by URL.
+ * `gh pr create` result printed its URL, `referenced` when a `gh pr view`,
+ * `gh pr edit`, or `gh pr checkout` call named it or its result printed its
+ * own URL, `discovered` when a lookup found it for a branch the Session pushed
+ * or works on, `tracked` when a caller bound it by URL.
  */
-export type BindingOrigin = 'created' | 'discovered' | 'tracked'
+export type BindingOrigin = 'created' | 'referenced' | 'discovered' | 'tracked'
 
-/** Which binding evidence a shell command can print: change request URLs, pushed refs, or both. */
-export type CommandKind = 'create' | 'push' | 'both'
+/** Binding evidence that a shell command and its result can carry. */
+export interface CommandEvidence {
+  /** Origin of the change request URLs the result prints, or null when the command prints none of its own. */
+  readonly urls: 'created' | 'referenced' | null
+  /** Whether the result can report pushed refs. */
+  readonly pushes: boolean
+  /** Change request URLs the command passes as the first argument of `gh pr view`, `gh pr edit`, or `gh pr checkout`. */
+  readonly named: readonly string[]
+}
 
 /** Payload of the `plugin:forge-session/binding` record. */
 export interface BindingRecord {
-  /** `track` binds or restores, `dismiss` hides, `discover` binds a change request found for a pushed branch. */
+  /** `track` binds or restores, `dismiss` hides, `discover` binds a change request found for a branch the Session pushed or works on. */
   readonly action: 'track' | 'dismiss' | 'discover'
   /** Web URL of the change request. */
   readonly url: string
 }
 
-/** One shell call whose result the projection still awaits. */
-export interface PendingCommand {
+/** One shell call whose result the projection still awaits, with the evidence the call and its result carry. */
+export interface PendingCommand extends CommandEvidence {
   /** Tool call id that pairs the call with its result. */
   readonly callId: string
-  /** Evidence the result may carry. */
-  readonly kind: CommandKind
 }
 
 /** One change request remembered by the projection, including hidden ones. */

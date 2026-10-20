@@ -89,6 +89,19 @@ describe('forgeSession discovery', () => {
     expect(records(session)).toEqual([])
   })
 
+  it('records the open change requests of a branch a caller reports, and nothing for a remote no provider serves', async () => {
+    const { ctx, provider, session } = await open()
+    provider.heads.set('feat', [pull(7), pull(8)])
+    create(session, 'create', pullUrl(8))
+
+    await ctx.forgeSession.discoverBranch(session, 'fake.test:octo/demo.git', 'feat')
+    expect(provider.lookups.map(lookup => [lookup.repository, lookup.branch])).toEqual([[demo, 'feat']])
+    expect(records(session)).toEqual([{ action: 'discover', url: pullUrl(7) }])
+
+    await ctx.forgeSession.discoverBranch(session, 'github.com:octo/demo.git', 'feat')
+    expect(provider.lookups).toHaveLength(1)
+  })
+
   it('looks up again on every push of a branch', async () => {
     const { provider, session } = await open()
     push(session, 'first', 'feat')

@@ -66,22 +66,36 @@ export function parseRemotes(output: string): GitRemote[] {
 }
 
 /**
+ * Split an upstream branch such as `origin/feature/x` into its remote and the
+ * branch on that remote. The remote is the longest remote name followed by `/`
+ * at the start of the upstream branch.
+ * @param upstream - upstream branch such as `origin/main`, or null.
+ * @param remotes - remotes in listed order.
+ * @returns the remote and branch, or undefined without an upstream or a remote it starts with.
+ */
+export function upstreamBranch(
+  upstream: string | null,
+  remotes: readonly GitRemote[],
+): { readonly remote: GitRemote; readonly branch: string } | undefined {
+  if (upstream === null) return undefined
+  const remote = remotes
+    .filter(candidate => upstream.startsWith(`${candidate.name}/`))
+    .reduce<GitRemote | undefined>(
+      (longest, candidate) => longest === undefined || candidate.name.length > longest.name.length ? candidate : longest,
+      undefined,
+    )
+  return remote === undefined ? undefined : { remote, branch: upstream.slice(remote.name.length + 1) }
+}
+
+/**
  * Order remotes for code host recognition: the upstream's remote first, then
- * `origin`, then the rest in listed order. The upstream's remote is the
- * longest remote name followed by `/` at the start of the upstream branch.
+ * `origin`, then the rest in listed order.
  * @param upstream - upstream branch such as `origin/main`, or null.
  * @param remotes - remotes in listed order.
  * @returns the same remotes in recognition order.
  */
 export function remoteOrder(upstream: string | null, remotes: readonly GitRemote[]): GitRemote[] {
-  const tracked = upstream === null
-    ? undefined
-    : remotes
-      .filter(remote => upstream.startsWith(`${remote.name}/`))
-      .reduce<GitRemote | undefined>(
-        (longest, remote) => longest === undefined || remote.name.length > longest.name.length ? remote : longest,
-        undefined,
-      )
+  const tracked = upstreamBranch(upstream, remotes)?.remote
   const rank = (remote: GitRemote): number => remote === tracked ? 0 : remote.name === 'origin' ? 1 : 2
   return [...remotes].sort((left, right) => rank(left) - rank(right))
 }

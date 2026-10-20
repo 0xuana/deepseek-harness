@@ -46,7 +46,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-`ForgePanelController` 为每个被关注的 Session 保留一个 `SessionPanel`，最后一个关注方离开时销毁它。面板从 Session 的工作目录与绑定开始，在每个 `working-directory/change`、`tool/result` 与 `sandbox/mode` 事件之后重新检查，每次变化都发布新的 `ForgePanelState`。每个变更请求在后续轮询失败时保留最近一次轮询得到的快照。检查一次只运行一个，最多再追加一次；Session 已离开的目录的结果会被丢弃。代码托管平台按远端顺序识别：先是上游所在的远端，然后是 `origin`，最后是其余远端。识别出的托管平台变化时以及刷新时，会在 `readinessTimeoutMs` 内检查登录状态；一次刷新在它触发的检查与登录状态检查结束后完成，轮询结果之后才到达。
+`ForgePanelController` 为每个被关注的 Session 保留一个 `SessionPanel`，最后一个关注方离开时销毁它。面板从 Session 的工作目录与绑定开始，在每个 `working-directory/change`、`tool/result` 与 `sandbox/mode` 事件之后重新检查，每次变化都发布新的 `ForgePanelState`。每个变更请求在后续轮询失败时保留最近一次轮询得到的快照。检查一次只运行一个，最多再追加一次；Session 已离开的目录的结果会被丢弃。代码托管平台按远端顺序识别：先是上游所在的远端，然后是 `origin`，最后是其余远端。检查发现提供方识别的远端上有上游分支时，面板调用 `ctx.forgeSession.discoverBranch` 绑定该分支打开状态的变更请求；同一远端与分支在刷新前只查找一次。识别出的托管平台变化时以及刷新时，会在 `readinessTimeoutMs` 内检查登录状态；一次刷新在它触发的检查与登录状态检查结束后完成，轮询结果之后才到达。
 
 检查运行 `rev-parse --show-toplevel`、`rev-parse --path-format=absolute --git-common-dir`、`rev-parse --path-format=absolute --git-dir`、`symbolic-ref --short HEAD`、`rev-parse --short HEAD`、`rev-parse --abbrev-ref @{upstream}` 与 `remote -v`；`branches` 运行 `symbolic-ref` 与 `for-each-ref --count=<maxBranches>`。之后，检查会为变更卡片统计 `branch` 范围的规模：找出分叉点，对它运行 `diff --numstat -z -M`，并列出未跟踪文件。每个命令都在 Session 的只读沙箱策略下运行，禁用可选的索引写入、钩子、文件系统监视器、提示与对象的延迟获取，移除继承的 Git 选择器与携带密钥的变量，并各自受 `gitTimeoutMs` 时限与每个输出流的 `maxOutputBytes` 上限约束。Git 打印的顶层目录、Git 目录与公共 Git 目录经 `ctx.fs` 解析为工作目录服务记录的规范进程路径；Git 目录与公共 Git 目录不同的检出是链接 worktree。工作树选项在 `danger-full-access` 沙箱模式下可用，在 `read-only` 下不可用，在 `workspace-write` 下只有两个目录都位于 Session 沙箱策略的规范工作区根内时才可用。
 

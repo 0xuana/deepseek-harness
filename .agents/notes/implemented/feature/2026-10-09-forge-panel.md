@@ -65,7 +65,7 @@ The changes view offers no scope for one commit or for the last turn yet; both w
 
 **The creation card in the transcript.** Transcript nodes accept no plugin kinds; the input dock above the composer is the nearest list slot, and it renders on the New Session screen.
 
-**A Session-row hover section and manual URL tracking.** Both duplicated the tab. Bindings come from `gh pr create` and pushes, and `track` remains for Undo.
+**A Session-row hover section and manual URL tracking.** Both duplicated the tab. Bindings come from `gh pr create`, the `gh pr` commands that act on one change request, pushes, and the branch the checkout tracks, and `track` remains for Undo.
 
 **Parsing patches in the browser.** The Remote would carry unbounded patch text, and the browser would need a patch parser; the Host bounds the read and parses it once.
 

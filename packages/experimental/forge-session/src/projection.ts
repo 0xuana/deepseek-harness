@@ -5,7 +5,7 @@ import { pluginRecordOf, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionEventMap } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
-import { changeRequestUrls, commandKind, commandOf, pushedBranches, sameChangeRequestUrl } from './commands.ts'
+import { changeRequestUrls, commandEvidence, commandOf, ownChangeRequestUrls, pushedBranches, sameChangeRequestUrl } from './commands.ts'
 import type { PushedRef } from './commands.ts'
 import type { BindingOrigin, BindingRecord, BindingState, ForgeChangeRequestsState, PushedBranch } from './types.ts'
 
@@ -27,10 +27,15 @@ const bindingRecordSchema: z.ZodType<BindingRecord> = z.object({
 })
 
 const stateSchema: z.ZodType<ForgeChangeRequestsState> = z.object({
-  pending: z.array(z.object({ callId: z.string(), kind: z.enum(['create', 'push', 'both']) }).strict()),
+  pending: z.array(z.object({
+    callId: z.string(),
+    urls: z.enum(['created', 'referenced']).nullable(),
+    pushes: z.boolean(),
+    named: z.array(z.string()),
+  }).strict()),
   bindings: z.array(z.object({
     url: z.string(),
-    origin: z.enum(['created', 'discovered', 'tracked']),
+    origin: z.enum(['created', 'referenced', 'discovered', 'tracked']),
     dismissed: z.boolean(),
   }).strict()),
   pushes: z.array(z.object({
@@ -42,16 +47,18 @@ const stateSchema: z.ZodType<ForgeChangeRequestsState> = z.object({
 
 /**
  * The `forgeChangeRequests` unit. A `bash` or `pwsh` call whose command is
- * `gh pr create` or `git push` stays pending until its first result; a
- * successful result binds the pull request URLs it prints and records the
- * branches it reports as pushed. Failed tool executions bind nothing; a
- * nonzero exit status does not matter, because the printed URL or ref line
- * is the evidence. `turn/end` drops calls that never received a result.
- * Binding records bind, restore, and hide URLs.
+ * `gh pr create`, `gh pr view`, `gh pr edit`, `gh pr checkout`, or
+ * `git push` stays pending until its first result. A successful result binds
+ * every pull request URL a `gh pr create` result prints; for the other `gh pr`
+ * commands it binds the URL the command names and the URL the output prints
+ * for its own change request; and it records the branches it reports as
+ * pushed. Failed tool executions bind nothing; a nonzero exit status does not
+ * matter, because the URL or ref line is the evidence. `turn/end` drops calls
+ * that never received a result. Binding records bind, restore, and hide URLs.
  */
 export const forgeChangeRequestsProjection = {
   key: 'forgeChangeRequests',
-  stateVersion: 1,
+  stateVersion: 2,
   stateSchema,
   init: () => EMPTY,
   apply,
@@ -74,9 +81,9 @@ function apply(state: ForgeChangeRequestsState, event: SessionEvent): ForgeChang
 function applyCall(state: ForgeChangeRequestsState, call: SessionEventMap['tool/call']): ForgeChangeRequestsState {
   if (!SHELL_TOOLS.has(call.name)) return state
   const command = commandOf(call.arguments)
-  const kind = command === undefined ? undefined : commandKind(command)
-  if (kind === undefined) return state
-  return { ...state, pending: [...state.pending, { callId: call.callId, kind }] }
+  const evidence = command === undefined ? undefined : commandEvidence(command)
+  if (evidence === undefined) return state
+  return { ...state, pending: [...state.pending, { callId: call.callId, ...evidence }] }
 }
 
 function applyResult(state: ForgeChangeRequestsState, result: SessionEventMap['tool/result'], seq: SessionSeq): ForgeChangeRequestsState {
@@ -86,10 +93,11 @@ function applyResult(state: ForgeChangeRequestsState, result: SessionEventMap['t
   const rest = state.pending.filter(entry => entry !== pending)
   if (result.message.isError === true) return { ...state, pending: rest }
   const text = result.message.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
+  const printed = pending.urls === 'created' ? changeRequestUrls(text) : ownChangeRequestUrls(text)
   return {
     pending: rest,
-    bindings: pending.kind === 'push' ? state.bindings : bind(state.bindings, changeRequestUrls(text), 'created'),
-    pushes: pending.kind === 'create' ? state.pushes : recordPushes(state.pushes, pushedBranches(text), seq),
+    bindings: pending.urls === null ? state.bindings : bind(state.bindings, [...pending.named, ...printed], pending.urls),
+    pushes: pending.pushes ? recordPushes(state.pushes, pushedBranches(text), seq) : state.pushes,
   }
 }
 

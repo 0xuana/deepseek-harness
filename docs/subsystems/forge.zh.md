@@ -200,22 +200,23 @@ interface ForgeActionFailure {
 
 ## Session 绑定
 
-`ctx.forgeSession` 从每个 Session 自己的日志派生其绑定：`gh pr create` 的结果绑定其输出的 URL，`git push` 的结果通过 `ctx.forge` 触发按 head 分支的发现。track、dismiss 与发现操作都是 `plugin:forge-session/binding` 插件记录，位于模型可见对话之外。`forgeChangeRequests` 投影只位于宿主侧。识别与发现规则见 [Session 绑定 README](../../packages/experimental/forge-session/README.zh.md#use-this-package)。
+`ctx.forgeSession` 从每个 Session 自己的日志派生其绑定：`gh pr create` 的结果绑定其输出的 URL，`gh pr view`、`gh pr edit` 与 `gh pr checkout` 调用绑定它们所操作的变更请求，`git push` 的结果通过 `ctx.forge` 触发按 head 分支的发现；面板也会报告其检出所跟踪的分支，触发同样的发现。track、dismiss 与发现操作都是 `plugin:forge-session/binding` 插件记录，位于模型可见对话之外。`forgeChangeRequests` 投影只位于宿主侧。识别与发现规则见 [Session 绑定 README](../../packages/experimental/forge-session/README.zh.md#use-this-package)。
 
 ```ts type-equiv
 /**
  * How a change request became bound to a Session: `created` when a
- * `gh pr create` result printed its URL, `discovered` when a lookup after a
- * `git push` found it for the pushed branch, `tracked` when a caller bound it
- * by URL.
+ * `gh pr create` result printed its URL, `referenced` when a `gh pr view`,
+ * `gh pr edit`, or `gh pr checkout` call named it or its result printed its
+ * own URL, `discovered` when a lookup found it for a branch the Session pushed
+ * or works on, `tracked` when a caller bound it by URL.
  */
-type BindingOrigin = 'created' | 'discovered' | 'tracked'
+type BindingOrigin = 'created' | 'referenced' | 'discovered' | 'tracked'
 ```
 
 ```ts type-equiv
 /** Payload of the `plugin:forge-session/binding` record. */
 interface BindingRecord {
-  /** `track` binds or restores, `dismiss` hides, `discover` binds a change request found for a pushed branch. */
+  /** `track` binds or restores, `dismiss` hides, `discover` binds a change request found for a branch the Session pushed or works on. */
   readonly action: 'track' | 'dismiss' | 'discover'
   /** Web URL of the change request. */
   readonly url: string
@@ -896,7 +897,7 @@ Source: [`packages/experimental/client-ui-forge/src/index.ts`](../../packages/ex
 
 ### `ctx.forgeSession` — `ForgeSessionService`
 
-Session-scoped change request bindings. The `forgeChangeRequests` projection derives them from `gh pr create` and `git push` results and from `plugin:forge-session/binding` records. After each push result the service looks up open change requests whose head is a pushed branch and records the unbound ones as discovered. Watching a Session polls its visible change requests through `ctx.forge`.
+Session-scoped change request bindings. The `forgeChangeRequests` projection derives them from `gh pr create`, `gh pr view`, `gh pr edit`, `gh pr checkout`, and `git push` results and from `plugin:forge-session/binding` records. After each push result, and when a caller reports the branch a Session works on, the service looks up open change requests whose head is that branch and records the unbound ones as discovered. Watching a Session polls its visible change requests through `ctx.forge`.
 
 ```ts cordis-catalog
 /**
@@ -915,6 +916,18 @@ changeRequests(session: Session): SessionChangeRequest[]
  * @throws when no registered provider recognizes the URL.
  */
 track(session: Session, url: string): void
+
+/**
+ * Look up open change requests whose head is a branch the Session works on,
+ * and record the unbound ones as discovered, as after a push of that branch.
+ * A remote that no provider recognizes changes nothing; a failed lookup is
+ * logged and changes nothing.
+ * @param session - Session that receives the bindings.
+ * @param remote - URL of the remote that holds the branch.
+ * @param branch - branch name on that remote.
+ * @returns resolves once the lookup has recorded its bindings or failed.
+ */
+discoverBranch(session: Session, remote: string, branch: string): Promise<void>
 
 /**
  * Hide a visible binding. Appends a `dismiss` record; a URL that is not

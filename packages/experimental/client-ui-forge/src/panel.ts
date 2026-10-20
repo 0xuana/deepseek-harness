@@ -15,7 +15,7 @@ import { hasBranch, inspectCheckout } from './git.ts'
 import type { GitConfig, Inspection } from './git.ts'
 import { localChanges } from './local-diff.ts'
 import type { DiffConfig } from './local-diff.ts'
-import { remoteOrder } from './parse.ts'
+import { remoteOrder, upstreamBranch } from './parse.ts'
 import type {
   ForgeCheckoutState, ForgeLocalChanges, ForgeMissingWorktree, ForgePanelChangeRequest, ForgePanelState, ForgePanelWorktree,
   ForgeSessionWorktree, ForgeWorktreeBlocker, ForgeWorktreeState,
@@ -29,6 +29,14 @@ export interface PanelConfig extends DiffConfig {
   readonly readinessTimeoutMs: number
 }
 
+/** The checkout's upstream branch and the remote URL its change requests are looked up at. */
+interface Upstream {
+  /** URL of the upstream's remote that a provider recognizes. */
+  readonly remote: string
+  /** Branch name on that remote. */
+  readonly branch: string
+}
+
 /**
  * Panel state of one Session. Construction starts the first checkout
  * inspection and watches the Session's change requests. Inspections run one at
@@ -36,7 +44,10 @@ export interface PanelConfig extends DiffConfig {
  * result for a directory the Session has since left is dropped. A sign-in
  * probe runs when an inspection recognizes a new code host and on `refresh`;
  * a probe result for a host the panel no longer shows is dropped. Each change
- * request keeps the latest snapshot a poll returned while later polls fail. The
+ * request keeps the latest snapshot a poll returned while later polls fail.
+ * When an inspection finds an upstream branch on a remote a provider
+ * recognizes, the open change requests of that branch are bound as discovered,
+ * once per remote and branch until a refresh. The
  * worktree facts follow the `forgeWorktree` projection, the live creation, and the last failed one;
  * each inspection also decides whether the Session's sandbox can write the
  * checkout and its shared Git directory, which a new worktree needs, whether
@@ -54,6 +65,8 @@ export class SessionPanel {
   private missing: ForgeMissingWorktree | null = null
   private inspection: Promise<void> | null = null
   private rerun: Promise<void> | null = null
+  /** Remote URL and branch of the upstream that the last branch lookup covered, until a refresh. */
+  private discovered: string | null = null
 
   /**
    * @param ctx - service context that provides the forge, Session, directory, and process services.
@@ -170,6 +183,7 @@ export class SessionPanel {
    * @returns settles once the inspection and the sign-in probe have ended; each poll publishes its result when it finishes.
    */
   async refresh(): Promise<void> {
+    this.discovered = null
     const inspection = this.inspect()
     const probe = this.current.repository === null ? undefined : this.probe(this.current.repository)
     for (const entry of this.current.changeRequests) {
@@ -244,6 +258,7 @@ export class SessionPanel {
     let repository: ForgeRepository | null = null
     let blocker: ForgeWorktreeBlocker | null = null
     let local: ForgeLocalChanges | null = null
+    let upstream: Upstream | null = null
     try {
       const inspection = await inspectCheckout(this.ctx, this.config, this.session, directory, this.lifetime.signal)
       if (inspection === undefined) {
@@ -252,6 +267,7 @@ export class SessionPanel {
       } else {
         checkout = { state: 'ready', checkout: inspection.checkout }
         repository = this.recognize(inspection)
+        upstream = this.upstreamOf(inspection)
         blocker = await this.blockerOf(inspection)
         local = await this.localOf(inspection)
       }
@@ -272,6 +288,22 @@ export class SessionPanel {
     const readiness = sameHost ? this.current.readiness : null
     this.publish({ ...this.current, checkout, repository, readiness, worktree: this.worktree(), local })
     if (repository !== null && !sameHost) void this.probe(repository)
+    if (upstream !== null) this.discover(upstream)
+  }
+
+  /** The upstream branch with the first URL of its remote that a provider recognizes. */
+  private upstreamOf(inspection: Inspection): Upstream | null {
+    const tracked = upstreamBranch(inspection.upstream, inspection.remotes)
+    const remote = tracked?.remote.urls.find(url => this.ctx.forge.repositoryFromRemote(url) !== undefined)
+    return tracked === undefined || remote === undefined ? null : { remote, branch: tracked.branch }
+  }
+
+  /** Bind the open change requests of the upstream branch, once per remote and branch until a refresh. */
+  private discover(upstream: Upstream): void {
+    const key = `${upstream.remote}\n${upstream.branch}`
+    if (this.discovered === key) return
+    this.discovered = key
+    void this.run(this.ctx.forgeSession.discoverBranch(this.session, upstream.remote, upstream.branch))
   }
 
   /** Decide whether the Session's sandbox lets the worktree service write the checkout and its shared Git directory. */

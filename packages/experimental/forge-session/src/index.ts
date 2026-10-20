@@ -10,7 +10,7 @@ import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import { deadline, MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { sameChangeRequestUrl } from './commands.ts'
 import { BINDING_RECORD, forgeChangeRequestsProjection } from './projection.ts'
-import type { BindingState, Config, ForgeChangeRequestsState, PushedBranch, SessionChangeRequest, SessionChangeRequestsListener } from './types.ts'
+import type { BindingState, Config, ForgeChangeRequestsState, SessionChangeRequest, SessionChangeRequestsListener } from './types.ts'
 
 export type * from './types.ts'
 
@@ -30,11 +30,13 @@ interface SessionWatch {
 
 /**
  * Session-scoped change request bindings. The `forgeChangeRequests`
- * projection derives them from `gh pr create` and `git push` results and from
- * `plugin:forge-session/binding` records. After each push result the service
- * looks up open change requests whose head is a pushed branch and records the
- * unbound ones as discovered. Watching a Session polls its visible change
- * requests through `ctx.forge`.
+ * projection derives them from `gh pr create`, `gh pr view`, `gh pr edit`,
+ * `gh pr checkout`, and `git push` results and from
+ * `plugin:forge-session/binding` records. After each push result, and when a
+ * caller reports the branch a Session works on, the service looks up open
+ * change requests whose head is that branch and records the unbound ones as
+ * discovered. Watching a Session polls its visible change requests through
+ * `ctx.forge`.
  */
 export class ForgeSessionService extends Service {
   static inject = ['forge', 'sessionProjections']
@@ -87,6 +89,20 @@ export class ForgeSessionService extends Service {
     const canonical = this.home.forge.changeRequestUrl(ref)
     const existing = this.state(session).bindings.find(binding => sameChangeRequestUrl(binding.url, canonical))
     if (existing === undefined || existing.dismissed) appendPluginRecord(session, BINDING_RECORD, { action: 'track', url: canonical })
+  }
+
+  /**
+   * Look up open change requests whose head is a branch the Session works on,
+   * and record the unbound ones as discovered, as after a push of that branch.
+   * A remote that no provider recognizes changes nothing; a failed lookup is
+   * logged and changes nothing.
+   * @param session - Session that receives the bindings.
+   * @param remote - URL of the remote that holds the branch.
+   * @param branch - branch name on that remote.
+   * @returns resolves once the lookup has recorded its bindings or failed.
+   */
+  discoverBranch(session: Session, remote: string, branch: string): Promise<void> {
+    return this.discover(session, remote, branch)
   }
 
   /**
@@ -161,7 +177,7 @@ export class ForgeSessionService extends Service {
     if (event.type !== 'tool/result' && pluginRecordOf(event)?.type !== BINDING_RECORD) return
     const state = this.state(session)
     for (const push of state.pushes) {
-      if (push.seq === event.seq) this.discover(session, push)
+      if (push.seq === event.seq) void this.discover(session, push.remote, push.branch)
     }
     const watch = this.watches.get(session)
     if (watch === undefined || watch.bindings === state.bindings) return
@@ -197,15 +213,16 @@ export class ForgeSessionService extends Service {
     }
   }
 
-  private discover(session: Session, push: PushedBranch): void {
-    const repository = this.home.forge.repositoryFromRemote(push.remote)
-    if (repository === undefined) return
-    const task = this.lookup(session, repository, push.branch).catch((error: unknown) => {
+  private discover(session: Session, remote: string, branch: string): Promise<void> {
+    const repository = this.home.forge.repositoryFromRemote(remote)
+    if (repository === undefined) return Promise.resolve()
+    const task = this.lookup(session, repository, branch).catch((error: unknown) => {
       if (this.lifetime.signal.aborted) return
-      this.home.logger.warn(`forge-session: change request lookup for ${push.branch} failed: ${error instanceof Error ? error.message : String(error)}`)
+      this.home.logger.warn(`forge-session: change request lookup for ${branch} failed: ${error instanceof Error ? error.message : String(error)}`)
     })
     this.discoveries.add(task)
     void task.then(() => this.discoveries.delete(task))
+    return task
   }
 
   private async lookup(session: Session, repository: ForgeRepository, branch: string): Promise<void> {

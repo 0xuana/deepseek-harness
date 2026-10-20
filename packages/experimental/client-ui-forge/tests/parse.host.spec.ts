@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { baseBranches, parseName, parseRemotes, parseTopLevel, remoteOrder } from '../src/parse.ts'
+import { baseBranches, parseName, parseRemotes, parseTopLevel, remoteOrder, upstreamBranch } from '../src/parse.ts'
 import type { GitRemote } from '../src/parse.ts'
 
 describe('parseTopLevel', () => {
@@ -65,6 +65,22 @@ describe('parseRemotes', () => {
       { name: 'upstream', urls: ['https://github.com/upstream/demo.git'] },
       { name: 'mirror', urls: ['https://mirror.example/demo.git'] },
     ])
+  })
+})
+
+describe('upstreamBranch', () => {
+  const remote = (name: string): GitRemote => ({ name, urls: [`https://example.test/${name}.git`] })
+
+  it('splits the upstream at the longest remote name it starts with', () => {
+    const remotes = [remote('origin'), remote('team'), remote('team/mirror')]
+
+    expect(upstreamBranch('team/mirror/feat/x', remotes)).toEqual({ remote: remote('team/mirror'), branch: 'feat/x' })
+    expect(upstreamBranch('origin/main', remotes)).toEqual({ remote: remote('origin'), branch: 'main' })
+  })
+
+  it('names no branch without an upstream or a remote it starts with', () => {
+    expect(upstreamBranch(null, [remote('origin')])).toBeUndefined()
+    expect(upstreamBranch('elsewhere/main', [remote('origin')])).toBeUndefined()
   })
 })
 
