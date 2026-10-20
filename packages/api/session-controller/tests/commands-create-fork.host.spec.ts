@@ -4,7 +4,8 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Agent, AgentHandle, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import { SessionQueryError } from '@deepseek-ai/dsh-session-query'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import type { Workspace, WorkspaceId } from '@deepseek-ai/dsh-workspace'
@@ -176,6 +177,23 @@ function completedSession(
   return session
 }
 
+/**
+ * A fork creation outcome that stores the seeded child the way the Agent factory would, so a later
+ * request can observe it under the id the caller named.
+ * @param ctx - context owning the Session store.
+ * @returns the mocked `ctx.agents.create` implementation.
+ */
+function seededChildCreate(ctx: Context) {
+  return vi.fn((options: CreateAgentOptions): Promise<AgentHandle> => {
+    ctx.sessions.create(options.sessionId, {
+      ...(options.seed === undefined ? {} : { seed: options.seed }),
+      ...(options.inheritedEventCount === undefined ? {} : { inheritedEventCount: options.inheritedEventCount }),
+      ...(options.meta === undefined ? {} : { meta: options.meta }),
+    })
+    return Promise.resolve(resolvedHandle(ctx, options.sessionId))
+  })
+}
+
 function resolvedHandle(ctx: Context, sessionId: SessionId): AgentHandle {
   return {
     agent: { id: sessionId, status: 'idle', ctx } as Agent,
@@ -293,5 +311,88 @@ describe('Session fork failures', () => {
     if (options === undefined) throw new Error('Agent creation was not attempted')
     expect(options.meta?.agentPreset).toBe('minimal')
     await ctx.fiber.dispose()
+  })
+})
+describe('Session fork named children', () => {
+  it('adopts the child an earlier named fork already materialized', async () => {
+    const ctx = await baseContext()
+    ctx.provide('workspaceRegistry', { list: () => [] } as never)
+    const source = completedSession(ctx, 'named-source')
+    const create = seededChildCreate(ctx)
+    vi.spyOn(ctx.agents, 'create').mockImplementation(create)
+    const controller = new SessionCommandController(ctx, controllerAgents(ctx), '/default')
+    const child = SessionId('named-child')
+
+    // Nothing is stored under the name yet, so the first call forks the child it was asked for.
+    await expect(controller.fork({ sessionId: source.id, childSessionId: child }))
+      .resolves.toEqual({ sessionId: child })
+    expect(create).toHaveBeenCalledOnce()
+
+    // The retry reads the stored child as this request's own fork and answers with it, without
+    // materializing a second child.
+    await expect(controller.fork({ sessionId: source.id, childSessionId: child }))
+      .resolves.toEqual({ sessionId: child })
+    expect(create).toHaveBeenCalledOnce()
+    await ctx.fiber.dispose()
+  })
+
+  it('refuses a named child another Session holds, and one seeded at another cut', async () => {
+    const foreign = await baseContext()
+    foreign.provide('workspaceRegistry', { list: () => [] } as never)
+    const source = completedSession(foreign, 'named-foreign-source')
+    // The name is taken by a Session that was not seeded from this source at all.
+    foreign.sessions.create(SessionId('foreign-child'), {
+      meta: { parentSession: SessionId('another-source') },
+    })
+    const foreignController = new SessionCommandController(foreign, controllerAgents(foreign), '/default')
+    await expect(foreignController.fork({ sessionId: source.id, childSessionId: SessionId('foreign-child') }))
+      .rejects.toMatchObject({ code: 'session/fork-conflict' })
+    await foreign.fiber.dispose()
+
+    const cut = await baseContext()
+    cut.provide('workspaceRegistry', { list: () => [] } as never)
+    const cutSource = completedSession(cut, 'named-cut-source')
+    // Same source, but the stored child inherited a shorter prefix than this fork would write.
+    cut.sessions.create(SessionId('wrong-cut-child'), {
+      seed: cutSource.snapshotEvents().slice(0, 2),
+      inheritedEventCount: SessionLogOffset(2),
+      meta: { parentSession: cutSource.id, isSeeded: true },
+    })
+    const cutController = new SessionCommandController(cut, controllerAgents(cut), '/default')
+    await expect(cutController.fork({ sessionId: cutSource.id, childSessionId: SessionId('wrong-cut-child') }))
+      .rejects.toMatchObject({ code: 'session/fork-conflict' })
+    await cut.fiber.dispose()
+  })
+
+  it('maps a named child it cannot read to an internal fork error', async () => {
+    const corrupt = await baseContext()
+    corrupt.provide('workspaceRegistry', { list: () => [] } as never)
+    const corruptSource = completedSession(corrupt, 'named-corrupt-source')
+    const corruptQuery = corrupt.sessionQuery
+    const observeCorrupt = corruptQuery.observeSession.bind(corruptQuery)
+    vi.spyOn(corruptQuery, 'observeSession').mockImplementation(async (sessionId, options) => (
+      sessionId === corruptSource.id
+        ? observeCorrupt(sessionId, options)
+        : Promise.reject(new SessionQueryError('child is corrupt', 'SESSION_QUERY_CORRUPT_SESSION'))
+    ))
+    const corruptController = new SessionCommandController(corrupt, controllerAgents(corrupt), '/default')
+    await expect(corruptController.fork({ sessionId: corruptSource.id, childSessionId: SessionId('corrupt-child') }))
+      .rejects.toMatchObject({ code: 'gateway/internal' })
+    await corrupt.fiber.dispose()
+
+    const offline = await baseContext()
+    offline.provide('workspaceRegistry', { list: () => [] } as never)
+    const offlineSource = completedSession(offline, 'named-offline-source')
+    const offlineQuery = offline.sessionQuery
+    const observeOffline = offlineQuery.observeSession.bind(offlineQuery)
+    vi.spyOn(offlineQuery, 'observeSession').mockImplementation(async (sessionId, options) => (
+      sessionId === offlineSource.id
+        ? observeOffline(sessionId, options)
+        : Promise.reject(new Error('storage offline'))
+    ))
+    const offlineController = new SessionCommandController(offline, controllerAgents(offline), '/default')
+    await expect(offlineController.fork({ sessionId: offlineSource.id, childSessionId: SessionId('offline-child') }))
+      .rejects.toMatchObject({ code: 'gateway/internal' })
+    await offline.fiber.dispose()
   })
 })
