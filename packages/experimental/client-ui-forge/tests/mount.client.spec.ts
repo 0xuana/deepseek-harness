@@ -13,7 +13,6 @@ import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { RemoteError, type RemoteResult, type TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ActionToast } from '../src/client/ActionToast.tsx'
-import { BranchChip, type BranchChipInjected } from '../src/client/BranchChip.tsx'
 import { CHANGES_ID, CHANGES_KIND } from '../src/client/changes-address.ts'
 import { ChangesTab, type ChangesTabInjected } from '../src/client/ChangesTab.tsx'
 import { ChangesTabTitle } from '../src/client/ChangesTabTitle.tsx'
@@ -99,10 +98,6 @@ function isChangesFace(value: Record<string, unknown>): value is Record<string, 
   return typeof value.localDiff === 'function' && typeof value.createChangeRequest === 'function'
 }
 
-function isBranchFace(value: Record<string, unknown>): value is Record<string, unknown> & BranchChipInjected {
-  return typeof value.hooks === 'object' && Object.keys(value).length === 1
-}
-
 function isNoticeFace(value: Record<string, unknown>): value is Record<string, unknown> & Omit<NoticeSource, 'report'> {
   return typeof value.dismiss === 'function' && typeof value.hooks === 'object'
 }
@@ -185,10 +180,9 @@ async function fixture() {
   const headerInject = entry('conversation.session.header.utilities', HeaderButton)?.inject
   const worktreeInject = entry('conversation.hero.options', WorktreeToggle)?.inject
   const progressInject = entry('conversation.input.dock', WorktreeProgress)?.inject
-  const branchInject = entry('conversation.session.header.actions', BranchChip)?.inject
   const toastInject = entry('shell.overlay', ActionToast)?.inject
   assert(tabInject !== undefined && headerInject !== undefined && worktreeInject !== undefined && toastInject !== undefined)
-  assert(progressInject !== undefined && branchInject !== undefined && changesInject !== undefined)
+  assert(progressInject !== undefined && changesInject !== undefined)
   const tab = (sessionId: SessionId): ForgeTabInjected => {
     const value = tabInject(sessionId as never)
     assert(isTabFace(value))
@@ -214,18 +208,13 @@ async function fixture() {
     assert(isProgressFace(value))
     return value
   }
-  const branch = (sessionId: SessionId): BranchChipInjected => {
-    const value = branchInject(sessionId as never)
-    assert(isBranchFace(value))
-    return value
-  }
   const toast = (): Omit<NoticeSource, 'report'> => {
     const value = toastInject(undefined as never)
     assert(isNoticeFace(value))
     return value
   }
   const notice = () => toast().hooks.notice.getSnapshot()
-  return { ...b, dispose, entry, tab, changes, header, worktree, progress, branch, toast, notice }
+  return { ...b, dispose, entry, tab, changes, header, worktree, progress, toast, notice }
 }
 
 describe('mountForgePanel registration', () => {
@@ -233,7 +222,7 @@ describe('mountForgePanel registration', () => {
     expect(inject).toEqual(['remote', 'slots', 'locale', 'sidebarRightTabs', 'sidebarRight'])
   })
 
-  it('registers the tab types, their bodies and titles, the header entries, the worktree option and card, and the toast', async () => {
+  it('registers the tab types, their bodies and titles, the header button, the worktree option and card, and the toast', async () => {
     const f = await fixture()
     expect(f.sidebarRightTabs.register).toHaveBeenCalledTimes(2)
     const type = f.sidebarRightTabs.register.mock.calls[0]?.[0]
@@ -246,7 +235,8 @@ describe('mountForgePanel registration', () => {
     expect(f.entry('sidebar.right.pane.tab', ChangesTab)?.store).toBeDefined()
     expect(f.entry('sidebar.right.pane.tab.title', ChangesTabTitle)).toMatchObject({ options: { key: CHANGES_ID }, locale: NS })
     expect(f.entry('conversation.session.header.utilities', HeaderButton)).toMatchObject({ options: { id: 'forge-panel', order: -8 }, locale: NS })
-    expect(f.entry('conversation.session.header.actions', BranchChip)).toMatchObject({ options: { id: 'forge-panel.branch', order: 10 }, locale: NS })
+    // The branch is named in the tab and the Session list, not beside the Session title.
+    expect(f.ctx.slots.entries('conversation.session.header.actions')).toEqual([])
     expect(f.entry('conversation.hero.options', WorktreeToggle)).toMatchObject({ options: { id: 'forge-panel.worktree' }, locale: NS })
     expect(f.entry('conversation.input.dock', WorktreeProgress)).toMatchObject({ options: { id: 'forge-panel.worktree', order: 5 }, locale: NS })
     expect(f.ctx.slots.entries('conversation.input.left')).toEqual([])
@@ -273,7 +263,6 @@ describe('mountForgePanel registration', () => {
       ['sidebar.right.pane.tab', ChangesTab],
       ['sidebar.right.pane.tab.title', ChangesTabTitle],
       ['conversation.session.header.utilities', HeaderButton],
-      ['conversation.session.header.actions', BranchChip],
       ['conversation.hero.options', WorktreeToggle],
       ['conversation.input.dock', WorktreeProgress],
       ['shell.overlay', ActionToast],
@@ -293,11 +282,10 @@ describe('mountForgePanel registration', () => {
 })
 
 describe('mountForgePanel Session stores', () => {
-  it('shares one panel stream per Session between the tab, the header entries, the worktree option, and the worktree card', async () => {
+  it('shares one panel stream per Session between the tab, the header button, the worktree option, and the worktree card', async () => {
     const f = await fixture()
     const tab = f.tab(S1)
     expect(f.header(S1).hooks.panel).toBe(tab.hooks.panel)
-    expect(f.branch(S1).hooks.panel).toBe(tab.hooks.panel)
     expect(f.worktree(S1).hooks.panel).toBe(tab.hooks.panel)
     expect(f.progress(S1).hooks.panel).toBe(tab.hooks.panel)
     expect(f.tab(S2).hooks.panel).not.toBe(tab.hooks.panel)
@@ -319,10 +307,10 @@ describe('mountForgePanel Session stores', () => {
     await f.dispose()
   })
 
-  it('reads the Host facts for the tab and the branch label again after each reconnect', async () => {
+  it('shares the Host facts between Sessions and reads them again after each reconnect', async () => {
     const f = await fixture()
     const host = f.tab(S1).hooks.host
-    expect(f.branch(S2).hooks.host).toBe(host)
+    expect(f.tab(S2).hooks.host).toBe(host)
     expect(host.getSnapshot()).toEqual({ home: '/home/octo', isLoopback: true })
     const listener = vi.fn()
     const unsubscribe = host.subscribe(listener)

@@ -8,11 +8,12 @@ import { useMemo, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
   FileTypeIcon, IconChevronDownOutlineRegular, IconChevronsUpDownOutlineRegular, IconEllipsisOutlineRegular,
-  languageForPath, Menu, MenuItemButton, PathLabel, useCodeHighlighter, type CodeHighlighter, type HighlightSpan,
+  languageForPath, Menu, MenuItemButton, useCodeHighlighter, type CodeHighlighter, type HighlightSpan,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ForgeDiffFile } from '../types.ts'
 import { segmentsOf, splitRows, type DiffRow, type SplitCell, type SplitRow } from './diff-rows.ts'
+import { FileLabel } from './FileLabel.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
 import css from './ChangesTab.module.css'
 
@@ -55,6 +56,8 @@ export interface DiffFileProps {
   readonly wrap: boolean
   /** Badge text after the path, or empty for none. */
   readonly badge: string
+  /** Hover text of the path: both paths of a renamed file, else the path. */
+  readonly tooltip: string
   /** Rows of the file's menu. */
   readonly actions: readonly DiffFileAction[]
   /** Receives the section element, which scrolling to the file targets. */
@@ -198,7 +201,7 @@ function Body(props: DiffFileProps): ReactNode {
  * @returns the file section.
  */
 export function DiffFile(props: DiffFileProps): ReactNode {
-  const { file, expanded, onToggle, badge, actions, sectionRef, t } = props
+  const { file, expanded, onToggle, badge, tooltip, actions, sectionRef, t } = props
   const [menuOpen, setMenuOpen] = useState(false)
   const name = file.path.slice(file.path.lastIndexOf('/') + 1)
   return (
@@ -214,7 +217,7 @@ export function DiffFile(props: DiffFileProps): ReactNode {
           <IconChevronDownOutlineRegular size={14} className={css.chevron} />
         </button>
         <FileTypeIcon path={file.path} size={16} className={css.fileIcon} />
-        <PathLabel path={file.path} className={css.filePath} />
+        <FileLabel path={file.path} tooltip={tooltip} className={css.filePath} />
         {badge !== '' && <span className={css.badge}>{badge}</span>}
         {!file.binary && <Counts file={file} t={t} />}
         <Menu

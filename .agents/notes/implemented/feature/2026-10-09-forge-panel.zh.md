@@ -10,7 +10,7 @@ Status: implemented
 
 ## Decision
 
-[`dsh-experimental-client-ui-forge`](../../../../packages/experimental/client-ui-forge/README.zh.md) 是一个双端包。宿主端的 `forgePanel` Remote 把面板为一个 Session 展示的全部内容组装成一条流式状态；forge 注册表与绑定服务只保留各自的领域操作。客户端包括一个右侧边栏标签页、一个显示或隐藏它的 Session 标题栏按钮、一个标题栏分支标签、一个新会话选项、一张位于输入框上方的创建卡片，以及一个 toast。所有界面都把已绑定的条目称为变更请求（forge 注册表的术语），不随代码托管平台的叫法变化。[forge 套件](../../../../packages/experimental/forge-bundle/README.zh.md)把面板、forge 注册表、GitHub 提供方、绑定服务与一个隔离的 worktree 服务作为插件页中默认禁用的一个条目发布。
+[`dsh-experimental-client-ui-forge`](../../../../packages/experimental/client-ui-forge/README.zh.md) 是一个双端包。宿主端的 `forgePanel` Remote 把面板为一个 Session 展示的全部内容组装成一条流式状态；forge 注册表与绑定服务只保留各自的领域操作。客户端包括一个右侧边栏标签页、一个显示或隐藏它的 Session 标题栏按钮、一个新会话选项、一张位于输入框上方的创建卡片，以及一个 toast。所有界面都把已绑定的条目称为变更请求（forge 注册表的术语），不随代码托管平台的叫法变化。[forge 套件](../../../../packages/experimental/forge-bundle/README.zh.md)把面板、forge 注册表、GitHub 提供方、绑定服务与一个隔离的 worktree 服务作为插件页中默认禁用的一个条目发布。
 
 Remote 通过 Session 的子进程提供方、在 Session 的只读沙箱策略下检查检出，因此它读到的与 Session 命令看到的相同，且无法写入。检查读取顶层目录、Git 目录与公共 Git 目录、分支或缩写的 HEAD 提交、上游与远端，以及分支相对于其分叉点的变更规模。它在 Session 被关注时、每个 `working-directory/change`、`tool/result` 与 `sandbox/mode` 事件之后以及刷新时运行，一次只运行一个，最多再追加一次。
 
@@ -69,7 +69,7 @@ Session 所在的 worktree 可能在 Session 之外被删除。每次检查都�
 
 **在浏览器中解析补丁。** Remote 将传输不受限的补丁文本，浏览器也需要补丁解析器；宿主约束读取并只解析一次。
 
-**复用代码审查标签页的文件对比。** 它属于另一个插件，本包在运行时不能导入；把它移入共享基础组件又会为一个使用方改动共享包。变更视图改用共享的高亮器、菜单、路径标签与 diff 颜色 token 构建。
+**复用代码审查标签页的文件对比。** 它属于另一个插件，本包在运行时不能导入；把它移入共享基础组件又会为一个使用方改动共享包。变更视图改用共享的高亮器、菜单、提示与 diff 颜色 token 构建。
 
 **从本地仓库读取变更请求的 diff。** 当前检出分支可能领先或落后于托管平台，基准分支也可能没有拉取；评审者看到的是托管平台的 diff。视图改为在当前检出分支有超出 head 的提交时给出说明。
 

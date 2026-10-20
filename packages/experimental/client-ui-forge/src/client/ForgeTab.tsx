@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react'
 import {
-  Button, IconBranchOutlineRegular, IconCopyOutlineRegular, IconWarningTriangleOutlineRegular, StateDot, Tooltip,
+  Button, IconBranchOutlineRegular, IconCopyOutlineRegular, IconFolderCloseRegular, IconWarningTriangleOutlineRegular, StateDot, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
@@ -84,7 +84,9 @@ function Checkout({ state, home, restore, copyPath, t }: {
         <span className={css.checkoutName} tabIndex={0}>
           {label.missing
             ? <IconWarningTriangleOutlineRegular size={14} className={css.checkoutIcon} />
-            : <IconBranchOutlineRegular size={14} className={css.checkoutIcon} />}
+            : label.worktree
+              ? <IconBranchOutlineRegular size={14} className={css.checkoutIcon} />
+              : <IconFolderCloseRegular size={14} className={css.checkoutIcon} />}
           {label.detached && <span>{t('checkout.detached')}</span>}
           {label.detached && label.name !== null && <span aria-hidden="true">·</span>}
           {label.name !== null && <span className={css.checkoutBranch}>{label.name}</span>}

@@ -17,7 +17,7 @@ import {
 import type { HostObservable, InjectFace, PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
-import { fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
+import { fileAddressFor, pathPartsOf } from '@deepseek-ai/dsh-util-workspace-path'
 import type {
   ForgeChangeRequestDiff, ForgeDiffFile, ForgeLocalDiff, ForgeLocalScope, ForgePanelChangeRequest, ForgePanelState,
 } from '../types.ts'
@@ -25,6 +25,7 @@ import { parseChangesAddress, type ChangesSource } from './changes-address.ts'
 import type { createChangesStore } from './changes-store.ts'
 import { Counts, DiffFile, type DiffFileAction } from './DiffFile.tsx'
 import { drawnLines, matchesHunks, textLines } from './diff-rows.ts'
+import { FileLabel } from './FileLabel.tsx'
 import { ChangeRequestGlyph } from './glyphs.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
 import { RefreshGlyph } from './RefreshGlyph.tsx'
@@ -155,12 +156,23 @@ function initiallyOpen(files: readonly ForgeDiffFile[]): ReadonlySet<string> {
   return open
 }
 
+/** What a rename badge names: the old file name, or the old path when only the directory changed. */
+function renamedFrom(previous: string, path: string): string {
+  const name = pathPartsOf(previous).name
+  return name === pathPartsOf(path).name ? previous : name
+}
+
+/** The hover text of a file's path: both paths of a renamed file, else the path. */
+function pathTooltipOf(file: ForgeDiffFile, t: Translate): string {
+  return file.status === 'renamed' && file.previousPath !== null ? t('diff.renamedPath', { from: file.previousPath, path: file.path }) : file.path
+}
+
 /** The badge after a path: how the file changed, and whether a branch view's file is untracked. */
 function badgeOf(file: ForgeDiffFile, data: ChangesData, t: Translate): string {
   const parts: string[] = []
   if (file.status === 'added') parts.push(t('diff.newFile'))
   else if (file.status === 'deleted') parts.push(t('diff.deletedFile'))
-  else if (file.status === 'renamed' && file.previousPath !== null) parts.push(t('diff.renamed', { from: file.previousPath }))
+  else if (file.status === 'renamed' && file.previousPath !== null) parts.push(t('diff.renamed', { from: renamedFrom(file.previousPath, file.path) }))
   if (file.untracked && data.kind === 'local' && data.scope === 'branch') parts.push(t('diff.badgeUncommitted'))
   return parts.join(' · ')
 }
@@ -263,7 +275,7 @@ function FilesMenu({ files, jump, t }: {
       listClassName={css.menuList}
       items={files.map(file => ({
         id: file.path,
-        label: <span className={css.menuRow}><span className={css.menuPath}>{file.path}</span><Counts file={file} t={t} /></span>,
+        label: <span className={css.menuRow}><FileLabel path={file.path} className={css.menuPath} /><Counts file={file} t={t} /></span>,
       }))}
       onClose={() => { setOpen(false) }}
       onSelect={(path) => {
@@ -470,6 +482,7 @@ export function ChangesTab({
               split={split}
               wrap={wrap}
               badge={badgeOf(file, data, t)}
+              tooltip={pathTooltipOf(file, t)}
               actions={fileActions(data, file)}
               sectionRef={(element) => {
                 if (element === null) sections.current.delete(path)

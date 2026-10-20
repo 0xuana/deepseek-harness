@@ -10,7 +10,7 @@ English | [中文](2026-10-09-forge-panel.zh.md)
 
 ## Decision
 
-[`dsh-experimental-client-ui-forge`](../../../../packages/experimental/client-ui-forge/README.md) is a two-face package. Its Host half, the `forgePanel` Remote, assembles everything the panel shows for one Session into one streamed state; the forge registry and the binding service keep only their domain operations. Its Client half is a right-sidebar tab, a Session header button that shows or hides it, a header branch label, a New Session option, a creation card above the composer, and a toast. Every surface calls a bound item a change request, the forge registry's term, whatever its code host calls it. The [forge bundle](../../../../packages/experimental/forge-bundle/README.md) ships the panel, the forge registry, the GitHub provider, the bindings, and an isolated worktree service as one default-disabled Plugins page entry.
+[`dsh-experimental-client-ui-forge`](../../../../packages/experimental/client-ui-forge/README.md) is a two-face package. Its Host half, the `forgePanel` Remote, assembles everything the panel shows for one Session into one streamed state; the forge registry and the binding service keep only their domain operations. Its Client half is a right-sidebar tab, a Session header button that shows or hides it, a New Session option, a creation card above the composer, and a toast. Every surface calls a bound item a change request, the forge registry's term, whatever its code host calls it. The [forge bundle](../../../../packages/experimental/forge-bundle/README.md) ships the panel, the forge registry, the GitHub provider, the bindings, and an isolated worktree service as one default-disabled Plugins page entry.
 
 The Remote inspects the checkout through the Session's subprocess provider under the Session's read-only sandbox policy, so it reads what the Session's commands see and cannot write. Inspection reads the top-level, Git, and common Git directories, the branch or the abbreviated HEAD commit, the upstream, the remotes, and the size of the branch's changes against its fork point. It runs when a Session is followed, after each `working-directory/change`, `tool/result`, and `sandbox/mode` event, and on refresh, one at a time with one trailing rerun.
 
@@ -69,7 +69,7 @@ The changes view offers no scope for one commit or for the last turn yet; both w
 
 **Parsing patches in the browser.** The Remote would carry unbounded patch text, and the browser would need a patch parser; the Host bounds the read and parses it once.
 
-**Reusing the review tab's file comparison.** It belongs to another plugin, which this package may not import at run time, and moving it into the shared primitives would change a shared package for one consumer; the view is built from the shared highlighter, menu, path label, and diff color tokens instead.
+**Reusing the review tab's file comparison.** It belongs to another plugin, which this package may not import at run time, and moving it into the shared primitives would change a shared package for one consumer; the view is built from the shared highlighter, menu, tooltip, and diff color tokens instead.
 
 **Reading a change request's diff from the local repository.** The checked-out branch can be ahead of or behind the host, and the base may not be fetched; the host's diff is what reviewers see. The view says when the checked-out branch has commits beyond the head instead.
 

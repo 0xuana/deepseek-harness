@@ -114,6 +114,7 @@ export const zh = {
   'diff.newFile': '新文件',
   'diff.deletedFile': '已删除',
   'diff.renamed': '由 {from} 重命名',
+  'diff.renamedPath': '{from} → {path}',
   'diff.badgeUncommitted': '未提交',
   'diff.binary': '二进制文件，无法显示变更',
   'diff.binaryLabel': '二进制',
@@ -309,6 +310,7 @@ export const en: Record<ForgePanelKey, string> = {
   'diff.newFile': 'New file',
   'diff.deletedFile': 'Deleted',
   'diff.renamed': 'Renamed from {from}',
+  'diff.renamedPath': '{from} → {path}',
   'diff.badgeUncommitted': 'Uncommitted',
   'diff.binary': 'Binary file; its changes cannot be shown',
   'diff.binaryLabel': 'Binary',
@@ -392,7 +394,7 @@ export const en: Record<ForgePanelKey, string> = {
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
-    /** Forge panel tab, changes view, header entries, worktree option and creation card, and action notices. */
+    /** Forge panel tab, changes view, header button, worktree option and creation card, and action notices. */
     forgePanel: ForgePanelKey
   }
 }

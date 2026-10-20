@@ -15,7 +15,6 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { RemoteResult, TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import type { ForgePanelChangeRequest } from '../types.ts'
 import { ActionToast } from './ActionToast.tsx'
-import { BranchChip, type BranchChipInjected } from './BranchChip.tsx'
 import { CHANGES_ID, changesDefinition } from './changes-address.ts'
 import { createChangesStore } from './changes-store.ts'
 import { ChangesTab, type ChangesTabInjected } from './ChangesTab.tsx'
@@ -48,7 +47,7 @@ function openLink(url: string): void {
   window.open(url, '_blank', 'noopener,noreferrer')
 }
 
-/** Per-Session stores shared by the tab, the header entries, the New Session option, and the worktree card. */
+/** Per-Session stores shared by the tab, the header button, the New Session option, and the worktree card. */
 interface SessionStores {
   readonly panel: PanelSource
   readonly visibility: VisibilitySource
@@ -246,14 +245,6 @@ function registerUi(ctx: Context): void {
   ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({
     name: 'conversation.input.dock', id: 'forge-panel.worktree', order: 5, locale: NS, inject: progressFace,
   }, WorktreeProgress))
-  ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({
-    name: 'conversation.session.header.actions',
-    id: 'forge-panel.branch',
-    // After the subagent lineage (-30), Team navigation (-20), and the preset label (-10).
-    order: 10,
-    locale: NS,
-    inject: (sessionId: SessionId): BranchChipInjected => ({ hooks: { panel: storesOf(sessionId).panel.hooks.panel, host } }),
-  }, BranchChip))
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
     name: 'shell.overlay', id: 'forge-panel.toast', locale: NS,
     inject: () => ({ hooks: notices.hooks, dismiss: notices.dismiss }),

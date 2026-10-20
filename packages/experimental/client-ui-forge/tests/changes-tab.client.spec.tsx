@@ -37,6 +37,21 @@ afterEach(() => {
   Reflect.deleteProperty(Element.prototype, 'scrollIntoView')
 })
 
+/** Hover the path of a file section past the tooltip delay and read the tooltip, then leave it. */
+function hoverPath(section: HTMLElement): string | null {
+  const label = section.querySelector('[data-forge-file-label]')
+  if (!(label instanceof HTMLElement)) throw new Error('no file label')
+  vi.useFakeTimers()
+  try {
+    fireEvent.mouseEnter(label)
+    act(() => { vi.advanceTimersByTime(1000) })
+    return within(document.body).getByRole('tooltip').textContent
+  } finally {
+    fireEvent.mouseLeave(label)
+    vi.useRealTimers()
+  }
+}
+
 function file(path: string, overrides: Partial<ForgeDiffFile> = {}): ForgeDiffFile {
   return {
     path, previousPath: null, status: 'modified', binary: false, oversized: false, untracked: false, additions: 0, deletions: 0, hunks: [],
@@ -219,12 +234,22 @@ describe('ChangesTab local reads', () => {
     expect(badge('src/app.ts')).toBeNull()
     expect(badge('src/new.ts')).toBe('New file · Uncommitted')
     expect(badge('docs/gone.txt')).toBe('Deleted')
-    expect(badge('lib/b.txt')).toBe('Renamed from lib/a.txt')
+    expect(badge('lib/b.txt')).toBe('Renamed from a.txt')
     expect(badge('logs/big.log')).toBe('New file · Uncommitted')
+    expect(hoverPath(m.section('src/app.ts'))).toBe('src/app.ts')
+    expect(hoverPath(m.section('lib/b.txt'))).toBe('lib/a.txt → lib/b.txt')
     expect(within(m.section('assets/logo.png')).getByText(en['diff.binary'])).toBeTruthy()
     expect(m.section('assets/logo.png').querySelector(`.${css.counts}`)).toBeNull()
     expect(within(m.section('logs/big.log')).getByText(en['diff.fileTooLarge'])).toBeTruthy()
     expect(m.section('lib/b.txt').querySelector(`.${css.code}`)).toBeNull()
+  })
+
+  it('names the old path of a file that only moved to another directory', async () => {
+    const moved = file('src/b.txt', { status: 'renamed', previousPath: 'lib/b.txt' })
+    const m = mount({ setup: (faces) => { faces.localDiff.mockResolvedValue(ok({ base: BASE, files: [moved], omitted: 0 })) } })
+    await settle()
+    expect(m.section('src/b.txt').querySelector(`.${css.badge}`)?.textContent).toBe('Renamed from lib/b.txt')
+    expect(hoverPath(m.section('src/b.txt'))).toBe('lib/b.txt → src/b.txt')
   })
 
   it('reads another scope from the scope menu and marks untracked files only in the branch scope', async () => {
@@ -468,9 +493,11 @@ describe('ChangesTab layout', () => {
     await settle()
     fireEvent.click(within(m.section('docs/gone.txt')).getByRole('button', { name: 'Collapse gone.txt' }))
     fireEvent.click(m.view.getByRole('button', { name: 'All 6 files' }))
-    expect(m.view.getAllByRole('menuitem').map(item => item.textContent)).toEqual([
+    // Each row shows the name before its directory; assistive technology reads the complete path.
+    expect(m.view.getAllByRole('menuitem')).toEqual([
       'src/app.ts+2−2', 'src/new.ts+2−0', `assets/logo.png${en['diff.binaryLabel']}`, 'docs/gone.txt+0−1', 'lib/b.txt+0−0', 'logs/big.log+0−0',
-    ])
+    ].map(name => m.view.getByRole('menuitem', { name })))
+    expect(m.view.getAllByRole('menuitem')[0]?.querySelector('[aria-hidden="true"]')?.textContent).toBe('app.tssrc')
     fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
     fireEvent.click(m.view.getByRole('button', { name: 'All 6 files' }))
     fireEvent.click(m.view.getByRole('menuitem', { name: 'docs/gone.txt+0−1' }))

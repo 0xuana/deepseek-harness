@@ -10,6 +10,7 @@ import type { MergeRequest } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { PaneId, SidebarRightTabActions, SidebarRightTabInfo, TabId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { IconBranchOutlineRegular, IconFolderCloseRegular, IconWarningTriangleOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { changesAddress } from '../src/client/changes-address.ts'
 import { ForgeTab, type ForgeTabProps } from '../src/client/ForgeTab.tsx'
@@ -198,6 +199,20 @@ describe('ForgeTab checkout', () => {
     // A removed worktree still offers the path it was created at.
     fireEvent.click(within(row).getByRole('button', { name: en['checkout.copyWorktreePath'] }))
     expect(b.copyPath).toHaveBeenCalledWith('/work/repo-dsh')
+  })
+
+  it.each([
+    ['a folder for the project directory', () => ready(), IconFolderCloseRegular],
+    ['a branch for a linked worktree', () => ready({}, { linked: true }), IconBranchOutlineRegular],
+    ['a branch for the worktree this Session created',
+      () => ready({ directory: '/work/repo-dsh', worktree: worktree({ created: created({ path: '/work/repo-dsh' }) }) }, { root: '/work/repo-dsh', branch: 'other', linked: true }),
+      IconBranchOutlineRegular],
+    ['a warning for a removed worktree', () => removed(), IconWarningTriangleOutlineRegular],
+  ])('marks the checkout with %s', (_label, state, Icon) => {
+    const b = tab(state())
+    const glyph = checkoutRow(b.view)?.querySelector(`.${css.checkoutName} svg`)
+    const expected = render(<Icon size={14} className={css.checkoutIcon} />).container.innerHTML
+    expect(glyph?.outerHTML).toBe(expected)
   })
 })
 

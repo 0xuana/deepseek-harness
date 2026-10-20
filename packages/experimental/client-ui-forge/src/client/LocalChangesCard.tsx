@@ -9,6 +9,7 @@ import { Button, IconChevronDownOutlineRegular, IconListPenOutlineRegular } from
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ForgeLocalChanges } from '../types.ts'
 import { Counts } from './DiffFile.tsx'
+import { FileLabel } from './FileLabel.tsx'
 import type { NS } from './locales.ts'
 import css from './ChangesTab.module.css'
 
@@ -70,7 +71,7 @@ export function LocalChangesCard({ local, creatable, view, create, t }: LocalCha
           {local.files.map(file => (
             <li key={file.path}>
               <button type="button" className={css.localFile} onClick={() => { view(file.path) }}>
-                <span className={css.menuPath}>{file.path}</span>
+                <FileLabel path={file.path} className={css.menuPath} />
                 <Counts file={file} t={t} />
               </button>
             </li>

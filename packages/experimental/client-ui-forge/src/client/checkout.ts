@@ -1,4 +1,4 @@
-/** What the panel row and the title chip say about the checkout the Session works in. */
+/** What the panel's checkout row says about the checkout the Session works in. */
 
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import { abbreviateHomePath } from '@deepseek-ai/dsh-util-workspace-path'
@@ -7,7 +7,7 @@ import type { NS } from './locales.ts'
 
 type Translate = PropsLocale<typeof NS>['t']
 
-/** Facts both surfaces show for the checkout. */
+/** Facts the checkout row shows. */
 export interface CheckoutLabel {
   /** Branch name, the abbreviated commit while HEAD is detached, or null when HEAD has no commit. */
   readonly name: string | null
@@ -29,13 +29,12 @@ export interface CheckoutLabel {
  * Describe the checkout of a Session. A worktree this panel created names its
  * base; any other linked worktree is a worktree, and the main checkout is the
  * project directory. A removed worktree keeps its branch name.
- * @param state - panel state, or null before the first one.
+ * @param state - panel state.
  * @param home - Host account home, or undefined to show full paths.
  * @param t - forge panel copy.
  * @returns the label, or undefined before a successful inspection.
  */
-export function checkoutLabel(state: ForgePanelState | null, home: string | undefined, t: Translate): CheckoutLabel | undefined {
-  if (state === null) return undefined
+export function checkoutLabel(state: ForgePanelState, home: string | undefined, t: Translate): CheckoutLabel | undefined {
   const created = state.worktree.created
   if (state.worktree.missing !== null && created !== null) {
     const path = abbreviateHomePath(created.path, home)

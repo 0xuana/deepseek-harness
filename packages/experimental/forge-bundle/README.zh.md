@@ -25,7 +25,7 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用本包
 
-打开插件页面，在官方分组中启用“变更请求与工作树”。在 Git 工作区中，发出第一条消息之前在输入框中勾选“工作树”，Session 就会在新的 worktree 中开始。Session 的目录位于 Git 检出中时，标题栏按钮会打开面板。Session 用 `gh pr create` 创建的 GitHub pull request，以及之后 `git push` 更新的 pull request，无需额外操作即会作为变更请求出现。在终端运行 `gh auth login --hostname <host>` 登录；缺少登录时，面板会显示这条命令。[面板包](../client-ui-forge/README.zh.md#use-this-package)说明了每个控件。
+打开插件页面，在官方分组中启用“变更请求与工作树”。在 Git 工作区中，发出第一条消息之前在输入框中勾选“工作树”，Session 就会在新的 worktree 中开始。Session 的目录位于 Git 检出中时，标题栏按钮会打开面板。Session 用 `gh pr create` 创建、用 `gh pr view`、`gh pr edit` 或 `gh pr checkout` 打开的 GitHub pull request，以及 Session 所在分支上或之后 `git push` 更新的 pull request，无需额外操作即会作为变更请求出现。在终端运行 `gh auth login --hostname <host>` 登录；缺少登录时，面板会显示这条命令。[面板包](../client-ui-forge/README.zh.md#use-this-package)说明了每个控件。
 
 -----
 

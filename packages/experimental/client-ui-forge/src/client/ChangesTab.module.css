@@ -185,11 +185,8 @@
 }
 
 .menuPath {
+  flex: 1;
   min-width: 0;
-  overflow: hidden;
-  font-family: var(--ds-font-family-code);
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .menuList {
@@ -293,7 +290,6 @@
 .filePath {
   flex: 1;
   min-width: 0;
-  font-family: var(--ds-font-family-code);
 }
 
 .chevron {
