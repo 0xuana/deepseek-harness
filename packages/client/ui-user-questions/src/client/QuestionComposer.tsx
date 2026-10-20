@@ -1,5 +1,5 @@
 import {
-  useEffect, useId, useLayoutEffect, useMemo, useRef, useState,
+  useEffect, useId, useMemo, useRef, useState,
   type ChangeEvent, type FocusEvent, type KeyboardEvent,
 } from 'react'
 import clsx from 'clsx'
@@ -242,68 +242,46 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
   // oxlint-disable-next-line typescript/no-non-null-assertion
   const draft = drafts[index]!
   const hasOptions = (question.options?.length ?? 0) > 0
-  const [questionTruncated, setQuestionTruncated] = useState(false)
-  const [descriptionModes, setDescriptionModes] = useState<Map<number, 'inline' | 'block' | 'truncated'> | null>(null)
+  const [overflow, setOverflow] = useState<{
+    question: typeof question
+    title: boolean
+    descriptions: Set<number>
+  } | null>(null)
+  const questionTruncated = overflow?.question === question && overflow.title
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (answerSurface.current !== null) answerSurface.current.scrollTop = 0
   }, [index])
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     const surface = answerSurface.current
     if (surface === null || minimized) return
     const title = surface.querySelector<HTMLElement>('[data-question-title]')
-    const rows = [...surface.querySelectorAll<HTMLElement>('[data-option-row]')]
+    const descriptions = [...surface.querySelectorAll<HTMLElement>('[data-option-description]')]
     const measure = (): void => {
-      if (title !== null) setQuestionTruncated(title.scrollHeight > title.clientHeight + 1)
-      const next = new Map<number, 'inline' | 'block' | 'truncated'>()
-      for (const row of rows) {
-        const description = row.querySelector<HTMLElement>('[data-option-description]')
-        if (description === null) continue
-        const optionIndex = Number(row.dataset.optionIndex)
-        const copy = row.querySelector<HTMLElement>('[data-option-copy]')
-        const line = row.querySelector<HTMLElement>('[data-option-line]')
-        if (copy === null || line === null || copy.clientWidth === 0) {
-          next.set(optionIndex, 'truncated')
-          continue
+      const titleTruncated = title !== null && title.scrollHeight > title.clientHeight + 1
+      const truncated = new Set<number>()
+      for (const description of descriptions) {
+        if (description.scrollWidth > description.clientWidth + 1) {
+          truncated.add(Number(description.dataset.optionIndex))
         }
-        const actionSpace = parseFloat(getComputedStyle(row).getPropertyValue('--description-action-space'))
-        // The action's reserved width must not make a fitting description appear truncated.
-        const fullWidth = copy.clientWidth + (row.querySelector('[data-option-details]') === null ? 0 : actionSpace)
-        const probe = line.cloneNode(true) as HTMLElement
-        probe.querySelector('[data-option-description]')?.remove()
-        const probeDescription = description.cloneNode(true) as HTMLElement
-        probeDescription.removeAttribute('id')
-        probeDescription.className = clsx(css.descriptionInline)
-        probe.append(probeDescription)
-        probe.style.cssText = 'position:fixed;top:-10000px;left:0;width:max-content;flex-wrap:nowrap;visibility:hidden;pointer-events:none'
-        document.body.append(probe)
-        const inlineWidth = probe.getBoundingClientRect().width
-        probeDescription.className = clsx(css.description)
-        probeDescription.style.width = 'max-content'
-        const blockWidth = probeDescription.getBoundingClientRect().width
-        probe.remove()
-        next.set(optionIndex, inlineWidth <= fullWidth + 1 ? 'inline'
-          : blockWidth <= fullWidth + 1 ? 'block' : 'truncated')
       }
-      setDescriptionModes(current => current !== null && current.size === next.size
-        && [...next].every(([optionIndex, mode]) => current.get(optionIndex) === mode) ? current : next)
+      setOverflow(current => current?.question === question && current.title === titleTruncated
+        && current.descriptions.size === truncated.size
+        && [...truncated].every(optionIndex => current.descriptions.has(optionIndex))
+        ? current : { question, title: titleTruncated, descriptions: truncated })
     }
     measure()
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
     if (title !== null) observer?.observe(title)
-    for (const row of rows) {
-      observer?.observe(row)
-      const copy = row.querySelector('[data-option-copy]')
-      if (copy !== null) observer?.observe(copy)
-    }
+    for (const description of descriptions) observer?.observe(description)
     const fonts = 'fonts' in document ? document.fonts : null
     fonts?.addEventListener('loadingdone', measure)
     return () => {
       observer?.disconnect()
       fonts?.removeEventListener('loadingdone', measure)
     }
-  }, [index, minimized, question.question, question.options])
+  }, [minimized, question])
 
   const replaceProgress = (nextIndex: number, nextDrafts: QuestionDraftAnswer[]): void => {
     actions.replace(pending.key, {
@@ -598,8 +576,7 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
                   const selected = draft.selected.includes(option.label)
                   const display = parseRecommendedLabel(option.label)
                   const hasDescription = option.description !== undefined && option.description.trim() !== ''
-                  const descriptionMode = descriptionModes?.get(optionIndex) ?? 'truncated'
-                  const showDetails = hasDescription && descriptionMode === 'truncated'
+                  const showDetails = hasDescription && overflow?.question === question && overflow.descriptions.has(optionIndex)
                   const descriptionId = `${descriptionIdPrefix}-question-${String(index)}-option-${String(optionIndex)}-description`
                   return (
                     <div
@@ -614,7 +591,7 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
                     >
                       <button
                         type="button"
-                        className={clsx(css.option, showDetails && css.optionWithDescription)}
+                        className={css.option}
                         role={question.multiSelect === true ? 'checkbox' : 'radio'}
                         aria-checked={selected}
                         aria-label={display.label}
@@ -640,15 +617,13 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
                             {display.recommended && (
                               <span className={css.badge}>{t('option.recommended')}</span>
                             )}
-                            {hasDescription && descriptionMode === 'inline' && (
-                              <span id={descriptionId} className={css.descriptionInline} data-option-description>{option.description}</span>
-                            )}
                           </span>
-                          {hasDescription && descriptionMode !== 'inline' && (
+                          {hasDescription && (
                             <span
                               id={descriptionId}
                               className={clsx(css.description, showDetails && css.descriptionTruncated)}
                               data-option-description
+                              data-option-index={optionIndex}
                             >{option.description}</span>
                           )}
                         </span>

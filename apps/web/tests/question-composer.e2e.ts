@@ -596,7 +596,7 @@ describe('web e2e: resident question composer round trip', () => {
         if (label === null || description === null) return null
         const style = getComputedStyle(description)
         return {
-          sameLine: Math.abs(label.getBoundingClientRect().top - description.getBoundingClientRect().top) < 1,
+          sameLine: description.getBoundingClientRect().top < label.getBoundingClientRect().bottom,
           fontSize: style.fontSize,
           lineHeight: style.lineHeight,
           hasDetails: row.querySelector('[data-option-details]') !== null,
@@ -605,7 +605,7 @@ describe('web e2e: resident question composer round trip', () => {
       }))
       expect(rows).toHaveLength(4)
       expect(rows).toEqual(Array.from({ length: 4 }, () => ({
-        sameLine: true, fontSize: '14px', lineHeight: '24px', hasDetails: false, maskImage: 'none',
+        sameLine: true, fontSize: '13px', lineHeight: '20px', hasDetails: false, maskImage: 'none',
       })))
       await composer.getByRole('radio', { name: '中（medium）' }).click()
       await composer.getByRole('button', { name: 'Submit', exact: true }).click()

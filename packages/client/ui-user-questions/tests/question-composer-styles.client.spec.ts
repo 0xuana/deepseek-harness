@@ -16,17 +16,11 @@ function declarations(selector: string): string[] {
 }
 
 describe('QuestionComposer compact long-copy layout', () => {
-  it('keeps fitting descriptions in the original option-line typography', () => {
-    expect(declarations('.descriptionInline')).toEqual(expect.arrayContaining([
-      'font-size: 14px',
-      'line-height: 24px',
-      'font-weight: 400',
-    ]))
-  })
-
   it('keeps the option description to one clipped line and fades only truncated text', () => {
     expect(declarations('.description')).toEqual(expect.arrayContaining([
       'display: block',
+      'width: max-content',
+      'max-width: 100%',
       'min-width: 0',
       'overflow: hidden',
       'font-size: 13px',
@@ -35,7 +29,7 @@ describe('QuestionComposer compact long-copy layout', () => {
       'white-space: nowrap',
     ]))
     expect(declarations('.descriptionTruncated')).toContain(
-      'mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent)',
+      'mask-image: linear-gradient(to right, #000 calc(100% - 52px), transparent calc(100% - 24px))',
     )
   })
 

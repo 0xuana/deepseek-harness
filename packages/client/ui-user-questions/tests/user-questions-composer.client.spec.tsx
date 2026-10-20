@@ -327,7 +327,11 @@ describe('QuestionComposer', () => {
     }
   })
 
-  it('opens a full option description without choosing the option', () => {
+  it('opens a full option description without choosing the option', ({ onTestFinished }) => {
+    const width = vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.hasAttribute('data-option-description') ? 500 : 0
+    })
+    onTestFinished(() => { cleanup(); width.mockRestore() })
     const description = 'Remove the experimental client from every shipped template and require an explicit profile install.'
     const { carrier } = wait([{
       id: 'release', question: 'How should the release graph change?',
@@ -356,7 +360,11 @@ describe('QuestionComposer', () => {
     expect(screen.getAllByText(description)).toHaveLength(1)
   })
 
-  it('resets scrolling and an open option description when the question changes', () => {
+  it('resets scrolling and an open option description when the question changes', ({ onTestFinished }) => {
+    const width = vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.hasAttribute('data-option-description') ? 500 : 0
+    })
+    onTestFinished(() => { cleanup(); width.mockRestore() })
     const firstDescription = 'First question detail that was pinned open.'
     const secondDescription = 'Second question detail starts closed.'
     const { carrier } = wait([
@@ -959,7 +967,11 @@ function reviewCard(review: readonly AskUserQuestionAnswerItem[] = RECORDED) {
 }
 
 describe('review card', () => {
-  it('walks a settled call record with every answer surface frozen', () => {
+  it('walks a settled call record with every answer surface frozen', ({ onTestFinished }) => {
+    const width = vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.hasAttribute('data-option-description') ? 500 : 0
+    })
+    onTestFinished(() => { cleanup(); width.mockRestore() })
     const { carrier } = reviewCard()
     render(<QuestionComposer matched={carrier} {...kit} />)
 

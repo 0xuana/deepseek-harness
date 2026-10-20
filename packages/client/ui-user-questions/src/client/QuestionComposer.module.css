@@ -216,7 +216,6 @@
 }
 
 .optionRow {
-  --description-action-space: 30px;
   position: relative;
   width: 100%;
   min-height: 40px;
@@ -241,10 +240,6 @@
   color: inherit;
   text-align: left;
   cursor: pointer;
-}
-
-.optionWithDescription {
-  padding-right: calc(12px + var(--description-action-space));
 }
 
 .optionSelected {
@@ -324,12 +319,17 @@
 }
 
 .optionCopy {
-  min-width: 0;
+  display: flex;
   flex: 1;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 6px;
+  min-width: 0;
 }
 
 .optionLine {
   display: flex;
+  max-width: 100%;
   align-items: baseline;
   flex-wrap: wrap;
   gap: 2px 6px;
@@ -353,6 +353,8 @@
 
 .description {
   display: block;
+  width: max-content;
+  max-width: 100%;
   min-width: 0;
   overflow: hidden;
   color: var(--dsw-alias-label-tertiary);
@@ -364,14 +366,7 @@
 }
 
 .descriptionTruncated {
-  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
-}
-
-.descriptionInline {
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 14px;
-  line-height: 24px;
-  font-weight: 400;
+  mask-image: linear-gradient(to right, #000 calc(100% - 52px), transparent calc(100% - 24px));
 }
 
 .descriptionAction {
@@ -584,10 +579,6 @@
   .option,
   .customRow {
     padding: 8px 6px;
-  }
-
-  .optionWithDescription {
-    padding-right: calc(6px + var(--description-action-space));
   }
 
   .descriptionAction {
