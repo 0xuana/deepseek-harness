@@ -52,7 +52,7 @@ Existing sources and records are unchanged, so the new reader accepts existing s
 <a id="verification"></a>
 ## Verification
 
-Focused Host and Client tests: 28 passed with 100% affected-source coverage. The Loader/HMR composition test enables a real optional package, verifies the saved profile, and observes the same Agent consuming the continuation notice. Tests cover replayed decisions, duplicate actions, failed activation, and disposal.
+Focused Host and Client tests cover tool contracts, card decisions and recovery. The Loader/HMR composition test enables a real optional package, verifies the saved profile, and observes the same Agent consuming the continuation notice. Tests cover replayed decisions, duplicate actions, failed activation, and disposal.
 
 <a id="dev-note"></a>
 ## Dev Note

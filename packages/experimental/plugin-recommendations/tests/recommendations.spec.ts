@@ -1,12 +1,13 @@
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { createUserMessage, createToolResultMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
-import { SessionId, SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session'
+import { appendPluginRecord, SessionId, SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { BundleInfo, ChangeResult } from '@deepseek-ai/dsh-plugin-manager/types'
 import RemoteAccess from '@deepseek-ai/dsh-api-remote-access'
 import PluginRecommendations from '../src/index.ts'
 import { recommendationProjection } from '../src/projection.ts'
+import type { RecommendationDecision } from '../src/types.ts'
 
 const bundle: BundleInfo = {
   name: 'official-search', official: true, optional: true, availability: 'installation',
@@ -114,6 +115,26 @@ describe('official recommendations', () => {
     expect((await f.propose()).meta).toMatchObject({ pluginRecommendation: { titleZh: 'Search', descriptionZh: 'History' } })
   })
 
+  it('releases a proposal rejected by a post-execute hook so a different call can retry', async () => {
+    const f = await fixture()
+    const remove = f.ctx.on('tools/post-execute', async (_exec, _result, _next) => ({ kind: 'block', feedback: [{ type: 'text', text: 'test veto' }] }))
+    expect((await f.execute('suggest_plugin', { name: bundle.name, request: 'search', reason: 'history' })).isError).toBe(true)
+    remove()
+    const retry = await f.ctx.tools.execute({
+      name: 'suggest_plugin', arguments: { name: bundle.name, request: 'search', reason: 'history' },
+      agent: f.agent, callId: ToolCallId('retry-after-hook'), signal: new AbortController().signal,
+    })
+    expect(retry.isError).toBe(false)
+  })
+
+  it('allows a session-authorized dismissal without global profile access', async () => {
+    const f = await fixture()
+    await f.propose()
+    vi.spyOn(f.ctx.remoteAccess, 'allows').mockReturnValue(false)
+    expect(await f.ctx.pluginRecommendations.act(f.agent, callId, 'dismiss')).toEqual({ status: 'settled', outcome: 'dismissed' })
+    expect(f.manager.setBundleEnabled).not.toHaveBeenCalled()
+  })
+
   it('refuses non-root callers and profile writes without global access', async () => {
     const f = await fixture()
     vi.spyOn(f.ctx.agents, 'roots').mockReturnValue([])
@@ -156,6 +177,7 @@ describe('official recommendations', () => {
     const f = await fixture()
     const result = await f.propose()
     expect(result.meta).toMatchObject({ pluginRecommendation: { titleZh: '搜索', name: bundle.name, callId } })
+    expect(result.content).toEqual([{ type: 'text', text: JSON.stringify({ status: 'offered', name: bundle.name }) }])
     expect(f.manager.setBundleEnabled).not.toHaveBeenCalled()
     for (const args of [
       { name: 'custom', request: 'last week’s conversation', reason: 'help' },
@@ -197,6 +219,53 @@ describe('official recommendations', () => {
     }
   })
 
+  it('settles an already-enabled plugin without another reload or activation notice', async () => {
+    const f = await fixture()
+    await f.propose()
+    f.manager.listBundles.mockResolvedValue([{ ...bundle, enabled: true }])
+    expect(await f.ctx.pluginRecommendations.act(f.agent, callId, 'enable')).toEqual({ status: 'settled', outcome: 'already-enabled' })
+    expect(f.manager.setBundleEnabled).not.toHaveBeenCalled()
+    expect(f.steer).not.toHaveBeenCalled()
+  })
+
+  it('preserves the management failure code without persisting external diagnostics', async () => {
+    const f = await fixture()
+    await f.propose()
+    f.manager.setBundleEnabled.mockResolvedValue({ application: 'failed', changed: false, stage: 'enable', target: bundle.name,
+      error: { code: 'incompatible-version', diagnostic: '/private/profile/path' } })
+    expect(await f.ctx.pluginRecommendations.act(f.agent, callId, 'enable')).toEqual({ status: 'settled', outcome: 'failed', errorCode: 'incompatible-version' })
+    expect(JSON.stringify(f.events)).not.toContain('/private/profile/path')
+  })
+
+  it('contains an unreadable receipt and refuses actions without stalling later events', async () => {
+    const f = await fixture()
+    await f.propose()
+    // Persisted data can originate in a newer build, outside the current writer's types.
+    const malformed = JSON.parse('{"callId":"suggest-1","outcome":"future-outcome"}') as RecommendationDecision
+    appendPluginRecord(f.agent.session, 'plugin:plugin-recommendations/decision', malformed)
+    f.agent.session.append('turn/start', { turn: 2 })
+    expect(await f.ctx.pluginRecommendations.act(f.agent, callId, 'enable')).toEqual({ status: 'refused', reason: 'invalid-history' })
+    expect(f.manager.setBundleEnabled).not.toHaveBeenCalled()
+    expect(f.events.reduce(recommendationProjection.apply, recommendationProjection.init()).turn).toBe(2)
+    expect((await f.execute('suggest_plugin', { name: bundle.name, request: 'search', reason: 'history' })).isError).toBe(true)
+  })
+
+  it.each(['plugin', 'agent'] as const)('does not start activation after the %s leaves during catalog lookup', async (target) => {
+    const f = await fixture()
+    await f.propose()
+    const entered = Promise.withResolvers<undefined>()
+    const gate = Promise.withResolvers<BundleInfo[]>()
+    f.manager.listBundles.mockImplementationOnce(() => { entered.resolve(undefined); return gate.promise })
+    const action = f.ctx.pluginRecommendations.act(f.agent, callId, 'enable')
+    await entered.promise
+    const disposal = target === 'plugin' ? f.fiber.dispose() : f.handle.dispose()
+    if (target === 'agent') await disposal
+    gate.resolve([bundle])
+    expect(await action).toEqual({ status: 'refused', reason: target === 'plugin' ? 'closing' : 'not-live-root' })
+    await disposal
+    expect(f.manager.setBundleEnabled).not.toHaveBeenCalled()
+  })
+
   it('dismisses durably, rejects forged ids, and rechecks catalog eligibility', async () => {
     const f = await fixture()
     expect(await f.ctx.pluginRecommendations.act(f.agent, callId, 'enable')).toEqual({ status: 'refused', reason: 'unknown' })
@@ -209,10 +278,11 @@ describe('official recommendations', () => {
     expect(f.steer).not.toHaveBeenCalled()
   })
 
-  it('coalesces concurrent actions and drains the operation on unload', async () => {
+  it('coalesces actions and releases local work when HMR must unload the consumer before applying', async () => {
     const f = await fixture()
     await f.propose()
     const gate = Promise.withResolvers<ChangeResult>()
+    onTestFinished(() => { gate.resolve({ application: 'applied', changed: true, stage: 'enable', target: bundle.name }) })
     const entered = Promise.withResolvers<undefined>()
     f.manager.setBundleEnabled.mockImplementation(() => { entered.resolve(undefined); return gate.promise })
     const first = f.ctx.pluginRecommendations.act(f.agent, callId, 'enable')
@@ -220,10 +290,14 @@ describe('official recommendations', () => {
     const second = f.ctx.pluginRecommendations.act(f.agent, callId, 'dismiss')
     const service = f.ctx.pluginRecommendations
     const disposing = f.fiber.dispose()
-    gate.resolve({ application: 'restart-required', changed: true, stage: 'enable', target: bundle.name })
-    expect(await first).toEqual({ status: 'settled', outcome: 'restart-required' })
-    expect(await second).toEqual(await first)
     await disposing
+    expect(await first).toEqual({ status: 'unconfirmed', reason: 'closing' })
+    expect(await second).toEqual(await first)
+    const before = f.events.length
+    gate.resolve({ application: 'applied', changed: true, stage: 'enable', target: bundle.name })
+    await gate.promise
+    expect(f.events).toHaveLength(before)
+    expect(f.steer).not.toHaveBeenCalled()
     expect(f.manager.setBundleEnabled).toHaveBeenCalledOnce()
     expect(await service.act(f.agent, callId, 'enable')).toEqual({ status: 'refused', reason: 'closing' })
   })

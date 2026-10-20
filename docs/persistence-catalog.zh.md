@@ -6957,7 +6957,7 @@ SHA-256: `8c1c4f72755a78ea163523a46565316e36e9b644382eb48e6635c71a6f412dd2`
 
 SHA-256: `8c5183de257e3cee55eebb8106b3c15fb4e1a430dc0267cf7d36f435634d6e29`
 
-来源：[`packages/experimental/plugin-recommendations/src/types.ts:55`](../packages/experimental/plugin-recommendations/src/types.ts)
+来源：[`packages/experimental/plugin-recommendations/src/types.ts:59`](../packages/experimental/plugin-recommendations/src/types.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|

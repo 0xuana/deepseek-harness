@@ -2,7 +2,7 @@
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { expect, it, onTestFinished } from 'vitest'
+import { expect, it, onTestFinished, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import Timer from '@deepseek-ai/cordis-plugin-timer'
 import { boot, initProfile, loadProfileDirectory, readProfilePatches, readProfileManifest, type ProfileContext } from '@deepseek-ai/dsh-app-boot'
@@ -29,7 +29,7 @@ class Model extends LlmAdapter {
   }
 }
 
-it('enables a shipped optional bundle through Loader/HMR, persists it, and continues the same agent', async () => {
+it.each(['normal', 'consumer-unload'] as const)('enables through the real Loader/HMR queue: %s', async (scenario) => {
   const home = await mkdtemp(join(tmpdir(), 'dsh-recommendations-'))
   let owner: Context | undefined
   onTestFinished(async () => { await owner?.fiber.dispose(); await rm(home, { recursive: true, force: true }) })
@@ -83,6 +83,30 @@ it('enables a shipped optional bundle through Loader/HMR, persists it, and conti
     ...result.meta === undefined ? {} : { meta: result.meta },
   }, { surfaceOp: 'append' })
   expect(readProfileManifest('test', dir).dsh?.profile?.bundles).not.toContain(name)
+  if (scenario === 'consumer-unload') {
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    onTestFinished(() => { release.resolve(undefined) })
+    const reload = ctx.hmr.runExclusive(async () => {
+      entered.resolve(undefined)
+      await release.promise
+      const fiber = [...ctx.loader.entries()].find(entry => entry.options.name === 'cordis:recommendations')?.fiber
+      expect(fiber).toBeDefined()
+      await fiber!.dispose()
+    })
+    await entered.promise
+    const exclusive = vi.spyOn(ctx.hmr, 'runExclusive')
+    const action = ctx.pluginRecommendations.act(agent, callId, 'enable')
+    await vi.waitFor(() => { expect(exclusive).toHaveBeenCalledOnce() })
+    release.resolve(undefined)
+    await reload
+    expect(await action).toEqual({ status: 'unconfirmed', reason: 'closing' })
+    await ctx.hmr.runExclusive(async () => {})
+    expect(readProfileManifest('test', dir).dsh?.profile?.bundles).toContain(name)
+    expect((await ctx.pluginManager.listBundles()).find(bundle => bundle.name === name)?.enabled).toBe(true)
+    expect(model.requests).toHaveLength(0)
+    return
+  }
   const idle = new Promise<void>((resolve) => {
     const stop = ctx.on('agent/status', ({ agent: subject, status }) => {
       if (subject === agent && status === 'idle') { stop(); resolve() }

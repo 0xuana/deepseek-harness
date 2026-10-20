@@ -31,7 +31,8 @@ type CardProps = { recommendation: PluginRecommendation } & Pick<PropsRuntime<'c
 export function RecommendationTail({ turn, useRecommendations, ...props }: Pick<PropsRuntime<'conversation.chat.turnTail'>, 'turn' | 'useProjection'>
   & PropsLocale<'pluginRecommendations'> & InjectFace<RecommendationTailInjected>) {
   const recommendation = useRecommendations(String(turn.turn))?.[0]
-  return recommendation === undefined ? null : <RecommendationCard {...props} recommendation={recommendation} />
+  return recommendation === undefined || turn.end?.data.reason.kind !== 'completed' || turn.data.get('turn-tail')?.closing == null
+    ? null : <RecommendationCard {...props} recommendation={recommendation} />
 }
 
 /** Display one recommendation and the persisted outcome of the user's choice.
@@ -51,7 +52,8 @@ export function RecommendationCard({ recommendation, useProjection, useChinese, 
     try {
       const result = await act(recommendation.callId, action)
       if (result === undefined) setError('transport')
-      else if (result.status === 'refused') setError(result.reason)
+      else if (result.status !== 'settled') setError(result.reason)
+      else if (result.errorCode !== undefined) setError(result.errorCode === 'incompatible-version' ? 'version-error' : 'management-error')
     } catch {
       // The Host operation may have committed before a connection loss; retry is idempotent.
       setError('transport')
@@ -61,19 +63,20 @@ export function RecommendationCard({ recommendation, useProjection, useChinese, 
     <header className={css.header}><span>{t('heading')}</span><span className={css.badge}>{t('official')}</span></header>
     <div className={css.body}>
       <button type="button" className={css.details} onClick={() => { openDetails(recommendation.name) }}
-        aria-label={`${t('details')}: ${chinese ? recommendation.titleZh : recommendation.titleEn}`}>
+        aria-label={t('detailsFor').replace('{title}', chinese ? recommendation.titleZh : recommendation.titleEn)}>
         <strong className={css.title}>{chinese ? recommendation.titleZh : recommendation.titleEn}</strong>
         <span className={css.reason}>{recommendation.reason}</span>
         <span className={css.description}>{chinese ? recommendation.descriptionZh : recommendation.descriptionEn}</span>
-        <span className={css.detailHint}>{t('details')} →</span>
+        <span className={css.detailHint}>{t('detailsHint')}</span>
       </button>
       {outcome !== undefined && <p role="status" className={css.status}>{t(outcome)}</p>}
-      {error !== undefined && <p role="alert" className={css.status}>{t(error)}</p>}
+      {decisions?.invalid ? <p role="alert" className={css.status}>{t('invalid-history')}</p>
+        : open && error !== undefined && <p role="alert" className={css.status}>{t(error)}</p>}
       {open && <footer className={css.footer}>
         <span className={css.scope}>{t('scope')}</span>
         <div className={css.actions}>
-          <Button variant="ghost" size="sm" disabled={pending || decisions === undefined} onClick={() => { void run('dismiss') }}>{t('dismiss')}</Button>
-          <Button variant="primary" size="sm" disabled={pending || decisions === undefined} onClick={() => { void run('enable') }}>
+          <Button variant="ghost" size="sm" disabled={pending || decisions === undefined || decisions.invalid} onClick={() => { void run('dismiss') }}>{t('dismiss')}</Button>
+          <Button variant="primary" size="sm" disabled={pending || decisions === undefined || decisions.invalid} onClick={() => { void run('enable') }}>
             {t(pending ? 'enabling' : outcome === undefined ? 'enable' : 'retry')}
           </Button>
         </div>

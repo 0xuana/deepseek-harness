@@ -367,7 +367,7 @@ Owns the catalog tools, durable decisions, and idempotent card actions.
  * @param agent - Exact live root resolved by the Gateway from the Session id.
  * @param callId - Proposal stored by suggest_plugin, never a package supplied by the browser.
  * @param action - Human choice.
- * @returns The observed application outcome or a refusal with no profile mutation.
+ * @returns An observed outcome, a refusal before mutation, or an unconfirmed result if reload interrupts the wait.
  */
 @Remote act(agent: Agent, callId: ToolCallId, action: 'enable' | 'dismiss'): Promise<RecommendationActionResult>
 ```

@@ -1,6 +1,7 @@
 /** Durable facts for user-requested official plugin recommendations. */
 import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import type { SessionProjectionSummaryExcluded } from '@deepseek-ai/dsh-session-projection/types'
+import type { ManagementError } from '@deepseek-ai/dsh-plugin-manager/types'
 
 /** Host-owned catalog text captured when a recommendation is made. */
 export interface PluginRecommendation {
@@ -17,7 +18,7 @@ export interface PluginRecommendation {
 }
 
 /** Selection and runtime application are deliberately separate. */
-export type RecommendationOutcome = 'dismissed' | 'applied' | 'restart-required' | 'overridden' | 'failed' | 'cancelled'
+export type RecommendationOutcome = 'dismissed' | 'applied' | 'already-enabled' | 'restart-required' | 'overridden' | 'failed' | 'cancelled'
 
 /** A completed user action. A failure remains retryable from the card. */
 export interface RecommendationDecision {
@@ -28,12 +29,15 @@ export interface RecommendationDecision {
 /** Full-session decisions; the card itself comes from the tool result. */
 export interface RecommendationView {
   readonly decisions: Readonly<Record<string, RecommendationOutcome>>
+  /** An unreadable receipt blocks actions without breaking other Session projections. */
+  readonly invalid?: true | undefined
 }
 
 /** Explicit refusals never change the profile. */
 export type RecommendationActionResult =
-  | { readonly status: 'settled'; readonly outcome: RecommendationOutcome }
-  | { readonly status: 'refused'; readonly reason: 'unknown' | 'unavailable' | 'access-denied' | 'not-live-root' | 'closing' }
+  | { readonly status: 'settled'; readonly outcome: RecommendationOutcome; readonly errorCode?: ManagementError['code'] }
+  | { readonly status: 'refused'; readonly reason: 'unknown' | 'unavailable' | 'access-denied' | 'not-live-root' | 'closing' | 'invalid-history' }
+  | { readonly status: 'unconfirmed'; readonly reason: 'closing' }
 
 declare module '@deepseek-ai/dsh-session/types' {
   interface PluginRecordMap {

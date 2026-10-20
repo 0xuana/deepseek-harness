@@ -24656,7 +24656,7 @@
       "digest": "8c5183de257e3cee55eebb8106b3c15fb4e1a430dc0267cf7d36f435634d6e29",
       "names": [],
       "sources": [
-        "packages/experimental/plugin-recommendations/src/types.ts:55"
+        "packages/experimental/plugin-recommendations/src/types.ts:59"
       ]
     },
     {

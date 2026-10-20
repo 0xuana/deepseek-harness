@@ -15,11 +15,11 @@ const recommendationSchema: z.ZodType<PluginRecommendation> = z.object({
 }).strict()
 
 const outcomeSchema: z.ZodType<RecommendationOutcome> = z.enum([
-  'dismissed', 'applied', 'restart-required', 'overridden', 'failed', 'cancelled',
+  'dismissed', 'applied', 'already-enabled', 'restart-required', 'overridden', 'failed', 'cancelled',
 ])
 
 /** The host retains proposals to validate actions; clients only need decisions. */
-const viewSchema = z.object({ decisions: z.record(z.string(), outcomeSchema) })
+const viewSchema = z.object({ decisions: z.record(z.string(), outcomeSchema), invalid: z.literal(true).optional() })
 /** Cache validation for proposals and experimental decision records. */
 export const stateSchema = z.object({
   proposals: z.record(z.string(), recommendationSchema),
@@ -45,15 +45,17 @@ export function recommendationOf(event: SessionEvent): PluginRecommendation | un
 /** Whole-log fold; late decisions survive card pagination and reconnect. */
 export const recommendationProjection = {
   key: 'pluginRecommendations',
-  stateVersion: 2,
+  stateVersion: 3,
   stateSchema,
   init: (): RecommendationState => ({ proposals: {}, view: { decisions: {} }, turn: 0, firstCall: null }),
   apply: (state, event) => {
     if (event.type === 'turn/start') return { ...state, turn: event.data.turn, firstCall: null }
     const record = pluginRecordOf(event)
     if (record?.type === 'plugin:plugin-recommendations/decision') {
-      const decision = z.object({ callId: z.string().min(1), outcome: outcomeSchema }).parse(record.data)
-      return { ...state, view: { decisions: { ...state.view.decisions, [decision.callId]: decision.outcome } } }
+      const parsed = z.object({ callId: z.string().min(1), outcome: outcomeSchema }).safeParse(record.data)
+      if (!parsed.success) return { ...state, view: { ...state.view, invalid: true } }
+      const decision = parsed.data
+      return { ...state, view: { ...state.view, decisions: { ...state.view.decisions, [decision.callId]: decision.outcome } } }
     }
     const recommendation = recommendationOf(event)
     return recommendation === undefined ? state

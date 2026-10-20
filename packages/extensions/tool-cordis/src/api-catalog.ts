@@ -1968,7 +1968,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: '@Remote act(agent: Agent, callId: ToolCallId, action: \'enable\' | \'dismiss\'): Promise<RecommendationActionResult>',
         description: 'Decide one logged recommendation. Concurrent actions on the same card share one operation; a settled success or dismissal never enables twice. Failed activation remains retryable. Profile selection survives session disposal.',
         parameters: [{ name: 'agent', description: 'Exact live root resolved by the Gateway from the Session id.' }, { name: 'callId', description: 'Proposal stored by suggest_plugin, never a package supplied by the browser.' }, { name: 'action', description: 'Human choice.' }],
-        returns: 'The observed application outcome or a refusal with no profile mutation.',
+        returns: 'An observed outcome, a refusal before mutation, or an unconfirmed result if reload interrupts the wait.',
       },
     ],
   },
@@ -6947,11 +6947,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RecommendationActionResult',
-    declaration: 'export type RecommendationActionResult = {\n    readonly status: \'settled\';\n    readonly outcome: RecommendationOutcome;\n} | {\n    readonly status: \'refused\';\n    readonly reason: \'unknown\' | \'unavailable\' | \'access-denied\' | \'not-live-root\' | \'closing\';\n};',
+    declaration: 'export type RecommendationActionResult = {\n    readonly status: \'settled\';\n    readonly outcome: RecommendationOutcome;\n    readonly errorCode?: ManagementError[\'code\'];\n} | {\n    readonly status: \'refused\';\n    readonly reason: \'unknown\' | \'unavailable\' | \'access-denied\' | \'not-live-root\' | \'closing\' | \'invalid-history\';\n} | {\n    readonly status: \'unconfirmed\';\n    readonly reason: \'closing\';\n};',
   },
   {
     name: 'RecommendationOutcome',
-    declaration: 'export type RecommendationOutcome = \'dismissed\' | \'applied\' | \'restart-required\' | \'overridden\' | \'failed\' | \'cancelled\';',
+    declaration: 'export type RecommendationOutcome = \'dismissed\' | \'applied\' | \'already-enabled\' | \'restart-required\' | \'overridden\' | \'failed\' | \'cancelled\';',
   },
   {
     name: 'RecurringScheduleRecord',

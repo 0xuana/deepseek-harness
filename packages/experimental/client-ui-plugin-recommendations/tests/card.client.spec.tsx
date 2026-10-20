@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, expect, it, vi } from 'vitest'
 import type { RecommendationOutcome } from '@deepseek-ai/dsh-experimental-plugin-recommendations/types'
 import { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
+import { SessionSeq } from '@deepseek-ai/dsh-session/types'
 import { RecommendationCard, RecommendationTail } from '../src/client/Card.tsx'
 import { en, zh, type RecommendationKey } from '../src/client/locales.ts'
 
@@ -29,11 +30,12 @@ it('shows at most one card at the completed turn tail and none when no proposal 
   type Tail = ComponentProps<typeof RecommendationTail>
   const value = props()
   const useRecommendations = vi.fn<(turn: string) => readonly Props['recommendation'][] | undefined>(() => undefined)
+  const getTurnData = vi.fn().mockReturnValue({ closing: {} })
   const tail: Tail = {
     ...value, useRecommendations,
     turn: {
-      turn: 1, start: undefined, end: undefined, status: 'closed', steps: [],
-      data: { get: () => undefined, source: () => ({ getSnapshot: () => undefined, subscribe: () => () => {} }) },
+      turn: 1, start: undefined, end: { type: 'turn/end', seq: SessionSeq(1), time: 0, data: { turn: 1, reason: { kind: 'completed' } } }, status: 'closed', steps: [],
+      data: { get: getTurnData, source: () => ({ getSnapshot: () => undefined, subscribe: () => () => {} }) },
     },
   }
   const { rerender } = render(<RecommendationTail {...tail} />)
@@ -45,6 +47,13 @@ it('shows at most one card at the completed turn tail and none when no proposal 
   rerender(<RecommendationTail {...tail} />)
   expect(screen.getAllByRole('region')).toHaveLength(1)
   expect(useRecommendations).toHaveBeenCalledWith('1')
+  for (const reason of [{ kind: 'aborted', reason: { kind: 'user' } }, { kind: 'interrupted' }, { kind: 'error', error: { code: 'UNKNOWN', message: 'fixture' } }] as const) {
+    rerender(<RecommendationTail {...tail} turn={{ ...tail.turn, end: { type: 'turn/end', seq: SessionSeq(1), time: 0, data: { turn: 1, reason } } }} />)
+    expect(screen.queryByRole('region')).toBeNull()
+  }
+  getTurnData.mockReturnValue(undefined)
+  rerender(<RecommendationTail {...tail} />)
+  expect(screen.queryByRole('region')).toBeNull()
 })
 
 it('shows host metadata, rationale and scope with explicit enable and dismiss actions', async () => {
@@ -69,12 +78,12 @@ it('allows dismissal and disables both actions until the request settles', async
   await act(async () => { pending.resolve({ status: 'settled', outcome: 'dismissed' }) })
 })
 
-it.each(['applied', 'dismissed', 'restart-required', 'overridden'] as const)('restores %s and keeps details available without repeating the decision', (outcome) => {
+it.each(['applied', 'already-enabled', 'dismissed', 'restart-required', 'overridden'] as const)('restores %s and keeps details available without repeating the decision', (outcome) => {
   const value = props(outcome)
   render(<RecommendationCard {...value} />)
   expect(screen.getByRole('status').textContent).toBe(zh[outcome])
   expect(screen.getAllByRole('button')).toHaveLength(1)
-  fireEvent.click(screen.getByRole('button', { name: '查看详情: 会话搜索' }))
+  fireEvent.click(screen.getByRole('button', { name: '查看详情：会话搜索' }))
   expect(value.openDetails).toHaveBeenCalledWith('official-search')
   expect(value.act).not.toHaveBeenCalled()
 })
@@ -107,6 +116,32 @@ it('does not offer a writable card before its projection arrives', () => {
   render(<RecommendationCard {...value} />)
   expect(screen.getByRole('button', { name: '启用' }).hasAttribute('disabled')).toBe(true)
   expect(screen.getByRole('button', { name: '暂不需要' }).hasAttribute('disabled')).toBe(true)
-  fireEvent.click(screen.getByRole('button', { name: '查看详情: 会话搜索' }))
+  fireEvent.click(screen.getByRole('button', { name: '查看详情：会话搜索' }))
   expect(value.openDetails).toHaveBeenCalledWith('official-search')
+})
+
+it('removes an uncertain transport warning when the persisted success arrives', async () => {
+  const value = props()
+  value.act = vi.fn().mockRejectedValue(new Error('disconnected'))
+  const { rerender } = render(<RecommendationCard {...value} />)
+  fireEvent.click(screen.getByRole('button', { name: '启用' }))
+  await screen.findByRole('alert')
+  rerender(<RecommendationCard {...props('applied')} />)
+  expect(screen.queryByRole('alert')).toBeNull()
+  expect(screen.getByRole('status').textContent).toBe('已启用')
+})
+
+it('shows an actionable version failure and contains an invalid history without enabling', async () => {
+  const value = props()
+  value.act = vi.fn().mockResolvedValue({ status: 'settled', outcome: 'failed', errorCode: 'incompatible-version' })
+  const { rerender } = render(<RecommendationCard {...value} />)
+  fireEvent.click(screen.getByRole('button', { name: '启用' }))
+  await waitFor(() => { expect(screen.getByRole('alert').textContent).toBe(zh['version-error']) })
+  value.act = vi.fn().mockResolvedValue({ status: 'settled', outcome: 'failed', errorCode: 'operation-error' })
+  rerender(<RecommendationCard {...value} />)
+  fireEvent.click(screen.getByRole('button', { name: '启用' }))
+  await waitFor(() => { expect(screen.getByRole('alert').textContent).toBe(zh['management-error']) })
+  rerender(<RecommendationCard {...value} useProjection={vi.fn().mockReturnValue({ decisions: {}, invalid: true })} />)
+  expect(screen.getByRole('alert').textContent).toBe(zh['invalid-history'])
+  expect(screen.getByRole('button', { name: '启用' }).hasAttribute('disabled')).toBe(true)
 })

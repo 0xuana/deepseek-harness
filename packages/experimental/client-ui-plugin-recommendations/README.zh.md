@@ -13,29 +13,31 @@ kind: "package-reference"
 
 ## 目录
 
-- [Use this package](#use-this-package)
-- [Understand the implementation](#understand-the-implementation)
-- [Further Exploration](#further-exploration)
-- [Model Experience](#model-experience)
-- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+- [使用本包](#use-this-package)
+- [实现原理](#understand-the-implementation)
+- [延伸阅读](#further-exploration)
+- [模型体验](#model-experience)
+- [已知限制与后续工作](#known-limitations-and-deferred-work)
 - [开发备注](#dev-note)
 
 -----
 
 <a id="use-this-package"></a>
-## Use this package
+## 使用本包
 
 启用[插件推荐 Bundle](../plugin-recommendations/README.zh.md)，即可组合本界面和 Host 工具、操作服务。本界面没有配置字段。
 
 -----
 
 <a id="understand-the-implementation"></a>
-## Understand the implementation
+## 实现原理
 
 <details>
 <summary>实现细节 — 点击展开</summary>
 
 已校验的原生及 PTC 工具结果存为隐藏的 Conversation 节点。已结束回合的末尾插槽读取该回合的推荐索引，只显示第一项，因此工具执行中和回答流式输出时不显示卡片。Session 投影恢复刷新后的选择状态。卸载时同时移除可选 Remote 和所有界面注册。
+
+卡片沿用应用字体，通过标题、正文和独立操作区区分信息层级。构建入口将生成的 Remote 描述传给可直接从源码测试的挂载流程。
 
 - [Source](src/client/index.ts)
 - [Tests](tests/)
@@ -45,22 +47,22 @@ kind: "package-reference"
 -----
 
 <a id="further-exploration"></a>
-## Further Exploration
+## 延伸阅读
 
 - [推荐服务](../plugin-recommendations/README.zh.md) — 推荐范围、启用和持久化。
 - [Conversation](../../client/ui-conversation/README.zh.md) — 事件索引。
 - [Slots](../../client/ui-slots/README.zh.md) — 回合末尾呈现。
 
 <a id="model-experience"></a>
-## Model Experience
+## 模型体验
 
-Indirectly，通过成功的启用操作：Host 推荐服务发送已记录的续跑通知。本界面不增加模型工具或提示词。
+间接影响来自成功的启用操作：Host 推荐服务发送已记录的续跑通知。本界面不增加模型工具或提示词。
 
 #### KV Cache effect
 
 卡片不增加模型上下文。启用操作可能通过 Host 改变后续工具声明。
 
-## Known Limitations and Deferred Work
+## 已知限制与后续工作
 
 <a id="known-limitations-and-deferred-work"></a>
 
@@ -76,5 +78,3 @@ Indirectly，通过成功的启用操作：Host 推荐服务发送已记录的�
 无。
 
 </details>
-
-卡片沿用应用字体，通过标题、正文和独立操作区区分信息层级。构建入口将生成的 Remote 描述传给可直接从源码测试的挂载流程。

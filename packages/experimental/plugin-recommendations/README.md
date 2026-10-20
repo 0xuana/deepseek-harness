@@ -43,7 +43,7 @@ Enable requires permission to modify the profile. The Host rechecks catalog elig
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The catalog and activation reuse `pluginManager`. The main Agent interprets expressed needs; Host code enforces the official shipped catalog, one successful proposal per Turn, and a separate human action. Concurrent proposals reserve the Turn before catalog lookup; failed proposals release that reservation. Replaying a settled proposal preserves the limit after reload, while a later Turn can recommend again. Trusted catalog text is persisted in tool-result metadata, while a Session projection folds decision receipts. Concurrent actions on one card share an operation, and disposal drains admitted changes. Profile files own installation state; experimental Session records only own the historical decision. Removing the bundle withdraws tools, cards and its generated Remote contribution.
+The catalog and activation reuse `pluginManager`. The main Agent interprets expressed needs; Host code enforces the official shipped catalog, one successful proposal per Turn, and a separate human action. Concurrent proposals reserve the Turn before catalog lookup; failed proposals release that reservation. Replaying a settled proposal preserves the limit after reload, while a later Turn can recommend again. Trusted catalog text is persisted in tool-result metadata, while a Session projection folds decision receipts. Concurrent actions on one card share an operation, and disposal stops local follow-up without waiting on a profile mutation queued behind its own HMR unload. Plugin Manager owns an accepted mutation; an unconfirmed card rechecks the installed state after reload. A plugin selected elsewhere settles as `already-enabled` without another reload or activation notice; profile selection does not prove runtime activation. Unreadable receipts block recommendation actions and show a recovery message without stalling other Session projections. Profile files own installation state; experimental Session records only own the historical decision. Removing the bundle withdraws tools, cards and its generated Remote contribution.
 
 - [Source](src/index.ts) — registration and service entry.
 - [Tests](tests/) — actions, recovery and lifecycle evidence.
@@ -71,7 +71,7 @@ The catalog and activation reuse `pluginManager`. The main Agent interprets expr
 
 #### Token effect
 
-Two tool schemas are present while the experimental bundle is enabled. Catalog results, recommendations and successful activation notices append context.
+Two tool schemas are present while the experimental bundle is enabled. Catalog results and successful activation notices append context. Native tool text contains only an offered status and package name; presentation metadata and structured PTC values retain the full proposal.
 
 #### KV Cache effect
 
@@ -79,9 +79,9 @@ Recommendation facts append to the transcript. Enabling a plugin can change subs
 
 ## Known Limitations and Deferred Work
 
-Intent cases are in `tests/fixtures/intent-cases.json`. Tool guidance asks the Agent to clarify vague needs, respect a request not to recommend, and produce one concise final answer after proposing. These semantic decisions are evaluated with real model runs; they are not keyword guards.
-
 <a id="known-limitations-and-deferred-work"></a>
+
+The manual real-model input set is in `evaluation/intent-cases.json`; unit tests do not measure semantic intent accuracy. Tool guidance asks the Agent to clarify vague needs, respect a request not to recommend, and produce one concise final answer after proposing. These semantic decisions are evaluated with real model runs; they are not keyword guards.
 
 - Only shipped, optional, official plugins are eligible; missing packages and third-party registries are excluded.
 - Recommendations require a live root conversation; there is no unsolicited opportunity discovery.

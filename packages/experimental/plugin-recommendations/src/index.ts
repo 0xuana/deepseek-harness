@@ -6,7 +6,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import { appendPluginRecord } from '@deepseek-ai/dsh-session'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
-import type { BundleInfo } from '@deepseek-ai/dsh-plugin-manager/types'
+import type { BundleInfo, ManagementError } from '@deepseek-ai/dsh-plugin-manager/types'
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
 import type {} from '@deepseek-ai/dsh-plugin-manager'
 import type {} from '@deepseek-ai/dsh-api-remote-access'
@@ -37,6 +37,7 @@ export default class PluginRecommendations extends TypertRemoteService {
   private projection!: ProjectionHandle<RecommendationState>
   private readonly operations = new Map<string, Promise<RecommendationActionResult>>()
   private readonly proposals = new Map<string, { turn: number; callId: ToolCallId }>()
+  private readonly stopped = Promise.withResolvers<undefined>()
   private closing = false
 
   constructor(ctx: Context) { super(ctx, 'pluginRecommendations') }
@@ -44,8 +45,14 @@ export default class PluginRecommendations extends TypertRemoteService {
   protected async [Service.init](): Promise<void> {
     this.projection = await this.ctx.sessionProjections.register(recommendationProjection)
     this.ctx.on('agent/disposed', ({ agent }) => { this.proposals.delete(agent.id) })
+    this.ctx.on('tools/result', (exec, result) => {
+      if (result.isError && exec.agent !== undefined && this.proposals.get(exec.agent.id)?.callId === exec.callId) {
+        this.proposals.delete(exec.agent.id)
+      }
+    })
     this.ctx.effect(() => async () => {
       this.closing = true
+      this.stopped.resolve(undefined)
       await Promise.allSettled([...this.operations.values()])
     }, 'plugin-recommendations: drain card actions')
     this.ctx.tools.register(defineTool({
@@ -65,7 +72,7 @@ export default class PluginRecommendations extends TypertRemoteService {
     }))
     this.ctx.tools.register(defineTool({
       name: 'suggest_plugin',
-      description: 'Offer one built-in official plugin in a conversation card for the current explicit user need. Read list_official_plugins first; use an exact catalog name, summarize the expressed need using conversation context, and explain the benefit in the user\'s language. Do not call for vague needs that require clarification, an explicit request not to recommend, unexpressed needs, already enabled plugins, or third-party packages. This only proposes: the user must click Enable. Do not enable it through another tool or claim it is enabled. Offer at most one plugin per response. Call this tool before your final response, then give one concise answer and finish; do not repeat the answer around the tool call. The card appears below the completed answer. Refer to its actions in the user’s language. Clicking Enable applies the change through hot reload and automatically sends you confirmation. Never ask the user to type a follow-up, tell you when it is enabled, or refresh the page. Describe the button as the complete activation action. Only mention a restart if the actual operation reports restart-required. The user can later turn off or remove the plugin from its Plugins details page.',
+      description: 'Offer one built-in official plugin in a conversation card for the current explicit user need. Read list_official_plugins first; use an exact catalog name, summarize the expressed need using conversation context, and explain the benefit in the user\'s language. Do not call for vague needs that require clarification, an explicit request not to recommend, unexpressed needs, already enabled plugins, or third-party packages. This only proposes: the user must click Enable. Do not enable it through another tool or claim it is enabled. Offer at most one plugin per response. Call this tool before your final response, then give one concise answer and finish; do not repeat the answer around the tool call. The card appears below the completed answer. Refer to its actions in the user’s language. Clicking Enable completes activation and automatically sends you confirmation. Never ask the user to type a follow-up, tell you when it is enabled, or refresh the page. Describe the button as the complete activation action. The user can later turn off or remove the plugin from its details page.',
       parameters: {
         name: { type: 'string', required: true, description: 'Exact official catalog name.' },
         request: { type: 'string', required: true, description: 'Explicit user need this capability addresses, including relevant conversation context.' },
@@ -73,7 +80,7 @@ export default class PluginRecommendations extends TypertRemoteService {
       },
       output: {
         schema: { type: 'string' },
-        render: (_args, value) => [{ type: 'text', text: value }],
+        render: (_args, value) => [{ type: 'text', text: JSON.stringify({ status: 'offered', name: (JSON.parse(value) as PluginRecommendation).name }) }],
         presentationMeta: (_args, value) => ({ pluginRecommendation: { ...(JSON.parse(value) as PluginRecommendation) } }),
       },
       execute: async (args, exec) => {
@@ -86,6 +93,7 @@ export default class PluginRecommendations extends TypertRemoteService {
           throw new PluginRecommendationError('Describe the explicit user need and explain how the plugin helps.', 'RECOMMENDATION_NEED')
         }
         const state = this.projection.stateOf(agent.session)
+        if (state.view.invalid) throw new PluginRecommendationError('This conversation contains an unreadable recommendation receipt. Update DSH or use a new conversation.', 'RECOMMENDATION_HISTORY')
         const pending = this.proposals.get(agent.id)
         const first = state.firstCall ?? (pending?.turn === state.turn ? pending.callId : undefined)
         if (first !== undefined && first !== exec.callId) {
@@ -122,13 +130,13 @@ export default class PluginRecommendations extends TypertRemoteService {
    * @param agent - Exact live root resolved by the Gateway from the Session id.
    * @param callId - Proposal stored by suggest_plugin, never a package supplied by the browser.
    * @param action - Human choice.
-   * @returns The observed application outcome or a refusal with no profile mutation.
+   * @returns An observed outcome, a refusal before mutation, or an unconfirmed result if reload interrupts the wait.
    */
   @Remote
   act(agent: Agent, callId: ToolCallId, action: 'enable' | 'dismiss'): Promise<RecommendationActionResult> {
     // The Agent lookup covers the Session. Enabling also touches the whole profile.
-    if (!this.ctx.remoteAccess.allows({ kind: 'global' })) return Promise.resolve({ status: 'refused', reason: 'access-denied' })
-    if (this.closing) return Promise.resolve({ status: 'refused', reason: 'closing' })
+    if (action === 'enable' && !this.ctx.remoteAccess.allows({ kind: 'global' })) return Promise.resolve({ status: 'refused', reason: 'access-denied' })
+    if (this.isStopping()) return Promise.resolve({ status: 'refused', reason: 'closing' })
     if (!this.ctx.agents.roots().includes(agent)) return Promise.resolve({ status: 'refused', reason: 'not-live-root' })
     const key = JSON.stringify([agent.id, callId])
     const running = this.operations.get(key)
@@ -139,22 +147,38 @@ export default class PluginRecommendations extends TypertRemoteService {
     return operation
   }
 
+  /** Read live lifecycle state after awaits rather than narrowing it to a stale value. */
+  private isStopping(): boolean { return this.closing }
+
   private async decide(agent: Agent, callId: ToolCallId, action: 'enable' | 'dismiss'): Promise<RecommendationActionResult> {
     const state = this.projection.stateOf(agent.session)
+    if (state.view.invalid) return { status: 'refused', reason: 'invalid-history' }
     const proposal = state.proposals[callId]
     if (proposal === undefined) return { status: 'refused', reason: 'unknown' }
     const previous = state.view.decisions[callId]
     if (previous !== undefined && previous !== 'failed' && previous !== 'cancelled') return { status: 'settled', outcome: previous }
     let outcome: RecommendationOutcome = 'dismissed'
+    let notify = false
+    let errorCode: ManagementError['code'] | undefined
     if (action === 'enable') {
       const bundle = (await this.ctx.pluginManager.listBundles()).find(item => item.name === proposal.name)
       if (bundle === undefined || !eligible(bundle)) return { status: 'refused', reason: 'unavailable' }
-      const result = await this.ctx.pluginManager.setBundleEnabled(bundle.name, true)
-      outcome = result.application
+      if (this.isStopping()) return { status: 'refused', reason: 'closing' }
+      if (!this.ctx.agents.roots().includes(agent)) return { status: 'refused', reason: 'not-live-root' }
+      if (bundle.enabled) outcome = 'already-enabled'
+      else {
+        // PluginManager owns the accepted profile mutation. HMR may unload this
+        // consumer before it finishes, so only our receipt/notification wait is cancelled.
+        const result = await Promise.race([this.ctx.pluginManager.setBundleEnabled(bundle.name, true), this.stopped.promise])
+        if (result === undefined || this.isStopping()) return { status: 'unconfirmed', reason: 'closing' }
+        outcome = result.application
+        errorCode = result.error?.code
+        notify = outcome === 'applied' && result.changed
+      }
     }
     // Profile files own the configuration; this receipt owns the card's decision.
     appendPluginRecord(agent.session, 'plugin:plugin-recommendations/decision', { callId, outcome })
-    if (outcome === 'applied') {
+    if (notify) {
       agent.steer(createUserMessage({
         source: { kind: 'plugin-recommendation', callId, form: 'notice', summary: boundContextSummary(`Enabled ${proposal.titleEn}`) },
         content: [{ type: 'text', text: JSON.stringify({
@@ -163,6 +187,6 @@ export default class PluginRecommendations extends TypertRemoteService {
         }) }],
       }))
     }
-    return { status: 'settled', outcome }
+    return { status: 'settled', outcome, ...errorCode === undefined ? {} : { errorCode } }
   }
 }

@@ -37,6 +37,8 @@ Enable the [Plugin recommendations bundle](../plugin-recommendations/README.md).
 
 Validated native and PTC results become hidden Conversation nodes. The completed-Turn tail reads its indexed proposals and renders the first one, so tool execution and answer streaming do not display the card. Session projection decisions drive the card after reload. The optional Remote and all UI registrations are removed together on unload.
 
+Cards use the application font, a distinct title and compact body scale, and a separate action footer. The built entry supplies generated Remote descriptors to the source-tested mount lifecycle.
+
 - [Source](src/client/index.ts)
 - [Tests](tests/)
 
@@ -76,5 +78,3 @@ The card adds no model context. Its Enable action can change subsequent tool dec
 None.
 
 </details>
-
-Cards use the application font, a distinct title and compact body scale, and a separate action footer. The built entry supplies generated Remote descriptors to the source-tested mount lifecycle.
