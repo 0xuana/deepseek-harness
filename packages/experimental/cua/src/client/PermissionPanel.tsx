@@ -29,15 +29,15 @@ export type PermissionPanelProps = PermissionProps & DefaultPresetProps & Persis
 function DefaultPresetSetting(props: DefaultPresetProps) {
   const preset = props.useCuaDefaultPreset(value => value)
   const changing = props.useCuaPermissions(value => value.changing)
-  return <ConfigurationSetting kind="default" status={preset.status} loading={preset.value === undefined && (changing || preset.status === 'loading')} writable={preset.writable} t={props.t} busy={changing} save={props.setPtcDefault}
+  return <ConfigurationSetting kind="default" status={preset.value !== undefined && preset.status === 'loading' ? 'ready' : preset.status} loading={preset.value === undefined && preset.status === 'loading'} writable={preset.writable} t={props.t} busy={changing} save={props.setPtcDefault}
     configured={(preset.value?.selectedDefault ?? preset.value?.default) === 'ptc'} />
 }
 
 function PersistentPtcSetting(props: PersistentPtcProps) {
   const runtime = props.useCuaPermissions(value => value.runtime)
   const changing = props.useCuaPermissions(value => value.changing)
-  return <ConfigurationSetting kind="persistent" loading={runtime.value === null && (runtime.busy || runtime.error === null)}
-    status={runtime.busy ? 'loading' : runtime.error === null && runtime.value !== null ? 'ready' : 'unavailable'} writable={!runtime.busy && runtime.value?.writable === true} t={props.t} busy={changing || runtime.busy} save={props.setPersistentPtc}
+  return <ConfigurationSetting kind="persistent" loading={runtime.value === null && runtime.error === null}
+    status={runtime.error !== null ? 'unavailable' : runtime.value !== null ? 'ready' : 'loading'} writable={runtime.value?.writable === true} t={props.t} busy={changing || runtime.busy} save={props.setPersistentPtc}
     configured={runtime.value?.persistent === true} />
 }
 
@@ -68,9 +68,9 @@ function ConfigurationSetting({ kind, status, loading, writable, configured, sav
         : <Button size="sm" className={css.permissionAction} data-configured={configured || undefined} variant={configured ? 'outline' : 'primary'} disabled={busy || saving || configured || !writable || status !== 'ready'}
           onClick={() => { void submit() }}>{t(configured ? `${kind}Set` : `${kind}Confirm`)}</Button>}
     </div>
-    {!busy && !configured && (status === 'unavailable' ? <p className={css.error} role="alert">{t(`${kind}Unavailable`)}</p>
+    {!configured && (status === 'unavailable' ? <p className={css.error} role="alert">{t(`${kind}Unavailable`)}</p>
       : status === 'ready' && !writable && <p className={css.error} role="alert">{t(`${kind}ReadOnly`)}</p>)}
-    {!busy && error !== null && <p className={css.error} role="alert">{error}</p>}
+    {error !== null && <p className={css.error} role="alert">{error}</p>}
   </div>
 }
 
@@ -138,8 +138,8 @@ export function PermissionPanel(props: PermissionPanelProps) {
   const transitioning = state.changing
   const busy = transitioning || state.system.busy
   const appsBusy = transitioning || state.applications.busy
-  const loading = observed === null && (busy || state.system.error === null)
-  const application = !busy && state.system.error !== null ? undefined : observed?.launchApplication
+  const loading = observed === null && state.system.error === null
+  const application = state.system.error !== null ? undefined : observed?.launchApplication
   useEffect(() => {
     refresh()
     window.addEventListener('focus', refresh)
@@ -151,9 +151,9 @@ export function PermissionPanel(props: PermissionPanelProps) {
       <div className={css.card}>
         <DefaultPresetSetting {...props} />
         <PersistentPtcSetting {...props} />
-        {!busy && state.system.error !== null && <div className={css.notice} role="alert">
+        {state.system.error !== null && <div className={css.notice} role="alert">
           <span className={css.error}>{t('queryFailed', { message: state.system.error })}</span>
-          <Button size="sm" variant="outline" disabled={state.system.busy} onClick={refresh}>{t('retry')}</Button>
+          <Button size="sm" variant="outline" disabled={busy} onClick={refresh}>{t('retry')}</Button>
         </div>}
         {(['accessibility', 'screenRecording'] as const).map(permission => <div className={css.permission} key={permission}
           role="group" aria-label={t(permission)}>
@@ -162,21 +162,18 @@ export function PermissionPanel(props: PermissionPanelProps) {
             <PermissionDescription application={application} permission={permission} loading={loading} t={t} />
           </div>
           <PermissionAction permission={permission}
-            granted={observed === null || (!busy && state.system.error !== null) ? null : observed[permission]}
+            granted={observed === null || state.system.error !== null ? null : observed[permission]}
             loading={loading} busy={busy} request={props.request} openSettings={props.openSettings} t={t} />
         </div>)}
       </div>
-      <p className={css.permissionHint}>
-        {observed !== null && (!observed.accessibility || !observed.screenRecording)
-          ? t(application === undefined ? 'permissionHintUnknown' : 'permissionHint') : null}
-      </p>
+      <p>{t('permissionHint')}</p>
     </section>
     <section className={css.panel} aria-label={t('applicationsTitle')}>
       <h3>{t('applicationsTitle')}</h3>
       <div className={css.card}>
-        {(['applications', 'icons'] as const).map(key => !transitioning && !state[key].busy && state[key].error !== null && <div className={css.notice} role="alert" key={key}>
+        {(['applications', 'icons'] as const).map(key => state[key].error !== null && <div className={css.notice} role="alert" key={key}>
           <span className={css.error}>{t(key === 'applications' ? 'applicationsFailed' : 'iconsFailed', { message: state[key].error })}</span>
-          <Button size="sm" variant="outline" onClick={refresh}>{t('retry')}</Button>
+          <Button size="sm" variant="outline" disabled={transitioning || state[key].busy} onClick={refresh}>{t('retry')}</Button>
         </div>)}
         {apps === null ? <div className={css.emptyState}><span className={css.appsPlaceholder} aria-hidden /></div> : <>
           {apps.allowedApps.length === 0 && apps.blockedApps.length === 0 && <p className={css.emptyState}>{t('noApps')}</p>}

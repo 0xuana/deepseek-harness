@@ -340,3 +340,27 @@ it.each(['requestPermission', 'openSettings', 'revoke', 'retryApproval'] as cons
     expect(f.actions.systemStatus).toHaveBeenCalledOnce()
   },
 )
+
+
+it('preserves settled failures and values while all four observations are paused', async () => {
+  const f = fixture()
+  const error = new Error('unavailable')
+  f.actions.ptcConfiguration.mockRejectedValueOnce(error)
+  f.actions.systemStatus.mockRejectedValueOnce(error)
+  f.actions.applications.mockRejectedValueOnce(error)
+  f.actions.applicationIcons.mockRejectedValueOnce(error)
+  f.face.refresh()
+  await vi.waitFor(() => { expect(f.controller.state.getSnapshot().busy).toBe(false) })
+  f.controller.setChanging(true)
+  for (const key of ['runtime', 'system', 'applications', 'icons'] as const) {
+    expect(f.controller.state.getSnapshot()[key]).toMatchObject({ error: 'unavailable', busy: true })
+  }
+  f.face.refresh()
+  expect(f.actions.systemStatus).toHaveBeenCalledOnce()
+  f.controller.setChanging(false)
+  await vi.waitFor(() => { expect(f.controller.state.getSnapshot().busy).toBe(false) })
+  for (const key of ['runtime', 'system', 'applications', 'icons'] as const) {
+    expect(f.controller.state.getSnapshot()[key].error).toBeNull()
+  }
+  await f.controller.dispose()
+})
