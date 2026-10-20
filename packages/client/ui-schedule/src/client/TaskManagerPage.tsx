@@ -261,7 +261,7 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
           </Button>
         </div>}
       >
-        <p className={css.confirmTitle}>{t('clear.count', { count: endedCount })}</p>
+        <p className={css.confirmTitle}>{t(endedCount === 1 ? 'clear.count.one' : 'clear.count.other', { count: endedCount })}</p>
       </Modal>
     </section>
   )

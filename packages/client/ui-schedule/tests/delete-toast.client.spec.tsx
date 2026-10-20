@@ -80,12 +80,15 @@ describe('ScheduleDeleteToast', () => {
     expect(screen.getByRole('alert').textContent).toBe(zh['toast.deleteFailed'])
   })
 
-  it('states how many ended tasks a bulk removal cleared', () => {
+  it('states how many ended tasks a bulk removal cleared, singular for one', () => {
     vi.useFakeTimers()
-    const { dismiss } = mount({ kind: 'cleared', count: 4, seq: 3 })
-    expect(screen.getByRole('alert').textContent).toBe(en['toast.cleared'].replace('{count}', '4'))
+    const many = mount({ kind: 'cleared', count: 4, seq: 3 })
+    expect(screen.getByRole('alert').textContent).toBe(en['toast.cleared.other'].replace('{count}', '4'))
     act(() => { vi.runAllTimers() })
-    expect(dismiss).toHaveBeenCalledOnce()
+    expect(many.dismiss).toHaveBeenCalledOnce()
+    cleanup()
+    mount({ kind: 'cleared', count: 1, seq: 4 })
+    expect(screen.getByRole('alert').textContent).toBe(en['toast.cleared.one'].replace('{count}', '1'))
   })
 
   it('states that a bulk removal found nothing instead of a zero count', () => {

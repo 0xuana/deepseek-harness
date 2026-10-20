@@ -27,15 +27,26 @@ function setup(
 }
 
 describe('createClearEnded', () => {
-  it('reads the catalog back after an acknowledged removal and reports how many rows went', async () => {
-    const { clearEnded, removeInactive, refresh } = setup({ ok: true, value: { deleted: 3 } })
+  it('reads the catalog back before the outcome settles and reports how many rows went', async () => {
+    const readback = Promise.withResolvers<undefined>()
+    const { clearEnded, removeInactive, refresh } = setup(
+      { ok: true, value: { deleted: 3 } },
+      vi.fn(() => readback.promise),
+    )
+    let settled = false
+    const outcome = clearEnded().then((value) => {
+      settled = true
+      return value
+    })
 
-    await expect(clearEnded()).resolves.toEqual({ cleared: true, count: 3 })
+    await vi.waitFor(() => { expect(refresh).toHaveBeenCalledOnce() })
+    // The list must agree with the count before the notice states it, so the
+    // outcome waits for the readback rather than publishing alongside it.
+    expect(settled).toBe(false)
+    readback.resolve(undefined)
 
+    await expect(outcome).resolves.toEqual({ cleared: true, count: 3 })
     expect(removeInactive).toHaveBeenCalledOnce()
-    expect(refresh).toHaveBeenCalledOnce()
-    // The readback is what makes the list agree with the count, so it settles
-    // before the outcome is published.
     expect(removeInactive.mock.invocationCallOrder[0])
       .toBeLessThan(refresh.mock.invocationCallOrder[0]!)
   })

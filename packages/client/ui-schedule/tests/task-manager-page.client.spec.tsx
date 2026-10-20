@@ -979,7 +979,7 @@ describe('clearing ended tasks', () => {
     fireEvent.click(screen.getByRole('button', { name: en['clear.action'] }))
     const dialog = screen.getByRole('dialog', { name: en['clear.title'] })
     expect(within(dialog).getByText(en['clear.description'])).toBeDefined()
-    expect(within(dialog).getByText(en['clear.count'].replace('{count}', '2'))).toBeDefined()
+    expect(within(dialog).getByText(en['clear.count.other'].replace('{count}', '2'))).toBeDefined()
   })
 
   it('removes nothing when the confirmation is dismissed', () => {
@@ -1030,7 +1030,7 @@ describe('clearing ended tasks', () => {
     mount({ records: [at, endedTask] }, zh)
     fireEvent.click(screen.getByRole('button', { name: zh['clear.action'] }))
     const dialog = screen.getByRole('dialog', { name: zh['clear.title'] })
-    expect(within(dialog).getByText(zh['clear.count'].replace('{count}', '1'))).toBeDefined()
+    expect(within(dialog).getByText(zh['clear.count.one'].replace('{count}', '1'))).toBeDefined()
     expect(within(dialog).getByRole('button', { name: zh['clear.confirm'] })).toBeDefined()
   })
 })

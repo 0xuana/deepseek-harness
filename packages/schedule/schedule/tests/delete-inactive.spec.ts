@@ -102,11 +102,17 @@ it('keeps the removals that landed, announces them, and reports the failure', as
   const pool = new MemoryMediaPool()
   let deletes = 0
   // The first ended row lands durably; the second row's physical delete rejects.
+  // Iteration order is a snapshot detail, so the case records which row failed
+  // instead of assuming which of the two that is.
+  let failedId: string | undefined
   const backend = gatedScheduleBackend(pool, {
-    deleteRecord: async (table) => {
+    deleteRecord: async (table, key) => {
       if (table !== 'tasks') return
       deletes += 1
-      if (deletes === 2) throw new Error('injected delete failure')
+      if (deletes === 2) {
+        failedId = key
+        throw new Error('injected delete failure')
+      }
     },
   })
   const test = await harness({
@@ -130,7 +136,9 @@ it('keeps the removals that landed, announces them, and reports the failure', as
   expect(String(failure)).toContain('injected delete failure')
   // The row removed before the failure is a durable change observers must hear.
   expect(changed).toHaveBeenCalledTimes(1)
-  expect((await service.catalog()).map(entry => entry.title)).toEqual(['Partial second'])
+  expect(failedId).toBeDefined()
+  // The survivor is the row whose delete failed; the other row stayed removed.
+  expect((await service.catalog()).map(entry => entry.id)).toEqual([failedId])
 })
 
 it('attempts every row and reports a rejection reason that carries no Error', async () => {

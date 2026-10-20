@@ -1267,9 +1267,12 @@ describe.skipIf(MODE === 'record')('web e2e: active Schedule catalog', () => {
     if (domain === undefined) throw new Error('Schedule domain was not opened')
     const endedIds = [ScheduleId('schedule-ended-first'), ScheduleId('schedule-ended-second')]
     const endedTitles = ['Ended release check', 'Ended metrics check'] as const
+    // An earlier scenario may leave an ended row behind; the confirmation states
+    // the whole ended set, so the lane starts from an empty one.
+    await scaffold.ctx.schedule.deleteInactive()
     for (const [index, id] of endedIds.entries()) {
       const title = endedTitles[index]!
-      const record = createAfterScheduleRecord(ScheduleId(id), title, 60, Date.now(), title)
+      const record = createAfterScheduleRecord(id, title, 60, Date.now(), title)
       const receipt = {
         scheduledAt: record.scheduledAt,
         deliveredAt: new Date(Date.parse(record.scheduledAt) + 1_000).toISOString(),
@@ -1280,45 +1283,55 @@ describe.skipIf(MODE === 'record')('web e2e: active Schedule catalog', () => {
         deliveryHistory: { records: [receipt], earlierRecordsUnavailable: false },
       })
     }
-    // A create is the Host's own committed change, so its notification is what
-    // makes the open page read the rows seeded above.
+    // The running task is what the cleanup must leave alone. Creating it also
+    // announces a committed Host change, so the open page reads the rows seeded
+    // above without waiting for its own first catalog read.
     const kept = await scaffold.ctx.schedule.create(endedSession, {
       prompt: 'Keep this running task', title: 'Keep this running task', at: '2099-08-25T12:08:00.000Z',
     })
-    await page.getByRole('button', { name: 'Automation tasks', exact: true }).click()
-    const manager = page.getByTestId('task-manager-page')
-    // Earlier scenarios leave their own search text and status filter on this
-    // shared page; this scenario asserts the complete list.
-    await manager.getByRole('searchbox', { name: 'Search tasks' }).fill('')
-    await manager.getByRole('button', { name: 'All', exact: true }).click()
-    const clear = manager.getByRole('button', { name: 'Clear ended', exact: true })
-    await clear.waitFor({ timeout: 15_000 })
+    try {
+      await page.getByRole('button', { name: 'Automation tasks', exact: true }).click()
+      const manager = page.getByTestId('task-manager-page')
+      // Earlier scenarios leave their own search text and status filter on this
+      // shared page; this scenario asserts the complete list.
+      await manager.getByRole('searchbox', { name: 'Search tasks' }).fill('')
+      await manager.getByRole('button', { name: 'All', exact: true }).click()
+      const clear = manager.getByRole('button', { name: 'Clear ended', exact: true })
+      await clear.waitFor({ timeout: 15_000 })
 
-    // The confirmation states the Host-side target and removes nothing until it
-    // is confirmed.
-    await clear.click()
-    const confirmation = page.getByRole('dialog', { name: 'Clear ended automation tasks?' })
-    await confirmation.getByText('2 ended tasks', { exact: true }).waitFor()
-    await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click()
-    expect((await scaffold.ctx.schedule.catalog()).filter(task => task.status === 'inactive')).toHaveLength(2)
+      // The confirmation states the Host-side target and removes nothing until it
+      // is confirmed.
+      await clear.click()
+      const confirmation = page.getByRole('dialog', { name: 'Clear ended automation tasks?' })
+      await confirmation.getByText('2 ended tasks', { exact: true }).waitFor()
+      await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click()
+      expect((await scaffold.ctx.schedule.catalog()).filter(task => task.status === 'inactive')).toHaveLength(2)
 
-    await clear.click()
-    await confirmation.getByRole('button', { name: 'Clear tasks', exact: true }).click()
-    await expect.poll(async () => (await scaffold.ctx.schedule.catalog()).filter(task => task.status === 'inactive'))
-      .toEqual([])
-    const remaining = await scaffold.ctx.schedule.catalog()
-    expect(remaining.some(task => endedIds.includes(task.id))).toBe(false)
-    expect(remaining.map(task => task.title)).toContain('Keep this running task')
-    await page.getByText('Cleared 2 ended tasks.', { exact: true }).waitFor({ timeout: 15_000 })
-    // The page follows the acknowledged removal: no ended row or cleanup action
-    // remains, and the running task is still listed.
-    await expect.poll(() => manager.getByRole('button', { name: 'Clear ended', exact: true }).count(), { timeout: 15_000 })
-      .toBe(0)
-    await manager.getByRole('button', { name: 'All', exact: true }).click()
-    await expect.poll(() => manager.getByRole('list', { name: 'Task catalog' })
-      .getByRole('button', { name: kept.title, exact: true }).count(), { timeout: 15_000 }).toBe(1)
-    expect((await scaffold.ctx.schedule.catalog()).filter(task => task.status === 'inactive')).toEqual([])
-    expect(tripwire.pageErrors).toEqual([])
-    await scaffold.ctx.schedule.delete({ sessionId: endedSession, id: kept.id })
+      await clear.click()
+      await confirmation.getByRole('button', { name: 'Clear tasks', exact: true }).click()
+      await expect.poll(
+        async () => (await scaffold.ctx.schedule.catalog()).filter(task => task.status === 'inactive'),
+        { timeout: 15_000 },
+      ).toEqual([])
+      const remaining = await scaffold.ctx.schedule.catalog()
+      expect(remaining.some(task => endedIds.includes(task.id))).toBe(false)
+      expect(remaining.map(task => task.title)).toContain('Keep this running task')
+      await page.getByText('Cleared 2 ended tasks.', { exact: true }).waitFor({ timeout: 15_000 })
+      // The page follows the acknowledged removal: no ended row or cleanup action
+      // remains, and the running task is still listed.
+      await expect.poll(() => manager.getByRole('button', { name: 'Clear ended', exact: true }).count(), { timeout: 15_000 })
+        .toBe(0)
+      await manager.getByRole('button', { name: 'All', exact: true }).click()
+      await expect.poll(() => manager.getByRole('list', { name: 'Task catalog' })
+        .getByRole('button', { name: kept.title, exact: true }).count(), { timeout: 15_000 }).toBe(1)
+      expect((await scaffold.ctx.schedule.catalog()).filter(task => task.status === 'inactive')).toEqual([])
+      expect(tripwire.pageErrors).toEqual([])
+    } finally {
+      // The shared page and Host outlive a failed assertion: remove every row
+      // this scenario introduced so the next one starts from the same state.
+      for (const id of [kept.id, ...endedIds]) {
+        await scaffold.ctx.schedule.delete({ sessionId: endedSession, id })
+      }
+    }
   }, 60_000)
 })

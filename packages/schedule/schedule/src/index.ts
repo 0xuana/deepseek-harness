@@ -371,10 +371,10 @@ export class ScheduleService extends TypertRemoteService {
    *
    * Ended tasks never schedule another delivery, so the removal changes no pending
    * target and no timer is recomputed. Rows are enumerated and removed in one FIFO
-   * slot, so a create ordered behind this call is not removed by it. Each removed row
-   * is durable on its own: a failure partway through leaves the earlier removals
-   * committed and announced, then rejects rather than reporting a partial count as
-   * the whole.
+   * slot, so a delivery ordered behind this call ends its task after the
+   * enumeration rather than during it. Each removed row is durable on its own: a
+   * failure partway through leaves the earlier removals committed and announced,
+   * then rejects rather than reporting a partial count as the whole.
    * @returns Count of removed rows; zero when the Host held no ended task.
    */
   @Remote('deleteInactive')

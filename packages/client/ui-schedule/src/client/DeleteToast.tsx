@@ -102,7 +102,9 @@ export function ScheduleDeleteToast({ useToast, dismiss, t }: ScheduleDeleteToas
       // ended rows can leave between the confirmation and the request.
       return <Toast
         key={key}
-        text={toast.count === 0 ? t('toast.clearedNone') : t('toast.cleared', { count: toast.count })}
+        text={toast.count === 0
+          ? t('toast.clearedNone')
+          : t(toast.count === 1 ? 'toast.cleared.one' : 'toast.cleared.other', { count: toast.count })}
         tone="success"
         onDone={dismiss}
       />
