@@ -74,7 +74,7 @@ After the checks, the list toolbar says how many plugins can be updated, that al
 
 ### Switching a bundle
 
-A bundle can declare `dsh.bundle.experimental: true` to display the experimental tag independently of its directory or package name; existing experimental package names retain that tag.
+A bundle can declare `dsh.bundle.experimental: true` to display the experimental tag independently of its directory or package name; the built-in experimental bundle list also supplies that tag.
 
 A bundle's page shows its full package name under the title. Its **Source** section, after the rows, names the spec that installs it elsewhere, as `pnpm add` accepts it, or **Built in** for an official bundle the installation ships, then its current version. A bundle's switch changes its layer selection. While the Host applies the change, the switch stays disabled and a spinner appears beside it; the reserved space keeps the controls from shifting. A profile with HMR recomposes before the operation completes; one without HMR, and a bundle a higher layer overrides, say so in a toast. A bundle the Host cannot read carries a problem tag and its reason on its page and cannot be switched on; one that provides the management components stays locked. The Host answers with error codes, which the page's dictionary words; pnpm's and the Loader's own diagnostics are shown as they are. The page excludes built-in profile bundles from cards even when the profile holds them as dependencies or the Host reports an error. The Host inventory remains complete; the Settings Plugins section's Plugin list tab inspects their plugins.
 

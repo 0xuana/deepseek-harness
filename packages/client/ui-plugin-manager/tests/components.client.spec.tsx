@@ -788,12 +788,13 @@ describe('PluginManagerPage', () => {
     expect(screen.getByText(`${en.reasonLabel}: native preparation unavailable`)).toBeTruthy()
   })
 
-  it('marks a normally named Computer Use bundle experimental and explains persistent PTC before enabling', () => {
-    const description = 'Enabling switches this profile to persistent PTC.'
+  it('shows Computer Use permission guidance on the experimental plugins page', () => {
+    const description = 'Review application access before use.'
     const { actions } = renderTab({ packages: [pkg({
       name: '@deepseek-ai/dsh-cua-bundle', experimental: true, enabled: false, optional: true, installed: false,
       meta: { title: 'Computer Use', description },
     })] })
+    fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
     expect(screen.getByText(en.statusBeta)).toBeTruthy()
     expect(screen.getByText(description)).toBeTruthy()
     fireEvent.click(screen.getByRole('switch', { name: en.enableToggle.replace('{name}', 'Computer Use') }))
