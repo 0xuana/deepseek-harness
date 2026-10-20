@@ -6,7 +6,7 @@ import type { ForgePanelKey } from './locales.ts'
 
 /**
  * Glyph tone of a change request: its lifecycle state, `blocked` for an open
- * one that needs its author, or `unknown` before the first snapshot.
+ * one, not a draft, that needs its author, or `unknown` before the first snapshot.
  */
 export type ChangeRequestTone = 'open' | 'blocked' | 'draft' | 'merged' | 'closed' | 'unknown'
 
@@ -46,20 +46,21 @@ const SETTLED: Record<Exclude<ChecksRollup, 'failure'>, Exclude<CiSummary['kind'
 export type ChangeRequestFlag = 'changesRequested' | 'conflicting' | 'draft'
 
 /**
- * Pick the glyph tone of a change request: an open one, drafts included, is
- * `blocked` while its checks failed, changes were requested, or it conflicts
- * with its base; running checks, a pending review, and an unknown
- * mergeability only wait and keep it `open` or `draft`.
+ * Pick the glyph tone of a change request: an open draft is always `draft`;
+ * any other open one is `blocked` while its checks failed, changes were
+ * requested, or it conflicts with its base, and running checks, a pending
+ * review, and an unknown mergeability only wait and keep it `open`.
  * @param snapshot - latest snapshot, or null before the first one.
  * @returns the tone.
  */
 export function toneOf(snapshot: ChangeRequestSnapshot | null): ChangeRequestTone {
   if (snapshot === null) return 'unknown'
   if (snapshot.state !== 'open') return snapshot.state
+  if (snapshot.draft) return 'draft'
   if (snapshot.checksRollup === 'failure' || snapshot.reviewDecision === 'changes-requested' || snapshot.mergeability === 'conflicting') {
     return 'blocked'
   }
-  return snapshot.draft ? 'draft' : 'open'
+  return 'open'
 }
 
 /**

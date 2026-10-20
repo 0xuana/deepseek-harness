@@ -12,7 +12,9 @@ describe('toneOf', () => {
     ['an open change request with failed checks', snapshot(1, { checksRollup: 'failure' }), 'blocked'],
     ['an open change request with requested changes', snapshot(1, { reviewDecision: 'changes-requested' }), 'blocked'],
     ['an open change request with conflicts', snapshot(1, { mergeability: 'conflicting' }), 'blocked'],
-    ['a draft with failed checks', snapshot(1, { draft: true, checksRollup: 'failure' }), 'blocked'],
+    ['a draft with failed checks', snapshot(1, { draft: true, checksRollup: 'failure' }), 'draft'],
+    ['a draft with requested changes and conflicts',
+      snapshot(1, { draft: true, reviewDecision: 'changes-requested', mergeability: 'conflicting' }), 'draft'],
     ['an open change request that waits for checks, a review, and its mergeability',
       snapshot(1, { checksRollup: 'pending', reviewDecision: 'review-required', mergeability: 'unknown' }), 'open'],
     ['a merged change request', snapshot(1, { state: 'merged', draft: true }), 'merged'],
@@ -86,6 +88,7 @@ describe('needsAttention', () => {
     ['a binding without a snapshot', entry(1, null)],
     ['an unserved URL', unserved('https://example.test/review/1')],
     ['a settled open change request', entry(1, snapshot(1, { checksRollup: 'pending', mergeability: 'unknown', draft: true }))],
+    ['a draft with failed checks', entry(1, snapshot(1, { draft: true, checksRollup: 'failure' }))],
     ['a merged change request with failed checks', entry(1, snapshot(1, { state: 'merged', checksRollup: 'failure' }))],
     ['a closed change request with conflicts', entry(1, snapshot(1, { state: 'closed', mergeability: 'conflicting' }))],
   ])('leaves %s unmarked', (_label, value) => {

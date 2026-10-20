@@ -67,6 +67,7 @@ describe('ChangeRequestCard head', () => {
       [{ state: 'open', draft: false }, 'open', en['change.state.open']],
       [{ state: 'open', draft: false, checksRollup: 'failure' }, 'blocked', en['change.state.blocked']],
       [{ state: 'open', draft: true }, 'draft', en['change.state.draft']],
+      [{ state: 'open', draft: true, checksRollup: 'failure' }, 'draft', en['change.state.draft']],
       [{ state: 'merged' }, 'merged', en['change.state.merged']],
       [{ state: 'closed' }, 'closed', en['change.state.closed']],
     ] as const
