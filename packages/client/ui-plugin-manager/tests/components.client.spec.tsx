@@ -767,7 +767,7 @@ describe('PluginManagerPage', () => {
     ['@deepseek-ai/dsh-experimental-agent-team-profile', true],
     ['@deepseek-ai/dsh-experimental-auto-review', true],
     ['@deepseek-ai/dsh-experimental-fixture-input', false],
-    ['@deepseek-ai/dsh-cua-bundle', false],
+    ['@deepseek-ai/dsh-cua-bundle', true],
     ['@acme/dsh-local-tools', false],
   ] as const)('localizes Host metadata for %s across cards, details, switches, and uninstall confirmation', (name, experimental) => {
     const meta = {
@@ -1100,6 +1100,34 @@ describe('PluginManagerPage', () => {
       fireEvent.click(within(detail).getByRole('button', { name: en.backToList }))
       expect(document.querySelector('[data-plugin-item-detail]')).toBeNull()
       expect(screen.getByRole('heading', { name: en.basicTitle })).toBeTruthy()
+    })
+
+    it.each([en, zh])('keeps disabled CUA on the secondary page with experimental labels', (dict) => {
+      const name = '@deepseek-ai/dsh-cua-bundle'
+      const entry = (enabled: boolean) => pkg({ name, official: true, enabled, meta: { title: 'Computer Use' } })
+      const b = renderTab({ packages: [entry(false)] })
+      b.setLanguage(dict)
+      expect(document.querySelector(`[data-plugin-package="${name}"]`)).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: dict.moreAction }))
+      const card = document.querySelector(`[data-plugin-package="${name}"]`) as HTMLElement
+      expect(within(card).getByText(dict.statusBeta)).toBeTruthy()
+      fireEvent.click(within(card).getByRole('button', { name: dict.openDetail.replace('{name}', 'Computer Use') }))
+      const detail = document.querySelector('[data-plugin-detail]') as HTMLElement
+      expect(within(detail).getByText(dict.statusBeta)).toBeTruthy()
+      fireEvent.click(within(detail).getByRole('switch', { name: dict.enableToggle.replace('{name}', 'Computer Use') }))
+      expect(b.actions.setEnabled).toHaveBeenCalledExactlyOnceWith(name, true)
+      b.set({ packages: [entry(true)] })
+      fireEvent.click(screen.getByRole('button', { name: dict.backToPackage.replace('{name}', dict.moreTitle) }))
+      expect(screen.getByRole('heading', { name: dict.moreTitle, level: 1 })).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: dict.backToList }))
+      const enabledCard = document.querySelector(`[data-plugin-package="${name}"]`) as HTMLElement
+      expect(within(enabledCard).getByText(dict.statusBeta)).toBeTruthy()
+      fireEvent.click(within(enabledCard).getByRole('switch', { name: dict.enableToggle.replace('{name}', 'Computer Use') }))
+      expect(b.actions.setEnabled).toHaveBeenLastCalledWith(name, false)
+      b.set({ packages: [entry(false)] })
+      expect(document.querySelector(`[data-plugin-package="${name}"]`)).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: dict.moreAction }))
+      expect(document.querySelector(`[data-plugin-package="${name}"]`)).toBeTruthy()
     })
 
     it('returns from package details to the secondary page and retains it across React remounts', () => {
