@@ -1,5 +1,5 @@
 ---
-description: "在全新 Node 进程中运行 TypeScript 程序，使用会话文件系统沙箱、受管清理以及可配置的执行与输出限制。"
+description: "在 Node 进程中运行 TypeScript 程序，可选择保留内存，使用会话文件系统沙箱与可配置的执行限制。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-执行模型编写的 TypeScript，并提供宿主异步函数。默认的 `per-call` 模式每次启动新 Node 进程，使用与 Bash 相同的平台沙箱策略。显式启用的 `persistent-in-memory` 模式为每个 Agent 跨调用保留受限 REPL。两种模式都返回捕获的日志、精确 JSON 值或结构化失败。直接 Node API 受所选模式的限制。执行时限、输出上限和 V8 堆上限约束运行；取消与逐次执行完成后清理托管进程范围。请求受限模式而沙箱后端不可用时，执行失败。
+执行模型编写的 TypeScript，并提供宿主异步函数。默认的 `per-call` 模式在全新 Node 进程中运行异步函数体；`vm-script` 支持顶层 await，并可通过 `scriptPersistence` 为每个 Agent 保留 context。显式启用的 `persistent-in-memory` 为每个 Agent 保留 REPL。所有模式都应用所选文件沙箱策略，返回捕获日志、无损 JSON 或结构化失败。执行时限、输出上限和 V8 堆上限约束运行。取消与单次执行完成后清理受管进程范围；约束不可用时执行失败。
 
 ## 目录
 
@@ -46,7 +46,8 @@ kind: "package-reference"
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
-| `executionMode` | `per-call` | `per-call` 每次按文件策略启动新进程；`persistent-in-memory` 为每个所有者保留受限 REPL |
+| `executionMode` | `per-call` | `per-call` 在全新进程中运行异步函数体；`vm-script` 求值 Script；`persistent-in-memory` 为每个所有者保留受限 REPL |
+| `scriptPersistence` | `false` | 在 `executionMode: vm-script` 下，为每个所有者复用进程与 context；其他模式下设为 `true` 会在加载时拒绝 |
 | `timeoutMs` | `120,000` | 默认经过时间截止，包括嵌套工具与审批等待 |
 | `maxTimeoutMs` | `600,000` | 解析器应用的经过时间截止上限 |
 | `maxOutputBytes` | `67,108,864` | 序列化日志与完成值或诊断的合计预算 |
@@ -64,10 +65,21 @@ kind: "package-reference"
 
 直接文件系统、网络与子进程操作仍是 Node 操作，受所选 OS 沙箱约束。嵌套 Host 绑定通过控制通道调用；PTC 工具调用保留注册表的可见性、排序、日志和审批规则。运行程序不会改变 Session 的常设策略，也不会在拒绝后自动重放程序。
 
+设置 `executionMode: vm-script`，即可通过 `node:vm` Script 求值可擦除 TypeScript。支持顶层声明和 `await`，例如 `var fs = await import("node:fs/promises"); await fs.readdir(".")`。不支持顶层 `return` 和静态 `import`/`export`。运行时等待末尾表达式，并返回其无损 JSON 值；`console.log(...)` 也会产生输出。相对动态导入以传入的工作目录为基准解析。除非程序显式启用严格模式，否则 Script 使用非严格语法；context 不是安全边界，Node 访问仍受进程沙箱约束。
+
+`scriptPersistence: false` 是默认值：每次调用都使用全新进程和 context，忽略 `stateOwner`。设为 `true` 后，运行时按下述生命周期规则为每个所有者保留 context。顶层声明、函数与对象身份可供后续调用使用，包括通过顶层 `await` 初始化的值。函数局部变量仍只在函数内有效。该选项要求 `executionMode: vm-script`；两种设置接受相同语法。
+
+```yaml
+- id: ptc-runtime
+  config:
+    executionMode: vm-script
+    scriptPersistence: true
+```
+
 <a id="persistent-repl"></a>
 ### 内存保留模式
 
-在现有 `@deepseek-ai/dsh-ptc-runtime-node` 插件上设置 `executionMode: persistent-in-memory` 即可保留状态。两种模式都需要 `fs`、`subprocess`、`sandbox` 和 `sandboxPolicy`；两种模式都应用所选文件沙箱策略。通过配置档补丁显式启用：
+`persistent-in-memory` 模式和启用 `scriptPersistence: true` 的 Script 模式都按所有者保留状态。要选择 REPL 求值器，在现有 `@deepseek-ai/dsh-ptc-runtime-node` 插件上设置 `executionMode: persistent-in-memory`。所有模式都需要 `fs`、`subprocess`、`sandbox` 和 `sandboxPolicy`，并应用所选文件沙箱策略。通过配置档补丁显式启用：
 
 ```yaml
 - id: ptc-runtime
@@ -75,11 +87,11 @@ kind: "package-reference"
     executionMode: persistent-in-memory
 ```
 
-保存补丁，在使用 PTC 工具展示的配置中通过 `dsh headless --patch <path>` 加载。默认的 `per-call` 模式不跨调用保留程序内存。修改配置会重载提供方并释放其执行资源。单文件打包宿主使用内存保留模式时，需要使用 `node-script` 启动方式，将 `launch.executable` 指向 Node，并将 `launch.bootstrapPath` 指向本包构建出的 `persistent-process.js`。
+保存补丁，在使用 PTC 工具展示的配置中通过 `dsh headless --patch <path>` 加载。`per-call` 模式和 `scriptPersistence: false` 的 Script 模式不跨调用保留程序内存。修改配置会重载提供方并释放其执行资源。单文件打包宿主使用内存保留模式时，需要使用 `node-script` 启动方式，将 `launch.executable` 指向 Node，并将 `launch.bootstrapPath` 指向本包构建出的 `persistent-process.js`。
 
-每个存活 Agent 保留独立进程，跨 `run_code` 调用和轮次保留顶层变量、函数及导入模块。使用 `await import(...)`、`console.log(...)` 和末尾 JSON 表达式；不支持顶层 `return`。Node REPL 使用非严格模式，给未声明的名称赋值会创建保留的全局变量。`_` 和 `_error` 是普通的保留全局变量，不使用交互式 REPL 的结果设置器。声明遵循 Node REPL 规则，包括重复声明已有 `let`、`const` 或 `class` 名称时报错；应给可变绑定赋值或选择新名称。开头的 `{ ... }` 按语句块执行，可以包含顶层 await 和临时声明；需要返回对象表达式时，用圆括号包裹。保留的函数和工具方法引用调用当前执行的绑定。必须等待所有工具调用；已完成执行的回调不能在后续执行中调用工具。
+在 REPL 模式下，每个存活 Agent 保留独立进程，跨 `run_code` 调用和轮次保留顶层变量、函数及导入模块。使用 `await import(...)`、`console.log(...)` 和末尾 JSON 表达式；不支持顶层 `return`。Node REPL 使用非严格模式，给未声明的名称赋值会创建保留的全局变量。`_` 和 `_error` 是普通的保留全局变量，不使用交互式 REPL 的结果设置器。声明遵循 Node REPL 规则，包括重复声明已有 `let`、`const` 或 `class` 名称时报错；应给可变绑定赋值或选择新名称。开头的 `{ ... }` 按语句块执行，可以包含顶层 await 和临时声明；需要返回对象表达式时，用圆括号包裹。保留的函数和工具方法引用调用当前执行的绑定。必须等待所有工具调用；已完成执行的回调不能在后续执行中调用工具。
 
-内存按尽力保留处理，不保存到磁盘。重启、Agent 销毁、提供方卸载、取消、超时、协议失败、输出超限或进程退出都会清除内存。缺失变量产生普通引用错误，模型需要重新获取句柄和创建声明。当前执行中的异常只结算一次，并保留此前发生的修改。已完成执行的回调抛出的异常不会在后续结果中报告；结束执行前应等待异步工作完成。Session 仍记录程序、工具分派和可见结果；恢复 Session 或派生 Agent 时从空内存开始。每次执行都会将进程工作目录重置为本次解析的 cwd；程序中的 `process.chdir()` 不跨执行保留。直接 Node 访问遵循已解析的文件策略。保留状态的所有者必须先释放环境，才能更改权限模式、工作区根目录、额外可写根目录或 Session 身份。
+内存按尽力保留处理，不保存到磁盘。重启、Agent 销毁、提供方卸载、取消、超时、协议失败、输出超限或进程退出都会清除内存。缺失变量产生普通引用错误，模型需要重新获取句柄和创建声明。当前执行中的异常只结算一次，并保留此前发生的修改。在 REPL 模式下，已完成执行的回调抛出的异常不会在后续结果中报告。在 Script 模式下，未捕获的回调异常可能终止保留进程；结束执行前应等待异步工作完成。Session 仍记录程序、工具分派和可见结果；恢复 Session 或派生 Agent 时从空内存开始。每次执行都会将进程工作目录重置为本次解析的 cwd；程序中的 `process.chdir()` 不跨执行保留。直接 Node 访问遵循已解析的文件策略。保留状态的所有者必须先释放环境，才能更改权限模式、工作区根目录、额外可写根目录或 Session 身份。
 
 服务消费者通过 `stateOwner` 对象复用环境，并在结束时等待 `release(owner)`。没有所有者的请求在临时进程中执行。权限设置同步记录新模式。Session 模式变化时，运行时立即禁止复用受影响的进程并开始取消，包括空闲环境。下一次程序执行前等待这些进程清理；清理失败会阻止本次程序启动，并允许重试。权限设置成功时，旧进程可能仍在停止过程中。单次获准的提权使用独立环境，返回前等待清理；该次执行无法访问原环境的变量，也不会保留新声明。执行及必要清理完成之前，同一所有者的并发调用会被拒绝；不同所有者可以并发。空闲环境没有过期计时器，进程保留到释放或失败为止。原始 stdout/stderr 不携带执行标识：执行期间收到的字节计入本次输出预算，包括较早启动的子进程此时写出的内容；空闲期间丢弃 stdout，只保留限额内的 stderr 诊断尾部。结束本次执行前，应等待子进程完成。进程退出诊断包含退出码和保留的 stderr 尾部；空闲期间的失败写入宿主日志。清理期间无法观测进程范围时，释放所有者会重试终止；清理成功前拒绝新执行。确认进程退出后仍未排空的管道会产生诊断，但不阻止释放环境。
 
@@ -105,6 +117,8 @@ PTC 消费方按 [dsh-tools](../../core/tools/README.zh.md#ptc-mode) 的说明�
 
 Host 负责策略、截止时间、绑定查找和进程清理。子进程负责程序求值与绑定代理；即使使用预期的控制描述符，模型编写的代码仍是不可信对端。
 
+`createExecution()` 在提供方加载时一次性确定配置对应的语法、类型擦除、模型指导和进程生命周期。提供方处理执行准入与取消，再委托单次或保留进程的所有者执行。两个子进程入口都使用 `createProgramEvaluator()`；异步函数、REPL 和 Script 实现共用全局变量、求值与清理操作。进程所有权代码不选择或解释程序语法。
+
 ### 启动与控制
 
 Host 擦除可擦除类型，在配置的执行世界中解析可执行文件与 bootstrap，通过 `ctx.sandbox` 等待 argv 限制准备完成，再通过 `ctx.subprocess` 启动。限制准备完成后会再次检查取消状态，因此提供方在取消后返回也无法启动程序。接管继承的控制通道后，子进程在 OS 环境中只保留可执行文件搜索路径、Windows 系统路径和临时路径，并将程序可见的 `process.env` 替换为空字典。Windows ACL 初始化接收父进程各自的 `TEMP` 和 `TMP` 值以使用共享授权锁，然后在启动程序前将二者替换为私有目录。这些原生路径使嵌套进程创建和原生临时文件 API 仍可正常工作。Host 仅在子进程启动时保留 `ELECTRON_RUN_AS_NODE`，使桌面端可执行文件运行 Node bootstrap；bootstrap 在求值模型代码前删除该选择变量。堆上限通过 Node argv 或为打包可执行文件由提供方构造的 `NODE_OPTIONS` 值传递；环境中的加载器和调试器标志会被丢弃。
@@ -113,16 +127,25 @@ Host 擦除可擦除类型，在配置的执行世界中解析可执行文件与
 
 ### 源代码与构建后 bootstrap
 
-源代码执行加载仅含可擦除语法的 bootstrap 依赖，不依赖同级包的构建后导出。构建后脚本通过 `process.js` 运行逐次程序，通过 `persistent-process.js` 运行保留状态的 REPL。保留模式要求 `node-script` 启动方式。远端脚本部署提供对应的 `launch.bootstrapPath`。内嵌载体通过 `launch.executable` 启动私有 worker。`resolveLaunch()` 在构造时选择本地默认值；显式的远端调用不依赖客户端自身是否打包。不会假设 Host 路径对应同一个远程文件。
+源代码执行加载仅含可擦除语法的 bootstrap 依赖，不依赖同级包的构建后导出。构建后脚本通过 `process.js` 运行单次程序，通过 `persistent-process.js` 运行保留状态的 REPL 和 Script 环境。保留模式要求 `node-script` 启动方式。远端脚本部署提供对应的 `launch.bootstrapPath`。内嵌载体通过 `launch.executable` 启动私有 worker。`resolveLaunch()` 在构造时选择本地默认值；显式的远端调用不依赖客户端自身是否打包。不会假设 Host 路径对应同一个远程文件。
+
+原生编译器接受的脚本直接执行。当编译需要顶层 await 支持时，Acorn 解析包住源码的异步函数。转换沿用 Node REPL 的 visitor、声明提升和按字符位置修改源码的方式，包括对末尾表达式结果的包装；求值器解包后等待该值。局部 AST 遍历器使新增依赖仍只有 Acorn。动态 `import()` 表达式保持原生形式，使用编译该 Script 时的 `importModuleDynamically` 选项。两个私有进程 bundle 都包含 Acorn；源码执行直接导入该包。
 
 ### 源码索引
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 默认提供方的解析、策略、绑定与受管执行 |
+| [`src/index.ts`](src/index.ts) | Node 提供方：统一执行准入、取消与服务委托 |
 | [`src/config.ts`](src/config.ts) | 执行模式、限制校验与默认值 |
+| [`src/execution.ts`](src/execution.ts) | 模式选择、类型擦除、模型指导与进程所有者选择 |
+| [`src/per-call.ts`](src/per-call.ts) | 单次进程执行与清理 |
 | [`src/persistent.ts`](src/persistent.ts) | 内存保留模式的进程所有权、执行截止与清理 |
-| [`src/persistent-process.ts`](src/persistent-process.ts) | 子进程 REPL、保留声明与当前绑定分派 |
+| [`src/persistent-process.ts`](src/persistent-process.ts) | 保留状态的子进程生命周期与当前绑定分派 |
+| [`src/evaluators/index.ts`](src/evaluators/index.ts) | 三种求值器的统一选择入口 |
+| [`src/evaluators/async-function.ts`](src/evaluators/async-function.ts) | AsyncFunction：严格模式异步函数体 |
+| [`src/evaluators/repl.ts`](src/evaluators/repl.ts) | Node REPL：交互式声明与保留的 context |
+| [`src/evaluators/vm-script.ts`](src/evaluators/vm-script.ts) | VM Script：Node 全局变量、声明与 Promise 完成值 |
+| [`src/evaluators/vm-script-await.ts`](src/evaluators/vm-script-await.ts) | VM Script 的顶层 await 转换与声明保留 |
 | [`src/output-stream.ts`](src/output-stream.ts) | 有界流捕获与进程输出排空 |
 | [`src/launch.ts`](src/launch.ts) | 可执行文件／bootstrap 参数与执行世界资源映射 |
 | [`src/process.ts`](src/process.ts) | 子进程握手、环境清空与程序生命周期 |
@@ -164,7 +187,8 @@ Host 擦除可擦除类型，在配置的执行世界中解析可执行文件与
 - **约束继承所选后端的限制**——完整与部分强制能力分开报告；沙箱策略与受管进程约束是不同保证。
 - **堆上限不是进程树内存限制**——原生分配与后代进程内存不属于 V8 老生代上限。不提供进程树 CPU 计量器。
 - **清理继承子进程的可观测范围**——使用 fallback 的平台上，逃逸的后代可能仍在受管范围之外；参见子进程提供方声明的限制。
-- **默认执行是一次性的**：保留状态需要设置 `executionMode: persistent-in-memory`；两种模式都不提供 yield/wait API。
+- **默认执行是一次性的**：保留状态需要设置 `persistent-in-memory` 模式，或在 Script 模式下启用 `scriptPersistence: true`；所有模式都不提供 yield/wait API。
+- **await 转换放宽声明语义**——转换后程序的顶层 `let`、`const` 和 `class` 绑定可修改，且在执行前初始化为 `undefined`，不再具有原生暂时性死区。执行到函数声明时才会为其设置保留的全局变量；没有初始化器的 `var` 声明会将其绑定重置为 `undefined`。直接 eval 中的声明仅在本次求值内有效。不接受顶层 `using` 声明；可释放绑定需放在块内。运行时堆栈位置指向转换后的源码。无需转换即可编译的脚本保持原生语义。
 - **内存保留环境为每个存活所有者保留一个进程**——空闲所有者保留进程及堆内存，直到显式释放、所有者销毁或执行失败。并行创建多个所有者会保留多个进程；空闲过期机制留待后续处理。
 - **输出上限拒绝超量内容，而不保留每个字节**——溢出只能保存本提供方交付的有界结果。
 - **绑定在传输接纳时受限**——控制限制不约束 Host 绑定生成结果期间分配的内存。

@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/ptc-runtime/ptc-runtime-node/README.md
 /:
-  en: 0743cf05fedb8321
-  zh: 7ad0cfa1b6b8a46b
+  en: 66cfe944c731a54f
+  zh: 30b9e7f852723301
 /deepseek-ai-dsh-ptc-runtime-node:
   en: 7e1a8657a212c70b
   zh: afb7a8c6a3afd718
 /deepseek-ai-dsh-ptc-runtime-node/summary:
-  en: 91379c5dc7f04630
-  zh: 6ae48abc2097a7ef
+  en: 79d30a488dfb61a9
+  zh: 6b375f440656da9c
 /deepseek-ai-dsh-ptc-runtime-node/table-of-contents:
   en: d152484eb41ac6b4
   zh: 725b47765ee8f30b
@@ -18,14 +18,14 @@
   en: 246231cf2a529550
   zh: 5d27b8e444ecd0f7
 /deepseek-ai-dsh-ptc-runtime-node/use-this-package/configuration:
-  en: 161f3b32c782bab4
-  zh: bd923e3d31261032
+  en: d69676e4b7cbe3cf
+  zh: 1f3874958672e566
 /deepseek-ai-dsh-ptc-runtime-node/use-this-package/execution-and-results:
-  en: c79baab0c0a49ca7
-  zh: b90b78d0d75280fb
-/deepseek-ai-dsh-ptc-runtime-node/use-this-package/in-memory-mode:
-  en: c059702ea642a00b
-  zh: b9c8e26bd0bd8151
+  en: b7c41598e68edd14
+  zh: eee2f2392c2b59ce
+/deepseek-ai-dsh-ptc-runtime-node/use-this-package/in-memory-modes:
+  en: 0023ae7fa3b5d0bd
+  zh: 3a4ab42af9302dca
 /deepseek-ai-dsh-ptc-runtime-node/use-this-package/deadlines-and-cancellation:
   en: ad72b8bdba6a3966
   zh: 28a20fb5fb7c622d
@@ -33,17 +33,17 @@
   en: 7682e50f9dcfa25c
   zh: ddcb3502e12be06f
 /deepseek-ai-dsh-ptc-runtime-node/understand-the-implementation:
-  en: 9020b491a39e4bf5
-  zh: bcd1b2b1a3bde7f3
+  en: 3e4a87c9b90692c1
+  zh: 74195f0bf7e04368
 /deepseek-ai-dsh-ptc-runtime-node/understand-the-implementation/launch-and-control:
   en: 894cf1c1fdbe0092
   zh: c1e1179391e89a3f
 /deepseek-ai-dsh-ptc-runtime-node/understand-the-implementation/source-and-built-bootstraps:
-  en: e7251a2f7cb8f134
-  zh: f68c08c507992969
+  en: 1c8c0109032cc729
+  zh: f85bc632d616afd4
 /deepseek-ai-dsh-ptc-runtime-node/understand-the-implementation/source-map:
-  en: 2a702f70cac410d1
-  zh: f275136c6019b56d
+  en: aa80cd23ba951724
+  zh: b6eaaa36466e7f15
 /deepseek-ai-dsh-ptc-runtime-node/further-exploration:
   en: ac2e2ae13d3f1394
   zh: 5d08b9c658fcf83a
@@ -54,8 +54,8 @@
   en: 40294c1c31b74824
   zh: d91e7b78c0619c7e
 /deepseek-ai-dsh-ptc-runtime-node/known-limitations-and-deferred-work:
-  en: 7b8d67207e35bbb3
-  zh: 246cd770e79078ac
+  en: f4c6a8a3e0b1220f
+  zh: 03fb9482097eabe7
 /deepseek-ai-dsh-ptc-runtime-node/known-limitations-and-deferred-work/dev-note:
   en: 6373aba4e08f7205
   zh: 2a8c33d1f2839df4

@@ -4,12 +4,15 @@
  * @module @deepseek-ai/dsh-ptc-runtime-node/src/protocol
  */
 
+import type { ProgramFormat } from './evaluators/types.ts'
 import type { PtcJsonWire } from './json-wire.ts'
 
 /** What the host hands the program at spawn, after the readiness handshake. */
 export interface ProgramBootData {
-  /** The type-stripped (plain JS) program body. */
+  /** The type-stripped (plain JS) program. */
   code: string
+  /** One-shot evaluation syntax; omitted preserves async-function-body execution. */
+  programFormat?: ProgramFormat
   /** Binding namespaces to materialize; functions themselves stay host-side. */
   namespaces: {
     global: string

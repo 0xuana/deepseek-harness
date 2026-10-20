@@ -2596,8 +2596,10 @@ export interface Config {
 export interface Config {
   /** Worker invocation in the subprocess world; omitted selects the local carrier. */
   launch?: LaunchConfig
-  /** per-call starts fresh processes; persistent-in-memory retains a REPL per owner under the same file policy. */
-  executionMode?: 'per-call' | 'persistent-in-memory'
+  /** per-call uses fresh async function bodies; vm-script uses VM contexts; persistent-in-memory retains a REPL per owner. */
+  executionMode?: 'per-call' | 'persistent-in-memory' | 'vm-script'
+  /** Retain a Script process and context per stateOwner; only supported with executionMode: vm-script. */
+  scriptPersistence?: boolean
   /** Default elapsed deadline, including nested tool and approval waits. */
   timeoutMs?: number
   /** Maximum numeric elapsed budget accepted by resolve. */

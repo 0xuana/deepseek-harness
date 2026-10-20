@@ -1,5 +1,5 @@
 ---
-description: "Run TypeScript programs in fresh Node processes with the session filesystem sandbox, managed cleanup, and configurable execution and output limits."
+description: "Run TypeScript programs in Node processes with optional retained memory, the session filesystem sandbox, and configurable execution limits."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Execute model-written TypeScript with host-provided async functions. The default `per-call` mode starts a fresh Node process under the same platform sandbox policy as Bash. Opt-in `persistent-in-memory` mode retains a confined REPL across calls for each Agent. Both return captured logs, an exact JSON value, or a structured failure. Direct Node APIs remain available within the selected restrictions. Elapsed deadlines, output bounds and a V8 heap limit constrain execution; cancellation and per-call completion terminate the managed process range. A requested restricted mode fails when its sandbox backend is unavailable.
+Execute model-written TypeScript with host-provided async functions. The default `per-call` mode runs async function bodies in fresh Node processes; `vm-script` supports top-level await and optionally retains a context per Agent with `scriptPersistence`. Opt-in `persistent-in-memory` retains a REPL per Agent. All modes apply the selected file sandbox policy and return captured logs, lossless JSON, or structured failures. Elapsed deadlines, output bounds and a V8 heap limit constrain execution. Cancellation and one-shot completion clean up the managed process range; unavailable confinement fails execution.
 
 ## Table of Contents
 
@@ -46,7 +46,8 @@ Configure the provider row after its required services are available:
 
 | Field | Default | Meaning |
 |---|---|---|
-| `executionMode` | `per-call` | `per-call` starts fresh processes under file policy; `persistent-in-memory` retains a confined REPL per owner |
+| `executionMode` | `per-call` | `per-call` runs async function bodies in fresh processes; `vm-script` evaluates Scripts; `persistent-in-memory` retains a confined REPL per owner |
+| `scriptPersistence` | `false` | With `executionMode: vm-script`, reuse a process and context per owner; `true` with another mode rejects at load |
 | `timeoutMs` | `120,000` | Default elapsed execution deadline, including nested tool and approval waits |
 | `maxTimeoutMs` | `600,000` | Elapsed deadline ceiling applied by the resolver |
 | `maxOutputBytes` | `67,108,864` | Combined serialized logs and completion or diagnostic budget |
@@ -64,10 +65,21 @@ In `per-call` mode, programs are async function bodies: top-level `await` and `r
 
 Direct filesystem, network and subprocess operations remain Node operations, subject to the selected OS sandbox. Nested host bindings cross the control channel; PTC tool calls retain the registry's visibility, ordering, logging and approval rules. Running a program does not change the Session's standing policy or automatically replay it after a denial.
 
-<a id="persistent-repl"></a>
-### In-memory mode
+Set `executionMode: vm-script` to evaluate erasable TypeScript through `node:vm` Script. Top-level declarations and `await` work, for example `var fs = await import("node:fs/promises"); await fs.readdir(".")`. Top-level `return` and static `import`/`export` are not supported. The runtime awaits the final expression and returns its lossless JSON value; `console.log(...)` also emits output. Relative dynamic imports resolve from the supplied working directory. Script syntax is non-strict unless the program opts into strict mode; the context is not a security boundary, and Node access remains subject to the process sandbox.
 
-Set `executionMode: persistent-in-memory` on the existing `@deepseek-ai/dsh-ptc-runtime-node` plugin to retain state. Both modes require `fs`, `subprocess`, `sandbox` and `sandboxPolicy`; both apply the selected file sandbox policy. Enable it deliberately with a profile patch:
+`scriptPersistence: false` is the default: every call uses a fresh process and context, ignoring `stateOwner`. Set it to `true` to retain a context per owner under the lifecycle rules below. Top-level declarations, functions and object identities survive subsequent calls, including values initialized through top-level `await`. Function locals remain local. This option requires `executionMode: vm-script`; both settings accept the same syntax.
+
+```yaml
+- id: ptc-runtime
+  config:
+    executionMode: vm-script
+    scriptPersistence: true
+```
+
+<a id="persistent-repl"></a>
+### In-memory modes
+
+The `persistent-in-memory` mode and Script mode with `scriptPersistence: true` retain state per owner. To select the REPL evaluator, set `executionMode: persistent-in-memory` on the existing `@deepseek-ai/dsh-ptc-runtime-node` plugin. All modes require `fs`, `subprocess`, `sandbox` and `sandboxPolicy` and apply the selected file sandbox policy. Enable it deliberately with a profile patch:
 
 ```yaml
 - id: ptc-runtime
@@ -75,11 +87,11 @@ Set `executionMode: persistent-in-memory` on the existing `@deepseek-ai/dsh-ptc-
     executionMode: persistent-in-memory
 ```
 
-Save the patch and pass its path to `dsh headless --patch <path>` in a composition with PTC tool presentation. The default `per-call` mode retains no program memory between calls. Changing the configuration reloads the provider and releases its execution resources. Packaged single-executable hosts require a `node-script` launch with `launch.executable` pointing to Node and `launch.bootstrapPath` pointing to this package's built `persistent-process.js` for in-memory execution.
+Save the patch and pass its path to `dsh headless --patch <path>` in a composition with PTC tool presentation. The `per-call` mode and Script mode with `scriptPersistence: false` retain no program memory between calls. Changing the configuration reloads the provider and releases its execution resources. Packaged single-executable hosts require a `node-script` launch with `launch.executable` pointing to Node and `launch.bootstrapPath` pointing to this package's built `persistent-process.js` for in-memory execution.
 
-Each live Agent keeps its own process and top-level variables, functions, and imported modules across `run_code` calls and turns. Use `await import(...)`, `console.log(...)`, and a final JSON expression; top-level `return` is not supported. Assignments to undeclared names create retained globals under Node REPL’s non-strict evaluation. `_` and `_error` are ordinary retained globals, without interactive REPL result setters. Node REPL declaration rules apply, including errors on redeclaring existing `let`, `const`, or `class` names; assign to a mutable binding or choose a new name. A leading `{ ... }` is a statement block and can contain top-level await and temporary declarations; parenthesize an object expression to return it. Retained functions and saved tool methods call the current evaluation's bindings. All tool calls must be awaited; callbacks from a completed evaluation cannot invoke tools in a later evaluation.
+In REPL mode, each live Agent keeps its own process and top-level variables, functions, and imported modules across `run_code` calls and turns. Use `await import(...)`, `console.log(...)`, and a final JSON expression; top-level `return` is not supported. Assignments to undeclared names create retained globals under Node REPL’s non-strict evaluation. `_` and `_error` are ordinary retained globals, without interactive REPL result setters. Node REPL declaration rules apply, including errors on redeclaring existing `let`, `const`, or `class` names; assign to a mutable binding or choose a new name. A leading `{ ... }` is a statement block and can contain top-level await and temporary declarations; parenthesize an object expression to return it. Retained functions and saved tool methods call the current evaluation's bindings. All tool calls must be awaited; callbacks from a completed evaluation cannot invoke tools in a later evaluation.
 
-Memory is best-effort and never saved to disk. Restart, Agent disposal, provider unload, cancellation, timeout, protocol failure, output overflow, or process exit clears it. Missing variables raise normal reference errors; reacquire handles and recreate declarations. Exceptions in the active evaluation settle once and preserve earlier mutations. Exceptions thrown by callbacks from a completed evaluation are not reported in a later result; await asynchronous work before completing an evaluation. The Session still records programs, tool dispatches and visible results; restoring a Session or forking an Agent starts with empty memory. Each evaluation resets the process working directory to its resolved cwd; program calls to `process.chdir()` do not persist across evaluations. Direct Node access follows the resolved file policy. A retained owner cannot change mode, workspace root, additional writable roots, or Session identity until its environment is released.
+Memory is best-effort and never saved to disk. Restart, Agent disposal, provider unload, cancellation, timeout, protocol failure, output overflow, or process exit clears it. Missing variables raise normal reference errors; reacquire handles and recreate declarations. Exceptions in the active evaluation settle once and preserve earlier mutations. In REPL mode, exceptions from callbacks belonging to a completed evaluation are not reported in a later result. In Script mode, uncaught callback exceptions can terminate the retained process; await asynchronous work before completing an evaluation. The Session still records programs, tool dispatches and visible results; restoring a Session or forking an Agent starts with empty memory. Each evaluation resets the process working directory to its resolved cwd; program calls to `process.chdir()` do not persist across evaluations. Direct Node access follows the resolved file policy. A retained owner cannot change mode, workspace root, additional writable roots, or Session identity until its environment is released.
 
 Service consumers pass an object as `stateOwner` to reuse its environment and await `release(owner)` when finished. Requests without an owner run in temporary processes. Permission setters record the new mode synchronously. The runtime immediately invalidates affected processes and begins cancellation when the Session mode changes, including idle environments. The next program waits for their cleanup before starting; cleanup failure blocks that program and remains retryable. Permission-setting success does not mean old processes have finished stopping. A one-time approved escalation uses a separate environment and awaits its cleanup before returning; it cannot read the standing environment's variables or retain new declarations. Concurrent runs for one owner reject until execution and required cleanup complete; distinct owners may run concurrently. An idle environment has no expiration timer and keeps its process until release or failure. Raw stdout/stderr have no evaluation identity: bytes received during an evaluation share its output budget, even when written by an earlier child process; idle stdout is discarded and idle stderr retains only the bounded diagnostic tail. Await child-process completion before ending an evaluation. Process-exit diagnostics include the exit code and retained stderr tail; idle failures are written to the host logger. If process observation fails during cleanup, releasing the owner retries termination; new runs remain blocked until cleanup succeeds. Pipes that fail to drain after confirmed process exit produce a diagnostic but do not prevent releasing the environment.
 
@@ -105,6 +117,8 @@ Program parse errors and thrown exceptions are `exception`; deadline expiry is `
 
 The host owns policy, deadlines, binding lookup and process cleanup. The child owns program evaluation and binding proxies; model-written code is an untrusted peer even when its messages use the expected control descriptor.
 
+`createExecution()` resolves the configured syntax, type erasure, model guidance and process lifetime once when the provider loads. The provider handles admission and cancellation, then delegates to the one-shot or retained process owner. Both child entry points use `createProgramEvaluator()`, whose async-function, REPL and Script implementations share globals, evaluation and cleanup operations. Process ownership does not select or interpret program syntax.
+
 ### Launch and control
 
 For per-call execution, the host strips erasable types, resolves the executable and bootstrap in the configured execution world, awaits argv confinement through `ctx.sandbox`, then spawns through `ctx.subprocess`. Cancellation is checked again after confinement, so a provider returning after cancellation cannot start the program. After adopting the inherited control channel, the child retains only executable-search, Windows system, and temporary paths in its OS environment and replaces the program-visible `process.env` with an empty dictionary. Windows ACL setup receives the parent's distinct `TEMP` and `TMP` values for shared grant locks, then replaces both with its private directory before starting the program. These native paths keep nested process creation and native temporary-file APIs functional. The host preserves `ELECTRON_RUN_AS_NODE` only for child startup so the Desktop executable runs the Node bootstrap; the bootstrap removes the selector before evaluating model code. The heap limit uses Node argv or a provider-created `NODE_OPTIONS` value for packaged executables; ambient loader and inspector flags are discarded.
@@ -113,16 +127,25 @@ Length-framed JSON travels separately from stdout/stderr. The host bounds frames
 
 ### Source and built bootstraps
 
-Source execution loads an erasable-only bootstrap closure without relying on sibling built exports. Built script execution uses `process.js` for per-call programs or `persistent-process.js` for retained REPL environments. Persistent mode requires a `node-script` launch. A remote script deployment supplies the matching `launch.bootstrapPath`. Embedded carriers launch their private worker through `launch.executable`. `resolveLaunch()` selects the local default during construction; an explicit remote invocation never depends on whether the client itself is packaged. A host path is never assumed to name the same remote file.
+Source execution loads an erasable-only bootstrap closure without relying on sibling built exports. Built script execution uses `process.js` for one-shot programs or `persistent-process.js` for retained REPL and Script environments. Persistent mode requires a `node-script` launch. A remote script deployment supplies the matching `launch.bootstrapPath`. Embedded carriers launch their private worker through `launch.executable`. `resolveLaunch()` selects the local default during construction; an explicit remote invocation never depends on whether the client itself is packaged. A host path is never assumed to name the same remote file.
+
+Scripts accepted by the native compiler execute unchanged. When compilation requires top-level await support, Acorn parses an async wrapper around the source. The transform follows Node's REPL visitors, declaration hoisting and character-position edits, including its boxed final-expression result; the evaluator unwraps that result and awaits its value. A local AST walker keeps Acorn as the only added dependency. Dynamic `import()` expressions remain native and use the compiling Script's `importModuleDynamically` option. Both private process bundles include Acorn; source execution imports the package directly.
 
 ### Source map
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Node provider: mode selection, per-call resolution, policy and managed execution |
+| [`src/index.ts`](src/index.ts) | Node provider: common admission, cancellation and service delegation |
 | [`src/config.ts`](src/config.ts) | Execution mode, validated limits and defaults |
+| [`src/execution.ts`](src/execution.ts) | Mode selection, type erasure, model guidance and process-owner selection |
+| [`src/per-call.ts`](src/per-call.ts) | One-shot process execution and cleanup |
 | [`src/persistent.ts`](src/persistent.ts) | In-memory process ownership, evaluation deadlines and cleanup |
-| [`src/persistent-process.ts`](src/persistent-process.ts) | Child REPL, retained declarations and current binding dispatch |
+| [`src/persistent-process.ts`](src/persistent-process.ts) | Retained child lifecycle and current binding dispatch |
+| [`src/evaluators/index.ts`](src/evaluators/index.ts) | Shared selection entry for the three evaluators |
+| [`src/evaluators/async-function.ts`](src/evaluators/async-function.ts) | AsyncFunction: strict async function bodies |
+| [`src/evaluators/repl.ts`](src/evaluators/repl.ts) | Node REPL: interactive declarations and retained context |
+| [`src/evaluators/vm-script.ts`](src/evaluators/vm-script.ts) | VM Script: Node globals, declarations and Promise completion |
+| [`src/evaluators/vm-script-await.ts`](src/evaluators/vm-script-await.ts) | VM Script top-level await lowering and retained declarations |
 | [`src/output-stream.ts`](src/output-stream.ts) | Bounded stream capture and process-output draining |
 | [`src/launch.ts`](src/launch.ts) | Executable/bootstrap arguments and execution-world asset mapping |
 | [`src/process.ts`](src/process.ts) | Child handshake, environment clearing and program lifecycle |
@@ -164,7 +187,8 @@ These limits qualify the execution guarantees and retained output.
 - **Confinement inherits the selected backend's limits** — full and partial enforcement are reported separately; sandbox policy and managed-process containment are distinct guarantees.
 - **The heap cap is not a process-tree memory limit** — native allocations and descendant memory are outside the V8 old-generation bound. No process-tree CPU meter is supplied.
 - **Cleanup inherits subprocess observability** — escaped descendants on a fallback platform may remain outside the managed range; see the subprocess provider's stated limits.
-- **Default execution is one-shot** — retained state requires `executionMode: persistent-in-memory`; neither mode offers a yield/wait API.
+- **Default execution is one-shot** — retained state requires `persistent-in-memory` mode or Script mode with `scriptPersistence: true`; no mode offers a yield/wait API.
+- **Await lowering relaxes declaration semantics** — in transformed programs, top-level `let`, `const`, and `class` bindings are mutable and initialized to `undefined` before execution; the native temporal dead zone does not apply. Function declarations populate retained globals when execution reaches them, and a `var` declaration without an initializer resets its binding to `undefined`. Direct-eval declarations stay within that evaluation. Top-level `using` declarations are rejected; put disposable bindings inside a block. Runtime stack locations refer to the transformed source. Scripts that compile without lowering keep native semantics.
 - **In-memory environments retain one process per live owner** — idle owners keep their process and heap until explicit release, owner disposal or failure. Fan-out can retain many processes; idle expiration remains deferred.
 - **Output caps reject rather than retain every byte** — spill can preserve only the bounded result delivered by this provider.
 - **Bindings are bounded at transport admission** — control limits do not bound the memory a host binding allocates while producing its result.

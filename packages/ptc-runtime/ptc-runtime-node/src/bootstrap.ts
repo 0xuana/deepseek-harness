@@ -7,6 +7,8 @@ import { inspect } from 'node:util'
 import type { DoneMessage, ReplyMessage, ProgramBootData, ProgramToHost } from './protocol.ts'
 import { jsonStringBytesUpTo, jsonValueBytesUpTo, truncateJsonStringBytes } from './output-json.ts'
 import { decodePtcJsonWire, encodePtcJsonWire, snapshotPtcJsonValue } from './json-wire.ts'
+import { createProgramEvaluator } from './evaluators/index.ts'
+import type { ProgramEvaluator } from './evaluators/types.ts'
 
 const CapturedError = Error
 const capturedObjectCreate = Object.create
@@ -358,8 +360,8 @@ export function makeNamespaces(
 }
 
 /**
- * Run one strict async-function body, allowing top-level `await` and `return`, and post exactly
- * one terminal {@link DoneMessage}; a thrown program error becomes its `error` field.
+ * Run one program through its selected evaluator and post exactly one terminal {@link DoneMessage}.
+ * A thrown program error becomes the terminal message's error field.
  * @param port - host message port or test double.
  * @param data - the boot payload the host sent.
  * @param streams - stdout/stderr objects captured as program logs.
@@ -397,18 +399,24 @@ export async function runProgram(
   const consoleShim = makeConsoleShim(logs)
 
   let done: DoneMessage
+  let evaluator: ProgramEvaluator | undefined
   try {
-    // The async function constructor, reached through an instance because
-    // `AsyncFunction` is not a global. The program body is strict-mode.
-    /* v8 ignore next -- the arrow exists only to reach the AsyncFunction constructor; it is never invoked. */
-    const AsyncFunction = (async () => {}).constructor as new (...args: string[]) => (...fnArgs: unknown[]) => Promise<unknown>
-    const fn = new AsyncFunction(
+    const names = [
       ...data.namespaces.map(namespace => namespace.global),
       ...errorClassParameters,
       'console',
-      `'use strict';\n${data.code}`,
-    )
-    const value = await fn(...namespaces, ...errorClassValues, consoleShim)
+    ]
+    const values = [...namespaces, ...errorClassValues, consoleShim]
+    const completion = Promise.withResolvers<unknown>()
+    evaluator = createProgramEvaluator(data.programFormat ?? 'function-body', (message) => { completion.reject(new CapturedError(message)) })
+    for (const [index, name] of names.entries()) {
+      Object.defineProperty(evaluator.globals, name, { configurable: true, enumerable: true, writable: true, value: values[index] })
+    }
+    evaluator.evaluate(data.code, (result) => {
+      if (result.ok) completion.resolve(result.value)
+      else completion.reject(result.error)
+    })
+    const value = await completion.promise
     done = {
       type: 'done',
       ...prepareCompletion(value, logs.remainingOutputBytes(), data.maxOutputBytes),
@@ -418,6 +426,8 @@ export async function runProgram(
       type: 'done',
       ...prepareException(error, logs.remainingOutputBytes(), data.maxOutputBytes),
     }
+  } finally {
+    evaluator?.close()
   }
   port.postMessage(done)
 }

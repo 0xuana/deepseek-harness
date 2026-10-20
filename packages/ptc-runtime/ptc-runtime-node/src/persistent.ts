@@ -1,6 +1,5 @@
 /** Node PTC in-memory execution with retained processes scoped to caller-owned objects. */
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { stripTypeScriptTypes } from 'node:module'
 import { isAbsolute } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import type { PtcRunRequest, PtcRunSpec, PtcRunResult, PtcRunSandbox, PtcRunFailure, PtcBindingNamespace, PtcJsonValue } from '@deepseek-ai/dsh-ptc-runtime'
@@ -10,6 +9,7 @@ import type { ConfinedArgv, SandboxExecutionPolicy } from '@deepseek-ai/dsh-sand
 import type { SubprocessHandle, SubprocessOutcome } from '@deepseek-ai/dsh-subprocess'
 import type { PolicyProcesses } from './policy-processes.ts'
 import type { ResolvedConfig } from './config.ts'
+import type { ExecutionMode, ExecutionRunner } from './execution.ts'
 import { replyToBinding, validateBindings } from './bindings.ts'
 import { JsonChannel } from './channel.ts'
 import { bootstrapArgs } from './launch.ts'
@@ -73,7 +73,7 @@ class Kernel {
 
   constructor(
     private readonly ctx: Context, private readonly config: ResolvedConfig,
-    readonly policy: SandboxExecutionPolicy, processes: PolicyProcesses,
+    readonly policy: SandboxExecutionPolicy, processes: PolicyProcesses, private readonly mode: ExecutionMode,
   ) {
     this.unregister = processes.register(policy, () => this.dispose())
   }
@@ -198,7 +198,7 @@ class Kernel {
   private async start(cwd: string): Promise<void> {
     const executable = await this.ctx.subprocess.resolveExecutable(this.config.launch.executable, undefined, this.controller.signal)
     if (this.closed) return
-    const argv = [executable, `--max-old-space-size=${this.config.maxOldGenerationSizeMb}`, ...bootstrapArgs(this.ctx.fs, this.config.launch, this.config.maxMessageBytes, true)]
+    const argv = [executable, `--max-old-space-size=${this.config.maxOldGenerationSizeMb}`, ...bootstrapArgs(this.ctx.fs, this.config.launch, this.config.maxMessageBytes, true, this.mode.format)]
     const policy = this.policy
     this.confined = policy.mode === 'danger-full-access' ? undefined : await this.ctx.sandbox.confine(argv, { ...policy, mode: policy.mode }, this.controller.signal)
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- Cancellation can close the kernel during confinement.
@@ -293,14 +293,7 @@ class Kernel {
 }
 
 /** Sandboxed, best-effort retained state; restart, disposal, and interrupted execution clear it. */
-export class InMemoryExecution {
-  /**
-   * Model-facing rules for retained variables, authority, output, and recovery.
-   * @returns Usage guidance appended to the run_code schema.
-   */
-  get executionInstructions(): string {
-    return 'The program contains TypeScript REPL statements; only erasable syntax is accepted, with no enum or namespaces. Type annotations are advisory. Top-level declarations and await are supported; top-level return is not supported. Emit output with console.log(...) or a final lossless JSON expression. Only printed values and that final expression become program output. Variables, functions, and imported modules remain in memory for this Agent across calls. Use await import(...) for modules. Direct filesystem access follows this execution\'s sandbox policy; process.env starts empty. Changing the session sandbox mode clears retained variables. An approved sandbox escalation runs in a separate temporary environment: it cannot access retained variables, and its declarations are discarded afterward. Restart, Agent disposal, cancellation, timeout, output overflow, or process failure clears the environment. If a variable is undefined, recreate it and reacquire its resources. State is not restored from the conversation, and failed evaluations can leave earlier mutations in memory. Redeclaring an existing let, const, or class name fails; assign to a mutable binding or use a new name. Await all tool calls; background callbacks cannot call tools after their evaluation ends. Await child-process completion before ending an evaluation; raw subprocess output belongs to whichever evaluation is active when it arrives.'
-  }
+export class InMemoryExecution implements ExecutionRunner {
   private readonly owners = new WeakMap<object, Kernel>()
   private readonly kernels = new Set<Kernel>()
   private disposed = false
@@ -310,8 +303,12 @@ export class InMemoryExecution {
    * @param ctx - Provider lifecycle and execution services.
    * @param config - Validated limits and selected executable.
    * @param processes - Provider-owned policy invalidation and cleanup.
+   * @param mode - Program syntax and TypeScript erasure.
    */
-  constructor(private readonly ctx: Context, private readonly config: ResolvedConfig, private readonly processes: PolicyProcesses) {
+  constructor(
+    private readonly ctx: Context, private readonly config: ResolvedConfig,
+    private readonly processes: PolicyProcesses, private readonly mode: ExecutionMode,
+  ) {
     if (this.config.launch.kind === 'embedded') throw new Error('Persistent PTC requires a node-script launch')
     ctx.effect(() => async () => {
       this.disposed = true
@@ -323,7 +320,7 @@ export class InMemoryExecution {
   }
 
   /**
-   * Resolve the file policy, directory and deadline for a retained REPL.
+   * Resolve the file policy, directory and deadline for a retained program context.
    * @param request - Program, bindings, owner, directory and elapsed budget.
    * @returns Resolved inputs with the selected file policy.
    */
@@ -353,7 +350,7 @@ export class InMemoryExecution {
       throw new Error('persistent PTC: release the retained environment before changing its sandbox policy')
     }
     let code: string
-    try { code = stripTypeScriptTypes(spec.program) } catch (error: unknown) {
+    try { code = this.mode.stripTypes(spec.program) } catch (error: unknown) {
       const output = persistentOutput(this.config.maxOutputBytes)
       const outcome = output.failure([], { kind: 'exception', message: messageOf(error) })
       if (outcome.error?.kind === 'output-limit' && spec.stateOwner !== undefined) {
@@ -371,7 +368,7 @@ export class InMemoryExecution {
         ...spec.sandboxPolicy.additionalWritableRoots === undefined
           ? {}
           : { additionalWritableRoots: [...spec.sandboxPolicy.additionalWritableRoots] },
-      }, this.processes)
+      }, this.processes, this.mode)
       this.kernels.add(kernel)
       if (spec.stateOwner !== undefined) this.owners.set(spec.stateOwner, kernel)
     }
