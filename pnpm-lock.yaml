@@ -8400,9 +8400,9 @@ importers:
 
   packages/experimental/client-ui-forge:
     dependencies:
-      '@deepseek-ai/dsh-timeout':
+      '@deepseek-ai/dsh-typert-protocol':
         specifier: workspace:*
-        version: link:../../util/timeout
+        version: link:../../typert/protocol
       '@deepseek-ai/dsh-util-values':
         specifier: workspace:*
         version: link:../../util/values
@@ -8506,9 +8506,9 @@ importers:
       '@deepseek-ai/dsh-system-prompt':
         specifier: workspace:*
         version: link:../../core/system-prompt
-      '@deepseek-ai/dsh-typert-protocol':
+      '@deepseek-ai/dsh-timeout':
         specifier: workspace:*
-        version: link:../../typert/protocol
+        version: link:../../util/timeout
       '@deepseek-ai/dsh-util-workspace-path':
         specifier: workspace:*
         version: link:../../util/workspace-path
