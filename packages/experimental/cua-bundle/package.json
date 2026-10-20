@@ -35,7 +35,6 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml",
-      "experimental": true,
       "platforms": [
         "darwin"
       ]

@@ -19,7 +19,7 @@ it('disables unsupported bundles, shows the Host restriction, and refuses direct
   })
   const name = 'host-platform-only'
   await writeFile(join(root, 'package.json'), JSON.stringify({ name, version: '1.0.0', dsh: { bundle: {
-    patch: './cordis.patch.yml', experimental: true, platforms: [process.platform === 'darwin' ? 'win32' : 'darwin'],
+    patch: './cordis.patch.yml', platforms: [process.platform === 'darwin' ? 'win32' : 'darwin'],
   } } }))
   await writeFile(join(root, 'cordis.patch.yml'), '- id: ptc-runtime\n  config:\n    executionMode: persistent-in-memory\n')
   const scaffold = owned.scaffold = await launchWebScaffold({ profile: { packages: [{ dir: root }] } })

@@ -91,8 +91,6 @@ export interface PackageRow {
 /** One bundle as the page shows it: the Host's bundle joined with the entries its rows run as. */
 export interface PackageView {
   readonly name: string
-  /** Experimental feature marker supplied by the bundle manifest. */
-  readonly experimental?: boolean
   /** Official catalog identity is independent of installation and selection. */
   readonly official: boolean
   /** Readable package location, separately from the profile dependency declaration. */
@@ -548,7 +546,6 @@ export function packageView(bundle: BundleInfo, plugins: readonly PluginInfo[]):
     ...bundle.installTarget === undefined ? {} : { installTarget: bundle.installTarget },
     installed: bundle.installed,
     optional: bundle.optional,
-    ...bundle.experimental === undefined ? {} : { experimental: bundle.experimental },
     removable: bundle.removable,
     updatable: bundle.updatable,
     enabled: bundle.enabled,

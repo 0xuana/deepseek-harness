@@ -13,8 +13,7 @@ const artifactGraph = {
   'desktop-bundle': ['host-bundle'],
   'client-src': ['desktop-bundle'],
   'client-bundle': ['client-src'],
-  'cua': ['client-bundle'],
-  'web': ['cua'],
+  'web': ['client-bundle'],
 }
 
 function graph(gates: ReturnType<typeof buildGates>): Record<string, string[] | undefined> {

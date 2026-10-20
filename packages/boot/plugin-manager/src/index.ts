@@ -520,8 +520,6 @@ export class PluginManager extends TypertRemoteService {
             ...(readOnlyReason === undefined ? {} : { readOnlyReason }), error: targetError ?? { code: 'not-bundle' }, rows: [], overrides: [] })
           continue
         }
-        const experimental = info.dsh?.bundle?.experimental
-        if (experimental !== undefined && typeof experimental !== 'boolean') throw new Error('bundle experimental must be a boolean')
         version = info.version
         const compatibility = evaluatePluginCompatibility(info, exemptions)
         if (compatibility !== undefined && !compatibility.exempted) throw new ManagementFailure('incompatible-version', [incompatiblePlugin(compatibility)])
@@ -531,8 +529,7 @@ export class PluginManager extends TypertRemoteService {
         try { assertBundlePlatform(info.dsh?.bundle?.platforms, process.platform) }
         catch (error) { platformError = managementError(error) }
         const error = targetError ?? platformError
-        bundles.push({ name, official, availability, ...target, ...experimental === undefined ? {} : { experimental },
-          ...(version === undefined ? {} : { version }),
+        bundles.push({ name, official, availability, ...target, ...(version === undefined ? {} : { version }),
           ...(info.description === undefined || info.description === '' ? {} : { description: info.description }),
           ...meta === undefined ? {} : { meta },
           ...sourceOf(info.name), enabled, installed, optional, removable: removable && readOnlyReason === undefined,

@@ -133,12 +133,12 @@ const EXPERIMENTAL_BUNDLES: readonly string[] = [
  * @returns localized copy with a technical-name fallback and the independent beta status.
  */
 export function packageText(
-  pkg: Pick<PackageView, 'name' | 'meta' | 'experimental'>, resolveText: PluginManagerFace['resolveText'],
+  pkg: Pick<PackageView, 'name' | 'meta'>, resolveText: PluginManagerFace['resolveText'],
 ): { title: string; description: string | undefined; beta: boolean } {
   return {
     title: pkg.meta?.title === undefined ? pkg.name : resolveText(pkg.meta.title),
     description: pkg.meta?.description === undefined ? undefined : resolveText(pkg.meta.description) || undefined,
-    beta: pkg.experimental === true || EXPERIMENTAL_BUNDLES.includes(pkg.name),
+    beta: EXPERIMENTAL_BUNDLES.includes(pkg.name),
   }
 }
 

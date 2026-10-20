@@ -5166,7 +5166,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'BundleInfo',
-    declaration: 'export interface BundleInfo {\n    name: string;\n    experimental?: boolean;\n    official: boolean;\n    availability: \'installation\' | \'profile\' | \'missing\';\n    installTarget?: {\n        spec: string;\n        version: string;\n    };\n    version?: string;\n    meta?: PluginLocalizedMeta;\n    description?: string;\n    enabled: boolean;\n    installed: boolean;\n    source?: string;\n    optional: boolean;\n    removable: boolean;\n    updatable: boolean;\n    readOnlyReason?: ReadOnlyReason;\n    error?: ManagementError;\n    rows: BundleRowInfo[];\n    overrides: string[];\n}',
+    declaration: 'export interface BundleInfo {\n    name: string;\n    official: boolean;\n    availability: \'installation\' | \'profile\' | \'missing\';\n    installTarget?: {\n        spec: string;\n        version: string;\n    };\n    version?: string;\n    meta?: PluginLocalizedMeta;\n    description?: string;\n    enabled: boolean;\n    installed: boolean;\n    source?: string;\n    optional: boolean;\n    removable: boolean;\n    updatable: boolean;\n    readOnlyReason?: ReadOnlyReason;\n    error?: ManagementError;\n    rows: BundleRowInfo[];\n    overrides: string[];\n}',
   },
   {
     name: 'BundleRowInfo',

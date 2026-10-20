@@ -72,8 +72,6 @@ export interface BundleRowInfo {
 /** One shipped, profile-installed, or discoverable on-demand bundle. */
 export interface BundleInfo {
   name: string
-  /** Explicit experimental feature status declared by the bundle. */
-  experimental?: boolean
   /** Project-maintained shipped optional bundle or on-demand catalog entry, independent of installation and selection. */
   official: boolean
   /** Readable package location; on-demand catalog entries exclude undeclared transitive copies, and declared files may be missing. */

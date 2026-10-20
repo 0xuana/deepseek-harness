@@ -11,7 +11,7 @@ import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import { load } from 'js-yaml'
 import { expect, it, vi } from 'vitest'
 import { captureStableAria, compareOrRefreshGolden, launchWebScaffold, webSnapshotMode, type WebScaffold } from './scaffold.ts'
-import { connectFreshWorkspaceZh, writeComposerDraft, ZH_BROWSER_LOCALE } from './support.ts'
+import { connectFreshWorkspaceZh, ZH_BROWSER_LOCALE } from './support.ts'
 
 // The shipped bundle admits only macOS Hosts; unsupported Hosts are exercised in bundle-platform.e2e.ts.
 it.skipIf(process.platform !== 'darwin').each([
@@ -39,8 +39,6 @@ it.skipIf(process.platform !== 'darwin').each([
     const page = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await connectFreshWorkspaceZh(page, scaffold.workspaceCwd)
-    const input = page.locator('[data-composer-input]')
-    await writeComposerDraft(page, input, 'Retained draft')
     await page.getByRole('navigation', { name: '全局面板' }).getByRole('button', { name: '插件', exact: true }).click()
     const plugins = page.locator('[data-plugin-panel]')
     await plugins.getByRole('button', { name: '更多', exact: true }).waitFor()

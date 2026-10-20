@@ -93,7 +93,7 @@ it.each(['live', 'startup'] as const)('refuses an unsupported bundle before savi
   const { manager, dir, ctx } = await fixture(reload, false, undefined, {}, undefined, (dir) => {
     const path = join(dir, 'node_modules/extra/package.json')
     writeFileSync(path, JSON.stringify({ name: 'extra', version: '1.0.0', description: 'Platform-limited bundle',
-      dsh: { bundle: { patch: './cordis.patch.yml', experimental: true, platforms: [process.platform === 'darwin' ? 'win32' : 'darwin'] } } }))
+      dsh: { bundle: { patch: './cordis.patch.yml', platforms: [process.platform === 'darwin' ? 'win32' : 'darwin'] } } }))
     const manifest = readProfileManifest('test', dir)
     manifest.dsh = { profile: { bundles: ['core'] } }
     writeFileSync(join(dir, 'package.json'), JSON.stringify(manifest))
@@ -101,7 +101,7 @@ it.each(['live', 'startup'] as const)('refuses an unsupported bundle before savi
   const before = readFileSync(join(dir, 'package.json'), 'utf8')
   const patchBefore = readFileSync(join(dir, 'cordis.patch.yml'), 'utf8')
   expect((await manager.listBundles()).find(row => row.name === 'extra')).toMatchObject({
-    enabled: false, experimental: true, description: 'Platform-limited bundle', error: { code: 'unsupported-platform' },
+    enabled: false, description: 'Platform-limited bundle', error: { code: 'unsupported-platform' },
   })
   expect(await manager.setBundleEnabled('extra', true)).toMatchObject({ changed: false, application: 'failed', error: { code: 'unsupported-platform' } })
   expect(readFileSync(join(dir, 'package.json'), 'utf8')).toBe(before)
@@ -1548,21 +1548,6 @@ it.each([false, true])('rechecks installed bundle peers before accepting a disab
   }
   expect(readProfileManifest('test', dir).dsh?.profile?.bundles).toEqual(['core', 'extra'])
 })
-
-it.each([true, false])('projects the explicit experimental flag %s independently of package naming', async (experimental) => {
-  const { manager, dir } = await fixture()
-  const path = join(dir, 'node_modules/extra/package.json')
-  const manifest = JSON.parse(readFileSync(path, 'utf8')) as { dsh: { bundle: { experimental?: boolean | string } } }
-  manifest.dsh.bundle.experimental = experimental
-  writeFileSync(path, JSON.stringify(manifest))
-  expect((await manager.listBundles()).find(row => row.name === 'extra')).toMatchObject({ experimental })
-  manifest.dsh.bundle.experimental = 'yes'
-  writeFileSync(path, JSON.stringify(manifest))
-  const error = (await manager.listBundles()).find(row => row.name === 'extra')?.error
-  expect(error?.code).toBe('operation-error')
-  expect(error?.diagnostic).toContain('must be a boolean')
-})
-
 
 it('lists absent Official entries offline without resolving their packages or consulting registries', async () => {
   const { manager } = await fixture()

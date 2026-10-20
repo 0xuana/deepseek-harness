@@ -791,7 +791,7 @@ describe('PluginManagerPage', () => {
   it('shows Computer Use permission guidance on the experimental plugins page', () => {
     const description = 'Review application access before use.'
     const { actions } = renderTab({ packages: [pkg({
-      name: '@deepseek-ai/dsh-cua-bundle', experimental: true, enabled: false, optional: true, installed: false,
+      name: '@deepseek-ai/dsh-cua-bundle', enabled: false, optional: true, installed: false,
       meta: { title: 'Computer Use', description },
     })] })
     fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
