@@ -1,4 +1,5 @@
 import { writeFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { packageTarget, parseDesktopPackageInvocation } from '../scripts/package-target.ts'
 import { withMacOSNotarizationProxy } from '../scripts/macos-notarization-proxy.ts'
@@ -42,6 +43,20 @@ function supervisor(failure?: string) {
     }) }
   return { run, stages }
 }
+
+it.each([undefined, '3'])('passes the package cache and selected compression to their subprocesses (%s)', async (level) => {
+  const { run } = supervisor()
+  const cache = resolve('fixture-package-cache')
+  await packageTarget(parseDesktopPackageInvocation(['win-x64'], 'win32', 'x64'), {
+    ...environment, DSH_DESKTOP_PACKAGE_CACHE_DIR: cache,
+    ...(level === undefined ? {} : { DSH_DESKTOP_WINDOWS_COMPRESSION_LEVEL: level }),
+    ELECTRON_BUILDER_COMPRESSION_LEVEL: '0',
+  }, run)
+  const prepare = run.run.mock.calls.find(([stage]) => stage.startsWith('run prepare:dsh'))!
+  expect(prepare[3].env.DSH_DESKTOP_PACKAGE_CACHE_DIR).toBe(cache)
+  const builder = run.run.mock.calls.find(([stage]) => stage.startsWith('exec electron-builder'))!
+  expect(builder[3].env.ELECTRON_BUILDER_COMPRESSION_LEVEL).toBe(level ?? '0')
+})
 
 it.each([undefined, '2'])('uses bounded Windows packing while retaining signing and smoke (workers=%s)', async (workers) => {
   const { run, stages } = supervisor()

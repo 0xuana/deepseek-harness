@@ -23,6 +23,37 @@ async function withDirectory(action: (directory: string) => Promise<void>): Prom
 }
 
 describe('Desktop local packaging configuration', () => {
+  it('loads file-owned compression and defaults to the existing Windows archive level', async () => {
+    expect(resolveWindowsPackageSettings({}).compressionLevel).toBe(9)
+    await withDirectory(async (directory) => {
+      await writeFile(join(directory, '.env.windows'), 'DSH_DESKTOP_WINDOWS_COMPRESSION_LEVEL=3\n')
+      const selected = loadDesktopPackageEnvironment('win32', { DSH_DESKTOP_WINDOWS_COMPRESSION_LEVEL: '0' }, directory)
+      expect(resolveWindowsPackageSettings(selected).compressionLevel).toBe(3)
+    })
+  })
+
+  it.each(['', '-1', '10', '3.5', '03', 'fast'])('rejects invalid compression %j before preparation', (value) => {
+    const selected = { ...RELEASE, DSH_DESKTOP_WINDOWS_COMPRESSION_LEVEL: value }
+    expect(() => { validateDesktopPackageEnvironment(selected, WINDOWS, { unsigned: true }) })
+      .toThrow('COMPRESSION_LEVEL')
+  })
+
+  it.each(['', ' ', 'relative/cache'])('rejects invalid package caches before any signing mode %j', (directory) => {
+    for (const target of [WINDOWS, MACOS]) {
+      for (const options of [{ unsigned: true }, { prepareOnly: true }, {}]) {
+        expect(() => { validateDesktopPackageEnvironment({ DSH_DESKTOP_PACKAGE_CACHE_DIR: directory }, target, options) })
+          .toThrow('DSH_DESKTOP_PACKAGE_CACHE_DIR')
+      }
+    }
+  })
+
+  it('preserves the machine package cache when loading a release file', async () => {
+    await withDirectory(async (directory) => {
+      await writeFile(join(directory, '.env.windows'), '')
+      expect(loadDesktopPackageEnvironment('win32', { DSH_DESKTOP_PACKAGE_CACHE_DIR: directory }, directory))
+        .toEqual({ DSH_DESKTOP_PACKAGE_CACHE_DIR: directory })
+    })
+  })
   it('selects macOS local defaults while excluding inherited release settings and retaining build networking', () => {
     const parent = {
       PATH: 'build-tools', HTTPS_PROXY: 'http://proxy.example:8080', DSH_DESKTOP_NPM_REGISTRY: 'https://registry.npmmirror.com',
@@ -271,9 +302,4 @@ it('skips Apple credentials but still requires signing credentials for unnotariz
       validateDesktopPackageEnvironment({ ...environment, CSC_KEY_PASSWORD: undefined }, MACOS, { skipNotarization: true })
     }).toThrow(/CSC_KEY_PASSWORD/u)
   })
-})
-
-it.each(['', 'relative-cache'])('rejects invalid build cache paths during preflight (%s)', (cache) => {
-  expect(() => { validateDesktopPackageEnvironment({ ...RELEASE, DSH_DESKTOP_PACKAGE_CACHE_DIR: cache }, MACOS, { unsigned: true }) })
-    .toThrow('DSH_DESKTOP_PACKAGE_CACHE_DIR must be absolute')
 })

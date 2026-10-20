@@ -42,6 +42,11 @@ on:
         type: string
         default: ''
         required: false
+      cache_namespace:
+        description: '缓存测量命名空间：留空使用共享缓存；新名称用于冷缓存，再次使用同名测热缓存，不清除现有缓存'
+        type: string
+        default: ''
+        required: false
 
 permissions:
   contents: read
@@ -66,6 +71,7 @@ jobs:
       DSH_PACKAGING_PRESET: ${{ inputs.preset }}
       PACKAGE_TEST_RELEASE_ID: ${{ inputs.test_release_id }}
       PACKAGE_SIGNING: ${{ inputs.signing }}
+      PACKAGE_CACHE_NAMESPACE: ${{ inputs.cache_namespace }}
     steps:
       - name: Reset packaging checkout
         working-directory: ${{ runner.temp }}
@@ -112,9 +118,18 @@ jobs:
         # PNPM_HOME belongs to this run; keep downloaded packages outside its temporary directory.
         run: |
           $storeRoot = Join-Path ([IO.Path]::GetPathRoot($env:GITHUB_WORKSPACE)) '.pnpm-store'
+          $namespace = $env:PACKAGE_CACHE_NAMESPACE
+          if ($namespace) {
+            if ($namespace -cnotmatch '^[a-z0-9][a-z0-9-]{0,63}\z') { throw 'Cache namespace must contain 1-64 lowercase letters, digits or hyphens' }
+            if ($namespace -match '^(con|prn|aux|nul|com[1-9]|lpt[1-9])$') { throw 'Cache namespace cannot be a Windows device name' }
+            $storeRoot = Join-Path $storeRoot $namespace
+            "DSH_DESKTOP_PACKAGE_CACHE_DIR=$(Join-Path $env:DSH_DESKTOP_PACKAGE_CACHE_DIR $namespace)" >> $env:GITHUB_ENV
+          }
           "PNPM_CONFIG_STORE_DIR=$storeRoot" >> $env:GITHUB_ENV
       - name: Install locked dependencies
         run: |
+          pnpm store path
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pnpm install --frozen-lockfile
           exit $LASTEXITCODE
       - name: Validate preset and resolve build version

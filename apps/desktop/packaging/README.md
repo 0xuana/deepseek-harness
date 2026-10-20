@@ -32,8 +32,6 @@ Build Desktop installers locally or through Windows or macOS Actions, choose dep
 
 Run local commands from the repository root after installing locked dependencies. Use platform-specific commands for a local build, or platform Actions for the registered self-hosted runner. Choose test or production deployment independently from signed or unsigned mode. Read [Windows signing and runner operations](../windows-signing/README.md#trust-and-isolation) before any Windows signed build or shared-runner use. Installation is separate from packaging; [publication](../publishing/README.md) is a further explicit operation.
 
-Set `DSH_DESKTOP_PACKAGE_CACHE_DIR` to an absolute build-cache directory to retain verified downloads and the pnpm content store across checkouts. Both packaging workflows use `runner.tool_cache/dsh-desktop-package-cache`; local commands default to `.desktop-build`. Runtime preparation still creates a fresh installation and lockfile, verifies stored package integrity, and copies files before signing. Cleanup removes temporary installations, not these caches. Operators manage cache disk usage; no automatic eviction runs.
-
 <a id="release-versions"></a>
 
 ## Release versions
@@ -114,6 +112,8 @@ The `Package Desktop · Windows` [manual workflow](../../../.github/workflows/wi
 Select the workflow in Actions, choose the source branch, preset, signing mode and version, then click Run workflow. Before merging input changes, test the pushed branch with `gh workflow run windows-package.yml --ref <branch> -f preset=test -f signing=unsigned -f build_version=auto`; verify the web form after merging. There is no push or PR trigger. Logs and successful EXEs are retained for 14 days. Inspect the retained logs and installer before relying on packaging; installation is separate. Before checkout, Node removes the runner-owned source directory without following dependency junctions; the workflow validates its location and rejects linked ancestors. Never point it at a development checkout. Runs share one concurrency group without cancelling an active build; only one run remains pending, and a newer dispatch replaces it. Diagnostics upload requires a successful clean checkout. Machine settings stay outside the checkout and are never uploaded as artifacts.
 
 Open the completed run in Actions and download its Artifacts. `windows-x64-signed-<version>-<run_id>-<run_attempt>` and `windows-x64-unsigned-<version>-<run_id>-<run_attempt>` contain the corresponding EXE; `windows-package-logs-<run_id>-<run_attempt>` contains packaging diagnostics. The upload steps are `Retain verified signed installer`, `Retain verified unsigned installer`, and `Retain packaging diagnostics`; their step durations and timestamped logs show upload time. These artifacts are not a Release or download-site publication.
+
+For cache measurements, `cache_namespace` selects a retained subdirectory for both dependency stores and upstream downloads; leave it empty for normal shared caches. Use a new name for a cold sample and repeat that name for warm samples. Names contain 1–64 lowercase letters, digits or hyphens, start with a letter or digit, and cannot be Windows device names. This does not reset the separate signature cache or OS file cache; report those states and Job start-to-completion time alongside phase timings and artifact size.
 
 <a id="macos-actions"></a>
 
@@ -256,11 +256,15 @@ When extraction fails, the installer writes a report with the 7-Zip result and i
 
 Windows packaging fixes the 7-Zip filter to `BCJ` for compatibility with the bundled NSIS decoder. This preserves ARM64 binaries carried by dependencies in x64 installers; automatic ARM64 filtering produces entries that this decoder cannot extract.
 
+`DSH_DESKTOP_WINDOWS_COMPRESSION_LEVEL` in the Windows dotenv or machine preset selects installer archive compression from `0` to `9`. If omitted, the existing `ELECTRON_BUILDER_COMPRESSION_LEVEL` environment override remains effective, otherwise the default is `9`. Lower levels trade installer size for packaging time; qualify the complete signed workflow and artifact size before changing a release preset.
+
 NSIS removes its temporary extraction tree during installation, before the completion page or an automatic launch. The installed production packages remain ordinary files; startup does not extract them again. Installation still writes the complete application tree.
 
 <a id="desktop-runtime-preparation"></a>
 
 ## Desktop runtime preparation
+
+`DSH_DESKTOP_PACKAGE_CACHE_DIR` in the packaging process environment selects a nonempty absolute directory for shared `downloads` and `pnpm-store` caches; omission uses `.desktop-build`. Temporary installation projects, lockfiles and configuration remain separate per run. Runtime installation verifies store integrity and copies package files so later signing cannot modify cached bytes; cleanup retains these caches. Windows Actions uses `runner.tool_cache/dsh-desktop-package-cache`, while repository dependency installation uses a separate `.pnpm-store` at the workspace drive root. Both installation logs identify their store and report package reuse. A fresh runtime lockfile still resolves dependencies on every run.
 
 Desktop [patch policy](../scripts/runtime-patch-policy.ts) explicitly classifies every workspace patch as shared, workspace-only, or runtime-only. Shared entries reuse the root patch bytes and verify their hash against the root lockfile; runtime-only entries use separate repository files without changing workspace installation. Workspace-only patches belong to build tools or dependencies already embedded in client bundles. Unclassified or stale entries, missing files, changed hashes, incompatible resolved versions, and workspace-only packages entering the runtime stop packaging. The [preparation script](../scripts/prepare-runtime-patches.ts) writes only to the temporary project; pnpm applies the selected patches and rejects application failures.
 

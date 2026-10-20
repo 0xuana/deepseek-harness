@@ -65,7 +65,7 @@ it('routes manual packaging to the dedicated runner with explicit preset and sig
   expect(workflow.concurrency).toEqual({ group: 'windows-desktop-package', 'cancel-in-progress': false })
   expect(workflow.permissions).toEqual({ contents: 'read' })
   expect(Object.keys(workflow.on.workflow_dispatch!.inputs).sort()).toEqual([
-    'build_version', 'preset', 'signing', 'source_ref', 'test_release_id', 'update_channel', 'version_mode',
+    'build_version', 'cache_namespace', 'preset', 'signing', 'source_ref', 'test_release_id', 'update_channel', 'version_mode',
   ])
   expect(workflow.on.workflow_dispatch!.inputs.signing!.default).toBe('signed')
   expect(workflow.on.workflow_dispatch!.inputs.build_version!.required).toBe(false)
@@ -120,12 +120,28 @@ it.skipIf(process.platform !== 'win32')('keeps the dependency store stable acros
       const environmentFile = resolve(directory, run + '.env')
       execFileSync('pwsh', ['-NoProfile', '-File', script], {
         env: { ...process.env, GITHUB_WORKSPACE: 'D:\\runner\\_work\\repo\\repo',
-          PNPM_HOME: resolve(directory, run, 'pnpm'), GITHUB_ENV: environmentFile },
+          PACKAGE_CACHE_NAMESPACE: '', PNPM_HOME: resolve(directory, run, 'pnpm'), GITHUB_ENV: environmentFile },
         stdio: 'pipe',
       })
       return readFileSync(environmentFile, 'utf8').trim()
     })
     expect(outputs).toEqual(['PNPM_CONFIG_STORE_DIR=D:\\.pnpm-store', 'PNPM_CONFIG_STORE_DIR=D:\\.pnpm-store'])
+    const runNamespace = (namespace: string) => {
+      const output = resolve(directory, 'namespace.env')
+      rmSync(output, { force: true })
+      execFileSync('pwsh', ['-NoProfile', '-File', script], {
+        env: { ...process.env, GITHUB_WORKSPACE: 'D:\\runner\\_work\\repo\\repo',
+          PACKAGE_CACHE_NAMESPACE: namespace, DSH_DESKTOP_PACKAGE_CACHE_DIR: 'D:\\tool-cache\\desktop', GITHUB_ENV: output },
+        stdio: 'pipe',
+      })
+      return readFileSync(output, 'utf8').trim().split(/\r?\n/u)
+    }
+    expect(runNamespace('perf-1')).toEqual([
+      'DSH_DESKTOP_PACKAGE_CACHE_DIR=D:\\tool-cache\\desktop\\perf-1', 'PNPM_CONFIG_STORE_DIR=D:\\.pnpm-store\\perf-1',
+    ])
+    for (const invalid of ['../escape', 'Upper', 'has space', 'con', 'perf\n', 'a'.repeat(65)]) {
+      expect(() => runNamespace(invalid)).toThrow()
+    }
   } finally {
     rmSync(directory, { recursive: true, force: true, maxRetries: 3 })
   }

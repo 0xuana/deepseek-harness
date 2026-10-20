@@ -3,6 +3,7 @@
 import { resolveMacOSSignatureCacheDirectory } from './macos-signature-cache-directory.mjs'
 import { packagingStep } from './packaging-step.mjs'
 import { spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join, relative, resolve } from 'node:path'
@@ -82,9 +83,9 @@ function runPnpm(args: readonly string[]): Promise<void> {
       PNPM,
       `--config.registry=${registry}`,
       `--config.store-dir=${STORE_ROOT}`,
-      '--config.enable-global-virtual-store=false',
       '--config.verify-store-integrity=true',
       '--config.package-import-method=copy',
+      '--config.enable-global-virtual-store=false',
       `--config.userconfig=${userConfig}`,
       command,
       ...commandArgs,
@@ -115,6 +116,7 @@ function runPnpm(args: readonly string[]): Promise<void> {
 
 async function main(): Promise<void> {
   try {
+    console.log(`desktop runtime: pnpm store ${STORE_ROOT}`)
     await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'runtime:reset', async () => {
       rmSync(DSH_OUTPUT_ROOT, { recursive: true, force: true })
       rmSync(PNPM_BUILD_STATE, { recursive: true, force: true })
@@ -129,8 +131,10 @@ async function main(): Promise<void> {
     })
     await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'runtime:lockfile', () => runPnpm(['install', '--lockfile-only']))
     verifyRuntimePatches(BUILD_ROOT, patches)
+    const lockfile = readFileSync(join(BUILD_ROOT, 'pnpm-lock.yaml'), 'utf8')
+    console.log(`desktop runtime: lockfile sha256 ${createHash('sha256').update(lockfile).digest('hex')}`)
     verifyDesktopCoreLockfile(
-      readFileSync(join(BUILD_ROOT, 'pnpm-lock.yaml'), 'utf8'),
+      lockfile,
       readDesktopCorePackageSet(BUILD_ROOT, release.version),
     )
     await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'runtime:install', () => runPnpm(['install', '--prod', '--frozen-lockfile', '--trust-lockfile']))
