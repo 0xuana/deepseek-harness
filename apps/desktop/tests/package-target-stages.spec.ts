@@ -1,5 +1,6 @@
 import { writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { setImmediate } from 'node:timers/promises'
 import { afterEach, expect, it, vi } from 'vitest'
 import { packageTarget, parseDesktopPackageInvocation } from '../scripts/package-target.ts'
 import { withMacOSNotarizationProxy } from '../scripts/macos-notarization-proxy.ts'
@@ -43,6 +44,83 @@ function supervisor(failure?: string) {
     }) }
   return { run, stages }
 }
+
+it.each(['pack', 'runtime'] as const)('overlaps Windows preparation and waits for both before signing when %s finishes first', async (first) => {
+  const { run, stages } = supervisor()
+  const pack = Promise.withResolvers<undefined>()
+  const runtime = Promise.withResolvers<undefined>()
+  const finished = new Set<string>()
+  run.run.mockImplementation(async (stage) => {
+    stages.push(stage)
+    if (stage.startsWith('run release:pack --family dsh ')) await pack.promise
+    if (stage === 'run prepare:runtime --defer-primary-runtime-smoke') {
+      await runtime.promise
+      finished.add('runtime')
+    }
+    if (stage.startsWith('--dir native/system/packages/entry pack ')) finished.add('pack')
+    if (stage === 'run sign:primary-runtime') expect([...finished].sort()).toEqual(['pack', 'runtime'])
+  })
+  const operation = packageTarget(parseDesktopPackageInvocation(['win-x64'], 'win32', 'x64'), environment, run)
+  const outcome = operation.then(() => undefined, (error: unknown) => error)
+  try {
+    await vi.waitFor(() => {
+      expect(stages.some(stage => stage.startsWith('run release:pack --family dsh '))).toBe(true)
+      expect(stages).toContain('run prepare:runtime --defer-primary-runtime-smoke')
+    })
+    expect(stages).not.toContain('run sign:primary-runtime')
+    ;(first === 'pack' ? pack : runtime).resolve(undefined)
+    await vi.waitFor(() => { expect(finished.has(first)).toBe(true) })
+    expect(stages).not.toContain('run sign:primary-runtime')
+    expect(writeFileSync).not.toHaveBeenCalled()
+    ;(first === 'pack' ? runtime : pack).resolve(undefined)
+    expect(await outcome).toBeUndefined()
+    expect(stages).toContain('run sign:primary-runtime')
+    expect(writeFileSync).toHaveBeenCalledOnce()
+  } finally {
+    pack.resolve(undefined)
+    runtime.resolve(undefined)
+    await outcome
+  }
+})
+
+it.each(['pack', 'runtime'] as const)('drains the other Windows preparation after %s fails without starting later packing or signing', async (failed) => {
+  const { run, stages } = supervisor()
+  const pack = Promise.withResolvers<undefined>()
+  const runtime = Promise.withResolvers<undefined>()
+  const failure = new Error(`${failed} preparation failed`)
+  let settled = false
+  run.run.mockImplementation(async (stage) => {
+    stages.push(stage)
+    if (stage.startsWith('run release:pack --family dsh ')) await pack.promise
+    if (stage === 'run prepare:runtime --defer-primary-runtime-smoke') await runtime.promise
+  })
+  const outcome = packageTarget(parseDesktopPackageInvocation(['win-x64'], 'win32', 'x64'), environment, run).then(
+    () => { settled = true; return undefined },
+    (error: unknown) => { settled = true; return error },
+  )
+  try {
+    await vi.waitFor(() => {
+      expect(stages.some(stage => stage.startsWith('run release:pack --family dsh '))).toBe(true)
+      expect(stages).toContain('run prepare:runtime --defer-primary-runtime-smoke')
+    })
+    ;(failed === 'pack' ? pack : runtime).reject(failure)
+    await setImmediate()
+    expect(settled).toBe(false)
+    expect(writeFileSync).not.toHaveBeenCalled()
+    ;(failed === 'pack' ? runtime : pack).resolve(undefined)
+    expect(await outcome).toBe(failure)
+    expect(stages.filter(stage => stage.startsWith('run release:pack'))).toHaveLength(1)
+    expect(stages.some(stage => stage.startsWith('--dir apps/desktop-host pack'))).toBe(false)
+    expect(stages.some(stage => stage.startsWith('--dir native/system'))).toBe(false)
+    expect(stages.some(stage => stage.startsWith('run sign:primary-runtime'))).toBe(false)
+    expect(stages.some(stage => stage.startsWith('run prepare:packages') || stage.startsWith('run prepare:dsh'))).toBe(false)
+    expect(writeFileSync).not.toHaveBeenCalled()
+  } finally {
+    pack.resolve(undefined)
+    runtime.resolve(undefined)
+    await outcome
+  }
+})
 
 it.each([undefined, '3'])('passes the package cache and selected compression to their subprocesses (%s)', async (level) => {
   const { run } = supervisor()
@@ -162,7 +240,10 @@ it.each([
   const invocation = parseDesktopPackageInvocation([target, '--unsigned'],
     target === 'win-x64' ? 'win32' : 'darwin', target === 'win-x64' ? 'x64' : 'arm64')
   await expect(packageTarget(invocation, environment, run)).rejects.toThrow('stage refused')
-  expect(stages.at(-1)?.startsWith(failure)).toBe(true)
+  const failedAt = stages.findIndex(stage => stage.startsWith(failure))
+  expect(failedAt).toBeGreaterThanOrEqual(0)
+  expect(stages.slice(failedAt + 1)).toEqual(
+    target === 'win-x64' && failure.startsWith('exec tsx') ? ['run prepare:runtime'] : [])
   expect(stages.some(stage => stage.startsWith('--dir apps/desktop-host pack'))).toBe(false)
   expect(writeFileSync).not.toHaveBeenCalled()
 })

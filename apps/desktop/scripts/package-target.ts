@@ -370,7 +370,7 @@ async function main(): Promise<void> {
     version: buildVersion, productVersion, node: process.version,
     commit: packaged.commit,
     dirty: packaged.dirty,
-  }, { parallel: target.platform === 'darwin', secrets })
+  }, { parallel: true, secrets })
   console.log(`DESKTOP_PACKAGING_RECORD ${run.directory}`)
   const previousDirectory = process.env.DSH_DESKTOP_PACKAGING_RUN_DIR
   process.env.DSH_DESKTOP_PACKAGING_RUN_DIR = run.directory
@@ -479,31 +479,47 @@ export async function packageTarget(
     })
   }
   await execute(invocation.unsigned ? ['run', 'build', '--profile', 'local'] : ['run', 'build:official'], buildEnv, REPOSITORY_ROOT)
-  await execute([
-    ...(invocation.unsigned
-      ? ['exec', 'tsx', 'apps/desktop/scripts/pack-local-packages.ts']
-      : ['run', 'release:pack', '--family', 'dsh']),
-    '--out', buildPaths.packedDsh, ...packArguments,
-  ], buildEnv, REPOSITORY_ROOT)
-  await execute([
-    '--dir',
-    'apps/desktop-host',
-    'pack',
-    '--pack-destination',
-    buildPaths.packedDsh,
-  ], buildEnv, REPOSITORY_ROOT)
-  await execute(['run', 'release:pack', '--family', 'vendor', '--out', buildPaths.packedVendor, ...packArguments], buildEnv, REPOSITORY_ROOT)
-  rmSync(buildPaths.packedLandlock, { recursive: true, force: true })
-  mkdirSync(buildPaths.packedLandlock, { recursive: true })
-  await execute(['--dir', 'native/system', 'run', 'build:ts'], buildEnv, REPOSITORY_ROOT)
-  await execute([
-    '--dir',
-    'native/system/packages/entry',
-    'pack',
-    '--pack-destination',
-    buildPaths.packedLandlock,
-  ], buildEnv, REPOSITORY_ROOT)
-  await execute(['run', 'prepare:runtime', ...(signPrimaryRuntime ? ['--defer-primary-runtime-smoke'] : [])], downloadEnv)
+  let preparationFailure: { error: unknown } | undefined
+  const executePreparation = async (args: readonly string[], env: NodeJS.ProcessEnv, cwd?: string): Promise<void> => {
+    if (preparationFailure !== undefined) throw preparationFailure.error
+    try { await execute(args, env, cwd) }
+    catch (error) { preparationFailure ??= { error }; throw error }
+  }
+  const pack = async (): Promise<void> => {
+    await executePreparation([
+      ...(invocation.unsigned
+        ? ['exec', 'tsx', 'apps/desktop/scripts/pack-local-packages.ts']
+        : ['run', 'release:pack', '--family', 'dsh']),
+      '--out', buildPaths.packedDsh, ...packArguments,
+    ], buildEnv, REPOSITORY_ROOT)
+    await executePreparation([
+      '--dir',
+      'apps/desktop-host',
+      'pack',
+      '--pack-destination',
+      buildPaths.packedDsh,
+    ], buildEnv, REPOSITORY_ROOT)
+    await executePreparation(['run', 'release:pack', '--family', 'vendor', '--out', buildPaths.packedVendor, ...packArguments], buildEnv, REPOSITORY_ROOT)
+    rmSync(buildPaths.packedLandlock, { recursive: true, force: true })
+    mkdirSync(buildPaths.packedLandlock, { recursive: true })
+    await executePreparation(['--dir', 'native/system', 'run', 'build:ts'], buildEnv, REPOSITORY_ROOT)
+    await executePreparation([
+      '--dir',
+      'native/system/packages/entry',
+      'pack',
+      '--pack-destination',
+      buildPaths.packedLandlock,
+    ], buildEnv, REPOSITORY_ROOT)
+  }
+  const prepareRuntime = () => executePreparation(
+    ['run', 'prepare:runtime', ...(signPrimaryRuntime ? ['--defer-primary-runtime-smoke'] : [])], downloadEnv)
+  if (target.platform === 'win32') {
+    const results = await Promise.allSettled([pack(), prepareRuntime()])
+    for (const result of results) if (result.status === 'rejected') throw result.reason
+  } else {
+    await pack()
+    await prepareRuntime()
+  }
   if (signPrimaryRuntime) await execute(['run', 'sign:primary-runtime'], electronBuilderEnv)
   await execute(['run', 'prepare:packages'], targetEnv)
   await execute(['run', 'prepare:dsh', ...(signPrimaryRuntime ? ['--defer-runtime-smoke'] : [])], downloadEnv)
