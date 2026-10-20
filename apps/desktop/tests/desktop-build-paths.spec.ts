@@ -35,9 +35,10 @@ describe('desktop build paths', () => {
     expect(windows.runtime).toContain(join('targets', 'win-x64', 'runtime'))
   })
 
-  it('shares only the immutable upstream download cache', () => {
+  it('shares upstream downloads and the integrity-checked package store', () => {
     const arm64 = desktopTargetBuildPaths('mac-arm64')
     const x64 = desktopTargetBuildPaths('mac-x64')
+    expect(arm64.pnpmStore).toBe(x64.pnpmStore)
     expect(arm64.downloads).toBe(x64.downloads)
     expect(arm64.downloads).not.toContain(`${sep}targets${sep}`)
   })
@@ -67,4 +68,18 @@ describe('desktop build paths', () => {
     expect(() => resolveDesktopBuildTarget({}, 'linux', 'x64')).toThrow(/unsupported target/u)
     expect(() => desktopTargetBuildPaths('linux-x64' as 'mac-x64')).toThrow(/unsupported target/u)
   })
+})
+
+it('keeps caches outside the disposable target directories when explicitly configured', () => {
+  const cache = join(process.cwd(), 'external-build-cache')
+  const environment = { DSH_DESKTOP_PACKAGE_CACHE_DIR: cache }
+  for (const target of ['mac-arm64', 'mac-x64', 'win-x64'] as const) {
+    const paths = desktopTargetBuildPaths(target, environment)
+    expect(paths.downloads).toBe(join(cache, 'downloads'))
+    expect(paths.pnpmStore).toBe(join(cache, 'pnpm-store'))
+    expect(paths.root).not.toContain(cache)
+  }
+  for (const value of ['', 'relative-cache']) {
+    expect(() => desktopTargetBuildPaths('mac-arm64', { DSH_DESKTOP_PACKAGE_CACHE_DIR: value })).toThrow('must be absolute')
+  }
 })

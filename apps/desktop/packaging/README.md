@@ -32,6 +32,8 @@ Build Desktop installers locally or through Windows or macOS Actions, choose dep
 
 Run local commands from the repository root after installing locked dependencies. Use platform-specific commands for a local build, or platform Actions for the registered self-hosted runner. Choose test or production deployment independently from signed or unsigned mode. Read [Windows signing and runner operations](../windows-signing/README.md#trust-and-isolation) before any Windows signed build or shared-runner use. Installation is separate from packaging; [publication](../publishing/README.md) is a further explicit operation.
 
+Set `DSH_DESKTOP_PACKAGE_CACHE_DIR` to an absolute build-cache directory to retain verified downloads and the pnpm content store across checkouts. Both packaging workflows use `runner.tool_cache/dsh-desktop-package-cache`; local commands default to `.desktop-build`. Runtime preparation still creates a fresh installation and lockfile, verifies stored package integrity, and copies files before signing. Cleanup removes temporary installations, not these caches. Operators manage cache disk usage; no automatic eviction runs.
+
 <a id="release-versions"></a>
 
 ## Release versions

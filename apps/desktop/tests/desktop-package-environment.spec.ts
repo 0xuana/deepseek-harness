@@ -272,3 +272,8 @@ it('skips Apple credentials but still requires signing credentials for unnotariz
     }).toThrow(/CSC_KEY_PASSWORD/u)
   })
 })
+
+it.each(['', 'relative-cache'])('rejects invalid build cache paths during preflight (%s)', (cache) => {
+  expect(() => { validateDesktopPackageEnvironment({ ...RELEASE, DSH_DESKTOP_PACKAGE_CACHE_DIR: cache }, MACOS, { unsigned: true }) })
+    .toThrow('DSH_DESKTOP_PACKAGE_CACHE_DIR must be absolute')
+})

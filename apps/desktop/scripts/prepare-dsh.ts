@@ -39,7 +39,7 @@ const APP_ROOT = resolve(import.meta.dirname, '..')
 const BUILD_PATHS = resolveDesktopTargetBuildPaths()
 const DSH_OUTPUT_ROOT = BUILD_PATHS.dsh
 const BUILD_ROOT = mkdtempSync(join(tmpdir(), 'dsh-desktop-runtime-'))
-const STORE_ROOT = join(BUILD_ROOT, 'store')
+const STORE_ROOT = BUILD_PATHS.pnpmStore
 const RUNTIME_ROOT = BUILD_PATHS.runtime
 const PNPM_BUILD_STATE = BUILD_PATHS.dshPnpm
 const PACKAGE_SET_ROOT = BUILD_PATHS.packageSet
@@ -83,6 +83,8 @@ function runPnpm(args: readonly string[]): Promise<void> {
       `--config.registry=${registry}`,
       `--config.store-dir=${STORE_ROOT}`,
       '--config.enable-global-virtual-store=false',
+      '--config.verify-store-integrity=true',
+      '--config.package-import-method=copy',
       `--config.userconfig=${userConfig}`,
       command,
       ...commandArgs,
