@@ -12,8 +12,8 @@
  * search field. Provider headings paint their background only while pinned
  * by scrolling. Clearing a query restores the full list and search focus.
  * Selecting restores trigger focus without a ring until the trigger loses focus
- * or the menu reopens. Mobile devices do not automatically focus the
- * trigger or a pane when opening or drilling, so search does not raise the keyboard.
+ * or the menu reopens. Mobile devices restore button focus when opening or
+ * drilling; model search takes focus only after explicit user input.
  * Model names match a case-insensitive ordered subsequence
  * within each provider group, ranked by
  * prefix, alignment score, then catalog order. Returning to the root pane
@@ -184,9 +184,9 @@ export function ModelSelect(
     previousShowSearch.current = showSearch
     const intent = paneFocus.current ?? (changedSearchMode && pane === 'model' ? 'drill' : null)
     paneFocus.current = null
-    if (!open || intent === null || isMobileDevice()) return
+    if (!open || intent === null) return
     if (intent === 'drill') {
-      if (pane === 'model' && showSearch) {
+      if (pane === 'model' && showSearch && !isMobileDevice()) {
         searchRef.current?.focus()
         return
       }
@@ -251,7 +251,7 @@ export function ModelSelect(
 
   const show = (): void => {
     setSelectionFocus(false)
-    if (!isMobileDevice()) triggerRef.current?.focus()
+    triggerRef.current?.focus()
     setQuery('')
     setHighlightedIndex(null)
     if (currentChoice === undefined) paneFocus.current = 'drill'
