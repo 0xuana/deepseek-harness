@@ -1319,6 +1319,33 @@ describe('UiWorkspaceService', () => {
     })
   })
 
+  it('keeps an explicit creation failure visible when its catalog update follows a failed startup restoration', async () => {
+    persistSelection({ sessionId: sid('blank') })
+    const startupFailure = new Error('startup failed')
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const created = Promise.withResolvers<SessionId>()
+    const b = bench({
+      sessions: sessionState([summary('blank', { blank: true, cwd: '/w/a' })]),
+      workspaces: workspaceState([workspace('a', [sid('blank')])]),
+      configureSessions: (sessions) => {
+        sessions.create.mockRejectedValueOnce(startupFailure).mockReturnValue(created.promise)
+      },
+    })
+    await vi.waitFor(() => {
+      expect(warning).toHaveBeenCalledWith('initial Session restoration failed:', startupFailure)
+    })
+
+    b.uiWorkspace.startSession(wid('a'))
+    b.sessions.list.set(sessionState([summary('blank', { blank: true, cwd: '/w/a' }), summary('creating')]))
+    created.reject(new Error('creation refused'))
+
+    await vi.waitFor(() => {
+      expect(b.notify).toHaveBeenCalledExactlyOnceWith({ kind: 'createFailed', message: 'creation refused' })
+    })
+    expect(b.sessions.create).toHaveBeenCalledTimes(2)
+    expect(b.sessions.retain).not.toHaveBeenCalled()
+  })
+
   it('settles empty startup without creating a Session on later catalog updates', () => {
     const b = bench({ sessions: sessionState(), workspaces: workspaceState() })
     b.workspaces.list.set(workspaceState([workspace('a')]))
