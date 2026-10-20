@@ -87,8 +87,10 @@
   white-space: nowrap;
 }
 
-/* The Plugins toolbar's Add-plugin step: a 32px capsule with the 13px label. */
-.newButton {
+/* The Plugins toolbar's steps: 32px capsules with the 13px label. The New
+   action and the bulk cleanup share the geometry, so the pair reads as one
+   toolbar. */
+.headerAction {
   height: 32px;
   font-size: 13px;
   line-height: 20px;
