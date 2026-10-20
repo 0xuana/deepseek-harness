@@ -269,7 +269,7 @@ export const InputBar = memo(function InputBar({
 
   useEffect(() => {
     if (editor === null) return
-    return installDraftKeyboardDismissal(editor)
+    return installDraftKeyboardDismissal(editor, cardRef)
   }, [editor])
 
   // Button presses steal focus from the editor; suppress at mousedown so
@@ -287,7 +287,7 @@ export const InputBar = memo(function InputBar({
     if (target.closest('[data-composer-overlay]') !== null) return
     if (scrollRef.current?.contains(target)) return
     const control = target.closest('button, a, input, select, textarea, [role="button"], [contenteditable], [tabindex]')
-    if (control !== null && e.currentTarget.contains(control)) return
+    if (control !== null && control !== e.currentTarget && e.currentTarget.contains(control)) return
     e.preventDefault()
     // Lexical's stored selection can lag behind native caret moves, so calling
     // editor.focus() on a focused editor can restore an older caret.
@@ -397,6 +397,7 @@ export const InputBar = memo(function InputBar({
           click's reopen (close-then-open flickers the chip's open echo). */}
       <div
         ref={cardRef}
+        tabIndex={-1}
         className={clsx(css.card, workspaceTrigger && css.cardWorkspaceTrigger)}
         data-composer-card
         onClick={workspaceTrigger ? onRequestWorkspace : undefined}

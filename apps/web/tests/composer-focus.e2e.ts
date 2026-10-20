@@ -1,7 +1,7 @@
 /** Browser selection and focus after presses in the composer's unused space. */
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
-import { chromium, type Page } from 'playwright'
+import { chromium, webkit, type Page } from 'playwright'
 import { expect, it, onTestFailed, onTestFinished } from 'vitest'
 import {
   assertFixtureInventory, compareOrRefreshGolden, launchWebScaffold, seedSession, watchConsole, webSnapshotMode,
@@ -208,52 +208,77 @@ it('restores the previous caret or selection in fresh and existing sessions', as
   expect(tripwire.pageErrors).toEqual([])
 }, 180_000)
 
-it('dismisses the mobile keyboard after Send while retaining desktop focus', async () => {
-  const browser = await chromium.launch()
-  onTestFinished(() => browser.close())
+it('keeps mobile submission keyboard navigation in the composer while retaining desktop focus', async () => {
   const observations: string[] = []
-  for (const mobile of [false, true]) {
+  for (const { engine, mobile, submission } of [
+    { engine: chromium, mobile: false, submission: 'Send' },
+    { engine: chromium, mobile: true, submission: 'Send' },
+    { engine: chromium, mobile: true, submission: 'Enter' },
+    { engine: webkit, mobile: true, submission: 'Send' },
+    { engine: webkit, mobile: true, submission: 'Enter' },
+  ]) {
     const scaffold = await launchWebScaffold({
       replayFixture: fileURLToPath(new URL('../../../snapshots/web/live-interactions/session.v3.jsonl', import.meta.url)),
       compareReplaySession: false,
     })
     try {
-      const page = await browser.newPage({
-        viewport: { width: mobile ? 390 : 1280, height: 844 },
-        locale: 'en-US', timezoneId: 'Asia/Shanghai',
-        ...mobile ? {
-          userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1',
-          isMobile: true, hasTouch: true,
-        } : {},
-      })
-      const tripwire = watchConsole(page)
-      const platform = mobile ? 'Mobile' : 'Desktop'
-      let finished = false
-      const off = scaffold.ctx.on('session/event', (_session, event) => {
-        if (event.type === 'turn/end') finished = true
-      })
+      const browser = await engine.launch()
       try {
-        await page.goto(scaffold.authenticatedUrl)
-        await connectFreshWorkspace(page, scaffold.workspaceCwd, `submission-${platform}`)
-        const input = page.locator('[data-composer-input][contenteditable="true"]')
-        await input.fill('Reply with a one-sentence description of event sourcing, then stop.')
-        expect(await input.evaluate(element => document.activeElement === element)).toBe(true)
-        const send = page.getByRole('button', { name: 'Send message', exact: true })
-        if (mobile) await send.tap()
-        else await send.click()
-        await expect.poll(() => input.textContent()).toBe('')
-        await expect.poll(() => input.evaluate(element => document.activeElement === element)).toBe(!mobile)
-        await expect.poll(() => finished, { timeout: 60_000 }).toBe(true)
-        expect(await input.evaluate(element => document.activeElement === element)).toBe(!mobile)
-        observations.push(`- ${platform}: Send clears the draft; editor ${mobile ? 'unfocused' : 'focused'} through response completion`)
-        expect(tripwire.pageErrors).toEqual([])
-        if (webSnapshotMode() !== 'record') expect(tripwire.warnings).toEqual([])
-      } catch (error) {
-        await saveFailureShot(page, `web-e2e-composer-submission-${platform}`)
-        throw error
+        const page = await browser.newPage({
+          viewport: { width: mobile ? 390 : 1280, height: 844 },
+          locale: 'en-US', timezoneId: 'Asia/Shanghai',
+          ...mobile ? {
+            userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1',
+            isMobile: true, hasTouch: true,
+          } : {},
+        })
+        const tripwire = watchConsole(page)
+        const platform = `${engine.name()} ${mobile ? 'mobile' : 'desktop'} ${submission}`
+        let finished = false
+        const off = scaffold.ctx.on('session/event', (_session, event) => {
+          if (event.type === 'turn/end') finished = true
+        })
+        try {
+          await page.goto(scaffold.authenticatedUrl)
+          await connectFreshWorkspace(page, scaffold.workspaceCwd, `submission-${platform}`)
+          const input = page.locator('[data-composer-input][contenteditable="true"]')
+          await input.fill('Reply with a one-sentence description of event sourcing, then stop.')
+          expect(await input.evaluate(element => document.activeElement === element)).toBe(true)
+          if (submission === 'Enter') await page.keyboard.press('Enter')
+          else {
+            const send = page.getByRole('button', { name: 'Send message', exact: true })
+            if (mobile) await send.tap()
+            else await send.click()
+          }
+          await expect.poll(() => input.textContent()).toBe('')
+          await expect.poll(() => input.evaluate(element => document.activeElement === element)).toBe(!mobile)
+          await expect.poll(() => finished, { timeout: 60_000 }).toBe(true)
+          expect(await input.evaluate(element => document.activeElement === element)).toBe(!mobile)
+          if (mobile) {
+            const card = page.locator('[data-composer-card]')
+            expect(await card.evaluate(element => document.activeElement === element)).toBe(true)
+            // Option+Tab includes buttons in WebKit's keyboard navigation mode.
+            const next = engine === webkit ? 'Alt+Tab' : 'Tab'
+            await page.keyboard.press(next)
+            expect(await input.evaluate(element => document.activeElement === element)).toBe(true)
+            await page.keyboard.press(next)
+            const attachment = page.getByRole('button', { name: 'Add files or run commands', exact: true })
+            expect(await attachment.evaluate(element => document.activeElement === element)).toBe(true)
+            observations.push(`- ${platform}: clears the draft; focus remains on the composer card through response completion, then advances to the editor and attachment button`)
+          } else {
+            observations.push(`- ${platform}: clears the draft; editor stays focused through response completion`)
+          }
+          expect(tripwire.pageErrors).toEqual([])
+          if (webSnapshotMode() !== 'record') expect(tripwire.warnings).toEqual([])
+        } catch (error) {
+          await saveFailureShot(page, `web-e2e-composer-submission-${platform}`)
+          throw error
+        } finally {
+          off()
+          await page.close()
+        }
       } finally {
-        off()
-        await page.close()
+        await browser.close()
       }
     } finally {
       await scaffold.close()
