@@ -76,7 +76,7 @@ export const modelSelectionProjectionDefinition: Required<ProjectionDefinition<'
   init: () => ({ lastUsed: null, pending: null }),
   apply: (state, event) => {
     if (event.type === 'model/selection') {
-      return sameModelSelection(state.pending, event.data) ? state : { ...state, pending: { ...event.data } }
+      return sameModelSelection(state.pending, event.data) ? state : { ...state, pending: event.data }
     }
     if (event.type !== 'request/header') return state
     const lastUsed = selectionOfHeader(event.data.header)

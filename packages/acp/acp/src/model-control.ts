@@ -42,14 +42,6 @@ export class AcpModelControl {
   ) {}
 
   /**
-   * Read the selection the Agent's next model step uses.
-   * @returns a detached selection, or undefined when neither the Session nor the deployment names a route.
-   */
-  current(): ModelSelection | undefined {
-    return this.model.current()
-  }
-
-  /**
    * Return the complete standard config-option state after prior mutations settle.
    * @param signal - optional catalog and exact-model cancellation.
    * @returns all current standard configuration options.
@@ -68,7 +60,7 @@ export class AcpModelControl {
   set(configId: string, value: unknown, signal?: AbortSignal): Promise<SessionConfigOption[]> {
     return this.serialize(async () => {
       if (typeof value !== 'string') throw new AcpModelConfigError(`${configId} requires a select value`)
-      const current = this.current()
+      const current = this.model.current()
       if (current === undefined) throw new AcpModelConfigError('this session has no model selection')
       if (configId === MODEL_CONFIG_ID) {
         const state = await this.state(signal)
@@ -107,7 +99,7 @@ export class AcpModelControl {
 
   /** Build detached model choices and the dependent reasoning option. */
   private async state(signal?: AbortSignal): Promise<ConfigState> {
-    const selected = this.current()
+    const selected = this.model.current()
     if (selected === undefined) return { choices: new Map(), options: [] }
     let resolved: ModelSelection
     let routeAvailable = true

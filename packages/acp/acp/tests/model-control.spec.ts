@@ -45,24 +45,24 @@ async function createControl(runtime: LlmRuntime, initial?: ModelSelection) {
   const options = initial ?? {}
   const projection = await ctx.sessionProjections.register(modelSelectionProjectionDefinition)
   const model = new AgentModel(() => projection.stateOf(session), session, options)
-  return { control: new AcpModelControl(runtime, model), session }
+  return { control: new AcpModelControl(runtime, model), session, model }
 }
 
 describe('ACP model configuration control', () => {
   it('represents an absent route and validates value types before mutation', async () => {
-    const { control, session } = await createControl(llmRuntime())
+    const { control, session, model } = await createControl(llmRuntime())
 
-    expect(control.current()).toBeUndefined()
+    expect(model.current()).toBeUndefined()
     await expect(control.options()).resolves.toEqual([])
     await expect(control.set('model', false)).rejects.toThrow(/requires a select value/)
     await expect(control.set('model', 'missing')).rejects.toThrow(/no model selection/)
 
     session.append('model/selection', { provider: 'mock', model: 'mock' })
-    expect(control.current()).toEqual({ provider: 'mock', model: 'mock' })
+    expect(model.current()).toEqual({ provider: 'mock', model: 'mock' })
   })
 
   it('synthesizes an unlisted current route and exposes reasoning descriptions', async () => {
-    const { control } = await createControl(llmRuntime({ listProviders: () => [] }), {
+    const { control, model: agentModel } = await createControl(llmRuntime({ listProviders: () => [] }), {
       provider: 'private',
       model: 'unlisted',
     })
@@ -82,7 +82,7 @@ describe('ACP model configuration control', () => {
       options: [{ name: 'Low', description: 'Less thought.' }, { name: 'High' }],
     })
 
-    expect(control.current()).toEqual({ provider: 'private', model: 'unlisted' })
+    expect(agentModel.current()).toEqual({ provider: 'private', model: 'unlisted' })
 
   })
 
@@ -132,7 +132,7 @@ describe('ACP model configuration control', () => {
         },
       }),
     })
-    const { control } = await createControl(runtime, { provider: 'mock', model: 'mock' })
+    const { control, model } = await createControl(runtime, { provider: 'mock', model: 'mock' })
 
     const initial = await control.options()
     expect(initial.find(option => option.id === 'reasoning_effort')).toMatchObject({
@@ -143,6 +143,6 @@ describe('ACP model configuration control', () => {
     const restored = await control.set('reasoning_effort', '')
 
     expect(restored.find(option => option.id === 'reasoning_effort')).toMatchObject({ currentValue: '' })
-    expect(control.current()).toEqual({ provider: 'mock', model: 'mock' })
+    expect(model.current()).toEqual({ provider: 'mock', model: 'mock' })
   })
 })
