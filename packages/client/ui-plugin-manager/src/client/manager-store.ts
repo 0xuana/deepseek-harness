@@ -45,7 +45,7 @@ import { BundleDetailController, type BundleDetailsState } from './detail-store.
 import type { LocaleSnapshot } from '@deepseek-ai/dsh-client-locale/client'
 
 /**
- * Read whether a bundle or one of its rows has a pending management action.
+ * Read whether a bundle has a pending management action.
  * @param state Current manager snapshot.
  * @param packageName Bundle whose controls and observers must wait.
  * @returns Whether the bundle's management operation is still pending.
@@ -53,8 +53,7 @@ import type { LocaleSnapshot } from '@deepseek-ai/dsh-client-locale/client'
 export function bundleBusy(state: PluginManagerState, packageName: string): boolean {
   return state.busy.includes(packageName) || state.update?.packageName === packageName
     || (state.install.subject?.name === packageName && (isInstallPending(state.install.phase) || state.install.phase === 'checking'))
-    || (state.packages.find(pkg => pkg.name === packageName)?.rows.some(row =>
-      row.entryId !== undefined && state.busy.includes(rowKey(row.entryId))) ?? false)
+
 }
 
 /** The action a failed notice names. */
@@ -690,7 +689,14 @@ export class PluginManagerController {
    * @returns A read-only source; unsubscribe releases the caller's observation.
    */
   observeChanges(packageName: string): HostObservable<boolean> {
-    return { getSnapshot: () => bundleBusy(this.getSnapshot(), packageName), subscribe: listener => this.store.subscribe(listener) }
+    return {
+      getSnapshot: () => {
+        const state = this.getSnapshot()
+        return bundleBusy(state, packageName) || (state.packages.find(pkg => pkg.name === packageName)?.rows.some(row =>
+          row.entryId !== undefined && state.busy.includes(rowKey(row.entryId))) ?? false)
+      },
+      subscribe: listener => this.store.subscribe(listener),
+    }
   }
 
   /** Stop publishing and drop every late settlement. */
