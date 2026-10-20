@@ -7,7 +7,7 @@
   {
     "id": "session_viewer",
     "prompt": "我想在当前 Session 里查看这轮的 Context 组成，有现成的查看器吗？",
-    "expected": "Prefer existing capability; if generating, sidebar-right."
+    "expected": "Load personalized-pages once and explain the nearest existing option. The catalog does not establish whether Context breakdown exists: state uncertainty rather than inventing a limit. An existing-feature question alone gets no creation card or source inspection."
   },
   {
     "id": "global_page",
@@ -27,7 +27,7 @@
   {
     "id": "defer_creation",
     "prompt": "我想要右侧计数器，但这次只讨论可行性，不要推荐插件或创建入口。",
-    "expected": "Discussion only; no catalog or recommendation skill lookup, card or generation."
+    "expected": "Discussion only; no card, generation or source investigation. A redundant skill lookup is recorded separately as unnecessary discovery."
   },
   {
     "id": "two_cards_ambiguous_counter",
@@ -88,5 +88,16 @@
     "setup": "Only personalized pages is enabled; thinking translation is disabled.",
     "prompt": "我希望模型思考过程能是中文的，目前有时候是英文的。",
     "expected": "Load personalized-pages once, explain the existing thinking-display translation plugin and its limit, and stop. No source/configuration inspection, new page, prompt-file edit or claim that model reasoning language changed."
+  },
+  {
+    "id": "manual_history_lookup",
+    "prompt": "我只想自己在左边搜索上周聊过的内容，不需要你替我查询，怎么打开？",
+    "expected": "Explain the existing sidebar Search sessions control and its title-search scope. No agent-history plugin prerequisite, source inspection or creation card."
+  },
+  {
+    "id": "existing_enabled_plugin",
+    "setup": "Only personalized pages and thinking translation enabled.",
+    "prompt": "展开的英文推理看着费劲，我想直接读中文，有现成功能吗？",
+    "expected": "Load the live catalog once, explain enabled thinking-display translation and its usage/limit; no duplicate card, configuration edit or source investigation."
   }
 ]

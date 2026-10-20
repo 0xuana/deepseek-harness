@@ -27,13 +27,13 @@ export interface ActionCardDefinition<S extends ParameterSchemaSpec> {
 export function registerActionCard<const S extends ParameterSchemaSpec>(
   ctx: Context,
   definition: ActionCardDefinition<S>,
-): () => void {
+): () => Promise<void> {
   if ('action' in definition.parameters) throw new Error('Action card fields must not redefine action.')
   return ctx.effect(() => {
     let active = true
     const removeTool = ctx.tools.register(defineTool({
       name: 'suggest_action',
-      description: 'Offer an optional action card before your normal final answer. Load the action’s skill for eligibility and planning. This only proposes an action; the user must click its card to start. Do not execute, wait, poll, claim completion or ask the user to report back. Use successful results only; a rejection creates no card.',
+      description: 'Offer an optional action card before your normal final answer. Load the action’s skill for eligibility and planning. This only proposes an action; the user must click its card to start. Do not execute, wait, poll, claim completion or ask the user to report back. The card carries the plan; briefly answer the request and refer to it without repeating its feature list or internal card limits. Use successful results only; a rejection creates no card.',
       parameters: { request: {
         type: 'object', additionalProperties: false, description: definition.description, required: true,
         properties: { action: { type: 'string', const: definition.name, required: true }, ...definition.parameters },

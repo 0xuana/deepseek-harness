@@ -57,7 +57,7 @@ This table connects model-visible tool names to the plugin package and service s
 
 ### `suggest_action`
 
-Offer an optional action card before your normal final answer. Load the action’s skill for eligibility and planning. This only proposes an action; the user must click its card to start. Do not execute, wait, poll, claim completion or ask the user to report back. Use successful results only; a rejection creates no card.
+Offer an optional action card before your normal final answer. Load the action’s skill for eligibility and planning. This only proposes an action; the user must click its card to start. Do not execute, wait, poll, claim completion or ask the user to report back. The card carries the plan; briefly answer the request and refer to it without repeating its feature list or internal card limits. Use successful results only; a rejection creates no card.
 
 ```json
 {
@@ -78,7 +78,7 @@ Offer an optional action card before your normal final answer. Load the action�
         },
         "brief": {
           "type": "string",
-          "description": "A few sentences describing the smallest useful plan for the selected need: purpose, essential interactions, known data/input and scope, and completion criteria, in the user’s language. Use relevant context without inventing links to other wishes. Ask only when a missing fact changes the outcome; leave implementation details to the Creator. Shown on the card and passed to the Creator."
+          "description": "One to three concise sentences in the user’s language: requested purpose, interactions, known input and persistence scope. Include only requested or essential behavior; do not add optional features or link unrelated wishes. Ask only when a missing fact changes the outcome; leave implementation details to the Creator. Shown on the card and passed to the Creator."
         },
         "slot": {
           "type": "string",

@@ -9,7 +9,7 @@ import { BUNDLED_SKILL_RANK, type SkillCandidate } from '@deepseek-ai/dsh-skill'
 export function registerCreationSkill(ctx: Context): void {
   const candidate: SkillCandidate = {
     name: 'personalized-pages',
-    description: 'Skip declined recommendations, quotes and ordinary tasks. Plan an unmet persistent DSH page need. For other app-capability wishes, use list_official_plugins first when available; skip this skill if an existing plugin matches. Without that tool, load this skill FIRST to discover existing capabilities, including readable/Chinese thinking, input methods and past conversations, before inspecting source or configuration. Includes the current catalog; never query it twice in one turn without a state change',
+    description: 'Find existing DSH features for product-use questions before inspecting source or config; also plan persistent pages. Covers viewers/editors (including Session Context), readable thinking, input methods, PR badges and history. Supplies live plugin names, descriptions and enabled state. Reuse a catalog already loaded this turn. Answer quoted, one-off, discussion-only or declined requests directly, without discovery, code investigation or cards.',
     provider: 'dsh-personalized-pages', source: 'bundled', rank: BUNDLED_SKILL_RANK, locator: null,
     invocation: { modelInvocable: true, userInvocable: false },
   }

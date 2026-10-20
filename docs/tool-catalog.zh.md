@@ -61,7 +61,7 @@
 
 ### `suggest_action`
 
-在正常最终回答前，提供一张可选操作卡片。通过动作的 Skill 加载适用条件和规划策略。调用只提交建议，用户点击卡片后才开始；不要直接执行、等待、轮询、声称完成或要求用户报告完成。仅依据成功结果回答；调用被拒绝时不产生卡片。
+在正常最终回答前，提供一张可选操作卡片。通过动作的 Skill 加载适用条件和规划策略。调用只提交建议，用户点击卡片后才开始；不要直接执行、等待、轮询、声称完成或要求用户报告完成。卡片承载方案；简短回答用户并指向卡片，不重复功能清单或内部卡片限制。仅依据成功结果回答；调用被拒绝时不产生卡片。
 
 ```json
 {
@@ -82,7 +82,7 @@
         },
         "brief": {
           "type": "string",
-          "description": "A few sentences describing the smallest useful plan for the selected need: purpose, essential interactions, known data/input and scope, and completion criteria, in the user’s language. Use relevant context without inventing links to other wishes. Ask only when a missing fact changes the outcome; leave implementation details to the Creator. Shown on the card and passed to the Creator."
+          "description": "One to three concise sentences in the user’s language: requested purpose, interactions, known input and persistence scope. Include only requested or essential behavior; do not add optional features or link unrelated wishes. Ask only when a missing fact changes the outcome; leave implementation details to the Creator. Shown on the card and passed to the Creator."
         },
         "slot": {
           "type": "string",

@@ -13,7 +13,7 @@ exports[`interface creation > discovers shipped plugins without the recommendati
             "type": "string",
           },
           "brief": {
-            "description": "A few sentences describing the smallest useful plan for the selected need: purpose, essential interactions, known data/input and scope, and completion criteria, in the user’s language. Use relevant context without inventing links to other wishes. Ask only when a missing fact changes the outcome; leave implementation details to the Creator. Shown on the card and passed to the Creator.",
+            "description": "One to three concise sentences in the user’s language: requested purpose, interactions, known input and persistence scope. Include only requested or essential behavior; do not add optional features or link unrelated wishes. Ask only when a missing fact changes the outcome; leave implementation details to the Creator. Shown on the card and passed to the Creator.",
             "type": "string",
           },
           "slot": {
@@ -44,14 +44,14 @@ exports[`interface creation > discovers shipped plugins without the recommendati
     ],
     "type": "object",
   },
-  "proposal": "Offer an optional action card before your normal final answer. Load the action’s skill for eligibility and planning. This only proposes an action; the user must click its card to start. Do not execute, wait, poll, claim completion or ask the user to report back. Use successful results only; a rejection creates no card.",
+  "proposal": "Offer an optional action card before your normal final answer. Load the action’s skill for eligibility and planning. This only proposes an action; the user must click its card to start. Do not execute, wait, poll, claim completion or ask the user to report back. The card carries the plan; briefly answer the request and refer to it without repeating its feature list or internal card limits. Use successful results only; a rejection creates no card.",
 }
 `;
 
 exports[`interface creation > discovers shipped plugins without the recommendation or management tools and withdraws discovery on unload > skill discovery 1`] = `
 [
   {
-    "description": "Skip declined recommendations, quotes and ordinary tasks. Plan an unmet persistent DSH page need. For other app-capability wishes, use list_official_plugins first when available; skip this skill if an existing plugin matches. Without that tool, load this skill FIRST to discover existing capabilities, including readable/Chinese thinking, input methods and past conversations, before inspecting source or configuration. Includes the current catalog; never query it twice in one turn without a state change",
+    "description": "Find existing DSH features for product-use questions before inspecting source or config; also plan persistent pages. Covers viewers/editors (including Session Context), readable thinking, input methods, PR badges and history. Supplies live plugin names, descriptions and enabled state. Reuse a catalog already loaded this turn. Answer quoted, one-off, discussion-only or declined requests directly, without discovery, code investigation or cards.",
     "invocation": {
       "modelInvocable": true,
       "userInvocable": false,
@@ -67,11 +67,15 @@ exports[`interface creation > discovers shipped plugins without the recommendati
 {
   "content": "# Personalized pages
 
-Use this workflow in the main conversation for a DSH interface or capability need. A wish to use DSH differently is not an instruction to develop DSH, even if the workspace contains its checkout. Load this skill for creation planning or when no other official-plugin discovery is available. Its catalog is current at load time; do not also call list_official_plugins in the same turn unless installation state has changed. When an existing plugin is already selected, no creation planning or skill load is needed.
+Use this workflow in the main conversation for a DSH interface or capability need. A wish to use DSH differently is not an instruction to develop DSH, even if the workspace contains its checkout. For a clearly specified persistent page, load this skill directly before list_official_plugins, including requests that also mention an existing-plugin need. Otherwise load it when no other official-plugin discovery is available. Its catalog is current at load time; do not also call list_official_plugins in the same turn unless installation state has changed. When an existing plugin is already selected, no creation planning or skill load is needed.
 
 ## Choose the smallest useful response
 
 Match the desired outcome against the current official-plugin descriptions below. An enabled match needs an explanation of how to use it, without an enable card. For a disabled match, use the official-plugin recommendation tool if available; otherwise explain its entry in Plugins. Do not recreate an existing capability. Display translation may make English thinking readable in Chinese without changing the model's reasoning language; explain that distinction and finish with the existing option. Explaining this limit is sufficient: do not investigate generation-language settings, propose instruction-file edits or ask to change file permissions unless the user separately requests that implementation. A catalog match ends discovery; do not research additional alternatives or setup steps.
+
+Recommend only what the description supports. The optional-plugin catalog is not a complete inventory of built-in UI. If it does not confirm a detail, say that detail is unconfirmed rather than claiming it is absent. A raw Session inspector's description does not confirm a live Context-composition breakdown. For questions asking only what already exists or where to open it, explain the existing option and any unconfirmed detail, then stop without a creation card. Offer a new page only when the user requests an unmet interface need or a clearly reusable result qualifies.
+
+For manual history lookup, the sidebar already has a Search sessions control for finding session titles. Explain that control directly. The optional Session search plugin gives the Agent tools to read earlier conversations; it is not a prerequisite for manual sidebar search. Do not inspect workspace files or source to provide product-use guidance.
 
 For a clear unmet interface need, propose a small persistent page. A clearly reusable result already obtained for the current task can also qualify: a changing task list, recurring status table, data explorer or interactive control. First answer the actual request. Ordinary coding tasks, one-off answers, incidental static tables, quoted wishes, discussion-only requests and declined recommendations need no page. Do not fetch extra data or inspect source/configuration to find a recommendation opportunity. Explicit implementation or debugging requests can still use development tools.
 
@@ -79,7 +83,7 @@ Consider ALL independent needs before choosing ONE card for this turn, even if t
 
 ## Plan and placement
 
-Describe the smallest useful plan in a few sentences: purpose, essential interactions, known data/input, scope and completion criteria. Use the user's language. Do not invent integrations, automation, broader access or deletion policies. Leave source/API research to the background Creator.
+Write one to three sentences in the user's language covering the requested purpose, interactions, input and persistence scope. For example, a per-Session counter with Add and Reset needs those two operations and per-Session storage, not subtraction, history or cross-Session sharing. Keep acceptance criteria tied to those requested behaviors. Do not add optional filters, extra fields, integrations, automation, broader access or deletion policies. Leave source/API research to the background Creator.
 
 Honor a location explicitly requested by the user. Otherwise:
 
@@ -93,7 +97,7 @@ For an optional page based on the current result, preserve its known scope. Sess
 
 Plan-only or do-not-start requests still permit a proposal, including read-only mode. A proposal creates no page. Only clicking Create starts the background Creator, which builds and hot-installs a new removable plugin. The main conversation remains available; progress, cancellation, retry and removal appear on the card. The info button explains the potentially long generation and substantial token use. Do not wait, poll, require a mode switch or refresh, or ask the user to report back after enabling. Never claim a page has been added before installation.
 
-When offering a new page, call \`suggest_action\` with \`request.action: "create_personalized_page"\`, a short \`request.title\`, a \`request.brief\` containing the plan, and the selected \`request.slot\`. Then answer the actual request concisely in the user's language and refer to the card; do not repeat its feature list or internal routing rules. Do not print card markup or JSON in the answer. A successful tool result creates the proposal; a rejection creates no card.
+When offering a new page, call \`suggest_action\` with \`request.action: "create_personalized_page"\`, a short \`request.title\`, a \`request.brief\` containing the plan, and the selected \`request.slot\`. A successful result creates the proposal; a rejection creates no card. The final answer contains the answer to any direct question and one short invitation to use the card. For example: “17 + 25 = 42。方案在下方卡片里；点击创建后在后台生成，你可以继续聊天。” For a page-only request: “方案放在下方卡片里，点击创建即可开始。” Adapt the wording and language to the user. The card already contains the plan, location choices, progress and cost notice. Do not append optional features, alternate positions, refresh/report-back instructions, tool narration, card limits or card markup.
 
 ## Current official plugins
 

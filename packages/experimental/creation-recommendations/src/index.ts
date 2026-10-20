@@ -99,7 +99,7 @@ export class CreationRecommendations extends TypertRemoteService {
       description: 'Create a persistent removable page using the background Creator. First load personalized-pages for policy, the current official-plugin catalog, and placement. Prefer an existing plugin unless the user explicitly prioritizes an unmet page need. At most one recommendation per turn.',
       parameters: {
         title: { type: 'string', required: true, description: 'Short name in the user’s language.' },
-        brief: { type: 'string', required: true, description: 'A few sentences describing the smallest useful plan for the selected need: purpose, essential interactions, known data/input and scope, and completion criteria, in the user’s language. Use relevant context without inventing links to other wishes. Ask only when a missing fact changes the outcome; leave implementation details to the Creator. Shown on the card and passed to the Creator.' },
+        brief: { type: 'string', required: true, description: 'One to three concise sentences in the user’s language: requested purpose, interactions, known input and persistence scope. Include only requested or essential behavior; do not add optional features or link unrelated wishes. Ask only when a missing fact changes the outcome; leave implementation details to the Creator. Shown on the card and passed to the Creator.' },
         slot: { type: 'string', enum: ['sidebar-right', 'page', 'sidebar-left'], required: true, description: 'Location selected using the personalized-pages skill: sidebar-right for Session viewers/editors, page for Session streaming tabs, sidebar-left for a global main-area page with a left entry. Honor an explicit user choice.' },
       },
       prepare: (args, callId) => {
