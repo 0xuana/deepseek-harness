@@ -81,9 +81,11 @@ describe('web e2e: mid-turn steering lands durably and visibly', () => {
     // clocks must read the fixture day or a run across Asia/Shanghai midnight
     // renders the same message with a date prefix.
     hostClock = pinHostClock()
-    scaffold = await launchWebScaffold(MODE === 'record'
-      ? {}
-      : { replayFixture: FIXTURE, paceMs: REPLAY_PACE_MS, compareReplaySession: true })
+    // Trajectory previews truncate before path normalization; pin the input length across hosts.
+    scaffold = await launchWebScaffold({
+      workspacePathLength: 112,
+      ...(MODE === 'record' ? {} : { replayFixture: FIXTURE, paceMs: REPLAY_PACE_MS, compareReplaySession: true }),
+    })
     scaffold.ctx.on('session/event', (_session, event) => { sessionEvents.push(event) })
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
