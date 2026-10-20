@@ -47,8 +47,9 @@ export class CuaAccess extends TypertRemoteService {
    */
   @Remote
   ptcConfiguration(): { persistent: boolean; writable: boolean } {
+    const runtime = this.ctx.get('ptcRuntime')
     return {
-      persistent: this.ctx.get('ptcRuntime')?.programFormat === 'repl',
+      persistent: runtime?.programFormat === 'repl' || runtime?.retainsState === true,
       writable: this.ctx.get('configEditor')?.entries().some(entry => entry.options.id === 'ptc-runtime') ?? false,
     }
   }
@@ -62,7 +63,9 @@ export class CuaAccess extends TypertRemoteService {
     const editor = this.ctx.get('configEditor')
     const entry = editor?.entries().find(entry => entry.options.id === 'ptc-runtime')
     if (editor === undefined || entry === undefined) throw new Error('PTC runtime has no editable profile entry')
-    await editor.edit(entry, current => ({ ...current, executionMode: 'persistent-in-memory' }))
+    await editor.edit(entry, current => current.executionMode === 'vm-script'
+      ? { ...current, scriptPersistence: true }
+      : { ...current, executionMode: 'persistent-in-memory' })
   }
 
   /**
