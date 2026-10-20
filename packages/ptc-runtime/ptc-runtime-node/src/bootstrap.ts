@@ -284,18 +284,25 @@ export function makeBindingErrorClasses(
  * @param pending - the id-keyed map of unsettled binding calls.
  */
 export function wireReplies(port: BootstrapPort, pending: Map<number, PendingCall>): void {
-  port.on('message', (message: ReplyMessage) => {
-    const entry = pending.get(message.id)
-    if (!entry) return
-    pending.delete(message.id)
-    if (message.ok) {
-      const value = decodePtcJsonWire(message.value)
-      if (value === undefined) entry.reject(new CapturedError('binding resolution must be lossless JSON'))
-      else entry.resolve(value)
-    } else {
-      entry.reject(new CapturedError(message.message))
-    }
-  })
+  port.on('message', (message) => { acceptReply(pending, message) })
+}
+
+/**
+ * Settle one pending binding directly from a decoded host reply.
+ * @param pending - Unsettled calls belonging to the process.
+ * @param message - Host reply; absent or already-settled ids are ignored.
+ */
+export function acceptReply(pending: Map<number, PendingCall>, message: ReplyMessage): void {
+  const entry = pending.get(message.id)
+  if (!entry) return
+  pending.delete(message.id)
+  if (message.ok) {
+    const value = decodePtcJsonWire(message.value)
+    if (value === undefined) entry.reject(new CapturedError('binding resolution must be lossless JSON'))
+    else entry.resolve(value)
+  } else {
+    entry.reject(new CapturedError(message.message))
+  }
 }
 
 /**
@@ -314,7 +321,7 @@ export function wireReplies(port: BootstrapPort, pending: Map<number, PendingCal
  */
 export function makeNamespaces(
   data: Pick<ProgramBootData, 'namespaces'>,
-  port: BootstrapPort,
+  port: Pick<BootstrapPort, 'postMessage'>,
   pending: Map<number, PendingCall>,
   nextId: { value: number },
   errorClasses: Pick<ReadonlyMap<string, BindingErrorConstructor>, 'get'> = makeBindingErrorClasses(data),
@@ -386,32 +393,20 @@ export async function runProgram(
   const nextId = { value: 1 }
   const errorClasses = makeBindingErrorClasses(data)
   const namespaces = makeNamespaces(data, port, pending, nextId, errorClasses)
-  const errorClassParameters: string[] = []
-  const errorClassValues: BindingErrorConstructor[] = []
-  for (const namespace of data.namespaces) {
-    if (!namespace.errorClass) continue
-    errorClassParameters.push(namespace.errorClass.name)
-    const errorClass = errorClasses.get(namespace.global)
-    /* v8 ignore next -- makeBindingErrorClasses covers every declaration in the same data. */
-    if (!errorClass) throw new CapturedError(`missing binding error class for ${namespace.global}`)
-    errorClassValues.push(errorClass)
-  }
-  const consoleShim = makeConsoleShim(logs)
-
   let done: DoneMessage
   let evaluator: ProgramEvaluator | undefined
   try {
-    const names = [
-      ...data.namespaces.map(namespace => namespace.global),
-      ...errorClassParameters,
-      'console',
-    ]
-    const values = [...namespaces, ...errorClassValues, consoleShim]
     const completion = Promise.withResolvers<unknown>()
     evaluator = createProgramEvaluator(data.programFormat ?? 'function-body', (message) => { completion.reject(new CapturedError(message)) })
-    for (const [index, name] of names.entries()) {
-      Object.defineProperty(evaluator.globals, name, { configurable: true, enumerable: true, writable: true, value: values[index] })
+    const globals = evaluator.globals
+    const defineGlobal = (name: string, value: unknown): void => {
+      Object.defineProperty(globals, name, { configurable: true, enumerable: true, writable: true, value })
     }
+    for (const [index, namespace] of data.namespaces.entries()) defineGlobal(namespace.global, namespaces[index])
+    for (const namespace of data.namespaces) {
+      if (namespace.errorClass) defineGlobal(namespace.errorClass.name, errorClasses.get(namespace.global))
+    }
+    defineGlobal('console', makeConsoleShim(logs))
     evaluator.evaluate(data.code, (result) => {
       if (result.ok) completion.resolve(result.value)
       else completion.reject(result.error)

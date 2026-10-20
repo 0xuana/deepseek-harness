@@ -10,7 +10,7 @@ import type { ProgramEvaluator } from './types.ts'
  * @returns Retained globals, asynchronous evaluation and resource cleanup.
  */
 export function createVmScriptEvaluator(): ProgramEvaluator {
-  const context = createScriptContext({})
+  const context = createScriptContext()
   return {
     globals: context,
     evaluate(code, finish) {
@@ -25,10 +25,9 @@ export function createVmScriptEvaluator(): ProgramEvaluator {
 
 /**
  * Create an independent program context with Node globals.
- * @param bindings - Program globals, including the captured console and binding error classes.
  * @returns A context reusable for sequential evaluations.
  */
-function createScriptContext(bindings: Record<string, unknown>): Context {
+function createScriptContext(): Context {
   const globals = Object.create(null) as Record<string, unknown>
   const context = createContext(globals)
   const realm = new Script('globalThis').runInContext(context) as Record<string, unknown>
@@ -38,9 +37,6 @@ function createScriptContext(bindings: Record<string, unknown>): Context {
     if (descriptor) Object.defineProperty(globals, key, descriptor)
   }
   globals.global = realm
-  for (const [name, value] of Object.entries(bindings)) {
-    Object.defineProperty(globals, name, { configurable: true, enumerable: true, writable: true, value })
-  }
   return context
 }
 
