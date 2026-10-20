@@ -21,8 +21,9 @@ import {
 } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/plugin-manager', import.meta.url))
-const MANAGER_EXPECTED = join(SNAPSHOT_DIR, 'manager.expected.md')
-const LIVE_EXPECTED = join(SNAPSHOT_DIR, 'live-enabled.expected.md')
+const PLATFORM_SUFFIX = process.platform === 'darwin' ? '' : '-unsupported-platform'
+const MANAGER_EXPECTED = join(SNAPSHOT_DIR, `manager${PLATFORM_SUFFIX}.expected.md`)
+const LIVE_EXPECTED = join(SNAPSHOT_DIR, `live-enabled${PLATFORM_SUFFIX}.expected.md`)
 const EXPORTS_EXPECTED = join(SNAPSHOT_DIR, 'exports.expected.md')
 const EXPORTS_EN_EXPECTED = join(SNAPSHOT_DIR, 'exports-en.expected.md')
 const FIXTURE_PLUGINS = fileURLToPath(new URL('./fixtures/plugins', import.meta.url))
@@ -1135,6 +1136,7 @@ describe('web e2e: plugin manager', () => {
     await assertFixtureInventory(SNAPSHOT_DIR, [
       'manager.expected.md', 'live-enabled.expected.md', 'missing-bundle.expected.md', 'exports.expected.md', 'exports-en.expected.md', 'icons.expected.md', 'loading.expected.md', 'refresh.expected.md',
       'ime-enter.expected.md', 'header-responsive.expected.md', 'preview.expected.md',
+      'manager-unsupported-platform.expected.md', 'live-enabled-unsupported-platform.expected.md',
     ])
   })
 })

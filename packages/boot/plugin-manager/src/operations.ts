@@ -7,7 +7,7 @@ import { execa } from 'execa'
 import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import {
-  DEFAULT_PROFILE_BUNDLES, bundlePatchPaths, initProfile, PROFILE_TEMPLATES, readProfileManifest,
+  DEFAULT_PROFILE_BUNDLES, assertBundlePlatform, bundlePatchPaths, initProfile, PROFILE_TEMPLATES, readProfileManifest,
   resolveBundleDir, resolveProfileDir, loadOverlayPatches, composeEntries, readProfileVersionExemptions,
   evaluatePluginCompatibility, pluginCompatibilityWarning, type ProfileManifest,
 } from '@deepseek-ai/dsh-app-boot'
@@ -102,6 +102,7 @@ async function reconcile(before: ProfileManifest, dir: string, anchor: string, o
       options.onOutput?.(`dsh: warning: ${name} declares no dsh.bundle — installed as a plain dependency, not a profile layer\n`, 'stderr')
       continue
     }
+    assertBundlePlatform(metadata.dsh.bundle.platforms, process.platform)
     for (const file of bundlePatchPaths(resolveBundleDir('dsh', name, anchor, dir), metadata.dsh.bundle)) loadOverlayPatches('dsh', file)
     if (!bundles.includes(name)) {
       bundles.push(name)

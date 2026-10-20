@@ -1402,6 +1402,11 @@ describe('PluginManagerPage', () => {
     expect(within(detail).getByText(`${en.reasonLabel}: ${en.reasonIncompatibleVersionUnnamed} ${en.reasonIncompatibleInstalled}`)).toBeTruthy()
     fireEvent.click(within(detail).getByRole('button', { name: en.backToList }))
     expect(document.querySelector('[data-plugin-detail]')).toBeNull()
+    set({ packages: [pkg({ enabled: false, error: { code: 'unsupported-platform' } })] })
+    expect(screen.getByText(en.reasonUnsupportedPlatform)).toBeTruthy()
+    expect(screen.getByRole('switch', { name: en.enableToggle.replace('{name}', 'dsh-better-sidebar') })).toHaveProperty('disabled', true)
+    set({ packages: [pkg({ enabled: true, error: { code: 'unsupported-platform' } })] })
+    expect(screen.getByRole('switch', { name: en.enableToggle.replace('{name}', 'dsh-better-sidebar') })).toHaveProperty('disabled', false)
     // A bundle that leaves the list drops back to the cards.
     const { version: _version, ...unversioned } = pkg()
     set({ packages: [unversioned] })

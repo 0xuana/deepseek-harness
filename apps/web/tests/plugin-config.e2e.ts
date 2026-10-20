@@ -19,7 +19,8 @@ import {
 import { ZH_BROWSER_LOCALE, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/plugin-config', import.meta.url))
-const OFFICIAL_EXPECTED = join(SNAPSHOT_DIR, 'official.expected.md')
+const OFFICIAL_EXPECTED = join(SNAPSHOT_DIR, process.platform === 'darwin'
+  ? 'official.expected.md' : 'official-unsupported-platform.expected.md')
 const ROW_EXPECTED = join(SNAPSHOT_DIR, 'row.expected.md')
 const BUNDLE_EXPECTED = join(SNAPSHOT_DIR, 'bundle.expected.md')
 const FIXTURE_PLUGINS = fileURLToPath(new URL('./fixtures/plugins', import.meta.url))
@@ -440,7 +441,7 @@ describe('web e2e: plugin configuration pages', () => {
 
   it.skipIf(MODE === 'record')('keeps the fixture inventory closed', async () => {
     expect(tripwire.warnings).toEqual([])
-    await assertFixtureInventory(SNAPSHOT_DIR, ['bundle.expected.md', 'official.expected.md', 'row.expected.md', 'subagent.expected.md', 'web-search.expected.md'])
+    await assertFixtureInventory(SNAPSHOT_DIR, ['bundle.expected.md', 'official.expected.md', 'official-unsupported-platform.expected.md', 'row.expected.md', 'subagent.expected.md', 'web-search.expected.md'])
   })
 
 
