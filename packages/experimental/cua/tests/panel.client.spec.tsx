@@ -134,7 +134,7 @@ it('shows query failures as unknown while retaining previously displayed apps', 
   fireEvent.click(screen.getByRole('button', { name: en.retry }))
   expect(f.props.refresh).toHaveBeenCalledTimes(2)
   f.publish({ system: { ...f.state.getSnapshot().system, busy: true }, busy: true })
-  expect(screen.queryByRole('button', { name: en.retry })).toBeNull()
+  expect(screen.getByRole('button', { name: en.retry }).hasAttribute('disabled')).toBe(true)
   f.publish({ system: { ...f.state.getSnapshot().system, busy: false, error: null }, busy: false })
   expect(screen.queryByRole('button', { name: en.retry })).toBeNull()
   f.publish(observe(value))
@@ -292,7 +292,7 @@ it('keeps content mounted and disables actions while management changes are pend
   const requirements = screen.getByRole('region', { name: en.title })
   expect(within(requirements).getAllByRole('group')).toHaveLength(4)
   expect(screen.getByRole('alert').textContent).toContain('provider is reloading')
-  expect(screen.getByRole('button', { name: en.unknown }).hasAttribute('disabled')).toBe(true)
+  expect(within(screen.getByRole('group', { name: en.accessibility })).getByRole('button', { name: en.unknown }).hasAttribute('disabled')).toBe(true)
   fireEvent.focus(window)
   expect(f.props.refresh).toHaveBeenCalledTimes(2)
   f.publish({ system: { ...f.state.getSnapshot().system, busy: true, error: null }, busy: true })
@@ -388,14 +388,13 @@ it('loads the runtime setting independently and reports unavailable and read-onl
 })
 
 
-it('retains the previous single control while a stale query error is being refreshed', () => {
+it('retains uncertainty and the diagnostic until a refresh succeeds', () => {
   const f = fixture()
   f.publish(observe(value))
   render(<PermissionPanel {...f.props} />)
   f.publish({ system: { value: value.system, busy: true, error: 'stale error' }, busy: true })
-  expect(screen.getByRole('button', { name: en.request }).hasAttribute('disabled')).toBe(true)
-  expect(screen.getByRole('button', { name: en.granted }).hasAttribute('disabled')).toBe(true)
-  expect(screen.queryByRole('alert')).toBeNull()
+  for (const button of screen.getAllByRole('button', { name: en.unknown })) expect(button.hasAttribute('disabled')).toBe(true)
+  expect(screen.getByRole('alert').textContent).toContain('stale error')
 })
 
 
