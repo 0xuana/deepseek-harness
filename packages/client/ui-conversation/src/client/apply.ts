@@ -237,11 +237,14 @@ export function apply(ctx: Context, config: Config = Config({})): void {
   }
   const bindings = new Set<SessionBinding>()
   const trackedBindings = new WeakSet<SessionBinding>()
+  // One binding-scope effect per tracked binding, owned by the plugin only until the scope releases:
+  // the long-lived plugin effect below must not hold a closure over a released binding's Context.
+  const bindingEffects = new Map<SessionBinding, () => void>()
   const trackBinding = (binding: SessionBinding): void => {
     if (trackedBindings.has(binding)) return
     trackedBindings.add(binding)
     bindings.add(binding)
-    ctx.effect(() => binding.ctx.effect(() => {
+    bindingEffects.set(binding, binding.ctx.effect(() => {
       // Controller withdrawal precedes asynchronous Session-scope disposal.
       const disposeRetention = sessions.retainInfo(binding.sessionId).subscribe(() => {
         if (sessions.binding(binding.sessionId) !== binding) bindings.delete(binding)
@@ -249,9 +252,16 @@ export function apply(ctx: Context, config: Config = Config({})): void {
       return () => {
         disposeRetention()
         bindings.delete(binding)
+        bindingEffects.delete(binding)
       }
-    }, 'ui-conversation: active Provider binding'), 'ui-conversation: View binding ownership')
+    }, 'ui-conversation: active Provider binding'))
   }
+  ctx.effect(() => () => {
+    // A binding that released before the plugin already deleted its own entry; this releases the rest.
+    for (const dispose of [...bindingEffects.values()]) dispose()
+    bindingEffects.clear()
+    bindings.clear()
+  }, 'ui-conversation: View binding ownership')
   const refreshViews = (): void => {
     const current = conversationViews.getSnapshot()
     const next = viewTabs()
