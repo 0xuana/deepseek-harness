@@ -61,6 +61,7 @@ it('routes manual packaging to the dedicated runner with explicit preset and sig
   expect(Object.keys(workflow.on)).toEqual(['workflow_dispatch'])
   expect(workflow.jobs.package).not.toHaveProperty('name')
   expect(job['runs-on']).toBe('dsh-win-package-trial')
+  expect(job.env.DSH_DESKTOP_PACKAGE_CACHE_DIR).toBe('${{ runner.tool_cache }}/dsh-desktop-package-cache')
   expect(workflow.concurrency).toEqual({ group: 'windows-desktop-package', 'cancel-in-progress': false })
   expect(workflow.permissions).toEqual({ contents: 'read' })
   expect(Object.keys(workflow.on.workflow_dispatch!.inputs).sort()).toEqual([
@@ -105,5 +106,27 @@ it('retains failure diagnostics and uploads only the selected successful install
   for (const mode of ['unsigned', 'signed']) {
     const upload = uploads.find(step => step.if === `success() && inputs.signing == '${mode}'`)!
     expect(upload.with).toMatchObject({ path: '${{ steps.retained.outputs.directory }}/*', 'if-no-files-found': 'error' })
+  }
+})
+
+it.skipIf(process.platform !== 'win32')('keeps the dependency store stable across run-specific pnpm homes', () => {
+  const directory = mkdtempSync(resolve(tmpdir(), 'windows-package-store-'))
+  try {
+    const step = job.steps.find(entry => entry.name === 'Configure persistent pnpm store')!
+    expect(job.steps.indexOf(step)).toBeLessThan(job.steps.findIndex(entry => entry.name === 'Install locked dependencies'))
+    const script = resolve(directory, 'store.ps1')
+    writeFileSync(script, step.run!)
+    const outputs = ['first', 'second'].map((run) => {
+      const environmentFile = resolve(directory, run + '.env')
+      execFileSync('pwsh', ['-NoProfile', '-File', script], {
+        env: { ...process.env, GITHUB_WORKSPACE: 'D:\\runner\\_work\\repo\\repo',
+          PNPM_HOME: resolve(directory, run, 'pnpm'), GITHUB_ENV: environmentFile },
+        stdio: 'pipe',
+      })
+      return readFileSync(environmentFile, 'utf8').trim()
+    })
+    expect(outputs).toEqual(['PNPM_CONFIG_STORE_DIR=D:\\.pnpm-store', 'PNPM_CONFIG_STORE_DIR=D:\\.pnpm-store'])
+  } finally {
+    rmSync(directory, { recursive: true, force: true, maxRetries: 3 })
   }
 })

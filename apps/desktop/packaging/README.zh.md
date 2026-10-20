@@ -32,6 +32,8 @@ description: "在本地或 Windows／macOS Actions 中生成 Desktop 安装包�
 
 安装锁定依赖后，从仓库根目录运行本地命令。本地构建使用平台命令，已注册的自托管 runner 使用对应平台的 Actions。test/production 部署与 signed/unsigned 模式分别选择。任何 Windows 签名构建或共享 runner 使用前，先阅读 [Windows 签名与 runner 运维](../windows-signing/README.zh.md#trust-and-isolation)。安装与打包分开进行；[发布](../publishing/README.zh.md)还需要单独的显式操作。
 
+将 `DSH_DESKTOP_PACKAGE_CACHE_DIR` 设为绝对构建缓存目录，即可跨 checkout 保留经过校验的下载文件和 pnpm 内容存储。两个打包工作流使用 `runner.tool_cache/dsh-desktop-package-cache`；本地命令默认使用 `.desktop-build`。runtime 准备仍创建全新安装目录和锁文件、校验缓存包的完整性，并在签名前复制文件。清理只删除临时安装，不删除这些缓存。缓存磁盘用量由操作者管理，不自动淘汰。
+
 <a id="release-versions"></a>
 
 ## 发布版本

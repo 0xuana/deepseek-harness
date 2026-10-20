@@ -9,6 +9,7 @@ const workflow = yaml.load(readFileSync(resolve(import.meta.dirname, '../.github
   concurrency: { group: string; 'cancel-in-progress': boolean }
   jobs: Record<string, {
     'runs-on': string[]
+    env: Record<string, string>
     steps: Array<{ id?: string; name?: string; if?: string; uses?: string; run?: string; with?: Record<string, unknown> }>
   }>
 }
@@ -39,4 +40,10 @@ it('defaults to notarization and labels the explicit debugging option', () => {
   const steps = workflow.jobs.package!.steps
   expect(steps.filter(step => step.run?.includes('args+=(--skip-notarization)'))).toHaveLength(2)
   expect(steps.find(step => step.name === 'Retain installers for the selected mode')?.with?.name).toContain('${{ steps.settings.outputs.mode }}')
+})
+
+it('retains build inputs outside checkout and run-specific pnpm installations', () => {
+  const env = workflow.jobs.package!.env
+  expect(env.DSH_DESKTOP_PACKAGE_CACHE_DIR).toBe('${{ runner.tool_cache }}/dsh-desktop-package-cache')
+  expect(env.PNPM_CONFIG_STORE_DIR).toBe('${{ runner.tool_cache }}/dsh-desktop-package-cache/workspace-pnpm-store')
 })

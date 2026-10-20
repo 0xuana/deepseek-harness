@@ -62,6 +62,8 @@ jobs:
       PACKAGE_VERSION_MODE: ${{ inputs.version_mode }}
       DSH_DESKTOP_UPDATE_CHANNEL: ${{ inputs.update_channel }}
       DSH_TELEMETRY_DISABLED: '1'
+      DSH_DESKTOP_PACKAGE_CACHE_DIR: ${{ runner.tool_cache }}/dsh-desktop-package-cache
+      PNPM_CONFIG_STORE_DIR: ${{ runner.tool_cache }}/dsh-desktop-package-cache/workspace-pnpm-store
       DSH_PACKAGING_PRESET: ${{ inputs.preset }}
       PACKAGE_TEST_RELEASE_ID: ${{ inputs.test_release_id }}
     steps:
