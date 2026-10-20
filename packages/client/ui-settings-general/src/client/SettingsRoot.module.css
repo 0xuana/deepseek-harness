@@ -35,8 +35,10 @@
   line-height: 22px;
 }
 
-.trigger:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .trigger:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* Rail trigger: the same 36x36 box and 12px rounding as the other rail
@@ -170,8 +172,10 @@
   text-align: left;
 }
 
-.navCell:hover {
-  background: var(--dsw-specific-sidebar-nav-item-hover);
+@media (hover: hover) {
+  .navCell:hover {
+    background: var(--dsw-specific-sidebar-nav-item-hover);
+  }
 }
 
 .navCell.active {
@@ -226,8 +230,10 @@
   color: var(--dsw-alias-label-primary);
 }
 
-.close:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .close:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* Options area (figma Options 501:29983): pad (24,0,24,24), scrolls. */
@@ -249,6 +255,12 @@
    clip a name; the active cell carries data-modal-autofocus, so opening the
    panel scrolls it into view. */
 @media (max-width: 767px) {
+  .overlay {
+    position: absolute;
+    height: 100%;
+    background: var(--dsw-alias-bg-layer-2);
+  }
+
   .panel {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-rows: auto auto minmax(0, 1fr);
