@@ -52,6 +52,11 @@ on:
         type: string
         default: ''
         required: false
+      compression_level:
+        description: '本轮安装器压缩等级：0..9；留空保留机器配置'
+        type: string
+        default: ''
+        required: false
 
 permissions:
   contents: read
@@ -77,6 +82,7 @@ jobs:
       PACKAGE_SIGNING: ${{ inputs.signing }}
       PACKAGE_CACHE_NAMESPACE: ${{ inputs.cache_namespace }}
       PACKAGE_BUILD_ROOT: ${{ inputs.build_root }}
+      PACKAGE_WINDOWS_COMPRESSION_LEVEL: ${{ inputs.compression_level }}
     steps:
       - name: Reset packaging checkout
         working-directory: ${{ runner.temp }}

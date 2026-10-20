@@ -258,7 +258,7 @@ When extraction fails, the installer writes a report with the 7-Zip result and i
 
 Windows packaging fixes the 7-Zip filter to `BCJ` for compatibility with the bundled NSIS decoder. This preserves ARM64 binaries carried by dependencies in x64 installers; automatic ARM64 filtering produces entries that this decoder cannot extract.
 
-`DSH_DESKTOP_WINDOWS_COMPRESSION_LEVEL` in the Windows dotenv or machine preset selects installer archive compression from `0` to `9`. If omitted, the existing `ELECTRON_BUILDER_COMPRESSION_LEVEL` environment override remains effective, otherwise the default is `9`. Lower levels trade installer size for packaging time; qualify the complete signed workflow and artifact size before changing a release preset.
+`DSH_DESKTOP_WINDOWS_COMPRESSION_LEVEL` in the Windows dotenv or machine preset selects installer archive compression from `0` to `9`. If omitted, the existing `ELECTRON_BUILDER_COMPRESSION_LEVEL` environment override remains effective, otherwise the default is `9`. The manual Windows workflow accepts an optional `compression_level` from `0` to `9` that overrides the file setting for that run; leave it empty to retain the machine setting. Lower levels trade installer size for packaging time; qualify the complete signed workflow and artifact size before changing a release preset.
 
 NSIS removes its temporary extraction tree during installation, before the completion page or an automatic launch. The installed production packages remain ordinary files; startup does not extract them again. Installation still writes the complete application tree.
 

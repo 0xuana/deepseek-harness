@@ -32,6 +32,25 @@ describe('Desktop local packaging configuration', () => {
     })
   })
 
+  it.each(['0', '3', '9'])('applies an explicit Windows workflow compression override %s', async (value) => {
+    await withDirectory(async (directory) => {
+      await writeFile(join(directory, '.env.windows'), 'DSH_DESKTOP_WINDOWS_COMPRESSION_LEVEL=5\n')
+      const selected = loadDesktopPackageEnvironment('win32', { PACKAGE_WINDOWS_COMPRESSION_LEVEL: value }, directory)
+      expect(resolveWindowsPackageSettings(selected).compressionLevel).toBe(Number(value))
+      const unchanged = loadDesktopPackageEnvironment('win32', { PACKAGE_WINDOWS_COMPRESSION_LEVEL: '' }, directory)
+      expect(resolveWindowsPackageSettings(unchanged).compressionLevel).toBe(5)
+    })
+  })
+
+  it.each([' ', '-1', '10', '3.5', '03', 'fast'])('rejects invalid workflow compression %j before reading settings', (value) => {
+    expect(() => loadDesktopPackageEnvironment('win32', { PACKAGE_WINDOWS_COMPRESSION_LEVEL: value }, 'missing-settings'))
+      .toThrow('PACKAGE_WINDOWS_COMPRESSION_LEVEL')
+  })
+
+  it('rejects a Windows compression override for macOS before reading settings', () => {
+    expect(() => loadDesktopPackageEnvironment('darwin', { PACKAGE_WINDOWS_COMPRESSION_LEVEL: '3' }, 'missing-settings'))
+      .toThrow('PACKAGE_WINDOWS_COMPRESSION_LEVEL')
+  })
   it.each(['', '-1', '10', '3.5', '03', 'fast'])('rejects invalid compression %j before preparation', (value) => {
     const selected = { ...RELEASE, DSH_DESKTOP_WINDOWS_COMPRESSION_LEVEL: value }
     expect(() => { validateDesktopPackageEnvironment(selected, WINDOWS, { unsigned: true }) })

@@ -37,6 +37,7 @@ export function localMacOSPackageEnvironment(environment = process.env) {
 /**
  * Read a machine preset when selected, otherwise the target's required dotenv; no ambient release fallback.
  * PACKAGE_TEST_RELEASE_ID overrides the test preset only; blank retains its configured ID.
+ * PACKAGE_WINDOWS_COMPRESSION_LEVEL explicitly overrides Windows compression; blank retains the file setting.
  * @param {'win32' | 'darwin'} platform Target platform.
  * @param {NodeJS.ProcessEnv} environment Parent environment, retained only for unrelated build tools.
  * @param {string} appRoot Desktop application directory; relative credential paths resolve here.
@@ -44,6 +45,12 @@ export function localMacOSPackageEnvironment(environment = process.env) {
  * @returns {NodeJS.ProcessEnv} Isolated environment with file-owned release settings.
  */
 export function loadDesktopPackageEnvironment(platform, environment = process.env, appRoot = APP_ROOT, options = {}) {
+  const compression = environment.PACKAGE_WINDOWS_COMPRESSION_LEVEL
+  if (compression !== undefined && compression !== '') {
+    if (platform !== 'win32' || !/^[0-9]$/u.test(compression)) {
+      throw new Error('desktop package: PACKAGE_WINDOWS_COMPRESSION_LEVEL requires Windows and an integer from 0 to 9')
+    }
+  }
   const preset = environment.DSH_PACKAGING_PRESET
   let path = join(appRoot, platform === 'win32' ? '.env.windows' : '.env.macos')
   if (preset !== undefined) {
@@ -69,6 +76,7 @@ export function loadDesktopPackageEnvironment(platform, environment = process.en
           : MACOS_SETTING.test(name) && !publicPlatformSetting.test(name)))
     }
   }
+  if (compression !== undefined && compression !== '') settings.DSH_DESKTOP_WINDOWS_COMPRESSION_LEVEL = compression
   const releaseId = environment.PACKAGE_TEST_RELEASE_ID?.trim()
   if (releaseId) {
     if (preset !== 'test') throw new Error('desktop package: test release ID override requires the test preset')
