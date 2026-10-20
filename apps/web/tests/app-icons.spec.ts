@@ -1,77 +1,34 @@
-/**
- * The install icons are committed binaries, so this suite renders them from the
- * tile source and asserts the two properties a launcher depends on: every
- * declared edge is really produced, and the maskable variant's artwork stays
- * inside the circle a platform mask is guaranteed to show. Without the second
- * the whale's tail is cropped on a round-masked home screen, which is the
- * defect the dedicated icon set exists to remove.
- */
+/** Committed install icon dimensions and the generator's SVG crop and safe-zone scale. */
 import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import sharp from 'sharp'
 import {
-  APP_ICON_VARIANTS, MASKABLE_ARTWORK_SCALE, MASKABLE_SAFE_RADIUS_RATIO, TILE_SOURCE,
-  maskableDocument, renderAppIcons, tileDocument,
+  APP_ICON_VARIANTS, ICON_OUTPUT_DIRECTORY, MASKABLE_ARTWORK_SCALE, TILE_SOURCE,
+  maskableDocument, tileDocument,
 } from '../scripts/render-app-icons.ts'
-
-/** Channel sum above which a pixel is tile background rather than whale ink. */
-const LIGHT_PIXEL_SUM = 384
-
-/** Center-to-corner distance of the darkest pixel, in pixels, from the icon centre. */
-async function inkRadius(png: Buffer): Promise<number> {
-  const { data, info } = await sharp(png).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
-  const centre = (info.width - 1) / 2
-  let radius = 0
-  for (let y = 0; y < info.height; y += 1) {
-    for (let x = 0; x < info.width; x += 1) {
-      const at = (y * info.width + x) * 4
-      const alpha = data[at + 3] ?? 0
-      const sum = (data[at] ?? 0) + (data[at + 1] ?? 0) + (data[at + 2] ?? 0)
-      if (alpha === 0 || sum >= LIGHT_PIXEL_SUM) continue
-      radius = Math.max(radius, Math.hypot(x - centre, y - centre))
-    }
-  }
-  return radius
-}
-
-/** The four corner pixels, where a maskable icon must be opaque. */
-async function cornerAlphas(png: Buffer): Promise<number[]> {
-  const { data, info } = await sharp(png).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
-  const last = info.width - 1
-  return [[0, 0], [last, 0], [0, last], [last, last]].map(([x, y]) => data[((y ?? 0) * info.width + (x ?? 0)) * 4 + 3] ?? 0)
-}
+import { pngSize } from './png-size.ts'
 
 describe('web install icons', () => {
-  it('renders every declared variant at its declared edge', async () => {
-    const icons = await renderAppIcons(await readFile(TILE_SOURCE, 'utf8'))
-    expect(icons.map(icon => icon.variant)).toEqual(APP_ICON_VARIANTS)
-    for (const { variant, png } of icons) {
-      const metadata = await sharp(png).metadata()
-      expect([variant.file, metadata.format, metadata.width, metadata.height])
-        .toEqual([variant.file, 'png', variant.size, variant.size])
+  it('ships every declared variant at its declared edge', async () => {
+    for (const variant of APP_ICON_VARIANTS) {
+      expect(pngSize(await readFile(join(ICON_OUTPUT_DIRECTORY, variant.file))))
+        .toEqual([variant.size, variant.size])
     }
   })
 
-  it('keeps the maskable artwork inside the circle a platform mask shows', async () => {
+  it('crops the desktop shadow and scales only the maskable artwork', async () => {
     const source = await readFile(TILE_SOURCE, 'utf8')
-    const edge = 512
-    const maskable = (await renderAppIcons(source))
-      .find(icon => icon.variant.kind === 'maskable')
-    expect(maskable).toBeDefined()
-    const safeRadius = MASKABLE_SAFE_RADIUS_RATIO * edge
-    expect(await inkRadius(maskable!.png)).toBeLessThanOrEqual(safeRadius)
-
-    // Negative control: the same artwork without the maskable scale overflows
-    // the circle, so the assertion above is not vacuous.
-    const unscaled = await sharp(Buffer.from(tileDocument(source)), { density: 72 })
-      .resize(edge, edge).png().toBuffer()
-    expect(await inkRadius(unscaled)).toBeGreaterThan(safeRadius)
+    const tile = tileDocument(source)
+    const maskable = maskableDocument(source)
+    expect(tile).toContain('viewBox="40 32 1024 1024"')
+    expect(tile).not.toContain('<g filter="url(#filter0_d_1637_371)">')
+    expect(tile).not.toContain('scale(0.82)')
+    expect(maskable).toContain(`transform="translate(552 544) scale(${MASKABLE_ARTWORK_SCALE}) translate(-552 -544)"`)
   })
 
-  it('fills a maskable icon to its edges so no mask meets transparency', async () => {
-    const maskable = maskableDocument(await readFile(TILE_SOURCE, 'utf8'))
-    const png = await sharp(Buffer.from(maskable), { density: 72 }).resize(512, 512).png().toBuffer()
-    expect(await cornerAlphas(png)).toEqual([255, 255, 255, 255])
+  it('rejects non-PNG bytes and incomplete image headers', () => {
+    expect(() => pngSize(Buffer.from('<svg/>'))).toThrow(/PNG IHDR/)
+    expect(() => pngSize(Buffer.alloc(33))).toThrow(/PNG IHDR/)
   })
 
   it('fails loudly on a source without the tile it transforms', () => {

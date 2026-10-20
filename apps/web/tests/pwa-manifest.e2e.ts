@@ -2,7 +2,9 @@ import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import sharp from 'sharp'
+import { chromium } from 'playwright'
+import { pngSize } from './png-size.ts'
+import { TILE_SOURCE, tileDocument } from '../scripts/render-app-icons.ts'
 
 const DIST_ROOT = fileURLToPath(new URL('../dist', import.meta.url))
 
@@ -16,6 +18,7 @@ interface ManifestIcon {
 
 it('ships install metadata with the built web application', async () => {
   const index = await readFile(join(DIST_ROOT, 'index.html'), 'utf8')
+  expect(index).toContain('<meta name="viewport" content="width=device-width, initial-scale=1" />')
   expect(index).toContain('<link rel="manifest" href="./manifest.webmanifest" />')
   expect(index).toContain('<link rel="apple-touch-icon" href="./apple-touch-icon.png" />')
   expect(index).toContain('<meta name="mobile-web-app-capable" content="yes" />')
@@ -56,12 +59,10 @@ it('ships every declared install icon as a raster of its declared size', async (
   expect(manifest.icons).not.toHaveLength(0)
   for (const icon of manifest.icons) {
     const [edge] = icon.sizes.split('x')
-    const metadata = await sharp(await readFile(join(DIST_ROOT, icon.src))).metadata()
-    expect([icon.src, metadata.format, metadata.width, metadata.height])
-      .toEqual([icon.src, 'png', Number(edge), Number(edge)])
+    expect(pngSize(await readFile(join(DIST_ROOT, icon.src))))
+      .toEqual([Number(edge), Number(edge)])
   }
-  const touch = await sharp(await readFile(join(DIST_ROOT, 'apple-touch-icon.png'))).metadata()
-  expect([touch.format, touch.width, touch.height]).toEqual(['png', 180, 180])
+  expect(pngSize(await readFile(join(DIST_ROOT, 'apple-touch-icon.png')))).toEqual([180, 180])
 })
 
 it('ships fixed-color favicons selected by document media queries', async () => {
@@ -74,4 +75,39 @@ it('ships fixed-color favicons selected by document media queries', async () => 
   expect(light).toContain('fill="#000"')
   expect(dark).toContain('fill="#fff"')
   expect(dark.replace('fill="#fff"', 'fill="#000"')).toBe(light)
+})
+
+it('keeps the shipped maskable artwork inside its opaque platform safe zone', async () => {
+  const browser = await chromium.launch({ headless: true })
+  try {
+    const page = await browser.newPage()
+    const maskable = await readFile(join(DIST_ROOT, 'icon-maskable-512.png'))
+    const tile = tileDocument(await readFile(TILE_SOURCE, 'utf8'))
+    const [scaled, unscaled] = await page.evaluate(async (sources) => {
+      return Promise.all(sources.map(async (source) => {
+        const image = new Image()
+        image.src = source
+        await image.decode()
+        const canvas = document.createElement('canvas')
+        canvas.width = canvas.height = 512
+        const context = canvas.getContext('2d')!
+        context.drawImage(image, 0, 0, 512, 512)
+        const { data } = context.getImageData(0, 0, 512, 512)
+        let radius = 0
+        for (let y = 0; y < 512; y += 1) {
+          for (let x = 0; x < 512; x += 1) {
+            const at = (y * 512 + x) * 4
+            if (data[at + 3] === 0 || data[at]! + data[at + 1]! + data[at + 2]! >= 384) continue
+            radius = Math.max(radius, Math.hypot(x - 255.5, y - 255.5))
+          }
+        }
+        return { radius, corners: [0, 511, 511 * 512, 512 * 512 - 1].map(index => data[index * 4 + 3]) }
+      }))
+    }, [`data:image/png;base64,${maskable.toString('base64')}`, `data:image/svg+xml;base64,${Buffer.from(tile).toString('base64')}`])
+    expect(scaled!.radius).toBeLessThanOrEqual(0.4 * 512)
+    expect(scaled!.corners).toEqual([255, 255, 255, 255])
+    expect(unscaled!.radius).toBeGreaterThan(0.4 * 512)
+  } finally {
+    await browser.close()
+  }
 })

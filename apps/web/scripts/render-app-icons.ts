@@ -23,7 +23,6 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import sharp from 'sharp'
 
 /** Vector source owned by the desktop application; 1104 units square with the tile inset. */
 export const TILE_SOURCE = fileURLToPath(new URL('../../desktop/resources/icon.svg', import.meta.url))
@@ -47,7 +46,7 @@ const SOURCE_DENSITY = 72
  * Fraction of a maskable icon the artwork keeps: the platform may crop the
  * border outside it. The tile's own ink reaches 0.461 of its edge from the
  * centre, so 0.868 is the largest scale a circular mask still shows whole;
- * `app-icons.spec.ts` re-derives this and fails when the artwork overflows.
+ * `pwa-manifest.e2e.ts` checks the committed artwork against that circle.
  */
 export const MASKABLE_ARTWORK_SCALE = 0.82
 
@@ -142,6 +141,7 @@ async function renderPng(document: string, size: number): Promise<Buffer> {
   // Render at the source scale the requested edge needs, then resize as a
   // guarantee: the rasterizer must see the target density, not a large bitmap
   // it would have to antialias down.
+  const { default: sharp } = await import('sharp')
   return sharp(Buffer.from(document), { density: SOURCE_DENSITY * size / TILE_EDGE })
     .resize(size, size)
     .png()

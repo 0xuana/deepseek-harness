@@ -12,7 +12,7 @@ A launcher masks the icon it puts on the home screen and chooses that icon itsel
 
 `apps/web/public/` carries four install icons: a 192px and a 512px `any` raster, a 512px `maskable` raster, and a 180px `apple-touch-icon`. [`render-app-icons.ts`](../../../../apps/web/scripts/render-app-icons.ts) renders all four from the official application tile in `apps/desktop/resources/icon.svg`, and `pnpm --filter @deepseek-ai/dsh-web-frontend run render:app-icons` regenerates the committed files. Every variant crops the tile's desktop drop shadow. The maskable variant scales the whale about the tile centre by `MASKABLE_ARTWORK_SCALE` while the tile's gradient keeps its own extent, so the border a mask may crop is still the real tile rather than a flat colour meeting it at a seam.
 
-[`app-icons.spec.ts`](../../../../apps/web/tests/app-icons.spec.ts) measures the whale's ink radius and fails when it leaves the circle a platform mask is guaranteed to show; the unscaled rendering is its negative control, so the assertion cannot pass vacuously.
+[`pwa-manifest.e2e.ts`](../../../../apps/web/tests/pwa-manifest.e2e.ts) uses the browser image decoder to measure the committed maskable whale's ink radius and fails when it leaves the circle a platform mask is guaranteed to show; the unscaled rendering is its negative control, so the assertion cannot pass vacuously.
 
 The manifest requests `display: "standalone"`, names `#ffffff` as its `theme_color` and `background_color`, and lists the three rasters. `apps/web/index.html` adds the `apple-touch-icon` link, `mobile-web-app-capable`, and `apple-mobile-web-app-title`. It adds no `theme-color`: `ThemePresenter` owns the single such node and follows the resolved in-application theme, which a static media query cannot. The tab favicons are unchanged.
 
@@ -32,7 +32,7 @@ This supersedes the icon entry and the display mode in the [archived Web install
 
 ## Consequences
 
-The repository carries four committed rasters, all rendered by one script from `apps/desktop/resources/icon.svg`. Changing the desktop tile means rerunning that script and reading the spec's diff.
+The repository carries four committed rasters, all rendered by one script from `apps/desktop/resources/icon.svg`. Changing the desktop tile means rerunning that script and reviewing the PNG diff. Unit tests inspect committed PNG dimensions without loading the native renderer. Browser tests check the committed maskable safe zone and opaque corners, with an unscaled SVG as the negative control. No automated check compares committed pixels with freshly generated output.
 
 The manifest's `theme_color` is one value and cannot follow the in-application theme, so a user whose theme differs from the system scheme sees that value until `ThemePresenter` writes the synchronized node shortly after boot. The presenter stays the only owner of `meta[name="theme-color"]`: a second static node wins document order and desynchronizes surrounding browser chrome from the rendered palette, which `settings-chrome.e2e.ts` pins.
 

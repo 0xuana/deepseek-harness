@@ -12,7 +12,7 @@ Status: implemented
 
 `apps/web/public/` 承载四个安装图标：192px 与 512px 的 `any` 位图、512px 的 `maskable` 位图，以及 180px 的 `apple-touch-icon`。[`render-app-icons.ts`](../../../../apps/web/scripts/render-app-icons.ts) 从 `apps/desktop/resources/icon.svg` 的官方应用底板渲染这四个文件，`pnpm --filter @deepseek-ai/dsh-web-frontend run render:app-icons` 重新生成已提交的文件。每个变体都会裁掉底板的桌面投影。maskable 变体围绕底板中心按 `MASKABLE_ARTWORK_SCALE` 缩放鲸鱼，而底板渐变保持自身范围，因此可能被蒙层裁掉的那圈边框仍是真实底板，而不是与其相接的纯色。
 
-[`app-icons.spec.ts`](../../../../apps/web/tests/app-icons.spec.ts) 测量鲸鱼墨迹半径，一旦它越出平台蒙层保证显示的范围就失败；未缩放的渲染结果是它的反向对照，因此该断言不可能空泛通过。
+[`pwa-manifest.e2e.ts`](../../../../apps/web/tests/pwa-manifest.e2e.ts) 使用浏览器图像解码器测量已提交 maskable 图标的鲸鱼墨迹半径，一旦它越出平台蒙层保证显示的范围就失败；未缩放的渲染结果是它的反向对照，因此该断言不可能空泛通过。
 
 manifest 请求 `display: "standalone"`，把 `theme_color` 与 `background_color` 定为 `#ffffff`，并列出三个位图。`apps/web/index.html` 增加 `apple-touch-icon` 链接、`mobile-web-app-capable` 与 `apple-mobile-web-app-title`。它不添加 `theme-color`：该节点由 `ThemePresenter` 独占并跟随解析后的应用内主题，这是静态媒体查询做不到的。标签页 favicon 保持不变。
 
@@ -32,7 +32,7 @@ manifest 请求 `display: "standalone"`，把 `theme_color` 与 `background_colo
 
 ## Consequences
 
-仓库承载四个已提交位图，全部由一个脚本从 `apps/desktop/resources/icon.svg` 渲染。底板变化意味着重跑该脚本并阅读 spec 的 diff。
+仓库携带四张已提交的栅格图，均由同一个脚本从 `apps/desktop/resources/icon.svg` 渲染。桌面图块变化时，需要重新运行该脚本并审查 PNG diff。单元测试直接检查已提交 PNG 的尺寸，不加载原生渲染器。浏览器测试检查已提交 maskable 图标的安全区和不透明角落，并以未缩放 SVG 作为反向对照。没有自动检查将已提交像素与重新生成的结果进行比较。
 
 manifest 的 `theme_color` 是单个值，无法跟随应用内主题；因此当用户选择的主题与系统方案不同时，该值会一直生效，直到 `ThemePresenter` 在启动后不久写入同步节点。该 presenter 仍是 `meta[name="theme-color"]` 的唯一所有者：第二个静态节点会在文档顺序上胜出，使周边浏览器界面与已渲染的配色脱节，这一点由 `settings-chrome.e2e.ts` 固定。
 
