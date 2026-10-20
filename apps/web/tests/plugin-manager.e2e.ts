@@ -488,12 +488,23 @@ describe('web e2e: plugin manager', () => {
     }
   })
 
-  it('keeps touch actions direct and opens supplementary tooltips on tap', async () => {
+  it('keeps touch actions direct before keyboard focus and mouse hover', async () => {
     const context = await browser.newContext({
-      viewport: { width: 1280, height: 900 }, locale: ZH_BROWSER_LOCALE, hasTouch: true,
+      viewport: { width: 1280, height: 900 }, locale: ZH_BROWSER_LOCALE,
     })
     try {
       const probe = await context.newPage()
+      const input = await context.newCDPSession(probe)
+      // Native touch input preserves desktop hover capability for mixed-input devices.
+      const tap = async (target: Locator): Promise<void> => {
+        await target.scrollIntoViewIfNeeded()
+        const bounds = await target.boundingBox()
+        if (bounds === null) throw new Error('Touch target is not visible')
+        await input.send('Input.dispatchTouchEvent', {
+          type: 'touchStart', touchPoints: [{ x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }],
+        })
+        await input.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+      }
       const consoleWatch = watchConsole(probe)
       onTestFailed(() => saveFailureShot(probe, 'web-e2e-touch-tooltips'))
       await probe.clock.install()
@@ -507,7 +518,7 @@ describe('web e2e: plugin manager', () => {
       await probe.evaluate(() => document.fonts.ready)
       const calls = vi.spyOn(scaffold.ctx.pluginManager, 'listBundles')
       try {
-        await refresh.tap()
+        await tap(refresh)
         await expect.poll(() => calls.mock.calls.length).toBe(1)
         await expect.poll(() => refresh.isEnabled()).toBe(true)
       } finally {
@@ -518,7 +529,7 @@ describe('web e2e: plugin manager', () => {
       expect(await probe.getByRole('tooltip').count()).toBe(0)
       const facts = ['Touch refresh: one refresh request; no tooltip']
 
-      await info.tap()
+      await tap(info)
       const help = probe.getByRole('tooltip')
       await help.waitFor()
       const bounds = await help.boundingBox()
@@ -528,11 +539,11 @@ describe('web e2e: plugin manager', () => {
       expect(bounds.y).toBeGreaterThanOrEqual(12)
       expect(bounds.y + bounds.height).toBeLessThanOrEqual(844 - 12)
       facts.push('Touch explanation: visible within the 390px viewport', await help.ariaSnapshot())
-      await info.tap()
+      await tap(info)
       expect(await help.count()).toBe(0)
-      await info.tap()
+      await tap(info)
       await help.waitFor()
-      await panel.getByRole('heading', { name: '插件', exact: true }).tap()
+      await tap(panel.getByRole('heading', { name: '插件', exact: true }))
       expect(await help.count()).toBe(0)
       facts.push('Explanation closes on another tap or an outside touch')
 
@@ -542,8 +553,6 @@ describe('web e2e: plugin manager', () => {
       await probe.getByRole('tooltip').filter({ hasText: '刷新' }).waitFor()
       facts.push('Keyboard focus after touch: refresh tooltip visible')
       await probe.keyboard.press('Tab')
-      const inputEmulation = await context.newCDPSession(probe)
-      await inputEmulation.send('Emulation.setTouchEmulationEnabled', { enabled: false })
       expect(await probe.evaluate(() => matchMedia('(any-hover: hover)').matches)).toBe(true)
       await refresh.hover()
       await probe.clock.runFor(500)
@@ -551,7 +560,7 @@ describe('web e2e: plugin manager', () => {
       facts.push('Mouse hover after touch: refresh tooltip visible')
       await probe.mouse.move(0, 843)
       expect(await help.count()).toBe(0)
-      await inputEmulation.detach()
+      await input.detach()
       await probe.clock.resume()
       await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'touch-tooltips.expected.md'),
         ['# Touch tooltips', '', ...facts].join('\n'), MODE)
