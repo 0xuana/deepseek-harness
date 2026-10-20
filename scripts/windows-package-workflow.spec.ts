@@ -7,7 +7,7 @@ import { expect, it } from 'vitest'
 
 const root = resolve(import.meta.dirname, '..')
 const workflow = yaml.load(readFileSync(resolve(root, '.github/workflows/windows-package.yml'), 'utf8')) as {
-  on: Record<string, { inputs: Record<string, { required?: boolean; default?: string; description?: string }> }>
+  on: Record<string, { inputs: Record<string, { type?: string; required?: boolean; default?: string; description?: string }> }>
   permissions: Record<string, string>
   concurrency: { group: string; 'cancel-in-progress': boolean }
   jobs: Record<string, {
@@ -19,6 +19,7 @@ const workflow = yaml.load(readFileSync(resolve(root, '.github/workflows/windows
       uses?: string
       run?: string
       if?: string
+      'working-directory'?: string
       env?: Record<string, string>
       with?: Record<string, unknown>
     }>
@@ -67,7 +68,7 @@ it('routes manual packaging to the dedicated runner with explicit preset and sig
   expect(workflow.concurrency).toEqual({ group: 'windows-desktop-package', 'cancel-in-progress': false })
   expect(workflow.permissions).toEqual({ contents: 'read' })
   expect(Object.keys(workflow.on.workflow_dispatch!.inputs).sort()).toEqual([
-    'build_version', 'cache_namespace', 'preset', 'signing', 'source_ref', 'test_release_id', 'update_channel', 'version_mode',
+    'build_root', 'build_version', 'cache_namespace', 'preset', 'signing', 'source_ref', 'test_release_id', 'update_channel', 'version_mode',
   ])
   expect(workflow.on.workflow_dispatch!.inputs.signing!.default).toBe('signed')
   expect(workflow.on.workflow_dispatch!.inputs.build_version!.required).toBe(false)
@@ -104,10 +105,58 @@ it('retains failure diagnostics and uploads only the selected successful install
   const uploads = job.steps.filter(step => step.uses?.startsWith('actions/upload-artifact@'))
   expect(uploads).toHaveLength(3)
   expect(uploads[0]!.if).toBe("always() && steps.checkout.outcome == 'success'")
-  expect(uploads[0]!.with).toMatchObject({ path: 'apps/desktop/.desktop-build/packaging-runs/', 'include-hidden-files': true })
+  expect(uploads[0]!.with).toMatchObject({
+    path: '${{ steps.build_workspace.outputs.directory || github.workspace }}/apps/desktop/.desktop-build/packaging-runs/',
+    'include-hidden-files': true,
+  })
   for (const mode of ['unsigned', 'signed']) {
     const upload = uploads.find(step => step.if === `success() && inputs.signing == '${mode}'`)!
     expect(upload.with).toMatchObject({ path: '${{ steps.retained.outputs.directory }}/*', 'if-no-files-found': 'error' })
+  }
+})
+
+it('routes all packaging consumers to the selected workspace and removes it only after successful uploads', () => {
+  expect(workflow.on.workflow_dispatch!.inputs.build_root).toMatchObject({ type: 'string', default: '', required: false })
+  expect(job.env.PACKAGE_BUILD_ROOT).toBe('${{ inputs.build_root }}')
+  const selected = job.steps.find(step => step.id === 'build_workspace')!
+  expect(selected.name).toBe('Select packaging workspace')
+  expect(selected.env).toEqual({ PACKAGE_SOURCE_SHA: '${{ steps.checkout.outputs.commit }}' })
+  expect(selected['working-directory']).toBeUndefined()
+  expect(selected.run).toContain('if (!$env:PACKAGE_BUILD_ROOT)')
+  expect(selected.run).toContain('"directory=$env:GITHUB_WORKSPACE" >> $env:GITHUB_OUTPUT')
+  expect(selected.run).toContain('} else {')
+  expect(selected.run).toContain('node apps/desktop/scripts/windows-build-workspace.mjs')
+  expect(selected.run).toContain('exit $LASTEXITCODE')
+  const index = job.steps.indexOf(selected)
+  expect(index).toBeGreaterThan(job.steps.findIndex(step => step.uses?.startsWith('actions/setup-node@')))
+  expect(index).toBeLessThan(job.steps.findIndex(step => step.name === 'Configure persistent pnpm store'))
+  const consumers = [
+    'Install locked dependencies',
+    'Validate preset and resolve build version',
+    'Check packaging configuration and toolchain',
+    'Build installer and verify packaged runtime',
+    'Retain complete package outside the checkout',
+  ]
+  for (const name of consumers) {
+    const step = job.steps.find(entry => entry.name === name)!
+    expect(step['working-directory']).toBe('${{ steps.build_workspace.outputs.directory }}')
+    expect(job.steps.indexOf(step)).toBeGreaterThan(index)
+  }
+  expect(job.steps.filter(step => step['working-directory'] === '${{ steps.build_workspace.outputs.directory }}'))
+    .toHaveLength(consumers.length)
+  const store = job.steps.find(step => step.name === 'Configure persistent pnpm store')!
+  expect(store.run).toContain('[IO.Path]::GetPathRoot($env:GITHUB_WORKSPACE)')
+  expect(store['working-directory']).toBeUndefined()
+  const cleanup = job.steps.at(-1)!
+  expect(cleanup).toMatchObject({
+    name: 'Remove isolated packaging workspace',
+    if: "success() && inputs.build_root != ''",
+    env: { PACKAGE_SOURCE_SHA: '${{ steps.checkout.outputs.commit }}' },
+    run: 'node apps/desktop/scripts/windows-build-workspace.mjs --remove',
+  })
+  expect(cleanup['working-directory']).toBeUndefined()
+  for (const upload of job.steps.filter(step => step.uses?.startsWith('actions/upload-artifact@'))) {
+    expect(job.steps.indexOf(upload)).toBeLessThan(job.steps.indexOf(cleanup))
   }
 })
 

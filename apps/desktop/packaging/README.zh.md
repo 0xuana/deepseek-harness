@@ -113,6 +113,8 @@ runner 的受监督启动和恢复见 [Windows runner 机器准备](../windows-s
 
 在 Actions 打开完成的运行并下载 Artifacts。`windows-x64-signed-<version>-<run_id>-<run_attempt>` 与 `windows-x64-unsigned-<version>-<run_id>-<run_attempt>` 包含对应 EXE；`windows-package-logs-<run_id>-<run_attempt>` 包含打包诊断。上传步骤名为 `Retain verified signed installer`、`Retain verified unsigned installer` 和 `Retain packaging diagnostics`；步骤耗时与带时间戳的日志显示上传用时。这些产物不等于发布 Release 或下载站内容。
 
+测量 Windows 构建路径对性能的影响时，可用 `build_root` 指定现有 Git checkout 之外的绝对目录。每轮任务将已验证的源码提交克隆到新的 `windows-package-<run-id>-<attempt>/source` 目录；不会复制忽略文件或此前的构建输出。依赖缓存和签名缓存沿用原有位置。成功任务在产物上传后仅删除本轮所属的 checkout；失败任务保留该目录供检查。输入留空时使用原 Actions checkout。完整 Job 耗时须包含 checkout 创建和清理。
+
 测量缓存时，`cache_namespace` 为两个依赖 store 和上游下载选择保留的子目录；留空使用正常共享缓存。新名称用于冷缓存采样，再次使用同名用于热缓存采样。名称由 1–64 个小写字母、数字或连字符组成，以字母或数字开头，且不能为 Windows 设备名。这不会重置独立的签名缓存或操作系统文件缓存；应将其状态、Job 开始至完成的总耗时与阶段耗时和产物体积一并报告。
 
 <a id="macos-actions"></a>
