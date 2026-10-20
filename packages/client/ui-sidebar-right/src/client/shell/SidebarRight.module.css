@@ -138,8 +138,11 @@
   height: 15px;
 }
 
+@media (hover: hover) {
+
 .iconButton:hover {
   background: var(--dsw-alias-interactive-bg-hover);
+}
 }
 
 /* The expand button's glyph, so collapse and expand share one affordance. */

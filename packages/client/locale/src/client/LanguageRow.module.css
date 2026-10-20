@@ -42,8 +42,11 @@
   cursor: pointer;
 }
 
+@media (hover: hover) {
+
 .selector:hover {
   background: var(--dsw-alias-interactive-bg-hover);
+}
 }
 
 .chevron {

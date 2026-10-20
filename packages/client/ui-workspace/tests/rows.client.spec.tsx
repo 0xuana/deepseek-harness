@@ -551,7 +551,7 @@ describe('workspace browser rows', () => {
       expect(screen.getByText('/projects/project')).toBeTruthy()
 
       if (trigger === 'hover') {
-        fireEvent.mouseEnter(create)
+        fireEvent.pointerEnter(create)
         act(() => { vi.advanceTimersByTime(500) })
       } else {
         fireEvent.keyDown(document, { key: 'Tab' })
@@ -560,7 +560,7 @@ describe('workspace browser rows', () => {
       expect(screen.getByRole('tooltip').textContent).toBe('新会话')
       expect(screen.getByText('/projects/project')).toBeTruthy()
 
-      if (trigger === 'hover') fireEvent.mouseLeave(create, { relatedTarget: row })
+      if (trigger === 'hover') fireEvent.pointerLeave(create, { relatedTarget: row })
       else fireEvent.blur(create, { relatedTarget: row })
       expect(screen.queryByRole('tooltip')).toBeNull()
       expect(screen.getByText('/projects/project')).toBeTruthy()
@@ -580,12 +580,12 @@ describe('workspace browser rows', () => {
       const row = screen.getByRole('treeitem')
       const create = screen.getByRole('button', { name: '在“Project”中新建会话' })
       fireEvent.pointerEnter(row.parentElement as HTMLElement)
-      fireEvent.mouseEnter(create)
+      fireEvent.pointerEnter(create)
       act(() => { vi.advanceTimersByTime(1000) })
       expect(screen.getByRole('tooltip').textContent).toBe('新会话')
       expect(screen.getByText('/projects/project')).toBeTruthy()
 
-      fireEvent.mouseLeave(create, { relatedTarget: row })
+      fireEvent.pointerLeave(create, { relatedTarget: row })
       expect(screen.queryByRole('tooltip')).toBeNull()
       expect(screen.getByText('/projects/project')).toBeTruthy()
     } finally {
@@ -869,7 +869,6 @@ describe('workspace browser rows', () => {
 
       fireEvent(title, new MouseEvent('pointerout', { bubbles: true, relatedTarget: archive }))
       fireEvent(archive, new MouseEvent('pointerover', { bubbles: true, relatedTarget: title }))
-      fireEvent.mouseEnter(archive)
       if (dwell === 800) expect(card()).not.toBeNull()
       act(() => { vi.advanceTimersByTime(499) })
       expect(screen.queryByRole('tooltip')).toBeNull()
@@ -884,7 +883,6 @@ describe('workspace browser rows', () => {
 
       fireEvent(archive, new MouseEvent('pointerout', { bubbles: true, relatedTarget: title }))
       fireEvent(title, new MouseEvent('pointerover', { bubbles: true, relatedTarget: archive }))
-      fireEvent.mouseLeave(archive, { relatedTarget: title })
       rerender(<SessionNodeItem node={{ ...node, running: true }} currentId={undefined} now={0}
         onOpen={vi.fn()} renderSlot={renderSlot} t={t} />)
       act(() => { vi.advanceTimersByTime(1000) })

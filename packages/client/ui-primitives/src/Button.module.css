@@ -38,12 +38,16 @@
   color: var(--dsw-alias-label-primary-foreground);
 }
 
-.primary:hover:not(:disabled) {
-  background: var(--dsw-alias-button-primary-hover);
+@media (hover: hover) {
+  .primary:hover:not(:disabled) {
+    background: var(--dsw-alias-button-primary-hover);
+  }
 }
 
-.ghost:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .ghost:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .ghost:active:not(:disabled) {
@@ -56,16 +60,20 @@
   background: transparent;
 }
 
-.outline:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .outline:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .toolbar {
   background: var(--dsw-alias-button-tool-bar-fill);
 }
 
-.toolbar:hover:not(:disabled) {
-  background: var(--dsw-alias-button-tool-bar-hover);
+@media (hover: hover) {
+  .toolbar:hover:not(:disabled) {
+    background: var(--dsw-alias-button-tool-bar-hover);
+  }
 }
 
 .icon {

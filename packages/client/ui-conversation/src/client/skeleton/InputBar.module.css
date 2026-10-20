@@ -103,8 +103,11 @@
   pointer-events: none;
 }
 
+@media (hover: hover) {
+
 .cardWorkspaceTrigger:hover::after {
   color: var(--dsw-alias-state-business-primary);
+}
 }
 
 .accessory {
@@ -330,8 +333,11 @@
   cursor: pointer;
 }
 
+@media (hover: hover) {
+
 .add:hover:not(:disabled) {
   background: var(--dsw-alias-interactive-bg-hover-solid);
+}
 }
 
 .add:disabled {
@@ -362,8 +368,11 @@
   appearance: none;
 }
 
+@media (hover: hover) {
+
 .select:hover:not(:disabled) {
   background-color: var(--dsw-alias-interactive-bg-hover);
+}
 }
 
 .select:disabled {
@@ -395,8 +404,11 @@
   transform: translateY(-2px);
 }
 
+@media (hover: hover) {
+
 .primary:hover:not(:disabled) {
   background: var(--dsw-alias-button-info-hover);
+}
 }
 
 .primary:disabled {

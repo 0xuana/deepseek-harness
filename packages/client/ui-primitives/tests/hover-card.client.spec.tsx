@@ -5,7 +5,10 @@ import { HoverCard, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { POINTER_GRACE_MS } from '../src/pointer-grace.ts'
 
 afterEach(cleanup)
-beforeEach(() => { vi.useFakeTimers() })
+beforeEach(() => {
+  vi.useFakeTimers()
+  vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(any-hover: hover)' }))
+})
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
 
 /** Anchor wrapper rect: the card positions from this (jsdom rects are all-zero by default). */
@@ -54,6 +57,18 @@ function installClipboard(writeText: (text: string) => Promise<void>): () => voi
 }
 
 describe('HoverCard', () => {
+  it.each(['compact', 'preview'] as const)('does not open a %s card when a touch enters the anchor', (variant) => {
+    const { wrapper } = mount({ variant })
+    const event = new Event('pointerover', { bubbles: true })
+    Object.defineProperty(event, 'pointerType', { value: 'touch' })
+    fireEvent(wrapper, event)
+    act(() => { vi.advanceTimersByTime(1000) })
+    expect(screen.queryByText('card body')).toBeNull()
+    fireEvent.pointerEnter(wrapper)
+    act(() => { vi.advanceTimersByTime(500) })
+    expect(screen.getByText('card body')).toBeTruthy()
+  })
+
   it.each(['disabled', 'unmounted'] as const)('keeps its preview mounted while a nested tooltip shows and is then %s', (released) => {
     const markup = (state: 'active' | 'disabled' | 'unmounted') => (
       <HoverCard
@@ -68,7 +83,7 @@ describe('HoverCard', () => {
     const view = render(markup('active'))
     fireEvent.pointerEnter(screen.getByText('row').parentElement as HTMLElement)
     act(() => { vi.advanceTimersByTime(500) })
-    fireEvent.mouseEnter(screen.getByRole('button', { name: 'action' }))
+    fireEvent.pointerEnter(screen.getByRole('button', { name: 'action' }))
     expect(screen.getByRole('tooltip').textContent).toBe('Create')
     const card = screen.getByText('card body')
     expect(card.isConnected).toBe(true)
@@ -88,7 +103,7 @@ describe('HoverCard', () => {
     fireEvent.pointerEnter(screen.getByText('row').parentElement as HTMLElement)
     act(() => { vi.advanceTimersByTime(500) })
     const card = screen.getByText('card body')
-    fireEvent.mouseEnter(screen.getByRole('button', { name: 'card action' }))
+    fireEvent.pointerEnter(screen.getByRole('button', { name: 'card action' }))
     expect(card.isConnected).toBe(true)
     expect(screen.getByRole('tooltip').textContent).toBe('Details')
     act(() => { vi.advanceTimersByTime(1000) })

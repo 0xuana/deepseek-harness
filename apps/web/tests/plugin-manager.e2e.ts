@@ -488,6 +488,79 @@ describe('web e2e: plugin manager', () => {
     }
   })
 
+  it('keeps touch actions direct and opens supplementary tooltips on tap', async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 900 }, locale: ZH_BROWSER_LOCALE, hasTouch: true,
+    })
+    try {
+      const probe = await context.newPage()
+      const consoleWatch = watchConsole(probe)
+      onTestFailed(() => saveFailureShot(probe, 'web-e2e-touch-tooltips'))
+      await probe.clock.install()
+      await probe.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+      await probe.getByRole('button', { name: '插件', exact: true }).click()
+      const panel = probe.locator('[data-plugin-panel]')
+      const refresh = panel.getByRole('button', { name: '刷新', exact: true })
+      const info = panel.getByRole('button', { name: '插件说明', exact: true })
+      await expect.poll(() => refresh.isEnabled()).toBe(true)
+      await probe.setViewportSize({ width: 390, height: 844 })
+      await probe.evaluate(() => document.fonts.ready)
+      const calls = vi.spyOn(scaffold.ctx.pluginManager, 'listBundles')
+      try {
+        await refresh.tap()
+        await expect.poll(() => calls.mock.calls.length).toBe(1)
+        await expect.poll(() => refresh.isEnabled()).toBe(true)
+      } finally {
+        calls.mockRestore()
+      }
+      await probe.clock.pauseAt(await probe.evaluate(() => Date.now() + 1000))
+      await probe.clock.runFor(500)
+      expect(await probe.getByRole('tooltip').count()).toBe(0)
+      const facts = ['Touch refresh: one refresh request; no tooltip']
+
+      await info.tap()
+      const help = probe.getByRole('tooltip')
+      await help.waitFor()
+      const bounds = await help.boundingBox()
+      if (bounds === null) throw new Error('Tapped plugin explanation is not visible')
+      expect(bounds.x).toBeGreaterThanOrEqual(12)
+      expect(bounds.x + bounds.width).toBeLessThanOrEqual(390 - 12)
+      expect(bounds.y).toBeGreaterThanOrEqual(12)
+      expect(bounds.y + bounds.height).toBeLessThanOrEqual(844 - 12)
+      facts.push('Touch explanation: visible within the 390px viewport', await help.ariaSnapshot())
+      await info.tap()
+      expect(await help.count()).toBe(0)
+      await info.tap()
+      await help.waitFor()
+      await panel.getByRole('heading', { name: '插件', exact: true }).tap()
+      expect(await help.count()).toBe(0)
+      facts.push('Explanation closes on another tap or an outside touch')
+
+      await probe.keyboard.press('Tab')
+      await refresh.focus()
+      await probe.clock.runFor(500)
+      await probe.getByRole('tooltip').filter({ hasText: '刷新' }).waitFor()
+      facts.push('Keyboard focus after touch: refresh tooltip visible')
+      await probe.keyboard.press('Tab')
+      const inputEmulation = await context.newCDPSession(probe)
+      await inputEmulation.send('Emulation.setTouchEmulationEnabled', { enabled: false })
+      expect(await probe.evaluate(() => matchMedia('(any-hover: hover)').matches)).toBe(true)
+      await refresh.hover()
+      await probe.clock.runFor(500)
+      await probe.getByRole('tooltip').filter({ hasText: '刷新' }).waitFor()
+      facts.push('Mouse hover after touch: refresh tooltip visible')
+      await probe.mouse.move(0, 843)
+      expect(await help.count()).toBe(0)
+      await inputEmulation.detach()
+      await probe.clock.resume()
+      await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'touch-tooltips.expected.md'),
+        ['# Touch tooltips', '', ...facts].join('\n'), MODE)
+      expect(consoleWatch.pageErrors).toEqual([])
+    } finally {
+      await context.close()
+    }
+  })
+
   it('starts with an unavailable selected bundle and lets the user clear its error', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-manager-missing-bundle'))
     const panel = await openPluginsPanel()
@@ -1115,7 +1188,7 @@ describe('web e2e: plugin manager', () => {
     expect(tripwire.warnings).toEqual([])
     await assertFixtureInventory(SNAPSHOT_DIR, [
       'manager.expected.md', 'live-enabled.expected.md', 'missing-bundle.expected.md', 'exports.expected.md', 'exports-en.expected.md', 'icons.expected.md', 'loading.expected.md', 'refresh.expected.md',
-      'ime-enter.expected.md', 'header-responsive.expected.md', 'preview.expected.md',
+      'ime-enter.expected.md', 'header-responsive.expected.md', 'preview.expected.md', 'touch-tooltips.expected.md',
     ])
   })
 })
