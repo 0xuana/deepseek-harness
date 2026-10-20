@@ -502,7 +502,7 @@ describe('PluginManagerPage', () => {
     expect(document.querySelector('[data-detail-document]')).toBeNull()
     // A read the controller forgot, after a profile change, starts again.
     b.setDetails({})
-    expect(b.actions.loadDetail).toHaveBeenCalledTimes(2)
+    expect(b.actions.loadDetail).toHaveBeenLastCalledWith('dsh-better-sidebar', '0.16.0', 'en', false)
   })
 
   it('says where a bundle comes from: the spec that installs it, or built in, with its version', () => {
@@ -2345,6 +2345,30 @@ describe('PluginManagerPage', () => {
   })
 })
 
+it.each([false, true])('shows progress only for the changing bundle and clears it when settled (enabled=%s)', (enabled) => {
+  const name = 'dsh-better-sidebar'
+  const { set, setLanguage, actions } = renderTab({ packages: [pkg({ enabled }), pkg({ name: 'dsh-other' })] })
+  const toggle = screen.getByRole('switch', { name: `Enable ${name}` })
+  const status = within(toggle.parentElement!).getByRole('status')
+  expect(status.textContent).toBe('')
+  fireEvent.click(toggle)
+  expect(actions.setEnabled).toHaveBeenCalledExactlyOnceWith(name, !enabled)
+  set({ busy: [name] })
+  for (const dict of [en, zh]) {
+    setLanguage(dict)
+    expect(status.textContent).toBe(dict.applyingChange.replace('{name}', name))
+    expect(status.querySelector('[data-state="ongoing"]')).not.toBeNull()
+  }
+  expect(toggle).toHaveProperty('disabled', true)
+  fireEvent.click(toggle)
+  expect(actions.setEnabled).toHaveBeenCalledOnce()
+  expect(screen.getByRole('switch', { name: '启用 dsh-other' })).toHaveProperty('disabled', false)
+  set({ busy: [] })
+  expect(within(toggle.parentElement!).getByRole('status')).toBe(status)
+  expect(status.textContent).toBe('')
+  expect(toggle).toHaveProperty('disabled', false)
+})
+
 it.each([false, true])('opens activation guidance details and returns to the originating list (experimental: %s)', (fromMore) => {
   const name = fromMore ? '@deepseek-ai/dsh-experimental-terminal-bundle' : 'dsh-better-sidebar'
   const bundle = pkg({ name, official: fromMore })
@@ -2525,6 +2549,21 @@ describe('on-demand Official bundles', () => {
     expect(within(detail).queryByRole('button', { name: en.uninstallLabel.replace('{name}', title) })).toBeNull()
     expect(detail.querySelector('[data-plugin-rows]')).toBeNull()
   })
+})
+
+it('keeps bundle configuration mounted while its operation is pending', () => {
+  const name = 'dsh-better-sidebar'
+  const { set } = renderTab({ packages: [pkg()] }, { bundles: new Set([name]) }, {
+    [`plugins.bundle.config:${name}`]: () => <div data-testid="bundle-config">Configuration</div>,
+  })
+  fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', name) }))
+  const panel = screen.getByTestId('bundle-config')
+  expect(panel.textContent).toBe('Configuration')
+  set({ busy: [name] })
+  expect(screen.getByTestId('bundle-config')).toBe(panel)
+  expect(panel.textContent).toBe('Configuration')
+  set({ busy: [] })
+  expect(panel.textContent).toBe('Configuration')
 })
 
 describe('registry versions and updates', () => {
