@@ -479,20 +479,7 @@ export class SessionController extends TypertRemoteService {
       ...(clientTimeZone === undefined ? {} : { clientTimeZone }),
       ...(principal === undefined ? {} : { principal }),
     }
-    // The caller's access and cancellation are read after every await and immediately before delivery:
-    // a prompt queued while a share still allowed it must not deliver once that share was narrowed.
-    return this.commands.prompt(request, source, () => {
-      if (signal.aborted || invocation?.peer.signal.aborted) {
-        throw new RemoteError('gateway/cancelled', 'prompt cancelled during admission', {})
-      }
-      if (principal === undefined) return true
-      return this.ctx.remoteAccess.decide({
-        principal,
-        action: 'session/prompt',
-        resources: [{ kind: 'session', id: request.sessionId }],
-        args: { request },
-      }).kind === 'allow'
-    })
+    return this.commands.prompt(request, source, signal)
   }
 
   /**

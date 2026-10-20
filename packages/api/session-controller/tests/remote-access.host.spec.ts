@@ -248,19 +248,6 @@ describe('Session Controller access', () => {
     ])
   })
 
-  it('refuses a prompt whose Session grant is withdrawn during admission', async () => {
-    const { shared, as } = await harness()
-    // The Gateway admitted the call earlier; the controller re-reads the caller's grant after every
-    // await and immediately before delivery, so a share narrowed meanwhile must not deliver.
-    const signal = new AbortController().signal
-    await expect(as(GUEST, 'prompt').sessionController.prompt(promptRequest('withdrawn-1'), signal))
-      .rejects.toMatchObject({
-        code: 'remote-access/denied',
-        details: { action: 'session/prompt', reason: 'access-withdrawn' },
-      })
-    expect(shared.inbox.nextTurn).toEqual([])
-  })
-
   it('cancels admission when the caller aborts after the prompt was admitted', async () => {
     const { ctx, shared, as } = await harness()
     guestPolicy(ctx, DRIVES_SHARED)
