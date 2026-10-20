@@ -588,4 +588,52 @@ describe('viewer carrier forwarded page routes', () => {
       .toBe('direct:open-in-app/open')
     expect(direct).toHaveBeenCalledTimes(1)
   })
+
+  it('carries a forwarded request body and its abort signal to the owner', async () => {
+    const { posted } = carrier(() => json({ name: 'owner-host' }))
+    const controller = new AbortController()
+    const response = await globalThis.fetch('/api/present.host', {
+      body: '{"app":"finder"}',
+      signal: controller.signal,
+    })
+    expect(await response.json()).toEqual({ name: 'owner-host' })
+    expect(posted[0]).toMatchObject({ op: 'call', path: '/api/present.host', body: { app: 'finder' } })
+  })
+
+  it('forwards a GET whose init states no body or signal', async () => {
+    const { posted } = carrier(() => json({ name: 'owner-host' }))
+    expect(await (await globalThis.fetch('/api/present.host', { method: 'GET' })).json())
+      .toEqual({ name: 'owner-host' })
+    expect(posted[0]).toMatchObject({ op: 'call', path: '/api/present.host', body: {} })
+  })
+
+  it('treats a null page signal as no signal', async () => {
+    const { posted } = carrier(() => json({ name: 'owner-host' }))
+    // A page handler may pass `signal: null`; the carrier states it as no signal rather than as one.
+    expect(await (await globalThis.fetch('/api/present.host', { signal: null })).json())
+      .toEqual({ name: 'owner-host' })
+    expect(posted[0]).toMatchObject({ op: 'call', path: '/api/present.host' })
+  })
+
+  it('answers a forwarded route whose owner reply carries no body', async () => {
+    const { posted } = carrier(() => new Response('', { status: 200 }))
+    const response = await globalThis.fetch('/api/present.host')
+    expect(response.status).toBe(200)
+    expect(await response.text()).toBe('null')
+    expect(posted).toHaveLength(1)
+  })
+
+  it('reads the target and method from a Request object', async () => {
+    const { posted } = carrier(() => json({ apps: ['finder'] }))
+    const response = await globalThis.fetch(new Request('https://relay.example/open-in-app/apps'))
+    expect(await response.json()).toEqual({ apps: ['finder'] })
+    expect(posted[0]).toMatchObject({ op: 'call', path: '/open-in-app/apps' })
+  })
+
+  it('leaves a target the page base cannot resolve to the page fetch', async () => {
+    const direct = directFetch()
+    // `new URL` rejects this target, so it cannot name a forwarded route.
+    expect(await (await globalThis.fetch('http://[invalid')).text()).toBe('direct:http://[invalid')
+    expect(direct).toHaveBeenCalledTimes(1)
+  })
 })

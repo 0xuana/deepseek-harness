@@ -27,12 +27,8 @@ export function identityKeyOf(identity: IdentityTriple): string {
 export function identityFromKey(key: string): IdentityTriple | undefined {
   const parts = key.split(':')
   if (parts.length !== 3) return undefined
-  const [providerPart, tenantPart, subjectPart] = parts
-  if (providerPart === undefined || tenantPart === undefined || subjectPart === undefined) return undefined
   try {
-    const providerId = decodeURIComponent(providerPart)
-    const tenantId = decodeURIComponent(tenantPart)
-    const subjectId = decodeURIComponent(subjectPart)
+    const [providerId = '', tenantId = '', subjectId = ''] = parts.map(part => decodeURIComponent(part))
     if (providerId === '' || tenantId === '' || subjectId === '') return undefined
     return { providerId, tenantId, subjectId }
   } catch {
