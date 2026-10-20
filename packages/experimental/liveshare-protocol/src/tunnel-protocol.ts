@@ -383,7 +383,13 @@ export function parseTunnelWorkerCommand(value: unknown): TunnelWorkerCommand | 
           ...share,
           ...(share.sessionMode === undefined
             ? {}
-            : { sessionMode: normalizeShareSessionMode(share.sessionMode) }),
+            : {
+              sessionMode: normalizeShareSessionMode(share.sessionMode),
+              // The withdrawn name granted forking; keep that half when the value named no switch.
+              ...(share.sessionMode === 'fork-readonly' && share.allowsFork === undefined
+                ? { allowsFork: true }
+                : {}),
+            }),
         },
       }
     }
@@ -532,6 +538,7 @@ export function parseShareAccessState(value: unknown): ShareAccessStateFrame | u
   }
   return { type: 'share-access-state', version: Number(value.version), accessMode: value.accessMode,
     allowedSubjectIds: [...value.allowedSubjectIds], sessionMode: normalizeShareSessionMode(value.sessionMode),
+    ...(value.sessionMode === 'fork-readonly' && value.allowsFork === undefined ? { allowsFork: true } : {}),
     ...(value.allowsFork === undefined ? {} : { allowsFork: value.allowsFork }),
     ...(value.expiresAt === undefined ? {} : { expiresAt: value.expiresAt }) }
 }
