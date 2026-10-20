@@ -30,7 +30,7 @@ function locations(options) {
   }
   const owner = join(root, `windows-package-${runId}-${runAttempt}`)
   assertUnlinkedAncestors(owner)
-  return { root, owner, directory: join(owner, 'source') }
+  return { root, owner, directory: join(owner, 'source'), temporaryDirectory: join(owner, 'temp') }
 }
 
 function git(directory, args) {
@@ -44,7 +44,7 @@ function ownership(options, paths) {
 /**
  * Clone the validated commit into a new run-owned checkout; failures retain diagnostics.
  * @param {{sourceDirectory: string, buildRoot: string, runId: string, runAttempt: string, sourceSha: string}} options - Source and run identity.
- * @returns {{directory: string}} Checkout to use for packaging.
+ * @returns {{directory: string, temporaryDirectory: string}} Checkout and temporary directory owned by this run.
  */
 export function prepareWindowsBuildWorkspace(options) {
   const paths = locations(options)
@@ -54,12 +54,13 @@ export function prepareWindowsBuildWorkspace(options) {
   mkdirSync(paths.root, { recursive: true })
   mkdirSync(paths.owner)
   writeFileSync(join(paths.owner, 'owner.json'), ownership(options, paths), { flag: 'wx' })
+  mkdirSync(paths.temporaryDirectory)
   git(paths.owner, ['clone', '--no-hardlinks', '--no-checkout', resolve(options.sourceDirectory), paths.directory])
   git(paths.directory, ['checkout', '--detach', options.sourceSha])
   if (git(paths.directory, ['rev-parse', 'HEAD']) !== options.sourceSha || git(paths.directory, ['status', '--porcelain'])) {
     throw new Error('Isolated packaging checkout does not match the selected commit')
   }
-  return { directory: paths.directory }
+  return { directory: paths.directory, temporaryDirectory: paths.temporaryDirectory }
 }
 
 /**
@@ -89,6 +90,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   else {
     if (process.argv.length !== 2 || !process.env.GITHUB_OUTPUT) throw new Error('Expected Actions output file and no arguments')
     const result = prepareWindowsBuildWorkspace(options)
-    appendFileSync(process.env.GITHUB_OUTPUT, `directory=${result.directory}\n`)
+    appendFileSync(process.env.GITHUB_OUTPUT, `directory=${result.directory}\ntemporaryDirectory=${result.temporaryDirectory}\n`)
   }
 }

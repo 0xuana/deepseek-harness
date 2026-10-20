@@ -9,9 +9,9 @@ export interface WindowsBuildWorkspaceOptions {
 /**
  * Clone the clean selected commit into a new run-owned directory.
  * @param options - Original checkout and Actions run identity.
- * @returns Checkout to use for packaging.
+ * @returns Checkout and temporary directory owned by this run.
  */
-export function prepareWindowsBuildWorkspace(options: WindowsBuildWorkspaceOptions): { directory: string }
+export function prepareWindowsBuildWorkspace(options: WindowsBuildWorkspaceOptions): { directory: string; temporaryDirectory: string }
 /**
  * Remove the directory only when its ownership record matches the run.
  * @param options - Original checkout and Actions run identity.

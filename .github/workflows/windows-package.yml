@@ -171,7 +171,12 @@ jobs:
         working-directory: ${{ steps.build_workspace.outputs.directory }}
         env:
           PACKAGE_VERSION: ${{ steps.settings.outputs.version }}
+          PACKAGE_BUILD_TEMP: ${{ steps.build_workspace.outputs.temporaryDirectory }}
         run: |
+          if ($env:PACKAGE_BUILD_TEMP) {
+            $env:TEMP = $env:PACKAGE_BUILD_TEMP
+            $env:TMP = $env:PACKAGE_BUILD_TEMP
+          }
           $packageArgs = @('run', 'package:desktop:win:x64', '--build-version', $env:PACKAGE_VERSION)
           if ($env:PACKAGE_SIGNING -eq 'unsigned') { $packageArgs += '--unsigned' }
           pnpm @packageArgs

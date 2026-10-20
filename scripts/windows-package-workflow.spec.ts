@@ -160,6 +160,33 @@ it('routes all packaging consumers to the selected workspace and removes it only
   }
 })
 
+it('scopes the optional temporary directory to installer building without changing Actions or later steps', () => {
+  const build = job.steps.find(step => step.name === 'Build installer and verify packaged runtime')!
+  expect(build.env?.PACKAGE_BUILD_TEMP).toBe('${{ steps.build_workspace.outputs.temporaryDirectory }}')
+  expect(build.run).toContain([
+    'if ($env:PACKAGE_BUILD_TEMP) {',
+    '  $env:TEMP = $env:PACKAGE_BUILD_TEMP',
+    '  $env:TMP = $env:PACKAGE_BUILD_TEMP',
+    '}',
+  ].join('\n'))
+  expect(build.run!.indexOf('if ($env:PACKAGE_BUILD_TEMP)')).toBeLessThan(build.run!.indexOf('$packageArgs ='))
+  expect(build.run).not.toContain('GITHUB_ENV')
+  expect(build.run).not.toContain('RUNNER_TEMP')
+  expect(job.env).not.toHaveProperty('TEMP')
+  expect(job.env).not.toHaveProperty('TMP')
+  expect(job.env).not.toHaveProperty('PACKAGE_BUILD_TEMP')
+  for (const step of job.steps.filter(step => step !== build)) {
+    expect(step.env ?? {}).not.toHaveProperty('PACKAGE_BUILD_TEMP')
+    expect(step.env ?? {}).not.toHaveProperty('TEMP')
+    expect(step.env ?? {}).not.toHaveProperty('TMP')
+    expect(step.run ?? '').not.toMatch(/\$env:(?:TEMP|TMP)\s*=/u)
+  }
+  const selected = job.steps.find(step => step.id === 'build_workspace')!
+  const defaultBranch = selected.run!.split('} else {')[0]!
+  expect(defaultBranch).toContain('"directory=$env:GITHUB_WORKSPACE" >> $env:GITHUB_OUTPUT')
+  expect(defaultBranch).not.toContain('temporaryDirectory')
+})
+
 it.skipIf(process.platform !== 'win32')('keeps the dependency store stable across run-specific pnpm homes', () => {
   const directory = mkdtempSync(resolve(tmpdir(), 'windows-package-store-'))
   try {

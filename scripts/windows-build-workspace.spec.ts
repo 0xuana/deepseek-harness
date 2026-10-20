@@ -40,7 +40,9 @@ it('clones the exact clean commit and removes only its run-owned checkout', () =
       stdio: 'pipe',
     })
     const directory = join(options.buildRoot, 'windows-package-123-1', 'source')
-    expect(readFileSync(output, 'utf8')).toBe(`directory=${directory}\n`)
+    const temporaryDirectory = join(options.buildRoot, 'windows-package-123-1', 'temp')
+    expect(readFileSync(output, 'utf8')).toBe(`directory=${directory}\ntemporaryDirectory=${temporaryDirectory}\n`)
+    writeFileSync(join(temporaryDirectory, 'temporary.txt'), 'owned temporary data')
     expect(readFileSync(join(directory, 'source.txt'), 'utf8')).toBe('selected source')
     expect(existsSync(join(directory, 'private.env'))).toBe(false)
     expect(() => prepareWindowsBuildWorkspace(options)).toThrow()
@@ -52,6 +54,7 @@ it('clones the exact clean commit and removes only its run-owned checkout', () =
     symlinkSync(external, join(directory, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir')
     removeWindowsBuildWorkspace(options)
     expect(existsSync(directory)).toBe(false)
+    expect(existsSync(temporaryDirectory)).toBe(false)
     expect(readFileSync(join(external, 'keep.txt'), 'utf8')).toBe('keep')
     expect(readFileSync(join(sourceDirectory, 'source.txt'), 'utf8')).toBe('selected source')
     const linked = join(root, 'linked')
