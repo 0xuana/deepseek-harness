@@ -42,9 +42,7 @@
   .primary:hover:not(:disabled) {
     background: var(--dsw-alias-button-primary-hover);
   }
-}
 
-@media (hover: hover) {
   .ghost:hover:not(:disabled) {
     background: var(--dsw-alias-interactive-bg-hover);
   }

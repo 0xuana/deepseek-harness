@@ -174,9 +174,7 @@
   .addButton:hover:not(:disabled) {
     background: var(--dsw-alias-interactive-bg-hover);
   }
-}
 
-@media (hover: hover) {
   .secondaryButton:hover:not(:disabled) {
     background: var(--dsw-alias-interactive-bg-hover-solid);
   }

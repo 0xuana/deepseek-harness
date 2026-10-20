@@ -15,4 +15,6 @@
 .spinner { flex: none; animation: spin 1s linear infinite; }
 .primaryButton:has(.spinner) { opacity: 1; }
 @keyframes spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation: none; }
+}

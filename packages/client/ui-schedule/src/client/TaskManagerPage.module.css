@@ -134,10 +134,9 @@
 }
 
 @media (hover: hover) {
-
-.filterTab:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
+  .filterTab:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .filterTabActive {
@@ -162,10 +161,9 @@
 }
 
 @media (hover: hover) {
-
-.searchField:hover {
-  border-color: var(--dsw-alias-border-l2);
-}
+  .searchField:hover {
+    border-color: var(--dsw-alias-border-l2);
+  }
 }
 
 .searchField:focus-within {
@@ -254,10 +252,9 @@
 }
 
 @media (hover: hover) {
-
-.row:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
+  .row:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .rowGlyph {
@@ -324,10 +321,9 @@
 }
 
 @media (hover: hover) {
-
-.endedRow:hover .rowTitle {
-  color: inherit;
-}
+  .endedRow:hover .rowTitle {
+    color: inherit;
+  }
 }
 
 .endedRow.selectedRow .rowTitle {
@@ -335,10 +331,9 @@
 }
 
 @media (hover: hover) {
-
-.endedRow:hover .rowSummary {
-  color: var(--dsw-alias-label-tertiary);
-}
+  .endedRow:hover .rowSummary {
+    color: var(--dsw-alias-label-tertiary);
+  }
 }
 
 .endedRow.selectedRow .rowSummary {
@@ -514,10 +509,9 @@
 }
 
 @media (hover: hover) {
-
-.editName:hover {
-  box-shadow: 0 1px var(--dsw-alias-border-l3);
-}
+  .editName:hover {
+    box-shadow: 0 1px var(--dsw-alias-border-l3);
+  }
 }
 
 .editName:focus {
@@ -725,10 +719,9 @@
 }
 
 @media (hover: hover) {
-
-.retentionInfo:hover {
-  color: var(--dsw-alias-label-primary);
-}
+  .retentionInfo:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .retentionInfo:focus-visible {
@@ -872,10 +865,9 @@
 }
 
 @media (hover: hover) {
-
-.ruleValue:not(:disabled):hover .ruleValueFace {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
+  .ruleValue:not(:disabled):hover .ruleValueFace {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* The trigger's own ring would box the row label as well; the value face
@@ -968,10 +960,9 @@
 }
 
 @media (hover: hover) {
-
-.ruleInput:not(:disabled):hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
+  .ruleInput:not(:disabled):hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* An ended task keeps its values readable: tertiary rather than dimmed ink. */
@@ -1029,10 +1020,9 @@
 }
 
 @media (hover: hover) {
-
-.ruleIntervalInput:not(:disabled):hover {
-  background: transparent;
-}
+  .ruleIntervalInput:not(:disabled):hover {
+    background: transparent;
+  }
 }
 
 .ruleRows .ruleIntervalInput:focus-visible {
@@ -1049,10 +1039,9 @@
 }
 
 @media (hover: hover) {
-
-.ruleIntervalStepper:hover .ruleIntervalArrows {
-  opacity: 1;
-}
+  .ruleIntervalStepper:hover .ruleIntervalArrows {
+    opacity: 1;
+  }
 }
 
 .ruleIntervalStepper:focus-within .ruleIntervalArrows {
@@ -1074,10 +1063,9 @@
 }
 
 @media (hover: hover) {
-
-.ruleIntervalArrow:hover:not(:disabled) {
-  background: var(--dsw-alias-bg-layer-1);
-}
+  .ruleIntervalArrow:hover:not(:disabled) {
+    background: var(--dsw-alias-bg-layer-1);
+  }
 }
 
 .ruleIntervalArrow:disabled {
@@ -1161,10 +1149,9 @@
 }
 
 @media (hover: hover) {
-
-.instruction:hover {
-  border-color: var(--dsw-alias-border-l2);
-}
+  .instruction:hover {
+    border-color: var(--dsw-alias-border-l2);
+  }
 }
 
 .instruction:focus {
@@ -1309,10 +1296,9 @@
 }
 
 @media (hover: hover) {
-
-.savedPromptToggle:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
+  .savedPromptToggle:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .savedPromptToggle:focus-visible {
@@ -1524,6 +1510,7 @@
 
   /* The mock narrows the title strip's gap at this width and closes the
      actions' group gap between its icon buttons. */
+
   .detailTabsBar {
     gap: 16px;
   }

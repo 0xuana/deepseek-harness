@@ -23,8 +23,7 @@
 .previewHint { display: none; }
 @media (hover: hover) {
   .file:hover .description:not([role='status']) .secondaryText { display: none; }
-}
-@media (hover: hover) {
+
   .file:hover .description:not([role='status']) .previewHint { display: inline; }
 }
 .toggle { align-self: center; display: inline-flex; align-items: center; gap: 4px; min-width: 0; padding: 1px 11px; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-tertiary); cursor: pointer; font: inherit; font-size: 12px; line-height: 18px; }
@@ -34,3 +33,9 @@
 .toggle svg { flex: none; width: 14px; height: 14px; }
 @container (max-width: 620px) { .presented { grid-template-columns: minmax(0, 1fr); } }
 .actions { display: inline-flex; flex: none; pointer-events: auto; }
+
+.secondaryText[data-success] { animation-name: success-fade; animation-timing-function: ease-out; animation-fill-mode: forwards; }
+@keyframes success-fade { to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .secondaryText[data-success] { animation-name: none; }
+}

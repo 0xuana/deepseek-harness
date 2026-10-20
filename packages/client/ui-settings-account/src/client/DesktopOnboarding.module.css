@@ -184,8 +184,7 @@
 }
 @media (hover: hover) {
   .card:hover::before { border-color: var(--dsw-alias-border-l4); }
-}
-@media (hover: hover) {
+
   .card:hover::after { opacity: 0.35; }
 }
 .selected::before { opacity: 0; }
@@ -266,11 +265,17 @@
 
 @media (max-height: 760px) {
   .purpose, .process { top: calc(50% - 180px); }
+
   .purpose .copy h1, .process .copy h1 { font-size: 28px; line-height: 39px; }
+
   .subtitle { margin-top: 16px; line-height: 21px; }
+
   .card { padding: 24.5px 32.5px 32.5px; min-height: 187px; }
+
   .processCards { min-height: 0; padding-block: 0; }
+
   .primaryAction { margin-top: 40px; }
+
   .creditActions { margin-top: 32px; }
 }
 
@@ -284,9 +289,13 @@
 
 @media (max-width: 1100px) {
   .page { --page-padding: 40px; }
+
   .copy h1 { font-size: 26px; line-height: 40px; }
+
   .heroDescription { font-size: 16px; line-height: 28px; }
+
   .welcome .copy h1 { font-size: 28px; line-height: 48px; }
+
   .fileIcons { gap: 3px; }
 }
 
@@ -296,6 +305,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .page button, .card, .card::before, .card::after { transition: none; }
+
   .page, .fileIcons > svg, .selected::after { animation: none; }
 }
 

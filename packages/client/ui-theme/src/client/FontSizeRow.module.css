@@ -80,10 +80,9 @@
 }
 
 @media (hover: hover) {
-
-.stepper:hover .arrows {
-  opacity: 1;
-}
+  .stepper:hover .arrows {
+    opacity: 1;
+  }
 }
 
 .stepper:focus-within .arrows {
@@ -108,10 +107,9 @@
 }
 
 @media (hover: hover) {
-
-.arrow:hover:not(:disabled) {
-  background: var(--dsw-alias-bg-layer-1);
-}
+  .arrow:hover:not(:disabled) {
+    background: var(--dsw-alias-bg-layer-1);
+  }
 }
 
 .arrow:disabled {
@@ -135,10 +133,9 @@
 }
 
 @media (hover: hover) {
-
-.expander:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
+  .expander:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .expander svg {

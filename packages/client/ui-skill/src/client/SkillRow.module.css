@@ -65,9 +65,7 @@
   .row:hover .iconIdle {
     opacity: 0;
   }
-}
 
-@media (hover: hover) {
   .row:hover .chevronHover {
     opacity: 1;
   }
@@ -187,9 +185,7 @@
   .card:hover .inspectButton {
     opacity: 1;
   }
-}
 
-@media (hover: hover) {
   .inspectButton:hover {
     background: var(--dsw-alias-interactive-bg-hover-solid);
     color: var(--dsw-alias-label-primary);

@@ -57,6 +57,16 @@ function installClipboard(writeText: (text: string) => Promise<void>): () => voi
 }
 
 describe('HoverCard', () => {
+  it.each([false, true])('opens mouse previews only when a pointer can hover: %s', (canHover) => {
+    vi.stubGlobal('matchMedia', () => ({ matches: canHover }))
+    const { wrapper } = mount()
+    const event = new Event('pointerover', { bubbles: true })
+    Object.defineProperty(event, 'pointerType', { value: 'mouse' })
+    fireEvent(wrapper, event)
+    act(() => { vi.advanceTimersByTime(1000) })
+    expect(screen.queryByText('card body') !== null).toBe(canHover)
+  })
+
   it.each(['compact', 'preview'] as const)('does not open a %s card when a touch enters the anchor', (variant) => {
     const { wrapper } = mount({ variant })
     const event = new Event('pointerover', { bubbles: true })
@@ -625,6 +635,7 @@ describe('HoverCard', () => {
 })
 
 it('opens inline previews only for keyboard focus and closes when focus leaves the anchor', () => {
+  vi.stubGlobal('matchMedia', () => ({ matches: false }))
   const anchor = <><button>first</button><button>second</button></>
   const view = render(<HoverCard inline anchor={anchor} content={<span>thumbnail</span>} />)
   const first = screen.getByRole('button', { name: 'first' })

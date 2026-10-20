@@ -1,4 +1,4 @@
-/** Pointer, keyboard, and resize behavior in the assembled client. @author feiyu.xia */
+/** Pointer, keyboard, and resize behavior in the assembled client. */
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { expect, it, onTestFailed, onTestFinished } from 'vitest'

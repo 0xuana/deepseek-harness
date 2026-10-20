@@ -1,7 +1,7 @@
 /** Hover capability checks for client stylesheets. */
 import { readFileSync } from 'node:fs'
 import { expect, it } from 'vitest'
-import { atRuleBlock, packageStylesheets } from './stylesheet-scan.ts'
+import { atRuleBlock, packageFiles, packageStylesheets } from './stylesheet-scan.ts'
 
 function unguardedHover(source: string): string[] {
   const css = source.replace(/\/\*[\s\S]*?\*\//g, '')
@@ -36,7 +36,11 @@ it('rejects unguarded hover and queries that also match devices without hover', 
 })
 
 it('limits every client hover selector to hover-capable primary input', () => {
-  const files = packageStylesheets().filter(file => file.includes('/packages/client/'))
+  const clientRoots = packageFiles(name => name === 'package.json').flatMap((file) => {
+    const manifest = JSON.parse(readFileSync(file, 'utf8')) as { dsh?: { client?: object } }
+    return manifest.dsh?.client === undefined ? [] : [file.slice(0, -'package.json'.length)]
+  })
+  const files = packageStylesheets().filter(file => file.includes('/packages/client/') || clientRoots.some(root => file.startsWith(root)))
   expect(files.length).toBeGreaterThan(0)
   const failures = files.flatMap(file => unguardedHover(readFileSync(file, 'utf8')).map(selector => `${file}: ${selector}`))
   expect(failures).toEqual([])

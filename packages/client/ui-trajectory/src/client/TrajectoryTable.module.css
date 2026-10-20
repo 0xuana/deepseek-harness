@@ -186,9 +186,7 @@
   .table tbody tr:not([data-collapsed-summary]):not([data-virtual-spacer]):not([data-history-load]):not([data-selected='true']):hover {
     background: var(--dsw-alias-interactive-bg-hover);
   }
-}
 
-@media (hover: hover) {
   .table tbody tr[data-request-only='true']:hover {
     background: transparent;
   }

@@ -104,10 +104,9 @@
 }
 
 @media (hover: hover) {
-
-.cardWorkspaceTrigger:hover::after {
-  color: var(--dsw-alias-state-business-primary);
-}
+  .cardWorkspaceTrigger:hover::after {
+    color: var(--dsw-alias-state-business-primary);
+  }
 }
 
 .accessory {
@@ -334,10 +333,9 @@
 }
 
 @media (hover: hover) {
-
-.add:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover-solid);
-}
+  .add:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover-solid);
+  }
 }
 
 .add:disabled {
@@ -369,10 +367,9 @@
 }
 
 @media (hover: hover) {
-
-.select:hover:not(:disabled) {
-  background-color: var(--dsw-alias-interactive-bg-hover);
-}
+  .select:hover:not(:disabled) {
+    background-color: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .select:disabled {
@@ -405,10 +402,9 @@
 }
 
 @media (hover: hover) {
-
-.primary:hover:not(:disabled) {
-  background: var(--dsw-alias-button-info-hover);
-}
+  .primary:hover:not(:disabled) {
+    background: var(--dsw-alias-button-info-hover);
+  }
 }
 
 .primary:disabled {

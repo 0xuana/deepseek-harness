@@ -340,10 +340,9 @@
 }
 
 @media (hover: hover) {
-
-.iconButton:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
+  .iconButton:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* The toggle is flush with .logoRow, which clips its own overflow, so an outward ring loses
@@ -368,17 +367,13 @@
 }
 
 @media (hover: hover) {
+  .collapsed .toggle:hover .panelIcon {
+    display: inline;
+  }
 
-.collapsed .toggle:hover .panelIcon {
-  display: inline;
-}
-}
-
-@media (hover: hover) {
-
-.collapsed .toggle:hover .railMark {
-  display: none;
-}
+  .collapsed .toggle:hover .railMark {
+    display: none;
+  }
 }
 
 .railMark {
@@ -435,10 +430,9 @@
 }
 
 @media (hover: hover) {
-
-.newSession:hover {
-  background: var(--dsw-alias-button-floating-hover);
-}
+  .newSession:hover {
+    background: var(--dsw-alias-button-floating-hover);
+  }
 }
 
 /* macOS: the themed elevated fill reads as a foreign slab on the vibrancy
@@ -449,10 +443,9 @@
 }
 
 @media (hover: hover) {
-
-:global([data-platform='darwin']) .newSession:hover {
-  background: rgb(255 255 255 / 0.3);
-}
+  :global([data-platform='darwin']) .newSession:hover {
+    background: rgb(255 255 255 / 0.3);
+  }
 }
 
 :global([data-platform='darwin']) :global([data-ds-dark-theme]) .newSession {
@@ -460,10 +453,9 @@
 }
 
 @media (hover: hover) {
-
-:global([data-platform='darwin']) :global([data-ds-dark-theme]) .newSession:hover {
-  background: rgb(255 255 255 / 0.2);
-}
+  :global([data-platform='darwin']) :global([data-ds-dark-theme]) .newSession:hover {
+    background: rgb(255 255 255 / 0.2);
+  }
 }
 
 .collapsed .newSession {
@@ -478,10 +470,9 @@
 }
 
 @media (hover: hover) {
-
-.collapsed .newSession:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
+  .collapsed .newSession:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .newSessionLabel {
@@ -496,7 +487,7 @@
 
 .newSessionLabelMask { flex: 1; min-width: 0; }
 @media (hover: hover) {
-.newSession:is(:hover, :focus-visible) .newSessionLabelMask:has(+ .newSessionShortcut) { overflow: hidden; mask-image: linear-gradient(to right, black calc(100% - 16px), transparent); }
+  .newSession:is(:hover, :focus-visible) .newSessionLabelMask:has(+ .newSessionShortcut) { overflow: hidden; mask-image: linear-gradient(to right, black calc(100% - 16px), transparent); }
 }
 .newSessionContent { display: flex; width: 100cqw; align-items: center; justify-content: center; gap: 6px; }
 .newSessionContent > svg { flex: none; }
@@ -510,8 +501,7 @@
 }
 
 @media (hover: hover) {
-
-.newSession:is(:hover, :focus-visible) .newSessionShortcut { opacity: 1; }
+  .newSession:is(:hover, :focus-visible) .newSessionShortcut { opacity: 1; }
 }
 
 .panelList {
@@ -543,10 +533,9 @@
 }
 
 @media (hover: hover) {
-
-.panelRow:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
+  .panelRow:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .panelRow.panelActive {

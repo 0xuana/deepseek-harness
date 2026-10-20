@@ -376,5 +376,6 @@
 
 @media (hover: none) {
   .copySlot { opacity: 1; pointer-events: auto; }
+
   .row:has(> .copySlot) { padding-right: 24px; }
 }

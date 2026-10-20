@@ -25,8 +25,7 @@
 }
 
 @media (hover: hover) {
-
-.iconButton:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
+  .iconButton:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }

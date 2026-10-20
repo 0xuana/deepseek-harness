@@ -39,10 +39,9 @@
 }
 
 @media (hover: hover) {
-
-.iconButton:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
+  .iconButton:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* View-options dropdown card: labels are short, so a content-sized card reads
@@ -200,17 +199,13 @@
 }
 
 @media (hover: hover) {
+  .searchButton:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 
-.searchButton:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
-}
-
-@media (hover: hover) {
-
-.searchExpanded .searchButton:hover {
-  background: transparent;
-}
+  .searchExpanded .searchButton:hover {
+    background: transparent;
+  }
 }
 
 .searchInput {
@@ -254,10 +249,9 @@
 }
 
 @media (hover: hover) {
-
-.clearButton:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
+  .clearButton:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* Rail variant (own .rail class from the wide owner prop — the region never
@@ -304,10 +298,9 @@
 }
 
 @media (hover: hover) {
-
-.rail .searchButton:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
+  .rail .searchButton:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* List seat: always mounted so the shell foot never moves. */
@@ -529,11 +522,10 @@
 }
 
 @media (hover: hover) {
-
-.sessionOverflowButton:hover {
-  background: transparent;
-  color: var(--dsw-alias-label-secondary);
-}
+  .sessionOverflowButton:hover {
+    background: transparent;
+    color: var(--dsw-alias-label-secondary);
+  }
 }
 
 .empty {

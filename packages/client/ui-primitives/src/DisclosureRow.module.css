@@ -95,9 +95,7 @@ button.leading {
   .row:hover .iconIdle {
     opacity: 0;
   }
-}
 
-@media (hover: hover) {
   .row:hover .chevronHover {
     opacity: 1;
   }

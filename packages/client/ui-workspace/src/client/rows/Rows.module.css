@@ -12,10 +12,9 @@
 }
 
 @media (hover: hover) {
-
-.projectRow:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
+  .projectRow:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .sessionRow.selected {
@@ -39,10 +38,9 @@
 }
 
 @media (hover: hover) {
-
-.searchResultRow:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
+  .searchResultRow:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .searchResultRow.selected {
@@ -148,10 +146,9 @@
 /* Project leading slot: folder by default, expand arrow on row hover. */
 .projectRow .chevron { display: none; }
 @media (hover: hover) {
-.projectRow:hover .chevron { display: inline-flex; }
-}
-@media (hover: hover) {
-.projectRow:hover .folder { display: none; }
+  .projectRow:hover .chevron { display: inline-flex; }
+
+  .projectRow:hover .folder { display: none; }
 }
 
 /* Expand arrow (filled triangle): points right closed, rotates to point down open. */
@@ -270,11 +267,10 @@
 }
 
 @media (hover: hover) {
-
-.projectRow:hover .rowActions,
-.searchResultRow:hover .rowActions {
-  display: inline-flex;
-}
+  .projectRow:hover .rowActions,
+  .searchResultRow:hover .rowActions {
+    display: inline-flex;
+  }
 }
 
 .projectRow.menuOpen .rowActions {
@@ -447,10 +443,9 @@
 }
 
 @media (hover: hover) {
-
-.iconButton:hover {
-  color: var(--dsw-alias-label-primary);
-}
+  .iconButton:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 /* Chevrons ride the caption grey (#ADB2B8); the folder glyph stays one step

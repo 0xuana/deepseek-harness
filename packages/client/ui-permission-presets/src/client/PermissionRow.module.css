@@ -48,10 +48,9 @@
 }
 
 @media (hover: hover) {
-
-.selector:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
+  .selector:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .selector:disabled {

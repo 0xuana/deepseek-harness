@@ -292,6 +292,7 @@ export function HoverCard({
       } : undefined}
       onPointerEnter={(event) => {
         if (disabled || event.pointerType === 'touch') return
+        if (event.pointerType === 'mouse' && !window.matchMedia('(any-hover: hover)').matches) return
         // Coming back inside during the grace (the gap, or the card itself)
         // keeps the current card rather than restarting the dwell.
         cancelClose()

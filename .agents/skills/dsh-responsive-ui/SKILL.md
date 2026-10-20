@@ -53,9 +53,7 @@ Use a viewport width of 390 CSS px as the primary acceptance minimum. There must
 
 On mobile, do not raise the input keyboard automatically unless it is explicitly intended.
 
-## 9. Telling a mobile or touch client from a desktop one
+## 9. Input capabilities and mobile text fields
 
-1. Prefer CSS media features to script: `(pointer: coarse)` selects touch input (phones, tablets, iPadOS, touch laptops), `(hover: none)` selects pointers that cannot hover, and width queries select layout breaks. Layout always comes from these; never branch layout on a parsed user agent.
-2. Use `isMobileDevice()` from `@deepseek-ai/dsh-client-ui-primitives` where behavior rather than layout must differ, such as automatic text-input focus and keyboard dismissal after sending. It uses Bowser’s `mobile` and `tablet` platform types and recognizes desktop-mode iPads through `MacIntel` with multiple touch points. Unrecognized devices return false. Keep this identification in the shared helper; do not duplicate the UA checks in consumers. `bowser` is a browser-only library, so it belongs in `devDependencies`.
-3. Treat a positive answer as permission for an enhancement, never as a reason to withhold a primary action: desktop-site mode and custom user-agent strings hide the mobile platform, and a desktop user agent alone cannot separate an Android tablet from a Linux computer.
-4. Text fields take a 16px floor under `(pointer: coarse)` — iOS Safari zooms the visual viewport for a focused field under 16px and leaves the page pannable after the keyboard closes — while a fine pointer keeps the compact 13-14px steps. The Automation tasks page's field rule in `packages/client/ui-schedule/src/client/TaskManagerPage.module.css` is the reference.
+1. Prefer CSS media features for presentation: `(pointer: coarse)` describes the primary pointer's accuracy, `(hover: none)` describes its inability to hover, and width queries select layout breaks. These queries do not detect a physical keyboard. Never branch layout on a parsed user agent.
+2. Text fields take a 16px floor under `(pointer: coarse)` to avoid iOS Safari's focus zoom. Fine pointers keep the existing compact field sizes. Use the field rules in `packages/client/ui-plugin-manager/src/client/PluginManagerPage.module.css` as the reference.
