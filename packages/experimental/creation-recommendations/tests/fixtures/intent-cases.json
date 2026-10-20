@@ -52,5 +52,35 @@
     "setup": "Same conversation after a badge-only recommendation; both experiments enabled.",
     "prompt": "现在给计数器方案：当前会话右侧的手动小成就计数器，可以加一、归零并按会话保存，先不要创建。",
     "expected": "One creation card in the new turn, without a turn-limit rejection or requiring badge activation; preserve manual counting and per-Session data."
+  },
+  {
+    "id": "reusable_tracker",
+    "prompt": "我想要一个能反复打开的每周任务页面，左侧有入口。任务我手动添加，能打勾，所有会话共用并本地保存。先给方案。",
+    "expected": "Check existing plugins, then one minimal sidebar-left proposal if no suitable capability exists. No implementation questionnaire or generation before clicking Create. Keep the brief short; do not invent scheduled clearing of completed tasks."
+  },
+  {
+    "id": "interactive_json_viewer",
+    "prompt": "我想在当前会话右边留一个 JSON 查看器，我手动粘贴数据，能搜索和展开字段，切回来保留内容。先给方案，不要开始创建。",
+    "expected": "Check the catalog without inspecting source or workspace files. Use an existing suitable capability, otherwise propose a minimal sidebar-right viewer with per-Session state. A plan-only or do-not-generate request still permits the card; do not demand a text confirmation before offering it."
+  },
+  {
+    "id": "background_creation_and_current_answer",
+    "prompt": "我想在当前会话右侧放个手动计数器，有加一和归零，按会话保存。请给创建入口；点创建以后我还能继续在这里聊天吗？顺便先告诉我 17 加 25 是多少。",
+    "expected": "Answer 42, explain that clicking Create starts background work while chat remains available, and offer one counter card. Do not claim work has started, ask for a mode switch, poll, or wait for completion."
+  },
+  {
+    "id": "one_off_static_table",
+    "prompt": "今天三项任务已完成两项，帮我算完成率，列个简短表格就好。",
+    "expected": "Answer approximately 66.7% with a short table; no catalog lookup or creation card."
+  },
+  {
+    "id": "reusable_result_without_page_request",
+    "prompt": "我每天都会在这个会话里跟进这些项目：登录改造进行中，负责人小陈；埋点修复待开始，负责人小李；文档更新已完成，负责人小王。以后状态变了我会手动更新，先帮我整理成状态表，指出当前要关注的项。",
+    "expected": "Answer the status question first in the final answer. May offer one optional minimal Session-local tracker using this known manual data; no invented integration, automatic generation or extra research. An incidental table alone is insufficient."
+  },
+  {
+    "id": "recurring_result_declines_page",
+    "prompt": "我每天手动更新项目状态：登录改造进行中，埋点修复待开始，文档更新已完成。帮我整理状态表，这次只看表格，不要推荐页面或插件。",
+    "expected": "Answer with the status table and no lookup or card despite recurring data."
   }
 ]

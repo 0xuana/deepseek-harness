@@ -1,6 +1,10 @@
 /** English creation and recovery copy. */
 export const en = {
   heading: 'Personalized pages', newPlugin: 'New plugin', location: 'Location', options: 'Options',
+  creationInfo: 'How creation works and token usage',
+  creationMethod: 'Creator mode builds and installs a new page as a removable plugin.',
+  creationCost: 'Generation may take a while and consume a large number of tokens.',
+  creationBackground: 'Generation starts only when you click Create. It runs in the background, so you can continue chatting here.',
   expandPlan: 'View full plan', collapsePlan: 'Collapse plan',
   'sidebar-right': 'Right sidebar', page: 'Session tab', 'sidebar-left': 'Global page · Left sidebar entry',
   create: 'Create', starting: 'Starting…', dismiss: 'Not now', retry: 'Create again', keep: 'Keep', undo: 'Undo',
@@ -29,6 +33,10 @@ export type RecommendationKey = keyof typeof en
 /** Chinese creation and recovery copy. */
 export const zh: Record<RecommendationKey, string> = {
   heading: '个性化页面', newPlugin: '新插件', location: '添加位置', options: '选项',
+  creationInfo: '创建方式与 token 消耗',
+  creationMethod: '创造模式会生成一个新页面，并安装为可移除的插件。',
+  creationCost: '生成可能耗时较长，并消耗大量 token。',
+  creationBackground: '只有点击「创建」才开始生成。它在后台运行，不阻塞主对话，你可以继续聊天。',
   expandPlan: '展开方案', collapsePlan: '收起方案',
   'sidebar-right': '右侧栏', page: '会话顶部 Tab', 'sidebar-left': '全局页面 · 左侧入口',
   create: '创建', starting: '开始创建…', dismiss: '暂不需要', retry: '重新创建', keep: '保留', undo: '撤销',

@@ -48,6 +48,18 @@ describe('creation recommendation after an explicit wish', () => {
     expect(cardBox!.y).toBeGreaterThanOrEqual(answerBox!.y + answerBox!.height)
     expect(await card.getByRole('button', { name: 'Create', exact: true }).isEnabled()).toBe(true)
     await compareOrRefreshGolden(join(directory, 'offered.expected.md'), await captureStableAria(page, '[data-creation-recommendation]', scaffold.workspaceCwd), scaffold.mode)
+    const info = card.getByRole('button', { name: 'How creation works and token usage', exact: true })
+    await info.focus()
+    await info.press('Enter')
+    expect(await info.getAttribute('aria-expanded')).toBe('true')
+    expect(await card.getByRole('note').innerText()).toContain('consume a large number of tokens')
+    expect(await card.getByRole('note').innerText()).toContain('continue chatting here')
+    expect(await card.getByRole('button', { name: 'Create', exact: true }).isEnabled()).toBe(true)
+    expect(await card.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+    await compareOrRefreshGolden(join(directory, 'info.expected.md'), await captureStableAria(page, '[data-creation-recommendation]', scaffold.workspaceCwd), scaffold.mode)
+    await info.press('Space')
+    expect(await info.getAttribute('aria-expanded')).toBe('false')
+    expect(await card.getByRole('note').count()).toBe(0)
     const expand = card.getByRole('button', { name: 'View full plan', exact: true })
     const plan = page.locator(`[id="${await expand.getAttribute('aria-controls')}"]`)
     const compactHeight = await plan.evaluate(element => element.clientHeight)
@@ -75,7 +87,7 @@ describe('creation recommendation after an explicit wish', () => {
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
     if (scaffold.mode === 'replay') await assertFixtureInventory(directory, [
-      'session.v4.jsonl', 'offered.expected.md', 'expanded.expected.md', 'options.expected.md', 'dismissed.expected.md', 'system-prompt.expected.md', 'tool-schemas.expected.json',
+      'session.v4.jsonl', 'offered.expected.md', 'info.expected.md', 'expanded.expected.md', 'options.expected.md', 'dismissed.expected.md', 'system-prompt.expected.md', 'tool-schemas.expected.json',
     ])
   })
 })

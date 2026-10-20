@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-For an explicit interface or reusable feature wish, the Agent answers first and offers one creation card at the completed Turn’s end. The user can change its suggested location, then choose Create. A background Creator builds a new plugin and installs it into the profile. Keep confirms retention; Undo removes that plugin.
+For an explicit interface wish, or a clearly reusable result already obtained in the current task, the Agent answers first and may offer one optional creation card at the completed Turn’s end. The user can change its suggested location, then choose Create. A background Creator builds a new plugin and installs it into the profile. Keep confirms retention; Undo removes that plugin.
 
 ## Table of Contents
 
@@ -33,11 +33,11 @@ Open Plugins → More → Experimental plugins and enable Personalized pages. Sh
 | `page` | Session-bound streaming interaction in a tab beside Chat and Trajectory. |
 | `sidebar-left` | Global feature: a left-sidebar entry opens a standalone main-area page without Chat/Trajectory tabs. |
 
-The left entry and its global page form one placement, including global streaming tools. Default selection distinguishes global from Session scope first; Session streaming dialogue takes the tab, while other viewers and editors take the right sidebar. Unclear scope calls for clarification before a recommendation.
+The left entry and its global page form one placement, including global streaming tools. Default selection distinguishes global from Session scope first; Session streaming dialogue takes the tab, while other viewers and editors take the right sidebar. An optional page keeps the current result’s known data scope; a Session-local viewer defaults to the right sidebar. Clarification is needed only when missing scope changes the outcome.
 
 Personalized pages works with the plugin recommendation experiment disabled or absent. When discovery finds an existing plugin, tool guidance directs the Agent to its Plugins entry instead of creating a duplicate. If the recommendation experiment is also enabled, it can offer that plugin through `suggest_plugin`; both experiments share the one-card-per-turn limit.
 
-For multiple independent needs, guidance selects one proposal across creation and plugin recommendations before calling either tool. Explicit user priority wins; otherwise an existing plugin takes precedence. Other needs stay in the answer, with clarification when their purpose, data source or interaction is unknown. The plan must not infer these from another wish. A rejected proposal creates no card and does not schedule a future one. Discovery for an unselected creation is unnecessary once an existing plugin is selected. These semantic instructions supplement the Host’s one-successful-card limit; they do not make one experiment depend on the other.
+For multiple independent needs, guidance selects one proposal across creation and plugin recommendations before calling either tool. Explicit user priority wins; otherwise an existing plugin takes precedence. Other needs stay in the answer. Clarification asks only for missing facts that change the outcome; the plan must not infer purpose or data from another wish. A rejected proposal creates no card and does not schedule a future one. Discovery for an unselected creation is unnecessary once an existing plugin is selected. These semantic instructions supplement the Host’s one-successful-card limit; they do not make one experiment depend on the other.
 
 ### Outcomes and recovery
 
@@ -76,11 +76,11 @@ The Creator receives the full brief, the user’s final location as authoritativ
 
 #### What the model sees
 
-`list_creation_plugins` reads shipped plugin names, descriptions and enabled state without requiring the recommendation experiment or Creator-mode management tools. It is a small on-demand catalog, not an index of every built-in feature. `suggest_view` records the title, explicit need, relevant context, and suggested location. It never creates a plugin by itself. The main Agent judges intent semantically; there is no keyword trigger, TODO reader or background scanner. Guidance keeps proposal planning at product level, defers source/API inspection to the Creator after Create, and asks it to check existing official plugins first, call the tool, then provide one concise final answer. Vague wishes, ordinary one-off tasks and explicit requests to discuss only do not merit a card. The user’s Create action starts a separate Creator conversation; Keep and Undo do not resume the parent model.
+`list_creation_plugins` reads shipped plugin names, descriptions and enabled state without requiring the recommendation experiment or Creator-mode management tools. It is an on-demand plugin catalog, not an index of every built-in feature. `suggest_view` records a title, brief and location for an expressed interface need, or a clearly reusable result already obtained in the current task, such as a changing task list, recurring status table or explorer. Guidance keeps the plan to the smallest useful version with known inputs and answers the current question normally; vague wishes, one-off explanations, incidental static tables, ordinary coding tasks and requests to discuss only do not merit a card. It forbids extra research solely to manufacture an opportunity and invented live integrations, automation or broader data access. The main Agent judges intent semantically, without keyword triggers, TODO scans or background opportunity detection. The optional card follows the completed answer. Clicking Create starts a separate background Creator to research, build and install the plugin while the user can keep chatting. Progress stays on the card; the main Agent must not wait, poll, request a mode switch or ask the user to report completion. “Give a plan” or “do not start generating” still permits a card, including in read-only mode; a refusal of recommendations does not. The brief stays to a few sentences without unrequested automation or data deletion, and the answer does not repeat it. No text confirmation is needed before offering the card. A proposal does not mean work has started or succeeded. Installation applies automatically; any restart requirement comes from the card’s actual receipt. Keep and Undo do not resume the parent model.
 
 #### Token effect
 
-Two tool schemas are added while enabled. Discovery results and proposals append to the current conversation. Only an accepted creation spends a background Creator run.
+Two tool schemas are added while enabled. Discovery results and proposals append to the current conversation. Only an accepted creation spends a background Creator run. The card’s information button explains potentially long generation, substantial token use and continued conversation in the foreground; reading it starts no work.
 
 #### KV Cache effect
 

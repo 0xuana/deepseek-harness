@@ -65,7 +65,11 @@ it('disables pending decisions and supports dismissal without starting a child',
   value.act = vi.fn(() => pending.promise)
   render(<RecommendationCard {...value} />)
   fireEvent.click(screen.getByRole('button', { name: '暂不需要' }))
-  expect(screen.getAllByRole('button').every(button => (button as HTMLButtonElement).disabled)).toBe(true)
+  expect(screen.getByRole('button', { name: '选项' }).hasAttribute('disabled')).toBe(true)
+  expect(screen.getByRole('button', { name: '暂不需要' }).hasAttribute('disabled')).toBe(true)
+  expect(screen.getByRole('button', { name: '开始创建…' }).hasAttribute('disabled')).toBe(true)
+  fireEvent.click(screen.getByRole('button', { name: zh.creationInfo }))
+  expect(screen.getByRole('note').textContent).toContain(zh.creationCost)
   expect(value.act).toHaveBeenCalledWith(callId, 'dismiss', 'sidebar-right')
   await act(async () => { pending.resolve({ status: 'settled', decision: { callId, phase: 'dismissed', slot: 'sidebar-right' } }) })
 })
@@ -73,8 +77,28 @@ it('disables pending decisions and supports dismissal without starting a child',
 it.each(['installing', 'dismissed', 'removed'] as const)('restores %s without repeat actions', (phase) => {
   render(<RecommendationCard {...props({ callId, phase, slot: 'sidebar-left' }, false)} />)
   expect(screen.getByRole('status').textContent).toBe(en[phase])
-  expect(screen.queryByRole('button')).toBeNull()
+  expect(screen.getAllByRole('button')).toEqual([screen.getByRole('button', { name: en.creationInfo })])
   expect(screen.getByText('Location · Global page · Left sidebar entry')).toBeTruthy()
+})
+
+it.each([true, false])('explains cost and background creation without starting work (Chinese: %s)', (chinese) => {
+  const value = props(undefined, chinese)
+  const copy = chinese ? zh : en
+  render(<RecommendationCard {...value} />)
+  const button = screen.getByRole('button', { name: copy.creationInfo })
+  expect(screen.queryByRole('note')).toBeNull()
+  expect(button.getAttribute('aria-expanded')).toBe('false')
+  fireEvent.click(button)
+  const note = screen.getByRole('note')
+  expect(note.id).toBe(button.getAttribute('aria-controls'))
+  expect(button.getAttribute('aria-expanded')).toBe('true')
+  expect(note.textContent).toContain(copy.creationMethod)
+  expect(note.textContent).toContain(copy.creationCost)
+  expect(note.textContent).toContain(copy.creationBackground)
+  expect(screen.getByRole('button', { name: copy.create }).hasAttribute('disabled')).toBe(false)
+  fireEvent.click(button)
+  expect(screen.queryByRole('note')).toBeNull()
+  expect(value.act).not.toHaveBeenCalled()
 })
 
 it('offers cancellation during generation, then waits for cleanup before retrying', async () => {

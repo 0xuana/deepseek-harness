@@ -1,5 +1,11 @@
 .card { margin: 16px 0; border: 0.5px solid var(--dsw-alias-border-l1); border-radius: var(--dsw-radius-lg); overflow: hidden; font-family: var(--dsw-font-family); color: var(--dsw-alias-label-primary); }
 .header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 20px; background: var(--dsw-alias-bg-module-platform); font-size: 12px; line-height: 1.5; color: var(--dsw-alias-label-secondary); flex-wrap: wrap; }
+.heading { display: inline-flex; align-items: center; gap: 4px; }
+.infoButton { width: 28px; padding: 0; color: var(--dsw-alias-label-secondary); }
+.info { padding: 12px 20px; border-bottom: 0.5px solid var(--dsw-alias-border-l1); font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
+.info p { margin: 0; }
+.info p + p { margin-top: 4px; }
+.info strong { font-weight: 500; }
 .phase { color: var(--dsw-alias-label-primary); }
 .body { padding: 20px; }
 .title { display: block; font-size: 16px; font-weight: 500; line-height: 1.5; overflow-wrap: anywhere; }

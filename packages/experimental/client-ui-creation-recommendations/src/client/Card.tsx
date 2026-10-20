@@ -1,6 +1,6 @@
 /** Completed-answer creation card with location selection and undo. */
 import { useId, useLayoutEffect, useRef, useState } from 'react'
-import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconInfoOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import type { CreationRecommendation, CreationActionResult, CreationSlot } from '@deepseek-ai/dsh-experimental-creation-recommendations/types'
@@ -70,6 +70,8 @@ export function RecommendationCard({ recommendation, useProjection, act, t }: Ca
   const decision = view?.decisions[recommendation.callId]
   const [selected, setSelected] = useState<CreationSlot>()
   const [options, setOptions] = useState(false)
+  const [info, setInfo] = useState(false)
+  const infoId = useId()
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<RecommendationKey>()
   const slot = selected ?? decision?.slot ?? recommendation.slot
@@ -91,10 +93,22 @@ export function RecommendationCard({ recommendation, useProjection, act, t }: Ca
     /* jscpd:ignore-end */
   }
   return <section className={css.card} aria-label={t('heading')} data-creation-recommendation={recommendation.callId}>
-    <header className={css.header}><span>{t('heading')}</span>
-      {decision === undefined ? <span>{t('newPlugin')}</span>
-        : <span role="status" className={css.phase} data-phase={decision.phase}>{t(decision.phase)}</span>}
+    <header className={css.header}><span className={css.heading}>{t('heading')}
+      <Tooltip label={t('creationInfo')} side="top" portal disabled={info}>
+        <Button variant="ghost" size="sm" className={css.infoButton} aria-label={t('creationInfo')}
+          aria-expanded={info} aria-controls={infoId} onClick={() => { setInfo(value => !value) }}>
+          <IconInfoOutlineRegular size={14} />
+        </Button>
+      </Tooltip>
+    </span>
+    {decision === undefined ? <span>{t('newPlugin')}</span>
+      : <span role="status" className={css.phase} data-phase={decision.phase}>{t(decision.phase)}</span>}
     </header>
+    {info && <div id={infoId} role="note" className={css.info}>
+      <p>{t('creationMethod')}</p>
+      <p><strong>{t('creationCost')}</strong></p>
+      <p>{t('creationBackground')}</p>
+    </div>}
     <div className={css.body}>
       <strong className={css.title}>{recommendation.title}</strong>
       <CreationPlan brief={recommendation.brief} t={t} />

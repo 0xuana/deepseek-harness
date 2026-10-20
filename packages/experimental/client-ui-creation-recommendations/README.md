@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Users see one creation proposal below the completed answer. Plans show up to three lines and expand to reveal the full brief; Creator always receives the full brief. Cards use the application font, separate title and body sizes, and show progress in the header. The recommended location is visible immediately; Options reveals Right sidebar, Session tab, and Global page with a left entry. Create starts background work. After installation, Keep confirms retention and Undo removes the new plugin.
+Users see one creation proposal below the completed answer. Plans show three lines and expand; Creator receives the full brief. The information button explains Creator mode, potentially long generation and substantial token use, and that chatting can continue. Reading it starts no work. Options changes the suggested location: Right sidebar, Session tab, or Global page with a left entry. Only Create starts background work. Progress appears in the header. After installation, Keep confirms retention; Undo removes the plugin.
 
 ## Table of Contents
 
