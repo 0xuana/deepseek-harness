@@ -36,6 +36,14 @@ describe('readForkRefusal', () => {
       .toEqual({ code: 'share-stopped', message: 'refused' })
   })
 
+  it('survives a rejection that carries no object at all', () => {
+    for (const rejection of [null, undefined, 42, {}]) {
+      expect(readForkRefusal(rejection)).toEqual({ code: 'unknown', message: '' })
+    }
+    expect(readForkRefusal({ rpcError: null, message: 'plain' }))
+      .toEqual({ code: 'unknown', message: 'plain' })
+  })
+
   it('names the placeholder code only when the rejection named none', () => {
     expect(readForkRefusal(new Error('fork failed'))).toEqual({ code: 'unknown', message: 'fork failed' })
     expect(readForkRefusal('a rejection that is not an object')).toEqual({ code: 'unknown', message: '' })
@@ -53,6 +61,12 @@ describe('noteBranchRefusal', () => {
       reason => `未能完成分支：${reason}`,
     )
     expect(b.notify).toHaveBeenLastCalledWith('error', '未能完成分支：boundary is not committed (boundary-not-committed)')
+  })
+
+  it('states the placeholder code without throwing when the rejection is not an object', () => {
+    const b = bench({})
+    noteBranchRefusal(b.ctx, CHILD, undefined, reason => `未能完成分支：${reason}`)
+    expect(b.notify).toHaveBeenLastCalledWith('error', '未能完成分支：unknown')
   })
 
   it('states the code alone when the rejection carried no message of its own', () => {

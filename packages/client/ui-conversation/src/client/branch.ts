@@ -28,11 +28,13 @@ const UNNAMED_REFUSAL = 'unknown'
  * @returns The code the Host refused with, and its own message when it named one.
  */
 export function readForkRefusal(error: unknown): ForkRefusal {
-  const wrapped = error as {
+  // A rejection may be null, undefined, or any non-object; reading through it must not turn the
+  // refusal notice itself into a crash.
+  const wrapped: {
     readonly code?: unknown
     readonly message?: unknown
     readonly rpcError?: { readonly code?: unknown; readonly message?: unknown }
-  }
+  } = typeof error === 'object' && error !== null ? error : {}
   const code = typeof wrapped.rpcError?.code === 'string' && wrapped.rpcError.code !== ''
     ? wrapped.rpcError.code
     : typeof wrapped.code === 'string' && wrapped.code !== '' ? wrapped.code : UNNAMED_REFUSAL
