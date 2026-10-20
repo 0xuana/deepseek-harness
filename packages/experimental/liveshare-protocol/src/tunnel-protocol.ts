@@ -30,6 +30,8 @@ export const LIVESHARE_CAPABILITIES: readonly string[] = [
   'unsupported-frame-refusal',
   'share-access-state',
   'file-upload',
+  'actor-credential',
+  'direct-connection',
 ]
 
 /**
@@ -51,6 +53,8 @@ export interface SharePermissions {
 
 /** One share the owner host asks its gateway worker to carry to the Relay. */
 export interface TunnelShareSpec extends SharePermissions {
+  /** How a viewer reaches the owner; absent reads as `{ mode: 'relay' }`, today's only shape. */
+  readonly connection?: ShareConnection
   readonly shareId: string
   readonly sessionId: string
   /** Display-only share title; the host refreshes it with `reconcileShareTitles()` when renamed. */
@@ -166,6 +170,23 @@ export interface ShareRpcActor {
   readonly providerId: string
   readonly tenantId: string
   readonly subjectId: string
+  /**
+   * Owner-verifiable credential asserting this identity, when the deployment's data path has no
+   * in-band authority to assert it (a viewer reaching the owner directly). Absent today: the Relay
+   * asserts the triple itself. The owner verifies it before trusting the identity; the protocol does
+   * not verify it.
+   */
+  readonly credential?: string
+}
+
+/** How a viewer reaches the owner that published this share. */
+export interface ShareConnection {
+  /**
+   * `relay` reaches the owner through the Relay that carried this registration. `direct` is reserved
+   * for a deployment where viewers reach the owner itself; its transport parameters are added when
+   * that path is implemented.
+   */
+  readonly mode: 'relay' | 'direct'
 }
 
 /**
@@ -484,6 +505,8 @@ function isTunnelShareSpec(value: unknown): value is TunnelShareSpec {
     && (value.allowsFork === undefined || typeof value.allowsFork === 'boolean')
     && (mode === undefined || mode === 'view' || mode === 'write')
     && (value.allowsFileUpload === undefined || typeof value.allowsFileUpload === 'boolean')
+    && (value.connection === undefined
+      || (isRecord(value.connection) && (value.connection.mode === 'relay' || value.connection.mode === 'direct')))
     && (value.ownerCredential === undefined || typeof value.ownerCredential === 'string')
     && Array.isArray(value.allowedSubjectIds)
     && value.allowedSubjectIds.every(subject => typeof subject === 'string' && subject !== '')
@@ -501,6 +524,7 @@ function isShareRpcActor(value: unknown): value is ShareRpcActor {
   return typeof actor.providerId === 'string' && actor.providerId !== ''
     && typeof actor.tenantId === 'string'
     && typeof actor.subjectId === 'string' && actor.subjectId !== ''
+    && (actor.credential === undefined || typeof actor.credential === 'string')
 }
 
 function isRegistrationToken(value: unknown): value is TunnelRegistrationToken {

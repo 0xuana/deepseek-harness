@@ -4,9 +4,22 @@
   "frame": {
     "type": "share-rpc",
     "id": 7,
-    "body": { "op": "call", "path": "/__share/context", "body": {} },
-    "actor": { "providerId": "example", "tenantId": "tenant-a", "subjectId": "ou_viewer" }
+    "body": {
+      "op": "call",
+      "path": "/__share/context",
+      "body": {}
+    },
+    "actor": {
+      "providerId": "example",
+      "tenantId": "tenant-a",
+      "subjectId": "ou_viewer",
+      "credential": "signed-owner-verified-token"
+    }
   },
-  "required": ["id", "body", "actor"],
+  "required": [
+    "id",
+    "body",
+    "actor"
+  ],
   "optional": []
 }
