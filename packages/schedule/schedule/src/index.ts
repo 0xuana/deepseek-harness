@@ -384,23 +384,7 @@ export class ScheduleService extends TypertRemoteService {
       const ended = [...tasks.entries()]
         .filter(([, task]) => task.status === 'inactive')
         .map(([, task]) => task.record.id)
-      let deleted = 0
-      let failure: Error | undefined
-      for (const id of ended) {
-        try {
-          // Only a row this call removed is counted: the domain answers false
-          // when the row is already absent.
-          if (await tasks.delete(id)) deleted += 1
-        } catch (error: unknown) {
-          // Every row is attempted, so one failed delete does not leave the rest
-          // of the ended rows behind. A rejection reason that carries no Error is
-          // wrapped before the first one is kept.
-          failure ??= error instanceof Error ? error : new Error(`schedule ended-task removal failed: ${String(error)}`)
-        }
-      }
-      if (deleted > 0) this.emitChanged()
-      if (failure !== undefined) throw failure
-      return { deleted }
+      return { deleted: await this.removeRows(ended, 'schedule ended-task removal failed', false) }
     })
   }
 
@@ -500,30 +484,45 @@ export class ScheduleService extends TypertRemoteService {
         .filter(([, task]) => task.sessionId === sessionId && task.status === 'active')
         .map(([, task]) => task.record.id)
       if (active.length === 0) return
-      // One row per write: the domain table has no batch delete, and each row is
-      // durable on its own, so a failure partway through leaves the rows already
-      // removed committed. Observers hear about that change before the failure
-      // reaches the caller, which still receives it.
-      let removed = false
-      let failure: Error | undefined
-      for (const id of active) {
-        try {
-          await tasks.delete(id)
-          removed = true
-        } catch (error: unknown) {
-          // Every row is attempted: the archive has already landed, so a row this
-          // stop skipped would stay armed in a Session whose runtime then refuses
-          // its model steps. A rejection reason that carries no Error still has to
-          // report a failure, so it is wrapped before the first one is kept.
-          failure ??= error instanceof Error ? error : new Error(`schedule stop failed: ${String(error)}`)
-        }
-      }
-      if (removed) {
-        this.emitChanged()
-        this.runtime?.requestDrive()
-      }
-      if (failure !== undefined) throw failure
+      await this.removeRows(active, 'schedule stop failed', true)
     })
+  }
+
+  /**
+   * Remove rows one at a time inside the current queue slot.
+   *
+   * One row per write: the domain table has no batch delete, and each row is
+   * durable on its own, so a failure partway through leaves the rows already
+   * removed committed. Observers hear about that change before the failure
+   * reaches the caller, which still receives it. Every row is attempted after a
+   * failure, so one unreadable delete does not leave the rest of the set behind;
+   * a rejection reason that carries no Error is wrapped before the first one is
+   * kept.
+   * @param ids - rows to remove.
+   * @param label - failure message prefix naming the operation that owned them.
+   * @param rearm - whether the rows were armed, so the pending timer must be recomputed.
+   * @returns the number of rows this call removed.
+   */
+  private async removeRows(ids: readonly ScheduleRecord['id'][], label: string, rearm: boolean): Promise<number> {
+    const tasks = (await this.getDomain()).table('tasks')
+    let removed = 0
+    let failure: Error | undefined
+    for (const id of ids) {
+      try {
+        // Only a row this call removed is counted. The domain answers false when
+        // the row is absent; that is defensive here because every task write
+        // shares this queue slot.
+        if (await tasks.delete(id)) removed += 1
+      } catch (error: unknown) {
+        failure ??= error instanceof Error ? error : new Error(`${label}: ${String(error)}`)
+      }
+    }
+    if (removed > 0) {
+      this.emitChanged()
+      if (rearm) this.runtime?.requestDrive()
+    }
+    if (failure !== undefined) throw failure
+    return removed
   }
 
   private serialize<T>(work: () => Promise<T>): Promise<T> {

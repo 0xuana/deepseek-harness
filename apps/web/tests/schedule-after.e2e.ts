@@ -1296,14 +1296,14 @@ describe.skipIf(MODE === 'record')('web e2e: active Schedule catalog', () => {
       // shared page; this scenario asserts the complete list.
       await manager.getByRole('searchbox', { name: 'Search tasks' }).fill('')
       await manager.getByRole('button', { name: 'All', exact: true }).click()
-      const clear = manager.getByRole('button', { name: 'Clear ended', exact: true })
+      const clear = manager.getByRole('button', { name: 'Clear inactive', exact: true })
       await clear.waitFor({ timeout: 15_000 })
 
       // The confirmation states the Host-side target and removes nothing until it
       // is confirmed.
       await clear.click()
-      const confirmation = page.getByRole('dialog', { name: 'Clear ended automation tasks?' })
-      await confirmation.getByText('2 ended tasks', { exact: true }).waitFor()
+      const confirmation = page.getByRole('dialog', { name: 'Clear inactive automation tasks?' })
+      await confirmation.getByText('2 inactive tasks', { exact: true }).waitFor()
       await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click()
       expect((await scaffold.ctx.schedule.catalog()).filter(task => task.status === 'inactive')).toHaveLength(2)
 
@@ -1316,10 +1316,10 @@ describe.skipIf(MODE === 'record')('web e2e: active Schedule catalog', () => {
       const remaining = await scaffold.ctx.schedule.catalog()
       expect(remaining.some(task => endedIds.includes(task.id))).toBe(false)
       expect(remaining.map(task => task.title)).toContain('Keep this running task')
-      await page.getByText('Cleared 2 ended tasks.', { exact: true }).waitFor({ timeout: 15_000 })
+      await page.getByText('Cleared 2 inactive tasks.', { exact: true }).waitFor({ timeout: 15_000 })
       // The page follows the acknowledged removal: no ended row or cleanup action
       // remains, and the running task is still listed.
-      await expect.poll(() => manager.getByRole('button', { name: 'Clear ended', exact: true }).count(), { timeout: 15_000 })
+      await expect.poll(() => manager.getByRole('button', { name: 'Clear inactive', exact: true }).count(), { timeout: 15_000 })
         .toBe(0)
       await manager.getByRole('button', { name: 'All', exact: true }).click()
       await expect.poll(() => manager.getByRole('list', { name: 'Task catalog' })

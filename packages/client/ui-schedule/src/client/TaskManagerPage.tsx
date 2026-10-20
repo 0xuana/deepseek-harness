@@ -119,17 +119,21 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
     setSelectedId(null)
   }
 
-  // The Modal returns focus to the control that opened it only while that
-  // control still exists; a cleanup that removes every ended row unmounts the
-  // trigger before the confirmation closes, so the page heading takes the focus.
+  // The Modal restores focus to the element it captured when it opened; the
+  // trigger can be removed or rebuilt while the confirmation is open, so the
+  // page points focus at the current control, or the heading when it is gone.
   useEffect(() => {
     if (clearConfirm || !clearFocusPending.current) return
     clearFocusPending.current = false
-    if (clearTriggerRef.current?.isConnected === true) return
-    headingRef.current?.focus()
+    const trigger = clearTriggerRef.current
+    const target = trigger?.isConnected === true ? trigger : headingRef.current
+    target?.focus()
   }, [clearConfirm])
 
   const confirmClearEnded = (): void => {
+    // The confirmation button stays focusable while the removal runs, so a
+    // second press has to be ignored here instead of by `disabled`.
+    if (clearing) return
     setClearing(true)
     void onClearEnded().finally(() => {
       setClearing(false)
@@ -276,7 +280,11 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
           <Button variant="outline" disabled={clearing} onClick={() => { setClearConfirm(false) }}>
             {t('delete.cancel')}
           </Button>
-          <Button className={css.deleteButton} disabled={clearing} onClick={confirmClearEnded}>
+          <Button
+            className={css.deleteButton}
+            aria-disabled={clearing}
+            onClick={confirmClearEnded}
+          >
             {t(clearing ? 'clear.pending' : 'clear.confirm')}
           </Button>
         </div>}

@@ -80,7 +80,7 @@ describe('ScheduleDeleteToast', () => {
     expect(screen.getByRole('alert').textContent).toBe(zh['toast.deleteFailed'])
   })
 
-  it('states how many ended tasks a bulk removal cleared, singular for one', () => {
+  it('states how many inactive tasks a bulk removal cleared, singular for one', () => {
     vi.useFakeTimers()
     const many = mount({ kind: 'cleared', count: 4, seq: 3 })
     expect(screen.getByRole('alert').textContent).toBe(en['toast.cleared.other'].replace('{count}', '4'))

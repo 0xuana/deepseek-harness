@@ -943,7 +943,7 @@ describe('Task manager catalog', () => {
   })
 })
 
-describe('clearing ended tasks', () => {
+describe('clearing inactive tasks', () => {
   // A distinct identity: the module's `ended` case reuses the active row's id.
   const endedTask: ScheduleCatalogEntry = {
     ...ended, id: 'task-ended' as ScheduleId, title: 'Ended summary', prompt: 'Ended summary',
@@ -999,12 +999,21 @@ describe('clearing ended tasks', () => {
     trigger.focus()
     fireEvent.click(trigger)
     const dialog = screen.getByRole('dialog', { name: en['clear.title'] })
-    fireEvent.click(within(dialog).getByRole('button', { name: en['clear.confirm'] }))
+    const confirm = within(dialog).getByRole('button', { name: en['clear.confirm'] })
+    confirm.focus()
+    fireEvent.click(confirm)
     expect(onClearEnded).toHaveBeenCalledOnce()
 
     const running = screen.getByRole('dialog', { name: en['clear.title'] })
-    expect(within(running).getByRole('button', { name: en['clear.pending'] }).hasAttribute('disabled')).toBe(true)
+    const runningButton = within(running).getByRole('button', { name: en['clear.pending'] })
+    // The pressed control keeps the focus and reads as busy; disabling it would
+    // hand focus to the document body mid-removal.
+    expect(runningButton.getAttribute('aria-disabled')).toBe('true')
+    expect(document.activeElement).toBe(runningButton)
     expect(within(running).getByRole('button', { name: en['delete.cancel'] }).hasAttribute('disabled')).toBe(true)
+    // A second press while the removal runs must not start another request.
+    fireEvent.click(runningButton)
+    expect(onClearEnded).toHaveBeenCalledOnce()
     // The confirmation is the only place that states the removal still runs, so
     // the Escape that would close it waits for the outcome.
     fireEvent.keyDown(running, { key: 'Escape' })
@@ -1044,6 +1053,19 @@ describe('clearing ended tasks', () => {
     fireEvent.keyDown(screen.getByRole('dialog', { name: en['clear.title'] }), { key: 'Escape' })
     expect(screen.queryByRole('dialog', { name: en['clear.title'] })).toBeNull()
     expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 }))
+  })
+
+  it('focuses the rebuilt trigger when the dialog closes', () => {
+    const h = mount({ records: [at, endedTask] })
+    fireEvent.click(screen.getByRole('button', { name: en['clear.action'] }))
+    // Another client clears the ended rows, then a delivery ends one more while
+    // the confirmation stays open: the trigger unmounts and a new one mounts.
+    act(() => { h.update({ records: [at] }) })
+    act(() => { h.update({ records: [at, anotherEnded] }) })
+    const rebuilt = screen.getByRole('button', { name: en['clear.action'] })
+    fireEvent.keyDown(screen.getByRole('dialog', { name: en['clear.title'] }), { key: 'Escape' })
+    expect(screen.queryByRole('dialog', { name: en['clear.title'] })).toBeNull()
+    expect(document.activeElement).toBe(rebuilt)
   })
 
   it('closes only the confirmation on Escape while a task detail is open', () => {
