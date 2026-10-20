@@ -1959,6 +1959,13 @@ describe('strips and variants', () => {
     }
   })
 
+  it('announces a refused branch from the machine store as an alert', () => {
+    const { view, shell } = bench()
+    // The Chat page reports a refused branch through this store; the bar renders the new copy.
+    act(() => { shell.notify('error', '未能完成分支：fork child rename failed') })
+    expect(view.getByRole('alert').textContent).toContain('未能完成分支：fork child rename failed')
+  })
+
   it('renders an information notice from the machine store as a status strip', () => {
     const { view, shell } = bench()
     act(() => { shell.notify('info', '命令完成了') })

@@ -294,7 +294,7 @@ describe('Chat inject API', () => {
     await b.runtime.dispose()
   })
 
-  it('states why a refused branch failed, on the Session it was asked of', async () => {
+  it('states why a refused branch failed on the owner page, on the Session it was asked of', async () => {
     /** The notice the addressed Session's composer bar consumes, as the page would show it. */
     const noticeOf = (sessionId: SessionId): string | undefined => {
       const entry = b.runtime.slots.entries('conversation.composer.bar')[0]
@@ -305,6 +305,9 @@ describe('Chat inject API', () => {
       return composer.hooks.notices.getSnapshot()?.text
     }
     const b = await bench()
+    // This page presents the owner's own browser session: the notice is an owner-visible change, not
+    // only a served-page one.
+    expect(b.runtime.ctx.remoteAccess.owner).toBe(true)
     const { injected } = b.chatViewApi(b.rootReference)
     // The Host's own message reaches the reader with the stable code beside it, and the Session it was
     // asked of is the one that shows it.
