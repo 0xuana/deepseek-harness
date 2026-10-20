@@ -4,19 +4,19 @@
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-10-20-weighted-approval-status-gate-with-check-run-label.md
 /agent-note-weighted-approval-keeps-its-commit-status-gate-and-adds-a-decision-check-run:
   en: a1f0f9fd657c7d35
-  zh: c178a026d5f1735c
+  zh: e8fa02fb5bde6075
 /agent-note-weighted-approval-keeps-its-commit-status-gate-and-adds-a-decision-check-run/problem:
-  en: 06b0f3159c4a6c79
+  en: 8e854872edfc0729
   zh: 6f3ed495fcb690a4
 /agent-note-weighted-approval-keeps-its-commit-status-gate-and-adds-a-decision-check-run/decision:
-  en: 117b62dac44dc1ef
-  zh: 0208c72371e569a2
+  en: 03de94946d7532d7
+  zh: cf2f585f715d3295
 /agent-note-weighted-approval-keeps-its-commit-status-gate-and-adds-a-decision-check-run/verification:
   en: 8298cff64cce6467
-  zh: c5b81fba7326302e
+  zh: a121d509c2302c00
 /agent-note-weighted-approval-keeps-its-commit-status-gate-and-adds-a-decision-check-run/alternatives-considered:
   en: 197255cd82aabef7
   zh: dc03f4bf77150f22
 /agent-note-weighted-approval-keeps-its-commit-status-gate-and-adds-a-decision-check-run/consequences:
-  en: 0b020353f92e1292
-  zh: 3e7713747301dca6
+  en: 25e1ac1c8cab089a
+  zh: 84e10cccb1b9eda7

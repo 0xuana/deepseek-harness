@@ -497,6 +497,26 @@ test('publishes setup phases without evaluating or installing dependencies', asy
   await assert.rejects(publishApprovalPhase({ ...options, phase: 'success' }), /invalid approval setup phase/u)
 })
 
+test('keeps the status gate when the label write fails', async () => {
+  const writes = []
+  const states = []
+  await runPublisher({
+    event: pullRequestEvent(), policySource, runUrl: 'https://github.example/run/1',
+    write: line => writes.push(line),
+    getOwnership: async () => ({ totalLines: 100, reviewerLines: { turtle2099: 25 } }),
+    api: async (path, options = {}) => {
+      if (path.includes('/reviews?')) return [review('turtle2099', 'APPROVED')]
+      if (path.includes('/collaborators/turtle2099/permission')) return { permission: 'write' }
+      if (path.includes('/comments?')) return []
+      if (path.includes('/statuses/')) { states.push(options.body.state); return {} }
+      if (path.includes('/check-runs')) throw new Error('check runs unavailable')
+      throw new Error(`unexpected API path ${path}`)
+    },
+  })
+  assert.deepEqual(states, ['pending', 'success'])
+  assert.ok(writes.some(line => /Decision check run not published/.test(line)))
+})
+
 test('reports the decision on a non-required check run beside the status', async () => {
   const calls = []
   const api = async (path, options = {}) => {
@@ -525,9 +545,10 @@ test('reports the decision on a non-required check run beside the status', async
 test('revokes a published success check run and updates one run per head', async () => {
   const calls = []
   const checkRuns = [
-    { id: 7, app: { slug: 'github-actions' }, conclusion: 'success' },
-    { id: 8, app: { slug: 'github-actions' }, conclusion: 'skipped' },
-    { id: 9, app: { slug: 'other-app' }, conclusion: 'success' },
+    { id: 7, app: { slug: 'github-actions' }, conclusion: 'success', external_id: '' },
+    { id: 8, app: { slug: 'github-actions' }, conclusion: 'action_required', external_id: 'weighted-approval-decision' },
+    { id: 9, app: { slug: 'other-app' }, conclusion: 'success', external_id: '' },
+    { id: 10, app: { slug: 'github-actions' }, conclusion: 'success', external_id: 'a-job-check-run' },
   ]
   await publishApprovalPhase({
     event: pullRequestEvent(), runUrl: 'https://github.example/run/1', phase: 'pending',
@@ -540,7 +561,6 @@ test('revokes a published success check run and updates one run per head', async
     `/repos/deepseek-harness/deepseek-harness/statuses/${HEAD_SHA}`,
     `/repos/deepseek-harness/deepseek-harness/commits/${HEAD_SHA}/check-runs?check_name=weighted%20approval%20decision&filter=all&per_page=100`,
     '/repos/deepseek-harness/deepseek-harness/check-runs/7',
-    '/repos/deepseek-harness/deepseek-harness/check-runs/8',
   ])
   for (const call of calls.slice(2)) {
     assert.equal(call.method, 'PATCH')
