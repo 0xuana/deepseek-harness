@@ -310,7 +310,7 @@ describe('deriveTrajectoryLayout', () => {
     ])
   })
 
-  it('places steering in its resolved step instead of the turn-opening Message group', () => {
+  it('places opening and steering inputs in their respective consuming steps', () => {
     const nodes = [
       { kind: 'user', seq: 1, time: 1_000, content: [{ type: 'text', text: 'start' }], source: null },
       {
@@ -345,9 +345,13 @@ describe('deriveTrajectoryLayout', () => {
 
     expect(turns).toHaveLength(1)
     expect(turns[0]?.groups.map(group => group.title)).toEqual([
-      'Message', 'Step 1', 'Step 2',
+      'Step 1', 'Step 2',
     ])
-    expect(turns[0]?.groups[2]?.cells).toMatchObject([
+    expect(turns[0]?.groups[0]?.cells).toMatchObject([
+      { kind: 'user', previewMarkdown: 'start', opensTurn: true },
+      { kind: 'message', previewMarkdown: 'first step' },
+    ])
+    expect(turns[0]?.groups[1]?.cells).toMatchObject([
       { kind: 'user', previewMarkdown: 'change direction', sourceSeq: 3 },
       { kind: 'message', previewMarkdown: 'second step', sourceSeq: 4 },
     ])

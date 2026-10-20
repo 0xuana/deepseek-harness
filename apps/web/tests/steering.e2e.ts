@@ -28,6 +28,7 @@ const FIXTURE = join(SNAPSHOT_DIR, 'session.v3.jsonl')
 const MID_EXPECTED = join(SNAPSHOT_DIR, 'mid-steer.expected.md')
 const SETTLED_EXPECTED = join(SNAPSHOT_DIR, 'settled.expected.md')
 const SETTLED_EXPANDED_EXPECTED = join(SNAPSHOT_DIR, 'settled-expanded.expected.md')
+const TRAJECTORY_EXPECTED = join(SNAPSHOT_DIR, 'trajectory.expected.md')
 const MODE = webSnapshotMode()
 // The question composer replaces the textarea, so fill → Queue row → Steer
 // starts only after request/context and must finish before the first replay
@@ -193,6 +194,13 @@ describe('web e2e: mid-turn steering lands durably and visibly', () => {
       scaffold.workspaceCwd,
     )
     await compareOrRefreshGolden(SETTLED_EXPANDED_EXPECTED, expanded, MODE)
+    await page.getByRole('tab', { name: 'Trajectory', exact: true }).click()
+    await page.locator('[data-trajectory-row-key]').filter({ hasText: STEER }).waitFor({ timeout: 10_000 })
+    await compareOrRefreshGolden(
+      TRAJECTORY_EXPECTED,
+      await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd),
+      MODE,
+    )
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
   }, 200_000)
@@ -200,7 +208,98 @@ describe('web e2e: mid-turn steering lands durably and visibly', () => {
   it.skipIf(MODE === 'record')('keeps the fixture inventory closed', async () => {
     await assertFixtureInventory(SNAPSHOT_DIR, [
       'session.v3.jsonl', 'mid-steer.expected.md', 'settled.expected.md', 'settled-expanded.expected.md',
+      'trajectory.expected.md',
     ])
+  })
+})
+
+describe.skipIf(MODE === 'record')('web e2e: retained steering and a post-stop message', () => {
+  let scaffold: WebScaffold
+  let browser: Browser
+  let page: Page
+  let tripwire: ReturnType<typeof watchConsole>
+  const sessionEvents: SessionEvent[] = []
+  const requestInputs: string[][] = []
+  const releaseQuestion = Promise.withResolvers<undefined>()
+  const FOLLOWUP = 'Also acknowledge this second message.'
+  const RESPONSE = "Great, let's move forward. BANANA!"
+
+  beforeAll(async () => {
+    scaffold = await launchWebScaffold({ replayFixture: FIXTURE, compareReplaySession: false })
+    scaffold.ctx.on('session/event', (_session, event) => { sessionEvents.push(event) })
+    scaffold.ctx.on('llm/stream', async function* (options, next) {
+      requestInputs.push(options.messages.flatMap(message =>
+        message.role === 'user'
+          ? message.content.flatMap(block => block.type === 'text' ? [block.text] : [])
+          : []))
+      for await (const chunk of next()) {
+        yield chunk
+        if (requestInputs.length === 1 && chunk.type === 'block-start') await releaseQuestion.promise
+      }
+    }, { prepend: true })
+    browser = await chromium.launch()
+    page = await newEnglishPage(browser)
+    tripwire = watchConsole(page)
+    await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    await connectFreshWorkspace(page, scaffold.workspaceCwd)
+  })
+
+  afterAll(async () => {
+    releaseQuestion.resolve(undefined)
+    try {
+      await browser?.close()
+    } finally {
+      await scaffold?.close()
+    }
+  })
+
+  it('keeps both inputs before the response in Chat and Trajectory, including after reload', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-trajectory-input-order'))
+    const input = page.locator('[data-composer-input][contenteditable="true"]').first()
+    await input.fill(PROMPT)
+    await input.press('Enter')
+    await expect.poll(() => requestInputs.length, { timeout: 10_000 }).toBe(1)
+    await input.fill(STEER)
+    await input.press('Meta+Enter')
+    await page.locator('[data-pending-steering]').filter({ hasText: STEER }).waitFor({ timeout: 10_000 })
+    await page.getByRole('button', { name: 'Stop generating', exact: true }).click()
+    releaseQuestion.resolve(undefined)
+    await expect.poll(() => sessionEvents.filter(event => event.type === 'turn/end').length, { timeout: 10_000 }).toBe(1)
+    expect(claimedMessages(sessionEvents, STEER)).toHaveLength(0)
+
+    await input.fill(FOLLOWUP)
+    await input.press('Enter')
+    await expect.poll(() => sessionEvents.filter(event => event.type === 'turn/end').length, { timeout: 10_000 }).toBe(2)
+    expect(requestInputs.at(-1)?.filter(text => text === STEER || text === FOLLOWUP)).toEqual([STEER, FOLLOWUP])
+    const first = claimedMessages(sessionEvents, STEER)
+    const second = claimedMessages(sessionEvents, FOLLOWUP)
+    const response = sessionEvents.findLast(event => event.type === 'assistant/message')
+    expect(first).toHaveLength(1)
+    expect(second).toHaveLength(1)
+    expect(first[0]!.seq).toBeLessThan(second[0]!.seq)
+    expect(second[0]!.seq).toBeLessThan(response!.seq)
+
+    const expectOrder = async (selector: string) => {
+      await expect.poll(async () => {
+        const text = await page.locator(selector).textContent()
+        const expected = [STEER, FOLLOWUP, RESPONSE]
+        const positions = expected.map(value => text?.indexOf(value) ?? -1)
+        return positions.every(position => position >= 0)
+          && positions[0]! < positions[1]! && positions[1]! < positions[2]!
+          && expected.every(value => text?.indexOf(value) === text?.lastIndexOf(value))
+      }, { timeout: 10_000 }).toBe(true)
+    }
+    await page.getByText(RESPONSE, { exact: true }).waitFor()
+    await expectOrder('[class*="centerCol"]')
+    await page.getByRole('tab', { name: 'Trajectory', exact: true }).click()
+    await expectOrder('[data-trajectory-scroll]')
+    const warningStart = tripwire.warnings.length
+    await page.reload({ waitUntil: 'load' })
+    await expectOrder('[data-trajectory-scroll]')
+    acknowledgeReloadConnectionLoss(tripwire, warningStart)
+    expect(tripwire.pageErrors).toEqual([])
+    expect(tripwire.warnings).toEqual([])
   })
 })
 
