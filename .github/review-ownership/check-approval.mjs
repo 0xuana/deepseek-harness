@@ -359,7 +359,12 @@ export async function runApprovalCheck({ event, policySource, api, runUrl, getOw
 export async function publishApprovalPhase({ event, api, runUrl, phase }) {
   const pull = pullRequestFromEvent(event)
   if (phase === 'revoke') return revokeApproval(api, pull, runUrl)
-  if (phase === 'failure') return publishCheck(api, pull, 'failure', 'Approval setup or evaluation failed.', runUrl)
+  // The setup-failure step runs after an evaluation failure already concluded this run as failure
+  // with a title that names what failed; keep that write instead of replacing its title.
+  if (phase === 'failure') {
+    return publishCheck(api, pull, 'failure', 'Approval setup or evaluation failed.', runUrl,
+      run => run.conclusion === 'failure' && run.details_url === runUrl)
+  }
   throw new Error('invalid approval setup phase')
 }
 
@@ -469,7 +474,7 @@ async function reviewerPermission(api, repository, login) {
 
 // One decision per head keeps branch rules and CI watchers unambiguous; the head's existing GitHub
 // Actions run is updated and a run is created only when none exists.
-async function publishCheck(api, pull, conclusion, title, runUrl) {
+async function publishCheck(api, pull, conclusion, title, runUrl, keep = () => false) {
   requireHttpsRunUrl(runUrl)
   const body = { status: 'completed', conclusion, details_url: runUrl, output: { title, summary: `${title} [Workflow run](${runUrl})` } }
   const runs = await decisionRuns(api, pull)
@@ -477,9 +482,10 @@ async function publishCheck(api, pull, conclusion, title, runUrl) {
     await api(`/repos/${pull.repository}/check-runs`, { method: 'POST', body: { name: CHECK_NAME, head_sha: pull.headSha, ...body } })
     return
   }
-  for (const { id } of runs) {
-    if (!Number.isSafeInteger(id)) throw new Error('check run has no valid id')
-    await api(`/repos/${pull.repository}/check-runs/${id}`, { method: 'PATCH', body })
+  for (const run of runs) {
+    if (!Number.isSafeInteger(run.id)) throw new Error('check run has no valid id')
+    if (keep(run)) continue
+    await api(`/repos/${pull.repository}/check-runs/${run.id}`, { method: 'PATCH', body })
   }
 }
 

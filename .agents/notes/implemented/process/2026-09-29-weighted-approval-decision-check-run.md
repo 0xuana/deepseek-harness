@@ -28,9 +28,11 @@ A blocking review dominates the point total, so the conclusion remains `action_r
 
 ## Verification
 
-[Approval policy tests](../../../../.github/review-ownership/check-approval.test.mjs) pin the threshold-reaching blocker case, the exact published check-run payloads, revoking a published success through its conclusion, updating an existing run instead of creating another, and invalid list responses. [Workflow tests](../../../../scripts/ci-workflow.spec.ts) pin the `checks: write` permission, the `revoke` and `failure` phase commands, the publish step identity, and the fallback that runs when a run fails or is cancelled before publishing.
+[Approval policy tests](../../../../.github/review-ownership/check-approval.test.mjs) pin the threshold-reaching blocker case, the exact published check-run payloads, revoking a published success through its conclusion, updating an existing run instead of creating another, keeping the evaluation failure title when the setup-failure step follows it, and invalid list responses. [Workflow tests](../../../../scripts/ci-workflow.spec.ts) pin the `checks: write` permission, the `revoke` and `failure` phase commands, the publish step identity, and the fallback that runs when a run fails or is cancelled before publishing.
 
 The transition matrix and the fallback condition were measured on 2026-09-30 with throwaway tag runs in this repository, using the same GitHub Actions token as the publisher. A run created as `in_progress` and completed as `success` accepted `status: in_progress` and `status: queued` with `200` and stayed `completed`, while conclusion-only updates moved it to `action_required`, back to `success`, and to `failure`. The fallback step ran for a failed publish and for a cancellation during the publish step, and did not run when the job was cancelled after the decision was published.
+
+The list response's `total_count` counts the `check_name`-filtered runs rather than every check on the head: on 2026-10-20 a head carrying 33 check runs reported `total_count` 0 for a name that matches none and 2 for an existing name, so an equality between `total_count` and the returned array length rejects a truncated page.
 
 ## Alternatives considered
 
@@ -52,4 +54,6 @@ The transition matrix and the fallback condition were measured on 2026-09-30 wit
 
 CI watchers finish while the decision waits on reviewers. `gh pr checks` groups `action_required` with failed checks and exits non-zero; consumers distinguish it by the check name, the `ACTION_REQUIRED` conclusion, or the output title, which carries the score or blocker. The `weighted approval publisher` Actions job and the `failure` conclusion carry operational failures.
 
-Re-evaluating a head that already published `success` reports `action_required` until the new decision is written, so a watcher that polls inside that window sees a failed check. Heads created before this change keep their `weighted approval` commit status: no API completes or removes a commit status, so those heads stay pending for watchers until they receive a new commit.
+Re-evaluating a head that already published `success` reports `action_required` until the new decision is written, so a watcher that polls inside that window sees a failed check.
+
+The branch-rule switch leaves two gaps on heads the publisher has not evaluated since it. A head without the decision check run reports the required check as expected until a push, a review, or a re-run of its latest publisher run creates it. A head that also carries the earlier `weighted approval` commit status keeps that pending status until the same event: the combined status resolves each context to its latest status, so the rollout posts a terminal `success` status for that context on every open head instead of waiting for its next push.

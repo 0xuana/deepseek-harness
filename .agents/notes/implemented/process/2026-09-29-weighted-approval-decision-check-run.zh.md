@@ -28,9 +28,11 @@ commit status 只提供 `pending`、`success`、`failure` 和 `error`。`pending
 
 ## 验证
 
-[批准策略测试](../../../../.github/review-ownership/check-approval.test.mjs)锁定已达到阈值但仍有 blocker 的场景、准确发布的 check run payload、通过 conclusion 撤销已发布的成功、更新已有 run 而不是另建一个，以及无效的列表响应。[工作流测试](../../../../scripts/ci-workflow.spec.ts)锁定 `checks: write` 权限、`revoke` 和 `failure` 阶段命令、publish 步骤的身份，以及运行失败或在发布前被取消时执行的兜底步骤。
+[批准策略测试](../../../../.github/review-ownership/check-approval.test.mjs)锁定已达到阈值但仍有 blocker 的场景、准确发布的 check run payload、通过 conclusion 撤销已发布的成功、更新已有 run 而不是另建一个、安装失败步骤跟在评估失败之后时保留该标题，以及无效的列表响应。[工作流测试](../../../../scripts/ci-workflow.spec.ts)锁定 `checks: write` 权限、`revoke` 和 `failure` 阶段命令、publish 步骤的身份，以及运行失败或在发布前被取消时执行的兜底步骤。
 
 转换矩阵与该兜底条件于 2026-09-30 在本仓库用一次性 tag 运行实测，使用的是与 publisher 相同的 GitHub Actions token。以 `in_progress` 创建、以 `success` 完成的 run，接受 `status: in_progress` 和 `status: queued` 的更新时都返回 `200` 并保持 `completed`；只改 conclusion 的更新把它依次改为 `action_required`、`success` 和 `failure`。兜底步骤在发布失败以及在发布步骤执行期间被取消时运行，而在决策发布之后才取消 job 时不运行。
+
+列表响应中的 `total_count` 统计的是经 `check_name` 过滤后的 run，而不是该 head 上的全部检查：2026-10-20 实测，一个带有 33 个 check run 的 head，对不匹配任何 run 的名称返回 `total_count` 0，对已存在的名称返回 2，因此用 `total_count` 与返回数组长度相等来拒绝被截断的分页是有效的。
 
 ## 考虑过的替代方案
 
@@ -52,4 +54,6 @@ commit status 只提供 `pending`、`success`、`failure` 和 `error`。`pending
 
 决策等待评审人时，CI 监视工具会结束。`gh pr checks` 把 `action_required` 与失败的检查归为一组并以非零状态退出；消费方可以通过 check 名称、`ACTION_REQUIRED` conclusion 或携带分数或 blocker 的输出标题加以区分。`weighted approval publisher` Actions job 和 `failure` conclusion 承载运行故障信号。
 
-重新评估已经发布 `success` 的 head 时，在新决策写入前会报告 `action_required`，因此在该窗口内轮询的监视工具会看到失败的检查。本次变更之前创建的 head 会保留原有的 `weighted approval` commit status：没有任何 API 能完成或删除 commit status，因此这些 head 对监视工具一直是 pending，直到它们收到新的 commit。
+重新评估已经发布 `success` 的 head 时，在新决策写入前会报告 `action_required`，因此在该窗口内轮询的监视工具会看到失败的检查。
+
+分支规则切换后，对切换以来 publisher 尚未评估过的 head 存在两个缺口。没有该决策 check run 的 head 会把必需检查报告为 expected，直到一次 push、一次评审，或重跑其最新的 publisher run 创建它。同时也带有先前 `weighted approval` commit status 的 head 会一直保留那个 pending status 直到同一事件：combined status 对每个 context 取最新的 status，因此 rollout 对每个开放 head 发布该 context 的终态 `success` status，而不是等它下一次 push。

@@ -531,6 +531,26 @@ test('updates the head\'s GitHub Actions decision check run instead of creating 
   }
 })
 
+test('setup failure keeps the evaluation failure title published for the same run', async () => {
+  const calls = []
+  const checkRuns = [
+    { id: 7, app: { slug: 'github-actions' }, conclusion: 'failure', details_url: 'https://github.example/run/1' },
+    { id: 8, app: { slug: 'github-actions' }, conclusion: 'failure', details_url: 'https://github.example/old-run' },
+    { id: 9, app: { slug: 'github-actions' }, conclusion: 'action_required', details_url: 'https://github.example/run/1' },
+  ]
+  await publishApprovalPhase({
+    event: pullRequestEvent(), runUrl: 'https://github.example/run/1', phase: 'failure',
+    api: async (path, options) => {
+      if (!isCheckRunsList(path)) calls.push({ path, method: options?.method })
+      return isCheckRunsList(path) ? { total_count: checkRuns.length, check_runs: checkRuns } : {}
+    },
+  })
+  assert.deepEqual(calls, [
+    { path: '/repos/deepseek-harness/deepseek-harness/check-runs/8', method: 'PATCH' },
+    { path: '/repos/deepseek-harness/deepseek-harness/check-runs/9', method: 'PATCH' },
+  ])
+})
+
 for (const [mergedCount, credit] of [[0, 0], [1, 0.011], [50, 0.55], [99, 1.089], [100, 1.1], [101, 1.1], [200, 1.1]]) {
   test(`author with ${mergedCount} merged PRs contributes ${credit} points but cannot approve alone`, async () => {
     const result = await evaluateApproval({
@@ -585,7 +605,7 @@ test('blockers skip history and ignore non-write reviewers', async () => {
   assert.deepEqual(result.ignoredReviewers, ['reader'])
 })
 
-test('drafts skip history and history failures revoke success with error', async () => {
+test('drafts skip history and a failed history lookup concludes the check as failure', async () => {
   await evaluateApproval({
     event: pullRequestEvent({ draft: true }), policySource,
     getMergedCount: async () => { throw new Error('draft must skip history') },
@@ -1005,7 +1025,7 @@ test('a new sender review arriving during dismissal is not dismissed or delegate
   assert.deepEqual(result.blockers, ['turtle1999'])
 })
 
-test('a failed or unconfirmed dismissal prevents review requests and publishes error', async () => {
+test('a failed or unconfirmed dismissal prevents review requests and concludes failure', async () => {
   for (const rejected of [false, true]) {
     const states = []
     const read = delegationApi({ comments: [comment('turtle1999', '/delegate @writer')], reviews: [review('turtle1999', 'CHANGES_REQUESTED')] })
