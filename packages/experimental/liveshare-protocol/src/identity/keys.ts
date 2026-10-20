@@ -4,6 +4,10 @@ import type { IdentityTriple } from './types.ts'
 
 /**
  * Build the canonical identity key stored in share ACLs.
+ *
+ * The caller normalizes the identity first: {@link normalizeIdentity} fills the documented tenant
+ * placeholder, while an unnormalized empty tenant renders an empty segment that
+ * {@link identityFromKey} cannot parse.
  * @param identity Provider, tenant, and subject triple.
  * @returns Percent-encoded stable key with no user-controlled formatting.
  */
@@ -37,9 +41,10 @@ export function identityFromKey(key: string): IdentityTriple | undefined {
 }
 
 /**
- * Tenant id recorded for a provider that issues no tenant of its own, such as a
- * An account adapter whose provider issues no tenant of its own must reject an empty
- * tenant instead of using this placeholder; see {@link requireIdentityTenant}.
+ * Tenant id recorded for a provider that issues no tenant of its own.
+ *
+ * An account adapter whose provider issues no tenant must reject an empty tenant instead of using
+ * this placeholder; see {@link requireIdentityTenant}.
  */
 export const IDENTITY_TENANT_PLACEHOLDER = 'default'
 

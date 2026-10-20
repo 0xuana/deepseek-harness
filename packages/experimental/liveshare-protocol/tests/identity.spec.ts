@@ -30,6 +30,10 @@ describe('identity keys', () => {
     })
     expect(identityFromKey('example:only-two')).toBeUndefined()
     expect(identityFromKey('example:%E0%A4%A:user')).toBeUndefined()
+    // The key codec reads the triple it is given: a caller that skips normalization can build a key
+    // whose empty tenant segment its own parser refuses.
+    expect(identityKeyOf({ providerId: 'example', tenantId: '', subjectId: 'user' })).toBe('example::user')
+    expect(identityFromKey('example::user')).toBeUndefined()
   })
 
   it('fills the placeholder tenant only for a provider that issues none', () => {

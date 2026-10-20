@@ -35,6 +35,8 @@ import { parseGatewayFrame, rawText, sendFrame } from '@deepseek-ai/dsh-experime
 import { identityKeyOf, normalizeIdentity } from '@deepseek-ai/dsh-experimental-liveshare-protocol/identity'
 ```
 
+The viewer carrier (`installViewerCarrier`) and the viewer-state vocabulary are published through the root entry, not through their own subpaths, because both faces of the owner page consume them together.
+
 `parseGatewayFrame` returns one validated frame and answers `undefined` for malformed or unknown input, so a gateway this build does not understand cannot fail the connection. A caller that needs to answer the peer instead of leaving it waiting calls `unsupportedFrameRefusal`, which turns a frame this build cannot serve into the refusal to send back. `identityKeyOf` renders one actor as the `providerId:tenantId:subjectId` key every ACL comparison uses, and `normalizeIdentity` fills the documented `default` tenant for a provider that issues none.
 
 Relay compatibility uses declared versions, capabilities, and explicit refusals, not per-release frame translation or common-subset negotiation. Independently deployed peers have no agreed historical support window, so version-specific shims would add an unbounded set of behaviors to maintain. Published optional Relay fields remain optional; capability names are added only for implemented behavior and are never renamed or reinterpreted.
@@ -53,6 +55,8 @@ Relay compatibility uses declared versions, capabilities, and explicit refusals,
 |---|---|
 | [`src/index.ts`](src/index.ts) | Both faces re-exported for callers that want one import |
 | [`src/tunnel-protocol.ts`](src/tunnel-protocol.ts) | Owner/worker IPC frames, gateway frames, and their codecs |
+| [`src/viewer-carrier.ts`](src/viewer-carrier.ts) | Viewer-page carrier script and the owner page routes it forwards; reachable through the root entry |
+| [`src/viewer-states.ts`](src/viewer-states.ts) | Viewer state vocabulary and its answers, re-exported by `./protocol` and the root entry |
 | [`src/identity/types.ts`](src/identity/types.ts) | Provider-neutral identity triple and `IdentityProvider` contract |
 | [`src/identity/keys.ts`](src/identity/keys.ts) | Canonical ACL key codec and the tenant normalization adapters apply before storing an identity |
 | [`src/identity/mock.ts`](src/identity/mock.ts) | Loopback identity provider for local runs and tests |

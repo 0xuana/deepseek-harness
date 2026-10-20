@@ -35,6 +35,8 @@ import { parseGatewayFrame, rawText, sendFrame } from '@deepseek-ai/dsh-experime
 import { identityKeyOf, normalizeIdentity } from '@deepseek-ai/dsh-experimental-liveshare-protocol/identity'
 ```
 
+查看页载体（`installViewerCarrier`）与查看页状态词汇通过根入口发布，而不是各自的子路径，因为 owner 页面的两个面会一起消费它们。
+
 `parseGatewayFrame` 返回一个校验通过的帧，对畸形或未知输入返回 `undefined`，因此本构建不认识的 gateway 帧不会让连接失败。需要回答对端而不是让它空等的调用方使用 `unsupportedFrameRefusal`，它把一个本构建无法服务的帧变成要回送的拒绝。`identityKeyOf` 把一个 actor 渲染成所有 ACL 比较使用的 `providerId:tenantId:subjectId` 键，`normalizeIdentity` 为不签发 tenant 的 provider 填入文档化的 `default`。
 
 Relay 兼容性依靠声明版本、能力和明确拒绝，不提供逐发布版本的帧翻译或共同子集协商。独立部署的对端没有约定的历史支持窗口，因此逐版本适配会引入数量无界、需要持续维护的行为。已发布的可选 Relay 字段保持可选；能力名仅为已经实现的行为新增，绝不重命名或重新解释。
@@ -53,6 +55,8 @@ Relay 兼容性依靠声明版本、能力和明确拒绝，不提供逐发布�
 |---|---|
 | [`src/index.ts`](src/index.ts) | 为只想一次导入的调用方复出两个面 |
 | [`src/tunnel-protocol.ts`](src/tunnel-protocol.ts) | owner/worker IPC 帧、gateway 帧及其编解码 |
+| [`src/viewer-carrier.ts`](src/viewer-carrier.ts) | 查看页载体脚本及其转发的 owner 页面路由；经根入口引入 |
+| [`src/viewer-states.ts`](src/viewer-states.ts) | 查看页状态词汇及其应答，由 `./protocol` 与根入口复出 |
 | [`src/identity/types.ts`](src/identity/types.ts) | 与 provider 无关的身份三元组与 `IdentityProvider` 契约 |
 | [`src/identity/keys.ts`](src/identity/keys.ts) | 规范 ACL 身份键编解码，以及 adapter 存入身份前的 tenant 规范化 |
 | [`src/identity/mock.ts`](src/identity/mock.ts) | 供本地运行与测试使用的 loopback 身份 provider |
