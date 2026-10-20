@@ -213,7 +213,7 @@ function standaloneProps(
 ): StandaloneBaseProps {
   const trajectory = historySnapshot(nodes)
   const input = createSnapshotStore<InputState>({
-    draft: '', attachmentIds: [], draftRev: 0, phase: 'plain', occurrences: [], queue: [],
+    draft: '', attachmentIds: [], draftRev: 0, phase: 'plain', sendingAttachmentIds: [], occurrences: [], queue: [],
   })
   const inputActions: InputActions = {
     captureInsertion: () => ({ start: 0, end: 0, draftRev: 0 }),
@@ -342,7 +342,7 @@ function mount(fixture: Awaited<ReturnType<typeof bench>>) {
     createSnapshotStore<readonly ViewTab[]>(tabsOf(slots)),
   )
   const useInput = bindSnapshotSelector(createSnapshotStore<InputState>({
-    draft: '', attachmentIds: [], draftRev: 0, phase: 'plain', occurrences: [], queue: [],
+    draft: '', attachmentIds: [], draftRev: 0, phase: 'plain', sendingAttachmentIds: [], occurrences: [], queue: [],
   }))
   const inputActions: InputActions = {
     captureInsertion: () => ({ start: 0, end: 0, draftRev: 0 }),
@@ -410,6 +410,9 @@ function mount(fixture: Awaited<ReturnType<typeof bench>>) {
     <>
       <ConversationSessionHeader
         hideChrome={false}
+        useEntryPins={selector => selector([])}
+        useEntryActions={selector => selector(false)}
+        setPinned={vi.fn()}
         {...standardProps}
         SessionProvider={({ children }) => children}
         useStore={bindSnapshotSelector(conversation)}

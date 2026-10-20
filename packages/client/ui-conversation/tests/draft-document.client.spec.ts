@@ -479,6 +479,31 @@ describe('draft documents in the input shell', () => {
     expect(shell.snapshot.attachmentIds).toEqual([attachment])
   })
 
+  it('lets whenDraftExists keep, append to, or replace an existing draft ahead of clearPreviousDraft', () => {
+    const shell = makeShell()
+    const old = documentOf('existing ', session)
+    shell.setDraft(old)
+    expect(shell.requestDraftInitialization({ prompt: 'ignored', clearPreviousDraft: true, whenDraftExists: 'keep' })).toBe('preserved')
+    expect(shell.draftSnapshot).toEqual(old)
+    expect(shell.requestDraftInitialization({ whenDraftExists: 'append' })).toBe('preserved')
+    expect(shell.requestDraftInitialization({ prompt: '\uFFFC', whenDraftExists: 'append' })).toBe('applied')
+    expect(shell.draftSnapshot).toEqual(old)
+    expect(shell.requestDraftInitialization({ prompt: 'next\nline', whenDraftExists: 'append' })).toBe('applied')
+    expect(shell.draftSnapshot).toEqual({ text: `${old.text}\nnext\nline`, references: old.references })
+    expect(chips(shell)).toHaveLength(1)
+    expect(shell.requestDraftInitialization({ prompt: 'fresh', whenDraftExists: 'replace' })).toBe('applied')
+    expect(shell.draftSnapshot).toEqual({ text: 'fresh', references: [] })
+  })
+
+  it('appends to an attachment-only draft as its whole text', () => {
+    const shell = makeShell()
+    const attachment = 'draft-image' as DraftAttachmentId
+    shell.addAttachments([attachment])
+    expect(shell.requestDraftInitialization({ prompt: 'describe it', whenDraftExists: 'append' })).toBe('applied')
+    expect(shell.snapshot.draft).toBe('describe it')
+    expect(shell.snapshot.attachmentIds).toEqual([attachment])
+  })
+
   it('persists clearing so a persistence rebind and a new shell do not restore references', () => {
     const shell = makeShell()
     shell.setDraft(documentOf(file, ' ', session))
@@ -594,10 +619,16 @@ describe('draft documents in the input shell', () => {
         expect(shell.addAttachments([nextAttachment])).toBe(true)
         expect(shell.removeAttachment(nextAttachment)).toBe(true)
         expect(shell.addAttachments([nextAttachment])).toBe(true)
+        expect(shell.snapshot).toMatchObject({
+          attachmentIds: [sentAttachment, nextAttachment], sendingAttachmentIds: [sentAttachment],
+        })
         outcome.resolve({ kind: 'error', text: 'flight rejected' })
         await vi.waitFor(() => { expect(shell.notices.getSnapshot()?.text).toBe('flight rejected') })
         expect(shell.snapshot).toMatchObject({
-          phase: 'plain', draft: attachmentOnly ? '' : 'outbound message', attachmentIds: [sentAttachment, nextAttachment],
+          phase: 'plain',
+          draft: attachmentOnly ? '' : 'outbound message',
+          attachmentIds: [sentAttachment, nextAttachment],
+          sendingAttachmentIds: [],
         })
         expect(shell.removeAttachment(sentAttachment)).toBe(true)
         expect(shell.requestDraftInitialization({ prompt: 'after settlement', clearPreviousDraft: true })).toBe('applied')
@@ -608,6 +639,35 @@ describe('draft documents in the input shell', () => {
       }
     },
   )
+
+  it('settles a message the moment its sink reports the Host acceptance, before the sink resolves', async () => {
+    const outcome = Promise.withResolvers<SubmitOutcome>()
+    let accept: (() => void) | undefined
+    const sink = vi.fn<SessionInputDeps['defaultSink']>((_text, _ids, _mode, _signal, onAccept) => {
+      accept = onAccept
+      return outcome.promise
+    })
+    const shell = makeShell({ defaultSink: sink })
+    const sentAttachment = 'sent-image' as DraftAttachmentId
+    try {
+      shell.addAttachments([sentAttachment])
+      shell.setDraft('accepted early')
+      shell.submit()
+      await vi.waitFor(() => { expect(accept).toBeDefined() })
+      expect(shell.snapshot.phase).toBe('sending')
+      accept?.()
+      // In the same call, so the editor has shrunk before the Session renders the echo.
+      expect(shell.snapshot).toMatchObject({ phase: 'plain', draft: '', attachmentIds: [], sendingAttachmentIds: [] })
+      outcome.resolve({ kind: 'success' })
+      await outcome.promise
+      await Promise.resolve()
+      expect(shell.snapshot).toMatchObject({ phase: 'plain', draft: '', attachmentIds: [] })
+    } finally {
+      shell.dispose()
+      outcome.resolve({ kind: 'error' })
+      await outcome.promise
+    }
+  })
 
   it.each([
     {
@@ -649,7 +709,7 @@ describe('draft documents in the input shell', () => {
       expect(shell.addAttachments([nextAttachment])).toBe(true)
       outcome.resolve({ kind: 'success' })
       await vi.waitFor(() => { expect(shell.snapshot.phase).toBe('plain') })
-      expect(shell.snapshot).toMatchObject({ draft, attachmentIds: [nextAttachment] })
+      expect(shell.snapshot).toMatchObject({ draft, attachmentIds: [nextAttachment], sendingAttachmentIds: [] })
       expect(shell.caretSpan()).toEqual({ start: caret, end: caret })
       shell.editor.dispatchCommand(UNDO_COMMAND, undefined)
       shell.editor.update(() => {}, { discrete: true })

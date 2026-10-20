@@ -56,12 +56,18 @@ export interface SessionInputDeps {
    * order (the empty-draft accelerated-Enter gesture); absent = unsupported.
    */
   steerQueue?: (() => void) | undefined
-  /** The plain-message sink (send choreography / materialize fork — the hub owns it). */
+  /**
+   * The plain-message sink (send choreography / materialize fork — the hub owns it).
+   * `accept` settles the message as accepted at once; the sink calls it when
+   * the Host's acceptance is known before the returned outcome, so the editor
+   * shrinks before the message's echo renders.
+   */
   defaultSink(
     text: string,
     attachmentIds: readonly DraftAttachmentId[],
     mode: InputSubmitMode,
     signal: AbortSignal,
+    accept: () => void,
   ): Promise<SubmitOutcome>
   /** Command-plane attachment plumbing (the hub owns the conversation face and the copy). */
   commandAttachments: {
@@ -109,6 +115,8 @@ function errorText(error: unknown): string {
 }
 
 const EMPTY_QUEUE: InboxState['next-turn'] = []
+
+const EMPTY_ATTACHMENTS: readonly DraftAttachmentId[] = []
 
 /** Unavailable catalogs contain no named text references. */
 const EMPTY_LEXICON: ReadonlyMap<'/' | '@', readonly string[]> = new Map()
@@ -273,17 +281,24 @@ export class SessionInputShell implements SessionInput {
 
   /**
    * Apply one new-task request to this already-initialized input model.
-   * @param options - replacement content and explicit permission to clear existing text.
+   * @param options - content to adopt and the handling of an existing draft.
    * @returns applied when the requested text is adopted, even if unchanged;
    * preserved when the current draft is kept; blocked after disposal or during a pending submission.
    */
   requestDraftInitialization(options: DraftInitializationOptions): DraftInitializationResult {
     if (this.draftInitializationBlocked()) return 'blocked'
-    if (options.prompt === undefined && options.clearPreviousDraft !== true) return 'preserved'
-    if (options.clearPreviousDraft !== true && (this.snapshot.draft !== '' || this.attachmentIds.length > 0)) {
-      return 'preserved'
+    const whenDraftExists = options.whenDraftExists ?? (options.clearPreviousDraft === true ? 'replace' : 'keep')
+    if (whenDraftExists === 'replace') {
+      this.setDraft(options.prompt ?? '')
+      return 'applied'
     }
-    this.setDraft(options.prompt ?? '')
+    if (options.prompt === undefined) return 'preserved'
+    if (this.snapshot.draft === '' && this.attachmentIds.length === 0) {
+      this.setDraft(options.prompt)
+      return 'applied'
+    }
+    if (whenDraftExists === 'keep') return 'preserved'
+    this.draftEditor.appendDraft(options.prompt)
     return 'applied'
   }
 
@@ -683,7 +698,7 @@ export class SessionInputShell implements SessionInput {
     this.notifySubmission(attempt.submission)
     const { occurrences, attachmentIds } = attempt
     if (occurrences.length === 0) {
-      this.settleSink(attempt, this.deps.defaultSink(draft.trim(), attachmentIds, mode, attempt.signal))
+      this.settleSink(attempt, this.deps.defaultSink(draft.trim(), attachmentIds, mode, attempt.signal, () => { this.acceptSink(attempt) }))
       return
     }
     const inputTriggers = this.deps.inputTriggers?.()
@@ -707,7 +722,7 @@ export class SessionInputShell implements SessionInput {
           cursor = part.offset + part.length
         }
         out += draft.slice(cursor)
-        this.settleSink(attempt, this.deps.defaultSink(out.trim(), attachmentIds, mode, attempt.signal))
+        this.settleSink(attempt, this.deps.defaultSink(out.trim(), attachmentIds, mode, attempt.signal, () => { this.acceptSink(attempt) }))
       },
       (error: unknown) => { this.failSink(attempt, error) },
     )
@@ -730,17 +745,24 @@ export class SessionInputShell implements SessionInput {
     pending: Promise<SubmitOutcome>,
   ): void {
     pending.then(
-      (outcome) => {
-        if (this.dead(attempt)) return
-        const accepted = outcome.kind === 'success'
-        if (accepted && attempt.attachmentIds.length > 0) {
-          const sent = new Set(attempt.attachmentIds)
-          this.attachmentIds = this.attachmentIds.filter(id => !sent.has(id))
-        }
-        this.dispatchRun(({ type: 'sink-settled', attempt, ok: accepted, command: this.projection.command, outcome }))
-      },
+      (outcome) => { if (!this.dead(attempt)) this.applySinkOutcome(attempt, outcome) },
       (error: unknown) => { this.failSink(attempt, error) },
     )
+  }
+
+  /** Settle the message being sent as accepted when the sink learns the Host's acceptance before its outcome. */
+  private acceptSink(attempt: SubmitAttempt): void {
+    if (this.dead(attempt) || this.core.sendingAttempt !== attempt) return
+    this.applySinkOutcome(attempt, { kind: 'success' })
+  }
+
+  private applySinkOutcome(attempt: SubmitAttempt, outcome: SubmitOutcome): void {
+    const accepted = outcome.kind === 'success'
+    if (accepted && attempt.attachmentIds.length > 0) {
+      const sent = new Set(attempt.attachmentIds)
+      this.attachmentIds = this.attachmentIds.filter(id => !sent.has(id))
+    }
+    this.dispatchRun(({ type: 'sink-settled', attempt, ok: accepted, command: this.projection.command, outcome }))
   }
 
   /** Settle a send that ended without a Host outcome; the draft stays for correction. */
@@ -826,6 +848,7 @@ export class SessionInputShell implements SessionInput {
       attachmentIds: this.attachmentIds,
       draftRev: this.rev,
       phase: core.phase,
+      sendingAttachmentIds: this.core.sendingAttempt?.attachmentIds ?? EMPTY_ATTACHMENTS,
       ...(core.claim !== undefined ? { claim: core.claim } : {}),
       occurrences: this.projection.occurrences,
       queue: this.deps.inbox?.getSnapshot()?.['next-turn'] ?? EMPTY_QUEUE,
