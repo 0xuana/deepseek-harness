@@ -34,7 +34,7 @@ function fixture() {
   const props = { useCuaPermissions: bindSnapshotSelector(state), t: makeTranslate(en),
     setPersistentPtc: vi.fn(async () => true),
     useCuaDefaultPreset: bindSnapshotSelector(preset), setPtcDefault: vi.fn(async () => true),
-    refresh, request: vi.fn(), openSettings: vi.fn(), revoke: vi.fn(),
+    refresh, setActive: vi.fn((active: boolean) => { if (active) refresh() }), request: vi.fn(), openSettings: vi.fn(), revoke: vi.fn(),
     retryApproval: vi.fn(), dismissToast: vi.fn(),
   } satisfies PermissionPanelProps
   return { state, preset, props,
@@ -284,6 +284,26 @@ it('keeps all four requirements visible before the first permission response', (
   for (const permission of [en.accessibility, en.screenRecording]) expect(within(screen.getByRole('group', { name: permission })).queryByRole('button')).toBeNull()
 })
 
+it('keeps content mounted and pauses observation while the bundle changes', () => {
+  const f = fixture()
+  f.publish({ ...observe(value), system: { value: value.system, busy: false, error: 'provider is reloading' }, busy: false })
+  const view = render(<PermissionPanel {...f.props} busy />)
+  const requirements = screen.getByRole('region', { name: en.title })
+  expect(within(requirements).getAllByRole('group')).toHaveLength(4)
+  expect(screen.queryByRole('alert')).toBeNull()
+  expect(f.props.setActive).toHaveBeenLastCalledWith(false)
+  expect(screen.getByRole('button', { name: en.request }).hasAttribute('disabled')).toBe(true)
+  fireEvent.focus(window)
+  expect(f.props.refresh).not.toHaveBeenCalled()
+  f.publish({ system: { ...f.state.getSnapshot().system, busy: true, error: null }, busy: true })
+  view.rerender(<PermissionPanel {...f.props} busy={false} />)
+  expect(f.props.setActive).toHaveBeenLastCalledWith(true)
+  expect(screen.getByRole('region', { name: en.title })).toBe(requirements)
+  expect(f.props.refresh).toHaveBeenCalledOnce()
+  f.publish({ system: { ...f.state.getSnapshot().system, busy: false }, busy: false })
+  expect(screen.getByRole('button', { name: en.request }).hasAttribute('disabled')).toBe(false)
+})
+
 it('fills application names, system permissions, and icons as their observations arrive', () => {
   const f = fixture()
   render(<PermissionPanel {...f.props} />)
@@ -312,7 +332,7 @@ it('fills application names, system permissions, and icons as their observations
 it.each(['applications', 'icons'] as const)('contains a failed %s query in the application section', (key) => {
   const f = fixture()
   f.publish({ ...observe(value), [key]: { value: null, busy: false, error: 'offline' } })
-  render(<PermissionPanel {...f.props} />)
+  const view = render(<PermissionPanel {...f.props} />)
   const requirements = screen.getByRole('region', { name: en.title })
   const access = screen.getByRole('region', { name: en.applicationsTitle })
   expect(within(requirements).getByText(en.granted)).toBeTruthy()
@@ -320,6 +340,8 @@ it.each(['applications', 'icons'] as const)('contains a failed %s query in the a
   expect(within(access).getByRole('alert').textContent).toContain('offline')
   fireEvent.click(within(access).getByRole('button', { name: en.retry }))
   expect(f.props.refresh).toHaveBeenCalledTimes(2)
+  view.rerender(<PermissionPanel {...f.props} busy />)
+  expect(screen.queryByRole('alert')).toBeNull()
 })
 
 it('finishes activation guidance without waiting for application icons', () => {

@@ -1,5 +1,5 @@
 /** Built permission UI talks to the real provider; the isolated helper substitutes only macOS privilege observations. */
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -33,13 +33,12 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
     icon: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC' }
   await writeFile(state, JSON.stringify({ accessibility: false, screenRecording: false, launchApplication }))
   await writeFile(join(root, 'observe-helper'), '')
-  const fixtureBundle = join(root, 'fixture-bundle')
-  await mkdir(fixtureBundle)
-  await writeFile(join(fixtureBundle, 'package.json'), JSON.stringify({ name: 'cua-permission-fixture', version: '1.0.0',
-    dsh: { bundle: { patch: 'cordis.patch.yml' } } }))
-  await writeFile(join(fixtureBundle, 'cordis.patch.yml'), `- id: cua\n  config: ${JSON.stringify({ helperPath: helper })}\n`)
+  const fixturePatch = join(root, 'native-fixture.yml')
+  // Keep the helper override above bundle order changes when CUA is re-enabled.
+  await writeFile(fixturePatch, JSON.stringify([{ id: 'cua', config: { helperPath: helper } }]))
   const scaffold = await launchWebScaffold({
-    profile: { packages: [{ dir: bundle, enabled: true }, { dir: fixtureBundle, enabled: true }] },
+    profile: { packages: [{ dir: bundle, enabled: true }] },
+    extraOverlayPath: fixturePatch,
   })
   resources.scaffold = scaffold
   await scaffold.ctx.settings.mutate('cua', [{ op: 'set', path: ['allowedApps'],
@@ -153,5 +152,42 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
     { method: 'openPermissionSettings', params: { permission: 'accessibility' } },
   ])
   expect(events.every(event => ['permissionStatus', 'requestPermission', 'openPermissionSettings', 'applicationIcons', 'getApp'].includes(event.method))).toBe(true)
+  const trace = await page.evaluateHandle(() => {
+    const errors: string[] = []
+    const heights: number[] = []
+    let frame = 0
+    const measure = () => {
+      const settings = document.querySelector('[data-cua-settings]')
+      if (settings) heights.push(settings.getBoundingClientRect().height)
+      frame = requestAnimationFrame(measure)
+    }
+    measure()
+    const observer = new MutationObserver(() => {
+      for (const node of document.querySelectorAll('[data-cua-settings] [role="alert"]')) {
+        const text = node.textContent?.trim()
+        if (text && errors.at(-1) !== text) errors.push(text)
+      }
+    })
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true })
+    return { errors, heights, stop: () => { observer.disconnect(); cancelAnimationFrame(frame) } }
+  })
+  try {
+    const toggle = page.locator('[data-plugin-panel]').getByRole('switch', { name: 'Enable Computer Use', exact: true })
+    for (let cycle = 0; cycle < 3; cycle++) {
+      await toggle.click()
+      await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('false')
+      await expect.poll(() => toggle.isEnabled()).toBe(true)
+      await toggle.click()
+      await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
+      await expect.poll(() => panel.getAttribute('aria-busy')).toBe('false')
+      expect(await trace.evaluate(value => value.errors)).toEqual([])
+    }
+    const heights = await trace.evaluate(value => value.heights)
+    expect(heights.length).toBeGreaterThan(1)
+    expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(1)
+  } finally {
+    await trace.evaluate((value) => { value.stop() })
+    await trace.dispose()
+  }
   expect(tripwire.pageErrors).toEqual([])
 }, 60_000)

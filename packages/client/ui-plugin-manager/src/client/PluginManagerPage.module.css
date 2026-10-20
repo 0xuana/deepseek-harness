@@ -380,9 +380,9 @@
 .skeletonDescription { width: min(280px, 85%); }
 .skeletonIcon { border-color: transparent; }
 
-/* Keep text-column metrics while leaving the action area blank. */
+/* Reserve the switch and its pending indicator without painting controls. */
 .skeletonActions {
-  width: 36px;
+  width: calc(36px + 8px + 14px);
   height: 20px;
 }
 
@@ -403,6 +403,17 @@
   flex: none;
   align-items: center;
   gap: 8px;
+}
+
+.bundleToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toggleProgress {
+  display: inline-flex;
+  width: 14px;
 }
 
 /* The toolbar's icon action, round like the message-row actions. */

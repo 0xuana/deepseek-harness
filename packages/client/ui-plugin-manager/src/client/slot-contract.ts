@@ -26,6 +26,8 @@ import type { ConfigForm, ConfigFormSnapshot } from '@deepseek-ai/dsh-client-ui-
 export interface PluginConfigViewProps {
   /** `summary` renders the one-liner alone, as text or inline nodes; `page` renders the form with its save control. */
   readonly view: 'summary' | 'page'
+  /** Whether the owning bundle is being changed; supplied on bundle configuration pages. */
+  readonly busy?: boolean
   /** Host-owned configuration values and write actions for this page's entry. */
   readonly form?: ConfigPageForm | undefined
 }
