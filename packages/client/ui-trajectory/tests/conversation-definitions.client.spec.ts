@@ -19,6 +19,7 @@ import { registerTrajectoryRequestHeaderDefinition } from '../src/client/traject
 import { trajectoryViewDefinition } from '../src/client/trajectory-snapshot-builder.ts'
 import { registerTrajectoryToolDefinition } from '../src/client/trajectory-tool-definition.ts'
 import { deriveTrajectoryLayout } from '../src/client/layout.ts'
+import { deriveTrajectoryTimeline } from '../src/client/timeline.ts'
 import { t } from './locale.client.ts'
 
 const DEFINITIONS: ConversationNodeDefinition[] = []
@@ -174,6 +175,81 @@ function systemMessage(text: string) {
 }
 
 describe('Trajectory conversation Definitions', () => {
+  describe.each([{ turn: 2, step: 1 }, { turn: 1, step: 2 }])(
+    'request prompt ordering in turn $turn, step $step',
+    ({ turn, step }) => {
+      it.each(['waiting', 'streaming', 'settled'] as const)(
+        'keeps tool changes after inputs and before the response (%s)',
+        (phase) => {
+          const events = [
+            at(1, 'turn/start', { turn: 1 }),
+            at(2, 'step/start', { turn: 1, step: 1 }),
+            at(3, 'system/message', { turn: 1, step: 1, message: systemMessage('prompt') }, { surfaceOp: 'append' }),
+            at(4, 'request/header', {
+              reason: 'initial', header: { config: { provider: 'test', model: 'test' }, tools: [] },
+            }),
+            at(5, 'assistant/message', { turn: 1, step: 1, message: assistantMessage('first', 'Earlier response') }),
+            at(6, 'step/end', { turn: 1, step: 1 }),
+          ]
+          if (turn === 2) {
+            events.push(
+              at(7, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),
+              at(8, 'turn/start', { turn }),
+            )
+          }
+          events.push(
+            at(9, 'step/start', { turn, step }),
+            at(10, 'user/message', {
+              id: 'followup', role: 'user', content: [{ type: 'text', text: 'Continue' }], source: { kind: 'user' },
+            }),
+            at(11, 'developer/message', {
+              message: {
+                id: 'tool-update', role: 'developer',
+                content: [{ type: 'tool-addition', toolName: 'search' }],
+                source: { kind: 'tool-registry' },
+              },
+            }),
+            at(12, 'request/header', {
+              reason: 'series',
+              header: {
+                config: { provider: 'test', model: 'test' },
+                tools: [{ name: 'search', description: 'Search', parameters: { type: 'object', properties: {} } }],
+              },
+            }),
+          )
+          if (phase === 'streaming') {
+            events.push(
+              at(13, 'assistant/live-chunk', { turn, step, chunk: { type: 'block-start', index: 0, blockType: 'text' } }),
+              at(14, 'assistant/live-chunk', { turn, step, chunk: { type: 'text-delta', index: 0, text: 'Answer' } }),
+            )
+          } else if (phase === 'settled') {
+            events.push(
+              at(13, 'assistant/message', { turn, step, message: assistantMessage('answer', 'Answer') }),
+              at(14, 'step/end', { turn, step }),
+            )
+          }
+          const current = snapshot(assembler(events))
+          expect(current.requests.at(-1)).toMatchObject({ turn, step, promptChange: { kind: 'tools', seq: 12 } })
+          const turns = deriveTrajectoryLayout({ ...current, nodes: current.eventNodes }, t)
+          const cells = turns.flatMap(value => value.groups.flatMap(group => group.cells))
+          const requestCells = turns.find(value => value.turn === turn)?.groups
+            .filter(group => group.title === `Step ${step}`).flatMap(group => group.cells)
+          expect(requestCells?.map(cell => cell.requestOnly ? '[request]' : cell.previewMarkdown || cell.text)).toEqual([
+            'Continue', 'Tool added: search', 'Tools Updated', phase === 'waiting' ? '[request]' : 'Answer',
+          ])
+          const byIndex = new Map(cells.map(cell => [cell.index, cell]))
+          expect(deriveTrajectoryTimeline(turns)?.spans.map((span) => {
+            const cell = byIndex.get(span.index)!
+            return cell.previewMarkdown || cell.text
+          })).toEqual([
+            'Initial System Prompt', 'Earlier response', 'Continue', 'Tool added: search', 'Tools Updated',
+            ...phase === 'waiting' ? [] : ['Answer'],
+          ])
+        },
+      )
+    },
+  )
+
   it.each(['waiting', 'streaming', 'settled', 'prepend'] as const)(
     'keeps retained steering and subsequent inputs before their shared response (%s)',
     (phase) => {

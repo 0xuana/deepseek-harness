@@ -325,10 +325,7 @@ export function deriveTrajectoryLayout(
     }
     if (entry.kind === 'system') {
       const { change, request } = entry
-      const turn = change.kind === 'initial'
-        ? firstVisibleTurn(nodes, partial)
-        : enclosingPromptTurn(nodes, change.seq, partial)
-      pushMessage(turn, {
+      const laid: LaidCell = {
         absTime: finiteTime(change.time),
         cell: {
           index: ++index,
@@ -343,7 +340,15 @@ export function deriveTrajectoryLayout(
           timeSeconds: 0,
           startedAt: finiteTime(change.time),
         },
-      })
+      }
+      if (request !== undefined) {
+        pushStepInput(request.turn, request.step, [laid])
+      } else {
+        const turn = change.kind === 'initial'
+          ? firstVisibleTurn(nodes, partial)
+          : enclosingPromptTurn(nodes, change.seq, partial)
+        pushMessage(turn, laid)
+      }
       prevAbsTime = finiteTime(change.time) ?? prevAbsTime
       continue
     }
@@ -402,6 +407,7 @@ export function deriveTrajectoryLayout(
     }
     const { node, nodeIndex: i } = entry
     if (node.kind === 'user' || node.kind === 'steering' || node.kind === 'context') {
+      // Without request location, steering stays in the preceding turn; other inputs open the next.
       const placement = inputPlacement(
         followingAssistants[i],
         partial,
