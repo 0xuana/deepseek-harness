@@ -33,12 +33,13 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
     icon: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC' }
   await writeFile(state, JSON.stringify({ accessibility: false, screenRecording: false, launchApplication }))
   await writeFile(join(root, 'observe-helper'), '')
-  const fixturePatch = join(root, 'native-fixture.yml')
-  // Keep the helper override above bundle order changes when CUA is re-enabled.
-  await writeFile(fixturePatch, JSON.stringify([{ id: 'cua', config: { helperPath: helper } }]))
+  const fixtureBundle = join(root, 'fixture-bundle')
+  await mkdir(fixtureBundle)
+  await writeFile(join(fixtureBundle, 'package.json'), JSON.stringify({ name: 'cua-permission-fixture', version: '1.0.0',
+    dsh: { bundle: { patch: 'cordis.patch.yml' } } }))
+  await writeFile(join(fixtureBundle, 'cordis.patch.yml'), `- id: cua\n  config: ${JSON.stringify({ helperPath: helper })}\n`)
   const scaffold = await launchWebScaffold({
-    profile: { packages: [{ dir: bundle, enabled: true }] },
-    extraOverlayPath: fixturePatch,
+    profile: { packages: [{ dir: bundle, enabled: true }, { dir: fixtureBundle, enabled: true }] },
   })
   resources.scaffold = scaffold
   await scaffold.ctx.settings.mutate('cua', [{ op: 'set', path: ['allowedApps'],

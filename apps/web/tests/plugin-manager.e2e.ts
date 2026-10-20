@@ -298,7 +298,7 @@ describe('web e2e: plugin manager', () => {
           width: node.getBoundingClientRect().width,
           height: node.getBoundingClientRect().height,
         })))
-        expect(blankActions).toEqual(Array.from({ length: 4 }, () => ({ children: 0, background: 'rgba(0, 0, 0, 0)', width: 36, height: 20 })))
+        expect(blankActions).toEqual(Array.from({ length: 4 }, () => ({ children: 0, background: 'rgba(0, 0, 0, 0)', width: 58, height: 20 })))
         if (shots !== undefined) {
           for (const colorScheme of ['light', 'dark'] as const) {
             await probe.emulateMedia({ colorScheme })
