@@ -261,9 +261,12 @@ describe('web e2e: macOS window drag coverage', () => {
         await body.evaluate((element) => { element.scrollTop = 120 })
         await page.waitForFunction(() => document.querySelector('[data-plugin-bar]')?.hasAttribute('data-compact'))
         const after = await toolbarGeometry()
-        expect(after.padding).toBe(platform === 'darwin' ? 64 : 16)
-        expect(after.buttons).toEqual(before.buttons.map(button => ({ ...button, y: button.y - 12 })))
-        expect(after.buttons.every(button => button.y >= (platform === 'darwin' ? 48 : 40))).toBe(true)
+        // macOS only needs the top strip cleared while the sidebar is collapsed; with it open the
+        // native controls live in the sidebar, so the compact bar keeps its own 16px spacing.
+        const compactTop = platform === 'darwin' && collapsed ? 64 : 16
+        expect(after.padding).toBe(compactTop)
+        expect(after.buttons).toEqual(before.buttons.map(button => ({ ...button, y: button.y - (before.padding - compactTop) })))
+        expect(after.buttons.every(button => button.y >= (platform === 'darwin' ? compactTop : 16))).toBe(true)
         expect(await body.evaluate(element => element.getBoundingClientRect().top))
           .toBe(await bar.evaluate(element => element.getBoundingClientRect().bottom))
         if (platform === 'darwin') expect(swallowedBoxes(await collectedRegions(page, INTERACTIVE_SELECTOR))).toEqual([])

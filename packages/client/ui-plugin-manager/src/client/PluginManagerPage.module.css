@@ -1585,6 +1585,16 @@ label.registryOption {
   padding-bottom: 16px;
 }
 
+/* With the sidebar open, native window controls sit in the sidebar rather than above the page. */
+:global([data-platform='darwin']) .pageBar[data-compact] .pageHead {
+  padding-top: var(--plugin-page-top-inset);
+}
+
+/* Collapsing the sidebar moves those controls above the page; the compact bar then clears them. */
+:global([data-platform='darwin']) :global([data-sidebar-collapsed]) .pageBar[data-compact] .pageHead {
+  padding-top: calc(var(--plugin-page-top-inset) + var(--dsh-frame-top-clearance, 0px));
+}
+
 /* The collapsed bar's divider spans the page like the scrolled list and its scrollbar. */
 .pageBar[data-compact]::after {
   content: '';
