@@ -11,6 +11,7 @@ const API_VERSION = '2026-03-10'
 const MAX_PULL_REQUEST_RECORDS = 3_000
 const PAGE_SIZE = 100
 const CHECK_NAME = 'weighted approval decision'
+const PASSING_CONCLUSIONS = new Set(['success', 'neutral', 'skipped'])
 const WRITABLE_PERMISSIONS = new Set(['admin', 'write'])
 const REVIEW_STATES = new Set(['APPROVED', 'CHANGES_REQUESTED', 'COMMENTED', 'DISMISSED', 'PENDING'])
 
@@ -306,10 +307,10 @@ export async function evaluateApproval({ event, policySource, api, getOwnership 
 
 /**
  * Evaluate and publish the required check run, concluding it as failure when evaluation fails.
- * @param {{event: unknown, policySource: string, api: (path: string, options?: {method?: string, body?: unknown}) => Promise<unknown>, runUrl: string, write?: (line: string) => void, getOwnership?: typeof productionOwnership, getMergedCount?: typeof countMergedAuthorPulls}} options Runtime inputs.
+ * @param {{event: unknown, policySource: string, api: (path: string, options?: {method?: string, body?: unknown}) => Promise<unknown>, runUrl: string, write?: (line: string) => void, record?: (conclusion: string) => void, getOwnership?: typeof productionOwnership, getMergedCount?: typeof countMergedAuthorPulls}} options Runtime inputs; record receives each conclusion the run publishes.
  * @returns {Promise<Awaited<ReturnType<typeof evaluateApproval>>>} Published approval decision.
  */
-export async function runApprovalCheck({ event, policySource, api, runUrl, getOwnership = productionOwnership, getMergedCount = countMergedAuthorPulls, write = line => process.stdout.write(`${line}\n`) }) {
+export async function runApprovalCheck({ event, policySource, api, runUrl, getOwnership = productionOwnership, getMergedCount = countMergedAuthorPulls, write = line => process.stdout.write(`${line}\n`), record = () => {} }) {
   const pull = pullRequestFromEvent(event)
   let result
   try {
@@ -331,7 +332,7 @@ export async function runApprovalCheck({ event, policySource, api, runUrl, getOw
     }
   } catch (error) {
     await publishCheck(api, pull, 'failure', 'Approval evaluation failed.', runUrl)
-    recordConclusion('failure')
+    record('failure')
     throw error
   }
   write(result.authorCredit
@@ -343,7 +344,7 @@ export async function runApprovalCheck({ event, policySource, api, runUrl, getOw
   writeList(write, 'Blocking change requests', result.blockers.map(login => `@${login}`))
   writeList(write, 'Ignored reviewers without write access', result.ignoredReviewers.map(login => `@${login}`))
   await publishCheck(api, pull, result.state, result.description, runUrl)
-  recordConclusion(result.state)
+  record(result.state)
   write(`Published ${JSON.stringify(CHECK_NAME)} check run ${JSON.stringify(result.state)}.`)
   try {
     await requestDelegatedReviews(result, api, write)
@@ -501,9 +502,9 @@ async function revokeApproval(api, pull, runUrl) {
   }
   for (const { id, conclusion } of runs) {
     if (!Number.isSafeInteger(id)) throw new Error('check run has no valid id')
-    // This publisher concludes a run success only when the policy is met, so a published success is
-    // the only conclusion here that satisfies the branch rule; it never writes neutral or skipped.
-    if (conclusion !== 'success') continue
+    // Revoke every conclusion a required check accepts, not only the success this publisher writes:
+    // a workflow job added by the pull request can produce a same-named passing check run.
+    if (!PASSING_CONCLUSIONS.has(conclusion)) continue
     await api(`/repos/${pull.repository}/check-runs/${id}`, {
       method: 'PATCH',
       body: { status: 'completed', conclusion: 'action_required', details_url: runUrl, output },
@@ -519,12 +520,6 @@ async function decisionRuns(api, pull) {
     throw new Error('check-run list response is invalid or incomplete')
   }
   return listed.check_runs.filter(run => isRecord(run) && isRecord(run.app) && run.app.slug === 'github-actions')
-}
-
-// The setup-failure step reads this output so it replaces a conclusion only when this run did not
-// already publish one; a cancelled run cannot rely on the step outcome for that distinction.
-function recordConclusion(conclusion) {
-  if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `concluded=${conclusion}\n`)
 }
 
 function requireHttpsRunUrl(runUrl) {
@@ -629,6 +624,9 @@ async function main() {
     policySource,
     api,
     runUrl: process.env.GITHUB_RUN_URL ?? '',
+    record: (conclusion) => {
+      if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `concluded=${conclusion}\n`)
+    },
   })
 }
 

@@ -1,7 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import {
@@ -450,6 +448,9 @@ test('revokes a published success without returning a completed run to in progre
     { id: 7, app: { slug: 'github-actions' }, conclusion: 'success' },
     { id: 8, app: { slug: 'github-actions' }, conclusion: 'action_required' },
     { id: 9, app: { slug: 'other-app' }, conclusion: 'success' },
+    { id: 10, app: { slug: 'github-actions' }, conclusion: 'skipped' },
+    { id: 11, app: { slug: 'github-actions' }, conclusion: 'neutral' },
+    { id: 12, app: { slug: 'github-actions' }, conclusion: null },
   ]
   await publishApprovalPhase({
     event: pullRequestEvent(), runUrl: 'https://github.example/run/1', phase: 'revoke',
@@ -458,20 +459,20 @@ test('revokes a published success without returning a completed run to in progre
       return isCheckRunsList(path) ? { total_count: checkRuns.length, check_runs: checkRuns } : {}
     },
   })
-  assert.deepEqual(calls, [{
-    path: `/repos/deepseek-harness/deepseek-harness/commits/${HEAD_SHA}/check-runs?check_name=weighted%20approval%20decision&filter=all&per_page=100`,
-    method: undefined,
-    body: undefined,
-  }, {
-    path: '/repos/deepseek-harness/deepseek-harness/check-runs/7',
-    method: 'PATCH',
-    body: {
+  assert.deepEqual(calls.map(({ path }) => path), [
+    `/repos/deepseek-harness/deepseek-harness/commits/${HEAD_SHA}/check-runs?check_name=weighted%20approval%20decision&filter=all&per_page=100`,
+    '/repos/deepseek-harness/deepseek-harness/check-runs/7',
+    '/repos/deepseek-harness/deepseek-harness/check-runs/10',
+    '/repos/deepseek-harness/deepseek-harness/check-runs/11',
+  ])
+  for (const call of calls.slice(1)) {
+    assert.deepEqual(call.body, {
       status: 'completed',
       conclusion: 'action_required',
       details_url: 'https://github.example/run/1',
       output: { title: 'Preparing approval evaluation.', summary: 'Preparing approval evaluation. [Workflow run](https://github.example/run/1)' },
-    },
-  }])
+    })
+  }
 })
 
 for (const reviewers of [['first', 'second'], ['turtle1999', 'first']]) {
@@ -533,12 +534,8 @@ test('updates the head\'s GitHub Actions decision check run instead of creating 
   }
 })
 
-test('records the concluded decision so the failure step never replaces it', async () => {
-  const directory = mkdtempSync(join(tmpdir(), 'approval-output-'))
-  const output = join(directory, 'output')
-  writeFileSync(output, '')
-  const previous = process.env.GITHUB_OUTPUT
-  process.env.GITHUB_OUTPUT = output
+test('records each published conclusion so the failure step never replaces it', async () => {
+  const recorded = []
   const api = async (path, options) => {
     if (isCheckRunsList(path)) return emptyCheckRuns
     if (path.includes('/reviews?')) return [review('turtle2099', 'APPROVED')]
@@ -547,29 +544,24 @@ test('records the concluded decision so the failure step never replaces it', asy
     assert.match(path, /\/check-runs$/u)
     return {}
   }
-  try {
-    await runApprovalCheck({
-      event: pullRequestEvent(), policySource, runUrl: 'https://github.example/run/1', api, write: () => {},
-    })
-    assert.match(readFileSync(output, 'utf8'), /^concluded=success$/mu)
-    writeFileSync(output, '')
-    await assert.rejects(runApprovalCheck({
-      event: pullRequestEvent(), policySource, runUrl: 'https://github.example/run/2', write: () => {},
-      getMergedCount: async () => { throw new Error('history unavailable') },
-      api: async path => {
-        if (isCheckRunsList(path)) return emptyCheckRuns
-        if (path.includes('/reviews?')) return []
-        if (path.includes('/comments?')) return []
-        return {}
-      },
-    }), /history unavailable/u)
-    assert.match(readFileSync(output, 'utf8'), /^concluded=failure$/mu)
-  } finally {
-    if (previous === undefined) delete process.env.GITHUB_OUTPUT
-    else process.env.GITHUB_OUTPUT = previous
-    rmSync(directory, { recursive: true, force: true })
-  }
+  await runApprovalCheck({
+    event: pullRequestEvent(), policySource, runUrl: 'https://github.example/run/1', api, write: () => {},
+    record: conclusion => recorded.push(conclusion),
+  })
+  await assert.rejects(runApprovalCheck({
+    event: pullRequestEvent(), policySource, runUrl: 'https://github.example/run/2', write: () => {},
+    getMergedCount: async () => { throw new Error('history unavailable') },
+    record: conclusion => recorded.push(conclusion),
+    api: async path => {
+      if (isCheckRunsList(path)) return emptyCheckRuns
+      if (path.includes('/reviews?')) return []
+      if (path.includes('/comments?')) return []
+      return {}
+    },
+  }), /history unavailable/u)
+  assert.deepEqual(recorded, ['success', 'failure'])
 })
+
 
 for (const [mergedCount, credit] of [[0, 0], [1, 0.011], [50, 0.55], [99, 1.089], [100, 1.1], [101, 1.1], [200, 1.1]]) {
   test(`author with ${mergedCount} merged PRs contributes ${credit} points but cannot approve alone`, async () => {
