@@ -1,5 +1,6 @@
 - button "返回 实验性插件": 实验性插件
 - button "卸载 思考过程机器翻译" [disabled]: 卸载
+- status
 - switch "启用 思考过程机器翻译" [checked]
 - heading "思考过程机器翻译" [level=3]
 - text: v{{version}} 实验性
