@@ -2,7 +2,7 @@
   - text: Personalized pages
   - button "How creation works and token usage"
   - strong: Counter
-  - paragraph: "Need: Keep a small counter visible across conversations. Location: A card titled Today’s achievements in the right sidebar. Controls: Increment and reset buttons beside the current value. Storage: Save changes in browser storage across navigation and refresh. Appearance: Follow the existing sidebar theme in light and dark mode. Completion: Both controls work and reopening restores the saved value."
+  - paragraph: "Need: Keep a small counter visible across conversations. Location: A card titled…"
   - button "View full plan"
   - text: Add to
   - 'button "Add to: Write your own"': Write your own

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Users see one creation proposal below the completed answer. Plans show three lines and expand. A dropdown offers Right sidebar, Session tab, Global page, or Write your own. The cost notice opens until dismissed; this browser remembers the choice across sessions. The information button reopens it. Only Create starts background work; chatting can continue. Progress appears in the header. Keep confirms retention; Undo removes the plugin.
+Users see one creation proposal below the completed answer. Short plans appear in full; longer ones show an expandable 80-grapheme preview. A dropdown offers Right sidebar, Session tab, Global page, or Write your own. The cost notice opens until dismissed; this browser remembers the choice across sessions. The information button reopens it. Only Create starts background work; chatting can continue. Progress appears in the header. Keep confirms retention; Undo removes the plugin.
 
 ## Table of Contents
 
@@ -32,6 +32,8 @@ Enable the [Personalized pages bundle](../creation-recommendations/README.md). T
 Creation, installation, retention and removal receipts come from the Session projection. The card restores them after reconnecting. A lost action reply shows an actionable error; retry uses the Host’s recorded state. Pending requests disable repeated actions. During generation, Cancel stops the child and waits for cleanup before retry. Accepted installations finish without cancellation. The information disclosure contains the source directory and explains that Undo keeps those files.
 
 Write your own reveals a placement field, limited to 1,000 characters; blank input cannot start creation. Choosing a preset ignores that custom text. Accepted requests persist it with the receipt for reconnect and retry, and Creator receives it with the full brief. Editing the draft, opening the menu and reading the cost notice make no model request. Dismissing the notice or choosing Create/Not now acknowledges it in browser-local storage; a new browser or cleared/unavailable storage can show it again. Historical settled cards keep the notice collapsed.
+
+Plan disclosure depends on omitted text, not rendered height. Long previews collapse whitespace and preserve grapheme boundaries, including combined emoji; expanding restores the original brief. Short plans remain complete at every viewport width. Lines wrap naturally, with no fixed three-line limit, DOM measurement, or ResizeObserver.
 
 -----
 

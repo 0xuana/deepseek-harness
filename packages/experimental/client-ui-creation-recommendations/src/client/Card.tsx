@@ -1,5 +1,5 @@
 /** Completed-answer creation card with location selection and undo. */
-import { useId, useLayoutEffect, useRef, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { Button, IconChevronDownOutlineRegular, IconInfoOutlineRegular, Menu, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
@@ -46,27 +46,18 @@ function LocationPicker({ value, disabled, onChange, t }: {
     </Button>} />
 }
 
-/** Keep long plans compact without truncating the brief sent to Creator. */
+/** Fold omitted content, without measuring layout or changing Creator's brief. */
 function CreationPlan({ brief, t }: { brief: string } & PropsLocale<'creationRecommendations'>) {
-  const ref = useRef<HTMLParagraphElement>(null)
   const id = useId()
   const [expanded, setExpanded] = useState(false)
-  const [clamped, setClamped] = useState(false)
-  // Browser clamp measurement is shared idiom; this card owns its plan formatting and lifetime.
-  /* jscpd:ignore-start */
-  useLayoutEffect(() => {
-    if (expanded) return
-    const paragraph = ref.current as HTMLParagraphElement
-    const measure = () => { setClamped(paragraph.scrollHeight > paragraph.clientHeight) }
-    measure()
-    const observer = new ResizeObserver(measure)
-    observer.observe(paragraph)
-    return () => { observer.disconnect() }
-  }, [expanded, brief])
-  /* jscpd:ignore-end */
+  const preview = useMemo(() => {
+    const text = brief.replace(/\s+/g, ' ').trim()
+    const characters = Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text), part => part.segment)
+    return characters.length > 80 ? characters.slice(0, 80).join('').trimEnd() + '…' : undefined
+  }, [brief])
   return <>
-    <p ref={ref} id={id} className={css.reason} data-expanded={expanded || undefined}>{expanded ? brief : brief.replace(/\s+/g, ' ').trim()}</p>
-    {clamped && <Button variant="ghost" size="sm" className={css.planToggle} aria-expanded={expanded} aria-controls={id}
+    <p id={id} className={css.reason}>{expanded || preview === undefined ? brief : preview}</p>
+    {preview !== undefined && <Button variant="ghost" size="sm" className={css.planToggle} aria-expanded={expanded} aria-controls={id}
       onClick={() => { setExpanded(value => !value) }}>{t(expanded ? 'collapsePlan' : 'expandPlan')}</Button>}
   </>
 }

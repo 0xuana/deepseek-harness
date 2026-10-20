@@ -1,22 +1,13 @@
 // @vitest-environment jsdom
 import type { ComponentProps } from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import { SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { CreationDecision } from '@deepseek-ai/dsh-experimental-creation-recommendations/types'
 import { RecommendationCard, RecommendationTail } from '../src/client/Card.tsx'
 import { en, zh, type RecommendationKey } from '../src/client/locales.ts'
 
-class PlanResizeObserver implements ResizeObserver {
-  static made: PlanResizeObserver[] = []
-  readonly observe = vi.fn()
-  readonly unobserve = vi.fn()
-  readonly disconnect = vi.fn()
-  constructor(private readonly callback: ResizeObserverCallback) { PlanResizeObserver.made.push(this) }
-  fire(): void { this.callback([], this) }
-}
-beforeEach(() => { PlanResizeObserver.made = []; vi.stubGlobal('ResizeObserver', PlanResizeObserver) })
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 type Props = ComponentProps<typeof RecommendationCard>
 const callId = ToolCallId('creation-1')
@@ -216,33 +207,29 @@ it('waits for its projection before exposing writable actions', () => {
   expect(screen.getByRole('button', { name: '创建' }).hasAttribute('disabled')).toBe(true)
 })
 
-it('expands the full plan only when it overflows, without starting creation, and remeasures on resize', () => {
-  let lines = 3
-  vi.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(60)
-  vi.spyOn(Element.prototype, 'scrollHeight', 'get').mockImplementation(() => lines * 20)
+it('only offers expansion for omitted content and preserves the full plan without layout measurement', () => {
+  vi.stubGlobal('ResizeObserver', undefined)
   const value = props()
-  value.recommendation = { ...value.recommendation, brief: 'Keep my task count visible.\n\nPersist across conversations.\nVerify removal.' }
+  const short = 'Keep my task count visible.\n\nPersist across conversations.\nVerify removal.'
+  value.recommendation = { ...value.recommendation, brief: short }
   const view = render(<RecommendationCard {...value} />)
   expect(screen.queryByRole('button', { name: '展开方案' })).toBeNull()
-  const observer = PlanResizeObserver.made.at(-1)!
-  lines = 5
-  act(() => { observer.fire() })
+  expect(screen.getByText(/Keep my task count visible/).textContent).toBe(short)
+  const prefix = '计'.repeat(79) + '👩🏽‍💻'
+  value.recommendation = { ...value.recommendation, brief: prefix + '\n\n保留完整方案，点击创建后交给 Creator。' }
+  view.rerender(<RecommendationCard {...value} />)
   const expand = screen.getByRole('button', { name: '展开方案' })
   const paragraph = document.getElementById(expand.getAttribute('aria-controls')!)!
-  expect(paragraph.textContent).toBe('Keep my task count visible. Persist across conversations. Verify removal.')
+  expect(paragraph.textContent).toBe(prefix + '…')
   expect(expand.getAttribute('aria-expanded')).toBe('false')
   fireEvent.click(expand)
   expect(screen.getByRole('button', { name: '收起方案' }).getAttribute('aria-expanded')).toBe('true')
-  expect(paragraph.dataset.expanded).toBe('true')
   expect(paragraph.textContent).toBe(value.recommendation.brief)
-  expect(observer.disconnect).toHaveBeenCalledOnce()
   expect(value.act).not.toHaveBeenCalled()
-  lines = 2
   fireEvent.click(screen.getByRole('button', { name: '收起方案' }))
+  expect(paragraph.textContent).toBe(prefix + '…')
+  value.recommendation = { ...value.recommendation, brief: prefix }
+  view.rerender(<RecommendationCard {...value} />)
   expect(screen.queryByRole('button', { name: '展开方案' })).toBeNull()
-  expect(paragraph.dataset.expanded).toBeUndefined()
-  const remeasured = PlanResizeObserver.made.at(-1)!
-  expect(remeasured).not.toBe(observer)
-  view.unmount()
-  expect(remeasured.disconnect).toHaveBeenCalledOnce()
+  expect(paragraph.textContent).toBe(prefix)
 })
