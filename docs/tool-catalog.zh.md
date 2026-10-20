@@ -19,6 +19,7 @@
 
 | 工具包 | 模型可见名称 | 依赖 | 写入／影响 | 随产品发布的别名 | 部署说明 |
 | --- | --- | --- | --- | --- | --- |
+| `@deepseek-ai/dsh-experimental-creation-recommendations` | `list_creation_plugins`, `suggest_view` | `ctx.tools`, `ctx.pluginManager`, `ctx.agents`, `ctx.sessionProjections`, `ctx.remoteAccess`, `ctx.subagents`, `ctx.profileContext` | `tool/call`, `tool/result`, `plugin:creation-recommendations/decision`, `Creator child session`, `profile bundle selection` | - | - |
 | `@deepseek-ai/dsh-plugin-manager` | `plugin_manager` | `ctx.tools`, `ctx.pluginManager`, `ctx.sandboxPolicy` | `tool/call`, `tool/result`, `user/message` | - | - |
 | `@deepseek-ai/dsh-plugin-market` | `plugin_market` | `ctx.tools`, `ctx.pluginMarket` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-mcp-resources` | `list_mcp_resource_templates`, `list_mcp_resources`, `read_mcp_resource` | `ctx.tools`, `ctx.mcpResources` | `tool/call`, `tool/result` | - | - |
@@ -53,6 +54,59 @@
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`、`ctx.workflowEngine`、`ctx.systemPrompt`、`a calling Agent (exec.agent parents the script children)` | `tool/call`、`tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-workspace-dependencies` | `load_workspace_dependencies` | `ctx.tools` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`、`web_search` | `ctx.tools`、`ctx.web`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可见 schema 在更换后端时保持稳定。 |
+
+<a id="deepseek-aidsh-experimental-creation-recommendations"></a>
+
+## `@deepseek-ai/dsh-experimental-creation-recommendations`
+
+### `list_creation_plugins`
+
+提出新界面建议前，读取随应用提供的 DSH 插件及当前启用状态。此只读清单可用于普通会话。优先使用合适的现有插件；清单中没有某项不代表 DSH 缺少对应内置功能。发现阶段只处理产品能力，不要为了建议或讨论功能而搜索源码、私有配置档案或实现文档。愿望模糊时先澄清，再查询。
+
+```json
+{
+  "type": "object",
+  "properties": {}
+}
+```
+
+源码： [`packages/experimental/creation-recommendations/src/index.ts`](../packages/experimental/creation-recommendations/src/index.ts)
+
+### `suggest_view`
+
+针对明确需求（包括“我想要一个……”等愿望）推荐新的持久界面或功能插件。建议阶段只规划产品行为，将源码、API 调研和技术选型留给用户点击创建后的 Creator。建议前读取 list_creation_plugins；已有合适能力时直接使用，或在 suggest_plugin 可用时推荐符合条件的未启用插件。suggest_plugin 不可用时，说明如何在“插件”页打开已有插件，不要重复创建。普通任务、一次性问题、需要澄清的模糊愿望，以及明确要求只讨论可行性或拒绝推荐的请求不应显示卡片。在简明、完整的方案中写清行为、数据来源、相关上下文和验收点，并推荐位置。每轮 suggest_view 与 suggest_plugin 合计最多一条推荐。在最终回答之前调用工具，再给出一次包含方案的简洁回答，避免工具调用前后重复；卡片显示在完整回答末尾。用用户的语言称呼操作。不要开始创建或安装；用户点击创建后，Creator 才会按方案生成新的可卸载插件，不修改已有插件。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Short name in the user’s language."
+    },
+    "brief": {
+      "type": "string",
+      "description": "Concise implementation plan in the user’s language: explicit need, behavior, data sources, relevant context and completion criteria. This is shown on the card and passed to the Creator."
+    },
+    "slot": {
+      "type": "string",
+      "description": "Apply this order: (1) Honor a location explicitly requested by the user. (2) A global feature uses sidebar-left: one left entry opens a standalone main-area page without Chat/Trajectory tabs, including global streaming tools. (3) A Session-bound streaming dialogue or interactive assistant uses page: a tab beside Chat and Trajectory; Session scope is not a reason to put streaming dialogue in the right sidebar. (4) Other Session-bound viewers, editors and Context inspection use sidebar-right. Do not invent a right-sidebar preference to replace the streaming-tab rule. If scope or interaction is unclear, clarify first.",
+      "enum": [
+        "sidebar-right",
+        "page",
+        "sidebar-left"
+      ]
+    }
+  },
+  "required": [
+    "title",
+    "brief",
+    "slot"
+  ]
+}
+```
+
+源码： [`packages/experimental/creation-recommendations/src/index.ts`](../packages/experimental/creation-recommendations/src/index.ts)
 
 <a id="deepseek-aidsh-plugin-manager"></a>
 

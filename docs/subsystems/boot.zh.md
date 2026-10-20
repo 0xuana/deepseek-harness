@@ -96,6 +96,27 @@ async edit( entry: Entry, change: (current: Record<string, unknown>, inherited: 
 
 Source: [`packages/boot/config-editor/src/index.ts`](../../packages/boot/config-editor/src/index.ts)
 
+<a id="ctxcreationrecommendations--creationrecommendations"></a>
+
+### `ctx.creationRecommendations` — `CreationRecommendations`
+
+Owns accepted Creator runs and the durable receipts for their new bundles.
+
+```ts cordis-catalog
+/** Apply a human decision to a logged proposal.
+ * @param agent - Live root resolved from the displayed session.
+ * @param callId - Logged proposal id.
+ * @param action - Create, cancel generation, dismiss, confirm retention, or remove the owned bundle.
+ * @param slot - Location chosen by the user when creating or dismissing.
+ * @returns acceptance for background work, a durable receipt, or a refusal.
+ */
+@Remote act(agent: Agent, callId: ToolCallId, action: 'create' | 'dismiss' | 'keep' | 'undo' | 'cancel', slot: CreationSlot): Promise<CreationActionResult>
+```
+
+Types: [Agent](core.zh.md) · [ToolCallId](core.zh.md)
+
+Source: [`packages/experimental/creation-recommendations/src/index.ts`](../../packages/experimental/creation-recommendations/src/index.ts)
+
 <a id="ctxheadlessstartup--headlessstartupvalues"></a>
 
 ### `ctx.headlessStartup` — `HeadlessStartupValues`

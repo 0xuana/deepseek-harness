@@ -1,0 +1,82 @@
+---
+description: "在完整回答末尾显示支持位置选择、保留和撤销的创建卡片。"
+kind: "package-reference"
+---
+
+# @deepseek-ai/dsh-experimental-client-ui-creation-recommendations
+
+[English](README.md) | 中文
+
+## 概述
+
+用户在完整回答下方看到一条创建建议。方案默认最多显示三行，可展开查看全文；Creator 始终收到完整方案。卡片沿用应用字体，区分标题和正文层级，并在顶部显示进度。卡片直接显示推荐位置，展开选项后可选右侧栏、会话顶部 Tab、全局页面及左侧入口。创建会启动后台任务；安装完成后，保留用于确认继续使用，撤销则移除新插件。
+
+## 目录
+
+- [使用本包](#use-this-package)
+- [实现原理](#understand-the-implementation)
+- [延伸阅读](#further-exploration)
+- [模型体验](#model-experience)
+- [已知限制与后续工作](#known-limitations-and-deferred-work)
+- [开发备注](#dev-note)
+
+-----
+
+<a id="use-this-package"></a>
+## 使用本包
+
+启用[个性化页面 Bundle](../creation-recommendations/README.zh.md)。本浏览器组件没有配置字段。
+
+### 操作结果与恢复
+
+创建、安装、保留和移除记录来自 Session 投影，重新连接后会在卡片中恢复。操作回复丢失时显示可采取行动的错误信息；重试以 Host 已记录的状态为准。请求处理中禁用重复操作。生成阶段可取消，等待子任务清理后才能重试；已接纳的安装不再取消。卡片说明原工作区的源码目录，并明确撤销会保留这些文件。
+
+-----
+
+<a id="understand-the-implementation"></a>
+## 实现原理
+
+<details>
+<summary>实现细节 — 点击展开</summary>
+
+成功的原生及 PTC 结果元数据成为隐藏的 Conversation 节点。已完成回合的末尾插槽读取该回合的推荐索引，只显示第一项。组件接收绑定会话的回调，不直接访问服务。可选 Remote、语言字典、事件定义和插槽注册使用同一插件生命周期。
+
+- [源码](src/client/index.ts)
+- [测试](tests/)
+
+</details>
+
+-----
+
+<a id="further-exploration"></a>
+## 延伸阅读
+
+- [创建服务](../creation-recommendations/README.zh.md) — 创建任务与持久化。
+- [Conversation](../../client/ui-conversation/README.zh.md) — 事件索引。
+- [Slots](../../client/ui-slots/README.zh.md) — 回合末尾呈现.
+
+<a id="model-experience"></a>
+## 模型体验
+
+间接影响来自用户接受的创建操作：Host 启动 Creator 调用。浏览器组件不增加模型工具或提示词。
+
+#### KV Cache effect
+
+渲染卡片和修改位置不会影响模型缓存。
+
+## 已知限制与后续工作
+
+<a id="known-limitations-and-deferred-work"></a>
+
+- 需求摘要由模型编写，需要包含 Creator 所需的上下文。
+- 历史记录不会持续跟踪之后在插件页手动进行的修改。
+
+<a id="dev-note"></a>
+### 开发备注
+
+<details>
+<summary>维护者工作上下文 — 点击展开</summary>
+
+无。
+
+</details>

@@ -69,6 +69,8 @@ import * as ToolTeam from '@deepseek-ai/dsh-experimental-tool-agent-team'
 import * as ToolTodo from '@deepseek-ai/dsh-tool-todo'
 import type PluginManager from '@deepseek-ai/dsh-plugin-manager'
 import * as PluginManagerTools from '@deepseek-ai/dsh-plugin-manager/tools'
+import CreationRecommendations from '@deepseek-ai/dsh-experimental-creation-recommendations'
+import RemoteAccess from '@deepseek-ai/dsh-api-remote-access'
 import type PluginMarket from '@deepseek-ai/dsh-plugin-market'
 import * as PluginMarketTools from '@deepseek-ai/dsh-plugin-market/tools'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
@@ -188,6 +190,22 @@ export interface ToolPackage {
  * guard proves it is exhaustive against the on-disk glob.
  */
 const TOOL_PACKAGES: ToolPackage[] = [
+  {
+    pkg: '@deepseek-ai/dsh-experimental-creation-recommendations',
+    dir: 'creation-recommendations',
+    source: 'packages/experimental/creation-recommendations/src/index.ts',
+    requires: ['ctx.tools', 'ctx.pluginManager', 'ctx.agents', 'ctx.sessionProjections', 'ctx.remoteAccess', 'ctx.subagents', 'ctx.profileContext'],
+    writes: ['tool/call', 'tool/result', 'plugin:creation-recommendations/decision', 'Creator child session', 'profile bundle selection'],
+    async mount(ctx) {
+      // Schema harvest starts no children and changes no profile.
+      ctx.provide('pluginManager', {})
+      ctx.provide('subagents', {})
+      ctx.provide('profileContext', {})
+      await ctx.plugin(AgentRegistry)
+      await ctx.plugin(RemoteAccess)
+      await ctx.plugin(CreationRecommendations)
+    },
+  },
   {
     pkg: '@deepseek-ai/dsh-plugin-manager',
     dir: 'plugin-manager',

@@ -1,0 +1,32 @@
+[
+  {
+    "id": "wish_counter",
+    "prompt": "我想要一个一直留在右侧栏的小计数器，可以加一和归零，还能保存数字。",
+    "expected": "Lookup then suggest_view sidebar-right; no generation before click."
+  },
+  {
+    "id": "session_viewer",
+    "prompt": "我想在当前 Session 里查看这轮的 Context 组成，有现成的查看器吗？",
+    "expected": "Prefer existing capability; if generating, sidebar-right."
+  },
+  {
+    "id": "global_page",
+    "prompt": "我想要一个全局个人读书清单，所有会话共用，能增删书名和标记读完，重启也保存。",
+    "expected": "Lookup; prefer existing if suitable, otherwise suggest_view sidebar-left: global main-area page with a left entry, without Chat/Trajectory tabs."
+  },
+  {
+    "id": "global_streaming",
+    "prompt": "我想要一个全局翻译练习工具，所有会话共用，在专门的界面流式给我讲解和纠错，左边能随时打开。",
+    "expected": "Lookup; prefer existing if suitable, otherwise suggest_view sidebar-left: global main-area page with a left entry, without Chat/Trajectory tabs."
+  },
+  {
+    "id": "session_streaming",
+    "prompt": "我想针对当前 Session 的代码做一个专用对话界面，持续流式解释和问答，内容跟着当前 Session。",
+    "expected": "Lookup; if generating, suggest_view page: Session-bound tab beside Chat/Trajectory, preserving both."
+  },
+  {
+    "id": "defer_creation",
+    "prompt": "我想要右侧计数器，但这次只讨论可行性，不要推荐插件或创建入口。",
+    "expected": "Discussion only; no card or generation."
+  }
+]

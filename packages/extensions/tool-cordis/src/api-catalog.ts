@@ -853,6 +853,19 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'creationRecommendations',
+    summary: 'Owns accepted Creator runs and the durable receipts for their new bundles.',
+    description: 'Owns accepted Creator runs and the durable receipts for their new bundles.',
+    methods: [
+      {
+        signature: '@Remote act(agent: Agent, callId: ToolCallId, action: \'create\' | \'dismiss\' | \'keep\' | \'undo\' | \'cancel\', slot: CreationSlot): Promise<CreationActionResult>',
+        description: 'Apply a human decision to a logged proposal.',
+        parameters: [{ name: 'agent', description: 'Live root resolved from the displayed session.' }, { name: 'callId', description: 'Logged proposal id.' }, { name: 'action', description: 'Create, cancel generation, dismiss, confirm retention, or remove the owned bundle.' }, { name: 'slot', description: 'Location chosen by the user when creating or dismissing.' }],
+        returns: 'acceptance for background work, a durable receipt, or a refusal.',
+      },
+    ],
+  },
+  {
     key: 'credentials',
     summary: 'Abstract credential service over two key spaces that answer two questions.',
     description: 'Abstract credential service over two key spaces that answer two questions.\n\nA CredentialRef answers "what is behind this environment-variable name": the provider-managed store first, then ambient fallbacks such as the process environment and `.env` files. One seam-wide rule binds that half: an empty stored value is absent everywhere — `resolve` skips it, `describe` reports it unconfigured — so a blank never masquerades as a configured secret.\n\nA CredentialKey answers "what credential does this plugin hold for this id". Nothing can layer here — an authorization grant has no environment to be read from — so presence of the record is the whole fact, and modifyRecord is the only write path because a correct write depends on the current value (a token refresh is read-decide-replace under one lock).',
@@ -5463,6 +5476,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'CreateWorktreeRequest',
     declaration: 'export interface CreateWorktreeRequest {\n    name?: string;\n    from?: string;\n}',
+  },
+  {
+    name: 'CreationActionResult',
+    declaration: 'export type CreationActionResult = {\n    readonly status: \'accepted\';\n} | {\n    readonly status: \'settled\';\n    readonly decision: CreationDecision;\n} | {\n    readonly status: \'refused\';\n    readonly reason: \'unknown\' | \'access-denied\' | \'not-live-root\' | \'closing\' | \'unavailable\' | \'invalid-location\';\n} | {\n    readonly status: \'unconfirmed\';\n    readonly reason: \'closing\';\n};',
+  },
+  {
+    name: 'CreationDecision',
+    declaration: 'export interface CreationDecision {\n    readonly callId: ToolCallId;\n    readonly phase: \'dismissed\' | \'creating\' | \'installing\' | \'cancelled\' | \'installed\' | \'kept\' | \'removed\' | \'failed\' | \'interrupted\' | \'unconfirmed\';\n    readonly slot: CreationSlot;\n    readonly bundleName?: string | undefined;\n    readonly application?: ChangeResult[\'application\'] | undefined;\n}',
+  },
+  {
+    name: 'CreationSlot',
+    declaration: 'export type CreationSlot = \'sidebar-right\' | \'page\' | \'sidebar-left\';',
   },
   {
     name: 'CredentialInfo',

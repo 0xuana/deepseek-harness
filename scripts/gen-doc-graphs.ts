@@ -108,6 +108,14 @@ const GROUP_ORDER = [
 
 const SERVICE_ROLES: ServiceRole[] = [
   {
+    key: 'creationRecommendations',
+    pkg: 'experimental-creation-recommendations',
+    title: 'Explicit-need interface creation',
+    mode: 'service',
+    consumers: ['experimental-client-ui-creation-recommendations'],
+    note: 'Starts a Creator after a human choice and owns installation and removal of the new bundle.',
+  },
+  {
     key: 'headlessStartup',
     pkg: 'headless',
     title: 'Headless invocation options',

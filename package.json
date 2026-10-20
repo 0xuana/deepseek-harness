@@ -294,6 +294,7 @@
     "@deepseek-ai/dsh-cua-bundle": "workspace:*",
     "@deepseek-ai/dsh-experimental-subagent-oar": "workspace:*",
     "@deepseek-ai/dsh-experimental-tool-subagent-oar": "workspace:*",
-    "@deepseek-ai/dsh-experimental-cua-macos": "workspace:*"
+    "@deepseek-ai/dsh-experimental-cua-macos": "workspace:*",
+    "@deepseek-ai/dsh-experimental-creation-recommendations": "workspace:*"
   }
 }

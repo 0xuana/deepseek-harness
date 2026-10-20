@@ -13,5 +13,6 @@ Shared Session event declarations and resolved schemas appear in the [Session pe
 
 | Record | Owner | Purpose | Payload and source |
 |---|---|---|---|
+| `plugin:creation-recommendations/decision` | `@deepseek-ai/dsh-experimental-creation-recommendations` | New-plugin creation progress and explicit keep/undo decisions. | <code>CreationDecision</code> · [`packages/experimental/creation-recommendations/src/types.ts`](../packages/experimental/creation-recommendations/src/types.ts) |
 | `plugin:translator/request` | `@deepseek-ai/dsh-experimental-translator` | Provider-independent translation input, retained before dispatch. | <code>TranslationRequestRecord</code> · [`packages/experimental/translator/src/types.ts`](../packages/experimental/translator/src/types.ts) |
 | `plugin:translator/result` | `@deepseek-ai/dsh-experimental-translator` | Successful translation, retained before it is returned to the consumer. | <code>TranslationResultRecord</code> · [`packages/experimental/translator/src/types.ts`](../packages/experimental/translator/src/types.ts) |

@@ -1,0 +1,49 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/creation-recommendations/README.md
+/:
+  en: 08688503db441fbf
+  zh: 855dbe0b9ce53ab9
+/deepseek-ai-dsh-experimental-creation-recommendations:
+  en: f4b9d65da579ef83
+  zh: 6525d553f7758ac2
+/deepseek-ai-dsh-experimental-creation-recommendations/summary:
+  en: 94a96b0aa0448668
+  zh: 0b46fac7779bb36a
+/deepseek-ai-dsh-experimental-creation-recommendations/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: b00dddf4c88f0a45
+/deepseek-ai-dsh-experimental-creation-recommendations/use-this-package:
+  en: f30e06700be7004f
+  zh: febf4c15b529fdf7
+/deepseek-ai-dsh-experimental-creation-recommendations/use-this-package/outcomes-and-recovery:
+  en: c4e5a6c2dd90e4cc
+  zh: 2373e7aeb1cafabc
+/deepseek-ai-dsh-experimental-creation-recommendations/understand-the-implementation:
+  en: 1ae216ab3b44c3be
+  zh: 428b7521d1b06a55
+/deepseek-ai-dsh-experimental-creation-recommendations/further-exploration:
+  en: 764927dcbad0e080
+  zh: 9d14cb335a2fb54c
+/deepseek-ai-dsh-experimental-creation-recommendations/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-experimental-creation-recommendations/model-experience/creation-recommendations:
+  en: b950fbe9f29693d4
+  zh: 2dd7edb2d1c72941
+/deepseek-ai-dsh-experimental-creation-recommendations/model-experience/creation-recommendations/what-the-model-sees:
+  en: da38a7e8c663fe3a
+  zh: 8c5f2defb2705da3
+/deepseek-ai-dsh-experimental-creation-recommendations/model-experience/creation-recommendations/token-effect:
+  en: c4518adaa99de5cf
+  zh: d591a6dcf151b5bf
+/deepseek-ai-dsh-experimental-creation-recommendations/model-experience/creation-recommendations/kv-cache-effect:
+  en: 3b2c56357ea9ffdb
+  zh: 6ee8e240bb1ad744
+/deepseek-ai-dsh-experimental-creation-recommendations/known-limitations-and-deferred-work:
+  en: cd023a6bfc1e7166
+  zh: ee8b62bf78bdcaef
+/deepseek-ai-dsh-experimental-creation-recommendations/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 8ec3e73528ddb1a6

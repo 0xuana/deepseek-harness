@@ -1,0 +1,17 @@
+- region "Personalized pages":
+  - text: Personalized pages New plugin
+  - strong: Counter
+  - paragraph: "Need: Keep a small counter visible across conversations. Location: A card titled Today’s achievements in the right sidebar. Controls: Increment and reset buttons beside the current value. Storage: Save changes in browser storage across navigation and refresh. Appearance: Follow the existing sidebar theme in light and dark mode. Completion: Both controls work and reopening restores the saved value."
+  - button "View full plan"
+  - paragraph: Location · Session tab
+  - group "Location":
+    - text: Location
+    - radio "Right sidebar"
+    - text: Right sidebar
+    - radio "Session tab" [checked]
+    - text: Session tab
+    - radio "Global page · Left sidebar entry"
+    - text: Global page · Left sidebar entry
+  - button "Options" [expanded]
+  - button "Not now"
+  - button "Create"

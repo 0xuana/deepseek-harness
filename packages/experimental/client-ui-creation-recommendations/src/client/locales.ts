@@ -1,0 +1,50 @@
+/** English creation and recovery copy. */
+export const en = {
+  heading: 'Personalized pages', newPlugin: 'New plugin', location: 'Location', options: 'Options',
+  expandPlan: 'View full plan', collapsePlan: 'Collapse plan',
+  'sidebar-right': 'Right sidebar', page: 'Session tab', 'sidebar-left': 'Global page · Left sidebar entry',
+  create: 'Create', starting: 'Starting…', dismiss: 'Not now', retry: 'Create again', keep: 'Keep', undo: 'Undo',
+  scope: 'Available across conversations until you remove it',
+  dismissed: 'Dismissed', creating: 'Creating. You can continue the conversation.',
+  cancel: 'Cancel creation', cancelling: 'Cancelling…', installing: 'Completing installation…',
+  sourceRetained: 'Source location: .dsh-created-plugins/ in the original workspace. Undo uninstalls the plugin without deleting these files.',
+  installed: 'Installed', kept: 'Kept', removed: 'Removed',
+  failed: 'Could not complete this change. You can retry.',
+  interrupted: 'Creation was interrupted. You can try again.',
+  unconfirmed: 'Could not confirm creation. Retrying checks for an installed plugin first.',
+  'invalid-location': 'Choose a supported location and try again.',
+  'restart-required': 'The change is saved. Restart DSH to apply it.',
+  overridden: 'Another configuration overrides this change.', cancelled: 'The change was cancelled.',
+  transport: 'Could not confirm the result. Reconnect and check the card before retrying.',
+  unknown: 'This recommendation is no longer available.',
+  unavailable: 'This action is unavailable. Check the plugin in Plugins.',
+  'access-denied': 'This connection cannot change plugins.',
+  'not-live-root': 'Open the original conversation to use this card.',
+  closing: 'The creation plugin is stopping. Try again after it reloads.',
+}
+
+/** Keys shared by both dictionaries. */
+export type RecommendationKey = keyof typeof en
+
+/** Chinese creation and recovery copy. */
+export const zh: Record<RecommendationKey, string> = {
+  heading: '个性化页面', newPlugin: '新插件', location: '添加位置', options: '选项',
+  expandPlan: '展开方案', collapsePlan: '收起方案',
+  'sidebar-right': '右侧栏', page: '会话顶部 Tab', 'sidebar-left': '全局页面 · 左侧入口',
+  create: '创建', starting: '开始创建…', dismiss: '暂不需要', retry: '重新创建', keep: '保留', undo: '撤销',
+  scope: '可在其他会话使用，直到你将它移除',
+  dismissed: '已忽略', creating: '正在创建，你可以继续对话',
+  cancel: '取消创建', cancelling: '正在取消…', installing: '正在完成安装…',
+  sourceRetained: '源码保存位置：原工作区的 .dsh-created-plugins/ 目录。撤销只卸载功能，不删除文件。',
+  installed: '已安装', kept: '已保留', removed: '已移除',
+  failed: '未能完成本次操作，可以重试', interrupted: '创建已中断，可以重新尝试',
+  unconfirmed: '暂时无法确认创建结果，重试时会先检查插件是否已安装',
+  'invalid-location': '请选择可用位置后重试',
+  'restart-required': '变更已保存，重启 DSH 后生效',
+  overridden: '其他配置覆盖了本次变更', cancelled: '本次操作已取消',
+  transport: '暂时无法确认结果，请重新连接并查看卡片状态后再重试',
+  unknown: '这条推荐已不可用', unavailable: '暂时无法执行，请到插件页面查看',
+  'access-denied': '当前连接没有修改插件的权限',
+  'not-live-root': '请打开原会话后使用这张卡片',
+  closing: '创建插件正在停止，请等待重新加载后再试',
+}

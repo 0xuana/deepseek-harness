@@ -15,6 +15,7 @@ This table connects model-visible tool names to the plugin package and service s
 
 | Tool package | Model-visible names | Requires | Writes / affects | Shipped aliases | Deployment note |
 | --- | --- | --- | --- | --- | --- |
+| `@deepseek-ai/dsh-experimental-creation-recommendations` | `list_creation_plugins`, `suggest_view` | `ctx.tools`, `ctx.pluginManager`, `ctx.agents`, `ctx.sessionProjections`, `ctx.remoteAccess`, `ctx.subagents`, `ctx.profileContext` | `tool/call`, `tool/result`, `plugin:creation-recommendations/decision`, `Creator child session`, `profile bundle selection` | - | - |
 | `@deepseek-ai/dsh-plugin-manager` | `plugin_manager` | `ctx.tools`, `ctx.pluginManager`, `ctx.sandboxPolicy` | `tool/call`, `tool/result`, `user/message` | - | - |
 | `@deepseek-ai/dsh-plugin-market` | `plugin_market` | `ctx.tools`, `ctx.pluginMarket` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-mcp-resources` | `list_mcp_resource_templates`, `list_mcp_resources`, `read_mcp_resource` | `ctx.tools`, `ctx.mcpResources` | `tool/call`, `tool/result` | - | - |
@@ -49,6 +50,59 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`, `ctx.workflowEngine`, `ctx.systemPrompt`, `a calling Agent (exec.agent parents the script children)` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-workspace-dependencies` | `load_workspace_dependencies` | `ctx.tools` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`, `web_search` | `ctx.tools`, `ctx.web`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps. |
+
+<a id="deepseek-aidsh-experimental-creation-recommendations"></a>
+
+## `@deepseek-ai/dsh-experimental-creation-recommendations`
+
+### `list_creation_plugins`
+
+Read shipped DSH plugins and their current enabled state before proposing a new interface. This read-only catalog works in ordinary conversations. Prefer a suitable existing plugin; an absent entry does not prove that DSH lacks a built-in feature. Keep discovery at product level: do not search source files, private profiles or implementation docs just to propose or discuss a feature. Clarify vague wishes before discovery.
+
+```json
+{
+  "type": "object",
+  "properties": {}
+}
+```
+
+Source: [`packages/experimental/creation-recommendations/src/index.ts`](../packages/experimental/creation-recommendations/src/index.ts)
+
+### `suggest_view`
+
+Offer a new persistent interface or feature plugin for an explicit user need, including wishes such as "I want a..." or "I wish I could...". Keep proposal planning at product level; defer source/API inspection and implementation choices to the Creator after the user clicks Create. Read list_creation_plugins before proposing; use a suitable existing capability instead, or suggest_plugin when available for an eligible disabled plugin. If suggest_plugin is unavailable, explain how to open the existing plugin in Plugins; do not create a duplicate. Do not offer a card for one-off questions, ordinary tasks, vague wishes that need clarification, or when the user asks only to discuss feasibility or explicitly declines recommendations. Plan the requested behavior, data sources, relevant conversation context and completion criteria in a concise self-contained brief, and recommend a location. Offer at most one recommendation per turn, across suggest_view and suggest_plugin. Call this tool before your final response, then give one concise answer with the plan; do not repeat the answer around the tool call. The card appears below the completed answer. Refer to its actions in the user’s language. Do not start creating or installing anything; the user must click Create. A Creator agent then executes this plan as a new removable plugin. Existing plugins are never edited.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Short name in the user’s language."
+    },
+    "brief": {
+      "type": "string",
+      "description": "Concise implementation plan in the user’s language: explicit need, behavior, data sources, relevant context and completion criteria. This is shown on the card and passed to the Creator."
+    },
+    "slot": {
+      "type": "string",
+      "description": "Apply this order: (1) Honor a location explicitly requested by the user. (2) A global feature uses sidebar-left: one left entry opens a standalone main-area page without Chat/Trajectory tabs, including global streaming tools. (3) A Session-bound streaming dialogue or interactive assistant uses page: a tab beside Chat and Trajectory; Session scope is not a reason to put streaming dialogue in the right sidebar. (4) Other Session-bound viewers, editors and Context inspection use sidebar-right. Do not invent a right-sidebar preference to replace the streaming-tab rule. If scope or interaction is unclear, clarify first.",
+      "enum": [
+        "sidebar-right",
+        "page",
+        "sidebar-left"
+      ]
+    }
+  },
+  "required": [
+    "title",
+    "brief",
+    "slot"
+  ]
+}
+```
+
+Source: [`packages/experimental/creation-recommendations/src/index.ts`](../packages/experimental/creation-recommendations/src/index.ts)
 
 <a id="deepseek-aidsh-plugin-manager"></a>
 

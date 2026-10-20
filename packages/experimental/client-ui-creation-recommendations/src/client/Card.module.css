@@ -1,0 +1,16 @@
+.card { margin: 16px 0; border: 0.5px solid var(--dsw-alias-border-l1); border-radius: var(--dsw-radius-lg); overflow: hidden; font-family: var(--dsw-font-family); color: var(--dsw-alias-label-primary); }
+.header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 20px; background: var(--dsw-alias-bg-module-platform); font-size: 12px; line-height: 1.5; color: var(--dsw-alias-label-secondary); flex-wrap: wrap; }
+.phase { color: var(--dsw-alias-label-primary); }
+.body { padding: 20px; }
+.title { display: block; font-size: 16px; font-weight: 500; line-height: 1.5; overflow-wrap: anywhere; }
+.reason { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; margin: 8px 0 0; font-size: 13px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--dsw-alias-label-secondary); }
+.reason[data-expanded] { display: block; -webkit-line-clamp: unset; }
+.planToggle { margin: 8px 0 0; padding-inline: 0; height: auto; min-height: 24px; font-size: 12px; }
+.description { margin: 16px 0 0; padding-top: 12px; border-top: 0.5px solid var(--dsw-alias-border-l1); font-size: 12px; line-height: 1.6; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+.footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+.scope { font-size: 12px; line-height: 1.5; color: var(--dsw-alias-label-secondary); }
+.actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.status { margin: 12px 0 0; font-size: 12px; line-height: 1.6; color: var(--dsw-alias-label-secondary); }
+.locations { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 16px 0 0; padding: 12px; border: 0.5px solid var(--dsw-alias-border-l1); border-radius: var(--dsw-radius-md); font-size: 13px; line-height: 1.6; }
+.locations legend { padding-inline: 4px; font-size: 12px; color: var(--dsw-alias-label-secondary); }
+.locations label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
