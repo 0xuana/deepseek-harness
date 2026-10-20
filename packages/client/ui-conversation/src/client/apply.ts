@@ -239,7 +239,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
   const trackedBindings = new WeakSet<SessionBinding>()
   // One binding-scope effect per tracked binding, owned by the plugin only until the scope releases:
   // the long-lived plugin effect below must not hold a closure over a released binding's Context.
-  const bindingEffects = new Map<SessionBinding, () => void>()
+  const bindingEffects = new Map<SessionBinding, () => void | Promise<void>>()
   const trackBinding = (binding: SessionBinding): void => {
     if (trackedBindings.has(binding)) return
     trackedBindings.add(binding)
@@ -258,7 +258,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
   }
   ctx.effect(() => () => {
     // A binding that released before the plugin already deleted its own entry; this releases the rest.
-    for (const dispose of [...bindingEffects.values()]) dispose()
+    for (const dispose of [...bindingEffects.values()]) void dispose()
     bindingEffects.clear()
     bindings.clear()
   }, 'ui-conversation: View binding ownership')
@@ -291,8 +291,11 @@ export function apply(ctx: Context, config: Config = Config({})): void {
     })
   }
   // The button and the fixed shortcut share this gate: it re-reads the live answer at call time.
+  // After plugin disposal the optional lookup answers nothing; the shared stop then surfaces its own
+  // loud unavailable error instead of a disposed context reporting a withdrawn permission.
+  const allowsStop = { getSnapshot: () => true, subscribe: () => () => {} }
   const stopTurn = createStopTurn(
-    stop, sessionId => ctx.remoteAccess.source('session', sessionId, 'session/cancel'),
+    stop, sessionId => ctx.get('remoteAccess')?.source('session', sessionId, 'session/cancel') ?? allowsStop,
   )
   const stopShortcut = createSnapshotStore<readonly string[]>([])
   ctx.inject(['shortcuts'], (scope) => {
