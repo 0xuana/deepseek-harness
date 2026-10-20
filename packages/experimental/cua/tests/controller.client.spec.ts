@@ -124,6 +124,7 @@ it('ignores stale toast completion after the permission UI is disposed', async (
   await f.controller.dispose()
   const before = f.controller.state.getSnapshot()
   f.face.dismissToast()
+  f.face.setActive(true)
   f.face.refresh()
   expect(f.controller.state.getSnapshot()).toBe(before)
 })
