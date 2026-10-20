@@ -43,7 +43,7 @@ import { ConversationHeader } from './skeleton/ConversationHeader.tsx'
 import { ConversationSession, ConversationSessionHeader } from './skeleton/ConversationSession.tsx'
 import { InputBar } from './skeleton/InputBar.tsx'
 import { todoDockEntry } from './skeleton/TodoPanel.tsx'
-import { installStopShortcut } from './stop-shortcut.ts'
+import { createStopTurn, installStopShortcut } from './stop-shortcut.ts'
 import { TRAJECTORY_VIEW_ID, resolveActiveView } from './view-selection.ts'
 import { createViewPins } from './view-pins.ts'
 import { en, ja, NS, zh, type ConversationKey } from './locales.ts'
@@ -290,6 +290,10 @@ export function apply(ctx: Context, config: Config = Config({})): void {
       // Stop failure is published through Session promptError.
     })
   }
+  // The button and the fixed shortcut share this gate: it re-reads the live answer at call time.
+  const stopTurn = createStopTurn(
+    stop, sessionId => ctx.remoteAccess.source('session', sessionId, 'session/cancel'),
+  )
   const stopShortcut = createSnapshotStore<readonly string[]>([])
   ctx.inject(['shortcuts'], (scope) => {
     const fixedInputs: readonly ShortcutFixedCommand[] = [
@@ -310,7 +314,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
       scope.effect(() => scope.shortcuts.registerFixed(command), `ui-conversation: ${command.id}`)
     }
     scope.effect(() => installStopShortcut(
-      scope.shortcuts, sessions, binding => uiConversation.binding(binding).openTurn, ctx.uiSession, stop,
+      scope.shortcuts, sessions, binding => uiConversation.binding(binding).openTurn, ctx.uiSession, stopTurn,
     ), 'ui-conversation: fixed stop input')
     scope.effect(() => {
       const command: ShortcutFixedCommand = {
@@ -519,7 +523,6 @@ export function apply(ctx: Context, config: Config = Config({})): void {
       const shell = inputHub.shell(sessionId)
       const inputTriggers = inputHub.inputTriggers(sessionId)
       const bridge = hostPathBridge()
-      const cancelAccess = ctx.remoteAccess.source('session', sessionId, 'session/cancel')
       return {
         keyboard: shell,
         addFiles: (files, directories = new Set()) => {
@@ -585,12 +588,9 @@ export function apply(ctx: Context, config: Config = Config({})): void {
               span: { ...selection, draftRev: snapshot.draftRev },
             })
           },
-        // The bar hides Stop while the access snapshot excludes `session/cancel`; the handler re-reads
-        // the live answer, so a click the page had already rendered never reaches a withdrawn endpoint.
-        stop: () => {
-          if (!cancelAccess.getSnapshot()) return
-          stop(sessionId)
-        },
+        // The bar hides Stop while the access snapshot excludes `session/cancel`; the shared stop
+        // re-reads the live answer, so neither a click nor the fixed shortcut reaches a withdrawn endpoint.
+        stop: () => { stopTurn(sessionId) },
         hooks: {
           stopShortcut,
           busyEnter: submissionPolicy.busyEnter,
