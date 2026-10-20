@@ -96,7 +96,7 @@ export class CreationRecommendations extends TypertRemoteService {
     })
     registerActionCard(this.ctx, {
       name: 'create_personalized_page',
-      description: 'Create a persistent removable page using the background Creator. First load personalized-pages for policy, the current official-plugin catalog, and placement. Prefer an existing plugin unless the user explicitly prioritizes an unmet page need. At most one recommendation per turn.',
+      description: 'Offer an optional plan for a reusable page or interactive tool. Load personalized-pages to plan it and check for existing capabilities; do not use this action for questions about existing features. At most one recommendation per turn. The user starts background creation from the card.',
       parameters: {
         title: { type: 'string', required: true, description: 'Short name in the user’s language.' },
         brief: { type: 'string', required: true, description: 'One to three concise sentences in the user’s language: requested purpose, interactions, known input and persistence scope. Include only requested or essential behavior; do not add optional features or link unrelated wishes. Ask only when a missing fact changes the outcome; leave implementation details to the Creator. Shown on the card and passed to the Creator.' },

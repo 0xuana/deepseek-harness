@@ -781,13 +781,13 @@
     },
     {
       "name": "suggest_action",
-      "description": "Offer an optional action card before your normal final answer. Load the action’s skill for eligibility and planning. This only proposes an action; the user must click its card to start. Do not execute, wait, poll, claim completion or ask the user to report back. The card carries the plan; briefly answer the request and refer to it without repeating its feature list or internal card limits. Use successful results only; a rejection creates no card.",
+      "description": "Offer an optional action card before your normal final answer. Load the action’s skill for eligibility and planning. This only proposes an action; the user must click its card to start. Do not execute, wait, poll, claim work has started or completed, or ask the user to report back. The card carries the plan; briefly answer the request and refer to it without repeating its feature list or internal card limits. Use successful results only; a rejection creates no card.",
       "parameters": {
         "type": "object",
         "properties": {
           "request": {
             "type": "object",
-            "description": "Create a persistent removable page using the background Creator. First load personalized-pages for policy, the current official-plugin catalog, and placement. Prefer an existing plugin unless the user explicitly prioritizes an unmet page need. At most one recommendation per turn.",
+            "description": "Offer an optional plan for a reusable page or interactive tool. Load personalized-pages to plan it and check for existing capabilities; do not use this action for questions about existing features. At most one recommendation per turn. The user starts background creation from the card.",
             "additionalProperties": false,
             "properties": {
               "action": {

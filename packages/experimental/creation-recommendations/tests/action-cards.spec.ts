@@ -30,6 +30,8 @@ it('keeps the card contract independent of creation and withdraws it with its pl
   expect(prepared).not.toHaveBeenCalled()
   const result = await execute({ action: 'fixture_action', title: 'Example' })
   expect(result.isError).toBe(false)
+  expect(result.content).toEqual([{ type: 'text', text: JSON.stringify(result.value)
+    + '\nProposal saved. No action has started. The user can start it from the card.' }])
   expect(result.meta).toEqual({ actionCard: { action: 'fixture_action', callId, data: { title: 'Example' } } })
   expect(prepared).toHaveBeenCalledExactlyOnceWith('Example')
   expect(f.startActivation).not.toHaveBeenCalled()

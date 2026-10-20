@@ -33,7 +33,7 @@ export function registerActionCard<const S extends ParameterSchemaSpec>(
     let active = true
     const removeTool = ctx.tools.register(defineTool({
       name: 'suggest_action',
-      description: 'Offer an optional action card before your normal final answer. Load the action’s skill for eligibility and planning. This only proposes an action; the user must click its card to start. Do not execute, wait, poll, claim completion or ask the user to report back. The card carries the plan; briefly answer the request and refer to it without repeating its feature list or internal card limits. Use successful results only; a rejection creates no card.',
+      description: 'Offer an optional action card before your normal final answer. Load the action’s skill for eligibility and planning. This only proposes an action; the user must click its card to start. Do not execute, wait, poll, claim work has started or completed, or ask the user to report back. The card carries the plan; briefly answer the request and refer to it without repeating its feature list or internal card limits. Use successful results only; a rejection creates no card.',
       parameters: { request: {
         type: 'object', additionalProperties: false, description: definition.description, required: true,
         properties: { action: { type: 'string', const: definition.name, required: true }, ...definition.parameters },
@@ -42,7 +42,7 @@ export function registerActionCard<const S extends ParameterSchemaSpec>(
         schema: { type: 'object', additionalProperties: false, properties: {
           action: { type: 'string', required: true }, callId: { type: 'string', required: true }, data: { type: 'json', required: true },
         } },
-        render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
+        render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) + '\nProposal saved. No action has started. The user can start it from the card.' }],
         presentationMeta: (_args, value) => ({ actionCard: value }),
       },
       execute: (args, exec) => {

@@ -61,7 +61,7 @@
 
 ### `suggest_action`
 
-在正常最终回答前，提供一张可选操作卡片。通过动作的 Skill 加载适用条件和规划策略。调用只提交建议，用户点击卡片后才开始；不要直接执行、等待、轮询、声称完成或要求用户报告完成。卡片承载方案；简短回答用户并指向卡片，不重复功能清单或内部卡片限制。仅依据成功结果回答；调用被拒绝时不产生卡片。
+在正常最终回答前，提供一张可选操作卡片。通过动作的 Skill 加载适用条件和规划策略。调用只提交建议，用户点击卡片后才开始；不要直接执行、等待、轮询、声称已开始或完成，也不要要求用户报告完成。卡片承载方案；简短回答用户并指向卡片，不重复功能清单或内部卡片限制。仅依据成功结果回答；调用被拒绝时不产生卡片。
 
 ```json
 {
@@ -69,7 +69,7 @@
   "properties": {
     "request": {
       "type": "object",
-      "description": "Create a persistent removable page using the background Creator. First load personalized-pages for policy, the current official-plugin catalog, and placement. Prefer an existing plugin unless the user explicitly prioritizes an unmet page need. At most one recommendation per turn.",
+      "description": "Offer an optional plan for a reusable page or interactive tool. Load personalized-pages to plan it and check for existing capabilities; do not use this action for questions about existing features. At most one recommendation per turn. The user starts background creation from the card.",
       "additionalProperties": false,
       "properties": {
         "action": {

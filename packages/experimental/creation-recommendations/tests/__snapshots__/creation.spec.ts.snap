@@ -1,12 +1,12 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`interface creation > discovers shipped plugins without the recommendation or management tools and withdraws discovery on unload > one card tool 1`] = `
+exports[`interface creation > loads page planning with a live duplicate-check catalog and withdraws it on unload > one card tool 1`] = `
 {
   "parameters": {
     "properties": {
       "request": {
         "additionalProperties": false,
-        "description": "Create a persistent removable page using the background Creator. First load personalized-pages for policy, the current official-plugin catalog, and placement. Prefer an existing plugin unless the user explicitly prioritizes an unmet page need. At most one recommendation per turn.",
+        "description": "Offer an optional plan for a reusable page or interactive tool. Load personalized-pages to plan it and check for existing capabilities; do not use this action for questions about existing features. At most one recommendation per turn. The user starts background creation from the card.",
         "properties": {
           "action": {
             "const": "create_personalized_page",
@@ -44,14 +44,14 @@ exports[`interface creation > discovers shipped plugins without the recommendati
     ],
     "type": "object",
   },
-  "proposal": "Offer an optional action card before your normal final answer. Load the action’s skill for eligibility and planning. This only proposes an action; the user must click its card to start. Do not execute, wait, poll, claim completion or ask the user to report back. The card carries the plan; briefly answer the request and refer to it without repeating its feature list or internal card limits. Use successful results only; a rejection creates no card.",
+  "proposal": "Offer an optional action card before your normal final answer. Load the action’s skill for eligibility and planning. This only proposes an action; the user must click its card to start. Do not execute, wait, poll, claim work has started or completed, or ask the user to report back. The card carries the plan; briefly answer the request and refer to it without repeating its feature list or internal card limits. Use successful results only; a rejection creates no card.",
 }
 `;
 
-exports[`interface creation > discovers shipped plugins without the recommendation or management tools and withdraws discovery on unload > skill discovery 1`] = `
+exports[`interface creation > loads page planning with a live duplicate-check catalog and withdraws it on unload > skill discovery 1`] = `
 [
   {
-    "description": "Find existing DSH features for product-use questions before inspecting source or config; also plan persistent pages. Covers viewers/editors (including Session Context), readable thinking, input methods, PR badges and history. Supplies live plugin names, descriptions and enabled state. Reuse a catalog already loaded this turn. Answer quoted, one-off, discussion-only or declined requests directly, without discovery, code investigation or cards.",
+    "description": "Plan a reusable page or small interactive tool when the user wants one, including requests to reuse an existing capability if possible. Also consider clearly reusable results already obtained in the current task. The included catalog is only for page-plan duplicate checks. Questions only about existing features, ordinary coding, one-off answers, quoted wishes, discussion-only requests and declined recommendations do not qualify.",
     "invocation": {
       "modelInvocable": true,
       "userInvocable": false,
@@ -63,21 +63,25 @@ exports[`interface creation > discovers shipped plugins without the recommendati
 ]
 `;
 
-exports[`interface creation > discovers shipped plugins without the recommendation or management tools and withdraws discovery on unload > skill policy and current catalog 1`] = `
+exports[`interface creation > loads page planning with a live duplicate-check catalog and withdraws it on unload > skill policy and current catalog 1`] = `
 {
   "content": "# Personalized pages
 
-Use this workflow in the main conversation for a DSH interface or capability need. A wish to use DSH differently is not an instruction to develop DSH, even if the workspace contains its checkout. For a clearly specified persistent page, load this skill directly before list_official_plugins, including requests that also mention an existing-plugin need. Otherwise load it when no other official-plugin discovery is available. Its catalog is current at load time; do not also call list_official_plugins in the same turn unless installation state has changed. When an existing plugin is already selected, no creation planning or skill load is needed.
+Use this workflow in the main conversation to plan an optional persistent page or small interactive tool. The user's need can concern any task or result, not just DSH itself. Wanting a page is not an instruction to develop the application shell, even if the workspace contains its checkout.
+
+Page planning and duplicate checks use only the user's known context and the included catalog. Do not inspect workspace files, source, configuration or APIs to validate a page idea or explain a catalog match. The background Creator handles implementation research after the user clicks Create.
 
 ## Choose the smallest useful response
 
-Match the desired outcome against the current official-plugin descriptions below. An enabled match needs an explanation of how to use it, without an enable card. For a disabled match, use the official-plugin recommendation tool if available; otherwise explain its entry in Plugins. Do not recreate an existing capability. Display translation may make English thinking readable in Chinese without changing the model's reasoning language; explain that distinction and finish with the existing option. Explaining this limit is sufficient: do not investigate generation-language settings, propose instruction-file edits or ask to change file permissions unless the user separately requests that implementation. A catalog match ends discovery; do not research additional alternatives or setup steps.
+First decide whether a page would serve the current request. An explicit wish for a reusable interface qualifies, including a request to reuse something existing if possible; load this skill to check that page need before deciding to build. A clearly reusable result already obtained for the current task can also qualify: something the user will revisit, update or interact with. First answer the actual request. Ordinary coding tasks, one-off answers, incidental static tables, quoted wishes, discussion-only requests and declined recommendations need no page.
 
-Recommend only what the description supports. The optional-plugin catalog is not a complete inventory of built-in UI. If it does not confirm a detail, say that detail is unconfirmed rather than claiming it is absent. A raw Session inspector's description does not confirm a live Context-composition breakdown. For questions asking only what already exists or where to open it, explain the existing option and any unconfirmed detail, then stop without a creation card. Offer a new page only when the user requests an unmet interface need or a clearly reusable result qualifies.
+Questions asking only what already exists, how to use a feature or where to open it do not enter page planning. Do not load this skill just to discover plugins. If it is already loaded, those questions still get no creation card. Do not fetch extra data or inspect source/configuration to find a recommendation opportunity. Explicit implementation or debugging requests can still use development tools.
 
-For manual history lookup, the sidebar already has a Search sessions control for finding session titles. Explain that control directly. The optional Session search plugin gives the Agent tools to read earlier conversations; it is not a prerequisite for manual sidebar search. Do not inspect workspace files or source to provide product-use guidance.
+## Check for an existing capability
 
-For a clear unmet interface need, propose a small persistent page. A clearly reusable result already obtained for the current task can also qualify: a changing task list, recurring status table, data explorer or interactive control. First answer the actual request. Ordinary coding tasks, one-off answers, incidental static tables, quoted wishes, discussion-only requests and declined recommendations need no page. Do not fetch extra data or inspect source/configuration to find a recommendation opportunity. Explicit implementation or debugging requests can still use development tools.
+Only after deciding to plan a page, compare its requested behavior with the current official-plugin descriptions below. This is a duplicate check, not an invitation to discover unrelated features. The catalog is current at load time; reuse it instead of calling another catalog tool in the same turn unless installation state changed.
+
+If an existing capability satisfies the page need, stop page planning. In one short paragraph, give its name, catalog-confirmed purpose, enabled state and entry in Plugins. Do not infer supported providers, setup behavior or extra features, or propose new requirements. An enabled match needs no enable card. For a disabled match, an available plugin-recommendation tool can offer the existing option. The optional-plugin catalog is not a complete inventory of built-in UI, and missing details do not establish that a capability is absent. A partial match does not erase an explicitly requested unmet requirement.
 
 Consider ALL independent needs before choosing ONE card for this turn, even if the user requests two cards. Follow an explicit priority. Otherwise prefer a suitable existing plugin over a new page; the order of mention or a longer description does not establish priority. Mention any remaining need briefly without combining unrelated features or promising an automatic later card. Clarify only missing facts that change the requested outcome.
 
@@ -99,7 +103,7 @@ Plan-only or do-not-start requests still permit a proposal, including read-only 
 
 When offering a new page, call \`suggest_action\` with \`request.action: "create_personalized_page"\`, a short \`request.title\`, a \`request.brief\` containing the plan, and the selected \`request.slot\`. A successful result creates the proposal; a rejection creates no card. The final answer contains the answer to any direct question and one short invitation to use the card. For example: “17 + 25 = 42。方案在下方卡片里；点击创建后在后台生成，你可以继续聊天。” For a page-only request: “方案放在下方卡片里，点击创建即可开始。” Adapt the wording and language to the user. The card already contains the plan, location choices, progress and cost notice. Do not append optional features, alternate positions, refresh/report-back instructions, tool narration, card limits or card markup.
 
-## Current official plugins
+## Existing capabilities to check against this page plan
 
 [{"name":"enabled","title":"Existing view","description":"Inspect current work","enabled":true},{"name":"disabled","title":"disabled","description":"Optional view","enabled":false},{"name":"empty","title":"empty","description":"","enabled":true},{"name":"localized","title":{"en":"Counter","zh":"计数器"},"description":{"en":"Count tasks","zh":"统计任务"},"enabled":true}]",
   "name": "personalized-pages",

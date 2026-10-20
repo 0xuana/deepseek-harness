@@ -7,7 +7,7 @@
   {
     "id": "session_viewer",
     "prompt": "我想在当前 Session 里查看这轮的 Context 组成，有现成的查看器吗？",
-    "expected": "Load personalized-pages once and explain the nearest existing option. The catalog does not establish whether Context breakdown exists: state uncertainty rather than inventing a limit. An existing-feature question alone gets no creation card or source inspection."
+    "expected": "Existing-feature question: do not load personalized-pages or offer a creation card. Answer from available product knowledge or feature-discovery capabilities without inventing what the catalog confirms."
   },
   {
     "id": "global_page",
@@ -87,17 +87,43 @@
     "id": "existing_plugin_without_recommendation_experiment",
     "setup": "Only personalized pages is enabled; thinking translation is disabled.",
     "prompt": "我希望模型思考过程能是中文的，目前有时候是英文的。",
-    "expected": "Load personalized-pages once, explain the existing thinking-display translation plugin and its limit, and stop. No source/configuration inspection, new page, prompt-file edit or claim that model reasoning language changed."
+    "expected": "A display-language preference alone does not request a reusable page. Do not load personalized-pages or offer a creation card. Existing-plugin discovery belongs to its own capability, when available."
   },
   {
     "id": "manual_history_lookup",
     "prompt": "我只想自己在左边搜索上周聊过的内容，不需要你替我查询，怎么打开？",
-    "expected": "Explain the existing sidebar Search sessions control and its title-search scope. No agent-history plugin prerequisite, source inspection or creation card."
+    "expected": "Existing-feature usage question: no personalized-pages load or creation card. Do not use page planning to discover how manual search works."
   },
   {
     "id": "existing_enabled_plugin",
     "setup": "Only personalized pages and thinking translation enabled.",
     "prompt": "展开的英文推理看着费劲，我想直接读中文，有现成功能吗？",
-    "expected": "Load the live catalog once, explain enabled thinking-display translation and its usage/limit; no duplicate card, configuration edit or source investigation."
+    "expected": "Existing-feature question: no personalized-pages load or creation card, regardless of plugin enabled state."
+  },
+  {
+    "id": "personal_budget_page",
+    "prompt": "我想要一个以后能反复打开的家庭月度预算页面，左边有入口。我自己填收入和每类支出，显示本月剩余额度，数据本地保存，所有会话共用。先给方案，别开始做。",
+    "expected": "Load personalized-pages, check existing capabilities and offer one minimal sidebar-left page. Cover the personal task without requiring DSH-specific functionality or starting generation."
+  },
+  {
+    "id": "existing_badge_question",
+    "prompt": "DSH 有没有给 PR 加标识的现成功能？在哪里打开？",
+    "expected": "Existing-feature question: no personalized-pages load or creation card."
+  },
+  {
+    "id": "duplicate_page_need",
+    "setup": "Only personalized pages is enabled; thinking translation is disabled.",
+    "prompt": "我想做一个能反复用的小工具，唯一功能就是把会话里展开的英文思考内容翻译成中文。先给方案，如果现有插件已经能做到就直接告诉我，不要重复造。",
+    "expected": "Page intent loads personalized-pages, then its live catalog identifies thinking translation. Explain the existing option instead of issuing a duplicate creation card; do not build or enable anything."
+  },
+  {
+    "id": "partial_match_page_need",
+    "prompt": "我需要一个反复使用的翻译练习页面：我自己粘贴英文邮件，输入中文译文，保存多次练习记录，所有会话共用。只给方案，不需要翻译模型的思考内容。",
+    "expected": "Load personalized-pages and offer one sidebar-left practice page. An existing thinking-display translation plugin does not satisfy user-supplied mail practice and saved attempts."
+  },
+  {
+    "id": "ordinary_coding",
+    "prompt": "给我一个 TypeScript 函数，接收数字数组并返回平均值；空数组返回 null。只贴代码。",
+    "expected": "Answer the coding request without personalized-pages, a plugin-catalog lookup or a creation card."
   }
 ]

@@ -11,7 +11,7 @@ import { fixture, callId, proposal, installedBundle, writeBundle } from './fixtu
 import type { CreationSlot, CreationView } from '../src/types.ts'
 
 describe('interface creation', () => {
-  it('discovers shipped plugins without the recommendation or management tools and withdraws discovery on unload', async () => {
+  it('loads page planning with a live duplicate-check catalog and withdraws it on unload', async () => {
     const f = await fixture()
     f.bundles.push(
       { ...installedBundle('enabled'), official: true, meta: { title: 'Existing view', description: 'Inspect current work' } },
@@ -28,6 +28,7 @@ describe('interface creation', () => {
       parameters: f.ctx.tools.get('suggest_action', f.agent)?.parameters,
     }).toMatchSnapshot('one card tool')
     expect(await f.ctx.skills.list()).toMatchSnapshot('skill discovery')
+    expect(f.manager.listBundles).not.toHaveBeenCalled()
     const result = await f.ctx.tools.execute({ name: 'skill', arguments: { name: 'personalized-pages' }, agent: f.agent,
       callId: ToolCallId('discovery'), signal: new AbortController().signal })
     expect(result.isError, JSON.stringify(result.content)).toBe(false)

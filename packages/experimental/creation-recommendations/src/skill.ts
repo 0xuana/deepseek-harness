@@ -1,4 +1,4 @@
-/** On-demand recommendation policy with the current shipped-plugin catalog. */
+/** On-demand page planning with current plugins for duplicate checks. */
 import { readFile } from 'node:fs/promises'
 import type { Context } from '@deepseek-ai/cordis'
 import { BUNDLED_SKILL_RANK, type SkillCandidate } from '@deepseek-ai/dsh-skill'
@@ -9,7 +9,7 @@ import { BUNDLED_SKILL_RANK, type SkillCandidate } from '@deepseek-ai/dsh-skill'
 export function registerCreationSkill(ctx: Context): void {
   const candidate: SkillCandidate = {
     name: 'personalized-pages',
-    description: 'Find existing DSH features for product-use questions before inspecting source or config; also plan persistent pages. Covers viewers/editors (including Session Context), readable thinking, input methods, PR badges and history. Supplies live plugin names, descriptions and enabled state. Reuse a catalog already loaded this turn. Answer quoted, one-off, discussion-only or declined requests directly, without discovery, code investigation or cards.',
+    description: 'Plan a reusable page or small interactive tool when the user wants one, including requests to reuse an existing capability if possible. Also consider clearly reusable results already obtained in the current task. The included catalog is only for page-plan duplicate checks. Questions only about existing features, ordinary coding, one-off answers, quoted wishes, discussion-only requests and declined recommendations do not qualify.',
     provider: 'dsh-personalized-pages', source: 'bundled', rank: BUNDLED_SKILL_RANK, locator: null,
     invocation: { modelInvocable: true, userInvocable: false },
   }
@@ -25,7 +25,7 @@ export function registerCreationSkill(ctx: Context): void {
       const { rank: _rank, locator: _locator, ...summary } = candidate
       return {
         ...summary,
-        content: instructions + '\n## Current official plugins\n\n'
+        content: instructions + '\n## Existing capabilities to check against this page plan\n\n'
           + JSON.stringify(bundles.filter(bundle => bundle.official).map(bundle => ({
             name: bundle.name, title: bundle.meta?.title ?? bundle.name,
             description: bundle.meta?.description ?? bundle.description ?? '', enabled: bundle.enabled,
