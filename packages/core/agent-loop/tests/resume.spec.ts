@@ -350,7 +350,7 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx.fiber.dispose()
   })
 
-  it('rollback swallows a rejecting handle close after a prepare failure (create and createAgent)', async () => {
+  it('rollback swallows a rejecting handle close after initialization validation fails (create and createAgent)', async () => {
     const { ctx } = await persistentHarness(new MockAdapter([]))
     const originalCreate = ctx.sessionPersistence.create.bind(ctx.sessionPersistence)
     const closeSpies: Array<{ mockRestore: () => void }> = []
@@ -360,12 +360,10 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
       return handle
     }
 
-    // Config create path: prepare's option validation throws after the handle exists.
     await expect(ctx.agentLoop.create(SessionId('close-reject-config'), { maxTokens: -1 }))
       .rejects.toThrow('agent maxTokens must be a positive safe integer')
     expect(ctx.agents.get(SessionId('close-reject-config'))).toBeUndefined()
 
-    // Owned createAgent path: the same validation failure after the handle exists.
     await expect(ctx.agents.create({
       sessionId: SessionId('close-reject-owned'),
       agentOptions: { maxTokens: -1 },
@@ -376,18 +374,20 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx.fiber.dispose()
   })
 
-  it('a reentrant abort during preparation swallows a rejecting handle close', async () => {
+  it('a reentrant abort during scope construction waits for a rejecting handle close', async () => {
     const { ctx } = await persistentHarness(new MockAdapter([]))
-    const sessionId = SessionId('prepare-abort-close-reject')
+    const sessionId = SessionId('scope-abort-close-reject')
     const originalCreate = ctx.sessionPersistence.create.bind(ctx.sessionPersistence)
     const spies: Array<{ mockRestore: () => void }> = []
     let closed: Promise<void> | undefined
+    let closeCompleted = false
     ctx.sessionPersistence.create = async (header, options) => {
       const handle = await originalCreate(header, options)
       const realClose = handle.close.bind(handle)
       spies.push(vi.spyOn(handle, 'close').mockImplementation(async () => {
         closed = realClose()
         await closed
+        closeCompleted = true
         throw new Error('close failed')
       }))
       return handle
@@ -401,14 +401,15 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
       controller.abort(reason)
     })
 
-    await expect(ctx.agents.create({ sessionId, signal: controller.signal })).rejects.toBe(reason)
-    // The rejecting close stays swallowed by the rollback; wait for the
-    // rollback's real close so factory teardown finds a quiescent lifecycle.
-    await vi.waitFor(() => { if (closed === undefined) throw new Error('close not reached') })
-    await closed
-    expect(ctx.agents.get(sessionId)).toBeUndefined()
-    for (const spy of spies.splice(0)) spy.mockRestore()
-    await ctx.fiber.dispose()
+    try {
+      await expect(ctx.agents.create({ sessionId, signal: controller.signal })).rejects.toBe(reason)
+      expect(closeCompleted).toBe(true)
+      expect(ctx.agents.get(sessionId)).toBeUndefined()
+    } finally {
+      await closed
+      for (const spy of spies.splice(0)) spy.mockRestore()
+      await ctx.fiber.dispose()
+    }
   })
 
   it('config create rollback swallows a rejecting close after a publish failure', async () => {
