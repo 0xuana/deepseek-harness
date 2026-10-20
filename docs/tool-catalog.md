@@ -86,7 +86,7 @@ Offer an optional action card before your normal final answer. Load the actionâ€
         },
         "slot": {
           "type": "string",
-          "description": "Location selected using the personalized-pages skill: page for Session-bound streaming output or interaction, sidebar-right for other Session viewers/editors, sidebar-left for a global main-area page with a left entry. Honor an explicit user choice.",
+          "description": "Location selected using the personalized-pages skill: sidebar-right for content viewed while chatting or other Session viewers/editors; otherwise page for Session-bound streaming output or interaction. sidebar-left opens a global main-area page with a left entry. Honor an explicit user choice.",
           "enum": [
             "sidebar-right",
             "page",

@@ -30,7 +30,7 @@ When the page uses content already supplied or obtained in this task, copy only 
 
 If the user will add or maintain the content themselves, missing old material need not block a proposal. Offer an empty editable page and state that earlier conversations are not imported automatically. Ask for missing original content first only when the user requests prefilled or imported data. Do not promise scheduled collection, automatic updates or integrations unless requested.
 
-Honor a location explicitly requested by the user, including an explicit request to keep the content beside the conversation. Merely wanting to keep chatting does not override the default placement. Otherwise:
+Honor a location explicitly requested by the user. Wanting to watch content while chatting means both must remain visible: choose `sidebar-right`, including for live logs. Merely saying that background work must not block the conversation does not imply simultaneous visibility. Otherwise:
 
 - `sidebar-left`: global feature, with a left entry opening a standalone main-area page without Chat/Trajectory tabs; includes global streaming tools.
 - `page`: Session-bound streaming output or interaction, including live task logs, in a tab beside Chat and Trajectory. Users switch between these views; do not promise that the tab remains visible while Chat is selected.

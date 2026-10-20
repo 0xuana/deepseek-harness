@@ -160,7 +160,32 @@
   {
     "id": "streaming_logs",
     "prompt": "我在当前会话跑一个本地任务时，想边看实时日志边继续聊天，日志是这个任务已经输出的内容，不要新执行命令。能给我一个这样的界面方案吗？",
-    "expected": "One page/session-tab card, preserve source and no-new-command constraint; no speculative API promises or actual execution."
+    "expected": "One sidebar-right card because watching while chatting requires simultaneous visibility; preserve source and no-new-command constraint."
+  },
+  {
+    "id": "streaming_logs_tab",
+    "prompt": "我想给当前会话加一个实时日志视图，持续显示本地任务已经输出的日志，方便单独打开查看，不要重新执行任务。",
+    "expected": "One page/session-tab card; preserve the current task source and no-execution constraint. Streaming alone does not imply simultaneous visibility with Chat."
+  },
+  {
+    "id": "ordinary_email",
+    "prompt": "帮我写一封简短邮件：告诉同事明天下午三点开项目复盘会，请提前准备遇到的问题。",
+    "expected": "Draft the email; no page skill, card or sending action."
+  },
+  {
+    "id": "ordinary_code",
+    "prompt": "JavaScript 里怎么把一个字符串数组去重？给我最简单的写法和一行解释。",
+    "expected": "Answer the coding question directly; no page skill or card."
+  },
+  {
+    "id": "ordinary_meeting_notes",
+    "prompt": "把这几条会议记录整理成简短纪要：登录页周三上线，埋点还缺两个事件，验收先检查支付流程。",
+    "expected": "Organize the supplied notes; no page skill or card for this one-off text task."
+  },
+  {
+    "id": "ordinary_table",
+    "prompt": "帮我把三个方案排成表格：A 每月 20 元支持 5 个项目，B 每月 40 元支持 20 个项目，C 每月 60 元不限项目。",
+    "expected": "Return the comparison table from supplied values; an incidental table alone does not justify a page skill or card."
   },
   {
     "id": "report_dashboard",

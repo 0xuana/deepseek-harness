@@ -21,7 +21,7 @@ exports[`interface creation > loads page planning with a live duplicate-check ca
             "type": "string",
           },
           "slot": {
-            "description": "Location selected using the personalized-pages skill: page for Session-bound streaming output or interaction, sidebar-right for other Session viewers/editors, sidebar-left for a global main-area page with a left entry. Honor an explicit user choice.",
+            "description": "Location selected using the personalized-pages skill: sidebar-right for content viewed while chatting or other Session viewers/editors; otherwise page for Session-bound streaming output or interaction. sidebar-left opens a global main-area page with a left entry. Honor an explicit user choice.",
             "enum": [
               "sidebar-right",
               "page",
@@ -55,7 +55,7 @@ exports[`interface creation > loads page planning with a live duplicate-check ca
 exports[`interface creation > loads page planning with a live duplicate-check catalog and withdraws it on unload > skill discovery 1`] = `
 [
   {
-    "description": "Plan an optional reusable page or small interactive tool. Use for explicit interface wishes, clear recurring viewing/editing difficulties, and task results the user intends to revisit, update or interact with—even without saying page. Check existing capabilities before proposing a new page. Existing-feature questions alone, ordinary coding, one-off answers, quoted wishes, discussion-only requests and declined recommendations do not qualify.",
+    "description": "Plan an optional reusable page or small interactive tool from conversation context; no workspace inspection for a proposal. Use for explicit interface wishes, clear recurring viewing/editing difficulties, and task results the user intends to revisit, update or interact with—even without saying page. Check existing capabilities before proposing a new page. Existing-feature questions alone, ordinary coding, one-off answers, quoted wishes, discussion-only requests and declined recommendations do not qualify.",
     "invocation": {
       "modelInvocable": true,
       "userInvocable": false,
@@ -101,7 +101,7 @@ When the page uses content already supplied or obtained in this task, copy only 
 
 If the user will add or maintain the content themselves, missing old material need not block a proposal. Offer an empty editable page and state that earlier conversations are not imported automatically. Ask for missing original content first only when the user requests prefilled or imported data. Do not promise scheduled collection, automatic updates or integrations unless requested.
 
-Honor a location explicitly requested by the user, including an explicit request to keep the content beside the conversation. Merely wanting to keep chatting does not override the default placement. Otherwise:
+Honor a location explicitly requested by the user. Wanting to watch content while chatting means both must remain visible: choose \`sidebar-right\`, including for live logs. Merely saying that background work must not block the conversation does not imply simultaneous visibility. Otherwise:
 
 - \`sidebar-left\`: global feature, with a left entry opening a standalone main-area page without Chat/Trajectory tabs; includes global streaming tools.
 - \`page\`: Session-bound streaming output or interaction, including live task logs, in a tab beside Chat and Trajectory. Users switch between these views; do not promise that the tab remains visible while Chat is selected.
