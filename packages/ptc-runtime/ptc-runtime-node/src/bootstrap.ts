@@ -4,8 +4,7 @@
  */
 
 import { inspect } from 'node:util'
-import type { ProgramResult, ProgramBootData } from './protocol.ts'
-import type { PtcJsonWire } from './json-wire.ts'
+import type { HostMethods, ProgramResult, ProgramBootData } from './protocol.ts'
 import { jsonStringBytesUpTo, jsonValueBytesUpTo, truncateJsonStringBytes } from './output-json.ts'
 import { decodePtcJsonWire, encodePtcJsonWire, snapshotPtcJsonValue } from './json-wire.ts'
 
@@ -19,25 +18,6 @@ function defineBindingErrorField(error: Error, key: string, value: string): void
   attributes.enumerable = true
   attributes.value = value
   capturedObjectDefineProperty(error, key, attributes)
-}
-
-/** Evaluation-scoped host calls used by injected bindings and output capture. */
-export interface ProgramHost {
-  /**
-   * Invoke one declared host binding.
-   * @param global - Namespace global.
-   * @param name - Function name.
-   * @param args - Flat lossless JSON argument.
-   * @returns Flat lossless result or a rejected binding failure.
-   */
-  invoke(this: void, global: string, name: string, args: PtcJsonWire): Promise<PtcJsonWire>
-  /**
-   * Stream text to the host output ledger.
-   * @param text - Captured text.
-   */
-  log(text: string): void
-  /** Report exhausted output accounting to the host. */
-  outputLimit(): void
 }
 
 /**
@@ -289,7 +269,7 @@ export function makeBindingErrorClasses(
  */
 export function makeNamespaces(
   data: Pick<ProgramBootData, 'namespaces'>,
-  host: Pick<ProgramHost, 'invoke'>,
+  host: Pick<HostMethods, 'invoke'>,
   errorClasses: Pick<ReadonlyMap<string, BindingErrorConstructor>, 'get'> = makeBindingErrorClasses(data),
 ): Record<string, unknown>[] {
   return data.namespaces.map(({ global, names }) => {
@@ -328,7 +308,7 @@ export function makeNamespaces(
  * @returns Completion or a bounded program failure.
  */
 export async function runProgram(
-  host: ProgramHost,
+  host: Omit<HostMethods, 'ready'>,
   data: ProgramBootData,
   streams: { stdout: PatchableStream; stderr: PatchableStream },
 ): Promise<ProgramResult> {

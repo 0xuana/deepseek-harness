@@ -31,7 +31,7 @@ it('boots an unbuilt source closure outside the workspace and exchanges tool rep
   if (!(control instanceof Duplex)) { child.kill(); await finished; throw new Error('missing child control channel') }
   const channel = createProcessRpc<ProgramMethods, HostMethods>(control, 100_000, {
     ready() {
-      void channel.run(1, directory, {
+      void channel.run(directory, {
         code: 'const answer = await tools.echo({ n: 21 }); return { answer, env: { ...process.env } }',
         namespaces: [{ global: 'tools', names: ['echo'] }],
         maxOutputBytes: 10_000,
@@ -40,7 +40,7 @@ it('boots an unbuilt source closure outside the workspace and exchanges tool rep
         else completed.resolve(decodePtcJsonWire(result.value))
       }, (error: unknown) => { completed.reject(error) })
     },
-    async invoke(_evaluation, _global, _name, args) {
+    async invoke(_global, _name, args) {
       expect(decodePtcJsonWire(args)).toEqual({ n: 21 })
       return encodePtcJsonWire(42)
     },

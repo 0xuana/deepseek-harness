@@ -4,7 +4,7 @@ import { stripTypeScriptTypes } from 'node:module'
 import { isAbsolute } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
-import type { PtcBindingFunction, PtcBindingNamespace, PtcJsonValue, PtcRunFailure, PtcRunRequest, PtcRunResult, PtcRunSandbox, PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
+import type { PtcBindingNamespace, PtcJsonValue, PtcRunFailure, PtcRunRequest, PtcRunResult, PtcRunSandbox, PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
 import { clampTimeout } from '@deepseek-ai/dsh-timeout'
 import { SandboxUnavailableError, classifyRunnerFailure, isRunnerSpawnFailure } from '@deepseek-ai/dsh-sandbox'
 import type { ConfinedArgv, SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandbox'
@@ -273,11 +273,13 @@ export class NodePtcRuntime extends PtcRuntime {
           ? { kind: 'sandbox-unavailable', message: stderr }
           : { kind: 'worker-exit', message: `Node process exited before completing (${String(outcome.exitCode)})${stderr ? `: ${stderr}` : ''}` })
       }
+      // Report a protocol failure and abandon the handler; the closed endpoint sends no response.
+      const refuse = (message: string): never => { protocolFailure(message); throw new Error(message) }
       const transport = createProcessRpc<ProgramMethods, HostMethods>(launched.control, this.config.maxMessageBytes, {
         ready: () => {
           if (ready) { protocolFailure('duplicate program readiness'); return }
           ready = true
-          void transport.run(1, spec.cwd, data).then((raw) => {
+          void transport.run(spec.cwd, data).then((raw) => {
             // A message delivered beside the result can select another outcome first.
             if (settled) return
             const { error, value } = readProgramResult(raw)
@@ -289,32 +291,25 @@ export class NodePtcRuntime extends PtcRuntime {
             finish(error, value)
           }).catch((error: unknown) => { protocolFailure(messageOf(error)) })
         },
-        log: (evaluation, text) => {
-          if (!ready || evaluation !== 1 || typeof text !== 'string') protocolFailure('invalid program log')
-          else admit(text)
+        log: (text: unknown) => {
+          if (typeof text === 'string') admit(text)
+          else protocolFailure('invalid program log')
         },
-        outputLimit: (evaluation) => {
-          if (!ready || evaluation !== 1) { protocolFailure('invalid program output limit'); return }
+        outputLimit: () => {
           outputOverflow = true
           finish()
         },
-        invoke: async (evaluation: unknown, global: unknown, name: unknown, wire: unknown) => {
-          let fn: PtcBindingFunction | undefined
-          let args: PtcJsonValue | undefined
-          let bytes = 0
-          try {
-            if (!ready || evaluation !== 1) throw new Error('call does not belong to the active PTC evaluation')
-            if (typeof global !== 'string' || typeof name !== 'string') throw new Error('invalid binding call identity')
-            const functions = bindings.get(global)?.functions
-            fn = functions !== undefined && Object.hasOwn(functions, name) ? functions[name] : undefined
-            if (typeof fn !== 'function') throw new Error('program requested an undeclared binding')
-            args = decodePtcJsonWire(wire)
-            if (args === undefined) throw new Error('binding arguments must be lossless JSON')
-            bytes = Buffer.byteLength(JSON.stringify(wire))
-            if (pending >= this.config.maxPendingCalls || pendingBytes + bytes > this.config.maxMessageBytes) {
-              throw new Error('pending binding calls exceed configured limits')
-            }
-          } catch (error: unknown) { protocolFailure(messageOf(error)); throw error }
+        invoke: async (global, name, wire) => {
+          // Wire identities that are not strings fail these lookups.
+          const functions = bindings.get(global)?.functions
+          const fn = functions !== undefined && Object.hasOwn(functions, name) ? functions[name] : undefined
+          if (typeof fn !== 'function') return refuse('program requested an undeclared binding')
+          const args = decodePtcJsonWire(wire)
+          if (args === undefined) return refuse('binding arguments must be lossless JSON')
+          const bytes = Buffer.byteLength(JSON.stringify(wire))
+          if (pending >= this.config.maxPendingCalls || pendingBytes + bytes > this.config.maxMessageBytes) {
+            return refuse('pending binding calls exceed configured limits')
+          }
           pending += 1
           pendingBytes += bytes
           try { return await callBinding(fn, args) } finally { pending -= 1; pendingBytes -= bytes }

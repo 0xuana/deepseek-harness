@@ -4,7 +4,7 @@ import { start } from 'node:repl'
 import { PassThrough, Writable, type Duplex } from 'node:stream'
 import { createProcessRpc } from './rpc.ts'
 import { captureStreamWrites, LogBuffer, makeConsoleShim, makeBindingErrorClass, makeNamespaces, prepareCompletion, prepareException } from './bootstrap.ts'
-import type { BindingErrorConstructor, PatchableStream, ProgramHost } from './bootstrap.ts'
+import type { BindingErrorConstructor, PatchableStream } from './bootstrap.ts'
 import type { ProgramResult, HostMethods, ProgramMethods } from './protocol.ts'
 import { clearProgramEnvironment } from './environment.ts'
 
@@ -17,7 +17,6 @@ export interface PersistentProcess {
 }
 
 interface Evaluation {
-  id: number
   logs: LogBuffer
   maxOutputBytes: number
   active: boolean
@@ -51,11 +50,11 @@ export async function runPersistentMain(stream: Duplex, maxMessageBytes: number,
     Object.defineProperty(repl.context, name, { configurable: true, enumerable: true, writable: true, value: undefined })
   }
   let current: Evaluation | undefined
-  const host: Pick<ProgramHost, 'invoke'> = {
+  const host: Pick<HostMethods, 'invoke'> = {
     invoke: (global, name, args) => {
       const evaluation = context.getStore()
       if (!evaluation?.active) throw new Error('PTC evaluation has ended; call this function from a new run_code evaluation')
-      return connection.invoke(evaluation.id, global, name, args)
+      return connection.invoke(global, name, args)
     },
   }
   const logSink = { push(text: string): void { const evaluation = context.getStore(); if (evaluation?.active) evaluation.logs.push(text) } }
@@ -64,14 +63,11 @@ export async function runPersistentMain(stream: Duplex, maxMessageBytes: number,
   captureStreamWrites(logSink, processState.stdout)
   captureStreamWrites(logSink, processState.stderr)
   const connection = createProcessRpc<HostMethods, ProgramMethods>(stream, maxMessageBytes, {
-    async run(id, cwd, data) {
-      if (current?.active) throw new Error('persistent PTC already has an active evaluation')
+    async run(cwd, data) {
       const completion = Promise.withResolvers<ProgramResult>()
-      const logs = new LogBuffer(data.maxOutputBytes,
-        (text) => { void connection.log(id, text) },
-        () => { void connection.outputLimit(id) })
+      const logs = new LogBuffer(data.maxOutputBytes, (text) => { void connection.log(text) }, () => { void connection.outputLimit() })
       const evaluation: Evaluation = {
-        id, logs, maxOutputBytes: data.maxOutputBytes, active: true,
+        logs, maxOutputBytes: data.maxOutputBytes, active: true,
         finish(result) {
           if (!evaluation.active) return
           evaluation.active = false

@@ -99,7 +99,7 @@ async function setup(config: Config = {}, mode: 'read-only' | 'danger-full-acces
 }
 
 function call(id: number, value: string = '') {
-  return { t: 'q', i: String(id), m: 'invoke', a: [1, 'tools', 'test', encodePtcJsonWire(value)] }
+  return { t: 'q', i: String(id), m: 'invoke', a: ['tools', 'test', encodePtcJsonWire(value)] }
 }
 
 function withBinding(fn: PtcBindingFunction): PtcRunRequest {
@@ -305,23 +305,13 @@ describe('Node runtime host failures', () => {
     expect((await h.start()).error?.kind).toBe('protocol')
   })
 
-  it('rejects traffic before readiness without invoking host bindings', async () => {
-    const h = await setup()
-    const binding = vi.fn(async () => null)
-    const result = await h.start(withBinding(binding), call(1))
-    expect(result.error?.message).toContain('active PTC evaluation')
-    expect(binding).not.toHaveBeenCalled()
-  })
-
   it.each<[unknown, string]>([
     [null, 'invalid RPC frame'],
     [{ t: 'q', m: 'ready', a: [] }, 'duplicate program readiness'],
-    [{ t: 'q', m: 'log', a: [1, 1] }, 'invalid program log'],
-    [{ t: 'q', m: 'outputLimit', a: [0] }, 'invalid program output limit'],
-    [{ t: 'q', m: 'invoke', a: [1, null, 'test', []], i: 'call' }, 'invalid binding call identity'],
-    [{ t: 'q', m: 'invoke', a: [0, 'tools', 'test', []], i: 'call' }, 'active PTC evaluation'],
-    [{ t: 'q', m: 'invoke', a: [1, 'tools', 'constructor', []], i: 'call' }, 'undeclared binding'],
-    [{ t: 'q', m: 'invoke', a: [1, 'tools', 'test'], i: 'call' }, 'arguments must be lossless JSON'],
+    [{ t: 'q', m: 'log', a: [1] }, 'invalid program log'],
+    [{ t: 'q', m: 'invoke', a: [null, 'test', []], i: 'call' }, 'undeclared binding'],
+    [{ t: 'q', m: 'invoke', a: ['tools', 'constructor', []], i: 'call' }, 'undeclared binding'],
+    [{ t: 'q', m: 'invoke', a: ['tools', 'test'], i: 'call' }, 'arguments must be lossless JSON'],
     [{ t: 'q', m: 'constructor', a: [] }, 'invalid RPC method call'],
     [{ t: 'q', m: 'toString', a: [] }, 'invalid RPC method call'],
     [{ t: 'unknown' }, 'unknown RPC message'],
@@ -408,7 +398,7 @@ describe('Node runtime host failures', () => {
       const run = message as { m?: string; i?: string }
       if (run.m !== 'run') return
       const result = { t: 's', i: run.i, r: { error: { kind: 'exception', message: 'EACCES: blocked' } } }
-      const log = { t: 'q', m: 'log', a: [1, 'x'.repeat(100)] }
+      const log = { t: 'q', m: 'log', a: ['x'.repeat(100)] }
       h.control.push(Buffer.from(`${JSON.stringify(result)}\n${JSON.stringify(log)}\n`))
     })
     const result = await h.start()
@@ -419,7 +409,7 @@ describe('Node runtime host failures', () => {
   it('retains admitted logs when the program reports its own output limit', async () => {
     const h = await setup()
     h.onBoot(() => {
-      h.emit({ t: 'q', m: 'log', a: [1, 'retained'] })
+      h.emit({ t: 'q', m: 'log', a: ['retained'] })
       h.complete({ error: { kind: 'output-limit', message: 'child ledger exhausted' } })
     })
     const result = await h.start()

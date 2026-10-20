@@ -1,9 +1,7 @@
 /** birpc over newline-delimited JSON on the bounded private process channel. */
 import { Buffer } from 'node:buffer'
 import type { Duplex } from 'node:stream'
-import type { PtcJsonValue } from '@deepseek-ai/dsh-ptc-runtime'
 import { createBirpc, type BirpcReturn } from 'birpc'
-import { jsonValueBytesUpTo } from './output-json.ts'
 
 const stringify = JSON.stringify
 const parse = JSON.parse
@@ -38,16 +36,14 @@ export function createProcessRpc<Remote extends object, Local extends object>(
     eventNames,
     on: (listener) => { receive = listener },
     off: () => { receive = undefined; stream.destroy() },
-    serialize: (message: Record<string, unknown>) => {
-      // JSON drops Error fields; the peer receives only the diagnostic.
-      const encoded = message.e instanceof Error ? { t: 's', i: message.i, e: { message: message.e.message } } : message
-      // Measure before materializing the line; the Writable owns already queued bytes.
-      if (jsonValueBytesUpTo(encoded as PtcJsonValue, maxMessageBytes - stream.writableLength - 1) !== undefined) return `${stringify(encoded)}\n`
-      fail(new Error(`control output exceeds ${maxMessageBytes} queued bytes`), 'protocol')
-      return ''
+    // JSON drops Error fields; the peer receives only the diagnostic.
+    serialize: (message: Record<string, unknown>) => `${stringify(message.e instanceof Error ? { ...message, e: { message: message.e.message } } : message)}\n`,
+    post: (line: string) => {
+      // A binding can settle after the endpoint closes; the Writable owns already queued bytes.
+      if (rpc.$closed) return
+      if (stream.writableLength + Buffer.byteLength(line) > maxMessageBytes) fail(new Error(`control output exceeds ${maxMessageBytes} queued bytes`), 'protocol')
+      else stream.write(line)
     },
-    // A binding can settle after the endpoint closes.
-    post: (line: string) => { if (!rpc.$closed) stream.write(line) },
     deserialize: (line: string) => {
       const message: unknown = parse(line)
       if (!record(message)) throw new Error('invalid RPC frame')

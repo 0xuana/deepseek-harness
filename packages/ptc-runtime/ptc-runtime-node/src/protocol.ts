@@ -21,40 +21,34 @@ export interface ProgramResult {
   error?: { kind: 'exception' | 'invalid-output' | 'output-limit'; message: string }
 }
 
-/** Host operations available only during the identified evaluation. */
+/** Host operations for the current evaluation; one pipe delivers its messages before its result. */
 export interface HostMethods {
   /** Announce that the process can accept its first evaluation. */
   ready(): void
   /**
    * Invoke a binding under its originating host execution context.
-   * @param evaluation - Active evaluation generation, independent of RPC correlation.
    * @param global - Namespace global.
    * @param name - Function name within the namespace.
    * @param args - Flat lossless JSON arguments.
    * @returns Flat lossless JSON result; binding failures reject the call.
    */
-  invoke(evaluation: number, global: string, name: string, args: PtcJsonWire): Promise<PtcJsonWire>
+  invoke(global: string, name: string, args: PtcJsonWire): Promise<PtcJsonWire>
   /**
    * Admit captured output before completion or interruption.
-   * @param evaluation - Active evaluation generation.
    * @param text - Captured text.
    */
-  log(evaluation: number, text: string): void
-  /**
-   * Report exhausted program-side output accounting.
-   * @param evaluation - Active evaluation generation.
-   */
-  outputLimit(evaluation: number): void
+  log(text: string): void
+  /** Report exhausted program-side output accounting. */
+  outputLimit(): void
 }
 
 /** Operations implemented by either the per-call child or retained REPL. */
 export interface ProgramMethods {
   /**
    * Evaluate code with the supplied binding declarations and output budget.
-   * @param evaluation - Generation carried by all callbacks during this evaluation.
    * @param cwd - Execution-world working directory.
    * @param data - Program and injected declarations.
    * @returns Completion or a bounded program failure, after captured output is sent.
    */
-  run(evaluation: number, cwd: string, data: ProgramBootData): Promise<ProgramResult>
+  run(cwd: string, data: ProgramBootData): Promise<ProgramResult>
 }

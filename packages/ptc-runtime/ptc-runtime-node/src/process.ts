@@ -28,14 +28,14 @@ export async function runNodeMain(stream: Duplex, maxMessageBytes: number, proce
   // Set once the result is returned or the endpoint closes; the child then sends nothing more.
   let ended = false
   const connection = createProcessRpc<HostMethods, ProgramMethods>(stream, maxMessageBytes, {
-    async run(evaluation, _cwd, data) {
+    async run(_cwd, data) {
       const result = await runProgram({
         invoke: (global, name, args) => {
           if (ended) throw new Error('PTC evaluation has ended')
-          return connection.invoke(evaluation, global, name, args)
+          return connection.invoke(global, name, args)
         },
-        log: (text) => { if (!ended) void connection.log(evaluation, text) },
-        outputLimit: () => { if (!ended) void connection.outputLimit(evaluation) },
+        log: (text) => { if (!ended) void connection.log(text) },
+        outputLimit: () => { if (!ended) void connection.outputLimit() },
       }, data, processState)
       ended = true
       void connection.$rejectPendingCalls(({ reject }) => { reject(new Error('PTC evaluation ended before the binding completed')) })

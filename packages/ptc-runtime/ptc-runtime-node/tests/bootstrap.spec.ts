@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import { LogBuffer, makeBindingErrorClasses, makeConsoleShim, makeNamespaces, captureStreamWrites, prepareCompletion, prepareException, runProgram } from '../src/bootstrap.ts'
-import type { ProgramHost, PatchableStream } from '../src/bootstrap.ts'
+import type { PatchableStream } from '../src/bootstrap.ts'
+import type { HostMethods } from '../src/protocol.ts'
 import { decodePtcJsonWire, encodePtcJsonWire } from '../src/json-wire.ts'
 
-function host(): ProgramHost & { logs: string[]; limits: number } {
+function host(): Omit<HostMethods, 'ready'> & { logs: string[]; limits: number } {
   const calls = {
     logs: [] as string[], limits: 0,
-    invoke: vi.fn<ProgramHost['invoke']>(async () => encodePtcJsonWire(42)),
+    invoke: vi.fn<HostMethods['invoke']>(async () => encodePtcJsonWire(42)),
     log: (text: string) => { calls.logs.push(text) },
     outputLimit: () => { calls.limits += 1 },
   }

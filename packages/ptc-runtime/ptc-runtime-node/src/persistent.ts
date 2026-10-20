@@ -16,7 +16,7 @@ import { createProcessRpc } from './rpc.ts'
 import { readProgramResult } from './result.ts'
 import { bootstrapArgs } from './launch.ts'
 import { STARTUP_ENVIRONMENT_NAMES } from './environment.ts'
-import { decodePtcJsonWire, type PtcJsonWire } from './json-wire.ts'
+import { decodePtcJsonWire } from './json-wire.ts'
 import { OutputLedger } from './output-ledger.ts'
 import { drainOutput, terminateProcess } from './output-stream.ts'
 import type { ProgramBootData, ProgramMethods, HostMethods } from './protocol.ts'
@@ -41,7 +41,6 @@ function sameAdditionalRoots(left: readonly string[] | undefined, right: readonl
 }
 
 interface Evaluation {
-  id: number
   data: ProgramBootData
   spec: PtcRunSpec
   bindings: Map<string, PtcBindingNamespace>
@@ -63,7 +62,6 @@ class Kernel {
   private running = false
   private cleanupPending = false
   private ready = false
-  private sequence = 0
   private stderr = ''
   private stopped: Promise<boolean> | undefined
   private starting?: Promise<void>
@@ -117,7 +115,6 @@ class Kernel {
     }, spec.timeoutMs)
     const onAbort = (): void => { evaluation.finish({ kind: 'abort', message: 'execution canceled; retained variables were cleared' }, undefined, true) }
     const evaluation: Evaluation = {
-      id: ++this.sequence,
       data: { code, maxOutputBytes: this.config.maxOutputBytes, namespaces: [...bindings.values()].map(binding => ({
         global: binding.global, names: Object.keys(binding.functions), ...binding.errorClass ? { errorClass: binding.errorClass } : {},
       })) },
@@ -187,7 +184,7 @@ class Kernel {
   }
 
   private dispatch(evaluation: Evaluation): void {
-    void this.channel?.run(evaluation.id, evaluation.spec.cwd, evaluation.data).then((raw) => {
+    void this.channel?.run(evaluation.spec.cwd, evaluation.data).then((raw) => {
       const { error, value } = readProgramResult(raw)
       // Raw stdio can be queued beside the RPC result on separate pipes.
       setImmediate(() => { evaluation.finish(error, value) })
@@ -220,23 +217,41 @@ class Kernel {
       })
       stream.on('error', (error: Error) => { this.fail('worker-exit', error.message) })
     }
+    // Report a protocol failure and abandon the handler; the closed endpoint sends no response.
+    const refuse = (message: string): never => { this.fail('protocol', message); throw new Error(message) }
     this.channel = createProcessRpc<ProgramMethods, HostMethods>(handle.control, this.config.maxMessageBytes, {
       ready: () => {
         if (this.ready || !this.active) { this.fail('protocol', 'unexpected persistent PTC readiness'); return }
         this.ready = true
         this.dispatch(this.active)
       },
-      log: (id, text) => {
-        const evaluation = this.evaluation(id)
-        if (evaluation === undefined || typeof text !== 'string') this.fail('protocol', 'invalid persistent PTC log')
-        else evaluation.admit(text)
+      log: (text: unknown) => {
+        if (this.active === undefined || typeof text !== 'string') this.fail('protocol', 'invalid persistent PTC log')
+        else this.active.admit(text)
       },
-      outputLimit: (id) => {
-        const evaluation = this.evaluation(id)
-        if (evaluation === undefined) this.fail('protocol', 'invalid persistent PTC output limit')
-        else evaluation.finish({ kind: 'output-limit', message: 'output limit exceeded' }, undefined, true)
+      outputLimit: () => {
+        if (this.active === undefined) this.fail('protocol', 'idle persistent PTC output limit')
+        else this.active.finish({ kind: 'output-limit', message: 'output limit exceeded' }, undefined, true)
       },
-      invoke: (id, global, name, wire) => this.invoke(id, global, name, wire),
+      invoke: async (global, name, wire) => {
+        const evaluation = this.active
+        if (evaluation === undefined) return refuse('idle persistent PTC binding call')
+        const args = decodePtcJsonWire(wire)
+        if (args === undefined) return refuse('binding arguments must be lossless JSON')
+        const bytes = Buffer.byteLength(JSON.stringify(wire))
+        if (evaluation.pending >= this.config.maxPendingCalls || evaluation.pendingBytes + bytes > this.config.maxMessageBytes) {
+          return refuse('pending binding calls exceed configured limits')
+        }
+        // A retained function can name a binding this evaluation no longer declares; invokeBinding rejects it.
+        const functions = evaluation.bindings.get(global)?.functions
+        const fn = functions !== undefined && Object.hasOwn(functions, name) ? functions[name] : undefined
+        evaluation.pending += 1
+        evaluation.pendingBytes += bytes
+        try { return await evaluation.invoke(fn, args) } finally {
+          evaluation.pending -= 1
+          evaluation.pendingBytes -= bytes
+        }
+      },
     }, [], (error, kind) => {
       if (kind === 'protocol') this.fail('protocol', error.message)
       else setImmediate(() => { if (!this.closed && this.exitOutcome === undefined) handle.terminate() })
@@ -249,35 +264,6 @@ class Kernel {
         if (!this.closed) this.fail(this.confined !== undefined && classifyRunnerFailure(outcome.exitCode, this.stderr, this.confined.runnerFailureRules) !== undefined ? 'sandbox-unavailable' : 'worker-exit', this.exitMessage(outcome))
       })
     }, (error: unknown) => { this.fail('worker-exit', messageOf(error)) })
-  }
-
-  private evaluation(id: unknown): Evaluation | undefined {
-    return this.ready && id === this.active?.id ? this.active : undefined
-  }
-
-  private async invoke(id: unknown, global: unknown, name: unknown, wire: unknown): Promise<PtcJsonWire> {
-    let evaluation: Evaluation | undefined
-    let args: PtcJsonValue | undefined
-    let bytes = 0
-    try {
-      evaluation = this.evaluation(id)
-      if (evaluation === undefined) throw new Error('call does not belong to the active PTC evaluation')
-      if (typeof global !== 'string' || typeof name !== 'string') throw new Error('invalid persistent PTC binding identity')
-      args = decodePtcJsonWire(wire)
-      if (args === undefined) throw new Error('binding arguments must be lossless JSON')
-      bytes = Buffer.byteLength(JSON.stringify(wire))
-      if (evaluation.pending >= this.config.maxPendingCalls || evaluation.pendingBytes + bytes > this.config.maxMessageBytes) {
-        throw new Error('pending binding calls exceed configured limits')
-      }
-    } catch (error: unknown) { this.fail('protocol', messageOf(error)); throw error }
-    evaluation.pending += 1
-    evaluation.pendingBytes += bytes
-    const functions = evaluation.bindings.get(global)?.functions
-    const fn = functions && Object.hasOwn(functions, name) ? functions[name] : undefined
-    try { return await evaluation.invoke(fn, args) } finally {
-      evaluation.pending -= 1
-      evaluation.pendingBytes -= bytes
-    }
   }
 }
 

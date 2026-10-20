@@ -94,7 +94,7 @@ async function setup(config: Config = {}) {
   }
 }
 
-function call(id = 1, args: unknown = encodePtcJsonWire(null)) { return { t: 'q', i: String(id), m: 'invoke', a: [1, 'tools', 'test', args] } }
+function call(id = 1, args: unknown = encodePtcJsonWire(null)) { return { t: 'q', i: String(id), m: 'invoke', a: ['tools', 'test', args] } }
 const bound: PtcRunRequest = { ...request, bindings: [{ global: 'tools', functions: { test: async () => 42 } }] }
 
 it.each(['per-call', 'persistent-in-memory'] as const)('cancels a %s call when its Session policy changes before process launch', async (executionMode) => {
@@ -209,12 +209,8 @@ it('rejects a retained call when its provider unloads during earlier policy clea
 describe('persistent PTC host protocol', () => {
   it.each([
     null,
-    { t: 'q', m: 'log', a: [99, 'stale'] },
-    { t: 'q', m: 'outputLimit', a: [99] },
     { t: 'q', m: 'other', a: [] },
-    { t: 'q', m: 'log', a: [1, 1] },
-    { t: 'q', m: 'invoke', a: [1, null, 'test', []], i: 'call' },
-    { t: 'q', m: 'invoke', a: [99, 'tools', 'test', encodePtcJsonWire(null)], i: 'call' },
+    { t: 'q', m: 'log', a: [1] },
     call(1, 'not a wire value'),
   ])('rejects invalid process traffic %j', async (raw) => {
     const h = await setup()
@@ -249,7 +245,7 @@ describe('persistent PTC host protocol', () => {
     h.onBoot(() => { h.complete({ value: 'bad' }) })
     expect((await h.start()).error?.kind).toBe('invalid-output')
     const limited = await setup({ maxOutputBytes: 30 })
-    limited.onBoot(() => { limited.emit({ t: 'q', m: 'log', a: [1, 'x'.repeat(100)] }) })
+    limited.onBoot(() => { limited.emit({ t: 'q', m: 'log', a: ['x'.repeat(100)] }) })
     expect((await limited.start()).error?.kind).toBe('output-limit')
   })
 
@@ -380,7 +376,6 @@ describe('persistent PTC host protocol', () => {
     expect(result.error?.message).toContain(outcome === 'abort' ? 'execution canceled' : outcome === 'cleanup' ? 'exit cleanup failed' : 'exited (9, signal null)')
     expect(h.messages).toHaveLength(1)
     expect(h.messages[0]).toMatchObject({ t: 'q', m: 'run' })
-    expect((h.messages[0] as { a: unknown[] }).a[0]).toBe(1)
     expect(h.spawn).toHaveBeenCalledTimes(1)
     expect(h.terminate).toHaveBeenCalledTimes(1)
     expect(h.waitForExit).toHaveBeenCalledTimes(1)
@@ -403,7 +398,7 @@ describe('persistent PTC host protocol', () => {
   it('reports failed managed cleanup and waits for both exit and pipe drain', async () => {
     const h = await setup()
     h.waitForExit.mockRejectedValue(new Error('cleanup failed'))
-    h.onBoot(() => { h.emit({ t: 'q', m: 'outputLimit', a: [1] }) })
+    h.onBoot(() => { h.emit({ t: 'q', m: 'outputLimit', a: [] }) })
     expect((await h.start()).error?.message).toContain('cleanup failed')
   })
 
@@ -477,11 +472,15 @@ it('rejects corrupt framed traffic before it reaches the evaluator', async () =>
   expect((await h.start()).error?.kind).toBe('protocol')
 })
 
-it('discards unsolicited idle traffic and awaits the retained process exit', async () => {
+it.each([
+  { t: 'q', m: 'log', a: ['late'] },
+  { t: 'q', m: 'outputLimit', a: [] },
+  call(),
+])('discards unsolicited idle traffic %j and awaits the retained process exit', async (raw) => {
   const h = await setup()
   h.onBoot(() => { h.complete({}) })
   expect((await h.start()).error).toBeUndefined()
-  h.emit({ t: 'q', m: 'log', a: [1, 'late'] })
+  h.emit(raw)
   await h.direct.promise
   expect(h.terminate).toHaveBeenCalledTimes(1)
 })
@@ -642,7 +641,7 @@ it('releases a confirmed exited process even when its output pipe did not drain'
 it('preserves logs in a result-level failure when temporary process pipes do not drain', async () => {
   const h = await setup()
   h.onBoot(() => {
-    h.emit({ t: 'q', m: 'log', a: [1, 'captured before cleanup'] })
+    h.emit({ t: 'q', m: 'log', a: ['captured before cleanup'] })
     h.complete({ value: encodePtcJsonWire(42) })
     h.stdout.destroy()
   })

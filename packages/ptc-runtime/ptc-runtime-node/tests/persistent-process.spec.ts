@@ -16,15 +16,14 @@ async function setup(limit = 4096, chdir: (cwd: string) => void = () => {}) {
   const nativeEnvironment = state.env
   const ready = Promise.withResolvers<true>()
   const seen: Record<string, unknown>[] = []
-  let sequence = 0
   const methods: HostMethods = {
     ready: () => { ready.resolve(true) },
-    invoke: async (id, global, name, args) => {
-      seen.push({ type: 'call', id, global, name, args })
+    invoke: async (global, name, args) => {
+      seen.push({ type: 'call', global, name, args })
       return encodePtcJsonWire(42)
     },
-    log: (id, text) => { seen.push({ type: 'log', id, text }) },
-    outputLimit: (id) => { seen.push({ type: 'output-limit', id }) },
+    log: (text) => { seen.push({ type: 'log', text }) },
+    outputLimit: () => { seen.push({ type: 'output-limit' }) },
   }
   const peer = createProcessRpc<ProgramMethods, HostMethods>(host, limit, methods, [], () => {})
   const main = runPersistentMain(child, limit, state)
@@ -32,9 +31,8 @@ async function setup(limit = 4096, chdir: (cwd: string) => void = () => {}) {
   onTestFinished(close)
   await ready.promise
   const run = (code: string, namespaces: ProgramBootData['namespaces'] = [], maxOutputBytes = 1024) => {
-    const id = ++sequence
-    return peer.run(id, '/', { code, namespaces, maxOutputBytes }).then((result) => {
-      seen.push({ type: 'done', id, ...result })
+    return peer.run('/', { code, namespaces, maxOutputBytes }).then((result) => {
+      seen.push({ type: 'done', ...result })
       return result
     })
   }
@@ -107,20 +105,6 @@ it('contains directory failures and output overflow in the active evaluation', a
   expect(h.seen.some(item => item.type === 'output-limit')).toBe(true)
 })
 
-it('rejects overlapping host evaluations without replacing the active run', async () => {
-  const h = await setup()
-  const entered = Promise.withResolvers<undefined>()
-  const release = Promise.withResolvers<ReturnType<typeof encodePtcJsonWire>>()
-  h.setCall(() => { entered.resolve(undefined); return release.promise })
-  const running = h.run('await tools.echo({})', [{ global: 'tools', names: ['echo'] }])
-  try {
-    await entered.promise
-    await expect(h.run('1')).rejects.toThrow('already has an active evaluation')
-    release.resolve(encodePtcJsonWire(42))
-    expect(decodePtcJsonWire((await running).value)).toBe(42)
-  } finally { release.resolve(encodePtcJsonWire(null)); await running }
-})
-
 it('closes the process channel when a terminal result cannot fit its write budget', async () => {
   const h = await setup(1024)
   await expect(h.run('"x".repeat(2000)', [], 8000)).rejects.toThrow()
@@ -135,7 +119,7 @@ it('ignores output and rejects tool calls from a completed evaluation', async ()
   expect(decodePtcJsonWire(result.value)).toContain('evaluation has ended')
   expect(h.seen.some(item => item.type === 'log' || item.type === 'call')).toBe(false)
   expect(decodePtcJsonWire((await h.run('await tools.echo({})', declarations)).value)).toBe(42)
-  expect(h.seen.find(item => item.type === 'call')?.id).toBe(3)
+  expect(h.seen.filter(item => item.type === 'call')).toHaveLength(1)
 })
 
 it('rejects unfinished binding waits when a program returns', async () => {

@@ -28,14 +28,14 @@ async function setup(limit = 4096) {
   const methods: HostMethods = {
     ready: () => { ready.resolve(undefined) },
     invoke: async () => encodePtcJsonWire(42),
-    log: (_id, text) => { logs.push(text) },
+    log: (text) => { logs.push(text) },
     outputLimit: () => {},
   }
   const peer = createProcessRpc<ProgramMethods, HostMethods>(host, limit, methods, [], () => {})
   const main = runNodeMain(child, limit, state)
   onTestFinished(async () => { peer.$close(); child.destroy(); await main })
   await ready.promise
-  const run = (code: string, maxOutputBytes = 1024) => peer.run(1, '/', {
+  const run = (code: string, maxOutputBytes = 1024) => peer.run('/', {
     code, namespaces: [{ global: 'tools', names: ['echo'] }], maxOutputBytes,
   })
   return { child, host, state, nativeEnvironment, methods, peer, main, logs, run }

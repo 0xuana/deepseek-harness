@@ -45,7 +45,7 @@ export async function probeRestrictedWorker(
   // Accepting only readiness rejects any other worker message as a protocol failure.
   const channel = createProcessRpc<ProgramMethods, Pick<HostMethods, 'ready'>>(control, 1_048_576, {
     ready() {
-      void channel.run(1, workspace, { code, namespaces: [], maxOutputBytes: 65_536 }).then((result) => {
+      void channel.run(workspace, { code, namespaces: [], maxOutputBytes: 65_536 }).then((result) => {
         if (result.error !== undefined) completed.reject(new Error(JSON.stringify(result.error)))
         else completed.resolve(decodePtcJsonWire(result.value))
         channel.$close()
