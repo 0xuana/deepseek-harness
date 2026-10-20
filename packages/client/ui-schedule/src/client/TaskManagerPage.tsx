@@ -101,13 +101,15 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
   useEffect(() => {
     // The detail focuses its own panel; with nothing selected, focus returns
     // to the row that opened it, or to the page heading once that row is gone.
-    if (selectedId !== null) return
+    // An open confirmation owns the focus until it closes, even when a refresh
+    // drops the selected task behind it.
+    if (selectedId !== null || clearConfirm) return
     if (rowRef.current !== null) {
       const target = rowRef.current.isConnected ? rowRef.current : headingRef.current
       target?.focus()
       rowRef.current = null
     }
-  }, [selectedId])
+  }, [selectedId, clearConfirm])
 
   useEffect(() => {
     if (status !== 'ready') return

@@ -1041,6 +1041,23 @@ describe('clearing inactive tasks', () => {
     expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 }))
   })
 
+  it('keeps focus in the confirmation when the selected task disappears behind it', () => {
+    const h = mount({ records: [at, endedTask] })
+    fireEvent.click(screen.getByRole('button', { name: 'Ended summary' }))
+    expect(screen.getByRole('complementary', { name: en['detail.label'] })).toBeDefined()
+    fireEvent.click(screen.getByRole('button', { name: en['clear.action'] }))
+    const dialog = screen.getByRole('dialog', { name: en['clear.title'] })
+    // A refresh drops the selected task while the confirmation is open; closing
+    // the detail must not take the focus out of the dialog.
+    act(() => { h.update({ records: [at] }) })
+    expect(screen.queryByRole('complementary', { name: en['detail.label'] })).toBeNull()
+    expect(dialog.contains(document.activeElement)).toBe(true)
+    fireEvent.keyDown(dialog, { key: 'Escape' })
+    expect(screen.queryByRole('dialog', { name: en['clear.title'] })).toBeNull()
+    // The row that held the focus is gone with the detail, so the heading takes it.
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 }))
+  })
+
   it('falls back to the page heading when another cleanup removes the trigger', () => {
     const h = mount({ records: [at, endedTask] })
     const trigger = screen.getByRole('button', { name: en['clear.action'] })

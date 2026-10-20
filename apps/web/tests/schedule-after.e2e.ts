@@ -1317,6 +1317,11 @@ describe.skipIf(MODE === 'record')('web e2e: active Schedule catalog', () => {
       expect(remaining.some(task => endedIds.includes(task.id))).toBe(false)
       expect(remaining.map(task => task.title)).toContain('Keep this running task')
       await page.getByText('Cleared 2 inactive tasks.', { exact: true }).waitFor({ timeout: 15_000 })
+      // The trigger left with the rows it removed, so the page heading owns the
+      // focus after the confirmation closes (a browser-level check: jsdom does
+      // not move focus to the document body when a focused control unmounts).
+      await expect.poll(() => page.evaluate(() => document.activeElement?.tagName), { timeout: 15_000 })
+        .toBe('H1')
       // The page follows the acknowledged removal: no ended row or cleanup action
       // remains, and the running task is still listed.
       await expect.poll(() => manager.getByRole('button', { name: 'Clear inactive', exact: true }).count(), { timeout: 15_000 })
