@@ -16,7 +16,7 @@ import {
   type ProfileContext, type RuntimeResolution,
 } from '@deepseek-ai/dsh-app-boot'
 import PluginManager, { type Config, type PluginChange, type PluginInstallLogChunk, type PluginInstallProgress, type PluginInstallRequestId } from '../src/index.ts'
-import type { PluginOperation } from '../src/types.ts'
+import type { PluginEntryId, PluginOperation } from '../src/types.ts'
 import Hmr from '@deepseek-ai/dsh-hmr'
 import Timer from '@deepseek-ai/cordis-plugin-timer'
 import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
@@ -472,7 +472,7 @@ it('correlates diagnostic operation starts with persisted toggle results', async
   expect(facts[2]!.id).not.toBe(facts[0]!.id)
 })
 
-it('retains an observed version for a refused removal and leaves damaged metadata unknown', async () => {
+it.each(['{', ...[null, 12, {}, 'x'.repeat(129)].map(version => JSON.stringify({ version, dsh: { bundle: { patch: './cordis.patch.yml' } } }))])('retains an observed version for a refused removal and leaves damaged metadata unknown: %s', async (manifest) => {
   const { manager, ctx, dir } = await fixture('startup')
   const facts: PluginOperation[] = []
   ctx.on('plugin-manager/operation', (event) => { facts.push(event) })
@@ -481,7 +481,7 @@ it('retains an observed version for a refused removal and leaves damaged metadat
     expect.objectContaining({ phase: 'started', reason: 'remove', version: '1.0.0' }),
     expect.objectContaining({ phase: 'settled', reason: 'remove', version: '1.0.0', application: 'failed' }),
   ])
-  writeFileSync(join(dir, 'node_modules', 'extra', 'package.json'), '{')
+  writeFileSync(join(dir, 'node_modules', 'extra', 'package.json'), manifest)
   expect(await manager.setBundleEnabled('extra', false)).toMatchObject({ changed: true, application: 'restart-required' })
   expect(facts[2]).not.toHaveProperty('version')
   expect(facts[3]).not.toHaveProperty('version')
@@ -510,6 +510,19 @@ it('keeps credential-bearing tarball addresses out of failed installation facts'
   expect(JSON.stringify(facts)).not.toMatch(/user|secret|example|private|archive/)
 })
 
+it.each(['bundle', 'remove', 'plugin'] as const)('excludes credential-bearing targets from %s diagnostics', async (reason) => {
+  const { manager, ctx } = await fixture('startup')
+  const facts: PluginOperation[] = []
+  ctx.on('plugin-manager/operation', (event) => { facts.push(event) })
+  const target = 'https://user:secret@example.invalid/private?token=secret'
+  if (reason === 'bundle') await manager.setBundleEnabled(target, false)
+  else if (reason === 'remove') await manager.removeBundle(target)
+  else await manager.setPluginEnabled(target as PluginEntryId, false)
+  expect(facts).toHaveLength(2)
+  expect(facts.map(event => event.target)).toEqual([null, null])
+  expect(JSON.stringify(facts)).not.toMatch(/user|secret|example|private/)
+})
+
 it('reports unknown outcomes when profile inspection rejects before a result exists', async () => {
   const { manager, ctx, dir } = await fixture('startup')
   const facts: PluginOperation[] = []
@@ -523,14 +536,20 @@ it('reports unknown outcomes when profile inspection rejects before a result exi
   expect(facts[1]).not.toHaveProperty('changed')
 })
 
-it('preserves management results when a diagnostic subscriber throws', async () => {
+it.each(['throw', 'reject'])('delivers diagnostics to later subscribers when an earlier subscriber fails: %s', async (failure) => {
   const { manager, ctx, dir } = await fixture('startup')
   const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
   onTestFinished(() => { errors.mockRestore() })
-  ctx.on('plugin-manager/operation', () => { throw new Error('diagnostic sink unavailable') })
+  ctx.on('plugin-manager/operation', () => {
+    if (failure === 'reject') return Promise.reject(new Error('diagnostic sink unavailable'))
+    throw new Error('diagnostic sink unavailable')
+  })
+  const facts: PluginOperation[] = []
+  ctx.on('plugin-manager/operation', (event) => { facts.push(event) })
   expect(await manager.setBundleEnabled('extra', false)).toMatchObject({ changed: true, application: 'restart-required' })
   expect(readProfileManifest('test', dir).dsh?.profile?.bundles).not.toContain('extra')
-  expect(errors).toHaveBeenCalledWith('dsh plugin-manager: operation diagnostic delivery failed')
+  expect(facts.map(event => event.phase)).toEqual(['started', 'settled'])
+  await vi.waitFor(() => { expect(errors).toHaveBeenCalledWith('dsh plugin-manager: operation diagnostic delivery failed') })
 })
 
 it('turns a plugin off and on without leaving a patch override the bundle already implies', async () => {

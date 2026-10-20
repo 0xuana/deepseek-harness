@@ -43,3 +43,17 @@ it('contains startup and runtime worker failures', async () => {
   worker.emit('exit', 1)
   expect(await result).toEqual({ appended: false, timedOut: false })
 })
+
+it('retains ownership after termination rejects until the worker actually exits', async () => {
+  vi.useFakeTimers()
+  const worker = Object.assign(new EventEmitter(), { terminate: vi.fn(async () => { throw new Error('termination failed') }) })
+  create.mockReturnValue(worker)
+  let settled = false
+  const result = runOperationReportJob(input, 500).then((value) => { settled = true; return value })
+  await vi.advanceTimersByTimeAsync(500)
+  expect(worker.terminate).toHaveBeenCalledTimes(1)
+  expect(settled).toBe(false)
+  worker.emit('exit', 1)
+  expect(await result).toEqual({ appended: false, timedOut: true })
+  expect(vi.getTimerCount()).toBe(0)
+})

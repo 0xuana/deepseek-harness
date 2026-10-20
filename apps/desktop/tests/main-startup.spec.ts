@@ -12,6 +12,7 @@ import { DesktopHostFatalError, DesktopHostUncleanExitError } from '../src/host-
 import { en, zh } from '../src/locale.ts'
 import { DesktopUpdatePreparationError } from '../src/update-error.ts'
 import { writeCrashReport } from '../src/crash-report.ts'
+import { runOperationReportJob } from '../src/operation-report-job.ts'
 
 type InvokeEvent = { sender?: unknown; senderFrame: { url: string } }
 type InvokeHandler = (event: InvokeEvent, ...args: unknown[]) => unknown
@@ -2155,6 +2156,10 @@ describe('desktop main startup', () => {
     expect(report.phase).toBe('startup')
     expect(report.error).toBeInstanceOf(DesktopHostFatalError)
     expect(report.hostDiagnostic).toBe(diagnostic)
+    expect(runOperationReportJob).toHaveBeenCalledWith({
+      reportPath: 'desktop-test-logs/crash-test.log', directory: join('desktop-test-logs', 'plugin-operations'),
+      limits: { bytes: 65536, recordBytes: 4096, records: 100, outputBytes: 65536 }, journal: null,
+    }, 500)
     expect((harness.dialog.showMessageBox.mock.calls[0]![0] as MessageBoxOptions).detail).toContain('profile has no cordis.yml')
   })
 

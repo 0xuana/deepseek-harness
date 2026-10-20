@@ -158,3 +158,14 @@ it('does not collect the same open segment twice when it rotates during collecti
     await handle.close()
   }
 })
+
+it.each(['absent', 'empty', 'nonempty'])('reports omitted bytes at an exact budget: previous segment %s', async (previous) => {
+  const path = await fixture()
+  const current = line(1)
+  await writeFile(join(path, 'operations.jsonl'), current)
+  if (previous !== 'absent') await writeFile(join(path, 'operations.previous.jsonl'), previous === 'empty' ? '' : line(0))
+  const result = await readOperationHistory(path,
+    { ...limits, bytes: Buffer.byteLength(current), records: 1 }, new AbortController().signal)
+  expect(result.records).toEqual([record(1)])
+  expect(result.truncated).toBe(previous === 'nonempty')
+})

@@ -7,6 +7,8 @@
 
 本矩阵展示哪些包会派发各个 harness 自有事件，以及哪些包会监听这些事件。事件之间存在多对多关系，因此密集的关系数据以表格而非一张大型关系图呈现。接收方和事件名称类型还涵盖有意绕过 `ctx.emit` 的内含派发位置，例如 subagent 生命周期封装。
 
+应用级监听者不在本包矩阵范围内。Desktop Host 通过 [`installOperationDiagnostics`](../apps/desktop-host/src/operation-diagnostics.ts) 订阅 `plugin-manager/operation`，并向壳转发有界记录。
+
 <!-- BEGIN GENERATED event-producer-consumer:events -->
 | Event | Mode | Declared in | Dispatchers | Listeners |
 | --- | --- | --- | --- | --- |
@@ -61,7 +63,7 @@
 | `plugin-manager/changed` | `emit` | [`packages/boot/plugin-manager/src/types.ts:302`](../packages/boot/plugin-manager/src/types.ts) | [`plugin-manager`](../packages/boot/plugin-manager) (`emit`) | `remotes` |
 | `plugin-manager/install-log` | `emit` | [`packages/boot/plugin-manager/src/types.ts:308`](../packages/boot/plugin-manager/src/types.ts) | [`plugin-manager`](../packages/boot/plugin-manager) (`emit`) | `remotes` |
 | `plugin-manager/install-state` | `emit` | [`packages/boot/plugin-manager/src/types.ts:315`](../packages/boot/plugin-manager/src/types.ts) | [`plugin-manager`](../packages/boot/plugin-manager) (`emit`) | `remotes` |
-| `plugin-manager/operation` | `emit` | [`packages/boot/plugin-manager/src/types.ts:294`](../packages/boot/plugin-manager/src/types.ts) | [`plugin-manager`](../packages/boot/plugin-manager) (`emit`) | - |
+| `plugin-manager/operation` | `parallel` | [`packages/boot/plugin-manager/src/types.ts:294`](../packages/boot/plugin-manager/src/types.ts) | [`plugin-manager`](../packages/boot/plugin-manager) (`parallel`) | - |
 | `plugin-market/changed` | `emit` | [`packages/boot/plugin-market/src/types.ts:136`](../packages/boot/plugin-market/src/types.ts) | [`plugin-market`](../packages/boot/plugin-market) (`emit`) | `remotes` |
 | `schedule/changed` | `emit` | [`packages/schedule/schedule/src/types.ts:478`](../packages/schedule/schedule/src/types.ts) | [`schedule`](../packages/schedule/schedule) (`emit`) | `remotes` |
 | `session-telemetry/record` | `waterfall` | [`packages/session/session-telemetry/src/index.ts:44`](../packages/session/session-telemetry/src/index.ts) | [`session-telemetry`](../packages/session/session-telemetry) (`waterfall`) | - |

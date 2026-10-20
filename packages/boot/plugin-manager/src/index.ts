@@ -205,6 +205,11 @@ function installOperationTarget(spec: string): string | null {
   return parsed.kind === 'registry' ? parsed.name : null
 }
 
+/** Unusable file metadata must not discard the rest of an operation record. */
+function diagnosticVersion(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length <= 128 ? value : undefined
+}
+
 declare module '@deepseek-ai/cordis' {
   interface Context {
     /** Persistent management of the current profile's composition and packages. */
@@ -910,9 +915,10 @@ export class PluginManager extends TypertRemoteService {
     reason: PluginChange['reason'],
   ): Promise<ChangeResult> {
     const id = randomUUID() as PluginOperationId
-    const version = this.operationVersion(reason, request.target)
+    const target = this.operationTarget(reason, request.target)
+    const version = this.operationVersion(reason, reason === 'plugin' ? request.target : target)
     const facts = { id, reason, stage: request.stage,
-      target: reason === 'install' ? installOperationTarget(request.target) : request.target,
+      target,
       ...version === undefined ? {} : { version },
       ...request.enabled === undefined ? {} : { enabled: request.enabled } }
     this.reportOperation({ ...facts, time: new Date().toISOString(), phase: 'started' })
@@ -948,9 +954,9 @@ export class PluginManager extends TypertRemoteService {
     const refusedVersion = reason === 'install'
       ? settled.error?.incompatible?.find(plugin => plugin.name === facts.target)?.version
       : undefined
-    const observedVersion = settled.version ?? refusedVersion
+    const observedVersion = diagnosticVersion(settled.version ?? refusedVersion)
     this.reportOperation({ ...facts, time: new Date().toISOString(), phase: 'settled',
-      stage: settled.stage, target: settled.bundle ?? facts.target,
+      stage: settled.stage, target: settled.bundle === undefined ? facts.target : installOperationTarget(settled.bundle),
       application: settled.application, changed: settled.changed,
       ...observedVersion === undefined ? {} : { version: observedVersion },
       ...settled.error === undefined ? {} : { errorCode: settled.error.code },
@@ -959,22 +965,26 @@ export class PluginManager extends TypertRemoteService {
   }
 
   private reportOperation(operation: PluginOperation): void {
-    try { this.ownerContext.emit('plugin-manager/operation', operation) }
-    catch (_error) {
-      // Diagnostic subscribers cannot change a management result or prevent the operation.
+    void this.ownerContext.parallel('plugin-manager/operation', operation).catch((_error: unknown) => {
+      // All subscribers run; diagnostic failures cannot change the management result.
       console.error('dsh plugin-manager: operation diagnostic delivery failed')
-    }
+    })
   }
 
-  /** Read the pre-operation package version without preventing recovery from damaged metadata. */
-  private operationVersion(reason: PluginChange['reason'], target: string): string | undefined {
-    if (reason === 'install') return undefined
+  private operationTarget(reason: PluginChange['reason'], target: string): string | null {
+    if (reason !== 'plugin') return installOperationTarget(target)
+    return target.length <= 256 && [...this.ctx.loader.entries()].some(entry => entry.id === target) ? target : null
+  }
+
+  /** Read the request-time package version without preventing recovery from damaged metadata. */
+  private operationVersion(reason: PluginChange['reason'], target: string | null): string | undefined {
+    if (reason === 'install' || target === null) return undefined
     try {
-      if (reason !== 'plugin') return bundleManifest(target, this.profile.dir, this.profile.installAnchor)?.version
+      if (reason !== 'plugin') return diagnosticVersion(bundleManifest(target, this.profile.dir, this.profile.installAnchor)?.version)
       const entry = [...this.ctx.loader.entries()].find(row => row.id === target)
       const source = entry?.parent.tree.ctx.baseUrl
       if (entry === undefined || source === undefined) return undefined
-      return this.ownerContext.get('pluginPackages')?.packageOf(entry.options.name, source)?.version
+      return diagnosticVersion(this.ownerContext.get('pluginPackages')?.packageOf(entry.options.name, source)?.version)
     } catch (_error) {
       // Disabling or removing a broken package must not depend on diagnostic metadata being readable.
       return undefined

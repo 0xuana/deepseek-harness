@@ -44,7 +44,6 @@ export async function readOperationHistory(
   let unavailableFiles = 0
   for (const name of ['operations.jsonl', 'operations.previous.jsonl']) {
     if (cancelled()) break
-    if (bytesRead >= limits.bytes || records.length >= limits.records) { truncated = true; break }
     try {
       await using handle = await open(join(directory, name), 'r')
       if (cancelled()) break
@@ -54,6 +53,7 @@ export async function readOperationHistory(
       const identity = `${String(stat.dev)}:${String(stat.ino)}`
       if (seenFiles.has(identity)) { truncated = true; continue }
       seenFiles.add(identity)
+      if (stat.size > 0 && (bytesRead >= limits.bytes || records.length >= limits.records)) { truncated = true; break }
       const length = Math.min(stat.size, limits.bytes - bytesRead)
       const start = stat.size - length
       const buffer = Buffer.alloc(length)
@@ -67,8 +67,8 @@ export async function readOperationHistory(
       if (cancelled()) break
       truncated ||= start > 0 || offset < length
       // An unterminated last record can still be in flight; never parse it as a committed record.
-      let end = buffer.lastIndexOf(10, offset - 1)
       if (offset === 0) continue
+      let end = buffer.lastIndexOf(10, offset - 1)
       if (end !== offset - 1) truncated = true
       while (end >= 0 && records.length < limits.records && !cancelled()) {
         const preceding = end === 0 ? -1 : buffer.lastIndexOf(10, end - 1)

@@ -265,11 +265,11 @@ export type PluginOperation = {
   readonly id: PluginOperationId
   readonly time: string
   readonly reason: PluginChange['reason']
-  /** Entry id or package name; installation specs are omitted until the package is resolved. */
+  /** Known entry id or parsed registry package name; unrecognized targets and raw specs are omitted. */
   readonly target: string | null
   readonly stage: ChangeResult['stage']
   readonly enabled?: boolean | undefined
-  /** Observed package version; absence means unavailable, never the latest registry version. */
+  /** Request-time or resolved package version; absence means unusable or unavailable, never the latest registry version. */
   readonly version?: string | undefined
 } & (
   | { readonly phase: 'started' }
@@ -287,11 +287,11 @@ export type PluginOperation = {
 declare module '@deepseek-ai/cordis' {
   interface Events {
     /**
-     * One manager invocation started or ended; raw installation specs and error messages are excluded.
-     * @mode emit
+     * One manager invocation started or ended; subscribers run independently without delaying management.
+     * @mode parallel
      * @param operation - Correlated operation facts; a start without an end has an unknown outcome.
      */
-    'plugin-manager/operation'(operation: PluginOperation): void
+    'plugin-manager/operation'(operation: PluginOperation): void | Promise<void>
     /**
      * The profile's plugins, bundles, or composition changed: a manager
      * operation completed. A patch generation applied outside the manager,

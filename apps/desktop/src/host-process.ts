@@ -217,7 +217,7 @@ export class DesktopHostProcess {
     child.on('message', (message: unknown) => {
       if (typeof message === 'object' && message !== null && 'type' in message && message.type === 'plugin-operation') {
         const record = 'record' in message ? parsePluginOperationRecord(message.record) : undefined
-        if (record !== undefined) {
+        if (record !== undefined && record.runId === this.runId) {
           try { this.onPluginOperation?.(record) }
           catch (_error) {
             // Diagnostic persistence cannot invalidate the Host's business IPC channel.

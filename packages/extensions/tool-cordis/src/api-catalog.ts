@@ -4407,10 +4407,10 @@ export const EVENT_API: readonly EventApiEntry[] = [
   },
   {
     name: 'plugin-manager/operation',
-    mode: 'emit',
-    signature: '\'plugin-manager/operation\'(operation: PluginOperation): void',
-    summary: 'One manager invocation started or ended; raw installation specs and error messages are excluded.',
-    description: 'One manager invocation started or ended; raw installation specs and error messages are excluded.',
+    mode: 'parallel',
+    signature: '\'plugin-manager/operation\'(operation: PluginOperation): void | Promise<void>',
+    summary: 'One manager invocation started or ended; subscribers run independently without delaying management.',
+    description: 'One manager invocation started or ended; subscribers run independently without delaying management.',
     parameters: [{ name: 'operation', description: 'Correlated operation facts; a start without an end has an unknown outcome.' }],
   },
   {

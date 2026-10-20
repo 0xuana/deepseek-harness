@@ -5,6 +5,8 @@
 
 This matrix shows which packages dispatch each harness-owned event and which packages listen to it. Events are many-to-many, so the dense relation data is presented as a table rather than one large graph. Receiver and event-name types also cover contained dispatch sites that deliberately bypass `ctx.emit`, such as subagent lifecycle containment.
 
+Application listeners are outside this package matrix. Desktop Host subscribes to `plugin-manager/operation` through [`installOperationDiagnostics`](../apps/desktop-host/src/operation-diagnostics.ts) and forwards bounded records to the shell.
+
 <!-- BEGIN GENERATED event-producer-consumer:events -->
 | Event | Mode | Declared in | Dispatchers | Listeners |
 | --- | --- | --- | --- | --- |
@@ -59,7 +61,7 @@ This matrix shows which packages dispatch each harness-owned event and which pac
 | `plugin-manager/changed` | `emit` | [`packages/boot/plugin-manager/src/types.ts:302`](../packages/boot/plugin-manager/src/types.ts) | [`plugin-manager`](../packages/boot/plugin-manager) (`emit`) | `remotes` |
 | `plugin-manager/install-log` | `emit` | [`packages/boot/plugin-manager/src/types.ts:308`](../packages/boot/plugin-manager/src/types.ts) | [`plugin-manager`](../packages/boot/plugin-manager) (`emit`) | `remotes` |
 | `plugin-manager/install-state` | `emit` | [`packages/boot/plugin-manager/src/types.ts:315`](../packages/boot/plugin-manager/src/types.ts) | [`plugin-manager`](../packages/boot/plugin-manager) (`emit`) | `remotes` |
-| `plugin-manager/operation` | `emit` | [`packages/boot/plugin-manager/src/types.ts:294`](../packages/boot/plugin-manager/src/types.ts) | [`plugin-manager`](../packages/boot/plugin-manager) (`emit`) | - |
+| `plugin-manager/operation` | `parallel` | [`packages/boot/plugin-manager/src/types.ts:294`](../packages/boot/plugin-manager/src/types.ts) | [`plugin-manager`](../packages/boot/plugin-manager) (`parallel`) | - |
 | `plugin-market/changed` | `emit` | [`packages/boot/plugin-market/src/types.ts:136`](../packages/boot/plugin-market/src/types.ts) | [`plugin-market`](../packages/boot/plugin-market) (`emit`) | `remotes` |
 | `schedule/changed` | `emit` | [`packages/schedule/schedule/src/types.ts:478`](../packages/schedule/schedule/src/types.ts) | [`schedule`](../packages/schedule/schedule) (`emit`) | `remotes` |
 | `session-telemetry/record` | `waterfall` | [`packages/session/session-telemetry/src/index.ts:44`](../packages/session/session-telemetry/src/index.ts) | [`session-telemetry`](../packages/session/session-telemetry) (`waterfall`) | - |

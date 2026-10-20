@@ -124,6 +124,7 @@ process.send({ type: 'ready', url: 'http://127.0.0.1:3080/' }, () => { ${trigger
     const runtime = projectWithHost(`
 process.send({ type: 'starting', runId: ${JSON.stringify(record.runId)} })
 process.send({ type: 'plugin-operation', record: { invalid: true } })
+process.send({ type: 'plugin-operation', record: { ...${JSON.stringify(record)}, runId: 'c254ab28-97c9-4382-95e6-2db9c66f98c0' } })
 process.send({ type: 'plugin-operation', record: ${JSON.stringify(record)} })
 ${HTTP_HOST}`)
     const directory = join(runtime, 'operation-history')
