@@ -373,7 +373,12 @@ export function HoverCard(props: HoverCardProps) {
         cancelClose()
         setPhase('open')
       }}
-      onPointerLeave={() => {
+      onPointerLeave={(event) => {
+        // Portal-to-anchor movement stays within this card's interaction.
+        if (event.relatedTarget instanceof Node && rootRef.current?.contains(event.relatedTarget)) {
+          cancelClose()
+          return
+        }
         if (!pinned && !(anchored && keyboardFocus.current)) armClose()
       }}
     >

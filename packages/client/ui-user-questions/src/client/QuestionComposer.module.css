@@ -391,10 +391,16 @@
   cursor: pointer;
 }
 
-.descriptionButton:hover,
 .descriptionButton:focus-visible {
   background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-primary);
+}
+
+@media (hover: hover) {
+  .descriptionButton:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .descriptionMoreIcon {

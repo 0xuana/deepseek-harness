@@ -458,6 +458,22 @@ describe('HoverCard', () => {
     expect(screen.queryByText('card body')).toBeNull()
   })
 
+  it('keeps a preview open when the pointer returns directly from its portal to the anchor', () => {
+    const { anchor, wrapper } = mount({ variant: 'preview' })
+    fireEvent.pointerEnter(wrapper)
+    act(() => { vi.advanceTimersByTime(500) })
+    const card = screen.getByText('card body').parentElement as HTMLElement
+    fireEvent.pointerEnter(card)
+    fireEvent(card, new MouseEvent('pointerout', { bubbles: true, relatedTarget: anchor }))
+    act(() => { vi.advanceTimersByTime(POINTER_GRACE_MS + 100) })
+    expect(card.hasAttribute('data-closing')).toBe(false)
+    expect(screen.getByText('card body')).toBeTruthy()
+    fireEvent.pointerLeave(wrapper)
+    act(() => { vi.advanceTimersByTime(POINTER_GRACE_MS) })
+    act(() => { vi.advanceTimersByTime(100) })
+    expect(screen.queryByText('card body')).toBeNull()
+  })
+
   it('re-entering while open does not queue a second dwell', () => {
     const { wrapper } = mount()
     fireEvent.pointerEnter(wrapper)
