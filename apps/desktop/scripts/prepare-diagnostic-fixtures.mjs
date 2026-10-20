@@ -59,7 +59,7 @@ const fixtures = [
     description: 'Requires the disabled-services test package installed but unselected; enables it through pluginManager and then fails asynchronously.',
     patch: '- insert:\n    - id: diagnostic-restart\n      name: ./fault.mjs\n',
     source: delayed(`void ctx.pluginManager.setBundleEnabled('${disabledBundle}', true).then(result => {
-      if (result.application !== 'restart-required') throw new Error('DIAGNOSTIC_FIXTURE_UNEXPECTED_RESULT_' + result.application);
+      if (!['applied', 'restart-required'].includes(result.application)) throw new Error('DIAGNOSTIC_FIXTURE_UNEXPECTED_RESULT_' + result.application);
       throw new Error('DIAGNOSTIC_FIXTURE_RESTART_AFTER_CHANGE');
     });`).replace("['appReady']", "['appReady', 'pluginManager']"),
   },
@@ -92,7 +92,7 @@ fixtures.json 记录包名、文件路径和故障类型。生成成功不代表
 - initialize：插件初始化抛错，并让 agent-loop 等待夹具服务；核对 cause。
 - async：appReady 后 10 秒抛出异步异常；核对原始错误和 cause。
 - exit：appReady 后 10 秒将 Host 以退出码 23 结束；核对退出码和 stderr 标记。
-- restart：要求 disabled-services 已安装但未启用；通过 pluginManager 启用它后抛错，再次启动应出现核心提供者缺失。
+- restart：要求 disabled-services 已安装但未启用；通过 pluginManager 启用它，接受即时应用或要求重启的成功结果后抛错，再次启动应出现核心提供者缺失。
 
 每个独立场景从干净测试配置开始。restart 场景保留同一配置和日志跨两次启动。
 appReady 不代表窗口已经显示；运行时场景必须另行观察实际就绪状态。
