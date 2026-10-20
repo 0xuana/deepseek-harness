@@ -36,6 +36,7 @@ export function localMacOSPackageEnvironment(environment = process.env) {
 
 /**
  * Read a machine preset when selected, otherwise the target's required dotenv; no ambient release fallback.
+ * PACKAGE_MACOS_ZIP_COMPRESSION_LEVEL selects 3 or 7 for Mac workflow builds, overriding the file setting.
  * PACKAGE_TEST_RELEASE_ID overrides the test preset only; blank retains its configured ID.
  * @param {'win32' | 'darwin'} platform Target platform.
  * @param {NodeJS.ProcessEnv} environment Parent environment, retained only for unrelated build tools.
@@ -68,6 +69,11 @@ export function loadDesktopPackageEnvironment(platform, environment = process.en
           ? /^DSH_DESKTOP_WINDOWS_(?:CER_FILE|SIGNTOOL|KEY_CONTAINER|TOKEN_PIN)$/u.test(name)
           : MACOS_SETTING.test(name) && !publicPlatformSetting.test(name)))
     }
+  }
+  const zipCompression = environment.PACKAGE_MACOS_ZIP_COMPRESSION_LEVEL
+  if (platform === 'darwin' && zipCompression !== undefined) {
+    if (!['3', '7'].includes(zipCompression)) throw new Error('desktop package: workflow ZIP compression must be 3 or 7')
+    settings.DSH_DESKTOP_MACOS_ZIP_COMPRESSION_LEVEL = zipCompression
   }
   const releaseId = environment.PACKAGE_TEST_RELEASE_ID?.trim()
   if (releaseId) {

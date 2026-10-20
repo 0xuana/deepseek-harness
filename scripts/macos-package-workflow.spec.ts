@@ -47,3 +47,10 @@ it('retains build inputs outside checkout and run-specific pnpm installations', 
   expect(env.DSH_DESKTOP_PACKAGE_CACHE_DIR).toBe('${{ runner.tool_cache }}/dsh-desktop-package-cache')
   expect(env.PNPM_CONFIG_STORE_DIR).toBe('${{ runner.tool_cache }}/dsh-desktop-package-cache/workspace-pnpm-store')
 })
+
+it('offers ZIP compression choices with a fast default', () => {
+  expect(workflow.on.workflow_dispatch).toMatchObject({ inputs: { zip_compression_level: {
+    type: 'choice', options: ['3', '7'], default: '3', required: true,
+  } } })
+  expect(workflow.jobs.package!.env.PACKAGE_MACOS_ZIP_COMPRESSION_LEVEL).toBe('${{ inputs.zip_compression_level }}')
+})

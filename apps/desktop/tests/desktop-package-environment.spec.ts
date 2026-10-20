@@ -288,3 +288,19 @@ it.each(['', 'relative-cache'])('rejects invalid build cache paths during prefli
   expect(() => { validateDesktopPackageEnvironment({ ...RELEASE, DSH_DESKTOP_PACKAGE_CACHE_DIR: cache }, MACOS, { unsigned: true }) })
     .toThrow('DSH_DESKTOP_PACKAGE_CACHE_DIR must be absolute')
 })
+
+it.each(['3', '7'])('applies the workflow ZIP choice %s over the Mac file setting', async (level) => {
+  await withDirectory(async (directory) => {
+    await writeFile(join(directory, '.env.macos'), 'DSH_DESKTOP_MACOS_ZIP_COMPRESSION_LEVEL=5\n')
+    const loaded = loadDesktopPackageEnvironment('darwin', { PACKAGE_MACOS_ZIP_COMPRESSION_LEVEL: level }, directory)
+    expect(loaded.DSH_DESKTOP_MACOS_ZIP_COMPRESSION_LEVEL).toBe(level)
+  })
+})
+
+it.each(['', '0', '9', 'invalid'])('rejects unsupported workflow ZIP choice %j', async (level) => {
+  await withDirectory(async (directory) => {
+    await writeFile(join(directory, '.env.macos'), '')
+    expect(() => loadDesktopPackageEnvironment('darwin', { PACKAGE_MACOS_ZIP_COMPRESSION_LEVEL: level }, directory))
+      .toThrow('workflow ZIP compression must be 3 or 7')
+  })
+})
