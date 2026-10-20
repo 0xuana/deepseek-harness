@@ -17,7 +17,7 @@ const SEATS = ['sidebar.panellist.actions', 'conversation.session.header.views.a
 const runtimes = new Set<SlotTestRuntime>()
 afterEach(async () => {
   try { for (const runtime of runtimes) await runtime.dispose() }
-  finally { runtimes.clear(); cleanup(); vi.useRealTimers() }
+  finally { runtimes.clear(); cleanup(); vi.useRealTimers(); vi.unstubAllGlobals() }
 })
 
 type ContentProps = ComponentProps<typeof EntryMenuContent>
@@ -81,15 +81,16 @@ describe('More menu rows', () => {
   })
 
   it('shows the pin hint after the shared tooltip delay outside the menu card', () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({ matches: query === '(any-hover: hover)' })))
     const { view } = content()
     const unpin = view.getByRole('menuitem', { name: 'Unpin from left sidebar: Notes' })
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    fireEvent.mouseEnter(unpin)
+    fireEvent.pointerEnter(unpin, { pointerType: 'mouse' })
     act(() => { vi.advanceTimersByTime(499) })
     expect(view.queryByRole('tooltip', { hidden: true })).toBeNull()
     act(() => { vi.advanceTimersByTime(1) })
     expect(view.getByRole('tooltip', { hidden: true }).closest('[role="menu"]')).toBeNull()
-    fireEvent.mouseLeave(unpin)
+    fireEvent.pointerLeave(unpin, { pointerType: 'mouse' })
   })
 })
 
