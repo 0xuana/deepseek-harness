@@ -87,5 +87,30 @@ it.each([false, true])('keeps actions and focus usable with touch=%s across layo
     expect(await element!.evaluate(node => node.isConnected)).toBe(true)
     expect(await selection()).toEqual(before)
   }
+
+  await page.getByRole('button', { name: 'Open right sidebar', exact: true }).click()
+  const panel = page.locator('[data-sidebar-right-panel][data-sidebar-right-open]')
+  await panel.getByRole('button', { name: 'Fullscreen', exact: true }).click()
+  await panel.locator('[data-dockkit-split-button]').click()
+  await expect.poll(() => panel.locator('[data-dockkit-pane]').count()).toBe(2)
+  await page.mouse.move(0, 0)
+  await page.keyboard.press('Escape')
+  await page.getByRole('tooltip').waitFor({ state: 'detached' })
+  const blockedSplit = panel.locator('[data-dockkit-split-button]').last()
+  expect(await blockedSplit.isDisabled()).toBe(true)
+  const hit = await blockedSplit.evaluate((button) => {
+    const bounds = button.getBoundingClientRect()
+    const x = bounds.x + bounds.width / 2
+    const y = bounds.y + bounds.height / 2
+    const target = document.elementFromPoint(x, y)
+    return { x, y, wrapperReceivesInput: target === button.parentElement, cursor: target && getComputedStyle(target).cursor }
+  })
+  expect(hit.wrapperReceivesInput).toBe(true)
+  expect(['auto', 'default']).toContain(hit.cursor)
+  // Coordinate input exercises CSS hit testing over the disabled button itself.
+  if (hasTouch) await page.touchscreen.tap(hit.x, hit.y)
+  else await page.mouse.click(hit.x, hit.y)
+  await page.getByRole('tooltip').filter({ hasText: 'Two panes is the limit' }).waitFor()
+  expect(await panel.locator('[data-dockkit-pane]').count()).toBe(2)
   expect(consoleWatch.pageErrors).toEqual([])
 })
