@@ -61,7 +61,7 @@
 
 ### `list_creation_plugins`
 
-提出新界面建议前，读取随应用提供的 DSH 插件及当前启用状态。此只读清单可用于普通会话。优先使用合适的现有插件；清单中没有某项不代表 DSH 缺少对应内置功能。发现阶段只处理产品能力，不要为了建议或讨论功能而搜索源码、私有配置档案或实现文档。愿望模糊时先澄清，再查询。
+为新界面提出建议前，读取随应用提供的 DSH 插件及启用状态，检查已有能力。先选定一个需求：遵循明确优先级，否则优先使用现成插件。如果 list_official_plugins 已找到满足该需求的插件，直接使用，不再为另一个未选中的需求查询本目录。出卡后，以及模糊、引用或明确拒绝推荐的纯讨论请求，不应查询。缺少信息时先澄清。目录中没有某项不代表 DSH 缺少对应内置功能。发现阶段只处理产品能力，不要为了提议功能而查源码、私有配置档案或实现文档。
 
 ```json
 {
@@ -74,7 +74,7 @@
 
 ### `suggest_view`
 
-针对明确需求（包括“我想要一个……”等愿望）推荐新的持久界面或功能插件。建议阶段只规划产品行为，将源码、API 调研和技术选型留给用户点击创建后的 Creator。建议前读取 list_creation_plugins；已有合适能力时直接使用，或在 suggest_plugin 可用时推荐符合条件的未启用插件。suggest_plugin 不可用时，说明如何在“插件”页打开已有插件，不要重复创建。普通任务、一次性问题、需要澄清的模糊愿望，以及明确要求只讨论可行性或拒绝推荐的请求不应显示卡片。在简明、完整的方案中写清行为、数据来源、相关上下文和验收点，并推荐位置。每轮 suggest_view 与 suggest_plugin 合计最多一条推荐。在最终回答之前调用工具，再给出一次包含方案的简洁回答，避免工具调用前后重复；卡片显示在完整回答末尾。用用户的语言称呼操作。不要开始创建或安装；用户点击创建后，Creator 才会按方案生成新的可卸载插件，不修改已有插件。
+为一个明确需求（包括日常愿望）提出新的持久界面方案。调用前先从 suggest_view 与 suggest_plugin 中选定本轮唯一推荐，即使用户要求多张卡也不得同批提交多个建议。遵循明确优先级，否则优先使用现成插件。其他独立需求在正文说明，不合并需求，也不承诺以后自动出卡。用途、数据来源或交互不清楚时先澄清，不从无关需求中推断。针对选定的创造需求，先读取 list_creation_plugins。已有合适能力时直接使用，或在 suggest_plugin 可用时推荐符合条件的未启用插件；否则说明插件页入口，不重复创建。模糊愿望、普通任务、引用内容或明确拒绝推荐的纯讨论请求不出卡。方案保持简洁并聚焦产品：所需行为、已知数据来源、相关上下文、验收点和位置。源码与 API 调研留给 Creator。最终回答前调用，再用用户的语言根据成功结果简洁作答；被拒绝的调用不会生成卡片。卡片显示在完整回答下方。不要创建或安装；用户点击创建后，Creator 才会生成新的可卸载插件，不修改已有插件。
 
 ```json
 {
@@ -86,7 +86,7 @@
     },
     "brief": {
       "type": "string",
-      "description": "Concise implementation plan in the user’s language: explicit need, behavior, data sources, relevant context and completion criteria. This is shown on the card and passed to the Creator."
+      "description": "Concise plan for only the selected need: behavior, known data sources, relevant context and completion criteria, in the user’s language. Do not infer its purpose from another independent wish. Clarify missing requirements before calling. Shown on the card and passed to the Creator."
     },
     "slot": {
       "type": "string",

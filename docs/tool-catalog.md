@@ -57,7 +57,7 @@ This table connects model-visible tool names to the plugin package and service s
 
 ### `list_creation_plugins`
 
-Read shipped DSH plugins and their current enabled state before proposing a new interface. This read-only catalog works in ordinary conversations. Prefer a suitable existing plugin; an absent entry does not prove that DSH lacks a built-in feature. Keep discovery at product level: do not search source files, private profiles or implementation docs just to propose or discuss a feature. Clarify vague wishes before discovery.
+Read shipped DSH plugins and their enabled state to check existing capabilities before proposing a new interface. Select one need first: follow explicit priority; otherwise prefer a suitable existing plugin. If list_official_plugins already found a plugin for that need, use it without querying this catalog to plan another, unselected need. Do not query after offering a card or for vague, quoted or discussion-only requests that decline recommendations. Clarify missing requirements before discovery. An absent entry does not prove that DSH lacks a built-in feature. Keep discovery at product level; do not inspect source, private profiles or implementation docs just to propose a feature.
 
 ```json
 {
@@ -70,7 +70,7 @@ Source: [`packages/experimental/creation-recommendations/src/index.ts`](../packa
 
 ### `suggest_view`
 
-Offer a new persistent interface or feature plugin for an explicit user need, including wishes such as "I want a..." or "I wish I could...". Keep proposal planning at product level; defer source/API inspection and implementation choices to the Creator after the user clicks Create. Read list_creation_plugins before proposing; use a suitable existing capability instead, or suggest_plugin when available for an eligible disabled plugin. If suggest_plugin is unavailable, explain how to open the existing plugin in Plugins; do not create a duplicate. Do not offer a card for one-off questions, ordinary tasks, vague wishes that need clarification, or when the user asks only to discuss feasibility or explicitly declines recommendations. Plan the requested behavior, data sources, relevant conversation context and completion criteria in a concise self-contained brief, and recommend a location. Offer at most one recommendation per turn, across suggest_view and suggest_plugin. Call this tool before your final response, then give one concise answer with the plan; do not repeat the answer around the tool call. The card appears below the completed answer. Refer to its actions in the user’s language. Do not start creating or installing anything; the user must click Create. A Creator agent then executes this plan as a new removable plugin. Existing plugins are never edited.
+Propose a new persistent interface for one explicit need, including everyday wishes. Select ONE recommendation per turn across suggest_view and suggest_plugin before calling either, even if multiple cards are requested; never batch recommendations. Honor explicit priority; otherwise prefer a suitable existing plugin. Discuss other independent needs in the answer, without merging them or promising an automatic later card. Clarify an unknown purpose, data source or interaction before proposing; do not guess these from an unrelated need. Read list_creation_plugins for the selected creation need first. Use an existing capability when suitable, or suggest_plugin if available for an eligible disabled plugin; otherwise explain its Plugins entry, without creating a duplicate. No cards for vague wishes, ordinary tasks, quoted requests or discussion-only requests that decline recommendations. Keep the brief concise and at product level: requested behavior, known data sources, relevant context, completion criteria and location. Defer source/API inspection to the Creator. Call before the final answer, then answer concisely in the user’s language using only successful results; a rejected call created no card. The card appears below the completed answer. Do not create or install anything: the user must click Create, which starts a Creator to build a new removable plugin. Existing plugins are never edited.
 
 ```json
 {
@@ -82,7 +82,7 @@ Offer a new persistent interface or feature plugin for an explicit user need, in
     },
     "brief": {
       "type": "string",
-      "description": "Concise implementation plan in the user’s language: explicit need, behavior, data sources, relevant context and completion criteria. This is shown on the card and passed to the Creator."
+      "description": "Concise plan for only the selected need: behavior, known data sources, relevant context and completion criteria, in the user’s language. Do not infer its purpose from another independent wish. Clarify missing requirements before calling. Shown on the card and passed to the Creator."
     },
     "slot": {
       "type": "string",

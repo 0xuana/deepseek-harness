@@ -22,6 +22,11 @@ describe('interface creation', () => {
     )
     expect(f.ctx.tools.get('list_official_plugins')).toBeUndefined()
     expect(f.ctx.tools.get('plugin_manager')).toBeUndefined()
+    expect({
+      discovery: f.ctx.tools.get('list_creation_plugins', f.agent)?.description,
+      proposal: f.ctx.tools.get('suggest_view', f.agent)?.description,
+      parameters: f.ctx.tools.get('suggest_view', f.agent)?.parameters,
+    }).toMatchSnapshot('one selected need without invented requirements')
     const result = await f.ctx.tools.execute({ name: 'list_creation_plugins', arguments: {}, agent: f.agent,
       callId: ToolCallId('discovery'), signal: new AbortController().signal })
     expect(result.value).toBe(JSON.stringify([
@@ -179,6 +184,7 @@ describe('interface creation', () => {
     const calls = await Promise.all([f.execute(), f.ctx.tools.execute({ name: 'suggest_plugin', arguments: {},
       callId: ToolCallId('official'), agent: f.agent, signal: new AbortController().signal })])
     expect(calls.filter(result => !result.isError)).toHaveLength(1)
+    expect(calls.find(result => result.isError)?.content).toMatchSnapshot('rejected extra proposal does not promise a card')
     expect((await f.execute(proposal, ToolCallId('third'))).isError).toBe(true)
     const result = await f.ctx.tools.execute({ name: 'suggest_view', arguments: proposal,
       callId, signal: new AbortController().signal })
