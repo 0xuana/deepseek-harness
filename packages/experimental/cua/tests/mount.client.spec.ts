@@ -207,6 +207,7 @@ it('resumes queries when a management operation settles without a mounted permis
     expect(actions.hooks.cuaPermissions.getSnapshot().changing).toBe(true)
     actions.refresh()
     f.ctx.emit('connection/reset')
+    await setImmediate()
     expect(f.status).not.toHaveBeenCalled()
     f.changes.set(false)
     await vi.waitFor(() => { expect(actions.hooks.cuaPermissions.getSnapshot().busy).toBe(false) })
