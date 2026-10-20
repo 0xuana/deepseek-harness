@@ -2516,19 +2516,19 @@ describe('on-demand Official bundles', () => {
   })
 })
 
-it('keeps bundle configuration mounted while reporting its pending operation', () => {
+it('keeps bundle configuration mounted while its operation is pending', () => {
   const name = 'dsh-better-sidebar'
   const { set } = renderTab({ packages: [pkg()] }, { bundles: new Set([name]) }, {
-    [`plugins.bundle.config:${name}`]: (_view, owner) => <div data-testid="bundle-config">{String((owner as { busy?: boolean }).busy)}</div>,
+    [`plugins.bundle.config:${name}`]: () => <div data-testid="bundle-config">Configuration</div>,
   })
   fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', name) }))
   const panel = screen.getByTestId('bundle-config')
-  expect(panel.textContent).toBe('false')
+  expect(panel.textContent).toBe('Configuration')
   set({ busy: [name] })
   expect(screen.getByTestId('bundle-config')).toBe(panel)
-  expect(panel.textContent).toBe('true')
+  expect(panel.textContent).toBe('Configuration')
   set({ busy: [] })
-  expect(panel.textContent).toBe('false')
+  expect(panel.textContent).toBe('Configuration')
 })
 
 describe('registry versions and updates', () => {

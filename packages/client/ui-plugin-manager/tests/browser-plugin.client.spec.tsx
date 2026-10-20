@@ -97,6 +97,7 @@ describe('ui-plugin-manager browser plugin', () => {
     const removeRoot = declare(b.slots)
     const mainInjected: object = b.slots.entries('main')[0]!.inject!()
     const face = mainInjected as PluginManagerFace
+    expect(b.ctx.pluginChanges.bundle('unlisted').getSnapshot()).toBe(false)
     const overlayInjected: object = b.slots.entries('shell.overlay')[0]!.inject!()
     const overlay = overlayInjected as PluginRefreshToastFace
     expect(overlay.hooks.pluginManager).toBe(face.hooks.pluginManager)
