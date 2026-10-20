@@ -8,6 +8,8 @@ import type {} from '@deepseek-ai/dsh-tools/types'
 
 /** Model and wire values use the same three supported locations. */
 export const slotSchema = z.enum(['sidebar-right', 'page', 'sidebar-left'])
+/** Human-authored placement is a short instruction, not a package or path. */
+export const customLocationSchema = z.string().trim().min(1).max(1000)
 const proposalSchema = z.object({
   callId: z.string().min(1).transform(ToolCallId),
   title: z.string().min(1), brief: z.string().min(1), slot: slotSchema,
@@ -15,7 +17,7 @@ const proposalSchema = z.object({
 const decisionSchema = z.object({
   callId: z.string().min(1).transform(ToolCallId),
   phase: z.enum(['dismissed', 'creating', 'installing', 'cancelled', 'installed', 'kept', 'removed', 'failed', 'interrupted', 'unconfirmed']),
-  slot: slotSchema, bundleName: z.string().optional(),
+  slot: slotSchema, customLocation: customLocationSchema.optional(), bundleName: z.string().optional(),
   application: z.enum(['applied', 'restart-required', 'overridden', 'failed', 'cancelled']).optional(),
 })
 const viewSchema = z.object({ decisions: z.record(z.string(), decisionSchema) })
@@ -45,7 +47,7 @@ function settlement(event: SessionEvent) {
 
 /** Full-session fold; later explicit needs may offer another card in another turn. */
 export const creationProjection = {
-  key: 'creationRecommendations', stateVersion: 2, stateSchema,
+  key: 'creationRecommendations', stateVersion: 3, stateSchema,
   init: (): CreationState => ({ proposals: {}, view: { decisions: {} }, turn: 0, firstCall: null }),
   apply: (state, event) => {
     if (event.type === 'turn/start') return { ...state, turn: event.data.turn, firstCall: null }

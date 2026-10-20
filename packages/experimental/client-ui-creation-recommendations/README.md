@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Users see one creation proposal below the completed answer. Plans show three lines and expand; Creator receives the full brief. The information button explains Creator mode, potentially long generation and substantial token use, and that chatting can continue. Reading it starts no work. Options changes the suggested location: Right sidebar, Session tab, or Global page with a left entry. Only Create starts background work. Progress appears in the header. After installation, Keep confirms retention; Undo removes the plugin.
+Users see one creation proposal below the completed answer. Plans show three lines and expand. A dropdown offers Right sidebar, Session tab, Global page, or Write your own. The cost notice opens until dismissed; this browser remembers the choice across sessions. The information button reopens it. Only Create starts background work; chatting can continue. Progress appears in the header. Keep confirms retention; Undo removes the plugin.
 
 ## Table of Contents
 
@@ -29,7 +29,9 @@ Enable the [Personalized pages bundle](../creation-recommendations/README.md). T
 
 ### Outcomes and recovery
 
-Creation, installation, retention and removal receipts come from the Session projection. The card restores them after reconnecting. A lost action reply shows an actionable error; retry uses the Host’s recorded state. Pending requests disable repeated actions. During generation, Cancel stops the child and waits for cleanup before retry. Accepted installations finish without cancellation. The card identifies the original workspace’s source directory and explains that Undo keeps those files.
+Creation, installation, retention and removal receipts come from the Session projection. The card restores them after reconnecting. A lost action reply shows an actionable error; retry uses the Host’s recorded state. Pending requests disable repeated actions. During generation, Cancel stops the child and waits for cleanup before retry. Accepted installations finish without cancellation. The information disclosure contains the source directory and explains that Undo keeps those files.
+
+Write your own reveals a placement field, limited to 1,000 characters; blank input cannot start creation. Choosing a preset ignores that custom text. Accepted requests persist it with the receipt for reconnect and retry, and Creator receives it with the full brief. Editing the draft, opening the menu and reading the cost notice make no model request. Dismissing the notice or choosing Create/Not now acknowledges it in browser-local storage; a new browser or cleared/unavailable storage can show it again. Historical settled cards keep the notice collapsed.
 
 -----
 
@@ -39,7 +41,7 @@ Creation, installation, retention and removal receipts come from the Session pro
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-Successful native and PTC result metadata become hidden Conversation nodes. The completed-Turn tail reads its indexed proposals and displays only the first. The component receives session-bound callbacks rather than accessing services. Its optional Remote, locale, event definition and slot registration share one plugin lifetime.
+Successful native and PTC result metadata become hidden Conversation nodes. The completed-Turn tail reads its indexed proposals and displays only the first. The component receives session-bound callbacks and a framework-bound notice preference rather than accessing services. The shared Menu handles portal positioning, keyboard selection and dismissal. Its optional Remote, locale, event definition and slot registration share one plugin lifetime.
 
 - [Source](src/client/index.ts)
 - [Tests](tests/)
@@ -58,7 +60,7 @@ Successful native and PTC result metadata become hidden Conversation nodes. The 
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through an accepted Create action: the Host starts a Creator run. The browser adds no model tools or prompt content.
+Indirectly, through an accepted Create action: the Host starts Creator with the full brief and selected or human-written placement, without adding browser tools or resuming the parent model.
 
 #### KV Cache effect
 

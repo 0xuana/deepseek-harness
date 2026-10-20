@@ -1,16 +1,15 @@
 - region "Personalized pages":
   - text: Personalized pages
   - button "How creation works and token usage" [expanded]
-  - text: New plugin
   - note:
-    - paragraph: Creator mode builds and installs a new page as a removable plugin.
+    - paragraph: Creator mode builds a new page you can remove at any time.
     - paragraph:
-      - strong: Generation may take a while and consume a large number of tokens.
-    - paragraph: Generation starts only when you click Create. It runs in the background, so you can continue chatting here.
+      - strong: Creation may take a while and use a large number of tokens.
+    - paragraph: Click Create to start in the background. You can keep chatting here.
   - strong: Counter
   - paragraph: "Need: Keep a small counter visible across conversations. Location: A card titled Today’s achievements in the right sidebar. Controls: Increment and reset buttons beside the current value. Storage: Save changes in browser storage across navigation and refresh. Appearance: Follow the existing sidebar theme in light and dark mode. Completion: Both controls work and reopening restores the saved value."
   - button "View full plan"
-  - paragraph: Location · Right sidebar
-  - button "Options"
+  - text: Add to
+  - 'button "Add to: Right sidebar"': Right sidebar
   - button "Not now"
   - button "Create"

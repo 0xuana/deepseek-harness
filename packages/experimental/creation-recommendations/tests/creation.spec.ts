@@ -95,6 +95,40 @@ describe('interface creation', () => {
     expect(await readFile(join(spec.request.cwd!, 'package.json'), 'utf8')).toBe(source)
   })
 
+  it('persists a written placement and gives Creator the human request with the existing location references', async () => {
+    const f = await fixture()
+    await f.propose()
+    for (const invalid of ['', '  ', 'x'.repeat(1001)]) {
+      expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page', invalid)).toEqual({ status: 'refused', reason: 'invalid-location' })
+    }
+    expect(f.startActivation).not.toHaveBeenCalled()
+    await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page', '  左侧入口打开全屏日历  ')
+    const spec = await f.complete()
+    const instructions: unknown = JSON.parse(spec.request.prompt.find(block => block.type === 'text')!.text)
+    const references = ['sidebar-right.md', 'session-tab.md', 'sidebar-entry.md'].map(file =>
+      fileURLToPath(import.meta.resolve('@deepseek-ai/dsh-experimental-creation-recommendations/references/' + file)))
+    expect(instructions).toMatchObject({ location: { request: '左侧入口打开全屏日历' }, uiReferences: references })
+    expect(instructions).toHaveProperty('locationPolicy', expect.stringContaining('instead of silently substituting another location'))
+    expect(instructions).not.toHaveProperty('uiReference')
+    for (const reference of references) expect(await readFile(reference, 'utf8')).toMatch(/^# /)
+    expect(f.current()).toMatchObject({ phase: 'installed', customLocation: '左侧入口打开全屏日历' })
+    appendPluginRecord(f.agent.session, 'plugin:creation-recommendations/decision', { ...f.current()!, phase: 'interrupted' })
+    await f.fiber.dispose()
+    await f.ctx.plugin(CreationRecommendations)
+    expect(f.current()?.customLocation).toBe('左侧入口打开全屏日历')
+    await f.ctx.creationRecommendations.act(f.agent, callId, 'undo', 'page')
+    expect(f.current()).toMatchObject({ phase: 'removed', customLocation: '左侧入口打开全屏日历' })
+  })
+
+  it.each(['', '右侧查看当前会话'])('allows dismissing a custom location without creation: %s', async (customLocation) => {
+    const f = await fixture()
+    await f.propose()
+    expect((await f.ctx.creationRecommendations.act(f.agent, callId, 'dismiss', 'page', customLocation)).status).toBe('settled')
+    expect(f.current()?.phase).toBe('dismissed')
+    expect(f.current()?.customLocation).toBe(customLocation === '' ? undefined : customLocation)
+    expect(f.startActivation).not.toHaveBeenCalled()
+  })
+
   it('cancels generation, drains its child, preserves source and permits a fresh retry', async () => {
     const f = await fixture()
     await f.propose()

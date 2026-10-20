@@ -19,6 +19,8 @@ export interface CreationDecision {
   readonly callId: ToolCallId
   readonly phase: 'dismissed' | 'creating' | 'installing' | 'cancelled' | 'installed' | 'kept' | 'removed' | 'failed' | 'interrupted' | 'unconfirmed'
   readonly slot: CreationSlot
+  /** Omitted: use slot. Present: Creator resolves this human-authored placement instead. */
+  readonly customLocation?: string | undefined
   readonly bundleName?: string | undefined
   readonly application?: ChangeResult['application'] | undefined
 }

@@ -1,6 +1,6 @@
 /** Completed-answer creation card with location selection and undo. */
 import { useId, useLayoutEffect, useRef, useState } from 'react'
-import { Button, IconInfoOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconChevronDownOutlineRegular, IconInfoOutlineRegular, Menu, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import type { CreationRecommendation, CreationActionResult, CreationSlot } from '@deepseek-ai/dsh-experimental-creation-recommendations/types'
@@ -11,7 +11,9 @@ import css from './Card.module.css'
 
 /** Session-bound user actions; installation paths remain Host-owned. */
 export interface CardInjected {
-  act: (callId: ToolCallId, action: 'create' | 'dismiss' | 'keep' | 'undo' | 'cancel', slot: CreationSlot) => Promise<CreationActionResult | undefined>
+  act: (callId: ToolCallId, action: 'create' | 'dismiss' | 'keep' | 'undo' | 'cancel', slot: CreationSlot, customLocation?: string) => Promise<CreationActionResult | undefined>
+  hooks: { infoDismissed: ObservableSnapshot<boolean> }
+  dismissInfo: () => void
 }
 
 /** Proposals indexed by their originating turn. */
@@ -21,6 +23,28 @@ export interface RecommendationTailInjected extends CardInjected {
 
 type CardProps = { recommendation: CreationRecommendation } & Pick<PropsRuntime<'conversation.chat.turnTail'>, 'useProjection'>
   & PropsLocale<'creationRecommendations'> & InjectFace<CardInjected>
+
+type LocationChoice = CreationSlot | 'custom'
+
+function LocationPicker({ value, disabled, onChange, t }: {
+  value: LocationChoice
+  disabled: boolean
+  onChange: (value: LocationChoice) => void
+} & PropsLocale<'creationRecommendations'>) {
+  const [open, setOpen] = useState(false)
+  return <Menu open={open && !disabled} portal autoFocus compact
+    listClassName={css.locationMenu} selectedId={value}
+    onClose={() => { setOpen(false) }}
+    onSelect={(id) => { onChange(id as LocationChoice); setOpen(false) }}
+    items={(['sidebar-right', 'page', 'sidebar-left', 'custom'] as const).map(id => ({
+      id, label: <span className={css.locationOption}><span>{t(id)}</span><span>{t(`${id}Hint`)}</span></span>,
+    }))}
+    anchor={<Button variant="outline" size="sm" disabled={disabled} className={css.locationButton}
+      aria-label={`${t('location')}: ${t(value)}`} aria-haspopup="menu" aria-expanded={open && !disabled}
+      onClick={() => { setOpen(current => !current) }}>
+      {t(value)}<IconChevronDownOutlineRegular size={14} />
+    </Button>} />
+}
 
 /** Keep long plans compact without truncating the brief sent to Creator. */
 function CreationPlan({ brief, t }: { brief: string } & PropsLocale<'creationRecommendations'>) {
@@ -65,25 +89,31 @@ export function RecommendationTail({ turn, useRecommendations, ...props }: Pick<
  * @param props - Proposal, receipts and human actions.
  * @returns the creation card.
  */
-export function RecommendationCard({ recommendation, useProjection, act, t }: CardProps) {
+export function RecommendationCard({ recommendation, useProjection, act, useInfoDismissed, dismissInfo, t }: CardProps) {
   const view = useProjection('creationRecommendations')
   const decision = view?.decisions[recommendation.callId]
-  const [selected, setSelected] = useState<CreationSlot>()
-  const [options, setOptions] = useState(false)
-  const [info, setInfo] = useState(false)
+  const [selected, setSelected] = useState<LocationChoice>()
+  const [custom, setCustom] = useState<string>()
+  const [info, setInfo] = useState<boolean>()
+  const infoDismissed = useInfoDismissed(value => value)
   const infoId = useId()
+  const customId = useId()
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<RecommendationKey>()
-  const slot = selected ?? decision?.slot ?? recommendation.slot
+  const slot = selected !== undefined && selected !== 'custom' ? selected : decision?.slot ?? recommendation.slot
+  const location = selected ?? (decision?.customLocation === undefined ? slot : 'custom')
+  const customLocation = custom ?? decision?.customLocation ?? ''
   const offer = decision === undefined || decision.phase === 'cancelled' || decision.phase === 'failed' || decision.phase === 'interrupted' || decision.phase === 'unconfirmed'
+  const infoOpen = info ?? (offer && !infoDismissed)
   const installed = decision?.phase === 'installed' || decision?.phase === 'kept'
   const run = async (action: 'create' | 'dismiss' | 'keep' | 'undo' | 'cancel') => {
     setPending(true)
     setError(undefined)
+    if (action === 'create' || action === 'dismiss') { dismissInfo(); setInfo(false) }
     // Independent optional cards keep their action and receipt handling local.
     /* jscpd:ignore-start */
     try {
-      const result = await act(recommendation.callId, action, slot)
+      const result = await act(recommendation.callId, action, slot, location === 'custom' ? customLocation.trim() : undefined)
       if (result === undefined) setError('transport')
       else if (result.status === 'refused' || result.status === 'unconfirmed') setError(result.reason)
     } catch {
@@ -94,46 +124,49 @@ export function RecommendationCard({ recommendation, useProjection, act, t }: Ca
   }
   return <section className={css.card} aria-label={t('heading')} data-creation-recommendation={recommendation.callId}>
     <header className={css.header}><span className={css.heading}>{t('heading')}
-      <Tooltip label={t('creationInfo')} side="top" portal disabled={info}>
+      <Tooltip label={t('creationInfo')} side="top" portal disabled={infoOpen}>
         <Button variant="ghost" size="sm" className={css.infoButton} aria-label={t('creationInfo')}
-          aria-expanded={info} aria-controls={infoId} onClick={() => { setInfo(value => !value) }}>
+          aria-expanded={infoOpen} aria-controls={infoId} onClick={() => {
+            setInfo(!infoOpen)
+            if (infoOpen) dismissInfo()
+          }}>
           <IconInfoOutlineRegular size={14} />
         </Button>
       </Tooltip>
     </span>
-    {decision === undefined ? <span>{t('newPlugin')}</span>
-      : <span role="status" className={css.phase} data-phase={decision.phase}>{t(decision.phase)}</span>}
+    {decision !== undefined && <span role="status" className={css.phase} data-phase={decision.phase}>{t(decision.phase)}</span>}
     </header>
-    {info && <div id={infoId} role="note" className={css.info}>
+    {infoOpen && <div id={infoId} role="note" className={css.info}>
       <p>{t('creationMethod')}</p>
       <p><strong>{t('creationCost')}</strong></p>
       <p>{t('creationBackground')}</p>
+      {decision?.bundleName !== undefined && <p>{t('sourceRetained')}</p>}
     </div>}
     <div className={css.body}>
       <strong className={css.title}>{recommendation.title}</strong>
       <CreationPlan brief={recommendation.brief} t={t} />
-      <p className={css.description}>{t('location')} · {t(slot)}</p>
       {decision?.application !== undefined && decision.application !== 'applied'
         && <p role="status" className={css.status}>{t(decision.application)}</p>}
       {error !== undefined && <p role="alert" className={css.status}>{t(error)}</p>}
-      {offer && <>
-        {options && <fieldset className={css.locations}>
-          <legend>{t('location')}</legend>
-          {(['sidebar-right', 'page', 'sidebar-left'] as const).map(value => <label key={value}>
-            <input type="radio" name={recommendation.callId} value={value} checked={slot === value}
-              disabled={pending} onChange={() => { setSelected(value) }} />{t(value)}
-          </label>)}
-        </fieldset>}
+      {offer ? <div className={css.controls}>
+        <div className={css.locationRow}>
+          <span className={css.locationLabel}>{t('location')}</span>
+          <LocationPicker value={location} disabled={pending} onChange={setSelected} t={t} />
+        </div>
+        {location === 'custom' && <div className={css.customLocation}>
+          <label htmlFor={customId} className={css.locationLabel}>{t('customLabel')}</label>
+          <textarea id={customId} value={customLocation} rows={2} maxLength={1000} disabled={pending}
+            placeholder={t('customPlaceholder')} onChange={(event) => { setCustom(event.target.value) }} />
+        </div>}
         <footer className={css.footer}>
-          <Button variant="ghost" size="sm" aria-expanded={options} disabled={pending} onClick={() => { setOptions(value => !value) }}>{t('options')}</Button>
           <div className={css.actions}>
             <Button variant="ghost" size="sm" disabled={pending || view === undefined} onClick={() => { void run('dismiss') }}>{t('dismiss')}</Button>
-            <Button variant="primary" size="sm" disabled={pending || view === undefined} onClick={() => { void run('create') }}>
+            <Button variant="primary" size="sm" disabled={pending || view === undefined || location === 'custom' && customLocation.trim() === ''} onClick={() => { void run('create') }}>
               {t(pending ? 'starting' : decision === undefined ? 'create' : 'retry')}
             </Button>
           </div>
         </footer>
-      </>}
+      </div> : <p className={css.description}>{t('location')} · {location === 'custom' ? customLocation : t(slot)}</p>}
       {decision?.phase === 'creating' && <footer className={css.footer}>
         <Button variant="ghost" size="sm" disabled={pending} onClick={() => { void run('cancel') }}>{t(pending ? 'cancelling' : 'cancel')}</Button>
       </footer>}
@@ -144,7 +177,6 @@ export function RecommendationCard({ recommendation, useProjection, act, t }: Ca
           {decision.phase !== 'kept' && <Button variant="primary" size="sm" disabled={pending} onClick={() => { void run('keep') }}>{t('keep')}</Button>}
         </div>
       </footer>}
-      {decision?.bundleName !== undefined && <p className={css.status}>{t('sourceRetained')}</p>}
     </div>
   </section>
 }

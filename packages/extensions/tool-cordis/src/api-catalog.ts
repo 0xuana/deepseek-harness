@@ -858,9 +858,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Owns accepted Creator runs and the durable receipts for their new bundles.',
     methods: [
       {
-        signature: '@Remote act(agent: Agent, callId: ToolCallId, action: \'create\' | \'dismiss\' | \'keep\' | \'undo\' | \'cancel\', slot: CreationSlot): Promise<CreationActionResult>',
+        signature: '@Remote act(agent: Agent, callId: ToolCallId, action: \'create\' | \'dismiss\' | \'keep\' | \'undo\' | \'cancel\', slot: CreationSlot, customLocation?: string): Promise<CreationActionResult>',
         description: 'Apply a human decision to a logged proposal.',
-        parameters: [{ name: 'agent', description: 'Live root resolved from the displayed session.' }, { name: 'callId', description: 'Logged proposal id.' }, { name: 'action', description: 'Create, cancel generation, dismiss, confirm retention, or remove the owned bundle.' }, { name: 'slot', description: 'Location chosen by the user when creating or dismissing.' }],
+        parameters: [{ name: 'agent', description: 'Live root resolved from the displayed session.' }, { name: 'callId', description: 'Logged proposal id.' }, { name: 'action', description: 'Create, cancel generation, dismiss, confirm retention, or remove the owned bundle.' }, { name: 'slot', description: 'Location chosen by the user when creating or dismissing.' }, { name: 'customLocation', description: 'Omitted: use slot. Present: Creator resolves this human-authored placement instead.' }],
         returns: 'acceptance for background work, a durable receipt, or a refusal.',
       },
     ],
@@ -5483,7 +5483,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CreationDecision',
-    declaration: 'export interface CreationDecision {\n    readonly callId: ToolCallId;\n    readonly phase: \'dismissed\' | \'creating\' | \'installing\' | \'cancelled\' | \'installed\' | \'kept\' | \'removed\' | \'failed\' | \'interrupted\' | \'unconfirmed\';\n    readonly slot: CreationSlot;\n    readonly bundleName?: string | undefined;\n    readonly application?: ChangeResult[\'application\'] | undefined;\n}',
+    declaration: 'export interface CreationDecision {\n    readonly callId: ToolCallId;\n    readonly phase: \'dismissed\' | \'creating\' | \'installing\' | \'cancelled\' | \'installed\' | \'kept\' | \'removed\' | \'failed\' | \'interrupted\' | \'unconfirmed\';\n    readonly slot: CreationSlot;\n    readonly customLocation?: string | undefined;\n    readonly bundleName?: string | undefined;\n    readonly application?: ChangeResult[\'application\'] | undefined;\n}',
   },
   {
     name: 'CreationSlot',

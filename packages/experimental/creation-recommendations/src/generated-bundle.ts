@@ -3,7 +3,7 @@ import { lstat, readdir, readFile, readlink, realpath } from 'node:fs/promises'
 import { dirname, extname, isAbsolute, join, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import { parseDocument } from 'yaml'
-import { exports as resolveExports } from 'resolve.exports'
+import { resolve as resolvePackageEntry } from 'resolve.exports'
 
 /** Validate model-written files before profile installation.
  * @param directory - Host-reserved output directory.
@@ -32,7 +32,7 @@ export async function validateGeneratedBundle(directory: string, name: string): 
     ids.add(row.id)
     const target = manifest.exports === undefined
       ? row.name === name ? manifest.main ?? './index.js' : './' + row.name.slice(name.length + 1)
-      : resolveExports(manifest, row.name)?.[0]
+      : resolvePackageEntry(manifest, row.name)?.[0]
     if (target === undefined || !['.js', '.mjs', '.cjs'].includes(extname(target))) {
       throw new Error(`Build and export the runtime entry for ${row.name} before installation.`)
     }

@@ -108,9 +108,10 @@ Owns accepted Creator runs and the durable receipts for their new bundles.
  * @param callId - Logged proposal id.
  * @param action - Create, cancel generation, dismiss, confirm retention, or remove the owned bundle.
  * @param slot - Location chosen by the user when creating or dismissing.
+ * @param customLocation - Omitted: use slot. Present: Creator resolves this human-authored placement instead.
  * @returns acceptance for background work, a durable receipt, or a refusal.
  */
-@Remote act(agent: Agent, callId: ToolCallId, action: 'create' | 'dismiss' | 'keep' | 'undo' | 'cancel', slot: CreationSlot): Promise<CreationActionResult>
+@Remote act(agent: Agent, callId: ToolCallId, action: 'create' | 'dismiss' | 'keep' | 'undo' | 'cancel', slot: CreationSlot, customLocation?: string): Promise<CreationActionResult>
 ```
 
 Types: [Agent](core.zh.md) · [ToolCallId](core.zh.md)

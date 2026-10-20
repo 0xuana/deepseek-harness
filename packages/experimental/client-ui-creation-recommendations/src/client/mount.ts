@@ -11,6 +11,7 @@ import type {} from '@deepseek-ai/dsh-experimental-creation-recommendations/type
 import { RecommendationTail, type RecommendationTailInjected } from './Card.tsx'
 import { recommendationDefinition } from './definition.ts'
 import { en, zh, type RecommendationKey } from './locales.ts'
+import { createCreationInfoStore } from './info-store.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap { creationRecommendations: RecommendationKey }
@@ -35,6 +36,7 @@ export async function mountRecommendations(ctx: Context, contribution: TypertRem
 }
 
 function registerUi(ctx: Context): void {
+  const infoDismissed = createCreationInfoStore()
   ctx.effect(() => ctx.locale.register('creationRecommendations', { en, zh }), 'creation-recommendations: locale')
   ctx.effect(() => ctx.uiConversation.events.register(recommendationDefinition), 'creation-recommendations: chat')
   ctx.slots.inject('conversation.chat.turnTail', () => ctx.slots.register({
@@ -44,13 +46,15 @@ function registerUi(ctx: Context): void {
       if (binding === undefined) throw new Error(`creation-recommendations: unknown session "${sessionId}"`)
       const chat = ctx.uiConversation.binding(binding).target('chat')
       return {
+        hooks: { infoDismissed },
+        dismissInfo: () => { infoDismissed.set(true) },
         keyedHooks: { recommendations: (turn) => {
           const snapshot = chat.getSnapshot()
           if (snapshot === undefined) throw new Error('creation-recommendations: Chat target is unavailable')
           return snapshot.nodes.turnDataSource(Number(turn), 'creation-recommendation')
         } },
-        act: async (callId, action, slot) => {
-          const result = await ctx.remote.creationRecommendations.act(sessionId, callId, action, slot)
+        act: async (callId, action, slot, customLocation) => {
+          const result = await ctx.remote.creationRecommendations.act(sessionId, callId, action, slot, customLocation)
           return result.ok ? result.value : undefined
         },
       }

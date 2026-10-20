@@ -15,7 +15,7 @@ import type {} from '@deepseek-ai/dsh-plugin-manager'
 import type {} from '@deepseek-ai/dsh-api-remote-access'
 import type {} from '@deepseek-ai/dsh-subagent'
 import type {} from '@deepseek-ai/dsh-app-boot'
-import { creationProjection, slotSchema, type CreationState } from './projection.ts'
+import { creationProjection, customLocationSchema, slotSchema, type CreationState } from './projection.ts'
 import { validateGeneratedBundle } from './generated-bundle.ts'
 import type { CreationActionResult, CreationDecision, CreationRecommendation, CreationSlot } from './types.ts'
 export type * from './types.ts'
@@ -132,18 +132,22 @@ export default class CreationRecommendations extends TypertRemoteService {
    * @param callId - Logged proposal id.
    * @param action - Create, cancel generation, dismiss, confirm retention, or remove the owned bundle.
    * @param slot - Location chosen by the user when creating or dismissing.
+   * @param customLocation - Omitted: use slot. Present: Creator resolves this human-authored placement instead.
    * @returns acceptance for background work, a durable receipt, or a refusal.
    */
   @Remote
-  act(agent: Agent, callId: ToolCallId, action: 'create' | 'dismiss' | 'keep' | 'undo' | 'cancel', slot: CreationSlot): Promise<CreationActionResult> {
+  act(agent: Agent, callId: ToolCallId, action: 'create' | 'dismiss' | 'keep' | 'undo' | 'cancel', slot: CreationSlot, customLocation?: string): Promise<CreationActionResult> {
     if ((action === 'create' || action === 'undo') && !this.ctx.remoteAccess.allows({ kind: 'global' })) return Promise.resolve({ status: 'refused', reason: 'access-denied' })
     if (this.isStopping()) return Promise.resolve({ status: 'refused', reason: 'closing' })
     if (!this.ctx.agents.roots().includes(agent)) return Promise.resolve({ status: 'refused', reason: 'not-live-root' })
-    if (action === 'create' && !slotSchema.safeParse(slot).success) return Promise.resolve({ status: 'refused', reason: 'invalid-location' })
+    const custom = customLocationSchema.optional().safeParse(customLocation)
+    if (action === 'create' && (!slotSchema.safeParse(slot).success || !custom.success)) return Promise.resolve({ status: 'refused', reason: 'invalid-location' })
     const key = JSON.stringify([agent.id, callId])
     const existing = this.actions.get(key)
     if (existing !== undefined) return existing
-    const operation = this.ctx.agents.withInitiator(agent, () => this.decide(agent, callId, action, slot, key))
+    const operation = this.ctx.agents.withInitiator(agent, () => this.decide(
+      agent, callId, action, slot, key, custom.success ? custom.data : undefined,
+    ))
       .finally(() => { this.actions.delete(key) })
     this.actions.set(key, operation)
     return operation
@@ -159,6 +163,7 @@ export default class CreationRecommendations extends TypertRemoteService {
       const installed = (await this.ctx.pluginManager.listBundles()).find(bundle => bundle.name === decision.bundleName && bundle.installed)
       if (installed !== undefined) this.record(agent, {
         callId: decision.callId, slot: decision.slot, phase: 'installed', bundleName: installed.name,
+        ...(decision.customLocation === undefined ? {} : { customLocation: decision.customLocation }),
         ...(installed.error === undefined && installed.enabled ? {} : { application: 'failed' }),
       })
       else if (decision.phase === 'creating' || decision.phase === 'installing' || decision.phase === 'unconfirmed') this.record(agent, { ...decision, phase: 'interrupted' })
@@ -180,7 +185,7 @@ export default class CreationRecommendations extends TypertRemoteService {
   /** Read live lifecycle state after awaits rather than narrowing it to a stale value. */
   private isStopping(): boolean { return this.closing }
 
-  private async decide(agent: Agent, callId: ToolCallId, action: 'create' | 'dismiss' | 'keep' | 'undo' | 'cancel', slot: CreationSlot, key: string): Promise<CreationActionResult> {
+  private async decide(agent: Agent, callId: ToolCallId, action: 'create' | 'dismiss' | 'keep' | 'undo' | 'cancel', slot: CreationSlot, key: string, customLocation?: string): Promise<CreationActionResult> {
     try { await this.recover(agent) }
     catch (error) {
       this.ctx.logger.warn('Cannot confirm creation before card action: %s', String(error))
@@ -219,7 +224,8 @@ export default class CreationRecommendations extends TypertRemoteService {
     }
     if (previous?.phase === 'dismissed' || previous?.phase === 'removed' || action === 'cancel' && previous !== undefined) return { status: 'settled', decision: previous }
     if (action === 'dismiss') {
-      const decision: CreationDecision = { callId, phase: 'dismissed', slot: slotSchema.safeParse(slot).success ? slot : proposal.slot }
+      const decision: CreationDecision = { callId, phase: 'dismissed', slot: slotSchema.safeParse(slot).success ? slot : proposal.slot,
+        ...(customLocation === undefined ? {} : { customLocation }) }
       this.record(agent, decision)
       return { status: 'settled', decision }
     }
@@ -229,7 +235,8 @@ export default class CreationRecommendations extends TypertRemoteService {
     // Spawn preserves the parent's workspace-write boundary even with a different cwd.
     const sourceDirectory = join(agent.session.header.cwd ?? this.ctx.profileContext.cwd, '.dsh-created-plugins', id)
     const bundleName = '@dsh-local/view-' + id
-    const decision: CreationDecision = { callId, phase: 'creating', slot, bundleName }
+    const decision: CreationDecision = { callId, phase: 'creating', slot, bundleName,
+      ...(customLocation === undefined ? {} : { customLocation }) }
     this.record(agent, decision)
     const abort = new AbortController()
     const childId = SessionId(randomUUID())
@@ -253,13 +260,19 @@ export default class CreationRecommendations extends TypertRemoteService {
           parent: agent, agentPreset: 'cordis', cwd: sourceDirectory,
           prompt: [{ type: 'text', text: JSON.stringify({
             task: 'Create one new independently removable DSH interface plugin. Read and use the cordis-plugin-development skill. Generate and build the package only; the caller validates and installs it. Do not install, enable, remove, or edit any existing plugin or profile configuration.',
-            title: proposal.title, brief: proposal.brief, location: decision.slot,
+            title: proposal.title, brief: proposal.brief,
+            location: decision.customLocation === undefined ? decision.slot : { request: decision.customLocation },
             directory: sourceDirectory, packageName: bundleName,
             packaging: 'Write a package.json with the exact reserved name, version, and dsh.bundle.patch="./cordis.patch.yml". Write cordis.patch.yml as a plain YAML or JSON array containing only {insert:[...]} operations. Do not use groups, aliases, custom tags or includes. Every inserted id must start with the package name plus a colon, and each module name must be this package or one of its exports. Use existing DSH slots and theme tokens. Build and export all runtime entry points before reporting ready. Symlinks must be relative and remain inside this package; the installed copy must work without the source directory.',
-            uiReference: fileURLToPath(import.meta.resolve('@deepseek-ai/dsh-experimental-creation-recommendations/references/'
-              + { 'sidebar-right': 'sidebar-right.md', page: 'session-tab.md', 'sidebar-left': 'sidebar-entry.md' }[decision.slot])),
-            locationPolicy: 'location and uiReference are the user’s final choice in the card. They override any earlier location described in brief; preserve the requested behavior and data scope while adapting the interface to this chosen location.',
-            lifecycle: 'Read the selected absolute uiReference bundled with this plugin before implementation; it supplements the cordis-plugin-development skill. Follow its registration, persistence and teardown guidance. Unloading must remove only this plugin’s UI and tabs, preserving unrelated content. Generate and build only; the caller installs and validates the live result.',
+            ...(decision.customLocation === undefined ? {
+              uiReference: fileURLToPath(import.meta.resolve('@deepseek-ai/dsh-experimental-creation-recommendations/references/'
+                + { 'sidebar-right': 'sidebar-right.md', page: 'session-tab.md', 'sidebar-left': 'sidebar-entry.md' }[decision.slot])),
+              locationPolicy: 'location and uiReference are the user’s final choice in the card. They override any earlier location described in brief; preserve the requested behavior and data scope while adapting the interface to this chosen location.',
+            } : {
+              uiReferences: ['sidebar-right.md', 'session-tab.md', 'sidebar-entry.md'].map(file => fileURLToPath(import.meta.resolve('@deepseek-ai/dsh-experimental-creation-recommendations/references/' + file))),
+              locationPolicy: 'location.request is the user’s final placement instruction, overriding earlier placement in brief. Resolve it using existing documented DSH extension points; the references describe common placements, not a new custom slot. Preserve the requested behavior and data scope. Do not change the application shell or install anything outside this removable plugin. If the placement cannot be implemented, report ready:false instead of silently substituting another location.',
+            }),
+            lifecycle: 'Read the relevant absolute uiReference or uiReferences bundled with this plugin before implementation; they supplement the cordis-plugin-development skill. Follow their registration, persistence and teardown guidance. Unloading must remove only this plugin’s UI and tabs, preserving unrelated content. Generate and build only; the caller installs and validates the live result.',
             completion: 'After the package and required checks are complete, finish by calling structured_output with {"ready":true}. Do not send a final prose report: only that tool call hands the package back for installation. If the package cannot be completed, call structured_output with {"ready":false}.',
           }) }],
           outputSchema: { type: 'object', properties: { ready: { type: 'boolean' } }, required: ['ready'], additionalProperties: false },
