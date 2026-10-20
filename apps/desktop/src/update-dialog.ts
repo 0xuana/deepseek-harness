@@ -1,7 +1,7 @@
 /** Main-owned update confirmations; closing or replacing a dialog never grants installation permission. */
-import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent, type MessageBoxOptions, type MessageBoxReturnValue } from 'electron'
+import { ipcMain, WebContentsView, type BrowserWindow, type IpcMainInvokeEvent, type MessageBoxOptions, type MessageBoxReturnValue } from 'electron'
 import type { DesktopLocale } from './locale.ts'
-import type { DesktopUpdateOverlays } from './update-overlay.ts'
+import { WINDOWS_TITLEBAR_HEIGHT } from './windows-layout.ts'
 
 /** Channels available only to the isolated update-dialog document. */
 export const UPDATE_DIALOG_IPC = { status: 'dsh-update-dialog:status', changed: 'dsh-update-dialog:changed', respond: 'dsh-update-dialog:respond' } as const
@@ -40,13 +40,27 @@ const page = 'dsh-app://shell/update-dialog.html'
 export class DesktopUpdateDialog {
   private disposed = false
   private revision = 0
-  private window: BrowserWindow | undefined
+  private view: WebContentsView | undefined
+  private releaseParent: (() => void) | undefined
+  private readonly inputs = new WeakMap<BrowserWindow, { revision: number; blocked: boolean }>()
   private parent: BrowserWindow | undefined
   private closing: ReturnType<typeof setTimeout> | undefined
-  private active: { window: BrowserWindow; view: UpdateDialogView; finish: (index: number, retain?: boolean) => void } | undefined
+  private active: { view: UpdateDialogView; finish: (index: number, retain?: boolean) => void } | undefined
 
   /** Focus the current explanation or confirmation without replacing it or granting permission. */
-  focus(): void { this.active?.window.focus() }
+  focus(): void {
+    if (this.active === undefined || this.parent?.isDestroyed() !== false) return
+    this.parent.focus()
+    this.view?.webContents.focus()
+  }
+
+  /**
+   * @param parent - Product window whose shortcuts may be blocked by a dialog.
+   * @returns Blocking state and a revision changed on attachment or release.
+   */
+  input(parent: BrowserWindow): { readonly revision: number; readonly blocked: boolean } {
+    return this.inputs.get(parent) ?? { revision: 0, blocked: false }
+  }
 
   /** Whether a shell prompt is awaiting a response. */
   get isOpen(): boolean { return this.active !== undefined }
@@ -54,10 +68,8 @@ export class DesktopUpdateDialog {
   /**
    * @param preload - Bundled isolated preload.
    * @param locale - Shell-owned copy or a reader of the current UI language.
-   * @param overlays - Application-owned overlay creation and input tracking.
    */
-  constructor(private readonly preload: string, private readonly locale: DesktopLocale | (() => DesktopLocale),
-    private readonly overlays: Pick<DesktopUpdateOverlays, 'create'>) {
+  constructor(private readonly preload: string, private readonly locale: DesktopLocale | (() => DesktopLocale)) {
     ipcMain.handle(UPDATE_DIALOG_IPC.status, (event) => { this.owned(event); return this.active?.view ?? null })
     ipcMain.handle(UPDATE_DIALOG_IPC.respond, (event, revision: unknown, index: unknown) => {
       this.owned(event)
@@ -87,9 +99,11 @@ export class DesktopUpdateDialog {
     this.active?.finish(this.active.view.cancelId, true)
     clearTimeout(this.closing)
     this.closing = undefined
-    const existing = this.window
-    const window = existing ?? this.overlays.create(parent, this.preload, options.title ?? locale.messages.updateTitle, false)
-    this.window = window
+    const existing = this.view
+    const surface = existing ?? new WebContentsView({ webPreferences: {
+      preload: this.preload, contextIsolation: true, sandbox: true, nodeIntegration: false, webSecurity: true,
+    } })
+    this.view = surface
     this.parent = parent
     const view: UpdateDialogView = { revision: ++this.revision, locale: locale.id, title: options.title ?? '', message: options.message,
       detail: options.detail ?? '', buttons, cancelId, closeLabel: locale.messages.updateClose,
@@ -100,20 +114,51 @@ export class DesktopUpdateDialog {
         if (this.active?.view !== view) return
         this.active = undefined
         options.signal?.removeEventListener('abort', abort)
-        if (!retain && !window.isDestroyed()) {
-          window.webContents.send(UPDATE_DIALOG_IPC.changed, null)
+        if (!retain && !surface.webContents.isDestroyed()) {
+          surface.webContents.send(UPDATE_DIALOG_IPC.changed, null)
           this.closing = setTimeout(() => { this.close() }, 150)
         }
         resolve({ response, checkboxChecked: false })
       }
-      this.active = { window, view, finish }
+      this.active = { view, finish }
       options.signal?.addEventListener('abort', abort, { once: true })
-      if (existing !== undefined) { window.webContents.send(UPDATE_DIALOG_IPC.changed, view); return }
-      const failed = (): void => { if (this.window === window) { this.cancel(); this.close() } }
-      window.once('closed', failed)
-      window.webContents.on('will-navigate', (event, url) => { if (url !== page) event.preventDefault() })
-      window.webContents.once('render-process-gone', failed)
-      void window.loadURL(page).catch(failed)
+      if (existing !== undefined) { surface.webContents.send(UPDATE_DIALOG_IPC.changed, view); return }
+      const failed = (): void => { if (this.view === surface) { this.cancel(); this.close() } }
+      const contents = parent.webContents
+      const resize = (): void => {
+        const { width, height } = parent.getContentBounds()
+        const top = process.platform === 'win32' ? WINDOWS_TITLEBAR_HEIGHT : 0
+        surface.setBounds({ x: 0, y: top, width, height: Math.max(0, height - top) })
+      }
+      const focus = (): void => {
+        if (!parent.isDestroyed() && parent.isFocused() && !surface.webContents.isDestroyed()) surface.webContents.focus()
+      }
+      const blockInput = (event: Electron.Event): void => { event.preventDefault(); focus() }
+      const input = this.inputs.get(parent) ?? { revision: 0, blocked: false }
+      this.inputs.set(parent, input)
+      input.blocked = true; input.revision++
+      surface.setBackgroundColor('#00000000')
+      parent.contentView.addChildView(surface)
+      resize()
+      parent.on('resize', resize)
+      parent.on('focus', focus)
+      parent.once('closed', failed)
+      contents.prependListener('before-input-event', blockInput)
+      this.releaseParent = () => {
+        parent.off('resize', resize)
+        parent.off('focus', focus)
+        parent.off('closed', failed)
+        contents.off('before-input-event', blockInput)
+        if (!parent.isDestroyed()) parent.contentView.removeChildView(surface)
+        input.blocked = false; input.revision++
+      }
+      surface.webContents.once('destroyed', failed)
+      surface.webContents.once('render-process-gone', failed)
+      surface.webContents.once('preload-error', failed)
+      surface.webContents.on('will-navigate', (event, url) => { if (url !== page) event.preventDefault() })
+      surface.webContents.on('will-redirect', (event) => { event.preventDefault() })
+      surface.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+      void surface.webContents.loadURL(page).then(focus, failed)
     })
   }
 
@@ -133,20 +178,20 @@ export class DesktopUpdateDialog {
   private close(): void {
     clearTimeout(this.closing)
     this.closing = undefined
-    const window = this.window
-    this.window = undefined
+    const surface = this.view
+    this.view = undefined
+    this.releaseParent?.()
+    this.releaseParent = undefined
+    const parent = this.parent
     this.parent = undefined
-    if (window !== undefined && !window.isDestroyed()) {
-      // Release Windows modality before destruction so another application cannot become active.
-      if (process.platform === 'win32' && window.isVisible()) window.hide()
-      window.destroy()
-    }
+    if (surface !== undefined && !surface.webContents.isDestroyed()) surface.webContents.close({ waitForBeforeUnload: false })
+    if (parent !== undefined && !parent.isDestroyed() && parent.isFocused()) parent.webContents.focus()
   }
 
   private owned(event: IpcMainInvokeEvent): void {
-    const window = this.window
-    if (window === undefined || event.sender !== window.webContents
-      || event.senderFrame !== window.webContents.mainFrame || event.senderFrame.url !== page) {
+    const surface = this.view
+    if (surface === undefined || event.sender !== surface.webContents
+      || event.senderFrame !== surface.webContents.mainFrame || event.senderFrame.url !== page) {
       throw new Error('desktop update: rejected unowned dialog renderer')
     }
   }
