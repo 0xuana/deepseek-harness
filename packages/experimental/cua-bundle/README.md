@@ -33,6 +33,8 @@ pnpm dsh web
 
 For the source Desktop launcher and its separate development profile, follow [Desktop development](../../../apps/desktop/README.md). Enable Computer Use in each profile that needs it.
 
+The plugin detail page shows a localized feature preview above the permission controls.
+
 The switch saves bundle selection in the profile’s `package.json`. Computer Use is installed only in PTC sessions. Enabling from the plugin list offers setup guidance when system permissions need attention; enabling from its detail page displays the permission controls directly. The detail page offers **Set to PTC** for the new-session default; existing sessions keep their preset. The switch leaves PTC execution mode and other settings unchanged. The detail page’s **Use persistent mode** action separately enables in-memory state across PTC calls; its effects and reload behavior are described in the [permission page](../cua/README.md). Native preparation runs when the provider loads and reuses the source-hashed executable when available.
 
 Disabling unloads the provider and withdraws CUA tools from its Agent scopes. Runtime configuration, the new-session default and saved grants remain. Session-only application decisions end with provider disposal.
