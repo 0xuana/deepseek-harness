@@ -9,7 +9,7 @@
 import { Context, Service } from '@deepseek-ai/cordis'
 import { agentEvents } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, HarnessError } from '@deepseek-ai/dsh-llm'
 import type { MessageId } from '@deepseek-ai/dsh-llm'
 import type { AdmissionDecision, DeliveryRequest } from './types.ts'
 
@@ -22,6 +22,9 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
+/** `code` of every {@link AgentAdmissionRejected}; senders recognize a refusal by it. */
+export const ADMISSION_REJECTED_CODE = 'AGENT_ADMISSION_REJECTED'
+
 /** Refusal reason when an admission listener threw instead of returning a decision. */
 export const ADMISSION_FAILED = 'agent-controller/admission-failed'
 
@@ -33,18 +36,22 @@ const ADMIT: AdmissionDecision = { kind: 'admit' }
 
 /**
  * A message `deliver` kept out of the inbox: a listener rejected it, a
- * listener threw, or the Agent left the registry first.
+ * listener threw, or the Agent left the registry first. Senders recognize it
+ * by its {@link ADMISSION_REJECTED_CODE} `code` and read `reason`, never by
+ * its class, so the check also holds for an error from another copy of this
+ * module.
  */
-export class AgentAdmissionRejected extends Error {
+export class AgentAdmissionRejected extends HarnessError {
+  declare readonly code: typeof ADMISSION_REJECTED_CODE
+
   /**
-   * @param reason - code of the refusal: a listener's reason, {@link ADMISSION_FAILED}, or {@link ADMISSION_AGENT_GONE}.
+   * @param reason - why the message stayed out: a listener's reason, {@link ADMISSION_FAILED}, or {@link ADMISSION_AGENT_GONE}.
    * @param message - explanation for a sender that shows nothing of the refusing plugin.
    * @param presented - whether the refusing plugin explains the refusal in its own interface.
    * @param options - standard Error options.
    */
   constructor(readonly reason: string, message: string, readonly presented: boolean, options?: ErrorOptions) {
-    super(message, options)
-    this.name = 'AgentAdmissionRejected'
+    super(message, ADMISSION_REJECTED_CODE, options)
   }
 }
 

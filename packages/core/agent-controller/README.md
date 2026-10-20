@@ -43,7 +43,7 @@ const messageId = await ctx.agentController.deliver(agent, {
 
 `prepare` runs after the earlier messages to the same Agent settled, so content admission happens in arrival order; its error reaches the sender unchanged. `beforeInsert` runs synchronously after admission, immediately before the message enters the inbox, for bookkeeping the sender needs before the Agent wakes. A throw from it keeps the message out of the inbox, and the sender reverts its own effects when `deliver()` rejects.
 
-`deliver()` rejects with `AgentAdmissionRejected` when a listener refuses the message (with the listener's `reason` and `presented`), when a listener throws (`agent-controller/admission-failed`, with the error as `cause`), or when the Agent left the registry before its message entered the inbox (`agent-controller/agent-gone`). A cancelled sender gets its cancellation reason at once, also while its message waits behind a held one, and errors from `prepare`, `beforeInsert`, `followup()`, and `steer()` pass through unchanged. The Web Session Remote maps these failures onto `session/prompt-rejected` and its other Session errors.
+`deliver()` rejects with `AgentAdmissionRejected` when a listener refuses the message (with the listener's `reason` and `presented`), when a listener throws (`agent-controller/admission-failed`, with the error as `cause`), or when the Agent left the registry before its message entered the inbox (`agent-controller/agent-gone`). Each of these errors is a `HarnessError` whose `code` is `AGENT_ADMISSION_REJECTED` (`ADMISSION_REJECTED_CODE`); senders recognize a refusal by that code and its `reason`, not by the class, so the check also holds for an error from another copy of this package. A cancelled sender gets its cancellation reason at once, also while its message waits behind a held one, and errors from `prepare`, `beforeInsert`, `followup()`, and `steer()` pass through unchanged. The Web Session Remote maps these failures onto `session/prompt-rejected` and its other Session errors.
 
 ### Hold or refuse a message
 
@@ -76,7 +76,7 @@ The controller chains each Agent's deliveries on one promise, so a held message 
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | `AgentController`, the fixed refusal reasons, and `AgentAdmissionRejected` |
+| [`src/index.ts`](src/index.ts) | `AgentController`, the refusal code and fixed refusal reasons, and `AgentAdmissionRejected` |
 | [`src/types.ts`](src/types.ts) | `DeliveryRequest`, `AdmissionDecision`, and the `agent-controller/admission` event |
 
 </details>

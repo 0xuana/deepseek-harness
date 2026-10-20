@@ -4,7 +4,7 @@
  * client.
  */
 
-import { describe, expect, it, onTestFinished } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -162,6 +162,30 @@ describe('Session prompt admission', () => {
     await unregister()
     release.resolve(undefined)
     expect(await pending).toMatchObject({
+      ok: false,
+      error: { code: 'session/not-found', details: { sessionId: agent.id } },
+    })
+  })
+
+  it('maps a refusal from another copy of the agent-controller module by its code', async () => {
+    const { ctx, agent, remote, prompt } = await harness()
+    // Another copy of the module raises the same fields from its own class.
+    const refusal = (reason: string): Error => Object.assign(new Error('The worktree was removed.'), {
+      name: 'AgentAdmissionRejected', code: 'AGENT_ADMISSION_REJECTED', reason, presented: true,
+    })
+    vi.spyOn(ctx.agentController, 'deliver')
+      .mockRejectedValueOnce(refusal('fixture/worktree-missing'))
+      .mockRejectedValueOnce(refusal('agent-controller/agent-gone'))
+
+    expect(await remote.prompt(prompt('refused'))).toMatchObject({
+      ok: false,
+      error: {
+        code: 'session/prompt-rejected',
+        message: 'The worktree was removed.',
+        details: { reason: 'fixture/worktree-missing', presented: true },
+      },
+    })
+    expect(await remote.prompt(prompt('orphaned'))).toMatchObject({
       ok: false,
       error: { code: 'session/not-found', details: { sessionId: agent.id } },
     })
