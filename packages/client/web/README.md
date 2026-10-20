@@ -38,7 +38,7 @@ Web and Desktop mathematical rendering requires WOFF2 support. The [Web build](.
 <a id="viewport-sizing"></a>
 ### Viewport sizing
 
-The root fills the CSS layout viewport with absolute positioning. Opening the keyboard retains the application's layout height, so the homepage and navigation drawer do not resize with the keyboard. The browser pans the page to reveal focused inputs; inner panes own content scrolling.
+The root fills the CSS layout viewport with absolute positioning. The browser pans the page to reveal focused inputs; inner panes own content scrolling.
 
 The root applies horizontal safe-area padding and publishes `--dsh-safe-area-top` and `--dsh-safe-area-bottom` for frame content padding.
 
