@@ -6,31 +6,40 @@ import css from './Rows.module.css'
 /**
  * Own a row's inert drag preview until drag end, replacement, or unmount.
  * The offscreen copy keeps WebKit snapshots separate from overlapping panels.
- * @returns preview creation and cleanup callbacks for native drag handlers.
+ * Its cloned slot DOM remains in document.body for that lifetime; query live rows
+ * within their list to exclude duplicate text and element IDs.
+ * @returns preview callbacks; cleanup reports whether this row started a drag,
+ * even when its preview failed or the row became non-draggable before drag end.
  */
 export function useRowDragPreview(): {
   start: (event: DragEvent<HTMLElement>) => void
-  clear: () => void
+  clear: () => boolean
 } {
   const current = useRef<HTMLDivElement | null>(null)
+  const dragging = useRef(false)
   const preview = useMemo(() => {
-    const clear = (): void => {
+    const clear = (): boolean => {
+      const wasDragging = dragging.current
+      dragging.current = false
       current.current?.remove()
       current.current = null
+      return wasDragging
     }
     return {
       clear,
       start: (event: DragEvent<HTMLElement>): void => {
         clear()
+        dragging.current = true
         const row = event.currentTarget
         const rect = row.getBoundingClientRect()
         const style = getComputedStyle(row)
         const copy = row.cloneNode(true) as HTMLElement
         copy.removeAttribute('data-row-key')
-        Object.assign(copy.style, {
-          boxSizing: 'border-box', margin: '0', width: '100%', height: '100%',
-          color: style.color,
-        })
+        copy.tabIndex = -1
+        for (const control of copy.querySelectorAll<HTMLElement>(
+          'button, a[href], input, select, textarea, [tabindex], [contenteditable]',
+        )) control.tabIndex = -1
+        copy.style.color = style.color
         const image = row.ownerDocument.createElement('div')
         image.className = css.dragPreview as string
         image.inert = true
@@ -43,10 +52,16 @@ export function useRowDragPreview(): {
         image.append(copy)
         row.ownerDocument.body.append(image)
         current.current = image
-        event.dataTransfer.setDragImage(image, event.clientX - rect.left, event.clientY - rect.top)
+        try {
+          event.dataTransfer.setDragImage(image, event.clientX - rect.left, event.clientY - rect.top)
+        } catch (_error) {
+          // Browsers may reject a custom image; retain native dragging without the copy.
+          image.remove()
+          current.current = null
+        }
       },
     }
   }, [])
-  useEffect(() => preview.clear, [preview])
+  useEffect(() => () => { preview.clear() }, [preview])
   return preview
 }

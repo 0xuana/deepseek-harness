@@ -167,6 +167,8 @@ describe('native row drag previews', () => {
   it.each(['workspace', 'session'] as const)('uses an inert offscreen %s copy without changing the source row', (kind) => {
     const { row, drag, transfer, start } = fixture(kind)
     const originalStyle = row.getAttribute('style')
+    fireEvent.dragEnd(row)
+    expect(drag.end).not.toHaveBeenCalled()
     const image = start()
     expect(transfer.setDragImage).toHaveBeenCalledWith(image, 65, 12)
     expect(transfer.effectAllowed).toBe('move')
@@ -175,6 +177,9 @@ describe('native row drag previews', () => {
     expect(image.parentElement).toBe(document.body)
     expect(image.inert).toBe(true)
     expect(image.getAttribute('aria-hidden')).toBe('true')
+    const controls = image.querySelectorAll<HTMLElement>('button, a[href], input, select, textarea, [tabindex]')
+    expect(controls.length).toBeGreaterThan(0)
+    expect([...controls].every(control => control.tabIndex === -1)).toBe(true)
     expect(image.style.left).toBe('-200px')
     expect(image.style.width).toBe('200px')
     expect(image.style.height).toBe('34px')
@@ -185,6 +190,31 @@ describe('native row drag previews', () => {
     expect(screen.getAllByRole('treeitem')).toEqual([row])
     expect(row.getAttribute('style')).toBe(originalStyle)
     expect(row.getAttribute('draggable')).toBe('true')
+  })
+
+  it.each(['workspace', 'session'] as const)('keeps %s dragging active when the browser rejects its preview', (kind) => {
+    const { drag, transfer, start } = fixture(kind)
+    transfer.setDragImage.mockImplementation(() => { throw new DOMException('Image unavailable') })
+    const image = start()
+    expect(drag.start).toHaveBeenCalledOnce()
+    expect(vi.mocked(drag.start).mock.invocationCallOrder[0])
+      .toBeLessThan(transfer.setDragImage.mock.invocationCallOrder[0]!)
+    expect(image.isConnected).toBe(false)
+    fireEvent.dragEnd(screen.getByRole('treeitem'))
+    expect(drag.end).toHaveBeenCalledOnce()
+  })
+
+  it('finishes a Session drag when the source becomes archived before drag end', () => {
+    const { row, drag, start, rerender } = fixture('session')
+    const image = start()
+    rerender(<SessionNodeItem node={{
+      id: sid('session'), title: 'Draggable row', blank: false, running: false,
+      runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: true,
+    }} currentId={undefined} now={0} onOpen={vi.fn()} drag={drag} t={t} />)
+    expect(row.getAttribute('draggable')).toBe('false')
+    fireEvent.dragEnd(row)
+    expect(image.isConnected).toBe(false)
+    expect(drag.end).toHaveBeenCalledOnce()
   })
 
   it.each(['workspace', 'session'] as const)('removes %s previews on replacement, drag end, and unmount', (kind) => {
@@ -1162,6 +1192,19 @@ describe('workspace browser rows', () => {
     view.rerender(<SessionNodeItem node={{ ...node, pinned: false }} currentId={undefined} now={0} onOpen={vi.fn()}
       drag={dragProps()} t={t} />)
     expect(screen.queryByRole('img', { name: '已置顶' })).toBeNull()
+  })
+
+  it.each(['blank', 'archived'] as const)('ignores child drag end on a %s Session row', (state) => {
+    const drag = dragProps({ active: true, marker: 'before' })
+    render(<SessionNodeItem node={{
+      id: sid('not-draggable'), title: 'Not draggable', blank: state === 'blank', running: false,
+      runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: state === 'archived',
+    }} currentId={undefined} now={0} onOpen={vi.fn()} drag={drag} t={t} />)
+    const row = screen.getByRole('treeitem')
+    expect(row.getAttribute('draggable')).toBe('false')
+    fireEvent.dragEnd(row.firstElementChild!)
+    fireEvent.dragEnd(row)
+    expect(drag.end).not.toHaveBeenCalled()
   })
 
   it('marks an archived row and blocks dragging it', () => {

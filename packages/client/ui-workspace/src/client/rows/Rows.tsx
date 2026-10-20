@@ -255,10 +255,10 @@ export function ProjectRowItem({ group, containsCurrentDescendant = false, onTog
         : (e) => {
           e.dataTransfer.effectAllowed = 'move'
           e.dataTransfer.setData('text/plain', row.key)
-          dragPreview.start(e)
           drag.start()
+          dragPreview.start(e)
         }}
-      onDragEnd={() => { dragPreview.clear(); drag?.end() }}
+      onDragEnd={() => { if (dragPreview.clear()) drag?.end() }}
     >
       <span className={clsx(css.slot, css.folder, active && css.folderActive)}>
         {row.expanded ? <IconFolderOpenRegular /> : <IconFolderCloseRegular />}
@@ -626,10 +626,10 @@ export function SessionNodeItem({
         : (e) => {
           e.dataTransfer.effectAllowed = 'move'
           e.dataTransfer.setData('text/plain', node.id)
-          dragPreview.start(e)
           drag.start()
+          dragPreview.start(e)
         }}
-      onDragEnd={() => { dragPreview.clear(); drag?.end() }}
+      onDragEnd={() => { if (dragPreview.clear()) drag?.end() }}
       onDragOver={drag === undefined
         ? undefined
         : (e) => {
