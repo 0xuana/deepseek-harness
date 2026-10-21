@@ -10,7 +10,7 @@ import type { TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-experimental-creation-recommendations/types'
 import { RecommendationTail, type RecommendationTailInjected } from './Card.tsx'
 import { recommendationDefinition } from './definition.ts'
-import { en, zh, type RecommendationKey } from './locales.ts'
+import { en, ja, zh, type RecommendationKey } from './locales.ts'
 import { createCreationInfoStore } from './info-store.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -37,7 +37,7 @@ export async function mountRecommendations(ctx: Context, contribution: TypertRem
 
 function registerUi(ctx: Context): void {
   const infoDismissed = createCreationInfoStore()
-  ctx.effect(() => ctx.locale.register('creationRecommendations', { en, zh }), 'creation-recommendations: locale')
+  ctx.effect(() => ctx.locale.register('creationRecommendations', { en, zh, ja }), 'creation-recommendations: locale')
   ctx.effect(() => ctx.uiConversation.events.register(recommendationDefinition), 'creation-recommendations: chat')
   ctx.slots.inject('conversation.chat.turnTail', () => ctx.slots.register({
     name: 'conversation.chat.turnTail', id: 'creation-recommendation', locale: 'creationRecommendations',
