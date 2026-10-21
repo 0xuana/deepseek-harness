@@ -148,6 +148,11 @@
     },
     {
       "doc": "docs/subsystems/core.md",
+      "symbol": "Model",
+      "source": "packages/core/agent/src/runtime-types.ts"
+    },
+    {
+      "doc": "docs/subsystems/core.md",
       "symbol": "InboxTarget",
       "source": "packages/core/agent/src/types.ts"
     },
@@ -2489,6 +2494,21 @@
     },
     {
       "doc": "docs/subsystems/core.md",
+      "symbol": "ModelSelection",
+      "source": "packages/core/agent/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/core.md",
+      "symbol": "ModelSelectionProjectionState",
+      "source": "packages/core/agent/src/model-selection.ts"
+    },
+    {
+      "doc": "docs/subsystems/core.md",
+      "symbol": "ModelSelectionProjection",
+      "source": "packages/core/agent/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/core.md",
       "symbol": "TurnBoundaryProjection",
       "source": "packages/core/agent/src/types.ts"
     },
@@ -2526,21 +2546,6 @@
       "doc": "docs/subsystems/session-projection.md",
       "symbol": "ProjectionKeySelection",
       "source": "packages/session/session-projection/src/index.ts"
-    },
-    {
-      "doc": "docs/subsystems/core.md",
-      "symbol": "DeliveryMode",
-      "source": "packages/core/agent-controller/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/core.md",
-      "symbol": "DeliveryRequest",
-      "source": "packages/core/agent-controller/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/core.md",
-      "symbol": "AdmissionDecision",
-      "source": "packages/core/agent-controller/src/types.ts"
     }
   ]
 }
