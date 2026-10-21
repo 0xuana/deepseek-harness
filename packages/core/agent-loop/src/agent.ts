@@ -279,10 +279,10 @@ export class ReactLoopAgent implements Agent {
     if (selection === undefined) {
       throw new Error(`agent "${this.id}" has no provider/model: set AgentOptions.provider and AgentOptions.model or record a model selection`)
     }
-    const assembly = await this.loopCtx.systemPrompt.assemble({ ...assembleContextFor(this, signal), callConfig: selection })
+    const assembly = await this.loopCtx.systemPrompt.assemble({ ...assembleContextFor(this, signal), modelSelection: selection })
     signal.throwIfAborted()
     const decision = await this.dispatch.waterfall(
-      'agent/pre-step', { messages: claimed, ...position, signal, callConfig: selection },
+      'agent/pre-step', { messages: claimed, ...position, signal, modelSelection: selection },
       (): Promise<PreStepDecision> => {
         const sections = renderContextSections(assembly)
         const context = this.runtimeContext.project(joinContextSections(sections), sections)
@@ -419,7 +419,7 @@ export class ReactLoopAgent implements Agent {
     while (true) {
       const { config, preparedCall } = await this.prepareRequest(turn, step, decision.selection, signal)
       const currentContext = this.loopCtx.systemPrompt.refreshContext(assembly, {
-        ...assembleContextFor(this, signal), callConfig: decision.selection,
+        ...assembleContextFor(this, signal), modelSelection: decision.selection,
       })
       const sections = renderContextSections(currentContext)
       const context = this.runtimeContext.project(joinContextSections(sections), sections)

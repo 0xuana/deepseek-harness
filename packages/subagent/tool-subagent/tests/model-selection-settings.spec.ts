@@ -323,7 +323,7 @@ describe('SubagentModelSelectionConfig', () => {
     const next = () => Promise.resolve({ kind: 'enter' as const, messages: [] })
     const payload = {
       agent: enabled.agent,
-      callConfig: { provider: 'mock', model: 'mock' },
+      modelSelection: { provider: 'mock', model: 'mock' },
       messages: [],
       turn: 1,
       step: 1,

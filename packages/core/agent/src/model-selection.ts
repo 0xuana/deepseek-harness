@@ -157,14 +157,17 @@ function modelSwitchNotice(previous: ModelSelection, selected: ModelSelection) {
 export function installModelSelection(agentCtx: Context): () => void {
   return agentCtx.on(
     'agent/pre-step',
-    async ({ agent, messages, signal, step, callConfig }, next): Promise<PreStepDecision> => {
+    async ({ agent, messages, signal, step, modelSelection }, next): Promise<PreStepDecision> => {
       const decision = await next()
       if (decision.kind === 'reject' || signal.aborted) return decision
       // The loop skips an empty first step and an emptied offered continuation.
       if (decision.messages.length === 0 && (step === 1 || messages.length > 0)) return decision
       const previous = agent.session.requestHeader()?.config
-      if (previous === undefined || (callConfig.provider === previous.provider && callConfig.model === previous.model)) return decision
-      return { ...decision, messages: [...decision.messages, modelSwitchNotice(previous, callConfig)] }
+      if (
+        previous === undefined
+        || (modelSelection.provider === previous.provider && modelSelection.model === previous.model)
+      ) return decision
+      return { ...decision, messages: [...decision.messages, modelSwitchNotice(previous, modelSelection)] }
     },
     { prepend: true },
   )

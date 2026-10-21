@@ -154,7 +154,7 @@ async function fire(
 ): Promise<void> {
   const decision = await agentEvents(ctx, agent).waterfall(
     'agent/pre-step',
-    { callConfig: { provider: 'mock', model: 'mock' }, messages: [], turn, step, signal },
+    { modelSelection: { provider: 'mock', model: 'mock' }, messages: [], turn, step, signal },
     () => Promise.resolve({ kind: 'enter' as const, messages: [] }),
   )
   if (decision.kind === 'enter') {

@@ -442,11 +442,11 @@ describe('prepared-route prompt admission', () => {
     h.agent.model.select(selection)
     const prepared: (Readonly<ModelSelection> | undefined)[] = []
     h.ctx.on('system-prompt/assemble', (_assembly, context, next) => {
-      prepared.push(context.callConfig)
+      prepared.push(context.modelSelection)
       return next()
     })
-    h.ctx.on('agent/pre-step', ({ callConfig }, next) => {
-      prepared.push(callConfig)
+    h.ctx.on('agent/pre-step', ({ modelSelection }, next) => {
+      prepared.push(modelSelection)
       return next()
     })
     h.ctx.on('agent/request-error', () => {

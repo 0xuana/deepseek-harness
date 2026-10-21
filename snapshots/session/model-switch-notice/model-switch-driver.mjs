@@ -16,8 +16,8 @@ export function apply(ctx) {
     agent.model.select(initial)
     agent.model.select(initial)
   })
-  ctx.on('agent/pre-step', ({ callConfig }, next) => {
-    if (callConfig.model === SELECTED.model && callConfig.reasoningEffort !== SELECTED.reasoningEffort) {
+  ctx.on('agent/pre-step', ({ modelSelection }, next) => {
+    if (modelSelection.model === SELECTED.model && modelSelection.reasoningEffort !== SELECTED.reasoningEffort) {
       throw new Error('model-switch driver requires the explicit effort before the second step')
     }
     return next()

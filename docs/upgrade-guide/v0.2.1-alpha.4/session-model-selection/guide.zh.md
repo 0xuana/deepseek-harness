@@ -23,6 +23,6 @@ ACP（Agent Client Protocol）的模型与推理强度变更从下一个模型�
 2. 将可变引用与选择 hook 替换为校验后的 `agent.model.select(selection)`，使用 `current()` 读取选择。在 Agent setup 中保留 `installModelSelection(agentCtx)` 以提供切换提示，并移除原来的选择参数。不要添加 `agent/request` 监听器。
 3. 通过 `AgentOptions.maxTokens` 设置输出上限。其他逐请求控制参数覆盖没有替代 API；仍需要该行为时，保留现有监听器。
 4. 要在程序化恢复时覆盖已保存路由，先形成配置选择，仅在路由不变且配置省略强度时保留已保存的显式强度，再在 Agent setup 回调中调用 `agent.model.select(selection)`。仅提供 `agentOptions` 时，它只为没有选择或请求记录的 Session 提供回退值。
-5. 通过 `agent/pre-step.callConfig` 传入捕获的 `Readonly<ModelSelection>`，包含已选定的显式强度；`AssembleContext.callConfig` 携带同一选择。直接调用 `SessionReferenceResolver.prepare()` 时，将路由作为第四个参数，放在可选信号之前。
+5. 通过 `agent/pre-step.modelSelection` 传入捕获的 `Readonly<ModelSelection>`，包含已选定的显式强度；`AssembleContext.modelSelection` 携带同一选择。直接调用 `SessionReferenceResolver.prepare()` 时，将路由作为第四个参数，放在可选信号之前。
 6. 要求整轮使用同一个模型的 ACP 控制器，必须等待活跃提示词完成后再更改选项。验证轮次中的变更被记录为 `model/selection`、下一个步骤使用该选择，且恢复保留尚未使用的选择。
 7. 从 `@deepseek-ai/dsh-agent/types` 导入 `ModelSelectionProjection`，替换 API 包别名。`ModelSelection` 仍位于 `dsh-agent/types`。仅在实现驱动器时从 `@deepseek-ai/dsh-agent` 导入 `ModelSelectionProjectionState`；普通读取使用 `agent.model.current()`。强度值使用 `dsh-llm/brand` 中的 `ReasoningEffortId`。

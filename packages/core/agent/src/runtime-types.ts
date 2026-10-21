@@ -19,8 +19,8 @@ declare module '@deepseek-ai/dsh-system-prompt' {
   interface AssembleContext {
     /** Agent for this assembly; absent on diagnostics. When present, `scope` must identify the same agent. */
     agent?: Agent
-    /** Model selection fixed for this step; omitted effort uses adapter defaults. Absent outside step preparation. */
-    callConfig?: Readonly<ModelSelection>
+    /** Captured step selection, retained across retries; omitted effort uses adapter defaults. Absent outside agent steps. */
+    modelSelection?: Readonly<ModelSelection>
   }
 }
 
@@ -343,11 +343,11 @@ declare module '@deepseek-ai/cordis' {
      * @param payload.turn - the turn that will own the step.
      * @param payload.step - the step proposed by the loop.
      * @param payload.signal - the current turn's cancellation signal.
-     * @param payload.callConfig - model selection fixed for this step and its retries; omitted effort uses adapter defaults.
+     * @param payload.modelSelection - captured step selection, retained across retries; omitted effort uses adapter defaults.
      * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
      * @mode waterfall
      */
-    'agent/pre-step'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; signal: AbortSignal; callConfig: Readonly<ModelSelection> }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>
+    'agent/pre-step'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; signal: AbortSignal; modelSelection: Readonly<ModelSelection> }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>
     /**
      * Replace the frozen call configuration. `await next()` yields the config
      * the machine would use (the step's model selection with agent options on

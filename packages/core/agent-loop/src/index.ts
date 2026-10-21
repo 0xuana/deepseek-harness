@@ -334,8 +334,8 @@ export class AgentLoop extends Service implements AgentFactory {
     this.modelProjectionHandle = await ctx.sessionProjections.register(modelSelectionProjectionDefinition)
     this.inboxProjectionHandle = await ctx.sessionProjections.register(inboxProjectionDefinition)
     ctx.effect(() => ctx.agents.setFactory(this), 'agentLoop.setFactory()')
-    ctx.systemPrompt.variable('provider', context => context.callConfig?.provider ?? context.agent?.options.provider)
-    ctx.systemPrompt.variable('model', context => context.callConfig?.model ?? context.agent?.options.model)
+    ctx.systemPrompt.variable('provider', context => context.modelSelection?.provider ?? context.agent?.options.provider)
+    ctx.systemPrompt.variable('model', context => context.modelSelection?.model ?? context.agent?.options.model)
 
     for (const { id, sessionId, cwd, resumeSessionId, ...options } of this.config.agents) {
       const meta = cwd === undefined ? {} : { cwd }

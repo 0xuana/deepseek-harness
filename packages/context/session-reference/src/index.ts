@@ -125,12 +125,12 @@ export class SessionReferenceResolver extends TypertRemoteService {
         'SESSION_REFERENCE_INVALID_CONFIG',
       )
     }
-    ctx.on('agent/pre-step', async ({ agent, signal, callConfig }, next): Promise<PreStepDecision> => {
+    ctx.on('agent/pre-step', async ({ agent, signal, modelSelection }, next): Promise<PreStepDecision> => {
       const decision = await next()
       if (decision.kind === 'reject') return decision
       return {
         ...decision,
-        messages: await this.prepareDirectMessages(agent, decision.messages, callConfig, signal),
+        messages: await this.prepareDirectMessages(agent, decision.messages, modelSelection, signal),
       }
     }, { prepend: true })
   }

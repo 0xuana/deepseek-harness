@@ -54,14 +54,14 @@ function expectedNotice(from: string, to: string) {
 
 async function preStep(
   agent: Agent,
-  callConfig: ModelSelection,
+  modelSelection: ModelSelection,
   {
     messages = [INPUT], offered = [INPUT], step = 1, signal = SIGNAL,
   }: { messages?: UserMessage[]; offered?: UserMessage[]; step?: number; signal?: AbortSignal } = {},
 ) {
   return agentEvents(agent.ctx, agent).waterfall(
     'agent/pre-step',
-    { turn: 1, step, messages: offered, signal, callConfig },
+    { turn: 1, step, messages: offered, signal, modelSelection },
     () => Promise.resolve({ kind: 'enter' as const, messages, startsRequestSeries: true as const }),
   )
 }
@@ -178,7 +178,7 @@ describe('installModelSelection()', () => {
       .resolves.toMatchObject({ messages: [INPUT] })
     const selected = { provider: 'alpha', model: 'a1' }
     await expect(agentEvents(h.ctx, h.agent).waterfall(
-      'agent/pre-step', { turn: 1, step: 1, messages: [], signal: SIGNAL, callConfig: selected },
+      'agent/pre-step', { turn: 1, step: 1, messages: [], signal: SIGNAL, modelSelection: selected },
       () => Promise.resolve({ kind: 'reject' as const }),
     )).resolves.toEqual({ kind: 'reject' })
     await expect(preStep(h.agent, selected, { signal: AbortSignal.abort() })).resolves.toMatchObject({ messages: [INPUT] })
