@@ -8,6 +8,7 @@
     "rewriteRelativeImportExtensions": false
   },
   "include": [
+    "apps/web/tests/japanese-plugin-metadata.e2e.ts",
     "apps/web/tests/rich-text-quotes.e2e.ts",
     "apps/web/tests/hover-input.e2e.ts",
     "apps/web/tests/collapse-timing.e2e.ts",
@@ -406,6 +407,8 @@
     { "path": "./packages/experimental/auto-review" },
     { "path": "./packages/experimental/claude-code-mods" },
     { "path": "./packages/core/tools" },
+    { "path": "./packages/core/tool-executor-native" },
+    { "path": "./packages/core/tool-executor-ptc" },
     { "path": "./packages/core/agent-tool-presentation" },
     { "path": "./packages/skill/skill" },
     { "path": "./packages/experimental/skill-badge" },
@@ -475,6 +478,7 @@
     { "path": "./packages/spill/spill-policy" },
     { "path": "./packages/guard/timeout-policy" },
     { "path": "./packages/test-support/agent-loop-testkit" },
+    { "path": "./packages/test-support/tool-testkit" },
     { "path": "./packages/acp/acp" },
     { "path": "./packages/bundle/acp-app" },
     { "path": "./packages/bundle/base" },
