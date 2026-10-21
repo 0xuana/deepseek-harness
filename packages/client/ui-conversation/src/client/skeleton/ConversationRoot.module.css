@@ -213,10 +213,11 @@
 }
 
 /* The 16px text line retains 9px below it. The press target extends 10px
-   above the text into the strip's top margin and 10px to each side, as the
-   Sidebar tab chips do (ui-dockkit `.tab`); negative margins keep the layout
-   at the text box. The active bar spans the text and reaches 1px past the tab
-   box to sit over the header rule. */
+   above the text into the strip's top margin and 10px to each side, matching
+   the inline padding of the Sidebar tab chips (ui-dockkit `.tab`); negative
+   margins keep the layout box at its 25px row and text width. The active bar
+   spans the text and reaches 1px past the tab box to sit over the header
+   rule. */
 .tab {
   --dsh-tab-hit-inline: 10px;
 
