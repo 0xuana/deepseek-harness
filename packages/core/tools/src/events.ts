@@ -48,7 +48,7 @@ declare module '@deepseek-ai/cordis' {
      */
     'tools/result'(this: Scoped<ToolsService>, exec: Readonly<ToolExecution>, result: Readonly<ToolExecutionResult>): undefined
     /**
-     * A tool or executor was registered or unregistered, or a scoped restriction changed.
+     * A tool was registered or unregistered, or a scoped restriction changed.
      * Unfiltered registry notification: scoped listeners receive changes from every
      * scope because a global contribution can affect every agent's next assembly.
      * @mode emit

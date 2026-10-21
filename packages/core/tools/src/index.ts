@@ -260,11 +260,9 @@ export class ToolsService extends Service {
       }
       if (scope === undefined) this.root = record
       else this.scoped.set(scope, record)
-      this.ctx.emit('tools/change')
       yield () => {
         // Keep an unavailable selection so a program cannot fall through to a different executor.
         record.executor = undefined
-        this.ctx.emit('tools/change')
       }
     }.bind(this), 'tools.setExecutor()')
   }

@@ -676,11 +676,11 @@ Source: [`packages/core/tools/src/index.ts`](../../packages/core/tools/src/index
 
 #### `tools/change` — emit
 
-A tool or executor was registered or unregistered, or a scoped restriction changed. Unfiltered registry notification: scoped listeners receive changes from every scope because a global contribution can affect every agent's next assembly.
+A tool was registered or unregistered, or a scoped restriction changed. Unfiltered registry notification: scoped listeners receive changes from every scope because a global contribution can affect every agent's next assembly.
 
 ```ts cordis-catalog
 /**
- * A tool or executor was registered or unregistered, or a scoped restriction changed.
+ * A tool was registered or unregistered, or a scoped restriction changed.
  * Unfiltered registry notification: scoped listeners receive changes from every
  * scope because a global contribution can affect every agent's next assembly.
  * @mode emit

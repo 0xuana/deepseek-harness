@@ -191,14 +191,20 @@ it('rejects new batches after unload while an accepted batch settles on its orig
   expect(trace).toEqual(['old_eval:execute', 'replacement_eval:execute'])
 })
 
-it('refreshes the selected projection when the same assembly context is reused', async () => {
+it('refreshes executor projections without emitting tool registry changes', async () => {
   const ctx = await setup()
+  let registryChanges = 0
+  ctx.on('tools/change', () => { registryChanges++ })
   const key = { preset: 'refresh' }
   const scope = await scoped(ctx, key)
   const context: AssembleContext = { scope: key }
   expect((await ctx.systemPrompt.assemble(context)).tools.map(tool => tool.name)).toEqual(['echo'])
-  scope.ctx.tools.setExecutor(independent(scope.ctx, 'new_eval', []))
+  const dispose = scope.ctx.tools.setExecutor(independent(scope.ctx, 'new_eval', []))
   expect((await ctx.systemPrompt.assemble(context)).tools.map(tool => tool.name)).toEqual(['new_eval'])
+  expect(registryChanges).toBe(0)
+  dispose()
+  await expect(ctx.systemPrompt.assemble(context)).rejects.toThrow('selected tool executor is unavailable')
+  expect(registryChanges).toBe(0)
 })
 
 it.each([

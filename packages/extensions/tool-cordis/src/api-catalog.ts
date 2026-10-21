@@ -4691,8 +4691,8 @@ export const EVENT_API: readonly EventApiEntry[] = [
     name: 'tools/change',
     mode: 'emit',
     signature: '\'tools/change\'(): void',
-    summary: 'A tool or executor was registered or unregistered, or a scoped restriction changed.',
-    description: 'A tool or executor was registered or unregistered, or a scoped restriction changed. Unfiltered registry notification: scoped listeners receive changes from every scope because a global contribution can affect every agent\'s next assembly.',
+    summary: 'A tool was registered or unregistered, or a scoped restriction changed.',
+    description: 'A tool was registered or unregistered, or a scoped restriction changed. Unfiltered registry notification: scoped listeners receive changes from every scope because a global contribution can affect every agent\'s next assembly.',
     parameters: [],
   },
   {
