@@ -772,6 +772,7 @@ export const en = {
 
 /** Japanese copy, checked against the English keys. */
 export const ja = {
+  'quote.remove': '引用を削除',
   'shortcut.newline': '改行',
   'shortcut.complementary': '補助のキュー / 実行中の指示変更を使用',
   'shortcut.slash': 'コマンドメニューを開く',
@@ -1095,9 +1096,9 @@ export const ja = {
   'tool.title.glob': 'Glob',
   'tool.title.webSearch': '検索',
   'tool.title.webFetch': '取得',
-  'tool.autoReviewRejected': '自動レビューにより拒否されました',
+  'tool.autoReviewRejected': '自動認可レビューにより拒否されました',
   'tool.autoReviewNotExecuted': 'ツールは実行されませんでした。理由: {reason}',
-  'tool.autoReviewReasonFallback': '自動レビューがこの操作を承認しませんでした',
+  'tool.autoReviewReasonFallback': '自動認可レビューがこの操作を承認しませんでした',
   'diff.collapseAria': '差分を折りたたむ',
   'diff.expandAria': '差分の残り{count}行を表示',
   'diff.expandRest': '… 残り{count}行',
