@@ -146,53 +146,6 @@ describe('ModelSelect label slot', () => {
     expect(screen.getByRole('button', { name: '请选择模型' })).toBeTruthy()
     expect(renderSlot).not.toHaveBeenCalled()
   })
-
-  const renderSeat = () => render(
-    <ModelSelect locked={false} available directory={createSnapshotStore(state())}
-      load={vi.fn()} select={vi.fn()} t={t} renderSlot={renderLabel} />,
-  )
-
-  it('marks truncated text clipped while it is wider than its box, re-reading on resize', () => {
-    const observers: Array<{ targets: Element[]; fire: () => void; disconnect: ReturnType<typeof vi.fn> }> = []
-    vi.stubGlobal('ResizeObserver', class {
-      readonly targets: Element[] = []
-      readonly disconnect = vi.fn()
-      constructor(callback: () => void) {
-        observers.push({ targets: this.targets, fire: callback, disconnect: this.disconnect })
-      }
-      observe(target: Element) { this.targets.push(target) }
-      unobserve() {}
-    })
-    onTestFinished(() => { vi.unstubAllGlobals() })
-    let boxWidth = 300
-    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(200)
-    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => boxWidth)
-    onTestFinished(() => { vi.restoreAllMocks() })
-    const view = renderSeat()
-    const label = screen.getByRole('button', { name: /^选择模型/ }).querySelector<HTMLElement>('[data-model-select-text]')!
-    const observer = observers.find(entry => entry.targets[0] === label)!
-    expect(observer.targets).toEqual([label, label.firstElementChild])
-    expect(label.hasAttribute('data-model-select-clipped')).toBe(false)
-    boxWidth = 120
-    act(() => { observer.fire() })
-    expect(label.hasAttribute('data-model-select-clipped')).toBe(true)
-    boxWidth = 300
-    act(() => { observer.fire() })
-    expect(label.hasAttribute('data-model-select-clipped')).toBe(false)
-    view.unmount()
-    expect(observer.disconnect).toHaveBeenCalledTimes(1)
-  })
-
-  it('marks clipping once at mount without ResizeObserver', () => {
-    vi.stubGlobal('ResizeObserver', undefined)
-    onTestFinished(() => { vi.unstubAllGlobals() })
-    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(200)
-    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(120)
-    onTestFinished(() => { vi.restoreAllMocks() })
-    renderSeat()
-    const label = screen.getByRole('button', { name: /^选择模型/ }).querySelector('[data-model-select-text]')!
-    expect(label.hasAttribute('data-model-select-clipped')).toBe(true)
-  })
 })
 
 describe('ModelSelect reasoning effort', () => {

@@ -44,34 +44,23 @@
   cursor: default;
 }
 
-/* Truncating text (FadeText) clips without an ellipsis and, while clipped,
-   fades over its last 24px. A mask rather than a painted gradient, so the
-   fade matches the trigger's bare and hover fills and every menu row. */
-.fade {
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-.fade[data-model-select-clipped] {
-  mask-image: linear-gradient(to right, black calc(100% - 24px), transparent);
-}
-
-/* Inline-block so its width is the text's own and resizes with it. */
-.fadeRun {
-  display: inline-block;
-}
-
 .triggerLabel {
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Effort value beside the model name (mock's 'High': same 13/20/400, caption
    tone). Adaptive priority: the huge shrink factor makes the effort absorb
-   all deficit first — it fades away to nothing before the model name
+   all deficit first — it ellipsizes away to nothing before the model name
    loses a single pixel, and the chevron stays snug throughout. */
 .triggerEffort {
   flex-shrink: 1000;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--dsw-alias-label-caption);
 }
 
@@ -79,6 +68,31 @@
 .triggerIcon {
   display: var(--dsh-composer-model-icon-display, none);
   flex: 0 0 auto;
+}
+
+/* Clipped selector text fades over its last 24px instead of ending in an
+   ellipsis. A self scroll timeline is active only while the box overflows,
+   so the mask never touches text that fits; browsers without scroll-driven
+   animations keep the ellipsis. A mask rather than a painted gradient, so
+   the fade matches the trigger's bare and hover fills and every menu row. */
+@supports (animation-timeline: scroll()) {
+  .triggerLabel,
+  .triggerEffort,
+  .modelName,
+  .cellValue {
+    text-overflow: clip;
+    /* Longhands only: the build folds a full set into the `animation`
+       shorthand, which cannot carry a timeline. */
+    animation-name: clipped-fade;
+    animation-fill-mode: both;
+    animation-timeline: scroll(self inline);
+  }
+}
+
+@keyframes clipped-fade {
+  from, to {
+    mask-image: linear-gradient(to right, black calc(100% - 24px), transparent);
+  }
 }
 
 /* The composer measures expanded row demand and owns these display variables.
@@ -107,7 +121,7 @@
   display: flex;
   flex-direction: column;
   /* Let the visible pane's rows set the card width, but keep pathological ids
-     and narrow screens inside a bounded card where clipped text fades. */
+     and narrow screens inside a bounded card where ellipsis remains. */
   width: max-content;
   min-width: min(240px, calc(100vw - 32px));
   max-width: min(420px, calc(100vw - 32px));
@@ -285,10 +299,13 @@
 }
 
 .modelName {
+  overflow: hidden;
   color: inherit;
   font-size: 13px;
   line-height: 18px;
   font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .check {
@@ -342,6 +359,9 @@
 .cellValue {
   flex: 1 1 auto;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   text-align: right;
   color: var(--dsw-alias-label-tertiary);
 }

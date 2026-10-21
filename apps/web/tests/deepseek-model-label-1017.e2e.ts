@@ -73,13 +73,12 @@ describe.skipIf(MODE === 'record')('web e2e: temporary DeepSeek release badge', 
     const trigger = page.getByRole('button', { name: /^选择模型/ })
     const readLayout = () => trigger.getByText('1017', { exact: true }).evaluate((release) => {
       const label = release.parentElement!
-      const box = label.closest('[data-model-select-text]')!
+      const box = label.closest('[data-provider-id]')!.parentElement!
       const style = getComputedStyle(release)
       const labelStyle = getComputedStyle(label)
       const boxStyle = getComputedStyle(box)
       return {
-        overflowing: box.scrollWidth > box.clientWidth,
-        clipped: box.hasAttribute('data-model-select-clipped'),
+        clipped: box.scrollWidth > box.clientWidth,
         textOverflow: boxStyle.textOverflow,
         fade: boxStyle.maskImage,
         inline: labelStyle.display === 'inline' && style.display === 'inline',
@@ -93,7 +92,7 @@ describe.skipIf(MODE === 'record')('web e2e: temporary DeepSeek release badge', 
       await expect.poll(async () => (await readLayout()).clipped).toBe(true)
       const narrowed = await readLayout()
       expect(narrowed).toEqual({
-        overflowing: true, clipped: true, textOverflow: 'clip',
+        clipped: true, textOverflow: 'clip',
         fade: 'linear-gradient(90deg, rgb(0, 0, 0) calc(100% - 24px), rgba(0, 0, 0, 0))',
         inline: true, sameFontSize: true, background: 'rgba(0, 0, 0, 0)', padding: '0px',
       })
