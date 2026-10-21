@@ -1,12 +1,11 @@
-import { cloneElement, useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
-import type { CSSProperties, ReactElement, ReactNode, RefObject, SyntheticEvent } from 'react'
+import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import type { CSSProperties, ReactNode, RefObject, SyntheticEvent } from 'react'
 import clsx from 'clsx'
 import { createPortal } from 'react-dom'
 import { writeClipboard } from './clipboard.ts'
 import { usePointerGrace } from './pointer-grace.ts'
 import { overlayTopMargin } from './overlay-top-margin.ts'
 import { HoverCardGroupContext } from './HoverCardGroup.tsx'
-import { useDismissOnOutsidePointer } from './useDismissOnOutsidePointer.ts'
 import css from './HoverCard.module.css'
 
 /** Preview opacity transition and retained lifetime during dismissal. */
@@ -14,101 +13,64 @@ const PREVIEW_FADE_MS = 100
 const PREVIEW_MAX_HEIGHT = 420
 const PREVIEW_INSET = 24
 const INLINE_PREVIEW_WIDTH = 300
-const CALLOUT_MAX_HEIGHT = 240
-const CALLOUT_WIDTH = 300
-const CALLOUT_ARROW_EDGE_INSET = 16
-const CALLOUT_SURFACE_INSET = 4
 const ANCHOR_GAP = 8
 const VIEWPORT_MARGIN = 8
 
-interface DescribedAnchorProps {
-  'aria-describedby'?: string | undefined
-}
-
-type HoverCardProps = {
-  /** Inline media preview using the shared menu material and keyboard focus. */
-  inline?: boolean
-  content: ReactNode
-  openDelayMs?: number
-  disabled?: boolean
-  grouped?: boolean
-  variant?: 'compact' | 'preview' | 'callout'
-  widthAnchorRef?: RefObject<HTMLElement | null>
-} & ({
-  anchor: ReactElement<DescribedAnchorProps>
-  openOnClick: true
-  describeAnchor?: boolean
-} | {
-  anchor: ReactNode
-  openOnClick?: false | undefined
-  describeAnchor?: never
-}) & ({ copyText?: string | undefined; copyLabel: string; copiedLabel: string } | {
-  copyText?: undefined
-  copyLabel?: string
-  copiedLabel?: string
-})
-
 /**
  * Render an anchor with a hover-triggered preview card independently of nested tooltips.
- * @param props.anchor - the hover target (rendered in place inside a wrapper span). With
- * openOnClick, pass one focusable element that forwards ARIA props.
+ * Touch entry does not open a preview or intercept the anchor's action.
+ * @param props.anchor - the hover target (rendered in place inside a wrapper span).
  * @param props.content - card content; the pointer may rest on it, so it is
  * readable and selectable, but it carries no dismissal affordance of its own.
  * @param props.openDelayMs - hover dwell before the card shows (default 500).
- * @param props.variant - compact card beside the anchor; a preview with container-relative
- * width and opacity transitions; or a 300px callout with an anchor caret and 240px height cap.
+ * @param props.variant - compact card beside the anchor, or a preview above/below it
+ * with 24px side insets, a 420px height cap, frame-top clearance, and 100ms opacity transitions.
  * @param props.widthAnchorRef - optional element whose width and horizontal position size the preview.
  * @param props.inline - keep the anchor in prose; show a contained preview on hover or keyboard focus.
  * @param props.disabled - suppress opening; turning true dismisses an open card.
  * @param props.grouped - share first-display dwell across the surrounding list and active portal.
  * Group replacement removes the previous card immediately, including a fading preview.
- * @param props.openOnClick - clicking or touching the anchor pins the card open. Another activation,
- * Escape, Tab, or an outside pointerdown dismisses it; pointer leave and blur do not dismiss a pinned card.
- * For callouts, focused anchors scroll the card with arrow keys, PageUp/PageDown, Home, and End.
- * @param props.describeAnchor - with openOnClick, append the open card to the anchor's accessible
- * description (default true). Set false when the caller supplies a stable description relationship.
  * @param props.copyText - optional primary value copied by activation and
  * included in the card's accessible name.
  * @param props.copyLabel - localized accessible activation-label prefix.
  * @param props.copiedLabel - localized visible success label.
  * @returns anchor wrapper with the conditional portaled card.
  */
-export function HoverCard(props: HoverCardProps) {
-  const {
-    content, openDelayMs = 500, disabled = false, grouped = false, describeAnchor = true,
-    copyText, copyLabel, copiedLabel, variant = 'compact', widthAnchorRef, inline = false,
-  } = props
-  const openOnClick = props.openOnClick === true
-  const callout = variant === 'callout'
-  const anchored = inline || callout
-  const id = useId()
+export function HoverCard({
+  anchor, content, openDelayMs = 500, disabled = false, grouped = false,
+  copyText, copyLabel, copiedLabel, variant = 'compact', widthAnchorRef, inline = false,
+}: {
+  anchor: ReactNode
+  /** Inline media preview using the shared menu material and keyboard focus. */
+  inline?: boolean
+  content: ReactNode
+  openDelayMs?: number
+  disabled?: boolean
+  grouped?: boolean
+  variant?: 'compact' | 'preview'
+  widthAnchorRef?: RefObject<HTMLElement | null>
+} & ({ copyText?: string | undefined; copyLabel: string; copiedLabel: string } | {
+  copyText?: undefined
+  copyLabel?: string
+  copiedLabel?: string
+})) {
   const rootRef = useRef<HTMLSpanElement>(null)
   const cardRef = useRef<HTMLDivElement>(null)
-  const scrollRef = useRef<HTMLDivElement>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const copyHeightRef = useRef<number | null>(null)
   const copyEpochRef = useRef(0)
-  const keyboardFocus = useRef(false)
   const copyingRef = useRef(false)
   const mountedRef = useRef(true)
   const [phase, setPhase] = useState<'closed' | 'open' | 'closing'>('closed')
   const open = phase !== 'closed'
   const closing = phase === 'closing'
-  const [pos, setPos] = useState<{
-    left: number
-    top: number
-    width?: number
-    maxHeight?: number
-    anchorX?: number
-    placement?: 'above' | 'below'
-  } | null>(null)
+  const [pos, setPos] = useState<{ left: number; top: number; width?: number; maxHeight?: number } | null>(null)
   const positioned = pos !== null
   const [copied, setCopied] = useState(false)
   const parentGroup = useContext(HoverCardGroupContext)
   const group = grouped ? parentGroup : null
   const [groupOwner] = useState(() => Symbol('hover-card'))
-  const [pinned, setPinned] = useState(false)
 
   const clearCopied = useCallback(() => {
     if (copyTimerRef.current !== null) {
@@ -120,15 +82,12 @@ export function HoverCard(props: HoverCardProps) {
   }, [])
 
   const close = useCallback(() => {
-    keyboardFocus.current = false
     copyEpochRef.current += 1
     clearCopied()
-    setPinned(false)
     setPhase(current => variant === 'preview' && current !== 'closed' ? 'closing' : 'closed')
   }, [clearCopied, variant])
 
   const { arm: armClose, cancel: cancelClose } = usePointerGrace(close)
-  useDismissOnOutsidePointer(rootRef, openOnClick && open, close, cardRef)
 
   const clearTimer = useCallback(() => {
     if (timerRef.current !== null) {
@@ -181,7 +140,7 @@ export function HoverCard(props: HoverCardProps) {
   }, [])
 
   useEffect(() => {
-    if (!open || openOnClick || (variant !== 'preview' && !anchored)) return
+    if (!open || (variant !== 'preview' && !inline)) return
     const dismiss = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') return
       if (inline) event.stopPropagation()
@@ -191,23 +150,7 @@ export function HoverCard(props: HoverCardProps) {
     }
     window.addEventListener('keydown', dismiss, inline)
     return () => { window.removeEventListener('keydown', dismiss, inline) }
-  }, [open, openOnClick, variant, anchored, cancelClose, close])
-
-  useEffect(() => {
-    if (!openOnClick || !open) return
-    const dismiss = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape' && event.key !== 'Tab') return
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        event.stopPropagation()
-      }
-      clearTimer()
-      cancelClose()
-      close()
-    }
-    document.addEventListener('keydown', dismiss, true)
-    return () => { document.removeEventListener('keydown', dismiss, true) }
-  }, [open, openOnClick, cancelClose, close])
+  }, [open, variant, inline, cancelClose, close])
 
   // Fixed-position from the anchor rect before paint; track the anchor while
   // open (capture-phase scroll catches nested panes), as in Menu portal mode.
@@ -235,34 +178,19 @@ export function HoverCard(props: HoverCardProps) {
         })
         return
       }
-      if (anchored) {
-        const height = callout
-          ? Math.max(h, (scrollRef.current?.scrollHeight ?? 0) + CALLOUT_SURFACE_INSET * 2)
-          : Math.max(h, cardRef.current?.scrollHeight ?? 0)
-        const width = Math.max(0, Math.min(callout ? CALLOUT_WIDTH : INLINE_PREVIEW_WIDTH,
-          window.innerWidth - VIEWPORT_MARGIN * 2))
+      if (inline) {
+        const height = Math.max(h, cardRef.current?.scrollHeight ?? 0)
+        const width = Math.max(0, Math.min(INLINE_PREVIEW_WIDTH, window.innerWidth - VIEWPORT_MARGIN * 2))
         const topMargin = overlayTopMargin(VIEWPORT_MARGIN)
         const belowTop = Math.max(topMargin, r.bottom + ANCHOR_GAP)
         const above = Math.max(0, r.top - ANCHOR_GAP - topMargin)
         const below = Math.max(0, window.innerHeight - belowTop - VIEWPORT_MARGIN)
         const onTop = height > below && above > below
-        const maxHeight = Math.min(callout ? CALLOUT_MAX_HEIGHT : Number.POSITIVE_INFINITY,
-          onTop ? above : below)
-        const anchorCenter = (r.left + r.right) / 2
-        const idealLeft = callout ? anchorCenter - width / 2 : r.left
-        const left = Math.max(VIEWPORT_MARGIN, Math.min(idealLeft,
-          window.innerWidth - width - VIEWPORT_MARGIN))
-        const arrowInset = Math.min(CALLOUT_ARROW_EDGE_INSET, width / 2)
+        const maxHeight = onTop ? above : below
         setPos({
-          left,
+          left: Math.max(VIEWPORT_MARGIN, Math.min(r.left, window.innerWidth - width - VIEWPORT_MARGIN)),
           top: onTop ? r.top - ANCHOR_GAP - Math.min(height, maxHeight) : belowTop,
           width, maxHeight,
-          ...(callout
-            ? {
-              anchorX: Math.max(arrowInset, Math.min(anchorCenter - left, width - arrowInset)),
-              placement: onTop ? 'above' as const : 'below' as const,
-            }
-            : {}),
         })
         return
       }
@@ -270,8 +198,8 @@ export function HoverCard(props: HoverCardProps) {
       setPos({ left: r.right + ANCHOR_GAP, top })
     }
     place()
-    const observer = (variant === 'preview' || anchored) && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(place) : null
-    for (const element of [cardRef.current, scrollRef.current, rootRef.current, widthAnchorRef?.current]) {
+    const observer = (variant === 'preview' || inline) && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(place) : null
+    for (const element of [cardRef.current, rootRef.current, widthAnchorRef?.current]) {
       if (element !== null && element !== undefined) observer?.observe(element)
     }
     window.addEventListener('scroll', place, true)
@@ -281,19 +209,19 @@ export function HoverCard(props: HoverCardProps) {
       window.removeEventListener('scroll', place, true)
       window.removeEventListener('resize', place)
     }
-  }, [open, variant, widthAnchorRef, positioned, anchored, callout])
+  }, [open, variant, widthAnchorRef, positioned, inline])
 
   // The first placement ran before the card mounted (height read 0): once the
   // card's real height is measurable, correct the bottom-edge clamp. The
   // correction converges — a clamped top satisfies the guard, so it runs once.
   useLayoutEffect(() => {
-    if (!open || pos === null || variant === 'preview' || anchored) return
+    if (!open || pos === null || variant === 'preview' || inline) return
     /* v8 ignore next -- the card is mounted whenever pos is set, so the ref is attached here. */
     const h = cardRef.current?.offsetHeight ?? 0
     if (pos.top + h > window.innerHeight - VIEWPORT_MARGIN) {
       setPos({ left: pos.left, top: window.innerHeight - h - VIEWPORT_MARGIN })
     }
-  }, [open, pos, variant, anchored])
+  }, [open, pos, variant, inline])
 
   const copy = async (text: string): Promise<void> => {
     if (copied || copyingRef.current) return
@@ -310,43 +238,21 @@ export function HoverCard(props: HoverCardProps) {
   }
 
   const copyable = copyText !== undefined
-  const describedAnchor = props.openOnClick === true && describeAnchor
-    ? cloneElement(props.anchor, {
-      'aria-describedby': open
-        ? [props.anchor.props['aria-describedby'], id].filter(Boolean).join(' ')
-        : props.anchor.props['aria-describedby'],
-    })
-    : props.anchor
   const dismissFromAnchor = (event: SyntheticEvent<HTMLSpanElement>): void => {
     // Portal content is a React child, but its clicks and text selection do not activate the anchor.
     if (cardRef.current?.contains(event.target as Node)) return
-    keyboardFocus.current = false
     clearTimer()
     cancelClose()
-    if (openOnClick && !disabled && !pinned) {
-      setPinned(true)
-      setPhase('open')
-      return
-    }
     close()
   }
-  const cardContent = copied ? <span className={css.copied} aria-hidden="true">{copiedLabel}</span> : content
   const card = open && pos !== null && (
     <div
       ref={cardRef}
-      id={openOnClick ? id : undefined}
-      className={clsx(css.card, variant === 'preview' && css.preview, inline && css.media,
-        callout && css.callout, copyable && css.copyable, copied && css.feedback)}
+      className={clsx(css.card, variant === 'preview' && css.preview, inline && css.media, copyable && css.copyable, copied && css.feedback)}
       data-closing={closing || undefined}
-      data-pinned={pinned || undefined}
-      data-placement={callout ? pos.placement : undefined}
       style={{
-        left: pos.left, top: pos.top, width: pos.width,
-        maxHeight: callout ? undefined : pos.maxHeight,
-        minHeight: copied && copyHeightRef.current !== null ? copyHeightRef.current : undefined,
+        ...pos, minHeight: copied && copyHeightRef.current !== null ? copyHeightRef.current : undefined,
         '--dsh-hover-preview-fade': `${PREVIEW_FADE_MS}ms`,
-        '--dsh-hover-card-max-height': pos.maxHeight === undefined ? undefined : `${pos.maxHeight}px`,
-        '--dsh-hover-card-anchor-x': pos.anchorX === undefined ? undefined : `${pos.anchorX}px`,
       } as CSSProperties}
       role={copyable ? 'button' : undefined}
       tabIndex={copyable ? 0 : undefined}
@@ -369,63 +275,20 @@ export function HoverCard(props: HoverCardProps) {
           void copy(copyText)
         }
         : undefined}
-      onPointerEnter={() => {
-        cancelClose()
-        setPhase('open')
-      }}
-      onPointerLeave={(event) => {
-        // Portal-to-anchor movement stays within this card's interaction.
-        if (event.relatedTarget instanceof Node && rootRef.current?.contains(event.relatedTarget)) {
-          cancelClose()
-          return
-        }
-        if (!pinned && !(anchored && keyboardFocus.current)) armClose()
-      }}
     >
-      {callout
-        ? (
-          <>
-            <span className={css.calloutCaret} data-hover-card-caret aria-hidden="true" />
-            <div className={css.calloutSurface}>
-              <div ref={scrollRef} className={css.calloutBody} data-hover-card-scroll>{cardContent}</div>
-            </div>
-          </>
-        )
-        : cardContent}
+      {copied ? <span className={css.copied} aria-hidden="true">{copiedLabel}</span> : content}
     </div>
   )
 
   return (
     <span
       ref={rootRef}
-      className={clsx(css.root, anchored && css.inline)}
-      onFocus={anchored ? (event) => {
-        if (!disabled && event.target.matches(':focus-visible')) {
-          keyboardFocus.current = true
-          cancelClose()
-          setPhase('open')
-        }
+      className={clsx(css.root, inline && css.inline)}
+      onFocus={inline ? (event) => {
+        if (!disabled && event.target.matches(':focus-visible')) { cancelClose(); setPhase('open') }
       } : undefined}
-      onBlur={anchored ? (event) => {
-        keyboardFocus.current = false
-        if (!pinned && !event.currentTarget.contains(event.relatedTarget)) { clearTimer(); cancelClose(); close() }
-      } : undefined}
-      onKeyDown={callout && open ? (event) => {
-        const scroll = scrollRef.current
-        if (scroll === null || !rootRef.current?.contains(event.target as Node)) return
-        let top: number
-        switch (event.key) {
-          case 'ArrowDown': top = scroll.scrollTop + scroll.clientHeight / 8; break
-          case 'ArrowUp': top = scroll.scrollTop - scroll.clientHeight / 8; break
-          case 'PageDown': top = scroll.scrollTop + scroll.clientHeight; break
-          case 'PageUp': top = scroll.scrollTop - scroll.clientHeight; break
-          case 'Home': top = 0; break
-          case 'End': top = scroll.scrollHeight; break
-          default: return
-        }
-        event.preventDefault()
-        event.stopPropagation()
-        scroll.scrollTop = top
+      onBlur={inline ? (event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) { clearTimer(); cancelClose(); close() }
       } : undefined}
       onPointerEnter={(event) => {
         if (disabled || event.pointerType === 'touch') return
@@ -441,14 +304,13 @@ export function HoverCard(props: HoverCardProps) {
       onPointerLeave={() => {
         clearTimer()
         // Leaving a closed card schedules a no-op close; only arm while
-        // open, matching Menu's shape. Keyboard focus remains an independent
-        // open trigger after the pointer leaves.
-        if (open && !pinned && !(anchored && keyboardFocus.current)) armClose()
+        // open, matching Menu's shape.
+        if (open) armClose()
       }}
-      onPointerDownCapture={openOnClick ? undefined : dismissFromAnchor}
+      onPointerDownCapture={dismissFromAnchor}
       onClickCapture={dismissFromAnchor}
     >
-      {describedAnchor}
+      {anchor}
       {open && copyable && <span className={css.status} role="status">{copied ? copiedLabel : ''}</span>}
       {card !== false && createPortal(card, document.body)}
     </span>

@@ -22,7 +22,7 @@ function stubAnchorRect(anchor: HTMLElement, rect: { top: number; right: number 
 
 function mount(props: {
   widthAnchorRef?: { current: HTMLElement | null }
-  variant?: 'compact' | 'preview' | 'callout'
+  variant?: 'compact' | 'preview'
   openDelayMs?: number
   disabled?: boolean
   copyText?: string
@@ -165,27 +165,6 @@ describe('HoverCard', () => {
     expect(screen.queryByText('card body')).toBeNull()
   })
 
-  it('caps a callout, keeps its caret on the anchor, and flips it above when needed', () => {
-    const { wrapper } = mount({ variant: 'callout' })
-    fireEvent.pointerEnter(wrapper)
-    act(() => { vi.advanceTimersByTime(500) })
-    const card = screen.getByText('card body').closest('[data-placement]') as HTMLElement
-    const body = card.querySelector<HTMLElement>('[data-hover-card-scroll]') as HTMLElement
-    expect(card.style.width).toBe('300px')
-    expect(card.style.left).toBe('8px')
-    expect(card.style.top).toBe('82px')
-    expect(card.dataset.placement).toBe('below')
-    expect(card.style.getPropertyValue('--dsh-hover-card-max-height')).toBe('240px')
-    expect(card.style.getPropertyValue('--dsh-hover-card-anchor-x')).toBe('142px')
-
-    Object.defineProperty(body, 'scrollHeight', { configurable: true, value: 600 })
-    wrapper.getBoundingClientRect = () => DOMRect.fromRect({ x: 100, y: 700, width: 100, height: 34 })
-    fireEvent(window, new Event('resize'))
-    expect(card.style.top).toBe('452px')
-    expect(card.dataset.placement).toBe('above')
-    expect(card.style.getPropertyValue('--dsh-hover-card-max-height')).toBe('240px')
-  })
-
   it('observes preview and container sizes until dismissal', () => {
     let resize = () => {}
     const observe = vi.fn()
@@ -244,127 +223,6 @@ describe('HoverCard', () => {
     fireEvent.pointerEnter(wrapper)
     act(() => { vi.advanceTimersByTime(50) })
     expect(screen.getByText('card body')).toBeTruthy()
-  })
-
-  it('pins on click for touch access and keeps the card through pointer leave and blur', () => {
-    render(
-      <>
-        <p id="existing-description">Existing description</p>
-        <HoverCard
-          inline
-          openOnClick
-          anchor={<button type="button" aria-describedby="existing-description">details</button>}
-          content={<div>card body</div>}
-        />
-      </>,
-    )
-    const anchor = screen.getByRole('button', { name: 'details' })
-    const wrapper = anchor.parentElement as HTMLElement
-    const touch = new Event('pointerover', { bubbles: true })
-    Object.defineProperty(touch, 'pointerType', { value: 'touch' })
-    fireEvent(wrapper, touch)
-    act(() => { vi.advanceTimersByTime(500) })
-    expect(screen.queryByText('card body')).toBeNull()
-
-    fireEvent.click(anchor)
-    const card = screen.getByText('card body').parentElement as HTMLElement
-    expect(card.getAttribute('data-pinned')).toBe('true')
-    expect(anchor.getAttribute('aria-describedby')).toBe(`existing-description ${card.id}`)
-    fireEvent.pointerLeave(wrapper)
-    act(() => { vi.advanceTimersByTime(POINTER_GRACE_MS) })
-    fireEvent.blur(anchor, { relatedTarget: document.body })
-    expect(screen.getByText('card body')).toBeTruthy()
-
-    fireEvent.pointerLeave(card)
-    act(() => { vi.advanceTimersByTime(POINTER_GRACE_MS) })
-    expect(screen.getByText('card body')).toBeTruthy()
-    fireEvent.pointerDown(card)
-    expect(screen.getByText('card body')).toBeTruthy()
-    fireEvent.pointerDown(document.body)
-    expect(screen.queryByText('card body')).toBeNull()
-    expect(anchor.getAttribute('aria-describedby')).toBe('existing-description')
-  })
-
-  it('preserves a caller-owned accessible description while click-pinned', () => {
-    render(<>
-      <p id="stable-description">Stable description</p>
-      <HoverCard
-        inline
-        openOnClick
-        describeAnchor={false}
-        anchor={<button type="button" aria-describedby="stable-description">details</button>}
-        content={<div>card body</div>}
-      />
-    </>)
-    const anchor = screen.getByRole('button', { name: 'details' })
-    expect(anchor.getAttribute('aria-describedby')).toBe('stable-description')
-    fireEvent.click(anchor)
-    expect(screen.getByText('card body')).toBeTruthy()
-    expect(anchor.getAttribute('aria-describedby')).toBe('stable-description')
-    fireEvent.pointerDown(document.body)
-    expect(screen.queryByText('card body')).toBeNull()
-    expect(anchor.getAttribute('aria-describedby')).toBe('stable-description')
-  })
-
-  it('dismisses a click-open card on another click, Escape, or Tab', () => {
-    const ownerKey = vi.fn()
-    render(<div onKeyDown={ownerKey}>
-      <HoverCard openOnClick anchor={<button type="button">details</button>} content={<div>card body</div>} />
-    </div>)
-    const anchor = screen.getByRole('button', { name: 'details' })
-
-    fireEvent.click(anchor)
-    expect(screen.getByText('card body')).toBeTruthy()
-    fireEvent.click(anchor)
-    expect(screen.queryByText('card body')).toBeNull()
-
-    fireEvent.click(anchor)
-    fireEvent.keyDown(anchor, { key: 'a' })
-    expect(screen.getByText('card body')).toBeTruthy()
-    ownerKey.mockClear()
-    expect(fireEvent.keyDown(anchor, { key: 'Escape' })).toBe(false)
-    expect(ownerKey).not.toHaveBeenCalled()
-    expect(screen.queryByText('card body')).toBeNull()
-
-    fireEvent.click(anchor)
-    expect(fireEvent.keyDown(anchor, { key: 'Tab' })).toBe(true)
-    expect(screen.queryByText('card body')).toBeNull()
-  })
-
-  it('drops a click pin when the card is disabled', () => {
-    const pinnedCard = (disabled = false) => (
-      <HoverCard openOnClick disabled={disabled} anchor={<button type="button">details</button>} content={<div>card body</div>} />
-    )
-    const view = render(pinnedCard())
-    const anchor = screen.getByRole('button', { name: 'details' })
-    fireEvent.click(anchor)
-    expect(screen.getByText('card body')).toBeTruthy()
-    view.rerender(pinnedCard(true))
-    expect(screen.queryByText('card body')).toBeNull()
-
-  })
-
-  it('removes click-pin dismissal listeners on unmount', () => {
-    const view = render(
-      <HoverCard openOnClick anchor={<button type="button">details</button>} content={<div>card body</div>} />,
-    )
-    const registrations = vi.spyOn(document, 'addEventListener')
-    const removals = vi.spyOn(document, 'removeEventListener')
-    fireEvent.click(screen.getByRole('button', { name: 'details' }))
-    expect(screen.getByText('card body')).toBeTruthy()
-
-    const listeners = registrations.mock.calls.filter(([type]) => type === 'keydown' || type === 'pointerdown')
-    expect(listeners.map(([type]) => type).sort()).toEqual(['keydown', 'pointerdown'])
-    view.unmount()
-
-    for (const [type, listener, options] of listeners) {
-      const removed = removals.mock.calls.find(([removedType, removedListener]) =>
-        removedType === type && removedListener === listener)
-      expect(removed).toBeDefined()
-      expect(removed?.[2]).toBe(options)
-    }
-    expect(fireEvent.keyDown(document.body, { key: 'Escape' })).toBe(true)
-    fireEvent.pointerDown(document.body)
   })
 
   it('dismisses on keyboard clicks and cancels a pending hover', () => {
@@ -441,37 +299,6 @@ describe('HoverCard', () => {
     fireEvent.pointerEnter(wrapper)
     act(() => { vi.advanceTimersByTime(POINTER_GRACE_MS * 10) })
     expect(screen.getByText('card body')).toBeTruthy()
-  })
-
-  it('keeps the card open while its own pointer is inside and closes after leaving it', () => {
-    const { wrapper } = mount({ variant: 'callout' })
-    fireEvent.pointerEnter(wrapper)
-    act(() => { vi.advanceTimersByTime(500) })
-    const card = screen.getByText('card body').closest('[data-placement]') as HTMLElement
-    fireEvent.pointerLeave(wrapper)
-    act(() => { vi.advanceTimersByTime(POINTER_GRACE_MS - 50) })
-    fireEvent.pointerEnter(card)
-    act(() => { vi.advanceTimersByTime(POINTER_GRACE_MS) })
-    expect(screen.getByText('card body')).toBeTruthy()
-    fireEvent.pointerLeave(card)
-    act(() => { vi.advanceTimersByTime(POINTER_GRACE_MS) })
-    expect(screen.queryByText('card body')).toBeNull()
-  })
-
-  it('keeps a preview open when the pointer returns directly from its portal to the anchor', () => {
-    const { anchor, wrapper } = mount({ variant: 'preview' })
-    fireEvent.pointerEnter(wrapper)
-    act(() => { vi.advanceTimersByTime(500) })
-    const card = screen.getByText('card body').parentElement as HTMLElement
-    fireEvent.pointerEnter(card)
-    fireEvent(card, new MouseEvent('pointerout', { bubbles: true, relatedTarget: anchor }))
-    act(() => { vi.advanceTimersByTime(POINTER_GRACE_MS + 100) })
-    expect(card.hasAttribute('data-closing')).toBe(false)
-    expect(screen.getByText('card body')).toBeTruthy()
-    fireEvent.pointerLeave(wrapper)
-    act(() => { vi.advanceTimersByTime(POINTER_GRACE_MS) })
-    act(() => { vi.advanceTimersByTime(100) })
-    expect(screen.queryByText('card body')).toBeNull()
   })
 
   it('re-entering while open does not queue a second dwell', () => {
@@ -829,22 +656,6 @@ it('opens inline previews only for keyboard focus and closes when focus leaves t
   matches.mockRestore()
 })
 
-it('keeps an inline preview open when the pointer leaves its focused anchor', () => {
-  render(<HoverCard inline anchor={<button>details</button>} content={<span>thumbnail</span>} />)
-  const anchor = screen.getByRole('button', { name: 'details' })
-  const matches = vi.spyOn(anchor, 'matches').mockReturnValue(true)
-  fireEvent.focus(anchor)
-  expect(screen.getByText('thumbnail')).toBeTruthy()
-  const activeElement = vi.spyOn(document, 'activeElement', 'get').mockReturnValue(anchor)
-  fireEvent.pointerLeave(anchor.parentElement as HTMLElement)
-  act(() => { vi.advanceTimersByTime(POINTER_GRACE_MS) })
-  expect(screen.getByText('thumbnail')).toBeTruthy()
-  activeElement.mockRestore()
-  fireEvent.blur(anchor, { relatedTarget: document.body })
-  expect(screen.queryByText('thumbnail')).toBeNull()
-  matches.mockRestore()
-})
-
 it('dismisses an inline hover without anchor focus and lets the next Escape reach the owner', () => {
   const ownerKey = vi.fn()
   render(<div onKeyDown={ownerKey}>
@@ -894,47 +705,4 @@ it('flips inline media above a bottom link and constrains it without covering th
   fireEvent.resize(window)
   expect(card.style.top).toBe('42px')
   expect(Number.parseFloat(card.style.maxHeight)).toBe(window.innerHeight - 50)
-})
-
-it('closes a compact copyable card after its mouse-focused card loses the pointer', () => {
-  const { wrapper } = mount({ copyText: 'value' })
-  fireEvent.pointerEnter(wrapper)
-  act(() => { vi.advanceTimersByTime(500) })
-  const card = screen.getByRole('button', { name: 'Copy: value' })
-  act(() => { card.focus() })
-  expect(document.activeElement).toBe(card)
-  fireEvent.pointerLeave(card)
-  act(() => { vi.advanceTimersByTime(POINTER_GRACE_MS) })
-  expect(screen.queryByText('card body')).toBeNull()
-})
-
-it('closes a callout hover after click toggling leaves mouse focus on the anchor', () => {
-  render(<HoverCard variant="callout" openOnClick anchor={<button>details</button>} content="body" />)
-  const anchor = screen.getByRole('button', { name: 'details' })
-  act(() => { anchor.focus() })
-  fireEvent.click(anchor)
-  fireEvent.click(anchor)
-  fireEvent.pointerEnter(anchor.parentElement as HTMLElement)
-  act(() => { vi.advanceTimersByTime(500) })
-  expect(screen.getByText('body')).toBeTruthy()
-  fireEvent.pointerLeave(anchor.parentElement as HTMLElement)
-  act(() => { vi.advanceTimersByTime(POINTER_GRACE_MS) })
-  expect(screen.queryByText('body')).toBeNull()
-})
-
-it('scrolls an open callout with the focused anchor keyboard controls', () => {
-  render(<HoverCard variant="callout" openOnClick anchor={<button>details</button>} content="body" />)
-  const anchor = screen.getByRole('button', { name: 'details' })
-  fireEvent.click(anchor)
-  const scroll = document.querySelector<HTMLElement>('[data-hover-card-scroll]') as HTMLElement
-  Object.defineProperty(scroll, 'clientHeight', { configurable: true, value: 160 })
-  Object.defineProperty(scroll, 'scrollHeight', { configurable: true, value: 640 })
-  expect(fireEvent.keyDown(scroll, { key: 'PageDown' })).toBe(true)
-  expect(scroll.scrollTop).toBe(0)
-  for (const [key, top] of [['ArrowDown', 20], ['ArrowUp', 0], ['PageDown', 160], ['PageUp', 0], ['End', 640], ['Home', 0]] as const) {
-    expect(fireEvent.keyDown(anchor, { key })).toBe(false)
-    expect(scroll.scrollTop).toBe(top)
-  }
-  fireEvent.keyDown(anchor, { key: 'Tab' })
-  expect(screen.queryByText('body')).toBeNull()
 })
