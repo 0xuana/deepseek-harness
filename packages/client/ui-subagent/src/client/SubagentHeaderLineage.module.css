@@ -287,16 +287,17 @@
 
 .sidebarButton,
 .sidebarSpace {
+  box-sizing: border-box;
   flex: none;
   width: 28px;
+  height: 28px;
+  margin: 4px 0;
 }
 
 .sidebarButton {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 28px;
-  margin: 4px 0;
   padding: 6px;
   border: 0;
   border-radius: var(--dsw-radius-sm);
