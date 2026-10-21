@@ -2,7 +2,8 @@
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { MessageId } from '@deepseek-ai/dsh-llm/brand'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { createAfterScheduleRecord, ScheduleId } from '../src/domain.ts'
+import { createAfterScheduleRecord, createEveryScheduleRecord, ScheduleId } from '../src/domain.ts'
+import type { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
 import { scheduleDomain, type ScheduleTask } from '../src/storage.ts'
 import { MemoryMediaPool } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
 import { gatedScheduleBackend, harness } from './harness.ts'
@@ -96,6 +97,73 @@ it('reports zero and announces nothing when the Host holds no ended task', async
   expect(await service.deleteInactive()).toEqual({ deleted: 0 })
   expect(changed).not.toHaveBeenCalled()
   expect(await service.catalog()).toHaveLength(1)
+})
+
+it('clears a large ended set in one batch and stays idempotent across repeated cleanups', async () => {
+  const pool = new MemoryMediaPool()
+  const batches: string[][] = []
+  const backend = gatedScheduleBackend(pool, {
+    deleteRecords: async (table, keys) => {
+      if (table === 'tasks') batches.push([...keys])
+    },
+  })
+  // Half the rows are ended one-shots and half stay armed, so the scan has to
+  // separate them and the batch has to leave the active rows untouched.
+  const endedCount = 5_000
+  const activeCount = 5_000
+  let facilityRef: DomainFacility | undefined
+  const test = await harness({
+    pool,
+    backend,
+    beforeService: async (_ctx, facility) => {
+      facilityRef = facility
+      const domain = await facility.open(scheduleDomain)
+      const tasks = domain.table('tasks')
+      const now = Date.now()
+      for (let index = 0; index < endedCount; index += 1) {
+        const id = `ended-${index}`
+        await tasks.put(ScheduleId(id), endedRow(SessionId(`ended-session-${index}`), id, `Ended ${index}`))
+      }
+      for (let index = 0; index < activeCount; index += 1) {
+        const id = `active-${index}`
+        await tasks.put(ScheduleId(id), {
+          sessionId: SessionId(`active-session-${index}`),
+          record: createEveryScheduleRecord(ScheduleId(id), `Active ${index}`, 3_600, now, `Active ${index}`),
+          status: 'active',
+        })
+      }
+      await domain.close()
+    },
+  })
+  tests.push(test)
+  const { ctx, service } = test
+  const changed = vi.fn()
+  ctx.on('schedule/changed', changed)
+
+  expect(await service.deleteInactive()).toEqual({ deleted: endedCount })
+  expect(batches).toHaveLength(1)
+  expect(batches[0]).toHaveLength(endedCount)
+  expect(changed).toHaveBeenCalledTimes(1)
+  expect(await service.catalog()).toHaveLength(activeCount)
+  expect((await service.catalog()).every(entry => entry.status === 'active')).toBe(true)
+
+  // Repeated cleanups reseed a small ended set through the live domain table,
+  // so each round exercises the same single-batch path without a growing file.
+  const reseeded = 100
+  const rounds = 24
+  const table = facilityRef?.get('schedule')?.table('tasks')
+  expect(table).toBeDefined()
+  for (let round = 0; round < rounds; round += 1) {
+    for (let index = 0; index < reseeded; index += 1) {
+      const id = `again-${round}-${index}`
+      await table!.put(ScheduleId(id), endedRow(SessionId(`again-session-${round}-${index}`), id, `Again ${round}-${index}`))
+    }
+    expect(await service.deleteInactive()).toEqual({ deleted: reseeded })
+    expect(await service.catalog()).toHaveLength(activeCount)
+  }
+  expect(batches).toHaveLength(rounds + 1)
+  expect(batches.every((keys, index) => keys.length === (index === 0 ? endedCount : reseeded))).toBe(true)
+  expect(changed).toHaveBeenCalledTimes(rounds + 1)
 })
 
 it('removes nothing and reports the batch failure', async () => {
