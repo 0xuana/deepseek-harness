@@ -255,7 +255,7 @@ it.each(['initial', 'recovery'] as const)('keeps the native owner title unchange
   expect(f.owner.setTitle).not.toHaveBeenCalled()
 })
 
-it('defers native recovery until foreground and retries only the local update view', async () => {
+it('defers native recovery until foreground and opens the policy download page without installing', async () => {
   vi.spyOn(console, 'error').mockImplementation(() => {})
   const f = setup('darwin')
   await Promise.resolve()
@@ -272,13 +272,14 @@ it('defers native recovery until foreground and retries only the local update vi
   expect(native.messageBox).toHaveBeenCalledOnce()
   expect(native.messageBox).toHaveBeenCalledWith(f.owner, expect.objectContaining({
     message: '更新界面加载失败', cancelId: 2,
-    buttons: ['重新加载更新界面', '退出', '取消'],
+    buttons: ['打开下载页面', '退出', '取消'],
   }))
   expect(native.messageBox.mock.calls[0]![1].detail).toContain('1.0.1-nightly.1')
   answer.resolve({ response: 0 })
   await Promise.resolve()
   await Promise.resolve()
-  expect(window.loadURL).toHaveBeenCalledTimes(3)
+  expect(window.loadURL).toHaveBeenCalledTimes(2)
+  expect(native.open).toHaveBeenCalledWith('https://downloads.example.com/desktop')
   expect(f.install).not.toHaveBeenCalled()
   expect(f.view().policy.blocking).toBe(true)
   expect(native.quit).not.toHaveBeenCalled()
@@ -344,4 +345,52 @@ it('ignores a late quit response after policy clearance', async () => {
   answer.resolve({ response: 1 })
   await Promise.resolve()
   expect(native.quit).not.toHaveBeenCalled()
+})
+
+
+it.each([undefined, 'https://unapproved.example.com/download'])('omits native download action for unavailable destination %s', async (page) => {
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  const f = setup()
+  await Promise.resolve()
+  f.policy({ blocking: true, checking: false, ...(page === undefined ? {} : { page }) })
+  window.loadURL.mockRejectedValueOnce(new Error('local recovery failed'))
+  window.webContents.emit('render-process-gone')
+  await Promise.resolve()
+  expect(native.messageBox.mock.calls[0]![1].buttons).toEqual(['退出', '取消'])
+  expect(native.messageBox.mock.calls[0]![1].cancelId).toBe(1)
+  expect(native.open).not.toHaveBeenCalled()
+})
+
+it('does not open a changed policy URL using approval for the previous destination', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  const f = setup()
+  await Promise.resolve()
+  const answer = Promise.withResolvers<{ response: number }>()
+  native.messageBox.mockReturnValueOnce(answer.promise)
+  window.loadURL.mockRejectedValueOnce(new Error('local recovery failed'))
+  window.webContents.emit('render-process-gone')
+  await Promise.resolve()
+  f.policy({ blocking: true, checking: false, page: 'https://downloads.example.com/new' })
+  answer.resolve({ response: 0 })
+  await Promise.resolve()
+  expect(native.open).not.toHaveBeenCalled()
+  expect(native.messageBox).toHaveBeenCalledTimes(2)
+})
+
+
+it('reports a browser-opening failure in the native fallback without claiming download success', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  const f = setup()
+  await Promise.resolve()
+  const answer = Promise.withResolvers<{ response: number }>()
+  native.messageBox.mockReturnValueOnce(answer.promise)
+  native.open.mockRejectedValueOnce(new Error('browser unavailable'))
+  window.loadURL.mockRejectedValueOnce(new Error('local recovery failed'))
+  window.webContents.emit('render-process-gone')
+  await Promise.resolve()
+  answer.resolve({ response: 0 })
+  await vi.waitFor(() => { expect(native.messageBox).toHaveBeenCalledTimes(2) })
+  expect(native.messageBox.mock.calls[1]![1].detail).toContain('无法打开下载页面，请重试')
+  expect(f.view().policy.blocking).toBe(true)
+  expect(f.install).not.toHaveBeenCalled()
 })
