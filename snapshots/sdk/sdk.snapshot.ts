@@ -635,6 +635,7 @@ async function runScenario(scenario: CorpusScenario): Promise<{
     ...legacySdkCompositions.has(scenario.manifest.composition) ? [legacySdkContextPatch] : [],
     ...authoredPatches(scenario, !recording),
     ...assertions.patches ?? [],
+    ...scenario.name === 'session-resume' && !recording ? [join(scenario.dir, 'replay.cordis.yml')] : [],
   ]
     .map((patch, index) => materializeProfilePatch(patch, cwd, scenario.manifest.profile, patchRoot, index))
   let childSessionsRoot: string | undefined
@@ -691,7 +692,7 @@ async function runScenario(scenario: CorpusScenario): Promise<{
     ...resumeReplayFile === undefined ? {} : { DSH_SNAPSHOT_OVERRIDE: resumeReplayFile },
   }
 
-  const createHarness = (): DeepSeekHarness => new DeepSeekHarness({
+  const createHarness = (model = route.model): DeepSeekHarness => new DeepSeekHarness({
     profile: scenario.manifest.profile,
     ...(assertions.approvalOutcomes === undefined ? {} : { approvalRequests: true }),
     patches,
@@ -702,7 +703,7 @@ async function runScenario(scenario: CorpusScenario): Promise<{
     requestTimeoutMs: 110_000,
     cwd,
     provider: route.provider,
-    model: route.model,
+    model,
   })
   let harness = createHarness()
   try {
@@ -755,7 +756,7 @@ async function runScenario(scenario: CorpusScenario): Promise<{
           subscription.close()
           await harness.close()
           await prepareTurnReplay(action.turn)
-          harness = createHarness()
+          harness = createHarness('deepseek-v4-pro')
           await harness.start()
           subscription = harness.client.subscribeSessionTree(sessionId)
           await expect(harness.resumeSession('missing-session')).rejects.toThrow()

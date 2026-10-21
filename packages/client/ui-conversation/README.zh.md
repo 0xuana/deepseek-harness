@@ -59,6 +59,12 @@ target package 通过 declaration merge 扩展 snapshot 与 Location data map，
 
 Queue 预览启用空白折叠和文档边缘 trim，保留 emoji，并使用 CSS 省略而不截断输入。编辑和复制保留原文；原生附件使用独立的展示路径。
 
+[Message quotes](../../session/message-quotes/README.zh.md) 通过相同的 UserText 扩展点注册引用匹配与渲染。 每个用户文本容器和草稿编辑器各自拥有独立的悬停卡片分组，其中的 quote 原文弹层会立即互相替换。
+
+现有语义 `DraftSnapshot` 在 references 旁保留 quote 文本及 clipboard 坐标范围。存储接受较早的字符串和仅含 reference 的草稿；Session 切换、Workspace 转移以及发送失败恢复通过现有编辑器 runtime 保留原子 quote。`inputActions.insertQuote(text)` 仅在输入框处于 plain 模式时插入非空选区。提交产出普通 Markdown 文本；待发送回显、队列行、steering 行和持久消息使用同一文本匹配器。
+
+`UiConversation.interactions` 拥有插件对文本选择和右键手势的注册。每个注册项提供同步处理函数，其 ID 选择对应的 keyed Slot 组件；插件通过 Slot injection 机制渲染。处理函数调用 `open()` 展示，需要替代浏览器默认行为时单独调用 `preventDefault()`。Chat 提供 DOM 选区和区域内布局；机制不从 DOM 位置推断原始来源数据或 Markdown 偏移。
+
 <a id="shell-and-standard-props"></a>
 ## Shell 与标准 props
 
@@ -71,6 +77,8 @@ Queue 预览启用空白折叠和文档边缘 trim，保留 emoji，并使用 CS
 上下文占用按钮在输入卡片下方、会话统计右侧显示圆环和百分比。点击按钮可在视口内的面板查看 token 构成，没有统计项时面板也不会越界；上下文用量和容量尚不可用时，按钮保持隐藏。
 
 关闭代码工作工具时，外壳仅隐藏 Trajectory；其他插件贡献的 View 仍然可用。可用 View 少于两个时隐藏 View 标签栏。在 Trajectory 激活时关闭代码工作工具会返回 Chat；已保存的 View 偏好和 Session 记录保持不变。开启后，Trajectory 恢复可用。View 所有者接收可用列表，使导航操作跟随相同的可见性。
+
+root 作用域的 `conversation.session.header.views.actions` list 有注册项时，标签行中的 View 标签之后显示带提示框的**更多会话视图**按钮。它打开的菜单以该 list 的注册项为菜单行。每个注册项接收 `entries`（按注册顺序的可用 View，含 `id`、`label` 与 `pinned`；不含 Chat）、在本 Session 选择 View 的 `onOpen(id)`、`onPinnedChange(id, pinned)`，以及关闭菜单的 `onDismiss()`。头部在浏览器 `localStorage` 的 `dsh.slot.manual-order.conversation.view.v1` 下保存一份 root 级的已收起 View id 列表，格式为 `{ "unpinned": string[] }`，所有 Session 共用；标签栏不显示已收起的 View，Chat 始终显示。标签栏是否显示按可用 View 计算，不按已固定的 View 计算，因此其他 View 全部收起时，标签栏和“更多”仍然显示。收起当前激活的 View 不会切走其内容，其标签及 `aria-selected` 保留到选中其他 View 为止。未注册 View 的 id 保留在列表中；保存内容不是字符串数组时，所有标签都显示。
 
 输入框注册「文件」命令动作，负责其标题、可用性和原生文件选择器回调。菜单可用性与实际调用都读取已挂载输入框当前的附件接收策略。输入框卸载或锁定后该动作不可用，插件 dispose（资源释放）时移除注册。回调绑定留在输入模块内部。
 
@@ -96,11 +104,13 @@ Session 首次绑定或缓存的 Session 成为 current 时，shell 会在渲染
 
 常驻 composer 在无 Session 与有 Session 之间保持挂载。输入空白字符会隐藏占位提示；没有附件的纯空白草稿无法发送。无 Session 时，同一个编辑器表面保持 inert，Workspace picker 连接 blank Session。该表面是 shell 所有的 Lexical 编辑器：引用 chip 是携带 owner 序列化身份的原子 decorator 节点（提交时经 owner codec 展开），已认领的 slash command 是携带认领的行首原子 chip，文件夹文本引用以图标前缀携带文件夹图形，草稿文字和引用语义字段由逐 Session Conversation store 持久化。QueueDock 从 Session 的 `inbox` 投影读取 `next-turn`，包含从冷状态恢复的消息，仅排除仍由本地 transcript 提交承接的 requestId。其他排队行保留正常展示和操作。Queue 操作通过 scoped `ctx.conversation` service 寻址准确的 queue occurrence；queue 预览使用 [UserText Factory](#sent-user-text)（wire 会话形式折叠为其标签），并按原始附件顺序展示本地或持久化的图片和文件。图片使用缩略图，文件使用紧凑的名称与大小卡片。编辑态在 ui-primitives 的 `InlineEditor` 中展示字面发送文本，因此重新编辑不会丢失换行。持久化缩略图通过会话图片 URL 缓存解析。繁忙时 Enter 行为保存在 Host-backed `ui-conversation` settings namespace。 composer 键盘映射经斜杠流水线裁决触发菜单的按键——Tab 确认高亮补全项（可下钻项则下钻），Escape 与 Shift+Tab 离开菜单且不选定——其余按键交给编辑器自身。 接管键盘的浮层通过 `SessionInput.focus()` 把键盘还回来，该路径走 Lexical 自己的 focus，因此光标回到草稿原来的位置而不是开头。
 
+窄屏浏览器设置中，繁忙时 Enter 偏好的标签与控件间距缩小；Windows 和 macOS 桌面窗口保留标准间距。
+
 普通 Enter 使用已配置的投递模式，严格的 Ctrl+Enter 或 Cmd+Enter 使用互补模式，Shift+Enter 插入换行。带 Alt、AltGraph、同时带 Ctrl 与 Cmd，或 Shift 与 Ctrl/Cmd 的 Enter 保持草稿和指令菜单不变，并将 DOM 事件留给应用快捷键。Conversation 插件注册发送、换行、互补投递、命令菜单和引用菜单的固定条目，并在卸载前保留这些键位。
 
 点击可编辑输入框内的留白时，已聚焦的输入框保留当前光标或选区，未聚焦的输入框恢复上次的光标或选区。文本选择、滚动条、控件和内嵌浮层保持各自的指针交互行为。
 
-每次输入框提交都携带原始发生时间、操作来源、投递意图以及会话模型和运行状态快照，贯穿异步命令裁决。普通消息通知在引用序列化前发出一次，纯附件提交也遵循这一规则；已处理或认领的命令不发出通知。快照读取与通知消费异常不能阻断发送。
+每次输入框提交都携带原始发生时间、操作来源、投递意图以及会话模型和运行状态快照，贯穿异步命令裁决。快照还记录会话是否仍为空白，以及会话记录的 Agent preset id。普通消息通知在引用序列化前发出一次，纯附件提交也遵循这一规则；已处理或认领的命令不发出通知。快照读取与通知消费异常不能阻断发送。在桌面端，该通知报告 `send_button_click`，携带 `is_new_session`（会话为空白时为 true）和表示 preset 类别的 `agent_preset`：`cordis` 记为 `creator`；`ptc`、`minimal` 与 `standard` 沿用各自的 id；其他 preset 记为 `other`。会话未记录 preset 时省略 `agent_preset`。不发送自定义 preset 的 id。
 
 默认发送采用乐观提交：Enter 在同一事务里清空草稿、occurrence 表和撤销历史，composer 保持 `plain`，发送作为 detached attempt 运行，发送期间可以继续输入和提交。`sendSession` 在序列化之前用投递模式注册 Session 提交回显（`session.beginSubmission`），并在 `pendingSubmissions` 中保留图片与文件的选择顺序；Session 根据该模式与当前运行状态推导位置，因此空闲发送进入 transcript（文本记录），繁忙时 Queue 进入 QueueDock，繁忙时 Steer 进入 pending-steering 区域。随后让出一帧，图片经浏览器原生 `FileReader` data-URL 路径编码，文件则引用已暂存凭证。命令提交也用同一凭证表示通用文件，因此发送 `/goal` 或 `/plan` 时不会再次读取这些浏览器文件。提示词复用提交 `requestId`；Session 按同一 `rpcId` 关联展示接管，并仅退休回显一次。多个并发发送失败时，在用户编辑还原内容之前按提交顺序合并还原；命令提交保持冻结的 `submitting` 阶段。Detached attempt 持有附件 id，直到 admission 完成或 Session scope 销毁。回显以 observed 退休时，durable 图片缓存立即公开每个预览 URL，读取 admitted 附件后用规范化 URL 替换预览，并在各 URL 停止使用后撤销，同时释放文件卡。选中的通用文件进入同一个先进先出的后台上传队列；`maxConcurrentFileUploads` 默认允许两个 Worker transport 同时运行，Conversation 服务在切换 Session 时继续持有排队和运行中的传输操作及字节进度，移除草稿会跳过排队中的传输或中止正在运行的传输。浏览器 shell 暴露 `__DSH_HOST_PATHS__` 时（桌面应用），拖入或粘贴的文件夹以及拖入、选择或粘贴的带真实路径的非图片文件会成为 `@路径` chip；图片仍然上传。拖放和粘贴通过浏览器 entry API 识别目录；该 API 不可用或没有返回 entry 时，粘贴项沿用普通文件处理。文件选择器不能选择目录。引用需要启用 `ui-reference` 插件，原路径也必须仍可由模型的文件工具读取。工作区内的路径使用相对形式，其他路径保留绝对形式。整批文件先校验再插入，保留来源顺序和已选中的文字，引用之间有空白分隔，含空格的路径使用闭合引号。没有该桥的浏览器会拒绝拖入或粘贴的文件夹，桌面端无法获取文件夹路径时单独报错。continuable 子代理允许粘贴和拖入 PNG、JPEG、WebP、GIF 图片，并沿用相同的投影限制；包含通用文件、不支持的图片格式或目录的批次会在进入草稿前整批拒绝。它们的发送同样注册本地回显；continuation 请求携带回显的 `requestId`，Host 把它记录为子会话消息的 `rpcId`。
 

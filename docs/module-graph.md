@@ -167,6 +167,7 @@ flowchart TD
     pkg_client_ui_directory_picker_browse["client-ui-directory-picker-browse"]
     pkg_client_ui_directory_picker_native["client-ui-directory-picker-native"]
     pkg_client_ui_dockkit["client-ui-dockkit"]
+    pkg_client_ui_entry_customization["client-ui-entry-customization"]
     pkg_client_ui_goal["client-ui-goal"]
     pkg_client_ui_input_trigger["client-ui-input-trigger"]
     pkg_client_ui_jobs["client-ui-jobs"]
@@ -373,6 +374,7 @@ flowchart TD
     pkg_sdk_protocol["sdk-protocol"]
   end
   subgraph group_session["packages/session"]
+    pkg_message_quotes["message-quotes"]
     pkg_session_checkpoint_policy["session-checkpoint-policy"]
     pkg_session_format["session-format"]
     pkg_session_format_catalog["session-format-catalog"]
@@ -488,7 +490,6 @@ flowchart TD
   pkg_remote_mock --> pkg_typert_protocol
   pkg_typert_loader --> pkg_typert_registry
   pkg_skill_office --> pkg_skill
-  pkg_web_fetch_http --> pkg_http_proxy
   pkg_web_fetch_http --> pkg_timeout
   pkg_web_fetch_http --> pkg_web
   pkg_web_search_exa --> pkg_launch_environment
@@ -1492,6 +1493,7 @@ flowchart TD
 | [`client-ui-directory-picker-browse`](../packages/client/ui-directory-picker-browse) | `client` | — |
 | [`client-ui-directory-picker-native`](../packages/client/ui-directory-picker-native) | `client` | — |
 | [`client-ui-dockkit`](../packages/client/ui-dockkit) | `client` | — |
+| [`client-ui-entry-customization`](../packages/client/ui-entry-customization) | `client` | — |
 | [`client-ui-goal`](../packages/client/ui-goal) | `client` | — |
 | [`client-ui-input-trigger`](../packages/client/ui-input-trigger) | `client` | — |
 | [`client-ui-jobs`](../packages/client/ui-jobs) | `client` | — |
@@ -1563,6 +1565,7 @@ flowchart TD
 | [`host-directory-picker-native`](../packages/host/directory-picker-native) | `host` | — |
 | [`host-open-in-app`](../packages/host/open-in-app) | `host` | — |
 | [`host-webserver`](../packages/host/webserver) | `host` | — |
+| [`message-quotes`](../packages/session/message-quotes) | `session` | — |
 | [`session-format`](../packages/session/session-format) | `session` | — |
 | [`session-format-v0-to-v1`](../packages/session/session-format-v0-to-v1) | `session` | — |
 | [`session-format-v1-to-v2`](../packages/session/session-format-v1-to-v2) | `session` | — |
@@ -1596,7 +1599,7 @@ flowchart TD
 | [`remote-mock`](../packages/test-support/remote-mock) | `test-support` | [`typert-protocol`](../packages/typert/protocol) |
 | [`typert-loader`](../packages/typert/loader) | `typert` | [`typert-registry`](../packages/typert/registry) |
 | [`skill-office`](../packages/skill/skill-office) | `skill` | [`skill`](../packages/skill/skill) |
-| [`web-fetch-http`](../packages/web/web-fetch-http) | `web` | [`http-proxy`](../packages/util/http-proxy), [`timeout`](../packages/util/timeout), [`web`](../packages/web/web) |
+| [`web-fetch-http`](../packages/web/web-fetch-http) | `web` | [`timeout`](../packages/util/timeout), [`web`](../packages/web/web) |
 | [`web-search-exa`](../packages/web/web-search-exa) | `web` | [`launch-environment`](../packages/util/launch-environment), [`web`](../packages/web/web) |
 | [`web-search-perplexity`](../packages/web/web-search-perplexity) | `web` | [`launch-environment`](../packages/util/launch-environment), [`web`](../packages/web/web) |
 | [`spill`](../packages/spill/spill) | `spill` | [`brand`](../packages/util/brand), [`llm`](../packages/llm/llm), [`session`](../packages/core/session) |
