@@ -50,7 +50,7 @@ const LISTING: MarketSearchResult = {
   fetchedAt: 1,
   total: 6,
   nextOffset: null,
-  title: { en: 'Alpha market', zh: '甲市场' },
+  title: { en: 'Alpha index', zh: '甲索引' },
   metadata: {
     categories: { tools: { title: 'Tools' }, themes: { title: 'Themes' } },
     labels: { official: { title: 'Official' }, beta: { title: 'Beta' } },
@@ -231,7 +231,7 @@ describe('DiscoverSection', () => {
     expect(screen.getByText(en.emptyIndex)).toBeTruthy()
   })
 
-  it('sorts by publish date, a market sort key, either direction, and back to the index order', () => {
+  it('sorts by publish date, an index sort key, either direction, and back to the index order', () => {
     const { actions, answer } = renderTab()
     openMenu(/^Sort: Default order/)
     pick(en.sortPublished)
@@ -269,9 +269,9 @@ describe('DiscoverSection', () => {
     expect(screen.queryByRole('menu')).toBeNull()
   })
 
-  it('switches markets and opens source management from the market menu', () => {
+  it('switches indexes and opens source management from the index menu', () => {
     const { actions } = renderTab()
-    openMenu('Switch plugin index, currently Alpha market')
+    openMenu('Switch plugin index, currently Alpha index')
     pick('b.example')
     expect(actions.select).toHaveBeenCalledWith(B)
     openMenu(/^Switch plugin index/)
@@ -287,7 +287,7 @@ describe('DiscoverSection', () => {
     expect(detail.getByRole('status', { name: en.detailLoading })).toBeTruthy()
     expect(detail.getByRole('heading', { name: 'Alpha' })).toBeTruthy()
     expect(detail.getByText('dsh-a')).toBeTruthy()
-    for (const value of ['Jane', 'dsh-a@1.0.0', 'https://r.example/', 'Tools', 'Official', 'Beta', 'Alpha market']) expect(detail.getByText(value)).toBeTruthy()
+    for (const value of ['Jane', 'dsh-a@1.0.0', 'https://r.example/', 'Tools', 'Official', 'Beta', 'Alpha index']) expect(detail.getByText(value)).toBeTruthy()
     const homepage = detail.getByRole('link', { name: 'https://example.com/alpha#readme' })
     expect([homepage.getAttribute('href'), homepage.getAttribute('target'), homepage.getAttribute('rel')])
       .toEqual(['https://example.com/alpha#readme', '_blank', 'noopener noreferrer'])
@@ -427,7 +427,7 @@ describe('DiscoverSection', () => {
     const { actions, set } = renderTab({ editing: true, draft: 'https://c.example/index.json', indexes: [{ url: A, title: LISTING.title }, { url: B, error: 'HTTP 404' }] })
     const dialog = within(screen.getByRole('dialog', { name: en.sourcesTitle }))
     expect(dialog.getByText(en.sourcesTrust)).toBeTruthy()
-    expect(dialog.getByText('Alpha market')).toBeTruthy()
+    expect(dialog.getByText('Alpha index')).toBeTruthy()
     expect(dialog.getByText(B)).toBeTruthy()
     expect(dialog.getByText('HTTP 404')).toBeTruthy()
     fireEvent.click(dialog.getByRole('button', { name: `Remove ${B}` }))
@@ -453,7 +453,7 @@ describe('DiscoverSection', () => {
 
   it('renders the Chinese copy and dates', () => {
     renderTab({}, zh)
-    expect(screen.getByRole('button', { name: '切换插件索引，当前为 甲市场' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '切换插件索引，当前为 甲索引' })).toBeTruthy()
     expect(card('dsh-a').getByText('甲')).toBeTruthy()
     expect(card('dsh-a').getByText(/^1\.0\.0 · Jane · 2026年9月/)).toBeTruthy()
     expect(card('dsh-b').getByText(zh.statusInstalled)).toBeTruthy()

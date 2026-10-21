@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`pluginMarket` reads the plugin indexes the user configures, validates them with [`dsh-plugin-market-index`](../../util/plugin-market-index/README.md), and annotates every entry with the profile's installation status, DSH compatibility, and the exact arguments that install it. It also reads each market entry's long description, a Markdown document with images, for Discover entry pages. The Web [Discover tab](../../client/ui-plugin-market/README.md) and the `plugin_market` agent tool read through it; installation itself goes through [`pluginManager.installBundle`](../plugin-manager/README.md). The format and its rationale live in the [index format Agent Note](../../../.agents/notes/implemented/feature/2026-10-02-plugin-market-index-format.md); the Host and Web design lives in the [Discover Agent Note](../../../.agents/notes/implemented/feature/2026-10-02-plugin-market-discover.md).
+`pluginMarket` reads the plugin indexes the user configures, validates them with [`dsh-plugin-market-index`](../../util/plugin-market-index/README.md), and annotates every entry with the profile's installation status, DSH compatibility, and the exact arguments that install it. It also reads each index entry's long description, a Markdown document with images, for Discover entry pages. The Web [Discover tab](../../client/ui-plugin-market/README.md) and the `plugin_market` agent tool read through it; installation itself goes through [`pluginManager.installBundle`](../plugin-manager/README.md). The format and its rationale live in the [index format Agent Note](../../../.agents/notes/implemented/feature/2026-10-02-plugin-market-index-format.md); the Host and Web design lives in the [Discover Agent Note](../../../.agents/notes/implemented/feature/2026-10-02-plugin-market-discover.md).
 
 ## Table of Contents
 
@@ -24,7 +24,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-The optional [custom plugin indexes bundle](../../experimental/plugin-market-bundle/README.md) mounts the service as the `plugin-market` row; shipped profiles leave the bundle off. Like `plugin-manager`, the row is disabled without a profile, and it waits for `pluginManager`. No index source is configured by default, so the Host sends no market request until a user adds one.
+The optional [custom plugin indexes bundle](../../experimental/plugin-market-bundle/README.md) mounts the service as the `plugin-market` row; shipped profiles leave the bundle off. Like `plugin-manager`, the row is disabled without a profile, and it waits for `pluginManager`. No index source is configured by default, so the Host sends no index request until a user adds one.
 
 | Config | Default | Meaning |
 |---|---|---|
@@ -123,7 +123,7 @@ Append-only: results enter the conversation as ordinary tool results and do not 
 <a id="known-limitations-and-deferred-work"></a>
 
 - **No upgrade** — an installed bundle with a newer index version is reported as `update-available`; upgrading remains uninstall followed by install.
-- **Unsigned indexes** — index content, including a Git entry's name and version, is the market's claim; the installed manifest decides what is installed.
+- **Unsigned indexes** — index content, including a Git entry's name and version, is the index's claim; the installed manifest decides what is installed.
 - **Last write wins** — `setIndexes` replaces the whole list, so two windows editing sources at the same time can overwrite each other's change.
 - **Redirects refused** — an index served only behind a redirect must be configured at its final URL.
 - **Whole-document reads** — the Host downloads and keeps each index up to `maxBytes` and builds its text index in memory; a synthetic index of 20,000 plugins took about 0.8 s of build time and 130 MiB of heap. Parsing runs in a Worker, but receiving the validated index still blocks the Host event loop while the clone is deserialized: about 35 ms for a synthetic 7.6 MiB index of 20,000 plugins and about 190 ms for 38 MiB and 100,000 plugins. Larger markets need a server-side query protocol.
