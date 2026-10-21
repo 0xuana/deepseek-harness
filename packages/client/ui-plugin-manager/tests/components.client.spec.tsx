@@ -757,7 +757,7 @@ describe('PluginManagerPage', () => {
     expect(locked.getAttribute('title')).toBe(en.reasonManagementRequired)
   })
 
-  it('omits built-in profile dependencies while retaining optional and third-party bundles', () => {
+  it('omits profile and persistent-terminal bundles while retaining other optional and third-party bundles', () => {
     renderTab({
       packages: [
         ...[
@@ -767,6 +767,7 @@ describe('PluginManagerPage', () => {
           '@deepseek-ai/dsh-sdk-app',
           '@deepseek-ai/dsh-acp-app',
           '@deepseek-ai/dsh-sdk-minimal',
+          '@deepseek-ai/dsh-experimental-terminal-bundle',
         ].map(name => pkg({ name })),
         pkg({ name: '@acme/dsh-base', readOnlyReason: 'management-required' }),
         pkg({ name: 'dsh-better-sidebar' }),
@@ -779,9 +780,29 @@ describe('PluginManagerPage', () => {
     expect(document.querySelector('[data-plugin-count]')).toBeNull()
   })
 
-  it.each([false, true])('shows an empty list for built-in bundles with errors and installed=%s', (installed) => {
+  it.each([false, true])('hides persistent terminals from both lists and direct navigation without changing enabled=%s', (enabled) => {
+    const name = '@deepseek-ai/dsh-experimental-terminal-bundle'
+    const b = renderTab({ packages: [
+      pkg({ name, official: true, enabled, rows: [row()] }),
+      pkg({ name: '@deepseek-ai/dsh-experimental-agent-team-profile', official: true }),
+    ] })
+    expect(document.querySelector(`[data-plugin-package="${name}"]`)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
+    expect(screen.getByRole('heading', { name: en.moreTitle, level: 1 })).toBeTruthy()
+    expect(document.querySelector(`[data-plugin-package="${name}"]`)).toBeNull()
+    act(() => { b.navigation.actions.setView({ kind: 'package', name }) })
+    expect(document.querySelector('[data-plugin-detail]')).toBeNull()
+    act(() => { b.navigation.actions.setView({ kind: 'row', name, rowId: 'sidebar' }) })
+    expect(document.querySelector('[data-plugin-row-detail]')).toBeNull()
+    expect(screen.queryByRole('switch', { name: en.enableToggle.replace('{name}', name) })).toBeNull()
+    expect(b.actions.setEnabled).not.toHaveBeenCalled()
+    expect(b.actions.setRowEnabled).not.toHaveBeenCalled()
+    expect(b.actions.uninstall).not.toHaveBeenCalled()
+  })
+
+  it.each([false, true])('shows an empty list for hidden bundles with errors and installed=%s', (installed) => {
     renderTab({
-      packages: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'].map(name => pkg({
+      packages: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', '@deepseek-ai/dsh-experimental-terminal-bundle'].map(name => pkg({
         name, installed, error: { code: 'operation-error', diagnostic: 'Unreadable bundle' },
       })),
     })
@@ -1181,7 +1202,7 @@ describe('PluginManagerPage', () => {
       '@acme/shipped-exploration',
     ])('omits %s from default lists while retaining explicit profile selections and installations', (name) => {
       const entry = pkg({ name, installed: false, optional: true, removable: false, enabled: false, listedByDefault: false })
-      const other = pkg({ name: '@deepseek-ai/dsh-experimental-terminal-bundle', installed: false, optional: true, enabled: false })
+      const other = pkg({ name: '@deepseek-ai/dsh-experimental-session-titles-bundle', installed: false, optional: true, enabled: false })
       const { actions, navigation, set, setLanguage } = renderTab({ packages: [other, entry] })
       const card = () => document.querySelector(`[data-plugin-package="${name}"]`)
       for (const dict of [en, zh]) {
@@ -1235,7 +1256,7 @@ describe('PluginManagerPage', () => {
     })
 
     it('returns from package details to the secondary page and retains it across React remounts', () => {
-      const name = '@deepseek-ai/dsh-experimental-terminal-bundle'
+      const name = '@deepseek-ai/dsh-experimental-session-titles-bundle'
       const b = renderTab({ packages: [pkg({ name, official: true, enabled: false })] })
       fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
       expect(screen.getByRole('heading', { name: en.moreTitle, level: 1 })).toBeTruthy()
@@ -1278,7 +1299,7 @@ describe('PluginManagerPage', () => {
     })
 
     it('returns a held-back bundle opened outside the lists to the list that shows it', () => {
-      const name = '@deepseek-ai/dsh-experimental-terminal-bundle'
+      const name = '@deepseek-ai/dsh-experimental-session-titles-bundle'
       const b = renderTab({ packages: [pkg({ name, official: true, enabled: false })] })
       act(() => { b.navigation.actions.setView({ kind: 'package', name }) })
       expect(document.querySelector(`[data-plugin-detail="${name}"]`)).toBeTruthy()
@@ -2247,7 +2268,7 @@ describe('PluginManagerPage', () => {
     const descriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollIntoView')
     Object.defineProperty(Element.prototype, 'scrollIntoView', { value: scrollIntoView, configurable: true })
     try {
-      const { actions, set } = renderTab({ packages: [pkg(), pkg({ name: '@deepseek-ai/dsh-experimental-terminal-bundle', official: true })] })
+      const { actions, set } = renderTab({ packages: [pkg(), pkg({ name: '@deepseek-ai/dsh-experimental-session-titles-bundle', official: true })] })
       // A package the list does not show has nothing to scroll to; the mark still times out.
       set({ highlight: 'missing' })
       expect(scrollIntoView).not.toHaveBeenCalled()
@@ -2270,7 +2291,7 @@ describe('PluginManagerPage', () => {
 
   it('highlights only the visible list and does not extend the mark when navigating or refreshing', () => {
     vi.useFakeTimers()
-    const name = '@deepseek-ai/dsh-experimental-terminal-bundle'
+    const name = '@deepseek-ai/dsh-experimental-session-titles-bundle'
     const scrollIntoView = vi.fn()
     const descriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollIntoView')
     Object.defineProperty(Element.prototype, 'scrollIntoView', { value: scrollIntoView, configurable: true })
@@ -2461,7 +2482,7 @@ it.each([false, true])('shows progress only for the changing bundle and clears i
 })
 
 it.each([false, true])('opens activation guidance details and returns to the originating list (experimental: %s)', (fromMore) => {
-  const name = fromMore ? '@deepseek-ai/dsh-experimental-terminal-bundle' : 'dsh-better-sidebar'
+  const name = fromMore ? '@deepseek-ai/dsh-experimental-session-titles-bundle' : 'dsh-better-sidebar'
   const bundle = pkg({ name, official: fromMore })
   const { set, actions } = renderTab({ packages: [{ ...bundle, enabled: false }] }, { bundles: new Set([name]) }, {
     [`plugins.bundle.activation:${name}`]: (_view, owner) => <button onClick={(owner as PluginActivationOwnerProps).onOpenDetails}>Go to setup</button>,
