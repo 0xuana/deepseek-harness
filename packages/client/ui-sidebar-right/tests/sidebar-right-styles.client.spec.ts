@@ -37,6 +37,13 @@ describe('SidebarRight.module.css', () => {
       .toBe('none')
   })
 
+  it('removes the open and close slides for reduced motion', () => {
+    const reduce = css.slice(css.indexOf('@media (prefers-reduced-motion: reduce)'))
+    const motion = rules[ruleIndex([...items.map(item => `.panel ${item}`), ...items.map(item => `.panel[data-sidebar-right-open] ${item}`)])]
+    expect(reduce).toContain(motion!.selectors[0])
+    expect(motion?.declarations.get('transition')).toBe('none')
+  })
+
   it('overrides the open slide with the closed style while an item settles', () => {
     const open = ruleIndex(items.map(item => `.panel[data-sidebar-right-open] ${item}`))
     const settling = ruleIndex(['.panel[data-sidebar-right-open] :global([data-sidebar-right-settling])'])

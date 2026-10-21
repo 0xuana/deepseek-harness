@@ -119,7 +119,10 @@
 @media (prefers-reduced-motion: reduce) {
   .panel :global([data-dockkit-host='dock']),
   .panel :global([data-dockkit-empty]),
-  .panel :global([data-dockkit-divider]) {
+  .panel :global([data-dockkit-divider]),
+  .panel[data-sidebar-right-open] :global([data-dockkit-host='dock']),
+  .panel[data-sidebar-right-open] :global([data-dockkit-empty]),
+  .panel[data-sidebar-right-open] :global([data-dockkit-divider]) {
     transition: none;
   }
 }
