@@ -267,19 +267,38 @@ describe('interrupting a return', () => {
     expect(h.left()).toBe(100)
   })
 
-  it('ends at its target when the resize corner is pressed, and resizes from there', () => {
+  it('picks the panel up where it is drawn on a corner press, and a release in place resumes the return', () => {
     const h = mounted({ x: 0, y: 80, width: 300, height: 200 })
     drag(h.grip(), [150, 90], [150 - 400, 90])
     frame()
-    expect(h.left()).toBeLessThan(0)
+    const drawn = h.left()
+    expect(drawn).toBeLessThan(0)
     fireEvent.pointerDown(h.corner(), { clientX: 250, clientY: 275, pointerId: 8, button: 0 })
     expect(queued.size).toBe(0)
-    expect(h.left()).toBe(0)
+    expect(h.left()).toBe(drawn)
     fireEvent.pointerMove(window, { pointerId: 8, clientX: 250, clientY: 275 })
-    expect(h.left()).toBe(0)
+    expect(h.left()).toBe(drawn)
     fireEvent.pointerUp(window, { pointerId: 8, clientX: 250, clientY: 275 })
-    expect(h.left()).toBe(0)
+    expect(h.left()).toBe(drawn)
     expect(h.resizeFloat).not.toHaveBeenCalled()
+    runOut()
+    expect(h.left()).toBe(0)
+  })
+
+  it('resizes a panel caught during a return from where it is drawn, then springs it inside', () => {
+    const h = mounted({ x: 0, y: 80, width: 300, height: 200 })
+    drag(h.grip(), [150, 90], [150 - 400, 90])
+    frame()
+    const drawn = h.left()
+    fireEvent.pointerDown(h.corner(), { clientX: 250, clientY: 275, pointerId: 8, button: 0 })
+    fireEvent.pointerMove(window, { pointerId: 8, clientX: 270, clientY: 295 })
+    // The origin stays where it was drawn; only the size follows the corner.
+    expect(h.left()).toBe(drawn)
+    fireEvent.pointerUp(window, { pointerId: 8, clientX: 270, clientY: 295 })
+    expect(h.resizeFloat).toHaveBeenCalledWith(h.paneId, { x: 0, y: 80, width: 320, height: 220 })
+    expect(h.left()).toBe(drawn)
+    runOut()
+    expect(h.left()).toBe(0)
   })
 
   it('yields when its panel closes', () => {
@@ -327,6 +346,19 @@ describe('reduced motion', () => {
     expect(h.left()).toBe(724)
     fireEvent.pointerUp(window, { pointerId: 7, clientX: 894, clientY: 90 })
     expect(h.moveFloat).toHaveBeenCalledWith(h.paneId, 724, 80)
+    expect(queued.size).toBe(0)
+  })
+
+  it('draws a resize at its legal rectangle, so a viewport that shrank past its origin animates nothing', () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(prefers-reduced-motion: reduce)' }))
+    const h = mounted({ x: 700, y: 80, width: 300, height: 200 })
+    fireEvent.pointerDown(h.corner(), { clientX: 1000, clientY: 280, pointerId: 7, button: 0 })
+    viewport(500, 768)
+    act(() => { window.dispatchEvent(new Event('resize')) })
+    fireEvent.pointerMove(window, { pointerId: 7, clientX: 990, clientY: 280 })
+    expect(h.left()).toBe(280)
+    fireEvent.pointerUp(window, { pointerId: 7, clientX: 990, clientY: 280 })
+    expect(h.resizeFloat).toHaveBeenCalledWith(h.paneId, { x: 280, y: 80, width: 220, height: 200 })
     expect(queued.size).toBe(0)
   })
 

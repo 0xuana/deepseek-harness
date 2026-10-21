@@ -260,23 +260,25 @@ export function useFloatGestures(state: LayoutState, intents: DockIntents) {
     // The press stops here: the panel's own press-to-focus would record a focus
     // entry before the drag's, and the release below decides which one it is.
     event.stopPropagation()
-    // A grip press during its own return takes the panel from where it is
-    // drawn; a corner press, or a press on another panel, ends the return at
-    // its target.
-    const drawn = mode === 'move' && settling.current?.paneId === paneId ? preview?.rect : undefined
+    // A press during its own return takes the panel from where it is drawn;
+    // another panel's return ends at its target.
+    const drawn = settling.current?.paneId === paneId ? preview?.rect : undefined
     if (cancelSettling() && drawn === undefined) setPreview(undefined)
     area.current = floatBounds()
     const reduce = reducedMotion()
     const shown = drawn ?? legalFloatRect(floatRect(getPane(state, paneId)), area.current)
-    const rect = mode === 'move' && !reduce ? unresistedRect(shown, area.current) : legalFloatRect(shown, area.current)
+    const rect = mode === 'move' && !reduce ? unresistedRect(shown, area.current) : shown
     const start: FloatDrag = { mode, originX: event.clientX, originY: event.clientY, rect }
     /** The rectangle to draw for a pointer position, and the legal one a release there records. */
     const reached = (x: number, y: number): { readonly drawn: FloatRect; readonly legal: FloatRect } => {
       const desired = draggedRect(start, x, y)
       if (mode === 'resize') {
-        // The origin may lie outside a viewport that shrank mid-gesture.
-        const resized = legalFloatRect(boundedResize(desired, area.current, FLOAT_MIN_SIZE), area.current)
-        return { drawn: resized, legal: resized }
+        // A resize keeps its origin, which lies outside the viewport when the
+        // press caught a return or the viewport shrank mid-gesture; the
+        // release records the legal rectangle and springs the panel there.
+        const resized = boundedResize(desired, area.current, FLOAT_MIN_SIZE)
+        const legal = legalFloatRect(resized, area.current)
+        return { drawn: reduce ? legal : resized, legal }
       }
       const legal = legalFloatRect(desired, area.current)
       return { drawn: reduce ? legal : resistedRect(desired, area.current), legal }

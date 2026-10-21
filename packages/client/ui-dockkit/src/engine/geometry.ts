@@ -289,7 +289,7 @@ export function unresistedRect(drawn: FloatRect, bounds: FloatBounds): FloatRect
 /**
  * A resized rectangle whose bottom-right corner stays inside the bounds, never
  * below the minimum size.
- * @param rect - the resized rectangle, its origin legal.
+ * @param rect - the resized rectangle; its origin may lie outside the bounds.
  * @param bounds - the viewport region.
  * @param min - smallest size the panel may take.
  * @returns the rectangle with its size capped by the bounds.
