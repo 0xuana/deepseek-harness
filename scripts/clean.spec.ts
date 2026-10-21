@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -25,6 +25,11 @@ function addProject(root: string, path: string, outDir = 'lib/types'): void {
     include: ['src'],
   }))
   write(join(root, path, 'src/index.ts'), 'export {}\n')
+}
+
+function link(target: string, path: string): void {
+  mkdirSync(dirname(path), { recursive: true })
+  symlinkSync(target, path, process.platform === 'win32' ? 'junction' : 'dir')
 }
 
 afterEach(() => {
@@ -82,26 +87,37 @@ describe('RepositoryCleaner', () => {
     expect(existsSync(join(root, 'native/system/tsconfig.tsbuildinfo'))).toBe(false)
   })
 
-  it('removes pnpm links to deleted packages and keeps live links', async () => {
+  it('removes pnpm links to deleted or cleaned packages and keeps live links', async () => {
     const root = fixture()
-    const type = process.platform === 'win32' ? 'junction' : 'dir'
     addProject(root, 'packages/core/live')
     write(join(root, 'packages/core/live/package.json'), '{}')
+    write(join(root, 'packages/hooks/stale/lib/index.js'))
     const hoisted = join(root, 'node_modules/.pnpm/node_modules')
-    mkdirSync(join(hoisted, '@deepseek-ai'), { recursive: true })
-    symlinkSync(join(root, 'packages/core/live'), join(hoisted, '@deepseek-ai/dsh-live'), type)
-    symlinkSync(join(root, 'packages/hooks/gone'), join(hoisted, '@deepseek-ai/dsh-gone'), type)
-    symlinkSync(join(root, 'packages/hooks/plain'), join(hoisted, 'plain'), type)
-    symlinkSync(join(root, 'packages/hooks/top'), join(root, 'node_modules/top'), type)
+    link(join(root, 'packages/core/live'), join(hoisted, '@deepseek-ai/dsh-live'))
+    link(join(root, 'packages/hooks/gone'), join(hoisted, '@deepseek-ai/dsh-gone'))
+    link(join(root, 'packages/hooks/stale'), join(hoisted, '@deepseek-ai/dsh-stale'))
+    link(join(root, 'packages/hooks/plain'), join(hoisted, 'plain'))
+    link(join(hoisted, 'loop'), join(hoisted, 'loop'))
+    link(join(root, 'packages/hooks/top'), join(root, 'node_modules/@deepseek-ai/dsh-top'))
 
-    const removed = await new RepositoryCleaner(root).clean()
+    await new RepositoryCleaner(root).clean()
 
-    expect(removed).toEqual([
-      'node_modules/.pnpm/node_modules/@deepseek-ai/dsh-gone',
-      'node_modules/.pnpm/node_modules/plain',
-      'node_modules/top',
-    ])
+    expect(readdirSync(join(hoisted, '@deepseek-ai'))).toEqual(['dsh-live'])
+    expect(readdirSync(hoisted)).toEqual(['@deepseek-ai'])
+    expect(readdirSync(join(root, 'node_modules/@deepseek-ai'))).toEqual([])
     expect(existsSync(join(hoisted, '@deepseek-ai/dsh-live/package.json'))).toBe(true)
+  })
+
+  it('does not scan node_modules outside the repository', async () => {
+    const root = fixture()
+    const externalModules = fixture()
+    addProject(root, 'products/shell')
+    link(join(root, 'packages/hooks/gone'), join(externalModules, 'gone'))
+    link(externalModules, join(root, 'node_modules'))
+
+    await new RepositoryCleaner(root).clean()
+
+    expect(readdirSync(externalModules)).toEqual(['gone'])
   })
 
   it('refuses project outputs reached through a symlink outside the repository', async () => {
