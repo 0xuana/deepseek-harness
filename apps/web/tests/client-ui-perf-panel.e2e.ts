@@ -42,9 +42,9 @@ const USAGE: TokenUsage = {
   cacheWriteTokens: 400,
 }
 
-/** Compact stream whose first token arrives `firstToken` milliseconds after the step start. */
-function stream(firstToken: number): AssistantStreamRecord[] {
-  return [{ type: 'text-chunks', time0: firstToken, index: 0, dt: [200], texts: ['Ready.'] }]
+/** Compact stream whose first token arrives at the absolute Session time `firstTokenAt`. */
+function stream(firstTokenAt: number): AssistantStreamRecord[] {
+  return [{ type: 'text-chunks', time0: firstTokenAt, index: 0, dt: [200], texts: ['Ready.'] }]
 }
 
 describe('Performance view overlay', () => {
@@ -77,6 +77,11 @@ describe('web e2e: Performance view', () => {
       source: { kind: 'user' },
     }), { surfaceOp: 'append' })
     agent.session.append('step/start', { turn: 1, step: 1 })
+    await new Promise((resolve) => { setTimeout(resolve, 60) })
+    // Real timestamps: the compact stream's time0 is an absolute Session time,
+    // so the measured first token must sit between this step's start and the
+    // settled message, exactly as a live round records them.
+    const firstTokenAt = Date.now() - 10
     agent.session.append('assistant/message', {
       turn: 1,
       step: 1,
@@ -84,7 +89,7 @@ describe('web e2e: Performance view', () => {
         content: [{ type: 'text', text: 'Ready.' }],
         source: { provider: 'fixture', model: 'fixture' },
       }),
-      stream: stream(2_200),
+      stream: stream(firstTokenAt),
       usage: USAGE,
     }, { surfaceOp: 'append' })
     agent.session.append('tool/call', {
@@ -126,9 +131,20 @@ describe('web e2e: Performance view', () => {
     expect(await table.getByText('Turn 1', { exact: false }).count()).toBeGreaterThan(0)
     expect(await table.getByText('Step 1', { exact: false }).count()).toBeGreaterThan(0)
     expect(await table.getByText('read ×1', { exact: false }).count()).toBeGreaterThan(0)
+    // The measured columns carry the fixture's real accounting, and the timing
+    // columns are measured rather than the dash placeholder. Durations and the
+    // derived throughput/clock vary with the run, so the golden tokenizes them.
+    const cells = await table.locator('tbody tr').first().locator('td').allInnerTexts()
+    expect(cells[3]).toBe('5.2K')
+    expect(cells[4]).toBe('0.24K')
+    expect(cells[5]).toBe('69.23%')
+    expect(cells[6]).not.toBe('—')
+    expect(cells[8]).not.toBe('—')
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
-    const snapshot = await captureStableAria(page, 'table[aria-label="Performance"]', scaffold.workspaceCwd)
+    const snapshot = await captureStableAria(page, 'table[aria-label="Performance"]', scaffold.workspaceCwd, {
+      replacements: [[cells[6]!, '{{ttft}}'], [cells[8]!, '{{tps}}']],
+    })
     await compareOrRefreshGolden(PANEL_EXPECTED, snapshot, MODE)
   }, 60_000)
 

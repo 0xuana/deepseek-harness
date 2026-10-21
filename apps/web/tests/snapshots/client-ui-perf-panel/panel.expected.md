@@ -13,27 +13,31 @@
       - columnheader "Tool time"
       - columnheader "Total time"
   - rowgroup:
-    - row "Turn 1 · 1 steps · Hide · {{clock}} Show the measured round. read ×1 → 7 chars 5.2K 0.24K 69.23% {{duration}} {{duration}} 0.0 {{duration}} {{duration}}":
-      - cell "Turn 1 · 1 steps · Hide · {{clock}}"
+    - row "Expand or collapse turn 1 · 1 steps · Hide · {{clock}} Show the measured round. read ×1 → 7 chars 5.2K 0.24K 69.23% {{ttft}} {{duration}} {{tps}} {{duration}} {{duration}}":
+      - cell "Expand or collapse turn 1 · 1 steps · Hide · {{clock}}":
+        - button "Expand or collapse turn 1" [expanded]: Turn 1
+        - text: · 1 steps · Hide · {{clock}}
       - cell "Show the measured round."
       - cell "read ×1 → 7 chars"
       - cell "5.2K"
       - cell "0.24K"
       - cell "69.23%"
+      - cell "{{ttft}}"
+      - cell "{{duration}}"
+      - cell "{{tps}}"
       - cell "{{duration}}"
       - cell "{{duration}}"
-      - cell "0.0"
-      - cell "{{duration}}"
-      - cell "{{duration}}"
-    - row "Step 1 · details read /work/notes.md 2 lines 5.2K 0.24K 69.23% {{duration}} {{duration}} 0.0 {{duration}} {{duration}}":
-      - cell "Step 1 · details"
+    - row "Expand or collapse the tool details of step 1 · details read /work/notes.md 2 lines 5.2K 0.24K 69.23% {{ttft}} {{duration}} {{tps}} {{duration}} {{duration}}":
+      - cell "Expand or collapse the tool details of step 1 · details":
+        - button "Expand or collapse the tool details of step 1": Step 1
+        - text: · details
       - cell
       - cell "read /work/notes.md 2 lines"
       - cell "5.2K"
       - cell "0.24K"
       - cell "69.23%"
+      - cell "{{ttft}}"
       - cell "{{duration}}"
-      - cell "{{duration}}"
-      - cell "0.0"
+      - cell "{{tps}}"
       - cell "{{duration}}"
       - cell "{{duration}}"
