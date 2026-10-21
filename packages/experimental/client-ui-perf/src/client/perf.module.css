@@ -547,6 +547,10 @@
   padding: 6px 8px;
   max-height: 320px;
   overflow: auto;
+  /* The code block scrolls on the detail cell's elevated surface: rebind the
+     scrollbar pair so the dark palette draws the l2 thumb, not the l1 one. */
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
   font: 12px/18px var(--ds-font-family-code);
   tab-size: 2;
   white-space: pre;
