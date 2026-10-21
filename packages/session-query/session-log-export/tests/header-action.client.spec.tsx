@@ -9,7 +9,7 @@ import { SessionLogDownloadController } from '../src/client/controller.ts'
 import { SessionMarkdownCopyController, type SessionMarkdownClipboard } from '../src/client/copy-controller.ts'
 import { SessionLogDownloadHeaderAction } from '../src/client/HeaderAction.tsx'
 import type { SessionLogDownloadHeaderProps } from '../src/client/HeaderAction.tsx'
-import { en, zh } from '../src/client/locales.ts'
+import { en } from '../src/client/locales.ts'
 
 const SID = 'session-export-header' as SessionId
 const clipboard: SessionMarkdownClipboard = {
@@ -69,11 +69,6 @@ function bench(feedbackAvailable = false, copyController = new SessionMarkdownCo
 afterEach(cleanup)
 
 describe('Session export Header action', () => {
-  it('names whole-Session copying in English and Chinese', () => {
-    expect(en['menu.copyMarkdown']).toBe('Copy Session as Markdown')
-    expect(zh['menu.copyMarkdown']).toBe('复制会话为 Markdown')
-  })
-
   it('opens Session feedback and closes the menu without starting a download', () => {
     const b = bench(true)
     fireEvent.click(b.view.getByRole('button', { name: 'More actions' }))

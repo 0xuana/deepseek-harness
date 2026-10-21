@@ -1,7 +1,7 @@
 /**
- * Pure backend converter for one complete committed Session log. The "Copy as
- * Markdown" Host route uses it, and the package entry exports it for callers
- * that already hold the logical events. The raw log is authoritative:
+ * Pure backend converter for one complete committed Session log. The Session
+ * Markdown copy Host route uses it, and the package entry exports it for
+ * callers that already hold the logical events. The raw log is authoritative:
  * compaction surface replacements never remove earlier messages, and
  * fork-inherited history appears once. Reasoning, system and developer
  * messages, injected non-human context, request headers, and runtime records
