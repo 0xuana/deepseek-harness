@@ -6,7 +6,7 @@ import type { CuaAppHandle, CuaSnapshotId } from './types.ts'
 const id = z.number().int().positive().max(2 ** 32 - 1)
 const pid = z.number().int().positive().max(2 ** 31 - 1)
 const point = z.number().nonnegative()
-const relativePoint = z.number().int().min(0).max(1000)
+const relativePoint = z.number().int().min(0).max(999)
 const app = { appHandle: z.string().min(1) }
 const pointer = { mouseButton: z.enum(['left', 'right', 'middle']).optional(),
   modifiers: z.array(z.enum(['command', 'control', 'option', 'shift', 'fn'])).optional() }
@@ -17,7 +17,7 @@ const window = { ...app, windowId: id }
 const snapshot = { ...app, snapshotId: z.string().min(1), elementIndex: z.number().int().nonnegative() }
 const coordinate = { ...window, snapshotId: z.string().min(1).optional(), x: point, y: point }
 const absoluteCoordinate = { ...coordinate, relative: z.literal(false).optional().describe('Omitted or false uses pixels in the latest screenshot returned by this tool.') }
-const relativeCoordinate = { ...coordinate, relative: z.literal(true).describe('Use integer thousandths of the window width and height, from 0 to 1000.'), x: relativePoint, y: relativePoint }
+const relativeCoordinate = { ...coordinate, relative: z.literal(true).describe('Use integer coordinates from 0 to 999, normalized by 999 to the window width and height.'), x: relativePoint, y: relativePoint }
 const bounds = z.object({
   x: z.number(), y: z.number(), width: z.number().nonnegative(), height: z.number().nonnegative(),
 })
