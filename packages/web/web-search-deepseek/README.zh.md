@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-有了 `dsh-web-search-deepseek`，harness 可以通过 DeepSeek 原生搜索检索 web，使用 DeepSeek 账号登录或部署已有的 `DEEPSEEK_API_KEY`。当部署希望使用 DeepSeek 原生搜索、并接受一次搜索在延迟与 token 上消耗一个完整模型轮次时选择它；[dsh-web-deepseek-api](../web-deepseek-api/README.zh.md) 中的 DeepSeek Search 与 Fetch API 无需模型轮次即可检索。结果来自 DeepSeek 返回的结构化搜索块，绝不会从回复文本中抓取。对搜索没有可用凭据的模型请求，提供方报告自身未就绪，因此 `dsh-tool-web` 不会为该请求提供 `web_search`；仍然到达的调用，或缺少搜索结果块的响应，都以结构化错误失败。面向模型的 `web_search` 工具位于 `dsh-tool-web`。
+有了 `dsh-web-search-deepseek`，harness 可以通过 DeepSeek 原生搜索检索 web，使用 DeepSeek 账号登录或部署已有的 `DEEPSEEK_API_KEY`。当部署接受一次搜索在延迟与 token 上消耗一个完整模型轮次时选择它；[dsh-web-deepseek-api](../web-deepseek-api/README.zh.md) 中的 DeepSeek Search 与 Fetch API 无需模型轮次即可检索。结果来自 DeepSeek 的结构化搜索块，绝不取自回复文本。对搜索没有可用凭据的模型请求，提供方报告自身未就绪，因此 `dsh-tool-web` 会对该请求撤下 `web_search`；仍然到达的调用，或缺少搜索结果块的响应，都以结构化错误失败。
 
 ## 目录
 
