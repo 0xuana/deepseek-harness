@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { act, cleanup, fireEvent, isInaccessible, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { bindSnapshotSelector, makeTranslate, RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
+import { allowAllAccess, bindSnapshotSelector, makeTranslate, RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import type { RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
@@ -174,6 +174,7 @@ function mount(
     useSessionStatus: select => select(new Map()),
     useSessionRetainInfo: () => undefined,
     useResource: () => { throw new Error('The task manager does not load document resources') },
+    ...allowAllAccess,
     onDelete: vi.fn<TaskManagerPageProps['onDelete']>(async () => 'deleted'),
     onRetry: vi.fn(async () => {}),
     onNewTask: vi.fn(),
@@ -890,6 +891,24 @@ describe('Task manager catalog', () => {
     expect(screen.getByRole('button', { name: en['statusFilter.all'] }).getAttribute('aria-pressed')).toBe('true')
   })
 
+  it('renders a decorative document-and-clock illustration in an empty catalog', () => {
+    mount({ records: [], status: 'ready' })
+    const illustration = screen.getByRole('status').querySelector('svg')
+    expect(illustration?.getAttribute('aria-hidden')).toBe('true')
+    expect(illustration?.getAttribute('focusable')).toBe('false')
+    expect(illustration?.getAttribute('viewBox')).toBe('0 0 170 170')
+    const paths = illustration?.querySelectorAll('path')
+    expect(paths).toHaveLength(20)
+    // Roles follow the approved artwork's paint order, including overlapping paper and clock layers.
+    expect(paths?.[0]?.getAttribute('fill')).toBe('var(--dsw-alias-illustration-background)')
+    expect(paths?.[2]?.getAttribute('fill')).toBe('var(--dsw-alias-illustration-backing)')
+    expect(paths?.[3]?.getAttribute('fill')).toBe('var(--dsw-alias-illustration-surface)')
+    expect(paths?.[10]?.getAttribute('fill')).toBe('var(--dsw-alias-illustration-shadow)')
+    expect(paths?.[17]?.getAttribute('fill')).toBe('var(--dsw-alias-illustration-detail)')
+    expect(paths?.[18]?.getAttribute('fill')).toBe('var(--dsw-alias-illustration-inset)')
+    expect(emptyNewTaskButton().textContent).toBe(en['empty.action'])
+  })
+
   it('distinguishes an empty catalog, loading, and a failed read', () => {
     const h = mount({ records: [], status: 'loading' })
     expect(screen.getByRole('status', { name: en['list.loading'] }).textContent).toBe('')
@@ -1598,6 +1617,7 @@ describe('Task manager details', () => {
       useResource={unread}
       useSessionStatus={unread}
       useSessionRetainInfo={unread}
+      {...allowAllAccess}
     />)
   }
 
@@ -3459,9 +3479,9 @@ describe('Task detail rule header and run-time card', () => {
       expect(link().className).toBe(within(detail).getByRole('button', { name: en['detail.more'] }).className)
       expect(within(link()).queryByText(en['detail.session'])).toBeNull()
       expect(within(link()).getByText(at.sessionId)).toBeDefined()
-      fireEvent.mouseEnter(detailContext(detail)!)
+      fireEvent.pointerEnter(detailContext(detail)!)
       expect(tooltip()).toBe(en['detail.session'])
-      fireEvent.mouseLeave(detailContext(detail)!)
+      fireEvent.pointerLeave(detailContext(detail)!)
       fireEvent.click(link())
       expect(h.props.onOpenSession).toHaveBeenCalledExactlyOnceWith(at.sessionId)
 
@@ -3469,9 +3489,9 @@ describe('Task detail rule header and run-time card', () => {
       state = { ...workspaces, archivedSessionIds: [at.sessionId] }
       h.update({})
       expect(link().hasAttribute('disabled')).toBe(true)
-      fireEvent.mouseEnter(detailContext(detail)!)
+      fireEvent.pointerEnter(detailContext(detail)!)
       expect(tooltip()).toBe(en['detail.session'])
-      fireEvent.mouseLeave(detailContext(detail)!)
+      fireEvent.pointerLeave(detailContext(detail)!)
       state = workspaces
       h.update({})
       const focused = link()
@@ -3487,9 +3507,9 @@ describe('Task detail rule header and run-time card', () => {
       // The same button changes layout, so keyboard focus survives the switch.
       expect(link()).toBe(focused)
       expect(document.activeElement).toBe(focused)
-      fireEvent.mouseEnter(detailContext(detail)!)
+      fireEvent.pointerEnter(detailContext(detail)!)
       expect(tooltip()).toBeUndefined()
-      fireEvent.mouseLeave(detailContext(detail)!)
+      fireEvent.pointerLeave(detailContext(detail)!)
       strip = 240
       act(() => { stripObserver().fire() })
       expect(compact()).toBe(false)
@@ -3759,6 +3779,10 @@ describe('Mock detail metrics shared with the task list', () => {
     expect(heading).toMatch(/font-size:\s*14px;/)
     expect(heading).toMatch(/font-weight:\s*400;/)
     expect(rule('emptyGlyph')).toMatch(/margin-bottom:\s*12px;/)
+    expect(rule('emptyIllustration')).toMatch(/width:\s*110px;/)
+    expect(rule('emptyIllustration')).toMatch(/max-width:\s*100%;/)
+    expect(rule('emptyIllustration')).toMatch(/height:\s*auto;/)
+    expect(rule('emptyIllustration')).toMatch(/margin-bottom:\s*12px;/)
     // The mock's `.empty h3 + .btn`.
     expect(rule('emptyAction')).toMatch(/margin-top:\s*16px;/)
   })

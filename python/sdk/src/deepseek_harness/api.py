@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from .client import HarnessClient, HarnessConfig
+from .client import HarnessClient, HarnessConfig, UserQuestionHandler
 from .errors import SdkProtocolError
 from .models import JsonObject, Notification
 
@@ -35,6 +35,7 @@ class DeepSeekHarnessConfig:
     shutdown_timeout_seconds: float | None = 1.0
     base_url: str | None = None
     api_key: str | None = None
+    on_user_question: UserQuestionHandler | None = None
 
 
 @dataclass(slots=True)
@@ -84,6 +85,7 @@ class DeepSeekHarness:
                 initialize_timeout_seconds=self.config.initialize_timeout_seconds,
                 request_timeout_seconds=self.config.request_timeout_seconds,
                 shutdown_timeout_seconds=self.config.shutdown_timeout_seconds,
+                on_user_question=self.config.on_user_question,
             ),
             _launch_args=_launch_args,
         )
@@ -120,6 +122,15 @@ class DeepSeekHarness:
     def start_session(self, session_id: str | None = None) -> "Session":
         self.start()
         return Session(self, session_id or f"session-{uuid.uuid4().hex}")
+
+    def resume_session(self, session_id: str) -> "Session":
+        """Restore persisted history from the configured Harness home without sending input.
+
+        Missing, unreadable, incompatible, or occupied sessions raise instead of creating a new session.
+        """
+        self.start()
+        self._client.resume_session(session_id)
+        return Session(self, session_id)
 
     def run(
         self,

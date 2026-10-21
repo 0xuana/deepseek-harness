@@ -13,9 +13,10 @@ import type { InboxState } from '@deepseek-ai/dsh-agent/types'
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
+import { createPortal } from 'react-dom'
 import { $getRoot, $isTextNode } from 'lexical'
 import {
-  bindSnapshotSelector, conversationSnapshot as conversationFixture, makeTranslate, RemoteError,
+  allowAllAccess, bindSnapshotSelector, conversationSnapshot as conversationFixture, makeTranslate, RemoteError,
   sessionSnapshot as sessionFixture,
 } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -190,6 +191,7 @@ function bench(over?: BenchOptions) {
     useWorkspaces: bindSnapshotSelector(createSnapshotStore({
       items: [], archivedSessionIds: [], pinnedSessionIds: [], state: 'idle', phase: 'ready', error: null,
     })),
+    ...allowAllAccess,
     useProjection: ((key: string, selector?: (v: unknown) => unknown) =>
       (selector ?? (v => v))(key === 'plan'
         ? over?.plan
@@ -283,6 +285,86 @@ function writeDraft(shell: SessionInputShell, text: string): void {
 }
 
 describe('composer focus handoff', () => {
+  it.each(['hero', 'composer'] as const)('focuses the %s editor when its card background is pressed', (variant) => {
+    const { view, shell, textarea } = bench({ variant })
+    writeDraft(shell, 'draft text')
+    textarea.blur()
+    const lexicalFocus = vi.spyOn(shell.editor, 'focus')
+    const card = view.container.querySelector('[data-composer-card]')!
+
+    expect(fireEvent.mouseDown(card, { button: 0 })).toBe(false)
+    expect(document.activeElement).toBe(textarea)
+    expect(lexicalFocus).toHaveBeenCalled()
+  })
+
+  it('leaves editor selection, scrollport gestures, controls and canceled presses to their owners', () => {
+    const { view, shell, textarea } = bench({
+      modelEntry: <button><span>Model</span></button>,
+      leftItems: <span onMouseDown={(event) => { event.preventDefault() }}>Canceled</span>,
+    })
+    const lexicalFocus = vi.spyOn(shell.editor, 'focus')
+    const scrollport = view.container.querySelector('[data-input-scroll]')!
+    const card = view.container.querySelector('[data-composer-card]')!
+
+    expect(fireEvent.mouseDown(textarea, { button: 0 })).toBe(true)
+    expect(fireEvent.mouseDown(scrollport, { button: 0 })).toBe(true)
+    expect(fireEvent.mouseDown(view.getByText('Model'), { button: 0 })).toBe(true)
+    expect(fireEvent.mouseDown(view.getByText('Canceled'), { button: 0 })).toBe(false)
+    expect(fireEvent.mouseDown(card, { button: 2 })).toBe(true)
+    expect(lexicalFocus).not.toHaveBeenCalled()
+  })
+
+  it('leaves embedded overlay options, status text and scrollbars with the focused search field', () => {
+    const { view, shell } = bench({
+      overlay: <div>
+        <input aria-label="Filter models" />
+        <div role="listbox"><div role="option" aria-selected={false}>Model option</div></div>
+        <div>Loading models</div>
+      </div>,
+    })
+    const search = view.getByRole('textbox', { name: 'Filter models' })
+    act(() => { search.focus() })
+    const lexicalFocus = vi.spyOn(shell.editor, 'focus')
+
+    for (const target of [
+      view.getByRole('option'), view.getByRole('listbox'), view.getByText('Loading models'),
+      view.container.querySelector('[data-composer-overlay]')!,
+    ]) {
+      expect(fireEvent.mouseDown(target, { button: 0 })).toBe(true)
+      expect(document.activeElement).toBe(search)
+    }
+    expect(lexicalFocus).not.toHaveBeenCalled()
+  })
+
+  it('keeps a focused editor\'s native caret without restoring an older Lexical selection', () => {
+    const { view, shell, textarea } = bench()
+    act(() => { shell.focus() })
+    expect(document.activeElement).toBe(textarea)
+    const lexicalFocus = vi.spyOn(shell.editor, 'focus')
+
+    expect(fireEvent.mouseDown(view.container.querySelector('[data-composer-card]')!, { button: 0 })).toBe(false)
+    expect(document.activeElement).toBe(textarea)
+    expect(lexicalFocus).not.toHaveBeenCalled()
+  })
+
+  it('leaves portaled menu background presses outside the card alone', () => {
+    const { view, shell } = bench({ modelEntry: createPortal(<div>Menu background</div>, document.body) })
+    const lexicalFocus = vi.spyOn(shell.editor, 'focus')
+
+    expect(fireEvent.mouseDown(view.getByText('Menu background'), { button: 0 })).toBe(true)
+    expect(lexicalFocus).not.toHaveBeenCalled()
+  })
+
+  it.each([{ inert: true }, { disabled: true }, { blocked: { reason: 'unavailable' } }])(
+    'does not focus an unavailable composer: %j', (options) => {
+      const { view, shell } = bench(options)
+      const lexicalFocus = vi.spyOn(shell.editor, 'focus')
+
+      expect(fireEvent.mouseDown(view.container.querySelector('[data-composer-card]')!, { button: 0 })).toBe(true)
+      expect(lexicalFocus).not.toHaveBeenCalled()
+    },
+  )
+
   it('focus() returns the keyboard to the editor through Lexical, not a bare DOM focus', () => {
     const { shell, textarea } = bench()
     writeDraft(shell, 'draft text')
@@ -908,7 +990,7 @@ describe('running and lock semantics', () => {
         t: makeTranslate(messages, {}),
       })
       const stop = view.getByRole('button', { name: label })
-      if (trigger === 'hover') fireEvent.mouseEnter(stop)
+      if (trigger === 'hover') fireEvent.pointerEnter(stop)
       else fireEvent.focus(stop)
       act(() => { vi.advanceTimersByTime(500) })
       expect(view.getByRole('tooltip').getAttribute('aria-label')).toBe(`${label} Esc Esc`)
@@ -923,7 +1005,7 @@ describe('running and lock semantics', () => {
     vi.useFakeTimers()
     try {
       const { button, view, session } = bench({ running: true })
-      fireEvent.mouseEnter(button)
+      fireEvent.pointerEnter(button)
       act(() => { vi.advanceTimersByTime(500) })
       expect(view.getByRole('tooltip').getAttribute('aria-label')).toBe('停止生成 Esc Esc')
 
@@ -1425,12 +1507,12 @@ describe('machine pending lock', () => {
 })
 
 describe('decorations', () => {
-  /** The claim-token styled leaf (the transform's inline accent color). */
-  function tokenSpanOf(container: HTMLElement): HTMLElement | null {
-    return container.querySelector('[data-lexical-text][style*="business-primary"]')
+  /** The claimed command chip's host element. */
+  function commandChipOf(container: HTMLElement): HTMLElement | null {
+    return container.querySelector('[data-composer-command]')
   }
 
-  it('claimed token styles the leading leaf and sets the blank-args hint variable', () => {
+  it('a claim renders the leading command chip and sets the blank-args hint variable', () => {
     // Dictionary-less stub: an unmatched hint key keeps the machine's raw hint.
     const { view, shell, textarea } = bench({ t: makeTranslate({}) })
     act(() => {
@@ -1439,15 +1521,14 @@ describe('decorations', () => {
         { name: 'goal', token: '/goal ', hint: '目标内容', submit: () => Promise.resolve({ kind: 'success' as const }) },
         { start: 0, end: 6, draftRev: shell.snapshot.draftRev },
       )
-      shell.editor.update(() => {}, { discrete: true }) // flush the queued decoration refresh
     })
-    expect(tokenSpanOf(view.container)?.textContent).toBe('/goal ')
+    expect(commandChipOf(view.container)?.textContent).toBe('/goal')
     expect(textarea.style.getPropertyValue('--dsh-composer-hint')).toBe(JSON.stringify('目标内容'))
-    // Args typed: the hint disappears, the token style stays.
-    act(() => { shell.setDraft('/goal 发布') })
-    act(() => { shell.editor.update(() => {}, { discrete: true }) }) // flush the queued decoration refresh
+    // Args typed: the hint disappears, the chip stays.
+    act(() => { shell.actions.insertText('发布', shell.actions.captureInsertion()) })
+    expect(shell.snapshot.draft).toBe('/goal 发布')
     expect(textarea.style.getPropertyValue('--dsh-composer-hint')).toBe('')
-    expect(tokenSpanOf(view.container)).not.toBeNull()
+    expect(commandChipOf(view.container)).not.toBeNull()
   })
 
   it('a locale entry for the claimed command overrides the raw claim hint (trailing-space token)', () => {

@@ -1,3 +1,4 @@
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -6,7 +7,7 @@ import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { agentPresetProjectionDefinition } from '@deepseek-ai/dsh-agent-preset-registry'
 import SessionStore, { SESSION_FORMAT_VERSION, SessionLogOffset, SessionId } from '@deepseek-ai/dsh-session'
-import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
+import type { SessionHeader } from '@deepseek-ai/dsh-session'
 import { SessionAlreadyOwnedError } from '@deepseek-ai/dsh-session-persistence'
 import type { SessionObservation } from '@deepseek-ai/dsh-session-query'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
@@ -15,10 +16,8 @@ import {
   ApiSessionAgentController,
   ApiSessionCwdConflict,
   ApiSessionNotFound,
-  ApiSessionSubagentOwnership,
   inspectApiSession,
 } from '../src/agent.ts'
-import { installModelSelectionProjection } from '../src/model-selection-projection.ts'
 import { installSessionReadTestServices, testSessionPersistence } from './test-remote.ts'
 
 const roots: Context[] = []
@@ -36,15 +35,17 @@ async function harness(): Promise<{ ctx: Context; agents: ApiSessionAgentControl
   roots.push(ctx)
   await ctx.plugin(TypertRegistry)
   await ctx.plugin(SessionStore)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   installSessionReadTestServices(ctx)
-  ctx.sessionProjections.register(agentPresetProjectionDefinition)
-  installModelSelectionProjection(ctx)
+  await ctx.sessionProjections.register(agentPresetProjectionDefinition)
   ctx.provide('agentDefaultModel', {
     currentSelection: () => ({ provider: 'fixture', model: 'fixture-model' }),
     saveSelection: () => Promise.resolve(),
   } as never)
-  return { ctx, agents: new ApiSessionAgentController(ctx) }
+  const agents = new ApiSessionAgentController(ctx)
+  agents.initialize()
+  return { ctx, agents }
 }
 
 function header(id: string, cwd: string | null = '/workspace'): SessionHeader {
@@ -287,165 +288,8 @@ describe('ApiSession Agent lookup and recovery', () => {
   })
 })
 
-describe('ApiSession model selection', () => {
-  it('requires the model-selection projection', async () => {
-    const { ctx, agents } = await harness()
-    const live = agent(ctx, header('missing-model-projection'))
-    vi.spyOn(ctx.sessionProjections, 'stateOf').mockReturnValue(undefined)
-
-    expect(() => agents.selectionFor(live)).toThrow('required modelSelection projection')
-  })
-
-  it('reads a reasoning-free request and consumes only the exact pending selection', async () => {
-    const { ctx, agents } = await harness()
-    const logged = agent(ctx, header('logged-model'))
-    logged.session.append('request/header', {
-      header: { config: { provider: 'logged-provider', model: 'logged-model' } },
-      reason: 'initial',
-    })
-    expect(agents.selectionFor(logged).current).toEqual({
-      provider: 'logged-provider',
-      model: 'logged-model',
-    })
-
-    const pending = agent(ctx, header('pending-model'))
-    const selection = agents.selectionFor(pending)
-    agents.selectForNextRequest(pending, {
-      provider: 'selected-provider',
-      model: 'selected-model',
-      reasoningEffort: 'high' as never,
-    })
-    expect(selection.current).toMatchObject({
-      provider: 'selected-provider', model: 'selected-model', reasoningEffort: 'high',
-    })
-    expect(agents.consumeSelection(pending, 'other-provider', 'selected-model', 'high')).toBe(false)
-    expect(agents.consumeSelection(pending, 'selected-provider', 'other-model', 'high')).toBe(false)
-    expect(agents.consumeSelection(pending, 'selected-provider', 'selected-model', 'low')).toBe(false)
-    expect(agents.consumeSelection(pending, 'selected-provider', 'selected-model', 'high')).toBe(true)
-    expect(selection.current).toEqual({ provider: 'fixture', model: 'fixture-model' })
-
-    const untouched = agent(ctx, header('uninstalled-model'))
-    expect(agents.consumeSelection(untouched, 'fixture', 'fixture-model', undefined)).toBe(false)
-  })
-})
-
-describe('ApiSession create or adoption', () => {
-  it('shares one in-flight creation between concurrent callers', async () => {
-    const { ctx, agents } = await harness()
-    const cwd = mkdtempSync(join(tmpdir(), 'dsh-session-controller-concurrent-'))
-    tempDirs.push(cwd)
-    const meta = header('concurrent-create', cwd)
-    const created = unpublishedAgent(ctx, meta)
-    let release!: () => void
-    const gate = new Promise<void>((resolve) => { release = resolve })
-    const create = vi.spyOn(ctx.agents, 'create').mockImplementation(async () => {
-      await gate
-      return { agent: created, dispose: () => Promise.resolve() }
-    })
-
-    const first = agents.ensureSession(meta.id, cwd, false)
-    const second = agents.ensureSession(meta.id, cwd, false)
-    release()
-
-    await expect(Promise.all([first, second])).resolves.toEqual([created, created])
-    expect(create).toHaveBeenCalledOnce()
-  })
-
-  it('accepts a raced ordinary creation and rejects a raced attached child', async () => {
-    const ordinary = await harness()
-    const cwd = mkdtempSync(join(tmpdir(), 'dsh-session-controller-create-'))
-    tempDirs.push(cwd)
-    const ordinaryMeta = header('create-race', cwd)
-    const winner = agent(ordinary.ctx, ordinaryMeta)
-    vi.spyOn(ordinary.ctx.agents, 'create').mockImplementation(async () => {
-      await ordinary.ctx.agents.register(winner)
-      throw new Error('raced creation')
-    })
-    await expect(ordinary.agents.ensureSession(ordinaryMeta.id, cwd, false))
-      .resolves.toBe(winner)
-
-    const child = await harness()
-    const childCwd = mkdtempSync(join(tmpdir(), 'dsh-session-controller-child-'))
-    tempDirs.push(childCwd)
-    const childId = SessionId('create-child-race')
-    vi.spyOn(child.ctx.agents, 'create').mockImplementation(async () => {
-      child.ctx.sessions.create(childId, {
-        meta: { cwd: childCwd, parentSession: SessionId('parent'), origin: 'subagent' },
-      })
-      throw new Error('raced child creation')
-    })
-    await expect(child.agents.ensureSession(childId, childCwd, false))
-      .rejects.toBeInstanceOf(ApiSessionSubagentOwnership)
-  })
-
-  it('validates ownership and cwd on the Agent returned by creation', async () => {
-    const child = await harness()
-    const childCwd = mkdtempSync(join(tmpdir(), 'dsh-session-controller-returned-child-'))
-    tempDirs.push(childCwd)
-    const childMeta = {
-      ...header('returned-child', childCwd),
-      parentSession: SessionId('parent'),
-      origin: 'subagent' as const,
-    }
-    const childAgent = unpublishedAgent(child.ctx, childMeta)
-    vi.spyOn(child.ctx.agents, 'create').mockResolvedValue({
-      agent: childAgent,
-      dispose: () => Promise.resolve(),
-    })
-    await expect(child.agents.ensureSession(childMeta.id, childCwd, false))
-      .rejects.toBeInstanceOf(ApiSessionSubagentOwnership)
-
-    const wrong = await harness()
-    const requestedCwd = mkdtempSync(join(tmpdir(), 'dsh-session-controller-wrong-cwd-'))
-    tempDirs.push(requestedCwd)
-    const wrongAgent = unpublishedAgent(wrong.ctx, header('wrong-returned-cwd', '/other'))
-    vi.spyOn(wrong.ctx.agents, 'create').mockResolvedValue({
-      agent: wrongAgent,
-      dispose: () => Promise.resolve(),
-    })
-    await expect(wrong.agents.ensureSession(wrongAgent.id, requestedCwd, false))
-      .rejects.toBeInstanceOf(ApiSessionCwdConflict)
-  })
-
-  it('resumes a matching persisted identity and preserves its selected preset', async () => {
-    const { ctx, agents } = await harness()
-    const meta = { ...header('stored'), agentPreset: 'minimal' }
-    const events = [{
-      type: 'agent-preset/selected',
-      seq: 0,
-      time: 1,
-      data: { agentPreset: 'minimal' },
-    }] as SessionEvent[]
-    providePersistence(ctx, {
-      list: () => Promise.resolve([meta]),
-      inspect: () => Promise.resolve({ meta, events }),
-    })
-    ctx.provide('agentPresets', {
-      resolve: (id?: string) => Promise.resolve({ id: id ?? 'minimal' }),
-      mount: () => Promise.resolve(),
-    } as never)
-    const resumed = {
-      id: meta.id,
-      session: {
-        id: meta.id,
-        header: meta,
-        snapshotEvents: () => events,
-        eventAt: (seq: number) => events[seq],
-        seq: events.length,
-      },
-      status: 'idle',
-      ctx,
-    } as unknown as Agent
-    const resume = vi.spyOn(ctx.agents, 'resume').mockResolvedValue({
-      agent: resumed,
-      dispose: () => Promise.resolve(),
-    })
-
-    await expect(agents.ensureSession(meta.id, '/workspace', true, 'minimal')).resolves.toBe(resumed)
-    expect(resume).toHaveBeenCalledWith(expect.objectContaining({ resumeSessionId: meta.id }))
-  })
-
-  it('rejects an ownership race before resume and a persisted cwd conflict', async () => {
+describe('ApiSession creation', () => {
+  it('rejects a resume that subagent routing adopts before publication', async () => {
     const child = await harness()
     const childMeta = header('resume-child-race')
     providePersistence(child.ctx, {
@@ -464,15 +308,6 @@ describe('ApiSession create or adoption', () => {
     await expect(child.agents.resolveAgent(childMeta.id)).resolves.toMatchObject({
       error: { code: 'session/agent-busy' },
     })
-
-    const conflict = await harness()
-    const stored = header('stored-cwd-conflict', '/stored')
-    providePersistence(conflict.ctx, {
-      list: () => Promise.resolve([stored]),
-      inspect: () => Promise.resolve({ meta: stored, events: [] }),
-    })
-    await expect(conflict.agents.ensureSession(stored.id, '/requested', true))
-      .rejects.toBeInstanceOf(ApiSessionCwdConflict)
   })
 
   it('surfaces directory creation failure', async () => {
@@ -481,7 +316,7 @@ describe('ApiSession create or adoption', () => {
     tempDirs.push(parent)
     const file = join(parent, 'file')
     writeFileSync(file, 'not a directory')
-    await expect(agents.ensureSession(SessionId('mkdir-failure'), join(file, 'child'), false))
+    await expect(agents.createSession({ cwd: join(file, 'child'), reusable: () => true }))
       .rejects.toThrow('failed to ensure project directory')
   })
 })

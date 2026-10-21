@@ -24,6 +24,7 @@ import NativeDirectoryPicker from '@deepseek-ai/dsh-host-directory-picker-native
 import {
   createLaunchEnvironmentSnapshot, DSH_LAUNCH_ENVIRONMENT_KEY, type LaunchEnvironmentSnapshot,
 } from '@deepseek-ai/dsh-launch-environment'
+import { probeNonLoopbackIpv4 } from '../../../../scripts/test-non-loopback-address.ts'
 import * as DirectoryPickerAuto from '../src/index.ts'
 
 const renameControl = vi.hoisted(() => ({
@@ -54,6 +55,15 @@ const NATIVE = '@deepseek-ai/dsh-host-directory-picker-native'
 const BROWSE = '@deepseek-ai/dsh-host-directory-picker-browse'
 const NATIVE_SURFACE = '@deepseek-ai/dsh-client-ui-directory-picker-native'
 const BROWSE_SURFACE = '@deepseek-ai/dsh-client-ui-directory-picker-browse'
+
+/**
+ * This machine's first non-internal IPv4 address that really accepts a listen.
+ * The webserver really listens, so only a non-loopback bind case needs one; a
+ * host with no bindable candidate skips that case, because requesting an
+ * address the host cannot bind fails the bind rather than exercising the
+ * chooser.
+ */
+const NON_LOOPBACK_IPV4 = await probeNonLoopbackIpv4()
 
 /**
  * Loader-visible stand-in for a client surface package: the surfaces belong to
@@ -96,7 +106,7 @@ afterEach(async () => {
  * provides the Connection trust policy, then boot it through the real Loader.
  */
 async function loadComposition(
-  bindHost: '127.0.0.1' | '0.0.0.0',
+  bindHost: string,
   options: { failSurface?: boolean; launchEnvironment?: LaunchEnvironmentSnapshot; remoteAuthorities?: boolean } = {},
 ): Promise<{ ctx: Context; configPath: string }> {
   root = await mkdtemp(join(tmpdir(), 'dsh-directory-picker-auto-'))
@@ -255,9 +265,9 @@ describe('real Loader composition', () => {
     expect(picker.capability().kind).toBe('browse')
   })
 
-  it('mounts the browse backend for an all-interfaces bind even on an attended host', { timeout: 60_000 }, async () => {
+  it.skipIf(NON_LOOPBACK_IPV4 === undefined)('mounts the browse backend for a non-loopback bind even on an attended host', { timeout: 60_000 }, async () => {
     stubAttendedHost()
-    const { ctx } = await loadComposition('0.0.0.0')
+    const { ctx } = await loadComposition(NON_LOOPBACK_IPV4!)
 
     expect(entryNames(ctx)).toContain(BROWSE)
     expect(entryNames(ctx)).toContain(BROWSE_SURFACE)

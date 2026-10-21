@@ -10,7 +10,7 @@ import { createUserMessage, ToolCallId  } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import { STRUCTURED_OUTPUT_TOOL } from '@deepseek-ai/dsh-subagent'
-import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import * as spawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import PtcWorkflowEngine from '@deepseek-ai/dsh-workflow-ptc'
 import { MockAdapter, maxTokensResponse, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
@@ -146,11 +146,8 @@ describe('dsh-tool-ralph over the real spawn and sandboxed PTC stack', () => {
       toolCallResponse('round-1', STRUCTURED_OUTPUT_TOOL, firstReport),
       maxTokensResponse('unfinished child output'),
     ], { maxRounds: 2 })
-    const children: Agent[] = []
-    ctx.on('workflow/agent-start', (_run, child) => {
-      const agent = ctx.agents.get(child.childId)
-      if (agent !== undefined) children.push(agent)
-    })
+    const childIds: SessionId[] = []
+    ctx.on('workflow/agent-start', (_run, child) => { childIds.push(child.childId) })
 
     const result = await ctx.tools.execute({
       signal: testToolSignal,
@@ -165,8 +162,8 @@ describe('dsh-tool-ralph over the real spawn and sandboxed PTC stack', () => {
     expect(text).toContain('Ralph round 2 child failed before producing a structured report.')
     expect(text).toContain('Last successful handoff:')
     expect(text).toContain('ROUND_ONE_HANDOFF')
-    expect(children).toHaveLength(2)
-    for (const child of children) expect(ctx.agents.get(child.id)).toBeUndefined()
+    expect(childIds).toHaveLength(2)
+    for (const childId of childIds) expect(ctx.agents.get(childId)).toBeUndefined()
     await parentHandle.dispose()
   })
 

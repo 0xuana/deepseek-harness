@@ -8,6 +8,7 @@ import ToolRuntime, { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import PlanModeController from '@deepseek-ai/dsh-plan-mode'
+import UserQuestionService, { UserQuestionError } from '@deepseek-ai/dsh-user-questions'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 
 const PLAN_CONFIG = { section: 'Test plan mode instructions.' }
@@ -55,8 +56,7 @@ function waitForIdle(ctx: Context, agent: Agent): Promise<void> {
 
 /** Read the plan unit that backs the service in this full composition. */
 function planActive(ctx: Context, agent: Agent): boolean {
-  const state = ctx.sessionProjections.stateOf(agent.session, 'plan')
-  if (state === undefined) throw new Error('plan projection is not registered')
+  const state = ctx.planMode.get(agent)
   return state.active
 }
 
@@ -222,5 +222,30 @@ describe('plan mode through the agent loop', () => {
     expect(notice?.type === 'user/message' && notice.data.content).toEqual([
       { type: 'text', text: 'The user switched this session to plan mode.' },
     ])
+  })
+
+  it('a dismissed plan review ends the turn without another model request', async () => {
+    const adapter = new MockAdapter([
+      toolCallResponse('call-exit', 'exit_plan_mode', { plan: '# Plan\n\ndo things' }),
+      // Consumed only if the dismissal regresses to another model request.
+      textResponse('Waiting for your message.'),
+    ])
+    const ctx = await harness(adapter)
+    await ctx.plugin(UserQuestionService)
+    ctx.on('user-questions/request', () => Promise.reject(new UserQuestionError('the user cancelled ask_user_question', 'ASK_CANCELLED')))
+    const agent = await ctx.agentLoop.create(SessionId('it-plan-dismiss'), { provider: 'mock', model: 'mock' })
+    ctx.planMode.set(agent, true)
+
+    const idle = waitForIdle(ctx, agent)
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'plan it' }], source: { kind: 'user' } }))
+    await idle
+
+    expect(adapter.requests).toHaveLength(1)
+    const log = agent.session.snapshotEvents()
+    const result = findEvent(log, 'tool/result')
+    expect(result.data.message.isError).toBe(false)
+    expect(result.data.message.content).toEqual([{ type: 'text', text: 'The user dismissed the plan review to reply in their own words; plan mode remains active.' }])
+    expect(findEvent(log, 'turn/end').data.reason).toEqual({ kind: 'completed' })
+    expect(planActive(ctx, agent)).toBe(true)
   })
 })

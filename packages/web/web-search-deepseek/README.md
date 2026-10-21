@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-With `dsh-web-search-deepseek`, the harness searches the web through DeepSeek's native search using the DeepSeek account sign-in or an existing `DEEPSEEK_API_KEY`. Choose it when a deployment accepts that one search costs a full model turn in latency and tokens, because DeepSeek exposes no dedicated search endpoint. Results come from the structured search blocks DeepSeek returns, never from reply text. The provider reports itself not ready for a model request whose search has no credential, so `dsh-tool-web` does not offer that request `web_search`; a call that still arrives, or a response without a search-result block, fails with a structured error.
+With `dsh-web-search-deepseek`, the harness searches the web through DeepSeek's native search using the DeepSeek account sign-in or an existing `DEEPSEEK_API_KEY`. Choose it when a deployment wants DeepSeek native search and accepts that one search costs a full model turn in latency and tokens; the DeepSeek Search and Fetch APIs in [dsh-web-deepseek-api](../web-deepseek-api/README.md) retrieve without one. Results come from the structured search blocks DeepSeek returns, never from scraping text out of a reply. The provider reports itself not ready for a model request whose search has no credential, so `dsh-tool-web` does not offer that request `web_search`; a call that still arrives, or a response without a search-result block, fails with a structured error. The model-facing `web_search` tool lives in `dsh-tool-web`.
 
 ## Table of Contents
 
@@ -74,7 +74,7 @@ A search running under an initiating agent appends the log-only `web/deepseek-se
 
 ### Failures and recovery
 
-Failures throw `WebError` with a machine-routable code: a missing credential is `WEB_PROVIDER_CREDENTIAL_MISSING`, a conversation on another provider's route without search configuration is `WEB_PROVIDER_ROUTE_DISABLED`, a chat key that may not reach the search endpoint is `WEB_PROVIDER_ENDPOINT_MISMATCH`, caller cancellation is `WEB_ABORTED`, and provider or transport failures — including a response with no `web_search_tool_result` block — are `WEB_PROVIDER_ERROR`. HTTP redirects are rejected before the `Location` target is contacted. Every failure after dispatch names the resolved search endpoint and explains that search endpoint configuration is separate from chat. If the endpoint is unintended, the message tells the conversation model that the user can set `DEEPSEEK_SEARCH_BASE_URL` or configure `web-search-deepseek.baseURL`; the shipped Web app has no settings page for this provider. The model must not choose or change the endpoint. The model-facing `web_search` tool surfaces this text under its own error wrapper.
+Failures throw `WebError` with a machine-routable code: a missing credential is `WEB_PROVIDER_CREDENTIAL_MISSING`, a conversation on another provider's route without search configuration is `WEB_PROVIDER_ROUTE_DISABLED`, a chat key that may not reach the search endpoint is `WEB_PROVIDER_ENDPOINT_MISMATCH`, caller cancellation is `WEB_ABORTED`, and provider or transport failures — including a response with no `web_search_tool_result` block — are `WEB_PROVIDER_ERROR`. HTTP redirects are rejected before the `Location` target is contacted. Every failure after dispatch names the resolved search endpoint and explains that search endpoint configuration is separate from chat. If the endpoint is unintended, the message tells the conversation model to guide the user to the Messages API base URL field under Plugins > Built-in plugin settings > Web search and save the change. When that page is unavailable, it names `web-search-deepseek.baseURL` as the deployment configuration alternative. The model must not choose or change the endpoint. The model-facing `web_search` tool surfaces this text under its own error wrapper.
 
 -----
 
@@ -117,7 +117,7 @@ Readiness captures the same options but reads no API key value: on the account r
 Read these pages when the package-level contract is not enough. They move from the shared vocabulary to the service, the model-facing tools, and the design rationale.
 
 - [Web subsystem](../../../docs/subsystems/web.md) — the exhaustive search request/result vocabulary and error codes.
-- [Web package map](../README.md) — the six-package family and each role.
+- [Web package map](../README.md) — the seven-package family and each role.
 - [dsh-web](../web/README.md) — the web service this provider registers into.
 - [dsh-tool-web](../tool-web/README.md) — the model-facing `web_search` tool that renders this provider's sources.
 - [Generated configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-web-search-deepseek) — every accepted config field and its source declaration.
@@ -133,11 +133,11 @@ Read these pages when the package-level contract is not enough. They move from t
 
 #### What the model sees
 
-A separate DeepSeek model receives exactly `Perform a web search for the query: <query>` as its user text and one native `web_search` server-tool definition. This request is not part of the conversation model's context.
+A separate DeepSeek model receives exactly `Perform a web search for the query: <query>` as its user text and one native `web_search` server-tool definition, with thinking disabled. This request is not part of the conversation model's context.
 
 #### Token effect
 
-Separate provider input and output tokens are incurred for each search; `maxTokens` caps generated output and `maxUses` caps native search uses.
+Separate provider input and output tokens are incurred for each search; disabled thinking adds no reasoning tokens, `maxTokens` caps generated output, and `maxUses` caps native search uses.
 
 #### KV Cache effect
 
@@ -178,13 +178,13 @@ A returning or removed `web_search` changes the declared tools as [`dsh-tool-web
 
 These limits define when the provider is expensive or incomplete. They are current package constraints.
 
-- **One search costs a full Messages model turn** — latency plus generated tokens, with up to `maxUses` server-side searches; DeepSeek exposes no dedicated retrieval endpoint.
-- **Provider selection cannot see a missing key** — `available()` is synchronous and cannot query the asynchronous credential store, so `ctx.web` still selects a keyless provider and a direct search fails with `WEB_PROVIDER_CREDENTIAL_MISSING`; the asynchronous `ready()` affects only which model requests are offered `web_search`.
+- **One search costs a full Messages model turn** — latency plus generated tokens, with up to `maxUses` server-side searches; [dsh-web-deepseek-api](../web-deepseek-api/README.md) uses the dedicated Search API instead.
+- **Provider selection cannot see a missing key** — the synchronous availability check can establish that a resolver exists but cannot query an asynchronous credential store, so `ctx.web` still selects a keyless provider and a direct search fails with `WEB_PROVIDER_CREDENTIAL_MISSING`; the asynchronous `ready()` affects only which model requests are offered `web_search`.
 - **Readiness checks presence, not validity** — a wrong key, or an endpoint without the native `web_search_20250305` server tool, counts as ready, so `web_search` stays offered and each call fails with a structured error.
 - **The endpoint check compares origins only** — a gateway on another origin that forwards an official DeepSeek key is still refused until search has its own key or endpoint.
 - **Only the key reference is compared with its default** — `apiKeyEnv: DEEPSEEK_API_KEY` written out matches the shipped row, so it keeps the DeepSeek-route and endpoint checks; a written `baseURL` counts as search configuration even when it names the default endpoint.
 - **Over-returned sources still cost tokens** — with no result-count knob on the wire, `maxResults` is enforced only post-hoc by service truncation.
-- **Uncited results carry no `snippet`** — a source gains one only when a text-block citation (`cited_text`) matches its URL.
+- **Sources usually carry no `snippet`** — a source gains one only when a text-block citation (`cited_text`) matches its URL, and DeepSeek's Anthropic-compatible endpoint returns text blocks without `citations`.
 
 <a id="dev-note"></a>
 ### Dev Note
@@ -194,8 +194,8 @@ These limits define when the provider is expensive or incomplete. They are curre
 
 This Dev Note is working context for maintainers: open questions and undecided directions. It is explicitly non-authoritative — shipped behavior, limits, and rationale live in the sections above and the linked Agent Notes.
 
-#### Future: dedicated retrieval endpoint
+#### Dedicated retrieval endpoint
 
-A native DeepSeek search endpoint that avoids the full model turn would remove the dominant cost; until DeepSeek exposes one, this provider stays a Messages-call adapter.
+DeepSeek's Search and Fetch APIs, which avoid the full model turn, live in [dsh-web-deepseek-api](../web-deepseek-api/README.md) and are selected by the Web search settings switch; this provider stays the default until the Search API launch is announced.
 
 </details>

@@ -1,15 +1,16 @@
+import AgentRegistry from '@deepseek-ai/dsh-agent'
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import LlmRuntime, { createUserMessage, markAgentLoopRequest } from '@deepseek-ai/dsh-llm'
 import { deepFreeze } from '@deepseek-ai/dsh-util-values'
 import SessionStore, { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import { turnBoundaryProjectionDefinition } from '@deepseek-ai/dsh-agent-loop'
 import SessionTitleService, {
   SessionTitleProviderId,
   type SessionTitleProvider,
   type SessionTitleProviderRequest,
   type SessionTitleProviderResult,
+  type SessionTitleSnapshot,
 } from '@deepseek-ai/dsh-session-title'
 
 const CONFIG = {
@@ -55,6 +56,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentRegistry)
     await ctx.plugin(SessionTitleService, CONFIG)
     const parent = ctx.sessions.create(SessionId('title-parent'))
     parent.append('turn/start', {
@@ -120,6 +122,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentRegistry)
     await ctx.plugin(SessionTitleService, CONFIG)
     const requests: SessionTitleProviderRequest[] = []
     const provider: SessionTitleProvider = {
@@ -152,6 +155,13 @@ describe('SessionTitleService Provider lifecycle', () => {
       messages: [{ seq: first.seq, text: 'Explain asynchronous title generation' }],
       route: { provider: 'main-route', model: 'chat-model' },
     })
+    // The service captures the fallback it ensured immediately before the
+    // provider call, and that fallback event can follow the source message.
+    expect(requests[0]?.currentTitle).toMatchObject({
+      source: { kind: 'fallback' },
+      messageSeqs: [first.seq],
+    })
+    expect(requests[0]?.currentTitle?.eventSeq).toBeGreaterThan(first.seq)
     expect(ctx.sessionTitle.get(session)).toMatchObject({
       title: 'A model-generated title',
       messageSeqs: [first.seq],
@@ -172,10 +182,84 @@ describe('SessionTitleService Provider lifecycle', () => {
     expect(requests[1]?.messages.map(message => message.seq)).toEqual([first.seq, second.seq])
   })
 
+  it('omits currentTitle when a one-byte cap makes the fallback underivable from a multibyte message', async () => {
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentRegistry)
+    await ctx.plugin(SessionTitleService, { fallbackMaxWords: 5, fallbackMaxBytes: 1, maxTitleBytes: 24 })
+    const currentTitles: (SessionTitleSnapshot | undefined)[] = []
+    ctx.sessionTitle.register({
+      id: SessionTitleProviderId('absent-current'),
+      automatic: 'all-prompts',
+      async generate(request) {
+        currentTitles.push(request.currentTitle)
+        return { title: 'Provided title', messageSeqs: request.messages.map(message => message.seq) }
+      },
+    })
+    const session = ctx.sessions.create(SessionId('underivable-fallback'))
+    session.append('turn/start', { turn: 1 })
+    appendHumanPrompt(session, '番')
+    await settle()
+    appendRoute(session)
+    await settle()
+
+    expect(currentTitles).toEqual([undefined])
+    expect(ctx.sessionTitle.get(session)).toMatchObject({
+      title: 'Provided title',
+      source: { kind: 'provider', provider: SessionTitleProviderId('absent-current') },
+    })
+  })
+
+  it('passes the latest accepted title snapshot to each provider revision', async () => {
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentRegistry)
+    await ctx.plugin(SessionTitleService, CONFIG)
+    const currentTitles: (SessionTitleSnapshot | undefined)[] = []
+    ctx.sessionTitle.register({
+      id: SessionTitleProviderId('current-title'),
+      automatic: 'all-prompts',
+      async generate(request) {
+        currentTitles.push(request.currentTitle)
+        return {
+          title: `Revision ${String(currentTitles.length)}`,
+          messageSeqs: request.messages.map(message => message.seq),
+        }
+      },
+    })
+    const session = ctx.sessions.create(SessionId('current-title-snapshot'))
+    session.append('turn/start', { turn: 1 })
+    const first = appendHumanPrompt(session, 'First prompt')
+    await settle()
+    appendRoute(session)
+    await settle()
+
+    expect(currentTitles[0]).toMatchObject({
+      source: { kind: 'fallback' },
+      messageSeqs: [first.seq],
+    })
+
+    appendHumanPrompt(session, 'Second prompt')
+    appendRoute(session, 'change')
+    await settle()
+
+    expect(currentTitles[1]).toMatchObject({
+      title: 'Revision 1',
+      messageSeqs: [first.seq],
+      source: { kind: 'provider', provider: SessionTitleProviderId('current-title') },
+    })
+    expect(Object.isFrozen(currentTitles[1])).toBe(true)
+  })
+
   it('preserves provider input order across bounded title-input chunks', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentRegistry)
     await ctx.plugin(SessionTitleService, CONFIG)
     const session = ctx.sessions.create(SessionId('chunked-provider-input'))
     session.append('turn/start', { turn: 1 })
@@ -205,6 +289,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentRegistry)
     await ctx.plugin(SessionTitleService, CONFIG)
     const requests: SessionTitleProviderRequest[] = []
     ctx.sessionTitle.register({
@@ -241,6 +326,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentRegistry)
     await ctx.plugin(SessionTitleService, CONFIG)
     const pending = deferred<SessionTitleProviderResult>()
     let observedSignal: AbortSignal | undefined
@@ -293,6 +379,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentRegistry)
     await ctx.plugin(SessionTitleService, CONFIG)
     const pending = deferred<SessionTitleProviderResult>()
     const dispose = ctx.sessionTitle.register({
@@ -328,6 +415,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentRegistry)
     await ctx.plugin(SessionTitleService, CONFIG)
     const firstResult = deferred<SessionTitleProviderResult>()
     const requests: SessionTitleProviderRequest[] = []
@@ -373,7 +461,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
+    await ctx.plugin(AgentRegistry)
     await ctx.plugin(SessionTitleService, CONFIG)
     const requests: SessionTitleProviderRequest[] = []
     ctx.sessionTitle.register({
@@ -429,7 +517,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
+    await ctx.plugin(AgentRegistry)
     await ctx.plugin(SessionTitleService, CONFIG)
     const generate = vi.fn(async (request: SessionTitleProviderRequest): Promise<SessionTitleProviderResult> => ({
       title: 'Unexpected title',
@@ -462,6 +550,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentRegistry)
     await ctx.plugin(SessionTitleService, CONFIG)
     const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => undefined)
     const provider: SessionTitleProvider = {

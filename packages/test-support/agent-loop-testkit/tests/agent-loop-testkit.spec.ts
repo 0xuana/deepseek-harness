@@ -12,6 +12,7 @@ import {
   mountAgentLoopTestDependencies,
   mountAgentLoopTestHarness,
   unsupportedInbox,
+  unsupportedModel,
 } from '../src/index.ts'
 
 function message(text: string) {
@@ -19,6 +20,14 @@ function message(text: string) {
 }
 
 describe('dsh-agent-loop-testkit', () => {
+  it('rejects reads and changes through an unsupported Agent stub Model', () => {
+    const model = unsupportedModel()
+
+    expect(() => model.current()).toThrow('this test Agent does not support model selection')
+    expect(() => { model.select({ provider: 'mock', model: 'mock' }) })
+      .toThrow('this test Agent does not support model selection')
+  })
+
   it('rejects mutations through an unsupported Agent stub Inbox', () => {
     const inbox = unsupportedInbox()
 
@@ -110,7 +119,7 @@ describe('dsh-agent-loop-testkit', () => {
       time: 1,
       data: { target: 'next-turn', start: 99, inserted: [] },
     }])
-    expect(() => ctx.sessionProjections.stateOf(invalid, 'inbox'))
+    expect(() => ctx.sessionProjections.checkpoint(invalid).inbox?.val)
       .toThrow(/invalid persisted inbox splice/)
     expect(harness.claim(agent, 'next-turn', 3)).toEqual([step, turn])
     expect(claimed).toEqual([

@@ -7,6 +7,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { resolve } from 'node:path'
+import { SdkUserQuestionBridge } from './user-questions.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
 import { admitEncodedImages, type EncodedImageAttachment, type ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
@@ -14,6 +15,7 @@ import { createUserMessage, ReasoningEffortId, type ContentBlock, type LlmRuntim
 import { carrierKeyOf, type Scoped } from '@deepseek-ai/dsh-scope'
 import type { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-working-directory'
+import type {} from '@deepseek-ai/dsh-schedule'
 import type SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import type { SubagentRunEndInfo } from '@deepseek-ai/dsh-subagent'
 import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
@@ -24,6 +26,7 @@ import type {
   SessionEventNotification,
   SessionPromptParams,
   SessionPromptResult,
+  SessionResumeParams,
   SessionWaitParams,
   SessionWorkingDirectoryParams,
   SessionWorkingDirectorySetParams,
@@ -92,6 +95,10 @@ export class HarnessSdkJsonRpcServer {
   private shutdownTask: Promise<Record<string, never>> | undefined
   private shuttingDown = false
   private initialized = false
+  private readonly userQuestions: SdkUserQuestionBridge
+  private readonly initialization = Promise.withResolvers<void>()
+  /** Restored by a reminder and available for the client's first resume. */
+  private readonly scheduledSessions = new Map<string, Promise<SessionRecord>>()
 
   constructor(
     private readonly ctx: Context,
@@ -99,6 +106,28 @@ export class HarnessSdkJsonRpcServer {
     private readonly options: HarnessSdkJsonRpcServerOptions = {},
   ) {
     const serverOptions = this.options
+    this.userQuestions = new SdkUserQuestionBridge(ctx, transport, agent =>
+      this.sessions.get(agent.session.id)?.handle.agent === agent)
+    this.disposers.push(ctx.on('schedule/resolve-agent', async (sessionId) => {
+      // Startup delivery must wait for the SDK model route and output limit.
+      await this.initialization.promise
+      if (this.shuttingDown) throw new Error('SDK server is shutting down')
+      const existing = this.sessions.get(sessionId)
+      const pending = this.sessionCreations.get(sessionId)
+      if (existing !== undefined) {
+        this.assertLiveAgent(existing, sessionId)
+        return existing.handle.agent
+      }
+      if (pending !== undefined) return (await pending).handle.agent
+      const restoration = this.openSession(sessionId, true)
+      this.scheduledSessions.set(sessionId, restoration)
+      try {
+        return (await restoration).handle.agent
+      } catch (error) {
+        this.scheduledSessions.delete(sessionId)
+        throw error
+      }
+    }))
     this.disposers.push(ctx.on('session/event', (session, event) => {
       const record = this.sessions.get(session.id)
       if (event.type === 'turn/end' && record?.handle.agent.session === session
@@ -183,7 +212,9 @@ export class HarnessSdkJsonRpcServer {
     this.model = model
     this.reasoningEffort = reasoningEffort
     this.maxTokens = params.maxTokens
+    this.userQuestions.enabled = params.capabilities?.userQuestions === true
     this.initialized = true
+    this.initialization.resolve()
     return { serverInfo: { name: 'deepseek-harness-sdk-runtime', version: '0.0.1' } }
   }
 
@@ -209,6 +240,31 @@ export class HarnessSdkJsonRpcServer {
     })
     rec.handle.agent.followup(message)
     return { messageId: message.id }
+  }
+
+  /**
+   * Restore a persisted session and repair its interrupted final turn without sending input.
+   * Uses the initialized model route while preserving the stored session identity and directory.
+   * Rejects missing, unreadable, or already owned sessions; never creates a replacement.
+   * @param params - persisted session identity in the configured persistence store.
+   * @returns an empty result after the Agent is ready for prompts.
+   */
+  async resume(params: SessionResumeParams): Promise<Record<string, never>> {
+    if (!this.initialized) throw new Error('SDK server is not initialized')
+    if (this.shuttingDown) throw new Error('SDK server is shutting down')
+    const sessionId = params.sessionId
+    const restoration = this.scheduledSessions.get(sessionId)
+    if (restoration !== undefined) {
+      this.scheduledSessions.delete(sessionId)
+      const record = await restoration
+      this.assertLiveAgent(record, sessionId)
+      return {}
+    }
+    if (this.sessions.has(sessionId) || this.sessionCreations.has(sessionId)) {
+      throw new Error(`SDK session is already open or opening: ${sessionId}`)
+    }
+    await this.openSession(sessionId, true)
+    return {}
   }
 
   /**
@@ -283,9 +339,12 @@ export class HarnessSdkJsonRpcServer {
 
   private async performShutdown(): Promise<Record<string, never>> {
     this.shuttingDown = true
+    this.userQuestions.close()
+    this.initialization.resolve()
     const pendingCreations = [...this.sessionCreations.values()]
     await Promise.allSettled(pendingCreations)
     this.sessionCreations.clear()
+    this.scheduledSessions.clear()
     const records = [...this.sessions.values()]
     this.sessions.clear()
     const failures: unknown[] = []
@@ -327,6 +386,13 @@ export class HarnessSdkJsonRpcServer {
         return this.initialize(params as unknown as InitializeParams)
       case 'session/prompt':
         return this.prompt(params as unknown as SessionPromptParams)
+      case 'session/resume': {
+        const sessionId = params?.sessionId
+        if (typeof sessionId !== 'string' || sessionId.length === 0) {
+          throw new TypeError('session/resume requires a non-empty sessionId string')
+        }
+        return this.resume({ sessionId })
+      }
       case 'session/wait': {
         const sessionId = params?.sessionId
         if (typeof sessionId !== 'string') throw new TypeError('session/wait requires a sessionId string')
@@ -352,11 +418,16 @@ export class HarnessSdkJsonRpcServer {
 
   private async getOrCreateSession(sessionId: string): Promise<SessionRecord> {
     if (this.shuttingDown) throw new Error('SDK server is shutting down')
+    this.scheduledSessions.delete(sessionId)
     const existing = this.sessions.get(sessionId)
     if (existing) return existing
     const pending = this.sessionCreations.get(sessionId)
     if (pending) return pending
-    const creation = this.createSession(sessionId)
+    return this.openSession(sessionId, false)
+  }
+
+  private openSession(sessionId: string, resume: boolean): Promise<SessionRecord> {
+    const creation = this.createSession(sessionId, resume)
     this.sessionCreations.set(sessionId, creation)
     void creation.then(
       () => { this.sessionCreations.delete(sessionId) },
@@ -365,21 +436,36 @@ export class HarnessSdkJsonRpcServer {
     return creation
   }
 
-  private async createSession(sessionId: string): Promise<SessionRecord> {
+  private async createSession(sessionId: string, resume: boolean): Promise<SessionRecord> {
     // No preset composition: this server's compositions keep the model-facing
     // rows in the host plane, so this agent reads them from the global layer. A
     // deployment that configures a roster has to join one here first
     // (@deepseek-ai/dsh-agent-preset-registry README, "Composing a child agent").
-    const handle = await this.ctx.agents.create({
+    const agentOptions = {
+      provider: this.provider,
+      model: this.model,
+      ...this.reasoningEffort === undefined ? {} : { reasoningEffort: this.reasoningEffort },
+      ...this.maxTokens === undefined ? {} : { maxTokens: this.maxTokens },
+    }
+    const handle = await (resume ? this.ctx.agents.resume({
+      resumeSessionId: brandString<SessionId>(sessionId),
+      agentOptions,
+      // The initialized route replaces the restored Session's model selection.
+      setup: (_agentCtx, agent) => {
+        const previous = agent.model.current()
+        const selection = { ...agentOptions }
+        if (selection.reasoningEffort === undefined && previous !== undefined
+          && previous.provider === selection.provider && previous.model === selection.model
+          && previous.reasoningEffort !== undefined) {
+          selection.reasoningEffort = previous.reasoningEffort
+        }
+        agent.model.select(selection)
+      },
+    }) : this.ctx.agents.create({
       sessionId: brandString<SessionId>(sessionId),
       meta: { cwd: this.cwd },
-      agentOptions: {
-        provider: this.provider,
-        model: this.model,
-        ...this.reasoningEffort === undefined ? {} : { reasoningEffort: this.reasoningEffort },
-        ...this.maxTokens === undefined ? {} : { maxTokens: this.maxTokens },
-      },
-    })
+      agentOptions,
+    }))
     const rec: SessionRecord = { handle, failure: undefined }
     this.sessions.set(sessionId, rec)
     return rec
