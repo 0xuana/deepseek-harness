@@ -271,7 +271,7 @@ it('defers native recovery until foreground and opens the policy download page w
   f.owner.emit('focus')
   expect(native.messageBox).toHaveBeenCalledOnce()
   expect(native.messageBox).toHaveBeenCalledWith(f.owner, expect.objectContaining({
-    message: '更新界面加载失败', cancelId: 2,
+    message: '请更新后继续使用', cancelId: 2,
     buttons: ['打开下载页面', '退出', '取消'],
   }))
   expect(native.messageBox.mock.calls[0]![1].detail).toContain('1.0.1-nightly.1')
@@ -393,4 +393,18 @@ it('reports a browser-opening failure in the native fallback without claiming do
   expect(native.messageBox.mock.calls[1]![1].detail).toContain('无法打开下载页面，请重试')
   expect(f.view().policy.blocking).toBe(true)
   expect(f.install).not.toHaveBeenCalled()
+})
+
+
+it('uses the configured policy title as the native headline without repeating it in detail', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  const f = setup()
+  await Promise.resolve()
+  f.policy({ blocking: true, checking: false, title: 'Configured title', detail: 'Configured detail' })
+  window.loadURL.mockRejectedValueOnce(new Error('local recovery failed'))
+  window.webContents.emit('render-process-gone')
+  await Promise.resolve()
+  const options = native.messageBox.mock.calls[0]![1]
+  expect(options.message).toBe('Configured title')
+  expect(options.detail).toBe('Configured detail\n\n新版本：1.0.1-nightly.1')
 })
