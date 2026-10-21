@@ -8,7 +8,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { EntryMenuContent, type EntryMenuInjected, type EntryRegion } from './EntryMenuContent.tsx'
-import { en, zh } from './locales.ts'
+import { en, ja, zh } from './locales.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -25,7 +25,8 @@ export const inject = ['slots', 'locale', 'pluginNavigation', 'uiWorkspace']
  * @param ctx - Browser context with slot, locale, plugin navigation, and Workspace services.
  */
 export function apply(ctx: Context): void {
-  ctx.effect(() => ctx.locale.register('entryCustomization', { en, zh }))
+  const dictionaries = { en, zh, ja }
+  ctx.effect(() => ctx.locale.register('entryCustomization', dictionaries))
   const t = ctx.locale.bind('entryCustomization')
   const injected = (region: EntryRegion): EntryMenuInjected => ({
     region,

@@ -23,7 +23,7 @@ describe.skipIf(MODE === 'record')('web e2e: native and Client locale preference
   const reported: string[] = []
 
   beforeAll(async () => {
-    scaffold = await launchWebScaffold()
+    scaffold = await launchWebScaffold({ extraOverlayPath: fileURLToPath(new URL('./pin-browse-picker.overlay.yml', import.meta.url)) })
     browser = await chromium.launch()
     page = await browser.newPage({ viewport: { width: 1440, height: 960 }, locale: 'en-US' })
     tripwire = watchConsole(page)
@@ -54,14 +54,14 @@ describe.skipIf(MODE === 'record')('web e2e: native and Client locale preference
   it('uses OS languages without saving them, then shares an explicit choice across reloads', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-desktop-locale'))
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
-    await openSettings(page, 'zh')
-    const zhDialog = page.getByRole('dialog', { name: '设置', exact: true })
-    await zhDialog.getByRole('button', { name: '中文', exact: true }).waitFor()
-    await expect.poll(() => reported).toEqual(['zh'])
+    await openSettings(page, 'ja')
+    const jaDialog = page.getByRole('dialog', { name: '設定', exact: true })
+    await jaDialog.getByRole('button', { name: '日本語', exact: true }).waitFor()
+    await expect.poll(() => reported).toEqual(['ja'])
     expect(scaffold.ctx.settings.describe().find(row => row.ns === 'locale')!.value).toEqual({})
     await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'automatic.expected.md'),
       await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd, versionCapture), MODE)
-    await zhDialog.getByRole('button', { name: '中文', exact: true }).click()
+    await jaDialog.getByRole('button', { name: '日本語', exact: true }).click()
     await page.getByRole('menuitem', { name: 'English', exact: true }).click()
     const enDialog = page.getByRole('dialog', { name: 'Settings', exact: true })
     await enDialog.getByRole('button', { name: 'English', exact: true }).waitFor()
@@ -79,6 +79,22 @@ describe.skipIf(MODE === 'record')('web e2e: native and Client locale preference
     await expect.poll(() => reported).toEqual(['en'])
     expect(await page.evaluate(() => document.documentElement.lang)).toBe('en')
     expect(await page.evaluate(() => localStorage.getItem('dsh.locale'))).toBeNull()
+    await enDialog.getByRole('button', { name: 'English', exact: true }).click()
+    await page.getByRole('menuitem', { name: '日本語', exact: true }).click()
+    await jaDialog.getByRole('button', { name: '日本語', exact: true }).waitFor()
+    await expect.poll(() => readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8'))
+      .toContain('preference: ja')
+    const japaneseReloadWarnings = tripwire.warnings.length
+    reported.length = 0
+    await page.reload({ waitUntil: 'load' })
+    acknowledgeReloadConnectionLoss(tripwire, japaneseReloadWarnings)
+    await openSettings(page, 'ja')
+    await jaDialog.getByRole('button', { name: '日本語', exact: true }).waitFor()
+    await expect.poll(() => reported).toEqual(['ja'])
+    expect(await page.evaluate(() => document.documentElement.lang)).toBe('ja')
+    await page.setViewportSize({ width: 390, height: 844 })
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+
     expect(tripwire.warnings).toEqual([])
     expect(tripwire.pageErrors).toEqual([])
     await assertFixtureInventory(SNAPSHOT_DIR, ['automatic.expected.md', 'selected.expected.md'])

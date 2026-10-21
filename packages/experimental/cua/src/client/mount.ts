@@ -10,7 +10,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import { PermissionController } from './controller.ts'
 import { PermissionPanel, PermissionSetup, PermissionToast } from './PermissionPanel.tsx'
-import { en, NS, zh, type CuaPermissionLocaleKey } from './locales.ts'
+import { en, ja, NS, zh, type CuaPermissionLocaleKey } from './locales.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -31,7 +31,8 @@ export const inject = ['remote', 'slots', 'locale', 'configForms']
 export async function mountCuaPermissions(ctx: Context, contribution: TypertRemoteContribution): Promise<() => Promise<void>> {
   const transport = ctx.plugin(async (owner) => { await owner.remote.$mount(contribution) })
   const ui = ctx.inject(['remote.cuaAccess', 'slots', 'locale'], (ctx) => {
-    ctx.effect(() => ctx.locale.register(NS, { en, zh }))
+    const dictionaries = { en, zh, ja }
+    ctx.effect(() => ctx.locale.register(NS, dictionaries))
     const controller = new PermissionController(ctx.remote.cuaAccess)
     const face = controller.face()
     const preset = ctx.configForms.get<{ default: string; selectedDefault?: string }>('agent-preset-registry')
