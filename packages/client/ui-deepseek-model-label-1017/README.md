@@ -27,7 +27,7 @@ This package shows `1017` beside `DeepSeek-V4.1-Flash` in the composer model sel
 
 The Web bundle includes this plugin, including when Desktop uses that bundle. It has no configuration fields.
 
-The badge appears only when the provider is `deepseek-official` or `deepseek-account`, the model ID is `deepseek-flash`, and the catalog name is exactly `DeepSeek-V4.1-Flash`. Other names and providers keep their catalog text. The input button, current-model menu row, and model options share the blue plain-text release marker. It uses the model name’s font size and baseline, with no capsule or fade; limited space ellipsizes the combined text, so the marker may be hidden.
+The badge appears only when the provider is `deepseek-official` or `deepseek-account`, the model ID is `deepseek-flash`, and the catalog name is exactly `DeepSeek-V4.1-Flash`. Other names and providers keep their catalog text. The input button, current-model menu row, and model options share the blue plain-text release marker. It uses the model name’s font size and baseline, with no capsule; when space is limited, the selector fades out the end of the combined text, so the marker may be hidden.
 
 Disable the following row through a profile patch to restore the catalog name:
 

@@ -69,21 +69,23 @@ describe.skipIf(MODE === 'record')('web e2e: temporary DeepSeek release badge', 
     }
   })
 
-  it('ellipsizes the inline release with the model name and restores it after widening', async () => {
+  it('fades out the inline release with the model name and restores it after widening', async () => {
     const trigger = page.getByRole('button', { name: /^选择模型/ })
     const readLayout = () => trigger.getByText('1017', { exact: true }).evaluate((release) => {
       const label = release.parentElement!
-      const container = label.closest('[data-provider-id]')!.parentElement!
+      const box = label.closest('[data-model-select-text]')!
       const style = getComputedStyle(release)
       const labelStyle = getComputedStyle(label)
+      const boxStyle = getComputedStyle(box)
       return {
-        clipped: container.scrollWidth > container.clientWidth,
-        ellipsis: getComputedStyle(container).textOverflow,
+        overflowing: box.scrollWidth > box.clientWidth,
+        clipped: box.hasAttribute('data-model-select-clipped'),
+        textOverflow: boxStyle.textOverflow,
+        fade: boxStyle.maskImage,
         inline: labelStyle.display === 'inline' && style.display === 'inline',
         sameFontSize: style.fontSize === labelStyle.fontSize,
         background: style.backgroundColor,
         padding: style.padding,
-        mask: labelStyle.maskImage,
       }
     })
     try {
@@ -91,8 +93,9 @@ describe.skipIf(MODE === 'record')('web e2e: temporary DeepSeek release badge', 
       await expect.poll(async () => (await readLayout()).clipped).toBe(true)
       const narrowed = await readLayout()
       expect(narrowed).toEqual({
-        clipped: true, ellipsis: 'ellipsis', inline: true, sameFontSize: true,
-        background: 'rgba(0, 0, 0, 0)', padding: '0px', mask: 'none',
+        overflowing: true, clipped: true, textOverflow: 'clip',
+        fade: 'linear-gradient(90deg, rgb(0, 0, 0) calc(100% - 24px), rgba(0, 0, 0, 0))',
+        inline: true, sameFontSize: true, background: 'rgba(0, 0, 0, 0)', padding: '0px',
       })
       await page.setViewportSize({ width: 1440, height: 900 })
       await expect.poll(async () => (await readLayout()).clipped).toBe(false)
