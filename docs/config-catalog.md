@@ -16,7 +16,7 @@ Each package entry labels its data with three identifiers: `inject` lists the se
 
 - `inject`: `agents` · `llm` · `sessionPersistence` · `sessions`
 - `refs`: `Stream` (`@agentclientprotocol/sdk`)
-- `source`: [`packages/acp/acp/src/index.ts:75`](../packages/acp/acp/src/index.ts)
+- `source`: [`packages/acp/acp/src/index.ts:74`](../packages/acp/acp/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: the provider/model selection used for each ACP-created agent. */
@@ -96,7 +96,7 @@ export interface Config {
 
 - `inject`: `agents` · `sessions` · `llm` · `tools` · `systemPrompt` · `sessionProjections`
 - `refs`: [`AgentOptions`](subsystems/core.md) · [`SessionId`](subsystems/core.md) · `Volatile` (`@deepseek-ai/cosmokit`)
-- `source`: [`packages/core/agent-loop/src/index.ts:250`](../packages/core/agent-loop/src/index.ts)
+- `source`: [`packages/core/agent-loop/src/index.ts:253`](../packages/core/agent-loop/src/index.ts)
 
 ```ts config-catalog
 /** Agent-loop plugin configuration. */
@@ -106,7 +106,7 @@ export interface Config {
    * omission defaults to {@link DEFAULT_MAX_PARALLEL_TOOL_CALLS}.
    */
   maxParallelToolCalls: Volatile<number>
-  /** Agents created or resumed at plugin startup. */
+  /** Agents created or resumed at plugin startup; a resumed agent records its configured route as the Session's model selection. */
   agents: (AgentOptions & {
     /** Stable config label used in logs and as the fresh combined-id prefix. */
     id: string
@@ -1430,7 +1430,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-fs-local`
 
-- `source`: [`packages/fs/fs-local/src/index.ts:45`](../packages/fs/fs-local/src/index.ts)
+- `source`: [`packages/fs/fs-local/src/index.ts:46`](../packages/fs/fs-local/src/index.ts)
 
 ```ts config-catalog
 /** Configuration for the local filesystem backend. */
@@ -2604,7 +2604,7 @@ export interface Config {
   maxOutputBytes?: number
   /** V8 old-generation heap limit in MiB; native allocations are excluded. */
   maxOldGenerationSizeMb?: number
-  /** Maximum control frame, outstanding argument and queued control-output bytes. */
+  /** Maximum control message, outstanding binding-argument and queued control-output bytes. */
   maxMessageBytes?: number
   /** Maximum simultaneous host binding calls accepted from a program. */
   maxPendingCalls?: number
@@ -2799,8 +2799,8 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-schedule`
 
-- `inject`: `agents` · `sessions` · `storageDomain` · `sessionController` · `sessionPersistence`
-- `source`: [`packages/schedule/schedule/src/index.ts:72`](../packages/schedule/schedule/src/index.ts)
+- `inject`: `agents` · `sessions` · `storageDomain` · `sessionPersistence`
+- `source`: [`packages/schedule/schedule/src/index.ts:83`](../packages/schedule/schedule/src/index.ts)
 
 ```ts config-catalog
 /** Configuration for the Host Schedule domain. */
@@ -4258,6 +4258,8 @@ export interface Config {
   searchMaxResults?: number
   /** Upper bound on queries accepted by one `web_search` call. */
   searchMaxQueries?: number
+  /** Cap on each source summary in `web_search` output, in characters. Defaults to 800. */
+  searchSummaryMaxChars?: number
   /** Cooperative timeout budget (ms) for `web_fetch`. Defaults to 30000. */
   fetchTimeoutMs?: number
   /** Cooperative timeout budget (ms) for `web_search`. Defaults to 30000. */
@@ -4714,9 +4716,10 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-client-ui-conversation` | — | [`packages/client/ui-conversation/src/index.ts`](../packages/client/ui-conversation/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-cordis` | — | [`packages/extensions/ui-cordis/src/index.ts`](../packages/extensions/ui-cordis/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-deepseek-model-label-1017` | — | [`packages/client/ui-deepseek-model-label-1017/src/index.ts`](../packages/client/ui-deepseek-model-label-1017/src/index.ts) |
-| `@deepseek-ai/dsh-client-ui-deliverables` | `systemPrompt` · `connection` · `sessionQuery` · `sessionController` · `workspaceFiles` · `fs` · `sandboxPolicy` · `workspaceChanges` | [`packages/client/ui-deliverables/src/index.ts`](../packages/client/ui-deliverables/src/index.ts) |
+| `@deepseek-ai/dsh-client-ui-deliverables` | `connection` · `sessionQuery` · `sessionController` · `workspaceFiles` · `fs` · `sandboxPolicy` · `workspaceChanges` | [`packages/client/ui-deliverables/src/index.ts`](../packages/client/ui-deliverables/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-directory-picker-browse` | — | [`packages/client/ui-directory-picker-browse/src/index.ts`](../packages/client/ui-directory-picker-browse/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-directory-picker-native` | — | [`packages/client/ui-directory-picker-native/src/index.ts`](../packages/client/ui-directory-picker-native/src/index.ts) |
+| `@deepseek-ai/dsh-client-ui-entry-customization` | — | [`packages/client/ui-entry-customization/src/index.ts`](../packages/client/ui-entry-customization/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-goal` | — | [`packages/client/ui-goal/src/index.ts`](../packages/client/ui-goal/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-input-trigger` | — | [`packages/client/ui-input-trigger/src/index.ts`](../packages/client/ui-input-trigger/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-jobs` | — | [`packages/client/ui-jobs/src/index.ts`](../packages/client/ui-jobs/src/index.ts) |
@@ -4762,7 +4765,9 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-computer-use` | — | [`packages/computer-use/computer-use/src/index.ts`](../packages/computer-use/computer-use/src/index.ts) |
 | `@deepseek-ai/dsh-config-editor` | `loader` · `profileContext` | [`packages/boot/config-editor/src/index.ts`](../packages/boot/config-editor/src/index.ts) |
 | `@deepseek-ai/dsh-cordis-client-runner` | — | [`packages/extensions/cordis-client-runner/src/index.ts`](../packages/extensions/cordis-client-runner/src/index.ts) |
+| `@deepseek-ai/dsh-cua` | — | [`packages/experimental/cua/src/index.ts`](../packages/experimental/cua/src/index.ts) |
 | `@deepseek-ai/dsh-deepseek-llm-api-extensions` | — | [`packages/llm/deepseek-llm-api-extensions/src/index.ts`](../packages/llm/deepseek-llm-api-extensions/src/index.ts) |
+| `@deepseek-ai/dsh-deliverable-file-references` | `systemPrompt` | [`packages/deliverables/deliverable-file-references/src/index.ts`](../packages/deliverables/deliverable-file-references/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-auto-review` | `approval` · `llm` · `permissionPresets` · `sessions` · `tools` · `workingDirectory` | [`packages/experimental/auto-review/src/index.ts`](../packages/experimental/auto-review/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-client-ui-agent-team` | — | [`packages/experimental/client-ui-agent-team/src/index.ts`](../packages/experimental/client-ui-agent-team/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-client-ui-claude-code-mods` | — | [`packages/experimental/client-ui-claude-code-mods/src/index.ts`](../packages/experimental/client-ui-claude-code-mods/src/index.ts) |
@@ -4780,6 +4785,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-llm` | — | [`packages/llm/llm/src/index.ts`](../packages/llm/llm/src/index.ts) |
 | `@deepseek-ai/dsh-lsp` | — | [`packages/lsp/lsp/src/index.ts`](../packages/lsp/lsp/src/index.ts) |
 | `@deepseek-ai/dsh-mcp-resources` | `tools` | [`packages/mcp/mcp-resources/src/index.ts`](../packages/mcp/mcp-resources/src/index.ts) |
+| `@deepseek-ai/dsh-message-quotes` | — | [`packages/session/message-quotes/src/index.ts`](../packages/session/message-quotes/src/index.ts) |
 | `@deepseek-ai/dsh-otel` | — | [`packages/telemetry/otel/src/index.ts`](../packages/telemetry/otel/src/index.ts) |
 | `@deepseek-ai/dsh-sandbox-ssh` | `ssh` | [`packages/ssh/sandbox-ssh/src/index.ts`](../packages/ssh/sandbox-ssh/src/index.ts) |
 | `@deepseek-ai/dsh-session` | — | [`packages/core/session/src/index.ts`](../packages/core/session/src/index.ts) |
@@ -4849,7 +4855,7 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 | `@deepseek-ai/dsh-client-ui-slots` | — | [`packages/client/ui-slots/src/index.ts`](../packages/client/ui-slots/src/index.ts) |
 | `@deepseek-ai/dsh-client-web` | — | [`packages/client/web/src/index.ts`](../packages/client/web/src/index.ts) |
 | `@deepseek-ai/dsh-cmdline` | — | [`packages/boot/cmdline/src/index.ts`](../packages/boot/cmdline/src/index.ts) |
-| `@deepseek-ai/dsh-cua` | — | [`packages/experimental/cua/src/index.ts`](../packages/experimental/cua/src/index.ts) |
+| `@deepseek-ai/dsh-cua-bundle` | — | [`packages/experimental/cua-bundle/src/index.ts`](../packages/experimental/cua-bundle/src/index.ts) |
 | `@deepseek-ai/dsh-deque` | — | [`packages/util/deque/src/index.ts`](../packages/util/deque/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-agent-team-profile` | — | [`packages/experimental/agent-team-profile/src/index.ts`](../packages/experimental/agent-team-profile/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-badge-skill-bundle` | — | [`packages/experimental/badge-skill-bundle/src/index.ts`](../packages/experimental/badge-skill-bundle/src/index.ts) |

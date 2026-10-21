@@ -601,8 +601,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'clientModules',
-    summary: 'The web plugin table service: incremental `dsh.client` scan + wire composition + bundle route + index injection rows.',
-    description: 'The web plugin table service: incremental `dsh.client` scan + wire composition + bundle route + index injection rows. Construction runs the activation scan synchronously — a malformed declaration or missing bundle among the already-loaded entries aggregates into one loud throw (FAILED fiber; the boot activation audit reports it).',
+    summary: 'The web plugin table service: incremental `dsh.client` scan + wire composition + bundle and package-asset route + index injection rows.',
+    description: 'The web plugin table service: incremental `dsh.client` scan + wire composition + bundle and package-asset route + index injection rows. Construction runs the activation scan synchronously — a malformed declaration or missing bundle among the already-loaded entries aggregates into one loud throw (FAILED fiber; the boot activation audit reports it).',
     methods: [
       {
         signature: 'graph(): WebBootGraph',
@@ -618,7 +618,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'async fetchBundle(request: Request): Promise<Response>',
-        description: 'Serve an advertised revisioned bundle or source map without a Web server. Unknown URLs return 404, unsupported methods return 405, and `HEAD` returns the same immutable headers without materializing a body. Each body is built once on its first `GET`; script construction never reads maps.',
+        description: 'Serve an advertised revisioned bundle, source map, chunk, or package asset without a Web server. Unknown URLs return 404, unsupported methods return 405, and `HEAD` returns the same immutable headers without materializing a body. Each bundle body is built once on its first `GET`; script construction never reads maps. A package asset is read on every request and answers 304 without a body when `If-None-Match` equals its entity tag; its body holds the file open until the caller consumes or cancels it.',
         parameters: [{ name: 'request', description: 'shell-carrier request for a `/plugins` resource.' }],
         returns: 'the exact response also exposed by the optional Web route.',
       },
@@ -630,13 +630,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'rebuilt(id: string): string | undefined',
-        description: 'Publish one completed bundle generation (the HMR watch\'s registration hook — the only entry point through which build changes reach the graph). Unchanged mtime, ctime and size preserve the graph without reading the bundle.',
+        description: 'Publish one completed bundle generation (the HMR watch\'s registration hook; an entry restart publishes through reconciliation instead). Unchanged mtime, ctime and size preserve the graph without reading the bundle.',
         parameters: [{ name: 'id', description: 'entry id (package name).' }],
         returns: 'the current artifact rev, or undefined for an unknown id.',
       },
       {
         signature: 'onRebuilt(listener: (id: string, rev: string) => void): () => void',
-        description: 'Subscribe to bundle rebuilds; fires only when artifact metadata changes the rev.',
+        description: 'Subscribe to bundle rebuilds; fires when rebuilt changes a rev. A rev an entry restart publishes reaches only onGraphChanged listeners.',
         parameters: [{ name: 'listener', description: 'receives the entry id and its new bundle rev.' }],
         returns: 'the unsubscriber.',
       },
@@ -919,6 +919,67 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Remove one reference from a configuration surface.',
         parameters: [{ name: 'ref', description: 'reference name to remove.' }],
         throws: ['RemoteError when the request is invalid, no provider is mounted, or the provider refuses the write.'],
+      },
+    ],
+  },
+  {
+    key: 'cuaAccess',
+    summary: 'Browser controls for provider-owned native permission and application decisions.',
+    description: 'Browser controls for provider-owned native permission and application decisions.',
+    methods: [
+      {
+        signature: '@Remote ptcConfiguration(): { persistent: boolean; writable: boolean }',
+        description: 'Read PTC execution state separately from native permission checks.',
+        parameters: [],
+        returns: 'Whether the shared runtime retains memory and has an editable profile entry.',
+      },
+      {
+        signature: '@Remote async enablePersistentPtc(): Promise<void>',
+        description: 'Persist in-memory PTC execution through the existing profile editor and Loader lifecycle.',
+        parameters: [],
+        returns: 'Completion after the shared runtime reload; already-persistent runtimes are left intact.',
+      },
+      {
+        signature: '@Remote applications(): CuaApplicationState',
+        description: 'Read application decisions without waiting for the native helper.',
+        parameters: [],
+        returns: 'Saved grants and refused applications with their persistence owner.',
+      },
+      {
+        signature: '@Remote async systemStatus(): Promise<CuaSystemPermissionState>',
+        description: 'Inspect system privileges independently of application decisions and icons.',
+        parameters: [],
+        returns: 'Fresh native preflight and launch metadata.',
+      },
+      {
+        signature: '@Remote async applicationIcons(): Promise<Record<string, string>>',
+        description: 'Load presentation icons separately from application decisions.',
+        parameters: [],
+        returns: 'Optional native PNG icons keyed by executable path for saved and blocked applications.',
+      },
+      {
+        signature: '@Remote async requestPermission(permission: CuaSystemPermission): Promise<CuaSystemPermissionState>',
+        description: 'Request a system privilege explicitly selected by the user.',
+        parameters: [{ name: 'permission', description: 'macOS privilege to request.' }],
+        returns: 'Preflight state after requesting; a false value never implies consent.',
+      },
+      {
+        signature: '@Remote async openSettings(permission: CuaSystemPermission): Promise<void>',
+        description: 'Open the macOS privacy pane selected by the user.',
+        parameters: [{ name: 'permission', description: 'Corresponding system privilege.' }],
+        returns: 'Completion after macOS accepted the open request.',
+      },
+      {
+        signature: '@Remote revoke(id: CuaApplicationId): Promise<void>',
+        description: 'Remove saved and session access and join affected operations.',
+        parameters: [{ name: 'id', description: 'Application identity displayed on the permission page.' }],
+        returns: 'Completion after persistence and cancellation; dispatched input cannot be undone.',
+      },
+      {
+        signature: '@Remote async retryApproval(id: CuaApplicationId): Promise<void>',
+        description: 'Clear this application\'s refusals across sessions so each session may ask for access again.',
+        parameters: [{ name: 'id', description: 'Refused or revoked application displayed on the permission page.' }],
+        returns: 'Completion after clearing refusals; no permission is granted and no action is replayed.',
       },
     ],
   },
@@ -2391,13 +2452,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: 'register<K extends keyof SessionProjectionMap, S>( definition: Omit<ProjectionDefinition<K, S>, \'wire\'> & { wire: NonNullable<ProjectionDefinition<K, S>[\'wire\']> }, ): Promise<ProjectionHandle<S>>',
         description: 'Register one domain\'s unit on the calling context\'s fiber. Fiber or handle disposal releases one reference; the final release removes live participation. Retained handles remain readable after release. Callers must await registration before publishing consumers; registration may perform asynchronous work.',
         parameters: [{ name: 'definition', description: 'key, state schema, pure unit functions, and stateVersion.' }],
-        returns: 'a ready handle with synchronous state reads and the effect disposer.',
+        returns: 'an awaitable yielding a ready handle; the callable runtime value is deprecated.',
       },
       {
         signature: 'register<K extends string, S>( definition: ProjectionDefinition<K, S> & { key: Exclude<K, keyof SessionProjectionMap> }, ): Promise<ProjectionHandle<S>>',
         description: 'Register one host-only unit. Its state is omitted from client snapshots and always checkpointed like every other unit. Callers must await registration before publishing consumers; registration may perform asynchronous work.',
         parameters: [{ name: 'definition', description: 'key, state schema, pure unit functions, and stateVersion.' }],
-        returns: 'a ready handle with synchronous state reads and the effect disposer.',
+        returns: 'an awaitable yielding a ready handle; the callable runtime value is deprecated.',
       },
       {
         signature: 'onChanged(listener: ProjectionChangeListener): () => void',
@@ -2574,9 +2635,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'mention-carrying candidates in rank order.',
       },
       {
-        signature: 'async prepare( agent: Agent, content: ContentBlock[], references: SessionReferenceInput[], signal?: AbortSignal, ): Promise<PreparedReferencedMessage>',
-        description: 'Snapshot all references for one accepted direct message and return one aggregated durable context. Automatic budgets use the last assembled route, or agent options before any assembly. Missing model capacity or adapter uses 64 KiB; other metadata lookup failures and cancellation reject preparation. Truncated previews include omission facts and a full-snapshot spill locator, or an explicit unavailable notice. Cancellation prevents context publication, including when storage completes after cancellation.',
-        parameters: [{ name: 'agent', description: 'target agent; references to it are rejected.' }, { name: 'content', description: 'already host-normalized readable message content.' }, { name: 'references', description: 'structured source sessions in mention order.' }, { name: 'signal', description: 'optional cancellation boundary for the active turn.' }],
+        signature: 'async prepare( agent: Agent, content: ContentBlock[], references: SessionReferenceInput[], route: Readonly<Pick<LlmCallConfig, \'provider\' | \'model\'>>, signal?: AbortSignal, ): Promise<PreparedReferencedMessage>',
+        description: 'Snapshot all references for one accepted direct message and return one aggregated durable context. Automatic budgets use the context capacity of `route`. Missing model capacity or adapter uses 64 KiB; other metadata lookup failures and cancellation reject preparation. Truncated previews include omission facts and a full-snapshot spill locator, or an explicit unavailable notice. Cancellation prevents context publication, including when storage completes after cancellation.',
+        parameters: [{ name: 'agent', description: 'target agent; references to it are rejected.' }, { name: 'content', description: 'already host-normalized readable message content.' }, { name: 'references', description: 'structured source sessions in mention order.' }, { name: 'route', description: 'provider and model whose context capacity sizes the previews.' }, { name: 'signal', description: 'optional cancellation boundary for the active turn.' }],
         returns: 'detached content and optional referenced-session context.',
       },
     ],
@@ -4151,18 +4212,10 @@ export const EVENT_API: readonly EventApiEntry[] = [
   {
     name: 'agent/pre-step',
     mode: 'waterfall',
-    signature: '\'agent/pre-step\'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; signal: AbortSignal }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>',
+    signature: '\'agent/pre-step\'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; signal: AbortSignal; modelSelection: Readonly<ModelSelection> }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>',
     summary: 'Reject a proposed step or replace the messages that enter it.',
     description: 'Reject a proposed step or replace the messages that enter it. Calling `next()` preserves the current messages.',
-    parameters: [{ name: 'payload', description: '.signal - the current turn\'s cancellation signal. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.' }],
-  },
-  {
-    name: 'agent/request',
-    mode: 'waterfall',
-    signature: '\'agent/request\'(this: Scoped<Agent>, payload: { agent: Agent; turn: number; step: number; signal: AbortSignal }, next: () => Promise<LlmCallConfig>): Promise<LlmCallConfig>',
-    summary: 'Replace the frozen call configuration.',
-    description: 'Replace the frozen call configuration. `await next()` yields the config the machine would use (agent options on the first request, the logged header afterwards); return a replacement to switch. On step admission, this runs after assembly and `step/start`, before the system prompt and accepted user batch are committed. Cancellation here or during subsequent `prepareCall()` resolution commits neither. The prepared call capability governs prompt admission. Model-visible content must use logged channels; this waterfall cannot mutate messages.',
-    parameters: [{ name: 'payload', description: '.signal - the current turn\'s explicit abort signal. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.' }],
+    parameters: [{ name: 'payload', description: '.modelSelection - captured step selection, retained across retries; omitted effort uses adapter defaults. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.' }],
   },
   {
     name: 'agent/request-error',
@@ -4509,6 +4562,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [],
   },
   {
+    name: 'schedule/resolve-agent',
+    mode: 'waterfall',
+    signature: '\'schedule/resolve-agent\'(sessionId: SessionId, next: () => Promise<Agent>): Promise<Agent>',
+    summary: 'Restore a reminder\'s Session through its embedding\'s owning controller.',
+    description: 'Restore a reminder\'s Session through its embedding\'s owning controller. Call next() to use the Web Session controller.',
+    parameters: [{ name: 'sessionId', description: 'Original Session receiving the reminder.' }],
+  },
+  {
     name: 'session-telemetry/record',
     mode: 'waterfall',
     signature: '\'session-telemetry/record\'(record: SessionTelemetryRecord, next: () => SessionTelemetryRecord): SessionTelemetryRecord',
@@ -4814,7 +4875,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'AgentOptions',
-    declaration: 'export interface AgentOptions {\n    provider?: string;\n    model?: string;\n    reasoningEffort?: ReasoningEffortId;\n    maxTokens?: number;\n}',
+    declaration: 'export interface AgentOptions {\n    provider?: string;\n    model?: string;\n    reasoningEffort?: ReasoningEffortId | undefined;\n    maxTokens?: number;\n}',
   },
   {
     name: 'AgentPresetComposition',
@@ -4855,6 +4916,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'AgentStatus',
     declaration: 'export type AgentStatus = \'idle\' | \'running\';',
+  },
+  {
+    name: 'AnalyticsPreset',
+    declaration: 'export type AnalyticsPreset = \'creator\' | \'ptc\' | \'minimal\' | \'standard\';',
   },
   {
     name: 'AnonymousTranslationProvider',
@@ -4914,7 +4979,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'AskUserQuestionIntent',
-    declaration: 'export type AskUserQuestionIntent = {\n    kind: \'plan-review\';\n    approve: string;\n    callId?: ToolCallId;\n};',
+    declaration: 'export type AskUserQuestionIntent = {\n    kind: \'plan-review\';\n    approve: string;\n    callId?: ToolCallId;\n} | {\n    kind: \'approval\';\n    approve: string;\n    reject: string;\n    always?: string;\n    subject?: {\n        name: string;\n        icon?: string;\n    };\n    display?: {\n        question: {\n            en: string;\n            [locale: string]: string;\n        };\n        detail?: {\n            en: string;\n            [locale: string]: string;\n        };\n        approve?: {\n            en: string;\n            [locale: string]: string;\n        };\n    };\n};',
   },
   {
     name: 'AskUserQuestionItem',
@@ -5070,7 +5135,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'BundleInfo',
-    declaration: 'export interface BundleInfo {\n    name: string;\n    official: boolean;\n    availability: \'installation\' | \'profile\' | \'missing\';\n    installTarget?: {\n        spec: string;\n        version: string;\n    };\n    version?: string;\n    meta?: PluginLocalizedMeta;\n    description?: string;\n    enabled: boolean;\n    installed: boolean;\n    source?: string;\n    optional: boolean;\n    removable: boolean;\n    updatable: boolean;\n    readOnlyReason?: ReadOnlyReason;\n    error?: ManagementError;\n    rows: BundleRowInfo[];\n    overrides: string[];\n}',
+    declaration: 'export interface BundleInfo {\n    name: string;\n    official: boolean;\n    availability: \'installation\' | \'profile\' | \'missing\';\n    installTarget?: {\n        spec: string;\n        version: string;\n    };\n    version?: string;\n    meta?: PluginLocalizedMeta;\n    description?: string;\n    listedByDefault?: boolean;\n    enabled: boolean;\n    installed: boolean;\n    source?: string;\n    optional: boolean;\n    removable: boolean;\n    updatable: boolean;\n    readOnlyReason?: ReadOnlyReason;\n    error?: ManagementError;\n    rows: BundleRowInfo[];\n    overrides: string[];\n}',
   },
   {
     name: 'BundleRowInfo',
@@ -5399,6 +5464,30 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'CronScheduleRecord',
     declaration: 'export interface CronScheduleRecord {\n    readonly id: ScheduleId;\n    readonly kind: \'cron\';\n    readonly title: string;\n    readonly prompt: string;\n    readonly expression: string;\n    readonly timeZone: string;\n    readonly scheduledAt: string;\n}',
+  },
+  {
+    name: 'CuaApplicationGrant',
+    declaration: 'export interface CuaApplicationGrant {\n    id: CuaApplicationId;\n    name: string;\n    executablePath: string;\n}',
+  },
+  {
+    name: 'CuaApplicationId',
+    declaration: 'export type CuaApplicationId = Branded<\'CuaApplicationId\'>;',
+  },
+  {
+    name: 'CuaApplicationState',
+    declaration: 'export interface CuaApplicationState {\n    settingsNamespace: string | null;\n    allowedApps: readonly CuaApplicationGrant[];\n    blockedApps: readonly CuaApplicationGrant[];\n    persistentAvailable: boolean;\n}',
+  },
+  {
+    name: 'CuaPermissionProcess',
+    declaration: 'export interface CuaPermissionProcess {\n    pid: number;\n    path?: string | undefined;\n    name?: string | undefined;\n}',
+  },
+  {
+    name: 'CuaSystemPermission',
+    declaration: 'export type CuaSystemPermission = \'accessibility\' | \'screenRecording\';',
+  },
+  {
+    name: 'CuaSystemPermissionState',
+    declaration: 'export interface CuaSystemPermissionState {\n    accessibility: boolean;\n    screenRecording: boolean;\n    helper: CuaPermissionProcess;\n    parent: CuaPermissionProcess;\n    launchApplication?: {\n        name: string;\n        path: string;\n        icon?: string | undefined;\n    } | undefined;\n}',
   },
   {
     name: 'DailyInput',
@@ -6642,7 +6731,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ProductEventMap',
-    declaration: 'export interface ProductEventMap {\n    desktop_app_launch: Record<string, never>;\n    auth_page_view: Record<string, never>;\n    auth_page_click: {\n        button_name: \'sign_in\' | \'api-key\';\n    };\n    api_key_save_click: Record<string, never>;\n    onboarding_page_view: {\n        page_name: OnboardingPage;\n    };\n    onboarding_page_click: {\n        page_name: OnboardingPage;\n        button_name: \'next\' | \'back\' | \'skip\' | \'charge\' | \'later\' | \'continue\';\n        selected_content?: \'office\' | \'code\' | \'code_office\' | \'focus_result\' | \'key_detail\' | \'full_process\';\n    };\n    onboarding_popup_view: {\n        popup_name: \'skip_charge\' | \'skip_setting\';\n    };\n    onboarding_popup_click: {\n        popup_name: \'skip_charge\' | \'skip_setting\';\n        button_name: \'charge\' | \'know\' | \'enter\' | \'setting\' | \'close\';\n    };\n    desktop_upgrade_click: Record<string, never>;\n    desktop_upgrade_download_result: {\n        is_success: boolean;\n        error_reason?: string;\n    };\n    desktop_upgrade_install_restart_click: Record<string, never>;\n    send_button_click: {\n        session_id?: SessionId;\n        model_name?: string;\n        thinking_effort?: string;\n        run_mode: \'plan\' | \'goal\' | \'default\';\n        msg_type: \'default\' | \'steer\' | \'queue\';\n    };\n    model_switch: {\n        session_id?: SessionId;\n        switch_from: string;\n        switch_to: string;\n    };\n    thinking_level_switch: {\n        session_id?: SessionId;\n        switch_from: string;\n        switch_to: str /* …truncated — full shape in source */',
+    declaration: 'export interface ProductEventMap {\n    desktop_app_launch: Record<string, never>;\n    auth_page_view: Record<string, never>;\n    auth_page_click: {\n        button_name: \'sign_in\' | \'api-key\';\n    };\n    api_key_save_click: Record<string, never>;\n    onboarding_page_view: {\n        page_name: OnboardingPage;\n    };\n    onboarding_page_click: {\n        page_name: OnboardingPage;\n        button_name: \'next\' | \'back\' | \'skip\' | \'charge\' | \'later\' | \'continue\';\n        selected_content?: \'office\' | \'code\' | \'code_office\' | \'focus_result\' | \'key_detail\' | \'full_process\';\n    };\n    onboarding_popup_view: {\n        popup_name: \'skip_charge\' | \'skip_setting\';\n    };\n    onboarding_popup_click: {\n        popup_name: \'skip_charge\' | \'skip_setting\';\n        button_name: \'charge\' | \'know\' | \'enter\' | \'setting\' | \'close\';\n    };\n    desktop_upgrade_click: Record<string, never>;\n    desktop_upgrade_download_result: {\n        is_success: boolean;\n        error_reason?: string;\n    };\n    desktop_upgrade_install_restart_click: Record<string, never>;\n    send_button_click: {\n        session_id?: SessionId;\n        model_name?: string;\n        thinking_effort?: string;\n        run_mode: \'plan\' | \'goal\' | \'default\';\n        msg_type: \'default\' | \'steer\' | \'queue\';\n        is_new_session: boolean;\n        agent_preset?: AnalyticsPreset | \'other\';\n    };\n    model_switch: {\n        session_id?: SessionId;\n        switch_from: string;\n        switch_to: string;\n    };\n    thinking_level_switch: {\n /* …truncated — full shape in source */',
   },
   {
     name: 'ProductTelemetryRecord',
@@ -8826,7 +8915,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WebSearchSource',
-    declaration: 'export interface WebSearchSource {\n    readonly url: string;\n    readonly title?: string;\n    readonly snippet?: string;\n    readonly publishedAt?: string;\n}',
+    declaration: 'export interface WebSearchSource {\n    readonly url: string;\n    readonly title?: string;\n    readonly snippet?: string;\n    readonly summary?: string;\n    readonly publishedAt?: string;\n}',
   },
   {
     name: 'WebSource',

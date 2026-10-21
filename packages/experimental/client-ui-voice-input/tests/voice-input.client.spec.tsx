@@ -21,7 +21,8 @@ const transcript: Transcript = { text: '检查 TypeScript 类型', audioSeconds:
 function fixture(recording?: Recording) {
   const capture = Object.assign(new Recording(() => {}), { start: vi.fn<Recording['start']>(async () => {}), stop: vi.fn(async () => new Uint8Array(48)),
     amplitude: () => 0, dispose: vi.fn(async () => {}) })
-  const inputActions = { notify: vi.fn(), captureInsertion: vi.fn(() => ({ start: 3, end: 3, draftRev: 1 })), insertText: vi.fn(() => true),
+  const inputActions = { notify: vi.fn(), insertQuote: () => false,
+    captureInsertion: vi.fn(() => ({ start: 3, end: 3, draftRev: 1 })), insertText: vi.fn(() => true),
     setDraft: vi.fn(), persistDraft: vi.fn(), addAttachments: vi.fn(() => true), removeAttachment: vi.fn(),
     pruneAttachments: vi.fn(), submit: vi.fn() }
   const readiness = createSnapshotStore<SpeechReadiness>({ connected: true, error: null, catalog: {
@@ -46,8 +47,8 @@ function stop(): void { fireEvent.click(screen.getByRole('button', { name: zh.st
 
 it('clicks to record, shows measured audio, and stops to insert without sending or a popup', async () => {
   const b = fixture()
-  fireEvent.mouseEnter(screen.getByRole('button', { name: zh.start }).parentElement!)
-  expect(screen.getByRole('tooltip').textContent).toBe('听写')
+  fireEvent.pointerEnter(screen.getByRole('button', { name: zh.start }).parentElement!)
+  expect((await screen.findByRole('tooltip')).textContent).toBe('听写')
   fireEvent.mouseDown(screen.getByRole('button', { name: zh.start }))
   await start()
   expect(b.props.onActiveChange).toHaveBeenLastCalledWith(true)
@@ -157,7 +158,7 @@ it.each([new RecordingError('empty'), new Error('decode failed'), 'decode failed
 it('bounds recordings, indicates idle wake-up, and cancels an in-flight transcription', async () => {
   const b = fixture(), result = Promise.withResolvers<RemoteResult<Transcript>>()
   b.transcribe.mockReturnValueOnce(result.promise)
-  vi.useFakeTimers()
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
   fireEvent.click(screen.getByRole('button', { name: zh.start })); await act(async () => {})
   await act(async () => { await vi.advanceTimersByTimeAsync(120000) })
   expect(b.capture.stop).toHaveBeenCalledWith(120)
@@ -304,7 +305,7 @@ it('offers installation on click without a preparation tooltip', () => {
   const mic = screen.getByRole<HTMLButtonElement>('button', { name: zh['setupPrompt.trigger'] })
   expect(mic.disabled).toBe(false)
   expect(mic.getAttribute('aria-haspopup')).toBe('dialog')
-  fireEvent.mouseEnter(mic.parentElement!)
+  fireEvent.pointerEnter(mic.parentElement!)
   expect(screen.queryByRole('tooltip')).toBeNull()
   fireEvent.click(mic)
   expect(screen.getByRole('dialog').textContent).toContain(zh['setupPrompt.body'])
