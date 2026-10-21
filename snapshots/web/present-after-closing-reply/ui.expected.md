@@ -1,0 +1,7 @@
+- button "Preview {{cwd}}/report.txt in sidebar"
+- text: report.txt Draft report
+- button "Copy"
+- button "Good response"
+- button "Bad response"
+- button "Branch into a new conversation" [disabled]
+- text: Available only on the last message of a completed turn {{clock}}

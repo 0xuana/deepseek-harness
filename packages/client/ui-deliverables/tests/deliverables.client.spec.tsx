@@ -966,16 +966,27 @@ describe('presented files', () => {
   it('replays deliveries without mutation calls, preserves indices, and isolates turns', () => {
     const value = assembler([
       at(1, 'turn/start', { turn: 1 }),
-      at(2, 'deliverables/presented', { turn: 1, callId: 'nested', files: [null, { ...file(), description: 'Final report' }] }),
+      at(2, 'deliverables/presented', { turn: 1, callId: 'nested', files: [null, { ...file(), description: 'Final report' }, file('notes.md')] }),
       at(3, 'deliverables/presented', { turn: 1, callId: 'again', files: [{ ...file(), description: 'Updated report' }] }),
       at(4, 'turn/end', { turn: 1 }),
       at(5, 'turn/start', { turn: 2 }),
     ])
-    const first = presentedForClosing(tailOwner(deliverablesOf(value), 3))
-    expect(first).toMatchObject([{ path: 'report.docx', seq: 2, index: 1, description: 'Final report' }])
-    expect(presentedForClosing(tailOwner(deliverablesOf(value), 4)))
-      .toMatchObject([{ path: 'report.docx', seq: 3, description: 'Updated report' }])
+    expect(presentedForClosing(tailOwner(deliverablesOf(value), 4))).toMatchObject([
+      { path: 'report.docx', seq: 3, index: 0, description: 'Updated report' },
+      { path: 'notes.md', seq: 2, index: 2 },
+    ])
     expect(selectDeliverables(tailOwner(deliverablesOf(value, 2), 9))).toBeNull()
+  })
+
+  it('keeps deliveries recorded after the closing reply', () => {
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(3, 'deliverables/presented', { turn: 1, callId: 'present', files: [{ ...file(), description: 'Final report' }] }),
+      at(4, 'turn/end', { turn: 1 }),
+    ])
+    // The closing reply at seq 2 shares the step that called present, and no later step wrote text.
+    expect(selectDeliverables(tailOwner(deliverablesOf(value), 2))?.presented)
+      .toMatchObject([{ path: 'report.docx', seq: 3, index: 0, description: 'Final report' }])
   })
 
   it('uses the viewed fork Session in every open action and expands all delivered files', () => {

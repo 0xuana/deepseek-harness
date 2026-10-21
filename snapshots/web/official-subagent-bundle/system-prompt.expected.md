@@ -165,7 +165,7 @@ interface ToolArgsMap {
     /** Exact model id; requires provider. */
     model?: string;
   } & Record<string, JsonValue>;
-  /** Declare existing files as final deliverables for the user. Use it when the user needs a separate file, especially Office documents, spreadsheets, and slide decks; prefer your final response when that suffices. The user opens the current files; their contents are not copied. */
+  /** Declare existing files as final deliverables for the user. Hosts show presented files after your turn ends, so call it once the files are final; to have the user review files before then, such as before asking a question, link them in your message instead. Use it when the user needs a separate file, especially Office documents, spreadsheets, and slide decks; prefer your final response when that suffices. The user opens the current files; their contents are not copied. */
   present: {
     /** Usually the 1-2 most important deliverables; at most 4 per call. */
     files: {

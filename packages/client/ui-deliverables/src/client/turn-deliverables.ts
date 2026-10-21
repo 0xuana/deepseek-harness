@@ -255,15 +255,14 @@ export function changesForClosing(owner: TurnTailOwnerProps): ChangesTurnData | 
 }
 
 /**
- * Select the latest declaration of each path before the closing reply.
- * @param owner - closing turn and sequence.
+ * Select the latest declaration of each path in the closing turn, including
+ * declarations recorded after the closing reply.
+ * @param owner - closing turn.
  * @returns replayable deliveries in first-seen path order.
  */
 export function presentedForClosing(owner: TurnTailOwnerProps): PresentedPath[] {
   const files = new Map<string, PresentedPath>()
-  for (const file of owner.turn.data.get('deliverables')?.presented ?? []) {
-    if (file.seq < owner.seq) files.set(file.path, file)
-  }
+  for (const file of owner.turn.data.get('deliverables')?.presented ?? []) files.set(file.path, file)
   return [...files.values()]
 }
 
