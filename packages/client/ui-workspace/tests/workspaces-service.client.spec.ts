@@ -1341,24 +1341,28 @@ describe('UiWorkspaceService', () => {
     })
   })
 
-  it('keeps an explicit creation failure visible when its catalog update follows a failed startup restoration', async () => {
-    persistSelection({ sessionId: sid('blank') })
+  it('keeps an explicit creation failure visible after a failed startup and a catalog update', async () => {
     const startupFailure = new Error('startup failed')
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const creating = Promise.withResolvers<undefined>()
     const created = Promise.withResolvers<SessionId>()
     const b = bench({
-      sessions: sessionState([summary('blank', { blank: true, cwd: '/w/a' })]),
-      workspaces: workspaceState([workspace('a', [sid('blank')])]),
+      sessions: sessionState(),
+      workspaces: workspaceState([workspace('a')]),
       configureSessions: (sessions) => {
-        sessions.create.mockRejectedValueOnce(startupFailure).mockReturnValue(created.promise)
+        sessions.create.mockRejectedValueOnce(startupFailure).mockImplementationOnce(() => {
+          creating.resolve(undefined)
+          return created.promise
+        })
       },
     })
     await vi.waitFor(() => {
-      expect(warning).toHaveBeenCalledWith('initial Session restoration failed:', startupFailure)
+      expect(warning).toHaveBeenCalledExactlyOnceWith('initial Session restoration failed:', startupFailure)
     })
 
     b.uiWorkspace.startSession(wid('a'))
-    b.sessions.list.set(sessionState([summary('blank', { blank: true, cwd: '/w/a' }), summary('creating')]))
+    await creating.promise
+    b.sessions.list.set(sessionState([summary('creating', { blank: true, cwd: '/w/a' })]))
     created.reject(new Error('creation refused'))
 
     await vi.waitFor(() => {
@@ -1366,6 +1370,10 @@ describe('UiWorkspaceService', () => {
     })
     expect(b.sessions.create).toHaveBeenCalledTimes(2)
     expect(b.sessions.retain).not.toHaveBeenCalled()
+    expect(warning.mock.calls).toEqual([
+      ['initial Session restoration failed:', startupFailure],
+      ['new session failed:', expect.any(Error)],
+    ])
   })
 
   it('settles empty startup without creating a Session on later catalog updates', () => {
