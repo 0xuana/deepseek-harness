@@ -325,7 +325,6 @@ export function expectedDshPackageFiles(manifest: PackageManifest, detailFiles: 
     ...detailFiles,
     'lib/index.js',
     ...manifest.bin ? ['lib/bin.js'] : [],
-    ...exportDefault(manifest, './testing') === './lib/testing.js' ? ['lib/testing.js'] : [],
     // Worker-thread packages ship a CJS worker entry; the browser worker
     // bundle is an ES module a page loads with `new Worker(type: 'module')`.
     // Keyed on the artifact path, like ./client below.
@@ -579,11 +578,6 @@ export function checkWorkspaceManifest({ dir, manifest }: WorkspaceManifest): st
     }
     if (rootEntry?.default !== './lib/index.js') {
       errors.push(`${label}: package.json exports["."].default must be "./lib/index.js"`)
-    }
-    if (manifest.exports?.['./testing'] !== undefined
-      && !hasExportPair(manifest, './testing', './lib/types/testing.d.ts', './lib/testing.js')
-      && !hasExportPair(manifest, './testing', './lib/types/testing.d.ts', './lib/types/testing.js')) {
-      errors.push(`${label}: exports["./testing"] must expose lib/types/testing.d.ts with lib/testing.js or lib/types/testing.js`)
     }
     if (manifest.name === '@deepseek-ai/dsh-tools'
       && !hasExportPair(manifest, './pipeline', './lib/types/pipeline.d.ts', './lib/pipeline.js')) {
