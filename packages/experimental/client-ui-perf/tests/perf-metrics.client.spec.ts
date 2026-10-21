@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { SessionEventLike } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { AssistantStreamRecord, StreamChunk } from '@deepseek-ai/dsh-llm'
+import { SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { SessionEventType } from '@deepseek-ai/dsh-session/types'
 import { aggregateTurn, buildTurns } from '../src/client/perf-aggregate.ts'
 import {
@@ -17,13 +18,10 @@ import {
 
 let seq = 0
 
-/**
- * One durable session event with a deterministic sequence and time. Payloads are
- * fixtures, so this cast is where the test stops type-checking them.
- */
-function event(type: SessionEventType, data: unknown, time?: number): SessionEventLike {
+/** One durable session event with a deterministic sequence and time. */
+function event(type: SessionEventType, data: object, time?: number): SessionEventLike {
   const at = time ?? 1_000 + (seq += 1) * 10
-  return { type, seq, time: at, data } as unknown as SessionEventLike
+  return { type, seq: SessionSeq(seq), time: at, data } as SessionEventLike
 }
 
 /** Narrow a folded state the fixture guarantees exists. */
@@ -34,8 +32,13 @@ function defined<T>(value: T | undefined): T {
 
 /** One client-only live chunk event. */
 function chunk(turn: number, step: number, value: StreamChunk, time?: number): SessionEventLike {
-  const base = { type: 'assistant/live-chunk', seq: seq += 1, time: time ?? 1_000 + seq * 10, data: { attemptId: 'attempt-1', turn, step, chunk: value } }
-  return base as unknown as SessionEventLike
+  seq += 1
+  return {
+    type: 'assistant/live-chunk',
+    seq,
+    time: time ?? 1_000 + seq * 10,
+    data: { attemptId: 'attempt-1', turn, step, chunk: value },
+  } as SessionEventLike
 }
 
 /** A token delta chunk. */

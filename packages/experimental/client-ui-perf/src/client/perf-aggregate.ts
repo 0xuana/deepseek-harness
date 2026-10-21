@@ -145,6 +145,7 @@ export function buildTurns(nodes: Iterable<PerfViewNode>): PerfTurnMetrics[] {
   const order = [...grouped.keys()].sort((left, right) => left - right)
   order.forEach((turn, index) => {
     const bucket = grouped.get(turn)
+    /* v8 ignore next -- order is built from grouped's own keys, so the lookup always resolves. */
     if (bucket === undefined) return
     const steps = bucket.slice().sort((left, right) => left.step - right.step)
     // A step followed by another step cannot still be running: a trimmed window

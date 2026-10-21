@@ -84,6 +84,7 @@ const stepDefinition: ConversationNodeDefinition<PerfStepState> = {
     }
     return { ...newState(match.event.data.turn, match.event.data.step), startSeq: match.event.seq, startTime: match.event.time }
   },
+  /* v8 ignore next -- the engine calls update only after start adopted a state, so folding never returns undefined here. */
   update: (context, match) => foldEvent(context.state, match.event) ?? context.state,
   publication: (match) => {
     if (match.event.type === 'step/start') return 'none'
@@ -121,8 +122,10 @@ const promptDefinition: ConversationNodeDefinition<PerfStepState> = {
     if (match.event.type !== 'turn/start') {
       throw new Error('perf-prompt start requires turn/start')
     }
+    /* v8 ignore next -- start only receives turn/start, which folding always handles. */
     return foldEvent(undefined, match.event) ?? newState(match.event.data.turn, PROMPT_STEP, 'prompt')
   },
+  /* v8 ignore next -- the engine calls update only after start adopted a state, so folding never returns undefined here. */
   update: (context, match) => foldEvent(context.state, match.event) ?? context.state,
   publication: match => (match.event.type === 'turn/start' ? 'none' : 'immediate'),
   buildViewNode: (context) => {

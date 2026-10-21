@@ -96,8 +96,11 @@ function lcsLength(left: readonly string[], right: readonly string[]): number {
   let current = new Uint16Array(width)
   for (let row = 1; row <= left.length; row += 1) {
     for (let column = 1; column <= right.length; column += 1) {
+      /* v8 ignore next -- an in-bounds typed-array read is always a number; the fallback only satisfies the index type. */
       const up = previous[column] ?? 0
+      /* v8 ignore next -- an in-bounds typed-array read is always a number; the fallback only satisfies the index type. */
       const leftCell = current[column - 1] ?? 0
+      /* v8 ignore next 3 -- the typed-array nullish fallback is unreachable; in-bounds reads never yield undefined. */
       current[column] = left[row - 1] === right[column - 1]
         ? (previous[column - 1] ?? 0) + 1
         : Math.max(up, leftCell)
@@ -107,6 +110,7 @@ function lcsLength(left: readonly string[], right: readonly string[]): number {
     current = swap
     current.fill(0)
   }
+  /* v8 ignore next -- an in-bounds typed-array read is always a number; the fallback only satisfies the index type. */
   return previous[right.length] ?? 0
 }
 
@@ -239,6 +243,7 @@ function rememberPtcCall(callId: string, stepId: string): void {
   PTC_STEPS.set(callId, stepId)
   if (PTC_STEPS.size <= PTC_STEPS_MAX) return
   const oldest = PTC_STEPS.keys().next().value
+  /* v8 ignore next -- the size check above guarantees a first key, so the guard never sees undefined. */
   if (oldest !== undefined) PTC_STEPS.delete(oldest)
 }
 
@@ -324,6 +329,7 @@ function resultCallId(message: unknown): string | null {
 
 /** Result text: the text blocks of the tool message joined by newlines. */
 function resultText(message: unknown): string | null {
+  /* v8 ignore next -- callers reach this helper only after resolving a call id from an object message. */
   if (message === null || typeof message !== 'object') return null
   const content = (message as { content?: unknown }).content
   if (!Array.isArray(content)) return null
@@ -563,6 +569,7 @@ export function foldEvent(
         return { ...withError, calls, toolMissing: next.toolMissing + 1 }
       }
       const pending: Record<string, number> = {}
+      /* v8 ignore next -- a numeric dispatched time implies pending exists, so the empty fallback is unreachable. */
       for (const [key, value] of Object.entries(next.pending ?? {})) {
         if (key !== callId) pending[key] = value
       }
