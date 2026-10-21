@@ -507,9 +507,11 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     throw new Error('deepSeekMissingCredential is a keyless replay/refresh option')
   }
   const maskDeepSeekCredential = mode !== 'record' && options.deepSeekMissingCredential === true
-  // Every other keyless run pins the snapshot replay placeholder: shipped compositions offer
-  // web_search only while a DeepSeek search key is configured, and recordings ran with a real key.
+  // A keyless run that replays recorded model calls pins the snapshot replay placeholder: shipped
+  // compositions offer web_search only while a DeepSeek search key is configured, and recordings
+  // ran with a real key. Other runs keep the launching environment, as their goldens do.
   const pinDeepSeekCredential = mode !== 'record' && !maskDeepSeekCredential
+    && options.replayFixture !== undefined && options.replayProvidersOnly !== true
   const originalDeepSeekCredential = process.env.DEEPSEEK_API_KEY
   let credentialEnvironmentRestored = false
   const restoreCredentialEnvironment = (): void => {
