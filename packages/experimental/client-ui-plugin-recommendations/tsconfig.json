@@ -55,6 +55,9 @@
     },
     {
       "path": "../../util/package-manifest"
+    },
+    {
+      "path": "../creation-recommendations"
     }
   ]
 }
