@@ -215,7 +215,11 @@ function toolHint(name: string, raw: unknown): string | null {
   }
 }
 
-/** Code-Mode steps call this one tool; the real tools run inside it. */
+/**
+ * Whether one tool name is the Code-Mode runner; its real tools run inside it.
+ * @param name - tool name, or null for a nameless call.
+ * @returns true when the name is the Code-Mode runner.
+ */
 export function isCodeMode(name: string | null): boolean {
   return name !== null && /^run_?code$/i.test(name)
 }
@@ -317,7 +321,11 @@ function resultInfo(content: readonly ContentBlock[]): {
   return { chars: text.length, lines, text: body.text, truncated: body.truncated }
 }
 
-/** User question: only a human-typed `user` source is the text the user wrote. */
+/**
+ * User question: only a human-typed `user` source is the text the user wrote.
+ * @param message - one user-role message from the Session log.
+ * @returns the one-line question and the number of attached images.
+ */
 export function promptOf(message: UserMessage): { text: string | null; images: number } {
   const parts: string[] = []
   let images = 0
@@ -529,7 +537,11 @@ function sortedTools(tools: Readonly<Record<string, number>> | null): PerfToolCo
     .sort((left, right) => right.count - left.count)
 }
 
-/** Wall span covered by calls that both started and settled; overlaps count once. */
+/**
+ * Wall span covered by calls that both started and settled; overlaps count once.
+ * @param calls - calls with their paired start and end times.
+ * @returns the span in milliseconds, or null when no call is paired.
+ */
 export function toolSpanUnion(calls: readonly PerfCall[]): number | null {
   const intervals = calls
     .filter((call): call is PerfCall & { startedAt: number; endedAt: number } =>
