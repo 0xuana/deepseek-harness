@@ -13,7 +13,7 @@ import type { SessionBehaviorOverrides } from '@deepseek-ai/dsh-client-test-runt
 import type { ClientRemote } from '@deepseek-ai/dsh-api-remotes/client'
 import {
   apply as applyConversation, inject as injectConversation,
-  type ComposerBarInjected, type GroupKey,
+  type GroupKey,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import {
   apply as applyChat, inject as injectChat, type ChatFlowDataInjected, type ChatViewInjected,
@@ -293,38 +293,6 @@ describe('Chat inject API', () => {
       expect(b.uiWorkspace.forkSession).toHaveBeenLastCalledWith(ROOT, expect.any(Function) as (childId: SessionId) => void, {
         atSeq: 18, present: 'selected',
       })
-    })
-    await b.runtime.dispose()
-  })
-
-  it('states why a refused branch failed on the owner page, on the Session it was asked of', async () => {
-    /** The notice the addressed Session's composer bar consumes, as the page would show it. */
-    const noticeOf = (sessionId: SessionId): string | undefined => {
-      const entry = b.runtime.slots.entries('conversation.composer.bar')[0]
-      if (entry?.inject === undefined) return undefined
-      const composer = (entry.inject as unknown as (
-        id: SessionId | undefined,
-      ) => ComposerBarInjected)(sessionId)
-      return composer.hooks.notices.getSnapshot()?.text
-    }
-    const b = await bench()
-    const { injected } = b.chatViewApi(b.rootReference)
-    // The Host's own message reaches the reader with the stable code beside it, and the Session it was
-    // asked of is the one that shows it.
-    vi.spyOn(b.uiWorkspace, 'forkSession').mockRejectedValueOnce({
-      rpcError: { code: 'boundary-not-committed', message: 'boundary is not committed' },
-    })
-    injected.forkAt(18)
-    await vi.waitFor(() => {
-      expect(noticeOf(ROOT)).toBe(
-        '未能完成分支：boundary is not committed (boundary-not-committed)',
-      )
-    })
-    // A rejection that named no code keeps its own message and gains no placeholder.
-    vi.spyOn(b.uiWorkspace, 'forkSession').mockRejectedValueOnce(new Error('fork child rename failed'))
-    injected.forkAt(19)
-    await vi.waitFor(() => {
-      expect(noticeOf(ROOT)).toBe('未能完成分支：fork child rename failed')
     })
     await b.runtime.dispose()
   })

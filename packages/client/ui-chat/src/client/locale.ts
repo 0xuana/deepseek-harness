@@ -161,7 +161,6 @@ export const zh = {
   'message.stopped': '已停止',
   'message.branch': '在新对话中分支',
   'message.branchUnavailable': '仅可从已完成轮次的最后一条消息分支',
-  'message.branchRefused': '未能完成分支：{reason}',
   'message.retry.active': '正在重试模型请求',
   'message.retry.cancelled': '模型请求重试已取消',
   'message.retry.started': '已重试模型请求',
@@ -364,7 +363,6 @@ export const en = {
   'message.stopped': 'Stopped',
   'message.branch': 'Branch into a new conversation',
   'message.branchUnavailable': 'Available only on the last message of a completed turn',
-  'message.branchRefused': 'Could not complete the branch: {reason}',
   'message.retry.active': 'Retrying model request',
   'message.retry.cancelled': 'Model request retry cancelled',
   'message.retry.started': 'Retried model request',
@@ -453,7 +451,6 @@ export const ja = {
   'message.stepProcess.comma': '、',
   'message.stepProcess.sharedPrefix': '',
   'message.stepProcess.more': '{title}など',
-  'message.branchRefused': 'ブランチを完了できませんでした：{reason}',
   'message.trigger.request': '実行が要求されました',
   'message.trigger.goal': '目標を継続中',
   'message.trigger.agent': 'タスクメッセージを受信しました',
@@ -604,5 +601,4 @@ export const ja = {
   'json.truncated': '… 省略表示、全{total}文字',
   'clock.md': '{m}/{d}',
   'clock.ymd': '{y}-{m}-{d}',
-
 } satisfies Record<keyof typeof en, string>

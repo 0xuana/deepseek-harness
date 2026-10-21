@@ -16,7 +16,6 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-locale/client'
 import type { InboxState } from '@deepseek-ai/dsh-agent/types'
 import type { ModelSelectionProjection } from '@deepseek-ai/dsh-agent/types'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
-import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
   DraftAttachmentId, DraftAttachmentSerializationResult, DraftInitializationOptions, DraftInitializationResult, InputTriggerController,
   SessionInputResolver, SessionInput, SubmitOutcome,
@@ -208,33 +207,13 @@ export class InputHub implements SessionInputResolver {
   }
 
   /**
-   * The one file-intake policy answer: the live permission source the composer hook renders and the
-   * drop gate reads.
-   * @param id - target Session.
-   * @returns identity-stable live source for this Session's `fileUploads/upload` grant.
-   */
-  fileIntake(id: SessionId): HostObservable<boolean> {
-    return this.rootCtx.remoteAccess.source('session', id, 'fileUploads/upload')
-  }
-
-  /**
-   * Query file intake without creating a Session input.
-   * @param id - target Session.
-   * @returns whether the Session's live grant currently accepts files.
-   */
-  canIntakeFiles(id: SessionId): boolean {
-    return this.fileIntake(id).getSnapshot()
-  }
-
-  /**
    * Query file intake without creating a Session input.
    * @param id - target Session.
    * @returns whether its mounted composer currently accepts files.
    */
   canPickFiles(id: SessionId): boolean {
     const binding = this.sessions().binding(id)
-    return this.rootCtx.remoteAccess.source('session', id, 'fileUploads/upload').getSnapshot()
-      && binding !== undefined && this.shells.get(binding)?.canPickFiles() === true
+    return binding !== undefined && this.shells.get(binding)?.canPickFiles() === true
   }
 
   /**
@@ -243,7 +222,7 @@ export class InputHub implements SessionInputResolver {
    */
   pickFiles(id: SessionId): void {
     const binding = this.sessions().binding(id)
-    if (this.canPickFiles(id) && binding !== undefined) this.shells.get(binding)?.pickFiles()
+    if (binding !== undefined) this.shells.get(binding)?.pickFiles()
   }
 
   /**

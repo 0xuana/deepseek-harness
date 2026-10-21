@@ -309,12 +309,8 @@ export function apply(ctx: Context): void {
                 click_position: 'footer',
               })
             }, { atSeq: seq, present: 'selected' })
-              .catch((error: unknown) => {
-                // Fork or child-title failure leaves the source view unchanged, and states why on
-                // the Session's own composer: a refusal this page cannot retry is not silent.
-                ctx.uiConversation.noticeBranchRefusal(
-                  sessionId, error, reason => t('message.branchRefused', { reason }),
-                )
+              .catch(() => {
+                // Fork or child-title failure leaves the source view unchanged.
               })
           },
         }

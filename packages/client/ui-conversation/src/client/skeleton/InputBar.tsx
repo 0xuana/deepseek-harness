@@ -48,21 +48,21 @@ export const InputBar = memo(function InputBar({
   retryFileUpload,
   toggleCommandMenu, stop, t,
   renderSlot, useBusyEnter, useFileUploads, useNotices, useLexicon, useMenuLauncher, useStopShortcut,
-  useFileIntake, useAccess,
+  useAccess,
   useProjection, sessionId, variant, disabled: inert = false, blocked,
   workspacePickerOpen = false, onRequestWorkspace,
   placeholder, accessory,
 }: InputBarProps) {
   const input = useInput(s => s)
   const notice = useNotices(s => s)
-  // An optional seat means this bar cannot prove live intake permission; offer no file controls then.
-  const acceptsFiles = useFileIntake?.(allowed => allowed) ?? false
   const busyEnter = useBusyEnter(s => s)
   const stopKeys = useStopShortcut(keys => keys)
-  // A page whose access snapshot excludes prompting or stopping this Session is offered no Send or
-  // no Stop rather than a disabled one; without a Session neither question has an answer yet.
+  // A page whose access snapshot excludes prompting, stopping, or uploading to this Session is offered
+  // no Send, no Stop, or no file intake rather than a disabled control. `useAccess` is undefined only
+  // without a Session, where the bar is an inert placeholder with no keyboard, stop, or file intake.
   const promptDenied = useAccess('session/prompt') === false
   const cancelDenied = useAccess('session/cancel') === false
+  const uploadDenied = useAccess('fileUploads/upload') === false
   const stopAction = cancelDenied ? undefined : stop
   void useLexicon // hook seat stays bound by the inject compartment; text-ref decoration rides the shell's editor transforms
   const commandMenuOpen = useMenuLauncher(source => source === 'command')
@@ -222,7 +222,7 @@ export const InputBar = memo(function InputBar({
   // The host enforces the same image limits at submit for callers that bypass
   // this composer.
   const intakeFiles = useCallback((files: readonly File[], directories?: ReadonlySet<File>): void => {
-    if (!acceptsFiles || locked || machineBusy || (subagent !== null && !continuable)
+    if (uploadDenied || locked || machineBusy || (subagent !== null && !continuable)
       || addFiles === undefined || files.length === 0) return
     const rejected = ((): string | null => {
       // Child prompts support images, but not generic file receipts or the
@@ -249,9 +249,9 @@ export const InputBar = memo(function InputBar({
       return addFiles(files, directories)
     })()
     if (rejected !== null) showToast(rejected)
-  }, [acceptsFiles, locked, machineBusy, subagent, continuable, addFiles, attachments, imageLimits, showToast, t])
+  }, [uploadDenied, locked, machineBusy, subagent, continuable, addFiles, attachments, imageLimits, showToast, t])
 
-  const canAcceptDrop = acceptsFiles && (subagent === null || continuable) && !locked && !machineBusy && addFiles !== undefined
+  const canAcceptDrop = !uploadDenied && (subagent === null || continuable) && !locked && !machineBusy && addFiles !== undefined
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const onPickFiles = (e: ChangeEvent<HTMLInputElement>): void => {

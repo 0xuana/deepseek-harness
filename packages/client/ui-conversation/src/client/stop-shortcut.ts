@@ -7,25 +7,6 @@ import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import { StopSequence } from './stop-sequence.ts'
 
 /**
- * The one stop operation the bar button and the fixed shortcut share.
- *
- * The Session's live `session/cancel` answer is read at call time, so a withdrawal that happened
- * after the page rendered refuses both entry points instead of only the button.
- * @param cancel - scoped cancellation that preserves Queue and reports failures.
- * @param accessOf - live `session/cancel` answer for one Session.
- * @returns stop that refuses a withdrawn endpoint.
- */
-export function createStopTurn(
-  cancel: (sessionId: SessionId) => void,
-  accessOf: (sessionId: SessionId) => ObservableSnapshot<boolean>,
-): (sessionId: SessionId) => void {
-  return (sessionId) => {
-    if (!accessOf(sessionId).getSnapshot()) return
-    cancel(sessionId)
-  }
-}
-
-/**
  * Subscribe fixed input to the same Session cancellation used by the stop button.
  * @param shortcuts - window keyboard arbitration and validated sequence interval.
  * @param sessions - live Session identities and lifecycle sources.

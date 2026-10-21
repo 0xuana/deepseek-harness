@@ -505,8 +505,7 @@ export interface PropsRenderFactories {
  * inject face. These retain the original source-to-selector binding and do
  * not participate in render-occurrence context.
  */
-/** One registrant hook source; an optional entry lets the registration omit the source. */
-export type HooksSources = Record<string, HostObservable<unknown> | undefined>
+export type HooksSources = Record<string, HostObservable<unknown>>
 
 /** Registrant keyed-hooks compartment: stable key-to-observable resolvers. */
 export type KeyedHooksSources = Record<string, KeyedStandardSource>
@@ -568,13 +567,10 @@ export type PropsSlotHooks<HS extends object> = {
 export type SlotInjectFace<I extends object> =
   I extends { hooks: infer HS extends object } ? Omit<I, 'hooks'> & PropsSlotHooks<HS> : I
 
-/** Component-side selector Hook for one source; an optional source may leave its seat absent. */
-type PropsHookOf<Source> =
-  Source extends HostObservable<infer Snapshot> ? SnapshotSelectorHook<Snapshot> : undefined
-
 /** Selector-hook share synthesized from an entry inject hooks compartment. */
 export type PropsHooks<HS extends HooksSources> = {
-  [N in keyof HS & string as `use${Capitalize<N>}`]: PropsHookOf<HS[N]>
+  [N in keyof HS & string as `use${Capitalize<N>}`]:
+  SnapshotSelectorHook<HS[N] extends HostObservable<infer T> ? T : never>
 }
 
 /** Selector-hook share synthesized from an entry inject keyed-hooks compartment. */

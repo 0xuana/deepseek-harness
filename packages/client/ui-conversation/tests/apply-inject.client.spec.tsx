@@ -169,40 +169,6 @@ describe('Conversation inject API', () => {
     expect(errors).not.toHaveBeenCalled()
   })
 
-  it('refuses every File intake while the access snapshot excludes uploads but allows prompting', async () => {
-    const b = await bench()
-    onTestFinished(() => b.runtime.dispose())
-    const denied = createSnapshotStore(false)
-    const source = vi.spyOn(b.runtime.ctx.remoteAccess, 'source')
-    onTestFinished(() => { source.mockRestore() })
-    source.mockImplementation((kind, id, endpoint) => {
-      expect([kind, id]).toEqual(['session', ROOT])
-      return endpoint === 'fileUploads/upload' ? denied : createSnapshotStore(true)
-    })
-    const composer = b.composerApi(ROOT)
-    expect(composer.hooks.fileIntake).toBe(denied)
-    for (const file of [new File(['note'], 'note.txt'), new File(['image'], 'shot.png', { type: 'image/png' })]) {
-      expect(composer.addFiles?.([file])).toBe('当前无法添加文件或图片')
-    }
-    expect(b.rootUpload).not.toHaveBeenCalled()
-    // The File command reads the same answer: a bound picker stays closed.
-    const contributions = new Map<string, CommandContribution>()
-    b.runtime.ctx.provide('commandUi', {
-      register: (contribution: CommandContribution) => {
-        contributions.set(contribution.name, contribution)
-        return () => { contributions.delete(contribution.name) }
-      },
-    } satisfies Pick<CommandUiContract, 'register'>)
-    await vi.waitFor(() => { expect(contributions.has('file')).toBe(true) })
-    const open = vi.fn()
-    composer.keyboard!.bindFilePicker({ open, available: () => true })
-    const file = contributions.get('file')!
-    expect(file.available({ sessionId: ROOT })).toBe(false)
-    if (file.ui.kind !== 'action') throw new Error('File must be an action')
-    file.ui.run({ sessionId: ROOT })
-    expect(open).not.toHaveBeenCalled()
-  })
-
   it('owns the File action, reads its mounted composer availability, and unregisters on disposal', async () => {
     const b = await bench()
     onTestFinished(() => b.runtime.dispose())
@@ -434,23 +400,6 @@ describe('Conversation inject API', () => {
     })
     b.composerApi(ROOT).stop!()
     await vi.waitFor(() => { expect(b.sessionFake.cancel).toHaveBeenCalledOnce() })
-    await b.runtime.dispose()
-  })
-
-  it('never stops a Session after its access snapshot withdraws session/cancel', async () => {
-    const b = await bench()
-    const cancel = createSnapshotStore(true)
-    const source = vi.spyOn(b.runtime.ctx.remoteAccess, 'source')
-    onTestFinished(() => { source.mockRestore() })
-    source.mockImplementation((_kind, _id, endpoint) => endpoint === 'session/cancel' ? cancel : createSnapshotStore(true))
-    const composer = b.composerApi(ROOT)
-    composer.stop!()
-    await vi.waitFor(() => { expect(b.sessionFake.cancel).toHaveBeenCalledOnce() })
-    // Withdrawn while the view is open: the same handler re-reads the live answer and the cancel
-    // never reaches the Session.
-    cancel.set(false)
-    composer.stop!()
-    expect(b.sessionFake.cancel).toHaveBeenCalledOnce()
     await b.runtime.dispose()
   })
 

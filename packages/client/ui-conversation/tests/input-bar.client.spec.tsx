@@ -106,7 +106,6 @@ interface BenchOptions {
   attachments?: readonly ComposerAttachment[]
   /** Upload states served for file-kind drafts (absent = every file is ready). */
   fileUploads?: DraftFileUploads
-  acceptsFiles?: boolean
   /** Endpoints the Session's access snapshot excludes (absent = every endpoint is allowed). */
   deniedEndpoints?: readonly string[]
   addFiles?: (files: readonly File[], directories?: ReadonlySet<File>) => string | null
@@ -207,7 +206,6 @@ function bench(over?: BenchOptions) {
     inputActions: shell.actions,
     keyboard: shell,
     addFiles: over?.addFiles ?? (() => null),
-    useFileIntake: bindSnapshotSelector(createSnapshotStore(over?.acceptsFiles ?? true)),
     useFileUploads: bindSnapshotSelector(createSnapshotStore<DraftFileUploads>(over?.fileUploads ?? {})),
     retryFileUpload: undefined,
     removeAttachment,
@@ -715,7 +713,7 @@ describe('image draft rail', () => {
 
   it('keeps text editable but refuses attachment-slot, picker and paste intake without permission', () => {
     const added = vi.fn(() => null)
-    const result = bench({ acceptsFiles: false, addFiles: added, draft: 'text stays editable' })
+    const result = bench({ deniedEndpoints: ['fileUploads/upload'], addFiles: added, draft: 'text stays editable' })
     const attachment = attachmentOwner(result.slotCalls)
     expect(attachment.canAcceptDrop).toBe(false)
     const file = new File(['note'], 'note.txt')
@@ -1957,13 +1955,6 @@ describe('strips and variants', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('announces a refused branch from the machine store as an alert', () => {
-    const { view, shell } = bench()
-    // The Chat page reports a refused branch through this store; the bar renders the new copy.
-    act(() => { shell.notify('error', '未能完成分支：fork child rename failed') })
-    expect(view.getByRole('alert').textContent).toContain('未能完成分支：fork child rename failed')
   })
 
   it('renders an information notice from the machine store as a status strip', () => {

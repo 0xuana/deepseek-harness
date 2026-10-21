@@ -23,7 +23,6 @@ import { ConversationNodeAssembler } from './assembler.ts'
 import { ConversationEventRegistry } from './event-registry.ts'
 import { HistoricalImageCache } from './historical-images.ts'
 import { ConversationViewRegistry } from './view-registry.ts'
-import { noteBranchRefusal } from '../branch.ts'
 import { ConversationGroupRegistry } from './group-registry.ts'
 import { ConversationInteractionRegistry } from './interaction-registry.ts'
 import { UserTextRegistry } from './user-text-registry.ts'
@@ -235,20 +234,6 @@ export class UiConversation extends Service {
         for (const record of [...this.bindings.values]) this.drop(record, true)
       }
     }, 'ui-conversation assembly')
-  }
-
-  /**
-   * State why one branch was refused, on the Session it was asked of.
-   *
-   * The reason comes from the page's own vocabulary for the code when it has one, and otherwise from
-   * the Host's own message with the stable code beside it. A failed branch leaves the Session
-   * unchanged; this notice is the only trace it leaves.
-   * @param sessionId - Session the branch was asked of.
-   * @param error - Rejection the fork reported.
-   * @param message - The caller's copy for one stated reason.
-   */
-  noticeBranchRefusal(sessionId: SessionId, error: unknown, message: (reason: string) => string): void {
-    noteBranchRefusal(this.ctx, sessionId, error, message)
   }
 
   /**

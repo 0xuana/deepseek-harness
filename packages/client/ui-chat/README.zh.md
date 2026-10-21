@@ -178,7 +178,7 @@ Chat 会在历史前插与 renderer 重新挂载时恢复语义锚点，并且�
 <a id="write-actions"></a>
 ## 写操作
 
-轮次末尾的分支操作读取会话作用域的 `useAccess('session/fork')` 钩子，调用方 Peer 的访问快照不含该端点时不显示；视图始终收到 `forkAt` 处理函数。只有当快照对源 Session 含 `session/rename` 时，分支才为子会话命名；否则子会话保留 Host 给的标题，并在会话列表出现它之后打开。Host 拒绝的一次分支会在它被请求的那个 Session 上说明原因（走 composer 的 notice 通道），内容为 Host 自己的消息并附上稳定错误码。会话树的分支动词共用这一拒绝提示，以及同一套命名与打开分支的规则。这些界面判断不替代 Host 授权。
+轮次末尾的分支操作读取会话作用域的 `useAccess('session/fork')` 钩子，调用方 Peer 的访问快照不含该端点时不显示；视图始终收到 `forkAt` 处理函数。只有当快照对源 Session 含 `session/rename` 时，分支才为子会话命名；否则子会话保留 Host 给的标题，并在会话列表出现它之后打开。会话树的分支动词共用同一套命名与打开分支的规则。这些界面判断不替代 Host 授权。
 
 -----
 

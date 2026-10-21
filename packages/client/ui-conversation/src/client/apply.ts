@@ -43,7 +43,7 @@ import { ConversationHeader } from './skeleton/ConversationHeader.tsx'
 import { ConversationSession, ConversationSessionHeader } from './skeleton/ConversationSession.tsx'
 import { InputBar } from './skeleton/InputBar.tsx'
 import { todoDockEntry } from './skeleton/TodoPanel.tsx'
-import { createStopTurn, installStopShortcut } from './stop-shortcut.ts'
+import { installStopShortcut } from './stop-shortcut.ts'
 import { TRAJECTORY_VIEW_ID, resolveActiveView } from './view-selection.ts'
 import { createViewPins } from './view-pins.ts'
 import { en, ja, NS, zh, type ConversationKey } from './locales.ts'
@@ -58,7 +58,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /** Services required by the Conversation plugin. */
 export const inject = [
-  'slots', 'sessions', 'fileUpload', 'uiSession', 'uiWorkspace', 'locale', 'configForms', 'remoteAccess',
+  'slots', 'sessions', 'fileUpload', 'uiSession', 'uiWorkspace', 'locale', 'configForms',
 ]
 
 /** Conversation runtime configuration. */
@@ -94,10 +94,6 @@ const ABSENT_MENU_LAUNCHER = {
 const EMPTY_FILE_UPLOADS: DraftFileUploads = {}
 const ABSENT_FILE_UPLOADS = {
   getSnapshot: () => EMPTY_FILE_UPLOADS,
-  subscribe: () => () => {},
-}
-const ABSENT_FILE_INTAKE = {
-  getSnapshot: () => false,
   subscribe: () => () => {},
 }
 
@@ -290,13 +286,6 @@ export function apply(ctx: Context, config: Config = Config({})): void {
       // Stop failure is published through Session promptError.
     })
   }
-  // The button and the fixed shortcut share this gate: it re-reads the live answer at call time.
-  // After plugin disposal the optional lookup answers nothing; the shared stop then surfaces its own
-  // loud unavailable error instead of a disposed context reporting a withdrawn permission.
-  const allowsStop = { getSnapshot: () => true, subscribe: () => () => {} }
-  const stopTurn = createStopTurn(
-    stop, sessionId => ctx.get('remoteAccess')?.source('session', sessionId, 'session/cancel') ?? allowsStop,
-  )
   const stopShortcut = createSnapshotStore<readonly string[]>([])
   ctx.inject(['shortcuts'], (scope) => {
     const fixedInputs: readonly ShortcutFixedCommand[] = [
@@ -317,7 +306,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
       scope.effect(() => scope.shortcuts.registerFixed(command), `ui-conversation: ${command.id}`)
     }
     scope.effect(() => installStopShortcut(
-      scope.shortcuts, sessions, binding => uiConversation.binding(binding).openTurn, ctx.uiSession, stopTurn,
+      scope.shortcuts, sessions, binding => uiConversation.binding(binding).openTurn, ctx.uiSession, stop,
     ), 'ui-conversation: fixed stop input')
     scope.effect(() => {
       const command: ShortcutFixedCommand = {
@@ -515,7 +504,6 @@ export function apply(ctx: Context, config: Config = Config({})): void {
             stopShortcut,
             busyEnter: submissionPolicy.busyEnter,
             fileUploads: ABSENT_FILE_UPLOADS,
-            fileIntake: ABSENT_FILE_INTAKE,
             notices: ABSENT_NOTICES,
             lexicon: ABSENT_LEXICON,
             menuLauncher: ABSENT_MENU_LAUNCHER,
@@ -529,8 +517,6 @@ export function apply(ctx: Context, config: Config = Config({})): void {
       return {
         keyboard: shell,
         addFiles: (files, directories = new Set()) => {
-          // The user copy belongs to this caller; the live answer belongs to the input hub.
-          if (!inputHub.canIntakeFiles(sessionId)) return t('attachment.dropBlocked')
           if (sessions.binding(sessionId) === undefined) return t('file.sessionUnavailable')
           if (shell.snapshot.phase === 'adjudicating' || shell.snapshot.phase === 'submitting') {
             return t('attachment.dropBlocked')
@@ -591,13 +577,10 @@ export function apply(ctx: Context, config: Config = Config({})): void {
               span: { ...selection, draftRev: snapshot.draftRev },
             })
           },
-        // The bar hides Stop while the access snapshot excludes `session/cancel`; the shared stop
-        // re-reads the live answer, so neither a click nor the fixed shortcut reaches a withdrawn endpoint.
-        stop: () => { stopTurn(sessionId) },
+        stop: () => { stop(sessionId) },
         hooks: {
           stopShortcut,
           busyEnter: submissionPolicy.busyEnter,
-          fileIntake: inputHub.fileIntake(sessionId),
           fileUploads: conversation.fileUploads,
           notices: shell.notices,
           lexicon: shell.lexicon,

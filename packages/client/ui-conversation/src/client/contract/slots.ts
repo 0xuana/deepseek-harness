@@ -528,14 +528,6 @@ export interface ComposerBarInjected {
   toggleCommandMenu: ((selection: EditSelection) => void) | undefined
   stop: (() => void) | undefined
   hooks: {
-    /**
-     * Live permission for file intake, independently of text prompting.
-     *
-     * Optional: a bar registration that omits it cannot prove live intake permission, so the bar offers
-     * no file controls (fail-closed, like the no-session placeholder). The registration that owns this
-     * composer supplies the live answer.
-     */
-    fileIntake?: ObservableSnapshot<boolean>
     /** Readable sequence while the fixed Stop command is registered. */
     stopShortcut: ObservableSnapshot<readonly string[]>
     /**

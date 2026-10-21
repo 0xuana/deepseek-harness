@@ -73,7 +73,6 @@ function mountBar(shell: SessionInputShell, over?: { running?: boolean; disabled
     inputActions: shell.actions,
     keyboard: shell,
     addFiles: () => null,
-    useFileIntake: bindSnapshotSelector(createSnapshotStore(true)),
     useFileUploads: bindSnapshotSelector(createSnapshotStore({})),
     retryFileUpload: undefined,
     removeAttachment: () => {},

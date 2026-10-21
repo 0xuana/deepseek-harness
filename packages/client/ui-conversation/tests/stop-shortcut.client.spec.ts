@@ -2,7 +2,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SessionPendingInteractionBase } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { Shortcuts, ShortcutContext, ShortcutGesture } from '@deepseek-ai/dsh-client-shortcuts/client'
-import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { makeTranslate, SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import { MutableSessionEventSource } from '@deepseek-ai/dsh-api-session-controller/client'
 import { SessionSeq, type SessionId } from '@deepseek-ai/dsh-session/types'
@@ -10,7 +9,7 @@ import { UiConversation } from '../src/client/conversation/assembly.ts'
 import { ComposerBlockRegistry } from '../src/client/input/blocks.ts'
 import { InputHub } from '../src/client/input/hub.ts'
 import { ConversationController } from '../src/client/service.ts'
-import { createStopTurn, installStopShortcut } from '../src/client/stop-shortcut.ts'
+import { installStopShortcut } from '../src/client/stop-shortcut.ts'
 import { zh } from '../src/client/locales.ts'
 
 const disposers: (() => void | Promise<void>)[] = []
@@ -72,17 +71,6 @@ async function bench() {
 }
 
 describe('fixed stop routing', () => {
-  it('refuses the shared stop once session/cancel is withdrawn', () => {
-    const cancel = vi.fn()
-    const allowed = createSnapshotStore(true)
-    const stopTurn = createStopTurn(cancel, () => allowed)
-    stopTurn('s1' as SessionId)
-    expect(cancel).toHaveBeenCalledExactlyOnceWith('s1')
-    allowed.set(false)
-    stopTurn('s1' as SessionId)
-    expect(cancel).toHaveBeenCalledOnce()
-  })
-
   it('cancels through the scoped ConversationController only after two eligible Escapes', async () => {
     const b = await bench()
     expect(b.press()).toHaveBeenCalledOnce()
