@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { AnimatedRows } from '@deepseek-ai/dsh-client-ui-primitives'
+import { AnimatedRows } from '../src/AnimatedRows.tsx'
 
 interface RecordedAnimation {
   element: HTMLElement
@@ -24,7 +24,8 @@ beforeEach(() => {
     configurable: true,
     value(this: HTMLElement, keyframes: Keyframe[], options: KeyframeAnimationOptions): Animation {
       const cancel = vi.fn<() => void>()
-      const animation = { onfinish: null, cancel } as unknown as Animation
+      const methods: Pick<Animation, 'onfinish' | 'cancel'> = { onfinish: null, cancel }
+      const animation = methods as Animation
       animations.push({ element: this, keyframes, options, animation, cancel })
       return animation
     },
@@ -103,6 +104,17 @@ describe('AnimatedRows', () => {
     expect(leaving.keyframes).toEqual([{ opacity: 1 }, { opacity: 0 }])
     finish(leaving.animation)
     expect(leaving.element.isConnected).toBe(false)
+  })
+
+  it('fades the last row when the list becomes empty', () => {
+    const view = render(rows(['a']))
+    arm()
+    view.rerender(rows([]))
+    expect(animations).toHaveLength(1)
+    expect(animations[0]?.options.duration).toBe(100)
+    expect(animations[0]?.element.inert).toBe(true)
+    finish(animations[0]!.animation)
+    expect(animations[0]?.element.isConnected).toBe(false)
   })
 
   it('does not measure content-only updates or scrolling, or interrupt their ongoing movement', () => {

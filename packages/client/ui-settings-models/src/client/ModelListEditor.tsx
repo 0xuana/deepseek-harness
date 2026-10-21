@@ -28,6 +28,7 @@ import type { DeepSeekModelDraft } from './DeepSeekModelsEditor.tsx'
 import type { en } from './locales.ts'
 import { ModelRow } from './ModelRow.tsx'
 import { useModelRows } from './useModelRows.ts'
+import type { CapacityField } from './useModelRows.ts'
 import styles from './ModelsSection.module.css'
 
 /**
@@ -109,9 +110,6 @@ export interface ModelListEditorProps {
    */
   onBusyChange: (busy: boolean) => void
 }
-
-/** The two token counts edited as K/M-suffixed text behind a row's disclosure. */
-type CapacityField = 'contextWindow' | 'maxTokens'
 
 /**
  * What an empty capacity field is worth, shown as its placeholder so a row left

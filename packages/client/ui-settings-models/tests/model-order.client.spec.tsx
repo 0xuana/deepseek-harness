@@ -55,6 +55,12 @@ function fireDrag(target: HTMLElement, kind: 'dragOver' | 'drop', clientY: numbe
   fireEvent(target, event)
 }
 
+function leave(target: HTMLElement, relatedTarget: Node | null = null) {
+  const event = createEvent.dragLeave(target)
+  Object.defineProperty(event, 'relatedTarget', { value: relatedTarget })
+  fireEvent(target, event)
+}
+
 describe.each(['deepseek', 'pi-ai'] as const)('%s model ordering', (family) => {
   it('moves a complete model and its expanded capacity draft to the drop position', () => {
     const first = { id: 'first', name: 'First', contextWindow: 4096, input: ['image'], hidden: { preserved: true } }
@@ -72,6 +78,7 @@ describe.each(['deepseek', 'pi-ai'] as const)('%s model ordering', (family) => {
 
     const dataTransfer = transfer()
     fireEvent.dragStart(source, { dataTransfer })
+    expect(dataTransfer.setData).toHaveBeenCalledExactlyOnceWith('application/x-dsh-model-order', '1')
     fireEvent.dragOver(destination, { dataTransfer })
     expect(changed).not.toHaveBeenCalled()
     fireEvent.drop(destination, { dataTransfer })
@@ -91,6 +98,7 @@ describe.each(['deepseek', 'pi-ai'] as const)('%s model ordering', (family) => {
     const changed = vi.fn()
     render(<Editor family={family} initial={[{ id: 'first' }, { id: 'second' }]} changed={changed} />)
     const source = handle(1)
+    expect(source.getAttribute('aria-description')).toBe(en.reorderModelHelp)
     source.focus()
     fireEvent.keyDown(source, { key: 'ArrowUp' })
     fireEvent.keyDown(source, { key: 'Enter' })
@@ -178,6 +186,37 @@ describe.each(['deepseek', 'pi-ai'] as const)('%s model ordering', (family) => {
     fireEvent.keyDown(source, { key: 'ArrowDown' })
     fireEvent.drop(destination, { dataTransfer })
     expect(changed).not.toHaveBeenCalled()
+  })
+
+  it('clears an outside insertion marker without clearing another row or an internal transition', () => {
+    const changed = vi.fn()
+    render(<Editor family={family} initial={[{ id: 'first' }, { id: 'second' }, { id: 'third' }]} changed={changed} />)
+    const source = handle(1)
+    const second = row(handle(2))
+    const third = row(handle(3))
+    const dataTransfer = transfer()
+    fireEvent.dragStart(source, { dataTransfer })
+    fireEvent.dragOver(second, { dataTransfer })
+    leave(second, second.querySelector('input'))
+    expect(second.dataset.dropTarget).toBe('after')
+    fireEvent.dragOver(third, { dataTransfer })
+    leave(second, third)
+    expect(third.dataset.dropTarget).toBe('after')
+    leave(third, document.body)
+    expect(third.dataset.dropTarget).toBeUndefined()
+    fireEvent.dragOver(second, { dataTransfer })
+    leave(second)
+    expect(second.dataset.dropTarget).toBeUndefined()
+    fireEvent.dragEnd(source)
+    expect(changed).not.toHaveBeenCalled()
+  })
+
+  it('keeps the animated list mounted when its last row is removed', () => {
+    render(<Editor family={family} initial={[{ id: 'first' }]} changed={vi.fn()} />)
+    const list = row(handle(1)).parentElement!
+    fireEvent.click(screen.getByRole('button', { name: `${en.removeModel} 1` }))
+    expect(list.isConnected).toBe(true)
+    expect(screen.getByText(en.modelsEmpty)).toBeDefined()
   })
 
   it('keeps blank rows distinct through editing, moves, removal, and addition', () => {

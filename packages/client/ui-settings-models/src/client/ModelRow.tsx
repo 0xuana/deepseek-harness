@@ -68,6 +68,10 @@ export function ModelRow(props: ModelRowProps): ReactNode {
         event.dataTransfer.dropEffect = 'move'
         props.order.onOver(rowHalf(event))
       }}
+      onDragLeave={(event) => {
+        if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return
+        props.order.onLeave()
+      }}
       onDrop={(event) => {
         if (!props.order.canDrop) return
         event.preventDefault()
@@ -81,11 +85,12 @@ export function ModelRow(props: ModelRowProps): ReactNode {
             className={`${styles['iconButton']} ${styles['modelDragHandle']}`}
             aria-label={`${t('reorderModel')} ${String(position)}`}
             aria-keyshortcuts="ArrowUp ArrowDown"
+            aria-description={t('reorderModelHelp')}
             disabled={disabled}
             draggable={!disabled}
             onDragStart={(event) => {
               event.dataTransfer.effectAllowed = 'move'
-              event.dataTransfer.setData('text/plain', String(position))
+              event.dataTransfer.setData('application/x-dsh-model-order', String(position))
               props.order.onStart()
               preview.start(event, event.currentTarget.closest('[data-row-key]') as HTMLElement)
             }}

@@ -4,7 +4,7 @@ import { useRef, useState } from 'react'
 import type { DeepSeekModelDraft } from './DeepSeekModelsEditor.tsx'
 
 /** Text fields whose unfinished spelling belongs to one draft row. */
-type CapacityField = 'contextWindow' | 'maxTokens'
+export type CapacityField = 'contextWindow' | 'maxTokens'
 
 interface RowState {
   key: number
@@ -20,6 +20,7 @@ export interface ModelRowOrder {
   onStart: () => void
   onEnd: () => void
   onOver: (half: 'before' | 'after') => void
+  onLeave: () => void
   onDrop: (half: 'before' | 'after') => void
   onMove: (offset: -1 | 1) => void
 }
@@ -78,6 +79,7 @@ export function useModelRows(
         onOver: (half): void => {
           setTarget(current => current?.key === state.key && current.half === half ? current : { key: state.key, half })
         },
+        onLeave: (): void => { setTarget(current => current?.key === state.key ? undefined : current) },
         onDrop: (half): void => {
           const from = rows.findIndex(row => row.key === dragged)
           const insertion = index + (half === 'after' ? 1 : 0)

@@ -10,6 +10,7 @@ import { AnimatedRows, IconPlusOutlineRegular } from '@deepseek-ai/dsh-client-ui
 import type { en } from './locales.ts'
 import { ModelRow } from './ModelRow.tsx'
 import { useModelRows } from './useModelRows.ts'
+import type { CapacityField } from './useModelRows.ts'
 import styles from './ModelsSection.module.css'
 
 /** One catalog entry kept structurally open so hidden or future fields survive an edit. */
@@ -17,9 +18,6 @@ export type DeepSeekModelDraft = Record<string, unknown>
 
 /** The catalog fields this editor writes. */
 type CatalogField = 'id' | 'name' | 'contextWindow' | 'maxTokens'
-
-/** The two token counts edited as K/M-suffixed text behind a row's disclosure. */
-type CapacityField = 'contextWindow' | 'maxTokens'
 
 /** Accepted capacity spellings: a decimal count with an optional K/M suffix. */
 const CAPACITY_PATTERN = /^(\d+(?:\.\d+)?)([km])?$/i
@@ -218,35 +216,32 @@ export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNod
           )
           : null}
       </div>
-      {props.models.length === 0
-        ? <p className={styles['modelEmpty']}>{props.t('modelsEmpty')}</p>
-        : (
-          <AnimatedRows className={styles['modelList'] as string} rowKeys={rowState.rows.map(row => String(row.key))} ready resetKey="">
-            {rowState.rows.map(({ model, key, expanded, order }, index) => (
-              <ModelRow
-                key={key}
-                rowKey={key}
-                order={order}
-                model={model}
-                position={index + 1}
-                inputField="inputModalities"
-                expanded={expanded}
-                disabled={props.disabled}
-                t={props.t}
-                contextWindow={capacityInput(model, index, 'contextWindow', props.defaultContextWindow)}
-                maxTokens={capacityInput(model, index, 'maxTokens', props.defaultMaxTokens)}
-                onFieldChange={(field, value) => { update(index, field, value) }}
-                onIdBlur={(value) => {
-                  const trimmed = value.trim()
-                  if (trimmed !== value) update(index, 'id', trimmed)
-                }}
-                onChange={(next) => { props.onChange(props.models.map((row, at) => at === index ? next : row)) }}
-                onToggle={() => { rowState.toggle(index) }}
-                onRemove={() => { remove(index) }}
-              />
-            ))}
-          </AnimatedRows>
-        )}
+      <AnimatedRows className={styles['modelList'] as string} rowKeys={rowState.rows.map(row => String(row.key))} ready resetKey="">
+        {props.models.length === 0 ? <p className={styles['modelEmpty']}>{props.t('modelsEmpty')}</p> : null}
+        {rowState.rows.map(({ model, key, expanded, order }, index) => (
+          <ModelRow
+            key={key}
+            rowKey={key}
+            order={order}
+            model={model}
+            position={index + 1}
+            inputField="inputModalities"
+            expanded={expanded}
+            disabled={props.disabled}
+            t={props.t}
+            contextWindow={capacityInput(model, index, 'contextWindow', props.defaultContextWindow)}
+            maxTokens={capacityInput(model, index, 'maxTokens', props.defaultMaxTokens)}
+            onFieldChange={(field, value) => { update(index, field, value) }}
+            onIdBlur={(value) => {
+              const trimmed = value.trim()
+              if (trimmed !== value) update(index, 'id', trimmed)
+            }}
+            onChange={(next) => { props.onChange(props.models.map((row, at) => at === index ? next : row)) }}
+            onToggle={() => { rowState.toggle(index) }}
+            onRemove={() => { remove(index) }}
+          />
+        ))}
+      </AnimatedRows>
       <button
         type="button"
         className={styles['addModelButton']}

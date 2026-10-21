@@ -229,7 +229,7 @@ export const zh: { [Key in keyof typeof en]: string } = {
   addModel: '添加模型',
   removeModel: '删除模型',
   reorderModel: '调整模型顺序',
-  reorderModelHelp: '拖动排序，或使用上下方向键调整顺序',
+  reorderModelHelp: '拖动排序，或使用上下方向键调整顺序。',
   modelsEmpty: '模型选择器中将不显示任何模型；目录外 ID 仍可直接发送。',
   keyBlank: '请输入 API 密钥；留空则保持已存储的密钥。',
   keyBlankNew: '请输入 API 密钥；若该提供商以其他方式鉴权，可以留空。',

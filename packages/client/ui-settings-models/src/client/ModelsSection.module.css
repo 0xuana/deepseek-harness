@@ -532,13 +532,27 @@
   background: var(--dsw-alias-bg-module-platform);
 }
 
-.modelEntry[data-drop-target='before']::before,
-.modelEntry[data-drop-target='after']::after {
+/* Each row owns half of the 8px gap so native drops reach the insertion line. */
+.modelEntry::before,
+.modelEntry::after {
   content: '';
   position: absolute;
   z-index: 1;
   left: 0;
   right: 0;
+  height: 4px;
+}
+
+.modelEntry::before {
+  top: -4px;
+}
+
+.modelEntry::after {
+  bottom: -4px;
+}
+
+.modelEntry[data-drop-target='before']::before,
+.modelEntry[data-drop-target='after']::after {
   height: 12px;
   background:
     linear-gradient(
@@ -556,7 +570,6 @@
     linear-gradient(
       var(--dsw-alias-state-business-primary) 0 0
     ) 4px 5px / calc(100% - 4px) 2px no-repeat;
-  pointer-events: none;
 }
 
 .modelEntry[data-drop-target='before']::before {
