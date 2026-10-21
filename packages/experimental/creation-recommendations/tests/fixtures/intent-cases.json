@@ -283,5 +283,50 @@
     "id": "dsh_ui_customization_addition",
     "prompt": "在 DSH 的会话页面旁边留个验收清单吧：空列表提示、刷新后保留数据、深色模式文字可读。我边聊边一项项打勾。",
     "expected": "Recognize DSH UI customization without asking the user to select Creator mode. One sidebar-right proposal with exact checklist, no source edits or creation before click."
+  },
+  {
+    "id": "minimal_link_collection",
+    "prompt": "每次要找竞品资料都得翻聊天，挺麻烦的。要是能把标题和网址放在一个一直能打开的地方，之后我自己再加链接，就方便了。以前的不用帮我搬过来。",
+    "expected": "Offer one sidebar-left card for adding title/URL entries and saving them across Sessions, starting empty. Necessary validation is allowed; independent editing/deletion, import or automation is not implied. Omit initialContent; keep the answer to a short invitation."
+  },
+  {
+    "id": "checklist_data_not_behavior",
+    "prompt": "我想一边在这个对话里聊，一边看到能打勾的小面板，记录本次验收。内容是「登录失败时提示正确」「刷新后输入保留」「深色模式文字清楚」，只需要勾选和取消勾选，随当前会话保留状态。先让我确认方案再创建。",
+    "expected": "One sidebar-right card. brief contains check/uncheck and Session persistence; initialContent contains exactly the three supplied items as content, without page behavior/storage instructions. Preserve the item wording without turning it into page requirements."
+  },
+  {
+    "id": "weekly_additions_not_backlog",
+    "prompt": "请先写一段简短的竞品资料整理周报：上周 A 产品收集了 12 条资料、读完 5 条，B 产品收集了 8 条、读完 2 条。以后我每周会回来手动更新这些数字，看看积压有没有减少。",
+    "expected": "Complete the short report preserving 上周 and the four counts. Before proposing a backlog calculation, clarify whether the figures are weekly additions/completions or cumulative totals. Do not infer total backlog or a decreasing trend from these numbers. A clarification without a card is correct."
+  },
+  {
+    "id": "weekly_snapshot_handoff",
+    "prompt": "这周要汇报竞品资料进度：A 有 12 条资料，其中 5 条已读；B 有 8 条，其中 2 条已读。先给我简短总结，今后每周我再手动录入新数字，跟踪未读资料的变化。",
+    "expected": "Complete the concise summary. A sidebar-left tracker is optional. If proposed, brief contains manual weekly entry, total minus read and comparison of saved records; initialContent contains only this week’s original A/B totals and read counts. Do not add reading-rate features or mix formula instructions into source content."
+  },
+  {
+    "id": "requested_editing_and_filtering",
+    "prompt": "能给我一个自己的读书小工具吗？从左边打开，填书名、全书多少页、读到多少页；以后每周都回来补进度，也能只看没读完的。数据留在本机。现在先让我看看方案，别开始生成。",
+    "expected": "One sidebar-left card for the explicitly requested title/total-pages/current-page entry, progress updates, unfinished filter and local persistence. Do not omit requested editing/filtering when applying minimal scope, or add unrelated operations. No initialContent for an empty page."
+  },
+  {
+    "id": "ordinary_summary_no_card",
+    "prompt": "这次只需要一段三句话的汇报文字：A 的资料总数 12、读完 5，B 的总数 8、读完 2。帮我说清目前整理进度。",
+    "expected": "Three concise Chinese sentences summarizing the supplied values. No planning Skill, card or implementation work; the static summary alone does not qualify for a page."
+  },
+  {
+    "id": "equipment_stock",
+    "prompt": "想在左侧有一个设备借用小页面。我自己填设备名、总台数和已借台数，之后改已借数量，只看当前还有几台可借，数据保存在本机。先给方案。",
+    "expected": "Current stock maintenance: add equipment, update borrowed count, display total minus borrowed, local persistence. No borrower identities, reminders, reservations, lending history, or automatic data collection. No initialContent."
+  },
+  {
+    "id": "source_words",
+    "prompt": "把这两条测试名称放到当前会话右侧，只做一个可以打勾、取消勾选的清单，状态跟着会话保存：甲「点击删除后能恢复」；乙「不登录也能查看」。这是要展示的测试名称，先给方案。",
+    "expected": "Preserve the two test names as source data; no delete/recovery or login behavior in brief, no checkbox/storage instructions in initialContent. Exactly one sidebar-right card."
+  },
+  {
+    "id": "cost_snapshot",
+    "prompt": "截至9月30日，旅行预算累计3000元，已支出1800元；学习预算累计1200元，已支出400元。先给两句总结。以后每个月我会手动填一次累计预算和累计支出，想比较还剩多少。",
+    "expected": "Two-sentence summary: budget 4200, spent 2200, remaining 2000; no invented year or trend. Optional global tracker preserving September 30 and four supplied CNY amounts as data; calculation/monthly entry in brief, no duplicate-content instructions or automatic import."
   }
 ]

@@ -275,7 +275,7 @@ export class CreationRecommendations extends TypertRemoteService {
         request: {
           parent: agent, agentPreset: 'cordis', cwd: sourceDirectory,
           prompt: [{ type: 'text', text: JSON.stringify({
-            task: 'Create one new independently removable DSH interface plugin. Read and use the cordis-plugin-development skill. Generate and build the package only; the caller validates and installs it. Do not install, enable, remove, or edit any existing plugin or profile configuration.',
+            task: 'Create one new independently removable DSH interface plugin. Implement the accepted behavior and data scope in brief; research APIs and choose the technical details needed to make it work. Do not add independent operations, data sources, automation or wider access beyond that scope. If unresolved business meaning prevents faithful implementation, report ready:false rather than inventing it. Read and use the cordis-plugin-development skill. Generate and build the package only; the caller validates and installs it. Do not install, enable, remove, or edit any existing plugin or profile configuration.',
             title: proposal.title, brief: proposal.brief,
             ...(proposal.initialContent === undefined ? {} : {
               initialContent: proposal.initialContent,
