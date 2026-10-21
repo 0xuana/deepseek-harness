@@ -49,8 +49,6 @@ export function createWorkspaceShortcutControls(): WorkspaceShortcutControls {
 /**
  * Register navigation commands against the existing workspace owner.
  * Rename requires a nonblank main Conversation with no modal obscuring it.
- * Rename, fork, and archive stay bound while the current Session's access snapshot excludes their
- * endpoint and report refusal.
  * @param ctx - plugin context with the shortcut, locale, and model services.
  * @param navigation - session creation and forking from the pointer controls' navigation service.
  * @param controls - browser-owned opening requests.
@@ -65,8 +63,6 @@ export function installWorkspaceShortcuts(
   reportForkFailure: (reason: 'unavailable' | 'failed') => void,
 ): void {
   const t = ctx.locale.bind('workspace')
-  const allows = (sessionId: SessionId, endpoint: string): boolean =>
-    ctx.remoteAccess.source('session', sessionId, endpoint).getSnapshot()
   const current = () => Object.values(ctx.sessions.list.getSnapshot().byId)
     .find(row => (row.retainedBy.mainView ?? 0) > 0)
   const addReason = () => ctx.slots.entries('sidebar.workspaces.directoryFlow').length === 0
@@ -93,9 +89,6 @@ export function installWorkspaceShortcuts(
     })
   register('session.rename', () => t('rename.session.title'), ['rename session'], 'KeyG', ['primary', 'alt'], ['primary', 'alt'], (context) => {
     const target = current()
-    if (target !== undefined && !allows(target.id, 'session/rename')) {
-      return { status: 'blocked', reason: t('shortcut.notPermitted') }
-    }
     return target === undefined || target.blank || context.modal !== null || ctx.layout.panelInfo.getSnapshot().activePanelId !== null
       ? { status: 'blocked', reason: t('shortcut.noSession') }
       : { status: 'handled', run: () => { controls.rename(target.id, target.title?.trim() ?? '') } }
@@ -103,7 +96,6 @@ export function installWorkspaceShortcuts(
   register('session.fork', () => t('menu.fork'), ['fork session'], 'KeyF', ['primary', 'alt'], ['primary', 'shift'], () => {
     const target = current()
     if (target === undefined) return { status: 'blocked', reason: t('shortcut.noSession') }
-    if (!allows(target.id, 'session/fork')) return { status: 'blocked', reason: t('shortcut.notPermitted') }
     if (target.blank) return { status: 'blocked', reason: t('shortcut.noCompletedTurn') }
     return { status: 'handled', run: () => {
       // The main view owns history opening for this target.
@@ -118,10 +110,9 @@ export function installWorkspaceShortcuts(
   })
   register('session.archive', () => t('menu.archiveSession'), ['archive session'], 'KeyA', ['primary', 'shift'], ['primary', 'alt'], () => {
     const target = current()
-    if (target === undefined) return { status: 'blocked', reason: t('shortcut.noSession') }
-    if (!allows(target.id, 'workspace/archiveSession')) return { status: 'blocked', reason: t('shortcut.notPermitted') }
-    return { status: 'handled', run: () => {
-      archiveSession(target.id)
-    } }
+    return target === undefined ? { status: 'blocked', reason: t('shortcut.noSession') }
+      : { status: 'handled', run: () => {
+        archiveSession(target.id)
+      } }
   })
 }

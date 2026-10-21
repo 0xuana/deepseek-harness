@@ -17,7 +17,6 @@ export const zh = {
   'shortcut.directoryBusy': '正在选择或添加工作区',
   'shortcut.noCompletedTurn': '当前会话没有已结束的轮次',
   'shortcut.forkFailed': '无法分叉会话，请重试',
-  'shortcut.notPermitted': '当前页面不允许此操作',
   'section.workspaces': '工作区',
   'section.sessions': '会话',
   'viewOptions.label': '视图选项',
@@ -144,7 +143,6 @@ export const en = {
   'shortcut.directoryBusy': 'Selecting or adding a workspace',
   'shortcut.noCompletedTurn': 'This session has no completed turn',
   'shortcut.forkFailed': 'Could not fork the session. Try again.',
-  'shortcut.notPermitted': 'This page may not perform that action',
   'section.workspaces': 'Workspaces',
   'section.sessions': 'Sessions',
   'viewOptions.label': 'View options',
@@ -268,7 +266,6 @@ export const ja = {
   'shortcut.directoryBusy': 'ワークスペースを選択または追加しています',
   'shortcut.noCompletedTurn': 'このセッションには完了したターンがありません',
   'shortcut.forkFailed': 'セッションをフォークできませんでした。もう一度お試しください。',
-  'shortcut.notPermitted': 'このページではこの操作を実行できません',
   'section.workspaces': 'ワークスペース',
   'section.sessions': 'セッション',
   'viewOptions.label': '表示オプション',
@@ -377,5 +374,4 @@ export const ja = {
   'time.months': '{n}か月',
   'time.years': '{n}年',
   'time.ago': '{t}前',
-
 } satisfies Record<keyof typeof en, string>

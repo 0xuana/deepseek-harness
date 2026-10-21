@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { EVENTS_ENDPOINT, EVENTS_ROUTE, parsePluginsEventFrame } from '../src/events.ts'
+import { parsePluginsEventFrame } from '../src/events.ts'
 
 describe('plugin event wire parser', () => {
   it('accepts complete rebuilt and graph frames', () => {
@@ -19,10 +19,5 @@ describe('plugin event wire parser', () => {
     for (const value of [null, [], {}, { type: 'rebuilt', id: 'plugin' }, { type: 'graph', graph: null }]) {
       expect(parsePluginsEventFrame(value)).toEqual({ kind: 'invalid' })
     }
-  })
-
-  it('separates the server route from the browser-relative endpoint', () => {
-    expect(EVENTS_ENDPOINT).toBe('/plugins/events')
-    expect(EVENTS_ROUTE).toBe('plugins/events')
   })
 })

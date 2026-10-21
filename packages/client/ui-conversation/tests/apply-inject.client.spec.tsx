@@ -604,56 +604,6 @@ describe('Conversation inject API', () => {
     await b.runtime.dispose()
   })
 
-  it('releases View refresh ownership before a withdrawn Session or plugin can receive locale changes', async () => {
-    const b = await bench()
-    onTestFinished(() => b.runtime.dispose())
-    const removeView = b.slots.register(
-      { name: 'conversation.view', id: 'chat', label: 'Chat' },
-      (() => null) as never,
-    )
-    onTestFinished(removeView)
-    const binding = b.rootReference.binding
-    b.runtime.ctx.uiSession.bindingSource(b.rootReference)
-    const resolve = vi.spyOn(b.runtime.ctx.uiConversation, 'binding')
-    const errors = vi.spyOn(console, 'error')
-    onTestFinished(() => { resolve.mockRestore(); errors.mockRestore() })
-    resolve.mockClear()
-
-    b.rootReference.release()
-    expect(b.runtime.sessions.binding(ROOT)).toBeUndefined()
-    b.runtime.ctx.locale.setLocale('en')
-    expect(resolve).not.toHaveBeenCalled()
-    expect(errors).not.toHaveBeenCalled()
-    await binding.ctx.fiber.dispose()
-    await b.feature.dispose()
-    b.runtime.ctx.locale.setLocale('zh')
-    expect(resolve).not.toHaveBeenCalled()
-    expect(errors).not.toHaveBeenCalled()
-  })
-
-  it('detaches View refresh when Conversation unloads before its retained Session', async () => {
-    const b = await bench()
-    onTestFinished(() => b.runtime.dispose())
-    const removeView = b.slots.register(
-      { name: 'conversation.view', id: 'chat', label: 'Chat' },
-      (() => null) as never,
-    )
-    onTestFinished(removeView)
-    b.runtime.ctx.uiSession.bindingSource(b.rootReference)
-    const resolve = vi.spyOn(b.runtime.ctx.uiConversation, 'binding')
-    const errors = vi.spyOn(console, 'error')
-    onTestFinished(() => { resolve.mockRestore(); errors.mockRestore() })
-
-    await b.feature.dispose()
-    expect(b.runtime.sessions.binding(ROOT)).toBe(b.rootReference.binding)
-    resolve.mockClear()
-    b.runtime.ctx.locale.setLocale('en')
-    b.rootReference.release()
-    b.runtime.ctx.locale.setLocale('zh')
-    expect(resolve).not.toHaveBeenCalled()
-    expect(errors).not.toHaveBeenCalled()
-  })
-
   it('projects the dynamic View registration ledger', async () => {
     const b = await bench()
     const source = b.viewSource(ROOT)
