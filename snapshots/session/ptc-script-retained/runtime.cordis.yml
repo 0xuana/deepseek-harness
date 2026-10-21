@@ -1,0 +1,12 @@
+- id: ptc-runtime
+  config:
+    executionMode: vm-script
+    scriptPersistence: true
+
+- insert:
+    - id: computer-use
+      name: '@deepseek-ai/dsh-computer-use'
+    - id: cua-script-guidance
+      name: './cua-guidance.mjs'
+      config:
+        agentPreset: false
