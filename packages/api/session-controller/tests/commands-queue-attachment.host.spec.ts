@@ -35,6 +35,7 @@ async function commandHarness(
   inbox: Inbox
   steer: ReturnType<typeof vi.fn>
   cancel: ReturnType<typeof vi.fn>
+  resolveAgent: ReturnType<typeof vi.fn>
 }> {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
@@ -107,7 +108,7 @@ async function commandHarness(
     saveSelection: () => Promise.resolve(),
   } as never)
   const agents = new ApiSessionAgentController(ctx)
-  vi.spyOn(agents, 'resolveAgent').mockImplementation(id => Promise.resolve(id === agent.id
+  const resolveAgent = vi.spyOn(agents, 'resolveAgent').mockImplementation(id => Promise.resolve(id === agent.id
     ? { agent }
     : { error: new RemoteError('session/not-found', 'missing', { sessionId: id }) }))
   vi.spyOn(agents, 'composeAgent').mockResolvedValue({ setup: () => {} })
@@ -118,6 +119,7 @@ async function commandHarness(
     inbox,
     steer,
     cancel,
+    resolveAgent,
   }
 }
 
@@ -126,6 +128,19 @@ async function expectFailure(operation: Promise<unknown>, code: string): Promise
 }
 
 describe('Session queue commands', () => {
+  it('edits a blockquote into ordinary text without changing prompt correlation', async () => {
+    const { ctx, controller, agent, inbox } = await commandHarness()
+    try {
+      const message = createUserMessage({ content: [{ type: 'text', text: '> selected' }],
+        source: { kind: 'user', rpcId: 'quote-edit' as import('../src/types.ts').SessionRequestId } })
+      inbox.append('next-turn', message)
+      await controller.updateQueue({ sessionId: agent.id, itemId: message.id,
+        action: { kind: 'edit', content: [{ type: 'text', text: 'plain replacement' }] } })
+      expect(inbox.nextTurn[0]?.content).toEqual([{ type: 'text', text: 'plain replacement' }])
+      expect(inbox.nextTurn[0]?.source).toEqual(message.source)
+    } finally { await ctx.fiber.dispose() }
+  })
+
   it('preserves the cold Agent resolver rejection', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
