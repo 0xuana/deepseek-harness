@@ -170,7 +170,10 @@ export interface ChangeResult {
   bundle?: string
   /** The installed bundle's manifest version, when declared; pnpm's `minimumReleaseAge` can make it older than the newest release. */
   version?: string
-  /** Exact package names awaiting explicit script approval in the profile's pnpm settings, read after a failed run. */
+  /**
+   * Exact `allowBuilds` keys awaiting explicit script approval in the profile's pnpm settings, read after a failed run:
+   * a package name, `name@version`, or a git key pinned to a commit.
+   */
   pendingBuilds?: string[]
   /** Package script permissions saved before this installation attempt. */
   approvedBuilds?: string[]

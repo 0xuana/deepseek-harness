@@ -667,10 +667,13 @@ it('runs a real pnpm dependency script only after approval and retry', async () 
 })
 
 it('offers approval for a real git-hosted package pnpm refused to prepare', async () => {
-  const { manager, dir, profile } = await fixture('startup')
+  // Both the fixture's Git and the manager's pnpm child read only this empty configuration.
+  const env = { GIT_CONFIG_GLOBAL: '', GIT_CONFIG_NOSYSTEM: '1' }
+  const pnpm = fileURLToPath(new URL('../../../../apps/desktop/node_modules/pnpm/bin/pnpm.mjs', import.meta.url))
+  const { manager, dir, profile } = await fixture('startup', false, undefined, {}, { command: process.execPath, args: ['--expose-internals', pnpm], env })
   const repository = join(profile.cwd, 'repository')
   mkdirSync(repository)
-  const env = { GIT_CONFIG_GLOBAL: join(profile.cwd, 'git.config'), GIT_CONFIG_NOSYSTEM: '1' }
+  env.GIT_CONFIG_GLOBAL = join(profile.cwd, 'git.config')
   writeFileSync(env.GIT_CONFIG_GLOBAL, '')
   const git = (args: string[]) => execa('git', args, { cwd: repository, env })
   await git(['init', '--initial-branch=main'])
@@ -687,10 +690,12 @@ it('offers approval for a real git-hosted package pnpm refused to prepare', asyn
   const spec = `git+${pathToFileURL(repository).href}`
   const blocked = await manager.installBundle(spec, { enabled: false })
   expect(blocked, JSON.stringify(blocked)).toMatchObject({ application: 'failed', packageResult: { kind: 'build-blocked' } })
-  expect(blocked.pendingBuilds).toEqual([expect.stringMatching(/^@test\/git-prepared@git\+file:/)])
+  expect(blocked.pendingBuilds).toEqual([expect.stringMatching(/^@test\/git-prepared@git\+file:.*#[0-9a-f]{40}$/)])
+  const built = join(dir, 'node_modules', '@test', 'git-prepared', 'built.txt')
+  expect(existsSync(built)).toBe(false)
   const allowed = await manager.installBundle(spec, { enabled: false, approvedBuilds: blocked.pendingBuilds! })
   expect(allowed, JSON.stringify(allowed)).toMatchObject({ application: 'restart-required', packageResult: { exitCode: 0 } })
-  expect(readFileSync(join(dir, 'node_modules', '@test', 'git-prepared', 'built.txt'), 'utf8')).toBe('built')
+  expect(readFileSync(built, 'utf8')).toBe('built')
 })
 
 it.each(['[', 'allowBuilds: false\n'])('preserves pnpm diagnostics when pending approvals cannot be read: %s', async (policy) => {
