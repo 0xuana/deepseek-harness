@@ -1,18 +1,22 @@
-/** Offscreen snapshots for native Workspace and Session row dragging. */
+/** Offscreen row snapshots for native browser dragging. */
 import { useEffect, useMemo, useRef } from 'react'
 import type { DragEvent } from 'react'
-import css from './Rows.module.css'
+import clsx from 'clsx'
+import css from './RowDragPreview.module.css'
 
 /**
  * Own a row's inert drag preview until drag end, replacement, or unmount.
  * The offscreen copy keeps WebKit snapshots separate from overlapping panels.
  * Its cloned slot DOM remains in document.body for that lifetime; query live rows
  * within their list to exclude duplicate text and element IDs.
+ * @param className - preview background matching the row's surface; WebKit fills
+ * transparent snapshot pixels white, including rounded corners.
  * @returns preview callbacks; cleanup reports whether this row started a drag,
  * even when its preview failed or the row became non-draggable before drag end.
+ * Start accepts the source row when a child handle owns the drag event.
  */
-export function useRowDragPreview(): {
-  start: (event: DragEvent<HTMLElement>) => void
+export function useRowDragPreview(className: string): {
+  start: (event: DragEvent<HTMLElement>, row?: HTMLElement) => void
   clear: () => boolean
 } {
   const current = useRef<HTMLDivElement | null>(null)
@@ -27,10 +31,9 @@ export function useRowDragPreview(): {
     }
     return {
       clear,
-      start: (event: DragEvent<HTMLElement>): void => {
+      start: (event: DragEvent<HTMLElement>, row = event.currentTarget): void => {
         clear()
         dragging.current = true
-        const row = event.currentTarget
         const rect = row.getBoundingClientRect()
         const style = getComputedStyle(row)
         const copy = row.cloneNode(true) as HTMLElement
@@ -40,15 +43,15 @@ export function useRowDragPreview(): {
           'button, a[href], input, select, textarea, [tabindex], [contenteditable]',
         )) control.tabIndex = -1
         copy.style.color = style.color
+        copy.style.paddingInlineStart = style.paddingInlineStart
         const image = row.ownerDocument.createElement('div')
-        image.className = css.dragPreview as string
+        image.className = clsx(css.preview, className)
         image.inert = true
         image.setAttribute('aria-hidden', 'true')
         Object.assign(image.style, {
           left: `${String(-rect.width)}px`, width: `${String(rect.width)}px`,
           height: `${String(rect.height)}px`, font: style.font,
         })
-        image.style.setProperty('--dsh-workspace-indent', style.getPropertyValue('--dsh-workspace-indent'))
         image.append(copy)
         row.ownerDocument.body.append(image)
         current.current = image
@@ -61,7 +64,7 @@ export function useRowDragPreview(): {
         }
       },
     }
-  }, [])
+  }, [className])
   useEffect(() => () => { preview.clear() }, [preview])
   return preview
 }

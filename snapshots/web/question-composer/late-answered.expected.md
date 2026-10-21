@@ -21,13 +21,13 @@
 - term: Which color do you prefer?
 - definition: Green Answered after the timeout
 - button "Inspect"
-- status: Completed
-- button "Completed in {{duration}}" [expanded]
-- button "Analysis completed" [expanded]
-- group "Reply to earlier pending questions":
-  - button "Reply to earlier pending questions · Open question details": Reply to earlier pending questions Green, Answered after the timeout
+- group "Questions and answers":
+  - term: Pick one Which color do you prefer?
+  - definition: Green, Answered after the timeout
   - text: {{clock}}
   - button "Copy"
+- status: Completed
+- button "Completed in {{duration}}" [disabled]
 - region "Which color do you prefer?":
   - text: Pick one Answered
   - button "Collapse the question card" [expanded]
