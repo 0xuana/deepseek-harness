@@ -1,24 +1,26 @@
 /** Durable facts for user-requested official plugin recommendations. */
 import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
+import type { ContextFormed } from '@deepseek-ai/dsh-llm'
+import type { SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { SessionProjectionSummaryExcluded } from '@deepseek-ai/dsh-session-projection/types'
 import type { ManagementError } from '@deepseek-ai/dsh-plugin-manager/types'
+import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
 
-/** Host-owned catalog text captured when a recommendation is made. */
+/** A `dsh-action` block naming one official plugin; the card reads the plugin's catalog text from the Host. */
 export interface PluginRecommendation {
   readonly callId: ToolCallId
+  /** Package name as written in the block; enabling checks it against the current catalog. */
   readonly name: string
-  readonly titleEn: string
-  readonly titleZh: string
-  readonly descriptionEn: string
-  readonly descriptionZh: string
-  /** The explicit user need this recommendation addresses, including conversational context. */
-  readonly request: string
-  /** Model explanation of how this plugin helps with that request. */
+  /** Model explanation of how this plugin helps with the user's need. */
   readonly reason: string
 }
 
 /** Selection and runtime application are deliberately separate. */
 export type RecommendationOutcome = 'dismissed' | 'applied' | 'already-enabled' | 'restart-required' | 'overridden' | 'failed' | 'cancelled'
+
+/** Replacement and suppression are derived from the log, never written as decisions: a later proposal replaces an undecided card;
+ * a proposal written while user messages are queued, or after another card in the same answer or turn, is never offered. */
+export type RecommendationCardState = RecommendationOutcome | 'replaced' | 'suppressed'
 
 /** A completed user action. A failure remains retryable from the card. */
 export interface RecommendationDecision {
@@ -26,16 +28,21 @@ export interface RecommendationDecision {
   readonly outcome: RecommendationOutcome
 }
 
-/** Full-session decisions; the card itself comes from the tool result. */
+/** Full-session card states; the card itself comes from the answer block. */
 export interface RecommendationView {
-  readonly decisions: Readonly<Record<string, RecommendationOutcome>>
+  readonly decisions: Readonly<Record<string, RecommendationCardState>>
   /** An unreadable receipt blocks actions without breaking other Session projections. */
   readonly invalid?: true | undefined
 }
 
+/** Catalog text for a card, read when it is displayed; a name outside the catalog gets no card text. */
+export type RecommendationDetails =
+  | { readonly status: 'available'; readonly title: LocalizedText; readonly description: LocalizedText; readonly enabled: boolean }
+  | { readonly status: 'refused'; readonly reason: 'unknown' | 'unavailable' | 'not-live-root' | 'closing' }
+
 /** Explicit refusals never change the profile. */
 export type RecommendationActionResult =
-  | { readonly status: 'settled'; readonly outcome: RecommendationOutcome; readonly errorCode?: ManagementError['code'] }
+  | { readonly status: 'settled'; readonly outcome: RecommendationCardState; readonly errorCode?: ManagementError['code'] }
   | { readonly status: 'refused'; readonly reason: 'unknown' | 'unavailable' | 'access-denied' | 'not-live-root' | 'closing' | 'invalid-history' }
   | { readonly status: 'unconfirmed'; readonly reason: 'closing' }
 
@@ -48,14 +55,17 @@ declare module '@deepseek-ai/dsh-session/types' {
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionMap {
-    /** Open-session card decisions, omitted from session listing summaries. */
+    /** Open-session card states, omitted from session listing summaries. */
     pluginRecommendations: SessionProjectionSummaryExcluded<RecommendationView>
   }
 }
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
-    /** Host-confirmed activation, queued after the user clicks the card. */
-    'plugin-recommendation': { kind: 'plugin-recommendation'; callId: ToolCallId; form: 'notice'; summary: string }
+    /** Status receipt attribution; other readers preserve the recorded text without this plugin.
+     * The producer uses through only to acknowledge delivered updates.
+     * @persistenceAttribution
+     */
+    'plugin-recommendations': { kind: 'plugin-recommendations'; through: SessionSeq } & ContextFormed
   }
 }

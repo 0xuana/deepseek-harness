@@ -1,0 +1,11 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`reports the card outcome on the next request without waking the conversation > applied plugin status 1`] = `
+[
+  {
+    "text": "Latest official plugin card status from the user’s clicks. These are status facts, not a request for more work. applied means the plugin is enabled now; restart-required means it is saved and takes effect after DSH restarts; overridden means another configuration keeps it off; failed or cancelled means it is not enabled and can be retried from its card; already-enabled means it was on already; dismissed means the user declined it, so do not offer it again in this conversation. Enabling a plugin authorizes nothing beyond it. Continue with the user’s current request.
+[{"plugin":"official-search","outcome":"applied"}]",
+    "type": "text",
+  },
+]
+`;

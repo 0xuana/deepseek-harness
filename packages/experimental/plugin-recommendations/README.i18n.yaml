@@ -4,46 +4,46 @@
 #   pnpm run verify-translation-pairing --write packages/experimental/plugin-recommendations/README.md
 /:
   en: 74f11064759209bf
-  zh: 736146c50a5a7188
+  zh: 694dc0dc26dacd3b
 /deepseek-ai-dsh-experimental-plugin-recommendations:
   en: a59118891a7040bf
   zh: 405bdb33f06112fa
 /deepseek-ai-dsh-experimental-plugin-recommendations/summary:
-  en: afa1a1bef108eb9d
-  zh: a8da0c3544cebbfc
+  en: 062f8e00e4b21695
+  zh: fbe8f6b8b50706fd
 /deepseek-ai-dsh-experimental-plugin-recommendations/table-of-contents:
   en: d152484eb41ac6b4
   zh: 59094206ec49ad20
 /deepseek-ai-dsh-experimental-plugin-recommendations/use-this-package:
-  en: 693672f86fd245d5
-  zh: 7a85af9715ffb65e
+  en: 4df678f652205cbe
+  zh: 9d917aabc1c2d87f
 /deepseek-ai-dsh-experimental-plugin-recommendations/use-this-package/outcomes-and-recovery:
-  en: 37c1a422f44826c8
-  zh: cda21de617a138b6
+  en: 106e39516c2121ec
+  zh: 8bfa9496ac9e6bf2
 /deepseek-ai-dsh-experimental-plugin-recommendations/understand-the-implementation:
-  en: 9e6d4ec2553d4ceb
-  zh: 9179160ca96cdb2f
+  en: f599b66e64ce557e
+  zh: 928b41ab1f8e2368
 /deepseek-ai-dsh-experimental-plugin-recommendations/further-exploration:
-  en: cfce6b9a473bd4f7
-  zh: e70d8a69bac6349f
+  en: 5db668685185b67b
+  zh: c0270c295a3b1e43
 /deepseek-ai-dsh-experimental-plugin-recommendations/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
-/deepseek-ai-dsh-experimental-plugin-recommendations/model-experience/recommendation-tools:
-  en: 6e027d76f2e0f54c
-  zh: 538a733fc125137c
-/deepseek-ai-dsh-experimental-plugin-recommendations/model-experience/recommendation-tools/what-the-model-sees:
-  en: 2dd6bcfacb1c0ec0
-  zh: 8c3a0ea94f76949b
-/deepseek-ai-dsh-experimental-plugin-recommendations/model-experience/recommendation-tools/token-effect:
-  en: c584caf8efa00a98
-  zh: 5ce5a3309983195c
-/deepseek-ai-dsh-experimental-plugin-recommendations/model-experience/recommendation-tools/kv-cache-effect:
-  en: ea862c5d2f978a0a
-  zh: 00c5b00956746edb
+/deepseek-ai-dsh-experimental-plugin-recommendations/model-experience/official-plugin-recommendations:
+  en: 79e932b35e50619a
+  zh: 821b4d95d6ce1d22
+/deepseek-ai-dsh-experimental-plugin-recommendations/model-experience/official-plugin-recommendations/what-the-model-sees:
+  en: 43506f5fb12f271a
+  zh: 496cabedb2bbbc6e
+/deepseek-ai-dsh-experimental-plugin-recommendations/model-experience/official-plugin-recommendations/token-effect:
+  en: 00a094d2bbed5a9b
+  zh: caba1f479a5c06c1
+/deepseek-ai-dsh-experimental-plugin-recommendations/model-experience/official-plugin-recommendations/kv-cache-effect:
+  en: 086a06d4732a88cc
+  zh: 610597117579cfa4
 /deepseek-ai-dsh-experimental-plugin-recommendations/known-limitations-and-deferred-work:
-  en: d284d8b39480ab8e
-  zh: a45d152a7e2430bc
+  en: 3ea277cf88ec5447
+  zh: 6cb50ea7ab168f52
 /deepseek-ai-dsh-experimental-plugin-recommendations/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
-  zh: 8ec3e73528ddb1a6
+  zh: e88aeb617ffb74ea

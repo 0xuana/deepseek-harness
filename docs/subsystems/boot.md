@@ -383,11 +383,19 @@ Internal Remote and effect owner assembled by the plugin-recommendation feature.
 
 ```ts cordis-catalog
 /**
+ * Read the current catalog text for a logged proposal's card.
+ * @param agent - Exact live root resolved by the Gateway from the Session id.
+ * @param callId - Proposal id from the answer block, never a package supplied by the browser.
+ * @returns the plugin's title, description and selection, or a refusal when the block names no available official plugin.
+ */
+@Remote async describe(agent: Agent, callId: ToolCallId): Promise<RecommendationDetails>
+
+/**
  * Decide one logged recommendation. Concurrent actions on the same card share
  * one operation; a settled success or dismissal never enables twice. Failed
  * activation remains retryable. Profile selection survives session disposal.
  * @param agent - Exact live root resolved by the Gateway from the Session id.
- * @param callId - Proposal stored by suggest_plugin, never a package supplied by the browser.
+ * @param callId - Proposal id from the answer block, never a package supplied by the browser.
  * @param action - Human choice.
  * @returns An observed outcome, a refusal before mutation, or an unconfirmed result if reload interrupts the wait.
  */

@@ -4,7 +4,7 @@
 .body { padding: 20px; }
 .details { display: block; width: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; }
 .details:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; border-radius: var(--dsw-radius-sm); }
-.details:hover .detailHint { color: var(--dsw-alias-label-primary); text-decoration: underline; }
+@media (hover: hover) { .details:hover .detailHint { color: var(--dsw-alias-label-primary); text-decoration: underline; } }
 .detailHint { display: block; margin-top: 12px; font-size: 12px; line-height: 1.5; color: var(--dsw-alias-label-secondary); }
 .reason, .description { display: block; }
 .title { display: block; font-size: 16px; font-weight: 500; line-height: 1.5; overflow-wrap: anywhere; }

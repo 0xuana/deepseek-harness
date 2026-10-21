@@ -15,7 +15,6 @@ This table connects model-visible tool names to the plugin package and service s
 
 | Tool package | Model-visible names | Requires | Writes / affects | Shipped aliases | Deployment note |
 | --- | --- | --- | --- | --- | --- |
-| `@deepseek-ai/dsh-experimental-plugin-recommendations` | `list_official_plugins`, `suggest_plugin` | `ctx.tools`, `ctx.pluginManager`, `ctx.agents`, `ctx.sessionProjections`, `ctx.remoteAccess` | `tool/call`, `tool/result`, `plugin:plugin-recommendations/decision`, `user/message after successful activation` | - | - |
 | `@deepseek-ai/dsh-plugin-manager` | `plugin_manager` | `ctx.tools`, `ctx.pluginManager`, `ctx.sandboxPolicy` | `tool/call`, `tool/result`, `user/message` | - | - |
 | `@deepseek-ai/dsh-plugin-market` | `plugin_market` | `ctx.tools`, `ctx.pluginMarket` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-mcp-resources` | `list_mcp_resource_templates`, `list_mcp_resources`, `read_mcp_resource` | `ctx.tools`, `ctx.mcpResources` | `tool/call`, `tool/result` | - | - |
@@ -50,54 +49,6 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`, `ctx.workflowEngine`, `ctx.systemPrompt`, `a calling Agent (exec.agent parents the script children)` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-workspace-dependencies` | `load_workspace_dependencies` | `ctx.tools` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`, `web_search` | `ctx.tools`, `ctx.web`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps. |
-
-<a id="deepseek-aidsh-experimental-plugin-recommendations"></a>
-
-## `@deepseek-ai/dsh-experimental-plugin-recommendations`
-
-### `list_official_plugins`
-
-Skip this tool for declined recommendations, discussion-only requests, quotes and ordinary tasks. Also skip when personalized-pages or this tool already supplied the current catalog this turn; use those names and descriptions directly, without a confirmation lookup. Otherwise read built-in optional DSH plugins and their enabled state for an explicit product-use need, before inspecting source, configuration or instruction files. Re-query only after installation state changes. Catalog descriptions are sufficient; do not research implementation or setup steps. Match the desired user outcome semantically and explain any material limit. For a suitable disabled entry use suggest_plugin; for an enabled entry explain that it is already enabled and how to use it, without another card. This is read-only and enables nothing. Skip ordinary tasks, quoted wishes, declined or unrelated needs.
-
-```json
-{
-  "type": "object",
-  "properties": {}
-}
-```
-
-Source: [`packages/experimental/plugin-recommendations/src/index.ts`](../packages/experimental/plugin-recommendations/src/index.ts)
-
-### `suggest_plugin`
-
-Propose one disabled built-in official plugin for an explicit user need. Use an exact name from the current catalog supplied by list_official_plugins or personalized-pages; do not repeat discovery in the same turn. Select ONE recommendation per turn across suggest_plugin and suggest_action, even if multiple cards are requested; never batch recommendations. Honor explicit priority; otherwise prefer an existing plugin over creating an interface. Explain remaining independent needs in the answer without another recommendation call or a promise of an automatic later card. Clarify missing requirements; do not invent connections between needs. Do not call for vague, unexpressed or declined needs, already enabled plugins, or third-party packages. Call before the final answer, then answer concisely in the user’s language using only successful results. A rejected call created no card. The card appears below the completed answer. This only proposes: the user must click Enable. Never enable through another tool or claim it is enabled. Clicking Enable applies the plugin and automatically sends confirmation; never ask the user to report back, refresh or reopen. Include only setup requirements stated in the catalog; do not invent installation steps or inspect source to add them. The card reports any actual restart requirement. Enabling authorizes this plugin only, not another recommendation or unrelated work. The user can later disable or remove it from its details page.
-
-```json
-{
-  "type": "object",
-  "properties": {
-    "name": {
-      "type": "string",
-      "description": "Exact official catalog name."
-    },
-    "request": {
-      "type": "string",
-      "description": "Only the selected explicit need this plugin addresses and its relevant context; keep other independent wishes separate."
-    },
-    "reason": {
-      "type": "string",
-      "description": "Brief benefit tied to that need, in the user's language."
-    }
-  },
-  "required": [
-    "name",
-    "request",
-    "reason"
-  ]
-}
-```
-
-Source: [`packages/experimental/plugin-recommendations/src/index.ts`](../packages/experimental/plugin-recommendations/src/index.ts)
 
 <a id="deepseek-aidsh-plugin-manager"></a>
 

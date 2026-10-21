@@ -9,6 +9,10 @@
       name: cordis:prompt
     - id: tools
       name: cordis:tools
+    - id: executor
+      name: cordis:executor
+    - id: skills
+      name: cordis:skills
     - id: agents
       name: cordis:agents
     - id: loop

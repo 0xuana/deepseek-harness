@@ -1,8 +1,9 @@
-/** Turn-indexed recommendations derived from validated native or PTC results. */
+/** Turn-indexed official-plugin proposals read from answer blocks. */
 import type { PluginRecommendation } from '@deepseek-ai/dsh-experimental-plugin-recommendations/types'
 import type { ConversationNodeDefinition } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { ChatNode } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
+import { actionBlocksOf } from './action-block.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-chat/client' {
   interface ChatNodeDataMap { 'plugin-recommendation': PluginRecommendation }
@@ -12,29 +13,23 @@ function record(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-/** Older or malformed metadata stays with the ordinary tool renderer.
- * @param event - native or PTC settlement from the transcript.
- * @returns the validated recommendation, if present.
+/** Read a proposal from a logged answer: its last valid official-plugin `dsh-action` block.
+ * The Host card state decides whether another card holds the answer or turn.
+ * @param event - Persisted assistant message.
+ * @returns validated proposal, if present.
  */
 export function recommendationOf(event: { readonly type: string; readonly data: unknown }): PluginRecommendation | undefined {
-  if (!record(event.data)) return undefined
-  const result = event.type === 'tool/result' && record(event.data.message) ? { ...event.data, isError: event.data.message.isError }
-    : event.type === 'tool/ptc-dispatch' ? event.data : undefined
-  if (!record(result) || result.isError || !record(result.meta)) return undefined
-  const value = result.meta.pluginRecommendation
-  if (!record(value)) return undefined
-  if (typeof value.callId !== 'string' || typeof value.name !== 'string'
-    || typeof value.titleEn !== 'string' || typeof value.titleZh !== 'string'
-    || typeof value.descriptionEn !== 'string' || typeof value.descriptionZh !== 'string'
-    || typeof value.request !== 'string' || typeof value.reason !== 'string') return undefined
-  if (value.callId === '' || value.name === '' || value.request === '' || value.reason === '') return undefined
-  return {
-    callId: value.callId as ToolCallId, name: value.name, titleEn: value.titleEn, titleZh: value.titleZh,
-    descriptionEn: value.descriptionEn, descriptionZh: value.descriptionZh, request: value.request, reason: value.reason,
-  }
+  if (event.type !== 'assistant/message' || !record(event.data)) return undefined
+  const message = event.data.message
+  if (!record(message) || !Array.isArray(message.content) || typeof message.id !== 'string' || message.id === '') return undefined
+  const text = message.content.flatMap(block => record(block) && block.type === 'text' && typeof block.text === 'string' ? [block.text] : []).join('\n')
+  const last = actionBlocksOf(text).flatMap(value => record(value) && value.action === 'enable_official_plugin'
+    && Object.keys(value).length === 3 && typeof value.name === 'string' && value.name.trim() !== ''
+    && typeof value.reason === 'string' && value.reason.trim() !== '' ? [{ name: value.name.trim(), reason: value.reason.trim() }] : []).at(-1)
+  return last === undefined ? undefined : { callId: `block:${message.id}` as ToolCallId, ...last }
 }
 
-/** Retain proposal data without rendering a card inside the tool sequence. */
+/** Retain proposal data without rendering inside the answer. */
 export const recommendationDefinition = {
   kind: 'plugin-recommendation', target: 'chat',
   match: (event) => {

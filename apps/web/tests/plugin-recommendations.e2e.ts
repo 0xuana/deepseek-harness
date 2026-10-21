@@ -13,6 +13,7 @@ import { connectFreshWorkspace, newEnglishPage } from './support.ts'
 
 const directory = fileURLToPath(new URL('../../../snapshots/web/plugin-recommendations', import.meta.url))
 const fixture = join(directory, 'session.v4.jsonl')
+const voiceBundle = '@deepseek-ai/dsh-experimental-voice-input-bundle'
 
 describe('official plugin recommendation in a conversation', () => {
   let scaffold: WebScaffold
@@ -32,28 +33,30 @@ describe('official plugin recommendation in a conversation', () => {
     await scaffold?.close()
   })
 
-  it('requires a user choice, keeps the card in the transcript, and restores dismissal', async () => {
+  it('offers the answer block as one card, keeps the fence out of the answer, and reports a dismissal on the next request', async () => {
     const tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await connectFreshWorkspace(page, scaffold.workspaceCwd)
     const input = page.locator('[data-composer-input]').first()
     const settled = scaffold.whenTurnSettled()
-    await input.fill(fixtureUserPrompts(await readFile(fixture, 'utf8'))[0]!)
+    const prompts = fixtureUserPrompts(await readFile(fixture, 'utf8'))
+    await input.fill(prompts[0]!)
     await input.press('Enter')
     await settled
     const card = page.locator('[data-plugin-recommendation]')
     await card.waitFor({ state: 'visible' })
     expect(await card.count()).toBe(1)
     expect(await page.locator('[data-turn-tail] [data-plugin-recommendation]').count()).toBe(1)
-    const answer = page.getByText('You can enable conversation search below.', { exact: true })
+    const answer = page.getByText('Voice input transcribes your recordings locally into the composer. You can enable it below.', { exact: true })
     const answerBox = await answer.boundingBox()
     const cardBox = await card.boundingBox()
     expect(answerBox).not.toBeNull()
     expect(cardBox!.y).toBeGreaterThanOrEqual(answerBox!.y + answerBox!.height)
+    expect(await page.getByText('enable_official_plugin').count()).toBe(0)
+    await card.getByText('Voice input', { exact: true }).waitFor()
     expect(await card.getByRole('button', { name: 'Enable', exact: true }).isEnabled()).toBe(true)
-    expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === '@deepseek-ai/dsh-experimental-session-search')?.enabled).toBe(false)
+    expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === voiceBundle)?.enabled).toBe(false)
     await compareOrRefreshGolden(join(directory, 'offered.expected.md'), await captureStableAria(page, '[data-plugin-recommendation]', scaffold.workspaceCwd), scaffold.mode)
-    await page.screenshot({ path: '/tmp/dsh-plugin-recommendation-offered.png', fullPage: true })
     await page.setViewportSize({ width: 620, height: 900 })
     expect(await card.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
     await card.getByRole('button', { name: 'Not now', exact: true }).click()
@@ -64,11 +67,17 @@ describe('official plugin recommendation in a conversation', () => {
     acknowledgeReloadConnectionLoss(tripwire, warnings)
     expect(await card.count()).toBe(1)
     expect(await card.getByRole('button').count()).toBe(1)
-    expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === '@deepseek-ai/dsh-experimental-session-search')?.enabled).toBe(false)
+    expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === voiceBundle)?.enabled).toBe(false)
     await compareOrRefreshGolden(join(directory, 'dismissed.expected.md'), await captureStableAria(page, '[data-plugin-recommendation]', scaffold.workspaceCwd), scaffold.mode)
-    await card.getByRole('button', { name: 'View details: Session search', exact: true }).click()
-    await page.locator('[data-plugin-detail="@deepseek-ai/dsh-experimental-session-search"]').waitFor({ state: 'visible' })
-    expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === '@deepseek-ai/dsh-experimental-session-search')?.enabled).toBe(false)
+    const statusSettled = scaffold.whenTurnSettled()
+    await input.fill(prompts[1]!)
+    await input.press('Enter')
+    await statusSettled
+    await page.getByText('Voice input is not enabled: you dismissed the card.', { exact: true }).waitFor()
+    expect(await card.count()).toBe(1)
+    await card.getByRole('button', { name: 'View details: Voice input', exact: true }).click()
+    await page.locator(`[data-plugin-detail="${voiceBundle}"]`).waitFor({ state: 'visible' })
+    expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === voiceBundle)?.enabled).toBe(false)
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
     if (scaffold.mode === 'replay') await assertFixtureInventory(directory, [

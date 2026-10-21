@@ -664,7 +664,7 @@ describe('web e2e: plugin manager', () => {
     expect(await panel.getByText(/Cordis|Chrome DevTools/).count()).toBe(0)
     await panel.getByRole('button', { name: '更多', exact: true }).click()
     await panel.getByRole('heading', { name: '实验性插件', exact: true, level: 1 }).waitFor()
-    expect(await panel.getByText('查看调试会话原始数据、聊天消息分组数据，以及调试 NodeJS 后端', { exact: true }).count()).toBe(1)
+    expect(await panel.getByText('在 DSH 内查看会话原始日志和消息分组，调试 NodeJS 后端，适合排查会话或界面异常；启用后会捕获未脱敏的 Host 网络请求。', { exact: true }).count()).toBe(1)
     const bundles = await scaffold.ctx.pluginManager.listBundles()
     expect(bundles.some(bundle => bundle.name === '@deepseek-ai/dsh-experimental-terminal-bundle')).toBe(true)
     expect(await panel.getByRole('switch', { name: '启用 持久终端', exact: true }).count()).toBe(0)
@@ -686,8 +686,8 @@ describe('web e2e: plugin manager', () => {
       ['@deepseek-ai/dsh-experimental-plugin-market-bundle', 1],
       ['@deepseek-ai/dsh-experimental-auto-review', 1],
       ['@deepseek-ai/dsh-experimental-creation-recommendations', 1],
-      ['@deepseek-ai/dsh-experimental-inspector-profile', 1],
       ['@deepseek-ai/dsh-experimental-plugin-recommendations', 1],
+      ['@deepseek-ai/dsh-experimental-inspector-profile', 1],
       ['@deepseek-ai/dsh-cua-bundle', 1],
       ['@deepseek-ai/dsh-experimental-tool-worktree', 1],
       ['@deepseek-ai/dsh-experimental-cot-translation-bundle', 1],

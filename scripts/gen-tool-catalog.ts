@@ -73,8 +73,6 @@ import * as ToolTeam from '@deepseek-ai/dsh-experimental-tool-agent-team'
 import * as ToolTodo from '@deepseek-ai/dsh-tool-todo'
 import type PluginManager from '@deepseek-ai/dsh-plugin-manager'
 import * as PluginManagerTools from '@deepseek-ai/dsh-plugin-manager/tools'
-import * as PluginRecommendations from '@deepseek-ai/dsh-experimental-plugin-recommendations'
-import RemoteAccess from '@deepseek-ai/dsh-api-remote-access'
 import type PluginMarket from '@deepseek-ai/dsh-plugin-market'
 import * as PluginMarketTools from '@deepseek-ai/dsh-plugin-market/tools'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
@@ -189,20 +187,6 @@ export interface ToolPackage {
  * guard proves it is exhaustive against the on-disk glob.
  */
 const TOOL_PACKAGES: ToolPackage[] = [
-  {
-    pkg: '@deepseek-ai/dsh-experimental-plugin-recommendations',
-    dir: 'plugin-recommendations',
-    source: 'packages/experimental/plugin-recommendations/src/index.ts',
-    requires: ['ctx.tools', 'ctx.pluginManager', 'ctx.agents', 'ctx.sessionProjections', 'ctx.remoteAccess'],
-    writes: ['tool/call', 'tool/result', 'plugin:plugin-recommendations/decision', 'user/message after successful activation'],
-    async mount(ctx) {
-      // Schema harvest does not execute catalog reads or profile changes.
-      ctx.provide('pluginManager', {})
-      await ctx.plugin(AgentRegistry)
-      await ctx.plugin(RemoteAccess)
-      await ctx.plugin(PluginRecommendations)
-    },
-  },
   {
     pkg: '@deepseek-ai/dsh-plugin-manager',
     dir: 'plugin-manager',

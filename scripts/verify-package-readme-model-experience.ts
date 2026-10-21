@@ -55,7 +55,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/experimental/client-ui-voice-input': { kind: 'none', reason: 'Inserts reviewable text into the unsent draft without submitting to the Agent.' },
   'packages/experimental/plugin-market-bundle': { kind: 'indirect', reason: 'Mounts the pluginMarket service, which lets the Creator preset register the plugin_market tool documented in packages/boot/plugin-market.' },
   'packages/experimental/client-ui-creation-recommendations': { kind: 'indirect', reason: 'The card starts a Creator through the Host creation service; the Host owns its logged task and tool schema.' },
-  'packages/experimental/client-ui-plugin-recommendations': { kind: 'indirect', reason: 'The card calls the Host recommendation service, which owns the logged activation notice and tool schemas.' },
+  'packages/experimental/client-ui-plugin-recommendations': { kind: 'indirect', reason: 'The card calls the Host recommendation service, which owns the skill and the logged status notice.' },
   'packages/experimental/voice-input-bundle': { kind: 'none', reason: 'Composes dictation and preparation plugins without adding any model-facing contribution.' },
   'packages/telemetry/otel': { kind: 'none', reason: 'The service delivers caller-selected records without changing model context.' },
   'packages/host/product-telemetry-otel': { kind: 'none', reason: 'The plugin exports explicit analytics records without contributing model context.' },

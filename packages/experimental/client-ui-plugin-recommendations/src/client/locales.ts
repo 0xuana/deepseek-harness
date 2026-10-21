@@ -2,7 +2,6 @@
 export const zh = {
   heading: '推荐插件',
   official: '官方',
-  details: '查看详情',
   detailsFor: '查看详情：{title}',
   detailsHint: '查看详情 →',
   'version-error': '插件与当前 DSH 版本不兼容，请更新 DSH 后重试。',
@@ -15,12 +14,14 @@ export const zh = {
   applied: '已启用',
   'already-enabled': '已在插件页开启，可查看详情了解运行状态',
   dismissed: '已忽略',
+  replaced: '已替换',
+  suppressed: '未展示',
   'restart-required': '已保存，重启 DSH 后生效',
   overridden: '已保存，但被其他配置覆盖。请在插件页检查。',
   failed: '启用失败。可重试或在插件页检查。',
   cancelled: '操作已取消，可以重试。',
   retry: '重试启用',
-  unavailable: '插件状态已变化，请在插件页检查。',
+  unavailable: '这个插件当前无法启用，请在插件页检查。',
   unknown: '找不到这条推荐，请重新打开会话。',
   'access-denied': '没有修改此配置的权限。',
   'not-live-root': '请在原会话中操作这条推荐。',
@@ -28,14 +29,13 @@ export const zh = {
   transport: '无法确认操作结果，请刷新后重试。',
 } satisfies Record<string, string>
 
-/** Keys shared by both card dictionaries. */
+/** Keys shared by every card dictionary. */
 export type RecommendationKey = keyof typeof zh
 
 /** English card copy. */
 export const en = {
   heading: 'Recommended plugin',
   official: 'Official',
-  details: 'View details',
   detailsFor: 'View details: {title}',
   detailsHint: 'View details →',
   'version-error': 'This plugin is incompatible with this DSH version. Update DSH and retry.',
@@ -48,15 +48,48 @@ export const en = {
   applied: 'Enabled',
   'already-enabled': 'Already selected in Plugins. Open details to check its runtime status.',
   dismissed: 'Dismissed',
+  replaced: 'Replaced',
+  suppressed: 'Not offered',
   'restart-required': 'Saved. Restart DSH to apply.',
   overridden: 'Saved, but another configuration overrides it. Check Plugins.',
   failed: 'Could not enable. Retry or check Plugins.',
   cancelled: 'Cancelled. You can retry.',
   retry: 'Retry enabling',
-  unavailable: 'This plugin has changed. Check Plugins.',
+  unavailable: 'This plugin cannot be enabled now. Check Plugins.',
   unknown: 'This recommendation is unavailable. Reopen the conversation.',
   'access-denied': 'You do not have permission to change this profile.',
   'not-live-root': 'Use this recommendation in its original conversation.',
   closing: 'The service is reloading. Try again shortly.',
   transport: 'Could not confirm the result. Refresh and try again.',
+} satisfies Record<RecommendationKey, string>
+
+/** Japanese card copy. */
+export const ja = {
+  heading: 'おすすめのプラグイン',
+  official: '公式',
+  detailsFor: '詳細を表示：{title}',
+  detailsHint: '詳細を表示 →',
+  'version-error': 'このプラグインは現在の DSH バージョンと互換性がありません。DSH を更新してから再試行してください。',
+  'management-error': 'プラグインを有効にできませんでした。詳細を開いてエラーを確認し、再試行してください。',
+  'invalid-history': 'この会話の推薦記録を読み取れません。DSH を更新するか、新しい会話で試してください。',
+  enable: '有効にする',
+  dismiss: '今はしない',
+  enabling: '処理中…',
+  scope: '有効にするとすべての会話で使えます',
+  applied: '有効化済み',
+  'already-enabled': 'プラグイン画面で有効になっています。詳細で動作状況を確認できます。',
+  dismissed: '却下済み',
+  replaced: '置き換え済み',
+  suppressed: '非表示',
+  'restart-required': '保存しました。適用するには DSH を再起動してください。',
+  overridden: '保存しましたが、別の設定で上書きされています。プラグイン画面を確認してください。',
+  failed: '有効にできませんでした。再試行するか、プラグイン画面を確認してください。',
+  cancelled: 'キャンセルしました。再試行できます。',
+  retry: '再度有効にする',
+  unavailable: 'このプラグインは現在有効にできません。プラグイン画面を確認してください。',
+  unknown: 'この推薦は利用できません。会話を開き直してください。',
+  'access-denied': 'このプロファイルを変更する権限がありません。',
+  'not-live-root': '元の会話でこの推薦を操作してください。',
+  closing: 'サービスを再読み込み中です。しばらくしてから再試行してください。',
+  transport: '結果を確認できませんでした。更新してから再試行してください。',
 } satisfies Record<RecommendationKey, string>

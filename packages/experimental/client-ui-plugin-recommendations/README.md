@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Users see one plugin recommendation below the completed answer. Clicking its title or description opens that plugin's details in Plugins without enabling it or changing the current Session. Enable and Not now remain separate choices. Decisions and the details link remain available after reconnecting.
+Users see one plugin recommendation below the completed answer, with the plugin's current title and description in the interface language and the Agent's reason. Clicking its title or description opens that plugin's details in Plugins without enabling it or changing the current Session. Enable and Not now remain separate choices. Decisions and the details link remain available after reconnecting.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ Users see one plugin recommendation below the completed answer. Clicking its tit
 <a id="use-this-package"></a>
 ## Use this package
 
-Enable the [Plugin recommendations bundle](../plugin-recommendations/README.md). It composes this browser contribution with the Host tools and action service. This contribution has no configuration fields.
+Enable the [Plugin recommendations bundle](../plugin-recommendations/README.md). It composes this browser contribution with the Host skill and action service. This contribution has no configuration fields.
 
 -----
 
@@ -35,7 +35,7 @@ Enable the [Plugin recommendations bundle](../plugin-recommendations/README.md).
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-Validated native and PTC results become hidden Conversation nodes. The completed-Turn tail reads its indexed proposals and renders the first one, so tool execution and answer streaming do not display the card. Session projection decisions drive the card after reload. The optional Remote and all UI registrations are removed together on unload.
+The last valid `enable_official_plugin` block of an assistant answer becomes a hidden Conversation node; the chat hides the fence itself. The completed-Turn tail reads its indexed proposals and renders the first one, so answer streaming does not display the card, and a proposal the Host projection marks never offered renders nothing. The card asks the Host for the plugin's current catalog text and selection; a name outside the eligible catalog shows no actions. Session projection decisions drive the card after reload. The optional Remote and all UI registrations are removed together on unload.
 
 Cards use the application font, a distinct title and compact body scale, and a separate action footer. The built entry supplies generated Remote descriptors to the source-tested mount lifecycle.
 
@@ -56,7 +56,7 @@ Cards use the application font, a distinct title and compact body scale, and a s
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through a successful Enable action: the Host recommendation service sends a logged continuation notice. The browser contribution adds no model tools or prompt content.
+Indirectly, through card actions: the Host recommendation service adds a logged status notice to the next model request. The browser contribution adds no model tools or prompt content.
 
 #### KV Cache effect
 

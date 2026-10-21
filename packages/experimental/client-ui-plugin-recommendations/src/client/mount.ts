@@ -11,7 +11,7 @@ import type { TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-experimental-plugin-recommendations/types'
 import { RecommendationTail, type RecommendationTailInjected } from './Card.tsx'
 import { recommendationDefinition } from './definition.ts'
-import { en, zh, type RecommendationKey } from './locales.ts'
+import { en, ja, zh, type RecommendationKey } from './locales.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap { pluginRecommendations: RecommendationKey }
@@ -33,7 +33,7 @@ export async function mountRecommendations(ctx: Context, contribution: TypertRem
 }
 
 function registerUi(ctx: Context): void {
-  ctx.effect(() => ctx.locale.register('pluginRecommendations', { en, zh }), 'plugin-recommendations: locale')
+  ctx.effect(() => ctx.locale.register('pluginRecommendations', { en, zh, ja }), 'plugin-recommendations: locale')
   ctx.effect(() => ctx.uiConversation.events.register(recommendationDefinition), 'plugin-recommendations: chat')
   ctx.slots.inject('conversation.chat.turnTail', () => ctx.slots.register({
     name: 'conversation.chat.turnTail', id: 'plugin-recommendation', locale: 'pluginRecommendations',
@@ -48,10 +48,15 @@ function registerUi(ctx: Context): void {
           if (snapshot === undefined) throw new Error('plugin-recommendations: Chat target is unavailable')
           return snapshot.nodes.turnDataSource(Number(turn), 'plugin-recommendation')
         } },
-        hooks: { chinese: {
-          getSnapshot: () => ctx.locale.getSnapshot().active.startsWith('zh'),
+        hooks: { locale: {
+          getSnapshot: () => ctx.locale.getSnapshot().active,
           subscribe: listener => ctx.locale.subscribe(listener),
         } },
+        resolveText: text => ctx.locale.resolveText(text),
+        describe: async (callId) => {
+          const result = await ctx.remote.pluginRecommendations.describe(sessionId, callId)
+          return result.ok ? result.value : undefined
+        },
         act: async (callId, action) => {
           const result = await ctx.remote.pluginRecommendations.act(sessionId, callId, action)
           return result.ok ? result.value : undefined

@@ -1,4 +1,4 @@
-/** Profile files, Loader, HMR, AgentLoop and tools are real; only model output is scripted. */
+/** Profile files, Loader, HMR, AgentLoop and skills are real; only model output is scripted. */
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -12,11 +12,14 @@ import Sessions, { SessionId } from '@deepseek-ai/dsh-session'
 import Projections from '@deepseek-ai/dsh-session-projection'
 import Agents from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import Llm, { LlmAdapter, createToolResultMessage, ToolCallId, type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import Llm, { LlmAdapter, ToolCallId, createUserMessage, type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import Tools from '@deepseek-ai/dsh-tools'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import Skills from '@deepseek-ai/dsh-skill'
 import Access from '@deepseek-ai/dsh-api-remote-access'
 import * as Recommendations from '../src/index.ts'
+import { answer } from './fixture.ts'
 
 class Model extends LlmAdapter {
   readonly requests: GenerateOptions[] = []
@@ -63,6 +66,7 @@ it.each(['normal', 'consumer-unload'] as const)('enables through the real Loader
     ctx.provide('appReady', { onReady: (listener) => { listener(); return () => {} } })
     Object.assign(ctx.loader.builtins, {
       sessions: Sessions, projections: Projections, llm: Llm, prompt: SystemPrompt, tools: Tools,
+      executor: NativeToolExecutor, skills: Skills,
       agents: Agents, loop: AgentLoop, access: Access, manager: PluginManager, recommendations: Recommendations,
     })
   })
@@ -72,16 +76,9 @@ it.each(['normal', 'consumer-unload'] as const)('enables through the real Loader
   const model = new Model()
   ctx.llm.registerAdapter(['mock'], model)
   const agent = await ctx.agentLoop.create(SessionId('recommendation-live'), { provider: 'mock', model: 'test' })
-  const callId = ToolCallId('suggest-live')
-  const result = await ctx.tools.execute({
-    name: 'suggest_plugin', callId, agent, signal: new AbortController().signal,
-    arguments: { name, request: 'Find last week’s conversation', reason: 'Search saved conversations' },
-  })
-  expect(result.isError).toBe(false)
-  agent.session.append('tool/result', {
-    turn: 1, step: 1, message: createToolResultMessage({ callId, content: result.content, isError: result.isError }),
-    ...result.meta === undefined ? {} : { meta: result.meta },
-  }, { surfaceOp: 'append' })
+  const callId = ToolCallId('block:recommend-live')
+  agent.session.append('assistant/message', answer('recommend-live', [{ action: 'enable_official_plugin', name, reason: 'Search saved conversations' }]), { surfaceOp: 'append' })
+  expect((await ctx.skills.list()).map(skill => skill.name)).toContain('official-plugins')
   expect(readProfileManifest('test', dir).dsh?.profile?.bundles).not.toContain(name)
   if (scenario === 'consumer-unload') {
     const entered = Promise.withResolvers<undefined>()
@@ -102,25 +99,23 @@ it.each(['normal', 'consumer-unload'] as const)('enables through the real Loader
     await reload
     expect(await action).toEqual({ status: 'unconfirmed', reason: 'closing' })
     expect(ctx.get('pluginRecommendations')).toBeUndefined()
-    expect(ctx.tools.get('list_official_plugins')).toBeUndefined()
-    expect(ctx.tools.get('suggest_plugin')).toBeUndefined()
+    expect(await ctx.skills.list()).toEqual([])
     await ctx.hmr.runExclusive(async () => {})
     expect(readProfileManifest('test', dir).dsh?.profile?.bundles).toContain(name)
     expect((await ctx.pluginManager.listBundles()).find(bundle => bundle.name === name)?.enabled).toBe(true)
     expect(model.requests).toHaveLength(0)
     return
   }
-  const idle = new Promise<void>((resolve) => {
-    const stop = ctx.on('agent/status', ({ agent: subject, status }) => {
-      if (subject === agent && status === 'idle') { stop(); resolve() }
-    })
-  })
   expect(await ctx.pluginRecommendations.act(agent, callId, 'enable')).toEqual({ status: 'settled', outcome: 'applied' })
-  await idle
   expect(readProfileManifest('test', dir).dsh?.profile?.bundles).toContain(name)
   expect([...ctx.loader.entries()].find(entry => entry.options.id === 'recommendation-probe')?.fiber).toBeDefined()
   expect((await ctx.pluginManager.listBundles()).find(bundle => bundle.name === name)?.enabled).toBe(true)
-  expect(model.requests).toHaveLength(1)
-  expect(JSON.stringify(model.requests[0]?.messages)).toContain('Find last week’s conversation')
+  // The outcome reaches the model with the next request; enabling starts no turn by itself.
+  expect(agent.status).toBe('idle')
+  expect(model.requests).toHaveLength(0)
   expect(ctx.sessionProjections.snapshot(agent.session).values.pluginRecommendations).toEqual({ decisions: { [callId]: 'applied' } })
+  agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Thanks.' }], source: { kind: 'user' } }))
+  await agent.whenIdle()
+  expect(model.requests).toHaveLength(1)
+  expect(JSON.stringify(model.requests[0]?.messages)).toContain('Latest official plugin card status')
 })

@@ -15,9 +15,6 @@
       "path": "../../llm/llm"
     },
     {
-      "path": "../../core/tools"
-    },
-    {
       "path": "../../core/agent"
     },
     {
@@ -36,12 +33,16 @@
       "path": "../../api/remote-access/tsconfig.host.json"
     },
     {
-      "path": "../../core/system-prompt"
+      "path": "../../skill/skill"
+    },
+    {
+      "path": "../creation-recommendations"
     }
   ],
   "files": [
     "src/index.ts",
     "src/types.ts",
-    "src/projection.ts"
+    "src/projection.ts",
+    "src/skill.ts"
   ]
 }

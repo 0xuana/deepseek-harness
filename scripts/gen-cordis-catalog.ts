@@ -902,6 +902,7 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   CreationActionResult: 'packages/experimental/creation-recommendations/README.md',
   CreationSlot: 'packages/experimental/creation-recommendations/README.md',
   RecommendationActionResult: 'packages/experimental/plugin-recommendations/README.md',
+  RecommendationDetails: 'packages/experimental/plugin-recommendations/README.md',
   ProductEvent: 'Desktop event fields are owned by packages/client/product-analytics/README.md and src/events.ts',
   ConnectionFetchHandler: 'shared Fetch dispatch is owned by packages/client/connection/src/rpc.ts',
   ConnectionRequestRejection: 'transport rejection status is owned by packages/client/connection/src/rpc.ts',
