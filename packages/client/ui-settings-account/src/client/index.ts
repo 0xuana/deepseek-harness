@@ -8,6 +8,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-theme/client'
 import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
+import type {} from '@deepseek-ai/dsh-api-remote-access/client'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type { AccountView, AccountDetails } from '@deepseek-ai/dsh-deepseek-account/types'
 import type { OnboardingChange } from './onboarding-contract.ts'
@@ -41,7 +42,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 /** Services required by account settings. */
-export const inject = ['slots', 'locale', 'remote', 'remote.account', 'remote.session', 'theme', 'configForms']
+export const inject = ['slots', 'locale', 'remote', 'remote.account', 'remote.session', 'theme', 'configForms', 'remoteAccess']
 /** Register account UI in Desktop and plain Web clients. @param ctx - client plugin context. */
 export function apply(ctx: Context): void {
   const desktop = 'dshDesktop' in globalThis
@@ -115,37 +116,40 @@ export function apply(ctx: Context): void {
     void request.finally(() => { if (refreshing === request) refreshing = undefined })
     return request
   }
-  ctx.effect(() => () => { revision++ }, 'account: details request lifetime')
-  const stream = ctx.remote.$stream<AccountView>({
-    name: 'account', open: signal => ctx.remote.account.watch(signal), ended: () => new Error('account stream ended'),
+  // The account stream, and the reads it starts, follow access to this host's account state.
+  ctx.remoteAccess.whenAccess('account/watch', function* () {
+    yield () => { revision++ }
+    const stream = ctx.remote.$stream<AccountView>({
+      name: 'account', open: signal => ctx.remote.account.watch(signal), ended: () => new Error('account stream ended'),
+    })
+    let disposed = false
+    yield () => { disposed = true; notices.end(); return stream.dispose() }
+    void (async () => {
+      for await (const frame of stream) {
+        revision++
+        refreshing = undefined
+        avatar.reset()
+        const initialize = frame.value.status === 'credential-stored' && frame.value.attempt?.phase === 'succeeded'
+          && snapshot.view?.attempt?.phase !== 'succeeded'
+        const { notices: previousNotices, ...previous } = snapshot
+        publish({ ...previous, view: frame.value, details: undefined, avatar: undefined, failed: false,
+          ...(frame.value.status === 'credential-stored' && previousNotices ? { notices: previousNotices } : {}) })
+        browser.update(frame.value)
+        frame.accept()
+        if (frame.value.status === 'credential-stored') notices.begin()
+        else notices.end()
+        if (initialize) void (async () => {
+          try {
+            const initialized = await ctx.remote.session.initializeDefaultModel()
+            if (!initialized.ok) console.error('[deepseek-account] default model initialization failed', { reason: 'refused' })
+          } catch (_error) {
+            console.error('[deepseek-account] default model initialization failed', { reason: 'disconnected' })
+          }
+        })()
+        void refresh()
+      }
+    })().catch(() => { if (!disposed) publish({ ...snapshot, failed: true }) })
   })
-  let disposed = false
-  ctx.effect(() => () => { disposed = true; return stream.dispose() }, 'account: state stream')
-  void (async () => {
-    for await (const frame of stream) {
-      revision++
-      refreshing = undefined
-      avatar.reset()
-      const initialize = frame.value.status === 'credential-stored' && frame.value.attempt?.phase === 'succeeded'
-        && snapshot.view?.attempt?.phase !== 'succeeded'
-      const { notices: previousNotices, ...previous } = snapshot
-      publish({ ...previous, view: frame.value, details: undefined, avatar: undefined, failed: false,
-        ...(frame.value.status === 'credential-stored' && previousNotices ? { notices: previousNotices } : {}) })
-      browser.update(frame.value)
-      frame.accept()
-      if (frame.value.status === 'credential-stored') notices.begin()
-      else notices.end()
-      if (initialize) void (async () => {
-        try {
-          const initialized = await ctx.remote.session.initializeDefaultModel()
-          if (!initialized.ok) console.error('[deepseek-account] default model initialization failed', { reason: 'refused' })
-        } catch (_error) {
-          console.error('[deepseek-account] default model initialization failed', { reason: 'disconnected' })
-        }
-      })()
-      void refresh()
-    }
-  })().catch(() => { if (!disposed) publish({ ...snapshot, failed: true }) })
   const nativePlatform = (globalThis as typeof globalThis & { dshPlatform?: PlatformBridge }).dshPlatform
   // One request channel for the single native Platform view. It always exists
   // so every entry can observe whether a page is showing; only a native bridge
@@ -290,14 +294,14 @@ export function apply(ctx: Context): void {
   ctx.slots.inject('settings.models.sign-in', () => ctx.slots.register({
     name: 'settings.models.sign-in', locale: 'settings.account', inject: () => operations,
   }, AccountOnboarding))
-  ctx.slots.inject('shell.quota-notice', () => ctx.slots.register({
+  ctx.remoteAccess.whenAccess('account/watch', () => ctx.slots.inject('shell.quota-notice', () => ctx.slots.register({
     name: 'shell.quota-notice', locale: 'settings.account',
     select: owner => owner.code === 'ACCOUNT_QUOTA' ? owner : null,
     inject: (): AccountQuotaNoticeInjected => ({
       hooks: { account: operations.hooks.account, platformPage: platformPages },
       ...nativePlatform === undefined ? {} : { openPlatformPage: platformPageOpener(refreshAccount) },
     }),
-  }, AccountQuotaNotice))
+  }, AccountQuotaNotice)))
   if (nativePlatform !== undefined) {
     ctx.slots.inject('shell.overlay', () => ctx.slots.register({
       name: 'shell.overlay', id: 'account.platform-page', locale: 'settings.account',
@@ -307,9 +311,9 @@ export function apply(ctx: Context): void {
       }),
     }, AccountPlatformHost))
   }
-  ctx.slots.inject('settings.launcher', () => ctx.slots.register({
+  ctx.remoteAccess.whenAccess('account/watch', () => ctx.slots.inject('settings.launcher', () => ctx.slots.register({
     name: 'settings.launcher', locale: 'settings.account', inject: () => operations,
-  }, AccountMenu))
+  }, AccountMenu)))
   ctx.slots.inject('settings.section', () => {
     let unregister: (() => void) | undefined
     const update = () => {

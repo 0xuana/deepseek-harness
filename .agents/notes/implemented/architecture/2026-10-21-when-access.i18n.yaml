@@ -1,0 +1,28 @@
+# Bilingual-pair consistency record for 2026-10-21-when-access.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-21-when-access.md
+/agent-note-whenaccess-registration-that-follows-access:
+  en: 2ef7cfef514c138a
+  zh: 064e3aecbfafcd9c
+/agent-note-whenaccess-registration-that-follows-access/problem:
+  en: c12d401db33f7d77
+  zh: 3bc2c8ad1a441bd7
+/agent-note-whenaccess-registration-that-follows-access/decision:
+  en: a15c7c13f167e5ac
+  zh: 63bcc2ef60c2f344
+/agent-note-whenaccess-registration-that-follows-access/decision/whenaccess:
+  en: c168de20989cf9a4
+  zh: bf3b0361beea083d
+/agent-note-whenaccess-registration-that-follows-access/decision/plugin-migration:
+  en: 0487c2e2f5e71bde
+  zh: 1750e83e7f9fa1cb
+/agent-note-whenaccess-registration-that-follows-access/alternatives-considered:
+  en: 670e07d9da3ea599
+  zh: 625e8e8bff57ff8c
+/agent-note-whenaccess-registration-that-follows-access/consequences:
+  en: 5c7c7c49446fd140
+  zh: f8fa106040fac4bc
+/agent-note-whenaccess-registration-that-follows-access/related:
+  en: 89073ffbfcff0641
+  zh: 736a180d13a08981

@@ -235,20 +235,23 @@ tapIndex(transform: (html: string) => string): () => void
 applyIndexTaps(html: string): string
 
 /**
- * Gather the structured injection table: one `webserver/index-inject` emit,
- * every subscriber pushes its current rows. Fresh per call, so subscribers
- * read live state (module graph, theme preference) at emit time.
+ * Gather the structured injection table for one Peer: one
+ * `webserver/index-inject` emit, every subscriber pushes its current rows.
+ * Fresh per call, so subscribers read live state (module graph, theme
+ * preference, the Peer's access) at emit time.
+ * @param peer - the Peer the page speaks for.
  * @returns rows in subscriber activation order.
  */
-collectIndexInjections(): IndexInjection[]
+collectIndexInjections(peer: PeerScope): IndexInjection[]
 
 /**
- * Render one index.html body: the structured injection table first, then
- * the raw `tapIndex` transforms over the result.
+ * Render one index.html body for one Peer: the structured injection table
+ * first, then the raw `tapIndex` transforms over the result.
  * @param html - the raw index.html body.
+ * @param peer - the Peer the page speaks for.
  * @returns the transformed body.
  */
-renderIndex(html: string): string
+renderIndex(html: string, peer: PeerScope): string
 ```
 
 Source: [`packages/host/webserver/src/index.ts`](../../packages/host/webserver/src/index.ts)
@@ -285,17 +288,19 @@ Source: [`packages/client/connection/src/index.ts`](../../packages/client/connec
 
 #### `webserver/index-inject` — emit
 
-Collect the structured index injection table. Emitted on every index render and every worker boot-payload request; listeners push their current rows, so a row's data is read fresh at emit time.
+Collect the structured index injection table for the page `peer` speaks for. Emitted on every index render and every worker boot-payload request; listeners push their current rows, so a row's data is read fresh at emit time.
 
 ```ts cordis-catalog
 /**
- * Collect the structured index injection table. Emitted on every index
- * render and every worker boot-payload request; listeners push their
- * current rows, so a row's data is read fresh at emit time.
+ * Collect the structured index injection table for the page `peer` speaks
+ * for. Emitted on every index render and every worker boot-payload
+ * request; listeners push their current rows, so a row's data is read
+ * fresh at emit time.
  * @param table - Mutable row table; listeners append in activation order.
+ * @param peer - The Peer the rendered page speaks for.
  * @mode emit
  */
-'webserver/index-inject'(table: IndexInjection[]): void
+'webserver/index-inject'(table: IndexInjection[], peer: PeerScope): void
 ```
 
 Source: [`packages/host/webserver/src/index.ts`](../../packages/host/webserver/src/index.ts)

@@ -728,7 +728,10 @@ describe('ui-session apply', () => {
         }
         return source
       }),
+      whenAccess: vi.fn(() => () => {}),
+      whenResourceAccess: vi.fn((): () => void => stopGuard),
     }
+    const stopGuard = vi.fn()
     ctx.provide('sessions', bench.sessions)
     ctx.provide('slots', slots as never)
     ctx.provide('remoteAccess', remoteAccess)
@@ -758,6 +761,11 @@ describe('ui-session apply', () => {
     const binding = bench.binding(sessionId('s2'))
     const scoped = ctx.uiSession.bindingSource(bench.reference(binding)).getSnapshot()
     expect(scoped.keyedHooks.access?.('session/fork')).toBe(remoteAccess.source('session', sessionId('s2'), 'session/fork'))
+
+    // `whenAccess` follows the same Session resource through the service's resource form.
+    const guarded = vi.fn(() => () => {})
+    expect(ctx.uiSession.whenAccess(sessionId('s1'), 'session/fork', guarded)).toBe(stopGuard)
+    expect(remoteAccess.whenResourceAccess).toHaveBeenCalledWith('session', sessionId('s1'), 'session/fork', guarded)
   })
 
   it('keeps the Host loader half inert', () => {

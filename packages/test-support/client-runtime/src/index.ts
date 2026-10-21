@@ -58,7 +58,7 @@ export type {
   FixtureSnapshot, SessionBehaviorOverrides, SessionFixture, SessionFixtureSnapshot, Stabilizer,
 } from './fixtures.ts'
 export { makeTranslate } from './translate.ts'
-export { allowAllAccess, allowAllAccessPlugin } from './access.ts'
+export { allowAllAccess, allowAllAccessPlugin, StaticRemoteAccess } from './access.ts'
 export type { AccessStandardProps } from './access.ts'
 export { usePinnedBrowserLanguages } from './locale-env.ts'
 
