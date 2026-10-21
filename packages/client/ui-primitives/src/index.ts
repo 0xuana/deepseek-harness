@@ -3,6 +3,8 @@
  */
 
 export type { CodeToolbarLabels } from './CodeToolbar.tsx'
+export { UserMessageBubble } from './UserMessageBubble.tsx'
+export type { UserMessageBubbleProps } from './UserMessageBubble.tsx'
 export { StateDot } from './StateDot.tsx'
 export type { StateDotState } from './StateDot.tsx'
 export { DisclosureRow } from './DisclosureRow.tsx'
@@ -70,6 +72,8 @@ export { writeClipboard } from './clipboard.ts'
 export type { FileDragActions, FileDragSource, PreparedFileDrag } from './file-drag-actions.ts'
 export { DraggableImage } from './DraggableImage.tsx'
 export type { DraggableImageProps } from './DraggableImage.tsx'
+export { useClipboardCopy } from './use-clipboard-copy.ts'
+export type { ClipboardCopyState } from './use-clipboard-copy.ts'
 export { SettingsForm } from './settings-form/SettingsForm.tsx'
 export type { SettingsFormLabels, SettingsFormProps } from './settings-form/SettingsForm.tsx'
 export { SettingsSecretField, SettingsValueField } from './settings-form/fields.tsx'
