@@ -271,8 +271,8 @@ it('defers native recovery until foreground and opens the policy download page w
   f.owner.emit('focus')
   expect(native.messageBox).toHaveBeenCalledOnce()
   expect(native.messageBox).toHaveBeenCalledWith(f.owner, expect.objectContaining({
-    message: '请更新后继续使用', cancelId: 2,
-    buttons: ['打开下载页面', '退出', '取消'],
+    message: '请更新后继续使用', cancelId: -1,
+    buttons: ['打开下载页面', '退出'],
   }))
   expect(native.messageBox.mock.calls[0]![1].detail).toContain('1.0.1-nightly.1')
   answer.resolve({ response: 0 })
@@ -314,7 +314,7 @@ it('uses the normal quit entry only for an explicit native recovery exit', async
   expect(f.install).not.toHaveBeenCalled()
 })
 
-it('retains blocking after cancellation and offers recovery on the next foreground return', async () => {
+it('retains blocking and reopens native recovery after a non-action dismissal', async () => {
   vi.spyOn(console, 'error').mockImplementation(() => {})
   const answer = Promise.withResolvers<{ response: number }>()
   const f = setup()
@@ -323,12 +323,11 @@ it('retains blocking after cancellation and offers recovery on the next foregrou
   window.loadURL.mockRejectedValueOnce(new Error('local recovery failed'))
   window.webContents.emit('render-process-gone')
   await Promise.resolve()
-  answer.resolve({ response: 2 })
+  answer.resolve({ response: -1 })
   await Promise.resolve()
   expect(native.quit).not.toHaveBeenCalled()
   expect(f.view().policy.blocking).toBe(true)
   expect(window.loadURL).toHaveBeenCalledTimes(2)
-  f.owner.emit('focus')
   expect(native.messageBox).toHaveBeenCalledTimes(2)
 })
 
@@ -356,8 +355,8 @@ it.each([undefined, 'https://unapproved.example.com/download'])('omits native do
   window.loadURL.mockRejectedValueOnce(new Error('local recovery failed'))
   window.webContents.emit('render-process-gone')
   await Promise.resolve()
-  expect(native.messageBox.mock.calls[0]![1].buttons).toEqual(['退出', '取消'])
-  expect(native.messageBox.mock.calls[0]![1].cancelId).toBe(1)
+  expect(native.messageBox.mock.calls[0]![1].buttons).toEqual(['退出'])
+  expect(native.messageBox.mock.calls[0]![1].cancelId).toBe(-1)
   expect(native.open).not.toHaveBeenCalled()
 })
 

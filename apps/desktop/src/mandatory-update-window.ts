@@ -275,14 +275,14 @@ export class DesktopMandatoryUpdateWindow {
       const policy = this.options.policy()
       const update = this.options.update()
       const destination = desktopPolicyPage(policy.page, this.options.allowedPageOrigins)
-      const actions: readonly ('page' | 'quit' | 'cancel')[] = destination === undefined ? ['quit', 'cancel'] : ['page', 'quit', 'cancel']
-      const labels = { page: messages.mandatoryViewDownload, quit: messages.quit, cancel: messages.cancel }
+      const actions: readonly ('page' | 'quit')[] = destination === undefined ? ['quit'] : ['page', 'quit']
+      const labels = { page: messages.mandatoryViewDownload, quit: messages.quit }
       const detail = [policy.detail ?? messages.mandatoryDetail,
         ...('version' in update ? [messages.mandatoryVersion.replace('{version}', update.version)] : []),
         ...(this.navigation?.page === 'failed' ? [messages.mandatoryViewPageFailed] : [])].join('\n\n')
       void dialog.showMessageBox(parent, { type: 'error', title: messages.mandatoryTitle,
         message: policy.title ?? messages.mandatoryTitle, detail,
-        buttons: actions.map(action => labels[action]), defaultId: destination === undefined ? 1 : 0, cancelId: actions.length - 1,
+        buttons: actions.map(action => labels[action]), defaultId: 0, cancelId: -1,
         noLink: true, signal: controller.signal }).then(({ response }) => {
         if (prompt === controller) prompt = undefined
         if (controller.signal.aborted || !valid() || !failed) return
@@ -291,7 +291,7 @@ export class DesktopMandatoryUpdateWindow {
           if (destination !== desktopPolicyPage(this.options.policy().page, this.options.allowedPageOrigins)) { show(); return }
           void this.navigate('page').then(() => { if (this.navigation?.page === 'failed') show() })
             .catch((error: unknown) => { console.error('desktop policy: recovery download page failed', error) })
-        }
+        } else show()
       }).catch((error: unknown) => {
         if (prompt === controller) prompt = undefined
         console.error('desktop policy: native update recovery failed', error)
