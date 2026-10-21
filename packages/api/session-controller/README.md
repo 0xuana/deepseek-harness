@@ -27,6 +27,8 @@ Desktop analytics follows the [product collection policy](../../client/product-a
 <a id="use-this-package"></a>
 ## Use this package
 
+The controller reads a Session's recorded preset through the optional `agentPresets.presetForSession(session)` service method. A null result means no preset was recorded; an absent service means preset identity is unavailable to the controller.
+
 History pages and follow opening snapshots carry one `{ type: 'event', event: SessionWireEvent }` record per durable Session event. The Client retains each accepted record as one durable `SessionEventLikeEntry`; Assistant token boundaries remain inside the compact stream on `assistant/message` or `assistant/attempt`. Tool arguments, result content, failures, and `tool/result.data.meta` pass through unchanged; the controller does not resolve a Tool definition, run a presenter, or attach UI data.
 
 The Client journal validates current Session event envelopes before publishing follow snapshots, live entries, or history pages. It reuses the browser-safe Session validators for required surface markers, exact replacement endpoints, earlier unique source seqs, embedded Assistant provider metadata, request-header omissions, and tool-error consistency. Invalid records fail without field stripping or normalization; range membership and source existence remain durable-log checks on the Host.
@@ -88,7 +90,7 @@ References keep local Session data, scoped Contexts, and history streams alive, 
 
 GUI model selection requires the exact provider/model pair in the available catalog; unavailable choices reject with `session/model-unavailable`. Prompt admission retains the saved route without a catalog availability gate, so request execution reports missing credentials or unavailable models. `initializeDefaultModel()` saves the first available account model after login when no other provider has a configured API key; credential checks use configured references independently of model availability. A provider with no available models rejects initialization with `session/provider-models-unavailable`. Availability never substitutes another model or rewrites a Session selection.
 
-A successful `selectModel` response acknowledges the Session-local selection without waiting for the default profile setting to save. Default saves run in the background in submission order; a failure logs a warning and leaves the Session selection intact. New Sessions read the last successfully saved default.
+A successful `selectModel` response acknowledges the recorded Session selection without waiting for the default profile setting to save. The loop registers its projection; a change applies to the next step while a prepared step retains its captured choice. Default saves run in the background in submission order; a failure logs a warning and leaves the Session selection intact. A Session with no recorded selection or request reads the last successfully saved default through live `AgentOptions` accessors. An explicit choice is recorded even when it equals that default. Omitting reasoning effort clears the explicit effort and lets each request use the adapter default.
 
 -----
 
@@ -103,6 +105,8 @@ A successful `selectModel` response acknowledges the Session-local selection wit
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-api-session-controller) is the exhaustive source for accepted fields and their JSDoc.
 
 -----
+
+Blockquotes travel as ordinary prompt text without quote metadata. Local submission echoes and durable messages use the same text rendering rules; queue edits replace content while retaining prompt correlation.
 
 <a id="model-experience"></a>
 ## Model Experience
