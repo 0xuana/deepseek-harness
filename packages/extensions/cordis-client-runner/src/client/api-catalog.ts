@@ -648,6 +648,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type HostObservable<T> = ObservableSnapshot<T>;',
   },
   {
+    name: 'IconGlyph',
+    declaration: 'export type IconGlyph = keyof typeof ICON_ARTWORK;',
+  },
+  {
+    name: 'IconSymbolId',
+    declaration: 'export type IconSymbolId = `dsw-icon-${IconGlyph}-${IconWeight}`;',
+  },
+  {
+    name: 'IconWeight',
+    declaration: 'export type IconWeight = \'regular\' | \'medium\';',
+  },
+  {
     name: 'InjectFace',
     declaration: 'export type InjectFace<I extends object> = I extends {\n    hooks: infer HS extends HooksSources;\n} ? I extends {\n    keyedHooks: infer KS extends KeyedHooksSources;\n} ? Omit<I, \'hooks\' | \'keyedHooks\'> & PropsHooks<HS> & PropsKeyedHooks<KS> : Omit<I, \'hooks\'> & PropsHooks<HS> : I extends {\n    keyedHooks: infer KS extends KeyedHooksSources;\n} ? Omit<I, \'keyedHooks\'> & PropsKeyedHooks<KS> : I;',
   },
@@ -1049,7 +1061,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ThemeDefinition',
-    declaration: 'export interface ThemeDefinition {\n    id: string;\n    colorScheme: \'light\' | \'dark\';\n    tokens: ThemeTokens;\n}',
+    declaration: 'export interface ThemeDefinition {\n    id: string;\n    colorScheme: \'light\' | \'dark\';\n    tokens: ThemeTokens;\n    icons?: Readonly<Partial<Record<IconSymbolId, string>>> | undefined;\n}',
   },
   {
     name: 'ThemePreference',
