@@ -13,7 +13,7 @@
  * only `state` and the outward contracts. An embedder may portal it anywhere,
  * and nothing here assumes the docked tree is an ancestor or even present.
  */
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import clsx from 'clsx'
 import { IconCloseOutlineRegular, IconPanelLeftOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -341,6 +341,18 @@ export function FloatHeader({ paneId, tab, labels, intents, renderTabTitle, canC
   )
 }
 
+/**
+ * A tab's body from the embedder's renderer. It is memoized on the renderer and
+ * the tab record, so a float gesture or return, which re-renders its layout on
+ * every frame, leaves every body untouched.
+ */
+export const TabBody = memo(function TabBody({ tab, renderTab }: {
+  readonly tab: TabRecord
+  readonly renderTab: TabRenderer
+}): ReactNode {
+  return renderTab(tab)
+})
+
 /** Every floating panel, in z order. */
 export function FloatLayer({ state, intents, labels, renderTab, renderTabTitle, canCloseTab }: FloatLayerProps): ReactNode {
   const { preview, raise, drag, rectOf } = useFloatGestures(state, intents)
@@ -368,7 +380,7 @@ export function FloatLayer({ state, intents, labels, renderTab, renderTabTitle, 
             onPointerDown={() => { raise(paneId) }}
           >
             <FloatHeader {...{ paneId, tab, labels, intents, renderTabTitle, canCloseTab, drag }} />
-            <div className={css.floatBody}>{renderTab(tab)}</div>
+            <div className={css.floatBody}><TabBody tab={tab} renderTab={renderTab} /></div>
             <div
               className={css.floatResize}
               data-dockkit-float-resize={paneId}

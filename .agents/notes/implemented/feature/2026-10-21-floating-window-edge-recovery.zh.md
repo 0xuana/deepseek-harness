@@ -65,8 +65,8 @@ x = x + v * h
 |---|---|
 | `packages/client/ui-dockkit/src/engine/geometry.ts` | `FloatBounds`、`FLOAT_RESISTANCE`、`legalFloatRect`、`resistedRect`、`unresistedRect`、`boundedResize` |
 | `packages/client/ui-dockkit/src/engine/spring.ts` | 纯弹簧积分器、静止判定函数 `springSettled`、`launchVelocity` 与时间上限 |
-| `packages/client/ui-dockkit/src/components/FloatLayer.tsx` | `useFloatGestures`：视口投影、阻力、松手弹簧、绘制速度采样、减弱动态效果、帧循环与取消；供两个渲染器使用的 `rectOf` 与 `floatStyle` |
-| `packages/client/ui-dockkit/src/components/TabLayout.tsx` | 通过 `floatStyle` 绘制 hook 给出的显示矩形 |
+| `packages/client/ui-dockkit/src/components/FloatLayer.tsx` | `useFloatGestures`：视口投影、阻力、松手弹簧、绘制速度采样、减弱动态效果、帧循环与取消；供两个渲染器使用的 `rectOf`、`floatStyle` 与 memo 化的 `TabBody` |
+| `packages/client/ui-dockkit/src/components/TabLayout.tsx` | 通过 `floatStyle` 绘制 hook 给出的显示矩形，通过 `TabBody` 绘制内容 |
 | `packages/client/ui-dockkit/src/components/dockkit.module.css` | `.float` 上位置与尺寸的静止钳制 |
 | `packages/client/ui-dockkit/README.md` 对 | 在悬浮渲染器说明旁补充边界规则 |
 | `apps/web/tests/sidebar-right.e2e.ts` | 覆盖阻力与回弹的浏览器用例 |
@@ -77,7 +77,7 @@ x = x + v * h
 
 `tests/float-bounds.client.spec.ts` 覆盖投影（内部、每条边、角、顶部下限、超尺寸面板）、阻力（表中数值、边界处斜率为 1、以 `K` 为上界的单调增长、各轴独立）、其反演与上限，以及受限缩放。`tests/spring.client.spec.ts` 覆盖在截止时间内稳定、过冲上限、30／60／120 Hz 下与帧率无关、松手速度的作用、确定性，以及启动速度上限让每条回弹都不超出 `K`。`tests/app-region-styles.client.spec.ts` 固定样式表中的静止钳制。
 
-`tests/float-recovery.client.spec.tsx` 在活的控制器上渲染 `FloatLayer`，帧与时钟由测试手动推进：越过边界时带阻力的预览、每次松手恰好一次合法的 `moveFloat` 以及带向内过冲的弹回、一步撤销、甩出与慢推的对比、快速甩出不超出 `K`、拖过顶部下限、区域内松手不播放动画、推到存储位置的手势、回弹中按下接住面板且不跳变、停顿直接跳转、截止时间、回弹让位于撤销、关闭与按下另一个面板、卸载取消、两种减弱动态效果答复、视口缩小与变大时的投影且不调用任何 intent、单击投影面板不记录任何操作、手势中窗口缩放约束其松手结果、缩放结束回弹，以及屏幕外存储矩形在视口内绘制。既有的 `FloatLayer` 与 `TabLayout` 测试在位置断言改为读取静止变量后通过，包括开始手势不做布局读取这一规则；每个改动的源文件都被完全覆盖。`apps/web/tests/sidebar-right.e2e.ts` 在 Chromium 中把 Sidebar 悬浮面板拖过右边界和下边界，检查绘制的面板越过两边均不超过 120 px，等待松手后面板贴合两条边静止，再发布一个远在视口外且大于视口的静止矩形，检查仅靠样式表就把它恰好绘制成覆盖整个视口。
+`tests/float-recovery.client.spec.tsx` 在活的控制器上渲染 `FloatLayer`，帧与时钟由测试手动推进：越过边界时带阻力的预览、每次松手恰好一次合法的 `moveFloat` 以及带向内过冲的弹回、一步撤销、甩出与慢推的对比、快速甩出不超出 `K`、拖过顶部下限、区域内松手不播放动画、推到存储位置的手势、回弹中按下接住面板且不跳变、停顿直接跳转、截止时间、拖拽与回弹期间不重渲染标签页内容、回弹让位于撤销、关闭与按下另一个面板、卸载取消、两种减弱动态效果答复、视口缩小与变大时的投影且不调用任何 intent、单击投影面板不记录任何操作、手势中窗口缩放约束其松手结果、缩放结束回弹，以及屏幕外存储矩形在视口内绘制。`tests/tab-layout.client.spec.tsx` 新增：悬浮面板拖拽期间所有保留的标签页内容都不重渲染。既有的 `FloatLayer` 与 `TabLayout` 测试在位置断言改为读取静止变量后通过，包括开始手势不做布局读取这一规则；每个改动的源文件都被完全覆盖。`apps/web/tests/sidebar-right.e2e.ts` 在 Chromium 中把 Sidebar 悬浮面板拖过右边界和下边界，检查绘制的面板越过两边均不超过 120 px，等待松手后面板贴合两条边静止，再发布一个远在视口外且大于视口的静止矩形，检查仅靠样式表就把它恰好绘制成覆盖整个视口。
 
 ## 考虑过的替代方案
 
@@ -101,4 +101,4 @@ x = x + v * h
 
 悬浮面板在两个客户端中都不会再丢失到屏幕外，推过边界读起来是被拉回而不是撞墙。历史、持久化与所有嵌入方不受影响，运动由确定性测试而非手动检查覆盖。
 
-弹簧通过 React state 更新预览，每帧成本与拖拽相同，但承载重内容的面板在松手后最多会重渲染 900 ms；如果测量显示问题，退路是直接在面板元素上写 transform。被缩小窗口推入的面板会在窗口变大时朝存储位置回移，期望它留在被推到位置的用户可能会感到意外。面板内的内容（例如 webview）在松手后可能观察到最多 900 ms 的运动。常量针对鼠标或触控板调优；触控输入经由同样的 pointer 事件可用，但仍未调优。
+拖拽与弹簧都通过 React state 更新预览，因此布局每帧都会重渲染，松手后最多还会持续 900 ms。两个渲染器都通过 `TabBody` 绘制标签页内容，它以渲染函数和标签记录为键做了 memo，因此这样的一帧只重渲染面板框与标题栏，从不重渲染嵌入方的内容；如果剩余成本经测量构成问题，退路是直接在面板元素上写 transform。被缩小窗口推入的面板会在窗口变大时朝存储位置回移，期望它留在被推到位置的用户可能会感到意外。面板内的内容（例如 webview）在松手后可能观察到最多 900 ms 的运动。常量针对鼠标或触控板调优；触控输入经由同样的 pointer 事件可用，但仍未调优。

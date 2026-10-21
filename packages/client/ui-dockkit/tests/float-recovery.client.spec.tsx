@@ -66,8 +66,9 @@ function mounted(rect: FloatRect = { x: 100, y: 80, width: 300, height: 200 }) {
   const controller = seededController()
   const tabId = controller.openContent({ contentId: 'dsh-resource://file/session/s/a.txt', title: 'a.txt', kind: 'file' })
   const paneId = controller.floatTab(tabId, rect)
+  const renderTab = vi.fn(() => null)
   const redraw = (): void => {
-    view.rerender(<FloatLayer state={controller.getSnapshot().state} intents={intents} labels={TEST_LABELS} renderTab={() => null} />)
+    view.rerender(<FloatLayer state={controller.getSnapshot().state} intents={intents} labels={TEST_LABELS} renderTab={renderTab} />)
   }
   const moveFloat = vi.fn((id: PaneId, x: number, y: number) => { controller.moveFloat(id, x, y); redraw() })
   const resizeFloat = vi.fn((id: PaneId, next: FloatRect) => { controller.resizeFloat(id, next); redraw() })
@@ -77,7 +78,7 @@ function mounted(rect: FloatRect = { x: 100, y: 80, width: 300, height: 200 }) {
     floatTab: vi.fn(), unfloatPane: vi.fn(), placeTab: vi.fn(), dropTab: vi.fn(), moveFloat, resizeFloat,
     resizeSplit: vi.fn(),
   }
-  const view = render(<FloatLayer state={controller.getSnapshot().state} intents={intents} labels={TEST_LABELS} renderTab={() => null} />)
+  const view = render(<FloatLayer state={controller.getSnapshot().state} intents={intents} labels={TEST_LABELS} renderTab={renderTab} />)
   const panel = (): HTMLElement => view.container.querySelector<HTMLElement>(`[data-dockkit-float="${paneId}"]`) as HTMLElement
   const grip = (): HTMLElement => panel().querySelector<HTMLElement>('[data-dockkit-float-grip]') as HTMLElement
   // A lifted panel writes left and top inline; a resting one publishes them to the `.float` rule.
@@ -87,7 +88,7 @@ function mounted(rect: FloatRect = { x: 100, y: 80, width: 300, height: 200 }) {
   const top = (): number => drawn('top', 'y')
   const stored = (): FloatRect => floatRect(getPane(controller.getSnapshot().state, paneId))
   const corner = (): HTMLElement => panel().querySelector<HTMLElement>('[data-dockkit-float-resize]') as HTMLElement
-  return { controller, tabId, paneId, view, redraw, moveFloat, resizeFloat, focusPane, left, top, grip, corner, stored }
+  return { controller, tabId, paneId, view, redraw, renderTab, moveFloat, resizeFloat, focusPane, left, top, grip, corner, stored }
 }
 
 /** Press the grip at `from`, move to `to`, and optionally release there. */
@@ -121,6 +122,16 @@ describe('dragging past an edge', () => {
     expect(Math.min(...trail)).toBeLessThan(724)
     expect(Math.min(...trail)).toBeGreaterThan(724 - 120 * 0.06)
     expect(h.top()).toBe(80)
+  })
+
+  it('leaves the body unrendered through the drag and the return', () => {
+    const h = mounted()
+    const rendered = h.renderTab.mock.calls.length
+    drag(h.grip(), [150, 90], [150 + 744, 90])
+    runOut()
+    expect(h.left()).toBe(724)
+    // The release's moveFloat redraws the layer, but the tab record and the renderer stay the same.
+    expect(h.renderTab).toHaveBeenCalledTimes(rendered)
   })
 
   it('undoes the whole gesture in one step', () => {
