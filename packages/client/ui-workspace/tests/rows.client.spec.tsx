@@ -38,6 +38,16 @@ type SessionNodeItemProps = ComponentProps<typeof SessionNodeItemComponent>
 const renderNoRowEntries: RowRenderSlot = () => null
 
 // Direct row specs use the real required Slot share, empty unless the case supplies entries.
+/**
+ * Browser double-click: the second press carries detail 2 and must not disarm.
+ * @param el - the double-clicked element.
+ */
+function realDoubleClick(el: Element): void {
+  fireEvent.mouseDown(el, { detail: 1 }); fireEvent.mouseUp(el, { detail: 1 }); fireEvent.click(el, { detail: 1 })
+  fireEvent.mouseDown(el, { detail: 2 }); fireEvent.mouseUp(el, { detail: 2 }); fireEvent.click(el, { detail: 2 })
+  fireEvent.doubleClick(el)
+}
+
 function SessionNodeItem({ renderSlot = renderNoRowEntries, onRenameRequest = () => {}, ...props }: Omit<
   SessionNodeItemProps, 'renderSlot' | 'onRenameRequest'
 > & Partial<Pick<SessionNodeItemProps, 'renderSlot' | 'onRenameRequest'>>) {
@@ -1231,16 +1241,14 @@ describe('workspace browser rows', () => {
     }
     const view = render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={onOpen}
       onRenameRequest={onRenameRequest} t={t} />)
-    fireEvent.mouseDown(screen.getByText('Named'), { detail: 1 })
-    fireEvent.doubleClick(screen.getByText('Named'))
+    realDoubleClick(screen.getByText('Named'))
     expect(onRenameRequest).toHaveBeenCalledWith(node.id, 'Named')
-    expect(onOpen).not.toHaveBeenCalled()
+    expect(onOpen).toHaveBeenCalledWith(node.id)
 
     // A blank placeholder has no content to rename: double-click is inert.
     view.rerender(<SessionNodeItem node={{ ...node, blank: true }} currentId={undefined} now={0}
       onOpen={onOpen} onRenameRequest={onRenameRequest} t={t} />)
-    fireEvent.mouseDown(screen.getByText('新会话'), { detail: 1 })
-    fireEvent.doubleClick(screen.getByText('新会话'))
+    realDoubleClick(screen.getByText('新会话'))
     expect(onRenameRequest).toHaveBeenCalledOnce()
   })
 
@@ -1269,8 +1277,8 @@ describe('workspace browser rows', () => {
     expect(onRenameRequest).not.toHaveBeenCalled()
 
     // One armed press renames once.
-    fireEvent.mouseDown(title, { detail: 1 })
-    fireEvent.doubleClick(title)
+    realDoubleClick(title)
+    fireEvent.mouseDown(title, { detail: 2 })
     fireEvent.doubleClick(title)
     expect(onRenameRequest).toHaveBeenCalledOnce()
   })
@@ -1442,8 +1450,7 @@ it.each([['未命名', t], ['Untitled', tEn]])('labels unnamed history as %s', (
   render(<SessionNodeItem node={node} currentId={node.id} now={0} onOpen={vi.fn()}
     renderSlot={() => null} onRenameRequest={onRenameRequest} t={translate} />)
   expect(screen.getByText(label)).toBeTruthy()
-  fireEvent.mouseDown(screen.getByText(label), { detail: 1 })
-  fireEvent.doubleClick(screen.getByText(label))
+  realDoubleClick(screen.getByText(label))
   expect(onRenameRequest).toHaveBeenCalledWith(node.id, '')
 })
 

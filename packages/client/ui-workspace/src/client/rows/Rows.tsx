@@ -542,7 +542,8 @@ export function SearchResultItem({ result, currentId, onOpen, onUnarchive, t }: 
  * @param props.currentId - selected session id (row highlight).
  * @param props.now - epoch ms for relative-time formatting.
  * @param props.onOpen - open a session by id.
- * @param props.onRenameRequest - open the rename dialog from a title double-click (id + current title).
+ * @param props.onRenameRequest - open the rename dialog from a title double-click (id + current title);
+ * called only after a single press on the title since the window last lost focus.
  * @param props.renderSlot - child-seat renderer for the row's action lists
  * (`sidebar.workspaces.session.menu.item` / `sidebar.workspaces.session.row.action`),
  * its leading and trailing decorations, and its hover-card section.
@@ -559,7 +560,7 @@ export function SessionNodeItem({
   currentId: string | undefined
   now: number
   onOpen: (id: SessionNode['id']) => void
-  /** Open the rename dialog from a title double-click (id + current title). */
+  /** Open the rename dialog from a title double-click (id + current title); see the function JSDoc for the press precondition. */
   onRenameRequest: (id: SessionNode['id'], currentTitle: string) => void
   /** Scroll this row into view after search navigation, then acknowledge it. */
   onReveal?: (() => void) | undefined
@@ -595,11 +596,7 @@ export function SessionNodeItem({
   // next click arrives with detail 2 and fires dblclick, so rename requires a
   // detail-1 press on this title since the window last lost focus.
   const renameArmed = useRef(false)
-  useEffect(() => {
-    const disarm = (): void => { renameArmed.current = false }
-    window.addEventListener('blur', disarm)
-    return () => { window.removeEventListener('blur', disarm) }
-  }, [])
+  const disarmRename = useRef(() => { renameArmed.current = false }).current
   const marquee = useTitleMarquee(titleRef)
   useEffect(() => {
     if (onReveal === undefined) return
@@ -668,7 +665,12 @@ export function SessionNodeItem({
       <span
         ref={titleRef}
         className={css.title}
-        onMouseDown={(e) => { if (e.detail === 1) renameArmed.current = true }}
+        onMouseDown={(e) => {
+          if (e.detail !== 1) return
+          renameArmed.current = true
+          // One shared function and options: repeated presses add one listener.
+          window.addEventListener('blur', disarmRename, { once: true })
+        }}
         onDoubleClick={row.blank
           ? undefined
           : (e) => {
