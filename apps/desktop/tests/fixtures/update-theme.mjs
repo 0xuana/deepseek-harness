@@ -45,6 +45,8 @@ async function main() {
           webPreferences: { preload: fileURLToPath(new URL(`../../lib/preload-${document === 'update-dialog' ? 'update-dialog' : 'mandatory'}.cjs`, import.meta.url)),
             contextIsolation: true, sandbox: true, nodeIntegration: false } })
         windows.push(window)
+        // Palette checks exclude the user's pointer so hover cannot select an interaction color.
+        window.setIgnoreMouseEvents(true)
         await window.loadURL(`dsh-app://shell/${document}.html`)
         for (const source of [initial, initial === 'light' ? 'dark' : 'light', 'system']) {
           nativeTheme.themeSource = source

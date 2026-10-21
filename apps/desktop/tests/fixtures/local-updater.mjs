@@ -231,7 +231,7 @@ async function main() {
       protocol.handle('dsh-app', async request => {
         if (new URL(request.url).hostname === 'app') return new Response('<!doctype html><title>Updater qualification</title>', { headers: { 'content-type': 'text/html' } })
         const path = new URL(request.url).pathname.slice(1)
-        assert.ok(['design-platform.css', 'update-theme.js', 'mandatory-update-frame.js', 'mandatory-update.html', 'mandatory-update.js', 'mandatory-update.css', 'update-dialog.css'].includes(path))
+        assert.ok(['design-platform.css', 'shell-theme.js', 'mandatory-update-frame.js', 'mandatory-update.html', 'mandatory-update.js', 'mandatory-update.css', 'update-dialog.css'].includes(path))
         const mime = path.endsWith('.js') ? 'text/javascript' : path.endsWith('.css') ? 'text/css' : 'text/html'
         return new Response(await readFile(new URL(`${path === 'design-platform.css' ? '../../lib/welcome' : '../../renderer'}/${path}`, import.meta.url)), { headers: { 'content-type': mime } })
       })

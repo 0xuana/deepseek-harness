@@ -501,7 +501,7 @@ describe('desktop main startup', () => {
       for (const [name, mime] of [
         ['update-dialog.html', 'text/html'], ['update-dialog.css', 'text/css'], ['update-dialog.js', 'text/javascript'],
         ['mandatory-update.html', 'text/html'], ['mandatory-update.css', 'text/css'], ['mandatory-update.js', 'text/javascript'],
-        ['update-close.svg', 'image/svg+xml'], ['update-theme.js', 'text/javascript'],
+        ['update-close.svg', 'image/svg+xml'], ['shell-theme.js', 'text/javascript'],
       ] as const) {
         const response = await handler(new Request(`dsh-app://shell/${name}`))
         expect(response.status).toBe(200)
