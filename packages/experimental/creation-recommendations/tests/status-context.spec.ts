@@ -9,7 +9,7 @@ async function prepare(
   f: Awaited<ReturnType<typeof fixture>>, agent: Agent = f.agent,
   signal = new AbortController().signal, admitted?: () => void | Promise<void>,
 ) {
-  const decision = await agentEvents(f.ctx, agent).waterfall('agent/pre-step', { messages: [], turn: 2, step: 1, signal },
+  const decision = await agentEvents(f.ctx, agent).waterfall('agent/pre-step', { messages: [], turn: 2, step: 1, signal, modelSelection: { provider: 'mock', model: 'mock' } },
     async (): Promise<PreStepDecision> => { await admitted?.(); return { kind: 'enter', messages: [] } })
   return decision.kind === 'reject' ? decision : {
     ...decision, messages: decision.messages.filter(message => message.source.kind === 'personalized-pages'),
