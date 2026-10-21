@@ -26,6 +26,7 @@ import { abbreviateHomePath } from '@deepseek-ai/dsh-util-workspace-path'
 import type { MenuOpenState, WorkspaceBrowserProps } from '../contract/slots.ts'
 import type { GroupNode, SearchResultNode, SessionNode } from '../tree.ts'
 import css from './Rows.module.css'
+import { useRowDragPreview } from './useRowDragPreview.ts'
 
 /** The standard locale seat, prop-passed from the browser root. */
 type RowTranslate = WorkspaceBrowserProps['t']
@@ -236,6 +237,7 @@ export function ProjectRowItem({ group, containsCurrentDescendant = false, onTog
   const label = row.workspaceId === undefined ? t('group.ungrouped') : row.label
   const active = containsCurrentDescendant || (group.expanded && group.containsCurrent)
   const [menuOpen, setMenuOpen] = useState(false)
+  const dragPreview = useRowDragPreview()
   const workspaceMenuItems = [
     { id: 'rename', label: t('rename'), icon: <IconEditOutlineRegular /> },
     { id: 'delete', label: t('delete.workspace'), icon: <IconTrashOutlineRegular />, danger: true },
@@ -254,8 +256,9 @@ export function ProjectRowItem({ group, containsCurrentDescendant = false, onTog
           e.dataTransfer.effectAllowed = 'move'
           e.dataTransfer.setData('text/plain', row.key)
           drag.start()
+          dragPreview.start(e)
         }}
-      onDragEnd={drag?.end}
+      onDragEnd={() => { if (dragPreview.clear()) drag?.end() }}
     >
       <span className={clsx(css.slot, css.folder, active && css.folderActive)}>
         {row.expanded ? <IconFolderOpenRegular /> : <IconFolderCloseRegular />}
@@ -539,7 +542,8 @@ export function SearchResultItem({ result, currentId, onOpen, onUnarchive, t }: 
  * @param props.currentId - selected session id (row highlight).
  * @param props.now - epoch ms for relative-time formatting.
  * @param props.onOpen - open a session by id.
- * @param props.onRenameRequest - open the rename dialog from a title double-click (id + current title).
+ * @param props.onRenameRequest - open the rename dialog from a title double-click (id + current title);
+ * called only after a single press on the title since the window last lost focus.
  * @param props.renderSlot - child-seat renderer for the row's action lists
  * (`sidebar.workspaces.session.menu.item` / `sidebar.workspaces.session.row.action`),
  * its leading and trailing decorations, and its hover-card section.
@@ -556,7 +560,7 @@ export function SessionNodeItem({
   currentId: string | undefined
   now: number
   onOpen: (id: SessionNode['id']) => void
-  /** Open the rename dialog from a title double-click (id + current title). */
+  /** Open the rename dialog from a title double-click (id + current title); see the function JSDoc for the press precondition. */
   onRenameRequest: (id: SessionNode['id'], currentTitle: string) => void
   /** Scroll this row into view after search navigation, then acknowledge it. */
   onReveal?: (() => void) | undefined
@@ -583,10 +587,16 @@ export function SessionNodeItem({
   // their drop targets to fellow pinned rows.
   const draggable = drag !== undefined && !row.blank && !row.archived
   const [menuOpen, setMenuOpen] = useState(false)
+  const dragPreview = useRowDragPreview()
   // The menu's open state, bound into the row entries' `useMenuOpenState` hook.
   const menuOpenState = useMemo((): MenuOpenState => [menuOpen, setMenuOpen], [menuOpen])
   const rowRef = useRef<HTMLDivElement>(null)
   const titleRef = useRef<HTMLSpanElement>(null)
+  // On macOS the click that activates the window is not delivered, but the
+  // next click arrives with detail 2 and fires dblclick, so rename requires a
+  // detail-1 press on this title since the window last lost focus.
+  const renameArmed = useRef(false)
+  const disarmRename = useRef(() => { renameArmed.current = false }).current
   const marquee = useTitleMarquee(titleRef)
   useEffect(() => {
     if (onReveal === undefined) return
@@ -623,8 +633,9 @@ export function SessionNodeItem({
           e.dataTransfer.effectAllowed = 'move'
           e.dataTransfer.setData('text/plain', node.id)
           drag.start()
+          dragPreview.start(e)
         }}
-      onDragEnd={!draggable ? undefined : drag.end}
+      onDragEnd={() => { if (dragPreview.clear()) drag?.end() }}
       onDragOver={drag === undefined
         ? undefined
         : (e) => {
@@ -654,9 +665,20 @@ export function SessionNodeItem({
       <span
         ref={titleRef}
         className={css.title}
+        onMouseDown={(e) => {
+          if (e.detail !== 1) return
+          renameArmed.current = true
+          // One shared function and options: repeated presses add one listener.
+          window.addEventListener('blur', disarmRename, { once: true })
+        }}
         onDoubleClick={row.blank
           ? undefined
-          : (e) => { e.stopPropagation(); onRenameRequest(node.id, row.title) }}
+          : (e) => {
+            e.stopPropagation()
+            if (!renameArmed.current) return
+            renameArmed.current = false
+            onRenameRequest(node.id, row.title)
+          }}
       >
         {title}
       </span>

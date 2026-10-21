@@ -43,9 +43,6 @@
       "path": "../../core/session"
     },
     {
-      "path": "../../core/tools"
-    },
-    {
       "path": "../../interaction/commands"
     },
     {
@@ -122,6 +119,9 @@
     },
     {
       "path": "../ui-file-drag"
+    },
+    {
+      "path": "../../core/tool-executor-ptc"
     }
   ],
   "exclude": [
