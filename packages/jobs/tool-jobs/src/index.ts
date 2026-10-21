@@ -394,6 +394,14 @@ export function apply(ctx: Context, config: Config): void {
       try {
         if (args.wait === true) {
           const input = new AbortController()
+          // FIXME: this treats an inbox insertion whose source is `user` as a
+          // user steer, but the source only says who authored the message: hooks,
+          // subagents, and future hosts also deliver current-step input, and a
+          // plugin may label its own context as `user`. The decision to stop
+          // waiting belongs to the operation that delivered the input, not to
+          // this consumer; a shared steer signal (a broadcast or AbortSignal
+          // raised by the user-input entry points) should let waiters subscribe
+          // and decide locally instead. Tracked in #5965.
           const checkInput = (): void => {
             // Only a user-authored message releases the wait. Other current-step
             // inputs — completion notices and injected context — stay queued for
@@ -407,6 +415,10 @@ export function apply(ctx: Context, config: Config): void {
           }
           // Subscribe before reading pending input; each parallel wait owns its
           // listener. The notification follows the durable insertion commit.
+          // FIXME: only this wait stops on the signal. Other blocking waits
+          // (`wait_agent`, future subagent waits) keep waiting for the same
+          // input and need the shared steer signal rather than their own copy of
+          // this release logic. Tracked in #5965.
           const unsubscribe = agent === undefined ? () => {} : ctx.on('agent/inbox/inserted', ({ agent: subject }) => {
             if (subject === agent) checkInput()
           })
