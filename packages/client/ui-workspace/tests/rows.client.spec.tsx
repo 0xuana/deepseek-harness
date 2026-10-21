@@ -1231,6 +1231,7 @@ describe('workspace browser rows', () => {
     }
     const view = render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={onOpen}
       onRenameRequest={onRenameRequest} t={t} />)
+    fireEvent.mouseDown(screen.getByText('Named'), { detail: 1 })
     fireEvent.doubleClick(screen.getByText('Named'))
     expect(onRenameRequest).toHaveBeenCalledWith(node.id, 'Named')
     expect(onOpen).not.toHaveBeenCalled()
@@ -1238,7 +1239,39 @@ describe('workspace browser rows', () => {
     // A blank placeholder has no content to rename: double-click is inert.
     view.rerender(<SessionNodeItem node={{ ...node, blank: true }} currentId={undefined} now={0}
       onOpen={onOpen} onRenameRequest={onRenameRequest} t={t} />)
+    fireEvent.mouseDown(screen.getByText('新会话'), { detail: 1 })
     fireEvent.doubleClick(screen.getByText('新会话'))
+    expect(onRenameRequest).toHaveBeenCalledOnce()
+  })
+
+  it('does not rename when the first click of the pair only activated the window', () => {
+    const onRenameRequest = vi.fn()
+    const onOpen = vi.fn()
+    const node: SessionNode = {
+      id: sid('s1'), title: 'Named', blank: false, running: false,
+      runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: false,
+    }
+    render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={onOpen}
+      onRenameRequest={onRenameRequest} t={t} />)
+    const title = screen.getByText('Named')
+    // macOS delivers only the second press of a window-activating pair.
+    fireEvent.mouseDown(title, { detail: 2 })
+    fireEvent.click(title, { detail: 2 })
+    fireEvent.doubleClick(title)
+    expect(onOpen).toHaveBeenCalledWith(node.id)
+    expect(onRenameRequest).not.toHaveBeenCalled()
+
+    // A press seen before the window lost focus does not arm the next pair.
+    fireEvent.mouseDown(title, { detail: 1 })
+    fireEvent.blur(window)
+    fireEvent.mouseDown(title, { detail: 2 })
+    fireEvent.doubleClick(title)
+    expect(onRenameRequest).not.toHaveBeenCalled()
+
+    // One armed press renames once.
+    fireEvent.mouseDown(title, { detail: 1 })
+    fireEvent.doubleClick(title)
+    fireEvent.doubleClick(title)
     expect(onRenameRequest).toHaveBeenCalledOnce()
   })
 
@@ -1409,6 +1442,7 @@ it.each([['未命名', t], ['Untitled', tEn]])('labels unnamed history as %s', (
   render(<SessionNodeItem node={node} currentId={node.id} now={0} onOpen={vi.fn()}
     renderSlot={() => null} onRenameRequest={onRenameRequest} t={translate} />)
   expect(screen.getByText(label)).toBeTruthy()
+  fireEvent.mouseDown(screen.getByText(label), { detail: 1 })
   fireEvent.doubleClick(screen.getByText(label))
   expect(onRenameRequest).toHaveBeenCalledWith(node.id, '')
 })

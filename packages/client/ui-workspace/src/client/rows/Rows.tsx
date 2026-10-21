@@ -591,6 +591,15 @@ export function SessionNodeItem({
   const menuOpenState = useMemo((): MenuOpenState => [menuOpen, setMenuOpen], [menuOpen])
   const rowRef = useRef<HTMLDivElement>(null)
   const titleRef = useRef<HTMLSpanElement>(null)
+  // On macOS the click that activates the window is not delivered, but the
+  // next click arrives with detail 2 and fires dblclick, so rename requires a
+  // detail-1 press on this title since the window last lost focus.
+  const renameArmed = useRef(false)
+  useEffect(() => {
+    const disarm = (): void => { renameArmed.current = false }
+    window.addEventListener('blur', disarm)
+    return () => { window.removeEventListener('blur', disarm) }
+  }, [])
   const marquee = useTitleMarquee(titleRef)
   useEffect(() => {
     if (onReveal === undefined) return
@@ -659,9 +668,15 @@ export function SessionNodeItem({
       <span
         ref={titleRef}
         className={css.title}
+        onMouseDown={(e) => { if (e.detail === 1) renameArmed.current = true }}
         onDoubleClick={row.blank
           ? undefined
-          : (e) => { e.stopPropagation(); onRenameRequest(node.id, row.title) }}
+          : (e) => {
+            e.stopPropagation()
+            if (!renameArmed.current) return
+            renameArmed.current = false
+            onRenameRequest(node.id, row.title)
+          }}
       >
         {title}
       </span>
