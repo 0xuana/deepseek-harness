@@ -70,8 +70,6 @@ export interface ComposerAttachmentsOwnerProps {
   onAddFiles: (files: readonly File[], directories?: ReadonlySet<File>) => void
   /** Remove one draft attachment through the Conversation service. */
   onRemoveAttachment: (id: DraftAttachmentId) => void
-  /** Attachments of the message being sent, which the rail shows without a remove action. */
-  sendingAttachmentIds: readonly DraftAttachmentId[]
   /** Current per-draft upload states for file-kind attachments. */
   uploads: DraftFileUploads
   /** Restart one failed file upload. */

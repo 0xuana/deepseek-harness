@@ -80,12 +80,11 @@ function props(overrides: Partial<ComposerAttachmentsOwnerProps> = {}): Composer
     canAcceptDrop: true,
     onAddFiles: () => {},
     onRemoveAttachment: () => {},
-    sendingAttachmentIds: [],
     uploads: {},
     onRetryFile: () => {},
     t,
     ...overrides,
-  } as ComposerAttachmentsProps
+  } as unknown as ComposerAttachmentsProps
 }
 
 describe('ComposerAttachments', () => {
@@ -201,26 +200,6 @@ describe('ComposerAttachments', () => {
     fireEvent.click(view.getByTitle('查看原图'))
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(view.queryByRole('dialog', { name: '原图预览' })).toBeNull()
-  })
-
-  it('keeps the attachments of the message being sent without a remove action', () => {
-    const onRemoveAttachment = vi.fn()
-    const view = render(<ComposerAttachments {...props({
-      attachments: [attachment('sent'), fileDraft('sent-file'), attachment('next')],
-      uploads: {
-        'sent-file': {
-          status: 'ready', receiptId: 'receipt-sent-file' as never,
-          file: { attachmentId: 'file-sent' as never, name: 'sent-file.pdf', bytes: 3 },
-        },
-      },
-      sendingAttachmentIds: ['sent', 'sent-file'] as ComposerAttachment['id'][],
-      onRemoveAttachment,
-    })} />)
-    expect(view.queryByRole('button', { name: '移除图片 sent.png' })).toBeNull()
-    expect(view.queryByRole('button', { name: '移除文件 sent-file.pdf' })).toBeNull()
-    expect(view.getByTitle('sent-file.pdf').textContent).toContain('PDF 3B')
-    fireEvent.click(view.getByRole('button', { name: '移除图片 next.png' }))
-    expect(onRemoveAttachment).toHaveBeenCalledWith('next')
   })
 
   it('keeps images and files in pick order inside one attachment rail', () => {

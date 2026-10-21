@@ -104,7 +104,6 @@ const inputState: InputState = {
   attachmentIds: [],
   draftRev: 0,
   phase: 'plain',
-  sendingAttachmentIds: [],
   occurrences: [],
   queue: [],
 }

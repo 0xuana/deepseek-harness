@@ -619,16 +619,10 @@ describe('draft documents in the input shell', () => {
         expect(shell.addAttachments([nextAttachment])).toBe(true)
         expect(shell.removeAttachment(nextAttachment)).toBe(true)
         expect(shell.addAttachments([nextAttachment])).toBe(true)
-        expect(shell.snapshot).toMatchObject({
-          attachmentIds: [sentAttachment, nextAttachment], sendingAttachmentIds: [sentAttachment],
-        })
         outcome.resolve({ kind: 'error', text: 'flight rejected' })
         await vi.waitFor(() => { expect(shell.notices.getSnapshot()?.text).toBe('flight rejected') })
         expect(shell.snapshot).toMatchObject({
-          phase: 'plain',
-          draft: attachmentOnly ? '' : 'outbound message',
-          attachmentIds: [sentAttachment, nextAttachment],
-          sendingAttachmentIds: [],
+          phase: 'plain', draft: attachmentOnly ? '' : 'outbound message', attachmentIds: [sentAttachment, nextAttachment],
         })
         expect(shell.removeAttachment(sentAttachment)).toBe(true)
         expect(shell.requestDraftInitialization({ prompt: 'after settlement', clearPreviousDraft: true })).toBe('applied')
@@ -709,7 +703,7 @@ describe('draft documents in the input shell', () => {
       expect(shell.addAttachments([nextAttachment])).toBe(true)
       outcome.resolve({ kind: 'success' })
       await vi.waitFor(() => { expect(shell.snapshot.phase).toBe('plain') })
-      expect(shell.snapshot).toMatchObject({ draft, attachmentIds: [nextAttachment], sendingAttachmentIds: [] })
+      expect(shell.snapshot).toMatchObject({ draft, attachmentIds: [nextAttachment] })
       expect(shell.caretSpan()).toEqual({ start: caret, end: caret })
       shell.editor.dispatchCommand(UNDO_COMMAND, undefined)
       shell.editor.update(() => {}, { discrete: true })

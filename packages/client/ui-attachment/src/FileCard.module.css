@@ -118,8 +118,8 @@
   }
 }
 
-.removable:hover .name,
-.removable:focus-within .name {
+.card:hover .name,
+.card:focus-within .name {
   padding-right: 18px;
 }
 
