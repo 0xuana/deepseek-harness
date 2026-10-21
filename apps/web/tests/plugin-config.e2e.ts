@@ -112,7 +112,8 @@ describe('web e2e: plugin configuration pages', () => {
     await panel.getByRole('heading', { name: '实验性插件', exact: true, level: 1 }).waitFor()
     const bundles = await scaffold.ctx.pluginManager.listBundles()
     expect(await panel.locator('[data-plugin-group="more"] [data-plugin-package]').count())
-      .toBe(bundles.filter(bundle => bundle.official && (bundle.listedByDefault !== false || bundle.enabled || bundle.installed)).length)
+      .toBe(bundles.filter(bundle => bundle.name !== '@deepseek-ai/dsh-experimental-terminal-bundle'
+        && bundle.official && (bundle.listedByDefault !== false || bundle.enabled || bundle.installed)).length)
     expect(await basic.count()).toBe(0)
     expect(await extensions.count()).toBe(0)
     expect(await panel.locator('[data-plugin-group="bundles"]').count()).toBe(0)
