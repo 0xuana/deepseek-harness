@@ -13,7 +13,7 @@ export function actionBlocksOf(text: string): unknown[] {
   const objects: unknown[] = []
   for (const match of text.matchAll(FENCE)) {
     try {
-      const value: unknown = JSON.parse(match[1]!.trim())
+      const value: unknown = JSON.parse((match[1] as string).trim())
       if (typeof value === 'object' && value !== null && !Array.isArray(value)) objects.push(value)
     } catch {
       // Malformed JSON inside a fence creates no proposal; the answer stays as written.
