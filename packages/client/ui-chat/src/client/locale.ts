@@ -453,6 +453,7 @@ export const ja = {
   'message.stepProcess.comma': '、',
   'message.stepProcess.sharedPrefix': '',
   'message.stepProcess.more': '{title}など',
+  'message.branchRefused': 'ブランチを完了できませんでした：{reason}',
   'message.trigger.request': '実行が要求されました',
   'message.trigger.goal': '目標を継続中',
   'message.trigger.agent': 'タスクメッセージを受信しました',
@@ -603,4 +604,5 @@ export const ja = {
   'json.truncated': '… 省略表示、全{total}文字',
   'clock.md': '{m}/{d}',
   'clock.ymd': '{y}-{m}-{d}',
+
 } satisfies Record<keyof typeof en, string>

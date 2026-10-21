@@ -268,6 +268,7 @@ export const ja = {
   'shortcut.directoryBusy': 'ワークスペースを選択または追加しています',
   'shortcut.noCompletedTurn': 'このセッションには完了したターンがありません',
   'shortcut.forkFailed': 'セッションをフォークできませんでした。もう一度お試しください。',
+  'shortcut.notPermitted': 'このページではこの操作を実行できません',
   'section.workspaces': 'ワークスペース',
   'section.sessions': 'セッション',
   'viewOptions.label': '表示オプション',
@@ -376,4 +377,5 @@ export const ja = {
   'time.months': '{n}か月',
   'time.years': '{n}年',
   'time.ago': '{t}前',
+
 } satisfies Record<keyof typeof en, string>

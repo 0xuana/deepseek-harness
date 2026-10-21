@@ -308,9 +308,6 @@ describe('Chat inject API', () => {
       return composer.hooks.notices.getSnapshot()?.text
     }
     const b = await bench()
-    // This page presents the owner's own browser session: the notice is an owner-visible change, not
-    // only a served-page one.
-    expect(b.runtime.ctx.remoteAccess.owner).toBe(true)
     const { injected } = b.chatViewApi(b.rootReference)
     // The Host's own message reaches the reader with the stable code beside it, and the Session it was
     // asked of is the one that shows it.

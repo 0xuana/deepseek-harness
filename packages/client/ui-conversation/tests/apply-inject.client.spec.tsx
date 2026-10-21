@@ -167,6 +167,8 @@ describe('Conversation inject API', () => {
     await vi.waitFor(() => { expect(document.querySelector('[data-quote-preview-text]')?.textContent).toBe('@literal /review') })
     expect(document.querySelector('[data-slot-error]')).toBeNull()
     expect(errors).not.toHaveBeenCalled()
+  })
+
   it('refuses every File intake while the access snapshot excludes uploads but allows prompting', async () => {
     const b = await bench()
     onTestFinished(() => b.runtime.dispose())
