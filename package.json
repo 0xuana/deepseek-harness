@@ -147,6 +147,7 @@
     "verify-npm-install-layout": "tsx scripts/verify-npm-install-layout.ts",
     "verify-client-packages": "tsx scripts/verify-client-packages.ts",
     "check:i18n": "tsx scripts/run-gates.ts i18n",
+    "verify-installer-locales": "node apps/desktop/scripts/installer-locales.mjs",
     "verify-locale-metadata": "tsx scripts/verify-locale-metadata.ts",
     "verify-client-ui-i18n": "tsx scripts/verify-client-ui-i18n.ts",
     "verify-client-route-resolution": "tsx scripts/verify-client-route-resolution.ts",

@@ -391,6 +391,7 @@ function ciSharedStaticGates(): Gate[] {
 
 function i18nGates(): Gate[] {
   return [
+    pnpmScript('installer-locales', 'verify-installer-locales', { label: 'Windows installer locales' }),
     pnpmScript('locale-metadata', 'verify-locale-metadata', { label: 'Japanese plugin metadata' }),
     pnpmExec('locale-dictionaries', ['vitest', 'run', 'scripts/locale-dictionary-parity.spec.ts'], { label: 'locale dictionaries' }),
   ]
