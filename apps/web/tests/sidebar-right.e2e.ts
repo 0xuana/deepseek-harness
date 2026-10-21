@@ -1076,6 +1076,17 @@ describe('web e2e: shipped right Sidebar', () => {
         return box === null ? undefined : { right: Math.round(box.x + box.width), bottom: Math.round(box.y + box.height) }
       }).toEqual({ right: viewport.width, bottom: viewport.height })
 
+      // At rest the stylesheet clamps on its own: a rectangle published from a
+      // stale viewport reading, far outside and larger than the viewport, still
+      // draws inside it.
+      const clamped = await panel.evaluate((node) => {
+        const element = node as HTMLElement
+        for (const name of ['x', 'y', 'width', 'height']) element.style.setProperty(`--dsh-dockkit-float-${name}`, '5000px')
+        const box = element.getBoundingClientRect()
+        return { left: box.left, top: box.top, right: box.right, bottom: box.bottom }
+      })
+      expect(clamped).toEqual({ left: 0, top: 0, right: viewport.width, bottom: viewport.height })
+
       expect(tripwire.pageErrors).toEqual([])
       expect(tripwire.warnings).toEqual([])
     }, 60_000)

@@ -22,7 +22,7 @@ dock kit 的悬浮面板就是客户端里的悬浮窗。`FloatLayer` 与保留�
 
 面板绘制在其存储矩形投影到视口后的位置。存储矩形从不因视口而被改写：窗口缩小时面板被推入且不记录操作，窗口变大时面板朝存储位置回移。hook 在每次按下和每次窗口 `resize` 事件时重新读取区域，进行中的手势使用新区域。包含屏幕外矩形的持久化布局无需迁移即在视口内显示。
 
-静止时面板通过 `floatStyle` 把矩形以 CSS 变量发布给 `.float` 规则，该规则再次把它钳制在视口（`100vw` × `100vh`）内并保持在标题栏下限之下。因此即使 hook 读到的区域尚未刷新（例如全屏切换完成前读取的值），面板仍在视口内。手势或回弹把位置写在行内样式中，不受该钳制。
+静止时面板通过 `floatStyle` 把矩形以 CSS 变量发布给 `.float` 规则，该规则再次把它的位置和尺寸钳制在视口（`100vw` × `100dvh`；`dvh` 与 hook 读取的 `window.innerHeight` 一致）内并保持在标题栏下限之下；超尺寸面板在这里同样按视口尺寸绘制，与 `legalFloatRect` 一致。因此即使 hook 读到的区域尚未刷新（例如全屏切换完成前读取的值），面板仍在视口内。手势或回弹把位置和尺寸写在行内样式中，不受该钳制。
 
 ### 带阻力的拖拽
 
@@ -67,7 +67,7 @@ x = x + v * h
 | `packages/client/ui-dockkit/src/engine/spring.ts` | 纯弹簧积分器、静止判定函数 `springSettled`、`launchVelocity` 与时间上限 |
 | `packages/client/ui-dockkit/src/components/FloatLayer.tsx` | `useFloatGestures`：视口投影、阻力、松手弹簧、绘制速度采样、减弱动态效果、帧循环与取消；供两个渲染器使用的 `rectOf` 与 `floatStyle` |
 | `packages/client/ui-dockkit/src/components/TabLayout.tsx` | 通过 `floatStyle` 绘制 hook 给出的显示矩形 |
-| `packages/client/ui-dockkit/src/components/dockkit.module.css` | `.float` 上的静止钳制 |
+| `packages/client/ui-dockkit/src/components/dockkit.module.css` | `.float` 上位置与尺寸的静止钳制 |
 | `packages/client/ui-dockkit/README.md` 对 | 在悬浮渲染器说明旁补充边界规则 |
 | `apps/web/tests/sidebar-right.e2e.ts` | 覆盖阻力与回弹的浏览器用例 |
 
@@ -77,7 +77,7 @@ x = x + v * h
 
 `tests/float-bounds.client.spec.ts` 覆盖投影（内部、每条边、角、顶部下限、超尺寸面板）、阻力（表中数值、边界处斜率为 1、以 `K` 为上界的单调增长、各轴独立）、其反演与上限，以及受限缩放。`tests/spring.client.spec.ts` 覆盖在截止时间内稳定、过冲上限、30／60／120 Hz 下与帧率无关、松手速度的作用、确定性，以及启动速度上限让每条回弹都不超出 `K`。`tests/app-region-styles.client.spec.ts` 固定样式表中的静止钳制。
 
-`tests/float-recovery.client.spec.tsx` 在活的控制器上渲染 `FloatLayer`，帧与时钟由测试手动推进：越过边界时带阻力的预览、每次松手恰好一次合法的 `moveFloat` 以及带向内过冲的弹回、一步撤销、甩出与慢推的对比、快速甩出不超出 `K`、拖过顶部下限、区域内松手不播放动画、推到存储位置的手势、回弹中按下接住面板且不跳变、停顿直接跳转、截止时间、回弹让位于撤销、关闭与按下另一个面板、卸载取消、两种减弱动态效果答复、视口缩小与变大时的投影且不调用任何 intent、单击投影面板不记录任何操作、手势中窗口缩放约束其松手结果、缩放结束回弹，以及屏幕外存储矩形在视口内绘制。既有的 `FloatLayer` 与 `TabLayout` 测试在位置断言改为读取静止变量后通过，包括开始手势不做布局读取这一规则；每个改动的源文件都被完全覆盖。`apps/web/tests/sidebar-right.e2e.ts` 在 Chromium 中把 Sidebar 悬浮面板拖过右边界和下边界，检查绘制的面板越过两边均不超过 120 px，并等待松手后面板贴合两条边静止。
+`tests/float-recovery.client.spec.tsx` 在活的控制器上渲染 `FloatLayer`，帧与时钟由测试手动推进：越过边界时带阻力的预览、每次松手恰好一次合法的 `moveFloat` 以及带向内过冲的弹回、一步撤销、甩出与慢推的对比、快速甩出不超出 `K`、拖过顶部下限、区域内松手不播放动画、推到存储位置的手势、回弹中按下接住面板且不跳变、停顿直接跳转、截止时间、回弹让位于撤销、关闭与按下另一个面板、卸载取消、两种减弱动态效果答复、视口缩小与变大时的投影且不调用任何 intent、单击投影面板不记录任何操作、手势中窗口缩放约束其松手结果、缩放结束回弹，以及屏幕外存储矩形在视口内绘制。既有的 `FloatLayer` 与 `TabLayout` 测试在位置断言改为读取静止变量后通过，包括开始手势不做布局读取这一规则；每个改动的源文件都被完全覆盖。`apps/web/tests/sidebar-right.e2e.ts` 在 Chromium 中把 Sidebar 悬浮面板拖过右边界和下边界，检查绘制的面板越过两边均不超过 120 px，等待松手后面板贴合两条边静止，再发布一个远在视口外且大于视口的静止矩形，检查仅靠样式表就把它恰好绘制成覆盖整个视口。
 
 ## 考虑过的替代方案
 
