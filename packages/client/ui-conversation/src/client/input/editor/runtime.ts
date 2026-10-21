@@ -16,18 +16,12 @@ import { ReferenceChipNode, $createReferenceChipNode } from './chip-node.tsx'
 import { CommandChipNode, $createCommandChipNode, registerCommandChipSeat } from './command-chip-node.tsx'
 import { registerCommandChipSelection } from './command-chip-selection.ts'
 import { registerTextRefDecoration, rescanTextRefs, TextRefNode } from './text-ref.ts'
-import type { ComposerLayout, EditorProjection } from './projection.ts'
+import type { EditorProjection } from './projection.ts'
 import { $composerLayout, $projectComposer, detectOffsetOfClipboardOffset } from './projection.ts'
-import { $replaceDetectSpanWithNodes, $replaceDetectSpanWithText, $selectDetectSpan } from './span-map.ts'
+import { $replaceDetectSpanWithNodes, $replaceDetectSpanWithText } from './span-map.ts'
 import type { DetectSpan } from './span-map.ts'
 
 type Lexicon = ReadonlyMap<'/' | '@', readonly string[]>
-
-/** Whether a clipboard offset falls strictly inside a chip's clipboard text. */
-function splitsChip(layout: ComposerLayout, offset: number): boolean {
-  return layout.segments.some(segment => segment.kind === 'chip'
-    && segment.clipboardStart < offset && offset < segment.clipboardStart + segment.clipboardLength)
-}
 
 /** Model callbacks read at the same editor registration and update points. */
 interface DraftEditorRuntimeDeps {
@@ -339,43 +333,23 @@ export class DraftEditorRuntime {
   }
 
   /**
-   * Remove submitted text from the start of the draft. The whole draft goes
-   * while it equals the submitted text. When the user added text after it,
-   * the submitted text and the whitespace that follows it go, and the
-   * selection keeps its place in the remaining text. When the user changed
-   * the submitted text itself, including turning its end into a chip, the
-   * draft stays.
-   * @param submitted - clipboard text of the submitted draft.
-   * @returns whether the draft changed.
+   * Clear committed content using the model's suffix decision inside the editor update.
+   * @param prefixLength - returns the clipboard-prefix length to remove, or null to clear the root.
    */
-  removeSubmittedDraft(submitted: string): boolean {
-    let removed = false
+  clearCommittedDraft(prefixLength: (clipboardText: string) => number | null): void {
     this.editor.update(() => {
       const layout = $composerLayout()
-      const clip = layout.clipboardText
-      if (submitted === '' || !clip.startsWith(submitted) || splitsChip(layout, submitted.length)) return
-      let end = submitted.length
-      while (end < clip.length && /\s/u.test(clip.charAt(end))) end += 1
-      removed = true
+      const length = prefixLength(layout.clipboardText)
+      if (length !== null) {
+        $replaceDetectSpanWithText(
+          { start: 0, end: detectOffsetOfClipboardOffset(layout, length) }, '',
+        )
+        return
+      }
       const root = $getRoot()
-      if (end === clip.length) {
-        root.clear()
-        root.selectEnd()
-        return
-      }
-      const selection = $projectComposer(key => this.occurrenceIdOf(key)).selection
-      const removedEnd = detectOffsetOfClipboardOffset(layout, end)
-      $replaceDetectSpanWithText({ start: 0, end: removedEnd }, '')
-      if (selection === null) {
-        root.selectEnd()
-        return
-      }
-      $selectDetectSpan({
-        start: Math.max(0, selection.start - removedEnd),
-        end: Math.max(0, selection.end - removedEnd),
-      })
+      root.clear()
+      root.selectEnd()
     }, { discrete: true, tag: HISTORY_MERGE_TAG })
-    return removed
   }
 
   /**

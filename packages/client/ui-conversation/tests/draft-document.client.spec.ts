@@ -42,11 +42,6 @@ function documentOf(...parts: readonly (string | ReferenceContent)[]): DraftSnap
   return { text, references }
 }
 
-/** A collapsed insertion span at one detect offset of the current draft revision. */
-function atOffset(shell: SessionInputShell, offset: number): { start: number; end: number; draftRev: number } {
-  return { start: offset, end: offset, draftRev: shell.snapshot.draftRev }
-}
-
 function makeShell(overrides: Partial<SessionInputDeps> = {}): SessionInputShell {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
@@ -598,33 +593,29 @@ describe('draft documents in the input shell', () => {
   })
 
   it.each(['message', 'attachment-only message'] as const)(
-    'keeps a %s and its attachments while it waits for the Host and takes new attachments', async (kind) => {
+    'refuses draft initialization and attachments while a %s waits for the Host', async (kind) => {
       const outcome = Promise.withResolvers<SubmitOutcome>()
       const started = Promise.withResolvers<undefined>()
       const sink = vi.fn<SessionInputDeps['defaultSink']>(() => { started.resolve(undefined); return outcome.promise })
       const shell = makeShell({ defaultSink: sink })
       try {
         const sentAttachment = 'sent-image' as DraftAttachmentId
-        const nextAttachment = 'next-image' as DraftAttachmentId
         const attachmentOnly = kind === 'attachment-only message'
-        shell.addAttachments([sentAttachment])
-        if (!attachmentOnly) shell.setDraft('outbound message')
+        if (attachmentOnly) shell.addAttachments([sentAttachment])
+        else shell.setDraft('outbound message')
         shell.submit()
         await started.promise
         expect(sink).toHaveBeenCalledOnce()
-        expect(sink.mock.calls[0]?.[1]).toEqual([sentAttachment])
+        expect(sink.mock.calls[0]?.[1]).toEqual(attachmentOnly ? [sentAttachment] : [])
         expect(shell.snapshot.phase).toBe('sending')
-        expectInitializationBlocked(shell)
+        expect(shell.addAttachments(['next-image' as DraftAttachmentId])).toBe(false)
         expect(shell.removeAttachment(sentAttachment)).toBe(false)
-        expect(shell.addAttachments([nextAttachment])).toBe(true)
-        expect(shell.removeAttachment(nextAttachment)).toBe(true)
-        expect(shell.addAttachments([nextAttachment])).toBe(true)
+        expectInitializationBlocked(shell)
         outcome.resolve({ kind: 'error', text: 'flight rejected' })
         await vi.waitFor(() => { expect(shell.notices.getSnapshot()?.text).toBe('flight rejected') })
         expect(shell.snapshot).toMatchObject({
-          phase: 'plain', draft: attachmentOnly ? '' : 'outbound message', attachmentIds: [sentAttachment, nextAttachment],
+          phase: 'plain', draft: attachmentOnly ? '' : 'outbound message', attachmentIds: attachmentOnly ? [sentAttachment] : [],
         })
-        expect(shell.removeAttachment(sentAttachment)).toBe(true)
         expect(shell.requestDraftInitialization({ prompt: 'after settlement', clearPreviousDraft: true })).toBe('applied')
       } finally {
         shell.dispose()
@@ -651,63 +642,11 @@ describe('draft documents in the input shell', () => {
       expect(shell.snapshot.phase).toBe('sending')
       accept?.()
       // In the same call, so the editor has shrunk before the Session renders the echo.
-      expect(shell.snapshot).toMatchObject({ phase: 'plain', draft: '', attachmentIds: [], sendingAttachmentIds: [] })
+      expect(shell.snapshot).toMatchObject({ phase: 'plain', draft: '', attachmentIds: [] })
       outcome.resolve({ kind: 'success' })
       await outcome.promise
       await Promise.resolve()
       expect(shell.snapshot).toMatchObject({ phase: 'plain', draft: '', attachmentIds: [] })
-    } finally {
-      shell.dispose()
-      outcome.resolve({ kind: 'error' })
-      await outcome.promise
-    }
-  })
-
-  it.each([
-    {
-      change: 'adds text after it',
-      sent: 'first message',
-      edit: (shell: SessionInputShell) => shell.actions.insertText(' second', atOffset(shell, 'first message'.length)),
-      // The accepted text and the space after it leave, the caret stays after the typed text, and undo cannot restore them.
-      draft: 'second', caret: 'second'.length, afterUndo: 'second',
-    },
-    {
-      change: 'changes the accepted text itself',
-      sent: 'first message',
-      edit: (shell: SessionInputShell) => shell.actions.insertText('my ', atOffset(shell, 'first '.length)),
-      draft: 'first my message', caret: 'first my '.length, afterUndo: 'first message',
-    },
-    {
-      change: 'turns the end of the accepted text into a reference',
-      sent: 'see @src/ma',
-      edit: (shell: SessionInputShell) => shell.insertReference(
-        { source: file.source, ref: file.ref, label: file.label, appearance: 'file', clipboardText: file.clipboardText },
-        { ...atOffset(shell, 'see @src/ma'.length), start: 'see '.length },
-      ),
-      // Detect coordinates: the chip counts as one character, followed by its separating space.
-      draft: 'see @src/main.ts ', caret: 'see '.length + 2, afterUndo: 'see @src/ma',
-    },
-  ])('removes only what the Host accepted when the user $change while it was sent', async ({ sent, edit, draft, caret, afterUndo }) => {
-    const outcome = Promise.withResolvers<SubmitOutcome>()
-    const started = Promise.withResolvers<undefined>()
-    const sink = vi.fn<SessionInputDeps['defaultSink']>(() => { started.resolve(undefined); return outcome.promise })
-    const shell = makeShell({ defaultSink: sink })
-    const sentAttachment = 'sent-image' as DraftAttachmentId
-    const nextAttachment = 'next-image' as DraftAttachmentId
-    try {
-      shell.addAttachments([sentAttachment])
-      shell.setDraft(sent)
-      shell.submit()
-      await started.promise
-      expect(edit(shell)).toBe(true)
-      expect(shell.addAttachments([nextAttachment])).toBe(true)
-      outcome.resolve({ kind: 'success' })
-      await vi.waitFor(() => { expect(shell.snapshot.phase).toBe('plain') })
-      expect(shell.snapshot).toMatchObject({ draft, attachmentIds: [nextAttachment] })
-      expect(shell.caretSpan()).toEqual({ start: caret, end: caret })
-      shell.editor.dispatchCommand(UNDO_COMMAND, undefined)
-      shell.editor.update(() => {}, { discrete: true })
-      await vi.waitFor(() => { expect(shell.snapshot.draft).toBe(afterUndo) })
     } finally {
       shell.dispose()
       outcome.resolve({ kind: 'error' })

@@ -3,11 +3,10 @@
  * Events in, effects out; zero React / DOM / cordis. Package-private; the
  * SessionInput shell owns editor state and executes the returned effects.
  *
- * Claimed commands and ordinary messages occupy the one in-flight slot. A
- * command keeps the editor read-only until it settles. A message keeps the
- * editor editable while the Host decides and blocks only another send; once
- * the Host accepts it, the sent text leaves the editor, and a refusal or
- * failure leaves the draft as the user left it.
+ * Claimed commands and ordinary messages occupy the one frozen in-flight
+ * slot. A message stays in the read-only editor until the Host accepts it;
+ * only then does the editor clear, and a refusal or failure returns it to
+ * editing unchanged.
  */
 import type { InputSubmitMode, MessageSubmission } from '../contract/composer-submission.ts'
 import type { Occurrence } from '../contract/draft-editor.ts'
@@ -95,8 +94,7 @@ export class SubmitMachine {
    * chip: deleting or displacing the chip releases it, and a history restore
    * of the chip re-enters claimed. The claim event applies the same rule to a
    * chip the editor just inserted, before its update commits; busy phases
-   * refuse both, and the settlement of a message being sent applies the chip
-   * the user left meanwhile.
+   * refuse both.
    */
   private followCommand(command: CommandClaim | undefined): readonly InputEffect[] {
     if (this.phase !== 'plain' && this.phase !== 'claimed') return []
@@ -105,7 +103,7 @@ export class SubmitMachine {
     return []
   }
 
-  /** Occupy the in-flight slot with the draft, references, and attachments the user sent. */
+  /** Occupy the frozen slot with the draft, references, and attachments the user sent. */
   private beginAttempt(
     mode: InputSubmitMode,
     draft: string,
@@ -128,7 +126,7 @@ export class SubmitMachine {
     return attempt
   }
 
-  /** Send the captured message; another send waits until the Host accepts or refuses it. */
+  /** Send the frozen message; the editor stays read-only until the Host accepts it. */
   private send(attempt: SubmitAttempt): readonly InputEffect[] {
     this.claim = undefined
     this.phase = 'sending'
@@ -190,7 +188,7 @@ export class SubmitMachine {
     if (ev.ok) {
       this.phase = 'plain'
       this.claim = undefined
-      const effects: InputEffect[] = [{ type: 'commit-draft', submitted: flight.attempt.draftSnapshot }]
+      const effects: InputEffect[] = [{ type: 'commit-draft', retainSuffixOf: flight.attempt.draftSnapshot }]
       if (ev.outcome?.text !== undefined) {
         effects.push({ type: 'notice', level: ev.outcome.kind === 'error' ? 'error' : 'info', text: ev.outcome.text })
       }
@@ -202,18 +200,13 @@ export class SubmitMachine {
     return text === undefined ? [] : [{ type: 'notice', level: 'error', text }]
   }
 
-  /**
-   * Settle the message being sent. The claim follows the leading command chip
-   * the draft holds now; an accepted message's text leaves the editor, and a
-   * refused or failed one leaves the draft as it is.
-   */
+  /** An accepted message clears the editor; a refused or failed one returns to editing unchanged. */
   private onSinkSettled(ev: Extract<InputEvent, { type: 'sink-settled' }>): readonly InputEffect[] {
     const flight = this.inflight
     if (this.phase !== 'sending' || flight === undefined || flight.attempt.seq !== ev.attempt.seq) return []
     this.inflight = undefined
-    this.claim = ev.command
-    this.phase = ev.command === undefined ? 'plain' : 'claimed'
-    const effects: InputEffect[] = ev.ok ? [{ type: 'commit-draft', submitted: flight.attempt.draftSnapshot }] : []
+    this.phase = 'plain'
+    const effects: InputEffect[] = ev.ok ? [{ type: 'commit-draft', retainSuffixOf: null }] : []
     const text = ev.message ?? ev.outcome?.text
     if (text !== undefined) {
       effects.push({ type: 'notice', level: ev.ok && ev.outcome?.kind !== 'error' ? 'info' : 'error', text })

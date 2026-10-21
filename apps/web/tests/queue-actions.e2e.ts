@@ -124,14 +124,12 @@ describe('web e2e: queue row actions', () => {
       await input.fill(REMOVE)
       await input.press('Enter')
       await received.promise
-      // The composer keeps the message, still editable, until the Host accepts it; Stop stays
-      // beside the sending control for the running Turn, and the queue shows nothing yet.
+      // The composer keeps the message, read-only, until the Host accepts it; the queue shows nothing yet.
       const sendingButton = page.getByRole('button', { name: 'Sending message', exact: true })
       await sendingButton.waitFor()
       expect(await sendingButton.getAttribute('aria-busy')).toBe('true')
-      expect(await page.getByRole('button', { name: 'Stop generating', exact: true }).isEnabled()).toBe(true)
       expect(await input.textContent()).toBe(REMOVE)
-      expect(await input.getAttribute('contenteditable')).toBe('true')
+      expect(await input.getAttribute('contenteditable')).toBe('false')
       expect(await page.locator('[data-queue-dock] [data-submission-echo]').count()).toBe(0)
       const sending = await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd)
       await compareOrRefreshGolden(SENDING_EXPECTED, sending, MODE)
