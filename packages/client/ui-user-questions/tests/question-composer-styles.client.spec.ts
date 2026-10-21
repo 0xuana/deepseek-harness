@@ -28,7 +28,7 @@ function keyframes(name: string): string[] {
 
 describe('QuestionComposer long-copy layout', () => {
   it('reads question overflow against three lines and keeps two once it overflows', () => {
-    expect(declarations('.questionTitle')).toContain('timeline-scope: --question-copy')
+    expect(declarations('.questionTitle')).toEqual(expect.arrayContaining(['flex-shrink: 0', 'timeline-scope: --question-copy']))
     expect(declarations('.titlePreview')).toEqual(expect.arrayContaining([
       'max-height: calc(3lh + 2px)',
       'margin: 0 0 -2px',
@@ -41,6 +41,7 @@ describe('QuestionComposer long-copy layout', () => {
     ]))
     expect(keyframes('question-clipped')).toEqual(expect.arrayContaining([
       'margin-bottom: calc(-1lh - 2px)',
+      'clip-path: inset(0 0 calc(1lh + 2px) 0)',
       'mask-size: 100% 1lh, 100% 1lh',
       'mask-position: 0 0, 0 1lh',
     ]))
@@ -69,6 +70,7 @@ describe('QuestionComposer long-copy layout', () => {
     ]))
     expect(keyframes('description-clipped')).toEqual(expect.arrayContaining([
       'margin-bottom: calc(-1lh - 2px)',
+      'clip-path: inset(0 0 calc(1lh + 2px) 0)',
       'mask-size: 100% 1lh',
     ]))
     expect(declarations('.descriptionToggle')).toEqual(expect.arrayContaining([
@@ -104,6 +106,6 @@ describe('QuestionComposer long-copy layout', () => {
       'min-height: 0',
       'overflow-y: auto',
     ]))
-    expect(declarations('.title')).toContain('flex-shrink: 0')
+    expect(declarations('.questionTitle')).toContain('flex-shrink: 0')
   })
 })

@@ -433,6 +433,15 @@ describe('web e2e: resident question composer round trip', () => {
     const blueText = composer.locator('[data-option-description]').first()
     const blueToggle = composer.locator(`button[aria-controls=${JSON.stringify(await blueText.getAttribute('id'))}]`)
     await expect.poll(() => blueText.evaluate(readCopy)).toEqual({ lines: 1, clipped: true, overflows: true, toggle: 'expand' })
+    // A clipped description's dropped line takes no clicks: the custom row's top edge belongs to it.
+    expect(await composer.locator('[data-option-description]').last().evaluate(readCopy)).toMatchObject({ clipped: true })
+    expect(await composer.locator('textarea').evaluate((field) => {
+      const row = field.closest('[class*="customRow"]')
+      if (!(row instanceof HTMLElement)) return false
+      const box = row.getBoundingClientRect()
+      const hit = document.elementFromPoint(box.left + box.width / 2, box.top + 2)
+      return hit !== null && row.contains(hit)
+    })).toBe(true)
     await blueToggle.click()
     expect(await blue.getAttribute('aria-checked')).toBe('false')
     expect(await blueToggle.getAttribute('aria-expanded')).toBe('true')
@@ -753,6 +762,13 @@ describe('web e2e: resident question composer round trip', () => {
       }
       expect(scrollStates).toContain(false)
       expect(scrollStates).toContain(true)
+
+      // A clipped question's dropped line takes no clicks: the detail's first line belongs to the detail.
+      expect(await composer.getByText(detail, { exact: true }).evaluate((text) => {
+        const box = text.getBoundingClientRect()
+        const hit = document.elementFromPoint(box.left + 8, box.top + 3)
+        return hit !== null && text.contains(hit)
+      })).toBe(true)
 
       // The question expands in place; its choices move down inside the
       // scrollport while navigation and submission stay reachable.

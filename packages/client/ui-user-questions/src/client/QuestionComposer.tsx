@@ -27,10 +27,15 @@ const REMOVED_CARD: QuestionCardSnapshot = {
   state: 'open', waitState: 'counting', countdown: undefined, channel: 'none', closed: true,
 }
 
-/** Long copy the user expanded: the question itself or an option description by index. */
-type ExpandedCopy = ReadonlySet<'question' | number>
+/** Long copy the user expanded on one question: the question itself or an option description by index. */
+interface ExpandedCopy {
+  /** Index of the question the expansions belong to. */
+  readonly index: number
+  /** Expanded copy of that question: `'question'` or an option index. */
+  readonly copies: ReadonlySet<'question' | number>
+}
 
-const NOTHING_EXPANDED: ExpandedCopy = new Set()
+const NOTHING_EXPANDED: ExpandedCopy['copies'] = new Set()
 
 /**
  * Split the conventional recommendation suffix without changing the answer value.
@@ -247,24 +252,24 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
   // oxlint-disable-next-line typescript/no-non-null-assertion
   const draft = drafts[index]!
   const hasOptions = (question.options?.length ?? 0) > 0
-  // CSS decides which copy is clipped; only the user's expansions are state.
-  const [expanded, setExpanded] = useState<ExpandedCopy>(NOTHING_EXPANDED)
+  // CSS decides which copy is clipped; only the user's expansions are state,
+  // and they apply only while their question is the one shown.
+  const [expandedCopy, setExpandedCopy] = useState<ExpandedCopy>({ index, copies: NOTHING_EXPANDED })
+  const expanded = expandedCopy.index === index ? expandedCopy.copies : NOTHING_EXPANDED
 
   const questionToggleLabel = t(expanded.has('question') ? 'text.collapse' : 'text.expand')
 
   const toggleCopy = (copy: 'question' | number): void => {
-    setExpanded((current) => {
-      const next = new Set(current)
-      if (!next.delete(copy)) next.add(copy)
-      return next
-    })
+    const copies = new Set(expanded)
+    if (!copies.delete(copy)) copies.add(copy)
+    setExpandedCopy({ index, copies })
   }
 
   const replaceProgress = (nextIndex: number, nextDrafts: QuestionDraftAnswer[]): void => {
     if (nextIndex !== index) {
       // Another question starts at its top with its long copy collapsed.
       if (answerSurface.current !== null) answerSurface.current.scrollTop = 0
-      setExpanded(NOTHING_EXPANDED)
+      setExpandedCopy({ index: nextIndex, copies: NOTHING_EXPANDED })
     }
     actions.replace(pending.key, {
       index: nextIndex,

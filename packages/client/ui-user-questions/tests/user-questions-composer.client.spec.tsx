@@ -380,6 +380,24 @@ describe('QuestionComposer', () => {
     expect(document.getElementById(descriptionToggle?.getAttribute('aria-controls') ?? '')?.textContent).toBe(secondDescription)
   })
 
+  it('keeps expansions with their question when the shared position moves elsewhere', () => {
+    const { carrier } = wait([
+      { id: 'first', question: 'First question?', options: [{ label: 'Continue', description: 'First detail.' }] },
+      { id: 'second', question: 'Second question?', options: [{ label: 'Continue', description: 'Second detail.' }] },
+    ])
+    render(<QuestionComposer matched={carrier} {...kit} />)
+    fireEvent.click(screen.getAllByRole('button', { name: '展开' })[1] as HTMLElement)
+    expect(screen.getByRole('button', { name: '收起' })).toBeTruthy()
+
+    // Another surface of the same Session moves the shared question position.
+    const blank = { selected: [], custom: '', skipped: false }
+    act(() => { kit.actions.replace(carrier.key, { index: 1, drafts: [blank, blank] }) })
+
+    expect(screen.getByRole('region', { name: 'Second question?' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '收起' })).toBeNull()
+    expect(document.querySelector('[data-expanded]')).toBeNull()
+  })
+
   it('renders plan detail through the shared assistant Markdown primitive', () => {
     const { carrier } = wait([{
       id: 'plan',
