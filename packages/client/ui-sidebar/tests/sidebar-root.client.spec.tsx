@@ -53,7 +53,9 @@ function mountShell({ collapsed = false, width = 300, shortcuts = [] }: {
     <SidebarRoot
       collapsed={current.collapsed} width={current.width}
       useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
-      usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])} useShortcuts={selector => selector(shortcuts)}
+      usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])} useEntryPins={selector => selector([])}
+      useEntryActions={selector => selector(false)} setPinned={vi.fn()}
+      useShortcuts={selector => selector(shortcuts)}
       useResource={useResource} useWorkspaces={neverHook}
       {...allowAllAccess}
       startSession={startSession} toggleSidebar={toggleSidebar} t={t}
@@ -109,7 +111,7 @@ describe('SidebarRoot shell', () => {
       expect(button.getAttribute('aria-keyshortcuts')).toBe('Control+N')
     }
     const expanded = screen.getAllByRole('button', { name: 'New session' }).find(button => button.querySelector('kbd') !== null)!
-    fireEvent.mouseEnter(expanded)
+    fireEvent.pointerEnter(expanded)
     fireEvent.focus(expanded)
     expect(screen.queryByRole('tooltip')).toBeNull()
     expect(Array.from(expanded.querySelectorAll('kbd'), key => key.textContent)).toEqual(['Ctrl', 'N'])
@@ -118,7 +120,8 @@ describe('SidebarRoot shell', () => {
       usePanelInfo={neverHook} useSessions={neverHook} useSessionStatus={neverHook}
       useSessionRetainInfo={neverHook} useResource={useResource} useWorkspaces={neverHook}
       {...allowAllAccess}
-      usePanels={select => select([])} useShortcuts={select => select([shortcut])} />)
+      usePanels={select => select([])} useEntryPins={select => select([])}
+      useEntryActions={select => select(false)} setPinned={vi.fn()} useShortcuts={select => select([shortcut])} />)
     const button = screen.getByRole('button', { name: 'New session' })
     expect(button.getAttribute('aria-keyshortcuts')).toBe('Control+N')
     fireEvent.focus(button)
@@ -146,7 +149,9 @@ describe('SidebarRoot shell', () => {
     const { container } = render(<SidebarRoot
       collapsed={false} width={300}
       useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
-      usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])} useShortcuts={selector => selector([])}
+      usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])} useEntryPins={selector => selector([])}
+      useEntryActions={selector => selector(false)} setPinned={vi.fn()}
+      useShortcuts={selector => selector([])}
       useResource={useResource} useWorkspaces={neverHook}
       {...allowAllAccess}
       startSession={vi.fn()} toggleSidebar={vi.fn()} t={t}
@@ -167,7 +172,9 @@ describe('SidebarRoot shell', () => {
     render(<SidebarRoot
       collapsed={false} width={300}
       useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
-      usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])} useShortcuts={selector => selector([])}
+      usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])} useEntryPins={selector => selector([])}
+      useEntryActions={selector => selector(false)} setPinned={vi.fn()}
+      useShortcuts={selector => selector([])}
       useResource={useResource} useWorkspaces={neverHook}
       {...allowAllAccess}
       startSession={vi.fn()} toggleSidebar={vi.fn()} t={t}
@@ -192,7 +199,9 @@ describe('SidebarRoot shell', () => {
     render(<SidebarRoot
       collapsed={false} width={300}
       useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
-      usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])} useShortcuts={selector => selector([])}
+      usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])} useEntryPins={selector => selector([])}
+      useEntryActions={selector => selector(false)} setPinned={vi.fn()}
+      useShortcuts={selector => selector([])}
       useResource={useResource} useWorkspaces={neverHook}
       {...allowAllAccess}
       startSession={startSession} toggleSidebar={vi.fn()} t={t}
@@ -237,7 +246,9 @@ describe('SidebarRoot shell', () => {
     render(<SidebarRoot
       collapsed={false} width={300}
       useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
-      usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])} useShortcuts={selector => selector([])}
+      usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])} useEntryPins={selector => selector([])}
+      useEntryActions={selector => selector(false)} setPinned={vi.fn()}
+      useShortcuts={selector => selector([])}
       useResource={useResource} useWorkspaces={neverHook}
       {...allowAllAccess}
       startSession={vi.fn()} toggleSidebar={vi.fn()} t={t}
@@ -285,7 +296,9 @@ describe('SidebarRoot shell', () => {
     render(<SidebarRoot
       collapsed width={56}
       useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
-      usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])} useShortcuts={selector => selector([])}
+      usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])} useEntryPins={selector => selector([])}
+      useEntryActions={selector => selector(false)} setPinned={vi.fn()}
+      useShortcuts={selector => selector([])}
       useResource={useResource} useWorkspaces={neverHook}
       {...allowAllAccess}
       startSession={vi.fn()} toggleSidebar={vi.fn()} t={t}
@@ -294,17 +307,17 @@ describe('SidebarRoot shell', () => {
         : null) as SidebarRootComponentProps['renderSlot']}
     />)
     const toggle = screen.getByRole('button', { name: 'Open sidebar' })
-    fireEvent.mouseEnter(toggle)
+    fireEvent.pointerEnter(toggle)
     act(() => { vi.advanceTimersByTime(500) })
     expect(screen.getByRole('tooltip').textContent).toBe('Open sidebar')
     // The badge's own bubble replaces the toggle's rather than stacking on it,
     // even after the toggle's longer hover delay has elapsed.
-    fireEvent.mouseEnter(screen.getByTestId('badge'))
+    fireEvent.pointerEnter(screen.getByTestId('badge'))
     act(() => { vi.advanceTimersByTime(500) })
     expect(screen.getAllByRole('tooltip').map(bubble => bubble.textContent)).toEqual(['Update — V1.2.3'])
-    fireEvent.mouseLeave(screen.getByTestId('badge'), { relatedTarget: toggle })
+    fireEvent.pointerLeave(screen.getByTestId('badge'), { relatedTarget: toggle })
     expect(screen.getByRole('tooltip').textContent).toBe('Open sidebar')
-    fireEvent.mouseLeave(toggle)
+    fireEvent.pointerLeave(toggle)
     expect(screen.queryByRole('tooltip')).toBeNull()
   })
 })
@@ -337,7 +350,7 @@ describe('Windows caption tooltips', () => {
   afterEach(() => { document.documentElement.removeAttribute('data-windows-titlebar') })
 
   const hover = (button: HTMLElement): void => {
-    fireEvent.mouseEnter(button)
+    fireEvent.pointerEnter(button)
     act(() => { vi.advanceTimersByTime(500) })
   }
 
