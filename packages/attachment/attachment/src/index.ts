@@ -11,6 +11,7 @@ import type {
   ImageAttachmentLimits,
   ImageAttachmentRef,
   ImageRequestTarget,
+  PromptContentPart,
   RequestImageAttachment,
   SaveFileAttachment,
   SaveFileStreamAttachment,
@@ -47,6 +48,11 @@ declare module '@deepseek-ai/cordis' {
   interface Context {
     attachments: AttachmentStore
   }
+}
+
+/** Whether one admission part still carries encoded image bytes. */
+function isEncodedImage(part: AttachmentAdmissionPart): part is Extract<PromptContentPart, { readonly type: 'image' }> {
+  return part.type === 'image' && !('attachment' in part)
 }
 
 /** Immutable binary attachment service. Implementations validate bytes before publishing a reference. */
@@ -105,25 +111,29 @@ export abstract class AttachmentStore extends Service {
   }
 
   /**
-   * Admit one Host prompt and replace each uploaded image with its durable reference.
-   * Text and durable file references pass through unchanged. A prompt without image parts performs no storage operation.
-   * @param content - prompt parts in message order after file receipt resolution.
+   * Admit one Host prompt and replace each encoded image with its durable reference.
+   * Text, durable file references, and already stored images pass through unchanged.
+   * Every image part counts toward `maxImagesPerMessage`; the aggregate byte limit
+   * applies to the encoded images. A prompt without encoded images performs no storage operation.
+   * @param content - prompt parts in message order after upload receipt resolution.
    * @returns admitted prompt parts in the same order as `content`.
    * @throws AttachmentError when the image batch is refused.
    */
   async admitPromptContent(
     content: readonly AttachmentAdmissionPart[],
   ): Promise<AdmittedPromptContentPart[]> {
-    if (content.every(part => part.type !== 'image')) {
-      return content.map(part => part.type === 'text'
-        ? { type: 'text', text: part.text }
-        : { type: 'file', attachment: part.attachment })
+    const encoded = content.filter(isEncodedImage)
+    const images = content.filter(part => part.type === 'image').length
+    // The encoded batch enforces its own count; stored images join it here.
+    if (images > encoded.length && images > this.imageLimits.maxImagesPerMessage) {
+      throw new AttachmentError('Image batch exceeds the configured image-count limit.', 'TOO_MANY_IMAGES')
     }
-    const refs = await admitEncodedImages(this, content.filter(part => part.type === 'image'))
+    const refs = encoded.length === 0 ? [] : await admitEncodedImages(this, encoded)
     let next = 0
     return content.map((part) => {
       if (part.type === 'text') return { type: 'text', text: part.text }
       if (part.type === 'file') return { type: 'file', attachment: part.attachment }
+      if ('attachment' in part) return { type: 'image', attachment: part.attachment }
       return { type: 'image', attachment: refs[next++] as ImageAttachmentRef }
     })
   }

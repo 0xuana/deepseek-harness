@@ -229,6 +229,32 @@ describe('ComposerAttachments', () => {
   })
 })
 
+describe('ComposerAttachments image uploads', () => {
+  it('shows image upload progress and turns a failed image into its retry control', () => {
+    const onRetryFile = vi.fn()
+    const view = render(<ComposerAttachments {...props({
+      attachments: [attachment('measured'), attachment('streaming'), attachment('failed'), attachment('ready')],
+      uploads: {
+        measured: { status: 'uploading', loaded: 1, total: 2 },
+        streaming: { status: 'uploading', loaded: 3 },
+        failed: { status: 'error', message: 'boom' },
+        ready: {
+          status: 'ready', receiptId: 'receipt-ready' as never,
+          image: { attachmentId: 'image-ready' as never, mediaType: 'image/png', bytes: 1, width: 1, height: 1 },
+        },
+      },
+      onRetryFile,
+    })} />)
+    expect(view.container.querySelector('[style="width: 50%;"]')).toBeTruthy()
+    expect(view.getAllByTitle('查看原图').map(button => button.getAttribute('aria-busy')))
+      .toEqual(['true', 'true', 'false'])
+    expect(view.getByTitle('上传失败，点击重试')).toBeTruthy()
+    fireEvent.click(view.getByRole('button', { name: '重试上传 failed.png' }))
+    expect(onRetryFile).toHaveBeenCalledWith('failed')
+    expect(view.queryByRole('dialog', { name: '原图预览' })).toBeNull()
+  })
+})
+
 describe('ComposerAttachments file drafts', () => {
   it('renders uploading, ready, and failed cards with remove and retry affordances', () => {
     const onRemoveAttachment = vi.fn()

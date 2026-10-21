@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   ComposerAttachment, ComposerAttachmentsProps, ComposerImageAttachment,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { IconCloseFillRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconCloseFillRegular, IconRefreshOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import { AttachmentRail } from '../AttachmentRail.tsx'
 import type { AttachmentRailItem } from '../AttachmentRail.tsx'
 import { DropOverlay } from '../DropOverlay.tsx'
@@ -71,16 +71,44 @@ export function ComposerAttachments({
                   />
                 )
               }
+              // An uploading image shows its progress; a failed upload turns the thumbnail into its retry control.
+              const upload = uploads[attachment.id]
               return (
                 <div className={css.imageItem}>
-                  <button
-                    type="button"
-                    className={css.thumbnail}
-                    title={t('image.openOriginal')}
-                    onClick={() => { setPreview(attachment) }}
-                  >
-                    <img src={attachment.previewUrl} alt={attachment.file.name || t('image.pending')} />
-                  </button>
+                  {upload?.status === 'error'
+                    ? (
+                      <button
+                        type="button"
+                        className={`${css.thumbnail} ${css.thumbnailFailed}`}
+                        title={t('file.uploadFailed')}
+                        aria-label={t('file.retry', { name: attachment.file.name })}
+                        onClick={() => { onRetryFile(attachment.id) }}
+                      >
+                        <img src={attachment.previewUrl} alt="" />
+                        <span className={css.retryGlyph} aria-hidden><IconRefreshOutlineRegular size={16} /></span>
+                      </button>
+                    )
+                    : (
+                      <button
+                        type="button"
+                        className={css.thumbnail}
+                        title={t('image.openOriginal')}
+                        aria-busy={upload?.status === 'uploading'}
+                        onClick={() => { setPreview(attachment) }}
+                      >
+                        <img src={attachment.previewUrl} alt={attachment.file.name || t('image.pending')} />
+                      </button>
+                    )}
+                  {upload?.status === 'uploading' && (
+                    <span className={css.progressTrack} aria-hidden>
+                      <span
+                        className={css.progressBar}
+                        style={upload.total === undefined || upload.total <= 0
+                          ? undefined
+                          : { width: `${String(Math.min(1, upload.loaded / upload.total) * 100)}%` }}
+                      />
+                    </span>
+                  )}
                   <button
                     type="button"
                     className={css.remove}

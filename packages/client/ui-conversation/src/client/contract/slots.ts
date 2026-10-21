@@ -28,7 +28,11 @@ import type { UserTextDocumentInput, UserTextEvaluator, UserTextId, UserTextNode
 /** Browser-owned draft attachment that has not crossed the durable Host boundary. */
 export type ComposerAttachment = ComposerImageAttachment | ComposerFileAttachment
 
-/** Browser-owned image, base64-encoded into the prompt at send time. */
+/**
+ * Browser-owned image. An ordinary Session's draft uploads it to the Host as
+ * soon as it is added, and the prompt cites the receipt; a subagent
+ * continuation's draft base64-encodes it into the prompt at send time.
+ */
 export interface ComposerImageAttachment {
   kind: 'image'
   id: DraftAttachmentId
@@ -47,10 +51,14 @@ export interface ComposerFileAttachment {
   file: File
 }
 
-/** Upload lifecycle of one picked file draft (files upload on pick, not on send). */
+/**
+ * Upload lifecycle of one draft that uploads when it is added, not on send:
+ * every file draft, and every image draft of an ordinary Session.
+ */
 export type DraftFileUpload =
   | { readonly status: 'uploading'; readonly loaded: number; readonly total?: number }
   | { readonly status: 'ready'; readonly receiptId: FileUploadReceiptId; readonly file: FileAttachmentRef }
+  | { readonly status: 'ready'; readonly receiptId: FileUploadReceiptId; readonly image: ImageAttachmentRef }
   | { readonly status: 'error'; readonly message: string }
 
 /** Per-draft upload states keyed by draft attachment id. */
@@ -517,7 +525,7 @@ export interface ComposerBarInjected {
      * and the primary Send button use while the addressed agent is busy.
      */
     busyEnter: ObservableSnapshot<BusyEnterBehavior>
-    /** Live per-draft upload states for file-kind drafts. */
+    /** Live per-draft upload states for drafts that upload when added. */
     fileUploads: ObservableSnapshot<DraftFileUploads>
     notices: ObservableSnapshot<InputNotice | null>
     lexicon: ObservableSnapshot<ReadonlyMap<'/' | '@', readonly string[]>>

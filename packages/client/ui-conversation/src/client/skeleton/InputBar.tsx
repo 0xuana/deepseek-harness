@@ -80,11 +80,12 @@ export const InputBar = memo(function InputBar({
   )
   const empty = draft.trim() === '' && attachments.length === 0
   const uploads = useFileUploads(snapshot => snapshot)
-  // Send waits for every picked file: uploading and failed drafts both hold
-  // the gate (a failed upload is retried or removed, never silently dropped).
-  const uploadsPending = attachments.some(
-    attachment => attachment.kind === 'file' && uploads[attachment.id]?.status !== 'ready',
-  )
+  // Send waits for every picked file and every uploading image: uploading and
+  // failed drafts both hold the gate (a failed upload is retried or removed,
+  // never silently dropped). An image draft without an upload sends inline.
+  const uploadsPending = attachments.some(attachment => attachment.kind === 'file'
+    ? uploads[attachment.id]?.status !== 'ready'
+    : uploads[attachment.id] !== undefined && uploads[attachment.id]?.status !== 'ready')
   // Transient error banner (machine notices, image-intake rejections, and
   // prompt failures): the seq keys the Toast so an identical repeated message
   // restarts the hold-then-fade cycle instead of reusing the faded one.

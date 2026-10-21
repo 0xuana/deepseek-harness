@@ -82,7 +82,8 @@ export type SessionProjectionValues = Partial<SessionProjectionMap>
 /**
  * Browser-submitted prompt content; the Host promotes image bytes to durable
  * references. File parts carry the opaque receipt returned by a preceding
- * `uploadFile` call on the same Session.
+ * upload on the same Session; the receipt of an image upload enters the
+ * message as that image.
  */
 export type PromptContentPart =
   | { readonly type: 'text'; readonly text: string }
@@ -212,12 +213,6 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'session/projections-unavailable': Record<string, never>
     'session/writer-held': { readonly sessionId: SessionId }
     'session/agent-busy': { readonly reason: string }
-    'session/prompt-rejected': {
-      /** Code of the refusal, owned by the plugin that refused, such as `forgePanel/worktree-missing`. */
-      readonly reason: string
-      /** Whether the refusing plugin shows its own explanation, so the client adds no notice. */
-      readonly presented: boolean
-    }
     'session/invalid-time-zone': { readonly value: string }
     'session/workspace-attach-failed': { readonly sessionId: SessionId; readonly workspaceId: string }
     'agent-preset/conflict': {

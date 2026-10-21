@@ -1,12 +1,12 @@
 import { Context, FiberState } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
-import AgentController from '@deepseek-ai/dsh-agent-controller'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { Agent, ModelSelectionRef } from '@deepseek-ai/dsh-agent'
 import AttachmentStore, { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import type {
-  FileAttachmentRef, ImageAttachmentRef, SaveFileAttachment, SaveFileStreamAttachment,
+  FileAttachmentRef, ImageAttachmentLimits, ImageAttachmentRef, SaveFileAttachment, SaveFileStreamAttachment,
+  SaveImageAttachment,
 } from '@deepseek-ai/dsh-attachment'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { MessageSource, UserMessage } from '@deepseek-ai/dsh-llm'
@@ -21,6 +21,26 @@ import { SessionCommandController } from '../src/commands.ts'
 import type { SessionRequestId } from '../src/types.ts'
 
 const SESSION = SessionId('upload-session')
+const IMAGE_LIMITS: ImageAttachmentLimits = {
+  maxImageBytes: 4,
+  maxImagesPerMessage: 2,
+  maxMessageImageBytes: 8,
+  maxImagePixels: 64,
+  maxImageDimension: 8,
+  mediaTypes: ['image/png'],
+}
+const STAGED_IMAGE: ImageAttachmentRef = {
+  attachmentId: AttachmentId(`sha256:${'12'.repeat(32)}`),
+  mediaType: 'image/png',
+  bytes: 3,
+  width: 1,
+  height: 1,
+  name: 'shot.png',
+}
+
+async function* chunks(...parts: readonly number[][]): AsyncIterable<Uint8Array> {
+  for (const part of parts) yield Uint8Array.from(part)
+}
 
 async function uploadHarness(origin?: 'subagent'): Promise<{
   ctx: Context
@@ -31,6 +51,7 @@ async function uploadHarness(origin?: 'subagent'): Promise<{
   saveFile: ReturnType<typeof vi.fn>
   saveFileStream: ReturnType<typeof vi.fn>
   saveImages: ReturnType<typeof vi.fn>
+  resolveModelInfo: ReturnType<typeof vi.fn>
   disposeAgent: () => Promise<void>
   uploadRoute: (request: Request) => Promise<Response>
 }> {
@@ -39,7 +60,6 @@ async function uploadHarness(origin?: 'subagent'): Promise<{
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
-  await ctx.plugin(AgentController)
   await ctx.plugin(CommandRuntime)
   const session = ctx.sessions.create(SESSION, {
     meta: { cwd: '/workspace', ...(origin === undefined ? {} : { origin }) },
@@ -72,10 +92,10 @@ async function uploadHarness(origin?: 'subagent'): Promise<{
       bytes,
     }
   })
-  const saveImages = vi.fn((): Promise<readonly ImageAttachmentRef[]> =>
+  const saveImages = vi.fn((_inputs: readonly SaveImageAttachment[]): Promise<readonly ImageAttachmentRef[]> =>
     Promise.reject(new Error('fixture did not expect image persistence')))
   ctx.provide('attachments', Object.setPrototypeOf(
-    { saveFile, saveFileStream, saveImages },
+    { saveFile, saveFileStream, saveImages, imageLimits: IMAGE_LIMITS },
     AttachmentStore.prototype,
   ) as never)
   let uploadRoute: ((request: Request) => Promise<Response>) | undefined
@@ -87,10 +107,16 @@ async function uploadHarness(origin?: 'subagent'): Promise<{
       },
     },
   } as never)
+  const resolveModelInfo = vi.fn((): Promise<{
+    readonly provider: string
+    readonly id: string
+    readonly name: string
+    readonly inputModalities?: readonly string[]
+  }> => Promise.resolve({ provider: 'fixture', id: 'fixture-model', name: 'Fixture' }))
   ctx.provide('llm', {
     listModels: async () => [{ id: 'fixture-model', name: 'Model' }],
     listProviders: () => [{ id: 'fixture', name: 'Fixture' }],
-    resolveModelInfo: () => Promise.resolve({ provider: 'fixture', id: 'fixture-model', name: 'Fixture' }),
+    resolveModelInfo,
   } as never)
   const selection: ModelSelectionRef = {
     current: { provider: 'fixture', model: 'fixture-model' },
@@ -101,8 +127,6 @@ async function uploadHarness(origin?: 'subagent'): Promise<{
     selectionFor: () => selection,
     serializeImageAdmission: <Value>(_agent: Agent, operation: () => Promise<Value>) => operation(),
   } as unknown as ApiSessionAgentController
-  // Image prompts take their admission turn at once; no model selection competes in these tests.
-  Object.assign(agents, { acquireImageAdmission: () => Promise.resolve(() => {}) })
   const uploads = new FileUploads(ctx)
   if (uploadRoute === undefined) throw new Error('file upload route was not registered')
   return {
@@ -114,6 +138,7 @@ async function uploadHarness(origin?: 'subagent'): Promise<{
     saveFile,
     saveFileStream,
     saveImages,
+    resolveModelInfo,
     disposeAgent,
     uploadRoute,
   }
@@ -121,8 +146,6 @@ async function uploadHarness(origin?: 'subagent'): Promise<{
 
 /** The owner source `SessionController.prompt()` builds for {@link promptRequest}. */
 const USER_SOURCE: MessageSource = { kind: 'user', rpcId: 'req-1' as SessionRequestId }
-/** A client that stays connected for the whole prompt. */
-const SIGNAL = new AbortController().signal
 
 function promptRequest(content: Parameters<SessionCommandController['prompt']>[0]['content']) {
   return {
@@ -146,7 +169,7 @@ describe('Session file uploads', () => {
     expect(saveFile).toHaveBeenCalledTimes(1)
     expect(receipt.file.name).toBe('notes.pdf')
     expect(receipt.file.bytes).toBe(3)
-    expect(uploads.resolve(agent, receipt.receiptId)).toEqual(receipt.file)
+    expect(uploads.resolve(agent, receipt.receiptId)).toEqual({ type: 'file', attachment: receipt.file })
     expect(uploads.resolve(agent, 'missing' as FileUploadReceiptId)).toBeUndefined()
     const commandHandler = vi.fn((_invocation: unknown) => ({ kind: 'success' as const }))
     ctx.commands.register({
@@ -174,7 +197,7 @@ describe('Session file uploads', () => {
       { type: 'file', receiptId: receipt.receiptId },
       { type: 'image', mediaType: 'image/png', data: 'AAAA' },
       { type: 'text', text: 'read it' },
-    ]), USER_SOURCE, SIGNAL)
+    ]), USER_SOURCE)
     expect(followup).toHaveBeenCalledTimes(1)
     const message = followup.mock.calls[0]?.[0] as UserMessage
     expect(message.content).toEqual([
@@ -201,10 +224,66 @@ describe('Session file uploads', () => {
       name: 'huge.bin',
     }))
     expect(receipt.file).toMatchObject({ name: 'huge.bin', bytes: 5 })
-    await controller.prompt(promptRequest([{ type: 'file', receiptId: receipt.receiptId }]), USER_SOURCE, SIGNAL)
+    await controller.prompt(promptRequest([{ type: 'file', receiptId: receipt.receiptId }]), USER_SOURCE)
     expect((followup.mock.calls[0]?.[0] as UserMessage).content).toEqual([
       { type: 'file', attachment: receipt.file },
     ])
+  })
+
+  it('stages an uploaded image and admits its receipt as that image, which commands do not accept', async () => {
+    const { ctx, controller, uploads, agent, followup, saveImages } = await uploadHarness()
+    saveImages.mockResolvedValueOnce([STAGED_IMAGE])
+    const receipt = await uploads.uploadImageStream({
+      sessionId: SESSION, data: chunks([1, 2], [3, 4]), mediaType: 'image/png', name: 'shot.png',
+    })
+    expect(saveImages).toHaveBeenCalledWith([{ data: Uint8Array.of(1, 2, 3, 4), mediaType: 'image/png', name: 'shot.png' }])
+    expect(receipt.image).toEqual(STAGED_IMAGE)
+    expect(uploads.resolve(agent, receipt.receiptId)).toEqual({ type: 'image', attachment: STAGED_IMAGE })
+    const commandHandler = vi.fn((_invocation: unknown) => ({ kind: 'success' as const }))
+    ctx.commands.register({
+      name: 'files', description: 'Use staged files', input: { hint: '<task>', attachments: true },
+      handler: commandHandler,
+    })
+    await ctx.commands.execute(
+      agent,
+      '/files inspect',
+      [{ type: 'file', receiptId: receipt.receiptId }],
+      new AbortController().signal,
+    )
+    expect(commandHandler).not.toHaveBeenCalled()
+    await controller.prompt(promptRequest([
+      { type: 'file', receiptId: receipt.receiptId },
+      { type: 'text', text: 'look' },
+    ]), USER_SOURCE)
+    expect((followup.mock.calls[0]?.[0] as UserMessage).content).toEqual([
+      { type: 'image', attachment: STAGED_IMAGE },
+      { type: 'text', text: 'look' },
+    ])
+    expect(saveImages).toHaveBeenCalledTimes(1)
+  })
+
+  it('refuses an uploaded image for a model without image input', async () => {
+    const { controller, uploads, followup, saveImages, resolveModelInfo } = await uploadHarness()
+    saveImages.mockResolvedValueOnce([STAGED_IMAGE])
+    const receipt = await uploads.uploadImageStream({ sessionId: SESSION, data: chunks([1]), mediaType: 'image/png' })
+    resolveModelInfo.mockResolvedValue({ provider: 'fixture', id: 'fixture-model', name: 'Fixture', inputModalities: ['text'] })
+    await expect(controller.prompt(promptRequest([{ type: 'file', receiptId: receipt.receiptId }]), USER_SOURCE))
+      .rejects.toMatchObject({ code: 'session/attachment-invalid', details: { reason: 'MODEL_DOES_NOT_SUPPORT_IMAGES' } })
+    expect(followup).not.toHaveBeenCalled()
+  })
+
+  it('refuses an image past the per-image byte limit without reading further, and an unaccepted type', async () => {
+    const { uploads, saveImages } = await uploadHarness()
+    const overLimit = (async function* (): AsyncIterable<Uint8Array> {
+      yield Uint8Array.of(1, 2, 3)
+      yield Uint8Array.of(4, 5)
+      throw new Error('read past the limit')
+    })()
+    await expect(uploads.uploadImageStream({ sessionId: SESSION, data: overLimit, mediaType: 'image/png' }))
+      .rejects.toMatchObject({ code: 'session/attachment-invalid', details: { reason: 'IMAGE_TOO_LARGE' } })
+    await expect(uploads.uploadImageStream({ sessionId: SESSION, data: chunks([1]), mediaType: 'image/bmp' }))
+      .rejects.toMatchObject({ code: 'session/attachment-invalid', details: { reason: 'UNSUPPORTED_IMAGE_TYPE' } })
+    expect(saveImages).not.toHaveBeenCalled()
   })
 
   it('keeps the stream name optional and maps storage failures through the same error vocabulary', async () => {
@@ -228,7 +307,7 @@ describe('Session file uploads', () => {
     await expect(controller.prompt(promptRequest([
       { type: 'image', mediaType: 'image/png', data: 'AAAA' },
       { type: 'file', receiptId: 'missing-receipt' as FileUploadReceiptId },
-    ]), USER_SOURCE, SIGNAL)).rejects.toMatchObject({ code: 'session/attachment-invalid', details: { reason: 'FILE_NOT_STAGED' } })
+    ]), USER_SOURCE)).rejects.toMatchObject({ code: 'session/attachment-invalid', details: { reason: 'FILE_NOT_STAGED' } })
     expect(followup).not.toHaveBeenCalled()
     expect(saveImages).not.toHaveBeenCalled()
   })
@@ -302,6 +381,9 @@ describe('Session file uploads', () => {
       details: { reason: 'SUBAGENT_FILE_UNSUPPORTED' },
     })
     expect(child.saveFile).not.toHaveBeenCalled()
+    await expect(child.uploads.uploadImageStream({ sessionId: SESSION, data: chunks([1]), mediaType: 'image/png' }))
+      .rejects.toMatchObject({ code: 'subagent/attachment-invalid', details: { reason: 'SUBAGENT_FILE_UNSUPPORTED' } })
+    expect(child.saveImages).not.toHaveBeenCalled()
   })
 
   it('isolates receipts by Session object even when Session ids match', async () => {
@@ -317,7 +399,7 @@ describe('Session file uploads', () => {
     expect(() => owner.uploads.bindPrompt(other.agent, [receipt.receiptId], 'other-prompt'))
       .toThrow(expect.objectContaining({ code: 'session/attachment-invalid', details: { reason: 'FILE_NOT_STAGED' } }))
     owner.uploads.retirePrompt(other.agent, 'owner-prompt')
-    expect(owner.uploads.resolve(owner.agent, receipt.receiptId)).toEqual(receipt.file)
+    expect(owner.uploads.resolve(owner.agent, receipt.receiptId)).toEqual({ type: 'file', attachment: receipt.file })
     owner.uploads.retirePrompt(owner.agent, 'owner-prompt')
     expect(owner.uploads.resolve(owner.agent, receipt.receiptId)).toBeUndefined()
   })
@@ -326,10 +408,10 @@ describe('Session file uploads', () => {
     const { controller, uploads, agent } = await uploadHarness()
     uploads.retirePrompt(agent, 'not-staged')
     const receipt = await uploads.upload(agent, { data: 'AAAA' }, new AbortController().signal)
-    await controller.prompt(promptRequest([{ type: 'file', receiptId: receipt.receiptId }]), USER_SOURCE, SIGNAL)
-    expect(uploads.resolve(agent, receipt.receiptId)).toEqual(receipt.file)
+    await controller.prompt(promptRequest([{ type: 'file', receiptId: receipt.receiptId }]), USER_SOURCE)
+    expect(uploads.resolve(agent, receipt.receiptId)).toEqual({ type: 'file', attachment: receipt.file })
     uploads.retirePrompt(agent, 'other-request')
-    expect(uploads.resolve(agent, receipt.receiptId)).toEqual(receipt.file)
+    expect(uploads.resolve(agent, receipt.receiptId)).toEqual({ type: 'file', attachment: receipt.file })
     uploads.retirePrompt(agent, 'req-1')
     expect(uploads.resolve(agent, receipt.receiptId)).toBeUndefined()
   })
@@ -341,12 +423,12 @@ describe('Session file uploads', () => {
       { data: 'AAAA' },
       new AbortController().signal,
     )
-    await first.controller.prompt(promptRequest([{ type: 'file', receiptId: observed.receiptId }]), USER_SOURCE, SIGNAL)
+    await first.controller.prompt(promptRequest([{ type: 'file', receiptId: observed.receiptId }]), USER_SOURCE)
     first.agent.session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'extension event' }],
       source: { kind: 'user', rpcId: 1 } as never,
     }), { surfaceOp: 'append' })
-    expect(first.uploads.resolve(first.agent, observed.receiptId)).toEqual(observed.file)
+    expect(first.uploads.resolve(first.agent, observed.receiptId)).toEqual({ type: 'file', attachment: observed.file })
     first.agent.session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'observed' }],
       source: { kind: 'user', rpcId: 'req-1' as SessionRequestId },
@@ -366,9 +448,9 @@ describe('Session file uploads', () => {
   it('deduplicates a retried rpcId already present in the Agent inbox', async () => {
     const { controller, agent, followup } = await uploadHarness()
     const request = promptRequest([{ type: 'text', text: 'once' }])
-    await controller.prompt(request, USER_SOURCE, SIGNAL)
+    await controller.prompt(request, USER_SOURCE)
     agent.inbox.append('next-turn', followup.mock.calls[0]?.[0] as UserMessage)
-    await expect(controller.prompt(request, USER_SOURCE, SIGNAL)).resolves.toEqual({ accepted: true })
+    await expect(controller.prompt(request, USER_SOURCE)).resolves.toEqual({ accepted: true })
     expect(followup).toHaveBeenCalledOnce()
   })
 
@@ -385,7 +467,7 @@ describe('Session file uploads', () => {
       source: { kind: 'user', rpcId: request.requestId },
     }), { surfaceOp: 'append' })
 
-    await expect(controller.prompt(request, USER_SOURCE, SIGNAL)).resolves.toEqual({ accepted: true })
+    await expect(controller.prompt(request, USER_SOURCE)).resolves.toEqual({ accepted: true })
     expect(followup).not.toHaveBeenCalled()
   })
 
@@ -395,7 +477,7 @@ describe('Session file uploads', () => {
     saveImages.mockReturnValueOnce(admitted.promise)
     const prompting = controller.prompt(promptRequest([
       { type: 'image', mediaType: 'image/png', data: 'AAAA' },
-    ]), USER_SOURCE, SIGNAL)
+    ]), USER_SOURCE)
     await vi.waitFor(() => { expect(saveImages).toHaveBeenCalledOnce() })
     await disposeAgent()
     admitted.resolve([{
@@ -407,7 +489,7 @@ describe('Session file uploads', () => {
   it('rejects when a previously bound receipt retires during image admission', async () => {
     const { controller, uploads, agent, saveImages } = await uploadHarness()
     const receipt = await uploads.upload(agent, { data: 'AAAA' }, new AbortController().signal)
-    await controller.prompt(promptRequest([{ type: 'file', receiptId: receipt.receiptId }]), USER_SOURCE, SIGNAL)
+    await controller.prompt(promptRequest([{ type: 'file', receiptId: receipt.receiptId }]), USER_SOURCE)
     const admitted = Promise.withResolvers<readonly ImageAttachmentRef[]>()
     saveImages.mockReturnValueOnce(admitted.promise)
     const prompting = controller.prompt({
@@ -416,7 +498,7 @@ describe('Session file uploads', () => {
         { type: 'image', mediaType: 'image/png', data: 'AAAA' },
       ]),
       requestId: 'req-2' as SessionRequestId,
-    }, USER_SOURCE, SIGNAL)
+    }, USER_SOURCE)
     await vi.waitFor(() => { expect(saveImages).toHaveBeenCalledOnce() })
     uploads.retirePrompt(agent, 'req-1')
     admitted.resolve([{
@@ -430,12 +512,12 @@ describe('Session file uploads', () => {
   it('keeps the prior receipt binding when a later prompt attempt fails', async () => {
     const { controller, uploads, agent, followup } = await uploadHarness()
     const receipt = await uploads.upload(agent, { data: 'AAAA' }, new AbortController().signal)
-    await controller.prompt(promptRequest([{ type: 'file', receiptId: receipt.receiptId }]), USER_SOURCE, SIGNAL)
+    await controller.prompt(promptRequest([{ type: 'file', receiptId: receipt.receiptId }]), USER_SOURCE)
     followup.mockImplementationOnce(() => { throw new Error('busy') })
     await expect(controller.prompt({
       ...promptRequest([{ type: 'file', receiptId: receipt.receiptId }]),
       requestId: 'req-2' as SessionRequestId,
-    }, USER_SOURCE, SIGNAL)).rejects.toMatchObject({ code: 'session/agent-busy' })
+    }, USER_SOURCE)).rejects.toMatchObject({ code: 'session/agent-busy' })
     uploads.retirePrompt(agent, 'req-1')
     expect(uploads.resolve(agent, receipt.receiptId)).toBeUndefined()
   })
@@ -446,15 +528,15 @@ describe('Session file uploads', () => {
     followup.mockImplementationOnce(() => { throw new Error('busy') })
     await expect(controller.prompt(promptRequest([
       { type: 'file', receiptId: receipt.receiptId },
-    ]), USER_SOURCE, SIGNAL)).rejects.toMatchObject({ code: 'session/agent-busy' })
+    ]), USER_SOURCE)).rejects.toMatchObject({ code: 'session/agent-busy' })
     uploads.retirePrompt(agent, 'req-1')
-    expect(uploads.resolve(agent, receipt.receiptId)).toEqual(receipt.file)
+    expect(uploads.resolve(agent, receipt.receiptId)).toEqual({ type: 'file', attachment: receipt.file })
   })
 
   it('retires a prompt-bound receipt when its queued occurrence is removed', async () => {
     const { controller, uploads, agent, followup } = await uploadHarness()
     const receipt = await uploads.upload(agent, { data: 'AAAA' }, new AbortController().signal)
-    await controller.prompt(promptRequest([{ type: 'file', receiptId: receipt.receiptId }]), USER_SOURCE, SIGNAL)
+    await controller.prompt(promptRequest([{ type: 'file', receiptId: receipt.receiptId }]), USER_SOURCE)
     const queued = followup.mock.calls[0]?.[0] as UserMessage
     agent.inbox.append('next-turn', queued)
     expect(await controller.updateQueue({
@@ -475,7 +557,7 @@ describe('Session file uploads', () => {
     await controller.prompt(promptRequest([
       { type: 'file', receiptId: first.receiptId },
       { type: 'file', receiptId: second.receiptId },
-    ]), USER_SOURCE, SIGNAL)
+    ]), USER_SOURCE)
 
     const message = followup.mock.calls[0]?.[0] as UserMessage
     expect(message.content).toEqual([
