@@ -353,7 +353,7 @@ function CatalogRows({
                     )}
                   </span>
                 )}
-                {!isCurrent && !external && (
+                {isCurrent || external ? <span className={css.sidebarSpace} /> : (
                   <Tooltip label={t('open.sidebar')} side="bottom" align="end">
                     <button
                       type="button"

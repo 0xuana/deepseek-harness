@@ -285,12 +285,16 @@
   grid-row: 2;
 }
 
+.sidebarButton,
+.sidebarSpace {
+  flex: none;
+  width: 28px;
+}
+
 .sidebarButton {
   display: inline-flex;
-  flex: none;
   align-items: center;
   justify-content: center;
-  width: 28px;
   height: 28px;
   margin: 4px 0;
   padding: 6px;
