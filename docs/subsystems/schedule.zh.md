@@ -345,7 +345,7 @@ type ScheduleCatalogEntry = ScheduleRecord & {
 }
 ```
 
-Remote 方法 `schedule.list({ sessionId })`、模型 `schedule_list` 和 Session 页头目录仅返回活动任务。模型视图派生的时间 `state` 与存储的生命周期 `status` 仍是不同概念。删除通过 `schedule.delete({ sessionId, id })` 使用条目的原始绑定；绑定不匹配时返回未找到。模型工具传入当前 Agent 的 Session，全局用户界面则传入所选任务的绑定。仅校验绑定并不构成调用者鉴权。`schedule.deleteInactive()` 删除跨会话的全部未运行（已结束）任务，连同每行携带的已保存的发送记录；成功时以它移除的计数答复 `{ deleted }`，中途失败时先提交并通知已移除的行，再以拒绝结束。自动化任务页面的批量清理使用该方法。未运行任务从不会安排定时器，因此该删除不重算任何目标。无 payload 的 `schedule/changed` 事件通知客户端刷新列表；重新连接后，客户端再次获取当前状态。
+Remote 方法 `schedule.list({ sessionId })`、模型 `schedule_list` 和 Session 页头目录仅返回活动任务。模型视图派生的时间 `state` 与存储的生命周期 `status` 仍是不同概念。删除通过 `schedule.delete({ sessionId, id })` 使用条目的原始绑定；绑定不匹配时返回未找到。模型工具传入当前 Agent 的 Session，全局用户界面则传入所选任务的绑定。仅校验绑定并不构成调用者鉴权。`schedule.deleteInactive()` 删除跨会话的全部未运行（已结束）任务，连同每行携带的已保存的发送记录；成功时以它移除的计数答复 `{ deleted }`；该批删除是一次持久写入，失败时不删除任何行，也不发通知，调用以拒绝结束。自动化任务页面的批量清理使用该方法。未运行任务从不会安排定时器，因此该删除不重算任何目标。无 payload 的 `schedule/changed` 事件通知客户端刷新列表；重新连接后，客户端再次获取当前状态。
 
 随发行版交付的 Web 组合把 `ui-schedule` 与宿主能力一起挂载。[客户端包](../../packages/client/ui-schedule/README.zh.md) 负责目录、空状态与删除控件。页面单独筛选全部、活动和未运行任务，保留未运行任务详情及详情页签条内的原 Session 入口，并要求显式确认删除。“规则”和“任务运行记录”页签将任务设置与按需分页加载的已保存回执分开。回执与未运行状态均不确认模型执行。
 
@@ -522,9 +522,8 @@ async create(sessionId: SessionId, request: ScheduleCreateRequest, signal?: Abor
  * Ended tasks never schedule another delivery, so the removal changes no pending
  * target and no timer is recomputed. Rows are enumerated and removed in one FIFO
  * slot, so a delivery ordered behind this call ends its task after the
- * enumeration rather than during it. Each removed row is durable on its own: a
- * failure partway through leaves the earlier removals committed and announced,
- * then rejects rather than reporting a partial count as the whole.
+ * enumeration rather than during it. The batch is one durable write: a failure
+ * removes nothing and rejects, so the caller never receives a partial removal.
  * @returns Count of removed rows; zero when the Host held no ended task.
  */
 @Remote('deleteInactive') async deleteInactive(): Promise<ScheduleDeleteInactiveResult>

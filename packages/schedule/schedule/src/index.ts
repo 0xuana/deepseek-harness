@@ -372,9 +372,8 @@ export class ScheduleService extends TypertRemoteService {
    * Ended tasks never schedule another delivery, so the removal changes no pending
    * target and no timer is recomputed. Rows are enumerated and removed in one FIFO
    * slot, so a delivery ordered behind this call ends its task after the
-   * enumeration rather than during it. Each removed row is durable on its own: a
-   * failure partway through leaves the earlier removals committed and announced,
-   * then rejects rather than reporting a partial count as the whole.
+   * enumeration rather than during it. The batch is one durable write: a failure
+   * removes nothing and rejects, so the caller never receives a partial removal.
    * @returns Count of removed rows; zero when the Host held no ended task.
    */
   @Remote('deleteInactive')
@@ -489,39 +488,27 @@ export class ScheduleService extends TypertRemoteService {
   }
 
   /**
-   * Remove rows one at a time inside the current queue slot.
+   * Remove rows as one durable batch inside the current queue slot.
    *
-   * One row per write: the domain table has no batch delete, and each row is
-   * durable on its own, so a failure partway through leaves the rows already
-   * removed committed. Observers hear about that change before the failure
-   * reaches the caller, which still receives it. Every row is attempted after a
-   * failure, so one unreadable delete does not leave the rest of the set behind;
-   * a rejection reason that carries no Error is wrapped before the first one is
-   * kept.
+   * The batch is one domain write: either every present row is removed and
+   * announced, or the removal rejects with every row still stored. A rejection
+   * reason that carries no Error is wrapped with the operation label.
    * @param ids - rows to remove.
    * @param label - failure message prefix naming the operation that owned them.
    * @param rearm - whether the rows were armed, so the pending timer must be recomputed.
    * @returns the number of rows this call removed.
    */
   private async removeRows(ids: readonly ScheduleRecord['id'][], label: string, rearm: boolean): Promise<number> {
-    const tasks = (await this.getDomain()).table('tasks')
-    let removed = 0
-    let failure: Error | undefined
-    for (const id of ids) {
-      try {
-        // Only a row this call removed is counted. The domain answers false when
-        // the row is absent; that is defensive here because every task write
-        // shares this queue slot.
-        if (await tasks.delete(id)) removed += 1
-      } catch (error: unknown) {
-        failure ??= error instanceof Error ? error : new Error(`${label}: ${String(error)}`)
-      }
+    if (ids.length === 0) return 0
+    let removed: number
+    try {
+      removed = await (await this.getDomain()).table('tasks').deleteMany(ids)
+    } catch (error: unknown) {
+      throw error instanceof Error ? error : new Error(`${label}: ${String(error)}`)
     }
-    if (removed > 0) {
-      this.emitChanged()
-      if (rearm) this.runtime?.requestDrive()
-    }
-    if (failure !== undefined) throw failure
+    // Rows enumerated in this slot are present, so a non-empty batch always removed rows.
+    this.emitChanged()
+    if (rearm) this.runtime?.requestDrive()
     return removed
   }
 

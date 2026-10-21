@@ -110,6 +110,22 @@ export interface KvUnit {
   deleteRecord(table: string, key: string): Promise<void>
 
   /**
+   * Delete several records durably as one batch. Idempotent: missing keys are
+   * no-ops. Resolves once every listed record is absent from the readable
+   * state and durable; a rejection leaves the batch unapplied, so no listed
+   * record was removed. A backend whose medium can apply a whole batch in one
+   * operation (the `single` document, a row store) must do that instead of
+   * repeating {@link deleteRecord} per key.
+   * @param table - Declared table name.
+   * @param keys - Record keys; duplicates are harmless. In the `per-record`
+   * layout every key becomes a path segment and must match `[a-zA-Z0-9_-]+`
+   * (an unsafe key rejects before any deletion); in the `single` layout keys
+   * stay opaque.
+   * @returns resolution after durability.
+   */
+  deleteRecords(table: string, keys: readonly string[]): Promise<void>
+
+  /**
    * Move one record's stored document out of the unit's readable set,
    * preserving its bytes for inspection instead of deleting them. Backends
    * whose medium has no per-record document to move (the `single` layout, a

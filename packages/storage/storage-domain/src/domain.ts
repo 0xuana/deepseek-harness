@@ -80,6 +80,18 @@ export interface KvTable<K extends string, V> {
   delete(key: K): Promise<boolean>
 
   /**
+   * Delete several records durably in one write slot.
+   *
+   * The batch is one job on the domain's write chain: it runs at its slot, not
+   * at call time, so an earlier queued write of the same domain is visible to
+   * it and no other write interleaves. Missing keys are ignored; a backend
+   * failure rejects with the batch unapplied, leaving every record in place.
+   * @param keys - Record keys; duplicates are harmless.
+   * @returns the number of keys that existed and were removed.
+   */
+  deleteMany(keys: readonly K[]): Promise<number>
+
+  /**
    * Atomic read-modify-write on the domain's write chain: `fn` sees the
    * value current at its queue slot, so concurrent updates never interleave.
    * @param key - Record key; a missing key rejects with `missing-key`.
@@ -326,6 +338,26 @@ class KvTableImpl<K extends string, V> implements KvTable<K, V> {
         operation: 'deleted',
       })
       return true
+    })
+  }
+
+  deleteMany(keys: readonly K[]): Promise<number> {
+    return this.host.enqueue(async () => {
+      // Existence and the backend write happen at this job's chain slot, so an
+      // earlier queued put of a key is observed and the batch is one unit call.
+      const present = [...new Set(keys)].filter(key => this.records.has(key))
+      if (present.length === 0) return 0
+      await this.host.unit.deleteRecords(this.tableName, present)
+      for (const key of present) {
+        this.records.delete(key)
+        this.host.emitChanged({
+          domain: this.host.domainName,
+          table: this.tableName,
+          key,
+          operation: 'deleted',
+        })
+      }
+      return present.length
     })
   }
 

@@ -98,21 +98,14 @@ it('reports zero and announces nothing when the Host holds no ended task', async
   expect(await service.catalog()).toHaveLength(1)
 })
 
-it('keeps the removals that landed, announces them, and reports the failure', async () => {
+it('removes nothing and reports the batch failure', async () => {
   const pool = new MemoryMediaPool()
-  let deletes = 0
-  // The first ended row lands durably; the second row's physical delete rejects.
-  // Iteration order is a snapshot detail, so the case records which row failed
-  // instead of assuming which of the two that is.
-  let failedId: string | undefined
+  const batches: string[][] = []
   const backend = gatedScheduleBackend(pool, {
-    deleteRecord: async (table, key) => {
+    deleteRecords: async (table, keys) => {
       if (table !== 'tasks') return
-      deletes += 1
-      if (deletes === 2) {
-        failedId = key
-        throw new Error('injected delete failure')
-      }
+      batches.push([...keys])
+      throw new Error('injected batch failure')
     },
   })
   const test = await harness({
@@ -133,21 +126,21 @@ it('keeps the removals that landed, announces them, and reports the failure', as
   const failure = await service.deleteInactive().then(() => undefined, (error: unknown) => error)
 
   expect(failure).toBeInstanceOf(Error)
-  expect(String(failure)).toContain('injected delete failure')
-  // The row removed before the failure is a durable change observers must hear.
-  expect(changed).toHaveBeenCalledTimes(1)
-  expect(failedId).toBeDefined()
-  // The survivor is the row whose delete failed; the other row stayed removed.
-  expect((await service.catalog()).map(entry => entry.id)).toEqual([failedId])
+  expect(String(failure)).toContain('injected batch failure')
+  // One write carried both rows; the rejection left both stored and announced nothing.
+  expect(batches).toEqual([['ended-a', 'ended-b']])
+  expect(changed).not.toHaveBeenCalled()
+  expect((await service.catalog()).map(entry => entry.title).sort())
+    .toEqual(['Partial first', 'Partial second'])
 })
 
-it('attempts every row and reports a rejection reason that carries no Error', async () => {
+it('reports a rejection reason that carries no Error as a labeled Error', async () => {
   const pool = new MemoryMediaPool()
-  let deletes = 0
+  let batches = 0
   const backend = gatedScheduleBackend(pool, {
-    deleteRecord: async (table) => {
+    deleteRecords: async (table) => {
       if (table !== 'tasks') return
-      deletes += 1
+      batches += 1
       throw undefined
     },
   })
@@ -171,7 +164,7 @@ it('attempts every row and reports a rejection reason that carries no Error', as
   // A reason that carries no Error must not read as a successful removal.
   expect(failure).toBeInstanceOf(Error)
   expect(String(failure)).toContain('schedule ended-task removal failed')
-  expect(deletes).toBe(2)
+  expect(batches).toBe(1)
   expect(changed).not.toHaveBeenCalled()
   expect((await service.catalog()).map(entry => entry.title).sort())
     .toEqual(['Unreportable first', 'Unreportable second'])

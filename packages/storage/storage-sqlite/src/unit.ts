@@ -1,9 +1,10 @@
 /**
  * One opened SQLite KV unit: prepared per-table statements over the
  * `u_<unit>_<table>` record tables plus this unit's row in the shared
- * `unit_globals` table. Each primitive is a single statement, so atomicity
- * comes from SQLite itself — no explicit transactions, and no write queue
- * (write ordering is the caller's responsibility per the KV contract).
+ * `unit_globals` table. Each single-record primitive is one statement, so
+ * SQLite's per-statement atomicity applies; a batch delete runs its deletes in
+ * one explicit transaction. There is no write queue — write ordering is the
+ * caller's responsibility per the KV contract.
  * @module @deepseek-ai/dsh-storage-sqlite/unit
  */
 
@@ -36,7 +37,7 @@ export class SqliteKvUnit implements KvUnit {
    * @param onClose - Backend callback releasing this unit's open-name slot.
    */
   constructor(
-    db: DatabaseSync,
+    private readonly db: DatabaseSync,
     private readonly descriptor: KvUnitDescriptor,
     private readonly onClose: () => void,
   ) {
@@ -105,6 +106,27 @@ export class SqliteKvUnit implements KvUnit {
   deleteRecord(table: string, key: string): Promise<void> {
     return this.settle(() => {
       this.statementsFor(table).remove.run(key)
+    })
+  }
+
+  deleteRecords(table: string, keys: readonly string[]): Promise<void> {
+    return this.settle(() => {
+      const remove = this.statementsFor(table).remove
+      this.db.exec('BEGIN IMMEDIATE')
+      try {
+        for (const key of new Set(keys)) remove.run(key)
+        this.db.exec('COMMIT')
+      } catch (error: unknown) {
+        try {
+          this.db.exec('ROLLBACK')
+        } catch (rollbackError: unknown) {
+          // A failed rollback leaves the connection's state to its own next
+          // statement; both failures are reported, neither is discarded.
+          /* v8 ignore next -- ROLLBACK fails only on an unusable connection; the next statement reports it. */
+          throw new AggregateError([error, rollbackError], `kv unit '${this.descriptor.name}' batch delete failed and could not roll back`)
+        }
+        throw error
+      }
     })
   }
 

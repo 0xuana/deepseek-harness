@@ -50,6 +50,23 @@ describe('sqlite backend specifics', () => {
     await backend.close()
   })
 
+  it('rolls back a batch delete whose transaction fails', async () => {
+    const path = await freshDbPath()
+    const backend = backendAt(path)
+    const unit = await backend.kv.open(DESCRIPTOR)
+    await unit.putRecord('records', 'a', { n: 1 })
+    await unit.putRecord('records', 'b', { n: 2 })
+    const db = new DatabaseSync(path)
+    db.exec('CREATE TRIGGER block_b BEFORE DELETE ON "u_specimen_records"'
+      + " WHEN old.key = 'b' BEGIN SELECT RAISE(ABORT, 'blocked'); END")
+    await expect(unit.deleteRecords('records', ['a', 'b'])).rejects.toThrow(/blocked/)
+    db.exec('DROP TRIGGER block_b')
+    db.close()
+    // The transaction rolled back, so the key deleted before the failing row is back.
+    expect((await unit.loadAll()).tables['records']).toEqual({ a: { n: 1 }, b: { n: 2 } })
+    await backend.close()
+  })
+
   it('materializes STRICT record tables and stamps the schema version', async () => {
     const path = await freshDbPath()
     const backend = backendAt(path)
