@@ -3,7 +3,7 @@ import type { CreationRecommendation } from '@deepseek-ai/dsh-experimental-creat
 import type { ConversationNodeDefinition } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { ChatNode } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
-import { actionBlocksOf } from './action-block.ts'
+import { actionBlocksOf } from '@deepseek-ai/dsh-experimental-creation-recommendations/action-block'
 
 declare module '@deepseek-ai/dsh-client-ui-chat/client' {
   interface ChatNodeDataMap { 'creation-recommendation': CreationRecommendation }
@@ -17,10 +17,14 @@ function proposalFields(value: unknown): Omit<CreationRecommendation, 'callId'> 
   if (!record(value) || typeof value.title !== 'string' || value.title.trim() === '' || typeof value.brief !== 'string' || value.brief.trim() === ''
     || value.slot !== 'sidebar-right' && value.slot !== 'page' && value.slot !== 'sidebar-left'
     || value.initialContent !== undefined && typeof value.initialContent !== 'string') return undefined
-  return { title: value.title.trim(), brief: value.brief.trim(), slot: value.slot, ...value.initialContent === undefined ? {} : { initialContent: value.initialContent } }
+  return {
+    title: value.title.trim(), brief: value.brief.trim(), slot: value.slot,
+    ...value.initialContent === undefined ? {} : { initialContent: value.initialContent },
+  }
 }
 
-/** Read a proposal from a logged event: the last valid `dsh-action` block of an assistant answer, or earlier sessions' tool result metadata.
+/** Read a proposal from a logged event: the last valid `dsh-action` block of an assistant answer,
+ * or earlier sessions' tool result metadata.
  * @param event - Persisted assistant message, native or PTC result.
  * @returns validated creation proposal, if present.
  */

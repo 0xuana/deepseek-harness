@@ -234,6 +234,12 @@ describe('client bundle purity gate', () => {
     expect(() => resolveId('@deepseek-ai/dsh-spill-policy/notice/internal')).toThrow(/purity/)
   })
 
+  it('admits only the pure proposal block parser of the creation experiment, not its Host plugin', () => {
+    expect(resolveId('@deepseek-ai/dsh-experimental-creation-recommendations/action-block')).toBeNull()
+    expect(() => resolveId('@deepseek-ai/dsh-experimental-creation-recommendations')).toThrow(/purity/)
+    expect(() => resolveId('@deepseek-ai/dsh-experimental-creation-recommendations/action-block/internal')).toThrow(/purity/)
+  })
+
   it('inlines the browser-safe Timer entry while sharing Cordis through the module table', () => {
     const timer = '@deepseek-ai/cordis-plugin-timer'
     expect(resolveId(timer)).toBeNull()
