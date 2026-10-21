@@ -8,11 +8,11 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { Config } from '../src/index.ts'
 import { mountRuntime } from './setup.ts'
 
-async function setup(config: Config = {}) {
+async function setupRuntime(config: Config = {}) {
   const cwd = await mkdtemp(join(tmpdir(), 'dsh-persistent-ptc-'))
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose(); await rm(cwd, { recursive: true, force: true }) })
-  const { runtime, fiber } = await mountRuntime(ctx, { ...config, executionMode: 'persistent-in-memory' })
+  const { runtime, fiber } = await mountRuntime(ctx, { executionMode: 'persistent-in-memory', ...config })
   const owner = {}
   const run = (program: string, options: Partial<PtcRunRequest> = {}) =>
     runtime.run(runtime.resolve({ program, bindings: [], cwd, stateOwner: owner, ...options }))
@@ -23,7 +23,11 @@ function bindings(value: PtcBindingFunction) {
   return [{ global: 'tools', functions: { value }, errorClass: { name: 'ToolCallError', memberNameProperty: 'toolName' } }]
 }
 
-describe('persistent Node REPL', () => {
+describe.each([
+  { executionMode: 'persistent-in-memory', scriptPersistence: false, format: 'repl' },
+  { executionMode: 'vm-script', scriptPersistence: true, format: 'script' },
+] as const)('retained Node $format', ({ format, ...mode }) => {
+  const setup = (config: Config = {}) => setupRuntime({ ...mode, ...config })
   it('keeps a snapshot of caller-owned root arrays and rejects changed grants', async () => {
     const { run, runtime, owner, cwd } = await setup()
     const roots = [cwd]
@@ -51,22 +55,10 @@ describe('persistent Node REPL', () => {
 
   it('retains declarations, closures, object identity, and imports across evaluations', async () => {
     const { run, cwd } = await setup()
-    expect(await run('const box: { count: number } = { count: 1 }; let alias = box; function increment() { return ++box.count }; const path = await import("node:path");')).toMatchObject({ logs: [] })
+    expect((await run('const box: { count: number } = { count: 1 }; let alias = box; function increment() { return ++box.count }; const path = await import("node:path");')).error).toBeUndefined()
     expect(await run('console.log("second call"); ({ count: increment(), same: box === alias, dir: path.basename(process.cwd()), env: Object.keys(process.env) })')).toMatchObject({ logs: ['second call'], value: { count: 2, same: true, dir: cwd.split(/[\\/]/).at(-1), env: [] } })
   })
 
-  it('retains implicit REPL globals and does not attribute a completed callback exception to a later evaluation', async () => {
-    const { run } = await setup()
-    expect((await run('implicitValue = 7')).value).toBe(7)
-    await run(`
-      let fireLate; let acknowledge;
-      const fired = new Promise(resolve => { fireLate = resolve });
-      const acknowledged = new Promise(resolve => { acknowledge = resolve });
-      void fired.then(() => setImmediate(() => { acknowledge(); throw new Error('completed callback failure') }));
-    `)
-    expect(await run('fireLate(); await acknowledged; implicitValue')).toMatchObject({ logs: [], value: 7 })
-    expect(await run('implicitValue')).toMatchObject({ logs: [], value: 7 })
-  })
 
   it('uses current host bindings through retained functions and saved method references', async () => {
     const { run } = await setup()
@@ -115,14 +107,6 @@ describe('persistent Node REPL', () => {
     expect(plain.value).toEqual({ name: 'Error', member: false })
   })
 
-  it('settles an asynchronous exception once while a later evaluation awaits a tool', async () => {
-    const { run } = await setup()
-    const failed = await run('let retained = 17; let resume; const paused = new Promise(resolve => { resume = resolve }); setImmediate(() => { throw new Error("async failure") }); await paused; retained')
-    expect(failed.error?.message).toContain('async failure')
-    const next = await run('resume(); await tools.value({})', { bindings: bindings(async () => { await setImmediate(); return 42 }) })
-    expect(next).toMatchObject({ logs: [], value: 42 })
-    expect((await run('retained')).value).toBe(17)
-  })
 
   it('rejects a completed evaluation callback without consuming the next real binding identity', async () => {
     const { run } = await setup()
@@ -240,7 +224,7 @@ describe('persistent Node REPL', () => {
   it('resolves confinement and validates options before starting a process', async () => {
     const { run, runtime } = await setup()
     expect(runtime.sandboxMode).toBe('danger-full-access')
-    expect(runtime.programFormat).toBe('repl')
+    expect(runtime.programFormat).toBe(format)
     expect(runtime.timeout).toEqual({ defaultMs: 120_000, maxMs: 600_000 })
     expect(runtime.resolve({ program: '1', bindings: [], sandboxPolicy: { mode: 'read-only', workspaceRoot: process.cwd() } }).sandboxPolicy?.mode).toBe('read-only')
     expect(() => runtime.resolve({ program: '1', bindings: [], cwd: 'relative' })).toThrow('absolute')
@@ -277,7 +261,7 @@ describe('persistent Node REPL', () => {
       Object.defineProperty(process, 'pkg', { configurable: true, value: {} })
       await expect(setup()).rejects.toThrow('requires a node-script launch')
       const { runtime } = await setup({ launch: { kind: 'node-script', executable: process.execPath, bootstrapPath: join(process.cwd(), 'persistent-process.js') } })
-      expect(runtime.programFormat).toBe('repl')
+      expect(runtime.programFormat).toBe(format)
     } finally {
       if (previous === undefined) Reflect.deleteProperty(process, 'pkg')
       else Object.defineProperty(process, 'pkg', previous)
@@ -292,7 +276,7 @@ describe('persistent Node REPL', () => {
 })
 
 it.each(['_', '_error'])('keeps %s assignments and subsequent tools in the active evaluation', async (name) => {
-  const { run } = await setup()
+  const { run } = await setupRuntime()
   const called = vi.fn(async () => 7)
   expect(await run(`${name} = 42; await tools.value({}); ${name}`, { bindings: bindings(called) })).toMatchObject({ logs: [], value: 42 })
   expect(called).toHaveBeenCalledOnce()
@@ -300,7 +284,7 @@ it.each(['_', '_error'])('keeps %s assignments and subsequent tools in the activ
 })
 
 it('rejects a new run until cancellation cleanup has completed for its owner', async () => {
-  const { run, ctx } = await setup()
+  const { run, ctx } = await setupRuntime()
   const entered = Promise.withResolvers<true>()
   const cleanup = Promise.withResolvers<true>()
   const released = Promise.withResolvers<boolean>()
@@ -323,4 +307,26 @@ it('rejects a new run until cancellation cleanup has completed for its owner', a
     expect((await pending).error?.kind).toBe('abort')
     expect((await run('42')).value).toBe(42)
   } finally { released.resolve(true); await pending; intercepted.mockRestore() }
+})
+
+it('retains implicit REPL globals and does not attribute a completed callback exception to a later evaluation', async () => {
+  const { run } = await setupRuntime()
+  expect((await run('implicitValue = 7')).value).toBe(7)
+  await run(`
+    let fireLate; let acknowledge;
+    const fired = new Promise(resolve => { fireLate = resolve });
+    const acknowledged = new Promise(resolve => { acknowledge = resolve });
+    void fired.then(() => setImmediate(() => { acknowledge(); throw new Error('completed callback failure') }));
+  `)
+  expect(await run('fireLate(); await acknowledged; implicitValue')).toMatchObject({ logs: [], value: 7 })
+  expect(await run('implicitValue')).toMatchObject({ logs: [], value: 7 })
+})
+
+it('settles an asynchronous exception once while a later evaluation awaits a tool', async () => {
+  const { run } = await setupRuntime()
+  const failed = await run('let retained = 17; let resume; const paused = new Promise(resolve => { resume = resolve }); setImmediate(() => { throw new Error("async failure") }); await paused; retained')
+  expect(failed.error?.message).toContain('async failure')
+  const next = await run('resume(); await tools.value({})', { bindings: bindings(async () => { await setImmediate(); return 42 }) })
+  expect(next).toMatchObject({ logs: [], value: 42 })
+  expect((await run('retained')).value).toBe(17)
 })

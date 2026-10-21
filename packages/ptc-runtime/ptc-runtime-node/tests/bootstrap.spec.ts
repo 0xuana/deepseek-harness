@@ -442,3 +442,9 @@ describe('runProgram', () => {
     expect(port.logs().at(-1)).toBe('never seen — already restored? no: patch persists in worker')
   })
 })
+
+it('reports an asynchronous REPL failure through the standalone bootstrap', async () => {
+  const port = new FakePort()
+  await runProgram(port, { ...BOOT, programFormat: 'repl', code: 'setImmediate(() => { throw new Error("async bootstrap failure") }); await new Promise(() => {})', namespaces: [] }, fakeStreams())
+  expect(port.done()).toHaveProperty('error.message', expect.stringContaining('async bootstrap failure'))
+})

@@ -1,4 +1,5 @@
 import { Duplex, PassThrough } from 'node:stream'
+import { setImmediate } from 'node:timers/promises'
 import { expect, it, onTestFinished } from 'vitest'
 import { JsonChannel } from '../src/channel.ts'
 import { runPersistentMain, type PersistentProcess } from '../src/persistent-process.ts'
@@ -149,4 +150,12 @@ it('shuts down an idle REPL without creating an evaluation', async () => {
   const h = await setup()
   await h.close()
   expect(h.seen).toEqual([])
+})
+
+it('ignores a REPL asynchronous diagnostic after its evaluation has completed', async () => {
+  const h = await setup()
+  await h.run('setImmediate(() => { throw new Error("completed callback") }); 1')
+  await setImmediate()
+  expect(decodePtcJsonWire((await h.run('2')).value)).toBe(2)
+  expect(h.seen.filter(message => message.type === 'done')).toHaveLength(2)
 })

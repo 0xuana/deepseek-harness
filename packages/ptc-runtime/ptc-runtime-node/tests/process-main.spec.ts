@@ -68,6 +68,7 @@ it('keeps the control pipe open for a late binding reply until the host closes i
     await nextTurn()
     expect(child.destroyed).toBe(false)
     await peer.send({ type: 'reply', id: callId, ok: true, value: encodePtcJsonWire(42) })
+    await peer.send({ type: 'boot', data: { code: 'throw new Error("must not rerun")', namespaces: [], maxOutputBytes: 1024 } })
     await nextTurn()
     expect(messages).toEqual(['ready', 'call', 'done'])
   } finally {
@@ -89,12 +90,12 @@ it('rejects an unexpected first control frame', async () => {
   await expect(runNodeMain(child, 4096, processState())).rejects.toThrow('expected program boot')
 })
 
-it('records an I/O failure before the boot frame', async () => {
+it('accepts host shutdown before the first evaluation', async () => {
   const { child, host } = endpoints()
   const state = processState()
   const peer = new JsonChannel(host, 4096, () => { peer.close() }, () => {})
-  await expect(runNodeMain(child, 4096, state)).rejects.toBeInstanceOf(Error)
-  expect(state.exitCode).toBe(1)
+  await runNodeMain(child, 4096, state)
+  expect(state.exitCode).toBeUndefined()
 })
 
 it('contains program writes that exceed queued control output', async () => {
@@ -140,4 +141,24 @@ it('retains a malformed host frame failure after the terminal frame', async () =
     await main
     expect(state.exitCode).toBe(1)
   } finally { peer.close(); await main }
+})
+
+it('rejects malformed transport bytes before the first evaluation', async () => {
+  const { child, host } = endpoints()
+  const peer = new JsonChannel(host, 4096, () => { host.write(Buffer.from([0, 0, 0, 1, 0xff])) }, () => {})
+  onTestFinished(() => { peer.close() })
+  await expect(runNodeMain(child, 4096, processState())).rejects.toThrow()
+})
+
+it('reports a missing directory operation on a run frame', async () => {
+  const { child, host } = endpoints()
+  const terminal = Promise.withResolvers<unknown>()
+  const peer = new JsonChannel(host, 4096, (raw) => {
+    const frame = raw as { type?: string; payload?: unknown }
+    if (frame.type === 'ready') void peer.send({ type: 'run', id: 1, cwd: '/', data: { code: '1', namespaces: [], maxOutputBytes: 2048 } })
+    if (frame.payload) { terminal.resolve(frame.payload); host.end() }
+  }, () => {})
+  onTestFinished(() => { peer.close() })
+  await runNodeMain(child, 4096, processState())
+  expect(await terminal.promise).toHaveProperty('error.message', expect.stringContaining('cannot change its working directory'))
 })

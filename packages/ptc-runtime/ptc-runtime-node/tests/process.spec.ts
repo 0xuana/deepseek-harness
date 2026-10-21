@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process'
-import { copyFile, mkdtemp, rm } from 'node:fs/promises'
+import { copyFile, cp, mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { dirname, join } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { Duplex } from 'node:stream'
 import { expect, it, onTestFinished } from 'vitest'
 import { JsonChannel } from '../src/channel.ts'
@@ -13,6 +13,11 @@ it('boots an unbuilt source closure outside the workspace and exchanges tool rep
   onTestFinished(async () => { await rm(directory, { recursive: true, force: true }) })
   for (const file of ['process.ts', 'bootstrap.ts', 'channel.ts', 'json-wire.ts', 'output-json.ts', 'protocol.ts', 'environment.ts']) {
     await copyFile(new URL(`../src/${file}`, import.meta.url), join(directory, file))
+  }
+  await cp(new URL('../src/evaluators/', import.meta.url), join(directory, 'evaluators'), { recursive: true })
+  await mkdir(join(directory, 'node_modules'))
+  for (const name of ['acorn', 'acorn-walk']) {
+    await cp(dirname(fileURLToPath(import.meta.resolve(`${name}/package.json`))), join(directory, 'node_modules', name), { recursive: true })
   }
   const source = `import {Socket} from 'node:net';import {runNodeMain} from ${JSON.stringify(pathToFileURL(join(directory, 'process.ts')).href)};await runNodeMain(new Socket({fd:7,readable:true,writable:true}),100000,process);`
   const child = spawn(process.execPath, ['--input-type=module', '--eval', source], {

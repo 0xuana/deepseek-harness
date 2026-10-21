@@ -176,6 +176,7 @@ function resolveMode(config: ResolvedConfig): ExecutionMode {
         stripTypes: stripTypeScriptTypes,
       }
     }
+    /* v8 ignore next -- Loader validates the closed execution-mode union before selection. */
     default: return assertNever(config.executionMode)
   }
 }

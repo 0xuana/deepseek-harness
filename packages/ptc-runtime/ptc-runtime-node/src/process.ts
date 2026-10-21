@@ -141,14 +141,14 @@ export async function runNodeMain(
       }
     })
   }, (error, kind) => {
-    if (current === undefined) closed.reject(error)
-    if (current?.active || kind === 'protocol' || current === undefined) fail()
+    if (current === undefined && kind === 'protocol') closed.reject(error)
+    if (current?.active || kind === 'protocol') fail()
     else closed.resolve()
   })
   stream.once('close', onClose)
   try {
-    await channel.send({ type: 'ready' })
-    await closed.promise
+    // Host closure can arrive before the readiness write receipt.
+    await Promise.race([closed.promise, channel.send({ type: 'ready' }).then(() => closed.promise)])
     await channel.drain()
   } finally {
     stream.off('close', onClose)

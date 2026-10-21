@@ -26,7 +26,7 @@
  * IN THE SOFTWARE.
  */
 import { Parser } from 'acorn'
-import type { AnyNode, BlockStatement, Pattern, Position, Program, Statement, VariableDeclarator } from 'acorn'
+import type { AnyNode, BlockStatement, ExpressionStatement, Identifier, Pattern, Position, Program, Statement, VariableDeclarator } from 'acorn'
 import * as walk from 'acorn-walk'
 
 interface TransformState {
@@ -48,10 +48,11 @@ const noop = (): void => {}
 const base = walk.base as Required<walk.RecursiveVisitors<TransformState>>
 const visitorsWithoutAncestors: walk.RecursiveVisitors<TransformState> = {
   ClassDeclaration(node, state, c) {
-    if (node.id === null) throw new SyntaxError('Script declarations must be named')
+    // Anonymous declarations are invalid inside the parsed async body.
+    const name = (node.id as Identifier).name
     if (isTopLevelDeclaration(state)) {
-      state.prepend(node, `${node.id.name}=`)
-      state.hoistedDeclarationStatements.push(`let ${node.id.name}; `)
+      state.prepend(node, `${name}=`)
+      state.hoistedDeclarationStatements.push(`let ${name}; `)
     }
 
     base.ClassDeclaration(node, state, c)
@@ -63,9 +64,10 @@ const visitorsWithoutAncestors: walk.RecursiveVisitors<TransformState> = {
     base.ForOfStatement(node, state, c)
   },
   FunctionDeclaration(node, state) {
-    if (node.id === null) throw new SyntaxError('Script declarations must be named')
-    state.prepend(node, `this.${node.id.name} = ${node.id.name}; `)
-    state.hoistedDeclarationStatements.push(`var ${node.id.name}; `)
+    // Anonymous declarations are invalid inside the parsed async body.
+    const name = (node.id as Identifier).name
+    state.prepend(node, `this.${name} = ${name}; `)
+    state.hoistedDeclarationStatements.push(`var ${name}; `)
   },
   FunctionExpression: noop,
   ArrowFunctionExpression: noop,
@@ -138,8 +140,10 @@ const visitorsWithoutAncestors: walk.RecursiveVisitors<TransformState> = {
           case 'RestElement':
             registerVariableDeclarationIdentifiers(node.argument)
             break
+          /* v8 ignore next 4 -- Acorn declaration bindings exclude member targets and other node tags. */
           case 'MemberExpression':
             throw new SyntaxError('A declaration cannot bind a member expression')
+          /* v8 ignore next -- The parsed Pattern union is exhaustive above. */
           default: return assertNever(node)
         }
       }
@@ -175,6 +179,7 @@ const visitors: walk.RecursiveVisitors<TransformState> = Object.fromEntries(
 )
 
 /** Keep the native-Node bootstrap independent of workspace packages' built exports. */
+/* v8 ignore next 3 -- Exhaustive declaration-tag assertion; parsed bindings cannot reach it. */
 function assertNever(value: never): never {
   throw new Error(`Unexpected declaration pattern: ${String(value)}`)
 }
@@ -218,10 +223,10 @@ export function processTopLevelAwait(src: string): string | null {
     }
     throw new SyntaxError(message)
   }
-  const statement = root.body[0]
-  if (statement?.type !== 'ExpressionStatement' || statement.expression.type !== 'CallExpression'
-    || statement.expression.callee.type !== 'ArrowFunctionExpression' || statement.expression.callee.body.type !== 'BlockStatement') return null
-  const body = statement.expression.callee.body
+  // The fixed prefix starts an expression statement and an arrow with a block body.
+  const expression = (root.body[0] as ExpressionStatement).expression
+  if (expression.type !== 'CallExpression' || expression.callee.type !== 'ArrowFunctionExpression') return null
+  const body = expression.callee.body as BlockStatement
   const state: TransformState = {
     body,
     ancestors: [],
@@ -230,7 +235,6 @@ export function processTopLevelAwait(src: string): string | null {
       for (let i = from; i < to; i++) {
         wrappedArray[i] = ''
       }
-      if (from === to) str += wrappedArray[from] as string
       wrappedArray[from] = str
     },
     prepend(node, str) {

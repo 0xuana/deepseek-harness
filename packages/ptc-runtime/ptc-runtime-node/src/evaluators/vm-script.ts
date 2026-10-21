@@ -33,8 +33,7 @@ function createScriptContext(): Context {
   const realm = new Script('globalThis').runInContext(context) as Record<string, unknown>
   for (const key of Reflect.ownKeys(globalThis)) {
     if (key === 'global' || Object.hasOwn(realm, key)) continue
-    const descriptor = Object.getOwnPropertyDescriptor(globalThis, key)
-    if (descriptor) Object.defineProperty(globals, key, descriptor)
+    Object.defineProperty(globals, key, Object.getOwnPropertyDescriptor(globalThis, key) as PropertyDescriptor)
   }
   globals.global = realm
   return context

@@ -8,7 +8,10 @@ const pkgDir = fileURLToPath(new URL('..', import.meta.url))
 const built = ['lib/index.js', 'lib/persistent-process.js'].every(file => existsSync(join(pkgDir, file)))
 
 describe.skipIf(!built)('persistent PTC published exports', () => {
-  it('retains variables through the built provider and sibling process entry', async () => {
+  it.each([
+    { executionMode: 'persistent-in-memory' },
+    { executionMode: 'vm-script', scriptPersistence: true },
+  ])('retains variables through published exports with $executionMode', async (config) => {
     const script = `
       const { Context } = await import('@deepseek-ai/cordis')
       const { default: NodeRuntime } = await import('@deepseek-ai/dsh-ptc-runtime-node')
@@ -17,7 +20,7 @@ describe.skipIf(!built)('persistent PTC published exports', () => {
         for (const name of ['session-projection', 'fs-local', 'subprocess-local', 'sandbox-local', 'sandbox-policy']) {
           await ctx.plugin((await import('@deepseek-ai/dsh-' + name)).default)
         }
-        await ctx.plugin(NodeRuntime, { executionMode: 'persistent-in-memory' })
+        await ctx.plugin(NodeRuntime, ${JSON.stringify(config)})
         const stateOwner = {}
         const run = program => ctx.ptcRuntime.run(ctx.ptcRuntime.resolve({program, bindings: [], stateOwner}))
         const first = await run('let count: number = 40; const path = await import("node:path");')
@@ -33,8 +36,8 @@ describe.skipIf(!built)('persistent PTC published exports', () => {
     expect(result.timedOut).toBe(false)
     expect(result.signal).toBeUndefined()
     expect(result.exitCode, result.stderr).toBe(0)
-    expect(JSON.parse(result.stdout.trim().split('\n').at(-1) ?? '')).toMatchObject({
-      first: { logs: [] }, second: { logs: ['b'], value: 42 }, fresh: { logs: [], value: 'undefined' },
-    })
+    const observed = JSON.parse(result.stdout.trim().split('\n').at(-1) ?? '') as { first: { error?: unknown } }
+    expect(observed.first.error).toBeUndefined()
+    expect(observed).toMatchObject({ second: { logs: ['b'], value: 42 }, fresh: { logs: [], value: 'undefined' } })
   })
 })
