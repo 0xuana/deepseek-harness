@@ -339,8 +339,11 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         return !runtime?.retainsState ? guidance : `${guidance}
 
 Persistent PTC initialization:
+
+\`\`\`ts
 var { connectCua } = await import(${JSON.stringify(new URL('../lib/bridge.js', import.meta.url).href)});
-var cua = connectCua(() => tools.cua, text => console.log(text));`
+var cua = connectCua(() => tools.cua, text => console.log(text));
+\`\`\``
       },
     }
     const register = (scope: Context): void => {

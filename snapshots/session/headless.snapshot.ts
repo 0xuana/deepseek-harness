@@ -1,7 +1,7 @@
 /** Recorded-session replay through the shipped headless `dsh` profile. */
 
 import { startHttpMcpFixture } from '../../packages/mcp/mcp-client/tests/http-fixture.ts'
-import { cp, copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, utimes, writeFile } from 'node:fs/promises'
+import { cp, copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, utimes, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
@@ -496,6 +496,15 @@ const WORKTREE_CHECKOUT_FILTER = "printf 'FILTERED CHECKOUT CONTENT\\n'"
 const WORKTREE_CHECKOUT_ATTRIBUTES = 'tracked.txt filter=dsh-snapshot-checkout\n'
 
 const workspaceSetups: Record<string, (cwd: string) => Promise<void>> = {
+  async 'cua-script-guidance'(cwd) {
+    // Keep the real prompt's bridge URL under the fixture workspace on every host.
+    const source = join(repoRoot, 'packages/experimental/cua')
+    const target = join(cwd, 'cua-runtime')
+    await cp(join(source, 'src'), join(target, 'src'), { recursive: true })
+    await copyFile(join(source, 'package.json'), join(target, 'package.json'))
+    await symlink(join(source, 'node_modules'), join(target, 'node_modules'), 'dir')
+    await copyFile(join(repoRoot, 'packages/experimental/cua-macos/src/guidance.ts'), join(target, 'guidance.ts'))
+  },
   async 'windows-acl-skill'(cwd) {
     const target = join(cwd, '.dsh', 'skills', 'diagnose-windows-sandbox-acl', 'SKILL.md')
     await mkdir(dirname(target), { recursive: true })

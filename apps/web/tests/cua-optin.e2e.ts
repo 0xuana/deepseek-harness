@@ -1,5 +1,5 @@
 /** Optional CUA uses existing plugin activation and offers a separate persistent PTC action. */
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -12,7 +12,11 @@ import { expect, it, vi } from 'vitest'
 import { captureStableAria, compareOrRefreshGolden, launchWebScaffold, webSnapshotMode, type WebScaffold } from './scaffold.ts'
 import { connectFreshWorkspaceZh, ZH_BROWSER_LOCALE } from './support.ts'
 
-it.each([undefined, 'minimal'] as const)('adds CUA to PTC sessions while preserving default %s until the explicit persistent-runtime action', async (selectedDefault) => {
+it.each([
+  { selectedDefault: undefined, script: false },
+  { selectedDefault: 'minimal', script: false },
+  { selectedDefault: undefined, script: true },
+] as const)('adds CUA while preserving default $selectedDefault and Script selection $script', async ({ selectedDefault, script }) => {
   const directory = await mkdtemp(join(tmpdir(), 'cua-optin-web-'))
   let ownedScaffold: WebScaffold | undefined
   let browser: Browser | undefined
@@ -20,9 +24,16 @@ it.each([undefined, 'minimal'] as const)('adds CUA to PTC sessions while preserv
     const patch = join(directory, 'native-fixture.yml')
     // The executable cannot answer native permission queries, so setup must offer retry in the detail page.
     await writeFile(patch, JSON.stringify([{ id: 'cua', disabled: false, config: { helperPath: process.execPath } }]))
+    const defaults = join(directory, 'script-defaults')
+    if (script) {
+      await mkdir(defaults)
+      await writeFile(join(defaults, 'package.json'), JSON.stringify({ name: 'cua-script-defaults', version: '1.0.0', dsh: { bundle: { patch: 'cordis.patch.yml' } } }))
+      await writeFile(join(defaults, 'cordis.patch.yml'), '- id: ptc-runtime\n  config:\n    executionMode: vm-script\n    scriptPersistence: false\n')
+    }
     // Install the test provider explicitly so the helper override also exercises session wiring on Linux.
     const scaffold = ownedScaffold = await launchWebScaffold({
-      profile: { packages: [{ dir: fileURLToPath(new URL('../../../packages/experimental/cua-macos', import.meta.url)), enabled: false }] },
+      profile: { packages: [{ dir: fileURLToPath(new URL('../../../packages/experimental/cua-macos', import.meta.url)), enabled: false },
+        ...script ? [{ dir: defaults, enabled: true }] : []] },
       harnessHome: join(directory, 'home'), extraOverlayPath: [
         fileURLToPath(new URL('./pin-browse-picker.overlay.yml', import.meta.url)), patch,
       ] })
@@ -40,7 +51,7 @@ it.each([undefined, 'minimal'] as const)('adds CUA to PTC sessions while preserv
     const originalRuntime = scaffold.ctx.ptcRuntime
     const originalRuntimeFiber = runtimeFiber()
     expect(originalRuntimeFiber).toBeDefined()
-    expect(scaffold.ctx.ptcRuntime.programFormat).toBe('function-body')
+    expect(scaffold.ctx.ptcRuntime.programFormat).toBe(script ? 'script' : 'function-body')
     const settingsPath = join(scaffold.harnessHome, 'profiles/scaffold/cordis.patch.yml')
     const before = await readFile(settingsPath, 'utf8')
     const selected = () => readProfileManifest('scaffold', join(scaffold.harnessHome, 'profiles/scaffold')).dsh?.profile?.bundles
@@ -83,7 +94,7 @@ it.each([undefined, 'minimal'] as const)('adds CUA to PTC sessions while preserv
     expect(selected()).toContain('@deepseek-ai/dsh-cua-bundle')
     expect(await readFile(settingsPath, 'utf8')).toBe(before)
     expect(runtimeFiber() === originalRuntimeFiber).toBe(true)
-    expect(scaffold.ctx.ptcRuntime.programFormat).toBe('function-body')
+    expect(scaffold.ctx.ptcRuntime.programFormat).toBe(script ? 'script' : 'function-body')
     expect(scaffold.ctx.agentPresets.defaultId).toBe(initialDefault)
     expect(scaffold.ctx.agents.get(originalAgent.id) === originalAgent).toBe(true)
     expect(scaffold.ctx.tools.schemas(originalAgent).some(tool => tool.name === 'cua')).toBe(false)
@@ -98,7 +109,7 @@ it.each([undefined, 'minimal'] as const)('adds CUA to PTC sessions while preserv
     expect(scaffold.ctx.get('computerUse')).toBeUndefined()
     for (const agent of [ptcAgent, fresh.agent]) expect(scaffold.ctx.tools.schemas(agent).some(tool => tool.name === 'cua')).toBe(false)
     expect(runtimeFiber() === originalRuntimeFiber).toBe(true)
-    expect(scaffold.ctx.ptcRuntime.programFormat).toBe('function-body')
+    expect(scaffold.ctx.ptcRuntime.programFormat).toBe(script ? 'script' : 'function-body')
     expect(await readFile(settingsPath, 'utf8')).toBe(before)
     await card.getByRole('button', { name: '查看 Computer Use', exact: true }).click()
     const detailToggle = page.locator('[data-plugin-panel]').getByRole('switch', { name: '启用 Computer Use', exact: true })
@@ -112,7 +123,7 @@ it.each([undefined, 'minimal'] as const)('adds CUA to PTC sessions while preserv
     await expect.poll(() => scaffold.ctx.agentPresets.defaultId).toBe('ptc')
     expect(scaffold.ctx.agentPresets.composedPreset(originalAgent.ctx)).toBe(initialDefault)
     expect(runtimeFiber() === originalRuntimeFiber).toBe(true)
-    expect(scaffold.ctx.ptcRuntime.programFormat).toBe('function-body')
+    expect(scaffold.ctx.ptcRuntime.programFormat).toBe(script ? 'script' : 'function-body')
     const confirmed = await scaffold.ctx.agents.create({ sessionId: SessionId('cua-confirmed-default'),
       setup: async (ctx) => { await scaffold.ctx.agentPresets.mount(ctx) },
     })
@@ -123,14 +134,16 @@ it.each([undefined, 'minimal'] as const)('adds CUA to PTC sessions while preserv
     const persistent = panel.getByRole('group', { name: 'PTC 执行方式', exact: true })
     await persistent.getByRole('button', { name: '设为持久化', exact: true }).click()
     await persistent.getByRole('button', { name: '已设为持久化', exact: true }).waitFor()
-    expect(scaffold.ctx.ptcRuntime.programFormat).toBe('repl')
+    expect(scaffold.ctx.ptcRuntime.programFormat).toBe(script ? 'script' : 'repl')
+    expect(scaffold.ctx.ptcRuntime.retainsState).toBe(true)
     expect(scaffold.ctx.ptcRuntime === originalRuntime).toBe(false)
     const persistentRuntimeFiber = runtimeFiber()
     const runtime = scaffold.ctx.ptcRuntime, owner = {}
     const program = 'globalThis.counter = (globalThis.counter ?? 0) + 1'
     expect((await runtime.run(runtime.resolve({ program, bindings: [], stateOwner: owner }))).value).toBe(1)
     const configured = await readFile(settingsPath, 'utf8')
-    expect(configured).toContain('executionMode: persistent-in-memory')
+    expect(configured).toContain(`executionMode: ${script ? 'vm-script' : 'persistent-in-memory'}`)
+    expect(configured).toContain(`scriptPersistence: ${script}`)
     expect(scaffold.ctx.agentPresets.defaultId).toBe('ptc')
     expect(scaffold.ctx.agentPresets.composedPreset(originalAgent.ctx)).toBe(initialDefault)
     await detailToggle.click()
