@@ -108,6 +108,29 @@ const GROUP_ORDER = [
 
 const SERVICE_ROLES: ServiceRole[] = [
   {
+    key: 'headlessStartup',
+    pkg: 'headless',
+    title: 'Headless invocation options',
+    mode: 'core',
+    consumers: ['headless'],
+    note: 'Supplies parsed task and run options to the headless runner and its sandbox-policy configuration.',
+  },
+  {
+    key: 'cotTranslation',
+    pkg: 'experimental-client-ui-cot-translation',
+    title: 'Reasoning translation Remote',
+    mode: 'service',
+    note: 'Serves reasoning translations, reuses saved results, and joins ordinary Session activation for uncached inactive Sessions.',
+  },
+  {
+    key: 'translator',
+    pkg: 'experimental-translator',
+    title: 'Anonymous text translation',
+    mode: 'service',
+    consumers: ['experimental-client-ui-cot-translation'],
+    note: 'Resolves Google or Bing requests and retains shared experimental records through the active Session writer.',
+  },
+  {
     key: 'hmr',
     pkg: 'hmr',
     title: 'Serialized module and configuration reloads',
@@ -132,6 +155,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Shares profile package operations with the CLI and reports persisted and running state to Web and agent callers.',
   },
   {
+    key: 'pluginMarket',
+    pkg: 'plugin-market',
+    title: 'Plugin market index reader',
+    mode: 'core',
+    consumers: ['client-ui-plugin-market', 'plugin-market'],
+    note: 'Fetches and validates the index sources the user configures; installation goes through the plugin manager.',
+  },
+  {
     key: 'profileContext',
     pkg: 'app-boot',
     title: 'Launcher-owned profile data',
@@ -146,6 +177,24 @@ const SERVICE_ROLES: ServiceRole[] = [
     mode: 'core',
     consumers: ['api-gateway', 'host-frontend-static'],
     note: 'Owns browser authentication and shared HTTP request dispatch; API adapters register endpoints and streams.',
+  },
+  {
+    key: 'worktrees',
+    pkg: 'experimental-worktree',
+    title: 'Git worktree creation',
+    mode: 'seam',
+    implementations: ['experimental-worktree'],
+    consumers: ['experimental-tool-worktree'],
+    note: 'Explicit experimental creation from a pinned local commit. Existing write permissions govern checkout and shared Git metadata; the working-directory service owns the resulting Session directory.',
+  },
+  {
+    key: 'workingDirectory',
+    pkg: 'working-directory',
+    title: 'Session working directory',
+    mode: 'seam',
+    implementations: ['working-directory'],
+    consumers: ['tool-working-directory', 'tool-fs', 'tool-bash', 'tool-pwsh', 'subagent', 'sdk-jsonrpc-server'],
+    note: 'One Session projection owns the effective execution directory. The filesystem validates changes; user context reports them while original metadata and write grants stay fixed.',
   },
   {
     key: 'mcpResources',
@@ -173,6 +222,11 @@ const SERVICE_ROLES: ServiceRole[] = [
     implementations: ['experimental-computer-use-cua-driver-mcp', 'experimental-computer-use-cua-driver-native'],
     consumers: ['experimental-computer-use-cua-driver-mcp', 'experimental-computer-use-cua-driver-native'],
     note: 'One provider-owned name per service instance. Each provider also owns its model tools; the service has no common action API, runtime selection, or Session workflow lock.',
+  },
+  {
+    key: 'cuaAccess', pkg: 'cua', title: 'Computer Use permission controls',
+    mode: 'core', consumers: ['cua'],
+    note: 'The native provider owns application consent and cancellation; the optional Client page queries and changes those decisions through its Remote.',
   },
   {
     key: 'officeToPdf', pkg: 'office-to-pdf', title: 'Office to PDF conversion',
@@ -235,7 +289,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'session',
     title: 'In-memory session store',
     mode: 'core',
-    consumers: ['agent-loop', 'agent', 'session-persistence', 'session-query', 'session-query-sqlite', 'subagent-in-process-driver', 'invariants', 'message-feedback'],
+    consumers: ['agent-loop', 'agent', 'session-persistence', 'session-query', 'session-query-sqlite', 'subagent', 'message-feedback'],
     note: 'Owns append-only Session instances and emits the durable session event feed.',
   },
   {
@@ -323,14 +377,6 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Carries the picking seam onto the wire: capability gating, cancellation, and the seam-coded failures a browser directory flow discriminates on.',
   },
   {
-    key: 'invariants',
-    pkg: 'invariants',
-    title: 'Package-owned invariant registry',
-    mode: 'core',
-    consumers: ['session', 'agent', 'scope', 'agent-loop'],
-    note: 'Companion subpaths register owner-local checks; the service owns selection, uniqueness, child fibers, and package-attributed failures.',
-  },
-  {
     key: 'typert',
     pkg: 'typert-registry',
     title: 'Runtime type registry',
@@ -344,6 +390,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Typert Host invocation gateway',
     mode: 'core',
     note: 'Associates generated Remote descriptors with live Cordis services, resolves registered identities, and exposes unary calls through the shared Connection RPC carrier.',
+  },
+  {
+    key: 'remoteAccess',
+    pkg: 'api-remote-access',
+    title: 'Remote method access control',
+    mode: 'core',
+    consumers: ['api-gateway', 'api-session-controller', 'api-workspace-controller'],
+    note: 'Decides which Remote methods a non-owner Peer may call through business-registered role-based policies, filters list results, and streams each Peer access snapshot.',
   },
   {
     key: 'sessionPersistence',
@@ -404,6 +458,21 @@ const SERVICE_ROLES: ServiceRole[] = [
     implementations: [],
     consumers: ['llm-pi-ai'],
     note: 'Flows are registered by the plugin that knows how to obtain one credential and keyed by the record they write; the seam owns the conversation and the one-attempt-per-key lifecycle, never the protocol.',
+  },
+  {
+    key: 'productAnalytics',
+    pkg: 'client-product-analytics',
+    title: 'Desktop interaction collection',
+    mode: 'service',
+    note: 'Accepts selected Desktop events, enriches available login identity, and observes live compaction under the live Host collection policy.',
+  },
+  {
+    key: 'otel',
+    pkg: 'otel',
+    title: 'Shared OTel reporting channels',
+    mode: 'service',
+    consumers: ['host-product-telemetry-otel', 'session-telemetry-otel'],
+    note: 'Product analytics and Session feedback adapters create independent reporting channels through one injected service.',
   },
   {
     key: 'productTelemetry',
@@ -552,15 +621,15 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'session-projection-cache',
     title: 'Persisted projection cache',
     mode: 'core',
-    consumers: ['api-session-controller', 'session-query', 'session-reference', 'subagent'],
-    note: 'Durably checkpoints projection unit states per session (throttled + turn/end/detach mandatory points) and serves the cold-read ladder: cache row + persistence tail replay, so listings never load full logs.',
+    consumers: ['api-session-controller', 'session-query', 'session-reference'],
+    note: 'Durably checkpoints projection unit states per session (throttled + turn/end/detach mandatory points), serves cached projection views, and accelerates prepared-Session projection hydration.',
   },
   {
     key: 'skills',
     pkg: 'skill',
     title: 'Skill provider registry',
     mode: 'seam',
-    implementations: ['skill-badge', 'skill-filesystem', 'skill-office'],
+    implementations: ['sandbox-windows-acl', 'skill-badge', 'skill-filesystem', 'skill-office'],
     consumers: ['tool-skill'],
     note: 'Merges provider skill catalogs; tool-skill renders the session-prefix catalog and loads complete skill bodies.',
   },
@@ -569,7 +638,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'agent',
     title: 'Agent service',
     mode: 'core',
-    consumers: ['agent-loop', 'acp', 'subagent-in-process-driver'],
+    consumers: ['agent-loop', 'acp', 'subagent'],
     note: 'Owns live Agent handles, the create/resume factory seam, and process-local initiator propagation.',
   },
   {
@@ -587,6 +656,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     mode: 'bundle',
     consumers: ['base', 'sdk-minimal'],
     note: 'The one concrete loop plugin; extension packages depend on dsh-agent events and services, not on this package.',
+  },
+  {
+    key: 'schedule',
+    pkg: 'schedule',
+    title: 'Host scheduled messages',
+    mode: 'core',
+    note: 'Stores tasks independently of Session activation and queues due messages in the original Session.',
   },
   {
     key: 'goals',
@@ -708,7 +784,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     mode: 'seam',
     implementations: ['subagent-spawn-in-process', 'subagent-fork-in-process', 'subagent-acp', 'subagent-codex', 'subagent-claude-code', 'subagent-dsh-sdk'],
     consumers: ['tool-subagent', 'tool-subagent-control', 'tool-ralph'],
-    note: 'Providers implement transports; the service also owns optional Activation-based continuation orchestration, tool-subagent selects one-shot or continuable delegation, tool-subagent-control delivers follow-ups, and tool-ralph requires one fresh structured-output route.',
+    note: 'Providers prepare local children or execute external tasks; one activation manager owns both lifecycles. The delegation tool selects a backend, control tools deliver local follow-ups, and workflows await activation results.',
   },
   {
     key: 'speechToText',
@@ -725,7 +801,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Agent Teams coordination domain',
     mode: 'core',
     consumers: ['experimental-tool-agent-team'],
-    note: 'Owns the implicit-root roster, durable peer mailbox, shared task DAG, and continuable-child lifecycle; tool-agent-team contributes model controls.',
+    note: 'Owns the implicit-root roster, direct peer inbox delivery, shared task DAG, and continuable-child lifecycle; tool-agent-team contributes model controls.',
+  },
+  {
+    key: 'claudeCodeMods',
+    pkg: 'experimental-claude-code-mods',
+    title: 'Claude Code mods bridge',
+    mode: 'core',
+    note: 'Loads mods that defineMod plugins add, raises their hook chains from harness extension points, and draws the band above the prompt over its Remote.',
   },
   {
     key: 'inspector',
@@ -740,15 +823,15 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Background job registry',
     mode: 'seam',
     implementations: ['jobs-local'],
-    consumers: ['tool-bash', 'tool-pwsh', 'tool-terminal', 'tool-subagent', 'tool-jobs', 'api-job-controller'],
-    note: 'Producers (background bash/pwsh, PTY sends, and subagent delegations) register running work; record-declaring jobs additionally stream raw output for non-consuming observers; tool-jobs is the model-facing controller that reads, lists, and kills it; jobs-local is the process-local registry.',
+    consumers: ['tool-bash', 'tool-pwsh', 'tool-terminal', 'tool-jobs', 'api-job-controller'],
+    note: 'Producers (background bash/pwsh and PTY sends) register running work; record-declaring jobs additionally stream raw output for non-consuming observers; tool-jobs is the model-facing controller that reads, lists, and kills it; jobs-local is the process-local registry.',
   },
   {
     key: 'web',
     pkg: 'web',
     title: 'Web access provider registry',
     mode: 'seam',
-    implementations: ['web-search-exa', 'web-search-perplexity', 'web-search-deepseek', 'web-fetch-http'],
+    implementations: ['web-search-exa', 'web-search-perplexity', 'web-search-deepseek', 'web-deepseek-api', 'web-fetch-http'],
     consumers: ['tool-web'],
     note: 'Search and fetch providers register into one ctx.web seam; tool-web owns the stable model-facing names.',
   },
@@ -777,6 +860,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     mode: 'core',
     consumers: ['client-connection', 'client-modules', 'client-hmr'],
     note: 'Plain node:http carrier: named-route registry, index transform taps, and the static dist fallback; web-transport plugins register their own routes.',
+  },
+  {
+    key: 'webApp',
+    pkg: 'web-app',
+    title: 'Served Web GUI',
+    mode: 'core',
+    consumers: ['harness-dev-context'],
+    note: 'The web-runtime row advertises one URL for its Web GUI: the configured publicUrl, otherwise the listener origin; DSH_WEB_URL, the startup URL, and harness-dev-context read the same value.',
   },
   {
     key: 'clientModules',
@@ -1696,8 +1787,66 @@ function renderIndex(docs: GraphDoc[]): string {
   ].join('\n')
 }
 
+function memoize<A extends readonly unknown[], R>(
+  compute: (...args: A) => R,
+  key: (...args: A) => string,
+  copy: (value: R) => R,
+): (...args: A) => R {
+  const results = new Map<string, R>()
+  return (...args) => {
+    const id = key(...args)
+    const recorded = results.get(id)
+    if (recorded !== undefined) return copy(recorded)
+    const value = compute(...args)
+    results.set(id, value)
+    return copy(value)
+  }
+}
+
+/**
+ * Run read-only analysis with memoized TypeScript filesystem probes.
+ *
+ * While `run` executes, `fileExists`, `directoryExists`, `realpath`, `readDirectory`,
+ * and `getDirectories` on `system` return the first result recorded for each distinct
+ * argument list, so every compiler host and config parse built on it, including the
+ * Typert programs and the event-relation Program, shares one view of the filesystem.
+ * The workspace must not change while `run` executes. A probe that throws records
+ * nothing, and array results are copied for each caller. The original methods are
+ * restored when `run` returns or throws. The memo patches `system` itself, so `run`
+ * must be synchronous and must not call this function again.
+ * @param run - read-only analysis that runs under the memo.
+ * @param system - TypeScript system whose probes are memoized.
+ * @returns the value returned by `run`.
+ */
+export function withMemoizedFileSystemProbes<T>(run: () => T, system: ts.System = ts.sys): T {
+  const probes = ['fileExists', 'directoryExists', 'realpath', 'readDirectory', 'getDirectories'] as const
+  const descriptors = probes.map(name => [name, Object.getOwnPropertyDescriptor(system, name)] as const)
+  const original: ts.System = { ...system }
+  const same = <V>(value: V): V => value
+  const copied = (value: string[]): string[] => [...value]
+  system.fileExists = memoize((path: string) => original.fileExists(path), path => path, same)
+  system.directoryExists = memoize((path: string) => original.directoryExists(path), path => path, same)
+  if (original.realpath !== undefined) system.realpath = memoize(original.realpath.bind(original), path => path, same)
+  system.readDirectory = memoize(
+    (path: string, extensions?: readonly string[], exclude?: readonly string[], include?: readonly string[], depth?: number) =>
+      original.readDirectory(path, extensions, exclude, include, depth),
+    (path, extensions, exclude, include, depth) => JSON.stringify([path, extensions, exclude, include, depth]),
+    copied,
+  )
+  system.getDirectories = memoize((path: string) => original.getDirectories(path), path => path, copied)
+  try {
+    return run()
+  } finally {
+    for (const [name, descriptor] of descriptors) {
+      if (descriptor === undefined) Reflect.deleteProperty(system, name)
+      else Object.defineProperty(system, name, descriptor)
+    }
+  }
+}
+
 function main(): void {
-  const docs = renderDocs()
+  // renderDocs reads the workspace only; generated pages are written after the memo is removed.
+  const docs = withMemoizedFileSystemProbes(renderDocs)
   if (process.argv.includes('--check')) {
     const stale: string[] = []
     for (const doc of docs) {

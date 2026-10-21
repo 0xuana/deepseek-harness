@@ -1,7 +1,8 @@
 import { tmpdir } from 'node:os'
 import { readFileSync } from 'node:fs'
 import { Arch, Platform } from 'electron-builder'
-import { Packager } from 'app-builder-lib'
+import { AppInfo, Packager } from 'app-builder-lib'
+import { expandMacro } from 'app-builder-lib/out/util/macroExpander.js'
 import { describe, expect, it, vi } from 'vitest'
 
 const { execute } = vi.hoisted(() => ({ execute: vi.fn(async () => undefined) }))
@@ -19,7 +20,7 @@ describe('installer preparation preserves application dependencies', () => {
       DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN: 'https://test.example.com',
     }, platform, 'x64')).toThrow('DSH_DESKTOP_MANDATORY_UPDATE_PROD_ORIGIN')
   })
-  it.each(['win32', 'darwin'] as const)('keeps electron-builder responsible for node_modules on %s', async (platform) => {
+  it.each(['win32', 'darwin'] as const)('preserves installer metadata and dependency ownership on %s', async (platform) => {
     execute.mockClear()
     const env = {
       DSH_DESKTOP_APP_ID: 'com.example.installer',
@@ -37,9 +38,28 @@ describe('installer preparation preserves application dependencies', () => {
     try {
       const { createElectronBuilderConfig } = await import('../electron-builder.config.mjs')
       const config = createElectronBuilderConfig(env, platform, 'x64')
+      const metadataPackager = new Packager({ projectDir: tmpdir() })
+      const metadata: unknown = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+      Object.defineProperties(metadataPackager, {
+        config: { value: config },
+        metadata: { value: metadata },
+      })
+      const appInfo = new AppInfo(metadataPackager, undefined)
+      expect(appInfo.companyName).toBe('Hangzhou DeepSeek Artificial Intelligence Co., Ltd.')
+      expect(appInfo.copyright).toBe(`Copyright © ${new Date().getFullYear()} DeepSeek Harness`)
+      if (platform === 'win32') {
+        expect(expandMacro(config.nsis.uninstallDisplayName, null, appInfo, {}, false)).toBe('DeepSeek Harness')
+      }
       const aboutIcon = config.extraResources.find(resource => resource.to === 'icon.png')
       expect(aboutIcon).toBeDefined()
       expect(readFileSync(aboutIcon!.from)).toEqual(readFileSync(new URL('../resources/icon-windows.png', import.meta.url)))
+      // Only the Windows package carries the tray bitmaps; macOS keeps the Dock.
+      const trayIcon = config.extraResources.find(resource => resource.to === 'tray.ico')
+      if (platform === 'win32') {
+        expect(readFileSync(trayIcon!.from)).toEqual(readFileSync(new URL('../resources/tray-windows.ico', import.meta.url)))
+      } else {
+        expect(trayIcon).toBeUndefined()
+      }
       const packager = new Packager({ projectDir: tmpdir() })
       // A foreign source-build target avoids rebuilding modules; the real dependency ownership decision still runs.
       Object.defineProperties(packager, {

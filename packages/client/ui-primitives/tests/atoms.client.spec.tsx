@@ -1,13 +1,24 @@
 // @vitest-environment jsdom
-import { useState } from 'react'
+import { createRef, useState } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Button, ConnectionIndicator, Input, Menu, MenuItemButton, Modal, Pill } from '@deepseek-ai/dsh-client-ui-primitives'
 import { POINTER_GRACE_MS } from '../src/pointer-grace.ts'
+import buttonCss from '../src/Button.module.css'
 
 afterEach(cleanup)
 
 describe('Button', () => {
+  it('exposes its native button for focus and releases the ref on unmount', () => {
+    const ref = createRef<HTMLButtonElement>()
+    const { unmount } = render(<Button ref={ref}>Focus</Button>)
+    expect(ref.current).toBe(screen.getByRole('button', { name: 'Focus' }))
+    ref.current?.focus()
+    expect(document.activeElement).toBe(ref.current)
+    unmount()
+    expect(ref.current).toBeNull()
+  })
+
   it('renders children, icon, and forwards clicks', () => {
     const onClick = vi.fn()
     render(<Button variant="primary" icon={<svg data-testid="ic" />} onClick={onClick}>Go</Button>)
@@ -24,9 +35,27 @@ describe('Button', () => {
     expect(onClick).not.toHaveBeenCalled()
   })
 
-  it('outline variant renders a bordered cancel-style button', () => {
-    render(<Button variant="outline">Cancel</Button>)
-    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDefined()
+  it('selects the outline stylesheet for outlined actions only', () => {
+    const { rerender } = render(<Button variant="outline">Cancel</Button>)
+    const button = screen.getByRole('button', { name: 'Cancel' })
+    expect(button.classList.contains(buttonCss.outline!)).toBe(true)
+    for (const variant of ['primary', 'ghost', 'toolbar'] as const) {
+      rerender(<Button variant={variant}>Cancel</Button>)
+      expect(button.classList.contains(buttonCss.outline!)).toBe(false)
+    }
+  })
+
+  it('keeps the native element and focus when the variant changes', () => {
+    const ref = createRef<HTMLButtonElement>()
+    const { rerender } = render(<Button ref={ref} variant="outline">Open</Button>)
+    const button = screen.getByRole('button')
+    button.focus()
+    rerender(<Button ref={ref} variant="primary">Open</Button>)
+    expect(ref.current).toBe(button)
+    expect(document.activeElement).toBe(button)
+    rerender(<Button ref={ref} variant="outline">Open</Button>)
+    expect(ref.current).toBe(button)
+    expect(document.activeElement).toBe(button)
   })
 })
 
@@ -49,6 +78,16 @@ describe('Pill', () => {
 })
 
 describe('Input', () => {
+  it('exposes its native input for focus and releases the ref on unmount', () => {
+    const ref = createRef<HTMLInputElement>()
+    const { unmount } = render(<Input ref={ref} aria-label="Search" />)
+    expect(ref.current).toBe(screen.getByRole('textbox', { name: 'Search' }))
+    ref.current?.focus()
+    expect(document.activeElement).toBe(ref.current)
+    unmount()
+    expect(ref.current).toBeNull()
+  })
+
   it('forwards value/onChange and renders the leading icon', () => {
     const onChange = vi.fn()
     render(<Input icon={<svg data-testid="ic" />} value="q" onChange={onChange} placeholder="search" />)
@@ -89,18 +128,19 @@ describe('Menu', () => {
           onSelect={() => {}}
           onClose={() => { setOpen(false) }}
         >
-          <MenuItemButton separatorBefore onSelect={() => { onAction(); setOpen(false) }}>Publish</MenuItemButton>
+          <MenuItemButton separatorBefore shortcut={{ keys: ['Ctrl', 'P'], aria: 'Control+P' }} onSelect={() => { onAction(); setOpen(false) }}>Publish</MenuItemButton>
         </Menu>
       )
     }
     render(<Harness />)
     const trigger = screen.getByRole('button', { name: 'trigger' })
-    expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['Alpha', 'Publish'])
+    expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['Alpha', 'PublishCtrlP'])
     // The component row starts a group: one hairline, between the data row and it.
     const publishWrap = screen.getByRole('menuitem', { name: 'Publish' }).parentElement
     expect(screen.getByRole('separator').nextElementSibling).toBe(screen.getByRole('menuitem', { name: 'Publish' }))
     expect(publishWrap?.contains(screen.getByRole('separator'))).toBe(true)
     const publish = screen.getByRole('menuitem', { name: 'Publish' })
+    expect(publish.getAttribute('aria-keyshortcuts')).toBe('Control+P')
     trigger.focus()
     fireEvent.keyDown(trigger, { key: 'End' })
     expect(document.activeElement).toBe(publish)
@@ -222,7 +262,9 @@ describe('Menu', () => {
     // autoFocus parks the keyboard on the first row; Tab settles it like Enter.
     const alpha = screen.getByRole('menuitem', { name: 'Alpha' })
     expect(document.activeElement).toBe(alpha)
+    expect(alpha.getAttribute('data-dsh-automatic-focus')).toBe('')
     expect(fireEvent.keyDown(alpha, { key: 'Tab' })).toBe(false)
+    expect(alpha.getAttribute('data-dsh-automatic-focus')).toBeNull()
     expect(onSelect).toHaveBeenCalledExactlyOnceWith('a')
 
     // Shift+Tab leaves like Escape: closed, with the trigger taking the keyboard.
@@ -438,7 +480,7 @@ describe('Menu', () => {
             id: 'new',
             label: 'New Workspace',
             submenu: [
-              { id: 'ok', label: 'Create ok', icon: <svg data-testid="sub-ic" /> },
+              { id: 'ok', label: 'Create ok', icon: <svg data-testid="sub-ic" />, shortcut: { keys: ['⌘', 'N'], aria: 'Meta+N' } },
             ],
           },
         ]}
@@ -455,6 +497,8 @@ describe('Menu', () => {
     fireEvent.focus(parent)
     fireEvent.mouseEnter(wrap)
     expect(screen.getByTestId('sub-ic')).toBeDefined()
+    expect(screen.getByRole('menuitem', { name: 'Create ok' }).getAttribute('aria-keyshortcuts')).toBe('Meta+N')
+    expect(screen.getByRole('menuitem', { name: 'Create ok' }).querySelectorAll('kbd')).toHaveLength(2)
     fireEvent.click(screen.getByRole('menuitem', { name: 'Create ok' }))
     expect(onSelect).toHaveBeenCalledWith('ok')
     fireEvent.mouseLeave(wrap)
@@ -618,11 +662,12 @@ describe('Modal', () => {
 
   it('renders headless content without the default close chrome', () => {
     render(
-      <Modal open onClose={() => {}} title="Custom surface" headless>
+      <Modal open onClose={() => {}} title="Custom surface" headless backdropBlur={false}>
         <span>Custom body</span>
       </Modal>,
     )
     expect(screen.getByRole('dialog', { name: 'Custom surface' })).toBeDefined()
+    expect((screen.getByRole('dialog').previousElementSibling as HTMLElement).style.backdropFilter).toBe('none')
     expect(screen.getByText('Custom body')).toBeDefined()
     expect(screen.queryByRole('button')).toBeNull()
   })

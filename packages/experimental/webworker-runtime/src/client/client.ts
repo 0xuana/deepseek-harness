@@ -3,8 +3,10 @@
  * turns fetch-shaped calls into `req` frames and rebuilds Responses from the
  * worker's `res` / `res-head`+`res-chunk`+`res-end` frames, so every consumer
  * (boot payload, bundle transport, ApiClient, Typert RPC) speaks plain HTTP.
+ * The worker's unsolicited `view-text` frame opens the page's text viewer.
  */
 
+import { packageAssetResolver } from '../package-assets.ts'
 import type { IndexInjection } from '@deepseek-ai/dsh-host-webserver'
 import type {
   TunnelAbortFrame as AbortFrame,
@@ -18,6 +20,7 @@ import type {
   TunnelStreamItemFrame,
   TunnelStreamOpenFrame,
 } from '../transport/frames.ts'
+import { showTextViewer } from './text-viewer.ts'
 
 /** Boot payload of the tunnel bootstrap route. */
 export interface BootPayload {
@@ -364,6 +367,18 @@ export class WorkerTunnel {
   }
 
   /**
+   * Read every package asset of the image and map each reference to a Blob URL.
+   * @returns The synchronous resolver the module system calls for `require.asset`.
+   */
+  async packageAssets(): Promise<(reference: string) => string> {
+    const response = await this.fetch('/__assets__')
+    if (!response.ok) {
+      throw new Error(`web-preview tunnel: package assets failed with HTTP ${String(response.status)}: ${await response.text()}`)
+    }
+    return packageAssetResolver(new Uint8Array(await response.arrayBuffer()))
+  }
+
+  /**
    * `loadBundle` seam: take one client bundle through the tunnel and execute it
    * as a classic script, exactly like the shell's same-origin `<script src>`.
    * The image packs each bundle with a trailing `sourceURL` naming its image
@@ -542,6 +557,10 @@ export class WorkerTunnel {
         this.bodyStreams.delete(frame.id)
         this.releaseSignal(frame.id)
         controller.error(reason)
+        return
+      }
+      case 'view-text': {
+        showTextViewer(frame.path, frame.text)
         return
       }
       case 'stream-item':

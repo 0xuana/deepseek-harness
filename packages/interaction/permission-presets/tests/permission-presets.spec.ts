@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import SessionStore, {
   Session,
@@ -65,17 +65,17 @@ describe('permission preset fold', () => {
   it('folds the latest preset selection and steps over unrelated events', async () => {
     const ctx = await mounted()
     const session = freshSession('sess-fold')
-    const presetOf = () => ctx.sessionProjections.stateOf(session, 'permissions')?.preset ?? null
-    expect(presetOf()).toBeNull()
+    const presetOf = () => ctx.sessionProjections.checkpoint(session).permissions?.val
+    expect(presetOf()).toMatchObject({ preset: null })
     session.append('permission/preset', { preset: 'danger-full-access' })
     session.append('permission/preset', { preset: 'workspace-write' })
-    expect(presetOf()).toBe('workspace-write')
+    expect(presetOf()).toMatchObject({ preset: 'workspace-write' })
     // The knob fold steps over non-preset events to the latest selection.
     session.append('sandbox/mode', { mode: 'read-only' })
-    expect(presetOf()).toBe('workspace-write')
+    expect(presetOf()).toMatchObject({ preset: 'workspace-write' })
 
     const seeded = Session.create(SessionId('sess-fold-seeded'), [])
-    expect(ctx.sessionProjections.stateOf(seeded, 'permissions')?.seeded).toBe(true)
+    expect(ctx.sessionProjections.checkpoint(seeded).permissions?.val).toMatchObject({ seeded: true })
   })
 })
 
@@ -83,13 +83,6 @@ describe('PermissionPresetService', () => {
   it('does not activate without the required projection registry', async () => {
     const ctx = await mounted({ projection: false })
     expect(ctx.get('permissionPresets')).toBeUndefined()
-  })
-
-  it('fails when the permissions projection key is absent', async () => {
-    const ctx = await mounted()
-    vi.spyOn(ctx.sessionProjections, 'stateOf').mockReturnValue(undefined)
-    expect(() => ctx.permissionPresets.current(freshSession('missing-permission-projection-key')))
-      .toThrow('permission: permissions session projection is not registered')
   })
 
   it('advertises the preset table in declaration order and resolves bundles', async () => {
@@ -104,7 +97,7 @@ describe('PermissionPresetService', () => {
     const fiber = await mountAuto(ctx)
     expect(ctx.permissionPresets.names).toEqual(['workspace-write', 'danger-full-access', AUTO_PRESET])
     expect(ctx.permissionPresets.resolve(AUTO_PRESET)).toEqual({
-      sandbox: 'danger-full-access', approval: 'never',
+      sandbox: 'danger-full-access', approval: 'ask',
     })
     expect(ctx.permissionPresets.optionOf(AUTO_PRESET)).toEqual({
       value: AUTO_PRESET,
@@ -134,13 +127,12 @@ describe('PermissionPresetService', () => {
     expect(session.snapshotEvents().map(event => [event.type, event.data])).toEqual([
       ['permission/preset', { preset: AUTO_PRESET }],
       ['sandbox/mode', { mode: 'danger-full-access' }],
-      ['approval/policy', { policy: 'never' }],
     ])
     expect(ctx.permissionPresets.current(session)).toBe(AUTO_PRESET)
 
     ctx.permissionPresets.set(session, AUTO_PRESET)
     expect(admissions).toBe(2)
-    expect(session.snapshotEvents()).toHaveLength(3)
+    expect(session.snapshotEvents()).toHaveLength(2)
   })
 
   it('leaves the session untouched when dynamic admission rejects a selection', async () => {
@@ -155,7 +147,7 @@ describe('PermissionPresetService', () => {
     expect(session.snapshotEvents()).toEqual([])
   })
 
-  it('records shared-bundle Auto and Full access switches by preset identity only', async () => {
+  it('switches between Auto and Full access through identity and approval policy', async () => {
     const config = { presets: {
       'read-only': { sandbox: 'read-only', approval: 'ask' },
       'workspace-write': { sandbox: 'workspace-write', approval: 'ask' },
@@ -170,13 +162,18 @@ describe('PermissionPresetService', () => {
     ctx.permissionPresets.set(session, 'danger-full-access')
     expect(session.snapshotEvents().slice(baselineLength).map(event => [event.type, event.data])).toEqual([
       ['permission/preset', { preset: 'danger-full-access' }],
+      ['approval/policy', { policy: 'never' }],
     ])
     expect(ctx.permissionPresets.current(session)).toBe('danger-full-access')
 
     ctx.permissionPresets.set(session, AUTO_PRESET)
-    expect(session.snapshotEvents().slice(baselineLength + 1).map(event => [event.type, event.data])).toEqual([
+    expect(session.snapshotEvents().slice(baselineLength + 2).map(event => [event.type, event.data])).toEqual([
       ['permission/preset', { preset: AUTO_PRESET }],
+      ['approval/policy', { policy: 'ask' }],
     ])
+    expect(ctx.permissionPresets.current(session)).toBe(AUTO_PRESET)
+
+    session.append('approval/policy', { policy: 'never' })
     expect(ctx.permissionPresets.current(session)).toBe(AUTO_PRESET)
   })
 

@@ -110,7 +110,7 @@ interface Agent {
    * turn and runs when the aborted activity converges to idle; a `disposed`
    * cancel leaves it parked. A wake submitted while already idle always opens
    * its turn boundary, even when its message is cleared before the driver
-   * claims ([cancel-convergence wake latch](../../../../.agents/notes/implemented/bug-fix/2026-08-07-cancel-convergence-wake-latch.md)).
+   * claims ([driver wake convergence](../../agent-loop/src/agent.ts)).
    * @param message - identified content and the source that supplied it.
    * @param target - the preferred next-turn or next-step inbox boundary.
    * @param wakeup - whether delivery may wake the driver.
@@ -363,6 +363,8 @@ type SessionStartSource = 'startup' | 'resume' | 'clear' | 'compact'
 
 其完整字段、`defineTool`/`ValueSchemaSpec`/`ParameterSchemaSpec` 类型化 schema DSL、`ToolExecution`/`ToolExecutionResult` waterfall 类型，以及工具展示 UI 类型都在 **[tools.md](tools.zh.md)** 中。
 
+<a id="repo-wide-type-patterns"></a>
+
 ## 全仓通用类型模式
 
 两个模式在每个子系统中反复出现，只在此处记录一次。
@@ -419,6 +421,26 @@ type Branded<B extends string> = string & { readonly [BRAND]: B }
 
 两个核心 ID 是 `ToolCallId`（关联工具调用及其结果；dsh-llm）和 `SessionId`（活跃 agent 与持久会话共享的标识；dsh-session）。能力包也会品牌化各自的 id，例如 [jobs.md](jobs.zh.md) 中的 `JobId`。
 
+## `TurnBoundaryProjection`
+
+`ctx.agents.turnBoundaryOf(session)` 读取已记录的轮次和步骤位置，无需活跃 Agent。注册表持有此状态；消费方不注册其投影定义。
+
+来源: [`packages/core/agent/src/types.ts`](../../packages/core/agent/src/types.ts)
+
+```ts type-equiv
+/** Turn and step positions recorded in a Session. */
+interface TurnBoundaryProjection {
+  /** Seq of the open turn's `turn/start`, or null between turns. */
+  readonly openTurnStartSeq: OptionalSessionSeq
+  /** Seq of the latest `step/start` event, or null before the first step. */
+  readonly lastStepStartSeq: OptionalSessionSeq
+  /** The latest step boundary (`step/start` or `step/end`) and its seq, or null before the first step boundary. */
+  readonly lastStepBoundary: { readonly kind: 'start' | 'end'; readonly seq: SessionSeq } | null
+  /** Turn number of the latest `turn/start`; 0 before the first turn. */
+  readonly lastTurn: number
+}
+```
+
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
 <a id="cordis-surface"></a>
@@ -442,7 +464,8 @@ currentSelection(): ModelSelection
 
 /**
  * Save the complete default model selection. A deployment without a configuration
- * editor keeps its composition entry.
+ * editor keeps its composition entry. Saves commit in submission order; a failed
+ * save rejects its caller without blocking later saves.
  * @param next - resolved selection accepted by an entry point.
  * @returns fulfillment after the optional profile write settles.
  */
@@ -498,19 +521,32 @@ Source: [`packages/core/agent-loop/src/index.ts`](../../packages/core/agent-loop
 Registry of YAML-declared presets and the revisions live Agents retain.
 
 ```ts cordis-catalog
+/**
+ * Read the preset recorded for a Session, including selections no longer in the roster.
+ * @param session - Session whose committed preset selection is read.
+ * @returns the recorded preset, or null when none was selected.
+ */
+presetForSession(session: Session): string | null
+
 /** Register and eagerly load a definition; activation failure remains visible in the roster.
  * @param definition Parsed configuration supplied by the declaring plugin.
  * @returns Definition disposer after activation or its diagnostic settles; the declaring plugin owns it.
  */
 async register(definition: PresetDefinition): Promise<() => Promise<void>>
 
+/** Inspect retained revisions, or the exact revision an Agent joined.
+ * @param ctx - optional Agent context; omission includes all retained revisions.
+ * @returns detached module references and isolation diagnostics; no match returns an empty list.
+ */
+inspectCompositions(ctx?: Context): AgentPresetInspection[]
+
 /** Read every declared preset, including activation failures.
  * @returns Display metadata and loading diagnostics.
  */
 async list(): Promise<AgentPreset[]>
 
-/** Read the selection roster and chooser policy.
- * @returns Current presets, default and chooser policy.
+/** Read the selection roster.
+ * @returns Current presets, each marked when it is the default.
  */
 @Remote('list') async remoteExportList(): Promise<AgentPresetRoster>
 
@@ -560,7 +596,9 @@ serviceFor<K extends string & keyof Context>(agent: { ctx: Context }, name: K): 
  */
 async recompose(ctx: Context, id: string): Promise<AgentPreset>
 
-/** Select a preset before a session starts its first turn.
+/** Select a preset before a session starts its first turn. A Session whose
+ * log records the preset and whose Agent runs its current revision keeps its
+ * composition; nothing is logged or announced.
  * @param agent Target Agent.
  * @param agentPreset Requested identity.
  * @returns Committed preset identity.
@@ -579,7 +617,7 @@ async acquireScope(id?: string): Promise<{ key: ScopeKey } & AsyncDisposable>
 compositionInventory(): Promise<AgentPresetComposition[]>
 ```
 
-Types: [ScopeKey](scope.zh.md)
+Types: [ScopeKey](scope.zh.md) · [Session](session.zh.md)
 
 Source: [`packages/preset/agent-preset-registry/src/index.ts`](../../packages/preset/agent-preset-registry/src/index.ts)
 
@@ -592,6 +630,13 @@ Agent service (`ctx.agents`): tracks live agents and carries the initiating Agen
 Initiator methods provide same-process causal attribution only. Ambient presence is neither liveness proof nor authorization; subjects and owners remain explicit, as does identity at worker, process, persistence, and wire boundaries. Returned Promise boundaries drain during teardown, except a nested lineage that starts an owning-fiber unload is excluded from its own drain.
 
 ```ts cordis-catalog
+/**
+ * Read the turn and step positions recorded in a Session.
+ * @param session - Session whose committed events are read.
+ * @returns the current turn and step positions; do not mutate the returned value.
+ */
+turnBoundaryOf(session: Session): TurnBoundaryProjection
+
 /**
  * Read the Agent that initiated the inherited asynchronous driver chain.
  * Use this optional form for logging, tracing, metrics, or host attribution
@@ -757,6 +802,8 @@ list(): Agent[]
  */
 roots(): Agent[]
 ```
+
+Types: [Session](session.zh.md)
 
 Source: [`packages/core/agent/src/index.ts`](../../packages/core/agent/src/index.ts)
 

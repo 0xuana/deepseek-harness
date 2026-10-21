@@ -9,8 +9,9 @@ import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session/types'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { provideWorkingDirectoryFixture, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
 import type { JobId } from '@deepseek-ai/dsh-jobs'
 import * as ToolTasks from '@deepseek-ai/dsh-tool-jobs'
@@ -34,8 +35,10 @@ const spillDir = mkdtempSync(join(tmpdir(), 'dsh-tool-bash-background-spec-'))
 /** Job harness with a fast registry pump for tests. */
 async function setup() {
   const ctx = new Context()
+  provideWorkingDirectoryFixture(ctx)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(LocalJobRegistry, { pumpPollMs: 25 })
   await ctx.plugin(ToolTasks)
@@ -121,7 +124,7 @@ describe('background bash output', () => {
       workdir: '/nonexistent-dsh',
       run_in_background: true,
     })
-    expect(text(started)).toMatch(/^started background job bash-\d+$/)
+    expect(text(started)).toMatch(/^started background job bash-[0-9a-f]{16}$/)
     const jobs = ctx.jobs
     const job = jobs.list()[0]
     await until(() => jobs.get(job!.id).status === 'killed' ? true : undefined)
@@ -216,19 +219,21 @@ describe('foreground commands as jobs', () => {
       })
       await until(() => execution?.observed.stdout.readFrom(0).text.includes('early-output') ? true : undefined, task.timeout)
       // The job exists from the start: the command is listed while the call still waits.
-      expect(ctx.jobs.list()[0]).toMatchObject({ id: 'bash-1', kind: 'bash', status: 'running', label: 'printf "early-output\\n"; sleep 30' })
+      const jobId = ctx.jobs.list()[0]?.id
+      expect(jobId).toMatch(/^bash-[0-9a-f]{16}$/)
+      expect(ctx.jobs.list()[0]).toMatchObject({ id: jobId, kind: 'bash', status: 'running', label: 'printf "early-output\\n"; sleep 30' })
       await vi.advanceTimersByTimeAsync(250)
       const result = await pending
       vi.useRealTimers()
       const body = text(result)
       expect(body).toContain('early-output')
-      expect(body).toContain('[still running after 250ms; moved to background job bash-1]')
+      expect(body).toContain(`[still running after 250ms; moved to background job ${jobId}]`)
       expect(body).toContain('read newer output with job_output, stop it with job_kill')
       expect(body.indexOf('early-output')).toBeLessThan(body.indexOf('[still running'))
 
       const jobs = ctx.jobs
       const job = jobs.list()[0]
-      expect(job).toMatchObject({ id: 'bash-1', status: 'running' })
+      expect(job).toMatchObject({ id: jobId, status: 'running' })
       // The hand-over was one consuming read: the next read repeats nothing.
       expect(jobs.read(job!.id).chunks).toEqual([])
       expect(jobs.kill(job!.id, undefined, 'test cleanup')).toBe('requested')
@@ -418,8 +423,10 @@ describe('foreground commands as jobs', () => {
 
   it('keeps the plain timeout kill when keeping timed-out commands is configured off', async () => {
     const ctx = new Context()
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(LocalJobRegistry, { pumpPollMs: 25 })
     await ctx.plugin(ToolTasks)
@@ -434,15 +441,14 @@ describe('foreground commands as jobs', () => {
     expect(text(result)).toContain('[timed out after 250ms]')
     expect(ctx.jobs.list()).toEqual([])
     expect(seen).toEqual([])
-    const description = ctx.tools.get('bash')?.description ?? ''
-    expect(description).not.toContain('moves to the background')
-    expect(description).toContain('run_in_background')
+    const parameters = JSON.stringify(ctx.tools.get('bash')?.parameters)
+    expect(parameters).not.toContain('moves to the background')
+    expect(parameters).toContain('run_in_background')
   })
 
-  it('advertises the hand-over semantics in the description and the timeout parameter', async () => {
+  it('advertises the hand-over semantics in the timeout parameter', async () => {
     const ctx = await setup()
     const tool = ctx.tools.get('bash')
-    expect(tool?.description).toContain('A foreground command that reaches its timeout is not killed')
     expect(JSON.stringify(tool?.parameters)).toContain('moves to the background as a job instead of being killed')
   })
 })

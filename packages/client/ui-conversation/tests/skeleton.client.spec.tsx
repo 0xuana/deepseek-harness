@@ -2,13 +2,13 @@
 import type { GlobalStandardProps, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createContext, useContext, type ReactNode } from 'react'
-import { act, cleanup, fireEvent, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionListState, SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceSnapshot, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import {
-  bindSnapshotSelector, makeTranslate, RemoteError, sessionSnapshot as sessionFixture,
+  allowAllAccess, bindSnapshotSelector, makeTranslate, RemoteError, sessionSnapshot as sessionFixture,
 } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
@@ -33,7 +33,7 @@ import type { InputBarProps } from '../src/client/skeleton/InputBar.tsx'
 import type {
   ComposerBarOwnerProps, ConversationContentInputProps, ConversationContentProps,
   ConversationHeaderLineageOwnerProps, ConversationSessionHeaderSlotProps, ConversationSessionSlotProps, ConversationSlotProps,
-  ConversationViewsProps,
+  ConversationViewActionsOwnerProps, ConversationViewsProps,
 } from '../src/client/contract/slots.ts'
 import type { ViewTab } from '../src/client/contract/views.ts'
 
@@ -140,6 +140,10 @@ function mount(
     composerBlock?: { reason: string }
     /** Mutable view ledger used by registration-order regressions. */
     viewTabs?: ViewTab[]
+    /** Persisted ids of unpinned View tabs. */
+    unpinnedViews?: readonly string[]
+    /** Whether the View actions list has registrations. */
+    entryActions?: boolean
   } = {},
 ) {
   const sessionId = 'sessionId' in options ? options.sessionId : SID
@@ -178,6 +182,7 @@ function mount(
   const store = createConversationStore().create()
   store.actions.setDraft('ordinary draft')
   const { wiring, sink } = fakeWiring()
+  wiring.setDraft(store.store.getSnapshot().draft)
   const useInput = bindSnapshotSelector(wiring.state)
   const inputActions = wiring.actions
   const stop = vi.fn()
@@ -192,12 +197,18 @@ function mount(
   /** Owner share handed to the two composer tool-row seats, per render. */
   const seatOwners: { key: string; owner: unknown }[] = []
   let pickerOwner: unknown
+  let actionsOwner: ConversationViewActionsOwnerProps | undefined
+  const setPinned = vi.fn<(id: string, pinned: boolean) => void>()
   const renderSlot = ((key: string, owner: object, opts?: { only?: string; fallback?: ReactNode }) => {
     slotCalls.push(key)
     if (key === 'conversation.input.model' || key === 'conversation.input.plan') {
       seatOwners.push({ key, owner })
     }
     if (key === 'conversation.hero.workspace') { pickerOwner = owner; return null }
+    if (key === 'conversation.session.header.views.actions') {
+      actionsOwner = owner as ConversationViewActionsOwnerProps
+      return <button type="button" role="menuitem" onClick={actionsOwner.onDismiss}>Header view action</button>
+    }
     if (key === 'conversation.session.header.lineage') {
       lineageOwners.push(owner as ConversationHeaderLineageOwnerProps)
       return opts?.fallback ?? null
@@ -214,6 +225,9 @@ function mount(
           useSession={useSession}
           useConversation={useConversation}
           useConversationViews={useConversationViews}
+          useEntryPins={selector => selector(options.unpinnedViews ?? [])}
+          useEntryActions={selector => selector(options.entryActions ?? false)}
+          setPinned={setPinned}
           useChat={useChat}
           useTrajectory={useTrajectory}
           useSessions={props.useSessions}
@@ -222,6 +236,7 @@ function mount(
           useSessionStatus={useSessionStatus}
           useSessionRetainInfo={() => undefined}
           useWorkspaces={props.useWorkspaces}
+          {...allowAllAccess}
           useProjection={(() => undefined)}
           useInput={useInput}
           inputActions={inputActions}
@@ -251,13 +266,14 @@ function mount(
           useSessionStatus={useSessionStatus}
           useSessionRetainInfo={() => undefined}
           useWorkspaces={props.useWorkspaces}
+          {...allowAllAccess}
           useProjection={(() => undefined)}
           useInput={useInput}
           inputActions={inputActions}
           useStore={bindSnapshotSelector(store)}
           actions={store.actions}
           renderSlot={renderSlot as never}
-          bindDraftMirror={write => wiring.bindMirror(write)}
+          bindDraftPersistence={write => wiring.bindDraftPersistence(write)}
           openView={(view, focus) => { store.actions.openView(view, focus) }}
         />
       )
@@ -278,6 +294,7 @@ function mount(
           useSessionStatus={useSessionStatus}
           useSessionRetainInfo={() => undefined}
           useWorkspaces={props.useWorkspaces}
+          {...allowAllAccess}
           useProjection={(() => undefined)}
           useInput={useInput}
           inputActions={inputActions}
@@ -289,6 +306,7 @@ function mount(
           resolveDraftAttachments={() => []}
           toggleCommandMenu={vi.fn()}
           useBusyEnter={bindSnapshotSelector(createSnapshotStore<'queue' | 'steer'>('queue'))}
+          useStopShortcut={bindSnapshotSelector(createSnapshotStore<readonly string[]>([]))}
           useNotices={bindSnapshotSelector(wiring.notices)}
           useLexicon={bindSnapshotSelector(wiring.lexicon)}
           useMenuLauncher={bindSnapshotSelector(createSnapshotStore<string | null>(null))}
@@ -335,6 +353,7 @@ function mount(
       useSessionStatus,
       useSessionRetainInfo: () => undefined,
       useWorkspaces: bindSnapshotSelector(workspaces),
+      ...allowAllAccess,
       useProjection: (() => undefined),
       useComposerBlock: select => select(options.composerBlock),
       useInput,
@@ -365,6 +384,7 @@ function mount(
     useSessionRetainInfo: () => undefined,
     useResource,
     useWorkspaces: bindSnapshotSelector(workspaces),
+    ...allowAllAccess,
     useProjection: (() => undefined),
     useInput,
     inputActions,
@@ -374,6 +394,11 @@ function mount(
   return {
     view, store, wiring, sink, retargetWorkspace, session, conversation, slotCalls, lineageOwners, seatOwners, open,
     pickerOwner: () => pickerOwner,
+    setPinned,
+    actionsOwner: () => {
+      if (actionsOwner === undefined) throw new Error('View actions not rendered')
+      return actionsOwner
+    },
     rerender: () => { view.rerender(<ConversationMainPanel {...props} />) },
   }
 }
@@ -466,7 +491,7 @@ describe('ConversationRoot resident composer', () => {
     const box = b.view.getByRole('textbox')
     expect(b.wiring.snapshot.draft).toBe('ordinary draft')
     act(() => { b.wiring.setDraft('ordinary revised') })
-    expect(b.store.store.getSnapshot().draft).toBe('ordinary revised')
+    expect(b.store.store.getSnapshot().draft).toEqual({ text: 'ordinary revised', references: [] })
     fireEvent.keyDown(box, { key: 'Enter' })
     expect(b.sink).toHaveBeenCalledWith('ordinary revised', [], 'queue', expect.any(AbortSignal))
     // The current crumb is plain text (a drag surface on darwin), not a button.
@@ -555,7 +580,7 @@ describe('ConversationRoot resident composer', () => {
     const box = b.view.getByRole('textbox')
     expect(host?.contains(box)).toBe(true)
     act(() => { b.wiring.setDraft('draft in hero') })
-    expect(b.store.store.getSnapshot().draft).toBe('draft in hero')
+    expect(b.store.store.getSnapshot().draft).toEqual({ text: 'draft in hero', references: [] })
     // Picker: open through the chip; a pick switches to the other
     // workspace's blank session (draft carry is apply-layer wiring).
     fireEvent.click(b.view.getByRole('button', { name: '选择工作区' }))
@@ -628,7 +653,7 @@ describe('ConversationRoot resident composer', () => {
     const after = b.view.getByRole('textbox')
     expect(after).toBe(before)
     expect(b.wiring.snapshot.draft).toBe('kept across flip')
-    expect(b.store.store.getSnapshot().draft).toBe('kept across flip')
+    expect(b.store.store.getSnapshot().draft).toEqual({ text: 'kept across flip', references: [] })
     expect(b.view.container.querySelector('[data-conversation-scroll]')?.contains(after)).toBe(true)
     expect(b.view.queryByTestId('hero-headline')).toBeNull()
     expect(b.view.getByTestId('view-chat')).toBeTruthy()
@@ -654,6 +679,61 @@ describe('ConversationRoot resident composer', () => {
     expect(b.view.getByRole('tab', { name: 'New view' }).getAttribute('aria-selected')).toBe('false')
     // The browser drag lane anchors its header tab-strip probe on this marker.
     expect(b.view.getByRole('tablist').hasAttribute('data-conversation-tabs')).toBe(true)
+  })
+
+  it('keeps the selected View tab while it is unpinned and hides it once another View is selected', () => {
+    const viewTabs: ViewTab[] = [
+      { id: 'chat', label: 'Chat' },
+      { id: 'trajectory', label: 'Trajectory' },
+      { id: 'timeline', label: 'Timeline' },
+    ]
+    const b = mount(sessionSnapshotOf(), undefined, undefined, { viewTabs, unpinnedViews: ['chat', 'trajectory', 'removed-view'] })
+    act(() => { b.store.actions.setView('trajectory') })
+    const tabs = (): HTMLElement[] => within(b.view.getByRole('tablist')).getAllByRole('tab')
+    expect(tabs().map(tab => [tab.textContent, tab.getAttribute('aria-selected')])).toEqual([
+      ['Chat', 'false'], ['Trajectory', 'true'], ['Timeline', 'false'],
+    ])
+    expect(b.view.getByTestId('view-trajectory')).toBeTruthy()
+    act(() => { b.store.actions.setView('chat') })
+    expect(tabs().map(tab => tab.textContent)).toEqual(['Chat', 'Timeline'])
+  })
+
+  it('keeps the tab row and More after the tabs while every other View is unpinned', () => {
+    const b = mount(sessionSnapshotOf(), undefined, undefined, { unpinnedViews: ['trajectory'], entryActions: true })
+    const tablist = b.view.getByRole('tablist')
+    expect(within(tablist).getAllByRole('tab').map(tab => tab.textContent)).toEqual(['Chat'])
+    const more = b.view.getByRole('button', { name: zh['session.moreViews'] })
+    expect(tablist.nextElementSibling?.contains(more)).toBe(true)
+    expect(more.getAttribute('aria-haspopup')).toBe('menu')
+    expect(b.view.queryByRole('menu')).toBeNull()
+  })
+
+  it('omits More while the View actions list has no registrations', () => {
+    const b = mount(sessionSnapshotOf())
+    expect(b.view.getByRole('tablist')).toBeTruthy()
+    expect(b.view.queryByRole('button', { name: zh['session.moreViews'] })).toBeNull()
+  })
+
+  it('omits the tab row and More while Chat is the only registered View', () => {
+    const b = mount(sessionSnapshotOf(), undefined, undefined, { viewTabs: [{ id: 'chat', label: 'Chat' }], entryActions: true })
+    expect(b.view.queryByRole('tablist')).toBeNull()
+    expect(b.view.queryByRole('button', { name: zh['session.moreViews'] })).toBeNull()
+  })
+
+  it('hands the More menu the non-Chat Views with their pin state and this Session\'s selection', () => {
+    const b = mount(sessionSnapshotOf(), undefined, undefined, { unpinnedViews: ['trajectory'], entryActions: true })
+    const more = b.view.getByRole('button', { name: zh['session.moreViews'] })
+    fireEvent.click(more)
+    expect(more.getAttribute('aria-expanded')).toBe('true')
+    expect(within(b.view.getByRole('menu')).getByRole('menuitem', { name: 'Header view action' })).toBeTruthy()
+    expect(b.actionsOwner().entries).toEqual([{ id: 'trajectory', label: 'Trajectory', pinned: false }])
+    b.actionsOwner().onPinnedChange('trajectory', true)
+    expect(b.setPinned).toHaveBeenCalledExactlyOnceWith('trajectory', true)
+    act(() => { b.actionsOwner().onOpen('trajectory') })
+    expect(b.view.getByTestId('view-trajectory')).toBeTruthy()
+    fireEvent.click(b.view.getByRole('menuitem', { name: 'Header view action' }))
+    expect(b.view.queryByRole('menu')).toBeNull()
+    expect(more.getAttribute('aria-expanded')).toBe('false')
   })
 
   it('rolls the pending workspace label back when switching fails', async () => {
@@ -682,6 +762,18 @@ describe('ConversationRoot resident composer', () => {
     // The agent-preset chip sits in the same row, for the same reason: both
     // choices are only open before the first message.
     expect(b.slotCalls).toContain('conversation.hero.agentPreset')
+    expect(b.slotCalls).toContain('conversation.hero.options')
+  })
+
+  it('seats the New Session options after the agent-preset chip, and only for a Session', () => {
+    const b = mount(sessionSnapshotOf({ blank: true }))
+    const preset = within(b.view.container).getByTestId('view-conversation.hero.agentPreset')
+    const options = within(b.view.container).getByTestId('view-conversation.hero.options')
+    expect(options.parentElement?.previousElementSibling).toBe(preset)
+
+    const cold = mount(sessionSnapshotOf(), [], undefined, { sessionId: undefined })
+    expect(cold.slotCalls).toContain('conversation.hero.agentPreset')
+    expect(cold.slotCalls).not.toContain('conversation.hero.options')
   })
 
   it('prompt failure renders the promptError strip (ordinary failure, no transaction UI)', () => {

@@ -26,7 +26,7 @@ export interface Config {
   maxTokens: Volatile<number>
   /** Positive context capacity used when the selected model has no exact value (default 1,000,000). */
   defaultContextWindow: Volatile<number>
-  /** Advisory models shown by discovery consumers; defaults to V41 Flash and V4 Pro. */
+  /** Advisory models shown by discovery consumers; defaults to V4.1 Flash and V4 Pro. */
   models: Volatile<DeepSeekCatalogModel[]>
   /** Maximum provider idle time while one stream read is outstanding (default five minutes). */
   streamIdleTimeoutMs: Volatile<number>
@@ -65,16 +65,26 @@ export function plainOptions(config: Config): Options {
   return Object.fromEntries(Object.entries(config).map(([key, value]) => [key, isVolatile(value) ? value.get() : value]))
 }
 
-const catalogModel: z<DeepSeekCatalogModel> = z.object({
-  id: z.string().required(),
+/**
+ * Schemas of the catalog-entry fields other than `id` and `inputModalities`,
+ * whose requiredness and defaults differ between a `models` entry and a
+ * provider's per-model overrides.
+ */
+export const catalogModelFields = {
   name: z.string(),
   description: z.string(),
   contextWindow: z.number().step(1).min(1),
   maxTokens: z.number().step(1).min(1),
-  inputModalities: z.array(z.union(MODEL_MODALITIES)).min(1).default(['text']),
   imagePixelBudget: z.union([z.number().step(1).min(1), 'low']),
   imageMaxBytes: z.number().step(1).min(1),
   systemPromptUpdate: z.const('in-history'),
+  toolUpdate: z.union(['in-history', 'addition-only'] as const),
+}
+
+const catalogModel: z<DeepSeekCatalogModel> = z.object({
+  id: z.string().required(),
+  ...catalogModelFields,
+  inputModalities: z.array(z.union(MODEL_MODALITIES)).min(1).default(['text']),
 })
 
 /** Shared schema fields for Messages protocol options. */
@@ -163,6 +173,10 @@ function resolveModels(models: readonly DeepSeekCatalogModel[] | undefined): Dee
     if (systemPromptUpdate !== undefined && systemPromptUpdate !== 'in-history') {
       throw new Error(`llm-deepseek: catalog model "${model.id}" systemPromptUpdate must be "in-history" when present`)
     }
+    const toolUpdate: string | undefined = model.toolUpdate
+    if (toolUpdate !== undefined && toolUpdate !== 'in-history' && toolUpdate !== 'addition-only') {
+      throw new Error(`llm-deepseek: catalog model "${model.id}" toolUpdate must be "in-history" or "addition-only" when present`)
+    }
     if (seen.has(model.id)) throw new Error(`llm-deepseek: duplicate catalog model "${model.id}"`)
     seen.add(model.id)
     return {
@@ -172,6 +186,7 @@ function resolveModels(models: readonly DeepSeekCatalogModel[] | undefined): Dee
       ...model.contextWindow === undefined ? {} : { contextWindow: model.contextWindow },
       ...model.maxTokens === undefined ? {} : { maxTokens: model.maxTokens },
       ...model.systemPromptUpdate === undefined ? {} : { systemPromptUpdate: model.systemPromptUpdate },
+      ...model.toolUpdate === undefined ? {} : { toolUpdate: model.toolUpdate },
       inputModalities: [...inputModalities],
       ...hasImage
         ? {
@@ -193,7 +208,8 @@ function resolveModels(models: readonly DeepSeekCatalogModel[] | undefined): Dee
  * the product CLI. Every layer may supply an endpoint: the product trusts the
  * project it is launched in, so a checkout can point its own agent at the
  * gateway that checkout is meant to use.
- * @returns validated protocol settings.
+ * @returns validated protocol settings; `models` holds one resolved entry per
+ * input model in input order, or the built-in catalog when `models` is absent.
  */
 export function resolveAdapterOptions(config: Options, environment?: LaunchEnvironmentSnapshot): ResolvedDeepSeekOptions {
   // Settings updates can reach this resolver without schema validation.

@@ -18,7 +18,7 @@
   padding: 0;
   overflow: hidden;
   border: 0.5px solid var(--dsw-alias-border-l2-darkmode-thin);
-  border-radius: 16px;
+  border-radius: var(--dsw-radius-xl);
   background: var(--dsw-alias-interactive-bg-hover);
   cursor: zoom-in;
 }
@@ -50,12 +50,17 @@
   transition: opacity 0.2s ease-in-out;
 }
 
-.imageItem:hover .remove,
 .remove:focus-visible {
   opacity: 1;
 }
 
-@media (pointer: coarse) {
+@media (hover: hover) {
+  .imageItem:hover .remove {
+    opacity: 1;
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
   .remove {
     opacity: 1;
   }

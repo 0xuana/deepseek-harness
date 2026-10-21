@@ -1,17 +1,16 @@
 /** Explicit deliveries commit only after a successful final tool result. */
-import { mkdtemp, rm, writeFile, symlink } from 'node:fs/promises'
+import { provideWorkingDirectoryFixture, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { mkdtemp, rm, writeFile, symlink, realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
-import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import { turnBoundaryProjectionDefinition } from '@deepseek-ai/dsh-agent-loop'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { defineTool } from '@deepseek-ai/dsh-tools'
 import type { PresentedFile } from '../src/types.ts'
@@ -55,13 +54,13 @@ async function setup() {
   const root = await mkdtemp(join(tmpdir(), 'dsh-present-minimal-'))
   cleanups.push(() => rm(root, { recursive: true, force: true }))
   const ctx = new Context()
+  provideWorkingDirectoryFixture(ctx)
   cleanups.push(() => ctx.fiber.dispose())
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(LocalFileSystem, { cwd: root })
-  await ctx.plugin(SessionProjectionRegistry)
-  ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
   const fiber = ctx.plugin(Present, { maxFiles: 2 })
   await fiber
   const owner = await agent(ctx, root)
@@ -85,7 +84,7 @@ describe('present', () => {
     const files = (result.value as unknown as { files: PresentedFile[] }).files
     expect(files).toHaveLength(1)
     expect(owner.session.snapshotEvents().find(event => event.type === 'deliverables/presented')?.data.files).toEqual(files)
-    expect(files).toEqual([{ path: '报告.docx', description: 'Report' }])
+    expect(files).toEqual([{ path: await realpath(join(root, '报告.docx')), description: 'Report' }])
     expect(read).not.toHaveBeenCalled()
     expect(ctx.get('attachments')).toBeUndefined()
     await fiber.dispose()
@@ -119,7 +118,7 @@ describe('present', () => {
     expect((await execute([{ path: 'a' }])).isError).toBe(false)
     const deliveries = owner.session.snapshotEvents().filter(event => event.type === 'deliverables/presented')
     expect(deliveries).toHaveLength(1)
-    expect(deliveries[0]?.data.files[0]?.path).toBe('a')
+    expect(deliveries[0]?.data.files[0]?.path).toBe(await realpath(join(root, 'a')))
   })
 
   it('does not publish deliveries after post-execute blocks a successful declaration', async () => {
@@ -148,9 +147,12 @@ describe('present', () => {
 })
 
 
-it('validates deployment limits before registering the tool', () => {
+it('validates deployment limits before registering the tool', async () => {
+  const ctx = new Context()
+  cleanups.push(() => ctx.fiber.dispose())
+  await ctx.plugin(SessionProjectionRegistry)
   for (const config of [{ maxFiles: 0 }, { maxFiles: 1.5 }, { maxFiles: Number.POSITIVE_INFINITY }]) {
-    expect(() => { Present.apply(new Context(), config) }).toThrow('positive integer maxFiles')
+    expect(() => { Present.apply(ctx, config) }).toThrow('positive integer maxFiles')
   }
 })
 
@@ -175,7 +177,7 @@ it('declares readable files outside the Session directory using absolute and rel
   await writeFile(file, 'external report')
   const files = [{ path: file }, { path: relative(root, file) }]
   expect((await execute(files)).isError).toBe(false)
-  expect(owner.session.snapshotEvents().find(event => event.type === 'deliverables/presented')?.data.files).toEqual(files)
+  expect(owner.session.snapshotEvents().find(event => event.type === 'deliverables/presented')?.data.files).toEqual([{ path: await realpath(file) }, { path: await realpath(file) }])
 })
 
 it('refuses a final symlink to an ordinary file', async () => {

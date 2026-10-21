@@ -15,23 +15,40 @@ import type { RefObject } from 'react'
 import clsx from 'clsx'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import {
-  HoverCard, IconAlarmClockOutlineRegular, IconArchiveOutlineRegular, IconEditOutlineRegular,
+  HoverCard, IconArchiveOutlineRegular, IconEditOutlineRegular,
   IconEllipsisOutlineRegular, IconFolderCloseRegular, IconFolderOpenRegular,
   IconNewChatOutlineRegular, IconPinFillRegular, IconTrashOutlineRegular,
   IconTriangleRightFillRegular, IconUnarchiveOutlineRegular, Menu, relativeTime, StateDot, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
 import { abbreviateHomePath } from '@deepseek-ai/dsh-util-workspace-path'
 import type { MenuOpenState, WorkspaceBrowserProps } from '../contract/slots.ts'
 import type { GroupNode, SearchResultNode, SessionNode } from '../tree.ts'
 import css from './Rows.module.css'
+import { useRowDragPreview } from './useRowDragPreview.ts'
 
 /** The standard locale seat, prop-passed from the browser root. */
 type RowTranslate = WorkspaceBrowserProps['t']
 
+/**
+ * Child-seat renderer threaded from the browser root: the row's action lists,
+ * its leading and trailing decorations, and its hover-card section. The leading
+ * seat is rendered only while the row's primary state is idle, so a status dot and a
+ * leading occupant never share the row; the hover seat only while the row's
+ * card is open.
+ */
+type RowRenderSlots = PropsRenderSlots<
+  | 'sidebar.workspaces.session.menu.item'
+  | 'sidebar.workspaces.session.row.action'
+  | 'sidebar.session.row.trailing'
+  | 'sidebar.session.row.leading'
+  | 'sidebar.session.row.hover'
+>['renderSlot']
+
 /** Row display title: blank rows show the localized New Session label. */
 function displayTitle(node: SessionNode, t: RowTranslate): string {
-  return node.blank ? t('session.new') : node.title
+  return node.blank ? t('session.new') : (node.title || t('session.untitled'))
 }
 
 /* Overflow this small hides no meaningful tail; scrolling for it reads as an
@@ -201,8 +218,9 @@ function rowHalf(e: { clientY: number; currentTarget: HTMLElement }): 'before' |
  * @param props.t - the browser root's locale seat.
  * @returns the row element.
  */
-export function ProjectRowItem({ group, containsCurrentDescendant = false, onToggle, onCreate, actions, drag, home, t }: {
+export function ProjectRowItem({ group, containsCurrentDescendant = false, onToggle, onCreate, actions, drag, home, newShortcut, t }: {
   group: GroupNode
+  newShortcut?: ShortcutCatalogEntry | undefined
   containsCurrentDescendant?: boolean
   onToggle: () => void
   onCreate: () => void
@@ -219,6 +237,7 @@ export function ProjectRowItem({ group, containsCurrentDescendant = false, onTog
   const label = row.workspaceId === undefined ? t('group.ungrouped') : row.label
   const active = containsCurrentDescendant || (group.expanded && group.containsCurrent)
   const [menuOpen, setMenuOpen] = useState(false)
+  const dragPreview = useRowDragPreview()
   const workspaceMenuItems = [
     { id: 'rename', label: t('rename'), icon: <IconEditOutlineRegular /> },
     { id: 'delete', label: t('delete.workspace'), icon: <IconTrashOutlineRegular />, danger: true },
@@ -237,8 +256,9 @@ export function ProjectRowItem({ group, containsCurrentDescendant = false, onTog
           e.dataTransfer.effectAllowed = 'move'
           e.dataTransfer.setData('text/plain', row.key)
           drag.start()
+          dragPreview.start(e)
         }}
-      onDragEnd={drag?.end}
+      onDragEnd={() => { if (dragPreview.clear()) drag?.end() }}
     >
       <span className={clsx(css.slot, css.folder, active && css.folderActive)}>
         {row.expanded ? <IconFolderOpenRegular /> : <IconFolderCloseRegular />}
@@ -278,10 +298,11 @@ export function ProjectRowItem({ group, containsCurrentDescendant = false, onTog
             )}
           />
         )}
-        <Tooltip label={t('actions.newSession')} side="bottom" align="end" delayMs={500}>
+        <Tooltip label={t('actions.newSession')} shortcutKeys={newShortcut?.keys} side="bottom" align="end" delayMs={500} portal>
           <button
             type="button"
             className={css.iconButton}
+            aria-keyshortcuts={newShortcut?.aria}
             aria-label={t('actions.newSession.aria', { name: label })}
             onClick={(e) => { e.stopPropagation(); onCreate() }}
           >
@@ -303,6 +324,7 @@ export function ProjectRowItem({ group, containsCurrentDescendant = false, onTog
         t={t}
       />}
       openDelayMs={800}
+      grouped
       disabled={menuOpen}
       copyText={row.cwd}
       copyLabel={t('copy')}
@@ -391,21 +413,6 @@ function SessionStatusDots({ statuses }: { statuses: readonly [SessionStatus, ..
   )
 }
 
-/** Non-interactive active-Schedule marker; the enclosing row remains the only action. */
-function ActiveScheduleIndicator({ t, search = false }: { t: RowTranslate; search?: boolean }) {
-  const label = t('schedule.active')
-  return (
-    <span
-      className={clsx(css.scheduleIndicator, search && css.searchScheduleIndicator)}
-      role="img"
-      aria-label={label}
-      title={label}
-    >
-      <IconAlarmClockOutlineRegular />
-    </span>
-  )
-}
-
 /** Non-interactive pinned-row marker; the enclosing row remains the only action. */
 function PinnedIndicator({ t }: { t: RowTranslate }) {
   const label = t('row.pinned')
@@ -416,8 +423,19 @@ function PinnedIndicator({ t }: { t: RowTranslate }) {
   )
 }
 
-/** Hover-card body: full title, relative time, and every relevant live status. */
-function SessionHoverContent({ node, now, t }: { node: SessionNode; now: number; t: RowTranslate }) {
+/**
+ * Hover-card body: full title, display working directory, relative time, the Session's own scheduled-task
+ * section, and every relevant live status. The task section sits above the
+ * status lines so they stay the card's trailing status line.
+ */
+function SessionHoverContent({ node, cwd, now, renderSlot, t }: {
+  node: SessionNode
+  /** Display working directory; absent omits the line. */
+  cwd: string | undefined
+  now: number
+  renderSlot: RowRenderSlots
+  t: RowTranslate
+}) {
   // On archived rows the archived line already says the session is inactive,
   // so resting statuses (idle/completed) drop; live activity still shows.
   const statuses = sessionStatuses(node, t)
@@ -425,9 +443,11 @@ function SessionHoverContent({ node, now, t }: { node: SessionNode; now: number;
   return (
     <div className={css.hoverContent}>
       <div className={css.hoverTitle}>{displayTitle(node, t)}</div>
+      {cwd !== undefined && <div className={css.hoverPath}>{cwd}</div>}
       {/* Same placeholder rule as the row's trailing cell: no timestamp
           before the first prompt. */}
       {!node.blank && <div className={css.hoverTime}>{hoverTimeLabel(node.updatedAt, now, t)}</div>}
+      {renderSlot('sidebar.session.row.hover', { sessionId: node.id })}
       {statuses.map(status => (
         <div className={css.hoverStatus} key={status.label}>
           <StateDot state={status.state} />
@@ -483,11 +503,10 @@ export function SearchResultItem({ result, currentId, onOpen, onUnarchive, t }: 
             <SessionStatusDots statuses={statuses} />
           )}
         </span>
-        <span className={css.searchResultTitle}>{result.title}</span>
-        {result.hasActiveSchedule && <ActiveScheduleIndicator t={t} search />}
+        <span className={css.searchResultTitle}>{result.title || t('session.untitled')}</span>
         {result.archived && (
           <span className={css.rowActions}>
-            <Tooltip label={t('actions.unarchive')} side="bottom" align="end" delayMs={500}>
+            <Tooltip label={t('actions.unarchive')} side="bottom" align="end" delayMs={500} portal>
               <button
                 type="button"
                 className={css.iconButton}
@@ -511,23 +530,30 @@ export function SearchResultItem({ result, currentId, onOpen, onUnarchive, t }: 
 }
 
 /**
- * One top-level 34px session row: status dot (pending user interaction outranks
- * own or descendant activity), title, relative time or compact pending label,
- * and the row actions menu.
+ * One top-level 32px session row: leading 16px cell (status dot, or the
+ * leading seat while the row's primary state is idle), title, relative time or
+ * compact pending label, and the row actions menu. A row that owns a state dot
+ * keeps that cell and renders no seat, so an ambient automation mark never
+ * appears beside the row's own state dot. An archived row keeps the cell blank:
+ * neither marker renders there, and its live status stays on the hover card.
+ * The row accepts Tab focus and opens with unmodified Enter or Space; descendant controls
+ * handle their own activation without opening the row.
  * @param props.node - derived session node.
  * @param props.currentId - selected session id (row highlight).
  * @param props.now - epoch ms for relative-time formatting.
  * @param props.onOpen - open a session by id.
  * @param props.onRenameRequest - open the rename dialog from a title double-click (id + current title).
- * @param props.renderSlot - render the row's `sidebar.workspaces.session.menu.item` and `sidebar.workspaces.session.row.action` lists.
+ * @param props.renderSlot - child-seat renderer for the row's action lists
+ * (`sidebar.workspaces.session.menu.item` / `sidebar.workspaces.session.row.action`),
+ * its leading and trailing decorations, and its hover-card section.
  * @param props.onReveal - scroll this row into view after search navigation, then acknowledge it.
  * @param props.drag - optional row-drag target wiring; blank rows cannot start a drag.
- * @param props.flat - omit the empty status slot in the hierarchy-free flat list.
+ * @param props.home - host account home for POSIX hover-path abbreviation.
  * @param props.t - the browser root's locale seat.
  * @returns the session row.
  */
 export function SessionNodeItem({
-  node, currentId, now, onOpen, onRenameRequest, renderSlot, onReveal, drag, flat = false, t,
+  node, currentId, now, onOpen, onRenameRequest, renderSlot, onReveal, drag, home, t,
 }: {
   node: SessionNode
   currentId: string | undefined
@@ -539,10 +565,16 @@ export function SessionNodeItem({
   onReveal?: (() => void) | undefined
   /** Present on reorderable-list rows so every row can remain a drop target. */
   drag?: RowDragProps | undefined
-  /** The row is rendered without a parent Workspace header. */
-  flat?: boolean | undefined
+  /** Host account home; POSIX home-rooted hover paths display as `~`. */
+  home?: string | undefined
   t: RowTranslate
-} & PropsRenderSlots<'sidebar.workspaces.session.menu.item' | 'sidebar.workspaces.session.row.action'>) {
+} & PropsRenderSlots<
+  | 'sidebar.workspaces.session.menu.item'
+  | 'sidebar.workspaces.session.row.action'
+  | 'sidebar.session.row.trailing'
+  | 'sidebar.session.row.leading'
+  | 'sidebar.session.row.hover'
+>) {
   const row = node
   const title = displayTitle(node, t)
   const selected = node.id === currentId
@@ -554,6 +586,7 @@ export function SessionNodeItem({
   // their drop targets to fellow pinned rows.
   const draggable = drag !== undefined && !row.blank && !row.archived
   const [menuOpen, setMenuOpen] = useState(false)
+  const dragPreview = useRowDragPreview()
   // The menu's open state, bound into the row entries' `useMenuOpenState` hook.
   const menuOpenState = useMemo((): MenuOpenState => [menuOpen, setMenuOpen], [menuOpen])
   const rowRef = useRef<HTMLDivElement>(null)
@@ -572,13 +605,19 @@ export function SessionNodeItem({
       className={clsx(
         css.sessionRow, selected && css.selected, menuOpen && css.menuOpen,
         row.archived && css.archived,
-        flat && !showStatus && css.flatSessionRowWithoutStatus,
         drag?.marker === 'before' && css.dropBefore, drag?.marker === 'after' && css.dropAfter,
       )}
       role="treeitem"
       aria-selected={selected}
       aria-description={row.archived ? t('toast.archivedNotOpenable') : undefined}
+      tabIndex={0}
       onClick={() => { onOpen(node.id) }}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return
+        if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
+        event.preventDefault()
+        onOpen(node.id)
+      }}
       onPointerEnter={marquee.enter}
       onPointerLeave={marquee.leave}
       draggable={draggable}
@@ -588,8 +627,9 @@ export function SessionNodeItem({
           e.dataTransfer.effectAllowed = 'move'
           e.dataTransfer.setData('text/plain', node.id)
           drag.start()
+          dragPreview.start(e)
         }}
-      onDragEnd={!draggable ? undefined : drag.end}
+      onDragEnd={() => { if (dragPreview.clear()) drag?.end() }}
       onDragOver={drag === undefined
         ? undefined
         : (e) => {
@@ -611,11 +651,11 @@ export function SessionNodeItem({
           and is cleared by opening the session. Archived rows keep the slot
           blank — the grayed row carries the archived look — and their live
           status stays on the hover card only. */}
-      {(!flat || showStatus) && (
-        <span className={css.slot}>
-          {!row.archived && showStatus && <SessionStatusDots statuses={statuses} />}
-        </span>
-      )}
+      <span className={css.slot}>
+        {!row.archived && !row.blank && (showStatus
+          ? <SessionStatusDots statuses={statuses} />
+          : renderSlot('sidebar.session.row.leading', { sessionId: node.id }))}
+      </span>
       <span
         ref={titleRef}
         className={css.title}
@@ -625,22 +665,20 @@ export function SessionNodeItem({
       >
         {title}
       </span>
-      {row.hasActiveSchedule && <ActiveScheduleIndicator t={t} />}
-      {/* A blank New Session row is a provisional placeholder: nothing has
-          happened in it yet, so a "now" timestamp and the row verbs
-          (rename/fork/archive) would all act on content that does not
-          exist — both trailing cells stay off until the first prompt. */}
+      {/* Blank rows have no first prompt, so neither trailing details nor
+          actions for existing content are available. */}
       {!row.blank && (
-        <span
-          className={css.time}
-          aria-hidden={primaryStatus.trailingLabel === undefined ? undefined : true}
-        >
-          {primaryStatus.trailingLabel ?? timeLabel(row.updatedAt, now, t)}
+        <span className={css.rowResting}>
+          <span
+            className={css.time}
+            aria-hidden={primaryStatus.trailingLabel === undefined ? undefined : true}
+          >
+            {primaryStatus.trailingLabel ?? timeLabel(row.updatedAt, now, t)}
+          </span>
+          {renderSlot('sidebar.session.row.trailing', { sessionId: node.id })}
+          {row.pinned && !row.archived && <PinnedIndicator t={t} />}
         </span>
       )}
-      {/* Trails the time so the marker occupies the same right-edge cell as
-          the hover pin button that replaces it. */}
-      {row.pinned && !row.archived && <PinnedIndicator t={t} />}
       {/* The strip's clicks stay in the strip: the trigger and every
           row.action entry act without also opening the row, so an entry's
           button needs no propagation handling of its own. */}
@@ -668,7 +706,9 @@ export function SessionNodeItem({
               { hookContext: menuOpenState },
             )}
           </Menu>
-          {renderSlot('sidebar.workspaces.session.row.action', { sessionId: node.id, displayTitle: row.title })}
+          <span className={css.rowQuickActions}>
+            {renderSlot('sidebar.workspaces.session.row.action', { sessionId: node.id, displayTitle: row.title })}
+          </span>
         </span>
       )}
     </div>
@@ -676,10 +716,17 @@ export function SessionNodeItem({
   return (
     <HoverCard
       anchor={ownRow}
-      content={<SessionHoverContent node={node} now={now} t={t} />}
+      content={<SessionHoverContent
+        node={node}
+        cwd={row.cwd === undefined ? undefined : abbreviateHomePath(row.cwd, home)}
+        now={now}
+        renderSlot={renderSlot}
+        t={t}
+      />}
       openDelayMs={800}
+      grouped
       disabled={menuOpen || drag?.active === true}
-      copyText={row.blank ? undefined : row.title}
+      copyText={row.blank || row.title === '' ? undefined : row.title}
       copyLabel={t('copy')}
       copiedLabel={t('hover.copied')}
     />

@@ -67,6 +67,12 @@ interface ChromeRow {
 
 const CHROME_ROWS: readonly ChromeRow[] = [
   {
+    file: 'client/ui-settings-account/src/client/OnboardingSurface.module.css',
+    selector: '.dragBand',
+    markup: 'client/ui-settings-account/src/client/OnboardingSurface.tsx',
+    inset: ['inset', '8px'],
+  },
+  {
     file: SIDEBAR,
     selector: '.topStrip',
     markup: 'client/ui-sidebar/src/client/SidebarRoot.tsx',
@@ -99,6 +105,11 @@ const CHROME_ROWS: readonly ChromeRow[] = [
   {
     file: PLUGIN_MANAGER,
     selector: '.detailTop',
+    markup: 'client/ui-plugin-manager/src/client/PluginManagerPage.tsx',
+  },
+  {
+    file: PLUGIN_MANAGER,
+    selector: '.moreHead',
     markup: 'client/ui-plugin-manager/src/client/PluginManagerPage.tsx',
   },
   {

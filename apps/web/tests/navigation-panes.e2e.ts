@@ -20,14 +20,17 @@ import {
   launchWebScaffold, recordFixture, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import { expandOwningTurnProcess, newEnglishPage, saveFailureShot } from './support.ts'
+import { expectWrappedTerminalCommand } from './terminal-command-browser.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/navigation-panes', import.meta.url))
 const SEED = join(SNAPSHOT_DIR, 'session.v3.jsonl')
 const TRAJECTORY_EXPECTED = join(SNAPSHOT_DIR, 'trajectory.expected.md')
 const TIMING_EXPECTED = join(SNAPSHOT_DIR, 'timing.expected.md')
 const SEARCH_EXPECTED = join(SNAPSHOT_DIR, 'search-results.expected.md')
+const ID_SEARCH_EXPECTED = join(SNAPSHOT_DIR, 'search-id-results.expected.md')
 const TERMINAL_EXPECTED = join(SNAPSHOT_DIR, 'terminal-card.expected.md')
 const CODE_CARD_DIR = fileURLToPath(new URL('./expected/navigation-panes', import.meta.url))
+const COMMAND_WRAP_EXPECTED = join(CODE_CARD_DIR, 'command-wrap.expected.md')
 const CODE_CARD_EXPECTED = join(CODE_CARD_DIR, 'code-card.expected.md')
 const MODE = webSnapshotMode()
 const SEED_ID = 'navigation-panes-web-e2e'
@@ -200,9 +203,20 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
       { timeout: 10_000 },
     ).toBe(0)
 
-    await search.fill('WATERFALL')
     const resultTree = page.getByRole('tree', { name: 'Search results' })
     const result = resultTree.getByRole('treeitem')
+    // The seed log carries its id only in the header, so this mid-id,
+    // differently cased fragment can match only through local id matching.
+    await search.fill('PANES-WEB')
+    await expect.poll(() => result.count(), { timeout: 10_000 }).toBe(1)
+    await page.getByRole('status', { name: 'Searching session history…' }).waitFor({ state: 'detached', timeout: 30_000 })
+    await compareOrRefreshGolden(
+      ID_SEARCH_EXPECTED,
+      await captureStableAria(page, '[class*="listArea"]', scaffold.workspaceCwd),
+      MODE,
+    )
+
+    await search.fill('WATERFALL')
     await expect.poll(() => result.count(), { timeout: 30_000 }).toBe(1)
     await expect.poll(() => result.getByText('WATERFALL', { exact: false }).count(), {
       timeout: 10_000,
@@ -471,6 +485,8 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     if (await bashRow.getAttribute('aria-expanded') !== 'true') await bashRow.click()
     const card = page.locator('[data-sample="bash"] ~ div [data-terminal]').first()
     await card.waitFor({ timeout: 15_000 })
+    const commandWrap = await expectWrappedTerminalCommand(page, card, 'echo NAVIGATION_OK', 300)
+    await compareOrRefreshGolden(COMMAND_WRAP_EXPECTED, JSON.stringify(commandWrap, null, 2), MODE)
     // Real layout, not jsdom's stub (which computes no geometry at all):
     // squeeze the output pane below its content width and the line must keep
     // its single row and overflow sideways instead of folding. Soft-wrapping
@@ -545,9 +561,9 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
   }, 60_000)
 
   it.skipIf(MODE === 'record')('keeps the recorded fixture inventory exact', async () => {
-    await assertFixtureInventory(CODE_CARD_DIR, ['code-card.expected.md'])
+    await assertFixtureInventory(CODE_CARD_DIR, ['code-card.expected.md', 'command-wrap.expected.md'])
     await assertFixtureInventory(SNAPSHOT_DIR, [
-      'session.v3.jsonl', 'search-results.expected.md', 'trajectory.expected.md',
+      'session.v3.jsonl', 'search-id-results.expected.md', 'search-results.expected.md', 'trajectory.expected.md',
       'terminal-card.expected.md', 'timing.expected.md',
     ])
   })

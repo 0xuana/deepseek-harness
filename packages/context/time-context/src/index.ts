@@ -19,6 +19,7 @@ declare module '@deepseek-ai/dsh-llm' {
 
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionSeq } from '@deepseek-ai/dsh-session'
+import { Duration } from '@deepseek-ai/dsh-util-time'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import {
   deriveBrowserTimeZoneContext,
@@ -30,13 +31,6 @@ import { createTimestampFormatter, formatTimestamp } from './timestamp.ts'
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'time-context'
 
-declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionStateMap {
-    /** Latest time-context readings. */
-    timeContext: TimeContextProjection
-  }
-}
-
 const timeContextStateSchema = zod.object({
   /** Time of the latest model-visible event (user/assistant message, tool result), or null. */
   lastMessageTime: zod.number().nullable(),
@@ -46,9 +40,6 @@ const timeContextStateSchema = zod.object({
   lastTurnInjectionTime: zod.number().nullable(),
 })
 
-/** Folded time-context readings. */
-type TimeContextProjection = zod.infer<typeof timeContextStateSchema>
-
 /** The agent registry that owns pre-step processing. */
 export const inject = ['agents', 'sessionProjections']
 
@@ -56,7 +47,7 @@ export const inject = ['agents', 'sessionProjections']
 export interface Config {
   /** Fallback display zone when the open turn has no unique browser zone. Omit to use the process zone. */
   timeZone?: string
-  /** Minimum milliseconds between durable injections in one session. Omit or set to 0 to inject at every eligible step. */
+  /** Minimum milliseconds between durable injections in one session. Defaults to 600000 (10 minutes); 0 injects at every eligible step. */
   refreshIntervalMs?: number
 }
 
@@ -66,15 +57,17 @@ export const Config: z<Config> = z.object({
   refreshIntervalMs: z.number(),
 })
 
-/** Format a non-negative elapsed millisecond count as compact whole-second units. */
+/**
+ * Format a non-negative elapsed millisecond count as compact whole-second units.
+ *
+ * A backward wall-clock reading is a property of the clock rather than of the
+ * span, so it clamps to zero here; the shared span type then supplies the whole
+ * parts, and this package keeps the wording.
+ */
 function formatDuration(elapsedMs: number): string {
-  let seconds = Math.floor(Math.max(0, elapsedMs) / 1000)
-  const days = Math.floor(seconds / 86_400)
-  seconds %= 86_400
-  const hours = Math.floor(seconds / 3600)
-  seconds %= 3600
-  const minutes = Math.floor(seconds / 60)
-  seconds %= 60
+  const { days, hours, minutes, seconds } = Duration
+    .fromMilliseconds(Math.max(0, elapsedMs))
+    .decompose()
   const parts: string[] = []
   if (days > 0) parts.push(`${days}d`)
   if (hours > 0) parts.push(`${hours}h`)
@@ -115,11 +108,8 @@ function renderText(
 }
 
 /** Reject refresh intervals that cannot represent an exact elapsed-millisecond threshold. */
-function validateRefreshInterval(refreshIntervalMs: number | undefined): void {
-  if (refreshIntervalMs !== undefined && (
-    !Number.isSafeInteger(refreshIntervalMs)
-    || refreshIntervalMs < 0
-  )) {
+function validateRefreshInterval(refreshIntervalMs: number): void {
+  if (!Number.isSafeInteger(refreshIntervalMs) || refreshIntervalMs < 0) {
     throw new TypeError(
       `time-context: refreshIntervalMs must be a non-negative safe integer, got ${String(refreshIntervalMs)}`,
     )
@@ -128,13 +118,16 @@ function validateRefreshInterval(refreshIntervalMs: number | undefined): void {
 
 /**
  * Register a prepended pre-step listener for the lifetime of `ctx`.
+ * Steps admitted during activation await the projection registration; a
+ * registration failure or owner disposal prevents the request from proceeding.
  * @param ctx - plugin context; the listener is disposed with it.
  * @param config - time zone and durable refresh scheduling configuration.
  * @throws when the refresh interval is invalid or the configured or process time zone cannot be resolved.
+ * @returns when the plugin is ready.
  */
-export function apply(ctx: Context, config: Config): void {
+export async function apply(ctx: Context, config: Config): Promise<void> {
   const timeZone = config.timeZone
-  const refreshIntervalMs = config.refreshIntervalMs
+  const refreshIntervalMs = config.refreshIntervalMs ?? 600_000
   validateRefreshInterval(refreshIntervalMs)
   let fallbackFormatter: Intl.DateTimeFormat
   try {
@@ -157,7 +150,7 @@ export function apply(ctx: Context, config: Config): void {
     return created
   }
 
-  ctx.sessionProjections.register({
+  const projectionReady = ctx.sessionProjections.register({
     key: 'timeContext',
     stateVersion: 2,
     stateSchema: timeContextStateSchema,
@@ -189,11 +182,13 @@ export function apply(ctx: Context, config: Config): void {
     { agent, turn, step, signal },
     next,
   ): Promise<PreStepDecision> => {
+    const timeContextProjectionHandle = await projectionReady
+    ctx.fiber.assertActive()
     const decision = await next()
     if (decision.kind === 'reject' || signal.aborted) return decision
     const now = Date.now()
-    const state = ctx.sessionProjections.stateOf(agent.session, 'timeContext') as TimeContextProjection
-    if (refreshIntervalMs !== undefined && refreshIntervalMs > 0) {
+    const state = timeContextProjectionHandle.stateOf(agent.session)
+    if (refreshIntervalMs > 0) {
       const lastInjection = state.lastInjectionTime
       if (lastInjection != null
         && now >= lastInjection
@@ -226,4 +221,5 @@ export function apply(ctx: Context, config: Config): void {
       ],
     }
   }, { prepend: true })
+  await projectionReady
 }
