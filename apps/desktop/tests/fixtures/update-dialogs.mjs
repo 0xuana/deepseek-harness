@@ -1,4 +1,5 @@
 /** Real isolated update dialogs; installer handoff is recorded by the caller's inert updater. */
+import { DesktopUpdateOverlays } from '../../lib/types/update-overlay.js'
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
 import { access, readFile, writeFile } from 'node:fs/promises'
@@ -33,7 +34,7 @@ export async function qualifyUpdateDialogs(root, fixture) {
     return new Response(await readFile(new URL(`${name === 'design-platform.css' ? '../../lib/welcome' : '../../renderer'}/${name}`, import.meta.url)), { headers: { 'content-type': mime } })
   })
   const parent = new BrowserWindow({ show: true, width: 900, height: 650 })
-  const dialogs = new DesktopUpdateDialog(fileURLToPath(new URL('../../lib/preload-update-dialog.cjs', import.meta.url)), locale)
+  const dialogs = new DesktopUpdateDialog(fileURLToPath(new URL('../../lib/preload-update-dialog.cjs', import.meta.url)), locale, new DesktopUpdateOverlays())
   try {
     await parent.loadURL('data:text/html;charset=utf-8,<title>Update dialog qualification</title><h1>Local updater</h1>')
     const f = await fixture()

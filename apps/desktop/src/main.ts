@@ -371,7 +371,7 @@ async function main(): Promise<void> {
   const ordinaryDialogs = new Set<AbortController>()
   const currentDialogWindow = (): BrowserWindow | undefined => welcomeWindow ?? mainWindow
   const updateOverlays = new DesktopUpdateOverlays()
-  const updateDialog = new DesktopUpdateDialog(fileURLToPath(new URL('./preload-update-dialog.cjs', import.meta.url)), () => locale)
+  const updateDialog = new DesktopUpdateDialog(fileURLToPath(new URL('./preload-update-dialog.cjs', import.meta.url)), () => locale, updateOverlays)
   const isMandatory = (): boolean => mandatoryPolicy?.state.blocking === true
   const ordinaryMessageBox = async (options: UpdateDialogOptions): Promise<Electron.MessageBoxReturnValue> => {
     const controller = new AbortController()
@@ -442,7 +442,8 @@ async function main(): Promise<void> {
     return next.promise
   }
   const platformView = new DesktopPlatformView(join(app.getAppPath(), 'lib', 'preload-platform-account.cjs'),
-    () => locale.id === 'zh-CN' ? 'zh_CN' : 'en_US', process.platform === 'win32' ? 'win32' : 'darwin')
+    () => locale.id === 'zh-CN' ? 'zh_CN' : 'en_US', process.platform === 'win32' ? 'win32' : 'darwin',
+    owner => isMandatory() || updateOverlays.input(owner).blocked)
   const backend = new DesktopBackendController((onFailure) => {
     const hostInspectPort = developmentHostInspectPort(development)
     const host = new DesktopHostProcess(resources.node, resources.dsh, activeProject,
@@ -686,11 +687,7 @@ async function main(): Promise<void> {
   installDesktopDirectoryPicker(() => mainWindow)
   installMicrophonePermissions(session.defaultSession, () => mainWindow?.webContents)
   const shortcuts = installDesktopShortcuts(() => mainWindow, app.getPath('userData'),
-    process.platform === 'darwin' ? 'macos' : process.platform === 'win32' ? 'windows' : 'linux', () => { refreshApplicationMenu() }, (window) => {
-      const mandatory = updateOverlays.input(window)
-      const embedded = updateDialog.input(window)
-      return { revision: mandatory.revision + embedded.revision, blocked: mandatory.blocked || embedded.blocked }
-    })
+    process.platform === 'darwin' ? 'macos' : process.platform === 'win32' ? 'windows' : 'linux', () => { refreshApplicationMenu() }, window => updateOverlays.input(window))
   app.on('will-quit', () => { shortcuts.dispose() })
 
   ipcMain.handle(DESKTOP_IPC.boot, async (event) => {

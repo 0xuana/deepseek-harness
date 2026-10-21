@@ -1,7 +1,7 @@
 /** Main-owned update confirmations; closing or replacing a dialog never grants installation permission. */
 import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent, type MessageBoxOptions, type MessageBoxReturnValue } from 'electron'
 import type { DesktopLocale } from './locale.ts'
-import { DesktopUpdateOverlays, type DesktopUpdateOverlay } from './update-overlay.ts'
+import type { DesktopUpdateOverlays, DesktopUpdateOverlay } from './update-overlay.ts'
 
 /** Channels available only to the isolated update-dialog document. */
 export const UPDATE_DIALOG_IPC = { status: 'dsh-update-dialog:status', changed: 'dsh-update-dialog:changed', respond: 'dsh-update-dialog:respond' } as const
@@ -41,7 +41,6 @@ export class DesktopUpdateDialog {
   private disposed = false
   private revision = 0
   private view: DesktopUpdateOverlay | undefined
-  private readonly overlays = new DesktopUpdateOverlays()
   private parent: BrowserWindow | undefined
   private closing: ReturnType<typeof setTimeout> | undefined
   private active: { view: UpdateDialogView; finish: (index: number, retain?: boolean) => void } | undefined
@@ -53,22 +52,16 @@ export class DesktopUpdateDialog {
     this.view?.webContents.focus()
   }
 
-  /**
-   * @param parent - Product window whose shortcuts may be blocked by a dialog.
-   * @returns Blocking state and a revision changed on attachment or release.
-   */
-  input(parent: BrowserWindow): { readonly revision: number; readonly blocked: boolean } {
-    return this.overlays.input(parent)
-  }
-
   /** Whether a shell prompt is awaiting a response. */
   get isOpen(): boolean { return this.active !== undefined }
 
   /**
    * @param preload - Bundled isolated preload.
    * @param locale - Shell-owned copy or a reader of the current UI language.
+   * @param overlays - Application-owned view creation and input tracking.
    */
-  constructor(private readonly preload: string, private readonly locale: DesktopLocale | (() => DesktopLocale)) {
+  constructor(private readonly preload: string, private readonly locale: DesktopLocale | (() => DesktopLocale),
+    private readonly overlays: Pick<DesktopUpdateOverlays, 'create'>) {
     ipcMain.handle(UPDATE_DIALOG_IPC.status, (event) => { this.owned(event); return this.active?.view ?? null })
     ipcMain.handle(UPDATE_DIALOG_IPC.respond, (event, revision: unknown, index: unknown) => {
       this.owned(event)

@@ -285,7 +285,8 @@ export class DesktopMandatoryUpdateWindow {
         buttons: actions.map(action => labels[action]), defaultId: 0, cancelId: -1,
         noLink: true, signal: controller.signal }).then(({ response }) => {
         if (prompt === controller) prompt = undefined
-        if (controller.signal.aborted || !valid() || !failed) return
+        if (controller.signal.aborted) { show(); return }
+        if (!valid() || !failed) return
         if (actions[response] === 'quit') app.quit()
         else if (actions[response] === 'page') {
           if (destination !== desktopPolicyPage(this.options.policy().page, this.options.allowedPageOrigins)) { show(); return }

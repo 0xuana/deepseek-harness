@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import type { BrowserWindow } from 'electron'
 import { DesktopUpdateDialog, UPDATE_DIALOG_IPC, type UpdateDialogOptions } from '../src/update-dialog.ts'
+import { DesktopUpdateOverlays } from '../src/update-overlay.ts'
 import { resolveDesktopLocale, type DesktopLocale } from '../src/locale.ts'
 
 const fixture = await vi.hoisted(async () => {
@@ -53,7 +54,8 @@ afterEach(() => {
 function setup(locale: DesktopLocale | (() => DesktopLocale) = resolveDesktopLocale('zh-CN')) {
   const parent = new fixture.FakeParent()
   const owner = parent as unknown as BrowserWindow
-  dialogs = new DesktopUpdateDialog('preload-update-dialog.cjs', locale)
+  const overlays = new DesktopUpdateOverlays()
+  dialogs = new DesktopUpdateDialog('preload-update-dialog.cjs', locale, overlays)
   const show = (signal?: AbortSignal, options: Partial<UpdateDialogOptions> = {}) => dialogs!.show(owner, {
     message: '下载完成', buttons: ['安装并重启'], cancelId: 1, ...options, ...(signal === undefined ? {} : { signal }),
   })
@@ -63,7 +65,7 @@ function setup(locale: DesktopLocale | (() => DesktopLocale) = resolveDesktopLoc
     const state = fixture.handlers.get(UPDATE_DIALOG_IPC.status)!(event) as { revision: number }
     return fixture.handlers.get(channel)!(event, ...(channel === UPDATE_DIALOG_IPC.respond ? [state.revision, ...args] : args))
   }
-  return { parent, owner, show, invoke }
+  return { parent, owner, show, invoke, overlays }
 }
 
 it('accepts only a displayed choice from its isolated shell frame', async () => {
@@ -124,23 +126,23 @@ it('updates a background result in the same view without activating its owner', 
 it('releases keyboard blocking only after fade-out and retains it across replacement', async () => {
   vi.useFakeTimers()
   const f = setup()
-  expect(dialogs!.input(f.owner)).toEqual({ revision: 0, blocked: false })
+  expect(f.overlays.input(f.owner)).toEqual({ revision: 0, blocked: false })
   const first = f.show()
   const view = fixture.views[0]!
-  expect(dialogs!.input(f.owner)).toEqual({ revision: 1, blocked: true })
+  expect(f.overlays.input(f.owner)).toEqual({ revision: 1, blocked: true })
   dialogs!.cancel()
   await first
   expect(view.webContents.send).toHaveBeenLastCalledWith(UPDATE_DIALOG_IPC.changed, null)
   const next = f.show()
   await vi.advanceTimersByTimeAsync(150)
   expect(view.destroyed).toBe(false)
-  expect(dialogs!.input(f.owner)).toEqual({ revision: 1, blocked: true })
+  expect(f.overlays.input(f.owner)).toEqual({ revision: 1, blocked: true })
   dialogs!.cancel()
   await next
   await vi.advanceTimersByTimeAsync(150)
   expect(view.destroyed).toBe(true)
   expect(f.parent.contentView.removeChildView).toHaveBeenCalledWith(view)
-  expect(dialogs!.input(f.owner)).toEqual({ revision: 2, blocked: false })
+  expect(f.overlays.input(f.owner)).toEqual({ revision: 2, blocked: false })
 })
 
 it('blocks owner input and restores dialog focus only when that owner is focused', async () => {

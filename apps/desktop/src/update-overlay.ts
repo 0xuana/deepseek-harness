@@ -27,7 +27,7 @@ export class DesktopUpdateOverlays {
   private readonly inputs = new WeakMap<object, { revision: number; active: number; readonly blocked: boolean }>()
 
   /** @param parent - Product window. @returns Blocking state and attachment/release revision. */
-  input(parent: object): { readonly revision: number; readonly blocked: boolean } {
+  input(parent: Pick<BrowserWindow, 'isDestroyed'>): { readonly revision: number; readonly blocked: boolean } {
     const state = this.inputs.get(parent)
     return { revision: state?.revision ?? 0, blocked: state?.blocked ?? false }
   }

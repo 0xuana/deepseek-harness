@@ -1,7 +1,7 @@
 #status, #version { margin-top: 12px; color: var(--dsw-alias-label-secondary); }
 #status:empty, #version:empty { display: none; }
 #error { margin-top: 12px; color: var(--dsw-alias-state-error-primary); }
-#address { display: block; width: 100%; margin-top: 4px; padding: 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; background: var(--dsw-alias-bg-layer-2); font: 12px/20px monospace; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; resize: vertical; }
+#address { display: block; width: 100%; margin-top: 4px; padding: 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; background: var(--dsw-alias-markdown-code-block); font: 12px/20px monospace; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; resize: vertical; }
 #actions button:not(.primary) { min-height: 32px; padding: 5px 8px; color: var(--dsw-alias-label-secondary); background: transparent; }
 #update, #refresh { border-radius: 100px; }
 #fallback { border-top: 1px solid var(--dsw-alias-border-l2); margin-top: 12px; padding-top: 12px; }
@@ -14,3 +14,6 @@
 #progress::-webkit-progress-bar { background: var(--dsw-alias-border-l2); }
 #progress::-webkit-progress-value { background: var(--dsw-alias-button-primary-fill); }
 #progress::-moz-progress-bar { background: var(--dsw-alias-button-primary-fill); }
+@media (hover: hover) {
+  #actions button:not(.primary):hover:not(:disabled), #copy:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
+}

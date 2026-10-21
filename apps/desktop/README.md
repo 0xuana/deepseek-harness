@@ -271,7 +271,7 @@ On Windows, the downloaded-update confirmation explains that the application clo
 
 On macOS, installation preparation waits for the product window to leave fullscreen before displaying the restart confirmation. Cancelling leaves the window in normal mode; destroying it during the native transition cancels installation before task teardown. If macOS does not report completion within five seconds, preparation fails without stopping the Host; the localized error asks the user to exit fullscreen and retry. Installation failure recovery uses the normal window.
 
-Ordinary update dialogs use an isolated shell-origin WebContentsView inside the product window, so loading a result does not raise a separate native window. The document remains available before the workspace Host is ready. While attached, it intercepts product keyboard input; closing it releases its listeners and view. Windows caption controls remain above the view.
+Ordinary update dialogs use an isolated shell-origin WebContentsView inside the product window, so loading a result does not raise a separate native window. The document remains available before the workspace Host is ready. While attached, it intercepts product keyboard input; closing it releases its listeners and view. The Windows caption lies outside the view; its native and product Web controls remain operable.
 
 Ordinary update dialogs, the Windows first-close notice, and mandatory-update documents share the UI design tokens bundled with the shell. Before displaying a card, each document resolves Electron's application theme through `prefers-color-scheme` and updates its dark-theme attribute when the palette changes. Welcome and update documents use the same initialization script. Explicit light/dark preferences and system appearance share this path; the isolated document keeps its background transparent, and dark mode adds a 1 CSS px token-based inset outline without changing the card size; light mode has no outline.
 
@@ -377,7 +377,7 @@ When an expired account returns to Welcome, the main process retains a one-time 
 
 An expired login displays a timeout heading with explicit Sign in again and Add API Key actions. Opening the API-key form dismisses the authorization view; late account-state notifications do not replace an in-progress key entry.
 
-Embedded Platform views remain hidden until document loading completes so the renderer loading indicator stays visible. Closing or replacing a pending view prevents it from appearing later. Reloading or replacing the owning application document, renderer termination, and window closure also destroy the native view without relying on React cleanup.
+Embedded Platform views remain hidden until document loading completes so the renderer loading indicator stays visible. Closing or replacing a pending view prevents it from appearing later. Update policy and ordinary update prompts refuse Platform admission, including a pending open whose storage cleanup completes after blocking starts. Reloading or replacing the owning application document, renderer termination, and window closure also destroy the native view without relying on React cleanup.
 
 Private Platform deployment headers are injected by the embedded browser session only for its configured origin, including document and API requests. Cookie overrides merge by name. Cross-origin requests discard deployment headers; bootstrap exposes only origin, token, and resolved language.
 

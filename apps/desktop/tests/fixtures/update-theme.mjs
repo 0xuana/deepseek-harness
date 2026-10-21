@@ -61,16 +61,21 @@ async function main() {
               const card = getComputedStyle(document.querySelector('main'));
               const primary = getComputedStyle(document.querySelector('.primary'));
               resolve({ dark, surface: card.backgroundColor, label: card.color, primary: primary.backgroundColor,
-                primaryLabel: primary.color, body: getComputedStyle(document.body).backgroundColor,
+                primaryLabel: primary.color, boxShadow: card.boxShadow,
+                diagnostic: getComputedStyle(document.querySelector('pre, #address')).backgroundColor, body: getComputedStyle(document.body).backgroundColor,
                 mask: getComputedStyle(document.body, '::before').backgroundColor,
                 close: document.querySelector('.close') ? getComputedStyle(document.querySelector('.close'), '::before').backgroundColor : null });
             }
             observer.observe(document.body, { attributes: true }); check();
           })`)
-          assert.deepEqual(colors, { dark, surface: dark ? 'rgb(35, 35, 36)' : 'rgb(255, 255, 255)',
+          const { boxShadow, ...palette } = colors
+          if (dark) assert.match(boxShadow, /0px 0px 0px 1px inset$/)
+          else assert.equal(boxShadow, 'none')
+          assert.deepEqual(palette, { dark, surface: dark ? 'rgb(35, 35, 36)' : 'rgb(255, 255, 255)',
             label: dark ? 'rgb(249, 250, 251)' : 'rgb(15, 17, 21)',
             primary: dark ? 'rgb(249, 250, 251)' : 'rgb(15, 17, 21)',
-            primaryLabel: dark ? 'rgb(53, 54, 56)' : 'rgb(255, 255, 255)', body: 'rgba(0, 0, 0, 0)',
+            primaryLabel: dark ? 'rgb(53, 54, 56)' : 'rgb(255, 255, 255)',
+            diagnostic: dark ? 'rgb(27, 27, 28)' : 'rgb(249, 250, 251)', body: 'rgba(0, 0, 0, 0)',
             mask: dark ? 'rgba(0, 0, 0, 0.5)' : 'rgba(0, 0, 0, 0.24)',
             close: document === 'update-dialog' ? dark ? 'rgb(249, 250, 251)' : 'rgb(15, 17, 21)' : null })
           results.push({ document, initial, source, ...colors })

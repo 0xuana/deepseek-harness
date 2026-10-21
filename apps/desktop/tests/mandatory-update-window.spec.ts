@@ -407,3 +407,23 @@ it('uses the configured policy title as the native headline without repeating it
   expect(options.message).toBe('Configured title')
   expect(options.detail).toBe('Configured detail\n\n新版本：1.0.1-nightly.1')
 })
+
+
+it('rechecks recovery after an aborted native prompt finishes following a foreground return', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  const f = setup()
+  await Promise.resolve()
+  const answer = Promise.withResolvers<{ response: number }>()
+  native.messageBox.mockReturnValueOnce(answer.promise)
+  window.loadURL.mockRejectedValueOnce(new Error('local recovery failed'))
+  window.webContents.emit('render-process-gone')
+  await Promise.resolve()
+  f.owner.emit('hide')
+  f.owner.emit('focus')
+  expect(native.messageBox).toHaveBeenCalledOnce()
+  answer.resolve({ response: 1 })
+  await Promise.resolve()
+  expect(native.messageBox).toHaveBeenCalledTimes(2)
+  expect(native.quit).not.toHaveBeenCalled()
+  expect(f.view().policy.blocking).toBe(true)
+})
