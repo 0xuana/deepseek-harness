@@ -320,24 +320,24 @@
   color: var(--dsw-alias-label-caption);
 }
 
-.endedRow.selectedRow .rowTitle {
-  color: inherit;
-}
-
 @media (hover: hover) {
   .endedRow:hover .rowTitle {
     color: inherit;
   }
 }
 
-.endedRow.selectedRow .rowSummary {
-  color: var(--dsw-alias-label-tertiary);
+.endedRow.selectedRow .rowTitle {
+  color: inherit;
 }
 
 @media (hover: hover) {
   .endedRow:hover .rowSummary {
     color: var(--dsw-alias-label-tertiary);
   }
+}
+
+.endedRow.selectedRow .rowSummary {
+  color: var(--dsw-alias-label-tertiary);
 }
 
 /* The mock's `.notice`: the catalog loading and failure text keeps the caption
@@ -1038,18 +1038,18 @@
   opacity: 0;
 }
 
+@media (hover: hover) {
+  .ruleIntervalStepper:hover .ruleIntervalArrows {
+    opacity: 1;
+  }
+}
+
 .ruleIntervalStepper:focus-within .ruleIntervalArrows {
   opacity: 1;
 }
 
 @media (hover: none) {
   .ruleIntervalArrows { opacity: 1; }
-}
-
-@media (hover: hover) {
-  .ruleIntervalStepper:hover .ruleIntervalArrows {
-    opacity: 1;
-  }
 }
 
 .ruleIntervalArrow {
@@ -1514,6 +1514,7 @@
 
   /* The mock narrows the title strip's gap at this width and closes the
      actions' group gap between its icon buttons. */
+
   .detailTabsBar {
     gap: 16px;
   }

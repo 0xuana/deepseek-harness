@@ -82,20 +82,6 @@ export interface TypeApiEntry {
 /** Every harness `ctx.<key>` service, sorted by key. */
 export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
-    key: 'agentController',
-    summary: 'Delivers the messages that senders, such as the Web Session Remote, bring on someone\'s behalf.',
-    description: 'Delivers the messages that senders, such as the Web Session Remote, bring on someone\'s behalf. Messages to one Agent are prepared, decided, and appended one at a time in arrival order; messages to different Agents do not wait for each other. Disposal stops every message that has not entered an inbox and finishes once each delivery it stopped has settled.',
-    methods: [
-      {
-        signature: 'async deliver(agent: Agent, request: DeliveryRequest): Promise<MessageId>',
-        description: 'Deliver one message from outside the Agent: prepare its content, ask the `agent-controller/admission` stage for a decision, then append an admitted message with `followup` or `steer`.',
-        parameters: [{ name: 'agent', description: 'the receiving Agent.' }, { name: 'request', description: 'delivery mode, source, cancellation, and the sender\'s content preparation.' }],
-        returns: 'the id of the message once it is in the inbox.',
-        throws: ['{@link AgentAdmissionRejected} when a listener rejects the message or throws, or when the Agent left the registry first; the error of `prepare`, `beforeInsert`, `followup`, or `steer` unchanged; the sender\'s cancellation reason as soon as it cancels, also while the message waits behind another one; the stop reason once the controller stops.'],
-      },
-    ],
-  },
-  {
     key: 'agentDefaultModel',
     summary: 'Owns the default model selection independently of any Host or transport.',
     description: 'Owns the default model selection independently of any Host or transport. Each operation reads the owning Config references.',
@@ -2301,10 +2287,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: '@Remote(\'prompt\') async prompt(request: SessionPromptRequest, signal: AbortSignal): Promise<SessionPromptValue>',
-        description: 'Admit one prompt after explicitly resuming its Session. The prompt is delivered through `ctx.agentController`, whose `agent-controller/admission` stage runs before it enters the inbox, so the call can wait for a listener that holds it.',
-        parameters: [{ name: 'request', description: 'Session identity, prompt content, source metadata, and delivery mode.' }, { name: 'signal', description: 'caller cancellation; it also stops a prompt waiting for or held at the admission stage.' }],
+        description: 'Admit one prompt after explicitly resuming its Session.',
+        parameters: [{ name: 'request', description: 'Session identity, prompt content, source metadata, and delivery mode.' }, { name: 'signal', description: 'caller cancellation before prompt admission begins.' }],
         returns: 'acknowledgement that the Agent accepted the prompt.',
-        throws: ['`session/prompt-rejected` when an admission listener refuses the prompt or fails.'],
       },
       {
         signature: '@Remote(\'attachment\') attachment(request: SessionAttachmentRequest): Promise<SessionAttachmentValue>',
@@ -4153,14 +4138,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
 /** Every harness event, sorted by name. */
 export const EVENT_API: readonly EventApiEntry[] = [
   {
-    name: 'agent-controller/admission',
-    mode: 'waterfall',
-    signature: '\'agent-controller/admission\'(this: Scoped<Agent>, payload: { agent: Agent; message: UserMessage; signal: AbortSignal }, next: () => Promise<AdmissionDecision>): Promise<AdmissionDecision>',
-    summary: 'Decide whether one message from outside an Agent enters its inbox.',
-    description: 'Decide whether one message from outside an Agent enters its inbox. `ctx.agentController.deliver` runs this stage and appends the message only after the whole chain admitted it; messages the Agent\'s own machinery produces enter through `followup`, `steer`, or `inject` without it. Listeners run in registration order, and messages to one Agent are decided one at a time in arrival order. A listener admits by returning the decision of `next()`, whose last step admits; awaiting before `next()` holds the message, and returning a `reject` decision refuses it without asking later listeners. A thrown error means the listener\'s check itself failed. A listener must not wait for a person when the message source is unattended, such as a schedule or a webhook.',
-    parameters: [{ name: 'payload', description: '.signal - aborted when the sender cancels or the controller stops; a holding listener must settle once it aborts, because controller disposal waits for it. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): Agent-scoped listeners receive only that Agent.' }],
-  },
-  {
     name: 'agent-loop/config-start-failed',
     mode: 'emit',
     signature: '\'agent-loop/config-start-failed\'(payload: { sessionId: SessionId; error: unknown }): void',
@@ -4881,10 +4858,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface AdapterRegistrationHandle {\n    (): void;\n    replace(providers: string[]): void;\n}',
   },
   {
-    name: 'AdmissionDecision',
-    declaration: 'export type AdmissionDecision = {\n    readonly kind: \'admit\';\n} | {\n    readonly kind: \'reject\';\n    readonly reason: string;\n    readonly message: string;\n    readonly presented: boolean;\n};',
-  },
-  {
     name: 'AdmittedPromptContentPart',
     declaration: 'export type AdmittedPromptContentPart = {\n    readonly type: \'text\';\n    readonly text: string;\n} | {\n    readonly type: \'image\';\n    readonly attachment: ImageAttachmentRef;\n} | {\n    readonly type: \'file\';\n    readonly attachment: FileAttachmentRef;\n};',
   },
@@ -4953,6 +4926,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type AgentStatus = \'idle\' | \'running\';',
   },
   {
+    name: 'AnalyticsPreset',
+    declaration: 'export type AnalyticsPreset = \'creator\' | \'ptc\' | \'minimal\' | \'standard\';',
+  },
+  {
     name: 'AnonymousTranslationProvider',
     declaration: 'export type AnonymousTranslationProvider = \'google\' | \'bing\';',
   },
@@ -5010,7 +4987,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'AskUserQuestionIntent',
-    declaration: 'export type AskUserQuestionIntent = {\n    kind: \'plan-review\';\n    approve: string;\n    callId?: ToolCallId;\n};',
+    declaration: 'export type AskUserQuestionIntent = {\n    kind: \'plan-review\';\n    approve: string;\n    callId?: ToolCallId;\n} | {\n    kind: \'approval\';\n    approve: string;\n    reject: string;\n    always?: string;\n    subject?: {\n        name: string;\n        icon?: string;\n    };\n    display?: {\n        question: {\n            en: string;\n            [locale: string]: string;\n        };\n        detail?: {\n            en: string;\n            [locale: string]: string;\n        };\n        approve?: {\n            en: string;\n            [locale: string]: string;\n        };\n    };\n};',
   },
   {
     name: 'AskUserQuestionItem',
@@ -5166,7 +5143,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'BundleInfo',
-    declaration: 'export interface BundleInfo {\n    name: string;\n    official: boolean;\n    availability: \'installation\' | \'profile\' | \'missing\';\n    installTarget?: {\n        spec: string;\n        version: string;\n    };\n    version?: string;\n    meta?: PluginLocalizedMeta;\n    description?: string;\n    enabled: boolean;\n    installed: boolean;\n    source?: string;\n    optional: boolean;\n    removable: boolean;\n    updatable: boolean;\n    readOnlyReason?: ReadOnlyReason;\n    error?: ManagementError;\n    rows: BundleRowInfo[];\n    overrides: string[];\n}',
+    declaration: 'export interface BundleInfo {\n    name: string;\n    official: boolean;\n    availability: \'installation\' | \'profile\' | \'missing\';\n    installTarget?: {\n        spec: string;\n        version: string;\n    };\n    version?: string;\n    meta?: PluginLocalizedMeta;\n    description?: string;\n    listedByDefault?: boolean;\n    enabled: boolean;\n    installed: boolean;\n    source?: string;\n    optional: boolean;\n    removable: boolean;\n    updatable: boolean;\n    readOnlyReason?: ReadOnlyReason;\n    error?: ManagementError;\n    rows: BundleRowInfo[];\n    overrides: string[];\n}',
   },
   {
     name: 'BundleRowInfo',
@@ -5543,14 +5520,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'DeepSeekLlmApiJson',
     declaration: 'export type DeepSeekLlmApiJson = null | boolean | number | string | DeepSeekLlmApiJson[] | {\n    [key: string]: DeepSeekLlmApiJson;\n};',
-  },
-  {
-    name: 'DeliveryMode',
-    declaration: 'export type DeliveryMode = \'followup\' | \'steer\';',
-  },
-  {
-    name: 'DeliveryRequest',
-    declaration: 'export interface DeliveryRequest {\n    readonly mode: DeliveryMode;\n    readonly source: MessageSource;\n    readonly signal: AbortSignal;\n    readonly prepare: (signal: AbortSignal) => Promise<UserMessage[\'content\']>;\n    readonly beforeInsert?: (message: UserMessage) => void;\n}',
   },
   {
     name: 'DeliveryRetentionBounds',
@@ -6437,10 +6406,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface MessageRoleMap {\n    system: SystemMessage;\n    developer: DeveloperMessage;\n    user: UserMessage;\n    assistant: AssistantMessage;\n    tool: ToolResultMessage;\n}',
   },
   {
-    name: 'MessageSource',
-    declaration: 'export type MessageSource = MessageSourceMap[keyof MessageSourceMap];',
-  },
-  {
     name: 'MessageSourceMap',
     declaration: 'export interface MessageSourceMap {\n    user: {\n        kind: \'user\';\n    };\n    model: ModelMessageSource;\n    tool: ToolMessageSource;\n    \'system-prompt\': SystemPromptMessageSource;\n}',
   },
@@ -6774,7 +6739,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ProductEventMap',
-    declaration: 'export interface ProductEventMap {\n    desktop_app_launch: Record<string, never>;\n    auth_page_view: Record<string, never>;\n    auth_page_click: {\n        button_name: \'sign_in\' | \'api-key\';\n    };\n    api_key_save_click: Record<string, never>;\n    onboarding_page_view: {\n        page_name: OnboardingPage;\n    };\n    onboarding_page_click: {\n        page_name: OnboardingPage;\n        button_name: \'next\' | \'back\' | \'skip\' | \'charge\' | \'later\' | \'continue\';\n        selected_content?: \'office\' | \'code\' | \'code_office\' | \'focus_result\' | \'key_detail\' | \'full_process\';\n    };\n    onboarding_popup_view: {\n        popup_name: \'skip_charge\' | \'skip_setting\';\n    };\n    onboarding_popup_click: {\n        popup_name: \'skip_charge\' | \'skip_setting\';\n        button_name: \'charge\' | \'know\' | \'enter\' | \'setting\' | \'close\';\n    };\n    desktop_upgrade_click: Record<string, never>;\n    desktop_upgrade_download_result: {\n        is_success: boolean;\n        error_reason?: string;\n    };\n    desktop_upgrade_install_restart_click: Record<string, never>;\n    send_button_click: {\n        session_id?: SessionId;\n        model_name?: string;\n        thinking_effort?: string;\n        run_mode: \'plan\' | \'goal\' | \'default\';\n        msg_type: \'default\' | \'steer\' | \'queue\';\n    };\n    model_switch: {\n        session_id?: SessionId;\n        switch_from: string;\n        switch_to: string;\n    };\n    thinking_level_switch: {\n        session_id?: SessionId;\n        switch_from: string;\n        switch_to: str /* …truncated — full shape in source */',
+    declaration: 'export interface ProductEventMap {\n    desktop_app_launch: Record<string, never>;\n    auth_page_view: Record<string, never>;\n    auth_page_click: {\n        button_name: \'sign_in\' | \'api-key\';\n    };\n    api_key_save_click: Record<string, never>;\n    onboarding_page_view: {\n        page_name: OnboardingPage;\n    };\n    onboarding_page_click: {\n        page_name: OnboardingPage;\n        button_name: \'next\' | \'back\' | \'skip\' | \'charge\' | \'later\' | \'continue\';\n        selected_content?: \'office\' | \'code\' | \'code_office\' | \'focus_result\' | \'key_detail\' | \'full_process\';\n    };\n    onboarding_popup_view: {\n        popup_name: \'skip_charge\' | \'skip_setting\';\n    };\n    onboarding_popup_click: {\n        popup_name: \'skip_charge\' | \'skip_setting\';\n        button_name: \'charge\' | \'know\' | \'enter\' | \'setting\' | \'close\';\n    };\n    desktop_upgrade_click: Record<string, never>;\n    desktop_upgrade_download_result: {\n        is_success: boolean;\n        error_reason?: string;\n    };\n    desktop_upgrade_install_restart_click: Record<string, never>;\n    send_button_click: {\n        session_id?: SessionId;\n        model_name?: string;\n        thinking_effort?: string;\n        run_mode: \'plan\' | \'goal\' | \'default\';\n        msg_type: \'default\' | \'steer\' | \'queue\';\n        is_new_session: boolean;\n        agent_preset?: AnalyticsPreset | \'other\';\n    };\n    model_switch: {\n        session_id?: SessionId;\n        switch_from: string;\n        switch_to: string;\n    };\n    thinking_level_switch: {\n /* …truncated — full shape in source */',
   },
   {
     name: 'ProductTelemetryRecord',

@@ -87,18 +87,18 @@
   opacity: 0;
 }
 
+@media (hover: hover) {
+  .stepper:hover .arrows {
+    opacity: 1;
+  }
+}
+
 .stepper:focus-within .arrows {
   opacity: 1;
 }
 
 @media (hover: none) {
   .arrows { opacity: 1; }
-}
-
-@media (hover: hover) {
-  .stepper:hover .arrows {
-    opacity: 1;
-  }
 }
 
 /* Arrow buttons: small chips carrying a translucent wash of the layer-1
