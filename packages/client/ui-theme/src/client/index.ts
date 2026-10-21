@@ -24,6 +24,8 @@ import { AppearanceRow } from './AppearanceRow.tsx'
 import type { FontSettingsInjected } from './FontSettingsGroup.tsx'
 import { FontSettingsGroup } from './FontSettingsGroup.tsx'
 import { createAppearanceRowStore, createFontRowStore } from './settings-store.ts'
+import { ICON_SYMBOLS, type IconSymbolId } from '@deepseek-ai/dsh-client-ui-primitives'
+import { installIconSprite } from './icon-sprite.ts'
 import { installThemeStyles } from './styles.ts'
 import { en, ja, zh, type ThemeKey } from './locales.ts'
 import {
@@ -78,6 +80,14 @@ export interface ThemeDefinition {
   colorScheme: 'light' | 'dark'
   /** Alias-layer overrides applied as inline CSS variables over the base palette. */
   tokens: ThemeTokens
+  /**
+   * Product icon replacements: ui-primitives `ICON_SYMBOLS` ids to complete
+   * SVG documents. The icon sprite renders each replacement as that id's
+   * `<symbol>`, so its paint may use `currentColor` and `--dsw-*` variables.
+   * Each document needs an SVG-namespace root with a `viewBox`, no `<style>`
+   * or `<script>`, and element ids unique across the theme and the defaults.
+   */
+  icons?: Readonly<Partial<Record<IconSymbolId, string>>> | undefined
 }
 
 /** Immutable theme state published on every change. */
@@ -338,6 +348,7 @@ export class ThemeRuntime {
     if (this.themes.some(t => t.id === definition.id)) {
       throw new Error(`theme "${definition.id}" is already registered`)
     }
+    validateIcons(definition)
     this.themes = [...this.themes, definition]
     this.publish()
     return () => {
@@ -485,6 +496,34 @@ function durableFontFamilies(section: ThemeSettings): FontFamilies {
   return validated
 }
 
+const SVG_NS = 'http://www.w3.org/2000/svg'
+
+/** Element ids the default symbols use, so a replacement cannot shadow them. */
+const DEFAULT_ICON_IDS = new Set(Object.values(ICON_SYMBOLS).flatMap(markup => [...markup.matchAll(/\sid="([^"]+)"/g)].map(([, value = '']) => value)))
+
+/**
+ * Reject icon replacements a sprite cannot render (untyped dynamic-package
+ * callers reach this boundary, as with {@link validateOverrides}): unknown
+ * symbol ids, documents without an SVG-namespace `<svg viewBox>` root,
+ * document-wide `<style>` or `<script>`, and colliding element ids.
+ */
+function validateIcons({ id, icons = {} }: ThemeDefinition): void {
+  const ids = new Set(DEFAULT_ICON_IDS)
+  for (const [name, markup] of Object.entries<unknown>(icons)) {
+    const fail = (problem: string): never => { throw new TypeError(`theme "${id}" icon "${name}" ${problem}`) }
+    if (!Object.hasOwn(ICON_SYMBOLS, name)) fail('is not an ICON_SYMBOLS id')
+    if (typeof markup !== 'string') fail('must be an SVG document string')
+    const root = new DOMParser().parseFromString(markup as string, 'image/svg+xml').documentElement
+    if (root.namespaceURI !== SVG_NS || root.localName !== 'svg' || root.querySelector('parsererror') !== null) fail('is not a well-formed SVG-namespace <svg> document')
+    if (!root.hasAttribute('viewBox')) fail('needs a viewBox')
+    if (root.querySelector('style, script') !== null) fail('must not contain <style> or <script>')
+    for (const element of root.querySelectorAll('[id]')) {
+      if (ids.has(element.id) || Object.hasOwn(ICON_SYMBOLS, element.id)) fail(`reuses element id "${element.id}"`)
+      ids.add(element.id)
+    }
+  }
+}
+
 function dynamicToken(name: string): ThemeTokenInspection {
   return {
     name,
@@ -548,6 +587,7 @@ export function apply(ctx: ClientContext): void {
   const host = ctx.configForms.get<ThemeSettings>(THEME_SETTINGS_NAMESPACE)
   const theme = new ThemeRuntime(ctx, host)
   ctx.provide('theme', theme)
+  installIconSprite(ctx, theme.getTheme().active.icons)
 
   const store = createAppearanceRowStore()
   let bound: BoundActions<typeof store> | undefined

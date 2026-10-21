@@ -301,7 +301,7 @@ describe('the chip introduce cue', () => {
 
   /** Character spans carry inline animation delays; nothing else does. */
   function delayedChars(): HTMLElement[] {
-    return Array.from(screen.getByRole('button').querySelectorAll<HTMLElement>('[style]'))
+    return Array.from(screen.getByRole('button').querySelectorAll<HTMLElement>('span[style]'))
   }
 
   it('reveals a long Latin name inside the shared window, then acknowledges', () => {
