@@ -1,6 +1,7 @@
 {
   "meta": {
-    "title": "Computer Use",
-    "description": "Let agents view and operate macOS application interfaces for tasks that need clicks and text entry. Requires PTC mode, Accessibility and Screen Recording permissions; Windows Hosts are not yet supported."
+    "title": "Computer use",
+    "description": "Let agents view and operate macOS application interfaces for tasks that need clicks and text entry. Requires PTC mode, Accessibility and Screen Recording permissions; Windows Hosts are not yet supported.",
+    "detail": "docs/DETAIL.md"
   }
 }

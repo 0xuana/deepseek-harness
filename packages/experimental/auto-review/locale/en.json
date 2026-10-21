@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "Auto Authorization Review",
+    "title": "Auto authorization review",
     "description": "Choose Auto review to reduce repeated approval prompts by having the model assess tool calls. Approved calls run with full access; reviews can make mistakes and use extra tokens.",
     "detail": "docs/DETAIL.md"
   }

@@ -25,24 +25,30 @@
   - listitem:
     - button "查看 智能体团队": 智能体团队
     - text: 实验性 让多个智能体分工协作、互相沟通，并共享成员列表与任务看板，适合需要持续协调多个协作者的工作；启用后使用团队工具替代普通子智能体委派。
+    - status
     - switch "启用 智能体团队"
   - listitem:
     - button "查看 语音输入": 语音输入
     - text: 实验性 用说话代替打字，将录音在本机转成输入框文字，适合口述较长需求；使用 SenseVoice，首次使用需下载模型并安装依赖。
+    - status
     - switch "启用 语音输入"
+  - listitem:
+    - button "查看 自定义插件市场": 自定义插件市场
+    - text: 实验性 把自定义插件市场索引加入 DSH，在插件页的「发现」中浏览和安装其中的插件，适合接入其他团队或社区维护的插件源。
+    - status
+    - switch "启用 自定义插件市场"
   - listitem:
     - button "查看 自动授权审查": 自动授权审查
     - text: 实验性 希望减少逐次授权确认时，可选择由模型审查工具调用的自动审查模式；审查通过的调用使用完全访问权限，仍可能误判并消耗额外 Token。
+    - status
     - switch "启用 自动授权审查"
-  - listitem:
-    - button "查看 开发者工具": 开发者工具
-    - text: 实验性 在 DSH 内查看会话原始日志和消息分组，调试 NodeJS 后端，适合排查会话或界面异常；启用后会捕获未脱敏的 Host 网络请求。
-    - switch "启用 开发者工具"
 - heading "已安装插件" [level=3]
 - list:
   - listitem:
     - button "查看 @fixture/live-client": "@fixture/live-client"
+    - status
     - switch "启用 @fixture/live-client"
   - listitem:
     - button "查看 dsh-web-scaffold-defaults": dsh-web-scaffold-defaults
+    - status
     - switch "启用 dsh-web-scaffold-defaults" [checked]
