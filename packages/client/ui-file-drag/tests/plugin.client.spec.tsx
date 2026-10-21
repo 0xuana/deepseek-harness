@@ -22,14 +22,15 @@ function transfer(token = ''): DataTransfer {
   })
 }
 
-async function bench() {
+async function bench(language: 'zh' | 'en' | 'ja' = 'zh') {
   revokeUrl.mockReset()
   vi.stubGlobal('File', NodeFile)
   vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:transfer'), revokeObjectURL: revokeUrl }))
   const runtime = await SlotTestRuntime.create()
   onTestFinished(() => runtime.dispose())
   const locale = new LocaleRuntime(runtime.ctx)
-  locale.setLocale('zh')
+  onTestFinished(locale.addLanguage({ id: 'ja', label: '日本語', fallback: 'en' }))
+  locale.setLocale(language)
   runtime.ctx.provide('locale', locale)
   runtime.slots.installLocale(locale)
   const owner = await runtime.mount(plugin)
@@ -64,14 +65,18 @@ it('retains bytes after source unmount and releases on the detached node dragend
   expect(runtime.slots.entries('shell.overlay')).toHaveLength(0)
 })
 
-it('reports a late native failure after source unmount using the plugin dictionary', async () => {
+it.each([
+  ['zh', '拖放失败，请重试'],
+  ['en', 'Drag failed. Try again.'],
+  ['ja', 'ドラッグ＆ドロップに失敗しました。もう一度お試しください。'],
+] as const)('reports a late native failure after source unmount in %s', async (language, message) => {
   const pending = Promise.withResolvers<boolean>()
   const handle = 'handle' as FileDragHandle
   const desktop: DesktopFileDrag = {
     prepare: vi.fn(async () => handle), cancel: vi.fn(), start: vi.fn(() => pending.promise), release: vi.fn(),
   }
   vi.stubGlobal('dshDesktop', { protocolVersion: 1, fileDrag: desktop })
-  const { service } = await bench()
+  const { service } = await bench(language)
   vi.stubGlobal('dshDesktop', { protocolVersion: 2 })
   const file = new File(['image'], 'image.png', { type: 'image/png' })
   const source = render(<DraggableImage fileDrag={service.actions} src="blob:original" name={file.name} original={file} alt="original" />)
@@ -82,7 +87,7 @@ it('reports a late native failure after source unmount using the plugin dictiona
   vi.useFakeTimers()
   await act(async () => { pending.resolve(false); await pending.promise })
   expect(desktop.release).toHaveBeenCalledWith(handle)
-  expect(screen.getByRole('alert').textContent).toBe('拖放失败，请重试')
+  expect(screen.getByRole('alert').textContent).toBe(message)
   await act(async () => { await vi.runAllTimersAsync() })
   expect(screen.queryByRole('alert')).toBeNull()
 })

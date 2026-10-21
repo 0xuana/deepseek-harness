@@ -22,7 +22,7 @@ kind: package-reference
 <a id="use-this-package"></a>
 ## 使用此包
 
-Web profile 将该插件与 locale、插槽渲染器及声明 `shell.overlay` 的外壳一同加载。消费方注入 `fileDrag`，通过入口的注入接口传递 `ctx.fileDrag.actions`。`prepare(source, signal)` 接受 Blob 或 URL 内容、导出名及可选 Session 资源地址，返回同步启动和释放操作。`reportFailure()` 使用插件词典。输入框接收方获取 `ctx.fileDrag.read`；组件不读取服务或 React context。
+Web profile 将该插件与 locale、插槽渲染器及声明 `shell.overlay` 的外壳一同加载。消费方注入 `fileDrag`，通过入口的注入接口传递 `ctx.fileDrag.actions`。`prepare(source, signal)` 接受 Blob 或 URL 内容、导出名及可选 Session 资源地址，返回同步启动和释放操作。`reportFailure()` 使用插件词典；失败提示和插件元数据提供中文、英文与日语。输入框接收方获取 `ctx.fileDrag.read`；组件不读取服务或 React context。
 
 服务为一次浏览器拖放保留一个原始 `File`。随机的 `application/x-dsh-file` 令牌只能在所属应用实例解析。原生监听器在 React 卸载后仍绑定源节点，拖放结束、投放完成或插件卸载会清除传递。内部令牌仅在输入框范围接受；外部文件保留已有的全页投放遮罩。Desktop 原生拖放返回时属于普通文件，包括拖回源窗口，也使用该遮罩。
 
