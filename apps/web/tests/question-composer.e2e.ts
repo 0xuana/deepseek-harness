@@ -68,8 +68,43 @@ async function capMetrics(field: Locator): Promise<{ textLines: number; scrolls:
   })
 }
 
+/**
+ * Read how the composer draws one long-copy element: the lines it shows,
+ * whether CSS clipped it, whether its text overflows the line budget, and the
+ * label of its toggle while that toggle is visible.
+ * @param element - a question heading or an option description.
+ * @returns the drawn state of the copy.
+ */
+function readCopy(element: HTMLElement): { lines: number; clipped: boolean; overflows: boolean; toggle: string | undefined } {
+  const style = getComputedStyle(element)
+  const toggle = element.tagName === 'H2'
+    ? element.nextElementSibling
+    : element.closest('[data-option-row]')?.querySelector(':scope > button:not([role])')
+  return {
+    // A clipped box keeps its full budget and gives the dropped line back through its bottom margin.
+    lines: Math.round((element.getBoundingClientRect().height + parseFloat(style.marginBottom)) / parseFloat(style.lineHeight)),
+    clipped: style.maskImage !== 'none',
+    overflows: element.scrollHeight > element.clientHeight + 0.5,
+    toggle: toggle instanceof HTMLElement && getComputedStyle(toggle).visibility === 'visible'
+      ? toggle.textContent ?? undefined
+      : undefined,
+  }
+}
+
+/**
+ * Tell whether an expanded copy's toggle sits below the copy's last text line.
+ * @param toggle - the copy's toggle button.
+ * @param copy - the expanded question heading or option description.
+ * @returns whether the toggle starts at or below the bottom of the text; false without the copy.
+ */
+function belowText(toggle: HTMLElement, copy: Element | null): boolean {
+  if (copy === null) return false
+  const textBottom = copy.getBoundingClientRect().bottom - parseFloat(getComputedStyle(copy).paddingBottom)
+  return toggle.getBoundingClientRect().top >= textBottom - 0.5
+}
+
 // The options carry descriptions on purpose: the squeeze assertion below
-// verifies that each description remains on one line in the card scrollport.
+// verifies that each description keeps to its two-line budget in the card scrollport.
 const PROMPT = 'Use the ask_user_question tool to ask me exactly one multi-select question with id "color", question "Which color do you prefer?", header "Pick one", and two options: label "Blue" with description "A cool recessive hue that reads as calm and trustworthy in long reading sessions and dense dashboards.", and label "Green" with description "A restful mid-spectrum hue with the highest perceived brightness, easiest on the eye over long sessions." Set multi_select to true. After I answer, reply with the single word DONE and stop.'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -360,7 +395,6 @@ describe('web e2e: resident question composer round trip', () => {
         await page.setViewportSize({ width: 640, height })
         const squeeze = await composer.evaluate((card) => {
           const rows = [...card.querySelectorAll<HTMLElement>('[data-option-row]')]
-          const descriptions = [...card.querySelectorAll<HTMLElement>('[data-option-description]')]
           const spill = rows.map(row => Math.max(...[...row.children].map((child) => {
             const box = row.getBoundingClientRect()
             const inner = child.getBoundingClientRect()
@@ -371,16 +405,17 @@ describe('web e2e: resident question composer round trip', () => {
           return {
             rows: rows.length,
             spill: Math.max(...spill),
-            descriptionLines: Math.max(...descriptions.map((item) => {
-              const style = getComputedStyle(item)
-              return item.clientHeight / parseFloat(style.lineHeight)
-            })),
             scrolls: list === null ? false : list.scrollHeight > list.clientHeight,
             titleInScrollport: list?.contains(title) === true,
           }
         })
         expect(squeeze.rows).toBeGreaterThan(0)
-        expect(squeeze.descriptionLines).toBeLessThan(1.1)
+        for (const description of await composer.locator('[data-option-description]').all()) {
+          const copy = await description.evaluate(readCopy)
+          expect(copy.lines).toBeLessThanOrEqual(2)
+          expect(copy.clipped).toBe(copy.overflows)
+          expect(copy.toggle).toBe(copy.clipped ? 'More' : undefined)
+        }
         scrollStates.push(squeeze.scrolls)
         expect(squeeze.titleInScrollport).toBe(true)
         expect(await composer.getByRole('button', { name: 'Submit', exact: true }).isVisible()).toBe(true)
@@ -391,19 +426,20 @@ describe('web e2e: resident question composer round trip', () => {
       await page.setViewportSize(originalViewport)
     }
 
-    await page.setViewportSize({ width: 640, height: 520 })
+    // The narrowest supported card clips Blue's description to one line; its
+    // toggle expands the text in place without choosing Blue.
+    await page.setViewportSize({ width: 390, height: 700 })
     const blue = composer.getByRole('checkbox', { name: 'Blue' })
-    const blueDetail = 'A cool recessive hue that reads as calm and trustworthy in long reading sessions and dense dashboards.'
-    const blueInfo = composer.getByRole('button', { name: 'Show details for “Blue”' })
-    await blueInfo.hover()
-    await expect.poll(() => page.getByText(blueDetail, { exact: true }).count()).toBe(2)
-    await composer.getByRole('heading', { name: 'Which color do you prefer?' }).hover()
-    await expect.poll(() => page.getByText(blueDetail, { exact: true }).count()).toBe(1)
-    await blueInfo.click()
+    const blueText = composer.locator('[data-option-description]').first()
+    const blueToggle = composer.locator(`button[aria-controls=${JSON.stringify(await blueText.getAttribute('id'))}]`)
+    await expect.poll(() => blueText.evaluate(readCopy)).toEqual({ lines: 1, clipped: true, overflows: true, toggle: 'More' })
+    await blueToggle.click()
     expect(await blue.getAttribute('aria-checked')).toBe('false')
-    await expect.poll(() => page.getByText(blueDetail, { exact: true }).count()).toBe(2)
-    await composer.getByRole('heading', { name: 'Which color do you prefer?' }).click()
-    await expect.poll(() => page.getByText(blueDetail, { exact: true }).count()).toBe(1)
+    expect(await blueToggle.getAttribute('aria-expanded')).toBe('true')
+    expect(await blueText.evaluate(readCopy)).toMatchObject({ clipped: false, overflows: false, toggle: 'Show less' })
+    await blueToggle.click()
+    // A collapsed copy's scroll timeline reports the overflow from the next frame.
+    await expect.poll(() => blueText.evaluate(readCopy)).toEqual({ lines: 1, clipped: true, overflows: true, toggle: 'More' })
     await page.setViewportSize(originalViewport)
 
     // Multi-line custom answer: the field is a textarea whose hidden mirror
@@ -584,12 +620,9 @@ describe('web e2e: resident question composer round trip', () => {
     try {
       await page.setViewportSize({ width: 1328, height: 720 })
       await composer.getByRole('heading', { name: '选择 HF provider 的思考等级？' }).waitFor()
-      expect(await composer.getByRole('heading').evaluate((heading) => {
-        const style = getComputedStyle(heading)
-        return heading.getBoundingClientRect().height / parseFloat(style.lineHeight)
-      })).toBe(1)
-      expect(await composer.getByRole('button', { name: 'Show full question' }).count()).toBe(0)
-      expect(await composer.getByRole('heading').evaluate(heading => getComputedStyle(heading).maskImage)).toBe('none')
+      expect(await composer.getByRole('heading').evaluate(readCopy))
+        .toEqual({ lines: 1, clipped: false, overflows: false, toggle: undefined })
+      expect(await composer.getByRole('button', { name: 'More' }).count()).toBe(0)
       const rows = await composer.locator('[data-option-row]').evaluateAll(options => options.map((row) => {
         const label = row.querySelector<HTMLElement>('[data-option-line] > span:first-child')
         const description = row.querySelector<HTMLElement>('[data-option-description]')
@@ -599,13 +632,12 @@ describe('web e2e: resident question composer round trip', () => {
           sameLine: description.getBoundingClientRect().top < label.getBoundingClientRect().bottom,
           fontSize: style.fontSize,
           lineHeight: style.lineHeight,
-          hasDetails: row.querySelector('[data-option-details]') !== null,
           maskImage: style.maskImage,
         }
       }))
       expect(rows).toHaveLength(4)
       expect(rows).toEqual(Array.from({ length: 4 }, () => ({
-        sameLine: true, fontSize: '13px', lineHeight: '20px', hasDetails: false, maskImage: 'none',
+        sameLine: true, fontSize: '13px', lineHeight: '20px', maskImage: 'none',
       })))
       await composer.getByRole('radio', { name: '中（medium）' }).click()
       await composer.getByRole('button', { name: 'Submit', exact: true }).click()
@@ -655,6 +687,25 @@ describe('web e2e: resident question composer round trip', () => {
     let bodyCompleted = false
     try {
       await composer.waitFor({ timeout: 30_000 })
+      const heading = composer.getByRole('heading', { name: question })
+      const descriptionOf = (label: string) => composer.locator('[data-option-row]', {
+        has: page.getByRole('checkbox', { name: label, exact: true }),
+      }).locator('[data-option-description]')
+      const toggleFor = async (copy: Locator) =>
+        composer.locator(`button[aria-controls=${JSON.stringify(await copy.getAttribute('id'))}]`)
+      const readMetrics = () => composer.evaluate((card) => {
+        const scroll = card.querySelector<HTMLElement>('[data-question-scroll]')
+        const title = card.querySelector<HTMLElement>('h2')
+        const submit = [...card.querySelectorAll<HTMLButtonElement>('button')]
+          .find(button => button.textContent === 'Next')
+        if (scroll === null || title === null || submit === undefined) return null
+        const submitBox = submit.getBoundingClientRect()
+        return {
+          footerFits: submitBox.top >= -0.5 && submitBox.bottom <= window.innerHeight + 0.5,
+          scrolls: scroll.scrollHeight > scroll.clientHeight,
+          titleInScrollport: scroll.contains(title),
+        }
+      })
       // Cover common desktop sizes plus the CSS-pixel equivalents of a
       // progressively zoomed 640x420 window without changing browser-global zoom.
       const scrollStates: boolean[] = []
@@ -667,87 +718,55 @@ describe('web e2e: resident question composer round trip', () => {
         { width: 390, height: 700 },
       ]) {
         await page.setViewportSize(viewport)
-        const readMetrics = () => composer.evaluate((card) => {
-          const scroll = card.querySelector<HTMLElement>('[data-question-scroll]')
-          const title = card.querySelector<HTMLElement>('h2')
-          const submit = [...card.querySelectorAll<HTMLButtonElement>('button')]
-            .find(button => button.textContent === 'Next')
-          if (scroll === null || title === null || submit === undefined) return null
-          const submitBox = submit.getBoundingClientRect()
-          return {
-            footerFits: submitBox.top >= -0.5 && submitBox.bottom <= window.innerHeight + 0.5,
-            scrolls: scroll.scrollHeight > scroll.clientHeight,
-            titleInScrollport: scroll.contains(title),
-          }
-        })
         await expect.poll(readMetrics).not.toBeNull()
         const metrics = await readMetrics()
         expect(metrics?.footerFits).toBe(true)
         expect(metrics?.titleInScrollport).toBe(true)
         scrollStates.push(metrics?.scrolls ?? false)
-        expect(await composer.getByRole('button', { name: 'Show details for “Keep the default edge”' }).count()).toBe(0)
-        if (viewport.width === 1440 || viewport.width === 427) {
-          expect(await composer.getByRole('button', { name: 'Show details for “Move the package”' }).count())
-            .toBe(viewport.width === 427 ? 1 : 0)
+        // Past its three-line budget the question keeps two lines; past its
+        // two-line budget a description keeps one. Copy within budget shows in full.
+        await expect.poll(() => heading.evaluate(readCopy))
+          .toEqual({ lines: 2, clipped: true, overflows: true, toggle: 'More' })
+        expect(await descriptionOf('Explicit install').evaluate(readCopy))
+          .toEqual({ lines: 1, clipped: true, overflows: true, toggle: 'More' })
+        expect(await descriptionOf('Keep the default edge').evaluate(readCopy))
+          .toEqual({ lines: 1, clipped: false, overflows: false, toggle: undefined })
+        for (const copy of await composer.locator('[data-option-description]').all()) {
+          const drawn = await copy.evaluate(readCopy)
+          expect(drawn.clipped).toBe(drawn.overflows)
+          expect(drawn.toggle).toBe(drawn.clipped ? 'More' : undefined)
+          expect(drawn.lines).toBeLessThanOrEqual(drawn.clipped ? 1 : 2)
         }
-        const descriptions = composer.locator('[data-option-description]')
-        const textMetrics = await descriptions.evaluateAll(nodes => nodes.map((node) => {
+        if (viewport.width === 512) {
+          expect(await descriptionOf('Move the package').evaluate(readCopy))
+            .toEqual({ lines: 2, clipped: false, overflows: false, toggle: undefined })
+        }
+        const textMetrics = await composer.locator('[data-option-description]').evaluateAll(nodes => nodes.map((node) => {
           const style = getComputedStyle(node)
           const rect = node.getBoundingClientRect()
           return { fontSize: style.fontSize, lineHeight: style.lineHeight,
-            singleLine: rect.height <= 20.5, fitsViewport: rect.left >= 0 && rect.right <= innerWidth }
+            fitsViewport: rect.left >= 0 && rect.right <= innerWidth }
         }))
         expect(textMetrics).toEqual(Array.from({ length: 3 }, () => ({
-          fontSize: '13px', lineHeight: '20px', singleLine: true, fitsViewport: true,
+          fontSize: '13px', lineHeight: '20px', fitsViewport: true,
         })))
-        const questionLines = await composer.getByRole('heading', { name: question }).evaluate((title) => {
-          const style = getComputedStyle(title)
-          return title.getBoundingClientRect().height / parseFloat(style.lineHeight)
-        })
-        expect(questionLines).toBeGreaterThan(2)
-        expect(questionLines).toBeLessThanOrEqual(3.05)
-        const truncated = await composer.getByRole('heading', { name: question }).evaluate(title =>
-          title.scrollHeight > title.clientHeight + 1)
-        await expect.poll(() => composer.getByRole('button', { name: 'Show full question' }).count())
-          .toBe(truncated ? 1 : 0)
       }
       expect(scrollStates).toContain(false)
       expect(scrollStates).toContain(true)
 
-      const questionInfo = composer.getByRole('button', { name: 'Show full question' })
-      await questionInfo.scrollIntoViewIfNeeded()
-      const questionTitle = composer.getByRole('heading', { name: question })
-      expect(await questionInfo.getAttribute('aria-describedby')).toBe(await questionTitle.getAttribute('id'))
-      const questionMask = await questionTitle.evaluate(title => getComputedStyle(title).maskImage)
-      expect(questionMask).toContain('linear-gradient')
-      await page.keyboard.press('Tab')
-      await questionInfo.focus()
-      const questionPreview = page.locator('[data-placement]')
-      await questionPreview.getByText(question, { exact: true }).waitFor()
-      expect(await questionPreview.evaluate(node => node.closest('[data-question-scroll]') === null)).toBe(true)
-      await page.keyboard.press('Escape')
-      await expect.poll(() => questionPreview.count()).toBe(0)
-      await questionInfo.click()
-      await questionPreview.getByText(question, { exact: true }).waitFor()
-      const previewGeometry = await questionPreview.evaluate((node) => {
-        const rect = node.getBoundingClientRect()
-        const scroll = node.querySelector<HTMLElement>('[data-hover-card-scroll]')
-        return { fits: rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight,
-          scrolls: scroll !== null && scroll.scrollHeight > scroll.clientHeight }
-      })
-      expect(previewGeometry.fits).toBe(true)
-      expect(previewGeometry.scrolls).toBe(true)
-      const questionScroll = questionPreview.locator('[data-hover-card-scroll]')
-      await questionInfo.focus()
-      await page.keyboard.press('End')
-      expect(await questionScroll.evaluate(node => node.scrollTop + node.clientHeight >= node.scrollHeight - 1)).toBe(true)
-      await page.keyboard.press('Home')
-      expect(await questionScroll.evaluate(node => node.scrollTop)).toBe(0)
-      await page.keyboard.press('PageDown')
-      expect(await questionScroll.evaluate(node => node.scrollTop)).toBeGreaterThan(0)
-
-      await composer.getByRole('heading', { name: question }).click()
-      await expect.poll(() => questionPreview.count()).toBe(0)
+      // The question expands in place; its choices move down inside the
+      // scrollport while navigation and submission stay reachable.
+      const questionToggle = await toggleFor(heading)
+      expect(await questionToggle.getAttribute('aria-expanded')).toBe('false')
+      await questionToggle.click()
+      expect(await questionToggle.getAttribute('aria-expanded')).toBe('true')
+      const expandedQuestion = await heading.evaluate(readCopy)
+      expect(expandedQuestion).toMatchObject({ clipped: false, overflows: false, toggle: 'Show less' })
+      expect(expandedQuestion.lines).toBeGreaterThan(3)
+      expect(await questionToggle.evaluate(belowText, await heading.elementHandle())).toBe(true)
+      expect(await readMetrics()).toEqual({ footerFits: true, scrolls: true, titleInScrollport: true })
+      await questionToggle.click()
+      await expect.poll(() => heading.evaluate(readCopy)).toEqual({ lines: 2, clipped: true, overflows: true, toggle: 'More' })
 
       const detailText = composer.getByText(detail, { exact: true })
       expect(await detailText.evaluate(node => node.closest('[data-question-scroll]') !== null)).toBe(true)
@@ -755,107 +774,37 @@ describe('web e2e: resident question composer round trip', () => {
       expect(await detailText.isVisible()).toBe(true)
       expect(await composer.getByRole('button', { name: 'Next', exact: true }).isVisible()).toBe(true)
 
-      const info = composer.getByRole('button', { name: 'Show details for “Explicit install”' })
-      const descriptionId = await info.getAttribute('aria-describedby')
-      expect(descriptionId).not.toBeNull()
-      expect(await page.locator(`[id=${JSON.stringify(descriptionId)}]`).textContent()).toBe(description)
-      await info.hover()
-      const hoveredPreview = page.locator('[data-placement]')
-      await hoveredPreview.getByText(description, { exact: true }).waitFor()
-      const hoveredBox = await hoveredPreview.boundingBox()
-      expect(hoveredBox).not.toBeNull()
-      await page.mouse.move((hoveredBox?.x ?? 0) + 24, (hoveredBox?.y ?? 0) + 24)
-      await page.waitForTimeout(250)
-      expect(await hoveredPreview.isVisible()).toBe(true)
+      // A description expands in place without choosing its option, and its
+      // toggle stays described by the text it controls.
+      const explicit = composer.getByRole('checkbox', { name: 'Explicit install' })
+      const explicitText = descriptionOf('Explicit install')
+      const descriptionToggle = await toggleFor(explicitText)
+      const descriptionId = await explicitText.getAttribute('id')
+      expect(await explicit.getAttribute('aria-describedby')).toBe(descriptionId)
+      expect(await descriptionToggle.getAttribute('aria-describedby')).toBe(descriptionId)
+      await descriptionToggle.click()
+      expect(await explicit.getAttribute('aria-checked')).toBe('false')
+      const expandedDescription = await explicitText.evaluate(readCopy)
+      expect(expandedDescription).toMatchObject({ clipped: false, overflows: false, toggle: 'Show less' })
+      expect(expandedDescription.lines).toBeGreaterThan(2)
+      expect(await descriptionToggle.evaluate(belowText, await explicitText.elementHandle())).toBe(true)
+      expect(await explicitText.evaluate((text) => {
+        const row = text.closest('[data-option-row]') as HTMLElement
+        return [...row.querySelectorAll<HTMLElement>('*')].every(child =>
+          child.getBoundingClientRect().bottom <= row.getBoundingClientRect().bottom + 0.5)
+      })).toBe(true)
 
-      await info.click()
-      expect(await composer.getByRole('checkbox', { name: 'Explicit install' }).getAttribute('aria-checked')).toBe('false')
-      expect(await info.getAttribute('aria-describedby')).toBe(descriptionId)
-      const preview = page.locator('[data-pinned="true"]')
-      await preview.getByText(description, { exact: true }).waitFor()
-      expect(await page.locator(`[id=${JSON.stringify(descriptionId)}]`).evaluate((item) => {
-        const style = getComputedStyle(item)
-        return {
-          lines: item.clientHeight / parseFloat(style.lineHeight),
-          textOverflow: style.textOverflow,
-          fades: style.maskImage !== 'none',
-        }
-      })).toEqual({ lines: 1, textOverflow: 'clip', fades: true })
-      expect(await info.evaluate((button) => {
-        const icon = button.querySelector('svg')
-        const ring = icon?.parentElement
-        return {
-          dots: icon?.querySelectorAll('path').length,
-          ring: ring instanceof HTMLElement ? getComputedStyle(ring).borderStyle : undefined,
-        }
-      })).toEqual({ dots: 3, ring: 'solid' })
-      const previewBox = await preview.boundingBox()
-      const constrainedViewport = page.viewportSize()
-      expect(constrainedViewport).not.toBeNull()
-      expect(previewBox).not.toBeNull()
-      expect(previewBox?.x).toBeGreaterThanOrEqual(7.5)
-      expect(previewBox?.y).toBeGreaterThanOrEqual(7.5)
-      expect((previewBox?.x ?? 0) + (previewBox?.width ?? 0))
-        .toBeLessThanOrEqual((constrainedViewport?.width ?? 0) - 7.5)
-      expect((previewBox?.y ?? 0) + (previewBox?.height ?? 0))
-        .toBeLessThanOrEqual((constrainedViewport?.height ?? 0) - 7.5)
-      expect(previewBox?.height).toBeLessThanOrEqual(240)
-      const scrollport = preview.locator('[data-hover-card-scroll]')
-      expect(await scrollport.evaluate(card => ({
-        overflowY: getComputedStyle(card).overflowY,
-        scrolls: card.scrollHeight > card.clientHeight,
-      }))).toEqual({ overflowY: 'auto', scrolls: true })
-      const caretMetrics = await preview.evaluate((card, infoButton) => {
-        const caret = card.querySelector<HTMLElement>('[data-hover-card-caret]')
-        if (!(infoButton instanceof HTMLElement) || caret === null) return null
-        const anchorBox = infoButton.getBoundingClientRect()
-        const caretBox = caret.getBoundingClientRect()
-        const placement = card.dataset.placement
-        return {
-          horizontalDelta: Math.abs((anchorBox.left + anchorBox.width / 2) - (caretBox.left + caretBox.width / 2)),
-          verticalGap: placement === 'above'
-            ? anchorBox.top - caretBox.bottom
-            : caretBox.top - anchorBox.bottom,
-        }
-      }, await info.elementHandle())
-      expect(caretMetrics).not.toBeNull()
-      expect(caretMetrics?.horizontalDelta).toBeLessThan(1)
-      expect(caretMetrics?.verticalGap).toBeGreaterThanOrEqual(0)
-      expect(caretMetrics?.verticalGap).toBeLessThanOrEqual(3)
-      expect(await preview.getByText(description, { exact: true }).evaluate((text) => {
-        const selection = window.getSelection()
-        const range = document.createRange()
-        range.selectNodeContents(text)
-        selection?.removeAllRanges()
-        selection?.addRange(range)
-        const selectedLength = selection?.toString().length ?? 0
-        selection?.removeAllRanges()
-        return selectedLength
-      })).toBe(description.length)
-      await info.focus()
-      await page.keyboard.press('Home')
-      expect(await scrollport.evaluate(card => card.scrollTop)).toBe(0)
-      await page.keyboard.press('End')
-      expect(await scrollport.evaluate(card => card.scrollTop + card.clientHeight >= card.scrollHeight - 1)).toBe(true)
+      // The toggle's ink stays readable on the card in both themes.
       const palette: string[] = []
       const originalDarkTheme = await page.locator('body').getAttribute('data-ds-dark-theme')
       try {
         for (const dark of [false, true]) {
           await page.evaluate((value) => { document.body.toggleAttribute('data-ds-dark-theme', value) }, dark)
-          const colors = await preview.evaluate((card) => {
-            const surface = card.querySelector<HTMLElement>('[class*="calloutSurface"]')
-            const body = card.querySelector<HTMLElement>('[data-hover-card-scroll]')
-            const caret = card.querySelector<HTMLElement>('[data-hover-card-caret]')
-            if (surface === null || body === null || caret === null) return null
-            return {
-              surface: getComputedStyle(surface).backgroundColor,
-              text: getComputedStyle(body).color,
-              caret: getComputedStyle(caret).backgroundColor,
-            }
+          const colors = await descriptionToggle.evaluate((toggle) => {
+            const card = toggle.closest('section')
+            return card === null ? null : { text: getComputedStyle(toggle).color, surface: getComputedStyle(card).backgroundColor }
           })
-          expect(colors).not.toBeNull()
-          expect(colors?.surface).toBe(colors?.caret)
-          if (colors === null) throw new Error('Callout colors are unavailable')
+          if (colors === null) throw new Error('The question card is unavailable')
           const channels = (color: string) => color.match(/[\d.]+/g)?.slice(0, 3).map(Number) ?? []
           const luminance = (color: string) => channels(color).reduce((total, channel, index) => {
             const normalized = channel / 255
@@ -875,7 +824,9 @@ describe('web e2e: resident question composer round trip', () => {
           else document.body.setAttribute('data-ds-dark-theme', previous)
         }, originalDarkTheme)
       }
-      await page.keyboard.press('Escape')
+      await descriptionToggle.click()
+      await expect.poll(() => explicitText.evaluate(readCopy))
+        .toEqual({ lines: 1, clipped: true, overflows: true, toggle: 'More' })
 
       await composer.getByRole('checkbox', { name: 'Explicit install' }).click()
       const answer = composer.getByRole('textbox')

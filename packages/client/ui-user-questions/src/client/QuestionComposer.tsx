@@ -6,7 +6,7 @@ import clsx from 'clsx'
 import {
   Button, IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconChevronLeftOutlineRegular,
   IconChevronRightOutlineRegular, IconChevronUpOutlineRegular, IconCloseOutlineRegular,
-  HoverCard, IconEditOutlineRegular, IconEllipsisOutlineRegular, MarkdownText,
+  IconEditOutlineRegular, MarkdownText,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { planReviewOf, type QuestionAnswer, type QuestionCardSnapshot, type QuestionComposerProps } from './contract/slots.ts'
 import type { PendingQuestion } from './contract/slots.ts'
@@ -26,6 +26,11 @@ type Feedback = { key: 'error.incomplete' | 'error.unanswered' | 'error.unavaila
 const REMOVED_CARD: QuestionCardSnapshot = {
   state: 'open', waitState: 'counting', countdown: undefined, channel: 'none', closed: true,
 }
+
+/** Long copy the user expanded: the question itself or an option description by index. */
+type ExpandedCopy = ReadonlySet<'question' | number>
+
+const NOTHING_EXPANDED: ExpandedCopy = new Set()
 
 /**
  * Split the conventional recommendation suffix without changing the answer value.
@@ -242,48 +247,23 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
   // oxlint-disable-next-line typescript/no-non-null-assertion
   const draft = drafts[index]!
   const hasOptions = (question.options?.length ?? 0) > 0
-  const [overflow, setOverflow] = useState<{
-    question: typeof question
-    title: boolean
-    descriptions: Set<number>
-  } | null>(null)
-  const questionTruncated = overflow?.question === question && overflow.title
+  // CSS decides which copy is clipped; only the user's expansions are state.
+  const [expanded, setExpanded] = useState<ExpandedCopy>(NOTHING_EXPANDED)
 
-  useEffect(() => {
-    if (answerSurface.current !== null) answerSurface.current.scrollTop = 0
-  }, [index])
-
-  useEffect(() => {
-    const surface = answerSurface.current
-    if (surface === null || minimized) return
-    const title = surface.querySelector<HTMLElement>('[data-question-title]')
-    const descriptions = [...surface.querySelectorAll<HTMLElement>('[data-option-description]')]
-    const measure = (): void => {
-      const titleTruncated = title !== null && title.scrollHeight > title.clientHeight + 1
-      const truncated = new Set<number>()
-      for (const description of descriptions) {
-        if (description.scrollWidth > description.clientWidth + 1) {
-          truncated.add(Number(description.dataset.optionIndex))
-        }
-      }
-      setOverflow(current => current?.question === question && current.title === titleTruncated
-        && current.descriptions.size === truncated.size
-        && [...truncated].every(optionIndex => current.descriptions.has(optionIndex))
-        ? current : { question, title: titleTruncated, descriptions: truncated })
-    }
-    measure()
-    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
-    if (title !== null) observer?.observe(title)
-    for (const description of descriptions) observer?.observe(description)
-    const fonts = 'fonts' in document ? document.fonts : null
-    fonts?.addEventListener('loadingdone', measure)
-    return () => {
-      observer?.disconnect()
-      fonts?.removeEventListener('loadingdone', measure)
-    }
-  }, [minimized, question])
+  const toggleCopy = (copy: 'question' | number): void => {
+    setExpanded((current) => {
+      const next = new Set(current)
+      if (!next.delete(copy)) next.add(copy)
+      return next
+    })
+  }
 
   const replaceProgress = (nextIndex: number, nextDrafts: QuestionDraftAnswer[]): void => {
+    if (nextIndex !== index) {
+      // Another question starts at its top with its long copy collapsed.
+      if (answerSurface.current !== null) answerSurface.current.scrollTop = 0
+      setExpanded(NOTHING_EXPANDED)
+    }
     actions.replace(pending.key, {
       index: nextIndex,
       drafts: nextDrafts,
@@ -537,36 +517,22 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
               onFocusCapture={focusAnswerSurface}
               onBlurCapture={blurAnswerSurface}
             >
-              <div className={css.questionTitle}>
+              <div className={css.questionTitle} data-expanded={expanded.has('question') || undefined}>
                 <h2
-                  className={clsx(css.title, css.titlePreview, questionTruncated && css.titleTruncated)}
+                  className={clsx(css.title, css.titlePreview)}
                   id={`question-${pending.key}-${String(index)}`}
-                  data-question-title
                 >
                   {question.question}
                 </h2>
-                {questionTruncated && (
-                  <span className={css.questionAction}>
-                    <HoverCard
-                      key={`${question.id}-${String(index)}`}
-                      variant="callout"
-                      openOnClick
-                      describeAnchor={false}
-                      openDelayMs={200}
-                      anchor={(
-                        <button
-                          type="button"
-                          className={css.descriptionButton}
-                          aria-label={t('question.details')}
-                          aria-describedby={`question-${pending.key}-${String(index)}`}
-                        >
-                          <span className={css.descriptionMoreIcon}><IconEllipsisOutlineRegular size={12} /></span>
-                        </button>
-                      )}
-                      content={<span className={css.descriptionPreview} aria-hidden="true">{question.question}</span>}
-                    />
-                  </span>
-                )}
+                <button
+                  type="button"
+                  className={clsx(css.copyToggle, css.questionToggle)}
+                  aria-expanded={expanded.has('question')}
+                  aria-controls={`question-${pending.key}-${String(index)}`}
+                  onClick={() => { toggleCopy('question') }}
+                >
+                  {t(expanded.has('question') ? 'text.collapse' : 'text.expand')}
+                </button>
               </div>
               {question.detail !== undefined && (
                 <div className={css.detail}><MarkdownText text={question.detail} labels={markdownLabels} /></div>
@@ -576,18 +542,18 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
                   const selected = draft.selected.includes(option.label)
                   const display = parseRecommendedLabel(option.label)
                   const hasDescription = option.description !== undefined && option.description.trim() !== ''
-                  const showDetails = hasDescription && overflow?.question === question && overflow.descriptions.has(optionIndex)
+                  const descriptionExpanded = expanded.has(optionIndex)
                   const descriptionId = `${descriptionIdPrefix}-question-${String(index)}-option-${String(optionIndex)}-description`
                   return (
                     <div
                       key={`${option.label}-${String(optionIndex)}`}
                       className={clsx(
                         css.optionRow,
-                        (!locked || showDetails) && css.optionRowInteractive,
+                        !locked && css.optionRowInteractive,
                         selected && question.multiSelect !== true && css.optionSelected,
                       )}
                       data-option-row
-                      data-option-index={optionIndex}
+                      data-expanded={descriptionExpanded || undefined}
                     >
                       <button
                         type="button"
@@ -611,7 +577,7 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
                             </span>
                           )
                           : <span className={css.number}>{optionIndex + 1}</span>}
-                        <span className={css.optionCopy} data-option-copy>
+                        <span className={css.optionCopy}>
                           <span className={css.optionLine} data-option-line>
                             <span className={css.optionLabel}>{display.label}</span>
                             {display.recommended && (
@@ -619,36 +585,23 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
                             )}
                           </span>
                           {hasDescription && (
-                            <span
-                              id={descriptionId}
-                              className={clsx(css.description, showDetails && css.descriptionTruncated)}
-                              data-option-description
-                              data-option-index={optionIndex}
-                            >{option.description}</span>
+                            <span id={descriptionId} className={css.description} data-option-description>
+                              {option.description}
+                            </span>
                           )}
                         </span>
                       </button>
-                      {showDetails && (
-                        <span className={css.descriptionAction} data-option-details>
-                          <HoverCard
-                            key={`${question.id}-${String(index)}`}
-                            variant="callout"
-                            openOnClick
-                            describeAnchor={false}
-                            openDelayMs={200}
-                            anchor={(
-                              <button
-                                type="button"
-                                className={css.descriptionButton}
-                                aria-label={t('option.details', { option: display.label })}
-                                aria-describedby={descriptionId}
-                              >
-                                <span className={css.descriptionMoreIcon}><IconEllipsisOutlineRegular size={12} /></span>
-                              </button>
-                            )}
-                            content={<span className={css.descriptionPreview} aria-hidden="true">{option.description}</span>}
-                          />
-                        </span>
+                      {hasDescription && (
+                        <button
+                          type="button"
+                          className={clsx(css.copyToggle, css.descriptionToggle)}
+                          aria-expanded={descriptionExpanded}
+                          aria-controls={descriptionId}
+                          aria-describedby={descriptionId}
+                          onClick={() => { toggleCopy(optionIndex) }}
+                        >
+                          {t(descriptionExpanded ? 'text.collapse' : 'text.expand')}
+                        </button>
                       )}
                     </div>
                   )

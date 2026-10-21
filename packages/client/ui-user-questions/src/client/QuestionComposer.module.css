@@ -106,32 +106,56 @@
   font-weight: 500;
 }
 
-/* Keep the full question accessible while only its first three lines are visible. */
+/* Long copy keeps one line fewer than its budget once it overflows: a
+   question shows in full up to three lines, an option description up to two;
+   longer copy drops its last line, fades at the end of the line before, and
+   shows its toggle there. Each box keeps its full budget, plus a 2px
+   allowance for glyphs taller than the line, so the scroll timeline that
+   reports the overflow never depends on the collapsed layout. A negative
+   bottom margin, not a smaller box, gives the dropped line back to the row. */
 .questionTitle {
   position: relative;
   flex-shrink: 0;
   margin: 5px 24px 0;
+  timeline-scope: --question-copy;
+}
+
+.questionTitle[data-expanded] {
+  padding-bottom: 22px;
 }
 
 .titlePreview {
-  margin: 0;
-  max-height: 3lh;
+  max-height: calc(3lh + 2px);
+  margin: 0 0 -2px;
+  padding-bottom: 2px;
   overflow: hidden;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+  scroll-timeline: --question-copy block;
+  /* Longhands: the bundled lightningcss folds animation-timeline into the
+     animation shorthand, a form browsers reject. */
+  animation-name: question-clipped;
+  animation-fill-mode: both;
+  animation-timeline: --question-copy;
 }
 
-.titleTruncated {
-  mask-image: linear-gradient(#000, #000), linear-gradient(to right, #000 calc(100% - 74px), transparent calc(100% - 28px));
-  mask-size: 100% 2lh, 100% 1lh;
-  mask-position: top left, bottom left;
-  mask-repeat: no-repeat;
+@keyframes question-clipped {
+  from, to {
+    margin-bottom: calc(-1lh - 2px);
+    mask-image: linear-gradient(#000, #000), linear-gradient(to right, #000 calc(100% - 72px), transparent calc(100% - 48px));
+    mask-size: 100% 1lh, 100% 1lh;
+    mask-position: 0 0, 0 1lh;
+    mask-repeat: no-repeat;
+  }
 }
 
-.questionAction {
+.questionToggle {
   position: absolute;
-  right: 0;
-  bottom: -1px;
+  right: -6px;
+  bottom: 0;
+  animation-name: copy-toggle-shown;
+  animation-fill-mode: both;
+  animation-timeline: --question-copy;
 }
 
 .cardMinimized .title {
@@ -224,6 +248,7 @@
   border-radius: var(--dsw-radius-md);
   background: transparent;
   transition: background-color 120ms ease, border-color 120ms ease;
+  timeline-scope: --description-copy;
 }
 
 .option {
@@ -356,69 +381,96 @@
   width: max-content;
   max-width: 100%;
   min-width: 0;
+  max-height: calc(2lh + 2px);
+  margin-bottom: -2px;
+  padding-bottom: 2px;
   overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
   color: var(--dsw-alias-label-tertiary);
   font-size: 13px;
   line-height: 20px;
   font-weight: 400;
-  text-overflow: clip;
-  white-space: nowrap;
+  scroll-timeline: --description-copy block;
+  animation-name: description-clipped;
+  animation-fill-mode: both;
+  animation-timeline: --description-copy;
 }
 
-.descriptionTruncated {
-  mask-image: linear-gradient(to right, #000 calc(100% - 52px), transparent calc(100% - 24px));
+@keyframes description-clipped {
+  from, to {
+    margin-bottom: calc(-1lh - 2px);
+    mask-image: linear-gradient(to right, #000 calc(100% - 72px), transparent calc(100% - 48px));
+    mask-size: 100% 1lh;
+    mask-repeat: no-repeat;
+  }
 }
 
-.descriptionAction {
+.descriptionToggle {
   position: absolute;
-  right: 12px;
-  bottom: 6px;
-  width: 24px;
-  height: 24px;
+  right: 6px;
+  bottom: 7px;
+  animation-name: copy-toggle-shown;
+  animation-fill-mode: both;
+  animation-timeline: --description-copy;
 }
 
-.descriptionButton {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
+/* Expanded copy keeps its toggle on a line of its own below the text. */
+.optionRow[data-expanded] .option {
+  padding-bottom: 30px;
+}
+
+.questionTitle[data-expanded] .titlePreview,
+.optionRow[data-expanded] .description {
+  max-height: none;
+  animation: none;
+}
+
+.copyToggle {
+  padding: 1px 6px;
   border: 0;
-  border-radius: 999px;
-  corner-shape: round;
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 400;
+  white-space: nowrap;
   cursor: pointer;
+  visibility: hidden;
 }
 
-.descriptionButton:focus-visible {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
+@keyframes copy-toggle-shown {
+  from, to {
+    visibility: visible;
+  }
+}
+
+.questionTitle[data-expanded] .copyToggle,
+.optionRow[data-expanded] .copyToggle {
+  visibility: visible;
+  animation: none;
 }
 
 @media (hover: hover) {
-  .descriptionButton:hover {
+  .copyToggle:hover {
     background: var(--dsw-alias-interactive-bg-hover);
     color: var(--dsw-alias-label-primary);
   }
 }
 
-.descriptionMoreIcon {
-  display: grid;
-  place-items: center;
-  width: 16px;
-  height: 16px;
-  border: 1px solid currentColor;
-  border-radius: 50%;
-  corner-shape: round;
-}
+/* Without scroll timelines clipped copy cannot be told apart, so it shows in full. */
+@supports not (animation-timeline: scroll()) {
+  .titlePreview,
+  .description {
+    max-height: none;
+    animation: none;
+  }
 
-.descriptionPreview {
-  display: block;
-  font-size: 13px;
-  line-height: 20px;
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
+  .copyToggle {
+    display: none;
+  }
 }
 
 /* Read-only note standing in for a question the user skipped: it takes the
@@ -587,8 +639,8 @@
     padding: 8px 6px;
   }
 
-  .descriptionAction {
-    right: 6px;
+  .descriptionToggle {
+    right: 0;
   }
 
   .footer {

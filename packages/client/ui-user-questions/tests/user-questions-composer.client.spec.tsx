@@ -300,73 +300,7 @@ describe('QuestionComposer', () => {
     expect(screen.getByRole<HTMLButtonElement>('button', { name: '正在提交…' }).disabled).toBe(true)
   })
 
-  it('opens the full truncated question and removes its action on the next fitting question', () => {
-    const question = 'First question with four rendered lines'
-    const scrollHeight = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function (this: HTMLElement) {
-      return this.hasAttribute('data-question-title') && this.textContent === question ? 88 : 66
-    })
-    const clientHeight = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(66)
-    try {
-      const { carrier } = wait([
-        { id: 'first', question, options: [{ label: 'Continue' }] },
-        { id: 'second', question: 'Second question?', options: [{ label: 'Continue' }] },
-      ])
-      render(<QuestionComposer matched={carrier} {...kit} />)
-      const details = screen.getByRole('button', { name: '查看完整问题' })
-      expect(details.getAttribute('aria-describedby')).toBe(screen.getByRole('heading', { name: question }).id)
-      fireEvent.click(details)
-      expect(screen.getAllByText(question)).toHaveLength(2)
-      expect(screen.getByRole('radio', { name: 'Continue' }).getAttribute('aria-checked')).toBe('false')
-      fireEvent.click(screen.getByRole('radio', { name: 'Continue' }))
-      expect(screen.queryByText(question)).toBeNull()
-      expect(screen.queryByRole('button', { name: '查看完整问题' })).toBeNull()
-    } finally {
-      cleanup()
-      scrollHeight.mockRestore()
-      clientHeight.mockRestore()
-    }
-  })
-
-  it('shows details only for overflow and removes them when the description fits after resizing', ({ onTestFinished }) => {
-    let availableWidth = 300
-    const scrollWidth = vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(200)
-    const clientWidth = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => availableWidth)
-    const disconnect = vi.fn()
-    let resize = (): void => {}
-    vi.stubGlobal('ResizeObserver', class {
-      constructor(callback: () => void) { resize = callback }
-      observe(): void {}
-      disconnect = disconnect
-    })
-    onTestFinished(() => {
-      cleanup()
-      scrollWidth.mockRestore()
-      clientWidth.mockRestore()
-      vi.unstubAllGlobals()
-    })
-    const description = 'An explanation that fits in a wide row.'
-    const { carrier } = wait([{
-      id: 'size', question: 'Which option?', options: [{ label: 'Option', description }],
-    }])
-    const { unmount } = render(<QuestionComposer matched={carrier} {...kit} />)
-    const text = screen.getByText(description)
-    expect(screen.queryByRole('button', { name: '查看“Option”的选项说明' })).toBeNull()
-    availableWidth = 100
-    act(() => { resize() })
-    expect(screen.getByRole('button', { name: '查看“Option”的选项说明' })).toBeTruthy()
-    availableWidth = 300
-    act(() => { resize() })
-    expect(screen.queryByRole('button', { name: '查看“Option”的选项说明' })).toBeNull()
-    expect(screen.getByText(description)).toBe(text)
-    unmount()
-    expect(disconnect).toHaveBeenCalledOnce()
-  })
-
-  it('opens a full option description without choosing the option', ({ onTestFinished }) => {
-    const width = vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(function (this: HTMLElement) {
-      return this.hasAttribute('data-option-description') ? 500 : 0
-    })
-    onTestFinished(() => { cleanup(); width.mockRestore() })
+  it('expands long copy in place without choosing an option', () => {
     const description = 'Remove the experimental client from every shipped template and require an explicit profile install.'
     const { carrier } = wait([{
       id: 'release', question: 'How should the release graph change?',
@@ -379,29 +313,39 @@ describe('QuestionComposer', () => {
     }])
     render(<QuestionComposer matched={carrier} {...kit} />)
 
+    // CSS shows each toggle only while its copy overflows; every candidate is rendered.
+    const heading = screen.getByRole('heading', { name: 'How should the release graph change?' })
+    const [questionToggle, descriptionToggle, ...rest] = screen.getAllByRole('button', { name: '全部' })
+    expect(rest).toHaveLength(0)
+    expect(questionToggle?.getAttribute('aria-controls')).toBe(heading.id)
     const option = screen.getByRole('radio', { name: 'Explicit install' })
-    const details = screen.getByRole('button', { name: '查看“Explicit install”的选项说明' })
-    expect(screen.getAllByRole('button', { name: /选项说明/ })).toHaveLength(1)
-    expect(screen.getAllByText(description)).toHaveLength(1)
-    const describedBy = details.getAttribute('aria-describedby')
-    expect(describedBy).not.toBeNull()
-    expect(document.getElementById(describedBy as string)?.textContent).toBe(description)
-    fireEvent.click(details)
+    const text = screen.getByText(description)
+    expect(option.getAttribute('aria-describedby')).toBe(text.id)
+    expect(descriptionToggle?.getAttribute('aria-controls')).toBe(text.id)
+    expect(descriptionToggle?.getAttribute('aria-describedby')).toBe(text.id)
+    expect(descriptionToggle?.getAttribute('aria-expanded')).toBe('false')
 
+    fireEvent.click(descriptionToggle as HTMLElement)
+    expect(descriptionToggle?.getAttribute('aria-expanded')).toBe('true')
+    expect(descriptionToggle?.textContent).toBe('收起')
+    expect(text.closest('[data-option-row]')?.hasAttribute('data-expanded')).toBe(true)
+    expect(screen.getByText(description)).toBe(text)
     expect(option.getAttribute('aria-checked')).toBe('false')
-    expect(details.getAttribute('aria-describedby')).toBe(describedBy)
-    expect(screen.getAllByText(description)).toHaveLength(2)
-    fireEvent.pointerDown(document.body)
-    expect(screen.getAllByText(description)).toHaveLength(1)
+    expect(questionToggle?.getAttribute('aria-expanded')).toBe('false')
+
+    fireEvent.click(questionToggle as HTMLElement)
+    expect(questionToggle?.getAttribute('aria-expanded')).toBe('true')
+    expect(heading.parentElement?.hasAttribute('data-expanded')).toBe(true)
+    fireEvent.click(questionToggle as HTMLElement)
+    fireEvent.click(descriptionToggle as HTMLElement)
+    expect(heading.parentElement?.hasAttribute('data-expanded')).toBe(false)
+    expect(text.closest('[data-option-row]')?.hasAttribute('data-expanded')).toBe(false)
+    expect(screen.getAllByRole('button', { name: '全部' })).toEqual([questionToggle, descriptionToggle])
   })
 
-  it('resets scrolling and an open option description when the question changes', ({ onTestFinished }) => {
-    const width = vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(function (this: HTMLElement) {
-      return this.hasAttribute('data-option-description') ? 500 : 0
-    })
-    onTestFinished(() => { cleanup(); width.mockRestore() })
-    const firstDescription = 'First question detail that was pinned open.'
-    const secondDescription = 'Second question detail starts closed.'
+  it('resets scrolling and expanded copy when the question changes', () => {
+    const firstDescription = 'First question detail that was expanded.'
+    const secondDescription = 'Second question detail starts collapsed.'
     const { carrier } = wait([
       {
         id: 'first', question: 'First question?',
@@ -417,13 +361,8 @@ describe('QuestionComposer', () => {
     expect(screen.getByRole('region', { name: 'First question?' })).toBeTruthy()
     const firstScroll = screen.getByText('First question?').closest('[data-question-scroll]') as HTMLElement
     firstScroll.scrollTop = 80
-    const firstDetails = screen.getByRole('button', { name: '查看“Continue”的选项说明' })
-    fireEvent.click(firstDetails)
-    expect(screen.getAllByText(firstDescription)).toHaveLength(2)
-    const firstDescribedIds = (firstDetails.getAttribute('aria-describedby') ?? '').split(/\s+/).filter(Boolean)
-    expect(firstDescribedIds.length).toBeGreaterThan(0)
-    expect(firstDescribedIds.every(id => document.getElementById(id) !== null)).toBe(true)
-    expect(firstDescribedIds.map(id => document.getElementById(id)?.textContent)).toContain(firstDescription)
+    for (const toggle of screen.getAllByRole('button', { name: '全部' })) fireEvent.click(toggle)
+    expect(screen.getAllByRole('button', { name: '收起' })).toHaveLength(2)
     fireEvent.click(screen.getByRole('radio', { name: 'Continue' }))
 
     const secondScroll = screen.getByText('Second question?').closest('[data-question-scroll]') as HTMLElement
@@ -431,14 +370,11 @@ describe('QuestionComposer', () => {
     expect(screen.getByRole('region', { name: 'Second question?' })).toBeTruthy()
     expect(secondScroll).toBe(firstScroll)
     expect(secondScroll.scrollTop).toBe(0)
+    expect(screen.queryByRole('button', { name: '收起' })).toBeNull()
+    expect(secondScroll.querySelector('[data-expanded]')).toBeNull()
     expect(screen.queryByText(firstDescription)).toBeNull()
-    expect(screen.getAllByText(secondDescription)).toHaveLength(1)
-    const secondDetails = screen.getByRole('button', { name: '查看“Continue”的选项说明' })
-    const describedIds = (secondDetails.getAttribute('aria-describedby') ?? '').split(/\s+/).filter(Boolean)
-    expect(describedIds.length).toBeGreaterThan(0)
-    expect(describedIds.every(id => document.getElementById(id) !== null)).toBe(true)
-    expect(describedIds.map(id => document.getElementById(id)?.textContent)).toContain(secondDescription)
-    expect(describedIds.map(id => document.getElementById(id)?.textContent)).not.toContain(firstDescription)
+    const descriptionToggle = screen.getAllByRole('button', { name: '全部' })[1]
+    expect(document.getElementById(descriptionToggle?.getAttribute('aria-controls') ?? '')?.textContent).toBe(secondDescription)
   })
 
   it('renders plan detail through the shared assistant Markdown primitive', () => {
@@ -1002,11 +938,7 @@ function reviewCard(review: readonly AskUserQuestionAnswerItem[] = RECORDED) {
 }
 
 describe('review card', () => {
-  it('walks a settled call record with every answer surface frozen', ({ onTestFinished }) => {
-    const width = vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(function (this: HTMLElement) {
-      return this.hasAttribute('data-option-description') ? 500 : 0
-    })
-    onTestFinished(() => { cleanup(); width.mockRestore() })
+  it('walks a settled call record with every answer surface frozen', () => {
     const { carrier } = reviewCard()
     render(<QuestionComposer matched={carrier} {...kit} />)
 
@@ -1015,7 +947,8 @@ describe('review card', () => {
     const chosen = screen.getByRole<HTMLButtonElement>('radio', { name: '工程落地型' })
     expect(chosen.getAttribute('aria-checked')).toBe('true')
     expect(chosen.disabled).toBe(true)
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: '查看“工程落地型”的选项说明' }).disabled).toBe(false)
+    // Long copy stays readable on a frozen card.
+    expect(screen.getAllByRole<HTMLButtonElement>('button', { name: '全部' }).map(toggle => toggle.disabled)).toEqual([false, false, false])
     // Nothing is left to send, and the unused free-text field would read as
     // somewhere to type.
     expect(screen.queryByRole('button', { name: '跳过' })).toBeNull()

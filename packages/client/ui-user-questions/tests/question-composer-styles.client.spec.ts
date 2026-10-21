@@ -8,29 +8,95 @@ const stylesheet = readFileSync(
   'utf8',
 ).replace(/\/\*[\s\S]*?\*\//g, ' ')
 
-function declarations(selector: string): string[] {
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const rule = new RegExp(`(?:^|\\})\\s*${escaped}\\s*\\{([^{}]*)\\}`).exec(stylesheet)
-  if (rule === null) throw new Error(`QuestionComposer.module.css has no \`${selector}\` rule`)
-  return (rule[1] ?? '').split(';').map(part => part.trim()).filter(Boolean)
+const escape = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+function split(body: string | undefined): string[] {
+  return (body ?? '').split(';').map(part => part.trim()).filter(Boolean)
 }
 
-describe('QuestionComposer compact long-copy layout', () => {
-  it('keeps the option description to one clipped line and fades only truncated text', () => {
+function declarations(selector: string): string[] {
+  const rule = new RegExp(`(?:^|\\})\\s*${escape(selector)}\\s*\\{([^{}]*)\\}`).exec(stylesheet)
+  if (rule === null) throw new Error(`QuestionComposer.module.css has no \`${selector}\` rule`)
+  return split(rule[1])
+}
+
+function keyframes(name: string): string[] {
+  const rule = new RegExp(`@keyframes ${escape(name)}\\s*\\{\\s*from, to\\s*\\{([^{}]*)\\}`).exec(stylesheet)
+  if (rule === null) throw new Error(`QuestionComposer.module.css has no \`${name}\` keyframes`)
+  return split(rule[1])
+}
+
+describe('QuestionComposer long-copy layout', () => {
+  it('reads question overflow against three lines and keeps two once it overflows', () => {
+    expect(declarations('.questionTitle')).toContain('timeline-scope: --question-copy')
+    expect(declarations('.titlePreview')).toEqual(expect.arrayContaining([
+      'max-height: calc(3lh + 2px)',
+      'margin: 0 0 -2px',
+      'padding-bottom: 2px',
+      'overflow: hidden',
+      'scroll-timeline: --question-copy block',
+      'animation-name: question-clipped',
+      'animation-fill-mode: both',
+      'animation-timeline: --question-copy',
+    ]))
+    expect(keyframes('question-clipped')).toEqual(expect.arrayContaining([
+      'margin-bottom: calc(-1lh - 2px)',
+      'mask-size: 100% 1lh, 100% 1lh',
+      'mask-position: 0 0, 0 1lh',
+    ]))
+    expect(declarations('.questionToggle')).toEqual(expect.arrayContaining([
+      'animation-name: copy-toggle-shown',
+      'animation-timeline: --question-copy',
+    ]))
+  })
+
+  it('reads description overflow against two lines and keeps one once it overflows', () => {
+    expect(declarations('.optionRow')).toContain('timeline-scope: --description-copy')
     expect(declarations('.description')).toEqual(expect.arrayContaining([
       'display: block',
       'width: max-content',
       'max-width: 100%',
-      'min-width: 0',
+      'max-height: calc(2lh + 2px)',
+      'margin-bottom: -2px',
+      'padding-bottom: 2px',
       'overflow: hidden',
       'font-size: 13px',
       'line-height: 20px',
-      'text-overflow: clip',
-      'white-space: nowrap',
+      'scroll-timeline: --description-copy block',
+      'animation-name: description-clipped',
+      'animation-fill-mode: both',
+      'animation-timeline: --description-copy',
     ]))
-    expect(declarations('.descriptionTruncated')).toContain(
-      'mask-image: linear-gradient(to right, #000 calc(100% - 52px), transparent calc(100% - 24px))',
-    )
+    expect(keyframes('description-clipped')).toEqual(expect.arrayContaining([
+      'margin-bottom: calc(-1lh - 2px)',
+      'mask-size: 100% 1lh',
+    ]))
+    expect(declarations('.descriptionToggle')).toEqual(expect.arrayContaining([
+      'animation-name: copy-toggle-shown',
+      'animation-timeline: --description-copy',
+    ]))
+  })
+
+  it('shows a toggle only through the overflow timeline or an expansion', () => {
+    expect(declarations('.copyToggle')).toContain('visibility: hidden')
+    expect(keyframes('copy-toggle-shown')).toEqual(['visibility: visible'])
+    expect(declarations('.questionTitle[data-expanded] .titlePreview,\n.optionRow[data-expanded] .description'))
+      .toEqual(['max-height: none', 'animation: none'])
+    expect(declarations('.questionTitle[data-expanded] .copyToggle,\n.optionRow[data-expanded] .copyToggle'))
+      .toEqual(['visibility: visible', 'animation: none'])
+  })
+
+  it('names timelines through longhands that the bundled CSS keeps apart', () => {
+    // lightningcss merges `animation` with `animation-timeline` into a shorthand browsers reject.
+    const timed = [...stylesheet.matchAll(/\{([^{}]*animation-timeline[^{}]*)\}/g)].map(match => match[1] ?? '')
+    expect(timed).toHaveLength(4)
+    for (const body of timed) expect(split(body).some(part => part.startsWith('animation:'))).toBe(false)
+  })
+
+  it('shows all copy where scroll timelines are unsupported', () => {
+    const fallback = /@supports not \(animation-timeline: scroll\(\)\)\s*\{([\s\S]*?)\n\}/.exec(stylesheet)?.[1] ?? ''
+    expect(fallback).toMatch(/\.titlePreview,\s*\.description\s*\{\s*max-height: none;\s*animation: none;\s*\}/)
+    expect(fallback).toMatch(/\.copyToggle\s*\{\s*display: none;\s*\}/)
   })
 
   it('keeps the question and choices in the card scrollport', () => {
