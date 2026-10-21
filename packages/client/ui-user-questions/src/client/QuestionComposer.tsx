@@ -250,7 +250,7 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
   // CSS decides which copy is clipped; only the user's expansions are state.
   const [expanded, setExpanded] = useState<ExpandedCopy>(NOTHING_EXPANDED)
 
-  const questionToggleLabel = t(expanded.has('question') ? 'question.collapse' : 'question.expand')
+  const questionToggleLabel = t(expanded.has('question') ? 'text.collapse' : 'text.expand')
 
   const toggleCopy = (copy: 'question' | number): void => {
     setExpanded((current) => {
@@ -533,6 +533,7 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
                     aria-label={questionToggleLabel}
                     aria-expanded={expanded.has('question')}
                     aria-controls={`question-${pending.key}-${String(index)}`}
+                    aria-describedby={`question-${pending.key}-${String(index)}`}
                     onClick={() => { toggleCopy('question') }}
                   >
                     {expanded.has('question') ? <IconChevronUpOutlineRegular /> : <IconChevronDownOutlineRegular />}
@@ -548,7 +549,7 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
                   const display = parseRecommendedLabel(option.label)
                   const hasDescription = option.description !== undefined && option.description.trim() !== ''
                   const descriptionExpanded = expanded.has(optionIndex)
-                  const descriptionToggleLabel = t(descriptionExpanded ? 'option.collapse' : 'option.expand', { option: display.label })
+                  const descriptionToggleLabel = t(descriptionExpanded ? 'text.collapse' : 'text.expand')
                   const descriptionId = `${descriptionIdPrefix}-question-${String(index)}-option-${String(optionIndex)}-description`
                   return (
                     <div
