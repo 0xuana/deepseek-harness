@@ -124,9 +124,12 @@ describe('SDK approval bridge', () => {
       .toEqual([action === 'cancel' ? 'cancelled' : 'unavailable'])
   })
 
-  it('does not claim an unrelated live Agent', async () => {
+  it.each([false, true])('does not claim an unrelated live Agent with SDK session lineage: %s', async (hasLineage) => {
     const h = await setup(true)
-    const foreign = await h.ctx.agents.create({ sessionId: SessionId('foreign'), meta: { cwd: process.cwd() } })
+    const foreign = await h.ctx.agents.create({
+      sessionId: SessionId('foreign'),
+      meta: { cwd: process.cwd(), ...(hasLineage ? { parentSession: h.agent.session.id } : {}) },
+    })
     onTestFinished(() => foreign.dispose())
     foreign.agent.session.append('turn/start', { turn: 1 })
     const clientDecision = vi.fn(async () => ({ outcome: 'allowed-once' }))
@@ -136,18 +139,59 @@ describe('SDK approval bridge', () => {
     expect(clientDecision).not.toHaveBeenCalled()
   })
 
-  it('serves in-process descendants and preserves never policy', async () => {
+  it.each([false, true])('serves runtime descendants with SDK session lineage: %s and preserves never policy', async (hasLineage) => {
     const h = await setup(true)
-    const child = await h.ctx.agents.create({ sessionId: SessionId('child'), meta: { cwd: process.cwd(), parentSession: h.agent.session.id } })
-    onTestFinished(() => child.dispose())
-    child.agent.session.append('turn/start', { turn: 1 })
-    h.client.onRequest(async (_method, params) => {
-      expect(params).toEqual({ sessionId: 'child', toolName: 'bash' })
-      return { outcome: 'allowed-once' }
+    const child = await h.ctx.agents.create({
+      sessionId: SessionId('child'), parentAgent: h.agent,
+      meta: { cwd: process.cwd(), ...(hasLineage ? { parentSession: h.agent.session.id } : {}) },
     })
-    await expect(h.ctx.approval.request({ agent: child.agent, toolName: 'bash' })).resolves.toBe('allowed-once')
+    onTestFinished(() => child.dispose())
+    const grandchild = await h.ctx.agents.create({
+      sessionId: SessionId('grandchild'), parentAgent: child.agent, meta: { cwd: process.cwd() },
+    })
+    onTestFinished(() => grandchild.dispose())
+    child.agent.session.append('turn/start', { turn: 1 })
+    grandchild.agent.session.append('turn/start', { turn: 1 })
+    const clientDecision = vi.fn(async () => ({ outcome: 'allowed-once' }))
+    h.client.onRequest(clientDecision)
+    for (const agent of [child.agent, grandchild.agent]) {
+      await expect(h.ctx.approval.request({ agent, toolName: 'bash' })).resolves.toBe('allowed-once')
+      expect(clientDecision).toHaveBeenLastCalledWith('approval/request', { sessionId: agent.session.id, toolName: 'bash' })
+    }
     h.ctx.approval.setPolicy(child.agent, 'never')
     await expect(h.ctx.approval.request({ agent: child.agent, toolName: 'bash' })).resolves.toBe('rejected')
+    expect(clientDecision).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not claim another runtime owner\'s child despite SDK session lineage', async () => {
+    const h = await setup(true)
+    const owner = await h.ctx.agents.create({ sessionId: SessionId('foreign-owner') })
+    onTestFinished(() => owner.dispose())
+    const child = await h.ctx.agents.create({
+      sessionId: SessionId('foreign-child'), parentAgent: owner.agent,
+      meta: { parentSession: h.agent.session.id },
+    })
+    onTestFinished(() => child.dispose())
+    child.agent.session.append('turn/start', { turn: 1 })
+    const clientDecision = vi.fn(async () => ({ outcome: 'allowed-once' }))
+    h.client.onRequest(clientDecision)
+    h.ctx.on('approval/request', () => Promise.resolve('rejected'))
+    await expect(h.ctx.approval.request({ agent: child.agent, toolName: 'bash' })).resolves.toBe('rejected')
+    expect(clientDecision).not.toHaveBeenCalled()
+  })
+
+  it('does not claim a disposed Agent when an owned replacement reuses its id', async () => {
+    const h = await setup(true)
+    const old = await h.ctx.agents.create({ sessionId: SessionId('reused'), parentAgent: h.agent })
+    await old.dispose()
+    const replacement = await h.ctx.agents.create({ sessionId: old.agent.id, parentAgent: h.agent })
+    onTestFinished(() => replacement.dispose())
+    const clientDecision = vi.fn(async () => ({ outcome: 'allowed-once' }))
+    h.client.onRequest(clientDecision)
+    // Dispatch at the answerer seam: disposal has already closed the old Agent's turn.
+    await expect(h.ctx.waterfall('approval/request', { agent: old.agent, toolName: 'bash' },
+      () => Promise.resolve('rejected' as const))).resolves.toBe('rejected')
+    expect(clientDecision).not.toHaveBeenCalled()
   })
 
   it('rejects an invalid wire capability flag', async () => {

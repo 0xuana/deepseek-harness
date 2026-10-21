@@ -321,11 +321,15 @@ export class HarnessSdkJsonRpcServer {
   }
 
   private ownsAgent(agent: Agent): boolean {
-    let current: Agent | undefined = agent
-    while (current !== undefined) {
+    const agents = this.ctx.agents
+    if (agents.get(agent.id) !== agent) return false
+    const liveAgents = agents.list()
+    const ancestors = new Set([agent])
+    for (const current of ancestors) {
       if (this.sessions.get(current.session.id)?.handle.agent === current) return true
-      const parent: SessionId | undefined = current.session.header.parentSession
-      current = parent === undefined ? undefined : this.ctx.agents.get(parent)
+      for (const parent of liveAgents) {
+        if (agents.isOwnedBy(current.id, parent)) ancestors.add(parent)
+      }
     }
     return false
   }
