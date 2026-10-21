@@ -122,23 +122,29 @@ export function apply(ctx: Context): void {
     const stream = ctx.remote.$stream<AccountView>({
       name: 'account', open: signal => ctx.remote.account.watch(signal), ended: () => new Error('account stream ended'),
     })
-    let disposed = false
-    // Withdrawing access invalidates the reads this grant started and clears its
-    // account view, synchronously, so the next grant starts from no account
+    // Read across closures: the disposer ends this grant while the frame loop awaits.
+    const grant = { ended: false }
+    // Withdrawing access invalidates the reads this grant started, closes the
+    // pending authorization tab, and clears the account view and the sign-in
+    // dialog state, synchronously, so the next grant starts from no account
     // state. `notices.end()` disposes this generation's notice lifetime, which a
     // frame of this stream begins; the notice controller stays outside and
     // begins again under the next grant.
     yield () => {
-      disposed = true
+      grant.ended = true
       revision++
       refreshing = undefined
       avatar.reset()
-      publish({ ...snapshot, view: undefined, details: undefined, avatar: undefined, failed: false })
+      browser.dispose()
+      const { loginFailed: _loginFailed, ...current } = snapshot
+      publish({ ...current, view: undefined, details: undefined, avatar: undefined, failed: false, loginVisible: false })
       notices.end()
       return stream.dispose()
     }
     void (async () => {
       for await (const frame of stream) {
+        // A frame the stream delivered before the revocation is not this grant's to apply.
+        if (grant.ended) return
         revision++
         refreshing = undefined
         avatar.reset()
@@ -161,7 +167,7 @@ export function apply(ctx: Context): void {
         })()
         void refresh()
       }
-    })().catch(() => { if (!disposed) publish({ ...snapshot, failed: true }) })
+    })().catch(() => { if (!grant.ended) publish({ ...snapshot, failed: true }) })
   })
   const nativePlatform = (globalThis as typeof globalThis & { dshPlatform?: PlatformBridge }).dshPlatform
   // One request channel for the single native Platform view. It always exists

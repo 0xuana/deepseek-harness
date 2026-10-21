@@ -189,3 +189,124 @@ it('drops reads a revoked grant started, and the next grant shows no account sec
     for (const dispose of lifetime.reverse()) dispose()
   }
 })
+
+/** Stream behaviour of one grant's account stream in {@link revocationHarness}. */
+type StreamScript = (yieldFrame: () => void) => void
+
+/**
+ * The account plugin over hand-built services whose account streams follow `scripts`, one per grant.
+ * @param scripts - per-grant hooks run right before that stream delivers its first frame.
+ * @returns the plugin's access guards, Remote spies, slot counts, and teardown.
+ */
+function revocationHarness(scripts: StreamScript[]) {
+  const links = { usageUrl: 'https://example.test/usage', topUpUrl: 'https://example.test/top_up' }
+  const signedIn: AccountView = { status: 'credential-stored', links, attempt: null }
+  const guards: Guard[] = []
+  const registered = new Map<string, number>()
+  const accepted: Promise<undefined>[] = []
+  const lifetime: (() => void)[] = []
+  let operations: AccountSectionInjected | undefined
+  const getProfile = vi.fn(async () => ({ ok: true, value: null }))
+  const getUnnotifiedBonuses = vi.fn(async () => ({ ok: true, value: null }))
+  const startSignIn = vi.fn<() => Promise<{ ok: false }>>()
+  const ctx = {
+    effect: (install: () => (() => void) | undefined) => { const dispose = install(); if (dispose) lifetime.push(dispose) },
+    locale: { register: () => () => {}, bind: () => (key: string) => key, getSnapshot: () => ({ active: 'en' }) },
+    configForms: {
+      get: () => ({ subscribe: () => () => {}, getSnapshot: () => ({ status: 'loading', value: undefined }) }),
+      describe: () => ({ subscribe: () => () => {}, getSnapshot: () => ({ error: null }) }),
+    },
+    theme: { getTheme: () => ({ active: { colorScheme: 'light' } }) },
+    slots: {
+      inject: (_name: string, install: () => (() => void) | undefined) => {
+        const dispose = install()
+        return () => { dispose?.() }
+      },
+      register: (entry: { readonly name: string; readonly inject?: () => AccountSectionInjected }) => {
+        if (entry.name === 'settings.launcher') operations = entry.inject?.()
+        registered.set(entry.name, (registered.get(entry.name) ?? 0) + 1)
+        return () => { registered.set(entry.name, registered.get(entry.name)! - 1) }
+      },
+    },
+    remoteAccess: {
+      whenAccess: (action: string, install: () => AccessEffect) => {
+        guards.push({ action, install, installed: undefined })
+        return () => {}
+      },
+    },
+    remote: {
+      $on: () => () => {},
+      session: { initializeDefaultModel: async () => ({ ok: true, value: undefined }) },
+      account: {
+        getProfile, getBalance: async () => ({ ok: true, value: null }), getUnnotifiedBonuses, startSignIn,
+      },
+      $stream: () => {
+        const abort = new AbortController()
+        const delivered = Promise.withResolvers<undefined>()
+        const script = scripts[accepted.length]!
+        accepted.push(delivered.promise)
+        return {
+          signal: abort.signal,
+          dispose: () => { abort.abort() },
+          async *[Symbol.asyncIterator]() {
+            await Promise.resolve()
+            script(() => {})
+            yield { value: signedIn, accept: () => { delivered.resolve(undefined) } }
+            await new Promise((resolve) => { abort.signal.addEventListener('abort', resolve) })
+          },
+        }
+      },
+    },
+  }
+  apply(ctx as never)
+  return {
+    guards, registered, accepted, getProfile, getUnnotifiedBonuses, startSignIn,
+    operations: () => operations!,
+    dispose: () => { revoke(guards); for (const dispose of lifetime.reverse()) dispose() },
+  }
+}
+
+it('ignores a frame the stream delivered just before the revocation', async () => {
+  vi.stubEnv('DSH_CLIENT_VERSION', '0.0.0-test')
+  // The stream hands out its first frame after access is already withdrawn.
+  const b = revocationHarness([() => { revoke(b.guards) }])
+  try {
+    grant(b.guards)
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(b.operations().hooks.account.getSnapshot().view).toBeUndefined()
+    expect(b.registered.get('settings.section') ?? 0).toBe(0)
+    expect(b.getProfile).not.toHaveBeenCalled()
+    expect(b.getUnnotifiedBonuses).not.toHaveBeenCalled()
+  } finally {
+    b.dispose()
+  }
+})
+
+it('closes the sign-in dialog, its failure, and the pending authorization tab on revocation', async () => {
+  vi.stubEnv('DSH_CLIENT_VERSION', '0.0.0-test')
+  const popup = { opener: null, closed: false, close: vi.fn(), location: { replace: vi.fn() } }
+  const open = vi.spyOn(window, 'open').mockReturnValue(popup as never)
+  const b = revocationHarness([() => {}, () => {}])
+  try {
+    grant(b.guards)
+    await b.accepted[0]
+    b.startSignIn.mockResolvedValueOnce({ ok: false })
+    await expect(b.operations().start()).rejects.toThrow('account start failed')
+    expect(b.operations().hooks.account.getSnapshot()).toMatchObject({ loginVisible: true, loginFailed: true })
+    revoke(b.guards)
+    expect(b.operations().hooks.account.getSnapshot().loginVisible).toBe(false)
+    expect(b.operations().hooks.account.getSnapshot().loginFailed).toBeUndefined()
+
+    grant(b.guards)
+    await b.accepted[1]
+    popup.close.mockClear()
+    b.startSignIn.mockReturnValueOnce(new Promise(() => {}))
+    void b.operations().start()
+    expect(open).toHaveBeenCalledTimes(2)
+    revoke(b.guards)
+    expect(popup.close).toHaveBeenCalledOnce()
+  } finally {
+    b.dispose()
+    open.mockRestore()
+  }
+})
