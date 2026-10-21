@@ -67,6 +67,9 @@
       "path": "../../subagent/subagent"
     },
     {
+      "path": "../connection/tsconfig.client.json"
+    },
+    {
       "path": "../locale/tsconfig.client.json"
     },
     {
