@@ -4,7 +4,7 @@ import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { pluginRecordOf, type SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 import type { CreationRecommendation } from './types.ts'
-import type {} from '@deepseek-ai/dsh-tools/types'
+import type {} from '@deepseek-ai/dsh-tool-executor-ptc/types'
 
 /** Model and wire values use the same three supported locations. */
 export const slotSchema = z.enum(['sidebar-right', 'page', 'sidebar-left'])

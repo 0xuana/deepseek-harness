@@ -17,6 +17,8 @@
     {
       "path": "../../core/tools"
     },
+    { "path": "../../core/tool-executor-ptc" },
+    { "path": "../../test-support/tool-testkit" },
     {
       "path": "../../core/agent"
     },

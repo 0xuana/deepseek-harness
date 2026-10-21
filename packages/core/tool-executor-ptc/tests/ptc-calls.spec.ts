@@ -67,7 +67,7 @@ it('honors cancellation while waiting for a canceled predecessor', async () => {
   expect(next).not.toHaveBeenCalled()
 })
 
-it('unloads the registry only after calls stop and refuses late admission', async () => {
+it('unloads the executor only after calls stop and refuses late admission', async () => {
   const { ctx, session, calls, mode, signal } = await setup()
   const cleanup = Promise.withResolvers<undefined>()
   const stopped = Promise.withResolvers<undefined>()
@@ -79,11 +79,11 @@ it('unloads the registry only after calls stop and refuses late admission', asyn
   try {
     await stopped.promise
     const next = calls.run(session.id, signal, mode, async () => 'unexpected')
-    const rejected = expect(next).rejects.toThrow('PTC tool registry disposed')
+    const rejected = expect(next).rejects.toThrow('PTC tool executor disposed')
     cleanup.resolve(undefined)
     await first
     await rejected
     await disposed
-    await expect(calls.run(session.id, signal, mode, async () => 'unexpected')).rejects.toThrow('PTC tool registry disposed')
+    await expect(calls.run(session.id, signal, mode, async () => 'unexpected')).rejects.toThrow('PTC tool executor disposed')
   } finally { cleanup.resolve(undefined); await first; await disposed }
 })

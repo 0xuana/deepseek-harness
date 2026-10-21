@@ -3,6 +3,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { registerActionCard } from '../src/action-cards.ts'
 import { fixture } from './fixture.ts'
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 it('keeps the card contract independent of creation and withdraws it with its plugin', async () => {
   const f = await fixture()
@@ -19,7 +20,7 @@ it('keeps the card contract independent of creation and withdraws it with its pl
     },
   })
   const callId = ToolCallId('other')
-  const execute = (request: unknown) => f.ctx.tools.execute({
+  const execute = (request: unknown) => executeToolFixture(f.ctx, {
     name: 'suggest_action', arguments: { request }, callId, agent: f.agent, signal: new AbortController().signal,
   })
   for (const request of [
@@ -50,7 +51,7 @@ it('keeps the card contract independent of creation and withdraws it with its pl
     output: { schema: { type: 'json' }, render: () => [] },
     execute: async (_args, exec) => { await queued.execute({ request: { action: 'fixture_action', title: 'Stale' } }, exec); return null },
   }))
-  const stale = await f.ctx.tools.execute({ name: 'fixture_queued_card', arguments: {}, callId,
+  const stale = await executeToolFixture(f.ctx, { name: 'fixture_queued_card', arguments: {}, callId,
     agent: f.agent, signal: new AbortController().signal })
   expect(stale.isError).toBe(true)
   expect(JSON.stringify(stale.content)).toContain('no longer available')

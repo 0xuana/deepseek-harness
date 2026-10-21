@@ -9,8 +9,8 @@
   en: 6cc2cd9ced70bb09
   zh: 1c0e6cb4ba2ed637
 /tool-schema-catalog/tool-package-map:
-  en: e2233129f2b78018
-  zh: 17291124f9400fde
+  en: c6104bbb0d2b7d25
+  zh: b7e438041278bc98
 /tool-schema-catalog/deepseek-ai-dsh-experimental-creation-recommendations:
   en: b0727c5ef1bdec4b
   zh: b0727c5ef1bdec4b
@@ -66,14 +66,14 @@
   en: e713a4a11a15d13c
   zh: e713a4a11a15d13c
 /tool-schema-catalog/deepseek-ai-dsh-tool-ask-user/ask-user-question:
-  en: 055268ba4dcd32f9
-  zh: a1a3c4bfcbf698ed
-/tool-schema-catalog/deepseek-ai-dsh-tools:
-  en: 76fbbf0fe38aef10
-  zh: 76fbbf0fe38aef10
-/tool-schema-catalog/deepseek-ai-dsh-tools/run-code:
-  en: a2368a9d8136276e
-  zh: d1a4918fc45a7c87
+  en: 2f86adf8ae823afb
+  zh: a5dad3d821e75e55
+/tool-schema-catalog/deepseek-ai-dsh-tool-executor-ptc:
+  en: 8c8643ef46fd075f
+  zh: 8c8643ef46fd075f
+/tool-schema-catalog/deepseek-ai-dsh-tool-executor-ptc/run-code:
+  en: a5d49232a604a2fb
+  zh: 720040d11a3e31c2
 /tool-schema-catalog/deepseek-ai-dsh-plan-mode:
   en: b500b530845e26a9
   zh: b500b530845e26a9

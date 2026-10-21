@@ -9,6 +9,7 @@ import type { ChangeResult } from '@deepseek-ai/dsh-plugin-manager/types'
 import * as CreationRecommendations from '../src/index.ts'
 import { fixture, callId, proposal, installedBundle, writeBundle } from './fixture.ts'
 import type { CreationSlot, CreationView } from '../src/types.ts'
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 describe('interface creation', () => {
   it('loads page planning with a live duplicate-check catalog and withdraws it on unload', async () => {
@@ -29,7 +30,7 @@ describe('interface creation', () => {
     }).toMatchSnapshot('one card tool')
     expect(await f.ctx.skills.list()).toMatchSnapshot('skill discovery')
     expect(f.manager.listBundles).not.toHaveBeenCalled()
-    const result = await f.ctx.tools.execute({ name: 'skill', arguments: { name: 'personalized-pages' }, agent: f.agent,
+    const result = await executeToolFixture(f.ctx, { name: 'skill', arguments: { name: 'personalized-pages' }, agent: f.agent,
       callId: ToolCallId('discovery'), signal: new AbortController().signal })
     expect(result.isError, JSON.stringify(result.content)).toBe(false)
     expect(result.value).toMatchSnapshot('skill policy and current catalog')
@@ -257,12 +258,12 @@ describe('interface creation', () => {
     const f = await fixture()
     f.ctx.tools.register(defineTool({ name: 'suggest_plugin', description: 'fixture', parameters: {},
       output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] }, execute: async () => 'official' }))
-    const calls = await Promise.all([f.execute(), f.ctx.tools.execute({ name: 'suggest_plugin', arguments: {},
+    const calls = await Promise.all([f.execute(), executeToolFixture(f.ctx, { name: 'suggest_plugin', arguments: {},
       callId: ToolCallId('official'), agent: f.agent, signal: new AbortController().signal })])
     expect(calls.filter(result => !result.isError)).toHaveLength(1)
     expect(calls.find(result => result.isError)?.content).toMatchSnapshot('rejected extra proposal does not promise a card')
     expect((await f.execute(proposal, ToolCallId('third'))).isError).toBe(true)
-    const result = await f.ctx.tools.execute({ name: 'suggest_action', arguments: { request: { action: 'create_personalized_page', ...proposal } },
+    const result = await executeToolFixture(f.ctx, { name: 'suggest_action', arguments: { request: { action: 'create_personalized_page', ...proposal } },
       callId, signal: new AbortController().signal })
     expect(result.isError).toBe(true)
   })
@@ -381,7 +382,7 @@ describe('interface creation', () => {
     const child = await f.harness.create(spec.childId!)
     f.ctx.tools.register(defineTool({ name: 'plugin_manager', description: 'fixture', parameters: { action: { type: 'string', required: true } },
       output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] }, execute: async () => 'done' }))
-    const run = (action: string, agent = child) => f.ctx.tools.execute({ name: 'plugin_manager', arguments: { action },
+    const run = (action: string, agent = child) => executeToolFixture(f.ctx, { name: 'plugin_manager', arguments: { action },
       callId: ToolCallId('manager'), agent, signal: new AbortController().signal })
     expect((await run('install')).isError).toBe(true)
     expect((await run('list_bundles')).isError).toBe(false)

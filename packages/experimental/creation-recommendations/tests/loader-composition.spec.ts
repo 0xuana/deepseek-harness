@@ -21,6 +21,7 @@ import type { SubagentActivation, SubagentActivationSpec } from '@deepseek-ai/ds
 import * as Recommendations from '../src/index.ts'
 import type { CreationView } from '../src/types.ts'
 import { writeBundle } from './fixture.ts'
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 it.each(['portable-bundle', 'foreign-nested-row'] as const)('validates and installs through pnpm/HMR: %s', async (scenario) => {
   const home = await mkdtemp(join(tmpdir(), 'dsh-creation-loader-'))
@@ -80,7 +81,7 @@ it.each(['portable-bundle', 'foreign-nested-row'] as const)('validates and insta
   await ctx.plugin(AgentLoop, { agents: [] })
   const agent = await ctx.agentLoop.create(SessionId('creation-live'))
   const callId = ToolCallId('create-live')
-  const result = await ctx.tools.execute({ name: 'suggest_action', callId, agent, signal: new AbortController().signal,
+  const result = await executeToolFixture(ctx, { name: 'suggest_action', callId, agent, signal: new AbortController().signal,
     arguments: { request: { action: 'create_personalized_page', title: 'Counter', brief: 'Keep a counter in the right sidebar.', slot: 'sidebar-right' } } })
   expect(result.isError).toBe(false)
   agent.session.append('tool/result', { turn: 1, step: 1,

@@ -15,6 +15,7 @@ import type { SubagentActivationSpec, SubagentResult } from '@deepseek-ai/dsh-su
 import * as CreationRecommendations from '../src/index.ts'
 import { creationProjection } from '../src/projection.ts'
 import type { CreationCardState, CreationDecision } from '../src/types.ts'
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 export const callId = ToolCallId('creation-1')
 export const proposal = { title: 'Counter', brief: 'Keep a counter visible for this task.', slot: 'sidebar-right' as const }
@@ -73,7 +74,7 @@ export async function fixture(initial?: CreationDecision) {
   const fiber = await ctx.plugin(CreationRecommendations)
   const current = (): CreationCardState | undefined =>
     events.reduce(creationProjection.apply, creationProjection.init()).view.decisions[callId]
-  const execute = (args: object = proposal, id = callId, caller = agent) => ctx.tools.execute({
+  const execute = (args: object = proposal, id = callId, caller = agent) => executeToolFixture(ctx, {
     name: 'suggest_action', arguments: { request: { action: 'create_personalized_page', ...args } }, agent: caller, callId: id, signal: new AbortController().signal,
   })
   const propose = async (id = callId, args: object = proposal) => {
