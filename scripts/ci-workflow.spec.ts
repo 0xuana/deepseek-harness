@@ -1302,8 +1302,8 @@ describe('Weighted approval workflow', () => {
       'continue-on-error': true,
       uses: 'actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1',
       with: {
-        'client-id': '${{ vars.DSH_ISSUE_APP_CLIENT_ID }}',
-        'private-key': '${{ secrets.DSH_ISSUE_APP_PRIVATE_KEY }}',
+        'client-id': '${{ vars.DSH_APPROVAL_APP_CLIENT_ID }}',
+        'private-key': '${{ secrets.DSH_APPROVAL_APP_PRIVATE_KEY }}',
         owner: 'deepseek-harness',
         repositories: 'deepseek-harness',
         'permission-checks': 'write',
@@ -1353,7 +1353,7 @@ describe('Weighted approval workflow', () => {
     expect(record?.run).toBe("echo 'Recorded a weighted approval review event.'")
     expect(recordSteps).toHaveLength(1)
     expect(JSON.stringify(publisher)).not.toContain('github.event.pull_request.head')
-    expect(JSON.stringify(publisher).match(/secrets\.[A-Za-z0-9_]+/gu)).toEqual(['secrets.DSH_ISSUE_APP_PRIVATE_KEY'])
+    expect(JSON.stringify(publisher).match(/secrets\.[A-Za-z0-9_]+/gu)).toEqual(['secrets.DSH_APPROVAL_APP_PRIVATE_KEY'])
     expect(JSON.stringify(reviewEvent)).not.toContain('github.token')
     expect(JSON.stringify(reviewEvent)).not.toContain('secrets.')
   })
@@ -1418,8 +1418,8 @@ describe('Issue lifecycle workflow', () => {
       if: "${{ steps.preflight.outputs.needs-project == 'true' }}",
       uses: 'actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1',
       with: {
-        'client-id': '${{ vars.DSH_ISSUE_APP_CLIENT_ID }}',
-        'private-key': '${{ secrets.DSH_ISSUE_APP_PRIVATE_KEY }}',
+        'client-id': '${{ vars.DSH_APPROVAL_APP_CLIENT_ID }}',
+        'private-key': '${{ secrets.DSH_APPROVAL_APP_PRIVATE_KEY }}',
         owner: 'deepseek-harness',
         repositories: 'deepseek-harness',
         'permission-issues': 'read',

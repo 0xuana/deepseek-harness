@@ -37,16 +37,17 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
-      # The decision check run is published by the repository App so GitHub associates its check
-      # suite with the pull request; the job token alone keeps it out of the merge box. A missing
-      # App permission leaves the token empty and the publisher falls back to the job token.
+      # The decision check run is published by a dedicated approval App so GitHub associates its
+      # check suite with the pull request and no other workflow owns that identity; the job token
+      # alone keeps the run out of the merge box. The App holds only Checks write. A missing App
+      # permission leaves the token empty and the publisher falls back to the job token.
       - name: Create decision check token
         id: decision-token
         continue-on-error: true
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
-          client-id: ${{ vars.DSH_ISSUE_APP_CLIENT_ID }}
-          private-key: ${{ secrets.DSH_ISSUE_APP_PRIVATE_KEY }}
+          client-id: ${{ vars.DSH_APPROVAL_APP_CLIENT_ID }}
+          private-key: ${{ secrets.DSH_APPROVAL_APP_PRIVATE_KEY }}
           owner: deepseek-harness
           repositories: deepseek-harness
           permission-checks: write
