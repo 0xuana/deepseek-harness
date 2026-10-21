@@ -1442,10 +1442,6 @@
     "d2c3345795169400442563b4923671c090a724eacaaae7f0c190297b967c1c4d": 1,
     "dfa30a521aae411e70eee81fc4c0511178589d0656dea01c1c97131bfe097793": 1
   },
-  "packages/ptc-runtime/ptc-runtime-node/tests/host-failures.spec.ts": {
-    "aa5de2d4958ec64219565d53ec5a9d7f40f1f60037a2d52d1a9c3c65db034d73": 1,
-    "be027af1ef5cb3bfe41eeb19b54dbb176ec7c23ae367d709059839f9851833d5": 1
-  },
   "packages/ptc-runtime/ptc-runtime-node/tests/output-json.spec.ts": {
     "8c4c486bbc27559714f4e0aaf376c72c49ac9157539b03c6c12853b8d3fc6e74": 1
   },
