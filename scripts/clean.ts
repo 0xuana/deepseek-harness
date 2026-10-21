@@ -1,4 +1,4 @@
-import { lstat, readdir, realpath, rm } from 'node:fs/promises'
+import { lstat, readdir, realpath, rm, stat } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
@@ -10,9 +10,9 @@ function isMissing(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'ENOENT'
 }
 
-async function exists(path: string): Promise<boolean> {
+async function exists(path: string, probe: typeof lstat = lstat): Promise<boolean> {
   try {
-    await lstat(path)
+    await probe(path)
     return true
   } catch (error) {
     if (isMissing(error)) return false
@@ -28,6 +28,27 @@ async function childDirectories(path: string): Promise<string[]> {
     if (isMissing(error)) return []
     throw error
   }
+}
+
+/** Lists symbolic links whose targets are missing in a node_modules directory and its `@scope` directories. */
+async function danglingLinks(modulesDirectory: string): Promise<string[]> {
+  const links: string[] = []
+  const scan = async (directory: string, scopes: boolean): Promise<void> => {
+    let entries
+    try {
+      entries = await readdir(directory, { withFileTypes: true })
+    } catch (error) {
+      if (isMissing(error)) return
+      throw error
+    }
+    for (const entry of entries) {
+      const path = join(directory, entry.name)
+      if (scopes && entry.isDirectory() && entry.name.startsWith('@')) await scan(path, false)
+      else if (entry.isSymbolicLink() && !await exists(path, stat)) links.push(path)
+    }
+  }
+  await scan(modulesDirectory, true)
+  return links
 }
 
 function repositoryPath(root: string, path: string): string {
@@ -86,6 +107,13 @@ export class RepositoryCleaner {
     // the sibling runtime bundles, so the complete build output root is removed.
     for (const outputDirectory of this.buildOutputDirectories()) {
       await this.addIfPresent(targets, outputDirectory, canonicalRoot)
+    }
+
+    // pnpm install keeps links whose targets are gone, such as hoisted links to deleted workspace packages.
+    for (const modulesDirectory of ['node_modules', 'node_modules/.pnpm/node_modules']) {
+      for (const link of await danglingLinks(join(this.root, modulesDirectory))) {
+        await this.addIfPresent(targets, link, canonicalRoot)
+      }
     }
 
     for (const groupDirectory of await childDirectories(join(this.root, 'packages'))) {

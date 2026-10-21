@@ -82,6 +82,28 @@ describe('RepositoryCleaner', () => {
     expect(existsSync(join(root, 'native/system/tsconfig.tsbuildinfo'))).toBe(false)
   })
 
+  it('removes pnpm links to deleted packages and keeps live links', async () => {
+    const root = fixture()
+    const type = process.platform === 'win32' ? 'junction' : 'dir'
+    addProject(root, 'packages/core/live')
+    write(join(root, 'packages/core/live/package.json'), '{}')
+    const hoisted = join(root, 'node_modules/.pnpm/node_modules')
+    mkdirSync(join(hoisted, '@deepseek-ai'), { recursive: true })
+    symlinkSync(join(root, 'packages/core/live'), join(hoisted, '@deepseek-ai/dsh-live'), type)
+    symlinkSync(join(root, 'packages/hooks/gone'), join(hoisted, '@deepseek-ai/dsh-gone'), type)
+    symlinkSync(join(root, 'packages/hooks/plain'), join(hoisted, 'plain'), type)
+    symlinkSync(join(root, 'packages/hooks/top'), join(root, 'node_modules/top'), type)
+
+    const removed = await new RepositoryCleaner(root).clean()
+
+    expect(removed).toEqual([
+      'node_modules/.pnpm/node_modules/@deepseek-ai/dsh-gone',
+      'node_modules/.pnpm/node_modules/plain',
+      'node_modules/top',
+    ])
+    expect(existsSync(join(hoisted, '@deepseek-ai/dsh-live/package.json'))).toBe(true)
+  })
+
   it('refuses project outputs reached through a symlink outside the repository', async () => {
     const root = fixture()
     const externalProject = fixture()
