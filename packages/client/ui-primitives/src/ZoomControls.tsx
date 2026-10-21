@@ -22,7 +22,8 @@ export interface ZoomControlsHandle {
 /**
  * Present optional fitting, fixed presets, and incremental controls.
  * @param props - committed `zoom`, optional `fit` row (omitted: no fitting row), localized labels, `visible`, optional
- *   owner `className`, and zoom and activity callbacks. `showZoom` displays a transient scale until `zoom` changes.
+ *   owner `className`, and zoom and activity callbacks.
+ * @param ref - `showZoom` displays a transient scale until `zoom` changes.
  * @returns a localized zoom toolbar.
  */
 export const ZoomControls = forwardRef<ZoomControlsHandle, {
@@ -36,12 +37,17 @@ export const ZoomControls = forwardRef<ZoomControlsHandle, {
 }>(function ZoomControls({
   zoom, fit, className, labels, visible, onZoom, onActiveChange,
 }, ref): ReactNode {
-  const [shown, setShown] = useState<{ readonly from: number; readonly zoom: number }>()
+  const [committed, setCommitted] = useState(zoom)
+  const [transient, setTransient] = useState<number>()
   const [open, setOpen] = useState(false)
   const [hovered, setHovered] = useState(false)
   const [focused, setFocused] = useState(false)
-  const displayZoom = shown?.from === zoom ? shown.zoom : zoom
-  useImperativeHandle(ref, () => ({ showZoom: (next) => { setShown({ from: zoom, zoom: next }) } }), [zoom])
+  if (committed !== zoom) {
+    setCommitted(zoom)
+    setTransient(undefined)
+  }
+  const displayZoom = transient ?? zoom
+  useImperativeHandle(ref, () => ({ showZoom: setTransient }), [])
   useEffect(() => { onActiveChange(open || hovered || focused) }, [focused, hovered, onActiveChange, open])
   const items: readonly MenuEntry[] = [
     ...(fit === undefined ? [] : [{ id: 'fit', label: fit.label }, { type: 'separator' as const, id: 'fit-scale' }]),

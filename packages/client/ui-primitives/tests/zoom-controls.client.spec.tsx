@@ -68,3 +68,15 @@ test('without fit, marks the matching preset and no row for an unlisted scale', 
   expect(screen.getByRole('button', { name: 'Choose zoom' }).textContent).toContain('113%')
   expect(screen.getAllByRole('menuitem').filter(item => item.querySelector('svg') !== null)).toEqual([])
 })
+
+test('drops a shown scale once the committed zoom changes, even when it later returns', () => {
+  const zoom = vi.fn(), ref = createRef<ZoomControlsHandle>()
+  const props = { visible: true, labels, onZoom: zoom, onActiveChange: vi.fn() }
+  const view = render(<ZoomControls {...props} zoom={1} ref={ref} />)
+  act(() => { ref.current!.showZoom(0.8) })
+  view.rerender(<ZoomControls {...props} zoom={2} ref={ref} />)
+  view.rerender(<ZoomControls {...props} zoom={1} ref={ref} />)
+  expect(screen.getByRole('button', { name: 'Choose zoom' }).textContent).toContain('100%')
+  fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
+  expect(zoom).toHaveBeenLastCalledWith(1.25)
+})
