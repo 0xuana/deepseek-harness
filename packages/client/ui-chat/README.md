@@ -72,6 +72,8 @@ The composer statistics are two `conversation.composer.dock` list entries: `acti
 
 Explicit selections update every consumer immediately; accepted Host settings reconcile the live value, so a refused or pending write keeps the selected mode until the Host answers.
 
+In narrow browser settings, preference labels use a smaller gutter before their controls. Windows and macOS desktop windows retain the standard spacing.
+
 Preference menus restore focus to their trigger without scrolling before publishing a new selection.
 
 <a id="completed-turn-footer"></a>
