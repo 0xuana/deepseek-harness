@@ -20,7 +20,7 @@ Inspect applications, retain window objects across PTC calls, and send actions t
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 - [Dev Note](#dev-note)
 
-Application consent uses the existing User Questions options and remains independent of the session tool-approval policy. The provider accepts only one exact offered label without custom text. Native icons accompany permission-page observations and remain outside saved identities and model results. System checks, saved grants and refusals, and icons use separate queries.
+Application consent uses the fixed approval presentation of User Questions and remains independent of the session tool-approval policy. Native icons accompany the prompt and permission-page observations, but remain outside saved identities and model results. System checks, saved grants and refusals, and icons use separate queries so each result can appear without waiting for the others.
 
 -----
 
