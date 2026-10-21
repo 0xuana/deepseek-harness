@@ -913,6 +913,7 @@ describe('web-search-deepseek search readiness', () => {
     expect(await ctx.web.searchReady('deepseek-account')).toBe(false)
     // A search on that route reads the same grant before any key and fails instead of trying the key.
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const session = ctx.sessions.create(SessionId('web-search-unreadable-grant'))
     session.append('turn/start', { turn: 1 })
@@ -939,6 +940,7 @@ describe('web-search-deepseek route policy', () => {
     const ctx = new Context()
     try {
       await ctx.plugin(SessionStore)
+      await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(AgentRegistry)
       await ctx.plugin(WebRuntime, { searchProvider: DEEPSEEK_PROVIDER_ID })
       await ctx.plugin(deepseekPlugin, config)

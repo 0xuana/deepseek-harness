@@ -17,6 +17,7 @@ import { createLaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environ
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import * as Official from '@deepseek-ai/dsh-llm-deepseek-api-key'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import WebRuntime from '@deepseek-ai/dsh-web'
 import * as deepseekPlugin from '@deepseek-ai/dsh-web-search-deepseek'
 
@@ -55,6 +56,7 @@ async function compose(composition: Composition): Promise<Context> {
   const rows = [
     { id: 'llm', name: '@deepseek-ai/dsh-llm' },
     { id: 'session', name: '@deepseek-ai/dsh-session' },
+    { id: 'session-projection', name: '@deepseek-ai/dsh-session-projection' },
     { id: 'agents', name: '@deepseek-ai/dsh-agent' },
     {
       id: 'llm-deepseek', name: '@deepseek-ai/dsh-llm-deepseek-api-key',
@@ -67,6 +69,7 @@ async function compose(composition: Composition): Promise<Context> {
   await writeFile(configPath, JSON.stringify(rows))
   const modules = new Map<string, unknown>([
     ['@deepseek-ai/dsh-llm', LlmRuntime], ['@deepseek-ai/dsh-session', SessionStore],
+    ['@deepseek-ai/dsh-session-projection', SessionProjectionRegistry],
     ['@deepseek-ai/dsh-agent', AgentRegistry], ['@deepseek-ai/dsh-llm-deepseek-api-key', Official],
     ['@deepseek-ai/dsh-web', WebRuntime], ['@deepseek-ai/dsh-web-search-deepseek', deepseekPlugin],
   ])

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { installModelSelection, type ModelSelectionRef } from '@deepseek-ai/dsh-agent'
+import type { ModelSelection } from '@deepseek-ai/dsh-agent'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
 import TurndownService from 'turndown'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
@@ -1086,26 +1086,23 @@ describe('web_search offering per model request', () => {
   }
 
   /**
-   * Mount the real prompt, tool, and web services with tool-web. Model selection is
-   * installed first, the order a tool-web reload produces once a Session exists.
+   * Mount the real prompt, tool, and web services with tool-web. The prompt's `provider`
+   * variable comes from the step's model selection, as the agent loop registers it.
    * @param setup - registered providers, the configured search provider, and the selected route.
-   * @returns the Session's model selection, tool-web's fiber, and a reader for one model request.
+   * @returns the step's model selection, tool-web's fiber, and a reader for one model request.
    */
   async function compose(setup: { providers: WebSearchProvider[]; searchProvider?: string; route?: string }) {
     const ctx = new Context()
     mounted.push(ctx)
-    const selection: ModelSelectionRef = {
-      current: { provider: setup.route ?? 'deepseek-official', model: 'deepseek-v4-flash' },
-      assembled: undefined,
-    }
-    installModelSelection(ctx, selection)
+    const selection: ModelSelection = { provider: setup.route ?? 'deepseek-official', model: 'deepseek-v4-flash' }
     await ctx.plugin(SystemPrompt)
+    ctx.systemPrompt.variable('provider', context => context.modelSelection?.provider)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(WebRuntime, setup.searchProvider === undefined ? {} : { searchProvider: setup.searchProvider })
     for (const provider of setup.providers) ctx.web.registerSearchProvider(provider)
     const fiber = await ctx.plugin(ToolWeb, {})
     const request = async (): Promise<{ tools: string[]; prompt: string }> => {
-      const assembly = await ctx.systemPrompt.assemble({})
+      const assembly = await ctx.systemPrompt.assemble({ modelSelection: { ...selection } })
       return { tools: assembly.tools.map(tool => tool.name), prompt: renderPrompt(assembly) }
     }
     return { ctx, selection, fiber, request }
@@ -1141,9 +1138,9 @@ describe('web_search offering per model request', () => {
   it('follows the model selected for each request', async () => {
     const { selection, request } = await compose({ providers: [routeProvider('deepseek', ['deepseek-account'])], route: 'deepseek-account' })
     expect((await request()).tools).toContain('web_search')
-    selection.current = { provider: 'deepseek-official', model: 'deepseek-v4-flash' }
+    selection.provider = 'deepseek-official'
     expect((await request()).tools).not.toContain('web_search')
-    selection.current = { provider: 'deepseek-account', model: 'deepseek-v4-flash' }
+    selection.provider = 'deepseek-account'
     expect((await request()).tools).toContain('web_search')
   })
 
