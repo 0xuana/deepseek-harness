@@ -98,7 +98,7 @@ The existing `skill` tool loads `personalized-pages` for an explicit interface r
 
 #### Token effect
 
-One shared card-tool schema and one short skill-catalog entry are added while enabled. Full policy and current plugin descriptions enter context only when the existing skill tool loads them. A normal creation recommendation needs one skill load and one `suggest_action` call. Guidance reuses a catalog already read in the same turn instead of requesting it again. Only an accepted creation spends a background Creator run. The card's information button explains potentially long generation and substantial token use; reading it starts no work.
+While enabled, every request includes the card tool's description and parameter schema. The Skill catalog contains a brief entry; full planning policy, handoff examples and current official-plugin descriptions load through `skill` when needed. A normal creation recommendation needs one skill load and one `suggest_action` call. Guidance reuses a catalog already read in the same turn instead of requesting it again. Only an accepted creation spends a background Creator run. The card's information button explains potentially long generation and substantial token use; reading it starts no work.
 
 #### KV Cache effect
 

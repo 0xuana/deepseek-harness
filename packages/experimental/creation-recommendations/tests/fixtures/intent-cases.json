@@ -328,5 +328,15 @@
     "id": "cost_snapshot",
     "prompt": "截至9月30日，旅行预算累计3000元，已支出1800元；学习预算累计1200元，已支出400元。先给两句总结。以后每个月我会手动填一次累计预算和累计支出，想比较还剩多少。",
     "expected": "Two-sentence summary: budget 4200, spent 2200, remaining 2000; no invented year or trend. Optional global tracker preserving September 30 and four supplied CNY amounts as data; calculation/monthly entry in brief, no duplicate-content instructions or automatic import."
+  },
+  {
+    "id": "explicit_log_tab_routing",
+    "prompt": "给当前会话一个实时日志 Tab，和对话、轨迹并列。读取工作区 task.log 并持续展示，切到 Tab 再看即可。",
+    "expected": "Load personalized-pages and propose one page-slot card. Planning from the named but uninspected file does not require browsing the workspace. Do not mistake a new Session tab for editing an existing page or start implementation before the card is clicked."
+  },
+  {
+    "id": "reading_source_dates",
+    "prompt": "先简要整理我的阅读记录：10月7日累计读了30页，10月14日累计读了55页。我以后每周还会回来补累计页数，希望能自己输入并看变化。",
+    "expected": "Summarize the two cumulative readings and their 25-page increase; offer a global manual tracker. Keep the two original dates and values in initialContent without inventing a year, and keep entry, persistence and calculation instructions in brief."
   }
 ]
