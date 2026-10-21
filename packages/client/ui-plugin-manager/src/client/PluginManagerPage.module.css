@@ -6,6 +6,8 @@
    for a focused field under 16px and leaves the page pannable afterwards. */
 
 .page {
+  --bundle-progress-size: 14px;
+  --bundle-toggle-gap: 8px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -385,9 +387,9 @@
 .skeletonDescription { width: min(280px, 85%); }
 .skeletonIcon { border-color: transparent; }
 
-/* Keep text-column metrics while leaving the action area blank. */
+/* Switch.module.css owns the 36px switch; ongoing StateDot occupies the reserved progress size. */
 .skeletonActions {
-  width: 36px;
+  width: calc(36px + var(--bundle-toggle-gap) + var(--bundle-progress-size));
   height: 20px;
 }
 
@@ -408,6 +410,29 @@
   flex: none;
   align-items: center;
   gap: 8px;
+}
+
+.bundleToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bundle-toggle-gap);
+}
+
+.toggleProgress {
+  display: inline-flex;
+  width: var(--bundle-progress-size);
+  height: var(--bundle-progress-size);
+}
+
+.toggleProgress > svg { width: 100%; height: 100%; }
+
+.progressAnnouncement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 /* The toolbar's icon action, round like the message-row actions. */
