@@ -861,6 +861,159 @@ describe('web e2e: resident question composer round trip', () => {
     }
   }, 60_000)
 
+  it.skipIf(MODE === 'record')('re-evaluates long copy when the chat column or the window changes width', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-question-chat-width'))
+    const sessionId = answeredSession
+    expect(sessionId).toBeDefined()
+    const agent = scaffold.ctx.agents.get(sessionId as SessionId)
+    expect(agent).toBeDefined()
+    // Sized for the chat-width drag range: the question takes three lines or
+    // fewer in the widest chat column and more in the narrowest, and the staged
+    // description takes two lines or fewer and more.
+    const question = `${Array.from({ length: 2 }, () => 'The rollout plan must name the release owner, the verification lanes that gate it, and the rollback path before the candidate is cut.').join(' ')} Which plan should we adopt?`
+    const staged = 'Stage the rollout behind the release channel first, keep the experimental client out of every shipped template, ask plugin authors to declare the dependency explicitly, and publish the upgrade note together with the cross-platform validation results.'
+    const explicit = Array.from({ length: 24 }, (_, index) =>
+      `Step ${String(index + 1)} removes the experimental client from shipped templates and records the validation before rollout.`).join(' ')
+    const controller = new AbortController()
+    const asked = scaffold.ctx.userQuestions.ask({
+      agent: agent as NonNullable<typeof agent>,
+      signal: controller.signal,
+      questions: [{
+        id: 'rollout',
+        header: 'Rollout decision',
+        question,
+        options: [
+          { label: 'Explicit install', description: explicit },
+          { label: 'Stage the rollout', description: staged },
+          { label: 'Keep the default edge', description: 'Keep the current setup.' },
+        ],
+      }],
+    })
+    const outcome = asked.then(value => ({ value }), (error: unknown) => ({ error }))
+
+    const composer = page.locator('[data-question-key]')
+    const frame = page.locator('[style*="grid-template-columns"]').first()
+    const original = page.viewportSize() ?? { width: 1680, height: 1000 }
+    let bodyCompleted = false
+    try {
+      await page.setViewportSize({ width: 1680, height: 1000 })
+      await composer.waitFor({ timeout: 30_000 })
+      const heading = composer.getByRole('heading', { name: question })
+      const descriptionOf = (label: string) => composer.locator('[data-option-row]', {
+        has: page.getByRole('radio', { name: label, exact: true }),
+      }).locator('[data-option-description]')
+      const toggleFor = async (copy: Locator) =>
+        composer.locator(`button[aria-controls=${JSON.stringify(await copy.getAttribute('id'))}]`)
+      // Settled layout: no AppFrame column transition in flight, then every
+      // collapsed copy drawn as its own overflow decides, the expanded copy
+      // still expanded, and the actions reachable.
+      const settle = async () => {
+        await expect.poll(() => frame.evaluate(node => node.hasAttribute('data-animating'))).toBe(false)
+        const read = async () => {
+          const card = await composer.locator('section').evaluate((section) => {
+            const scroll = section.querySelector<HTMLElement>('[data-question-scroll]')
+            const submit = [...section.querySelectorAll<HTMLButtonElement>('button')]
+              .find(button => button.textContent === 'Submit')
+            const submitBox = submit?.getBoundingClientRect()
+            return {
+              width: Math.round(section.getBoundingClientRect().width),
+              actionsReachable: submitBox !== undefined && submitBox.top >= -0.5 && submitBox.bottom <= window.innerHeight + 0.5,
+              titleInScrollport: scroll?.contains(section.querySelector('h2')) === true,
+            }
+          })
+          return {
+            card,
+            question: await heading.evaluate(readCopy),
+            explicit: await descriptionOf('Explicit install').evaluate(readCopy),
+            staged: await descriptionOf('Stage the rollout').evaluate(readCopy),
+            short: await descriptionOf('Keep the default edge').evaluate(readCopy),
+          }
+        }
+        await expect.poll(async () => {
+          const state = await read()
+          const decided = (copy: Awaited<ReturnType<typeof read>>['question'], budget: number) =>
+            copy.clipped === copy.overflows && copy.toggle === (copy.clipped ? 'expand' : undefined)
+            && copy.lines <= (copy.clipped ? budget - 1 : budget)
+          return state.card.actionsReachable && state.card.titleInScrollport
+            && decided(state.question, 3) && decided(state.staged, 2) && decided(state.short, 2)
+            && !state.explicit.clipped && !state.explicit.overflows && state.explicit.toggle === 'collapse'
+        }).toBe(true)
+        return await read()
+      }
+      // The right transcript handle widens the content column by twice its
+      // outward travel. The composer seat covers the handle's lower part, so
+      // the gesture grabs it beside the transcript.
+      const dragChatWidth = async (travel: number) => {
+        const box = await page.locator('[data-width-handle="right"]').boundingBox()
+        if (box === null) throw new Error('The chat width handle is not rendered')
+        const x = box.x + box.width / 2
+        const y = box.y + 120
+        await page.mouse.move(x, y)
+        await page.mouse.down()
+        try {
+          await page.mouse.move(x + travel, y, { steps: 8 })
+        } finally {
+          await page.mouse.up()
+        }
+      }
+
+      // Expanded copy is the user's choice and survives every width change below.
+      const explicitToggle = await toggleFor(descriptionOf('Explicit install'))
+      await explicitToggle.click()
+      expect(await explicitToggle.getAttribute('aria-expanded')).toBe('true')
+      expect(await composer.getByRole('radio', { name: 'Explicit install', exact: true }).getAttribute('aria-checked')).toBe('false')
+
+      await dragChatWidth(-400)
+      const narrow = await settle()
+      expect(narrow.question).toEqual({ lines: 2, clipped: true, overflows: true, toggle: 'expand' })
+      expect(narrow.staged).toEqual({ lines: 1, clipped: true, overflows: true, toggle: 'expand' })
+
+      await dragChatWidth(600)
+      const wide = await settle()
+      expect(wide.card.width).toBeGreaterThan(narrow.card.width)
+      expect(wide.question).toMatchObject({ clipped: false, overflows: false, toggle: undefined })
+      expect(wide.staged).toEqual({ lines: 2, clipped: false, overflows: false, toggle: undefined })
+      expect(wide.short).toEqual({ lines: 1, clipped: false, overflows: false, toggle: undefined })
+
+      // The right sidebar narrows the conversation column, and collapsing it restores the wide state.
+      await page.getByRole('button', { name: 'Open right sidebar', exact: true }).click()
+      const withSidebar = await settle()
+      expect(withSidebar.card.width).toBeLessThan(wide.card.width)
+      await page.getByRole('button', { name: 'Collapse right sidebar', exact: true }).click()
+      expect(await settle()).toEqual(wide)
+
+      // A smaller window clamps the dragged width; restoring the window restores it.
+      await page.setViewportSize({ width: 900, height: 700 })
+      const smallWindow = await settle()
+      expect(smallWindow.card.width).toBeLessThan(wide.card.width)
+      expect(smallWindow.question).toEqual({ lines: 2, clipped: true, overflows: true, toggle: 'expand' })
+      expect(smallWindow.staged).toEqual({ lines: 1, clipped: true, overflows: true, toggle: 'expand' })
+      await page.setViewportSize({ width: 1680, height: 1000 })
+      expect(await settle()).toEqual(wide)
+
+      await explicitToggle.click()
+      await expect.poll(() => descriptionOf('Explicit install').evaluate(readCopy))
+        .toEqual({ lines: 1, clipped: true, overflows: true, toggle: 'expand' })
+      await composer.getByRole('radio', { name: 'Stage the rollout', exact: true }).click()
+      await composer.getByRole('button', { name: 'Submit', exact: true }).click()
+      expect(await outcome).toEqual({ value: { answers: [{ id: 'rollout', selected: ['Stage the rollout'] }] } })
+      await expect.poll(() => page.locator('[data-question-key]').count(), { timeout: 10_000 }).toBe(0)
+      bodyCompleted = true
+    } finally {
+      controller.abort()
+      // The dragged width is a persisted preference; dropping it and resizing republishes the default.
+      const cleanup = await Promise.allSettled([
+        outcome,
+        page.evaluate(() => { localStorage.removeItem('dsh.conversation.contentWidth') })
+          .then(() => page.setViewportSize(original)),
+      ])
+      if (bodyCompleted) {
+        const failure = cleanup.find((result): result is PromiseRejectedResult => result.status === 'rejected')
+        if (failure !== undefined) throw failure.reason
+      }
+    }
+  }, 90_000)
+
 })
 
 describe.skipIf(MODE === 'record')('web e2e: cancelled question transcript', () => {
