@@ -1,12 +1,13 @@
+import type { PtcProgramFormat } from '@deepseek-ai/dsh-ptc-runtime'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { Parser } from 'acorn'
 import { createProgramEvaluator } from '../src/evaluators/index.ts'
-import type { ProgramEvaluator, ProgramFormat } from '../src/evaluators/types.ts'
+import type { ProgramEvaluator } from '../src/evaluators/types.ts'
 import { processTopLevelAwait } from '../src/evaluators/vm-script-await.ts'
 
 type EvaluationResult = Parameters<Parameters<ProgramEvaluator['evaluate']>[1]>[0]
 
-function evaluator(format: ProgramFormat = 'script') {
+function evaluator(format: PtcProgramFormat = 'script') {
   const instance = createProgramEvaluator(format, () => {})
   onTestFinished(() => { instance.close() })
   const run = (code: string) => new Promise<EvaluationResult>((resolve) => {

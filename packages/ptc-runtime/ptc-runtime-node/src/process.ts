@@ -1,4 +1,5 @@
 /** Node child evaluation over typed RPC; the host owns process lifetime. */
+import type { PtcProgramFormat } from '@deepseek-ai/dsh-ptc-runtime'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import type { Duplex } from 'node:stream'
 import { createProcessRpc } from './rpc.ts'
@@ -6,7 +7,7 @@ import { captureStreamWrites, LogBuffer, makeConsoleShim, makeBindingErrorClass,
 import type { BindingErrorConstructor, PatchableStream } from './bootstrap.ts'
 import { clearProgramEnvironment } from './environment.ts'
 import { createProgramEvaluator } from './evaluators/index.ts'
-import type { ProgramEvaluator, ProgramFormat } from './evaluators/types.ts'
+import type { ProgramEvaluator } from './evaluators/types.ts'
 import type { ProgramResult, HostMethods, ProgramMethods } from './protocol.ts'
 
 /** Process-owned environment, output and directory control consumed by the child. */
@@ -35,7 +36,7 @@ interface Evaluation {
  * @returns After control closure and evaluator cleanup.
  */
 export async function runNodeMain(
-  stream: Duplex, maxMessageBytes: number, processState: ProgramProcess, defaultFormat: ProgramFormat = 'function-body',
+  stream: Duplex, maxMessageBytes: number, processState: ProgramProcess, defaultFormat: PtcProgramFormat = 'function-body',
 ): Promise<void> {
   if (!Number.isSafeInteger(maxMessageBytes) || maxMessageBytes <= 0) throw new Error('invalid control message limit')
   clearProgramEnvironment(processState)

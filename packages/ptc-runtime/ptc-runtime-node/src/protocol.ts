@@ -1,6 +1,5 @@
 /** Typed methods shared by the host and its co-shipped Node execution process, and validation of untrusted program results. */
-import type { ProgramFormat } from './evaluators/types.ts'
-import type { PtcJsonValue, PtcRunFailure } from '@deepseek-ai/dsh-ptc-runtime'
+import type { PtcProgramFormat, PtcJsonValue, PtcRunFailure } from '@deepseek-ai/dsh-ptc-runtime'
 import { decodePtcJsonWire, type PtcJsonWire } from './json-wire.ts'
 
 /** Inputs for one program; host functions remain in the parent process. */
@@ -8,7 +7,7 @@ export interface ProgramBootData {
   /** Type-stripped JavaScript source. */
   code: string
   /** Evaluation syntax; omitted uses the installed bootstrap's default. */
-  programFormat?: ProgramFormat
+  programFormat?: PtcProgramFormat
   /** Whether the host will reuse this process after the evaluation. */
   retainsState: boolean
   /** Globals and callable names injected into the program. */

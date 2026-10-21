@@ -1,9 +1,9 @@
+import type { PtcProgramFormat } from '@deepseek-ai/dsh-ptc-runtime'
 import { Duplex, PassThrough } from 'node:stream'
 import { setImmediate as nextTurn } from 'node:timers/promises'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { createProcessRpc } from '../src/rpc.ts'
 import { runNodeMain, type ProgramProcess } from '../src/process.ts'
-import type { ProgramFormat } from '../src/evaluators/types.ts'
 import type { HostMethods, ProgramMethods } from '../src/protocol.ts'
 import { decodePtcJsonWire, encodePtcJsonWire } from '../src/json-wire.ts'
 
@@ -36,7 +36,7 @@ async function setup(limit = 4096) {
   const main = runNodeMain(child, limit, state)
   onTestFinished(async () => { peer.$close(); child.destroy(); await main })
   await ready.promise
-  const run = (code: string, maxOutputBytes = 1024, programFormat?: ProgramFormat) => peer.run('/', {
+  const run = (code: string, maxOutputBytes = 1024, programFormat?: PtcProgramFormat) => peer.run('/', {
     code, ...programFormat === undefined ? {} : { programFormat },
     retainsState: false, namespaces: [{ global: 'tools', names: ['echo'] }], maxOutputBytes,
   })

@@ -1,6 +1,4 @@
 /** Evaluation syntax and operations shared by the three child evaluators. */
-/** Supported child evaluation syntax, independent of process lifetime. */
-export type ProgramFormat = 'function-body' | 'repl' | 'script'
 
 /** One evaluation's completion or thrown value. */
 type EvaluationResult = { ok: true; value: unknown } | { ok: false; error: unknown }

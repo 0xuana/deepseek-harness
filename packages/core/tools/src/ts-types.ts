@@ -7,7 +7,7 @@
  */
 
 import type { ToolSchema } from '@deepseek-ai/dsh-llm'
-import type { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
+import type { PtcProgramFormat } from '@deepseek-ai/dsh-ptc-runtime'
 import { assertSupportedJsonSchema } from './json-schema.ts'
 import type { JsonSchemaNode, JsonSchemaScalar } from './json-schema.ts'
 /** Internal PTC mode projection: the model-facing schema plus the canonical output schema. */
@@ -248,7 +248,7 @@ export function jsonSchemaToTs(schema: unknown, indent = 0): string {
 }
 
 /** Render the argument and call instructions for the selected execution syntax. */
-function renderSdkInstructions(programFormat: PtcRuntime['programFormat']): string {
+function renderSdkInstructions(programFormat: PtcProgramFormat): string {
   const programDescription = programFormat === 'function-body'
     ? 'the body of an async TypeScript function (erasable syntax only — no `enum` or namespaces; type annotations are advisory, the code runs type-stripped)'
     : 'the program to execute'
@@ -258,7 +258,7 @@ function renderSdkInstructions(programFormat: PtcRuntime['programFormat']): stri
 }
 
 /** Render tool execution and output instructions for the selected execution syntax. */
-function renderSdkProgramInstructions(programFormat: PtcRuntime['programFormat']): string {
+function renderSdkProgramInstructions(programFormat: PtcProgramFormat): string {
   const outputInstruction = programFormat === 'function-body'
     ? 'Emit results with `return` and/or `console.log(...)`. Only what you print or return is program output.'
     : 'Only values emitted as program output enter the conversation.'
@@ -280,7 +280,7 @@ function acceptsExampleString(schema: JsonSchemaNode | undefined, value: string)
 }
 
 /** Render the bash example only when its literal arguments satisfy the current parameter schema. */
-function renderBashExample(schemas: ToolSdkSchema[], programFormat: PtcRuntime['programFormat']): string {
+function renderBashExample(schemas: ToolSdkSchema[], programFormat: PtcProgramFormat): string {
   const bash = schemas.find(schema => schema.name === 'bash')
   if (bash === undefined) return ''
   const parameters = bash.parameters as JsonSchemaNode
@@ -310,7 +310,7 @@ function renderBashExample(schemas: ToolSdkSchema[], programFormat: PtcRuntime['
  * @param programFormat - Runtime syntax selecting function-body, REPL, or Script instructions and examples.
  * @returns the complete section text.
  */
-export function renderToolsSdk(schemas: ToolSdkSchema[], programFormat: PtcRuntime['programFormat'] = 'function-body'): string {
+export function renderToolsSdk(schemas: ToolSdkSchema[], programFormat: PtcProgramFormat = 'function-body'): string {
   const sorted = [...schemas].sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
   const argsMembers: string[] = []
   const outputMembers: string[] = []
