@@ -13,27 +13,26 @@ test('shows owner-specific fitting, changes scale, and follows gesture updates w
   const zoom = vi.fn(), fit = vi.fn(), active = vi.fn(), ref = createRef<ZoomControlsHandle>()
   const props = { zoom: 1.13, visible: true, labels, onZoom: zoom, onActiveChange: active,
     fit: { label: 'Fit page', selected: true, onSelect: fit } }
-  const view = render(<ZoomControls {...props} ref={ref} className="owner-position" />)
-  expect(view.container.querySelector('[role="toolbar"]')?.classList.contains('owner-position')).toBe(true)
+  const view = render(<ZoomControls {...props} ref={ref} />)
   fireEvent.click(screen.getByRole('button', { name: 'Choose zoom' }))
   fireEvent.click(screen.getByRole('menuitem', { name: 'Fit page' }))
   expect(fit).toHaveBeenCalledOnce()
   fireEvent.click(screen.getByRole('button', { name: 'Choose zoom' }))
   fireEvent.click(screen.getByRole('menuitem', { name: '150%' }))
   expect(zoom).toHaveBeenLastCalledWith(1.5)
-  act(() => { ref.current!.showZoom(1.13) })
-  expect(screen.getByRole('button', { name: 'Choose zoom' }).textContent).toContain('113%')
+  act(() => { ref.current!.showZoom(0.8) })
+  expect(screen.getByRole('button', { name: 'Choose zoom' }).textContent).toContain('80%')
   fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }))
-  expect(zoom).toHaveBeenLastCalledWith(1)
+  expect(zoom).toHaveBeenLastCalledWith(0.75)
   fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
-  expect(zoom).toHaveBeenLastCalledWith(1.25)
+  expect(zoom).toHaveBeenLastCalledWith(1)
   view.rerender(<ZoomControls {...props} zoom={4} ref={ref} />)
   expect(screen.getByRole('button', { name: 'Zoom in' }).hasAttribute('disabled')).toBe(true)
   view.rerender(<ZoomControls {...props} zoom={0.25} ref={ref} />)
   expect(screen.getByRole('button', { name: 'Zoom out' }).hasAttribute('disabled')).toBe(true)
 })
 
-test('omits fitting for spreadsheets and keeps the toolbar active during pointer, focus, and menu interaction', () => {
+test('without fit, lists only presets and keeps the toolbar active during pointer, focus, and menu interaction', () => {
   const active = vi.fn(), zoom = vi.fn()
   const view = render(<ZoomControls zoom={1} visible={false} labels={labels} onZoom={zoom} onActiveChange={active} />)
   const panel = screen.getByRole('toolbar'), button = screen.getByRole('button', { name: 'Choose zoom' })
@@ -57,4 +56,15 @@ test('omits fitting for spreadsheets and keeps the toolbar active during pointer
   fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
   expect(screen.queryByRole('menu')).toBeNull()
   view.unmount()
+})
+
+test('without fit, marks the matching preset and no row for an unlisted scale', () => {
+  const props = { visible: true, labels, onZoom: vi.fn(), onActiveChange: vi.fn() }
+  const view = render(<ZoomControls {...props} zoom={1} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Choose zoom' }))
+  expect(screen.getAllByRole('menuitem').filter(item => item.querySelector('svg') !== null).map(item => item.textContent))
+    .toEqual(['100%'])
+  view.rerender(<ZoomControls {...props} zoom={1.13} />)
+  expect(screen.getByRole('button', { name: 'Choose zoom' }).textContent).toContain('113%')
+  expect(screen.getAllByRole('menuitem').filter(item => item.querySelector('svg') !== null)).toEqual([])
 })

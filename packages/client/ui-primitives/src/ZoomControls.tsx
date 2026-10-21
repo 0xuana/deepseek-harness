@@ -1,4 +1,5 @@
 /** Floating controls shared by every zoomable document renderer. */
+import clsx from 'clsx'
 import { forwardRef, useEffect, useImperativeHandle, useState, type ReactNode } from 'react'
 import { Button } from './Button.tsx'
 import { IconChevronDownOutlineRegular, IconPlusOutlineRegular } from './icons/index.tsx'
@@ -7,11 +8,9 @@ import { Tooltip } from './Tooltip.tsx'
 import { DOCUMENT_ZOOM, type DocumentZoomLabels } from './document-zoom.ts'
 import css from './ZoomControls.module.css'
 
-const { minimum: MIN_FIXED_ZOOM, maximum: MAX_FIXED_ZOOM, step: ZOOM_STEP, presets: ZOOM_OPTIONS } = DOCUMENT_ZOOM
-
 function steppedZoom(zoom: number, direction: -1 | 1): number {
-  const step = direction === -1 ? Math.ceil(zoom / ZOOM_STEP) - 1 : Math.floor(zoom / ZOOM_STEP) + 1
-  return Math.min(MAX_FIXED_ZOOM, Math.max(MIN_FIXED_ZOOM, step * ZOOM_STEP))
+  const step = direction === -1 ? Math.ceil(zoom / DOCUMENT_ZOOM.step) - 1 : Math.floor(zoom / DOCUMENT_ZOOM.step) + 1
+  return Math.min(DOCUMENT_ZOOM.maximum, Math.max(DOCUMENT_ZOOM.minimum, step * DOCUMENT_ZOOM.step))
 }
 
 /** Live percentage display updated independently from the document tree. */
@@ -22,7 +21,8 @@ export interface ZoomControlsHandle {
 
 /**
  * Present optional fitting, fixed presets, and incremental controls.
- * @param props - current resolved zoom, preference mode, labels, and callbacks.
+ * @param props - committed `zoom`, optional `fit` row (omitted: no fitting row), localized labels, `visible`, optional
+ *   owner `className`, and zoom and activity callbacks. `showZoom` displays a transient scale until `zoom` changes.
  * @returns a localized zoom toolbar.
  */
 export const ZoomControls = forwardRef<ZoomControlsHandle, {
@@ -36,20 +36,20 @@ export const ZoomControls = forwardRef<ZoomControlsHandle, {
 }>(function ZoomControls({
   zoom, fit, className, labels, visible, onZoom, onActiveChange,
 }, ref): ReactNode {
-  const [displayZoom, setDisplayZoom] = useState(zoom)
+  const [shown, setShown] = useState<{ readonly from: number; readonly zoom: number }>()
   const [open, setOpen] = useState(false)
   const [hovered, setHovered] = useState(false)
   const [focused, setFocused] = useState(false)
-  useEffect(() => { setDisplayZoom(zoom) }, [zoom])
-  useImperativeHandle(ref, () => ({ showZoom: setDisplayZoom }), [])
+  const displayZoom = shown?.from === zoom ? shown.zoom : zoom
+  useImperativeHandle(ref, () => ({ showZoom: (next) => { setShown({ from: zoom, zoom: next }) } }), [zoom])
   useEffect(() => { onActiveChange(open || hovered || focused) }, [focused, hovered, onActiveChange, open])
   const items: readonly MenuEntry[] = [
     ...(fit === undefined ? [] : [{ id: 'fit', label: fit.label }, { type: 'separator' as const, id: 'fit-scale' }]),
-    ...ZOOM_OPTIONS.map(value => ({ id: String(value), label: labels.value(value * 100) })),
+    ...DOCUMENT_ZOOM.presets.map(value => ({ id: String(value), label: labels.value(value * 100) })),
   ]
   const selectedId = fit?.selected === true ? 'fit'
-    : ZOOM_OPTIONS.some(value => value === displayZoom) ? String(displayZoom) : undefined
-  return <div className={`${css.panel} ${visible ? css.visible : ''} ${className ?? ''}`} role="toolbar" aria-label={labels.controls}
+    : DOCUMENT_ZOOM.presets.some(value => value === displayZoom) ? String(displayZoom) : undefined
+  return <div className={clsx(css.panel, visible && css.visible, className)} role="toolbar" aria-label={labels.controls}
     data-document-zoom-controls data-document-zoom-visible={visible || undefined}
     onPointerEnter={(event) => { if (event.pointerType !== 'touch') setHovered(true) }} onPointerLeave={() => { setHovered(false) }}
     onFocusCapture={() => { setFocused(true) }} onBlurCapture={(event) => {
@@ -57,7 +57,7 @@ export const ZoomControls = forwardRef<ZoomControlsHandle, {
     }}>
     <Tooltip label={labels.out} side="top">
       <span className={css.controlAnchor}><Button size="sm" className={css.zoomButton} aria-label={labels.out}
-        disabled={displayZoom <= MIN_FIXED_ZOOM} onMouseDown={(event) => { event.preventDefault() }}
+        disabled={displayZoom <= DOCUMENT_ZOOM.minimum} onMouseDown={(event) => { event.preventDefault() }}
         onClick={() => { onZoom(steppedZoom(displayZoom, -1)) }}>
         <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
           <path d="M2 8h12" fill="none" stroke="currentColor" strokeWidth="1.5" />
@@ -77,7 +77,7 @@ export const ZoomControls = forwardRef<ZoomControlsHandle, {
       }} />
     <Tooltip label={labels.into} side="top">
       <span className={css.controlAnchor}><Button size="sm" className={css.zoomButton} aria-label={labels.into}
-        disabled={displayZoom >= MAX_FIXED_ZOOM} onMouseDown={(event) => { event.preventDefault() }}
+        disabled={displayZoom >= DOCUMENT_ZOOM.maximum} onMouseDown={(event) => { event.preventDefault() }}
         onClick={() => { onZoom(steppedZoom(displayZoom, 1)) }}>
         <IconPlusOutlineRegular size={14} />
       </Button></span>
