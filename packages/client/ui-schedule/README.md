@@ -57,6 +57,8 @@ The Sidebar's Session rows mark scheduled Sessions: while a row is idle, unarchi
 
 Time-zone inventory and localization are offline. `Intl` reads ICU/CLDR tables embedded in the browser runtime and never fetches or downloads zone data while DSH runs. There is no crawler to refresh; a third-party locale supplies `time.locale` and translates only the selector's own UI copy.
 
+Access: the plugin registers these surfaces only while the current Peer may call `schedule/catalog`, and the Session-header reminder catalog renders only while that Session also allows `schedule/list`; the task tab type and the turn definition stay registered. The owner always has access.
+
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 

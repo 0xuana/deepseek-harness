@@ -10,7 +10,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { HostObservable, PropsRenderSlots, StoredEntry } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ShortcutCommand } from '@deepseek-ai/dsh-client-shortcuts/client'
-import { RemoteError, TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
+import { RemoteError, StaticRemoteAccess, TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { apply, inject } from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type { WorkspaceBrowserInjected, WorkspacePickerInjected } from '@deepseek-ai/dsh-client-ui-workspace/client'
@@ -56,7 +56,7 @@ const workspaceState = (
 
 const ALLOWED: HostObservable<boolean> = createSnapshotStore(true)
 
-async function bench() {
+async function bench(access: 'fake' | 'static' = 'fake') {
   const ctx = new Context()
   const commands = new Map<string, ShortcutCommand>()
   ctx.provide('shortcuts', {
@@ -71,7 +71,8 @@ async function bench() {
   const accessSource = vi.fn((_kind: string, _id: string, _action: string): HostObservable<boolean> => ALLOWED)
   const stopGuard = vi.fn()
   const whenResourceAccess = vi.fn((): () => void => stopGuard)
-  ctx.provide('remoteAccess', { source: accessSource, whenAccess: vi.fn(() => () => {}), whenResourceAccess })
+  if (access === 'static') new StaticRemoteAccess(ctx)
+  else ctx.provide('remoteAccess', { source: accessSource, whenAccess: vi.fn(() => () => {}), whenResourceAccess })
   const create = vi.fn(async (input: { name: string } | { path: string }) => ({
     workspaceId: 'ws-new' as never,
     path: 'name' in input ? `/projects/${input.name}` : input.path,
@@ -239,6 +240,21 @@ describe('ui-workspace apply', () => {
     const guarded = vi.fn(() => () => {})
     expect(b.ctx.uiWorkspace.whenAccess('w1' as WorkspaceId, 'workspace/follow', guarded)).toBe(b.stopGuard)
     expect(b.whenResourceAccess).toHaveBeenCalledWith('workspace', 'w1', 'workspace/follow', guarded)
+  })
+
+  it('hangs Workspace-guarded effects on the calling plugin, so they leave when it unloads', async () => {
+    const b = await bench('static')
+    onTestFinished(() => b.ctx.fiber.dispose())
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    const dispose = vi.fn()
+    const caller = b.ctx.plugin({
+      inject: ['uiWorkspace'],
+      apply: (callerCtx: Context) => { callerCtx.uiWorkspace.whenAccess('w1' as WorkspaceId, 'workspace/follow', () => dispose) },
+    })
+    await caller.await()
+    expect(dispose).not.toHaveBeenCalled()
+    await caller.dispose()
+    expect(dispose).toHaveBeenCalledOnce()
   })
 
   it('reports a default Workspace creation failure through the shared notice overlay', async () => {

@@ -34,6 +34,8 @@ Open **More** beneath the left navigation entries, **More conversation views** a
 
 On Desktop, **Browse other plugins** and **Create your plugin** report `more_menu_item_click` before they act, with `action=browse_plugins` or `action=create_plugin` and the menu's `region`: `sidebar` for **More**, `conversation` for **More conversation views**, and `rightbar` for **More tools**. Opening an entry and changing a pin report nothing, and the menus report no exposure events. Without the analytics service, both actions behave the same and report nothing.
 
+The browse-plugins row appears only while the `pluginNavigation` service is present; the plugin starts without it.
+
 -----
 
 <a id="understand-the-implementation"></a>

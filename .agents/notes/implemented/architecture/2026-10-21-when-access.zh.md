@@ -13,7 +13,7 @@ Client 插件需要按当前 Peer 的访问状态开关自己的注册：侧栏�
 | 组件 | `useRemoteAccess(action)`（global）、`useSessionAccess(sessionId, action)`、`useWorkspaceAccess(workspaceId, action)`、会话作用域的 `useAccess(action)` | 只能在渲染时读，答案变化时自动重渲染 |
 | JS（`apply`、服务） | `ctx.remoteAccess.source(kind, id, action)` 返回 `HostObservable<boolean>` | 插件要自己读 `getSnapshot`、订阅变化，再手动注册与撤销 |
 
-#6486 因此在 8 个插件的 `apply` 开头写 `if (!ctx.remoteAccess.owner) return`：按身份写死，授权变化后注册不跟随。
+没有 JS 侧入口时，插件只能在 `apply` 时按身份一次性决定注册与否，授权变化后注册不跟随。
 
 ## 决策
 
@@ -56,17 +56,17 @@ export interface WhenAccess {
 
 | 插件 | 改法 | action |
 |---|---|---|
-| ui-schedule | 任务列表数据源、删除提示浮层、右栏任务 tab 与标题、主面板、侧栏入口、turn 尾部卡片、会话头部提醒、会话行标记与悬浮列表包进 `remoteAccess.whenAccess`；任务 tab 类型与 turn 定义的注册留在外面 | `schedule/catalog` |
-| ui-plugin-manager | Host 变更订阅、刷新提示浮层、主面板（含 `pluginNavigation`）、侧栏入口包进 `remoteAccess.whenAccess`；controller 与 `pluginChanges` 留在外面 | `pluginManager/listBundles` |
+| ui-schedule | 任务列表数据源、删除提示浮层、右栏任务 tab 与标题、主面板、侧栏入口、turn 尾部卡片、会话头部提醒、会话行标记与悬浮列表包进 `remoteAccess.whenAccess`；会话头部提醒读取按会话判定的 `schedule.list`，组件另在会话作用域里用 `useAccess` 决定是否渲染；任务 tab 类型与 turn 定义的注册留在外面 | `schedule/catalog`、`schedule/list` |
+| ui-plugin-manager | Host 变更订阅、刷新提示浮层、主面板（含 `pluginNavigation`）、侧栏入口包进 `remoteAccess.whenAccess`，每次授权时刷新已加载过的列表；controller 与 `pluginChanges` 留在外面，撤权期间 `pluginChanges` 不更新。依赖 `pluginNavigation` 的 ui-entry-customization 与 voice-input 改为可选使用：服务不在时隐藏「浏览插件」与「打开 / 查看详情」按钮，插件照常启动 | `pluginManager/listBundles` |
 | ui-settings-general | 设置外壳 `sidebar.settings` 与 `settings.open` 快捷键包进 `remoteAccess.whenAccess` | `settings/describe` |
-| ui-settings-account | 账号状态流（含默认模型初始化）、额度提醒、设置启动器包进 `remoteAccess.whenAccess` | `account/watch` |
+| ui-settings-account | 账号状态流（含默认模型初始化）、额度提醒、设置启动器、账号设置分区与 `settings.models.sign-in` 包进 `remoteAccess.whenAccess`；账号流的 disposer 同时结束本轮奖励提示（提示由该流的帧开始），提示控制器留在外面，下次授权时重新开始 | `account/watch` |
 | ui-directory-picker-native | 两个目录选择流程包进 `remoteAccess.whenAccess` | `directoryPicker/pick` |
 | ui-message-feedback | 消息反馈按钮照常注册，组件在会话作用域里用 `useAccess` 判断是否渲染；`messageFeedback/*` 的请求带 `sessionId`，Gateway 按 `session` 资源的默认字段自动解析为该 Session，无需声明。`/feedback` 装饰不做前端判断：装饰注册表是全局的，而 `sessionFeedback/record` 按会话判定；没有权限时对话框照常打开，提交被 Host 拒绝并显示失败码 | `messageFeedback/put` |
 | ui-deliverables、ui-open-in-app | 不动：owner 专用 HTTP 路由读不到时走已有回退 | — |
 
 ## 考虑过的替代方案
 
-**插件 `apply` 开头判断 owner 后 return**：按身份写死，授权变化后不跟随。
+**插件 `apply` 开头判断 owner 后 return（#6486 的做法）**：按身份写死，授权变化后不跟随。
 
 **按连接裁剪插件列表**：授权变化后插件无法立即重新加载。
 
@@ -78,7 +78,7 @@ export interface WhenAccess {
 
 | 后果 | 说明 |
 |---|---|
-| 注册跟随授权变化 | 6 个插件不再在 `apply` 开头 return；非 owner 无授权时相应入口不出现，授予后出现，撤销后消失；owner 行为不变 |
+| 注册跟随授权变化 | 迁移的插件在非 owner 无授权时不注册相应入口，授予后出现，撤销后消失；owner 的答案恒为 true，注册与直接注册相同 |
 | 回调必须交还 disposer | 回调里经插件 `ctx` 注册的效果也挂在插件 fiber 上；不 yield 其 disposer 的注册在失权时不会撤销，只在插件卸载时撤销 |
 | 读者拿到全部插件代码 | 插件照常加载；访问由 Gateway 逐次判定，界面由 `whenAccess` 与 Hook 控制 |
 | 测试替身 | [`dsh-client-test-runtime`](../../../../packages/test-support/client-runtime/README.zh.md) 的 `StaticRemoteAccess`、`staticAccessPlugin` 与 `TestClientOptions.access` 以固定答案替换 remote-access，供插件测试无权限路径 |

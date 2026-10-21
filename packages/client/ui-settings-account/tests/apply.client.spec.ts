@@ -78,13 +78,13 @@ it('registers account sign-in in a plain browser without the Desktop-only surfac
   }
 }, 60_000)
 
-withoutAccountAccess('opens no account stream and registers no launcher or quota notice while the current Peer may not watch the account', async ({ start }) => {
+withoutAccountAccess('opens no account stream and registers no account surface while the current Peer may not watch the account', async ({ start }) => {
   const c = await start()
   expect(c.mock.streams.end('account/watch')).toBe(0)
   expect(c.ctx.slots.entries('settings.launcher')).toHaveLength(0)
   expect(quotaNoticeEntry(c)).toBeUndefined()
-  // The models sign-in entry lives inside the settings shell, which follows its own access.
-  expect(c.ctx.slots.entries('settings.models.sign-in')).toHaveLength(1)
+  expect(c.ctx.slots.entries('settings.models.sign-in')).toHaveLength(0)
+  expect(c.ctx.slots.entries('settings.section').some(entry => entry.options.id === 'account')).toBe(false)
 }, 60_000)
 
 it('claims account balance notices from the frame-wide quota chain and declines generic quota', async ({ start }) => {

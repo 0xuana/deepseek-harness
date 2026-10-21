@@ -34,6 +34,8 @@ kind: "package-reference"
 
 在桌面端，**浏览更多插件**与**创建你的插件**在执行前上报 `more_menu_item_click`，`action` 为 `browse_plugins` 或 `create_plugin`，`region` 为菜单所在区域：**更多**为 `sidebar`，**更多会话视图**为 `conversation`，**更多工具**为 `rightbar`。打开入口和更改 Pin 状态不上报，菜单也不上报曝光事件。没有埋点服务时，两项操作行为不变且不上报。
 
+「浏览插件」一行只在 `pluginNavigation` 服务存在时出现；没有该服务时插件照常启动。
+
 -----
 
 <a id="understand-the-implementation"></a>

@@ -21,11 +21,53 @@ usePinnedBrowserLanguages('zh-CN')
 beforeEach(() => { localStorage.clear() })
 afterEach(cleanup)
 
-async function bench(allows: (action: string) => boolean = () => true) {
+type AccessEffect = (() => void) | Iterable<() => void>
+
+/** One guarded callback, the Context that owns it, and the disposer of its current installation. */
+interface Guard {
+  readonly owner: Context
+  readonly callback: () => AccessEffect
+  dispose: (() => void) | undefined
+}
+
+/** A `remoteAccess` stand-in whose one answer a spec switches, installing or withdrawing every guarded effect. */
+class SwitchableAccess extends Service {
+  private allowed = true
+  private readonly guards: Guard[] = []
+
+  constructor(serviceCtx: Context) {
+    super(serviceCtx, 'remoteAccess')
+  }
+
+  whenAccess(_action: string, callback: () => AccessEffect): () => void {
+    const guard: Guard = { owner: this.ctx, callback, dispose: undefined }
+    this.guards.push(guard)
+    this.install(guard)
+    return () => {}
+  }
+
+  /** @param allowed - the answer every guarded effect follows from now on. */
+  set(allowed: boolean): void {
+    this.allowed = allowed
+    for (const guard of this.guards) {
+      if (allowed) this.install(guard)
+      else { guard.dispose?.(); guard.dispose = undefined }
+    }
+  }
+
+  private install(guard: Guard): void {
+    if (!this.allowed || guard.dispose !== undefined) return
+    const dispose = guard.owner.effect(guard.callback)
+    guard.dispose = () => { void dispose() }
+  }
+}
+
+async function bench(allows: ((action: string) => boolean) | 'switchable' = () => true) {
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose() })
   await ctx.plugin(SlotRegistry).await()
-  new StaticRemoteAccess(ctx, allows)
+  const access = allows === 'switchable' ? new SwitchableAccess(ctx) : undefined
+  if (allows !== 'switchable') new StaticRemoteAccess(ctx, allows)
   const locale = new LocaleRuntime(ctx)
   ctx.provide('locale', locale)
   class LocaleHolder extends Service {
@@ -51,7 +93,7 @@ async function bench(allows: (action: string) => boolean = () => true) {
   ctx.provide('layout', { panelInfo, selectPanel, beginNavigation: () => new AbortController().signal,
     toggleSidebar: vi.fn(), openRightbar: vi.fn(), closeRightbar: vi.fn() })
   await ctx.plugin(settings).await()
-  return { ctx, slots: ctx.get('slots') as SlotRegistry, locale, list, remote, selectPanel, panelInfo }
+  return { ctx, slots: ctx.get('slots') as SlotRegistry, locale, list, remote, selectPanel, panelInfo, access }
 }
 
 function declare(slots: SlotRegistry): () => void {
@@ -155,6 +197,27 @@ describe('ui-plugin-manager browser plugin', () => {
 
   it('declares only the services the page and its Remote methods use', () => {
     expect(inject).toEqual(['slots', 'locale', 'remote', 'remote.pluginManager', 'remote.pluginInventory', 'remote.pluginRegistryProbe', 'configForms', 'layout', 'remoteAccess'])
+  })
+
+  it('reads the Host again on a later grant after showing the page, and not while access is withdrawn', async () => {
+    const b = await bench('switchable')
+    declare(b.slots)
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    const injected: object = b.slots.entries('main')[0]!.inject!()
+    const face = injected as PluginManagerFace
+    face.ensure()
+    await vi.waitFor(() => { expect(face.hooks.pluginManager.getSnapshot().status).toBe('ready') })
+    expect(b.list).toHaveBeenCalledTimes(1)
+
+    b.access!.set(false)
+    expect(b.slots.entries('main')).toEqual([])
+    b.remote.emit('plugin-manager/changed', [{ reason: 'install' }])
+    await Promise.resolve()
+    expect(b.list).toHaveBeenCalledTimes(1)
+
+    b.access!.set(true)
+    expect(b.slots.entries('main')).toHaveLength(1)
+    await vi.waitFor(() => { expect(b.list).toHaveBeenCalledTimes(2) })
   })
 
   it('contributes the entry, page, and navigation only while the current Peer may list bundles, and observes changes either way', async () => {

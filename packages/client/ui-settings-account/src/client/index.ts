@@ -116,13 +116,16 @@ export function apply(ctx: Context): void {
     void request.finally(() => { if (refreshing === request) refreshing = undefined })
     return request
   }
+  ctx.effect(() => () => { revision++ }, 'account: details request lifetime')
   // The account stream, and the reads it starts, follow access to this host's account state.
   ctx.remoteAccess.whenAccess('account/watch', function* () {
-    yield () => { revision++ }
     const stream = ctx.remote.$stream<AccountView>({
       name: 'account', open: signal => ctx.remote.account.watch(signal), ended: () => new Error('account stream ended'),
     })
     let disposed = false
+    // `notices.end()` disposes this generation's notice lifetime, which a frame
+    // of this stream begins; the notice controller stays outside and begins
+    // again under the next grant.
     yield () => { disposed = true; notices.end(); return stream.dispose() }
     void (async () => {
       for await (const frame of stream) {
@@ -291,9 +294,9 @@ export function apply(ctx: Context): void {
       }),
     }, DesktopOnboardingEntry))
   }
-  ctx.slots.inject('settings.models.sign-in', () => ctx.slots.register({
+  ctx.remoteAccess.whenAccess('account/watch', () => ctx.slots.inject('settings.models.sign-in', () => ctx.slots.register({
     name: 'settings.models.sign-in', locale: 'settings.account', inject: () => operations,
-  }, AccountOnboarding))
+  }, AccountOnboarding)))
   ctx.remoteAccess.whenAccess('account/watch', () => ctx.slots.inject('shell.quota-notice', () => ctx.slots.register({
     name: 'shell.quota-notice', locale: 'settings.account',
     select: owner => owner.code === 'ACCOUNT_QUOTA' ? owner : null,
@@ -314,7 +317,7 @@ export function apply(ctx: Context): void {
   ctx.remoteAccess.whenAccess('account/watch', () => ctx.slots.inject('settings.launcher', () => ctx.slots.register({
     name: 'settings.launcher', locale: 'settings.account', inject: () => operations,
   }, AccountMenu)))
-  ctx.slots.inject('settings.section', () => {
+  ctx.remoteAccess.whenAccess('account/watch', () => ctx.slots.inject('settings.section', () => {
     let unregister: (() => void) | undefined
     const update = () => {
       if (snapshot.view?.status === 'credential-stored') {
@@ -330,5 +333,5 @@ export function apply(ctx: Context): void {
     listeners.add(update)
     update()
     return () => { listeners.delete(update); unregister?.() }
-  })
+  }))
 }
