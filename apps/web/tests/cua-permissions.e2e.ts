@@ -154,7 +154,9 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
     { method: 'openPermissionSettings', params: { permission: 'accessibility' } },
   ])
   expect(events.every(event => ['permissionStatus', 'requestPermission', 'openPermissionSettings', 'applicationIcons', 'getApp'].includes(event.method))).toBe(true)
-  await plugins.locator('[data-detail-document] h1').waitFor()
+  const preview = plugins.locator('[data-detail-document] img')
+  await preview.waitFor()
+  await preview.evaluate(async (image: HTMLImageElement) => { await image.decode() })
   const trace = await page.evaluateHandle(() => {
     const errors: string[] = []
     const stable = [...document.querySelectorAll('[data-cua-settings] [role="alert"]')].map(node => node.textContent?.trim())
