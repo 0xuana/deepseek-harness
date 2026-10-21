@@ -849,7 +849,7 @@ describe('timeline projection', () => {
       expect(span?.getAttribute('data-assistant-timing')).toBe('true')
       expect(span?.style.getPropertyValue('--trajectory-assistant-ttft')).toBe('25%')
 
-      fireEvent.mouseEnter(span as HTMLElement)
+      fireEvent.pointerEnter(span as HTMLElement)
       act(() => { vi.advanceTimersByTime(499) })
       expect(view.container.querySelector('[role="tooltip"]')).toBeNull()
       act(() => { vi.advanceTimersByTime(1) })
