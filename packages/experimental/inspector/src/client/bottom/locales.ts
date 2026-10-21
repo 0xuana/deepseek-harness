@@ -9,11 +9,11 @@ export const zh = {
 
 /** English labels checked against the bottom-panel dictionary. */
 export const en: Record<keyof typeof zh, string> = {
-  title: 'NodeJS Inspector',
-  toggle: 'Toggle NodeJS Inspector',
+  title: 'NodeJS inspector',
+  toggle: 'Toggle NodeJS inspector',
   close: 'Collapse',
-  resize: 'Resize NodeJS Inspector panel',
-  frameTitle: 'NodeJS Inspector',
+  resize: 'Resize NodeJS inspector panel',
+  frameTitle: 'NodeJS inspector',
 }
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {

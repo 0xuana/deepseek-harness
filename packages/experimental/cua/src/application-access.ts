@@ -145,8 +145,8 @@ export class ApplicationAccess {
         let result: AskUserQuestionAnswer
         try {
           result = await questions.ask({ agent, signal, questions: [{ id: 'cua-app-access',
-            question: `Allow Computer Use to launch if needed, read, capture, and control ${identity.name}?`,
-            detail: 'Session access lasts until DSH restarts or Computer Use is disabled.',
+            question: `Allow computer use to launch if needed, read, capture, and control ${identity.name}?`,
+            detail: 'Session access lasts until DSH restarts or computer use is disabled.',
             options }] })
         } catch (error) {
           if (error instanceof UserQuestionError && error.code === 'ASK_CANCELLED') {

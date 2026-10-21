@@ -24,11 +24,11 @@ Enable this optional bundle to inspect Session data in the Sidebar and open Node
 <a id="use-this-package"></a>
 ## Use this package
 
-Enable **Developer Tools** in Plugin Manager's official group. This selects `@deepseek-ai/dsh-experimental-inspector-profile` for the current Web profile.
+Enable **Developer tools** in Plugin Manager's official group. This selects `@deepseek-ai/dsh-experimental-inspector-profile` for the current Web profile.
 
-Open **Session Log** from the Sidebar's new-tab menu or guide. [Session Inspector](../session-inspector/README.md) provides one view with selectable Raw Log and Chat Group presentations; Raw Log is selected initially.
+Open **Session log** from the Sidebar's new-tab menu or guide. [Session Inspector](../session-inspector/README.md) provides one view with selectable Raw Log and Chat Group presentations; Raw Log is selected initially.
 
-Press **Ctrl/Cmd+Shift+.** to open or collapse **NodeJS Inspector** in the bottom panel with the packaged DevTools frontend. Enabling this bundle starts the local debugging backend and unredacted Host fetch capture; no user override or debugging argument is required.
+Press **Ctrl/Cmd+Shift+.** to open or collapse **NodeJS inspector** in the bottom panel with the packaged DevTools frontend. Enabling this bundle starts the local debugging backend and unredacted Host fetch capture; no user override or debugging argument is required.
 
 -----
 

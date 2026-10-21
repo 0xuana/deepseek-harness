@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Inspect raw Session logs and Chat structures through the optional [Developer Tools bundle](../inspector-profile/README.md). Open **Session Log** from the Sidebar's new-tab menu or guide, then choose **Raw Log** or **Chat Group** from its upper-left selector. Follow object references between Nodes, Turns, and Steps, or locate a selected Node in Chat. Stream chunks appear as child rows, and Chat updates briefly highlight their rows. Both presentations support older history and resizable details without a composer.
+Inspect raw Session logs and Chat structures through the optional [Developer Tools bundle](../inspector-profile/README.md). Open **Session log** from the Sidebar's new-tab menu or guide, then choose **Raw log** or **Chat group** from its upper-left selector. Follow object references between Nodes, Turns, and Steps, or locate a selected Node in Chat. Stream chunks appear as child rows, and Chat updates briefly highlight their rows. Both presentations support older history and resizable details without a composer.
 
 ## Table of Contents
 
@@ -56,7 +56,7 @@ Chat picking prefers the exact Node and reasoning/response part, then its Group,
 
 Session Log uses the same field renderer for parsed JSON, with every nested object and array initially expanded. Containers can be collapsed individually; there are no reference buttons, breadcrumbs, collection-property disclosures, or collection paging. JSON retains `[Circular]` markers and readable bigint strings. Inspection failures appear locally without disabling the table. Preview filtering never removes fields from either detail presentation.
 
-Ancestor rows remain sticky beneath the table header, one nesting level below another, with an opaque tinted background. Each level follows the first row not covered by the header or earlier sticky levels. Automatic block closure keeps the visible row or surviving parent at its screen position and leaves unused space only below the data; new rows fill that space before normal tail following resumes. A manual disclosure keeps the clicked header at its measured viewport position and pauses following, retaining only the trailing space needed to keep it visible. **Follow Latest** clears reserved space and resumes following. Scrolling upward or choosing **Load earlier** also pauses following. Raw Log shows UTC timestamps with the server's millisecond precision; Chat Group has no time column.
+Ancestor rows remain sticky beneath the table header, one nesting level below another, with an opaque tinted background. Each level follows the first row not covered by the header or earlier sticky levels. Automatic block closure keeps the visible row or surviving parent at its screen position and leaves unused space only below the data; new rows fill that space before normal tail following resumes. A manual disclosure keeps the clicked header at its measured viewport position and pauses following, retaining only the trailing space needed to keep it visible. **Follow latest** clears reserved space and resumes following. Scrolling upward or choosing **Load earlier** also pauses following. Raw Log shows UTC timestamps with the server's millisecond precision; Chat Group has no time column.
 
 -----
 
