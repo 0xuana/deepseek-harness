@@ -11,7 +11,7 @@ kind: "package-reference"
 
 ## 概述
 
-现有 [agent preset](../../preset/agent-preset-registry/README.zh.md) 可以继续使用 `dsh-agent-tool-presentation`，选择模型看到全部原生工具 schema，还是只有带生成 SDK 的 `run_code`。每个 preset 可独立选择，因此 native 与 PTC agent 可以共享同一进程，而不共享工具目录。选择 `ptc` 需要兼容的 PTC 运行时；没有该运行时的部署会在挂载时拒绝 preset，不会等到收到第一条提示词。使用本包时 `mode` 字段为必填；省略本包则沿用部署默认值。
+现有 [agent preset](../../preset/agent-preset-registry/README.zh.md) 可以继续使用 `dsh-agent-tool-presentation`，选择模型看到全部原生工具 schema，还是只有带生成 SDK 的 `run_code`。每个 preset 可独立选择，因此 native 与 PTC agent 可以共享同一进程，而不共享工具目录。选择 `ptc` 需要兼容的 PTC 运行时。使用本包时 `mode` 字段为必填；省略本包则沿用部署默认值。
 
 ## 目录
 
@@ -45,7 +45,7 @@ kind: "package-reference"
 
 ### PTC 模式需要什么
 
-选择 `ptc` 需要已组合的 PTC 运行时（`ctx.ptcRuntime`），且其语言有已注册的 SDK 渲染器——TypeScript 运行时经 [`dsh-ptc-runtime-node`](../../ptc-runtime/ptc-runtime-node/README.zh.md) 交付，TypeScript 与 Python 的 SDK 渲染器都内置在 `dsh-tool-executor-ptc` 中。即使缺少运行时，选择也会生效；随后提示词组装或程序执行会报告缺少运行时，而不会继承原生执行方式。
+选择 `ptc` 需要已组合的 PTC 运行时（`ctx.ptcRuntime`），且其语言有已注册的 SDK 渲染器——TypeScript 运行时经 [`dsh-ptc-runtime-node`](../../ptc-runtime/ptc-runtime-node/README.zh.md) 交付，TypeScript 与 Python 的 SDK 渲染器都内置在 `dsh-tool-executor-ptc` 中。在运行时首次可用之前，此兼容选择器会保留继承的执行器。若需要在 preset 激活时拒绝缺少运行时的配置，请直接挂载 `dsh-tool-executor-ptc`。
 
 ### 每个 agent 只声明一次呈现方式
 
@@ -73,7 +73,7 @@ kind: "package-reference"
 
 ### 行为说明
 
-两种模式都会立即挂载各自的执行器。PTC 在描述或执行程序时检查运行时是否可用。挂载的执行器拥有作用域注册，并随此选择器的插件生命周期一同撤销。
+选中的子插件在所需服务可用时注册执行器。注册后，卸载子插件或其运行时会使选中的执行器不可用，直到替代执行器完成注册；调用不会回退到继承的执行器。
 
 </details>
 
@@ -108,7 +108,7 @@ kind: "package-reference"
 
 这些限制说明这一行何时需要特别留意。它们是当前包约束，不是任务积压。
 
-- **运行时仍在宿主平面**——preset 可以选择 PTC mode，却无法自带它所需的 TypeScript 运行时；未组装运行时的部署也就无法组装任何 PTC 模式的 preset。
+- **运行时仍在宿主平面**——preset 可以选择 PTC mode，却无法自带它所需的 TypeScript 运行时；在部署提供运行时之前，PTC 选择会保持等待状态。
 
 <a id="dev-note"></a>
 ### 开发备注

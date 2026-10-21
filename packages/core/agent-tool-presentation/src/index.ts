@@ -13,8 +13,8 @@ import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
 export const name = 'tool-presentation'
 
 /**
- * Tool selection does not require a program runtime; the PTC executor
- * reports a missing runtime when its description or execution is requested.
+ * Native selection does not require a program runtime; the PTC child waits
+ * for its runtime before registering an executor in this scope.
  */
 export const inject = ['tools']
 

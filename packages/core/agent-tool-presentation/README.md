@@ -11,7 +11,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Existing [agent presets](../../preset/agent-preset-registry/README.md) can keep using `dsh-agent-tool-presentation` to select whether models see every native tool schema or only `run_code` with a generated SDK. Each preset can choose independently, so native and PTC agents can share one process without sharing tool catalogs. Selecting `ptc` requires a compatible PTC runtime; a deployment without one rejects the preset at mount time before its first prompt. The `mode` field is required when this package is present, while omitting the package keeps the deployment default.
+Existing [agent presets](../../preset/agent-preset-registry/README.md) can keep using `dsh-agent-tool-presentation` to select whether models see every native tool schema or only `run_code` with a generated SDK. Each preset can choose independently, so native and PTC agents can share one process without sharing tool catalogs. Selecting `ptc` requires a compatible PTC runtime. The `mode` field is required when this package is present, while omitting the package keeps the deployment default.
 
 ## Table of Contents
 
@@ -45,7 +45,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### What PTC mode requires
 
-Selecting `ptc` needs a composed PTC runtime (`ctx.ptcRuntime`) whose language has a registered SDK renderer — the TypeScript runtime ships via [`dsh-ptc-runtime-node`](../../ptc-runtime/ptc-runtime-node/README.md), and both the TypeScript and Python SDK renderers are built into `dsh-tool-executor-ptc`. Selection takes effect even when the runtime is missing; prompt assembly or program execution then reports the missing runtime instead of inheriting native execution.
+Selecting `ptc` needs a composed PTC runtime (`ctx.ptcRuntime`) whose language has a registered SDK renderer — the TypeScript runtime ships via [`dsh-ptc-runtime-node`](../../ptc-runtime/ptc-runtime-node/README.md), and both the TypeScript and Python SDK renderers are built into `dsh-tool-executor-ptc`. Before the runtime first becomes available, this compatibility selector leaves the inherited executor active. Mount `dsh-tool-executor-ptc` directly when preset activation must reject a missing runtime.
 
 ### One presentation per agent
 
@@ -73,7 +73,7 @@ The tool registry cannot move into a preset: its consumers are all host-plane �
 
 ### Behavior notes
 
-Both modes mount their executor immediately. PTC checks runtime availability when describing or executing a program. The mounted executor owns its scoped registration, which is withdrawn with this selector's plugin lifetime.
+The selected child plugin registers its executor when its required services are available. After registration, unloading the child or its runtime makes the selected executor unavailable until a replacement registers; calls do not fall back to an inherited executor.
 
 </details>
 
@@ -108,7 +108,7 @@ No direct invalidation; the presentation is fixed when the agent is composed, so
 
 These limits define when this row needs special care. They are current package constraints, not a task backlog.
 
-- **The runtime stays host-plane** — a preset can select PTC mode but cannot supply the TypeScript runtime it needs; a deployment that composes none can compose no PTC preset.
+- **The runtime stays host-plane** — a preset can select PTC mode but cannot supply the TypeScript runtime it needs; PTC selection remains pending until the deployment supplies a runtime.
 
 <a id="dev-note"></a>
 ### Dev Note

@@ -1,12 +1,12 @@
 /**
  * The row an agent preset carries to pick its tool presentation. What it owes
  * its caller: the choice reaches THIS agent and no other, it unwinds with the
- * agent, and a missing PTC runtime rejects the selected scope's prompt
- * instead of inheriting the native executor.
+ * agent, and PTC selection waits for a runtime before replacing the
+ * inherited executor.
  */
 
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, onTestFinished } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -32,6 +32,7 @@ class StubRuntime extends PtcRuntime {
 /** A host plane with one tool, optionally carrying a PTC runtime. */
 async function host(options: { runtime?: boolean } = {}) {
   const ctx = new Context()
+  onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(SystemPrompt, {})
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
@@ -93,13 +94,15 @@ describe('the tool-presentation row', () => {
     await expect(ctx.systemPrompt.assemble({ scope: agent })).rejects.toThrow('selected tool executor is unavailable')
   })
 
-  it('rejects PTC assembly when the deployment does not compose its runtime', async () => {
+  it('keeps the inherited executor while waiting for a PTC runtime', async () => {
     const ctx = await host({ runtime: false })
 
     const { agent, row } = await mount(ctx, { mode: 'ptc' })
 
     expect(row.ctx.get('ptcRuntime')).toBeUndefined()
-    await expect(ctx.systemPrompt.assemble({ scope: agent })).rejects.toThrow('requires a PTC runtime')
+    const assembly = await ctx.systemPrompt.assemble({ scope: agent })
+    expect(assembly.tools.map(tool => tool.name)).toEqual(['echo'])
+    expect(assembly.sections.some(section => section.name === 'tools:sdk')).toBe(false)
   })
 
   it('applies once the runtime arrives', async () => {

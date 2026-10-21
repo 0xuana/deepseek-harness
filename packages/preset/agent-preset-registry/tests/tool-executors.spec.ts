@@ -125,17 +125,14 @@ it.each([true, false])('loads cordis.yml executor presets with runtime availabil
   await ctx.loader.create({ name: 'cordis:include', config: { path: pathToFileURL(path).href } })
   await ctx.loader.await()
   const native = await agentOn(ctx, 'native-package', 'standard')
-  const ptc = await agentOn(ctx, 'ptc-package', 'ptc')
   expect((await ctx.systemPrompt.assemble({ scope: native })).tools.map(tool => tool.name)).toEqual(['echo'])
   if (!hasRuntime) {
-    await expect(ctx.systemPrompt.assemble({ scope: ptc })).rejects.toThrow('requires a PTC runtime')
-    const batch = await ctx.tools.execute({
-      agent: ptc, calls: [{ type: 'tool-call', id: ToolCallId('missing-runtime'), name: 'echo', arguments: '{}' }],
-      signal: new AbortController().signal,
-    })
-    expect(batch.results[0]?.result).toMatchObject({ isError: true, error: { info: { code: 'UNKNOWN_TOOL' } } })
+    const pending = agentOn(ctx, 'ptc-package', 'ptc')
+    await expect(pending).rejects.toMatchObject({ code: 'agent-preset/invalid' })
+    await expect(pending).rejects.toThrow('executor (cordis:ptc): waiting for ptcRuntime')
     return
   }
+  const ptc = await agentOn(ctx, 'ptc-package', 'ptc')
   expect((await ctx.systemPrompt.assemble({ scope: ptc })).tools.map(tool => tool.name)).toEqual(['run_code'])
   const signal = new AbortController().signal
   expect(await executeModelToolFixture(ctx, {
