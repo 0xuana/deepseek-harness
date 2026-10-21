@@ -747,9 +747,6 @@
   "packages/client/ui-workflow-run/tests/workflow-run.client.spec.tsx": {
     "9f5585ad6cebba08252165f2dcc63c1e16101e0306fab754afb641b417e7789d": 1
   },
-  "packages/client/ui-workspace/tests/animated-rows.client.spec.tsx": {
-    "a898fd26a24bbfa72e00b9b825779a95c1d1c2bd447ebf8f21e8b2d38c3fb08c": 1
-  },
   "packages/client/ui-workspace/tests/apply.client.spec.ts": {
     "b467270b0c2a95d6b29939f6baf4d5c8e5031e99a1d15437a3060f35735d8d37": 1
   },
