@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { writeClipboard } from './clipboard.ts'
 
 /** How long the `copied` flag stays true after a successful write, in ms. */
@@ -14,17 +14,27 @@ export interface CopyFeedback {
 
 /**
  * Copy `text` to the clipboard with one-second success feedback.
+ * Unmount cancels the reset timer and ignores pending clipboard completions.
  * @param text - the text to write on copy.
  * @returns the `copied` flag and the `onCopy` handler.
  */
 export function useCopyFeedback(text: string): CopyFeedback {
   const [copied, setCopied] = useState(false)
+  const mounted = useRef(false)
+  useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
+  useEffect(() => {
+    if (!copied) return
+    const timer = window.setTimeout(() => { setCopied(false) }, COPIED_FEEDBACK_MS)
+    return () => { window.clearTimeout(timer) }
+  }, [copied])
   const onCopy = useCallback(() => {
     if (copied) return
     void writeClipboard(text).then((ok) => {
-      if (!ok) return
+      if (!ok || !mounted.current) return
       setCopied(true)
-      window.setTimeout(() => { setCopied(false) }, COPIED_FEEDBACK_MS)
     })
   }, [copied, text])
   return { copied, onCopy }

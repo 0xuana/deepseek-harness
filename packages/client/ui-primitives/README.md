@@ -119,6 +119,8 @@ The nearest `MarkdownDelegateProvider` supplies optional `openExternalLink` and 
 
 ### Localizing copy
 
+Shared output-card copy controls show success for one second. Unmount clears the reset timer and ignores pending clipboard completions.
+
 The atoms cannot read the application locale, so every piece of user-facing copy arrives through required label props. `HoverCard`, `TerminalBlock`, `JsonTree`, `CodeBlock`, `MarkdownText`, `JsonBlock`, `ConnectionIndicator`, `Modal`, `DiffBlock`, `ReadBlock`, `SearchBlock`, and `WebBlock` accept complete localized labels. The package owns no language fallback; omission fails typechecking, and each feature maps its typed `t` seat into the primitive's label interface.
 
 -----
