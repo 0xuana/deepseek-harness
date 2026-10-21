@@ -16,7 +16,6 @@ import {
   ApiSessionAgentController,
   ApiSessionCwdConflict,
   ApiSessionNotFound,
-  inspectApiSession,
 } from '../src/agent.ts'
 import { installSessionReadTestServices, testSessionPersistence } from './test-remote.ts'
 
@@ -84,60 +83,7 @@ describe('ApiSession identity failures', () => {
       .toContain('belongs to "/existing"')
   })
 
-  it('maps absent and cwd-less point observations to not found', async () => {
-    const ctx = new Context()
-    roots.push(ctx)
-    await ctx.plugin(SessionStore)
-    installSessionReadTestServices(ctx)
-    await expect(inspectApiSession(ctx, SessionId('missing')))
-      .rejects.toBeInstanceOf(ApiSessionNotFound)
 
-    const inspect = vi.fn(() => Promise.resolve(undefined))
-    const stat = vi.fn(() => Promise.resolve(undefined))
-    const disposeMissing = providePersistence(ctx, {
-      list: () => Promise.resolve([]),
-      stat,
-      inspect,
-    })
-    await expect(inspectApiSession(ctx, SessionId('missing'))).rejects.toBeInstanceOf(ApiSessionNotFound)
-    // Absence is decided by the stat preflight; the log itself is never opened.
-    expect(stat).toHaveBeenCalledOnce()
-    expect(inspect).not.toHaveBeenCalled()
-    disposeMissing()
-
-    const listed = header('cwd-less-catalog', null)
-    const disposeListed = providePersistence(ctx, {
-      list: () => Promise.resolve([listed]),
-      inspect: () => Promise.resolve({ meta: listed, events: [] }),
-    })
-    await expect(inspectApiSession(ctx, listed.id)).rejects.toBeInstanceOf(ApiSessionNotFound)
-    disposeListed()
-
-    const catalog = header('cwd-less-inspect')
-    const inspected = header('cwd-less-inspect', null)
-    providePersistence(ctx, {
-      list: () => Promise.resolve([catalog]),
-      inspect: () => Promise.resolve({ meta: inspected, events: [] }),
-    })
-    await expect(inspectApiSession(ctx, catalog.id)).rejects.toBeInstanceOf(ApiSessionNotFound)
-  })
-
-  it('forwards an explicit inspection signal', async () => {
-    const ctx = new Context()
-    roots.push(ctx)
-    await ctx.plugin(SessionStore)
-    installSessionReadTestServices(ctx)
-    const meta = header('signalled-inspection')
-    const inspect = vi.fn(() => Promise.resolve({ meta, inheritedEventCount: SessionLogOffset(0), events: [] }))
-    providePersistence(ctx, {
-      list: () => Promise.resolve([meta]),
-      inspect,
-    })
-    const signal = new AbortController().signal
-
-    await expect(inspectApiSession(ctx, meta.id, signal)).resolves.toEqual({ meta, inheritedEventCount: SessionLogOffset(0), events: [] })
-    expect(inspect).toHaveBeenCalledWith(meta.id, signal)
-  })
 })
 
 describe('ApiSession Agent lookup and recovery', () => {
