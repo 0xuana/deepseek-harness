@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react'
 import {
-  IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconChevronsUpDownOutlineRegular,
+  IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconDragHandleOutlineRegular,
   IconTrashOutlineRegular, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { DeepSeekModelDraft } from './DeepSeekModelsEditor.tsx'
@@ -89,7 +89,7 @@ export function ModelRow(props: ModelRowProps): ReactNode {
               props.order.onMove(event.key === 'ArrowUp' ? -1 : 1)
             }}
           >
-            <IconChevronsUpDownOutlineRegular size={14} />
+            <IconDragHandleOutlineRegular size={14} />
           </button>
         </Tooltip>
         {(['id', 'name'] as const).map(field => (

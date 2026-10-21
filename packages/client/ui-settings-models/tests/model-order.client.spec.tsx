@@ -42,7 +42,7 @@ function row(button: HTMLButtonElement): HTMLElement {
 }
 
 function transfer() {
-  return { setData: vi.fn(), setDragImage: vi.fn(), effectAllowed: '', dropEffect: '' }
+  return { setData: vi.fn(), effectAllowed: '', dropEffect: '' }
 }
 
 describe.each(['deepseek', 'pi-ai'] as const)('%s model ordering', (family) => {

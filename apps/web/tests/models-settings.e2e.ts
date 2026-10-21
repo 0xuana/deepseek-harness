@@ -586,9 +586,9 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     } })
     await edit.click()
     await dialog.getByText('自定义设置').click()
-    expect(await dialog.getByLabel('模型 ID 1', { exact: true }).inputValue()).toBe('order-second')
-    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'reordered.expected.md'),
-      await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd), MODE)
+    expect(await Promise.all([1, 2, 3].map(position =>
+      dialog.getByLabel(`模型 ID ${String(position)}`, { exact: true }).inputValue(),
+    ))).toEqual(['order-second', 'order-third', 'acme-large'])
     const viewport = page.viewportSize()
     if (viewport === null) throw new Error('Model ordering checks require an explicit viewport')
     try {
@@ -645,7 +645,7 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
       'configured.expected.md', 'declared-edit.expected.md', 'declared.expected.md',
       'delete.expected.md', 'empty.expected.md', 'model-picker.expected.md',
       'native-delete.expected.md', 'native-keyless.expected.md', 'catalog-inputs.expected.md',
-      'refreshing.expected.md', 'image-only.expected.md', 'reordered.expected.md',
+      'refreshing.expected.md', 'image-only.expected.md',
     ])
   })
 })
