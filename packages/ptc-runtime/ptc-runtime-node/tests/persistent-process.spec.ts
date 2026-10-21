@@ -58,7 +58,9 @@ it('keeps an injected process local to the REPL while it runs and after it close
 })
 
 it('keeps an environment while capturing each evaluation and binding replies separately', async () => {
-  const h = await setup()
+  // REPL diagnostics include Node-version-dependent frames and checkout paths.
+  const diagnosticBudget = 65_536
+  const h = await setup(diagnosticBudget)
   const declarations = [{ global: 'tools', names: ['echo'], errorClass: { name: 'ToolCallError', memberNameProperty: 'toolName' } }]
   expect(await h.run('let count = 1; const saved = tools.echo;', declarations)).toEqual({})
   const result = await h.run('count++; process.stdout.write("raw"); console.log("value", count); await saved({})', declarations)
@@ -66,10 +68,12 @@ it('keeps an environment while capturing each evaluation and binding replies sep
   expect(h.seen.filter(item => item.type === 'log').map(item => item.text)).toEqual(['raw', 'value 2'])
   expect(h.state.env).toEqual({})
   expect(h.nativeEnvironment).toEqual({ PATH: '/native' })
-  const failed = await h.run('throw new Error("failed")')
+  const failed = await h.run('throw new Error("failed")', [], diagnosticBudget)
   expect(failed).toMatchObject({ error: { kind: 'exception' } })
   expect((failed.error as { message: string }).message).toContain('failed')
-  expect(await h.run('const =')).toMatchObject({ error: { kind: 'exception' } })
+  const syntax = await h.run('const =', [], diagnosticBudget)
+  expect(syntax).toMatchObject({ error: { kind: 'exception' } })
+  expect(syntax.error?.message).toContain('SyntaxError')
   expect(decodePtcJsonWire((await h.run('count')).value)).toBe(2)
 })
 
