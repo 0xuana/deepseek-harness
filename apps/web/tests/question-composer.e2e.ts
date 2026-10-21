@@ -21,7 +21,7 @@ import {
   launchWebScaffold, recordFixture, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import {
-  connectFreshWorkspace, expandTurnProcesses, newEnglishPage, saveFailureShot,
+  connectFreshWorkspace, expandTurnProcesses, newEnglishPage, pinBrowserClock, pinHostClock, saveFailureShot, WEB_FIXTURE_TIME,
 } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/question-composer', import.meta.url))
@@ -211,9 +211,7 @@ function resettledFixture(fixture: string, outcome: 'cancelled' | 'queued' | 'la
     const event: unknown = JSON.parse(line)
     if (!isRecord(event)) throw new Error('question fixture event is invalid')
     if (event.type === 'session') {
-      // Keep the derived session's relative-time header stable as the source
-      // fixture ages.
-      event.createdAt = Date.now()
+      event.createdAt = WEB_FIXTURE_TIME
       lines.push(JSON.stringify(event))
       continue
     }
@@ -299,9 +297,10 @@ async function openSeededTranscript(fixtureText: string, seedId: string): Promis
   const scaffold = await launchWebScaffold({})
   let browser: Browser | undefined
   try {
-    await seedSession(scaffold, fixtureText, seedId)
+    await seedSession(scaffold, fixtureText, seedId, undefined, { createdAt: WEB_FIXTURE_TIME })
     browser = await chromium.launch()
     const page = await newEnglishPage(browser)
+    await pinBrowserClock(page)
     const tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
@@ -326,12 +325,15 @@ describe('web e2e: resident question composer round trip', () => {
   let tripwire: ReturnType<typeof watchConsole>
   const sessionEvents: SessionEvent[] = []
   let answeredSession: SessionId | undefined
+  let hostClock: ReturnType<typeof pinHostClock> | undefined
 
   beforeAll(async () => {
+    if (MODE !== 'record') hostClock = pinHostClock()
     scaffold = await launchWebScaffold(MODE === 'record' ? {} : { replayFixture: FIXTURE, paceMs: 15, compareReplaySession: true })
     scaffold.ctx.on('session/event', (_session, event: SessionEvent) => { sessionEvents.push(event) })
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
+    if (MODE !== 'record') await pinBrowserClock(page)
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
@@ -340,8 +342,12 @@ describe('web e2e: resident question composer round trip', () => {
   }, 120_000)
 
   afterAll(async () => {
-    await browser?.close()
-    await scaffold?.close()
+    try {
+      await browser?.close()
+    } finally {
+      try { await scaffold?.close() }
+      finally { hostClock?.mockRestore() }
+    }
   })
 
   it('asks through the composer, answers, and completes with the answer logged', async () => {
@@ -412,10 +418,11 @@ describe('web e2e: resident question composer round trip', () => {
         })
         expect(squeeze.rows).toBeGreaterThan(0)
         for (const description of await composer.locator('[data-option-description]').all()) {
-          const copy = await description.evaluate(readCopy)
-          expect(copy.lines).toBeLessThanOrEqual(2)
-          expect(copy.clipped).toBe(copy.overflows)
-          expect(copy.toggle).toBe(copy.clipped ? 'expand' : undefined)
+          await expect.poll(async () => {
+            const copy = await description.evaluate(readCopy)
+            return copy.lines <= 2 && copy.clipped === copy.overflows
+              && copy.toggle === (copy.clipped ? 'expand' : undefined)
+          }).toBe(true)
         }
         scrollStates.push(squeeze.scrolls)
         expect(squeeze.titleInScrollport).toBe(true)

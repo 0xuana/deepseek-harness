@@ -204,6 +204,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'conversation.images.content': {
       scope: 'root'
       props: MessageImagesContentInput
+      inject: { readonly fileDrag: import('@deepseek-ai/dsh-client-ui-primitives').FileDragActions }
       locale: 'conversation'
     }
   }
