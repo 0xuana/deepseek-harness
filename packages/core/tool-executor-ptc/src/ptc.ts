@@ -514,6 +514,7 @@ export function createRunCodeTool(
             schema,
             arguments: normalized.dispatched,
             ...exec.agent ? { agent: exec.agent } : {},
+            ...exec.toolSet !== undefined ? { toolSet: exec.toolSet } : {},
             parent: exec.token,
             signal: runController.signal,
           }
@@ -648,7 +649,7 @@ export function createRunCodeTool(
         // restricted globals vanish) — the same view the SDK section declared,
         // so a program can bind exactly what its prompt promised; sub-dispatch
         // re-resolves per call through the same view (exec.agent threads down).
-        for (const schema of tools.schemas(exec.agent)) {
+        for (const schema of tools.schemas(exec.agent, exec.toolSet)) {
           Object.defineProperty(functions, schema.name, { enumerable: true, value: binding(deepFreeze(schema)) })
         }
 
