@@ -43,6 +43,11 @@ describe('Menu top clearance', () => {
     expect(view.getByRole('menu').style.top).toBe('68px')
   })
 
+  it('places a menu that does not fit above an anchor inside the top strip directly below it', () => {
+    const view = openMenu(new DOMRect(300, 14, 18, 22), 'top')
+    expect(view.getByRole('menu').style.top).toBe('40px')
+  })
+
   it('keeps the top strip clear when the anchor has scrolled above the viewport', () => {
     const view = openMenu(new DOMRect(300, -30, 18, 22), 'bottom')
     expect(view.getByRole('menu').style.top).toBe('68px')

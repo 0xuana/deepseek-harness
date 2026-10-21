@@ -33,7 +33,8 @@ interface CardPosition {
  * readable and selectable, but it carries no dismissal affordance of its own.
  * @param props.openDelayMs - hover dwell before the card shows (default 500).
  * @param props.variant - compact card beside the anchor, or a preview above/below it
- * with 24px side insets, a 420px height cap, frame-top clearance, and 100ms opacity transitions.
+ * with 24px side insets, a 420px height cap, the frame-top clearance (capped below an anchor inside the top strip),
+ * and 100ms opacity transitions.
  * @param props.widthAnchorRef - optional element whose width and horizontal position size the preview.
  * @param props.inline - keep the anchor in prose; show a contained preview on hover or keyboard focus.
  * Its hover region connects the anchor and preview across the visual gap.

@@ -243,7 +243,7 @@ describe('HoverCard', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('keeps previews below the desktop frame clearance', () => {
+  it('keeps previews clear of the frame top strip except below an anchor inside it', () => {
     const prior = document.documentElement.style.getPropertyValue('--dsh-frame-top-clearance')
     const priority = document.documentElement.style.getPropertyPriority('--dsh-frame-top-clearance')
     document.documentElement.style.setProperty('--dsh-frame-top-clearance', '100px')
