@@ -1,0 +1,39 @@
+- table "Performance":
+  - rowgroup:
+    - row "Turn / step Question Did Context Output Cache hit First token Model time Output speed Tool time Total time":
+      - columnheader "Turn / step"
+      - columnheader "Question"
+      - columnheader "Did"
+      - columnheader "Context"
+      - columnheader "Output"
+      - columnheader "Cache hit"
+      - columnheader "First token"
+      - columnheader "Model time"
+      - columnheader "Output speed"
+      - columnheader "Tool time"
+      - columnheader "Total time"
+  - rowgroup:
+    - row "Turn 1 · 1 steps · Hide · {{clock}} Show the measured round. read ×1 → 7 chars 5.2K 0.24K 69.23% {{duration}} {{duration}} 0.0 {{duration}} {{duration}}":
+      - cell "Turn 1 · 1 steps · Hide · {{clock}}"
+      - cell "Show the measured round."
+      - cell "read ×1 → 7 chars"
+      - cell "5.2K"
+      - cell "0.24K"
+      - cell "69.23%"
+      - cell "{{duration}}"
+      - cell "{{duration}}"
+      - cell "0.0"
+      - cell "{{duration}}"
+      - cell "{{duration}}"
+    - row "Step 1 · details read /work/notes.md 2 lines 5.2K 0.24K 69.23% {{duration}} {{duration}} 0.0 {{duration}} {{duration}}":
+      - cell "Step 1 · details"
+      - cell
+      - cell "read /work/notes.md 2 lines"
+      - cell "5.2K"
+      - cell "0.24K"
+      - cell "69.23%"
+      - cell "{{duration}}"
+      - cell "{{duration}}"
+      - cell "0.0"
+      - cell "{{duration}}"
+      - cell "{{duration}}"
