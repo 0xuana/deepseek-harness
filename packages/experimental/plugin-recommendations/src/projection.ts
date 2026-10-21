@@ -1,15 +1,33 @@
 /** Validate answer blocks and fold card decisions without scanning session history. */
 import { z } from 'zod'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { pluginRecordOf } from '@deepseek-ai/dsh-session'
+import { pluginRecordOf, type SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
-import { cardBlocksOf } from '@deepseek-ai/dsh-experimental-creation-recommendations'
+import { actionBlocksOf } from '@deepseek-ai/dsh-util-action-block'
 import type { PluginRecommendation, RecommendationOutcome } from './types.ts'
 
 const recommendationSchema: z.ZodType<PluginRecommendation> = z.object({
   callId: z.string().min(1).transform(ToolCallId),
   name: z.string().min(1), reason: z.string().min(1),
 }).strict()
+
+const blockSchema = z.object({
+  action: z.literal('enable_official_plugin'), name: z.string().trim().min(1), reason: z.string().trim().min(1),
+}).strict()
+
+/** Read a proposal from a logged answer: its last valid official-plugin block. Blocks of other actions are ignored.
+ * @param event - logged session event.
+ * @returns the proposal, when the event is an answer carrying a valid block.
+ */
+export function recommendationOf(event: SessionEvent): PluginRecommendation | undefined {
+  if (event.type !== 'assistant/message') return undefined
+  const text = event.data.message.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
+  const last = actionBlocksOf(text).flatMap((value) => {
+    const parsed = blockSchema.safeParse(value)
+    return parsed.success ? [parsed.data] : []
+  }).at(-1)
+  return last === undefined ? undefined : { callId: ToolCallId(`block:${event.data.message.id}`), name: last.name, reason: last.reason }
+}
 
 const outcomeSchema: z.ZodType<RecommendationOutcome> = z.enum([
   'dismissed', 'applied', 'already-enabled', 'restart-required', 'overridden', 'failed', 'cancelled',
@@ -51,7 +69,7 @@ export type RecommendationProjectionDefinition = Omit<Definition, 'init' | 'wire
  */
 export function recommendationProjection(limits: RecommendationLimits): RecommendationProjectionDefinition {
   return {
-    key: 'pluginRecommendations', stateVersion: 4, stateSchema,
+    key: 'pluginRecommendations', stateVersion: 5, stateSchema,
     init: (): RecommendationState => ({ proposals: {}, view: { decisions: {} }, turn: 0, firstCall: null, pendingStatus: {}, queued: 0 }),
     apply: (state, event) => {
       // Same as personalized pages until the shared action-card layer owns card folds.
@@ -74,20 +92,15 @@ export function recommendationProjection(limits: RecommendationLimits): Recommen
         return { ...state, view: { ...state.view, decisions: { ...state.view.decisions, [callId]: outcome } },
           pendingStatus: { ...state.pendingStatus, [callId]: event.seq } }
       }
-      const answer = cardBlocksOf(event)
-      if (answer === undefined) return state
-      const firstCall = state.firstCall ?? answer.callId
-      const last = answer.blocks.filter(block => block.action === 'enable_official_plugin').at(-1)
-      if (last === undefined) return firstCall === state.firstCall ? state : { ...state, firstCall }
-      const proposal: PluginRecommendation = { callId: answer.callId, name: last.name, reason: last.reason }
+      const proposal = recommendationOf(event)
+      if (proposal === undefined) return state
+      const firstCall = state.firstCall ?? proposal.callId
+      // One card per turn: this experiment's later block in the same turn creates nothing.
+      // Other experiments' blocks never displace a plugin card; Personalized pages yields instead.
+      if (firstCall !== proposal.callId) return state
       const decisions = { ...state.view.decisions }
-      // Another experiment's card holds this answer or turn: the block is logged but never offered.
-      const foreignCard = answer.card.action !== 'enable_official_plugin'
-        || firstCall !== proposal.callId && state.proposals[firstCall] === undefined
-      // One card per turn: a block written after another card in this turn creates nothing.
-      if (!foreignCard && firstCall !== proposal.callId) return state
       // Queued user messages mean the user has moved on; the proposal is logged but never offered.
-      if (foreignCard || state.queued >= limits.queuedMessageLimit) {
+      if (state.queued >= limits.queuedMessageLimit) {
         decisions[proposal.callId] = 'suppressed'
         return { ...state, firstCall, proposals: { ...state.proposals, [proposal.callId]: proposal }, view: { ...state.view, decisions } }
       }

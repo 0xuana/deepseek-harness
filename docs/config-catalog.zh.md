@@ -1044,7 +1044,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-experimental-creation-recommendations`
 
 - `refs`: `z` (`zod`)
-- `source`: [`packages/experimental/creation-recommendations/src/index.ts:34`](../packages/experimental/creation-recommendations/src/index.ts)
+- `source`: [`packages/experimental/creation-recommendations/src/index.ts:33`](../packages/experimental/creation-recommendations/src/index.ts)
 
 ```ts config-catalog
 /** Validated card limits after schema defaults. */
@@ -4920,6 +4920,7 @@ export interface Config {
 | `@deepseek-ai/dsh-typert-generator` | — | [`packages/typert/generator/src/index.ts`](../packages/typert/generator/src/index.ts) |
 | `@deepseek-ai/dsh-typert-protocol` | — | [`packages/typert/protocol/src/index.ts`](../packages/typert/protocol/src/index.ts) |
 | `@deepseek-ai/dsh-typert-registry` | — | [`packages/typert/registry/src/index.ts`](../packages/typert/registry/src/index.ts) |
+| `@deepseek-ai/dsh-util-action-block` | — | [`packages/util/action-block/src/index.ts`](../packages/util/action-block/src/index.ts) |
 | `@deepseek-ai/dsh-util-code-language` | — | [`packages/util/code-language/src/index.ts`](../packages/util/code-language/src/index.ts) |
 | `@deepseek-ai/dsh-util-crypto` | — | [`packages/util/crypto/src/index.ts`](../packages/util/crypto/src/index.ts) |
 | `@deepseek-ai/dsh-util-time` | — | [`packages/util/time/src/index.ts`](../packages/util/time/src/index.ts) |

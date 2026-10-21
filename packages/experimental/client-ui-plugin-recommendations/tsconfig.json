@@ -57,7 +57,7 @@
       "path": "../../util/package-manifest"
     },
     {
-      "path": "../creation-recommendations"
+      "path": "../../util/action-block"
     }
   ]
 }

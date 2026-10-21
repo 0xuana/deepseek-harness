@@ -4,7 +4,7 @@ import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { pluginRecordOf, type SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 import type { CreationRecommendation } from './types.ts'
-import { actionBlocksOf } from './action-block.ts'
+import { actionBlocksOf, actionOf } from '@deepseek-ai/dsh-util-action-block'
 import type {} from '@deepseek-ai/dsh-tool-executor-ptc/types'
 
 /** Model and wire values use the same three supported locations. */
@@ -33,35 +33,33 @@ const stateSchema = z.object({
   queued: z.number(),
 })
 
-/** The current turn's reservation also covers official-plugin recommendations. */
+/** The current turn's reservation also covers cards of other experiments. */
 export type CreationState = z.infer<typeof stateSchema>
 
 const blockSchema = proposalSchema.omit({ callId: true }).extend({
   action: z.literal('create_personalized_page'), title: z.string().trim().min(1), brief: z.string().trim().min(1),
 }).strict()
-const officialPluginBlockSchema = z.object({
-  action: z.literal('enable_official_plugin'), name: z.string().trim().min(1), reason: z.string().trim().min(1),
-}).strict()
-const cardBlockSchema = z.discriminatedUnion('action', [blockSchema, officialPluginBlockSchema])
+const ACTION = 'create_personalized_page'
 
-/** A valid `dsh-action` block of either official card experiment. */
-export type CardBlock = z.infer<typeof cardBlockSchema>
-
-/** Read the valid card blocks of an assistant answer, in order. The last one is the answer's card,
- * so a page block followed by an official-plugin block offers the plugin, and the reverse offers the page.
+/** Blocks of an assistant answer: its last valid page block and whether another action's block is present.
  * @param event - logged session event.
- * @returns the answer's card id, its valid blocks and its card, when the event is an answer with at least one.
+ * @returns the answer's card id, its page block and the foreign flag; undefined for other events and answers without blocks.
  */
-export function cardBlocksOf(event: SessionEvent):
-{ readonly callId: ToolCallId; readonly blocks: readonly CardBlock[]; readonly card: CardBlock } | undefined {
+function answerBlocksOf(event: SessionEvent):
+{ readonly callId: ToolCallId; readonly page: z.infer<typeof blockSchema> | undefined; readonly foreign: boolean } | undefined {
   if (event.type !== 'assistant/message') return undefined
   const text = event.data.message.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
-  const blocks = actionBlocksOf(text).flatMap((value) => {
-    const parsed = cardBlockSchema.safeParse(value)
+  const blocks = actionBlocksOf(text)
+  if (blocks.length === 0) return undefined
+  const pages = blocks.flatMap((value) => {
+    const parsed = blockSchema.safeParse(value)
     return parsed.success ? [parsed.data] : []
   })
-  const card = blocks.at(-1)
-  return card === undefined ? undefined : { callId: ToolCallId(`block:${event.data.message.id}`), blocks, card }
+  const foreign = blocks.some((value) => {
+    const action = actionOf(value)
+    return action !== undefined && action !== ACTION
+  })
+  return { callId: ToolCallId(`block:${event.data.message.id}`), page: pages.at(-1), foreign }
 }
 
 /** Read a proposal from a logged event: the last valid page block of an assistant answer,
@@ -71,10 +69,9 @@ export function cardBlocksOf(event: SessionEvent):
  */
 export function creationOf(event: SessionEvent): CreationRecommendation | undefined {
   if (event.type === 'assistant/message') {
-    const answer = cardBlocksOf(event)
-    const last = answer?.blocks.filter(block => block.action === 'create_personalized_page').at(-1)
-    if (answer === undefined || last === undefined) return undefined
-    const { action: _action, ...fields } = last
+    const answer = answerBlocksOf(event)
+    if (answer?.page === undefined) return undefined
+    const { action: _action, ...fields } = answer.page
     return { callId: answer.callId, ...fields }
   }
   const result = settlement(event)
@@ -108,7 +105,7 @@ export type CreationProjectionDefinition = Omit<ProjectionDefinition<'creationRe
  */
 export function creationProjection(limits: CreationLimits): CreationProjectionDefinition {
   return {
-    key: 'creationRecommendations', stateVersion: 9, stateSchema,
+    key: 'creationRecommendations', stateVersion: 10, stateSchema,
     init: (): CreationState => ({ proposals: {}, view: { decisions: {} }, turn: 0, firstCall: null, pendingStatus: {}, queued: 0 }),
     apply: (state, event) => {
       if (event.type === 'turn/start') return { ...state, turn: event.data.turn, firstCall: null }
@@ -127,20 +124,26 @@ export function creationProjection(limits: CreationLimits): CreationProjectionDe
           pendingStatus: { ...state.pendingStatus, [decision.callId]: event.seq } }
       }
       const proposal = creationOf(event)
-      const answer = cardBlocksOf(event)
+      const answer = answerBlocksOf(event)
       if (proposal === undefined) {
-        const foreign = z.union([
+        const legacy = z.union([
           z.object({ pluginRecommendation: z.object({ callId: z.string().min(1) }) }).transform(value => value.pluginRecommendation.callId),
           z.object({ actionCard: z.object({ action: z.string(), callId: z.string().min(1) }) }).transform(value => value.actionCard.callId),
         ]).safeParse(settlement(event)?.meta)
-        const firstCall = state.firstCall ?? answer?.callId ?? (foreign.success ? foreign.data : null)
-        return firstCall === state.firstCall ? state : { ...state, firstCall }
+        const other = answer?.foreign === true ? answer.callId : legacy.success ? legacy.data : null
+        if (other === null) return state
+        // Pages yield: another action's card later in the turn retracts this turn's undecided page card.
+        const held = state.firstCall !== null ? state.proposals[state.firstCall] : undefined
+        if (state.firstCall !== null && held !== undefined && state.view.decisions[state.firstCall] === undefined) {
+          const decisions = { ...state.view.decisions, [held.callId]: { callId: held.callId, phase: 'suppressed' as const, slot: held.slot } }
+          return { ...state, view: { decisions } }
+        }
+        return state.firstCall === null ? { ...state, firstCall: other } : state
       }
       const firstCall = state.firstCall ?? proposal.callId
       const decisions = { ...state.view.decisions }
-      // Another experiment's card holds this answer or turn: the page block is logged but never offered.
-      const foreignCard = answer?.card.action === 'enable_official_plugin'
-        || firstCall !== proposal.callId && state.proposals[firstCall] === undefined
+      // Pages yield: another action's block in this answer, or another card earlier in this turn, keeps the page block from being offered.
+      const foreignCard = answer?.foreign === true || firstCall !== proposal.callId && state.proposals[firstCall] === undefined
       // One card per turn: a block written after another card in this turn creates nothing.
       if (!foreignCard && firstCall !== proposal.callId) return state
       // Queued user messages mean the user has moved on; the proposal is logged but never offered.

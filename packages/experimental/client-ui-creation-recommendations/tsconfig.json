@@ -45,6 +45,9 @@
       "path": "../creation-recommendations"
     },
     {
+      "path": "../../util/action-block"
+    },
+    {
       "path": "../../client/store"
     },
     {

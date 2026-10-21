@@ -5,7 +5,7 @@ import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import type { BundleInfo, ChangeResult } from '@deepseek-ai/dsh-plugin-manager/types'
 import * as PluginRecommendations from '../src/index.ts'
 import type { RecommendationDecision } from '../src/types.ts'
-import { block, bundle, callId, fixture } from './fixture.ts'
+import { bundle, callId, fixture } from './fixture.ts'
 
 describe('official recommendations', () => {
   it('offers the live catalog through a skill, adds no tools, and withdraws it on unload', async () => {
@@ -150,9 +150,11 @@ describe('official recommendations', () => {
 
   it('settles cards that were never offered or were replaced without changing the profile', async () => {
     const f = await fixture()
-    const page = { action: 'create_personalized_page', title: 'Counter', brief: 'Count tasks.', slot: 'page' }
-    const suppressed = f.propose('answer-1', [block, page])
+    const message = createUserMessage({ content: [{ type: 'text', text: 'Next question.' }], source: { kind: 'user' } })
+    f.agent.session.append('agent/inbox/spliced', { target: 'next-turn', start: 0, inserted: [message, message] })
+    const suppressed = f.propose('answer-1')
     expect(await f.ctx.pluginRecommendations.act(f.agent, suppressed, 'enable')).toEqual({ status: 'settled', outcome: 'suppressed' })
+    f.agent.session.append('agent/inbox/spliced', { target: 'next-turn', start: 0, removedCount: 2, inserted: [] })
     f.agent.session.append('turn/start', { turn: 2 })
     const first = f.propose('answer-2')
     f.agent.session.append('turn/start', { turn: 3 })

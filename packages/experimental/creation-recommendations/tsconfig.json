@@ -48,14 +48,14 @@
     },
     {
       "path": "../../util/values"
-    }
+    },
+    { "path": "../../util/action-block" }
   ],
   "files": [
     "src/index.ts",
     "src/types.ts",
     "src/projection.ts",
     "src/generated-bundle.ts",
-    "src/skill.ts",
-    "src/action-block.ts"
+    "src/skill.ts"
   ]
 }

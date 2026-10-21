@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest'
 import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session'
-import { recommendationProjection } from '../src/projection.ts'
+import { recommendationOf, recommendationProjection } from '../src/projection.ts'
 import { answer, block } from './fixture.ts'
 
 const projection = recommendationProjection({ queuedMessageLimit: 2 })
@@ -27,27 +27,30 @@ it('reads the last valid official-plugin block of an answer and ignores malforme
   expect(projection.wire.view(apply(empty, event('assistant/message', answer('m1', [block]))))).toEqual({ decisions: {} })
 })
 
-it('keeps one card per turn across both card actions and logs the losing block as never offered', () => {
+it('never yields to another action and keeps one card per turn of its own', () => {
   const empty = projection.init()
-  // A page block written after the plugin block makes the page the answer's card.
-  const pageLast = apply(empty, event('assistant/message', answer('m1', [block, page])))
-  expect(pageLast.view.decisions[id('m1')]).toBe('suppressed')
-  expect(pageLast.firstCall).toBe(id('m1'))
-  const pluginLast = apply(empty, event('assistant/message', answer('m1', [page, block])))
-  expect(pluginLast.view.decisions).toEqual({})
-  expect(pluginLast.proposals[id('m1')]).toBeDefined()
-  // A page card earlier in the turn holds the turn, also when this experiment's block comes later.
+  // Page blocks in the same answer, before or after, do not change this experiment's card.
+  for (const blocks of [[block, page], [page, block]]) {
+    const state = apply(empty, event('assistant/message', answer('m1', blocks)))
+    expect(state.view.decisions).toEqual({})
+    expect(state.proposals[id('m1')]).toBeDefined()
+  }
+  // A page answer earlier in the turn neither holds the turn nor hides a later plugin block.
   const pageFirst = apply(empty, event('assistant/message', answer('m1', [page])))
-  expect(pageFirst.firstCall).toBe(id('m1'))
-  expect(apply(pageFirst, event('assistant/message', answer('m1', [page])))).toBe(pageFirst)
-  expect(apply(pageFirst, event('assistant/message', answer('m2', [block]))).view.decisions[id('m2')]).toBe('suppressed')
+  expect(pageFirst).toBe(empty)
+  expect(apply(pageFirst, event('assistant/message', answer('m2', [block]))).proposals[id('m2')]).toBeDefined()
   // This experiment's own later block in the same turn creates nothing.
   const own = apply(empty, event('assistant/message', answer('m1', [block])))
   const later = apply(own, event('assistant/message', answer('m2', [{ ...block, name: 'later' }])))
   expect(later).toBe(own)
-  expect(apply(own, event('assistant/message', answer('m3', [page])))).toBe(own)
   expect(apply(own, event('assistant/message', answer('m1', [block])))).toEqual(own)
   expect(apply(own, event('turn/start', { turn: 2 })).firstCall).toBeNull()
+})
+
+it('reads only the text parts of an answer', () => {
+  const data = answer('m1', [block])
+  const message = { ...data.message, content: [{ type: 'tool-call' as const, id: ToolCallId('call'), name: 'skill', arguments: '{}' }, ...data.message.content] }
+  expect(recommendationOf(event('assistant/message', { ...data, message }))).toEqual({ callId: id('m1'), name: block.name, reason: block.reason })
 })
 
 it('lets a later proposal replace only undecided cards', () => {

@@ -1,0 +1,43 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/util/action-block/README.md
+/:
+  en: c3cffc9fd1ddc0de
+  zh: 5abbfc238fcf6e4d
+/deepseek-ai-dsh-util-action-block:
+  en: cf7b74342b6e13e6
+  zh: 88f591b07862f6fb
+/deepseek-ai-dsh-util-action-block/summary:
+  en: eee5d7c4e08a7967
+  zh: 46cfdb996f87ae1e
+/deepseek-ai-dsh-util-action-block/table-of-contents:
+  en: 80b31a934611cb4a
+  zh: 6195f049e8537637
+/deepseek-ai-dsh-util-action-block/use-this-package:
+  en: bbff250eba0f1b89
+  zh: 0a618f05cc88ee2b
+/deepseek-ai-dsh-util-action-block/use-this-package/read-the-blocks-of-an-answer:
+  en: e14b63273f46d2c6
+  zh: 185306d61e4ff55b
+/deepseek-ai-dsh-util-action-block/use-this-package/tell-actions-apart:
+  en: 9273b5e38fc76f93
+  zh: 0541d64b400b4bcf
+/deepseek-ai-dsh-util-action-block/use-this-package/hide-the-fences:
+  en: e04a95c30c884bf3
+  zh: ea029a3e72568b51
+/deepseek-ai-dsh-util-action-block/understand-the-implementation:
+  en: 880a2381c4c13897
+  zh: 3481d98b8aecf182
+/deepseek-ai-dsh-util-action-block/understand-the-implementation/source-map:
+  en: e07a11631358c555
+  zh: b2f06b27d41060ff
+/deepseek-ai-dsh-util-action-block/further-exploration:
+  en: 4fa14cf65a65aa2e
+  zh: 2bd28a13141ef444
+/deepseek-ai-dsh-util-action-block/known-limitations-and-deferred-work:
+  en: cc49513ebcd6cac3
+  zh: bdce7b0f1650f618
+/deepseek-ai-dsh-util-action-block/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 8ec3e73528ddb1a6

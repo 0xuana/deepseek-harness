@@ -21,7 +21,6 @@ import { creationProjection, customLocationSchema, slotSchema, type CreationStat
 import { validateGeneratedBundle } from './generated-bundle.ts'
 import type { CreationActionResult, CreationDecision, CreationRecommendation, CreationSlot } from './types.ts'
 export type * from './types.ts'
-export { cardBlocksOf, type CardBlock } from './projection.ts'
 
 export const name = 'creation-recommendations'
 

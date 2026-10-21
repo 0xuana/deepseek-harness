@@ -30,8 +30,8 @@ export interface CreationDecision {
 }
 
 /** Replacement and suppression are derived from the log, never written as plugin decisions: a later proposal
- * replaces an unstarted card; a proposal written while user messages are queued, or after an official-plugin card
- * in the same answer or turn, is never offered. */
+ * replaces an unstarted card; a proposal written while user messages are queued, or in an answer or turn that also
+ * carries another action's block, is never offered. */
 export type CreationCardState = CreationDecision | (Omit<CreationDecision, 'phase'> & { readonly phase: 'replaced' | 'suppressed' })
 
 /** Open-session receipts, excluded from session-list summaries. */

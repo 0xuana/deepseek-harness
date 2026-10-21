@@ -58,7 +58,7 @@
   },
   "dependencies": {
     "zod": "4.4.3",
-    "@deepseek-ai/dsh-experimental-creation-recommendations": "workspace:*",
+    "@deepseek-ai/dsh-util-action-block": "workspace:*",
     "@deepseek-ai/dsh-experimental-client-ui-plugin-recommendations": "workspace:*"
   },
   "files": [

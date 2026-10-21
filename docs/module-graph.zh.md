@@ -24,6 +24,7 @@ flowchart TD
     pkg_plugin_detail["plugin-detail"]
     pkg_plugin_market_index["plugin-market-index"]
     pkg_timeout["timeout"]
+    pkg_util_action_block["util-action-block"]
     pkg_util_code_language["util-code-language"]
     pkg_util_crypto["util-crypto"]
     pkg_util_time["util-time"]
@@ -1486,6 +1487,7 @@ flowchart TD
 | [`plugin-detail`](../packages/util/plugin-detail) | `util` | — |
 | [`plugin-market-index`](../packages/util/plugin-market-index) | `util` | — |
 | [`timeout`](../packages/util/timeout) | `util` | — |
+| [`util-action-block`](../packages/util/action-block) | `util` | — |
 | [`util-code-language`](../packages/util/code-language) | `util` | — |
 | [`util-crypto`](../packages/util/crypto) | `util` | — |
 | [`util-time`](../packages/util/time) | `util` | — |

@@ -36,7 +36,7 @@
       "path": "../../skill/skill"
     },
     {
-      "path": "../creation-recommendations"
+      "path": "../../util/action-block"
     }
   ],
   "files": [

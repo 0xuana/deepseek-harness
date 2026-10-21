@@ -8747,6 +8747,9 @@ importers:
       '@deepseek-ai/dsh-typert-protocol':
         specifier: workspace:*
         version: link:../../typert/protocol
+      '@deepseek-ai/dsh-util-action-block':
+        specifier: workspace:*
+        version: link:../../util/action-block
       react:
         specifier: ^18.2.0
         version: 18.3.1
@@ -8786,9 +8789,6 @@ importers:
       '@deepseek-ai/dsh-client-ui-slots':
         specifier: workspace:*
         version: link:../../client/ui-slots
-      '@deepseek-ai/dsh-experimental-creation-recommendations':
-        specifier: workspace:*
-        version: link:../creation-recommendations
       '@deepseek-ai/dsh-experimental-plugin-recommendations':
         specifier: workspace:*
         version: link:../plugin-recommendations
@@ -8804,6 +8804,9 @@ importers:
       '@deepseek-ai/dsh-typert-protocol':
         specifier: workspace:*
         version: link:../../typert/protocol
+      '@deepseek-ai/dsh-util-action-block':
+        specifier: workspace:*
+        version: link:../../util/action-block
       react:
         specifier: ^18.2.0
         version: 18.3.1
@@ -9011,6 +9014,9 @@ importers:
       '@deepseek-ai/dsh-experimental-client-ui-creation-recommendations':
         specifier: workspace:*
         version: link:../client-ui-creation-recommendations
+      '@deepseek-ai/dsh-util-action-block':
+        specifier: workspace:*
+        version: link:../../util/action-block
       resolve.exports:
         specifier: ^2.0.3
         version: 2.0.3
@@ -9630,9 +9636,9 @@ importers:
       '@deepseek-ai/dsh-experimental-client-ui-plugin-recommendations':
         specifier: workspace:*
         version: link:../client-ui-plugin-recommendations
-      '@deepseek-ai/dsh-experimental-creation-recommendations':
+      '@deepseek-ai/dsh-util-action-block':
         specifier: workspace:*
-        version: link:../creation-recommendations
+        version: link:../../util/action-block
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -16190,6 +16196,12 @@ importers:
       '@deepseek-ai/dsh-typert-protocol':
         specifier: workspace:*
         version: link:../protocol
+
+  packages/util/action-block:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
 
   packages/util/atomic-write:
     devDependencies:
