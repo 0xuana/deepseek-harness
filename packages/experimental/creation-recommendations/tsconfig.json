@@ -56,6 +56,6 @@
     "src/projection.ts",
     "src/generated-bundle.ts",
     "src/skill.ts",
-    "src/action-cards.ts"
+    "src/action-block.ts"
   ]
 }

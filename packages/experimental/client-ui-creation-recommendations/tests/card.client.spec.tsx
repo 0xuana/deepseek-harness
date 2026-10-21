@@ -36,6 +36,9 @@ it('places only the first proposal at its turn tail and leaves unrelated turns e
   rerender(<RecommendationTail {...tail} />)
   expect(screen.getAllByRole('region')).toHaveLength(1)
   expect(useRecommendations).toHaveBeenCalledWith('3')
+  const suppressed: Tail = { ...tail, useProjection: () => ({ decisions: { [callId]: { callId, phase: 'suppressed', slot: 'sidebar-right' } } }) }
+  rerender(<RecommendationTail {...suppressed} />)
+  expect(screen.queryByRole('region')).toBeNull()
 })
 
 it('starts with a recommendation, lets the user change the location, and starts only on Create', async () => {

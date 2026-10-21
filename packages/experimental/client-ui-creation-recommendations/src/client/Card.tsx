@@ -71,7 +71,8 @@ function FoldedText({ text, expandLabel, collapseLabel }: { text: string; expand
 export function RecommendationTail({ turn, useRecommendations, ...props }: Pick<PropsRuntime<'conversation.chat.turnTail'>, 'turn' | 'useProjection'>
   & PropsLocale<'creationRecommendations'> & InjectFace<RecommendationTailInjected>) {
   const recommendation = useRecommendations(String(turn.turn))?.[0]
-  return recommendation === undefined || turn.end?.data.reason.kind !== 'completed' || turn.data.get('turn-tail')?.closing == null
+  const phase = props.useProjection('creationRecommendations')?.decisions[recommendation?.callId ?? '']?.phase
+  return recommendation === undefined || phase === 'suppressed' || turn.end?.data.reason.kind !== 'completed' || turn.data.get('turn-tail')?.closing == null
     ? null : <RecommendationCard {...props} recommendation={recommendation} />
 }
 /* jscpd:ignore-end */

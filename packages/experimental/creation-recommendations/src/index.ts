@@ -1,4 +1,4 @@
-/** Explicit interface needs become independently installed plugins after a click. */
+/** Explicit interface needs become independently installed plugins after a click; proposals are dsh-action blocks in the answer. */
 import { randomUUID } from 'node:crypto'
 import { cp, mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -17,7 +17,6 @@ import type {} from '@deepseek-ai/dsh-subagent'
 import type {} from '@deepseek-ai/dsh-app-boot'
 import type {} from '@deepseek-ai/dsh-skill'
 import { registerCreationSkill } from './skill.ts'
-import { registerActionCard } from './action-cards.ts'
 import { creationProjection, customLocationSchema, slotSchema, type CreationState } from './projection.ts'
 import { validateGeneratedBundle } from './generated-bundle.ts'
 import type { CreationActionResult, CreationDecision, CreationRecommendation, CreationSlot } from './types.ts'
@@ -27,7 +26,7 @@ export const name = 'creation-recommendations'
 
 /** Deployment-tunable limits for offering cards. */
 export const Config = z.object({
-  /** Queued next-turn messages at or above which the current turn offers no card. */
+  /** Queued next-turn messages at or above which a proposal written in the current turn is never offered. */
   queuedMessageLimit: z.number().int().min(1).default(2),
 }).prefault({})
 /** Validated card limits after schema defaults. */
@@ -54,7 +53,6 @@ export class CreationRecommendations extends TypertRemoteService {
   private projection!: ProjectionHandle<CreationState>
   private readonly actions = new Map<string, Promise<CreationActionResult>>()
   private readonly jobs = new Map<string, CreationJob>()
-  private readonly reservations = new Map<string, { turn: number; callId: ToolCallId }>()
   private readonly stopped = Promise.withResolvers<undefined>()
   private closing = false
   private readonly owner: Context['fiber']
@@ -65,7 +63,7 @@ export class CreationRecommendations extends TypertRemoteService {
   }
 
   protected async [Service.init](): Promise<void> {
-    this.projection = await this.ctx.sessionProjections.register(creationProjection)
+    this.projection = await this.ctx.sessionProjections.register(creationProjection(this.config))
     registerCreationSkill(this.ctx)
     this.ctx.on('agent/pre-step', async ({ agent, signal }, next) => {
       const decision = await next()
@@ -95,7 +93,6 @@ export class CreationRecommendations extends TypertRemoteService {
     }, 'creation-recommendations: drain creation')
     this.ctx.on('agent/created', async ({ agent }) => { await this.recoverOnOpen(agent) })
     this.ctx.on('agent/disposed', ({ agent }) => {
-      this.reservations.delete(agent.id)
       for (const job of this.jobs.values()) if (job.parent === agent
         && this.projection.stateOf(agent.session).view.decisions[job.decision.callId]?.phase !== 'installing') {
         job.abort.abort()
@@ -108,38 +105,7 @@ export class CreationRecommendations extends TypertRemoteService {
       if (creator && exec.name === 'plugin_manager' && !z.object({ action: z.enum(['list_plugins', 'list_bundles', 'list_version_exemptions']) }).safeParse(exec.arguments).success) {
         return 'Generate the new bundle files only. The caller installs them after validation.'
       }
-      if (exec.name !== 'suggest_action' && exec.name !== 'suggest_plugin') return undefined
-      if (exec.agent.inbox.nextTurn.length >= this.config.queuedMessageLimit) {
-        return 'The user has already queued more messages. This call created no card; finish the current answer without a recommendation.'
-      }
-      const state = this.projection.stateOf(exec.agent.session)
-      const reserved = this.reservations.get(exec.agent.id)
-      const first = state.firstCall ?? (reserved?.turn === state.turn ? reserved.callId : undefined)
-      if (first !== undefined && first !== exec.callId) return 'This turn already has a recommendation. This call created no card. Finish using successful results only; do not promise an automatic later card.'
-      this.reservations.set(exec.agent.id, { turn: state.turn, callId: exec.callId })
       return undefined
-    })
-    this.ctx.on('tools/result', (exec, result) => {
-      if (result.isError && exec.agent !== undefined && this.reservations.get(exec.agent.id)?.callId === exec.callId) {
-        this.reservations.delete(exec.agent.id)
-      }
-    })
-    registerActionCard(this.ctx, {
-      name: 'create_personalized_page',
-      description: 'Propose creating a new personalized page. Load personalized-pages for this action’s policy. The user’s click authorizes background generation and installation.',
-      parameters: {
-        title: { type: 'string', required: true, description: 'Short name in the user’s language.' },
-        brief: { type: 'string', required: true, description: 'One-to-three-sentence plan in the user’s language, shown on the card and passed to the background Creator. Follow personalized-pages for scope and handoff; put source content in initialContent.' },
-        initialContent: { type: 'string', description: 'Optional verbatim source content needed to initialize the page, preserving supplied values, units and gaps. Passed as data to the background Creator, which cannot read this conversation. Omit for an empty page.' },
-        slot: { type: 'string', enum: ['sidebar-right', 'page', 'sidebar-left'], required: true, description: 'Suggested location: sidebar-right is the conversation’s right panel; page is a Session tab; sidebar-left is a global page with a left entry. Choose using personalized-pages; the user can change it on the card.' },
-      },
-      prepare: (args, callId) => {
-        if (args.title.trim() === '' || args.brief.trim() === '') {
-          throw new CreationRecommendationError('Describe the user need and the proposed interface.', 'CREATION_NEED')
-        }
-        return { callId, title: args.title.trim(), brief: args.brief.trim(), slot: slotSchema.parse(args.slot),
-          ...(args.initialContent === undefined ? {} : { initialContent: args.initialContent }) }
-      },
     })
     for (const agent of this.ctx.agents.roots()) await this.recoverOnOpen(agent)
   }
@@ -247,7 +213,7 @@ export class CreationRecommendations extends TypertRemoteService {
       this.record(agent, decision)
       return { status: 'settled', decision }
     }
-    if (previous?.phase === 'dismissed' || previous?.phase === 'removed' || previous?.phase === 'replaced'
+    if (previous?.phase === 'dismissed' || previous?.phase === 'removed' || previous?.phase === 'replaced' || previous?.phase === 'suppressed'
       || action === 'cancel' && previous !== undefined) return { status: 'settled', decision: previous }
     if (action === 'dismiss') {
       const decision: CreationDecision = { callId, phase: 'dismissed', slot: slotSchema.safeParse(slot).success ? slot : proposal.slot,

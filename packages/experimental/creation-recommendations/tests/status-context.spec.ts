@@ -143,7 +143,7 @@ it('keeps an unstarted proposal across later human messages and lets the next pr
   expect(f.current()).toBeUndefined()
   expect(await prepare(f)).toEqual({ kind: 'enter', messages: [] })
   f.agent.session.append('turn/start', { turn: 2 })
-  await f.propose(ToolCallId('creation-2'), { ...proposal, title: 'Checklist' })
+  await f.propose('creation-2', { ...proposal, title: 'Checklist' })
   expect(f.current()).toEqual({ callId, phase: 'replaced', slot: 'sidebar-right' })
   // Replacement is the model's own choice, so no status notice is queued for it.
   expect(await prepare(f)).toEqual({ kind: 'enter', messages: [] })

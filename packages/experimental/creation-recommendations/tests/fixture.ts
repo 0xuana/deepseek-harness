@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { expect, onTestFinished, vi } from 'vitest'
-import { createToolResultMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { MessageId, ToolCallId, type AssistantMessage } from '@deepseek-ai/dsh-llm'
 import { appendPluginRecord, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import Skills from '@deepseek-ai/dsh-skill'
@@ -15,9 +15,8 @@ import type { SubagentActivationSpec, SubagentResult } from '@deepseek-ai/dsh-su
 import * as CreationRecommendations from '../src/index.ts'
 import { creationProjection } from '../src/projection.ts'
 import type { CreationCardState, CreationDecision } from '../src/types.ts'
-import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
-export const callId = ToolCallId('creation-1')
+export const callId = ToolCallId('block:creation-1')
 export const proposal = { title: 'Counter', brief: 'Keep a counter visible for this task.', slot: 'sidebar-right' as const }
 
 export function installedBundle(name: string): BundleInfo {
@@ -72,19 +71,19 @@ export async function fixture(initial?: CreationDecision) {
   ctx.on('session/event', (session, event) => { if (session === agent.session) events.push(event) })
   if (initial !== undefined) appendPluginRecord(agent.session, 'plugin:creation-recommendations/decision', initial)
   const fiber = await ctx.plugin(CreationRecommendations)
-  const current = (): CreationCardState | undefined =>
-    events.reduce(creationProjection.apply, creationProjection.init()).view.decisions[callId]
-  const execute = (args: object = proposal, id = callId, caller = agent) => executeToolFixture(ctx, {
-    name: 'suggest_action', arguments: { request: { action: 'create_personalized_page', ...args } }, agent: caller, callId: id, signal: new AbortController().signal,
-  })
-  const propose = async (id = callId, args: object = proposal) => {
-    const value = await execute(args, id)
-    expect(value.isError).toBe(false)
-    agent.session.append('tool/result', { turn: 1, step: 1,
-      message: createToolResultMessage({ callId: id, content: value.content, isError: value.isError }),
-      ...value.meta === undefined ? {} : { meta: value.meta },
-    }, { surfaceOp: 'append' })
-    return value
+  const projection = creationProjection(CreationRecommendations.Config.parse({}))
+  const state = () => events.reduce(projection.apply, projection.init())
+  const current = (): CreationCardState | undefined => state().view.decisions[callId]
+  /** Log an assistant answer ending in a dsh-action block, as the model would write it. */
+  let step = 0
+  const propose = async (id = 'creation-1', args: object = proposal, caller = agent) => {
+    const text = '方案在下方，点击创建即可开始。\n\n```dsh-action\n' + JSON.stringify({ action: 'create_personalized_page', ...args }) + '\n```'
+    const message: AssistantMessage = { role: 'assistant', id: MessageId(id), content: [{ type: 'text', text }],
+      source: { kind: 'model', provider: 'fixture', model: 'fixture' } }
+    const turn = caller === agent ? Math.max(1, state().turn) : 1
+    caller.session.append('assistant/message', { turn, step: ++step, message, stream: [] }, { surfaceOp: 'append' })
+    await Promise.resolve()
+    return ToolCallId('block:' + id)
   }
   const complete = async () => {
     const spec = await entered.promise
@@ -95,5 +94,5 @@ export async function fixture(initial?: CreationDecision) {
     return spec
   }
   return { ctx, agent, agentHandle, harness, directory, manager, bundles, startActivation, dispose, result, entered,
-    fiber, execute, propose, current, complete, events }
+    fiber, propose, current, state, complete, events }
 }

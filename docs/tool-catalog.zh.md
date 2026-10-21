@@ -19,7 +19,6 @@
 
 | 工具包 | 模型可见名称 | 依赖 | 写入／影响 | 随产品发布的别名 | 部署说明 |
 | --- | --- | --- | --- | --- | --- |
-| `@deepseek-ai/dsh-experimental-creation-recommendations` | `suggest_action` | `ctx.tools`, `ctx.pluginManager`, `ctx.agents`, `ctx.sessionProjections`, `ctx.remoteAccess`, `ctx.subagents`, `ctx.profileContext`, `ctx.skills` | `tool/call`, `tool/result`, `plugin:creation-recommendations/decision`, `Creator child session`, `profile bundle selection` | - | - |
 | `@deepseek-ai/dsh-plugin-manager` | `plugin_manager` | `ctx.tools`, `ctx.pluginManager`, `ctx.sandboxPolicy` | `tool/call`, `tool/result`, `user/message` | - | - |
 | `@deepseek-ai/dsh-plugin-market` | `plugin_market` | `ctx.tools`, `ctx.pluginMarket` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-mcp-resources` | `list_mcp_resource_templates`, `list_mcp_resources`, `read_mcp_resource` | `ctx.tools`, `ctx.mcpResources` | `tool/call`, `tool/result` | - | - |
@@ -56,65 +55,6 @@
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`、`web_search` | `ctx.tools`、`ctx.web`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可见 schema 在更换后端时保持稳定。 |
 
 <a id="deepseek-aidsh-experimental-creation-recommendations"></a>
-
-## `@deepseek-ai/dsh-experimental-creation-recommendations`
-
-### `suggest_action`
-
-提交一张可选操作卡片，在最终回答之后显示。遵循所选动作的 Skill 判断适用条件并规划。调用只保存建议；用户必须点击卡片才开始。不要仅凭提案执行动作或声称已执行。成功结果提供卡片；被拒绝时不产生卡片。
-
-```json
-{
-  "type": "object",
-  "properties": {
-    "request": {
-      "type": "object",
-      "description": "Propose creating a new personalized page. Load personalized-pages for this action’s policy. The user’s click authorizes background generation and installation.",
-      "additionalProperties": false,
-      "properties": {
-        "action": {
-          "type": "string",
-          "const": "create_personalized_page"
-        },
-        "title": {
-          "type": "string",
-          "description": "Short name in the user’s language."
-        },
-        "brief": {
-          "type": "string",
-          "description": "One-to-three-sentence plan in the user’s language, shown on the card and passed to the background Creator. Follow personalized-pages for scope and handoff; put source content in initialContent."
-        },
-        "initialContent": {
-          "type": "string",
-          "description": "Optional verbatim source content needed to initialize the page, preserving supplied values, units and gaps. Passed as data to the background Creator, which cannot read this conversation. Omit for an empty page."
-        },
-        "slot": {
-          "type": "string",
-          "description": "Suggested location: sidebar-right is the conversation’s right panel; page is a Session tab; sidebar-left is a global page with a left entry. Choose using personalized-pages; the user can change it on the card.",
-          "enum": [
-            "sidebar-right",
-            "page",
-            "sidebar-left"
-          ]
-        }
-      },
-      "required": [
-        "action",
-        "title",
-        "brief",
-        "slot"
-      ]
-    }
-  },
-  "required": [
-    "request"
-  ]
-}
-```
-
-源码： [`packages/experimental/creation-recommendations/src/index.ts`](../packages/experimental/creation-recommendations/src/index.ts)
-
-<a id="deepseek-aidsh-plugin-manager"></a>
 
 ## `@deepseek-ai/dsh-plugin-manager`
 

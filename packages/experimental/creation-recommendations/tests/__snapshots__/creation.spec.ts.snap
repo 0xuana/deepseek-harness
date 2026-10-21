@@ -1,61 +1,9 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`interface creation > loads page planning with a live duplicate-check catalog and withdraws it on unload > one card tool 1`] = `
-{
-  "parameters": {
-    "properties": {
-      "request": {
-        "additionalProperties": false,
-        "description": "Propose creating a new personalized page. Load personalized-pages for this action’s policy. The user’s click authorizes background generation and installation.",
-        "properties": {
-          "action": {
-            "const": "create_personalized_page",
-            "type": "string",
-          },
-          "brief": {
-            "description": "One-to-three-sentence plan in the user’s language, shown on the card and passed to the background Creator. Follow personalized-pages for scope and handoff; put source content in initialContent.",
-            "type": "string",
-          },
-          "initialContent": {
-            "description": "Optional verbatim source content needed to initialize the page, preserving supplied values, units and gaps. Passed as data to the background Creator, which cannot read this conversation. Omit for an empty page.",
-            "type": "string",
-          },
-          "slot": {
-            "description": "Suggested location: sidebar-right is the conversation’s right panel; page is a Session tab; sidebar-left is a global page with a left entry. Choose using personalized-pages; the user can change it on the card.",
-            "enum": [
-              "sidebar-right",
-              "page",
-              "sidebar-left",
-            ],
-            "type": "string",
-          },
-          "title": {
-            "description": "Short name in the user’s language.",
-            "type": "string",
-          },
-        },
-        "required": [
-          "action",
-          "title",
-          "brief",
-          "slot",
-        ],
-        "type": "object",
-      },
-    },
-    "required": [
-      "request",
-    ],
-    "type": "object",
-  },
-  "proposal": "Propose an optional action card, displayed after your final answer. Follow the selected action’s skill for eligibility and planning. Submission saves a proposal only; the user must click its card to start. Do not execute or claim execution from a proposal. A successful result supplies the card; a rejection creates none.",
-}
-`;
-
 exports[`interface creation > loads page planning with a live duplicate-check catalog and withdraws it on unload > skill discovery 1`] = `
 [
   {
-    "description": "Plan an optional new page or small tool when the user asks for a page, tab, panel, tool or interface in this app (even for one-off use), wants something to keep, revisit or update later, or will keep changing data shown in your answer. Load this before reading any files or source. Not for requested files or code, ordinary answers, existing-feature questions, quoted wishes or declined recommendations.",
+    "description": "Plan an optional new page or small tool when the user asks for a page, tab, panel, tool or interface in this app (even for one-off use), wants something to keep, revisit or update later, or will keep changing data shown in your answer. Load this before reading any files or source; it tells you how to submit the proposal. Not for requested files or code, ordinary answers, existing-feature questions, quoted wishes or declined recommendations.",
     "invocation": {
       "modelInvocable": true,
       "userInvocable": false,
@@ -71,7 +19,7 @@ exports[`interface creation > loads page planning with a live duplicate-check ca
 {
   "content": "# Personalized pages
 
-Use this workflow in the main conversation to plan an optional new page or small tool for any task, not just DSH. You decide whether a page helps, check existing capabilities, and hand the Creator a short plan. \`suggest_action\` only saves the proposal and shows a card; nothing is built until the user clicks Create. Plan from the conversation and the catalog at the end of this skill. Do not read files, configuration or source to validate a page idea; name an uninspected source as an unverified dependency and leave its details to the Creator.
+Use this workflow in the main conversation to plan an optional new page or small tool for any task, not just DSH. You decide whether a page helps, check existing capabilities, and hand the Creator a short plan. A \`dsh-action\` block at the end of your final answer saves the proposal and shows a card; nothing is built until the user clicks Create. Plan from the conversation and the catalog at the end of this skill. Do not read files, configuration or source to validate a page idea; name an uninspected source as an unverified dependency and leave its details to the Creator.
 
 ## When to propose
 
@@ -117,7 +65,11 @@ Supplying data in this conversation does not make a record Session-bound.
 
 ## Offer without starting
 
-Call \`suggest_action\` with \`request.action: "create_personalized_page"\` and the fields above. One proposal per turn, and one unstarted card per conversation: if a card is still waiting, do not propose another; a new proposal replaces it only when the user changed the plan. Plan-only and read-only requests still get a card; do not ask for approval instead of showing it. Only clicking Create starts the background Creator; do not wait, poll, claim installation or ask for a report-back. Answer any direct question, then add at most one short invitation such as “方案在下方，点击创建即可开始。” Do not repeat the plan, list extra features, narrate tool calls or mention schema names.
+To propose, end your final answer with exactly one fenced code block tagged \`dsh-action\` whose content is one JSON object with \`action: "create_personalized_page"\`, the fields above and \`slot\`. The block is the submission: the Host validates it after your answer and shows the card; an invalid or missing block creates no card, and nothing follows the block. One proposal per turn, and one unstarted card per conversation: if a card is still waiting, do not propose another; a new proposal replaces it only when the user changed the plan. Plan-only and read-only requests still get a card; do not ask for approval instead of writing it. Only clicking Create starts the background Creator; do not wait, poll, claim installation or ask for a report-back. Answer any direct question, then add at most one short invitation such as “方案在下方，点击创建即可开始。” before the block. Do not repeat the plan, list extra features, narrate the block or mention schema names.
+
+\`\`\`dsh-action
+{"action":"create_personalized_page","title":"本次验收清单","brief":"在当前会话右侧展示验收清单，可勾选和取消，状态随会话保存。","slot":"sidebar-right","initialContent":"1. 导出成功\\n2. 断网提示清楚"}
+\`\`\`
 
 ## Examples
 
@@ -135,15 +87,6 @@ Call \`suggest_action\` with \`request.action: "create_personalized_page"\` and 
   "name": "personalized-pages",
   "provider": "dsh-personalized-pages",
 }
-`;
-
-exports[`interface creation > reserves one recommendation before parallel tools settle, including the official recommendation tool > rejected extra proposal does not promise a card 1`] = `
-[
-  {
-    "text": "Error: This turn already has a recommendation. This call created no card. Finish using successful results only; do not promise an automatic later card.",
-    "type": "text",
-  },
-]
 `;
 
 exports[`interface creation > retains actual task content separately from the short plan and hands it to Creator after reload > Creator handoff after reload 1`] = `

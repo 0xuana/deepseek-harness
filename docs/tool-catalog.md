@@ -15,7 +15,6 @@ This table connects model-visible tool names to the plugin package and service s
 
 | Tool package | Model-visible names | Requires | Writes / affects | Shipped aliases | Deployment note |
 | --- | --- | --- | --- | --- | --- |
-| `@deepseek-ai/dsh-experimental-creation-recommendations` | `suggest_action` | `ctx.tools`, `ctx.pluginManager`, `ctx.agents`, `ctx.sessionProjections`, `ctx.remoteAccess`, `ctx.subagents`, `ctx.profileContext`, `ctx.skills` | `tool/call`, `tool/result`, `plugin:creation-recommendations/decision`, `Creator child session`, `profile bundle selection` | - | - |
 | `@deepseek-ai/dsh-plugin-manager` | `plugin_manager` | `ctx.tools`, `ctx.pluginManager`, `ctx.sandboxPolicy` | `tool/call`, `tool/result`, `user/message` | - | - |
 | `@deepseek-ai/dsh-plugin-market` | `plugin_market` | `ctx.tools`, `ctx.pluginMarket` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-mcp-resources` | `list_mcp_resource_templates`, `list_mcp_resources`, `read_mcp_resource` | `ctx.tools`, `ctx.mcpResources` | `tool/call`, `tool/result` | - | - |
@@ -50,65 +49,6 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`, `ctx.workflowEngine`, `ctx.systemPrompt`, `a calling Agent (exec.agent parents the script children)` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-workspace-dependencies` | `load_workspace_dependencies` | `ctx.tools` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`, `web_search` | `ctx.tools`, `ctx.web`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps. |
-
-<a id="deepseek-aidsh-experimental-creation-recommendations"></a>
-
-## `@deepseek-ai/dsh-experimental-creation-recommendations`
-
-### `suggest_action`
-
-Propose an optional action card, displayed after your final answer. Follow the selected action’s skill for eligibility and planning. Submission saves a proposal only; the user must click its card to start. Do not execute or claim execution from a proposal. A successful result supplies the card; a rejection creates none.
-
-```json
-{
-  "type": "object",
-  "properties": {
-    "request": {
-      "type": "object",
-      "description": "Propose creating a new personalized page. Load personalized-pages for this action’s policy. The user’s click authorizes background generation and installation.",
-      "additionalProperties": false,
-      "properties": {
-        "action": {
-          "type": "string",
-          "const": "create_personalized_page"
-        },
-        "title": {
-          "type": "string",
-          "description": "Short name in the user’s language."
-        },
-        "brief": {
-          "type": "string",
-          "description": "One-to-three-sentence plan in the user’s language, shown on the card and passed to the background Creator. Follow personalized-pages for scope and handoff; put source content in initialContent."
-        },
-        "initialContent": {
-          "type": "string",
-          "description": "Optional verbatim source content needed to initialize the page, preserving supplied values, units and gaps. Passed as data to the background Creator, which cannot read this conversation. Omit for an empty page."
-        },
-        "slot": {
-          "type": "string",
-          "description": "Suggested location: sidebar-right is the conversation’s right panel; page is a Session tab; sidebar-left is a global page with a left entry. Choose using personalized-pages; the user can change it on the card.",
-          "enum": [
-            "sidebar-right",
-            "page",
-            "sidebar-left"
-          ]
-        }
-      },
-      "required": [
-        "action",
-        "title",
-        "brief",
-        "slot"
-      ]
-    }
-  },
-  "required": [
-    "request"
-  ]
-}
-```
-
-Source: [`packages/experimental/creation-recommendations/src/index.ts`](../packages/experimental/creation-recommendations/src/index.ts)
 
 <a id="deepseek-aidsh-plugin-manager"></a>
 

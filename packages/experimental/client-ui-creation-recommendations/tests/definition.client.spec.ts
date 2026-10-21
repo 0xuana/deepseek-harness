@@ -50,3 +50,15 @@ it('indexes proposal data while keeping the tool position free of cards', () => 
   expect(recommendationDefinition.buildViewNode?.({ ...context, state: undefined })).toBeNull()
   expect(recommendationDefinition.buildViewNode?.({ ...context, start: undefined })).toBeNull()
 })
+
+it('reads the last valid dsh-action block from an assistant answer and ignores malformed ones', () => {
+  const block = (fields: object) => '```dsh-action\n' + JSON.stringify({ action: 'create_personalized_page', ...fields }) + '\n```'
+  const fields = { title: 'Counter', brief: 'Show a counter', slot: 'sidebar-right' as const }
+  const answer = (id: string, text: string) => ({ type: 'assistant/message', data: { message: { id, role: 'assistant', content: [{ type: 'text', text }] } } })
+  expect(recommendationOf(answer('m1', '方案在下方。\n\n' + block(fields)))).toEqual({ callId: 'block:m1', ...fields })
+  expect(recommendationOf(answer('m2', block({ ...fields, title: '' }) + '\n' + block({ ...fields, initialContent: '1. a' })))).toEqual({ callId: 'block:m2', ...fields, initialContent: '1. a' })
+  for (const text of ['没有围栏', '```dsh-action\n{broken\n```', block({ ...fields, action: 'other' }), block({ ...fields, slot: 'elsewhere' }), block({ ...fields, initialContent: 2 })]) {
+    expect(recommendationOf(answer('m3', text))).toBeUndefined()
+  }
+  expect(recommendationOf({ type: 'assistant/message', data: { message: { id: '', role: 'assistant', content: [{ type: 'text', text: block(fields) }] } } })).toBeUndefined()
+})

@@ -24,10 +24,6 @@ describe('interface creation', () => {
     expect(f.ctx.tools.get('list_official_plugins')).toBeUndefined()
     expect(f.ctx.tools.get('plugin_manager')).toBeUndefined()
     expect(f.ctx.tools.get('list_creation_plugins')).toBeUndefined()
-    expect({
-      proposal: f.ctx.tools.get('suggest_action', f.agent)?.description,
-      parameters: f.ctx.tools.get('suggest_action', f.agent)?.parameters,
-    }).toMatchSnapshot('one card tool')
     expect(await f.ctx.skills.list()).toMatchSnapshot('skill discovery')
     expect(f.manager.listBundles).not.toHaveBeenCalled()
     const result = await executeToolFixture(f.ctx, { name: 'skill', arguments: { name: 'personalized-pages' }, agent: f.agent,
@@ -44,7 +40,6 @@ describe('interface creation', () => {
     expect(f.startActivation).not.toHaveBeenCalled()
     await f.fiber.dispose()
     expect(f.ctx.tools.get('list_creation_plugins')).toBeUndefined()
-    expect(f.ctx.tools.get('suggest_action')).toBeUndefined()
     expect(f.ctx.get('creationRecommendations')).toBeUndefined()
     expect(await f.ctx.skills.list()).toEqual([])
   })
@@ -106,7 +101,7 @@ describe('interface creation', () => {
   it('retains actual task content separately from the short plan and hands it to Creator after reload', async () => {
     const f = await fixture()
     const initialContent = '| 项目 | 负责人 | 状态 |\n| A | 小李 | 未开始 |\n| B | 小王 | 进行中 |\n| C | 小陈 | 已完成 |'
-    await f.propose(callId, { ...proposal, initialContent })
+    await f.propose('creation-1', { ...proposal, initialContent })
     expect(f.startActivation).not.toHaveBeenCalled()
     await f.fiber.dispose()
     await f.ctx.plugin(CreationRecommendations)
@@ -126,11 +121,7 @@ describe('interface creation', () => {
   it('uses the profile workspace when an accepted Session has no recorded working directory', async () => {
     const f = await fixture()
     const handle = await f.ctx.agents.create({ sessionId: SessionId('without-cwd') })
-    const result = await f.execute(proposal, callId, handle.agent)
-    handle.agent.session.append('tool/result', { turn: 1, step: 1,
-      message: createToolResultMessage({ callId, content: result.content, isError: result.isError }),
-      meta: result.meta!,
-    }, { surfaceOp: 'append' })
+    await f.propose('creation-1', proposal, handle.agent)
     await f.ctx.creationRecommendations.act(handle.agent, callId, 'create', 'sidebar-right')
     const spec = await f.entered.promise
     expect(spec.request.cwd!.startsWith(join(f.ctx.profileContext.cwd, '.dsh-created-plugins'))).toBe(true)
@@ -240,32 +231,35 @@ describe('interface creation', () => {
     expect(f.startActivation).not.toHaveBeenCalled()
   })
 
-  it('rejects absent needs and non-root callers, and enforces one recommendation per turn', async () => {
+  it('ignores blank proposals, keeps one card per turn, and refuses non-root or unauthorized clicks', async () => {
     const f = await fixture()
-    for (const [index, args] of [{ ...proposal, title: ' ' }, { ...proposal, brief: ' ' }].entries()) expect((await f.execute(args, ToolCallId('failed-' + String(index)))).isError).toBe(true)
+    for (const [index, args] of [{ ...proposal, title: ' ' }, { ...proposal, brief: ' ' }].entries()) {
+      const failed = await f.propose('failed-' + String(index), args)
+      expect(f.state().proposals[failed]).toBeUndefined()
+    }
     await f.propose()
-    expect((await f.execute(proposal, ToolCallId('second'))).isError).toBe(true)
+    const second = await f.propose('second')
+    expect(f.state().proposals[second]).toBeUndefined()
     f.agent.session.append('turn/start', { turn: 2 })
-    expect((await f.execute(proposal, ToolCallId('next-turn'))).isError).toBe(false)
+    const nextTurn = await f.propose('next-turn')
+    expect(f.state().proposals[nextTurn]).toBeDefined()
     vi.spyOn(f.ctx.agents, 'roots').mockReturnValue([])
-    expect((await f.execute()).isError).toBe(true)
     expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')).toEqual({ status: 'refused', reason: 'not-live-root' })
     vi.spyOn(f.ctx.remoteAccess, 'allows').mockReturnValue(false)
     expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')).toEqual({ status: 'refused', reason: 'access-denied' })
   })
 
-  it('reserves one recommendation before parallel tools settle, including the official recommendation tool', async () => {
+  it('keeps one card per turn when the official recommendation tool already offered one', async () => {
     const f = await fixture()
-    f.ctx.tools.register(defineTool({ name: 'suggest_plugin', description: 'fixture', parameters: {},
-      output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] }, execute: async () => 'official' }))
-    const calls = await Promise.all([f.execute(), executeToolFixture(f.ctx, { name: 'suggest_plugin', arguments: {},
-      callId: ToolCallId('official'), agent: f.agent, signal: new AbortController().signal })])
-    expect(calls.filter(result => !result.isError)).toHaveLength(1)
-    expect(calls.find(result => result.isError)?.content).toMatchSnapshot('rejected extra proposal does not promise a card')
-    expect((await f.execute(proposal, ToolCallId('third'))).isError).toBe(true)
-    const result = await executeToolFixture(f.ctx, { name: 'suggest_action', arguments: { request: { action: 'create_personalized_page', ...proposal } },
-      callId, signal: new AbortController().signal })
-    expect(result.isError).toBe(true)
+    f.agent.session.append('tool/result', { turn: 1, step: 1,
+      message: createToolResultMessage({ callId: ToolCallId('official'), content: [{ type: 'text', text: 'official' }], isError: false }),
+      meta: { pluginRecommendation: { callId: 'official' } },
+    }, { surfaceOp: 'append' })
+    await f.propose()
+    expect(f.state().proposals[callId]).toBeUndefined()
+    f.agent.session.append('turn/start', { turn: 2 })
+    const later = await f.propose('creation-2')
+    expect(f.state().proposals[later]).toBeDefined()
   })
 
   it('returns a typed invalid-location refusal and falls back for invalid dismissal locations', async () => {
@@ -586,15 +580,21 @@ describe('interface creation', () => {
   })
 })
 
-it('offers no card while the user has queued more messages for later turns', async () => {
+it('never offers a proposal written while the user has queued more messages for later turns', async () => {
   const f = await fixture()
   const queued = () => createUserMessage({ content: [{ type: 'text', text: 'Next question.' }], source: { kind: 'user' } })
   f.agent.inbox.append('next-turn', queued())
   f.agent.inbox.append('next-turn', queued())
-  const refused = await f.execute()
-  expect(refused.isError).toBe(true)
-  expect(JSON.stringify(refused.content)).toContain('queued more messages')
+  await f.propose()
+  expect(f.current()).toEqual({ callId, phase: 'suppressed', slot: 'sidebar-right' })
+  expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'sidebar-right')).toEqual({
+    status: 'settled', decision: { callId, phase: 'suppressed', slot: 'sidebar-right' },
+  })
+  expect(f.startActivation).not.toHaveBeenCalled()
   f.agent.inbox.clear()
   f.agent.inbox.append('next-turn', queued())
-  expect((await f.execute()).isError).toBe(false)
+  f.agent.session.append('turn/start', { turn: 2 })
+  const next = await f.propose('creation-2')
+  expect(f.state().proposals[next]).toBeDefined()
+  expect(f.state().view.decisions[next]).toBeUndefined()
 })

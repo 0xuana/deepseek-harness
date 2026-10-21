@@ -1042,7 +1042,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-experimental-creation-recommendations`
 
 - `refs`: `z` (`zod`)
-- `source`: [`packages/experimental/creation-recommendations/src/index.ts:34`](../packages/experimental/creation-recommendations/src/index.ts)
+- `source`: [`packages/experimental/creation-recommendations/src/index.ts:33`](../packages/experimental/creation-recommendations/src/index.ts)
 
 ```ts config-catalog
 /** Validated card limits after schema defaults. */

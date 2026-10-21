@@ -841,56 +841,6 @@
       }
     },
     {
-      "name": "suggest_action",
-      "description": "Propose an optional action card, displayed after your final answer. Follow the selected action’s skill for eligibility and planning. Submission saves a proposal only; the user must click its card to start. Do not execute or claim execution from a proposal. A successful result supplies the card; a rejection creates none.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "request": {
-            "type": "object",
-            "description": "Propose creating a new personalized page. Load personalized-pages for this action’s policy. The user’s click authorizes background generation and installation.",
-            "additionalProperties": false,
-            "properties": {
-              "action": {
-                "type": "string",
-                "const": "create_personalized_page"
-              },
-              "title": {
-                "type": "string",
-                "description": "Short name in the user’s language."
-              },
-              "brief": {
-                "type": "string",
-                "description": "One-to-three-sentence plan in the user’s language, shown on the card and passed to the background Creator. Follow personalized-pages for scope and handoff; put source content in initialContent."
-              },
-              "initialContent": {
-                "type": "string",
-                "description": "Optional verbatim source content needed to initialize the page, preserving supplied values, units and gaps. Passed as data to the background Creator, which cannot read this conversation. Omit for an empty page."
-              },
-              "slot": {
-                "type": "string",
-                "description": "Suggested location: sidebar-right is the conversation’s right panel; page is a Session tab; sidebar-left is a global page with a left entry. Choose using personalized-pages; the user can change it on the card.",
-                "enum": [
-                  "sidebar-right",
-                  "page",
-                  "sidebar-left"
-                ]
-              }
-            },
-            "required": [
-              "action",
-              "title",
-              "brief",
-              "slot"
-            ]
-          }
-        },
-        "required": [
-          "request"
-        ]
-      }
-    },
-    {
       "name": "todo_write",
       "description": "Record and update a task list to plan multi-step work and show progress; skip it for trivial single-step tasks. Add one todo per concrete step before you start. While work remains, keep the todos being worked on `in_progress`, several only when work runs in parallel. Mark each todo `completed` as soon as it is done.",
       "parameters": {

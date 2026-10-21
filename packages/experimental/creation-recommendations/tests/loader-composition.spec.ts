@@ -2,6 +2,7 @@
 import { mkdtemp, mkdir, writeFile, readFile, rename, symlink, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { MessageId, type AssistantMessage } from '@deepseek-ai/dsh-llm'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import Timer from '@deepseek-ai/cordis-plugin-timer'
@@ -12,7 +13,7 @@ import Sessions, { SessionId } from '@deepseek-ai/dsh-session'
 import Projections from '@deepseek-ai/dsh-session-projection'
 import Agents from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import Llm, { createToolResultMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import Llm, { ToolCallId } from '@deepseek-ai/dsh-llm'
 import Skills from '@deepseek-ai/dsh-skill'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import Tools from '@deepseek-ai/dsh-tools'
@@ -21,7 +22,6 @@ import type { SubagentActivation, SubagentActivationSpec } from '@deepseek-ai/ds
 import * as Recommendations from '../src/index.ts'
 import type { CreationView } from '../src/types.ts'
 import { writeBundle } from './fixture.ts'
-import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 it.each(['portable-bundle', 'foreign-nested-row'] as const)('validates and installs through pnpm/HMR: %s', async (scenario) => {
   const home = await mkdtemp(join(tmpdir(), 'dsh-creation-loader-'))
@@ -80,14 +80,11 @@ it.each(['portable-bundle', 'foreign-nested-row'] as const)('validates and insta
   await ctx.hmr.runExclusive(async () => {})
   await ctx.plugin(AgentLoop, { agents: [] })
   const agent = await ctx.agentLoop.create(SessionId('creation-live'))
-  const callId = ToolCallId('create-live')
-  const result = await executeToolFixture(ctx, { name: 'suggest_action', callId, agent, signal: new AbortController().signal,
-    arguments: { request: { action: 'create_personalized_page', title: 'Counter', brief: 'Keep a counter in the right sidebar.', slot: 'sidebar-right' } } })
-  expect(result.isError).toBe(false)
-  agent.session.append('tool/result', { turn: 1, step: 1,
-    message: createToolResultMessage({ callId, content: result.content, isError: result.isError }),
-    ...result.meta === undefined ? {} : { meta: result.meta },
-  }, { surfaceOp: 'append' })
+  const callId = ToolCallId('block:create-live')
+  const text = '方案在下方。\n\n```dsh-action\n' + JSON.stringify({ action: 'create_personalized_page', title: 'Counter', brief: 'Keep a counter in the right sidebar.', slot: 'sidebar-right' }) + '\n```'
+  const message: AssistantMessage = { role: 'assistant', id: MessageId('create-live'), content: [{ type: 'text', text }],
+    source: { kind: 'model', provider: 'fixture', model: 'fixture' } }
+  agent.session.append('assistant/message', { turn: 1, step: 1, message, stream: [] }, { surfaceOp: 'append' })
   const receipt = () => (ctx.sessionProjections.snapshot(agent.session).values.creationRecommendations as CreationView).decisions[callId]
   expect(starts).toHaveLength(0)
   const access = [...ctx.loader.entries()].find(entry => entry.options.id === 'access')
@@ -123,6 +120,5 @@ it.each(['portable-bundle', 'foreign-nested-row'] as const)('validates and insta
   expect(feature?.fiber).toBeDefined()
   await feature!.fiber!.dispose()
   expect(ctx.get('creationRecommendations')).toBeUndefined()
-  expect(ctx.tools.get('suggest_action')).toBeUndefined()
   expect(await ctx.skills.list()).toEqual([])
 }, 30_000)
