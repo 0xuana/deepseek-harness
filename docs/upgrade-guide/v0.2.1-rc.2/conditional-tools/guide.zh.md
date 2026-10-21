@@ -21,5 +21,5 @@ description: "工具声明只来自步骤准入的注册：`system-prompt/assemb
 
 1. 把 `system-prompt/assemble` 监听器中的工具过滤改为注册时的 `when` 条件；从条件的 `modelSelection` 读取该步骤的提供方、模型与推理强度。waterfall 中只保留段落、上下文与变量的修改。
 2. 让工具指引跟随同一准入：段落回调把 `context.toolSet` 传给 `ctx.tools.get()` 或 `ctx.tools.schemas()`。
-3. 程序化调用条件工具时，调用 `ctx.tools.resolve({ agent, modelSelection, signal })`，把返回的 `toolSet` 传给 `assemble()` 与 `ctx.tools.execute()`，并在批次结束后释放。
+3. 程序化调用条件工具时，调用 `ctx.tools.resolve({ agent, modelSelection, signal })`，把返回的 `toolSet` 传给 `assemble()` 与 `ctx.tools.execute()` 批次，并在批次结束后释放。不使用共享 pipeline 的自定义执行器用 `ctx.tools.executable(name, agent, toolSet)` 查找每次调用。
 4. 更新在会话进入计划模式之前仍列出 `exit_plan_mode` 的期望。验证被禁用的工具不出现在请求中，用其名称调用会返回 `UNKNOWN_TOOL` 且不进入实现，条件失败时轮次以 `TOOL_ACTIVATION_FAILED` 结束。

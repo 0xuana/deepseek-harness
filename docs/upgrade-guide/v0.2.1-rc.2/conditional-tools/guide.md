@@ -21,5 +21,5 @@ Model tool calls run only through their step's admitted set. A call to a conditi
 
 1. Replace tool filtering in `system-prompt/assemble` listeners with a `when` condition on the registration; read the step's provider, model, and reasoning effort from the condition's `modelSelection`. Keep only section, context, and variable changes in the waterfall.
 2. Make tool guidance follow the same admission: section callbacks pass `context.toolSet` to `ctx.tools.get()` or `ctx.tools.schemas()`.
-3. For programmatic calls of conditional tools, call `ctx.tools.resolve({ agent, modelSelection, signal })`, pass the returned `toolSet` to `assemble()` and `ctx.tools.execute()`, and dispose it after the batch settles.
+3. For programmatic calls of conditional tools, call `ctx.tools.resolve({ agent, modelSelection, signal })`, pass the returned `toolSet` to `assemble()` and the `ctx.tools.execute()` batch, and dispose it after the batch settles. A custom executor that does not use the shared pipeline looks up each call with `ctx.tools.executable(name, agent, toolSet)`.
 4. Update expectations that listed `exit_plan_mode` before a Session entered plan mode. Verify that a disabled tool is absent from the request, that calling its name returns `UNKNOWN_TOOL` without reaching the implementation, and that a failing condition ends the turn with `TOOL_ACTIVATION_FAILED`.
