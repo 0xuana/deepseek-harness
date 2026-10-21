@@ -42,3 +42,14 @@ it('folds native and PTC metadata, ignores failed or malformed proposals, and re
   expect(creationProjection.apply(state, foreign)).toBe(state)
   expect(creationProjection.apply(state, { type: 'turn/start', seq: SessionSeq(3), time: 0, data: { turn: 2 } }).firstCall).toBeNull()
 })
+
+it('replaces only undecided earlier proposals and never a proposal by its own replay', () => {
+  const empty = creationProjection.init()
+  const first = creationProjection.apply(empty, ptc)
+  expect(creationProjection.apply(first, ptc).view.decisions).toEqual({})
+  const later: SessionEvent<'tool/ptc-dispatch'> = { ...ptc, seq: SessionSeq(5), data: { ...ptc.data,
+    meta: { creationRecommendation: { ...proposal, callId: ToolCallId('creation-2'), title: 'Checklist' } } } }
+  expect(creationProjection.apply(first, later).view.decisions).toEqual({ [callId]: { callId, phase: 'replaced', slot: 'page' } })
+  const dismissed = { ...first, view: { decisions: { [callId]: { callId, phase: 'dismissed' as const, slot: 'page' as const } } } }
+  expect(creationProjection.apply(dismissed, later).view.decisions[callId]).toEqual({ callId, phase: 'dismissed', slot: 'page' })
+})
