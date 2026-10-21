@@ -104,7 +104,7 @@ class NodeExecution {
         ...spec.sandboxPolicy.additionalWritableRoots === undefined
           ? {}
           : { additionalWritableRoots: [...spec.sandboxPolicy.additionalWritableRoots] },
-      }, this.processes, this.mode)
+      }, this.processes, this.mode, owner !== undefined)
       this.workers.add(worker)
       if (owner !== undefined) this.owners.set(owner, worker)
     }

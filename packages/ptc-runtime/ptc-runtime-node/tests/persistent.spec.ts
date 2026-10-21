@@ -158,6 +158,25 @@ describe.each([
     expect((await run('privateValue')).value).toBe(7)
   })
 
+  it.each([
+    ['timeout', 'await new Promise(() => {})'],
+    ['abort', 'await tools.value({}); await new Promise(() => {})'],
+    ['output-limit', '"x".repeat(10_000)'],
+    ['worker-exit', 'process.exit(7)'],
+  ] as const)('reports temporary %s without claiming the owner state was cleared', async (kind, program) => {
+    const { run, runtime, cwd } = await setup({ maxOutputBytes: 256 })
+    expect((await run('let retained = 7; retained')).value).toBe(7)
+    const controller = new AbortController()
+    const result = await runtime.run(runtime.resolve({
+      program, cwd, signal: controller.signal, timeoutMs: kind === 'timeout' ? 100 : null,
+      bindings: bindings(async () => { controller.abort('cancel temporary evaluation'); return null }),
+    }))
+    expect(result.error?.kind).toBe(kind)
+    expect(result.error?.message).not.toContain('retained variables were cleared')
+    if (kind === 'abort') expect(result.error?.message).toBe('cancel temporary evaluation')
+    expect((await run('retained')).value).toBe(7)
+  })
+
   it('releases an owner and reports missing variables until the caller recreates them', async () => {
     const { run, runtime, owner } = await setup()
     await run('let app = { ready: true };')

@@ -59,11 +59,13 @@ export class ProgramWorker {
    * @param config - Validated resource limits and launch selection.
    * @param policy - Authority retained for the lifetime of this process.
    * @param processes - Session policy invalidation and cleanup coordination.
-   * @param mode - Evaluator syntax and retained-state diagnostics.
+   * @param mode - Evaluator syntax and TypeScript erasure.
+   * @param retainsState - Whether this process belongs to an owner and survives completed evaluations.
    */
   constructor(
     private readonly ctx: Context, private readonly config: ResolvedConfig,
     readonly policy: SandboxExecutionPolicy, processes: PolicyProcesses, private readonly mode: ExecutionMode,
+    private readonly retainsState: boolean,
   ) {
     this.unregister = processes.register(policy, () => this.dispose())
   }
@@ -95,16 +97,16 @@ export class ProgramWorker {
   }
 
   private output(): OutputLedger {
-    return new OutputLedger(this.config.maxOutputBytes, this.mode.retainsState
+    return new OutputLedger(this.config.maxOutputBytes, this.retainsState
       ? `retained variables were cleared; outer output exceeded ${this.config.maxOutputBytes} bytes` : undefined)
   }
 
   private message(message: string): string {
-    return this.mode.retainsState ? `${message}; retained variables were cleared` : message
+    return this.retainsState ? `${message}; retained variables were cleared` : message
   }
 
   private abortMessage(signal: AbortSignal | undefined): string {
-    return this.mode.retainsState ? 'execution canceled; retained variables were cleared' : messageOf(signal?.reason)
+    return this.retainsState ? 'execution canceled; retained variables were cleared' : messageOf(signal?.reason)
   }
 
   private async evaluate(spec: PtcRunSpec, bindings: Map<string, PtcBindingNamespace>): Promise<PtcRunResult> {
@@ -130,7 +132,7 @@ export class ProgramWorker {
     const evaluation: Evaluation = {
       settled: false,
       data: {
-        code: '', programFormat: this.mode.format, retainsState: this.mode.retainsState && spec.stateOwner !== undefined,
+        code: '', programFormat: this.mode.format, retainsState: this.retainsState,
         maxOutputBytes: this.config.maxOutputBytes,
         namespaces: [...bindings.values()].map(binding => ({
           global: binding.global, names: Object.keys(binding.functions), ...binding.errorClass ? { errorClass: binding.errorClass } : {},
@@ -153,7 +155,7 @@ export class ProgramWorker {
         const complete = (): PtcRunResult => overflowed || error?.kind === 'output-limit' ? output.limit(logs)
           : error ? output.failure(logs, error) : output.success(logs, value)
         const outcome = complete()
-        const cleanup = discard || outcome.error?.kind === 'output-limit' || !this.mode.retainsState || spec.stateOwner === undefined ? this.stop() : Promise.resolve(true)
+        const cleanup = discard || outcome.error?.kind === 'output-limit' || !this.retainsState ? this.stop() : Promise.resolve(true)
         void cleanup.then((drained) => {
           this.active = undefined
           result.resolve(drained ? complete() : output.failure(logs, { kind: 'worker-exit', message: 'managed process exited but its output did not drain cleanly' }))
@@ -236,7 +238,7 @@ export class ProgramWorker {
     const packaged = this.config.launch.kind === 'embedded'
     const heapFlag = `--max-old-space-size=${this.config.maxOldGenerationSizeMb}`
     const argv = [executable, ...packaged ? [] : [heapFlag],
-      ...bootstrapArgs(this.ctx.fs, this.config.launch, this.config.maxMessageBytes, this.mode.retainsState)]
+      ...bootstrapArgs(this.ctx.fs, this.config.launch, this.config.maxMessageBytes, this.retainsState)]
     const policy = this.policy
     this.confined = policy.mode === 'danger-full-access' ? undefined : await this.ctx.sandbox.confine(argv, { ...policy, mode: policy.mode }, this.controller.signal)
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- Cancellation can close the process during confinement.
