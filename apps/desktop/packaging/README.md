@@ -117,6 +117,8 @@ For path-sensitive Windows build measurements, `build_root` optionally selects a
 
 For cache measurements, `cache_namespace` selects a retained subdirectory for both dependency stores and upstream downloads; leave it empty for normal shared caches. Use a new name for a cold sample and repeat that name for warm samples. Names contain 1–64 lowercase letters, digits or hyphens, start with a letter or digit, and cannot be Windows device names. This does not reset the separate signature cache or OS file cache; report those states and Job start-to-completion time alongside phase timings and artifact size. Before dependency installation, the workflow records the Node version, available CPU parallelism, logical CPU count, and total/free memory.
 
+The dependency-install and packaging steps normalize their own shell to normal CPU, I/O and memory priority before launching children, and record all three values before and after adjustment. Failure to establish these values stops the step. This does not modify the runner task, account, startup triggers or other processes.
+
 <a id="macos-actions"></a>
 
 ## macOS self-hosted packaging

@@ -579,6 +579,9 @@ jobs:
       - name: Verify windowless Windows runner launcher
         shell: pwsh
         run: ./apps/desktop/tests/windows-runner-launcher.ps1
+      - name: Verify packaging process priority inheritance
+        shell: pwsh
+        run: ./apps/desktop/tests/windows-packaging-priority.ps1
       - name: Run Windows observational gates on built artifacts
         id: observational
         continue-on-error: true

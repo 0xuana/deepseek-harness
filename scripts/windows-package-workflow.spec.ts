@@ -162,6 +162,16 @@ it('routes all packaging consumers to the selected workspace and removes it only
   }
 })
 
+it('normalizes priority in the dependency and packaging shells before launching their children', () => {
+  const command = '& ./apps/desktop/scripts/windows-packaging-priority.ps1'
+  expect(job.steps.find(entry => entry.name === 'Validate selected source and adapter support')!.run)
+    .toContain("fs.existsSync('apps/desktop/scripts/windows-packaging-priority.ps1')")
+  for (const name of ['Install locked dependencies', 'Build installer and verify packaged runtime']) {
+    const step = job.steps.find(entry => entry.name === name)!
+    expect(step.run!.trimStart().startsWith(command + '\n')).toBe(true)
+  }
+})
+
 it('scopes the optional temporary directory to installer building without changing Actions or later steps', () => {
   const build = job.steps.find(step => step.name === 'Build installer and verify packaged runtime')!
   expect(build.env?.PACKAGE_BUILD_TEMP).toBe('${{ steps.build_workspace.outputs.temporaryDirectory }}')
