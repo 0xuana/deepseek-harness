@@ -112,6 +112,7 @@ export function TabMenu({ labels, anchor, onClose, onDismiss, extras }: TabMenuP
       // have removed.
       onPointerDown={(event) => { event.stopPropagation() }}
       onClick={(event) => { event.stopPropagation() }}
+      onAuxClick={(event) => { event.stopPropagation() }}
     >
       {onClose !== undefined && (
         <button type="button" role="menuitem" className={css.menuItem} data-dockkit-menu-close onClick={onClose}>
