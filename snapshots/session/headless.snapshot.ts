@@ -50,7 +50,7 @@ import {
   type SnapshotManifest,
   type WorkspaceSnapshotEntry,
 } from '@deepseek-ai/dsh-session-snapshot'
-import { LOADER_SMOKE_TEST_TIMEOUT_MS, runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
+import { LOADER_SMOKE_TEST_TIMEOUT_MS, resolveExampleMode, runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
 import { resolvePwshPath } from '@deepseek-ai/dsh-pwsh-local'
 import { parseSessionLog, prepareSessionSnapshotFixtureForComparison } from '@deepseek-ai/dsh-llm-replay'
 
@@ -500,10 +500,13 @@ const workspaceSetups: Record<string, (cwd: string) => Promise<void>> = {
     // Keep the real prompt's bridge URL under the fixture workspace on every host.
     const source = join(repoRoot, 'packages/experimental/cua')
     const target = join(cwd, 'cua-runtime')
-    await cp(join(source, 'src'), join(target, 'src'), { recursive: true })
+    const face = resolveExampleMode() === 'lib' ? 'lib' : 'src'
+    const extension = face === 'lib' ? 'js' : 'ts'
+    const guidanceDirectory = face === 'lib' ? 'lib/types' : 'src'
+    await cp(join(source, face), join(target, face), { recursive: true })
     await copyFile(join(source, 'package.json'), join(target, 'package.json'))
     await symlink(join(source, 'node_modules'), join(target, 'node_modules'), 'dir')
-    await copyFile(join(repoRoot, 'packages/experimental/cua-macos/src/guidance.ts'), join(target, 'guidance.ts'))
+    await copyFile(join(repoRoot, `packages/experimental/cua-macos/${guidanceDirectory}/guidance.${extension}`), join(target, `guidance.${extension}`))
   },
   async 'windows-acl-skill'(cwd) {
     const target = join(cwd, '.dsh', 'skills', 'diagnose-windows-sandbox-acl', 'SKILL.md')
