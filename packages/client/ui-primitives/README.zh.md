@@ -67,6 +67,8 @@ kind: "package-library"
 | `JsonTree`、`JsonBlock` | 只读 JSON 查看。 |
 | `MarkdownText`、`MarkdownDelegateProvider`、`CodeBlock` | 不可信 GFM 与 TeX 数学、owner 委托的 HTTP(S) 导航，以及高亮代码。`CodeBlock` 可通过 `lineNumbers` 开启行号；复制的源码不含行号栏，`contentRef` 则向需要把稳定源码包装节点用作滚动区的 owner 提供该节点。调用方提供自己的语言与复制工具栏时，设置 `showHeader={false}`。 |
 | `DetailDocument`、`detailDocumentState`、`useDetailDocumentLabels` | 用于较长 Markdown 描述（例如插件的详细介绍文档）的区块，本身不带标题：加载期间显示三行骨架屏，随后显示文档、owner 提供的失败消息和重试，或在没有文档时不显示任何内容。文档高度超过 `min(560px, 60vh)` 时，在可通过键盘聚焦、由 owner 的标题命名的区域内滚动。文档中的原始 HTML 会被省略。相对链接保持为文本，只加载 owner 的 `images` 解析器接受的图片或绝对 HTTP(S) 地址的图片。`detailDocumentState` 把 owner 的读取结果映射为显示状态，`useDetailDocumentLabels` 根据翻译后的字符串构建引用稳定的标签。 |
+| `useClipboardCopy` | 复制当前文本并显示一秒成功反馈，阻止写入期间及成功反馈期间的重复操作，卸载时清除重置计时器；迟到的写入结果不会更新已卸载控件。 |
+| `UserMessageBubble` | 用户消息的背景、圆角、内容内边距、字体与纯文本换行规则。接收原生 div props；行对齐、宽度、内容和操作由调用方拥有。 |
 | `UserTextRun`、`ReferenceChip` | 不做解析的行内文本，以及业务已解析的引用标签或激活按钮。 |
 | `CommandText` | 可选中的命令或参数文本；仅横向溢出时添加具名的键盘聚焦目标。 |
 | `TerminalBlock`、`ReadBlock`、`DiffBlock`、`SearchBlock`、`WebBlock` | 与各类工具结果意图对应的 agent 输出卡片。 |
