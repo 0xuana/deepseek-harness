@@ -53,6 +53,14 @@ describe.each([
     expect(spawn).not.toHaveBeenCalled()
   })
 
+  it('keeps the environment when an unfinished binding rejection is handled', async () => {
+    const { run } = await setup()
+    const release = Promise.withResolvers<null>()
+    onTestFinished(() => { release.resolve(null) })
+    expect((await run('var kept = 1; void tools.value({}).catch(() => {}); kept', { bindings: bindings(() => release.promise) })).value).toBe(1)
+    expect((await run('kept')).value).toBe(1)
+  })
+
   it('retains declarations, closures, object identity, and imports across evaluations', async () => {
     const { run, cwd } = await setup()
     expect((await run('const box: { count: number } = { count: 1 }; let alias = box; function increment() { return ++box.count }; const path = await import("node:path");')).error).toBeUndefined()
