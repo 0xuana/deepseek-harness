@@ -136,7 +136,7 @@ Append-only, prefix-stable, replacing, or independent behavior, including the ex
 }
 ```
 
-语言文件统一放在 `locale/`，并保留 `en.json` 作为发现入口。字段可选，填写时必须是非空字符串。英文 `meta.title` 和 `meta.description` 使用 sentence case：只大写首个单词、专有名词和产品名，例如 `Git worktrees`（[rule](../../.agents/skills/dsh-prose-standard/SKILL.md#required-coverage-by-prose-location)）。文件或字段缺失时允许回退，JSON 损坏或字段无效时显示单插件诊断。 仓库内的包和插件模板必须提供 `ja.json`，覆盖 `en.json` 或 `zh.json` 中的全部字段并保留占位符；详情路径可指向现有英文文档。运行 `pnpm run check:i18n` 检查元数据、locale 所有的展示文案映射和 UI 字典完整性；这些检查也接入 `check:all`、CI 静态检查和 hygiene。
+语言文件统一放在 `locale/`，并保留 `en.json` 作为发现入口。字段可选，填写时必须是非空字符串。英文 `meta.title` 和 `meta.description` 使用 sentence case：只大写首个单词、专有名词和产品名，例如 `Git worktrees`（[rule](../../.agents/skills/dsh-prose-standard/SKILL.md#required-coverage-by-prose-location)）。文件或字段缺失时允许回退，JSON 损坏或字段无效时显示单插件诊断。 仓库内的包和插件模板必须提供 `ja.json`，覆盖 `en.json` 或 `zh.json` 中的全部字段并保留占位符；详情路径可指向现有英文文档。运行 `pnpm run check:i18n` 检查 JSON 元数据和 UI 字典完整性；这些检查也接入 `check:all`、CI 静态检查和 hygiene。
 
 各字段先独立回退，再按页面规则格式化技术名称；回退优先经过现有 locale 语言链：
 

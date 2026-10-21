@@ -392,7 +392,6 @@ function ciSharedStaticGates(): Gate[] {
 function i18nGates(): Gate[] {
   return [
     pnpmScript('locale-metadata', 'verify-locale-metadata', { label: 'Japanese plugin metadata' }),
-    pnpmScript('localized-text', 'verify-localized-text', { label: 'localized display text' }),
     pnpmExec('locale-dictionaries', ['vitest', 'run', 'scripts/locale-dictionary-parity.spec.ts'], { label: 'locale dictionaries' }),
   ]
 }

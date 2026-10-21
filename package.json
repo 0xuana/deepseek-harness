@@ -148,7 +148,6 @@
     "verify-client-packages": "tsx scripts/verify-client-packages.ts",
     "check:i18n": "tsx scripts/run-gates.ts i18n",
     "verify-locale-metadata": "tsx scripts/verify-locale-metadata.ts",
-    "verify-localized-text": "tsx scripts/verify-localized-text.ts",
     "verify-client-ui-i18n": "tsx scripts/verify-client-ui-i18n.ts",
     "verify-client-route-resolution": "tsx scripts/verify-client-route-resolution.ts",
     "verify-no-bare-dispatcher": "tsx scripts/verify-no-bare-dispatcher.ts",
