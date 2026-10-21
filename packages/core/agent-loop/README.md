@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-agent-loop` creates fresh agents or resumes persisted sessions, then drives each turn through model requests, streamed responses, tool execution, and durable session history. Mount it for standard agent compositions; declarative entries start agents at boot, while the public `ctx.agents` API supports programmatic creation and resume. `maxParallelToolCalls` limits concurrent parallel-safe calls, and exclusive calls retain ordering. Cancellation preserves streamed text already delivered to the user. Choose a custom `Agent` implementation only when the standard "call model, run tools, repeat" lifecycle is insufficient.
+`dsh-agent-loop` creates fresh agents or resumes persisted sessions, then drives each turn through model requests, streamed responses, tool execution, and durable session history. Mount it for standard agent compositions; declarative entries start agents at boot, while the public `ctx.agents` API supports programmatic creation and resume. The selected tool executor owns dispatch, concurrency, cancellation, and tool logging. Cancellation preserves streamed text already delivered to the user. Choose a custom `Agent` implementation only when the standard "call model, run tools, repeat" lifecycle is insufficient.
 
 ## Table of Contents
 
@@ -34,7 +34,6 @@ Agents declared in config start automatically when the plugin loads. Each entry 
 ```yaml
 - name: '@deepseek-ai/dsh-agent-loop'
   config:
-    maxParallelToolCalls: 10
     agents:
       - id: 'main'
         provider: deepseek
@@ -45,7 +44,6 @@ Agents declared in config start automatically when the plugin loads. Each entry 
 
 | Field | Default | Meaning |
 |---|---|---|
-| `maxParallelToolCalls` | `10` | Parallel-safe tool calls in flight per step; `1` is serial |
 | `agents[].id` | required | Stable label; a fresh session mints `${id}-session-<uuid>` unless `sessionId` is set |
 | `agents[].provider` / `agents[].model` | — | Model route; both required before step preparation |
 | `agents[].reasoningEffort` | — | Non-empty initial reasoning effort; later choices are recorded in the Session |
@@ -54,7 +52,7 @@ Agents declared in config start automatically when the plugin loads. Each entry 
 | `agents[].sessionId` | — | Exact identity: first use creates, a remount resumes materialized history |
 | `agents[].resumeSessionId` | — | Load this persisted session instead of creating one; mutually exclusive with `sessionId` |
 
-The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-agent-loop) lists every accepted field. `maxParallelToolCalls` is a volatile Config field sampled for the next tool group; `agents` remains startup configuration.
+The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-agent-loop) lists every accepted field. `maxParallelToolCalls` remains a volatile positive-integer Config field with default `10`; `1` selects serial execution. The loop passes its current value to each batch's `execute()` call, taking precedence over executor configuration. Live edits apply to the next batch; `agents` remains startup configuration.
 
 A configured resume records the declared route as the Session selection before publication. Programmatic resume preserves the Session choice unless its setup explicitly records another route; initial `agentOptions` alone do not override saved history.
 
@@ -74,7 +72,7 @@ Every inbox mutation commits one normalized `agent/inbox/spliced` event. The pro
 
 ### What a step does
 
-Each step sends the session's derived history — with the latest non-empty `system/message` node as the effective prompt, or no system messages when the rendered prompt is empty — and its visible tool schemas; the model's tool calls run through the guarded tool pipeline and every accepted fact is appended to the session log before the next step derives from it. Parallel-safe calls may overlap up to `maxParallelToolCalls`; exclusive calls run alone as ordering barriers. Cancellation is cooperative: `agent.cancel()` aborts the current activity and, unless `keepInbox` is set, clears pending work; a cancelled stream finalizes the text already delivered to the user.
+Each step sends the session's derived history — with the latest non-empty `system/message` node as the effective prompt, or no system messages when the rendered prompt is empty — and its visible tool schemas; the model's tool calls run through the guarded tool pipeline and every accepted fact is appended to the session log before the next step derives from it. The loop passes the complete raw call batch to `ctx.tools.execute()`; built-in executors preserve model-order results and exclusive barriers. Cancellation is cooperative: `agent.cancel()` aborts the current activity and, unless `keepInbox` is set, clears pending work; a cancelled stream finalizes the text already delivered to the user.
 
 -----
 
@@ -105,9 +103,7 @@ The loop deep-freezes each derived message identity on its first request and reu
 | [`src/index.ts`](src/index.ts) | Plugin entry: `AgentLoop` service, config schema, declarative agent startup, factory registration |
 | [`src/agent.ts`](src/agent.ts) | The concrete `ReactLoopAgent` driver: inbox, turn/step machine, cancellation |
 | [`src/inbox.ts`](src/inbox.ts) | Package-internal `ReactLoopInbox`: durable projection, structural commands, and loop-only claim state |
-| [`src/tool-calls.ts`](src/tool-calls.ts) | Tool scheduling: exclusive barriers and the bounded parallel pool |
 | [`src/runtime-context.ts`](src/runtime-context.ts) | Per-step runtime-context snapshot handling |
-| [`src/constants.ts`](src/constants.ts) | `DEFAULT_MAX_PARALLEL_TOOL_CALLS` |
 
 ### Creation and teardown
 
