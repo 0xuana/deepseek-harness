@@ -63,6 +63,14 @@ ctx.tools.register(defineTool({
 
 The unified schema DSL supports `string`, `number`, `integer`, `boolean`, `null`, `array`, `object`, author-only `json`, and exact-one `oneOf`; `InferValue` preserves exact types through 16 container levels before widening to `JsonValue`. A raw JSON Schema (`JsonSchemaNode`) is the wire-level counterpart shared with subagents, workflows, and MCP.
 
+### Conditional tools
+
+`register(definition, { when })` evaluates a synchronous or asynchronous condition once for each model step. The condition receives `{ agent, modelSelection, signal }`; `modelSelection` is the provider, model, and reasoning effort that step preparation captured for every request attempt in the step, the same value as `AssembleContext.modelSelection`. False omits the tool from Native declarations, PTC bindings, and execution. A thrown condition fails step preparation as `TOOL_ACTIVATION_FAILED`; it is not treated as ordinary unavailability. Conditions must observe cancellation and must not change registrations or perform tool work.
+
+`resolve({ agent, modelSelection, signal })` returns a step-owned `ResolvedToolSet`. Pass it as `toolSet` to prompt assembly and every Native or PTC execution, then dispose it after the step's batch settles; retries in the step reuse it. Registrations stay effect-owned; each selection admits only the original registration in its exact agent scope. Disposal, new restrictions, cancellation, or same-name replacement prevent unstarted calls from using it. Started operations retain their cooperative cancellation obligations. Conditional calls without a resolved set return `UNKNOWN_TOOL`.
+
+`get(name, scope, toolSet)` and `schemas(scope, toolSet)` inspect an admitted set; omitting `toolSet` inspects registered definitions without evaluating conditions. Tool guidance receives the same selection as `AssembleContext.toolSet`. A presentation transform cannot add or remove callable tools.
+
 ### Configure the presentation mode
 
 The `mode` config decides what the model sees: `native` (every visible schema) or `ptc` (only `run_code` plus a generated SDK). The runtime supplies evaluation syntax, output syntax and state-retention guidance through `executionInstructions`; this package owns tool-call rules, SDK declarations and image-result attachment.

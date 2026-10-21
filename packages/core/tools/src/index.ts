@@ -11,7 +11,7 @@ import { AnonymousEntries, NamedEntries, ScopedLayers, scopeOf, scopeTarget } fr
 import type { ScopeKey, ScopeLayer, Scoped } from '@deepseek-ai/dsh-scope'
 import type { ToolCallId, ContentBlock, ToolSchema } from '@deepseek-ai/dsh-llm'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
-import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { Agent, ModelSelection } from '@deepseek-ai/dsh-agent'
 import type { UserMessage } from '@deepseek-ai/dsh-session'
 import { assertNever, deepFreeze, snapshotJsonValue, type JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { PromptSection, ToolProviderResult } from '@deepseek-ai/dsh-system-prompt'
@@ -28,6 +28,13 @@ import type { PtcSdkLanguage } from './ptc.ts'
 import { renderToolsSdk } from './ts-types.ts'
 import type { ToolSdkSchema } from './ts-types.ts'
 import { renderToolsSdkPy } from './py-types.ts'
+
+declare module '@deepseek-ai/dsh-system-prompt' {
+  interface AssembleContext {
+    /** Step-owned tool selection; absent when inspecting registered definitions. */
+    toolSet?: ResolvedToolSet
+  }
+}
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -220,6 +227,57 @@ export interface ToolOutputDefinition {
   presentationMeta?(args: unknown, value: JsonValue): JsonValue
 }
 
+/** Inputs for a tool's step-time activation condition. */
+export interface ToolActivationContext {
+  /** Agent preparing the step. */
+  readonly agent: Agent
+  /** Provider, model, and optional reasoning effort captured for the step. */
+  readonly modelSelection: Readonly<ModelSelection>
+  /** Cancellation of step preparation; asynchronous conditions must observe it. */
+  readonly signal: AbortSignal
+}
+
+/** Lifecycle-owned conditions for a registered tool. */
+export interface ToolRegistrationOptions {
+  /**
+   * Decide whether the step's requests may call the tool. Omission enables
+   * it. False excludes it from both declarations and dispatch; rejection fails
+   * step preparation. Conditions must not mutate registrations or start tool work.
+   * @param context - preparing agent, captured model selection, and cancellation signal.
+   * @returns whether the tool participates in this step.
+   */
+  readonly when?: (context: ToolActivationContext) => boolean | Promise<boolean>
+}
+
+/** One step's admitted registrations, also used by nested PTC calls. */
+export interface ResolvedToolSet {
+  /** Close admission after the step's tool batch settles. */
+  dispose(): void
+  /**
+   * Read admitted registrations that remain visible in their original scope.
+   * @param scope - exact requesting agent; another scope is never admitted.
+   * @returns original definitions excluding removed or restricted registrations.
+   */
+  view(scope: ScopeKey | undefined): ReadonlyMap<string, ToolDefinition>
+}
+
+/** Failure to determine a tool's step-time availability. */
+export class ToolActivationError extends HarnessError {
+  /**
+   * Preserve a condition failure without treating it as normal unavailability.
+   * @param name - tool whose condition rejected.
+   * @param cause - underlying condition failure.
+   */
+  constructor(name: string, cause: unknown) {
+    super(`cannot resolve availability of tool "${name}": ${errorMessage(cause)}`, 'TOOL_ACTIVATION_FAILED', { cause })
+  }
+}
+
+interface ToolRegistration {
+  readonly definition: ToolDefinition
+  readonly when: ToolRegistrationOptions['when']
+}
+
 /** A registered tool: its schema plus the execution function. */
 export interface ToolDefinition extends ToolSchema {
   /** Mandatory canonical output declaration. */
@@ -338,6 +396,8 @@ export interface ToolExecutionInput {
   readonly arguments: unknown
   /** The agent on whose behalf the call runs (set by the agent loop). */
   readonly agent?: Agent
+  /** Step admission shared by Native and PTC dispatch. Conditional tools require it. */
+  readonly toolSet?: ResolvedToolSet
   /**
    * Opaque token of the enclosing transport execution, when one exists. PTC
    * mode sets this on SDK sub-dispatches so commit-style observers can wait for
@@ -715,6 +775,7 @@ interface CompiledToolRestriction {
 interface ToolView {
   /** Visible definitions after restrictions, scoped shadowing, and transport insertion. */
   readonly visible: ReadonlyMap<string, ToolDefinition>
+  readonly registrations: ReadonlyMap<string, ToolRegistration>
   /** Pre-restriction capability names used by prompt-order validation. */
   readonly knownNames: ReadonlySet<string>
   /** Current global names that a scoped restriction may name. */
@@ -733,7 +794,7 @@ export type ToolGuard = (execution: Readonly<ToolExecution>) => string | undefin
 
 /** One scope's complete tool-registry contribution. */
 class ToolLayer implements ScopeLayer {
-  readonly tools: NamedEntries<ToolDefinition>
+  readonly tools: NamedEntries<ToolRegistration>
   readonly restrictions = new AnonymousEntries<CompiledToolRestriction>()
   readonly guards = new AnonymousEntries<ToolGuard>()
   /**
@@ -854,7 +915,7 @@ export class ToolRuntime extends Service {
     // optional-input type for direct (non-Loader) construction in tests.
     this.defaultMode = config.mode ?? 'native'
     this.maxParallelSubCalls = resolveMaxParallelSubCalls(config.maxParallelSubCalls)
-    ctx.systemPrompt.tools(context => this.wireSchemas(context.scope))
+    ctx.systemPrompt.tools(context => this.wireSchemas(context.scope, context.toolSet))
     if (this.defaultMode !== 'native') {
       ctx.systemPrompt.section(this.collapseSection())
       ctx.systemPrompt.section(this.sdkSection())
@@ -911,7 +972,7 @@ export class ToolRuntime extends Service {
         const render = SDK_RENDERERS[runtime.language]
         /* v8 ignore next -- requirePtcRuntime rejects an unknown language before this runs. */
         if (render === undefined) throw new Error(`dsh-tools: no SDK renderer for ${runtime.language}`)
-        return render(this.sdkSchemas(context.scope), runtime.programFormat)
+        return render(this.sdkSchemas(context.scope, context.toolSet), runtime.programFormat)
       },
     }
   }
@@ -1016,11 +1077,11 @@ export class ToolRuntime extends Service {
    * Build one scope's wire schemas and names for prompt-order validation.
    * Restrictions do not make known tools invalid, but a mode collapse does.
    */
-  private wireSchemas(scope?: ScopeKey): ToolProviderResult {
+  private wireSchemas(scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolProviderResult {
     const view = this.view(scope)
     const mode = this.modeFor(scope)
     if (mode === 'native') {
-      const schemas = [...view.visible.values()].map(definition => this.schemaOf(definition, false))
+      const schemas = this.definitions(scope, toolSet).map(definition => this.schemaOf(definition, false))
       return { schemas, knownNames: [...view.knownNames] }
     }
     // Validate the runtime language BEFORE projecting schemas: schemaOf reads
@@ -1029,7 +1090,7 @@ export class ToolRuntime extends Service {
     // renderer-table rejection the canonical assembly-time error for a
     // language with no SDK renderer.
     this.requirePtcRuntime(mode)
-    const schemas = [...view.visible.values()].map(definition => this.schemaOf(definition, false))
+    const schemas = this.definitions(scope, toolSet).map(definition => this.schemaOf(definition, false))
     return {
       schemas: schemas.filter(schema => schema.name === RUN_CODE_NAME),
       knownNames: [RUN_CODE_NAME],
@@ -1066,9 +1127,10 @@ export class ToolRuntime extends Service {
    * Register globally or in the calling agent scope. Scoped tools shadow
    * globals; duplicates within one layer and the reserved `run_code` name fail.
    * @param definition - tool schema, execution, and optional finalization/presentation callbacks.
+   * @param options - optional step-time activation condition.
    * @returns the exact disposer that unregisters the tool.
    */
-  register(definition: ToolDefinition): () => void {
+  register(definition: ToolDefinition, options: ToolRegistrationOptions = {}): () => void {
     const name = definition.name
     const output = (definition as Partial<ToolDefinition>).output
     if (output === undefined || typeof output !== 'object'
@@ -1090,7 +1152,7 @@ export class ToolRuntime extends Service {
     }
     return this.layers.effect(
       this.ctx,
-      layer => layer.tools.insert(name, definition),
+      layer => layer.tools.insert(name, { definition, when: options.when }),
       { label: 'tools.register()' },
     )
   }
@@ -1192,27 +1254,32 @@ export class ToolRuntime extends Service {
     const own = this.layers.peek(scope)
     // Inherited surface, nearest ancestor last: a nearer scope's same-name
     // entry shadows a farther one, and the global layer is the farthest.
-    const inherited = new Map<string, ToolDefinition>(this.layers.global.tools.entries())
+    const inherited = new Map(this.layers.global.tools.entries())
     for (const layer of layers) {
       if (layer === own) continue
       for (const [name, definition] of layer.tools.entries()) inherited.set(name, definition)
     }
     const visible = new Map<string, ToolDefinition>()
+    const registrations = new Map<string, ToolRegistration>()
     const knownNames = new Set<string>()
     const restrictableNames = new Set<string>()
-    for (const [name, definition] of inherited) {
+    for (const [name, registration] of inherited) {
       knownNames.add(name)
       restrictableNames.add(name)
       // Restrictions intersect across the whole chain: any scope on it may
       // mask an inherited name for everything nested inside it.
-      if (layers.every(layer => layer.admits(name))) visible.set(name, definition)
+      if (layers.every(layer => layer.admits(name))) {
+        visible.set(name, registration.definition)
+        registrations.set(name, registration)
+      }
     }
     // The scope's own registrations last, shadowing an inherited name and
     // outside the filter above.
     if (own !== undefined) {
-      for (const [name, definition] of own.tools.entries()) {
+      for (const [name, registration] of own.tools.entries()) {
         knownNames.add(name)
-        visible.set(name, definition)
+        visible.set(name, registration.definition)
+        registrations.set(name, registration)
       }
     }
     // Presentation infrastructure is resolved last and outside capability
@@ -1223,7 +1290,7 @@ export class ToolRuntime extends Service {
     if (this.modeFor(scope) !== 'native') {
       visible.set(RUN_CODE_NAME, this.requirePtcTransport())
     }
-    return { visible, knownNames, restrictableNames }
+    return { visible, registrations, knownNames, restrictableNames }
   }
 
   /**
@@ -1233,10 +1300,58 @@ export class ToolRuntime extends Service {
    * actually executed.
    * @param name - the tool name as registered.
    * @param scope - the viewing scope (the agent); omitted = the global view.
+   * @param toolSet - step admission; omit only to inspect registered definitions.
    * @returns the definition the scope resolves, or undefined when none is visible.
    */
-  get(name: string, scope?: ScopeKey): ToolDefinition | undefined {
-    return this.view(scope).visible.get(name)
+  get(name: string, scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolDefinition | undefined {
+    return toolSet === undefined ? this.view(scope).visible.get(name) : toolSet.view(scope).get(name)
+  }
+
+  /**
+   * Resolve conditions once for this step without changing shared registrations.
+   * Cancellation or a rejected condition publishes no partial selection. Removed
+   * registrations cannot be restored by a late condition result.
+   * @param context - preparing agent, captured model selection, and cancellation.
+   * @returns the complete selection; the caller disposes it after its tool batch settles.
+   */
+  async resolve(context: ToolActivationContext): Promise<ResolvedToolSet> {
+    const { agent, signal } = context
+    signal.throwIfAborted()
+    const view = this.view(agent)
+    const admitted = new Map<string, ToolDefinition>()
+    for (const [name, definition] of view.visible) {
+      const registration = view.registrations.get(name)
+      let enabled: boolean
+      try {
+        enabled = registration?.when === undefined || await registration.when(context)
+      } catch (cause: unknown) {
+        signal.throwIfAborted()
+        throw new ToolActivationError(name, cause)
+      }
+      signal.throwIfAborted()
+      if (enabled) admitted.set(name, definition)
+    }
+    let closed = false
+    return Object.freeze({
+      dispose: () => { closed = true },
+      view: (scope: ScopeKey | undefined): ReadonlyMap<string, ToolDefinition> => {
+        const visible = new Map<string, ToolDefinition>()
+        if (closed || scope !== agent || signal.aborted) return visible
+        const current = this.view(agent)
+        for (const [name, definition] of admitted) {
+          if (current.visible.get(name) === definition
+            && current.registrations.get(name) === view.registrations.get(name)) {
+            visible.set(name, definition)
+          }
+        }
+        return visible
+      },
+    })
+  }
+
+  private definitions(scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolDefinition[] {
+    if (toolSet === undefined) return [...this.view(scope).visible.values()]
+    return [...toolSet.view(scope).values()]
   }
 
   /**
@@ -1252,8 +1367,11 @@ export class ToolRuntime extends Service {
    * @param nested - whether the call is a transport sub-dispatch, not a model-direct call.
    * @returns the definition that may run, or undefined when the call must be rejected.
    */
-  private resolveExecution(name: string, scope: ScopeKey | undefined, nested: boolean): ToolDefinition | undefined {
-    const tool = this.get(name, scope)
+  private resolveExecution(
+    name: string, scope: ScopeKey | undefined, nested: boolean, toolSet?: ResolvedToolSet,
+  ): ToolDefinition | undefined {
+    if (toolSet === undefined && this.view(scope).registrations.get(name)?.when !== undefined) return undefined
+    const tool = this.get(name, scope, toolSet)
     if (tool === undefined) return undefined
     if (this.collapses(name, scope, nested)) return undefined
     return tool
@@ -1263,15 +1381,16 @@ export class ToolRuntime extends Service {
    * Project visible definitions onto the allowlisted model-facing schema fields,
    * excluding execution and presentation callbacks.
    * @param scope - the viewing scope (the agent); omitted = the global view.
+   * @param toolSet - step admission, or omitted for registered-definition inspection.
    * @returns one deep-cloned schema per visible tool.
    */
-  schemas(scope?: ScopeKey): ToolSchema[] {
-    return [...this.view(scope).visible.values()].map(definition => this.schemaOf(definition, true))
+  schemas(scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolSchema[] {
+    return this.definitions(scope, toolSet).map(definition => this.schemaOf(definition, true))
   }
 
   /** Project visible callable tools onto the generated PTC mode SDK contract. */
-  private sdkSchemas(scope?: ScopeKey): ToolSdkSchema[] {
-    return [...this.view(scope).visible.values()]
+  private sdkSchemas(scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolSdkSchema[] {
+    return this.definitions(scope, toolSet)
       .filter(definition => definition.name !== RUN_CODE_NAME)
       .map((definition): ToolSdkSchema => {
         const output = snapshotJsonValue(definition.output.schema)
@@ -1309,7 +1428,7 @@ export class ToolRuntime extends Service {
    * @returns the fail-closed scheduling mode.
    */
   executionMode(exec: ToolExecutionInput): ToolExecutionMode {
-    const tool = this.resolveExecution(exec.name, exec.agent, exec.parent !== undefined)
+    const tool = this.resolveExecution(exec.name, exec.agent, exec.parent !== undefined, exec.toolSet)
     if (!tool?.isConcurrencySafe) return { kind: 'exclusive' }
     try {
       const concurrencySafe: unknown = tool.isConcurrencySafe(exec.arguments)
@@ -1412,7 +1531,7 @@ export class ToolRuntime extends Service {
     // observe — or worse, approve — a call that can only fail. An unknown tool
     // keeps the historical dispatch-stage `UNKNOWN_TOOL` path so policy
     // listeners still see every name that reaches the registry.
-    const visible = this.get(name, agent)
+    const visible = this.get(name, agent, exec.toolSet)
     const collapsed = visible !== undefined && this.collapses(name, agent, parent !== undefined)
     const concludingExecutions = this.concludingExecutions
     const base = {
@@ -1422,6 +1541,7 @@ export class ToolRuntime extends Service {
       name,
       signal,
       ...agent !== undefined ? { agent } : {},
+      ...exec.toolSet !== undefined ? { toolSet: exec.toolSet } : {},
       ...parent !== undefined ? { parent } : {},
       ...exec.schema !== undefined ? { schema: exec.schema } : {},
       deferContext(context: UserMessage): void {
@@ -1583,7 +1703,7 @@ export class ToolRuntime extends Service {
     }
     exec.signal = signal
     try {
-      const tool = this.resolveExecution(exec.name, exec.agent, exec.parent !== undefined)
+      const tool = this.resolveExecution(exec.name, exec.agent, exec.parent !== undefined, exec.toolSet)
       if (!tool) throw new ToolNotFoundError(exec.name)
       state.bodyInvoked = true
       const returned = await tool.execute(exec.arguments, exec)
@@ -1812,7 +1932,7 @@ export class ToolRuntime extends Service {
       if (result.isError) {
         throw new TypeError('tools/post-execute cannot replace the value of a failed result')
       }
-      const tool = this.resolveExecution(exec.name, exec.agent, exec.parent !== undefined)
+      const tool = this.resolveExecution(exec.name, exec.agent, exec.parent !== undefined, exec.toolSet)
       if (tool === undefined) throw new ToolNotFoundError(exec.name)
       const replaced = this.createSuccessResult(exec, tool, decision.value)
       return this.markCanonical(exec, {
@@ -1881,7 +2001,7 @@ export class ToolRuntime extends Service {
         ...result.additionalContexts !== undefined ? { additionalContexts: result.additionalContexts } : {},
       })
     }
-    const tool = this.resolveExecution(exec.name, exec.agent, exec.parent !== undefined)
+    const tool = this.resolveExecution(exec.name, exec.agent, exec.parent !== undefined, exec.toolSet)
     if (tool === undefined) throw new ToolNotFoundError(exec.name)
     const normalized = this.createSuccessResult(exec, tool, result.value)
     return this.markCanonical(exec, {

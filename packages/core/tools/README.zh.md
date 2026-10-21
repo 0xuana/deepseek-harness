@@ -63,6 +63,14 @@ ctx.tools.register(defineTool({
 
 统一 schema DSL 支持 `string`、`number`、`integer`、`boolean`、`null`、`array`、`object`、仅供作者使用的 `json` 与恰好匹配一个分支的 `oneOf`；`InferValue` 在 16 层容器内保留精确类型，之后加宽为 `JsonValue`。原始 JSON Schema（`JsonSchemaNode`）是与 subagent、工作流和 MCP 共享的协议级对应类型。
 
+### 条件工具
+
+`register(definition, { when })` 为每个模型步骤计算一次同步或异步条件。条件接收 `{ agent, modelSelection, signal }`；`modelSelection` 是步骤准备时为该步骤所有请求尝试捕获的提供方、模型与推理强度，与 `AssembleContext.modelSelection` 相同。返回 false 会从原生声明、PTC 绑定和执行集合中排除工具。条件抛错会以 `TOOL_ACTIVATION_FAILED` 中止步骤准备，不会被当成正常不可用。条件必须响应取消，不得改变注册或执行工具操作。
+
+`resolve({ agent, modelSelection, signal })` 返回步骤拥有的 `ResolvedToolSet`。将它作为 `toolSet` 传给提示词组装以及每次原生或 PTC 执行，步骤的批次结束后释放；同一步骤内的重试复用它。注册仍由 effect 持有；每份集合只准入原 agent scope 中的原注册。注销、新的限制、取消或同名替换会阻止尚未开始的调用继续使用它。已经开始的操作保留协作取消义务。没有已解析集合的条件工具调用返回 `UNKNOWN_TOOL`。
+
+`get(name, scope, toolSet)` 和 `schemas(scope, toolSet)` 读取已准入集合；省略 `toolSet` 时只查看已注册定义，不计算条件。工具指导文本通过 `AssembleContext.toolSet` 接收同一集合。展示变换不能增删可调用工具。
+
 ### 配置呈现模式
 
 `mode` 配置决定模型看到什么：`native`（每个可见 schema）或 `ptc`（只有 `run_code` 加一份生成 SDK）。运行时通过 `executionInstructions` 提供求值语法、输出方式和状态保留指引；本包负责工具调用规则、SDK 声明和图片结果附加。

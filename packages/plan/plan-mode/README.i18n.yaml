@@ -45,8 +45,8 @@
   en: a7bf35c2a9da52bc
   zh: dea9f4b3a41f1a6d
 /deepseek-ai-dsh-plan-mode/understand-the-implementation/the-exit-tool:
-  en: 56798d0f45fb5775
-  zh: 282e4a522ce6dae0
+  en: ad84b4025d8ea536
+  zh: 683b3f56b0b6b368
 /deepseek-ai-dsh-plan-mode/understand-the-implementation/session-projection-unit:
   en: 396d66816890f715
   zh: fab5d67c027b33f5
@@ -90,14 +90,14 @@
   en: 9622e96bdc01276d
   zh: 53801e68a49f3d1d
 /deepseek-ai-dsh-plan-mode/model-experience/exit-tool-schema-and-review-exchange/what-the-model-sees:
-  en: 16c57e8e64ad5a85
-  zh: d81932553025c875
+  en: b0b53f72b11d634b
+  zh: c7bc8a10a90f7fa3
 /deepseek-ai-dsh-plan-mode/model-experience/exit-tool-schema-and-review-exchange/token-effect:
-  en: d1b1418f20ee119d
-  zh: c2b89ea3cae57175
+  en: a1a020eb7ba26e7c
+  zh: a99208693d331a31
 /deepseek-ai-dsh-plan-mode/model-experience/exit-tool-schema-and-review-exchange/kv-cache-effect:
-  en: 6b1404ea11f1e60d
-  zh: 348d0579de218652
+  en: 9d9626fbf4cdc8de
+  zh: 8237cbc3ca048024
 /deepseek-ai-dsh-plan-mode/known-limitations-and-deferred-work:
   en: a87aabfede0087fd
   zh: 201e9b3766980005

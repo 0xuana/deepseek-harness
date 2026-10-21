@@ -87,7 +87,8 @@ AgentLoop 在启动已排队工作前等待串行 `agent/created`，初始化失
 ```text
 turn/start
   claim next-step input plus one queued message
-  snapshot Session model selection; assemble prompt sections + tool schemas
+  snapshot Session model selection; resolve the step's conditional tools
+  assemble prompt sections + admitted tool schemas
   -> agent/pre-step; project runtime context at fallback
                                      reject | enter(messages, startsRequestSeries?)
      reject, or a first enter rewritten empty -> close the turn with no step
