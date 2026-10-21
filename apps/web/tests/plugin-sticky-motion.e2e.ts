@@ -82,7 +82,9 @@ it('preserves both header layouts and follows the scroll position without changi
           await page.locator('[data-plugin-package]').first().waitFor()
           await page.locator('[data-plugin-bar][data-natural]').waitFor()
           await page.evaluate(() => document.fonts.ready)
-          for (const width of [1280, 600, 470, 390]) {
+          // Without tabs, whether the actions fit beside the title at 470px depends on the platform font,
+          // so that width is pinned only with tabs.
+          for (const width of hasTabs ? [1280, 600, 470, 390] : [1280, 600, 390]) {
             await page.setViewportSize({ width, height: 480 })
             await scrollTo(page, 0)
             const resting = await reference(page, false)
