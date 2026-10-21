@@ -363,11 +363,14 @@ export class ConversationController extends Service implements IConversation {
    * Stage carried file and image drafts again for a new Session.
    * @param sessionId - target Agent-scope identity after a Workspace switch.
    * @param ids - carried draft attachment ids.
+   * @param uploadImages - whether the target Session stages image uploads; an image draft otherwise sends inline.
    */
-  rebindDraftFiles(sessionId: SessionId, ids: readonly DraftAttachmentId[]): void {
+  rebindDraftFiles(sessionId: SessionId, ids: readonly DraftAttachmentId[], uploadImages: boolean): void {
     for (const id of ids) {
       const attachment = this.draftAttachments.get(id)
-      if (attachment !== undefined) this.beginFileUpload(sessionId, attachment)
+      if (attachment === undefined) continue
+      if (attachment.kind === 'image' && !uploadImages) this.dropUpload(id)
+      else this.beginFileUpload(sessionId, attachment)
     }
   }
 
@@ -406,11 +409,17 @@ export class ConversationController extends Service implements IConversation {
         if (this.fileUploadOperations.get(attachment.id)?.controller !== controller) return
         this.fileUploads.update((draft) => {
           if (!(attachment.id in draft)) return
-          draft[attachment.id] = !result.ok
-            ? { status: 'error', message: result.error.message }
-            : 'image' in result.value
-              ? { status: 'ready', receiptId: result.value.receiptId, image: result.value.image }
-              : { status: 'ready', receiptId: result.value.receiptId, file: result.value.file }
+          if (result.ok) {
+            draft[attachment.id] = 'file' in result.value
+              ? { status: 'ready', receiptId: result.value.receiptId, file: result.value.file }
+              : { status: 'ready', receiptId: result.value.receiptId }
+            return
+          }
+          const { error } = result
+          // A Host refusal keeps its reason: retrying the same bytes cannot succeed.
+          draft[attachment.id] = error.code === 'session/attachment-invalid' || error.code === 'subagent/attachment-invalid'
+            ? { status: 'error', message: error.message, reason: error.details.reason }
+            : { status: 'error', message: error.message }
         })
       } catch (error) {
         if (this.fileUploadOperations.get(attachment.id)?.controller !== controller) return
@@ -461,8 +470,9 @@ export class ConversationController extends Service implements IConversation {
 
   /**
    * Serialize ordered draft attachments to command-submit wire payloads without
-   * sending or releasing them. Images are encoded; generic files cite receipts
-   * from their completed background uploads and never reread browser bytes.
+   * sending or releasing them. Images are encoded even when an upload already
+   * stored them, because commands accept only file receipts; generic files cite
+   * receipts from their completed background uploads and never reread browser bytes.
    * @param attachmentIds - ordered draft-local attachment ids.
    * @returns wire payloads in id order.
    */
@@ -493,12 +503,17 @@ export class ConversationController extends Service implements IConversation {
   releaseDraftAttachment(id: DraftAttachmentId): void {
     const attachment = this.draftAttachments.get(id)
     if (attachment === undefined) return
-    const operation = this.fileUploadOperations.get(id)
-    this.fileUploadOperations.delete(id)
-    operation?.controller.abort()
     this.draftAttachments.delete(id)
     if (attachment.kind === 'image') revokePreview(attachment.previewUrl)
     // The stored Host object stays durable; only the draft's upload state ends.
+    this.dropUpload(id)
+  }
+
+  /** Abort one draft's active upload and drop its upload state. */
+  private dropUpload(id: DraftAttachmentId): void {
+    const operation = this.fileUploadOperations.get(id)
+    this.fileUploadOperations.delete(id)
+    operation?.controller.abort()
     this.forgetUpload(id)
   }
 

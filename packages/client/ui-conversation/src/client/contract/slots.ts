@@ -53,13 +53,15 @@ export interface ComposerFileAttachment {
 
 /**
  * Upload lifecycle of one draft that uploads when it is added, not on send:
- * every file draft, and every image draft of an ordinary Session.
+ * every file draft, and every image draft of an ordinary Session. A failed
+ * upload the Host refused keeps the attachment refusal `reason`, because
+ * retrying the same bytes cannot succeed.
  */
 export type DraftFileUpload =
   | { readonly status: 'uploading'; readonly loaded: number; readonly total?: number }
   | { readonly status: 'ready'; readonly receiptId: FileUploadReceiptId; readonly file: FileAttachmentRef }
-  | { readonly status: 'ready'; readonly receiptId: FileUploadReceiptId; readonly image: ImageAttachmentRef }
-  | { readonly status: 'error'; readonly message: string }
+  | { readonly status: 'ready'; readonly receiptId: FileUploadReceiptId }
+  | { readonly status: 'error'; readonly message: string; readonly reason?: string }
 
 /** Per-draft upload states keyed by draft attachment id. */
 export type DraftFileUploads = Readonly<Record<string, DraftFileUpload>>
@@ -82,6 +84,13 @@ export interface ComposerAttachmentsOwnerProps {
   uploads: DraftFileUploads
   /** Restart one failed file upload. */
   onRetryFile: (id: DraftAttachmentId) => void
+  /**
+   * Explain one upload the Host refused; such a draft cannot be retried and
+   * stays until it is removed.
+   * @param reason - the refusal `reason` the failed upload carries.
+   * @returns localized text naming the limit or the way out.
+   */
+  uploadFailureText: (reason: string) => string
   /** Display-ready limits for the drop invitation. */
   dropLimits?: { readonly count: number; readonly size: string } | undefined
 }

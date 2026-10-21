@@ -1180,6 +1180,38 @@ describe('running and lock semantics', () => {
     expect(inline.button.disabled).toBe(false)
   })
 
+  it('explains on Enter why uploads hold the send, naming a Host refusal', () => {
+    const limits = {
+      maxImageBytes: 1024 * 1024,
+      maxImagesPerMessage: 2,
+      maxMessageImageBytes: 2 * 1024 * 1024,
+      maxImagePixels: 40_000_000,
+      maxImageDimension: 2000,
+      mediaTypes: ['image/png'] as const,
+    }
+    const image = {
+      kind: 'image' as const,
+      id: 'image-1' as DraftAttachmentId,
+      file: new File(['x'], 'wide.png', { type: 'image/png' }),
+      previewUrl: 'blob:wide',
+    }
+    const enterWith = (upload: NonNullable<BenchOptions['fileUploads']>[string]): string | null => {
+      const result = bench({ draft: '带图', attachments: [image], fileUploads: { [image.id]: upload }, imageLimits: limits })
+      fireEvent.keyDown(result.textarea, { key: 'Enter' })
+      expect(result.sink).not.toHaveBeenCalled()
+      const text = result.view.getByRole('alert').textContent
+      cleanup()
+      return text
+    }
+    expect(enterWith({ status: 'uploading', loaded: 0 })).toContain('文件还在上传，请等待上传完成后发送')
+    expect(enterWith({ status: 'error', message: 'offline' })).toContain('上传失败，点击重试')
+    const refusal = '图片宽高不能超过 2000px，请缩小后重试'
+    expect(enterWith({ status: 'error', message: 'too wide', reason: 'IMAGE_DIMENSION_TOO_LARGE' })).toContain(refusal)
+    // The attachments slot receives the same localized explanation for its thumbnail.
+    const owner = attachmentOwner(bench({ attachments: [image], imageLimits: limits }).slotCalls)
+    expect(owner.uploadFailureText('IMAGE_DIMENSION_TOO_LARGE')).toBe(refusal)
+  })
+
   it('idle Send keeps the plain label regardless of the busy-state preference', () => {
     const { button, sink } = bench({ busyEnter: 'steer', draft: '空闲发送' })
     expect(button.getAttribute('aria-label')).toBe('发送消息')

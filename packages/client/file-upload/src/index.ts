@@ -140,9 +140,10 @@ export class FileUploads extends TypertRemoteService {
   }
 
   /**
-   * Persist one prompt image for a Session: read at most the deployment's
-   * per-image byte limit, then validate, normalize, and store the image the
-   * way prompt admission does, so a later prompt cites it by receipt.
+   * Persist one prompt image for a Session: read at most the smaller of the
+   * deployment's per-image and per-message byte limits, then validate,
+   * normalize, and store the image the way prompt admission does, so a later
+   * prompt cites it by receipt.
    * Cancellation before storage begins stores nothing; a cancelled upload
    * never receives a receipt, although an image whose storage already began
    * stays in the content-addressed store.
@@ -168,7 +169,8 @@ export class FileUploads extends TypertRemoteService {
       )
     }
     const staged = await this.store(agent, async () => {
-      const data = await readAtMost(request.data, limits.maxImageBytes, request.signal)
+      // One image must also fit a whole message; stop at the smaller bound, as read-image does.
+      const data = await readAtMost(request.data, Math.min(limits.maxImageBytes, limits.maxMessageImageBytes), request.signal)
       // readAtMost checks cancellation per chunk; an abort after the last chunk still stops here.
       request.signal?.throwIfAborted()
       const refs = await this.ctx.attachments.saveImages([{

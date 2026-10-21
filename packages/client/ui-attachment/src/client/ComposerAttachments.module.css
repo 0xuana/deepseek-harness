@@ -39,7 +39,12 @@
   opacity: 0.4;
 }
 
-.retryGlyph {
+.thumbnailRefused {
+  box-sizing: border-box;
+  cursor: default;
+}
+
+.failureGlyph {
   position: absolute;
   inset: 0;
   display: grid;

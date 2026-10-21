@@ -74,7 +74,7 @@ function fileDraft(id: string, name = `${id}.pdf`): ComposerAttachment {
   }
 }
 
-function props(overrides: Partial<ComposerAttachmentsOwnerProps> = {}): ComposerAttachmentsProps {
+function props(overrides: Partial<ComposerAttachmentsOwnerProps> = {}): Parameters<typeof ComposerAttachments>[0] {
   return {
     attachments: [],
     canAcceptDrop: true,
@@ -82,9 +82,10 @@ function props(overrides: Partial<ComposerAttachmentsOwnerProps> = {}): Composer
     onRemoveAttachment: () => {},
     uploads: {},
     onRetryFile: () => {},
+    uploadFailureText: (reason: string) => `refused:${reason}`,
     t,
     ...overrides,
-  } as unknown as ComposerAttachmentsProps
+  }
 }
 
 describe('ComposerAttachments', () => {
@@ -230,18 +231,18 @@ describe('ComposerAttachments', () => {
 })
 
 describe('ComposerAttachments image uploads', () => {
-  it('shows image upload progress and turns a failed image into its retry control', () => {
+  it('shows image upload progress, retries a failed image, and explains one the Host refused', () => {
     const onRetryFile = vi.fn()
     const view = render(<ComposerAttachments {...props({
-      attachments: [attachment('measured'), attachment('streaming'), attachment('failed'), attachment('ready')],
+      attachments: [
+        attachment('measured'), attachment('streaming'), attachment('failed'), attachment('refused'), attachment('ready'),
+      ],
       uploads: {
         measured: { status: 'uploading', loaded: 1, total: 2 },
         streaming: { status: 'uploading', loaded: 3 },
         failed: { status: 'error', message: 'boom' },
-        ready: {
-          status: 'ready', receiptId: 'receipt-ready' as never,
-          image: { attachmentId: 'image-ready' as never, mediaType: 'image/png', bytes: 1, width: 1, height: 1 },
-        },
+        refused: { status: 'error', message: 'too wide', reason: 'IMAGE_DIMENSION_TOO_LARGE' },
+        ready: { status: 'ready', receiptId: 'receipt-ready' as never },
       },
       onRetryFile,
     })} />)
@@ -251,7 +252,22 @@ describe('ComposerAttachments image uploads', () => {
     expect(view.getByTitle('上传失败，点击重试')).toBeTruthy()
     fireEvent.click(view.getByRole('button', { name: '重试上传 failed.png' }))
     expect(onRetryFile).toHaveBeenCalledWith('failed')
+    // A refusal names its reason and offers no retry; removal stays available.
+    expect(view.getByRole('img', { name: 'refused:IMAGE_DIMENSION_TOO_LARGE' }).getAttribute('title'))
+      .toBe('refused:IMAGE_DIMENSION_TOO_LARGE')
+    expect(view.queryByRole('button', { name: '重试上传 refused.png' })).toBeNull()
+    expect(view.getByRole('button', { name: '移除图片 refused.png' })).toBeTruthy()
     expect(view.queryByRole('dialog', { name: '原图预览' })).toBeNull()
+  })
+
+  it('names an image without a file name in its preview, retry, and remove controls', () => {
+    const view = render(<ComposerAttachments {...props({
+      attachments: [attachment('pasted', ''), attachment('shown', '')],
+      uploads: { pasted: { status: 'error', message: 'boom' } },
+    })} />)
+    expect(view.getByRole('button', { name: '重试上传 待发送图片' })).toBeTruthy()
+    expect(view.getAllByRole('button', { name: '移除图片 待发送图片' })).toHaveLength(2)
+    expect(view.getByAltText('待发送图片')).toBeTruthy()
   })
 })
 

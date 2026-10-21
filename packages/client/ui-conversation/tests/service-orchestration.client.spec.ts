@@ -209,7 +209,7 @@ describe('ConversationController', () => {
     await vi.waitFor(() => {
       expect(b.root.fileUploads.getSnapshot()[fileDraft.id]?.status).toBe('ready')
       expect(b.root.fileUploads.getSnapshot()[imageDraft.id])
-        .toEqual({ status: 'ready', receiptId: 'image-receipt-1', image: IMAGE_REF })
+        .toEqual({ status: 'ready', receiptId: 'image-receipt-1' })
     })
     expect(uploadFile).toHaveBeenCalledOnce()
     expect(uploadFile.mock.calls[0]?.[0]).toBe(fileDraft.file)
@@ -242,8 +242,10 @@ describe('ConversationController', () => {
       const [draft] = b.root.createDrafts(session.sessionId, [
         new File([Uint8Array.of(1)], 'big.png', { type: 'image/png' }),
       ], UPLOAD_IMAGES)
+      // A Host refusal keeps its reason; retrying stays available to the service.
       await vi.waitFor(() => {
-        expect(b.root.fileUploads.getSnapshot()[draft!.id]).toEqual({ status: 'error', message: 'too big' })
+        expect(b.root.fileUploads.getSnapshot()[draft!.id])
+          .toEqual({ status: 'error', message: 'too big', reason: 'IMAGE_TOO_LARGE' })
       })
       b.root.retryFileUpload(session.sessionId, draft!.id)
       await vi.waitFor(() => { expect(uploadImage).toHaveBeenCalledTimes(2) })
@@ -255,6 +257,26 @@ describe('ConversationController', () => {
     } finally {
       created.mockRestore()
       revoked.mockRestore()
+    }
+    await b.runtime.dispose()
+  })
+
+  it('keeps no refusal reason when an image upload fails in transport', async () => {
+    const b = await bench()
+    const created = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:flaky')
+    try {
+      const session = b.runtime.sessions.binding('s1')!.session
+      ;(session as { uploadImage?: unknown }).uploadImage = vi.fn(() => Promise.resolve({
+        ok: false, error: new RemoteError('gateway/internal', 'connection reset', {}),
+      }))
+      const [draft] = b.root.createDrafts(session.sessionId, [
+        new File([Uint8Array.of(1)], 'flaky.png', { type: 'image/png' }),
+      ], UPLOAD_IMAGES)
+      await vi.waitFor(() => {
+        expect(b.root.fileUploads.getSnapshot()[draft!.id]).toEqual({ status: 'error', message: 'connection reset' })
+      })
+    } finally {
+      created.mockRestore()
     }
     await b.runtime.dispose()
   })
@@ -397,6 +419,38 @@ describe('ConversationController', () => {
     await b.runtime.dispose()
   })
 
+  it('drops a carried image upload when the target Session sends images inline', async () => {
+    const b = await bench()
+    const created = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:carry')
+    try {
+      const source = b.runtime.sessions.binding('s1')!.session
+      let sourceSignal: AbortSignal | undefined
+      ;(source as { uploadImage?: unknown }).uploadImage = vi.fn(
+        (_data: Blob, _mediaType: string, _name: string | undefined, signal: AbortSignal) => {
+          sourceSignal = signal
+          return new Promise<never>((_resolve, reject) => {
+            signal.addEventListener('abort', () => { reject(new Error('aborted')) }, { once: true })
+          })
+        },
+      )
+      const [image] = b.root.createDrafts(source.sessionId, [
+        new File([Uint8Array.of(5)], 'carry.png', { type: 'image/png' }),
+      ], UPLOAD_IMAGES)
+      await vi.waitFor(() => { expect(sourceSignal).toBeDefined() })
+      const targetUpload = vi.fn()
+      await b.runtime.sessions.add({ id: 's2', session: { uploadImage: targetUpload } })
+      using _target = b.runtime.sessions.retain('s2' as SessionId)
+      await _target.ready
+      b.root.rebindDraftFiles(b.runtime.sessions.binding('s2')!.session.sessionId, [image!.id], INLINE_IMAGES)
+      expect(sourceSignal?.aborted).toBe(true)
+      expect(b.root.fileUploads.getSnapshot()[image!.id]).toBeUndefined()
+      expect(targetUpload).not.toHaveBeenCalled()
+    } finally {
+      created.mockRestore()
+    }
+    await b.runtime.dispose()
+  })
+
   it('cancels a superseded upload and stages the carried draft on the target Session', async () => {
     const b = await bench()
     const source = b.runtime.sessions.binding('s1')!.session
@@ -428,7 +482,7 @@ describe('ConversationController', () => {
     await b.runtime.sessions.add({ id: 's2', session: target })
     using _target = b.runtime.sessions.retain('s2' as SessionId)
     await _target.ready
-    b.root.rebindDraftFiles(b.runtime.sessions.binding('s2')!.session.sessionId, [attachment.id])
+    b.root.rebindDraftFiles(b.runtime.sessions.binding('s2')!.session.sessionId, [attachment.id], UPLOAD_IMAGES)
 
     expect(sourceSignal?.aborted).toBe(true)
     await vi.waitFor(() => {

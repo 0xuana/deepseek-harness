@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   ComposerAttachment, ComposerAttachmentsProps, ComposerImageAttachment,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { IconCloseFillRegular, IconRefreshOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import {
+  IconCloseFillRegular, IconRefreshOutlineRegular, IconWarningOutlineRegular,
+} from '@deepseek-ai/dsh-client-ui-primitives'
 import { AttachmentRail } from '../AttachmentRail.tsx'
 import type { AttachmentRailItem } from '../AttachmentRail.tsx'
 import { DropOverlay } from '../DropOverlay.tsx'
@@ -17,10 +19,15 @@ interface ComposerRailItem extends AttachmentRailItem {
   attachment: ComposerAttachment
 }
 
+/** The owner share and locale seat the attachment rail reads from its slot props. */
+type ComposerAttachmentsInput = Pick<ComposerAttachmentsProps,
+  | 'attachments' | 'canAcceptDrop' | 'onAddFiles' | 'onRemoveAttachment' | 'uploads' | 'onRetryFile'
+  | 'uploadFailureText' | 'dropLimits' | 't'>
+
 /** Draft image previews, pending-file cards, drop target, and original-image preview. */
 export function ComposerAttachments({
-  attachments, canAcceptDrop, onAddFiles, onRemoveAttachment, uploads, onRetryFile, dropLimits, t,
-}: ComposerAttachmentsProps) {
+  attachments, canAcceptDrop, onAddFiles, onRemoveAttachment, uploads, onRetryFile, uploadFailureText, dropLimits, t,
+}: ComposerAttachmentsInput) {
   const [preview, setPreview] = useState<ComposerImageAttachment | null>(null)
   const [dragActive, setDragActive] = useState(false)
   const dragDepth = useRef(0)
@@ -71,34 +78,51 @@ export function ComposerAttachments({
                   />
                 )
               }
-              // An uploading image shows its progress; a failed upload turns the thumbnail into its retry control.
+              // An uploading image shows its progress; a failed upload turns the thumbnail into its retry
+              // control, except one the Host refused, which shows why and leaves removal as the way out.
               const upload = uploads[attachment.id]
+              const name = attachment.file.name || t('image.pending')
+              const refusal = upload?.status === 'error' && upload.reason !== undefined
+                ? uploadFailureText(upload.reason)
+                : undefined
               return (
                 <div className={css.imageItem}>
-                  {upload?.status === 'error'
+                  {refusal !== undefined
                     ? (
-                      <button
-                        type="button"
-                        className={`${css.thumbnail} ${css.thumbnailFailed}`}
-                        title={t('file.uploadFailed')}
-                        aria-label={t('file.retry', { name: attachment.file.name })}
-                        onClick={() => { onRetryFile(attachment.id) }}
+                      <div
+                        className={`${css.thumbnail} ${css.thumbnailFailed} ${css.thumbnailRefused}`}
+                        role="img"
+                        aria-label={refusal}
+                        title={refusal}
                       >
                         <img src={attachment.previewUrl} alt="" />
-                        <span className={css.retryGlyph} aria-hidden><IconRefreshOutlineRegular size={16} /></span>
-                      </button>
+                        <span className={css.failureGlyph} aria-hidden><IconWarningOutlineRegular size={16} /></span>
+                      </div>
                     )
-                    : (
-                      <button
-                        type="button"
-                        className={css.thumbnail}
-                        title={t('image.openOriginal')}
-                        aria-busy={upload?.status === 'uploading'}
-                        onClick={() => { setPreview(attachment) }}
-                      >
-                        <img src={attachment.previewUrl} alt={attachment.file.name || t('image.pending')} />
-                      </button>
-                    )}
+                    : upload?.status === 'error'
+                      ? (
+                        <button
+                          type="button"
+                          className={`${css.thumbnail} ${css.thumbnailFailed}`}
+                          title={t('file.uploadFailed')}
+                          aria-label={t('file.retry', { name })}
+                          onClick={() => { onRetryFile(attachment.id) }}
+                        >
+                          <img src={attachment.previewUrl} alt="" />
+                          <span className={css.failureGlyph} aria-hidden><IconRefreshOutlineRegular size={16} /></span>
+                        </button>
+                      )
+                      : (
+                        <button
+                          type="button"
+                          className={css.thumbnail}
+                          title={t('image.openOriginal')}
+                          aria-busy={upload?.status === 'uploading'}
+                          onClick={() => { setPreview(attachment) }}
+                        >
+                          <img src={attachment.previewUrl} alt={name} />
+                        </button>
+                      )}
                   {upload?.status === 'uploading' && (
                     <span className={css.progressTrack} aria-hidden>
                       <span
@@ -112,7 +136,7 @@ export function ComposerAttachments({
                   <button
                     type="button"
                     className={css.remove}
-                    aria-label={t('image.remove', { name: attachment.file.name })}
+                    aria-label={t('image.remove', { name })}
                     onClick={() => { onRemoveAttachment(attachment.id) }}
                   >
                     <IconCloseFillRegular size={12} />

@@ -328,6 +328,20 @@ describe('Session file uploads', () => {
     expect(saveImages).not.toHaveBeenCalled()
   })
 
+  it('stops reading an image at the message byte limit when it is below the per-image limit', async () => {
+    const { uploads, saveImages } = await uploadHarness(undefined, {
+      ...IMAGE_LIMITS, maxImageBytes: 8, maxMessageImageBytes: 3,
+    })
+    const overLimit = (async function* (): AsyncIterable<Uint8Array> {
+      yield Uint8Array.of(1, 2)
+      yield Uint8Array.of(3, 4)
+      throw new Error('read past the limit')
+    })()
+    await expect(uploads.uploadImageStream({ sessionId: SESSION, data: overLimit, mediaType: 'image/png' }))
+      .rejects.toMatchObject({ code: 'session/attachment-invalid', details: { reason: 'IMAGE_TOO_LARGE' } })
+    expect(saveImages).not.toHaveBeenCalled()
+  })
+
   it('keeps the stream name optional and maps storage failures through the same error vocabulary', async () => {
     const { uploads, saveFileStream } = await uploadHarness()
     const stream = (async function* (): AsyncIterable<Uint8Array> {})()
