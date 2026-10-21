@@ -113,10 +113,11 @@ describe('interface creation', () => {
     const spec = await f.complete()
     const prompt: unknown = JSON.parse(spec.request.prompt.find(block => block.type === 'text')!.text)
     expect(prompt).toMatchObject({ brief: proposal.brief, initialContent, location: 'sidebar-left' })
+    const stringMatcher: unknown = expect.any(String)
     expect(prompt).toMatchSnapshot({
-      directory: expect.any(String) as unknown,
-      packageName: expect.any(String) as unknown,
-      uiReference: expect.any(String) as unknown,
+      directory: stringMatcher,
+      packageName: stringMatcher,
+      uiReference: stringMatcher,
     }, 'Creator handoff after reload')
     expect(f.startActivation).toHaveBeenCalledOnce()
   })
