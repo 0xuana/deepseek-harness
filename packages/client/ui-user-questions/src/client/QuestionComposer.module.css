@@ -109,7 +109,7 @@
 /* Long copy keeps one line fewer than its budget once it overflows: a
    question shows in full up to three lines, an option description up to two;
    longer copy drops its last line, fades at the end of the line before, and
-   shows its toggle there. Each box keeps its full budget, plus a 2px
+   shows its expand button there. Each box keeps its full budget, plus a 2px
    allowance for glyphs taller than the line, so the scroll timeline that
    reports the overflow never depends on the collapsed layout. A negative
    bottom margin, not a smaller box, gives the dropped line back to the row. */
@@ -121,7 +121,7 @@
 }
 
 .questionTitle[data-expanded] {
-  padding-bottom: 22px;
+  padding-bottom: 24px;
 }
 
 .titlePreview {
@@ -142,7 +142,7 @@
 @keyframes question-clipped {
   from, to {
     margin-bottom: calc(-1lh - 2px);
-    mask-image: linear-gradient(#000, #000), linear-gradient(to right, #000 calc(100% - 72px), transparent calc(100% - 48px));
+    mask-image: linear-gradient(#000, #000), linear-gradient(to right, #000 calc(100% - 56px), transparent calc(100% - 28px));
     mask-size: 100% 1lh, 100% 1lh;
     mask-position: 0 0, 0 1lh;
     mask-repeat: no-repeat;
@@ -151,8 +151,8 @@
 
 .questionToggle {
   position: absolute;
-  right: -6px;
-  bottom: 0;
+  right: -4px;
+  bottom: -1px;
   animation-name: copy-toggle-shown;
   animation-fill-mode: both;
   animation-timeline: --question-copy;
@@ -400,7 +400,7 @@
 @keyframes description-clipped {
   from, to {
     margin-bottom: calc(-1lh - 2px);
-    mask-image: linear-gradient(to right, #000 calc(100% - 72px), transparent calc(100% - 48px));
+    mask-image: linear-gradient(to right, #000 calc(100% - 56px), transparent calc(100% - 28px));
     mask-size: 100% 1lh;
     mask-repeat: no-repeat;
   }
@@ -408,16 +408,16 @@
 
 .descriptionToggle {
   position: absolute;
-  right: 6px;
-  bottom: 7px;
+  right: 8px;
+  bottom: 6px;
   animation-name: copy-toggle-shown;
   animation-fill-mode: both;
   animation-timeline: --description-copy;
 }
 
-/* Expanded copy keeps its toggle on a line of its own below the text. */
+/* Expanded copy keeps its collapse button on a line of its own below the text. */
 .optionRow[data-expanded] .option {
-  padding-bottom: 30px;
+  padding-bottom: 32px;
 }
 
 .questionTitle[data-expanded] .titlePreview,
@@ -426,18 +426,8 @@
   animation: none;
 }
 
+/* Shares .iconButton's 24px round control; hidden until its copy overflows or expands. */
 .copyToggle {
-  padding: 1px 6px;
-  border: 0;
-  border-radius: var(--dsw-radius-sm);
-  background: transparent;
-  color: var(--dsw-alias-label-secondary);
-  font: inherit;
-  font-size: 13px;
-  line-height: 20px;
-  font-weight: 400;
-  white-space: nowrap;
-  cursor: pointer;
   visibility: hidden;
 }
 
@@ -451,13 +441,6 @@
 .optionRow[data-expanded] .copyToggle {
   visibility: visible;
   animation: none;
-}
-
-@media (hover: hover) {
-  .copyToggle:hover {
-    background: var(--dsw-alias-interactive-bg-hover);
-    color: var(--dsw-alias-label-primary);
-  }
 }
 
 /* Without scroll timelines clipped copy cannot be told apart, so it shows in full. */
@@ -640,7 +623,7 @@
   }
 
   .descriptionToggle {
-    right: 0;
+    right: 2px;
   }
 
   .footer {

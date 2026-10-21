@@ -70,12 +70,12 @@ async function capMetrics(field: Locator): Promise<{ textLines: number; scrolls:
 
 /**
  * Read how the composer draws one long-copy element: the lines it shows,
- * whether CSS clipped it, whether its text overflows the line budget, and the
- * label of its toggle while that toggle is visible.
+ * whether CSS clipped it, whether its text overflows the line budget, and what
+ * its toggle does while that toggle is visible.
  * @param element - a question heading or an option description.
  * @returns the drawn state of the copy.
  */
-function readCopy(element: HTMLElement): { lines: number; clipped: boolean; overflows: boolean; toggle: string | undefined } {
+function readCopy(element: HTMLElement): { lines: number; clipped: boolean; overflows: boolean; toggle: 'expand' | 'collapse' | undefined } {
   const style = getComputedStyle(element)
   const toggle = element.tagName === 'H2'
     ? element.nextElementSibling
@@ -86,7 +86,7 @@ function readCopy(element: HTMLElement): { lines: number; clipped: boolean; over
     clipped: style.maskImage !== 'none',
     overflows: element.scrollHeight > element.clientHeight + 0.5,
     toggle: toggle instanceof HTMLElement && getComputedStyle(toggle).visibility === 'visible'
-      ? toggle.textContent ?? undefined
+      ? toggle.getAttribute('aria-expanded') === 'true' ? 'collapse' : 'expand'
       : undefined,
   }
 }
@@ -414,7 +414,7 @@ describe('web e2e: resident question composer round trip', () => {
           const copy = await description.evaluate(readCopy)
           expect(copy.lines).toBeLessThanOrEqual(2)
           expect(copy.clipped).toBe(copy.overflows)
-          expect(copy.toggle).toBe(copy.clipped ? 'More' : undefined)
+          expect(copy.toggle).toBe(copy.clipped ? 'expand' : undefined)
         }
         scrollStates.push(squeeze.scrolls)
         expect(squeeze.titleInScrollport).toBe(true)
@@ -432,14 +432,14 @@ describe('web e2e: resident question composer round trip', () => {
     const blue = composer.getByRole('checkbox', { name: 'Blue' })
     const blueText = composer.locator('[data-option-description]').first()
     const blueToggle = composer.locator(`button[aria-controls=${JSON.stringify(await blueText.getAttribute('id'))}]`)
-    await expect.poll(() => blueText.evaluate(readCopy)).toEqual({ lines: 1, clipped: true, overflows: true, toggle: 'More' })
+    await expect.poll(() => blueText.evaluate(readCopy)).toEqual({ lines: 1, clipped: true, overflows: true, toggle: 'expand' })
     await blueToggle.click()
     expect(await blue.getAttribute('aria-checked')).toBe('false')
     expect(await blueToggle.getAttribute('aria-expanded')).toBe('true')
-    expect(await blueText.evaluate(readCopy)).toMatchObject({ clipped: false, overflows: false, toggle: 'Show less' })
+    expect(await blueText.evaluate(readCopy)).toMatchObject({ clipped: false, overflows: false, toggle: 'collapse' })
     await blueToggle.click()
     // A collapsed copy's scroll timeline reports the overflow from the next frame.
-    await expect.poll(() => blueText.evaluate(readCopy)).toEqual({ lines: 1, clipped: true, overflows: true, toggle: 'More' })
+    await expect.poll(() => blueText.evaluate(readCopy)).toEqual({ lines: 1, clipped: true, overflows: true, toggle: 'expand' })
     await page.setViewportSize(originalViewport)
 
     // Multi-line custom answer: the field is a textarea whose hidden mirror
@@ -622,7 +622,7 @@ describe('web e2e: resident question composer round trip', () => {
       await composer.getByRole('heading', { name: '选择 HF provider 的思考等级？' }).waitFor()
       expect(await composer.getByRole('heading').evaluate(readCopy))
         .toEqual({ lines: 1, clipped: false, overflows: false, toggle: undefined })
-      expect(await composer.getByRole('button', { name: 'More' }).count()).toBe(0)
+      expect(await composer.getByRole('button', { name: 'Show the full question' }).count()).toBe(0)
       const rows = await composer.locator('[data-option-row]').evaluateAll(options => options.map((row) => {
         const label = row.querySelector<HTMLElement>('[data-option-line] > span:first-child')
         const description = row.querySelector<HTMLElement>('[data-option-description]')
@@ -726,15 +726,15 @@ describe('web e2e: resident question composer round trip', () => {
         // Past its three-line budget the question keeps two lines; past its
         // two-line budget a description keeps one. Copy within budget shows in full.
         await expect.poll(() => heading.evaluate(readCopy))
-          .toEqual({ lines: 2, clipped: true, overflows: true, toggle: 'More' })
+          .toEqual({ lines: 2, clipped: true, overflows: true, toggle: 'expand' })
         expect(await descriptionOf('Explicit install').evaluate(readCopy))
-          .toEqual({ lines: 1, clipped: true, overflows: true, toggle: 'More' })
+          .toEqual({ lines: 1, clipped: true, overflows: true, toggle: 'expand' })
         expect(await descriptionOf('Keep the default edge').evaluate(readCopy))
           .toEqual({ lines: 1, clipped: false, overflows: false, toggle: undefined })
         for (const copy of await composer.locator('[data-option-description]').all()) {
           const drawn = await copy.evaluate(readCopy)
           expect(drawn.clipped).toBe(drawn.overflows)
-          expect(drawn.toggle).toBe(drawn.clipped ? 'More' : undefined)
+          expect(drawn.toggle).toBe(drawn.clipped ? 'expand' : undefined)
           expect(drawn.lines).toBeLessThanOrEqual(drawn.clipped ? 1 : 2)
         }
         if (viewport.width === 512) {
@@ -758,15 +758,17 @@ describe('web e2e: resident question composer round trip', () => {
       // scrollport while navigation and submission stay reachable.
       const questionToggle = await toggleFor(heading)
       expect(await questionToggle.getAttribute('aria-expanded')).toBe('false')
+      expect(await questionToggle.getAttribute('aria-label')).toBe('Show the full question')
       await questionToggle.click()
       expect(await questionToggle.getAttribute('aria-expanded')).toBe('true')
+      expect(await questionToggle.getAttribute('aria-label')).toBe('Show less of the question')
       const expandedQuestion = await heading.evaluate(readCopy)
-      expect(expandedQuestion).toMatchObject({ clipped: false, overflows: false, toggle: 'Show less' })
+      expect(expandedQuestion).toMatchObject({ clipped: false, overflows: false, toggle: 'collapse' })
       expect(expandedQuestion.lines).toBeGreaterThan(3)
       expect(await questionToggle.evaluate(belowText, await heading.elementHandle())).toBe(true)
       expect(await readMetrics()).toEqual({ footerFits: true, scrolls: true, titleInScrollport: true })
       await questionToggle.click()
-      await expect.poll(() => heading.evaluate(readCopy)).toEqual({ lines: 2, clipped: true, overflows: true, toggle: 'More' })
+      await expect.poll(() => heading.evaluate(readCopy)).toEqual({ lines: 2, clipped: true, overflows: true, toggle: 'expand' })
 
       const detailText = composer.getByText(detail, { exact: true })
       expect(await detailText.evaluate(node => node.closest('[data-question-scroll]') !== null)).toBe(true)
@@ -782,10 +784,11 @@ describe('web e2e: resident question composer round trip', () => {
       const descriptionId = await explicitText.getAttribute('id')
       expect(await explicit.getAttribute('aria-describedby')).toBe(descriptionId)
       expect(await descriptionToggle.getAttribute('aria-describedby')).toBe(descriptionId)
+      expect(await descriptionToggle.getAttribute('aria-label')).toBe('Show the full description of “Explicit install”')
       await descriptionToggle.click()
       expect(await explicit.getAttribute('aria-checked')).toBe('false')
       const expandedDescription = await explicitText.evaluate(readCopy)
-      expect(expandedDescription).toMatchObject({ clipped: false, overflows: false, toggle: 'Show less' })
+      expect(expandedDescription).toMatchObject({ clipped: false, overflows: false, toggle: 'collapse' })
       expect(expandedDescription.lines).toBeGreaterThan(2)
       expect(await descriptionToggle.evaluate(belowText, await explicitText.elementHandle())).toBe(true)
       expect(await explicitText.evaluate((text) => {
@@ -794,7 +797,7 @@ describe('web e2e: resident question composer round trip', () => {
           child.getBoundingClientRect().bottom <= row.getBoundingClientRect().bottom + 0.5)
       })).toBe(true)
 
-      // The toggle's ink stays readable on the card in both themes.
+      // The toggle's icon keeps non-text contrast on the card in both themes.
       const palette: string[] = []
       const originalDarkTheme = await page.locator('body').getAttribute('data-ds-dark-theme')
       try {
@@ -814,7 +817,7 @@ describe('web e2e: resident question composer round trip', () => {
           const foreground = luminance(colors.text)
           const background = luminance(colors.surface)
           expect((Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05))
-            .toBeGreaterThanOrEqual(4.5)
+            .toBeGreaterThanOrEqual(3)
           palette.push(colors.surface)
         }
         expect(palette[0]).not.toBe(palette[1])
@@ -826,7 +829,7 @@ describe('web e2e: resident question composer round trip', () => {
       }
       await descriptionToggle.click()
       await expect.poll(() => explicitText.evaluate(readCopy))
-        .toEqual({ lines: 1, clipped: true, overflows: true, toggle: 'More' })
+        .toEqual({ lines: 1, clipped: true, overflows: true, toggle: 'expand' })
 
       await composer.getByRole('checkbox', { name: 'Explicit install' }).click()
       const answer = composer.getByRole('textbox')

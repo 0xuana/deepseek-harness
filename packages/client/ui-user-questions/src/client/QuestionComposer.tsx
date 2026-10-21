@@ -6,7 +6,7 @@ import clsx from 'clsx'
 import {
   Button, IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconChevronLeftOutlineRegular,
   IconChevronRightOutlineRegular, IconChevronUpOutlineRegular, IconCloseOutlineRegular,
-  IconEditOutlineRegular, MarkdownText,
+  IconEditOutlineRegular, MarkdownText, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { planReviewOf, type QuestionAnswer, type QuestionCardSnapshot, type QuestionComposerProps } from './contract/slots.ts'
 import type { PendingQuestion } from './contract/slots.ts'
@@ -249,6 +249,8 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
   const hasOptions = (question.options?.length ?? 0) > 0
   // CSS decides which copy is clipped; only the user's expansions are state.
   const [expanded, setExpanded] = useState<ExpandedCopy>(NOTHING_EXPANDED)
+
+  const questionToggleLabel = t(expanded.has('question') ? 'question.collapse' : 'question.expand')
 
   const toggleCopy = (copy: 'question' | number): void => {
     setExpanded((current) => {
@@ -524,15 +526,18 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
                 >
                   {question.question}
                 </h2>
-                <button
-                  type="button"
-                  className={clsx(css.copyToggle, css.questionToggle)}
-                  aria-expanded={expanded.has('question')}
-                  aria-controls={`question-${pending.key}-${String(index)}`}
-                  onClick={() => { toggleCopy('question') }}
-                >
-                  {t(expanded.has('question') ? 'text.collapse' : 'text.expand')}
-                </button>
+                <Tooltip label={questionToggleLabel} side="top" portal>
+                  <button
+                    type="button"
+                    className={clsx(css.iconButton, css.copyToggle, css.questionToggle)}
+                    aria-label={questionToggleLabel}
+                    aria-expanded={expanded.has('question')}
+                    aria-controls={`question-${pending.key}-${String(index)}`}
+                    onClick={() => { toggleCopy('question') }}
+                  >
+                    {expanded.has('question') ? <IconChevronUpOutlineRegular /> : <IconChevronDownOutlineRegular />}
+                  </button>
+                </Tooltip>
               </div>
               {question.detail !== undefined && (
                 <div className={css.detail}><MarkdownText text={question.detail} labels={markdownLabels} /></div>
@@ -543,6 +548,7 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
                   const display = parseRecommendedLabel(option.label)
                   const hasDescription = option.description !== undefined && option.description.trim() !== ''
                   const descriptionExpanded = expanded.has(optionIndex)
+                  const descriptionToggleLabel = t(descriptionExpanded ? 'option.collapse' : 'option.expand', { option: display.label })
                   const descriptionId = `${descriptionIdPrefix}-question-${String(index)}-option-${String(optionIndex)}-description`
                   return (
                     <div
@@ -592,16 +598,19 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
                         </span>
                       </button>
                       {hasDescription && (
-                        <button
-                          type="button"
-                          className={clsx(css.copyToggle, css.descriptionToggle)}
-                          aria-expanded={descriptionExpanded}
-                          aria-controls={descriptionId}
-                          aria-describedby={descriptionId}
-                          onClick={() => { toggleCopy(optionIndex) }}
-                        >
-                          {t(descriptionExpanded ? 'text.collapse' : 'text.expand')}
-                        </button>
+                        <Tooltip label={descriptionToggleLabel} side="top" portal>
+                          <button
+                            type="button"
+                            className={clsx(css.iconButton, css.copyToggle, css.descriptionToggle)}
+                            aria-label={descriptionToggleLabel}
+                            aria-expanded={descriptionExpanded}
+                            aria-controls={descriptionId}
+                            aria-describedby={descriptionId}
+                            onClick={() => { toggleCopy(optionIndex) }}
+                          >
+                            {descriptionExpanded ? <IconChevronUpOutlineRegular /> : <IconChevronDownOutlineRegular />}
+                          </button>
+                        </Tooltip>
                       )}
                     </div>
                   )
