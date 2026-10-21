@@ -189,20 +189,31 @@ describe('agent scope lifecycle', () => {
     const reason = new Error('cancelled while preparing')
     const controller = new AbortController()
     let aborted = false
+    let scopeReleased = false
     ctx.on('internal/plugin', (fiber) => {
       if (aborted || fiber.name !== 'scope') return
       aborted = true
+      fiber.ctx.effect(() => () => new Promise<void>((resolve) => {
+        setImmediate(() => {
+          scopeReleased = true
+          resolve()
+        })
+      }))
       controller.abort(reason)
     })
 
-    await expect(ctx.agents.create({
-      sessionId: SessionId('prepare-abort-s'),
-      signal: controller.signal,
-    })).rejects.toBe(reason)
+    try {
+      await expect(ctx.agents.create({
+        sessionId: SessionId('prepare-abort-s'),
+        signal: controller.signal,
+      })).rejects.toBe(reason)
 
-    expect(ctx.agents.get(SessionId('prepare-abort-s'))).toBeUndefined()
-    expect(ctx.sessions.get(SessionId('prepare-abort-s'))).toBeUndefined()
-    await ctx.fiber.dispose()
+      expect(scopeReleased).toBe(true)
+      expect(ctx.agents.get(SessionId('prepare-abort-s'))).toBeUndefined()
+      expect(ctx.sessions.get(SessionId('prepare-abort-s'))).toBeUndefined()
+    } finally {
+      await ctx.fiber.dispose()
+    }
   })
 
   it('normalizes non-Error create failures for rollback while rethrowing the original value', async () => {

@@ -42,7 +42,7 @@ expect(view.container).toMatchSnapshot()
 await runtime.dispose()
 ```
 
-`mount` prechecks required services and fails loud when one is missing — `provide(name, value)` supplies an extra service first. The runtime provides a `fileUpload` stub that rejects every call until a suite replaces `runtime.fileUpload.upload`. `storeOf(key, scopeKey)` returns the live store instance the renderer hands a slot's component for identity and action-driven-write assertions.
+`mount` prechecks required services and fails loud when one is missing — `provide(name, value)` supplies an extra service first. The runtime provides a `fileUpload` stub whose `upload` and `uploadImage` reject every call until a suite replaces them. `storeOf(key, scopeKey)` returns the live store instance the renderer hands a slot's component for identity and action-driven-write assertions.
 
 The runtime installs `allowAllAccessPlugin` before ui-session: its `remoteAccess` service, a `StaticRemoteAccess`, answers true for every resource, so every access Hook allows every action and every `whenAccess` callback runs at once. `TestClientOptions.access` fixes the answer per action instead, through `staticAccessPlugin(allows)`. Hand-built component props spread `...allowAllAccess` to receive the same Hooks; a spec of a refused path overrides one Hook or provides `new StaticRemoteAccess(ctx, allows)`.
 

@@ -564,6 +564,12 @@ export const IconChevronsUpDownOutlineRegular = productIcon('chevrons-up-down-ou
 /** Medium IconChevronsUpDownOutline artwork with a 1.3px stroke. */
 export const IconChevronsUpDownOutlineMedium = productIcon('chevrons-up-down-outline', 'medium')
 
+/** Regular one-pixel IconDragHandleOutline artwork. */
+export const IconDragHandleOutlineRegular = productIcon('drag-handle-outline', 'regular')
+
+/** Medium IconDragHandleOutline artwork with a 1.3px stroke. */
+export const IconDragHandleOutlineMedium = productIcon('drag-handle-outline', 'medium')
+
 /** Regular one-pixel IconArchiveOffOutline artwork. */
 export const IconArchiveOffOutlineRegular = productIcon('archive-off-outline', 'regular')
 
