@@ -722,12 +722,12 @@ importers:
       '@deepseek-ai/dsh-deepseek-account':
         specifier: workspace:*
         version: link:../../packages/credentials/deepseek-account
-      '@deepseek-ai/dsh-file-drag':
-        specifier: workspace:*
-        version: link:../../packages/util/file-drag
       '@deepseek-ai/dsh-home-paths':
         specifier: workspace:*
         version: link:../../packages/util/home-paths
+      '@deepseek-ai/dsh-util-file-drag':
+        specifier: workspace:*
+        version: link:../../packages/util/file-drag
       '@deepseek-ai/node-addon-system':
         specifier: workspace:~
         version: link:../../native/system/packages/entry
@@ -3683,7 +3683,7 @@ importers:
       '@deepseek-ai/dsh-client-ui-trajectory':
         specifier: workspace:*
         version: link:../ui-trajectory
-      '@deepseek-ai/dsh-file-drag':
+      '@deepseek-ai/dsh-util-file-drag':
         specifier: workspace:*
         version: link:../../util/file-drag
       clsx:
@@ -4343,12 +4343,12 @@ importers:
       '@deepseek-ai/dsh-client-ui-slots':
         specifier: workspace:*
         version: link:../ui-slots
-      '@deepseek-ai/dsh-file-drag':
-        specifier: workspace:*
-        version: link:../../util/file-drag
       '@deepseek-ai/dsh-util-crypto':
         specifier: workspace:*
         version: link:../../util/crypto
+      '@deepseek-ai/dsh-util-file-drag':
+        specifier: workspace:*
+        version: link:../../util/file-drag
       react:
         specifier: ^18.2.0
         version: 18.3.1
@@ -4992,12 +4992,12 @@ importers:
       '@deepseek-ai/dsh-client-store':
         specifier: workspace:*
         version: link:../store
-      '@deepseek-ai/dsh-file-drag':
-        specifier: workspace:*
-        version: link:../../util/file-drag
       '@deepseek-ai/dsh-util-code-language':
         specifier: workspace:*
         version: link:../../util/code-language
+      '@deepseek-ai/dsh-util-file-drag':
+        specifier: workspace:*
+        version: link:../../util/file-drag
       '@deepseek-ai/dsh-util-workspace-path':
         specifier: workspace:*
         version: link:../../util/workspace-path

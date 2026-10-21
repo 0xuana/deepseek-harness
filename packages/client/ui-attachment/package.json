@@ -60,7 +60,7 @@
     "@deepseek-ai/dsh-client-ui-tool": "workspace:*",
     "clsx": "^2.0.0",
     "@deepseek-ai/dsh-client-ui-file-drag": "workspace:*",
-    "@deepseek-ai/dsh-file-drag": "workspace:*"
+    "@deepseek-ai/dsh-util-file-drag": "workspace:*"
   },
   "files": [
     "locale/*.json",

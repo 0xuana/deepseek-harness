@@ -14,7 +14,6 @@ flowchart TD
     pkg_brand["brand"]
     pkg_chunked_list["chunked-list"]
     pkg_deque["deque"]
-    pkg_file_drag["file-drag"]
     pkg_home_paths["home-paths"]
     pkg_http_proxy["http-proxy"]
     pkg_launch_environment["launch-environment"]
@@ -27,6 +26,7 @@ flowchart TD
     pkg_timeout["timeout"]
     pkg_util_code_language["util-code-language"]
     pkg_util_crypto["util-crypto"]
+    pkg_util_file_drag["util-file-drag"]
     pkg_util_time["util-time"]
     pkg_util_values["util-values"]
     pkg_util_workspace_path["util-workspace-path"]
@@ -1453,7 +1453,6 @@ flowchart TD
 | [`brand`](../packages/util/brand) | `util` | — |
 | [`chunked-list`](../packages/util/chunked-list) | `util` | — |
 | [`deque`](../packages/util/deque) | `util` | — |
-| [`file-drag`](../packages/util/file-drag) | `util` | — |
 | [`home-paths`](../packages/util/home-paths) | `util` | — |
 | [`http-proxy`](../packages/util/http-proxy) | `util` | — |
 | [`launch-environment`](../packages/util/launch-environment) | `util` | — |
@@ -1466,6 +1465,7 @@ flowchart TD
 | [`timeout`](../packages/util/timeout) | `util` | — |
 | [`util-code-language`](../packages/util/code-language) | `util` | — |
 | [`util-crypto`](../packages/util/crypto) | `util` | — |
+| [`util-file-drag`](../packages/util/file-drag) | `util` | — |
 | [`util-time`](../packages/util/time) | `util` | — |
 | [`util-values`](../packages/util/values) | `util` | — |
 | [`util-workspace-path`](../packages/util/workspace-path) | `util` | — |

@@ -3,7 +3,7 @@ description: "Web 与 Desktop 共用的导出文件名及原生文件拖放请�
 kind: "package-library"
 ---
 
-# @deepseek-ai/dsh-file-drag
+# @deepseek-ai/dsh-util-file-drag
 
 [English](README.md) | 中文
 

@@ -6,7 +6,7 @@ import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { DraggableImage } from '@deepseek-ai/dsh-client-ui-primitives'
-import { FILE_DRAG_TOKEN_TYPE, type DesktopFileDrag, type FileDragHandle } from '@deepseek-ai/dsh-file-drag'
+import { FILE_DRAG_TOKEN_TYPE, type DesktopFileDrag, type FileDragHandle } from '@deepseek-ai/dsh-util-file-drag'
 import * as plugin from '../src/client/index.ts'
 import { apply as applyHost } from '../src/index.ts'
 

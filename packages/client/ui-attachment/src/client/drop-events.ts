@@ -1,5 +1,5 @@
 /** Document drag-and-drop listeners owned by one mounted attachment view. */
-import { FILE_DRAG_TOKEN_TYPE } from '@deepseek-ai/dsh-file-drag'
+import { FILE_DRAG_TOKEN_TYPE } from '@deepseek-ai/dsh-util-file-drag'
 import type { ComposerAttachmentsProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 
 /**

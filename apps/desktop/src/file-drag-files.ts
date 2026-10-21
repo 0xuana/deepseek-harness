@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { resolveDragFileName, type DragFileName, type FileDragHandle } from '@deepseek-ai/dsh-file-drag'
+import { resolveDragFileName, type DragFileName, type FileDragHandle } from '@deepseek-ai/dsh-util-file-drag'
 
 // Aggregate temporary bytes, including incomplete writes and failed removals.
 const MAX_TOTAL_DRAG_FILE_BYTES = 64 * 1024 * 1024

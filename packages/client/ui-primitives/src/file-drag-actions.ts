@@ -1,5 +1,5 @@
 /** Stable file preparation callbacks supplied by a transfer-owning plugin. */
-import type { DragFileName } from '@deepseek-ai/dsh-file-drag'
+import type { DragFileName } from '@deepseek-ai/dsh-util-file-drag'
 
 /** Content source and optional Host-verifiable identity of its unmodified local original. */
 export type FileDragSource = DragFileName & { readonly resourceAddress?: string | undefined } & (

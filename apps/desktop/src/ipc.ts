@@ -3,7 +3,7 @@
 import type { DesktopKeyboardApi, DesktopShortcutsApi } from '@deepseek-ai/dsh-client-shortcuts/protocol'
 import type { IpcMainInvokeEvent } from 'electron'
 import type { DesktopBrowserBridge } from '@deepseek-ai/dsh-client-ui-sidebar-browser/types'
-import type { DesktopFileDrag } from '@deepseek-ai/dsh-file-drag'
+import type { DesktopFileDrag } from '@deepseek-ai/dsh-util-file-drag'
 
 /** IPC channel names kept private to the desktop application bundle. */
 export const DESKTOP_IPC = {

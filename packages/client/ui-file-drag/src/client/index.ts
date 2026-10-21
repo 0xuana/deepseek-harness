@@ -1,7 +1,7 @@
 /** Cordis-owned file transfers and localized feedback shared across independent entries. */
 import type { Context } from '@deepseek-ai/cordis'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { DesktopFileDrag } from '@deepseek-ai/dsh-file-drag'
+import type { DesktopFileDrag } from '@deepseek-ai/dsh-util-file-drag'
 import type { FileDragActions } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'

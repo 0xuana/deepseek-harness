@@ -4,7 +4,7 @@ import { createReadStream, statSync, type Stats } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { app, ipcMain, type BrowserWindow, type IpcMainInvokeEvent, type NativeImage } from 'electron'
-import { resolveDragFileName, type DesktopFileSource, type FileDragHandle } from '@deepseek-ai/dsh-file-drag'
+import { resolveDragFileName, type DesktopFileSource, type FileDragHandle } from '@deepseek-ai/dsh-util-file-drag'
 import { DESKTOP_IPC } from './ipc.ts'
 import { DragFiles } from './file-drag-files.ts'
 

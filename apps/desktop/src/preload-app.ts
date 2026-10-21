@@ -9,7 +9,7 @@ import { syncNativeTheme } from './preload-theme.ts'
 import { syncWindowsAppearance } from './preload-windows.ts'
 import { installMandatoryUpdateOverlay } from './preload-mandatory-overlay.ts'
 import { createDesktopBrowserBridge } from './preload-browser.ts'
-import type { FileDragHandle } from '@deepseek-ai/dsh-file-drag'
+import type { FileDragHandle } from '@deepseek-ai/dsh-util-file-drag'
 
 function createProductApi(): DshDesktopProductApi {
   return {
