@@ -7,7 +7,7 @@ import type { LayoutState, PaneId, PaneNode, TabId, TabRecord } from '../contrac
 import { findTabPane, floatRect, getNode, getPane } from '../engine/tree.ts'
 import type { SizePreview } from './PaneTree.tsx'
 import type { PaneCallbacks } from './render.ts'
-import { FloatHeader, useFloatGestures } from './FloatLayer.tsx'
+import { FloatHeader, floatStyle, useFloatGestures } from './FloatLayer.tsx'
 import { PaneDropHints, TabPanel, TabStrip } from './TabPanel.tsx'
 import css from './dockkit.module.css'
 
@@ -89,9 +89,7 @@ function TabHost({ state, callbacks, intents, tab, pane, column, floats, focusRe
         data-dockkit-float={floating ? pane.id : undefined}
         data-dockkit-float-active={floating && state.activePaneId === pane.id || undefined}
         data-dockkit-column={!floating ? column : undefined}
-        style={rect === undefined ? undefined : {
-          left: rect.x, top: `max(var(--dsh-dockkit-float-top, 0px), ${rect.y}px)`, width: rect.width, height: rect.height,
-        }}
+        style={rect === undefined ? undefined : floatStyle(rect, lifted !== undefined)}
         onPointerDown={() => { if (floating) floats.raise(pane.id) }}
         onClick={() => { if (!floating && state.activePaneId !== pane.id) callbacks.onFocusPane(pane.id) }}>
         <div className={css.tabHostHeader}>

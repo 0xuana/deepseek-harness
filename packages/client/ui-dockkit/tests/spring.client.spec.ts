@@ -3,7 +3,7 @@
  * independence, and determinism, all with fixed frame steps.
  */
 import { describe, expect, it } from 'vitest'
-import { SPRING_DEADLINE_MS, springSettled, stepSpring } from '../src/engine/spring.ts'
+import { launchVelocity, SPRING_DEADLINE_MS, SPRING_MAX_VELOCITY, springSettled, stepSpring } from '../src/engine/spring.ts'
 import type { SpringAxis } from '../src/engine/spring.ts'
 
 /** Analytic overshoot bound for the shipped damping ratio, exp(-pi*zeta/sqrt(1-zeta^2)). */
@@ -51,6 +51,31 @@ describe('stepSpring', () => {
 
   it('stays put at its target', () => {
     expect(stepSpring({ position: 5, velocity: 0 }, 5, 1 / 60)).toEqual({ position: 5, velocity: 0 })
+  })
+})
+
+describe('launchVelocity', () => {
+  it('keeps an axis that is already at its target still', () => {
+    expect(launchVelocity(40, 40, 900, 120)).toBe(0)
+  })
+
+  it('passes an inward velocity through unchanged', () => {
+    expect(launchVelocity(60, 0, -900, 120)).toBe(-900)
+    expect(launchVelocity(-60, 0, 900, 120)).toBe(900)
+  })
+
+  it('caps an outward velocity on either side, to nothing once the axis is at the reach', () => {
+    expect(launchVelocity(119, 0, 1500, 120)).toBeLessThan(1500)
+    expect(launchVelocity(-119, 0, -1500, 120)).toBeGreaterThan(-1500)
+    expect(launchVelocity(130, 0, 1500, 120)).toBe(0)
+  })
+
+  it('keeps every return within the reach of its target, however fast the fling', () => {
+    for (let offset = 1; offset < 120; offset += 1) {
+      const velocity = launchVelocity(offset, 0, SPRING_MAX_VELOCITY, 120)
+      const { positions } = settle({ position: offset, velocity }, 0, 60)
+      expect(Math.max(offset, ...positions)).toBeLessThan(120)
+    }
   })
 })
 

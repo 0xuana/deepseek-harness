@@ -1046,6 +1046,40 @@ describe('web e2e: shipped right Sidebar', () => {
       expect(tripwire.warnings).toEqual([])
     }, 90_000)
 
+    it('resists a floating panel dragged past the viewport edges and springs it back inside', async () => {
+      onTestFailed(() => saveFailureShot(page, 'web-e2e-sidebar-right-float-edge'))
+      const column = await resetSidebar(page)
+      const floats = page.locator('[data-sidebar-right-session]:not([hidden]) [data-dockkit-float]')
+      await proseChip(page).click()
+      await expect.poll(async () => await tabTitles(paneAt(column, 0))).toEqual(['Files', SAMPLE_NAME])
+      await floatByDrag(page, paneAt(column, 0).locator('[data-dockkit-tab]').filter({ hasText: SAMPLE_NAME }))
+      await expect.poll(async () => await floats.count()).toBe(1)
+      const panel = floats.first()
+      const viewport = page.viewportSize()
+      if (viewport === null) throw new Error('page has no viewport')
+
+      // Carrying the grip to the bottom-right corner asks for the panel well past both edges.
+      const grip = await centre(panel.locator('[data-dockkit-float-grip]'))
+      await page.mouse.move(grip.x, grip.y)
+      await page.mouse.down()
+      await page.mouse.move(viewport.width - 2, viewport.height - 2, { steps: 8 })
+      const pushed = await panel.boundingBox()
+      if (pushed === null) throw new Error('float is not rendered')
+      expect(pushed.x + pushed.width).toBeGreaterThan(viewport.width)
+      expect(pushed.x + pushed.width).toBeLessThan(viewport.width + 120)
+      expect(pushed.y + pushed.height).toBeGreaterThan(viewport.height)
+      expect(pushed.y + pushed.height).toBeLessThan(viewport.height + 120)
+      await page.mouse.up()
+
+      await expect.poll(async () => {
+        const box = await panel.boundingBox()
+        return box === null ? undefined : { right: Math.round(box.x + box.width), bottom: Math.round(box.y + box.height) }
+      }).toEqual({ right: viewport.width, bottom: viewport.height })
+
+      expect(tripwire.pageErrors).toEqual([])
+      expect(tripwire.warnings).toEqual([])
+    }, 60_000)
+
     it('drops a pane whose last tab closes, and follows the last-tab rule on the surface', async () => {
       onTestFailed(() => saveFailureShot(page, 'web-e2e-sidebar-right-settle'))
       const column = await resetSidebar(page)

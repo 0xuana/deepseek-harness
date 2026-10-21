@@ -219,23 +219,27 @@ export interface FloatBounds {
 /** How far past an edge the resistance lets a dragged panel travel, at most, in CSS pixels. */
 export const FLOAT_RESISTANCE = 120
 
-/** One axis clamped into `[min, max]`; a span too small for the panel pins it at `min`. */
+/** One axis clamped into `[min, max]`; an empty span pins it at `min`. */
 function clampAxis(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(value, max))
 }
 
 /**
  * The nearest rectangle that lies inside the bounds, per axis. A panel larger
- * than the bounds on an axis pins its leading edge, so its header stays reachable.
+ * than the bounds on an axis takes the bounds' size on it, so its header
+ * controls and resize corner stay reachable.
  * @param rect - any rectangle, possibly outside the bounds.
  * @param bounds - the viewport region.
- * @returns the rectangle moved inside the bounds; the size is unchanged.
+ * @returns the rectangle moved inside the bounds, its size capped by them.
  */
 export function legalFloatRect(rect: FloatRect, bounds: FloatBounds): FloatRect {
+  const width = Math.min(rect.width, bounds.width)
+  const height = Math.min(rect.height, bounds.height - bounds.top)
   return {
-    ...rect,
-    x: clampAxis(rect.x, 0, bounds.width - rect.width),
-    y: clampAxis(rect.y, bounds.top, bounds.height - rect.height),
+    x: clampAxis(rect.x, 0, bounds.width - width),
+    y: clampAxis(rect.y, bounds.top, bounds.height - height),
+    width,
+    height,
   }
 }
 
@@ -259,7 +263,11 @@ export function resistedRect(desired: FloatRect, bounds: FloatBounds): FloatRect
 /** The largest displacement `unresistedRect` inverts; `resist` only approaches `FLOAT_RESISTANCE`. */
 const MAX_INVERTIBLE = FLOAT_RESISTANCE * 0.99
 
-/** Pointer overflow that `resist` maps to a displacement, the displacement capped at `MAX_INVERTIBLE`. */
+/**
+ * Pointer overflow that `resist` maps to a displacement, the displacement capped
+ * at `MAX_INVERTIBLE`. A panel drawn further out than that is picked up at the
+ * cap, which moves it inward by less than 1.2 px.
+ */
 function unresist(displacement: number): number {
   const shown = Math.min(Math.abs(displacement), MAX_INVERTIBLE)
   return Math.sign(displacement) * FLOAT_RESISTANCE * shown / (FLOAT_RESISTANCE - shown)

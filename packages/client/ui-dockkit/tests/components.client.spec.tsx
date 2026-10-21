@@ -1518,7 +1518,7 @@ describe('FloatLayer', () => {
 
     drag(grip, [150, 90], [180, 110], false)
     expect(panel.style.left).toBe('130px')
-    expect(panel.style.top).toBe('max(var(--dsh-dockkit-float-top, 0px), 100px)')
+    expect(panel.style.top).toBe('100px')
     // Mid-gesture the panel draws on top, as the move it records will leave it.
     expect(panel.style.zIndex).toBe('3')
     fireEvent.pointerUp(window, { pointerId: 7, clientX: 180, clientY: 110 })
@@ -1526,7 +1526,8 @@ describe('FloatLayer', () => {
     expect(intents.moveFloat).toHaveBeenCalledTimes(1)
     expect(intents.focusPane).not.toHaveBeenCalled()
     // The recorded rectangle and depth are drawn again once the preview clears.
-    expect(panel.style.left).toBe('100px')
+    expect(panel.style.left).toBe('')
+    expect(panel.style.getPropertyValue('--dsh-dockkit-float-x')).toBe('100px')
     expect(panel.style.zIndex).toBe('1')
   })
 

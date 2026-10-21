@@ -1,4 +1,4 @@
-# Agent Note: Force-directed edge recovery for floating dock panels
+# Agent Note: Spring-based edge recovery for floating dock panels
 
 Status: implemented
 
@@ -8,23 +8,25 @@ English | [中文](2026-10-21-floating-window-edge-recovery.zh.md)
 
 The dock kit's floating panels are the client's floating windows. `FloatLayer` and the retained `DockLayout` renderer draw them in viewport coordinates through one shared gesture hook, `useFloatGestures`, and the right Sidebar embeds them, so the same panels run in the Web client and inside the Desktop window. Their drag followed the pointer one to one with only a top floor (`--dsh-dockkit-float-top`, which keeps the header below the Windows caption). A panel could therefore be dragged past the left, right or bottom edge until its header was out of reach; a viewport that shrank left a panel outside it; and the creation cascade could place a new panel outside a small viewport. The required behavior is that a panel pushed past an edge visibly resists, and on release is pulled back inside with spring physics instead of being stopped by a wall or left outside.
 
-We reverse engineered Claude Desktop 2.42304.2 as a reference, and it has no such behavior. On macOS its Quick Entry surface is a native Swift `NSPanel`; its binary contains animation primitives, but no edge-recovery rule could be established from it. The Electron fallback used on Windows/Linux is static: after a 750 ms input debounce it makes one instantaneous `setPosition` that clamps only the right and bottom edges (trigger margin 0, target margin 30 DIP, so the first correction jumps by overflow + 30) and never clamps left or top. No `spring` symbol exists in its main bundle; its only window-motion utilities are a 240 ms `easeInOutCubic` bounds tween for main-window size changes, Electron's macOS-only `setBounds(bounds, true)`, and a 300 ms `cubic-bezier(0.16, 1, 0.3, 1)` CSS vocabulary. The behavior had to be designed, not ported.
+The reference implementation examined, Claude Desktop, has no portable edge-recovery rule: its Electron fallback corrects an off-screen window once, without animation, on the right and bottom edges only. The behavior had to be designed, not ported.
 
 The change keeps these obligations: a panel header is always reachable; one gesture still records at most one history entry; reduced motion is honored; the persisted Sidebar layout format and every embedder stay unchanged; and the motion is deterministic enough to test without a real browser clock.
 
 ## Decision
 
-The behavior lives entirely in `packages/client/ui-dockkit`, inside `useFloatGestures` and the pure engine helpers it calls. Both float renderers take their rectangles from that hook through `rectOf`, so Web and Desktop share the behavior, and no embedder, shell or persisted format changed.
+The behavior lives entirely in `packages/client/ui-dockkit`, inside `useFloatGestures` and the pure engine helpers it calls. Both float renderers take their rectangles from that hook through `rectOf`, so Web and Desktop share the behavior, and no embedder, shell or persisted format changed. The rule extends the floating panels of [right Sidebar docking](2026-09-04-right-sidebar-docking-infrastructure.md) and the fixed-position floating frames of the [retained tab layout](../architecture/2026-09-20-sidebar-retained-tab-layout.md); it supersedes neither note.
 
 ### Legal region and displayed position
 
-The legal region of a panel is the viewport (`window.innerWidth` by `window.innerHeight`) with the existing top floor: the Windows caption height plus 20 px when `data-windows-titlebar` is set (20 px in native fullscreen), otherwise 0. `floatBounds` reads only these values and the root's attributes, so starting a gesture forces no layout. `legalFloatRect` projects a rectangle into the region per axis; when a panel is wider or taller than the region it pins the minimum edge, so the header and its grip stay on screen and the excess hangs off the right or bottom.
+The legal region of a panel is the viewport (`window.innerWidth` by `window.innerHeight`) with the existing top floor: the Windows caption height plus 20 px when `data-windows-titlebar` is set (20 px in native fullscreen), otherwise 0. `floatBounds` reads only these values and the root's attributes, so starting a gesture forces no layout. `legalFloatRect` projects a rectangle into the region per axis; when a panel is wider or taller than the region it is drawn at the region's size on that axis, so its header controls and its resize corner stay on screen; the stored size is unchanged.
 
-A panel draws at its stored rectangle projected into the viewport. The stored rectangle is never rewritten for the viewport: a shrinking window pushes the panel in without recording an operation, and a growing window returns it toward its stored position. The hook re-reads the bounds on every window `resize` event. Persisted layouts that hold off-screen rectangles display inside the viewport without migration.
+A panel draws at its stored rectangle projected into the viewport. The stored rectangle is never rewritten for the viewport: a shrinking window pushes the panel in without recording an operation, and a growing window returns it toward its stored position. The hook re-reads the bounds at every press and on every window `resize` event, and a gesture in progress uses the new bounds. Persisted layouts that hold off-screen rectangles display inside the viewport without migration.
+
+At rest a panel publishes its rectangle to the `.float` rule as CSS variables through `floatStyle`, and the rule clamps it into the viewport (`100vw` by `100vh`) and below the caption floor once more. A bounds reading the hook has not refreshed, such as one taken before a fullscreen change settles, therefore still leaves the panel inside. A gesture or a return writes its position inline, outside the clamp.
 
 ### Drag with resistance
 
-A move computes the desired rectangle from the gesture's start rectangle and the pointer travel, then `resistedRect` splits it per axis into the legal projection and the overflow `o` beyond it and draws it at `legal + sign(o) * K * |o| / (K + |o|)` with `K = FLOAT_RESISTANCE = 120` px. The mapping is continuous, has slope 1 at the edge, and approaches `K`:
+A move computes the desired rectangle from the gesture's start rectangle and the pointer travel, then `resistedRect` splits it per axis into the legal projection and the overflow `o` beyond it and draws it at `legal + sign(o) * K * |o| / (K + |o|)` with `K = FLOAT_RESISTANCE = 120` px. The mapping applies on all four edges, including above the top floor, is continuous, has slope 1 at the edge, and approaches `K`:
 
 | pointer overflow (px) | panel displacement past the edge (px) | share of the overflow |
 |---|---|---|
@@ -37,9 +39,9 @@ A resize clamps the bottom-right corner to the region through `boundedResize` an
 
 ### Release and spring
 
-A release records the legal rectangle: `moveFloat` or `resizeFloat` when it differs from the stored one, otherwise only the raise a click records. History and persistence therefore always hold a legal position, and undo restores the pre-gesture position in one step. When the panel was drawn outside the legal region, the hook keeps a preview and springs it from where it was drawn to the recorded rectangle, then clears the preview. A release inside the region animates nothing.
+A release records the legal rectangle: `moveFloat` or `resizeFloat` when it differs from the legal rectangle at the press, otherwise only the raise a click records. A click on a panel drawn projected therefore keeps its stored rectangle. A move or resize therefore records only legal rectangles, and undo restores the pre-gesture position in one step. Panel creation (the drop rectangle of `floatTab` and the cascade) can still store a rectangle outside the viewport; the projection draws it inside. When the panel was drawn outside the legal region, the hook keeps a preview and springs it from where it was drawn to the recorded rectangle, then clears the preview. A release inside the region animates nothing.
 
-The spring in `engine/spring.ts` is underdamped, because its bounce goes inward and is always legal: response 0.32 s and damping ratio 0.72. An overflowing axis starts with the pointer velocity over the last 100 ms of the drag, capped at `SPRING_MAX_VELOCITY` (1500 px/s), so a fling past the edge travels further before it turns back; an axis that did not overflow keeps still. Per axis the update is:
+The spring in `engine/spring.ts` is underdamped, because its bounce goes inward and is always legal: response 0.32 s and damping ratio 0.72. An overflowing axis starts with the velocity of the drawn panel over the last 100 ms of the drag, so the speed is continuous across the release; it is capped at `SPRING_MAX_VELOCITY` (1500 px/s), and `launchVelocity` caps its outward part at `omega0 * (K - d)` for a drawn overflow `d`. A fling past the edge travels further before it turns back, and because the spring carries an offset `d` with speed `v` at most `d + 0.46 * v / omega0` from its target, the whole return stays within `K` of the edge. An axis that did not overflow keeps still. Per axis the update is:
 
 ```
 a = -omega0^2 * (x - target) - 2 * zeta * omega0 * v
@@ -47,9 +49,9 @@ v = v + a * h
 x = x + v * h
 ```
 
-`stepSpring` integrates in equal substeps of at most `h = 1/480 s`, so the motion does not depend on the frame rate. One `requestAnimationFrame` loop in the hook clamps a frame to 64 ms, ends at the target when a frame gap exceeds 250 ms or 900 ms have passed, and otherwise stops when each axis is within 1 px of the target and slower than 60 px/s. From rest, a 200 px overflow settles in 367 ms with an inward overshoot within one percentage point of the analytic bound `exp(-pi * zeta / sqrt(1 - zeta^2)) = 3.8%`; the resistance caps the released overflow at 120 px. The integrator is pure and takes `dt`, so the engine keeps its rule of reading no clock.
+`stepSpring` integrates in equal substeps of at most `h = 1/480 s`, so the motion does not depend on the frame rate. One `requestAnimationFrame` loop in the hook clamps a frame to 64 ms, ends at the target when a frame gap exceeds 250 ms or 900 ms have passed, and otherwise stops when each axis is within 1 px of the target and slower than 60 px/s. From rest, a 200 px overflow settles in 367 ms with an inward overshoot within one percentage point of the analytic bound `exp(-pi * zeta / sqrt(1 - zeta^2)) = 3.8%`. The integrator is pure and takes `dt`, so the engine keeps its rule of reading no clock.
 
-A press on the grip or the corner during a return cancels it. A move picks the panel up where it is drawn: `unresistedRect` inverts the resistance, so zero pointer travel draws the same rectangle, and a release in place resumes the return without recording a second operation. One hook runs at most one return; a window resize ends a running return at its recorded rectangle, and unmounting cancels the pending frame.
+A press on the grip or the corner during a return cancels it. A move picks the panel up where it is drawn: `unresistedRect` inverts the resistance, so zero pointer travel draws the same rectangle, and a release in place resumes the return without recording a second operation. One hook runs at most one return. A window resize ends a running return at its recorded rectangle, a press on another panel ends it at its target, a change of the panel's record that does not project to the target (an undo, a dock, a close) ends it at the new record on the next frame, and unmounting cancels the pending frame.
 
 ### Reduced motion
 
@@ -62,18 +64,20 @@ The change touches one package, `@deepseek-ai/dsh-client-ui-dockkit`, and leaves
 | File | Change |
 |---|---|
 | `packages/client/ui-dockkit/src/engine/geometry.ts` | `FloatBounds`, `FLOAT_RESISTANCE`, `legalFloatRect`, `resistedRect`, `unresistedRect`, `boundedResize` |
-| `packages/client/ui-dockkit/src/engine/spring.ts` | the pure spring integrator, its rest test and its timing limits |
-| `packages/client/ui-dockkit/src/components/FloatLayer.tsx` | `useFloatGestures`: viewport projection, resistance, release spring, velocity sampling, reduced motion, frame loop and cancellation; `rectOf` for both renderers |
-| `packages/client/ui-dockkit/src/components/TabLayout.tsx` | draws the hook's displayed rectangle |
+| `packages/client/ui-dockkit/src/engine/spring.ts` | the pure spring integrator, its rest test, `launchVelocity` and its timing limits |
+| `packages/client/ui-dockkit/src/components/FloatLayer.tsx` | `useFloatGestures`: viewport projection, resistance, release spring, drawn-velocity sampling, reduced motion, frame loop and cancellation; `rectOf` and `floatStyle` for both renderers |
+| `packages/client/ui-dockkit/src/components/TabLayout.tsx` | draws the hook's displayed rectangle through `floatStyle` |
+| `packages/client/ui-dockkit/src/components/dockkit.module.css` | the resting clamp on `.float` |
 | `packages/client/ui-dockkit/README.md` pair | the edge rule beside the float renderer description |
+| `apps/web/tests/sidebar-right.e2e.ts` | a browser case for the resistance and the return |
 
-`ui-sidebar-right` and its persisted layout schema, `apps/web`, `apps/desktop`, the shared primitives and the theme are untouched. No dependency was added.
+`ui-sidebar-right` and its persisted layout schema, the `apps/web` source, `apps/desktop`, the shared primitives and the theme are untouched. No dependency was added.
 
 ## Testing
 
-`tests/float-bounds.client.spec.ts` covers the projection (inside, each edge, corner, the top floor, an oversized panel), the resistance (the table values, slope 1 at the edge, monotone growth bounded by `K`, independent axes), its inverse and its cap, and the bounded resize. `tests/spring.client.spec.ts` covers settling inside the deadline, the overshoot bound, frame-rate independence at 30, 60 and 120 Hz, the effect of release velocity, and determinism.
+`tests/float-bounds.client.spec.ts` covers the projection (inside, each edge, corner, the top floor, an oversized panel), the resistance (the table values, slope 1 at the edge, monotone growth bounded by `K`, independent axes), its inverse and its cap, and the bounded resize. `tests/spring.client.spec.ts` covers settling inside the deadline, the overshoot bound, frame-rate independence at 30, 60 and 120 Hz, the effect of release velocity, determinism, and the launch cap keeping every return within `K`. `tests/app-region-styles.client.spec.ts` pins the resting clamp in the stylesheet.
 
-`tests/float-recovery.client.spec.tsx` renders `FloatLayer` over a live controller with hand-driven frames and clock: the resisted preview past an edge, exactly one legal `moveFloat` per release and the spring to it with an inward overshoot, undo in one step, fling against slow push, no animation for a release inside, a push that ends at the stored position, a press mid-return picking the panel up without a jump, the stall snap, the deadline, unmount cancellation, both reduced-motion answers, the viewport projection on shrink and growth without any intent, a resize ending a return, and an off-screen stored rectangle drawn inside. The existing `FloatLayer` and `TabLayout` specs still pass unchanged, including the rule that starting a gesture forces no layout read; every changed source file is fully covered.
+`tests/float-recovery.client.spec.tsx` renders `FloatLayer` over a live controller with hand-driven frames and clock: the resisted preview past an edge, exactly one legal `moveFloat` per release and the spring to it with an inward overshoot, undo in one step, fling against slow push, a fast fling staying within `K`, a drag above the top floor, no animation for a release inside, a push that ends at the stored position, a press mid-return picking the panel up without a jump, the stall snap, the deadline, a return yielding to an undo, a close and a press on another panel, unmount cancellation, both reduced-motion answers, the viewport projection on shrink and growth without any intent, a click on a projected panel recording nothing, a window resize during a gesture bounding its release, a resize ending a return, and an off-screen stored rectangle drawn inside. The existing `FloatLayer` and `TabLayout` specs still pass with their position assertions read from the resting variables, including the rule that starting a gesture forces no layout read; every changed source file is fully covered. `apps/web/tests/sidebar-right.e2e.ts` drags a Sidebar float past the right and bottom edges in Chromium, checks that the drawn panel stays within 120 px beyond them, and waits for the release to settle flush against both edges.
 
 ## Alternatives considered
 

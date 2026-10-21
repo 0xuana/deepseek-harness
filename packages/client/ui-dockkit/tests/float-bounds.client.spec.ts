@@ -32,9 +32,13 @@ describe('legalFloatRect', () => {
     expect(legalFloatRect({ ...PANEL, y: 10 }, { ...VIEWPORT, top: 60 }).y).toBe(60)
   })
 
-  it('pins the leading edge of a panel larger than the viewport, so its header stays reachable', () => {
+  it('draws a panel larger than the viewport at the viewport size, so its header controls and corner stay reachable', () => {
     const big = { x: 300, y: 300, width: 1200, height: 900 }
-    expect(legalFloatRect(big, { ...VIEWPORT, top: 20 })).toEqual({ ...big, x: 0, y: 20 })
+    expect(legalFloatRect(big, { ...VIEWPORT, top: 20 })).toEqual({ x: 0, y: 20, width: 1000, height: 780 })
+  })
+
+  it('caps only the axis that does not fit', () => {
+    expect(legalFloatRect({ ...PANEL, x: 900, width: 1200 }, VIEWPORT)).toEqual({ ...PANEL, x: 0, width: 1000 })
   })
 })
 

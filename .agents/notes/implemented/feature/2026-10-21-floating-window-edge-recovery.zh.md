@@ -1,4 +1,4 @@
-# Agent Note: 悬浮停靠面板的力导向边界收回
+# Agent Note: 悬浮停靠面板的弹簧式边界收回
 
 Status: implemented
 
@@ -8,23 +8,25 @@ Status: implemented
 
 dock kit 的悬浮面板就是客户端里的悬浮窗。`FloatLayer` 与保留式 `DockLayout` 渲染器通过同一个手势 hook `useFloatGestures` 以视口坐标绘制它们，右侧 Sidebar 嵌入了它们，因此同一套面板既运行在 Web 客户端中，也运行在 Desktop 窗口内。它们的拖拽过去一比一跟随指针，只有一个顶部下限（`--dsh-dockkit-float-top`，让标题栏保持在 Windows 标题栏之下）。因此面板可以被拖过左、右或下边界，直到标题栏够不着；视口缩小会把面板留在外面；新建面板的级联位置也可能落在小视口之外。期望行为是：面板被推过边界时可见地受到阻力，松手后以弹簧物理被拉回视口内，而不是像撞墙一样被挡住或被留在外面。
 
-我们逆向分析了参考实现 Claude Desktop 2.42304.2，它没有这种行为。在 macOS 上它的 Quick Entry 是原生 Swift `NSPanel`；其二进制包含动画原语，但无法从中确认任何边界收回规则。Windows/Linux 上使用的 Electron 回退是静态的：输入防抖 750 ms 后做一次瞬时 `setPosition`，只裁剪右边界和下边界（触发边距为 0、目标边距为 30 DIP，因此首次修正在溢出量之外再跳 30），从不裁剪左边界和上边界。其主 bundle 中不存在 `spring` 符号；仅有的窗口运动工具是用于主窗口尺寸变化的 240 ms `easeInOutCubic` 边界补间、Electron 仅 macOS 可用的 `setBounds(bounds, true)`，以及 300 ms `cubic-bezier(0.16, 1, 0.3, 1)` 的 CSS 运动语汇。该行为必须被设计，而不是移植。
+所考察的参考实现 Claude Desktop 没有可移植的边界收回规则：它的 Electron 回退只对屏幕外窗口做一次无动画修正，且只修正右边界和下边界。该行为必须被设计，而不是移植。
 
 变更维持以下义务：面板标题栏始终可达；一个手势仍然最多记录一条历史；遵循减弱动态效果；Sidebar 的持久化布局格式与所有嵌入方保持不变；运动足够确定，无需真实浏览器时钟即可测试。
 
 ## 决定
 
-该行为完全位于 `packages/client/ui-dockkit` 内，在 `useFloatGestures` 及其调用的纯 engine 辅助函数中实现。两个悬浮渲染器都通过 `rectOf` 从该 hook 取得矩形，因此 Web 与 Desktop 共享该行为，任何嵌入方、壳或持久化格式都没有改变。
+该行为完全位于 `packages/client/ui-dockkit` 内，在 `useFloatGestures` 及其调用的纯 engine 辅助函数中实现。两个悬浮渲染器都通过 `rectOf` 从该 hook 取得矩形，因此 Web 与 Desktop 共享该行为，任何嵌入方、壳或持久化格式都没有改变。该规则扩展了 [右侧 Sidebar 停靠](2026-09-04-right-sidebar-docking-infrastructure.zh.md) 的悬浮面板与 [保留式标签布局](../architecture/2026-09-20-sidebar-retained-tab-layout.zh.md) 的固定定位悬浮框，不取代其中任何一篇。
 
 ### 合法区域与显示位置
 
-面板的合法区域是视口（`window.innerWidth` × `window.innerHeight`）加上既有的顶部下限：设置了 `data-windows-titlebar` 时为 Windows 标题栏高度加 20 px（原生全屏时为 20 px），否则为 0。`floatBounds` 只读取这些值和根元素属性，因此开始手势不会触发布局。`legalFloatRect` 逐轴把矩形投影进该区域；面板比区域更宽或更高时钉住最小边，使标题栏及其抓手留在屏幕上，多余部分悬在右侧或下方。
+面板的合法区域是视口（`window.innerWidth` × `window.innerHeight`）加上既有的顶部下限：设置了 `data-windows-titlebar` 时为 Windows 标题栏高度加 20 px（原生全屏时为 20 px），否则为 0。`floatBounds` 只读取这些值和根元素属性，因此开始手势不会触发布局。`legalFloatRect` 逐轴把矩形投影进该区域；面板比区域更宽或更高时，在该轴上按区域尺寸绘制，使标题栏控件和缩放角留在屏幕上；存储的尺寸不变。
 
-面板绘制在其存储矩形投影到视口后的位置。存储矩形从不因视口而被改写：窗口缩小时面板被推入且不记录操作，窗口变大时面板回到存储位置。hook 在每次窗口 `resize` 事件时重新读取区域。包含屏幕外矩形的持久化布局无需迁移即在视口内显示。
+面板绘制在其存储矩形投影到视口后的位置。存储矩形从不因视口而被改写：窗口缩小时面板被推入且不记录操作，窗口变大时面板朝存储位置回移。hook 在每次按下和每次窗口 `resize` 事件时重新读取区域，进行中的手势使用新区域。包含屏幕外矩形的持久化布局无需迁移即在视口内显示。
+
+静止时面板通过 `floatStyle` 把矩形以 CSS 变量发布给 `.float` 规则，该规则再次把它钳制在视口（`100vw` × `100vh`）内并保持在标题栏下限之下。因此即使 hook 读到的区域尚未刷新（例如全屏切换完成前读取的值），面板仍在视口内。手势或回弹把位置写在行内样式中，不受该钳制。
 
 ### 带阻力的拖拽
 
-移动时由手势起始矩形和指针位移计算期望矩形，然后 `resistedRect` 逐轴把它拆分为合法投影与超出它的溢出量 `o`，并绘制在 `legal + sign(o) * K * |o| / (K + |o|)`，其中 `K = FLOAT_RESISTANCE = 120` px。该映射连续、在边界处斜率为 1、渐近于 `K`：
+移动时由手势起始矩形和指针位移计算期望矩形，然后 `resistedRect` 逐轴把它拆分为合法投影与超出它的溢出量 `o`，并绘制在 `legal + sign(o) * K * |o| / (K + |o|)`，其中 `K = FLOAT_RESISTANCE = 120` px。该映射作用于全部四条边，包括顶部下限之上，连续、在边界处斜率为 1、渐近于 `K`：
 
 | 指针溢出（px） | 面板越过边界的位移（px） | 占溢出的比例 |
 |---|---|---|
@@ -37,9 +39,9 @@ dock kit 的悬浮面板就是客户端里的悬浮窗。`FloatLayer` 与保留�
 
 ### 松手与弹簧
 
-松手时记录合法矩形：与存储矩形不同时记录 `moveFloat` 或 `resizeFloat`，否则只记录点击会记录的提升。因此历史与持久化始终保存合法位置，撤销一步即可恢复手势前的位置。若面板绘制在合法区域之外，hook 保留预览，用弹簧把它从绘制位置带到记录的矩形，然后清除预览。在区域内松手不播放动画。
+松手时记录合法矩形：与按下时的合法矩形不同时记录 `moveFloat` 或 `resizeFloat`，否则只记录点击会记录的提升。因此单击以投影绘制的面板会保留其存储矩形。因此移动或缩放只记录合法矩形，撤销一步即可恢复手势前的位置。创建面板（`floatTab` 的落点矩形与级联）仍可能存储视口外的矩形，由投影把它绘制在视口内。若面板绘制在合法区域之外，hook 保留预览，用弹簧把它从绘制位置带到记录的矩形，然后清除预览。在区域内松手不播放动画。
 
-`engine/spring.ts` 中的弹簧是欠阻尼的，因为它的回弹朝向内侧，始终合法：响应时间 0.32 s、阻尼比 0.72。溢出的轴以拖拽最后 100 ms 的指针速度起步，上限为 `SPRING_MAX_VELOCITY`（1500 px/s），因此甩过边界的面板会先走得更远再折返；没有溢出的轴保持不动。每轴更新为：
+`engine/spring.ts` 中的弹簧是欠阻尼的，因为它的回弹朝向内侧，始终合法：响应时间 0.32 s、阻尼比 0.72。溢出的轴以拖拽最后 100 ms 内绘制面板的速度起步，因此速度在松手前后连续；该速度上限为 `SPRING_MAX_VELOCITY`（1500 px/s），且对绘制溢出量 `d`，`launchVelocity` 把其向外分量限制在 `omega0 * (K - d)` 以内。甩过边界的面板会先走得更远再折返；由于弹簧从偏移 `d`、速度 `v` 出发时距目标至多 `d + 0.46 * v / omega0`，整条回弹轨迹都不超出边界 `K`。没有溢出的轴保持不动。每轴更新为：
 
 ```
 a = -omega0^2 * (x - target) - 2 * zeta * omega0 * v
@@ -47,9 +49,9 @@ v = v + a * h
 x = x + v * h
 ```
 
-`stepSpring` 以等长且不超过 `h = 1/480 s` 的子步积分，因此运动与帧率无关。hook 中唯一的 `requestAnimationFrame` 循环把单帧钳制到 64 ms，帧间隔超过 250 ms 或已过 900 ms 时直接停在目标，否则在每轴距目标 1 px 内且慢于 60 px/s 时停止。从静止开始，200 px 溢出在 367 ms 内稳定，向内过冲与解析上限 `exp(-pi * zeta / sqrt(1 - zeta^2)) = 3.8%` 相差不超过一个百分点；阻力把松手时的溢出限制在 120 px 内。积分器是纯函数并接收 `dt`，因此 engine 保持不读取时钟的规则。
+`stepSpring` 以等长且不超过 `h = 1/480 s` 的子步积分，因此运动与帧率无关。hook 中唯一的 `requestAnimationFrame` 循环把单帧钳制到 64 ms，帧间隔超过 250 ms 或已过 900 ms 时直接停在目标，否则在每轴距目标 1 px 内且慢于 60 px/s 时停止。从静止开始，200 px 溢出在 367 ms 内稳定，向内过冲与解析上限 `exp(-pi * zeta / sqrt(1 - zeta^2)) = 3.8%` 相差不超过一个百分点。积分器是纯函数并接收 `dt`，因此 engine 保持不读取时钟的规则。
 
-回弹期间按下抓手或右下角会取消回弹。移动从绘制位置接住面板：`unresistedRect` 反演阻力，因此零指针位移绘制同一矩形，原地松手会恢复回弹且不记录第二次操作。一个 hook 最多运行一个回弹；窗口缩放会让进行中的回弹停在记录的矩形，卸载会取消待处理的帧。
+回弹期间按下抓手或右下角会取消回弹。移动从绘制位置接住面板：`unresistedRect` 反演阻力，因此零指针位移绘制同一矩形，原地松手会恢复回弹且不记录第二次操作。一个 hook 最多运行一个回弹。窗口缩放会让进行中的回弹停在记录的矩形；按下另一个面板会让它停在目标；面板记录的变化若不再投影到目标（撤销、停靠、关闭），会在下一帧让它停在新记录；卸载会取消待处理的帧。
 
 ### 减弱动态效果
 
@@ -62,18 +64,20 @@ x = x + v * h
 | 文件 | 变更 |
 |---|---|
 | `packages/client/ui-dockkit/src/engine/geometry.ts` | `FloatBounds`、`FLOAT_RESISTANCE`、`legalFloatRect`、`resistedRect`、`unresistedRect`、`boundedResize` |
-| `packages/client/ui-dockkit/src/engine/spring.ts` | 纯弹簧积分器、静止判定与时间上限 |
-| `packages/client/ui-dockkit/src/components/FloatLayer.tsx` | `useFloatGestures`：视口投影、阻力、松手弹簧、速度采样、减弱动态效果、帧循环与取消；供两个渲染器使用的 `rectOf` |
-| `packages/client/ui-dockkit/src/components/TabLayout.tsx` | 绘制 hook 给出的显示矩形 |
+| `packages/client/ui-dockkit/src/engine/spring.ts` | 纯弹簧积分器、静止判定、`launchVelocity` 与时间上限 |
+| `packages/client/ui-dockkit/src/components/FloatLayer.tsx` | `useFloatGestures`：视口投影、阻力、松手弹簧、绘制速度采样、减弱动态效果、帧循环与取消；供两个渲染器使用的 `rectOf` 与 `floatStyle` |
+| `packages/client/ui-dockkit/src/components/TabLayout.tsx` | 通过 `floatStyle` 绘制 hook 给出的显示矩形 |
+| `packages/client/ui-dockkit/src/components/dockkit.module.css` | `.float` 上的静止钳制 |
 | `packages/client/ui-dockkit/README.md` 对 | 在悬浮渲染器说明旁补充边界规则 |
+| `apps/web/tests/sidebar-right.e2e.ts` | 覆盖阻力与回弹的浏览器用例 |
 
-`ui-sidebar-right` 及其持久化布局 schema、`apps/web`、`apps/desktop`、共享基础组件与主题均未改动。没有新增依赖。
+`ui-sidebar-right` 及其持久化布局 schema、`apps/web` 源码、`apps/desktop`、共享基础组件与主题均未改动。没有新增依赖。
 
 ## 测试
 
-`tests/float-bounds.client.spec.ts` 覆盖投影（内部、每条边、角、顶部下限、超尺寸面板）、阻力（表中数值、边界处斜率为 1、以 `K` 为上界的单调增长、各轴独立）、其反演与上限，以及受限缩放。`tests/spring.client.spec.ts` 覆盖在截止时间内稳定、过冲上限、30／60／120 Hz 下与帧率无关、松手速度的作用以及确定性。
+`tests/float-bounds.client.spec.ts` 覆盖投影（内部、每条边、角、顶部下限、超尺寸面板）、阻力（表中数值、边界处斜率为 1、以 `K` 为上界的单调增长、各轴独立）、其反演与上限，以及受限缩放。`tests/spring.client.spec.ts` 覆盖在截止时间内稳定、过冲上限、30／60／120 Hz 下与帧率无关、松手速度的作用、确定性，以及启动速度上限让每条回弹都不超出 `K`。`tests/app-region-styles.client.spec.ts` 固定样式表中的静止钳制。
 
-`tests/float-recovery.client.spec.tsx` 在活的控制器上渲染 `FloatLayer`，帧与时钟由测试手动推进：越过边界时带阻力的预览、每次松手恰好一次合法的 `moveFloat` 以及带向内过冲的弹回、一步撤销、甩出与慢推的对比、区域内松手不播放动画、推到存储位置的手势、回弹中按下接住面板且不跳变、停顿直接跳转、截止时间、卸载取消、两种减弱动态效果答复、视口缩小与变大时的投影且不调用任何 intent、缩放结束回弹，以及屏幕外存储矩形在视口内绘制。既有的 `FloatLayer` 与 `TabLayout` 测试原样通过，包括开始手势不做布局读取这一规则；每个改动的源文件都被完全覆盖。
+`tests/float-recovery.client.spec.tsx` 在活的控制器上渲染 `FloatLayer`，帧与时钟由测试手动推进：越过边界时带阻力的预览、每次松手恰好一次合法的 `moveFloat` 以及带向内过冲的弹回、一步撤销、甩出与慢推的对比、快速甩出不超出 `K`、拖过顶部下限、区域内松手不播放动画、推到存储位置的手势、回弹中按下接住面板且不跳变、停顿直接跳转、截止时间、回弹让位于撤销、关闭与按下另一个面板、卸载取消、两种减弱动态效果答复、视口缩小与变大时的投影且不调用任何 intent、单击投影面板不记录任何操作、手势中窗口缩放约束其松手结果、缩放结束回弹，以及屏幕外存储矩形在视口内绘制。既有的 `FloatLayer` 与 `TabLayout` 测试在位置断言改为读取静止变量后通过，包括开始手势不做布局读取这一规则；每个改动的源文件都被完全覆盖。`apps/web/tests/sidebar-right.e2e.ts` 在 Chromium 中把 Sidebar 悬浮面板拖过右边界和下边界，检查绘制的面板越过两边均不超过 120 px，并等待松手后面板贴合两条边静止。
 
 ## 考虑过的替代方案
 
@@ -97,4 +101,4 @@ x = x + v * h
 
 悬浮面板在两个客户端中都不会再丢失到屏幕外，推过边界读起来是被拉回而不是撞墙。历史、持久化与所有嵌入方不受影响，运动由确定性测试而非手动检查覆盖。
 
-弹簧通过 React state 更新预览，每帧成本与拖拽相同，但承载重内容的面板在松手后最多会重渲染 900 ms；如果测量显示问题，退路是直接在面板元素上写 transform。被缩小窗口推入的面板会在窗口变大时回到存储位置，期望它留在被推到位置的用户可能会感到意外。面板内的内容（例如 webview）在松手后可能观察到最多 900 ms 的运动。常量针对鼠标或触控板调优；触控输入经由同样的 pointer 事件可用，但仍未调优。
+弹簧通过 React state 更新预览，每帧成本与拖拽相同，但承载重内容的面板在松手后最多会重渲染 900 ms；如果测量显示问题，退路是直接在面板元素上写 transform。被缩小窗口推入的面板会在窗口变大时朝存储位置回移，期望它留在被推到位置的用户可能会感到意外。面板内的内容（例如 webview）在松手后可能观察到最多 900 ms 的运动。常量针对鼠标或触控板调优；触控输入经由同样的 pointer 事件可用，但仍未调优。

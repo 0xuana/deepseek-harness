@@ -70,19 +70,24 @@ function mounted(rect: FloatRect = { x: 100, y: 80, width: 300, height: 200 }) {
     view.rerender(<FloatLayer state={controller.getSnapshot().state} intents={intents} labels={TEST_LABELS} renderTab={() => null} />)
   }
   const moveFloat = vi.fn((id: PaneId, x: number, y: number) => { controller.moveFloat(id, x, y); redraw() })
+  const resizeFloat = vi.fn((id: PaneId, next: FloatRect) => { controller.resizeFloat(id, next); redraw() })
   const focusPane = vi.fn((id: PaneId) => { controller.focusPane(id); redraw() })
   const intents: DockIntents = {
     focusTab: vi.fn(), focusPane, splitPane: vi.fn(), addTab: vi.fn(), closeTab: vi.fn(), duplicateTab: vi.fn(),
-    floatTab: vi.fn(), unfloatPane: vi.fn(), placeTab: vi.fn(), dropTab: vi.fn(), moveFloat, resizeFloat: vi.fn(),
+    floatTab: vi.fn(), unfloatPane: vi.fn(), placeTab: vi.fn(), dropTab: vi.fn(), moveFloat, resizeFloat,
     resizeSplit: vi.fn(),
   }
   const view = render(<FloatLayer state={controller.getSnapshot().state} intents={intents} labels={TEST_LABELS} renderTab={() => null} />)
   const panel = (): HTMLElement => view.container.querySelector<HTMLElement>(`[data-dockkit-float="${paneId}"]`) as HTMLElement
   const grip = (): HTMLElement => panel().querySelector<HTMLElement>('[data-dockkit-float-grip]') as HTMLElement
-  const left = (): number => Number.parseFloat(panel().style.left)
-  const top = (): number => Number.parseFloat(/(-?[\d.]+)px\)$/.exec(panel().style.top)?.[1] ?? 'NaN')
+  // A lifted panel writes left and top inline; a resting one publishes them to the `.float` rule.
+  const drawn = (side: 'left' | 'top', axis: 'x' | 'y'): number =>
+    Number.parseFloat(panel().style.getPropertyValue(side) || panel().style.getPropertyValue(`--dsh-dockkit-float-${axis}`))
+  const left = (): number => drawn('left', 'x')
+  const top = (): number => drawn('top', 'y')
   const stored = (): FloatRect => floatRect(getPane(controller.getSnapshot().state, paneId))
-  return { controller, paneId, view, moveFloat, focusPane, left, top, grip, stored }
+  const corner = (): HTMLElement => panel().querySelector<HTMLElement>('[data-dockkit-float-resize]') as HTMLElement
+  return { controller, tabId, paneId, view, redraw, moveFloat, resizeFloat, focusPane, left, top, grip, corner, stored }
 }
 
 /** Press the grip at `from`, move to `to`, and optionally release there. */
@@ -139,6 +144,36 @@ describe('dragging past an edge', () => {
     expect(fast.left()).toBeGreaterThan(released)
     runOut()
     expect(fast.left()).toBe(724)
+  })
+
+  it('starts a fling at the drawn speed, so even the fastest one stays within the resistance limit', () => {
+    const h = mounted()
+    fireEvent.pointerDown(h.grip(), { clientX: 150, clientY: 90, pointerId: 7, button: 0 })
+    // A long push that ends in a fast flick: the samples older than the velocity window drop out.
+    for (let x = 150; x <= 850; x += 50) {
+      now += 50
+      fireEvent.pointerMove(window, { pointerId: 7, clientX: x, clientY: 90 })
+    }
+    now += 10
+    fireEvent.pointerMove(window, { pointerId: 7, clientX: 3000, clientY: 90 })
+    fireEvent.pointerUp(window, { pointerId: 7, clientX: 3000, clientY: 90 })
+    const trail = [h.left()]
+    for (let guard = 0; queued.size > 0 && guard < 100; guard++) {
+      frame()
+      trail.push(h.left())
+    }
+    expect(Math.max(...trail)).toBeLessThan(724 + 120)
+    expect(h.left()).toBe(724)
+  })
+
+  it('draws above the top edge while dragged and springs back below it', () => {
+    const h = mounted()
+    drag(h.grip(), [150, 90], [150, 90 - 200], false)
+    expect(h.top()).toBeLessThan(0)
+    fireEvent.pointerUp(window, { pointerId: 7, clientX: 150, clientY: -110 })
+    expect(h.moveFloat).toHaveBeenCalledWith(h.paneId, 100, 0)
+    runOut()
+    expect(h.top()).toBe(0)
   })
 
   it('springs straight back after a slow push, which has no release velocity', () => {
@@ -205,6 +240,47 @@ describe('interrupting a return', () => {
     expect(h.left()).toBe(724)
   })
 
+  it('yields to an undo: the panel draws at the restored record at once', () => {
+    const h = mounted()
+    drag(h.grip(), [150, 90], [150 + 744, 90])
+    frame()
+    act(() => {
+      h.controller.undo()
+      h.redraw()
+    })
+    frame()
+    expect(queued.size).toBe(0)
+    expect(h.left()).toBe(100)
+  })
+
+  it('yields when its panel closes', () => {
+    const h = mounted()
+    drag(h.grip(), [150, 90], [150 + 744, 90])
+    act(() => {
+      h.controller.closeTab(h.tabId)
+      h.redraw()
+    })
+    frame()
+    expect(queued.size).toBe(0)
+  })
+
+  it('ends at its target when another panel is pressed', () => {
+    const h = mounted()
+    const other = h.controller.floatTab(
+      h.controller.openContent({ contentId: 'dsh-resource://file/session/s/b.txt', title: 'b.txt', kind: 'file' }),
+      { x: 100, y: 400, width: 300, height: 200 },
+    )
+    act(() => { h.redraw() })
+    drag(h.grip(), [150, 90], [150 + 744, 90])
+    frame()
+    expect(h.left()).toBeGreaterThan(724)
+    const otherGrip = h.view.container.querySelector<HTMLElement>(`[data-dockkit-float="${other}"] [data-dockkit-float-grip]`) as HTMLElement
+    fireEvent.pointerDown(otherGrip, { clientX: 150, clientY: 410, pointerId: 8, button: 0 })
+    expect(queued.size).toBe(0)
+    expect(h.left()).toBe(724)
+    fireEvent.pointerUp(window, { pointerId: 8, clientX: 150, clientY: 410 })
+  })
+
   it('cancels its frame when the layer unmounts', () => {
     const h = mounted()
     drag(h.grip(), [150, 90], [150 + 744, 90])
@@ -253,6 +329,30 @@ describe('the viewport projection', () => {
     act(() => { window.dispatchEvent(new Event('resize')) })
     expect(queued.size).toBe(0)
     expect(h.left()).toBe(724)
+  })
+
+  it('treats a click on a projected panel as a raise, keeping its record for a larger window', () => {
+    const h = mounted()
+    viewport(350, 768)
+    act(() => { window.dispatchEvent(new Event('resize')) })
+    expect(h.left()).toBe(50)
+    drag(h.grip(), [100, 90], [100, 90])
+    drag(h.corner(), [340, 270], [340, 270])
+    expect(h.moveFloat).not.toHaveBeenCalled()
+    expect(h.resizeFloat).not.toHaveBeenCalled()
+    viewport(1024, 768)
+    act(() => { window.dispatchEvent(new Event('resize')) })
+    expect(h.left()).toBe(100)
+  })
+
+  it('bounds a gesture by the viewport the window resized to mid-gesture', () => {
+    const h = mounted()
+    fireEvent.pointerDown(h.corner(), { clientX: 400, clientY: 280, pointerId: 7, button: 0 })
+    fireEvent.pointerMove(window, { pointerId: 7, clientX: 800, clientY: 280 })
+    viewport(500, 768)
+    act(() => { window.dispatchEvent(new Event('resize')) })
+    fireEvent.pointerUp(window, { pointerId: 7, clientX: 800, clientY: 280 })
+    expect(h.resizeFloat).toHaveBeenCalledWith(h.paneId, { x: 100, y: 80, width: 400, height: 200 })
   })
 
   it('draws a stored rectangle from outside the viewport inside it', () => {

@@ -14,17 +14,18 @@
  * and nothing here assumes the docked tree is an ancestor or even present.
  */
 import { useEffect, useRef, useState } from 'react'
-import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
+import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import clsx from 'clsx'
 import { IconCloseOutlineRegular, IconPanelLeftOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { DockIntents, DockLabels, TabRenderer } from '../contract/adapter.ts'
 import type { FloatRect, LayoutState, PaneId, TabId, TabRecord } from '../contract/types.ts'
 import { FLOAT_MIN_SIZE } from '../engine/constraints.ts'
 import {
-  boundedResize, legalFloatRect, movedRect, resistedRect, resizedRect, unresistedRect, type FloatBounds,
+  boundedResize, FLOAT_RESISTANCE, legalFloatRect, movedRect, resistedRect, resizedRect, unresistedRect, type FloatBounds,
 } from '../engine/geometry.ts'
 import {
-  SPRING_DEADLINE_MS, SPRING_MAX_FRAME_MS, SPRING_MAX_VELOCITY, SPRING_STALL_MS, springSettled, stepSpring, type SpringAxis,
+  launchVelocity, SPRING_DEADLINE_MS, SPRING_MAX_FRAME_MS, SPRING_MAX_VELOCITY, SPRING_STALL_MS, springSettled, stepSpring,
+  type SpringAxis,
 } from '../engine/spring.ts'
 import { floatRect, getPane, getTab, onlyTabId } from '../engine/tree.ts'
 import { useGesture } from './pointer.ts'
@@ -88,20 +89,30 @@ function reducedMotion(): boolean {
   return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
-/** How much recent pointer history the release velocity is measured over. */
+/** How much recent drawing history the release velocity is measured over. */
 const VELOCITY_WINDOW_MS = 100
 
-/** One pointer position and when it was read. */
-interface PointerSample {
+/** One drawn panel position and when it was drawn. */
+interface DrawnSample {
   readonly t: number
   readonly x: number
   readonly y: number
 }
 
-/** Pointer velocity over the last `VELOCITY_WINDOW_MS`, capped per axis, in pixels per second. */
-function releaseVelocity(samples: readonly PointerSample[]): { readonly x: number; readonly y: number } {
-  const last = samples[samples.length - 1] as PointerSample
-  const first = samples.find(sample => last.t - sample.t <= VELOCITY_WINDOW_MS) as PointerSample
+/** Append a drawn position and drop the samples more than `VELOCITY_WINDOW_MS` older than it. */
+function sampleDrawn(samples: DrawnSample[], t: number, rect: FloatRect): void {
+  samples.push({ t, x: rect.x, y: rect.y })
+  while (t - (samples[0] as DrawnSample).t > VELOCITY_WINDOW_MS) samples.shift()
+}
+
+/**
+ * Drawn panel velocity over the kept samples, capped per axis, in pixels per
+ * second. It follows the drawn panel rather than the pointer, so the speed stays
+ * continuous across a release where the resistance slows the panel.
+ */
+function releaseVelocity(samples: readonly DrawnSample[]): { readonly x: number; readonly y: number } {
+  const first = samples[0] as DrawnSample
+  const last = samples[samples.length - 1] as DrawnSample
   if (last.t === first.t) return { x: 0, y: 0 }
   const rate = (travel: number): number =>
     Math.max(-SPRING_MAX_VELOCITY, Math.min(SPRING_MAX_VELOCITY, travel / (last.t - first.t) * 1000))
@@ -120,6 +131,25 @@ interface Settling {
 }
 
 /**
+ * Inline position of a floating panel. A gesture or return draws it exactly at
+ * `rect`. At rest the panel only publishes `rect` to the `.float` rule, which
+ * clamps it into the viewport and below the caption floor, so a stale viewport
+ * reading in `useFloatGestures` still leaves the panel inside.
+ * @param rect - the rectangle to draw.
+ * @param lifted - whether a gesture or return is drawing the panel.
+ * @returns the panel's inline position and size.
+ */
+export function floatStyle(rect: FloatRect, lifted: boolean): CSSProperties {
+  if (lifted) return { left: rect.x, top: rect.y, width: rect.width, height: rect.height }
+  return {
+    '--dsh-dockkit-float-x': `${rect.x}px`,
+    '--dsh-dockkit-float-y': `${rect.y}px`,
+    '--dsh-dockkit-float-width': `${rect.width}px`,
+    '--dsh-dockkit-float-height': `${rect.height}px`,
+  } as CSSProperties
+}
+
+/**
  * Shared move/resize gestures; changing layout mode never owns the content DOM.
  * Panels draw at their stored rectangle projected into the viewport, so a
  * shrinking window pushes them in without recording anything. A move past an
@@ -132,6 +162,11 @@ interface Settling {
 export function useFloatGestures(state: LayoutState, intents: DockIntents) {
   const [preview, setPreview] = useState<{ paneId: PaneId; rect: FloatRect } | undefined>(undefined)
   const [bounds, setBounds] = useState(floatBounds)
+  // The bounds a gesture reads: re-read at each press and on each window resize.
+  const area = useRef(bounds)
+  // The committed layout, for a return to notice its panel's record changing.
+  const latest = useRef(state)
+  latest.current = state
   const settling = useRef<Settling | undefined>(undefined)
   const begin = useGesture(() => { setPreview(undefined) })
 
@@ -147,7 +182,8 @@ export function useFloatGestures(state: LayoutState, intents: DockIntents) {
   useEffect(() => {
     const resize = (): void => {
       if (cancelSettling()) setPreview(undefined)
-      setBounds(floatBounds())
+      area.current = floatBounds()
+      setBounds(area.current)
     }
     window.addEventListener('resize', resize)
     return () => {
@@ -156,13 +192,21 @@ export function useFloatGestures(state: LayoutState, intents: DockIntents) {
     }
   }, [cancelSettling])
 
-  /** One animation frame of a return: advance the spring, or end it at its target. */
+  /**
+   * One animation frame of a return: advance the spring, or end it at its
+   * target. It also ends once the panel's record no longer projects to the
+   * target, as after an undo, a dock or a close, so the release's `moveFloat`
+   * or `resizeFloat` must reach `state` before the first frame.
+   */
   const frame = (): void => {
     const running = settling.current as Settling
     const now = performance.now()
     const gap = now - running.last
     running.last = now
-    if (gap <= SPRING_STALL_MS && now - running.started < SPRING_DEADLINE_MS) {
+    const layout = latest.current
+    const recorded = layout.floats.includes(running.paneId)
+      && sameRect(legalFloatRect(floatRect(getPane(layout, running.paneId)), area.current), running.target)
+    if (recorded && gap <= SPRING_STALL_MS && now - running.started < SPRING_DEADLINE_MS) {
       const dt = Math.min(gap, SPRING_MAX_FRAME_MS) / 1000
       running.x = stepSpring(running.x, running.target.x, dt)
       running.y = stepSpring(running.y, running.target.y, dt)
@@ -176,10 +220,10 @@ export function useFloatGestures(state: LayoutState, intents: DockIntents) {
     setPreview(undefined)
   }
 
-  /** Spring a panel from where it was drawn to its recorded rectangle; a legal axis keeps still. */
+  /** Spring a panel from where it was drawn to its recorded rectangle, never farther than `FLOAT_RESISTANCE` outside it. */
   const settle = (paneId: PaneId, from: FloatRect, target: FloatRect, velocity: { x: number; y: number }): void => {
     const axis = (position: number, goal: number, speed: number): SpringAxis =>
-      ({ position, velocity: position === goal ? 0 : speed })
+      ({ position, velocity: launchVelocity(position, goal, speed, FLOAT_RESISTANCE) })
     const now = performance.now()
     settling.current = {
       paneId, target, started: now, last: now,
@@ -205,40 +249,47 @@ export function useFloatGestures(state: LayoutState, intents: DockIntents) {
   const rectOf = (paneId: PaneId, stored: FloatRect): FloatRect =>
     preview?.paneId === paneId ? preview.rect : legalFloatRect(stored, bounds)
 
-  /** Start a move or resize from a press on the panel's grip or corner; a release that moved nothing is a click. */
+  /**
+   * Start a move or resize from a press on the panel's grip or corner. A release
+   * that reaches the same legal rectangle as the press is a click and only raises,
+   * also for a panel drawn projected from its record.
+   */
   const drag = (mode: 'move' | 'resize', paneId: PaneId, event: ReactPointerEvent<HTMLElement>): void => {
     // The press stops here: the panel's own press-to-focus would record a focus
     // entry before the drag's, and the release below decides which one it is.
     event.stopPropagation()
-    // A press during a return takes the panel from where it is drawn.
+    // A press during its own return takes the panel from where it is drawn;
+    // another panel's return ends at its target.
     const drawn = settling.current?.paneId === paneId ? preview?.rect : undefined
-    cancelSettling()
-    const area = floatBounds()
+    if (cancelSettling() && drawn === undefined) setPreview(undefined)
+    area.current = floatBounds()
     const reduce = reducedMotion()
-    const stored = floatRect(getPane(state, paneId))
-    const shown = drawn ?? legalFloatRect(stored, area)
-    const rect = mode === 'move' && !reduce ? unresistedRect(shown, area) : legalFloatRect(shown, area)
+    const shown = drawn ?? legalFloatRect(floatRect(getPane(state, paneId)), area.current)
+    const rect = mode === 'move' && !reduce ? unresistedRect(shown, area.current) : legalFloatRect(shown, area.current)
     const start: FloatDrag = { mode, originX: event.clientX, originY: event.clientY, rect }
-    const samples: PointerSample[] = [{ t: performance.now(), x: event.clientX, y: event.clientY }]
     /** The rectangle to draw for a pointer position, and the legal one a release there records. */
     const reached = (x: number, y: number): { readonly drawn: FloatRect; readonly legal: FloatRect } => {
       const desired = draggedRect(start, x, y)
       if (mode === 'resize') {
-        const resized = boundedResize(desired, area, FLOAT_MIN_SIZE)
+        const resized = boundedResize(desired, area.current, FLOAT_MIN_SIZE)
         return { drawn: resized, legal: resized }
       }
-      const legal = legalFloatRect(desired, area)
-      return { drawn: reduce ? legal : resistedRect(desired, area), legal }
+      const legal = legalFloatRect(desired, area.current)
+      return { drawn: reduce ? legal : resistedRect(desired, area.current), legal }
     }
+    const pressed = reached(event.clientX, event.clientY)
+    const samples: DrawnSample[] = []
+    sampleDrawn(samples, performance.now(), pressed.drawn)
     begin(event.currentTarget, event.pointerId, {
       move: (moved) => {
-        samples.push({ t: performance.now(), x: moved.clientX, y: moved.clientY })
-        setPreview({ paneId, rect: reached(moved.clientX, moved.clientY).drawn })
+        const { drawn } = reached(moved.clientX, moved.clientY)
+        sampleDrawn(samples, performance.now(), drawn)
+        setPreview({ paneId, rect: drawn })
       },
       up: (released) => {
-        samples.push({ t: performance.now(), x: released.clientX, y: released.clientY })
         const { drawn, legal } = reached(released.clientX, released.clientY)
-        if (sameRect(legal, stored)) raise(paneId)
+        sampleDrawn(samples, performance.now(), drawn)
+        if (sameRect(legal, pressed.legal)) raise(paneId)
         else if (mode === 'move') intents.moveFloat(paneId, legal.x, legal.y)
         else intents.resizeFloat(paneId, legal)
         if (!sameRect(drawn, legal)) settle(paneId, drawn, legal, releaseVelocity(samples))
@@ -311,10 +362,7 @@ export function FloatLayer({ state, intents, labels, renderTab, renderTabTitle, 
             tabIndex={-1}
             data-dockkit-float-active={state.activePaneId === paneId || undefined}
             style={{
-              left: live.x,
-              top: `max(var(--dsh-dockkit-float-top, 0px), ${live.y}px)`,
-              width: live.width,
-              height: live.height,
+              ...floatStyle(live, lifted !== undefined),
               zIndex: lifted === undefined ? depth + 1 : state.floats.length + 1,
             }}
             onPointerDown={() => { raise(paneId) }}

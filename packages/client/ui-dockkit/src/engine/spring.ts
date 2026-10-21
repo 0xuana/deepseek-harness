@@ -50,6 +50,24 @@ export function stepSpring(axis: SpringAxis, target: number, dtSeconds: number):
 }
 
 /**
+ * The velocity an axis starts its return with. An axis already at its target
+ * keeps still. Outward speed is capped at `omega0 * (reach - |offset|)`: the
+ * spring carries a start offset `d` and speed `v` at most `d + 0.46 * v / omega0`
+ * from its target, so the whole return stays within `reach`.
+ * @param position - where the axis is drawn at release.
+ * @param target - the position the spring pulls toward.
+ * @param velocity - the drawn release velocity, in pixels per second.
+ * @param reach - the farthest the return may be from the target.
+ * @returns the starting velocity.
+ */
+export function launchVelocity(position: number, target: number, velocity: number, reach: number): number {
+  const offset = position - target
+  if (offset === 0) return 0
+  if (Math.sign(velocity) !== Math.sign(offset)) return velocity
+  return Math.sign(offset) * Math.min(Math.abs(velocity), OMEGA * Math.max(0, reach - Math.abs(offset)))
+}
+
+/**
  * Whether an axis has come to rest at its target.
  * @param axis - the axis state.
  * @param target - the spring's target.
