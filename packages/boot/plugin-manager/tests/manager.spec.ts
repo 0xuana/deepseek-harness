@@ -666,6 +666,33 @@ it('runs a real pnpm dependency script only after approval and retry', async () 
   expect(readFileSync(built, 'utf8')).toBe('built')
 })
 
+it('offers approval for a real git-hosted package pnpm refused to prepare', async () => {
+  const { manager, dir, profile } = await fixture('startup')
+  const repository = join(profile.cwd, 'repository')
+  mkdirSync(repository)
+  const env = { GIT_CONFIG_GLOBAL: join(profile.cwd, 'git.config'), GIT_CONFIG_NOSYSTEM: '1' }
+  writeFileSync(env.GIT_CONFIG_GLOBAL, '')
+  const git = (args: string[]) => execa('git', args, { cwd: repository, env })
+  await git(['init', '--initial-branch=main'])
+  writeFileSync(join(repository, 'package.json'), JSON.stringify({ name: '@test/git-prepared', version: '1.0.0',
+    scripts: { prepare: 'node build.cjs' }, dsh: { bundle: { patch: './cordis.patch.yml' } } }))
+  writeFileSync(join(repository, 'build.cjs'), 'require("node:fs").writeFileSync("built.txt", "built")\n')
+  writeFileSync(join(repository, 'cordis.patch.yml'), '[]\n')
+  await git(['add', '.'])
+  await git(['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-m', 'fixture bundle'])
+  writeFileSync(join(dir, 'package.json'), '{"name":"git-approval-fixture","private":true}\n')
+  const policy = parseDocument(readFileSync(join(dir, 'pnpm-workspace.yaml'), 'utf8'))
+  policy.set('storeDir', join(profile.cwd, 'store'))
+  writeFileSync(join(dir, 'pnpm-workspace.yaml'), String(policy))
+  const spec = `git+${pathToFileURL(repository).href}`
+  const blocked = await manager.installBundle(spec, { enabled: false })
+  expect(blocked, JSON.stringify(blocked)).toMatchObject({ application: 'failed', packageResult: { kind: 'build-blocked' } })
+  expect(blocked.pendingBuilds).toEqual([expect.stringMatching(/^@test\/git-prepared@git\+file:/)])
+  const allowed = await manager.installBundle(spec, { enabled: false, approvedBuilds: blocked.pendingBuilds! })
+  expect(allowed, JSON.stringify(allowed)).toMatchObject({ application: 'restart-required', packageResult: { exitCode: 0 } })
+  expect(readFileSync(join(dir, 'node_modules', '@test', 'git-prepared', 'built.txt'), 'utf8')).toBe('built')
+})
+
 it.each(['[', 'allowBuilds: false\n'])('preserves pnpm diagnostics when pending approvals cannot be read: %s', async (policy) => {
   const { manager, dir } = await fixture()
   writeFileSync(join(dir, 'pnpm-workspace.yaml'), policy)

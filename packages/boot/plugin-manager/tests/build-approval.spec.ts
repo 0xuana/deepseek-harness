@@ -89,6 +89,22 @@ it('records the ignored build scripts a non-interactive run reported', async () 
   expect(parse(readFileSync(filename, 'utf8'))).toMatchObject({ allowBuilds: { 'native@1.0.0': true } })
 })
 
+it.each(['\n', '\r\n'])('records the allowBuilds key pnpm suggests for a git-hosted package it refused to prepare (%j)', async (eol) => {
+  const { dir, filename } = fixture()
+  const key = '@scope/sidechat@git+https://example.com/sidechat.git#244b67419a80844f5fb1fd7971109b9c19a20b76'
+  const output = [
+    '[ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED] Failed to prepare git-hosted package fetched from "https://example.com/sidechat.git": The git-hosted package "@scope/sidechat@0.2.0" needs to execute build scripts but is not in the "allowBuilds" allowlist.',
+    '',
+    'Add the package to "allowBuilds" in your project\'s pnpm-workspace.yaml to allow it to run scripts. For example:',
+    'allowBuilds:',
+    `  ${key}: true`,
+  ].join(eol)
+
+  expect(await recordPendingBuilds(dir, output)).toEqual([key])
+  await approveBuilds(dir, [key])
+  expect(parse(readFileSync(filename, 'utf8'))).toMatchObject({ allowBuilds: { [key]: true } })
+})
+
 it.each([
   ['no report', 'Progress: resolved 1, reused 1, downloaded 0, added 1, done\n'],
   ['an empty report', '[ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: \n'],

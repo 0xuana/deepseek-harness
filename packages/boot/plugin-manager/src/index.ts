@@ -927,7 +927,7 @@ export class PluginManager extends TypertRemoteService {
         const succeeded = run.exitCode === 0 && run.timedOut !== true
         if (succeeded) delete result.failedAt
         if (!succeeded) {
-          // pnpm-workspace.yaml is not restored, so the names it left undecided, or reported as ignored, are offered for approval.
+          // pnpm-workspace.yaml is not restored, so the names it left undecided, or reported as blocked, are offered for approval.
           try { result.pendingBuilds = await recordPendingBuilds(this.profile.dir, run.output) }
           catch (error) {
             this.ownerContext.logger.warn('Could not read pending build approvals after pnpm failed', error)
