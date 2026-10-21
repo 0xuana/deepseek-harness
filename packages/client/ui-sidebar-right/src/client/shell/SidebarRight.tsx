@@ -8,8 +8,9 @@
  *
  * Docked content stays mounted while collapsed, translated off the frame's right
  * edge, so opening and closing are one gesture in both presentations: a slide
- * from and to that edge. Normal presentation moves the frame's tracks with
- * the panel. A fullscreen opening reserves its underlying track only after
+ * from and to that edge. An item the opening commit mounts, such as the first
+ * tab of an empty column, takes the closed style once so it joins that slide.
+ * Normal presentation moves the frame's tracks with the panel. A fullscreen opening reserves its underlying track only after
  * the panel covers the frame, without animating those hidden columns.
  *
  * The panel has no header of its own: its two controls — presentation switch
@@ -295,10 +296,10 @@ function PanelChrome({ sessionId, fullscreen, actions, t, shortcuts, toggleFulls
   )
 }
 
-/** The docked Grid items whose transform slides with the panel (`SidebarRight.module.css`). */
-const DOCKED_ITEMS = "[data-dockkit-host='dock'], [data-dockkit-empty], [data-dockkit-divider]"
+/** The docked Grid items whose transform slides with the panel; the slide rules in `SidebarRight.module.css` list the same selectors. */
+export const DOCKED_ITEMS = "[data-dockkit-host='dock'], [data-dockkit-empty], [data-dockkit-divider]"
 
-/** Whether an animation is a docked item's running open or close slide. */
+/** Whether an animation is a running transform transition: the panel's open or close slide. */
 function isSlide(animation: Animation): boolean {
   return 'transitionProperty' in animation && animation.transitionProperty === 'transform'
     && animation.playState !== 'finished' && animation.playState !== 'idle'

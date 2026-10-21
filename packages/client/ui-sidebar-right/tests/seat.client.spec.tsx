@@ -557,7 +557,7 @@ describe('RightbarSeat presentation', () => {
     expect(h.frame.closeRightbar).toHaveBeenCalled()
   })
 
-  it('starts an item the opening mounts from the closed style, leaving a sliding item alone', async () => {
+  it('starts an item mounted by the opening commit from the closed style and leaves a reversing item alone', async () => {
     const h = await mountSeat()
     const settled: { readonly item: Element; readonly open: boolean }[] = []
     const getComputedStyle = window.getComputedStyle.bind(window)

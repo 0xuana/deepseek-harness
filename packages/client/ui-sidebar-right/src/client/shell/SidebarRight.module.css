@@ -48,7 +48,8 @@
 }
 
 /* Only docked Grid items slide. Their common ancestor remains untransformed
-   and without a stacking context, so fixed floating children escape. */
+   and without a stacking context, so fixed floating children escape. The
+   selector lists match `DOCKED_ITEMS` (SidebarRight.tsx). */
 .panel :global([data-dockkit-host='dock']),
 .panel :global([data-dockkit-empty]),
 .panel :global([data-dockkit-divider]) {
