@@ -83,12 +83,13 @@ type PromptContentPart =
 /**
  * Host prompt content whose upload receipts are resolved. An image part
  * carries encoded bytes awaiting admission, or references an image this
- * service already stored for an upload the same Session staged.
+ * service already stored for an upload the same Session staged, with
+ * `encodedBytes` holding the byte length of that upload.
  */
 type AttachmentAdmissionPart =
   | PromptContentPart
   | { readonly type: 'file'; readonly attachment: FileAttachmentRef }
-  | { readonly type: 'image'; readonly attachment: ImageAttachmentRef }
+  | { readonly type: 'image'; readonly attachment: ImageAttachmentRef; readonly encodedBytes: number }
 ```
 
 ```ts type-equiv
@@ -207,8 +208,9 @@ async saveImages(inputs: readonly SaveImageAttachment[]): Promise<readonly Image
 /**
  * Admit one Host prompt and replace each encoded image with its durable reference.
  * Text, durable file references, and already stored images pass through unchanged.
- * Every image part counts toward `maxImagesPerMessage`; the aggregate byte limit
- * applies to the encoded images. A prompt without encoded images performs no storage operation.
+ * Every image part counts toward `maxImagesPerMessage` and `maxMessageImageBytes`;
+ * a stored image counts the bytes of the upload that stored it. Refused content
+ * starts no writes. A prompt without encoded images performs no storage operation.
  * @param content - prompt parts in message order after upload receipt resolution.
  * @returns admitted prompt parts in the same order as `content`.
  * @throws AttachmentError when the image batch is refused.
@@ -340,6 +342,9 @@ async uploadStream(request: { readonly sessionId: SessionId readonly data: Async
  * Persist one prompt image for a Session: read at most the deployment's
  * per-image byte limit, then validate, normalize, and store the image the
  * way prompt admission does, so a later prompt cites it by receipt.
+ * Cancellation before storage begins stores nothing; a cancelled upload
+ * never receives a receipt, although an image whose storage already began
+ * stays in the content-addressed store.
  * @param request - Session identity, ordered bytes, the declared media type that this deployment
  * must accept, cancellation, and optional display name.
  * @returns the staged receipt and durable normalized image reference.

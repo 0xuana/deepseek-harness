@@ -43,7 +43,7 @@ async function* chunks(...parts: readonly number[][]): AsyncIterable<Uint8Array>
   for (const part of parts) yield Uint8Array.from(part)
 }
 
-async function uploadHarness(origin?: 'subagent'): Promise<{
+async function uploadHarness(origin?: 'subagent', imageLimits: ImageAttachmentLimits = IMAGE_LIMITS): Promise<{
   ctx: Context
   controller: SessionCommandController
   uploads: FileUploads
@@ -104,7 +104,7 @@ async function uploadHarness(origin?: 'subagent'): Promise<{
   const saveImages = vi.fn((_inputs: readonly SaveImageAttachment[]): Promise<readonly ImageAttachmentRef[]> =>
     Promise.reject(new Error('fixture did not expect image persistence')))
   ctx.provide('attachments', Object.setPrototypeOf(
-    { saveFile, saveFileStream, saveImages, imageLimits: IMAGE_LIMITS },
+    { saveFile, saveFileStream, saveImages, imageLimits },
     AttachmentStore.prototype,
   ) as never)
   let uploadRoute: ((request: Request) => Promise<Response>) | undefined
@@ -240,7 +240,7 @@ describe('Session file uploads', () => {
     })
     expect(saveImages).toHaveBeenCalledWith([{ data: Uint8Array.of(1, 2, 3, 4), mediaType: 'image/png', name: 'shot.png' }])
     expect(receipt.image).toEqual(STAGED_IMAGE)
-    expect(uploads.resolve(agent, receipt.receiptId)).toEqual({ type: 'image', attachment: STAGED_IMAGE })
+    expect(uploads.resolve(agent, receipt.receiptId)).toEqual({ type: 'image', attachment: STAGED_IMAGE, encodedBytes: 4 })
     const commandHandler = vi.fn((_invocation: unknown) => ({ kind: 'success' as const }))
     ctx.commands.register({
       name: 'files', description: 'Use staged files', input: { hint: '<task>', attachments: true },
@@ -272,6 +272,46 @@ describe('Session file uploads', () => {
     await expect(controller.prompt(promptRequest([{ type: 'file', receiptId: receipt.receiptId }]), USER_SOURCE))
       .rejects.toMatchObject({ code: 'session/attachment-invalid', details: { reason: 'MODEL_DOES_NOT_SUPPORT_IMAGES' } })
     expect(followup).not.toHaveBeenCalled()
+  })
+
+  it('refuses image receipts whose uploads together exceed the message image-byte limit', async () => {
+    const { controller, uploads, followup, saveImages } = await uploadHarness(undefined, {
+      ...IMAGE_LIMITS, maxMessageImageBytes: 5,
+    })
+    saveImages.mockResolvedValue([STAGED_IMAGE])
+    const first = await uploads.uploadImageStream({ sessionId: SESSION, data: chunks([1, 2, 3]), mediaType: 'image/png' })
+    const second = await uploads.uploadImageStream({ sessionId: SESSION, data: chunks([4, 5, 6]), mediaType: 'image/png' })
+    await expect(controller.prompt(promptRequest([
+      { type: 'file', receiptId: first.receiptId },
+      { type: 'file', receiptId: second.receiptId },
+    ]), USER_SOURCE)).rejects.toMatchObject({ code: 'session/attachment-invalid', details: { reason: 'IMAGES_TOO_LARGE' } })
+    expect(followup).not.toHaveBeenCalled()
+  })
+
+  it('issues no receipt for an image upload cancelled after its last chunk or during storage', async () => {
+    const { uploads, saveImages } = await uploadHarness()
+    const afterBody = new AbortController()
+    await expect(uploads.uploadImageStream({
+      sessionId: SESSION,
+      data: (async function* (): AsyncIterable<Uint8Array> {
+        yield Uint8Array.of(1, 2, 3)
+        afterBody.abort()
+      })(),
+      mediaType: 'image/png',
+      signal: afterBody.signal,
+    })).rejects.toThrow('failed to store file upload: AbortError')
+    expect(saveImages).not.toHaveBeenCalled()
+    const duringStorage = new AbortController()
+    const stored = Promise.withResolvers<readonly ImageAttachmentRef[]>()
+    saveImages.mockReturnValueOnce(stored.promise)
+    const uploading = uploads.uploadImageStream({
+      sessionId: SESSION, data: chunks([1, 2, 3]), mediaType: 'image/png', signal: duringStorage.signal,
+    })
+    await vi.waitFor(() => { expect(saveImages).toHaveBeenCalledOnce() })
+    duringStorage.abort()
+    stored.resolve([STAGED_IMAGE])
+    // The image whose storage began stays stored; only its receipt is withheld.
+    await expect(uploading).rejects.toThrow('failed to store file upload: AbortError')
   })
 
   it('refuses an image past the per-image byte limit without reading further, and an unaccepted type', async () => {

@@ -148,9 +148,10 @@ describe('AttachmentStore.admitPromptContent', () => {
 
   it('passes stored images through in part order and stores only the encoded ones', async () => {
     const { store, mocks } = storeOf()
-    Object.defineProperty(store, 'imageLimits', { value: { maxImagesPerMessage: 2 } })
+    // The stored upload's 4 bytes and the encoded byte fill the budget exactly; the normalized 8 bytes do not count.
+    Object.defineProperty(store, 'imageLimits', { value: { maxImagesPerMessage: 2, maxMessageImageBytes: 5 } })
     await expect(store.admitPromptContent([
-      { type: 'image', attachment: STORED_REF },
+      { type: 'image', attachment: STORED_REF, encodedBytes: 4 },
       { type: 'text', text: 'between' },
       { type: 'image', mediaType: 'image/png', data: 'AQ==' },
     ])).resolves.toEqual([
@@ -164,15 +165,30 @@ describe('AttachmentStore.admitPromptContent', () => {
 
   it('counts stored images toward the image-count limit before storing anything', async () => {
     const { store, mocks } = storeOf()
-    Object.defineProperty(store, 'imageLimits', { value: { maxImagesPerMessage: 1 } })
+    Object.defineProperty(store, 'imageLimits', { value: { maxImagesPerMessage: 1, maxMessageImageBytes: 100 } })
     await expect(store.admitPromptContent([
-      { type: 'image', attachment: STORED_REF },
+      { type: 'image', attachment: STORED_REF, encodedBytes: 1 },
       { type: 'image', mediaType: 'image/png', data: 'AQ==' },
     ])).rejects.toMatchObject({ code: 'TOO_MANY_IMAGES' })
     await expect(store.admitPromptContent([
-      { type: 'image', attachment: STORED_REF },
-      { type: 'image', attachment: { ...STORED_REF, attachmentId: 'stored-2' as ImageAttachmentRef['attachmentId'] } },
+      { type: 'image', attachment: STORED_REF, encodedBytes: 1 },
+      { type: 'image', attachment: { ...STORED_REF, attachmentId: 'stored-2' as ImageAttachmentRef['attachmentId'] }, encodedBytes: 1 },
     ])).rejects.toMatchObject({ code: 'TOO_MANY_IMAGES' })
+    expect(mocks.saveImages).not.toHaveBeenCalled()
+  })
+
+  it('counts stored upload bytes with encoded bytes toward the message byte limit before storing anything', async () => {
+    const { store, mocks } = storeOf()
+    Object.defineProperty(store, 'imageLimits', { value: { maxImagesPerMessage: 4, maxMessageImageBytes: 5 } })
+    // Two 3-byte uploads each fit alone; together they exceed one message.
+    await expect(store.admitPromptContent([
+      { type: 'image', attachment: STORED_REF, encodedBytes: 3 },
+      { type: 'image', attachment: { ...STORED_REF, attachmentId: 'stored-2' as ImageAttachmentRef['attachmentId'] }, encodedBytes: 3 },
+    ])).rejects.toMatchObject({ code: 'IMAGES_TOO_LARGE' })
+    await expect(store.admitPromptContent([
+      { type: 'image', attachment: STORED_REF, encodedBytes: 3 },
+      { type: 'image', mediaType: 'image/png', data: PNG },
+    ])).rejects.toMatchObject({ code: 'IMAGES_TOO_LARGE' })
     expect(mocks.saveImages).not.toHaveBeenCalled()
   })
 })
