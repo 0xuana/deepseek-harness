@@ -1103,6 +1103,29 @@ describe('web e2e: shipped right Sidebar', () => {
       expect(tripwire.warnings).toEqual([])
     }, 90_000)
 
+    it('keeps a dragged tab when a middle click is chorded with the primary button', async () => {
+      onTestFailed(() => saveFailureShot(page, 'web-e2e-sidebar-right-middle-drag'))
+      const column = await resetSidebar(page)
+      await proseChip(page).click()
+      await expect.poll(() => tabTitles(column)).toEqual(['Files', SAMPLE_NAME])
+      const sample = column.getByRole('tab').filter({ hasText: SAMPLE_NAME })
+      const from = await pointIn(sample, 0.25, 0.5)
+      const to = await pointIn(column.getByRole('tab').filter({ hasText: 'Files' }), 0.25, 0.5)
+      await page.mouse.move(from.x, from.y)
+      await page.mouse.down()
+      try {
+        await page.mouse.move(to.x, to.y, { steps: 8 })
+        await column.locator('[data-dockkit-caret="0"]').waitFor({ state: 'visible' })
+        await page.mouse.down({ button: 'middle' })
+        await page.mouse.up({ button: 'middle' })
+      } finally {
+        await page.mouse.up()
+      }
+      await expect.poll(() => tabTitles(column)).toEqual([SAMPLE_NAME, 'Files'])
+      expect(tripwire.pageErrors).toEqual([])
+      expect(tripwire.warnings).toEqual([])
+    })
+
     it('closes background and active tabs with the middle button and keeps the last guide', async () => {
       onTestFailed(() => saveFailureShot(page, 'web-e2e-sidebar-right-middle-close'))
       const column = await resetSidebar(page)

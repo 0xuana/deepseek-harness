@@ -6,7 +6,9 @@
  * A chip is a capsule carrying one control, its close, shown over its right
  * end while the chip is active, hovered, or focused; the context menu
  * (secondary press) carries the same close plus whatever the embedder appends.
- * Middle-click closes without selecting the tab. The embedder's `canCloseTab`
+ * A middle click anywhere on the chip, including its close control, closes
+ * without selecting the tab, unless another mouse button is still held.
+ * The embedder's `canCloseTab`
  * governs all close routes. A pane's lone chip whose close is withheld draws
  * quiet — no capsule, no hover fill — since there is nothing to select against
  * and nothing to do to it.
@@ -293,7 +295,7 @@ export function TabStrip({ state, pane, callbacks }: TabPanelProps): ReactNode {
                   if (event.button !== 1) return
                   event.preventDefault()
                   event.stopPropagation()
-                  if (closable) callbacks.onCloseTab(tabId)
+                  if (closable && event.buttons === 0) callbacks.onCloseTab(tabId)
                 }}
                 onClick={(event) => {
                   event.stopPropagation()

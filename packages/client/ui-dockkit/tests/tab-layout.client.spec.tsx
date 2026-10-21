@@ -38,7 +38,12 @@ function mounted(controller = seededController(), options: Partial<ComponentProp
   return { controller, view, redraw, callbacks, node, body: (id: TabId) => node(`[data-body="${id}"]`) }
 }
 
-it.each([false, true])('closes a tab by middle click without selecting it first (active: %s)', (active) => {
+it.each([
+  { active: false, targetControl: false },
+  { active: true, targetControl: false },
+  { active: false, targetControl: true },
+  { active: true, targetControl: true },
+])('closes a tab by middle click without selecting it first (active: $active, close control: $targetControl)', ({ active, targetControl }) => {
   const controller = seededController()
   const first = controller.openContent({ kind: 'file', contentId: 'file:a', title: 'A' })
   const second = controller.openContent({ kind: 'file', contentId: 'file:b', title: 'B' })
@@ -49,7 +54,7 @@ it.each([false, true])('closes a tab by middle click without selecting it first 
     h.redraw()
   })
   const target = active ? second : first
-  const chip = h.node(`[data-dockkit-tab="${target}"]`)
+  const chip = h.node(`[data-dockkit-tab="${target}"]${targetControl ? ' [data-dockkit-tab-close]' : ''}`)
   fireEvent.pointerDown(chip, { button: 1, pointerId: 7 })
   expect(fireEvent.mouseDown(chip, { button: 1 })).toBe(false)
   expect(close).not.toHaveBeenCalled()
