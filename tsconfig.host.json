@@ -144,6 +144,7 @@
     "apps/web/tests/official-subagent-bundle.e2e.ts",
     "apps/web/tests/present.e2e.ts",
     "apps/web/tests/present-svg.e2e.ts",
+    "apps/web/tests/present-after-closing-reply.e2e.ts",
     "apps/web/tests/composer-draft-scroll.e2e.ts",
     "apps/web/tests/composer-focus.e2e.ts",
     "apps/web/tests/composer-placeholder.e2e.ts",
