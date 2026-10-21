@@ -305,9 +305,23 @@ describe('web e2e: plugin manager', () => {
       expect(await body.evaluate(element => element.scrollHeight - element.clientHeight)).toBe(30)
       expect(await bar.evaluate(element => element.hasAttribute('data-compact'))).toBe(false)
       await probe.setViewportSize({ width: 390, height: 480 })
-      await refresh.hover()
+      // Locator hover scrolls its target into view, and scrolling this list moves the header controls away from
+      // the pointer; once the resized header stops moving, move the pointer onto each control instead.
+      const pointAt = async (target: Locator): Promise<void> => {
+        await expect.poll(() => target.evaluate(element => new Promise<boolean>((resolve) => {
+          const before = element.getBoundingClientRect()
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            const after = element.getBoundingClientRect()
+            resolve(before.x === after.x && before.y === after.y)
+          }))
+        }))).toBe(true)
+        const bounds = await target.boundingBox()
+        if (bounds === null) throw new Error('Header control is not visible')
+        await probe.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
+      }
+      await pointAt(refresh)
       await probe.getByRole('tooltip', { name: 'Refresh', exact: true }).waitFor()
-      await add.hover()
+      await pointAt(add)
       await probe.getByRole('tooltip', { name: 'Add plugin', exact: true }).waitFor()
       await bar.getByRole('button', { name: 'Choose how to add a plugin', exact: true }).click()
       await probe.getByRole('menu').waitFor()
@@ -721,7 +735,9 @@ describe('web e2e: plugin manager', () => {
       await probe.getByRole('tooltip').filter({ hasText: '刷新' }).waitFor()
       facts.push('Mouse hover after touch: refresh tooltip visible')
       await probe.mouse.move(0, 843)
-      expect(await help.count()).toBe(0)
+      // Tab moved focus to the icon-only Add plugin button, whose focus tooltip stays; the hovered ones leave.
+      expect(await probe.getByRole('tooltip').filter({ hasText: '刷新' }).count()).toBe(0)
+      expect(await probe.getByRole('tooltip').filter({ hasText: '在这里配置官方插件' }).count()).toBe(0)
       await input.detach()
       await probe.clock.resume()
       await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'touch-tooltips.expected.md'),
