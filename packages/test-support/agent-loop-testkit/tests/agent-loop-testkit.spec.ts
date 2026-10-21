@@ -13,6 +13,7 @@ import {
   mountAgentLoopTestDependencies,
   mountAgentLoopTestHarness,
   unsupportedInbox,
+  unsupportedModel,
 } from '../src/index.ts'
 
 function message(text: string) {
@@ -52,6 +53,14 @@ describe('dsh-agent-loop-testkit', () => {
     } finally {
       await ctx.fiber.dispose()
     }
+  })
+
+  it('rejects reads and changes through an unsupported Agent stub Model', () => {
+    const model = unsupportedModel()
+
+    expect(() => model.current()).toThrow('this test Agent does not support model selection')
+    expect(() => { model.select({ provider: 'mock', model: 'mock' }) })
+      .toThrow('this test Agent does not support model selection')
   })
 
   it('rejects mutations through an unsupported Agent stub Inbox', () => {

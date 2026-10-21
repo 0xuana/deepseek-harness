@@ -1,6 +1,6 @@
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
-import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { unsupportedModel, provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
@@ -463,7 +463,8 @@ describe('dsh-tool-workflow', () => {
       const engine = ctx.workflowEngine as StubEngine
       const session = Session.create(SessionId('caller'))
       const parent: Agent = {
-        id: session.id, options: {}, session, inbox: unsupportedInbox(), status: 'idle', ctx,
+        id: session.id, options: {}, session, model: unsupportedModel(),
+        inbox: unsupportedInbox(), status: 'idle', ctx,
         send: () => {}, followup: () => {}, steer: () => {}, inject: () => {}, cancel: () => {},
         runMaintenance: task => task(new AbortController().signal), whenIdle: () => Promise.resolve(),
       }
@@ -684,7 +685,8 @@ describe('dsh-tool-workflow', () => {
       await ctx.plugin(toolWorkflow, {})
       const session = Session.create(SessionId('caller'))
       const parent: Agent = {
-        id: session.id, options: {}, session, inbox: unsupportedInbox(), status: 'idle', ctx,
+        id: session.id, options: {}, session, model: unsupportedModel(),
+        inbox: unsupportedInbox(), status: 'idle', ctx,
         send: () => {}, followup: () => {}, steer: () => {}, inject: () => {}, cancel: () => {},
         runMaintenance: task => task(new AbortController().signal), whenIdle: () => Promise.resolve(),
       }

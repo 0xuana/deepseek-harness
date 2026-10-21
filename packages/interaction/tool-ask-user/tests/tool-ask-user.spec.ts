@@ -1,10 +1,11 @@
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import { unsupportedModel } from '@deepseek-ai/dsh-agent-loop-testkit'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createToolResultMessage, ToolCallId, type ToolSchema } from '@deepseek-ai/dsh-llm'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { Session, SessionId, SessionSeq, SESSION_FORMAT_VERSION, type SessionEvent } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
@@ -90,6 +91,7 @@ function stubAgent(id: string, delegationDepth = 0): Agent {
     session: Session.create(agentId, [], {
       version: SESSION_FORMAT_VERSION, id: agentId, createdAt: 0, isSeeded: false, delegationDepth,
     }),
+    model: unsupportedModel(),
     inbox: {
       nextTurn: [], nextStep: [], clear() {}, append() {}, prepend() {},
       replace: () => false, remove: () => false, splice: () => [],
