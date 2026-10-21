@@ -1,6 +1,6 @@
 ---
 kind: upgrade-guide
-description: "工具声明只来自步骤准入的注册：`system-prompt/assemble` 不再携带工具，条件工具需要已解析的步骤集合，`exit_plan_mode` 只在计划模式下声明。"
+description: "工具声明只来自步骤准入的注册：`system-prompt/assemble` 不再携带工具，条件工具需要已解析的步骤集合，`exit_plan_mode` 只在会话首次进入计划模式后声明。"
 ---
 
 # 通过步骤准入声明条件工具
@@ -15,11 +15,11 @@ description: "工具声明只来自步骤准入的注册：`system-prompt/assemb
 
 模型的工具调用只通过所属步骤的准入集合执行。没有已解析集合的条件工具调用、集合释放之后的调用，以及注册在步骤内被替换或移除时尚未开始的调用，都会返回 `UNKNOWN_TOOL`，不会执行。
 
-`exit_plan_mode` 只在已选计划状态为激活的步骤中声明，因此进入或离开计划模式时请求的工具列表会变化。现有 Session 无需格式迁移。
+`exit_plan_mode` 从已选计划状态首次为激活的步骤起声明，并在会话剩余部分保持声明，因此从未进入计划模式的会话，其请求不再列出它。现有 Session 无需格式迁移。
 
 ## 迁移
 
 1. 把 `system-prompt/assemble` 监听器中的工具过滤改为注册时的 `when` 条件；从条件的 `modelSelection` 读取该步骤的提供方、模型与推理强度。waterfall 中只保留段落、上下文与变量的修改。
 2. 让工具指引跟随同一准入：段落回调把 `context.toolSet` 传给 `ctx.tools.get()` 或 `ctx.tools.schemas()`。
 3. 程序化调用条件工具时，调用 `ctx.tools.resolve({ agent, modelSelection, signal })`，把返回的 `toolSet` 传给 `assemble()` 与 `ctx.tools.execute()`，并在批次结束后释放。
-4. 更新在计划模式之外仍列出 `exit_plan_mode` 的期望。验证被禁用的工具不出现在请求中，用其名称调用会返回 `UNKNOWN_TOOL` 且不进入实现，条件失败时轮次以 `TOOL_ACTIVATION_FAILED` 结束。
+4. 更新在会话进入计划模式之前仍列出 `exit_plan_mode` 的期望。验证被禁用的工具不出现在请求中，用其名称调用会返回 `UNKNOWN_TOOL` 且不进入实现，条件失败时轮次以 `TOOL_ACTIVATION_FAILED` 结束。

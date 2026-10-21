@@ -12,9 +12,10 @@
  * assembly, then appends `plan/mode` from `agent/pre-step` only when the step
  * is accepted. Same-step request retries reuse their assembly.
  *
- * The exit tool is admitted only for steps whose selected state is active,
- * the same state that renders the guidance section. Native declarations, PTC
- * bindings, and execution share that admission.
+ * The exit tool is disclosed progressively: it is admitted from the first step
+ * whose selected state is active and stays admitted for the rest of the
+ * Session, so leaving plan mode changes only the guidance section. Native
+ * declarations, PTC bindings, and execution share that admission.
  *
  * See packages/plan/plan-mode/README.md.
  *
@@ -59,7 +60,7 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-/** The model-facing exit tool's name, admitted only for steps in plan mode. */
+/** The model-facing exit tool's name, admitted once the Session enters plan mode. */
 export const EXIT_PLAN_MODE = 'exit_plan_mode'
 
 /** Deployment-owned plan guidance. */
@@ -121,6 +122,7 @@ const planUnitStateSchema: ZodType<PlanUnitState> = zod.object({
     wanted: zod.boolean(),
   }).strict().nullable(),
   activeAtLastHeader: zod.boolean().nullable(),
+  entered: zod.boolean(),
 }).strict()
 
 /** Wire payload schema of the `plan` projection. */
@@ -132,9 +134,9 @@ const planProjectionSchema: ZodType<PlanProjection> = zod.object({
 /** Projection of logged plan selections and committed mode. */
 export const planProjectionDefinition = {
   key: 'plan',
-  stateVersion: 3,
+  stateVersion: 4,
   stateSchema: planUnitStateSchema,
-  init: () => ({ active: false, wanted: null, running: null, activeAtLastHeader: null }),
+  init: () => ({ active: false, wanted: null, running: null, activeAtLastHeader: null, entered: false }),
   apply: (state, event) => {
     if (event.type === 'command/run' && event.data.name === 'plan') {
       if (event.data.args === undefined) return state
@@ -148,7 +150,7 @@ export const planProjectionDefinition = {
       return { ...state, wanted, running: null }
     }
     if (event.type === 'plan/mode') {
-      return { ...state, active: event.data.active, wanted: null }
+      return { ...state, active: event.data.active, wanted: null, entered: state.entered || event.data.active }
     }
     if (event.type === 'request/header') {
       return { ...state, activeAtLastHeader: state.active }
@@ -299,7 +301,7 @@ export class PlanModeController extends Service {
       execute: async (args, exec) => {
         // oxlint-disable-next-line typescript/no-non-null-assertion -- conditional admission requires the step's Agent
         const agent = exec.agent!
-        // Admission follows the selected state; a failed pre-step append can leave it uncommitted.
+        // Admission outlives plan mode and follows the selected state, so check the committed state.
         if (!this.loggedActive(agent.session)) {
           throw new Error(`${EXIT_PLAN_MODE} is only available in plan mode`)
         }
@@ -371,7 +373,7 @@ export class PlanModeController extends Service {
         title: 'Plan review',
         content: result.content,
       }),
-    }), { when: ({ agent }) => this.selectedActive(agent.session) })
+    }), { when: ({ agent }) => this.selectedActive(agent.session) || this.planState(agent.session).entered })
   }
 
   private loggedActive(session: Session): boolean {

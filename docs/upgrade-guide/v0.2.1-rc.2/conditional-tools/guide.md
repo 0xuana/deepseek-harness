@@ -1,6 +1,6 @@
 ---
 kind: upgrade-guide
-description: "Tool declarations come only from step-admitted registrations: `system-prompt/assemble` no longer carries tools, conditional tools need a resolved step set, and `exit_plan_mode` is declared only in plan mode."
+description: "Tool declarations come only from step-admitted registrations: `system-prompt/assemble` no longer carries tools, conditional tools need a resolved step set, and `exit_plan_mode` is declared only after a Session first enters plan mode."
 ---
 
 # Declare conditional tools through step admission
@@ -15,11 +15,11 @@ The `system-prompt/assemble` waterfall now receives sections, contexts, and vari
 
 Model tool calls run only through their step's admitted set. A call to a conditional tool without a resolved set, a call after the set is disposed, and a pending call whose registration was replaced or removed during the step return `UNKNOWN_TOOL` instead of running.
 
-`exit_plan_mode` is declared only for steps whose selected plan state is active, so the request tool list changes when plan mode starts or ends. Existing Sessions require no format migration.
+`exit_plan_mode` is declared from the first step whose selected plan state is active and stays declared for the rest of the Session, so requests of a Session that never entered plan mode no longer list it. Existing Sessions require no format migration.
 
 ## Migration
 
 1. Replace tool filtering in `system-prompt/assemble` listeners with a `when` condition on the registration; read the step's provider, model, and reasoning effort from the condition's `modelSelection`. Keep only section, context, and variable changes in the waterfall.
 2. Make tool guidance follow the same admission: section callbacks pass `context.toolSet` to `ctx.tools.get()` or `ctx.tools.schemas()`.
 3. For programmatic calls of conditional tools, call `ctx.tools.resolve({ agent, modelSelection, signal })`, pass the returned `toolSet` to `assemble()` and `ctx.tools.execute()`, and dispose it after the batch settles.
-4. Update expectations that listed `exit_plan_mode` outside plan mode. Verify that a disabled tool is absent from the request, that calling its name returns `UNKNOWN_TOOL` without reaching the implementation, and that a failing condition ends the turn with `TOOL_ACTIVATION_FAILED`.
+4. Update expectations that listed `exit_plan_mode` before a Session entered plan mode. Verify that a disabled tool is absent from the request, that calling its name returns `UNKNOWN_TOOL` without reaching the implementation, and that a failing condition ends the turn with `TOOL_ACTIVATION_FAILED`.
