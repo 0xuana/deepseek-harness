@@ -1,11 +1,9 @@
 /**
- * Program evaluation, output capture, and host binding proxies over the process channel.
+ * Output capture, result encoding, and host binding proxies over the process channel.
  * @module @deepseek-ai/dsh-ptc-runtime-node/src/bootstrap
  */
 
 import { inspect } from 'node:util'
-import { createProgramEvaluator } from './evaluators/index.ts'
-import type { ProgramEvaluator } from './evaluators/types.ts'
 import type { HostMethods, ProgramResult, ProgramBootData } from './protocol.ts'
 import { jsonStringBytesUpTo, jsonValueBytesUpTo, truncateJsonStringBytes } from './output-json.ts'
 import { decodePtcJsonWire, encodePtcJsonWire, snapshotPtcJsonValue } from './json-wire.ts'
@@ -248,21 +246,6 @@ function bindingFailure(errorClass: BindingErrorConstructor | undefined, memberN
 }
 
 /**
- * Build each declared error class once so calls and `instanceof` share constructor identity.
- * @param data - binding namespace declarations from the boot payload.
- * @returns constructors keyed by their owning namespace global.
- */
-export function makeBindingErrorClasses(
-  data: Pick<ProgramBootData, 'namespaces'>,
-): Map<string, BindingErrorConstructor> {
-  const classes = new Map<string, BindingErrorConstructor>()
-  for (const namespace of data.namespaces) {
-    if (namespace.errorClass) classes.set(namespace.global, makeBindingErrorClass(namespace.errorClass))
-  }
-  return classes
-}
-
-/**
  * Build null-prototype binding globals with namespace-specific rejection classes.
  * @param data - Namespace declarations injected into the program.
  * @param host - Evaluation-scoped remote binding calls.
@@ -272,7 +255,7 @@ export function makeBindingErrorClasses(
 export function makeNamespaces(
   data: Pick<ProgramBootData, 'namespaces'>,
   host: Pick<HostMethods, 'invoke'>,
-  errorClasses: Pick<ReadonlyMap<string, BindingErrorConstructor>, 'get'> = makeBindingErrorClasses(data),
+  errorClasses: Pick<ReadonlyMap<string, BindingErrorConstructor>, 'get'>,
 ): Record<string, unknown>[] {
   return data.namespaces.map(({ global, names }) => {
     const namespace = Object.create(null) as Record<string, unknown>
@@ -299,52 +282,4 @@ export function makeNamespaces(
     }
     return namespace
   })
-}
-
-/**
- * Run one program through its selected evaluator with captured output and host binding proxies.
- * @param host - Evaluation-scoped host methods.
- * @param data - the boot payload the host sent.
- * @param streams - stdout/stderr objects captured as program logs.
- * @returns Completion or a bounded program failure.
- */
-export async function runProgram(
-  host: Omit<HostMethods, 'ready'>,
-  data: ProgramBootData,
-  streams: { stdout: PatchableStream; stderr: PatchableStream },
-): Promise<ProgramResult> {
-  const logs = new LogBuffer(
-    data.maxOutputBytes,
-    (text) => { host.log(text) },
-    () => { host.outputLimit() },
-  )
-  captureStreamWrites(logs, streams.stdout)
-  captureStreamWrites(logs, streams.stderr)
-
-  const errorClasses = makeBindingErrorClasses(data)
-  const namespaces = makeNamespaces(data, host, errorClasses)
-  let evaluator: ProgramEvaluator | undefined
-  try {
-    const completion = Promise.withResolvers<unknown>()
-    evaluator = createProgramEvaluator(data.programFormat ?? 'function-body', (message) => { completion.reject(new CapturedError(message)) })
-    const globals = evaluator.globals
-    const defineGlobal = (name: string, value: unknown): void => {
-      Object.defineProperty(globals, name, { configurable: true, enumerable: true, writable: true, value })
-    }
-    for (const [index, namespace] of data.namespaces.entries()) defineGlobal(namespace.global, namespaces[index])
-    for (const namespace of data.namespaces) {
-      if (namespace.errorClass) defineGlobal(namespace.errorClass.name, errorClasses.get(namespace.global))
-    }
-    defineGlobal('console', makeConsoleShim(logs))
-    evaluator.evaluate(data.code, (result) => {
-      if (result.ok) completion.resolve(result.value)
-      else completion.reject(result.error)
-    })
-    const value = await completion.promise
-    return prepareCompletion(value, logs.remainingOutputBytes(), data.maxOutputBytes)
-  } catch (error: unknown) {
-    return prepareException(error, logs.remainingOutputBytes(), data.maxOutputBytes)
-  } finally {
-    evaluator?.close()
-  }
 }

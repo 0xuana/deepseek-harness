@@ -16,7 +16,7 @@ export interface ProgramProcess {
   stdout: PatchableStream
   stderr: PatchableStream
   exitCode?: string | number | null | undefined
-  chdir?(directory: string): void
+  chdir(directory: string): void
 }
 
 interface Evaluation {
@@ -85,7 +85,6 @@ export async function runNodeMain(
       current = evaluation
       context.run(evaluation, () => {
         try {
-          if (processState.chdir === undefined) throw new Error('Node program process cannot change its working directory')
           processState.chdir(cwd)
           if (evaluator === undefined) {
             evaluator = createProgramEvaluator(format, (error) => {

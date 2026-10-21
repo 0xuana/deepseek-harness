@@ -2,7 +2,8 @@ import { Duplex, PassThrough } from 'node:stream'
 import { setImmediate } from 'node:timers/promises'
 import { expect, it, onTestFinished } from 'vitest'
 import { createProcessRpc } from '../src/rpc.ts'
-import { runPersistentMain, type PersistentProcess } from '../src/persistent-process.ts'
+import { runPersistentMain } from '../src/persistent-process.ts'
+import type { ProgramProcess } from '../src/process.ts'
 import { decodePtcJsonWire, encodePtcJsonWire } from '../src/json-wire.ts'
 import type { ProgramBootData, HostMethods, ProgramMethods } from '../src/protocol.ts'
 
@@ -13,7 +14,7 @@ async function setup(limit = 4096, chdir: (cwd: string) => void = () => {}) {
   const host = Duplex.from({ readable: second, writable: first })
   child.on('error', () => {})
   host.on('error', () => {})
-  const state: PersistentProcess = { env: { FIXTURE_SECRET: 'test', PATH: '/native' }, stdout: { write: () => true }, stderr: { write: () => true }, chdir }
+  const state: ProgramProcess = { env: { FIXTURE_SECRET: 'test', PATH: '/native' }, stdout: { write: () => true }, stderr: { write: () => true }, chdir }
   const nativeEnvironment = state.env
   const ready = Promise.withResolvers<true>()
   const seen: Record<string, unknown>[] = []
