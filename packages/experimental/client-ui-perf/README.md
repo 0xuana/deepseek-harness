@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Adds a Performance tab beside Chat and Trajectory. Each turn is one row; expanding it lists its steps with context tokens, output tokens, cache hit rate, first-token latency, model time, output speed, tool time, and a total-time bar split into first token, generation, tools, and the rest. A running step shows elapsed time instead of a blank. The panel reads Session events only; it registers no tool, prompt section, or service.
+Adds a Performance tab beside Chat and Trajectory. Each turn is one row; expanding it lists its steps with context tokens, output tokens, cache hit rate, first-token latency, model time, output speed, tool time, and a total-time bar split into first token, generation, tools, and the rest. A running step shows elapsed time instead of a blank. Scrolling to the top pulls earlier turns through the same Session paging the other views use; there are no page controls. The panel reads Session events only; it registers no tool, prompt section, or service.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ Adds a Performance tab beside Chat and Trajectory. Each turn is one row; expandi
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount it in a client composition that already provides `slots`, `uiConversation`, and `locale`. It contributes one entry to the `conversation.view` slot; no configuration fields exist.
+Mount it in a client composition that already provides `slots`, `sessions`, `uiConversation`, and `locale`. It contributes one entry to the `conversation.view` slot; no configuration fields exist.
 
 ### When to choose it
 
@@ -46,18 +46,18 @@ Choose it when you need to compare turns or steps by prompt length, cache reuse,
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-Three Conversation Definitions fold the event window into nodes for one view target named `perf`. `perf-step` owns one context per `step/start`; `perf-prompt` owns the turn's user question; `perf-turn-end` records the turn boundary so an interrupted tail closes.
+Four Conversation Definitions fold the event window into nodes for one view target named `perf`. `perf-step` owns one context per `step/start`; `perf-prompt` owns one context per human-typed user message; `perf-turn-end` records the turn boundary so an interrupted tail closes; `perf-code-mode` owns one context per Code-Mode root call for the inner dispatches its runner performed. Turn and step identity comes from the engine's match Location, never from module state, so history paging and multiple Sessions cannot cross-attribute events.
 
 | File | Responsibility |
 | --- | --- |
-| `src/client/perf-definition.ts` | The three Definitions, their match rules, publication cadence, and node envelopes |
+| `src/client/perf-definition.ts` | The four Definitions, their match rules, publication cadence, and node envelopes |
 | `src/client/perf-fold.ts` | Event folding, tool pairing, Code-Mode dispatch attribution, and per-step metrics |
-| `src/client/perf-aggregate.ts` | Turn aggregation and turn ordering, including the interrupted-tail close |
+| `src/client/perf-aggregate.ts` | Turn aggregation and ordering, the interrupted-tail close, and the Code-Mode merge into the owning step |
 | `src/client/perf-snapshot-builder.ts` | The `perf` view target builder |
-| `src/client/PerfView.tsx` | Table, time bars, step accordion, and copy controls |
+| `src/client/PerfView.tsx` | Scrollport with scroll-to-top paging, table, time bars, step accordion, and copy controls |
 | `src/client/locales.ts` | Every visible string, in Chinese and English |
 
-Windows are bounded: when a step's `step/start` is outside the loaded window, its start-dependent columns show `—` with a `start unknown` marker rather than a guessed value.
+Windows are bounded: when a step's `step/start` is outside the loaded window, its start-dependent columns show `—` with a `start unknown` marker rather than a guessed value. Scrolling to the top asks the Session for one older page; the view offsets the scroll position by the height it prepended, so the row being read stays in place.
 
 </details>
 
@@ -87,9 +87,9 @@ No effect. The package never constructs a model request and never mutates a prom
 
 - **Not mounted by the default product.** The Web bundle refuses experimental packages by rule, so a profile or explicit composition must add the row.
 - **Trimmed windows lose start times.** When the loaded window begins mid-step, first-token, model time, and total time cannot be derived; the row says `start unknown` instead of estimating.
-- **Code-Mode attribution is process-local.** Inner calls carry no turn or step, so ownership is resolved through an in-memory root-call map bounded at 4000 entries; a window replay that arrives after eviction cannot attribute older dispatches.
-- **Package-level tests only.** Coverage covers folding, aggregation, and formatting; there is no browser snapshot or recorded-session scene for the tab yet.
-- **Timing is derived, not sampled.** Total time is the last step's end minus the first step's start; queueing and scheduler waits land in the "rest" segment.
+- **Code-Mode dispatches merge by root-call context.** Inner calls carry no turn or step, so each root call opens its own context keyed by the root call id, and the builder merges its dispatches into the step that owns the runner. A window that lost the dispatch start still merges the calls but cannot show their measured duration.
+- **Browser evidence is a test-only overlay.** Package tests cover folding, aggregation, formatting, and the jsdom table; `apps/web/tests/client-ui-perf-panel.e2e.ts` mounts the plugin through a test-only overlay over the shipped Web surface and compares a committed ARIA golden. No recorded-session scenario exists because no shipped profile mounts the package yet.
+- **Timing is derived, not sampled.** Total time is the last step's end minus the first step's start; queueing and scheduler waits land in the "rest" segment. The total-time bar draws tool calls as the union of their paired intervals, so parallel calls count once; the tool column keeps the summed per-call time.
 
 <a id="dev-note"></a>
 ### Dev Note

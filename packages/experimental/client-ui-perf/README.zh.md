@@ -46,7 +46,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-三个 Conversation Definition 把事件窗口折叠成名为 `perf` 的视图目标节点。`perf-step` 每个 `step/start` 一个上下文；`perf-prompt` 记录这一轮的用户问题；`perf-turn-end` 记录轮次边界，让被中断的尾部也能收尾。
+四个 Conversation Definition 把事件窗口折叠成名为 `perf` 的视图目标节点。`perf-step` 每个 `step/start` 一个上下文；`perf-prompt` 每条人写的用户消息一个上下文；`perf-turn-end` 记录轮次边界，让被中断的尾部也能收尾；`perf-code-mode` 每个 Code-Mode 根调用一个上下文，收纳它实际派发的内层调用。轮次与步骤身份取自引擎给出的 match Location，而不是模块级状态，因此历史分页和多个 Session 都不会串归属。
 
 | 文件 | 职责 |
 | --- | --- |
@@ -57,7 +57,7 @@ kind: "package-reference"
 | `src/client/PerfView.tsx` | 表格、时间条、步骤手风琴与复制按钮 |
 | `src/client/locales.ts` | 全部可见文案，中英两份 |
 
-会话窗口是有界的：某一步的 `step/start` 不在已加载窗口里时，与起点有关的列显示 `—` 并标「起止未知」，不估算数值。
+会话窗口是有界的：某一步的 `step/start` 不在已加载窗口里时，与起点有关的列显示 `—` 并标「起止未知」，不估算数值。滚到顶部会向 Session 请求更早的一页；视图按新增内容的高度补偿滚动位置，正在读的行不会跳走。
 
 </details>
 
@@ -87,9 +87,9 @@ kind: "package-reference"
 
 - **默认产品不挂载。** Web 包按规则拒绝引用 experimental 包，需要 profile 或显式组合添加这一行。
 - **窗口被截断时没有起始时刻。** 已加载窗口从半步中间开始时，首 token、模型用时和总用时都推导不出来；行上标「起止未知」，不估算。
-- **Code-Mode 归属是进程内的。** 内层调用不带 turn/step，归属靠内存里的 root call 表解析，上限 4000 条；淘汰之后重放的窗口无法再归属更早的内层调用。
-- **只有包级测试。** 覆盖折叠、汇总与格式化；页签还没有浏览器快照测试或录制会话场景。
-- **计时是推导值。** 总用时取最后一步结束减第一步开始；排队和调度等待落在「其余」段里。
+- **Code-Mode 内层调用按根调用上下文并回步骤。** 内层调用不带 turn/step，因此每个根调用各自开一个以 root call id 为键的上下文，由 builder 把它的派发并回持有 runner 的那一步。窗口里丢了派发起点时仍会合并调用，但无法给出它们各自的实测耗时。
+- **浏览器证据是仅测试用的 overlay。** 包级测试覆盖折叠、汇总、格式化与 jsdom 表格；`apps/web/tests/client-ui-perf-panel.e2e.ts` 用仅测试用的 overlay 把插件挂到真实 Web 面上，并比对提交的 ARIA golden。由于还没有任何 shipped profile 挂载本包，暂无录制会话场景。
+- **计时是推导值。** 总用时取最后一步结束减第一步开始；排队和调度等待落在「其余」段里。总用时条把工具调用画成配对区间之并，并行调用只算一次；工具列仍显示逐次求和。
 
 <a id="dev-note"></a>
 ### 开发备注
