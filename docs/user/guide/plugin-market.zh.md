@@ -18,7 +18,7 @@
 <a id="turn-on"></a>
 ## 打开「发现」
 
-打开**插件**，点击**实验性插件**旁的**更多**，找到**自定义插件市场**并打开开关。**已安装**旁边会出现**发现**标签页，Creator 模式也会获得只读的 `plugin_market` 工具。关闭该组合包会再次移除这两者。
+打开**插件**，在**实验性插件**下找到**自定义插件市场**并打开开关。**已安装**旁边会出现**发现**标签页，Creator 模式也会获得只读的 `plugin_market` 工具。关闭该组合包会再次移除这两者。
 
 DSH 不内置任何索引源。选择**发现**，点击**添加索引源**，输入一个索引文件的 URL。URL 必须使用 `http:` 或 `https:`，并且不能包含用户名、密码或 `#` 片段。网络路径上的任何人都能修改 `http:` 索引，包括其中列出的安装 spec，因此经由不受你控制的网络访问的市场应使用 `https:`。每个索引源属于当前 profile。
 
@@ -97,7 +97,7 @@ https://gitlab.example.com/team/dsh-plugins
 pnpm --filter @deepseek-ai/dsh-plugin-market-generator start --input plugins.txt --output site/index.json --title "Team plugins"
 ```
 
-对于 npm 包，索引列出所有未弃用且声明了 `dsh.bundle` 的版本。对于 Git 仓库，生成器在默认分支上查找组合包，列出它们在 `vX.Y.Z`、`X.Y.Z` 和 `<name>@X.Y.Z` 标签处的版本，以及每个包在默认分支上的版本。标题、描述、图标、作者和主页取自每个插件的最高版本。路径相对于你运行 pnpm 的目录。
+对于 npm 包，索引列出所有未弃用、未设为私有且声明了 `dsh.bundle` 的版本。对于 Git 仓库，生成器在默认分支上查找 `package.json` 没有设置 `"private": true` 的组合包，列出它们在 `vX.Y.Z`、`X.Y.Z` 和 `<name>@X.Y.Z` 标签处的版本，以及每个包在默认分支上的版本。标题、描述、图标、作者和主页取自每个插件的最高版本。路径相对于你运行 pnpm 的目录。
 
 生成器只下载和读取文件，从不安装包或运行其代码。它在列表旁的 `.plugin-market-cache` 中保存缓存，因此再次运行时只下载新的版本和提交。按上文所述发布输出目录，即 `index.json` 及其 `icons/` 目录。
 

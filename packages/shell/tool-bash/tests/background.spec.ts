@@ -1,3 +1,4 @@
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -10,7 +11,7 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { provideWorkingDirectoryFixture, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { unsupportedModel, provideWorkingDirectoryFixture, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
 import type { JobId } from '@deepseek-ai/dsh-jobs'
 import * as ToolTasks from '@deepseek-ai/dsh-tool-jobs'
@@ -37,6 +38,7 @@ async function setup() {
   provideWorkingDirectoryFixture(ctx)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(LocalJobRegistry, { pumpPollMs: 25 })
   await ctx.plugin(ToolTasks)
@@ -359,6 +361,7 @@ describe('foreground commands as jobs', () => {
       session: Session.create(ownerId, undefined, {
         version: SESSION_FORMAT_VERSION, id: ownerId, createdAt: 0, cwd: process.cwd(), isSeeded: false,
       }),
+      model: unsupportedModel(),
       inbox: unsupportedInbox(),
       status: 'idle',
       ctx,
@@ -424,6 +427,7 @@ describe('foreground commands as jobs', () => {
     provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(LocalJobRegistry, { pumpPollMs: 25 })
     await ctx.plugin(ToolTasks)
@@ -475,6 +479,7 @@ describe('owned background output', () => {
       session: Session.create(ownerId, undefined, {
         version: SESSION_FORMAT_VERSION, id: ownerId, createdAt: 0, cwd: process.cwd(), isSeeded: false,
       }),
+      model: unsupportedModel(),
       inbox: unsupportedInbox(),
       status: 'idle',
       ctx,

@@ -9,7 +9,7 @@ kind: "package-group"
 
 ## 概述
 
-实验性能力可按需安装和组合，但不提供产品支持承诺。包命名和发布遵循[实验包策略](../../scripts/experimental-package-policy.ts)。[可选组合规则](../../.agents/notes/implemented/architecture/2026-09-21-experimental-capabilities-as-optional-bundles.zh.md)决定哪些能力以默认关闭状态随安装提供，并在 GUI 插件管理器的官方分组显式启用。
+实验性能力可按需安装和组合，但不提供产品支持承诺。包命名和发布遵循[实验包策略](../../scripts/experimental-package-policy.ts)。[可选组合规则](../../.agents/notes/implemented/architecture/2026-09-21-experimental-capabilities-as-optional-bundles.zh.md)决定哪些能力以默认关闭状态随安装提供，以便显式选入。[插件管理页](../client/ui-plugin-manager/README.zh.md#use-this-package)管理哪些组合包默认展示，以及如何启用隐藏项。
 
 ## 目录
 
@@ -69,8 +69,9 @@ kind: "package-group"
 | [`claude-code-mods`](claude-code-mods/README.zh.md) | 把 Claude Code 模组作为插件运行：钩子链落在 harness 扩展点上，并在提示框上方绘制横幅 | `ctx.claudeCodeMods` |
 | [`client-ui-claude-code-mods`](client-ui-claude-code-mods/README.zh.md) | 在提示框上方绘制模组树并把按钮点击发回的 Web 横幅 | — |
 | [`ptc-runtime-python`](ptc-runtime-python/README.zh.md) | PTC 执行 seam 的 CPython 子进程后端 | `ctx.ptcRuntime` |
-| [CUA](cua/README.zh.md) | 共享应用与窗口对象、授权和已记录的执行。 | 库 |
+| [CUA](cua/README.zh.md) | 应用与窗口对象、授权执行和权限控件。 | `ctx.cuaAccess` |
 | [macOS CUA](cua-macos/README.zh.md) | Swift 原生执行与平台组件准备。 | `ctx.computerUse` |
+| [`cua-bundle`](cua-bundle/README.zh.md) | 面向 PTC 会话、默认关闭的 Computer Use 开关 | — |
 | [`computer-use-cua-driver-mcp`](computer-use-cua-driver-mcp/README.zh.md) | 通过 MCP 使用已安装的 Cua Driver | `ctx.computerUse` |
 | [`computer-use-cua-driver-native`](computer-use-cua-driver-native/README.zh.md) | 嵌入 Cua Driver 原生 npm 运行时 | `ctx.computerUse` |
 | [`browser-use-playwright-mcp`](browser-use-playwright-mcp/README.zh.md) | 通过 MCP 提供 Playwright 浏览器工具 | `ctx.browserUse` |

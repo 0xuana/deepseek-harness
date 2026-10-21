@@ -216,11 +216,13 @@ export const DEFAULT_PROFILE_BUNDLES: readonly string[] = ['@deepseek-ai/dsh-bas
  * The bundles the dsh installation ships for a person to switch on: each a
  * runtime dependency of the installation that declares `dsh.bundle.patch`,
  * an `icon`, and `./locale/*.json` display metadata, selected by no shipped
- * template, and offered switched off by the plugin manager
+ * template, and offered switched off by the plugin manager except persistent
+ * terminals, which have no page switch
  * ([rationale](../../../../.agents/notes/implemented/process/2026-09-15-shipped-optional-bundles.md),
  * [admission](../../../../.agents/notes/implemented/architecture/2026-09-21-experimental-capabilities-as-optional-bundles.md)).
  */
 export const OPTIONAL_BUNDLES: readonly string[] = [
+  '@deepseek-ai/dsh-cua-bundle',
   '@deepseek-ai/dsh-experimental-session-search',
   '@deepseek-ai/dsh-experimental-ralph-bundle',
   '@deepseek-ai/dsh-experimental-terminal-bundle',
@@ -374,7 +376,8 @@ function readPackageManifest(anchor: string): ProfileManifest {
 
 /** Return dependency names that may be imported by a loader-visible plugin. */
 function profileDependencyNames(manifest: ProfileManifest): string[] {
-  return [...Object.keys(manifest.dependencies ?? {}), ...Object.keys(manifest.peerDependencies ?? {})]
+  return [...Object.keys(manifest.dependencies ?? {}), ...Object.keys(manifest.peerDependencies ?? {}),
+    ...Object.keys(manifest.optionalDependencies ?? {})]
 }
 
 /** Resolve the installation packages that the runtime resolver supplies to every profile. */

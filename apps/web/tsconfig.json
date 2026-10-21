@@ -15,6 +15,7 @@
   },
   "include": [
     "src",
+    "scripts",
     "tests"
   ],
   // The web e2e lane (scaffold + replay specs) boots the host spine and reads
@@ -22,9 +23,12 @@
   // this client-registered project must not also hold them (one program
   // cannot see both sides of the cordis Context merges).
   "exclude": [
+    "tests/rich-text-quotes.e2e.ts",
+    "tests/hover-input.e2e.ts",
     "tests/collapse-timing.e2e.ts",
     "tests/notice-wake-tail.e2e.ts",
     "tests/fold-blank-matrix.e2e.ts",
+    "tests/chat-fold-opened-group.e2e.ts",
     "tests/chat-flow-layout.e2e.ts",
     "tests/layout-bottom.e2e.ts",
     "tests/shortcuts-desktop.e2e.ts",
@@ -82,7 +86,11 @@
     "tests/plugin-config.e2e.ts",
     "tests/input-plugin-extensions.e2e.ts",
     "tests/plugin-manager.e2e.ts",
+    "tests/entry-customization.e2e.ts",
+    "tests/cua-optin.e2e.ts",
+    "tests/cua-permissions.e2e.ts",
     "tests/schedule-header.e2e.ts",
+    "tests/schedule-phone.e2e.ts",
     "tests/worktree-opt-in.e2e.ts",
     "tests/session-inspector.e2e.ts",
     "tests/shared-inspector.e2e.ts",
@@ -144,6 +152,7 @@
     "tests/ptc-round.e2e.ts",
     "tests/present.e2e.ts",
     "tests/present-svg.e2e.ts",
+    "tests/present-after-closing-reply.e2e.ts",
     "tests/composer-draft-scroll.e2e.ts",
     "tests/composer-focus.e2e.ts",
     "tests/composer-placeholder.e2e.ts",

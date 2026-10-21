@@ -27,6 +27,7 @@ const SEED = join(SNAPSHOT_DIR, 'session.v3.jsonl')
 const TRAJECTORY_EXPECTED = join(SNAPSHOT_DIR, 'trajectory.expected.md')
 const TIMING_EXPECTED = join(SNAPSHOT_DIR, 'timing.expected.md')
 const SEARCH_EXPECTED = join(SNAPSHOT_DIR, 'search-results.expected.md')
+const ID_SEARCH_EXPECTED = join(SNAPSHOT_DIR, 'search-id-results.expected.md')
 const TERMINAL_EXPECTED = join(SNAPSHOT_DIR, 'terminal-card.expected.md')
 const CODE_CARD_DIR = fileURLToPath(new URL('./expected/navigation-panes', import.meta.url))
 const COMMAND_WRAP_EXPECTED = join(CODE_CARD_DIR, 'command-wrap.expected.md')
@@ -203,9 +204,20 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
       { timeout: 10_000 },
     ).toBe(0)
 
-    await search.fill('WATERFALL')
     const resultTree = page.getByRole('tree', { name: 'Search results' })
     const result = resultTree.getByRole('treeitem')
+    // The seed log carries its id only in the header, so this mid-id,
+    // differently cased fragment can match only through local id matching.
+    await search.fill('PANES-WEB')
+    await expect.poll(() => result.count(), { timeout: 10_000 }).toBe(1)
+    await page.getByRole('status', { name: 'Searching session history…' }).waitFor({ state: 'detached', timeout: 30_000 })
+    await compareOrRefreshGolden(
+      ID_SEARCH_EXPECTED,
+      await captureStableAria(page, '[class*="listArea"]', scaffold.workspaceCwd),
+      MODE,
+    )
+
+    await search.fill('WATERFALL')
     await expect.poll(() => result.count(), { timeout: 30_000 }).toBe(1)
     await expect.poll(() => result.getByText('WATERFALL', { exact: false }).count(), {
       timeout: 10_000,
@@ -614,7 +626,7 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
       'code-card.expected.md', 'command-wrap.expected.md', 'copy-markdown.expected.md',
     ])
     await assertFixtureInventory(SNAPSHOT_DIR, [
-      'session.v3.jsonl', 'search-results.expected.md', 'trajectory.expected.md',
+      'session.v3.jsonl', 'search-id-results.expected.md', 'search-results.expected.md', 'trajectory.expected.md',
       'terminal-card.expected.md', 'timing.expected.md',
     ])
   })

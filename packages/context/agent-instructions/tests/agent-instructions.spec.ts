@@ -5,13 +5,14 @@ import { tmpdir } from 'node:os'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
+import type { Config as AgentInstructionsConfig } from '@deepseek-ai/dsh-agent-instructions'
 import * as AgentInstructions from '@deepseek-ai/dsh-agent-instructions'
 import LlmRuntime, { createUserMessage, ToolCallId, type Message, type MessageSource, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId, SessionSeq, type SessionEvent, type SurfaceIntent, type UserMessage } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import AgentRegistry, { agentEvents, type Agent } from '@deepseek-ai/dsh-agent'
-import AgentLoop, { turnBoundaryProjectionDefinition } from '@deepseek-ai/dsh-agent-loop'
+import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { FileSystem, FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
 import type {
   FsDirEntry,
@@ -278,19 +279,19 @@ class BlockingReadFileSystem extends RecordingFileSystem {
   }
 }
 
-async function mountAgentInstructionsPlugin(ctx: Context, config: AgentInstructions.Config): Promise<Awaited<ReturnType<Context['plugin']>>> {
+async function mountAgentInstructionsPlugin(ctx: Context, config: AgentInstructionsConfig): Promise<Awaited<ReturnType<Context['plugin']>>> {
   if (ctx.get('workingDirectory') === undefined) provideWorkingDirectoryFixture(ctx)
-  if (ctx.get('sessionProjections') === undefined) await ctx.plugin(SessionProjectionRegistry)
-  ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
+  if (ctx.get('sessionProjections') === undefined) if (ctx.get('sessionProjections') === undefined) await ctx.plugin(SessionProjectionRegistry)
+  if (ctx.get('agents') === undefined) await ctx.plugin(AgentRegistry)
   return ctx.plugin(AgentInstructions, config)
 }
 
-async function mountAgentInstructions(ctx: Context, config: AgentInstructions.Config): Promise<Awaited<ReturnType<Context['plugin']>>> {
+async function mountAgentInstructions(ctx: Context, config: AgentInstructionsConfig): Promise<Awaited<ReturnType<Context['plugin']>>> {
   await ctx.plugin(LocalFileSystem, { cwd: '/' })
   return mountAgentInstructionsPlugin(ctx, config)
 }
 
-async function mountFileToolsAndAgentInstructions(ctx: Context, config: AgentInstructions.Config): Promise<Awaited<ReturnType<Context['plugin']>>> {
+async function mountFileToolsAndAgentInstructions(ctx: Context, config: AgentInstructionsConfig): Promise<Awaited<ReturnType<Context['plugin']>>> {
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(LocalFileSystem, { cwd: '/' })
@@ -352,7 +353,7 @@ async function agentInstructionsOf(agent: Agent): Promise<UserMessage> {
 
 async function syncAgentInstructions(ctx: Context, agent: Agent): Promise<void> {
   await agentEvents(ctx, agent).waterfall(
-    'agent/pre-step', { messages: [], turn: 1, step: 1, signal: testToolSignal },
+    'agent/pre-step', { modelSelection: { provider: 'mock', model: 'mock' }, messages: [], turn: 1, step: 1, signal: testToolSignal },
     async () => ({ kind: 'enter' as const, messages: [] }),
   )
 }
@@ -387,13 +388,13 @@ async function composeBaselinePrefix(ctx: Context, agent: TestAgent): Promise<Me
   const signal = new AbortController().signal
   await agentEvents(ctx, agent).waterfall(
     'agent/pre-step',
-    { messages: [], turn: 1, step: 1, signal },
+    { modelSelection: { provider: 'mock', model: 'mock' }, messages: [], turn: 1, step: 1, signal },
     () => Promise.resolve({ kind: 'enter' as const, messages: [] }),
   )
   const claimed = claimInbox(agent, 'next-step')
   const decision = await agentEvents(ctx, agent).waterfall(
     'agent/pre-step',
-    { messages: claimed, turn: 1, step: 2, signal },
+    { modelSelection: { provider: 'mock', model: 'mock' }, messages: claimed, turn: 1, step: 2, signal },
     () => Promise.resolve({ kind: 'enter' as const, messages: claimed }),
   )
   const entered = decision.kind === 'enter' ? decision.messages : []
@@ -1836,7 +1837,7 @@ describe('workspace context request injection', () => {
     const ctx = new Context()
 
     provideWorkingDirectoryFixture(ctx)
-    await expect(mountAgentInstructionsPlugin(ctx, {} as AgentInstructions.Config)).rejects.toThrow(/maxBytes/)
+    await expect(mountAgentInstructionsPlugin(ctx, {} as AgentInstructionsConfig)).rejects.toThrow(/maxBytes/)
   })
 
   it('mounts without requiring a filesystem provider', async () => {
@@ -1849,30 +1850,8 @@ describe('workspace context request injection', () => {
     }
   })
 
-  it('requires projections without making the optional filesystem a static dependency', () => {
-    expect(AgentInstructions.inject).toEqual(['sessionProjections', 'workingDirectory'])
-  })
-
-  it('rejects a file-touch projection when the turn boundary unit is absent', async () => {
-    const ctx = new Context()
-    provideWorkingDirectoryFixture(ctx)
-    await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(AgentInstructions, { maxBytes: 65536 })
-    const exec = stubToolExecution({
-      callId: ToolCallId('missing-turn-boundary'),
-      name: 'read',
-      arguments: { file_path: 'file.txt' },
-      agent: await stubAgent('/virtual/repo'),
-      signal: testToolSignal,
-    })
-
-    expect(() => {
-      ctx.emit('tools/result', exec, {
-        content: [{ type: 'text', text: 'ok' }],
-        isError: false,
-        value: null,
-      })
-    }).toThrow('agent-instructions requires the turnBoundary session projection')
+  it('requires agents without making the optional filesystem a static dependency', () => {
+    expect(AgentInstructions.inject).toEqual(['agents', 'workingDirectory'])
   })
 
   it('does not inject baseline context when no filesystem provider is present', async () => {
@@ -2390,7 +2369,7 @@ describe('workspace context request injection', () => {
       const original = await stubAgent(root)
       await agentEvents(ctx, original).waterfall(
         'agent/pre-step',
-        { messages: [], turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
+        { modelSelection: { provider: 'mock', model: 'mock' }, messages: [], turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
         () => Promise.resolve({ kind: 'enter' as const, messages: [] }),
       )
       const inserted = original.inbox.nextStep[0]
@@ -2404,7 +2383,7 @@ describe('workspace context request injection', () => {
       const claimed = claimInbox(resumed, 'next-step')
       const decision = await agentEvents(ctx, resumed).waterfall(
         'agent/pre-step',
-        { messages: claimed, turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
+        { modelSelection: { provider: 'mock', model: 'mock' }, messages: claimed, turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
         () => Promise.resolve({ kind: 'enter' as const, messages: claimed }),
       )
       if (decision.kind !== 'enter') throw new Error('recovered baseline was rejected')
@@ -2439,7 +2418,7 @@ describe('workspace context request injection', () => {
       const original = await stubAgent(root)
       await agentEvents(ctx, original).waterfall(
         'agent/pre-step',
-        { messages: [], turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
+        { modelSelection: { provider: 'mock', model: 'mock' }, messages: [], turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
         () => Promise.resolve({ kind: 'enter' as const, messages: [] }),
       )
       const stale = original.inbox.nextStep[0]
@@ -2454,7 +2433,7 @@ describe('workspace context request injection', () => {
       const staleClaim = claimInbox(resumed, 'next-step')
       const staleDecision = await agentEvents(ctx, resumed).waterfall(
         'agent/pre-step',
-        { messages: staleClaim, turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
+        { modelSelection: { provider: 'mock', model: 'mock' }, messages: staleClaim, turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
         () => Promise.resolve({ kind: 'enter' as const, messages: staleClaim }),
       )
 
@@ -2497,7 +2476,7 @@ describe('workspace context request injection', () => {
       const original = await stubAgent(root)
       await agentEvents(originalCtx, original).waterfall(
         'agent/pre-step',
-        { messages: [], turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
+        { modelSelection: { provider: 'mock', model: 'mock' }, messages: [], turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
         () => Promise.resolve({ kind: 'enter' as const, messages: [] }),
       )
       const stale = original.inbox.nextStep[0]
@@ -2512,7 +2491,7 @@ describe('workspace context request injection', () => {
       const claimed = claimInbox(resumed, 'next-step')
       const decision = await agentEvents(resumedCtx, resumed).waterfall(
         'agent/pre-step',
-        { messages: claimed, turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
+        { modelSelection: { provider: 'mock', model: 'mock' }, messages: claimed, turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
         () => Promise.resolve({ kind: 'enter' as const, messages: claimed }),
       )
 
@@ -2625,7 +2604,7 @@ describe('workspace context request injection', () => {
 
       const decision = await agentEvents(ctx, agent).waterfall(
         'agent/pre-step',
-        { messages: [prompt], turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
+        { modelSelection: { provider: 'mock', model: 'mock' }, messages: [prompt], turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
         () => Promise.resolve(downstream),
       )
 
@@ -3217,7 +3196,7 @@ describe('workspace context request injection', () => {
 
       const decision = await agentEvents(ctx, agent).waterfall(
         'agent/pre-step',
-        { messages: [], turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
+        { modelSelection: { provider: 'mock', model: 'mock' }, messages: [], turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
         () => Promise.resolve(downstream),
       )
 
@@ -3339,7 +3318,7 @@ describe('workspace context request injection', () => {
 
       const decision = await agentEvents(ctx, agent).waterfall(
         'agent/pre-step',
-        { messages: [prompt], turn: 2, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
+        { modelSelection: { provider: 'mock', model: 'mock' }, messages: [prompt], turn: 2, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
         () => Promise.resolve({ kind: 'enter' as const, messages: [prompt] }),
       )
 
@@ -3803,7 +3782,7 @@ describe('workspace context request injection', () => {
       const reason = new Error('cancel prefix')
       const pending = agentEvents(ctx, await stubAgent(root)).waterfall(
         'agent/pre-step',
-        { messages: [], turn: 1, step: 1, signal: controller.signal },
+        { modelSelection: { provider: 'mock', model: 'mock' }, messages: [], turn: 1, step: 1, signal: controller.signal },
         () => Promise.resolve({ kind: 'enter' as const, messages: [] }),
       )
 
@@ -6436,7 +6415,7 @@ describe('workspace context inbox synchronization', () => {
       controller.abort(new Error('abort pre-step reconciliation'))
 
       await expect(agentEvents(ctx, agent).waterfall(
-        'agent/pre-step', { messages: [], turn: 1, step: 1, signal: controller.signal },
+        'agent/pre-step', { modelSelection: { provider: 'mock', model: 'mock' }, messages: [], turn: 1, step: 1, signal: controller.signal },
         async () => ({ kind: 'enter' as const, messages: [] }),
       )).rejects.toThrow('abort pre-step reconciliation')
 
@@ -6555,7 +6534,7 @@ describe('workspace context inbox synchronization', () => {
       const downstream = { kind: 'enter' as const, messages: claimed }
 
       const decision = await agentEvents(ctx, agent).waterfall(
-        'agent/pre-step', { messages: claimed, turn: 1, step: 1, signal: testToolSignal },
+        'agent/pre-step', { modelSelection: { provider: 'mock', model: 'mock' }, messages: claimed, turn: 1, step: 1, signal: testToolSignal },
         async () => downstream,
       )
 
