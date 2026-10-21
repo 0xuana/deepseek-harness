@@ -3,7 +3,7 @@ import type { CreationRecommendation } from '@deepseek-ai/dsh-experimental-creat
 import type { ConversationNodeDefinition } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { ChatNode } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
-import { actionBlocksOf } from './action-block.ts'
+import { actionBlocksOf } from '@deepseek-ai/dsh-experimental-creation-recommendations/action-block'
 
 declare module '@deepseek-ai/dsh-client-ui-chat/client' {
   interface ChatNodeDataMap { 'creation-recommendation': CreationRecommendation }
