@@ -18,8 +18,7 @@ import { VoiceSetupPrompt } from './VoiceSetupPrompt.tsx'
 export const inject = ['remote', 'slots', 'locale', 'pluginNavigation']
 
 function registerUi(ctx: Context): void {
-  const dictionaries = { zh, en, ja }
-  ctx.effect(() => ctx.locale.register(NS, dictionaries))
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }))
   const recordings = new Set<Recording>()
   const microphone = createMicrophoneDeviceStore()
   const readiness = observeReadiness(ctx)

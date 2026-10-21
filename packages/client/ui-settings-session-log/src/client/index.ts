@@ -25,8 +25,7 @@ export const inject = ['slots', 'locale', 'configForms']
 export function apply(ctx: Context): void {
   const locale = 'settings.sessionLog'
   const namespace = 'session-log-deepseek'
-  const dictionaries = { en, zh, ja }
-  ctx.effect(() => ctx.locale.register(locale, dictionaries))
+  ctx.effect(() => ctx.locale.register(locale, { en, zh, ja }))
   const form = ctx.configForms.get<UploadSettings>(namespace)
   const preference = new UploadPreference(form)
   const face = (): UploadInjected => ({

@@ -36,7 +36,6 @@ describe('web e2e: PTC mode round renders nested sub-calls', () => {
   beforeAll(async () => {
     scaffold = await launchWebScaffold({
       agentPresets: { default: 'ptc' },
-      extraOverlayPath: fileURLToPath(new URL('./pin-browse-picker.overlay.yml', import.meta.url)),
       compareReplaySession: true,
       ...(MODE === 'record' ? {} : { replayFixture: FIXTURE, paceMs: 15 }),
     })
@@ -275,7 +274,6 @@ describe('web e2e: PTC mode round renders nested sub-calls', () => {
     await page.getByRole('tab', { name: 'Summary', exact: true }).click()
     expect(await wrap.getAttribute('aria-pressed')).toBe('true')
   })
-
 
   it.skipIf(MODE === 'record')('renders the same recorded tool round in Japanese without translating model or tool data', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-ptc-japanese'))

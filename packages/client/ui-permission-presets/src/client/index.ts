@@ -142,8 +142,7 @@ export function apply(ctx: ClientContext): void {
     'ui-permission: dismiss stale slash choices',
   )
 
-  const dictionaries = { zh, en, ja }
-  ctx.effect(() => ctx.locale.register('settings.permission', dictionaries), 'ui-permission: settings row dictionaries')
+  ctx.effect(() => ctx.locale.register('settings.permission', { zh, en, ja }), 'ui-permission: settings row dictionaries')
 
   // The shared ConfigForm mirror updates after document commits and reconnects.
   const controller = new PermissionPresetSettingsController(

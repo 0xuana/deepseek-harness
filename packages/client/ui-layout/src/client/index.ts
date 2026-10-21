@@ -156,8 +156,7 @@ export const inject = ['slots', 'theme', 'locale', 'shortcuts']
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
-  const dictionaries = { zh, en, ja }
-  ctx.effect(() => ctx.locale.register('shortcuts.layout', dictionaries), 'layout: command labels')
+  ctx.effect(() => ctx.locale.register('shortcuts.layout', { zh, en, ja }), 'layout: command labels')
   const t = ctx.locale.bind('shortcuts.layout')
 
   ctx.effect(() => {

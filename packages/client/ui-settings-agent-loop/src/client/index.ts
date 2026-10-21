@@ -41,8 +41,7 @@ export const inject = ['slots', 'locale', 'configForms']
  */
 export function apply(ctx: ClientContext): void {
   const t = ctx.locale.bind(NS)
-  const dictionaries = { zh, en, ja }
-  ctx.effect(() => ctx.locale.register(NS, dictionaries), 'ui-settings-agent-loop: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'ui-settings-agent-loop: dictionaries')
   const card = new AgentLoopCardController(ctx.configForms.get(AGENT_LOOP_NS))
   ctx.effect(() => () => { card.dispose() }, 'ui-settings-agent-loop: form subscription')
   ctx.effect(() => ctx.configForms.whileServed([AGENT_LOOP_NS], () => ctx.slots.inject('plugins.item', () => ctx.slots.register({

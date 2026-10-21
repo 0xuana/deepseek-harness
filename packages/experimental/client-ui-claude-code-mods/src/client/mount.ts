@@ -75,8 +75,7 @@ function watchSession(ctx: Context, sessionId: SessionId, onEnd: () => void): { 
 }
 
 function registerUi(ctx: Context): void {
-  const dictionaries = { zh, en, ja }
-  ctx.effect(() => ctx.locale.register(NS, dictionaries), 'client-ui-claude-code-mods: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'client-ui-claude-code-mods: dictionaries')
   const watches = new Map<SessionId, ReturnType<typeof watchSession>>()
   ctx.effect(() => () => {
     for (const watch of watches.values()) watch.dispose()

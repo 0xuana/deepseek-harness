@@ -37,8 +37,7 @@ export function apply(ctx: ClientContext): void {
   const controller = new SessionLogDownloadController()
   ctx.provide('sessionLogDownload', controller)
   ctx.effect(() => async () => { await controller.dispose() }, 'session-log-download: browser download lifecycle')
-  const dictionaries = { zh, en, ja }
-  ctx.effect(() => ctx.locale.register(NS, dictionaries), 'session-log-download: browser dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'session-log-download: browser dictionaries')
   const feedbackAvailable = createSnapshotStore(false)
   ctx.inject(['feedbackUi'], (scope: ClientContext) => {
     scope.effect(() => {

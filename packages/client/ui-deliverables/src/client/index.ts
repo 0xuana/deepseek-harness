@@ -57,8 +57,7 @@ export function apply(ctx: ClientContext): void {
     diffs.reset()
   })
   ctx.uiConversation.events.register(deliverablesDefinition)
-  const dictionaries = { zh, en, ja }
-  ctx.effect(() => ctx.locale.register(NS, dictionaries), 'ui-deliverables: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'ui-deliverables: dictionaries')
   ctx.slots.inject(
     'conversation.chat.turnTail',
     () => ctx.slots.register({

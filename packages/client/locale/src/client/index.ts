@@ -383,10 +383,13 @@ export class LocaleRuntime {
    * namespace's texts have one owner). Registration bumps the revision so
    * mounted outlets pick up late-arriving dictionaries.
    * @param ns - a namespace merged into LocaleNamespaceMap.
-   * @param dicts - complete dictionaries keyed by built-in locale id.
+   * @param dicts - complete baseline dictionaries and optional dictionaries for additional locale ids.
    * @returns disposer removing every locale registered by this call (idempotent).
    */
-  register<N extends Extract<keyof LocaleNamespaceMap, string>>(ns: N, dicts: Record<BuiltInLocaleId, LocaleDictOf<N>>): () => void
+  register<N extends Extract<keyof LocaleNamespaceMap, string>>(
+    ns: N,
+    dicts: Record<BuiltInLocaleId, LocaleDictOf<N>> & Record<LocaleId, LocaleDictOf<N>>,
+  ): () => void
   /**
    * Single-locale untyped form for language-pack contributions and namespaces
    * outside the merge table.
@@ -577,10 +580,8 @@ export async function apply(ctx: ClientContext): Promise<void> {
   const host = ctx.configForms.get<LocaleSettings>(LOCALE_SETTINGS_NAMESPACE)
   const locale = new LocaleRuntime(ctx, host, bootstrap)
   ctx.effect(() => locale.addLanguage({ id: 'ja', label: '日本語', fallback: 'en' }), 'locale: Japanese language')
-  const commonDictionaries = { zh, en, ja }
-  const settingsDictionaries = { zh: settingsZh, en: settingsEn, ja: settingsJa }
-  ctx.effect(() => locale.register(COMMON_NS, commonDictionaries), 'locale: common dictionaries')
-  ctx.effect(() => locale.register(SETTINGS_NS, settingsDictionaries), 'locale: settings dictionaries')
+  ctx.effect(() => locale.register(COMMON_NS, { zh, en, ja }), 'locale: common dictionaries')
+  ctx.effect(() => locale.register(SETTINGS_NS, { zh: settingsZh, en: settingsEn, ja: settingsJa }), 'locale: settings dictionaries')
   ctx.provide('locale', locale)
   if (bridge !== undefined) {
     ctx.on('locale/change', (snapshot) => { bridge.onChange(snapshot.active) })

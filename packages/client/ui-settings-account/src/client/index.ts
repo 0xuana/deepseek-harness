@@ -45,8 +45,7 @@ export const inject = ['slots', 'locale', 'remote', 'remote.account', 'remote.se
 /** Register account UI in Desktop and plain Web clients. @param ctx - client plugin context. */
 export function apply(ctx: Context): void {
   const desktop = 'dshDesktop' in globalThis
-  const dictionaries = { en, zh, ja }
-  ctx.effect(() => ctx.locale.register('settings.account', dictionaries), 'account: dictionaries')
+  ctx.effect(() => ctx.locale.register('settings.account', { en, zh, ja }), 'account: dictionaries')
   const t = ctx.locale.bind('settings.account')
   const page = globalThis as Partial<Record<typeof CONTACT_CONFIG_GLOBAL, unknown>>
   const config = ContactConfig(page[CONTACT_CONFIG_GLOBAL] ?? {})

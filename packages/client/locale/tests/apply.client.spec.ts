@@ -192,7 +192,6 @@ describe('locale apply', () => {
     expect(instance.getSnapshot().options.map(option => option.id)).toEqual(['zh', 'en', 'ja'])
   })
 
-
   it('restores Japanese from the Host and releases its language and dictionaries on unload', async () => {
     const b = await bench('ja')
     onTestFinished(() => b.ctx.fiber.dispose())

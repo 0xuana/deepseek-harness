@@ -34,8 +34,7 @@ export const inject = ['slots', 'locale']
  */
 export function apply(ctx: ClientContext): void {
   const t = ctx.locale.bind(NS)
-  const dictionaries = { zh, en, ja }
-  ctx.effect(() => ctx.locale.register(NS, dictionaries), 'ui-settings-plugins: section dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'ui-settings-plugins: section dictionaries')
 
   let tabsVersion = -1
   let tabsRevision = -1

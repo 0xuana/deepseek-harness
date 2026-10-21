@@ -27,8 +27,7 @@ export const inject = ['sessions', 'uiWorkspace', 'slots', 'locale']
  * @param ctx - Client Context carrying the injected navigation, locale, slot, and Session services.
  */
 export function registerAgentTeamUi(ctx: ClientContext): void {
-  const dictionaries = { zh, en, ja }
-  ctx.effect(() => ctx.locale.register(NS, dictionaries), 'client-ui-agent-team: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'client-ui-agent-team: dictionaries')
   const sessions = ctx.sessions
   const leadSessionId = (sessionId: SessionId): SessionId => {
     const address = sessions.binding(sessionId)?.session.getSnapshot().subagent?.address

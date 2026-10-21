@@ -56,8 +56,7 @@ export const inject = ['slots', 'remote', 'remote.commands', 'remote.session', '
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
-  const dictionaries = { zh, en, ja }
-  ctx.effect(() => ctx.locale.register(NS, dictionaries), 'ui-plan: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'ui-plan: dictionaries')
 
   const previewId = '@deepseek-ai/dsh-client-ui-plan'
   const t = ctx.locale.bind(NS)

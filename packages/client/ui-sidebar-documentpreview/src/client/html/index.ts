@@ -26,8 +26,7 @@ export function htmlBodyDefinition(title: () => string): DocumentPreviewDefiniti
  */
 export function apply(ctx: Context): void {
   const t = ctx.locale.bind('documentHtml')
-  const dictionaries = { zh, en, ja }
-  ctx.effect(() => ctx.locale.register('documentHtml', dictionaries))
+  ctx.effect(() => ctx.locale.register('documentHtml', { zh, en, ja }))
   ctx.effect(() => ctx.documentPreviews.register(htmlBodyDefinition(() => t('title'))))
   ctx.effect(() => ctx.slots.inject('sidebar.right.tab.document', () => ctx.slots.register(
     {

@@ -21,15 +21,16 @@ describe.skipIf(MODE === 'record')('web e2e: native and Client locale preference
   let page: Page
   let tripwire: ReturnType<typeof watchConsole>
   const reported: string[] = []
+  let languages = ['fr-FR', 'zh-CN', 'en-US']
 
   beforeAll(async () => {
-    scaffold = await launchWebScaffold({ extraOverlayPath: fileURLToPath(new URL('./pin-browse-picker.overlay.yml', import.meta.url)) })
+    scaffold = await launchWebScaffold()
     browser = await chromium.launch()
     page = await browser.newPage({ viewport: { width: 1440, height: 960 }, locale: 'en-US' })
     tripwire = watchConsole(page)
     await page.exposeFunction('nativeLocaleRead', () => {
       const section = scaffold.ctx.settings.describe().find(row => row.ns === 'locale')!.value as { preference?: string }
-      return { languages: ['ja-JP', 'zh-CN', 'en-US'], preference: section.preference ?? null }
+      return { languages, preference: section.preference ?? null }
     })
     await page.exposeFunction('nativeLocaleChanged', (locale: string) => { reported.push(locale) })
     await page.addInitScript(() => {
@@ -54,13 +55,23 @@ describe.skipIf(MODE === 'record')('web e2e: native and Client locale preference
   it('uses OS languages without saving them, then shares an explicit choice across reloads', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-desktop-locale'))
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+    await openSettings(page, 'zh')
+    const zhDialog = page.getByRole('dialog', { name: '设置', exact: true })
+    await zhDialog.getByRole('button', { name: '中文', exact: true }).waitFor()
+    await expect.poll(() => reported).toEqual(['zh'])
+    expect(scaffold.ctx.settings.describe().find(row => row.ns === 'locale')!.value).toEqual({})
+    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'automatic.expected.md'),
+      await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd, versionCapture), MODE)
+    languages = ['ja-JP', 'zh-CN', 'en-US']
+    const automaticWarnings = tripwire.warnings.length
+    reported.length = 0
+    await page.reload({ waitUntil: 'load' })
+    acknowledgeReloadConnectionLoss(tripwire, automaticWarnings)
     await openSettings(page, 'ja')
     const jaDialog = page.getByRole('dialog', { name: '設定', exact: true })
     await jaDialog.getByRole('button', { name: '日本語', exact: true }).waitFor()
     await expect.poll(() => reported).toEqual(['ja'])
     expect(scaffold.ctx.settings.describe().find(row => row.ns === 'locale')!.value).toEqual({})
-    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'automatic.expected.md'),
-      await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd, versionCapture), MODE)
     await jaDialog.getByRole('button', { name: '日本語', exact: true }).click()
     await page.getByRole('menuitem', { name: 'English', exact: true }).click()
     const enDialog = page.getByRole('dialog', { name: 'Settings', exact: true })
@@ -92,8 +103,26 @@ describe.skipIf(MODE === 'record')('web e2e: native and Client locale preference
     await jaDialog.getByRole('button', { name: '日本語', exact: true }).waitFor()
     await expect.poll(() => reported).toEqual(['ja'])
     expect(await page.evaluate(() => document.documentElement.lang)).toBe('ja')
-    await page.setViewportSize({ width: 390, height: 844 })
-    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    const overflows = (): Promise<number> => jaDialog.evaluate((dialog) => {
+      const containers = [dialog, ...dialog.querySelectorAll<HTMLElement>('*')]
+        .filter(element => element === dialog || ['auto', 'scroll'].includes(getComputedStyle(element).overflowX))
+      return containers.filter(element => element.clientWidth > 0 && element.scrollWidth > element.clientWidth + 1).length
+    })
+    await expect.poll(overflows).toBe(0)
+    await jaDialog.evaluate((dialog) => {
+      const options = dialog.querySelector('nav')!.nextElementSibling!.lastElementChild!
+      const probe = document.createElement('div')
+      probe.dataset.localeOverflowProbe = ''
+      probe.style.width = '2000px'
+      probe.style.height = '1px'
+      options.append(probe)
+    })
+    try {
+      expect(await overflows()).toBeGreaterThan(0)
+    } finally {
+      await jaDialog.locator('[data-locale-overflow-probe]').evaluate((element) => { element.remove() })
+    }
+    await expect.poll(overflows).toBe(0)
 
     expect(tripwire.warnings).toEqual([])
     expect(tripwire.pageErrors).toEqual([])

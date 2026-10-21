@@ -67,8 +67,7 @@ export function apply(ctx: Context): void {
       return { status: 'handled', run: () => { ctx.sidebarRight.openTabFromTarget('terminal', target) } }
     },
   }), 'ui-sidebar-terminal: shortcut')
-  const dictionaries = { zh, en, ja }
-  ctx.effect(() => ctx.locale.register(namespace, dictionaries), 'ui-sidebar-terminal.copy')
+  ctx.effect(() => ctx.locale.register(namespace, { zh, en, ja }), 'ui-sidebar-terminal.copy')
   ctx.effect(() => ctx.sidebarRightTabs.register({
     id, kind: 'terminal', multiple: true, priority: 'builtin', title: () => t('title'),
     guide: [{ id: 'new', order: 20, title: () => t('new'), description: () => t('description'), icon: PluginArtworkTerminal }],

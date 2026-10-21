@@ -1,5 +1,5 @@
 /** Chinese first-run copy from the onboarding requirements. */
-export const onboardingCopy = {
+export const onboardingZh = {
   onboardingArtworkLocale: 'zh',
   onboardingWelcome: '欢迎使用',
   onboardingBrand: 'DeepSeek Harness',
@@ -42,7 +42,7 @@ export const onboardingCopy = {
 } as const
 
 /** English first-run copy with the same keys as the Chinese dictionary. */
-export const onboardingEnglishCopy: Record<keyof typeof onboardingCopy, string> = {
+export const onboardingEn: Record<keyof typeof onboardingZh, string> = {
   onboardingArtworkLocale: 'en',
   onboardingWelcome: 'Welcome to',
   onboardingBrand: 'DeepSeek Harness',
@@ -85,7 +85,7 @@ export const onboardingEnglishCopy: Record<keyof typeof onboardingCopy, string> 
 }
 
 /** Japanese copy, checked against the English keys. */
-export const onboardingJapaneseCopy = {
+export const onboardingJa = {
   'onboardingArtworkLocale': 'en',
   'onboardingWelcome': 'ようこそ',
   'onboardingBrand': 'DeepSeek Harness',
@@ -125,4 +125,4 @@ export const onboardingJapaneseCopy = {
   'onboardingSaveFailed': '設定を保存できませんでした。もう一度お試しください。',
   'onboardingRetry': '再試行',
   'onboardingLoading': '設定を読み込んでいます…',
-} satisfies Record<keyof typeof onboardingEnglishCopy, string>
+} satisfies Record<keyof typeof onboardingEn, string>

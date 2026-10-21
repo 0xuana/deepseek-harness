@@ -544,8 +544,7 @@ export const inject = ['slots', 'locale', 'remote', 'configForms']
  */
 export function apply(ctx: ClientContext): void {
   installThemeStyles(ctx)
-  const dictionaries = { zh, en, ja }
-  ctx.effect(() => ctx.locale.register(SETTINGS_NS, dictionaries), 'ui-theme: settings row dictionaries')
+  ctx.effect(() => ctx.locale.register(SETTINGS_NS, { zh, en, ja }), 'ui-theme: settings row dictionaries')
   const host = ctx.configForms.get<ThemeSettings>(THEME_SETTINGS_NAMESPACE)
   const theme = new ThemeRuntime(ctx, host)
   ctx.provide('theme', theme)

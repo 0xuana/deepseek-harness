@@ -127,8 +127,7 @@ export function apply(ctx: ClientContext): void {
     return binding === undefined ? undefined : seatFor(binding)
   }
 
-  const dictionaries = { zh, en, ja }
-  ctx.effect(() => ctx.locale.register('settings.agentPreset', dictionaries), 'ui-agent-preset: settings row dictionaries')
+  ctx.effect(() => ctx.locale.register('settings.agentPreset', { zh, en, ja }), 'ui-agent-preset: settings row dictionaries')
 
   ctx.effect(() => {
     let requested = 0

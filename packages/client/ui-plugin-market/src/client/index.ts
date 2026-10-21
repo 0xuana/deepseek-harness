@@ -36,8 +36,7 @@ export const inject = ['slots', 'locale', 'remote', 'remote.pluginMarket', 'remo
  * @param ctx - the browser plugin context.
  */
 export function apply(ctx: ClientContext): void {
-  const dictionaries = { zh, en, ja }
-  ctx.effect(() => ctx.locale.register(NS, dictionaries), 'ui-plugin-market: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'ui-plugin-market: dictionaries')
   const controller = new DiscoverController(ctx, () => document.baseURI)
   ctx.effect(() => () => { controller.dispose() }, 'ui-plugin-market: controller')
   ctx.effect(() => {

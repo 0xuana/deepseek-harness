@@ -14,7 +14,6 @@ export const inject = ['slots', 'locale', 'sessions', 'uiSession', 'uiConversati
  * @param ctx - Client plugin context owning the dictionaries and registrations.
  */
 export function apply(ctx: Context): void {
-  const dictionaries = { en, zh, ja }
-  ctx.effect(() => ctx.locale.register(NS, dictionaries), 'session-inspector: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { en, zh, ja }), 'session-inspector: dictionaries')
   registerInspectorTab(ctx)
 }

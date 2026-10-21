@@ -25,8 +25,7 @@ export const inject = ['slots', 'locale', 'pluginNavigation', 'uiWorkspace']
  * @param ctx - Browser context with slot, locale, plugin navigation, and Workspace services.
  */
 export function apply(ctx: Context): void {
-  const dictionaries = { en, zh, ja }
-  ctx.effect(() => ctx.locale.register('entryCustomization', dictionaries))
+  ctx.effect(() => ctx.locale.register('entryCustomization', { en, zh, ja }))
   const t = ctx.locale.bind('entryCustomization')
   const injected = (region: EntryRegion): EntryMenuInjected => ({
     region,

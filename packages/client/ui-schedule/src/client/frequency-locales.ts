@@ -181,5 +181,5 @@ export const frequencyJa = {
   'unit.second.other': '秒',
   'relative.now': 'まもなく期限',
   'relative.future': '{value}{unit}後',
-  'relative.overdue': '{value} {unit}超過',
+  'relative.overdue': '{value}{unit}超過',
 } satisfies Record<keyof typeof frequencyEn, string>

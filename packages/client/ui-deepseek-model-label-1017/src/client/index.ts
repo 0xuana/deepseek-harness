@@ -22,8 +22,7 @@ export const inject = ['slots', 'locale']
  */
 export function apply(ctx: Context): void {
   const namespace = 'deepseek-model-label-1017'
-  const dictionaries = { zh, en, ja }
-  ctx.effect(() => ctx.locale.register(namespace, dictionaries), 'deepseek-model-label-1017: dictionaries')
+  ctx.effect(() => ctx.locale.register(namespace, { zh, en, ja }), 'deepseek-model-label-1017: dictionaries')
   ctx.slots.inject('conversation.input.model.label', () => ctx.slots.register({
     name: 'conversation.input.model.label', locale: namespace,
   }, DeepSeekModelLabel))

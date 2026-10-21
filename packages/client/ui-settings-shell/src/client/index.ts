@@ -42,8 +42,7 @@ export const inject = ['slots', 'locale', 'configForms']
  */
 export function apply(ctx: ClientContext): void {
   const t = ctx.locale.bind(NS)
-  const dictionaries = { zh, en, ja }
-  ctx.effect(() => ctx.locale.register(NS, dictionaries), 'ui-settings-shell: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'ui-settings-shell: dictionaries')
   // The base bundle composes exactly one shell executor per platform; the page binds the served one.
   const bash = new ShellCardController(ctx.configForms.get(BASH_NS))
   const pwsh = new ShellCardController(ctx.configForms.get(PWSH_NS))

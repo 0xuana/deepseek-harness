@@ -31,8 +31,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 export function apply(ctx: Context, config: Config['office']): void {
   const id = '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/office'
   const extensions = ['doc', 'docx', 'ppt', 'pptx']
-  const dictionaries = { zh, en, ja }
-  ctx.effect(() => ctx.locale.register('sidebarOffice', dictionaries))
+  ctx.effect(() => ctx.locale.register('sidebarOffice', { zh, en, ja }))
   const t = ctx.locale.bind('sidebarOffice')
   const unavailable: ReadOfficeDocument = (_file, signal) => {
     signal.throwIfAborted()

@@ -25,8 +25,7 @@ export const inject = ['locale', 'slots', 'uiConversation']
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
-  const dictionaries = { zh, en, ja }
-  ctx.effect(() => ctx.locale.register(NS, dictionaries), 'ui-secret-mask: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'ui-secret-mask: dictionaries')
   ctx.uiConversation.userText.register(createSecretRule())
   ctx.slots.inject('conversation.user.text.node', () => ctx.slots.register({
     name: 'conversation.user.text.node', key: 'secret', priority: 100, locale: NS,

@@ -80,8 +80,7 @@ async function registerUi(ctx: Context, lifetime: AbortController): Promise<void
   }
   const scope = ctx.configForms.get<CotTranslationPreferences>('cot-translation')
   ctx.effect(() => scope.subscribe(invalidate))
-  const dictionaries = { en, zh, ja }
-  ctx.effect(() => ctx.locale.register(NS, dictionaries))
+  ctx.effect(() => ctx.locale.register(NS, { en, zh, ja }))
   const form = new TranslationPreferencesForm(scope)
   ctx.effect(() => () => { form.dispose() })
   const injected = (sessionId: SessionId): TranslationBodyInjected => ({

@@ -12,8 +12,7 @@ import { en, ja, zh } from './locales.ts'
  */
 export function apply(ctx: Context, limits: Config['excel']): void {
   const id = '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/excel'
-  const dictionaries = { zh, en, ja }
-  ctx.effect(() => ctx.locale.register('sidebarExcel', dictionaries))
+  ctx.effect(() => ctx.locale.register('sidebarExcel', { zh, en, ja }))
   const t = ctx.locale.bind('sidebarExcel')
   ctx.effect(() => ctx.documentPreviews.register({
     id, extensions: ['xlsx', 'xls', 'csv', 'tsv'], binaryExtensions: ['xlsx', 'xls'], priority: 'builtin',

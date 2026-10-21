@@ -86,8 +86,7 @@ export const inject = [
  * @param ctx - browser services used by these contributions.
  */
 export function apply(ctx: ClientContext): void {
-  const dictionaries = { zh, en, ja }
-  ctx.effect(() => ctx.locale.register(NS, dictionaries), 'ui-schedule: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'ui-schedule: dictionaries')
   const managerDictionaries = { zh: managerZh, en: managerEn, ja: managerJa }
   ctx.effect(() => ctx.locale.register(MANAGER_NS, managerDictionaries), 'ui-schedule: manager dictionaries')
   const t = ctx.locale.bind(MANAGER_NS)

@@ -58,8 +58,7 @@ export const inject = ['sessions', 'locale']
  */
 export function apply(ctx: ClientContext): void {
   ctx.plugin(InputTriggerService)
-  const dictionaries = { zh, en, ja }
-  ctx.effect(() => ctx.locale.register(MENU_NS, dictionaries), 'ui-input-trigger: menu dictionaries')
+  ctx.effect(() => ctx.locale.register(MENU_NS, { zh, en, ja }), 'ui-input-trigger: menu dictionaries')
   ctx.inject(['slots', 'inputTriggers', 'sessions'], (scope: ClientContext) => {
     const inputTriggers = scope.inputTriggers
     const sessions = scope.sessions

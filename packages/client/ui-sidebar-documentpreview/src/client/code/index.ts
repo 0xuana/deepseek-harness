@@ -10,8 +10,7 @@ const NS = 'sidebarCodePreview'
 
 /** @param ctx - owning plugin context. Register localized metadata and the matching keyed document body. */
 export function apply(ctx: Context): void {
-  const dictionaries = { zh, en, ja }
-  ctx.effect(() => ctx.locale.register(NS, dictionaries))
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }))
   const t = ctx.locale.bind(NS)
   ctx.effect(() => ctx.documentPreviews.register({
     id: ID,

@@ -41,8 +41,7 @@ export function imageBodyDefinition(title: () => string): DocumentPreviewDefinit
  */
 export function apply(ctx: Context): void {
   const t = ctx.locale.bind('sidebarImage')
-  const dictionaries = { zh, en, ja }
-  ctx.effect(() => ctx.locale.register('sidebarImage', dictionaries), 'document-image: dictionaries')
+  ctx.effect(() => ctx.locale.register('sidebarImage', { zh, en, ja }), 'document-image: dictionaries')
   ctx.effect(() => ctx.documentPreviews.register(imageBodyDefinition(() => t('title'))), 'document-image: metadata')
   const store = createZoomStore()
   const retainTab = retainDocumentTabs(ctx)

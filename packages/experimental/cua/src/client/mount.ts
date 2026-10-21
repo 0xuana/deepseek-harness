@@ -31,8 +31,7 @@ export const inject = ['remote', 'slots', 'locale', 'configForms']
 export async function mountCuaPermissions(ctx: Context, contribution: TypertRemoteContribution): Promise<() => Promise<void>> {
   const transport = ctx.plugin(async (owner) => { await owner.remote.$mount(contribution) })
   const ui = ctx.inject(['remote.cuaAccess', 'slots', 'locale'], (ctx) => {
-    const dictionaries = { en, zh, ja }
-    ctx.effect(() => ctx.locale.register(NS, dictionaries))
+    ctx.effect(() => ctx.locale.register(NS, { en, zh, ja }))
     const controller = new PermissionController(ctx.remote.cuaAccess)
     const face = controller.face()
     ctx.inject(['pluginChanges'], (scope) => {
