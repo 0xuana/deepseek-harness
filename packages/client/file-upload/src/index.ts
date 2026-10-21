@@ -143,6 +143,9 @@ export class FileUploads extends TypertRemoteService {
    * Persist one prompt image for a Session: read at most the deployment's
    * per-image byte limit, then validate, normalize, and store the image the
    * way prompt admission does, so a later prompt cites it by receipt.
+   * Cancellation before storage begins stores nothing; a cancelled upload
+   * never receives a receipt, although an image whose storage already began
+   * stays in the content-addressed store.
    * @param request - Session identity, ordered bytes, the declared media type that this deployment
    * must accept, cancellation, and optional display name.
    * @returns the staged receipt and durable normalized image reference.
@@ -164,17 +167,20 @@ export class FileUploads extends TypertRemoteService {
         { reason: 'UNSUPPORTED_IMAGE_TYPE' } as never,
       )
     }
-    const image = await this.store(agent, async () => {
+    const staged = await this.store(agent, async () => {
       const data = await readAtMost(request.data, limits.maxImageBytes, request.signal)
+      // readAtMost checks cancellation per chunk; an abort after the last chunk still stops here.
+      request.signal?.throwIfAborted()
       const refs = await this.ctx.attachments.saveImages([{
         data,
         mediaType,
         ...(request.name === undefined ? {} : { name: request.name }),
       }])
+      request.signal?.throwIfAborted()
       // saveImages returns one reference per input, in input order.
-      return refs[0] as ImageAttachmentRef
+      return { type: 'image' as const, attachment: refs[0] as ImageAttachmentRef, encodedBytes: data.byteLength }
     })
-    return { receiptId: this.stage(agent, { type: 'image', attachment: image }), image }
+    return { receiptId: this.stage(agent, staged), image: staged.attachment }
   }
 
   /**

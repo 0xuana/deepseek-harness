@@ -26,10 +26,14 @@ export interface ImageUploadValue {
   readonly image: ImageAttachmentRef
 }
 
-/** Durable attachment one staged receipt names: a verbatim file, or a normalized prompt image. */
+/**
+ * Durable attachment one staged receipt names: a verbatim file, or a
+ * normalized prompt image with `encodedBytes` holding the byte length of its
+ * upload, which counts toward the per-message image byte limit.
+ */
 export type StagedAttachment =
   | { readonly type: 'file'; readonly attachment: FileAttachmentRef }
-  | { readonly type: 'image'; readonly attachment: ImageAttachmentRef }
+  | { readonly type: 'image'; readonly attachment: ImageAttachmentRef; readonly encodedBytes: number }
 
 /** Host-minted authority for one staged file upload in one Agent scope. */
 export type FileUploadReceiptId = Branded<'file-upload-receipt-id'>
