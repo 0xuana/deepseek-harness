@@ -6,7 +6,7 @@
  */
 
 import type { ReactNode } from 'react'
-import { IconPlusOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { AnimatedRows, IconPlusOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { en } from './locales.ts'
 import { ModelRow } from './ModelRow.tsx'
 import { useModelRows } from './useModelRows.ts'
@@ -221,10 +221,11 @@ export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNod
       {props.models.length === 0
         ? <p className={styles['modelEmpty']}>{props.t('modelsEmpty')}</p>
         : (
-          <div className={styles['modelList']}>
+          <AnimatedRows className={styles['modelList'] as string} rowKeys={rowState.rows.map(row => String(row.key))} ready resetKey="">
             {rowState.rows.map(({ model, key, expanded, order }, index) => (
               <ModelRow
                 key={key}
+                rowKey={key}
                 order={order}
                 model={model}
                 position={index + 1}
@@ -244,7 +245,7 @@ export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNod
                 onRemove={() => { remove(index) }}
               />
             ))}
-          </div>
+          </AnimatedRows>
         )}
       <button
         type="button"

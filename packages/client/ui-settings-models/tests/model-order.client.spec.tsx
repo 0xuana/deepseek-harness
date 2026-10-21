@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 /** Provider-local ordering preserves row instances and unfinished model edits. */
 import { useState } from 'react'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, createEvent, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DeepSeekModelsEditor } from '../src/client/DeepSeekModelsEditor.tsx'
 import type { DeepSeekModelDraft } from '../src/client/DeepSeekModelsEditor.tsx'
 import { ModelListEditor } from '../src/client/ModelListEditor.tsx'
 import { en } from '../src/client/locales.ts'
 
-afterEach(cleanup)
+afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
 function Editor(props: {
   family: 'deepseek' | 'pi-ai'
@@ -36,13 +36,23 @@ function handle(position: number): HTMLButtonElement {
 }
 
 function row(button: HTMLButtonElement): HTMLElement {
-  const entry = button.closest('[data-model-row]')
+  const entry = button.closest('[data-row-key]')
   if (!(entry instanceof HTMLElement)) throw new Error('Model row is missing')
   return entry
 }
 
 function transfer() {
-  return { setData: vi.fn(), effectAllowed: '', dropEffect: '' }
+  return {
+    setData: vi.fn(), effectAllowed: '', dropEffect: '',
+    setDragImage: vi.fn<(image: HTMLElement, x: number, y: number) => void>(),
+  }
+}
+
+/** jsdom's DragEvent fallback drops pointer coordinates from event options. */
+function fireDrag(target: HTMLElement, kind: 'dragOver' | 'drop', clientY: number, dataTransfer: ReturnType<typeof transfer>) {
+  const event = kind === 'dragOver' ? createEvent.dragOver(target) : createEvent.drop(target)
+  Object.defineProperties(event, { clientY: { value: clientY }, dataTransfer: { value: dataTransfer } })
+  fireEvent(target, event)
 }
 
 describe.each(['deepseek', 'pi-ai'] as const)('%s model ordering', (family) => {
@@ -92,6 +102,58 @@ describe.each(['deepseek', 'pi-ai'] as const)('%s model ordering', (family) => {
     expect(changed).toHaveBeenCalledExactlyOnceWith([{ id: 'second' }, { id: 'first' }])
     fireEvent.keyDown(source, { key: 'ArrowUp' })
     expect(changed).toHaveBeenLastCalledWith([{ id: 'first' }, { id: 'second' }])
+  })
+
+  it('marks and inserts before or after a row, ignoring adjacent insertions that keep the order', () => {
+    const changed = vi.fn()
+    render(<Editor family={family} initial={[{ id: 'first' }, { id: 'second' }, { id: 'third' }]} changed={changed} />)
+    const source = handle(3)
+    const destination = row(handle(1))
+    vi.spyOn(destination, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 100, 200, 40))
+    const dataTransfer = transfer()
+    fireEvent.dragStart(source, { dataTransfer })
+    fireDrag(destination, 'dragOver', 110, dataTransfer)
+    expect(destination.dataset.dropTarget).toBe('before')
+    fireDrag(destination, 'dragOver', 130, dataTransfer)
+    expect(destination.dataset.dropTarget).toBe('after')
+    fireDrag(destination, 'dragOver', 130, dataTransfer)
+    fireDrag(destination, 'drop', 110, dataTransfer)
+    fireEvent.dragEnd(source)
+    expect(changed).toHaveBeenCalledExactlyOnceWith([{ id: 'third' }, { id: 'first' }, { id: 'second' }])
+    expect(destination.dataset.dropTarget).toBeUndefined()
+    changed.mockClear()
+
+    const adjacent = row(handle(2))
+    vi.spyOn(adjacent, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 100, 200, 40))
+    fireEvent.dragStart(source, { dataTransfer })
+    fireDrag(adjacent, 'drop', 110, dataTransfer)
+    fireEvent.dragEnd(source)
+    fireEvent.dragStart(handle(2), { dataTransfer })
+    fireDrag(row(source), 'drop', 0, dataTransfer)
+    fireEvent.dragEnd(handle(2))
+    expect(changed).not.toHaveBeenCalled()
+  })
+
+  it('previews the whole expanded row from its handle and cleans it up at drag end or unmount', () => {
+    const view = render(<Editor family={family} initial={[{ id: 'first' }]} changed={vi.fn()} />)
+    const source = handle(1)
+    fireEvent.click(screen.getByRole('button', { name: `${en.modelAdvanced} 1` }))
+    const dataTransfer = transfer()
+    fireEvent.dragStart(source, { dataTransfer })
+    const preview = dataTransfer.setDragImage.mock.calls[0]![0]
+    expect(preview.inert).toBe(true)
+    expect(preview.getAttribute('aria-hidden')).toBe('true')
+    expect(preview.querySelector('[data-row-key]')).toBeNull()
+    expect(within(preview).getByLabelText<HTMLInputElement>(`${en.modelId} 1`).value).toBe('first')
+    expect(within(preview).getByLabelText(`${en.contextWindow} 1`).tabIndex).toBe(-1)
+    expect(row(source).draggable).toBe(false)
+    fireEvent.dragEnd(source)
+    expect(preview.isConnected).toBe(false)
+    fireEvent.dragEnd(source)
+    fireEvent.dragStart(source, { dataTransfer })
+    const nextPreview = dataTransfer.setDragImage.mock.calls[1]![0]
+    view.unmount()
+    expect(nextPreview.isConnected).toBe(false)
   })
 
   it('keeps canceled, same-row, foreign, and disabled drops from changing the draft', () => {

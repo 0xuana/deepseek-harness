@@ -21,7 +21,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { LlmDiscoveredModel } from '@deepseek-ai/dsh-api-remotes/client'
-import { Button, IconPlusOutlineRegular, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
+import { AnimatedRows, Button, IconPlusOutlineRegular, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import { formatCapacity, parseCapacity } from './DeepSeekModelsEditor.tsx'
 import type { ModelsOperations } from './operations.ts'
 import type { DeepSeekModelDraft } from './DeepSeekModelsEditor.tsx'
@@ -346,10 +346,11 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
         </button>
       </div>
       {models.length === 0 ? <p className={styles['modelEmpty']}>{t('modelsEmpty')}</p> : null}
-      <div className={styles['modelList']}>
+      <AnimatedRows className={styles['modelList'] as string} rowKeys={rowState.rows.map(row => String(row.key))} ready resetKey="">
         {rowState.rows.map(({ model, key, expanded, order }, index) => (
           <ModelRow
             key={key}
+            rowKey={key}
             order={order}
             model={model}
             position={index + 1}
@@ -379,7 +380,7 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
             }}
           />
         ))}
-      </div>
+      </AnimatedRows>
       <button
         type="button"
         className={styles['addModelButton']}

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { AnimatedRows } from '../src/client/rows/AnimatedRows.tsx'
+import { AnimatedRows } from '@deepseek-ai/dsh-client-ui-primitives'
 
 interface RecordedAnimation {
   element: HTMLElement
@@ -49,6 +49,7 @@ function rows(keys: readonly string[], options: { ready?: boolean; resetKey?: st
   return <div style={{ position: 'relative' }}>
     <AnimatedRows
       className="rows"
+      role="tree"
       label="Sessions"
       rowKeys={keys}
       ready={options.ready ?? true}

@@ -1,9 +1,9 @@
 /** Shared model fields and actions for both adapter catalog editors. */
 
-import type { ReactNode } from 'react'
+import type { DragEvent, ReactNode } from 'react'
 import {
   IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconDragHandleOutlineRegular,
-  IconTrashOutlineRegular, Tooltip,
+  IconTrashOutlineRegular, Tooltip, useRowDragPreview,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { DeepSeekModelDraft } from './DeepSeekModelsEditor.tsx'
 import type { ModelsKey } from './locales.ts'
@@ -23,6 +23,7 @@ interface CapacityInput {
 /** Adapter-owned data and actions for one model row. */
 interface ModelRowProps {
   model: DeepSeekModelDraft
+  rowKey: number
   position: number
   order: ModelRowOrder
   inputField: 'inputModalities' | 'input'
@@ -42,6 +43,11 @@ interface ModelRowProps {
   onRemove: () => void
 }
 
+function rowHalf(event: DragEvent<HTMLElement>): 'before' | 'after' {
+  const rect = event.currentTarget.getBoundingClientRect()
+  return event.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
+}
+
 /**
  * Render consistent model identity, capacity, and input-type controls.
  * @param props - drafted fields and their owning editor's actions.
@@ -49,22 +55,23 @@ interface ModelRowProps {
  */
 export function ModelRow(props: ModelRowProps): ReactNode {
   const { model, position, t, disabled } = props
+  const preview = useRowDragPreview(styles['modelDragPreview'] as string)
   return (
     <div
       className={styles['modelEntry']}
-      data-model-row=""
+      data-row-key={props.rowKey}
       data-dragging={props.order.dragging || undefined}
-      data-drop-target={props.order.target && !props.order.dragging || undefined}
+      data-drop-target={props.order.dragging ? undefined : props.order.target}
       onDragOver={(event) => {
         if (!props.order.canDrop) return
         event.preventDefault()
         event.dataTransfer.dropEffect = 'move'
-        props.order.onOver()
+        props.order.onOver(rowHalf(event))
       }}
       onDrop={(event) => {
         if (!props.order.canDrop) return
         event.preventDefault()
-        props.order.onDrop()
+        props.order.onDrop(rowHalf(event))
       }}
     >
       <div className={styles['modelRow']}>
@@ -80,8 +87,9 @@ export function ModelRow(props: ModelRowProps): ReactNode {
               event.dataTransfer.effectAllowed = 'move'
               event.dataTransfer.setData('text/plain', String(position))
               props.order.onStart()
+              preview.start(event, event.currentTarget.closest('[data-row-key]') as HTMLElement)
             }}
-            onDragEnd={props.order.onEnd}
+            onDragEnd={() => { if (preview.clear()) props.order.onEnd() }}
             onKeyDown={(event) => {
               if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
               event.preventDefault()

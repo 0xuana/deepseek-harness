@@ -15,12 +15,12 @@ interface RowState {
 /** Drag state and actions for one model row within its editor. */
 export interface ModelRowOrder {
   dragging: boolean
-  target: boolean
+  target: 'before' | 'after' | undefined
   canDrop: boolean
   onStart: () => void
   onEnd: () => void
-  onOver: () => void
-  onDrop: () => void
+  onOver: (half: 'before' | 'after') => void
+  onDrop: (half: 'before' | 'after') => void
   onMove: (offset: -1 | 1) => void
 }
 
@@ -50,7 +50,7 @@ export function useModelRows(
   const nextKey = useRef(0)
   const [stored, setRows] = useState(() => models.map(() => createRow(nextKey.current++)))
   const [dragged, setDragged] = useState<number>()
-  const [target, setTarget] = useState<number>()
+  const [target, setTarget] = useState<{ key: number; half: 'before' | 'after' }>()
   const entries = models.map((model, index) => ({ model, state: stored[index] ?? createRow(nextKey.current++) }))
   const rows = entries.map(entry => entry.state)
   if (stored.length !== models.length) setRows(rows)
@@ -71,12 +71,19 @@ export function useModelRows(
       model,
       order: {
         dragging: dragged === state.key,
-        target: target === state.key,
+        target: target?.key === state.key ? target.half : undefined,
         canDrop: !disabled && dragged !== undefined,
         onStart: (): void => { setDragged(state.key) },
         onEnd: endDrag,
-        onOver: (): void => { setTarget(state.key) },
-        onDrop: (): void => { move(rows.findIndex(row => row.key === dragged), index); endDrag() },
+        onOver: (half): void => {
+          setTarget(current => current?.key === state.key && current.half === half ? current : { key: state.key, half })
+        },
+        onDrop: (half): void => {
+          const from = rows.findIndex(row => row.key === dragged)
+          const insertion = index + (half === 'after' ? 1 : 0)
+          move(from, insertion > from ? insertion - 1 : insertion)
+          endDrag()
+        },
         onMove: (offset: -1 | 1): void => { move(index, index + offset) },
       },
     })),
