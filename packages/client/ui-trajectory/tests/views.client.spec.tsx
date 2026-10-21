@@ -276,17 +276,22 @@ async function bench(snapshot = historySnapshot(NODES)) {
   const conversationStore = createSnapshotStore<ConversationSnapshot>(conversationSnapshot(snapshot))
   const uiConversation = new UiConversation(ctx, runtime.sessions)
   const { events, views } = uiConversation
-  const targetSources: ConversationTargetSources = {
+  // Only the targets this trajectory bench binds; a typed lookup keeps the map
+  // non-exhaustive so other packages' targets need no dependency here.
+  const targetSources: Partial<ConversationTargetSources> = {
     chat: createSnapshotStore<ChatSnapshot | undefined>(undefined),
     trajectory: trajectoryStore,
     'tool-todo-history': createSnapshotStore<ConversationViewSnapshotMap['tool-todo-history'] | undefined>(undefined),
-    perf: createSnapshotStore<ConversationViewSnapshotMap['perf'] | undefined>(undefined),
   }
   const binding: ConversationBinding = {
     snapshot: conversationStore,
     openTurn: createSnapshotStore<number | undefined>(undefined),
     activate: () => {},
-    target: target => targetSources[target],
+    target: (target) => {
+      const source = targetSources[target]
+      if (source === undefined) throw new Error(`trajectory bench has no source for target "${target}"`)
+      return source
+    },
   }
   vi.spyOn(uiConversation, 'binding').mockReturnValue(binding)
   // The conversation entry's role: declare the ring, then seed the chat entry.
