@@ -10,10 +10,23 @@ Installed qualification can opt into `DSH_DESKTOP_UPDATE_JOURNAL_DIR`, an absolu
 
 ## Table of Contents
 
+- [Update dialog themes](#verification-theme)
 - [Native overlay visibility](#verification-overlay)
 - [Evidence](#verification-evidence)
 - [Manual walkthrough](#verification-interactive)
 - [Open verification](#verification-open)
+
+<a id="verification-theme"></a>
+
+## Update dialog themes
+
+After `pnpm --dir apps/desktop run build`, run the real Electron palette fixture on macOS:
+
+```sh
+apps/desktop/.desktop-build/targets/mac-arm64/electron/Electron.app/Contents/MacOS/Electron apps/desktop/tests/fixtures/update-theme.mjs
+```
+
+The fixture creates a private profile, loads the production shell HTML, sandboxed preloads, renderer scripts, and bundled design tokens, and substitutes only fixed IPC status responses. Its 12 cases cover ordinary and mandatory documents starting in light/dark mode, switching while open, and following system appearance. It checks transparent document backgrounds, surface/text/button/mask colors, and the ordinary close icon, then writes four screenshots and `result.json` to `.desktop-build/qualification/update-theme-*`. It does not start a Host, download updates, run an installer, or qualify Windows native rendering. The first-close notice shares the ordinary document's CSS and theme script.
 
 <a id="verification-overlay"></a>
 

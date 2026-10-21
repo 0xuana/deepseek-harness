@@ -4,7 +4,7 @@ import { once } from 'node:events'
 import { access, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { app, BrowserWindow, protocol } from 'electron'
+import { app, BrowserWindow, nativeTheme, protocol } from 'electron'
 import { DesktopUpdateDialog } from '../../lib/types/update-dialog.js'
 import { DesktopBackgroundNotice } from '../../lib/types/background-notice.js'
 import { desktopUpdateReadyConfirmation, resolveDesktopLocale } from '../../lib/types/locale.js'
@@ -20,15 +20,17 @@ async function rendered(window) {
 
 /** Exercise cancellation and explicit installation through the production preload and renderer. */
 export async function qualifyUpdateDialogs(root, fixture) {
+  const theme = nativeTheme.themeSource
+  nativeTheme.themeSource = 'light'
   const locale = resolveDesktopLocale('zh-CN')
   const messages = locale.messages
   const screenshots = []
   protocol.handle('dsh-app', async request => {
     const name = new URL(request.url).pathname.slice(1)
-    assert.ok(['update-dialog.html', 'update-dialog.js', 'update-dialog.css', 'update-close.svg'].includes(name))
+    assert.ok(['design-platform.css', 'update-theme.js', 'update-dialog.html', 'update-dialog.js', 'update-dialog.css', 'update-close.svg'].includes(name))
     const mime = name.endsWith('.js') ? 'text/javascript' : name.endsWith('.css') ? 'text/css'
       : name.endsWith('.svg') ? 'image/svg+xml' : 'text/html'
-    return new Response(await readFile(new URL(`../../renderer/${name}`, import.meta.url)), { headers: { 'content-type': mime } })
+    return new Response(await readFile(new URL(`${name === 'design-platform.css' ? '../../lib/welcome' : '../../renderer'}/${name}`, import.meta.url)), { headers: { 'content-type': mime } })
   })
   const parent = new BrowserWindow({ show: true, width: 900, height: 650 })
   const dialogs = new DesktopUpdateDialog(fileURLToPath(new URL('../../lib/preload-update-dialog.cjs', import.meta.url)), locale)
@@ -161,5 +163,6 @@ export async function qualifyUpdateDialogs(root, fixture) {
     dialogs.dispose()
     parent.destroy()
     protocol.unhandle('dsh-app')
+    nativeTheme.themeSource = theme
   }
 }
