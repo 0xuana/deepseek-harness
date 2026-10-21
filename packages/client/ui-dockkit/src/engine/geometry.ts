@@ -207,6 +207,94 @@ export function resizedRect(rect: FloatRect, dx: number, dy: number, min: Size):
 }
 
 /**
+ * The viewport region floating panels stay inside: `[0, width]` horizontally and
+ * `[top, height]` vertically, where `top` keeps the header clear of window chrome.
+ */
+export interface FloatBounds {
+  readonly top: number
+  readonly width: number
+  readonly height: number
+}
+
+/** How far past an edge the resistance lets a dragged panel travel, at most, in CSS pixels. */
+export const FLOAT_RESISTANCE = 120
+
+/** One axis clamped into `[min, max]`; a span too small for the panel pins it at `min`. */
+function clampAxis(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(value, max))
+}
+
+/**
+ * The nearest rectangle that lies inside the bounds, per axis. A panel larger
+ * than the bounds on an axis pins its leading edge, so its header stays reachable.
+ * @param rect - any rectangle, possibly outside the bounds.
+ * @param bounds - the viewport region.
+ * @returns the rectangle moved inside the bounds; the size is unchanged.
+ */
+export function legalFloatRect(rect: FloatRect, bounds: FloatBounds): FloatRect {
+  return {
+    ...rect,
+    x: clampAxis(rect.x, 0, bounds.width - rect.width),
+    y: clampAxis(rect.y, bounds.top, bounds.height - rect.height),
+  }
+}
+
+/** Displacement past an edge for a pointer overflow: slope 1 at the edge, approaching `FLOAT_RESISTANCE`. */
+function resist(overflow: number): number {
+  return Math.sign(overflow) * FLOAT_RESISTANCE * Math.abs(overflow) / (FLOAT_RESISTANCE + Math.abs(overflow))
+}
+
+/**
+ * Where a dragged panel draws when the pointer has taken it past an edge: the
+ * legal rectangle plus a resisted share of the overflow on each axis.
+ * @param desired - the rectangle the pointer travel asks for.
+ * @param bounds - the viewport region.
+ * @returns the drawn rectangle; equal to `desired` while it is legal.
+ */
+export function resistedRect(desired: FloatRect, bounds: FloatBounds): FloatRect {
+  const legal = legalFloatRect(desired, bounds)
+  return { ...desired, x: legal.x + resist(desired.x - legal.x), y: legal.y + resist(desired.y - legal.y) }
+}
+
+/** The largest displacement `unresistedRect` inverts; `resist` only approaches `FLOAT_RESISTANCE`. */
+const MAX_INVERTIBLE = FLOAT_RESISTANCE * 0.99
+
+/** Pointer overflow that `resist` maps to a displacement, the displacement capped at `MAX_INVERTIBLE`. */
+function unresist(displacement: number): number {
+  const shown = Math.min(Math.abs(displacement), MAX_INVERTIBLE)
+  return Math.sign(displacement) * FLOAT_RESISTANCE * shown / (FLOAT_RESISTANCE - shown)
+}
+
+/**
+ * The rectangle a drag must start from so that zero pointer travel draws
+ * `drawn`, the inverse of `resistedRect`: a press on a panel still outside the
+ * bounds picks it up where it is.
+ * @param drawn - where the panel is drawn now.
+ * @param bounds - the viewport region.
+ * @returns the start rectangle; equal to `drawn` while it is legal.
+ */
+export function unresistedRect(drawn: FloatRect, bounds: FloatBounds): FloatRect {
+  const legal = legalFloatRect(drawn, bounds)
+  return { ...drawn, x: legal.x + unresist(drawn.x - legal.x), y: legal.y + unresist(drawn.y - legal.y) }
+}
+
+/**
+ * A resized rectangle whose bottom-right corner stays inside the bounds, never
+ * below the minimum size.
+ * @param rect - the resized rectangle, its origin legal.
+ * @param bounds - the viewport region.
+ * @param min - smallest size the panel may take.
+ * @returns the rectangle with its size capped by the bounds.
+ */
+export function boundedResize(rect: FloatRect, bounds: FloatBounds, min: Size): FloatRect {
+  return {
+    ...rect,
+    width: Math.max(min.width, Math.min(rect.width, bounds.width - rect.x)),
+    height: Math.max(min.height, Math.min(rect.height, bounds.height - rect.y)),
+  }
+}
+
+/**
  * Where a panel should appear when a tab is dropped outside the docked area.
  * @param x - drop point x.
  * @param y - drop point y.
