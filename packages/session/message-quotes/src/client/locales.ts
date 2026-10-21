@@ -15,3 +15,8 @@ export type MessageQuotesKey = keyof typeof zh
 export const en: Record<MessageQuotesKey, string> = {
   'quote.add': 'Quote text',
 }
+
+/** Japanese dictionary. */
+export const ja: Record<MessageQuotesKey, string> = {
+  'quote.add': 'テキストを引用',
+}
