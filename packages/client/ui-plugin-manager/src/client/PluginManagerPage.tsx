@@ -95,34 +95,37 @@ function AddPluginMenu({ t, disabled, openInstall, renderSlot }: {
 /** How long the list marks a package an install just enabled. */
 const HIGHLIGHT_MS = 2_400
 
-/** Built-in profile bundles stay out of this page even when the profile declares them as dependencies. */
-const BUILTIN_PROFILE_BUNDLES = new Set([
+/**
+ * Built-in profile bundles and persistent terminals have no management page.
+ * Their Host availability and activation stay intact.
+ */
+const HIDDEN_BUNDLES = new Set([
   '@deepseek-ai/dsh-base',
   '@deepseek-ai/dsh-web-app',
   '@deepseek-ai/dsh-headless',
   '@deepseek-ai/dsh-sdk-app',
   '@deepseek-ai/dsh-acp-app',
   '@deepseek-ai/dsh-sdk-minimal',
+  '@deepseek-ai/dsh-experimental-terminal-bundle',
 ])
 
 /** The optional bundles the main list always holds, in this order; new bundles join the main list. */
 const EXTENSION_BUNDLES = [
   '@deepseek-ai/dsh-experimental-agent-team-profile',
   '@deepseek-ai/dsh-experimental-voice-input-bundle',
+  '@deepseek-ai/dsh-experimental-plugin-market-bundle',
   '@deepseek-ai/dsh-experimental-auto-review',
-  '@deepseek-ai/dsh-experimental-inspector-profile',
 ]
 /** The optional bundles the main list holds back until selected; the More list includes eligible entries. */
 const MORE_BUNDLES = [
+  '@deepseek-ai/dsh-experimental-inspector-profile',
   '@deepseek-ai/dsh-cua-bundle',
   '@deepseek-ai/dsh-experimental-tool-worktree',
   '@deepseek-ai/dsh-experimental-cot-translation-bundle',
-  '@deepseek-ai/dsh-experimental-terminal-bundle',
   '@deepseek-ai/dsh-experimental-session-search',
   '@deepseek-ai/dsh-experimental-session-titles-bundle',
   '@deepseek-ai/dsh-experimental-badge-skill-bundle',
   '@deepseek-ai/dsh-experimental-ralph-bundle',
-  '@deepseek-ai/dsh-experimental-plugin-market-bundle',
   '@deepseek-ai/dsh-subagent-codex',
   '@deepseek-ai/dsh-subagent-claude-code',
 ]
@@ -1561,10 +1564,9 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   }, [highlight, clearHighlight])
   const noticeLine = state.notice === null || state.notice.kind === 'refresh-failed' ? null : noticeText(state.notice, t)
 
-  // The page manages what the person installed, what the installation ships for them to switch on, and a
-  // selected name the Host cannot read; the installation's other bundles are inspected in the Settings
-  // Plugins section's Plugin list tab.
-  const listed = state.packages.filter(pkg => !BUILTIN_PROFILE_BUNDLES.has(pkg.name)
+  // The page omits profile bundles and persistent terminals. Other installed or offered bundles and
+  // unreadable selections remain manageable; Settings' Plugin list inspects the full Host inventory.
+  const listed = state.packages.filter(pkg => !HIDDEN_BUNDLES.has(pkg.name)
     && (pkg.listedByDefault !== false || pkg.enabled || pkg.installed)
     && (pkg.installed || pkg.official || pkg.error !== undefined))
   const mine = listed.filter(pkg => !pkg.official)
