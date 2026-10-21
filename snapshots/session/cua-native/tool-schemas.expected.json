@@ -390,7 +390,7 @@
                       "relative": {
                         "type": "boolean",
                         "const": true,
-                        "description": "Use integer coordinates from 0 to 999, normalized by 999 to the window width and height."
+                        "description": "Use integer thousandths of the window width and height, from 0 to 999."
                       }
                     },
                     "required": [
@@ -589,7 +589,7 @@
                       "relative": {
                         "type": "boolean",
                         "const": true,
-                        "description": "Use integer coordinates from 0 to 999, normalized by 999 to the window width and height."
+                        "description": "Use integer thousandths of the window width and height, from 0 to 999."
                       },
                       "mouseButton": {
                         "type": "string",
@@ -993,7 +993,7 @@
                       "relative": {
                         "type": "boolean",
                         "const": true,
-                        "description": "Use integer coordinates from 0 to 999, normalized by 999 to the window width and height."
+                        "description": "Use integer thousandths of the window width and height, from 0 to 999."
                       },
                       "deltaLinesX": {
                         "type": "integer",
@@ -1142,7 +1142,8 @@
                       },
                       "relative": {
                         "type": "boolean",
-                        "const": true
+                        "const": true,
+                        "description": "Use integer thousandths of the window width and height, from 0 to 999."
                       },
                       "fromX": {
                         "type": "integer",
