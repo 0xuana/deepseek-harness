@@ -85,7 +85,7 @@ describe('web e2e: Agent Teams panel', () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-agent-team-panel'))
     const projectionReads = vi.spyOn(scaffold.ctx.sessionController, 'projections')
     onTestFinished(() => { projectionReads.mockRestore() })
-    await page.locator('[data-team-action]').getByRole('button', { name: /Agent Team/iu }).click()
+    await page.locator('[data-team-action]').getByRole('button', { name: 'Agent team', exact: true }).click()
     const action = page.getByRole('dialog', { name: 'Agent team', exact: true })
     await action.getByText('No shared tasks yet. Create them through the conversation.').waitFor()
     await action.getByText('lead').waitFor()
@@ -120,7 +120,7 @@ describe('web e2e: Agent Teams panel', () => {
   it('keeps the panel inside the viewport and closes on outside click or Escape', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-agent-team-panel-keyboard'))
     const panel = page.getByRole('dialog', { name: 'Agent team', exact: true })
-    const trigger = page.locator('[data-team-action]').getByRole('button', { name: /Agent Team/iu })
+    const trigger = page.locator('[data-team-action]').getByRole('button', { name: 'Agent team', exact: true })
     const viewport = page.viewportSize()!
     await trigger.click()
     await panel.getByText('lead', { exact: true }).waitFor()

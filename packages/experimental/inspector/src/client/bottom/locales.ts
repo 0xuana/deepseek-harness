@@ -1,4 +1,4 @@
-/** Localized labels for the NodeJS Inspector bottom panel and command. */
+/** Localized labels for the NodeJS inspector bottom panel and command. */
 export const zh = {
   title: 'NodeJS 诊断',
   toggle: '展开或收起 NodeJS 诊断',
