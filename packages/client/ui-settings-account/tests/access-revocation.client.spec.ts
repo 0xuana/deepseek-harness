@@ -2,7 +2,7 @@
 /** Account surfaces follow `account/watch` access: a revocation withdraws them and a later grant restores them. */
 import { afterEach, expect, it, vi } from 'vitest'
 import type { AccountView } from '@deepseek-ai/dsh-deepseek-account/types'
-import { apply } from '../src/client/index.ts'
+import { apply, type AccountSectionInjected } from '../src/client/index.ts'
 
 afterEach(() => { vi.unstubAllEnvs() })
 
@@ -94,6 +94,98 @@ it('withdraws every account surface and the account stream on revocation, and re
     grant()
     await streams[1]!.accepted
     expect(surfaces()).toEqual({ 'settings.launcher': 1, 'shell.quota-notice': 1, 'settings.models.sign-in': 1, 'settings.section': 1 })
+  } finally {
+    revoke()
+    for (const dispose of lifetime.reverse()) dispose()
+  }
+})
+
+it('drops reads a revoked grant started, and the next grant shows no account section before its first frame', async () => {
+  vi.stubEnv('DSH_CLIENT_VERSION', '0.0.0-test')
+  const links = { usageUrl: 'https://example.test/usage', topUpUrl: 'https://example.test/top_up' }
+  const signedIn: AccountView = { status: 'credential-stored', links, attempt: null }
+  const guards: Guard[] = []
+  const grant = (): void => {
+    for (const guard of guards) {
+      const effect = guard.install()
+      guard.installed = typeof effect === 'function' ? [effect] : [...effect]
+    }
+  }
+  const revoke = (): void => {
+    for (const guard of [...guards].reverse()) {
+      for (const dispose of (guard.installed ?? []).reverse()) dispose()
+      guard.installed = undefined
+    }
+  }
+  const registered = new Map<string, number>()
+  let operations: AccountSectionInjected | undefined
+  const profile = Promise.withResolvers<{ ok: true; value: { status: 'failed' } }>()
+  const firstFrames: { release: () => void; accepted: Promise<undefined> }[] = []
+  const lifetime: (() => void)[] = []
+  const ctx = {
+    effect: (install: () => (() => void) | undefined) => { const dispose = install(); if (dispose) lifetime.push(dispose) },
+    locale: { register: () => () => {}, bind: () => (key: string) => key, getSnapshot: () => ({ active: 'en' }) },
+    configForms: {
+      get: () => ({ subscribe: () => () => {}, getSnapshot: () => ({ status: 'loading', value: undefined }) }),
+      describe: () => ({ subscribe: () => () => {}, getSnapshot: () => ({ error: null }) }),
+    },
+    slots: {
+      inject: (_name: string, install: () => (() => void) | undefined) => {
+        const dispose = install()
+        return () => { dispose?.() }
+      },
+      register: (entry: { readonly name: string; readonly inject?: () => AccountSectionInjected }) => {
+        if (entry.name === 'settings.launcher') operations = entry.inject?.()
+        registered.set(entry.name, (registered.get(entry.name) ?? 0) + 1)
+        return () => { registered.set(entry.name, registered.get(entry.name)! - 1) }
+      },
+    },
+    remoteAccess: {
+      whenAccess: (action: string, install: () => AccessEffect) => {
+        guards.push({ action, install, installed: undefined })
+        return () => {}
+      },
+    },
+    remote: {
+      $on: () => () => {},
+      session: { initializeDefaultModel: async () => ({ ok: true, value: undefined }) },
+      account: { getProfile: async () => await profile.promise, getBalance: async () => ({ ok: true, value: null }) },
+      $stream: () => {
+        const abort = new AbortController()
+        const gate = Promise.withResolvers<undefined>()
+        const accepted = Promise.withResolvers<undefined>()
+        firstFrames.push({ release: () => { gate.resolve(undefined) }, accepted: accepted.promise })
+        return {
+          signal: abort.signal,
+          dispose: () => { abort.abort() },
+          async *[Symbol.asyncIterator]() {
+            await gate.promise
+            yield { value: signedIn, accept: () => { accepted.resolve(undefined) } }
+            await new Promise((resolve) => { abort.signal.addEventListener('abort', resolve) })
+          },
+        }
+      },
+    },
+  }
+  try {
+    apply(ctx as never)
+    grant()
+    firstFrames[0]!.release()
+    await firstFrames[0]!.accepted
+    expect(registered.get('settings.section')).toBe(1)
+
+    // The profile read started under the first grant settles only after the revocation.
+    revoke()
+    expect(operations!.hooks.account.getSnapshot()).toMatchObject({ view: undefined, details: undefined })
+    profile.resolve({ ok: true, value: { status: 'failed' } })
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(operations!.hooks.account.getSnapshot().details).toBeUndefined()
+
+    grant()
+    expect(registered.get('settings.section')).toBe(0)
+    firstFrames[1]!.release()
+    await firstFrames[1]!.accepted
+    expect(registered.get('settings.section')).toBe(1)
   } finally {
     revoke()
     for (const dispose of lifetime.reverse()) dispose()

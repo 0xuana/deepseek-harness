@@ -322,7 +322,8 @@ it('coalesces refreshes, publishes independent failures, and rejects stale respo
   await c.unload(SELF)
   pendingAgain.resolve(ok(profile))
   await request
-  expect(actions.hooks.account.getSnapshot().details?.profile).toEqual({ status: 'failed' })
+  // Unloading ends the grant, which clears the account state; the late profile publishes nothing.
+  expect(actions.hooks.account.getSnapshot()).toMatchObject({ view: undefined, details: undefined })
 }, 60_000)
 
 for (const desktop of [false, true]) it(`uses the browser or Desktop login carrier (Desktop: ${desktop}) and exposes operation errors`, async ({ start, mock }) => {

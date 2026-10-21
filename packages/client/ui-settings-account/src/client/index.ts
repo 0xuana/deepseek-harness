@@ -123,10 +123,20 @@ export function apply(ctx: Context): void {
       name: 'account', open: signal => ctx.remote.account.watch(signal), ended: () => new Error('account stream ended'),
     })
     let disposed = false
-    // `notices.end()` disposes this generation's notice lifetime, which a frame
-    // of this stream begins; the notice controller stays outside and begins
-    // again under the next grant.
-    yield () => { disposed = true; notices.end(); return stream.dispose() }
+    // Withdrawing access invalidates the reads this grant started and clears its
+    // account view, synchronously, so the next grant starts from no account
+    // state. `notices.end()` disposes this generation's notice lifetime, which a
+    // frame of this stream begins; the notice controller stays outside and
+    // begins again under the next grant.
+    yield () => {
+      disposed = true
+      revision++
+      refreshing = undefined
+      avatar.reset()
+      publish({ ...snapshot, view: undefined, details: undefined, avatar: undefined, failed: false })
+      notices.end()
+      return stream.dispose()
+    }
     void (async () => {
       for await (const frame of stream) {
         revision++
