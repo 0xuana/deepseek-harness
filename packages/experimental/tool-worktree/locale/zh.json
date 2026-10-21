@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Git 工作树",
-    "description": "让智能体创建新的 Git 分支与独立工作目录并切换过去，适合并行改动时保留当前工作区；关闭插件不会删除已创建的分支和目录。",
+    "description": "让智能体创建新的 Git 分支与工作树，并在其中继续工作。",
     "detail": "docs/DETAIL.zh.md"
   }
 }

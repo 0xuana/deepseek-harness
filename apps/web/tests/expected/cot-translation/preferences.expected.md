@@ -6,7 +6,7 @@
 - text: v{{version}} 实验性
 - paragraph:
   - code: "@deepseek-ai/dsh-experimental-cot-translation-bundle"
-- paragraph: 在界面中把展开的思考内容翻译成中文等目标语言，适合阅读外语推理费劲时使用，可随时查看原文；原文会发送给所选翻译服务。
+- paragraph: 机器翻译展开的思考内容；原文会发送给所选服务
 - region "详细介绍":
   - paragraph:
     - img "展开的思考行从英文翻译成中文，并显示“查看原文”按钮"

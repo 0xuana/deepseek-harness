@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Ralph loops",
-    "description": "Repeat an explicitly requested objective with a fresh agent each round when you want iterative work with a clean context. Ordinary long tasks do not require this plugin.",
+    "description": "Run explicitly requested repeated work with fresh agents.",
     "detail": "docs/DETAIL.md"
   }
 }

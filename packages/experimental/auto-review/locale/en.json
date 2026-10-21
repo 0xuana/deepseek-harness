@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Auto authorization review",
-    "description": "Choose Auto review to reduce repeated approval prompts by having the model assess tool calls. Approved calls run with full access; reviews can make mistakes and use extra tokens.",
+    "description": "Add an Auto review permission mode that uses the model to assess authorization before each tool call.",
     "detail": "docs/DETAIL.md"
   }
 }

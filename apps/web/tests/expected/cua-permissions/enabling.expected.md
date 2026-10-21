@@ -1,5 +1,5 @@
 - listitem:
   - button "查看 Computer Use": Computer Use
-  - text: 实验性 让智能体查看和操作 macOS 应用界面，适合需要点击、输入等桌面交互的任务；需切换到 PTC 模式并授予辅助功能和屏幕录制权限，目前不支持 Windows Host。
+  - text: 实验性 目前仅支持 macOS，Windows 支持正在开发中。为已有及新建 PTC 会话加载 Computer Use。请切换到 PTC 模式来使用，并授予辅助功能和屏幕录制权限。
   - status: 正在应用 Computer Use 的更改
   - switch "启用 Computer Use" [disabled]

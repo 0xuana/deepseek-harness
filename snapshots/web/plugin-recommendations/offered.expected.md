@@ -2,7 +2,7 @@
   - text: Recommended plugin Official
   - 'button "View details: Voice input"':
     - strong: Voice input
-    - text: "Speak long requests instead of typing them; transcription runs on this computer. Speak instead of typing: transcribe recordings locally into the composer for longer dictated requests. Uses SenseVoice; first use requires downloading models and installing dependencies. View details →"
+    - text: Speak long requests instead of typing them; transcription runs on this computer. Transcribe recordings locally with SenseVoice; first use requires installing dependencies. View details →
   - text: Available in all conversations when enabled
   - button "Not now"
   - button "Enable"

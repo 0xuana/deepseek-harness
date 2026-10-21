@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Custom plugin markets",
-    "description": "Add custom plugin market indexes to DSH and browse or install their bundles in the Plugins page’s Discover tab, including sources maintained by other teams or communities.",
+    "description": "Adds a Discover tab to Plugins for browsing and installing bundles from plugin market indexes you add.",
     "detail": "docs/DETAIL.md"
   }
 }
