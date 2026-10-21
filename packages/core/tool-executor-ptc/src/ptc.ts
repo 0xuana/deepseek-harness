@@ -3,42 +3,35 @@
  * tools through nested executions scheduled under the native concurrency
  * contract; each sub-dispatch is logged for reconstruction, while only the
  * outer curated result enters model history.
- * @module @deepseek-ai/dsh-tools/src/ptc
+ * @module
  */
 
+import type { PtcDispatchLog } from './runtime-types.ts'
 import { symbols, type Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import { createUserMessage, HarnessError } from '@deepseek-ai/dsh-llm'
-declare module '@deepseek-ai/dsh-llm' {
-  interface MessageSourceMap {
-    /** Images deferred from a successful PTC subcall's final result. */
-    'ptc-mode': { kind: 'ptc-mode' }
-  }
-}
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 
 import type { ContentBlock, ToolCallId, ToolSchema } from '@deepseek-ai/dsh-llm'
 import type { PtcBindingFunction, PtcRunResult, PtcRunSandbox, PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
 import { approveEscalation, ESCALATION_TARGETS, validateEscalationArgs } from '@deepseek-ai/dsh-sandbox'
 import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
-import type { ApprovalService } from '@deepseek-ai/dsh-user-approval'
+import type {} from '@deepseek-ai/dsh-user-approval'
+import type {} from '@deepseek-ai/dsh-working-directory'
+import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import { deepFreeze, snapshotJsonValue, type JsonValue } from '@deepseek-ai/dsh-util-values'
-import { defineTool, parameterSchemaSpecToJsonSchema } from './schema.ts'
+import { defineTool, parameterSchemaSpecToJsonSchema, RUN_CODE_NAME } from '@deepseek-ai/dsh-tools'
+import type { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
+import { toolErrorMessage } from '@deepseek-ai/dsh-tools/pipeline'
+import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import { PtcCalls } from './ptc-calls.ts'
-import { TOOL_RUNTIME_SCHEDULER } from './index.ts'
-import type { PtcDispatchLog, ToolDefinition, ToolExecutionResult, ToolRuntime, ToolRunContext } from './index.ts'
+import { CodeRunFailedError } from './errors.ts'
+import type { ToolDefinition, ToolExecutionResult, ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type {} from './types.ts'
 
 /** The model-facing name of the PTC mode tool. */
-export const RUN_CODE_NAME = 'run_code'
+export { RUN_CODE_NAME }
 
-/**
- * The language-specific `run_code` schema text: the tool `description` and its
- * `code` parameter description, kept together so a language's two model-facing
- * strings share one source of truth. Keyed by `PtcRuntime.language`, mirroring
- * `SDK_RENDERERS` in {@link ./index.ts}. The emitted flavor MUST match the
- * semantics the same language's SDK instructions promise, so the model never
- * receives a TypeScript schema beside a Python SDK (or vice versa).
- */
+/** Language-specific tool and code-parameter descriptions. */
 interface RunCodeFlavor {
   /** The tool `description` the model sees for this language. */
   readonly description: string
@@ -69,22 +62,32 @@ const TYPESCRIPT_FUNCTION_FLAVOR = runCodeFlavor('TypeScript', {
 })
 const PYTHON_FLAVOR = runCodeFlavor('Python')
 
-/**
- * The languages PTC mode ships a presentation for. Both per-language tables —
- * {@link RUN_CODE_FLAVORS} here and `SDK_RENDERERS` in {@link ./index.ts} — are
- * checked against this union with `satisfies`, so a language added to one and
- * not the other fails `typecheck` instead of waiting for a runtime that reports
- * it. The tables stay declared `Record<string, …>` because `PtcRuntime.language`
- * is an unconstrained `string`: this union pins what the harness ships, while the
- * `Object.hasOwn` guards reject what a mounted runtime may report.
- */
+/** Languages with both a transport schema and an SDK renderer. */
 export type PtcSdkLanguage = 'typescript' | 'python'
 
-/** Per-language `run_code` schema flavors (see {@link RunCodeFlavor}); one entry per {@link PtcSdkLanguage}. */
-const RUN_CODE_FLAVORS: Record<string, RunCodeFlavor> = {
+type SupportedPtcRuntime = PtcRuntime & { readonly language: PtcSdkLanguage }
+
+const RUN_CODE_FLAVORS = {
   typescript: TYPESCRIPT_FLAVOR,
   python: PYTHON_FLAVOR,
 } satisfies Record<PtcSdkLanguage, RunCodeFlavor>
+
+/**
+ * Read the active runtime, rejecting missing providers and unsupported languages.
+ * @param ctx - executor context containing the runtime provider.
+ * @returns the runtime with a supported SDK language.
+ */
+export function requirePtcRuntime(ctx: Context): SupportedPtcRuntime {
+  const runtime = ctx.get('ptcRuntime')
+  if (runtime === undefined) {
+    throw new Error('dsh-tools: mode "ptc" requires a PTC runtime — load a ctx.ptcRuntime implementation (e.g. @deepseek-ai/dsh-ptc-runtime-node) or load @deepseek-ai/dsh-tool-executor-native')
+  }
+  if (!Object.hasOwn(RUN_CODE_FLAVORS, runtime.language)) {
+    const known = Object.keys(RUN_CODE_FLAVORS).map(name => JSON.stringify(name)).join(', ')
+    throw new Error(`dsh-tools: no SDK renderer registered for runtime language ${JSON.stringify(runtime.language)} (known: ${known})`)
+  }
+  return runtime as SupportedPtcRuntime
+}
 
 /**
  * The `description` parameter's model-facing description: language-independent
@@ -104,9 +107,7 @@ const RUN_CODE_CONTROLS = {
   justification: { type: 'string', description: 'Reason this complete program needs wider access, shown to the user for approval. Use the language of the user’s current request.' },
 } as const
 
-function controlParameters(runtime: PtcRuntime | undefined) {
-  // Catalog readers have no mounted runtime; real model assembly requires one.
-  if (runtime === undefined) return RUN_CODE_CONTROLS
+function controlParameters(runtime: PtcRuntime) {
   return {
     ...runtime.timeout === undefined ? {} : {
       timeoutMs: { ...RUN_CODE_CONTROLS.timeoutMs,
@@ -119,58 +120,17 @@ function controlParameters(runtime: PtcRuntime | undefined) {
   }
 }
 
-function escalationGuidance(runtime: PtcRuntime | undefined): string {
-  return runtime?.sandboxMode === undefined ? ''
+function escalationGuidance(mode: PtcRuntime['sandboxMode']): string {
+  return mode === undefined ? ''
     : ' A sandbox escalation approves this complete program for one execution only. Nested tools retain their own policies and approvals. Request wider access only after evidence of a denial. Earlier effects may already have completed: inspect them before explicitly retrying. Programs are never replayed automatically.'
 }
 
-/**
- * Resolve the {@link RunCodeFlavor} for the loaded runtime's language, read at
- * schema-emission time so the model-visible `run_code` schema always matches
- * the SDK section's language. `peekRuntime` returns `undefined` only when no
- * runtime is mounted, which reaches this function through definition readers
- * and `schemas()` — the doc-catalog harvest is the only shipped one, and none
- * of them feeds a model, because `wireSchemas` calls `requirePtcRuntime`
- * before projecting — so that path degrades to {@link TYPESCRIPT_FLAVOR}. A
- * mounted runtime whose language has no flavor entry fails loud, exactly as
- * `requirePtcRuntime` rejects it at assembly. Keeping this table in step with
- * `SDK_RENDERERS` is the compiler's job ({@link PtcSdkLanguage}); what this
- * guard owns is the runtime-supplied language neither table knows, which never
- * yields a wrong-language schema for a real runtime.
- */
-function resolveFlavor(peekRuntime: () => PtcRuntime | undefined): RunCodeFlavor {
-  const runtime = peekRuntime()
-  if (runtime === undefined) {
-    // No runtime mounted: reached by definition readers and `schemas()`, of
-    // which the doc-catalog harvest is the only shipped one. None feeds a
-    // model — `wireSchemas` calls `requirePtcRuntime` before projecting, so
-    // the assembly path never arrives here. Degrade to the TS default.
-    return TYPESCRIPT_FLAVOR
-  }
-  // Own-property read: a language like `toString`/`constructor` would otherwise
-  // resolve an inherited Object.prototype member as a flavor.
-  const flavor = RUN_CODE_FLAVORS[runtime.language]
-  if (!Object.hasOwn(RUN_CODE_FLAVORS, runtime.language) || flavor === undefined) {
-    const known = Object.keys(RUN_CODE_FLAVORS).map(name => JSON.stringify(name)).join(', ')
-    throw new Error(`dsh-tools: no run_code schema flavor registered for runtime language ${JSON.stringify(runtime.language)} (known: ${known})`)
-  }
+/** Match schema text to the runtime language and program syntax. */
+function resolveFlavor(runtime: SupportedPtcRuntime): RunCodeFlavor {
   return runtime.language === 'typescript' && runtime.programFormat === 'function-body'
-    ? TYPESCRIPT_FUNCTION_FLAVOR : flavor
+    ? TYPESCRIPT_FUNCTION_FLAVOR : RUN_CODE_FLAVORS[runtime.language]
 }
 
-/**
- * Thrown by `run_code` when the program run itself failed — a program
- * exception, a budget expiry, an abort, or substrate death. Extends
- * {@link HarnessError} (`code: 'CODE_RUN_FAILED'`); the registry's execution
- * pipeline converts it into a structured `isError` result whose text carries
- * the failure kind plus the captured logs, so the model can self-correct.
- */
-export class CodeRunFailedError extends HarnessError {
-  constructor(message: string) {
-    super(message, 'CODE_RUN_FAILED')
-    this.name = 'CodeRunFailedError'
-  }
-}
 
 /**
  * Snapshot one binding call's argument as lossless JSON, then snapshot that
@@ -288,47 +248,50 @@ function renderValue(value: JsonValue): string {
 /** Canonical value returned by the outer PTC mode transport. */
 type RunCodeOutput = { logs: string[]; result?: JsonValue; sandbox?: PtcRunSandbox }
 
-/**
- * Registry-private capabilities the bridge receives at construction — the
- * `requireRuntime` idiom: operations only the owning registry can mint stay
- * off its public service API and flow here as closures instead.
- */
-export interface RunCodeBridgeOptions {
-  /** Captures the calling Session current directory before program creation. */
-  resolveWorkingDirectory: (exec: ToolRunContext) => Promise<string | undefined>
-  /** Reads the approval channel when a program requests a wider sandbox mode. */
-  peekApprover: () => ApprovalService | undefined
-  /** Resolves standing Session authority only for a runtime that enforces file policy. */
-  resolveSandboxPolicy: (exec: ToolRunContext) => SandboxExecutionPolicy
-  /** Resolves `ctx.ptcRuntime` or throws the loud misconfiguration error (shared with the registry's assembly-time checks). */
-  requireRuntime: () => PtcRuntime
-  /**
-   * Reads `ctx.ptcRuntime` without throwing: `undefined` when none is mounted.
-   * Lets schema emission tell "no runtime" (degrade to TS; the readers that
-   * reach it are {@link resolveFlavor}'s) apart from "unknown language" (fail
-   * loud).
-   */
-  peekRuntime: () => PtcRuntime | undefined
-  /** The run's overlap cap for parallel-classified sub-calls (the registry passes its validated `maxParallelSubCalls`). */
-  maxParallel: number
-  /** Runs the contained `tools/ptc-dispatch-log` waterfall over one settled sub-dispatch (the registry's private invoker). */
-  shapeDispatchLog: (dispatch: PtcDispatchLog) => Promise<ContentBlock[]>
+/** Unowned programs do not require Session directory state. */
+async function resolveWorkingDirectory(ctx: Context, exec: ToolRunContext): Promise<string | undefined> {
+  if (exec.agent === undefined) return undefined
+  const directories = ctx.get('workingDirectory')
+  if (directories === undefined) throw new Error('dsh-tools: run_code with an Agent requires workingDirectory')
+  return directories.ensure(exec.agent, exec.signal)
+}
+
+/** Resolve standing authority for a runtime that enforces file policy. */
+function resolveSandboxPolicy(ctx: Context, exec: ToolRunContext): SandboxExecutionPolicy {
+  const policy = ctx.get('sandboxPolicy')
+  if (policy === undefined) throw new Error('dsh-tools: confined PTC runtime requires sandboxPolicy')
+  return policy.resolve(exec.agent === undefined ? {} : { session: exec.agent.session })
 }
 
 /**
- * Build the `run_code` {@link ToolDefinition}: required `code` and
- * `description` parameters, executed through the dispatch bridge described
- * above. The
- * registry reserves it as presentation infrastructure under non-native modes,
- * outside the filterable global/scoped capability layers.
- * @param registry - the owning registry (sub-calls go through its `execute`,
- *   bindings cover its registered tools).
- * @param options - the registry-private capabilities described above.
- * @param ctx - Owning registry context, independent of the calling Agent.
- * @returns the registry-ready definition.
+ * Build the reserved `run_code` transport outside registered capabilities.
+ * @param ctx - executor context owning policy listeners and active program cleanup.
+ * @param executor - shared invocation pipeline for nested calls.
+ * @param maxParallel - maximum overlapping concurrency-safe subcalls.
+ * @returns the transport definition with runtime-dependent schema text.
  */
-export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeOptions, ctx: Context): ToolDefinition {
-  const { requireRuntime, peekRuntime, maxParallel, shapeDispatchLog } = options
+export function createRunCodeTool(
+  ctx: Context,
+  executor: ToolExecutionPipeline,
+  maxParallel: number,
+): ToolDefinition {
+  // Retain services for log settlement after the executor context becomes inactive.
+  const tools = ctx.tools
+  const logger = ctx.logger
+
+  /** A failed log-content listener preserves the settled content and cannot fail the dispatch. */
+  async function shapeDispatchLog(dispatch: PtcDispatchLog): Promise<ContentBlock[]> {
+    try {
+      return await ctx.waterfall(
+        scopeTarget(tools, dispatch.agent), 'tools/ptc-dispatch-log', dispatch,
+        () => Promise.resolve(dispatch.content),
+      )
+    } catch (error: unknown) {
+      logger.warn(`tools: ptc-dispatch-log listener failed for ${dispatch.name}: ${toolErrorMessage(error)}; logging the original settled content`)
+      return dispatch.content
+    }
+  }
+
   const stateOwners = new WeakMap<object, WeakSet<PtcRuntime>>()
   const calls = new PtcCalls(ctx)
   const definition = defineTool({
@@ -371,7 +334,7 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
         const rendered = value.result === undefined ? '' : renderValue(value.result)
         const parts = [value.logs.join('\n'), rendered].filter(part => part.length > 0)
         if (value.sandbox?.enforcement === 'partial') parts.push('File sandbox enforcement is partial on this host.')
-        if (value.sandbox?.denied) parts.push(`The ${value.sandbox.mode} file sandbox denied an operation.${escalationGuidance(peekRuntime())}`)
+        if (value.sandbox?.denied) parts.push(`The ${value.sandbox.mode} file sandbox denied an operation.${escalationGuidance(ctx.get('ptcRuntime')?.sandboxMode)}`)
         return [{ type: 'text', text: parts.length > 0 ? parts.join('\n') : '(run_code completed with no output)' }]
       },
     },
@@ -379,7 +342,7 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
       if (args.description.trim().length === 0) {
         throw new Error('invalid description: expected a non-empty string')
       }
-      const runtime = requireRuntime()
+      const runtime = requirePtcRuntime(ctx)
       const run = async (callSignal: AbortSignal): Promise<RunCodeOutput> => {
         validateEscalationArgs(args.sandbox_permissions, args.justification)
         if (args.timeoutMs !== undefined && runtime.timeout === undefined) {
@@ -388,7 +351,7 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
         if (args.timeoutMs !== undefined && (!Number.isFinite(args.timeoutMs) || args.timeoutMs <= 0)) {
           throw new Error('invalid timeoutMs: expected a positive finite number')
         }
-        const standingPolicy = runtime.sandboxMode === undefined ? undefined : options.resolveSandboxPolicy(exec)
+        const standingPolicy = runtime.sandboxMode === undefined ? undefined : resolveSandboxPolicy(ctx, exec)
         let policy = standingPolicy
         if (args.sandbox_permissions !== undefined && args.justification !== undefined) {
           if (standingPolicy === undefined) throw new Error('sandbox_permissions is not available for this PTC runtime')
@@ -398,12 +361,12 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
             effectiveMode: standingPolicy.mode,
             subject: 'program',
           }, {
-            approver: options.peekApprover(), agent: exec.agent, callId: exec.callId,
+            approver: ctx.get('approval'), agent: exec.agent, callId: exec.callId,
             toolName: RUN_CODE_NAME, signal: callSignal,
           })
           policy = { ...standingPolicy, mode: approvedMode }
         }
-        const cwd = await options.resolveWorkingDirectory({ ...exec, signal: callSignal })
+        const cwd = await resolveWorkingDirectory(ctx, { ...exec, signal: callSignal })
         callSignal.throwIfAborted()
 
         // The run-scoped abort: follows the outer signal in, and fires when the
@@ -418,7 +381,7 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
         // The per-run scheduler uses the registry's staged interface and follows
         // the same concurrency rules as the native loop. It also follows the
         // native loop's SEQUENCING: every ordered stage (the dispatch-start
-        // append, prepare = pre-execute/guards, finalize/finish = post-execute,
+        // append, prepare = pre-execute/guards, complete = post-execute,
         // context deferral, the settle append) runs inside ONE driver lane, so
         // ordered policy stages never overlap each other and only the
         // around-dispatch/body stage runs concurrently. Starts are strictly
@@ -555,7 +518,6 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
             signal: runController.signal,
           }
           type DispatchOutcome = { isError: true; message: string } | { isError: false; value: JsonValue }
-          const scheduler = registry[TOOL_RUNTIME_SCHEDULER]
           const outcome = await new Promise<DispatchOutcome>((resolve, reject) => {
             // Set by the dispatch stage (or start() for a pre-settled result): what commit() finalizes in submission order.
             let parked:
@@ -606,7 +568,7 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
               settled: false,
               // Re-read per driver pass against the same agent view the SDK
               // declared; fail-closed exclusive when undeclared/invalid.
-              classify: () => registry.executionMode(input).kind,
+              classify: () => executor.executionMode(input).kind,
               abandon: () => {
                 reject(new Error(`run_code run is over (${String(runController.signal.reason)}); ${name} tool call abandoned`))
               },
@@ -621,9 +583,9 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
                 // Ordered prepare runs INSIDE the driver lane: the next entry's
                 // pre-execute waits for this resolution, as under the native
                 // scheduler. Only the launched body below overlaps.
-                const prepared = await scheduler.prepare(input)
+                const prepared = await executor.prepare(input)
                 if (prepared.kind === 'dispatch') {
-                  this.flight = scheduler.dispatch(prepared.exec).then((dispatchOutcome) => {
+                  this.flight = executor.dispatch(prepared.exec).then((dispatchOutcome) => {
                     parked = { kind: dispatchOutcome.kind, exec: prepared.exec, result: dispatchOutcome.result }
                     this.settled = true
                   })
@@ -635,9 +597,7 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
               async commit(): Promise<void> {
                 /* v8 ignore next -- commit() runs only after `settled` flipped, which set parked. */
                 if (parked === undefined) return
-                const result = parked.kind === 'post-result'
-                  ? await scheduler.finalize(parked.exec, parked.result)
-                  : scheduler.finish(parked.exec, parked.result)
+                const result = await executor.complete(parked.exec, parked)
                 if (!result.isError && result.content.some(block => block.type === 'image')) {
                   exec.deferContext(createUserMessage({
                     content: result.content,
@@ -688,8 +648,7 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
         // restricted globals vanish) — the same view the SDK section declared,
         // so a program can bind exactly what its prompt promised; sub-dispatch
         // re-resolves per call through the same view (exec.agent threads down).
-        for (const schema of registry.schemas(exec.agent)) {
-          if (schema.name === RUN_CODE_NAME) continue
+        for (const schema of tools.schemas(exec.agent)) {
           Object.defineProperty(functions, schema.name, { enumerable: true, value: binding(deepFreeze(schema)) })
         }
 
@@ -701,7 +660,7 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
               let runtimes = stateOwners.get(agent)
               if (runtimes === undefined) stateOwners.set(agent, runtimes = new WeakSet())
               // Cordis can wrap service returns repeatedly; cleanup belongs to the original provider.
-              let provider = runtime
+              let provider: PtcRuntime = runtime
               for (;;) {
                 const original = (provider as PtcRuntime & { [symbols.original]?: PtcRuntime })[symbols.original]
                 if (original === undefined) break
@@ -737,7 +696,7 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
             const logsText = result.logs.length > 0 ? `\nCaptured output:\n${result.logs.join('\n')}` : ''
             const sandboxText = result.sandbox === undefined ? ''
               : `\nFile sandbox: ${result.sandbox.mode}${result.sandbox.enforcement === undefined ? '' : `; enforcement: ${result.sandbox.enforcement}`}${result.sandbox.denied ? '; operation denied' : ''}.`
-            throw new CodeRunFailedError(`code run failed (${result.error.kind}): ${result.error.message}${logsText}${sandboxText}${result.sandbox?.denied ? escalationGuidance(runtime) : ''}`)
+            throw new CodeRunFailedError(`code run failed (${result.error.kind}): ${result.error.message}${logsText}${sandboxText}${result.sandbox?.denied ? escalationGuidance(runtime.sandboxMode) : ''}`)
           }
           return {
             logs: result.logs,
@@ -749,7 +708,7 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
         }
       }
       return runtime.sandboxMode === undefined || exec.agent === undefined ? run(exec.signal)
-        : calls.run(exec.agent.session.id, exec.signal, () => options.resolveSandboxPolicy(exec).mode, run)
+        : calls.run(exec.agent.session.id, exec.signal, () => resolveSandboxPolicy(ctx, exec).mode, run)
     },
     // The model-authored description is the call's always-visible UI label
     // (the bash `description` precedent); the program itself rides rawInput.
@@ -763,30 +722,30 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
     // title and reads durable result content without duplicating a large raw
     // result into the host view payload.
   })
-  // Resolve the language flavor lazily, at the moment the registry projects the
-  // schema (`schemaOf` destructures `description`/`parameters`). The definition
-  // is minted once at registration, before a runtime is known; deferring here
-  // is the least invasive point that still emits the loaded runtime's language.
+  // Read current runtime instructions and controls whenever the schema is projected.
   Object.defineProperty(definition, 'description', {
     enumerable: true,
     get: () => {
-      const runtime = peekRuntime()
-      const instructions = runtime?.executionInstructions
-      return resolveFlavor(peekRuntime).description
+      const runtime = requirePtcRuntime(ctx)
+      const instructions = runtime.executionInstructions
+      return resolveFlavor(runtime).description
         + (instructions ? ` ${instructions}` : '')
-        + (runtime === undefined ? '' : " Each program starts in the Session's current directory. Running programs keep their initial directory.")
-        + escalationGuidance(runtime)
+        + " Each program starts in the Session's current directory. Running programs keep their initial directory."
+        + escalationGuidance(runtime.sandboxMode)
     },
   })
   Object.defineProperty(definition, 'parameters', {
     enumerable: true,
     // Recompile through the same spec→schema projection defineTool used, so
     // the emitted schema always matches the validated specification.
-    get: () => parameterSchemaSpecToJsonSchema({
-      code: { type: 'string', required: true, description: resolveFlavor(peekRuntime).codeDescription },
-      description: { type: 'string', required: true, description: RUN_CODE_DESCRIPTION_PARAM_DESCRIPTION },
-      ...controlParameters(peekRuntime()),
-    }),
+    get: () => {
+      const runtime = requirePtcRuntime(ctx)
+      return parameterSchemaSpecToJsonSchema({
+        code: { type: 'string', required: true, description: resolveFlavor(runtime).codeDescription },
+        description: { type: 'string', required: true, description: RUN_CODE_DESCRIPTION_PARAM_DESCRIPTION },
+        ...controlParameters(runtime),
+      })
+    },
   })
   return definition
 }

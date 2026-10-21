@@ -15,8 +15,8 @@ export class PtcCalls {
   private disposed = false
 
   /**
-   * Observe policy changes for the owning tool registry.
-   * @param ctx - Registry lifecycle and Session events.
+   * Observe policy changes for the owning executor.
+   * @param ctx - Executor lifecycle and Session events.
    */
   constructor(ctx: Context) {
     ctx.on('session/event', (session, event) => {
@@ -28,7 +28,7 @@ export class PtcCalls {
     ctx.effect(() => async () => {
       this.disposed = true
       const calls = [...this.calls.values()].flatMap(calls => [...calls])
-      for (const call of calls) call.controller.abort(new Error('PTC tool registry disposed'))
+      for (const call of calls) call.controller.abort(new Error('PTC tool executor disposed'))
       await Promise.all(calls.map(call => call.done))
     }, 'PTC calls')
   }
@@ -48,7 +48,7 @@ export class PtcCalls {
       await Promise.all(pending.map(call => call.done))
     }
     signal.throwIfAborted()
-    if (this.disposed) throw new Error('PTC tool registry disposed')
+    if (this.disposed) throw new Error('PTC tool executor disposed')
     const controller = new AbortController()
     const done = Promise.withResolvers<undefined>()
     const call = { mode: mode(), controller, done: done.promise }
