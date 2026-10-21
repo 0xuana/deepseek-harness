@@ -1079,7 +1079,7 @@ describe('PluginManagerPage', () => {
       'plugins.row.config:dsh-better-sidebar#sidebar': view => view === 'summary' ? 'The sidebar row.' : <form aria-label="row form" />,
     }
 
-    it('keeps configuration and installed plugins on the main list and shows all official plugins on the secondary page', () => {
+    it('keeps configuration and installed plugins on the main list and shows eligible official plugins on the secondary page', () => {
       const team = '@deepseek-ai/dsh-experimental-agent-team-profile'
       renderTab(
         { packages: [
@@ -1088,6 +1088,8 @@ describe('PluginManagerPage', () => {
           pkg({ name: '@deepseek-ai/dsh-subagent-claude-code', official: true, availability: 'missing', installed: false, enabled: false }),
           pkg({ name: '@deepseek-ai/dsh-subagent-codex', official: true, enabled: false }),
           pkg({ name: '@deepseek-ai/dsh-experimental-tool-worktree', official: true, enabled: false }),
+          pkg({ name: '@deepseek-ai/dsh-experimental-session-search', installed: false, optional: true, enabled: false, listedByDefault: false }),
+          pkg({ name: '@deepseek-ai/dsh-experimental-ralph-bundle', installed: false, optional: true, enabled: false, listedByDefault: false }),
           pkg({ name: '@acme/new-official', official: true }),
           pkg(),
         ] },
@@ -1133,6 +1135,37 @@ describe('PluginManagerPage', () => {
       fireEvent.click(within(detail).getByRole('button', { name: en.backToList }))
       expect(document.querySelector('[data-plugin-item-detail]')).toBeNull()
       expect(screen.getByRole('heading', { name: en.basicTitle })).toBeTruthy()
+    })
+
+    it.each([
+      '@deepseek-ai/dsh-experimental-session-search',
+      '@deepseek-ai/dsh-experimental-ralph-bundle',
+      '@acme/shipped-exploration',
+    ])('omits %s from default lists while retaining explicit profile selections and installations', (name) => {
+      const entry = pkg({ name, installed: false, optional: true, removable: false, enabled: false, listedByDefault: false })
+      const other = pkg({ name: '@deepseek-ai/dsh-experimental-terminal-bundle', installed: false, optional: true, enabled: false })
+      const { actions, navigation, set, setLanguage } = renderTab({ packages: [other, entry] })
+      const card = () => document.querySelector(`[data-plugin-package="${name}"]`)
+      for (const dict of [en, zh]) {
+        setLanguage(dict)
+        expect(card()).toBeNull()
+        fireEvent.click(screen.getByRole('button', { name: dict.moreAction }))
+        expect(card()).toBeNull()
+        fireEvent.click(screen.getByRole('button', { name: dict.backToList }))
+      }
+      setLanguage(en)
+      set({ packages: [other, { ...entry, enabled: true }] })
+      expect(card()).not.toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', name) }))
+      fireEvent.click(screen.getByRole('switch', { name: en.enableToggle.replace('{name}', name) }))
+      expect(actions.setEnabled).toHaveBeenCalledExactlyOnceWith(name, false)
+      set({ packages: [other, entry] })
+      expect(card()).toBeNull()
+      expect(document.querySelector('[data-plugin-detail]')).toBeNull()
+      expect(document.querySelector('[data-plugin-group="more"]')).toBeNull()
+      act(() => { navigation.actions.setView({ kind: 'more' }) })
+      set({ packages: [other, { ...entry, installed: true, availability: 'profile' }] })
+      expect(card()).not.toBeNull()
     })
 
     it.each([en, zh])('keeps disabled CUA on the secondary page with experimental labels', (dict) => {
@@ -1753,6 +1786,21 @@ describe('PluginManagerPage', () => {
     expect(screen.queryByRole('button', { name: en.installEnableNow })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: en.installClose }))
     expect(actions.closeInstall).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([en, zh])('offers an existing bundled plugin without claiming a download or installation', (dict) => {
+    const name = '@acme/shipped-exploration'
+    const { actions, setLanguage } = renderTab({ install: {
+      ...IDLE_INSTALL, open: true, spec: name, phase: 'done', installed: name, installedVersion: '1.0.0',
+      subject: { status: 'accepted', spec: name, name, kind: 'registry', registry: null, bundle: true, bundled: true, version: '1.0.0' },
+    } })
+    setLanguage(dict)
+    expect(screen.getByText(dict.installBundledTitle)).toBeTruthy()
+    expect(screen.getByText(dict.installBundledDescription)).toBeTruthy()
+    expect(screen.queryByText(dict.installedTitle)).toBeNull()
+    expect(screen.queryByRole('button', { name: dict.installDetailsShow })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: dict.installEnableNow }))
+    expect(actions.enableInstalled).toHaveBeenCalledExactlyOnceWith()
   })
 
   it('asks to allow the scripts a blocked install left pending, retries with them, and says what was allowed', () => {
