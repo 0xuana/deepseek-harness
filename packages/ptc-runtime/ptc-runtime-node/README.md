@@ -63,7 +63,7 @@ Profile editors can import `resolvePersistentExecution` from `@deepseek-ai/dsh-p
 
 ### Execution and results
 
-In `per-call` mode, programs are async function bodies: top-level `await` and `return` work, and only erasable TypeScript is accepted. A successful call returns its lossless-JSON value as `result.value` and captured text as `result.logs`. `result.sandbox` reports the selected mode, observed denial and the backend's full or partial enforcement independently of the program outcome.
+In `per-call` mode, programs are async function bodies: top-level `await` and `return` work, and only erasable TypeScript is accepted. Node globals remain available, and a function body may declare a local `process`, including `const process = await import("node:process")`. A successful call returns its lossless-JSON value as `result.value` and captured text as `result.logs`. `result.sandbox` reports the selected mode, observed denial and the backend's full or partial enforcement independently of the program outcome.
 
 Direct filesystem, network and subprocess operations remain Node operations, subject to the selected OS sandbox. Nested host bindings cross the control channel; PTC tool calls retain the registry's visibility, ordering, logging and approval rules. Running a program does not change the Session's standing policy or automatically replay it after a denial.
 

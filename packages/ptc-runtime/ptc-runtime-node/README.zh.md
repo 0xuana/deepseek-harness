@@ -63,7 +63,7 @@ profile 编辑器可从 `@deepseek-ai/dsh-ptc-runtime-node/configuration` 导入
 
 ### 执行与结果
 
-`per-call` 模式中的程序是异步函数体：支持顶层 `await` 与 `return`，且只接受可擦除 TypeScript。成功调用以 `result.value` 返回无损 JSON 值，以 `result.logs` 返回捕获文本。`result.sandbox` 独立于程序结果报告所选模式、观察到的拒绝，以及后端完整或部分的强制能力。
+`per-call` 模式中的程序是异步函数体：支持顶层 `await` 与 `return`，且只接受可擦除 TypeScript。Node 全局变量仍然可用，函数体可声明局部 `process`，例如 `const process = await import("node:process")`。成功调用以 `result.value` 返回无损 JSON 值，以 `result.logs` 返回捕获文本。`result.sandbox` 独立于程序结果报告所选模式、观察到的拒绝，以及后端完整或部分的强制能力。
 
 直接文件系统、网络与子进程操作仍是 Node 操作，受所选 OS 沙箱约束。嵌套 Host 绑定通过控制通道调用；PTC 工具调用保留注册表的可见性、排序、日志和审批规则。运行程序不会改变 Session 的常设策略，也不会在拒绝后自动重放程序。
 
