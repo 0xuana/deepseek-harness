@@ -177,6 +177,50 @@ interface ToolRestriction {
 }
 ```
 
+## 条件准入 — 步骤拥有的准入集合
+
+注册可以携带 `when` 条件。AgentLoop 为每个拟议步骤以捕获的模型选择调用一次 `ctx.tools.resolve()`；返回的集合决定该步骤的工具声明、执行器分区以及批次中的每次调用，包括 PTC 程序的子调用。`ctx.tools.executable()` 在执行时应用集合，没有集合时排除条件注册。同名替换或新的限制会阻止尚未开始的调用使用已准入的注册，步骤的批次结束后循环释放集合。
+
+```ts type-equiv
+/** Inputs for a tool's step-time activation condition. */
+interface ToolActivationContext {
+  /** Agent preparing the step. */
+  readonly agent: Agent
+  /** Provider, model, and optional reasoning effort captured for the step. */
+  readonly modelSelection: Readonly<ModelSelection>
+  /** Cancellation of step preparation; asynchronous conditions must observe it. */
+  readonly signal: AbortSignal
+}
+```
+
+```ts type-equiv
+/** Lifecycle-owned conditions for a registered tool. */
+interface ToolRegistrationOptions {
+  /**
+   * Decide whether the step's requests may call the tool. Omission enables
+   * it. False excludes it from both declarations and dispatch; rejection fails
+   * step preparation. Conditions must not mutate registrations or start tool work.
+   * @param context - preparing agent, captured model selection, and cancellation signal.
+   * @returns whether the tool participates in this step.
+   */
+  readonly when?: (context: ToolActivationContext) => boolean | Promise<boolean>
+}
+```
+
+```ts type-equiv
+/** One step's admitted registrations, also used by nested PTC calls. */
+interface ResolvedToolSet {
+  /** Close admission after the step's tool batch settles. */
+  dispose(): void
+  /**
+   * Read admitted registrations that remain visible in their original scope.
+   * @param scope - exact requesting agent; another scope is never admitted.
+   * @returns original definitions excluding removed or restricted registrations.
+   */
+  view(scope: ScopeKey | undefined): ReadonlyMap<string, ToolDefinition>
+}
+```
+
 ## 执行器与原始调用批次
 
 `ctx.tools.execute()` 把完整的原始模型调用批次委托给最近作用域的执行器。服务在每个批次开始时选择当前提供者；提示词组装仅返回模型输入。`agent` 在独立服务调用中不存在；`log` 在模型步骤之外的程序调用（例如初始化钩子）中不存在。有 Agent 而没有 `log` 时，调用仍受该 Agent 的工具作用域约束，但不记录根调用／结果事件。工具自身的事件仍可使用 Agent 的 Session。

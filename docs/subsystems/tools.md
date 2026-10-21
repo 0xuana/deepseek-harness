@@ -177,6 +177,50 @@ interface ToolRestriction {
 }
 ```
 
+## Conditional activation — step-owned admission
+
+A registration may carry a `when` condition. AgentLoop calls `ctx.tools.resolve()` once per proposed step with the captured model selection; the returned set decides that step's tool declarations, executor sections, and every call in its batch, including PTC program subcalls. `ctx.tools.executable()` applies the set at execution and, without one, excludes conditional registrations. A same-name replacement or a new restriction stops unstarted calls from using an admitted registration, and the loop disposes the set once the step's batch settles.
+
+```ts type-equiv
+/** Inputs for a tool's step-time activation condition. */
+interface ToolActivationContext {
+  /** Agent preparing the step. */
+  readonly agent: Agent
+  /** Provider, model, and optional reasoning effort captured for the step. */
+  readonly modelSelection: Readonly<ModelSelection>
+  /** Cancellation of step preparation; asynchronous conditions must observe it. */
+  readonly signal: AbortSignal
+}
+```
+
+```ts type-equiv
+/** Lifecycle-owned conditions for a registered tool. */
+interface ToolRegistrationOptions {
+  /**
+   * Decide whether the step's requests may call the tool. Omission enables
+   * it. False excludes it from both declarations and dispatch; rejection fails
+   * step preparation. Conditions must not mutate registrations or start tool work.
+   * @param context - preparing agent, captured model selection, and cancellation signal.
+   * @returns whether the tool participates in this step.
+   */
+  readonly when?: (context: ToolActivationContext) => boolean | Promise<boolean>
+}
+```
+
+```ts type-equiv
+/** One step's admitted registrations, also used by nested PTC calls. */
+interface ResolvedToolSet {
+  /** Close admission after the step's tool batch settles. */
+  dispose(): void
+  /**
+   * Read admitted registrations that remain visible in their original scope.
+   * @param scope - exact requesting agent; another scope is never admitted.
+   * @returns original definitions excluding removed or restricted registrations.
+   */
+  view(scope: ScopeKey | undefined): ReadonlyMap<string, ToolDefinition>
+}
+```
+
 ## Executors and raw call batches
 
 `ctx.tools.execute()` delegates a complete raw model-call batch to the nearest scoped executor. The service selects the current provider when each batch starts; prompt assembly returns only model input. `agent` is absent for standalone service calls; `log` is absent for programmatic calls outside a model step, such as initialization hooks. An Agent without `log` still scopes tool access but produces no root call/result events. Tool-owned events may still use its Session.

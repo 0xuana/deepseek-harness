@@ -7,6 +7,7 @@ import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-test
 import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { RUN_CODE_NAME } from '@deepseek-ai/dsh-tools'
+import type { ToolExecutionToken, ToolRunContext } from '@deepseek-ai/dsh-tools'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { Session, SessionId, type SessionEvent, type UserMessage } from '@deepseek-ai/dsh-session'
 import AgentRegistry, { agentEvents, type Agent } from '@deepseek-ai/dsh-agent'
@@ -830,6 +831,18 @@ describe('exit_plan_mode', () => {
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: unknown tool "exit_plan_mode"' }])
+  })
+
+  it('rejects a direct execution without a calling Agent', async () => {
+    const ctx = await setup()
+    const exit = ctx.tools.get(EXIT_PLAN_MODE)
+    expect(exit).toBeDefined()
+    const exec: ToolRunContext = {
+      callId: ToolCallId('direct-exit'), rootCallId: ToolCallId('direct-exit'), name: EXIT_PLAN_MODE,
+      arguments: { plan: '# P' }, token: Symbol('direct-exit') as ToolExecutionToken, signal: testToolSignal,
+      deferContext() {}, concludeTurn() {},
+    }
+    await expect(exit?.execute({ plan: '# P' }, exec)).rejects.toThrow(`${EXIT_PLAN_MODE} is only available in plan mode`)
   })
 
   it('keeps the exit tool after leaving plan mode and rejects a call outside it', async () => {

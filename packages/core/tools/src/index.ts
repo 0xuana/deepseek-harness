@@ -283,7 +283,7 @@ export class ToolsService extends Service {
       dispose: () => { closed = true },
       view: (scope: ScopeKey | undefined): ReadonlyMap<string, ToolDefinition> => {
         const visible = new Map<string, ToolDefinition>()
-        if (closed || scope !== agent || signal.aborted) return visible
+        if (closed || scope !== agent) return visible
         const current = this.view(agent)
         for (const [name, definition] of admitted) {
           if (current.visible.get(name) === definition

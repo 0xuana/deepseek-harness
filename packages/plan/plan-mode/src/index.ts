@@ -299,10 +299,9 @@ export class PlanModeController extends Service {
         }],
       },
       execute: async (args, exec) => {
-        // oxlint-disable-next-line typescript/no-non-null-assertion -- conditional admission requires the step's Agent
-        const agent = exec.agent!
+        const agent = exec.agent
         // Admission outlives plan mode and follows the selected state, so check the committed state.
-        if (!this.loggedActive(agent.session)) {
+        if (agent === undefined || !this.loggedActive(agent.session)) {
           throw new Error(`${EXIT_PLAN_MODE} is only available in plan mode`)
         }
         if (!/^#\s+\S/.test(args.plan.trim())) {

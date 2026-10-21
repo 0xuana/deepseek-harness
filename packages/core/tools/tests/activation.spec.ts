@@ -8,7 +8,7 @@ import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime, { defineTool, ToolActivationError } from '@deepseek-ai/dsh-tools'
+import ToolRuntime, { defineTool, TOOL_ABORTED_BEFORE_DISPATCH, ToolActivationError } from '@deepseek-ai/dsh-tools'
 import type { ToolExecutionInput, ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 
 const TEST_MODEL_SELECTION = { provider: 'test', model: 'test' }
@@ -88,6 +88,28 @@ it('applies live restrictions and closes step admission permanently', async () =
   expect(h.ctx.tools.schemas(h.agent, toolSet)).toEqual([])
   expect((await h.execute({ toolSet })).error?.info?.code).toBe('UNKNOWN_TOOL')
   expect(h.calls()).toBe(1)
+})
+
+it('settles calls of a cancelled step through cancellation with their finalizers', async () => {
+  const h = await setup()
+  h.ctx.tools.register({ ...h.tool, finalizeContent: () => [{ type: 'text', text: 'finalized' }] }, { when: () => true })
+  const toolSet = await h.resolve()
+  h.controller.abort()
+  const result = await h.execute({ toolSet })
+  expect(result.error?.info?.code).toBe(TOOL_ABORTED_BEFORE_DISPATCH)
+  expect(result.content).toEqual([{ type: 'text', text: 'finalized' }])
+  expect(h.calls()).toBe(0)
+})
+
+it('reports a wrapper result completed at cancellation as cancelled rather than unknown', async () => {
+  const h = await setup()
+  h.ctx.tools.register(h.tool, { when: () => true })
+  const toolSet = await h.resolve()
+  h.ctx.on('tools/execute', async () => {
+    h.controller.abort()
+    return { isError: false, value: 'wrapped', content: [{ type: 'text', text: 'wrapped' }] }
+  })
+  expect((await h.execute({ toolSet })).error?.info?.code).toBe(TOOL_ABORTED_BEFORE_DISPATCH)
 })
 
 it('does not substitute a same-name registration after admission', async () => {
