@@ -51,7 +51,7 @@ describe('icon sprite', () => {
 
   it('rejects replacements a sprite cannot render', async () => {
     const { theme, fiber } = await mount()
-    const reject = (icons: Record<string, unknown>) => () => theme.register({ id: 'x', colorScheme: 'light', tokens: {}, icons: icons as never })
+    const reject = (icons: Record<string, unknown>) => () => theme.register({ id: 'x', colorScheme: 'light', tokens: {}, icons })
     const svg = (body: string, root = 'xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"') => `<svg ${root}>${body}</svg>`
     expect(reject({ 'dsw-icon-nope': TWO_TONE })).toThrow(/"dsw-icon-nope" is not an ICON_SYMBOLS id/)
     expect(reject({ toString: TWO_TONE })).toThrow(/is not an ICON_SYMBOLS id/)
