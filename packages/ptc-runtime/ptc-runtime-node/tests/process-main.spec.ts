@@ -69,6 +69,25 @@ it('keeps unfinished calls pending and suppresses later logs while awaiting host
   } finally { release.resolve(encodePtcJsonWire(null)) }
 })
 
+it('rejects a binding call that the host fails during the run', async () => {
+  const h = await setup()
+  h.methods.invoke = async () => { throw new Error('denied by host') }
+  const result = await h.run('try { await tools.echo({}) } catch (error) { return error.message }')
+  expect(decodePtcJsonWire(result.value)).toBe('denied by host')
+})
+
+it('keeps an unawaited call pending when the host closes after the result', async () => {
+  const h = await setup()
+  const pending = Promise.withResolvers<ReturnType<typeof encodePtcJsonWire>>()
+  onTestFinished(() => { pending.resolve(encodePtcJsonWire(null)) })
+  h.methods.invoke = () => pending.promise
+  expect(decodePtcJsonWire((await h.run('void tools.echo({}); return 42')).value)).toBe(42)
+  h.peer.$close()
+  await h.main
+  await nextTurn()
+  expect(h.state.exitCode).toBeUndefined()
+})
+
 it('reports exhausted output accounting during the run', async () => {
   const h = await setup()
   const limited = vi.fn()

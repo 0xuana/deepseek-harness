@@ -25,12 +25,17 @@ export async function runNodeMain(stream: Duplex, maxMessageBytes: number, proce
   if (!Number.isSafeInteger(maxMessageBytes) || maxMessageBytes <= 0) throw new Error('invalid control message limit')
   clearProgramEnvironment(processState)
   const hostClosed = Promise.withResolvers<void>()
-  // Set once the result is returned or the endpoint closes; later calls stay pending and output is dropped.
+  // Set once the result is returned or the endpoint closes; binding calls then never settle and output is dropped.
   let ended = false
+  const unsettled = new Promise<never>(() => {})
   const connection = createProcessRpc<HostMethods, ProgramMethods>(stream, maxMessageBytes, {
     async run(_cwd, data) {
       const result = await runProgram({
-        invoke: (global, name, args) => ended ? new Promise(() => {}) : connection.invoke(global, name, args),
+        invoke: (global, name, args) => ended ? unsettled : connection.invoke(global, name, args).catch((error: unknown) => {
+          // Closure rejects outstanding calls; an unawaited one would crash the child into the result logs.
+          if (ended) return unsettled
+          throw error
+        }),
         log: (text) => { if (!ended) void connection.log(text) },
         outputLimit: () => { if (!ended) void connection.outputLimit() },
       }, data, processState)
