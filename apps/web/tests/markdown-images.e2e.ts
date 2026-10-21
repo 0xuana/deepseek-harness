@@ -179,7 +179,8 @@ describe('web e2e: Markdown image rendering', () => {
     await writeFile(join(scaffold.workspaceCwd, 'corrupt.png'), 'invalid image')
     const oversized = await open(join(scaffold.workspaceCwd, 'oversized.png'), 'w')
     try {
-      await oversized.truncate(20 * 1024 * 1024 + 1)
+      // One byte over attachment-local's default maxImageBytes (50 MiB), which also bounds /api/file.
+      await oversized.truncate(50 * 1024 * 1024 + 1)
     } finally {
       await oversized.close()
     }
