@@ -687,9 +687,9 @@ async function main(): Promise<void> {
   installMicrophonePermissions(session.defaultSession, () => mainWindow?.webContents)
   const shortcuts = installDesktopShortcuts(() => mainWindow, app.getPath('userData'),
     process.platform === 'darwin' ? 'macos' : process.platform === 'win32' ? 'windows' : 'linux', () => { refreshApplicationMenu() }, (window) => {
-      const native = updateOverlays.input(window)
+      const mandatory = updateOverlays.input(window)
       const embedded = updateDialog.input(window)
-      return { revision: native.revision + embedded.revision, blocked: native.blocked || embedded.blocked }
+      return { revision: mandatory.revision + embedded.revision, blocked: mandatory.blocked || embedded.blocked }
     })
   app.on('will-quit', () => { shortcuts.dispose() })
 

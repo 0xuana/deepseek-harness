@@ -1,6 +1,6 @@
 /** Shell-owned modal policy UI; only explicit actions authorize downloads or browser navigation. */
 
-import { type BrowserWindow, clipboard, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
+import { app, type BrowserWindow, clipboard, dialog, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
 import type { DesktopLocale } from './locale.ts'
 import { assertDesktopSender, type DesktopUpdateState } from './ipc.ts'
 import { desktopPolicyPage, type DesktopPolicyState } from './mandatory-update-policy.ts'
@@ -55,6 +55,7 @@ export class DesktopMandatoryUpdateWindow {
   private readonly publishEmbedded = (): void => { this.embeddedBlocking = false; this.sync() }
   private window: DesktopUpdateOverlay | undefined
   private surfaceParent: BrowserWindow | undefined
+  private recovery: { load: () => Promise<void>; dismiss: () => void; dispose: () => void } | undefined
   private closing: ReturnType<typeof setTimeout> | undefined
   private disposed = false
   private error: string | undefined
@@ -147,6 +148,8 @@ export class DesktopMandatoryUpdateWindow {
   sync(): void {
     if (this.disposed) return
     if (!this.embedded && this.window !== undefined && this.surfaceParent !== this.options.parent()) {
+      this.recovery?.dispose()
+      this.recovery = undefined
       this.finishConfirmation(false)
       const previous = this.window
       this.window = undefined
@@ -166,6 +169,7 @@ export class DesktopMandatoryUpdateWindow {
       if (parent === undefined || parent.isDestroyed()) return
     }
     if (!this.options.policy().blocking) {
+      this.recovery?.dismiss()
       this.finishConfirmation(false)
       this.attention.reset()
       this.clearNavigation()
@@ -212,13 +216,9 @@ export class DesktopMandatoryUpdateWindow {
       window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
       window.webContents.on('will-navigate', (event, url) => { if (url !== page) event.preventDefault() })
       window.webContents.on('will-redirect', (event) => { event.preventDefault() })
-      const reportLoadFailure = (error: unknown): void => {
-        if (!this.disposed && !window.isDestroyed()) console.error('desktop policy: mandatory update view failed to load', error)
-      }
-      window.webContents.on('render-process-gone', () => {
-        if (!this.disposed) void window.loadURL(page).catch(reportLoadFailure)
-      })
-      void window.loadURL(page).catch(reportLoadFailure)
+      const recovery = this.attachRecovery(window, parent)
+      this.recovery = recovery
+      void recovery.load()
     }
     this.window.webContents.send(MANDATORY_IPC.state, this.view())
   }
@@ -237,6 +237,8 @@ export class DesktopMandatoryUpdateWindow {
   /** Detach IPC and release the modal during shutdown, including after the main window closes. */
   dispose(): void {
     this.disposed = true
+    this.recovery?.dispose()
+    this.recovery = undefined
     clearTimeout(this.closing)
     this.closing = undefined
     this.finishConfirmation(false)
@@ -251,6 +253,84 @@ export class DesktopMandatoryUpdateWindow {
     this.window?.destroy()
     this.window = undefined
     this.surfaceParent = undefined
+  }
+
+  private attachRecovery(surface: DesktopUpdateOverlay, parent: BrowserWindow): {
+    load: () => Promise<void>
+    dismiss: () => void
+    dispose: () => void
+  } {
+    let released = false
+    let failed = false
+    let attempt = 0
+    let prompt: AbortController | undefined
+    const valid = (): boolean => !released && !this.disposed && this.options.policy().blocking
+      && this.options.parent() === parent && this.window === surface && !surface.isDestroyed() && !parent.isDestroyed()
+    const dismiss = (): void => { prompt?.abort() }
+    const show = (): void => {
+      if (!valid() || !failed || prompt !== undefined || !parent.isVisible() || !parent.isFocused()) return
+      const controller = new AbortController()
+      prompt = controller
+      const messages = this.options.locale.messages
+      const policy = this.options.policy()
+      const update = this.options.update()
+      const detail = [policy.title ?? messages.mandatoryTitle, policy.detail ?? messages.mandatoryDetail,
+        ...('version' in update ? [messages.mandatoryVersion.replace('{version}', update.version)] : []),
+        messages.mandatoryViewFailedDetail].join('\n\n')
+      void dialog.showMessageBox(parent, { type: 'error', title: messages.mandatoryTitle,
+        message: messages.mandatoryViewFailed, detail,
+        buttons: [messages.mandatoryViewRetry, messages.quit, messages.cancel], defaultId: 0, cancelId: 2,
+        noLink: true, signal: controller.signal }).then(({ response }) => {
+        if (prompt === controller) prompt = undefined
+        if (controller.signal.aborted || !valid() || !failed) return
+        if (response === 0) void load()
+        else if (response === 1) app.quit()
+      }).catch((error: unknown) => {
+        if (prompt === controller) prompt = undefined
+        console.error('desktop policy: native update recovery failed', error)
+      })
+    }
+    const load = async (): Promise<void> => {
+      if (!valid()) return
+      const revision = ++attempt
+      failed = false
+      dismiss()
+      try {
+        await surface.loadURL(page)
+      } catch (error) {
+        if (!valid() || revision !== attempt) return
+        console.error('desktop policy: mandatory update view failed to load', error)
+        failed = true
+        show()
+        return
+      }
+      if (!valid() || revision !== attempt) return
+      failed = false
+      dismiss()
+      this.sync()
+    }
+    const loaded = (): void => {
+      if (!valid()) return
+      failed = false
+      dismiss()
+    }
+    const crashed = (): void => { void load() }
+    const dispose = (): void => {
+      if (released) return
+      released = true
+      dismiss()
+      parent.off('focus', show)
+      parent.off('hide', dismiss)
+      surface.webContents.off('did-finish-load', loaded)
+      surface.webContents.off('render-process-gone', crashed)
+      surface.webContents.off('destroyed', dispose)
+    }
+    parent.on('focus', show)
+    parent.on('hide', dismiss)
+    surface.webContents.on('did-finish-load', loaded)
+    surface.webContents.on('render-process-gone', crashed)
+    surface.webContents.once('destroyed', dispose)
+    return { load, dismiss, dispose }
   }
 
   private view(): MandatoryUpdateView {
