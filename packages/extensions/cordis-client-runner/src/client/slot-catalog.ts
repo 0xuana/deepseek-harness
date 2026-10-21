@@ -3510,6 +3510,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       'client-ui-workspace SessionArchiveConfirmDialog id \'workspace.session-archive\'',
       'client-ui-workspace RowActionToast id \'workspace.row-toast\'',
       'cua PermissionToast id \'cua-permission-outcome\'',
+      'session-log-export SessionMarkdownCopyToast id \'session-log-download.copy-toast\'',
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'shell.overlay\', () => ctx.slots.register(\n      { name: \'shell.overlay\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',

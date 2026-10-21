@@ -4248,6 +4248,9 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-api-remote-access':
+        specifier: workspace:*
+        version: link:../../api/remote-access
       '@deepseek-ai/dsh-client-test-runtime':
         specifier: workspace:*
         version: link:../../test-support/client-runtime
@@ -4302,6 +4305,9 @@ importers:
       '@deepseek-ai/dsh-client-product-analytics':
         specifier: workspace:*
         version: link:../product-analytics
+      '@deepseek-ai/dsh-client-store':
+        specifier: workspace:*
+        version: link:../store
       '@deepseek-ai/dsh-client-test-runtime':
         specifier: workspace:*
         version: link:../../test-support/client-runtime
@@ -4867,6 +4873,9 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-api-remote-access':
+        specifier: workspace:*
+        version: link:../../api/remote-access
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:*
         version: link:../../api/remotes
@@ -5140,6 +5149,9 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-api-remote-access':
+        specifier: workspace:*
+        version: link:../../api/remote-access
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:*
         version: link:../../api/remotes
@@ -5313,6 +5325,9 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-api-remote-access':
+        specifier: workspace:*
+        version: link:../../api/remote-access
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:*
         version: link:../../api/remotes
@@ -5422,6 +5437,9 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-api-remote-access':
+        specifier: workspace:*
+        version: link:../../api/remote-access
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:*
         version: link:../../api/remotes
@@ -11494,6 +11512,9 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-typert-protocol':
+        specifier: workspace:*
+        version: link:../../typert/protocol
       '@types/compression':
         specifier: ^1.8.1
         version: 1.8.1
@@ -12995,6 +13016,9 @@ importers:
       '@deepseek-ai/dsh-subagent':
         specifier: workspace:*
         version: link:../../subagent/subagent
+      '@deepseek-ai/dsh-user-approval':
+        specifier: workspace:*
+        version: link:../../interaction/user-approval
       '@deepseek-ai/dsh-user-questions':
         specifier: workspace:*
         version: link:../../interaction/user-questions
@@ -13044,6 +13068,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-conversation':
         specifier: workspace:*
         version: link:../../client/ui-conversation
+      '@deepseek-ai/dsh-client-ui-layout':
+        specifier: workspace:*
+        version: link:../../client/ui-layout
       '@deepseek-ai/dsh-client-ui-message-feedback':
         specifier: workspace:*
         version: link:../../client/ui-message-feedback
@@ -13071,6 +13098,9 @@ importers:
       '@deepseek-ai/dsh-session-query':
         specifier: workspace:*
         version: link:../session-query
+      '@deepseek-ai/dsh-session-title':
+        specifier: workspace:*
+        version: link:../../session/session-title
       react:
         specifier: ^18.2.0
         version: 18.3.1

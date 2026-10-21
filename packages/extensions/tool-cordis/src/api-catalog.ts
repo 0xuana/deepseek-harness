@@ -2104,7 +2104,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'snapshotFor(principal: Principal): RemoteAccessBaseline',
-        description: 'The baseline a page opens with before its snapshot stream connects. A business package rendering a non-owner page assigns this value to REMOTE_ACCESS_SNAPSHOT_KEY after every index injection row, replacing the owner baseline the webServer index carries.',
+        description: 'The baseline a page opens with before its snapshot stream connects; every index the webServer renders carries it under REMOTE_ACCESS_SNAPSHOT_KEY for the Peer the page speaks for.',
         parameters: [{ name: 'principal', description: 'the page\'s caller identity.' }],
         returns: 'the owner baseline for the owner; otherwise the principal\'s current grants.',
       },
@@ -3877,15 +3877,15 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the transformed body.',
       },
       {
-        signature: 'collectIndexInjections(): IndexInjection[]',
-        description: 'Gather the structured injection table: one `webserver/index-inject` emit, every subscriber pushes its current rows. Fresh per call, so subscribers read live state (module graph, theme preference) at emit time.',
-        parameters: [],
+        signature: 'collectIndexInjections(peer: PeerScope): IndexInjection[]',
+        description: 'Gather the structured injection table for one Peer: one `webserver/index-inject` emit, every subscriber pushes its current rows. Fresh per call, so subscribers read live state (module graph, theme preference, the Peer\'s access) at emit time.',
+        parameters: [{ name: 'peer', description: 'the Peer the page speaks for.' }],
         returns: 'rows in subscriber activation order.',
       },
       {
-        signature: 'renderIndex(html: string): string',
-        description: 'Render one index.html body: the structured injection table first, then the raw `tapIndex` transforms over the result.',
-        parameters: [{ name: 'html', description: 'the raw index.html body.' }],
+        signature: 'renderIndex(html: string, peer: PeerScope): string',
+        description: 'Render one index.html body for one Peer: the structured injection table first, then the raw `tapIndex` transforms over the result.',
+        parameters: [{ name: 'html', description: 'the raw index.html body.' }, { name: 'peer', description: 'the Peer the page speaks for.' }],
         returns: 'the transformed body.',
       },
     ],
@@ -4751,10 +4751,10 @@ export const EVENT_API: readonly EventApiEntry[] = [
   {
     name: 'webserver/index-inject',
     mode: 'emit',
-    signature: '\'webserver/index-inject\'(table: IndexInjection[]): void',
-    summary: 'Collect the structured index injection table.',
-    description: 'Collect the structured index injection table. Emitted on every index render and every worker boot-payload request; listeners push their current rows, so a row\'s data is read fresh at emit time.',
-    parameters: [{ name: 'table', description: 'Mutable row table; listeners append in activation order.' }],
+    signature: '\'webserver/index-inject\'(table: IndexInjection[], peer: PeerScope): void',
+    summary: 'Collect the structured index injection table for the page `peer` speaks for.',
+    description: 'Collect the structured index injection table for the page `peer` speaks for. Emitted on every index render and every worker boot-payload request; listeners push their current rows, so a row\'s data is read fresh at emit time.',
+    parameters: [{ name: 'table', description: 'Mutable row table; listeners append in activation order.' }, { name: 'peer', description: 'The Peer the rendered page speaks for.' }],
   },
   {
     name: 'workflow/agent-end',
@@ -7501,6 +7501,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface SessionListValue {\n    readonly items: readonly SessionSummary[];\n}',
   },
   {
+    name: 'SessionLocation',
+    declaration: 'export interface SessionLocation {\n    readonly kind: string;\n    readonly path: string;\n}',
+  },
+  {
     name: 'SessionLogOffset',
     declaration: 'export type SessionLogOffset = BrandedNumber<\'SessionLogOffset\'>;',
   },
@@ -7578,7 +7582,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionPersistenceSnapshot',
-    declaration: 'export interface SessionPersistenceSnapshot {\n    readonly header: SessionHeader;\n    readonly formatStatus?: \'current\' | \'migration-required\';\n    readonly revision: SessionPersistenceRevision;\n    readonly eventCount?: number;\n    readonly sizeBytes?: number;\n}',
+    declaration: 'export interface SessionPersistenceSnapshot {\n    readonly header: SessionHeader;\n    readonly formatStatus?: \'current\' | \'migration-required\';\n    readonly revision: SessionPersistenceRevision;\n    readonly eventCount?: number;\n    readonly sizeBytes?: number;\n    readonly location?: SessionLocation;\n}',
   },
   {
     name: 'SessionPersistenceStatOptions',
