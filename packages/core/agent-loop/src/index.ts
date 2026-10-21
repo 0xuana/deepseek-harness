@@ -165,10 +165,8 @@ interface StoredSession {
 /** Prepared-but-unpublished agent resources sharing one memoized teardown. */
 interface PreparedAgent {
   agent: ReactLoopAgent
-  /** Aborts when the factory unloads, the caller cancels, or teardown begins — ends any setup await. */
-  signal: AbortSignal
-  /** Enter both registries and await creation listeners. */
-  publish(source: SessionStartSource): Promise<AgentHandle>
+  /** Persist initial history, announce the Session, run setup/commit, then enter and announce the Agent. */
+  initializeAndPublish(source: SessionStartSource, setup?: AgentSetup): Promise<AgentHandle>
   /** Reverse teardown: stop the machine, unregister, unwind the scope. Memoized. */
   dispose(): Promise<void>
 }
@@ -466,7 +464,7 @@ export class AgentLoop extends Service implements AgentFactory {
     options: AgentOptions,
     session: Session,
     callerSignal?: AbortSignal,
-    handle?: SessionHandle,
+    stored?: StoredSession,
     parentAgent?: Agent,
   ): PreparedAgent {
     assertAgentOptions(options)
@@ -504,6 +502,7 @@ export class AgentLoop extends Service implements AgentFactory {
     let detachAgent: (() => void) | undefined
     let disposing: Promise<void> | undefined
     let publication: ReturnType<typeof Promise.withResolvers<void>> | undefined
+    let ready = false
     const machineReady = Promise.withResolvers<void>()
     // Reverse teardown, memoized so every racing owner awaits one quiescence:
     // stop the machine, unwind the scope, drain and close the session's write
@@ -528,7 +527,7 @@ export class AgentLoop extends Service implements AgentFactory {
         if (machine === undefined) await machineReady.promise
         /* v8 ignore next -- setup failure untracks this disposer before resolving without a machine. */
         if (machine !== undefined) {
-          machine.cancel({ kind: 'disposed' })
+          machine.cancel({ kind: 'disposed' }, { keepInbox: !ready })
           await machine.whenIdle()
         }
       } catch (error: unknown) {
@@ -544,7 +543,7 @@ export class AgentLoop extends Service implements AgentFactory {
       // receive all closing events. A failed final drain is retained here
       // rather than logged away.
       try {
-        await handle?.close()
+        await stored?.handle.close()
       } catch (error: unknown) {
         failures.push(error)
       }
@@ -620,19 +619,25 @@ export class AgentLoop extends Service implements AgentFactory {
 
       return {
         agent,
-        signal: abort.signal,
-        publish: async (source) => {
+        initializeAndPublish: async (source, setup) => {
           publication = Promise.withResolvers<void>()
           try {
             assertLive()
+            await this.appendUnstoredSuffix(stored, session)
+            assertLive()
             detachSession = agent.ctx.sessions.enter(session)
+            agent.ctx.sessions.announce(session)
+            assertLive()
+            const setupCommit = await raceAbort(setup?.(agent.ctx, agent), abort.signal, id)
+            assertLive()
+            setupCommit?.commit()
+            assertLive()
             // The mounted backend routes announced live events into the active
             // write handle by session id; the loop only owns the handle itself.
             detachAgent = loopCtx.agents.enter(agent, parentAgent)
-            agent.ctx.sessions.announce(session)
-            assertLive()
             await loopCtx.agents.announce(agent, source, abort.signal)
             assertLive()
+            ready = true
             return { agent, dispose }
           } finally {
             publication.resolve()
@@ -664,24 +669,19 @@ export class AgentLoop extends Service implements AgentFactory {
     const stored = await this.createStoredSession(preparation.session)
     let prepared: PreparedAgent
     try {
-      prepared = this.prepare(this.ctx, id, options, preparation.session, undefined, stored?.handle)
+      prepared = this.prepare(this.ctx, id, options, preparation.session, undefined, stored)
     } catch (error: unknown) {
       await stored?.handle.close().catch(() => {})
       throw error
     }
-    return (await this.initializeAgent(prepared, async () => {
-      await this.appendUnstoredSuffix(stored, preparation.session)
-      return await prepared.publish('startup')
-    })).agent
+    return (await this.initializeAgent(prepared, () => prepared.initializeAndPublish('startup'))).agent
   }
 
   /**
    * Take a fresh session's write ownership when persistence is mounted.
-   * Nothing is appended here: the constructor seed (which never re-emits
-   * through `session/event`) is stored by `appendUnstoredSuffix` at the
-   * publication commit point, so a failed or cancelled validation or setup
-   * closes an unmaterialized handle and leaves no stored residue — the same
-   * id can be created again.
+   * The constructor seed is stored before Session store entry. Setup then
+   * appends through the live event feed; creation failure retains any events
+   * already written to the handle.
    * @param session - the unpublished session to store.
    * @param signal - optional cancellation forwarded to the backend create.
    * @returns the owned handle and stored cursor, or `undefined` without a backend.
@@ -698,10 +698,6 @@ export class AgentLoop extends Service implements AgentFactory {
 
   /**
    * Durably store the session events appended since the last stored cursor.
-   * Pre-publication appends (constructor seed markers, setup-window events
-   * such as delegation policy records) never re-emit through `session/event`,
-   * so publication must flush them through the handle before live events
-   * start routing into it.
    * @param stored - the session's owned handle and stored cursor, if any.
    * @param session - the unpublished session whose suffix is stored.
    */
@@ -710,8 +706,6 @@ export class AgentLoop extends Service implements AgentFactory {
     // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
     const suffix = session.snapshotEvents(SessionLogOffset(stored.storedCount))
     if (suffix.length > 0) await stored.handle.append(suffix)
-    // Advance by what was stored, not to `session.seq`: an event appended
-    // during the await must stay unstored for the next flush.
     stored.storedCount += suffix.length
   }
 
@@ -776,17 +770,12 @@ export class AgentLoop extends Service implements AgentFactory {
     const session = ownedPreparation.session
     let prepared: PreparedAgent
     try {
-      prepared = this.prepare(ownerCtx, id, agentOptions, session, signal, stored?.handle, parentAgent)
+      prepared = this.prepare(ownerCtx, id, agentOptions, session, signal, stored, parentAgent)
     } catch (error: unknown) {
       await stored?.handle.close().catch(() => {})
       throw error
     }
-    return await this.initializeAgent(prepared, async () => {
-      const setupCommit = await raceAbort(setup?.(prepared.agent.ctx, prepared.agent), prepared.signal, id)
-      setupCommit?.commit()
-      await this.appendUnstoredSuffix(stored, session)
-      return await prepared.publish(source)
-    })
+    return await this.initializeAgent(prepared, () => prepared.initializeAndPublish(source, setup))
   }
 
   private async initializeAgent(prepared: PreparedAgent, initialize: () => Promise<AgentHandle>): Promise<AgentHandle> {

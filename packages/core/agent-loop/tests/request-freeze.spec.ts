@@ -75,6 +75,7 @@ describe('loop-owned request freezing', () => {
     expect(Object.isFrozen(userEvent.data.content)).toBe(false)
     expect(Object.isFrozen(assistantEvent.data.message)).toBe(false)
     ctx.effect(() => ctx.sessions.enter(session))
+    ctx.sessions.announce(session)
     const inbox = await loopCtx.sessionProjections.register(inboxProjectionDefinition)
     const model = await loopCtx.sessionProjections.register(modelSelectionProjectionDefinition)
     const agent = new ReactLoopAgent(loopCtx, id, { provider: 'mock', model: 'mock' }, session,

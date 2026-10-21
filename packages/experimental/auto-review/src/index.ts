@@ -8,6 +8,7 @@
  * @module @deepseek-ai/dsh-experimental-auto-review
  */
 
+import type {} from '@deepseek-ai/dsh-tool-executor-ptc/types'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import { FiberState, type Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'

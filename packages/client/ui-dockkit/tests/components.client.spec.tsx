@@ -978,6 +978,27 @@ describe('DockSurface', () => {
 })
 
 describe('tab drags', () => {
+  it('keeps a dragged tab when the middle button is released while the primary button stays down', () => {
+    const controller = seededController()
+    const tabId = controller.openContent({ contentId: 'file:a', title: 'a.txt', kind: 'file' })
+    const state = controller.getSnapshot().state
+    const paneId = getPane(state, state.rootId).id
+    layOut([paneId], 420)
+    const intents = spyIntents()
+    intents.closeTab.mockImplementation(controller.closeTab.bind(controller))
+    intents.placeTab.mockImplementation(controller.placeTab.bind(controller))
+    renderSurface(controller, intents)
+    const chip = screen.getByRole('tab', { name: /a\.txt/u })
+
+    drag(chip, FILE_CHIP, [30, 18], false)
+    fireEvent(chip, new MouseEvent('auxclick', { button: 1, buttons: 1, bubbles: true, cancelable: true }))
+    expect(intents.closeTab).not.toHaveBeenCalled()
+    fireEvent.pointerUp(window, { pointerId: 7, button: 0, buttons: 0, clientX: 30, clientY: 18 })
+    expect(intents.placeTab).toHaveBeenCalledExactlyOnceWith(tabId, paneId, 0)
+    expect(getPane(controller.getSnapshot().state, paneId).tabs[0]).toBe(tabId)
+    expect(document.querySelector('[data-dockkit-caret]')).toBeNull()
+  })
+
   it('previews a caret at the slot under the pointer and reports that slot on release', () => {
     const { intents, first, fileTabId, chip } = twoPanes()
     // Left of the first chip's midpoint: slot 0.
