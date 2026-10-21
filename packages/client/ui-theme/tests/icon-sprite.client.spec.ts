@@ -61,10 +61,31 @@ describe('icon sprite', () => {
     expect(reject({ [SEARCH]: '<g xmlns="http://www.w3.org/2000/svg"/>' })).toThrow(/not a well-formed SVG-namespace/)
     expect(reject({ [SEARCH]: svg('<path/>', 'xmlns="http://www.w3.org/2000/svg" width="16"') })).toThrow(/needs a viewBox/)
     expect(reject({ [SEARCH]: svg('<style>path{fill:red}</style>') })).toThrow(/<style> or <script>/)
-    expect(reject({ [SEARCH]: svg('<mask id="dsh-archive-off-regular"/>') })).toThrow(/reuses element id "dsh-archive-off-regular"/)
-    expect(reject({ [SEARCH]: svg('<g id="a"/>'), 'dsw-icon-plus-outline-regular': svg('<g id="a"/>') })).toThrow(/reuses element id "a"/)
-    expect(reject({ [SEARCH]: svg(`<g id="${SEARCH}"/>`) })).toThrow(/reuses element id/)
+    expect(reject({ [SEARCH]: svg('<mask id="root"/>') })).toThrow(/element id "root" must start with "dsw-icon-search-outline-regular-"/)
+    expect(reject({ [SEARCH]: svg(`<g id="${SEARCH}"/>`) })).toThrow(/must start with/)
     expect(theme.getTheme().themes.map(t => t.id)).toEqual(['light', 'dark'])
+    await fiber.dispose()
+  })
+
+  it('treats missing icons as no replacement and keeps a frozen copy of the registered ones', async () => {
+    const { theme, fiber, symbol } = await mount()
+    theme.register({ id: 'none', colorScheme: 'light', tokens: {}, icons: null as never })
+    const icons: Record<string, string> = { [SEARCH]: TWO_TONE }
+    theme.register({ id: 'skin', colorScheme: 'light', tokens: {}, icons })
+    icons[SEARCH] = '<svg viewBox="0 0 16 16"><path/></svg>'
+    theme.setTheme('skin')
+    expect(symbol(SEARCH)?.querySelector('circle')).not.toBeNull()
+    expect(Object.isFrozen(theme.getTheme().active.icons)).toBe(true)
+    theme.setTheme('none')
+    expect(symbol(SEARCH)?.querySelector('circle')).toBeNull()
+    await fiber.dispose()
+  })
+
+  it('accepts element ids in the symbol namespace', async () => {
+    const { theme, fiber, symbol } = await mount()
+    theme.register({ id: 'grad', colorScheme: 'light', tokens: {}, icons: { [SEARCH]: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><linearGradient id="${SEARCH}-g"/><rect width="16" height="16" fill="url(#${SEARCH}-g)"/></svg>` } })
+    theme.setTheme('grad')
+    expect(symbol(SEARCH)?.querySelector('linearGradient')?.id).toBe(`${SEARCH}-g`)
     await fiber.dispose()
   })
 

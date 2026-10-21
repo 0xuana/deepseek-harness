@@ -7,6 +7,9 @@ import {
   IconAppsAddOutlineMedium, IconGoalOutlineRegular, IconSendOutlineRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { ICON_ARTWORK, type IconGlyph, type IconWeight } from '../src/icons/artwork.ts'
+import {
+  BrowseOutlineArtwork, ChatLinesOutlineArtwork, CodeBracketsArtwork, FolderCloseArtwork, GlobeOutlineArtwork,
+} from '../src/icons/shared-artwork.tsx'
 
 afterEach(cleanup)
 
@@ -84,6 +87,31 @@ describe('product icon set', () => {
   it('keeps element ids unique across the default symbols', () => {
     const ids = Object.values(primitives.ICON_SYMBOLS).flatMap(markup => [...markup.matchAll(/\sid="([^"]+)"/g)].map(([, id]) => id))
     expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it.each(iconNames)('%s references the glyph and weight its name spells', (name) => {
+    const weight = name.endsWith('Regular') ? 'regular' : 'medium'
+    const glyph = name.slice('Icon'.length, -weight.length).replace(/(?<!^)(?=[A-Z])/g, '-').toLowerCase()
+    const Icon = icons[name]!
+    expect(render(<Icon />).container.querySelector('svg')!.getAttribute('data-icon')).toBe(`dsw-icon-${glyph}-${weight}`)
+  })
+
+  it.each([
+    ['queue-outline', ChatLinesOutlineArtwork],
+    ['globe-outline', GlobeOutlineArtwork],
+    ['inspect-outline', CodeBracketsArtwork],
+    ['browse-outline', BrowseOutlineArtwork],
+    ['folder-close', FolderCloseArtwork],
+  ] as const)('keeps the shared %s artwork identical to its product glyph', (glyph, Artwork) => {
+    for (const weight of ['regular', 'medium'] as const) {
+      const stroke = weight === 'regular' ? primitives.ICON_REGULAR_STROKE : primitives.ICON_MEDIUM_STROKE
+      const inline = render(<Artwork strokeWidth={stroke} />).container.querySelector('svg')!
+      const product = artwork(glyph, weight).documentElement
+      expect(inline.getAttribute('viewBox')).toBe(product.getAttribute('viewBox'))
+      expect(inline.children.length).toBe(product.children.length)
+      expect([...inline.children].every((child, index) => child.isEqualNode(product.children[index]!))).toBe(true)
+      cleanup()
+    }
   })
 
   it('size and className props land on the root svg', () => {

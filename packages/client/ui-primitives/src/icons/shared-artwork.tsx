@@ -5,8 +5,8 @@ interface WeightedArtworkProps extends IconProps {
 }
 
 /**
- * Render shared conversation geometry — the chat bubble around two text
- * lines — for the queue product icon and session reference icons.
+ * Render conversation geometry — the chat bubble around two text lines —
+ * for session reference icons; it matches the `queue-outline` product glyph.
  * @param props - Size, optional CSS class, and inherited stroke width.
  * @returns The decorative SVG artwork.
  */
@@ -19,7 +19,7 @@ export const ChatLinesOutlineArtwork = ({ size = 16, className, strokeWidth }: W
 )
 
 /**
- * Render shared globe geometry for product and link icons.
+ * Render globe geometry for link icons; it matches the `globe-outline` product glyph.
  * @param props - Size, optional CSS class, and inherited stroke width.
  * @returns The decorative SVG artwork.
  */
@@ -33,7 +33,7 @@ export const GlobeOutlineArtwork = ({ size = 14, className, strokeWidth }: Weigh
 )
 
 /**
- * Render shared code-bracket geometry for product and link icons.
+ * Render code-bracket geometry for link icons; it matches the `inspect-outline` product glyph.
  * @param props - Size, optional CSS class, and inherited stroke width.
  * @returns The decorative SVG artwork.
  */
@@ -46,7 +46,7 @@ export const CodeBracketsArtwork = ({ size = 14, className, strokeWidth }: Weigh
 )
 
 /**
- * Render shared document-browse geometry for product and reference icons.
+ * Render document-browse geometry for reference icons; it matches the `browse-outline` product glyph.
  * @param props - Size, optional CSS class, and inherited stroke width.
  * @returns The decorative SVG artwork.
  */
@@ -59,7 +59,7 @@ export const BrowseOutlineArtwork = ({ size = 16, className, strokeWidth }: Weig
 )
 
 /**
- * Render shared closed-folder geometry for product, reference, and link icons.
+ * Render closed-folder geometry for reference and link icons; it matches the `folder-close` product glyph.
  * @param props - Size, optional CSS class, and inherited stroke width.
  * @returns The decorative SVG artwork.
  */

@@ -8,7 +8,8 @@ import { ICON_SYMBOLS, type IconSymbolId } from '@deepseek-ai/dsh-client-ui-prim
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
-type Replacements = Readonly<Partial<Record<IconSymbolId, string>>>
+/** Icon replacements keyed by sprite symbol id; see `ThemeDefinition.icons`. */
+export type IconReplacements = Readonly<Partial<Record<IconSymbolId, string>>>
 /** Root attributes that size or label one rendering, not the reusable artwork. */
 const DROPPED_ATTRIBUTES = new Set(['width', 'height', 'xmlns', 'class', 'aria-hidden'])
 
@@ -27,7 +28,7 @@ function toSymbol(id: string, markup: string): SVGSymbolElement {
  * @param ctx - owning plugin context; `theme/change` snapshots drive updates.
  * @param icons - replacements of the theme active at install time.
  */
-export function installIconSprite(ctx: Context, icons: Replacements | undefined): void {
+export function installIconSprite(ctx: Context, icons: IconReplacements | undefined): void {
   if (typeof document === 'undefined') return
   const sprite = document.createElementNS(SVG_NS, 'svg')
   sprite.setAttribute('aria-hidden', 'true')
@@ -35,7 +36,7 @@ export function installIconSprite(ctx: Context, icons: Replacements | undefined)
   sprite.style.cssText = 'position: absolute; width: 0; height: 0; overflow: hidden'
   const rendered = new Map<string, SVGSymbolElement>()
   const markups = new Map<string, string>()
-  const apply = (replacements: Replacements = {}): void => {
+  const apply = (replacements: IconReplacements = {}): void => {
     for (const [id, fallback] of Object.entries(ICON_SYMBOLS) as [IconSymbolId, string][]) {
       const markup = replacements[id] ?? fallback
       if (markups.get(id) === markup) continue

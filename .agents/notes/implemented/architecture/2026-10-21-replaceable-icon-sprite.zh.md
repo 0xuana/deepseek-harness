@@ -22,5 +22,8 @@ Status: implemented
 
 - 图标 DOM 包含 `<use>` 引用而不是路径；测试通过 `data-icon` 识别图形，通过 `ICON_SYMBOLS` 检查图形。
 - 没有 ui-theme 时，sprite 不存在，图标不渲染任何内容。
-- 所有 symbol 共享文档的 id 空间，因此默认图形与替换图形内的元素 id 必须唯一；另一个文档（例如 iframe）中的 `<use>` 无法引用该 sprite。
+- 所有 symbol 共享文档的 id 空间，因此 `register` 要求替换图形内的元素 id 以 `<symbol id>-` 开头；另一个文档（例如 iframe）中的 `<use>` 无法引用该 sprite。
+- 替换标记与注册它的插件代码同等受信任；`register` 仅拒绝 `<style>` 与 `<script>`，因为它们会作用于整个文档。
+- 渐变及其他绘制服务器在 sprite 所在位置解析其色标，因此它们跟随调色板 token，但不跟随使用处的颜色覆盖。
+- 默认 symbol 与使用 token 着色的替换 symbol 在 Chromium、WebKit 与 Firefox 中通过 `<use>` 渲染与内联渲染的结果逐像素一致。
 - 文件类型、插件、站点与品牌图形仍以内联方式渲染，暂不可替换。

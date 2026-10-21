@@ -22,5 +22,8 @@ Each product glyph weight is one sprite symbol, `dsw-icon-<glyph>-<weight>`. ui-
 
 - Icon DOM contains a `<use>` reference instead of paths; tests identify glyphs through `data-icon` and inspect artwork through `ICON_SYMBOLS`.
 - Without ui-theme, the sprite is absent and icons render nothing.
-- Every symbol shares the document id space, so element ids inside default artwork and replacements must be unique; `<use>` in another document, such as an iframe, cannot reach the sprite.
+- Every symbol shares the document id space, so `register` requires element ids inside a replacement to start with `<symbol id>-`; `<use>` in another document, such as an iframe, cannot reach the sprite.
+- Replacement markup is trusted like the registering plugin's code; `register` rejects `<style>` and `<script>` only because they would apply to the whole document.
+- Gradients and other paint servers resolve their stops where the sprite sits, so they follow palette tokens but not use-site color overrides.
+- Default and token-colored replacement symbols render pixel-identically through `<use>` and inline in Chromium, WebKit, and Firefox.
 - File-type, plugin, site, and brand artwork still render inline and are not replaceable yet.

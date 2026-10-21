@@ -25,7 +25,7 @@ import type { FontSettingsInjected } from './FontSettingsGroup.tsx'
 import { FontSettingsGroup } from './FontSettingsGroup.tsx'
 import { createAppearanceRowStore, createFontRowStore } from './settings-store.ts'
 import { ICON_SYMBOLS, type IconSymbolId } from '@deepseek-ai/dsh-client-ui-primitives'
-import { installIconSprite } from './icon-sprite.ts'
+import { installIconSprite, type IconReplacements } from './icon-sprite.ts'
 import { installThemeStyles } from './styles.ts'
 import { en, ja, zh, type ThemeKey } from './locales.ts'
 import {
@@ -82,12 +82,18 @@ export interface ThemeDefinition {
   tokens: ThemeTokens
   /**
    * Product icon replacements: ui-primitives `ICON_SYMBOLS` ids to complete
-   * SVG documents. The icon sprite renders each replacement as that id's
-   * `<symbol>`, so its paint may use `currentColor` and `--dsw-*` variables.
-   * Each document needs an SVG-namespace root with a `viewBox`, no `<style>`
-   * or `<script>`, and element ids unique across the theme and the defaults.
+   * SVG documents, trusted like the registering plugin's code. The icon
+   * sprite renders each replacement as that id's `<symbol>`: the root's
+   * `viewBox` and presentation attributes carry over, its `width`, `height`,
+   * `class`, and `aria-hidden` are ignored because the use site sizes the
+   * icon, and painted elements inherit `currentColor` and CSS variables from
+   * the use site. Gradients and other paint servers resolve their stops in
+   * the sprite, which sits in `body`, so they follow palette tokens but not
+   * use-site overrides. Each document needs an SVG-namespace root with a
+   * `viewBox`, no `<style>` or `<script>` (they would apply to the whole
+   * document), and element ids prefixed with `<symbol id>-`.
    */
-  icons?: Readonly<Partial<Record<IconSymbolId, string>>> | undefined
+  icons?: IconReplacements | undefined
 }
 
 /** Immutable theme state published on every change. */
@@ -338,7 +344,9 @@ export class ThemeRuntime {
   /**
    * Register a theme. Duplicate id throws (single occupant per id; the
    * built-in pair counts; `system` is a preference, not a registrable id).
-   * @param definition - theme id, colorScheme, and alias-token overrides.
+   * @param definition - theme id, colorScheme, alias-token overrides, and
+   * optional icon replacements; the runtime keeps a frozen copy of `icons`.
+   * Invalid icon replacements throw a `TypeError` naming the theme and icon.
    * @returns disposer. Disposing the theme backing the active preference
    * resets the preference to the default so the UI never keeps tokens of an
    * unregistered theme.
@@ -348,8 +356,8 @@ export class ThemeRuntime {
     if (this.themes.some(t => t.id === definition.id)) {
       throw new Error(`theme "${definition.id}" is already registered`)
     }
-    validateIcons(definition)
-    this.themes = [...this.themes, definition]
+    const icons = validateIcons(definition)
+    this.themes = [...this.themes, Object.freeze({ ...definition, icons })]
     this.publish()
     return () => {
       if (!this.themes.some(t => t.id === definition.id)) return
@@ -498,30 +506,34 @@ function durableFontFamilies(section: ThemeSettings): FontFamilies {
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
-/** Element ids the default symbols use, so a replacement cannot shadow them. */
-const DEFAULT_ICON_IDS = new Set(Object.values(ICON_SYMBOLS).flatMap(markup => [...markup.matchAll(/\sid="([^"]+)"/g)].map(([, value = '']) => value)))
-
 /**
  * Reject icon replacements a sprite cannot render (untyped dynamic-package
  * callers reach this boundary, as with {@link validateOverrides}): unknown
  * symbol ids, documents without an SVG-namespace `<svg viewBox>` root,
- * document-wide `<style>` or `<script>`, and colliding element ids.
+ * document-wide `<style>` or `<script>`, and element ids outside the
+ * symbol's own `<symbol id>-` namespace.
+ * @returns a frozen copy of the replacements, or undefined when there are none.
  */
-function validateIcons({ id, icons = {} }: ThemeDefinition): void {
-  const ids = new Set(DEFAULT_ICON_IDS)
+function validateIcons({ id, icons }: ThemeDefinition): IconReplacements | undefined {
+  // Untyped callers may pass null; treat it like an absent field.
+  if (icons == null) return undefined
+  const copy: Partial<Record<IconSymbolId, string>> = {}
   for (const [name, markup] of Object.entries<unknown>(icons)) {
     const fail = (problem: string): never => { throw new TypeError(`theme "${id}" icon "${name}" ${problem}`) }
     if (!Object.hasOwn(ICON_SYMBOLS, name)) fail('is not an ICON_SYMBOLS id')
     if (typeof markup !== 'string') fail('must be an SVG document string')
+    copy[name as IconSymbolId] = markup as string
+    /* v8 ignore next -- needs a documentless run (node e2e booting the client tree), where no sprite renders either */
+    if (typeof DOMParser === 'undefined') continue
     const root = new DOMParser().parseFromString(markup as string, 'image/svg+xml').documentElement
     if (root.namespaceURI !== SVG_NS || root.localName !== 'svg' || root.querySelector('parsererror') !== null) fail('is not a well-formed SVG-namespace <svg> document')
     if (!root.hasAttribute('viewBox')) fail('needs a viewBox')
     if (root.querySelector('style, script') !== null) fail('must not contain <style> or <script>')
     for (const element of root.querySelectorAll('[id]')) {
-      if (ids.has(element.id) || Object.hasOwn(ICON_SYMBOLS, element.id)) fail(`reuses element id "${element.id}"`)
-      ids.add(element.id)
+      if (!element.id.startsWith(`${name}-`)) fail(`element id "${element.id}" must start with "${name}-"`)
     }
   }
+  return Object.freeze(copy)
 }
 
 function dynamicToken(name: string): ThemeTokenInspection {
