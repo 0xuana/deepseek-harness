@@ -9,7 +9,7 @@ import { SessionLogDownloadController } from '../src/client/controller.ts'
 import { SessionMarkdownCopyController, type SessionMarkdownClipboard } from '../src/client/copy-controller.ts'
 import { SessionLogDownloadHeaderAction } from '../src/client/HeaderAction.tsx'
 import type { SessionLogDownloadHeaderProps } from '../src/client/HeaderAction.tsx'
-import { en } from '../src/client/locales.ts'
+import { en, zh } from '../src/client/locales.ts'
 
 const SID = 'session-export-header' as SessionId
 const clipboard: SessionMarkdownClipboard = {
@@ -69,6 +69,11 @@ function bench(feedbackAvailable = false, copyController = new SessionMarkdownCo
 afterEach(cleanup)
 
 describe('Session export Header action', () => {
+  it('names whole-Session copying in English and Chinese', () => {
+    expect(en['menu.copyMarkdown']).toBe('Copy Session as Markdown')
+    expect(zh['menu.copyMarkdown']).toBe('复制会话为 Markdown')
+  })
+
   it('opens Session feedback and closes the menu without starting a download', () => {
     const b = bench(true)
     fireEvent.click(b.view.getByRole('button', { name: 'More actions' }))
@@ -82,7 +87,7 @@ describe('Session export Header action', () => {
     const b = bench()
     fireEvent.click(b.view.getByRole('button', { name: 'More actions' }))
     expect(b.view.queryByRole('menuitem', { name: 'Feedback' })).toBeNull()
-    expect(b.view.getByRole('menuitem', { name: 'Copy as Markdown' })).toBeTruthy()
+    expect(b.view.getByRole('menuitem', { name: 'Copy Session as Markdown' })).toBeTruthy()
     expect(b.view.getByRole('menuitem', { name: 'Download session log' })).toBeTruthy()
   })
 
@@ -108,10 +113,10 @@ describe('Session export Header action', () => {
     const b = bench()
     fireEvent.click(b.view.getByRole('button', { name: 'More actions' }))
     expect(b.view.getAllByRole('menuitem').map(item => item.textContent)).toEqual([
-      'Copy as Markdown',
+      'Copy Session as Markdown',
       'Download session log',
     ])
-    fireEvent.click(b.view.getByRole('menuitem', { name: 'Copy as Markdown' }))
+    fireEvent.click(b.view.getByRole('menuitem', { name: 'Copy Session as Markdown' }))
     await waitFor(() => { expect(b.copyMarkdown).toHaveBeenCalledWith(SID) })
     expect(b.request).not.toHaveBeenCalled()
     expect(b.view.queryByRole('menu')).toBeNull()
@@ -128,7 +133,7 @@ describe('Session export Header action', () => {
     const button = b.view.getByRole('button', { name: 'More actions' })
     await waitFor(() => { expect(button.getAttribute('aria-expanded')).toBe('false') })
     fireEvent.click(button)
-    const copyItem = b.view.getByRole('menuitem', { name: 'Copy as Markdown' })
+    const copyItem = b.view.getByRole('menuitem', { name: 'Copy Session as Markdown' })
     await waitFor(() => { expect((copyItem as HTMLButtonElement).disabled).toBe(true) })
     expect((b.view.getByRole('menuitem', { name: 'Download session log' }) as HTMLButtonElement).disabled).toBe(false)
     expect((b.view.getByRole('menuitem', { name: 'Feedback' }) as HTMLButtonElement).disabled).toBe(false)
@@ -188,7 +193,7 @@ describe('Session export Header action', () => {
     fireEvent.click(button)
     const item = b.view.getByRole('menuitem', { name: 'Download session log' })
     expect((item as HTMLButtonElement).disabled).toBe(true)
-    expect((b.view.getByRole('menuitem', { name: 'Copy as Markdown' }) as HTMLButtonElement).disabled).toBe(false)
+    expect((b.view.getByRole('menuitem', { name: 'Copy Session as Markdown' }) as HTMLButtonElement).disabled).toBe(false)
     expect((b.view.getByRole('menuitem', { name: 'Feedback' }) as HTMLButtonElement).disabled).toBe(false)
     release(new Response('zip'))
     await download

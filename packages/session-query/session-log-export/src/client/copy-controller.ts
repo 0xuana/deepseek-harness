@@ -1,5 +1,5 @@
 /**
- * Browser controller for the Session Header's "Copy as Markdown" action. One
+ * Browser controller for the Session Header's "Copy Session as Markdown" action. One
  * plugin instance owns one pending copy: the clipboard is a browser-wide
  * destination, so a second request joins the pending operation instead of
  * racing it.

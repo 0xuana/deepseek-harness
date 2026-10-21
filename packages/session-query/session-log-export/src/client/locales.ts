@@ -4,7 +4,7 @@ export const NS = 'session-log-download'
 /** Simplified-Chinese Session export strings. */
 export const zh = {
   'header.more': '更多操作',
-  'menu.copyMarkdown': '复制为 Markdown',
+  'menu.copyMarkdown': '复制会话为 Markdown',
   'menu.download': '下载 Session 日志',
   'menu.feedback': '反馈',
   'toast.copied': 'Session 已复制为 Markdown',
@@ -22,7 +22,7 @@ export const zh = {
 /** English Session export strings. */
 export const en: Record<keyof typeof zh, string> = {
   'header.more': 'More actions',
-  'menu.copyMarkdown': 'Copy as Markdown',
+  'menu.copyMarkdown': 'Copy Session as Markdown',
   'menu.download': 'Download session log',
   'menu.feedback': 'Feedback',
   'toast.copied': 'Session copied as Markdown.',

@@ -448,7 +448,7 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
       && new URL(response.url()).pathname === '/api/session.markdown', { timeout: 30_000 })
     const copyButton = page.getByRole('button', { name: 'More actions' })
     await copyButton.click()
-    await page.getByRole('menuitem', { name: 'Copy as Markdown' }).click()
+    await page.getByRole('menuitem', { name: 'Copy Session as Markdown' }).click()
     const response = await markdownResponse
     expect(response.status()).toBe(200)
     expect(response.headers()['content-type']).toBe('text/markdown; charset=utf-8')
@@ -481,7 +481,7 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     expect(normalized.endsWith('\n\n')).toBe(false)
 
     await copyButton.click()
-    expect(await page.getByRole('menuitem', { name: 'Copy as Markdown' }).isDisabled()).toBe(false)
+    expect(await page.getByRole('menuitem', { name: 'Copy Session as Markdown' }).isDisabled()).toBe(false)
     await page.keyboard.press('Escape')
   }, 60_000)
 

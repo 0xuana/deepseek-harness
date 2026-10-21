@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-session-log-export` lets the Web interface export a session's complete history. The Session Header's more-actions menu offers `Copy as Markdown` and `Download session log`; an `/export` slash command also starts the ZIP download. The ZIP contains the session, its sub-sessions, and attachments. The package owns both authenticated Host routes, the Markdown transcript formatter, and the browser controls and feedback. The browser chooses the download destination and owns the clipboard. Setup and usage come first; implementation details follow.
+`dsh-session-log-export` lets the Web interface export a session's complete history. The Session Header's more-actions menu offers `Copy Session as Markdown` and `Download session log`; an `/export` slash command also starts the ZIP download. The ZIP contains the session, its sub-sessions, and attachments. The package owns both authenticated Host routes, the Markdown transcript formatter, and the browser controls and feedback. The browser chooses the download destination and owns the clipboard. Setup and usage come first; implementation details follow.
 
 ## Table of Contents
 
@@ -25,11 +25,11 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Use this package when the Web bundle should let users export a session log. It requires Connection, the command registry, Session query and persistence, and attachments. Mount the plugin, then choose `Copy as Markdown` or `Download session log` from the Session Header's more-actions menu, or type `/export`; the browser copies the transcript or downloads `dsh-session-<id>.zip`.
+Use this package when the Web bundle should let users export a session log. It requires Connection, the command registry, Session query and persistence, and attachments. Mount the plugin, then choose `Copy Session as Markdown` or `Download session log` from the Session Header's more-actions menu, or type `/export`; the browser copies the transcript or downloads `dsh-session-<id>.zip`.
 
-### Copy as Markdown
+### Copy Session as Markdown
 
-`Copy as Markdown` copies the complete selected Session, including history that the client has not loaded, as portable Markdown. The transcript starts with the latest log-backed title. Human user messages are blockquotes in chronological order, final assistant replies remain ordinary Markdown, and earlier assistant commentary and tool activity in each turn are folded into a collapsible `<details>` section before that turn's final reply. A turn whose last committed assistant message carries tool calls has no final reply, so all of its activity stays folded. An incomplete turn renders the committed messages it has. Only append message events are exported. An unfinished assistant code fence is closed at the message boundary, and four-space or tab-indented code keeps its indentation.
+`Copy Session as Markdown` copies the complete selected Session, including history that the client has not loaded, as portable Markdown. The transcript starts with the latest log-backed title. Human user messages are blockquotes in chronological order, final assistant replies remain ordinary Markdown, and earlier assistant commentary and tool activity in each turn are folded into a collapsible `<details>` section before that turn's final reply. A turn whose last committed assistant message carries tool calls has no final reply, so all of its activity stays folded. An incomplete turn renders the committed messages it has. Only append message events are exported. An unfinished assistant code fence is closed at the message boundary, and four-space or tab-indented code keeps its indentation.
 
 The formatter reads the committed raw log, so a compaction surface replacement never removes earlier messages, and fork-inherited history appears once. The title and body come from one `readSession` snapshot. When persistence metadata reports a selected materialized artifact, the transcript adds a `Session file:` fenced text block with that exact path; without one, the block is absent. Only the selected Session and its inherited prefix are copied; descendant logs remain ZIP-only. Reasoning blocks, system and developer messages, injected user-role context whose source kind is not `user`, request headers and context, and runtime records are omitted. Images and files become readable labels; attachment bytes and authentication links never enter the transcript. Structural labels such as `Assistant`, `Tool`, and attachment placeholders are intentionally English; original message text stays unchanged. The text ends with exactly one newline.
 
