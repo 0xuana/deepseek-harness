@@ -788,7 +788,7 @@ Allow a listener to replace content in the DURABLE LOG COPY of one `run_code` su
 
 Types: [ContentBlock](llm-streaming.zh.md) · [Scoped](scope.zh.md)
 
-Source: [`packages/core/tool-executor-ptc/src/types.ts`](../../packages/core/tool-executor-ptc/src/types.ts)
+Source: [`packages/core/tool-executor-ptc/src/runtime-types.ts`](../../packages/core/tool-executor-ptc/src/runtime-types.ts)
 
 <a id="toolsresult--emit"></a>
 

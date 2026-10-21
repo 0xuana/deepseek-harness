@@ -1,49 +1,64 @@
-/** Live PTC dispatch policy declarations; importing types does not mount the executor. @module */
-import type { Agent } from '@deepseek-ai/dsh-agent'
-import type { ContentBlock, ToolCallId } from '@deepseek-ai/dsh-llm'
-import type { Scoped } from '@deepseek-ai/dsh-scope'
-import type { ToolExecution, ToolsService } from '@deepseek-ai/dsh-tools'
-
 /**
- * One settled `run_code` sub-dispatch about to be logged, as seen by the
- * `tools/ptc-dispatch-log` waterfall: the parent execution (session owner,
- * outer call identity), the sub-call identity, and the outcome whose durable
- * copy a listener may reshape. `content` is the RENDERED result projection
- * (what a native `tool/result` would carry) — the program itself received
- * the structured `value` (or just the error message on failure); only the
- * `tool/ptc-dispatch` event's copy changes.
+ * Client-safe PTC dispatch events and message-source declarations.
+ *
+ * @module @deepseek-ai/dsh-tool-executor-ptc/types
  */
-export interface PtcDispatchLog {
-  /** The outer `run_code` execution. */
-  readonly exec: ToolExecution
-  /** The calling agent (the scope routing key and the spill owner), when the outer call has one. */
-  readonly agent?: Agent
-  /** Opaque sub-call id; new calls use `<parent>:ptc:<n>`. */
-  readonly subCallId: ToolCallId
-  /** The dispatched sub-tool name. */
-  readonly name: string
-  /** Whether the sub-call settled as an error. */
-  readonly isError: boolean
-  /** The sub-call's complete model-facing content (the settle event's default payload). */
-  readonly content: ContentBlock[]
+
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
+import type { ContentBlock } from '@deepseek-ai/dsh-llm/types'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+
+/** Payload recorded when one nested PTC mode Tool dispatch starts. */
+export interface PtcDispatchStartEventData {
+  rootCallId: ToolCallId
+  parentCallId: ToolCallId
+  subCallId: ToolCallId
+  name: string
+  arguments: unknown
 }
 
-declare module '@deepseek-ai/cordis' {
-  interface Events {
+/** Payload recorded when one nested PTC mode Tool dispatch settles. */
+export interface PtcDispatchEventData extends PtcDispatchStartEventData {
+  isError: boolean
+  content: ContentBlock[]
+  /** Replayable tool-owned presentation metadata, separate from model content. */
+  meta?: JsonValue
+  /** Optional failure identity and raw user-facing detail, outside model-facing content. */
+  error?: { name: string; code: string; reason?: string }
+}
+
+declare module '@deepseek-ai/dsh-session/types' {
+  interface SessionEventMap {
     /**
-     * Allow a listener to replace content in the DURABLE LOG COPY of one
-     * `run_code` sub-dispatch outcome before the bridge appends its
-     * `tool/ptc-dispatch` event. `next()` keeps the
-     * content unchanged; a listener may return replacement blocks (e.g. the
-     * spill policy's preview + locator for an oversized text result). Only the
-     * logged copy is affected — the program already received the complete
-     * value, and the model sees neither. A throwing listener is contained:
-     * the bridge falls back to logging the original settled content.
-     * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent's dispatches.
-     * @param dispatch - the parent execution, sub-call identity, and the settled content to log.
-     * @mode waterfall
+     * One sub-dispatch STARTING inside a `run_code` program: the parent
+     * `run_code` call id, the opaque sub-call id (new calls use
+     * `<parent>:ptc:<n>`, numbered in submission order), and the tool `name` with its
+     * JSON-normalized `arguments` — the exact value dispatched, normalized
+     * BEFORE dispatch, so this append can never fail on payload shape.
+     * Appended when the scheduler actually starts the call (not at
+     * submission), so a start means the tool body pipeline was entered; a
+     * call abandoned in the queue logs nothing. Log-only: `deriveMessages()`
+     * ignores it; UIs use it for live per-sub-call running state and pair it
+     * with `tool/ptc-dispatch` by `subCallId` (timing = the two events'
+     * `time` fields).
      */
-    'tools/ptc-dispatch-log'(this: Scoped<ToolsService>, dispatch: PtcDispatchLog, next: () => Promise<ContentBlock[]>): Promise<ContentBlock[]>
+    'tool/ptc-dispatch-start': PtcDispatchStartEventData
+    /**
+     * One bridged sub-dispatch SETTLING: the pairing ids (matching the
+     * `tool/ptc-dispatch-start` with the same `subCallId`), the tool `name`
+     * with the same JSON-normalized `arguments`, and the sub-call's complete
+     * durable outcome in `tool/result`'s own vocabulary (`content` + `isError`
+     * + optional presentation `meta` and structured `error`), so UIs and SDKs
+     * render a sub-call through the exact path used for a native call. Every started sub-call settles
+     * with exactly one of these (abort included: the aborted pipeline result
+     * is an `isError` outcome).
+     * Log-only: `deriveMessages()` ignores it, so sub-calls never re-enter
+     * model context; persistence and UIs get every call. Appended inside the
+     * parent `run_code`'s execution (the bridge drains in-flight dispatches
+     * before returning), so its execution-enclosure relation holds by
+     * construction.
+     */
+    'tool/ptc-dispatch': PtcDispatchEventData
   }
 }
 

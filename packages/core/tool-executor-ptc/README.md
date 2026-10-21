@@ -37,7 +37,7 @@ Root `run_code` calls are exclusive and execute serially. `maxParallelSubCalls` 
 
 This package declares `ctx.ptcRuntime` and `ctx.systemPrompt` as required injections; Agent-owned programs need `ctx.workingDirectory`. The executor activates only after its runtime is available and withdraws when that runtime unloads. An enabled PTC executor without a runtime stops application startup. A withdrawn PTC selection never falls back to native execution.
 
-Import durable event payloads from `@deepseek-ai/dsh-tool-executor-ptc/types`; this entry is safe for detached readers and client compilation. Host policy extensions import `PtcDispatchLog`, `tools/ptc-dispatch-log`, and the `ptc-mode` message-source declaration through a type-only import of the package entry, without mounting an executor.
+Shared dispatch events and the `ptc-mode` message-source declaration live in `@deepseek-ai/dsh-tool-executor-ptc/types`; Client code imports the same declarations through `@deepseek-ai/dsh-tool-executor-ptc/client`. Both entries exclude Host service declarations. Host policy extensions use `import type` from the package entry for `PtcDispatchLog` and `tools/ptc-dispatch-log` without mounting the executor.
 
 [Configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-tool-executor-ptc)
 

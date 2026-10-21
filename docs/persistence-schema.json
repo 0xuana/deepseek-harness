@@ -23147,10 +23147,10 @@
     {
       "digest": "2fe5026daf14bd4ff2b7bfb7cf9791c302d9cbba06802178b6dfec00b892698f",
       "names": [
-        "packages/core/tool-executor-ptc/src/session-types.ts#PtcDispatchStartEventData"
+        "packages/core/tool-executor-ptc/src/types.ts#PtcDispatchStartEventData"
       ],
       "sources": [
-        "packages/core/tool-executor-ptc/src/session-types.ts:12"
+        "packages/core/tool-executor-ptc/src/types.ts:12"
       ]
     },
     {
@@ -24920,7 +24920,7 @@
       "names": [],
       "sources": [
         "packages/core/session/src/types.ts:384",
-        "packages/core/tool-executor-ptc/src/session-types.ts:27"
+        "packages/core/tool-executor-ptc/src/types.ts:27"
       ]
     },
     {
@@ -25509,10 +25509,10 @@
     {
       "digest": "cef171adf021a1867d244618a3dbbaafc22beb17c7f3df3ee203393271c8c6f6",
       "names": [
-        "packages/core/tool-executor-ptc/src/session-types.ts#PtcDispatchEventData"
+        "packages/core/tool-executor-ptc/src/types.ts#PtcDispatchEventData"
       ],
       "sources": [
-        "packages/core/tool-executor-ptc/src/session-types.ts:21"
+        "packages/core/tool-executor-ptc/src/types.ts:21"
       ]
     },
     {
@@ -25626,7 +25626,7 @@
       "digest": "dba54c09c6e7aafc9acbed7792ecc920d99f92d0784aeeed10af55f7fe0bc8cd",
       "names": [],
       "sources": [
-        "packages/core/tool-executor-ptc/src/types.ts:53"
+        "packages/core/tool-executor-ptc/src/types.ts:68"
       ]
     },
     {

@@ -6,7 +6,7 @@
  * @module
  */
 
-import type { PtcDispatchLog } from './types.ts'
+import type { PtcDispatchLog } from './runtime-types.ts'
 import { symbols, type Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
@@ -26,7 +26,7 @@ import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import { PtcCalls } from './ptc-calls.ts'
 import { CodeRunFailedError } from './errors.ts'
 import type { ToolDefinition, ToolExecutionResult, ToolRunContext } from '@deepseek-ai/dsh-tools'
-import type {} from './session-types.ts'
+import type {} from './types.ts'
 
 /** The model-facing name of the PTC mode tool. */
 export { RUN_CODE_NAME }

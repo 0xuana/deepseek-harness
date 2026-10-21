@@ -63,8 +63,8 @@ export class PtcExecutor implements ToolExecutor {
 
 export { Config } from './config.ts'
 export { CodeRunFailedError } from './errors.ts'
-export type { PtcDispatchLog } from './types.ts'
-export type { PtcDispatchStartEventData, PtcDispatchEventData } from './session-types.ts'
+export type { PtcDispatchLog } from './runtime-types.ts'
+export type { PtcDispatchStartEventData, PtcDispatchEventData } from './types.ts'
 export { jsonSchemaToTs, renderToolsSdk, type ToolSdkSchema } from './ts-types.ts'
 export { jsonSchemaToPy, renderToolsSdkPy } from './py-types.ts'
 

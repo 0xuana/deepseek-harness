@@ -974,7 +974,7 @@
     {
       "doc": "docs/subsystems/tools.md",
       "symbol": "PtcDispatchLog",
-      "source": "packages/core/tool-executor-ptc/src/types.ts"
+      "source": "packages/core/tool-executor-ptc/src/runtime-types.ts"
     },
     {
       "doc": "docs/subsystems/tools.md",
