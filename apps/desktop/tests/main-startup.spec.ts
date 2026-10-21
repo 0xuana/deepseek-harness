@@ -1299,7 +1299,7 @@ describe('desktop main startup', () => {
     expect(harness.trays[0]!.setContextMenu.mock.calls.length).toBe(relabels + 1)
   })
 
-  it('routes closing a macOS owner with a mandatory view through application quit', async () => {
+  it('hides a macOS owner with a mandatory view without quitting or stopping the Host', async () => {
     vi.stubGlobal('process', { ...process, platform: 'darwin' })
     harness.embeddedPolicy = { origin: 'https://policy.example.com', allowedPageOrigins: ['https://downloads.example.com'] }
     vi.stubGlobal('fetch', vi.fn(async () => Response.json({ code: 40005, data: {
@@ -1307,13 +1307,17 @@ describe('desktop main startup', () => {
     } })))
     const host = await readyWorkspace()
     await harness.policyBlocked.promise
-    harness.windows[0]!.close()
-    expect(harness.app.quit).toHaveBeenCalled()
+    const window = harness.windows[0]!
+    const hides = window.hide.mock.calls.length
+    window.close()
+    expect(window.hide).toHaveBeenCalledTimes(hides + 1)
+    expect(window.isDestroyed()).toBe(false)
+    expect(harness.app.quit).not.toHaveBeenCalled()
     expect(harness.backgroundNotice.close).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(0)
-    expect(host.inspectQuit).toHaveBeenCalledOnce()
-    host.exited.resolve()
-    await harness.quitCompleted.promise
+    expect(host.inspectQuit).not.toHaveBeenCalled()
+    expect(host.stop).not.toHaveBeenCalled()
+    harness.app.emit('activate')
+    expect(window.show).toHaveBeenCalled()
   })
 
   it('keeps the workspace visible while acknowledgement is pending and ignores a destroyed window', async () => {

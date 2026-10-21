@@ -29,24 +29,28 @@ function fakeWindow() {
     isFocused: () => true, isMinimized: () => false, focus: vi.fn(), show: vi.fn(), restore: vi.fn() })
 }
 afterEach(() => { ui?.dispose(); vi.restoreAllMocks(); vi.clearAllMocks(); native.handlers.clear(); vi.useRealTimers() })
-function setup(platform: NodeJS.Platform = 'darwin') {
+function setup(platform: NodeJS.Platform = 'darwin', beforeSync?: (surface: ReturnType<typeof fakeWindow>) => void) {
   vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
   window = fakeWindow()
-  if (platform === 'win32') window.webContents.mainFrame.url = 'dsh-app://app/'
+  const owner = platform === 'win32' ? window : fakeWindow()
+  owner.webContents.mainFrame.url = 'dsh-app://app/'
   let policy: DesktopPolicyState = { blocking: true, checking: false, page: 'https://downloads.example.com/desktop' }
   let update: DesktopUpdateState = { phase: 'ready', version: '1.0.1-nightly.1' }
   const install = vi.fn(async () => update)
   const createOverlay = (): WindowFixture => window
-  const parent = createOverlay as () => BrowserWindow
-  ui = new DesktopMandatoryUpdateWindow({ overlays: { create: parent }, preload: 'owned', locale: resolveDesktopLocale('zh'),
+  const create = createOverlay as () => BrowserWindow
+  const currentParent = (): WindowFixture => platform === 'win32' ? window : owner
+  const parent = currentParent as () => BrowserWindow
+  ui = new DesktopMandatoryUpdateWindow({ overlays: { create }, preload: 'owned', locale: resolveDesktopLocale('zh'),
     allowedPageOrigins: ['https://downloads.example.com'], parent,
     policy: () => policy, update: () => update, refresh: async () => {}, download: async () => update, install })
+  beforeSync?.(window)
   ui.sync()
   const event = { sender: window.webContents, senderFrame: window.webContents.mainFrame }
   const view = () => native.handlers.get(MANDATORY_IPC.status)!(event) as MandatoryUpdateView
   const action = (name: string, version: string = '1.0.1-nightly.1', revision = view().confirmation?.revision) =>
     native.handlers.get(MANDATORY_IPC.action)!(event, name, version, revision)
-  return { view, action, install, policy(next: DesktopPolicyState) { policy = next; ui!.sync() },
+  return { view, action, install, owner, policy(next: DesktopPolicyState) { policy = next; ui!.sync() },
     update(next: DesktopUpdateState) { update = next; ui!.sync() } }
 }
 
@@ -209,10 +213,11 @@ it('updates the same macOS view in the background without showing or focusing th
   const f = setup()
   f.update({ phase: 'downloading', version: '1.0.1-nightly.1', percent: 35 })
   f.update({ phase: 'error', version: '1.0.1-nightly.1', failedOperation: 'download' })
-  expect(window.show).not.toHaveBeenCalled()
-  expect(window.focus).not.toHaveBeenCalled()
+  expect(f.owner).not.toBe(window)
+  expect(f.owner.show).not.toHaveBeenCalled()
+  expect(f.owner.focus).not.toHaveBeenCalled()
   expect(window.loadURL).toHaveBeenCalledOnce()
-  expect(ui!.confirmationWindow).toBe(window)
+  expect(ui!.confirmationWindow).toBe(f.owner)
   expect(f.view().policy.blocking).toBe(true)
 })
 
@@ -222,4 +227,27 @@ it('cancels outstanding approval when the mandatory view is destroyed without cl
   window.webContents.emit('destroyed')
   expect(await approval).toBe(false)
   expect(f.view().policy.blocking).toBe(true)
+})
+
+it.each(['initial', 'recovery'] as const)('keeps the native owner title unchanged after %s view loading fails', async (stage) => {
+  const failure = new Error('view load failed')
+  const report = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const f = setup('darwin', (surface) => {
+    if (stage === 'initial') surface.loadURL.mockRejectedValueOnce(failure)
+  })
+  expect(f.owner).not.toBe(window)
+  if (stage === 'recovery') {
+    window.loadURL.mockRejectedValueOnce(failure)
+    window.webContents.emit('render-process-gone')
+  }
+  await expect(window.loadURL.mock.results.at(-1)!.value).rejects.toBe(failure)
+  expect(f.owner.setTitle).not.toHaveBeenCalled()
+  expect(f.owner.show).not.toHaveBeenCalled()
+  expect(f.owner.focus).not.toHaveBeenCalled()
+  expect(native.quit).not.toHaveBeenCalled()
+  expect(f.view().policy.blocking).toBe(true)
+  expect(report).toHaveBeenCalledWith(expect.stringContaining('mandatory update view'), failure)
+  f.policy({ blocking: false, checking: false })
+  ui!.dispose()
+  expect(f.owner.setTitle).not.toHaveBeenCalled()
 })

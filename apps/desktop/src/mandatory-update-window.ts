@@ -212,16 +212,13 @@ export class DesktopMandatoryUpdateWindow {
       window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
       window.webContents.on('will-navigate', (event, url) => { if (url !== page) event.preventDefault() })
       window.webContents.on('will-redirect', (event) => { event.preventDefault() })
+      const reportLoadFailure = (error: unknown): void => {
+        if (!this.disposed && !window.isDestroyed()) console.error('desktop policy: mandatory update view failed to load', error)
+      }
       window.webContents.on('render-process-gone', () => {
-        if (!this.disposed) void window.loadURL(page).catch(() => {
-          // A failed recovery keeps the parent blocked and leaves application exit available.
-          if (!window.isDestroyed()) parent.setTitle(this.options.locale.messages.mandatoryActionFailed)
-        })
+        if (!this.disposed) void window.loadURL(page).catch(reportLoadFailure)
       })
-      void window.loadURL(page).catch(() => {
-        // The parent stays modal-blocked if its dedicated recovery document cannot load.
-        if (!window.isDestroyed()) parent.setTitle(this.options.locale.messages.mandatoryActionFailed)
-      })
+      void window.loadURL(page).catch(reportLoadFailure)
     }
     this.window.webContents.send(MANDATORY_IPC.state, this.view())
   }
