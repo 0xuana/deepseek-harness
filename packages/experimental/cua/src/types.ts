@@ -55,10 +55,10 @@ export type CuaWindowInfo = z.output<typeof WindowsResult>[number]
 export type CuaActionResult = z.output<typeof ActionResult>
 /** Hover dispatch and the effect on the user's system pointer. */
 export type CuaHoverResult = z.output<typeof HoverResult>
-/** Select screenshot pixels by default or normalized integer coordinates when explicitly requested. */
+/** Select screenshot pixels by default or integer thousandths when explicitly requested. */
 export interface CuaCoordinateOptions {
   /**
-   * True uses integers from 0 to 999, normalized by 999; omitted or false uses the latest screenshot's pixels.
+   * True uses integer thousandths from 0 to 999; omitted or false uses the latest screenshot's pixels.
    * Applies only to coordinate targets.
    */
   relative?: boolean

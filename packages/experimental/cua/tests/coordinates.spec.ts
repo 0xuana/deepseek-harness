@@ -22,14 +22,14 @@ it('maps Retina and downscaled screenshot pixels to the same native point', () =
   }
 })
 
-it.each(['click', 'hover', 'scroll'])('maps 0–999 coordinates for %s independently of screenshot resolution', (method) => {
+it.each(['click', 'hover', 'scroll'])('preserves thousandth scaling for %s across screenshot resolutions', (method) => {
   const coordinates = new CuaCoordinates()
   const bounds = window(1200, 900).bounds
   coordinates.observe(handle, [window(1200, 900)])
   const params = { relative: true, ...method === 'scroll' ? { deltaLinesX: 0, deltaLinesY: -1 } : {} }
   const assertPoints = () => {
-    expect(coordinates.parameters(call(method, { ...params, x: 333, y: 666 }))).toMatchObject({ x: 400, y: 600 })
-    expect(coordinates.parameters(call(method, { ...params, x: 999, y: 999 }))).toMatchObject({ x: 1199, y: 899 })
+    expect(coordinates.parameters(call(method, { ...params, x: 500, y: 250 }))).toMatchObject({ x: 600, y: 225 })
+    expect(coordinates.parameters(call(method, { ...params, x: 999, y: 999 }))).toMatchObject({ x: 1198.8, y: 899 })
     expect(coordinates.parameters(call(method, { ...params, x: 0, y: 0 }))).toMatchObject({ x: 0, y: 0 })
   }
   assertPoints()
@@ -42,9 +42,9 @@ it.each(['click', 'hover', 'scroll'])('maps 0–999 coordinates for %s independe
 it('maps relative drag endpoints and keeps 999 inside a one-point window', () => {
   const coordinates = new CuaCoordinates()
   coordinates.observe(handle, [window(1200, 900)])
-  const params = { fromX: 0, fromY: 333, toX: 999, toY: 666, relative: true }
+  const params = { fromX: 0, fromY: 250, toX: 999, toY: 500, relative: true }
   expect(coordinates.parameters(call('drag', params))).toEqual({ appHandle: handle, windowId: 7,
-    fromX: 0, fromY: 300, toX: 1199, toY: 600 })
+    fromX: 0, fromY: 225, toX: 1198.8, toY: 450 })
   coordinates.observe(handle, [window(1, 1)])
   expect(coordinates.parameters(call('click', { x: 999, y: 999, relative: true }))).toMatchObject({ x: 0, y: 0 })
 })

@@ -17,7 +17,7 @@ const window = { ...app, windowId: id }
 const snapshot = { ...app, snapshotId: z.string().min(1), elementIndex: z.number().int().nonnegative() }
 const coordinate = { ...window, snapshotId: z.string().min(1).optional(), x: point, y: point }
 const absoluteCoordinate = { ...coordinate, relative: z.literal(false).optional().describe('Omitted or false uses pixels in the latest screenshot returned by this tool.') }
-const relativeCoordinate = { ...coordinate, relative: z.literal(true).describe('Use integer coordinates from 0 to 999, normalized by 999 to the window width and height.'), x: relativePoint, y: relativePoint }
+const relativeCoordinate = { ...coordinate, relative: z.literal(true).describe('Use integer thousandths of the window width and height, from 0 to 999.'), x: relativePoint, y: relativePoint }
 const bounds = z.object({
   x: z.number(), y: z.number(), width: z.number().nonnegative(), height: z.number().nonnegative(),
 })
@@ -66,7 +66,7 @@ export const Request = z.discriminatedUnion('method', [
   z.object({ method: z.literal('drag'), params: z.union([
     z.object({ ...window, ...pointer, snapshotId: z.string().min(1).optional(), relative: z.literal(false).optional(),
       fromX: point, fromY: point, toX: point, toY: point }).strict(),
-    z.object({ ...window, ...pointer, snapshotId: z.string().min(1).optional(), relative: z.literal(true),
+    z.object({ ...window, ...pointer, snapshotId: z.string().min(1).optional(), relative: relativeCoordinate.relative,
       fromX: relativePoint, fromY: relativePoint, toX: relativePoint, toY: relativePoint }).strict(),
   ]) }).strict(),
   operation('screenshot', window),
