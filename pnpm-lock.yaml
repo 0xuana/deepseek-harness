@@ -81,6 +81,9 @@ importers:
       '@deepseek-ai/dsh-hooks-codex':
         specifier: workspace:*
         version: link:packages/experimental/hooks-codex
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:*
+        version: link:packages/llm/llm
       '@deepseek-ai/dsh-llm-replay':
         specifier: workspace:*
         version: link:packages/test-support/llm-replay
