@@ -162,6 +162,7 @@ function renderTab(
   }
   const navigation = createNavigationStore().create()
   const props: PluginManagerPageProps = {
+    createHeaderRef: vi.fn(() => vi.fn()),
     useStore: bindSnapshotSelector(navigation), actions: navigation.actions,
     ...standard,
     t,
@@ -276,56 +277,20 @@ describe('PluginManagerPage', () => {
     expect(screen.getByRole('tabpanel', { name: 'Discover' })).toBeTruthy()
   })
 
-  it('collapses the page bar to one row while the page body is scrolled', () => {
-    const { setTabs } = renderTab({ packages: [pkg()] })
+  it('keeps the header controls in the scrolling page without remounting them', () => {
+    const { setTabs, props, hidePage } = renderTab({ packages: [pkg()] })
     const bar = document.querySelector('[data-plugin-bar]')
-    const body = document.querySelector('[data-plugin-body]')
-    expect(bar?.hasAttribute('data-compact')).toBe(false)
+    const body = document.querySelector('[data-plugin-body]')!
+    const refresh = screen.getByRole('button', { name: en.refresh })
+    expect(bar?.parentElement).toBe(body)
+    expect(props.createHeaderRef).toHaveBeenCalledTimes(1)
     setTabs([{ id: 'discover', label: 'Discover' }])
-    // The tabs take the collapsed row beside the actions, so they sit in the pinned head itself.
-    expect(screen.getByRole('tablist').closest('header')?.closest('[data-plugin-bar]')).not.toBeNull()
-    act(() => {
-      if (body === null) throw new Error('the page body is missing')
-      body.scrollTop = 160
-      fireEvent.scroll(body)
-    })
-    expect(bar?.hasAttribute('data-compact')).toBe(true)
-    act(() => {
-      if (body === null) throw new Error('the page body is missing')
-      Object.defineProperties(body, { scrollHeight: { configurable: true, value: 900 }, clientHeight: { configurable: true, value: 400 } })
-      body.scrollTop = 0
-      fireEvent.scroll(body)
-    })
-    expect(bar?.hasAttribute('data-compact')).toBe(false)
-  })
-
-  it('keeps the collapsed bar when collapsing makes the list fit, and reopens it on an upward scroll', () => {
-    renderTab({ packages: [pkg()] })
-    const bar = document.querySelector('[data-plugin-bar]')
-    const body = document.querySelector<HTMLElement>('[data-plugin-body]')
-    if (body === null) throw new Error('the page body is missing')
-    const range = (scrollHeight: number): void => {
-      Object.defineProperties(body, {
-        scrollHeight: { configurable: true, value: scrollHeight },
-        clientHeight: { configurable: true, value: 400 },
-      })
-    }
-    range(440)
-    act(() => { body.scrollTop = 20; fireEvent.scroll(body) })
-    expect(bar?.hasAttribute('data-compact')).toBe(true)
-    // The taller body now holds the whole list, and the browser clamps the scroll position to 0.
-    range(400)
-    act(() => { body.scrollTop = 0; fireEvent.scroll(body) })
-    expect(bar?.hasAttribute('data-compact')).toBe(true)
-    act(() => { fireEvent.wheel(body, { deltaY: 40 }) })
-    expect(bar?.hasAttribute('data-compact')).toBe(true)
-    act(() => { fireEvent.wheel(body, { deltaY: -40 }) })
-    expect(bar?.hasAttribute('data-compact')).toBe(false)
-    // A wheel over a list that still scrolls leaves the bar to the scroll position.
-    range(900)
-    act(() => { body.scrollTop = 20; fireEvent.scroll(body) })
-    act(() => { fireEvent.wheel(body, { deltaY: -40 }) })
-    expect(bar?.hasAttribute('data-compact')).toBe(true)
+    expect(screen.getByRole('tablist').closest('header')?.closest('[data-plugin-bar]')).toBe(bar)
+    act(() => { body.scrollTop = 160; fireEvent.scroll(body) })
+    expect(screen.getByRole('button', { name: en.refresh })).toBe(refresh)
+    expect(props.createHeaderRef).toHaveBeenCalledTimes(1)
+    hidePage()
+    expect(document.querySelector('[data-plugin-bar]')).toBeNull()
   })
 
   it('keeps the Installed tab panel through loading and the More list out of the tabs', () => {

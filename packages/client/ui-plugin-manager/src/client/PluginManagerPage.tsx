@@ -22,6 +22,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import type { createNavigationStore } from './navigation-store.ts'
+import type { PluginHeaderLayoutFace } from './header-scroll.ts'
 import { rowConfigKey, type OfficialItem } from './config-ledger.ts'
 import { INSTALL_GIT_EXAMPLE, INSTALL_PATH_EXAMPLE, type PluginManagerLocaleKey } from './locales.ts'
 import {
@@ -49,7 +50,7 @@ export type PluginManagerPageProps =
     | 'plugins.add.actions' | 'plugins.tab'
     | 'plugins.detail.actions' | 'plugins.detail.badge' | 'plugins.detail.section'
   >
-  & InjectFace<PluginManagerFace>
+  & InjectFace<PluginManagerFace & PluginHeaderLayoutFace>
   & PropsStore<ReturnType<typeof createNavigationStore>>
 
 /** The page's slot renderer, narrowed to the configuration slots. */
@@ -100,9 +101,6 @@ function AddPluginMenu({ t, disabled, openInstall, renderSlot }: {
 
 /** How long the list marks a package an install just enabled. */
 const HIGHLIGHT_MS = 2_400
-
-/** Scrolled distance past which the page bar collapses to one row. */
-const COMPACT_BAR_SCROLL_TOP = 8
 
 /** Built-in profile bundles stay out of this page even when the profile declares them as dependencies. */
 const BUILTIN_PROFILE_BUNDLES = new Set([
@@ -1564,8 +1562,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   useEffect(() => { if (tab !== selectedTab) setTab(tab) }, [tab, selectedTab, setTab])
   const tabsId = useId()
   const [activation, setActivation] = useState<string | null>(null)
-  // The bar keeps one row while the list is scrolled, as the page heading only needs its resting height at the top.
-  const [compactBar, setCompactBar] = useState(false)
+  const [headerRef] = useState(props.createHeaderRef)
   useEffect(() => { ensure() }, [ensure])
   // Installation highlights visible cards without changing the user's current page.
   const { highlight, clearHighlight } = { highlight: state.highlight, clearHighlight: props.clearHighlight }
@@ -1658,66 +1655,6 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
 
   return (
     <section className={css.page} data-plugin-panel aria-busy={state.status === 'loading' || refreshing}>
-      {showsMainList
-        ? (
-          <div
-            className={`${css.pageBar}${tabs.length > 0 ? ` ${css.pageBarWithTabs}` : ''}`}
-            data-plugin-bar
-            data-compact={compactBar ? '' : undefined}
-          >
-            <header className={css.pageHead} data-window-drag>
-              <div className={css.pageHeading}>
-                <h1 className={css.pageTitle}>{t('title')}</h1>
-                <div className={css.pageIntro}>
-                  <span>{t('intro')}</span>
-                  <Tooltip label={t('infoDescription')} side="bottom" delayMs={300} maxWidth={300} portal openOnClick>
-                    <Button variant="ghost" size="sm" className={css.infoButton} aria-label={t('infoLabel')}>
-                      <IconInfoOutlineRegular size={11} aria-hidden="true" />
-                    </Button>
-                  </Tooltip>
-                </div>
-              </div>
-              <div className={css.toolbar} data-plugin-toolbar hidden={!onInstalled}>
-                {updates === undefined ? null : <span className={css.updatesNote} data-tone={updates.tone}>{updates.text}</span>}
-                <Tooltip label={t('refresh')} delayMs={500} focusDelayMs={500} side="bottom" portal disabled={!loaded || refreshing}>
-                  <Button variant="outline" size="sm" className={css.addButton} aria-label={t('refresh')} aria-busy={refreshing}
-                    disabled={!loaded || refreshing} onClick={props.refresh}
-                    icon={refreshing ? <StateDot state="ongoing" size={13} /> : <IconRefreshOutlineRegular size={13} />}>
-                    <span className={css.toolbarLabel}>{t('refresh')}</span>
-                  </Button>
-                </Tooltip>
-                {state.install.requestId === undefined
-                  ? <AddPluginMenu t={t} disabled={!loaded} openInstall={props.openInstall} renderSlot={renderSlot} />
-                  : (
-                    <Tooltip label={t('installViewTask')} side="bottom" delayMs={500} focusDelayMs={500} portal disabled={!loaded}>
-                      <Button variant="primary" size="sm" className={css.addButton} icon={<IconPlusOutlineRegular size={13} />}
-                        aria-label={t('installViewTask')} disabled={!loaded} onClick={props.openInstall}>
-                        <span className={css.toolbarLabel}>{t('installViewTask')}</span>
-                      </Button>
-                    </Tooltip>
-                  )}
-              </div>
-              {tabs.length > 0
-                ? (
-                  <div className={css.pageTabs}>
-                    <SegmentedTabs
-                      size="sm"
-                      className={css.pageTabList}
-                      label={t('tabsLabel')}
-                      value={tab}
-                      onChange={(next) => { setTab(next) }}
-                      items={[
-                        { value: INSTALLED_TAB, label: t('installedTab'), id: `${tabsId}-${INSTALLED_TAB}`, panelId: `${tabsId}-${INSTALLED_TAB}-panel` },
-                        ...tabs.map(item => ({ value: item.id, label: item.label, id: `${tabsId}-${item.id}`, panelId: `${tabsId}-${item.id}-panel` })),
-                      ]}
-                    />
-                  </div>
-                )
-                : null}
-            </header>
-          </div>
-        )
-        : null}
       {showsMoreList ? (
         <header className={css.moreHead} data-window-drag>
           <Button size="sm" className={css.moreBack} aria-label={t('backToList')} onClick={() => { setView({ kind: 'list' }) }}>
@@ -1726,20 +1663,68 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
           <h1 className={css.pageTitle}>{t('moreTitle')}</h1>
         </header>
       ) : null}
-      {/* The page bar and the More list's head stay put; everything below scrolls. */}
-      <div className={css.pageBody} data-plugin-body
-        onScroll={(event) => {
-          const body = event.currentTarget
-          if (body.scrollTop > COMPACT_BAR_SCROLL_TOP) setCompactBar(true)
-          // Collapsing grows the body, so a list that only just scrolled can fit and clamp to 0 without
-          // the person scrolling up; the bar reopens at the top only while the list still scrolls.
-          else if (body.scrollTop === 0 && body.scrollHeight > body.clientHeight) setCompactBar(false)
-        }}
-        onWheel={(event) => {
-          // A list that fits only under the collapsed bar has no scroll range; scrolling up reopens the bar.
-          const body = event.currentTarget
-          if (event.deltaY < 0 && body.scrollHeight <= body.clientHeight) setCompactBar(false)
-        }}>
+      <div className={css.pageBody} data-plugin-body>
+        {showsMainList
+          ? (
+            <div
+              className={`${css.pageBar}${tabs.length > 0 ? ` ${css.pageBarWithTabs}` : ''}`}
+              data-plugin-bar
+              ref={headerRef}
+            >
+              <header className={css.pageHead} data-window-drag>
+                <div className={css.pageHeading}>
+                  <h1 className={css.pageTitle} data-plugin-header-part="title">{t('title')}</h1>
+                  <div className={css.pageIntro} data-plugin-header-part="intro">
+                    <span>{t('intro')}</span>
+                    <Tooltip label={t('infoDescription')} side="bottom" delayMs={300} maxWidth={300} portal openOnClick>
+                      <Button variant="ghost" size="sm" className={css.infoButton} aria-label={t('infoLabel')}>
+                        <IconInfoOutlineRegular size={11} aria-hidden="true" />
+                      </Button>
+                    </Tooltip>
+                  </div>
+                </div>
+                <div className={css.toolbar} data-plugin-toolbar data-plugin-header-part="toolbar" hidden={!onInstalled}>
+                  {updates === undefined ? null : <span className={css.updatesNote} data-tone={updates.tone}>{updates.text}</span>}
+                  <Tooltip label={t('refresh')} delayMs={500} focusDelayMs={500} side="bottom" portal disabled={!loaded || refreshing}>
+                    <Button variant="outline" size="sm" className={css.addButton} aria-label={t('refresh')} aria-busy={refreshing}
+                      disabled={!loaded || refreshing} onClick={props.refresh}
+                      icon={refreshing ? <StateDot state="ongoing" size={13} /> : <IconRefreshOutlineRegular size={13} />}>
+                      <span className={css.toolbarLabel}>{t('refresh')}</span>
+                    </Button>
+                  </Tooltip>
+                  {state.install.requestId === undefined
+                    ? <AddPluginMenu t={t} disabled={!loaded} openInstall={props.openInstall} renderSlot={renderSlot} />
+                    : (
+                      <Tooltip label={t('installViewTask')} side="bottom" delayMs={500} focusDelayMs={500} portal disabled={!loaded}>
+                        <Button variant="primary" size="sm" className={css.addButton} icon={<IconPlusOutlineRegular size={13} />}
+                          aria-label={t('installViewTask')} disabled={!loaded} onClick={props.openInstall}>
+                          <span className={css.toolbarLabel}>{t('installViewTask')}</span>
+                        </Button>
+                      </Tooltip>
+                    )}
+                </div>
+                {tabs.length > 0
+                  ? (
+                    <div className={css.pageTabs} data-plugin-header-part="tabs">
+                      <SegmentedTabs
+                        size="sm"
+                        className={css.pageTabList}
+                        label={t('tabsLabel')}
+                        value={tab}
+                        onChange={(next) => { setTab(next) }}
+                        items={[
+                          { value: INSTALLED_TAB, label: t('installedTab'), id: `${tabsId}-${INSTALLED_TAB}`, panelId: `${tabsId}-${INSTALLED_TAB}-panel` },
+                          ...tabs.map(item => ({ value: item.id, label: item.label, id: `${tabsId}-${item.id}`, panelId: `${tabsId}-${item.id}-panel` })),
+                        ]}
+                      />
+                    </div>
+                  )
+                  : null}
+              </header>
+            </div>
+          )
+          : null}
+
         {!onInstalled
           ? (
             <div role="tabpanel" id={`${tabsId}-${tab}-panel`} aria-labelledby={`${tabsId}-${tab}`} className={css.tabPanel}>

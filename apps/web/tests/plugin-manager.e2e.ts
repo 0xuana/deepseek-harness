@@ -132,12 +132,22 @@ describe('web e2e: plugin manager', () => {
           const measure = () => header.evaluate((element) => {
             const heading = element.firstElementChild!
             const actions = element.querySelector('[data-plugin-toolbar]')!
-            const headingRect = heading.getBoundingClientRect()
+            const titleRect = heading.querySelector('h1')!.getBoundingClientRect()
+            const introRect = heading.querySelector('h1 + div')!.getBoundingClientRect()
+            const headingRect = {
+              right: Math.max(titleRect.right, introRect.right),
+              bottom: Math.max(titleRect.bottom, introRect.bottom),
+              width: Math.max(titleRect.right, introRect.right) - Math.min(titleRect.left, introRect.left),
+            }
             const actionRect = actions.getBoundingClientRect()
             const headerRect = element.getBoundingClientRect()
             const intrinsicHeading = heading.cloneNode(true) as HTMLElement
+            intrinsicHeading.querySelectorAll('[data-plugin-header-part]').forEach((part) => {
+              part.removeAttribute('data-plugin-header-part')
+              part.removeAttribute('style')
+            })
             Object.assign(intrinsicHeading.style, {
-              position: 'absolute', width: 'max-content', maxWidth: 'none', visibility: 'hidden', pointerEvents: 'none',
+              display: 'block', position: 'absolute', width: 'max-content', maxWidth: 'none', visibility: 'hidden', pointerEvents: 'none',
             })
             element.append(intrinsicHeading)
             let intrinsicHeadingWidth: number
@@ -201,6 +211,7 @@ describe('web e2e: plugin manager', () => {
           const previousWrap = await header.evaluate((element) => {
             const style = element.style
             const previous = { value: style.getPropertyValue('flex-wrap'), priority: style.getPropertyPriority('flex-wrap') }
+            element.parentElement!.removeAttribute('data-natural')
             style.setProperty('flex-wrap', 'nowrap')
             return previous
           })
@@ -213,6 +224,7 @@ describe('web e2e: plugin manager', () => {
             await header.evaluate((element, previous) => {
               if (previous.value === '') element.style.removeProperty('flex-wrap')
               else element.style.setProperty('flex-wrap', previous.value, previous.priority)
+              element.parentElement!.setAttribute('data-natural', '')
             }, previousWrap)
           }
           await probe.setViewportSize({ width: 390, height: 1000 })
@@ -280,7 +292,7 @@ describe('web e2e: plugin manager', () => {
         // The collapsed bar hides the title visually but keeps the page's heading for assistive technology.
         expect(await bar.getByRole('heading', { name: 'Plugins', level: 1, exact: true }).count()).toBe(1)
       }
-      // With tabs, collapsing frees more height than a list just taller than the window scrolls.
+      // A short list keeps its range even when the available travel cannot fully compact the tabs.
       await probe.setViewportSize({ width: 1280, height: 480 })
       await body.evaluate((element) => { element.scrollTop = 0 })
       await expect.poll(() => bar.evaluate(element => element.hasAttribute('data-compact'))).toBe(false)
@@ -289,13 +301,9 @@ describe('web e2e: plugin manager', () => {
       await expect.poll(() => body.evaluate(element => element.scrollHeight - element.clientHeight)).toBe(30)
       await probe.mouse.move(800, 400)
       await probe.mouse.wheel(0, 200)
-      await expect.poll(() => bar.evaluate(element => element.hasAttribute('data-compact'))).toBe(true)
-      expect(await bar.evaluate(element => new Promise<number>((resolve) => {
-        let count = 0
-        const observer = new MutationObserver(() => { count++ })
-        observer.observe(element, { attributes: true, attributeFilter: ['data-compact'] })
-        setTimeout(() => { observer.disconnect(); resolve(count) }, 500)
-      }))).toBe(0)
+      await expect.poll(() => body.evaluate(element => element.scrollTop)).toBe(30)
+      expect(await body.evaluate(element => element.scrollHeight - element.clientHeight)).toBe(30)
+      expect(await bar.evaluate(element => element.hasAttribute('data-compact'))).toBe(false)
       await probe.setViewportSize({ width: 390, height: 480 })
       await refresh.hover()
       await probe.getByRole('tooltip', { name: 'Refresh', exact: true }).waitFor()
@@ -310,38 +318,6 @@ describe('web e2e: plugin manager', () => {
     } finally {
       await context.close()
       await compactScaffold.close()
-    }
-  })
-
-  it('keeps the collapsed bar steady when collapsing lets a barely scrolling list fit', async () => {
-    await page.setViewportSize({ width: 1000, height: 480 })
-    const panel = await openPluginsPanel()
-    const body = panel.locator('[data-plugin-body]')
-    const compact = () => panel.locator('[data-plugin-bar]').evaluate(element => element.hasAttribute('data-compact'))
-    try {
-      await panel.locator('[data-plugin-package]').first().waitFor()
-      // Size the window so the resting bar leaves the list 12px of scroll range, less than collapsing frees.
-      const range = await body.evaluate(element => element.scrollHeight - element.clientHeight)
-      await page.setViewportSize({ width: 1000, height: 480 + range - 12 })
-      await expect.poll(() => body.evaluate(element => element.scrollHeight - element.clientHeight)).toBe(12)
-      await page.mouse.move(500, 400)
-      await page.mouse.wheel(0, 200)
-      await expect.poll(compact).toBe(true)
-      expect(await body.evaluate(element => element.scrollHeight - element.clientHeight)).toBeLessThanOrEqual(0)
-      // The clamp back to the top must not reopen the bar and loop the layout.
-      const flips = await panel.locator('[data-plugin-bar]').evaluate(element => new Promise<number>((resolve) => {
-        let count = 0
-        const observer = new MutationObserver(() => { count++ })
-        observer.observe(element, { attributes: true, attributeFilter: ['data-compact'] })
-        setTimeout(() => { observer.disconnect(); resolve(count) }, 500)
-      }))
-      expect(flips).toBe(0)
-      expect(await compact()).toBe(true)
-      await page.mouse.wheel(0, -200)
-      await expect.poll(compact).toBe(false)
-    } finally {
-      await body.evaluate((element) => { element.scrollTop = 0 })
-      await page.setViewportSize({ width: 1680, height: 1000 })
     }
   })
 
@@ -367,13 +343,12 @@ describe('web e2e: plugin manager', () => {
       const bottom = await body.evaluate(element => element.scrollTop)
       expect(bottom).toBeGreaterThan(100)
       expect(await headerTop()).toBe(resting)
-      // Scrolled, the bar collapses to one row above a divider; it keeps its place at the top.
+      // The painted bar compacts while its document-flow height remains unchanged.
       await page.waitForFunction(() => document.querySelector('[data-plugin-bar]')?.hasAttribute('data-compact') === true)
-      expect(await barHeight()).toBeLessThan(restingHeight)
+      expect(await barHeight()).toBe(restingHeight)
       expect(await bar.evaluate(element => getComputedStyle(element, '::after').borderBottomWidth)).not.toBe('0px')
-      const barBottomAtScroll = await bar.evaluate(element => element.getBoundingClientRect().bottom)
-      expect(await body.evaluate(element => element.getBoundingClientRect().top)).toBeCloseTo(barBottomAtScroll, 1)
-      expect(await bar.evaluate(element => Number.parseFloat(getComputedStyle(element).paddingBottom))).toBe(16)
+      expect(await bar.evaluate(element => Number.parseFloat(getComputedStyle(element, '::before').height))).toBe(64)
+      expect(await body.evaluate(element => element.getBoundingClientRect().top)).toBe(resting)
       expect(await Promise.all([refreshButton.boundingBox(), addButton.boundingBox()]))
         .toEqual(restingActions.map((bounds) => {
           if (bounds === null) throw new Error('Plugin toolbar action is not visible')
@@ -381,7 +356,7 @@ describe('web e2e: plugin manager', () => {
         }))
       // Reverse keyboard navigation scrolls each focused control into view below the bar, never under it.
       await panel.locator('[data-plugin-package] [role="switch"]').last().focus()
-      const barBottom = await panel.locator('[data-plugin-bar]').evaluate(element => element.getBoundingClientRect().bottom)
+      const barBottom = await bar.evaluate(element => element.getBoundingClientRect().top + Number.parseFloat(getComputedStyle(element, '::before').height))
       const hidden: string[] = []
       for (let step = 0; step < 30; step++) {
         await page.keyboard.press('Shift+Tab')
@@ -389,7 +364,7 @@ describe('web e2e: plugin manager', () => {
           const element = document.activeElement
           const box = element?.getBoundingClientRect()
           return {
-            inBody: element?.closest('[data-plugin-body]') !== null,
+            inBody: element?.closest('[data-plugin-body]') !== null && element?.closest('[data-plugin-bar]') === null,
             top: box?.top ?? 0,
             name: element?.getAttribute('aria-label') ?? element?.textContent ?? '',
           }
@@ -412,7 +387,7 @@ describe('web e2e: plugin manager', () => {
         return {
           left: barBounds.left + Number.parseFloat(dividerStyle.left) - bounds.left,
           right: barBounds.right - Number.parseFloat(dividerStyle.right) - bounds.right,
-          gap: bodyBounds.top - barBounds.bottom,
+          gap: bodyBounds.top - barBounds.top,
         }
       })).toEqual({ left: 0, right: 0, gap: 0 })
     } finally {
@@ -1302,7 +1277,7 @@ describe('web e2e: plugin manager', () => {
     expect(tripwire.warnings).toEqual([])
     await assertFixtureInventory(SNAPSHOT_DIR, [
       'manager.expected.md', 'live-enabled.expected.md', 'missing-bundle.expected.md', 'exports.expected.md', 'exports-en.expected.md', 'icons.expected.md', 'loading.expected.md', 'refresh.expected.md',
-      'ime-enter.expected.md', 'header-responsive.expected.md', 'preview.expected.md',
+      'ime-enter.expected.md', 'header-responsive.expected.md', 'header-natural-motion.expected.md', 'preview.expected.md',
     ])
   })
 })

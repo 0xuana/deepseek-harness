@@ -1,5 +1,5 @@
-/* Plugin manager page: a centred column. The page bar (title, actions, tabs) or the More list's head
-   stays at the top; `.pageBody` scrolls the notices, cards, and detail views beneath it. */
+/* Plugin manager page: the main header and content share one scroller; the header retains its flow height.
+   The More list has a separate fixed head, and detail views scroll with their content. */
 
 .page {
   --plugin-page-inset: clamp(24px, 4vw, 48px);
@@ -24,12 +24,13 @@
   max-width: 960px;
 }
 
-.page > .pageBar {
+.pageBody > .pageBar {
   container: plugin-page-bar / inline-size;
+  align-self: flex-start;
   position: relative;
   display: flex;
   flex-direction: column;
-  width: calc(100% + 2 * var(--plugin-page-inset));
+  width: calc(100% + 2 * var(--plugin-page-inset) + var(--plugin-page-scrollbar-width, 0px));
   max-width: none;
   margin-inline: calc(-1 * var(--plugin-page-inset));
   box-sizing: border-box;
@@ -55,7 +56,10 @@
   gap: 32px;
   box-sizing: border-box;
   padding: 0 var(--plugin-page-inset) 48px;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  position: relative;
+  scroll-padding-top: var(--plugin-header-scroll-padding, 0px);
 }
 
 /* The initial list inset scrolls away; the scroll viewport meets the fixed bar directly. */
@@ -64,8 +68,74 @@
 }
 
 .pageBody > * {
+  flex: none;
   width: 100%;
   max-width: 960px;
+}
+
+/* Endpoint copies never enter the scroll layout or the accessibility tree. */
+.pageBody > .pageBar[data-measuring] {
+  position: absolute;
+  top: 0;
+  left: 0;
+  margin: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.pageBody > .pageBar[data-natural] {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.pageBar[data-natural] .pageHead {
+  position: relative;
+  height: var(--plugin-header-rest-height);
+  clip-path: inset(0 0 max(0px, calc(var(--plugin-header-rest-height) - var(--plugin-header-paint-height))) 0);
+  pointer-events: auto;
+}
+
+.pageBar[data-natural] .pageHeading {
+  display: contents;
+}
+
+.pageBar[data-natural] [data-plugin-header-part] {
+  position: absolute;
+  left: var(--plugin-part-x);
+  top: var(--plugin-part-y);
+  width: var(--plugin-part-width);
+  margin: 0;
+  pointer-events: auto;
+}
+
+.pageBar[data-natural] .pageTabs {
+  z-index: 2;
+  pointer-events: none;
+}
+
+.pageBar[data-natural] .pageTabList {
+  pointer-events: auto;
+}
+
+.pageBar[data-natural]::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: var(--plugin-header-paint-height, var(--plugin-header-rest-height));
+  background: var(--dsw-alias-bg-base);
+  pointer-events: none;
+}
+
+.pageBar[data-natural][data-compact]::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: var(--plugin-header-compact-height);
+  box-sizing: border-box;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
 }
 
 .pageHead {
@@ -1579,24 +1649,26 @@ label.registryOption {
 }
 
 /* Keep spacing inside the compact bar, above its divider rather than outside the scroll viewport. */
-.pageBar[data-compact] {
+.pageBar[data-compact]:not([data-natural]) {
   --plugin-page-top-inset: 16px;
 
   padding-bottom: 16px;
 }
 
 /* With the sidebar open, native window controls sit in the sidebar rather than above the page. */
-:global([data-platform='darwin']) .pageBar[data-compact] .pageHead {
+:global([data-platform='darwin']) .pageBar[data-compact]:not([data-natural]) .pageHead {
   padding-top: var(--plugin-page-top-inset);
 }
 
 /* Collapsing the sidebar moves those controls above the page; the compact bar then clears them. */
-:global([data-platform='darwin']) :global([data-sidebar-collapsed]) .pageBar[data-compact] .pageHead {
+:global([data-platform='darwin']) :global([data-sidebar-collapsed]) .pageBar[data-compact]:not([data-natural]) .pageHead {
+  --plugin-page-top-inset: 8px;
+
   padding-top: calc(var(--plugin-page-top-inset) + var(--dsh-frame-top-clearance, 0px));
 }
 
 /* The collapsed bar's divider spans the page like the scrolled list and its scrollbar. */
-.pageBar[data-compact]::after {
+.pageBar[data-compact]:not([data-natural])::after {
   content: '';
   position: absolute;
   inset-inline: 0;
@@ -1605,16 +1677,16 @@ label.registryOption {
   pointer-events: none;
 }
 
-.pageBar[data-compact] .pageHead {
+.pageBar[data-compact]:not([data-natural]) .pageHead {
   align-items: center;
 }
 
-.pageBar[data-compact] .pageIntro {
+.pageBar[data-compact]:not([data-natural]) .pageIntro {
   display: none;
 }
 
 /* Visually hidden rather than removed, so the page keeps its only heading for assistive technology. */
-.pageBarWithTabs[data-compact] .pageHeading {
+.pageBarWithTabs[data-compact]:not([data-natural]) .pageHeading {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -1623,7 +1695,7 @@ label.registryOption {
   white-space: nowrap;
 }
 
-.pageBarWithTabs[data-compact] .pageTabs {
+.pageBarWithTabs[data-compact]:not([data-natural]) .pageTabs {
   order: 1;
   flex: 0 0 auto;
 }
@@ -1634,6 +1706,23 @@ label.registryOption {
 }
 
 @container plugin-page-bar (width < 600px) {
+  .pageBarWithTabs .pageHead {
+    align-items: center;
+  }
+
+  .pageBarWithTabs .pageHeading {
+    flex-basis: 100%;
+  }
+
+  .pageBarWithTabs .pageTabs {
+    order: 2;
+    flex: 0 0 auto;
+  }
+
+  .pageBarWithTabs .toolbar {
+    order: 3;
+  }
+
   .toolbarLabel {
     display: none;
   }
