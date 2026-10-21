@@ -497,6 +497,35 @@ test('publishes setup phases without evaluating or installing dependencies', asy
   await assert.rejects(publishApprovalPhase({ ...options, phase: 'success' }), /invalid approval setup phase/u)
 })
 
+test('publishes the check run through the App token when one is provided', async () => {
+  const statusCalls = []
+  const checkCalls = []
+  await runPublisher({
+    event: pullRequestEvent(), policySource, runUrl: 'https://github.example/run/1', write: () => {},
+    getOwnership: async () => ({ totalLines: 0, reviewerLines: {} }),
+    getMergedCount: async () => 0,
+    api: async (path, options = {}) => {
+      statusCalls.push({ path, body: options.body })
+      if (path.includes('/reviews?')) return [review('writer', 'APPROVED')]
+      if (path.includes('/collaborators/writer/permission')) return { permission: 'write' }
+      if (path.includes('/comments?')) return []
+      if (path.includes('/statuses/')) return {}
+      throw new Error(`unexpected status API path ${path}`)
+    },
+    checkApi: async (path, options = {}) => {
+      checkCalls.push({ path, body: options.body })
+      if (isCheckRunsList(path)) return emptyCheckRuns
+      if (path.includes('/check-runs')) return {}
+      throw new Error(`unexpected check API path ${path}`)
+    },
+  })
+  assert.equal(statusCalls.at(-1).body.context, 'weighted approval')
+  assert.equal(checkCalls.at(-1).body.name, 'weighted approval decision')
+  assert.equal(checkCalls.at(-1).body.conclusion, 'action_required')
+  assert.ok(statusCalls.every(call => !call.path.includes('/check-runs')))
+  assert.ok(checkCalls.every(call => !call.path.includes('/statuses/')))
+})
+
 test('keeps the status gate when the label write fails', async () => {
   const writes = []
   const states = []
