@@ -45,6 +45,8 @@ Choose **Add workspace** and select a directory to register it and open a Sessio
 
 Hierarchy uses registered canonical paths only. It does not scan for projects or resolve symlink aliases. Nesting does not change Session working directories, logs, or Workspace membership. Deleting a parent Workspace leaves its child Workspaces registered and places them under their next registered ancestor, or at the root.
 
+On devices without hover, Workspace rows keep their menu and New Session controls visible, and archived search results keep the Unarchive control visible.
+
 ### Search
 
 Collapsed search is one header action beside the view and add actions: activating it expands the field across the header. A non-blank query replaces either browsing mode with one flat result list — case-insensitive title, Workspace, and Session id substring matches appear immediately, while a 250 ms debounced Host request adds ranked current-conversation content matches and snippets. Each new query aborts the preceding request; a failed content search leaves metadata matches visible without an additional warning. The list is capped at 20. Choosing an unarchived result clears and collapses search, opens the Session, and scrolls its row into view in the configured browsing mode; grouped browsing also expands its Workspace and the full Session list when required. Archived results offer Unarchive; attempting to open one explains that restriction without clearing the query or navigating.
@@ -189,6 +191,8 @@ Once the Workspace baseline is ready, browser-persisted expansion and Session-or
 The sidebar hides durable summaries with `origin: 'subagent'`. A visible ordinary row shows the shared ongoing loader from running direct children in its loaded parent catalog, never from summary lineage. Child activity uses the latest UI status, falling back to the Session summary until that status is known.
 
 Row motion belongs to [AnimatedRows](src/client/rows/AnimatedRows.tsx). It measures keyed rows before and after React commits that change their membership or order, and uses native movement and opacity animations. Removed rows fade as inert copies outside the scrolling list; they do not delay React unmounting or extend its scroll range. Initial loading, drag commits, overflow expansion, and view-option changes settle immediately. The animator has no layout observers or polling and does not measure content-only updates or scrolling.
+
+Native Workspace and Session drags use an inert offscreen copy for their preview, with the row's dimensions and indentation over the themed sidebar fill. [useRowDragPreview](src/client/rows/useRowDragPreview.ts) removes the copy on drag end, replacement, or row unmount. The preview does not change the source row's background or drag-and-drop handlers. If the browser rejects a custom drag image, the copy is removed and native dragging continues.
 
 ### Hover cards
 
