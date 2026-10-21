@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 /**
- * PerfView presentation behavior: the empty state and footer paging, turn and
- * step rows with their scope markers and tooltips, the step tool-call
- * accordion, code-block caps, step filters, and the live clock. Fixtures are
- * built from the published metrics contract so each case varies one field and
- * asserts visible labels.
+ * PerfView presentation behavior: the empty state and footer summary, the
+ * scrolling table with its older-history trigger, turn and step rows with
+ * their scope markers and tooltips, keyboard row controls, the copy control,
+ * the step tool-call accordion, code-block caps, step filters, and the live
+ * clock. Fixtures are built from the published metrics contract so each case
+ * varies one field and asserts visible labels.
  */
 
 import { createElement } from 'react'
@@ -56,6 +57,8 @@ function call(overrides: Partial<PerfCall> = {}): PerfCall {
     text: null,
     truncated: false,
     ms: null,
+    startedAt: null,
+    endedAt: null,
     ...overrides,
   }
 }
@@ -79,6 +82,7 @@ function step(overrides: Partial<PerfStepMetrics> = {}): PerfStepMetrics {
     tps: 10,
     output: 300,
     tool: 200,
+    toolWall: null,
     tools: [],
     calls: [],
     toolOutput: 0,
@@ -97,13 +101,7 @@ function step(overrides: Partial<PerfStepMetrics> = {}): PerfStepMetrics {
 }
 
 /** One turn aggregate; defaults describe a settled turn with no steps. */
-/** Turn overrides; the row also reads the optional cache breakdown fields the step contract carries. */
-type TurnOverrides = Partial<PerfTurnMetrics> & {
-  readonly cacheRead?: number | null
-  readonly cacheWrite?: number | null
-}
-
-function turn(overrides: TurnOverrides = {}): PerfTurnMetrics {
+function turn(overrides: Partial<PerfTurnMetrics> = {}): PerfTurnMetrics {
   return {
     turn: 1,
     steps: [],
@@ -117,9 +115,12 @@ function turn(overrides: TurnOverrides = {}): PerfTurnMetrics {
     tps: 10,
     output: 300,
     tool: 200,
+    toolWall: null,
     toolPending: 0,
     tools: [],
     cacheHit: null,
+    cacheRead: null,
+    cacheWrite: null,
     retries: 0,
     toolErrors: 0,
     toolOutput: 0,
@@ -137,7 +138,7 @@ function turn(overrides: TurnOverrides = {}): PerfTurnMetrics {
 /** A one-turn snapshot carrying the given steps. */
 function turnSnapshot(
   steps: readonly PerfStepMetrics[],
-  overrides: TurnOverrides = {},
+  overrides: Partial<PerfTurnMetrics> = {},
 ): PerfSnapshot {
   return { turns: [turn({ steps, ...overrides })], stepCount: steps.length }
 }
@@ -150,12 +151,67 @@ function callSnapshot(
   return turnSnapshot([step({ calls, tools: [tool('read', calls.length)], ...overrides })])
 }
 
-/** Render the view with the two props it consumes. */
-function mount(snapshot: PerfSnapshot): ReturnType<typeof createSnapshotStore<PerfSnapshot>> {
+/** Loader contract the view receives from the inject face. */
+type LoadOlder = () => Promise<boolean>
+
+/** Render the view with every prop it consumes. */
+function mount(
+  snapshot: PerfSnapshot,
+  loadOlder: LoadOlder = async () => false,
+): ReturnType<typeof createSnapshotStore<PerfSnapshot>> {
   const store = createSnapshotStore<PerfSnapshot>(snapshot)
   const usePerf = bindSnapshotSelector(store)
-  render(createElement(PerfView, { usePerf, t } as never))
+  render(createElement(PerfView, { usePerf, t, loadOlder } as never))
   return store
+}
+
+/** The scrollport that owns the table's viewport. */
+function scrollRegion(): HTMLElement {
+  return screen.getByRole('region', { name: say('view.perf') })
+}
+
+/** Mutable scroll metrics a test can move; jsdom performs no layout. */
+interface ScrollDouble {
+  height: number
+  top: number
+}
+
+/** Replace one element's scroll metrics because jsdom never lays content out. */
+function scrollDouble(element: HTMLElement, height: number, top: number): ScrollDouble {
+  const state: ScrollDouble = { height, top }
+  Object.defineProperty(element, 'scrollHeight', { configurable: true, get: () => state.height })
+  Object.defineProperty(element, 'scrollTop', {
+    configurable: true,
+    get: () => state.top,
+    set: (next: number) => { state.top = next },
+  })
+  return state
+}
+
+/** Patch the element prototype scroll metrics before a mount-time measurement. */
+function stubInitialScroll(height: number): { top: number } {
+  const state = { top: 0 }
+  vi.spyOn(Element.prototype, 'scrollHeight', 'get').mockReturnValue(height)
+  vi.spyOn(Element.prototype, 'scrollTop', 'get').mockImplementation(() => state.top)
+  vi.spyOn(Element.prototype, 'scrollTop', 'set').mockImplementation((value: number) => { state.top = value })
+  return state
+}
+
+/** A promise a test settles explicitly, to observe an in-flight page load. */
+function deferred<T>(): {
+  readonly promise: Promise<T>
+  readonly resolve: (value: T) => void
+} {
+  let settle: (value: T) => void = () => undefined
+  const promise = new Promise<T>((resolve) => {
+    settle = resolve
+  })
+  return { promise, resolve: settle }
+}
+
+/** Give the navigator a clipboard mock for copy-control cases. */
+function stubClipboard(writeText: () => Promise<void>): void {
+  Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
 }
 
 /** Body rows in render order (turn headers, step rows, detail rows, step controls). */
@@ -226,23 +282,21 @@ afterEach(() => {
 })
 
 describe('empty state and footer', () => {
-  it('shows the empty message, page info, and a disabled expand-all button', () => {
+  it('shows the empty message, the summary, and a disabled expand-all button', () => {
     mount({ turns: [], stepCount: 0 })
     expect(screen.getByText(say('empty'))).toBeTruthy()
     expect(screen.queryByRole('table')).toBeNull()
-    expect(screen.getByText(say('page.info', { turns: 0, steps: 0, page: 1, pages: 1 }))).toBeTruthy()
-    const expandAll = screen.getByRole('button', { name: say('expand.all') })
-    expect((expandAll as HTMLButtonElement).disabled).toBe(true)
-    expect(screen.queryByRole('button', { name: say('page.older') })).toBeNull()
-    expect(screen.queryByRole('button', { name: say('page.newer') })).toBeNull()
+    expect(screen.getByText(say('summary', { turns: 0, steps: 0 }))).toBeTruthy()
+    expect(button(say('expand.all')).disabled).toBe(true)
+    expect(screen.queryByRole('button', { name: say('loadOlder') })).toBeNull()
   })
 
-  it('leaves older and newer controls out of a one-page table', () => {
-    mount({ turns: [turn()], stepCount: 0 })
-    expect(screen.getByText(say('page.info', { turns: 1, steps: 0, page: 1, pages: 1 }))).toBeTruthy()
-    expect(screen.queryByRole('button', { name: say('page.older') })).toBeNull()
-    expect(screen.queryByRole('button', { name: say('page.newer') })).toBeNull()
-    expect(button(say('collapse.all')).disabled).toBe(false)
+  it('renders every published turn with a summary and an expand-all button', () => {
+    mount({ turns: [turn({ turn: 1 }), turn({ turn: 2 }), turn({ turn: 3 })], stepCount: 0 })
+    expect(screen.getByText(say('summary', { turns: 3, steps: 0 }))).toBeTruthy()
+    expect(bodyRows()).toHaveLength(3)
+    expect(button(say('expand.all')).disabled).toBe(false)
+    expect(screen.getByRole('button', { name: say('loadOlder') })).toBeTruthy()
   })
 
   it('toggles one turn row and all turns from the footer', () => {
@@ -265,49 +319,133 @@ describe('empty state and footer', () => {
   })
 })
 
-describe('pagination', () => {
-  /** 25 turns with no steps, so only paging shapes the table. */
-  function manyTurns(): PerfSnapshot {
-    return {
-      turns: Array.from({ length: 25 }, (_, index) => turn({ turn: index + 1 })),
-      stepCount: 0,
-    }
+describe('older history', () => {
+  /** Two settled turns, so one scroll can request an older page. */
+  function twoTurns(): PerfSnapshot {
+    return { turns: [turn({ turn: 1 }), turn({ turn: 2 })], stepCount: 2 }
   }
 
-  it('walks older and newer pages and falls back to the tail anchor', () => {
-    const store = mount(manyTurns())
-    expect(screen.getByText(say('page.info', { turns: 25, steps: 0, page: 3, pages: 3 }))).toBeTruthy()
-    expect(bodyRows()).toHaveLength(10)
-    expect(rowWithPrefix(say('turn.label', { turn: 16 }))).toBeTruthy()
-    expect(button(say('page.newer')).disabled).toBe(true)
+  it('loads near the top, reports the load, and stops after an exhausted page', async () => {
+    const gate = deferred<boolean>()
+    const loadOlder = vi.fn(() => gate.promise)
+    mount(twoTurns(), loadOlder)
+    const scroller = scrollRegion()
+    scrollDouble(scroller, 1_000, 10)
 
-    fireEvent.click(screen.getByRole('button', { name: say('page.older') }))
-    expect(screen.getByText(say('page.info', { turns: 25, steps: 0, page: 2, pages: 3 }))).toBeTruthy()
-    expect(bodyRows()).toHaveLength(10)
-    expect(rowWithPrefix(say('turn.label', { turn: 6 }))).toBeTruthy()
+    fireEvent.scroll(scroller)
+    expect(loadOlder).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('status').textContent).toBe(say('loadOlder.loading'))
+    expect(screen.queryByRole('button', { name: say('loadOlder') })).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: say('page.older') }))
-    expect(screen.getByText(say('page.info', { turns: 25, steps: 0, page: 1, pages: 3 }))).toBeTruthy()
-    expect(bodyRows()).toHaveLength(5)
-    expect(rowWithPrefix(say('turn.label', { turn: 1 }))).toBeTruthy()
-    expect(button(say('page.older')).disabled).toBe(true)
+    // A second scroll while the page is in flight must not start another load.
+    fireEvent.scroll(scroller)
+    expect(loadOlder).toHaveBeenCalledTimes(1)
 
-    fireEvent.click(screen.getByRole('button', { name: say('page.newer') }))
-    expect(screen.getByText(say('page.info', { turns: 25, steps: 0, page: 2, pages: 3 }))).toBeTruthy()
+    await act(async () => { gate.resolve(false) })
+    expect(screen.getByText(say('loadOlder.done'))).toBeTruthy()
+    expect(screen.queryByRole('status')).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: say('page.newer') }))
-    expect(screen.getByText(say('page.info', { turns: 25, steps: 0, page: 3, pages: 3 }))).toBeTruthy()
-    expect(bodyRows()).toHaveLength(10)
+    fireEvent.scroll(scroller)
+    expect(loadOlder).toHaveBeenCalledTimes(1)
+  })
 
-    // An anchored turn that leaves the snapshot drops the anchor and falls
-    // back to the newest page.
-    fireEvent.click(screen.getByRole('button', { name: say('page.older') }))
-    const replaced = manyTurns().turns.filter(candidate => candidate.turn !== 15)
-    act(() => {
-      store.set({ turns: replaced, stepCount: 0 })
+  it('loads from the visible button and stops once a page reports no progress', async () => {
+    let pages = 0
+    const loadOlder = vi.fn(async () => {
+      pages += 1
+      return pages === 1
     })
-    expect(screen.getByText(say('page.info', { turns: 24, steps: 0, page: 3, pages: 3 }))).toBeTruthy()
-    expect(bodyRows()).toHaveLength(10)
+    mount(twoTurns(), loadOlder)
+
+    fireEvent.click(screen.getByRole('button', { name: say('loadOlder') }))
+    expect(loadOlder).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('status').textContent).toBe(say('loadOlder.loading'))
+    await act(async () => {})
+    expect(screen.getByRole('button', { name: say('loadOlder') })).toBeTruthy()
+    expect(screen.queryByText(say('loadOlder.done'))).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: say('loadOlder') }))
+    expect(loadOlder).toHaveBeenCalledTimes(2)
+    await act(async () => {})
+    expect(screen.getByText(say('loadOlder.done'))).toBeTruthy()
+    expect(screen.queryByRole('button', { name: say('loadOlder') })).toBeNull()
+
+    fireEvent.scroll(scrollRegion())
+    expect(loadOlder).toHaveBeenCalledTimes(2)
+  })
+
+  it('ignores a scroll away from the top and keeps an empty snapshot quiet', () => {
+    const emptyLoad = vi.fn(async () => true)
+    mount({ turns: [], stepCount: 0 }, emptyLoad)
+    fireEvent.scroll(scrollRegion())
+    expect(emptyLoad).not.toHaveBeenCalled()
+
+    cleanup()
+    const loadOlder = vi.fn(async () => true)
+    mount(twoTurns(), loadOlder)
+    const scroller = scrollRegion()
+    const metrics = scrollDouble(scroller, 1_000, 200)
+    fireEvent.scroll(scroller)
+    expect(loadOlder).not.toHaveBeenCalled()
+    metrics.top = 64
+    fireEvent.scroll(scroller)
+    expect(loadOlder).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the trigger available after a rejected page', async () => {
+    const loadOlder = vi.fn(async () => {
+      throw new Error('history unavailable')
+    })
+    mount(twoTurns(), loadOlder)
+    const scroller = scrollRegion()
+    scrollDouble(scroller, 1_000, 0)
+
+    await act(async () => { fireEvent.scroll(scroller) })
+    expect(loadOlder).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(screen.queryByText(say('loadOlder.done'))).toBeNull()
+    expect(screen.getByRole('button', { name: say('loadOlder') })).toBeTruthy()
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: say('loadOlder') }))
+    })
+    expect(loadOlder).toHaveBeenCalledTimes(2)
+  })
+
+  it('restores the reading position when older turns prepend above the viewport', async () => {
+    const gate = deferred<boolean>()
+    const loadOlder = vi.fn(() => gate.promise)
+    const store = mount({ turns: [turn({ turn: 2 }), turn({ turn: 3 })], stepCount: 2 }, loadOlder)
+    const scroller = scrollRegion()
+    const metrics = scrollDouble(scroller, 1_000, 0)
+
+    fireEvent.scroll(scroller)
+    expect(loadOlder).toHaveBeenCalledTimes(1)
+    // The older page commits before the promise settles, and the content grows.
+    act(() => {
+      store.set({
+        turns: [turn({ turn: 1 }), turn({ turn: 2 }), turn({ turn: 3 })],
+        stepCount: 3,
+      })
+    })
+    metrics.height = 1_500
+    await act(async () => { gate.resolve(true) })
+    expect(metrics.top).toBe(500)
+  })
+
+  it('opens at the newest turn on first mount and when the first turns arrive', () => {
+    const initial = stubInitialScroll(1_200)
+    mount(twoTurns())
+    expect(initial.top).toBe(1_200)
+
+    cleanup()
+    vi.restoreAllMocks()
+    const later = stubInitialScroll(900)
+    const store = mount({ turns: [], stepCount: 0 })
+    act(() => {
+      store.set({ turns: [turn({ turn: 1 })], stepCount: 1 })
+    })
+    expect(later.top).toBe(900)
   })
 })
 
@@ -464,24 +602,49 @@ describe('turn rows', () => {
     expect(cellsOf(rowWithPrefix(say('turn.label', { turn: 3 })))[1]?.textContent).toBe('')
   })
 
-  it('falls back to zero cache breakdown parts and skips the marker above half', () => {
+  it('shows the recorded cache breakdown and the formula fallback when none was recorded', () => {
     mount({
       turns: [
-        turn({ turn: 1, cacheHit: 0.8, cacheRead: 100, cacheWrite: 100 }),
-        turn({ turn: 2, cacheHit: 0.1, cacheRead: null, cacheWrite: null, context: null }),
+        turn({ turn: 1, cacheHit: 0.8, cacheRead: 100, cacheWrite: 200, context: 1_000 }),
+        turn({ turn: 2, cacheHit: 0.1, cacheRead: null, cacheWrite: 200, context: 1_000 }),
+        turn({ turn: 3, cacheHit: 0.4, cacheRead: 100, cacheWrite: null, context: null }),
+        turn({ turn: 4, cacheHit: 0.2, cacheRead: null, cacheWrite: null }),
       ],
-      stepCount: 2,
+      stepCount: 4,
     })
-    const high = cellsOf(rowWithPrefix(say('turn.label', { turn: 1 })))
-    expect(high[5]?.getAttribute('title')).toBe(say('cache.detail', {
-      read: formatTokens(100), input: formatTokens(800), write: formatTokens(100),
+    const full = cellsOf(rowWithPrefix(say('turn.label', { turn: 1 })))
+    expect(full[5]?.getAttribute('title')).toBe(say('cache.detail', {
+      read: formatTokens(100), input: formatTokens(700), write: formatTokens(200),
     }))
-    expect(high[0]?.textContent).not.toContain(say('state.cacheMiss'))
-    const low = cellsOf(rowWithPrefix(say('turn.label', { turn: 2 })))
-    expect(low[5]?.getAttribute('title')).toBe(say('cache.detail', {
-      read: formatTokens(0), input: formatTokens(0), write: formatTokens(0),
+    expect(full[0]?.textContent).not.toContain(say('state.cacheMiss'))
+    const writeOnly = cellsOf(rowWithPrefix(say('turn.label', { turn: 2 })))
+    expect(writeOnly[5]?.getAttribute('title')).toBe(say('cache.detail', {
+      read: formatTokens(0), input: formatTokens(800), write: formatTokens(200),
     }))
-    expect(low[3]?.textContent).toBe('—')
+    const readOnly = cellsOf(rowWithPrefix(say('turn.label', { turn: 3 })))
+    expect(readOnly[5]?.getAttribute('title')).toBe(say('cache.detail', {
+      read: formatTokens(100), input: formatTokens(0), write: formatTokens(0),
+    }))
+    expect(readOnly[3]?.textContent).toBe('—')
+    const absent = cellsOf(rowWithPrefix(say('turn.label', { turn: 4 })))
+    expect(absent[5]?.getAttribute('title')).toBe(say('column.cache.title'))
+  })
+
+  it('draws the bar tool segment from the non-overlapping span and keeps the column sum', () => {
+    mount({
+      turns: [turn({ tool: 900, toolWall: 300, wall: 1_000, ttft: 100, model: 400 })],
+      stepCount: 0,
+    })
+    const row = rowWithPrefix(say('turn.label', { turn: 1 }))
+    expect(cellsOf(row)[9]?.textContent).toBe(formatMs(900))
+    expect(timeTitle(row)).toBe([
+      say('bar.start', { clock: formatClock(BASE) }),
+      say('bar.ttft', { value: formatMs(100) }),
+      say('bar.gen', { value: formatMs(300) }),
+      say('bar.tool', { value: formatMs(300) }),
+      say('bar.rest', { value: formatMs(300) }),
+      say('bar.wall', { value: formatMs(1_000) }),
+    ].join(' · '))
   })
 })
 
@@ -512,6 +675,8 @@ describe('step rows', () => {
     expect(firstCells[0]?.textContent).toContain(say('state.cacheMiss'))
     expect(firstCells[0]?.textContent).toContain(` · ${say('detail.show')}`)
     expect(first.getAttribute('title')).toBe(say('detail.title'))
+    // No recorded breakdown on this step: the cache cell keeps the formula explanation.
+    expect(firstCells[5]?.getAttribute('title')).toBe(say('column.cache.title'))
     const failed = within(firstCells[2] as HTMLTableCellElement).getByText(say('tool.failed', { count: 1 }))
     expect(failed.getAttribute('title')).toBe(say('tool.failed.title', { count: 1 }))
     expect(within(firstCells[2] as HTMLTableCellElement).getByText('read')).toBeTruthy()
@@ -681,6 +846,66 @@ describe('step rows', () => {
   })
 })
 
+describe('keyboard row controls', () => {
+  it('toggles a turn from its focusable button and reports aria-expanded', () => {
+    mount({ turns: [turn({ turn: 1 }), turn({ turn: 2 })], stepCount: 2 })
+    const labels = (): string | null => screen
+      .getByRole('button', { name: say('turn.toggle.aria', { turn: 2 }) })
+      .getAttribute('aria-expanded')
+    expect(labels()).toBe('true')
+    expect(screen.getByRole('button', { name: say('turn.toggle.aria', { turn: 2 }) })
+      .getAttribute('title')).toBe(say('turn.toggle.title'))
+
+    fireEvent.click(screen.getByRole('button', { name: say('turn.toggle.aria', { turn: 2 }) }))
+    expect(labels()).toBe('false')
+    expect(rowWithPrefix(say('turn.label', { turn: 2 })).textContent).toContain(say('turn.expand'))
+
+    // Mouse row clicks keep toggling the same state.
+    fireEvent.click(rowWithPrefix(say('turn.label', { turn: 2 })))
+    expect(labels()).toBe('true')
+
+    // A native button activates on Enter and Space; jsdom does not synthesize
+    // the click those keys produce, so the test dispatches it explicitly.
+    const enter = screen.getByRole('button', { name: say('turn.toggle.aria', { turn: 2 }) })
+    fireEvent.keyDown(enter, { key: 'Enter' })
+    fireEvent.click(enter)
+    expect(labels()).toBe('false')
+    const space = screen.getByRole('button', { name: say('turn.toggle.aria', { turn: 2 }) })
+    fireEvent.keyDown(space, { key: ' ' })
+    fireEvent.click(space)
+    expect(labels()).toBe('true')
+  })
+
+  it('toggles step details from their focusable button and reports aria-expanded', () => {
+    mount(turnSnapshot([
+      step({ step: 1, tools: [tool('read', 1)], calls: [call({ callId: 'c1', text: 'body' })] }),
+      step({ step: 2 }),
+    ]))
+    const toggle = (): HTMLElement => screen.getByRole('button', { name: say('step.toggle.aria', { step: 1 }) })
+    expect(toggle().getAttribute('aria-expanded')).toBe('false')
+    expect(toggle().getAttribute('title')).toBe(say('detail.title'))
+
+    fireEvent.click(toggle())
+    expect(toggle().getAttribute('aria-expanded')).toBe('true')
+    expect(detailRow().textContent).toContain('body')
+
+    // A row click still toggles the same state.
+    fireEvent.click(stepRow(1))
+    expect(toggle().getAttribute('aria-expanded')).toBe('false')
+    expect(bodyRows().some(row => (row.textContent ?? '').includes(DETAIL_MARKER))).toBe(false)
+
+    fireEvent.keyDown(toggle(), { key: 'Enter' })
+    fireEvent.click(toggle())
+    expect(toggle().getAttribute('aria-expanded')).toBe('true')
+    fireEvent.keyDown(toggle(), { key: ' ' })
+    fireEvent.click(toggle())
+    expect(toggle().getAttribute('aria-expanded')).toBe('false')
+
+    // A step without a detail body keeps the row non-interactive.
+    expect(screen.queryByRole('button', { name: say('step.toggle.aria', { step: 2 }) })).toBeNull()
+  })
+})
+
 describe('time cell', () => {
   it('shows the dash for a missing total and for a zero total', () => {
     mount({
@@ -703,6 +928,7 @@ describe('time cell', () => {
       step({ step: 1, wall: 1_000, ttft: 5_000, model: 5_000, tool: 5_000, startTime: BASE }),
       step({ step: 2, wall: 1_000, ttft: null, model: null, tool: null, startTime: BASE }),
       step({ step: 3, wall: 1_000, ttft: 100, model: 800, tool: 500, startTime: BASE }),
+      step({ step: 4, wall: 1_000, ttft: 100, model: 400, tool: 700, toolWall: 200, startTime: BASE }),
     ]))
     expect(timeTitle(stepRow(1))).toBe([
       say('bar.start', { clock: formatClock(BASE) }),
@@ -726,6 +952,16 @@ describe('time cell', () => {
       say('bar.gen', { value: formatMs(700) }),
       say('bar.tool', { value: formatMs(500) }),
       say('bar.rest', { value: formatMs(0) }),
+      say('bar.wall', { value: formatMs(1_000) }),
+    ].join(' · '))
+    // The column keeps the summed tool time while the bar uses the wall union.
+    expect(cellsOf(stepRow(4))[9]?.textContent).toBe(formatMs(700))
+    expect(timeTitle(stepRow(4))).toBe([
+      say('bar.start', { clock: formatClock(BASE) }),
+      say('bar.ttft', { value: formatMs(100) }),
+      say('bar.gen', { value: formatMs(300) }),
+      say('bar.tool', { value: formatMs(200) }),
+      say('bar.rest', { value: formatMs(400) }),
       say('bar.wall', { value: formatMs(1_000) }),
     ].join(' · '))
   })
@@ -784,7 +1020,7 @@ describe('step detail accordion', () => {
     const write = blocks[2] as HTMLElement
     expect(within(write).getByText(say('detail.emptyBody'))).toBeTruthy()
 
-    expect(within(detail).getAllByRole('button', { name: say('detail.copy') })).toHaveLength(2)
+    expect(within(detail).queryAllByRole('button', { name: say('detail.copy') })).toHaveLength(0)
     expect(within(detail).getAllByRole('button', { name: '{}' })).toHaveLength(2)
 
     const wrap = within(detail).getByRole('button', { name: say('detail.wrap') })
@@ -793,6 +1029,14 @@ describe('step detail accordion', () => {
     fireEvent.click(wrap)
     expect(within(detailRow()).getByRole('button', { name: say('detail.wrap') }).getAttribute('aria-pressed'))
       .toBe('true')
+  })
+
+  it('renders the copy control only for bodies with copied text', () => {
+    stubClipboard(vi.fn(() => Promise.resolve()))
+    mount(accordionSnapshot())
+    const detail = openDetail(1)
+    // Read has result text, edit falls back to its diff, write has an empty body.
+    expect(within(detail).getAllByRole('button', { name: say('detail.copy') })).toHaveLength(2)
   })
 
   it('toggles raw arguments per call and keeps the toggle when arguments disappear', () => {
@@ -829,7 +1073,7 @@ describe('step detail accordion', () => {
   it('reports the copied label and resets it after the timeout', async () => {
     vi.useFakeTimers()
     const writeText = vi.fn(() => Promise.resolve())
-    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    stubClipboard(writeText)
     mount(callSnapshot([call({ text: 'copied body' })]))
     openDetail(1)
     const copy = within(detailRow()).getByRole('button', { name: say('detail.copy') })
@@ -848,32 +1092,62 @@ describe('step detail accordion', () => {
     expect(within(detailRow()).getByRole('button', { name: say('detail.copy') })).toBeTruthy()
   })
 
-  it('stays silent when the clipboard rejects or throws or is absent', async () => {
+  it('reports a rejected copy and resets the failure label', async () => {
+    vi.useFakeTimers()
     const rejected = vi.fn(() => Promise.reject(new Error('denied')))
-    Object.defineProperty(navigator, 'clipboard', { value: { writeText: rejected }, configurable: true })
+    stubClipboard(rejected)
     mount(callSnapshot([call({ text: 'nope' })]))
     openDetail(1)
-    const copy = within(detailRow()).getByRole('button', { name: say('detail.copy') })
     await act(async () => {
-      fireEvent.click(copy)
+      fireEvent.click(within(detailRow()).getByRole('button', { name: say('detail.copy') }))
     })
     expect(rejected).toHaveBeenCalledWith('nope')
-    expect(within(detailRow()).getByRole('button', { name: say('detail.copy') })).toBeTruthy()
+    expect(within(detailRow()).getByRole('button', { name: say('detail.copyFailed') })).toBeTruthy()
 
+    act(() => {
+      vi.advanceTimersByTime(1_200)
+    })
+    expect(within(detailRow()).getByRole('button', { name: say('detail.copy') })).toBeTruthy()
+  })
+
+  it('reports a synchronous clipboard refusal as a failed copy', () => {
     const throwing = vi.fn(() => { throw new Error('no clipboard') })
-    Object.defineProperty(navigator, 'clipboard', { value: { writeText: throwing }, configurable: true })
+    stubClipboard(throwing)
+    mount(callSnapshot([call({ text: 'nope' })]))
+    openDetail(1)
     fireEvent.click(within(detailRow()).getByRole('button', { name: say('detail.copy') }))
     expect(throwing).toHaveBeenCalledTimes(1)
-    expect(within(detailRow()).getByRole('button', { name: say('detail.copy') })).toBeTruthy()
+    expect(within(detailRow()).getByRole('button', { name: say('detail.copyFailed') })).toBeTruthy()
+  })
 
-    Reflect.deleteProperty(navigator, 'clipboard')
-    fireEvent.click(within(detailRow()).getByRole('button', { name: say('detail.copy') }))
-    expect(within(detailRow()).getByRole('button', { name: say('detail.copy') })).toBeTruthy()
+  it('renders no copy control when the host has no Clipboard API', () => {
+    mount(callSnapshot([call({ text: 'body' })]))
+    openDetail(1)
+    expect(within(detailRow()).queryByRole('button', { name: say('detail.copy') })).toBeNull()
+  })
+
+  it('copies the raw arguments while the raw view is active', async () => {
+    const writeText = vi.fn(() => Promise.resolve())
+    stubClipboard(writeText)
+    mount(callSnapshot([call({ name: 'bash', args: '{"command":"ls"}', text: 'done' })]))
+    openDetail(1)
+    fireEvent.click(within(detailRow()).getByRole('button', { name: '{}' }))
+    await act(async () => {
+      fireEvent.click(within(detailRow()).getByRole('button', { name: say('detail.copy') }))
+    })
+    expect(writeText).toHaveBeenCalledWith('{"command":"ls"}')
+
+    // Leaving the raw view copies the rendered body again.
+    fireEvent.click(within(detailRow()).getByRole('button', { name: '{}' }))
+    await act(async () => {
+      fireEvent.click(within(detailRow()).getByRole('button', { name: say('detail.copied') }))
+    })
+    expect(writeText).toHaveBeenLastCalledWith('done')
   })
 
   it('copies the diff fallback when a call left no result text', async () => {
     const writeText = vi.fn(() => Promise.resolve())
-    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    stubClipboard(writeText)
     mount(callSnapshot([
       call({ callId: 'both', name: 'bash', before: 'old', after: 'new' }),
       call({ callId: 'after', name: 'bash', before: null, after: 'newer' }),

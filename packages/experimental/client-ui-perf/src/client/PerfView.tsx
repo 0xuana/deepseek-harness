@@ -3,7 +3,10 @@
  * rows, the time-composition bars, and the per-step tool-call accordion.
  */
 
-import { Fragment, useEffect, useState, type ReactElement, type ReactNode } from 'react'
+import {
+  Fragment, useEffect, useLayoutEffect, useRef, useState,
+  type ReactElement, type ReactNode, type UIEvent,
+} from 'react'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { ConvViewProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
@@ -15,15 +18,16 @@ import {
   formatTokens, formatTokensDelta, formatTokensShort, formatTps,
 } from './perf-format.ts'
 import { isNumber } from './perf-usage.ts'
+import { CALL_LIMIT } from './perf-fold.ts'
 import type { PerfTranslate } from './locales.ts'
 import css from './perf.module.css'
 
-/** Turns rendered per page; the newest page is the tail of the turn list. */
-const PAGE_SIZE = 10
 /** Steps one turn renders before the "show all" control appears. */
 const STEP_LIMIT = 24
-/** Tool calls one step's accordion lists; the builder keeps at most this many. */
-const CALL_LIMIT = 12
+/** Distance from the scroll top, in pixels, that requests one older history page. */
+const LOAD_OLDER_THRESHOLD = 64
+/** How long the clipboard button reports its outcome, in milliseconds. */
+const COPY_FEEDBACK_MS = 1_200
 /** Lines one code block renders before the line-cap notice. */
 const CODE_LINE_LIMIT = 400
 /** Line count above which a diff falls back to whole-side removal and addition. */
@@ -80,6 +84,11 @@ export interface PerfViewInjected {
     /** This target's snapshot; InjectFace exposes it as `usePerf`. */
     perf: ObservableSnapshot<PerfSnapshot>
   }
+  /**
+   * Load one older history page into the published window.
+   * @returns false when the snapshot produced no new page.
+   */
+  loadOlder: () => Promise<boolean>
 }
 
 /** Full props of the performance conversation View. */
@@ -98,9 +107,8 @@ interface StepViewState {
   readonly wrap?: boolean
 }
 
-/** Component-local table state: page anchor, turn folds, and per-turn step state. */
+/** Component-local table state: turn folds and per-turn step state. */
 interface ViewState {
-  readonly anchor: number | null
   readonly mode: ViewMode
   readonly openTurns: Readonly<Record<number, boolean>>
   readonly stepViews: Readonly<Record<number, StepViewState>>
@@ -115,8 +123,8 @@ interface MetricsValues {
   readonly model: number | null
   readonly tps: number | null
   readonly tool: number | null
-  readonly cacheRead?: number | null
-  readonly cacheWrite?: number | null
+  readonly cacheRead: number | null
+  readonly cacheWrite: number | null
   readonly ttftPending?: number
   readonly modelPending?: number
   readonly toolPending?: number
@@ -139,6 +147,8 @@ interface TimeState {
   readonly ttft: number | null
   readonly model: number | null
   readonly tool: number | null
+  /** Non-overlapping union of the paired tool calls; the bar prefers it over `tool`. */
+  readonly toolWall: number | null
 }
 
 /** Context growth from the previous step of the same turn. */
@@ -213,8 +223,9 @@ interface CallBlockProps {
   readonly onToggleRaw: () => void
 }
 
-/** Props of the clipboard button. */
+/** Props of the clipboard button; it renders only where the host exposes the Clipboard API. */
 interface CopyButtonProps {
+  readonly clipboard: Clipboard
   readonly clipboardValue: string
   readonly t: PerfTranslate
 }
@@ -297,9 +308,9 @@ function defaultTurnOpen(mode: ViewMode, turnNumber: number, latestTurn: number 
   return turnNumber === latestTurn
 }
 
-/** Fresh table state: follow the newest page, expand the newest turn. */
+/** Fresh table state: follow the newest turn's open default. */
 function createViewState(): ViewState {
-  return { anchor: null, mode: 'newest', openTurns: {}, stepViews: {} }
+  return { mode: 'newest', openTurns: {}, stepViews: {} }
 }
 
 /** Read an array element whose index the surrounding bounds already prove. */
@@ -470,14 +481,17 @@ function callBody(call: PerfCall, t: PerfTranslate, wrap: boolean, raw: boolean)
   )
 }
 
-/** Clipboard button: copies the body and reports success for a moment. */
-function CopyButton({ clipboardValue, t }: CopyButtonProps): ReactElement {
-  const [copied, setCopied] = useState(false)
+/** Clipboard button: copies the displayed body and reports the outcome for a moment. */
+function CopyButton({ clipboard, clipboardValue, t }: CopyButtonProps): ReactElement {
+  const [status, setStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
   useEffect(() => {
-    if (!copied) return undefined
-    const timer = setTimeout(() => { setCopied(false) }, 1200)
+    if (status === 'idle') return undefined
+    const timer = setTimeout(() => { setStatus('idle') }, COPY_FEEDBACK_MS)
     return () => { clearTimeout(timer) }
-  }, [copied])
+  }, [status])
+  const label = status === 'copied'
+    ? t('detail.copied')
+    : status === 'failed' ? t('detail.copyFailed') : t('detail.copy')
   return (
     <button
       type="button"
@@ -485,18 +499,28 @@ function CopyButton({ clipboardValue, t }: CopyButtonProps): ReactElement {
       title={t('detail.copy.title')}
       onClick={() => {
         try {
-          void navigator.clipboard.writeText(clipboardValue).then(
-            () => { setCopied(true) },
-            () => undefined,
+          void clipboard.writeText(clipboardValue).then(
+            () => { setStatus('copied') },
+            () => { setStatus('failed') },
           )
         } catch {
-          // The Clipboard API is absent outside secure contexts; the click stays silent.
+          // A synchronous refusal (missing writer, blocked frame) is a failed copy, not a silent one.
+          setStatus('failed')
         }
       }}
     >
-      {copied ? t('detail.copied') : t('detail.copy')}
+      {label}
     </button>
   )
+}
+
+/**
+ * Host Clipboard API, or undefined where the app cannot copy.
+ * lib.dom declares the member non-optional, but insecure contexts and jsdom omit it.
+ * @returns the clipboard, or undefined when the host exposes none.
+ */
+function clipboardOf(): Clipboard | undefined {
+  return navigator.clipboard
 }
 
 /** One tool call's accordion block: head metadata plus the selected body. */
@@ -506,7 +530,10 @@ function CallBlock({ call, t, wrap, raw, onToggleRaw }: CallBlockProps): ReactEl
   if (isNumber(call.lines)) meta.push(t('detail.lines', { lines: formatTokens(call.lines) }))
   if (isNumber(call.ms)) meta.push(formatMs(call.ms))
   const fallback = [call.before ?? '', call.after ?? ''].filter(part => part !== '').join('\n')
-  const clipboardValue = call.text ?? fallback
+  // Copy exactly what the body shows: the raw arguments while that view is active,
+  // otherwise the result text or the before/after fallback.
+  const clipboardValue = raw && call.args !== null ? call.args : call.text ?? fallback
+  const clipboard = clipboardOf()
   return (
     <div className={css.block}>
       <div className={css.blockHead}>
@@ -532,7 +559,9 @@ function CallBlock({ call, t, wrap, raw, onToggleRaw }: CallBlockProps): ReactEl
             {'{}'}
           </button>
         )}
-        {clipboardValue === '' ? null : <CopyButton clipboardValue={clipboardValue} t={t} />}
+        {clipboardValue === '' || clipboard === undefined
+          ? null
+          : <CopyButton clipboard={clipboard} clipboardValue={clipboardValue} t={t} />}
       </div>
       {callBody(call, t, wrap, raw)}
     </div>
@@ -743,8 +772,10 @@ const COLUMN_DETAIL: Readonly<
 > = {
   cache: (value, t) => {
     if (!isNumber(value.cacheHit)) return ''
-    const read = isNumber(value.cacheRead) ? value.cacheRead : 0
-    const write = isNumber(value.cacheWrite) ? value.cacheWrite : 0
+    // A row without a recorded breakdown keeps the column's formula explanation.
+    if (!isNumber(value.cacheRead) && !isNumber(value.cacheWrite)) return t('column.cache.title')
+    const read = value.cacheRead ?? 0
+    const write = value.cacheWrite ?? 0
     const context = isNumber(value.context) ? value.context : read + write
     const input = Math.max(0, context - read - write)
     return t('cache.detail', {
@@ -814,7 +845,9 @@ function TimeCell({ value, scale, gap, className, trackClass, now, t }: TimeCell
   const running = isTimeRunning(value)
   const ttft = isNumber(value.ttft) ? Math.min(value.ttft, total) : 0
   const model = isNumber(value.model) ? Math.min(value.model, total) : ttft
-  const tool = isNumber(value.tool) ? Math.min(value.tool, total) : 0
+  // The bar shows the non-overlapping tool span, not the sum the tool column shows.
+  const toolSpan = isNumber(value.toolWall) ? value.toolWall : value.tool
+  const tool = isNumber(toolSpan) ? Math.min(toolSpan, total) : 0
   const decode = Math.max(0, model - ttft)
   const rest = Math.max(0, total - model - tool)
   const share = barShare(total, scale)
@@ -1125,7 +1158,23 @@ function stepRows(options: StepRowsOptions): ReactNode[] {
         title={hasDetail ? t('detail.title') : undefined}
       >
         <td className={css.stepCell}>
-          {t('step.label', { step: step.step })}
+          {hasDetail
+            ? (
+              <button
+                type="button"
+                className={css.rowToggle}
+                aria-expanded={expanded}
+                aria-label={t('step.toggle.aria', { step: step.step })}
+                title={t('detail.title')}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onToggleDetail(step.step)
+                }}
+              >
+                {t('step.label', { step: step.step })}
+              </button>
+            )
+            : t('step.label', { step: step.step })}
           {scopeMarkers(step, t)}
           {isNumber(step.startTime)
             ? null
@@ -1178,7 +1227,19 @@ function turnRows(options: TurnRowsOptions): ReactNode[] {
       title={t('turn.toggle.title')}
     >
       <td className={css.turnCell}>
-        {t('turn.label', { turn: turn.turn })}
+        <button
+          type="button"
+          className={css.rowToggle}
+          aria-expanded={open}
+          aria-label={t('turn.toggle.aria', { turn: turn.turn })}
+          title={t('turn.toggle.title')}
+          onClick={(event) => {
+            event.stopPropagation()
+            onToggle()
+          }}
+        >
+          {t('turn.label', { turn: turn.turn })}
+        </button>
         <span className={css.stepCount}>{` · ${t('turn.stepCount', { count: turn.steps.length })}`}</span>
         <span className={css.toggle}>{` · ${toggleLabel}`}</span>
         {isNumber(turn.startTime) ? (
@@ -1227,32 +1288,38 @@ function TableButton({ caption, enabled, onClick }: TableButtonProps): ReactElem
   )
 }
 
+/** Scroll metrics captured before an older page loads, applied once its turns commit. */
+interface PendingPrepend {
+  readonly height: number
+  readonly top: number
+  readonly firstTurn: number | null
+}
+
 /**
- * Render the performance table of the current conversation view target.
- * @param props - composed conversation View props: the perf snapshot hook and the locale seat.
- * @returns the table, its empty state, and the pagination footer.
+ * Render the performance table of the current conversation view target. The
+ * table owns the viewport scroll: reaching the top asks the injected loader
+ * for one older page while the already published turns stay in place.
+ * @param props - composed conversation View props: the perf snapshot hook, the older-page loader, and the locale seat.
+ * @returns the scrolling table, its empty state, and the expand/collapse footer.
  */
 export function PerfView(props: PerfViewProps): ReactElement {
-  const { usePerf, t } = props
+  const { usePerf, t, loadOlder } = props
   const snapshot = usePerf(value => value)
   const [view, setView] = useState<ViewState>(createViewState)
   const [now, setNow] = useState(() => Date.now())
+  const [loading, setLoading] = useState(false)
+  const [exhausted, setExhausted] = useState(false)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const loadingRef = useRef(false)
+  const pendingPrepend = useRef<PendingPrepend | null>(null)
+  const initialized = useRef(false)
   const turns = snapshot.turns
-  const pages = Math.max(1, Math.ceil(turns.length / PAGE_SIZE))
-  let end = turns.length
-  if (view.anchor !== null) {
-    const at = turns.findIndex(turn => turn.turn === view.anchor)
-    if (at >= 0) end = at + 1
-  }
-  const start = Math.max(0, end - PAGE_SIZE)
-  const visible = turns.slice(start, end)
-  const page = Math.max(1, Math.min(pages, Math.ceil(end / PAGE_SIZE)))
-  const newest = visible.at(-1)
-  const latestTurn = newest === undefined ? null : newest.turn
+  const firstTurn = turns[0]?.turn ?? null
+  const latestTurn = turns.at(-1)?.turn ?? null
   const isTurnOpen = (turnNumber: number): boolean =>
     view.openTurns[turnNumber] ?? defaultTurnOpen(view.mode, turnNumber, latestTurn)
-  const allOpen = visible.length > 0 && visible.every(turn => isTurnOpen(turn.turn))
-  const hasRunning = visible.some(turn =>
+  const allOpen = turns.length > 0 && turns.every(turn => isTurnOpen(turn.turn))
+  const hasRunning = turns.some(turn =>
     isTimeRunning(turn) || turn.steps.some(step => isTimeRunning(step)))
   useEffect(() => {
     if (!hasRunning) return undefined
@@ -1260,8 +1327,8 @@ export function PerfView(props: PerfViewProps): ReactElement {
     const timer = setInterval(() => { setNow(Date.now()) }, 1000)
     return () => { clearInterval(timer) }
   }, [hasRunning])
-  // Turns compare only with turns on this page.
-  const turnScale = visible.reduce((max, turn) => {
+  // Turns compare only with the other turns in the window.
+  const turnScale = turns.reduce((max, turn) => {
     const span = totalSpan(turn, now)
     return span !== null && span > max ? span : max
   }, 0)
@@ -1295,66 +1362,121 @@ export function PerfView(props: PerfViewProps): ReactElement {
       }
     })
   }
-  const goOlder = (): void => {
-    const target = turns[start - 1]
-    /* v8 ignore next -- the older button is disabled while start is 0, so this guard only satisfies the index type. */
-    if (target === undefined) return
-    setView(current => ({ ...current, anchor: target.turn }))
+  const requestOlder = async (): Promise<void> => {
+    if (loadingRef.current || exhausted || turns.length === 0) return
+    const element = scrollRef.current
+    /* v8 ignore next -- the scrollport mounts with the first render, so a request never runs without it. */
+    if (element === null) return
+    loadingRef.current = true
+    setLoading(true)
+    const before: PendingPrepend = {
+      height: element.scrollHeight,
+      top: element.scrollTop,
+      firstTurn,
+    }
+    let grew: boolean
+    try {
+      grew = await loadOlder()
+    } catch {
+      // A failed page leaves the trigger in place: the next scroll or click tries again.
+      loadingRef.current = false
+      setLoading(false)
+      return
+    }
+    if (grew) {
+      pendingPrepend.current = before
+    } else {
+      pendingPrepend.current = null
+      setExhausted(true)
+    }
+    loadingRef.current = false
+    setLoading(false)
   }
-  const goNewer = (): void => {
-    const next = Math.min(turns.length, end + PAGE_SIZE)
-    const target = next >= turns.length ? undefined : turns[next - 1]
-    setView(current => ({ ...current, anchor: target === undefined ? null : target.turn }))
+  // After every commit: open at the newest turn, then restore the reading
+  // position once an older page has prepended its turns above the viewport.
+  useLayoutEffect(() => {
+    const element = scrollRef.current
+    /* v8 ignore next -- the scrollport mounts with the first render. */
+    if (element === null) return
+    if (!initialized.current && turns.length > 0) {
+      initialized.current = true
+      element.scrollTop = element.scrollHeight
+      return
+    }
+    const pending = pendingPrepend.current
+    if (pending === null || firstTurn === pending.firstTurn) return
+    pendingPrepend.current = null
+    element.scrollTop = pending.top + Math.max(0, element.scrollHeight - pending.height)
+  })
+  const handleScroll = (event: UIEvent<HTMLDivElement>): void => {
+    if (event.currentTarget.scrollTop > LOAD_OLDER_THRESHOLD) return
+    void requestOlder()
   }
   return (
-    <div className={css.root}>
-      {turns.length === 0 ? (
-        <div className={css.empty}>{t('empty')}</div>
-      ) : (
-        <table className={css.table} aria-label={t('view.perf')}>
-          <thead>
-            <tr>
-              <th className={css.thLeft} title={t('column.scope.title')}>{t('column.scope')}</th>
-              <th className={css.thLeft} title={t('column.prompt.title')}>{t('column.prompt')}</th>
-              <th className={css.thLeft} title={t('column.did.title')}>{t('column.did')}</th>
-              {COLUMNS.map(name => (
-                <th key={name} className={css.th} title={t(`column.${name}.title`)}>
-                  {t(`column.${name}`)}
-                </th>
-              ))}
-              <th className={css.th} title={t('column.time.title')}>{t('column.time')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visible.flatMap(turn => turnRows({
-              turn,
-              t,
-              now,
-              open: isTurnOpen(turn.turn),
-              state: view.stepViews[turn.turn] ?? EMPTY_STEP_VIEW,
-              turnScale,
-              onToggle: () => { toggleTurn(turn.turn) },
-              onToggleDetail: (stepNumber) => { toggleStepDetail(turn.turn, stepNumber) },
-              onControl: (patch) => { patchStepView(turn.turn, patch) },
-            }))}
-          </tbody>
-        </table>
-      )}
-      <div className={css.toolbar}>
-        <span className={css.pageInfo}>
-          {t('page.info', { turns: turns.length, steps: snapshot.stepCount, page, pages })}
-        </span>
-        <TableButton
-          caption={allOpen ? t('collapse.all') : t('expand.all')}
-          enabled={turns.length > 0}
-          onClick={toggleAllTurns}
-        />
-        {pages > 1 ? (
-          <TableButton caption={t('page.older')} enabled={start > 0} onClick={goOlder} />
-        ) : null}
-        {pages > 1 ? (
-          <TableButton caption={t('page.newer')} enabled={end < turns.length} onClick={goNewer} />
-        ) : null}
+    <div className={css.root} data-conversation-composer-overlay="">
+      <div
+        ref={scrollRef}
+        className={css.scroll}
+        role="region"
+        aria-label={t('view.perf')}
+        tabIndex={0}
+        onScroll={handleScroll}
+      >
+        {turns.length === 0 ? null : (
+          <div className={css.older}>
+            {loading ? (
+              <span className={css.olderStatus} role="status">{t('loadOlder.loading')}</span>
+            ) : exhausted ? (
+              <span className={css.olderStatus}>{t('loadOlder.done')}</span>
+            ) : (
+              <button type="button" className={css.button} onClick={() => { void requestOlder() }}>
+                {t('loadOlder')}
+              </button>
+            )}
+          </div>
+        )}
+        {turns.length === 0 ? (
+          <div className={css.empty}>{t('empty')}</div>
+        ) : (
+          <table className={css.table} aria-label={t('view.perf')}>
+            <thead>
+              <tr>
+                <th className={css.thLeft} title={t('column.scope.title')}>{t('column.scope')}</th>
+                <th className={css.thLeft} title={t('column.prompt.title')}>{t('column.prompt')}</th>
+                <th className={css.thLeft} title={t('column.did.title')}>{t('column.did')}</th>
+                {COLUMNS.map(name => (
+                  <th key={name} className={css.th} title={t(`column.${name}.title`)}>
+                    {t(`column.${name}`)}
+                  </th>
+                ))}
+                <th className={css.th} title={t('column.time.title')}>{t('column.time')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {turns.flatMap(turn => turnRows({
+                turn,
+                t,
+                now,
+                open: isTurnOpen(turn.turn),
+                state: view.stepViews[turn.turn] ?? EMPTY_STEP_VIEW,
+                turnScale,
+                onToggle: () => { toggleTurn(turn.turn) },
+                onToggleDetail: (stepNumber) => { toggleStepDetail(turn.turn, stepNumber) },
+                onControl: (patch) => { patchStepView(turn.turn, patch) },
+              }))}
+            </tbody>
+          </table>
+        )}
+        <div className={css.toolbar}>
+          <span className={css.summary}>
+            {t('summary', { turns: turns.length, steps: snapshot.stepCount })}
+          </span>
+          <TableButton
+            caption={allOpen ? t('collapse.all') : t('expand.all')}
+            enabled={turns.length > 0}
+            onClick={toggleAllTurns}
+          />
+        </div>
       </div>
     </div>
   )
