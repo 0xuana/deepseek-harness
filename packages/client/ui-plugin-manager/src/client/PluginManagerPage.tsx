@@ -113,11 +113,12 @@ const HIDDEN_BUNDLES = new Set([
 const EXTENSION_BUNDLES = [
   '@deepseek-ai/dsh-experimental-agent-team-profile',
   '@deepseek-ai/dsh-experimental-voice-input-bundle',
+  '@deepseek-ai/dsh-experimental-plugin-market-bundle',
   '@deepseek-ai/dsh-experimental-auto-review',
-  '@deepseek-ai/dsh-experimental-inspector-profile',
 ]
 /** The optional bundles the main list holds back until selected; the More list includes eligible entries. */
 const MORE_BUNDLES = [
+  '@deepseek-ai/dsh-experimental-inspector-profile',
   '@deepseek-ai/dsh-cua-bundle',
   '@deepseek-ai/dsh-experimental-tool-worktree',
   '@deepseek-ai/dsh-experimental-cot-translation-bundle',
@@ -125,7 +126,6 @@ const MORE_BUNDLES = [
   '@deepseek-ai/dsh-experimental-session-titles-bundle',
   '@deepseek-ai/dsh-experimental-badge-skill-bundle',
   '@deepseek-ai/dsh-experimental-ralph-bundle',
-  '@deepseek-ai/dsh-experimental-plugin-market-bundle',
   '@deepseek-ai/dsh-subagent-codex',
   '@deepseek-ai/dsh-subagent-claude-code',
 ]
