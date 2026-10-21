@@ -4,6 +4,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import type { SessionBinding } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
@@ -23,8 +24,8 @@ import { PerfView, type PerfViewInjected } from './PerfView.tsx'
 export type { PerfKey } from './locales.ts'
 export type { PerfCall, PerfSnapshot, PerfStepMetrics, PerfTurnMetrics } from './perf-contract.ts'
 
-/** Required services: the conversation slot registry, view registry, and locale. */
-export const inject = ['slots', 'uiConversation', 'locale']
+/** Required services: the conversation slot and view registries, Session paging, and the locale service. */
+export const inject = ['slots', 'sessions', 'uiConversation', 'locale']
 
 /** Snapshot hook name; `InjectFace` turns it into the component's `usePerf` prop. */
 const HOOK = 'perf'
@@ -36,6 +37,8 @@ const HOOK = 'perf'
  * @param ctx - client root context.
  */
 export function apply(ctx: Context): void {
+  // Per-plugin-instance source cache; unloading the plugin drops the map with it.
+  const sources = new WeakMap<SessionBinding, ObservableSnapshot<PerfSnapshot>>()
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'client-ui-perf: dictionaries')
   // Registration-time text (the tab label) reads through the bound translate as
   // a thunk, so it follows the active locale without re-registration.
@@ -49,12 +52,28 @@ export function apply(ctx: Context): void {
     locale: NS,
     label: () => t('view.perf'),
     inject: (sessionId: SessionId): PerfViewInjected => {
-      const target = ctx.uiConversation.binding(sessionId).target('perf')
-      const perf: ObservableSnapshot<PerfSnapshot> = {
-        getSnapshot: () => target.getSnapshot() ?? EMPTY_PERF_SNAPSHOT,
-        subscribe: listener => target.subscribe(listener),
+      const binding = ctx.sessions.binding(sessionId)
+      const session = binding?.session
+      if (binding === undefined || session === undefined) {
+        throw new Error(`client-ui-perf: session "${sessionId}" is unavailable`)
       }
-      return { hooks: { [HOOK]: perf } }
+      const target = ctx.uiConversation.binding(sessionId).target('perf')
+      let perf = sources.get(binding)
+      if (perf === undefined) {
+        perf = {
+          getSnapshot: () => target.getSnapshot() ?? EMPTY_PERF_SNAPSHOT,
+          subscribe: listener => target.subscribe(listener),
+        }
+        sources.set(binding, perf)
+      }
+      return {
+        hooks: { [HOOK]: perf },
+        loadOlder: async () => {
+          const before = perf.getSnapshot()
+          await session.loadOlder()
+          return perf.getSnapshot() !== before
+        },
+      }
     },
   }, PerfView))
 }

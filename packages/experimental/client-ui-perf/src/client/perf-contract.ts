@@ -33,6 +33,10 @@ export interface PerfCall {
   readonly truncated: boolean
   /** Measured tool duration, or null while the result is missing. */
   readonly ms: number | null
+  /** Wall-clock start of the call, for the non-overlapping tool-span union. */
+  readonly startedAt: number | null
+  /** Wall-clock end of the call, present only after its result settled. */
+  readonly endedAt: number | null
 }
 
 /** Tool call tally shown as one pill. */
@@ -84,6 +88,8 @@ export interface PerfStepMetrics {
   readonly tps: number | null
   readonly output: number | null
   readonly tool: number | null
+  /** Union of the paired calls' wall intervals; tool calls may run in parallel. */
+  readonly toolWall: number | null
   readonly tools: readonly PerfToolCount[]
   readonly calls: readonly PerfCall[]
   readonly toolOutput: number | null
@@ -119,9 +125,14 @@ export interface PerfTurnMetrics {
   readonly tps: number | null
   readonly output: number | null
   readonly tool: number | null
+  /** Union of the turn's step tool spans; steps never overlap. */
+  readonly toolWall: number | null
   readonly toolPending: number
   readonly tools: readonly PerfToolCount[]
   readonly cacheHit: number | null
+  /** Cache breakdown of the last step that reported usage, for the turn tooltip. */
+  readonly cacheRead: number | null
+  readonly cacheWrite: number | null
   readonly retries: number
   readonly toolErrors: number
   readonly toolOutput: number
@@ -137,6 +148,13 @@ export interface PerfTurnMetrics {
 /** One published node: a step's metrics or a turn-level marker. */
 export type PerfContribution =
   | { readonly kind: 'step'; readonly metrics: PerfStepMetrics }
+  | {
+    /** Inner tool calls one Code-Mode root call dispatched; merged into its step. */
+    readonly kind: 'inner'
+    readonly turn: number
+    readonly step: number
+    readonly calls: readonly PerfCall[]
+  }
   | {
     readonly kind: 'prompt'
     readonly turn: number

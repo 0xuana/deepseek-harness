@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { SessionEventLike } from '@deepseek-ai/dsh-api-session-controller/client'
+import { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import {
   LlmAttemptId,
   MessageId,
@@ -7,34 +8,32 @@ import {
   type AssistantMessage,
   type AssistantStreamRecord,
   type ContentBlock,
+  type ImageBlock,
   type StreamChunk,
   type TokenUsage,
   type ToolResultMessage,
   type UserMessage,
 } from '@deepseek-ai/dsh-llm'
+import { RetryId } from '@deepseek-ai/dsh-llm-retry'
+import type {} from '@deepseek-ai/dsh-llm-retry/types'
 import { SessionSeq, type SessionEventMap, type SessionEventType } from '@deepseek-ai/dsh-session/types'
-import type {} from '@deepseek-ai/dsh-tools/types'
-import { aggregateTurn, buildTurns } from '../src/client/perf-aggregate.ts'
+import type {} from '@deepseek-ai/dsh-tool-executor-ptc/types'
 import {
-  CALL_LIMIT, currentTurnOf, fallbackState, foldEvent, newState, ptcStepOf,
-  resetCurrentTurn, resetPtcSteps, stepMetrics,
+  CALL_LIMIT, fallbackState, foldEvent, isCodeMode, newState, promptOf, stepMetrics, toolSpanUnion,
 } from '../src/client/perf-fold.ts'
 import {
   DASH, barShare, formatChars, formatClock, formatDateTime, formatMs, formatPercent,
   formatTokens, formatTokensDelta, formatTokensShort, formatTps,
 } from '../src/client/perf-format.ts'
-import type {
-  PerfCall, PerfStepMetrics, PerfStepState, PerfViewNode,
-} from '../src/client/perf-contract.ts'
+import type { PerfCall, PerfStepMetrics, PerfStepState } from '../src/client/perf-contract.ts'
 import {
-  cacheHitRate, cacheReadTokens, cacheWriteTokens, contextTokens, isCount, isNumber,
-  isUsage, outputTokens,
+  cacheHitRate, cacheReadTokens, cacheWriteTokens, contextTokens, isCount, isNumber, isUsage, outputTokens,
 } from '../src/client/perf-usage.ts'
 
 let seq = 0
 let clock = 0
 
-/** One event envelope; running fixtures that need different times pass the time. */
+/** One event envelope; fixtures that need an exact time pass it. */
 function emit(type: SessionEventType, data: object, time?: number): SessionEventLike {
   seq += 1
   clock = time ?? clock + 10
@@ -50,18 +49,13 @@ function event<K extends SessionEventType>(
   return emit(type, data, time)
 }
 
-/** One event carrying a payload the fold must tolerate but the type map does not describe. */
-function unchecked(type: SessionEventType, data: object, time?: number): SessionEventLike {
-  return emit(type, data, time)
-}
-
 /** One client-only live chunk event. */
 function liveChunk(turn: number, step: number, chunk: StreamChunk, time?: number): SessionEventLike {
   seq += 1
   clock = time ?? clock + 10
   return {
     type: 'assistant/live-chunk',
-    seq: SessionSeq(seq),
+    seq,
     time: clock,
     data: { attemptId: LlmAttemptId('attempt-1'), turn, step, chunk },
   }
@@ -75,6 +69,19 @@ function defined<T>(value: T | undefined): T {
 
 function textBlock(text: string): ContentBlock {
   return { type: 'text', text }
+}
+
+function imageBlock(): ImageBlock {
+  return {
+    type: 'image',
+    attachment: {
+      attachmentId: AttachmentId('sha256:fixture'),
+      mediaType: 'image/png',
+      bytes: 1,
+      width: 1,
+      height: 1,
+    },
+  }
 }
 
 function userMessage(
@@ -139,6 +146,21 @@ function toolResult(
 ): SessionEventLike {
   return event('tool/result', {
     turn, step, message: toolMessage(callId, content, isError),
+  }, time)
+}
+
+function retry(turn: number, step: number, time: number): SessionEventLike {
+  return event('llm/retry', {
+    turn,
+    step,
+    retryId: RetryId('retry-1'),
+    provider: 'deepseek',
+    mode: 'normal',
+    policyKey: 'default',
+    retry: 1,
+    maxRetries: 3,
+    delayMs: 10,
+    failure: { message: 'rate limited', code: 'RATE_LIMITED' },
   }, time)
 }
 
@@ -213,36 +235,6 @@ function stateOf(overrides: Partial<PerfStepState> = {}): PerfStepState {
   return { ...newState(1, 1), ...overrides }
 }
 
-function metricsOf(overrides: Partial<PerfStepMetrics> = {}): PerfStepMetrics {
-  return {
-    turn: 1,
-    step: 1,
-    startTime: null,
-    endTime: null,
-    context: null,
-    ttft: null,
-    model: null,
-    decode: null,
-    tps: null,
-    output: null,
-    tool: null,
-    tools: [],
-    calls: [],
-    toolOutput: 0,
-    retries: 0,
-    toolErrors: 0,
-    cacheRead: null,
-    cacheWrite: null,
-    cacheHit: null,
-    wall: null,
-    toolPending: 0,
-    running: false,
-    interrupted: false,
-    aborted: false,
-    ...overrides,
-  }
-}
-
 function perfCall(callId: string, seqAt: number, overrides: Partial<PerfCall> = {}): PerfCall {
   return {
     callId,
@@ -261,48 +253,14 @@ function perfCall(callId: string, seqAt: number, overrides: Partial<PerfCall> = 
     text: null,
     truncated: false,
     ms: null,
+    startedAt: null,
+    endedAt: null,
     ...overrides,
   }
 }
 
 function callsRecord(calls: readonly PerfCall[]): Record<string, PerfCall> {
   return Object.fromEntries(calls.map(call => [call.callId, call]))
-}
-
-function stepNode(value: PerfStepMetrics): PerfViewNode {
-  return {
-    key: `${value.turn}:${value.step}`,
-    kind: 'perf-step',
-    id: `${value.turn}:${value.step}`,
-    target: 'perf',
-    anchorSeq: value.startTime ?? 0,
-    location: { kind: 'unresolved' },
-    data: { kind: 'step', metrics: value },
-  }
-}
-
-function promptNode(turn: number, prompt: string | null, images = 0): PerfViewNode {
-  return {
-    key: `${turn}:prompt`,
-    kind: 'perf-prompt',
-    id: `${turn}:prompt`,
-    target: 'perf',
-    anchorSeq: 1,
-    location: { kind: 'unresolved' },
-    data: { kind: 'prompt', turn, prompt, images },
-  }
-}
-
-function endNode(turn: number, endTime: number | null, closeKind: string | null): PerfViewNode {
-  return {
-    key: `${turn}:end`,
-    kind: 'perf-turn-end',
-    id: `${turn}:end`,
-    target: 'perf',
-    anchorSeq: 2,
-    location: { kind: 'unresolved' },
-    data: { kind: 'end', turn, closeKind, endTime },
-  }
 }
 
 /** Lines joined by newlines, for edit and write fixtures. */
@@ -318,8 +276,6 @@ const usage: TokenUsage = {
 }
 
 beforeEach(() => {
-  resetPtcSteps()
-  resetCurrentTurn()
   seq = 0
   clock = 0
 })
@@ -442,213 +398,6 @@ describe('token accounting helpers', () => {
   })
 })
 
-describe('prompt attribution', () => {
-  it('marks the turn-open state as the prompt row', () => {
-    expect(currentTurnOf()).toBeNull()
-    const turn = defined(foldEvent(undefined, event('turn/start', { turn: 3 }, 1_000)))
-    expect(currentTurnOf()).toBe(3)
-    expect(turn.turn).toBe(3)
-    expect(turn.step).toBe(0)
-    expect(turn.mark).toBe('prompt')
-    resetCurrentTurn()
-    expect(currentTurnOf()).toBeNull()
-  })
-
-  it('attributes a user question to the current turn by arrival order', () => {
-    const afterTurn = defined(foldEvent(undefined, event('turn/start', { turn: 3 }, 1_000)))
-    const state = defined(foldEvent(afterTurn, event('user/message', userMessage([
-      textBlock('explain this'), textBlock('failure'),
-    ]), 1_010)))
-    expect(state.turn).toBe(3)
-    expect(state.prompt).toBe('explain this failure')
-    expect(state.images).toBe(0)
-    expect(state.mark).toBe('prompt')
-  })
-
-  it('falls back to turn zero when a question arrives before any turn marker', () => {
-    const state = defined(foldEvent(undefined, event('user/message', userMessage([
-      textBlock('orphan question'),
-    ]), 1_000)))
-    expect(state.turn).toBe(0)
-    expect(state.step).toBe(0)
-    expect(state.prompt).toBe('orphan question')
-  })
-
-  it('keeps the first question of a turn', () => {
-    const first = defined(foldEvent(undefined, event('user/message', userMessage([
-      textBlock('first'),
-    ], { kind: 'user' }), 1_000)))
-    const second = defined(foldEvent(first, event('user/message', userMessage([
-      textBlock('second'),
-    ], { kind: 'user' }), 1_010)))
-    expect(second.prompt).toBe('first')
-  })
-
-  it('ignores injected messages but still marks the row as a prompt row', () => {
-    const state = defined(foldEvent(undefined, event('user/message', userMessage([
-      textBlock('<system-reminder>'),
-    ], { kind: 'model', provider: 'deepseek', model: 'deepseek-chat' }), 1_000)))
-    expect(state.mark).toBe('prompt')
-    expect(state.prompt).toBeNull()
-  })
-
-  it('tolerates a source or content the event map does not describe', () => {
-    const noSource = defined(foldEvent(undefined, unchecked('user/message', {
-      role: 'user', content: [textBlock('hidden')], source: null,
-    }, 1_000)))
-    expect(noSource.prompt).toBeNull()
-    const primitiveSource = defined(foldEvent(undefined, unchecked('user/message', {
-      role: 'user', content: [textBlock('hidden')], source: 'user',
-    }, 1_010)))
-    expect(primitiveSource.prompt).toBeNull()
-    const looseContent = defined(foldEvent(undefined, unchecked('user/message', {
-      role: 'user', content: 'not a list', source: { kind: 'user' },
-    }, 1_020)))
-    expect(looseContent.prompt).toBeNull()
-  })
-
-  it('keeps only text blocks and counts images among the blocks', () => {
-    const state = defined(foldEvent(undefined, unchecked('user/message', {
-      role: 'user',
-      content: [null, 7, { type: 'text', text: 9 }, { type: 'text', text: 'kept' }, { type: 'image' }],
-      source: { kind: 'user' },
-    }, 1_000)))
-    expect(state.prompt).toBe('kept')
-    expect(state.images).toBe(1)
-  })
-
-  it('clips long questions and drops blank ones', () => {
-    const long = defined(foldEvent(undefined, event('user/message', userMessage([
-      textBlock('q'.repeat(500)),
-    ]), 1_000)))
-    expect(long.prompt).toHaveLength(400)
-    expect(long.prompt?.endsWith('…')).toBe(true)
-    const blank = defined(foldEvent(undefined, event('user/message', userMessage([
-      textBlock('   '),
-    ]), 1_010)))
-    expect(blank.prompt).toBeNull()
-  })
-
-  it('keeps an image-only question with no text', () => {
-    const state = defined(foldEvent(undefined, unchecked('user/message', {
-      role: 'user', content: [{ type: 'image' }, { type: 'image' }], source: { kind: 'user' },
-    }, 1_000)))
-    expect(state.prompt).toBeNull()
-    expect(state.images).toBe(2)
-  })
-})
-
-describe('assistant timeline and usage', () => {
-  it('stamps the first visible live token and ignores empty or non-token chunks', () => {
-    const start = defined(foldEvent(undefined, stepStart(2, 1, 1_000)))
-    const empty = defined(foldEvent(start, liveChunk(2, 1, { type: 'text-delta', index: 0, text: '' }, 1_010)))
-    expect(empty.firstTokenTime).toBeNull()
-    const spaced = defined(foldEvent(empty, liveChunk(2, 1, { type: 'text-delta', index: 0, text: 'x' }, 1_020)))
-    expect(spaced.firstTokenTime).toBe(1_020)
-    const reasoning = defined(foldEvent(start, liveChunk(2, 1, { type: 'reasoning-delta', index: 0, text: 'why' }, 1_030)))
-    expect(reasoning.firstTokenTime).toBe(1_030)
-    const silentReasoning = defined(foldEvent(start, liveChunk(2, 1, {
-      type: 'reasoning-delta', index: 0, text: '',
-    }, 1_040)))
-    expect(silentReasoning.firstTokenTime).toBeNull()
-    const late = defined(foldEvent(spaced, liveChunk(2, 1, { type: 'text-delta', index: 0, text: 'y' }, 1_050)))
-    expect(late.firstTokenTime).toBe(1_020)
-  })
-
-  it('treats tool-call deltas as tokens only when they carry content', () => {
-    const start = defined(foldEvent(undefined, stepStart(2, 1, 1_000)))
-    const empty = defined(foldEvent(start, liveChunk(2, 1, {
-      type: 'tool-call-delta', index: 0, id: ToolCallId('c'), argumentsDelta: '',
-    }, 1_010)))
-    expect(empty.firstTokenTime).toBeNull()
-    const args = defined(foldEvent(start, liveChunk(2, 1, {
-      type: 'tool-call-delta', index: 0, id: ToolCallId('c'), argumentsDelta: '{"a":1}',
-    }, 1_020)))
-    expect(args.firstTokenTime).toBe(1_020)
-    const named = defined(foldEvent(start, liveChunk(2, 1, {
-      type: 'tool-call-delta', index: 0, id: ToolCallId('c'), name: 'read', argumentsDelta: '',
-    }, 1_030)))
-    expect(named.firstTokenTime).toBe(1_030)
-    const blockStart = defined(foldEvent(start, liveChunk(2, 1, {
-      type: 'block-start', index: 0, blockType: 'text',
-    }, 1_040)))
-    expect(blockStart.firstTokenTime).toBeNull()
-  })
-
-  it('adopts usage from a live chunk only when a count was reported', () => {
-    const start = defined(foldEvent(undefined, stepStart(2, 1, 1_000)))
-    const adopted = defined(foldEvent(start, liveChunk(2, 1, { type: 'usage', usage }, 1_010)))
-    expect(adopted.usage).toEqual(usage)
-    const rejected = defined(foldEvent(start, liveChunk(2, 1, {
-      type: 'usage', usage: { inputTokens: Number.NaN, outputTokens: -1 },
-    }, 1_020)))
-    expect(rejected.usage).toBeNull()
-    const kept = defined(foldEvent(adopted, liveChunk(2, 1, {
-      type: 'usage', usage: { inputTokens: Number.NaN, outputTokens: -1 },
-    }, 1_030)))
-    expect(kept.usage).toEqual(usage)
-  })
-
-  it('starts a live window without a step boundary', () => {
-    const state = defined(foldEvent(undefined, liveChunk(4, 2, { type: 'text-delta', index: 0, text: 'x' }, 2_000)))
-    expect(state.turn).toBe(4)
-    expect(state.step).toBe(2)
-    expect(state.firstTokenTime).toBe(2_000)
-    expect(state.startTime).toBeNull()
-  })
-
-  it('derives the first token from a durable attempt stream', () => {
-    const attempt = defined(foldEvent(undefined, event('assistant/attempt', {
-      turn: 2, step: 1, stream: streamAt(1_300),
-    }, 1_500)))
-    expect(attempt.firstTokenTime).toBe(1_300)
-    expect(attempt.messageTime).toBeNull()
-    const empty = defined(foldEvent(undefined, event('assistant/attempt', {
-      turn: 2, step: 1, stream: [],
-    }, 1_500)))
-    expect(empty.firstTokenTime).toBeNull()
-    const kept = defined(foldEvent(attempt, event('assistant/attempt', {
-      turn: 2, step: 1, stream: streamAt(1_400),
-    }, 1_600)))
-    expect(kept.firstTokenTime).toBe(1_300)
-  })
-
-  it('records the settled message time, usage, and interruption', () => {
-    const state = defined(foldEvent(undefined, event('assistant/message', {
-      turn: 2,
-      step: 1,
-      message: assistantMessage([textBlock('done')]),
-      stream: streamAt(1_300),
-      usage,
-      interrupted: true,
-    }, 1_500)))
-    expect(state.firstTokenTime).toBe(1_300)
-    expect(state.messageTime).toBe(1_500)
-    expect(state.usage).toEqual(usage)
-    expect(state.interrupted).toBe(true)
-    const repeated = defined(foldEvent(state, event('assistant/message', {
-      turn: 2,
-      step: 1,
-      message: assistantMessage([textBlock('again')]),
-      stream: [],
-      usage: { inputTokens: Number.NaN, outputTokens: -1 },
-    }, 1_900)))
-    expect(repeated.messageTime).toBe(1_500)
-    expect(repeated.usage).toEqual(usage)
-    expect(repeated.interrupted).toBe(false)
-  })
-
-  it('leaves usage unset when the first message reports none', () => {
-    const state = defined(foldEvent(undefined, event('assistant/message', {
-      turn: 2, step: 1, message: assistantMessage(), stream: [],
-    }, 1_500)))
-    expect(state.usage).toBeNull()
-    expect(state.firstTokenTime).toBeNull()
-    expect(state.messageTime).toBe(1_500)
-    expect(state.interrupted).toBe(false)
-  })
-})
-
 describe('tool call hints', () => {
   it('hints at the target for every tool family', () => {
     const cases: readonly { name: string; args: string; hint: string | null }[] = [
@@ -763,6 +512,9 @@ describe('tool call arguments and text bounds', () => {
     expect(empty.removed).toBe(0)
     expect(empty.before).toBeNull()
     expect(empty.after).toBeNull()
+    const unnamed = listedCall(callMetrics('edit', JSON.stringify({ file_path: '/a/b' })))
+    expect(unnamed.added).toBeNull()
+    expect(unnamed.removed).toBeNull()
   })
 
   it('counts write content lines and bounds the kept body', () => {
@@ -808,6 +560,138 @@ describe('tool call arguments and text bounds', () => {
   })
 })
 
+describe('assistant timeline and usage', () => {
+  it('stamps the first visible live token and ignores empty or non-token chunks', () => {
+    const start = defined(foldEvent(undefined, stepStart(2, 1, 1_000)))
+    const empty = defined(foldEvent(start, liveChunk(2, 1, { type: 'text-delta', index: 0, text: '' }, 1_010)))
+    expect(empty.firstTokenTime).toBeNull()
+    const spaced = defined(foldEvent(empty, liveChunk(2, 1, { type: 'text-delta', index: 0, text: 'x' }, 1_020)))
+    expect(spaced.firstTokenTime).toBe(1_020)
+    const reasoning = defined(foldEvent(start, liveChunk(2, 1, { type: 'reasoning-delta', index: 0, text: 'why' }, 1_030)))
+    expect(reasoning.firstTokenTime).toBe(1_030)
+    const silentReasoning = defined(foldEvent(start, liveChunk(2, 1, {
+      type: 'reasoning-delta', index: 0, text: '',
+    }, 1_040)))
+    expect(silentReasoning.firstTokenTime).toBeNull()
+    const late = defined(foldEvent(spaced, liveChunk(2, 1, { type: 'text-delta', index: 0, text: 'y' }, 1_050)))
+    expect(late.firstTokenTime).toBe(1_020)
+  })
+
+  it('treats tool-call deltas as tokens only when they carry content', () => {
+    const start = defined(foldEvent(undefined, stepStart(2, 1, 1_000)))
+    const empty = defined(foldEvent(start, liveChunk(2, 1, {
+      type: 'tool-call-delta', index: 0, id: ToolCallId('c'), argumentsDelta: '',
+    }, 1_010)))
+    expect(empty.firstTokenTime).toBeNull()
+    const args = defined(foldEvent(start, liveChunk(2, 1, {
+      type: 'tool-call-delta', index: 0, id: ToolCallId('c'), argumentsDelta: '{"a":1}',
+    }, 1_020)))
+    expect(args.firstTokenTime).toBe(1_020)
+    const named = defined(foldEvent(start, liveChunk(2, 1, {
+      type: 'tool-call-delta', index: 0, id: ToolCallId('c'), name: 'read', argumentsDelta: '',
+    }, 1_030)))
+    expect(named.firstTokenTime).toBe(1_030)
+    const blockStart = defined(foldEvent(start, liveChunk(2, 1, {
+      type: 'block-start', index: 0, blockType: 'text',
+    }, 1_040)))
+    expect(blockStart.firstTokenTime).toBeNull()
+  })
+
+  it('adopts the usage a live chunk carries', () => {
+    const start = defined(foldEvent(undefined, stepStart(2, 1, 1_000)))
+    const adopted = defined(foldEvent(start, liveChunk(2, 1, { type: 'usage', usage }, 1_010)))
+    expect(adopted.usage).toEqual(usage)
+    const replaced = defined(foldEvent(adopted, liveChunk(2, 1, {
+      type: 'usage', usage: { inputTokens: 5, outputTokens: 6 },
+    }, 1_020)))
+    expect(replaced.usage).toEqual({ inputTokens: 5, outputTokens: 6 })
+  })
+
+  it('starts a live window without a step boundary', () => {
+    const state = defined(foldEvent(undefined, liveChunk(4, 2, { type: 'text-delta', index: 0, text: 'x' }, 2_000)))
+    expect(state.turn).toBe(4)
+    expect(state.step).toBe(2)
+    expect(state.firstTokenTime).toBe(2_000)
+    expect(state.startTime).toBeNull()
+  })
+
+  it('derives the first token from a durable attempt stream', () => {
+    const attempt = defined(foldEvent(undefined, event('assistant/attempt', {
+      turn: 2, step: 1, stream: streamAt(1_300),
+    }, 1_500)))
+    expect(attempt.firstTokenTime).toBe(1_300)
+    expect(attempt.messageTime).toBeNull()
+    const empty = defined(foldEvent(undefined, event('assistant/attempt', {
+      turn: 2, step: 1, stream: [],
+    }, 1_500)))
+    expect(empty.firstTokenTime).toBeNull()
+    const kept = defined(foldEvent(attempt, event('assistant/attempt', {
+      turn: 2, step: 1, stream: streamAt(1_400),
+    }, 1_600)))
+    expect(kept.firstTokenTime).toBe(1_300)
+  })
+
+  it('records the settled message time, usage, and interruption', () => {
+    const state = defined(foldEvent(undefined, event('assistant/message', {
+      turn: 2,
+      step: 1,
+      message: assistantMessage([textBlock('done')]),
+      stream: streamAt(1_300),
+      usage,
+      interrupted: true,
+    }, 1_500)))
+    expect(state.firstTokenTime).toBe(1_300)
+    expect(state.messageTime).toBe(1_500)
+    expect(state.usage).toEqual(usage)
+    expect(state.interrupted).toBe(true)
+    const repeated = defined(foldEvent(state, event('assistant/message', {
+      turn: 2,
+      step: 1,
+      message: assistantMessage([textBlock('again')]),
+      stream: [],
+    }, 1_900)))
+    expect(repeated.messageTime).toBe(1_500)
+    expect(repeated.usage).toEqual(usage)
+    expect(repeated.interrupted).toBe(false)
+    const refreshed = defined(foldEvent(repeated, event('assistant/message', {
+      turn: 2,
+      step: 1,
+      message: assistantMessage(),
+      stream: [],
+      usage: { inputTokens: 5, outputTokens: 6 },
+    }, 2_100)))
+    expect(refreshed.usage).toEqual({ inputTokens: 5, outputTokens: 6 })
+  })
+
+  it('leaves usage unset when the first message reports none', () => {
+    const state = defined(foldEvent(undefined, event('assistant/message', {
+      turn: 2, step: 1, message: assistantMessage(), stream: [],
+    }, 1_500)))
+    expect(state.usage).toBeNull()
+    expect(state.firstTokenTime).toBeNull()
+    expect(state.messageTime).toBe(1_500)
+    expect(state.interrupted).toBe(false)
+  })
+})
+
+describe('prompt helper', () => {
+  it('joins typed text blocks and counts images', () => {
+    const prompt = promptOf(userMessage([textBlock('explain'), textBlock('this'), imageBlock()]))
+    expect(prompt.text).toBe('explain this')
+    expect(prompt.images).toBe(1)
+    const imageOnly = promptOf(userMessage([imageBlock(), imageBlock()]))
+    expect(imageOnly.text).toBeNull()
+    expect(imageOnly.images).toBe(2)
+  })
+
+  it('clips long questions and drops blank text', () => {
+    expect(promptOf(userMessage([textBlock('q'.repeat(500))])).text).toHaveLength(400)
+    expect(promptOf(userMessage([textBlock('q'.repeat(500))])).text?.endsWith('…')).toBe(true)
+    expect(promptOf(userMessage([textBlock('   ')])).text).toBeNull()
+    expect(promptOf(userMessage([textBlock('  a\n b  ')])).text).toBe('a b')
+  })
+})
+
 describe('tool call folding', () => {
   it('records a call before any step boundary and tallies its tool', () => {
     const state = defined(foldEvent(undefined, toolCall(5, 2, 'c1', 'grep', '{"pattern":"x"}', 1_000)))
@@ -827,19 +711,18 @@ describe('tool call folding', () => {
     expect(foldedState.pending).toEqual({ c1: 1_020, c2: 1_030 })
     expect(foldedState.tools).toEqual({ read: 2, grep: 1 })
     expect(recordedCall(foldedState, 'c1').name).toBe('read')
+    expect(recordedCall(foldedState, 'c1').seq).toBe(2)
     expect(stepMetrics(foldedState).tools).toEqual([{ name: 'read', count: 2 }, { name: 'grep', count: 1 }])
   })
 
-  it('keeps a nameless call without inventing a name or hint', () => {
+  it('marks the wall-clock start of a call and settles its end', () => {
     let state = foldEvent(undefined, stepStart(1, 1, 1_000))
-    state = foldEvent(state, unchecked('tool/call', {
-      turn: 1, step: 1, callId: 'anonymous', arguments: '{"file_path":"/a/b"}',
-    }, 1_010))
-    const foldedState = defined(state)
-    expect(foldedState.tools).toBeNull()
-    expect(foldedState.toolOpen).toBe(1)
-    expect(recordedCall(foldedState, 'anonymous').name).toBeNull()
-    expect(recordedCall(foldedState, 'anonymous').hint).toBeNull()
+    state = foldEvent(state, toolCall(1, 1, 'c1', 'read', '{}', 1_010))
+    expect(recordedCall(defined(state), 'c1').startedAt).toBe(1_010)
+    expect(recordedCall(defined(state), 'c1').endedAt).toBeNull()
+    state = foldEvent(state, toolResult(1, 1, 'c1', [textBlock('x')], 1_210))
+    expect(recordedCall(defined(state), 'c1').endedAt).toBe(1_210)
+    expect(stepMetrics(defined(state)).toolWall).toBe(200)
   })
 })
 
@@ -861,7 +744,9 @@ describe('tool result pairing', () => {
     expect(call.text).toBe('one\ntwo')
     expect(call.truncated).toBe(false)
     expect(call.error).toBe(false)
-    expect(call.ms).toBeNull()
+    // The paired intervals give the per-call duration the accordion renders.
+    expect(call.ms).toBe(200)
+    expect(call.endedAt).toBe(1_210)
   })
 
   it('joins text blocks and counts lines without a trailing empty line', () => {
@@ -919,6 +804,17 @@ describe('tool result pairing', () => {
     expect(call.truncated).toBe(false)
   })
 
+  it('ignores non-text content blocks in a tool result', () => {
+    const state = folded([
+      stepStart(1, 1, 1_000),
+      toolCall(1, 1, 'c1', 'read', '{}', 1_010),
+      toolResult(1, 1, 'c1', [imageBlock(), textBlock('kept')], 1_110),
+    ])
+    const call = recordedCall(state, 'c1')
+    expect(call.text).toBe('kept')
+    expect(call.chars).toBe(4)
+  })
+
   it('records a failed result and counts one tool error', () => {
     const state = folded([
       stepStart(1, 1, 1_000),
@@ -949,7 +845,7 @@ describe('tool result pairing', () => {
     expect(metrics.toolPending).toBe(2)
   })
 
-  it('never resolves an inherited property as a pending call', () => {
+  it('never resolves an inherited property as a pending or recorded call', () => {
     const empty = folded([
       stepStart(1, 1, 1_000),
       toolResult(1, 1, 'constructor', [textBlock('x')], 1_110),
@@ -963,22 +859,7 @@ describe('tool result pairing', () => {
     ])
     expect(populated.toolMissing).toBe(1)
     expect(populated.toolPairs).toBe(0)
-  })
-
-  it('tolerates a result message without a call id', () => {
-    const shapes: readonly object[] = [
-      { turn: 1, step: 1, message: null },
-      { turn: 1, step: 1, message: 'tool' },
-      { turn: 1, step: 1, message: { role: 'tool', content: [] } },
-      { turn: 1, step: 1, message: { role: 'tool', content: [], source: null } },
-      { turn: 1, step: 1, message: { role: 'tool', content: [], source: { callId: 7 } } },
-      { turn: 1, step: 1, message: { role: 'tool', content: 'text', source: { callId: 'c1' } } },
-    ]
-    for (const data of shapes) {
-      let state = foldEvent(undefined, stepStart(1, 1, 1_000))
-      state = foldEvent(state, unchecked('tool/result', data, 1_100))
-      expect(defined(state).toolMissing, JSON.stringify(data)).toBe(1)
-    }
+    expect(recordedCall(populated, 'known').chars).toBeNull()
   })
 
   it('folds a result that arrives without an open step', () => {
@@ -986,53 +867,6 @@ describe('tool result pairing', () => {
     expect(state.turn).toBe(1)
     expect(state.step).toBe(1)
     expect(state.toolMissing).toBe(1)
-  })
-
-  it('treats a result without a content list as empty', () => {
-    let state = foldEvent(undefined, stepStart(1, 1, 1_000))
-    state = foldEvent(state, toolCall(1, 1, 'c1', 'read', '{}', 1_010))
-    state = foldEvent(state, unchecked('tool/result', {
-      turn: 1,
-      step: 1,
-      message: { role: 'tool', content: 'text', source: { callId: 'c1' } },
-    }, 1_100))
-    const call = recordedCall(defined(state), 'c1')
-    expect(call.chars).toBe(0)
-    expect(call.lines).toBe(0)
-    expect(call.text).toBeNull()
-  })
-
-  it('skips content entries and blocks without usable text', () => {
-    const state = folded([
-      stepStart(1, 1, 1_000),
-      toolCall(1, 1, 'c1', 'read', '{}', 1_010),
-      unchecked('tool/result', {
-        turn: 1,
-        step: 1,
-        message: {
-          role: 'tool',
-          content: [null, 'block', { type: 'text', text: 9 }, { type: 'text', text: 'kept' }],
-          source: { callId: 'c1' },
-        },
-      }, 1_110),
-    ])
-    const call = recordedCall(state, 'c1')
-    expect(call.text).toBe('kept')
-    expect(call.chars).toBe(4)
-  })
-
-  it('treats a truthy non-boolean error flag as success', () => {
-    const state = folded([
-      stepStart(1, 1, 1_000),
-      toolCall(1, 1, 'c1', 'read', '{}', 1_010),
-      unchecked('tool/result', {
-        turn: 1,
-        step: 1,
-        message: { role: 'tool', content: [textBlock('x')], source: { callId: 'c1' }, isError: 'yes' },
-      }, 1_110),
-    ])
-    expect(recordedCall(state, 'c1').error).toBe(false)
-    expect(stepMetrics(state).toolErrors).toBe(0)
   })
 
   it('resolves pending calls one at a time and clamps a backwards duration', () => {
@@ -1061,16 +895,6 @@ describe('Code-Mode dispatch', () => {
     ])
   }
 
-  it('tracks the step that owns a root call', () => {
-    const state = codeStep()
-    expect(state.tools).toEqual({ run_code: 1 })
-    expect(ptcStepOf('root')).toBe('2:1')
-    expect(ptcStepOf('missing')).toBeNull()
-    expect(ptcStepOf(42)).toBeNull()
-    resetPtcSteps()
-    expect(ptcStepOf('root')).toBeNull()
-  })
-
   it('records an inner call with its dispatch duration and result', () => {
     let state = codeStep()
     state = defined(foldEvent(state, ptcStart('root', 'sub-1', 'grep', '{"pattern":"x"}', 5_020)))
@@ -1080,10 +904,27 @@ describe('Code-Mode dispatch', () => {
     expect(inner.name).toBe('grep')
     expect(inner.hint).toBe('x')
     expect(inner.ms).toBe(15)
+    expect(inner.startedAt).toBe(5_020)
+    expect(inner.endedAt).toBe(5_035)
     expect(inner.chars).toBe(3)
     expect(inner.text).toBe('hit')
     expect(inner.error).toBe(false)
     expect(defined(state).toolErrors).toBe(0)
+  })
+
+  it('keeps an inner call out of the outer tool time', () => {
+    const state = folded([
+      stepStart(2, 1, 5_000),
+      toolCall(2, 1, 'root', 'run_code', '{}', 5_010),
+      ptcStart('root', 'sub-1', 'grep', '{}', 5_020),
+      ptcDispatch('root', 'sub-1', 'grep', '{}', [textBlock('hit')], 5_035),
+    ])
+    const metrics = stepMetrics(state)
+    expect(state.toolPairs).toBe(0)
+    expect(metrics.tool).toBeNull()
+    expect(metrics.toolWall).toBe(15)
+    expect(metrics.calls.map(call => call.callId)).toEqual(['root', 'sub-1'])
+    expect(metrics.tools).toEqual([{ name: 'run_code', count: 1 }, { name: 'grep', count: 1 }])
   })
 
   it('records a dispatch inside a step with no root call', () => {
@@ -1098,14 +939,19 @@ describe('Code-Mode dispatch', () => {
   it('leaves the duration unmeasured without a dispatch start', () => {
     let state = codeStep()
     state = defined(foldEvent(state, ptcDispatch('root', 'sub-1', 'read', '{}', [textBlock('x')], 5_035)))
-    expect(recordedCall(defined(state), 'sub-1').ms).toBeNull()
+    const inner = recordedCall(defined(state), 'sub-1')
+    expect(inner.ms).toBeNull()
+    expect(inner.startedAt).toBeNull()
+    expect(inner.endedAt).toBe(5_035)
   })
 
   it('clamps a dispatch that settles before its start', () => {
     let state = codeStep()
     state = defined(foldEvent(state, ptcStart('root', 'sub-1', 'read', '{}', 5_050)))
     state = defined(foldEvent(state, ptcDispatch('root', 'sub-1', 'read', '{}', [textBlock('x')], 5_010)))
-    expect(recordedCall(defined(state), 'sub-1').ms).toBe(0)
+    const inner = recordedCall(defined(state), 'sub-1')
+    expect(inner.ms).toBe(0)
+    expect(inner.startedAt).toBe(5_050)
   })
 
   it('counts a failed inner call as a tool error', () => {
@@ -1145,8 +991,8 @@ describe('Code-Mode dispatch', () => {
     expect(inner.args).toBe('{"file_path":"/a/b.ts","content":"one\\ntwo"}')
   })
 
-  it('accepts array, null, and absent arguments without a hint', () => {
-    const cases: readonly unknown[] = [[1, 2], null, undefined]
+  it('accepts array, null, absent, and scalar arguments without a hint', () => {
+    const cases: readonly unknown[] = [[1, 2], null, undefined, 42]
     for (const [index, args] of cases.entries()) {
       const sub = `sub-${index}`
       const state = folded([
@@ -1156,7 +1002,7 @@ describe('Code-Mode dispatch', () => {
       ])
       const inner = recordedCall(state, sub)
       expect(inner.hint, String(index)).toBeNull()
-      expect(inner.args).toBe(args === undefined || args === null ? null : '[1,2]')
+      expect(inner.args, String(index)).toBe(args === undefined || args === null ? null : JSON.stringify(args))
       expect(inner.added).toBeNull()
     }
   })
@@ -1174,35 +1020,19 @@ describe('Code-Mode dispatch', () => {
     expect(inner.hint).toBe('nested/file.ts')
   })
 
-  it('ignores a dispatch with no tool name and one without a context', () => {
-    const state = codeStep()
-    const unnamed = foldEvent(state, unchecked('tool/ptc-dispatch', {
-      rootCallId: 'root', parentCallId: 'root', subCallId: 'sub-1', isError: false, content: [],
-    }, 5_040))
-    expect(unnamed).toBe(state)
-    expect(foldEvent(undefined, ptcDispatch('root', 'sub-1', 'read', {}, [], 5_040))).toBeUndefined()
+  it('needs a folded step context for dispatch events', () => {
     expect(foldEvent(undefined, ptcStart('root', 'sub-1', 'read', {}, 5_040))).toBeUndefined()
+    expect(foldEvent(undefined, ptcDispatch('root', 'sub-1', 'read', {}, [], 5_040))).toBeUndefined()
   })
 
-  it('remembers only code-mode root calls', () => {
-    let state = foldEvent(undefined, stepStart(3, 1, 6_000))
-    for (const name of ['run_code', 'RunCode', 'runCode', 'run-code', 'grep']) {
-      state = foldEvent(state, toolCall(3, 1, `call-${name}`, name, '{}', 6_010))
-    }
-    expect(ptcStepOf('call-run_code')).toBe('3:1')
-    expect(ptcStepOf('call-RunCode')).toBe('3:1')
-    expect(ptcStepOf('call-runCode')).toBe('3:1')
-    expect(ptcStepOf('call-run-code')).toBeNull()
-    expect(ptcStepOf('call-grep')).toBeNull()
-  })
-
-  it('evicts the oldest root call past the table cap', () => {
-    // Each call folds into a fresh state: only the root-call table grows here.
-    for (let index = 0; index <= 4_000; index += 1) {
-      foldEvent(newState(7, 1), toolCall(7, 1, `root-${index}`, 'run_code', '{}', 8_010 + index))
-    }
-    expect(ptcStepOf('root-0')).toBeNull()
-    expect(ptcStepOf('root-4000')).toBe('7:1')
+  it('lists several inner calls in sequence order', () => {
+    const state = folded([
+      stepStart(2, 1, 5_000),
+      toolCall(2, 1, 'root', 'run_code', '{}', 5_010),
+      ptcDispatch('root', 'sub-1', 'grep', '{}', [], 5_030),
+      ptcDispatch('root', 'sub-2', 'read', '{}', [], 5_040),
+    ])
+    expect(stepMetrics(state).calls.map(call => call.callId)).toEqual(['root', 'sub-1', 'sub-2'])
   })
 })
 
@@ -1229,21 +1059,25 @@ describe('step boundaries and the fold default', () => {
 
   it('counts retries from a retry event with or without an open step', () => {
     const fromStep = defined(foldEvent(undefined, stepStart(3, 1, 1_000)))
-    const once = defined(foldEvent(fromStep, unchecked('llm/retry', { turn: 3, step: 1 }, 1_010)))
+    const once = defined(foldEvent(fromStep, retry(3, 1, 1_010)))
     expect(once.retries).toBe(1)
-    const twice = defined(foldEvent(once, unchecked('llm/retry', { turn: 3, step: 1 }, 1_020)))
+    const twice = defined(foldEvent(once, retry(3, 1, 1_020)))
     expect(twice.retries).toBe(2)
-    const standalone = defined(foldEvent(undefined, unchecked('llm/retry', { turn: 3, step: 2 }, 1_030)))
+    const standalone = defined(foldEvent(undefined, retry(3, 2, 1_030)))
     expect(standalone.turn).toBe(3)
     expect(standalone.step).toBe(2)
     expect(standalone.retries).toBe(1)
   })
 
-  it('leaves a state unchanged for events the table does not fold', () => {
+  it('leaves prompt folding and other markers to their definitions', () => {
     const state = defined(foldEvent(undefined, stepStart(1, 1, 1_000)))
-    const same = foldEvent(state, event('turn/end', { turn: 1, reason: { kind: 'completed' } }, 2_000))
-    expect(same).toBe(state)
-    expect(foldEvent(undefined, event('turn/end', { turn: 1, reason: { kind: 'completed' } }, 2_000)))
+    const afterQuestion = foldEvent(state, event('user/message', userMessage([textBlock('question')]), 1_010))
+    expect(afterQuestion).toBe(state)
+    const afterTurnStart = foldEvent(state, event('turn/start', { turn: 2 }, 1_020))
+    expect(afterTurnStart).toBe(state)
+    const afterTurnEnd = foldEvent(state, event('turn/end', { turn: 1, reason: { kind: 'completed' } }, 1_030))
+    expect(afterTurnEnd).toBe(state)
+    expect(foldEvent(undefined, event('user/message', userMessage([textBlock('orphan')]), 1_040)))
       .toBeUndefined()
   })
 
@@ -1263,6 +1097,7 @@ describe('step boundaries and the fold default', () => {
     const metrics = stepMetrics(state)
     expect(metrics.ttft).toBe(100)
     expect(metrics.tool).toBe(100)
+    expect(metrics.toolWall).toBe(100)
     expect(metrics.wall).toBe(400)
     expect(metrics.running).toBe(false)
   })
@@ -1282,6 +1117,7 @@ describe('step metric derivation', () => {
     expect(metrics.tps).toBeNull()
     expect(metrics.output).toBeNull()
     expect(metrics.tool).toBeNull()
+    expect(metrics.toolWall).toBeNull()
     expect(metrics.tools).toEqual([])
     expect(metrics.calls).toEqual([])
     expect(metrics.toolOutput).toBe(0)
@@ -1290,6 +1126,9 @@ describe('step metric derivation', () => {
     expect(metrics.running).toBe(true)
     expect(metrics.aborted).toBe(false)
     expect(metrics.interrupted).toBe(false)
+    expect(metrics.cacheRead).toBeNull()
+    expect(metrics.cacheWrite).toBeNull()
+    expect(metrics.cacheHit).toBeNull()
     expect(metrics.mark).toBeNull()
     expect(metrics.prompt).toBeNull()
     expect(metrics.images).toBe(0)
@@ -1336,6 +1175,13 @@ describe('step metric derivation', () => {
     expect(metrics.images).toBe(3)
     expect(metrics.closed).toBe(true)
     expect(metrics.closeKind).toBe('interrupted')
+  })
+
+  it('reports a prompt marker through the same metric row', () => {
+    const metrics = stepMetrics(newState(1, 0, 'prompt'))
+    expect(metrics.turn).toBe(1)
+    expect(metrics.step).toBe(0)
+    expect(metrics.mark).toBe('prompt')
   })
 
   it('requires a start for the first-token and model spans', () => {
@@ -1404,6 +1250,13 @@ describe('step metric derivation', () => {
     expect(running.running).toBe(true)
   })
 
+  it('reports tool time only when at least one call paired', () => {
+    const paired = stepMetrics(stateOf({ toolPairs: 1, toolMs: 200 }))
+    expect(paired.tool).toBe(200)
+    const unpaired = stepMetrics(stateOf({ toolPairs: 0, toolMs: 200 }))
+    expect(unpaired.tool).toBeNull()
+  })
+
   it('lists calls in call order and caps the list', () => {
     const calls = Array.from({ length: CALL_LIMIT + 2 }, (_, index) => perfCall(
       `call-${index}`,
@@ -1446,7 +1299,7 @@ describe('step metric derivation', () => {
     expect(tied.tools).toEqual([{ name: 'read', count: 1 }, { name: 'grep', count: 1 }])
   })
 
-  it('hides the Code-Mode runner while keeping its inner and plain calls', () => {
+  it('keeps the Code-Mode runner until the builder merges inner dispatches', () => {
     const calls = callsRecord([
       perfCall('run', 1, { name: 'run_code', chars: 1_000 }),
       perfCall('inner', 2, { name: 'read', chars: 5, inner: true }),
@@ -1456,9 +1309,13 @@ describe('step metric derivation', () => {
       calls,
       tools: { run_code: 1, read: 1, write: 1 },
     }))
-    expect(metrics.calls.map(call => call.callId)).toEqual(['inner', 'plain'])
-    expect(metrics.tools).toEqual([{ name: 'read', count: 1 }, { name: 'write', count: 1 }])
-    expect(metrics.toolOutput).toBe(25)
+    expect(metrics.calls.map(call => call.callId)).toEqual(['run', 'inner', 'plain'])
+    expect(metrics.tools).toEqual([
+      { name: 'run_code', count: 1 },
+      { name: 'read', count: 1 },
+      { name: 'write', count: 1 },
+    ])
+    expect(metrics.toolOutput).toBe(1_025)
   })
 
   it('counts every result when no inner call is present', () => {
@@ -1470,289 +1327,62 @@ describe('step metric derivation', () => {
     expect(metrics.toolOutput).toBe(12)
     expect(metrics.tools).toHaveLength(2)
   })
-})
 
-describe('turn aggregation', () => {
-  it('reports an empty turn without invented values', () => {
-    const turn = aggregateTurn(9, [])
-    expect(turn.turn).toBe(9)
-    expect(turn.steps).toEqual([])
-    expect(turn.startTime).toBeNull()
-    expect(turn.context).toBeNull()
-    expect(turn.ttft).toBeNull()
-    expect(turn.ttftPending).toBe(0)
-    expect(turn.model).toBeNull()
-    expect(turn.modelPending).toBe(0)
-    expect(turn.decode).toBeNull()
-    expect(turn.tps).toBeNull()
-    expect(turn.output).toBeNull()
-    expect(turn.tool).toBeNull()
-    expect(turn.toolPending).toBe(0)
-    expect(turn.tools).toEqual([])
-    expect(turn.cacheHit).toBeNull()
-    expect(turn.retries).toBe(0)
-    expect(turn.toolErrors).toBe(0)
-    expect(turn.toolOutput).toBe(0)
-    expect(turn.lastStepWall).toBeNull()
-    expect(turn.running).toBe(false)
-    expect(turn.interrupted).toBe(false)
-    expect(turn.aborted).toBe(false)
-    expect(turn.wall).toBeNull()
-  })
-
-  it('sums measured spans and reports partial coverage as a lower bound', () => {
-    const measured = metricsOf({ startTime: 1_000, ttft: 100, model: 400, decode: 300, output: 40, tool: 200 })
-    const unknown = metricsOf({ startTime: 2_000, toolPending: 2 })
-    const turn = aggregateTurn(3, [measured, unknown])
-    expect(turn.ttft).toBe(100)
-    expect(turn.ttftPending).toBe(1)
-    expect(turn.model).toBe(400)
-    expect(turn.modelPending).toBe(1)
-    expect(turn.decode).toBe(300)
-    expect(turn.output).toBe(40)
-    expect(turn.tool).toBe(200)
-    expect(turn.toolPending).toBe(2)
-    expect(turn.startTime).toBe(1_000)
-    expect(turn.running).toBe(false)
-  })
-
-  it('reduces an entirely unmeasured turn to blanks', () => {
-    const turn = aggregateTurn(3, [metricsOf(), metricsOf({ step: 2 })])
-    expect(turn.ttft).toBeNull()
-    expect(turn.ttftPending).toBe(0)
-    expect(turn.model).toBeNull()
-    expect(turn.modelPending).toBe(2)
-    expect(turn.decode).toBeNull()
-    expect(turn.output).toBeNull()
-    expect(turn.tool).toBeNull()
-    expect(turn.toolPending).toBe(0)
-    expect(turn.tps).toBeNull()
-    expect(turn.wall).toBeNull()
-  })
-
-  it('derives turn speed only when decode and output are both positive', () => {
-    const fast = aggregateTurn(1, [
-      metricsOf({ step: 1, decode: 2_000, output: 50 }),
-      metricsOf({ step: 2, decode: 2_000, output: 50 }),
+  it('measures tool wall time as the union of overlapping call spans', () => {
+    const calls = callsRecord([
+      perfCall('c1', 1, { startedAt: 1_000, endedAt: 1_200 }),
+      perfCall('c2', 2, { startedAt: 1_100, endedAt: 1_300 }),
     ])
-    expect(fast.tps).toBeCloseTo(100 / 4)
-    const noDecode = aggregateTurn(1, [metricsOf({ decode: 0, output: 50 })])
-    expect(noDecode.decode).toBe(0)
-    expect(noDecode.tps).toBeNull()
-    const noOutput = aggregateTurn(1, [metricsOf({ decode: 2_000, output: 0 })])
-    expect(noOutput.tps).toBeNull()
-  })
-
-  it('keeps the last measured context and cache level of the turn', () => {
-    const turn = aggregateTurn(4, [
-      metricsOf({ step: 1, context: 100, cacheHit: 0.2, wall: 10 }),
-      metricsOf({ step: 2, context: 200, cacheHit: 0.5, wall: 20 }),
-      metricsOf({ step: 3 }),
-    ])
-    expect(turn.context).toBe(200)
-    expect(turn.cacheHit).toBe(0.5)
-    expect(turn.lastStepWall).toBe(20)
-    const heldBack = aggregateTurn(4, [
-      metricsOf({ step: 1, context: 100, cacheHit: 0.2, wall: 10 }),
-      metricsOf({ step: 2, cacheHit: null, wall: null }),
-    ])
-    expect(heldBack.context).toBe(100)
-    expect(heldBack.cacheHit).toBe(0.2)
-    expect(heldBack.lastStepWall).toBe(10)
-  })
-
-  it('sums retries, tool errors, and tool output', () => {
-    const turn = aggregateTurn(5, [
-      metricsOf({ step: 1, retries: 1, toolErrors: 2, toolOutput: 10 }),
-      metricsOf({ step: 2, retries: 2, toolErrors: 3, toolOutput: 5 }),
-    ])
-    expect(turn.retries).toBe(3)
-    expect(turn.toolErrors).toBe(5)
-    expect(turn.toolOutput).toBe(15)
-    const unrecorded = aggregateTurn(5, [
-      metricsOf({ step: 1, toolOutput: null }),
-      metricsOf({ step: 2, toolOutput: 4 }),
-    ])
-    expect(unrecorded.toolOutput).toBe(4)
-  })
-
-  it('merges tool tallies across steps', () => {
-    const turn = aggregateTurn(6, [
-      metricsOf({ step: 1, tools: [{ name: 'read', count: 1 }] }),
-      metricsOf({ step: 2, tools: [{ name: 'read', count: 2 }, { name: 'grep', count: 1 }] }),
-    ])
-    expect(turn.tools).toEqual([{ name: 'read', count: 3 }, { name: 'grep', count: 1 }])
-    const tied = aggregateTurn(6, [
-      metricsOf({ step: 1, tools: [{ name: 'read', count: 1 }, { name: 'grep', count: 1 }] }),
-    ])
-    expect(tied.tools).toEqual([{ name: 'read', count: 1 }, { name: 'grep', count: 1 }])
-  })
-
-  it('measures turn wall time only from a settled last step with a start', () => {
-    const first = metricsOf({ step: 1, startTime: 1_000 })
-    const last = metricsOf({ step: 2, startTime: 2_000, endTime: 3_000 })
-    expect(aggregateTurn(1, [first, last]).wall).toBe(2_000)
-    expect(aggregateTurn(1, [first, { ...last, running: true }]).wall).toBeNull()
-    expect(aggregateTurn(1, [{ ...first, startTime: null }, last]).wall).toBeNull()
-    expect(aggregateTurn(1, [first, { ...last, endTime: null }]).wall).toBeNull()
-    expect(aggregateTurn(1, [first, { ...last, endTime: 500 }]).wall).toBe(0)
-  })
-
-  it('reports last-step liveness and any interruption in the turn', () => {
-    const running = aggregateTurn(1, [
-      metricsOf({ step: 1, running: false }),
-      metricsOf({ step: 2, running: true }),
-    ])
-    expect(running.running).toBe(true)
-    const interrupted = aggregateTurn(2, [
-      metricsOf({ step: 1, interrupted: true }),
-      metricsOf({ step: 2, aborted: true }),
-    ])
-    expect(interrupted.interrupted).toBe(true)
-    expect(interrupted.aborted).toBe(true)
-  })
-
-  it('describes the turn prompt as absent until the table attributes it', () => {
-    const turn = aggregateTurn(2, [metricsOf()])
-    expect(turn.prompt).toBeNull()
-    expect(turn.promptImages).toBe(0)
-    expect(turn.steps).toHaveLength(1)
+    const metrics = stepMetrics(stateOf({ calls, toolPairs: 2, toolMs: 400 }))
+    expect(metrics.tool).toBe(400)
+    expect(metrics.toolWall).toBe(300)
   })
 })
 
-describe('turn grouping', () => {
-  it('groups steps into turns ordered oldest first with their markers', () => {
-    const one = metricsOf({ turn: 8, step: 2, startTime: 20_000 })
-    const two = metricsOf({ turn: 8, step: 1, startTime: 19_000 })
-    const later = metricsOf({ turn: 9, step: 1, startTime: 30_000 })
-    const turns = buildTurns([
-      stepNode(later),
-      stepNode(one),
-      stepNode(two),
-      promptNode(8, '问题', 2),
-      endNode(9, 31_000, 'interrupted'),
-    ])
-    expect(turns.map(turn => turn.turn)).toEqual([8, 9])
-    expect(turns[0]?.steps.map(step => step.step)).toEqual([1, 2])
-    expect(turns[0]?.prompt).toBe('问题')
-    expect(turns[0]?.promptImages).toBe(2)
-    expect(turns[1]?.interrupted).toBe(true)
+describe('tool span union', () => {
+  it('reports no span when no call settled with both ends', () => {
+    expect(toolSpanUnion([])).toBeNull()
+    expect(toolSpanUnion([
+      perfCall('a', 1, { startedAt: 1_000 }),
+      perfCall('b', 2, { endedAt: 2_000 }),
+    ])).toBeNull()
   })
 
-  it('returns no turn for markers without a step', () => {
-    expect(buildTurns([])).toEqual([])
-    expect(buildTurns([promptNode(5, 'orphan'), endNode(5, 1_000, 'interrupted')])).toEqual([])
+  it('adds disjoint spans and counts overlaps once', () => {
+    expect(toolSpanUnion([
+      perfCall('a', 1, { startedAt: 1_000, endedAt: 1_200 }),
+      perfCall('b', 2, { startedAt: 1_500, endedAt: 1_700 }),
+    ])).toBe(400)
+    expect(toolSpanUnion([
+      perfCall('a', 1, { startedAt: 1_000, endedAt: 1_500 }),
+      perfCall('b', 2, { startedAt: 1_200, endedAt: 1_300 }),
+    ])).toBe(500)
+    expect(toolSpanUnion([
+      perfCall('a', 1, { startedAt: 1_000, endedAt: 1_200 }),
+      perfCall('b', 2, { startedAt: 1_100, endedAt: 1_400 }),
+    ])).toBe(400)
   })
 
-  it('ignores prompt markers with no text and end markers with no detail', () => {
-    const step = metricsOf({ turn: 1, step: 1, startTime: 1_000, running: true })
-    const turns = buildTurns([
-      stepNode(step),
-      promptNode(1, null),
-      promptNode(1, ''),
-      endNode(1, Number.NaN, null),
-    ])
-    expect(turns).toHaveLength(1)
-    expect(turns[0]?.prompt).toBeNull()
-    expect(turns[0]?.promptImages).toBe(0)
-    expect(turns[0]?.running).toBe(true)
+  it('sorts input spans and joins touching ones', () => {
+    expect(toolSpanUnion([
+      perfCall('late', 1, { startedAt: 2_000, endedAt: 2_100 }),
+      perfCall('early', 2, { startedAt: 1_000, endedAt: 1_100 }),
+    ])).toBe(200)
+    expect(toolSpanUnion([
+      perfCall('first', 1, { startedAt: 1_000, endedAt: 1_200 }),
+      perfCall('second', 2, { startedAt: 1_200, endedAt: 1_500 }),
+    ])).toBe(500)
   })
+})
 
-  it('skips a step whose turn number is not a number', () => {
-    const turns = buildTurns([
-      stepNode(metricsOf({ turn: Number.NaN, step: 1 })),
-      stepNode(metricsOf({ turn: 2, step: 1 })),
-    ])
-    expect(turns.map(turn => turn.turn)).toEqual([2])
-  })
-
-  it('clears running before a later step without mutating the input', () => {
-    const first = metricsOf({ turn: 1, step: 1, running: true })
-    const second = metricsOf({ turn: 1, step: 2, running: true })
-    const third = metricsOf({ turn: 1, step: 3, running: true })
-    const turns = buildTurns([stepNode(first), stepNode(second), stepNode(third)])
-    expect(turns[0]?.steps.map(step => step.running)).toEqual([false, false, true])
-    expect(first.running).toBe(true)
-    expect(turns[0]?.running).toBe(true)
-  })
-
-  it('keeps a running turn when a later turn follows', () => {
-    const turns = buildTurns([
-      stepNode(metricsOf({ turn: 1, step: 1, running: true })),
-      stepNode(metricsOf({ turn: 2, step: 1, running: true })),
-    ])
-    expect(turns[0]?.running).toBe(false)
-    expect(turns[1]?.running).toBe(true)
-  })
-
-  it('drops the empty step an interruption appends', () => {
-    const one = metricsOf({ turn: 11, step: 1, startTime: 50_000, context: 300 })
-    const empty = metricsOf({ turn: 11, step: 2, wall: 0 })
-    const turns = buildTurns([
-      stepNode(one),
-      stepNode(empty),
-      endNode(11, 51_000, 'interrupted'),
-    ])
-    expect(turns[0]?.steps).toHaveLength(1)
-    expect(turns[0]?.steps[0]?.wall).toBe(1_000)
-    expect(turns[0]?.steps[0]?.aborted).toBe(true)
-  })
-
-  it('keeps a tail step that still measured something', () => {
-    const variants: readonly PerfStepMetrics[] = [
-      metricsOf({ turn: 12, step: 2, context: 5 }),
-      metricsOf({ turn: 12, step: 2, ttft: 5 }),
-      metricsOf({ turn: 12, step: 2, model: 5 }),
-      metricsOf({ turn: 12, step: 2, tool: 0 }),
-      metricsOf({ turn: 12, step: 2, toolPending: 1 }),
-      metricsOf({ turn: 12, step: 2, tools: [{ name: 'read', count: 1 }] }),
-      metricsOf({ turn: 12, step: 2, wall: 5 }),
-    ]
-    for (const tail of variants) {
-      const turns = buildTurns([
-        stepNode(metricsOf({ turn: 12, step: 1, startTime: 1_000, context: 10 })),
-        stepNode(tail),
-        endNode(12, 2_000, 'interrupted'),
-      ])
-      expect(turns[0]?.steps, JSON.stringify(tail)).toHaveLength(2)
-    }
-  })
-
-  it('closes an interrupted tail at the turn end time', () => {
-    const open = metricsOf({ turn: 13, step: 1, startTime: 1_000, running: true })
-    const turns = buildTurns([stepNode(open), endNode(13, 4_000, 'interrupted')])
-    const closed = turns[0]?.steps[0]
-    expect(closed?.endTime).toBe(4_000)
-    expect(closed?.wall).toBe(3_000)
-    expect(closed?.running).toBe(false)
-    expect(closed?.aborted).toBe(true)
-    expect(turns[0]?.wall).toBe(3_000)
-    expect(turns[0]?.running).toBe(false)
-  })
-
-  it('closes a tail with no start time without inventing a duration', () => {
-    const open = metricsOf({ turn: 14, step: 1, running: true })
-    const turns = buildTurns([stepNode(open), endNode(14, 4_000, null)])
-    expect(turns[0]?.steps[0]?.endTime).toBe(4_000)
-    expect(turns[0]?.steps[0]?.wall).toBeNull()
-    expect(turns[0]?.interrupted).toBe(false)
-  })
-
-  it('leaves a tail that already ended untouched', () => {
-    const settled = metricsOf({ turn: 15, step: 1, startTime: 1_000, endTime: 1_500 })
-    const turns = buildTurns([stepNode(settled), endNode(15, 4_000, 'completed')])
-    expect(turns[0]?.steps[0]?.endTime).toBe(1_500)
-    expect(turns[0]?.steps[0]?.wall).toBeNull()
-    expect(turns[0]?.wall).toBe(500)
-  })
-
-  it('prefers the interruption close kind over the step flags', () => {
-    const done = metricsOf({ turn: 16, step: 1, interrupted: true })
-    const interrupted = buildTurns([stepNode(done), endNode(16, 1_000, 'interrupted')])
-    expect(interrupted[0]?.interrupted).toBe(true)
-    const interruptedStep = buildTurns([stepNode(done), endNode(16, 1_000, 'completed')])
-    expect(interruptedStep[0]?.interrupted).toBe(true)
-    const quiet = buildTurns([stepNode(metricsOf({ turn: 17, step: 1 }))])
-    expect(quiet[0]?.interrupted).toBe(false)
+describe('code-mode name helper', () => {
+  it('recognizes the runner spellings and nothing else', () => {
+    expect(isCodeMode('run_code')).toBe(true)
+    expect(isCodeMode('RunCode')).toBe(true)
+    expect(isCodeMode('runCode')).toBe(true)
+    expect(isCodeMode('RUN_CODE')).toBe(true)
+    expect(isCodeMode('run-code')).toBe(false)
+    expect(isCodeMode('grep')).toBe(false)
+    expect(isCodeMode(null)).toBe(false)
   })
 })

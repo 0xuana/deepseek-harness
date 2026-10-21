@@ -1,15 +1,71 @@
 /** Turn aggregation over the step metrics a window holds. */
 
 import type {
-  PerfStepMetrics, PerfToolCount, PerfTurnMetrics, PerfViewNode,
+  PerfCall, PerfContribution, PerfStepMetrics, PerfToolCount, PerfTurnMetrics, PerfViewNode,
 } from './perf-contract.ts'
+import { CALL_LIMIT, isCodeMode, toolSpanUnion } from './perf-fold.ts'
 import { isNumber } from './perf-usage.ts'
+
+/** One Code-Mode root call's inner contribution, before merging into its step. */
+type InnerContribution = Extract<PerfContribution, { kind: 'inner' }>
 
 /** Context measured last in the turn: steps without usage keep the previous value. */
 function turnContext(steps: readonly PerfStepMetrics[]): number | null {
   let context: number | null = null
   for (const step of steps) if (isNumber(step.context)) context = step.context
   return context
+}
+
+/** Cache breakdown measured last in the turn, from the same step whose hit rate the row shows. */
+function turnCache(steps: readonly PerfStepMetrics[]): { read: number | null; write: number | null } {
+  let read: number | null = null
+  let write: number | null = null
+  for (const step of steps) {
+    if (!isNumber(step.cacheHit)) continue
+    read = step.cacheRead
+    write = step.cacheWrite
+  }
+  return { read, write }
+}
+
+/** Tool tallies by descending count; ties keep call order. */
+function tallyCalls(calls: readonly PerfCall[]): PerfToolCount[] {
+  const counts = new Map<string, number>()
+  for (const call of calls) {
+    if (call.name === null) continue
+    counts.set(call.name, (counts.get(call.name) ?? 0) + 1)
+  }
+  return [...counts.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((left, right) => right.count - left.count)
+}
+
+/**
+ * Merge the Code-Mode dispatches of one step into its row. The runner call
+ * disappears in favor of the real tools, so the row shows what the code called
+ * and the characters those results pushed into the next prompt.
+ * @param step - step row folded from native events only.
+ * @param inner - the step's Code-Mode contributions.
+ * @returns the merged row, or the original when no dispatch was recorded.
+ */
+function mergeInnerCalls(step: PerfStepMetrics, inner: readonly InnerContribution[]): PerfStepMetrics {
+  if (inner.length === 0) return step
+  const innerCalls = inner.flatMap(contribution => contribution.calls)
+  const calls = [
+    ...step.calls.filter(call => !isCodeMode(call.name)),
+    ...innerCalls,
+  ]
+    .sort((left, right) => left.seq - right.seq)
+    .slice(0, CALL_LIMIT)
+  const chars = calls.reduce((sum, call) => sum + (call.chars ?? 0), 0)
+  return {
+    ...step,
+    calls,
+    tools: tallyCalls(calls),
+    toolOutput: chars,
+    toolWall: toolSpanUnion(calls),
+    toolErrors: step.toolErrors + innerCalls.filter(call => call.error).length,
+  }
 }
 
 /**
@@ -30,6 +86,8 @@ export function aggregateTurn(turn: number, steps: readonly PerfStepMetrics[]): 
   let toolSum = 0
   let toolPairable = 0
   let toolPending = 0
+  let toolWallSum = 0
+  let toolWallMeasured = false
   const tools = new Map<string, number>()
   for (const step of steps) {
     for (const item of step.tools) tools.set(item.name, (tools.get(item.name) ?? 0) + item.count)
@@ -45,6 +103,10 @@ export function aggregateTurn(turn: number, steps: readonly PerfStepMetrics[]): 
     if (isNumber(step.tool)) {
       toolSum += step.tool
       toolPairable += 1
+    }
+    if (isNumber(step.toolWall)) {
+      toolWallSum += step.toolWall
+      toolWallMeasured = true
     }
     toolPending += step.toolPending
   }
@@ -68,6 +130,7 @@ export function aggregateTurn(turn: number, steps: readonly PerfStepMetrics[]): 
     if (isNumber(step.toolOutput)) toolOutput += step.toolOutput
     if (isNumber(step.wall)) lastStepWall = step.wall
   }
+  const cache = turnCache(steps)
   const all = steps.length
   const toolCounts: PerfToolCount[] = [...tools.entries()]
     .map(([name, count]) => ({ name, count }))
@@ -86,9 +149,12 @@ export function aggregateTurn(turn: number, steps: readonly PerfStepMetrics[]): 
     tps: decodeSum > 0 && outputSum > 0 ? outputSum / (decodeSum / 1000) : null,
     output: outputUnknown === all ? null : outputSum,
     tool: toolPairable === 0 ? null : toolSum,
+    toolWall: toolWallMeasured ? toolWallSum : null,
     toolPending: toolPairable === 0 ? 0 : toolPending,
     tools: toolCounts,
     cacheHit,
+    cacheRead: cache.read,
+    cacheWrite: cache.write,
     retries,
     toolErrors,
     toolOutput,
@@ -112,6 +178,8 @@ function isEmptyStep(step: PerfStepMetrics): boolean {
 
 /**
  * Group published nodes into ordered turns, closing each turn with its markers.
+ * Code-Mode contributions merge into the step that dispatched them, identified
+ * by the root call id the node carries.
  * @param nodes - every node the target builder currently holds.
  * @returns turn rows ordered oldest first.
  */
@@ -120,12 +188,14 @@ export function buildTurns(nodes: Iterable<PerfViewNode>): PerfTurnMetrics[] {
   // turn/end marker: turn → end time and reason, so an interrupted tail closes.
   const closedAt = new Map<number, number>()
   const closedKind = new Map<number, string>()
-  // User question per turn.
+  // User question per turn; the first typed question wins over later retries.
   const prompts = new Map<number, { text: string; images: number }>()
+  // Code-Mode dispatches per step, merged after the steps are ordered.
+  const inner = new Map<string, InnerContribution[]>()
   for (const node of nodes) {
     const data = node.data
     if (data.kind === 'prompt') {
-      if (data.prompt !== null && data.prompt !== '') {
+      if (data.prompt !== null && data.prompt !== '' && !prompts.has(data.turn)) {
         prompts.set(data.turn, { text: data.prompt, images: data.images })
       }
       continue
@@ -133,6 +203,13 @@ export function buildTurns(nodes: Iterable<PerfViewNode>): PerfTurnMetrics[] {
     if (data.kind === 'end') {
       if (isNumber(data.endTime)) closedAt.set(data.turn, data.endTime)
       if (data.closeKind !== null) closedKind.set(data.turn, data.closeKind)
+      continue
+    }
+    if (data.kind === 'inner') {
+      const key = `${data.turn}:${data.step}`
+      const list = inner.get(key)
+      if (list === undefined) inner.set(key, [data])
+      else list.push(data)
       continue
     }
     const metrics = data.metrics
@@ -145,7 +222,7 @@ export function buildTurns(nodes: Iterable<PerfViewNode>): PerfTurnMetrics[] {
   const order = [...grouped.keys()].sort((left, right) => left - right)
   order.forEach((turn, index) => {
     const bucket = grouped.get(turn)
-    /* v8 ignore next -- order is built from grouped's own keys, so the lookup always resolves. */
+    /* v8 ignore next -- turn came from the map's own keys, so the bucket always exists. */
     if (bucket === undefined) return
     const steps = bucket.slice().sort((left, right) => left.step - right.step)
     // A step followed by another step cannot still be running: a trimmed window
@@ -170,7 +247,8 @@ export function buildTurns(nodes: Iterable<PerfViewNode>): PerfTurnMetrics[] {
         aborted: true,
       }
     }
-    const aggregate = aggregateTurn(turn, steps)
+    const merged = steps.map(step => mergeInnerCalls(step, inner.get(`${turn}:${step.step}`) ?? []))
+    const aggregate = aggregateTurn(turn, merged)
     const prompt = prompts.get(turn)
     turns.push({
       ...aggregate,

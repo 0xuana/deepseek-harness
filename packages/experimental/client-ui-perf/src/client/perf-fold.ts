@@ -1,15 +1,15 @@
 /** Event folding and per-step metric derivation for the performance table. */
 
 import type { SessionEventLike } from '@deepseek-ai/dsh-api-session-controller/client'
-import type { StreamChunk } from '@deepseek-ai/dsh-llm'
+import type { ContentBlock, StreamChunk, UserMessage } from '@deepseek-ai/dsh-llm'
 import { assistantStreamFirstTokenTime } from '@deepseek-ai/dsh-llm/assistant-stream'
 // Type-only: the PTC event members this fold reads.
-import type {} from '@deepseek-ai/dsh-tools/types'
+import type {} from '@deepseek-ai/dsh-tool-executor-ptc/types'
 import type {
-  PerfCall, PerfStepMetrics, PerfStepState, PerfToolCount, PerfUsage,
+  PerfCall, PerfStepMetrics, PerfStepState, PerfToolCount,
 } from './perf-contract.ts'
 import {
-  cacheHitRate, cacheReadTokens, cacheWriteTokens, contextTokens, isNumber, isUsage,
+  cacheHitRate, cacheReadTokens, cacheWriteTokens, contextTokens, isNumber,
   outputTokens,
 } from './perf-usage.ts'
 
@@ -89,6 +89,11 @@ function countLines(text: string): number {
   return text.charCodeAt(text.length - 1) === 10 ? lines - 1 : lines
 }
 
+/** Read a record entry only when the record owns it, so model ids never resolve inherited members. */
+function ownValue<T>(record: Readonly<Record<string, T>> | null, key: string): T | undefined {
+  return record !== null && Object.hasOwn(record, key) ? record[key] : undefined
+}
+
 /** Longest common subsequence length, one rolling row; fine below 400 lines a side. */
 function lcsLength(left: readonly string[], right: readonly string[]): number {
   const width = right.length + 1
@@ -96,9 +101,9 @@ function lcsLength(left: readonly string[], right: readonly string[]): number {
   let current = new Uint16Array(width)
   for (let row = 1; row <= left.length; row += 1) {
     for (let column = 1; column <= right.length; column += 1) {
-      /* v8 ignore next -- an in-bounds typed-array read is always a number; the fallback only satisfies the index type. */
+      /* v8 ignore next -- an in-bounds typed-array read always yields a number; the fallback only satisfies the index type. */
       const up = previous[column] ?? 0
-      /* v8 ignore next -- an in-bounds typed-array read is always a number; the fallback only satisfies the index type. */
+      /* v8 ignore next -- an in-bounds typed-array read always yields a number; the fallback only satisfies the index type. */
       const leftCell = current[column - 1] ?? 0
       /* v8 ignore next 3 -- the typed-array nullish fallback is unreachable; in-bounds reads never yield undefined. */
       current[column] = left[row - 1] === right[column - 1]
@@ -110,7 +115,7 @@ function lcsLength(left: readonly string[], right: readonly string[]): number {
     current = swap
     current.fill(0)
   }
-  /* v8 ignore next -- an in-bounds typed-array read is always a number; the fallback only satisfies the index type. */
+  /* v8 ignore next -- an in-bounds typed-array read always yields a number; the fallback only satisfies the index type. */
   return previous[right.length] ?? 0
 }
 
@@ -211,14 +216,24 @@ function toolHint(name: string, raw: unknown): string | null {
 }
 
 /** Code-Mode steps call this one tool; the real tools run inside it. */
-function isCodeMode(name: string | null): boolean {
+export function isCodeMode(name: string | null): boolean {
   return name !== null && /^run_?code$/i.test(name)
 }
 
-/** Tool name of one call; a nameless call counts but invents no name. */
-function calledTool(data: { readonly name?: unknown }): string | null {
-  const name = data.name
-  return typeof name === 'string' && name !== '' ? name : null
+/** Arguments-derived PerfCall fields shared by a native call and one Code-Mode dispatch. */
+function callArguments(
+  name: string,
+  raw: unknown,
+): Pick<PerfCall, 'hint' | 'added' | 'removed' | 'before' | 'after' | 'args'> {
+  const delta = editDelta(name, raw)
+  return {
+    hint: toolHint(name, raw),
+    added: delta === null ? null : delta.added,
+    removed: delta === null ? null : delta.removed,
+    before: delta === null ? null : delta.before,
+    after: delta === null ? null : delta.after,
+    args: rawArgs(raw),
+  }
 }
 
 /** Whether one stream chunk counts as the first model token. */
@@ -232,49 +247,6 @@ function isTokenDelta(chunk: StreamChunk): boolean {
     default:
       return false
   }
-}
-
-/** Root call id → step id, for inner Code-Mode calls that carry no turn/step. */
-const PTC_STEPS = new Map<string, string>()
-const PTC_STEPS_MAX = 4_000
-
-/** Remember which step owns one Code-Mode root call, evicting the oldest entry. */
-function rememberPtcCall(callId: string, stepId: string): void {
-  PTC_STEPS.set(callId, stepId)
-  if (PTC_STEPS.size <= PTC_STEPS_MAX) return
-  const oldest = PTC_STEPS.keys().next().value
-  /* v8 ignore next -- the size check above guarantees a first key, so the guard never sees undefined. */
-  if (oldest !== undefined) PTC_STEPS.delete(oldest)
-}
-
-/**
- * Step id owning one Code-Mode root call.
- * @param rootCallId - root call id carried by a dispatch event.
- * @returns the owning step id, or null when the call was not recorded.
- */
-export function ptcStepOf(rootCallId: unknown): string | null {
-  return typeof rootCallId === 'string' ? PTC_STEPS.get(rootCallId) ?? null : null
-}
-
-/** Clear the Code-Mode owner table; tests use it to isolate cases. */
-export function resetPtcSteps(): void {
-  PTC_STEPS.clear()
-}
-
-/** Current turn number; `user/message` carries no turn and is attributed by order. */
-let currentTurn: number | null = null
-
-/**
- * Turn number of the latest `turn/start`.
- * @returns the current turn, or null before the window has one.
- */
-export function currentTurnOf(): number | null {
-  return currentTurn
-}
-
-/** Reset the current-turn marker; tests use it to isolate cases. */
-export function resetCurrentTurn(): void {
-  currentTurn = null
 }
 
 /**
@@ -318,38 +290,23 @@ export function newState(
   }
 }
 
-/** Call id of a tool result lives on the message source, not on the result event. */
-function resultCallId(message: unknown): string | null {
-  if (message === null || typeof message !== 'object') return null
-  const source = (message as { source?: unknown }).source
-  if (source === null || typeof source !== 'object') return null
-  const callId = (source as { callId?: unknown }).callId
-  return typeof callId === 'string' ? callId : null
-}
-
 /** Result text: the text blocks of the tool message joined by newlines. */
-function resultText(message: unknown): string | null {
-  /* v8 ignore next -- callers reach this helper only after resolving a call id from an object message. */
-  if (message === null || typeof message !== 'object') return null
-  const content = (message as { content?: unknown }).content
-  if (!Array.isArray(content)) return null
+function resultText(content: readonly ContentBlock[]): string | null {
   const parts: string[] = []
-  for (const item of content as unknown[]) {
-    if (item === null || typeof item !== 'object') continue
-    const block = item as { type?: unknown; text?: unknown }
-    if (block.type === 'text' && typeof block.text === 'string') parts.push(block.text)
+  for (const block of content) {
+    if (block.type === 'text') parts.push(block.text)
   }
   return parts.length === 0 ? null : parts.join('\n')
 }
 
 /** Size, line count, and bounded body of one tool result. */
-function resultInfo(message: unknown): {
+function resultInfo(content: readonly ContentBlock[]): {
   chars: number
   lines: number
   text: string | null
   truncated: boolean
 } {
-  const text = resultText(message)
+  const text = resultText(content)
   if (text === null) return { chars: 0, lines: 0, text: null, truncated: false }
   let lines = 0
   for (let index = 0; index < text.length; index += 1) {
@@ -360,28 +317,12 @@ function resultInfo(message: unknown): {
   return { chars: text.length, lines, text: body.text, truncated: body.truncated }
 }
 
-/** Whether one tool result reports an error. */
-function resultFailed(message: unknown): boolean {
-  return message !== null && typeof message === 'object'
-    && (message as { isError?: unknown }).isError === true
-}
-
-/**
- * User question: `user/message` also carries injected runtime context and time
- * snapshots, so only `source.kind === 'user'` is the text the user typed.
- */
-function promptOf(data: {
-  readonly content?: unknown
-  readonly source?: unknown
-}): { text: string | null; images: number } {
-  const content = data.content
-  if (!Array.isArray(content)) return { text: null, images: 0 }
+/** User question: only a human-typed `user` source is the text the user wrote. */
+export function promptOf(message: UserMessage): { text: string | null; images: number } {
   const parts: string[] = []
   let images = 0
-  for (const item of content as unknown[]) {
-    if (item === null || typeof item !== 'object') continue
-    const block = item as { type?: unknown; text?: unknown }
-    if (block.type === 'text' && typeof block.text === 'string') parts.push(block.text)
+  for (const block of message.content) {
+    if (block.type === 'text') parts.push(block.text)
     if (block.type === 'image') images += 1
   }
   return { text: clip(parts.join(' '), 400), images }
@@ -410,28 +351,11 @@ export function foldEvent(
     case 'step/start':
       return { ...newState(event.data.turn, event.data.step), startSeq: event.seq, startTime: event.time }
 
-    case 'turn/start': {
-      currentTurn = event.data.turn
-      return newState(event.data.turn, 0, 'prompt')
-    }
-
-    case 'user/message': {
-      const next = state ?? newState(currentTurn ?? 0, 0)
-      const base: PerfStepState = { ...next, mark: 'prompt' }
-      const source: unknown = event.data.source
-      if (typeof source !== 'object' || source === null
-        || (source as { kind?: unknown }).kind !== 'user') return base
-      if (base.prompt !== null) return base
-      const prompt = promptOf(event.data)
-      return { ...base, prompt: prompt.text, images: prompt.images }
-    }
-
     case 'assistant/live-chunk': {
       const next = state ?? newState(event.data.turn, event.data.step)
       const chunk = event.data.chunk
       if (chunk.type === 'usage') {
-        const usage: PerfUsage = chunk.usage
-        return isUsage(usage) ? { ...next, usage } : next
+        return { ...next, usage: chunk.usage }
       }
       if (next.firstTokenTime === null && isTokenDelta(chunk)) {
         return { ...next, firstTokenTime: event.time }
@@ -447,11 +371,10 @@ export function foldEvent(
         if (isNumber(fromStream)) next = { ...next, firstTokenTime: fromStream }
       }
       if (event.type === 'assistant/attempt') return next
-      const usage = event.data.usage
       return {
         ...next,
         messageTime: next.messageTime ?? event.time,
-        usage: isUsage(usage) ? usage : next.usage,
+        usage: event.data.usage ?? next.usage,
         interrupted: event.data.interrupted === true,
       }
     }
@@ -462,35 +385,30 @@ export function foldEvent(
       const pending: Record<string, number> = { ...(next.pending ?? {}) }
       const known = Object.hasOwn(pending, callId)
       pending[callId] = event.time
-      const name = calledTool(event.data)
+      const name = event.data.name
       const calls: Record<string, PerfCall> = { ...(next.calls ?? {}) }
-      if (isCodeMode(name)) rememberPtcCall(callId, `${event.data.turn}:${event.data.step}`)
       if (!Object.hasOwn(calls, callId)) {
-        const delta = name === null ? null : editDelta(name, event.data.arguments)
         calls[callId] = {
           callId,
           seq: event.seq,
           name,
-          hint: name === null ? null : toolHint(name, event.data.arguments),
+          ...callArguments(name, event.data.arguments),
           chars: null,
           lines: null,
           error: false,
-          added: delta === null ? null : delta.added,
-          removed: delta === null ? null : delta.removed,
-          before: delta === null ? null : delta.before,
-          after: delta === null ? null : delta.after,
-          args: rawArgs(event.data.arguments),
           inner: false,
           text: null,
           truncated: false,
           ms: null,
+          startedAt: event.time,
+          endedAt: null,
         }
       }
       return {
         ...next,
         pending,
         toolOpen: known ? next.toolOpen : next.toolOpen + 1,
-        tools: name === null ? next.tools : bumpTool(next.tools, name),
+        tools: bumpTool(next.tools, name),
         calls,
       }
     }
@@ -500,10 +418,8 @@ export function foldEvent(
 
     /**
      * Inner Code-Mode call: the name and arguments are the real tool's, the
-     * content is the real result. It does not count toward tool time (the outer
-     * `run_code` call already covers it), but its own dispatch span is measured.
-     * The event carries no turn or step, so it only folds into a context the
-     * root-call map already resolved.
+     * content is the real result. It does not count toward the outer call's
+     * tool time; its own dispatch span is measured instead.
      */
     case 'tool/ptc-dispatch-start': {
       if (state === undefined) return state
@@ -514,30 +430,25 @@ export function foldEvent(
     case 'tool/ptc-dispatch': {
       const next = state
       if (next === undefined) return next
-      const name = calledTool(event.data)
-      if (name === null) return next
-      const info = resultInfo({ content: event.data.content })
-      const delta = editDelta(name, event.data.arguments)
+      const name = event.data.name
+      const info = resultInfo(event.data.content)
       const callKey = event.data.subCallId
-      const startedAt = next.starts?.[callKey]
+      const startedAt = ownValue(next.starts, callKey)
       const calls: Record<string, PerfCall> = { ...(next.calls ?? {}) }
       calls[callKey] = {
         callId: callKey,
         seq: event.seq,
         name,
-        hint: toolHint(name, event.data.arguments),
+        ...callArguments(name, event.data.arguments),
         chars: info.chars,
         lines: info.lines,
         text: info.text,
         truncated: info.truncated,
         error: event.data.isError,
-        added: delta === null ? null : delta.added,
-        removed: delta === null ? null : delta.removed,
-        before: delta === null ? null : delta.before,
-        after: delta === null ? null : delta.after,
-        args: rawArgs(event.data.arguments),
         inner: true,
         ms: isNumber(startedAt) ? Math.max(0, event.time - startedAt) : null,
+        startedAt: isNumber(startedAt) ? startedAt : null,
+        endedAt: event.time,
       }
       return {
         ...next,
@@ -550,26 +461,27 @@ export function foldEvent(
     case 'tool/result': {
       const next = state ?? newState(event.data.turn, event.data.step)
       const message = event.data.message
-      const callId = resultCallId(message)
-      const failed = resultFailed(message)
-      const before = callId === null ? undefined : next.calls?.[callId]
+      const callId: string = message.source.callId
+      const failed = message.isError === true
+      const before = ownValue(next.calls, callId)
       const calls: Record<string, PerfCall> = { ...(next.calls ?? {}) }
-      if (callId !== null && before !== undefined) {
+      if (before !== undefined) {
         calls[callId] = {
           ...before,
-          ...resultInfo(message),
+          ...resultInfo(message.content),
           error: failed || before.error,
+          /* v8 ignore next -- a native call record always carries the start time tool/call recorded. */
+          ms: isNumber(before.startedAt) ? Math.max(0, event.time - before.startedAt) : before.ms,
+          endedAt: event.time,
         }
       }
       const withError = failed ? { ...next, toolErrors: next.toolErrors + 1 } : next
-      // Own-property check: the call id is model generated, so a name such as
-      // `constructor` must not resolve to an inherited function as a start time.
-      const dispatched = callId === null ? undefined : next.pending?.[callId]
+      const dispatched = ownValue(next.pending, callId)
       if (!isNumber(dispatched)) {
         return { ...withError, calls, toolMissing: next.toolMissing + 1 }
       }
       const pending: Record<string, number> = {}
-      /* v8 ignore next -- a numeric dispatched time implies pending exists, so the empty fallback is unreachable. */
+      /* v8 ignore next -- a numeric pending start implies pending exists; the empty fallback is unreachable. */
       for (const [key, value] of Object.entries(next.pending ?? {})) {
         if (key !== callId) pending[key] = value
       }
@@ -609,23 +521,43 @@ function callList(calls: Readonly<Record<string, PerfCall>> | null): PerfCall[] 
   })
 }
 
-/** Tool result characters one step pushed into the next prompt. */
-function outputChars(calls: Readonly<Record<string, PerfCall>> | null, skipRunner: boolean): number {
-  if (calls === null) return 0
-  let total = 0
-  for (const call of Object.values(calls)) {
-    if (skipRunner && isCodeMode(call.name) && !call.inner) continue
-    if (isNumber(call.chars)) total += call.chars
-  }
-  return total
-}
-
 /** Tool tallies by descending count; ties keep first-call order. */
 function sortedTools(tools: Readonly<Record<string, number>> | null): PerfToolCount[] {
   if (tools === null) return []
   return Object.entries(tools)
     .map(([name, count]) => ({ name, count }))
     .sort((left, right) => right.count - left.count)
+}
+
+/** Wall span covered by calls that both started and settled; overlaps count once. */
+export function toolSpanUnion(calls: readonly PerfCall[]): number | null {
+  const intervals = calls
+    .filter((call): call is PerfCall & { startedAt: number; endedAt: number } =>
+      isNumber(call.startedAt) && isNumber(call.endedAt))
+    .map(call => [call.startedAt, call.endedAt] as const)
+    .sort((left, right) => left[0] - right[0])
+  if (intervals.length === 0) return null
+  let total = 0
+  let [start, end] = intervals[0] as readonly [number, number]
+  for (const [nextStart, nextEnd] of intervals.slice(1)) {
+    if (nextStart > end) {
+      total += end - start
+      start = nextStart
+      end = nextEnd
+    } else if (nextEnd > end) {
+      end = nextEnd
+    }
+  }
+  return total + end - start
+}
+
+/** Tool result characters one step pushed into the next prompt. */
+function outputChars(calls: readonly PerfCall[]): number {
+  let total = 0
+  for (const call of calls) {
+    if (isNumber(call.chars)) total += call.chars
+  }
+  return total
 }
 
 /**
@@ -646,10 +578,9 @@ export function stepMetrics(state: PerfStepState): PerfStepMetrics {
     ? output / (decode / 1000)
     : null
   const settled = isNumber(message)
-  const rawCalls = callList(state.calls)
-  const inner = rawCalls.some(call => call.inner)
-  const calls = inner ? rawCalls.filter(call => !isCodeMode(call.name)) : rawCalls
-  const tools = sortedTools(state.tools).filter(item => !(inner && isCodeMode(item.name)))
+  const calls = callList(state.calls)
+  // The union spans every paired call, not just the row's displayed prefix.
+  const allCalls = state.calls === null ? [] : Object.values(state.calls)
   return {
     turn: state.turn,
     step: state.step,
@@ -662,9 +593,10 @@ export function stepMetrics(state: PerfStepState): PerfStepMetrics {
     tps,
     output,
     tool: state.toolPairs > 0 ? state.toolMs : null,
-    tools,
+    toolWall: toolSpanUnion(allCalls),
+    tools: sortedTools(state.tools),
     calls,
-    toolOutput: outputChars(state.calls, inner),
+    toolOutput: outputChars(calls),
     retries: state.retries,
     toolErrors: state.toolErrors,
     cacheRead: cacheReadTokens(state.usage),

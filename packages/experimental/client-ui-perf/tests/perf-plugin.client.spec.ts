@@ -22,7 +22,6 @@ import { en, NS, zh } from '../src/client/locales.ts'
 import type {
   PerfCall, PerfContribution, PerfSnapshot, PerfStepMetrics, PerfStepState, PerfViewNode,
 } from '../src/client/perf-contract.ts'
-import { resetCurrentTurn, resetPtcSteps } from '../src/client/perf-fold.ts'
 import { TARGET } from '../src/client/perf-definition.ts'
 import { PerfView } from '../src/client/PerfView.tsx'
 import {
@@ -115,6 +114,7 @@ interface PluginBench {
   readonly views: readonly ConversationViewDefinition[]
   readonly localeRegister: ReturnType<typeof vi.fn>
   readonly binding: ReturnType<typeof vi.fn>
+  readonly loadOlder: ReturnType<typeof vi.fn>
   readonly entries: () => readonly StoredEntry[]
   readonly setSnapshot: (next: PerfSnapshot | undefined) => void
   readonly notify: () => void
@@ -139,6 +139,9 @@ async function mountPlugin(): Promise<PluginBench> {
       },
     }),
   }))
+  const loadOlder = vi.fn(async () => undefined)
+  const sessionBinding = { session: { loadOlder } }
+  ctx.provide('sessions', { binding: (id: SessionId) => (id === SID ? sessionBinding : undefined) } as never)
   ctx.provide('locale', { register: localeRegister, bind: () => makeTranslate(zh) } as never)
   ctx.provide('uiConversation', {
     binding,
@@ -169,6 +172,7 @@ async function mountPlugin(): Promise<PluginBench> {
     views,
     localeRegister,
     binding,
+    loadOlder,
     entries: () => ctx.slots.entries('conversation.view'),
     setSnapshot: (next) => { snapshot = next },
     notify: () => { listener?.() },
@@ -196,8 +200,6 @@ function assemble(
 
 /** The Definitions captured by one plugin registration. */
 async function registeredDefinitions(): Promise<readonly ConversationNodeDefinition[]> {
-  resetCurrentTurn()
-  resetPtcSteps()
   const bench = await mountPlugin()
   const definitions = bench.events
   await bench.fiber.dispose()
@@ -223,6 +225,8 @@ function measuredStep(turn: number, step: number, startTime: number, endTime: nu
     text: 'one\ntwo',
     truncated: false,
     ms: 200,
+    startedAt: startTime + 50,
+    endedAt: endTime - 10,
   }
   return {
     turn,
@@ -236,6 +240,7 @@ function measuredStep(turn: number, step: number, startTime: number, endTime: nu
     tps: 40 / 0.3,
     output: 40,
     tool: 200,
+    toolWall: 200,
     tools: [{ name: 'read', count: 1 }],
     calls: [call],
     toolOutput: 7,
@@ -296,13 +301,47 @@ function contextOf(
   }
 }
 
+/** Location data store the hand-built Locations never let a Definition read. */
+const LOCATION_DATA = {
+  get: () => undefined,
+  source: () => ({ getSnapshot: () => undefined, subscribe: () => () => undefined }),
+} as never
+
+/** Fabricated Turn Location carrying only the number a Definition reads. */
+function turnAt(turn: number): ConversationLocation {
+  return {
+    kind: 'turn',
+    turn: { turn, start: undefined, end: undefined, status: 'open', steps: [], data: LOCATION_DATA },
+  }
+}
+
+/** Fabricated Step Location carrying only the numbers a Definition reads. */
+function stepAt(turn: number, step: number): ConversationLocation {
+  return {
+    kind: 'step',
+    turn: { turn, start: undefined, end: undefined, status: 'open', steps: [], data: LOCATION_DATA },
+    step: { turn, step, start: undefined, end: undefined, status: 'unknown', data: LOCATION_DATA },
+  }
+}
+
+/** A start-role match placed at a fabricated Location. */
+function locatedStart(event: SessionEventLike, location: ConversationLocation): ConversationStartMatch {
+  return { event, role: 'start', location }
+}
+
+/** An update-role match placed at a fabricated Location. */
+function locatedUpdate(event: SessionEventLike, location: ConversationLocation): ConversationMatch {
+  return { event, role: 'update', location }
+}
+
 describe('browser plugin registration', () => {
   it('registers the performance tab, dictionaries, Definitions, and view target', async () => {
     const bench = await mountPlugin()
     expect(bench.localeRegister).toHaveBeenCalledWith(NS, { zh, en })
     expect(bench.events.map(definition => definition.kind)).toEqual([
-      'perf-step', 'perf-prompt', 'perf-turn-end',
+      'perf-step', 'perf-prompt', 'perf-turn-end', 'perf-code-mode',
     ])
+    expect(clientInject).toEqual(['slots', 'sessions', 'uiConversation', 'locale'])
     expect(bench.views).toEqual([perfViewDefinition])
     expect(bench.entries()).toHaveLength(1)
     const registered = bench.entries()[0]!
@@ -332,6 +371,11 @@ describe('browser plugin registration', () => {
     bench.notify()
     expect(listener).toHaveBeenCalledTimes(1)
     unsubscribe()
+    expect(await injected.loadOlder()).toBe(false)
+    expect(bench.loadOlder).toHaveBeenCalledTimes(1)
+    // The source is cached per Session binding; a second injection reuses it.
+    expect(injectEntry!(SID).hooks.perf).toBe(injected.hooks.perf)
+    expect(() => injectEntry!('perf-missing' as SessionId)).toThrow(/unavailable/)
     await bench.fiber.dispose()
   })
 })
@@ -347,7 +391,8 @@ describe('locale dictionaries', () => {
     expect(Object.keys(en).sort()).toEqual(Object.keys(zh).sort())
     expect(Object.values(en).every(value => value !== '')).toBe(true)
     expect(en['view.perf']).toBe('Performance')
-    expect(en['page.info']).toContain('{page}')
+    expect(en['summary']).toContain('{turns}')
+    expect(en['loadOlder']).toBe('Load earlier')
   })
 })
 
@@ -445,17 +490,6 @@ describe('conversation Definitions', () => {
     expect(turn.steps[0]?.running).toBe(false)
   })
 
-  it('closes a turn whose reason carries no kind', async () => {
-    const definitions = await registeredDefinitions()
-    const snapshot = assemble(definitions, [
-      entry(event('turn/start', { turn: 3 })),
-      entry(event('step/start', { turn: 3, step: 1 }, 6_000)),
-      entry(event('step/end', { turn: 3, step: 1 }, 6_200)),
-      entry(event('turn/end', { turn: 3, reason: {} }, 6_200)),
-    ])
-    expect(snapshot!.turns[0]?.interrupted).toBe(false)
-  })
-
   it('folds a trimmed window from the update events it still holds', async () => {
     const definitions = await registeredDefinitions()
     const snapshot = assemble(definitions, [
@@ -529,48 +563,151 @@ describe('conversation Definitions', () => {
     expect(snapshot!.turns[0]!.steps[0]!.ttft).toBe(300)
   })
 
-  it('reports a prompt Definition only after a turn start', async () => {
+  it('publishes a prompt node from a human-typed user message location', async () => {
+    const definitions = await registeredDefinitions()
+    const prompt = definitions[1] as ConversationNodeDefinition<PerfStepState>
+    expect(prompt.match(event('turn/start', { turn: 9 }))).toBeNull()
+    expect(prompt.match(event('user/message', {
+      role: 'user', id: 'u4', content: [{ type: 'text', text: '<system-reminder>' }], source: { kind: 'runtime-context' },
+    }))).toBeNull()
+    const user = event('user/message', {
+      role: 'user', id: 'u6', content: [{ type: 'text', text: '继续' }, { type: 'image' }], source: { kind: 'user' },
+    })
+    expect(prompt.match(user)).toEqual({ id: `${user.seq}`, role: 'start' })
+    const match = locatedStart(user, turnAt(9))
+    const state = prompt.start(contextOf(prompt, undefined), match, reader)
+    expect(state.turn).toBe(9)
+    expect(state.mark).toBe('prompt')
+    expect(state.prompt).toBe('继续')
+    expect(state.images).toBe(1)
+    const node = prompt.buildViewNode!({
+      ...contextOf(prompt, state, [match], match),
+    }) as PerfViewNode
+    expect(node.data).toEqual({ kind: 'prompt', turn: 9, prompt: '继续', images: 1 })
+    const context: ConversationNodeContext<PerfStepState> & { readonly state: PerfStepState } = {
+      ...contextOf(prompt, state, [match], match),
+      state,
+    }
+    expect(prompt.update(context, match)).toBe(state)
+  })
+
+  it('takes a prompt turn from a step location and anchors without a start', async () => {
     const definitions = await registeredDefinitions()
     const prompt = definitions[1] as ConversationNodeDefinition<PerfStepState>
     const user = event('user/message', {
-      role: 'user', id: 'u3', content: [{ type: 'text', text: '无轮次' }], source: { kind: 'user' },
+      role: 'user', id: 'u7', content: [{ type: 'text', text: '问题' }], source: { kind: 'user' },
     })
-    expect(prompt.match(user)).toBeNull()
-    resetCurrentTurn()
-    expect(prompt.match(event('turn/start', { turn: 9 }))).toEqual({ id: '9:0', role: 'start' })
-    const state = prompt.start(
-      contextOf(prompt, undefined),
-      startMatch(event('turn/start', { turn: 9 })),
-      reader,
-    )
-    expect(state.turn).toBe(9)
-    expect(state.mark).toBe('prompt')
+    const located = locatedStart(user, stepAt(4, 1))
+    const state = prompt.start(contextOf(prompt, undefined), located, reader)
+    expect(state.turn).toBe(4)
+    const update = locatedUpdate(user, stepAt(4, 1))
+    const node = prompt.buildViewNode!({
+      ...contextOf(prompt, state, [update]),
+    }) as PerfViewNode
+    expect(node.anchorSeq).toBe(0)
+    expect(node.data).toMatchObject({ kind: 'prompt', turn: 4 })
+    // A message the window cannot place publishes no row.
+    expect(prompt.buildViewNode!({ ...contextOf(prompt, state) })).toBeNull()
   })
 
-  it('ignores user messages that are not typed prompts', async () => {
+  it('folds Code-Mode dispatches into one node per root call', async () => {
     const definitions = await registeredDefinitions()
-    const prompt = definitions[1] as ConversationNodeDefinition<PerfStepState>
-    const turnStart = event('turn/start', { turn: 10 })
-    const promptState = prompt.start(
-      contextOf(prompt, undefined),
-      startMatch(turnStart),
+    const codeMode = definitions[3] as ConversationNodeDefinition<PerfStepState>
+    const startEvent = event('tool/ptc-dispatch-start', {
+      rootCallId: 'root-1', parentCallId: 'root-1', subCallId: 'sub-1', name: 'grep', arguments: '{"pattern":"x"}',
+    }, 8_200)
+    const dispatch = event('tool/ptc-dispatch', {
+      rootCallId: 'root-1', parentCallId: 'root-1', subCallId: 'sub-1', name: 'grep',
+      arguments: '{"pattern":"x"}', isError: false, content: [{ type: 'text', text: 'hit' }],
+    }, 8_300)
+    expect(codeMode.match(startEvent)).toEqual({ id: 'code:root-1', role: 'start' })
+    expect(codeMode.match(dispatch)).toEqual({ id: 'code:root-1', role: 'update' })
+    expect(codeMode.match(event('step/start', { turn: 1, step: 1 }))).toBeNull()
+    const start = locatedStart(startEvent, stepAt(5, 1))
+    const update = locatedUpdate(dispatch, stepAt(5, 1))
+    const state = codeMode.start(contextOf(codeMode, undefined), start, reader)
+    expect(state.starts).toEqual({ 'sub-1': 8_200 })
+    const context: ConversationNodeContext<PerfStepState> & { readonly state: PerfStepState } = {
+      ...contextOf(codeMode, state, [start, update], start),
+      state,
+    }
+    const folded = codeMode.update(context, update)
+    expect(folded.calls?.['sub-1']?.name).toBe('grep')
+    const node = codeMode.buildViewNode!({
+      ...contextOf(codeMode, folded, [start, update], start),
+    }) as PerfViewNode
+    expect(node.data).toMatchObject({ kind: 'inner', turn: 5, step: 1 })
+    const inner = node.data
+    if (inner.kind !== 'inner') throw new Error('expected an inner contribution')
+    expect(inner.calls.map(call => call.name)).toEqual(['grep'])
+    expect(inner.calls[0]?.ms).toBe(100)
+    // Without a step location the contribution has no row to merge into.
+    expect(codeMode.buildViewNode!({
+      ...contextOf(codeMode, folded, [start, update], locatedStart(startEvent, turnAt(5))),
+    })).toBeNull()
+  })
+
+  it('publishes an inner node only when the window still knows its step', async () => {
+    const definitions = await registeredDefinitions()
+    const codeMode = definitions[3] as ConversationNodeDefinition<PerfStepState>
+    const startEvent = event('tool/ptc-dispatch-start', {
+      rootCallId: 'root-2', parentCallId: 'root-2', subCallId: 'sub-2', name: 'read', arguments: '{}',
+    }, 6_200)
+    const dispatch = event('tool/ptc-dispatch', {
+      rootCallId: 'root-2', parentCallId: 'root-2', subCallId: 'sub-2', name: 'read',
+      arguments: '{}', isError: false, content: [],
+    }, 6_300)
+    const start = locatedStart(startEvent, stepAt(6, 1))
+    const update = locatedUpdate(dispatch, stepAt(6, 1))
+    const state = codeMode.start(contextOf(codeMode, undefined), start, reader)
+    const folded = codeMode.update({
+      ...contextOf(codeMode, state, [start, update], start),
+      state,
+    }, update)
+    // Without a start match the node anchors at zero and takes the last location.
+    const noStart = codeMode.buildViewNode!({
+      ...contextOf(codeMode, folded, [update]),
+    }) as PerfViewNode
+    expect(noStart.anchorSeq).toBe(0)
+    expect(noStart.data).toMatchObject({ kind: 'inner', turn: 6, step: 1 })
+    // A turn-only location, or no location evidence, publishes no row.
+    expect(codeMode.buildViewNode!({
+      ...contextOf(codeMode, folded, [locatedUpdate(dispatch, turnAt(6))]),
+    })).toBeNull()
+    expect(codeMode.buildViewNode!({ ...contextOf(codeMode, folded) })).toBeNull()
+    // The node still merges even when the dispatch lost its own start.
+    const lostStart = { ...folded, calls: { 'sub-2': { ...folded.calls!['sub-2']!, ms: null, startedAt: null } } }
+    const node = codeMode.buildViewNode!({
+      ...contextOf(codeMode, lostStart, [update]),
+    }) as PerfViewNode
+    expect(node.data).toMatchObject({ kind: 'inner', turn: 6, step: 1 })
+  })
+
+  it('keeps a Code-Mode start unplaced when the window has no step location', async () => {
+    const definitions = await registeredDefinitions()
+    const codeMode = definitions[3] as ConversationNodeDefinition<PerfStepState>
+    const startEvent = event('tool/ptc-dispatch-start', {
+      rootCallId: 'root-3', parentCallId: 'root-3', subCallId: 'sub-3', name: 'grep', arguments: '{}',
+    }, 7_200)
+    const turnOnly = codeMode.start(
+      contextOf(codeMode, undefined),
+      locatedStart(startEvent, turnAt(7)),
       reader,
     )
-    const runtime = event('user/message', {
-      role: 'user', id: 'u4', content: [{ type: 'text', text: '<system-reminder>' }], source: { kind: 'runtime-context' },
-    })
-    expect(prompt.match(runtime)).toBeNull()
-    expect(prompt.match(event('user/message', { role: 'user', id: 'u5', content: [] }))).toBeNull()
-    expect(prompt.match(event('step/start', { turn: 10, step: 1 }))).toBeNull()
-    const typed = event('user/message', {
-      role: 'user', id: 'u6', content: [{ type: 'text', text: '继续' }], source: { kind: 'user' },
-    })
-    expect(prompt.match(typed)).toEqual({ id: '10:0', role: 'update' })
-    const context: ConversationNodeContext<PerfStepState> & { readonly state: PerfStepState } = {
-      ...contextOf(prompt, promptState, [updateMatch(typed)]),
-      state: promptState,
-    }
-    expect(prompt.update(context, updateMatch(typed)).prompt).toBe('继续')
+    expect(turnOnly.turn).toBe(0)
+    expect(turnOnly.step).toBe(0)
+    const unlocated = codeMode.start(
+      contextOf(codeMode, undefined),
+      { ...startMatch(startEvent), location: undefined as never },
+      reader,
+    )
+    expect(unlocated.turn).toBe(0)
+    // An update that arrives before any start keeps the absent state.
+    const orphan = event('tool/ptc-dispatch', {
+      rootCallId: 'root-4', parentCallId: 'root-4', subCallId: 'sub-4', name: 'read',
+      arguments: '{}', isError: false, content: [],
+    }, 7_300)
+    expect(codeMode.update(contextOf(codeMode, undefined) as never, updateMatch(orphan))).toBeUndefined()
   })
 
   it('rejects a start callback handed the wrong lifecycle event', async () => {
@@ -600,10 +737,10 @@ describe('conversation Definitions', () => {
     expect(step.publication!(updateMatch(event('assistant/attempt', { turn: 1, step: 1 })))).toBe('none')
     expect(step.publication!(updateMatch(event('step/end', { turn: 1, step: 1 })))).toBe('immediate')
     const prompt = definitions[1] as ConversationNodeDefinition<PerfStepState>
-    expect(prompt.publication!(startMatch(event('turn/start', { turn: 1 })))).toBe('none')
-    expect(prompt.publication!(updateMatch(event('user/message', {
+    expect(prompt.publication!(startMatch(event('user/message', {
       role: 'user', id: 'u', content: [], source: { kind: 'user' },
     })))).toBe('immediate')
+    expect(Object.hasOwn(definitions[3]!, 'publication')).toBe(false)
   })
 
   it('anchors and locates a step node from its folded state', async () => {
@@ -639,33 +776,15 @@ describe('conversation Definitions', () => {
     const contribution = withStart.data
     if (contribution.kind !== 'step') throw new Error('expected a step contribution')
     expect(contribution.metrics.context).toBe(600)
+    expect(contribution.metrics.toolWall).toBeNull()
 
     // Without a start match, the node anchors at 0 and takes the last match location.
-    const stepLocation: ConversationLocation = {
-      kind: 'step',
-      turn: {
-        turn: 11,
-        start: undefined,
-        end: undefined,
-        status: 'open',
-        steps: [],
-        data: { get: () => undefined, source: () => ({ getSnapshot: () => undefined, subscribe: () => () => {} }) },
-      },
-      step: {
-        turn: 11,
-        step: 2,
-        start: undefined,
-        end: undefined,
-        status: 'unknown',
-        data: { get: () => undefined, source: () => ({ getSnapshot: () => undefined, subscribe: () => () => {} }) },
-      },
-    }
     const trimmed = step.buildViewNode!({
       ...contextOf(step,
-        { ...folded, startSeq: null }, [{ ...update, location: stepLocation }]),
+        { ...folded, startSeq: null }, [{ ...update, location: stepAt(11, 2) }]),
     }) as PerfViewNode
     expect(trimmed.anchorSeq).toBe(0)
-    expect(trimmed.location).toEqual(stepLocation)
+    expect(trimmed.location).toEqual(stepAt(11, 2))
     const unresolved = step.buildViewNode!({
       ...contextOf(step, { ...folded, startSeq: null }, []),
     }) as PerfViewNode
@@ -682,33 +801,20 @@ describe('conversation Definitions', () => {
       [event('assistant/message', { turn: 12, step: 3 }), '12:3'],
       [event('llm/retry', { turn: 12, step: 3 }), '12:3'],
       [event('tool/call', { turn: 12, step: 3, callId: 'c', name: 'read', arguments: '{}' }), '12:3'],
-      [event('tool/result', { turn: 12, step: 3, message: { role: 'tool', content: [] } }), '12:3'],
+      [event('tool/result', {
+        turn: 12, step: 3, message: { role: 'tool', content: [], source: { callId: 'c' }, toolCallId: 'c' },
+      }), '12:3'],
       [transient(12, 3, delta).event, '12:3'],
     ]
     for (const [fixture, id] of cases) {
       expect(step.match(fixture)?.id).toBe(id)
     }
     expect(step.match(event('developer/message', { turn: 12, step: 3 }))).toBeNull()
-    // A dispatch with no recorded root call owns no step.
-    expect(step.match(event('tool/ptc-dispatch', {
-      rootCallId: 'missing', parentCallId: 'missing', subCallId: 's',
-      name: 'grep', arguments: '{}', isError: false, content: [],
-    }))).toBeNull()
+    expect(step.match(event('user/message', { role: 'user', id: 'u', content: [], source: { kind: 'user' } }))).toBeNull()
   })
 
   it('builds prompt and end markers from their folded states', async () => {
     const definitions = await registeredDefinitions()
-    const prompt = definitions[1] as ConversationNodeDefinition<PerfStepState>
-    const promptStart = startMatch(event('turn/start', { turn: 13 }))
-    const promptState = prompt.start(
-      contextOf(prompt, undefined),
-      promptStart,
-      reader,
-    )
-    const promptNode = prompt.buildViewNode!({
-      ...contextOf(prompt, promptState, [], promptStart),
-    }) as PerfViewNode
-    expect(promptNode.data).toMatchObject({ kind: 'prompt', turn: 13 })
     const end = definitions[2] as ConversationNodeDefinition<PerfStepState>
     const endStart = startMatch(event('turn/end', { turn: 13, reason: { kind: 'interrupted' } }, 13_500))
     const ended = end.start(
@@ -725,18 +831,8 @@ describe('conversation Definitions', () => {
     expect(end.match(event('step/start', { turn: 13, step: 1 }))).toBeNull()
   })
 
-  it('anchors marker nodes at zero without a recorded start', async () => {
+  it('keeps the end state and anchors it at zero without a recorded start', async () => {
     const definitions = await registeredDefinitions()
-    const prompt = definitions[1] as ConversationNodeDefinition<PerfStepState>
-    const promptState = prompt.start(
-      contextOf(prompt, undefined),
-      startMatch(event('turn/start', { turn: 14 })),
-      reader,
-    )
-    const promptNode = prompt.buildViewNode!({
-      ...contextOf(prompt, promptState),
-    }) as PerfViewNode
-    expect(promptNode.anchorSeq).toBe(0)
     const end = definitions[2] as ConversationNodeDefinition<PerfStepState>
     const endState = end.start(
       contextOf(end, undefined),

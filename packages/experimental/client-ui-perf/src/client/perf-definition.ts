@@ -1,6 +1,12 @@
 /**
  * Conversation Definitions producing the performance target's nodes: one step
- * context per `step/start`, one prompt marker per turn, one end marker per turn.
+ * context per `step/start`, one prompt context per user message, one end marker
+ * per turn, and one context per Code-Mode root call for its inner dispatches.
+ *
+ * Every callback is a pure function of the events it receives: turn and step
+ * identity comes from the engine's match location, never from module state, so
+ * one Definition set serves every Session binding and history paging
+ * (`replaceWindow`/`prepend`) cannot misattribute events.
  */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -9,7 +15,7 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { PerfStepState, PerfViewNode } from './perf-contract.ts'
 import {
-  currentTurnOf, fallbackState, foldEvent, newState, ptcStepOf, stepMetrics,
+  CALL_LIMIT, fallbackState, foldEvent, isCodeMode, newState, promptOf, stepMetrics,
 } from './perf-fold.ts'
 
 /** Target name shared by every Definition and the view builder. */
@@ -18,15 +24,33 @@ export const TARGET = 'perf'
 /** Definition kind of one measured step. */
 const STEP_KIND = 'perf-step'
 
-/** Definition kind of a turn's prompt marker. */
+/** Definition kind of one user prompt. */
 const PROMPT_KIND = 'perf-prompt'
 
 /** Definition kind of a turn's end marker. */
 const END_KIND = 'perf-turn-end'
 
+/** Definition kind of one Code-Mode root call's inner dispatches. */
+const CODE_MODE_KIND = 'perf-code-mode'
+
 /** Marker ids never collide with a step number. */
 const PROMPT_STEP = 0
 const END_STEP = 100_000
+
+/** Turn and step a match's Location resolves, or null when the window lost them. */
+function locationTurnStep(
+  location: ConversationLocation | undefined,
+): { readonly turn: number; readonly step: number | null } | null {
+  if (location === undefined) return null
+  if (location.kind === 'turn') return { turn: location.turn.turn, step: null }
+  if (location.kind === 'step') return { turn: location.turn.turn, step: location.step.step }
+  return null
+}
+
+/** Location a published node carries: the start match's, else the newest match's. */
+function nodeLocation(context: ConversationNodeContext<PerfStepState>): ConversationLocation {
+  return context.start?.location ?? context.matches.at(-1)?.location ?? { kind: 'unresolved' }
+}
 
 /** Wrap one contribution in the target's node envelope. */
 function perfNode(
@@ -34,21 +58,18 @@ function perfNode(
   anchorSeq: number,
   data: PerfViewNode['data'],
 ): PerfViewNode {
-  const location: ConversationLocation = context.start?.location
-    ?? context.matches.at(-1)?.location
-    ?? { kind: 'unresolved' }
   return {
     key: context.key,
     kind: context.kind,
     id: context.id,
     target: TARGET,
     anchorSeq,
-    location,
+    location: nodeLocation(context),
     data,
   }
 }
 
-/** State a step context folds from the matches a trimmed window still holds. */
+/** State a step-like Context folds from the matches a trimmed window still holds. */
 function stepState(context: ConversationNodeContext<PerfStepState>): PerfStepState | undefined {
   return context.state ?? fallbackState(context.matches)
 }
@@ -69,11 +90,6 @@ const stepDefinition: ConversationNodeDefinition<PerfStepState> = {
       case 'tool/call':
       case 'tool/result':
         return { id: `${event.data.turn}:${event.data.step}`, role: 'update' }
-      case 'tool/ptc-dispatch':
-      case 'tool/ptc-dispatch-start': {
-        const id = ptcStepOf(event.data.rootCallId)
-        return id === null ? null : { id, role: 'update' }
-      }
       default:
         return null
     }
@@ -102,38 +118,34 @@ const stepDefinition: ConversationNodeDefinition<PerfStepState> = {
   },
 }
 
-/** The user question of one turn; `user/message` carries no turn of its own. */
+/** The user question of one turn: one Context per human-typed `user/message`. */
 const promptDefinition: ConversationNodeDefinition<PerfStepState> = {
   kind: PROMPT_KIND,
   target: TARGET,
-  match: (event) => {
-    if (event.type === 'turn/start') {
-      return { id: `${event.data.turn}:${PROMPT_STEP}`, role: 'start' }
-    }
-    if (event.type !== 'user/message') return null
-    const turn = currentTurnOf()
-    const source: unknown = event.data.source
-    if (turn === null || typeof source !== 'object' || source === null) return null
-    return (source as { kind?: unknown }).kind === 'user'
-      ? { id: `${turn}:${PROMPT_STEP}`, role: 'update' }
-      : null
-  },
+  match: event => (event.type === 'user/message' && event.data.source.kind === 'user'
+    ? { id: `${event.seq}`, role: 'start' }
+    : null),
   start: (_context, match) => {
-    if (match.event.type !== 'turn/start') {
-      throw new Error('perf-prompt start requires turn/start')
+    if (match.event.type !== 'user/message') {
+      throw new Error('perf-prompt start requires user/message')
     }
-    /* v8 ignore next -- start only receives turn/start, which folding always handles. */
-    return foldEvent(undefined, match.event) ?? newState(match.event.data.turn, PROMPT_STEP, 'prompt')
+    const located = locationTurnStep(match.location)
+    const prompt = promptOf(match.event.data)
+    return {
+      ...newState(located?.turn ?? 0, PROMPT_STEP, 'prompt'),
+      prompt: prompt.text,
+      images: prompt.images,
+    }
   },
-  /* v8 ignore next -- the engine calls update only after start adopted a state, so folding never returns undefined here. */
-  update: (context, match) => foldEvent(context.state, match.event) ?? context.state,
-  publication: match => (match.event.type === 'turn/start' ? 'none' : 'immediate'),
+  update: context => context.state,
+  publication: () => 'immediate',
   buildViewNode: (context) => {
     const state = context.state
-    if (state === undefined) return null
+    const located = locationTurnStep(nodeLocation(context))
+    if (state === undefined || located === null) return null
     return perfNode(context, context.start?.event.seq ?? 0, {
       kind: 'prompt',
-      turn: state.turn,
+      turn: located.turn,
       prompt: state.prompt,
       images: state.images,
     })
@@ -151,14 +163,12 @@ const endDefinition: ConversationNodeDefinition<PerfStepState> = {
     if (match.event.type !== 'turn/end') {
       throw new Error('perf-turn-end start requires turn/end')
     }
-    const reason = match.event.data.reason
-    const closeKind = 'kind' in reason && typeof reason.kind === 'string' ? reason.kind : null
     return {
       ...newState(match.event.data.turn, END_STEP, 'end'),
       ended: true,
       endTime: match.event.time,
       closed: true,
-      closeKind,
+      closeKind: match.event.data.reason.kind,
     }
   },
   update: context => context.state,
@@ -175,7 +185,51 @@ const endDefinition: ConversationNodeDefinition<PerfStepState> = {
 }
 
 /**
- * Register the three Definitions. Each registration rides the caller's fiber
+ * One Context per Code-Mode root call folds its inner dispatches; the builder
+ * merges them into the owning step by the root call id. The events carry no
+ * turn or step, so the Context takes both from the engine's match location.
+ */
+const codeModeDefinition: ConversationNodeDefinition<PerfStepState> = {
+  kind: CODE_MODE_KIND,
+  target: TARGET,
+  match: (event) => {
+    if (event.type !== 'tool/ptc-dispatch-start' && event.type !== 'tool/ptc-dispatch') return null
+    return {
+      id: `code:${event.data.rootCallId}`,
+      role: event.type === 'tool/ptc-dispatch-start' ? 'start' : 'update',
+    }
+  },
+  start: (_context, match) => {
+    if (match.event.type !== 'tool/ptc-dispatch-start') {
+      throw new Error('perf-code-mode start requires tool/ptc-dispatch-start')
+    }
+    const located = locationTurnStep(match.location)
+    const base = located?.step === null || located === null
+      ? newState(0, 0)
+      : newState(located.turn, located.step)
+    /* v8 ignore next -- folding a defined state always returns a state. */
+    return foldEvent(base, match.event) ?? base
+  },
+  /* v8 ignore next -- the engine calls update only after start adopted a state, so folding never returns undefined here. */
+  update: (context, match) => foldEvent(context.state, match.event) ?? context.state,
+  buildViewNode: (context) => {
+    const state = stepState(context)
+    const located = locationTurnStep(nodeLocation(context))
+    if (state === undefined || located?.step === null || located === null) return null
+    const calls = stepMetrics(state).calls
+      .filter(call => !isCodeMode(call.name))
+      .slice(0, CALL_LIMIT)
+    return perfNode(context, context.start?.event.seq ?? 0, {
+      kind: 'inner',
+      turn: located.turn,
+      step: located.step,
+      calls,
+    })
+  },
+}
+
+/**
+ * Register the four Definitions. Each registration rides the caller's fiber
  * effect, so unloading the plugin removes the nodes with it.
  * @param ctx - client root context.
  */
@@ -183,4 +237,5 @@ export function registerPerfDefinitions(ctx: Context): void {
   ctx.uiConversation.events.register(stepDefinition)
   ctx.uiConversation.events.register(promptDefinition)
   ctx.uiConversation.events.register(endDefinition)
+  ctx.uiConversation.events.register(codeModeDefinition)
 }

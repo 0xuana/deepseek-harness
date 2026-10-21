@@ -1,381 +1,527 @@
 import { describe, expect, it } from 'vitest'
-import type { SessionEventLike } from '@deepseek-ai/dsh-api-session-controller/client'
-import type { AssistantStreamRecord, StreamChunk } from '@deepseek-ai/dsh-llm'
-import { SessionSeq } from '@deepseek-ai/dsh-session/types'
-import type { SessionEventType } from '@deepseek-ai/dsh-session/types'
 import { aggregateTurn, buildTurns } from '../src/client/perf-aggregate.ts'
-import {
-  currentTurnOf, foldEvent, newState, resetCurrentTurn, resetPtcSteps, stepMetrics,
-} from '../src/client/perf-fold.ts'
-import {
-  DASH, barShare, formatChars, formatClock, formatDateTime, formatMs, formatPercent,
-  formatTokens, formatTokensDelta, formatTokensShort, formatTps,
-} from '../src/client/perf-format.ts'
-import type { PerfStepMetrics, PerfStepState, PerfViewNode } from '../src/client/perf-contract.ts'
-import {
-  cacheHitRate, contextTokens, isCount, isUsage, outputTokens,
-} from '../src/client/perf-usage.ts'
+import type { PerfCall, PerfStepMetrics, PerfViewNode } from '../src/client/perf-contract.ts'
+import { CALL_LIMIT } from '../src/client/perf-fold.ts'
 
-let seq = 0
-
-/** One durable session event with a deterministic sequence and time. */
-function event(type: SessionEventType, data: object, time?: number): SessionEventLike {
-  const at = time ?? 1_000 + (seq += 1) * 10
-  return { type, seq: SessionSeq(seq), time: at, data } as SessionEventLike
-}
-
-/** Narrow a folded state the fixture guarantees exists. */
-function defined<T>(value: T | undefined): T {
-  if (value === undefined) throw new Error('expected a folded state')
-  return value
-}
-
-/** One client-only live chunk event. */
-function chunk(turn: number, step: number, value: StreamChunk, time?: number): SessionEventLike {
-  seq += 1
+/** One step row with every unmeasured column blank. */
+function metricsOf(overrides: Partial<PerfStepMetrics> = {}): PerfStepMetrics {
   return {
-    type: 'assistant/live-chunk',
-    seq,
-    time: time ?? 1_000 + seq * 10,
-    data: { attemptId: 'attempt-1', turn, step, chunk: value },
-  } as SessionEventLike
+    turn: 1,
+    step: 1,
+    startTime: null,
+    endTime: null,
+    context: null,
+    ttft: null,
+    model: null,
+    decode: null,
+    tps: null,
+    output: null,
+    tool: null,
+    toolWall: null,
+    tools: [],
+    calls: [],
+    toolOutput: 0,
+    retries: 0,
+    toolErrors: 0,
+    cacheRead: null,
+    cacheWrite: null,
+    cacheHit: null,
+    wall: null,
+    toolPending: 0,
+    running: false,
+    interrupted: false,
+    aborted: false,
+    ...overrides,
+  }
 }
 
-/** A token delta chunk. */
-const delta: StreamChunk = { type: 'text-delta', index: 0, text: 'x' }
-
-/** Usage reported by one assistant message. */
-const usage = {
-  inputTokens: 100,
-  outputTokens: 40,
-  cacheReadTokens: 400,
-  cacheWriteTokens: 100,
+function perfCall(callId: string, seqAt: number, overrides: Partial<PerfCall> = {}): PerfCall {
+  return {
+    callId,
+    seq: seqAt,
+    name: 'read',
+    hint: null,
+    chars: null,
+    lines: null,
+    error: false,
+    added: null,
+    removed: null,
+    before: null,
+    after: null,
+    args: null,
+    inner: false,
+    text: null,
+    truncated: false,
+    ms: null,
+    startedAt: null,
+    endedAt: null,
+    ...overrides,
+  }
 }
 
-/** A compact assistant stream recording the first token at `time`. */
-function stream(firstTokenAt: number): AssistantStreamRecord[] {
-  return [
-    { type: 'chunk', time: firstTokenAt - 100, chunk: { type: 'block-start', index: 0, blockType: 'text' } },
-    { type: 'chunk', time: firstTokenAt, chunk: delta },
-  ] as AssistantStreamRecord[]
+function stepNode(value: PerfStepMetrics): PerfViewNode {
+  return {
+    key: `${value.turn}:${value.step}`,
+    kind: 'perf-step',
+    id: `${value.turn}:${value.step}`,
+    target: 'perf',
+    anchorSeq: value.startTime ?? 0,
+    location: { kind: 'unresolved' },
+    data: { kind: 'step', metrics: value },
+  }
 }
 
-/** Build a step state across a start, a stream, a message, one tool call, and an end. */
-function completedStep(turn: number, step: number, startTime = 1_000): ReturnType<typeof stepMetrics> {
-  resetPtcSteps()
-  resetCurrentTurn()
-  let state = foldEvent(undefined, event('step/start', { turn, step }, startTime))
-  state = foldEvent(state, chunk(turn, step, delta, startTime + 100))
-  state = foldEvent(state, event('assistant/message', {
-    turn,
-    step,
-    message: { id: 'm', role: 'assistant', content: [], source: { provider: 'p', model: 'm' } },
-    stream: stream(startTime + 300),
-    usage,
-  }, startTime + 400))
-  state = foldEvent(state, event('tool/call', {
-    turn, step, callId: 'call-1', name: 'read', arguments: JSON.stringify({ file_path: '/a/b/c.ts' }),
-  }, startTime + 500))
-  state = foldEvent(state, event('tool/result', {
-    turn,
-    step,
-    message: { role: 'tool', content: [{ type: 'text', text: 'one\ntwo' }], source: { callId: 'call-1' } },
-  }, startTime + 700))
-  state = foldEvent(state, event('step/end', { turn, step }, startTime + 800))
-  return stepMetrics(defined(state))
+function promptNode(turn: number, prompt: string | null, images = 0): PerfViewNode {
+  return {
+    key: `${turn}:prompt:${prompt ?? 'null'}`,
+    kind: 'perf-prompt',
+    id: `${turn}:prompt`,
+    target: 'perf',
+    anchorSeq: 1,
+    location: { kind: 'unresolved' },
+    data: { kind: 'prompt', turn, prompt, images },
+  }
 }
 
-describe('format helpers', () => {
-  it('formats durations at each scale boundary', () => {
-    expect(formatMs(null)).toBe(DASH)
-    expect(formatMs(999)).toBe('999 ms')
-    expect(formatMs(1_000)).toBe('1.00 s')
-    expect(formatMs(59_999)).toBe('60.00 s')
-    expect(formatMs(60_000)).toBe('1.0 min')
-  })
+function endNode(turn: number, endTime: number | null, closeKind: string | null): PerfViewNode {
+  return {
+    key: `${turn}:end`,
+    kind: 'perf-turn-end',
+    id: `${turn}:end`,
+    target: 'perf',
+    anchorSeq: 2,
+    location: { kind: 'unresolved' },
+    data: { kind: 'end', turn, closeKind, endTime },
+  }
+}
 
-  it('keeps two decimals below one thousand tokens', () => {
-    expect(formatTokensShort(null)).toBe(DASH)
-    expect(formatTokensShort(30)).toBe('0.03K')
-    expect(formatTokensShort(1_500)).toBe('1.5K')
-    expect(formatTokensDelta(250)).toBe('+0.25K')
-    expect(formatTokensDelta(-730)).toBe('−0.73K')
-    expect(formatTokensDelta(null)).toBe('')
-    expect(formatTokens(1_234_567)).toBe('1,234,567')
-  })
-
-  it('formats characters, speed, and percent', () => {
-    expect(formatChars(null)).toBe(DASH)
-    expect(formatChars(0)).toBe(DASH)
-    expect(formatChars(12)).toBe('12')
-    expect(formatChars(1_234)).toBe('1.2K')
-    expect(formatTps(268.94)).toBe('268.9')
-    expect(formatTps(null)).toBe(DASH)
-    expect(formatPercent(0.962)).toBe('96.20%')
-    expect(formatPercent(null)).toBe(DASH)
-  })
-
-  it('formats the clock from the same instant it is given', () => {
-    const time = new Date(2026, 9, 20, 3, 4, 5).getTime()
-    expect(formatClock(time)).toBe('03:04:05')
-    expect(formatDateTime(time)).toBe('2026-10-20 03:04:05')
-    expect(formatClock(null)).toBe(DASH)
-    expect(formatDateTime(null)).toBe(DASH)
-  })
-
-  it('scales bars by square root of the group maximum', () => {
-    expect(barShare(10, 0)).toBe(1)
-    expect(barShare(0, 100)).toBe(0)
-    expect(barShare(100, 100)).toBe(1)
-    expect(barShare(25, 100)).toBe(0.5)
-    expect(barShare(200, 100)).toBe(1)
-  })
-})
-
-describe('usage helpers', () => {
-  it('sums the prompt length and derives cache hit', () => {
-    expect(isUsage(null)).toBe(false)
-    expect(isUsage(usage)).toBe(true)
-    expect(isCount(-1)).toBe(false)
-    expect(contextTokens(usage)).toBe(600)
-    expect(contextTokens(null)).toBeNull()
-    expect(outputTokens(usage)).toBe(40)
-    expect(cacheHitRate(usage)).toBeCloseTo(400 / 600)
-    expect(cacheHitRate({})).toBeNull()
-    expect(cacheHitRate({ inputTokens: 0 })).toBeNull()
-  })
-})
-
-describe('step folding and metrics', () => {
-  it('derives timeline, throughput, tool cost, and cache columns', () => {
-    const metrics = completedStep(1, 1)
-    expect(metrics.startTime).toBe(1_000)
-    expect(metrics.endTime).toBe(1_800)
-    expect(metrics.ttft).toBe(100)
-    expect(metrics.model).toBe(400)
-    expect(metrics.decode).toBe(300)
-    expect(metrics.tps).toBeCloseTo(40 / 0.3)
-    expect(metrics.tool).toBe(200)
-    expect(metrics.toolPending).toBe(0)
-    expect(metrics.wall).toBe(800)
-    expect(metrics.context).toBe(600)
-    expect(metrics.output).toBe(40)
-    expect(metrics.cacheHit).toBeCloseTo(400 / 600)
-    expect(metrics.running).toBe(false)
-    expect(metrics.aborted).toBe(false)
-    expect(metrics.tools).toEqual([{ name: 'read', count: 1 }])
-    expect(metrics.toolOutput).toBe(7)
-    expect(metrics.calls[0]?.hint).toBe('b/c.ts')
-  })
-
-  it('keeps a running step measurable up to the last event', () => {
-    resetPtcSteps()
-    const start = foldEvent(undefined, event('step/start', { turn: 2, step: 1 }, 5_000))
-    const metrics = stepMetrics(defined(start))
-    expect(metrics.running).toBe(true)
-    expect(metrics.ttft).toBeNull()
-    expect(metrics.wall).toBeNull()
-    expect(metrics.context).toBeNull()
-  })
-
-  it('reports an unsettled step as aborted', () => {
-    resetPtcSteps()
-    let state = foldEvent(undefined, event('step/start', { turn: 2, step: 1 }, 5_000))
-    state = foldEvent(state, chunk(2, 1, delta, 5_100))
-    state = foldEvent(state, event('step/end', { turn: 2, step: 1 }, 5_200))
-    expect(stepMetrics(defined(state)).aborted).toBe(true)
-  })
-
-  it('counts retries, tool errors, and unpaired results', () => {
-    resetPtcSteps()
-    let state: PerfStepState | undefined = newState(3, 1)
-    state = foldEvent(state, event('llm/retry', {
-      turn: 3, step: 1, failure: { message: 'rate limited' }, retry: 1, delayMs: 10, mode: 'normal', maxRetries: 3,
-    }))
-    state = foldEvent(state, event('tool/result', {
-      turn: 3, step: 1, message: { role: 'tool', content: [], isError: true, source: { callId: 'ghost' } },
-    }))
-    const metrics = stepMetrics(defined(state))
-    expect(metrics.retries).toBe(1)
-    expect(metrics.toolErrors).toBe(1)
-    expect(metrics.toolPending).toBe(1)
-  })
-
-  it('groups Code-Mode inner calls and hides the runner', () => {
-    resetPtcSteps()
-    let state = foldEvent(undefined, event('step/start', { turn: 4, step: 1 }, 7_000))
-    state = foldEvent(state, event('tool/call', {
-      turn: 4, step: 1, callId: 'run-1', name: 'run_code', arguments: '{}',
-    }, 7_010))
-    state = foldEvent(state, event('tool/ptc-dispatch-start', {
-      rootCallId: 'run-1', parentCallId: 'run-1', subCallId: 'sub-1', name: 'grep', arguments: '{"pattern":"x"}',
-    }, 7_020))
-    state = foldEvent(state, event('tool/ptc-dispatch', {
-      rootCallId: 'run-1', parentCallId: 'run-1', subCallId: 'sub-1', name: 'grep',
-      arguments: '{"pattern":"x"}', isError: false, content: [{ type: 'text', text: 'hit' }],
-    }, 7_030))
-    const metrics = stepMetrics(defined(state))
-    expect(metrics.tools).toEqual([{ name: 'grep', count: 1 }])
-    expect(metrics.calls).toHaveLength(1)
-    expect(metrics.calls[0]?.inner).toBe(true)
-    expect(metrics.calls[0]?.ms).toBe(10)
-    expect(metrics.toolOutput).toBe(3)
-  })
-
-  it('attributes inner calls through the root call map', () => {
-    resetPtcSteps()
-    let state = foldEvent(undefined, event('step/start', { turn: 5, step: 2 }, 7_000))
-    state = foldEvent(state, event('tool/call', { turn: 5, step: 2, callId: 'root', name: 'run_code', arguments: '{}' }))
-    expect(currentTurnOf()).toBeNull()
-    state = foldEvent(state, event('tool/ptc-dispatch', {
-      rootCallId: 'root', parentCallId: 'root', subCallId: 's', name: 'read',
-      arguments: '{"file_path":"/x/y.js"}', isError: true, content: [],
-    }))
-    const metrics = stepMetrics(defined(state))
-    expect(metrics.turn).toBe(5)
-    expect(metrics.step).toBe(2)
-    expect(metrics.toolErrors).toBe(1)
-  })
-
-  it('records the user question only from user-sourced messages', () => {
-    resetPtcSteps()
-    resetCurrentTurn()
-    let state = foldEvent(undefined, event('turn/start', { turn: 6 }))
-    expect(currentTurnOf()).toBe(6)
-    state = foldEvent(state, event('user/message', {
-      role: 'user',
-      id: 'u1',
-      content: [{ type: 'text', text: '帮我看看' }, { type: 'image' }],
-      source: { kind: 'user' },
-    }))
-    expect(state!.prompt).toBe('帮我看看')
-    expect(state!.images).toBe(1)
-    // A second question never overwrites the first.
-    state = foldEvent(state, event('user/message', {
-      role: 'user', id: 'u2', content: [{ type: 'text', text: '再问一次' }], source: { kind: 'user' },
-    }))
-    expect(state!.prompt).toBe('帮我看看')
-    // Injected context is not a question.
-    state = foldEvent(state, event('user/message', {
-      role: 'user', id: 'u3', content: [{ type: 'text', text: '<system-reminder>' }], source: { kind: 'runtime-context' },
-    }))
-    expect(state!.prompt).toBe('帮我看看')
-  })
-})
+function innerNode(
+  turn: number,
+  step: number,
+  calls: readonly PerfCall[],
+): PerfViewNode {
+  return {
+    key: `${turn}:${step}:code:${calls.map(call => call.callId).join(',')}`,
+    kind: 'perf-code-mode',
+    id: `${turn}:${step}:code`,
+    target: 'perf',
+    anchorSeq: 3,
+    location: { kind: 'unresolved' },
+    data: { kind: 'inner', turn, step, calls },
+  }
+}
 
 describe('turn aggregation', () => {
-  it('sums first-token waits and reports partial coverage', () => {
-    const one = completedStep(7, 1, 10_000)
-    const two = completedStep(7, 2, 11_000)
-    const partial: PerfStepMetrics = { ...one, ttft: null }
-    const turn = aggregateTurn(7, [one, two])
-    expect(turn.ttft).toBe(200)
+  it('reports an empty turn without invented values', () => {
+    const turn = aggregateTurn(9, [])
+    expect(turn.turn).toBe(9)
+    expect(turn.steps).toEqual([])
+    expect(turn.startTime).toBeNull()
+    expect(turn.context).toBeNull()
+    expect(turn.ttft).toBeNull()
     expect(turn.ttftPending).toBe(0)
-    expect(turn.model).toBe(800)
-    expect(turn.tool).toBe(400)
-    expect(turn.wall).toBe(two.endTime! - one.startTime!)
-    expect(turn.context).toBe(600)
-    const lower = aggregateTurn(7, [one, partial])
-    expect(lower.ttft).toBe(100)
-    expect(lower.ttftPending).toBe(1)
-    expect(aggregateTurn(7, [{ ...one, ttft: null }]).ttft).toBeNull()
+    expect(turn.model).toBeNull()
+    expect(turn.modelPending).toBe(0)
+    expect(turn.decode).toBeNull()
+    expect(turn.tps).toBeNull()
+    expect(turn.output).toBeNull()
+    expect(turn.tool).toBeNull()
+    expect(turn.toolWall).toBeNull()
+    expect(turn.toolPending).toBe(0)
+    expect(turn.tools).toEqual([])
+    expect(turn.cacheHit).toBeNull()
+    expect(turn.cacheRead).toBeNull()
+    expect(turn.cacheWrite).toBeNull()
+    expect(turn.retries).toBe(0)
+    expect(turn.toolErrors).toBe(0)
+    expect(turn.toolOutput).toBe(0)
+    expect(turn.lastStepWall).toBeNull()
+    expect(turn.running).toBe(false)
+    expect(turn.interrupted).toBe(false)
+    expect(turn.aborted).toBe(false)
+    expect(turn.wall).toBeNull()
+    expect(turn.prompt).toBeNull()
+    expect(turn.promptImages).toBe(0)
+  })
+
+  it('sums measured spans and reports partial coverage as a lower bound', () => {
+    const measured = metricsOf({ startTime: 1_000, ttft: 100, model: 400, decode: 300, output: 40, tool: 200 })
+    const unknown = metricsOf({ startTime: 2_000, toolPending: 2 })
+    const turn = aggregateTurn(3, [measured, unknown])
+    expect(turn.ttft).toBe(100)
+    expect(turn.ttftPending).toBe(1)
+    expect(turn.model).toBe(400)
+    expect(turn.modelPending).toBe(1)
+    expect(turn.decode).toBe(300)
+    expect(turn.output).toBe(40)
+    expect(turn.tool).toBe(200)
+    expect(turn.toolPending).toBe(2)
+    expect(turn.startTime).toBe(1_000)
+    expect(turn.running).toBe(false)
+  })
+
+  it('reduces an entirely unmeasured turn to blanks', () => {
+    const turn = aggregateTurn(3, [metricsOf(), metricsOf({ step: 2 })])
+    expect(turn.ttft).toBeNull()
+    expect(turn.ttftPending).toBe(0)
+    expect(turn.model).toBeNull()
+    expect(turn.modelPending).toBe(2)
+    expect(turn.decode).toBeNull()
+    expect(turn.output).toBeNull()
+    expect(turn.tool).toBeNull()
+    expect(turn.toolPending).toBe(0)
+    expect(turn.tps).toBeNull()
+    expect(turn.wall).toBeNull()
+  })
+
+  it('derives turn speed only when decode and output are both positive', () => {
+    const fast = aggregateTurn(1, [
+      metricsOf({ step: 1, decode: 2_000, output: 50 }),
+      metricsOf({ step: 2, decode: 2_000, output: 50 }),
+    ])
+    expect(fast.tps).toBeCloseTo(100 / 4)
+    const noDecode = aggregateTurn(1, [metricsOf({ decode: 0, output: 50 })])
+    expect(noDecode.decode).toBe(0)
+    expect(noDecode.tps).toBeNull()
+    const noOutput = aggregateTurn(1, [metricsOf({ decode: 2_000, output: 0 })])
+    expect(noOutput.tps).toBeNull()
+  })
+
+  it('keeps the last measured context and cache level of the turn', () => {
+    const turn = aggregateTurn(4, [
+      metricsOf({ step: 1, context: 100, cacheHit: 0.2, cacheRead: 10, cacheWrite: 5, wall: 10 }),
+      metricsOf({ step: 2, context: 200, cacheHit: 0.5, cacheRead: 20, cacheWrite: 6, wall: 20 }),
+      metricsOf({ step: 3, context: 300, wall: 30 }),
+    ])
+    expect(turn.context).toBe(300)
+    expect(turn.cacheHit).toBe(0.5)
+    expect(turn.cacheRead).toBe(20)
+    expect(turn.cacheWrite).toBe(6)
+    expect(turn.lastStepWall).toBe(30)
+    const heldBack = aggregateTurn(4, [
+      metricsOf({ step: 1, context: 100, cacheHit: 0.2, cacheRead: 10, cacheWrite: 5, wall: 10 }),
+      metricsOf({ step: 2, cacheHit: null, cacheRead: 99, cacheWrite: 99, wall: null }),
+    ])
+    expect(heldBack.context).toBe(100)
+    expect(heldBack.cacheHit).toBe(0.2)
+    expect(heldBack.cacheRead).toBe(10)
+    expect(heldBack.cacheWrite).toBe(5)
+    expect(heldBack.lastStepWall).toBe(10)
+    const bare = aggregateTurn(4, [metricsOf({ cacheHit: 0.4 })])
+    expect(bare.cacheHit).toBe(0.4)
+    expect(bare.cacheRead).toBeNull()
+    expect(bare.cacheWrite).toBeNull()
+  })
+
+  it('sums the sequential step tool spans', () => {
+    const turn = aggregateTurn(5, [
+      metricsOf({ step: 1, toolWall: 300, tool: 400 }),
+      metricsOf({ step: 2, toolWall: 200, tool: 250 }),
+      metricsOf({ step: 3 }),
+    ])
+    expect(turn.toolWall).toBe(500)
+    expect(turn.tool).toBe(650)
+    expect(aggregateTurn(5, [metricsOf(), metricsOf({ step: 2 })]).toolWall).toBeNull()
+  })
+
+  it('never confuses the summed tool time with the wall union', () => {
+    const turn = aggregateTurn(6, [metricsOf({ step: 1, tool: 200, toolWall: 100 })])
+    expect(turn.tool).toBe(200)
+    expect(turn.toolWall).toBe(100)
+  })
+
+  it('sums retries, tool errors, and tool output', () => {
+    const turn = aggregateTurn(5, [
+      metricsOf({ step: 1, retries: 1, toolErrors: 2, toolOutput: 10 }),
+      metricsOf({ step: 2, retries: 2, toolErrors: 3, toolOutput: 5 }),
+    ])
+    expect(turn.retries).toBe(3)
+    expect(turn.toolErrors).toBe(5)
+    expect(turn.toolOutput).toBe(15)
+    const unrecorded = aggregateTurn(5, [
+      metricsOf({ step: 1, toolOutput: null }),
+      metricsOf({ step: 2, toolOutput: 4 }),
+    ])
+    expect(unrecorded.toolOutput).toBe(4)
+  })
+
+  it('merges tool tallies across steps', () => {
+    const turn = aggregateTurn(6, [
+      metricsOf({ step: 1, tools: [{ name: 'read', count: 1 }] }),
+      metricsOf({ step: 2, tools: [{ name: 'read', count: 2 }, { name: 'grep', count: 1 }] }),
+    ])
+    expect(turn.tools).toEqual([{ name: 'read', count: 3 }, { name: 'grep', count: 1 }])
+    const tied = aggregateTurn(6, [
+      metricsOf({ step: 1, tools: [{ name: 'read', count: 1 }, { name: 'grep', count: 1 }] }),
+    ])
+    expect(tied.tools).toEqual([{ name: 'read', count: 1 }, { name: 'grep', count: 1 }])
+  })
+
+  it('measures turn wall time only from a settled last step with a start', () => {
+    const first = metricsOf({ step: 1, startTime: 1_000 })
+    const last = metricsOf({ step: 2, startTime: 2_000, endTime: 3_000 })
+    expect(aggregateTurn(1, [first, last]).wall).toBe(2_000)
+    expect(aggregateTurn(1, [first, { ...last, running: true }]).wall).toBeNull()
+    expect(aggregateTurn(1, [{ ...first, startTime: null }, last]).wall).toBeNull()
+    expect(aggregateTurn(1, [first, { ...last, endTime: null }]).wall).toBeNull()
+    expect(aggregateTurn(1, [first, { ...last, endTime: 500 }]).wall).toBe(0)
+  })
+
+  it('reports last-step liveness and any interruption in the turn', () => {
+    const running = aggregateTurn(1, [
+      metricsOf({ step: 1, running: false }),
+      metricsOf({ step: 2, running: true }),
+    ])
+    expect(running.running).toBe(true)
+    const interrupted = aggregateTurn(2, [
+      metricsOf({ step: 1, interrupted: true }),
+      metricsOf({ step: 2, aborted: true }),
+    ])
+    expect(interrupted.interrupted).toBe(true)
+    expect(interrupted.aborted).toBe(true)
+  })
+
+  it('describes the turn prompt as absent until the table attributes it', () => {
+    const turn = aggregateTurn(2, [metricsOf()])
+    expect(turn.prompt).toBeNull()
+    expect(turn.promptImages).toBe(0)
+    expect(turn.steps).toHaveLength(1)
   })
 })
 
 describe('turn grouping', () => {
-  /** Wrap one step metrics value in the node envelope the builder receives. */
-  function stepNode(metrics: PerfStepMetrics): PerfViewNode {
-    return {
-      key: `${metrics.turn}:${metrics.step}`,
-      kind: 'perf-step',
-      id: `${metrics.turn}:${metrics.step}`,
-      target: 'perf',
-      anchorSeq: metrics.startTime ?? 0,
-      location: { kind: 'unresolved' },
-      data: { kind: 'step', metrics },
-    }
-  }
-
-  it('groups steps into ordered turns with the question and markers', () => {
-    const one = completedStep(8, 1, 20_000)
-    const two = completedStep(8, 2, 21_000)
-    const open: PerfStepMetrics = {
-      ...completedStep(9, 1, 30_000),
-      endTime: null,
-      wall: null,
-      running: true,
-    }
-    const nodes: PerfViewNode[] = [
-      stepNode(two),
+  it('groups steps into turns ordered oldest first with their markers', () => {
+    const one = metricsOf({ turn: 8, step: 2, startTime: 20_000 })
+    const two = metricsOf({ turn: 8, step: 1, startTime: 19_000 })
+    const later = metricsOf({ turn: 9, step: 1, startTime: 30_000 })
+    const turns = buildTurns([
+      stepNode(later),
       stepNode(one),
-      stepNode(open),
-      {
-        key: '8:0',
-        kind: 'perf-prompt',
-        id: '8:0',
-        target: 'perf',
-        anchorSeq: 1,
-        location: { kind: 'unresolved' },
-        data: { kind: 'prompt', turn: 8, prompt: '问题', images: 2 },
-      },
-      {
-        key: '9:100000',
-        kind: 'perf-turn-end',
-        id: '9:100000',
-        target: 'perf',
-        anchorSeq: 2,
-        location: { kind: 'unresolved' },
-        data: { kind: 'end', turn: 9, closeKind: 'interrupted', endTime: 31_000 },
-      },
-    ]
-    const turns = buildTurns(nodes)
+      stepNode(two),
+      promptNode(8, '问题', 2),
+      endNode(9, 31_000, 'interrupted'),
+    ])
     expect(turns.map(turn => turn.turn)).toEqual([8, 9])
     expect(turns[0]?.steps.map(step => step.step)).toEqual([1, 2])
     expect(turns[0]?.prompt).toBe('问题')
     expect(turns[0]?.promptImages).toBe(2)
-    // The interrupted turn closes its last step at the turn-end time.
     expect(turns[1]?.interrupted).toBe(true)
-    expect(turns[1]?.steps[0]?.endTime).toBe(31_000)
-    expect(turns[1]?.steps[0]?.wall).toBe(1_000)
-    expect(turns[1]?.steps[0]?.running).toBe(false)
-    expect(turns[1]?.steps[0]?.aborted).toBe(true)
   })
 
-  it('never leaves a step running when a later step exists', () => {
-    const running = { ...completedStep(10, 1, 40_000), running: true }
-    const next = completedStep(10, 2, 41_000)
-    const turns = buildTurns([stepNode(running), stepNode(next)])
-    expect(turns[0]?.steps[0]?.running).toBe(false)
-    expect(turns[0]?.steps[1]?.running).toBe(false)
+  it('returns no turn for markers without a step', () => {
+    expect(buildTurns([])).toEqual([])
+    expect(buildTurns([promptNode(5, 'orphan'), endNode(5, 1_000, 'interrupted')])).toEqual([])
+  })
+
+  it('ignores blank prompt markers and end markers without detail', () => {
+    const step = metricsOf({ turn: 1, step: 1, startTime: 1_000, running: true })
+    const turns = buildTurns([
+      stepNode(step),
+      promptNode(1, null),
+      promptNode(1, ''),
+      endNode(1, Number.NaN, null),
+    ])
+    expect(turns).toHaveLength(1)
+    expect(turns[0]?.prompt).toBeNull()
+    expect(turns[0]?.promptImages).toBe(0)
+    expect(turns[0]?.running).toBe(true)
+  })
+
+  it('keeps the first non-blank prompt of a turn', () => {
+    const step = metricsOf({ turn: 1, step: 1 })
+    const turns = buildTurns([
+      stepNode(step),
+      promptNode(1, null),
+      promptNode(1, 'first', 3),
+      promptNode(1, 'second', 4),
+    ])
+    expect(turns[0]?.prompt).toBe('first')
+    expect(turns[0]?.promptImages).toBe(3)
+  })
+
+  it('skips a step whose turn number is not a number', () => {
+    const turns = buildTurns([
+      stepNode(metricsOf({ turn: Number.NaN, step: 1 })),
+      stepNode(metricsOf({ turn: 2, step: 1 })),
+    ])
+    expect(turns.map(turn => turn.turn)).toEqual([2])
+  })
+
+  it('clears running before a later step without mutating the input', () => {
+    const first = metricsOf({ turn: 1, step: 1, running: true })
+    const second = metricsOf({ turn: 1, step: 2, running: true })
+    const third = metricsOf({ turn: 1, step: 3, running: true })
+    const turns = buildTurns([stepNode(first), stepNode(second), stepNode(third)])
+    expect(turns[0]?.steps.map(step => step.running)).toEqual([false, false, true])
+    expect(first.running).toBe(true)
+    expect(turns[0]?.running).toBe(true)
+  })
+
+  it('clears running when a later turn follows', () => {
+    const turns = buildTurns([
+      stepNode(metricsOf({ turn: 1, step: 1, running: true })),
+      stepNode(metricsOf({ turn: 2, step: 1, running: true })),
+    ])
+    expect(turns[0]?.running).toBe(false)
+    expect(turns[1]?.running).toBe(true)
   })
 
   it('drops the empty step an interruption appends', () => {
-    const one = completedStep(11, 1, 50_000)
-    const empty = {
-      ...one,
-      step: 2,
-      context: null,
-      ttft: null,
-      model: null,
-      tool: null,
-      toolPending: 0,
-      tools: [],
-      wall: 0,
+    const one = metricsOf({ turn: 11, step: 1, startTime: 50_000, context: 300 })
+    for (const wall of [0, null]) {
+      const empty = metricsOf({ turn: 11, step: 2, wall })
+      const turns = buildTurns([
+        stepNode(one),
+        stepNode(empty),
+        endNode(11, 51_000, 'interrupted'),
+      ])
+      expect(turns[0]?.steps, String(wall)).toHaveLength(1)
+      expect(turns[0]?.steps[0]?.wall).toBe(1_000)
+      expect(turns[0]?.steps[0]?.aborted).toBe(true)
     }
-    const turns = buildTurns([
-      stepNode(one),
-      stepNode(empty),
-      {
-        key: '11:100000',
-        kind: 'perf-turn-end',
-        id: '11:100000',
-        target: 'perf',
-        anchorSeq: 2,
-        location: { kind: 'unresolved' },
-        data: { kind: 'end', turn: 11, closeKind: 'interrupted', endTime: 51_000 },
-      },
+  })
+
+  it('keeps a tail step that still measured something', () => {
+    const variants: readonly PerfStepMetrics[] = [
+      metricsOf({ turn: 12, step: 2, context: 5 }),
+      metricsOf({ turn: 12, step: 2, ttft: 5 }),
+      metricsOf({ turn: 12, step: 2, model: 5 }),
+      metricsOf({ turn: 12, step: 2, tool: 0 }),
+      metricsOf({ turn: 12, step: 2, toolPending: 1 }),
+      metricsOf({ turn: 12, step: 2, tools: [{ name: 'read', count: 1 }] }),
+      metricsOf({ turn: 12, step: 2, wall: 5 }),
+    ]
+    for (const tail of variants) {
+      const turns = buildTurns([
+        stepNode(metricsOf({ turn: 12, step: 1, startTime: 1_000, context: 10 })),
+        stepNode(tail),
+        endNode(12, 2_000, 'interrupted'),
+      ])
+      expect(turns[0]?.steps, JSON.stringify(tail)).toHaveLength(2)
+    }
+  })
+
+  it('closes an interrupted tail at the turn end time', () => {
+    const open = metricsOf({ turn: 13, step: 1, startTime: 1_000, running: true })
+    const turns = buildTurns([stepNode(open), endNode(13, 4_000, 'interrupted')])
+    const closed = turns[0]?.steps[0]
+    expect(closed?.endTime).toBe(4_000)
+    expect(closed?.wall).toBe(3_000)
+    expect(closed?.running).toBe(false)
+    expect(closed?.aborted).toBe(true)
+    expect(turns[0]?.wall).toBe(3_000)
+    expect(turns[0]?.running).toBe(false)
+  })
+
+  it('closes a tail with no start time without inventing a duration', () => {
+    const open = metricsOf({ turn: 14, step: 1, running: true })
+    const turns = buildTurns([stepNode(open), endNode(14, 4_000, null)])
+    expect(turns[0]?.steps[0]?.endTime).toBe(4_000)
+    expect(turns[0]?.steps[0]?.wall).toBeNull()
+    expect(turns[0]?.interrupted).toBe(false)
+  })
+
+  it('leaves a tail that already ended untouched', () => {
+    const settled = metricsOf({ turn: 15, step: 1, startTime: 1_000, endTime: 1_500 })
+    const turns = buildTurns([stepNode(settled), endNode(15, 4_000, 'completed')])
+    expect(turns[0]?.steps[0]?.endTime).toBe(1_500)
+    expect(turns[0]?.steps[0]?.wall).toBeNull()
+    expect(turns[0]?.wall).toBe(500)
+  })
+
+  it('prefers the interruption close kind over the step flags', () => {
+    const done = metricsOf({ turn: 16, step: 1, interrupted: true })
+    const interrupted = buildTurns([stepNode(done), endNode(16, 1_000, 'interrupted')])
+    expect(interrupted[0]?.interrupted).toBe(true)
+    const unrelated = buildTurns([stepNode(done), endNode(16, 1_000, 'completed')])
+    expect(unrelated[0]?.interrupted).toBe(true)
+    const quiet = buildTurns([stepNode(metricsOf({ turn: 17, step: 1 }))])
+    expect(quiet[0]?.interrupted).toBe(false)
+  })
+})
+
+describe('Code-Mode contribution merging', () => {
+  it('replaces the runner with the real tools and recomputes the totals', () => {
+    const runner = perfCall('root', 1, { name: 'run_code', chars: 500 })
+    const step = metricsOf({
+      turn: 2,
+      step: 1,
+      calls: [runner],
+      tools: [{ name: 'run_code', count: 1 }],
+      toolOutput: 500,
+      toolWall: 400,
+      toolErrors: 1,
+      tool: 200,
+    })
+    const inner = innerNode(2, 1, [
+      perfCall('sub-1', 2, {
+        name: 'grep', chars: 20, inner: true, startedAt: 1_100, endedAt: 1_150,
+      }),
+      perfCall('sub-2', 3, {
+        name: 'read', chars: 5, inner: true, error: true, startedAt: 1_200, endedAt: 1_300,
+      }),
+      perfCall('sub-3', 4, { name: null, inner: true, chars: null }),
     ])
+    const turns = buildTurns([stepNode(step), inner])
+    const merged = turns[0]?.steps[0]
+    expect(merged?.calls.map(call => call.callId)).toEqual(['sub-1', 'sub-2', 'sub-3'])
+    expect(merged?.tools).toEqual([{ name: 'grep', count: 1 }, { name: 'read', count: 1 }])
+    expect(merged?.toolOutput).toBe(25)
+    expect(merged?.toolWall).toBe(150)
+    expect(merged?.toolErrors).toBe(2)
+    expect(merged?.tool).toBe(200)
+    expect(turns[0]?.tools).toEqual([{ name: 'grep', count: 1 }, { name: 'read', count: 1 }])
+    expect(turns[0]?.toolErrors).toBe(2)
+    expect(turns[0]?.toolWall).toBe(150)
+  })
+
+  it('merges every root contribution of one step in sequence order', () => {
+    const step = metricsOf({ turn: 3, step: 1 })
+    const turns = buildTurns([
+      stepNode(step),
+      innerNode(3, 1, [perfCall('late', 5, { name: 'write', inner: true, chars: 2 })]),
+      innerNode(3, 1, [perfCall('early', 2, { name: 'grep', inner: true, chars: 3 })]),
+    ])
+    expect(turns[0]?.steps[0]?.calls.map(call => call.callId)).toEqual(['early', 'late'])
+    expect(turns[0]?.steps[0]?.toolOutput).toBe(5)
+  })
+
+  it('caps the merged call list at the table limit', () => {
+    const step = metricsOf({ turn: 4, step: 1 })
+    const calls = Array.from({ length: CALL_LIMIT + 3 }, (_, index) => perfCall(
+      `inner-${index}`,
+      index + 1,
+      { inner: true, name: 'read', chars: index + 1 },
+    ))
+    const turns = buildTurns([stepNode(step), innerNode(4, 1, calls)])
+    expect(turns[0]?.steps[0]?.calls).toHaveLength(CALL_LIMIT)
+    expect(turns[0]?.steps[0]?.calls[0]?.callId).toBe('inner-0')
+    expect(turns[0]?.steps[0]?.calls.at(-1)?.callId).toBe(`inner-${CALL_LIMIT - 1}`)
+    expect(turns[0]?.steps[0]?.toolOutput).toBe(
+      Array.from({ length: CALL_LIMIT }, (_, index) => index + 1).reduce((sum, value) => sum + value, 0),
+    )
+  })
+
+  it('keeps the runner when no inner contribution arrived', () => {
+    const runner = perfCall('root', 1, { name: 'run_code', chars: 500 })
+    const turns = buildTurns([stepNode(metricsOf({
+      turn: 5,
+      step: 1,
+      calls: [runner],
+      tools: [{ name: 'run_code', count: 1 }],
+      toolOutput: 500,
+    }))])
+    expect(turns[0]?.steps[0]?.calls.map(call => call.callId)).toEqual(['root'])
+    expect(turns[0]?.tools).toEqual([{ name: 'run_code', count: 1 }])
+  })
+
+  it('ignores inner contributions for steps the window no longer holds', () => {
+    const step = metricsOf({ turn: 6, step: 1, toolOutput: 7 })
+    const turns = buildTurns([stepNode(step), innerNode(6, 2, [perfCall('sub', 2, {
+      name: 'grep', chars: 9, inner: true,
+    })])])
     expect(turns[0]?.steps).toHaveLength(1)
-    expect(turns[0]?.steps[0]?.wall).not.toBeNull()
+    expect(turns[0]?.steps[0]?.calls).toEqual([])
+    expect(turns[0]?.toolOutput).toBe(7)
   })
 })
