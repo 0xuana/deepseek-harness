@@ -103,25 +103,22 @@ describe.skipIf(MODE === 'record')('web e2e: native and Client locale preference
     await jaDialog.getByRole('button', { name: '日本語', exact: true }).waitFor()
     await expect.poll(() => reported).toEqual(['ja'])
     expect(await page.evaluate(() => document.documentElement.lang)).toBe('ja')
+    await page.setViewportSize({ width: 390, height: 844 })
     const overflows = (): Promise<number> => jaDialog.evaluate((dialog) => {
-      const containers = [dialog, ...dialog.querySelectorAll<HTMLElement>('*')]
+      // The narrow navigation strip scrolls horizontally by design; inspect the panel and section content.
+      const options = dialog.lastElementChild!
+      const containers = [dialog, options, ...options.querySelectorAll<HTMLElement>('*')]
         .filter(element => element === dialog || ['auto', 'scroll'].includes(getComputedStyle(element).overflowX))
       return containers.filter(element => element.clientWidth > 0 && element.scrollWidth > element.clientWidth + 1).length
     })
     await expect.poll(overflows).toBe(0)
-    await jaDialog.getByRole('button', { name: '日本語', exact: true }).evaluate((button) => {
-      const dialog = button.closest('[role="dialog"]')
-      let container: HTMLElement | null = button.parentElement
-      while (container !== null && container !== dialog
-        && !['auto', 'scroll'].includes(getComputedStyle(container).overflowX)) {
-        container = container.parentElement
-      }
-      if (container === null || container === dialog) throw new Error('locale selector has no horizontal scroll container')
+    await jaDialog.evaluate((dialog) => {
+      const options = dialog.lastElementChild!
       const probe = document.createElement('div')
       probe.dataset.localeOverflowProbe = ''
       probe.style.width = '2000px'
       probe.style.height = '1px'
-      container.append(probe)
+      options.append(probe)
     })
     try {
       expect(await overflows()).toBeGreaterThan(0)
