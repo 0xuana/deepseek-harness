@@ -5,7 +5,7 @@
  * it, cancellation, reduced motion, and the viewport projection. Frames and
  * the clock are driven by hand so every trajectory is deterministic.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { FloatLayer } from '../src/components/FloatLayer.tsx'
 import type { DockIntents } from '../src/contract/adapter.ts'
@@ -88,7 +88,7 @@ function mounted(rect: FloatRect = { x: 100, y: 80, width: 300, height: 200 }) {
   const top = (): number => drawn('top', 'y')
   const stored = (): FloatRect => floatRect(getPane(controller.getSnapshot().state, paneId))
   const corner = (): HTMLElement => panel().querySelector<HTMLElement>('[data-dockkit-float-resize]') as HTMLElement
-  return { controller, tabId, paneId, view, redraw, renderTab, moveFloat, resizeFloat, focusPane, left, top, grip, corner, stored }
+  return { controller, tabId, paneId, view, redraw, renderTab, intents, moveFloat, resizeFloat, focusPane, left, top, grip, corner, stored }
 }
 
 /** Press the grip at `from`, move to `to`, and optionally release there. */
@@ -124,7 +124,7 @@ describe('dragging past an edge', () => {
     expect(h.top()).toBe(80)
   })
 
-  it('leaves the body unrendered through the drag and the return', () => {
+  it('does not re-render the body through the drag and the return, and re-renders it for a new renderer', () => {
     const h = mounted()
     const rendered = h.renderTab.mock.calls.length
     drag(h.grip(), [150, 90], [150 + 744, 90])
@@ -132,6 +132,9 @@ describe('dragging past an edge', () => {
     expect(h.left()).toBe(724)
     // The release's moveFloat redraws the layer, but the tab record and the renderer stay the same.
     expect(h.renderTab).toHaveBeenCalledTimes(rendered)
+    const next = vi.fn(() => null)
+    h.view.rerender(<FloatLayer state={h.controller.getSnapshot().state} intents={h.intents} labels={TEST_LABELS} renderTab={next} />)
+    expect(next).toHaveBeenCalledTimes(1)
   })
 
   it('undoes the whole gesture in one step', () => {
@@ -264,6 +267,21 @@ describe('interrupting a return', () => {
     expect(h.left()).toBe(100)
   })
 
+  it('ends at its target when the resize corner is pressed, and resizes from there', () => {
+    const h = mounted({ x: 0, y: 80, width: 300, height: 200 })
+    drag(h.grip(), [150, 90], [150 - 400, 90])
+    frame()
+    expect(h.left()).toBeLessThan(0)
+    fireEvent.pointerDown(h.corner(), { clientX: 250, clientY: 275, pointerId: 8, button: 0 })
+    expect(queued.size).toBe(0)
+    expect(h.left()).toBe(0)
+    fireEvent.pointerMove(window, { pointerId: 8, clientX: 250, clientY: 275 })
+    expect(h.left()).toBe(0)
+    fireEvent.pointerUp(window, { pointerId: 8, clientX: 250, clientY: 275 })
+    expect(h.left()).toBe(0)
+    expect(h.resizeFloat).not.toHaveBeenCalled()
+  })
+
   it('yields when its panel closes', () => {
     const h = mounted()
     drag(h.grip(), [150, 90], [150 + 744, 90])
@@ -364,6 +382,23 @@ describe('the viewport projection', () => {
     act(() => { window.dispatchEvent(new Event('resize')) })
     fireEvent.pointerUp(window, { pointerId: 7, clientX: 800, clientY: 280 })
     expect(h.resizeFloat).toHaveBeenCalledWith(h.paneId, { x: 100, y: 80, width: 400, height: 200 })
+  })
+
+  it('keeps a resize origin inside a viewport that shrank past it mid-gesture', () => {
+    const h = mounted({ x: 700, y: 80, width: 300, height: 200 })
+    fireEvent.pointerDown(h.corner(), { clientX: 1000, clientY: 280, pointerId: 7, button: 0 })
+    fireEvent.pointerMove(window, { pointerId: 7, clientX: 990, clientY: 280 })
+    viewport(500, 768)
+    act(() => { window.dispatchEvent(new Event('resize')) })
+    fireEvent.pointerUp(window, { pointerId: 7, clientX: 990, clientY: 280 })
+    expect(h.resizeFloat).toHaveBeenCalledWith(h.paneId, { x: 280, y: 80, width: 220, height: 200 })
+  })
+
+  it('keeps the 20px floor on a Windows root that publishes no caption height', () => {
+    document.documentElement.setAttribute('data-windows-titlebar', '')
+    onTestFinished(() => { document.documentElement.removeAttribute('data-windows-titlebar') })
+    const h = mounted({ x: 100, y: 0, width: 300, height: 200 })
+    expect(h.top()).toBe(20)
   })
 
   it('draws a stored rectangle from outside the viewport inside it', () => {

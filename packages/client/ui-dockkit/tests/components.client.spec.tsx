@@ -1353,6 +1353,34 @@ describe('divider drags', () => {
     expect(intents.placeTab).not.toHaveBeenCalled()
     expect([first, second]).toHaveLength(2)
   })
+
+  it('does not re-render the docked bodies while the divider preview redraws the panes', () => {
+    const controller = seededController()
+    controller.setExpanded(true)
+    controller.splitPane()
+    const [first, second] = dockPaneIds(controller.getSnapshot().state)
+    if (first === undefined || second === undefined) throw new Error('expected two docked panes')
+    layOut([first, second], 420)
+    const renderTab = vi.fn(() => null)
+    const surface = (renderer: typeof renderTab) => (
+      <DockSurface state={controller.getSnapshot().state} canSplit intents={spyIntents()} labels={TEST_LABELS} renderTab={renderer} />
+    )
+    const view = render(surface(renderTab))
+    const rendered = renderTab.mock.calls.length
+    expect(rendered).toBeGreaterThan(0)
+    const divider = document.querySelector('[data-dockkit-divider]')
+    if (divider === null) throw new Error('expected a divider between the two panes')
+    const splitId = divider.getAttribute('data-dockkit-divider')?.split(':')[0]
+    drag(divider, [420, 300], [504, 300], false)
+    fireEvent.pointerMove(window, { pointerId: 7, clientX: 460, clientY: 300 })
+    expect(Number(document.querySelector<HTMLElement>(`[data-dockkit-cell="${splitId}:0"]`)?.style.flexGrow)).toBeCloseTo(0.55)
+    expect(renderTab).toHaveBeenCalledTimes(rendered)
+    fireEvent.pointerUp(window, { pointerId: 7, clientX: 460, clientY: 300 })
+    // A new renderer is how an embedder refreshes its bodies.
+    const next = vi.fn(() => null)
+    view.rerender(surface(next))
+    expect(next).toHaveBeenCalledTimes(rendered)
+  })
 })
 
 describe('FloatLayer', () => {

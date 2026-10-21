@@ -7,7 +7,8 @@ import type { LayoutState, PaneId, PaneNode, TabId, TabRecord } from '../contrac
 import { findTabPane, floatRect, getNode, getPane } from '../engine/tree.ts'
 import type { SizePreview } from './PaneTree.tsx'
 import type { PaneCallbacks } from './render.ts'
-import { FloatHeader, floatStyle, TabBody, useFloatGestures } from './FloatLayer.tsx'
+import { FloatHeader, floatStyle, useFloatGestures } from './FloatLayer.tsx'
+import { TabBody } from './TabBody.tsx'
 import { PaneDropHints, TabPanel, TabStrip } from './TabPanel.tsx'
 import css from './dockkit.module.css'
 

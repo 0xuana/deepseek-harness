@@ -1071,10 +1071,13 @@ describe('web e2e: shipped right Sidebar', () => {
       expect(pushed.y + pushed.height).toBeLessThan(viewport.height + 120)
       await page.mouse.up()
 
-      await expect.poll(async () => {
-        const box = await panel.boundingBox()
-        return box === null ? undefined : { right: Math.round(box.x + box.width), bottom: Math.round(box.y + box.height) }
-      }).toEqual({ right: viewport.width, bottom: viewport.height })
+      // The return overshoots inward and can pass the edges before it ends, so
+      // wait for the resting style, which drops the inline position.
+      await expect.poll(async () => await panel.evaluate(node => (node as HTMLElement).style.left)).toBe('')
+      const rest = await panel.boundingBox()
+      if (rest === null) throw new Error('float is not rendered')
+      expect({ right: Math.round(rest.x + rest.width), bottom: Math.round(rest.y + rest.height) })
+        .toEqual({ right: viewport.width, bottom: viewport.height })
 
       // At rest the stylesheet clamps on its own: a rectangle published from a
       // stale viewport reading, far outside and larger than the viewport, still

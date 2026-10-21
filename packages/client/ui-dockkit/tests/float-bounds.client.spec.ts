@@ -75,6 +75,13 @@ describe('resistedRect', () => {
     expect(shown.y).toBe(80)
     expect(shown.x).toBeCloseTo(760)
   })
+
+  it('draws at the legal size when the desired rectangle no longer fits the viewport', () => {
+    const narrow = { ...VIEWPORT, width: 500 }
+    // 60 px of overflow past the legal x of 0 draws 40 px past it, at the 500 px the viewport allows.
+    expect(resistedRect({ ...PANEL, x: 60, width: 700 }, narrow)).toEqual({ ...PANEL, x: 40, width: 500 })
+    expect(unresistedRect({ ...PANEL, x: 0, width: 700 }, narrow)).toEqual({ ...PANEL, x: 0, width: 500 })
+  })
 })
 
 describe('unresistedRect', () => {

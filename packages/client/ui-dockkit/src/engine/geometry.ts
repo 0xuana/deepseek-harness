@@ -253,11 +253,11 @@ function resist(overflow: number): number {
  * legal rectangle plus a resisted share of the overflow on each axis.
  * @param desired - the rectangle the pointer travel asks for.
  * @param bounds - the viewport region.
- * @returns the drawn rectangle; equal to `desired` while it is legal.
+ * @returns the drawn rectangle at the legal size; equal to `desired` while it is legal.
  */
 export function resistedRect(desired: FloatRect, bounds: FloatBounds): FloatRect {
   const legal = legalFloatRect(desired, bounds)
-  return { ...desired, x: legal.x + resist(desired.x - legal.x), y: legal.y + resist(desired.y - legal.y) }
+  return { ...legal, x: legal.x + resist(desired.x - legal.x), y: legal.y + resist(desired.y - legal.y) }
 }
 
 /** The largest displacement `unresistedRect` inverts; `resist` only approaches `FLOAT_RESISTANCE`. */
@@ -279,11 +279,11 @@ function unresist(displacement: number): number {
  * bounds picks it up where it is.
  * @param drawn - where the panel is drawn now.
  * @param bounds - the viewport region.
- * @returns the start rectangle; equal to `drawn` while it is legal.
+ * @returns the start rectangle at the legal size; equal to `drawn` while it is legal.
  */
 export function unresistedRect(drawn: FloatRect, bounds: FloatBounds): FloatRect {
   const legal = legalFloatRect(drawn, bounds)
-  return { ...drawn, x: legal.x + unresist(drawn.x - legal.x), y: legal.y + unresist(drawn.y - legal.y) }
+  return { ...legal, x: legal.x + unresist(drawn.x - legal.x), y: legal.y + unresist(drawn.y - legal.y) }
 }
 
 /**

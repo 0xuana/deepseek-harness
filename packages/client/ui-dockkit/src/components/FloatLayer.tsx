@@ -13,7 +13,7 @@
  * only `state` and the outward contracts. An embedder may portal it anywhere,
  * and nothing here assumes the docked tree is an ancestor or even present.
  */
-import { memo, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import clsx from 'clsx'
 import { IconCloseOutlineRegular, IconPanelLeftOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -29,6 +29,7 @@ import {
 } from '../engine/spring.ts'
 import { floatRect, getPane, getTab, onlyTabId } from '../engine/tree.ts'
 import { useGesture } from './pointer.ts'
+import { TabBody } from './TabBody.tsx'
 import { TabTitle } from './TabTitle.tsx'
 import css from './dockkit.module.css'
 
@@ -78,10 +79,11 @@ function raised(state: LayoutState, paneId: PaneId): boolean {
 function floatBounds(): FloatBounds {
   const root = document.documentElement
   const windows = root.hasAttribute('data-windows-titlebar')
-  // Desktop publishes the caption height in pixels on the root's inline style.
+  // Desktop publishes the caption height in pixels on the root's inline style;
+  // a root without it keeps the 20px floor.
   const caption = windows && !root.hasAttribute('data-fullscreen')
     ? Number.parseFloat(root.style.getPropertyValue('--dsh-windows-titlebar-height')) : 0
-  return { top: windows ? caption + 20 : 0, width: window.innerWidth, height: window.innerHeight }
+  return { top: windows ? (Number.isFinite(caption) ? caption : 0) + 20 : 0, width: window.innerWidth, height: window.innerHeight }
 }
 
 /** Whether the platform asks for reduced motion; environments without `matchMedia` (jsdom) report no preference. */
@@ -258,9 +260,10 @@ export function useFloatGestures(state: LayoutState, intents: DockIntents) {
     // The press stops here: the panel's own press-to-focus would record a focus
     // entry before the drag's, and the release below decides which one it is.
     event.stopPropagation()
-    // A press during its own return takes the panel from where it is drawn;
-    // another panel's return ends at its target.
-    const drawn = settling.current?.paneId === paneId ? preview?.rect : undefined
+    // A grip press during its own return takes the panel from where it is
+    // drawn; a corner press, or a press on another panel, ends the return at
+    // its target.
+    const drawn = mode === 'move' && settling.current?.paneId === paneId ? preview?.rect : undefined
     if (cancelSettling() && drawn === undefined) setPreview(undefined)
     area.current = floatBounds()
     const reduce = reducedMotion()
@@ -271,7 +274,8 @@ export function useFloatGestures(state: LayoutState, intents: DockIntents) {
     const reached = (x: number, y: number): { readonly drawn: FloatRect; readonly legal: FloatRect } => {
       const desired = draggedRect(start, x, y)
       if (mode === 'resize') {
-        const resized = boundedResize(desired, area.current, FLOAT_MIN_SIZE)
+        // The origin may lie outside a viewport that shrank mid-gesture.
+        const resized = legalFloatRect(boundedResize(desired, area.current, FLOAT_MIN_SIZE), area.current)
         return { drawn: resized, legal: resized }
       }
       const legal = legalFloatRect(desired, area.current)
@@ -340,18 +344,6 @@ export function FloatHeader({ paneId, tab, labels, intents, renderTabTitle, canC
     </header>
   )
 }
-
-/**
- * A tab's body from the embedder's renderer. It is memoized on the renderer and
- * the tab record, so a float gesture or return, which re-renders its layout on
- * every frame, leaves every body untouched.
- */
-export const TabBody = memo(function TabBody({ tab, renderTab }: {
-  readonly tab: TabRecord
-  readonly renderTab: TabRenderer
-}): ReactNode {
-  return renderTab(tab)
-})
 
 /** Every floating panel, in z order. */
 export function FloatLayer({ state, intents, labels, renderTab, renderTabTitle, canCloseTab }: FloatLayerProps): ReactNode {
