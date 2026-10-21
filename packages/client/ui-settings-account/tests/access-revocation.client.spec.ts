@@ -15,23 +15,33 @@ interface Guard {
   installed: (() => void)[] | undefined
 }
 
+/**
+ * Install every guard's current effect.
+ * @param guards - Guards registering this run's access controllers.
+ */
+function grant(guards: readonly Guard[]): void {
+  for (const guard of guards) {
+    const effect = guard.install()
+    guard.installed = typeof effect === 'function' ? [effect] : [...effect]
+  }
+}
+
+/**
+ * Dispose every installed effect in reverse install order.
+ * @param guards - Guards registering this run's access controllers.
+ */
+function revoke(guards: readonly Guard[]): void {
+  for (const guard of [...guards].reverse()) {
+    for (const dispose of (guard.installed ?? []).reverse()) dispose()
+    guard.installed = undefined
+  }
+}
+
 it('withdraws every account surface and the account stream on revocation, and restores them on the next grant', async () => {
   vi.stubEnv('DSH_CLIENT_VERSION', '0.0.0-test')
   const links = { usageUrl: 'https://example.test/usage', topUpUrl: 'https://example.test/top_up' }
   const signedIn: AccountView = { status: 'credential-stored', links, attempt: null }
   const guards: Guard[] = []
-  const grant = (): void => {
-    for (const guard of guards) {
-      const effect = guard.install()
-      guard.installed = typeof effect === 'function' ? [effect] : [...effect]
-    }
-  }
-  const revoke = (): void => {
-    for (const guard of [...guards].reverse()) {
-      for (const dispose of (guard.installed ?? []).reverse()) dispose()
-      guard.installed = undefined
-    }
-  }
   const registered = new Map<string, number>()
   const streams: { readonly signal: AbortSignal; readonly accepted: Promise<undefined> }[] = []
   const lifetime: (() => void)[] = []
@@ -83,19 +93,19 @@ it('withdraws every account surface and the account stream on revocation, and re
   try {
     apply(ctx as never)
     expect(new Set(guards.map(guard => guard.action))).toEqual(new Set(['account/watch']))
-    grant()
+    grant(guards)
     await streams[0]!.accepted
     expect(surfaces()).toEqual({ 'settings.launcher': 1, 'shell.quota-notice': 1, 'settings.models.sign-in': 1, 'settings.section': 1 })
 
-    revoke()
+    revoke(guards)
     expect(streams[0]!.signal.aborted).toBe(true)
     expect(surfaces()).toEqual({ 'settings.launcher': 0, 'shell.quota-notice': 0, 'settings.models.sign-in': 0, 'settings.section': 0 })
 
-    grant()
+    grant(guards)
     await streams[1]!.accepted
     expect(surfaces()).toEqual({ 'settings.launcher': 1, 'shell.quota-notice': 1, 'settings.models.sign-in': 1, 'settings.section': 1 })
   } finally {
-    revoke()
+    revoke(guards)
     for (const dispose of lifetime.reverse()) dispose()
   }
 })
@@ -105,18 +115,6 @@ it('drops reads a revoked grant started, and the next grant shows no account sec
   const links = { usageUrl: 'https://example.test/usage', topUpUrl: 'https://example.test/top_up' }
   const signedIn: AccountView = { status: 'credential-stored', links, attempt: null }
   const guards: Guard[] = []
-  const grant = (): void => {
-    for (const guard of guards) {
-      const effect = guard.install()
-      guard.installed = typeof effect === 'function' ? [effect] : [...effect]
-    }
-  }
-  const revoke = (): void => {
-    for (const guard of [...guards].reverse()) {
-      for (const dispose of (guard.installed ?? []).reverse()) dispose()
-      guard.installed = undefined
-    }
-  }
   const registered = new Map<string, number>()
   let operations: AccountSectionInjected | undefined
   const profile = Promise.withResolvers<{ ok: true; value: { status: 'failed' } }>()
@@ -169,25 +167,25 @@ it('drops reads a revoked grant started, and the next grant shows no account sec
   }
   try {
     apply(ctx as never)
-    grant()
+    grant(guards)
     firstFrames[0]!.release()
     await firstFrames[0]!.accepted
     expect(registered.get('settings.section')).toBe(1)
 
     // The profile read started under the first grant settles only after the revocation.
-    revoke()
+    revoke(guards)
     expect(operations!.hooks.account.getSnapshot()).toMatchObject({ view: undefined, details: undefined })
     profile.resolve({ ok: true, value: { status: 'failed' } })
     await new Promise(resolve => setTimeout(resolve, 0))
     expect(operations!.hooks.account.getSnapshot().details).toBeUndefined()
 
-    grant()
+    grant(guards)
     expect(registered.get('settings.section')).toBe(0)
     firstFrames[1]!.release()
     await firstFrames[1]!.accepted
     expect(registered.get('settings.section')).toBe(1)
   } finally {
-    revoke()
+    revoke(guards)
     for (const dispose of lifetime.reverse()) dispose()
   }
 })
