@@ -42,7 +42,7 @@ expect(view.container).toMatchSnapshot()
 await runtime.dispose()
 ```
 
-`mount` 会预检必需服务，缺失时自明报错——先用 `provide(name, value)` 提供额外服务。运行时提供的 `fileUpload` 替身会拒绝每次调用，直到测试套件替换 `runtime.fileUpload.upload`。`storeOf(key, scopeKey)` 返回渲染器交给 slot 组件的实时存储实例，用于身份与动作驱动写入断言。
+`mount` 会预检必需服务，缺失时自明报错——先用 `provide(name, value)` 提供额外服务。运行时提供的 `fileUpload` 替身，其 `upload` 与 `uploadImage` 会拒绝每次调用，直到测试套件替换它们。`storeOf(key, scopeKey)` 返回渲染器交给 slot 组件的实时存储实例，用于身份与动作驱动写入断言。
 
 运行时在 ui-session 之前安装 `allowAllAccessPlugin`：它的 `remoteAccess` 服务是一个 `StaticRemoteAccess`，对每个资源都回答 true，因此每个访问 Hook 都允许每个 action，每个 `whenAccess` 回调都立即执行。`TestClientOptions.access` 改为按 action 固定答案，经由 `staticAccessPlugin(allows)`。手工构造的组件 props 展开 `...allowAllAccess` 以获得同样的 Hook；测试被拒绝路径的 spec 覆盖其中一个 Hook，或提供 `new StaticRemoteAccess(ctx, allows)`。
 
