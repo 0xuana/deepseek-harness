@@ -3,7 +3,7 @@ import type {
   ComposerAttachment, ComposerAttachmentsProps, ComposerImageAttachment,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import {
-  IconCloseFillRegular, IconRefreshOutlineRegular, IconWarningOutlineRegular,
+  IconCloseFillRegular, IconRefreshOutlineRegular, IconWarningOutlineRegular, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { AttachmentRail } from '../AttachmentRail.tsx'
 import type { AttachmentRailItem } from '../AttachmentRail.tsx'
@@ -79,7 +79,8 @@ export function ComposerAttachments({
                 )
               }
               // An uploading image shows its progress; a failed upload turns the thumbnail into its retry
-              // control, except one the Host refused, which shows why and leaves removal as the way out.
+              // control, except one the Host refused, which explains why and leaves removal as the way out.
+              // The refusal is the only explanation of its warning, so a tap or click also pins it.
               const upload = uploads[attachment.id]
               const name = attachment.file.name || t('image.pending')
               const refusal = upload?.status === 'error' && upload.reason !== undefined
@@ -89,28 +90,30 @@ export function ComposerAttachments({
                 <div className={css.imageItem}>
                   {refusal !== undefined
                     ? (
-                      <div
-                        className={`${css.thumbnail} ${css.thumbnailFailed} ${css.thumbnailRefused}`}
-                        role="img"
-                        aria-label={refusal}
-                        title={refusal}
-                      >
-                        <img src={attachment.previewUrl} alt="" />
-                        <span className={css.failureGlyph} aria-hidden><IconWarningOutlineRegular size={16} /></span>
-                      </div>
+                      <Tooltip label={refusal} side="top" delayMs={300} portal openOnClick>
+                        <button
+                          type="button"
+                          className={`${css.thumbnail} ${css.thumbnailFailed} ${css.thumbnailRefused}`}
+                          aria-label={refusal}
+                        >
+                          <img src={attachment.previewUrl} alt="" />
+                          <span className={css.failureGlyph} aria-hidden><IconWarningOutlineRegular size={16} /></span>
+                        </button>
+                      </Tooltip>
                     )
                     : upload?.status === 'error'
                       ? (
-                        <button
-                          type="button"
-                          className={`${css.thumbnail} ${css.thumbnailFailed}`}
-                          title={t('file.uploadFailed')}
-                          aria-label={t('file.retry', { name })}
-                          onClick={() => { onRetryFile(attachment.id) }}
-                        >
-                          <img src={attachment.previewUrl} alt="" />
-                          <span className={css.failureGlyph} aria-hidden><IconRefreshOutlineRegular size={16} /></span>
-                        </button>
+                        <Tooltip label={t('file.uploadFailed')} side="top" delayMs={300} portal>
+                          <button
+                            type="button"
+                            className={`${css.thumbnail} ${css.thumbnailFailed}`}
+                            aria-label={t('file.retry', { name })}
+                            onClick={() => { onRetryFile(attachment.id) }}
+                          >
+                            <img src={attachment.previewUrl} alt="" />
+                            <span className={css.failureGlyph} aria-hidden><IconRefreshOutlineRegular size={16} /></span>
+                          </button>
+                        </Tooltip>
                       )
                       : (
                         <button
