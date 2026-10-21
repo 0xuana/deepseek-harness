@@ -172,6 +172,10 @@ Chat 会在历史前插与 renderer 重新挂载时恢复语义锚点，并且�
 
 -----
 
+Chat view 在标记了 `data-text-interaction-source` 的业务节点上检测选区和右键手势。选区两端必须定位到同一个来源容器。已展示的用户内容和已完成的 Assistant 文本或 reasoning 参与交互；Tool、注入上下文、流式或中断的 Assistant 文本以及 Markdown 控件不参与。
+
+`ctx.uiConversation.interactions` 将有效手势分发给插件注册项，并把对应组件交给 Chat view。操作展示位置在已有 Chat 列内绝对定位，限制在 composer seat 及其 dock 上方。外层容器保留组件的外描边与阴影，内部滚动由组件负责。选区滚出该可见范围时暂时隐藏操作，滚回后恢复。Chat 负责视口可见性、定位、外部指针按下、Escape、新选区、来源失效与卸载清理；主动关闭保留浏览器选区，布局变化不会重新打开操作。[Message quotes](../../session/message-quotes/README.zh.md) 负责引用的接管条件和插入。
+
 <a id="model-experience"></a>
 ## 模型体验
 

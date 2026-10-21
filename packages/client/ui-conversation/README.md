@@ -59,6 +59,12 @@ Businesses extend `UserTextDataMap` and `UserTextFacts` on this package's `/clie
 
 Queue previews enable whitespace collapsing and document-edge trimming, retain emoji, and use CSS ellipsis without truncating the input. Editing and copying retain the original text; native attachments use their separate presentation.
 
+[Message quotes](../../session/message-quotes/README.md) registers quote matching and rendering through the same UserText extension points. Each user-text container and draft editor owns an independent hover-card group, so its quote previews replace one another immediately.
+
+The existing semantic `DraftSnapshot` retains quote text and clipboard-coordinate spans beside references. Storage accepts earlier string and reference-only drafts; Session switching, Workspace transfer, and failed-send restoration preserve atomic quotes through the existing editor runtime. `inputActions.insertQuote(text)` inserts a nonblank selection only while the composer is in plain mode. Submission emits ordinary Markdown text; pending echoes, queue rows, steering rows, and durable messages use the same text matcher.
+
+`UiConversation.interactions` owns plugin registrations for selected-text and context-menu gestures. A registration supplies a synchronous handler whose ID selects its keyed Slot component; plugins use the Slot injection mechanism for rendering. Handlers call `open()` to display and call `preventDefault()` separately when replacing a browser default. Chat supplies DOM selections and local layout; original source data and Markdown offsets are not inferred from DOM positions.
+
 <a id="shell-and-standard-props"></a>
 ## Shell and standard props
 

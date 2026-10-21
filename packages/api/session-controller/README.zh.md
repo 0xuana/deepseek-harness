@@ -106,6 +106,8 @@ GUI 模型选择要求确切提供方／模型对出现在可用目录中；不�
 
 -----
 
+Blockquote 作为普通 prompt 文本传递，不携带 quote 元数据。本地提交回显与持久消息使用同一文本渲染规则；队列编辑替换 content，同时保留 prompt 关联信息。
+
 <a id="model-experience"></a>
 ## 模型体验
 
