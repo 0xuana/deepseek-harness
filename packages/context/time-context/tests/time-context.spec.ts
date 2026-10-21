@@ -6,10 +6,10 @@ import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import { Session, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import AgentRegistry, { agentEvents, type Agent } from '@deepseek-ai/dsh-agent'
-import { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
+import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import { unsupportedInbox, mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { unsupportedModel, unsupportedInbox, mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import * as timeContext from '@deepseek-ai/dsh-time-context'
 import type { Config } from '@deepseek-ai/dsh-time-context'
 
@@ -50,6 +50,7 @@ function sessionAgent(session: Session, id = 'agent'): Agent {
     id: SessionId(id),
     options: {},
     session,
+    model: unsupportedModel(),
     inbox: unsupportedInbox(),
     status: 'running',
     ctx: new Context(),
@@ -98,7 +99,7 @@ async function fire(
   })
   const decision = await agentEvents(ctx, agent).waterfall(
     'agent/pre-step',
-    { messages: [proposed], turn, step, signal },
+    { modelSelection: { provider: 'mock', model: 'mock' }, messages: [proposed], turn, step, signal },
     () => Promise.resolve({ kind: 'enter' as const, messages: [proposed] }),
   )
   if (decision.kind === 'enter') {
@@ -429,10 +430,10 @@ describe('time-context projection fold edges', () => {
       content: [{ type: 'text', text: 'reading' }],
       source: { kind: 'time-context' },
     }), { surfaceOp: 'append' })
-    expect(typeof ctx.sessionProjections.stateOf(session, 'timeContext')?.lastTurnInjectionTime).toBe('number')
+    expect(ctx.sessionProjections.checkpoint(session).timeContext?.val).toHaveProperty('lastTurnInjectionTime', expect.any(Number))
     session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
     session.append('turn/start', { turn: 2 })
-    expect(ctx.sessionProjections.stateOf(session, 'timeContext')).toMatchObject({
+    expect(ctx.sessionProjections.checkpoint(session).timeContext?.val).toMatchObject({
       lastTurnInjectionTime: null,
     })
   })
@@ -441,7 +442,7 @@ describe('time-context projection fold edges', () => {
     const { ctx } = await mount()
     const session = Session.create(SessionId('end-without-start'))
     session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
-    expect(ctx.sessionProjections.stateOf(session, 'timeContext')).toMatchObject({
+    expect(ctx.sessionProjections.checkpoint(session).timeContext?.val).toMatchObject({
       lastTurnInjectionTime: null,
     })
   })

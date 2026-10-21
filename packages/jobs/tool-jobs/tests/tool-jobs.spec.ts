@@ -1,9 +1,12 @@
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import AgentRegistry, { emitAgentEvent } from '@deepseek-ai/dsh-agent'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
@@ -26,6 +29,8 @@ const testToolSignal = new AbortController().signal
 
 const agentRegistryDisposers = new WeakMap<Agent, () => Promise<void>>()
 const agentScopeFibers = new WeakMap<Agent, { dispose: () => Promise<void> }>()
+/** Mutable fake next-step inbox per agent, so a spec can queue input without an unknown assertion. */
+const fakeInboxes = new WeakMap<Agent, ReturnType<typeof createUserMessage>[]>()
 
 /** Registry knobs a test may narrow; every producer here pushes, so the pump stays idle. */
 interface RegistryConfig {
@@ -47,6 +52,8 @@ async function setup(config: ToolJobs.Config = {}, registry: RegistryConfig = {}
   const ctx = new Context()
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(NativeToolExecutor)
   const agentsFiber = await ctx.plugin(AgentRegistry)
   await ctx.plugin(LocalJobRegistry, registry)
   const toolsFiber = await ctx.plugin(ToolJobs, config)
@@ -85,10 +92,32 @@ async function fakeAgent(ctx: Context, sessionId: string, delivery: FakeDelivery
     status: delivery.status ?? 'running',
     session: { id, header: { version: 0, id, createdAt: 0 } },
   } as unknown as Agent
-  Object.assign(agent, { inbox: { remove: delivery.remove ?? (() => true) } })
+  // Session projections fold the fake Session when a test logs a notice into it.
+  Object.assign(agent.session, { inheritedEventCount: 0, snapshotEvents: () => [] })
+  const nextStep: ReturnType<typeof createUserMessage>[] = []
+  Object.assign(agent, { inbox: { nextStep, nextTurn: [], remove: delivery.remove ?? (() => true) } })
+  fakeInboxes.set(agent, nextStep)
   agentRegistryDisposers.set(agent, await ctx.agents.register(agent))
   agentScopeFibers.set(agent, scopeFiber)
   return agent
+}
+
+/** Durably queue one next-step message and publish its live insertion, as `ReactLoopInbox` does. */
+function insertNextStep(ctx: Context, owner: Agent, text: string): void {
+  const message = createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'user' } })
+  const nextStep = fakeInboxes.get(owner)
+  if (nextStep === undefined) throw new Error(`fake agent "${owner.id}" has no next-step inbox`)
+  nextStep.push(message)
+  emitAgentEvent(ctx, owner, 'agent/inbox/inserted', { message })
+}
+
+/** Durably queue one plugin notice, the other source a waiting step can receive. */
+function insertNotice(ctx: Context, owner: Agent, text: string): void {
+  const message = createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'tool-jobs', form: 'notice', summary: text } })
+  const nextStep = fakeInboxes.get(owner)
+  if (nextStep === undefined) throw new Error(`fake agent "${owner.id}" has no next-step inbox`)
+  nextStep.push(message)
+  emitAgentEvent(ctx, owner, 'agent/inbox/inserted', { message })
 }
 
 async function detachAgent(agent: Agent): Promise<void> {
@@ -140,7 +169,7 @@ function producer(overrides: Partial<Omit<JobSpec, 'run' | 'output'> & JobHooks>
 
 let callCounter = 0
 function call(ctx: Context, name: string, args: unknown, agent?: Agent) {
-  return ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId(`call-${++callCounter}`), name, arguments: args, ...agent ? { agent } : {} })
+  return executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId(`call-${++callCounter}`), name, arguments: args, ...agent ? { agent } : {} })
 }
 
 function text(result: { content: { type: string; text?: string }[] }): string {
@@ -171,6 +200,7 @@ describe('tool-jobs setup', () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(LocalJobRegistry)
     await ctx.plugin(ToolJobs)
     const p = producer()
@@ -186,6 +216,8 @@ describe('tool-jobs setup', () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(LocalJobRegistry)
     await expect(ctx.plugin(ToolJobs, { waitTimeoutMs: 100, maxWaitTimeoutMs: 50 }))
@@ -205,6 +237,8 @@ describe('tool-jobs setup', () => {
       const ctx = new Context()
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
+      await ctx.plugin(SessionProjectionRegistry)
+      await ctx.plugin(NativeToolExecutor)
       await ctx.plugin(AgentRegistry)
       await ctx.plugin(LocalJobRegistry)
       try {
@@ -303,6 +337,8 @@ describe('tool-jobs setup', () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(LocalJobRegistry)
     ToolJobs.apply(ctx, {})
@@ -708,6 +744,8 @@ describe('completion notices across scoped mounts', () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(LocalJobRegistry)
 
@@ -1105,7 +1143,7 @@ describe('completion notices', () => {
     ctx.jobs.start(p.spec)
 
     const aborter = new AbortController()
-    const pending = ctx.tools.execute({
+    const pending = executeToolFixture(ctx, {
       signal: aborter.signal,
       callId: ToolCallId('call-aborted-wait'),
       name: 'job_output',
@@ -1131,7 +1169,7 @@ describe('completion notices', () => {
     ctx.jobs.start(p.spec)
 
     const aborter = new AbortController()
-    const pending = ctx.tools.execute({
+    const pending = executeToolFixture(ctx, {
       signal: aborter.signal,
       callId: ToolCallId('call-abort-then-settle'),
       name: 'job_output',
@@ -1266,26 +1304,61 @@ describe('completion notice output', () => {
     expect(text(await call(ctx, 'job_output', { job_id: id }, owner))).toBe('(no new output)\n[status: completed, exit code: 0]')
   })
 
-  it('inlines a stream of exactly inlineOutputBytes, counted in UTF-8 bytes, and leaves a longer one unread', async () => {
-    const { ctx } = await setup({ inlineOutputBytes: 9 })
-    const inject = vi.fn()
-    const owner = await fakeAgent(ctx, 'sess-1', { inject })
-    // Three characters, nine bytes: a character count would also admit the longer stream.
-    const exact = producer({ owner: owner.id, label: 'exact' })
-    const exactId = ctx.jobs.start(exact.spec)
-    exact.append('日本語')
-    exact.settle({ status: 'completed' })
-    const over = producer({ owner: owner.id, label: 'over' })
-    const overId = ctx.jobs.start(over.spec)
+  it('inlines a notice of exactly inlineOutputBytes, counted in UTF-8 bytes, and points a longer one at job_output', async () => {
+    // Job ids have a fixed length, so a placeholder id sizes the notice exactly.
+    // Three characters, nine bytes: a character count would admit the longer notice too.
+    const bound = Buffer.byteLength(`background job bash-${'0'.repeat(16)} (bash: exact) finished [status: completed]. Output:\n日本語`)
+
+    const bounded = await setup({ inlineOutputBytes: bound })
+    const boundedInject = vi.fn()
+    const boundedOwner = await fakeAgent(bounded.ctx, 'sess-1', { inject: boundedInject })
+    const fits = producer({ owner: boundedOwner.id, label: 'exact' })
+    const fitsId = bounded.ctx.jobs.start(fits.spec)
+    fits.append('日本語')
+    fits.settle({ status: 'completed' })
+    const over = producer({ owner: boundedOwner.id, label: 'exact' })
+    const overId = bounded.ctx.jobs.start(over.spec)
     over.append('日本語x')
     over.settle({ status: 'completed' })
     await tick()
 
-    expect(notice(inject, 0).content[0].text).toBe(`background job ${exactId} (bash: exact) finished [status: completed]. Output:\n日本語`)
-    expect(notice(inject, 1).content[0].text).toBe(`background job ${overId} (bash: over) finished [status: completed]. Read its output with job_output.`)
-    logged(ctx, owner, notice(inject, 1))
-    // The registry kept the output the notice did not carry.
-    expect(text(await call(ctx, 'job_output', { job_id: overId }, owner))).toBe('日本語x\n[status: completed]')
+    expect(notice(boundedInject, 0).content[0].text).toBe(`background job ${fitsId} (bash: exact) finished [status: completed]. Output:\n日本語`)
+    expect(Buffer.byteLength(notice(boundedInject, 0).content[0].text)).toBe(bound)
+    expect(notice(boundedInject, 1).content[0].text).toBe(`background job ${overId} (bash: exact) finished [status: completed]. Read its output with job_output.`)
+    logged(bounded.ctx, boundedOwner, notice(boundedInject, 1))
+    expect(text(await call(bounded.ctx, 'job_output', { job_id: overId }, boundedOwner))).toBe('日本語x\n[status: completed]')
+  })
+
+  it('points a notice one byte over inlineOutputBytes at job_output even when the stream fits', async () => {
+    const bound = Buffer.byteLength(`background job bash-${'0'.repeat(16)} (bash: exact) finished [status: completed]. Output:\n日本語`)
+    const { ctx } = await setup({ inlineOutputBytes: bound - 1 })
+    const inject = vi.fn()
+    const owner = await fakeAgent(ctx, 'sess-1', { inject })
+    const p = producer({ owner: owner.id, label: 'exact' })
+    const id = ctx.jobs.start(p.spec)
+    p.append('日本語')
+    p.settle({ status: 'completed' })
+    await tick()
+
+    expect(notice(inject).content[0].text).toBe(`background job ${id} (bash: exact) finished [status: completed]. Read its output with job_output.`)
+    logged(ctx, owner, notice(inject))
+    expect(text(await call(ctx, 'job_output', { job_id: id }, owner))).toBe('日本語\n[status: completed]')
+  })
+
+  it('leaves a large final result for job_output instead of inlining it', async () => {
+    const { ctx } = await setup()
+    const inject = vi.fn()
+    const owner = await fakeAgent(ctx, 'sess-1', { inject })
+    const p = producer({ owner: owner.id, kind: 'test-task', label: 'answer' })
+    const id = ctx.jobs.start(p.spec)
+    p.settle({ status: 'completed', result: 'r'.repeat(5_000) })
+    await tick()
+
+    expect(notice(inject).content[0].text).toBe(`background job ${id} (test-task: answer) finished [status: completed]. Read its output with job_output.`)
+    // A logged pointer notice keeps the read: the model collects it through job_output.
+    logged(ctx, owner, notice(inject))
+    expect(text(await call(ctx, 'job_output', { job_id: id }, owner))).toBe(`${'r'.repeat(5_000)}\n[status: completed]`)
+    expect(text(await call(ctx, 'job_output', { job_id: id }, owner))).toBe('(no new output)\n[status: completed]')
   })
 
   it('never inlines when inlineOutputBytes is 0', async () => {
@@ -1294,29 +1367,27 @@ describe('completion notice output', () => {
     const owner = await fakeAgent(ctx, 'sess-1', { inject })
     const p = producer({ owner: owner.id, label: 'quiet' })
     const id = ctx.jobs.start(p.spec)
+    p.append('kept in the registry\n')
     p.settle({ status: 'completed' })
     await tick()
 
     expect(notice(inject).content[0].text).toBe(`background job ${id} (bash: quiet) finished [status: completed]. Read its output with job_output.`)
+    expect(text(await call(ctx, 'job_output', { job_id: id }, owner))).toBe('kept in the registry\n[status: completed]')
   })
 
-  it('bounds an inline notice by the producer cap and skips inlining when the cap cannot hold its head', async () => {
+  it('leaves a notice over the producer cap for job_output', async () => {
     const { ctx } = await setup()
     const inject = vi.fn()
     const owner = await fakeAgent(ctx, 'sess-1', { inject })
-    const capped = producer({ owner: owner.id, kind: 'test-task', label: 'capped', outputLimitBytes: 140 })
-    const cappedId = ctx.jobs.start(capped.spec)
-    capped.settle({ status: 'completed', result: `${'r'.repeat(499)}z` })
-    const tiny = producer({ owner: owner.id, kind: 'test-task', label: 'tiny', outputLimitBytes: 60 })
-    const tinyId = ctx.jobs.start(tiny.spec)
-    tiny.settle({ status: 'completed', result: 'answer' })
+    const p = producer({ owner: owner.id, kind: 'test-task', label: 'capped', outputLimitBytes: 140 })
+    const id = ctx.jobs.start(p.spec)
+    p.settle({ status: 'completed', result: `${'r'.repeat(499)}z` })
     await tick()
 
-    const cappedText = notice(inject, 0).content[0].text
-    expect(Buffer.byteLength(cappedText)).toBeLessThanOrEqual(140)
-    expect(cappedText).toMatch(new RegExp(`^background job ${cappedId} \\(test-task: capped\\) finished \\[status: completed\\]\\. Output:\\nr+z\\n\\[output truncated\\]$`))
-    expect(notice(inject, 1).content[0].text).toBe(`background job ${tinyId}\nDone; job_output.`)
-    expect(text(await call(ctx, 'job_output', { job_id: tinyId }, owner))).toContain('answer')
+    expect(notice(inject).content[0].text).toBe(`background job ${id} (test-task: capped) finished [status: completed]. Read its output with job_output.`)
+    const read = text(await call(ctx, 'job_output', { job_id: id }, owner))
+    expect(Buffer.byteLength(read)).toBeLessThanOrEqual(140)
+    expect(read).toMatch(/r+z\n\[output truncated\]\n\[status: completed\]$/)
   })
 
   it('withdraws a pending notice when job_output returns the same output', async () => {
@@ -1411,5 +1482,207 @@ describe('completion notice output', () => {
     await tick()
 
     expect(notice(inject).content[0].text).toBe(`background job ${id} (bash: cat > a.mjs <<'EOF'…) finished [status: completed]. No new output.`)
+  })
+})
+
+describe('released waits crossed by a settlement', () => {
+  /** A tool-jobs mount at `quiet` delivery with one fake owner to observe notices. */
+  async function releaseSetup() {
+    const { ctx } = await setup({ completionDelivery: 'quiet' })
+    const inject = vi.fn()
+    const owner = await fakeAgent(ctx, 'sess-1', { inject })
+    return { ctx, owner, inject }
+  }
+
+  /** Register a real waiter through `job_output`, returning the producer and the pending call. */
+  async function awaitingRead(ctx: Context, owner: Agent) {
+    const p = producer({ owner: owner.id })
+    const id = ctx.jobs.start(p.spec)
+    p.append('partial\n')
+    const registered = Promise.withResolvers<undefined>()
+    const originalWait = ctx.jobs.wait.bind(ctx.jobs)
+    vi.spyOn(ctx.jobs, 'wait').mockImplementation((...args) => {
+      const pending = originalWait(...args)
+      registered.resolve(undefined)
+      return pending
+    })
+    const pending = call(ctx, 'job_output', { job_id: id, wait: true }, owner)
+    await registered.promise
+    return { p, id, pending }
+  }
+
+  it('delivers a settlement through the released read that is about to carry it, with no notice', async () => {
+    const { ctx, owner, inject } = await releaseSetup()
+    try {
+      const { p, id, pending } = await awaitingRead(ctx, owner)
+      // The producer settles first in this tick; the input that ends the wait
+      // arrives before the wait's continuation reaches its consuming read, so
+      // that read commits against the already-terminal job.
+      p.settle({ status: 'completed', detail: 'exit code: 0', result: 'final output' })
+      insertNextStep(ctx, owner, 'RELEASE_INPUT')
+      expect(text(await pending)).toBe('partial\nfinal output\n[status: completed, exit code: 0]')
+      // The one read consumed the result; no notice repeats the completion.
+      expect(ctx.jobs.read(id, owner.id).result).toBeUndefined()
+      expect(inject).not.toHaveBeenCalled()
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('still notifies a settlement that follows a released read reporting running', async () => {
+    const { ctx, owner, inject } = await releaseSetup()
+    try {
+      const { p, pending } = await awaitingRead(ctx, owner)
+      // The release wins this ordering, so the read commits against a live job
+      // and only the later settlement is an event the model has not seen.
+      insertNextStep(ctx, owner, 'RELEASE_INPUT')
+      expect(text(await pending)).toBe('partial\n[status: running, user steered]')
+      expect(inject).not.toHaveBeenCalled()
+      p.settle({ status: 'completed', detail: 'exit code: 0' })
+      await tick()
+      expect(inject).toHaveBeenCalledTimes(1)
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('ignores another agent\'s insertion while this owner waits', async () => {
+    const { ctx, owner, inject } = await releaseSetup()
+    const other = await fakeAgent(ctx, 'sess-2')
+    try {
+      const { p, pending } = await awaitingRead(ctx, owner)
+      // Only the waiting execution's own agent releases it: the other owner's
+      // durable insertion must leave this waiter registered.
+      insertNextStep(ctx, other, 'OTHER_AGENT_INPUT')
+      p.settle({ status: 'completed', detail: 'exit code: 0', result: 'final output' })
+      expect(text(await pending)).toBe('partial\nfinal output\n[status: completed, exit code: 0]')
+      expect(inject).not.toHaveBeenCalled()
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('releases both parallel reads and notifies the settlement once', async () => {
+    const { ctx, owner, inject } = await releaseSetup()
+    try {
+      const p = producer({ owner: owner.id })
+      const id = ctx.jobs.start(p.spec)
+      p.append('partial\n')
+      const bothRegistered = Promise.withResolvers<undefined>()
+      let registered = 0
+      const originalWait = ctx.jobs.wait.bind(ctx.jobs)
+      vi.spyOn(ctx.jobs, 'wait').mockImplementation((...args) => {
+        const pending = originalWait(...args)
+        if (++registered === 2) bothRegistered.resolve(undefined)
+        return pending
+      })
+      const first = call(ctx, 'job_output', { job_id: id, wait: true }, owner)
+      const second = call(ctx, 'job_output', { job_id: id, wait: true }, owner)
+      await bothRegistered.promise
+      insertNextStep(ctx, owner, 'RELEASE_INPUT')
+      // Both released reads commit in the same microtask drain, so the shared
+      // claim ends with the last one; the later settlement notifies once.
+      expect(text(await first)).toBe('partial\n[status: running, user steered]')
+      expect(text(await second)).toBe('(no new output)\n[status: running, user steered]')
+      expect(inject).not.toHaveBeenCalled()
+      p.settle({ status: 'completed' })
+      await tick()
+      expect(inject).toHaveBeenCalledTimes(1)
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('delivers the withheld notice when the released read never commits', async () => {
+    const { ctx, owner, inject } = await releaseSetup()
+    try {
+      const p = producer({ owner: owner.id })
+      const id = ctx.jobs.start(p.spec)
+      p.append('partial\n')
+      const registered = Promise.withResolvers<undefined>()
+      const originalWait = ctx.jobs.wait.bind(ctx.jobs)
+      vi.spyOn(ctx.jobs, 'wait').mockImplementation((...args) => {
+        const pending = originalWait(...args)
+        registered.resolve(undefined)
+        return pending
+      })
+      const controller = new AbortController()
+      const pending = executeToolFixture(ctx, {
+        signal: controller.signal, callId: ToolCallId('cancel-after-release'),
+        name: 'job_output', arguments: { job_id: id, wait: true }, agent: owner,
+      })
+      await registered.promise
+      insertNextStep(ctx, owner, 'RELEASE_INPUT')
+      // Settlement lands while the release claim is open, so its notice waits
+      // for that read; the cancellation that follows discards the read, and
+      // the withheld notice is delivered instead of dropped.
+      p.settle({ status: 'completed', detail: 'exit code: 0', result: 'final output' })
+      controller.abort()
+      const result = await pending
+      expect(result.isError).toBe(true)
+      expect(text(result)).toContain('aborted')
+      expect(inject).toHaveBeenCalledTimes(1)
+      expect(JSON.stringify(inject.mock.calls[0])).toContain('finished')
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('does not repeat a completion the model already collected by killing the job', async () => {
+    const { ctx, owner, inject } = await releaseSetup()
+    try {
+      const p = producer({ owner: owner.id })
+      const id = ctx.jobs.start(p.spec)
+      p.append('partial\n')
+      const registered = Promise.withResolvers<undefined>()
+      const originalWait = ctx.jobs.wait.bind(ctx.jobs)
+      vi.spyOn(ctx.jobs, 'wait').mockImplementation((...args) => {
+        const pending = originalWait(...args)
+        registered.resolve(undefined)
+        return pending
+      })
+      const controller = new AbortController()
+      const pending = executeToolFixture(ctx, {
+        signal: controller.signal, callId: ToolCallId('kill-then-release'),
+        name: 'job_output', arguments: { job_id: id, wait: true }, agent: owner,
+      })
+      await registered.promise
+      // The model killed the job it was waiting on; that result is its delivery.
+      expect(text(await call(ctx, 'job_kill', { job_id: id }, owner))).toContain('requested')
+      insertNextStep(ctx, owner, 'RELEASE_INPUT')
+      p.settle({ status: 'killed', detail: 'cancelled by the user' })
+      // The released read never commits, so the withheld notice must not repeat
+      // the kill result the model already collected.
+      controller.abort()
+      const result = await pending
+      expect(result.isError).toBe(true)
+      await tick()
+      expect(inject).not.toHaveBeenCalled()
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('keeps waiting through a plugin notice and carries the settlement in its own read', async () => {
+    const { ctx, owner, inject } = await releaseSetup()
+    try {
+      const { p, pending } = await awaitingRead(ctx, owner)
+      try {
+        p.progress('3/10 files')
+        // A plugin notice is not user input: it stays queued for the next step
+        // instead of interrupting the wait.
+        insertNotice(ctx, owner, 'another job finished')
+        const raced = await Promise.race([
+          pending.then(() => 'resolved' as const),
+          tick().then(() => 'waiting' as const),
+        ])
+        expect(raced).toBe('waiting')
+        p.settle({ status: 'completed', detail: 'exit code: 0', result: 'final output' })
+        expect(text(await pending)).toBe('partial\nfinal output\n[status: completed, exit code: 0]')
+        expect(inject).not.toHaveBeenCalled()
+      } finally { p.settle({ status: 'completed' }) }
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('releases for a user steer even while a plugin notice is queued', async () => {
+    const { ctx, owner, inject } = await releaseSetup()
+    try {
+      const { p, pending } = await awaitingRead(ctx, owner)
+      try {
+        p.progress('3/10 files')
+        insertNotice(ctx, owner, 'another job finished')
+        insertNextStep(ctx, owner, 'RELEASE_INPUT')
+        expect(text(await pending)).toBe('partial\n[status: running, 3/10 files; user steered]')
+        expect(inject).not.toHaveBeenCalled()
+      } finally { p.settle({ status: 'completed' }) }
+    } finally { await ctx.fiber.dispose() }
   })
 })

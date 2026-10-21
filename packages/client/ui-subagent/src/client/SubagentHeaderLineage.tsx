@@ -662,11 +662,13 @@ function CatalogDropdown({
       className={`${css.root} ${variant === 'switcher' ? css.switcherRoot : ''}`}
       ref={rootRef}
       onKeyDown={navigate}
-      onMouseLeave={scheduleHoverClose}
+      onPointerLeave={scheduleHoverClose}
     >
       <button
         ref={triggerRef}
-        onMouseEnter={scheduleHoverOpen}
+        onPointerEnter={(event) => {
+          if (event.pointerType !== 'touch') scheduleHoverOpen()
+        }}
         type="button"
         className={variant === 'switcher'
           ? `${css.switcherTrigger} ${ancestorSwitcher ? css.ancestorSwitcherTrigger : ''}`
@@ -719,8 +721,10 @@ function CatalogDropdown({
           ref={menuRef}
           className={css.menu}
           style={menuPosition}
-          onMouseEnter={cancelHoverClose}
-          onMouseLeave={scheduleHoverClose}
+          onPointerEnter={(event) => {
+            if (event.pointerType !== 'touch') cancelHoverClose()
+          }}
+          onPointerLeave={scheduleHoverClose}
         >
           <div className={css.menuBody} role="tree" aria-label={t('tree.aria')}>
             <CatalogRows
@@ -751,7 +755,7 @@ export type SubagentCatalogActionProps =
 
 /**
  * Session-header catalog action for root sessions: the descendant count and
- * its dropdown at the start of the header actions band. Child sessions render nothing
+ * its dropdown after the preset label in the header actions band. Child sessions render nothing
  * here — their breadcrumb switcher in the lineage slot owns the same
  * navigation.
  * @param props - Session standard props plus the catalog actions and translator.

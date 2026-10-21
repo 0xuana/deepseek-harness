@@ -47,9 +47,9 @@ export interface DockSurfaceProps {
    */
   readonly canAddTab?: (paneId: PaneId) => boolean
   /**
-   * Whether a tab draws its close control and its menu's close item. Called
+   * Whether a tab may close via its close control, menu item, or middle click. Called
    * per rendered chip on every render; omit to keep every tab closable.
-   * `false` removes both routes without moving the chip: the close control
+   * `false` blocks these routes without moving the chip: the close control
    * paints over the title's end rather than beside it, so the chip is the same
    * width either way. The menu still opens and carries the embedder's items.
    */
@@ -308,7 +308,8 @@ export type DockLayoutProps = DockSurfaceProps & TabRetention
 /**
  * Render one pane or two horizontal panes, and their floats, in one stable content tree.
  * @param props - layout, gestures and lazy body-retention policy.
- * @returns the layout; the containing ancestors must not clip or establish a fixed-position containing block.
+ * @returns the layout; the containing ancestors must not establish a fixed-position containing block.
+ *   They may clip `overflow`, which does not reach the fixed-position floats.
  */
 export function DockLayout(props: DockLayoutProps): ReactNode {
   return <Surface {...props} draw={(callbacks, preview) =>

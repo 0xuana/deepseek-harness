@@ -86,12 +86,10 @@ export type ActivationResource =
     poke: PromiseWithResolvers<void>
     /**
      * Whether this child's settlement notice omits its closing text: true while
-     * the child's last action was a message to its direct parent, as the only
-     * tool call of its step, with no input claimed and no tool call logged since.
+     * the child's last logged tool call was a message to its direct parent and
+     * no input was claimed since.
      */
     omitClosingText: boolean
-    /** Tool calls the child's current step logged, which decides {@link omitClosingText}. */
-    toolCallsThisStep: number
   }
   | {
     readonly kind: 'external'

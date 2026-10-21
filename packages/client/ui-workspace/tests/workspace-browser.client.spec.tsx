@@ -2,7 +2,7 @@
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { allowAllAccess, bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
 import type {
   WorkspaceId, WorkspaceSnapshot, WorkspaceView,
@@ -92,8 +92,8 @@ function fireDrag(row: HTMLElement, kind: 'dragOver' | 'drop', clientY: number):
   fireEvent(row, event)
 }
 
-function dragData(): Pick<DataTransfer, 'effectAllowed' | 'dropEffect' | 'setData'> {
-  return { effectAllowed: 'uninitialized', dropEffect: 'none', setData: vi.fn() }
+function dragData(): Pick<DataTransfer, 'effectAllowed' | 'dropEffect' | 'setData' | 'setDragImage'> {
+  return { effectAllowed: 'uninitialized', dropEffect: 'none', setData: vi.fn(), setDragImage: vi.fn() }
 }
 
 // The default child stub: an open directory flow shows its marker; the two
@@ -122,6 +122,7 @@ function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
     useSessionRetainInfo: () => undefined,
     usePanelInfo, useResource,
     useWorkspaces: hook(workspaceState([])),
+    ...allowAllAccess,
     useStore: bindSnapshotSelector(store),
     actions: store.actions,
     startSession: vi.fn(),
@@ -289,6 +290,27 @@ describe('WorkspaceBrowser', () => {
         useHostInfo: selector => selector({ home: '/home/u', isLoopback: true }),
       })
       fireEvent.pointerEnter(screen.getByRole('treeitem').parentElement as HTMLElement)
+      act(() => { vi.advanceTimersByTime(800) })
+      expect(screen.getByText('~/Documents/project')).toBeTruthy()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it.each(['workspace', 'flat', 'ungrouped'] as const)('%s Session hover card shows the Session directory with home as ~', (mode) => {
+    vi.useFakeTimers()
+    try {
+      localStorage.clear()
+      const preferences = createWorkspaceViewStore().create()
+      preferences.actions.setGroupBy(mode === 'flat' ? 'flat' : 'workspace')
+      preferences.actions.setGroupExpanded(mode === 'ungrouped' ? UNGROUPED_KEY : 'alpha', true)
+      localStorage.setItem('dsh.workspace.view.v5', JSON.stringify(preferences.getSnapshot()))
+      mount({
+        useSessions: hook(sessionState([summary('located', 1, { cwd: '/home/u/Documents/project' })])),
+        useWorkspaces: hook(workspaceState(mode === 'ungrouped' ? [] : [workspace('alpha', ['located'])])),
+        useHostInfo: selector => selector({ home: '/home/u', isLoopback: true }),
+      })
+      fireEvent.pointerEnter(screen.getByText('located').closest('[role="treeitem"]')?.parentElement as HTMLElement)
       act(() => { vi.advanceTimersByTime(800) })
       expect(screen.getByText('~/Documents/project')).toBeTruthy()
     } finally {
@@ -717,11 +739,15 @@ describe('WorkspaceBrowser', () => {
       open,
     })
     fireEvent.click(screen.getByText('alpha'))
+    fireEvent.mouseDown(screen.getByText('Alpha session'), { detail: 1 })
+    fireEvent.mouseDown(screen.getByText('Alpha session'), { detail: 2 })
     fireEvent.doubleClick(screen.getByText('Alpha session'))
     expect(requestSessionRename).toHaveBeenCalledWith(sid('alpha-s'), 'Alpha session')
     expect(open).not.toHaveBeenCalled()
     // The flat list threads the same request.
     act(() => { b.store.actions.setGroupBy('flat') })
+    fireEvent.mouseDown(screen.getByText('Alpha session'), { detail: 1 })
+    fireEvent.mouseDown(screen.getByText('Alpha session'), { detail: 2 })
     fireEvent.doubleClick(screen.getByText('Alpha session'))
     expect(requestSessionRename).toHaveBeenCalledTimes(2)
   })
@@ -1014,6 +1040,7 @@ describe('WorkspaceBrowser', () => {
     const session5 = screen.getByText('session-5').closest('[role="treeitem"]') as HTMLElement
     fireEvent.dragStart(session5, { dataTransfer: dragData() })
     fireDrag(blankRow, 'drop', 205)
+    fireEvent.dragEnd(session5)
     expect(b.store.getSnapshot().sessionOrderByAccount.alpha)
       .toEqual(['blank', 'session-5', 'session-1', 'session-2', 'session-3', 'session-4', 'session-6'])
     expect(screen.getByText('session-5')).toBeTruthy()
@@ -2036,6 +2063,7 @@ describe('WorkspaceBrowser', () => {
     fireEvent.dragStart(two, { dataTransfer: dragData() })
     fireDrag(one, 'dragOver', 105)
     fireDrag(one, 'drop', 105)
+    fireEvent.dragEnd(two)
     expect(b.store.getSnapshot().sessionOrderByAccount.alpha).toEqual(['three', 'two', 'one', 'four'])
     expect(screen.getAllByRole('treeitem').slice(1).map(row => row.textContent)).toEqual([
       expect.stringContaining('two'), expect.stringContaining('one'),
@@ -2110,7 +2138,7 @@ describe('WorkspaceBrowser', () => {
     rerender(b, {
       useWorkspaces: hook(workspaceState([workspace('alpha', ['one', 'two', 'three'])], [], [sid('one')])),
     })
-    fireEvent.dragEnd(screen.getByText('one').closest('[role="treeitem"]') as HTMLElement)
+    fireEvent.dragEnd(within(b.view.container).getByText('one').closest('[role="treeitem"]') as HTMLElement)
     expect(b.store.getSnapshot().sessionOrderByAccount.alpha).toEqual(before)
 
     // The source unpins in flight.
@@ -2125,7 +2153,7 @@ describe('WorkspaceBrowser', () => {
     rerender(b, {
       useWorkspaces: hook(workspaceState([workspace('alpha', ['one', 'two', 'three'])], [], [sid('two')])),
     })
-    fireEvent.dragEnd(screen.getByText('one').closest('[role="treeitem"]') as HTMLElement)
+    fireEvent.dragEnd(within(b.view.container).getByText('one').closest('[role="treeitem"]') as HTMLElement)
     expect(b.store.getSnapshot().sessionOrderByAccount.alpha).toEqual(before)
   })
 
@@ -2177,6 +2205,7 @@ describe('WorkspaceBrowser', () => {
       })
       fireEvent.dragStart(source, { dataTransfer: dragData() })
       fireDrag(target, 'drop', 180)
+      fireEvent.dragEnd(source)
     }
 
     dragAfter('one', 'three')

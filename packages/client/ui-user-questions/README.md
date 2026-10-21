@@ -29,7 +29,9 @@ When the agent asks a question, the attached card temporarily occupies the compo
 
 ### Answering
 
-A multi-select draft keeps its selected labels while the user opens or edits the custom answer, so its submitted item may carry both `selected` and `custom`; a single-select custom answer remains exclusive. Question detail reuses the assistant-output `MarkdownText` primitive, including its GFM rendering and untrusted-content policy. The capped card keeps its title, navigation, and submission actions fixed while long detail and choices share an internal scroll region. "Skip" retains other drafts and emits the existing blank `{ selected: [] }` result for that item. Close is not an answer: a question the Host named by tool call only leaves the composer seat, and its `ask_user_question` tool call row brings the panel back; a request that carries no tool call has no row to return from, so closing it rejects the whole wait as `ASK_CANCELLED`.
+A multi-select draft keeps its selected labels while the user opens or edits the custom answer, so its submitted item may carry both `selected` and `custom`; a single-select custom answer remains exclusive. Question detail reuses the assistant-output `MarkdownText` primitive, including its GFM rendering and untrusted-content policy. The capped card keeps navigation and submission actions fixed while the question, long detail, and choices share an internal scroll region. A question appears in full up to three rendered lines; a longer one shows two, fades at the end of the second, and places a downward-chevron expand button there that expands it in place. Option descriptions use 13px text with a 20px line height and sit beside their label when they fit, otherwise below it; a description appears in full up to two lines, and a longer one shows one line with the same fade and expand button. Expanded copy keeps an upward-chevron collapse button on a line below it. Both buttons are named **Expand** or **Collapse**, show that name in a hover tooltip, and are described by the text they control. CSS scroll timelines decide which copy overflows; a browser without them shows all copy in full. "Skip" retains other drafts and emits the existing blank `{ selected: [] }` result for that item. Close is not an answer: a question the Host named by tool call only leaves the composer seat, and its `ask_user_question` tool call row brings the panel back; a request that carries no tool call has no row to return from, so closing it rejects the whole wait as `ASK_CANCELLED`.
+
+Fixed approval questions use the same pending-question and answer channel. A feature plugin can supply a higher-priority composer presentation. When none matches, the generic form keeps the offered options answerable; the caller still decides which responses grant permission.
 
 ### Reading a settled question back
 
@@ -43,7 +45,7 @@ A `plan-review` intent — set by `dsh-plan-mode` on the `exit_plan_mode` review
 
 ### Failure and recovery
 
-An answer field autofocuses only when its answer channel is ready and no countdown exists. Manual focus and blur during the claim handshake are retained: the countdown starts paused only if the answer surface still has focus when the remaining duration arrives.
+An answer field autofocuses only when its answer channel is ready and no countdown exists. Custom-answer focus survives Enter navigation between option questions; navigation resets the question scroll position and collapses expanded copy. Manual focus and blur during the claim handshake are retained: the countdown starts paused only if the answer surface still has focus when the remaining duration arrives.
 
 Returning a local answer does not release its foreground claim: the Host closes that stream after accepting the waterfall outcome. The plugin owns the claim through this delivery interval. Explicit delegation releases it before calling the next answerer, and plugin disposal cancels any remaining claims.
 
