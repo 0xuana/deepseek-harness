@@ -150,7 +150,7 @@ Source containing `await` is checked for top-level await before native compilati
 | [`src/output-stream.ts`](src/output-stream.ts) | Bounded stream capture and process-output draining |
 | [`src/launch.ts`](src/launch.ts) | Executable/bootstrap arguments and execution-world asset mapping |
 | [`src/process.ts`](src/process.ts) | Common child handshake, evaluator lifetime and binding RPC |
-| [`src/bootstrap.ts`](src/bootstrap.ts) | Binding proxies, JSON validation and output capture |
+| [`src/bootstrap.ts`](src/bootstrap.ts) | Binding proxies, JSON validation, cross-realm exception formatting and output capture |
 | [`src/rpc.ts`](src/rpc.ts) | Typed birpc transport, message limits and connection lifetime |
 | [`src/protocol.ts`](src/protocol.ts) | Host and program methods, and validation of untrusted program results |
 | [`src/output-ledger.ts`](src/output-ledger.ts) | Host accounting for the outer result |

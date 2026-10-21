@@ -1,6 +1,5 @@
 /** VM Script evaluation with Node globals and retained Script-scope declarations. */
 import { resolve } from 'node:path'
-import { types } from 'node:util'
 import { constants, createContext, Script, type Context, type ScriptOptions } from 'node:vm'
 import { processTopLevelAwait } from './vm-script-await.ts'
 import type { ProgramEvaluator } from './types.ts'
@@ -46,24 +45,14 @@ function createScriptContext(): Context {
  * @returns The script completion value after Promise settlement.
  */
 async function evaluateScript(code: string, context: Context): Promise<unknown> {
-  try {
-    const options: ScriptOptions = {
-      filename: resolve(process.cwd(), 'ptc-program.js'),
-      importModuleDynamically: constants.USE_MAIN_CONTEXT_DEFAULT_LOADER,
-    }
-    const compiled = compileScript(code, options)
-    const value: unknown = await compiled.script.runInContext(context)
-    // Node's transform boxes the last expression; the PTC caller also awaits that expression.
-    return compiled.transformed ? await (value as { value: unknown } | undefined)?.value : value
-  } catch (error: unknown) {
-    if (!types.isNativeError(error)) throw error
-    // Script errors belong to another realm; preserve their diagnostics for the bootstrap.
-    let detail: string
-    try { detail = error.stack ?? error.message } catch { detail = 'program threw an unrenderable value' }
-    const failure = new Error(detail)
-    failure.stack = detail
-    throw failure
+  const options: ScriptOptions = {
+    filename: resolve(process.cwd(), 'ptc-program.js'),
+    importModuleDynamically: constants.USE_MAIN_CONTEXT_DEFAULT_LOADER,
   }
+  const compiled = compileScript(code, options)
+  const value: unknown = await compiled.script.runInContext(context)
+  // Node's transform boxes the last expression; the PTC caller also awaits that expression.
+  return compiled.transformed ? await (value as { value: unknown } | undefined)?.value : value
 }
 
 /** Detect top-level await before native compilation can interpret await as an identifier. */

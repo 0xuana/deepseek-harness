@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm'
 import { describe, expect, it, vi } from 'vitest'
 import { LogBuffer, makeBindingErrorClass, makeConsoleShim, makeNamespaces, captureStreamWrites, prepareCompletion, prepareException } from '../src/bootstrap.ts'
 import type { BindingErrorConstructor, PatchableStream } from '../src/bootstrap.ts'
@@ -126,6 +127,15 @@ describe('prepareCompletion', () => {
 })
 
 describe('prepareException', () => {
+  it.each([
+    ['const error = new Error("foreign"); error.stack = "foreign stack"; error', 'foreign stack'],
+    ['const error = new Error("bare"); error.stack = undefined; error', 'bare'],
+    ['const error = new Error("hidden"); Object.defineProperty(error, "stack", { get() { throw 1 } }); error', 'program threw an unrenderable value'],
+  ])('formats a cross-realm error through the shared diagnostic path: %s', (source, message) => {
+    const error: unknown = runInNewContext(source)
+    expect(prepareException(error, 1_000)).toEqual({ error: { kind: 'exception', message } })
+  })
+
   it('passes a fitting diagnostic and rejects one byte over without carrying its text', () => {
     expect(prepareException('boom', 6, 64)).toEqual({ error: { kind: 'exception', message: 'boom' } })
     expect(prepareException('boom', 5, 64)).toEqual({

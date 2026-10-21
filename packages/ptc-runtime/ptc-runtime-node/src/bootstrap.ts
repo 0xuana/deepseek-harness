@@ -3,12 +3,13 @@
  * @module @deepseek-ai/dsh-ptc-runtime-node/src/bootstrap
  */
 
-import { inspect } from 'node:util'
+import { inspect, types } from 'node:util'
 import type { HostMethods, ProgramResult, ProgramBootData } from './protocol.ts'
 import { jsonStringBytesUpTo, jsonValueBytesUpTo, truncateJsonStringBytes } from './output-json.ts'
 import { decodePtcJsonWire, encodePtcJsonWire, snapshotPtcJsonValue } from './json-wire.ts'
 
 const CapturedError = Error
+const isNativeError = types.isNativeError
 const capturedObjectCreate = Object.create
 const capturedObjectDefineProperty = Object.defineProperty
 
@@ -198,8 +199,8 @@ function prepareFailure(
 }
 
 /**
- * Prepare a thrown program value without sending an unbounded stack or
- * string across the process channel.
+ * Prepare a thrown program value, including cross-realm errors, without sending
+ * an unbounded stack or string across the process channel.
  * @param error - the value thrown by the program.
  * @param remainingOutputBytes - exact bytes left after captured logs.
  * @param maxOutputBytes - the configured cap named in an overflow diagnostic.
@@ -212,7 +213,7 @@ export function prepareException(
 ): ProgramResult {
   let message: string
   try {
-    const detail: unknown = error instanceof CapturedError ? error.stack ?? error.message : error
+    const detail: unknown = isNativeError(error) ? error.stack ?? error.message : error
     message = typeof detail === 'string' ? detail : String(detail)
   } catch {
     message = 'program threw an unrenderable value'
