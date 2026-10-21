@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Plugin market indexes",
-    "description": "Configured plugin market indexes for the Web Discover page and the plugin_market agent tool"
+    "description": "Manage configured market indexes for plugin discovery and the plugin_market tool."
   }
 }

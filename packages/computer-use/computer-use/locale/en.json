@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Computer provider registry",
-    "description": "Exclusive named computer-use provider registration"
+    "description": "Register Computer Use providers by name, with one provider per name."
   }
 }

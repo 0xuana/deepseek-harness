@@ -1,6 +1,8 @@
 /** Check Japanese coverage of package metadata and plugin templates without loading plugins. */
 import { existsSync, globSync, readFileSync } from 'node:fs'
-import { basename, dirname, join, resolve } from 'node:path'
+import { basename, posix, join, resolve } from 'node:path'
+import { detailPath } from '../packages/util/plugin-detail/src/document.ts'
+import { PRODUCT_PACKAGE_POLICY } from './product-package-policy.ts'
 import { collectConfigCatalog } from './gen-config-catalog.ts'
 
 /** Flatten metadata strings and reject values that cannot be translated. */
@@ -16,16 +18,14 @@ function strings(value: unknown, key = ''): Record<string, string> {
  * @returns actionable missing-file, field, placeholder and resource diagnostics.
  */
 export function localeMetadataProblems(root: string): string[] {
-  const directories = new Set(globSync('packages/**/locale/*.json', {
+  const directories = new Set(globSync('packages/**/locale/**/*.json', {
     cwd: root, exclude: ['packages/**/node_modules/**', 'packages/**/lib/**', 'packages/**/tests/**'],
-  }).filter(file => ['en.json', 'zh.json', 'ja.json'].includes(basename(file))).map(dirname))
-  const loadable = new Set<string>()
+  }).map(file => file.replaceAll('\\', '/')).filter(file => ['en.json', 'zh.json', 'ja.json'].includes(basename(file))).map(file => posix.dirname(file)))
   for (const entry of collectConfigCatalog(root)) {
-    // Test-support providers are fixtures, outside the product plugin inventory.
-    if (entry.dir.startsWith('packages/test-support/')) continue
+    const dir = entry.dir.replaceAll('\\', '/')
+    if (PRODUCT_PACKAGE_POLICY[dir]?.category === 'test') continue
     if (entry.kind !== 'config' && entry.kind !== 'no-config') continue
-    const directory = join(entry.dir, 'locale')
-    loadable.add(directory)
+    const directory = `${dir}/locale`
     directories.add(directory)
   }
   const problems: string[] = []
@@ -35,10 +35,18 @@ export function localeMetadataProblems(root: string): string[] {
       const read = (language: string): Record<string, string> => {
         const file = join(root, directory, `${language}.json`)
         const value: unknown = JSON.parse(readFileSync(file, 'utf8'))
-        return strings(value)
+        const dictionary = strings(value)
+        const detail = detailPath(dictionary['meta.detail'], `${directory}/${language}.json: meta.detail`)
+        const packageDir = directory.slice(0, directory.lastIndexOf('/locale'))
+        if (detail !== undefined && !existsSync(resolve(root, packageDir, detail))) {
+          throw new Error(`missing detail resource ${detail}`)
+        }
+        return dictionary
       }
       const en = read('en')
-      const zh = loadable.has(directory) || existsSync(join(root, directory, 'zh.json')) ? read('zh') : {}
+      const zh = existsSync(join(root, directory, 'zh.json')) ? read('zh') : {}
+      const description = en['meta.description']
+      if (description !== undefined && !/[.!?]$/u.test(description)) problems.push(`${directory}/en.json: meta.description must end with sentence punctuation`)
       const ja = read('ja')
       const expected = { ...zh, ...en }
       for (const key of new Set([...Object.keys(expected), ...Object.keys(ja)])) {
@@ -47,9 +55,6 @@ export function localeMetadataProblems(root: string): string[] {
         else {
           const placeholders = (text: string): string => (text.match(/\{\w+\}/gu) ?? []).sort().join(',')
           if (placeholders(ja[key]) !== placeholders(expected[key])) problems.push(`${directory}/ja.json: ${key} changes placeholders`)
-          if (key === 'meta.detail' && !existsSync(resolve(root, directory, '..', ja[key]))) {
-            problems.push(`${directory}/ja.json: missing detail resource ${ja[key]}`)
-          }
         }
       }
     } catch (error) {
@@ -60,7 +65,7 @@ export function localeMetadataProblems(root: string): string[] {
 }
 
 if (import.meta.filename === resolve(process.argv[1] ?? '')) {
-  const problems = localeMetadataProblems(process.cwd())
+  const problems = localeMetadataProblems(resolve(import.meta.dirname, '..'))
   for (const problem of problems) console.error(problem)
   if (problems.length > 0) process.exitCode = 1
   else console.log('verify-locale-metadata: all package and template metadata has complete Japanese translations.')

@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "SQLite storage",
-    "description": "SQLite storage backend (kv facet) for the DeepSeek Harness storage hub"
+    "description": "Store Harness key-value data in SQLite."
   }
 }

@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Perplexity web search",
-    "description": "Perplexity-backed search provider for the DeepSeek Harness web capability seam (ctx.web)"
+    "description": "Search the Web through Perplexity."
   }
 }

@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "MCP client",
-    "description": "MCP client bridge: connects to MCP servers and registers their tools on ctx.tools"
+    "description": "Connect to MCP servers and make their tools available in Harness."
   }
 }

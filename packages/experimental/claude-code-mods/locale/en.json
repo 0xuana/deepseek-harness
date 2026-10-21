@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Claude Code mods",
-    "description": "Experimental bridge: load Claude Code mods (hooks modules) and run their hook chains on DeepSeek Harness extension points"
+    "description": "Load Claude Code extensions and run their hooks through Harness extension points."
   }
 }

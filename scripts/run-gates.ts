@@ -366,7 +366,7 @@ export function gatesForMode(selected: Mode): Gate[] {
     case 'doc-quick':
       return docQuickLeafGates()
     case 'i18n':
-      return i18nGates()
+      return i18nGates(true)
   }
 }
 
@@ -389,11 +389,11 @@ function ciSharedStaticGates(): Gate[] {
   ]
 }
 
-function i18nGates(): Gate[] {
+function i18nGates(includeDictionaries: boolean): Gate[] {
   return [
     pnpmScript('installer-locales', 'verify-installer-locales', { label: 'Windows installer locales' }),
     pnpmScript('locale-metadata', 'verify-locale-metadata', { label: 'Japanese plugin metadata' }),
-    pnpmExec('locale-dictionaries', ['vitest', 'run', 'scripts/locale-dictionary-parity.spec.ts'], { label: 'locale dictionaries' }),
+    ...includeDictionaries ? [pnpmExec('locale-dictionaries', ['vitest', 'run', 'scripts/locale-dictionary-parity.spec.ts'], { label: 'locale dictionaries' })] : [],
   ]
 }
 
@@ -403,7 +403,7 @@ function sharedHygieneGates(): Gate[] {
       label: 'optional dependency imports',
     }),
     pnpmScript('client-packages', 'verify-client-packages', { label: 'client packages' }),
-    ...i18nGates(),
+    ...i18nGates(false),
     pnpmScript('client-ui-i18n', 'verify-client-ui-i18n', { label: 'client UI i18n' }),
     pnpmScript('client-route-resolution', 'verify-client-route-resolution', { label: 'client route resolution' }),
     pnpmScript('no-bare-dispatcher', 'verify-no-bare-dispatcher', { label: 'proxy-aware dispatchers' }),

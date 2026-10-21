@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "All-message session titles",
-    "description": "All-user-messages LLM provider plugin for DeepSeek Harness session titles"
+    "description": "Generate session titles from all user messages in the session."
   }
 }

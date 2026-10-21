@@ -16,8 +16,8 @@
  * @module dsh-sandbox/escalation
  */
 
-import { escalationDisplayReason } from './locales.ts'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
+import { escalationDisplayReason } from './locales.ts'
 import type { SandboxMode } from './index.ts'
 
 /**

@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Stdio language server provider",
-    "description": "Generic stdio language-server provider for the DeepSeek Harness LSP capability seam (ctx.lsp) — spawns configured servers, translates JSON-RPC, and serves transient-open goToDefinition/findReferences/goToImplementation/hover queries in the host filesystem namespace"
+    "description": "Connect to language servers through subprocesses and JSON-RPC, open files as needed, and run code queries."
   }
 }

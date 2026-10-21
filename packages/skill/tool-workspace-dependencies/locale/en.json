@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Workspace dependencies",
-    "description": "The load_workspace_dependencies tool: absolute paths into a bundled Python, Node.js, and pnpm payload"
+    "description": "Provide absolute paths to the bundled Python, Node.js, and pnpm runtimes."
   }
 }

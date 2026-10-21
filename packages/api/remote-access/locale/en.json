@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Remote access control",
-    "description": "Method-level Remote access control for non-owner Peers and the per-Peer access snapshot"
+    "description": "Control which methods non-owner connections can access and retain permission snapshots for each connection."
   }
 }

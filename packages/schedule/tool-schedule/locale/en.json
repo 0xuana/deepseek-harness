@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Scheduling tools",
-    "description": "Model-facing reminder management tools (schedule_create, schedule_list, schedule_update, schedule_delete) over the Host ctx.schedule service"
+    "description": "Create, view, update, and delete automated tasks."
   }
 }

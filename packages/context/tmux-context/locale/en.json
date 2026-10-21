@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "tmux context",
-    "description": "Opt-in durable per-step context with this agent's tmux pane and window location"
+    "description": "Save tmux pane and window locations for each step when needed."
   }
 }

@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Claude Code mods interface",
-    "description": "Web band above the prompt for Claude Code mods: draws each session's mod tree and sends button presses back to the bridge"
+    "description": "Display each session's extension tree above the input box and send button actions to the extension service."
   }
 }

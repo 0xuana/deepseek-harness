@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "ACP server",
-    "description": "Automation-only Agent Client Protocol server for driving DeepSeek Harness agents over JSON-RPC stdio"
+    "description": "Run agents through JSON-RPC over standard input and output for automation."
   }
 }

@@ -8,7 +8,6 @@
  * @module @deepseek-ai/dsh-experimental-auto-review
  */
 
-import { deniedDisplayReason } from './locales.ts'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import { FiberState, type Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -33,6 +32,7 @@ import {
   type PreToolDecision,
   type ToolExecution,
 } from '@deepseek-ai/dsh-tools'
+import { deniedDisplayReason } from './locales.ts'
 
 /** Structured error name persisted for every final reviewer denial. */
 const AUTO_REVIEW_DENIED_ERROR_NAME = 'AutoReviewDeniedError'

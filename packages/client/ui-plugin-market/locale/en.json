@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Plugin discovery",
-    "description": "Discover tab of the dsh web Plugins page: browse configured plugin market indexes and install their bundles"
+    "description": "Browse configured plugin market indexes and install their packages."
   }
 }

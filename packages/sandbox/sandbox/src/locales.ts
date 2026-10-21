@@ -12,7 +12,7 @@ export const zh = {
 
 /** Japanese escalation messages. */
 export const ja = {
-  escalation: (mode: string, justification: string): string => `この操作に ${mode} 権限を許可しますか：${justification}`,
+  escalation: (mode: string, justification: string): string => `${mode} 権限でこの操作を許可します：${justification}`,
 } satisfies typeof en
 
 /**

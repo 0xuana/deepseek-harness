@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Local Bash execution",
-    "description": "Local-subprocess implementation of the DeepSeek Harness bash executor seam"
+    "description": "Run Bash commands in local subprocesses."
   }
 }
