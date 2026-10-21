@@ -249,17 +249,22 @@ describe('interface creation', () => {
     expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')).toEqual({ status: 'refused', reason: 'access-denied' })
   })
 
-  it('keeps one card per turn when the official recommendation tool already offered one', async () => {
+  it('keeps one card per turn when an official plugin card already holds the turn', async () => {
     const f = await fixture()
     f.agent.session.append('tool/result', { turn: 1, step: 1,
       message: createToolResultMessage({ callId: ToolCallId('official'), content: [{ type: 'text', text: 'official' }], isError: false }),
       meta: { pluginRecommendation: { callId: 'official' } },
     }, { surfaceOp: 'append' })
     await f.propose()
-    expect(f.state().proposals[callId]).toBeUndefined()
+    expect(f.current()).toEqual({ callId, phase: 'suppressed', slot: 'sidebar-right' })
+    expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')).toEqual({
+      status: 'settled', decision: { callId, phase: 'suppressed', slot: 'sidebar-right' },
+    })
     f.agent.session.append('turn/start', { turn: 2 })
     const later = await f.propose('creation-2')
     expect(f.state().proposals[later]).toBeDefined()
+    expect(f.state().view.decisions[later]).toBeUndefined()
+    expect(f.startActivation).not.toHaveBeenCalled()
   })
 
   it('returns a typed invalid-location refusal and falls back for invalid dismissal locations', async () => {
@@ -383,6 +388,9 @@ describe('interface creation', () => {
     expect((await run('install', f.agent)).isError).toBe(false)
     const unrelated = await f.harness.create(SessionId('other-root'))
     expect((await run('install', unrelated)).isError).toBe(false)
+    const detached = await executeToolFixture(f.ctx, { name: 'plugin_manager', arguments: { action: 'install' },
+      callId: ToolCallId('detached'), signal: new AbortController().signal })
+    expect(detached.isError).toBe(false)
   })
 
   it('releases installation follow-up when HMR unloads the creator and recovers its eventual result', async () => {

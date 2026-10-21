@@ -62,3 +62,11 @@ it('reads the last valid dsh-action block from an assistant answer and ignores m
   }
   expect(recommendationOf({ type: 'assistant/message', data: { message: { id: '', role: 'assistant', content: [{ type: 'text', text: block(fields) }] } } })).toBeUndefined()
 })
+
+it('reads only the text parts of an answer', () => {
+  const fields = { title: 'Counter', brief: 'Keep count visible', slot: 'page' }
+  const block = '```dsh-action\n' + JSON.stringify({ action: 'create_personalized_page', ...fields }) + '\n```'
+  const content = [{ type: 'tool-call', id: 'call', name: 'skill', arguments: '{}' }, 'raw', { type: 'text', text: 3 }, { type: 'text', text: block }]
+  expect(recommendationOf({ type: 'assistant/message', data: { message: { id: 'm1', role: 'assistant', content } } }))
+    .toEqual({ callId: 'block:m1', ...fields })
+})

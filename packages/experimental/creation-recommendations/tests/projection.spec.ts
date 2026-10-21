@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest'
 import { createToolResultMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session'
-import { creationOf, creationProjection as projectionFor } from '../src/projection.ts'
+import { cardBlocksOf, creationOf, creationProjection as projectionFor } from '../src/projection.ts'
 import { MessageId, type AssistantMessage } from '@deepseek-ai/dsh-llm'
 
 const creationProjection = projectionFor({ queuedMessageLimit: 2 })
@@ -84,4 +84,35 @@ it('reads the last valid dsh-action block of an answer, keeps one card per turn,
   answer('m5', block(fields), 12))
   expect(queued.queued).toBe(2)
   expect(queued.view.decisions[ToolCallId('block:m5')]).toEqual({ callId: ToolCallId('block:m5'), phase: 'suppressed', slot: 'page' })
+})
+
+it('keeps one card per turn across both card actions and logs a page block that is not the card as never offered', () => {
+  const page = { action: 'create_personalized_page', title: 'Counter', brief: 'Keep count visible', slot: 'page' as const }
+  const plugin = { action: 'enable_official_plugin', name: 'official-search', reason: 'Search past work.' }
+  const fence = (fields: object) => '```dsh-action\n' + JSON.stringify(fields) + '\n```'
+  const empty = creationProjection.init()
+  // The last valid block of an answer is its card, across both actions.
+  const pluginLast = creationProjection.apply(empty, answer('m1', fence(page) + '\n' + fence(plugin)))
+  expect(pluginLast.view.decisions[ToolCallId('block:m1')]).toEqual({ callId: ToolCallId('block:m1'), phase: 'suppressed', slot: 'page' })
+  const pageLast = creationProjection.apply(empty, answer('m1', fence(plugin) + '\n' + fence(page)))
+  expect(pageLast.view.decisions).toEqual({})
+  expect(pageLast.proposals[ToolCallId('block:m1')]).toBeDefined()
+  // An official-plugin answer earlier in the turn holds it.
+  const official = creationProjection.apply(empty, answer('m1', fence(plugin)))
+  expect(official.firstCall).toBe('block:m1')
+  expect(creationProjection.apply(official, answer('m1', fence(plugin)))).toBe(official)
+  expect(creationProjection.apply(official, answer('m2', fence(page), 8)).view.decisions[ToolCallId('block:m2')])
+    .toEqual({ callId: ToolCallId('block:m2'), phase: 'suppressed', slot: 'page' })
+  expect(cardBlocksOf(answer('m3', fence({ ...plugin, name: ' ' }) + '\n' + fence({ ...plugin, extra: 1 })))).toBeUndefined()
+  expect(cardBlocksOf(answer('m3', fence({ ...plugin, name: ' trimmed ' })))?.card).toEqual({ ...plugin, name: 'trimmed' })
+})
+
+it('reads only text parts of an answer and ignores splices outside the next-turn queue', () => {
+  const fields = { title: 'Counter', brief: 'Keep count visible', slot: 'page' as const }
+  const event = answer('m1', '```dsh-action\n' + JSON.stringify({ action: 'create_personalized_page', ...fields }) + '\n```')
+  const message: AssistantMessage = { ...event.data.message, content: [{ type: 'tool-call', id: ToolCallId('call'), name: 'skill', arguments: '{}' }, ...event.data.message.content] }
+  expect(creationOf({ ...event, data: { ...event.data, message } })).toEqual({ callId: ToolCallId('block:m1'), ...fields })
+  const empty = creationProjection.init()
+  expect(creationProjection.apply(empty, { type: 'agent/inbox/spliced', seq: SessionSeq(1), time: 0,
+    data: { target: 'next-step', start: 0, inserted: [ptc.data as never] } })).toBe(empty)
 })

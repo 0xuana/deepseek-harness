@@ -39,20 +39,43 @@ export type CreationState = z.infer<typeof stateSchema>
 const blockSchema = proposalSchema.omit({ callId: true }).extend({
   action: z.literal('create_personalized_page'), title: z.string().trim().min(1), brief: z.string().trim().min(1),
 }).strict()
+const officialPluginBlockSchema = z.object({
+  action: z.literal('enable_official_plugin'), name: z.string().trim().min(1), reason: z.string().trim().min(1),
+}).strict()
+const cardBlockSchema = z.discriminatedUnion('action', [blockSchema, officialPluginBlockSchema])
 
-/** Read a proposal from a logged event: the last valid `dsh-action` block of an assistant answer,
+/** A valid `dsh-action` block of either official card experiment. */
+export type CardBlock = z.infer<typeof cardBlockSchema>
+
+/** Read the valid card blocks of an assistant answer, in order. The last one is the answer's card,
+ * so a page block followed by an official-plugin block offers the plugin, and the reverse offers the page.
+ * @param event - logged session event.
+ * @returns the answer's card id, its valid blocks and its card, when the event is an answer with at least one.
+ */
+export function cardBlocksOf(event: SessionEvent):
+{ readonly callId: ToolCallId; readonly blocks: readonly CardBlock[]; readonly card: CardBlock } | undefined {
+  if (event.type !== 'assistant/message') return undefined
+  const text = event.data.message.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
+  const blocks = actionBlocksOf(text).flatMap((value) => {
+    const parsed = cardBlockSchema.safeParse(value)
+    return parsed.success ? [parsed.data] : []
+  })
+  const card = blocks.at(-1)
+  return card === undefined ? undefined : { callId: ToolCallId(`block:${event.data.message.id}`), blocks, card }
+}
+
+/** Read a proposal from a logged event: the last valid page block of an assistant answer,
  * or successful native and PTC result metadata written by earlier sessions.
  * @param event - logged session event.
  * @returns admitted proposal, when present.
  */
 export function creationOf(event: SessionEvent): CreationRecommendation | undefined {
   if (event.type === 'assistant/message') {
-    const text = event.data.message.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
-    const blocks = actionBlocksOf(text).map(value => blockSchema.safeParse(value)).filter(parsed => parsed.success)
-    const last = blocks.at(-1)
-    if (last === undefined) return undefined
-    const { action: _action, ...fields } = last.data
-    return { callId: ToolCallId(`block:${event.data.message.id}`), ...fields }
+    const answer = cardBlocksOf(event)
+    const last = answer?.blocks.filter(block => block.action === 'create_personalized_page').at(-1)
+    if (answer === undefined || last === undefined) return undefined
+    const { action: _action, ...fields } = last
+    return { callId: answer.callId, ...fields }
   }
   const result = settlement(event)
   const parsed = z.union([
@@ -85,7 +108,7 @@ export type CreationProjectionDefinition = Omit<ProjectionDefinition<'creationRe
  */
 export function creationProjection(limits: CreationLimits): CreationProjectionDefinition {
   return {
-    key: 'creationRecommendations', stateVersion: 8, stateSchema,
+    key: 'creationRecommendations', stateVersion: 9, stateSchema,
     init: (): CreationState => ({ proposals: {}, view: { decisions: {} }, turn: 0, firstCall: null, pendingStatus: {}, queued: 0 }),
     apply: (state, event) => {
       if (event.type === 'turn/start') return { ...state, turn: event.data.turn, firstCall: null }
@@ -104,17 +127,24 @@ export function creationProjection(limits: CreationLimits): CreationProjectionDe
           pendingStatus: { ...state.pendingStatus, [decision.callId]: event.seq } }
       }
       const proposal = creationOf(event)
-      const foreign = z.union([
-        z.object({ pluginRecommendation: z.object({ callId: z.string().min(1) }) }).transform(value => value.pluginRecommendation.callId),
-        z.object({ actionCard: z.object({ action: z.string(), callId: z.string().min(1) }) }).transform(value => value.actionCard.callId),
-      ]).safeParse(settlement(event)?.meta)
-      const firstCall = state.firstCall ?? proposal?.callId ?? (foreign.success ? foreign.data : null)
-      if (proposal === undefined) return firstCall === state.firstCall ? state : { ...state, firstCall }
-      // One card per turn: a block written after another card in this turn creates nothing.
-      if (firstCall !== proposal.callId) return state
+      const answer = cardBlocksOf(event)
+      if (proposal === undefined) {
+        const foreign = z.union([
+          z.object({ pluginRecommendation: z.object({ callId: z.string().min(1) }) }).transform(value => value.pluginRecommendation.callId),
+          z.object({ actionCard: z.object({ action: z.string(), callId: z.string().min(1) }) }).transform(value => value.actionCard.callId),
+        ]).safeParse(settlement(event)?.meta)
+        const firstCall = state.firstCall ?? answer?.callId ?? (foreign.success ? foreign.data : null)
+        return firstCall === state.firstCall ? state : { ...state, firstCall }
+      }
+      const firstCall = state.firstCall ?? proposal.callId
       const decisions = { ...state.view.decisions }
+      // Another experiment's card holds this answer or turn: the page block is logged but never offered.
+      const foreignCard = answer?.card.action === 'enable_official_plugin'
+        || firstCall !== proposal.callId && state.proposals[firstCall] === undefined
+      // One card per turn: a block written after another card in this turn creates nothing.
+      if (!foreignCard && firstCall !== proposal.callId) return state
       // Queued user messages mean the user has moved on; the proposal is logged but never offered.
-      if (state.queued >= limits.queuedMessageLimit) {
+      if (foreignCard || state.queued >= limits.queuedMessageLimit) {
         decisions[proposal.callId] = { callId: proposal.callId, phase: 'suppressed', slot: proposal.slot }
         return { ...state, firstCall, proposals: { ...state.proposals, [proposal.callId]: proposal }, view: { decisions } }
       }
