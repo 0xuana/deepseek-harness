@@ -203,6 +203,11 @@ interface ToolBatchInput {
    */
   readonly agent?: Agent
   /**
+   * Step admission for every call in the batch, including program subcalls.
+   * Undefined admits only unconditional registrations.
+   */
+  readonly toolSet?: ResolvedToolSet
+  /**
    * Committed model step receiving root call/result events; requires `agent`.
    * Undefined when `agent` is absent or for calls outside a model response, such
    * as session initialization hooks. Without `log`, root call/result events are
