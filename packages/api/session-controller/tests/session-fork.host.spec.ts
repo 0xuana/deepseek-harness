@@ -1,7 +1,7 @@
 /** Session Controller fork boundaries, lineage, and inherited model routing. */
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentHandle, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
@@ -633,8 +633,12 @@ describe('sessions.fork', () => {
   })
 
   it('inherits model selection through the completed turn and excludes later changes', async () => {
-    const ctx = await composed()
-    const source = await liveAgent(ctx, 'session-routed', 0)
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    await mountAgentLoopTestDependencies(ctx)
+    const harness = await mountAgentLoopTestHarness(ctx)
+    ctx.provide('workspaceRegistry', { list: () => [], archivedSessionIds: [] } as never)
+    const { session: source } = await harness.create(sid('session-routed'))
     source.append('turn/start', { turn: 1 })
     source.append('request/header', {
       header: {
@@ -666,6 +670,5 @@ describe('sessions.fork', () => {
     expect(child.model.current()).toEqual({
       provider: 'inherited-provider', model: 'inherited-model', reasoningEffort: 'high',
     })
-    await ctx.fiber.dispose()
   })
 })

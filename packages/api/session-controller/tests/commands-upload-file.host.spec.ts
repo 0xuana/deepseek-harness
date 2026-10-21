@@ -229,6 +229,28 @@ describe('Session file uploads', () => {
     expect(saveImages).not.toHaveBeenCalled()
   })
 
+  it('admits an image before the Agent has a model selection', async () => {
+    const { ctx, controller, agent, followup, saveImages } = await uploadHarness()
+    delete agent.options.provider
+    delete agent.options.model
+    expect(agent.model.current()).toBeUndefined()
+    const resolveModel = vi.spyOn(ctx.llm, 'resolveModelInfo')
+    const image: ImageAttachmentRef = {
+      attachmentId: AttachmentId(`sha256:${'ab'.repeat(32)}`),
+      mediaType: 'image/png', bytes: 3, width: 1, height: 1,
+    }
+    saveImages.mockResolvedValueOnce([image])
+
+    await expect(controller.prompt(promptRequest([
+      { type: 'image', mediaType: 'image/png', data: 'AAAA' },
+    ]), USER_SOURCE)).resolves.toEqual({ accepted: true })
+
+    expect(resolveModel).not.toHaveBeenCalled()
+    expect(followup).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      content: [{ type: 'image', attachment: image }],
+    }))
+  })
+
   it('publishes no receipt when its exact Agent is disposed during storage', async () => {
     const { uploads, agent, saveFile, disposeAgent } = await uploadHarness()
     const saved = Promise.withResolvers<FileAttachmentRef>()

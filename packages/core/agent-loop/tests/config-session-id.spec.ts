@@ -481,6 +481,7 @@ describe('config-driven session id', () => {
   })
 
   it.each([
+    { label: 'preserves the recorded effort on the same configured route', route: { provider: 'mock', model: 'mock' }, expected: { provider: 'mock', model: 'mock', reasoningEffort: 'high' }, appended: 0 },
     { label: 'applies an explicit configured effort', route: { provider: 'mock', model: 'mock', reasoningEffort: ReasoningEffortId('low') }, expected: { provider: 'mock', model: 'mock', reasoningEffort: 'low' }, appended: 1 },
     { label: 'keeps the recorded choice without a configured route', route: {}, expected: { provider: 'mock', model: 'mock', reasoningEffort: 'high' }, appended: 0 },
   ])('config-driven resume $label', async ({ route, expected, appended }) => {

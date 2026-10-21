@@ -2,11 +2,12 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SESSION_FORMAT_VERSION, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import SessionController from '../src/index.ts'
 import type { ApiSessionAgentController } from '../src/agent.ts'
 import { createSessionTestController, testSessionPersistence } from './test-remote.ts'
@@ -23,9 +24,9 @@ describe('SessionController facade', () => {
 
   it('owns Host service methods and publishes Agent lifecycle projections', async () => {
     const ctx = new Context()
-    await ctx.plugin(SessionStore)
-    await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(AgentRegistry)
+    onTestFinished(() => ctx.fiber.dispose())
+    await mountAgentLoopTestDependencies(ctx)
+    await mountAgentLoopTestHarness(ctx)
     const sessionId = SessionId('controller-session')
     const header: SessionHeader = {
       version: SESSION_FORMAT_VERSION,
