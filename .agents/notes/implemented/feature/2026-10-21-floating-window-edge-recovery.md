@@ -64,7 +64,7 @@ The change touches one package, `@deepseek-ai/dsh-client-ui-dockkit`, and leaves
 | File | Change |
 |---|---|
 | `packages/client/ui-dockkit/src/engine/geometry.ts` | `FloatBounds`, `FLOAT_RESISTANCE`, `legalFloatRect`, `resistedRect`, `unresistedRect`, `boundedResize` |
-| `packages/client/ui-dockkit/src/engine/spring.ts` | the pure spring integrator, its rest test, `launchVelocity` and its timing limits |
+| `packages/client/ui-dockkit/src/engine/spring.ts` | the pure spring integrator, its rest predicate `springSettled`, `launchVelocity` and its timing limits |
 | `packages/client/ui-dockkit/src/components/FloatLayer.tsx` | `useFloatGestures`: viewport projection, resistance, release spring, drawn-velocity sampling, reduced motion, frame loop and cancellation; `rectOf` and `floatStyle` for both renderers |
 | `packages/client/ui-dockkit/src/components/TabLayout.tsx` | draws the hook's displayed rectangle through `floatStyle` |
 | `packages/client/ui-dockkit/src/components/dockkit.module.css` | the resting clamp on `.float` |

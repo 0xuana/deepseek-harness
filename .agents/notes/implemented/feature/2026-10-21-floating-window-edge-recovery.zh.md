@@ -64,7 +64,7 @@ x = x + v * h
 | 文件 | 变更 |
 |---|---|
 | `packages/client/ui-dockkit/src/engine/geometry.ts` | `FloatBounds`、`FLOAT_RESISTANCE`、`legalFloatRect`、`resistedRect`、`unresistedRect`、`boundedResize` |
-| `packages/client/ui-dockkit/src/engine/spring.ts` | 纯弹簧积分器、静止判定、`launchVelocity` 与时间上限 |
+| `packages/client/ui-dockkit/src/engine/spring.ts` | 纯弹簧积分器、静止判定函数 `springSettled`、`launchVelocity` 与时间上限 |
 | `packages/client/ui-dockkit/src/components/FloatLayer.tsx` | `useFloatGestures`：视口投影、阻力、松手弹簧、绘制速度采样、减弱动态效果、帧循环与取消；供两个渲染器使用的 `rectOf` 与 `floatStyle` |
 | `packages/client/ui-dockkit/src/components/TabLayout.tsx` | 通过 `floatStyle` 绘制 hook 给出的显示矩形 |
 | `packages/client/ui-dockkit/src/components/dockkit.module.css` | `.float` 上的静止钳制 |
