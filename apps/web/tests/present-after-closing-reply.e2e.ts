@@ -45,8 +45,9 @@ describe('web e2e: delivery after the closing reply', () => {
     expect(await card.count()).toBe(1)
     expect(await card.innerText()).toContain('report.txt')
     expect(await card.innerText()).toContain('Draft report')
-    const tail = await captureStableAria(page, '[data-turn-tail]', scaffold.workspaceCwd)
-    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'ui.expected.md'), tail, MODE)
+    // The grid excludes the Host-desktop notice, which depends on the test platform.
+    const cards = await captureStableAria(page, '[data-turn-tail] [data-presented-files-row]', scaffold.workspaceCwd)
+    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'ui.expected.md'), cards, MODE)
     await card.getByRole('button', { name: `Preview ${join(scaffold.workspaceCwd, 'report.txt')} in sidebar`, exact: true }).click()
     await page.locator('[data-rightbar-col] [data-document-preview]').getByText('DRAFT_REPORT', { exact: true }).waitFor()
     expect(tripwire.pageErrors).toEqual([])
