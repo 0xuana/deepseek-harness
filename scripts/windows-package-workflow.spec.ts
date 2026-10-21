@@ -113,7 +113,7 @@ it('retains failure diagnostics and uploads only the selected successful install
   })
   for (const mode of ['unsigned', 'signed']) {
     const upload = uploads.find(step => step.if === `success() && inputs.signing == '${mode}'`)!
-    expect(upload.with).toMatchObject({ path: '${{ steps.retained.outputs.directory }}/*', 'if-no-files-found': 'error' })
+    expect(upload.with).toMatchObject({ path: '${{ steps.retained.outputs.directory }}/*', 'if-no-files-found': 'error', 'compression-level': 0 })
   }
 })
 

@@ -213,6 +213,7 @@ jobs:
         uses: actions/upload-artifact@v7.0.1
         with:
           name: windows-x64-unsigned-${{ steps.settings.outputs.version }}-${{ github.run_id }}-${{ github.run_attempt }}
+          compression-level: 0
           include-hidden-files: true
           path: ${{ steps.retained.outputs.directory }}/*
           if-no-files-found: error
@@ -222,6 +223,7 @@ jobs:
         uses: actions/upload-artifact@v7.0.1
         with:
           name: windows-x64-signed-${{ steps.settings.outputs.version }}-${{ github.run_id }}-${{ github.run_attempt }}
+          compression-level: 0
           include-hidden-files: true
           path: ${{ steps.retained.outputs.directory }}/*
           if-no-files-found: error

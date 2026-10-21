@@ -119,6 +119,8 @@ For cache measurements, `cache_namespace` selects a retained subdirectory for bo
 
 The dependency-install and packaging steps normalize their own shell to normal CPU, I/O and memory priority before launching children, and record all three values before and after adjustment. Failure to establish these values stops the step. This does not modify the runner task, account, startup triggers or other processes.
 
+Installer uploads store the already-compressed release files without ZIP recompression; this preserves installer bytes and signatures. Diagnostic uploads retain their ordinary compression.
+
 <a id="macos-actions"></a>
 
 ## macOS self-hosted packaging
