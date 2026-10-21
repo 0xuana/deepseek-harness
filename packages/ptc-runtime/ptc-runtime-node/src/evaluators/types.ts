@@ -1,4 +1,4 @@
-/** Evaluation syntax and operations shared by the three child evaluators. */
+/** Evaluation results and operations shared by the three child evaluators. */
 
 /** One evaluation's completion or thrown value. */
 type EvaluationResult = { ok: true; value: unknown } | { ok: false; error: unknown }
