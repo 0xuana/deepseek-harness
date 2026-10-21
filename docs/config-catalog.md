@@ -1036,6 +1036,20 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-computer-use-cua-driver-mcp -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-experimental-creation-recommendations -->
+<a id="deepseek-aidsh-experimental-creation-recommendations"></a>
+
+## `@deepseek-ai/dsh-experimental-creation-recommendations`
+
+- `refs`: `z` (`zod`)
+- `source`: [`packages/experimental/creation-recommendations/src/index.ts:34`](../packages/experimental/creation-recommendations/src/index.ts)
+
+```ts config-catalog
+/** Validated card limits after schema defaults. */
+export type Config = z.infer<typeof Config>
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-creation-recommendations -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-experimental-cua-macos -->
 <a id="deepseek-aidsh-experimental-cua-macos"></a>
 
@@ -4756,7 +4770,6 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-experimental-client-ui-creation-recommendations` | — | [`packages/experimental/client-ui-creation-recommendations/src/index.ts`](../packages/experimental/client-ui-creation-recommendations/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-client-ui-voice-input` | — | [`packages/experimental/client-ui-voice-input/src/index.ts`](../packages/experimental/client-ui-voice-input/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-computer-use-cua-driver-native` | `computerUse` · `tools` · `systemPrompt` | [`packages/experimental/computer-use-cua-driver-native/src/index.ts`](../packages/experimental/computer-use-cua-driver-native/src/index.ts) |
-| `@deepseek-ai/dsh-experimental-creation-recommendations` | — | [`packages/experimental/creation-recommendations/src/index.ts`](../packages/experimental/creation-recommendations/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-session-inspector` | — | [`packages/experimental/session-inspector/src/index.ts`](../packages/experimental/session-inspector/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-tool-worktree` | `tools` · `worktrees` | [`packages/experimental/tool-worktree/src/index.ts`](../packages/experimental/tool-worktree/src/index.ts) |
 | `@deepseek-ai/dsh-fs-observation-policy` | — | [`packages/fs/fs-observation-policy/src/index.ts`](../packages/fs/fs-observation-policy/src/index.ts) |

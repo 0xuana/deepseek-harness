@@ -2,7 +2,7 @@ import { expect, it, vi } from 'vitest'
 import { agentEvents, type Agent, type PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { appendPluginRecord } from '@deepseek-ai/dsh-session'
-import { fixture, callId } from './fixture.ts'
+import { fixture, callId, proposal } from './fixture.ts'
 import * as CreationRecommendations from '../src/index.ts'
 
 async function prepare(
@@ -134,34 +134,26 @@ it('reports installed and removed outcomes, including application errors, withou
   expect(f.startActivation).toHaveBeenCalledOnce()
 })
 
-it.each(['inbox', 'message'] as const)('expires unstarted proposals at the next human %s and refuses stale clicks after replay', async (path) => {
+it('keeps an unstarted proposal across later human messages and lets the next proposal replace it', async () => {
   const f = await fixture()
   await f.propose()
-  const notice = createUserMessage({ content: [{ type: 'text', text: 'Context updated' }],
-    source: { kind: 'personalized-pages', through: f.events.at(-1)!.seq, form: 'notice', summary: 'Status' } })
-  f.agent.session.append('agent/inbox/spliced', { target: 'next-turn', start: 0, inserted: [notice] })
-  f.agent.session.append('user/message', notice, { surfaceOp: 'append' })
-  f.agent.session.append('agent/inbox/spliced', { target: 'next-turn', start: 0, removedCount: 1, inserted: [] })
-  expect(f.current()).toBeUndefined()
-  await f.fiber.dispose()
-  await f.ctx.plugin(CreationRecommendations)
-  expect(f.current()).toBeUndefined()
   const human = createUserMessage({ content: [{ type: 'text', text: 'Let us discuss something else.' }], source: { kind: 'user' } })
-  if (path === 'inbox') f.agent.session.append('agent/inbox/spliced', { target: 'next-turn', start: 0, inserted: [human] })
-  else f.agent.session.append('user/message', human, { surfaceOp: 'append' })
-  expect(f.current()).toEqual({ callId, phase: 'expired', slot: 'sidebar-right' })
-  const status = await prepare(f)
-  if (status.kind !== 'enter') throw new Error('request was rejected')
-  const text = status.messages.flatMap(message => message.content).filter(block => block.type === 'text').map(block => block.text).join('\n')
-  expect(text).toContain('"phase":"expired"')
-  enter(f.agent, status)
-  // The same accepted input later entering model context does not re-queue expiry.
+  f.agent.session.append('agent/inbox/spliced', { target: 'next-turn', start: 0, inserted: [human] })
   f.agent.session.append('user/message', human, { surfaceOp: 'append' })
+  expect(f.current()).toBeUndefined()
   expect(await prepare(f)).toEqual({ kind: 'enter', messages: [] })
+  f.agent.session.append('turn/start', { turn: 2 })
+  await f.propose(ToolCallId('creation-2'), { ...proposal, title: 'Checklist' })
+  expect(f.current()).toEqual({ callId, phase: 'replaced', slot: 'sidebar-right' })
+  // Replacement is the model's own choice, so no status notice is queued for it.
+  expect(await prepare(f)).toEqual({ kind: 'enter', messages: [] })
+  expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')).toEqual({
+    status: 'settled', decision: { callId, phase: 'replaced', slot: 'sidebar-right' },
+  })
   await f.agentHandle.dispose()
   const reopened = await f.ctx.agents.create({ sessionId: f.agent.id, seed: [...f.events] })
   expect(await f.ctx.creationRecommendations.act(reopened.agent, callId, 'create', 'page')).toEqual({
-    status: 'settled', decision: { callId, phase: 'expired', slot: 'sidebar-right' },
+    status: 'settled', decision: { callId, phase: 'replaced', slot: 'sidebar-right' },
   })
   expect(f.startActivation).not.toHaveBeenCalled()
   expect(f.manager.installBundle).not.toHaveBeenCalled()

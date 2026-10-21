@@ -25,8 +25,10 @@ export function recommendationOf(event: { readonly type: string; readonly data: 
   const value = record(card) && card.action === 'create_personalized_page' ? card.data : result.meta.creationRecommendation
   if (!record(value) || typeof value.callId !== 'string' || value.callId === ''
     || typeof value.title !== 'string' || value.title === '' || typeof value.brief !== 'string' || value.brief === ''
-    || value.slot !== 'sidebar-right' && value.slot !== 'page' && value.slot !== 'sidebar-left') return undefined
-  return { callId: value.callId as ToolCallId, title: value.title, brief: value.brief, slot: value.slot }
+    || value.slot !== 'sidebar-right' && value.slot !== 'page' && value.slot !== 'sidebar-left'
+    || value.initialContent !== undefined && typeof value.initialContent !== 'string') return undefined
+  return { callId: value.callId as ToolCallId, title: value.title, brief: value.brief, slot: value.slot,
+    ...value.initialContent === undefined ? {} : { initialContent: value.initialContent } }
 }
 
 /** Retain proposal data without rendering inside the tool sequence. */

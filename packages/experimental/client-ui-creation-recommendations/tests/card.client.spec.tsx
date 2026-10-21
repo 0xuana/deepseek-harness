@@ -120,7 +120,7 @@ it('disables pending decisions and supports dismissal without starting a child',
   await act(async () => { pending.resolve({ status: 'settled', decision: { callId, phase: 'dismissed', slot: 'sidebar-right' } }) })
 })
 
-it.each(['installing', 'dismissed', 'removed', 'expired'] as const)('restores %s without repeat actions', (phase) => {
+it.each(['installing', 'dismissed', 'removed', 'replaced'] as const)('restores %s without repeat actions', (phase) => {
   render(<RecommendationCard {...props({ callId, phase, slot: 'sidebar-left' }, false)} />)
   expect(screen.getByRole('status').textContent).toBe(en[phase])
   expect(screen.getAllByRole('button')).toEqual([screen.getByRole('button', { name: en.creationInfo })])
@@ -232,4 +232,22 @@ it('only offers expansion for omitted content and preserves the full plan withou
   view.rerender(<RecommendationCard {...value} />)
   expect(screen.queryByRole('button', { name: '展开方案' })).toBeNull()
   expect(paragraph.textContent).toBe(prefix)
+})
+
+it('shows supplied initial content as folded data below the plan and omits it otherwise', () => {
+  const value = props()
+  const view = render(<RecommendationCard {...value} />)
+  expect(screen.queryByText('预填内容')).toBeNull()
+  const items = '1. 导出成功\n2. 断网提示清楚'
+  value.recommendation = { ...value.recommendation, initialContent: items }
+  view.rerender(<RecommendationCard {...value} />)
+  expect(screen.getByText('预填内容')).toBeTruthy()
+  expect(screen.getByText(/导出成功/).textContent).toBe(items)
+  expect(screen.queryByRole('button', { name: '展开内容' })).toBeNull()
+  value.recommendation = { ...value.recommendation, initialContent: '条'.repeat(81) }
+  view.rerender(<RecommendationCard {...value} />)
+  const expand = screen.getByRole('button', { name: '展开内容' })
+  fireEvent.click(expand)
+  expect(screen.getByRole('button', { name: '收起内容' }).getAttribute('aria-expanded')).toBe('true')
+  expect(value.act).not.toHaveBeenCalled()
 })

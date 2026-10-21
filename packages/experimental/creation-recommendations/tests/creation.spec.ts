@@ -1,5 +1,5 @@
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import { createToolResultMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { createToolResultMessage, createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { appendPluginRecord, SessionId } from '@deepseek-ai/dsh-session'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { readFile, rm } from 'node:fs/promises'
@@ -584,4 +584,17 @@ describe('interface creation', () => {
     await disposed.promise
     expect(f.current()?.phase).toBe('installing')
   })
+})
+
+it('offers no card while the user has queued more messages for later turns', async () => {
+  const f = await fixture()
+  const queued = () => createUserMessage({ content: [{ type: 'text', text: 'Next question.' }], source: { kind: 'user' } })
+  f.agent.inbox.append('next-turn', queued())
+  f.agent.inbox.append('next-turn', queued())
+  const refused = await f.execute()
+  expect(refused.isError).toBe(true)
+  expect(JSON.stringify(refused.content)).toContain('queued more messages')
+  f.agent.inbox.clear()
+  f.agent.inbox.append('next-turn', queued())
+  expect((await f.execute()).isError).toBe(false)
 })

@@ -5458,7 +5458,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CreationCardState',
-    declaration: 'export type CreationCardState = CreationDecision | (Omit<CreationDecision, \'phase\'> & {\n    readonly phase: \'expired\';\n});',
+    declaration: 'export type CreationCardState = CreationDecision | (Omit<CreationDecision, \'phase\'> & {\n    readonly phase: \'replaced\';\n});',
   },
   {
     name: 'CreationDecision',

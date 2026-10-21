@@ -46,19 +46,19 @@ function LocationPicker({ value, disabled, onChange, t }: {
     </Button>} />
 }
 
-/** Fold omitted content, without measuring layout or changing Creator's brief. */
-function CreationPlan({ brief, t }: { brief: string } & PropsLocale<'creationRecommendations'>) {
+/** Fold omitted text without measuring layout; the full text is never altered. */
+function FoldedText({ text, expandLabel, collapseLabel }: { text: string; expandLabel: string; collapseLabel: string }) {
   const id = useId()
   const [expanded, setExpanded] = useState(false)
   const preview = useMemo(() => {
-    const text = brief.replace(/\s+/g, ' ').trim()
-    const characters = Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text), part => part.segment)
+    const compact = text.replace(/\s+/g, ' ').trim()
+    const characters = Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(compact), part => part.segment)
     return characters.length > 80 ? characters.slice(0, 80).join('').trimEnd() + '…' : undefined
-  }, [brief])
+  }, [text])
   return <>
-    <p id={id} className={css.reason}>{expanded || preview === undefined ? brief : preview}</p>
+    <p id={id} className={css.reason}>{expanded || preview === undefined ? text : preview}</p>
     {preview !== undefined && <Button variant="ghost" size="sm" className={css.planToggle} aria-expanded={expanded} aria-controls={id}
-      onClick={() => { setExpanded(value => !value) }}>{t(expanded ? 'collapsePlan' : 'expandPlan')}</Button>}
+      onClick={() => { setExpanded(value => !value) }}>{expanded ? collapseLabel : expandLabel}</Button>}
   </>
 }
 
@@ -135,7 +135,11 @@ export function RecommendationCard({ recommendation, useProjection, act, useInfo
     </div>}
     <div className={css.body}>
       <strong className={css.title}>{recommendation.title}</strong>
-      <CreationPlan brief={recommendation.brief} t={t} />
+      <FoldedText text={recommendation.brief} expandLabel={t('expandPlan')} collapseLabel={t('collapsePlan')} />
+      {recommendation.initialContent !== undefined && <div className={css.content}>
+        <span className={css.contentLabel}>{t('initialContent')}</span>
+        <FoldedText text={recommendation.initialContent} expandLabel={t('expandContent')} collapseLabel={t('collapseContent')} />
+      </div>}
       {decision?.application !== undefined && decision.application !== 'applied'
         && <p role="status" className={css.status}>{t(decision.application)}</p>}
       {error !== undefined && <p role="alert" className={css.status}>{t(error)}</p>}

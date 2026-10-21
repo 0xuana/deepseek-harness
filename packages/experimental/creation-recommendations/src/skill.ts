@@ -9,7 +9,7 @@ import { BUNDLED_SKILL_RANK, type SkillCandidate } from '@deepseek-ai/dsh-skill'
 export function registerCreationSkill(ctx: Context): void {
   const candidate: SkillCandidate = {
     name: 'personalized-pages',
-    description: 'Plan optional new pages or tools for explicit UI wishes (even one-off use), clear viewing/editing needs, or results worth revisiting. Load before suggest_action; use known context and the catalog, not source/API research. Existing-page changes stay on the original: explain-only requests need no source search or creation card. Requested files/code, ordinary answers, static tables alone, existing-feature questions, quoted wishes and declined recommendations do not qualify.',
+    description: 'Plan an optional new page or small tool when the user asks for a page, tab, panel, tool or interface in this app (even for one-off use), wants something to keep, revisit or update later, or will keep changing data shown in your answer. Load this before reading any files or source. Not for requested files or code, ordinary answers, existing-feature questions, quoted wishes or declined recommendations.',
     provider: 'dsh-personalized-pages', source: 'bundled', rank: BUNDLED_SKILL_RANK, locator: null,
     invocation: { modelInvocable: true, userInvocable: false },
   }

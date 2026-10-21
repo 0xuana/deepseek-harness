@@ -22,7 +22,7 @@ const decisionSchema = z.object({
   application: z.enum(['applied', 'restart-required', 'overridden', 'failed', 'cancelled']).optional(),
 })
 const viewSchema = z.object({ decisions: z.record(z.string(), z.union([
-  decisionSchema, decisionSchema.extend({ phase: z.literal('expired') }),
+  decisionSchema, decisionSchema.extend({ phase: z.literal('replaced') }),
 ])) })
 const stateSchema = z.object({
   proposals: z.record(z.string(), proposalSchema), view: viewSchema,
@@ -54,26 +54,12 @@ function settlement(event: SessionEvent) {
   return result?.isError ? undefined : result
 }
 
-/** Full-session fold; later explicit needs may offer another card in another turn. */
+/** Full-session fold; a later proposal replaces an unstarted card, so one unstarted card exists per conversation. */
 export const creationProjection = {
-  key: 'creationRecommendations', stateVersion: 6, stateSchema,
+  key: 'creationRecommendations', stateVersion: 7, stateSchema,
   init: (): CreationState => ({ proposals: {}, view: { decisions: {} }, turn: 0, firstCall: null, pendingStatus: {} }),
   apply: (state, event) => {
     if (event.type === 'turn/start') return { ...state, turn: event.data.turn, firstCall: null }
-    const humanMessage = event.type === 'agent/inbox/spliced'
-      ? event.data.inserted.some(message => message.source.kind === 'user')
-      : event.type === 'user/message' && event.data.source.kind === 'user'
-    if (humanMessage) {
-      const pending = Object.values(state.proposals).filter(proposal => state.view.decisions[proposal.callId] === undefined)
-      if (pending.length === 0) return state
-      const decisions = { ...state.view.decisions }
-      const pendingStatus = { ...state.pendingStatus }
-      for (const proposal of pending) {
-        decisions[proposal.callId] = { callId: proposal.callId, phase: 'expired', slot: proposal.slot }
-        pendingStatus[proposal.callId] = event.seq
-      }
-      return { ...state, view: { decisions }, pendingStatus }
-    }
     if (event.type === 'user/message' && event.data.source.kind === 'personalized-pages') {
       const through = event.data.source.through
       return { ...state, pendingStatus: Object.fromEntries(Object.entries(state.pendingStatus).filter(([, seq]) => seq > through)) }
@@ -90,8 +76,15 @@ export const creationProjection = {
       z.object({ actionCard: z.object({ action: z.string(), callId: z.string().min(1) }) }).transform(value => value.actionCard.callId),
     ]).safeParse(settlement(event)?.meta)
     const firstCall = state.firstCall ?? proposal?.callId ?? (foreign.success ? foreign.data : null)
-    return proposal === undefined ? firstCall === state.firstCall ? state : { ...state, firstCall }
-      : { ...state, firstCall, proposals: { ...state.proposals, [proposal.callId]: proposal } }
+    if (proposal === undefined) return firstCall === state.firstCall ? state : { ...state, firstCall }
+    // A newer proposal supersedes every unstarted card; the model owns that choice, so no status notice is queued.
+    const decisions = { ...state.view.decisions }
+    for (const earlier of Object.values(state.proposals)) {
+      if (earlier.callId !== proposal.callId && decisions[earlier.callId] === undefined) {
+        decisions[earlier.callId] = { callId: earlier.callId, phase: 'replaced', slot: earlier.slot }
+      }
+    }
+    return { ...state, firstCall, proposals: { ...state.proposals, [proposal.callId]: proposal }, view: { decisions } }
   },
   wire: { summary: false, viewSchema, view: (state: CreationState) => state.view },
 } satisfies ProjectionDefinition<'creationRecommendations', CreationState>

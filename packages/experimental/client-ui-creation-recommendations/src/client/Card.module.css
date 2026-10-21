@@ -10,6 +10,8 @@
 .body { padding: 12px 20px 20px; }
 .title { display: block; font-size: 16px; font-weight: 500; line-height: 1.5; overflow-wrap: anywhere; }
 .reason { margin: 8px 0 0; font-size: 13px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--dsw-alias-label-secondary); }
+.content { margin-top: 12px; }
+.contentLabel { display: block; font-size: 12px; line-height: 1.6; color: var(--dsw-alias-label-secondary); }
 .planToggle { margin: 8px 0 0; padding-inline: 0; height: auto; min-height: 24px; font-size: 12px; }
 .description { margin: 16px 0 0; padding-top: 12px; border-top: 0.5px solid var(--dsw-alias-border-l1); font-size: 12px; line-height: 1.6; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
 .footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; flex-wrap: wrap; }

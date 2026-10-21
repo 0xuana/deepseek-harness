@@ -29,8 +29,8 @@ export interface CreationDecision {
   readonly application?: ChangeResult['application'] | undefined
 }
 
-/** Expiration is derived from user messages, never written as a plugin decision. */
-export type CreationCardState = CreationDecision | (Omit<CreationDecision, 'phase'> & { readonly phase: 'expired' })
+/** Replacement is derived from a later proposal in the same conversation, never written as a plugin decision. */
+export type CreationCardState = CreationDecision | (Omit<CreationDecision, 'phase'> & { readonly phase: 'replaced' })
 
 /** Open-session receipts, excluded from session-list summaries. */
 export interface CreationView {

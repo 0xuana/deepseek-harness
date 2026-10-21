@@ -25,6 +25,14 @@ export type * from './types.ts'
 
 export const name = 'creation-recommendations'
 
+/** Deployment-tunable limits for offering cards. */
+export const Config = z.object({
+  /** Queued next-turn messages at or above which the current turn offers no card. */
+  queuedMessageLimit: z.number().int().min(1).default(2),
+}).prefault({})
+/** Validated card limits after schema defaults. */
+export type Config = z.infer<typeof Config>
+
 declare module '@deepseek-ai/cordis' {
   interface Context { creationRecommendations: CreationRecommendations }
 }
@@ -51,7 +59,7 @@ export class CreationRecommendations extends TypertRemoteService {
   private closing = false
   private readonly owner: Context['fiber']
 
-  constructor(ctx: Context) {
+  constructor(ctx: Context, private readonly config: Config) {
     super(ctx, 'creationRecommendations')
     this.owner = ctx.fiber
   }
@@ -75,7 +83,6 @@ export class CreationRecommendations extends TypertRemoteService {
         content: [{ type: 'text', text: 'Latest personalized page status from card actions and background creation. '
           + 'These are status facts, not a request to start or retry work. Use these receipts instead of the earlier proposal when describing progress. '
           + 'Cancelled means a started background creation was stopped before installation. Cancelled, failed or interrupted runs can be retried from their existing card; no new proposal is needed. '
-          + 'Expired means an unstarted proposal became inactive when the user sent another message. Its old card cannot create anything. Offer a fresh card only if the current request still calls for a page plan. '
           + 'Continue with the user’s current request.\n' + JSON.stringify(updates) }],
       })] }
     }, { prepend: true })
@@ -102,6 +109,9 @@ export class CreationRecommendations extends TypertRemoteService {
         return 'Generate the new bundle files only. The caller installs them after validation.'
       }
       if (exec.name !== 'suggest_action' && exec.name !== 'suggest_plugin') return undefined
+      if (exec.agent.inbox.nextTurn.length >= this.config.queuedMessageLimit) {
+        return 'The user has already queued more messages. This call created no card; finish the current answer without a recommendation.'
+      }
       const state = this.projection.stateOf(exec.agent.session)
       const reserved = this.reservations.get(exec.agent.id)
       const first = state.firstCall ?? (reserved?.turn === state.turn ? reserved.callId : undefined)
@@ -237,7 +247,7 @@ export class CreationRecommendations extends TypertRemoteService {
       this.record(agent, decision)
       return { status: 'settled', decision }
     }
-    if (previous?.phase === 'dismissed' || previous?.phase === 'removed' || previous?.phase === 'expired'
+    if (previous?.phase === 'dismissed' || previous?.phase === 'removed' || previous?.phase === 'replaced'
       || action === 'cancel' && previous !== undefined) return { status: 'settled', decision: previous }
     if (action === 'dismiss') {
       const decision: CreationDecision = { callId, phase: 'dismissed', slot: slotSchema.safeParse(slot).success ? slot : proposal.slot,
@@ -345,7 +355,8 @@ export class CreationRecommendations extends TypertRemoteService {
 /**
  * Assemble the feature-owned Remote; disposing the feature also disposes its effects.
  * @param ctx - Owning feature context.
+ * @param config - Validated card limits; the Loader supplies them, and direct composition gets the schema defaults.
  */
-export async function apply(ctx: Context): Promise<void> {
-  await ctx.plugin(CreationRecommendations)
+export async function apply(ctx: Context, config: Config = Config.parse({})): Promise<void> {
+  await ctx.plugin(CreationRecommendations, config)
 }

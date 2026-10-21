@@ -14,6 +14,8 @@ it('reads identical proposal facts from native and nested PTC results', () => {
   for (const event of [native, ptc]) {
     expect(recommendationOf({ ...event, data: { ...event.data, meta: { actionCard: { action: 'create_personalized_page', callId: value.callId, data: value } } } })).toEqual(value)
     expect(recommendationOf({ ...event, data: { ...event.data, meta: { actionCard: { action: 'another_action', callId: value.callId, data: value } } } })).toBeUndefined()
+    const withContent = { ...value, initialContent: '1. a\n2. b' }
+    expect(recommendationOf({ ...event, data: { ...event.data, meta: { actionCard: { action: 'create_personalized_page', callId: value.callId, data: withContent } } } })).toEqual(withContent)
   }
 })
 
@@ -24,7 +26,7 @@ it('falls back for unrelated, failed, missing, and malformed data', () => {
     { type: 'tool/result', data: { message: { isError: true } } },
     { type: 'tool/result', data: { message: {}, meta: [] } },
     { type: 'tool/result', data: { message: {}, meta: {} } },
-    ...[null, [], {}, { ...value, brief: 3 }, { ...value, callId: '' }, { ...value, title: '' }, { ...value, brief: '' }, { ...value, slot: 'other' }].map(data => ({
+    ...[null, [], {}, { ...value, brief: 3 }, { ...value, callId: '' }, { ...value, title: '' }, { ...value, brief: '' }, { ...value, slot: 'other' }, { ...value, initialContent: 3 }].map(data => ({
       type: 'tool/result', data: { message: {}, meta: { creationRecommendation: data } },
     })),
   ]) expect(recommendationOf(event)).toBeUndefined()

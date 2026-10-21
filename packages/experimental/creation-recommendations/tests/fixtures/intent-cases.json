@@ -253,10 +253,10 @@
     "expected": "Recognize implicit recurring need; one global manual-entry record, no invented workout data, automation or extra required fields."
   },
   {
-    "id": "unstarted_card_expiry",
-    "setup": "Offer a page but do not click Create. Send a follow-up user message.",
+    "id": "unstarted_card_replacement",
+    "setup": "Offer a page but do not click Create. Send a follow-up user message, then ask for a changed plan in a later turn.",
     "prompt": "刚才的方案改成只在当前会话使用。",
-    "expected": "Expire the unstarted old card, refuse stale Create calls and offer a fresh plan when needed. Refresh or background context alone never expires a card; started/cancelled runs retain retry."
+    "expected": "Keep the unstarted card available across follow-up messages. The next proposal replaces it: the old card shows Replaced and refuses stale Create calls. Refresh or background context never changes a card; started or cancelled runs retain retry."
   },
   {
     "id": "artifact_html_file",
