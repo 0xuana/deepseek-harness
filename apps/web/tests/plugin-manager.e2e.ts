@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { FiberState } from '@deepseek-ai/cordis'
-import { ON_DEMAND_BUNDLES, OPTIONAL_BUNDLES } from '@deepseek-ai/dsh-app-boot'
+import { readProfileManifest } from '@deepseek-ai/dsh-app-boot'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished, vi } from 'vitest'
 import { join } from 'node:path'
@@ -298,7 +298,7 @@ describe('web e2e: plugin manager', () => {
           width: node.getBoundingClientRect().width,
           height: node.getBoundingClientRect().height,
         })))
-        expect(blankActions).toEqual(Array.from({ length: 4 }, () => ({ children: 0, background: 'rgba(0, 0, 0, 0)', width: 36, height: 20 })))
+        expect(blankActions).toEqual(Array.from({ length: 4 }, () => ({ children: 0, background: 'rgba(0, 0, 0, 0)', width: 58, height: 20 })))
         if (shots !== undefined) {
           for (const colorScheme of ['light', 'dark'] as const) {
             await probe.emulateMedia({ colorScheme })
@@ -664,8 +664,17 @@ describe('web e2e: plugin manager', () => {
     expect(await panel.getByText(/Cordis|Chrome DevTools/).count()).toBe(0)
     await panel.getByRole('button', { name: '更多', exact: true }).click()
     await panel.getByRole('heading', { name: '实验性插件', exact: true, level: 1 }).waitFor()
+    const bundles = await scaffold.ctx.pluginManager.listBundles()
+    expect(bundles.some(bundle => bundle.name === '@deepseek-ai/dsh-experimental-terminal-bundle')).toBe(true)
+    expect(await panel.getByRole('switch', { name: '启用 持久终端', exact: true }).count()).toBe(0)
     expect(await panel.locator('[data-plugin-group="more"] [data-plugin-package]').count())
-      .toBe(OPTIONAL_BUNDLES.length + ON_DEMAND_BUNDLES.length)
+      .toBe(bundles.filter(bundle => bundle.name !== '@deepseek-ai/dsh-experimental-terminal-bundle'
+        && bundle.official && (bundle.listedByDefault !== false || bundle.enabled || bundle.installed)).length)
+    for (const name of ['@deepseek-ai/dsh-experimental-session-search', '@deepseek-ai/dsh-experimental-ralph-bundle']) {
+      expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === name))
+        .toMatchObject({ enabled: false, optional: true, availability: 'installation', listedByDefault: false })
+      expect(await panel.locator(`[data-plugin-package="${name}"]`).count()).toBe(0)
+    }
     const cards = await panel.locator('[data-plugin-group="more"] [data-plugin-package]').all()
     expect(await Promise.all(cards.map(async card => [
       await card.getAttribute('data-plugin-package'),
@@ -679,11 +688,8 @@ describe('web e2e: plugin manager', () => {
       ['@deepseek-ai/dsh-cua-bundle', 1],
       ['@deepseek-ai/dsh-experimental-tool-worktree', 1],
       ['@deepseek-ai/dsh-experimental-cot-translation-bundle', 1],
-      ['@deepseek-ai/dsh-experimental-terminal-bundle', 1],
-      ['@deepseek-ai/dsh-experimental-session-search', 1],
       ['@deepseek-ai/dsh-experimental-session-titles-bundle', 1],
       ['@deepseek-ai/dsh-experimental-badge-skill-bundle', 1],
-      ['@deepseek-ai/dsh-experimental-ralph-bundle', 1],
       ['@deepseek-ai/dsh-experimental-plugin-market-bundle', 1],
       ['@deepseek-ai/dsh-subagent-codex', 0],
       ['@deepseek-ai/dsh-subagent-claude-code', 0],
@@ -701,6 +707,36 @@ describe('web e2e: plugin manager', () => {
 
     const snapshot = await captureStableAria(page, '[data-plugin-panel]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(MANAGER_EXPECTED, snapshot, MODE)
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+
+  it('enables both default-hidden shipped bundles by name without adding a profile dependency', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-manager-bundled-enable'))
+    const profileDir = join(scaffold.harnessHome, 'profiles', 'scaffold')
+    const before = readProfileManifest('dsh', profileDir).dependencies
+    for (const [name, title] of [
+      ['@deepseek-ai/dsh-experimental-session-search', '会话搜索'],
+      ['@deepseek-ai/dsh-experimental-ralph-bundle', 'Ralph 循环'],
+    ] as const) {
+      const panel = await openPluginsPanel()
+      expect(await panel.locator(`[data-plugin-package="${name}"]`).count()).toBe(0)
+      await panel.getByRole('button', { name: '添加插件', exact: true }).click()
+      const dialog = page.getByRole('dialog', { name: '添加插件', exact: true })
+      await dialog.getByRole('textbox', { name: '包名或地址', exact: true }).fill(name)
+      await dialog.getByRole('button', { name: '安装', exact: true }).click()
+      const ready = page.getByRole('dialog', { name: '插件已随 DSH 提供', exact: true })
+      await ready.waitFor()
+      expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === name)?.enabled).toBe(false)
+      expect(await ready.getByText('无需下载，启用即可使用', { exact: true }).count()).toBe(1)
+      await ready.getByRole('button', { name: '立即启用', exact: true }).click()
+      const card = panel.locator(`[data-plugin-package="${name}"]`)
+      await card.waitFor()
+      expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === name)?.enabled).toBe(true)
+      expect(readProfileManifest('dsh', profileDir).dependencies).toEqual(before)
+      await card.getByRole('switch', { name: `启用 ${title}`, exact: true }).click()
+      await card.waitFor({ state: 'hidden' })
+      expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === name)?.enabled).toBe(false)
+    }
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
