@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Claude Code hooks",
+    "description": "Bridge plugin: run a Claude Code hooks.json / settings hook config on the DeepSeek Harness interception seams"
+  }
+}

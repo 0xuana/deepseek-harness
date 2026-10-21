@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "SSH process sandbox",
+    "description": "Remote POSIX sandbox argv provider over the shared SSH helper"
+  }
+}

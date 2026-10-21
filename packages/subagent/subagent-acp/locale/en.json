@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "ACP subagent backend",
+    "description": "Out-of-process ACP subagent backend: drives a child agent in a spawned subprocess over the Agent Client Protocol"
+  }
+}

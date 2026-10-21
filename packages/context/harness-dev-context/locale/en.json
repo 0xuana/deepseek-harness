@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Harness development context",
+    "description": "Model context naming the DeepSeek Harness checkout and Web GUI URL without letting either change the system prompt"
+  }
+}

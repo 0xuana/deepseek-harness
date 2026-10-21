@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "DSH SDK subagent backend",
+    "description": "Out-of-process SDK subagent backend: drives a child DeepSeek Harness runtime subprocess over stdio JSON-RPC through the TypeScript SDK client"
+  }
+}

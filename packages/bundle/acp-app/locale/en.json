@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "ACP profile",
+    "description": "The dsh ACP profile bundle: automation-only JSON-RPC stdio and process lifecycle over dsh-base"
+  }
+}

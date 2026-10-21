@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Claude Code mods interface",
+    "description": "Web band above the prompt for Claude Code mods: draws each session's mod tree and sends button presses back to the bridge"
+  }
+}

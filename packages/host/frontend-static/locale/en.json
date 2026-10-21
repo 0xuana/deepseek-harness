@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Static frontend server",
+    "description": "SPA dist server for the Web shell: owns the webserver fallback seat, serving explicit index entries and static assets with traversal rejection and 404 misses"
+  }
+}

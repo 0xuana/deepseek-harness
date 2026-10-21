@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Translation service",
+    "description": "Machine translation with reusable Session results"
+  }
+}

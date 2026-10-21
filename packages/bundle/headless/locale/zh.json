@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "无界面运行配置",
+    "description": "在 dsh-base 上提供单次任务运行，不包含 Host、HTTP 或浏览器层。"
+  }
+}

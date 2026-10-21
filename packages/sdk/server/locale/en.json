@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "SDK server",
+    "description": "Stdio JSON-RPC server plugin for out-of-process DeepSeek Harness SDK clients"
+  }
+}

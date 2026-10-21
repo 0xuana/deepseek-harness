@@ -8,6 +8,7 @@
  * @module @deepseek-ai/dsh-experimental-auto-review
  */
 
+import { deniedDisplayReason } from './locales.ts'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import { FiberState, type Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -703,9 +704,7 @@ function askUser(exec: ToolExecution, reason?: string): PreToolDecision {
   return {
     kind: 'ask',
     reason: reason === undefined ? denial : `${denial}: ${reason}`,
-    displayReason: reason === undefined
-      ? { en: 'Auto review denied this call.', zh: 'Auto review 拒绝了此调用。' }
-      : { en: `Auto review denied this call: ${reason}`, zh: `Auto review 拒绝了此调用：${reason}` },
+    displayReason: deniedDisplayReason(reason),
   }
 }
 
