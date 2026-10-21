@@ -105,8 +105,8 @@ const turnLocation = (turn: number, deliverables?: DeliverablesTurnData): TurnLo
   return { turn, start: undefined, end: undefined, status: 'closed', steps: [], data }
 }
 
-const produced = (...values: ReadonlyArray<readonly [seq: number, path: string]>): DeliverablesTurnData => ({
-  produced: values.map(([seq, path]) => ({ seq, path })),
+const produced = (...paths: readonly string[]): DeliverablesTurnData => ({
+  produced: paths.map(path => ({ path })),
 })
 
 function tailOwner(
@@ -216,17 +216,27 @@ function deliverablesOf(value: ConversationNodeAssembler, turn = 1): Readonly<De
 }
 
 describe('produced-file Turn data', () => {
-  it('deduplicates paths in first-seen order and stops at the closing Assistant seq', () => {
-    const data = produced(
-      [3, 'out/index.html'],
-      [4, 'out/app.css'],
-      [4, 'out/index.html'],
-      [8, 'after.txt'],
-    )
-    expect(producedForClosing(data, 6)).toEqual(['out/index.html', 'out/app.css'])
-    expect(selectProducedFiles(tailOwner(data, 6))).toEqual(['out/index.html', 'out/app.css'])
+  it('deduplicates paths in first-seen order across the whole turn', () => {
+    const data = produced('out/index.html', 'out/app.css', 'out/index.html', 'after.txt')
+    expect(producedForClosing(data)).toEqual(['out/index.html', 'out/app.css', 'after.txt'])
+    expect(selectProducedFiles(tailOwner(data, 6))).toEqual(['out/index.html', 'out/app.css', 'after.txt'])
     expect(producedForClosing(undefined)).toEqual([])
     expect(selectProducedFiles(tailOwner(undefined, 9, () => {}, 2))).toBeNull()
+  })
+
+  it('includes mutations that settle after the closing reply', () => {
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      call(3, 'late', 'write', { file_path: 'late.txt', content: 'late' }),
+      result(4, 'late', false, 1, { path: '/project/late.txt' }),
+      at(5, 'turn/end', { turn: 1 }),
+    ])
+    const data = deliverablesOf(value)
+    // The closing reply at seq 2 shares the step that called write, and no later step wrote text.
+    expect(selectProducedFiles(tailOwner(data, 2))).toEqual(['/project/late.txt'])
+    const opened = vi.fn()
+    producedFileMentions(['/project/late.txt'], opened, path => path, data?.produced).resolve('late.txt')?.open()
+    expect(opened).toHaveBeenCalledWith('/project/late.txt')
   })
 
   it('opens a moved write at its recorded target when an absolute delivery names the same file', () => {
@@ -871,7 +881,7 @@ describe('plugin registration', () => {
     // resolver whose matches open through the owner-supplied opener.
     const opened: string[] = []
     const owner = tailOwner(
-      produced([2, 'site/report.html']),
+      produced('site/report.html'),
       3,
       (path) => { opened.push(path) },
     )
@@ -881,16 +891,20 @@ describe('plugin registration', () => {
     mentions?.resolve('report.html')?.open()
     expect(opened).toEqual(['site/report.html'])
     const canonical = '/project/child/out/report.txt'
-    const moved = tailOwner({ produced: [{ seq: 2, path: canonical, argumentPath: 'out/report.txt' }] }, 3, previewPath => opened.push(previewPath))
+    const moved = tailOwner({ produced: [{ path: canonical, argumentPath: 'out/report.txt' }] }, 3, previewPath => opened.push(previewPath))
     const movedMentions = service?.forClosing(moved, SessionId('moved-session'))
     movedMentions?.resolve('out/report.txt')?.open()
     expect(opened.at(-1)).toBe(canonical)
     expect(movedMentions?.resolve('out/report.txt')?.title).toBe(canonical)
+    // A delivery recorded after the closing reply still resolves in that reply's prose.
+    const late = tailOwner({ produced: [], presented: [{ path: 'out/late.docx', seq: 5, index: 0 }] }, 3, previewPath => opened.push(previewPath))
+    service?.forClosing(late, SessionId('late-session'))?.resolve('late.docx')?.open()
+    expect(opened.at(-1)).toBe('out/late.docx')
 
     const fetcher = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
     vi.stubGlobal('fetch', fetcher)
     const preview = vi.fn<(path: string) => void>()
-    for (const produced of [[], [{ path: 'out/report.docx', seq: 1 }]]) {
+    for (const produced of [[], [{ path: 'out/report.docx' }]]) {
       const delivered = tailOwner({ produced, presented: [{ path: 'out/report.docx', seq: 2, index: 0 }] }, 3, preview)
       const mentions = service?.forClosing(delivered, SessionId('child-session'))
       for (const text of ['report.docx', 'out/report.docx']) {
