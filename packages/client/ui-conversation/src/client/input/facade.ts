@@ -23,6 +23,7 @@ import type {
   ArbitrateKey, ArbitrateOutcome, ComposerKeyboard, DraftInput, DraftSnapshot, ReferenceInsert, TokenSpan,
 } from '../contract/draft-editor.ts'
 import type { InputSubmitMode, MessageSubmission, MessageSubmissionState } from '../contract/composer-submission.ts'
+import { serializeDraftPrompt } from './prompt.ts'
 import { SubmitMachine } from './machine.ts'
 import { resolveDraftInput, snapshotDraft } from '../draft.ts'
 import { DraftEditorRuntime } from './editor/runtime.ts'
@@ -69,6 +70,10 @@ export interface SessionInputDeps {
     signal: AbortSignal,
     accept: () => void,
   ): Promise<SubmitOutcome>
+  /** Live Session and composer-block policy for transcript insertion. */
+  quoteInsertionAllowed?: () => boolean
+  /** Current localized quote removal copy. */
+  quoteRemoveLabel?: () => string
   /** Command-plane attachment plumbing (the hub owns the conversation face and the copy). */
   commandAttachments: {
     /** Resolve ordered draft ids to wire payloads without sending them; rejects when an id no longer resolves. */
@@ -98,6 +103,10 @@ function frozen(phase: InputState['phase']): boolean {
 function projectionContentChanged(prev: EditorProjection, next: EditorProjection): boolean {
   if (prev.clipboardText !== next.clipboardText || prev.detectText !== next.detectText) return true
   if (prev.command !== next.command) return true
+  if (prev.quotes.length !== next.quotes.length || prev.quotes.some((quote, i) => {
+    const old = next.quotes[i]
+    return old?.text !== quote.text || old.offset !== quote.offset
+  })) return true
   if (prev.occurrences.length !== next.occurrences.length) return true
   return next.occurrences.some((occ, i) => {
     const old = prev.occurrences[i]
@@ -131,6 +140,7 @@ export class SessionInputShell implements SessionInput {
   }
   /** The public provide-channel action face (one stable identity per session). */
   readonly actions: InputActions = {
+    insertQuote: text => this.insertQuote(text),
     captureInsertion: () => ({ ...this.caretSpan(), draftRev: this.rev }),
     insertText: (text, span) => {
       if (frozen(this.snapshot.phase) || this.disposed) return false
@@ -170,6 +180,7 @@ export class SessionInputShell implements SessionInput {
   constructor(private readonly deps: SessionInputDeps) {
     this.draftEditor = new DraftEditorRuntime({
       onUpdate: () => { this.onEditorUpdate() },
+      quoteLabels: () => ({ remove: this.deps.quoteRemoveLabel?.() ?? '' }),
       openReference: (source, reference) =>
         this.deps.inputTriggers?.()?.openReference(source, reference) ?? false,
       lexicon: () => this.lexicon.getSnapshot(),
@@ -212,11 +223,19 @@ export class SessionInputShell implements SessionInput {
   setDraft(text: DraftInput): void {
     const draft = resolveDraftInput(text)
     this.cancelCommandRestore()
-    if (draft.references.length === 0) this.draftEditor.setDraft(draft.text)
-    else this.draftEditor.restoreDraft(draft.text, draft.references)
+    if (draft.references.length === 0 && (draft.quotes?.length ?? 0) === 0) this.draftEditor.setDraft(draft.text)
+    else this.draftEditor.restoreDraft(draft.text, draft.references, draft.quotes, { remove: this.deps.quoteRemoveLabel?.() ?? '' })
     if (draft.command === undefined) return
     this.pendingCommand = { token: draft.command.token, rev: this.rev }
     this.restoreCommand()
+  }
+
+  /** @param text - selected transcript text. @returns whether the editable draft accepted the quote. */
+  insertQuote(text: string): boolean {
+    if (this.disposed || this.snapshot.phase !== 'plain' || this.deps.quoteInsertionAllowed?.() === false || text.trim() === '') return false
+    const inserted = this.draftEditor.insertQuote(text.replace(/\r\n?/gu, '\n'), { remove: this.deps.quoteRemoveLabel?.() ?? '' })
+    if (inserted) this.focus()
+    return inserted
   }
 
   /**
@@ -263,7 +282,9 @@ export class SessionInputShell implements SessionInput {
   /** Current semantic document, stable until its content revision changes. */
   get draftSnapshot(): DraftSnapshot {
     if (this.draftSnapshotCache?.revision === this.rev) return this.draftSnapshotCache.value
-    const value = snapshotDraft(this.projection.clipboardText, this.projection.occurrences, this.projection.command?.token)
+    const value = snapshotDraft(
+      this.projection.clipboardText, this.projection.occurrences, this.projection.command?.token, this.projection.quotes,
+    )
     this.draftSnapshotCache = { revision: this.rev, value }
     return value
   }
@@ -391,6 +412,7 @@ export class SessionInputShell implements SessionInput {
       mode,
       draft: this.projection.clipboardText,
       occurrences: [...this.projection.occurrences],
+      quotes: [...this.projection.quotes],
       attachmentIds: [...this.attachmentIds],
       submission,
     })
@@ -685,9 +707,10 @@ export class SessionInputShell implements SessionInput {
   /**
    * Prompt serialization before the sink: expand each chip occurrence of the
    * sent draft to its owner's model form via the session controller's codec
-   * routing, then send it with the attachments captured at Enter. Owner
-   * missing or serialization failure settles the send as failed, which keeps
-   * the draft. Chip-free drafts skip the async detour.
+   * routing and format each quote as Markdown, then send it with the
+   * attachments captured at Enter. Owner missing or serialization failure
+   * settles the send as failed, which keeps the draft. Chip-free drafts skip
+   * the async detour.
    */
   private sinkSerialized(
     attempt: SubmitAttempt,
@@ -695,36 +718,18 @@ export class SessionInputShell implements SessionInput {
     mode: InputSubmitMode,
   ): void {
     this.notifySubmission(attempt.submission)
-    const { occurrences, attachmentIds } = attempt
-    if (occurrences.length === 0) {
-      this.settleSink(attempt, this.deps.defaultSink(draft.trim(), attachmentIds, mode, attempt.signal, () => { this.acceptSink(attempt) }))
-      return
-    }
+    const { occurrences, quotes, attachmentIds } = attempt
     const inputTriggers = this.deps.inputTriggers?.()
-    void Promise.all(occurrences.map(async (o) => {
-      if (inputTriggers === undefined) throw new Error(`no serializer for reference source "${o.source}"`)
-      return {
-        offset: o.offset,
-        length: o.length,
-        text: await inputTriggers.serializeReference(o.source, o.ref, attempt.signal),
-      }
-    })).then(
-      (parts) => {
-        if (this.dead(attempt)) return
-        // Splice model forms over their clipboard ranges (offsets are
-        // clipboard-projection; parts arrive offset-sorted since chips walk in
-        // document order).
-        let out = ''
-        let cursor = 0
-        for (const part of parts) {
-          out += draft.slice(cursor, part.offset) + part.text
-          cursor = part.offset + part.length
-        }
-        out += draft.slice(cursor)
-        this.settleSink(attempt, this.deps.defaultSink(out.trim(), attachmentIds, mode, attempt.signal, () => { this.acceptSink(attempt) }))
-      },
-      (error: unknown) => { this.failSink(attempt, error) },
-    )
+    const prompt = serializeDraftPrompt(snapshotDraft(draft, occurrences, undefined, quotes), async (source, ref) => {
+      if (inputTriggers === undefined) throw new Error(`no serializer for reference source "${source}"`)
+      return inputTriggers.serializeReference(source, ref, attempt.signal)
+    })
+    const send = (text: string): void => {
+      if (this.dead(attempt)) return
+      this.settleSink(attempt, this.deps.defaultSink(text, attachmentIds, mode, attempt.signal, () => { this.acceptSink(attempt) }))
+    }
+    if (!(prompt instanceof Promise)) { send(prompt); return }
+    void prompt.then(send, (error: unknown) => { this.failSink(attempt, error) })
   }
 
   private notifySubmission(submission: MessageSubmission | undefined): void {

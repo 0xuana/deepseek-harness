@@ -9,7 +9,7 @@
  * editing unchanged.
  */
 import type { InputSubmitMode, MessageSubmission } from '../contract/composer-submission.ts'
-import type { Occurrence } from '../contract/draft-editor.ts'
+import type { DraftQuote, Occurrence } from '../contract/draft-editor.ts'
 import type {
   CommandClaim, DraftAttachmentId, InputEffect, InputEvent, InputState, SubmitAttempt,
 } from '../contract/input.ts'
@@ -103,11 +103,12 @@ export class SubmitMachine {
     return []
   }
 
-  /** Occupy the frozen slot with the draft, references, and attachments the user sent. */
+  /** Occupy the frozen slot with the draft, references, quotes, and attachments the user sent. */
   private beginAttempt(
     mode: InputSubmitMode,
     draft: string,
     occurrences: readonly Occurrence[],
+    quotes: readonly DraftQuote[],
     attachmentIds: readonly DraftAttachmentId[],
     submission?: MessageSubmission,
   ): SubmitAttempt {
@@ -118,6 +119,7 @@ export class SubmitMachine {
       signal: controller.signal,
       draftSnapshot: draft,
       occurrences,
+      quotes,
       attachmentIds,
       mode,
       ...submission === undefined ? {} : { submission },
@@ -135,15 +137,15 @@ export class SubmitMachine {
 
   private onEnter(ev: Extract<InputEvent, { type: 'enter' }>): readonly InputEffect[] {
     if (this.phase === 'adjudicating' || this.phase === 'submitting' || this.phase === 'sending') return []
-    const { mode, draft, occurrences, attachmentIds, submission } = ev
+    const { mode, draft, occurrences, quotes, attachmentIds, submission } = ev
     if (this.phase === 'claimed' && this.claim !== undefined) {
-      const attempt = this.beginAttempt(mode, draft, occurrences, attachmentIds, submission)
+      const attempt = this.beginAttempt(mode, draft, occurrences, quotes, attachmentIds, submission)
       this.phase = 'submitting'
       return [{ type: 'begin-submit', attempt, claim: this.claim, args: argsAfter(draft, this.claim.token) }]
     }
     const trimmed = draft.trim()
     if (trimmed === '' && attachmentIds.length === 0) return []
-    const attempt = this.beginAttempt(mode, draft, occurrences, attachmentIds, submission)
+    const attempt = this.beginAttempt(mode, draft, occurrences, quotes, attachmentIds, submission)
     if (trimmed.startsWith('/')) {
       this.phase = 'adjudicating'
       return [{ type: 'adjudicate', attempt, draft }]

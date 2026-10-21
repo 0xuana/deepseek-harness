@@ -11,7 +11,7 @@ import type { SessionBinding } from '@deepseek-ai/dsh-api-session-controller/cli
 import type { InboxState } from '@deepseek-ai/dsh-agent/types'
 import type { ObservableSnapshot, SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { Branded } from '@deepseek-ai/dsh-brand'
-import type { ArbitrateKey, ArbitrateOutcome, Occurrence, ReferenceInsert, TokenSpan } from './draft-editor.ts'
+import type { ArbitrateKey, ArbitrateOutcome, DraftQuote, Occurrence, ReferenceInsert, TokenSpan } from './draft-editor.ts'
 import type { InputSubmitMode, MessageSubmission } from './composer-submission.ts'
 
 /** Attachment payload passed to a claimed command submission. */
@@ -182,6 +182,9 @@ export interface InputTarget {
 
 /** Per-session input facade owned by the conversation wiring layer. */
 export interface SessionInput extends InputTarget {
+  /** Insert selected transcript text as an atomic quote. @param text - nonblank selection. @returns whether editing accepted it. */
+  insertQuote(text: string): boolean
+
   /** Replace the whole draft with plain text, removing inline reference chips. */
   setDraft(text: string): void
   /** Append ordered browser-owned attachment ids; busy admission phases refuse. */
@@ -248,11 +251,13 @@ export type DraftInitializationResult = 'applied' | 'preserved' | 'blocked'
 
 /**
  * The public input action face provided to every session-scope slot
- * component: stable-identity void callbacks, mirroring the
+ * component: stable-identity callbacks, mirroring the
  * useStore+actions convention. Command-style handles (arbitrate/space/
  * paste/…) stay InputBar-private and never ride this face.
  */
 export interface InputActions {
+  /** Insert one nonblank transcript quote. @param text - selected text. @returns whether editing accepted it. */
+  insertQuote(text: string): boolean
   /** @returns a revision-guarded copy of the current editor selection. */
   captureInsertion(): TokenSpan
   /**
@@ -324,6 +329,8 @@ export interface SubmitAttempt {
   readonly draftSnapshot: string
   /** Reference chips of the sent draft, captured with it. */
   readonly occurrences: readonly Occurrence[]
+  /** Quotes of the sent draft, captured with it. */
+  readonly quotes: readonly DraftQuote[]
   /** Attachments of the sent draft, captured with it, in order. */
   readonly attachmentIds: readonly DraftAttachmentId[]
   /** Default-message delivery intent retained while slash adjudication is pending. */
@@ -342,12 +349,13 @@ export type InputEvent =
   | { readonly type: 'draft-changed'; readonly command: CommandClaim | undefined }
   /** The editor inserted a command chip: enter claimed. */
   | { readonly type: 'claim'; readonly claim: CommandClaim }
-  /** Enter submission with the current clipboard projection, its reference chips, and its attachments. */
+  /** Enter submission with the current clipboard projection, its reference chips, its quotes, and its attachments. */
   | {
     readonly type: 'enter'
     readonly mode: InputSubmitMode
     readonly draft: string
     readonly occurrences: readonly Occurrence[]
+    readonly quotes: readonly DraftQuote[]
     readonly attachmentIds: readonly DraftAttachmentId[]
     readonly submission?: MessageSubmission
   }
