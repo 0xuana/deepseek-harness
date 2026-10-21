@@ -1,0 +1,342 @@
+[
+  {
+    "id": "ongoing_personal_record_default",
+    "prompt": "本周的阅读记录：周一 20 页、周二 35 页、周三 15 页。先帮我总结一下。我每周都会回来看，而且想自己补后面的每天页数。",
+    "expected": "Complete the summary first. An optional reading tracker defaults to sidebar-left because it is an ongoing personal record, even without an explicit cross-Session requirement. Preserve the supplied values; do not infer automated collection."
+  },
+  {
+    "id": "task_record_default",
+    "prompt": "这次任务的验收项是空列表提示、刷新保留数据、深色模式可读。我只想在当前会话里打勾记录进度，先给页面方案。",
+    "expected": "Offer one sidebar-right card for this Session's checklist, preserving all three items. Do not turn the explicitly Session-bound checklist into a global personal tracker."
+  },
+  {
+    "id": "personal_record_explicit_right",
+    "prompt": "想持续记录自己每天读了多少页，手动输入就好。虽然会一直用，但这次请明确放在当前会话右侧，先给方案。",
+    "expected": "Offer one sidebar-right card. The user's explicit location takes precedence over the default global placement of ongoing personal records."
+  },
+  {
+    "id": "explicit_one_off_calculator",
+    "prompt": "我只在今天这次讨论里用：想在右侧放一个报价计算器，输入单价和数量就显示总价。不需要保存历史，也不打算以后再用。先给我方案。",
+    "expected": "Load personalized-pages and offer one sidebar-right card. An explicitly requested one-off interface qualifies without repeated use, changing data or independence from the Session. Keep only the requested calculation; no creation before click."
+  },
+  {
+    "id": "explicit_one_off_visual_page",
+    "prompt": "把这两种方案做成一个方便并排看的对比页面，放当前会话右侧：A 方案成本 2 万、耗时 3 天；B 方案成本 3 万、耗时 2 天。只看这一次，不要加编辑、筛选或自动更新。",
+    "expected": "Offer one sidebar-right comparison page. A requested visual page does not require interaction or future reuse. Carry the two supplied rows in initialContent without adding a currency unit or extra controls."
+  },
+  {
+    "id": "edit_existing_page",
+    "prompt": "我之前已经做了一个读书记录页面。现在想把原页面里的数字评分改成五星选择，其他都保持原样。你先说一下这个改动怎么做。",
+    "expected": "Discuss changing the existing page; do not offer create_personalized_page, make a replacement copy or claim an update occurred. Do not invent the original schema, score range or existing controls. Ask for source or location only when needed for implementation."
+  },
+  {
+    "id": "proposal_with_unverified_source",
+    "prompt": "想在当前会话右侧看我的构建状态，来源是我自己的构建 API，接口地址还没整理好。先只给一个页面方案，不要开始实现，也不用现在检查接口。",
+    "expected": "Offer one minimal sidebar-right plan using the requested but unverified API source. No workspace, source or API probe just to propose the page; no invented response schema or update schedule. Creator verifies the source after authorization."
+  },
+  {
+    "id": "wish_counter",
+    "prompt": "我想要一个一直留在右侧栏的小计数器，可以加一和归零，还能保存数字。",
+    "expected": "Load personalized-pages skill then write one dsh-action block for create_personalized_page sidebar-right; no generation before click."
+  },
+  {
+    "id": "session_viewer",
+    "prompt": "我想在当前 Session 里查看这轮的 Context 组成，有现成的查看器吗？",
+    "expected": "Existing-feature question: do not load personalized-pages or offer a creation card. Answer from available product knowledge or feature-discovery capabilities without inventing what the catalog confirms."
+  },
+  {
+    "id": "global_page",
+    "prompt": "我想要一个全局个人读书清单，所有会话共用，能增删书名和标记读完，重启也保存。",
+    "expected": "Load personalized-pages skill; prefer existing if suitable, otherwise write one dsh-action block for create_personalized_page sidebar-left: global main-area page with a left entry, without Chat/Trajectory tabs."
+  },
+  {
+    "id": "global_streaming",
+    "prompt": "我想要一个全局翻译练习工具，所有会话共用，在专门的界面流式给我讲解和纠错，左边能随时打开。",
+    "expected": "Load personalized-pages skill; prefer existing if suitable, otherwise write one dsh-action block for create_personalized_page sidebar-left: global main-area page with a left entry, without Chat/Trajectory tabs."
+  },
+  {
+    "id": "session_streaming",
+    "prompt": "我想针对当前 Session 的代码做一个专用对话界面，持续流式解释和问答，内容跟着当前 Session。",
+    "expected": "Load personalized-pages skill; if generating, write one dsh-action block for create_personalized_page page: Session-bound tab beside Chat/Trajectory, preserving both."
+  },
+  {
+    "id": "defer_creation",
+    "prompt": "我想要右侧计数器，但这次只讨论可行性，不要推荐插件或创建入口。",
+    "expected": "Discussion only; no card, generation or source investigation. A redundant skill lookup is recorded separately as unnecessary discovery."
+  },
+  {
+    "id": "two_cards_ambiguous_counter",
+    "setup": "Both experiments enabled; badge disabled.",
+    "prompt": "我需要每个 PR 的 DSH 标识，以及一个右侧栏计数器。请给两个入口：已有插件一张卡，创造一张卡，但先别执行。",
+    "expected": "Exactly one badge proposal, no rejected extra call. Explain the remaining need and clarify what to count; do not invent PR aggregation or promise an automatic later card."
+  },
+  {
+    "id": "creation_first_without_priority",
+    "setup": "Both experiments enabled; badge disabled.",
+    "prompt": "我想在当前会话右侧放一个手动小成就计数器，能加一、归零并按会话保存。另外我希望每个 PR 都有 DSH 标识。这两个都给我入口，先不要执行。",
+    "expected": "Choose the existing badge plugin despite mention order; discuss the independent counter without proposing a second card or claiming it exists."
+  },
+  {
+    "id": "explicit_creation_priority",
+    "setup": "Both experiments enabled; badge disabled.",
+    "prompt": "我希望每个 PR 都有 DSH 标识，也想在当前会话右侧放一个手动小成就计数器，能加一、归零并按会话保存。这轮优先给计数器的创建方案入口，徽章暂时只说明，不要执行。",
+    "expected": "Exactly one dsh-action block for create_personalized_page sidebar-right for the manual counter; no badge proposal and no generation before clicking Create."
+  },
+  {
+    "id": "later_independent_need",
+    "setup": "Same conversation after a badge-only recommendation; both experiments enabled.",
+    "prompt": "现在给计数器方案：当前会话右侧的手动小成就计数器，可以加一、归零并按会话保存，先不要创建。",
+    "expected": "One creation card in the new turn, without a turn-limit rejection or requiring badge activation; preserve manual counting and per-Session data."
+  },
+  {
+    "id": "reusable_tracker",
+    "prompt": "我想要一个能反复打开的每周任务页面，左侧有入口。任务我手动添加，能打勾，所有会话共用并本地保存。先给方案。",
+    "expected": "Check existing plugins, then one minimal sidebar-left proposal if no suitable capability exists. No implementation questionnaire or generation before clicking Create. Keep the brief short; do not invent scheduled clearing of completed tasks."
+  },
+  {
+    "id": "interactive_json_viewer",
+    "prompt": "我想在当前会话右边留一个 JSON 查看器，我手动粘贴数据，能搜索和展开字段，切回来保留内容。先给方案，不要开始创建。",
+    "expected": "Check the catalog without inspecting source or workspace files. Use an existing suitable capability, otherwise propose a minimal sidebar-right viewer with per-Session state. A plan-only or do-not-generate request still permits the card; do not demand a text confirmation before offering it."
+  },
+  {
+    "id": "background_creation_and_current_answer",
+    "prompt": "我想在当前会话右侧放个手动计数器，有加一和归零，按会话保存。请给创建入口；点创建以后我还能继续在这里聊天吗？顺便先告诉我 17 加 25 是多少。",
+    "expected": "Answer 42, explain that clicking Create starts background work while chat remains available, and offer one counter card. Do not claim work has started, ask for a mode switch, poll, or wait for completion."
+  },
+  {
+    "id": "one_off_static_table",
+    "prompt": "今天三项任务已完成两项，帮我算完成率，列个简短表格就好。",
+    "expected": "Answer approximately 66.7% with a short table; no catalog lookup or creation card."
+  },
+  {
+    "id": "reusable_result_without_page_request",
+    "prompt": "我每天都会在这个会话里跟进这些项目：登录改造进行中，负责人小陈；埋点修复待开始，负责人小李；文档更新已完成，负责人小王。以后状态变了我会手动更新，先帮我整理成状态表，指出当前要关注的项。",
+    "expected": "Answer the status question first in the final answer. May offer one optional minimal Session-local tracker using this known manual data; no invented integration, automatic generation or extra research. An incidental table alone is insufficient."
+  },
+  {
+    "id": "recurring_result_declines_page",
+    "prompt": "我每天手动更新项目状态：登录改造进行中，埋点修复待开始，文档更新已完成。帮我整理状态表，这次只看表格，不要推荐页面或插件。",
+    "expected": "Answer with the status table and no lookup or card despite recurring data."
+  },
+  {
+    "id": "existing_plugin_without_recommendation_experiment",
+    "setup": "Only personalized pages is enabled; thinking translation is disabled.",
+    "prompt": "我希望模型思考过程能是中文的，目前有时候是英文的。",
+    "expected": "A display-language preference alone does not request a reusable page. Do not load personalized-pages or offer a creation card. Existing-plugin discovery belongs to its own capability, when available."
+  },
+  {
+    "id": "manual_history_lookup",
+    "prompt": "我只想自己在左边搜索上周聊过的内容，不需要你替我查询，怎么打开？",
+    "expected": "Existing-feature usage question: no personalized-pages load or creation card. Do not use page planning to discover how manual search works."
+  },
+  {
+    "id": "existing_enabled_plugin",
+    "setup": "Only personalized pages and thinking translation enabled.",
+    "prompt": "展开的英文推理看着费劲，我想直接读中文，有现成功能吗？",
+    "expected": "Existing-feature question: no personalized-pages load or creation card, regardless of plugin enabled state."
+  },
+  {
+    "id": "personal_budget_page",
+    "prompt": "我想要一个以后能反复打开的家庭月度预算页面，左边有入口。我自己填收入和每类支出，显示本月剩余额度，数据本地保存，所有会话共用。先给方案，别开始做。",
+    "expected": "Load personalized-pages, check existing capabilities and offer one minimal sidebar-left page. Cover the personal task without requiring DSH-specific functionality or starting generation."
+  },
+  {
+    "id": "existing_badge_question",
+    "prompt": "DSH 有没有给 PR 加标识的现成功能？在哪里打开？",
+    "expected": "Existing-feature question: no personalized-pages load or creation card."
+  },
+  {
+    "id": "duplicate_page_need",
+    "setup": "Only personalized pages is enabled; thinking translation is disabled.",
+    "prompt": "我想做一个能反复用的小工具，唯一功能就是把会话里展开的英文思考内容翻译成中文。先给方案，如果现有插件已经能做到就直接告诉我，不要重复造。",
+    "expected": "Page intent loads personalized-pages, then its live catalog identifies thinking translation. Explain the existing option instead of issuing a duplicate creation card; do not build or enable anything."
+  },
+  {
+    "id": "partial_match_page_need",
+    "prompt": "我需要一个反复使用的翻译练习页面：我自己粘贴英文邮件，输入中文译文，保存多次练习记录，所有会话共用。只给方案，不需要翻译模型的思考内容。",
+    "expected": "Load personalized-pages and offer one sidebar-left practice page. An existing thinking-display translation plugin does not satisfy user-supplied mail practice and saved attempts."
+  },
+  {
+    "id": "ordinary_coding",
+    "prompt": "给我一个 TypeScript 函数，接收数字数组并返回平均值；空数组返回 null。只贴代码。",
+    "expected": "Answer the coding request without personalized-pages, a plugin-catalog lookup or a creation card."
+  },
+  {
+    "id": "data_projects",
+    "prompt": "把这些已有数据做成当前会话右侧可反复查看、手动改状态的小页面：登录改造进行中，小陈负责；埋点修复待开始，小李负责；文档更新已完成，小王负责。先给方案，不要开始创建。",
+    "expected": "Short brief plus initialContent preserves all three project/owner/status triples; no generation before click."
+  },
+  {
+    "id": "data_budget",
+    "prompt": "我想要左侧打开的全局月度预算页，能手动改金额并显示余额。本月数据：收入12000元、房租3500元、餐饮1800元、通勤320元。用这些数值初始化，之后本地保存，先给方案不要做。",
+    "expected": "sidebar-left; initialContent preserves the four supplied amounts and units; no invented category or extra automation."
+  },
+  {
+    "id": "cancelled_status_question",
+    "setup": "Offer a counter, click Create, then Cancel before installation. Wait for the cancelled receipt.",
+    "prompt": "刚才那个计数器现在是什么状态？我需要做什么？",
+    "expected": "Report that background generation was cancelled before installation. Direct any retry to the existing card; no replacement proposal or automatic restart."
+  },
+  {
+    "id": "wish_research",
+    "prompt": "我已经整理了几份竞品资料，但每次都得翻聊天才能找到，太麻烦了。我想以后随时能打开看，也能自己补充链接。",
+    "expected": "One minimal empty editable global page card, manual link entry, no promised automatic import or request for old material."
+  },
+  {
+    "id": "solo_checklist",
+    "prompt": "把这次讨论的验收清单一直放在这个会话旁边，我做完一项勾一项：检查空列表提示、验证刷新后数据保留、检查深色模式文字可读。",
+    "expected": "One sidebar-right card; preserve three supplied items; no assignees, collaboration, execution or invented items."
+  },
+  {
+    "id": "solo_reading",
+    "prompt": "我想有个自己的读书记录，换个会话也能接着记。我自己填书名和一句读后感就够了。",
+    "expected": "One sidebar-left card; only title and short personal note with local persistence; no ratings, dates or collaboration."
+  },
+  {
+    "id": "streaming_logs",
+    "prompt": "我在当前会话跑一个本地任务时，想边看实时日志边继续聊天，日志是这个任务已经输出的内容，不要新执行命令。能给我一个这样的界面方案吗？",
+    "expected": "One sidebar-right card because watching while chatting requires simultaneous visibility; preserve source and no-new-command constraint."
+  },
+  {
+    "id": "streaming_logs_tab",
+    "prompt": "我想给当前会话加一个实时日志视图，持续显示本地任务已经输出的日志，方便单独打开查看，不要重新执行任务。",
+    "expected": "One page/session-tab card; preserve the current task source and no-execution constraint. Streaming alone does not imply simultaneous visibility with Chat."
+  },
+  {
+    "id": "ordinary_email",
+    "prompt": "帮我写一封简短邮件：告诉同事明天下午三点开项目复盘会，请提前准备遇到的问题。",
+    "expected": "Draft the email; no page skill, card or sending action."
+  },
+  {
+    "id": "ordinary_code",
+    "prompt": "JavaScript 里怎么把一个字符串数组去重？给我最简单的写法和一行解释。",
+    "expected": "Answer the coding question directly; no page skill or card."
+  },
+  {
+    "id": "ordinary_meeting_notes",
+    "prompt": "把这几条会议记录整理成简短纪要：登录页周三上线，埋点还缺两个事件，验收先检查支付流程。",
+    "expected": "Organize the supplied notes; no page skill or card for this one-off text task."
+  },
+  {
+    "id": "ordinary_table",
+    "prompt": "帮我把三个方案排成表格：A 每月 20 元支持 5 个项目，B 每月 40 元支持 20 个项目，C 每月 60 元不限项目。",
+    "expected": "Return the comparison table from supplied values; an incidental table alone does not justify a page skill or card."
+  },
+  {
+    "id": "report_dashboard",
+    "prompt": "我每周都会在这个会话更新活动数据。这三周报名人数分别为120、150、135，实际到场人数分别为90、105、108。帮我写个简短趋势报告，算一下到场率，说说变化。",
+    "expected": "Complete report first with rates 75%,70%,80%; optional reusable dashboard card with exact six values and units, no assignees or automatic data collection."
+  },
+  {
+    "id": "text_only_checklist",
+    "prompt": "帮我整理验收清单：空列表提示、刷新保留数据、深色模式文字可读。先给文字清单，不要做页面也不要推荐创建。",
+    "expected": "Normal text response, no card or creation."
+  },
+  {
+    "id": "quoted_wish",
+    "prompt": "把这句话译成英文：“我想做一个所有会话都能打开的读书记录页面。”只要译文。",
+    "expected": "Translation only; no personalized-pages skill or card."
+  },
+  {
+    "id": "oneoff_report",
+    "prompt": "下面这三周报名人数是120、150、135，实际到场人数是90、105、108。帮我写一段100字左右的总结，我看完就存进报告，这次不用做别的。",
+    "expected": "One-off report: normal answer, no page card."
+  },
+  {
+    "id": "prefill_missing",
+    "prompt": "把我昨天另一个会话里整理的所有竞品资料，完整预填到一个全局资料页。每条原链接和备注都必须保留；不要给空页面。",
+    "expected": "Clarify missing source content, no invented data or empty-page card."
+  },
+  {
+    "id": "implicit_training",
+    "prompt": "我每周都记跑步训练，可记录散在不同聊天里，很难回头比较。想有个一直能打开的地方，我自己填每次的距离和用时。",
+    "expected": "Recognize implicit recurring need; one global manual-entry record, no invented workout data, automation or extra required fields."
+  },
+  {
+    "id": "unstarted_card_replacement",
+    "setup": "Offer a page but do not click Create. Send a follow-up user message, then ask for a changed plan in a later turn.",
+    "prompt": "刚才的方案改成只在当前会话使用。",
+    "expected": "Keep the unstarted card available across follow-up messages. The next proposal replaces it: the old card shows Replaced and refuses stale Create calls. Refresh or background context never changes a card; started or cancelled runs retain retry."
+  },
+  {
+    "id": "artifact_html_file",
+    "prompt": "帮我写一个能离线打开的 HTML 单文件，用来输入摄氏度并换算华氏度。我会自己保存到电脑上，给我完整代码。",
+    "expected": "Return a self-contained HTML file/code; no personalized-pages skill or plugin-installation proposal."
+  },
+  {
+    "id": "artifact_svg_diagram",
+    "prompt": "请给我一张 SVG 流程图：读取文件 → 校验格式 → 保存结果。把完整 SVG 代码发我，放进现有文档。",
+    "expected": "Provide requested SVG code; no page-installation proposal."
+  },
+  {
+    "id": "artifact_recurring_meal_record",
+    "prompt": "我每周都要回来补记午饭花费，想慢慢比较。本周周一23元、周二18元、周三26元，先帮我算总计，整理成表。",
+    "expected": "Answer 67元 and a table; may offer a global manual record for continued entry/comparison, preserving three values and not promising automatic collection."
+  },
+  {
+    "id": "artifact_handoff_context",
+    "prompt": "现在把这些做成当前会话右侧的小页面，我能手动切换这两种状态。先给方案。",
+    "expected": "Turn1 list only. Turn2 right card with exact two items/states and meaningful labels; brief and initialContent define what “回看项” means without needing previous chat.",
+    "setup": "Earlier user message: 我们这里把需要复查的条目叫“回看项”。当前有两条：登录跳转（待查），空列表提示（已确认）。先帮我原样列出来。"
+  },
+  {
+    "id": "dsh_ui_customization_addition",
+    "prompt": "在 DSH 的会话页面旁边留个验收清单吧：空列表提示、刷新后保留数据、深色模式文字可读。我边聊边一项项打勾。",
+    "expected": "Recognize DSH UI customization without asking the user to select Creator mode. One sidebar-right proposal with exact checklist, no source edits or creation before click."
+  },
+  {
+    "id": "minimal_link_collection",
+    "prompt": "每次要找竞品资料都得翻聊天，挺麻烦的。要是能把标题和网址放在一个一直能打开的地方，之后我自己再加链接，就方便了。以前的不用帮我搬过来。",
+    "expected": "Offer one sidebar-left card for adding title/URL entries and saving them across Sessions, starting empty. Necessary validation is allowed; independent editing/deletion, import or automation is not implied. Omit initialContent; keep the answer to a short invitation."
+  },
+  {
+    "id": "checklist_data_not_behavior",
+    "prompt": "我想一边在这个对话里聊，一边看到能打勾的小面板，记录本次验收。内容是「登录失败时提示正确」「刷新后输入保留」「深色模式文字清楚」，只需要勾选和取消勾选，随当前会话保留状态。先让我确认方案再创建。",
+    "expected": "One sidebar-right card. brief contains check/uncheck and Session persistence; initialContent contains exactly the three supplied items as content, without page behavior/storage instructions. Preserve the item wording without turning it into page requirements."
+  },
+  {
+    "id": "weekly_additions_not_backlog",
+    "prompt": "请先写一段简短的竞品资料整理周报：上周 A 产品收集了 12 条资料、读完 5 条，B 产品收集了 8 条、读完 2 条。以后我每周会回来手动更新这些数字，看看积压有没有减少。",
+    "expected": "Complete the short report preserving 上周 and the four counts. Before proposing a backlog calculation, clarify whether the figures are weekly additions/completions or cumulative totals. Do not infer total backlog or a decreasing trend from these numbers. A clarification without a card is correct."
+  },
+  {
+    "id": "weekly_snapshot_handoff",
+    "prompt": "这周要汇报竞品资料进度：A 有 12 条资料，其中 5 条已读；B 有 8 条，其中 2 条已读。先给我简短总结，今后每周我再手动录入新数字，跟踪未读资料的变化。",
+    "expected": "Complete the concise summary. A sidebar-left tracker is optional. If proposed, brief contains manual weekly entry, total minus read and comparison of saved records; initialContent contains only this week’s original A/B totals and read counts. Do not add reading-rate features or mix formula instructions into source content."
+  },
+  {
+    "id": "requested_editing_and_filtering",
+    "prompt": "能给我一个自己的读书小工具吗？从左边打开，填书名、全书多少页、读到多少页；以后每周都回来补进度，也能只看没读完的。数据留在本机。现在先让我看看方案，别开始生成。",
+    "expected": "One sidebar-left card for the explicitly requested title/total-pages/current-page entry, progress updates, unfinished filter and local persistence. Do not omit requested editing/filtering when applying minimal scope, or add unrelated operations. No initialContent for an empty page."
+  },
+  {
+    "id": "ordinary_summary_no_card",
+    "prompt": "这次只需要一段三句话的汇报文字：A 的资料总数 12、读完 5，B 的总数 8、读完 2。帮我说清目前整理进度。",
+    "expected": "Three concise Chinese sentences summarizing the supplied values. No planning Skill, card or implementation work; the static summary alone does not qualify for a page."
+  },
+  {
+    "id": "equipment_stock",
+    "prompt": "想在左侧有一个设备借用小页面。我自己填设备名、总台数和已借台数，之后改已借数量，只看当前还有几台可借，数据保存在本机。先给方案。",
+    "expected": "Current stock maintenance: add equipment, update borrowed count, display total minus borrowed, local persistence. No borrower identities, reminders, reservations, lending history, or automatic data collection. No initialContent."
+  },
+  {
+    "id": "source_words",
+    "prompt": "把这两条测试名称放到当前会话右侧，只做一个可以打勾、取消勾选的清单，状态跟着会话保存：甲「点击删除后能恢复」；乙「不登录也能查看」。这是要展示的测试名称，先给方案。",
+    "expected": "Preserve the two test names as source data; no delete/recovery or login behavior in brief, no checkbox/storage instructions in initialContent. Exactly one sidebar-right card."
+  },
+  {
+    "id": "cost_snapshot",
+    "prompt": "截至9月30日，旅行预算累计3000元，已支出1800元；学习预算累计1200元，已支出400元。先给两句总结。以后每个月我会手动填一次累计预算和累计支出，想比较还剩多少。",
+    "expected": "Two-sentence summary: budget 4200, spent 2200, remaining 2000; no invented year or trend. Optional global tracker preserving September 30 and four supplied CNY amounts as data; calculation/monthly entry in brief, no duplicate-content instructions or automatic import."
+  },
+  {
+    "id": "explicit_log_tab_routing",
+    "prompt": "给当前会话一个实时日志 Tab，和对话、轨迹并列。读取工作区 task.log 并持续展示，切到 Tab 再看即可。",
+    "expected": "Load personalized-pages and propose one page-slot card. Planning from the named but uninspected file does not require browsing the workspace. Do not mistake a new Session tab for editing an existing page or start implementation before the card is clicked."
+  },
+  {
+    "id": "reading_source_dates",
+    "prompt": "先简要整理我的阅读记录：10月7日累计读了30页，10月14日累计读了55页。我以后每周还会回来补累计页数，希望能自己输入并看变化。",
+    "expected": "Summarize the two cumulative readings and their 25-page increase; offer a global manual tracker. Keep the two original dates and values in initialContent without inventing a year, and keep entry, persistence and calculation instructions in brief."
+  }
+]

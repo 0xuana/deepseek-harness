@@ -332,6 +332,7 @@ export default defineConfig({
         // exercises the built entry, while source tests cover mountVoiceInput.
         'packages/experimental/client-ui-voice-input/src/client/index.ts',
         // Built Web replay covers generated recommendation Remote wiring; mount.ts is source-covered.
+        'packages/experimental/client-ui-creation-recommendations/src/client/index.ts',
         'packages/experimental/client-ui-plugin-recommendations/src/client/index.ts',
         // The permission entry binds generated Remote code; cua-permissions.e2e.ts covers
         // its built entry, while source tests exercise mountCuaPermissions and its UI.

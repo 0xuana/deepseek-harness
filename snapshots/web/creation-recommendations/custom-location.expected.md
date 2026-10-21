@@ -1,0 +1,14 @@
+- region "Personalized pages":
+  - text: Personalized pages
+  - button "How creation works and token usage"
+  - strong: Counter
+  - paragraph: "Need: Keep a small counter visible across conversations. Location: A card titled…"
+  - button "View full plan"
+  - text: Add to
+  - 'button "Add to: Write your own"': Write your own
+  - text: Where should it appear?
+  - textbox "Where should it appear?":
+    - /placeholder: For example, a left sidebar entry that opens a full-page calendar
+    - text: A left sidebar entry that opens a full-page calendar
+  - button "Not now"
+  - button "Create"

@@ -554,6 +554,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       'client-ui-deliverables DeliverablesTail id \'@deepseek-ai/dsh-client-ui-deliverables\'',
       'client-ui-plan PlanCards',
       'client-ui-schedule ScheduleTurnCard id \'schedule-created\'',
+      'experimental-client-ui-creation-recommendations RecommendationTail id \'creation-recommendation\'',
       'experimental-client-ui-plugin-recommendations RecommendationTail id \'plugin-recommendation\'',
     ],
     replaceRisk: 'none',

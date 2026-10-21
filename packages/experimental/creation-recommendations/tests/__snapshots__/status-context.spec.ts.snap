@@ -1,0 +1,11 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`reports the latest card status on the next request without waking the conversation > cancelled page status 1`] = `
+[
+  {
+    "text": "Latest personalized page status from card actions and background creation. These are status facts, not a request to start or retry work. Use these receipts instead of the earlier proposal when describing progress. Cancelled means a started background creation was stopped before installation. Cancelled, failed or interrupted runs can be retried from their existing card; no new proposal is needed. Continue with the user’s current request.
+[{"callId":"block:creation-1","title":"Counter","phase":"cancelled","slot":"page"}]",
+    "type": "text",
+  },
+]
+`;

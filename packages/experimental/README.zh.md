@@ -36,6 +36,8 @@ kind: "package-group"
 
 | 包 | 职责 | ctx 键 |
 |---|---|---|
+| [`creation-recommendations`](creation-recommendations/README.zh.md) | 针对明确需求创建持续可用、可移除的界面插件 | `ctx.creationRecommendations` |
+| [`client-ui-creation-recommendations`](client-ui-creation-recommendations/README.zh.md) | 回答末尾的创建卡片、位置选择和撤销 | — |
 | [`plugin-recommendations`](plugin-recommendations/README.zh.md) | 针对明确需求在会话内推荐官方插件 | `ctx.pluginRecommendations` |
 | [`client-ui-plugin-recommendations`](client-ui-plugin-recommendations/README.zh.md) | 回答末尾的推荐卡片和用户操作 | — |
 | [`tool-session-query`](tool-session-query/README.zh.md) | 按工作区授权的模型会话搜索、追踪与事件读取 | — |

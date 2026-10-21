@@ -7,9 +7,9 @@ A service can be a core spine service, a swappable capability seam, a bundle/com
 
 ```mermaid
 flowchart LR
-  pkg_experimental_plugin_recommendations["experimental-plugin-recommendations"]
-  svc_pluginRecommendations["ctx.pluginRecommendations<br/>Explicit-need plugin recommendations"]
-  pkg_experimental_client_ui_plugin_recommendations["experimental-client-ui-plugin-recommendations"]
+  pkg_experimental_creation_recommendations["experimental-creation-recommendations"]
+  svc_creationRecommendations["ctx.creationRecommendations<br/>Explicit-need interface creation"]
+  pkg_experimental_client_ui_creation_recommendations["experimental-client-ui-creation-recommendations"]
   pkg_headless["headless"]
   svc_headlessStartup["ctx.headlessStartup<br/>Headless invocation options"]
   pkg_experimental_client_ui_cot_translation["experimental-client-ui-cot-translation"]
@@ -353,7 +353,7 @@ flowchart LR
   pkg_experimental_client_ui_cot_translation --> svc_cotTranslation
   pkg_experimental_computer_use_cua_driver_mcp --> svc_computerUse
   pkg_experimental_computer_use_cua_driver_native --> svc_computerUse
-  pkg_experimental_plugin_recommendations --> svc_pluginRecommendations
+  pkg_experimental_creation_recommendations --> svc_creationRecommendations
   pkg_experimental_ptc_runtime_python --> svc_ptcRuntime
   pkg_experimental_speech_to_text --> svc_speechToText
   pkg_experimental_speech_to_text_sensevoice --> svc_speechToText
@@ -489,6 +489,7 @@ flowchart LR
   svc_connection --> pkg_api_gateway
   svc_connection --> pkg_host_frontend_static
   svc_cordisInspect --> pkg_tool_cordis
+  svc_creationRecommendations --> pkg_experimental_client_ui_creation_recommendations
   svc_credentials --> pkg_api_settings_controller
   svc_credentials --> pkg_llm_deepseek
   svc_credentials --> pkg_llm_pi_ai
@@ -519,7 +520,6 @@ flowchart LR
   svc_pluginManager --> pkg_ui_settings_plugin_inventory
   svc_pluginMarket --> pkg_client_ui_plugin_market
   svc_pluginMarket --> pkg_plugin_market
-  svc_pluginRecommendations --> pkg_experimental_client_ui_plugin_recommendations
   svc_pluginRegistryProbe --> pkg_client_ui_plugin_manager
   svc_profileContext --> pkg_plugin_manager
   svc_ptcRuntime --> pkg_tool_executor_ptc
@@ -624,7 +624,7 @@ flowchart LR
 
 | ctx key | Role | Owner | Implementations | Direct consumers | Companion plugins | Note |
 | --- | --- | --- | --- | --- | --- | --- |
-| `ctx.pluginRecommendations` | `service` | [`experimental-plugin-recommendations`](../packages/experimental/plugin-recommendations) | - | [`experimental-client-ui-plugin-recommendations`](../packages/experimental/client-ui-plugin-recommendations) | - | Offers official catalog entries and records explicit user activation through the profile plugin manager. |
+| `ctx.creationRecommendations` | `service` | [`experimental-creation-recommendations`](../packages/experimental/creation-recommendations) | - | [`experimental-client-ui-creation-recommendations`](../packages/experimental/client-ui-creation-recommendations) | - | Starts a Creator after a human choice and owns installation and removal of the new bundle. |
 | `ctx.headlessStartup` | `core` | [`headless`](../packages/bundle/headless) | - | [`headless`](../packages/bundle/headless) | - | Supplies parsed task and run options to the headless runner and its sandbox-policy configuration. |
 | `ctx.cotTranslation` | `service` | [`experimental-client-ui-cot-translation`](../packages/experimental/client-ui-cot-translation) | - | - | - | Serves reasoning translations, reuses saved results, and joins ordinary Session activation for uncached inactive Sessions. |
 | `ctx.translator` | `service` | [`experimental-translator`](../packages/experimental/translator) | - | [`experimental-client-ui-cot-translation`](../packages/experimental/client-ui-cot-translation) | - | Resolves Google or Bing requests and retains shared experimental records through the active Session writer. |

@@ -1,0 +1,61 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "references": [
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../typert/protocol"
+    },
+    {
+      "path": "../../llm/llm"
+    },
+    {
+      "path": "../../core/tools"
+    },
+    { "path": "../../core/tool-executor-ptc" },
+    { "path": "../../test-support/tool-testkit" },
+    {
+      "path": "../../core/agent"
+    },
+    {
+      "path": "../../core/session"
+    },
+    {
+      "path": "../../session/session-projection"
+    },
+    {
+      "path": "../../boot/plugin-manager"
+    },
+    {
+      "path": "../../util/package-manifest"
+    },
+    {
+      "path": "../../api/remote-access/tsconfig.host.json"
+    },
+    {
+      "path": "../../subagent/subagent"
+    },
+    {
+      "path": "../../boot/app-boot"
+    },
+    {
+      "path": "../../skill/skill"
+    },
+    {
+      "path": "../../util/values"
+    }
+  ],
+  "files": [
+    "src/index.ts",
+    "src/types.ts",
+    "src/projection.ts",
+    "src/generated-bundle.ts",
+    "src/skill.ts",
+    "src/action-block.ts"
+  ]
+}

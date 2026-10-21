@@ -1219,6 +1219,7 @@ describe('PluginManagerPage', () => {
 
     it.each([
       '@deepseek-ai/dsh-experimental-session-titles-bundle',
+      '@deepseek-ai/dsh-experimental-creation-recommendations',
       '@deepseek-ai/dsh-experimental-plugin-recommendations',
     ])('returns %s details to the secondary page and retains it across React remounts', (name) => {
       const b = renderTab({ packages: [pkg({ name, official: true, enabled: false })] })
@@ -1237,6 +1238,7 @@ describe('PluginManagerPage', () => {
 
     it.each([
       '@deepseek-ai/dsh-experimental-tool-worktree',
+      '@deepseek-ai/dsh-experimental-creation-recommendations',
       '@deepseek-ai/dsh-experimental-plugin-recommendations',
     ])('pins enabled %s onto the main list and removes it when disabled', (first) => {
       const team = '@deepseek-ai/dsh-experimental-agent-team-profile'

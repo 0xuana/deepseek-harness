@@ -36,6 +36,8 @@ Promotion requires a named product role, documented public behavior and limitati
 
 | Package | Role | ctx key |
 |---|---|---|
+| [`creation-recommendations`](creation-recommendations/README.md) | Explicit-need creation of persistent removable interface plugins | `ctx.creationRecommendations` |
+| [`client-ui-creation-recommendations`](client-ui-creation-recommendations/README.md) | Completed-answer creation cards with location selection and undo | — |
 | [`plugin-recommendations`](plugin-recommendations/README.md) | Explicit-need official plugin recommendations in conversations | `ctx.pluginRecommendations` |
 | [`client-ui-plugin-recommendations`](client-ui-plugin-recommendations/README.md) | Completed-answer recommendation cards and user choices | — |
 | [`tool-session-query`](tool-session-query/README.md) | Workspace-authorized model session search, trace, and event reads | — |

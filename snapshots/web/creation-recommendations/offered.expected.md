@@ -1,0 +1,15 @@
+- region "Personalized pages":
+  - text: Personalized pages
+  - button "How creation works and token usage" [expanded]
+  - note:
+    - paragraph: Creator mode builds a new page you can remove at any time.
+    - paragraph:
+      - strong: Creation may take a while and use a large number of tokens.
+    - paragraph: Click Create to start in the background. You can keep chatting here.
+  - strong: Counter
+  - paragraph: "Need: Keep a small counter visible across conversations. Location: A card titled…"
+  - button "View full plan"
+  - text: Add to
+  - 'button "Add to: Right sidebar"': Right sidebar
+  - button "Not now"
+  - button "Create"

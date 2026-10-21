@@ -1,0 +1,8 @@
+- region "Personalized pages":
+  - text: Personalized pages
+  - button "How creation works and token usage"
+  - status: Dismissed
+  - strong: Counter
+  - paragraph: "Need: Keep a small counter visible across conversations. Location: A card titled…"
+  - button "View full plan"
+  - paragraph: Add to · Session tab
