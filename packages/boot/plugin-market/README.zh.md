@@ -1,5 +1,5 @@
 ---
-description: "读取用户配置的插件市场索引的 Host 服务，提供安装状态、兼容性以及只读的 plugin_market 工具。"
+description: "读取用户配置的插件索引的 Host 服务，提供安装状态、兼容性以及只读的 plugin_market 工具。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`pluginMarket` 读取用户配置的插件市场索引，用 [`dsh-plugin-market-index`](../../util/plugin-market-index/README.zh.md) 校验，并为每个条目标注 profile 中的安装状态、DSH 兼容性以及安装它所需的精确参数。它还为发现区的条目页面读取每个市场条目的详细介绍，即一份带图片的 Markdown 文档。Web 的[发现标签页](../../client/ui-plugin-market/README.zh.md)和 `plugin_market` agent 工具通过它读取；安装本身经由 [`pluginManager.installBundle`](../plugin-manager/README.zh.md) 进行。格式及其理由见[索引格式 Agent Note](../../../.agents/notes/implemented/feature/2026-10-02-plugin-market-index-format.zh.md)；Host 与 Web 的设计见[发现 Agent Note](../../../.agents/notes/implemented/feature/2026-10-02-plugin-market-discover.zh.md)。
+`pluginMarket` 读取用户配置的插件索引，用 [`dsh-plugin-market-index`](../../util/plugin-market-index/README.zh.md) 校验，并为每个条目标注 profile 中的安装状态、DSH 兼容性以及安装它所需的精确参数。它还为发现区的条目页面读取每个市场条目的详细介绍，即一份带图片的 Markdown 文档。Web 的[发现标签页](../../client/ui-plugin-market/README.zh.md)和 `plugin_market` agent 工具通过它读取；安装本身经由 [`pluginManager.installBundle`](../plugin-manager/README.zh.md) 进行。格式及其理由见[索引格式 Agent Note](../../../.agents/notes/implemented/feature/2026-10-02-plugin-market-index-format.zh.md)；Host 与 Web 的设计见[发现 Agent Note](../../../.agents/notes/implemented/feature/2026-10-02-plugin-market-discover.zh.md)。
 
 ## 目录
 
@@ -24,7 +24,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-可选的[自定义插件市场组合包](../../experimental/plugin-market-bundle/README.zh.md)把该服务挂载为 `plugin-market` 行；随附的 profile 默认不启用该组合包。与 `plugin-manager` 一样，该行在没有 profile 时被禁用，并等待 `pluginManager`。默认不配置任何索引源，因此在用户添加索引源之前，Host 不发送任何市场请求。
+可选的[自定义插件索引组合包](../../experimental/plugin-market-bundle/README.zh.md)把该服务挂载为 `plugin-market` 行；随附的 profile 默认不启用该组合包。与 `plugin-manager` 一样，该行在没有 profile 时被禁用，并等待 `pluginManager`。默认不配置任何索引源，因此在用户添加索引源之前，Host 不发送任何市场请求。
 
 | 配置 | 默认值 | 含义 |
 |---|---|---|

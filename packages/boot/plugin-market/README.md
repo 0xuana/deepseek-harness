@@ -1,5 +1,5 @@
 ---
-description: "Host reader of the plugin market indexes a user configures, with installation status, compatibility, and the read-only plugin_market tool."
+description: "Host reader of the plugin indexes a user configures, with installation status, compatibility, and the read-only plugin_market tool."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`pluginMarket` reads the plugin market indexes the user configures, validates them with [`dsh-plugin-market-index`](../../util/plugin-market-index/README.md), and annotates every entry with the profile's installation status, DSH compatibility, and the exact arguments that install it. It also reads each market entry's long description, a Markdown document with images, for Discover entry pages. The Web [Discover tab](../../client/ui-plugin-market/README.md) and the `plugin_market` agent tool read through it; installation itself goes through [`pluginManager.installBundle`](../plugin-manager/README.md). The format and its rationale live in the [index format Agent Note](../../../.agents/notes/implemented/feature/2026-10-02-plugin-market-index-format.md); the Host and Web design lives in the [Discover Agent Note](../../../.agents/notes/implemented/feature/2026-10-02-plugin-market-discover.md).
+`pluginMarket` reads the plugin indexes the user configures, validates them with [`dsh-plugin-market-index`](../../util/plugin-market-index/README.md), and annotates every entry with the profile's installation status, DSH compatibility, and the exact arguments that install it. It also reads each market entry's long description, a Markdown document with images, for Discover entry pages. The Web [Discover tab](../../client/ui-plugin-market/README.md) and the `plugin_market` agent tool read through it; installation itself goes through [`pluginManager.installBundle`](../plugin-manager/README.md). The format and its rationale live in the [index format Agent Note](../../../.agents/notes/implemented/feature/2026-10-02-plugin-market-index-format.md); the Host and Web design lives in the [Discover Agent Note](../../../.agents/notes/implemented/feature/2026-10-02-plugin-market-discover.md).
 
 ## Table of Contents
 
@@ -24,7 +24,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-The optional [custom plugin markets bundle](../../experimental/plugin-market-bundle/README.md) mounts the service as the `plugin-market` row; shipped profiles leave the bundle off. Like `plugin-manager`, the row is disabled without a profile, and it waits for `pluginManager`. No index source is configured by default, so the Host sends no market request until a user adds one.
+The optional [custom plugin indexes bundle](../../experimental/plugin-market-bundle/README.md) mounts the service as the `plugin-market` row; shipped profiles leave the bundle off. Like `plugin-manager`, the row is disabled without a profile, and it waits for `pluginManager`. No index source is configured by default, so the Host sends no market request until a user adds one.
 
 | Config | Default | Meaning |
 |---|---|---|

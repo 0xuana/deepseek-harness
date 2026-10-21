@@ -256,7 +256,7 @@ describe('DiscoverSection', () => {
     answer(INITIAL_QUERY)
     openMenu(/^Sort: Default order/)
     expect(screen.queryByRole('menuitem', { name: en.switchToAscending })).toBeNull()
-    for (const name of [/^Sort:/, en.filter, /^Switch plugin market/]) {
+    for (const name of [/^Sort:/, en.filter, /^Switch plugin index/]) {
       fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
       expect(screen.queryByRole('menu')).toBeNull()
       openMenu(name)
@@ -264,17 +264,17 @@ describe('DiscoverSection', () => {
     }
     fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
     expect(screen.queryByRole('menu')).toBeNull()
-    openMenu(/^Switch plugin market/)
-    openMenu(/^Switch plugin market/)
+    openMenu(/^Switch plugin index/)
+    openMenu(/^Switch plugin index/)
     expect(screen.queryByRole('menu')).toBeNull()
   })
 
   it('switches markets and opens source management from the market menu', () => {
     const { actions } = renderTab()
-    openMenu('Switch plugin market, currently Alpha market')
+    openMenu('Switch plugin index, currently Alpha market')
     pick('b.example')
     expect(actions.select).toHaveBeenCalledWith(B)
-    openMenu(/^Switch plugin market/)
+    openMenu(/^Switch plugin index/)
     pick(en.manageSources)
     expect(actions.toggleSources).toHaveBeenCalledOnce()
   })
@@ -420,7 +420,7 @@ describe('DiscoverSection', () => {
     expect(screen.getByRole('status', { name: en.loading })).toBeTruthy()
     expect(screen.getByRole('button', { name: en.refresh }).hasAttribute('disabled')).toBe(true)
     set({ listing: { url: B, query: INITIAL_QUERY, status: 'ready', value: { ...LISTING, url: B, entries: [], total: 0 }, answered: INITIAL_QUERY, failure: null } })
-    expect(screen.getByRole('button', { name: 'Switch plugin market, currently b.example' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Switch plugin index, currently b.example' })).toBeTruthy()
   })
 
   it('manages sources in a dialog with the trust notice and each refusal', () => {
@@ -453,7 +453,7 @@ describe('DiscoverSection', () => {
 
   it('renders the Chinese copy and dates', () => {
     renderTab({}, zh)
-    expect(screen.getByRole('button', { name: '切换插件市场，当前为 甲市场' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '切换插件索引，当前为 甲市场' })).toBeTruthy()
     expect(card('dsh-a').getByText('甲')).toBeTruthy()
     expect(card('dsh-a').getByText(/^1\.0\.0 · Jane · 2026年9月/)).toBeTruthy()
     expect(card('dsh-b').getByText(zh.statusInstalled)).toBeTruthy()
