@@ -258,6 +258,10 @@ describe('HoverCard', () => {
       fireEvent(window, new Event('resize'))
       expect(card.style.top).toBe('120px')
       expect(card.style.maxHeight).toBe('322px')
+      // An anchor inside the top strip keeps its preview directly below it.
+      wrapper.getBoundingClientRect = () => DOMRect.fromRect({ x: 100, y: 10, width: 600, height: 32 })
+      fireEvent(window, new Event('resize'))
+      expect(card.style.top).toBe('50px')
     } finally {
       if (prior === '') document.documentElement.style.removeProperty('--dsh-frame-top-clearance')
       else document.documentElement.style.setProperty('--dsh-frame-top-clearance', prior, priority)

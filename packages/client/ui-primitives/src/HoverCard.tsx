@@ -178,7 +178,7 @@ export function HoverCard({
       if (variant === 'preview') {
         const bounds = widthAnchorRef?.current?.getBoundingClientRect() ?? r
         const width = Math.max(0, Math.min(bounds.width - PREVIEW_INSET * 2, window.innerWidth - VIEWPORT_MARGIN * 2))
-        const topMargin = overlayTopMargin(VIEWPORT_MARGIN)
+        const topMargin = overlayTopMargin(VIEWPORT_MARGIN, r, ANCHOR_GAP)
         const belowTop = Math.max(topMargin, r.bottom + ANCHOR_GAP)
         const above = Math.max(0, r.top - ANCHOR_GAP - topMargin)
         const below = Math.max(0, window.innerHeight - belowTop - VIEWPORT_MARGIN)
@@ -195,7 +195,7 @@ export function HoverCard({
         const height = Math.max(h, cardRef.current?.scrollHeight ?? 0)
         const maxWidth = Math.max(0, Math.min(INLINE_PREVIEW_WIDTH, window.innerWidth - VIEWPORT_MARGIN * 2))
         const width = fitContent ? Math.min(cardRef.current?.offsetWidth ?? maxWidth, maxWidth) : maxWidth
-        const topMargin = overlayTopMargin(VIEWPORT_MARGIN)
+        const topMargin = overlayTopMargin(VIEWPORT_MARGIN, r, ANCHOR_GAP)
         const belowTop = Math.max(topMargin, r.bottom + ANCHOR_GAP)
         const above = Math.max(0, r.top - ANCHOR_GAP - topMargin)
         const below = Math.max(0, window.innerHeight - belowTop - VIEWPORT_MARGIN)
