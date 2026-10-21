@@ -4,7 +4,7 @@ import { externalTestParent } from '../../../subagent/subagent/tests/external-ac
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { Context, FiberState } from '@deepseek-ai/cordis'
-import type { Agent } from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-instructions'
 import { compactCheckpointSource, CompactionId } from '@deepseek-ai/dsh-compaction'
 import LlmRuntime, {
@@ -142,6 +142,7 @@ async function harness(
     yield (await ctx.plugin(LlmRuntime)).dispose
     yield (await ctx.plugin(SessionStore)).dispose
     yield (await ctx.plugin(SessionProjectionRegistry)).dispose
+    yield (await ctx.plugin(AgentRegistry)).dispose
     yield (await ctx.plugin(SystemPrompt, {})).dispose
     yield (await ctx.plugin(ToolRuntime)).dispose
     yield (await ctx.plugin(NativeToolExecutor)).dispose
@@ -1756,6 +1757,7 @@ describe('cancellation and integration teardown', () => {
     await invalid.plugin(LlmRuntime)
     await invalid.plugin(SessionStore)
     await invalid.plugin(SessionProjectionRegistry)
+    await invalid.plugin(AgentRegistry)
     await invalid.plugin(SystemPrompt, {})
     await invalid.plugin(ToolRuntime)
     await invalid.plugin(NativeToolExecutor)
