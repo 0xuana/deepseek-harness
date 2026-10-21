@@ -1,3 +1,5 @@
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
@@ -49,6 +51,7 @@ async function setup(config: ToolJobs.Config = {}, registry: RegistryConfig = {}
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(NativeToolExecutor)
   const agentsFiber = await ctx.plugin(AgentRegistry)
   await ctx.plugin(LocalJobRegistry, registry)
   const toolsFiber = await ctx.plugin(ToolJobs, config)
@@ -161,7 +164,7 @@ function producer(overrides: Partial<Omit<JobSpec, 'run' | 'output'> & JobHooks>
 
 let callCounter = 0
 function call(ctx: Context, name: string, args: unknown, agent?: Agent) {
-  return ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId(`call-${++callCounter}`), name, arguments: args, ...agent ? { agent } : {} })
+  return executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId(`call-${++callCounter}`), name, arguments: args, ...agent ? { agent } : {} })
 }
 
 function text(result: { content: { type: string; text?: string }[] }): string {
@@ -192,6 +195,7 @@ describe('tool-jobs setup', () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(LocalJobRegistry)
     await ctx.plugin(ToolJobs)
     const p = producer()
@@ -208,6 +212,7 @@ describe('tool-jobs setup', () => {
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(LocalJobRegistry)
     await expect(ctx.plugin(ToolJobs, { waitTimeoutMs: 100, maxWaitTimeoutMs: 50 }))
@@ -228,6 +233,7 @@ describe('tool-jobs setup', () => {
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
       await ctx.plugin(SessionProjectionRegistry)
+      await ctx.plugin(NativeToolExecutor)
       await ctx.plugin(AgentRegistry)
       await ctx.plugin(LocalJobRegistry)
       try {
@@ -327,6 +333,7 @@ describe('tool-jobs setup', () => {
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(LocalJobRegistry)
     ToolJobs.apply(ctx, {})
@@ -733,6 +740,7 @@ describe('completion notices across scoped mounts', () => {
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(LocalJobRegistry)
 
@@ -1130,7 +1138,7 @@ describe('completion notices', () => {
     ctx.jobs.start(p.spec)
 
     const aborter = new AbortController()
-    const pending = ctx.tools.execute({
+    const pending = executeToolFixture(ctx, {
       signal: aborter.signal,
       callId: ToolCallId('call-aborted-wait'),
       name: 'job_output',
@@ -1156,7 +1164,7 @@ describe('completion notices', () => {
     ctx.jobs.start(p.spec)
 
     const aborter = new AbortController()
-    const pending = ctx.tools.execute({
+    const pending = executeToolFixture(ctx, {
       signal: aborter.signal,
       callId: ToolCallId('call-abort-then-settle'),
       name: 'job_output',
@@ -1379,7 +1387,7 @@ describe('released waits crossed by a settlement', () => {
         return pending
       })
       const controller = new AbortController()
-      const pending = ctx.tools.execute({
+      const pending = executeToolFixture(ctx, {
         signal: controller.signal, callId: ToolCallId('cancel-after-release'),
         name: 'job_output', arguments: { job_id: id, wait: true }, agent: owner,
       })
@@ -1412,7 +1420,7 @@ describe('released waits crossed by a settlement', () => {
         return pending
       })
       const controller = new AbortController()
-      const pending = ctx.tools.execute({
+      const pending = executeToolFixture(ctx, {
         signal: controller.signal, callId: ToolCallId('kill-then-release'),
         name: 'job_output', arguments: { job_id: id, wait: true }, agent: owner,
       })
