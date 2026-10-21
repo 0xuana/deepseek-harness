@@ -44,6 +44,10 @@ it('opens bottom DevTools after the Developer Tools bundle is enabled on an alre
 
   await toggle.click()
   await expect.poll(() => toggle.getAttribute('aria-checked'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('true')
+  // Enabling a More-page bundle also pins it to the main list.
+  await plugins.getByRole('button', { name: 'Back to plugins', exact: true }).click()
+  await plugins.locator('[data-plugin-group="extensions"]').getByRole('switch', { name: 'Enable Developer Tools', exact: true }).waitFor()
+  expect(await toggle.getAttribute('aria-checked')).toBe('true')
   await panel.waitFor({ state: 'attached', timeout: 20_000 }).catch((error: unknown) => {
     throw new Error(`Bottom panel did not mount; ${BOOTSTRAP_PATH} responses: ${JSON.stringify(bootstraps)}`, { cause: error })
   })
