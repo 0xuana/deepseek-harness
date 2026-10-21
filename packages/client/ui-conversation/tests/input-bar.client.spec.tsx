@@ -242,8 +242,9 @@ function bench(over?: BenchOptions) {
   const steeringAvailable = over?.subagent === undefined || over.subagent.address.mode === 'continuable'
   const composerLocked = over?.disabled === true || over?.inert === true || over?.blocked !== undefined
     || (over?.subagent?.address.mode === 'continuable' && over.subagent.parentAvailable !== true)
-  const uploadsPending = (over?.attachments ?? []).some(attachment =>
-    attachment.kind === 'file' && over?.fileUploads?.[attachment.id]?.status !== 'ready')
+  const uploadsPending = (over?.attachments ?? []).some(attachment => attachment.kind === 'file'
+    ? over?.fileUploads?.[attachment.id]?.status !== 'ready'
+    : over?.fileUploads?.[attachment.id] !== undefined && over.fileUploads[attachment.id]?.status !== 'ready')
   const plainMessageDraft = sendableDraft && !uploadsPending && !(over?.draft?.trimStart().startsWith('/') ?? false)
   const primaryLabel = primaryStops
     ? '停止生成'
@@ -1098,6 +1099,26 @@ describe('running and lock semantics', () => {
     })
     expect(ready.button.getAttribute('aria-label')).toBe('插话发送')
     expect(ready.button.disabled).toBe(false)
+  })
+
+  it('running Send waits for an uploading image and treats an image without an upload as ready', () => {
+    const image = {
+      kind: 'image' as const,
+      id: 'image-1' as DraftAttachmentId,
+      file: new File(['x'], 'shot.png', { type: 'image/png' }),
+      previewUrl: 'blob:shot',
+    }
+    const uploading = bench({
+      running: true, busyEnter: 'steer', draft: '带图', attachments: [image],
+      fileUploads: { [image.id]: { status: 'uploading', loaded: 0 } },
+    })
+    expect(uploading.button.getAttribute('aria-label')).toBe('发送消息')
+    expect(uploading.button.disabled).toBe(true)
+
+    // A subagent continuation's image has no upload and travels inline.
+    const inline = bench({ running: true, busyEnter: 'steer', draft: '带图', attachments: [image] })
+    expect(inline.button.getAttribute('aria-label')).toBe('插话发送')
+    expect(inline.button.disabled).toBe(false)
   })
 
   it('idle Send keeps the plain label regardless of the busy-state preference', () => {

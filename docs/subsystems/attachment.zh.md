@@ -80,10 +80,15 @@ type PromptContentPart =
 ```
 
 ```ts type-equiv
-/** Host prompt content whose file receipts are resolved and whose image bytes await admission. */
+/**
+ * Host prompt content whose upload receipts are resolved. An image part
+ * carries encoded bytes awaiting admission, or references an image this
+ * service already stored for an upload the same Session staged.
+ */
 type AttachmentAdmissionPart =
   | PromptContentPart
   | { readonly type: 'file'; readonly attachment: FileAttachmentRef }
+  | { readonly type: 'image'; readonly attachment: ImageAttachmentRef }
 ```
 
 ```ts type-equiv
@@ -200,9 +205,11 @@ abstract validateImage(input: SaveImageAttachment): Promise<void>
 async saveImages(inputs: readonly SaveImageAttachment[]): Promise<readonly ImageAttachmentRef[]>
 
 /**
- * Admit one Host prompt and replace each uploaded image with its durable reference.
- * Text and durable file references pass through unchanged. A prompt without image parts performs no storage operation.
- * @param content - prompt parts in message order after file receipt resolution.
+ * Admit one Host prompt and replace each encoded image with its durable reference.
+ * Text, durable file references, and already stored images pass through unchanged.
+ * Every image part counts toward `maxImagesPerMessage`; the aggregate byte limit
+ * applies to the encoded images. A prompt without encoded images performs no storage operation.
+ * @param content - prompt parts in message order after upload receipt resolution.
  * @returns admitted prompt parts in the same order as `content`.
  * @throws AttachmentError when the image batch is refused.
  */
@@ -320,7 +327,7 @@ registerAgentResolver(resolve: AgentResolver): () => void
  * @param signal - caller cancellation before storage begins.
  * @returns the staged receipt and durable file reference.
  */
-@Remote('upload') upload(agent: Agent, request: EncodedFileUploadRequest, signal: AbortSignal): Promise<FileUploadValue>
+@Remote('upload') async upload(agent: Agent, request: EncodedFileUploadRequest, signal: AbortSignal): Promise<FileUploadValue>
 
 /**
  * Persist raw chunks for one Session without aggregating the upload.
@@ -330,12 +337,22 @@ registerAgentResolver(resolve: AgentResolver): () => void
 async uploadStream(request: { readonly sessionId: SessionId readonly data: AsyncIterable<Uint8Array> readonly signal?: AbortSignal readonly name?: string }): Promise<FileUploadValue>
 
 /**
+ * Persist one prompt image for a Session: read at most the deployment's
+ * per-image byte limit, then validate, normalize, and store the image the
+ * way prompt admission does, so a later prompt cites it by receipt.
+ * @param request - Session identity, ordered bytes, the declared media type that this deployment
+ * must accept, cancellation, and optional display name.
+ * @returns the staged receipt and durable normalized image reference.
+ */
+async uploadImageStream(request: { readonly sessionId: SessionId readonly data: AsyncIterable<Uint8Array> readonly mediaType: string readonly signal?: AbortSignal readonly name?: string }): Promise<ImageUploadValue>
+
+/**
  * Resolve one staged receipt for the receiving Agent's exact Session.
  * @param agent - receiving Agent.
  * @param receiptId - opaque receipt minted for one completed upload.
- * @returns durable file reference, or `undefined` for an unknown or foreign receipt.
+ * @returns the staged file or image, or `undefined` for an unknown or foreign receipt.
  */
-resolve(agent: Agent, receiptId: FileUploadReceiptId): FileAttachmentRef | undefined
+resolve(agent: Agent, receiptId: FileUploadReceiptId): StagedAttachment | undefined
 
 /**
  * Bind receipts while one prompt enters an Agent inbox.
