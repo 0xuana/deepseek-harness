@@ -17,6 +17,6 @@ export const en: Record<MessageQuotesKey, string> = {
 }
 
 /** Japanese dictionary. */
-export const ja: Record<MessageQuotesKey, string> = {
+export const ja = {
   'quote.add': 'テキストを引用',
-}
+} satisfies Record<MessageQuotesKey, string>
