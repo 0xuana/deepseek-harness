@@ -67,6 +67,14 @@
   transition: transform var(--ds-transition-duration-slow) var(--ds-ease-in-out);
 }
 
+/* An item mounted by the opening commit takes the closed style for one style
+   read (SidebarRight.tsx), so it slides in like the items already mounted. */
+.panel[data-sidebar-right-open] :global([data-sidebar-right-settling]) {
+  transform: translateX(var(--dsh-sidebar-width));
+  visibility: hidden;
+  transition: none;
+}
+
 .panel[data-sidebar-right-panel='fullscreen'] {
   --dsh-dockkit-dock-layer: 40;
 }

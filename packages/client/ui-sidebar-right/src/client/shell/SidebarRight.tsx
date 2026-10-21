@@ -295,6 +295,15 @@ function PanelChrome({ sessionId, fullscreen, actions, t, shortcuts, toggleFulls
   )
 }
 
+/** The docked Grid items whose transform slides with the panel (`SidebarRight.module.css`). */
+const DOCKED_ITEMS = "[data-dockkit-host='dock'], [data-dockkit-empty], [data-dockkit-divider]"
+
+/** Whether an animation is a docked item's running open or close slide. */
+function isSlide(animation: Animation): boolean {
+  return 'transitionProperty' in animation && animation.transitionProperty === 'transform'
+    && animation.playState !== 'finished' && animation.playState !== 'idle'
+}
+
 /**
  * The panel: the docked surface with the two controls in its top-right strip,
  * anchored to the frame's right edge and slid off it while collapsed.
@@ -303,6 +312,23 @@ function SidebarPanel(panel: PanelProps & { width: number; panelRef: RefObject<H
   const { sessionId, surface, actions, t, renderSlot, openTab, width, reportRoom, fullscreen, panelRef } = panel
   const { expanded } = surface.layout
   const types = panel.useTabTypes(value => value)
+  const wasExpanded = useRef(expanded)
+  // An item the opening commit mounts, such as the first tab seeded into an
+  // empty column, has no closed style to slide from: a style read finds it
+  // open with no transition. It takes the closed style for one read, so
+  // removing that style starts the same slide as the items already mounted.
+  // `@starting-style` cannot select only these items: it would also slide
+  // items that mount while the panel is open or that a Session switch shows.
+  useLayoutEffect(() => {
+    const opening = expanded && !wasExpanded.current
+    wasExpanded.current = expanded
+    if (!opening) return
+    const items = [...(panelRef.current as HTMLDivElement).querySelectorAll(DOCKED_ITEMS)]
+      .filter(item => !item.getAnimations().some(isSlide))
+    for (const item of items) item.setAttribute('data-sidebar-right-settling', '')
+    for (const item of items) void getComputedStyle(item).transform
+    for (const item of items) item.removeAttribute('data-sidebar-right-settling')
+  }, [expanded, panelRef])
   return (
     <div
       ref={panelRef}
@@ -390,9 +416,7 @@ export function RightbarSeat({
       if (disposed) return
       // A shown panel renders unconditionally and attaches its ref before this effect.
       const entering = shown && fullscreen
-        ? (panelRef.current as HTMLDivElement).getAnimations({ subtree: true }).filter(animation =>
-          'transitionProperty' in animation && animation.transitionProperty === 'transform'
-          && animation.playState !== 'finished' && animation.playState !== 'idle')
+        ? (panelRef.current as HTMLDivElement).getAnimations({ subtree: true }).filter(isSlide)
         : []
       if (entering.length === 0) {
         syncPresentation({ shown, track, fullscreen })

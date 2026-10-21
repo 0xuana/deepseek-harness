@@ -557,6 +557,28 @@ describe('RightbarSeat presentation', () => {
     expect(h.frame.closeRightbar).toHaveBeenCalled()
   })
 
+  it('starts an item the opening mounts from the closed style, leaving a sliding item alone', async () => {
+    const h = await mountSeat()
+    const settled: { readonly item: Element; readonly open: boolean }[] = []
+    const getComputedStyle = window.getComputedStyle.bind(window)
+    vi.spyOn(window, 'getComputedStyle').mockImplementation((item, pseudo) => {
+      const open = item.closest('[data-sidebar-right-panel]')?.hasAttribute('data-sidebar-right-open') === true
+      if (item.hasAttribute('data-sidebar-right-settling')) settled.push({ item, open })
+      return getComputedStyle(item, pseudo)
+    })
+    h.open()
+    const host = element(h.view.container, "[data-dockkit-host='dock']")
+    expect(settled).toEqual([{ item: host, open: true }])
+    expect(host.hasAttribute('data-sidebar-right-settling')).toBe(false)
+    fireEvent.click(element(h.view.container, '[data-sidebar-right-toggle]'))
+    // Reopened during its closing slide, the item reverses from where it is.
+    const closing = transition()
+    vi.spyOn(host, 'getAnimations').mockReturnValue([closing.animation])
+    act(() => { h.actions.setExpanded(SESSION, true) })
+    expect(settled).toHaveLength(1)
+    expect(element(h.view.container, '[data-sidebar-right-panel]').hasAttribute('data-sidebar-right-open')).toBe(true)
+  })
+
   it('fills the viewport without replacing the content tree or releasing the wide track', async () => {
     const h = await mountSeat()
     const tab = h.open()
