@@ -59,6 +59,8 @@ kind: "package-reference"
 
 [配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-ptc-runtime-node)定义可接受的配置字段。`resolve(request)` 将 cwd 默认设为沙箱策略的工作区根目录，并补全数值或 null 截止选择与执行策略；`run(spec)` 接受这些已解析输入，不补缺省值。
 
+profile 编辑器可从 `@deepseek-ai/dsh-ptc-runtime-node/configuration` 导入 `resolvePersistentExecution`，根据当前有效程序格式选择持久执行设置。返回的两个设置必须原子合入：Script 保留原语法，函数体切换为 REPL。
+
 ### 执行与结果
 
 `per-call` 模式中的程序是异步函数体：支持顶层 `await` 与 `return`，且只接受可擦除 TypeScript。成功调用以 `result.value` 返回无损 JSON 值，以 `result.logs` 返回捕获文本。`result.sandbox` 独立于程序结果报告所选模式、观察到的拒绝，以及后端完整或部分的强制能力。
@@ -139,6 +141,7 @@ Host 通过 birpc 调用子进程的 `run()` 方法；注入的绑定调用 Host
 |---|---|
 | [`src/index.ts`](src/index.ts) | Node 提供方：统一执行准入、取消与服务委托 |
 | [`src/config.ts`](src/config.ts) | 执行模式、限制校验与默认值 |
+| [`src/configuration.ts`](src/configuration.ts) | 供 profile 编辑器使用的持久执行设置 |
 | [`src/execution.ts`](src/execution.ts) | 模式选择、请求解析及临时或保留进程的所有权 |
 | [`src/worker.ts`](src/worker.ts) | 共用的进程启动、执行截止、绑定分派与清理 |
 | [`src/persistent-process.ts`](src/persistent-process.ts) | 默认使用 REPL 的已安装入口，委托共用子进程循环 |

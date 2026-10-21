@@ -59,6 +59,8 @@ Configure the provider row after its required services are available:
 
 The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-ptc-runtime-node) defines accepted config fields. `resolve(request)` defaults cwd to the sandbox policy workspace root and supplies the numeric or null deadline choice and execution policy; `run(spec)` accepts those resolved inputs and does not fill missing values.
 
+Profile editors can import `resolvePersistentExecution` from `@deepseek-ai/dsh-ptc-runtime-node/configuration` to select retained execution from the effective program format. Merge both returned settings atomically: Script keeps its syntax, while function bodies switch to the REPL.
+
 ### Execution and results
 
 In `per-call` mode, programs are async function bodies: top-level `await` and `return` work, and only erasable TypeScript is accepted. A successful call returns its lossless-JSON value as `result.value` and captured text as `result.logs`. `result.sandbox` reports the selected mode, observed denial and the backend's full or partial enforcement independently of the program outcome.
@@ -139,6 +141,7 @@ Source containing `await` is checked for top-level await before native compilati
 |---|---|
 | [`src/index.ts`](src/index.ts) | Node provider: common admission, cancellation and service delegation |
 | [`src/config.ts`](src/config.ts) | Execution mode, validated limits and defaults |
+| [`src/configuration.ts`](src/configuration.ts) | Retained-execution settings for profile editors |
 | [`src/execution.ts`](src/execution.ts) | Mode selection, request resolution and temporary or retained process ownership |
 | [`src/worker.ts`](src/worker.ts) | Shared process launch, evaluation deadlines, binding dispatch and cleanup |
 | [`src/persistent-process.ts`](src/persistent-process.ts) | Installed REPL-default entry delegating to the common child loop |
