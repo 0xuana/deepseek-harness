@@ -14,7 +14,7 @@ import { en, ja, zh } from './locales.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
-    /** More menu rows: pin actions, footer actions, and Creator draft prompts. */
+    /** More menu rows: navigation actions, and Creator draft prompts. */
     entryCustomization: keyof typeof en
   }
 }
