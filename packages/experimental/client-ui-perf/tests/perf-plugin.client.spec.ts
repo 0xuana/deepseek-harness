@@ -115,6 +115,8 @@ interface PluginBench {
   readonly localeRegister: ReturnType<typeof vi.fn>
   readonly binding: ReturnType<typeof vi.fn>
   readonly loadOlder: ReturnType<typeof vi.fn>
+  readonly setOpenState: (state: 'cold' | 'open' | 'error') => void
+  readonly settleOnNextSubscribe: () => void
   readonly entries: () => readonly StoredEntry[]
   readonly setSnapshot: (next: PerfSnapshot | undefined) => void
   readonly notify: () => void
@@ -140,7 +142,23 @@ async function mountPlugin(): Promise<PluginBench> {
     }),
   }))
   const loadOlder = vi.fn(async () => undefined)
-  const sessionBinding = { session: { loadOlder } }
+  let openState: 'cold' | 'open' | 'error' = 'open'
+  let openListener: (() => void) | undefined
+  let settleOnSubscribe = false
+  const sessionBinding = {
+    session: {
+      loadOlder,
+      getSnapshot: () => ({ openState }),
+      subscribe: (next: () => void) => {
+        openListener = next
+        if (settleOnSubscribe) {
+          settleOnSubscribe = false
+          openState = 'open'
+        }
+        return () => { openListener = undefined }
+      },
+    },
+  }
   ctx.provide('sessions', { binding: (id: SessionId) => (id === SID ? sessionBinding : undefined) } as never)
   ctx.provide('locale', { register: localeRegister, bind: () => makeTranslate(zh) } as never)
   ctx.provide('uiConversation', {
@@ -173,6 +191,11 @@ async function mountPlugin(): Promise<PluginBench> {
     localeRegister,
     binding,
     loadOlder,
+    setOpenState: (state: 'cold' | 'open' | 'error') => {
+      openState = state
+      openListener?.()
+    },
+    settleOnNextSubscribe: () => { settleOnSubscribe = true },
     entries: () => ctx.slots.entries('conversation.view'),
     setSnapshot: (next) => { snapshot = next },
     notify: () => { listener?.() },
@@ -355,6 +378,40 @@ describe('browser plugin registration', () => {
     // The dictionary registration rides the plugin fiber effect; Definitions and
     // view targets dispose through their own registries in the wiring suites.
     expect(bench.localeDispose).toHaveBeenCalledTimes(1)
+  })
+
+  it('settles when the subscription resolves while it is being set up', async () => {
+    const bench = await mountPlugin()
+    const injectEntry = bench.entries()[0]!.inject as ((sessionId: SessionId) => PerfViewInjected) | undefined
+    const injected = injectEntry!(SID)
+    bench.setOpenState('cold')
+    bench.settleOnNextSubscribe()
+    expect(await injected.loadOlder()).toBe(false)
+    expect(bench.loadOlder).toHaveBeenCalledTimes(1)
+    await bench.fiber.dispose()
+  })
+
+  it('waits for a cold Session to open before asking for older history', async () => {
+    const bench = await mountPlugin()
+    const injectEntry = bench.entries()[0]!.inject as ((sessionId: SessionId) => PerfViewInjected) | undefined
+    const injected = injectEntry!(SID)
+    bench.setOpenState('cold')
+    let settled = false
+    const page = injected.loadOlder().then((value) => { settled = true; return value })
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    expect(bench.loadOlder).not.toHaveBeenCalled()
+    // A notification while still cold keeps waiting.
+    bench.setOpenState('cold')
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    bench.setOpenState('open')
+    await page
+    expect(bench.loadOlder).toHaveBeenCalledTimes(1)
+    // A failed open also settles instead of leaving the view waiting forever.
+    bench.setOpenState('error')
+    expect(await injected.loadOlder()).toBe(false)
+    await bench.fiber.dispose()
   })
 
   it('serves the empty snapshot until the target publishes turns', async () => {

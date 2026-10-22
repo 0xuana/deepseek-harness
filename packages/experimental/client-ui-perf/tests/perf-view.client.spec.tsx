@@ -329,6 +329,14 @@ describe('older history', () => {
     return { turns: [turn({ turn: 1 }), turn({ turn: 2 })], stepCount: 2 }
   }
 
+  it('prefetches one older page on the first content commit in a real scrollport', async () => {
+    vi.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(800)
+    const loadOlder = vi.fn(async () => true)
+    mount(twoTurns(), loadOlder)
+    await act(async () => {})
+    expect(loadOlder).toHaveBeenCalledTimes(1)
+  })
+
   it('loads near the top, reports the load, and stops after an exhausted page', async () => {
     const gate = deferred<boolean>()
     const loadOlder = vi.fn(() => gate.promise)

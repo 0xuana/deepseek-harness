@@ -45,7 +45,8 @@
   height: 30px;
   padding: 0 8px;
   border-bottom: 0.5px solid var(--dsw-alias-border-l2);
-  background: var(--dsw-specific-sidebar-fill);
+  background: var(--dsw-alias-bg-layer-1);
+  background-clip: padding-box;
   color: var(--dsw-alias-label-tertiary);
   font: var(--dsw-font-xxs-12);
   font-weight: 500;

@@ -4,7 +4,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import type { SessionBinding } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { SessionBinding, SessionFace } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
@@ -26,6 +26,27 @@ export type { PerfCall, PerfSnapshot, PerfStepMetrics, PerfTurnMetrics } from '.
 
 /** Required services: the conversation slot and view registries, Session paging, and the locale service. */
 export const inject = ['slots', 'sessions', 'uiConversation', 'locale']
+
+
+/** Resolve once the Session window has opened (or failed); paging before that is a no-op. */
+async function whenOpened(session: SessionFace): Promise<void> {
+  const settled = (): boolean => {
+    const state = session.getSnapshot().openState
+    return state === 'open' || state === 'error'
+  }
+  if (settled()) return
+  await new Promise<void>((resolve) => {
+    const stop = session.subscribe(() => {
+      if (!settled()) return
+      stop()
+      resolve()
+    })
+    if (settled()) {
+      stop()
+      resolve()
+    }
+  })
+}
 
 /** Snapshot hook name; `InjectFace` turns it into the component's `usePerf` prop. */
 const HOOK = 'perf'
@@ -70,6 +91,9 @@ export function apply(ctx: Context): void {
         hooks: { [HOOK]: perf },
         loadOlder: async () => {
           const before = perf.getSnapshot()
+          // A view can mount before the Session finishes opening; loadOlder is a
+          // no-op then and would look like exhausted history.
+          await whenOpened(session)
           await session.loadOlder()
           return perf.getSnapshot() !== before
         },

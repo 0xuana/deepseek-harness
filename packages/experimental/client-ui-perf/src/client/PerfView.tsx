@@ -1365,6 +1365,7 @@ export function PerfView(props: PerfViewProps): ReactElement {
   const loadingRef = useRef(false)
   const pendingPrepend = useRef<PendingPrepend | null>(null)
   const initialized = useRef(false)
+  const autoLoaded = useRef(false)
   const turns = snapshot.turns
   const firstTurn = turns[0]?.turn ?? null
   const latestTurn = turns.at(-1)?.turn ?? null
@@ -1453,6 +1454,12 @@ export function PerfView(props: PerfViewProps): ReactElement {
     if (!initialized.current && turns.length > 0) {
       initialized.current = true
       element.scrollTop = element.scrollHeight
+      // First open has no scroll gesture to trigger a page: pull one older page
+      // when the scrollport has real layout (a jsdom test has none).
+      if (!autoLoaded.current && element.clientHeight > 0) {
+        autoLoaded.current = true
+        void requestOlder()
+      }
       return
     }
     const pending = pendingPrepend.current
