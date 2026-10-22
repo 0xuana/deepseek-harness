@@ -9390,6 +9390,9 @@ importers:
       '@deepseek-ai/dsh-tool-bash':
         specifier: workspace:*
         version: link:../../shell/tool-bash
+      '@deepseek-ai/dsh-tool-executor-native':
+        specifier: workspace:*
+        version: link:../../core/tool-executor-native
       '@deepseek-ai/dsh-tools':
         specifier: workspace:*
         version: link:../../core/tools

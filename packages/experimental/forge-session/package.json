@@ -57,6 +57,7 @@
     "@deepseek-ai/dsh-subprocess-local": "workspace:*",
     "@deepseek-ai/dsh-system-prompt": "workspace:*",
     "@deepseek-ai/dsh-tool-bash": "workspace:*",
+    "@deepseek-ai/dsh-tool-executor-native": "workspace:*",
     "@deepseek-ai/dsh-tools": "workspace:*",
     "@deepseek-ai/dsh-working-directory": "workspace:*"
   }
