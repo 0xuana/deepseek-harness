@@ -1,7 +1,7 @@
 {
   "meta": {
-    "title": "Marchés de plugins personnalisés",
-    "description": "Ajoute un onglet Découvrir aux plugins pour parcourir et installer les bundles à partir des index de marché des plugins que vous ajoutez.",
+    "title": "Index de plugins personnalisés",
+    "description": "Ajoute un onglet Découvrir à Plugins pour parcourir et installer des bundles depuis les index de plugins que vous ajoutez.",
     "detail": "docs/DETAIL.md"
   }
 }

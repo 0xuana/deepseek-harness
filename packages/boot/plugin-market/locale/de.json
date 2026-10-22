@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "Plugin-Marktindizes",
-    "description": "Verwalten Sie konfigurierte Marktindizes für die Plugin-Erkennung und das plugin_market-Tool."
+    "title": "Plugin-Indizes",
+    "description": "Konfigurierte Plugin-Indizes für die Plugin-Suche und das Tool plugin_market verwalten."
   }
 }

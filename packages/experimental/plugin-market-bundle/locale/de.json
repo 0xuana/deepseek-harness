@@ -1,7 +1,7 @@
 {
   "meta": {
-    "title": "Benutzerdefinierte Plugin-Märkte",
-    "description": "Fügt Plugins eine Registerkarte „Entdecken“ hinzu, um Bundles aus den von Ihnen hinzugefügten Plugin-Marktindizes zu durchsuchen und zu installieren.",
+    "title": "Benutzerdefinierte Plugin-Indizes",
+    "description": "Fügt Plugins die Registerkarte „Entdecken“ hinzu, um Bundles aus hinzugefügten Plugin-Indizes zu durchsuchen und zu installieren.",
     "detail": "docs/DETAIL.md"
   }
 }
