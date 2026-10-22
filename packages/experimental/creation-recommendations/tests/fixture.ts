@@ -18,6 +18,10 @@ import * as CreationRecommendations from '../src/index.ts'
 import type { PageData } from '../src/types.ts'
 
 export const ACTION = 'create_personalized_page'
+/** Text of an accepted `create_personalized_page` call's result. */
+export const RESULT_TEXT = 'Card shown below your answer. Do not restate it. End with at most one short invitation in the user’s language, in the first '
+  + 'person: after they click Create below, you will build it in the background as a plugin page that stays available, without blocking the chat; '
+  + 'the build takes minutes and many tokens.'
 export const callId = ToolCallId('call-creation-1')
 export const proposal = { title: 'Counter', brief: 'Keep a counter visible for this task.', details: { slot: 'sidebar-right' as const } }
 
@@ -94,7 +98,7 @@ export async function fixture(initial?: PageCardState) {
     const toolCallId = ToolCallId(id)
     caller.session.append('tool/call', { turn, step: ++step, callId: toolCallId, name: 'propose_action', arguments: JSON.stringify({ action: ACTION, ...args }) })
     caller.session.append('tool/result', { turn, step, message: createToolResultMessage({ callId: toolCallId,
-      content: [{ type: 'text', text: 'Card shown below your answer.' }], isError: false }) }, { surfaceOp: 'append' })
+      content: [{ type: 'text', text: RESULT_TEXT }], isError: false }) }, { surfaceOp: 'append' })
     await Promise.resolve()
     return toolCallId
   }

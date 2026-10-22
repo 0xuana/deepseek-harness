@@ -35,7 +35,7 @@ kind: "package-reference"
 
 ### 注册卡片种类
 
-种类所在的包注入 `actionCards`，并在自己的插件中调用 `ctx.actionCards.register(kind)`；该插件卸载时种类随之移除，此后对其卡片的操作会以 unavailable 拒绝，只有“暂不需要”仍可忽略尚未开始的卡片。种类需要给出：动作名、提议该动作的 Skill、卡片 `details` 的 zod 校验、接受的用户操作及各自需要的共享检查（`global` 表示需要全局 Remote 权限，`writes` 表示只读会话中拒绝）、仍可忽略卡片的已记录阶段、可选的状态说明、状态通知要报告的决定数据字段、可选的 `reconcile`（每次操作前根据会话之外的状态更新卡片的已记录决定），以及处理 `dismiss` 以外所有操作的处理器。处理器用 `ctx.actionCards.record()` 记录每个新决定（该方法拒绝没有种类注册过的动作和推导得出的 `replaced` 阶段），并返回 `accepted`、带当前决定的 `settled`、`refused` 或 `unconfirmed`。
+种类所在的包注入 `actionCards`，并在自己的插件中调用 `ctx.actionCards.register(kind)`；该插件卸载时种类随之移除，此后对其卡片的操作会以 unavailable 拒绝，只有“暂不需要”仍可忽略尚未开始的卡片。种类需要给出：动作名、提议该动作的 Skill、被接受的调用结果交给模型的结尾邀请指引、卡片 `details` 的 zod 校验、接受的用户操作及各自需要的共享检查（`global` 表示需要全局 Remote 权限，`writes` 表示只读会话中拒绝）、仍可忽略卡片的已记录阶段、可选的状态说明、状态通知要报告的决定数据字段、可选的 `reconcile`（每次操作前根据会话之外的状态更新卡片的已记录决定），以及处理 `dismiss` 以外所有操作的处理器。处理器用 `ctx.actionCards.record()` 记录每个新决定（该方法拒绝没有种类注册过的动作和推导得出的 `replaced` 阶段），并返回 `accepted`、带当前决定的 `settled`、`refused` 或 `unconfirmed`。
 
 ### 卡片规则
 
@@ -85,11 +85,11 @@ Remote `act(sessionId, callId, verb, payload?)` 先检查服务所有者、在�
 
 #### 模型看到什么
 
-[`propose_action` 声明](../../../docs/tool-catalog.zh.md#deepseek-aidsh-experimental-action-cards)只对在本会话中自己直接调用加载过已注册种类 Skill 的在线根 Agent 出现，从下一步开始，持续到该 Agent 被释放。subagent 看不到它；PTC 预设的 Skill 加载由代码发起，也看不到它，因此不会展示卡片。种类的 Skill 给出动作名和 `details` 的字段。被接受的调用返回 `Card shown below your answer. Do not restate it; end with one short invitation.`。被拒绝的调用返回原因，例如 `Load skill <skill> first, then call propose_action.`、`One card per turn; the earlier card stands.`、`The user has queued more messages; show no card and answer briefly.`、`Cards are offered in the main conversation only.`、`Unknown action "<action>". Registered actions: <actions>.`（最后一个种类注销后列表为 `none`），或未通过校验的 `details` 字段。
+[`propose_action` 声明](../../../docs/tool-catalog.zh.md#deepseek-aidsh-experimental-action-cards)只对在本会话中自己直接调用加载过已注册种类 Skill 的在线根 Agent 出现，从下一步开始，持续到该 Agent 被释放。subagent 看不到它；PTC 预设的 Skill 加载由代码发起，也看不到它，因此不会展示卡片。种类的 Skill 给出动作名和 `details` 的字段。被接受的调用返回 `Card shown below your answer. Do not restate it. <invitation>`，其中 `<invitation>` 是种类给出的一两句指引，说明如何用用户的语言邀请用户使用卡片，因此模型只会在卡片已经存在之后写邀请。被拒绝的调用不带邀请，只返回原因，例如 `Load skill <skill> first, then call propose_action.`、`One card per turn; the earlier card stands.`、`The user has queued more messages; show no card and answer briefly.`、`Cards are offered in the main conversation only.`、`Unknown action "<action>". Registered actions: <actions>.`（最后一个种类注销后列表为 `none`），或未通过校验的 `details` 字段。
 
 #### Token 影响
 
-加载卡片 Skill 之前，工具不增加任何 token。加载之后，该 Agent 的每次请求都会声明它：574 个字符的 JSON，按 token 计量器每 4 个字符计 1 个 token 约 144 个 token。出一张卡片多一次模型往返（最终回答前的这次调用）以及一条简短的工具结果。
+加载卡片 Skill 之前，工具不增加任何 token。加载之后，该 Agent 的每次请求都会声明它：574 个字符的 JSON，按 token 计量器每 4 个字符计 1 个 token 约 144 个 token。出一张卡片多一次模型往返（最终回答前的这次调用）以及一条工具结果：49 个字符的前缀加上种类的邀请。个性化页面的结果为 305 个字符，按同样的比例约 77 个 token。
 
 #### KV Cache 影响
 

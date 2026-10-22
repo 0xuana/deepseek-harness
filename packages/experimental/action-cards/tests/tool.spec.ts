@@ -5,7 +5,9 @@ import type { ToolExecutionToken } from '@deepseek-ai/dsh-tools'
 import { executeModelToolFixture, executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
-import { ACTION, fixture, proposal, SKILL } from './fixture.ts'
+import { z } from 'zod'
+import type { ActionCardKind, ActionCardResult } from '../src/index.ts'
+import { ACTION, fixture, INVITATION, proposal, SKILL, type TestDetails } from './fixture.ts'
 
 type Fixture = Awaited<ReturnType<typeof fixture>>
 const signal = new AbortController().signal
@@ -52,7 +54,7 @@ it('declares propose_action from the step after a card skill loads, and logs the
   expect(await declared(f, agent)).toBe(true)
   const result = agent.session.snapshotEvents().find(event => event.type === 'tool/result' && event.data.message.toolCallId === 'call-card-1')
   expect(result?.type === 'tool/result' && result.data.message.content).toEqual([
-    { type: 'text', text: 'Card shown below your answer. Do not restate it; end with one short invitation.' },
+    { type: 'text', text: `Card shown below your answer. Do not restate it. ${INVITATION}` },
   ])
   expect(f.view(agent).proposals['call-card-1']).toEqual({ callId: 'call-card-1', turn: 1, ...proposal })
 })
@@ -102,8 +104,12 @@ it('accepts one card per turn, admits a retry after a failed result and names th
   expect((await call(f, 'propose_action', proposal, 'blocked')).isError).toBe(true)
   blocked()
   const accepted = await call(f, 'propose_action', { ...proposal, title: ' Counter ' }, 'accepted')
-  expect(accepted).toMatchObject({ isError: false, value: { action: ACTION, title: 'Counter' } })
-  expect(text(await call(f, 'propose_action', proposal, 'second'))).toBe('Error: One card per turn; the earlier card stands.')
+  expect(accepted).toMatchObject({ isError: false, value: { action: ACTION, title: 'Counter', invitation: INVITATION } })
+  expect(text(accepted)).toBe(`Card shown below your answer. Do not restate it. ${INVITATION}`)
+  const second = text(await call(f, 'propose_action', proposal, 'second'))
+  // Only an accepted call tells the model how to invite the user to its card.
+  expect(second).toBe('Error: One card per turn; the earlier card stands.')
+  expect(second).not.toContain(INVITATION)
   f.agent.session.append('turn/start', { turn: 2 })
   await call(f, 'skill', { name: SKILL }, 'load-2')
   f.propose(ToolCallId('logged'), proposal, f.agent, 2)
@@ -181,4 +187,12 @@ it('refuses a card while the user has queued messages for later turns, so the lo
   expect(result?.type === 'tool/result' && result.data.message).toMatchObject({ isError: true,
     content: [{ type: 'text', text: 'Error: The user has queued more messages; show no card and answer briefly.' }] })
   expect(f.view(agent)).toEqual({ proposals: {}, decisions: {} })
+})
+
+it('requires every kind to give the invitation its accepted calls return', () => {
+  const kind = { action: 'other_action', skill: 'other-skill', details: z.object({ value: z.string() }), verbs: {},
+    act: () => Promise.resolve<ActionCardResult>({ status: 'accepted' }) }
+  // @ts-expect-error: a kind without its invitation does not compile.
+  const incomplete: ActionCardKind<TestDetails> = kind
+  expect(incomplete).toBe(kind)
 })

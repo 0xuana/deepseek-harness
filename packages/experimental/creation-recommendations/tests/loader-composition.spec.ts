@@ -25,7 +25,7 @@ import * as ActionCards from '@deepseek-ai/dsh-experimental-action-cards'
 import type { SubagentActivation, SubagentActivationSpec } from '@deepseek-ai/dsh-subagent'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import * as Recommendations from '../src/index.ts'
-import { writeBundle } from './fixture.ts'
+import { RESULT_TEXT, writeBundle } from './fixture.ts'
 
 it.each(['portable-bundle', 'foreign-nested-row'] as const)('validates and installs through pnpm/HMR: %s', async (scenario) => {
   const home = await mkdtemp(join(tmpdir(), 'dsh-creation-loader-'))
@@ -102,6 +102,7 @@ it.each(['portable-bundle', 'foreign-nested-row'] as const)('validates and insta
     .toContainEqual({ type: 'tool-addition', toolName: 'propose_action' })
   const results = agent.session.snapshotEvents().flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])
   expect(results.map(message => message.isError === true)).toEqual([false, false])
+  expect(results[1]?.content).toEqual([{ type: 'text', text: RESULT_TEXT }])
   const receipt = () => ctx.actionCards.view(agent.session).decisions[callId]
   expect(ctx.actionCards.view(agent.session).proposals[callId]).toMatchObject({ action: 'create_personalized_page', title: 'Counter' })
   expect(starts).toHaveLength(0)

@@ -13,7 +13,7 @@ type Props = Parameters<typeof ProposeRow>[0]
 const argsRaw = JSON.stringify({ action: 'test_action', title: 'Counter', brief: 'Keep count.', details: {} })
 const running: StartedToolCall = { phase: 'start', args: PartialArguments.fromText(argsRaw), callId: 'c', name: 'propose_action', argsRaw, turn: 1, step: 1, time: 1, subCalls: [] }
 const settled: ToolResultNode = { kind: 'tool-result', seq: 2, time: 2, callId: 'c', name: 'propose_action', args: PartialArguments.fromText(argsRaw),
-  call: { name: 'propose_action', argsRaw }, callTime: 1, content: [{ type: 'text', text: 'Card shown below your answer.' }], isError: false, subCalls: [] }
+  call: { name: 'propose_action', argsRaw }, callTime: 1, content: [{ type: 'text', text: 'Card shown below your answer. Do not restate it. Invite the user.' }], isError: false, subCalls: [] }
 function props(block: Props['block'], inspect?: () => void): Props {
   return { ...('kind' in block ? { phase: 'result' as const, block } : { phase: block.phase, block }),
     callId: 'c', toolName: 'propose_action', openFile: vi.fn(), inspect, t: makeTranslate(en) } as Props
@@ -25,7 +25,7 @@ it('shows a proposed card on one line without exposing the model-facing result',
   expect(view.getByText('Proposed')).toBeTruthy()
   expect(view.getByText('Counter')).toBeTruthy()
   expect(view.queryByRole('button')).toBeNull()
-  expect(view.container.textContent).not.toContain('Card shown below your answer.')
+  expect(view.container.textContent).not.toContain('Card shown below your answer. Do not restate it. Invite the user.')
 })
 
 it('explains a refused call and offers call inspection', () => {
