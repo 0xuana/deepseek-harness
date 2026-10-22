@@ -160,7 +160,7 @@ describe('native row drag previews', () => {
       }} currentId={undefined} now={0} onOpen={vi.fn()} drag={drag} t={t} />)
     const row = screen.getByRole('treeitem')
     stubRect(row)
-    row.style.setProperty('--dsh-workspace-indent', '24px')
+    row.style.paddingInlineStart = '32px'
     const transfer = {
       effectAllowed: '', setData: vi.fn(),
       setDragImage: vi.fn<(image: HTMLElement, x: number, y: number) => void>(),
@@ -193,7 +193,7 @@ describe('native row drag previews', () => {
     expect(image.style.left).toBe('-200px')
     expect(image.style.width).toBe('200px')
     expect(image.style.height).toBe('34px')
-    expect(image.style.getPropertyValue('--dsh-workspace-indent')).toBe('24px')
+    expect((image.firstElementChild as HTMLElement).style.paddingInlineStart).toBe('32px')
     expect(image.querySelector('[data-row-key]')).toBeNull()
     expect(image.textContent).toBe(row.textContent)
     expect(image.firstElementChild).not.toBe(row)

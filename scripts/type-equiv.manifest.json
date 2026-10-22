@@ -1003,6 +1003,21 @@
     },
     {
       "doc": "docs/subsystems/tools.md",
+      "symbol": "ToolActivationContext",
+      "source": "packages/core/tools/src/contracts.ts"
+    },
+    {
+      "doc": "docs/subsystems/tools.md",
+      "symbol": "ToolRegistrationOptions",
+      "source": "packages/core/tools/src/contracts.ts"
+    },
+    {
+      "doc": "docs/subsystems/tools.md",
+      "symbol": "ResolvedToolSet",
+      "source": "packages/core/tools/src/contracts.ts"
+    },
+    {
+      "doc": "docs/subsystems/tools.md",
       "symbol": "ToolFailure",
       "source": "packages/core/tools/src/contracts.ts"
     },
@@ -1934,6 +1949,16 @@
     {
       "doc": "docs/subsystems/web-server.md",
       "symbol": "WebRoute",
+      "source": "packages/host/webserver/src/index.ts"
+    },
+    {
+      "doc": "docs/subsystems/web-server.md",
+      "symbol": "WebResource",
+      "source": "packages/host/webserver/src/index.ts"
+    },
+    {
+      "doc": "docs/subsystems/web-server.md",
+      "symbol": "WebResourceRoute",
       "source": "packages/host/webserver/src/index.ts"
     },
     {

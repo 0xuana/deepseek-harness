@@ -366,7 +366,12 @@ describe('web e2e: settings modal and General preferences', () => {
 
   it('stores Permission as the default for future sessions without changing an existing session', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-settings-permission'))
-    const existing = scaffold.ctx.sessions.create(SessionId('settings-permission-before'))
+    const createSession = async (id: string) => {
+      const handle = await scaffold.ctx.agents.create({ sessionId: SessionId(id) })
+      onTestFinished(() => handle.dispose())
+      return handle.agent.session
+    }
+    const existing = await createSession('settings-permission-before')
     expect(existing.snapshotEvents().find(event => event.type === 'permission/preset')?.data)
       .toEqual({ preset: 'workspace-write' })
 
@@ -386,7 +391,7 @@ describe('web e2e: settings modal and General preferences', () => {
     expect(existing.snapshotEvents().find(event => event.type === 'permission/preset')?.data)
       .toEqual({ preset: 'workspace-write' })
 
-    const created = scaffold.ctx.sessions.create(SessionId('settings-permission-after'))
+    const created = await createSession('settings-permission-after')
     expect(created.snapshotEvents().map(event => [event.type, event.data])).toEqual([
       ['permission/preset', { preset: 'read-only' }],
       ['sandbox/mode', { mode: 'read-only' }],
@@ -403,7 +408,7 @@ describe('web e2e: settings modal and General preferences', () => {
     await dialog.getByRole('button', { name: '完全权限' }).waitFor({ timeout: 10_000 })
     const confirmedDocument = await readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')
     expect(confirmedDocument).toContain('defaultPreset: danger-full-access')
-    const confirmed = scaffold.ctx.sessions.create(SessionId('settings-permission-confirmed'))
+    const confirmed = await createSession('settings-permission-confirmed')
     expect(confirmed.snapshotEvents().map(event => [event.type, event.data])).toEqual([
       ['permission/preset', { preset: 'danger-full-access' }],
       ['sandbox/mode', { mode: 'danger-full-access' }],
