@@ -7,7 +7,7 @@
  * viewer with, each paired with the answer that means it and nothing else, so a page, a test, and an
  * operator all read the same name for what happened.
  *
- * @module @deepseek-ai/dsh-experimental-liveshare-protocol/viewer-states
+ * @module @deepseek-ai/dsh-experimental-liveshare-protocol
  */
 
 /** One condition a viewer read can end in. */
