@@ -110,12 +110,14 @@ const ALWAYS = (): boolean => true
 /**
  * Resolve where a pointer sits inside the docked surface. An edge zone is only
  * offered where the split it would make is allowed: within the pane budget and
- * with room for two halves; otherwise the release is not a move at all.
+ * with room for two halves. Strip slots that preserve the dragged tab’s position
+ * offer no caret or placement intent.
  */
 function hitTest(
   root: HTMLElement,
   x: number,
   y: number,
+  tabId: TabId,
   canSplit: boolean,
   fits: ReadonlyMap<PaneId, HalvesFit>,
   dropZones: 'edges' | 'horizontal',
@@ -126,7 +128,10 @@ function hitTest(
     const strip = pane.querySelector<HTMLElement>('[data-dockkit-strip]')
     if (strip !== null && containsPoint(strip.getBoundingClientRect(), x, y)) {
       const tabs = [...strip.querySelectorAll<HTMLElement>('[data-dockkit-tab]')]
-      return { kind: 'strip', paneId, index: insertionIndex(tabs.map(tab => tab.getBoundingClientRect()), x) }
+      const index = insertionIndex(tabs.map(tab => tab.getBoundingClientRect()), x)
+      const sourceIndex = tabs.findIndex(tab => tab.dataset.dockkitTab === tabId)
+      if (sourceIndex >= 0 && (index === sourceIndex || index === sourceIndex + 1)) return undefined
+      return { kind: 'strip', paneId, index }
     }
     const zone = dropZones === 'horizontal'
       ? canSplit && fitOf(fits, paneId).row
@@ -229,12 +234,12 @@ function Surface({
             setPreview({
               ...NO_PREVIEW,
               draggingTabId: tabId,
-              dropTarget: hitTest(root, moved.clientX, moved.clientY, canSplit, fits, dropZones),
+              dropTarget: hitTest(root, moved.clientX, moved.clientY, tabId, canSplit, fits, dropZones),
             })
           },
           up: (released) => {
             if (!dragging) return
-            const target = hitTest(root, released.clientX, released.clientY, canSplit, fits, dropZones)
+            const target = hitTest(root, released.clientX, released.clientY, tabId, canSplit, fits, dropZones)
             if (target === undefined) {
               if (containsPoint(root.getBoundingClientRect(), released.clientX, released.clientY)) return
               intents.floatTab(tabId, floatRectAt(released.clientX, released.clientY, FLOAT_DEFAULT_SIZE))

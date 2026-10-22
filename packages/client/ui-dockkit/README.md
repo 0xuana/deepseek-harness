@@ -41,6 +41,8 @@ A docking layout kit: a split tree of tabbed panes with invertible operations, a
 
 Middle-clicking anywhere on a closable tab chip, including its close control, closes it through the same intent as its close button, without selecting it first. The chip owns the middle click and suppresses nested title content’s default action. Closing a background tab preserves the selected tab. Only the primary button starts tab dragging; a middle click while another mouse button is held does not close the tab.
 
+Strip slots that preserve the dragged tab’s position show no insertion caret and report no placement; the tab can still be dragged to split a pane or float.
+
 Tab context menus show the close action name without a shortcut hint: they act on the clicked tab, while shortcuts can target another focused pane. An unmodified Escape dismisses the foreground tab menu without closing the tab and returns focus from a menu item to its tab without drawing a focus outline. Tab and arrow navigation retain the tab’s visible focus indicator. Composition and held-key repeats do not dismiss it.
 
 <a id="embedding-it"></a>
