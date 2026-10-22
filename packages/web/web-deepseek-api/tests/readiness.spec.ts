@@ -1,6 +1,6 @@
 /**
- * Which model routes the Search and Fetch APIs serve, and whether a credential is present at all.
- * Both providers read one credential, so every case runs for both operations.
+ * Whether the Search and Fetch APIs have a credential for a model request, on any route. Both
+ * providers read one credential, so every case runs for both operations.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -105,12 +105,11 @@ describe.each(OPERATIONS)('%s readiness', (operation) => {
   })
 
   it.each<[string, Setup, boolean]>([
-    ['the shared DeepSeek key', { environment: { DEEPSEEK_API_KEY: 'chat-key' } }, false],
-    ['the shared key reference written out', { config: { apiKeyEnv: 'DEEPSEEK_API_KEY' }, environment: { DEEPSEEK_API_KEY: 'chat-key' } }, false],
-    ['their own API base and the shared key', { config: { baseURL: 'https://web-api.example.test/v1/tools' }, environment: { DEEPSEEK_API_KEY: 'chat-key' } }, false],
+    ['the DeepSeek key', { environment: { DEEPSEEK_API_KEY: 'chat-key' } }, true],
     ['a literal key', { config: { apiKey: 'own-key' } }, true],
     ['their own key reference', { config: { apiKeyEnv: 'DSH_WEB_API_KEY' }, environment: { DSH_WEB_API_KEY: 'own-key' } }, true],
-  ])('answers on another provider\'s route when the APIs have %s', async (_label, setup, expected) => {
+    ['no key', {}, false],
+  ])('answers on another provider\'s route, as on any route, when the APIs have %s', async (_label, setup, expected) => {
     const ctx = await mount(setup)
     expect(await ready(ctx, operation, 'moonshotai')).toBe(expected)
   })
@@ -148,30 +147,11 @@ describe.each(OPERATIONS)('%s readiness', (operation) => {
   })
 })
 
-describe.each(OPERATIONS)('%s route check', (operation) => {
-  it('refuses an operation with the shared DeepSeek key for another provider\'s conversation, sending nothing', async () => {
+describe.each(OPERATIONS)('%s on any model route', (operation) => {
+  it.each(['deepseek-official', 'moonshotai'])('sends the DeepSeek key for a conversation on the %s route', async (route) => {
     const authorization = stubApis()
     const ctx = await mount({ environment: { DEEPSEEK_API_KEY: 'chat-key' } })
-    await expect(operateOnRoute(ctx, operation, 'moonshotai')).rejects.toMatchObject({
-      code: 'WEB_PROVIDER_ROUTE_DISABLED',
-      message: 'DeepSeek web access serves conversations on other models only with a key of its own; this request runs '
-        + 'on the "moonshotai" model route. Only the user can enable it, by setting web-deepseek-api.apiKey or pointing '
-        + 'web-deepseek-api.apiKeyEnv at a key other than DEEPSEEK_API_KEY.',
-    })
-    expect(authorization()).toEqual([])
-  })
-
-  it('sends the key for a conversation on a DeepSeek route', async () => {
-    const authorization = stubApis()
-    const ctx = await mount({ environment: { DEEPSEEK_API_KEY: 'chat-key' } })
-    await operateOnRoute(ctx, operation, 'deepseek-official')
+    await operateOnRoute(ctx, operation, route)
     expect(authorization()).toEqual(['Bearer chat-key'])
-  })
-
-  it('sends a key of the APIs\' own for another provider\'s conversation', async () => {
-    const authorization = stubApis()
-    const ctx = await mount({ config: { apiKey: 'own-key' } })
-    await operateOnRoute(ctx, operation, 'moonshotai')
-    expect(authorization()).toEqual(['Bearer own-key'])
   })
 })

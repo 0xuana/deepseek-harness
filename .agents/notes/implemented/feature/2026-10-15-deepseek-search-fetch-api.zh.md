@@ -18,7 +18,7 @@ Status: implemented
 
 两种协议分别保存 API 基础地址。Messages 保留 `https://api.deepseek.com/anthropic/v1`，追加 `/messages`。直接检索使用 `web-deepseek-api.baseURL`，默认值为指南中的公网地址 `https://api.deepseek.com/v1/tools`，追加 `/search` 或 `/fetch`；已验证的开发地址为 `http://api-dev.deepseek.com:8031/api/v1/tools`。两者前缀不同，程序不会根据主机名推断，其他部署需填写完整基础地址。开关本身已是显式启用，因此以文档中的公网部署作为默认值。基础地址为空白或无法解析时，两个提供方都不可用。
 
-指南规定使用 API 密钥进行 Bearer 鉴权，请求只发送文档规定的鉴权与 JSON 内容类型请求头。DeepSeek 账号路由上的会话改为发送其账号 token，与 Messages 搜索一致；2026-10-16 公网 Search 与 Fetch 路由已接受该 token，因此只登录账号的用户也可以启用直接检索。与 Messages 搜索一样，这两个 API 只有在有自己的密钥时才服务其他路由上的对话，见[就绪决策](../architecture/2026-09-27-web-search-offered-by-provider-readiness.zh.md)。同日检查的一个 Anthropic 兼容网关提供 Messages 网页搜索，但没有 `/v1/tools` 路由；此类部署继续使用 Messages 搜索。
+指南规定使用 API 密钥进行 Bearer 鉴权，请求只发送文档规定的鉴权与 JSON 内容类型请求头。DeepSeek 账号路由上的会话改为发送其账号 token，与 Messages 搜索一致；2026-10-16 公网 Search 与 Fetch 路由已接受该 token，因此只登录账号的用户也可以启用直接检索。同日检查的一个 Anthropic 兼容网关提供 Messages 网页搜索，但没有 `/v1/tools` 路由；此类部署继续使用 Messages 搜索。
 
 ### 搜索结果与模型输入
 

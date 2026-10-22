@@ -6,5 +6,6 @@ recording: authored
 header:
   class: pi-ai-conversation-updates
   pin: true
+  toolSchemasSource: dynamic-tool-updates
   changes: 2
   promptChanges: 1

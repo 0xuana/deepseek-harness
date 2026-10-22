@@ -53,15 +53,13 @@ kind: "package-reference"
 
 使用 `deepseek-account` 路由的会话向账号服务请求已授权用于解析后端点的令牌，并通过 `x-dsh-auth-token` 发送；2026-10-16 公网 Search 与 Fetch 路由已接受该令牌。其他情况下，非空的字面 `apiKey` 优先于 `apiKeyEnv`；凭据引用通过 `ctx.credentials` 解析，该服务缺省时使用启动环境。API 密钥使用 `Authorization: Bearer`。凭据解析和端点选择使用同一份设置快照。
 
-与 [Messages 搜索](../web-search-deepseek/README.zh.md#authentication)一样，这两个提供者服务于 `deepseek-account` 与 `deepseek-official` 路由上的模型请求；其他路由上的模型请求，只有在这两个 API 有自己的密钥时才服务：字面 `apiKey`，或不是 `DEEPSEEK_API_KEY` 的 `apiKeyEnv`。没有自己的密钥时，为其他路由上的模型请求发起的操作会在读取任何凭据之前以 `WEB_PROVIDER_ROUTE_DISABLED` 失败，因此使用其他提供方模型的会话不会让共享的 DeepSeek 密钥计费；模型请求之外的操作不做这项检查。Web 搜索设置页保存的密钥存在 `apiKeyEnv` 指向的引用下，默认是 `DEEPSEEK_API_KEY`，因此除非部署把 `apiKeyEnv` 指向自己的引用，它只服务于 DeepSeek 路由。提供者不比较对话路由的地址与 API 基础地址。
-
-每个提供者的 `ready()` 回答模型请求将发起的操作能否运行且有凭据：该请求的路由是两个 DeepSeek 路由之一或这两个 API 有自己的密钥，并且要么路由是 `deepseek-account` 且 `ctx.deepseekAccount` 为 API 基础地址解析出令牌，要么设置了字面 `apiKey`，或 `ctx.credentials.describe` 报告 `apiKeyEnv` 引用已配置（没有该服务时，启动环境必须包含它）。账号令牌或凭据存储读取失败时回答 false。这两个提供者被选中时，[`dsh-tool-web`](../tool-web/README.zh.md#search-readiness) 会从它们回答 false 的每个请求中撤下 `web_search` 与 `web_fetch` 及其提示词指引。只检查是否存在：错误的密钥仍算就绪，并使每次调用失败。
+每个提供者的 `ready()` 回答模型请求将发起的操作是否有凭据，不论模型路由：该请求的路由是 `deepseek-account` 且 `ctx.deepseekAccount` 为 API 基础地址解析出令牌，或者设置了字面 `apiKey`，或 `ctx.credentials.describe` 报告 `apiKeyEnv` 引用已配置（没有该服务时，启动环境必须包含它）。账号令牌或凭据存储读取失败时回答 false。这两个提供者被选中时，[`dsh-tool-web`](../tool-web/README.zh.md#search-readiness) 会从它们回答 false 的每个请求中撤下 `web_search` 与 `web_fetch` 及其提示词指引。只检查是否存在：错误的密钥仍算就绪，并使每次调用失败。
 
 ### 结果与失败
 
 Search API 接收 `query`、`count`（配置的结果数，或请求中更小的 `maxResults`）、`need_content: false`，以及在 `sendOriginalQuestion` 未关闭时的 `ori_question`：发起会话中最近一条用户提示的文本，空白折叠后截取至 128 个字符。在会话之外或没有此类提示的搜索不发送该字段。提供者将 `results[].snippet` 映射为展示用摘录，将 `results[].summary` 映射为面向模型的摘录，并将可为 null 的 `date` 映射为可选的 `publishedAt`；`dsh-tool-web` 限制每条摘要的长度。空结果数组表示成功。Fetch 发送 `url`，以文本正文返回原始 Markdown，并报告 HTTP 状态 200，因为目标没有可用内容时 API 会返回错误状态。返回 URL 为请求 URL：API 不报告重定向后的最终 URL。
 
-`baseURL` 为空白或无法解析时，两个提供者都不可用；`count` 不在 1 至 50 之间时，Search 不可用。凭据缺失以 `WEB_PROVIDER_CREDENTIAL_MISSING` 失败，没有这两个 API 自己的密钥时，为其他提供方会话发起的操作以 `WEB_PROVIDER_ROUTE_DISABLED` 失败；取消使用 `WEB_ABORTED`；传输、HTTP 和响应格式错误使用 `WEB_PROVIDER_ERROR`。重定向在联系目标前即被拒绝。Fetch API 的非成功状态表示抓取失败，不代表目标页面的状态。账号鉴权的 HTTP 401 响应提供重新登录指引；其他请求失败指出端点及 `baseURL` 设置字段。不会自动重试或回退至其他提供者。
+`baseURL` 为空白或无法解析时，两个提供者都不可用；`count` 不在 1 至 50 之间时，Search 不可用。凭据缺失以 `WEB_PROVIDER_CREDENTIAL_MISSING` 失败；取消使用 `WEB_ABORTED`；传输、HTTP 和响应格式错误使用 `WEB_PROVIDER_ERROR`。重定向在联系目标前即被拒绝。Fetch API 的非成功状态表示抓取失败，不代表目标页面的状态。账号鉴权的 HTTP 401 响应提供重新登录指引；其他请求失败指出端点及 `baseURL` 设置字段。不会自动重试或回退至其他提供者。
 
 -----
 
@@ -118,7 +116,7 @@ Search API 接收 `query`、`count`（配置的结果数，或请求中更小的
 - 2026-10-16 的探测中，不同的 `ori_question` 未改变结果顺序、评分或摘要；由于指南将其列为意图信号，提供者仍会发送。
 - 查询和 URL 约束由远端服务执行。2026-10-16 抓取无法解析的目标域名时返回 HTTP 500，而非文档所述的 404，其失败信息与端点失败附带相同的端点指引。Fetch 既不暴露目标状态，也不暴露最终重定向 URL，因此结果报告 HTTP 200 和请求 URL；提供者丢弃 API 返回的页面标题。
 - `available()` 无法查询异步凭据存储；`ready()` 可以，因此凭据存储缺少密钥时，模型步骤会撤下这两个工具。直接调用 `ctx.web.search()` 或 `ctx.web.fetch()` 仍可能因凭据缺失失败。
-- 设置页无法为使用其他提供方模型的会话开启：它保存的是共享的 `DEEPSEEK_API_KEY`，因此这类会话需要在部署配置中设置字面 `apiKey` 或独立的 `apiKeyEnv` 引用。官方路由经网关对话时，操作仍把密钥发往配置的 API 基础地址，除非该地址接受这个密钥，否则调用失败。
+- 官方路由经网关对话时，操作仍把密钥发往配置的 API 基础地址，除非该地址接受这个密钥，否则调用失败。
 
 <a id="dev-note"></a>
 ### 开发备注
