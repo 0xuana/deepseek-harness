@@ -258,7 +258,11 @@ const TEAM_MESSAGE_PREFIX = /^Team message from ([^:]+):/u
 const AGENT_MESSAGE_PREFIX = /^Agent (\S+) sent a message:/u
 const OPAQUE_SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu
 
-/** Sender agent name of a teammate/agent notification, parsed from its body prefix. */
+/**
+ * Sender agent name of a teammate/agent notification, parsed from its body prefix.
+ * @param message - waking user message stamped with its producer source.
+ * @returns the readable member name, or null when the frame omits it or carries an opaque session id.
+ */
 export function triggerSenderOf(message: UserMessage): string | null {
   const kind: string = message.source.kind
   if (kind !== 'agent-message' && kind !== 'team-message') return null
