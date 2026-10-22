@@ -15,10 +15,12 @@ const available: RecommendationDetails = {
   status: 'available', title: { en: 'Session search', zh: '会话搜索' }, description: { en: 'Search past conversations', zh: '检索过去的会话' }, enabled: false,
 }
 
+const recommendation = { callId: ToolCallId('block:m1'), name: 'official-search', reason: '帮你找到上周讨论的方案' }
+
 function props(state?: RecommendationCardState, details: RecommendationDetails = available, view?: Partial<RecommendationView>): Props {
   return {
-    recommendation: { callId: ToolCallId('block:m1'), name: 'official-search', reason: '帮你找到上周讨论的方案' },
-    useProjection: () => ({ decisions: state === undefined ? {} : { 'block:m1': state }, ...view }),
+    recommendation,
+    useProjection: () => ({ decisions: state === undefined ? {} : { 'block:m1': state }, proposals: { 'block:m1': { ...recommendation, turn: 1 } }, ...view }),
     useLocale: <Value,>(selector: (value: string) => Value) => selector('zh-CN'),
     act: vi.fn(async () => ({ status: 'settled', outcome: 'applied' })),
     describe: vi.fn(async () => details),
@@ -39,33 +41,38 @@ it('keeps every dictionary aligned', () => {
   expect(Object.keys(ja).sort()).toEqual(Object.keys(zh).sort())
 })
 
-it('shows at most one card at the completed turn tail, hides never-offered cards, and none without a proposal', async () => {
+it('shows the proposal admitted in a turn once that turn has ended for any reason, and none for other turns', async () => {
   type Tail = ComponentProps<typeof RecommendationTail>
   const value = props()
-  const useRecommendations = vi.fn<(turn: string) => readonly Props['recommendation'][] | undefined>(() => undefined)
   const getTurnData = vi.fn().mockReturnValue({ closing: {} })
+  const end = (reason: NonNullable<Tail['turn']['end']>['data']['reason']): Tail['turn']['end'] => ({ type: 'turn/end', seq: SessionSeq(1), time: 0, data: { turn: 1, reason } })
   const tail: Tail = {
-    ...value, useRecommendations,
+    ...value,
     turn: {
-      turn: 1, start: undefined, end: { type: 'turn/end', seq: SessionSeq(1), time: 0, data: { turn: 1, reason: { kind: 'completed' } } }, status: 'closed', steps: [],
+      turn: 1, start: undefined, end: end({ kind: 'completed' }), status: 'closed', steps: [],
       data: { get: getTurnData, source: () => ({ getSnapshot: () => undefined, subscribe: () => () => {} }) },
     },
   }
-  const { rerender } = render(<RecommendationTail {...tail} />)
+  const view = (proposals: RecommendationView['proposals'], decisions: RecommendationView['decisions'] = {}): Tail['useProjection'] =>
+    () => ({ decisions, proposals })
+  const { rerender } = render(<RecommendationTail {...tail} useProjection={() => undefined} />)
   expect(screen.queryByRole('region')).toBeNull()
-  useRecommendations.mockReturnValue([])
-  rerender(<RecommendationTail {...tail} />)
+  rerender(<RecommendationTail {...tail} useProjection={view({ 'block:m3': { ...recommendation, callId: ToolCallId('block:m3'), turn: 2 } })} />)
   expect(screen.queryByRole('region')).toBeNull()
-  useRecommendations.mockReturnValue([value.recommendation, { ...value.recommendation, callId: ToolCallId('block:m2') }])
-  rerender(<RecommendationTail {...tail} />)
+  const second = { ...recommendation, callId: ToolCallId('block:m2'), name: 'second', turn: 1 }
+  rerender(<RecommendationTail {...tail} useProjection={view({ 'block:m2': second, 'block:m1': { ...recommendation, turn: 1 } })} />)
   expect(screen.getAllByRole('region')).toHaveLength(1)
-  expect(useRecommendations).toHaveBeenCalledWith('1')
+  expect(screen.getByRole('region').getAttribute('data-plugin-recommendation')).toBe('block:m1')
+  rerender(<RecommendationTail {...tail} useProjection={view({ 'block:m1': { ...recommendation, turn: 1 }, 'block:m2': second })} />)
+  expect(screen.getByRole('region').getAttribute('data-plugin-recommendation')).toBe('block:m1')
   rerender(<RecommendationTail {...tail} useProjection={props('suppressed').useProjection} />)
   expect(screen.queryByRole('region')).toBeNull()
   for (const reason of [{ kind: 'aborted', reason: { kind: 'user' } }, { kind: 'interrupted' }, { kind: 'error', error: { code: 'UNKNOWN', message: 'fixture' } }] as const) {
-    rerender(<RecommendationTail {...tail} turn={{ ...tail.turn, end: { type: 'turn/end', seq: SessionSeq(1), time: 0, data: { turn: 1, reason } } }} />)
-    expect(screen.queryByRole('region')).toBeNull()
+    rerender(<RecommendationTail {...tail} turn={{ ...tail.turn, end: end(reason) }} />)
+    expect(screen.getAllByRole('region')).toHaveLength(1)
   }
+  rerender(<RecommendationTail {...tail} turn={{ ...tail.turn, end: undefined }} />)
+  expect(screen.queryByRole('region')).toBeNull()
   getTurnData.mockReturnValue(undefined)
   rerender(<RecommendationTail {...tail} />)
   expect(screen.queryByRole('region')).toBeNull()

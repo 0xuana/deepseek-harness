@@ -52,7 +52,7 @@ export async function fixture() {
   const events: SessionEvent[] = []
   ctx.on('session/event', (session, event) => { if (session === agent.session) events.push(event) })
   const projection = recommendationProjection(PluginRecommendations.Config.parse({}))
-  const state = () => events.reduce(projection.apply, projection.init())
+  const state = () => events.reduce(projection.apply, projection.init(agent.session.header, agent.session.inheritedEventCount))
   /** Log an answer whose last block names the official plugin. */
   const propose = (id = 'answer-1', blocks: readonly object[] = [block], caller = agent) => {
     caller.session.append('assistant/message', answer(id, blocks, Math.max(1, state().turn)), { surfaceOp: 'append' })

@@ -113,7 +113,9 @@ it.each(['normal', 'consumer-unload'] as const)('enables through the real Loader
   // The outcome reaches the model with the next request; enabling starts no turn by itself.
   expect(agent.status).toBe('idle')
   expect(model.requests).toHaveLength(0)
-  expect(ctx.sessionProjections.snapshot(agent.session).values.pluginRecommendations).toEqual({ decisions: { [callId]: 'applied' } })
+  expect(ctx.sessionProjections.snapshot(agent.session).values.pluginRecommendations).toEqual({
+    decisions: { [callId]: 'applied' }, proposals: { [callId]: { callId, name, reason: 'Search saved conversations', turn: 0 } },
+  })
   agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Thanks.' }], source: { kind: 'user' } }))
   await agent.whenIdle()
   expect(model.requests).toHaveLength(1)

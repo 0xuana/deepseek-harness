@@ -19,7 +19,7 @@ export interface PluginRecommendation {
 export type RecommendationOutcome = 'dismissed' | 'applied' | 'already-enabled' | 'restart-required' | 'overridden' | 'failed' | 'cancelled'
 
 /** Replacement and suppression are derived from the log, never written as decisions: a later proposal replaces an undecided card;
- * a proposal written while user messages are queued, or after another card in the same answer or turn, is never offered. */
+ * a proposal written while user messages are queued, or after this experiment's card in the same turn, is never offered. */
 export type RecommendationCardState = RecommendationOutcome | 'replaced' | 'suppressed'
 
 /** A completed user action. A failure remains retryable from the card. */
@@ -28,9 +28,11 @@ export interface RecommendationDecision {
   readonly outcome: RecommendationOutcome
 }
 
-/** Full-session card states; the card itself comes from the answer block. */
+/** Full-session card states and admitted proposals. */
 export interface RecommendationView {
   readonly decisions: Readonly<Record<string, RecommendationCardState>>
+  /** Every admitted proposal by call id, with the turn whose answer carried it. */
+  readonly proposals: Readonly<Record<string, PluginRecommendation & { readonly turn: number }>>
   /** An unreadable receipt blocks actions without breaking other Session projections. */
   readonly invalid?: true | undefined
 }

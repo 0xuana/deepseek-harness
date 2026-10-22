@@ -135,6 +135,18 @@ describe('official recommendations', () => {
     expect(f.manager.setBundleEnabled).not.toHaveBeenCalled()
   })
 
+  it('treats inherited object member names as unknown proposals and logs nothing for them', async () => {
+    const f = await fixture()
+    f.propose()
+    const logged = f.events.length
+    expect(await f.ctx.pluginRecommendations.describe(f.agent, ToolCallId('toString'))).toEqual({ status: 'refused', reason: 'unknown' })
+    expect(await f.ctx.pluginRecommendations.act(f.agent, ToolCallId('toString'), 'dismiss')).toEqual({ status: 'refused', reason: 'unknown' })
+    expect(await f.ctx.pluginRecommendations.act(f.agent, ToolCallId('constructor'), 'enable')).toEqual({ status: 'refused', reason: 'unknown' })
+    expect(f.events).toHaveLength(logged)
+    expect(f.manager.listBundles).not.toHaveBeenCalled()
+    expect(f.manager.setBundleEnabled).not.toHaveBeenCalled()
+  })
+
   it('dismisses durably, rejects unknown ids, and rechecks catalog eligibility', async () => {
     const f = await fixture()
     expect(await f.ctx.pluginRecommendations.act(f.agent, callId, 'enable')).toEqual({ status: 'refused', reason: 'unknown' })

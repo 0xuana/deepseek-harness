@@ -35,7 +35,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-助手回答中最后一个合法的 `enable_official_plugin` 块存为隐藏的 Conversation 节点；聊天界面隐藏围栏本身。已结束回合的末尾插槽读取该回合的推荐索引，只显示第一项，因此回答流式输出时不显示卡片；Host 投影标为未展示的提案不渲染。卡片向 Host 读取插件当前的目录文本和启用状态；不在可推荐目录里的名字不显示操作按钮。Session 投影恢复刷新后的选择状态。卸载时同时移除可选 Remote 和所有界面注册。
+回合末尾插槽读取 `pluginRecommendations` Session 投影中的提案，在回合结束后（无论以何种原因结束）显示该回合接纳的那一条；投影每个回合最多接纳一条提案，聊天界面隐藏围栏本身。投影标为未展示的提案不渲染。卡片向 Host 读取插件当前的目录文本和启用状态；不在可推荐目录里的名字不显示操作按钮。Session 投影恢复刷新后的选择状态。卸载时同时移除可选 Remote 和所有界面注册。
 
 卡片沿用应用字体，通过标题、正文和独立操作区区分信息层级。构建入口将生成的 Remote 描述传给可直接从源码测试的挂载流程。
 
@@ -50,7 +50,7 @@ kind: "package-reference"
 ## 延伸阅读
 
 - [推荐服务](../plugin-recommendations/README.zh.md) — 推荐范围、启用和持久化。
-- [Conversation](../../client/ui-conversation/README.zh.md) — 事件索引。
+- [Session 投影](../../session/session-projection/README.zh.md) — 卡片读取的提案和卡片状态。
 - [Slots](../../client/ui-slots/README.zh.md) — 回合末尾呈现。
 
 <a id="model-experience"></a>

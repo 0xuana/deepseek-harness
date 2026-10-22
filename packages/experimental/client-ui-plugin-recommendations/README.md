@@ -35,7 +35,7 @@ Enable the [Plugin recommendations bundle](../plugin-recommendations/README.md).
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The last valid `enable_official_plugin` block of an assistant answer becomes a hidden Conversation node; the chat hides the fence itself. The completed-Turn tail reads its indexed proposals and renders the first one, so answer streaming does not display the card, and a proposal the Host projection marks never offered renders nothing. The card asks the Host for the plugin's current catalog text and selection; a name outside the eligible catalog shows no actions. Session projection decisions drive the card after reload. The optional Remote and all UI registrations are removed together on unload.
+The Turn tail reads the proposals of the `pluginRecommendations` Session projection and shows the one admitted in its Turn once that Turn has ended, for any end reason; the projection admits at most one proposal per Turn, and the chat hides the fence itself. A proposal the projection marks never offered renders nothing. The card asks the Host for the plugin's current catalog text and selection; a name outside the eligible catalog shows no actions. Session projection decisions drive the card after reload. The optional Remote and all UI registrations are removed together on unload.
 
 Cards use the application font, a distinct title and compact body scale, and a separate action footer. The built entry supplies generated Remote descriptors to the source-tested mount lifecycle.
 
@@ -50,7 +50,7 @@ Cards use the application font, a distinct title and compact body scale, and a s
 ## Further Exploration
 
 - [Recommendation service](../plugin-recommendations/README.md) — eligibility, activation and persistence.
-- [Conversation](../../client/ui-conversation/README.md) — event indexing.
+- [Session projection](../../session/session-projection/README.md) — the proposals and card states the card reads.
 - [Slots](../../client/ui-slots/README.md) — completed-Turn presentation.
 
 <a id="model-experience"></a>

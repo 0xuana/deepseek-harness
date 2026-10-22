@@ -29,6 +29,11 @@ declare module '@deepseek-ai/cordis' {
   interface Context { pluginRecommendations: PluginRecommendations }
 }
 
+/** Own entries only: browser-supplied ids such as `toString` never reach inherited object members. */
+function ownEntry<T>(record: Readonly<Record<string, T>>, key: string): T | undefined {
+  return Object.hasOwn(record, key) ? record[key] : undefined
+}
+
 /** Internal Remote and effect owner assembled by the plugin-recommendation feature. */
 export class PluginRecommendations extends TypertRemoteService {
   static inject = ['pluginManager', 'agents', 'sessionProjections', 'remoteAccess', 'skills']
@@ -54,7 +59,9 @@ export class PluginRecommendations extends TypertRemoteService {
       const state = this.projection.stateOf(agent.session)
       const pending = Object.entries(state.pendingStatus)
       if (pending.length === 0) return decision
-      const updates = pending.map(([callId]) => ({ plugin: state.proposals[callId]?.name, outcome: state.view.decisions[callId] }))
+      const updates = pending.map(([callId]) => ({
+        plugin: ownEntry(state.view.proposals, callId)?.name, outcome: ownEntry(state.view.decisions, callId),
+      }))
       return { ...decision, messages: [...decision.messages, createUserMessage({
         source: { kind: 'plugin-recommendations', through: SessionSeq(Math.max(...pending.map(([, seq]) => seq))),
           form: 'notice', summary: 'Official plugin status updated' },
@@ -82,7 +89,7 @@ export class PluginRecommendations extends TypertRemoteService {
   async describe(agent: Agent, callId: ToolCallId): Promise<RecommendationDetails> {
     if (this.isStopping()) return { status: 'refused', reason: 'closing' }
     if (!this.ctx.agents.roots().includes(agent)) return { status: 'refused', reason: 'not-live-root' }
-    const proposal = this.projection.stateOf(agent.session).proposals[callId]
+    const proposal = ownEntry(this.projection.stateOf(agent.session).view.proposals, callId)
     if (proposal === undefined) return { status: 'refused', reason: 'unknown' }
     const bundle = (await this.ctx.pluginManager.listBundles()).find(item => item.name === proposal.name)
     if (bundle === undefined || !eligible(bundle)) return { status: 'refused', reason: 'unavailable' }
@@ -131,9 +138,9 @@ export class PluginRecommendations extends TypertRemoteService {
   private async decide(agent: Agent, callId: ToolCallId, action: 'enable' | 'dismiss'): Promise<RecommendationActionResult> {
     const state = this.projection.stateOf(agent.session)
     if (state.view.invalid) return { status: 'refused', reason: 'invalid-history' }
-    const proposal = state.proposals[callId]
+    const proposal = ownEntry(state.view.proposals, callId)
     if (proposal === undefined) return { status: 'refused', reason: 'unknown' }
-    const previous = state.view.decisions[callId]
+    const previous = ownEntry(state.view.decisions, callId)
     if (previous !== undefined && previous !== 'failed' && previous !== 'cancelled') return { status: 'settled', outcome: previous }
     let outcome: RecommendationOutcome = 'dismissed'
     let errorCode: ManagementError['code'] | undefined

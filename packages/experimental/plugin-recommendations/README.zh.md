@@ -33,11 +33,11 @@ kind: "package-bundle"
     queuedMessageLimit: 2
 ```
 
-本实验可以单独使用，也可以和「个性化页面」同时开启。两者通过 `@deepseek-ai/dsh-util-action-block` 读取同一种回答块格式；每轮最多一张卡，因为「个性化页面」会对任何别的动作块让位，而本实验从不让位；两个包互不依赖。多个独立需求时，指引优先遵循用户明确的优先级，否则现成插件优先于新建页面；其余需求在回答正文中说明。
+本实验可以单独使用，也可以和「个性化页面」同时开启。两者通过 `@deepseek-ai/dsh-util-action-block` 读取同一种回答块格式，两个包互不依赖。各自每轮最多从自己的块出一张卡。多个独立需求时，指引要求一条回答只写一个块：用户明确的优先级优先，否则现成插件优先于新建页面；其余需求在回答正文中说明。一条回答若仍同时带两种块，两张卡都会显示。
 
 ### 结果与恢复
 
-启用需要修改 profile 的权限。Host 修改前会重新检查目录资格。已保存的选择可能需要重启，或被其他配置覆盖；失败和取消的变更可在同一张卡片上重试。已在别处开启的插件会直接记为已启用，不再改动。之后的新提案会替换尚未处理的卡片，旧卡片显示「已替换」；排队消息达到 `queuedMessageLimit` 时写下的提案，以及同一条回答或同一轮里另一张卡之后的提案，都不会展示。响应丢失时结果暂不确定，Session 投影重连后会恢复；重复点击卡片是幂等的。
+带块的回答所在的轮次结束后（无论以何种原因结束）卡片才会出现。启用需要修改 profile 的权限。Host 修改前会重新检查目录资格。已保存的选择可能需要重启，或被其他配置覆盖；失败和取消的变更可在同一张卡片上重试。已在别处开启的插件会直接记为已启用，不再改动。之后的新提案会替换尚未处理的卡片，旧卡片显示「已替换」；排队消息达到 `queuedMessageLimit` 时写下的提案，以及同一轮里本实验已出卡之后的提案，都不会展示。响应丢失时结果暂不确定，Session 投影重连后会恢复；重复点击卡片是幂等的。
 
 -----
 
@@ -49,7 +49,7 @@ kind: "package-bundle"
 
 Host 入口是函数插件。它的 `apply` 通过 `ctx.plugin` 组装内部的 `pluginRecommendations` Remote service。该 service 负责功能状态、effect 生命周期和类型化按钮调用；它不是可单独配置或替换的 YAML 条目，也不会向 `dsh-base` 添加 service。关闭功能会一并释放内部 service、skill provider 和监听器，并等待其拥有的异步工作结束。这沿用了现有 `command-feedback` 组装 `sessionFeedback` 的做法。
 
-本插件不添加模型工具，也不添加 system prompt 段。它注册 `official-plugins` skill，加载时追加来自 `pluginManager` 的当前可推荐目录。提案是最终回答末尾的一个 `dsh-action` 围栏 JSON 对象，含 `action: "enable_official_plugin"`、`name` 和 `reason`。Session 投影用共享的块解析器取回答中最后一个合法的官方插件块，以消息 id 标识卡片，并使用相同的每轮预留、排队抑制和替换规则。卡片向 Host 读取插件当前的标题、描述和启用状态，因此不在可推荐目录里的名字不会显示操作按钮。只有已随安装提供、可选、官方、可读取、可写且无错误的插件可以推荐。
+本插件不添加模型工具，也不添加 system prompt 段。它注册 `official-plugins` skill，加载时追加来自 `pluginManager` 的当前可推荐目录。提案是最终回答末尾的一个 `dsh-action` 围栏 JSON 对象，含 `action: "enable_official_plugin"`、`name` 和 `reason`。Session 投影用共享的块解析器取回答中最后一个合法的官方插件块，以消息 id 标识卡片，并使用相同的每轮预留、排队抑制和替换规则。fork 出的 Session 继承的事件不产生提案或回执，因此 fork 后没有卡片。投影的客户端视图在卡片状态旁带上已接纳的提案及其所在轮次。卡片向 Host 读取插件当前的标题、描述和启用状态，因此不在可推荐目录里的名字不会显示操作按钮。只有已随安装提供、可选、官方、可读取、可写且无错误的插件可以推荐。
 
 同一张卡上的并发操作共用一次执行；卸载时停止本地后续处理，不等待排在自身 HMR 卸载之后的 profile 变更。已接纳的变更由 Plugin Manager 负责完成；结果未确认的卡片再次点击时会重新检查 profile。安装状态由 profile 文件负责，实验性 Session 记录只保存历史决定。无法读取的回执会阻止操作并显示恢复提示，但不会卡住其他 Session 投影。每个决定都会通过现有的请求准备钩子排入下一次模型请求的状态通知；通知写入日志后才确认送达。
 
@@ -66,7 +66,7 @@ Host 入口是函数插件。它的 `apply` 通过 `ctx.plugin` 组装内部的 
 - [插件管理器](../../boot/plugin-manager/README.zh.md) — 配置档案变更。
 - [Session 投影](../../session/session-projection/README.zh.md) — 持久化派生状态。
 - [推荐卡片](../client-ui-plugin-recommendations/README.zh.md) — 回答末尾的推荐入口。
-- [个性化页面](../creation-recommendations/README.zh.md) — 另一种卡片动作；它会对本实验的块让位。
+- [个性化页面](../creation-recommendations/README.zh.md) — 另一种卡片动作，使用同一种块格式。
 
 <a id="model-experience"></a>
 ## 模型体验

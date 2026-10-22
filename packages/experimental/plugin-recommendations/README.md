@@ -33,11 +33,11 @@ Open Plugins → More → Experimental plugins and enable Plugin recommendations
     queuedMessageLimit: 2
 ```
 
-The experiment works with or without Personalized pages. Both read the same answer-block format through `@deepseek-ai/dsh-util-action-block`, and a turn shows at most one card because Personalized pages yields to any other action's block while this experiment never yields; neither package depends on the other. For several independent needs, guidance follows an explicit user priority and otherwise prefers an existing plugin over a new page; other needs stay in the answer.
+The experiment works with or without Personalized pages. Both read the same answer-block format through `@deepseek-ai/dsh-util-action-block`, and neither package depends on the other. Each admits at most one card per turn from its own blocks. For several independent needs, guidance writes one block per answer: an explicit user priority wins, and otherwise an existing plugin takes precedence over a new page; other needs stay in the answer. An answer that still carries both kinds of block shows both cards.
 
 ### Outcomes and recovery
 
-Enable requires permission to modify the profile. The Host rechecks catalog eligibility before changing it. A saved selection can require restart or be overridden; failed and cancelled changes can be retried from the same card. A plugin already selected elsewhere settles as already enabled without another change. A later proposal replaces an undecided card, which then shows Replaced; a proposal written while `queuedMessageLimit` or more messages are queued, or after another card in the same answer or turn, is never offered. A lost response leaves the outcome uncertain until the Session projection reconnects; repeated card actions are idempotent.
+The card appears once the Turn whose answer carries the block ends, for any end reason. Enable requires permission to modify the profile. The Host rechecks catalog eligibility before changing it. A saved selection can require restart or be overridden; failed and cancelled changes can be retried from the same card. A plugin already selected elsewhere settles as already enabled without another change. A later proposal replaces an undecided card, which then shows Replaced; a proposal written while `queuedMessageLimit` or more messages are queued, or after this experiment's card in the same turn, is never offered. A lost response leaves the outcome uncertain until the Session projection reconnects; repeated card actions are idempotent.
 
 -----
 
@@ -49,7 +49,7 @@ Enable requires permission to modify the profile. The Host rechecks catalog elig
 
 The Host entry is a function plugin. Its `apply` assembles the internal `pluginRecommendations` Remote service with `ctx.plugin`. That service owns feature state, effect lifetimes and typed button calls; it is not a separately configurable or replaceable YAML entry, and adds no service to `dsh-base`. Disabling the feature disposes its internal service, skill provider and listeners and drains its owned asynchronous work. This follows the existing `command-feedback` composition of `sessionFeedback`.
 
-The plugin adds no model tool and no system-prompt section. It registers the `official-plugins` skill; loading it appends the current eligible catalog from `pluginManager`. A proposal is one fenced `dsh-action` JSON object with `action: "enable_official_plugin"`, `name` and `reason` at the end of the final answer. The Session projection reads the answer's last valid official-plugin block through `@deepseek-ai/dsh-util-action-block`, identifies the card by the message id, and applies the same per-turn reservation, queue suppression and replacement rules as Personalized pages, without depending on that package. The card asks the Host for the plugin's current title, description and selection, so names outside the eligible catalog show no actions. Only shipped, optional, official plugins that are available, writable and error-free are eligible.
+The plugin adds no model tool and no system-prompt section. It registers the `official-plugins` skill; loading it appends the current eligible catalog from `pluginManager`. A proposal is one fenced `dsh-action` JSON object with `action: "enable_official_plugin"`, `name` and `reason` at the end of the final answer. The Session projection reads the answer's last valid official-plugin block through `@deepseek-ai/dsh-util-action-block`, identifies the card by the message id, and applies the same per-turn reservation, queue suppression and replacement rules as Personalized pages, without depending on that package. Events a forked Session inherits create no proposals or receipts, so a fork starts without cards. The projection’s client view carries the admitted proposals with their Turns beside the card states. The card asks the Host for the plugin's current title, description and selection, so names outside the eligible catalog show no actions. Only shipped, optional, official plugins that are available, writable and error-free are eligible.
 
 Concurrent actions on one card share an operation, and disposal stops local follow-up without waiting on a profile mutation queued behind its own HMR unload. Plugin Manager owns an accepted mutation; an unconfirmed card rechecks the profile when clicked again. Profile files own installation state; experimental Session records own only the historical decision. Unreadable receipts block actions and show a recovery message without stalling other Session projections. Each decision is queued as a status notice for the next model request through the existing request-preparation hook; delivery is acknowledged only after the notice is logged.
 
@@ -66,7 +66,7 @@ Concurrent actions on one card share an operation, and disposal stops local foll
 - [Plugin manager](../../boot/plugin-manager/README.md) — profile changes.
 - [Session projection](../../session/session-projection/README.md) — durable derived state.
 - [Recommendation cards](../client-ui-plugin-recommendations/README.md) — completed-answer placement.
-- [Personalized pages](../creation-recommendations/README.md) — the other card action; it yields to this experiment's block.
+- [Personalized pages](../creation-recommendations/README.md) — the other card action, written in the same block format.
 
 <a id="model-experience"></a>
 ## Model Experience

@@ -4,10 +4,11 @@ import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
-import type { PluginRecommendation, RecommendationActionResult, RecommendationDetails } from '@deepseek-ai/dsh-experimental-plugin-recommendations/types'
-import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
+import type {
+  PluginRecommendation, RecommendationActionResult, RecommendationDetails, RecommendationView,
+} from '@deepseek-ai/dsh-experimental-plugin-recommendations/types'
+import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { RecommendationKey } from './locales.ts'
-import type {} from './definition.ts'
 import css from './Card.module.css'
 
 /** Session-bound callbacks and language, without a service in the component. */
@@ -19,25 +20,30 @@ export interface CardInjected {
   hooks: { locale: HostObservable<string> }
 }
 
-/** Recommendations indexed by their originating Turn. */
-export interface RecommendationTailInjected extends CardInjected {
-  keyedHooks: { recommendations: (turn: string) => ObservableSnapshot<readonly PluginRecommendation[]> }
-}
-
 type CardProps = { recommendation: PluginRecommendation } & Pick<PropsRuntime<'conversation.chat.turnTail'>, 'useProjection'>
   & PropsLocale<'pluginRecommendations'> & InjectFace<CardInjected>
 
-/** Render the recommendation after the completed answer, never during tool execution.
- * @param props - Completed Turn and its indexed proposals.
- * @returns the Turn's first recommendation, or null when none was offered.
+/** The projection admits at most one proposal per turn; should several exist, the lowest call id is shown. */
+function proposalOf(view: RecommendationView | undefined, turn: number): PluginRecommendation | undefined {
+  let found: PluginRecommendation | undefined
+  for (const proposal of Object.values(view?.proposals ?? {})) {
+    if (proposal.turn === turn && (found === undefined || proposal.callId < found.callId)) found = proposal
+  }
+  return found
+}
+
+/** Place the proposal admitted in a turn after that turn's final answer, once the turn has ended.
+ * @param props - Turn location, projection reader and session-bound actions.
+ * @returns the recommendation card, or null when none was offered.
  */
 // Each optional bundle owns its card and locale contracts until the shared action-card layer owns this tail.
 /* jscpd:ignore-start */
-export function RecommendationTail({ turn, useRecommendations, ...props }: Pick<PropsRuntime<'conversation.chat.turnTail'>, 'turn' | 'useProjection'>
-  & PropsLocale<'pluginRecommendations'> & InjectFace<RecommendationTailInjected>) {
-  const recommendation = useRecommendations(String(turn.turn))?.[0]
-  const state = props.useProjection('pluginRecommendations')?.decisions[recommendation?.callId ?? '']
-  return recommendation === undefined || state === 'suppressed' || turn.end?.data.reason.kind !== 'completed' || turn.data.get('turn-tail')?.closing == null
+export function RecommendationTail({ turn, ...props }: Pick<PropsRuntime<'conversation.chat.turnTail'>, 'turn' | 'useProjection'>
+  & PropsLocale<'pluginRecommendations'> & InjectFace<CardInjected>) {
+  const view = props.useProjection('pluginRecommendations')
+  const recommendation = proposalOf(view, turn.turn)
+  const state = view?.decisions[recommendation?.callId ?? '']
+  return recommendation === undefined || state === 'suppressed' || turn.end === undefined || turn.data.get('turn-tail')?.closing == null
     ? null : <RecommendationCard {...props} recommendation={recommendation} />
 }
 /* jscpd:ignore-end */

@@ -60,8 +60,7 @@
     "@deepseek-ai/dsh-client-store": "workspace:*",
     "@deepseek-ai/dsh-client-ui-plugin-manager": "workspace:*",
     "@deepseek-ai/dsh-typert-protocol": "workspace:*",
-    "@deepseek-ai/dsh-package-manifest": "workspace:*",
-    "@deepseek-ai/dsh-util-action-block": "workspace:*"
+    "@deepseek-ai/dsh-package-manifest": "workspace:*"
   },
   "files": [
     "locale/*.json",

@@ -3,14 +3,12 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
-import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type {} from '@deepseek-ai/dsh-experimental-plugin-recommendations/remote'
 import type { TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-experimental-plugin-recommendations/types'
-import { RecommendationTail, type RecommendationTailInjected } from './Card.tsx'
-import { recommendationDefinition } from './definition.ts'
+import { RecommendationTail, type CardInjected } from './Card.tsx'
 import { en, ja, zh, type RecommendationKey } from './locales.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -18,7 +16,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 /** Registries available before this plugin mounts its optional Remote. */
-export const inject = ['slots', 'uiConversation', 'sessions', 'locale', 'remote', 'pluginNavigation']
+export const inject = ['slots', 'locale', 'remote', 'pluginNavigation']
 
 /** Mount the optional Remote and UI for the same plugin lifetime.
  * @param ctx - Client plugin context.
@@ -26,42 +24,34 @@ export const inject = ['slots', 'uiConversation', 'sessions', 'locale', 'remote'
  * @returns disposer removing the UI before the Remote contribution.
  */
 export async function mountRecommendations(ctx: Context, contribution: TypertRemoteContribution): Promise<() => Promise<void>> {
+  // Each independently optional bundle owns its Remote and dependent UI lifetime.
+  /* jscpd:ignore-start */
   const unmount = await ctx.remote.$mount(contribution)
   const ui = ctx.inject(['remote.pluginRecommendations'], registerUi)
   try { await ui } catch (error) { await ui.dispose(); await unmount(); throw error }
   return async () => { await ui.dispose(); await unmount() }
+  /* jscpd:ignore-end */
 }
 
 function registerUi(ctx: Context): void {
   ctx.effect(() => ctx.locale.register('pluginRecommendations', { en, zh, ja }), 'plugin-recommendations: locale')
-  ctx.effect(() => ctx.uiConversation.events.register(recommendationDefinition), 'plugin-recommendations: chat')
   ctx.slots.inject('conversation.chat.turnTail', () => ctx.slots.register({
     name: 'conversation.chat.turnTail', id: 'plugin-recommendation', locale: 'pluginRecommendations',
-    inject: (sessionId: SessionId): RecommendationTailInjected => {
-      const binding = ctx.sessions.binding(sessionId)
-      if (binding === undefined) throw new Error(`plugin-recommendations: unknown session "${sessionId}"`)
-      const chat = ctx.uiConversation.binding(binding).target('chat')
-      return {
-        openDetails: (packageName) => { ctx.pluginNavigation.openBundle(packageName) },
-        keyedHooks: { recommendations: (turn) => {
-          const snapshot = chat.getSnapshot()
-          if (snapshot === undefined) throw new Error('plugin-recommendations: Chat target is unavailable')
-          return snapshot.nodes.turnDataSource(Number(turn), 'plugin-recommendation')
-        } },
-        hooks: { locale: {
-          getSnapshot: () => ctx.locale.getSnapshot().active,
-          subscribe: listener => ctx.locale.subscribe(listener),
-        } },
-        resolveText: text => ctx.locale.resolveText(text),
-        describe: async (callId) => {
-          const result = await ctx.remote.pluginRecommendations.describe(sessionId, callId)
-          return result.ok ? result.value : undefined
-        },
-        act: async (callId, action) => {
-          const result = await ctx.remote.pluginRecommendations.act(sessionId, callId, action)
-          return result.ok ? result.value : undefined
-        },
-      }
-    },
+    inject: (sessionId: SessionId): CardInjected => ({
+      openDetails: (packageName) => { ctx.pluginNavigation.openBundle(packageName) },
+      hooks: { locale: {
+        getSnapshot: () => ctx.locale.getSnapshot().active,
+        subscribe: listener => ctx.locale.subscribe(listener),
+      } },
+      resolveText: text => ctx.locale.resolveText(text),
+      describe: async (callId) => {
+        const result = await ctx.remote.pluginRecommendations.describe(sessionId, callId)
+        return result.ok ? result.value : undefined
+      },
+      act: async (callId, action) => {
+        const result = await ctx.remote.pluginRecommendations.act(sessionId, callId, action)
+        return result.ok ? result.value : undefined
+      },
+    }),
   }, RecommendationTail))
 }
