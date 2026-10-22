@@ -9,7 +9,7 @@ kind: "package-library"
 
 ## 概述
 
-`@deepseek-ai/dsh-official-bundles` 保存由 dsh 安装决定的组合包包名：每个随附 profile 以哪些组合包启动、随附但默认关闭哪些组合包、哪些官方组合包按请求安装，以及哪些组合包曾由早期版本随附、现在要从 profile 中移除。[`dsh-app-boot`](../app-boot/README.zh.md) 在加载 profile 时应用这些列表；插件管理器、CLI、Desktop、WebWorker 镜像打包器和仓库检查直接读取它们。本包只含数据，因此增加或移除组合包只修改本包，不触及启动代码。请把它作为直接的库依赖使用，而不是通过 `cordis.yml` 使用。
+`@deepseek-ai/dsh-official-bundles` 保存由 dsh 安装决定的组合包名称：每个随附 profile 以哪些组合包启动、随附但默认关闭哪些组合包、哪些官方组合包按请求安装，以及哪些组合包曾由早期版本随附、现在要从 profile 中移除。[`dsh-app-boot`](../app-boot/README.zh.md) 在加载 profile 时应用这些列表；插件管理器、CLI、Desktop、WebWorker 镜像打包器和仓库检查直接读取它们。本包只含数据，因此增加或移除组合包不会改动 app-boot。请把它作为直接的库依赖使用，而不是通过 `cordis.yml` 使用。
 
 ## 目录
 
