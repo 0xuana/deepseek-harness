@@ -93,8 +93,8 @@ export const ja = {
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
   'appearance.title': 'Apariencia',
-  'appearance.light': 'Luz',
-  'appearance.dark': 'oscuro',
+  'appearance.light': 'Claro',
+  'appearance.dark': 'Oscuro',
   'appearance.system': 'Sistema',
   'fontSize.text.title': 'Tamaño de fuente',
   'fontSize.text.description': 'Sólo afecta al contenido de la conversación.',
@@ -122,7 +122,7 @@ export const es = {
 /** French dictionary, checked against the English keys. */
 export const fr = {
   'appearance.title': 'Apparence',
-  'appearance.light': 'Lumière',
+  'appearance.light': 'Clair',
   'appearance.dark': 'Sombre',
   'appearance.system': 'Système',
   'fontSize.text.title': 'Taille de la police',
@@ -151,7 +151,7 @@ export const fr = {
 /** German dictionary, checked against the English keys. */
 export const de = {
   'appearance.title': 'Aussehen',
-  'appearance.light': 'Licht',
+  'appearance.light': 'Hell',
   'appearance.dark': 'Dunkel',
   'appearance.system': 'System',
   'fontSize.text.title': 'Schriftgröße',
@@ -180,8 +180,8 @@ export const de = {
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
   'appearance.title': 'Внешний вид',
-  'appearance.light': 'Свет',
-  'appearance.dark': 'Темный',
+  'appearance.light': 'Светлая',
+  'appearance.dark': 'Тёмная',
   'appearance.system': 'Система',
   'fontSize.text.title': 'Размер шрифта',
   'fontSize.text.description': 'Влияет только на содержание разговора',
@@ -209,7 +209,7 @@ export const ru = {
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = {
   'appearance.title': 'Aparência',
-  'appearance.light': 'Luz',
+  'appearance.light': 'Claro',
   'appearance.dark': 'Escuro',
   'appearance.system': 'Sistema',
   'fontSize.text.title': 'Tamanho da fonte',

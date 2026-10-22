@@ -146,7 +146,7 @@ export const es = {
   platformFailed: 'No se pudo completar la operación. Intentar otra vez.', platformRetry: 'Reintentar',
   loading: 'Cargando…', backToHarness: 'Volver a DeepSeek Harness',
   settings: 'Configuración', contactUs: 'Comentarios', menu: 'Menú de cuenta',
-  nav: 'cuenta', signedIn: 'Iniciado sesión en DeepSeek', signedOut: 'No iniciado sesión',
+  nav: 'Cuenta', signedIn: 'Iniciado sesión en DeepSeek', signedOut: 'No iniciado sesión',
   signIn: 'Iniciar sesión', signOut: 'Cerrar sesión',
   signOutUnknownDescription: 'No se pudieron verificar las tareas en ejecución. Cerrar sesión puede interrumpir las tareas que utilizan esta cuenta. ¿Cerrar sesión ahora?',
   signOutDescription: 'Cerrar sesión no eliminará ningún dato. Puede iniciar sesión en esta cuenta nuevamente.',
