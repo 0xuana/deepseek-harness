@@ -13,13 +13,16 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {
   ConversationLocation, ConversationNodeContext, ConversationNodeDefinition,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { PerfCompactionState, PerfStepState, PerfViewNode } from './perf-contract.ts'
+import type {
+  PerfCompactionState, PerfEventMetrics, PerfStepState, PerfViewNode,
+} from './perf-contract.ts'
 import {
   CALL_LIMIT, fallbackState, foldEvent, isCodeMode, newState, promptOf, stepMetrics, triggerSenderOf,
 } from './perf-fold.ts'
 import {
   compactionEventId, compactionMetrics, foldCompaction, newCompactionState,
 } from './perf-compaction.ts'
+import { eventMetrics } from './perf-event.ts'
 
 /** Target name shared by every Definition and the view builder. */
 export const TARGET = 'perf'
@@ -38,6 +41,9 @@ const CODE_MODE_KIND = 'perf-code-mode'
 
 /** Definition kind of one compaction transaction. */
 const COMPACTION_KIND = 'perf-compaction'
+
+/** Definition kind of one non-step event row. */
+const EVENT_KIND = 'perf-event'
 
 /** Marker ids never collide with a step number. */
 const PROMPT_STEP = 0
@@ -271,8 +277,40 @@ const compactionDefinition: ConversationNodeDefinition<PerfCompactionState> = {
   },
 }
 
+/** One row per non-step event that explains request, prompt, tool, or prune changes. */
+const eventDefinition: ConversationNodeDefinition<PerfEventMetrics> = {
+  kind: EVENT_KIND,
+  target: TARGET,
+  match: event => (eventMetrics(event, undefined) === null
+    ? null
+    : { id: `${event.type}:${event.seq}`, role: 'start' }),
+  start: (_context, match) => {
+    const metrics = eventMetrics(match.event, match.location)
+    /* v8 ignore next 2 -- match accepted only events this normalizer handles. */
+    if (metrics === null) throw new Error('perf-event start requires a supported event')
+    return metrics
+  },
+  /* v8 ignore next -- event rows are created by their start match and never updated. */
+  update: context => context.state,
+  buildViewNode: (context) => {
+    const state = context.state
+    const start = context.start
+    /* v8 ignore next 2 -- a published node always retains its start match and state. */
+    if (state === undefined || start === undefined) return null
+    return {
+      key: context.key,
+      kind: context.kind,
+      id: context.id,
+      target: TARGET,
+      anchorSeq: start.event.seq,
+      location: start.location,
+      data: { kind: 'event', metrics: state },
+    }
+  },
+}
+
 /**
- * Register the five Definitions. Each registration rides the caller's fiber
+ * Register the six Definitions. Each registration rides the caller's fiber
  * effect, so unloading the plugin removes the nodes with it.
  * @param ctx - client root context.
  */
@@ -282,4 +320,5 @@ export function registerPerfDefinitions(ctx: Context): void {
   ctx.uiConversation.events.register(endDefinition)
   ctx.uiConversation.events.register(codeModeDefinition)
   ctx.uiConversation.events.register(compactionDefinition)
+  ctx.uiConversation.events.register(eventDefinition)
 }

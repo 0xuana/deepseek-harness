@@ -157,6 +157,8 @@ export interface PerfTurnMetrics {
   readonly wall: number | null
   /** Compaction transactions recorded in this turn, in start order. */
   readonly compactions: readonly PerfCompactionMetrics[]
+  /** Non-step event rows recorded in this turn, in event order. */
+  readonly events: readonly PerfEventMetrics[]
   readonly prompt: string | null
   /** Durable image references the prompt attached, in message order. */
   readonly promptImages: readonly ImageAttachmentRef[]
@@ -166,6 +168,27 @@ export interface PerfTurnMetrics {
   readonly promptSender: string | null
   /** Last answer preview measured in the turn. */
   readonly answer: string | null
+}
+
+/** Non-step event kinds the performance table can explain. */
+export type PerfEventKind = 'request-header' | 'system-prompt' | 'tool-set' | 'context-prune'
+
+/** One synthetic event row: request admission, prompt/tool changes, or a model-free prune. */
+export interface PerfEventMetrics {
+  readonly kind: PerfEventKind
+  readonly turn: number | null
+  readonly step: number | null
+  readonly time: number
+  readonly reason: string | null
+  readonly series: boolean
+  readonly provider: string | null
+  readonly model: string | null
+  readonly toolCount: number | null
+  readonly surfaceOp: 'append' | 'replace' | 'clear' | null
+  readonly chars: number | null
+  readonly added: readonly string[]
+  readonly removed: readonly string[]
+  readonly shadowedTokens: number | null
 }
 
 /** One completed or running compaction transaction with its model-call facts. */
@@ -230,6 +253,10 @@ export type PerfContribution =
   | {
     readonly kind: 'compaction'
     readonly metrics: PerfCompactionMetrics
+  }
+  | {
+    readonly kind: 'event'
+    readonly metrics: PerfEventMetrics
   }
   | {
     readonly kind: 'end'

@@ -18,11 +18,12 @@ import { PerfView } from '../src/client/PerfView.tsx'
 import { zh } from '../src/client/locales.ts'
 import css from '../src/client/perf.module.css'
 import {
-  barShare, formatChars, formatClock, formatDateTime, formatDateTimeShort, formatMs, formatPercent, formatTokens,
+  barShare, formatChars, formatClock, formatTokensDelta, formatDateTime, formatDateTimeShort, formatMs, formatPercent, formatTokens,
   formatTokensShort, formatTps,
 } from '../src/client/perf-format.ts'
 import type {
-  PerfCall, PerfCompactionMetrics, PerfSnapshot, PerfStepMetrics, PerfToolCount, PerfTurnMetrics,
+  PerfCall, PerfCompactionMetrics, PerfEventMetrics, PerfSnapshot, PerfStepMetrics, PerfToolCount,
+  PerfTurnMetrics,
 } from '../src/client/perf-contract.ts'
 
 const t = makeTranslate(zh)
@@ -136,9 +137,31 @@ function turn(overrides: Partial<PerfTurnMetrics> = {}): PerfTurnMetrics {
     wall: 1_000,
     prompt: null,
     compactions: [],
+    events: [],
     promptImages: [],
     promptSource: null,
     promptSender: null,
+    ...overrides,
+  }
+}
+
+/** One non-step event row with blank fields. */
+function perfEvent(overrides: Partial<PerfEventMetrics> = {}): PerfEventMetrics {
+  return {
+    kind: 'request-header',
+    turn: 1,
+    step: 1,
+    time: BASE,
+    reason: 'initial',
+    series: false,
+    provider: null,
+    model: null,
+    toolCount: null,
+    surfaceOp: null,
+    chars: null,
+    added: [],
+    removed: [],
+    shadowedTokens: null,
     ...overrides,
   }
 }
@@ -866,6 +889,7 @@ describe('turn rows', () => {
         }),
       ],
     }))
+    fireEvent.click(screen.getByRole('switch', { name: say('event.show') }))
     const rows = bodyRows()
     const first = rows.findIndex(row => (row.textContent ?? '').startsWith(say('step.label', { step: 1 })))
     const marker = rows.findIndex(row => (row.textContent ?? '').startsWith(say('compaction.label')))
@@ -879,6 +903,69 @@ describe('turn rows', () => {
     expect(completed[3]?.textContent).toBe(formatTokensShort(1_100))
     const running = rows.filter(row => (row.textContent ?? '').startsWith(say('compaction.label'))).at(-1)!
     expect(running.textContent).toContain(say('compaction.running'))
+  })
+
+  it('renders non-step event rows only when the event switch is on', () => {
+    mount(turnSnapshot([step({ step: 1, startTime: BASE, endTime: BASE + 1_000 })], {
+      events: [
+        perfEvent({ time: BASE + 100, reason: 'initial', provider: 'p', model: 'm', toolCount: 3 }),
+        perfEvent({ time: BASE + 200, reason: 'resume', series: true, provider: 'p', model: 'm', toolCount: 3 }),
+        perfEvent({ time: BASE + 300, reason: 'change' }),
+        perfEvent({ time: BASE + 400, reason: 'series' }),
+        perfEvent({ time: BASE + 450, reason: 'custom' }),
+        perfEvent({ time: BASE + 460, reason: null }),
+        perfEvent({ time: BASE + 500, kind: 'system-prompt', surfaceOp: 'append', chars: 120 }),
+        perfEvent({ time: BASE + 600, kind: 'system-prompt', surfaceOp: 'replace', chars: 200 }),
+        perfEvent({ time: BASE + 700, kind: 'system-prompt', surfaceOp: 'clear', chars: 0 }),
+        perfEvent({ time: BASE + 800, kind: 'tool-set', added: ['read'], removed: ['edit'] }),
+        perfEvent({ time: BASE + 850, kind: 'tool-set', added: ['read'], removed: [] }),
+        perfEvent({ time: BASE + 900, kind: 'tool-set', added: [], removed: ['edit'] }),
+        perfEvent({ time: BASE + 1_000, kind: 'context-prune', shadowedTokens: 4_000 }),
+      ],
+    }))
+    expect(screen.queryByText(say('event.request-header'))).toBeNull()
+    fireEvent.click(screen.getByRole('switch', { name: say('event.show') }))
+    expect(screen.getAllByText(say('event.request-header'))).toHaveLength(6)
+    expect(screen.getAllByText(say('event.system-prompt'))).toHaveLength(3)
+    expect(screen.getAllByText(say('event.tool-set')).length).toBeGreaterThanOrEqual(3)
+    expect(screen.getByText(say('event.context-prune'))).toBeTruthy()
+    expect(screen.getByText(say('event.header.detail', {
+      reason: say('event.reason.resume'), tools: '3',
+    }) + ` · ${say('event.series')}`)).toBeTruthy()
+    expect(screen.getByText(say('event.system.detail', {
+      action: say('event.system.clear'), chars: formatChars(0),
+    }))).toBeTruthy()
+    expect(screen.getAllByText(/新增 read|added read/).length).toBeGreaterThan(0)
+    expect(screen.getByText(say('event.prune.detail', { tokens: formatTokens(4_000) }))).toBeTruthy()
+  })
+
+  it('shows context deltas only when the delta switch is on', () => {
+    mount({
+      turns: [
+        turn({
+          turn: 1,
+          context: 1_500,
+          steps: [
+            step({ step: 1, context: 1_000 }),
+            step({ step: 2, context: 1_500 }),
+            step({ step: 3, context: 1_500 }),
+            step({ step: 4, context: null }),
+          ],
+        }),
+        turn({ turn: 2, context: 1_200, steps: [step({ step: 1, context: 1_200 })] }),
+        turn({ turn: 3, context: null, steps: [step({ step: 1, context: null })] }),
+      ],
+      stepCount: 6,
+    })
+    fireEvent.click(rowWithPrefix(say('turn.label', { turn: 1 })))
+    const step2 = (): string => cellsOf(stepRow(2))[3]?.textContent ?? ''
+    const turn2 = (): string => cellsOf(rowWithPrefix(say('turn.label', { turn: 2 })))[3]?.textContent ?? ''
+    expect(step2()).not.toContain(formatTokensDelta(500))
+    fireEvent.click(screen.getByRole('switch', { name: say('context.delta.show') }))
+    expect(step2()).toContain(formatTokensDelta(500))
+    expect(step2()).toContain('+0.50K')
+    expect(cellsOf(stepRow(3))[3]?.textContent).not.toContain('+0.00K')
+    expect(turn2()).toContain(formatTokensDelta(-300))
   })
 
   it('scales turn bars against the turns visible on screen', () => {

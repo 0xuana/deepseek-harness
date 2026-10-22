@@ -13,11 +13,12 @@ import { HoverCard, ImageLightbox, SegmentedControl, Switch } from '@deepseek-ai
 import type { ConvViewProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
-  PerfCall, PerfCompactionMetrics, PerfSnapshot, PerfStepMetrics, PerfToolCount, PerfTurnMetrics,
+  PerfCall, PerfCompactionMetrics, PerfEventKind, PerfEventMetrics, PerfSnapshot, PerfStepMetrics,
+  PerfToolCount, PerfTurnMetrics,
 } from './perf-contract.ts'
 import {
   DASH, barShare, formatChars, formatClock, formatDateTime, formatDateTimeShort, formatMs, formatPercent,
-  formatTokens, formatTokensShort, formatTps,
+  formatTokens, formatTokensDelta, formatTokensShort, formatTps,
 } from './perf-format.ts'
 import { aggregateTotals, turnContext, type ContextMode, type PerfTotals } from './perf-aggregate.ts'
 import { isNumber } from './perf-usage.ts'
@@ -139,6 +140,8 @@ interface ViewState {
   readonly openTurns: Readonly<Record<number, boolean>>
   readonly stepViews: Readonly<Record<number, StepViewState>>
   readonly showTotals: boolean
+  readonly showEvents: boolean
+  readonly showContextDelta: boolean
   readonly contextMode: ContextMode
 }
 
@@ -222,6 +225,9 @@ interface TurnRowsOptions {
   readonly state: StepViewState
   readonly turnScale: number
   readonly contextMode: ContextMode
+  readonly showEvents: boolean
+  readonly showContextDelta: boolean
+  readonly contextDelta: number | null
   readonly onToggle: () => void
   readonly onToggleDetail: (stepNumber: number) => void
   readonly onControl: (patch: Partial<StepViewState>) => void
@@ -233,6 +239,8 @@ interface StepRowsOptions {
   readonly t: PerfTranslate
   readonly now: number
   readonly state: StepViewState
+  readonly showEvents: boolean
+  readonly showContextDelta: boolean
   readonly onToggleDetail: (stepNumber: number) => void
   readonly onControl: (patch: Partial<StepViewState>) => void
 }
@@ -263,6 +271,7 @@ interface MetricCellsProps {
 interface ContextCellProps {
   readonly value: number | null
   readonly className: string | undefined
+  readonly delta?: number | null
 }
 
 /** Props of the time-composition cell. */
@@ -350,7 +359,7 @@ function defaultTurnOpen(mode: ViewMode, turnNumber: number, latestTurn: number 
 
 /** Fresh table state: follow the newest turn's open default. */
 function createViewState(): ViewState {
-  return { mode: 'newest', openTurns: {}, stepViews: {}, showTotals: false, contextMode: 'latest' }
+  return { mode: 'newest', openTurns: {}, stepViews: {}, showTotals: false, showEvents: false, showContextDelta: false, contextMode: 'latest' }
 }
 
 /** Read an array element whose index the surrounding bounds already prove. */
@@ -741,6 +750,18 @@ function stepGaps(turn: PerfTurnMetrics): ReadonlyMap<number, number> {
   return gaps
 }
 
+/** Context change of each step against the previous measured step in its turn. */
+function contextDeltas(turn: PerfTurnMetrics): ReadonlyMap<number, number> {
+  const deltas = new Map<number, number>()
+  let previous: number | null = null
+  for (const step of turn.steps) {
+    if (!isNumber(step.context)) continue
+    if (isNumber(previous) && step.context !== previous) deltas.set(step.step, step.context - previous)
+    previous = step.context
+  }
+  return deltas
+}
+
 /** Step slice shown for one turn: filtered pool, then the newest STEP_LIMIT. */
 function stepsOf(
   turn: PerfTurnMetrics,
@@ -851,10 +872,17 @@ function MetricCells({ cells, className }: MetricCellsProps): ReactElement {
 }
 
 /** Context column: the last measured prompt size of the row. */
-function ContextCell({ value, className }: ContextCellProps): ReactElement {
+function ContextCell({ value, className, delta = null }: ContextCellProps): ReactElement {
   return (
     <td className={className}>
       <span className={css.num}>{formatTokensShort(value)}</span>
+      {isNumber(delta) && delta !== 0
+        ? (
+          <span className={cx(css.numDelta, delta > 0 ? css.deltaUp : css.deltaDown)}>
+            {formatTokensDelta(delta)}
+          </span>
+        )
+        : null}
     </td>
   )
 }
@@ -1395,6 +1423,100 @@ function moreRows(
   )
 }
 
+/** Localized label of one non-step event kind. */
+function eventLabel(kind: PerfEventKind, t: PerfTranslate): string {
+  switch (kind) {
+    case 'request-header': return t('event.request-header')
+    case 'system-prompt': return t('event.system-prompt')
+    case 'tool-set': return t('event.tool-set')
+    case 'context-prune': return t('event.context-prune')
+    /* v8 ignore next -- PerfEventKind is exhaustive. */
+    default: return ''
+  }
+}
+
+/** Localized request-header reason. */
+function eventReason(reason: string | null, t: PerfTranslate): string {
+  switch (reason) {
+    case 'initial': return t('event.reason.initial')
+    case 'resume': return t('event.reason.resume')
+    case 'change': return t('event.reason.change')
+    case 'series': return t('event.reason.series')
+    default: return reason ?? ''
+  }
+}
+
+/** Localized system-message operation. */
+function eventAction(action: PerfEventMetrics['surfaceOp'], t: PerfTranslate): string {
+  switch (action) {
+    case 'append': return t('event.system.append')
+    case 'replace': return t('event.system.replace')
+    case 'clear': return t('event.system.clear')
+    /* v8 ignore next -- surfaceOp is null or one of the three actions. */
+    default: return ''
+  }
+}
+
+/** One-line explanation of a non-step event. */
+function eventDetail(event: PerfEventMetrics, t: PerfTranslate): string {
+  switch (event.kind) {
+    case 'request-header': {
+      const detail = t('event.header.detail', {
+        reason: eventReason(event.reason, t),
+        tools: String(event.toolCount ?? 0),
+      })
+      return event.series ? `${detail} · ${t('event.series')}` : detail
+    }
+    case 'system-prompt':
+      return t('event.system.detail', {
+        action: eventAction(event.surfaceOp, t),
+        chars: formatChars(event.chars),
+      })
+    case 'tool-set': {
+      const parts: string[] = []
+      if (event.added.length > 0) parts.push(t('event.tools.added', { tools: event.added.join(', ') }))
+      if (event.removed.length > 0) parts.push(t('event.tools.removed', { tools: event.removed.join(', ') }))
+      return parts.join(' · ')
+    }
+    case 'context-prune':
+      return t('event.prune.detail', { tokens: formatTokens(event.shadowedTokens) })
+  }
+}
+
+/** One synthetic non-step event row. */
+function eventRow(event: PerfEventMetrics, t: PerfTranslate): ReactElement {
+  const metrics: MetricsValues = {
+    context: null,
+    output: null,
+    cacheHit: null,
+    ttft: null,
+    model: null,
+    tps: null,
+    tool: null,
+    cacheRead: null,
+    cacheWrite: null,
+  }
+  const detail = eventDetail(event, t)
+  const side = event.provider !== null && event.model !== null
+    ? `${event.provider} / ${event.model}`
+    : event.kind === 'system-prompt'
+      ? eventAction(event.surfaceOp, t)
+      : event.kind === 'tool-set' ? t('event.tool-set') : ''
+  return (
+    <tr className={css.eventRow} title={t('event.title')}>
+      <td className={css.stepCell}>
+        <span className={css.compactionTag}>{eventLabel(event.kind, t)}</span>
+        <span className={css.stepClock}>{formatClock(event.time)}</span>
+      </td>
+      <td className={cx(css.promptCell, css.stepWhen)}>{side}</td>
+      <td className={css.stepDid}>{detail}</td>
+      <ContextCell value={null} className={css.stepMetric} />
+      <MetricCells cells={metricsCells(metrics, t)} className={css.stepMetric} />
+      <td className={css.stepMetric} title={t('event.title')}>{DASH}</td>
+    </tr>
+  )
+}
+
 /**
  * One synthetic compaction row: the summary model call's cost, shown between
  * the steps it ran between but excluded from the turn's step totals.
@@ -1468,8 +1590,9 @@ function compactionRow(
 
 /** Rendered rows of one turn: header, step-list controls, and step rows. */
 function stepRows(options: StepRowsOptions): ReactNode[] {
-  const { turn, t, now, state, onToggleDetail, onControl } = options
+  const { turn, t, now, state, showEvents, showContextDelta, onToggleDetail, onControl } = options
   const gaps = stepGaps(turn)
+  const deltas = showContextDelta ? contextDeltas(turn) : null
   const open = state.open ?? {}
   // Steps compare only with steps of the same turn.
   const stepScale = turn.steps.reduce((max, step) => {
@@ -1477,8 +1600,10 @@ function stepRows(options: StepRowsOptions): ReactNode[] {
     return span !== null && span > max ? span : max
   }, 0)
   const { shown } = stepsOf(turn, state)
-  const compactions = turn.compactions.slice()
+  const compactions = showEvents ? turn.compactions : []
+  const events = showEvents ? turn.events : []
   let nextCompaction = 0
+  let nextEvent = 0
   const rows: ReactNode[] = []
   const emitCompactionsUntil = (startTime: number | null): void => {
     while (nextCompaction < compactions.length) {
@@ -1488,8 +1613,17 @@ function stepRows(options: StepRowsOptions): ReactNode[] {
       nextCompaction += 1
     }
   }
+  const emitEventsUntil = (startTime: number | null): void => {
+    while (nextEvent < events.length) {
+      const event = events[nextEvent]
+      if (event === undefined || event.time > (startTime ?? Number.POSITIVE_INFINITY)) break
+      rows.push(eventRow(event, t))
+      nextEvent += 1
+    }
+  }
   for (const step of shown) {
     emitCompactionsUntil(step.startTime)
+    emitEventsUntil(step.startTime)
     const cells = metricsCells(step, t)
     const gap = gaps.get(step.step)
     const expanded = open[step.step] === true
@@ -1561,7 +1695,11 @@ function stepRows(options: StepRowsOptions): ReactNode[] {
             : null}
         </td>
         {stepDidCell(step, t)}
-        <ContextCell value={step.context} className={css.stepMetric} />
+        <ContextCell
+          value={step.context}
+          className={css.stepMetric}
+          delta={deltas === null ? null : deltas.get(step.step) ?? null}
+        />
         <MetricCells cells={cells} className={css.stepMetric} />
         <TimeCell
           value={step}
@@ -1577,13 +1715,15 @@ function stepRows(options: StepRowsOptions): ReactNode[] {
     if (expanded) rows.push(stepDetailRow(step, t, state, onControl))
   }
   emitCompactionsUntil(null)
+  emitEventsUntil(null)
   return rows
 }
 
 /** All rows of one turn: the clickable header, then the expanded body. */
 function turnRows(options: TurnRowsOptions): ReactNode[] {
   const {
-    turn, t, loadImage, now, open, state, turnScale, contextMode, onToggle, onToggleDetail, onControl,
+    turn, t, loadImage, now, open, state, turnScale, contextMode, showEvents, showContextDelta,
+    contextDelta, onToggle, onToggleDetail, onControl,
   } = options
   const cells = metricsCells(turn, t)
   const rows: ReactNode[] = [
@@ -1620,7 +1760,7 @@ function turnRows(options: TurnRowsOptions): ReactNode[] {
       </td>
       <PromptCell turn={turn} t={t} className={css.promptCellTurn} loadImage={loadImage} />
       {turnDidCell(turn, t)}
-      <ContextCell value={turnContext(turn, contextMode)} className={css.turnMetric} />
+      <ContextCell value={turnContext(turn, contextMode)} className={css.turnMetric} delta={contextDelta} />
       <MetricCells cells={cells} className={css.turnMetric} />
       <TimeCell
         value={turn}
@@ -1636,7 +1776,7 @@ function turnRows(options: TurnRowsOptions): ReactNode[] {
   if (!open) return rows
   const controls = moreRows(turn, t, state, onControl)
   if (controls !== null) rows.push(controls)
-  rows.push(...stepRows({ turn, t, now, state, onToggleDetail, onControl }))
+  rows.push(...stepRows({ turn, t, now, state, showEvents, showContextDelta, onToggleDetail, onControl }))
   return rows
 }
 
@@ -1698,6 +1838,15 @@ export function PerfView(props: PerfViewProps): ReactElement {
   }, [hasRunning])
   // Turns compare only with the other turns in the window.
   const totals = view.showTotals && turns.length > 0 ? aggregateTotals(turns) : null
+  const turnDeltas = new Map<number, number>()
+  if (view.showContextDelta) {
+    let previous: number | null = null
+    for (const turn of turns) {
+      const value = turnContext(turn, view.contextMode)
+      if (isNumber(previous) && isNumber(value) && value !== previous) turnDeltas.set(turn.turn, value - previous)
+      if (isNumber(value)) previous = value
+    }
+  }
   const scaleTurns = visibleTurns.size === 0 ? turns : turns.filter(turn => visibleTurns.has(turn.turn))
   const turnScale = scaleTurns.reduce((max, turn) => {
     const span = totalSpan(turn, now)
@@ -1872,6 +2021,9 @@ export function PerfView(props: PerfViewProps): ReactElement {
                 state: view.stepViews[turn.turn] ?? EMPTY_STEP_VIEW,
                 turnScale,
                 contextMode: view.contextMode,
+                showEvents: view.showEvents,
+                showContextDelta: view.showContextDelta,
+                contextDelta: view.showContextDelta ? turnDeltas.get(turn.turn) ?? null : null,
                 onToggle: () => { toggleTurn(turn.turn) },
                 onToggleDetail: (stepNumber) => { toggleStepDetail(turn.turn, stepNumber) },
                 onControl: (patch) => { patchStepView(turn.turn, patch) },
@@ -1895,6 +2047,19 @@ export function PerfView(props: PerfViewProps): ReactElement {
             checked={view.showTotals}
             onChange={(next) => { setView(previous => ({ ...previous, showTotals: next })) }}
             label={t('table.showTotals')}
+          />
+          <span className={css.controlLabel}>{t('event.show')}</span>
+          <Switch
+            checked={view.showEvents}
+            onChange={(next) => { setView(previous => ({ ...previous, showEvents: next })) }}
+            label={t('event.show')}
+          />
+          <span className={css.controlLabel}>{t('context.delta.show')}</span>
+          <Switch
+            checked={view.showContextDelta}
+            onChange={(next) => { setView(previous => ({ ...previous, showContextDelta: next })) }}
+            label={t('context.delta.show')}
+            title={t('context.delta.title')}
           />
           <span className={css.controlLabel}>{t('contextMode.label')}</span>
           <SegmentedControl

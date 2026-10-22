@@ -24,6 +24,7 @@ import type {
   PerfCall, PerfContribution, PerfSnapshot, PerfStepMetrics, PerfStepState, PerfViewNode,
 } from '../src/client/perf-contract.ts'
 import { TARGET } from '../src/client/perf-definition.ts'
+import { eventMetrics } from '../src/client/perf-event.ts'
 import { PerfView } from '../src/client/PerfView.tsx'
 import {
   EMPTY_PERF_SNAPSHOT, perfViewDefinition, registerPerfConversationView,
@@ -52,6 +53,11 @@ let seq = 0
 function event(type: string, data: unknown, time?: number): SessionEvent {
   seq += 1
   return { type, seq: SessionSeq(seq), time: time ?? 1_000 + seq, data } as SessionEvent
+}
+
+/** One event with an explicit surface operation. */
+function surfaceEvent(type: string, data: unknown, surfaceOp: string, time?: number): SessionEvent {
+  return { ...event(type, data, time), surfaceOp } as SessionEvent
 }
 
 /** One durable window entry. */
@@ -380,7 +386,7 @@ describe('browser plugin registration', () => {
     const bench = await mountPlugin()
     expect(bench.localeRegister).toHaveBeenCalledWith(NS, { zh, en, ja })
     expect(bench.events.map(definition => definition.kind)).toEqual([
-      'perf-step', 'perf-prompt', 'perf-turn-end', 'perf-code-mode', 'perf-compaction',
+      'perf-step', 'perf-prompt', 'perf-turn-end', 'perf-code-mode', 'perf-compaction', 'perf-event',
     ])
     expect(clientInject).toEqual(['slots', 'sessions', 'uiConversation', 'locale'])
     expect(bench.views).toEqual([perfViewDefinition])
@@ -724,6 +730,95 @@ describe('conversation Definitions', () => {
     expect(running?.turns[0]?.compactions[0]).toMatchObject({
       running: true, wall: null, context: null, provider: null, shadowedTokens: null, summaryChars: null, error: null,
     })
+  })
+
+  it('publishes request, prompt, tool-set, and prune event rows', async () => {
+    const definitions = await registeredDefinitions()
+    const snapshot = assemble(definitions, [
+      entry(event('compaction/prune', {
+        shadowedRange: { start: 1, end: 2 }, shadowedSeqs: [], shadowedTokenCount: 10,
+      }, 6_900)),
+      entry(event('turn/start', { turn: 9 })),
+      entry(event('request/header', {
+        header: { config: { provider: 'p', model: 'm', reasoningEffort: 'max', maxTokens: 1_000 } },
+        reason: 'initial',
+      }, 6_950)),
+      entry(event('step/start', { turn: 9, step: 1 }, 7_000)),
+      entry(event('user/message', { content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }, 7_010)),
+      entry(event('request/header', {
+        header: { config: { provider: 'p', model: 'm', reasoningEffort: 'max', maxTokens: 1_000 }, tools: [{ name: 'read' }] },
+        reason: 'series',
+        startsSeries: true,
+      }, 7_100)),
+      entry(surfaceEvent('system/message', {
+        turn: 9,
+        step: 1,
+        message: { role: 'system', source: { kind: 'system-prompt' }, content: [{ type: 'text', text: 'prompt' }] },
+      }, 'append', 7_200)),
+      entry(surfaceEvent('system/message', {
+        turn: 9,
+        step: 1,
+        message: { role: 'system', source: { kind: 'system-prompt' }, content: [] },
+      }, 'replace', 7_300)),
+      entry(event('developer/message', {
+        turn: 9,
+        step: 1,
+        message: {
+          role: 'developer',
+          source: { kind: 'tool-registry' },
+          content: [{ type: 'tool-addition', toolName: 'read' }, { type: 'tool-removal', toolName: 'edit' }],
+        },
+      }, 7_400)),
+      entry(event('developer/message', {
+        turn: 9,
+        step: 1,
+        message: { role: 'developer', source: { kind: 'plugin' }, content: [{ type: 'text', text: 'note' }] },
+      }, 7_450)),
+      entry(event('developer/message', {
+        turn: 9,
+        step: 1,
+        message: { role: 'developer', source: { kind: 'tool-registry' }, content: [{ type: 'text', text: 'noop' }] },
+      }, 7_480)),
+      entry(event('compaction/prune', {
+        shadowedRange: { start: 1, end: 2 }, shadowedSeqs: [], shadowedTokenCount: 5_000,
+      }, 7_600)),
+      entry(event('step/end', { turn: 9, step: 1 }, 7_700)),
+      entry(event('turn/end', { turn: 9, reason: { kind: 'completed' } }, 7_800)),
+    ])
+    expect(snapshot?.turns).toHaveLength(1)
+    const events = snapshot!.turns[0]!.events
+    expect(events.map(event => event.kind)).toEqual([
+      'request-header', 'request-header', 'system-prompt', 'system-prompt', 'tool-set', 'context-prune',
+    ])
+    expect(events[0]).toMatchObject({ kind: 'request-header', turn: 9, step: null, toolCount: null })
+    expect(events[1]).toMatchObject({
+      reason: 'series', series: true, provider: 'p', model: 'm', toolCount: 1, turn: 9, step: 1,
+    })
+    expect(events[2]).toMatchObject({ kind: 'system-prompt', surfaceOp: 'append', chars: 6 })
+    expect(events[3]).toMatchObject({ kind: 'system-prompt', surfaceOp: 'clear', chars: 0 })
+    expect(events[4]).toMatchObject({ kind: 'tool-set', added: ['read'], removed: ['edit'] })
+    expect(events[5]).toMatchObject({ kind: 'context-prune', shadowedTokens: 5_000 })
+
+    const turnLocation = { kind: 'turn', turn: { turn: 9 } } as Parameters<typeof eventMetrics>[1]
+    expect(eventMetrics(event('request/header', {
+      header: { config: { provider: 'p', model: 'm' } }, reason: 'initial',
+    }), turnLocation)).toMatchObject({ turn: 9, step: null, toolCount: null })
+    expect(eventMetrics(surfaceEvent('system/message', {
+      message: { role: 'system', source: { kind: 'system-prompt' }, content: [{ type: 'reasoning', text: 'r' }] },
+    }, 'replace'), undefined)).toMatchObject({ surfaceOp: 'clear', chars: 0 })
+    expect(eventMetrics(surfaceEvent('system/message', {
+      message: { role: 'system', source: { kind: 'system-prompt' }, content: [{ type: 'text', text: 'next' }] },
+    }, 'replace'), undefined)).toMatchObject({ surfaceOp: 'replace', chars: 4 })
+    expect(eventMetrics(event('developer/message', {
+      message: { role: 'developer', source: { kind: 'tool-registry' }, content: [{ type: 'text', text: 'noop' }] },
+    }), undefined)).toBeNull()
+    expect(eventMetrics(event('developer/message', {
+      message: {
+        role: 'developer',
+        source: { kind: 'tool-registry' },
+        content: [{ type: 'text', text: 'x', toolName: 'unknown' }],
+      },
+    }), undefined)).toBeNull()
   })
 
   it('attributes Code-Mode dispatch events through the root call table', async () => {
