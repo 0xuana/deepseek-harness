@@ -161,6 +161,39 @@ describe('sqlite backend specifics', () => {
     await backend.close()
   })
 
+  it.each(['single', 'per-record'] as const)('preserves the unit stamp when BEGIN is busy with layout %s, then retries', async (layout) => {
+    const path = await freshDbPath()
+    const first = backendAt(path)
+    await (await first.kv.open(DESCRIPTOR)).putRecord('records', 'saved', { n: 1 })
+    await first.close()
+
+    const observer = new DatabaseSync(path)
+    const backend = backendAt(path)
+    try {
+      const unit = await backend.kv.open({ ...DESCRIPTOR, version: 2, compatibleVersions: [1], layout })
+      await unit.deleteRecord('records', 'missing')
+      expect(observer.prepare('SELECT version FROM units WHERE name = ?').get(DESCRIPTOR.name)).toEqual({ version: 1 })
+      observer.exec('BEGIN IMMEDIATE')
+      await expect(unit.putRecord('records', 'new', { n: 2 })).rejects.toMatchObject({ errcode: 5 })
+      expect(observer.isTransaction).toBe(true)
+      expect(observer.prepare('SELECT version FROM units WHERE name = ?').get(DESCRIPTOR.name)).toEqual({ version: 1 })
+      expect((await unit.loadAll()).tables['records']).toEqual({ saved: { n: 1 } })
+      observer.exec('ROLLBACK')
+
+      await unit.putRecord('records', 'new', { n: 2 })
+      expect(observer.prepare('SELECT version FROM units WHERE name = ?').get(DESCRIPTOR.name)).toEqual({ version: 2 })
+      expect((await unit.loadAll()).tables['records']).toEqual({ saved: { n: 1 }, new: { n: 2 } })
+      await backend.close()
+      const oldReader = backendAt(path)
+      await expect(oldReader.kv.open({ ...DESCRIPTOR, layout })).rejects.toMatchObject({ code: 'version-mismatch' })
+      await oldReader.close()
+    } finally {
+      if (observer.isTransaction) observer.exec('ROLLBACK')
+      await backend.close()
+      observer.close()
+    }
+  })
+
   it.each(['ABORT', 'ROLLBACK'])('preserves data and stamp on %s during the first version update, then retries', async (action) => {
     const path = await freshDbPath()
     const first = backendAt(path)

@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it, onTestFinished } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Storage, { storageBackendServiceKey } from '@deepseek-ai/dsh-storage'
 import { runKvBackendContract } from '../../storage/tests/contract.ts'
@@ -470,20 +470,30 @@ describe('per-record layout', () => {
   it('reads per-record documents stamped with a declared compat version and stamps writes current', async () => {
     const root = await freshRoot()
     const backend = new JsonStorageBackend(root)
+    onTestFinished(() => backend.close())
     const compat = { ...descriptor, compatibleVersions: [1] }
     await mkdir(join(root, 'recs', 't'), { recursive: true })
-    await writeFile(recordPath(root, 'oldrec'), JSON.stringify({ version: 1, record: { v: 'old' } }), 'utf8')
+    const original = JSON.stringify({ version: 1, record: { v: 'old' } })
+    await writeFile(recordPath(root, 'oldrec'), original, 'utf8')
     const untouched = JSON.stringify({ version: 1, record: { v: 'keep' } })
     await writeFile(recordPath(root, 'untouched'), untouched, 'utf8')
     await writeFile(recordPath(root, 'ancient'), JSON.stringify({ version: 0, record: { v: 'no' } }), 'utf8')
+    const globalPath = join(root, 'recs', 'global.json')
+    const global = JSON.stringify({ version: 1, record: 'old global' })
+    await writeFile(globalPath, global, 'utf8')
     const unit = await backend.kv.open(compat)
     // Version 1 is declared compat and served; version 0 is not and discards.
-    expect(await unit.loadAll()).toEqual({ tables: { t: { oldrec: { v: 'old' }, untouched: { v: 'keep' } } }, global: null })
-    expect(JSON.parse(await readFile(recordPath(root, 'oldrec'), 'utf8')))
-      .toEqual({ version: 1, record: { v: 'old' } })
+    expect(await unit.loadAll()).toEqual({ tables: { t: { oldrec: { v: 'old' }, untouched: { v: 'keep' } } }, global: 'old global' })
+    await unit.deleteRecord('t', 'missing')
+    await expect(unit.putRecord('t', 'oldrec', { toJSON: () => { throw new Error('serialization failed') } }))
+      .rejects.toThrow('serialization failed')
+    expect(await readFile(recordPath(root, 'oldrec'), 'utf8')).toBe(original)
     await unit.putRecord('t', 'oldrec', { v: 'new' })
     expect(JSON.parse(await readFile(recordPath(root, 'oldrec'), 'utf8')))
       .toEqual({ version: 2, record: { v: 'new' } })
+    expect(await readFile(globalPath, 'utf8')).toBe(global)
+    await unit.setGlobal('new global')
+    expect(JSON.parse(await readFile(globalPath, 'utf8'))).toEqual({ version: 2, record: 'new global' })
     expect(await readFile(recordPath(root, 'untouched'), 'utf8')).toBe(untouched)
     await backend.close()
   })
