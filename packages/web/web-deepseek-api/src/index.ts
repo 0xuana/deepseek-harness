@@ -5,8 +5,9 @@
  * base. `web.searchProvider` and `web.fetchProvider` select them. A Session on the
  * DeepSeek account route authenticates with the account token when the account
  * service allows the endpoint; every other request uses the configured key. Both
- * providers serve only model requests on the DeepSeek routes, and report themselves
- * not ready for a model request whose operation would have no credential.
+ * providers serve model requests on the DeepSeek routes, and on other routes only
+ * with a key of their own, and report themselves not ready for a model request
+ * whose operation would have no credential.
  * @module @deepseek-ai/dsh-web-deepseek-api
  */
 import type { Context, Volatile } from '@deepseek-ai/cordis'
@@ -16,7 +17,7 @@ import type { Session } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-web'
 import { DeepSeekFetchApiProvider } from './fetch.ts'
 import { DEEPSEEK_DEFAULT_COUNT, DEEPSEEK_WEB_API_BASE_URL, DeepSeekSearchApiProvider } from './search.ts'
-import { deepSeekWebAuth, deepSeekWebCredentialReady } from './transport.ts'
+import { DEFAULT_API_KEY_ENV, deepSeekWebAuth, deepSeekWebCredentialReady } from './transport.ts'
 
 export { DEEPSEEK_FETCH_API_PROVIDER_ID, DeepSeekFetchApiProvider } from './fetch.ts'
 export type { DeepSeekFetchApiOptions } from './fetch.ts'
@@ -48,7 +49,7 @@ export interface Config {
 
 export const Config = z.object({
   apiKey: z.string().role('secret').volatile(),
-  apiKeyEnv: z.string().role('credential-ref').default('DEEPSEEK_API_KEY').volatile(),
+  apiKeyEnv: z.string().role('credential-ref').default(DEFAULT_API_KEY_ENV).volatile(),
   baseURL: z.string().default(DEEPSEEK_WEB_API_BASE_URL).volatile(),
   count: z.number().step(1).min(1).max(50).default(DEEPSEEK_DEFAULT_COUNT).volatile(),
   sendOriginalQuestion: z.boolean().default(true).volatile(),

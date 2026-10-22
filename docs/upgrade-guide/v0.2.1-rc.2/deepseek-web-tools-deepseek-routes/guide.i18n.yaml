@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.1-rc.2/deepseek-web-tools-deepseek-routes/guide.md
 /:
-  en: e8ef0ed8463d483f
-  zh: a75a73048758eade
-/deepseek-web-tools-serve-only-deepseek-models:
-  en: 876d377987303167
-  zh: 445bd1241d474167
-/deepseek-web-tools-serve-only-deepseek-models/change:
-  en: 624d2e9ed9896d14
-  zh: f2790acc4874983c
-/deepseek-web-tools-serve-only-deepseek-models/migration:
-  en: c600652c1fa9d9ff
-  zh: b4f8085ed34b766b
+  en: 3030d7c215cc474d
+  zh: a7ab11e0e5a90f50
+/deepseek-web-tools-need-their-own-key-for-other-models:
+  en: 9f5b7fb284c410c6
+  zh: 936efc232a8f6458
+/deepseek-web-tools-need-their-own-key-for-other-models/change:
+  en: 2296abaf2a9bd3cd
+  zh: 27b22f4bfdd813d6
+/deepseek-web-tools-need-their-own-key-for-other-models/migration:
+  en: 70921547e40b5730
+  zh: b9cf59590bf39a9e

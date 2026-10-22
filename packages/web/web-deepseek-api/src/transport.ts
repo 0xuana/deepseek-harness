@@ -18,8 +18,10 @@ import { WebError } from '@deepseek-ai/dsh-web'
 const ACCOUNT_PROVIDER = 'deepseek-account'
 /** Provider route id `dsh-llm-deepseek-api-key` registers. */
 const OFFICIAL_PROVIDER = 'deepseek-official'
-/** Chat routes whose model requests these APIs serve. */
+/** Chat routes whose model requests these APIs serve with the shared DeepSeek key. */
 const DEEPSEEK_ROUTES: ReadonlySet<string> = new Set([ACCOUNT_PROVIDER, OFFICIAL_PROVIDER])
+/** Credential reference the chat route and the Web search settings page share, and the APIs' default. */
+export const DEFAULT_API_KEY_ENV = 'DEEPSEEK_API_KEY'
 const USER_AGENT = 'deepseek-harness/0.0.1'
 
 /** Literal key and credential reference from one settings snapshot. */
@@ -82,7 +84,7 @@ interface DeepSeekWebRequest<T> {
  * @returns Authentication sources for one operation.
  */
 export function deepSeekWebAuth(ctx: Context, config: DeepSeekWebKeyConfig): DeepSeekWebAuth {
-  const { apiKeyEnv, literalApiKey } = keySources(config)
+  const { apiKeyEnv, literalApiKey, ownKey } = keySources(config)
   return {
     resolveAccountToken: async (endpoint) => {
       // The latest request context names the route that served the model
@@ -92,7 +94,7 @@ export function deepSeekWebAuth(ctx: Context, config: DeepSeekWebKeyConfig): Dee
     },
     resolveApiKey: async () => {
       // The key leaves only through this resolver, so a refusal here keeps it from both APIs.
-      const refusal = routeRefusal(initiatingRoute(ctx))
+      const refusal = routeRefusal(initiatingRoute(ctx), ownKey)
       if (refusal !== undefined) throw refusal
       if (literalApiKey !== undefined) return literalApiKey
       const credentials = ctx.get('credentials')
@@ -107,10 +109,11 @@ export function deepSeekWebAuth(ctx: Context, config: DeepSeekWebKeyConfig): Dee
 
 /**
  * Whether an operation for a model request on `route` may run and has a credential, checked in the order
- * the operation resolves them: the route must be a DeepSeek route, then the account token comes first on
- * the account route, then the API key. A failed read answers false, because the operation fails on that
- * read instead of trying the next credential. Only presence is checked: the key's value is not read and
- * the endpoint is not contacted, so a wrong key still counts as configured.
+ * the operation resolves them: the route must be a DeepSeek route unless the APIs have a key of their own,
+ * then the account token comes first on the account route, then the API key. A failed read answers false,
+ * because the operation fails on that read instead of trying the next credential. Only presence is
+ * checked: the key's value is not read and the endpoint is not contacted, so a wrong key still counts as
+ * configured.
  * @param ctx - Provider context with the account, credential, and environment planes.
  * @param config - Key sources and the API base the next operation would use.
  * @param route - Provider route of the model request being prepared.
@@ -119,7 +122,8 @@ export function deepSeekWebAuth(ctx: Context, config: DeepSeekWebKeyConfig): Dee
 export async function deepSeekWebCredentialReady(
   ctx: Context, config: DeepSeekWebKeyConfig & { readonly baseURL: string }, route: string | undefined,
 ): Promise<boolean> {
-  if (routeRefusal(route) !== undefined) return false
+  const { apiKeyEnv, literalApiKey, ownKey } = keySources(config)
+  if (routeRefusal(route, ownKey) !== undefined) return false
   const account = ctx.get('deepseekAccount')
   if (route === ACCOUNT_PROVIDER && account !== undefined) {
     let token: string | undefined
@@ -127,7 +131,6 @@ export async function deepSeekWebCredentialReady(
     catch (_unreadableGrant) { return false /* The operation fails on this read before it tries the API key. */ }
     if (token !== undefined && token.length > 0) return true
   }
-  const { apiKeyEnv, literalApiKey } = keySources(config)
   if (literalApiKey !== undefined) return true
   const credentials = ctx.get('credentials')
   if (credentials === undefined) {
@@ -139,14 +142,17 @@ export async function deepSeekWebCredentialReady(
 }
 
 /**
- * The key sources of one settings snapshot: its credential reference and its non-blank literal key.
+ * The key sources of one settings snapshot: its credential reference, its non-blank literal key, and
+ * whether the APIs have a key of their own, a literal key or a reference other than {@link DEFAULT_API_KEY_ENV}.
  * @param config - Literal key and credential reference.
- * @returns The branded reference and the literal key, when one is set.
+ * @returns The branded reference, the literal key when one is set, and whether the key is the APIs' own.
  */
-function keySources(config: DeepSeekWebKeyConfig): { apiKeyEnv: CredentialRef; literalApiKey?: string } {
+function keySources(config: DeepSeekWebKeyConfig): { apiKeyEnv: CredentialRef; literalApiKey?: string; ownKey: boolean } {
+  const literal = config.apiKey !== undefined && config.apiKey.length > 0
   return {
     apiKeyEnv: credentialRef(config.apiKeyEnv),
-    ...config.apiKey !== undefined && config.apiKey.length > 0 ? { literalApiKey: config.apiKey } : {},
+    ...literal ? { literalApiKey: config.apiKey } : {},
+    ownKey: literal || config.apiKeyEnv !== DEFAULT_API_KEY_ENV,
   }
 }
 
@@ -161,16 +167,19 @@ function initiatingRoute(ctx: Context): string | undefined {
 }
 
 /**
- * Why an operation for a model request on `route` must not run, or undefined when it may. These APIs
- * serve only the DeepSeek routes, so a conversation on another provider's model never bills the
- * DeepSeek key, whatever key the APIs are configured with.
+ * Why an operation for a model request on `route` must not run, or undefined when it may. Without a key
+ * of their own, these APIs serve only the DeepSeek routes, so a conversation on another provider's model
+ * never bills the shared DeepSeek key.
  * @param route - Provider route of the model request; undefined for an operation outside one.
+ * @param ownKey - Whether the APIs have a key of their own.
  * @returns The structured refusal, or undefined.
  */
-function routeRefusal(route: string | undefined): WebError | undefined {
-  if (route === undefined || DEEPSEEK_ROUTES.has(route)) return undefined
+function routeRefusal(route: string | undefined, ownKey: boolean): WebError | undefined {
+  if (ownKey || route === undefined || DEEPSEEK_ROUTES.has(route)) return undefined
   return new WebError(
-    `DeepSeek web access serves only conversations on DeepSeek models; this request runs on the ${JSON.stringify(route)} model route.`,
+    'DeepSeek web access serves conversations on other models only with a key of its own; this request runs on the '
+    + `${JSON.stringify(route)} model route. Only the user can enable it, by setting web-deepseek-api.apiKey or `
+    + 'pointing web-deepseek-api.apiKeyEnv at a key other than DEEPSEEK_API_KEY.',
     'WEB_PROVIDER_ROUTE_DISABLED',
   )
 }

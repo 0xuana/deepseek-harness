@@ -857,17 +857,18 @@ describe('web-search-deepseek search readiness', () => {
     expect(await ctx.web.searchReady('deepseek-account')).toBe(false)
   })
 
-  it.each<[string, Record<string, unknown>, Record<string, string>]>([
-    ['the DeepSeek chat key', {}, { DEEPSEEK_API_KEY: 'env-key' }],
-    ['a literal key', { apiKey: 'ds-key' }, {}],
-    ['its own key reference', { apiKeyEnv: 'DEEPSEEK_SEARCH_KEY' }, { DEEPSEEK_SEARCH_KEY: 'search-key' }],
-    ['a configured endpoint', { baseURL: 'https://search.example.test/anthropic/v1' }, { DEEPSEEK_API_KEY: 'env-key' }],
-  ])('is not ready for a model request on another provider route, even with %s', async (_label, config, env) => {
+  it.each<[string, Record<string, unknown>, Record<string, string>, boolean]>([
+    ['the shared DeepSeek key', {}, { DEEPSEEK_API_KEY: 'env-key' }, false],
+    ['the shared key reference written out', { apiKeyEnv: 'DEEPSEEK_API_KEY' }, { DEEPSEEK_API_KEY: 'env-key' }, false],
+    ['a configured endpoint and the shared key', { baseURL: 'https://search.example.test/anthropic/v1' }, { DEEPSEEK_API_KEY: 'env-key' }, false],
+    ['a literal key', { apiKey: 'ds-key' }, {}, true],
+    ['its own key reference', { apiKeyEnv: 'DEEPSEEK_SEARCH_KEY' }, { DEEPSEEK_SEARCH_KEY: 'search-key' }, true],
+  ])('answers for a model request on another provider route with %s', async (_label, config, env, expected) => {
     const saved = Object.fromEntries(Object.keys(env).map(name => [name, process.env[name]]))
     Object.assign(process.env, env)
     try {
       const ctx = await compose({ config })
-      expect(await ctx.web.searchReady('openai')).toBe(false)
+      expect(await ctx.web.searchReady('openai')).toBe(expected)
     } finally {
       for (const [name, value] of Object.entries(saved)) {
         if (value === undefined) Reflect.deleteProperty(process.env, name)
@@ -950,20 +951,22 @@ describe('web-search-deepseek route policy', () => {
     }
   }
 
-  it.each<[string, Record<string, unknown>]>([
-    ['the DeepSeek chat key', {}],
-    ['a key configured for search', { apiKey: 'search-key' }],
-  ])('refuses a search from a conversation on another provider route with %s, without contacting DeepSeek', async (_label, config) => {
-    const { fetchMock, error } = await searchOn('openai', config)
+  it('refuses a search with the shared DeepSeek key from a conversation on another provider route, without contacting DeepSeek', async () => {
+    const { fetchMock, error } = await searchOn('openai')
     expect(error).toMatchObject({
       code: 'WEB_PROVIDER_ROUTE_DISABLED',
-      message: 'DeepSeek web search serves only conversations on DeepSeek models; this request runs on the "openai" model route.',
+      message: 'DeepSeek web search serves conversations on other models only with a key of its own; this request runs '
+        + 'on the "openai" model route. Only the user can enable it, by setting web-search-deepseek.apiKey or pointing '
+        + 'web-search-deepseek.apiKeyEnv at a key other than DEEPSEEK_API_KEY.',
     })
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('searches with the key for a conversation on a DeepSeek route', async () => {
-    const { fetchMock, result } = await searchOn('deepseek-official', { apiKey: 'search-key' })
+  it.each<[string, string]>([
+    ['a conversation on a DeepSeek route', 'deepseek-official'],
+    ['a conversation on another route, since the key is its own', 'openai'],
+  ])('searches with a literal key for %s', async (_label, route) => {
+    const { fetchMock, result } = await searchOn(route, { apiKey: 'search-key' })
     expect(result).toMatchObject({ truncated: false })
     const [, init] = fetchMock.mock.calls[0] ?? []
     expect((init?.headers as Record<string, string>)['x-api-key']).toBe('search-key')
