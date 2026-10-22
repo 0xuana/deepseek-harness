@@ -11,8 +11,8 @@ import type { DesktopLocale } from './locale.ts'
 export function readDesktopLocaleCache(userData: string): DesktopLocale['id'] | undefined {
   try {
     const value = readFileSync(join(userData, 'desktop', 'locale-cache'), 'utf8').trim()
-    if (value === 'en' || value === 'zh-CN') return value
-    throw new Error('expected en or zh-CN')
+    if (value === 'en' || value === 'zh-CN' || value === 'ja') return value
+    throw new Error('expected en, zh-CN or ja')
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
       console.warn('desktop locale cache: using system language because the cache could not be read', error)

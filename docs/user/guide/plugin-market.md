@@ -18,7 +18,7 @@ A plugin market is one JSON index file that lists installable DSH bundles with t
 <a id="turn-on"></a>
 ## Turn on Discover
 
-Open **Plugins**, select **More** beside **Experimental plugins**, find **Custom plugin markets**, and switch it on. A **Discover** tab appears next to **Installed**, and Creator mode gains the read-only `plugin_market` tool. Switching the bundle off removes both again.
+Open **Plugins**, find **Custom plugin markets** under **Experimental plugins**, and switch it on. A **Discover** tab appears next to **Installed**, and Creator mode gains the read-only `plugin_market` tool. Switching the bundle off removes both again.
 
 DSH ships no index source. Select **Discover**, choose **Add index source**, and enter the URL of an index file. A URL must use `http:` or `https:` and must not contain a user name, password, or `#` fragment. Anyone on the network path can change an `http:` index, including the install specs it lists, so use `https:` for a market reached over a network you do not control. Each source belongs to the current profile.
 
@@ -97,7 +97,7 @@ Run it from a DSH checkout:
 pnpm --filter @deepseek-ai/dsh-plugin-market-generator start --input plugins.txt --output site/index.json --title "Team plugins"
 ```
 
-For an npm package, the index lists every version that is not deprecated and declares `dsh.bundle`. For a Git repository, it finds the bundle packages on the default branch and lists their versions at `vX.Y.Z`, `X.Y.Z`, and `<name>@X.Y.Z` tags, plus each package's version on the default branch. Titles, descriptions, icons, authors, and homepages come from each plugin's highest version. Paths are relative to the directory where you run pnpm.
+For an npm package, the index lists every version that is neither deprecated nor private and declares `dsh.bundle`. For a Git repository, it finds the bundle packages on the default branch whose `package.json` does not set `"private": true` and lists their versions at `vX.Y.Z`, `X.Y.Z`, and `<name>@X.Y.Z` tags, plus each package's version on the default branch. Titles, descriptions, icons, authors, and homepages come from each plugin's highest version. Paths are relative to the directory where you run pnpm.
 
 The generator only downloads and reads files; it never installs packages or runs their code. It keeps a cache in `.plugin-market-cache` next to the list, so a repeated run downloads only new versions and commits. Publish the output directory, `index.json` together with its `icons/` directory, as described above.
 
