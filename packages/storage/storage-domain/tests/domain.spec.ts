@@ -442,13 +442,13 @@ describe('durability failure', () => {
     await expect(failing).rejects.toMatchObject({ code: 'unknown-state' })
     await expect(queued).rejects.toMatchObject({ code: 'unknown-state' })
     // Synchronous reads and later chain jobs see the quarantined domain.
-    expect(() => table.get('a')).toThrowError(/unknown-state/)
-    expect(() => [...table.keys()]).toThrowError(/unknown-state/)
-    expect(() => table.size).toThrowError(/unknown-state/)
+    expect(() => table.get('a')).toThrow(/unknown-state/)
+    expect(() => [...table.keys()]).toThrow(/unknown-state/)
+    expect(() => table.size).toThrow(/unknown-state/)
     await expect(table.deleteMany(['missing'])).rejects.toMatchObject({ code: 'unknown-state' })
     await expect(table.put('c', { label: 'z', count: 3 })).rejects.toMatchObject({ code: 'unknown-state' })
     await expect(domain.global.set({ theme: 'dark' })).rejects.toMatchObject({ code: 'unknown-state' })
-    expect(() => domain.global.get()).toThrowError(/unknown-state/)
+    expect(() => domain.global.get()).toThrow(/unknown-state/)
     // Releasing the domain stays possible.
     await expect(domain.close()).resolves.toBeUndefined()
   })
