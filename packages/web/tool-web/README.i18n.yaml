@@ -33,8 +33,8 @@
   en: d542f546c78c40f5
   zh: 3589d1b27a326a8a
 /deepseek-ai-dsh-tool-web/use-this-package/search-readiness:
-  en: 6091cf5af732740d
-  zh: c25b57a472ac9657
+  en: 9971294c512b7d2a
+  zh: 4c199014274d5e1a
 /deepseek-ai-dsh-tool-web/use-this-package/failures-and-recovery:
   en: 19581f8f8947611b
   zh: 8eca83f619382659
@@ -45,14 +45,14 @@
   en: 025d0e6647a482f6
   zh: 0f5d72ff368f7572
 /deepseek-ai-dsh-tool-web/understand-the-implementation/source-map:
-  en: e91603a1c09e2f5c
-  zh: 4a6782092404b0f0
+  en: 89a643009808335f
+  zh: fa6404b3877146e0
 /deepseek-ai-dsh-tool-web/understand-the-implementation/search-flow:
   en: 80b7de753fe6b0de
   zh: 09727a7727248888
 /deepseek-ai-dsh-tool-web/understand-the-implementation/readiness-flow:
-  en: d464c8531cec86ed
-  zh: 2a18f4f492e185f5
+  en: 6ab828783f38d26a
+  zh: 89da55dffa8a9778
 /deepseek-ai-dsh-tool-web/understand-the-implementation/fetch-flow:
   en: bcb3270167081dbf
   zh: 82036ab27ae6fd96
@@ -69,8 +69,8 @@
   en: cf78b9dd5596495f
   zh: bd44560f8c2435e8
 /deepseek-ai-dsh-tool-web/model-experience/system-prompt/what-the-model-sees:
-  en: e4e3967f145c3f7d
-  zh: 6f10e952f83c2204
+  en: 4f6093748f69cd6c
+  zh: 599175f5d484344b
 /deepseek-ai-dsh-tool-web/model-experience/system-prompt/what-the-model-sees/web-search-guidance-with-fetch-enabled:
   en: 8221f44691b46903
   zh: 783e44de387666e9
@@ -102,8 +102,8 @@
   en: 3facb9e40c2a3dcc
   zh: 86423b514ca82e0a
 /deepseek-ai-dsh-tool-web/model-experience/withheld-search-tool/what-the-model-sees:
-  en: 3fa804ae8284c6bb
-  zh: 3f2cdd1d9bfc2482
+  en: 651279d71880d6f4
+  zh: 6b7d744c7edb5eb2
 /deepseek-ai-dsh-tool-web/model-experience/withheld-search-tool/token-effect:
   en: fc3904d8f90cc055
   zh: 09199c261d7c5bfc
@@ -159,8 +159,8 @@
   en: f5d5f97a153f7c70
   zh: f681f89596f500f5
 /deepseek-ai-dsh-tool-web/known-limitations-and-deferred-work:
-  en: 1f74619c42a5eecb
-  zh: be08aec1db1ac459
+  en: 7cd86ef1db2f6743
+  zh: b4cf681add3837d6
 /deepseek-ai-dsh-tool-web/known-limitations-and-deferred-work/dev-note:
   en: 7f775cc79dbce94b
   zh: 12b8f68f9e7c48ca

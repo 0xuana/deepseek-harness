@@ -10,18 +10,18 @@ Status: implemented
 
 ## Decision
 
-web 能力 seam 的每个角色各负责逐请求检查的一部分：
+web 能力 seam 的每个角色各负责逐步骤检查的一部分：
 
 - **Service Definition。** `WebSearchProvider` 有一个可选的 `ready(llmProvider)`，回答为该对话路由上的模型请求发起的搜索是否有可发送的凭据。它只检查配置，不发起网络调用。`ctx.web.searchReady(llmProvider?)` 按与 `search()` 相同的规则解析提供方并返回其回答。没有 `ready()` 的提供方视为就绪；选择失败时回答 true，因为 `search()` 会把该失败报告为结构化 `WebError`。
 - **Service Provider。** 以下情况 `dsh-web-search-deepseek` 回答 true：路由为 `deepseek-account` 且 `ctx.deepseekAccount.resolveToken()` 为配置的搜索端点返回 token；配置段带有字面 `apiKey`；或 `ctx.credentials.describe()` 报告 `apiKeyEnv` 引用已配置（没有该服务时，启动环境中存在该变量）。它按 `search()` 解析凭据的顺序检查，读取账号 token 或凭据存储失败时回答 false，因为 `search()` 会在该次读取上失败，而不会尝试下一种凭据。提供方不点名任何工具或提示词段落。
-- **Consumer。** `dsh-tool-web` 添加一个前置的 `system-prompt/assemble` 监听器。对于每个提供 `web_search` 的组装，它以模型选择写入组装变量的路由询问 `ctx.web.searchReady()`，回答 false 时移除该工具及其 `tool:web_search` 提示词段落。前置使监听器在模型选择之后运行。包含 PTC `run_code` 传输工具的组装原样返回，因为生成的 SDK 独立于工具列表声明 `web_search`。
+- **Consumer。** `dsh-tool-web` 注册 `web_search` 时带上一个[步骤激活条件](../../../../packages/core/tools/README.zh.md#conditional-tools)，以该步骤模型选择的路由询问 `ctx.web.searchReady()`。agent loop 在组装该步骤之前解析各条件，因此声明的工具、`tool:web_search` 提示词段落、PTC 程序绑定与派发都读取同一个准入集合。
 
 API 密钥能否计入，取决于是否为搜索单独做了配置：字面 `apiKey`、不是 `DEEPSEEK_API_KEY` 的 `apiKeyEnv`、`baseURL`，或 `$DEEPSEEK_SEARCH_BASE_URL`。配置了其中任意一项的用户是有意设置了搜索，因此为搜索配置的密钥和端点服务于每个路由。没有这种配置时，密钥就是 DeepSeek 的聊天密钥，提供方会做两项检查，并在每次搜索的 API 密钥解析函数（密钥唯一的出口）中再做一遍：
 
 - **路由。** 路由不是 `deepseek-account` 或 `deepseek-official` 的模型请求，会以 `WEB_PROVIDER_ROUTE_DISABLED` 被拒绝，因为它的搜索会让 DeepSeek 聊天密钥为其他提供方的对话计费。
 - **端点。** 当搜索要发送官方聊天路由自己的密钥引用时，搜索端点必须与该路由的聊天地址同源；否则以 `WEB_PROVIDER_ENDPOINT_MISMATCH` 拒绝，因为网关的密钥不是 DeepSeek 的密钥。提供方找到激活的 `dsh-llm-deepseek-api-key` Loader 行，用该包自己的解析函数解析它的地址。没有这一行的组合没有可比较的聊天地址。
 
-只看凭据是否存在：不读取 API 密钥的值，也不访问任何端点，因此错误的密钥，或不提供原生 `web_search_20250305` 服务器工具的端点，仍会让该工具保持提供。撤下只改变提供给模型的工具：仍然到达的调用会在运行时解析凭据，并以现有的结构化错误失败。
+只看凭据是否存在：不读取 API 密钥的值，也不访问任何端点，因此错误的密钥，或不提供原生 `web_search_20250305` 服务器工具的端点，仍会让该工具保持准入。未准入 `web_search` 的步骤也会以 `UNKNOWN_TOOL` 拒绝对它的调用，因此模型重复先前的调用也到达不了任何提供方；在模型步骤之外发起的搜索，在解析密钥时仍会执行提供方的上述检查。
 
 请求头记录组装后的工具，因此 agent loop（智能体循环）通过工具注册表更新宣告每次变化。路由切换、存储密钥或删除密钥都会改变下一个请求；DeepSeek 路由以延迟加载的新增方式载入重新提供的工具，不支持工具更新的路由则接收完整工具列表。
 
@@ -35,7 +35,7 @@ API 密钥能否计入，取决于是否为搜索单独做了配置：字面 `ap
 
 **在 `dsh-tool-web` 中注册或注销 `web_search`。** 注册由同一 agent preset 的所有会话共享，而凭据取决于每个请求的路由。注销还会使点名 `web_search` 的 `toolOrder` 条目和 subagent `toolFilter` 限制失败。
 
-**为 `dsh-tools` 增加按请求的可见性谓词。** 它也能覆盖 PTC SDK，但会为一个工具的需要给核心包增加通用的工具可用性 API。
+**从组装好的请求中移除 `web_search`。** `system-prompt/assemble` 监听器可以删掉该声明及其段落，但工具仍可执行，因此模型重复先前的调用时仍会运行它，PTC 程序也仍能绑定它。提示词组装也已不再携带工具声明。
 
 **只在 DeepSeek 账号路由上提供搜索。** 账号 token 只对官方端点签发，因此不需要端点检查。但所有发行 profile 的默认路由都是 `deepseek-official`，搜索会因此默认关闭，连与账号同样稳妥的官方 API 密钥情况也一并关闭。
 
@@ -51,6 +51,6 @@ API 密钥能否计入，取决于是否为搜索单独做了配置：字面 `ap
 
 ## Consequences
 
-`dsh-web` 增加两个公共成员：可选的 `WebSearchProvider.ready()` 与 `WebRuntime.searchReady()`。`searchReady()` 是其唯一消费方所需的最小查询，这正是[观测接口决策](../../archived/simplification/2026-07-04-drop-unconsumed-web-observation-surface.md)允许状态查询回归的方式；它既不报告可用性，也不报告选择失败。Exa 与 Perplexity 提供方没有实现 `ready()`，其行为不变。PTC 呈现在没有凭据时仍然提供 `web_search`。无法提供原生服务器工具的端点仍会让工具保持提供，并使每次调用失败。在路由不变时移除工具会改变声明的工具，并使提示词缓存失效一次；模型切换本身已经使缓存失效。在其他提供方的对话中搜索，需要为搜索单独配置密钥或端点；写出默认的密钥引用 `DEEPSEEK_API_KEY` 不算单独配置，而写出的 `baseURL` 即使就是默认端点也算。读取官方聊天地址让本提供方依赖 `dsh-llm-deepseek-api-key` 与 Loader 的行；回放组合禁用了该行，因此跳过端点检查。
+`dsh-web` 增加两个公共成员：可选的 `WebSearchProvider.ready()` 与 `WebRuntime.searchReady()`。`searchReady()` 是其唯一消费方所需的最小查询，这正是[观测接口决策](../../archived/simplification/2026-07-04-drop-unconsumed-web-observation-surface.md)允许状态查询回归的方式；它既不报告可用性，也不报告选择失败。Exa 与 Perplexity 提供方没有实现 `ready()`，其行为不变。未准入 `web_search` 的步骤，其 PTC 程序绑定中也没有它。无法提供原生服务器工具的端点仍会让工具保持准入，并使每次调用失败。在路由不变时移除工具会改变声明的工具，并使提示词缓存失效一次；模型切换本身已经使缓存失效。在其他提供方的对话中搜索，需要为搜索单独配置密钥或端点；写出默认的密钥引用 `DEEPSEEK_API_KEY` 不算单独配置，而写出的 `baseURL` 即使就是默认端点也算。读取官方聊天地址让本提供方依赖 `dsh-llm-deepseek-api-key` 与 Loader 的行；回放组合禁用了该行，因此跳过端点检查。
 
-单元测试分别固定每个角色：`packages/web/web/tests/web.spec.ts` 覆盖 `searchReady()` 询问哪个提供方以及选择失败时的回答，`packages/web/web-search-deepseek/tests/deepseek.spec.ts` 覆盖 `ready()` 的每种凭据情况，`packages/web/tool-web/tests/tool-web.spec.ts` 通过真实的提示词、工具与模型选择服务进行组装。发行版 headless 无密钥冒烟测试与 `web-search-unconfigured` 录制会话快照在真实组合中固定了撤下行为。快照回放提供占位 DeepSeek 密钥，因此其工具列表不依赖运行环境。`packages/web/web-search-deepseek/tests/chat-endpoint.spec.ts` 用真实 Loader 组合挂载官方聊天路由，固定端点检查；`pi-ai-conversation-updates` 快照固定了 pi-ai 路由上的对话不会获得 `web_search`。
+单元测试分别固定每个角色：`packages/web/web/tests/web.spec.ts` 覆盖 `searchReady()` 询问哪个提供方以及选择失败时的回答，`packages/web/web-search-deepseek/tests/deepseek.spec.ts` 覆盖 `ready()` 的每种凭据情况，`packages/web/tool-web/tests/tool-web.spec.ts` 通过真实的提示词、工具与执行器服务解析步骤准入，包括在撤下该工具的步骤中调用它时以 `UNKNOWN_TOOL` 拒绝。发行版 headless 无密钥冒烟测试与 `web-search-unconfigured` 录制会话快照在真实组合中固定了撤下行为。快照回放提供占位 DeepSeek 密钥，因此其工具列表不依赖运行环境。`packages/web/web-search-deepseek/tests/chat-endpoint.spec.ts` 用真实 Loader 组合挂载官方聊天路由，固定端点检查；`pi-ai-conversation-updates` 快照固定了 pi-ai 路由上的对话不会获得 `web_search`。

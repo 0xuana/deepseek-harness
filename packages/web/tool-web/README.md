@@ -79,7 +79,7 @@ Tool registration follows product enablement, not backend availability: a tool s
 <a id="search-readiness"></a>
 ### Search readiness
 
-Each model request is offered `web_search` and its guidance only while `ctx.web.searchReady()` answers true for the chat route that model selection assigns to that request. The service asks only the search provider that `search()` would select; a provider that does not implement readiness counts as ready, and a selection failure also answers true, so the stable-registration errors above still reach the model. [`dsh-web-search-deepseek`](../web-search-deepseek/README.md#authentication) is not ready when the request's search has no credential it may send; without search configuration of its own, it sends one only for the DeepSeek account and official routes. The check runs for every request, so a model switch or a newly stored key applies to the next request; `web_fetch` is unaffected. A request presented through PTC keeps `web_search`, because the `run_code` SDK declares it apart from the tool list.
+Each model step admits `web_search`, and so declares, describes, and dispatches it, only while `ctx.web.searchReady()` answers true for the chat route of the step's model selection. The service asks only the search provider that `search()` would select; a provider that does not implement readiness counts as ready, and a selection failure also answers true, so the stable-registration errors above still reach the model. [`dsh-web-search-deepseek`](../web-search-deepseek/README.md#authentication) is not ready when the step's search has no credential it may send; without search configuration of its own, it sends one only for the DeepSeek account and official routes. The check runs for every step, so a model switch or a newly stored key applies to the next step; `web_fetch` is unaffected. A step that does not admit `web_search` also leaves it out of PTC program bindings, and a call to it fails as `UNKNOWN_TOOL`.
 
 ### Failures and recovery
 
@@ -107,7 +107,7 @@ The package is built on one separation and one registration rule:
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: config schema, enablement, timeout budgets, tool registration |
-| [`src/search.ts`](src/search.ts) | The `web_search` tool: argument validation, query fan-out, merge, formatting, presentation meta, per-request readiness withholding |
+| [`src/search.ts`](src/search.ts) | The `web_search` tool: argument validation, query fan-out, merge, formatting, presentation meta, step admission condition |
 | [`src/fetch.ts`](src/fetch.ts) | The `web_fetch` tool: HTML→markdown conversion, output caps, formatting, presentation meta |
 
 ### Search flow
@@ -116,7 +116,7 @@ The package is built on one separation and one registration rule:
 
 ### Readiness flow
 
-A prepended `system-prompt/assemble` listener runs after model selection has written the request's route into the assembly variables. When the assembly offers `web_search` without the PTC `run_code` transport, the listener asks `ctx.web.searchReady(route)` and, on false, removes `web_search` and its `tool:web_search` section from that assembly.
+The `web_search` registration carries an activation condition that asks `ctx.web.searchReady()` about the route of the step's model selection. The agent loop resolves conditions before it assembles the step, so the declared tools, the `tool:web_search` section, PTC program bindings, and dispatch all read the same admitted set.
 
 ### Fetch flow
 
@@ -153,7 +153,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 #### What the model sees
 
-At assembly time, each section checks `ctx.tools.get(name, scope)` and renders only while its tool is visible. Search chooses the existing fetch-enabled or search-only text using fetch config and visibility in that scope. The original text is unchanged when both tools are available; this also applies to PTC capabilities behind `run_code`.
+At assembly time, each section checks `ctx.tools.get(name, scope, toolSet)` and renders only while the step admits its tool. Search chooses the existing fetch-enabled or search-only text using fetch config and admission in that scope. The original text is unchanged when both tools are available; this also applies to PTC capabilities behind `run_code`.
 
 ##### Web search guidance with fetch enabled
 
@@ -199,7 +199,7 @@ Prefix-stable while definitions, resolved query cap, and visibility are unchange
 
 #### What the model sees
 
-A request whose selected search provider is not ready carries neither the `web_search` schema nor its prompt guidance; `web_fetch`, its guidance, and the other tools are unchanged. The agent loop records each difference from the previous request as a tool-registry update, so a route switch, or a key being stored or removed, appears as a `web_search` addition or removal on the next request.
+A step whose selected search provider is not ready carries neither the `web_search` schema nor its prompt guidance, and its PTC programs cannot bind it; `web_fetch`, its guidance, and the other tools are unchanged. A `web_search` call in such a step fails as `UNKNOWN_TOOL` with `unknown tool "web_search"`. The agent loop records each difference from the previous request as a tool-registry update, so a route switch, or a key being stored or removed, appears as a `web_search` addition or removal on the next request.
 
 #### Token effect
 
@@ -275,7 +275,6 @@ These limits define when the tools are incomplete or need deployment cooperation
 - **There is no batch-wide native-search counter** — `searchMaxQueries` bounds `ctx.web.search` calls, but a provider may perform several native searches inside each call; for example a model-backed provider configured with `maxUses` can permit up to `searchMaxQueries × maxUses` native searches, and `searchMaxResults` limits only the combined sources returned to the caller. Deployments control cost through these independent consumer and provider settings because the service does not know provider-internal search units.
 - **HTML→markdown conversion omits inputs it cannot safely represent** — [turndown](https://github.com/mixmark-io/turndown) converts at most `fetchMaxOutputChars` source characters through a real DOM. A 512-level nesting guard and conversion exceptions produce a fixed omission marker instead of raw HTML; table `colspan` remains unsupported because GFM has no spanning-cell representation ([archived dependency decision](../../../.agents/notes/archived/simplification/2026-07-26-turndown-for-tool-web-html-markdown.md)).
 - **The model-facing API is minimal by design, with promotions deferred** — `max_results` stays a config bound (not a model argument), and `web_fetch` takes only `url` (no `format`/`prompt`/LLM-summarization mode); both are named later steps in [the seam Agent Note](../../../.agents/notes/implemented/architecture/2026-06-24-web-capability-seam.md).
-- **PTC presentations keep `web_search`** — their generated SDK declares tools apart from the request's tool list, so a call there fails with the selected provider's structured error when that provider is not ready.
 - **Fetches do not request approval** — the shipped `cordis`, `code`, and `standard` presets expose `web_fetch` in every sandbox and approval mode. The HTTP provider does not restrict destination addresses, so a model can reach loopback and private-network hosts and send data to any reachable URL. Deployments that need per-call confirmation must add a `tools/pre-execute` policy or disable fetch.
 
 <a id="dev-note"></a>

@@ -146,7 +146,7 @@ const offered = await ctx.web.searchReady('deepseek-official')
 <a id="model-experience"></a>
 ## 模型体验
 
-间接地，通过 `dsh-tool-web`：该工具把 seam 规范化的搜索结果与抓取正文渲染给模型，并从 `searchReady()` 回答 false 的请求中撤下 `web_search`，而本服务不贡献任何提示词或 schema。
+间接地，通过 `dsh-tool-web`：该工具把 seam 规范化的搜索结果与抓取正文渲染给模型，并且不让 `searchReady()` 回答 false 的模型步骤准入 `web_search`，而本服务不贡献任何提示词或 schema。
 
 #### KV Cache 影响
 

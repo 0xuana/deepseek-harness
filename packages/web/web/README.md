@@ -146,7 +146,7 @@ Read these pages when the package-level contract is not enough. They move from t
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through `dsh-tool-web`, which renders the seam's normalized search results and fetch bodies to the model and withholds `web_search` from requests for which `searchReady()` answers false, while this service contributes no prompt or schema.
+Indirectly, through `dsh-tool-web`, which renders the seam's normalized search results and fetch bodies to the model and does not admit `web_search` to model steps for which `searchReady()` answers false, while this service contributes no prompt or schema.
 
 #### KV Cache effect
 
