@@ -48,8 +48,7 @@
 }
 
 /* Only docked Grid items slide. Their common ancestor remains untransformed
-   and without a stacking context, so fixed floating children escape. The
-   selector lists match `DOCKED_ITEMS` (SidebarRight.tsx). */
+   and without a stacking context, so fixed floating children escape. */
 .panel :global([data-dockkit-host='dock']),
 .panel :global([data-dockkit-empty]),
 .panel :global([data-dockkit-divider]) {
@@ -68,12 +67,16 @@
   transition: transform var(--ds-transition-duration-slow) var(--ds-ease-in-out);
 }
 
-/* An item mounted by the opening commit takes the closed style for one style
-   read (SidebarRight.tsx), so it slides in like the items already mounted. */
-.panel[data-sidebar-right-open] :global([data-sidebar-right-settling]) {
-  transform: translateX(var(--dsh-sidebar-width));
-  visibility: hidden;
-  transition: none;
+/* An item mounted by the opening has no closed style to slide from; it starts
+   at the closed position like the items already mounted. Only an opening
+   marks the panel, so items that mount while it stays open, or that a
+   Session switch shows, appear in place. */
+@starting-style {
+  .panel[data-sidebar-right-opening] :global([data-dockkit-host='dock']),
+  .panel[data-sidebar-right-opening] :global([data-dockkit-empty]),
+  .panel[data-sidebar-right-opening] :global([data-dockkit-divider]) {
+    transform: translateX(var(--dsh-sidebar-width));
+  }
 }
 
 .panel[data-sidebar-right-panel='fullscreen'] {

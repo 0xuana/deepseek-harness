@@ -557,26 +557,31 @@ describe('RightbarSeat presentation', () => {
     expect(h.frame.closeRightbar).toHaveBeenCalled()
   })
 
-  it('starts an item mounted by the opening commit from the closed style and leaves a reversing item alone', async () => {
+  it('marks the panel as opening from the opening render until its slide ends', async () => {
     const h = await mountSeat()
-    const settled: { readonly item: Element; readonly open: boolean }[] = []
-    const getComputedStyle = window.getComputedStyle.bind(window)
-    vi.spyOn(window, 'getComputedStyle').mockImplementation((item, pseudo) => {
-      const open = item.closest('[data-sidebar-right-panel]')?.hasAttribute('data-sidebar-right-open') === true
-      if (item.hasAttribute('data-sidebar-right-settling')) settled.push({ item, open })
-      return getComputedStyle(item, pseudo)
-    })
+    const panel = element(h.view.container, '[data-sidebar-right-panel]')
+    expect(panel.hasAttribute('data-sidebar-right-opening')).toBe(false)
     h.open()
+    // The tab the opening seeds mounts under the mark, so it starts at the closed position.
     const host = element(h.view.container, "[data-dockkit-host='dock']")
-    expect(settled).toEqual([{ item: host, open: true }])
-    expect(host.hasAttribute('data-sidebar-right-settling')).toBe(false)
+    expect(panel.hasAttribute('data-sidebar-right-opening')).toBe(true)
+    fireEvent.transitionEnd(host)
+    expect(panel.hasAttribute('data-sidebar-right-opening')).toBe(false)
+    act(() => { h.actions.splitPane(SESSION) })
+    expect(panel.hasAttribute('data-sidebar-right-opening')).toBe(false)
     fireEvent.click(element(h.view.container, '[data-sidebar-right-toggle]'))
-    // Reopened during its closing slide, the item reverses from where it is.
-    const closing = transition()
-    vi.spyOn(host, 'getAnimations').mockReturnValue([closing.animation])
+    expect(panel.hasAttribute('data-sidebar-right-opening')).toBe(false)
     act(() => { h.actions.setExpanded(SESSION, true) })
-    expect(settled).toHaveLength(1)
-    expect(element(h.view.container, '[data-sidebar-right-panel]').hasAttribute('data-sidebar-right-open')).toBe(true)
+    expect(panel.hasAttribute('data-sidebar-right-opening')).toBe(true)
+    // Closing before the slide ends clears the mark.
+    fireEvent.click(element(h.view.container, '[data-sidebar-right-toggle]'))
+    expect(panel.hasAttribute('data-sidebar-right-opening')).toBe(false)
+    // Leaving the screen cancels the slide, so returning shows the items in place.
+    act(() => { h.actions.setExpanded(SESSION, true) })
+    expect(panel.hasAttribute('data-sidebar-right-opening')).toBe(true)
+    act(() => { h.runtime.panelInfo.set({ activePanelId: 'other-panel' as MainPanelId }) })
+    act(() => { h.runtime.panelInfo.set({ activePanelId: null }) })
+    expect(panel.hasAttribute('data-sidebar-right-opening')).toBe(false)
   })
 
   it('fills the viewport without replacing the content tree or releasing the wide track', async () => {
