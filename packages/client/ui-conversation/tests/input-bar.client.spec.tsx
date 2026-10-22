@@ -8,6 +8,7 @@
 // root listener routes them through the keymap commands); draft writes drive
 // the shell (jsdom's beforeinput lacks the ranges Lexical needs).
 
+import * as uiPrimitives from '@deepseek-ai/dsh-client-ui-primitives'
 import './control-row-dom.ts'
 import type { InboxState } from '@deepseek-ai/dsh-agent/types'
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
@@ -1431,6 +1432,10 @@ describe('running and lock semantics', () => {
         else Object.defineProperty(navigator, name, descriptor)
       })
     }
+    vi.resetModules()
+    const detection = await import('@deepseek-ai/dsh-client-ui-primitives/src/focus.ts')
+    const device = vi.spyOn(uiPrimitives, 'isMobileDevice').mockImplementation(detection.isMobileDevice)
+    onTestFinished(() => { device.mockRestore() })
     const outside = document.createElement('input')
     document.body.append(outside)
     onTestFinished(() => { outside.remove() })

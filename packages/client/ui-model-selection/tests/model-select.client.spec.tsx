@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import * as uiPrimitives from '@deepseek-ai/dsh-client-ui-primitives'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { RemoteError, SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
@@ -471,6 +472,10 @@ describe('ModelSelect keyboard walk', () => {
           else Object.defineProperty(navigator, name, descriptor)
         })
       }
+      vi.resetModules()
+      const detection = await import('@deepseek-ai/dsh-client-ui-primitives/src/focus.ts')
+      const device = vi.spyOn(uiPrimitives, 'isMobileDevice').mockImplementation(detection.isMobileDevice)
+      onTestFinished(() => { device.mockRestore() })
       const select = vi.fn()
       render(<ModelSelect renderSlot={renderLabel} locked={false} available
         directory={createSnapshotStore(state({ groups: modelGroups(modelCount) }))}

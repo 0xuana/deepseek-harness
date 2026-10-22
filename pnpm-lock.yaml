@@ -4882,9 +4882,6 @@ importers:
       anser:
         specifier: ^2.3.5
         version: 2.3.5
-      bowser:
-        specifier: ^2.14.1
-        version: 2.14.1
       clsx:
         specifier: ^2.0.0
         version: 2.1.1

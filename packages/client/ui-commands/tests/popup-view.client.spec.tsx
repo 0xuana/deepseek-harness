@@ -10,6 +10,7 @@
  * retry button, the highlighted row scrolls into view, and the card height
  * clamps to the space above the composer.
  */
+import * as uiPrimitives from '@deepseek-ai/dsh-client-ui-primitives'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { SelectOption } from '../src/client/contract.ts'
@@ -157,6 +158,10 @@ describe('PopupSelectView', () => {
         else Object.defineProperty(navigator, name, descriptor)
       })
     }
+    vi.resetModules()
+    const detection = await import('@deepseek-ai/dsh-client-ui-primitives/src/focus.ts')
+    const device = vi.spyOn(uiPrimitives, 'isMobileDevice').mockImplementation(detection.isMobileDevice)
+    onTestFinished(() => { device.mockRestore() })
     const { popup, search } = await mountOpen()
     expect(document.activeElement === search).toBe(automatic)
     act(() => { search.focus() })

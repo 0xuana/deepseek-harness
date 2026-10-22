@@ -1,17 +1,20 @@
 /** Mobile-device detection and automatic focus presentation. */
-import bowser from 'bowser'
 const releases = new WeakMap<HTMLElement, () => void>()
 const navigationKeys = new Set(['Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'])
+let mobileDevice: boolean | undefined
 
 /**
- * Identify phones and tablets from the current browser's device information.
- * Bowser identifies phones and tablets from the UA; MacIntel with multiple touch points identifies desktop-mode iPads.
- * @returns true for identified phones and tablets; false for other devices, including unrecognized UAs.
+ * Identify iOS and Android phones and tablets from the current browser's device information.
+ * MacIntel with multiple touch points identifies desktop-mode iPads.
+ * The first result is shared by all callers until the page reloads.
+ * @returns true for recognized mobile devices; false for other devices, including unrecognized UAs.
  */
 export function isMobileDevice(): boolean {
-  const platformType = bowser.parse(navigator.userAgent).platform.type
-  const desktopIPad = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1
-  return platformType === 'mobile' || platformType === 'tablet' || desktopIPad
+  if (mobileDevice !== undefined) return mobileDevice
+  const { userAgent, platform, maxTouchPoints } = navigator
+  mobileDevice = /Android|iPhone|iPad|iPod/i.test(userAgent)
+    || (platform === 'MacIntel' && maxTouchPoints > 1)
+  return mobileDevice
 }
 
 /**

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 /** Composer selection survives focus transfers and background editor reconciliation. */
+import * as uiPrimitives from '@deepseek-ai/dsh-client-ui-primitives'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { $getRoot, $getSelection, $isRangeSelection, SELECTION_CHANGE_COMMAND, UNDO_COMMAND } from 'lexical'
 import { DraftEditorRuntime } from '../src/client/input/editor/runtime.ts'
@@ -140,9 +141,13 @@ it('restores a pending selection when blur and explicit focus share one update b
   expect(reveal).toHaveBeenCalledOnce()
 })
 
-it('hands mobile submission focus to the composer without stealing focus from another control', () => {
+it('hands mobile submission focus to the composer without stealing focus from another control', async () => {
   const userAgent = vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1')
   onTestFinished(() => { userAgent.mockRestore() })
+  vi.resetModules()
+  const detection = await import('@deepseek-ai/dsh-client-ui-primitives/src/focus.ts')
+  const device = vi.spyOn(uiPrimitives, 'isMobileDevice').mockImplementation(detection.isMobileDevice)
+  onTestFinished(() => { device.mockRestore() })
   const f = fixture()
   const dispose = installDraftKeyboardDismissal(f.editor, { current: f.card })
   onTestFinished(dispose)
@@ -157,9 +162,13 @@ it('hands mobile submission focus to the composer without stealing focus from an
   expect(document.activeElement).toBe(f.outside)
 })
 
-it('retains mobile focus for a newer draft suffix and removes dismissal with the view', () => {
+it('retains mobile focus for a newer draft suffix and removes dismissal with the view', async () => {
   const userAgent = vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1')
   onTestFinished(() => { userAgent.mockRestore() })
+  vi.resetModules()
+  const detection = await import('@deepseek-ai/dsh-client-ui-primitives/src/focus.ts')
+  const device = vi.spyOn(uiPrimitives, 'isMobileDevice').mockImplementation(detection.isMobileDevice)
+  onTestFinished(() => { device.mockRestore() })
   const f = fixture()
   const dispose = installDraftKeyboardDismissal(f.editor, { current: f.card })
   onTestFinished(dispose)
