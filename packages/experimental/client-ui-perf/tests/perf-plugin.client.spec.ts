@@ -117,6 +117,7 @@ interface PluginBench {
   readonly loadOlder: ReturnType<typeof vi.fn>
   readonly setOpenState: (state: 'cold' | 'open' | 'error') => void
   readonly settleOnNextSubscribe: () => void
+  readonly setHasMore: (value: boolean) => void
   readonly entries: () => readonly StoredEntry[]
   readonly setSnapshot: (next: PerfSnapshot | undefined) => void
   readonly notify: () => void
@@ -143,12 +144,13 @@ async function mountPlugin(): Promise<PluginBench> {
   }))
   const loadOlder = vi.fn(async () => undefined)
   let openState: 'cold' | 'open' | 'error' = 'open'
+  let hasMore = false
   let openListener: (() => void) | undefined
   let settleOnSubscribe = false
   const sessionBinding = {
     session: {
       loadOlder,
-      getSnapshot: () => ({ openState }),
+      getSnapshot: () => ({ openState, hasMore }),
       subscribe: (next: () => void) => {
         openListener = next
         if (settleOnSubscribe) {
@@ -196,6 +198,7 @@ async function mountPlugin(): Promise<PluginBench> {
       openListener?.()
     },
     settleOnNextSubscribe: () => { settleOnSubscribe = true },
+    setHasMore: (value: boolean) => { hasMore = value },
     entries: () => ctx.slots.entries('conversation.view'),
     setSnapshot: (next) => { snapshot = next },
     notify: () => { listener?.() },
@@ -388,6 +391,9 @@ describe('browser plugin registration', () => {
     bench.settleOnNextSubscribe()
     expect(await injected.loadOlder()).toBe(false)
     expect(bench.loadOlder).toHaveBeenCalledTimes(1)
+    // A no-progress page with older history left stays retryable.
+    bench.setHasMore(true)
+    expect(await injected.loadOlder()).toBe(true)
     await bench.fiber.dispose()
   })
 
@@ -431,6 +437,9 @@ describe('browser plugin registration', () => {
     unsubscribe()
     expect(await injected.loadOlder()).toBe(false)
     expect(bench.loadOlder).toHaveBeenCalledTimes(1)
+    // A no-progress page with older history left stays retryable.
+    bench.setHasMore(true)
+    expect(await injected.loadOlder()).toBe(true)
     // The source is cached per Session binding; a second injection reuses it.
     expect(injectEntry!(SID).hooks.perf).toBe(injected.hooks.perf)
     expect(() => injectEntry!('perf-missing' as SessionId)).toThrow(/unavailable/)

@@ -95,7 +95,10 @@ export function apply(ctx: Context): void {
           // no-op then and would look like exhausted history.
           await whenOpened(session)
           await session.loadOlder()
-          return perf.getSnapshot() !== before
+          // A concurrent view (Chat/Trajectory) may own the in-flight page and
+          // this call then returns without progress. Only a Session that has no
+          // older history left may hide the trigger; otherwise keep it retryable.
+          return perf.getSnapshot() !== before || session.getSnapshot().hasMore === true
         },
       }
     },
