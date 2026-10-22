@@ -1,7 +1,7 @@
 /** The offline catalog does not depend on installed provider packages or registry requests. */
 
 import { describe, expect, it } from 'vitest'
-import { OFFICIAL_ON_DEMAND_CATALOG, ON_DEMAND_BUNDLES } from '../src/official-bundles.ts'
+import { OFFICIAL_ON_DEMAND_CATALOG, ON_DEMAND_BUNDLES } from '../src/index.ts'
 
 describe('Official on-demand catalog', () => {
   it('offers exactly the two native subagent integrations with offline localized metadata', () => {

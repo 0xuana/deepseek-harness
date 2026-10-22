@@ -21,7 +21,6 @@ import {
   loadProfileDirectory,
   PROFILE_COMPATIBILITY_FILENAME,
   PROFILE_PATCH_FILENAME,
-  PROFILE_TEMPLATES,
   readProfileManifest,
   readProfilePatches,
   removeLinkProjections,
@@ -32,6 +31,7 @@ import {
   type Profile,
   type RuntimeResolution,
 } from '../src/index.ts'
+import { PROFILE_TEMPLATES } from '@deepseek-ai/dsh-official-bundles'
 import { installRuntimeInterception } from '../src/profile-resolution/resolver.ts'
 
 const tempRoots: string[] = []
