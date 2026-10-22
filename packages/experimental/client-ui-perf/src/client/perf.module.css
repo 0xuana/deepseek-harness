@@ -107,7 +107,7 @@
 
 .turnMetric {
   font-weight: 600;
-  text-align: right;
+  text-align: left;
 }
 
 .turnDid {
@@ -191,7 +191,7 @@
 }
 
 .stepMetric {
-  text-align: right;
+  text-align: left;
 }
 
 /* Scope markers appended to the row label. */
@@ -526,7 +526,7 @@
   display: inline-block;
   min-width: 62px;
   font-variant-numeric: tabular-nums;
-  text-align: right;
+  text-align: left;
 }
 
 .numDelta {
@@ -534,7 +534,7 @@
   min-width: 62px;
   font: var(--dsw-font-xxxs-11);
   font-variant-numeric: tabular-nums;
-  text-align: right;
+  text-align: left;
 }
 
 .deltaUp {
@@ -607,14 +607,14 @@
 .timeValue {
   min-width: 58px;
   font-variant-numeric: tabular-nums;
-  text-align: right;
+  text-align: left;
 }
 
 .timeRunning {
   min-width: 58px;
   color: var(--dsw-alias-state-business-primary);
   font-variant-numeric: tabular-nums;
-  text-align: right;
+  text-align: left;
 }
 
 /* Step-list controls of a long turn. */
