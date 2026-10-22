@@ -29,20 +29,20 @@ The [Personalized pages bundle](../creation-recommendations/README.md) inserts t
 
 | Field | Default | Meaning |
 |---|---|---|
-| `queuedMessageLimit` | `2` | Queued next-turn user messages at or above which a card proposed in the current turn is never offered. |
+| `queuedMessageLimit` | `2` | Queued next-turn user messages at or above which `propose_action` refuses the call, so no card is offered. |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-experimental-action-cards) is the exhaustive source for accepted fields.
 
 ### Register a card kind
 
-A kind package injects `actionCards` and calls `ctx.actionCards.register(kind)` from its own plugin; unloading that plugin removes the kind, and actions on its cards are then refused as unavailable. The kind names its action, the skill that proposes it, a zod schema for the card's `details`, the user actions it accepts and the shared checks each needs (`global` Remote access, `writes` refused in a read-only Session), the recorded phases that still offer dismissal, optional status guidance, the decision data fields the status notice reports, and the handler for every action except `dismiss`. The handler records each new decision with `ctx.actionCards.record()` and returns `accepted`, `settled` with the decision in effect, `refused` or `unconfirmed`.
+A kind package injects `actionCards` and calls `ctx.actionCards.register(kind)` from its own plugin; unloading that plugin removes the kind, and actions on its cards are then refused as unavailable, except that Not now still dismisses an unstarted card. The kind names its action, the skill that proposes it, a zod schema for the card's `details`, the user actions it accepts and the shared checks each needs (`global` Remote access, `writes` refused in a read-only Session), the recorded phases that still offer dismissal, optional status guidance, the decision data fields the status notice reports, an optional `reconcile` that updates the card's recorded decision from state outside the Session before every action, and the handler for every action except `dismiss`. The handler records each new decision with `ctx.actionCards.record()`, which refuses an action no kind registered and the derived `replaced` phase, and returns `accepted`, `settled` with the decision in effect, `refused` or `unconfirmed`.
 
 ### Card rules
 
-- The first accepted `propose_action` call of a turn becomes the card. The tool refuses a second call in the same turn, an unregistered action, a call whose kind skill was not loaded in the current turn, a blank title or brief, details that fail the kind schema, and calls dispatched from code.
-- A newer card replaces every unstarted earlier card. A card proposed while `queuedMessageLimit` or more user messages wait for later turns is logged but never offered. Both states are derived from the log and never recorded.
+- The first accepted `propose_action` call of a turn becomes the card. The tool refuses a second call in the same turn, an unregistered action, a call whose kind skill was not loaded in the current turn, a blank title or brief, details that fail the kind schema, calls dispatched from code, calls from a subagent, and any call while `queuedMessageLimit` or more user messages wait for later turns.
+- A newer card of any kind replaces every unstarted earlier card. Replacement is derived from the log and never recorded.
 - Events a forked Session inherits create no cards.
-- Not now is recorded for an unstarted card and for the phases the kind lists; dismissed, replaced and suppressed cards accept no further action.
+- Before every action, including Not now, the kind's `reconcile` updates the card from state outside the Session. Not now is then recorded for an unstarted card and for the phases the kind lists; dismissed and replaced cards accept no further action. Without its registered kind, Not now still dismisses an unstarted card, and every other action is refused as unavailable.
 - Concurrent actions on one card share one operation. Actions require the card's live root Agent.
 
 -----
@@ -53,11 +53,11 @@ A kind package injects `actionCards` and calls `ctx.actionCards.register(kind)` 
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The package default-exports the `actionCards` Remote service. It registers `propose_action` once, globally, with a `when` condition: an Agent becomes eligible when a `skill` tool result loads the skill of a registered kind, and the flag lives in memory until the Agent is disposed. The call's `execute` checks the current turn's skill loads through the turn boundary and keeps an in-memory mark of the turn's accepted call; the logged `tool/call` and its successful `tool/result` are the durable proposal.
+The package default-exports the `actionCards` Remote service. It registers `propose_action` once, globally, with a `when` condition: a live root Agent becomes eligible when its own direct `skill` call loads the skill of a registered kind, while loads by subagents or from code are ignored. The flag lives in memory until the Agent is disposed. The call's `execute` checks the live root, the queued messages the projection counts against `queuedMessageLimit` and the current turn's skill loads through the turn boundary, and keeps an in-memory mark of the turn's accepted call; the logged `tool/call` and its successful `tool/result` are the durable proposal.
 
-The `actionCards` Session projection (state version 1) pairs each `propose_action` call with its successful result, records decisions from `plugin:action-cards/decision`, folds queued next-turn messages from inbox splices, and keeps unreported decisions until a status notice whose `through` covers them enters the log. Its Client view `{ proposals, decisions }` is excluded from Session summaries.
+The `actionCards` Session projection (state version 2) pairs each `propose_action` call with its successful result, records decisions from `plugin:action-cards/decision`, counts queued next-turn messages from inbox splices for the tool's limit, and keeps unreported decisions until a status notice whose `through` covers them enters the log. Its Client view `{ proposals, decisions }` is excluded from Session summaries.
 
-The Remote `act(sessionId, callId, verb, payload?)` checks the owner, the live root, the card, the kind and verb, and Remote access before it shares one operation per card. A dismissed, replaced or suppressed card then settles unchanged, Not now is recorded, a writing verb is refused in a read-only Session, and every other verb goes to the kind handler under the Agent's initiator. An `agent/pre-step` listener adds the status notice after later listeners prepared the step.
+The Remote `act(sessionId, callId, verb, payload?)` checks the owner, the live root and the card; Not now continues without a registered kind, while other verbs need the kind, the verb and Remote access. It then shares one operation per card. The kind's `reconcile` runs first and the live root is checked again; a dismissed or replaced card then settles unchanged, Not now is recorded, a writing verb is refused in a read-only Session, and every other verb goes to the kind handler under the Agent's initiator. `record()` also accepts an action whose kind has unregistered, because Cordis disposes a plugin's effects concurrently and an unloading kind still records the outcome of work it started. An `agent/pre-step` listener adds the status notice after later listeners prepared the step.
 
 | Source | Contents |
 |---|---|
@@ -85,7 +85,7 @@ The Remote `act(sessionId, callId, verb, payload?)` checks the owner, the live r
 
 #### What the model sees
 
-The [`propose_action` declaration](../../../docs/tool-catalog.md#deepseek-aidsh-experimental-action-cards) appears only to an Agent that loaded the skill of a registered kind in this Session, from the next step on, for that Agent's lifetime. A kind's skill names the action and the fields of `details`. An accepted call returns `Card shown below your answer. Do not restate it; end with one short invitation.`. A refused call returns its reason, for example `Load skill <skill> first, then call propose_action.`, `One card per turn; the earlier card stands.`, `Unknown action "<action>". Registered actions: <actions>.` or the failing `details` fields.
+The [`propose_action` declaration](../../../docs/tool-catalog.md#deepseek-aidsh-experimental-action-cards) appears only to a live root Agent whose own direct call loaded the skill of a registered kind in this Session, from the next step on, for that Agent's lifetime. Subagents never see it, and neither do PTC presets, whose skill loads are dispatched from code, so they show no cards. A kind's skill names the action and the fields of `details`. An accepted call returns `Card shown below your answer. Do not restate it; end with one short invitation.`. A refused call returns its reason, for example `Load skill <skill> first, then call propose_action.`, `One card per turn; the earlier card stands.`, `The user has queued more messages; show no card and answer briefly.`, `Cards are offered in the main conversation only.`, `Unknown action "<action>". Registered actions: <actions>.`, where the list reads `none` once the last kind unregistered, or the failing `details` fields.
 
 #### Token effect
 
@@ -120,9 +120,11 @@ The notice is appended after the request's other new context and never rewrites 
 <a id="known-limitations-and-deferred-work"></a>
 
 - Activation is per live Agent and kept in memory, so after a Session reopens the tool appears again only after a card skill loads again.
-- Calls dispatched from code, as in PTC presets, are refused: the log records them as program dispatches rather than tool calls, so no card could follow them.
-- Only one card is offered per turn across all kinds, and one unstarted card per conversation.
-- The projection reads `queuedMessageLimit` while its state version stays fixed. A changed limit applies to Sessions folded again from their log; cached projection rows keep the suppression decided under the earlier limit.
+- PTC presets show no cards: skill loads and calls dispatched from code never activate or reach the tool, because the log records them as program dispatches rather than tool calls.
+- Cards are offered in the main conversation only. A subagent's skill load, including a Creator child's, activates nothing and its calls are refused, because only a live root can act on a card.
+- Only one card is offered per turn across all kinds. A later card of any kind replaces every unstarted earlier card, so a second kind's card replaces an unstarted card of the first.
+- Refusal reasons of user actions are plain strings by design: the service defines `closing`, `not-live-root`, `unknown`, `unavailable`, `access-denied` and `read-only`, each kind adds its own, and a browser body names the reasons it knows and treats others as unavailable.
+- Each kind validates `details` on both sides, with its Host schema when the model proposes and before each action, and with its browser body's own schema, so the two schemas change together.
 - The rows of this service and its browser half are inserted by the Personalized pages bundle. A second kind's bundle that inserts the same rows conflicts with it; shared row ownership between bundles is deferred until a second kind ships.
 
 <a id="dev-note"></a>

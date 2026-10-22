@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type { ToolExecutionToken } from '@deepseek-ai/dsh-tools'
@@ -108,6 +108,77 @@ it('accepts one card per turn, admits a retry after a failed result and names th
   await call(f, 'skill', { name: SKILL }, 'load-2')
   f.propose(ToolCallId('logged'), proposal, f.agent, 2)
   expect(text(await call(f, 'propose_action', proposal, 'after-log'))).toBe('Error: One card per turn; the earlier card stands.')
-  // A disposed agent's activation and per-turn marks are released with it.
+  // Disposing the agent releases its activation.
+  expect(await declared(f)).toBe(true)
   await f.agentHandle.dispose()
+  expect(await declared(f)).toBe(false)
+})
+
+it('activates nothing for a skill load dispatched from code, so a PTC preset never declares the tool', async () => {
+  const f = await fixture()
+  f.agent.session.append('turn/start', { turn: 1 })
+  const outer = Symbol('outer') as ToolExecutionToken
+  expect((await call(f, 'skill', { name: SKILL }, 'nested-load', f.agent, outer)).isError).toBe(false)
+  expect(await declared(f)).toBe(false)
+  expect((await call(f, 'propose_action', proposal, 'unadmitted')).isError).toBe(true)
+  expect((await call(f, 'skill', { name: SKILL }, 'direct-load')).isError).toBe(false)
+  expect(await declared(f)).toBe(true)
+})
+
+it('offers cards in the main conversation only: subagent skill loads activate nothing and non-root calls are refused', async () => {
+  const f = await fixture()
+  const child = (await f.ctx.agents.create({ sessionId: SessionId('cards-child'), parentAgent: f.agent,
+    meta: { parentSession: f.agent.id, origin: 'subagent' } })).agent
+  child.session.append('turn/start', { turn: 1 })
+  expect((await call(f, 'skill', { name: SKILL }, 'child-load', child)).isError).toBe(false)
+  expect(await declared(f, child)).toBe(false)
+  expect((await call(f, 'propose_action', proposal, 'child-card', child)).isError).toBe(true)
+  f.agent.session.append('turn/start', { turn: 1 })
+  await call(f, 'skill', { name: SKILL }, 'load')
+  // Admission is fixed when the step starts; the call still checks that its agent is a live root.
+  const toolSet = await f.ctx.tools.resolve({ agent: f.agent, modelSelection, signal })
+  vi.spyOn(f.ctx.agents, 'roots').mockReturnValue([])
+  const refused = await executeModelToolFixture(f.ctx, { callId: ToolCallId('detached-root'), name: 'propose_action', arguments: proposal,
+    agent: f.agent, signal, toolSet })
+  toolSet.dispose()
+  expect(text(refused)).toBe('Error: Cards are offered in the main conversation only.')
+})
+
+it('names no actions when the last kind unregisters after the step admitted the tool', async () => {
+  const f = await fixture()
+  f.agent.session.append('turn/start', { turn: 1 })
+  await call(f, 'skill', { name: SKILL }, 'load')
+  const toolSet = await f.ctx.tools.resolve({ agent: f.agent, modelSelection, signal })
+  await f.kindFiber.dispose()
+  const result = await executeModelToolFixture(f.ctx, { callId: ToolCallId('late'), name: 'propose_action', arguments: proposal,
+    agent: f.agent, signal, toolSet })
+  toolSet.dispose()
+  expect(text(result)).toBe('Error: Unknown action "test_action". Registered actions: none.')
+})
+
+it('refuses a card while the user has queued messages for later turns, so the log holds no card', async () => {
+  const f = await fixture()
+  const queued = () => createUserMessage({ content: [{ type: 'text', text: 'Next question.' }], source: { kind: 'user' } })
+  const live: { agent?: Agent } = {}
+  const adapter = new MockAdapter([
+    toolCallResponse('call-skill', 'skill', { name: SKILL }),
+    () => {
+      // The user queues two more messages while the model writes its answer.
+      live.agent!.inbox.append('next-turn', queued())
+      live.agent!.inbox.append('next-turn', queued())
+      return toolCallResponse('call-card-1', 'propose_action', proposal)
+    },
+    textResponse('Short answer.'),
+    textResponse('Next answer.'),
+    textResponse('Last answer.'),
+  ])
+  f.ctx.llm.registerAdapter(['mock'], adapter)
+  const agent = await f.harness.create(SessionId('queued'), modelSelection)
+  live.agent = agent
+  agent.followup(createUserMessage({ content: [{ type: 'text', text: 'I want a counter.' }], source: { kind: 'user' } }))
+  await agent.whenIdle()
+  const result = agent.session.snapshotEvents().find(event => event.type === 'tool/result' && event.data.message.toolCallId === 'call-card-1')
+  expect(result?.type === 'tool/result' && result.data.message).toMatchObject({ isError: true,
+    content: [{ type: 'text', text: 'Error: The user has queued more messages; show no card and answer briefly.' }] })
+  expect(f.view(agent)).toEqual({ proposals: {}, decisions: {} })
 })

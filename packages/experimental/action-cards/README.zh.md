@@ -29,20 +29,20 @@ kind: "package-reference"
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
-| `queuedMessageLimit` | `2` | 排队到后续轮次的用户消息达到该数量时，本轮提议的卡片不再展示。 |
+| `queuedMessageLimit` | `2` | 排队到后续轮次的用户消息达到该数量时，`propose_action` 拒绝调用，因此不会展示卡片。 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-action-cards)是可接受字段的完整来源。
 
 ### 注册卡片种类
 
-种类所在的包注入 `actionCards`，并在自己的插件中调用 `ctx.actionCards.register(kind)`；该插件卸载时种类随之移除，此后对其卡片的操作会以 unavailable 拒绝。种类需要给出：动作名、提议该动作的 Skill、卡片 `details` 的 zod 校验、接受的用户操作及各自需要的共享检查（`global` 表示需要全局 Remote 权限，`writes` 表示只读会话中拒绝）、仍可忽略卡片的已记录阶段、可选的状态说明、状态通知要报告的决定数据字段，以及处理 `dismiss` 以外所有操作的处理器。处理器用 `ctx.actionCards.record()` 记录每个新决定，并返回 `accepted`、带当前决定的 `settled`、`refused` 或 `unconfirmed`。
+种类所在的包注入 `actionCards`，并在自己的插件中调用 `ctx.actionCards.register(kind)`；该插件卸载时种类随之移除，此后对其卡片的操作会以 unavailable 拒绝，只有“暂不需要”仍可忽略尚未开始的卡片。种类需要给出：动作名、提议该动作的 Skill、卡片 `details` 的 zod 校验、接受的用户操作及各自需要的共享检查（`global` 表示需要全局 Remote 权限，`writes` 表示只读会话中拒绝）、仍可忽略卡片的已记录阶段、可选的状态说明、状态通知要报告的决定数据字段、可选的 `reconcile`（每次操作前根据会话之外的状态更新卡片的已记录决定），以及处理 `dismiss` 以外所有操作的处理器。处理器用 `ctx.actionCards.record()` 记录每个新决定（该方法拒绝没有种类注册过的动作和推导得出的 `replaced` 阶段），并返回 `accepted`、带当前决定的 `settled`、`refused` 或 `unconfirmed`。
 
 ### 卡片规则
 
-- 一轮中第一个被接受的 `propose_action` 调用成为卡片。工具会拒绝同一轮的第二次调用、未注册的动作、本轮没有加载对应种类 Skill 的调用、空白的标题或说明、未通过种类校验的 details，以及从代码中发起的调用。
-- 新卡片会替换此前所有尚未开始的卡片。用户排队到后续轮次的消息达到 `queuedMessageLimit` 条时提议的卡片只记录、不展示。这两种状态都从日志推导，从不单独记录。
+- 一轮中第一个被接受的 `propose_action` 调用成为卡片。工具会拒绝同一轮的第二次调用、未注册的动作、本轮没有加载对应种类 Skill 的调用、空白的标题或说明、未通过种类校验的 details、从代码中发起的调用、来自 subagent 的调用，以及排队到后续轮次的用户消息达到 `queuedMessageLimit` 条时的任何调用。
+- 任何种类的新卡片都会替换此前所有尚未开始的卡片。替换从日志推导，从不单独记录。
 - fork 出的会话从父会话继承的事件不会产生卡片。
-- 对尚未开始的卡片，以及处于种类列出阶段的卡片，“暂不需要”会被记录；已忽略、已替换、未展示的卡片不再接受任何操作。
+- 每次操作（包括“暂不需要”）之前，种类的 `reconcile` 先根据会话之外的状态更新卡片。之后，对尚未开始的卡片，以及处于种类列出阶段的卡片，“暂不需要”会被记录；已忽略、已替换的卡片不再接受任何操作。卡片的种类未注册时，“暂不需要”仍可忽略尚未开始的卡片，其他操作一律以 unavailable 拒绝。
 - 同一张卡片上的并发操作共用一次处理。操作要求卡片所在会话的根 Agent 仍然在线。
 
 -----
@@ -53,11 +53,11 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-本包默认导出 `actionCards` Remote 服务。它在全局注册一次 `propose_action`，并附带 `when` 条件：某个 `skill` 工具结果加载了已注册种类的 Skill 后，该 Agent 才满足条件；这个标记保存在内存中，直到 Agent 被释放。调用的 `execute` 通过轮次边界检查本轮加载过的 Skill，并在内存中标记本轮已接受的调用；日志中的 `tool/call` 及其成功的 `tool/result` 就是持久的提议。
+本包默认导出 `actionCards` Remote 服务。它在全局注册一次 `propose_action`，并附带 `when` 条件：在线的根 Agent 自己直接调用 `skill` 加载了已注册种类的 Skill 后，该 Agent 才满足条件，subagent 或代码中发起的加载一律忽略；这个标记保存在内存中，直到 Agent 被释放。调用的 `execute` 检查在线根 Agent、投影累计的排队消息是否达到 `queuedMessageLimit`，并通过轮次边界检查本轮加载过的 Skill，同时在内存中标记本轮已接受的调用；日志中的 `tool/call` 及其成功的 `tool/result` 就是持久的提议。
 
-`actionCards` 会话投影（状态版本 1）把每个 `propose_action` 调用与其成功结果配对，从 `plugin:action-cards/decision` 读取决定，从收件箱拼接事件累计排队到下一轮的消息，并保留尚未报告的决定，直到 `through` 覆盖它们的状态通知写入日志。投影的客户端视图 `{ proposals, decisions }` 不进入会话摘要。
+`actionCards` 会话投影（状态版本 2）把每个 `propose_action` 调用与其成功结果配对，从 `plugin:action-cards/decision` 读取决定，从收件箱拼接事件累计排队到下一轮的消息供工具上限使用，并保留尚未报告的决定，直到 `through` 覆盖它们的状态通知写入日志。投影的客户端视图 `{ proposals, decisions }` 不进入会话摘要。
 
-Remote `act(sessionId, callId, verb, payload?)` 先检查服务所有者、在线根 Agent、卡片、种类与操作，以及 Remote 权限，然后让同一张卡片共用一次处理。之后，已忽略、已替换或未展示的卡片原样返回，“暂不需要”被记录，写入类操作在只读会话中被拒绝，其余操作在该 Agent 的发起方作用域内交给种类处理器。一个 `agent/pre-step` 监听器在后续监听器准备好本步之后追加状态通知。
+Remote `act(sessionId, callId, verb, payload?)` 先检查服务所有者、在线根 Agent 和卡片；“暂不需要”在种类未注册时也继续处理，其他操作还需要种类、操作和 Remote 权限。然后同一张卡片共用一次处理。种类的 `reconcile` 先运行，之后再次检查在线根 Agent；已忽略或已替换的卡片原样返回，“暂不需要”被记录，写入类操作在只读会话中被拒绝，其余操作在该 Agent 的发起方作用域内交给种类处理器。`record()` 也接受种类已注销的动作，因为 Cordis 并发释放插件的各个 effect，卸载中的种类仍要记录已开始工作的结果。一个 `agent/pre-step` 监听器在后续监听器准备好本步之后追加状态通知。
 
 | 源码 | 内容 |
 |---|---|
@@ -85,7 +85,7 @@ Remote `act(sessionId, callId, verb, payload?)` 先检查服务所有者、在�
 
 #### 模型看到什么
 
-[`propose_action` 声明](../../../docs/tool-catalog.zh.md#deepseek-aidsh-experimental-action-cards)只对在本会话中加载过已注册种类 Skill 的 Agent 出现，从下一步开始，持续到该 Agent 被释放。种类的 Skill 给出动作名和 `details` 的字段。被接受的调用返回 `Card shown below your answer. Do not restate it; end with one short invitation.`。被拒绝的调用返回原因，例如 `Load skill <skill> first, then call propose_action.`、`One card per turn; the earlier card stands.`、`Unknown action "<action>". Registered actions: <actions>.`，或未通过校验的 `details` 字段。
+[`propose_action` 声明](../../../docs/tool-catalog.zh.md#deepseek-aidsh-experimental-action-cards)只对在本会话中自己直接调用加载过已注册种类 Skill 的在线根 Agent 出现，从下一步开始，持续到该 Agent 被释放。subagent 看不到它；PTC 预设的 Skill 加载由代码发起，也看不到它，因此不会展示卡片。种类的 Skill 给出动作名和 `details` 的字段。被接受的调用返回 `Card shown below your answer. Do not restate it; end with one short invitation.`。被拒绝的调用返回原因，例如 `Load skill <skill> first, then call propose_action.`、`One card per turn; the earlier card stands.`、`The user has queued more messages; show no card and answer briefly.`、`Cards are offered in the main conversation only.`、`Unknown action "<action>". Registered actions: <actions>.`（最后一个种类注销后列表为 `none`），或未通过校验的 `details` 字段。
 
 #### Token 影响
 
@@ -120,9 +120,11 @@ Latest status of action cards from user actions and background work. These are s
 <a id="known-limitations-and-deferred-work"></a>
 
 - 激活按在线 Agent 记在内存中，因此会话重新打开后，要再次加载卡片 Skill 工具才会再次出现。
-- 从代码中发起的调用（例如 PTC 预设中）会被拒绝：日志把它们记为程序派发而不是工具调用，因此不可能有卡片跟随。
-- 所有种类合计每轮只展示一张卡片，每个对话只保留一张尚未开始的卡片。
-- 投影读取 `queuedMessageLimit`，状态版本却不随它变化。修改后的上限只作用于重新从日志折叠的会话；已缓存的投影行保留按旧上限得出的“未展示”结果。
+- PTC 预设不会展示卡片：从代码中发起的 Skill 加载和调用既不会激活工具，也到达不了工具，因为日志把它们记为程序派发而不是工具调用。
+- 卡片只在主对话中提供。subagent（包括 Creator 子 Agent）加载 Skill 不会激活任何东西，其调用也会被拒绝，因为只有在线的根 Agent 才能对卡片进行操作。
+- 所有种类合计每轮只展示一张卡片。任何种类的新卡片都会替换此前所有尚未开始的卡片，因此第二个种类的卡片会替换第一个种类尚未开始的卡片。
+- 用户操作的拒绝原因有意设计为普通字符串：服务定义 `closing`、`not-live-root`、`unknown`、`unavailable`、`access-denied` 和 `read-only`，各种类可以添加自己的原因，浏览器端正文为已知原因显示文案，其余按 unavailable 处理。
+- 每个种类在两端各自校验 `details`：Host 端的 schema 在模型提议时和每次操作前校验，浏览器端正文用自己的 schema 校验，因此两个 schema 要一起修改。
 - 本服务及其浏览器端的行由个性化页面 Bundle 插入。第二个种类的 Bundle 若插入相同的行会与其冲突；多个 Bundle 共享这些行的方式留到第二个种类发布时再定。
 
 <a id="dev-note"></a>

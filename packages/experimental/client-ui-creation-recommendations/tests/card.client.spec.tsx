@@ -17,7 +17,7 @@ type Act = (verb: string, payload?: ActionCardFields) => Promise<ActionCardResul
 
 function props(decision?: { phase: string; data?: ActionCardFields }, chinese = true, details: ActionCardFields = { slot: 'sidebar-right' }): PageCardProps & { act: ReturnType<typeof vi.fn<Act>> } {
   const proposal = { callId, turn: 1, action: ACTION, title: 'Counter', brief: 'Keep my task count visible.', details }
-  return { proposal, decision: decision === undefined ? undefined : { callId, action: ACTION, ...decision }, ready: true,
+  return { proposal, decision: decision === undefined ? undefined : { callId, action: ACTION, ...decision },
     sessionId: SessionId('session-1'), summary: <><strong>{proposal.title}</strong><p>{proposal.brief}</p></>, Folded: FoldedText,
     act: vi.fn<Act>(async () => ({ status: 'accepted' })), infoDismissed: createSnapshotStore(true),
     t: makeTranslate(chinese ? zh : en) }
@@ -235,11 +235,6 @@ it('keeps uncertain actions recoverable on refusal and connection loss', async (
     fireEvent.click(screen.getByRole('button', { name: '创建' }))
     await waitFor(() => { expect(screen.getByRole('alert').textContent).toBe(text) })
   }
-})
-
-it('waits for the card state before exposing writable actions', () => {
-  render(<PageCardBody {...{ ...props(), ready: false }} />)
-  expect(screen.getByRole('button', { name: '创建' }).hasAttribute('disabled')).toBe(true)
 })
 
 it('shows supplied initial content as folded data below the plan and omits it otherwise', () => {

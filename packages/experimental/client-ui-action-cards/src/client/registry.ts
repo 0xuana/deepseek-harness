@@ -20,8 +20,6 @@ export interface ActionCardBodyProps<N extends Extract<keyof LocaleNamespaceMap,
   readonly proposal: ActionCardProposal
   /** Recorded or derived card state; undefined while the card is unstarted. */
   readonly decision: ActionCardDecision | undefined
-  /** Whether the card state has arrived from the Host; writable actions wait for it. */
-  readonly ready: boolean
   readonly sessionId: SessionId
   /** Title and folded brief rendered by the frame; the body places them in its layout. */
   readonly summary: ReactNode

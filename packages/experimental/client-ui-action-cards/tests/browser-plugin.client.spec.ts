@@ -48,7 +48,7 @@ it('binds actions to the displayed session, serves registered bodies and removes
   expect([...bound.hooks.bodies.getSnapshot().keys()]).toEqual(['test_action'])
   const translate = (key: string) => key
   const element = bound.hooks.bodies.getSnapshot().get('test_action')!.render({ proposal: { callId: ToolCallId('card'), turn: 1,
-    action: 'test_action', title: 'Counter', brief: 'Keep count.', details: {} }, decision: undefined, ready: true,
+    action: 'test_action', title: 'Counter', brief: 'Keep count.', details: {} }, decision: undefined,
   sessionId: SessionId('session-one'), summary: null, Folded: Body, act: vi.fn() }, translate)
   expect(isValidElement(element) && element.type === Body && (element.props as { t: unknown }).t === translate).toBe(true)
   expect(() => ctx.actionCards.register({ action: 'test_action', locale: 'actionCards', Body })).toThrow('a body for "test_action" is already registered')

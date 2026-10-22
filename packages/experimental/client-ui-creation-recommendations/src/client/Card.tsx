@@ -65,7 +65,7 @@ function LocationPicker({ value, disabled, onChange, t }: {
  * @param props - card, state, actions, folded-text component and notice preference.
  * @returns the card body.
  */
-export function PageCardBody({ proposal, decision, ready, summary, Folded, act, infoDismissed, t }: PageCardProps) {
+export function PageCardBody({ proposal, decision, summary, Folded, act, infoDismissed, t }: PageCardProps) {
   const details = detailsSchema.safeParse(proposal.details)
   const parsed = decision === undefined ? undefined : dataSchema.safeParse(decision.data)
   const data = parsed?.success === true ? parsed.data : undefined
@@ -142,8 +142,8 @@ export function PageCardBody({ proposal, decision, ready, summary, Folded, act, 
         </div>}
         <footer className={css.footer}>
           <div className={css.actions}>
-            <Button variant="ghost" size="sm" disabled={busy || !ready} onClick={() => { void run('dismiss') }}>{t('dismiss')}</Button>
-            <Button variant="primary" size="sm" disabled={busy || !ready || location === 'custom' && customLocation.trim() === ''} onClick={() => { void run('create') }}>
+            <Button variant="ghost" size="sm" disabled={busy} onClick={() => { void run('dismiss') }}>{t('dismiss')}</Button>
+            <Button variant="primary" size="sm" disabled={busy || location === 'custom' && customLocation.trim() === ''} onClick={() => { void run('create') }}>
               {t(pending === 'create' ? 'starting' : decision === undefined ? 'create' : 'retry')}
             </Button>
           </div>

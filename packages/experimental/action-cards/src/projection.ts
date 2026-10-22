@@ -50,88 +50,75 @@ const stateSchema = z.object({
   admittedTurn: z.number().int().nullable(),
   /** Decisions not yet reported to the model, by call id, with the seq of their record. */
   pendingStatus: z.record(z.string(), z.number()),
-  /** User messages still queued for later turns, folded from inbox splices. */
+  /** User messages still queued for later turns, folded from inbox splices; the card tool compares it with its limit. */
   queued: z.number().int().nonnegative(),
 })
 
 /** Fold state; `view` is also the Client wire value. */
 export type ActionCardState = z.infer<typeof stateSchema>
 
-/** Card limits the fold needs; the owning service supplies its validated configuration. */
-export interface ActionCardLimits { readonly queuedMessageLimit: number }
-
-/** Definition returned by {@link actionCardProjection}: the fold plus its Client view wire. */
+/** Type of {@link actionCardProjection}: the fold plus its Client view wire. */
 export type ActionCardProjectionDefinition = Omit<ProjectionDefinition<'actionCards', ActionCardState>, 'wire'> & {
   readonly wire: NonNullable<ProjectionDefinition<'actionCards', ActionCardState>['wire']>
 }
 
 /**
  * Full-Session fold. A successful `propose_action` result admits the call as a card, at most one per turn;
- * the first admitted call of a turn wins. A newer card replaces every unstarted earlier card, and a card
- * written while `queuedMessageLimit` or more user messages are queued for later turns is suppressed.
+ * the first admitted call of a turn wins. A newer card of any kind replaces every unstarted earlier card.
  * Events inherited by a forked Session create no proposals or decisions.
- * @param limits - validated card limits.
- * @returns the projection definition for this configuration.
  */
-export function actionCardProjection(limits: ActionCardLimits): ActionCardProjectionDefinition {
-  return {
-    key: 'actionCards', stateVersion: 1, stateSchema,
-    init: (_header, inheritedEventCount) => ({
-      inheritedEventCount, view: { proposals: {}, decisions: {} }, calls: {}, admittedTurn: null, pendingStatus: {}, queued: 0,
-    }),
-    apply: (state, event) => {
-      if (event.seq < state.inheritedEventCount) return state
-      switch (event.type) {
-        case 'turn/start':
-          // A turn's calls settle inside it; a call left without a result never becomes a card.
-          return Object.keys(state.calls).length === 0 ? state : { ...state, calls: {} }
-        case 'agent/inbox/spliced':
-          if (event.data.target !== 'next-turn') return state
-          return { ...state, queued: Math.max(0, state.queued - (event.data.removedCount ?? 0) + event.data.inserted.length) }
-        case 'user/message': {
-          if (event.data.source.kind !== 'action-cards') return state
-          const through = event.data.source.through
-          return { ...state, pendingStatus: Object.fromEntries(Object.entries(state.pendingStatus).filter(([, seq]) => seq > through)) }
-        }
-        case 'tool/call': {
-          if (event.data.name !== PROPOSE_ACTION) return state
-          let raw: unknown
-          try { raw = JSON.parse(event.data.arguments) }
-          catch { return state } // Malformed model JSON failed in the tool too and creates no card.
-          const parsed = argumentsSchema.safeParse(raw)
-          if (!parsed.success) return state
-          return { ...state, calls: { ...state.calls, [event.data.callId]: { turn: event.data.turn, ...parsed.data } } }
-        }
-        case 'tool/result': {
-          const callId = event.data.message.toolCallId
-          const call = Object.hasOwn(state.calls, callId) ? state.calls[callId] : undefined
-          if (call === undefined) return state
-          const calls = Object.fromEntries(Object.entries(state.calls).filter(([id]) => id !== callId))
-          if (event.data.message.isError === true || state.admittedTurn === call.turn) return { ...state, calls }
-          const decisions = { ...state.view.decisions }
-          if (state.queued >= limits.queuedMessageLimit) {
-            // The user has moved on; the card is logged but never offered.
-            decisions[callId] = { callId, action: call.action, phase: 'suppressed' }
-          } else {
-            // A newer card supersedes every unstarted card; the model made that choice, so no status is reported.
-            for (const earlier of Object.values(state.view.proposals)) {
-              if (decisions[earlier.callId] === undefined) decisions[earlier.callId] = { callId: earlier.callId, action: earlier.action, phase: 'replaced' }
-            }
-          }
-          return { ...state, calls, admittedTurn: call.turn,
-            view: { proposals: { ...state.view.proposals, [callId]: { callId, ...call } }, decisions } }
-        }
-        default: {
-          const record = pluginRecordOf(event)
-          if (record?.type !== 'plugin:action-cards/decision') return state
-          // A malformed or newer record is skipped; throwing here would fail every later read of this Session.
-          const decision = decisionSchema.safeParse(record.data)
-          if (!decision.success) return state
-          return { ...state, view: { ...state.view, decisions: { ...state.view.decisions, [decision.data.callId]: decision.data } },
-            pendingStatus: { ...state.pendingStatus, [decision.data.callId]: event.seq } }
-        }
+export const actionCardProjection: ActionCardProjectionDefinition = {
+  key: 'actionCards', stateVersion: 2, stateSchema,
+  init: (_header, inheritedEventCount) => ({
+    inheritedEventCount, view: { proposals: {}, decisions: {} }, calls: {}, admittedTurn: null, pendingStatus: {}, queued: 0,
+  }),
+  apply: (state, event) => {
+    if (event.seq < state.inheritedEventCount) return state
+    switch (event.type) {
+      case 'turn/start':
+        // A turn's calls settle inside it; a call left without a result never becomes a card.
+        return Object.keys(state.calls).length === 0 ? state : { ...state, calls: {} }
+      case 'agent/inbox/spliced':
+        if (event.data.target !== 'next-turn') return state
+        return { ...state, queued: Math.max(0, state.queued - (event.data.removedCount ?? 0) + event.data.inserted.length) }
+      case 'user/message': {
+        if (event.data.source.kind !== 'action-cards') return state
+        const through = event.data.source.through
+        return { ...state, pendingStatus: Object.fromEntries(Object.entries(state.pendingStatus).filter(([, seq]) => seq > through)) }
       }
-    },
-    wire: { summary: false, viewSchema, view: (state: ActionCardState) => state.view },
-  }
+      case 'tool/call': {
+        if (event.data.name !== PROPOSE_ACTION) return state
+        let raw: unknown
+        try { raw = JSON.parse(event.data.arguments) }
+        catch { return state } // Malformed model JSON failed in the tool too and creates no card.
+        const parsed = argumentsSchema.safeParse(raw)
+        if (!parsed.success) return state
+        return { ...state, calls: { ...state.calls, [event.data.callId]: { turn: event.data.turn, ...parsed.data } } }
+      }
+      case 'tool/result': {
+        const callId = event.data.message.toolCallId
+        const call = Object.hasOwn(state.calls, callId) ? state.calls[callId] : undefined
+        if (call === undefined) return state
+        const calls = Object.fromEntries(Object.entries(state.calls).filter(([id]) => id !== callId))
+        if (event.data.message.isError === true || state.admittedTurn === call.turn) return { ...state, calls }
+        const decisions = { ...state.view.decisions }
+        // A newer card supersedes every unstarted card; the model made that choice, so no status is reported.
+        for (const earlier of Object.values(state.view.proposals)) {
+          if (decisions[earlier.callId] === undefined) decisions[earlier.callId] = { callId: earlier.callId, action: earlier.action, phase: 'replaced' }
+        }
+        return { ...state, calls, admittedTurn: call.turn,
+          view: { proposals: { ...state.view.proposals, [callId]: { callId, ...call } }, decisions } }
+      }
+      default: {
+        const record = pluginRecordOf(event)
+        if (record?.type !== 'plugin:action-cards/decision') return state
+        // A malformed or newer record is skipped; throwing here would fail every later read of this Session.
+        const decision = decisionSchema.safeParse(record.data)
+        if (!decision.success) return state
+        return { ...state, view: { ...state.view, decisions: { ...state.view.decisions, [decision.data.callId]: decision.data } },
+          pendingStatus: { ...state.pendingStatus, [decision.data.callId]: event.seq } }
+      }
+    }
+  },
+  wire: { summary: false, viewSchema, view: (state: ActionCardState) => state.view },
 }

@@ -80,16 +80,15 @@ function decisionOf(view: ActionCardView | undefined, callId: string): ActionCar
 }
 
 /**
- * Place the card admitted in a turn after that turn's final answer, once the turn has ended for any reason.
+ * Place the card admitted in a turn after that turn's final answer, once the turn has ended with one.
  * @param props - Turn location, projection reader, registered bodies and Session-bound actions.
- * @returns the card, or null.
+ * @returns the card, or null while the turn is open or when it ended without answer text.
  */
 export function ActionCardTail({ turn, useProjection, ...props }: TailProps) {
   const view = useProjection('actionCards')
   const proposal = proposalOf(view, turn.turn)
-  const decision = proposal === undefined ? undefined : decisionOf(view, proposal.callId)
-  return proposal === undefined || decision?.phase === 'suppressed' || turn.end === undefined || turn.data.get('turn-tail')?.closing == null
-    ? null : <ActionCard {...props} proposal={proposal} decision={decision} ready={view !== undefined} />
+  return proposal === undefined || turn.end === undefined || turn.data.get('turn-tail')?.closing == null
+    ? null : <ActionCard {...props} proposal={proposal} decision={decisionOf(view, proposal.callId)} />
 }
 
 /**
@@ -97,10 +96,9 @@ export function ActionCardTail({ turn, useProjection, ...props }: TailProps) {
  * @param props - the card, its state, registered bodies and actions.
  * @returns the card section.
  */
-export function ActionCard({ proposal, decision, ready, sessionId, act, bind, useBodies, t }: {
+export function ActionCard({ proposal, decision, sessionId, act, bind, useBodies, t }: {
   proposal: ActionCardProposal
   decision: ActionCardDecision | undefined
-  ready: boolean
 } & InjectFace<TailInjected> & PropsLocale<'actionCards'>) {
   const body = useBodies(bodies => bodies.get(proposal.action))
   const send = useCallback((verb: string, payload?: ActionCardFields) => act(proposal.callId, verb, payload), [act, proposal.callId])
@@ -110,8 +108,8 @@ export function ActionCard({ proposal, decision, ready, sessionId, act, bind, us
   </>
   // The frame re-renders on a locale change and hands the body a new summary, so the body re-renders with it.
   const content = body === undefined
-    ? <FallbackBody summary={summary} decision={decision} ready={ready} act={send} t={t} />
-    : body.render({ proposal, decision, ready, sessionId, summary, Folded: FoldedText, act: send }, bind(body.locale))
+    ? <FallbackBody summary={summary} decision={decision} act={send} t={t} />
+    : body.render({ proposal, decision, sessionId, summary, Folded: FoldedText, act: send }, bind(body.locale))
   return <section className={css.card} aria-label={proposal.title} data-action-card={proposal.callId} data-action={proposal.action}>
     {content}
   </section>
@@ -121,10 +119,9 @@ export function ActionCard({ proposal, decision, ready, sessionId, act, bind, us
 const NAMED_PHASES: Readonly<Record<string, ActionCardKey>> = { dismissed: 'dismissed', replaced: 'replaced' }
 
 /** Title, brief and Not now for a card whose kind registered no body in this browser. */
-function FallbackBody({ summary, decision, ready, act, t }: {
+function FallbackBody({ summary, decision, act, t }: {
   summary: ReactNode
   decision: ActionCardDecision | undefined
-  ready: boolean
   act: (verb: string) => Promise<ActionCardResult | undefined>
 } & PropsLocale<'actionCards'>) {
   const [pending, setPending] = useState(false)
@@ -147,7 +144,7 @@ function FallbackBody({ summary, decision, ready, act, t }: {
     {phase !== undefined && <p role="status" className={css.status}>{t(phase)}</p>}
     {error !== undefined && <p role="alert" className={css.status}>{t(error)}</p>}
     {decision === undefined && <footer className={css.footer}>
-      <Button variant="ghost" size="sm" disabled={pending || !ready} onClick={() => { void dismiss() }}>{t('dismiss')}</Button>
+      <Button variant="ghost" size="sm" disabled={pending} onClick={() => { void dismiss() }}>{t('dismiss')}</Button>
     </footer>}
   </div>
 }

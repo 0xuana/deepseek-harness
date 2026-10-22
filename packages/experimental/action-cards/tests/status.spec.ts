@@ -1,6 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import { agentEvents, type Agent, type PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { appendPluginRecord } from '@deepseek-ai/dsh-session'
 import ActionCards from '../src/index.ts'
 import { ACTION, callId, fixture } from './fixture.ts'
 
@@ -25,7 +26,8 @@ it('reports recorded decisions once on the next request, with each kind guidance
   expect(await prepare(f)).toEqual({ kind: 'enter', messages: [] })
   f.ctx.actionCards.record(f.agent, { callId, action: ACTION, phase: 'failed', data: { reason: 'timeout', internal: 'x' } })
   f.ctx.actionCards.record(f.agent, { callId: ToolCallId('call-card-2'), action: ACTION, phase: 'dismissed' })
-  f.ctx.actionCards.record(f.agent, { callId: ToolCallId('call-orphan'), action: 'retired_action', phase: 'done' })
+  // A decision logged by a kind that is no longer registered is still reported.
+  appendPluginRecord(f.agent.session, 'plugin:action-cards/decision', { callId: ToolCallId('call-orphan'), action: 'retired_action', phase: 'done' })
   const decision = await prepare(f)
   if (decision.kind !== 'enter') throw new Error('request was rejected')
   expect(decision.messages).toHaveLength(1)
