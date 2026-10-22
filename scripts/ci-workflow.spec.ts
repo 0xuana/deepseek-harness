@@ -1418,8 +1418,8 @@ describe('Issue lifecycle workflow', () => {
       if: "${{ steps.preflight.outputs.needs-project == 'true' }}",
       uses: 'actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1',
       with: {
-        'client-id': '${{ vars.DSH_APPROVAL_APP_CLIENT_ID }}',
-        'private-key': '${{ secrets.DSH_APPROVAL_APP_PRIVATE_KEY }}',
+        'client-id': '${{ vars.DSH_ISSUE_APP_CLIENT_ID }}',
+        'private-key': '${{ secrets.DSH_ISSUE_APP_PRIVATE_KEY }}',
         owner: 'deepseek-harness',
         repositories: 'deepseek-harness',
         'permission-issues': 'read',
