@@ -18,7 +18,7 @@ import { PerfView } from '../src/client/PerfView.tsx'
 import { zh } from '../src/client/locales.ts'
 import css from '../src/client/perf.module.css'
 import {
-  formatChars, formatClock, formatDateTime, formatMs, formatPercent, formatTokens,
+  formatChars, formatClock, formatDateTime, formatDateTimeShort, formatMs, formatPercent, formatTokens,
   formatTokensShort, formatTps,
 } from '../src/client/perf-format.ts'
 import type {
@@ -324,18 +324,19 @@ describe('empty state and footer', () => {
     mount({ turns: [turn({ prompt: 'question' })], stepCount: 0 })
     const row = rowWithPrefix(say('turn.label', { turn: 1 }))
     expect(row.textContent).toContain(say('turn.stepCount', { count: 0 }))
-    expect(row.textContent).toContain(say('turn.collapse'))
+    // The row is its own toggle, so the scope cell no longer repeats a hint word.
+    expect(row.textContent).not.toContain(say('turn.collapse'))
     expect(row.getAttribute('title')).toBe(say('turn.toggle.title'))
 
     fireEvent.click(row)
-    expect(rowWithPrefix(say('turn.label', { turn: 1 })).textContent).toContain(say('turn.expand'))
+    expect(rowWithPrefix(say('turn.label', { turn: 1 })).textContent).not.toContain(say('turn.expand'))
 
     fireEvent.click(screen.getByRole('button', { name: say('expand.all') }))
-    expect(rowWithPrefix(say('turn.label', { turn: 1 })).textContent).toContain(say('turn.collapse'))
+    expect(rowWithPrefix(say('turn.label', { turn: 1 })).textContent).not.toContain(say('turn.collapse'))
     expect(screen.getByRole('button', { name: say('collapse.all') })).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: say('collapse.all') }))
-    expect(rowWithPrefix(say('turn.label', { turn: 1 })).textContent).toContain(say('turn.expand'))
+    expect(rowWithPrefix(say('turn.label', { turn: 1 })).textContent).not.toContain(say('turn.expand'))
     expect(screen.getByRole('button', { name: say('expand.all') })).toBeTruthy()
   })
 })
@@ -507,8 +508,8 @@ describe('turn rows', () => {
     expect(headers[3]?.getAttribute('title')).toBe(say('column.context.title'))
 
     const row = rowWithPrefix(say('turn.label', { turn: 1 }))
-    expect(row.textContent).toContain(`· ${formatClock(BASE)}`)
-    const clock = within(row).getByText(`· ${formatClock(BASE)}`)
+    expect(row.textContent).toContain(`· ${formatDateTimeShort(BASE)}`)
+    const clock = within(row).getByText(`· ${formatDateTimeShort(BASE)}`)
     expect(clock.getAttribute('title')).toBe(say('turn.started', { time: formatDateTime(BASE) }))
     expect(within(row).getByText(say('did.retry', { count: 2 }))).toBeTruthy()
     const miss = within(row).getByText(say('state.cacheMiss'))
@@ -945,7 +946,7 @@ describe('keyboard row controls', () => {
 
     fireEvent.click(screen.getByRole('button', { name: say('turn.toggle.aria', { turn: 2 }) }))
     expect(labels()).toBe('false')
-    expect(rowWithPrefix(say('turn.label', { turn: 2 })).textContent).toContain(say('turn.expand'))
+    expect(rowWithPrefix(say('turn.label', { turn: 2 })).textContent).not.toContain(say('turn.expand'))
 
     // Mouse row clicks keep toggling the same state.
     fireEvent.click(rowWithPrefix(say('turn.label', { turn: 2 })))

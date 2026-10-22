@@ -91,6 +91,19 @@ export function formatClock(value: number | null): string {
 }
 
 /**
+ * Compact month-day clock for the turn scope cell; tooltips carry the full date.
+ * @param value - epoch milliseconds.
+ * @returns `MM-DD HH:MM`, or the dash placeholder.
+ */
+export function formatDateTimeShort(value: number | null): string {
+  if (!isNumber(value)) return DASH
+  const date = new Date(value)
+  const pad = (part: number): string => String(part).padStart(2, '0')
+  return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} `
+    + `${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+/**
  * Date and time of day: the table shows the clock, tooltips add the date.
  * @param value - epoch milliseconds.
  * @returns `YYYY-MM-DD HH:MM:SS`, or the dash placeholder.

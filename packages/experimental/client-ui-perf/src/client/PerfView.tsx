@@ -16,7 +16,7 @@ import type {
   PerfCall, PerfSnapshot, PerfStepMetrics, PerfToolCount, PerfTurnMetrics,
 } from './perf-contract.ts'
 import {
-  DASH, barShare, formatChars, formatClock, formatDateTime, formatMs, formatPercent,
+  DASH, barShare, formatChars, formatClock, formatDateTime, formatDateTimeShort, formatMs, formatPercent,
   formatTokens, formatTokensDelta, formatTokensShort, formatTps,
 } from './perf-format.ts'
 import { isNumber } from './perf-usage.ts'
@@ -1461,7 +1461,6 @@ function stepRows(options: StepRowsOptions): ReactNode[] {
 function turnRows(options: TurnRowsOptions): ReactNode[] {
   const { turn, t, loadImage, now, open, state, turnScale, onToggle, onToggleDetail, onControl } = options
   const cells = metricsCells(turn, t)
-  const toggleLabel = open ? t('turn.collapse') : t('turn.expand')
   const rows: ReactNode[] = [
     <tr
       key={`turn:${turn.turn}`}
@@ -1484,13 +1483,12 @@ function turnRows(options: TurnRowsOptions): ReactNode[] {
           {t('turn.label', { turn: turn.turn })}
         </button>
         <span className={css.stepCount}>{` · ${t('turn.stepCount', { count: turn.steps.length })}`}</span>
-        <span className={css.toggle}>{` · ${toggleLabel}`}</span>
         {isNumber(turn.startTime) ? (
           <span
             className={css.turnClock}
             title={t('turn.started', { time: formatDateTime(turn.startTime) })}
           >
-            {` · ${formatClock(turn.startTime)}`}
+            {` · ${formatDateTimeShort(turn.startTime)}`}
           </span>
         ) : null}
         {scopeMarkers(turn, t)}
@@ -1696,6 +1694,11 @@ export function PerfView(props: PerfViewProps): ReactElement {
           <div className={css.empty}>{t('empty')}</div>
         ) : (
           <table className={css.table} aria-label={t('view.perf')}>
+            <colgroup>
+              <col /><col /><col />
+              {COLUMNS.map(name => <col key={name} />)}
+              <col />
+            </colgroup>
             <thead>
               <tr>
                 <th className={css.thLeft} title={t('column.scope.title')}>{t('column.scope')}</th>

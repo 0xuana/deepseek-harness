@@ -36,11 +36,26 @@
 /* Table shared by the turn rows and their nested step rows. */
 .table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   border-spacing: 0;
   font: var(--dsw-font-xxs-12);
   font-variant-numeric: tabular-nums;
 }
+
+/* Scope | question | did | seven metrics | total time; fixed widths keep the
+   measurement columns visible instead of letting the did cell push them out. */
+.table col:nth-child(1) { width: 10%; }
+.table col:nth-child(2) { width: 16%; }
+.table col:nth-child(3) { width: 13%; }
+.table col:nth-child(4) { width: 6%; }
+.table col:nth-child(5) { width: 6%; }
+.table col:nth-child(6) { width: 6%; }
+.table col:nth-child(7) { width: 6.5%; }
+.table col:nth-child(8) { width: 6.5%; }
+.table col:nth-child(9) { width: 6.5%; }
+.table col:nth-child(10) { width: 6.5%; }
+.table col:nth-child(11) { width: 17%; }
 
 .thLeft,
 .th {
@@ -76,6 +91,8 @@
 .turnMetric,
 .turnDid,
 .promptCellTurn {
+  overflow: hidden;
+  text-overflow: ellipsis;
   padding: 6px 8px;
   border-top: 0.5px solid var(--dsw-alias-border-l2);
   border-bottom: 0.5px solid var(--dsw-alias-border-l1);
@@ -83,6 +100,8 @@
 }
 
 .turnCell {
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-weight: 600;
 }
 
@@ -162,6 +181,8 @@
 .stepMetric,
 .stepDid,
 .promptCell {
+  overflow: hidden;
+  text-overflow: ellipsis;
   box-sizing: border-box;
   height: 30px;
   padding: 0 8px;
