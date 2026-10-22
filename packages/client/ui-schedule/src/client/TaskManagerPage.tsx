@@ -54,7 +54,7 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
   const catalog = useCatalog(snapshot => snapshot)
   const { records, status } = catalog
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('active')
   const [selectedId, setSelectedId] = useState<ScheduleId | null>(null)
   const [clearConfirm, setClearConfirm] = useState(false)
   const [clearing, setClearing] = useState(false)
@@ -186,7 +186,7 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
               <div className={css.creationActions}>
                 {endedCount > 0 && <Button
                   ref={clearTriggerRef}
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
                   className={css.headerAction}
                   onClick={() => {
@@ -300,6 +300,7 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
             {t('delete.cancel')}
           </Button>
           <Button
+            variant="outline"
             className={css.deleteButton}
             aria-disabled={clearing}
             onClick={confirmClearEnded}

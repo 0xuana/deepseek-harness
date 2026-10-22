@@ -1466,6 +1466,9 @@
 
 .deleteButton {
   color: var(--dsw-alias-state-error-primary);
+  /* The outlined confirmation button keeps its border in the danger colour so
+     the destructive action reads as a bordered control, not bare text. */
+  --dsh-button-outline-color: var(--dsw-alias-state-error-primary);
 }
 
 .page :focus-visible {

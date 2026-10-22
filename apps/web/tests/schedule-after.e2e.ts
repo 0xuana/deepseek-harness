@@ -1303,8 +1303,8 @@ describe.skipIf(MODE === 'record')('web e2e: active Schedule catalog', () => {
       // The confirmation states the Host-side target and removes nothing until it
       // is confirmed.
       await clear.click()
-      const confirmation = page.getByRole('dialog', { name: 'Clear inactive automation tasks?' })
-      await confirmation.getByText('2 inactive tasks', { exact: true }).waitFor()
+      const confirmation = page.getByRole('dialog', { name: 'Clear inactive tasks?' })
+      await confirmation.getByText('2 tasks', { exact: true }).waitFor()
       await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click()
       expect((await scaffold.ctx.schedule.catalog()).filter(task => task.status === 'inactive')).toHaveLength(2)
 

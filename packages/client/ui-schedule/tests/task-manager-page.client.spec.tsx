@@ -162,6 +162,7 @@ function mount(
   initial: Partial<CatalogSnapshot<ScheduleCatalogEntry>> = {},
   dictionary: typeof en | typeof zh = en,
   overrides: Partial<TaskManagerPageProps> = {},
+  options: { startAtAll?: boolean } = {},
 ) {
   let snapshot: CatalogSnapshot<ScheduleCatalogEntry> = {
     records, status: 'ready', deleting: [], settled: true, readRequest: 0, readSettled: 0, ...initial,
@@ -194,6 +195,11 @@ function mount(
     ...overrides,
   }
   const view = render(<TaskManagerPage {...props} />)
+  // The page starts on Active; cases about the full list select All first. The
+  // default filter itself is covered by its own case below.
+  if (options.startAtAll !== false) {
+    fireEvent.click(screen.getByRole('button', { name: dictionary['statusFilter.all'] }))
+  }
   return {
     props, view,
     updateTiming: vi.mocked(props.onUpdateTiming),
@@ -834,6 +840,18 @@ describe('Task manager catalog', () => {
     expect(taskNames()).toEqual(['Review release'])
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: '' } })
     expect(taskNames()).toEqual(['Send summary', 'Review release', 'Check metrics'])
+  })
+
+  it.each([en, zh])('starts on the active status filter', (dictionary) => {
+    mount({ records: [ended, every, after] }, dictionary, {}, { startAtAll: false })
+    const list = screen.getByRole('list', { name: dictionary['list.label'] })
+    const names = within(list).queryAllByRole('button')
+      .filter(button => button.closest('li') !== null)
+      .map(button => button.getAttribute('aria-label'))
+    const statuses = screen.getByRole('group', { name: dictionary['statusFilter.label'] })
+    expect(within(statuses).getByRole('button', { name: dictionary['status.active'] }).getAttribute('aria-pressed')).toBe('true')
+    expect(within(statuses).getByRole('button', { name: dictionary['statusFilter.all'] }).getAttribute('aria-pressed')).toBe('false')
+    expect(names).toEqual(['Send summary', 'Check metrics'])
   })
 
   it.each([en, zh])('combines all, active, and inactive status filters with search', (dictionary) => {
