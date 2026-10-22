@@ -44,16 +44,26 @@ function turnContext(steps: readonly PerfStepMetrics[]): number | null {
   return context
 }
 
-/** Cache breakdown measured last in the turn, from the same step whose hit rate the row shows. */
-function turnCache(steps: readonly PerfStepMetrics[]): { read: number | null; write: number | null } {
-  let read: number | null = null
-  let write: number | null = null
+/** Token-weighted cache level of the turn, over the steps that reported both read and prompt tokens. */
+function turnCache(steps: readonly PerfStepMetrics[]): {
+  rate: number | null
+  read: number | null
+  write: number | null
+  context: number | null
+} {
+  let read = 0
+  let write = 0
+  let context = 0
+  let measured = false
   for (const step of steps) {
-    if (!isNumber(step.cacheHit)) continue
-    read = step.cacheRead
-    write = step.cacheWrite
+    if (!isNumber(step.cacheRead) || !isNumber(step.context)) continue
+    read += step.cacheRead
+    write += step.cacheWrite ?? 0
+    context += step.context
+    measured = true
   }
-  return { read, write }
+  const level = measured && context > 0 ? Math.min(1, read / context) : null
+  return { rate: level, read: measured ? read : null, write: measured ? write : null, context: measured ? context : null }
 }
 
 /** Tool tallies by descending count; ties keep call order. */
@@ -144,16 +154,12 @@ export function aggregateTurn(turn: number, steps: readonly PerfStepMetrics[]): 
     && !last.running && isNumber(first.startTime) && isNumber(last.endTime)
     ? Math.max(0, last.endTime - first.startTime)
     : null
-  // Last cache hit measured in the turn: the prompt grows, so the tail value is
-  // the turn's actual level rather than the first step's cold start.
-  let cacheHit: number | null = null
   let answer: string | null = null
   let retries = 0
   let toolErrors = 0
   let toolOutput = 0
   let lastStepWall: number | null = null
   for (const step of steps) {
-    if (isNumber(step.cacheHit)) cacheHit = step.cacheHit
     if (step.answer !== null) answer = step.answer
     retries += step.retries
     toolErrors += step.toolErrors
@@ -182,9 +188,10 @@ export function aggregateTurn(turn: number, steps: readonly PerfStepMetrics[]): 
     toolWall: toolWallMeasured ? toolWallSum : null,
     toolPending: toolPairable === 0 ? 0 : toolPending,
     tools: toolCounts,
-    cacheHit,
+    cacheHit: cache.rate,
     cacheRead: cache.read,
     cacheWrite: cache.write,
+    cacheContext: cache.context,
     retries,
     toolErrors,
     toolOutput,

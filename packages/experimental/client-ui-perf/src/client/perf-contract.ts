@@ -139,10 +139,14 @@ export interface PerfTurnMetrics {
   readonly toolWall: number | null
   readonly toolPending: number
   readonly tools: readonly PerfToolCount[]
+  /** Token-weighted cache-read share across the steps that reported usage. */
   readonly cacheHit: number | null
-  /** Cache breakdown of the last step that reported usage, for the turn tooltip. */
+  /** Cache-read tokens summed across the steps that reported usage. */
   readonly cacheRead: number | null
+  /** Cache-write tokens summed across the steps that reported usage. */
   readonly cacheWrite: number | null
+  /** Prompt tokens summed across the steps that reported usage; the weight of `cacheHit`. */
+  readonly cacheContext: number | null
   readonly retries: number
   readonly toolErrors: number
   readonly toolOutput: number

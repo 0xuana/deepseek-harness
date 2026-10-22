@@ -150,6 +150,8 @@ interface MetricsValues {
   readonly tool: number | null
   readonly cacheRead: number | null
   readonly cacheWrite: number | null
+  /** Weighted prompt denominator of a turn's cache rate; step rows use `context`. */
+  readonly cacheContext?: number | null
   readonly ttftPending?: number
   readonly modelPending?: number
   readonly toolPending?: number
@@ -802,7 +804,9 @@ const COLUMN_DETAIL: Readonly<
     if (!isNumber(value.cacheRead) && !isNumber(value.cacheWrite)) return t('column.cache.title')
     const read = value.cacheRead ?? 0
     const write = value.cacheWrite ?? 0
-    const context = isNumber(value.context) ? value.context : read + write
+    const context = isNumber(value.cacheContext)
+      ? value.cacheContext
+      : isNumber(value.context) ? value.context : read + write
     const input = Math.max(0, context - read - write)
     return t('cache.detail', {
       read: formatTokens(read),

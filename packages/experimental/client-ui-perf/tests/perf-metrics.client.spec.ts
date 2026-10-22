@@ -204,30 +204,35 @@ describe('turn aggregation', () => {
     expect(noOutput.tps).toBeNull()
   })
 
-  it('keeps the last measured context and cache level of the turn', () => {
+  it('weights the turn cache level by measured prompt tokens and keeps the last context', () => {
     const turn = aggregateTurn(4, [
-      metricsOf({ step: 1, context: 100, cacheHit: 0.2, cacheRead: 10, cacheWrite: 5, wall: 10 }),
-      metricsOf({ step: 2, context: 200, cacheHit: 0.5, cacheRead: 20, cacheWrite: 6, wall: 20 }),
+      metricsOf({ step: 1, context: 100, cacheHit: 0.2, cacheRead: 20, cacheWrite: 5, wall: 10 }),
+      metricsOf({ step: 2, context: 200, cacheHit: 0.5, cacheRead: 100, cacheWrite: 6, wall: 20 }),
       metricsOf({ step: 3, context: 300, wall: 30 }),
     ])
     expect(turn.context).toBe(300)
-    expect(turn.cacheHit).toBe(0.5)
-    expect(turn.cacheRead).toBe(20)
-    expect(turn.cacheWrite).toBe(6)
+    expect(turn.cacheHit).toBeCloseTo(120 / 300)
+    expect(turn.cacheRead).toBe(120)
+    expect(turn.cacheWrite).toBe(11)
+    expect(turn.cacheContext).toBe(300)
     expect(turn.lastStepWall).toBe(30)
     const heldBack = aggregateTurn(4, [
-      metricsOf({ step: 1, context: 100, cacheHit: 0.2, cacheRead: 10, cacheWrite: 5, wall: 10 }),
+      metricsOf({ step: 1, context: 100, cacheHit: 0.2, cacheRead: 20, cacheWrite: 5, wall: 10 }),
       metricsOf({ step: 2, cacheHit: null, cacheRead: 99, cacheWrite: 99, wall: null }),
     ])
     expect(heldBack.context).toBe(100)
     expect(heldBack.cacheHit).toBe(0.2)
-    expect(heldBack.cacheRead).toBe(10)
+    expect(heldBack.cacheRead).toBe(20)
     expect(heldBack.cacheWrite).toBe(5)
+    expect(heldBack.cacheContext).toBe(100)
     expect(heldBack.lastStepWall).toBe(10)
     const bare = aggregateTurn(4, [metricsOf({ cacheHit: 0.4 })])
-    expect(bare.cacheHit).toBe(0.4)
+    expect(bare.cacheHit).toBeNull()
     expect(bare.cacheRead).toBeNull()
     expect(bare.cacheWrite).toBeNull()
+    expect(bare.cacheContext).toBeNull()
+    const empty = aggregateTurn(4, [metricsOf({ context: 0, cacheRead: 0 })])
+    expect(empty.cacheHit).toBeNull()
   })
 
   it('sums the sequential step tool spans', () => {

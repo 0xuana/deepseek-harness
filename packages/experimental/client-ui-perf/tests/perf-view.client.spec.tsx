@@ -124,6 +124,7 @@ function turn(overrides: Partial<PerfTurnMetrics> = {}): PerfTurnMetrics {
     cacheHit: null,
     cacheRead: null,
     cacheWrite: null,
+    cacheContext: null,
     retries: 0,
     toolErrors: 0,
     toolOutput: 0,
@@ -728,8 +729,9 @@ describe('turn rows', () => {
         turn({ turn: 2, cacheHit: 0.1, cacheRead: null, cacheWrite: 200, context: 1_000 }),
         turn({ turn: 3, cacheHit: 0.4, cacheRead: 100, cacheWrite: null, context: null }),
         turn({ turn: 4, cacheHit: 0.2, cacheRead: null, cacheWrite: null }),
+        turn({ turn: 5, cacheHit: 0.15, cacheRead: 100, cacheWrite: 200, cacheContext: 2_000 }),
       ],
-      stepCount: 4,
+      stepCount: 5,
     })
     const full = cellsOf(rowWithPrefix(say('turn.label', { turn: 1 })))
     expect(full[5]?.getAttribute('title')).toBe(say('cache.detail', {
@@ -747,6 +749,10 @@ describe('turn rows', () => {
     expect(readOnly[3]?.textContent).toBe('—')
     const absent = cellsOf(rowWithPrefix(say('turn.label', { turn: 4 })))
     expect(absent[5]?.getAttribute('title')).toBe(say('column.cache.title'))
+    const weighted = cellsOf(rowWithPrefix(say('turn.label', { turn: 5 })))
+    expect(weighted[5]?.getAttribute('title')).toBe(say('cache.detail', {
+      read: formatTokens(100), input: formatTokens(1_700), write: formatTokens(200),
+    }))
   })
 
   it('scales turn bars against the turns visible on screen', () => {
