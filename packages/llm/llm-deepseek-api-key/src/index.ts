@@ -90,7 +90,15 @@ export function apply(ctx: Context, config: Config): void {
     },
     connect: async (signal) => {
       const connection = options()
-      return connectionOf(connection, connection.listing === undefined ? undefined : await listings.view(connection.listing, signal))
+      if (connection.listing === undefined) return connectionOf(connection, undefined)
+      let view: ListingView
+      try { view = await listings.view(connection.listing, signal) }
+      catch (error) {
+        if (signal?.aborted === true) throw error
+        // A credential lookup failure is reported by `resolveAuth` on the model request, after the turn records the prompt.
+        view = listings.current()
+      }
+      return connectionOf(connection, view)
     },
     resolveAuth: async connection => ({ headers: { 'x-api-key': await resolveApiKey(connection) } }),
     admit: (connection, model) => { refuseListedModel(model, connection.refusals.get(model)) },

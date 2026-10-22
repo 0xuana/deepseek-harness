@@ -100,6 +100,21 @@ it('refuses listed models this build cannot serve before any inference request',
   expect(requests).toHaveLength(1)
 })
 
+it('lets a caller abandon the first listing wait', async () => {
+  const started = Promise.withResolvers<undefined>()
+  vi.spyOn(globalThis, 'fetch').mockImplementation((_input, init) => new Promise((_resolve, reject) => {
+    started.resolve(undefined)
+    init?.signal?.addEventListener('abort', () => { reject(init.signal?.reason) }, { once: true })
+  }))
+  const { ctx } = await host()
+  await ctx.plugin(ApiKey, {})
+  const caller = new AbortController()
+  const pending = ctx.llm.resolveModelInfo('deepseek-official', 'deepseek-flash', caller.signal)
+  await started.promise
+  caller.abort(new Error('caller left'))
+  await expect(pending).rejects.toThrow('caller left')
+})
+
 it.each([[{}], [{ models: [{ id: 'custom' }] }]])('hides the route without a key and requests nothing for %j', async (config) => {
   const requests = officialListing(listing(FLASH))
   const { ctx } = await host('')
