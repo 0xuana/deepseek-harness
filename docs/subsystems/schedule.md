@@ -345,7 +345,7 @@ type ScheduleCatalogEntry = ScheduleRecord & {
 }
 ```
 
-The Remote `schedule.list({ sessionId })`, model `schedule_list`, and Session-header catalog return only active tasks. A model view's derived timing `state` remains distinct from stored lifecycle `status`. Deletion uses `schedule.delete({ sessionId, id })` with the entry's original binding; a mismatched binding returns not found. Model tools supply the current Agent's Session, whereas the global user interface supplies the selected task's binding. The binding check alone does not establish caller authorization. `schedule.deleteInactive()` removes every ended (inactive) task across Sessions, with the saved delivery records each row carries; on success it answers `{ deleted }` with the count it removed, and a failed batch rejects with nothing removed and nothing announced. The Automation tasks page's bulk cleanup uses it. An ended task never arms a timer, so the removal recomputes no target. The payload-free `schedule/changed` event invalidates client lists; reconnecting clients fetch current state again.
+The Remote `schedule.list({ sessionId })`, model `schedule_list`, and Session-header catalog return only active tasks. A model view's derived timing `state` remains distinct from stored lifecycle `status`. Deletion uses `schedule.delete({ sessionId, id })` with the entry's original binding; a mismatched binding returns not found. Model tools supply the current Agent's Session, whereas the global user interface supplies the selected task's binding. The binding check alone does not establish caller authorization. `schedule.deleteInactive()` removes every ended (inactive) task across Sessions, with the saved delivery records each row carries; on success it answers `{ deleted }` with the count it removed; a normal failed batch rejects with nothing removed, and an `unknown-state` failure may have removed rows, so the service announces `schedule/changed` before rejecting and clients re-read. The Automation tasks page's bulk cleanup uses it. An ended task never arms a timer, so the removal recomputes no target. The payload-free `schedule/changed` event invalidates client lists; reconnecting clients fetch current state again.
 
 The shipped Web composition mounts `ui-schedule` with the Host capability. The [client package](../../packages/client/ui-schedule/README.md) owns the catalog, empty state, and deletion controls. The page separately filters all, active, and inactive tasks, retains inactive details and an original-Session control in the detail tab strip, and requires explicit confirmed deletion. The Rules and Records tabs separate task settings from lazily paged saved receipts. Neither a receipt nor inactive status confirms model execution.
 
@@ -524,6 +524,8 @@ async create(sessionId: SessionId, request: ScheduleCreateRequest, signal?: Abor
  * slot, so a delivery ordered behind this call ends its task after the
  * enumeration rather than during it. The batch is one durable write: a failure
  * removes nothing and rejects, so the caller never receives a partial removal.
+ * A backend that reports `unknown-state` may have removed rows, so the service
+ * announces the change before rejecting and clients re-read the catalog.
  * @returns Count of removed rows; zero when the Host held no ended task.
  */
 @Remote('deleteInactive') async deleteInactive(): Promise<ScheduleDeleteInactiveResult>

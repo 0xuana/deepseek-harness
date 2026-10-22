@@ -30,6 +30,8 @@ export class SqliteKvUnit implements KvUnit {
   private readonly globalUpsert: StatementSync | undefined
   private readonly globalSelect: StatementSync | undefined
   private closed = false
+  /** Set when a batch transaction could not be opened or rolled back. */
+  private unusable: StorageError | undefined
 
   /**
    * @param db - Open database handle owned by the backend (never closed here).
@@ -112,7 +114,18 @@ export class SqliteKvUnit implements KvUnit {
   deleteRecords(table: string, keys: readonly string[]): Promise<void> {
     return this.settle(() => {
       const remove = this.statementsFor(table).remove
-      this.db.exec('BEGIN IMMEDIATE')
+      try {
+        this.db.exec('BEGIN IMMEDIATE')
+      } catch (error: unknown) {
+        // An unopened transaction can only mean the connection is not in the
+        // state this unit expects; later statements would run in an unknown one.
+        this.unusable = new StorageError(
+          'unknown-state',
+          `kv unit '${this.descriptor.name}' could not open a batch transaction; its readable state is unknown`,
+          { cause: error },
+        )
+        throw this.unusable
+      }
       try {
         for (const key of new Set(keys)) remove.run(key)
         this.db.exec('COMMIT')
@@ -120,10 +133,12 @@ export class SqliteKvUnit implements KvUnit {
         try {
           this.db.exec('ROLLBACK')
         } catch (rollbackError: unknown) {
-          // A failed rollback leaves the connection's state to its own next
-          // statement; both failures are reported, neither is discarded.
-          /* v8 ignore next -- ROLLBACK fails only on an unusable connection; the next statement reports it. */
-          throw new AggregateError([error, rollbackError], `kv unit '${this.descriptor.name}' batch delete failed and could not roll back`)
+          this.unusable = new StorageError(
+            'unknown-state',
+            `kv unit '${this.descriptor.name}' batch delete failed and could not roll back; its readable state is unknown`,
+            { cause: new AggregateError([error, rollbackError], 'batch delete failed and rollback failed') },
+          )
+          throw this.unusable
         }
         throw error
       }
@@ -166,6 +181,7 @@ export class SqliteKvUnit implements KvUnit {
     if (this.closed) {
       throw new StorageError('closed', `kv unit '${this.descriptor.name}' is closed`)
     }
+    if (this.unusable !== undefined) throw this.unusable
   }
 
   private statementsFor(table: string): TableStatements {

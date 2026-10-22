@@ -374,6 +374,8 @@ export class ScheduleService extends TypertRemoteService {
    * slot, so a delivery ordered behind this call ends its task after the
    * enumeration rather than during it. The batch is one durable write: a failure
    * removes nothing and rejects, so the caller never receives a partial removal.
+   * A backend that reports `unknown-state` may have removed rows, so the service
+   * announces the change before rejecting and clients re-read the catalog.
    * @returns Count of removed rows; zero when the Host held no ended task.
    */
   @Remote('deleteInactive')
@@ -504,6 +506,10 @@ export class ScheduleService extends TypertRemoteService {
     try {
       removed = await (await this.getDomain()).table('tasks').deleteMany(ids)
     } catch (error: unknown) {
+      // A rejection never establishes which rows landed, and the backend can
+      // report `unknown-state` after removing some of them. Announce the change
+      // so observers re-read instead of trusting their stale catalog.
+      this.emitChanged()
       throw error instanceof Error ? error : new Error(`${label}: ${String(error)}`)
     }
     // Rows enumerated in this slot are present, so a non-empty batch always removed rows.

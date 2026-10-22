@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createAfterScheduleRecord, createEveryScheduleRecord, ScheduleId } from '../src/domain.ts'
 import type { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
 import { scheduleDomain, type ScheduleTask } from '../src/storage.ts'
+import { StorageError } from '@deepseek-ai/dsh-storage'
 import { MemoryMediaPool } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
 import { gatedScheduleBackend, harness } from './harness.ts'
 
@@ -195,11 +196,50 @@ it('removes nothing and reports the batch failure', async () => {
 
   expect(failure).toBeInstanceOf(Error)
   expect(String(failure)).toContain('injected batch failure')
-  // One write carried both rows; the rejection left both stored and announced nothing.
+  // One write carried both rows; the rejection may have landed some of them, so
+  // observers are told to re-read even though both rows remain in this catalog.
   expect(batches).toEqual([['ended-a', 'ended-b']])
-  expect(changed).not.toHaveBeenCalled()
+  expect(changed).toHaveBeenCalledTimes(1)
   expect((await service.catalog()).map(entry => entry.title).sort())
     .toEqual(['Partial first', 'Partial second'])
+})
+
+it('quarantines the Host domain when the backend reports unknown-state', async () => {
+  const pool = new MemoryMediaPool()
+  let batches = 0
+  const backend = gatedScheduleBackend(pool, {
+    deleteRecords: async (table) => {
+      if (table !== 'tasks') return
+      batches += 1
+      throw new StorageError('unknown-state', 'injected unknown-state')
+    },
+  })
+  const test = await harness({
+    pool,
+    backend,
+    beforeService: async (_ctx, facility) => {
+      const domain = await facility.open(scheduleDomain)
+      await domain.table('tasks').put(ScheduleId('ended-a'), endedRow(SessionId('quarantine-a'), 'ended-a', 'Quarantine first'))
+      await domain.table('tasks').put(ScheduleId('ended-b'), endedRow(SessionId('quarantine-b'), 'ended-b', 'Quarantine second'))
+      await domain.close()
+    },
+  })
+  tests.push(test)
+  const { ctx, service } = test
+  const changed = vi.fn()
+  ctx.on('schedule/changed', changed)
+
+  const failure = await service.deleteInactive().then(() => undefined, (error: unknown) => error)
+  expect(failure).toMatchObject({ name: 'StorageError', code: 'unknown-state' })
+  expect(batches).toBe(1)
+  expect(changed).toHaveBeenCalledTimes(1)
+  // The quarantined domain rejects reads instead of serving stale rows.
+  await expect(service.catalog()).rejects.toMatchObject({ code: 'unknown-state' })
+  // Later batches are rejected before reaching the backend again.
+  await expect(service.deleteInactive()).rejects.toMatchObject({ code: 'unknown-state' })
+  expect(batches).toBe(1)
+  // The durable rows are still there; only the in-process domain is quarantined.
+  expect(pool.media.get('schedule')?.tables.get('tasks')?.size).toBe(2)
 })
 
 it('reports a rejection reason that carries no Error as a labeled Error', async () => {
@@ -233,7 +273,7 @@ it('reports a rejection reason that carries no Error as a labeled Error', async 
   expect(failure).toBeInstanceOf(Error)
   expect(String(failure)).toContain('schedule ended-task removal failed')
   expect(batches).toBe(1)
-  expect(changed).not.toHaveBeenCalled()
+  expect(changed).toHaveBeenCalledTimes(1)
   expect((await service.catalog()).map(entry => entry.title).sort())
     .toEqual(['Unreportable first', 'Unreportable second'])
 })

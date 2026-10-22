@@ -4,8 +4,9 @@
  * from memory; every write queues on the chain, awaits backend durability
  * FIRST, then mutates memory, then emits `domain/changed` — a rejected
  * backend write leaves memory untouched (no divergence between reads and the
- * medium), and events carry values that equal the in-memory state at
- * emission, in write order.
+ * medium) unless the backend reports `unknown-state`, which quarantines the
+ * domain: reads and later writes reject until close. Events carry values that
+ * equal the in-memory state at emission, in write order.
  * @module @deepseek-ai/dsh-storage-domain/src/domain
  */
 
@@ -140,7 +141,7 @@ interface TableHost {
   readonly unit: KvUnit
   /** Queue one job on the domain's single write chain. */
   enqueue<T>(job: () => Promise<T>): Promise<T>
-  /** Throw `closed` once the domain has fully closed (reads stay valid while draining). */
+  /** Throw `closed` after teardown, or the recorded `unknown-state` while quarantined. */
   assertReadable(): void
   /** Emit `domain/changed` for one durably landed write. */
   emitChanged(change: DomainChanged): void
@@ -299,10 +300,11 @@ export class DomainImpl {
   }
 
   private assertReadable(): void {
-    if (this.failure !== undefined) throw this.failure
+    // Close wins: the KvUnit contract reports `closed` for calls after teardown.
     if (this.closed) {
       throw new DomainError('closed', `domain '${this.name}' is closed`)
     }
+    if (this.failure !== undefined) throw this.failure
   }
 }
 

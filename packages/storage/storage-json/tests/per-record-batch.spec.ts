@@ -24,7 +24,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   }
 })
 
-const DESCRIPTOR = { name: 'batch', version: 1, layout: 'per-record' as const, tables: ['t'], hasGlobal: false }
+const DESCRIPTOR = { name: 'batch', version: 1, layout: 'per-record' as const, tables: ['t'], hasGlobal: true }
 
 const roots: string[] = []
 async function freshRoot(): Promise<string> {
@@ -49,6 +49,8 @@ it('waits for the whole batch before close releases the unit', async () => {
   const unit = await backend.kv.open(DESCRIPTOR)
   await unit.putRecord('t', 'a', { v: 1 })
   await unit.putRecord('t', 'b', { v: 2 })
+  // An empty batch is a settled no-op that never touches the medium.
+  await expect(unit.deleteRecords('t', [])).resolves.toBeUndefined()
 
   const firstEntered = Promise.withResolvers<undefined>()
   const firstRelease = Promise.withResolvers<undefined>()
@@ -116,7 +118,14 @@ it('rejects with unknown-state when a failed batch cannot restore its staged doc
   await expect(unit.loadAll()).rejects.toMatchObject({ code: 'unknown-state' })
   await expect(unit.putRecord('t', 'c', { v: 3 })).rejects.toMatchObject({ code: 'unknown-state' })
   await expect(unit.deleteRecord('t', 'a')).rejects.toMatchObject({ code: 'unknown-state' })
+  await expect(unit.setGlobal({ g: 1 })).rejects.toMatchObject({ code: 'unknown-state' })
+  await expect(unit.backupRecord('t', 'b')).rejects.toMatchObject({ code: 'unknown-state' })
   // Releasing the handle stays possible.
   await unit.close()
+  // A reopened unit reads the partial tree: the staged document is unreadable
+  // residue and the second record is still present.
+  const reopened = await backend.kv.open(DESCRIPTOR)
+  expect(await reopened.loadAll()).toEqual({ tables: { t: { b: { v: 2 } } }, global: null })
+  await reopened.close()
   await backend.close()
 })

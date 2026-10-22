@@ -195,7 +195,9 @@ describe('shared Schedule management', () => {
       .then(() => undefined, (error: unknown) => error)
     expect(failure).toBeInstanceOf(AggregateError)
     expect(batches).toBe(1)
-    expect(changed).not.toHaveBeenCalled()
+    // The batch may have landed some rows under unknown-state, so the service
+    // announces the change before the rejection reaches the caller.
+    expect(changed).toHaveBeenCalledTimes(1)
     expect((await service.catalog()).map(entry => entry.title).sort()).toEqual(['First', 'Second'])
   })
 
@@ -222,8 +224,9 @@ describe('shared Schedule management', () => {
     // Nothing landed, and a reason that carries no Error must not read as success
     // with the reminder still armed.
     expect(failure).toBeInstanceOf(AggregateError)
+    expect((failure as AggregateError).errors.map(String).some(text => text.includes('schedule stop failed'))).toBe(true)
     expect(batches).toBe(1)
-    expect(changed).not.toHaveBeenCalled()
+    expect(changed).toHaveBeenCalledTimes(1)
     expect((await service.catalog()).map(entry => entry.title)).toEqual(['First'])
   })
 
