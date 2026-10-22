@@ -152,7 +152,9 @@ export const InputBar = memo(function InputBar({
   // parent-offline continuable child. An owner block also disables input;
   // adjudicating and submitting render read-only so the draft stays visible.
   const disabled = removed || inert || !live || blocked !== undefined || parentOffline
-  const locked = disabled
+  // A page whose access snapshot excludes prompting offers no submission path: locking the composer
+  // withholds Enter, Mod+Enter, accelerated steering, paste and the editor itself, not just the button.
+  const locked = disabled || promptDenied
   // The model seat is the ONE control a block leaves live: every block this
   // contract has is cleared by choosing a model, so locking it too would leave
   // the composer asking for the only thing it prevents. The other reasons to
@@ -264,11 +266,11 @@ export const InputBar = memo(function InputBar({
   // The keymap handlers read live bar state through this ref so the editor
   // registration survives re-renders without re-arming per keystroke.
   const gate = useRef({
-    locked, machineBusy, canSteerQueue, running, steeringAvailable, busyEnter,
+    locked, promptDenied, machineBusy, canSteerQueue, running, steeringAvailable, busyEnter,
     intakeFiles, uploadsPending, uploadsHeldText, showToast, canAcceptDrop,
   })
   gate.current = {
-    locked, machineBusy, canSteerQueue, running, steeringAvailable, busyEnter,
+    locked, promptDenied, machineBusy, canSteerQueue, running, steeringAvailable, busyEnter,
     intakeFiles, uploadsPending, uploadsHeldText, showToast, canAcceptDrop,
   }
 

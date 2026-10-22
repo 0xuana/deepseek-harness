@@ -1245,6 +1245,25 @@ describe('running and lock semantics', () => {
     expect(view.container.querySelector('button[aria-label="发送消息"]')).toBeNull()
   })
 
+  it('denies Enter, Mod+Enter, and accelerated steering while the Session excludes prompting', () => {
+    const denied = ['session/prompt'] as const
+    const plain = bench({ draft: 'hello', deniedEndpoints: denied })
+    fireEvent.keyDown(plain.textarea, { key: 'Enter' })
+    fireEvent.keyDown(plain.textarea, { key: 'Enter', metaKey: true })
+    fireEvent.keyDown(plain.textarea, { key: 'Enter', ctrlKey: true })
+    expect(plain.sink).not.toHaveBeenCalled()
+    // The withheld submit also reads as a locked composer, so no key path can bypass the button.
+    expect(plain.inputDisabled).toBe(true)
+
+    // Accelerated Enter over a queue would steer the pending messages; the same answer refuses it.
+    const steerQueue = vi.fn()
+    const accelerated = bench({ running: true, queue: [row('q-1')], steerQueue, deniedEndpoints: denied })
+    fireEvent.keyDown(accelerated.textarea, { key: 'Enter', metaKey: true })
+    fireEvent.keyDown(accelerated.textarea, { key: 'Enter', ctrlKey: true })
+    expect(accelerated.steerQueue).not.toHaveBeenCalled()
+    expect(accelerated.sink).not.toHaveBeenCalled()
+  })
+
   it('a composer whose access has no answer yet keeps its ordinary Send', () => {
     const { view, props } = bench({ draft: 'hello' })
     // Without a bound Session the Session-scope Hook answers undefined, which denies nothing.

@@ -13,6 +13,7 @@ import { StopSequence } from './stop-sequence.ts'
  * @param openTurn - stable current-turn source for a live Session binding.
  * @param uiSession - current pending-interaction status.
  * @param cancel - scoped stop operation that preserves Queue and reports failures.
+ * @param canCancel - live `session/cancel` answer for a Session; a refused answer consumes nothing.
  * @returns disposer releasing the input subscription, pending watches and expiry timer.
  */
 export function installStopShortcut(
@@ -21,6 +22,7 @@ export function installStopShortcut(
   openTurn: (binding: SessionBinding) => ObservableSnapshot<number | undefined>,
   uiSession: UiSession,
   cancel: (sessionId: SessionId) => void,
+  canCancel: (sessionId: SessionId) => boolean,
 ): () => void {
   let unwatch = (): void => {}
   const sequence = new StopSequence(shortcuts.stopSequenceMs, () => {
@@ -40,6 +42,8 @@ export function installStopShortcut(
     if (occurrence === null || region === null || !occurrence.contains(region)
       || target.closest('[data-approval-key], iframe, .xterm, [inert]') !== null) { reset(); return }
     const sessionId = occurrence.dataset.conversationSession as SessionId
+    // The Stop button hides on the same answer; a page that may not cancel must not send the request.
+    if (!canCancel(sessionId)) { reset(); return }
     const binding = sessions.binding(sessionId)
     if (binding === undefined) { reset(); return }
     const turnSource = openTurn(binding)

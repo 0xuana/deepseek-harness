@@ -287,6 +287,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
     }
     scope.effect(() => installStopShortcut(
       scope.shortcuts, sessions, binding => uiConversation.binding(binding).openTurn, ctx.uiSession, stop,
+      sessionId => ctx.uiSession.access(sessionId, 'session/cancel'),
     ), 'ui-conversation: fixed stop input')
     scope.effect(() => {
       const command: ShortcutFixedCommand = {
