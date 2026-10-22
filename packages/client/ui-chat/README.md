@@ -178,7 +178,7 @@ Active-Turn highlighting is approximate: `readVisibleTurn` binary-searches the f
 <a id="write-actions"></a>
 ## Write actions
 
-The Turn Tail branch action reads the Session-scope `useAccess('session/fork')` Hook and disappears while the calling Peer's access snapshot excludes that endpoint; the view always receives the `forkAt` handler. A branch names its child only while the snapshot includes `session/rename` for the source Session; otherwise the child keeps the Host's title and opens once the Session list carries it. The Session tree's branch verb shares the rule for naming and opening a branch. These answers never replace Host authorization.
+The Turn Tail branch action reads the Session-scope `useAccess('session/fork')` Hook and disappears while the calling Peer's access snapshot excludes that endpoint; the view always receives the `forkAt` handler. A branch always names its child, because whoever may fork also holds `session/rename` on the child it creates, and it opens that child immediately. The Session tree's branch verb uses the same naming rule but leaves the selection alone. These answers never replace Host authorization.
 
 -----
 

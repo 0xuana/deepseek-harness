@@ -323,11 +323,6 @@ export type RowToast =
    * a report can be searched by it — and any other failure's own message.
    */
   | { kind: 'createFailed'; message: string }
-  /**
-   * A branch was created but the Session list refresh that would reveal it failed. `message` is the
-   * untranslated failure; the branch itself exists, so the copy names the failed refresh, not the fork.
-   */
-  | { kind: 'branchListRefreshFailed'; message: string }
 
 /** The notice on display; `seq` keys remounts so a repeated notice restarts its hold. */
 export type RowToastState = RowToast & { seq: number }

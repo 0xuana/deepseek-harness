@@ -72,14 +72,6 @@ export function registerToasts(
       }),
     }, ToastEntry<PropsRuntime<'workspace.toast', 'createFailed'>>)
     yield ctx.slots.register({
-      name: 'workspace.toast', key: 'branchListRefreshFailed', locale: 'workspace',
-      inject: (): ToastDisplayInjected<'branchListRefreshFailed'> => ({
-        display: (notice, t) => ({
-          text: t('toast.branchListRefreshFailed', { message: notice.message }), tone: 'warning', holdMs: 6000,
-        }),
-      }),
-    }, ToastEntry<PropsRuntime<'workspace.toast', 'branchListRefreshFailed'>>)
-    yield ctx.slots.register({
       name: 'workspace.toast', key: 'forkRequiresOpen', locale: 'workspace',
       inject: (): ToastDisplayInjected<'forkRequiresOpen'> => ({
         display: (notice, t, dismiss) => ({

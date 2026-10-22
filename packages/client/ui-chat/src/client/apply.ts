@@ -297,8 +297,8 @@ export function apply(ctx: Context): void {
             read: () => chatScrollPositions.get(sessionId) ?? null,
           },
           forkAt: (seq) => {
-            // The Workspace navigation owns the branch policy: whether this page may name the child and
-            // when the child becomes presentable. This page supplies the branch point and its analytics.
+            // The Workspace navigation owns the branch policy: it names the child and opens it
+            // immediately for `selected`. This page supplies the branch point and its analytics.
             const turn = [...chat.getSnapshot().timeline.turns.values()].find(turn => turn.end?.seq === seq)
             const messageId = turn?.data.get('turn-tail')?.closing?.finalNode.messageId
             void ctx.uiWorkspace.forkSession(sessionId, (childId) => {

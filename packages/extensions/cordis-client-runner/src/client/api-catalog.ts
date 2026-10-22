@@ -349,9 +349,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'forkSession( sessionId: SessionId, onCreated?: (childId: SessionId) => void, options?: ForkSessionOptions, ): Promise<SessionId>',
-        description: 'Fork a Session and apply its branch presentation policy. Pages whose access snapshot includes renaming the source increment the child title; other pages leave the title to the Host and open the child only once its summary is listed. In the latter case the call begins one navigation for that listing, so a pending navigation may be superseded.',
-        parameters: [{ name: 'sessionId', description: 'source Session.' }, { name: 'onCreated', description: 'observer after creation, before the optional child-title update.' }, { name: 'options', description: 'branch boundary, migration permission, and how the child is presented.' }],
-        returns: 'the child SessionId after creation and any permitted inherited-title increment; kept for upper layers that need the id while the listed-open wait is still pending.',
+        description: 'Fork a Session and apply its branch presentation policy. The child always receives the incremented title: whoever may fork a Session also holds `session/rename` on the child it creates, so the source\'s own rename answer does not matter.',
+        parameters: [{ name: 'sessionId', description: 'source Session.' }, { name: 'onCreated', description: 'observer after creation, before the child-title update.' }, { name: 'options', description: 'branch boundary, migration permission, and how the child is presented.' }],
+        returns: 'the child SessionId after creation and inherited-title increment.',
         throws: ['when the Host refuses or fails the fork; the caller keeps its current view and decides whether to report the failure.'],
       },
       {
