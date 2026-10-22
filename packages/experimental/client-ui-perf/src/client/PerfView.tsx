@@ -922,7 +922,18 @@ function PromptCell({ turn, t, className }: PromptCellProps): ReactElement {
       </td>
     )
   }
-  if (turn.prompt === null || turn.prompt === '') return <td className={className} />
+  if (turn.prompt === null || turn.prompt === '') {
+    // An image-only prompt still says how many images opened the turn.
+    if (turn.promptImages > 0) {
+      const label = t('turn.images', { count: turn.promptImages })
+      return (
+        <td className={className} title={label}>
+          <span className={css.promptText}>{label}</span>
+        </td>
+      )
+    }
+    return <td className={className} />
+  }
   const images = turn.promptImages > 0 ? ` · ${t('turn.images', { count: turn.promptImages })}` : ''
   const text = turn.prompt + images
   return (
