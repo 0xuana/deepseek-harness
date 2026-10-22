@@ -645,7 +645,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'HooksSources',
-    declaration: 'export type HooksSources = Record<string, HostObservable<unknown> | undefined>;',
+    declaration: 'export type HooksSources = Record<string, HostObservable<unknown>>;',
   },
   {
     name: 'HostObservable',
@@ -809,7 +809,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'PropsHooks',
-    declaration: 'export type PropsHooks<HS extends HooksSources> = {\n    [N in keyof HS & string as `use${Capitalize<N>}`]: PropsHookOf<HS[N]>;\n};',
+    declaration: 'export type PropsHooks<HS extends HooksSources> = {\n    [N in keyof HS & string as `use${Capitalize<N>}`]: SnapshotSelectorHook<HS[N] extends HostObservable<infer T> ? T : never>;\n};',
   },
   {
     name: 'PropsKeyedHooks',
