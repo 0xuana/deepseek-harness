@@ -192,7 +192,10 @@ export function apply(ctx: ClientContext): void {
         ...detail,
         // The page has no creation form: a new reminder starts in a Session.
         onNewTask: () => { ctx.uiWorkspace.startSession() },
-        onClearEnded: clearEnded,
+        onClearEnded: async () => {
+          const outcome = await clearEnded()
+          deleteToast.reportClear(outcome)
+        },
       }),
     }, TaskManagerPage))
     yield ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
