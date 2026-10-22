@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import type {
   ComposerAttachment, ComposerAttachmentsOwnerProps, ComposerAttachmentsProps,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -85,6 +85,7 @@ function props(overrides: Partial<ComposerAttachmentsOwnerProps> = {}): Paramete
     uploadFailureText: (reason: string) => `refused:${reason}`,
     t,
     ...overrides,
+    readFileDrag: () => undefined,
   }
 }
 
@@ -249,15 +250,45 @@ describe('ComposerAttachments image uploads', () => {
     expect(view.container.querySelector('[style="width: 50%;"]')).toBeTruthy()
     expect(view.getAllByTitle('查看原图').map(button => button.getAttribute('aria-busy')))
       .toEqual(['true', 'true', 'false'])
-    expect(view.getByTitle('上传失败，点击重试')).toBeTruthy()
     fireEvent.click(view.getByRole('button', { name: '重试上传 failed.png' }))
     expect(onRetryFile).toHaveBeenCalledWith('failed')
-    // A refusal names its reason and offers no retry; removal stays available.
-    expect(view.getByRole('img', { name: 'refused:IMAGE_DIMENSION_TOO_LARGE' }).getAttribute('title'))
-      .toBe('refused:IMAGE_DIMENSION_TOO_LARGE')
+    // A refusal names its reason and offers neither retry nor preview; removal stays available.
+    fireEvent.click(view.getByRole('button', { name: 'refused:IMAGE_DIMENSION_TOO_LARGE' }))
+    expect(onRetryFile).toHaveBeenCalledTimes(1)
     expect(view.queryByRole('button', { name: '重试上传 refused.png' })).toBeNull()
     expect(view.getByRole('button', { name: '移除图片 refused.png' })).toBeTruthy()
     expect(view.queryByRole('dialog', { name: '原图预览' })).toBeNull()
+  })
+
+  it('explains a failed image on hover and pins a refusal on tap', () => {
+    vi.useFakeTimers()
+    try {
+      const view = render(<ComposerAttachments {...props({
+        attachments: [attachment('failed'), attachment('refused')],
+        uploads: {
+          failed: { status: 'error', message: 'boom' },
+          refused: { status: 'error', message: 'too wide', reason: 'IMAGE_DIMENSION_TOO_LARGE' },
+        },
+      })} />)
+      // The stubbed ResizeObserver never measures, so the bubble mounts unplaced and hidden.
+      const bubble = () => view.queryByRole('tooltip', { hidden: true })
+      const retry = view.getByRole('button', { name: '重试上传 failed.png' })
+      fireEvent.pointerEnter(retry)
+      expect(bubble()).toBeNull()
+      act(() => { vi.advanceTimersByTime(300) })
+      expect(bubble()?.textContent).toBe('上传失败，点击重试')
+      fireEvent.pointerLeave(retry)
+      expect(bubble()).toBeNull()
+
+      const refused = view.getByRole('button', { name: 'refused:IMAGE_DIMENSION_TOO_LARGE' })
+      fireEvent.click(refused)
+      expect(bubble()?.textContent).toBe('refused:IMAGE_DIMENSION_TOO_LARGE')
+      expect(refused.getAttribute('aria-describedby')).toBe(bubble()?.id)
+      fireEvent.pointerLeave(refused)
+      expect(bubble()?.textContent).toBe('refused:IMAGE_DIMENSION_TOO_LARGE')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('names an image without a file name in its preview, retry, and remove controls', () => {
@@ -347,4 +378,29 @@ describe('ComposerAttachments file drafts', () => {
     })} />)
     expect(view.getByTitle('.env').textContent).toContain('ENV 3B')
   })
+})
+
+it('accepts internal file tokens only inside the composer without the full-page overlay', () => {
+  const file = new File([Uint8Array.of(1, 2)], 'original.pdf', { type: 'application/pdf' })
+  const onAddFiles = vi.fn()
+  const view = render(<div data-composer-card data-testid="composer"><ComposerAttachments {...props({ onAddFiles })}
+    readFileDrag={transfer => transfer.getData('application/x-dsh-file') === 'token' ? file : undefined} /></div>)
+  const data = new Map([['application/x-dsh-file', 'token']])
+  const transfer = {
+    types: ['application/x-dsh-file'], items: [], files: [],
+    getData: (key: string) => data.get(key) ?? '',
+  }
+  fireEvent.dragEnter(document.body, { dataTransfer: transfer })
+  fireEvent.dragOver(document.body, { dataTransfer: transfer })
+  fireEvent.drop(document.body, { dataTransfer: transfer })
+  expect(onAddFiles).not.toHaveBeenCalled()
+  const target = view.getByTestId('composer')
+  fireEvent.dragEnter(target, { dataTransfer: transfer })
+  fireEvent.dragOver(target, { dataTransfer: transfer })
+  expect(view.queryByText('文件或图片拖动到此处即可添加')).toBeNull()
+  fireEvent.drop(target, { dataTransfer: transfer })
+  expect(onAddFiles).toHaveBeenCalledExactlyOnceWith([file], new Set())
+  data.set('application/x-dsh-file', 'foreign')
+  fireEvent.drop(target, { dataTransfer: transfer })
+  expect(onAddFiles).toHaveBeenCalledOnce()
 })
