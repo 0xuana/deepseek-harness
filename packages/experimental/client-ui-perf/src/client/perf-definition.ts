@@ -13,10 +13,13 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {
   ConversationLocation, ConversationNodeContext, ConversationNodeDefinition,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { PerfStepState, PerfViewNode } from './perf-contract.ts'
+import type { PerfCompactionState, PerfStepState, PerfViewNode } from './perf-contract.ts'
 import {
   CALL_LIMIT, fallbackState, foldEvent, isCodeMode, newState, promptOf, stepMetrics, triggerSenderOf,
 } from './perf-fold.ts'
+import {
+  compactionEventId, compactionMetrics, foldCompaction, newCompactionState,
+} from './perf-compaction.ts'
 
 /** Target name shared by every Definition and the view builder. */
 export const TARGET = 'perf'
@@ -32,6 +35,9 @@ const END_KIND = 'perf-turn-end'
 
 /** Definition kind of one Code-Mode root call's inner dispatches. */
 const CODE_MODE_KIND = 'perf-code-mode'
+
+/** Definition kind of one compaction transaction. */
+const COMPACTION_KIND = 'perf-compaction'
 
 /** Marker ids never collide with a step number. */
 const PROMPT_STEP = 0
@@ -232,8 +238,41 @@ const codeModeDefinition: ConversationNodeDefinition<PerfStepState> = {
   },
 }
 
+/** One synthetic row per compaction transaction, including its summary model call. */
+const compactionDefinition: ConversationNodeDefinition<PerfCompactionState> = {
+  kind: COMPACTION_KIND,
+  target: TARGET,
+  match: (event) => {
+    const id = compactionEventId(event)
+    if (id === null) return null
+    return { id, role: event.type === 'compaction/start' ? 'start' : 'update' }
+  },
+  start: (_context, match) => {
+    if (match.event.type !== 'compaction/start') {
+      throw new Error('perf-compaction start requires compaction/start')
+    }
+    return newCompactionState(match.event)
+  },
+  update: (context, match) => foldCompaction(context.state, match.event),
+  publication: () => 'immediate',
+  buildViewNode: (context) => {
+    const state = context.state
+    if (state === undefined) return null
+    return {
+      key: context.key,
+      kind: context.kind,
+      id: context.id,
+      target: TARGET,
+      anchorSeq: state.startSeq,
+      /* v8 ignore next -- a live start match always carries a Location. */
+      location: context.start?.location ?? { kind: 'unresolved' },
+      data: { kind: 'compaction', metrics: compactionMetrics(state) },
+    }
+  },
+}
+
 /**
- * Register the four Definitions. Each registration rides the caller's fiber
+ * Register the five Definitions. Each registration rides the caller's fiber
  * effect, so unloading the plugin removes the nodes with it.
  * @param ctx - client root context.
  */
@@ -242,4 +281,5 @@ export function registerPerfDefinitions(ctx: Context): void {
   ctx.uiConversation.events.register(promptDefinition)
   ctx.uiConversation.events.register(endDefinition)
   ctx.uiConversation.events.register(codeModeDefinition)
+  ctx.uiConversation.events.register(compactionDefinition)
 }

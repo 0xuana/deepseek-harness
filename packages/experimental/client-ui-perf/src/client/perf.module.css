@@ -196,6 +196,21 @@
   text-align: left;
 }
 
+.compactionRow td {
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.compactionTag {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 4px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 4px;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-11);
+}
+
 .stepWhen {
   display: flex;
   align-items: baseline;

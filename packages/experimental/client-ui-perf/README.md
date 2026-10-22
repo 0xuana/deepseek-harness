@@ -61,6 +61,8 @@ The footer switches control the totals row and the context basis, and the footer
 
 The footer switches control the totals row and the context basis. `Context basis` changes only how a turn row aggregates its steps: `Latest` shows the turn's final prompt size, while `Cumulative` sums that turn's step prompt sizes. The totals row is not affected by this switch: its context cell is always the cumulative step context of the loaded turns, and the other numeric columns are sums (cache stays token-weighted, speed stays output over decode time). Token cells switch from `K` to `M` at ten million.
 
+Compaction is a log-only transaction, not a step. The table inserts a synthetic `Compaction` row between the steps it ran between; the row shows the summary call's context, output and cache-hit cells, the shadowed token count, the summary size, and its wall time. These rows are excluded from the turn and totals step sums, so the step columns keep their step-only meaning.
+
 The turn cache-hit cell is token-weighted across the steps that reported usage (summed cache reads ÷ summed prompt tokens), so one transient cold step is not hidden by a warmer neighbour; the tooltip shows the summed read/input/write breakdown. A step row keeps its own measured share.
 
 Windows are bounded: when a step's `step/start` is outside the loaded window, its start-dependent columns show `—` with a `start unknown` marker rather than a guessed value. Scrolling to the top asks the Session for one older page; the view offsets the scroll position by the height it prepended, so the row being read stays in place.

@@ -13,7 +13,7 @@ import { HoverCard, ImageLightbox, SegmentedControl, Switch } from '@deepseek-ai
 import type { ConvViewProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
-  PerfCall, PerfSnapshot, PerfStepMetrics, PerfToolCount, PerfTurnMetrics,
+  PerfCall, PerfCompactionMetrics, PerfSnapshot, PerfStepMetrics, PerfToolCount, PerfTurnMetrics,
 } from './perf-contract.ts'
 import {
   DASH, barShare, formatChars, formatClock, formatDateTime, formatDateTimeShort, formatMs, formatPercent,
@@ -1395,6 +1395,77 @@ function moreRows(
   )
 }
 
+/**
+ * One synthetic compaction row: the summary model call's cost, shown between
+ * the steps it ran between but excluded from the turn's step totals.
+ * @param compaction - folded compaction metrics.
+ * @param t - dictionary.
+ * @param now - current time for a running row.
+ * @param scale - step bar scale, widened to this call's wall.
+ * @returns the row.
+ */
+function compactionRow(
+  compaction: PerfCompactionMetrics,
+  t: PerfTranslate,
+  now: number,
+  scale: number,
+): ReactElement {
+  const metrics: MetricsValues = {
+    context: compaction.context,
+    output: compaction.output,
+    cacheHit: compaction.cacheHit,
+    ttft: null,
+    model: null,
+    tps: null,
+    tool: null,
+    cacheRead: compaction.cacheRead,
+    cacheWrite: compaction.cacheWrite,
+  }
+  const cells = metricsCells(metrics, t)
+  const value: TimeState = {
+    running: compaction.running,
+    startTime: compaction.startTime,
+    wall: compaction.wall,
+    ttft: null,
+    model: null,
+    tool: null,
+    toolWall: null,
+  }
+  const range = `${formatClock(compaction.startTime)}${compaction.endTime === null ? '' : `–${formatClock(compaction.endTime)}`}`
+  const parts: string[] = []
+  if (compaction.shadowedTokens !== null) {
+    parts.push(t('compaction.shadowed', { tokens: formatTokens(compaction.shadowedTokens) }))
+  }
+  if (compaction.summaryChars !== null) {
+    parts.push(t('compaction.summary', { chars: formatChars(compaction.summaryChars) }))
+  }
+  if (parts.length === 0) parts.push(t('compaction.running'))
+  const model = compaction.provider !== null && compaction.model !== null
+    ? `${compaction.provider} / ${compaction.model}`
+    : t('compaction.running')
+  return (
+    <tr className={css.compactionRow} title={t('compaction.title')}>
+      <td className={css.stepCell}>
+        <span className={css.compactionTag}>{t('compaction.label')}</span>
+        <span className={css.stepClock}>{range}</span>
+      </td>
+      <td className={cx(css.promptCell, css.stepWhen)} title={model}>{model}</td>
+      <td className={css.stepDid}>{parts.join(' · ')}</td>
+      <ContextCell value={compaction.context} className={css.stepMetric} />
+      <MetricCells cells={cells} className={css.stepMetric} />
+      <TimeCell
+        value={value}
+        scale={Math.max(scale, compaction.wall ?? 0)}
+        gap={undefined}
+        className={css.stepMetric}
+        trackClass={css.barStep}
+        now={now}
+        t={t}
+      />
+    </tr>
+  )
+}
+
 /** Rendered rows of one turn: header, step-list controls, and step rows. */
 function stepRows(options: StepRowsOptions): ReactNode[] {
   const { turn, t, now, state, onToggleDetail, onControl } = options
@@ -1406,8 +1477,19 @@ function stepRows(options: StepRowsOptions): ReactNode[] {
     return span !== null && span > max ? span : max
   }, 0)
   const { shown } = stepsOf(turn, state)
+  const compactions = turn.compactions.slice()
+  let nextCompaction = 0
   const rows: ReactNode[] = []
+  const emitCompactionsUntil = (startTime: number | null): void => {
+    while (nextCompaction < compactions.length) {
+      const compaction = compactions[nextCompaction]
+      if (compaction === undefined || compaction.startTime > (startTime ?? Number.POSITIVE_INFINITY)) break
+      rows.push(compactionRow(compaction, t, now, stepScale))
+      nextCompaction += 1
+    }
+  }
   for (const step of shown) {
+    emitCompactionsUntil(step.startTime)
     const cells = metricsCells(step, t)
     const gap = gaps.get(step.step)
     const expanded = open[step.step] === true
@@ -1494,6 +1576,7 @@ function stepRows(options: StepRowsOptions): ReactNode[] {
     )
     if (expanded) rows.push(stepDetailRow(step, t, state, onControl))
   }
+  emitCompactionsUntil(null)
   return rows
 }
 

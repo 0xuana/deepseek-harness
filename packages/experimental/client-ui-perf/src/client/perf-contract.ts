@@ -155,6 +155,8 @@ export interface PerfTurnMetrics {
   readonly interrupted: boolean
   readonly aborted: boolean
   readonly wall: number | null
+  /** Compaction transactions recorded in this turn, in start order. */
+  readonly compactions: readonly PerfCompactionMetrics[]
   readonly prompt: string | null
   /** Durable image references the prompt attached, in message order. */
   readonly promptImages: readonly ImageAttachmentRef[]
@@ -164,6 +166,44 @@ export interface PerfTurnMetrics {
   readonly promptSender: string | null
   /** Last answer preview measured in the turn. */
   readonly answer: string | null
+}
+
+/** One completed or running compaction transaction with its model-call facts. */
+export interface PerfCompactionMetrics {
+  readonly compactionId: string
+  readonly turn: number | null
+  readonly startTime: number
+  readonly endTime: number | null
+  readonly wall: number | null
+  readonly running: boolean
+  readonly context: number | null
+  readonly output: number | null
+  readonly cacheHit: number | null
+  readonly cacheRead: number | null
+  readonly cacheWrite: number | null
+  readonly provider: string | null
+  readonly model: string | null
+  readonly shadowedTokens: number | null
+  readonly summaryChars: number | null
+  readonly error: string | null
+}
+
+/** Per-turn compaction rows shown between the step rows. */
+export interface PerfCompactionState {
+  readonly compactionId: string
+  readonly turn: number | null
+  readonly startSeq: number
+  readonly startTime: number
+  readonly summarySeq: number | null
+  readonly endSeq: number | null
+  readonly endTime: number | null
+  readonly error: string | null
+  readonly provider: string | null
+  readonly model: string | null
+  readonly usage: PerfUsage | null
+  readonly shadowedTokens: number | null
+  readonly summaryChars: number | null
+  readonly checkpointSeq: number | null
 }
 
 /** One published node: a step's metrics or a turn-level marker. */
@@ -186,6 +226,10 @@ export type PerfContribution =
     readonly source: string
     /** Sender agent name of a team/agent message, or null. */
     readonly sender: string | null
+  }
+  | {
+    readonly kind: 'compaction'
+    readonly metrics: PerfCompactionMetrics
   }
   | {
     readonly kind: 'end'

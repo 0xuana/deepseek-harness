@@ -2,7 +2,8 @@
 
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type {
-  PerfCall, PerfContribution, PerfStepMetrics, PerfToolCount, PerfTurnMetrics, PerfViewNode,
+  PerfCall, PerfCompactionMetrics, PerfContribution, PerfStepMetrics, PerfToolCount, PerfTurnMetrics,
+  PerfViewNode,
 } from './perf-contract.ts'
 import { CALL_LIMIT, isCodeMode, toolSpanUnion } from './perf-fold.ts'
 import { isNumber } from './perf-usage.ts'
@@ -12,6 +13,9 @@ type InnerContribution = Extract<PerfContribution, { kind: 'inner' }>
 
 /** Empty image list shared by turns whose trigger attached no image. */
 const NO_IMAGES: readonly ImageAttachmentRef[] = []
+
+/** Empty compaction list shared by turns without one. */
+const NO_COMPACTIONS: readonly PerfCompactionMetrics[] = []
 
 /** The trigger that opened one turn, kept from the highest-priority source. */
 interface TurnTrigger {
@@ -200,6 +204,7 @@ export function aggregateTurn(turn: number, steps: readonly PerfStepMetrics[]): 
     interrupted: steps.some(step => step.interrupted),
     aborted: steps.some(step => step.aborted),
     wall,
+    compactions: [],
     prompt: null,
     promptImages: NO_IMAGES,
     promptSource: null,
@@ -232,6 +237,8 @@ export function buildTurns(nodes: Iterable<PerfViewNode>): PerfTurnMetrics[] {
   const prompts = new Map<number, TurnTrigger>()
   // Code-Mode dispatches per step, merged after the steps are ordered.
   const inner = new Map<string, InnerContribution[]>()
+  // Compaction transactions per turn, ordered by start time after grouping.
+  const compactions = new Map<number, PerfCompactionMetrics[]>()
   for (const node of nodes) {
     const data = node.data
     if (data.kind === 'prompt') {
@@ -252,6 +259,13 @@ export function buildTurns(nodes: Iterable<PerfViewNode>): PerfTurnMetrics[] {
     if (data.kind === 'end') {
       if (isNumber(data.endTime)) closedAt.set(data.turn, data.endTime)
       if (data.closeKind !== null) closedKind.set(data.turn, data.closeKind)
+      continue
+    }
+    if (data.kind === 'compaction') {
+      if (!isNumber(data.metrics.turn)) continue
+      const list = compactions.get(data.metrics.turn)
+      if (list === undefined) compactions.set(data.metrics.turn, [data.metrics])
+      else list.push(data.metrics)
       continue
     }
     if (data.kind === 'inner') {
@@ -306,6 +320,8 @@ export function buildTurns(nodes: Iterable<PerfViewNode>): PerfTurnMetrics[] {
     const prompt = prompts.get(turn)
     turns.push({
       ...aggregate,
+      compactions: (compactions.get(turn) ?? NO_COMPACTIONS).slice()
+        .sort((left, right) => left.startTime - right.startTime),
       // A turn followed by another turn cannot still be running.
       running: (index < order.length - 1 || at !== undefined) ? false : aggregate.running,
       interrupted: closedKind.get(turn) === 'interrupted' ? true : aggregate.interrupted,

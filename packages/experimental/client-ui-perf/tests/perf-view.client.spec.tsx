@@ -22,7 +22,7 @@ import {
   formatTokensShort, formatTps,
 } from '../src/client/perf-format.ts'
 import type {
-  PerfCall, PerfSnapshot, PerfStepMetrics, PerfToolCount, PerfTurnMetrics,
+  PerfCall, PerfCompactionMetrics, PerfSnapshot, PerfStepMetrics, PerfToolCount, PerfTurnMetrics,
 } from '../src/client/perf-contract.ts'
 
 const t = makeTranslate(zh)
@@ -135,9 +135,33 @@ function turn(overrides: Partial<PerfTurnMetrics> = {}): PerfTurnMetrics {
     aborted: false,
     wall: 1_000,
     prompt: null,
+    compactions: [],
     promptImages: [],
     promptSource: null,
     promptSender: null,
+    ...overrides,
+  }
+}
+
+/** One compaction row with every unmeasured field blank. */
+function compaction(overrides: Partial<PerfCompactionMetrics> = {}): PerfCompactionMetrics {
+  return {
+    compactionId: 'cmp-1',
+    turn: 1,
+    startTime: BASE,
+    endTime: BASE + 1_000,
+    wall: 1_000,
+    running: false,
+    context: null,
+    output: null,
+    cacheHit: null,
+    cacheRead: null,
+    cacheWrite: null,
+    provider: null,
+    model: null,
+    shadowedTokens: null,
+    summaryChars: null,
+    error: null,
     ...overrides,
   }
 }
@@ -823,6 +847,38 @@ describe('turn rows', () => {
     const partial = cellsOf(stepRow(4))
     expect(partial[1]?.textContent).toBe('')
     expect(partial[1]?.getAttribute('title')).toBeNull()
+  })
+
+  it('renders compaction rows between the steps they ran between', () => {
+    mount(turnSnapshot([
+      step({ step: 1, startTime: BASE, endTime: BASE + 1_000 }),
+      step({ step: 2, startTime: BASE + 5_000, endTime: BASE + 6_000 }),
+    ], {
+      compactions: [
+        compaction({
+          startTime: BASE + 2_000, endTime: BASE + 3_000, wall: 1_000,
+          context: 1_100, output: 50, cacheHit: 100 / 1_100, cacheRead: 100, cacheWrite: 20,
+          provider: 'deepseek-official', model: 'deepseek-flash',
+          shadowedTokens: 4_000, summaryChars: 30,
+        }),
+        compaction({
+          compactionId: 'cmp-2', startTime: BASE + 7_000, endTime: null, wall: null, running: true,
+        }),
+      ],
+    }))
+    const rows = bodyRows()
+    const first = rows.findIndex(row => (row.textContent ?? '').startsWith(say('step.label', { step: 1 })))
+    const marker = rows.findIndex(row => (row.textContent ?? '').startsWith(say('compaction.label')))
+    const second = rows.findIndex(row => (row.textContent ?? '').startsWith(say('step.label', { step: 2 })))
+    expect(first).toBeGreaterThanOrEqual(0)
+    expect(marker).toBeGreaterThan(first)
+    expect(marker).toBeLessThan(second)
+    const completed = cellsOf(rows[marker]!)
+    expect(completed[1]?.textContent).toBe('deepseek-official / deepseek-flash')
+    expect(rows[marker]?.textContent).toContain(say('compaction.shadowed', { tokens: formatTokens(4_000) }))
+    expect(completed[3]?.textContent).toBe(formatTokensShort(1_100))
+    const running = rows.filter(row => (row.textContent ?? '').startsWith(say('compaction.label'))).at(-1)!
+    expect(running.textContent).toContain(say('compaction.running'))
   })
 
   it('scales turn bars against the turns visible on screen', () => {

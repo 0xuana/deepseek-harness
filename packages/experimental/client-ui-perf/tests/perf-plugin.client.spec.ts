@@ -380,7 +380,7 @@ describe('browser plugin registration', () => {
     const bench = await mountPlugin()
     expect(bench.localeRegister).toHaveBeenCalledWith(NS, { zh, en, ja })
     expect(bench.events.map(definition => definition.kind)).toEqual([
-      'perf-step', 'perf-prompt', 'perf-turn-end', 'perf-code-mode',
+      'perf-step', 'perf-prompt', 'perf-turn-end', 'perf-code-mode', 'perf-compaction',
     ])
     expect(clientInject).toEqual(['slots', 'sessions', 'uiConversation', 'locale'])
     expect(bench.views).toEqual([perfViewDefinition])
@@ -634,6 +634,96 @@ describe('conversation Definitions', () => {
     expect(step.context).toBe(600)
     expect(step.tools).toEqual([{ name: 'grep', count: 1 }])
     expect(snapshot!.turns[0]!.prompt).toBeNull()
+  })
+
+  it('publishes a compaction row with its summary call facts', async () => {
+    const definitions = await registeredDefinitions()
+    const snapshot = assemble(definitions, [
+      entry(event('turn/start', { turn: 6 })),
+      entry(event('step/start', { turn: 6, step: 1 }, 5_000)),
+      entry(event('user/message', {
+        content: [{ type: 'text', text: 'go' }],
+        source: { kind: 'user' },
+      }, 5_100)),
+      entry(event('compaction/start', { compactionId: '', turn: 6 }, 4_800)),
+      entry(event('compaction/start', { compactionId: 'cmp-0', turn: null }, 4_900)),
+      entry(event('compaction/summary', {
+        compactionId: 'cmp-0',
+        turn: 6,
+        summary: [{ type: 'text', text: 'older summary' }],
+        shadowedRange: { start: 1 as SessionSeq, end: 2 as SessionSeq },
+        shadowedSeqs: [],
+        shadowedTokenCount: 1_000,
+        provider: 'p',
+        model: 'm',
+        llmStreamCall: false,
+      }, 5_000)),
+      entry(event('compaction/end', { compactionId: 'cmp-0', turn: 6 }, 5_100)),
+      entry(event('compaction/start', { compactionId: 'another', turn: null }, 5_150)),
+      entry(event('compaction/end', { compactionId: 'another', turn: null }, 5_160)),
+      entry(event('compaction/start', { compactionId: 'cmp-1', turn: 6 }, 5_200)),
+      entry(event('compaction/summary', {
+        compactionId: 'cmp-1',
+        turn: 6,
+        summary: [{ type: 'text', text: 'sum' }, { type: 'reasoning', text: 'why' }],
+        shadowedRange: { start: 1 as SessionSeq, end: 2 as SessionSeq },
+        shadowedSeqs: [],
+        shadowedTokenCount: 4_000,
+        provider: 'deepseek-official',
+        model: 'deepseek-flash',
+        usage: { inputTokens: 1_000, cacheReadTokens: 100, outputTokens: 50 },
+        llmStreamCall: false,
+      }, 5_300)),
+      entry(event('compaction/end', { compactionId: 'cmp-1', turn: 6 }, 5_400)),
+      entry(event('step/end', { turn: 6, step: 1 }, 5_500)),
+      entry(event('turn/end', { turn: 6, reason: { kind: 'completed' } }, 5_600)),
+    ])
+    expect(snapshot?.turns).toHaveLength(1)
+    expect(snapshot?.turns[0]?.compactions).toHaveLength(2)
+    expect(snapshot?.turns[0]?.compactions.find(entry => entry.compactionId === 'cmp-0')).toMatchObject({
+      turn: 6, context: null, output: null, cacheHit: null, summaryChars: 13,
+    })
+    expect(snapshot?.turns[0]?.compactions[1]).toEqual({
+      compactionId: 'cmp-1',
+      turn: 6,
+      startTime: 5_200,
+      endTime: 5_400,
+      wall: 200,
+      running: false,
+      context: 1_100,
+      output: 50,
+      cacheHit: 100 / 1_100,
+      cacheRead: 100,
+      cacheWrite: null,
+      provider: 'deepseek-official',
+      model: 'deepseek-flash',
+      shadowedTokens: 4_000,
+      summaryChars: 3,
+      error: null,
+    })
+
+    const interrupted = assemble(definitions, [
+      entry(event('turn/start', { turn: 7 })),
+      entry(event('step/start', { turn: 7, step: 1 }, 6_000)),
+      entry(event('user/message', { content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }, 6_010)),
+      entry(event('compaction/start', { compactionId: 'cmp-2', turn: 7 }, 6_100)),
+      entry(event('compaction/end', { compactionId: 'cmp-2', turn: 7, error: 'aborted' }, 6_200)),
+      entry(event('turn/end', { turn: 7, reason: { kind: 'completed' } }, 6_300)),
+    ])
+    expect(interrupted?.turns[0]?.compactions[0]?.error).toBe('aborted')
+    expect(interrupted?.turns[0]?.compactions[0]?.running).toBe(false)
+
+    const running = assemble(definitions, [
+      entry(event('turn/start', { turn: 8 })),
+      entry(event('step/start', { turn: 8, step: 1 }, 6_400)),
+      entry(event('user/message', { content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }, 6_410)),
+      entry(event('compaction/start', { compactionId: 'cmp-3', turn: 8 }, 6_500)),
+      entry(event('step/end', { turn: 8, step: 1 }, 6_600)),
+      entry(event('turn/end', { turn: 8, reason: { kind: 'interrupted' } }, 6_700)),
+    ])
+    expect(running?.turns[0]?.compactions[0]).toMatchObject({
+      running: true, wall: null, context: null, provider: null, shadowedTokens: null, summaryChars: null, error: null,
+    })
   })
 
   it('attributes Code-Mode dispatch events through the root call table', async () => {
