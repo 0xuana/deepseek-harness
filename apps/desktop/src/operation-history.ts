@@ -33,7 +33,9 @@ export interface OperationHistoryReadResult {
  * @returns Partial records and explicit omissions; filesystem failures never reject the collection.
  */
 export async function readOperationHistory(
-  directory: string, limits: OperationHistoryReadLimits, signal: AbortSignal,
+  directory: string,
+  limits: OperationHistoryReadLimits,
+  signal: AbortSignal,
 ): Promise<OperationHistoryReadResult> {
   if (![limits.bytes, limits.recordBytes, limits.records].every(value => Number.isSafeInteger(value) && value > 0)) {
     throw new RangeError('Operation history budgets must be positive safe integers')
@@ -51,40 +53,54 @@ export async function readOperationHistory(
     try {
       await using handle = await open(join(directory, name), 'r')
       if (cancelled()) break
-      const stat = await handle.stat()
+      const fileStat = await handle.stat()
       if (cancelled()) break
-      if (!stat.isFile()) { unavailableFiles++; continue }
-      const identity = `${String(stat.dev)}:${String(stat.ino)}`
-      if (seenFiles.has(identity)) { truncated = true; continue }
-      if (stat.size > 0 && (bytesRead >= limits.bytes || records.length >= limits.records)) { truncated = true; break }
-      const length = Math.min(stat.size, limits.bytes - bytesRead)
-      const start = stat.size - length
-      const buffer = Buffer.alloc(length)
-      let offset = 0
-      while (offset < length && !cancelled()) {
-        const read = await handle.read(buffer, offset, Math.min(16 * 1024, length - offset), start + offset)
+      if (!fileStat.isFile()) {
+        unavailableFiles++
+        continue
+      }
+      const identity = `${String(fileStat.dev)}:${String(fileStat.ino)}`
+      if (seenFiles.has(identity)) {
+        truncated = true
+        continue
+      }
+      if (fileStat.size > 0 && (bytesRead >= limits.bytes || records.length >= limits.records)) {
+        truncated = true
+        break
+      }
+
+      const readLength = Math.min(fileStat.size, limits.bytes - bytesRead)
+      const readStart = fileStat.size - readLength
+      const buffer = Buffer.alloc(readLength)
+      let readOffset = 0
+      while (readOffset < readLength && !cancelled()) {
+        const read = await handle.read(buffer, readOffset, Math.min(16 * 1024, readLength - readOffset), readStart + readOffset)
         bytesRead += read.bytesRead
         if (read.bytesRead === 0) break
-        offset += read.bytesRead
+        readOffset += read.bytesRead
       }
-      if (offset > 0) seenFiles.add(identity)
+      if (readOffset > 0) seenFiles.add(identity)
       if (cancelled()) break
-      truncated ||= start > 0 || offset < length
+      truncated ||= readStart > 0 || readOffset < readLength
+
       // An unterminated last record can still be in flight; never parse it as a committed record.
-      if (offset === 0) continue
-      let end = buffer.lastIndexOf(10, offset - 1)
-      if (end !== offset - 1) truncated = true
-      while (end >= 0 && records.length < limits.records && !cancelled()) {
+      if (readOffset === 0) continue
+      let lineEnd = buffer.lastIndexOf(10, readOffset - 1)
+      if (lineEnd !== readOffset - 1) truncated = true
+      while (lineEnd >= 0 && records.length < limits.records && !cancelled()) {
         await setImmediate()
         if (cancelled()) break
-        const preceding = end === 0 ? -1 : buffer.lastIndexOf(10, end - 1)
-        if (preceding < 0 && start > 0) { truncated = true; break }
-        const size = end - preceding - 1
-        if (size > limits.recordBytes) {
+        const previousLineEnd = lineEnd === 0 ? -1 : buffer.lastIndexOf(10, lineEnd - 1)
+        if (previousLineEnd < 0 && readStart > 0) {
+          truncated = true
+          break
+        }
+        const recordBytes = lineEnd - previousLineEnd - 1
+        if (recordBytes > limits.recordBytes) {
           invalidRecords++
-        } else if (size > 0) {
+        } else if (recordBytes > 0) {
           try {
-            const value: unknown = JSON.parse(buffer.subarray(preceding + 1, end).toString('utf8'))
+            const value: unknown = JSON.parse(buffer.subarray(previousLineEnd + 1, lineEnd).toString('utf8'))
             const record = parsePluginOperationRecord(value)
             if (record === undefined) invalidRecords++
             else records.push(record)
@@ -93,9 +109,9 @@ export async function readOperationHistory(
             invalidRecords++
           }
         }
-        end = preceding
+        lineEnd = previousLineEnd
       }
-      if (end >= 0) truncated = true
+      if (lineEnd >= 0) truncated = true
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') unavailableFiles++
     }

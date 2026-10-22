@@ -36,7 +36,10 @@ export class OperationJournal {
    * @param directory - Directory reserved for the shell's operation journal.
    * @param limits - Positive byte budgets, with recordBytes no greater than either other budget.
    */
-  constructor(private readonly directory: string, private readonly limits: OperationJournalLimits) {
+  constructor(
+    private readonly directory: string,
+    private readonly limits: OperationJournalLimits,
+  ) {
     if (![limits.segmentBytes, limits.recordBytes, limits.queuedBytes].every(value => Number.isSafeInteger(value) && value > 0)
       || limits.recordBytes > limits.segmentBytes || limits.recordBytes > limits.queuedBytes) {
       throw new RangeError('Invalid operation journal budgets')
@@ -64,8 +67,13 @@ export class OperationJournal {
 
   /** @returns Current queue occupancy and omission counters. */
   status(): OperationJournalStatus {
-    return { dropped: this.dropped, failed: this.failed, queuedBytes: this.queuedBytes, disabled: this.disabled,
-      repairedSegments: this.repairedSegments }
+    return {
+      dropped: this.dropped,
+      failed: this.failed,
+      queuedBytes: this.queuedBytes,
+      disabled: this.disabled,
+      repairedSegments: this.repairedSegments,
+    }
   }
 
   /** Stop accepting records and await completion of the owned writer. */
@@ -97,7 +105,9 @@ export class OperationJournal {
           }, timeoutMs)
         }),
       ])
-    } finally { clearTimeout(timer) }
+    } finally {
+      clearTimeout(timer)
+    }
   }
 
   private startWriter(): void {
@@ -121,7 +131,9 @@ export class OperationJournal {
         this.abort.signal.throwIfAborted()
         const bytes = Buffer.byteLength(line)
         let size = 0
-        try { size = (await stat(current)).size }
+        try {
+          size = (await stat(current)).size
+        }
         catch (error) {
           if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
         }
