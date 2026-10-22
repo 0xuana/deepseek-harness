@@ -574,8 +574,10 @@
   font: var(--dsw-font-xxxs-11);
 }
 
-.copy:hover {
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .copy:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .copy:focus-visible {
@@ -642,7 +644,7 @@
 
 .button {
   padding: 4px 10px;
-  border: 1px solid var(--dsw-alias-border-l1);
+  border: 0.5px solid var(--dsw-alias-border-l1);
   border-radius: 6px;
   background: var(--dsw-alias-bg-layer-2);
   color: var(--dsw-alias-label-primary);
@@ -650,8 +652,10 @@
   font-size: 12px;
 }
 
-.button:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .button:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .button:focus-visible {
@@ -661,7 +665,7 @@
 
 .buttonOff {
   padding: 4px 10px;
-  border: 1px solid var(--dsw-alias-border-l1);
+  border: 0.5px solid var(--dsw-alias-border-l1);
   border-radius: 6px;
   background: transparent;
   color: var(--dsw-alias-label-secondary);

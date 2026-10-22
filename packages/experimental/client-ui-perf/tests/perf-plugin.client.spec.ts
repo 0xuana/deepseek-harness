@@ -18,7 +18,7 @@ import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
 import type { StoredEntry } from '@deepseek-ai/dsh-client-ui-slots'
-import { en, NS, zh } from '../src/client/locales.ts'
+import { en, ja, NS, zh } from '../src/client/locales.ts'
 import type {
   PerfCall, PerfContribution, PerfSnapshot, PerfStepMetrics, PerfStepState, PerfViewNode,
 } from '../src/client/perf-contract.ts'
@@ -337,7 +337,7 @@ function locatedUpdate(event: SessionEventLike, location: ConversationLocation):
 describe('browser plugin registration', () => {
   it('registers the performance tab, dictionaries, Definitions, and view target', async () => {
     const bench = await mountPlugin()
-    expect(bench.localeRegister).toHaveBeenCalledWith(NS, { zh, en })
+    expect(bench.localeRegister).toHaveBeenCalledWith(NS, { zh, en, ja })
     expect(bench.events.map(definition => definition.kind)).toEqual([
       'perf-step', 'perf-prompt', 'perf-turn-end', 'perf-code-mode',
     ])
