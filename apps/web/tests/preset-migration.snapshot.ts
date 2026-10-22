@@ -5,6 +5,7 @@ import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { zstdCompressSync, zstdDecompressSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
+import { installModelSelection } from '@deepseek-ai/dsh-agent'
 import { SESSION_FORMAT_VERSION, SessionId } from '@deepseek-ai/dsh-session'
 import { generationLogPath } from '../../../packages/session/session-persistence-jsonl/src/format.ts'
 import { scanZstdFrames } from '../../../packages/session/session-persistence-jsonl/src/zstd.ts'
@@ -69,7 +70,36 @@ describe.skipIf(webSnapshotMode() === 'record')('historical preset restoration t
       }
       await expect(readFile(successor)).rejects.toMatchObject({ code: 'ENOENT' })
 
-      const resolved = await scaffold.ctx.sessionController.resolveAgent(id)
+      const setupEntered = Promise.withResolvers<undefined>()
+      const releaseSetup = Promise.withResolvers<undefined>()
+      const initialization = scaffold.ctx.agents.resume({
+        resumeSessionId: id,
+        setup: async (ctx) => {
+          installModelSelection(ctx)
+          await scaffold.ctx.agentPresets.mount(ctx, 'ptc')
+          setupEntered.resolve(undefined)
+          await releaseSetup.promise
+        },
+      })
+      const resolved = await (async () => {
+        try {
+          await Promise.race([setupEntered.promise, initialization])
+          expect(scaffold.ctx.agents.get(id)).toBeUndefined()
+          const lookup = scaffold.ctx.sessionController.resolveAgent(id)
+          releaseSetup.resolve(undefined)
+          const original = await initialization
+          const result = await lookup
+          expect({ sameAgent: 'agent' in result && result.agent === original.agent }).toMatchInlineSnapshot(`
+            {
+              "sameAgent": true,
+            }
+          `)
+          return result
+        } finally {
+          releaseSetup.resolve(undefined)
+          await initialization
+        }
+      })()
       if ('error' in resolved) throw resolved.error
       expect(scaffold.ctx.agentPresets.composedPreset(resolved.agent.ctx)).toBe('ptc')
       expect(resolved.agent.session.header.agentPreset).toBe('ptc')
