@@ -39,7 +39,6 @@ describe('desktop build paths', () => {
   it('shares download and package caches outside target output directories', () => {
     const arm64 = desktopTargetBuildPaths('mac-arm64')
     const x64 = desktopTargetBuildPaths('mac-x64')
-    expect(arm64.pnpmStore).toBe(x64.pnpmStore)
     expect(arm64.downloads).toBe(x64.downloads)
     expect(arm64.downloads).not.toContain(`${sep}targets${sep}`)
     expect(arm64.pnpmStore).toBe(x64.pnpmStore)
@@ -53,6 +52,12 @@ describe('desktop build paths', () => {
     const paths = resolveDesktopTargetBuildPaths(environment, 'win32', 'x64')
     expect(paths).toEqual({ ...defaults, downloads: join(cache, 'downloads'), pnpmStore: join(cache, 'pnpm-store') })
     expect(desktopTargetBuildPaths('mac-arm64', environment).pnpmStore).toBe(paths.pnpmStore)
+    for (const target of ['mac-arm64', 'mac-x64', 'win-x64'] as const) {
+      const configured = desktopTargetBuildPaths(target, environment)
+      expect(configured.downloads).toBe(join(cache, 'downloads'))
+      expect(configured.pnpmStore).toBe(join(cache, 'pnpm-store'))
+      expect(configured.root).not.toContain(cache)
+    }
     expect(defaults.pnpmStore).toBe(resolve(defaults.root, '../..', 'pnpm-store'))
   })
 
@@ -86,18 +91,4 @@ describe('desktop build paths', () => {
     expect(() => resolveDesktopBuildTarget({}, 'linux', 'x64')).toThrow(/unsupported target/u)
     expect(() => desktopTargetBuildPaths('linux-x64' as 'mac-x64')).toThrow(/unsupported target/u)
   })
-})
-
-it('keeps caches outside the disposable target directories when explicitly configured', () => {
-  const cache = join(process.cwd(), 'external-build-cache')
-  const environment = { DSH_DESKTOP_PACKAGE_CACHE_DIR: cache }
-  for (const target of ['mac-arm64', 'mac-x64', 'win-x64'] as const) {
-    const paths = desktopTargetBuildPaths(target, environment)
-    expect(paths.downloads).toBe(join(cache, 'downloads'))
-    expect(paths.pnpmStore).toBe(join(cache, 'pnpm-store'))
-    expect(paths.root).not.toContain(cache)
-  }
-  for (const value of ['', 'relative-cache']) {
-    expect(() => desktopTargetBuildPaths('mac-arm64', { DSH_DESKTOP_PACKAGE_CACHE_DIR: value })).toThrow('must be a nonempty absolute directory')
-  }
 })

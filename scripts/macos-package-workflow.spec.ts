@@ -38,6 +38,7 @@ it('confines signed Mac packaging to manual dispatch and a dedicated Apple Silic
   expect(uploads[0]?.if).toBe("always() && steps.checkout.outcome == 'success'")
   expect(uploads[1]?.if).toBe('success()')
   expect(uploads[1]?.with?.path).toBe('${{ steps.retained.outputs.directory }}/*')
+  expect(uploads[1]?.with?.['compression-level']).toBe(0)
 })
 
 it('defaults to notarization and labels the explicit debugging option', () => {

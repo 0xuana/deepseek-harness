@@ -37,6 +37,7 @@ export function localMacOSPackageEnvironment(environment = process.env) {
 /**
  * Read a machine preset when selected, otherwise the target's required dotenv; no ambient release fallback.
  * PACKAGE_MACOS_ZIP_COMPRESSION_LEVEL selects 3 or 7 for Mac workflow builds, overriding the file setting.
+ * Nonempty workflow compression overrides reject the other platform.
  * PACKAGE_TEST_RELEASE_ID overrides the test preset only; blank retains its configured ID.
  * PACKAGE_WINDOWS_COMPRESSION_LEVEL selects 3 or 7 for Windows workflow builds; blank retains the file setting.
  * @param {'win32' | 'darwin'} platform Target platform.
@@ -51,6 +52,11 @@ export function loadDesktopPackageEnvironment(platform, environment = process.en
     if (platform !== 'win32' || !['3', '7'].includes(compression)) {
       throw new Error('desktop package: PACKAGE_WINDOWS_COMPRESSION_LEVEL requires Windows and a choice of 3 or 7')
     }
+  }
+  const zipCompression = environment.PACKAGE_MACOS_ZIP_COMPRESSION_LEVEL
+  if (zipCompression !== undefined) {
+    if (platform !== 'darwin') throw new Error('desktop package: PACKAGE_MACOS_ZIP_COMPRESSION_LEVEL requires macOS')
+    if (!['3', '7'].includes(zipCompression)) throw new Error('desktop package: workflow ZIP compression must be 3 or 7')
   }
   const preset = environment.DSH_PACKAGING_PRESET
   let path = join(appRoot, platform === 'win32' ? '.env.windows' : '.env.macos')
@@ -78,9 +84,7 @@ export function loadDesktopPackageEnvironment(platform, environment = process.en
     }
   }
   if (compression !== undefined && compression !== '') settings.DSH_DESKTOP_WINDOWS_COMPRESSION_LEVEL = compression
-  const zipCompression = environment.PACKAGE_MACOS_ZIP_COMPRESSION_LEVEL
-  if (platform === 'darwin' && zipCompression !== undefined) {
-    if (!['3', '7'].includes(zipCompression)) throw new Error('desktop package: workflow ZIP compression must be 3 or 7')
+  if (zipCompression !== undefined) {
     settings.DSH_DESKTOP_MACOS_ZIP_COMPRESSION_LEVEL = zipCompression
   }
   const releaseId = environment.PACKAGE_TEST_RELEASE_ID?.trim()

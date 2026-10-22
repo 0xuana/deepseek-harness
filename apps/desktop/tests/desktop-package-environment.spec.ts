@@ -376,6 +376,11 @@ it.each(['3', '7'])('applies the workflow ZIP choice %s over the Mac file settin
   })
 })
 
+it.each(['3', '7'])('rejects Mac workflow ZIP choice %s on Windows before reading settings', (level) => {
+  expect(() => loadDesktopPackageEnvironment('win32', { PACKAGE_MACOS_ZIP_COMPRESSION_LEVEL: level }, 'missing-settings'))
+    .toThrow('PACKAGE_MACOS_ZIP_COMPRESSION_LEVEL requires macOS')
+})
+
 it.each(['', '0', '9', 'invalid'])('rejects unsupported workflow ZIP choice %j', async (level) => {
   await withDirectory(async (directory) => {
     await writeFile(join(directory, '.env.macos'), '')

@@ -65,6 +65,7 @@ export function prepareWindowsBuildWorkspace(options) {
 
 /**
  * Remove only the matching run-owned directory after successful artifact upload.
+ * Transient filesystem failures retry up to three times; persistent failures propagate.
  * @param {{sourceDirectory: string, buildRoot: string, runId: string, runAttempt: string, sourceSha: string}} options - Original source and run identity.
  * @returns {void}
  */
@@ -75,7 +76,7 @@ export function removeWindowsBuildWorkspace(options) {
   if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 8192 || readFileSync(marker, 'utf8') !== ownership(options, paths)) {
     throw new Error('Packaging workspace ownership does not match this run')
   }
-  rmSync(paths.owner, { recursive: true })
+  rmSync(paths.owner, { recursive: true, maxRetries: 3, retryDelay: 100 })
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
