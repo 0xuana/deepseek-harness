@@ -107,15 +107,18 @@ function message(text: string) {
 }
 
 describe('Session Controller access', () => {
-  it('owns the Session resource kind and its default sessionId field', async () => {
+  it('owns the Session resource kind and its default resolver', async () => {
     const { ctx } = await harness()
     expect(() => ctx.typert.resources.register('session', { field: 'sessionId' })).toThrow(/already registered/)
   })
 
   it('reads the Session resource of page and follow requests from the addressed Session', async () => {
-    const { controller } = await harness()
+    const { ctx, controller } = await harness()
+    const resource = ctx.typert.resources.get('session')
+    if (resource === undefined || !('resolve' in resource)) throw new Error('Session resource resolver is missing')
     for (const method of ['page', 'follow']) {
       const reader = remoteMethods(controller).find(marker => marker.method === method)?.resources?.['session']
+        ?? resource.resolve
       expect(reader?.({ address: { kind: 'session', sessionId: SHARED } })).toBe(SHARED)
       // A subagent address reads the child transcript; whether the parent's access covers it is the policy's rule.
       expect(reader?.({ address: { kind: 'subagent', parentSessionId: SHARED, childSessionId: PRIVATE } })).toBe(PRIVATE)

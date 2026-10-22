@@ -46,25 +46,24 @@ export function callResources(
 ): readonly RemoteAccessResource[] | undefined {
   // Each later source replaces an earlier one for its kind and keeps the kind's position.
   const sources = new Map<string, () => ResourceIds>()
-  for (const { kind, field } of typert.resources.entries()) {
-    sources.set(kind, () => {
-      // A default field names exactly one resource id; only a reader may return several.
-      const id = defaultFieldId(descriptor, args, field)
+  const positionalArgs: readonly unknown[] = [
+    ...descriptor.parameters.map(parameter => args[parameter.wire]),
+    ...descriptor.cancellation === undefined ? [] : [signal],
+  ]
+  for (const declaration of typert.resources.entries()) {
+    sources.set(declaration.kind, () => {
+      if ('resolve' in declaration) {
+        return read(() => declaration.resolve(...positionalArgs), [])
+      }
+      const id = defaultFieldId(descriptor, args, declaration.field)
       return Array.isArray(id) ? 'invalid' : id === undefined ? [] : [id]
     })
   }
   for (const [kind, ids] of lookupResources(typert, descriptor, args)) {
     sources.set(kind, () => ids)
   }
-  let positional: readonly unknown[] | undefined
   for (const [kind, reader] of Object.entries(readers ?? {})) {
-    sources.set(kind, () => {
-      positional ??= [
-        ...descriptor.parameters.map(parameter => args[parameter.wire]),
-        ...descriptor.cancellation === undefined ? [] : [signal],
-      ]
-      return read(reader, positional, [])
-    })
+    sources.set(kind, () => read(() => reader(...positionalArgs), []))
   }
   const resources: RemoteAccessResource[] = []
   for (const [kind, ids] of sources) {
@@ -91,7 +90,7 @@ export function eventResources(
   if (declared.length === 0) return GLOBAL
   const resources: RemoteAccessResource[] = []
   for (const [kind, reader] of declared) {
-    if (!collect(resources, kind, read(reader, args, 'invalid'))) return undefined
+    if (!collect(resources, kind, read(() => reader(...args), 'invalid'))) return undefined
   }
   return resources
 }
@@ -129,11 +128,11 @@ function lookupResources(
   return ids
 }
 
-/** Run one reader with spread positional arguments: `undefined` yields `absent`, a list names several and must not be empty. */
-function read(reader: TypertResourceReader, args: readonly unknown[], absent: ResourceIds): ResourceIds {
+/** Read resource identities: `undefined` yields `absent`, a list names several and must not be empty. */
+function read(reader: () => unknown, absent: ResourceIds): ResourceIds {
   let value: unknown
   try {
-    value = reader(...args)
+    value = reader()
   } catch {
     // Any reader error means it cannot name its resources, so they are invalid.
     return 'invalid'

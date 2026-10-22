@@ -868,6 +868,35 @@ describe('resource resolution', () => {
     expect(callResources(typert, undefined, method(), {}, NEVER)).toEqual([GLOBAL])
   })
 
+  it('resolves default identities through the registered function and preserves explicit overrides', async () => {
+    const ctx = new Context()
+    roots.push(ctx)
+    await ctx.plugin(TypertRegistry)
+    const resolve = vi.fn((request?: string | { address?: { id: string } }) => {
+      return typeof request === 'string' ? request : request?.address?.id
+    })
+    const dispose = ctx.typert.resources.register('test-shelf', { resolve })
+    expect(callResources(ctx.typert, undefined, method('roomId'), { roomId: 'r1' }, NEVER)).toEqual([ROOM])
+    expect(callResources(ctx.typert, undefined, method('request'), { request: { address: { id: 'r1' } } }, NEVER)).toEqual([ROOM])
+    expect(callResources(ctx.typert, undefined, method('request'), { request: {} }, NEVER)).toEqual([GLOBAL])
+    resolve.mockClear()
+    const args = { other: {}, later: { address: { id: 'r1' } } }
+    expect(callResources(ctx.typert, undefined, method('other', 'later'), args, NEVER)).toEqual([GLOBAL])
+    expect(resolve).toHaveBeenCalledExactlyOnceWith(args.other, args.later)
+    resolve.mockClear()
+    expect(callResources(ctx.typert, undefined, {
+      ...method('renamed'), cancellation: { parameter: 'signal' },
+    }, { renamed: { address: { id: 'r1' } } }, NEVER)).toEqual([ROOM])
+    expect(resolve).toHaveBeenCalledExactlyOnceWith({ address: { id: 'r1' } }, NEVER)
+    expect(callResources(ctx.typert, { 'test-shelf': () => 'override' }, method('request'), {
+      request: { address: { id: 'r1' } },
+    }, NEVER)).toEqual([shelf('override')])
+    await dispose()
+    expect(ctx.typert.resources.entries()).toEqual([])
+    ctx.typert.resources.register('test-shelf', { resolve: () => { throw new Error('cannot resolve') } })
+    expect(callResources(ctx.typert, undefined, method('request'), { request: {} }, NEVER)).toBeUndefined()
+  })
+
   it('lets a reader replace the defaults for its kind, called with the positional wire arguments', async () => {
     const typert = await registry()
     const readers = { 'test-shelf': (ids: unknown) => ids }

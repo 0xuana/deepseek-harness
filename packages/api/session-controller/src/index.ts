@@ -78,13 +78,14 @@ declare module '@deepseek-ai/cordis' {
 }
 
 /**
- * Read the Session resource a history address names: the Session itself, or
- * the child Session whose transcript a subagent address reads.
- * @param request - history request carrying the durable address.
- * @returns the Session whose access the read requires.
+ * Extract the Session resource from an ID or a history address.
+ * @param request - first wire argument carrying a Session ID or address.
+ * @returns the target Session identity when present.
  */
-function addressedSession(request: { readonly address: SessionAddress }): SessionId {
-  return request.address.kind === 'session' ? request.address.sessionId : request.address.childSessionId
+function resolveSessionResource(request?: { readonly sessionId?: SessionId; readonly address?: SessionAddress }): SessionId | undefined {
+  const address = request?.address
+  return request?.sessionId ?? (address === undefined ? undefined
+    : address.kind === 'session' ? address.sessionId : address.childSessionId)
 }
 
 /** Session Controller deployment policy. */
@@ -165,7 +166,7 @@ export class SessionController extends TypertRemoteService {
 
   protected async [Service.init](): Promise<void> {
     const ctx = this.ctx
-    ctx.typert.resources.register('session', { field: 'sessionId' })
+    ctx.typert.resources.register('session', { resolve: resolveSessionResource })
     this.agents = new ApiSessionAgentController(ctx)
     this.agents.initialize()
     this.commands = new SessionCommandController(ctx, this.agents, process.cwd())
@@ -493,7 +494,7 @@ export class SessionController extends TypertRemoteService {
    * @param signal - cancellation for persistence reads.
    * @returns one chronological page.
    */
-  @Remote({ name: 'page', resources: { session: addressedSession } })
+  @Remote('page')
   page(request: SessionPageRequest, signal: AbortSignal): Promise<SessionPage> {
     return this.history.page(request, signal)
   }
@@ -505,7 +506,7 @@ export class SessionController extends TypertRemoteService {
    * @returns a complete opening snapshot followed by gap-free durable event
    *   frames and optional cursorless assistant-stream frames.
    */
-  @Remote({ mode: 'stream', resources: { session: addressedSession } })
+  @Remote({ mode: 'stream' })
   follow(request: SessionFollowRequest, signal: AbortSignal): AsyncIterable<SessionFollowFrame> {
     return this.history.follow(request, signal)
   }

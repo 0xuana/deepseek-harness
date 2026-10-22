@@ -878,15 +878,16 @@ export interface TypertContextRegistry {
   subscribe(listener: TypertRegistryListener): TypertDisposer
 }
 
-/** Default wire field of one resource kind. */
-export interface TypertResourceDeclaration {
-  /** Top-level or first-object wire field holding one identity of the kind. */
-  readonly field: string
-}
+/** Default identity extraction for one resource kind. */
+export type TypertResourceDeclaration =
+  | { readonly field: string }
+  | {
+    /** Called once with spread positional wire arguments. Undefined means no matching resource. */
+    resolve(...args: readonly unknown[]): string | undefined
+  }
 
-/** One registered resource kind with its default wire field. */
-export interface TypertResourceEntry extends TypertResourceDeclaration {
-  /** Registered resource kind. */
+/** One registered resource kind with its default identity extraction. */
+export type TypertResourceEntry = TypertResourceDeclaration & {
   readonly kind: string
 }
 
