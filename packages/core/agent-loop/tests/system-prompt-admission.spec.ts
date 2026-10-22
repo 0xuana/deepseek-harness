@@ -240,6 +240,31 @@ describe('prepared-route prompt admission', () => {
     if (reason === 'tools') expect(header?.data.startsSeries).toBe(true)
   })
 
+  it('keeps the cached prefix at a compaction series start when the prompt text is unchanged', async () => {
+    const h = await harness()
+    await send(h.agent, 'first')
+    h.setPrompt('prompt two')
+    await send(h.agent, 'second')
+    const previous = h.capable.requests[1]!
+
+    // A prune/compaction replaces the last admitted user message: the surface changes, so the
+    // next step starts a new request series while the appended prompt node still holds the
+    // rendered text.
+    const seq = h.agent.session.surface.nodes.findLast(node => h.agent.session.eventAt(node)?.type === 'user/message')!
+    h.agent.session.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'compacted history' }], source: { kind: 'test-compaction' },
+    }), { surfaceOp: { op: 'replace', startSeq: seq, endSeq: seq }, sourceEventSeqs: [seq] })
+    await send(h.agent, 'third')
+
+    // Folding the prompt back into node 0 would move the system segment to wire message 0 and
+    // miss the provider prefix cache from the first token, although no prompt text changed.
+    const request = h.capable.requests[2]!
+    expect(systemTexts(request)).toEqual([
+      [{ type: 'text', text: 'prompt one' }], [{ type: 'text', text: 'prompt two' }],
+    ])
+    expect(request.messages.slice(0, previous.messages.length - 1)).toEqual(previous.messages.slice(0, -1))
+  })
+
   it.each([false, true])('reconciles compaction retries without replaying admission, older tail survives=%s', async (retainOlder) => {
     const overflow = () => { throw new LlmError('context window exceeded', 'CONTEXT_LENGTH') }
     const adapter = new MockAdapter([textResponse('one'), textResponse('two'), overflow, overflow, textResponse('done')])
