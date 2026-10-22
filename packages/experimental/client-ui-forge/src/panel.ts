@@ -1,6 +1,5 @@
 /** Live panel state of one followed Session, shared by all of its followers. */
 
-import { isAbsolute, relative, sep } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { ChangeRequestSnapshot, ForgeReadiness, ForgeRepository } from '@deepseek-ai/dsh-experimental-forge'
 import type { SessionChangeRequest } from '@deepseek-ai/dsh-experimental-forge-session'
@@ -20,7 +19,7 @@ import type {
   ForgeCheckoutState, ForgeLocalChanges, ForgeMissingWorktree, ForgePanelChangeRequest, ForgePanelState, ForgePanelWorktree,
   ForgeSessionWorktree, ForgeWorktreeBlocker, ForgeWorktreeState,
 } from './types.ts'
-import { WORKTREE_RECORD } from './worktree.ts'
+import { within, WORKTREE_RECORD } from './worktree.ts'
 import type { WorktreeCreations } from './worktree.ts'
 
 /** Git and diff limits plus the sign-in probe deadline. */
@@ -381,12 +380,6 @@ export async function missingWorktree(
   if (created === null || !within(created.path, directory)) return null
   if (await ctx.fs.lstat(created.path, undefined, signal) !== undefined) return null
   return { branchExists: await hasBranch(ctx, config, session, created.repositoryRoot, created.branch, signal) }
-}
-
-/** Whether `path` is `root` or lies below it. */
-function within(root: string, path: string): boolean {
-  const rest = relative(root, path)
-  return rest === '' || (rest !== '..' && !rest.startsWith(`..${sep}`) && !isAbsolute(rest))
 }
 
 function hostOf(repository: ForgeRepository): string {

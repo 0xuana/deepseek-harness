@@ -77,6 +77,8 @@ const PEER_REQUIRED_HOST_EXPORTS = {
   // appendPluginRecord writes through the Session class's private log; pluginRecordOf is stateless.
   '@deepseek-ai/dsh-session': ['SESSION_FORMAT_VERSION', 'appendPluginRecord', 'pluginRecordOf'],
   '@deepseek-ai/dsh-session-persistence': ['SessionPersistenceNotFoundError'],
+  // Stateless spec helpers; the forge panel opens its domain through the Host's own storage service.
+  '@deepseek-ai/dsh-storage-domain': ['defineDomain', 'domainTable'],
   // Readers recognize a deadline's TimeoutReason only by `instanceof` against their own copy.
   '@deepseek-ai/dsh-timeout': ['deadline'],
 } as const satisfies HostDependencyExports

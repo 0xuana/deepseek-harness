@@ -1468,7 +1468,7 @@ describe('forgePanel lifecycle', () => {
     await opened.ctx.plugin(ForgePanelController, {})
 
     expect(opened.ctx.sessionProjections.checkpoint(opened.session).forgeWorktree?.val)
-      .toEqual({ request: { from: null }, created: null, locked: false, stepped: false })
+      .toEqual({ request: { from: null }, created: null, locked: false, stepped: false, cwd: repo })
   })
 })
 

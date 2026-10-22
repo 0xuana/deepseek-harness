@@ -4,6 +4,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { AdmissionDecision } from '@deepseek-ai/dsh-agent-controller'
+import type {} from '@deepseek-ai/dsh-api-remote-access'
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type { ForgeActionFailure, ForgeFailure, MergeMethod } from '@deepseek-ai/dsh-experimental-forge'
 import type { SessionChangeRequest } from '@deepseek-ai/dsh-experimental-forge-session'
@@ -11,6 +12,8 @@ import type {} from '@deepseek-ai/dsh-experimental-worktree'
 import { appendPluginRecord } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
+import type {} from '@deepseek-ai/dsh-session-projection-cache'
+import type {} from '@deepseek-ai/dsh-session-query'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { gitIn, inspectCheckout, listBranches } from './git.ts'
@@ -19,10 +22,11 @@ import { parseDiff } from './diff.ts'
 import { aheadOf, DiffTooLarge, forkPoint, localDiff, localText, NoForkPoint } from './local-diff.ts'
 import { missingWorktree, SessionPanel } from './panel.ts'
 import { PatchCache } from './patch-cache.ts'
+import { ChangeRequestStates, changeRequestStatesDomain } from './states.ts'
 import type { PanelConfig } from './panel.ts'
 import type {
-  Config, ForgeBranches, ForgeChangeRequestDiff, ForgeLocalDiff, ForgeLocalScope, ForgeMissingWorktree, ForgePanelState,
-  ForgeSessionWorktree, ForgeWorktreeState,
+  Config, ForgeBranches, ForgeChangeRequestDiff, ForgeChangeRequestStatesFrame, ForgeLocalDiff, ForgeLocalScope, ForgeMissingWorktree,
+  ForgePanelState, ForgeSessionWorktree, ForgeWorktreeState,
 } from './types.ts'
 import { forgeWorktreeProjection, refusal, WORKTREE_RECORD, WorktreeCreations } from './worktree.ts'
 
@@ -77,6 +81,7 @@ export class ForgePanelController extends TypertRemoteService {
   private worktreeStates!: ProjectionHandle<ForgeWorktreeState>
   private creations!: WorktreeCreations
   private readonly patches: PatchCache
+  private states: ChangeRequestStates | undefined
 
   constructor(ctx: Context, config: Config) {
     super(ctx, 'forgePanel')
@@ -100,6 +105,10 @@ export class ForgePanelController extends TypertRemoteService {
       this.panels.clear()
       await Promise.allSettled(panels.map(panel => panel.dispose()))
     }, 'forge-panel: stop panels')
+    ctx.effect(() => () => {
+      this.states?.dispose()
+      this.states = undefined
+    }, 'forge-panel: stop change request states')
   }
 
   protected async [Service.init](): Promise<void> {
@@ -133,6 +142,24 @@ export class ForgePanelController extends TypertRemoteService {
   @Remote({ mode: 'stream' })
   async *follow(session: Session, signal: AbortSignal): AsyncIterable<ForgePanelState> {
     yield* this.panelOf(session).follow(signal)
+  }
+
+  /**
+   * Stream the last known state of every change request that a listed
+   * Session the caller may read binds: the stored states first, then each
+   * state a poll changes or a new binding reveals. Listing reads no Session
+   * log: loaded Sessions report their bindings, others the cached Session
+   * summary, and a Session without one shows nothing until it is opened.
+   * Change requests that are merged or closed are not polled again. The
+   * stream ends when `signal` aborts or the Remote stops.
+   * @param signal - ends the stream.
+   * @returns frames in publication order.
+   * @throws when the Host lacks the Session query, projection cache, storage, or Session store service.
+   */
+  @Remote({ mode: 'stream' })
+  async *changeRequestStates(signal: AbortSignal): AsyncIterable<ForgeChangeRequestStatesFrame> {
+    const access = this.ctx.get('remoteAccess')
+    yield* this.changeRequestStatesHub().stream(id => access === undefined || access.allows({ kind: 'session', id }), signal)
   }
 
   /**
@@ -507,6 +534,36 @@ export class ForgePanelController extends TypertRemoteService {
       throw new RemoteError('forgePanel/session-busy', 'The Session is busy', {}, { cause: error })
     }
     await running
+  }
+
+  /** The shared change request states, created for the first stream from the Host's Session and storage services. */
+  private changeRequestStatesHub(): ChangeRequestStates {
+    if (this.states !== undefined) return this.states
+    const ctx = this.home
+    const query = ctx.get('sessionQuery')
+    const cache = ctx.get('sessionProjectionCache')
+    const storage = ctx.get('storageDomain')
+    const store = ctx.get('sessions')
+    if (query === undefined || cache === undefined || storage === undefined || store === undefined) {
+      throw new Error('forge-panel: change request states need the sessionQuery, sessionProjectionCache, storageDomain, and sessions services')
+    }
+    const visibleUrls = (session: Session): string[] => ctx.forgeSession.changeRequests(session).map(entry => entry.url)
+    this.states = new ChangeRequestStates({
+      sessions: async signal => (await query.listSessions(signal)).map(({ header }) => {
+        const live = store.get(header.id)
+        if (live !== undefined) return { id: header.id, urls: visibleUrls(live) }
+        const bindings = cache.cachedSnapshot(header, ['forgeChangeRequests'])?.values.forgeChangeRequests
+        return { id: header.id, urls: bindings?.filter(binding => !binding.dismissed).map(binding => binding.url) }
+      }),
+      onBindings: listener => ctx.sessionProjections.onChanged((session, key) => {
+        if (key === 'forgeChangeRequests') listener(session.id, visibleUrls(session))
+      }),
+      refOf: url => ctx.forge.changeRequestFromUrl(url),
+      watch: (ref, listener) => ctx.forge.watch(ref, listener),
+      open: async () => (await storage.open(changeRequestStatesDomain)).table('states'),
+      report: (error) => { ctx.logger.warn(`forge-panel: storing a change request state failed: ${String(error)}`) },
+    })
+    return this.states
   }
 
   private panelOf(session: Session): SessionPanel {

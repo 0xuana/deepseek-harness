@@ -1,5 +1,6 @@
 /** The worktree a Session requests before it starts: its record, its projection, and its creation. */
 
+import { isAbsolute, relative, sep } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import type { AdmissionDecision } from '@deepseek-ai/dsh-agent-controller'
@@ -9,6 +10,7 @@ import { appendPluginRecord, pluginRecordOf } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition, ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
+import type {} from '@deepseek-ai/dsh-working-directory'
 import { z } from 'zod'
 import type {
   ForgeAdmissionRefusal, ForgeSessionWorktree, ForgeWorktreeCreation, ForgeWorktreeFailure, ForgeWorktreeState, WorktreeRecord,
@@ -17,7 +19,7 @@ import type {
 /** Plugin record type of worktree requests, withdrawals, and creations. */
 export const WORKTREE_RECORD = 'plugin:client-ui-forge/worktree'
 
-const EMPTY: ForgeWorktreeState = { request: null, created: null, locked: false, stepped: false }
+const EMPTY: Omit<ForgeWorktreeState, 'cwd'> = { request: null, created: null, locked: false, stepped: false }
 
 const worktreeSchema: z.ZodType<ForgeSessionWorktree> = z.object({
   path: z.string().min(1),
@@ -38,21 +40,39 @@ const stateSchema: z.ZodType<ForgeWorktreeState> = z.object({
   created: worktreeSchema.nullable(),
   locked: z.boolean(),
   stepped: z.boolean(),
+  cwd: z.string().min(1).nullable(),
 }).strict()
 
 /**
- * The host-only `forgeWorktree` unit. `request` and `cancel` records change
- * the request until the first `turn/start` or creation; the first `created`
- * record of an open request applies until the first `step/start`. Records
- * outside those periods leave the state unchanged.
+ * The `forgeWorktree` unit. `request` and `cancel` records change the request
+ * until the first `turn/start` or creation; the first `created` record of an
+ * open request applies until the first `step/start`. Records outside those
+ * periods leave the state unchanged. The unit also follows the Session's
+ * working directory, so clients, including the Session summary, see the
+ * created worktree only while that directory is the worktree or lies below it.
  */
 export const forgeWorktreeProjection = {
   key: 'forgeWorktree',
-  stateVersion: 2,
+  stateVersion: 3,
   stateSchema,
-  init: () => EMPTY,
+  init: header => ({ ...EMPTY, cwd: header.cwd ?? null }),
   apply,
+  wire: {
+    viewSchema: worktreeSchema.nullable(),
+    view: state => state.created !== null && state.cwd !== null && within(state.created.path, state.cwd) ? state.created : null,
+  },
 } satisfies ProjectionDefinition<'forgeWorktree', ForgeWorktreeState>
+
+/**
+ * Whether `path` is `root` or lies below it.
+ * @param root - absolute directory.
+ * @param path - absolute path.
+ * @returns whether `root` contains `path`.
+ */
+export function within(root: string, path: string): boolean {
+  const rest = relative(root, path)
+  return rest === '' || (rest !== '..' && !rest.startsWith(`..${sep}`) && !isAbsolute(rest))
+}
 
 function apply(state: ForgeWorktreeState, event: SessionEvent): ForgeWorktreeState {
   switch (event.type) {
@@ -60,6 +80,8 @@ function apply(state: ForgeWorktreeState, event: SessionEvent): ForgeWorktreeSta
       return state.locked ? state : { ...state, locked: true }
     case 'step/start':
       return state.stepped ? state : { ...state, stepped: true }
+    case 'working-directory/change':
+      return state.cwd === event.data.cwd ? state : { ...state, cwd: event.data.cwd }
     // Every other event type, including plugin records, which sit outside SessionEventMap.
     default:
       return applyRecord(state, event)
