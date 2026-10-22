@@ -1,6 +1,6 @@
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { appendPluginRecord, SessionId } from '@deepseek-ai/dsh-session'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -298,7 +298,7 @@ describe('interface creation', () => {
     const f = await fixture()
     await f.propose()
     const other = { callId: ToolCallId('other-card'), action: 'other_action', phase: 'creating', data: { slot: 'page', bundleName: '@dsh-local/other' } }
-    f.ctx.actionCards.record(f.agent, other)
+    appendPluginRecord(f.agent.session, 'plugin:action-cards/decision', other)
     f.ctx.actionCards.record(f.agent, { callId, action: ACTION, phase: 'installed', data: { slot: 'elsewhere' } })
     expect(await f.act('keep')).toEqual({ status: 'refused', reason: 'unavailable' })
     f.ctx.actionCards.record(f.agent, { callId, action: ACTION, phase: 'installed' })
@@ -326,6 +326,21 @@ describe('interface creation', () => {
     await vi.waitFor(() => { expect(f.current()?.phase).toBe('failed') })
     expect(f.manager.installBundle).not.toHaveBeenCalled()
     expect(f.dispose).toHaveBeenCalledOnce()
+  })
+
+  it('reconciles an unconfirmed card before Not now, so its installed page keeps Undo', async () => {
+    const f = await fixture({ callId, phase: 'creating', slot: 'page', bundleName: '@dsh-local/view-recover' })
+    await f.propose()
+    await f.fiber.dispose()
+    f.manager.listBundles.mockRejectedValue(new Error('profile read failed'))
+    await f.ctx.plugin(CreationRecommendations)
+    expect(f.current()?.phase).toBe('unconfirmed')
+    expect(await f.act('dismiss')).toEqual({ status: 'refused', reason: 'unavailable' })
+    expect(f.current()?.phase).toBe('unconfirmed')
+    f.manager.listBundles.mockResolvedValue([installedBundle('@dsh-local/view-recover')])
+    expect(await f.act('dismiss')).toEqual(settled('installed', { slot: 'page', bundleName: '@dsh-local/view-recover' }))
+    expect(await f.act('undo')).toEqual(settled('removed', { slot: 'page', bundleName: '@dsh-local/view-recover', application: 'applied' }))
+    expect(f.manager.removeBundle).toHaveBeenCalledWith('@dsh-local/view-recover')
   })
 
   it('reconciles an interrupted receipt with the installed profile before retrying', async () => {
@@ -687,15 +702,4 @@ describe('interface creation', () => {
     await disposed.promise
     expect(f.current()?.phase).toBe('installing')
   })
-})
-
-it('never offers a proposal written while the user has queued more messages for later turns', async () => {
-  const f = await fixture()
-  const queued = () => createUserMessage({ content: [{ type: 'text', text: 'Next question.' }], source: { kind: 'user' } })
-  f.agent.inbox.append('next-turn', queued())
-  f.agent.inbox.append('next-turn', queued())
-  await f.propose()
-  expect(f.current()).toEqual({ callId, phase: 'suppressed' })
-  expect(await f.act('create')).toEqual({ status: 'settled', decision: { callId, action: ACTION, phase: 'suppressed' } })
-  expect(f.startActivation).not.toHaveBeenCalled()
 })

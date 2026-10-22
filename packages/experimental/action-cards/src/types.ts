@@ -25,9 +25,8 @@ export interface ActionCardProposal {
 
 /**
  * Latest state of one card. Kinds define their own phases; `dismissed` is shared.
- * `replaced` (a later proposal superseded an unstarted card) and `suppressed`
- * (the proposal was written while the user had queued messages) are derived
- * from the log and never recorded.
+ * `replaced` (a later proposal superseded an unstarted card) is derived from the
+ * log and never recorded.
  */
 export interface ActionCardDecision {
   readonly callId: ToolCallId

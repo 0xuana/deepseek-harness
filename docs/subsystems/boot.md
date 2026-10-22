@@ -88,6 +88,7 @@ register<Details>(kind: ActionCardKind<Details>): () => void
  * Record a card decision in the Session log; the next model request reports it.
  * @param agent - agent whose Session owns the card.
  * @param decision - the card's new state.
+ * @throws when no kind ever registered the decision's action with this service, or its phase is one the projection derives.
  */
 record(agent: Agent, decision: ActionCardDecision): void
 
@@ -99,8 +100,9 @@ record(agent: Agent, decision: ActionCardDecision): void
 view(session: Session): ActionCardView
 
 /**
- * Apply a user action to a logged card. Shared checks run first; `dismiss` is recorded here and every other
- * verb goes to the card's kind. Concurrent actions on one card share one operation.
+ * Apply a user action to a logged card. Shared checks run first, then the kind reconciles the card; `dismiss` is
+ * recorded here and every other verb goes to the card's kind. `dismiss` also works on an unstarted card whose kind
+ * is no longer registered. Concurrent actions on one card share one operation.
  * @param agent - live root resolved from the displayed Session.
  * @param callId - the card's `propose_action` call id.
  * @param verb - `dismiss` or one of the kind's verbs.

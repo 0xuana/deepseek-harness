@@ -67,7 +67,7 @@ function statusKey(phase: string, data: CardData): RecommendationKey | undefined
  * @returns the card body.
  */
 export function PluginCardBody({
-  proposal, decision, ready, sessionId, summary, act, catalog, describe, openDetails, resolveText, t,
+  proposal, decision, sessionId, summary, act, catalog, describe, openDetails, resolveText, t,
 }: PluginCardProps) {
   const details = detailsSchema.safeParse(proposal.details)
   const name = details.success ? details.data.name : undefined
@@ -125,7 +125,7 @@ export function PluginCardBody({
       setError('transport')
     } finally { setPending(undefined) }
   }
-  const busy = pending !== undefined || !ready
+  const busy = pending !== undefined
   return <>
     <header className={css.header}><span>{t('heading')}</span><span className={css.badge}>{t('official')}</span></header>
     <div className={css.body} aria-busy={loading || undefined}>

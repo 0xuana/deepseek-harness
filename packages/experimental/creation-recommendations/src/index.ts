@@ -78,7 +78,8 @@ function refused(reason: string): ActionCardResult {
 /** Creator jobs, profile installation and recovery behind the `create_personalized_page` card. */
 class PersonalizedPages {
   private readonly jobs = new Map<string, CreationJob>()
-  private readonly operations = new Set<Promise<ActionCardResult>>()
+  /** Card reconciliations and actions in flight; unloading waits for them. */
+  private readonly operations = new Set<Promise<unknown>>()
   private readonly stopped = Promise.withResolvers<undefined>()
   private closing = false
   private readonly owner: Context['fiber']
@@ -104,11 +105,9 @@ class PersonalizedPages {
         const placement = custom.success ? { customLocation: custom.data } : {}
         return fieldsOf({ slot: slot.success ? slot.data : proposal.details.slot, ...placement })
       },
-      act: (agent, proposal, verb, payload) => {
-        const operation = this.decide(agent, proposal, verb, payload)
-        this.operations.add(operation)
-        return operation.finally(() => { this.operations.delete(operation) })
-      },
+      // Every action, including Not now, first confirms interrupted or uncertain runs against the installed profile.
+      reconcile: agent => this.tracked(this.recover(agent)),
+      act: (agent, proposal, verb, payload) => this.tracked(this.decide(agent, proposal, verb, payload)),
     })
     ctx.effect(() => async () => {
       this.closing = true
@@ -130,6 +129,12 @@ class PersonalizedPages {
       return this.underCreator(exec.agent) ? 'Generate the new bundle files only. The caller installs them after validation.' : undefined
     })
     for (const agent of ctx.agents.roots()) await this.recoverOnOpen(agent)
+  }
+
+  /** Track an operation until it settles, so unloading waits for it. */
+  private tracked<T>(operation: Promise<T>): Promise<T> {
+    this.operations.add(operation)
+    return operation.finally(() => { this.operations.delete(operation) })
   }
 
   private record(agent: Agent, card: PageCard): void {
@@ -195,13 +200,8 @@ class PersonalizedPages {
   ): Promise<ActionCardResult> {
     const location = locationSchema.safeParse(payload)
     if (verb === 'create' && !location.success) return refused('invalid-location')
-    try { await this.recover(agent) }
-    catch (error) {
-      this.ctx.logger.warn('Cannot confirm creation before card action: %s', String(error))
-      return refused('unavailable')
-    }
+    // The card service hands over only a live root, checked again after reconciliation.
     if (this.isStopping()) return refused('closing')
-    if (!this.ctx.agents.roots().includes(agent)) return refused('not-live-root')
     const previous = this.cardOf(agent, proposal.callId)
     const key = JSON.stringify([agent.id, proposal.callId])
     const job = this.jobs.get(key)

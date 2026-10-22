@@ -6,7 +6,7 @@ import {
 import { actionCardProjection, type ActionCardState } from '../src/projection.ts'
 import type { ActionCardDecision } from '../src/types.ts'
 
-const projection = actionCardProjection({ queuedMessageLimit: 2 })
+const projection = actionCardProjection
 const args = { action: 'test_action', title: 'Counter', brief: 'Keep count visible', details: { value: 'a' } }
 let seq = 0
 
@@ -75,16 +75,17 @@ it('keeps the first admitted card of a turn and replaces only unstarted earlier 
   const afterStart = fold([turn(2), call('c', args, 2), result('c', false, 2)], started)
   expect(afterStart.view.decisions.a?.phase).toBe('creating')
   expect(afterStart.view.decisions.c).toBeUndefined()
+  // Replacement crosses kinds: a card of another action replaces the unstarted one too.
+  const other = fold([turn(2), call('d', { ...args, action: 'other_action' }, 2), result('d', false, 2)], first)
+  expect(other.view.decisions).toEqual({ a: { callId: 'a', action: 'test_action', phase: 'replaced' } })
 })
 
-it('suppresses a card proposed while user messages are queued for later turns', () => {
+it('counts user messages queued for later turns for the card tool and leaves cards to it', () => {
   const queued = fold([turn(1), spliced(1, undefined, 'next-step'), spliced(2), call('a'), result('a')])
   expect(queued.queued).toBe(2)
-  expect(queued.view.decisions.a).toEqual({ callId: 'a', action: 'test_action', phase: 'suppressed' })
-  const drained = fold([spliced(0, 2), turn(2), call('b', args, 2), result('b', false, 2)], queued)
-  expect(drained.queued).toBe(0)
-  expect(drained.view.decisions.b).toBeUndefined()
-  expect(drained.view.decisions.a?.phase).toBe('suppressed')
+  expect(Object.keys(queued.view.proposals)).toEqual(['a'])
+  expect(queued.view.decisions).toEqual({})
+  expect(fold([spliced(0, 2)], queued).queued).toBe(0)
   expect(fold([spliced(0, 5)]).queued).toBe(0)
 })
 

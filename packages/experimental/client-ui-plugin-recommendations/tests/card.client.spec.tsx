@@ -28,7 +28,7 @@ function catalog() {
 
 function props(decision?: { phase: string; data?: ActionCardFields }, details: RecommendationDetails = available, store = catalog()) {
   return {
-    proposal, decision: decision === undefined ? undefined : { callId, action: ACTION, ...decision }, ready: true,
+    proposal, decision: decision === undefined ? undefined : { callId, action: ACTION, ...decision },
     sessionId: SessionId('session-1'), summary: <strong>{proposal.title}</strong>, Folded: FoldedText,
     act: vi.fn<Act>(async () => ({ status: 'settled', decision: { callId, action: ACTION, phase: 'enabled' } })),
     catalog: store, describe: vi.fn<Describe>(async () => details), openDetails: vi.fn<(name: string) => void>(),
@@ -159,11 +159,6 @@ it('keeps the recorded outcome of an enabled card whose plugin has left the cata
   expect(screen.queryByRole('alert')).toBeNull()
   expect(screen.getByRole('button', { name: '查看详情：搜索旧会话' })).toBeTruthy()
   expect(screen.queryByRole('button', { name: '重试' })).toBeNull()
-})
-
-it('keeps actions disabled until the card state loads', async () => {
-  await shown({ ...props(), ready: false })
-  expect(screen.getByRole('button', { name: '启用' }).hasAttribute('disabled')).toBe(true)
 })
 
 it('holds the description and action lines while the first catalog lookup is pending', async () => {

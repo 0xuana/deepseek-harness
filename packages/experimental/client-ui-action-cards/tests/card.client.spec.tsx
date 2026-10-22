@@ -17,14 +17,14 @@ const callId = ToolCallId('card-1')
 const proposal = { callId, turn: 3, action: 'test_action', title: 'Counter', brief: 'Keep my task count visible.', details: { value: 'a' } }
 
 function props(bodies: ReadonlyMap<string, RegisteredBody> = new Map(), decision?: ActionCardDecision, chinese = false): CardProps {
-  return { proposal, decision, ready: true, sessionId: SessionId('session-1'),
+  return { proposal, decision, sessionId: SessionId('session-1'),
     act: vi.fn(async (): Promise<ActionCardResult | undefined> => ({ status: 'settled', decision: { callId, action: 'test_action', phase: 'dismissed' } })),
     bind: vi.fn(() => (key: string) => `body:${key}`),
     useBodies: selector => selector(bodies),
     t: makeTranslate(chinese ? zh : en) }
 }
 
-it('places the card admitted in its turn once the turn has ended, and leaves other turns empty', () => {
+it('places the card admitted in its turn once the turn has ended with an answer, and leaves other turns empty', () => {
   type Tail = ComponentProps<typeof ActionCardTail>
   const value = props()
   let view: ActionCardView | undefined
@@ -49,12 +49,14 @@ it('places the card admitted in its turn once the turn has ended, and leaves oth
   turnData.mockReturnValueOnce({ closing: null })
   rerender(<ActionCardTail {...tail(ended)} />)
   expect(screen.queryByRole('region')).toBeNull()
-  view = { ...view, decisions: { a: { callId: ToolCallId('a'), action: 'test_action', phase: 'suppressed' } } }
+  view = { ...view, decisions: { a: { callId: ToolCallId('a'), action: 'test_action', phase: 'dismissed' } } }
   rerender(<ActionCardTail {...tail(ended)} />)
-  expect(screen.queryByRole('region')).toBeNull()
-  view = { ...view, decisions: { toString: { callId: ToolCallId('toString'), action: 'test_action', phase: 'suppressed' } } }
+  expect(screen.getByRole('status').textContent).toBe(en.dismissed)
+  // A call id naming an inherited object member reads no decision.
+  view = { decisions: {}, proposals: { toString: card('toString', 3) } }
   rerender(<ActionCardTail {...tail(ended)} />)
-  expect(screen.getByRole('region')).toBeTruthy()
+  expect(screen.getByRole('region').getAttribute('data-action-card')).toBe('toString')
+  expect(screen.getByRole('button', { name: en.dismiss })).toBeTruthy()
 })
 
 it('renders a registered body with the frame summary, the fold, its own translator and an action bound to the card', async () => {
@@ -70,7 +72,7 @@ it('renders a registered body with the frame summary, the fold, its own translat
   expect(value.bind).toHaveBeenCalledWith('testCard')
   expect(screen.getByRole('region', { name: 'Counter' }).textContent).toContain('Keep my task count visible.')
   expect(screen.getByText('Long details')).toBeTruthy()
-  expect(seen.at(-1)).toMatchObject({ proposal, decision: { phase: 'running' }, ready: true, sessionId: 'session-1', Folded: FoldedText })
+  expect(seen.at(-1)).toMatchObject({ proposal, decision: { phase: 'running' }, sessionId: 'session-1', Folded: FoldedText })
   fireEvent.click(screen.getByRole('button', { name: 'body:start' }))
   expect(value.act).toHaveBeenCalledWith(callId, 'start', { value: 'x' })
 })
@@ -97,17 +99,22 @@ it('offers only Not now for a card whose kind registered no body, and reports re
   await vi.waitFor(() => { expect(screen.queryByRole('alert')).toBeNull() })
 })
 
+it('dismisses a card through the fallback Not now when the Host records the dismissal without the card kind', async () => {
+  const value = props()
+  render(<ActionCard {...value} />)
+  const dismiss = screen.getByRole('button', { name: en.dismiss })
+  fireEvent.click(dismiss)
+  expect(value.act).toHaveBeenCalledWith(callId, 'dismiss', undefined)
+  await vi.waitFor(() => { expect(dismiss.hasAttribute('disabled')).toBe(false) })
+  expect(screen.queryByRole('alert')).toBeNull()
+})
+
 it.each([['dismissed', en.dismissed], ['replaced', en.replaced], ['finished', undefined], ['toString', undefined]] as const)(
   'shows the fallback status of a %s card without actions', (phase, text) => {
     render(<ActionCard {...props(new Map(), { callId, action: 'test_action', phase })} />)
     expect(screen.queryByRole('status')?.textContent).toBe(text)
     expect(screen.queryByRole('button', { name: en.dismiss })).toBeNull()
   })
-
-it('waits for the card state before offering Not now', () => {
-  render(<ActionCard {...{ ...props(), ready: false }} />)
-  expect(screen.getByRole('button', { name: en.dismiss }).hasAttribute('disabled')).toBe(true)
-})
 
 it('only offers expansion for omitted text and preserves the full brief without layout measurement', () => {
   vi.stubGlobal('ResizeObserver', undefined)

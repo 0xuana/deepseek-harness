@@ -1,5 +1,5 @@
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import type { BundleInfo, ChangeResult } from '@deepseek-ai/dsh-plugin-manager/types'
 import * as PluginRecommendations from '../src/index.ts'
@@ -164,17 +164,12 @@ describe('official recommendations', () => {
     expect(f.manager.setBundleEnabled).not.toHaveBeenCalled()
   })
 
-  it('leaves a replaced card and a card proposed while messages were queued unenabled', async () => {
+  it('leaves a replaced card unenabled', async () => {
     const f = await fixture()
     const first = f.propose('call-first')
     f.agent.session.append('turn/start', { turn: 2 })
     f.propose('call-second')
     expect(await f.ctx.actionCards.act(f.agent, first, 'enable')).toEqual({ status: 'settled', decision: { callId: first, action: ACTION, phase: 'replaced' } })
-    const message = createUserMessage({ content: [{ type: 'text', text: 'Next question.' }], source: { kind: 'user' } })
-    f.agent.session.append('agent/inbox/spliced', { target: 'next-turn', start: 0, inserted: [message, message] })
-    f.agent.session.append('turn/start', { turn: 3 })
-    const queued = f.propose('call-queued')
-    expect(await f.ctx.actionCards.act(f.agent, queued, 'enable')).toEqual({ status: 'settled', decision: { callId: queued, action: ACTION, phase: 'suppressed' } })
     expect(f.manager.setBundleEnabled).not.toHaveBeenCalled()
   })
 

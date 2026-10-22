@@ -16,7 +16,7 @@ export type * from './types.ts'
 
 /** Deployment-tunable limits for offering cards. */
 export const Config = z.object({
-  /** Queued next-turn messages at or above which a card proposed in the current turn is never offered. */
+  /** Queued next-turn user messages at or above which `propose_action` refuses, so no card is offered. */
   queuedMessageLimit: z.number().int().min(1).default(2),
 }).prefault({})
 /** Validated card limits after schema defaults. */
@@ -28,8 +28,10 @@ declare module '@deepseek-ai/cordis' {
 
 /** The user action every card offers; the shared service records it. */
 const DISMISS = 'dismiss'
+/** Phases the projection derives from the log; no decision may record them. */
+const DERIVED_PHASES: readonly string[] = ['replaced']
 /** Phases after which no user action changes the card. */
-const FINAL_PHASES: readonly string[] = ['dismissed', 'replaced', 'suppressed']
+const FINAL_PHASES: readonly string[] = ['dismissed', ...DERIVED_PHASES]
 /** Tool whose successful loads activate `propose_action`; its `name` argument names the skill. */
 const SKILL_TOOL = 'skill'
 const skillArguments = z.object({ name: z.string() })
@@ -97,6 +99,16 @@ export interface ActionCardKind<Details> {
    */
   dismissal?(proposal: ActionCardProposalOf<Details>, payload: ActionCardFields | undefined): ActionCardFields | undefined
   /**
+   * Bring the card's recorded decision up to date with state outside the Session, such as an installation that
+   * finished while the Session was closed, recording each change with {@link ActionCards.record}. The service awaits it
+   * before every user action, including `dismiss`, then reads the card's decision again, so a card that is no longer
+   * open settles instead of being dismissed.
+   * @param agent - live root of the card's Session.
+   * @param proposal - the card with validated details.
+   * @throws when that state cannot be read; the action is then refused as unavailable.
+   */
+  reconcile?(agent: Agent, proposal: ActionCardProposalOf<Details>): Promise<void>
+  /**
    * Handle one user action other than `dismiss` after the shared checks passed. The handler records each new
    * decision with {@link ActionCards.record}.
    * @param agent - live root of the card's Session.
@@ -118,6 +130,8 @@ interface RegisteredKind {
   /** Describe why details fail the kind's schema; undefined when they pass. */
   readonly detailsIssues: (details: ActionCardFields) => string | undefined
   readonly dismissal: (proposal: ActionCardProposal, payload: ActionCardFields | undefined) => ActionCardFields | undefined
+  /** Absent when the kind keeps no state outside the Session. */
+  readonly reconcile: ((agent: Agent, proposal: ActionCardProposal) => Promise<void>) | undefined
   readonly act: (
     agent: Agent, proposal: ActionCardProposal, verb: string, payload: ActionCardFields | undefined,
   ) => Promise<ActionCardResult>
@@ -142,6 +156,11 @@ export class ActionCards extends TypertRemoteService {
   static Config = Config
   private projection!: ProjectionHandle<ActionCardState>
   private readonly kinds = new Map<string, RegisteredKind>()
+  /**
+   * Actions whose kind unregistered. Cordis disposes a plugin's effects concurrently, so a kind's unload drain can
+   * still record the outcome of its in-flight work after its registration is gone.
+   */
+  private readonly retired = new Set<string>()
   /** Skills of registered kinds each live agent has loaded; `propose_action` is declared while one is still registered. */
   private readonly loaded = new Map<Agent, Set<string>>()
   /** Kind skills each agent loaded in its latest turn. */
@@ -162,7 +181,7 @@ export class ActionCards extends TypertRemoteService {
   }
 
   protected async [Service.init](): Promise<void> {
-    this.projection = await this.ctx.sessionProjections.register(actionCardProjection(this.config))
+    this.projection = await this.ctx.sessionProjections.register(actionCardProjection)
     this.ctx.tools.register(defineTool({
       name: PROPOSE_ACTION,
       description: 'Show the user one optional action card under this answer. Call only as the skill that names the action instructs.',
@@ -188,6 +207,8 @@ export class ActionCards extends TypertRemoteService {
         if (result.isError && this.accepted.get(agent)?.callId === exec.callId) this.accepted.delete(agent)
         return
       }
+      // Loads by subagents or from code activate nothing: `propose_action` refuses both callers.
+      if (exec.parent !== undefined || !this.ctx.agents.roots().includes(agent)) return
       const skill = exec.name === SKILL_TOOL && !result.isError ? skillArguments.safeParse(exec.arguments) : undefined
       if (skill?.success !== true || ![...this.kinds.values()].some(kind => kind.skill === skill.data.name)) return
       const turn = this.ctx.agents.turnBoundaryOf(agent.session).lastTurn
@@ -238,6 +259,7 @@ export class ActionCards extends TypertRemoteService {
       const details = kind.details.safeParse(proposal.details)
       return details.success ? { ...proposal, details: details.data } : undefined
     }
+    const reconcile = kind.reconcile?.bind(kind)
     const entry: RegisteredKind = {
       skill: kind.skill, verbs: kind.verbs, openPhases: kind.openPhases ?? [],
       statusGuidance: kind.statusGuidance, statusFields: kind.statusFields,
@@ -249,6 +271,11 @@ export class ActionCards extends TypertRemoteService {
         const card = typed(proposal)
         return card === undefined ? undefined : kind.dismissal?.(card, payload)
       },
+      // A card whose details no longer validate never reached the kind, so the kind has nothing to reconcile.
+      reconcile: reconcile === undefined ? undefined : async (agent, proposal) => {
+        const card = typed(proposal)
+        if (card !== undefined) await reconcile(agent, card)
+      },
       act: (agent, proposal, verb, payload) => {
         const card = typed(proposal)
         return card === undefined ? Promise.resolve(refused('unavailable')) : kind.act(agent, card, verb, payload)
@@ -257,7 +284,10 @@ export class ActionCards extends TypertRemoteService {
     const dispose = this.ctx.effect(() => {
       if (this.kinds.has(kind.action)) throw new Error(`action-cards: action "${kind.action}" is already registered`)
       this.kinds.set(kind.action, entry)
-      return () => { this.kinds.delete(kind.action) }
+      return () => {
+        this.kinds.delete(kind.action)
+        this.retired.add(kind.action)
+      }
     }, `action-cards: kind ${kind.action}`)
     return () => { void dispose() }
   }
@@ -266,9 +296,14 @@ export class ActionCards extends TypertRemoteService {
    * Record a card decision in the Session log; the next model request reports it.
    * @param agent - agent whose Session owns the card.
    * @param decision - the card's new state.
+   * @throws when no kind ever registered the decision's action with this service, or its phase is one the projection derives.
    */
   record(agent: Agent, decision: ActionCardDecision): void {
-    appendPluginRecord(agent.session, 'plugin:action-cards/decision', decision)
+    if (!this.kinds.has(decision.action) && !this.retired.has(decision.action)) {
+      throw new Error(`action-cards: cannot record a decision for unregistered action "${decision.action}"`)
+    }
+    if (DERIVED_PHASES.includes(decision.phase)) throw new Error(`action-cards: phase "${decision.phase}" is derived from the log and cannot be recorded`)
+    this.append(agent, decision)
   }
 
   /**
@@ -281,8 +316,9 @@ export class ActionCards extends TypertRemoteService {
   }
 
   /**
-   * Apply a user action to a logged card. Shared checks run first; `dismiss` is recorded here and every other
-   * verb goes to the card's kind. Concurrent actions on one card share one operation.
+   * Apply a user action to a logged card. Shared checks run first, then the kind reconciles the card; `dismiss` is
+   * recorded here and every other verb goes to the card's kind. `dismiss` also works on an unstarted card whose kind
+   * is no longer registered. Concurrent actions on one card share one operation.
    * @param agent - live root resolved from the displayed Session.
    * @param callId - the card's `propose_action` call id.
    * @param verb - `dismiss` or one of the kind's verbs.
@@ -296,33 +332,69 @@ export class ActionCards extends TypertRemoteService {
     const proposal = ownEntry(this.projection.stateOf(agent.session).view.proposals, callId)
     if (proposal === undefined) return Promise.resolve(refused('unknown'))
     const kind = this.kinds.get(proposal.action)
-    const policy = kind === undefined || verb === DISMISS ? undefined : ownEntry(kind.verbs, verb)
-    if (kind === undefined || verb !== DISMISS && policy === undefined) return Promise.resolve(refused('unavailable'))
-    if (policy?.global === true && !this.ctx.remoteAccess.allows({ kind: 'global' })) return Promise.resolve(refused('access-denied'))
+    if (verb === DISMISS) return this.coalesce(agent, callId, () => this.dismiss(agent, kind, proposal, payload))
+    const policy = kind === undefined ? undefined : ownEntry(kind.verbs, verb)
+    if (kind === undefined || policy === undefined) return Promise.resolve(refused('unavailable'))
+    if (policy.global === true && !this.ctx.remoteAccess.allows({ kind: 'global' })) return Promise.resolve(refused('access-denied'))
+    return this.coalesce(agent, callId, () => this.perform(agent, kind, proposal, verb, policy, payload))
+  }
+
+  /** Share one operation per card, run under the Agent's initiator, until it settles. */
+  private coalesce(agent: Agent, callId: ToolCallId, run: () => Promise<ActionCardResult>): Promise<ActionCardResult> {
     const key = JSON.stringify([agent.id, callId])
     const existing = this.actions.get(key)
     if (existing !== undefined) return existing
-    const operation = this.ctx.agents.withInitiator(agent, () => this.decide(agent, kind, proposal, verb, policy, payload))
-      .finally(() => { this.actions.delete(key) })
+    const operation = this.ctx.agents.withInitiator(agent, run).finally(() => { this.actions.delete(key) })
     this.actions.set(key, operation)
     return operation
   }
 
-  private async decide(
-    agent: Agent, kind: RegisteredKind, proposal: ActionCardProposal, verb: string, policy: ActionCardVerb | undefined,
+  /**
+   * Await the kind's reconciliation. A kind that unloads meanwhile still handles the action and refuses it itself.
+   * @returns a refusal when reconciliation failed or the root closed meanwhile; undefined to continue.
+   */
+  private async reconciled(
+    agent: Agent, kind: RegisteredKind, proposal: ActionCardProposal, verb: string,
+  ): Promise<ActionCardResult | undefined> {
+    if (kind.reconcile === undefined) return undefined
+    try { await kind.reconcile(agent, proposal) }
+    catch (error) {
+      this.ctx.logger.warn('Cannot reconcile action card %s before %s: %s', proposal.callId, verb, String(error))
+      return refused('unavailable')
+    }
+    return this.ctx.agents.roots().includes(agent) ? undefined : refused('not-live-root')
+  }
+
+  private async dismiss(
+    agent: Agent, kind: RegisteredKind | undefined, proposal: ActionCardProposal, payload: ActionCardFields | undefined,
+  ): Promise<ActionCardResult> {
+    const refusal = kind === undefined ? undefined : await this.reconciled(agent, kind, proposal, DISMISS)
+    if (refusal !== undefined) return refusal
+    const decision = ownEntry(this.projection.stateOf(agent.session).view.decisions, proposal.callId)
+    // Without its kind no recorded phase is known to be open, and the kind may return to act on it.
+    if (decision !== undefined && (FINAL_PHASES.includes(decision.phase) || kind?.openPhases.includes(decision.phase) !== true)) {
+      return { status: 'settled', decision }
+    }
+    const data = kind?.dismissal(proposal, payload)
+    const dismissed: ActionCardDecision = { callId: proposal.callId, action: proposal.action, phase: 'dismissed', ...data === undefined ? {} : { data } }
+    this.append(agent, dismissed)
+    return { status: 'settled', decision: dismissed }
+  }
+
+  private async perform(
+    agent: Agent, kind: RegisteredKind, proposal: ActionCardProposal, verb: string, policy: ActionCardVerb,
     payload: ActionCardFields | undefined,
   ): Promise<ActionCardResult> {
+    const refusal = await this.reconciled(agent, kind, proposal, verb)
+    if (refusal !== undefined) return refusal
     const decision = ownEntry(this.projection.stateOf(agent.session).view.decisions, proposal.callId)
     if (decision !== undefined && FINAL_PHASES.includes(decision.phase)) return { status: 'settled', decision }
-    if (verb === DISMISS) {
-      if (decision !== undefined && !kind.openPhases.includes(decision.phase)) return { status: 'settled', decision }
-      const data = kind.dismissal(proposal, payload)
-      const dismissed: ActionCardDecision = { callId: proposal.callId, action: proposal.action, phase: 'dismissed', ...data === undefined ? {} : { data } }
-      this.record(agent, dismissed)
-      return { status: 'settled', decision: dismissed }
-    }
-    if (policy?.writes === true && this.ctx.get('sandboxPolicy')?.resolve({ session: agent.session }).mode === 'read-only') return refused('read-only')
+    if (policy.writes === true && this.ctx.get('sandboxPolicy')?.resolve({ session: agent.session }).mode === 'read-only') return refused('read-only')
     return await kind.act(agent, proposal, verb, payload)
+  }
+
+  private append(agent: Agent, decision: ActionCardDecision): void {
+    appendPluginRecord(agent.session, 'plugin:action-cards/decision', decision)
   }
 
   /** Whether `propose_action` is declared for this agent's next step. */
@@ -339,9 +411,14 @@ export class ActionCards extends TypertRemoteService {
     // Step admission declares the tool only to an agent; calls dispatched from code are not logged as tool calls,
     // so no card could follow them.
     if (agent === undefined || exec.parent !== undefined) throw new ActionCardError('Call propose_action directly, not from code.', 'ACTION_CARD_NESTED')
+    // Only a live root can act on a card, so a subagent's card could never be used.
+    if (!this.ctx.agents.roots().includes(agent)) throw new ActionCardError('Cards are offered in the main conversation only.', 'ACTION_CARD_ROOT')
+    if (this.projection.stateOf(agent.session).queued >= this.config.queuedMessageLimit) {
+      throw new ActionCardError('The user has queued more messages; show no card and answer briefly.', 'ACTION_CARD_QUEUED')
+    }
     const kind = this.kinds.get(args.action)
-    // The tool is declared only while a kind is registered, so the list is never empty.
-    if (kind === undefined) throw new ActionCardError(`Unknown action "${args.action}". Registered actions: ${[...this.kinds.keys()].join(', ')}.`, 'ACTION_CARD_UNKNOWN')
+    // Admission is decided when the step starts, so the last kind can unregister before this call runs.
+    if (kind === undefined) throw new ActionCardError(`Unknown action "${args.action}". Registered actions: ${[...this.kinds.keys()].join(', ') || 'none'}.`, 'ACTION_CARD_UNKNOWN')
     const turn = this.ctx.agents.turnBoundaryOf(agent.session).lastTurn
     const loads = this.turnLoads.get(agent)
     if (loads?.turn !== turn || !loads.skills.has(kind.skill)) {
