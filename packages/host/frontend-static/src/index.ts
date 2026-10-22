@@ -42,6 +42,8 @@ const MIME: Record<string, string> = {
   '.html': HTML_MIME,
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
+  // Launchers require an image Content-Type for the install icons.
+  '.png': 'image/png',
   '.svg': 'image/svg+xml',
   '.json': 'application/json',
   '.map': 'application/json',
@@ -115,7 +117,8 @@ export function apply(ctx: Context, config: Config): void {
   const distRoot = dirname(distIndex)
   // Insert after all index transforms so the base precedes every resource reference.
   const renderIndex = async (): Promise<string> => {
-    const body = ctx.webServer.renderIndex(await readFile(distIndex, 'utf8'))
+    // Connection's browser authentication admits the owner's shared browser Peer.
+    const body = ctx.webServer.renderIndex(await readFile(distIndex, 'utf8'), ctx.connection.browserPeer)
     return body.replace(/<head(?:\s[^>]*)?>/i, open => `${open}<base href="./">`)
   }
   ctx.effect(() => ctx.webServer.registerFallback(async (req, res) => {
