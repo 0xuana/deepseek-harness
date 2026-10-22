@@ -803,7 +803,7 @@ export const es = {
 
 /** French dictionary, checked against the English keys. */
 export const fr = {
-  'view.trajectory': 'Trajectory',
+  'view.trajectory': 'Trajectoire',
   'toolbar.aria': 'Barre d’outils du parcours',
   'toolbar.duration': 'Durée',
   'toolbar.useActualDuration': 'Utiliser la durée réelle',
@@ -999,8 +999,8 @@ export const fr = {
 
 /** German dictionary, checked against the English keys. */
 export const de = {
-  'view.trajectory': 'Flugbahn',
-  'toolbar.aria': 'Symbolleiste „Flugbahn“.',
+  'view.trajectory': 'Ausführungsverlauf',
+  'toolbar.aria': 'Symbolleiste „Ausführungsverlauf“.',
   'toolbar.duration': 'Dauer',
   'toolbar.useActualDuration': 'Verwenden Sie die tatsächliche Dauer',
   'toolbar.useEqualWidth': 'Verwenden Sie Operationen gleicher Breite',
@@ -1122,7 +1122,7 @@ export const de = {
   'block.openSummary': 'Zusammenfassung des Toolaufrufs „Block #{index} öffnen“.',
   'block.openSummaryTitle': 'Zusammenfassung des Tool-Aufrufs öffnen',
   'block.label': 'Block #{index} {type}',
-  'history.loadingTrajectory': 'Flugbahn wird geladen…',
+  'history.loadingTrajectory': 'Ausführungsverlauf wird geladen…',
   'history.loadingEarlier': 'Früherer Verlauf wird geladen…',
   'history.loadingEarlierAria': 'Früherer Verlauf wird geladen…',
   'history.loadEarlier': 'Früheren Verlauf laden',
@@ -1164,7 +1164,7 @@ export const de = {
   'details.source': 'Quelle',
   'details.hierarchy': 'Hierarchie',
   'details.toolCall': 'Werkzeugaufruf',
-  'timeline.aria': 'Zeitleiste der Flugbahn',
+  'timeline.aria': 'Zeitleiste der Ausführungsverlauf',
   'timeline.overviewAria': 'Zeitleistenübersicht; Ziehen Sie horizontal, um Ereignisse zu fokussieren',
   'timeline.noTimingData': 'Keine Zeitdaten',
   'timeline.total': 'Insgesamt {duration}',

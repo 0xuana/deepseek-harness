@@ -78,7 +78,7 @@ export const es = {
 
 /** French dictionary, checked against the English keys. */
 export const fr = {
-  'header.more': 'Plus de propositions',
+  'header.more': 'Autres actions',
   'menu.copyMarkdown': 'Copier la session sous Markdown',
   'menu.download': 'Télécharger le journal de session',
   'menu.feedback': 'Commentaires',
@@ -114,7 +114,7 @@ export const de = {
 
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
-  'header.more': 'Дополнительные действия',
+  'header.more': 'Другие действия',
   'menu.copyMarkdown': 'Скопировать сеанс как Markdown',
   'menu.download': 'Скачать журнал сеанса',
   'menu.feedback': 'Обратная связь',

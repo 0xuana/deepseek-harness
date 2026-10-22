@@ -264,7 +264,7 @@ export const de = {
   'general.currentVersion': 'Aktuelle Version: {version}',
   'developerTools.title': 'Codieransicht anzeigen',
   'developerTools.error': 'Konnte nicht gespeichert werden. Bitte versuchen Sie es erneut.',
-  'developerTools.description': 'Zeigt Flugbahn, Codeunterschiede und alle Agentenvoreinstellungen an',
+  'developerTools.description': 'Zeigt Ausführungsverlauf, Codeunterschiede und alle Agentenvoreinstellungen an',
   'connection.error': 'Nicht verbunden',
   'connection.connecting': 'Wieder verbinden',
   'connection.connected': 'Verbunden',

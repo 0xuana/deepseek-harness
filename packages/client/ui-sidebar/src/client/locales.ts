@@ -53,7 +53,7 @@ export const fr = {
   'session.new.label': 'Nouvelle séance',
   'toggle.open': 'Ouvrir la barre latérale',
   'toggle.collapse': 'Réduire la barre latérale',
-  'panels.label': 'Panels mondiaux',
+  'panels.label': 'Panneaux globaux',
   'panels.more': 'Plus',
   'version.copied': 'Version copiée',
 } satisfies Record<keyof typeof en, string>
@@ -64,7 +64,7 @@ export const de = {
   'session.new.label': 'Neue Sitzung',
   'toggle.open': 'Seitenleiste öffnen',
   'toggle.collapse': 'Seitenleiste einklappen',
-  'panels.label': 'Globale Panels',
+  'panels.label': 'Globale Bereiche',
   'panels.more': 'Mehr',
   'version.copied': 'Version kopiert',
 } satisfies Record<keyof typeof en, string>

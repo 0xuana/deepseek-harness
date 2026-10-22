@@ -102,7 +102,7 @@ export const ja = {
 
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
-  'open.title': 'Abierto en {app}',
+  'open.title': 'Abrir en {app}',
   'path.appDefault': '{app} (predeterminado)',
   'path.appsError': 'No se pudieron cargar aplicaciones',
   'shortcut.busy': 'Abrir espacio de trabajo',
@@ -114,7 +114,7 @@ export const es = {
   'path.openError': 'No se pudo abrir. Intentar otra vez.',
   'path.revealError': 'No se pudo mostrar la ubicación del archivo. Intentar otra vez.',
   ...PRODUCT_NAMES,
-  'app.finder': 'Buscador',
+  'app.finder': 'Finder',
   'app.explorer': 'Explorador de archivos',
   'app.filemanager': 'Archivos',
   'app.terminal': 'terminales',
@@ -134,7 +134,7 @@ export const fr = {
   'path.openError': "Impossible d'ouvrir. Essayer à nouveau.",
   'path.revealError': "Impossible d'afficher l'emplacement du fichier. Essayer à nouveau.",
   ...PRODUCT_NAMES,
-  'app.finder': 'Chercheur',
+  'app.finder': 'Finder',
   'app.explorer': 'Explorateur de fichiers',
   'app.filemanager': 'Fichiers',
   'app.terminal': 'Borne',
@@ -142,7 +142,7 @@ export const fr = {
 
 /** German dictionary, checked against the English keys. */
 export const de = {
-  'open.title': 'Öffnen Sie in {app}',
+  'open.title': 'In {app} öffnen',
   'path.appDefault': '{app} (Standard)',
   'path.appsError': 'Anwendungen konnten nicht geladen werden',
   'shortcut.busy': 'Arbeitsbereich öffnen',
@@ -174,7 +174,7 @@ export const ru = {
   'path.openError': 'Не удалось открыть. Попробуйте еще раз.',
   'path.revealError': 'Не удалось показать местоположение файла. Попробуйте еще раз.',
   ...PRODUCT_NAMES,
-  'app.finder': 'Искатель',
+  'app.finder': 'Finder',
   'app.explorer': 'Проводник файлов',
   'app.filemanager': 'Файлы',
   'app.terminal': 'Терминал',
@@ -194,7 +194,7 @@ export const pt = {
   'path.openError': 'Não foi possível abrir. Tente novamente.',
   'path.revealError': 'Não foi possível mostrar o local do arquivo. Tente novamente.',
   ...PRODUCT_NAMES,
-  'app.finder': 'Localizador',
+  'app.finder': 'Finder',
   'app.explorer': 'Explorador de arquivos',
   'app.filemanager': 'Arquivos',
   'app.terminal': 'Terminais',
