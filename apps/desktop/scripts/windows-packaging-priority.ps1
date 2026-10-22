@@ -1,6 +1,6 @@
 # Normalize only this workflow shell and the children it subsequently launches.
 [CmdletBinding()]
-param([switch]$InspectOnly)
+param([switch]$InspectOnly, [switch]$BestEffort)
 
 $ErrorActionPreference = 'Stop'
 if (-not $IsWindows) { throw 'Packaging process priority requires Windows.' }
@@ -50,6 +50,10 @@ try {
   if (-not $InspectOnly -and ($after.cpu -ne 'Normal' -or $after.io -ne 2 -or $after.memory -ne 5)) {
     throw 'Packaging process did not reach normal CPU, I/O and memory priority.'
   }
+} catch {
+  if (-not $BestEffort) { throw }
+  Write-Warning "Packaging priority adjustment unavailable; performance comparison is invalid: $($_.Exception.Message)"
+  [ordered]@{ event = 'packaging-process-priority'; comparable = $false } | ConvertTo-Json -Compress
 } finally {
   $process.Dispose()
 }

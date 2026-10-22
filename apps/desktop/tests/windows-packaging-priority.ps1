@@ -1,9 +1,19 @@
 # Exercise priority inheritance in disposable children without changing the test host or runner.
 [CmdletBinding()]
-param([switch]$Child)
+param([switch]$Child, [switch]$Failure)
 $ErrorActionPreference = 'Stop'
 if (-not $IsWindows) { throw 'Requires PowerShell 7 on Windows.' }
 $helper = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../scripts/windows-packaging-priority.ps1'))
+if ($Failure) {
+  Add-Type 'public static class DshPackagingPriority { public static int Read(int kind) { throw new System.InvalidOperationException("fixture priority access denied"); } }'
+  $warnings = @()
+  $report = & $helper -BestEffort -WarningVariable warnings 3>$null | ConvertFrom-Json
+  if ($report.comparable -ne $false -or $warnings.Count -ne 1) { throw 'Missing degraded scheduling report.' }
+  $rejected = $false
+  try { & $helper } catch { $rejected = $true }
+  if (-not $rejected) { throw 'Strict priority inspection swallowed failure.' }
+  exit 0
+}
 if ($Child) {
   $null = & $helper -InspectOnly
   $self = [Diagnostics.Process]::GetCurrentProcess()
@@ -51,4 +61,6 @@ try {
   }
   $process.Dispose()
 }
-Write-Output 'Packaging priority normalization and child inheritance passed.'
+& (Join-Path $PSHOME 'pwsh.exe') -NoProfile -File $PSCommandPath -Failure
+if ($LASTEXITCODE -ne 0) { throw 'Priority failure policy test failed.' }
+Write-Output 'Packaging priority normalization, child inheritance and failure policy passed.'

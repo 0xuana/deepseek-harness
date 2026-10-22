@@ -127,7 +127,7 @@ it('routes all packaging consumers to the selected workspace and removes it only
   expect(selected.run).toContain('if (!$env:PACKAGE_BUILD_ROOT)')
   expect(selected.run).toContain('"directory=$env:GITHUB_WORKSPACE" >> $env:GITHUB_OUTPUT')
   expect(selected.run).toContain('} else {')
-  expect(selected.run).toContain('node apps/desktop/scripts/windows-build-workspace.mjs')
+  expect(selected.run).toContain('node "$env:PACKAGE_CI_HELPERS/windows-build-workspace.mjs"')
   expect(selected.run).toContain('exit $LASTEXITCODE')
   const index = job.steps.indexOf(selected)
   expect(index).toBeGreaterThan(job.steps.findIndex(step => step.uses?.startsWith('actions/setup-node@')))
@@ -154,7 +154,7 @@ it('routes all packaging consumers to the selected workspace and removes it only
     name: 'Remove isolated packaging workspace',
     if: "success() && inputs.build_root != ''",
     env: { PACKAGE_SOURCE_SHA: '${{ steps.checkout.outputs.commit }}' },
-    run: 'node apps/desktop/scripts/windows-build-workspace.mjs --remove',
+    run: 'node "$env:PACKAGE_CI_HELPERS/windows-build-workspace.mjs" --remove',
   })
   expect(cleanup['working-directory']).toBeUndefined()
   for (const upload of job.steps.filter(step => step.uses?.startsWith('actions/upload-artifact@'))) {
@@ -163,9 +163,9 @@ it('routes all packaging consumers to the selected workspace and removes it only
 })
 
 it('normalizes priority in the dependency and packaging shells before launching their children', () => {
-  const command = '& ./apps/desktop/scripts/windows-packaging-priority.ps1'
+  const command = '& "$env:PACKAGE_CI_HELPERS/windows-packaging-priority.ps1" -BestEffort'
   expect(job.steps.find(entry => entry.name === 'Validate selected source and adapter support')!.run)
-    .toContain("fs.existsSync('apps/desktop/scripts/windows-packaging-priority.ps1')")
+    .not.toContain('windows-packaging-priority.ps1')
   for (const name of ['Install locked dependencies', 'Build installer and verify packaged runtime']) {
     const step = job.steps.find(entry => entry.name === name)!
     expect(step.run!.trimStart().startsWith(command + '\n')).toBe(true)
@@ -235,6 +235,50 @@ it.skipIf(process.platform !== 'win32')('keeps the dependency store stable acros
     for (const invalid of ['../escape', 'Upper', 'has space', 'con', 'perf\n', 'a'.repeat(65)]) {
       expect(() => runNamespace(invalid)).toThrow()
     }
+  } finally {
+    rmSync(directory, { recursive: true, force: true, maxRetries: 3 })
+  }
+})
+
+it('pins environment helpers to the workflow commit before selecting product source', () => {
+  const helper = job.steps.find(step => step.name === 'Checkout workflow helpers')!
+  const stage = job.steps.find(step => step.name === 'Stage workflow helpers')!
+  const source = job.steps.find(step => step.id === 'checkout')!
+  expect(helper.with).toMatchObject({ ref: '${{ github.workflow_sha }}', 'persist-credentials': false })
+  expect(job.steps.indexOf(helper)).toBeLessThan(job.steps.indexOf(stage))
+  expect(job.steps.indexOf(stage)).toBeLessThan(job.steps.indexOf(source))
+  expect(stage.run).toContain('RUNNER_TEMP')
+  expect(stage.run).toContain('windows-build-workspace.mjs')
+  expect(stage.run).toContain('windows-packaging-priority.ps1')
+  for (const step of job.steps.filter(step => step.name !== 'Stage workflow helpers')) {
+    expect(step.run ?? '').not.toContain('./apps/desktop/scripts/windows-packaging-priority.ps1')
+    expect(step.run ?? '').not.toContain('node apps/desktop/scripts/windows-build-workspace.mjs')
+  }
+})
+
+it.skipIf(process.platform !== 'win32')('stages helpers that remain usable when product source lacks them', () => {
+  const directory = mkdtempSync(resolve(tmpdir(), 'workflow-helpers-'))
+  try {
+    const source = resolve(directory, 'source')
+    const scripts = resolve(source, 'apps/desktop/scripts')
+    const temporary = resolve(directory, 'temporary')
+    mkdirSync(scripts, { recursive: true })
+    mkdirSync(temporary)
+    for (const name of ['windows-packaging-priority.ps1', 'windows-build-workspace.mjs']) {
+      writeFileSync(resolve(scripts, name), readFileSync(resolve(root, 'apps/desktop/scripts', name)))
+    }
+    const stage = resolve(directory, 'stage.ps1')
+    writeFileSync(stage, job.steps.find(step => step.name === 'Stage workflow helpers')!.run!)
+    const env = { ...process.env, RUNNER_TEMP: temporary, GITHUB_RUN_ID: '123', GITHUB_RUN_ATTEMPT: '1', GITHUB_ENV: resolve(directory, 'env') }
+    execFileSync('pwsh', ['-NoProfile', '-File', stage], { cwd: source, env, stdio: 'pipe' })
+    rmSync(scripts, { recursive: true })
+    const helper = resolve(temporary, 'packaging-helpers-123-1/windows-packaging-priority.ps1')
+    expect(execFileSync('pwsh', ['-NoProfile', '-File', helper, '-InspectOnly'], { cwd: source, stdio: 'pipe' }).toString())
+      .toContain('packaging-process-priority')
+    expect(existsSync(resolve(temporary, 'packaging-helpers-123-1/windows-build-workspace.mjs'))).toBe(true)
+    expect(() => execFileSync('pwsh', ['-NoProfile', '-File', stage], {
+      cwd: source, env: { ...env, GITHUB_RUN_ATTEMPT: '2' }, stdio: 'pipe',
+    })).toThrow()
   } finally {
     rmSync(directory, { recursive: true, force: true, maxRetries: 3 })
   }
