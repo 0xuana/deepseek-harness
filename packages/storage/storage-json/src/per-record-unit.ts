@@ -195,6 +195,8 @@ async function readRecord(path: string, versions: readonly number[]): Promise<un
  */
 export class PerRecordJsonUnit implements KvUnit {
   private closed = false
+  /** Set when a failed batch could not restore its staged documents. */
+  private unusable: StorageError | undefined
   /** In-flight durable writes; close() drains them before releasing the unit. */
   private readonly inFlight = new Set<Promise<void>>()
 
@@ -233,21 +235,35 @@ export class PerRecordJsonUnit implements KvUnit {
    * Durably delete many records as one batch. Documents are renamed out of the
    * readable set first; only after the whole batch is staged are the staged
    * copies unlinked. A failure while staging restores the documents it moved,
-   * so a rejection leaves the batch unapplied. A staged document a crash leaves
-   * behind is not readable (`open` reads `*.json` documents only).
+   * so a rejection normally leaves the batch unapplied. If that restoration
+   * itself fails, the readable state is unknown: the unit rejects with
+   * `unknown-state` and every later operation on it rejects, while `close`
+   * still releases it. A staged document a crash leaves behind is not readable
+   * (`open` reads `*.json` documents only).
    */
   async deleteRecords(table: string, keys: readonly string[]): Promise<void> {
     this.assertOpen()
     const dir = this.tableDir(table)
     const unique = [...new Set(keys)]
     for (const key of unique) assertSafeKey(this.descriptor.name, key)
+    // One tracked promise covers staging, restoration, and cleanup, so close()
+    // cannot release the unit while any part of the batch is still running.
+    await this.tracked(this.removeDocuments(dir, unique))
+  }
+
+  /**
+   * Remove one batch's documents under a single tracked promise.
+   * @param dir - Declared table directory.
+   * @param keys - Validated, de-duplicated record keys.
+   */
+  private async removeDocuments(dir: string, keys: readonly string[]): Promise<void> {
     const staged: Array<{ from: string; to: string }> = []
     try {
-      for (const key of unique) {
+      for (const key of keys) {
         const from = join(dir, `${key}.json`)
         const to = `${from}.deleting`
         try {
-          await this.tracked(rename(from, to))
+          await rename(from, to)
         } catch (error: unknown) {
           if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue
           throw error
@@ -255,12 +271,26 @@ export class PerRecordJsonUnit implements KvUnit {
         staged.push({ from, to })
       }
     } catch (error: unknown) {
-      await Promise.allSettled(staged.map(({ from, to }) => rename(to, from)))
-      throw error
+      const restoreFailures: unknown[] = []
+      for (const { from, to } of staged) {
+        try {
+          await rename(to, from)
+        } catch (restoreError: unknown) {
+          restoreFailures.push(restoreError)
+        }
+      }
+      if (restoreFailures.length === 0) throw error
+      this.unusable = new StorageError(
+        'unknown-state',
+        `unit '${this.descriptor.name}' could not restore ${restoreFailures.length} staged document(s)`
+        + ' after a failed batch delete; its readable state is unknown',
+        { cause: new AggregateError([error, ...restoreFailures], 'batch delete failed and restoration failed') },
+      )
+      throw this.unusable
     }
     // The renames already removed the batch from the readable set; unlinking is
     // cleanup, and a failed unlink leaves an unreadable file rather than an entry.
-    await Promise.allSettled(staged.map(({ to }) => this.tracked(rm(to, { force: true }))))
+    await Promise.allSettled(staged.map(({ to }) => rm(to, { force: true })))
   }
 
   /**
@@ -304,6 +334,7 @@ export class PerRecordJsonUnit implements KvUnit {
     if (this.closed) {
       throw new StorageError('closed', `unit '${this.descriptor.name}' is closed`)
     }
+    if (this.unusable !== undefined) throw this.unusable
   }
   /* jscpd:ignore-end */
 

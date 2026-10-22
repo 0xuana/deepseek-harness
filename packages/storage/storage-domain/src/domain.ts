@@ -84,8 +84,11 @@ export interface KvTable<K extends string, V> {
    *
    * The batch is one job on the domain's write chain: it runs at its slot, not
    * at call time, so an earlier queued write of the same domain is visible to
-   * it and no other write interleaves. Missing keys are ignored; a backend
-   * failure rejects with the batch unapplied, leaving every record in place.
+   * it and no other write interleaves. Missing keys are ignored. The in-memory
+   * records reach the committed state before any `domain/changed` listener
+   * runs. A backend failure rejects with the batch unapplied, leaving every
+   * record in place; a backend that cannot restore its staged records rejects
+   * with `unknown-state` and keeps its unit unusable.
    * @param keys - Record keys; duplicates are harmless.
    * @returns the number of keys that existed and were removed.
    */
@@ -348,8 +351,10 @@ class KvTableImpl<K extends string, V> implements KvTable<K, V> {
       const present = [...new Set(keys)].filter(key => this.records.has(key))
       if (present.length === 0) return 0
       await this.host.unit.deleteRecords(this.tableName, present)
+      // Memory reaches the committed batch state before the first listener runs,
+      // so every `domain/changed` observes the same removed set as the medium.
+      for (const key of present) this.records.delete(key)
       for (const key of present) {
-        this.records.delete(key)
         this.host.emitChanged({
           domain: this.host.domainName,
           table: this.tableName,

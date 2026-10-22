@@ -295,6 +295,19 @@ describe('KvTable writes', () => {
     expect(changes).toHaveLength(seen + 2)
   })
 
+  it('applies the whole batch to memory before announcing it', async () => {
+    const { ctx, facility } = await harness()
+    const domain = await facility.open(spec)
+    const table = domain.table('items')
+    await table.put('a', { label: 'x', count: 1 })
+    await table.put('b', { label: 'y', count: 2 })
+    const observed: string[][] = []
+    ctx.on('domain/changed', () => { observed.push([...table.keys()].sort()) })
+    await table.deleteMany(['a', 'b'])
+    // Every listener run sees the committed batch state, not a prefix of it.
+    expect(observed).toEqual([[], []])
+  })
+
   it('emits domain/changed per durable write, in order, with tombstones and global marker', async () => {
     const { facility, changes } = await harness()
     const domain = await facility.open(spec)
