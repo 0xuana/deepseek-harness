@@ -39,16 +39,15 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
-/** Required services for the tail-slot and tab-type registrations, their dictionaries, and page access. */
-export const inject = ['slots', 'locale', 'uiConversation', 'remote', 'remote.session', 'sidebarRightTabs', 'sidebarRight', 'configForms', 'remoteAccess']
+/** Required services for the tail-slot and tab-type registrations and their dictionaries. */
+export const inject = ['slots', 'locale', 'uiConversation', 'remote', 'remote.session', 'sidebarRightTabs', 'sidebarRight', 'configForms']
 
 /**
  * Client plugin body: register the dictionaries, the turn-tail entry, and the comparison tab type.
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
-  // A page a business package re-labeled for another Peer must not read the Owner's host routes.
-  const opener = new PresentedOpenController(ctx.remoteAccess.owner)
+  const opener = new PresentedOpenController()
   const summaries = new ChangesSummaryStore()
   const diffs = new ChangesDiffStore()
   ctx.effect(() => () => Promise.all([opener.dispose(), summaries.dispose(), diffs.dispose()]))
