@@ -38,6 +38,16 @@ type SessionNodeItemProps = ComponentProps<typeof SessionNodeItemComponent>
 const renderNoRowEntries: RowRenderSlot = () => null
 
 // Direct row specs use the real required Slot share, empty unless the case supplies entries.
+/**
+ * Browser double-click: the second press carries detail 2 and must not disarm.
+ * @param el - the double-clicked element.
+ */
+function realDoubleClick(el: Element): void {
+  fireEvent.mouseDown(el, { detail: 1 }); fireEvent.mouseUp(el, { detail: 1 }); fireEvent.click(el, { detail: 1 })
+  fireEvent.mouseDown(el, { detail: 2 }); fireEvent.mouseUp(el, { detail: 2 }); fireEvent.click(el, { detail: 2 })
+  fireEvent.doubleClick(el)
+}
+
 function SessionNodeItem({ renderSlot = renderNoRowEntries, onRenameRequest = () => {}, ...props }: Omit<
   SessionNodeItemProps, 'renderSlot' | 'onRenameRequest'
 > & Partial<Pick<SessionNodeItemProps, 'renderSlot' | 'onRenameRequest'>>) {
@@ -150,7 +160,7 @@ describe('native row drag previews', () => {
       }} currentId={undefined} now={0} onOpen={vi.fn()} drag={drag} t={t} />)
     const row = screen.getByRole('treeitem')
     stubRect(row)
-    row.style.setProperty('--dsh-workspace-indent', '24px')
+    row.style.paddingInlineStart = '32px'
     const transfer = {
       effectAllowed: '', setData: vi.fn(),
       setDragImage: vi.fn<(image: HTMLElement, x: number, y: number) => void>(),
@@ -183,7 +193,7 @@ describe('native row drag previews', () => {
     expect(image.style.left).toBe('-200px')
     expect(image.style.width).toBe('200px')
     expect(image.style.height).toBe('34px')
-    expect(image.style.getPropertyValue('--dsh-workspace-indent')).toBe('24px')
+    expect((image.firstElementChild as HTMLElement).style.paddingInlineStart).toBe('32px')
     expect(image.querySelector('[data-row-key]')).toBeNull()
     expect(image.textContent).toBe(row.textContent)
     expect(image.firstElementChild).not.toBe(row)
@@ -1231,14 +1241,45 @@ describe('workspace browser rows', () => {
     }
     const view = render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={onOpen}
       onRenameRequest={onRenameRequest} t={t} />)
-    fireEvent.doubleClick(screen.getByText('Named'))
+    realDoubleClick(screen.getByText('Named'))
     expect(onRenameRequest).toHaveBeenCalledWith(node.id, 'Named')
-    expect(onOpen).not.toHaveBeenCalled()
+    expect(onOpen).toHaveBeenCalledWith(node.id)
 
     // A blank placeholder has no content to rename: double-click is inert.
     view.rerender(<SessionNodeItem node={{ ...node, blank: true }} currentId={undefined} now={0}
       onOpen={onOpen} onRenameRequest={onRenameRequest} t={t} />)
-    fireEvent.doubleClick(screen.getByText('新会话'))
+    realDoubleClick(screen.getByText('新会话'))
+    expect(onRenameRequest).toHaveBeenCalledOnce()
+  })
+
+  it('does not rename when the first click of the pair only activated the window', () => {
+    const onRenameRequest = vi.fn()
+    const onOpen = vi.fn()
+    const node: SessionNode = {
+      id: sid('s1'), title: 'Named', blank: false, running: false,
+      runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: false,
+    }
+    render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={onOpen}
+      onRenameRequest={onRenameRequest} t={t} />)
+    const title = screen.getByText('Named')
+    // macOS delivers only the second press of a window-activating pair.
+    fireEvent.mouseDown(title, { detail: 2 })
+    fireEvent.click(title, { detail: 2 })
+    fireEvent.doubleClick(title)
+    expect(onOpen).toHaveBeenCalledWith(node.id)
+    expect(onRenameRequest).not.toHaveBeenCalled()
+
+    // A press seen before the window lost focus does not arm the next pair.
+    fireEvent.mouseDown(title, { detail: 1 })
+    fireEvent.blur(window)
+    fireEvent.mouseDown(title, { detail: 2 })
+    fireEvent.doubleClick(title)
+    expect(onRenameRequest).not.toHaveBeenCalled()
+
+    // One armed press renames once.
+    realDoubleClick(title)
+    fireEvent.mouseDown(title, { detail: 2 })
+    fireEvent.doubleClick(title)
     expect(onRenameRequest).toHaveBeenCalledOnce()
   })
 
@@ -1409,7 +1450,7 @@ it.each([['未命名', t], ['Untitled', tEn]])('labels unnamed history as %s', (
   render(<SessionNodeItem node={node} currentId={node.id} now={0} onOpen={vi.fn()}
     renderSlot={() => null} onRenameRequest={onRenameRequest} t={translate} />)
   expect(screen.getByText(label)).toBeTruthy()
-  fireEvent.doubleClick(screen.getByText(label))
+  realDoubleClick(screen.getByText(label))
   expect(onRenameRequest).toHaveBeenCalledWith(node.id, '')
 })
 

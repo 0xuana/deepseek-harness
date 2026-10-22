@@ -57,6 +57,8 @@ kind: "package-reference"
 
 时区清单与本地化完全离线。`Intl` 读取浏览器运行时内嵌的 ICU/CLDR 表，DSH 运行时不会获取或下载时区数据。没有需要刷新的爬虫；第三方语言包提供 `time.locale`，并仅翻译选择器自身的 UI 文案。
 
+访问控制：只有当前 Peer 可以调用 `schedule/catalog` 时本插件才注册这些界面，会话头部的提醒还要求该会话允许 `schedule/list` 才渲染；任务 tab 类型与 turn 定义始终注册。owner 始终有权限。
+
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
