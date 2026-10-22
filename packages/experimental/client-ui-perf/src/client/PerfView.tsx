@@ -1409,6 +1409,7 @@ function stepRows(options: StepRowsOptions): ReactNode[] {
   const rows: ReactNode[] = []
   for (const step of shown) {
     const cells = metricsCells(step, t)
+    const gap = gaps.get(step.step)
     const expanded = open[step.step] === true
     const hasDetail = step.calls.length > 0
     const rowClass: (string | undefined)[] = []
@@ -1453,7 +1454,30 @@ function stepRows(options: StepRowsOptions): ReactNode[] {
             </span>
           ) : null}
         </td>
-        <td className={css.promptCell} />
+        <td
+          className={cx(css.promptCell, css.stepWhen)}
+          title={isNumber(step.startTime)
+            ? [
+              t('step.started.title', { time: formatDateTime(step.startTime) }),
+              ...gap === undefined ? [] : [t('bar.gap', { value: formatMs(gap) })],
+            ].join('\n')
+            : undefined}
+        >
+          {isNumber(step.startTime)
+            ? (
+              <>
+                <span className={css.stepClock}>{formatClock(step.startTime)}</span>
+                {gap === undefined
+                  ? null
+                  : (
+                    <span className={css.stepGap}>
+                      {t('bar.gap', { value: formatMs(gap) })}
+                    </span>
+                  )}
+              </>
+            )
+            : null}
+        </td>
         {stepDidCell(step, t)}
         <ContextCell value={step.context} className={css.stepMetric} />
         <MetricCells cells={cells} className={css.stepMetric} />

@@ -195,6 +195,23 @@
   text-align: left;
 }
 
+.stepWhen {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--dsw-alias-label-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.stepClock {
+  color: var(--dsw-alias-label-primary);
+}
+
+.stepGap {
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+}
+
 /* Scope markers appended to the row label. */
 .stateRunning {
   margin-left: 6px;
@@ -796,10 +813,16 @@
 
 /* Footer controls: the passive table summary plus expand/collapse everything. */
 .toolbar {
+  position: sticky;
+  bottom: calc(var(--dsh-composer-height, 152px) + 4px);
+  z-index: 3;
   display: flex;
   align-items: center;
   gap: 8px;
   margin-top: 14px;
+  padding: 8px 0;
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+  background: var(--dsw-alias-bg-layer-1);
   font: var(--dsw-font-xxs-12);
 }
 

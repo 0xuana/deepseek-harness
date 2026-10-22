@@ -803,6 +803,28 @@ describe('turn rows', () => {
     expect(cellsOf(row).at(-1)?.textContent).toBe('—')
   })
 
+  it('shows the step start clock and the gap since the previous step', () => {
+    mount(turnSnapshot([
+      step({ step: 1, startTime: BASE, endTime: BASE + 1_000 }),
+      step({ step: 2, startTime: BASE + 4_000, endTime: BASE + 5_000 }),
+      step({ step: 3, startTime: BASE + 6_000, endTime: BASE + 7_000 }),
+      step({ step: 4, startTime: null, endTime: null }),
+    ]))
+    const first = cellsOf(stepRow(1))
+    expect(first[1]?.textContent).toContain(formatClock(BASE))
+    expect(first[1]?.getAttribute('title')).toBe(say('step.started.title', { time: formatDateTime(BASE) }))
+    const second = cellsOf(stepRow(2))
+    expect(second[1]?.textContent).toContain(formatClock(BASE + 4_000))
+    expect(second[1]?.textContent).toContain(say('bar.gap', { value: formatMs(3_000) }))
+    expect(second[1]?.getAttribute('title')).toBe([
+      say('step.started.title', { time: formatDateTime(BASE + 4_000) }),
+      say('bar.gap', { value: formatMs(3_000) }),
+    ].join('\n'))
+    const partial = cellsOf(stepRow(4))
+    expect(partial[1]?.textContent).toBe('')
+    expect(partial[1]?.getAttribute('title')).toBeNull()
+  })
+
   it('scales turn bars against the turns visible on screen', () => {
     interface FakeEntry { readonly target: Element; readonly isIntersecting: boolean }
     class FakeObserver {
