@@ -98,6 +98,16 @@ it('resolves listed capabilities with this build\'s model knowledge', async () =
   expect(server.requests[0]?.headers['user-agent']).toMatch(/^deepseek-harness\//)
 })
 
+it('advertises the badges its listing declares', async () => {
+  const badge = { text: { en: 'New', zh: '新' }, tone: 'success' }
+  const server = await listing(json({ data: [{ ...FLASH, badge }, PRO] }))
+  const ctx = await host(server.origin)
+  await ctx.plugin(Account, { baseURL: server.baseURL })
+  expect((await ctx.llm.listModels('deepseek-account')).map(row => [row.id, row.badge])).toEqual([
+    ['deepseek-flash', badge], ['deepseek-v4-pro', undefined],
+  ])
+})
+
 it('falls back to the bundled catalog when the listing fails', async () => {
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
   const server = await listing((_request, response) => { response.writeHead(503).end('down') })

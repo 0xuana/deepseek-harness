@@ -96,7 +96,9 @@ export function apply(ctx: Context, config: Config): void {
     admit: (connection, model) => { refuseListedModel(model, connection.catalog.refusals.get(model)) },
     discoverModels: async (provider) => {
       const view = await catalog.view(settings().catalog)
-      return view.authenticated ? discovered(view).catalog.offered.map(model => catalogModelInfo(provider, model)) : []
+      if (!view.authenticated) return []
+      const { offered, badges } = discovered(view).catalog
+      return offered.map(model => catalogModelInfo(provider, model, badges.get(model.id)))
     },
   })
   ctx.effect(() => () => { catalog.dispose() }, 'llm-deepseek-account: model catalog')

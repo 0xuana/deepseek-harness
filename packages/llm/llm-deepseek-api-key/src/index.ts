@@ -1,6 +1,7 @@
 /** API-key authentication, credential-gated discovery, and the official model listing for the official DeepSeek route. */
 import type { Context } from '@deepseek-ai/cordis'
 import { APP_IDENTITY, assertUsableApiKey, LlmError } from '@deepseek-ai/dsh-llm'
+import type { LlmModelBadge } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
 import {
@@ -25,6 +26,8 @@ interface OfficialConnection extends ResolvedDeepSeekOptions {
   readonly offered: readonly DeepSeekCatalogModel[]
   /** Listed models refused before network I/O, by id. */
   readonly refusals: ReadonlyMap<string, CatalogRefusal>
+  /** Listed badges of offered models, by id; empty without a followed listing. */
+  readonly badges: ReadonlyMap<string, LlmModelBadge>
 }
 
 export function apply(ctx: Context, config: Config): void {
@@ -65,7 +68,7 @@ export function apply(ctx: Context, config: Config): void {
   let reportedListing: ModelListing | undefined
   /** Resolve the catalog of one operation, reporting each listing's hidden entries once. */
   const connectionOf = (connection: ResolvedDeepSeekOptions, view: ListingView | undefined): OfficialConnection => {
-    if (view === undefined) return { ...connection, offered: connection.models, refusals: new Map() }
+    if (view === undefined) return { ...connection, offered: connection.models, refusals: new Map(), badges: new Map() }
     const catalog = resolveListedCatalog({
       listing: view.listing?.entries,
       supported: connection.models,
@@ -77,7 +80,7 @@ export function apply(ctx: Context, config: Config): void {
       reportedListing = view.listing
       for (const problem of catalog.problems) console.warn(LOG_TAG, problem)
     }
-    return { ...connection, models: catalog.resolution, offered: catalog.offered, refusals: catalog.refusals }
+    return { ...connection, models: catalog.resolution, offered: catalog.offered, refusals: catalog.refusals, badges: catalog.badges }
   }
   ctx.llm.registerConfigurableProviders([
     { provider: PROVIDER, displayName: 'DeepSeek', settingsNs: ctx.fiber.entry?.options.id ?? name, settingsPath: [] },
@@ -109,7 +112,9 @@ export function apply(ctx: Context, config: Config): void {
         return connection.models.map(model => catalogModelInfo(provider, model))
       }
       const view = await listings.view(connection.listing)
-      return view.authenticated ? connectionOf(connection, view).offered.map(model => catalogModelInfo(provider, model)) : []
+      if (!view.authenticated) return []
+      const { offered, badges } = connectionOf(connection, view)
+      return offered.map(model => catalogModelInfo(provider, model, badges.get(model.id)))
     },
   })
   // Starting or stopping to follow the listing discards it, so restoring the built-in

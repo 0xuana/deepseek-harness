@@ -39,7 +39,7 @@ kind: "package-reference"
 
 `models` 是该 provider 独立的可配置目录；默认值和协议能力来自共享传输包。当 `models` 等于内置目录、且 Messages 的 origin 是官方 API `https://api.deepseek.com` 时，路由改为提供官方 `GET https://api.deepseek.com/models` 列表。列表请求用 `x-api-key` 携带 API key，带上 harness 的 `User-Agent`，并拒绝重定向；没有 API key 时不发任何请求。其他端点，包括由 `baseURL` 或 `$DEEPSEEK_BASE_URL` 指定的端点，提供 `models`，不请求列表。目录判断不探测推理端点。
 
-第一次访问会等待列表，最长 `modelsTimeoutMs`。之后的访问直接使用已加载的列表，列表超过 `modelsMaxAgeMs` 后在后台刷新；路由空闲时不发请求。获取失败或得到空列表时保留上一份；还没有加载到任何列表时，路由提供当前版本内置的目录（`deepseek-flash` 与 `deepseek-v4-pro`）。列表请求返回 HTTP 401 只让这一次加载失败。每次加载成功、连续失败中的第一次失败及其退回的目录、以及每个因声明无法读取或不可用而被隐藏的列表条目，都会以 `[llm-deepseek-api-key]` 标签写到 stderr；stdout 保留给协议消息，且不记录任何密钥。
+第一次访问会等待列表，最长 `modelsTimeoutMs`。之后的访问直接使用已加载的列表，列表超过 `modelsMaxAgeMs` 后在后台刷新；路由空闲时不发请求。获取失败或得到空列表时保留上一份；还没有加载到任何列表时，路由提供当前版本内置的目录（`deepseek-flash` 与 `deepseek-v4-pro`）。列表请求返回 HTTP 401 只让这一次加载失败。每次加载成功、连续失败中的第一次失败及其退回的目录、每个因声明无法读取或不可用而被隐藏的列表条目，以及每个被丢弃的角标，都会以 `[llm-deepseek-api-key]` 标签写到 stderr；stdout 保留给协议消息，且不记录任何密钥。
 
 列出的模型按[账号路由的规则](../llm-deepseek-account/README.zh.md#use-this-package)提供、与本版本的内置条目合并，并在网络请求之前以 `CLIENT_UPGRADE_REQUIRED` 或 `MODEL_UNSUPPORTED` 拒绝；列表没有列出的模型 id 照常透传。
 

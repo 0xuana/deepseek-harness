@@ -59,6 +59,20 @@ it('follows the official listing while the catalog is the built-in one', async (
   expect(diagnostics).toHaveBeenCalledExactlyOnceWith('[llm-deepseek-api-key]', expect.stringContaining('loaded 3 model(s), skipped 0 row(s)') as string)
 })
 
+it('advertises listed badges only while it follows the listing', async () => {
+  const badge = { text: '1017', tone: 'info' }
+  officialListing(listing({ ...FLASH, badge }, PRO))
+  const { ctx } = await host()
+  await ctx.plugin(ApiKey, {})
+  const listed = await ctx.llm.listModels('deepseek-official')
+  expect(listed.map(model => [model.id, model.badge])).toEqual([['deepseek-flash', badge], ['deepseek-v4-pro', undefined]])
+  await expect(ctx.llm.resolveModelInfo('deepseek-official', 'deepseek-flash')).resolves.not.toHaveProperty('badge')
+
+  const other = await host()
+  await other.ctx.plugin(ApiKey, { baseURL: 'http://127.0.0.1:9/anthropic' })
+  expect((await other.ctx.llm.listModels('deepseek-official')).some(model => model.badge !== undefined)).toBe(false)
+})
+
 it('keeps a customized catalog without requesting the listing', async () => {
   const requests = officialListing(listing(FLASH))
   const { ctx } = await host()

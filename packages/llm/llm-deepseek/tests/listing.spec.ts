@@ -4,7 +4,7 @@ import type { IncomingMessage, Server, ServerResponse } from 'node:http'
 import { afterEach, describe, expect, it } from 'vitest'
 import { APP_IDENTITY } from '@deepseek-ai/dsh-llm'
 import { deadline } from '@deepseek-ai/dsh-timeout'
-import { LISTING_TIMEOUT, parseModelListing, requestModelListing } from '../src/listing.ts'
+import { LISTING_TIMEOUT, MAX_BADGE_TEXT_LENGTH, parseModelListing, requestModelListing } from '../src/listing.ts'
 import type { ListedCapabilities } from '../src/listing.ts'
 
 /** The listing the service returned to an account token on 2026-09-24. */
@@ -108,6 +108,50 @@ describe('parseModelListing', () => {
   it('reads a null protocol mode as undeclared', () => {
     expect(only({ api_capabilities: { anthropic_messages: { system_prompt_update: null, tool_update: null } } })?.capabilities)
       .toEqual({ usable: true, facts: { inputModalities: ['text'] } })
+  })
+
+  const longest = '十'.repeat(MAX_BADGE_TEXT_LENGTH)
+  it.each([
+    [{ text: '1017', tone: 'info' }, { text: '1017', tone: 'info' }],
+    [{ text: '  1017 ', tone: 'success' }, { text: '1017', tone: 'success' }],
+    [{ text: longest, tone: 'warning' }, { text: longest, tone: 'warning' }],
+    [{ text: '👍🏽'.repeat(MAX_BADGE_TEXT_LENGTH) }, { text: '👍🏽'.repeat(MAX_BADGE_TEXT_LENGTH), tone: 'neutral' }],
+    [{ text: 'Beta' }, { text: 'Beta', tone: 'neutral' }],
+    [{ text: 'Beta', tone: null }, { text: 'Beta', tone: 'neutral' }],
+    [{ text: 'Beta', tone: 'accent' }, { text: 'Beta', tone: 'neutral' }],
+    [{ text: 'Beta', tone: 1 }, { text: 'Beta', tone: 'neutral' }],
+    [{ text: { en: 'New', zh: '新', 'zh-hant': ' 新 ' }, tone: 'info' }, { text: { en: 'New', zh: '新', 'zh-hant': '新' }, tone: 'info' }],
+  ])('decodes badge %j', (badge, expected) => {
+    expect(only({ ...MESSAGES, badge })?.badge).toEqual({ kind: 'badge', badge: expected })
+  })
+
+  it.each([undefined, null])('declares no badge for %j', (badge) => {
+    expect(only({ ...MESSAGES, badge })).not.toHaveProperty('badge')
+  })
+
+  const unreadableText = expect.stringMatching(/^badge text is not a string or an object of lowercase language ids/) as string
+  it.each([
+    ['1017', 'badge is not an object'],
+    [['1017'], 'badge is not an object'],
+    [{ tone: 'info' }, unreadableText],
+    [{ text: null }, unreadableText],
+    [{ text: '   ' }, unreadableText],
+    [{ text: `${longest}十` }, unreadableText],
+    [{ text: 'line\nbreak' }, unreadableText],
+    [{ text: 7 }, unreadableText],
+    [{ text: { zh: '新' } }, unreadableText],
+    [{ text: { en: 'New', ZH: '新' } }, unreadableText],
+    [{ text: { en: 'New', zh: '' } }, unreadableText],
+    [{ text: { en: 1 } }, unreadableText],
+  ])('rejects badge %j without hiding the entry', (badge, reason) => {
+    const entry = only({ ...MESSAGES, badge })
+    expect(entry?.badge).toEqual({ kind: 'invalid', reason })
+    expect(entry?.capabilities.usable).toBe(true)
+  })
+
+  it('rejects an own "__proto__" translation key', () => {
+    const body: unknown = JSON.parse('{"data":[{"id":"m","badge":{"text":{"en":"New","__proto__":"x"}}}]}')
+    expect(parseModelListing(body).entries[0]?.badge).toEqual({ kind: 'invalid', reason: unreadableText })
   })
 })
 
