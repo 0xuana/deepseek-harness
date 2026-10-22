@@ -46,6 +46,7 @@ kind: "package-library"
 | `Checkbox` | 带标签的原生复选框，支持受控状态、键盘交互和禁用样式；调用方提供本地化的 `label` 文本。 |
 | `Input` | 单行文本输入，用于搜索框与行内表单。ref 指向原生输入框，供焦点控制使用，并在卸载时清空。 |
 | `InlineEditor` | 自动聚焦的多行行内编辑器，用于排队消息、goal 等短草稿。它随文本和宽度增高，最多六行，之后滚动；Enter 保存，Shift+Enter 换行，输入法组合中的 Enter 不生效，Escape 取消。调用方提供本地化 `label`，并在 elevated 表面上重绑滚动条。 |
+| `ZoomControls`, `DOCUMENT_ZOOM` | 悬浮文档缩放控件，接收本地化标签、固定预设，以及可见性和交互状态回调。省略 `fit` 时不显示适配项。工具栏带 `data-document-zoom-controls`，可见时另带 `data-document-zoom-visible`。owner 的 `className` 覆盖 `bottom` 与 `max-width`，不受样式表加载顺序影响；`inset-inline-start` 和 `transform` 负责居中与进出场位移，`opacity` 负责淡入淡出，三者都由原语保留。渲染器共用导出的缩放范围。 |
 | `Menu`, `MenuItemButton` | 由 `items` 数据行、分隔线与分组标题构成的下拉菜单，支持嵌套子菜单；`children` 在同一列表中加入组件行，每行一个 `MenuItemButton`（`separatorBefore` 开启新分组）。所有行共享样式、键盘走位与焦点归还；两类行的关闭都是 owner 状态的改变。打开期间 `↑`／`↓`（以及 Home、End）在列表中走位，Tab 选定聚焦行，Escape 或 Shift+Tab 关闭并把焦点还给锚点；选定一行同样把键盘还给锚点——除非拥有者自己移动了焦点。只拦截位于锚点或列表内的键盘，`autoFocus` 仅决定打开时是否聚焦首行。 |
 | `MenuGroup`、`observeStickyMenuGroups` | 为自定义菜单与列表框提供本地化、可访问的分组，共用吸顶标题样式与原生交叉／尺寸观察；调用方负责观察器的生命周期。 |
 | `Pill` | 可选中的胶囊按钮，用于视图切换与筛选器；接受 `active` 与 `onClick`。 |
@@ -62,6 +63,7 @@ kind: "package-library"
 | `RiskConfirmation` | 以显式复选框把关的敏感操作确认。 |
 | `Tooltip` | 锚定在克隆子元素上的悬停与键盘聚焦提示；可选的 `delayMs` 控制悬停延迟，`focusDelayMs` 控制键盘聚焦延迟，均默认为 0 毫秒。可通过 `portal` 渲染到外层，避免被容器裁剪，或受祖先层叠上下文限制其 z-index。 |
 | `HoverCard`、`HoverCardGroup` | 可阅读、可选带复制按钮的悬停预览；物理列表可选择让卡片共享首次显示等待，并互斥显示。 |
+| `DraggableImage` | 通过显式传递与反馈回调提供原图拖放。 |
 | `ImageLightbox` | 共享图片浮层，支持焦点恢复与 Esc 关闭。 |
 | `Toast` | 顶部居中的瞬时横幅，保持时长由所有者的 `holdMs` 决定。 |
 | `SettingsForm`、`SettingsValueField`、`SettingsSecretField` | 插件设置页的框架与控件：框架以 `labels` 接收文案，只在按钮点击时保存，卸载即丢弃；值字段显示暂存文本以及已覆盖标签和重置；密文字段每次为空，请求浏览器不要自动填入已保存的密码，只报告是否已配置。 |
@@ -118,9 +120,11 @@ kind: "package-library"
 
 `ImageLightbox` 是共享原图浮层，支持焦点恢复与 Esc 关闭。与 `Modal` 相同，其遮罩不覆盖 Windows 顶栏，关闭按钮位于顶栏下方 20px。包内缩略图渲染器由调用方提供加载及失败文案。`HoverCard.inline` 使文件链接保持在文本流内，并使用共享菜单材质、键盘可见焦点，并在锚点上方或下方定位而不遮挡锚点。即使焦点位于其他位置，Esc 也会关闭已打开的缩略图；后续 Esc 按键继续传给 owner。`MarkdownDelegateProvider.fileImages` 提供已解码路径解析器与完整图片文案：消息落定后的图片链接支持悬停预览，独立图片支持点击放大。仅包含图片的链接保留单一导航目标。解析器仅恢复完整、未转义、独立成段且带明确图片扩展名的含裸空格本地图片引用；代码与有歧义的目标保持原文。 透明悬停区域连接锚点与弹层之间的视觉空隙，鼠标经过时不会激活下方内容。
 
+`DraggableImage` 接收显式的 `fileDrag: FileDragActions`，受管理的 Markdown 图片通过 `MarkdownDelegateProvider.fileImages.fileDrag` 接收同一组回调。[文件拖放插件](../ui-file-drag/README.zh.md) 负责准备、传递与本地化失败提示；图片原语负责手势和取消。带资源引用的图片仅在主指针按下时准备，其他来源也可在悬停时准备。在图片内松开保留准备供下一次手势使用；指针移开释放未使用的准备，平移模式跳过准备。Markdown 导出名取已解码路径的文件名。在准备完成前起拖会静默取消本次手势；实际准备失败才显示重试提示。受管理的 Web 拖放携带应用内令牌和指向插件所持 Blob URL 的 `DownloadURL`，不设置 `text/plain`。
+
 ### 本地化文案
 
-这些原子组件无法读取应用 locale，因此每段面向用户的文案都必须通过 label prop 提供。`HoverCard`、`TerminalBlock`、`JsonTree`、`CodeBlock`、`MarkdownText`、`JsonBlock`、`ConnectionIndicator`、`Modal`、`DiffBlock`、`ReadBlock`、`SearchBlock` 与 `WebBlock` 接收完整的本地化 label。本包不拥有语言回退；遗漏会导致类型检查失败，各功能会把带类型的 `t` 席位映射到 primitive 的 label 接口。
+这些原子组件无法读取应用 locale，因此每段面向用户的文案都必须通过 label prop 提供。`HoverCard`、`TerminalBlock`、`JsonTree`、`CodeBlock`、`MarkdownText`、`JsonBlock`、`ConnectionIndicator`、`Modal`、`DiffBlock`、`ReadBlock`、`SearchBlock`、`WebBlock` 与 `ZoomControls` 接收完整的本地化 label。本包不拥有语言回退；遗漏会导致类型检查失败，各功能会把带类型的 `t` 席位映射到 primitive 的 label 接口。
 
 -----
 
@@ -208,6 +212,7 @@ kind: "package-library"
 
 这些限制说明原子组件在边缘情况下的行为；它们是当前包约束，不是组件路线图。
 
+- **浏览器图片传递**：外部接收依赖 Chromium 的 `DownloadURL` 与接收应用；原生文件交付由 Desktop 提供。Web 令牌不跨窗口或标签页传递。不可读取的跨源图片保留浏览器原生拖动，链接内的 Markdown 图片及未配置 `fileImages` 的 Markdown 也保留原生行为；这些原生路径可能携带 URL。
 - **Diff 搜索有上限，输入处理仍为线性**：编辑距离上限使大量改动的片段采用粗粒度替换，不再精确对齐。规范化、回退行及复制内容仍随输入大小增长；高度限制只约束可见行数，不限制这些分配。
 - **已知站点标记是固定列表**：只有列名的主机解析为自己的标记，其余外部主机仍使用地球；要识别任意站点需要通过网络抓取它的图标。
 - **流式期间跨边界引用解析被推迟**：定义落在增量冻结边界另一侧的引用式链接或脚注，在回复流式输出期间渲染为字面文本；定稿时的全量解析会将其解析。

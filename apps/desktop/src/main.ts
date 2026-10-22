@@ -26,6 +26,7 @@ import { resolveDesktopPaths } from './paths.ts'
 import { DesktopProjectManager } from './project-manager.ts'
 import { DesktopHostFatalError, DesktopHostProcess, DesktopHostUncleanExitError } from './host-process.ts'
 import { DesktopPlatformView, PLATFORM_IPC, platformBounds } from './platform-view.ts'
+import { installDesktopFileDrag } from './file-drag.ts'
 import { installDesktopDirectoryPicker } from './directory-picker.ts'
 import { installMicrophonePermissions } from './microphone-permissions.ts'
 import { DesktopBackendController } from './backend-controller.ts'
@@ -345,6 +346,25 @@ async function main(): Promise<void> {
   let workspaceRecovery: Promise<void> | undefined
   let mainWindow: BrowserWindow | undefined
   let welcomeWindow: BrowserWindow | undefined
+  const installFileDrag = (): (() => Promise<void>) => installDesktopFileDrag(
+    event => assertProductSender(event),
+    (address, signal) => {
+      const host = backend.host
+      if (host === undefined) return Promise.reject(new Error('File drag Host unavailable'))
+      return host.resolveDragResource(address, signal)
+    },
+  )
+  const fileDragCleanups = new Set([installFileDrag()])
+  let fileDragStopped = false
+  const disposeFileDrag = async (): Promise<void> => {
+    fileDragStopped = true
+    const results = await Promise.allSettled([...fileDragCleanups].map(async (release) => {
+      await release()
+      fileDragCleanups.delete(release)
+    }))
+    const failure = results.find(result => result.status === 'rejected')
+    if (failure?.status === 'rejected') throw failure.reason
+  }
   let enteredWorkspace = false
   // NSIS passes --updated when it launches the application after installation.
   let raiseAfterUpdate = process.platform === 'win32' && process.argv.includes('--updated')
@@ -419,12 +439,13 @@ async function main(): Promise<void> {
   let returnedAttempt: string | undefined
   let pendingWelcomeNotice: WelcomeNotice | undefined
   let previousAccountStatus: string | undefined
-  const assertProductSender = (event: IpcMainInvokeEvent): void => {
+  const assertProductSender = (event: IpcMainInvokeEvent): BrowserWindow => {
     assertDesktopSender(event, ['app'])
     if (mainWindow === undefined || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents
       || event.senderFrame === null || event.senderFrame !== mainWindow.webContents.mainFrame) {
       throw new Error('dsh desktop: rejected IPC from an unowned renderer')
     }
+    return mainWindow
   }
   let navigation: { window: BrowserWindow; url: string; promise: Promise<void> } | undefined
   const navigateMain = (url: string): Promise<void> => {
@@ -511,6 +532,7 @@ async function main(): Promise<void> {
       },
       updateTasks: (action: 'inspect' | 'lock' | 'unlock') => host.updateTasks(action),
       inspectQuit: () => host.inspectQuit(),
+      resolveDragResource: (address: string, signal?: AbortSignal) => host.resolveDragResource(address, signal),
     }
   }, (state) => {
     if (state.phase === 'error') reportFatal(state.failure, 'host')
@@ -538,6 +560,10 @@ async function main(): Promise<void> {
       window.webContents.send(DESKTOP_IPC.updatesPresentation, presentDesktopUpdate(state))
     }
     if (state.phase === 'error' && state.failedOperation !== 'check') {
+      if (state.failedOperation === 'install' && fileDragStopped && !quitting) {
+        fileDragCleanups.add(installFileDrag())
+        fileDragStopped = false
+      }
       const restoreHost = state.failedOperation === 'install' && updateStoppedHost && !quitting
       shellInstallerOwnsQuit = false
       updateStoppedHost = false
@@ -622,6 +648,7 @@ async function main(): Promise<void> {
         mandatoryUI?.preparingRestart(stillActive)
         // The embedded Platform document holds credentials issued by the Host that is about to stop.
         await platformView.closeAndWait()
+        await disposeFileDrag().catch((error: unknown) => { console.error(error) })
         requireCleanStop = true
         updateStopFailure = undefined
         await backend.stop()
@@ -1263,7 +1290,8 @@ async function main(): Promise<void> {
     mandatoryUI?.dispose()
     void Promise.all([Promise.resolve(mandatoryPolicy?.dispose()).then(() => policyAuth?.dispose()), backend.close(),
       // A Platform cleanup failure is logged without cutting the remaining Host shutdown short.
-      platformView.dispose().catch((error: unknown) => { console.error(error) })])
+      platformView.dispose().catch((error: unknown) => { console.error(error) }),
+      disposeFileDrag().catch((error: unknown) => { console.error(error) })])
       .catch((error: unknown) => { console.error(error) }).finally(() => { app.quit() })
   }
   app.on('before-quit', (event) => {

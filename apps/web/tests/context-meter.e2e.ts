@@ -57,7 +57,8 @@ describe.skipIf(webSnapshotMode() === 'record')('web e2e: context details placem
           })
           await page.evaluate(async () => {
             await Promise.all(document.getAnimations()
-              .filter(animation => animation.effect?.getComputedTiming().iterations !== Infinity)
+              .filter(animation => animation.timeline === document.timeline
+                && animation.effect?.getComputedTiming().iterations !== Infinity)
               .map(animation => animation.finished.catch(() => undefined)))
           })
           await expect.poll(async () => {

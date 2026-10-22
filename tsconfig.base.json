@@ -247,6 +247,8 @@
       "@deepseek-ai/dsh-host-plugin-inventory": ["./packages/host/plugin-inventory/src"],
       "@deepseek-ai/dsh-host-plugin-inventory/types": ["./packages/host/plugin-inventory/src/types.ts"],
       "@deepseek-ai/dsh-client-ui-slots": ["./packages/client/ui-slots/src"],
+      "@deepseek-ai/dsh-client-ui-file-drag": ["./packages/client/ui-file-drag/src"],
+      "@deepseek-ai/dsh-client-ui-file-drag/client": ["./packages/client/ui-file-drag/src/client/index.ts"],
       "@deepseek-ai/dsh-client-ui-attachment": ["./packages/client/ui-attachment/src"],
       "@deepseek-ai/dsh-client-ui-primitives": ["./packages/client/ui-primitives/src"],
       "@deepseek-ai/dsh-client-ui-dockkit": ["./packages/client/ui-dockkit/src"],
@@ -372,6 +374,7 @@
       // util/ folders are role-named without the util- prefix their npm names carry,
       // so these aliases stay hand-written like dsh-util-crypto above.
       "@deepseek-ai/dsh-util-time": ["./packages/util/time/src"],
+      "@deepseek-ai/dsh-util-file-drag": ["./packages/util/file-drag/src"],
       // session-log-export lives under session-query/, so the generated aliases map only its
       // bare name; the browser half needs this explicit subpath for source-mode dynamic imports.
       "@deepseek-ai/dsh-session-log-export/client": ["./packages/session-query/session-log-export/src/client"],
