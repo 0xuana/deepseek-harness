@@ -169,15 +169,13 @@ function firstRecallPulse(page: Page): Promise<boolean> {
 }
 
 /**
- * Wait until no time-based animation under the page is running, so a probe measures
- * the settled layout instead of a frame of a column slide. Scroll-driven animations
- * never finish and are ignored.
+ * Wait until nothing under the page is animating, so a probe measures the settled
+ * layout instead of a frame of a column slide.
  * @param page - the page under test.
  */
 async function settled(page: Page): Promise<void> {
   await expect.poll(() => page.evaluate(() => document.getAnimations()
-    .every(animation => animation.timeline !== document.timeline
-      || animation.playState === 'finished' || animation.playState === 'idle')),
+    .every(animation => animation.playState === 'finished' || animation.playState === 'idle')),
   { timeout: 20_000 }).toBe(true)
 }
 

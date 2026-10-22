@@ -27,7 +27,7 @@ This package shows `1017` beside `DeepSeek-V4.1-Flash` in the composer model sel
 
 The Web bundle includes this plugin, including when Desktop uses that bundle. It has no configuration fields.
 
-The badge appears only when the provider is `deepseek-official` or `deepseek-account`, the model ID is `deepseek-flash`, and the catalog name is exactly `DeepSeek-V4.1-Flash`. Other names and providers keep their catalog text. The input button, current-model menu row, and model options share the blue plain-text release marker. It uses the model name’s font size and baseline, with no capsule; when space is limited, the selector fades out the end of the combined text, so the marker may be hidden.
+The badge appears only when the provider is `deepseek-official` or `deepseek-account`, the model ID is `deepseek-flash`, and the catalog name is exactly `DeepSeek-V4.1-Flash`. Other names and providers keep their catalog text. The input button, current-model menu row, and model options share the badge.
 
 Disable the following row through a profile patch to restore the catalog name:
 
@@ -44,7 +44,7 @@ Disable the following row through a profile patch to restore the catalog name:
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The browser entry contributes to the existing `conversation.input.model.label` slot through `ctx.slots.inject()`. Its component derives the label from owner props and renders the release marker as an inline span; it owns no cache, subscription, network request, or model-selection state. Registration and dictionaries leave with the plugin. The Host entry only makes the browser package available to the Loader.
+The browser entry contributes to the existing `conversation.input.model.label` slot through `ctx.slots.inject()`. Its component derives the label from owner props and uses the shared `Tag` primitive; it owns no cache, subscription, network request, or model-selection state. Registration and dictionaries leave with the plugin. The Host entry only makes the browser package available to the Loader.
 
 </details>
 
