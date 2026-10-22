@@ -198,6 +198,9 @@
   z-index: 1;
   display: flex;
   gap: 16px 20px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   align-items: flex-start;
   flex-wrap: wrap;
   margin-top: 10px;
@@ -261,6 +264,10 @@
   padding: 0;
   color: var(--dsw-alias-label-secondary);
 }
+
+.viewsMoreActive { color: var(--dsw-alias-state-business-primary); }
+
+.tabLabel { display: block; max-width: 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .viewsMore[aria-expanded='true'] {
   background: var(--dsw-alias-interactive-bg-hover);
