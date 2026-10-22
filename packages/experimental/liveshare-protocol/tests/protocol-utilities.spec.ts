@@ -40,7 +40,7 @@ function spec(): Record<string, unknown> {
  * @param share - Share spec to carry.
  * @returns The IPC command.
  */
-function addShare(share: Record<string, unknown>): Record<string, unknown> {
+function addShare(share: unknown): Record<string, unknown> {
   return { type: 'add-share', registrationToken: REGISTRATION, share }
 }
 
@@ -209,7 +209,7 @@ describe('tunnel worker commands', () => {
     ]
     for (const share of invalid) expect(parseTunnelWorkerCommand(addShare(share)), JSON.stringify(share)).toBeUndefined()
     for (const share of [null, 'share-one', []] as const) {
-      expect(parseTunnelWorkerCommand(addShare(share as unknown as Record<string, unknown>))).toBeUndefined()
+      expect(parseTunnelWorkerCommand(addShare(share))).toBeUndefined()
     }
 
     const allOptional = {
