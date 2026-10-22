@@ -3,6 +3,7 @@
   "note": "the owner host publishes one share to its gateway worker, every optional spec field present",
   "frame": {
     "type": "add-share",
+    "registrationToken": "11111111-1111-4111-8111-111111111111",
     "share": {
       "shareId": "share-one",
       "sessionId": "session-one",
@@ -26,10 +27,5 @@
       }
     }
   },
-  "required": [
-    "type",
-    "share",
-    "share.allowsFileUpload"
-  ],
   "optional": []
 }

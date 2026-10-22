@@ -1,4 +1,4 @@
-/** Relay wire v1 remains compatible; same-package Host/worker IPC requires request tokens. */
+/** Relay wire version 1; same-package Host/worker IPC requires request tokens. */
 
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -16,20 +16,18 @@ import {
 /** Which two endpoints exchanged a recorded frame, which also names the codec that reads it. */
 type Direction = 'relay->gateway' | 'gateway->relay' | 'host->worker' | 'worker->host'
 
-/** One frame recorded from a released build, with the fields that version may omit. */
+/** One frame the current build exchanges, with the fields it may omit. */
 interface RecordedFrame {
   readonly dir: Direction
   readonly note: string
   readonly frame: Record<string, unknown>
   /** Raw socket text, when the recording pins bytes rather than the frame's fields. */
   readonly text?: string
-  /** Top-level fields this build always sent. */
-  readonly required: readonly string[]
-  /** Top-level fields this build sent only when it had something to say. */
+  /** Top-level fields this build sends only when it has something to say. */
   readonly optional?: readonly string[]
 }
 
-/** One frame this build must refuse: a later release's addition, or a value the vocabulary rejects. */
+/** One frame this build must refuse: a later build's addition, or a value the vocabulary rejects. */
 interface RefusedFrame {
   readonly dir: Direction
   readonly note: string
@@ -97,12 +95,9 @@ function withoutField(frame: Record<string, unknown>, field: string): Record<str
 }
 
 describe('recorded frames', () => {
-  it('reads released Relay frames and rejects superseded same-package IPC identity', () => {
+  it('round-trips every current frame through the codec its direction names', () => {
     for (const recorded of readFrames<RecordedFrame>('v1')) {
-      const legacyIdentity = (recorded.dir === 'host->worker' || recorded.dir === 'worker->host')
-        && recorded.frame.type !== 'ready' && recorded.frame.type !== 'remove-share'
-      if (legacyIdentity) expect(parseFrame(recorded.dir, wireText(recorded)), recorded.note).toBeUndefined()
-      else expect(parseFrame(recorded.dir, wireText(recorded)), recorded.note).toEqual(recorded.frame)
+      expect(parseFrame(recorded.dir, wireText(recorded)), recorded.note).toEqual(recorded.frame)
     }
   })
 

@@ -2,6 +2,5 @@
   "dir": "host->worker",
   "note": "the owner host withdraws one share",
   "frame": { "type": "remove-share", "shareId": "share-one" },
-  "required": ["type", "shareId"],
   "optional": []
 }

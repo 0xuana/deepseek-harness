@@ -16,10 +16,5 @@
       "credential": "signed-owner-verified-token"
     }
   },
-  "required": [
-    "id",
-    "body",
-    "actor"
-  ],
   "optional": []
 }
