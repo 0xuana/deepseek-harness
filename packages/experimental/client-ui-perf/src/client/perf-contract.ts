@@ -73,6 +73,8 @@ export interface PerfStepState {
   readonly images: number
   readonly closed: boolean
   readonly closeKind: string | null
+  /** Trimmed one-message answer text, for the Did column preview. */
+  readonly answer: string | null
 }
 
 /** Measured metrics of one step. */
@@ -95,6 +97,8 @@ export interface PerfStepMetrics {
   readonly toolOutput: number | null
   readonly retries: number
   readonly toolErrors: number
+  /** Trimmed answer text of the settled assistant message, or null. */
+  readonly answer: string | null
   readonly cacheRead: number | null
   readonly cacheWrite: number | null
   readonly cacheHit: number | null
@@ -143,6 +147,8 @@ export interface PerfTurnMetrics {
   readonly wall: number | null
   readonly prompt: string | null
   readonly promptImages: number
+  /** Last answer preview measured in the turn. */
+  readonly answer: string | null
 }
 
 /** One published node: a step's metrics or a turn-level marker. */

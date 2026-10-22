@@ -89,6 +89,7 @@ function step(overrides: Partial<PerfStepMetrics> = {}): PerfStepMetrics {
     toolOutput: 0,
     retries: 0,
     toolErrors: 0,
+    answer: null,
     cacheRead: null,
     cacheWrite: null,
     cacheHit: null,
@@ -125,6 +126,7 @@ function turn(overrides: Partial<PerfTurnMetrics> = {}): PerfTurnMetrics {
     retries: 0,
     toolErrors: 0,
     toolOutput: 0,
+    answer: null,
     lastStepWall: 1_000,
     running: false,
     interrupted: false,
@@ -713,6 +715,27 @@ describe('step rows', () => {
 
     fireEvent.click(stepRow(6))
     expect(detailRow().textContent).toContain('done')
+  })
+
+  it('previews the answered text in the did cell and skips blank answers', () => {
+    mount(turnSnapshot([step({ answer: 'first line\nsecond line' })]))
+    const stepDid = cellsOf(stepRow(1))[2] as HTMLTableCellElement
+    expect(stepDid.textContent).toContain('first line')
+    expect(within(stepDid).getByTitle(/first line/).getAttribute('title')).toBe('first line\nsecond line')
+
+    cleanup()
+    mount(turnSnapshot([step({ answer: '   \n  ' })]))
+    expect(cellsOf(stepRow(1))[2]?.textContent).toBe(say('did.answer'))
+
+    cleanup()
+    mount({ turns: [turn({ answer: 'turn answer text' })], stepCount: 0 })
+    const turnDid = cellsOf(rowWithPrefix(say('turn.label', { turn: 1 })))[2] as HTMLTableCellElement
+    expect(turnDid.textContent).toContain('turn answer text')
+    expect(within(turnDid).getByTitle('turn answer text')).toBeTruthy()
+
+    cleanup()
+    mount({ turns: [turn({ answer: ' ' })], stepCount: 0 })
+    expect(cellsOf(rowWithPrefix(say('turn.label', { turn: 1 })))[2]?.textContent).toBe(say('did.answer'))
   })
 
   it('shows context deltas and the gap since the previous step', () => {

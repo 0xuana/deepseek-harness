@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Adds a Performance tab beside Chat and Trajectory. Each turn is one row; expanding it lists its steps with context tokens, output tokens, cache hit rate, first-token latency, model time, output speed, tool time, and a total-time bar split into first token, generation, tools, and the rest. A running step shows elapsed time instead of a blank. Scrolling to the top pulls earlier turns through the same Session paging the other views use; there are no page controls. The panel reads Session events only; it registers no tool, prompt section, or service.
+Adds a Performance tab beside Chat and Trajectory. Each turn is one row; expanding it lists its steps with context tokens, output tokens, cache hit rate, first-token latency, model time, output speed, tool time, and a total-time bar split into first token, generation, tools, and the rest. A running step shows elapsed time instead of a blank. Scrolling to the top pulls earlier turns through the same Session paging the other views use; there are no page controls. When a step has no tool calls, its answer label is followed by the first line of the model reply, with the full text on hover. The Question column only carries human-typed prompts: turns woken by a team message, a subagent settlement, a goal round, or runtime context leave it blank. The panel reads Session events only; it registers no tool, prompt section, or service.
 
 ## Table of Contents
 
@@ -89,6 +89,7 @@ No effect. The package never constructs a model request and never mutates a prom
 - **Trimmed windows lose start times.** When the loaded window begins mid-step, first-token, model time, and total time cannot be derived; the row says `start unknown` instead of estimating.
 - **Code-Mode dispatches merge by root-call context.** Inner calls carry no turn or step, so each root call opens its own context keyed by the root call id, and the builder merges its dispatches into the step that owns the runner. A window that lost the dispatch start still merges the calls but cannot show their measured duration.
 - **Browser evidence is a test-only overlay.** Package tests cover folding, aggregation, formatting, and the jsdom table; `apps/web/tests/client-ui-perf-panel.e2e.ts` mounts the plugin through a test-only overlay over the shipped Web surface and compares a committed ARIA golden. No recorded-session scenario exists because no shipped profile mounts the package yet.
+- **Late re-deliveries are not turns.** Compaction can restate a pruned tool result under its original turn and step after that turn left the window; a turn with no loaded start, prompt, or end marker is dropped instead of appearing as an empty ghost row.
 - **Timing is derived, not sampled.** Total time is the last step's end minus the first step's start; queueing and scheduler waits land in the "rest" segment. The total-time bar draws tool calls as the union of their paired intervals, so parallel calls count once; the tool column keeps the summed per-call time.
 
 <a id="dev-note"></a>

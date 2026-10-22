@@ -209,6 +209,11 @@
 }
 
 /* Did column: tool names, hints, and output sizes. */
+.answerPreview {
+  color: var(--dsw-alias-label-tertiary);
+  font-weight: 400;
+}
+
 .didClip {
   display: inline-block;
   max-width: 380px;

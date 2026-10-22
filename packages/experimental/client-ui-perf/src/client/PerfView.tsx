@@ -921,6 +921,14 @@ function PromptCell({ turn, t, className }: PromptCellProps): ReactElement {
 }
 
 /** Step did column: tool calls grouped by name and target, with output sizes. */
+/** One-line answer preview appended beside the answer label. */
+function answerPreview(answer: string | null): ReactNode {
+  if (answer === null) return null
+  const line = answer.split('\n').find(part => part.trim() !== '') ?? ''
+  if (line.trim() === '') return null
+  return <span className={css.answerPreview} title={answer}>{` · ${line.trim()}`}</span>
+}
+
 function stepDidCell(step: PerfStepMetrics, t: PerfTranslate): ReactElement {
   const nodes: ReactNode[] = []
   if (step.toolErrors > 0) {
@@ -933,6 +941,7 @@ function stepDidCell(step: PerfStepMetrics, t: PerfTranslate): ReactElement {
   if (step.tools.length === 0) {
     const label = step.running ? t('did.working') : step.aborted ? t('did.aborted') : t('did.answer')
     nodes.push(<span key="text">{label}</span>)
+    nodes.push(<Fragment key="answer">{answerPreview(step.answer)}</Fragment>)
     return (
       <td className={css.stepDid}>
         <span className={css.didClip}>{nodes}</span>
@@ -980,8 +989,11 @@ function turnDidCell(turn: PerfTurnMetrics, t: PerfTranslate): ReactElement {
   if (turn.tools.length === 0) {
     const label = turn.running ? t('did.working') : turn.aborted ? t('did.aborted') : t('did.answer')
     return (
-      <td className={css.turnDid}>
-        <span className={css.didClip}>{label}</span>
+      <td className={css.turnDid} title={turn.answer ?? undefined}>
+        <span className={css.didClip}>
+          {label}
+          {answerPreview(turn.answer)}
+        </span>
       </td>
     )
   }

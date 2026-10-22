@@ -23,6 +23,7 @@ function metricsOf(overrides: Partial<PerfStepMetrics> = {}): PerfStepMetrics {
     toolOutput: 0,
     retries: 0,
     toolErrors: 0,
+    answer: null,
     cacheRead: null,
     cacheWrite: null,
     cacheHit: null,
@@ -339,10 +340,21 @@ describe('turn grouping', () => {
     expect(turns[0]?.promptImages).toBe(3)
   })
 
+  it('carries the last measured answer preview into the turn', () => {
+    expect(aggregateTurn(1, []).answer).toBeNull()
+    expect(aggregateTurn(1, [metricsOf({ answer: 'first' })]).answer).toBe('first')
+    expect(aggregateTurn(1, [
+      metricsOf({ step: 1, answer: 'first' }),
+      metricsOf({ step: 2 }),
+      metricsOf({ step: 3, answer: 'third' }),
+    ]).answer).toBe('third')
+  })
+
   it('skips a step whose turn number is not a number', () => {
     const turns = buildTurns([
       stepNode(metricsOf({ turn: Number.NaN, step: 1 })),
       stepNode(metricsOf({ turn: 2, step: 1 })),
+      promptNode(2, 'q'),
     ])
     expect(turns.map(turn => turn.turn)).toEqual([2])
   })
@@ -351,7 +363,7 @@ describe('turn grouping', () => {
     const first = metricsOf({ turn: 1, step: 1, running: true })
     const second = metricsOf({ turn: 1, step: 2, running: true })
     const third = metricsOf({ turn: 1, step: 3, running: true })
-    const turns = buildTurns([stepNode(first), stepNode(second), stepNode(third)])
+    const turns = buildTurns([stepNode(first), stepNode(second), stepNode(third), promptNode(1, 'q')])
     expect(turns[0]?.steps.map(step => step.running)).toEqual([false, false, true])
     expect(first.running).toBe(true)
     expect(turns[0]?.running).toBe(true)
@@ -360,7 +372,9 @@ describe('turn grouping', () => {
   it('clears running when a later turn follows', () => {
     const turns = buildTurns([
       stepNode(metricsOf({ turn: 1, step: 1, running: true })),
+      promptNode(1, 'q'),
       stepNode(metricsOf({ turn: 2, step: 1, running: true })),
+      promptNode(2, 'q'),
     ])
     expect(turns[0]?.running).toBe(false)
     expect(turns[1]?.running).toBe(true)
@@ -435,7 +449,7 @@ describe('turn grouping', () => {
     expect(interrupted[0]?.interrupted).toBe(true)
     const unrelated = buildTurns([stepNode(done), endNode(16, 1_000, 'completed')])
     expect(unrelated[0]?.interrupted).toBe(true)
-    const quiet = buildTurns([stepNode(metricsOf({ turn: 17, step: 1 }))])
+    const quiet = buildTurns([stepNode(metricsOf({ turn: 17, step: 1 })), promptNode(17, 'q')])
     expect(quiet[0]?.interrupted).toBe(false)
   })
 })
@@ -462,7 +476,7 @@ describe('Code-Mode contribution merging', () => {
       }),
       perfCall('sub-3', 4, { name: null, inner: true, chars: null }),
     ])
-    const turns = buildTurns([stepNode(step), inner])
+    const turns = buildTurns([stepNode(step), promptNode(2, 'q'), inner])
     const merged = turns[0]?.steps[0]
     expect(merged?.calls.map(call => call.callId)).toEqual(['sub-1', 'sub-2', 'sub-3'])
     expect(merged?.tools).toEqual([{ name: 'grep', count: 1 }, { name: 'read', count: 1 }])
@@ -479,6 +493,7 @@ describe('Code-Mode contribution merging', () => {
     const step = metricsOf({ turn: 3, step: 1 })
     const turns = buildTurns([
       stepNode(step),
+      promptNode(3, 'q'),
       innerNode(3, 1, [perfCall('late', 5, { name: 'write', inner: true, chars: 2 })]),
       innerNode(3, 1, [perfCall('early', 2, { name: 'grep', inner: true, chars: 3 })]),
     ])
@@ -493,7 +508,7 @@ describe('Code-Mode contribution merging', () => {
       index + 1,
       { inner: true, name: 'read', chars: index + 1 },
     ))
-    const turns = buildTurns([stepNode(step), innerNode(4, 1, calls)])
+    const turns = buildTurns([stepNode(step), promptNode(4, 'q'), innerNode(4, 1, calls)])
     expect(turns[0]?.steps[0]?.calls).toHaveLength(CALL_LIMIT)
     expect(turns[0]?.steps[0]?.calls[0]?.callId).toBe('inner-0')
     expect(turns[0]?.steps[0]?.calls.at(-1)?.callId).toBe(`inner-${CALL_LIMIT - 1}`)
@@ -510,14 +525,14 @@ describe('Code-Mode contribution merging', () => {
       calls: [runner],
       tools: [{ name: 'run_code', count: 1 }],
       toolOutput: 500,
-    }))])
+    })), promptNode(5, 'q')])
     expect(turns[0]?.steps[0]?.calls.map(call => call.callId)).toEqual(['root'])
     expect(turns[0]?.tools).toEqual([{ name: 'run_code', count: 1 }])
   })
 
   it('ignores inner contributions for steps the window no longer holds', () => {
     const step = metricsOf({ turn: 6, step: 1, toolOutput: 7 })
-    const turns = buildTurns([stepNode(step), innerNode(6, 2, [perfCall('sub', 2, {
+    const turns = buildTurns([stepNode(step), promptNode(6, 'q'), innerNode(6, 2, [perfCall('sub', 2, {
       name: 'grep', chars: 9, inner: true,
     })])])
     expect(turns[0]?.steps).toHaveLength(1)

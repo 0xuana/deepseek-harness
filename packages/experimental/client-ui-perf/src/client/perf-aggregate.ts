@@ -119,12 +119,14 @@ export function aggregateTurn(turn: number, steps: readonly PerfStepMetrics[]): 
   // Last cache hit measured in the turn: the prompt grows, so the tail value is
   // the turn's actual level rather than the first step's cold start.
   let cacheHit: number | null = null
+  let answer: string | null = null
   let retries = 0
   let toolErrors = 0
   let toolOutput = 0
   let lastStepWall: number | null = null
   for (const step of steps) {
     if (isNumber(step.cacheHit)) cacheHit = step.cacheHit
+    if (step.answer !== null) answer = step.answer
     retries += step.retries
     toolErrors += step.toolErrors
     if (isNumber(step.toolOutput)) toolOutput += step.toolOutput
@@ -165,6 +167,7 @@ export function aggregateTurn(turn: number, steps: readonly PerfStepMetrics[]): 
     wall,
     prompt: null,
     promptImages: 0,
+    answer,
   }
 }
 
@@ -225,6 +228,11 @@ export function buildTurns(nodes: Iterable<PerfViewNode>): PerfTurnMetrics[] {
     /* v8 ignore next -- turn came from the map's own keys, so the bucket always exists. */
     if (bucket === undefined) return
     const steps = bucket.slice().sort((left, right) => left.step - right.step)
+    // A late re-delivery of a pruned tool result names an old turn and has no
+    // start, prompt, or end in this window: it is context, not a turn row.
+    const boundary = prompts.has(turn) || closedAt.has(turn)
+      || steps.some(step => step.startTime !== null || step.mark === 'end')
+    if (!boundary) return
     // A step followed by another step cannot still be running: a trimmed window
     // can lose its step/end, and the row would otherwise stay "running" forever.
     for (let at = 0; at < steps.length - 1; at += 1) {

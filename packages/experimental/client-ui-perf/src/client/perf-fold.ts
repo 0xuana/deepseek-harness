@@ -1,7 +1,7 @@
 /** Event folding and per-step metric derivation for the performance table. */
 
 import type { SessionEventLike } from '@deepseek-ai/dsh-api-session-controller/client'
-import type { ContentBlock, StreamChunk, UserMessage } from '@deepseek-ai/dsh-llm'
+import type { AssistantMessage, ContentBlock, StreamChunk, UserMessage } from '@deepseek-ai/dsh-llm'
 import { assistantStreamFirstTokenTime } from '@deepseek-ai/dsh-llm/assistant-stream'
 // Type-only: the PTC event members this fold reads.
 import type {} from '@deepseek-ai/dsh-tool-executor-ptc/types'
@@ -253,6 +253,20 @@ function isTokenDelta(chunk: StreamChunk): boolean {
   }
 }
 
+/** Answer characters kept for the one-line Did preview. */
+const ANSWER_LIMIT = 400
+
+/** First text of one assistant message, trimmed and capped for the preview. */
+function answerOf(message: AssistantMessage): string | null {
+  const parts: string[] = []
+  for (const block of message.content) {
+    if (block.type === 'text') parts.push(block.text)
+  }
+  const text = parts.join('\n').trim()
+  if (text === '') return null
+  return text.length > ANSWER_LIMIT ? text.slice(0, ANSWER_LIMIT) : text
+}
+
 /**
  * Initial state of one step or one turn-level marker.
  * @param turn - turn number.
@@ -291,6 +305,7 @@ export function newState(
     images: 0,
     closed: false,
     closeKind: null,
+    answer: null,
   }
 }
 
@@ -384,6 +399,7 @@ export function foldEvent(
         messageTime: next.messageTime ?? event.time,
         usage: event.data.usage ?? next.usage,
         interrupted: event.data.interrupted === true,
+        answer: answerOf(event.data.message) ?? next.answer,
       }
     }
 
@@ -611,6 +627,7 @@ export function stepMetrics(state: PerfStepState): PerfStepMetrics {
     toolOutput: outputChars(calls),
     retries: state.retries,
     toolErrors: state.toolErrors,
+    answer: state.answer,
     cacheRead: cacheReadTokens(state.usage),
     cacheWrite: cacheWriteTokens(state.usage),
     cacheHit: cacheHitRate(state.usage),

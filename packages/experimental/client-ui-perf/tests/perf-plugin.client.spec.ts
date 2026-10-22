@@ -246,6 +246,7 @@ function measuredStep(turn: number, step: number, startTime: number, endTime: nu
     toolOutput: 7,
     retries: 0,
     toolErrors: 0,
+    answer: null,
     cacheRead: 400,
     cacheWrite: 100,
     cacheHit: 400 / 600,
@@ -490,6 +491,26 @@ describe('conversation Definitions', () => {
     expect(turn.steps[0]?.running).toBe(false)
   })
 
+  it('ignores a compaction re-delivery for a turn the window does not hold', async () => {
+    const definitions = await registeredDefinitions()
+    const snapshot = assemble(definitions, [
+      entry(event('turn/start', { turn: 575 }, 8_000)),
+      entry(event('step/start', { turn: 575, step: 1 }, 8_100)),
+      entry(event('assistant/message', {
+        turn: 575,
+        step: 1,
+        message: { id: 'm', role: 'assistant', content: [], source: { provider: 'p', model: 'm' } },
+        stream: stream(8_200),
+      }, 8_200)),
+      // Compaction restores a pruned result under its original (unloaded) turn.
+      entry(event('tool/result', {
+        turn: 451, step: 1, message: { role: 'tool', content: [], source: { callId: 'call-old' } },
+      }, 8_300)),
+    ])
+    expect(snapshot?.turns.map(turn => turn.turn)).toEqual([575])
+    expect(snapshot?.stepCount).toBe(1)
+  })
+
   it('folds a trimmed window from the update events it still holds', async () => {
     const definitions = await registeredDefinitions()
     const snapshot = assemble(definitions, [
@@ -509,6 +530,7 @@ describe('conversation Definitions', () => {
       entry(event('tool/result', {
         turn: 4, step: 1, message: { role: 'tool', content: [{ type: 'text', text: 'hit' }], source: { callId: 'call-2' } },
       }, 7_600)),
+      entry(event('turn/end', { turn: 4, reason: { kind: 'completed' } }, 7_700)),
     ])
     expect(snapshot?.turns).toHaveLength(1)
     const step = snapshot!.turns[0]!.steps[0]!

@@ -663,6 +663,23 @@ describe('assistant timeline and usage', () => {
     expect(refreshed.usage).toEqual({ inputTokens: 5, outputTokens: 6 })
   })
 
+  it('keeps a trimmed answer preview and caps long text', () => {
+    const first = defined(foldEvent(undefined, event('assistant/message', {
+      turn: 2, step: 1, message: assistantMessage([textBlock('first line\nsecond line')]), stream: [],
+    }, 1_500)))
+    expect(first.answer).toBe('first line\nsecond line')
+    // Non-text blocks do not contribute, and a text-only whitespace message contributes nothing.
+    const mixed = defined(foldEvent(first, event('assistant/message', {
+      turn: 2, step: 1, message: assistantMessage([imageBlock(), textBlock('   ')]), stream: [],
+    }, 1_600)))
+    expect(mixed.answer).toBe('first line\nsecond line')
+    const long = 'x'.repeat(450)
+    const capped = defined(foldEvent(undefined, event('assistant/message', {
+      turn: 3, step: 1, message: assistantMessage([textBlock(long)]), stream: [],
+    }, 1_700)))
+    expect(capped.answer).toHaveLength(400)
+  })
+
   it('leaves usage unset when the first message reports none', () => {
     const state = defined(foldEvent(undefined, event('assistant/message', {
       turn: 2, step: 1, message: assistantMessage(), stream: [],
