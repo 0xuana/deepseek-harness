@@ -123,7 +123,7 @@ interface Domain<S extends DomainSpec> {
 }
 ```
 
-读取是同步的，来自权威的内存态：`KvTable` 暴露 `get`/`entries`/`keys`/`size`（快照迭代器，在排队写入落地期间保持稳定），global 句柄的 `get()` 在第一次 `set` 将 slot 物化到介质之前一直返回 spec 的 `initial`。每次写入——`put`、`delete`、`deleteMany`、`update`、`global.set`——都在同一条逐领域写链上排队，先在后端完成持久化，再更新内存，最后发出 `domain/changed`；后端写入被拒时内存原样不动，因此读取绝不会偏离介质。`update(key, fn)` 在其写链 slot 上是一次原子的读-改-写（键缺失时拒绝 `missing-key`）；`delete` 一个不存在的键 resolve 为 `false`，不产生写入也不产生事件。`deleteMany(keys)` 在一个写链 slot 内把存在的键作为一次后端批量删除移除，resolve 为移除数量，并为每个被移除的键发一次 `domain/changed`；后端写入被拒时所有记录保持原样，也不发事件。返回的记录就是存储的对象本身，不是副本——请经 `put`/`update` 整体替换，绝不要就地修改。
+读取是同步的，来自权威的内存态：`KvTable` 暴露 `get`/`entries`/`keys`/`size`（快照迭代器，在排队写入落地期间保持稳定），global 句柄的 `get()` 在第一次 `set` 将 slot 物化到介质之前一直返回 spec 的 `initial`。每次写入——`put`、`delete`、`deleteMany`、`update`、`global.set`——都在同一条逐领域写链上排队，先在后端完成持久化，再更新内存，最后发出 `domain/changed`；后端写入被拒时内存原样不动，因此读取绝不会偏离介质；若后端报告 `unknown-state`，领域会被隔离，读取与后续写入都会拒绝，直到 `close()` 释放它。`update(key, fn)` 在其写链 slot 上是一次原子的读-改-写（键缺失时拒绝 `missing-key`）；`delete` 一个不存在的键 resolve 为 `false`，不产生写入也不产生事件。`deleteMany(keys)` 在一个写链 slot 内把存在的键作为一次后端批量删除移除，resolve 为移除数量，并为每个被移除的键发一次 `domain/changed`；后端写入被拒时所有记录保持原样，也不发事件；`unknown-state` 拒绝会隔离整个领域。返回的记录就是存储的对象本身，不是副本——请经 `put`/`update` 整体替换，绝不要就地修改。
 
 ## 领域 facility：`ctx.storageDomain`
 

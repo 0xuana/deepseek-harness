@@ -10,7 +10,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import type { KvUnit } from '@deepseek-ai/dsh-storage'
+import { StorageError, type KvUnit } from '@deepseek-ai/dsh-storage'
 import { DomainError } from './error.ts'
 import type { DomainSpec, DomainGlobalSpec, TableKeyOf, TableValueOf } from './spec.ts'
 import type { DomainChanged } from './events.ts'
@@ -87,8 +87,9 @@ export interface KvTable<K extends string, V> {
    * it and no other write interleaves. Missing keys are ignored. The in-memory
    * records reach the committed state before any `domain/changed` listener
    * runs. A backend failure rejects with the batch unapplied, leaving every
-   * record in place; a backend that cannot restore its staged records rejects
-   * with `unknown-state` and keeps its unit unusable.
+   * record in place. A backend that cannot restore its staged records rejects
+   * with `unknown-state` and quarantines the domain: synchronous reads and
+   * every later write reject with that error, while `close()` still works.
    * @param keys - Record keys; duplicates are harmless.
    * @returns the number of keys that existed and were removed.
    */
@@ -164,6 +165,8 @@ export class DomainImpl {
   private chain: Promise<void> = Promise.resolve()
   /** Set when close begins: new writes reject while already-queued writes drain. */
   private disposing = false
+  /** Set when the unit reports `unknown-state`: reads and writes reject with it. */
+  private failure?: StorageError
   /** Set when close finishes (chain drained, unit closed): reads reject from here on. */
   private closed = false
   private disposal?: Promise<void>
@@ -279,12 +282,24 @@ export class DomainImpl {
     if (this.disposing) {
       return Promise.reject(new DomainError('closed', `domain '${this.name}' is closed`))
     }
-    const result = this.chain.then(job)
+    const run = async (): Promise<T> => {
+      // A poisoned unit makes in-memory state unverifiable: reject before the
+      // job runs, including jobs queued before the failure surfaced.
+      if (this.failure !== undefined) throw this.failure
+      try {
+        return await job()
+      } catch (error: unknown) {
+        if (error instanceof StorageError && error.code === 'unknown-state') this.failure = error
+        throw error
+      }
+    }
+    const result = this.chain.then(run)
     this.chain = result.then(noop, noop)
     return result
   }
 
   private assertReadable(): void {
+    if (this.failure !== undefined) throw this.failure
     if (this.closed) {
       throw new DomainError('closed', `domain '${this.name}' is closed`)
     }

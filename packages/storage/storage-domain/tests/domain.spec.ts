@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { z } from 'zod'
-import Storage, { storageBackendServiceKey } from '@deepseek-ai/dsh-storage'
+import Storage, { StorageError, storageBackendServiceKey } from '@deepseek-ai/dsh-storage'
+import type { KvUnit, StorageBackend } from '@deepseek-ai/dsh-storage'
 import { apply, defineDomain, descriptorOf, DomainFacility, domainTable } from '../src/index.ts'
 import type { Config } from '../src/index.ts'
 import type { DomainChanged } from '../src/events.ts'
@@ -25,11 +26,11 @@ const bareSpec = defineDomain({
   tables: { rows: domainTable<string, Item>(itemSchema) },
 })
 
-/** Boot a context with the storage hub, one memory backend, and a facility over it. */
-async function harness(options?: { pool?: MemoryMediaPool; config?: Partial<Config> }) {
+/** Boot a context with the storage hub, one KV backend, and a facility over it. */
+async function harness(options?: { pool?: MemoryMediaPool; config?: Partial<Config>; backend?: StorageBackend }) {
   const ctx = new Context()
   await ctx.plugin(Storage)
-  const backend = new MemoryStorageBackend(options?.pool)
+  const backend = options?.backend ?? new MemoryStorageBackend(options?.pool)
   ctx.storage.backend.register('memory', backend)
   const facility = new DomainFacility(ctx, { backend: 'memory', routes: {}, ...options?.config })
   ctx.storage.mount('domain', facility)
@@ -367,6 +368,44 @@ describe('durability failure', () => {
     ])
     expect(pool.media.get('demo')!.tables.get('items')!.get('b')).toEqual({ label: 'y', count: 2 })
     expect(changes).toHaveLength(seen)
+  })
+
+  it('quarantines the domain after a batch reports unknown-state', async () => {
+    const inner = new MemoryStorageBackend()
+    const poisoned: StorageBackend = {
+      close: () => inner.close(),
+      kv: {
+        open: async (descriptor) => {
+          const kv = inner.kv
+          if (kv === undefined) throw new Error('memory backend is missing its kv facet')
+          const unit: KvUnit = await kv.open(descriptor)
+          return {
+            loadAll: () => unit.loadAll(),
+            putRecord: (table, key, value) => unit.putRecord(table, key, value),
+            deleteRecord: (table, key) => unit.deleteRecord(table, key),
+            deleteRecords: () => Promise.reject(new StorageError('unknown-state', 'unknown-state injected by the test')),
+            setGlobal: value => unit.setGlobal(value),
+            close: () => unit.close(),
+          }
+        },
+      },
+    }
+    const { facility } = await harness({ backend: poisoned })
+    const domain = await facility.open(spec)
+    const table = domain.table('items')
+    await table.put('a', { label: 'x', count: 1 })
+
+    await expect(table.deleteMany(['a'])).rejects.toMatchObject({ code: 'unknown-state' })
+    // Synchronous reads and later chain jobs see the quarantined domain.
+    expect(() => table.get('a')).toThrowError(/unknown-state/)
+    expect(() => [...table.keys()]).toThrowError(/unknown-state/)
+    expect(() => table.size).toThrowError(/unknown-state/)
+    await expect(table.deleteMany(['missing'])).rejects.toMatchObject({ code: 'unknown-state' })
+    await expect(table.put('b', { label: 'y', count: 2 })).rejects.toMatchObject({ code: 'unknown-state' })
+    await expect(domain.global.set({ theme: 'dark' })).rejects.toMatchObject({ code: 'unknown-state' })
+    expect(() => domain.global.get()).toThrowError(/unknown-state/)
+    // Releasing the domain stays possible.
+    await expect(domain.close()).resolves.toBeUndefined()
   })
 
   it('keeps serving initial when the first global set fails durability', async () => {

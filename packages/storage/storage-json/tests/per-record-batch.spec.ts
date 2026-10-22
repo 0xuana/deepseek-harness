@@ -1,6 +1,6 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { JsonStorageBackend } from '../src/index.ts'
 
@@ -50,25 +50,40 @@ it('waits for the whole batch before close releases the unit', async () => {
   await unit.putRecord('t', 'a', { v: 1 })
   await unit.putRecord('t', 'b', { v: 2 })
 
-  const entered = Promise.withResolvers<undefined>()
-  const release = Promise.withResolvers<undefined>()
+  const firstEntered = Promise.withResolvers<undefined>()
+  const firstRelease = Promise.withResolvers<undefined>()
+  const secondEntered = Promise.withResolvers<undefined>()
+  const secondRelease = Promise.withResolvers<undefined>()
   gates.renameOverride = async (_from, to) => {
-    if (to.endsWith('/b.json.deleting')) {
-      entered.resolve(undefined)
-      await release.promise
+    const name = basename(to)
+    if (name === 'a.json.deleting') {
+      firstEntered.resolve(undefined)
+      await firstRelease.promise
+    }
+    if (name === 'b.json.deleting') {
+      secondEntered.resolve(undefined)
+      await secondRelease.promise
     }
     return false
   }
 
   const batch = unit.deleteRecords('t', ['a', 'b'])
-  await entered.promise
+  await firstEntered.promise
   let closed = false
   const closing = unit.close().then(() => { closed = true })
-  await new Promise(resolve => setTimeout(resolve, 25))
-  // The batch still holds the unit: its rename is blocked inside the call.
-  expect(closed).toBe(false)
-
-  release.resolve(undefined)
+  // Start close while the first document is still staged, then let the batch
+  // reach its second document. Per-rename tracking would let close() return
+  // here because the second rename was not registered before the snapshot.
+  firstRelease.resolve(undefined)
+  try {
+    await secondEntered.promise
+    await new Promise(resolve => setTimeout(resolve, 25))
+    expect(closed).toBe(false)
+  } finally {
+    // Release the blocked batch even when the assertion fails, so teardown
+    // never waits on an abandoned rename.
+    secondRelease.resolve(undefined)
+  }
   await batch
   await closing
   expect(closed).toBe(true)
@@ -88,8 +103,8 @@ it('rejects with unknown-state when a failed batch cannot restore its staged doc
 
   gates.renameOverride = async (from, to) => {
     // The second document cannot be staged, and the first cannot be restored.
-    if (to.endsWith('/b.json.deleting')) throw denied()
-    if (from.endsWith('/a.json.deleting')) throw denied()
+    if (basename(to) === 'b.json.deleting') throw denied()
+    if (basename(from) === 'a.json.deleting') throw denied()
     return false
   }
 
