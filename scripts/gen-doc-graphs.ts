@@ -108,6 +108,14 @@ const GROUP_ORDER = [
 
 const SERVICE_ROLES: ServiceRole[] = [
   {
+    key: 'actionCards',
+    pkg: 'experimental-action-cards',
+    title: 'Optional action cards',
+    mode: 'service',
+    consumers: ['experimental-client-ui-action-cards'],
+    note: 'Owns the card tool, card state, user actions and status notices; card kinds register their actions and handlers.',
+  },
+  {
     key: 'creationRecommendations',
     pkg: 'experimental-creation-recommendations',
     title: 'Explicit-need interface creation',
