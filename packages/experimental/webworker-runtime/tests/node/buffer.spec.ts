@@ -1,13 +1,24 @@
 /**
  * Differential check of the worker's `node:buffer` UTF-8 conversions against Node.
  */
-import { Buffer as NodeBuffer } from 'node:buffer'
-import { afterAll, expect, it } from 'vitest'
+import { createRequire } from 'node:module'
+import { afterAll, expect, it, vi } from 'vitest'
+
+// The worker bundle resolves `buffer` to the npm package, while Vitest maps it to Node's built-in module.
+// Mock that module so the shim patches the npm package and Node's own Buffer stays the unmodified reference.
+const require = createRequire(import.meta.url)
+const NodeBuffer = (require('node:buffer') as typeof import('node:buffer')).Buffer
+vi.mock('node:buffer', () => require('buffer/') as object)
 
 const ambient = globalThis.Buffer
 const { Buffer: WorkerBuffer } = await import('@deepseek-ai/dsh-experimental-webworker-runtime/src/node/builtin_modules/implemented/buffer.ts')
 afterAll(() => {
   Object.defineProperty(globalThis, 'Buffer', { value: ambient, writable: true, configurable: true })
+})
+
+it('tests the npm package against an unmodified Node reference', () => {
+  expect(WorkerBuffer).not.toBe(NodeBuffer)
+  expect(NodeBuffer.from('\uFEFF').toString()).toBe('\uFEFF')
 })
 
 const STRINGS = ['', 'a', '中文字符串', '\uFEFFbom', 'lone \uD800 high', 'lone \uDC00 low', '😀 pair', 'x'.repeat(100_000)]
