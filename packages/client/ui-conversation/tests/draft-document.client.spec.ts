@@ -13,6 +13,7 @@ import { parseStoredDraft, resolveDraftInput, snapshotDraft } from '../src/clien
 import { scanTextRefs } from '../src/client/input/decorations.ts'
 import { ReferenceChipNode } from '../src/client/input/editor/chip-node.tsx'
 import { CommandChipNode } from '../src/client/input/editor/command-chip-node.tsx'
+import { QuoteNode } from '../src/client/input/editor/QuoteNode.tsx'
 import { TextRefNode } from '../src/client/input/editor/text-ref.ts'
 import { SessionInputShell, type SessionInputDeps } from '../src/client/input/facade.ts'
 
@@ -40,11 +41,6 @@ function documentOf(...parts: readonly (string | ReferenceContent)[]): DraftSnap
     }
   }
   return { text, references }
-}
-
-/** A collapsed insertion span at one detect offset of the current draft revision. */
-function atOffset(shell: SessionInputShell, offset: number): { start: number; end: number; draftRev: number } {
-  return { start: offset, end: offset, draftRev: shell.snapshot.draftRev }
 }
 
 function makeShell(overrides: Partial<SessionInputDeps> = {}): SessionInputShell {
@@ -307,6 +303,33 @@ describe('draft documents in the input shell', () => {
     await vi.waitFor(() => { expect(claim.submitted).toEqual(['ship']) })
   })
 
+  it('restores a command and an atomic quote together without changing their text or offsets', async () => {
+    const original = makeShell()
+    original.setDraft('/goal ')
+    expect(original.insertQuote('selected source text')).toBe(true)
+    expect(original.beginCommand(goalClaim(), { start: 0, end: 6, draftRev: original.snapshot.draftRev })).toBe(true)
+    const stored = parseStoredDraft(JSON.parse(JSON.stringify(original.draftSnapshot)))
+    expect(stored).toEqual({
+      text: '/goal > selected source text ', references: [], command: { token: '/goal ' },
+      quotes: [{ offset: 6, length: 22, text: 'selected source text' }],
+    })
+    if (stored === undefined) throw new Error('Expected a stored draft')
+    const claim = goalClaim()
+    const provider: InputTriggerController = {
+      ...triggerProvider(createSnapshotStore(new Map())),
+      resolveClaim: () => Promise.resolve(claim),
+    }
+    const restored = makeShell({ inputTriggers: () => provider })
+    restored.setDraft(stored)
+    await vi.waitFor(() => { expect(restored.snapshot.phase).toBe('claimed') })
+    expect(commandChips(restored)).toBe(1)
+    expect(restored.editor.getEditorState().read(() => $nodesOfType(QuoteNode).map(node => node.getQuoteText())))
+      .toEqual(['selected source text'])
+    expect(restored.draftSnapshot).toEqual(stored)
+    restored.submit()
+    await vi.waitFor(() => { expect(claim.submitted).toEqual(['> selected source text ']) })
+  })
+
   it('waits for the trigger pipeline before resolving a restored command chip', async () => {
     const stored = storedGoalDraft()
     const resolveClaim = vi.fn<InputTriggerController['resolveClaim']>(() => Promise.resolve(goalClaim()))
@@ -479,6 +502,31 @@ describe('draft documents in the input shell', () => {
     expect(shell.snapshot.attachmentIds).toEqual([attachment])
   })
 
+  it('lets whenDraftExists keep, append to, or replace an existing draft ahead of clearPreviousDraft', () => {
+    const shell = makeShell()
+    const old = documentOf('existing ', session)
+    shell.setDraft(old)
+    expect(shell.requestDraftInitialization({ prompt: 'ignored', clearPreviousDraft: true, whenDraftExists: 'keep' })).toBe('preserved')
+    expect(shell.draftSnapshot).toEqual(old)
+    expect(shell.requestDraftInitialization({ whenDraftExists: 'append' })).toBe('preserved')
+    expect(shell.requestDraftInitialization({ prompt: '\uFFFC', whenDraftExists: 'append' })).toBe('applied')
+    expect(shell.draftSnapshot).toEqual(old)
+    expect(shell.requestDraftInitialization({ prompt: 'next\nline', whenDraftExists: 'append' })).toBe('applied')
+    expect(shell.draftSnapshot).toEqual({ text: `${old.text}\nnext\nline`, references: old.references })
+    expect(chips(shell)).toHaveLength(1)
+    expect(shell.requestDraftInitialization({ prompt: 'fresh', whenDraftExists: 'replace' })).toBe('applied')
+    expect(shell.draftSnapshot).toEqual({ text: 'fresh', references: [] })
+  })
+
+  it('appends to an attachment-only draft as its whole text', () => {
+    const shell = makeShell()
+    const attachment = 'draft-image' as DraftAttachmentId
+    shell.addAttachments([attachment])
+    expect(shell.requestDraftInitialization({ prompt: 'describe it', whenDraftExists: 'append' })).toBe('applied')
+    expect(shell.snapshot.draft).toBe('describe it')
+    expect(shell.snapshot.attachmentIds).toEqual([attachment])
+  })
+
   it('persists clearing so a persistence rebind and a new shell do not restore references', () => {
     const shell = makeShell()
     shell.setDraft(documentOf(file, ' ', session))
@@ -573,33 +621,29 @@ describe('draft documents in the input shell', () => {
   })
 
   it.each(['message', 'attachment-only message'] as const)(
-    'keeps a %s and its attachments while it waits for the Host and takes new attachments', async (kind) => {
+    'refuses draft initialization and attachments while a %s waits for the Host', async (kind) => {
       const outcome = Promise.withResolvers<SubmitOutcome>()
       const started = Promise.withResolvers<undefined>()
       const sink = vi.fn<SessionInputDeps['defaultSink']>(() => { started.resolve(undefined); return outcome.promise })
       const shell = makeShell({ defaultSink: sink })
       try {
         const sentAttachment = 'sent-image' as DraftAttachmentId
-        const nextAttachment = 'next-image' as DraftAttachmentId
         const attachmentOnly = kind === 'attachment-only message'
-        shell.addAttachments([sentAttachment])
-        if (!attachmentOnly) shell.setDraft('outbound message')
+        if (attachmentOnly) shell.addAttachments([sentAttachment])
+        else shell.setDraft('outbound message')
         shell.submit()
         await started.promise
         expect(sink).toHaveBeenCalledOnce()
-        expect(sink.mock.calls[0]?.[1]).toEqual([sentAttachment])
+        expect(sink.mock.calls[0]?.[1]).toEqual(attachmentOnly ? [sentAttachment] : [])
         expect(shell.snapshot.phase).toBe('sending')
-        expectInitializationBlocked(shell)
+        expect(shell.addAttachments(['next-image' as DraftAttachmentId])).toBe(false)
         expect(shell.removeAttachment(sentAttachment)).toBe(false)
-        expect(shell.addAttachments([nextAttachment])).toBe(true)
-        expect(shell.removeAttachment(nextAttachment)).toBe(true)
-        expect(shell.addAttachments([nextAttachment])).toBe(true)
+        expectInitializationBlocked(shell)
         outcome.resolve({ kind: 'error', text: 'flight rejected' })
         await vi.waitFor(() => { expect(shell.notices.getSnapshot()?.text).toBe('flight rejected') })
         expect(shell.snapshot).toMatchObject({
-          phase: 'plain', draft: attachmentOnly ? '' : 'outbound message', attachmentIds: [sentAttachment, nextAttachment],
+          phase: 'plain', draft: attachmentOnly ? '' : 'outbound message', attachmentIds: attachmentOnly ? [sentAttachment] : [],
         })
-        expect(shell.removeAttachment(sentAttachment)).toBe(true)
         expect(shell.requestDraftInitialization({ prompt: 'after settlement', clearPreviousDraft: true })).toBe('applied')
       } finally {
         shell.dispose()
@@ -609,51 +653,28 @@ describe('draft documents in the input shell', () => {
     },
   )
 
-  it.each([
-    {
-      change: 'adds text after it',
-      sent: 'first message',
-      edit: (shell: SessionInputShell) => shell.actions.insertText(' second', atOffset(shell, 'first message'.length)),
-      // The accepted text and the space after it leave, the caret stays after the typed text, and undo cannot restore them.
-      draft: 'second', caret: 'second'.length, afterUndo: 'second',
-    },
-    {
-      change: 'changes the accepted text itself',
-      sent: 'first message',
-      edit: (shell: SessionInputShell) => shell.actions.insertText('my ', atOffset(shell, 'first '.length)),
-      draft: 'first my message', caret: 'first my '.length, afterUndo: 'first message',
-    },
-    {
-      change: 'turns the end of the accepted text into a reference',
-      sent: 'see @src/ma',
-      edit: (shell: SessionInputShell) => shell.insertReference(
-        { source: file.source, ref: file.ref, label: file.label, appearance: 'file', clipboardText: file.clipboardText },
-        { ...atOffset(shell, 'see @src/ma'.length), start: 'see '.length },
-      ),
-      // Detect coordinates: the chip counts as one character, followed by its separating space.
-      draft: 'see @src/main.ts ', caret: 'see '.length + 2, afterUndo: 'see @src/ma',
-    },
-  ])('removes only what the Host accepted when the user $change while it was sent', async ({ sent, edit, draft, caret, afterUndo }) => {
+  it('settles a message the moment its sink reports the Host acceptance, before the sink resolves', async () => {
     const outcome = Promise.withResolvers<SubmitOutcome>()
-    const started = Promise.withResolvers<undefined>()
-    const sink = vi.fn<SessionInputDeps['defaultSink']>(() => { started.resolve(undefined); return outcome.promise })
+    let accept: (() => void) | undefined
+    const sink = vi.fn<SessionInputDeps['defaultSink']>((_text, _ids, _mode, _signal, onAccept) => {
+      accept = onAccept
+      return outcome.promise
+    })
     const shell = makeShell({ defaultSink: sink })
     const sentAttachment = 'sent-image' as DraftAttachmentId
-    const nextAttachment = 'next-image' as DraftAttachmentId
     try {
       shell.addAttachments([sentAttachment])
-      shell.setDraft(sent)
+      shell.setDraft('accepted early')
       shell.submit()
-      await started.promise
-      expect(edit(shell)).toBe(true)
-      expect(shell.addAttachments([nextAttachment])).toBe(true)
+      await vi.waitFor(() => { expect(accept).toBeDefined() })
+      expect(shell.snapshot.phase).toBe('sending')
+      accept?.()
+      // In the same call, so the editor has shrunk before the Session renders the echo.
+      expect(shell.snapshot).toMatchObject({ phase: 'plain', draft: '', attachmentIds: [] })
       outcome.resolve({ kind: 'success' })
-      await vi.waitFor(() => { expect(shell.snapshot.phase).toBe('plain') })
-      expect(shell.snapshot).toMatchObject({ draft, attachmentIds: [nextAttachment] })
-      expect(shell.caretSpan()).toEqual({ start: caret, end: caret })
-      shell.editor.dispatchCommand(UNDO_COMMAND, undefined)
-      shell.editor.update(() => {}, { discrete: true })
-      await vi.waitFor(() => { expect(shell.snapshot.draft).toBe(afterUndo) })
+      await outcome.promise
+      await Promise.resolve()
+      expect(shell.snapshot).toMatchObject({ phase: 'plain', draft: '', attachmentIds: [] })
     } finally {
       shell.dispose()
       outcome.resolve({ kind: 'error' })
