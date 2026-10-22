@@ -525,6 +525,10 @@ export async function packageTarget(
   await execute(['run', 'prepare:dsh', ...(signPrimaryRuntime ? ['--defer-runtime-smoke'] : [])], downloadEnv)
   if (signPrimaryRuntime) await execute(['run', 'sign:primary-runtime', '--dsh'], electronBuilderEnv)
   if (invocation.prepareOnly) return
+  const buildMacArtifact = (artifact: DesktopPrepackagedArtifact) => execute(
+    desktopElectronBuilderArguments(target, false, artifact), artifact.format === 'zip'
+      ? { ...electronBuilderEnv, ELECTRON_BUILDER_COMPRESSION_LEVEL: String(mac?.zipCompressionLevel) }
+      : electronBuilderEnv)
   if (target.platform === 'darwin' && !invocation.unsigned && !invocation.skipNotarization && !invocation.directory) {
     await execute([
       ...desktopElectronBuilderArguments(target, true),
@@ -537,9 +541,7 @@ export async function packageTarget(
       version: resolveDesktopBuildVersion(environment, packageVersion(join(APP_ROOT, 'package.json'), 'desktop package')),
       artifactsRoot: buildPaths.artifacts,
       environment: electronBuilderEnv,
-    }, artifact => execute(desktopElectronBuilderArguments(target, false, artifact), artifact.format === 'zip'
-      ? { ...electronBuilderEnv, ELECTRON_BUILDER_COMPRESSION_LEVEL: String(mac?.zipCompressionLevel) }
-      : electronBuilderEnv)), undefined, undefined, proxyEvent)
+    }, buildMacArtifact), undefined, undefined, proxyEvent)
   } else if (target.platform === 'darwin' && !invocation.unsigned && !invocation.skipNotarization) {
     await execute([...desktopElectronBuilderArguments(target, true), '--config.mac.notarize=false'], electronBuilderEnv)
     await execute(['exec', 'tsx', 'scripts/smoke-packaged-runtime.ts'], targetEnv)
@@ -547,7 +549,15 @@ export async function packageTarget(
     await withMacOSNotarizationProxy(mac?.notarizationProxy,
       () => notarizeMacOS({ appPath, ...resolveMacOSNotarizationEnvironment(environment) }), undefined, undefined, proxyEvent)
   } else {
-    await signedStage('artifacts', () => execute(desktopElectronBuilderArguments(target, invocation.directory), electronBuilderEnv))
+    if (target.platform === 'darwin' && invocation.skipNotarization && !invocation.directory) {
+      await execute(desktopElectronBuilderArguments(target, true), electronBuilderEnv)
+      const appPath = join(artifactsRoot, target.arch === 'arm64' ? 'mac-arm64' : 'mac', 'DeepSeek Harness.app')
+      for (const format of ['dmg', 'zip'] as const) {
+        await buildMacArtifact({ format, appPath, output: artifactsRoot })
+      }
+    } else {
+      await signedStage('artifacts', () => execute(desktopElectronBuilderArguments(target, invocation.directory), electronBuilderEnv))
+    }
     await execute(['exec', 'tsx', 'scripts/smoke-packaged-runtime.ts',
       ...(invocation.unsigned ? ['--unsigned'] : []), ...(invocation.skipNotarization ? ['--skip-notarization'] : [])], targetEnv)
   }
