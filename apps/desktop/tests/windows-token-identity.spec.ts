@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { rootCertificates } from 'node:tls'
 import { expect, it, vi } from 'vitest'
-import { inspectWindowsTokenIdentity } from '../scripts/windows-token-identity.ts'
+import { inspectWindowsTokenIdentity, windowsTokenIdentityFailure } from '../scripts/windows-token-identity.ts'
 
 const launch = vi.hoisted(() => vi.fn(async (_file: string, _args: string[], _options: { env: NodeJS.ProcessEnv; timeout: number }) => ({ stdout: '', stderr: '' })))
 vi.mock('node:child_process', async (importOriginal) => {
@@ -76,6 +76,18 @@ it('reports a helper timeout or stderr as unknown without retry', async () => {
   expect(launch).toHaveBeenCalledOnce()
   launch.mockResolvedValueOnce({ stdout: JSON.stringify({ status: 'public-keys', publicKeys: [blob.toString('base64')] }), stderr: 'unexpected' })
   expect(await inspectWindowsTokenIdentity(input)).toBe('unknown')
+})
+
+it('reports a missing query launcher without exposing process diagnostics or retrying', async () => {
+  launch.mockClear()
+  launch.mockRejectedValueOnce(Object.assign(new Error('private launcher diagnostic'), { code: 'ENOENT' }))
+  const result = await inspectWindowsTokenIdentity(input)
+  expect(result).toBe('unknown')
+  expect(launch).toHaveBeenCalledOnce()
+  const message = windowsTokenIdentityFailure('unknown')
+  expect(message).toContain('PowerShell 7 (pwsh) can start')
+  expect(message).not.toContain('private launcher diagnostic')
+  expect(message).toContain('no signing was attempted')
 })
 
 it.skipIf(process.platform !== 'win32')('exercises native control flow with a fake CSP and never constructs the native adapter', () => {

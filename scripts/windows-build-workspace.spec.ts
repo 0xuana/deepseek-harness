@@ -1,12 +1,12 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { expect, it } from 'vitest'
 import { prepareWindowsBuildWorkspace, removeWindowsBuildWorkspace } from '../apps/desktop/scripts/windows-build-workspace.mjs'
 
 it('clones the exact clean commit and removes only its run-owned checkout', () => {
-  const root = mkdtempSync(join(tmpdir(), 'package-workspace-'))
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'package-workspace-')))
   try {
     const sourceDirectory = join(root, 'original')
     mkdirSync(sourceDirectory)
