@@ -52,14 +52,20 @@ function layered(model: DeepSeekCatalogModel, layer: ModelOverride): DeepSeekCat
   return merged
 }
 
-/** Layer one usable listing entry over this build's entry for the same id. */
+/** Layer one usable listing entry over this build's entry for the same id; a declared `leading-only` mode removes the inherited one. */
 function listed(base: DeepSeekCatalogModel, entry: ListingEntry, facts: ListedFacts, routeMaxTokens: number): DeepSeekCatalogModel {
-  const { systemPromptUpdate: _replaced, ...leadingOnly } = base
-  return layered(facts.systemPromptUpdate === 'leading-only' ? leadingOnly : base, {
+  const { systemPromptUpdate, toolUpdate, ...rest } = base
+  const inherited: DeepSeekCatalogModel = {
+    ...rest,
+    ...systemPromptUpdate === undefined || facts.systemPromptUpdate === 'leading-only' ? {} : { systemPromptUpdate },
+    ...toolUpdate === undefined || facts.toolUpdate === 'leading-only' ? {} : { toolUpdate },
+  }
+  return layered(inherited, {
     ...entry.name === undefined ? {} : { name: entry.name },
     ...facts.contextWindow === undefined ? {} : { contextWindow: facts.contextWindow },
     ...facts.maxOutputTokens === undefined ? {} : { maxTokens: Math.min(routeMaxTokens, facts.maxOutputTokens) },
     ...facts.systemPromptUpdate === 'in-history' ? { systemPromptUpdate: 'in-history' as const } : {},
+    ...facts.toolUpdate === undefined || facts.toolUpdate === 'leading-only' ? {} : { toolUpdate: facts.toolUpdate },
     inputModalities: [...facts.inputModalities],
   })
 }

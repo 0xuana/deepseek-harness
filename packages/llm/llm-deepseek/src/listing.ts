@@ -33,6 +33,8 @@ export interface ListedFacts {
   readonly maxOutputTokens?: number
   /** Messages system prompt mode, when declared; any value other than `in-history` reads as `leading-only`. */
   readonly systemPromptUpdate?: 'in-history' | 'leading-only'
+  /** Messages tool update mode, when declared; any value other than `in-history` or `addition-only` reads as `leading-only`. */
+  readonly toolUpdate?: 'in-history' | 'addition-only' | 'leading-only'
 }
 
 /** Declared capabilities, or why the Messages transport cannot drive the model. */
@@ -106,14 +108,19 @@ function capabilitiesOf(entry: Fields): ListedCapabilities {
   if (contextWindow === false || maxOutputTokens === false) {
     return { usable: false, reason: 'declares an invalid context_window or max_output_tokens' }
   }
-  const update = messages.system_prompt_update
+  // `null` declares nothing, like an absent field, so a serializer that writes empty values as null keeps this build's knowledge.
+  const promptUpdate = messages.system_prompt_update ?? undefined
+  const toolUpdate = messages.tool_update ?? undefined
   return {
     usable: true,
     facts: {
       inputModalities: inputs,
       ...contextWindow === undefined ? {} : { contextWindow },
       ...maxOutputTokens === undefined ? {} : { maxOutputTokens },
-      ...update === undefined ? {} : { systemPromptUpdate: update === 'in-history' ? 'in-history' : 'leading-only' },
+      ...promptUpdate === undefined ? {} : { systemPromptUpdate: promptUpdate === 'in-history' ? 'in-history' : 'leading-only' },
+      ...toolUpdate === undefined ? {} : {
+        toolUpdate: toolUpdate === 'in-history' || toolUpdate === 'addition-only' ? toolUpdate : 'leading-only',
+      },
     },
   }
 }

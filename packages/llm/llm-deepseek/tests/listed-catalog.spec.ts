@@ -75,6 +75,28 @@ describe('with a listing', () => {
     expect(flash).not.toHaveProperty('systemPromptUpdate')
   })
 
+  it.each(['in-history', 'addition-only'])('takes a listed %s tool update mode over this build\'s', (toolUpdate) => {
+    const [flash] = resolve([{ ...FLASH, api_capabilities: { anthropic_messages: { system_prompt_update: 'in-history', tool_update: toolUpdate } } }]).offered
+    expect(flash?.toolUpdate).toBe(toolUpdate)
+  })
+
+  it('removes an inherited tool update mode the listing declares unsupported', () => {
+    const [flash] = resolve([{ ...FLASH, api_capabilities: { anthropic_messages: { system_prompt_update: 'in-history', tool_update: 'leading-only' } } }]).offered
+    expect(flash).not.toHaveProperty('toolUpdate')
+    expect(flash?.systemPromptUpdate).toBe('in-history')
+  })
+
+  it('keeps this build\'s protocol modes when the listing declares them null', () => {
+    const undeclared = { system_prompt_update: null, tool_update: null }
+    const [flash] = resolve([{ ...FLASH, api_capabilities: { anthropic_messages: undeclared } }]).offered
+    expect(flash).toMatchObject({ systemPromptUpdate: 'in-history', toolUpdate: 'addition-only' })
+  })
+
+  it('declares a listed tool update mode on a vouched unknown model', () => {
+    const [model] = resolve([{ ...FLASH, id: 'deepseek-v5', ...requires('0.1.0'), api_capabilities: { anthropic_messages: { tool_update: 'in-history' } } }]).offered
+    expect(model?.toolUpdate).toBe('in-history')
+  })
+
   it('drops inherited image limits from a model the listing makes text-only', () => {
     const [flash] = resolve([{ ...FLASH, input_modalities: ['text'] }]).offered
     expect(flash).toMatchObject({ inputModalities: ['text'] })

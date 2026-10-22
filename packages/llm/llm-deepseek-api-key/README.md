@@ -77,7 +77,7 @@ Authentication, discovery, and the listing add no input tokens. The followed lis
 
 #### KV Cache effect
 
-Credentials and catalog availability do not enter model input; the protocol transport owns request-prefix serialization. A listing change to a model's system prompt mode changes how later system prompt updates are serialized.
+Credentials and catalog availability do not enter model input; the protocol transport owns request-prefix serialization. A listing change to a model's system prompt or tool update mode changes how later system prompt or tool updates are serialized.
 
 ## Known Limitations and Deferred Work
 

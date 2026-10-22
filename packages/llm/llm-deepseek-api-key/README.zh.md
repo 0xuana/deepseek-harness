@@ -77,7 +77,7 @@ kind: "package-reference"
 
 #### KV Cache effect
 
-凭据与目录可用性不进入模型输入；协议传输拥有请求前缀的序列化。列表改变某个模型的 system prompt 模式时，之后的 system prompt 更新的序列化方式随之改变。
+凭据与目录可用性不进入模型输入；协议传输拥有请求前缀的序列化。列表改变某个模型的 system prompt 模式或工具更新模式时，之后的 system prompt 更新或工具更新的序列化方式随之改变。
 
 ## 已知限制与后续工作
 

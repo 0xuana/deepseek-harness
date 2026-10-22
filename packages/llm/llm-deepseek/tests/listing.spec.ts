@@ -92,6 +92,23 @@ describe('parseModelListing', () => {
     })?.capabilities).toEqual({ usable: true, facts: { inputModalities: ['text'], systemPromptUpdate: 'leading-only' } })
     expect(only(MESSAGES)?.capabilities).toEqual({ usable: true, facts: { inputModalities: ['text'] } })
   })
+
+  it.each([
+    ['addition-only', 'addition-only'],
+    ['in-history', 'in-history'],
+    ['leading-only', 'leading-only'],
+    ['future-mode', 'leading-only'],
+    [false, 'leading-only'],
+    [1, 'leading-only'],
+  ])('reads tool_update %j as %s', (declared, toolUpdate) => {
+    expect(only({ api_capabilities: { anthropic_messages: { tool_update: declared } } })?.capabilities)
+      .toEqual({ usable: true, facts: { inputModalities: ['text'], toolUpdate } })
+  })
+
+  it('reads a null protocol mode as undeclared', () => {
+    expect(only({ api_capabilities: { anthropic_messages: { system_prompt_update: null, tool_update: null } } })?.capabilities)
+      .toEqual({ usable: true, facts: { inputModalities: ['text'] } })
+  })
 })
 
 describe('requestModelListing', () => {
