@@ -278,10 +278,20 @@ export function rawText(data: Buffer | ArrayBuffer | Buffer[]): string {
 }
 
 /**
- * Decode one raw frame's envelope: the JSON value and the request id every accepted frame carries.
+ * Read the envelope every accepted frame carries from an already-decoded value.
  *
  * Both directions state the same envelope, so one decoder owns it — a frame's id is what correlates an
  * answer with its request, and a second copy of these rules is a second place for that to drift.
+ * @param value - Decoded JSON value.
+ * @returns The value with its id, or undefined when the value is not an accepted envelope.
+ */
+function frameEnvelope(value: unknown): { readonly value: Record<string, unknown>; readonly id: number } | undefined {
+  if (!isRecord(value) || !Number.isSafeInteger(value.id) || Number(value.id) <= 0) return undefined
+  return { value, id: Number(value.id) }
+}
+
+/**
+ * Decode one raw frame's envelope: the JSON value and the request id every accepted frame carries.
  * @param text - Raw socket text.
  * @returns The decoded value with its id, or undefined when the text is not an accepted envelope.
  */
@@ -292,8 +302,7 @@ function decodeFrameEnvelope(text: string): { readonly value: Record<string, unk
   } catch {
     return undefined
   }
-  if (!isRecord(value) || !Number.isSafeInteger(value.id) || Number(value.id) <= 0) return undefined
-  return { value, id: Number(value.id) }
+  return frameEnvelope(value)
 }
 
 /**
@@ -320,32 +329,41 @@ export function parseGatewayFrame(text: string): Frame | undefined {
 }
 
 /**
+ * Parse one already-decoded Relay-to-gateway value; unknown or malformed frames are dropped.
+ * @param value Decoded JSON value.
+ * @returns Parsed frame, or undefined when the frame is not accepted.
+ */
+function parseRelayValue(value: unknown): Frame | undefined {
+  const state = parseShareAccessState(value)
+  if (state !== undefined) return state
+  const envelope = frameEnvelope(value)
+  if (envelope === undefined) return undefined
+  const { value: frame, id } = envelope
+  if (frame.type === 'share-rpc') {
+    if (frame.body === undefined) return undefined
+    // A frame without the Relay's asserted actor is refused, so an owner never sees a request whose
+    // caller it cannot attribute.
+    if (!isShareRpcActor(frame.actor)) return undefined
+    return { type: 'share-rpc', id, body: frame.body, actor: frame.actor }
+  }
+  if (frame.type === 'share-rpc-cancel') return { type: 'share-rpc-cancel', id }
+  return undefined
+}
+
+/**
  * Parse one Relay-to-gateway frame; unknown or malformed frames are dropped.
  * @param text Raw socket text.
  * @returns Parsed frame, or undefined when the frame is not accepted.
  */
 export function parseRelayFrame(text: string): Frame | undefined {
-  let lifecycle: unknown
+  let value: unknown
   try {
-    lifecycle = JSON.parse(text)
+    value = JSON.parse(text)
   } catch (_error) {
     // Invalid wire JSON carries neither a lifecycle state nor an RPC.
     return undefined
   }
-  const state = parseShareAccessState(lifecycle)
-  if (state !== undefined) return state
-  const envelope = decodeFrameEnvelope(text)
-  if (envelope === undefined) return undefined
-  const { value, id } = envelope
-  if (value.type === 'share-rpc') {
-    if (value.body === undefined) return undefined
-    // A frame without the Relay's asserted actor is refused, so an owner never sees a request whose
-    // caller it cannot attribute.
-    if (!isShareRpcActor(value.actor)) return undefined
-    return { type: 'share-rpc', id, body: value.body, actor: value.actor }
-  }
-  if (value.type === 'share-rpc-cancel') return { type: 'share-rpc-cancel', id }
-  return undefined
+  return parseRelayValue(value)
 }
 
 /**
@@ -361,9 +379,16 @@ export function parseRelayFrame(text: string): Frame | undefined {
  * @returns The refusal to send, or undefined when this frame is not one to answer.
  */
 export function unsupportedFrameRefusal(text: string): ShareRpcResFrame | undefined {
+  let value: unknown
+  try {
+    value = JSON.parse(text)
+  } catch (_error) {
+    // Text that is not JSON states no frame to answer.
+    return undefined
+  }
   // A frame this build serves is not one to refuse, so the answer holds whoever calls this.
-  if (parseRelayFrame(text) !== undefined) return undefined
-  const envelope = decodeFrameEnvelope(text)
+  if (parseRelayValue(value) !== undefined) return undefined
+  const envelope = frameEnvelope(value)
   if (envelope === undefined) return undefined
   const type = envelope.value.type
   if (type === 'share-rpc') {
