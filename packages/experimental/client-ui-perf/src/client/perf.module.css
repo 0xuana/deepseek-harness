@@ -45,17 +45,17 @@
 
 /* Scope | question | did | seven metrics | total time; fixed widths keep the
    measurement columns visible instead of letting the did cell push them out. */
-.table col:nth-child(1) { width: 15%; }
-.table col:nth-child(2) { width: 17%; }
-.table col:nth-child(3) { width: 15%; }
-.table col:nth-child(4) { width: 5%; }
-.table col:nth-child(5) { width: 5%; }
-.table col:nth-child(6) { width: 5%; }
-.table col:nth-child(7) { width: 5.5%; }
-.table col:nth-child(8) { width: 5.5%; }
-.table col:nth-child(9) { width: 6.5%; }
+.table col:nth-child(1) { width: 13%; }
+.table col:nth-child(2) { width: 15%; }
+.table col:nth-child(3) { width: 13.5%; }
+.table col:nth-child(4) { width: 5.5%; }
+.table col:nth-child(5) { width: 5.5%; }
+.table col:nth-child(6) { width: 6.5%; }
+.table col:nth-child(7) { width: 6%; }
+.table col:nth-child(8) { width: 6%; }
+.table col:nth-child(9) { width: 7.5%; }
 .table col:nth-child(10) { width: 6%; }
-.table col:nth-child(11) { width: 14.5%; }
+.table col:nth-child(11) { width: 15.5%; }
 
 .thLeft,
 .th {
@@ -63,15 +63,16 @@
   z-index: 2;
   top: 0;
   box-sizing: border-box;
-  height: 30px;
-  padding: 0 8px;
+  padding: 4px 8px;
   border-bottom: 0.5px solid var(--dsw-alias-border-l2);
   background: var(--dsw-alias-bg-layer-1);
   background-clip: padding-box;
   color: var(--dsw-alias-label-tertiary);
   font: var(--dsw-font-xxs-12);
   font-weight: 500;
-  white-space: nowrap;
+  line-height: 1.25;
+  vertical-align: bottom;
+  white-space: normal;
 }
 
 .thLeft {

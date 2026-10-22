@@ -324,7 +324,6 @@ describe('empty state and footer', () => {
   it('toggles one turn row and all turns from the footer', () => {
     mount({ turns: [turn({ prompt: 'question' })], stepCount: 0 })
     const row = rowWithPrefix(say('turn.label', { turn: 1 }))
-    expect(row.textContent).toContain(say('turn.stepCount', { count: 0 }))
     // The row is its own toggle, so the scope cell no longer repeats a hint word.
     expect(row.textContent).not.toContain(say('turn.collapse'))
     expect(row.getAttribute('title')).toBe(say('turn.toggle.title'))

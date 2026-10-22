@@ -1450,7 +1450,6 @@ function turnRows(options: TurnRowsOptions): ReactNode[] {
         >
           {t('turn.label', { turn: turn.turn })}
         </button>
-        <span className={css.stepCount}>{` · ${t('turn.stepCount', { count: turn.steps.length })}`}</span>
         {isNumber(turn.startTime) ? (
           <span
             className={css.turnClock}
