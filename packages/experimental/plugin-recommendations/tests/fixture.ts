@@ -19,6 +19,9 @@ export const bundle: BundleInfo = {
   enabled: false, installed: false, removable: false, updatable: false, rows: [], overrides: [],
   meta: { title: { en: 'Search', zh: '搜索' }, description: 'Search past conversations.' },
 }
+/** Text of an accepted `enable_official_plugin` call's result. */
+export const RESULT_TEXT = 'Card shown below your answer. Do not restate it. End with at most one short invitation in the user’s language to click '
+  + 'Enable below; do not say the plugin is already on.'
 export const callId = ToolCallId('call-plugin-1')
 export const proposal = { title: 'Search', brief: 'Search your conversation history.', details: { name: bundle.name } }
 
@@ -36,7 +39,7 @@ export function logProposal(ctx: Context, agent: Agent, id = 'call-plugin-1', ar
   const toolCallId = ToolCallId(id)
   agent.session.append('tool/call', { turn, step: 1, callId: toolCallId, name: 'propose_action', arguments: JSON.stringify({ action, ...args }) })
   agent.session.append('tool/result', { turn, step: 1, message: createToolResultMessage({ callId: toolCallId,
-    content: [{ type: 'text', text: 'Card shown below your answer.' }], isError: false }) }, { surfaceOp: 'append' })
+    content: [{ type: 'text', text: RESULT_TEXT }], isError: false }) }, { surfaceOp: 'append' })
   return toolCallId
 }
 

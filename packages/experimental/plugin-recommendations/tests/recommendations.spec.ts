@@ -1,9 +1,11 @@
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { SessionId } from '@deepseek-ai/dsh-session'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import type { BundleInfo, ChangeResult } from '@deepseek-ai/dsh-plugin-manager/types'
+import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import * as PluginRecommendations from '../src/index.ts'
-import { ACTION, bundle, callId, fixture, logProposal, proposal } from './fixture.ts'
+import { ACTION, bundle, callId, fixture, logProposal, proposal, RESULT_TEXT } from './fixture.ts'
 
 describe('official recommendations', () => {
   it('offers the live catalog through a skill, adds no tools of its own, and withdraws the skill and card kind on unload', async () => {
@@ -37,6 +39,25 @@ describe('official recommendations', () => {
     expect(f.ctx.get('pluginRecommendations')).toBeUndefined()
     expect((await f.ctx.skills.list()).some(skill => skill.name === 'official-plugins')).toBe(false)
     expect(await f.ctx.actionCards.act(f.agent, callId, 'enable')).toEqual({ status: 'refused', reason: 'unavailable' })
+    expect(f.manager.setBundleEnabled).not.toHaveBeenCalled()
+  })
+
+  it('ends an accepted card call with the invitation to click Enable, and a refused call without it', async () => {
+    const f = await fixture()
+    const adapter = new MockAdapter([
+      toolCallResponse('call-skill', 'skill', { name: 'official-plugins' }),
+      toolCallResponse('call-card', 'propose_action', { action: ACTION, ...proposal }),
+      toolCallResponse('call-again', 'propose_action', { action: ACTION, ...proposal }),
+      textResponse('Search is one click away.'),
+    ])
+    f.ctx.llm.registerAdapter(['mock'], adapter)
+    const agent = await f.ctx.agentLoop.create(SessionId('invitation'), { provider: 'mock', model: 'mock' })
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Can DSH search my old conversations?' }], source: { kind: 'user' } }))
+    await agent.whenIdle()
+    const results = agent.session.snapshotEvents().flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])
+    expect(results.map(message => message.isError === true)).toEqual([false, false, true])
+    expect(results[1]?.content).toEqual([{ type: 'text', text: RESULT_TEXT }])
+    expect(results[2]?.content).toEqual([{ type: 'text', text: 'Error: One card per turn; the earlier card stands.' }])
     expect(f.manager.setBundleEnabled).not.toHaveBeenCalled()
   })
 
