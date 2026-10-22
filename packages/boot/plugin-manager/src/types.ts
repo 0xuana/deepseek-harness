@@ -83,6 +83,8 @@ export interface BundleInfo {
   meta?: PluginLocalizedMeta
   /** Untranslated `description` of this bundle's package manifest. */
   description?: string
+  /** GUI listing before explicit selection or profile installation; omission means true. */
+  listedByDefault?: boolean
   /** Selected in the profile manifest; a load error means its layer was skipped. */
   enabled: boolean
   /** Whether the profile declares this dependency; availability separately reports whether its files can be read. */
@@ -168,7 +170,7 @@ export interface ChangeResult {
   bundle?: string
   /** The installed bundle's manifest version, when declared; pnpm's `minimumReleaseAge` can make it older than the newest release. */
   version?: string
-  /** Exact package names awaiting explicit script approval in the profile's pnpm settings, read after a failed run. */
+  /** Exact `allowBuilds` keys awaiting explicit script approval in the profile's pnpm settings, read after a failed run. */
   pendingBuilds?: string[]
   /** Package script permissions saved before this installation attempt. */
   approvedBuilds?: string[]
