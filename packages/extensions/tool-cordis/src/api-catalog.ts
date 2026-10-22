@@ -1887,7 +1887,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: '@Remote installBundle(spec: string, options?: InstallBundleOptions): Promise<ChangeResult>',
-        description: 'Install a package using the same pnpm implementation as dsh plugin. GitHub repositories get a connection check bounded by githubConnectionTimeoutMs before pnpm starts; only network failures or timeouts stop installation, while pnpm owns authentication and transport fallback. A run that fails, is cancelled, or adds a package without a bundle patch restores `package.json` and `pnpm-lock.yaml` as they were; downloaded files can stay.',
+        description: 'Install a package using the same pnpm implementation as dsh plugin. GitHub repositories get a connection check bounded by githubConnectionTimeoutMs before pnpm starts; only network failures or timeouts stop installation, while pnpm owns authentication and transport fallback. An HTTP(S) Git URL on another host is installed over SSH instead when access probes bounded by gitTransportTimeoutMs find that only SSH can read it. A run that fails, is cancelled, or adds a package without a bundle patch restores `package.json` and `pnpm-lock.yaml` as they were; downloaded files can stay.',
         parameters: [{ name: 'spec', description: 'One package spec, including local paths relative to the invocation directory.' }, { name: 'options', description: 'Whether to activate the installed bundle (defaults to true), the request id a cancellation names, the pending build scripts to allow, whether to save an exact dependency, and the registry asked first.' }],
         returns: 'Package-manager diagnostics, the registries asked, and the observed activation outcome.',
       },
@@ -3806,10 +3806,22 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the provider\'s results, capped to `request.maxResults`.',
       },
       {
+        signature: 'async searchReady(llmProvider?: string): Promise<boolean>',
+        description: 'Whether the provider `search()` would select can authenticate a search made for a model request on the `llmProvider` chat route. Asks only that provider\'s `ready()`; one without `ready()` counts as ready. Makes no network calls. A selection failure answers true, because `search()` reports that failure as a structured `WebError`.',
+        parameters: [{ name: 'llmProvider', description: 'the provider route id of the model request, when known.' }],
+        returns: 'false only when the selected provider reports that it cannot authenticate.',
+      },
+      {
         signature: 'async fetch(request: WebFetchRequest, signal?: AbortSignal): Promise<WebFetchResult>',
         description: 'Retrieve one URL through the selected provider. Resolves the provider at call time with the selection rules above; throws WebError when the capability cannot run. A non-2xx response is a result, not a throw.',
         parameters: [{ name: 'request', description: 'the URL plus retrieval options.' }, { name: 'signal', description: 'optional cancellation signal forwarded to the provider.' }],
         returns: 'the retrieval outcome; non-2xx responses resolve descriptively.',
+      },
+      {
+        signature: 'async fetchReady(llmProvider?: string): Promise<boolean>',
+        description: 'Whether the provider `fetch()` would select can authenticate a fetch made for a model request on the `llmProvider` chat route. Asks only that provider\'s `ready()`; one without `ready()` counts as ready. Makes no network calls. A selection failure answers true, because `fetch()` reports that failure as a structured `WebError`.',
+        parameters: [{ name: 'llmProvider', description: 'the provider route id of the model request, when known.' }],
+        returns: 'false only when the selected provider reports that it cannot authenticate.',
       },
     ],
   },
@@ -8903,7 +8915,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WebFetchProvider',
-    declaration: 'export interface WebFetchProvider {\n    readonly id: string;\n    available(): boolean;\n    fetch(request: WebFetchRequest, signal?: AbortSignal): Promise<WebFetchResult>;\n}',
+    declaration: 'export interface WebFetchProvider {\n    readonly id: string;\n    available(): boolean;\n    ready?(llmProvider: string | undefined): Promise<boolean>;\n    fetch(request: WebFetchRequest, signal?: AbortSignal): Promise<WebFetchResult>;\n}',
   },
   {
     name: 'WebFetchRequest',
@@ -8971,7 +8983,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WebSearchProvider',
-    declaration: 'export interface WebSearchProvider {\n    readonly id: string;\n    available(): boolean;\n    search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult>;\n}',
+    declaration: 'export interface WebSearchProvider {\n    readonly id: string;\n    available(): boolean;\n    ready?(llmProvider: string | undefined): Promise<boolean>;\n    search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult>;\n}',
   },
   {
     name: 'WebSearchRequest',
