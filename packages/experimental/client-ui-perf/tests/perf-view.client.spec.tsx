@@ -15,6 +15,7 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { PerfView } from '../src/client/PerfView.tsx'
 import { zh } from '../src/client/locales.ts'
+import css from '../src/client/perf.module.css'
 import {
   formatChars, formatClock, formatDateTime, formatMs, formatPercent, formatTokens,
   formatTokensShort, formatTps,
@@ -1049,7 +1050,11 @@ describe('step detail accordion', () => {
     expect(raw.getAttribute('title')).toBe(say('detail.raw.title'))
     fireEvent.click(raw)
     expect(within(detailRow()).getByText(say('detail.args'))).toBeTruthy()
-    expect(within(detailRow()).getByText('{"path":"/a.ts"}')).toBeTruthy()
+    // Raw arguments are pretty-printed and always wrap instead of scrolling sideways.
+    const rawBody = detailRow().querySelector('pre')
+    expect([...(rawBody?.querySelectorAll('span') ?? [])].map(line => line.textContent))
+      .toEqual(['{', '  "path": "/a.ts"', '}'])
+    expect(rawBody?.classList.contains(css.codeWrap!)).toBe(true)
     expect(within(callBlocks()[0] as HTMLElement).getByRole('button', { name: '{}' }).getAttribute('aria-pressed'))
       .toBe('true')
 
@@ -1135,7 +1140,7 @@ describe('step detail accordion', () => {
     await act(async () => {
       fireEvent.click(within(detailRow()).getByRole('button', { name: say('detail.copy') }))
     })
-    expect(writeText).toHaveBeenCalledWith('{"command":"ls"}')
+    expect(writeText).toHaveBeenCalledWith('{\n  "command": "ls"\n}')
 
     // Leaving the raw view copies the rendered body again.
     fireEvent.click(within(detailRow()).getByRole('button', { name: '{}' }))
@@ -1238,7 +1243,7 @@ describe('call bodies', () => {
     expect(within(blocks[2] as HTMLElement).getByText('+ b')).toBeTruthy()
   })
 
-  it('toggles raw arguments onto the argument text', () => {
+  it('shows unparseable argument text verbatim and wrapped', () => {
     mount(callSnapshot([call({ name: 'bash', args: 'line one\nline two', text: null })]))
     openDetail(1)
     fireEvent.click(within(detailRow()).getByRole('button', { name: '{}' }))
@@ -1246,6 +1251,7 @@ describe('call bodies', () => {
     expect(within(detail).getByText(say('detail.args'))).toBeTruthy()
     expect(within(detail).getByText('line one')).toBeTruthy()
     expect(within(detail).getByText('line two')).toBeTruthy()
+    expect(within(detail).getByText('line one').closest('pre')?.classList.contains(css.codeWrap!)).toBe(true)
     expect(detail.textContent).not.toContain(say('detail.emptyBody'))
   })
 

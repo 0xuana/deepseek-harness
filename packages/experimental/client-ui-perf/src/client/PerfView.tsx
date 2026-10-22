@@ -329,6 +329,22 @@ function textLines(text: string): readonly CodeLine[] {
 }
 
 /**
+ * Readable argument body: parse and indent JSON by two spaces, or keep the
+ * text verbatim when the model produced arguments this build cannot parse.
+ * @param args - raw tool arguments as recorded.
+ * @returns the body the raw view displays and copies.
+ */
+function prettyArguments(args: string): string {
+  try {
+    const parsed: unknown = JSON.parse(args)
+    return JSON.stringify(parsed, null, 2)
+  } catch {
+    // Model-produced arguments are not always JSON; show them verbatim.
+    return args
+  }
+}
+
+/**
  * Line-level diff: removal/addition rows for the parts that differ, common
  * lines kept in place. Above the size cap the two sides are shown whole.
  */
@@ -436,7 +452,7 @@ function callBody(call: PerfCall, t: PerfTranslate, wrap: boolean, raw: boolean)
     return (
       <Fragment>
         <div className={css.blockSub}>{t('detail.args')}</div>
-        {codeBlock(textLines(call.args), t, wrap)}
+        {codeBlock(textLines(prettyArguments(call.args)), t, true)}
       </Fragment>
     )
   }
@@ -530,9 +546,9 @@ function CallBlock({ call, t, wrap, raw, onToggleRaw }: CallBlockProps): ReactEl
   if (isNumber(call.lines)) meta.push(t('detail.lines', { lines: formatTokens(call.lines) }))
   if (isNumber(call.ms)) meta.push(formatMs(call.ms))
   const fallback = [call.before ?? '', call.after ?? ''].filter(part => part !== '').join('\n')
-  // Copy exactly what the body shows: the raw arguments while that view is active,
-  // otherwise the result text or the before/after fallback.
-  const clipboardValue = raw && call.args !== null ? call.args : call.text ?? fallback
+  // Copy exactly what the body shows: the pretty raw arguments while that view
+  // is active, otherwise the result text or the before/after fallback.
+  const clipboardValue = raw && call.args !== null ? prettyArguments(call.args) : call.text ?? fallback
   const clipboard = clipboardOf()
   return (
     <div className={css.block}>
