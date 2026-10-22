@@ -38,12 +38,16 @@ export class SqliteKvUnit implements KvUnit {
    * @param descriptor - Validated descriptor whose record tables already exist.
    * @param storedVersion - Accepted unit version currently saved on the medium.
    * @param onClose - Backend callback releasing this unit's open-name slot.
+   * @param ensureBackendUsable - Rejects use of a connection whose rollback failed.
+   * @param onRollbackFailure - Retains the failure on the backend before this call rejects.
    */
   constructor(
     private readonly db: DatabaseSync,
     private readonly descriptor: KvUnitDescriptor,
     storedVersion: number,
     private readonly onClose: () => void,
+    private readonly ensureBackendUsable: () => void,
+    private readonly onRollbackFailure: (error: AggregateError) => void,
   ) {
     this.needsVersionStamp = storedVersion !== descriptor.version
     for (const table of descriptor.tables) {
@@ -177,7 +181,19 @@ export class SqliteKvUnit implements KvUnit {
       this.db.exec('COMMIT')
       this.needsVersionStamp = !changed
     } catch (error) {
-      if (this.db.isTransaction) this.db.exec('ROLLBACK')
+      if (this.db.isTransaction) {
+        try {
+          this.db.exec('ROLLBACK')
+        } catch (rollbackError) {
+          const failure = new AggregateError(
+            [error, rollbackError],
+            `kv unit '${this.descriptor.name}' write and rollback failed; the backend is unusable and must be closed and reopened`,
+            { cause: error },
+          )
+          this.onRollbackFailure(failure)
+          throw failure
+        }
+      }
       throw error
     }
   }
@@ -209,7 +225,7 @@ export class SqliteKvUnit implements KvUnit {
     if (this.closed) {
       throw new StorageError('closed', `kv unit '${this.descriptor.name}' is closed`)
     }
-    if (this.unusable !== undefined) throw this.unusable
+    this.ensureBackendUsable()
   }
 
   private statementsFor(table: string): TableStatements {

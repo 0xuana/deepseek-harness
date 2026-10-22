@@ -37,9 +37,9 @@ export class MemoryMediaPool {
   /** Unit name → stamped version; tests may pre-stamp to force `version-mismatch`. */
   readonly versions = new Map<string, number>()
   /**
-   * When positive, that many subsequent write primitives (putRecord /
-   * deleteRecord / setGlobal) reject without touching the medium, decrementing
-   * per rejection. Negative path: callers assert their state is
+   * When positive, that many subsequent mutations reject without touching
+   * the medium, decrementing per rejection. A missing-key delete is a no-op
+   * and leaves this counter unchanged. Callers assert their state is
    * untouched after a durability failure.
    */
   failNextWrites = 0

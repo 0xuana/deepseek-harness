@@ -158,7 +158,7 @@ class SingleJsonUnit implements KvUnit {
     return records
   }
 
-  private publish(): Promise<void> {
+  private async publish(): Promise<void> {
     const write = writeAtomic(this.path, serialize(this.descriptor.name, this.state))
     this.inFlight.add(write)
     // Swallow only on the tracking branch: the caller still awaits `write`

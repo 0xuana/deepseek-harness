@@ -189,6 +189,54 @@ describe('sqlite backend specifics', () => {
     }
   })
 
+  it('rejects all backend use after a failed rollback and preserves both errors', async () => {
+    const path = await freshDbPath()
+    const siblingDescriptor = { ...DESCRIPTOR, name: 'sibling' }
+    const first = backendAt(path)
+    await (await first.kv.open(DESCRIPTOR)).putRecord('records', 'saved', { n: 1 })
+    await (await first.kv.open(siblingDescriptor)).close()
+    await first.close()
+
+    const observer = new DatabaseSync(path)
+    const backend = backendAt(path)
+    try {
+      observer.exec("CREATE TRIGGER reject_unit_version BEFORE UPDATE ON units BEGIN SELECT RAISE(ABORT, 'version write failed'); END")
+      const unit = await backend.kv.open({ ...DESCRIPTOR, version: 2, compatibleVersions: [1] })
+      const sibling = await backend.kv.open(siblingDescriptor)
+      // oxlint-disable-next-line typescript/unbound-method -- replay the original method with the intercepted connection as this
+      const originalExec = DatabaseSync.prototype.exec
+      const rollbackError = new Error('rollback failed')
+      const rollback = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSync, sql) {
+        if (sql === 'ROLLBACK') throw rollbackError
+        originalExec.call(this, sql)
+      })
+      try {
+        const pending = backend.kv.open({ ...DESCRIPTOR, name: 'pending' })
+        const failure: unknown = await unit.putRecord('records', 'new', { n: 2 }).catch((error: unknown) => error)
+        expect(failure).toMatchObject({
+          name: 'AggregateError',
+          cause: { message: 'version write failed' },
+          errors: [{ message: 'version write failed' }, rollbackError],
+        })
+        await expect(sibling.putRecord('records', 'acknowledged', { n: 3 })).rejects.toBe(failure)
+        await expect(sibling.loadAll()).rejects.toBe(failure)
+        await expect(unit.loadAll()).rejects.toBe(failure)
+        await expect(pending).rejects.toBe(failure)
+        await expect(backend.kv.open({ ...DESCRIPTOR, name: 'later' })).rejects.toBe(failure)
+        expect(observer.prepare('SELECT * FROM u_sibling_records').all()).toEqual([])
+      } finally {
+        rollback.mockRestore()
+      }
+      await backend.close()
+      expect(observer.prepare('SELECT version FROM units WHERE name = ?').get(DESCRIPTOR.name)).toEqual({ version: 1 })
+      expect(observer.prepare('SELECT key FROM u_specimen_records').all()).toEqual([{ key: 'saved' }])
+      expect(observer.prepare('SELECT * FROM u_sibling_records').all()).toEqual([])
+    } finally {
+      await backend.close()
+      observer.close()
+    }
+  })
+
   it('rejects invalid unit and table names before touching the medium', async () => {
     const backend = backendAt(':memory:')
     await expect(backend.kv.open({ ...DESCRIPTOR, name: 'Bad-Name' })).rejects.toThrow(/violates/)

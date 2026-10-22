@@ -31,11 +31,11 @@ export interface KvFacet {
   /**
    * Open one unit, creating it when the medium holds no trace of it yet
    * (materialization may defer to the first write, but {@link KvUnit.loadAll}
-   * must immediately serve the empty shape). A version already stamped on the
-   * medium outside `descriptor.version` and `compatibleVersions` rejects with
-   * `version-mismatch` with unit-wide checks; an unaccepted per-record document
-   * reads as absent. A medium that cannot be parsed as this unit rejects
-   * with `malformed-medium`. Opening the same unit name twice without closing
+   * must immediately serve the empty shape). Backends with a unit-wide stamp
+   * reject an existing version outside `descriptor.version` and
+   * `compatibleVersions` with `version-mismatch`; document-based per-record
+   * layouts read an unaccepted document as absent. A medium that cannot be
+   * parsed as this unit rejects with `malformed-medium`. Opening the same unit name twice without closing
    * is a caller bug and rejects.
    * @param descriptor - Static identity and shape of the unit to open.
    * @returns the opened unit.
@@ -47,19 +47,19 @@ export interface KvFacet {
 export interface KvUnitDescriptor {
   /** Unit name; must match {@link UNIT_NAME_RE}. Also the file-name / SQL-identifier segment. */
   readonly name: string
-  /** Current unit format version; a non-negative integer stamped on durable writes. */
+  /** Current unit format version; a non-negative integer stamped on initial materialization and subsequent mutations. */
   readonly version: number
   /** Table names; each must match {@link UNIT_NAME_RE}. */
   readonly tables: readonly string[]
   /** Whether this unit carries the global singleton slot. */
   readonly hasGlobal: boolean
   /**
-   * Medium layout. `single` (the default) keeps the whole unit in one
+   * Document layout. `single` (the default) keeps the whole unit in one
    * document; `per-record` keeps each record in its own document, so a unit
    * whose records are large or sparse never rewrites the rest on one write,
-   * and an unaccepted version stamp discards only that record instead of
-   * rejecting the whole unit. Backends that only serve one layout accept the
-   * other's units as foreign documents.
+   * and an unaccepted document reads as absent instead of
+   * rejecting the whole unit. Row stores retain unit-wide versioning for
+   * either layout request.
    */
   readonly layout?: 'single' | 'per-record'
   /**

@@ -141,6 +141,26 @@ export function runKvBackendContract(label: string, create: () => Promise<KvBack
       await unchanged.close()
     })
 
+    it('restores the open snapshot after serialization failure and retries on the same unit', async () => {
+      const harness = await create()
+      await (await harness.backend.kv!.open(DESCRIPTOR)).putRecord('alpha', 'saved', { v: 1 })
+      await harness.backend.close()
+
+      const current = { ...DESCRIPTOR, version: 4, compatibleVersions: [3] }
+      const writer = await harness.reopen()
+      const unit = await writer.kv!.open(current)
+      await expect(unit.putRecord('alpha', 'broken', { toJSON: () => { throw new Error('serialization failed') } }))
+        .rejects.toThrow('serialization failed')
+      expect((await unit.loadAll()).tables['alpha']).toEqual({ saved: { v: 1 } })
+      await unit.putRecord('alpha', 'retry', { v: 2 })
+      await writer.close()
+
+      const restarted = await harness.reopen()
+      expect((await (await restarted.kv!.open(current)).loadAll()).tables['alpha'])
+        .toEqual({ saved: { v: 1 }, retry: { v: 2 } })
+      await restarted.close()
+    })
+
     it.each(['putRecord', 'deleteRecord', 'setGlobal'] as const)('%s commits the current stamp with its data', async (operation) => {
       const harness = await create()
       const original = await harness.backend.kv!.open(DESCRIPTOR)
@@ -156,6 +176,7 @@ export function runKvBackendContract(label: string, create: () => Promise<KvBack
       const unit = await writer.kv!.open(current)
       await expect(unit.putRecord('alpha', 'k', { toJSON: () => { throw new Error('serialization failed') } }))
         .rejects.toThrow('serialization failed')
+      expect((await unit.loadAll()).tables['alpha']).toEqual({ k: { v: 1 } })
       await writer.close()
       const afterFailure = await harness.reopen()
       expect((await (await afterFailure.kv!.open(DESCRIPTOR)).loadAll()).tables['alpha']).toEqual({ k: { v: 1 } })
@@ -180,7 +201,10 @@ export function runKvBackendContract(label: string, create: () => Promise<KvBack
       await restarted.close()
     })
 
-    it.each([false, true])('reads historical values in v3 with a v2 write: %s', async (writeV2) => {
+    it.each([
+      { name: 'v1 → v3', writeV2: false },
+      { name: 'v1 → v2 → v3', writeV2: true },
+    ])('reads historical values through $name', async ({ writeV2 }) => {
       const harness = await create()
       const v1 = { ...DESCRIPTOR, version: 1 }
       const v2 = { ...DESCRIPTOR, version: 2, compatibleVersions: [1] }
