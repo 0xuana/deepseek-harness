@@ -76,10 +76,11 @@ describe('sqlite backend specifics', () => {
     const db = new DatabaseSync(path)
     db.exec('CREATE TRIGGER block_b BEFORE DELETE ON "u_specimen_records"'
       + " WHEN old.key = 'b' BEGIN SELECT RAISE(ABORT, 'blocked'); END")
+    // oxlint-disable-next-line typescript/unbound-method -- Delegated through Reflect.apply with the spy's receiver.
     const original = DatabaseSync.prototype.exec
     const execSpy = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSync, sql: string) {
       if (sql === 'ROLLBACK') throw new Error('rollback denied')
-      return original.call(this, sql)
+      Reflect.apply(original, this, [sql])
     })
     try {
       await expect(unit.deleteRecords('records', ['a', 'b'])).rejects.toMatchObject({ code: 'unknown-state' })
@@ -102,10 +103,11 @@ describe('sqlite backend specifics', () => {
     const backend = backendAt(path)
     const unit = await backend.kv.open(DESCRIPTOR)
     await unit.putRecord('records', 'a', { n: 1 })
+    // oxlint-disable-next-line typescript/unbound-method -- Delegated through Reflect.apply with the spy's receiver.
     const original = DatabaseSync.prototype.exec
     const execSpy = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSync, sql: string) {
       if (sql.startsWith('BEGIN')) throw new Error('begin denied')
-      return original.call(this, sql)
+      Reflect.apply(original, this, [sql])
     })
     try {
       await expect(unit.deleteRecords('records', ['a'])).rejects.toMatchObject({ code: 'unknown-state' })
