@@ -2211,6 +2211,68 @@ describe('desktop main startup', () => {
     await harness.quitCompleted.promise
   })
 
+  it.each([{ rejectCleanup: false, stuck: false }, { rejectCleanup: true, stuck: false },
+    { rejectCleanup: true, stuck: true }])('waits for the diagnostic Worker (policy rejects=$rejectCleanup, stuck=$stuck)', async ({ rejectCleanup, stuck }) => {
+    harness.embeddedPolicy = { origin: 'https://policy.example.com', authentication: 'feishu-test',
+      allowedAuthOrigins: ['https://login.example.com'], allowedPageOrigins: ['https://downloads.example.com'] }
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockImplementation(async () =>
+      Response.json({ error: { code: 'UNAUTHENTICATED' } }, { status: 401 })))
+    let finishReport!: () => void
+    let reportSignal: AbortSignal | undefined
+    let workerExited = false
+    const report = new Promise<{ appended: boolean; timedOut: boolean; cancelled: boolean }>((resolve) => {
+      finishReport = () => { workerExited = true; resolve({ appended: false, timedOut: false, cancelled: true }) }
+    })
+    vi.mocked(runOperationReportJob).mockImplementationOnce((_input, _options, signal) => {
+      reportSignal = signal
+      return report
+    })
+    let finishPolicy!: () => void
+    let failPolicy!: (error: Error) => void
+    const policy = new Promise<void>((resolve, reject) => { finishPolicy = resolve; failPolicy = reject })
+    testAuth.dispose.mockImplementationOnce(() => policy)
+    const failure = new Error('policy Session storage cleanup failed')
+    const host = await readyForUpdate()
+    let quitCompleted = false
+    void harness.quitCompleted.promise.then(() => { quitCompleted = true })
+    try {
+      const window = harness.windows[0]!
+      window.webContents.emit('render-process-gone', {}, { reason: 'crashed' })
+      await harness.dialogShown.promise
+      expect(runOperationReportJob).toHaveBeenCalledOnce()
+      host.exited.resolve()
+      window.emit('session-end', { reasons: ['shutdown'] })
+      harness.app.quit()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(testAuth.dispose).toHaveBeenCalledOnce()
+      expect(reportSignal?.aborted).toBe(true)
+      expect(quitCompleted).toBe(false)
+      if (rejectCleanup) failPolicy(failure)
+      else finishPolicy()
+      await vi.advanceTimersByTimeAsync(0)
+      if (rejectCleanup) expect(console.error).toHaveBeenCalledWith(failure)
+      expect(workerExited).toBe(false)
+      expect(quitCompleted).toBe(false)
+      if (stuck) {
+        await vi.advanceTimersByTimeAsync(499)
+        expect(quitCompleted).toBe(false)
+        await vi.advanceTimersByTimeAsync(1)
+        expect(workerExited).toBe(false)
+        expect(console.error).toHaveBeenCalledWith('dsh desktop: operation report Worker has not exited; continuing shutdown')
+      } else {
+        finishReport()
+        await vi.advanceTimersByTimeAsync(0)
+      }
+      expect(quitCompleted).toBe(true)
+    } finally {
+      finishPolicy()
+      finishReport()
+      host.exited.resolve()
+      await vi.advanceTimersByTimeAsync(0)
+      await harness.quitCompleted.promise
+    }
+  })
+
   it.each([{ response: 0, stuck: false }, { response: 1, stuck: false }, { response: 2, stuck: false },
     { response: 0, stuck: true }])('waits for Host exit and bounds Worker cleanup for recovery $response (stuck=$stuck)', async ({ response, stuck }) => {
     let finishReport!: (result: { appended: boolean; timedOut: boolean; cancelled: boolean }) => void

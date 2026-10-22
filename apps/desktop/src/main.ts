@@ -1328,9 +1328,9 @@ async function main(): Promise<void> {
         await operationJournal?.drain(500)
         throw error
       }),
-      // A Platform cleanup failure is logged without cutting the remaining Host shutdown short.
-      platformView.dispose().catch((error: unknown) => { console.error(error) })])
-      .catch((error: unknown) => { console.error(error) }).finally(() => { app.quit() })
+      platformView.dispose(),
+    ].map(cleanup => cleanup.catch((error: unknown) => { console.error(error) })))
+      .then(() => { app.quit() })
   }
   app.on('before-quit', (event) => {
     if (shellInstallerOwnsQuit) {
