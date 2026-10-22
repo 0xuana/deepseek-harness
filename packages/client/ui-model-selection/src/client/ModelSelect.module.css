@@ -70,6 +70,31 @@
   flex: 0 0 auto;
 }
 
+/* Clipped selector text fades over its last 24px instead of ending in an
+   ellipsis. A self scroll timeline is active only while the box overflows,
+   so the mask never touches text that fits; browsers without scroll-driven
+   animations keep the ellipsis. A mask rather than a painted gradient, so
+   the fade matches the trigger's bare and hover fills and every menu row. */
+@supports (animation-timeline: scroll()) {
+  .triggerLabel,
+  .triggerEffort,
+  .modelName,
+  .cellValue {
+    text-overflow: clip;
+    /* Longhands only: the build folds a full set into the `animation`
+       shorthand, which cannot carry a timeline. */
+    animation-name: clipped-fade;
+    animation-fill-mode: both;
+    animation-timeline: scroll(self inline);
+  }
+}
+
+@keyframes clipped-fade {
+  from, to {
+    mask-image: linear-gradient(to right, black calc(100% - 24px), transparent);
+  }
+}
+
 /* The composer measures expanded row demand and owns these display variables.
    Outside a composer, the trigger retains its text. */
 .triggerLabel,
