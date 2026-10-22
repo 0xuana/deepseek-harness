@@ -375,6 +375,30 @@ describe('composer stats pills', () => {
     expect(usageDialog.textContent).toContain('未缓存输入5 tok')
   })
 
+  it.each([false, true])('shows the full reading on hover only while the label is cut off: %s', (overflow) => {
+    vi.spyOn(Element.prototype, 'scrollWidth', 'get').mockReturnValue(overflow ? 200 : 80)
+    vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(80)
+    const { source } = makeSource({ nodes: [timedStep()] })
+    const view = render(<StatsPills {...props(source)} />)
+    const usagePill = view.getAllByRole('button')[1]!
+    fireEvent.pointerEnter(usagePill)
+    expect(view.queryByRole('tooltip')?.textContent ?? null).toBe(overflow ? '105 tok · Cache hit 90%' : null)
+    // The open dialog carries every figure, so the tooltip yields to it.
+    fireEvent.click(usagePill)
+    fireEvent.pointerEnter(usagePill)
+    expect(view.queryByRole('tooltip')).toBeNull()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    fireEvent.pointerLeave(usagePill)
+    view.rerender(<StatsPills {...props(source)} usePerformanceUsage={selector => selector('compact')} />)
+    const plainPill = view.getByText('Cache hit 90%').parentElement!
+    fireEvent.pointerEnter(plainPill)
+    expect(view.queryByRole('tooltip')?.textContent ?? null).toBe(overflow ? 'Cache hit 90%' : null)
+    // A tap pins the static reading's tooltip, since no dialog shows it.
+    fireEvent.pointerLeave(plainPill)
+    fireEvent.click(plainPill)
+    expect(view.queryByRole('tooltip')?.textContent ?? null).toBe(overflow ? 'Cache hit 90%' : null)
+  })
+
   it('keeps the durable usage pill after the visible step window is empty', () => {
     const { source } = makeSource()
     const view = render(<StatsPills {...props(source, {
