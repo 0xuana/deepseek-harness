@@ -1,5 +1,6 @@
 /** Register completed-answer recommendations and their localized actions. */
 import type { Context } from '@deepseek-ai/cordis'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
@@ -8,7 +9,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type {} from '@deepseek-ai/dsh-experimental-plugin-recommendations/remote'
 import type { TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-experimental-plugin-recommendations/types'
-import { RecommendationTail, type CardInjected } from './Card.tsx'
+import { RecommendationTail, type CardInjected, type CatalogDetails } from './Card.tsx'
 import { en, ja, zh, type RecommendationKey } from './locales.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -34,6 +35,8 @@ export async function mountRecommendations(ctx: Context, contribution: TypertRem
 }
 
 function registerUi(ctx: Context): void {
+  // Catalog text by plugin name for this plugin lifetime: a revisited card renders it before its own lookup returns.
+  const catalog = createSnapshotStore<Readonly<Record<string, CatalogDetails>>>({})
   ctx.effect(() => ctx.locale.register('pluginRecommendations', { en, zh, ja }), 'plugin-recommendations: locale')
   ctx.slots.inject('conversation.chat.turnTail', () => ctx.slots.register({
     name: 'conversation.chat.turnTail', id: 'plugin-recommendation', locale: 'pluginRecommendations',
@@ -42,7 +45,8 @@ function registerUi(ctx: Context): void {
       hooks: { locale: {
         getSnapshot: () => ctx.locale.getSnapshot().active,
         subscribe: listener => ctx.locale.subscribe(listener),
-      } },
+      }, catalog },
+      remember: (name, details) => { catalog.set({ ...catalog.getSnapshot(), [name]: details }) },
       resolveText: text => ctx.locale.resolveText(text),
       describe: async (callId) => {
         const result = await ctx.remote.pluginRecommendations.describe(sessionId, callId)

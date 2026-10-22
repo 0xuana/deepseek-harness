@@ -1,4 +1,4 @@
-/** Real registries validate session binding and HMR removal. */
+/** Real registries validate session binding, the plugin-lifetime catalog and HMR removal. */
 import { Context } from '@deepseek-ai/cordis'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
@@ -46,12 +46,19 @@ it('binds actions to the displayed session and removes registrations on unload',
   expect(act).toHaveBeenCalledWith('session-one', 'proposal', 'enable')
   act.mockResolvedValueOnce({ ok: false })
   expect(await bound.act(ToolCallId('proposal'), 'dismiss')).toBeUndefined()
+  const details = { status: 'available', title: 'Search', description: 'Find past sessions', enabled: false } as const
+  bound.remember('official-search', details)
+  expect(resolve(SessionId('session-two')).hooks.catalog.getSnapshot()).toEqual({ 'official-search': details })
   await fiber.dispose()
   expect(unmount).toHaveBeenCalledOnce()
   expect(slots.entries('conversation.chat.turnTail')).toHaveLength(0)
+  const remounted = await ctx.plugin({ inject, apply })
+  const fresh = slots.entries('conversation.chat.turnTail')[0]!.inject as NonNullable<typeof entry.inject> & ((sessionId: SessionId) => CardInjected)
+  expect(fresh(SessionId('session-one')).hooks.catalog.getSnapshot()).toEqual({})
+  await remounted.dispose()
   vi.spyOn(locale, 'register').mockImplementation(() => { throw new Error('registration failed') })
   const failed = ctx.plugin({ inject, apply })
   await expect(failed.await()).rejects.toThrow('registration failed')
   await failed.dispose()
-  expect(unmount).toHaveBeenCalledTimes(2)
+  expect(unmount).toHaveBeenCalledTimes(3)
 })

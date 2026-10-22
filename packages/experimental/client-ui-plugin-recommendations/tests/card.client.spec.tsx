@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
-import type { ComponentProps } from 'react'
+import { useSyncExternalStore, type ComponentProps } from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { RecommendationCardState, RecommendationDetails, RecommendationView } from '@deepseek-ai/dsh-experimental-plugin-recommendations/types'
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
 import { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import { SessionSeq } from '@deepseek-ai/dsh-session/types'
-import { RecommendationCard, RecommendationTail } from '../src/client/Card.tsx'
+import { createSnapshotStore, type SnapshotSelectorHook } from '@deepseek-ai/dsh-client-store'
+import { RecommendationCard, RecommendationTail, type CatalogDetails } from '../src/client/Card.tsx'
 import { en, ja, zh, type RecommendationKey } from '../src/client/locales.ts'
 
 afterEach(cleanup)
@@ -17,11 +18,22 @@ const available: RecommendationDetails = {
 
 const recommendation = { callId: ToolCallId('block:m1'), name: 'official-search', reason: '帮你找到上周讨论的方案' }
 
-function props(state?: RecommendationCardState, details: RecommendationDetails = available, view?: Partial<RecommendationView>): Props {
+/** The plugin-lifetime catalog mount.ts creates, with the selector hook the slot binds to it. */
+function catalog() {
+  const store = createSnapshotStore<Readonly<Record<string, CatalogDetails>>>({})
+  const useCatalog: SnapshotSelectorHook<Readonly<Record<string, CatalogDetails>>> = selector =>
+    useSyncExternalStore(listener => store.subscribe(listener), () => selector(store.getSnapshot()))
+  const remember = vi.fn((name: string, details: CatalogDetails) => { store.set({ ...store.getSnapshot(), [name]: details }) })
+  return { store, useCatalog, remember }
+}
+
+function props(state?: RecommendationCardState, details: RecommendationDetails = available, view?: Partial<RecommendationView>,
+  { useCatalog, remember } = catalog()): Props {
   return {
     recommendation,
     useProjection: () => ({ decisions: state === undefined ? {} : { 'block:m1': state }, proposals: { 'block:m1': { ...recommendation, turn: 1 } }, ...view }),
     useLocale: <Value,>(selector: (value: string) => Value) => selector('zh-CN'),
+    useCatalog, remember,
     act: vi.fn(async () => ({ status: 'settled', outcome: 'applied' })),
     describe: vi.fn(async () => details),
     openDetails: vi.fn(),
@@ -147,25 +159,68 @@ it('reports an unreachable Host and an unreadable history without actions', asyn
   expect(screen.queryByRole('button', { name: '启用' })).toBeNull()
 })
 
-it('keeps actions disabled until the card state loads and shows the name while catalog text loads', async () => {
+it('keeps actions disabled until the card state loads', async () => {
   const value = props()
   value.useProjection = () => undefined
   await shown(value)
   expect(screen.getByRole('button', { name: '启用' }).hasAttribute('disabled')).toBe(true)
-  cleanup()
+})
+
+it('holds the title, description and action lines while the first catalog lookup is pending', async () => {
   const loading = props()
   const describe = Promise.withResolvers<RecommendationDetails | undefined>()
   loading.describe = vi.fn(() => describe.promise)
-  const { unmount } = render(<RecommendationCard {...loading} />)
-  expect(screen.getByText('official-search')).toBeTruthy()
-  expect(screen.queryByRole('button', { name: '启用' })).toBeNull()
-  unmount()
+  const { container } = render(<RecommendationCard {...loading} />)
+  const region = screen.getByRole('region', { name: '推荐插件' })
+  expect(region.getAttribute('aria-busy')).toBe('true')
+  expect(screen.queryByText('official-search')).toBeNull()
+  expect(container.querySelectorAll('strong > span, button span > span')).toHaveLength(2)
+  expect(screen.getByText('帮你找到上周讨论的方案')).toBeTruthy()
+  expect(screen.getByText('启用后可在所有会话中使用')).toBeTruthy()
+  for (const name of ['暂不需要', '启用']) expect(screen.getByRole('button', { name }).hasAttribute('disabled')).toBe(true)
   await act(async () => { describe.resolve(available) })
+  expect(region.hasAttribute('aria-busy')).toBe(false)
+  expect(within(screen.getByRole('button', { name: '查看详情：会话搜索' })).getByText('检索过去的会话')).toBeTruthy()
+  expect(screen.getByRole('button', { name: '启用' }).hasAttribute('disabled')).toBe(false)
+  expect(loading.remember).toHaveBeenCalledExactlyOnceWith('official-search', available)
+  cleanup()
+  const pending = props()
+  const late = Promise.withResolvers<RecommendationDetails | undefined>()
+  pending.describe = vi.fn(() => late.promise)
+  render(<RecommendationCard {...pending} />).unmount()
+  await act(async () => { late.resolve(available) })
+  expect(pending.remember).not.toHaveBeenCalled()
   const failing = props()
   const rejected = Promise.withResolvers<RecommendationDetails | undefined>()
   failing.describe = vi.fn(() => rejected.promise)
   render(<RecommendationCard {...failing} />).unmount()
   await act(async () => { rejected.reject(new Error('late')) })
+})
+
+it('renders a remembered plugin at once on a later card while refusals and lost replies still decide its actions', async () => {
+  const shared = catalog()
+  await shown(props(undefined, available, undefined, shared))
+  expect(shared.store.getSnapshot()).toEqual({ 'official-search': available })
+  cleanup()
+  const revisit = props(undefined, available, undefined, shared)
+  const lookup = Promise.withResolvers<RecommendationDetails | undefined>()
+  revisit.describe = vi.fn(() => lookup.promise)
+  render(<RecommendationCard {...revisit} />)
+  expect(screen.getByRole('region').hasAttribute('aria-busy')).toBe(false)
+  expect(within(screen.getByRole('button', { name: '查看详情：会话搜索' })).getByText('检索过去的会话')).toBeTruthy()
+  expect(screen.getByRole('button', { name: '启用' }).hasAttribute('disabled')).toBe(false)
+  await act(async () => { lookup.resolve({ ...available, enabled: true }) })
+  expect(screen.getByRole('status').textContent).toBe(zh['already-enabled'])
+  cleanup()
+  await shown(props(undefined, { status: 'refused', reason: 'unavailable' }, undefined, shared))
+  expect(screen.getByRole('alert').textContent).toBe(zh.unavailable)
+  expect(screen.queryByRole('button', { name: '启用' })).toBeNull()
+  cleanup()
+  const lost = props(undefined, available, undefined, shared)
+  lost.describe = vi.fn(async () => undefined)
+  await shown(lost)
+  expect(screen.getByRole('alert').textContent).toBe(zh.transport)
+  expect(screen.queryByRole('button', { name: '启用' })).toBeNull()
 })
 
 it.each([

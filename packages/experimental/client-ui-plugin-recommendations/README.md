@@ -35,7 +35,7 @@ Enable the [Plugin recommendations bundle](../plugin-recommendations/README.md).
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The Turn tail reads the proposals of the `pluginRecommendations` Session projection and shows the one admitted in its Turn once that Turn has ended, for any end reason; the projection admits at most one proposal per Turn, and the chat hides the fence itself. A proposal the projection marks never offered renders nothing. The card asks the Host for the plugin's current catalog text and selection; a name outside the eligible catalog shows no actions. Session projection decisions drive the card after reload. The optional Remote and all UI registrations are removed together on unload.
+The Turn tail reads the proposals of the `pluginRecommendations` Session projection and shows the one admitted in its Turn once that Turn has ended, for any end reason; the projection admits at most one proposal per Turn, and the chat hides the fence itself. A proposal the projection marks never offered renders nothing. The card asks the Host for the plugin's current catalog text and selection; a name outside the eligible catalog shows no actions. The browser contribution keeps returned catalog text by plugin name for its lifetime, so a revisited card renders it at once while its own lookup refreshes the selection. Until a plugin's first lookup returns, placeholder lines and the disabled actions hold the title, description and footer in place. Session projection decisions drive the card after reload. The optional Remote and all UI registrations are removed together on unload.
 
 Cards use the application font, the deliverables card border and background, a distinct title and compact body scale, and a separate action footer. The built entry supplies generated Remote descriptors to the source-tested mount lifecycle.
 
@@ -67,6 +67,7 @@ The card adds no model context. Its Enable action can change subsequent tool dec
 <a id="known-limitations-and-deferred-work"></a>
 
 - Only the first proposal in a Turn appears.
+- Before a plugin's first lookup returns, the card reserves one description line; a longer description still extends the card when it arrives.
 - Historical decisions do not track later changes made from the Plugins page.
 
 <a id="dev-note"></a>

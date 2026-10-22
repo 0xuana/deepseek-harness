@@ -11,13 +11,18 @@ import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { RecommendationKey } from './locales.ts'
 import css from './Card.module.css'
 
-/** Session-bound callbacks and language, without a service in the component. */
+/** Catalog text the Host returned for an available plugin. */
+export type CatalogDetails = Extract<RecommendationDetails, { readonly status: 'available' }>
+
+/** Session-bound callbacks, language and the plugin-lifetime catalog text, without a service in the component. */
 export interface CardInjected {
   act: (callId: ToolCallId, action: 'enable' | 'dismiss') => Promise<RecommendationActionResult | undefined>
   describe: (callId: ToolCallId) => Promise<RecommendationDetails | undefined>
+  /** Keep a plugin's catalog text so later cards of the same plugin render it at once. */
+  remember: (name: string, details: CatalogDetails) => void
   openDetails: (packageName: string) => void
   resolveText: (text: LocalizedText) => string
-  hooks: { locale: HostObservable<string> }
+  hooks: { locale: HostObservable<string>; catalog: HostObservable<Readonly<Record<string, CatalogDetails>>> }
 }
 
 type CardProps = { recommendation: PluginRecommendation } & Pick<PropsRuntime<'conversation.chat.turnTail'>, 'useProjection'>
@@ -49,28 +54,39 @@ export function RecommendationTail({ turn, ...props }: Pick<PropsRuntime<'conver
 /* jscpd:ignore-end */
 
 /** Display one recommendation, its current catalog text, and the persisted outcome of the user's choice.
+ * Until the first catalog lookup of a plugin returns, placeholder lines and the disabled actions hold the final layout.
  * @param props - Session-bound recommendation, actions and locale.
  * @returns the card below its completed answer.
  */
-export function RecommendationCard({ recommendation, useProjection, useLocale, act, describe, openDetails, resolveText, t }: CardProps) {
+export function RecommendationCard({
+  recommendation, useProjection, useLocale, useCatalog, act, describe, remember, openDetails, resolveText, t,
+}: CardProps) {
   useLocale(value => value)
   const view = useProjection('pluginRecommendations')
   const state = view?.decisions[recommendation.callId]
-  // Undefined while loading; null when the Host could not be reached.
-  const [details, setDetails] = useState<RecommendationDetails | null>()
+  const cached = useCatalog(catalog => Object.hasOwn(catalog, recommendation.name) ? catalog[recommendation.name] : undefined)
+  // This card's latest lookup: undefined while loading, null when the Host could not be reached.
+  const [lookup, setLookup] = useState<RecommendationDetails | null>()
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<RecommendationKey | undefined>()
   useEffect(() => {
     let current = true
     describe(recommendation.callId).then(
-      (value) => { if (current) setDetails(value ?? null) },
-      () => { if (current) setDetails(null) },
+      (value) => {
+        if (!current) return
+        if (value?.status === 'available') remember(recommendation.name, value)
+        setLookup(value ?? null)
+      },
+      () => { if (current) setLookup(null) },
     )
     return () => { current = false }
-  }, [describe, recommendation.callId, state])
+  }, [describe, remember, recommendation.callId, recommendation.name, state])
+  // Remembered text shows at once; this card's own refusal or lost reply still decides what it offers.
+  const details = lookup === null || lookup?.status === 'refused' ? lookup : cached ?? lookup
+  const loading = details === undefined
   const available = details?.status === 'available' ? details : undefined
   const settled = state ?? (available?.enabled ? 'already-enabled' : undefined)
-  const open = available !== undefined && !view?.invalid && (settled === undefined || settled === 'failed' || settled === 'cancelled')
+  const open = (available !== undefined || loading) && !view?.invalid && (settled === undefined || settled === 'failed' || settled === 'cancelled')
   const run = async (action: 'enable' | 'dismiss') => {
     setPending(true)
     setError(undefined)
@@ -85,14 +101,16 @@ export function RecommendationCard({ recommendation, useProjection, useLocale, a
     } finally { setPending(false) }
   }
   const title = available === undefined ? recommendation.name : resolveText(available.title)
-  return <section className={css.card} aria-label={t('heading')} data-plugin-recommendation={recommendation.callId}>
+  return <section className={css.card} aria-label={t('heading')} aria-busy={loading || undefined} data-plugin-recommendation={recommendation.callId}>
     <header className={css.header}><span>{t('heading')}</span><span className={css.badge}>{t('official')}</span></header>
     <div className={css.body}>
       <button type="button" className={css.details} onClick={() => { openDetails(recommendation.name) }}
         aria-label={t('detailsFor').replace('{title}', title)}>
-        <strong className={css.title}>{title}</strong>
+        <strong className={css.title}>{loading ? <span className={css.placeholder} /> : title}</strong>
         <span className={css.reason}>{recommendation.reason}</span>
-        {available !== undefined && <span className={css.description}>{resolveText(available.description)}</span>}
+        {(loading || available !== undefined) && <span className={css.description}>
+          {available === undefined ? <span className={css.placeholder} /> : resolveText(available.description)}
+        </span>}
       </button>
       {settled !== undefined && <p role="status" className={css.status}>{t(settled)}</p>}
       {view?.invalid ? <p role="alert" className={css.status}>{t('invalid-history')}</p>
@@ -102,8 +120,8 @@ export function RecommendationCard({ recommendation, useProjection, useLocale, a
       {open && <footer className={css.footer}>
         <span className={css.scope}>{t('scope')}</span>
         <div className={css.actions}>
-          <Button variant="ghost" size="sm" disabled={pending || view === undefined} onClick={() => { void run('dismiss') }}>{t('dismiss')}</Button>
-          <Button variant="primary" size="sm" disabled={pending || view === undefined} onClick={() => { void run('enable') }}>
+          <Button variant="ghost" size="sm" disabled={pending || loading || view === undefined} onClick={() => { void run('dismiss') }}>{t('dismiss')}</Button>
+          <Button variant="primary" size="sm" disabled={pending || loading || view === undefined} onClick={() => { void run('enable') }}>
             {t(pending ? 'enabling' : settled === undefined ? 'enable' : 'retry')}
           </Button>
         </div>
