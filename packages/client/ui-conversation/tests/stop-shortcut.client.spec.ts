@@ -19,7 +19,7 @@ afterEach(async () => {
   vi.useRealTimers()
 })
 
-async function bench(options: { readonly cancelAllowed?: boolean } = {}) {
+async function bench() {
   const runtime = await SlotTestRuntime.create()
   disposers.push(() => runtime.dispose())
   const cancel = vi.fn(() => Promise.resolve({ ok: true as const, value: { accepted: true as const } }))
@@ -46,9 +46,8 @@ async function bench(options: { readonly cancelAllowed?: boolean } = {}) {
     const scoped = runtime.sessions.scope(sessionId)!.get('conversation') as ConversationController
     void scoped.cancel()
   }
-  const canCancel = vi.fn((_sessionId: SessionId) => options.cancelAllowed ?? true)
   const dispose = installStopShortcut(shortcuts, runtime.sessions,
-    binding => conversation.binding(binding).openTurn, runtime.ctx.uiSession, stop, canCancel)
+    binding => conversation.binding(binding).openTurn, runtime.ctx.uiSession, stop)
   disposers.push(dispose)
   const root = document.createElement('div')
   root.dataset.conversationSession = 's1'
@@ -66,7 +65,7 @@ async function bench(options: { readonly cancelAllowed?: boolean } = {}) {
     context: { region: 'editable', modal: null, target, ...context }, consume })
     return consume
   }
-  return { runtime, cancel, canCancel, input, root, press, dispose,
+  return { runtime, cancel, input, root, press, dispose,
     reset: () => listener?.({ type: 'reset' }),
     events: reference.binding.eventSource as MutableSessionEventSource }
 }
@@ -78,20 +77,6 @@ describe('fixed stop routing', () => {
     expect(b.cancel).not.toHaveBeenCalled()
     b.press()
     await Promise.resolve()
-    expect(b.cancel).toHaveBeenCalledOnce()
-  })
-
-  it('sends no cancel while the Session access excludes session/cancel, and re-reads the live answer', async () => {
-    const b = await bench({ cancelAllowed: false })
-    b.press()
-    b.press()
-    expect(b.cancel).not.toHaveBeenCalled()
-    expect(b.canCancel).toHaveBeenCalledWith('s1' as SessionId)
-    // The answer is read per press; the sequence starts over once the page may cancel again.
-    b.canCancel.mockReturnValue(true)
-    b.press()
-    expect(b.cancel).not.toHaveBeenCalled()
-    b.press()
     expect(b.cancel).toHaveBeenCalledOnce()
   })
 

@@ -379,20 +379,6 @@ export class UiSession extends Service {
   }
 
   /**
-   * Whether the current Peer may call `action` on one Session resource.
-   *
-   * The non-Hook answer for JS callers outside render: the Session kind owns its `source()`, so
-   * other plugins ask this service instead of reading `remoteAccess.source()` themselves.
-   * @param sessionId - the Session resource to inspect.
-   * @param action - endpoint action the caller would invoke.
-   * @returns the current answer; false without a baseline, after a non-owner stream fails, or when
-   *   no remoteAccess service is present.
-   */
-  access(sessionId: SessionId, action: RemoteEndpoint): boolean {
-    return this.ctx.get('remoteAccess')?.source('session', sessionId, action).getSnapshot() ?? false
-  }
-
-  /**
    * Register one Session-scoped standard-source contribution.
    * @param descriptor - static member roster and per-binding resolver.
    * @returns disposer owned by the caller's Cordis fiber.
