@@ -24,7 +24,7 @@ function label(path: string, tooltip?: string) {
 /** Hover the label past its delay and read the tooltip. */
 function hover(root: HTMLElement): string | null {
   vi.useFakeTimers()
-  fireEvent.mouseEnter(root)
+  fireEvent.pointerEnter(root)
   act(() => { vi.advanceTimersByTime(1000) })
   return screen.getByRole('tooltip').textContent
 }

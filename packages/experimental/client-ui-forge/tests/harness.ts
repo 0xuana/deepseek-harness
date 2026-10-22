@@ -9,7 +9,7 @@ import { expect } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
-import { createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { createInboxStub, unsupportedModel } from '@deepseek-ai/dsh-agent-loop-testkit'
 import ForgeService, { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
   ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeFailure, ForgeProvider, ForgeReadiness,
@@ -373,7 +373,7 @@ export function testAgent(ctx: Context, session: Session): TestAgent {
     else if (!maintenance.disposed) maintenance.latched = true
   }
   const agent: TestAgent = {
-    id: session.id, session, options: {}, status: 'idle', ctx: scope.ctx, inbox,
+    id: session.id, session, options: {}, status: 'idle', ctx: scope.ctx, model: unsupportedModel(), inbox,
     get wakes() { return wakes },
     send(message, target, wakeup) {
       inbox.append(target, message)
@@ -465,7 +465,8 @@ export async function proposeStep(ctx: Context, agent: Agent, proposal: StepProp
   const messages = proposal.messages ?? []
   const decision: PreStepDecision = proposal.decision ?? { kind: 'enter', messages }
   return await agentEvents(ctx, agent).waterfall('agent/pre-step', {
-    messages, turn: proposal.turn, step: proposal.step, signal: proposal.signal ?? new AbortController().signal,
+    modelSelection: { provider: 'mock', model: 'mock' }, messages, turn: proposal.turn, step: proposal.step,
+    signal: proposal.signal ?? new AbortController().signal,
   }, () => Promise.resolve(decision))
 }
 

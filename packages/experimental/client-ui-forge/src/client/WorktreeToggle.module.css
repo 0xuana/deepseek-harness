@@ -27,9 +27,11 @@
   cursor: pointer;
 }
 
-.toggle:hover:not([data-disabled]),
-.base:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .toggle:hover:not([data-disabled]),
+  .base:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .toggle[data-disabled] {

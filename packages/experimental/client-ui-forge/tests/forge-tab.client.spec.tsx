@@ -145,7 +145,7 @@ describe('ForgeTab checkout', () => {
     const row = checkoutRow(b.view)
     if (row === null) throw new Error('no checkout row')
     expect(row.textContent).toBe(en['checkout.failed'])
-    fireEvent.mouseEnter(row)
+    fireEvent.pointerEnter(row)
     expect(b.view.getByRole('tooltip').textContent).toBe('git status failed (128): fatal')
   })
 
@@ -154,7 +154,7 @@ describe('ForgeTab checkout', () => {
     const row = checkoutRow(b.view)
     if (row === null) throw new Error('no checkout row')
     expect(row.textContent).toBe(`main${en['checkout.project']}`)
-    fireEvent.mouseEnter(row.querySelector(`.${css.checkoutName}`)!)
+    fireEvent.pointerEnter(row.querySelector(`.${css.checkoutName}`)!)
     expect(b.view.getByRole('tooltip').textContent).toBe('Project directory: ~/repo')
     // The copied path keeps the home directory the tooltip abbreviates.
     fireEvent.click(within(row).getByRole('button', { name: en['checkout.copyProjectPath'] }))

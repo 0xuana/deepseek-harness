@@ -93,9 +93,14 @@
   white-space: nowrap;
 }
 
-.select:hover,
 .select[aria-expanded='true'] {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .select:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .select:disabled {
@@ -103,8 +108,10 @@
   cursor: default;
 }
 
-.select:disabled:hover {
-  background: transparent;
+@media (hover: hover) {
+  .select:disabled:hover {
+    background: transparent;
+  }
 }
 
 .select svg {
@@ -153,12 +160,18 @@
   cursor: pointer;
 }
 
-.tool:hover:not(:disabled),
 .tool[aria-pressed='true'],
 .tool[aria-expanded='true'],
 .tool[data-expanded] {
   background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-primary);
+}
+
+@media (hover: hover) {
+  .tool:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .tool:disabled {
@@ -275,8 +288,10 @@
   cursor: pointer;
 }
 
-.fileToggle:hover {
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .fileToggle:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .file:not([data-expanded]) .fileHeader {
@@ -445,9 +460,11 @@
   cursor: pointer;
 }
 
-.gap:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .gap:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .gap:disabled {
@@ -486,8 +503,10 @@
   font-weight: 500;
 }
 
-.localToggle:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .localToggle:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .localToggle svg {
@@ -534,8 +553,10 @@
   font: inherit;
 }
 
-.localView:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .localView:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .localCreate {
@@ -568,8 +589,10 @@
   text-align: left;
 }
 
-.localFile:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .localFile:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .localFile .menuPath {

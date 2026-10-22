@@ -72,7 +72,7 @@ function hint(b: ReturnType<typeof option>): string | null {
   vi.useFakeTimers()
   const label = b.checkbox().closest('label')
   if (label === null) throw new Error('no option label')
-  fireEvent.mouseEnter(label)
+  fireEvent.pointerEnter(label)
   act(() => { vi.advanceTimersByTime(500) })
   return screen.getByRole('tooltip').textContent
 }
