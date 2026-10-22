@@ -174,18 +174,14 @@ describe('Python SDK dsh profile keyless smoke', () => {
       const toolNames = tools.map(tool => tool.name)
       expect(modelRequests[0]?.output_config).toEqual({ effort: 'max' })
       expect(modelRequests[0]?.max_tokens).toBe(1234)
-      const expectedTools = ['read', 'write', 'edit', 'web_fetch', 'subagent', 'subagent_fork',
+      const expectedTools = ['read', 'write', 'edit', 'web_fetch', 'web_search', 'subagent', 'subagent_fork',
         'present', 'ask_user_question', 'schedule_create', 'schedule_delete', 'schedule_list', 'schedule_update']
       const requestText = JSON.stringify(modelRequests[0])
-      // The chat route serves from this local endpoint, so its key is not sent to the official search
-      // endpoint and the step admits no web_search in either presentation.
       if (ptc) {
         expect(toolNames).toEqual(['run_code'])
         for (const tool of expectedTools) expect(requestText.includes(`${tool}:`), tool).toBe(true)
-        expect(requestText).not.toContain('web_search:')
       } else {
         expect(toolNames).toEqual(expect.arrayContaining(expectedTools))
-        expect(toolNames).not.toContain('web_search')
         expect(toolNames.includes('str_replace_editor')).toBe(editorEnabled)
         expect(toolNames).not.toContain('list_subagent_models')
       }

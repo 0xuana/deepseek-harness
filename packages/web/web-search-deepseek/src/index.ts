@@ -3,25 +3,19 @@
  * with native `web_search_20250305`. A search initiated by a Session on the DeepSeek account route
  * authenticates with the account token when the account service allows the search endpoint;
  * every other search reuses `DEEPSEEK_API_KEY`. The provider does not reuse `DEEPSEEK_BASE_URL`;
- * auxiliary search has its own endpoint configuration. A key or endpoint configured for search serves
- * every model route; without one, the DeepSeek chat key serves only the DeepSeek routes and only a search
- * endpoint on the official chat route's origin. The provider reports itself not ready for a model request
- * whose search would have no credential it may send.
+ * auxiliary search has its own endpoint configuration. The provider serves only model requests on the
+ * DeepSeek routes, and reports itself not ready for a model request whose search would have no credential.
  * @module @deepseek-ai/dsh-web-search-deepseek
  */
 import type { Volatile } from '@deepseek-ai/cordis'
 
-import { FiberState } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
-import type {} from '@deepseek-ai/cordis-plugin-loader'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-agent'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
 import type {} from '@deepseek-ai/dsh-deepseek-account'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
-import { plainOptions, resolveAdapterOptions } from '@deepseek-ai/dsh-llm-deepseek-api-key'
-import type { Config as OfficialRouteConfig, ResolvedDeepSeekOptions } from '@deepseek-ai/dsh-llm-deepseek-api-key'
 import type {} from '@deepseek-ai/dsh-session'
 import { WebError } from '@deepseek-ai/dsh-web'
 import {
@@ -96,29 +90,17 @@ const ACCOUNT_PROVIDER = 'deepseek-account'
 /** Provider route id `dsh-llm-deepseek-api-key` registers. */
 const OFFICIAL_PROVIDER = 'deepseek-official'
 
-/** Package whose Loader row owns the official route's endpoint and key reference. */
-const OFFICIAL_ROUTE_PACKAGE = '@deepseek-ai/dsh-llm-deepseek-api-key'
-
-/** Chat routes whose model requests may search with the DeepSeek chat key. */
+/** Chat routes whose model requests this provider serves. */
 const DEEPSEEK_ROUTES: ReadonlySet<string> = new Set([ACCOUNT_PROVIDER, OFFICIAL_PROVIDER])
-
-/** The settings a refused search names; configuring any of them gives search its own setup. */
-const SEARCH_SETTINGS = 'web-search-deepseek.apiKeyEnv, web-search-deepseek.apiKey, or web-search-deepseek.baseURL'
 
 /** Settings namespace carrying this provider's endpoint, model, and key reference. */
 export const WEB_SEARCH_DEEPSEEK_SETTINGS_NAMESPACE = 'web-search-deepseek'
 
-/** Options for one search, with the facts the API-key checks read. */
+/** Options for one search, with the key sources the readiness check reads. */
 type SearchOptions = DeepSeekSearchProviderOptions & {
   readonly apiKeyEnv: CredentialRef
-  /** Literal key from config, released only after the API-key checks pass. */
+  /** Literal key from config, released only after the route check passes. */
   readonly literalApiKey?: string
-  /**
-   * Whether the user configured a key or endpoint for search: a literal key, a key reference other than
-   * `DEEPSEEK_API_KEY`, `baseURL`, or `$DEEPSEEK_SEARCH_BASE_URL`. Without one, the search inherits the
-   * DeepSeek chat key and the official endpoint.
-   */
-  readonly configuredForSearch: boolean
 }
 
 /**
@@ -136,8 +118,7 @@ function resolveOptions(
   const literalApiKey = config.apiKey !== undefined && config.apiKey.length > 0
     ? config.apiKey
     : undefined
-  const configuredBaseURL = config.baseURL ?? launchEnvironmentOf(ctx).get(SEARCH_BASE_URL_ENV)?.value
-  const options: SearchOptions = {
+  return {
     ...literalApiKey === undefined ? {} : { literalApiKey },
     resolveAccountToken: async (endpoint) => {
       // The latest request context names the route that served the model
@@ -147,7 +128,7 @@ function resolveOptions(
     },
     resolveApiKey: async () => {
       // The key leaves only through this resolver, so a refusal here keeps it from every endpoint.
-      const refusal = apiKeyRefusal(ctx, options, initiatingRoute(ctx))
+      const refusal = routeRefusal(initiatingRoute(ctx))
       if (refusal !== undefined) throw refusal
       if (literalApiKey !== undefined) return literalApiKey
       const credentials = ctx.get('credentials')
@@ -157,9 +138,9 @@ function resolveOptions(
       return ambient !== undefined && ambient.value.length > 0 ? ambient.value : undefined
     },
     apiKeyEnv,
-    configuredForSearch: literalApiKey !== undefined || config.apiKeyEnv !== DEFAULT_API_KEY_ENV
-      || configuredBaseURL !== undefined,
-    baseURL: configuredBaseURL ?? DEEPSEEK_DEFAULT_BASE_URL,
+    baseURL: config.baseURL
+      ?? launchEnvironmentOf(ctx).get(SEARCH_BASE_URL_ENV)?.value
+      ?? DEEPSEEK_DEFAULT_BASE_URL,
     model: config.model,
     apiVersion: config.apiVersion,
     maxTokens: config.maxTokens,
@@ -171,7 +152,6 @@ function resolveOptions(
       )
     },
   }
-  return options
 }
 
 /**
@@ -185,68 +165,36 @@ function initiatingRoute(ctx: Context): string | undefined {
 }
 
 /**
- * The official chat route's endpoint and key reference, resolved by its owner's resolver, or undefined
- * when no active `dsh-llm-deepseek-api-key` row serves the route, as in a replay composition.
- * @param ctx - plugin context supplying the Loader rows.
- * @returns the route's base URL and key reference.
- */
-function officialChatRoute(ctx: Context): ResolvedDeepSeekOptions | undefined {
-  const entry = [...ctx.get('loader')?.entries() ?? []]
-    .find(row => row.options.name === OFFICIAL_ROUTE_PACKAGE && row.fiber?.state === FiberState.ACTIVE)
-  if (entry?.fiber === undefined) return undefined
-  const config = entry.fiber.config as OfficialRouteConfig
-  try { return resolveAdapterOptions(plainOptions(config), launchEnvironmentOf(entry.fiber.ctx)) }
-  catch (_invalidRouteConfig) { return undefined /* The route rejects this config for its own requests too. */ }
-}
-
-/**
- * Why a search for a model request on `route` must not send the API key, or undefined when it may. A key
- * or endpoint the user configured for search serves every route. Without one, the key is the DeepSeek
- * chat key: a route other than the DeepSeek routes would bill it for another provider's conversation,
- * and the official chat route's own key reference goes only to a search endpoint on that route's chat
- * origin, because a key for a gateway is not a DeepSeek key.
- * @param ctx - plugin context supplying the Loader rows.
- * @param options - options the search would use.
+ * Why a search for a model request on `route` must not run, or undefined when it may. The provider
+ * serves only the DeepSeek routes, so a conversation on another provider's model never bills the
+ * DeepSeek key, whatever key search is configured with.
  * @param route - provider route of the model request; undefined for a search outside one.
  * @returns the structured refusal, or undefined.
  */
-function apiKeyRefusal(ctx: Context, options: SearchOptions, route: string | undefined): WebError | undefined {
-  if (options.configuredForSearch) return undefined
-  if (route !== undefined && !DEEPSEEK_ROUTES.has(route)) {
-    return new WebError(
-      `DeepSeek web search is not enabled for conversations on the ${JSON.stringify(route)} model route. `
-      + `Only the user can enable it, by configuring ${SEARCH_SETTINGS}.`,
-      'WEB_PROVIDER_ROUTE_DISABLED',
-    )
-  }
-  const chat = officialChatRoute(ctx)
-  if (chat === undefined || chat.apiKeyEnv !== options.apiKeyEnv) return undefined
-  const chatOrigin = new URL(chat.baseURL).origin
-  const searchOrigin = new URL(options.baseURL).origin
-  if (chatOrigin === searchOrigin) return undefined
+function routeRefusal(route: string | undefined): WebError | undefined {
+  if (route === undefined || DEEPSEEK_ROUTES.has(route)) return undefined
   return new WebError(
-    `DeepSeek web search is not enabled: ${options.apiKeyEnv} is the key for the DeepSeek chat endpoint ${chatOrigin}, `
-    + `so it is not sent to the search endpoint ${searchOrigin}. Only the user can enable search, by configuring `
-    + `${SEARCH_SETTINGS}.`,
-    'WEB_PROVIDER_ENDPOINT_MISMATCH',
+    `DeepSeek web search serves only conversations on DeepSeek models; this request runs on the ${JSON.stringify(route)} model route.`,
+    'WEB_PROVIDER_ROUTE_DISABLED',
   )
 }
 
 /**
- * Whether the search a model request on `route` would make has a credential it may send, checked in
- * the order the search resolves them: the account token first on the account route, then the API
- * key, which must also pass the route and endpoint checks of {@link apiKeyRefusal}. A failed read
- * answers false, because the search fails on that read instead of trying the next credential. Only
- * presence is checked: the API key's value is not read and the endpoint is not contacted, so a wrong
- * key or an endpoint without native search still counts as configured.
+ * Whether the search a model request on `route` would make may run and has a credential, checked in
+ * the order the search resolves them: the route must be a DeepSeek route, then the account token
+ * comes first on the account route, then the API key. A failed read answers false, because the
+ * search fails on that read instead of trying the next credential. Only presence is checked: the API
+ * key's value is not read and the endpoint is not contacted, so a wrong key or an endpoint without
+ * native search still counts as configured.
  * @param ctx - plugin context supplying the account, credential, and environment planes.
  * @param options - options the next search would use.
  * @param route - provider route of the model request being assembled.
- * @returns whether the account token or an API key is available to that search.
+ * @returns whether that search may run with the account token or an API key.
  */
 async function searchConfigured(
   ctx: Context, options: SearchOptions, route: string | undefined,
 ): Promise<boolean> {
+  if (routeRefusal(route) !== undefined) return false
   const account = ctx.get('deepseekAccount')
   if (route === ACCOUNT_PROVIDER && account !== undefined) {
     let token: string | undefined
@@ -254,7 +202,6 @@ async function searchConfigured(
     catch (_unreadableGrant) { return false /* The search fails on this read before it tries the API key. */ }
     if (token !== undefined && token.length > 0) return true
   }
-  if (apiKeyRefusal(ctx, options, route) !== undefined) return false
   if (options.literalApiKey !== undefined) return true
   const credentials = ctx.get('credentials')
   if (credentials === undefined) {
@@ -267,7 +214,7 @@ async function searchConfigured(
 
 /**
  * Register the DeepSeek search provider with `ctx.web`. Its `ready()` answers whether a
- * search for a model request on the given route would have a credential to send.
+ * search for a model request on the given route may run and would have a credential to send.
  */
 export function apply(ctx: Context, config: Config): void {
   const options = () => resolveOptions(ctx, {

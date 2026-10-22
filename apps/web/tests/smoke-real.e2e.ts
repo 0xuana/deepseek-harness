@@ -496,13 +496,12 @@ describe('dsh web keyless CLI smoke', () => {
           "type": "text",
         }
       `)
-      // The chat route serves from this local endpoint, so its key is not sent to the official search
-      // endpoint and web_search is withheld.
       expect(captured.tools?.map(tool => tool.name)
         .filter(name => name === 'web_search' || name === 'web_fetch'))
         .toMatchInlineSnapshot(`
           [
             "web_fetch",
+            "web_search",
           ]
         `)
     } finally {

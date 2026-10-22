@@ -70,6 +70,7 @@
             "todo_write",
             "update_goal",
             "web_fetch",
+            "web_search",
             "workflow",
             "working_directory",
             "write"
@@ -131,6 +132,7 @@
             "todo_write",
             "update_goal",
             "web_fetch",
+            "web_search",
             "workflow",
             "working_directory",
             "write"
@@ -205,6 +207,7 @@
             "todo_write",
             "update_goal",
             "web_fetch",
+            "web_search",
             "workflow",
             "working_directory",
             "write"

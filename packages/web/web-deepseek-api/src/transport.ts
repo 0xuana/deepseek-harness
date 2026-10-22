@@ -1,48 +1,33 @@
 /**
  * Authentication and redirect-rejecting transport shared by the Search and
- * Fetch API providers in this package. Credential resolution, the API-key
- * route and endpoint checks, the dispatch call, and the cancellation helpers
- * deliberately repeat `dsh-web-search-deepseek`, so neither plugin depends on
- * the other; the `jscpd:ignore` regions mark those repeats
+ * Fetch API providers in this package. Credential resolution, the route check,
+ * the dispatch call, and the cancellation helpers deliberately repeat
+ * `dsh-web-search-deepseek`, so neither plugin depends on the other; the
+ * `jscpd:ignore` regions mark those repeats
  * ([rationale](../../../../.agents/notes/implemented/feature/2026-10-15-deepseek-search-fetch-api.md)).
  * @module @deepseek-ai/dsh-web-deepseek-api/transport
  */
-import { FiberState } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
-import type {} from '@deepseek-ai/cordis-plugin-loader'
 import type {} from '@deepseek-ai/dsh-agent'
-import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
+import { credentialRef, type CredentialRef } from '@deepseek-ai/dsh-credentials'
 import type {} from '@deepseek-ai/dsh-deepseek-account'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
-import { plainOptions, resolveAdapterOptions } from '@deepseek-ai/dsh-llm-deepseek-api-key'
-import type { Config as OfficialRouteConfig, ResolvedDeepSeekOptions } from '@deepseek-ai/dsh-llm-deepseek-api-key'
 import { WebError } from '@deepseek-ai/dsh-web'
 
 /** Provider route id `dsh-llm-deepseek-account` registers; `request/context` events record it per Session. */
 const ACCOUNT_PROVIDER = 'deepseek-account'
 /** Provider route id `dsh-llm-deepseek-api-key` registers. */
 const OFFICIAL_PROVIDER = 'deepseek-official'
-/** Package whose Loader row owns the official route's endpoint and key reference. */
-const OFFICIAL_ROUTE_PACKAGE = '@deepseek-ai/dsh-llm-deepseek-api-key'
-/** Chat routes whose model requests may use the DeepSeek chat key for these APIs. */
+/** Chat routes whose model requests these APIs serve. */
 const DEEPSEEK_ROUTES: ReadonlySet<string> = new Set([ACCOUNT_PROVIDER, OFFICIAL_PROVIDER])
-/** The settings a refusal names; configuring any of them gives these APIs their own setup. */
-const WEB_API_SETTINGS = 'web-deepseek-api.apiKeyEnv, web-deepseek-api.apiKey, or web-deepseek-api.baseURL'
 const USER_AGENT = 'deepseek-harness/0.0.1'
 
-/** Credential settings snapshotted for one operation or readiness answer, with the API base the key would reach. */
-export interface DeepSeekWebCredentialSettings {
-  /** Literal key from config, released only after the API-key checks pass. */
-  readonly literalApiKey?: string
+/** Literal key and credential reference from one settings snapshot. */
+export interface DeepSeekWebKeyConfig {
+  /** Literal key; blank counts as absent. */
+  readonly apiKey: string | undefined
   /** Credential reference resolved when no literal key is set. */
-  readonly apiKeyEnv: CredentialRef
-  /** API base including its path prefix. */
-  readonly baseURL: string
-  /**
-   * Whether the user configured a key or API base for these APIs. Without one, they reuse the DeepSeek
-   * chat key, which serves only the DeepSeek routes and only an API base on the official chat route's origin.
-   */
-  readonly configured: boolean
+  readonly apiKeyEnv: string
 }
 
 /** Authentication and endpoint values resolved once for an operation. */
@@ -92,12 +77,12 @@ interface DeepSeekWebRequest<T> {
 /* jscpd:ignore-start */
 /**
  * Resolve credential sources for one operation without retaining secret values.
- * @param ctx - Provider context with request routing, Loader, and credential services.
- * @param settings - Key sources and API base from the settings snapshot.
+ * @param ctx - Provider context with request routing and credential services.
+ * @param config - Literal key and credential reference from the settings snapshot.
  * @returns Authentication sources for one operation.
  */
-export function deepSeekWebAuth(ctx: Context, settings: DeepSeekWebCredentialSettings): DeepSeekWebAuth {
-  const { apiKeyEnv, literalApiKey } = settings
+export function deepSeekWebAuth(ctx: Context, config: DeepSeekWebKeyConfig): DeepSeekWebAuth {
+  const { apiKeyEnv, literalApiKey } = keySources(config)
   return {
     resolveAccountToken: async (endpoint) => {
       // The latest request context names the route that served the model
@@ -107,7 +92,7 @@ export function deepSeekWebAuth(ctx: Context, settings: DeepSeekWebCredentialSet
     },
     resolveApiKey: async () => {
       // The key leaves only through this resolver, so a refusal here keeps it from both APIs.
-      const refusal = apiKeyRefusal(ctx, settings, initiatingRoute(ctx))
+      const refusal = routeRefusal(initiatingRoute(ctx))
       if (refusal !== undefined) throw refusal
       if (literalApiKey !== undefined) return literalApiKey
       const credentials = ctx.get('credentials')
@@ -121,35 +106,48 @@ export function deepSeekWebAuth(ctx: Context, settings: DeepSeekWebCredentialSet
 }
 
 /**
- * Whether an operation for a model request on `route` has a credential it may send, checked in the order
- * the operation resolves them: the account token first on the account route, then the API key, which must
- * also pass the route and endpoint checks of {@link apiKeyRefusal}. A failed read answers false, because the
- * operation fails on that read instead of trying the next credential. Only presence is checked: the key's
- * value is not read and the endpoint is not contacted, so a wrong key still counts as configured.
- * @param ctx - Provider context with the account, credential, Loader, and environment planes.
- * @param settings - Settings the next operation would use.
+ * Whether an operation for a model request on `route` may run and has a credential, checked in the order
+ * the operation resolves them: the route must be a DeepSeek route, then the account token comes first on
+ * the account route, then the API key. A failed read answers false, because the operation fails on that
+ * read instead of trying the next credential. Only presence is checked: the key's value is not read and
+ * the endpoint is not contacted, so a wrong key still counts as configured.
+ * @param ctx - Provider context with the account, credential, and environment planes.
+ * @param config - Key sources and the API base the next operation would use.
  * @param route - Provider route of the model request being prepared.
- * @returns Whether the account token or an API key is available to that operation.
+ * @returns Whether that operation may run with the account token or an API key.
  */
 export async function deepSeekWebCredentialReady(
-  ctx: Context, settings: DeepSeekWebCredentialSettings, route: string | undefined,
+  ctx: Context, config: DeepSeekWebKeyConfig & { readonly baseURL: string }, route: string | undefined,
 ): Promise<boolean> {
+  if (routeRefusal(route) !== undefined) return false
   const account = ctx.get('deepseekAccount')
   if (route === ACCOUNT_PROVIDER && account !== undefined) {
     let token: string | undefined
-    try { token = await account.resolveToken(settings.baseURL) }
+    try { token = await account.resolveToken(config.baseURL) }
     catch (_unreadableGrant) { return false /* The operation fails on this read before it tries the API key. */ }
     if (token !== undefined && token.length > 0) return true
   }
-  if (apiKeyRefusal(ctx, settings, route) !== undefined) return false
-  if (settings.literalApiKey !== undefined) return true
+  const { apiKeyEnv, literalApiKey } = keySources(config)
+  if (literalApiKey !== undefined) return true
   const credentials = ctx.get('credentials')
   if (credentials === undefined) {
-    const ambient = launchEnvironmentOf(ctx).get(settings.apiKeyEnv)
+    const ambient = launchEnvironmentOf(ctx).get(apiKeyEnv)
     return ambient !== undefined && ambient.value.length > 0
   }
-  try { return (await credentials.describe(settings.apiKeyEnv)).configured }
+  try { return (await credentials.describe(apiKeyEnv)).configured }
   catch (_unreadableStore) { return false /* A store that cannot be read supplies no key to the operation either. */ }
+}
+
+/**
+ * The key sources of one settings snapshot: its credential reference and its non-blank literal key.
+ * @param config - Literal key and credential reference.
+ * @returns The branded reference and the literal key, when one is set.
+ */
+function keySources(config: DeepSeekWebKeyConfig): { apiKeyEnv: CredentialRef; literalApiKey?: string } {
+  return {
+    apiKeyEnv: credentialRef(config.apiKeyEnv),
+    ...config.apiKey !== undefined && config.apiKey.length > 0 ? { literalApiKey: config.apiKey } : {},
+  }
 }
 
 /**
@@ -163,50 +161,17 @@ function initiatingRoute(ctx: Context): string | undefined {
 }
 
 /**
- * The official chat route's endpoint and key reference, resolved by its owner's resolver, or undefined
- * when no active `dsh-llm-deepseek-api-key` row serves the route, as in a replay composition.
- * @param ctx - Provider context supplying the Loader rows.
- * @returns The route's base URL and key reference.
- */
-function officialChatRoute(ctx: Context): ResolvedDeepSeekOptions | undefined {
-  const entry = [...ctx.get('loader')?.entries() ?? []]
-    .find(row => row.options.name === OFFICIAL_ROUTE_PACKAGE && row.fiber?.state === FiberState.ACTIVE)
-  if (entry?.fiber === undefined) return undefined
-  const config = entry.fiber.config as OfficialRouteConfig
-  try { return resolveAdapterOptions(plainOptions(config), launchEnvironmentOf(entry.fiber.ctx)) }
-  catch (_invalidRouteConfig) { return undefined /* The route rejects this config for its own requests too. */ }
-}
-
-/**
- * Why an operation for a model request on `route` must not send the API key, or undefined when it may. A
- * key or API base the user configured for these APIs serves every route. Without one, the key is the
- * DeepSeek chat key: a route other than the DeepSeek routes would bill it for another provider's
- * conversation, and the official chat route's own key reference goes only to an API base on that route's
- * chat origin, because a key for a gateway is not a DeepSeek key.
- * @param ctx - Provider context supplying the Loader rows.
- * @param settings - Settings the operation would use; an unconfigured snapshot carries the default API base.
+ * Why an operation for a model request on `route` must not run, or undefined when it may. These APIs
+ * serve only the DeepSeek routes, so a conversation on another provider's model never bills the
+ * DeepSeek key, whatever key the APIs are configured with.
  * @param route - Provider route of the model request; undefined for an operation outside one.
  * @returns The structured refusal, or undefined.
  */
-function apiKeyRefusal(ctx: Context, settings: DeepSeekWebCredentialSettings, route: string | undefined): WebError | undefined {
-  if (settings.configured) return undefined
-  if (route !== undefined && !DEEPSEEK_ROUTES.has(route)) {
-    return new WebError(
-      `DeepSeek web access is not enabled for conversations on the ${JSON.stringify(route)} model route. `
-      + `Only the user can enable it, by configuring ${WEB_API_SETTINGS}.`,
-      'WEB_PROVIDER_ROUTE_DISABLED',
-    )
-  }
-  const chat = officialChatRoute(ctx)
-  if (chat === undefined || chat.apiKeyEnv !== settings.apiKeyEnv) return undefined
-  const chatOrigin = new URL(chat.baseURL).origin
-  const apiOrigin = new URL(settings.baseURL).origin
-  if (chatOrigin === apiOrigin) return undefined
+function routeRefusal(route: string | undefined): WebError | undefined {
+  if (route === undefined || DEEPSEEK_ROUTES.has(route)) return undefined
   return new WebError(
-    `DeepSeek web access is not enabled: ${settings.apiKeyEnv} is the key for the DeepSeek chat endpoint ${chatOrigin}, `
-    + `so it is not sent to the Search and Fetch API endpoint ${apiOrigin}. Only the user can enable web access, `
-    + `by configuring ${WEB_API_SETTINGS}.`,
-    'WEB_PROVIDER_ENDPOINT_MISMATCH',
+    `DeepSeek web access serves only conversations on DeepSeek models; this request runs on the ${JSON.stringify(route)} model route.`,
+    'WEB_PROVIDER_ROUTE_DISABLED',
   )
 }
 /* jscpd:ignore-end */
