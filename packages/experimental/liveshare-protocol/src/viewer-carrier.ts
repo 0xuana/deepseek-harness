@@ -14,7 +14,7 @@
  * {@link installViewerCarrier} runs in the browser from its own source text, so it must reference no
  * module binding: every constant and helper it needs is declared inside its body.
  *
- * @module @deepseek-ai/dsh-experimental-liveshare-protocol/src/viewer-carrier
+ * @module @deepseek-ai/dsh-experimental-liveshare-protocol
  */
 
 /** Page global naming the share one viewer page presents; the Liveshare client plugin reads it. */
@@ -227,7 +227,7 @@ export function installViewerCarrier(options: ViewerCarrierOptions): void {
       const id = nextStreamId++
       signal.throwIfAborted()
       // Each path below sends this at most once: the abort listener only runs on abort, the final
-      // block only without one, and the open paths return before either is armed.
+      // block only without one, and an open that ends the stream cancels here before either is armed.
       const cancel = (): void => {
         void post({ op: 'stream-cancel', id }, endpoint).catch(() => undefined)
       }
@@ -247,7 +247,15 @@ export function installViewerCarrier(options: ViewerCarrierOptions): void {
       // no stream for it: polling that id would only read `stream-not-found`, which looks like a lost
       // logical stream and would be re-opened forever. The frame's own code decides instead — an owner
       // refusal such as `remote-access/denied` is terminal, while a lost stream stays re-openable.
-      const refusedOpen = failure(readable(opened, endpoint), endpoint)
+      let openedBody: Record<string, unknown>
+      try {
+        openedBody = readable(opened, endpoint)
+      } catch (error) {
+        // A 200 answer the page cannot read reached the owner, which may already hold this stream id.
+        if (opened.status === 200) cancel()
+        throw error
+      }
+      const refusedOpen = failure(openedBody, endpoint)
       if (refusedOpen !== undefined) throw refusedOpen
       signal.addEventListener('abort', cancel, { once: true })
       try {

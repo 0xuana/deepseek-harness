@@ -230,7 +230,8 @@ describe('viewer carrier streams', () => {
     expect(posted.map(request => request.op)).toEqual(['stream-open', 'stream-next', 'stream-cancel'])
     const empty = await readStream([{ status: 200, body: [] }])
     expect(markerOf(empty.error)).toEqual({ kind: 'carrier' })
-    expect(empty.posted.map(request => request.op)).toEqual(['stream-open'])
+    // The 200 open reached the owner, so a body the page cannot read still releases the stream id.
+    expect(empty.posted.map(request => request.op)).toEqual(['stream-open', 'stream-cancel'])
   })
 
   it('keeps an authentication refusal terminal whatever code its body carries', async () => {
