@@ -9,7 +9,7 @@ import {
 } from 'react'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
-import { HoverCard, ImageLightbox } from '@deepseek-ai/dsh-client-ui-primitives'
+import { HoverCard, ImageLightbox, SegmentedControl, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ConvViewProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
@@ -19,6 +19,7 @@ import {
   DASH, barShare, formatChars, formatClock, formatDateTime, formatDateTimeShort, formatMs, formatPercent,
   formatTokens, formatTokensShort, formatTps,
 } from './perf-format.ts'
+import { aggregateTotals, turnContext, type ContextMode, type PerfTotals } from './perf-aggregate.ts'
 import { isNumber } from './perf-usage.ts'
 import { CALL_LIMIT } from './perf-fold.ts'
 import type { PerfTranslate } from './locales.ts'
@@ -137,6 +138,8 @@ interface ViewState {
   readonly mode: ViewMode
   readonly openTurns: Readonly<Record<number, boolean>>
   readonly stepViews: Readonly<Record<number, StepViewState>>
+  readonly showTotals: boolean
+  readonly contextMode: ContextMode
 }
 
 /** Fields both row kinds expose to the numeric column helpers. */
@@ -218,6 +221,7 @@ interface TurnRowsOptions {
   readonly open: boolean
   readonly state: StepViewState
   readonly turnScale: number
+  readonly contextMode: ContextMode
   readonly onToggle: () => void
   readonly onToggleDetail: (stepNumber: number) => void
   readonly onControl: (patch: Partial<StepViewState>) => void
@@ -346,7 +350,7 @@ function defaultTurnOpen(mode: ViewMode, turnNumber: number, latestTurn: number 
 
 /** Fresh table state: follow the newest turn's open default. */
 function createViewState(): ViewState {
-  return { mode: 'newest', openTurns: {}, stepViews: {} }
+  return { mode: 'newest', openTurns: {}, stepViews: {}, showTotals: false, contextMode: 'latest' }
 }
 
 /** Read an array element whose index the surrounding bounds already prove. */
@@ -915,6 +919,47 @@ function TimeCell({ value, scale, gap, className, trackClass, now, t }: TimeCell
   )
 }
 
+/** Props of the totals row. */
+interface TotalsRowProps {
+  readonly totals: PerfTotals
+  readonly t: PerfTranslate
+  readonly now: number
+}
+
+/** Bottom row summing the turns loaded in the current window. */
+function TotalsRow({ totals, t, now }: TotalsRowProps): ReactElement {
+  const cells = metricsCells(totals, t)
+  const value: TimeState = {
+    running: false,
+    startTime: null,
+    wall: totals.wall,
+    ttft: totals.ttft,
+    model: totals.model,
+    tool: totals.tool,
+    toolWall: totals.toolWall,
+  }
+  return (
+    <tr className={css.totalsRow} title={t('totals.title')}>
+      <td colSpan={2} className={css.totalsLabel}>
+        <span className={css.totalsTitle}>{t('totals.label')}</span>
+        <span className={css.totalsMeta}>{` · ${t('summary', { turns: totals.turnCount, steps: totals.stepCount })}`}</span>
+      </td>
+      <td className={css.turnMetric} />
+      <ContextCell value={totals.context} className={css.turnMetric} />
+      <MetricCells cells={cells} className={css.turnMetric} />
+      <TimeCell
+        value={value}
+        scale={totals.wall ?? 0}
+        gap={undefined}
+        className={css.turnMetric}
+        trackClass={css.barTurn}
+        now={now}
+        t={t}
+      />
+    </tr>
+  )
+}
+
 /** Display name of one prompt image: its recorded name, otherwise its position. */
 function imageName(attachment: ImageAttachmentRef, index: number, count: number, t: PerfTranslate): string {
   return attachment.name ?? t('imagePreview.alt', { index, count })
@@ -1430,7 +1475,9 @@ function stepRows(options: StepRowsOptions): ReactNode[] {
 
 /** All rows of one turn: the clickable header, then the expanded body. */
 function turnRows(options: TurnRowsOptions): ReactNode[] {
-  const { turn, t, loadImage, now, open, state, turnScale, onToggle, onToggleDetail, onControl } = options
+  const {
+    turn, t, loadImage, now, open, state, turnScale, contextMode, onToggle, onToggleDetail, onControl,
+  } = options
   const cells = metricsCells(turn, t)
   const rows: ReactNode[] = [
     <tr
@@ -1466,7 +1513,7 @@ function turnRows(options: TurnRowsOptions): ReactNode[] {
       </td>
       <PromptCell turn={turn} t={t} className={css.promptCellTurn} loadImage={loadImage} />
       {turnDidCell(turn, t)}
-      <ContextCell value={turn.context} className={css.turnMetric} />
+      <ContextCell value={turnContext(turn, contextMode)} className={css.turnMetric} />
       <MetricCells cells={cells} className={css.turnMetric} />
       <TimeCell
         value={turn}
@@ -1543,6 +1590,7 @@ export function PerfView(props: PerfViewProps): ReactElement {
     return () => { clearInterval(timer) }
   }, [hasRunning])
   // Turns compare only with the other turns in the window.
+  const totals = view.showTotals && turns.length > 0 ? aggregateTotals(turns, view.contextMode) : null
   const scaleTurns = visibleTurns.size === 0 ? turns : turns.filter(turn => visibleTurns.has(turn.turn))
   const turnScale = scaleTurns.reduce((max, turn) => {
     const span = totalSpan(turn, now)
@@ -1716,17 +1764,43 @@ export function PerfView(props: PerfViewProps): ReactElement {
                 open: isTurnOpen(turn.turn),
                 state: view.stepViews[turn.turn] ?? EMPTY_STEP_VIEW,
                 turnScale,
+                contextMode: view.contextMode,
                 onToggle: () => { toggleTurn(turn.turn) },
                 onToggleDetail: (stepNumber) => { toggleStepDetail(turn.turn, stepNumber) },
                 onControl: (patch) => { patchStepView(turn.turn, patch) },
               }))}
             </tbody>
+            {totals === null ? null : (
+              <tfoot>
+                <TotalsRow totals={totals} t={t} now={now} />
+              </tfoot>
+            )}
           </table>
         )}
         <div className={css.toolbar}>
           <span className={css.summary}>
             {t('summary', { turns: turns.length, steps: snapshot.stepCount })}
           </span>
+          <div className={css.controls}>
+            <span className={css.controlLabel}>{t('table.showTotals')}</span>
+            <Switch
+              checked={view.showTotals}
+              onChange={(next) => { setView(previous => ({ ...previous, showTotals: next })) }}
+              label={t('table.showTotals')}
+            />
+            <span className={css.controlLabel}>{t('contextMode.label')}</span>
+            <SegmentedControl
+              id="perf-context-mode"
+              value={view.contextMode}
+              options={[
+                { value: 'latest', label: t('contextMode.latest'), title: t('contextMode.latest.title') },
+                { value: 'cumulative', label: t('contextMode.cumulative'), title: t('contextMode.cumulative.title') },
+              ]}
+              onChange={(next) => { setView(previous => ({ ...previous, contextMode: next })) }}
+              label={t('contextMode.label')}
+              className={css.contextMode}
+            />
+          </div>
           <TableButton
             caption={allOpen ? t('collapse.all') : t('expand.all')}
             enabled={turns.length > 0}

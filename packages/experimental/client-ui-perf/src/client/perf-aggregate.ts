@@ -38,7 +38,7 @@ function triggerRank(source: string): number {
 }
 
 /** Context measured last in the turn: steps without usage keep the previous value. */
-function turnContext(steps: readonly PerfStepMetrics[]): number | null {
+function lastContext(steps: readonly PerfStepMetrics[]): number | null {
   let context: number | null = null
   for (const step of steps) if (isNumber(step.context)) context = step.context
   return context
@@ -175,7 +175,7 @@ export function aggregateTurn(turn: number, steps: readonly PerfStepMetrics[]): 
     turn,
     steps,
     startTime: first !== undefined && isNumber(first.startTime) ? first.startTime : null,
-    context: turnContext(steps),
+    context: lastContext(steps),
     // Only "nothing measured" counts as unrecorded; partial coverage is a lower bound.
     ttft: ttftUnknown === all ? null : ttftSum,
     ttftPending: ttftUnknown === all ? 0 : ttftUnknown,
@@ -316,4 +316,145 @@ export function buildTurns(nodes: Iterable<PerfViewNode>): PerfTurnMetrics[] {
     })
   })
   return turns
+}
+
+/** How a turn or window aggregates prompt sizes: final prompt or cumulative processing. */
+export type ContextMode = 'latest' | 'cumulative'
+
+/** Totals over the turns loaded in the current window. */
+export interface PerfTotals {
+  readonly turnCount: number
+  readonly stepCount: number
+  readonly context: number | null
+  readonly output: number | null
+  readonly cacheHit: number | null
+  readonly cacheRead: number | null
+  readonly cacheWrite: number | null
+  readonly cacheContext: number | null
+  readonly ttft: number | null
+  readonly ttftPending: number
+  readonly model: number | null
+  readonly modelPending: number
+  readonly tps: number | null
+  readonly tool: number | null
+  readonly toolPending: number
+  readonly toolWall: number | null
+  readonly wall: number | null
+}
+
+/**
+ * Context of one turn under the selected basis.
+ * @param turn - aggregated turn.
+ * @param mode - latest final prompt size, or the sum of its step prompt sizes.
+ * @returns the context tokens, or null when no step measured one.
+ */
+export function turnContext(turn: PerfTurnMetrics, mode: ContextMode): number | null {
+  if (mode === 'latest') return turn.context
+  let sum = 0
+  let measured = false
+  for (const step of turn.steps) {
+    if (!isNumber(step.context)) continue
+    sum += step.context
+    measured = true
+  }
+  return measured ? sum : null
+}
+
+/**
+ * Aggregate the loaded turns into one totals row.
+ * @param turns - aggregated turns in display order.
+ * @param mode - context basis shared with the turn rows.
+ * @returns summed metrics and the context value for the selected basis.
+ */
+export function aggregateTotals(turns: readonly PerfTurnMetrics[], mode: ContextMode): PerfTotals {
+  let context: number | null = null
+  let stepCount = 0
+  let outputSum = 0
+  let outputMeasured = false
+  let read = 0
+  let write = 0
+  let contextSum = 0
+  let cacheMeasured = false
+  let ttftSum = 0
+  let ttftMeasured = false
+  let ttftPending = 0
+  let modelSum = 0
+  let modelMeasured = false
+  let modelPending = 0
+  let decodeSum = 0
+  let toolSum = 0
+  let toolMeasured = false
+  let toolPending = 0
+  let toolWallSum = 0
+  let toolWallMeasured = false
+  let wallSum = 0
+  let wallMeasured = false
+  for (const turn of turns) {
+    stepCount += turn.steps.length
+    if (isNumber(turn.context)) context = turn.context
+    if (isNumber(turn.output)) {
+      outputSum += turn.output
+      outputMeasured = true
+    }
+    if (isNumber(turn.cacheRead) && isNumber(turn.cacheContext)) {
+      read += turn.cacheRead
+      write += turn.cacheWrite ?? 0
+      contextSum += turn.cacheContext
+      cacheMeasured = true
+    }
+    if (isNumber(turn.ttft)) {
+      ttftSum += turn.ttft
+      ttftMeasured = true
+    }
+    ttftPending += turn.ttftPending
+    if (isNumber(turn.model)) {
+      modelSum += turn.model
+      modelMeasured = true
+    }
+    modelPending += turn.modelPending
+    if (isNumber(turn.decode)) decodeSum += turn.decode
+    if (isNumber(turn.tool)) {
+      toolSum += turn.tool
+      toolMeasured = true
+    }
+    toolPending += turn.toolPending
+    if (isNumber(turn.toolWall)) {
+      toolWallSum += turn.toolWall
+      toolWallMeasured = true
+    }
+    if (isNumber(turn.wall)) {
+      wallSum += turn.wall
+      wallMeasured = true
+    }
+  }
+  let cumulative = 0
+  let cumulativeMeasured = false
+  if (mode === 'cumulative') {
+    for (const turn of turns) {
+      for (const step of turn.steps) {
+        if (!isNumber(step.context)) continue
+        cumulative += step.context
+        cumulativeMeasured = true
+      }
+    }
+  }
+  return {
+    turnCount: turns.length,
+    stepCount,
+    context: mode === 'cumulative' ? (cumulativeMeasured ? cumulative : null) : context,
+    output: outputMeasured ? outputSum : null,
+    cacheHit: cacheMeasured && contextSum > 0 ? Math.min(1, read / contextSum) : null,
+    cacheRead: cacheMeasured ? read : null,
+    cacheWrite: cacheMeasured ? write : null,
+    cacheContext: cacheMeasured ? contextSum : null,
+    ttft: ttftMeasured ? ttftSum : null,
+    ttftPending: ttftMeasured ? ttftPending : 0,
+    model: modelMeasured ? modelSum : null,
+    modelPending,
+    tps: outputMeasured && decodeSum > 0 && outputSum > 0 ? outputSum / (decodeSum / 1000) : null,
+    tool: toolMeasured ? toolSum : null,
+    toolPending,
+    toolWall: toolWallMeasured ? toolWallSum : null,
+    wall: wallMeasured ? wallSum : null,
+  }
 }

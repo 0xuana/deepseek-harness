@@ -808,6 +808,39 @@
   color: var(--dsw-alias-label-secondary);
 }
 
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  row-gap: 6px;
+  flex-wrap: wrap;
+}
+
+.controlLabel {
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}
+
+.contextMode {
+  flex: none;
+}
+
+.totalsRow td {
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-1);
+  font-weight: 600;
+}
+
+.totalsLabel {
+  color: var(--dsw-alias-label-primary);
+  font-weight: 600;
+}
+
+.totalsMeta {
+  color: var(--dsw-alias-label-secondary);
+  font-weight: 400;
+}
+
 .button {
   padding: 4px 10px;
   border: 0.5px solid var(--dsw-alias-border-l1);

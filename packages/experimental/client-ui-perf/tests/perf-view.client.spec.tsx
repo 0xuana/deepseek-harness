@@ -755,6 +755,54 @@ describe('turn rows', () => {
     }))
   })
 
+  it('shows a totals row and switches the context basis', () => {
+    mount({
+      turns: [
+        turn({
+          turn: 1,
+          context: 200,
+          output: 30,
+          steps: [step({ step: 1, context: 100 }), step({ step: 2, context: 200, wall: 500 })],
+        }),
+        turn({
+          turn: 2,
+          context: 300,
+          output: 40,
+          steps: [step({ step: 1, context: 200, wall: 600 }), step({ step: 2, context: 100 })],
+        }),
+      ],
+      stepCount: 4,
+    })
+    expect(screen.queryByText(say('totals.label'))).toBeNull()
+    const totalsSwitch = screen.getByRole('switch', { name: say('table.showTotals') })
+    expect(totalsSwitch.getAttribute('aria-checked')).toBe('false')
+    fireEvent.click(totalsSwitch)
+    const totalLabel = screen.getByText(say('totals.label'))
+    expect(totalLabel.parentElement?.textContent).toContain(say('summary', { turns: 2, steps: 4 }))
+    const totalRow = totalLabel.closest('tr') as HTMLTableRowElement
+    expect(cellsOf(totalRow)[2]?.textContent).toBe(formatTokensShort(300))
+
+    const first = rowWithPrefix(say('turn.label', { turn: 1 }))
+    expect(cellsOf(first)[3]?.textContent).toBe(formatTokensShort(200))
+    fireEvent.click(screen.getByRole('tab', { name: say('contextMode.cumulative') }))
+    expect(cellsOf(rowWithPrefix(say('turn.label', { turn: 1 })))[3]?.textContent)
+      .toBe(formatTokensShort(300))
+    expect(cellsOf(totalRow)[2]?.textContent).toBe(formatTokensShort(600))
+    expect(screen.getByRole('tab', { name: say('contextMode.cumulative') })
+      .getAttribute('aria-selected')).toBe('true')
+
+    fireEvent.click(totalsSwitch)
+    expect(screen.queryByText(say('totals.label'))).toBeNull()
+  })
+
+  it('leaves the totals time blank when no turn wall was measured', () => {
+    mount({ turns: [turn({ turn: 1, wall: null, context: 500 })], stepCount: 0 })
+    fireEvent.click(screen.getByRole('switch', { name: say('table.showTotals') }))
+    const label = screen.getByText(say('totals.label'))
+    const row = label.closest('tr') as HTMLTableRowElement
+    expect(cellsOf(row).at(-1)?.textContent).toBe('—')
+  })
+
   it('scales turn bars against the turns visible on screen', () => {
     interface FakeEntry { readonly target: Element; readonly isIntersecting: boolean }
     class FakeObserver {

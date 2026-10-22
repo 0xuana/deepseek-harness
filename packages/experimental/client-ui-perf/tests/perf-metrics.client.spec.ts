@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { AttachmentId, type ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
-import { aggregateTurn, buildTurns } from '../src/client/perf-aggregate.ts'
+import { aggregateTotals, aggregateTurn, buildTurns, turnContext } from '../src/client/perf-aggregate.ts'
 import type { PerfCall, PerfStepMetrics, PerfViewNode } from '../src/client/perf-contract.ts'
 import { CALL_LIMIT } from '../src/client/perf-fold.ts'
 
@@ -233,6 +233,93 @@ describe('turn aggregation', () => {
     expect(bare.cacheContext).toBeNull()
     const empty = aggregateTurn(4, [metricsOf({ context: 0, cacheRead: 0 })])
     expect(empty.cacheHit).toBeNull()
+  })
+
+  it('keeps unmeasured totals blank and skips unmeasured steps', () => {
+    const bare = aggregateTurn(3, [metricsOf({ step: 1 })])
+    expect(turnContext(bare, 'cumulative')).toBeNull()
+    expect(turnContext(bare, 'latest')).toBeNull()
+    const totals = aggregateTotals([bare], 'cumulative')
+    expect(totals.context).toBeNull()
+    expect(totals.output).toBeNull()
+    expect(totals.cacheHit).toBeNull()
+    expect(totals.ttft).toBeNull()
+    expect(totals.model).toBeNull()
+    expect(totals.tps).toBeNull()
+    expect(totals.tool).toBeNull()
+    expect(totals.toolWall).toBeNull()
+    expect(totals.wall).toBeNull()
+
+    const partial = aggregateTurn(4, [metricsOf({ step: 1, context: 100, cacheRead: 40 })])
+    expect(turnContext(partial, 'cumulative')).toBe(100)
+    const mixed = aggregateTotals([partial], 'cumulative')
+    expect(mixed.cacheWrite).toBe(0)
+    expect(mixed.cacheHit).toBe(0.4)
+    const forged = { ...bare, cacheRead: 10, cacheContext: 100, cacheWrite: null }
+    expect(aggregateTotals([forged], 'latest').cacheWrite).toBe(0)
+  })
+
+  it('aggregates loaded turns into totals and switches the context basis', () => {
+    const first = aggregateTurn(1, [
+      metricsOf({
+        step: 1, startTime: 0, endTime: 300, context: 100, output: 10, decode: 1_000,
+        cacheRead: 80, cacheWrite: 5, ttft: 100, model: 200, tool: 50, toolWall: 40, wall: 300,
+      }),
+      metricsOf({
+        step: 2, startTime: 300, endTime: 700, context: 200, output: 20, decode: 500,
+        cacheRead: 150, cacheWrite: 5, ttft: 50, model: 100, wall: 400,
+      }),
+    ])
+    const second = aggregateTurn(2, [
+      metricsOf({
+        step: 1, startTime: 700, endTime: 1_200, context: 300, output: 30, decode: 500,
+        cacheRead: 250, cacheWrite: 10, tool: 75, toolWall: 60, wall: 500,
+      }),
+    ])
+    const latest = aggregateTotals([first, second], 'latest')
+    expect(latest.turnCount).toBe(2)
+    expect(latest.stepCount).toBe(3)
+    expect(latest.context).toBe(300)
+    expect(turnContext(first, 'latest')).toBe(200)
+    expect(turnContext(first, 'cumulative')).toBe(300)
+    expect(latest.output).toBe(60)
+    expect(latest.cacheRead).toBe(480)
+    expect(latest.cacheWrite).toBe(20)
+    expect(latest.cacheContext).toBe(600)
+    expect(latest.cacheHit).toBe(0.8)
+    expect(latest.ttft).toBe(150)
+    expect(latest.ttftPending).toBe(0)
+    expect(latest.model).toBe(300)
+    expect(latest.modelPending).toBe(1)
+    expect(latest.tps).toBeCloseTo(60 / 2)
+    expect(latest.tool).toBe(125)
+    expect(latest.toolPending).toBe(0)
+    expect(latest.toolWall).toBe(100)
+    expect(latest.wall).toBe(1_200)
+
+    const cumulative = aggregateTotals([first, second], 'cumulative')
+    expect(cumulative.context).toBe(600)
+
+    const empty = aggregateTotals([], 'cumulative')
+    expect(empty).toEqual({
+      turnCount: 0,
+      stepCount: 0,
+      context: null,
+      output: null,
+      cacheHit: null,
+      cacheRead: null,
+      cacheWrite: null,
+      cacheContext: null,
+      ttft: null,
+      ttftPending: 0,
+      model: null,
+      modelPending: 0,
+      tps: null,
+      tool: null,
+      toolPending: 0,
+      toolWall: null,
+      wall: null,
+    })
   })
 
   it('sums the sequential step tool spans', () => {

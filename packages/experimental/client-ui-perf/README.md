@@ -57,6 +57,8 @@ Four Conversation Definitions fold the event window into nodes for one view targ
 | `src/client/PerfView.tsx` | Scrollport with scroll-to-top paging, table, time bars, step accordion, copy controls, and the prompt image pill with its preview and viewer |
 | `src/client/locales.ts` | Every visible string, in Chinese, English, and Japanese |
 
+The footer switches control the totals row and the context basis. `Context basis: Latest` shows each turn's final prompt size; `Cumulative` sums that turn's step prompt sizes, so a row shows the tokens processed rather than the final window. The totals row applies the same basis to every loaded turn and sums the numeric columns (cache stays token-weighted, speed stays output over decode time).
+
 The turn cache-hit cell is token-weighted across the steps that reported usage (summed cache reads ÷ summed prompt tokens), so one transient cold step is not hidden by a warmer neighbour; the tooltip shows the summed read/input/write breakdown. A step row keeps its own measured share.
 
 Windows are bounded: when a step's `step/start` is outside the loaded window, its start-dependent columns show `—` with a `start unknown` marker rather than a guessed value. Scrolling to the top asks the Session for one older page; the view offsets the scroll position by the height it prepended, so the row being read stays in place.
