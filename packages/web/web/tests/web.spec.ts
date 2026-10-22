@@ -261,6 +261,43 @@ describe('WebRuntime fetch capability', () => {
   })
 })
 
+describe('WebRuntime fetch readiness', () => {
+  /** A fetch provider whose readiness answer is scripted and whose calls are recorded. */
+  function readyFetchProvider(id: string, isAvailable: boolean, ready: boolean, asked: (string | undefined)[] = []): WebFetchProvider {
+    return {
+      ...makeFetchProvider(id, isAvailable, fetchResult(id)),
+      ready: (llmProvider) => {
+        asked.push(llmProvider)
+        return Promise.resolve(ready)
+      },
+    }
+  }
+
+  it('answers from the provider fetch() selects and passes it the request route', async () => {
+    const { web } = await mountWeb({ fetchProvider: 'deepseek' })
+    const asked: (string | undefined)[] = []
+    const httpAsked: (string | undefined)[] = []
+    web.registerFetchProvider(readyFetchProvider('deepseek', available, false, asked))
+    web.registerFetchProvider(readyFetchProvider('http', available, true, httpAsked))
+    await expect(web.fetchReady('deepseek-official')).resolves.toBe(false)
+    expect(asked).toEqual(['deepseek-official'])
+    expect(httpAsked).toEqual([])
+  })
+
+  it('treats a selected provider without ready() as ready', async () => {
+    const { web } = await mountWeb()
+    web.registerFetchProvider(makeFetchProvider('http', available, fetchResult('http')))
+    await expect(web.fetchReady('deepseek-official')).resolves.toBe(true)
+  })
+
+  it('answers true when no provider qualifies, leaving fetch() to report the failure', async () => {
+    const { web } = await mountWeb({ fetchProvider: 'down' })
+    web.registerFetchProvider(readyFetchProvider('down', unavailable, false))
+    await expect(web.fetchReady('deepseek-official')).resolves.toBe(true)
+    await expect(web.fetch({ url: 'https://example.com' })).rejects.toMatchObject({ code: 'WEB_PROVIDER_CONFIGURED_UNAVAILABLE' })
+  })
+})
+
 describe('WebError', () => {
   it('is a HarnessError carrying its code', () => {
     const error = new WebError('boom', 'WEB_INVALID_URL')

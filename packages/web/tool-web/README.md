@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-tool-web` lets models search the web with `web_search` and retrieve pages with `web_fetch`. Choose it when an agent needs current information or full source text, and enable either tool independently through package configuration. Results label provider-controlled text as external and untrusted, while fetched HTML excludes active and hidden content. If a configured provider is missing or unavailable, the tool remains visible and returns a structured error the model can act on; a request whose searches the selected provider cannot authenticate is not offered `web_search`. Timeout and result-size limits are deployment settings rather than model arguments.
+`dsh-tool-web` lets models search the web with `web_search` and retrieve pages with `web_fetch`. Choose it when an agent needs current information or full source text, and enable either tool independently through package configuration. Results label provider-controlled text as external and untrusted, while fetched HTML excludes active and hidden content. If a configured provider is missing or unavailable, the tool remains visible and returns a structured error the model can act on; a request is not offered a tool whose operations the selected provider cannot authenticate. Timeout and result-size limits are deployment settings rather than model arguments.
 
 ## Table of Contents
 
@@ -77,9 +77,9 @@ web_fetch({ url: 'https://example.com' })
 Tool registration follows product enablement, not backend availability: a tool stays visible even when its selected provider is missing, misconfigured, ambiguous, or temporarily unavailable. Execution then fails with a structured `WebError` — for example `WEB_PROVIDER_UNAVAILABLE` or `WEB_PROVIDER_AMBIGUOUS` — which becomes an error tool result the model can read and hooks or UI can route on. To remove a web tool, disable it here in config. A model request still goes without `web_search` while the selected provider is not [ready](#search-readiness) for it.
 
 <a id="search-readiness"></a>
-### Search readiness
+### Search and fetch readiness
 
-Each model step admits `web_search`, and so declares, describes, and dispatches it, only while `ctx.web.searchReady()` answers true for the chat route of the step's model selection. The service asks only the search provider that `search()` would select; a provider that does not implement readiness counts as ready, and a selection failure also answers true, so the stable-registration errors above still reach the model. [`dsh-web-search-deepseek`](../web-search-deepseek/README.md#authentication) is not ready when the step's search has no credential it may send; without search configuration of its own, it sends one only for the DeepSeek account and official routes. The check runs for every step, so a model switch or a newly stored key applies to the next step; `web_fetch` is unaffected. A step that does not admit `web_search` also leaves it out of PTC program bindings, and a call to it fails as `UNKNOWN_TOOL`.
+Each model step admits `web_search` and `web_fetch`, and so declares, describes, and dispatches them, only while `ctx.web.searchReady()` and `ctx.web.fetchReady()` answer true for the chat route of the step's model selection. The service asks only the provider that `search()` or `fetch()` would select; a provider that does not implement readiness counts as ready, and a selection failure also answers true, so the stable-registration errors above still reach the model. [`dsh-web-search-deepseek`](../web-search-deepseek/README.md#authentication) and [`dsh-web-deepseek-api`](../web-deepseek-api/README.md#authentication) are not ready when the step's operation has no credential it may send; without a key or endpoint configured for them, they send one only for the DeepSeek account and official routes. The shipped HTTP fetch provider needs no credential, so `web_fetch` stays admitted while it is selected. The check runs for every step, so a model switch or a newly stored key applies to the next step. A step that does not admit a tool also leaves it out of PTC program bindings, and a call to it fails as `UNKNOWN_TOOL`.
 
 ### Failures and recovery
 
@@ -99,7 +99,7 @@ This section explains the design decisions behind the tools; the observable beha
 
 The package is built on one separation and one registration rule:
 
-- **The consumer owns the model-facing contract.** Tool names, schemas, snake_case argument names, prompt sections, result bounds, formatting, and presentation all live here; provider selection stays entirely inside `ctx.web`. The tools never call a provider's `available()` or `ready()` and never enumerate providers — their only execution path is `ctx.web.search()` / `ctx.web.fetch()`, and `ctx.web.searchReady()` answers search readiness.
+- **The consumer owns the model-facing contract.** Tool names, schemas, snake_case argument names, prompt sections, result bounds, formatting, and presentation all live here; provider selection stays entirely inside `ctx.web`. The tools never call a provider's `available()` or `ready()` and never enumerate providers — their only execution path is `ctx.web.search()` / `ctx.web.fetch()`, and `ctx.web.searchReady()` / `ctx.web.fetchReady()` answer readiness.
 - **Enablement drives registration.** A tool registers when enabled in config, independent of backend availability, so plugin load order and HMR timing never enter the model-facing contract. Credential state enters only through per-request search readiness, which removes `web_search` from one request without unregistering it.
 
 ### Source map
@@ -108,7 +108,7 @@ The package is built on one separation and one registration rule:
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: config schema, enablement, timeout budgets, tool registration |
 | [`src/search.ts`](src/search.ts) | The `web_search` tool: argument validation, query fan-out, merge, formatting, presentation meta, step admission condition |
-| [`src/fetch.ts`](src/fetch.ts) | The `web_fetch` tool: HTML→markdown conversion, output caps, formatting, presentation meta |
+| [`src/fetch.ts`](src/fetch.ts) | The `web_fetch` tool: HTML→markdown conversion, output caps, formatting, presentation meta, step admission condition |
 
 ### Search flow
 
@@ -116,7 +116,7 @@ The package is built on one separation and one registration rule:
 
 ### Readiness flow
 
-The `web_search` registration carries an activation condition that asks `ctx.web.searchReady()` about the route of the step's model selection. The agent loop resolves conditions before it assembles the step, so the declared tools, the `tool:web_search` section, PTC program bindings, and dispatch all read the same admitted set.
+The `web_search` and `web_fetch` registrations carry activation conditions that ask `ctx.web.searchReady()` and `ctx.web.fetchReady()` about the route of the step's model selection. The agent loop resolves conditions before it assembles the step, so the declared tools, the `tool:web_search` and `tool:web_fetch` sections, PTC program bindings, and dispatch all read the same admitted set.
 
 ### Fetch flow
 
@@ -189,25 +189,25 @@ The model sees the generated [`web_search` and `web_fetch` schemas](../../../doc
 
 #### Token effect
 
-Fixed schema cost per request for a resolved `searchMaxQueries`; config disablement and scoped restrictions remove both the tool schema and its guidance, and search readiness removes both from one request.
+Fixed schema cost per request for a resolved `searchMaxQueries`; config disablement and scoped restrictions remove both the tool schema and its guidance, and readiness removes both from one request.
 
 #### KV Cache effect
 
 Prefix-stable while definitions, resolved query cap, and visibility are unchanged. Config enablement, changing `searchMaxQueries`, plugin lifecycle, or scoped restrictions may invalidate reuse from the first changed schema token.
 
-### Withheld search tool
+### Withheld web tools
 
 #### What the model sees
 
-A step whose selected search provider is not ready carries neither the `web_search` schema nor its prompt guidance, and its PTC programs cannot bind it; `web_fetch`, its guidance, and the other tools are unchanged. A `web_search` call in such a step fails as `UNKNOWN_TOOL` with `unknown tool "web_search"`. The agent loop records each difference from the previous request as a tool-registry update, so a route switch, or a key being stored or removed, appears as a `web_search` addition or removal on the next request.
+A step whose selected search or fetch provider is not ready carries neither that tool's schema nor its prompt guidance, and its PTC programs cannot bind it; the other tools are unchanged. Without an admitted `web_fetch`, the `web_search` guidance uses its search-only text. A call to a withheld tool in such a step fails as `UNKNOWN_TOOL`, for example with `unknown tool "web_search"`. The agent loop records each difference from the previous request as a tool-registry update, so a route switch, or a key being stored or removed, appears as a tool addition or removal on the next request.
 
 #### Token effect
 
-Withholding removes the `web_search` schema and its prompt guidance from the request.
+Withholding removes the tool's schema and its prompt guidance from the request.
 
 #### KV Cache effect
 
-On a DeepSeek route, a returning `web_search` is loaded as a deferred addition that keeps the cached prefix; removing it while the route stays the same changes the declared tools and prevents reuse from there. Routes without tool-update support send the complete tool list, so either change prevents reuse from the tool declarations. A model switch already invalidates the cache.
+On a DeepSeek route, a returning web tool is loaded as a deferred addition that keeps the cached prefix; removing it while the route stays the same changes the declared tools and prevents reuse from there. Routes without tool-update support send the complete tool list, so either change prevents reuse from the tool declarations. A model switch already invalidates the cache.
 
 ### Search result
 

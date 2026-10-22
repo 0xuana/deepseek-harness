@@ -2,18 +2,18 @@
 # section, a hash of its English and Chinese blocks outside code blocks and generated regions.
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-27-web-search-offered-by-provider-readiness.md
-/agent-note-offer-web-search-only-while-the-selected-search-provider-is-ready:
-  en: 9400c64d79f2ac93
-  zh: 575ef8bd0d44a3a8
-/agent-note-offer-web-search-only-while-the-selected-search-provider-is-ready/problem:
-  en: 5cac7bee675f0abf
-  zh: 9ed6c916e7a0ad59
-/agent-note-offer-web-search-only-while-the-selected-search-provider-is-ready/decision:
-  en: a7628bb5bcdbf93e
-  zh: f459be4ada116191
-/agent-note-offer-web-search-only-while-the-selected-search-provider-is-ready/alternatives-considered:
-  en: a452f57f104c823c
-  zh: 30eaf4398986f57a
-/agent-note-offer-web-search-only-while-the-selected-search-provider-is-ready/consequences:
-  en: ece942b5e71419c5
-  zh: 05a8693e615aadbd
+/agent-note-offer-web-search-and-web-fetch-only-while-the-selected-provider-is-ready:
+  en: 9163af91ea0e030d
+  zh: 92e44043b999d32f
+/agent-note-offer-web-search-and-web-fetch-only-while-the-selected-provider-is-ready/problem:
+  en: 6fac3c73a4415c83
+  zh: f65b61cc1705348b
+/agent-note-offer-web-search-and-web-fetch-only-while-the-selected-provider-is-ready/decision:
+  en: 41dda98cc14beafd
+  zh: e6de4388337e4d68
+/agent-note-offer-web-search-and-web-fetch-only-while-the-selected-provider-is-ready/alternatives-considered:
+  en: ed97aeaa22aeae1b
+  zh: d9eb442ad00186e4
+/agent-note-offer-web-search-and-web-fetch-only-while-the-selected-provider-is-ready/consequences:
+  en: ac6795e1e3faa1a6
+  zh: baca0b132ea9acfd

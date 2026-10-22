@@ -33,7 +33,7 @@ let base: string
 let handler: Handler
 let ctx: Context
 let fiber: Awaited<ReturnType<Context['plugin']>>
-// web_search is a conditional registration, so calls run inside an agent's step admission.
+// web_search and web_fetch are conditional registrations, so calls run inside an agent's step admission.
 const agent = { id: SessionId('tool-web-integration') } as Agent
 
 beforeEach(async () => {
@@ -66,10 +66,10 @@ afterEach(async () => {
 })
 
 let counter = 0
-async function call(name: string, args: unknown): Promise<ToolExecutionResult> {
-  const toolSet = await ctx.tools.resolve({ agent, modelSelection: { provider: 'test', model: 'test' }, signal: testToolSignal })
+async function call(name: string, args: unknown, on: Context = ctx): Promise<ToolExecutionResult> {
+  const toolSet = await on.tools.resolve({ agent, modelSelection: { provider: 'test', model: 'test' }, signal: testToolSignal })
   try {
-    return await executeToolFixture(ctx, { agent, toolSet, signal: testToolSignal, callId: ToolCallId(`call-${++counter}`), name, arguments: args })
+    return await executeToolFixture(on, { agent, toolSet, signal: testToolSignal, callId: ToolCallId(`call-${++counter}`), name, arguments: args })
   } finally {
     toolSet.dispose()
   }
@@ -165,7 +165,7 @@ describe('tool-call timeout returns TOOL_TIMEOUT (deadline wins over a slow fetc
   })
 
   it('returns a structured TOOL_TIMEOUT (not the provider WEB_FETCH_TIMEOUT) when the tool-call budget wins', async () => {
-    const out = await executeToolFixture(tctx, { signal: testToolSignal, callId: ToolCallId('slow-1'), name: 'web_fetch', arguments: { url: slowBase } })
+    const out = await call('web_fetch', { url: slowBase }, tctx)
     expect(out.isError).toBe(true)
     // The outer tool-call deadline won: TOOL_TIMEOUT, owned by dsh-tool-call-timeout-policy,
     // NOT the provider's own WEB_FETCH_TIMEOUT (its 30s backstop never fired).

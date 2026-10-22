@@ -78,13 +78,14 @@ Each call resolves its provider at execution time, and registration or load orde
 A provider's availability is a cheap local check — for example whether its API key is present — and never makes network calls, so selection stays fast and deterministic.
 
 <a id="search-readiness"></a>
-### Search readiness
+### Search and fetch readiness
 
-`searchReady(llmProvider?)` asks the search provider that `search()` would select whether a search made for a model request on that chat route has a credential to send; [`dsh-tool-web`](../tool-web/README.md#search-readiness) uses the answer to decide whether each request is offered `web_search`. A provider answers through its optional `ready(llmProvider)`, a configuration-only check that must not make network calls; a provider without it counts as ready. When selection fails, `searchReady()` answers true, because `search()` reports that failure as a structured `WebError`. Readiness never changes which provider is selected.
+`searchReady(llmProvider?)` and `fetchReady(llmProvider?)` ask the provider that `search()` or `fetch()` would select whether an operation made for a model request on that chat route has a credential to send; [`dsh-tool-web`](../tool-web/README.md#search-readiness) uses the answers to decide whether each model step admits `web_search` and `web_fetch`. A provider answers through its optional `ready(llmProvider)`, a configuration-only check that must not make network calls; a provider without it counts as ready. When selection fails, the readiness method answers true, because the operation reports that failure as a structured `WebError`. Readiness never changes which provider is selected.
 
 ```text
-// false only when the selected provider cannot authenticate this route's searches:
-const offered = await ctx.web.searchReady('deepseek-official')
+// false only when the selected provider cannot authenticate this route's operations:
+const searchOffered = await ctx.web.searchReady('deepseek-official')
+const fetchOffered = await ctx.web.fetchReady('deepseek-official')
 ```
 
 ### Failures and recovery
@@ -113,7 +114,7 @@ The package is built on one deliberate separation:
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Plugin entry: the `WebRuntime` service, both provider registries, execution-time selection, and search readiness |
+| [`src/index.ts`](src/index.ts) | Plugin entry: the `WebRuntime` service, both provider registries, execution-time selection, and per-route readiness |
 | [`src/types.ts`](src/types.ts) | Vocabulary: request/result types, the closed `WebFetchBody` union, and the `WebError` taxonomy |
 
 ### Data model
@@ -122,7 +123,7 @@ The request and result types define the normalized vocabulary callers build on �
 
 ### Selection flow
 
-At call time the service resolves the provider — configured id first, then the unique usable provider — and throws the matching `WebError` when no clear winner exists. A search result then passes through `capSources`, which truncates `sources[]` to `maxResults` and flags `truncated`. `searchReady()` resolves the same search provider, answers true when resolution throws, and otherwise returns the provider's `ready()` answer, or true when it has none. Registration is effect-based: providers register with the calling fiber and unregister when it disposes, and a duplicate id within a capability kind is rejected at registration.
+At call time the service resolves the provider — configured id first, then the unique usable provider — and throws the matching `WebError` when no clear winner exists. A search result then passes through `capSources`, which truncates `sources[]` to `maxResults` and flags `truncated`. `searchReady()` and `fetchReady()` resolve the same provider as the matching operation, answer true when resolution throws, and otherwise return the provider's `ready()` answer, or true when it has none. Registration is effect-based: providers register with the calling fiber and unregister when it disposes, and a duplicate id within a capability kind is rejected at registration.
 
 </details>
 
@@ -139,14 +140,14 @@ Read these pages when the package-level contract is not enough. They move from t
 - [dsh-web-fetch-http](../web-fetch-http/README.md) — the shipped anonymous HTTP(S) fetch backend.
 - [Generated configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-web) — every accepted config field and its source declaration.
 - [Web capability seam decision](../../../.agents/notes/implemented/architecture/2026-06-24-web-capability-seam.md) — why search and fetch share one provider-selection service.
-- [Search readiness decision](../../../.agents/notes/implemented/architecture/2026-09-27-web-search-offered-by-provider-readiness.md) — why the seam answers per-route search readiness for `dsh-tool-web`.
+- [Search readiness decision](../../../.agents/notes/implemented/architecture/2026-09-27-web-search-offered-by-provider-readiness.md) — why the seam answers per-route search and fetch readiness for `dsh-tool-web`.
 
 -----
 
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through `dsh-tool-web`, which renders the seam's normalized search results and fetch bodies to the model and does not admit `web_search` to model steps for which `searchReady()` answers false, while this service contributes no prompt or schema.
+Indirectly, through `dsh-tool-web`, which renders the seam's normalized search results and fetch bodies to the model and does not admit `web_search` or `web_fetch` to model steps for which `searchReady()` or `fetchReady()` answers false, while this service contributes no prompt or schema.
 
 #### KV Cache effect
 
@@ -159,7 +160,7 @@ No direct invalidation; the named consumer owns any request-prefix changes.
 
 These limits define when the service is incomplete on its own. They are current package constraints.
 
-- **No observation surface** — there is no provider-change event and no capability-status query; `searchReady()` reports only the selected search provider's credential readiness and answers true when selection fails. Availability is observable only by running a search or fetch and routing the thrown code, and the no-provider failure is the generic `WEB_PROVIDER_UNAVAILABLE` with no per-provider reason enumeration ([Agent Note](../../../.agents/notes/archived/simplification/2026-07-04-drop-unconsumed-web-observation-surface.md)).
+- **No observation surface** — there is no provider-change event and no capability-status query; `searchReady()` and `fetchReady()` report only the selected provider's credential readiness and answer true when selection fails. Availability is observable only by running a search or fetch and routing the thrown code, and the no-provider failure is the generic `WEB_PROVIDER_UNAVAILABLE` with no per-provider reason enumeration ([Agent Note](../../../.agents/notes/archived/simplification/2026-07-04-drop-unconsumed-web-observation-surface.md)).
 - **Search requests carry only `query` and `maxResults`** — provider-neutral controls (recency, domain filters, regional hints, search depth) are deferred until the backends can honor them ([seam Agent Note](../../../.agents/notes/implemented/architecture/2026-06-24-web-capability-seam.md)).
 - **`WebFetchBody` has no `pdf` arm** — text-extractable PDF support is named deferred work; the closed union makes adding it a compile-enforced change across the web packages.
 - **Provider-backed page extraction is out of scope of `fetch()`** — a Firecrawl/Tavily-style `web_extract` capability is deferred rather than widening the fetch operation.
