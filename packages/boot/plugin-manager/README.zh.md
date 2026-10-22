@@ -164,7 +164,7 @@ service 运行若在 `idleTimeoutMs` 内没有任何捕获输出即被终止，�
 - 命令改动锁文件时，pnpm 按默认注册表校验锁文件中的每个 tarball URL。某个包从其他注册表安装后，使用默认注册表安装另一个包，或在重启后删除该包，可能以 `ERR_PNPM_TARBALL_URL_MISMATCH` 失败。
 - 更新把目标保存为确切版本，失败后的重新安装也把原版本保存为确切版本，即使 profile 原先保存的是范围。有 HMR 时，重新安装的组合包排到选中列表末尾，这可能改变哪个组合包的配置优先。
 - 更新把移除与安装作为两次 profile 操作运行，其他操作可能在两者之间运行。
-- 在 Windows 上，Git 传输探测沿用父进程的控制台，SSH 的主机密钥或密码提示可能出现在启动终端中，直到 `gitTransportTimeoutMs` 到期。ssh-agent 的确认（例如 Touch ID 或 `ssh-add -c` 对话框）超过该时限时，保留 HTTPS spec。两种探测都失败时，诊断是 pnpm 的 HTTPS 失败，不报告 SSH 探测失败的原因。
+- 在 Windows 上，Git 传输探测沿用父进程的控制台，SSH 的主机密钥或密码提示可能出现在启动终端中，直到 `gitTransportTimeoutMs` 到期。在 POSIX 上，`known_hosts` 中没有的主机会让 SSH 探测失败，因此在接受一次主机密钥（例如执行 `ssh -T git@<host>`）之前一直走 HTTPS。凭据助手对话框或 ssh-agent 确认（例如 Touch ID 或 `ssh-add -c` 对话框）超过时限时算作探测失败；HTTPS 探测超时时，可达的 SSH 形式会写入 profile。私有仓库在 pnpm 启动前最多等待两倍 `gitTransportTimeoutMs`。SSH 形式固定使用 `git` 用户和 SSH 默认端口，其他 SSH 端点需要 `url.<base>.insteadOf` 规则。两种探测都失败时，诊断是 pnpm 的 HTTPS 失败，不报告 SSH 探测失败的原因。
 - 依赖需要新的构建脚本批准的新版本会更新失败，并重新安装为原版本；移除该包后通过普通安装批准其脚本。
 - 没有 HMR 时，替换包需要重启进程。在 Plugin Manager 之外重新链接仍处于安装状态的包，需要等待重启。
 - 仅启动时加载的 profile 不能删除当前进程启动时使用的包；停止进程后使用 `dsh plugin`。

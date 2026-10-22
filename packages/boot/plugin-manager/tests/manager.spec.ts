@@ -150,6 +150,17 @@ it('installs the spec the Git transport probe chooses with the profile Git envir
   expect(pnpm.mock.calls[0]?.[1]).toEqual(['add', 'git+ssh://git@git.example/team/sub/plugin.git#main'])
 })
 
+it('attributes a failure to the host of the SSH spec the probe chose, which carries no HTTPS port', async () => {
+  const { manager } = await fixture()
+  const transport = vi.spyOn(gitTransport, 'chooseGitTransport').mockResolvedValue('git+ssh://git@git.example/team/plugin.git#main')
+  const pnpm = vi.spyOn(operations, 'runProfilePnpm').mockResolvedValue({
+    exitCode: 1, output: 'ssh: Could not resolve hostname git.example: nodename nor servname provided', truncated: false, logPath: 'pnpm.log',
+  })
+  onTestFinished(() => { transport.mockRestore(); pnpm.mockRestore() })
+  expect(await manager.installBundle('git+https://git.example:8443/team/plugin.git#main')).toMatchObject({ application: 'failed', failedAt: 'spec-host' })
+  expect(pnpm).toHaveBeenCalledOnce()
+})
+
 it('cancels an active Git transport probe before starting pnpm', async () => {
   const { manager } = await fixture()
   const entered = Promise.withResolvers<undefined>()

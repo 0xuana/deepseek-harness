@@ -20,27 +20,29 @@ const HTTP_GIT_URL = /^(?:git\+)?https?:\/\//i
  * for the hosts `hosted-git-info` knows, such as GitHub and GitLab.com, and clones any other URL over the transport
  * it names.
  * @param spec The parsed installation address.
- * @returns `git+ssh://git@<host>/<path>` with the spec's fragment, or `undefined` for a spec that is not an HTTP(S)
- * Git URL on such a host, or whose URL carries credentials or a query.
+ * @returns `git+ssh://git@<host>/<path>` on SSH's default port with the spec's fragment, or `undefined` for a spec that
+ * is not an HTTP(S) Git URL on such a host, or whose URL carries credentials or a query.
  */
 export function sshGitSpec(spec: ParsedInstallSpec): string | undefined {
   if (spec.kind !== 'git' || !HTTP_GIT_URL.test(spec.spec) || hostedGitInfo.fromUrl(spec.spec) !== undefined) return undefined
   const url = new URL(spec.spec.replace(/^git\+/i, ''))
   if (url.username !== '' || url.password !== '' || url.search !== '') return undefined
-  return `git+ssh://git@${url.hostname}${url.pathname}${url.hash}`
+  // The fragment is copied as written: WHATWG serialization would percent-encode some of its characters.
+  const hash = /#.*$/s.exec(spec.spec)?.[0] ?? ''
+  return `git+ssh://git@${url.hostname}${url.pathname}${hash}`
 }
 
 /**
  * Probe whether Git can read a repository with the installer's Git configuration and credential helpers. Git's
- * terminal and askpass prompts are disabled, and on POSIX the probe has no controlling terminal, so SSH cannot ask
- * about host keys or passphrases either.
+ * terminal and askpass prompts are disabled, `core.askPass` included because Windows drops the empty `GIT_ASKPASS`,
+ * and on POSIX the probe has no controlling terminal, so SSH cannot ask about host keys or passphrases either.
  * @param repository The repository URL Git reads.
  * @param dir The profile directory where installation runs.
  * @param options The probe deadline, cancellation and environment.
  * @returns Whether `git ls-remote` listed the repository's HEAD.
  */
 async function readable(repository: string, dir: string, options: GitTransportOptions): Promise<boolean> {
-  const result = await execa('git', ['ls-remote', '--exit-code', '--', repository, 'HEAD'], {
+  const result = await execa('git', ['-c', 'core.askPass=', 'ls-remote', '--exit-code', '--', repository, 'HEAD'], {
     cwd: dir,
     env: {
       ...scrubbedParentEnv(), ...options.env, LC_ALL: 'C', GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never',

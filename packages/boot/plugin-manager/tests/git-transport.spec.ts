@@ -40,7 +40,14 @@ async function fixture() {
   await git('-C', work, 'push', repository, 'HEAD:refs/heads/main')
   await git('-C', repository, 'symbolic-ref', 'HEAD', 'refs/heads/main')
   const controller = new AbortController()
-  const choose = (spec: string) => chooseGitTransport(parseInstallSpec(spec), dir, { timeoutMs: 5000, signal: controller.signal, env })
+  const tasks: Promise<unknown>[] = []
+  // Registered after the directory removal, so it runs first: no probe outlives the directory it runs in.
+  onTestFinished(async () => { controller.abort(); await Promise.allSettled(tasks) })
+  const choose = (spec: string, timeoutMs = 5000) => {
+    const task = chooseGitTransport(parseInstallSpec(spec), dir, { timeoutMs, signal: controller.signal, env })
+    tasks.push(task)
+    return task
+  }
   return { dir, config, repository: pathToFileURL(repository).href, controller, choose }
 }
 
@@ -74,6 +81,8 @@ it('installs over SSH when HTTPS asks for credentials that SSH does not need', a
   const http = await server(unauthorized)
   await writeFile(config, `[url "${http}"]\n insteadOf = https://git.example/\n insteadOf = http://git.example/\n[url "${repository}"]\n insteadOf = ssh://git@git.example/team/sub/plugin.git\n[http]\n proxy =\n`)
   expect(await choose(SPEC)).toBe(SSH_SPEC)
+  // The fragment is copied as written, not as URL serialization would encode it.
+  expect(await choose('git+https://git.example/team/sub/plugin.git#semver:<2 >1')).toBe('git+ssh://git@git.example/team/sub/plugin.git#semver:<2 >1')
   expect(await choose('git+http://git.example/team/sub/plugin.git')).toBe('git+ssh://git@git.example/team/sub/plugin.git')
 })
 
@@ -116,6 +125,22 @@ it.each([
   run.mockClear()
   expect(await choose(spec)).toBe(spec)
   expect(run).not.toHaveBeenCalled()
+})
+
+it('ends an in-flight HTTPS probe on cancellation and keeps the spec', async () => {
+  const { config, controller, choose } = await fixture()
+  const requested = Promise.withResolvers<undefined>()
+  // Never answers, so only cancellation ends the probe.
+  const http = await server(() => { requested.resolve(undefined) })
+  await writeFile(config, `[url "${http}"]\n insteadOf = https://git.example/\n[http]\n proxy =\n`)
+  const run = vi.mocked(subprocess.execa)
+  run.mockClear()
+  const choosing = choose(SPEC, 60000)
+  await requested.promise
+  controller.abort()
+  expect(await choosing).toBe(SPEC)
+  expect(run).toHaveBeenCalledTimes(1)
+  expect(run.mock.calls[0]?.[1]).toEqual(['-c', 'core.askPass=', 'ls-remote', '--exit-code', '--', 'https://git.example/team/sub/plugin.git', 'HEAD'])
 })
 
 it('does not probe SSH after cancellation', async () => {

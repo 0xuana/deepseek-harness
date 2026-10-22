@@ -916,7 +916,7 @@ export class PluginManager extends TypertRemoteService {
           delete result.failedAt
           // A run this manager terminated got no answer from the registry at all, so no registry explains it.
           if (run.timedOut === true) break
-          const failedAt = attributeFailure(run.kind, run.output, parsed)
+          const failedAt = attributeFailure(run.kind, run.output, parsedForRegistry(installSpec))
           if (failedAt !== 'other') result.failedAt = failedAt
           if (failedAt !== 'registry' || index === plan.length - 1) break
         }
