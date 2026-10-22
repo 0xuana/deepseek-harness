@@ -8,8 +8,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-experimental-creation-recommendations/remote'
 import type { TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-experimental-creation-recommendations/types'
-import { RecommendationTail, type RecommendationTailInjected } from './Card.tsx'
-import { recommendationDefinition } from './definition.ts'
+import { RecommendationTail, type CardInjected } from './Card.tsx'
 import { en, ja, zh, type RecommendationKey } from './locales.ts'
 import { createCreationInfoStore } from './info-store.ts'
 
@@ -18,7 +17,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 /** Registries available before this plugin mounts its optional Remote. */
-export const inject = ['slots', 'uiConversation', 'sessions', 'locale', 'remote']
+export const inject = ['slots', 'locale', 'remote']
 
 /** Mount the optional Remote and UI for the same plugin lifetime.
  * @param ctx - Client plugin context.
@@ -38,26 +37,15 @@ export async function mountRecommendations(ctx: Context, contribution: TypertRem
 function registerUi(ctx: Context): void {
   const infoDismissed = createCreationInfoStore()
   ctx.effect(() => ctx.locale.register('creationRecommendations', { en, zh, ja }), 'creation-recommendations: locale')
-  ctx.effect(() => ctx.uiConversation.events.register(recommendationDefinition), 'creation-recommendations: chat')
   ctx.slots.inject('conversation.chat.turnTail', () => ctx.slots.register({
     name: 'conversation.chat.turnTail', id: 'creation-recommendation', locale: 'creationRecommendations',
-    inject: (sessionId: SessionId): RecommendationTailInjected => {
-      const binding = ctx.sessions.binding(sessionId)
-      if (binding === undefined) throw new Error(`creation-recommendations: unknown session "${sessionId}"`)
-      const chat = ctx.uiConversation.binding(binding).target('chat')
-      return {
-        hooks: { infoDismissed },
-        dismissInfo: () => { infoDismissed.set(true) },
-        keyedHooks: { recommendations: (turn) => {
-          const snapshot = chat.getSnapshot()
-          if (snapshot === undefined) throw new Error('creation-recommendations: Chat target is unavailable')
-          return snapshot.nodes.turnDataSource(Number(turn), 'creation-recommendation')
-        } },
-        act: async (callId, action, slot, customLocation) => {
-          const result = await ctx.remote.creationRecommendations.act(sessionId, callId, action, slot, customLocation)
-          return result.ok ? result.value : undefined
-        },
-      }
-    },
+    inject: (sessionId: SessionId): CardInjected => ({
+      hooks: { infoDismissed },
+      dismissInfo: () => { infoDismissed.set(true) },
+      act: async (callId, action, slot, customLocation) => {
+        const result = await ctx.remote.creationRecommendations.act(sessionId, callId, action, slot, customLocation)
+        return result.ok ? result.value : undefined
+      },
+    }),
   }, RecommendationTail))
 }

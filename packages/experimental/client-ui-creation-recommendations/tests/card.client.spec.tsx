@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, expect, it, vi } from 'vitest'
 import { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import { SessionSeq } from '@deepseek-ai/dsh-session/types'
-import type { CreationCardState } from '@deepseek-ai/dsh-experimental-creation-recommendations/types'
+import type { CreationCardState, CreationView } from '@deepseek-ai/dsh-experimental-creation-recommendations/types'
 import { RecommendationCard, RecommendationTail } from '../src/client/Card.tsx'
 import { en, zh, type RecommendationKey } from '../src/client/locales.ts'
 
@@ -20,24 +20,32 @@ function props(decision?: CreationCardState, chinese = true): Props {
   } as Props
 }
 
-it('places only the first proposal at its turn tail and leaves unrelated turns empty', () => {
+it('places the proposal admitted in its turn once the turn has ended, and leaves other turns empty', () => {
   type Tail = ComponentProps<typeof RecommendationTail>
   const value = props()
-  const useRecommendations = vi.fn<(turn: string) => readonly Props['recommendation'][] | undefined>(() => undefined)
-  const tail: Tail = { ...value, useRecommendations,
-    turn: { turn: 3, start: undefined,
-      end: { type: 'turn/end', seq: SessionSeq(1), time: 0, data: { turn: 3, reason: { kind: 'completed' } } },
-      status: 'closed', steps: [],
-      data: { get: vi.fn().mockReturnValue({ closing: {} }),
-        source: () => ({ getSnapshot: () => undefined, subscribe: () => () => {} }) } } }
-  const { rerender } = render(<RecommendationTail {...tail} />)
+  const proposal = (id: string, turn: number) => ({ ...value.recommendation, callId: ToolCallId(id), turn })
+  let view: CreationView | undefined
+  const turnData = vi.fn().mockReturnValue({ closing: {} })
+  const ended = { type: 'turn/end', seq: SessionSeq(1), time: 0, data: { turn: 3, reason: { kind: 'max-tokens' } } } as const
+  const tail = (end: typeof ended | undefined): Tail => ({ ...value, useProjection: () => view,
+    turn: { turn: 3, start: undefined, end, status: end === undefined ? 'open' : 'closed', steps: [],
+      data: { get: turnData, source: () => ({ getSnapshot: () => undefined, subscribe: () => () => {} }) } } })
+  const { rerender } = render(<RecommendationTail {...tail(ended)} />)
   expect(screen.queryByRole('region')).toBeNull()
-  useRecommendations.mockReturnValue([value.recommendation, { ...value.recommendation, callId: ToolCallId('second') }])
-  rerender(<RecommendationTail {...tail} />)
-  expect(screen.getAllByRole('region')).toHaveLength(1)
-  expect(useRecommendations).toHaveBeenCalledWith('3')
-  const suppressed: Tail = { ...tail, useProjection: () => ({ decisions: { [callId]: { callId, phase: 'suppressed', slot: 'sidebar-right' } } }) }
-  rerender(<RecommendationTail {...suppressed} />)
+  view = { decisions: {}, proposals: { earlier: proposal('earlier', 2) } }
+  rerender(<RecommendationTail {...tail(ended)} />)
+  expect(screen.queryByRole('region')).toBeNull()
+  view = { decisions: {}, proposals: { ...view.proposals, b: proposal('b', 3), a: proposal('a', 3), c: proposal('c', 3) } }
+  rerender(<RecommendationTail {...tail(ended)} />)
+  expect(screen.getAllByRole('region').map(region => region.getAttribute('data-creation-recommendation'))).toEqual(['a'])
+  expect(turnData).toHaveBeenCalledWith('turn-tail')
+  rerender(<RecommendationTail {...tail(undefined)} />)
+  expect(screen.queryByRole('region')).toBeNull()
+  turnData.mockReturnValueOnce({ closing: null })
+  rerender(<RecommendationTail {...tail(ended)} />)
+  expect(screen.queryByRole('region')).toBeNull()
+  view = { ...view, decisions: { a: { callId: ToolCallId('a'), phase: 'suppressed', slot: 'sidebar-right' } } }
+  rerender(<RecommendationTail {...tail(ended)} />)
   expect(screen.queryByRole('region')).toBeNull()
 })
 
@@ -80,6 +88,17 @@ it('requires a written location, preserves its draft, and passes only the chosen
   expect(screen.getByRole<HTMLTextAreaElement>('textbox').value).toBe('  左侧入口打开全屏日历  ')
 })
 
+it('shows the recorded placement once settled, not the location picked before the decision', () => {
+  const value = props(undefined, false)
+  const { rerender } = render(<RecommendationCard {...value} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Add to: Right sidebar' }))
+  fireEvent.click(screen.getByRole('menuitem', { name: /Write your own/ }))
+  fireEvent.change(screen.getByRole('textbox', { name: en.customLabel }), { target: { value: 'Next to the composer' } })
+  rerender(<RecommendationCard {...props({ callId, phase: 'dismissed', slot: 'sidebar-right' }, false)} />)
+  expect(screen.getByText('Add to · Right sidebar')).toBeTruthy()
+  expect(screen.queryByText(/Next to the composer/)).toBeNull()
+})
+
 it('restores a written location after cancellation and preserves it on retry', async () => {
   const value = props({ callId, phase: 'cancelled', slot: 'page', customLocation: '右侧查看当前会话的 Context' })
   const { rerender } = render(<RecommendationCard {...value} />)
@@ -108,22 +127,29 @@ it('opens the cost notice until dismissed, remembers dismissal, and allows reope
   expect(value.act).not.toHaveBeenCalled()
 })
 
-it('disables pending decisions and supports dismissal without starting a child', async () => {
+it('disables pending decisions, labels only a pending Create as starting, and supports dismissal without starting a child', async () => {
   const value = props()
-  const pending = Promise.withResolvers<Awaited<ReturnType<Props['act']>>>()
-  value.act = vi.fn(() => pending.promise)
+  const dismissal = Promise.withResolvers<Awaited<ReturnType<Props['act']>>>()
+  const creation = Promise.withResolvers<Awaited<ReturnType<Props['act']>>>()
+  value.act = vi.fn().mockReturnValueOnce(dismissal.promise).mockReturnValueOnce(creation.promise)
   render(<RecommendationCard {...value} />)
   fireEvent.click(screen.getByRole('button', { name: '暂不需要' }))
   expect(screen.getByRole('button', { name: '添加到: 右侧栏' }).hasAttribute('disabled')).toBe(true)
   expect(screen.getByRole('button', { name: '暂不需要' }).hasAttribute('disabled')).toBe(true)
-  expect(screen.getByRole('button', { name: '开始创建…' }).hasAttribute('disabled')).toBe(true)
+  expect(screen.getByRole('button', { name: '创建' }).hasAttribute('disabled')).toBe(true)
+  expect(screen.queryByRole('button', { name: '开始创建…' })).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: zh.creationInfo }))
   expect(screen.getByRole('note').textContent).toContain(zh.creationCost)
   expect(value.act).toHaveBeenCalledWith(callId, 'dismiss', 'sidebar-right', undefined)
-  await act(async () => { pending.resolve({ status: 'settled', decision: { callId, phase: 'dismissed', slot: 'sidebar-right' } }) })
+  await act(async () => { dismissal.resolve({ status: 'settled', decision: { callId, phase: 'dismissed', slot: 'sidebar-right' } }) })
+  fireEvent.click(screen.getByRole('button', { name: '创建' }))
+  expect(screen.getByRole('button', { name: '开始创建…' }).hasAttribute('disabled')).toBe(true)
+  expect(screen.getByRole('button', { name: '暂不需要' }).hasAttribute('disabled')).toBe(true)
+  await act(async () => { creation.resolve({ status: 'accepted' }) })
+  expect(screen.getByRole('button', { name: '创建' }).hasAttribute('disabled')).toBe(false)
 })
 
-it.each(['installing', 'dismissed', 'removed', 'replaced'] as const)('restores %s without repeat actions', (phase) => {
+it.each(['installing', 'dismissed', 'replaced'] as const)('restores %s without repeat actions', (phase) => {
   render(<RecommendationCard {...props({ callId, phase, slot: 'sidebar-left' }, false)} />)
   expect(screen.getByRole('status').textContent).toBe(en[phase])
   expect(screen.getAllByRole('button')).toEqual([screen.getByRole('button', { name: en.creationInfo })])
@@ -192,12 +218,46 @@ it('retains installed and kept plugins with an Undo action and the actual applic
   await waitFor(() => { expect(kept.act).toHaveBeenCalledWith(callId, 'undo', 'page', undefined) })
 })
 
+it('offers only Restore on a removed card, labels it while pending and explains missing page files', async () => {
+  const value = props({ callId, phase: 'removed', slot: 'page', bundleName: '@dsh-local/view-fixture', application: 'applied' })
+  const pending = Promise.withResolvers<Awaited<ReturnType<Props['act']>>>()
+  value.act = vi.fn(() => pending.promise)
+  render(<RecommendationCard {...value} />)
+  expect(screen.getByRole('status').textContent).toBe(zh.removed)
+  const restore = screen.getByRole('button', { name: zh.restore })
+  expect(screen.getAllByRole('button')).toEqual([screen.getByRole('button', { name: zh.creationInfo }), restore])
+  expect(screen.queryByRole('button', { name: zh.undo })).toBeNull()
+  expect(screen.queryByRole('button', { name: zh.keep })).toBeNull()
+  expect(restore.closest('footer')).not.toBeNull()
+  fireEvent.click(restore)
+  expect(value.act).toHaveBeenCalledExactlyOnceWith(callId, 'restore', 'page', undefined)
+  expect(screen.getByRole('button', { name: zh.restoring }).hasAttribute('disabled')).toBe(true)
+  await act(async () => { pending.resolve({ status: 'refused', reason: 'source-missing' }) })
+  expect(screen.getByRole('alert').textContent).toBe(zh['source-missing'])
+  expect(screen.getByRole('button', { name: zh.restore }).hasAttribute('disabled')).toBe(false)
+})
+
+it.each([
+  ['installed', 'failed', zh.applicationFailed],
+  ['kept', 'cancelled', zh.applicationCancelled],
+  ['removed', 'overridden', zh.overridden],
+] as const)('describes a %s receipt whose change ended %s with application copy, not phase copy', (phase, application, text) => {
+  render(<RecommendationCard {...props({ callId, phase, slot: 'page', application })} />)
+  expect(screen.getAllByRole('status').map(status => status.textContent)).toEqual([zh[phase], text])
+})
+
+it('leaves a failed creation to its phase line when the change also failed to apply', () => {
+  render(<RecommendationCard {...props({ callId, phase: 'failed', slot: 'page', application: 'failed' })} />)
+  expect(screen.getAllByRole('status').map(status => status.textContent)).toEqual([zh.failed])
+})
+
 it('keeps uncertain actions recoverable on refusal and connection loss', async () => {
   const value = props()
   value.act = vi.fn().mockResolvedValueOnce({ status: 'refused', reason: 'unavailable' })
+    .mockResolvedValueOnce({ status: 'refused', reason: 'read-only' })
     .mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('disconnected'))
   render(<RecommendationCard {...value} />)
-  for (const text of [zh.unavailable, zh.transport, zh.transport]) {
+  for (const text of [zh.unavailable, zh['read-only'], zh.transport, zh.transport]) {
     fireEvent.click(screen.getByRole('button', { name: '创建' }))
     await waitFor(() => { expect(screen.getByRole('alert').textContent).toBe(text) })
   }
@@ -218,7 +278,8 @@ it('only offers expansion for omitted content and preserves the full plan withou
   const view = render(<RecommendationCard {...value} />)
   expect(screen.queryByRole('button', { name: '展开方案' })).toBeNull()
   expect(screen.getByText(/Keep my task count visible/).textContent).toBe(short)
-  const prefix = '计'.repeat(79) + '👩🏽‍💻'
+  // 129 wide graphemes (258 units) plus one narrow emoji fill the 260-unit budget; the next grapheme folds.
+  const prefix = '计'.repeat(129) + '👩🏽‍💻'
   value.recommendation = { ...value.recommendation, brief: prefix + '\n\n保留完整方案，点击创建后交给 Creator。' }
   view.rerender(<RecommendationCard {...value} />)
   const expand = screen.getByRole('button', { name: '展开方案' })
@@ -247,7 +308,7 @@ it('shows supplied initial content as folded data below the plan and omits it ot
   expect(screen.getByText('预填内容')).toBeTruthy()
   expect(screen.getByText(/导出成功/).textContent).toBe(items)
   expect(screen.queryByRole('button', { name: '展开内容' })).toBeNull()
-  value.recommendation = { ...value.recommendation, initialContent: '条'.repeat(81) }
+  value.recommendation = { ...value.recommendation, initialContent: '条'.repeat(131) }
   view.rerender(<RecommendationCard {...value} />)
   const expand = screen.getByRole('button', { name: '展开内容' })
   fireEvent.click(expand)

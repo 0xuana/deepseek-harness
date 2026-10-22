@@ -106,12 +106,12 @@ Internal Remote and effect owner assembled by the personalized-pages plugin.
 /** Apply a human decision to a logged proposal.
  * @param agent - Live root resolved from the displayed session.
  * @param callId - Logged proposal id.
- * @param action - Create, cancel generation, dismiss, confirm retention, or remove the owned bundle.
+ * @param action - Create, cancel generation, dismiss, confirm retention, remove the owned bundle, or reinstall its retained profile copy.
  * @param slot - Location chosen by the user when creating or dismissing.
  * @param customLocation - Omitted: use slot. Present: Creator resolves this human-authored placement instead.
  * @returns acceptance for background work, a durable receipt, or a refusal.
  */
-@Remote act(agent: Agent, callId: ToolCallId, action: 'create' | 'dismiss' | 'keep' | 'undo' | 'cancel', slot: CreationSlot, customLocation?: string): Promise<CreationActionResult>
+@Remote act(agent: Agent, callId: ToolCallId, action: 'create' | 'dismiss' | 'keep' | 'undo' | 'cancel' | 'restore', slot: CreationSlot, customLocation?: string): Promise<CreationActionResult>
 ```
 
 Types: [Agent](core.md) · [ToolCallId](core.md)
@@ -272,7 +272,9 @@ Manage profile files and apply their declared reload lifecycle.
 /**
  * Install a package using the same pnpm implementation as dsh plugin. GitHub
  * repositories get a connection check bounded by githubConnectionTimeoutMs before pnpm starts;
- * only network failures or timeouts stop installation, while pnpm owns authentication and transport fallback. A run
+ * only network failures or timeouts stop installation, while pnpm owns authentication and transport fallback. An
+ * HTTP(S) Git URL on another host is installed over SSH instead when access probes bounded by gitTransportTimeoutMs
+ * find that only SSH can read it. A run
  * that fails, is cancelled, or adds a package without a bundle patch restores
  * `package.json` and `pnpm-lock.yaml` as they were; downloaded files can stay.
  * @param spec One package spec, including local paths relative to the invocation directory.

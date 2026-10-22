@@ -1,5 +1,5 @@
 ---
-description: "Parser for the fenced dsh-action JSON blocks an assistant answer ends with to propose a card, shared by the card experiments and the chat renderer."
+description: "Scanner for the fenced dsh- directive blocks of assistant answers: dsh-action proposal parsing and fence hiding, shared by the card experiments and the chat renderer."
 kind: "package-library"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Callers can read the `dsh-action` fenced blocks of an assistant answer as parsed JSON objects and tell which action each block names. The package owns only the fence grammar; every card experiment validates its own block fields and decides when a block becomes a card.
+Callers can find the `dsh-` directive fences of an assistant answer, read its `dsh-action` blocks as parsed JSON objects, tell which action each block names, and render the answer without those fences. The package owns only the fence grammar; every card experiment validates its own block fields and decides when a block becomes a card.
 
 ## Table of Contents
 
@@ -26,7 +26,7 @@ Callers can read the `dsh-action` fenced blocks of an assistant answer as parsed
 
 ### Read the blocks of an answer
 
-`actionBlocksOf(text)` returns every well-formed JSON object inside a ```` ```dsh-action ```` fence, in answer order. Fences with malformed JSON, arrays or scalars produce nothing; other fence languages are ignored. Validate the fields of each object with the schema of the action that owns it.
+`actionBlocksOf(text)` returns every well-formed JSON object inside a closed ```` ```dsh-action ```` fence, in answer order. Fences with malformed JSON, arrays or scalars produce nothing, and so does an unclosed fence; other fence languages are ignored. Validate the fields of each object with the schema of the action that owns it.
 
 ```ts
 import { actionBlocksOf, actionOf } from '@deepseek-ai/dsh-util-action-block'
@@ -35,7 +35,6 @@ declare const answerText: string
 
 const blocks = actionBlocksOf(answerText)
 const mine = blocks.filter(block => actionOf(block) === 'create_personalized_page')
-const foreign = blocks.some(block => actionOf(block) !== undefined && actionOf(block) !== 'create_personalized_page')
 ```
 
 ### Tell actions apart
@@ -44,7 +43,20 @@ const foreign = blocks.some(block => actionOf(block) !== undefined && actionOf(b
 
 ### Hide the fences
 
-`ACTION_BLOCK_LANGUAGE` is the fence language. Chat renderers hide fences with this language from the rendered answer; transcript views keep the original text.
+`hideDirectiveFences(text, { streaming })` removes every fence whose language starts with `dsh-`, from its opening line through its closing line, and keeps all other text as written. When a blank line precedes a removed fence, a blank line directly after it is removed too, so one blank line remains; when nothing follows the fence, the blank line before it is removed. An unclosed last fence is removed only while `streaming` is true, because the rest of the block has not arrived; a finished answer keeps it as text. Transcript views keep the original answer.
+
+```ts
+import { hideDirectiveFences } from '@deepseek-ai/dsh-util-action-block'
+
+declare const answerText: string
+declare const streaming: boolean
+
+const rendered = hideDirectiveFences(answerText, { streaming })
+```
+
+### Find the fences
+
+`scanDirectiveFences(text)` returns each directive fence with its language, the offsets of its first line and of the end of its closing line, whether it is closed, and the body lines between the fence lines. `ACTION_BLOCK_LANGUAGE` is the `dsh-action` language.
 
 -----
 
@@ -54,13 +66,13 @@ const foreign = blocks.some(block => actionOf(block) !== undefined && actionOf(b
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-One global regular expression matches each fence whose info string starts with `dsh-action`; the body between the fence lines is parsed with `JSON.parse` after trimming. The parser keeps no state and has no dependency, so a Host projection and a browser bundle read the same answer identically.
+The scanner splits the text into lines ending in `\n` or `\r\n` and follows CommonMark fenced code blocks outside any other fence. An opening line has at most three spaces of indentation and three or more backticks or tildes; the first word of its info string is the language, and a backtick fence's info string contains no backtick. The first later line with at most three spaces of indentation and at least as many of the same character, followed only by spaces or tabs, closes it. Every line inside an open fence of any language is its content, so a `dsh-action` example inside a `````` ````markdown `````` or `~~~` fence is neither parsed nor hidden, and fence characters after other text on a line open nothing. Block bodies are parsed with `JSON.parse` after trimming. The scanner keeps no state and has no dependency, so a Host projection and a browser bundle read the same answer identically.
 
 ### Source map
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Fence language, block parsing and the action discriminator |
+| [`src/index.ts`](src/index.ts) | Fence scan, block parsing, the action discriminator and fence hiding |
 
 </details>
 
@@ -71,7 +83,6 @@ One global regular expression matches each fence whose info string starts with `
 
 - [Utility package map](../README.md) — adjacent stateless helpers.
 - [Personalized pages](../../experimental/creation-recommendations/README.md) — proposes new pages through these blocks.
-- [Plugin recommendations](../../experimental/plugin-recommendations/README.md) — recommends official plugins through these blocks.
 
 -----
 
@@ -79,8 +90,9 @@ One global regular expression matches each fence whose info string starts with `
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **Fences must be closed and start at a line beginning** — a block the model leaves unterminated or indents is ordinary text; the answer is logged as written and no card appears.
-- **No shared card rules yet** — one card per turn, replacement and status notices are still folded by each experiment; a shared action-card layer is deferred until both experiments have landed.
+- **Block quotes and list items are not parsed as containers** — a fence after a `>` marker is plain text, and a fence indented by up to three spaces inside a list item counts as a top-level fence.
+- **Hiding can join paragraphs** — a removed fence written without blank lines around it leaves the lines before and after it adjacent, so Markdown renders them as one paragraph.
+- **No shared card rules yet** — one card per turn, replacement and status notices are still folded by each experiment; a shared action-card layer is deferred until a second card experiment reads these blocks.
 
 <a id="dev-note"></a>
 ### Dev Note

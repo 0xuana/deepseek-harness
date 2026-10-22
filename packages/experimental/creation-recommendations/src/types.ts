@@ -30,20 +30,21 @@ export interface CreationDecision {
 }
 
 /** Replacement and suppression are derived from the log, never written as plugin decisions: a later proposal
- * replaces an unstarted card; a proposal written while user messages are queued, or in an answer or turn that also
- * carries another action's block, is never offered. */
+ * replaces an unstarted card; a proposal written while user messages are queued is never offered. */
 export type CreationCardState = CreationDecision | (Omit<CreationDecision, 'phase'> & { readonly phase: 'replaced' | 'suppressed' })
 
-/** Open-session receipts, excluded from session-list summaries. */
+/** Open-session proposals and receipts, excluded from session-list summaries. */
 export interface CreationView {
   readonly decisions: Readonly<Record<string, CreationCardState>>
+  /** Every admitted proposal by call id, with the turn whose answer carried it. */
+  readonly proposals: Readonly<Record<string, CreationRecommendation & { readonly turn: number }>>
 }
 
 /** Human actions never accept a package name or installation path from the browser. */
 export type CreationActionResult =
   | { readonly status: 'accepted' }
   | { readonly status: 'settled'; readonly decision: CreationCardState }
-  | { readonly status: 'refused'; readonly reason: 'unknown' | 'access-denied' | 'not-live-root' | 'closing' | 'unavailable' | 'invalid-location' }
+  | { readonly status: 'refused'; readonly reason: 'unknown' | 'access-denied' | 'not-live-root' | 'closing' | 'unavailable' | 'invalid-location' | 'read-only' | 'source-missing' }
   | { readonly status: 'unconfirmed'; readonly reason: 'closing' }
 
 declare module '@deepseek-ai/dsh-llm' {
@@ -65,7 +66,7 @@ declare module '@deepseek-ai/dsh-session/types' {
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionMap {
-    /** Persistent creation receipts for the currently open session. */
+    /** Persistent creation proposals and receipts for the currently open session. */
     creationRecommendations: SessionProjectionSummaryExcluded<CreationView>
   }
 }

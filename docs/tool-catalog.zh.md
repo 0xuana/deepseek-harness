@@ -54,7 +54,7 @@
 | `@deepseek-ai/dsh-tool-workspace-dependencies` | `load_workspace_dependencies` | `ctx.tools` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`、`web_search` | `ctx.tools`、`ctx.web`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可见 schema 在更换后端时保持稳定。 |
 
-<a id="deepseek-aidsh-experimental-creation-recommendations"></a>
+<a id="deepseek-aidsh-plugin-manager"></a>
 
 ## `@deepseek-ai/dsh-plugin-manager`
 

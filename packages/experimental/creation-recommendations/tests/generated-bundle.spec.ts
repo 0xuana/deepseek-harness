@@ -98,3 +98,23 @@ it('checks explicit, default and legacy subpath entries and refuses source files
     await expect(validateGeneratedBundle(directory, name)).rejects.toThrow()
   }
 })
+
+it('requires a built ./client export when the package declares a client entry', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'dsh-created-client-'))
+  onTestFinished(() => rm(directory, { recursive: true, force: true }))
+  const name = '@dsh-local/view-client'
+  await writeBundle(directory, name)
+  const manifest = { name, version: '1.0.0', main: './index.js', dsh: { bundle: { patch: './cordis.patch.yml' }, client: { platform: 'web' } } }
+  await mkdir(join(directory, 'folder.js'))
+  for (const exports of [undefined, { '.': './index.js' }, { '.': './index.js', './client': './client.ts' },
+    { '.': './index.js', './client': './lib/client.js' }, { '.': './index.js', './client': './folder.js' }]) {
+    await writeFile(join(directory, 'package.json'), JSON.stringify({ ...manifest, exports }))
+    await expect(validateGeneratedBundle(directory, name)).rejects.toThrow('Build and export the "./client" entry before installation.')
+  }
+  await mkdir(join(directory, 'lib'))
+  await writeFile(join(directory, 'lib', 'client.js'), 'export function apply() {}\n')
+  await writeFile(join(directory, 'package.json'), JSON.stringify({ ...manifest, exports: { '.': './index.js', './client': './lib/client.js' } }))
+  await expect(validateGeneratedBundle(directory, name)).resolves.toBeUndefined()
+  await writeFile(join(directory, 'package.json'), JSON.stringify({ ...manifest, dsh: { ...manifest.dsh, client: 'web' } }))
+  await expect(validateGeneratedBundle(directory, name)).rejects.toThrow()
+})

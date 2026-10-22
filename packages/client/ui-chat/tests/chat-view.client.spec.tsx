@@ -468,6 +468,7 @@ function makeHarness(
   const useConnectionState = bindSnapshotSelector(connection)
   const SessionProviderStub: ChatViewSlotProps['SessionProvider'] = ({ children }) => <>{children}</>
   const props: HarnessStandardProps = {
+    fileDrag,
     renderFactorySlot,
     usePanelInfo: selector => selector({ activePanelId: null }),
     sessionId: SID,
@@ -2542,6 +2543,17 @@ describe('ChatView', () => {
     expect(branchButtons.map(button => button.getAttribute('aria-disabled'))).toEqual([null, null])
   })
 
+  it('copies the final answer without its dsh- directive blocks', () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+    const block = '```dsh-action\n{"action":"create_personalized_page","title":"A","brief":"B","slot":"page"}\n```'
+    const h = makeHarness({ nodes: [user(1, 'hi'), assistant(2, `方案在下方。\n\n${block}`)], turnEnds: new Map([[1, 2]]) })
+    const view = render(<h.ChatView {...h.props} />)
+    const tail = view.container.querySelector<HTMLElement>('[data-turn-tail]')
+    fireEvent.click(within(tail!).getByRole('button', { name: '复制' }))
+    expect(writeText).toHaveBeenCalledWith('方案在下方。')
+  })
+
   it('keeps every Assistant reply visible while the whole Turn folds its process', () => {
     const progress = {
       ...assistant(2, 'stage reply', 1, 1),
@@ -4609,3 +4621,5 @@ describe('ChatView', () => {
     expect(rows).toEqual(['fixture:steering:3'])
   })
 })
+
+const fileDrag = { prepare: vi.fn(async () => ({ start: () => true, release: () => {} })), reportFailure: vi.fn() }

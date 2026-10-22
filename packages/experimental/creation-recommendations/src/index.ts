@@ -16,6 +16,7 @@ import type {} from '@deepseek-ai/dsh-api-remote-access'
 import type {} from '@deepseek-ai/dsh-subagent'
 import type {} from '@deepseek-ai/dsh-app-boot'
 import type {} from '@deepseek-ai/dsh-skill'
+import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import { registerCreationSkill } from './skill.ts'
 import { creationProjection, customLocationSchema, slotSchema, type CreationState } from './projection.ts'
 import { validateGeneratedBundle } from './generated-bundle.ts'
@@ -36,6 +37,9 @@ declare module '@deepseek-ai/cordis' {
   interface Context { creationRecommendations: CreationRecommendations }
 }
 
+/** Generated page packages take this name prefix; the remainder names their copy in the profile's `created-plugins` directory. */
+const RESERVED_PREFIX = '@dsh-local/view-'
+
 interface CreationJob {
   readonly parent: Agent
   readonly childId: SessionId
@@ -46,6 +50,11 @@ interface CreationJob {
 
 /** Invalid proposals never start a child or change the profile. */
 export class CreationRecommendationError extends HarnessError {}
+
+/** Own entries only: browser-supplied ids such as `toString` never reach inherited object members. */
+function ownEntry<T>(record: Readonly<Record<string, T>>, key: string): T | undefined {
+  return Object.hasOwn(record, key) ? record[key] : undefined
+}
 
 /** Internal Remote and effect owner assembled by the personalized-pages plugin. */
 export class CreationRecommendations extends TypertRemoteService {
@@ -73,7 +82,7 @@ export class CreationRecommendations extends TypertRemoteService {
       if (pending.length === 0) return decision
       const updates = Object.values(state.view.decisions)
         .filter(receipt => state.pendingStatus[receipt.callId] !== undefined)
-        .map(receipt => ({ callId: receipt.callId, title: state.proposals[receipt.callId]?.title, phase: receipt.phase,
+        .map(receipt => ({ callId: receipt.callId, title: ownEntry(state.view.proposals, receipt.callId)?.title, phase: receipt.phase,
           slot: receipt.slot, customLocation: receipt.customLocation, application: receipt.application }))
       return { ...decision, messages: [...decision.messages, createUserMessage({
         source: { kind: 'personalized-pages', through: SessionSeq(Math.max(...pending.map(([, seq]) => seq))),
@@ -81,6 +90,7 @@ export class CreationRecommendations extends TypertRemoteService {
         content: [{ type: 'text', text: 'Latest personalized page status from card actions and background creation. '
           + 'These are status facts, not a request to start or retry work. Use these receipts instead of the earlier proposal when describing progress. '
           + 'Cancelled means a started background creation was stopped before installation. Cancelled, failed or interrupted runs can be retried from their existing card; no new proposal is needed. '
+          + 'A removed page can be restored from its card while its files remain; if they are gone, a new proposal is needed. '
           + 'Continue with the user’s current request.\n' + JSON.stringify(updates) }],
       })] }
     }, { prepend: true })
@@ -100,12 +110,9 @@ export class CreationRecommendations extends TypertRemoteService {
       }
     })
     this.ctx.tools.guard((exec) => {
-      if (exec.agent === undefined) return undefined
-      const creator = [...this.jobs.values()].some(job => job.childId === exec.agent?.id)
-      if (creator && exec.name === 'plugin_manager' && !z.object({ action: z.enum(['list_plugins', 'list_bundles', 'list_version_exemptions']) }).safeParse(exec.arguments).success) {
-        return 'Generate the new bundle files only. The caller installs them after validation.'
-      }
-      return undefined
+      if (exec.agent === undefined || exec.name !== 'plugin_manager' || this.jobs.size === 0
+        || z.object({ action: z.enum(['list_plugins', 'list_bundles', 'list_version_exemptions']) }).safeParse(exec.arguments).success) return undefined
+      return this.underCreator(exec.agent) ? 'Generate the new bundle files only. The caller installs them after validation.' : undefined
     })
     for (const agent of this.ctx.agents.roots()) await this.recoverOnOpen(agent)
   }
@@ -113,14 +120,14 @@ export class CreationRecommendations extends TypertRemoteService {
   /** Apply a human decision to a logged proposal.
    * @param agent - Live root resolved from the displayed session.
    * @param callId - Logged proposal id.
-   * @param action - Create, cancel generation, dismiss, confirm retention, or remove the owned bundle.
+   * @param action - Create, cancel generation, dismiss, confirm retention, remove the owned bundle, or reinstall its retained profile copy.
    * @param slot - Location chosen by the user when creating or dismissing.
    * @param customLocation - Omitted: use slot. Present: Creator resolves this human-authored placement instead.
    * @returns acceptance for background work, a durable receipt, or a refusal.
    */
   @Remote
-  act(agent: Agent, callId: ToolCallId, action: 'create' | 'dismiss' | 'keep' | 'undo' | 'cancel', slot: CreationSlot, customLocation?: string): Promise<CreationActionResult> {
-    if ((action === 'create' || action === 'undo') && !this.ctx.remoteAccess.allows({ kind: 'global' })) return Promise.resolve({ status: 'refused', reason: 'access-denied' })
+  act(agent: Agent, callId: ToolCallId, action: 'create' | 'dismiss' | 'keep' | 'undo' | 'cancel' | 'restore', slot: CreationSlot, customLocation?: string): Promise<CreationActionResult> {
+    if ((action === 'create' || action === 'undo' || action === 'restore') && !this.ctx.remoteAccess.allows({ kind: 'global' })) return Promise.resolve({ status: 'refused', reason: 'access-denied' })
     if (this.isStopping()) return Promise.resolve({ status: 'refused', reason: 'closing' })
     if (!this.ctx.agents.roots().includes(agent)) return Promise.resolve({ status: 'refused', reason: 'not-live-root' })
     const custom = customLocationSchema.optional().safeParse(customLocation)
@@ -165,6 +172,19 @@ export class CreationRecommendations extends TypertRemoteService {
     }
   }
 
+  /** A running Creator child, or an agent created under one at any depth, by runtime ownership. */
+  private underCreator(agent: Agent): boolean {
+    const creators = new Set([...this.jobs.values()].map(job => job.childId))
+    const live = this.ctx.agents.list()
+    const lineage = [agent]
+    for (const current of lineage) {
+      if (creators.has(current.id)) return true
+      const owner = live.find(candidate => this.ctx.agents.isOwnedBy(current.id, candidate))
+      if (owner !== undefined) lineage.push(owner)
+    }
+    return false
+  }
+
   /** Parent disposal starts before its child effects drain. */
   private isStopping(): boolean {
     let owner = this.owner
@@ -176,18 +196,18 @@ export class CreationRecommendations extends TypertRemoteService {
     }
   }
 
-  private async decide(agent: Agent, callId: ToolCallId, action: 'create' | 'dismiss' | 'keep' | 'undo' | 'cancel', slot: CreationSlot, key: string, customLocation?: string): Promise<CreationActionResult> {
+  private async decide(agent: Agent, callId: ToolCallId, action: 'create' | 'dismiss' | 'keep' | 'undo' | 'cancel' | 'restore', slot: CreationSlot, key: string, customLocation?: string): Promise<CreationActionResult> {
     try { await this.recover(agent) }
     catch (error) {
       this.ctx.logger.warn('Cannot confirm creation before card action: %s', String(error))
       return { status: 'refused', reason: 'unavailable' }
     }
     const state = this.projection.stateOf(agent.session)
-    const proposal = state.proposals[callId]
+    const proposal = ownEntry(state.view.proposals, callId)
     if (proposal === undefined) return { status: 'refused', reason: 'unknown' }
     if (this.isStopping()) return { status: 'refused', reason: 'closing' }
     if (!this.ctx.agents.roots().includes(agent)) return { status: 'refused', reason: 'not-live-root' }
-    const previous = state.view.decisions[callId]
+    const previous = ownEntry(state.view.decisions, callId)
     const job = this.jobs.get(key)
     if (job !== undefined) {
       if (action === 'cancel' && previous?.phase !== 'installing') {
@@ -213,6 +233,7 @@ export class CreationRecommendations extends TypertRemoteService {
       this.record(agent, decision)
       return { status: 'settled', decision }
     }
+    if (previous?.phase === 'removed' && action === 'restore') return this.restore(agent, previous)
     if (previous?.phase === 'dismissed' || previous?.phase === 'removed' || previous?.phase === 'replaced' || previous?.phase === 'suppressed'
       || action === 'cancel' && previous !== undefined) return { status: 'settled', decision: previous }
     if (action === 'dismiss') {
@@ -222,11 +243,13 @@ export class CreationRecommendations extends TypertRemoteService {
       return { status: 'settled', decision }
     }
     if (action !== 'create') return { status: 'refused', reason: 'unavailable' }
+    // The Creator inherits this Session's sandbox mode and could not write the package in read-only mode.
+    if (this.ctx.get('sandboxPolicy')?.resolve({ session: agent.session }).mode === 'read-only') return { status: 'refused', reason: 'read-only' }
     const id = randomUUID()
     const directory = join(this.ctx.profileContext.dir, 'created-plugins', id)
     // Spawn preserves the parent's workspace-write boundary even with a different cwd.
     const sourceDirectory = join(agent.session.header.cwd ?? this.ctx.profileContext.cwd, '.dsh-created-plugins', id)
-    const bundleName = '@dsh-local/view-' + id
+    const bundleName = RESERVED_PREFIX + id
     const decision: CreationDecision = { callId, phase: 'creating', slot, bundleName,
       ...(customLocation === undefined ? {} : { customLocation }) }
     this.record(agent, decision)
@@ -299,22 +322,61 @@ export class CreationRecommendations extends TypertRemoteService {
       await cp(sourceDirectory, directory, { recursive: true, force: false, errorOnExist: true, verbatimSymlinks: true })
       await validateGeneratedBundle(directory, bundleName)
       signal.throwIfAborted()
-      this.record(agent, { ...decision, phase: 'installing' })
-      // PluginManager owns the accepted installation, which can itself reload us.
-      // Stop local follow-up on unload and reconcile its outcome when reopened.
-      const result = await Promise.race([this.ctx.pluginManager.installBundle(directory), this.stopped.promise])
-      if (result === undefined || this.isStopping()) return
-      const installed = (await this.ctx.pluginManager.listBundles()).some(bundle => bundle.name === bundleName && bundle.installed)
-      const current = this.ctx.agents.roots().find(root => root.id === agent.id)
-      if (current !== undefined) this.record(current, {
-        ...decision, phase: installed ? 'installed' : 'failed', application: result.application,
-      })
+      await this.installProfileCopy(agent, decision, directory)
     } catch (error) {
       this.ctx.logger.warn('Interface creation failed: %s', String(error))
       const current = this.ctx.agents.roots().find(root => root.id === agent.id)
       const phase = signal.aborted ? signal.reason === 'cancelled' ? 'cancelled' : 'interrupted' : 'failed'
       if (current !== undefined) this.record(current, { ...decision, phase })
     }
+  }
+
+  /** Reinstall the retained profile copy of a removed page without running the Creator. */
+  private async restore(agent: Agent, previous: CreationDecision): Promise<CreationActionResult> {
+    if (previous.bundleName === undefined) return { status: 'refused', reason: 'unavailable' }
+    const directory = join(this.ctx.profileContext.dir, 'created-plugins', previous.bundleName.slice(RESERVED_PREFIX.length))
+    try { await validateGeneratedBundle(directory, previous.bundleName) }
+    catch (error) {
+      this.ctx.logger.warn('Cannot restore %s from its profile copy: %s', previous.bundleName, String(error))
+      return { status: 'refused', reason: 'source-missing' }
+    }
+    const installed = (await this.ctx.pluginManager.listBundles()).some(bundle => bundle.name === previous.bundleName && bundle.installed)
+    if (this.isStopping()) return { status: 'refused', reason: 'closing' }
+    // The removal outcome does not describe the reinstallation.
+    const { application: _application, ...receipt } = previous
+    if (installed) {
+      const decision: CreationDecision = { ...receipt, phase: 'installed' }
+      this.record(agent, decision)
+      return { status: 'settled', decision }
+    }
+    let outcome: CreationDecision | undefined
+    try { outcome = await this.installProfileCopy(agent, receipt, directory) }
+    catch (error) {
+      this.ctx.logger.warn('Restoring %s failed: %s', previous.bundleName, String(error))
+      // While unloading, Plugin Manager still owns the installation; reopening reconciles its outcome.
+      const current = this.isStopping() ? undefined : this.ctx.agents.roots().find(root => root.id === agent.id)
+      if (current === undefined) return { status: 'unconfirmed', reason: 'closing' }
+      outcome = { ...receipt, phase: 'failed' }
+      this.record(current, outcome)
+    }
+    return outcome === undefined ? { status: 'unconfirmed', reason: 'closing' } : { status: 'settled', decision: outcome }
+  }
+
+  /** Install a validated profile copy, then record the outcome on the Session's current root.
+   * @returns the recorded outcome; undefined when unloading released the follow-up or the root closed, which reopening reconciles.
+   */
+  private async installProfileCopy(agent: Agent, decision: CreationDecision, directory: string): Promise<CreationDecision | undefined> {
+    this.record(agent, { ...decision, phase: 'installing' })
+    // PluginManager owns the accepted installation, which can itself reload us.
+    // Stop local follow-up on unload and reconcile its outcome when reopened.
+    const result = await Promise.race([this.ctx.pluginManager.installBundle(directory), this.stopped.promise])
+    if (result === undefined || this.isStopping()) return undefined
+    const installed = (await this.ctx.pluginManager.listBundles()).some(bundle => bundle.name === decision.bundleName && bundle.installed)
+    const current = this.ctx.agents.roots().find(root => root.id === agent.id)
+    if (current === undefined) return undefined
+    const outcome: CreationDecision = { ...decision, phase: installed ? 'installed' : 'failed', application: result.application }
+    this.record(current, outcome)
+    return outcome
   }
 }
 

@@ -86,7 +86,7 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
         rendered.push(
           <MarkdownText
             key={i}
-            text={hideDirectiveFences(block.text)}
+            text={hideDirectiveFences(block.text, { streaming })}
             streaming={streaming}
             labels={labels}
             fileMentions={mentions}

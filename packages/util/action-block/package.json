@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-util-action-block",
-  "description": "Fenced dsh-action proposal blocks an assistant answer ends with, parsed for the card experiments of the DeepSeek Harness",
+  "description": "CommonMark fence scan for the dsh- directive blocks of assistant answers: dsh-action proposal parsing and fence hiding for the DeepSeek Harness",
   "version": "0.2.1-rc.2",
   "publishConfig": {
     "access": "public"

@@ -234,10 +234,16 @@ describe('client bundle purity gate', () => {
     expect(() => resolveId('@deepseek-ai/dsh-spill-policy/notice/internal')).toThrow(/purity/)
   })
 
-  it('inlines the action-block parser utility while rejecting the card experiments themselves', () => {
+  it('inlines the zero-dependency dsh-action fence utility', () => {
     expect(resolveId('@deepseek-ai/dsh-util-action-block')).toBeNull()
-    expect(() => resolveId('@deepseek-ai/dsh-experimental-creation-recommendations')).toThrow(/purity/)
-    expect(() => resolveId('@deepseek-ai/dsh-experimental-plugin-recommendations')).toThrow(/purity/)
+  })
+
+  it('inlines the stateless file-drag entry without admitting its subpaths or UI plugin', () => {
+    expect(resolveId('@deepseek-ai/dsh-util-file-drag')).toBeNull()
+    expect(() => resolveId('@deepseek-ai/dsh-util-file-drag/internal')).toThrow(/purity/)
+    expect(() => resolveId('@deepseek-ai/dsh-client-ui-file-drag')).toThrow(/purity/)
+    const deps = clientConfigs()[0]?.deps as { neverBundle: (specifier: string) => boolean }
+    expect(deps.neverBundle('@deepseek-ai/dsh-util-file-drag')).toBe(false)
   })
 
   it('inlines the browser-safe Timer entry while sharing Cordis through the module table', () => {

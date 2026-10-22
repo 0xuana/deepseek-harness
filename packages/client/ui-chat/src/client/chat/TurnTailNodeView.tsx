@@ -4,6 +4,7 @@ import type { ChatNodeViewProps, PerformanceUsageInjected, TurnTailOwnerProps } 
 import { MessageIconActions } from './MessageIconActions.tsx'
 import { TurnUsagePanel } from './TurnUsagePanel.tsx'
 import { assistantText } from './turn-assistant.ts'
+import { hideDirectiveFences } from './directive-fences.ts'
 import { hasAssistantReplyContent } from '../contract/assistant-content.ts'
 import type { ChatNode } from '../contract/chat-nodes.ts'
 import type { ChatSnapshot } from '../contract/snapshot.ts'
@@ -62,7 +63,7 @@ export const TurnTailNodeView = memo(function TurnTailNodeView({
     >
       {tail}
       <MessageIconActions
-        text={assistantText(closing.blocks)}
+        text={hideDirectiveFences(assistantText(closing.blocks))}
         time={closing.time}
         clock="end"
         // The branch action owns boundary resolution: it sends the real

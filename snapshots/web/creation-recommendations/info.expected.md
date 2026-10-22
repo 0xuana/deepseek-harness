@@ -7,7 +7,7 @@
       - strong: Creation may take a while and use a large number of tokens.
     - paragraph: Click Create to start in the background. You can keep chatting here.
   - strong: Counter
-  - paragraph: "Need: Keep a small counter visible across conversations. Location: A card titled…"
+  - paragraph: "Need: Keep a small counter visible across conversations. Location: A card titled Today’s achievements in the right sidebar. Controls: Increment and reset buttons beside the current value. Storage: Save changes in browser storage across navigation and refresh.…"
   - button "View full plan"
   - text: Add to
   - 'button "Add to: Right sidebar"': Right sidebar

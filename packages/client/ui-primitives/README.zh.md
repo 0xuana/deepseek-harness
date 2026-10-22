@@ -27,6 +27,8 @@ kind: "package-library"
 
 `Toast` 在浅色和深色模式下均使用主题的系统提示背景与文字颜色。`Menu` 数据条目与 `MenuItemButton` 组件条目接收功能 owner 提供的有效快捷键，并在末端以无背景的浅灰色文字对齐显示，子菜单也采用同一呈现。主指针为粗指针（`pointer: coarse`）且未使用[键盘导航](#input-modality)时，菜单隐藏这些提示。键盘导航会显示提示，直到下一次指针按下；快捷键绑定始终生效。`ShortcutKeys` 默认以无方块的按键文字显示菜单和行内提示。`tooltip` 变体在深色气泡上使用稍浅的键帽，以加号连接的组合则共用一个填充色块。`Tooltip.shortcutKeys` 将键帽与可选的本地化操作文本垂直居中排列，标签为空时只显示按键。可选的 `className` 供调用方设置交互状态样式。`Modal` 使用框架共享的浮层起点，视口边距至少为 24px。其遮罩不绘制 Windows 顶栏区域，覆盖整个视口的模态层仍阻挡背景点击。`Modal` 与设置外壳通过 `useModalLayer` 共用顶层 Esc 和 Tab 处理，关闭时恢复先前焦点。`closeTopModal(document)` 请求前台弹窗当前的关闭操作；上层菜单或未注册的对话框会阻止关闭其后方弹窗。组件通过 `isBehindModal` 避免将焦点移到嵌套弹窗后方。菜单先消费自己的 Esc，再由模态层处理关闭。 `observeComposition` 为局部弹层和录键处理提供相同的 composition-end 与旧版 IME 保护；调用方随交互生命周期释放其 document 监听。
 
+`isMobileDevice()` 识别 iOS 和 Android 手机及平板，供自动聚焦和收起键盘使用。它识别 UA 中的 `Android`、`iPhone`、`iPad` 或 `iPod`，以及报告 `MacIntel` 且触摸点数大于一的 iPad。其他设备（包括 Windows 触屏电脑）返回 false，不受窗口宽度影响。函数缓存首次判断结果，供页面内的所有调用方共享；组件重新挂载会复用该结果，重新加载页面时会再次读取浏览器环境。识别出的移动设备需要用户主动聚焦文本输入框。隐藏移动平台信息的浏览器模式或自定义 UA 可能导致识别失败；未识别的 UA 返回 false。仅凭桌面 UA 无法区分 Android 平板与 Linux 电脑。
+
 弹窗自动进入及弹窗、菜单回焦，包括通过 Esc 和应用关闭快捷键触发的回焦，均使用 `focusWithoutRing(element, options?)`，在 Tab 或方向键导航恢复正常焦点样式前抑制外轮廓线。弹窗容器仍不绘制焦点外框。原有边框、阴影和错误状态保持不变。用 `data-modal-autofocus` 标记弹窗的初始控件，让模态层先保存触发控件，再移动焦点。随弹窗挂载的控件不得使用 React `autoFocus`，因为它会在保存触发控件前执行。弹窗容器获得焦点时，Tab 和 Shift+Tab 分别进入第一个和最后一个可聚焦控件。
 
 本包是 Web 壳的构建输入。静态 ESM 为 Vite 保留第三方导入和样式；独立消费方自行提供开发依赖（[依赖规则](../AGENTS.md#dependency-declaration)）。
@@ -46,10 +48,11 @@ kind: "package-library"
 | `Checkbox` | 带标签的原生复选框，支持受控状态、键盘交互和禁用样式；调用方提供本地化的 `label` 文本。 |
 | `Input` | 单行文本输入，用于搜索框与行内表单。ref 指向原生输入框，供焦点控制使用，并在卸载时清空。 |
 | `InlineEditor` | 自动聚焦的多行行内编辑器，用于排队消息、goal 等短草稿。它随文本和宽度增高，最多六行，之后滚动；Enter 保存，Shift+Enter 换行，输入法组合中的 Enter 不生效，Escape 取消。调用方提供本地化 `label`，并在 elevated 表面上重绑滚动条。 |
+| `ZoomControls`, `DOCUMENT_ZOOM` | 悬浮文档缩放控件，接收本地化标签、固定预设，以及可见性和交互状态回调。省略 `fit` 时不显示适配项。工具栏带 `data-document-zoom-controls`，可见时另带 `data-document-zoom-visible`。owner 的 `className` 覆盖 `bottom` 与 `max-width`，不受样式表加载顺序影响；`inset-inline-start` 和 `transform` 负责居中与进出场位移，`opacity` 负责淡入淡出，三者都由原语保留。渲染器共用导出的缩放范围。 |
 | `Menu`, `MenuItemButton` | 由 `items` 数据行、分隔线与分组标题构成的下拉菜单，支持嵌套子菜单；`children` 在同一列表中加入组件行，每行一个 `MenuItemButton`（`separatorBefore` 开启新分组）。所有行共享样式、键盘走位与焦点归还；两类行的关闭都是 owner 状态的改变。打开期间 `↑`／`↓`（以及 Home、End）在列表中走位，Tab 选定聚焦行，Escape 或 Shift+Tab 关闭并把焦点还给锚点；选定一行同样把键盘还给锚点——除非拥有者自己移动了焦点。只拦截位于锚点或列表内的键盘，`autoFocus` 仅决定打开时是否聚焦首行。 |
 | `MenuGroup`、`observeStickyMenuGroups` | 为自定义菜单与列表框提供本地化、可访问的分组，共用吸顶标题样式与原生交叉／尺寸观察；调用方负责观察器的生命周期。 |
 | `Pill` | 可选中的胶囊按钮，用于视图切换与筛选器；接受 `active` 与 `onClick`。 |
-| `SegmentedTabs` | 受控的等宽分段标签，支持滑动指示条及左／右方向键、Home、End 导航。调用方提供文案、标签与面板 id，以及面板内容。 |
+| `SegmentedTabs` | 受控的等宽分段标签，支持滑动指示条及左／右方向键、Home、End 导航。调用方提供文案、标签与面板 id，以及面板内容。默认 `size="md"` 总高 42px、内边距 4px；`size="sm"` 总高 34px、内边距 2px。 |
 | `Tag` | 只读胶囊徽章；`tone` 选择八种配色之一。 |
 | `PathLabel` | 单行文件路径：目录使用弱化颜色，文件名使用主色，悬停可查看完整路径。空间足够时靠左显示；溢出时保留尾部并在左侧渐隐，路径或尺寸变化时更新。 |
 | `StateDot` | 10px 槽内的绿色 `done`、琥珀色 `warning`、红色 `error`、中性灰色 `idle` 圆点，以及 tertiary 灰色 14px 旋转 `ongoing` loading，其动画在挂载时以及每次动画重启（如列表重排）时固定到文档时间零点，所以所有可见 loading 同相旋转。它是 `aria-hidden` 的，名称由渲染点提供。 `appearance="step"` 以实心勾表示完成、空心圆表示等待。 |
@@ -62,6 +65,7 @@ kind: "package-library"
 | `RiskConfirmation` | 以显式复选框把关的敏感操作确认。 |
 | `Tooltip` | 锚定在克隆子元素上的悬停与键盘聚焦提示；可选的 `delayMs` 控制悬停延迟，`focusDelayMs` 控制键盘聚焦延迟，均默认为 0 毫秒。可通过 `portal` 渲染到外层，避免被容器裁剪，或受祖先层叠上下文限制其 z-index。 |
 | `HoverCard`、`HoverCardGroup` | 可阅读、可选带复制按钮的悬停预览；物理列表可选择让卡片共享首次显示等待，并互斥显示。 |
+| `DraggableImage` | 通过显式传递与反馈回调提供原图拖放。 |
 | `ImageLightbox` | 共享图片浮层，支持焦点恢复与 Esc 关闭。 |
 | `Toast` | 顶部居中的瞬时横幅，保持时长由所有者的 `holdMs` 决定。 |
 | `SettingsForm`、`SettingsValueField`、`SettingsSecretField` | 插件设置页的框架与控件：框架以 `labels` 接收文案，只在按钮点击时保存，卸载即丢弃；值字段显示暂存文本以及已覆盖标签和重置；密文字段每次为空，请求浏览器不要自动填入已保存的密码，只报告是否已配置。 |
@@ -92,7 +96,7 @@ kind: "package-library"
 
 ### 控件与图标
 
-上面的目录说明每个导出的用途；本节讲 props 本身看不出来的行为。产品图标名称不含画板尺寸，以 `Regular` 表示原始 1px 图形，以 `Medium` 表示同一几何的 1.3px 描边；`size` prop 控制渲染尺寸。具名组件让所选线重在导入处可见；描边几何由组件库拥有，而不是由消费方 CSS 覆盖。每个产品、引用、链接与权限图形都会有意保留两种线重导出，即使当前产品只使用其中一种，也让调用方无需再次扩展 API 就能选择强调程度；仅填充的成对图形外观相同。`IconWarningOutlineRegular`/`Medium` 使用圆形；`IconWarningTriangleOutlineRegular`/`Medium` 使用圆角三角形。`FishLogo` 与 `BrandWordmark` 填充品牌 slot。`FileTypeIcon` 渲染传统的 28px spreadsheet、folder、HTML、image、Markdown、generic、PDF、PPT、video 与 Word 图形，并为现有 48 个代码和配置类别使用导入的方形技术图形。该导入只替换图形：资源包中额外的类别不会扩展 `CodeFileType`。`classifyFileType` 按完整文件名、前缀、后缀、可选项目上下文、扩展名的顺序匹配；React 文件名优先于 TypeScript/JavaScript，Angular 后缀优先于基础扩展名，只有传入的项目文件包含带 `flutter:` 的 `pubspec.yaml` 时 Dart 文件才使用 Flutter。Markdown 与 SVG 仍分别使用传统 Markdown 与图片图形。表格映射包括 CSV、TSV、Excel 工作簿与模板、OpenDocument 表格和 Numbers；KEY 映射为幻灯片，RTF/ODT/Pages 映射为文档。`fileExtension` 为相邻元数据 label 暴露同一套 basename 与最终点号解析。传统图形使用实色分类底板、白色标记和半透明白色折角；通用代码图形使用尖括号与斜线，保留原图 1.35px 描边；通用文件使用灰色底板与较深灰色折角。调用方可通过 `--dsh-file-type-icon-color` 覆盖底板颜色。全彩技术图形是明确例外，会保留其内嵌调色板。所有图形都是装饰性的，不自带 label。`LinkIconMedium` 是可点击产物链接的前置图形——地球、文件夹、代码、图片、文档或纸张，`url` 链接的 `href` 指向已知站点时则改用该站点自己的标记——转写内容常引用的开发者站点（GitHub、GitLab、npm、PyPI、Stack Overflow、MDN、Wikipedia、Hacker News、YouTube、X、Bilibili、知乎、掘金、CSDN），以及主流搜索、视频、社交、购物与参考资料站点（Google、百度、DuckDuckGo、TikTok、Netflix、Spotify、Facebook、Instagram、Reddit、Telegram、WhatsApp、微信、QQ、微博、淘宝、速卖通、eBay、Quora、V2EX、Apple）——`classifyLinkPath` 把共享文件类型折叠进原有六类词汇。`ConnectionIndicator` 可渲染警告色的断联操作（常驻重试图形指明重试动作，断联文案由持有方提供）、与文案使用相同警告色的共享 ongoing loading 加一至三个点以独立于 retry 时序的 500ms 节奏推进的连接中状态，或成功色的恢复状态。点击任一警告状态都会请求立即重连；没有任何悬停交互会改变文案。药丸出现时淡入、卸载前淡出 150ms，宽度随当前 label 自适应。它的持有方提供可见性、恢复驻留时间、本地化 label 与立即重连回调；该原语不使用原生 title tooltip。`useAnchoredPosition` 与 `useAnchoredMaxHeight` 让浮动面板与底部锚定浮层始终钳制在视口内并跟随锚点；锚定浮层与 portal 模式的 `Menu` 在框架发布的顶部占用量上增加 20px，原生全屏时保留 20px，普通浏览器中沿用自身的最小边距。`HoverCard` 通过指针离开宽限期让采用 portal 的预览在跨过锚点间隙时仍可触及，并可通过 `copyText` prop 提供复制按钮。触摸进入不会打开预览，也不会拦截锚点操作。鼠标进入要求存在可悬停的指针设备；键盘聚焦不依赖该能力。其 `preview` 变体使用 anchor 或 `widthAnchorRef` 元素的宽度减去 48px，左右各内缩 24px，并在视口内放置于行的上方或下方。浮层避开框架顶部保留区，高度最多 420px，会跟随内容及 anchor 尺寸变化；Escape 或通过鼠标和键盘激活锚点可将其关闭。整个浮层的淡入和淡出各持续 100ms；关闭中的浮层停止接收指针输入，淡出后卸载。在淡出期间移回锚点可恢复显示。减少动态效果偏好会禁用过渡动画。只有启用复制时才必须提供复制标签。`HoverCard` 与嵌套的操作提示独立显示；使用 `Tooltip.portal` 将小气泡置于卡片上层。可见的嵌套 `Tooltip` 只隐藏外层 tooltip，不隐藏悬停卡片。`Toast` 使用调用方的 `holdMs` 同时控制淡出延迟与停留加淡出的总时长。`holdMs` 未变时，父组件重渲染不会重启该生命周期；完成时调用最新回调，完全淡出的操作不能接收输入。新的组件 key 会重新开始横幅周期。`rankByName` 是 `/` 菜单命令源与 skill（技能）源共享的候选排序器：查询必须是名字的不区分大小写的有序子序列；前缀命中排最前，其次按对齐分数，再按来源顺序。 portal 模式的 `Menu` 列表会在拖动和 CSS 变换期间跟随锚点，并在关闭时停止跟踪。`Menu.autoFocus` 聚焦首个启用项，支持上下方向键与 Home/End 导航，并在 Escape 时聚焦 anchor 内的第一个按钮；操作菜单可显式启用。
+上面的目录说明每个导出的用途；本节讲 props 本身看不出来的行为。产品图标名称不含画板尺寸，以 `Regular` 表示原始 1px 图形，以 `Medium` 表示同一几何的 1.3px 描边；`size` prop 控制渲染尺寸。具名组件让所选线重在导入处可见；描边几何由组件库拥有，而不是由消费方 CSS 覆盖。每个产品图标渲染一个 `<svg>` 框，其中包含一个引用对应 `dsw-icon-<glyph>-<weight>` symbol 的 `<use>`，例如 `dsw-icon-search-outline-regular`，并在 `data-icon` 中写出该 id。`ICON_SYMBOLS` 保存每个 symbol 的默认 SVG 文档；ui-theme 据此渲染文档的图标 sprite，缺少对应 symbol 的图标不渲染任何内容。通过 `<use>` 引用的图形会从使用处继承 `currentColor` 与 CSS 变量。每个产品、引用、链接与权限图形都会有意保留两种线重导出，即使当前产品只使用其中一种，也让调用方无需再次扩展 API 就能选择强调程度；仅填充的成对图形外观相同。`IconWarningOutlineRegular`/`Medium` 使用圆形；`IconWarningTriangleOutlineRegular`/`Medium` 使用圆角三角形。`FishLogo` 与 `BrandWordmark` 填充品牌 slot。`FileTypeIcon` 渲染传统的 28px spreadsheet、folder、HTML、image、Markdown、generic、PDF、PPT、video 与 Word 图形，并为现有 48 个代码和配置类别使用导入的方形技术图形。该导入只替换图形：资源包中额外的类别不会扩展 `CodeFileType`。`classifyFileType` 按完整文件名、前缀、后缀、可选项目上下文、扩展名的顺序匹配；React 文件名优先于 TypeScript/JavaScript，Angular 后缀优先于基础扩展名，只有传入的项目文件包含带 `flutter:` 的 `pubspec.yaml` 时 Dart 文件才使用 Flutter。Markdown 与 SVG 仍分别使用传统 Markdown 与图片图形。表格映射包括 CSV、TSV、Excel 工作簿与模板、OpenDocument 表格和 Numbers；KEY 映射为幻灯片，RTF/ODT/Pages 映射为文档。`fileExtension` 为相邻元数据 label 暴露同一套 basename 与最终点号解析。传统图形使用实色分类底板、白色标记和半透明白色折角；通用代码图形使用尖括号与斜线，保留原图 1.35px 描边；通用文件使用灰色底板与较深灰色折角。调用方可通过 `--dsh-file-type-icon-color` 覆盖底板颜色。全彩技术图形是明确例外，会保留其内嵌调色板。所有图形都是装饰性的，不自带 label。`LinkIconMedium` 是可点击产物链接的前置图形——地球、文件夹、代码、图片、文档或纸张，`url` 链接的 `href` 指向已知站点时则改用该站点自己的标记——转写内容常引用的开发者站点（GitHub、GitLab、npm、PyPI、Stack Overflow、MDN、Wikipedia、Hacker News、YouTube、X、Bilibili、知乎、掘金、CSDN），以及主流搜索、视频、社交、购物与参考资料站点（Google、百度、DuckDuckGo、TikTok、Netflix、Spotify、Facebook、Instagram、Reddit、Telegram、WhatsApp、微信、QQ、微博、淘宝、速卖通、eBay、Quora、V2EX、Apple）——`classifyLinkPath` 把共享文件类型折叠进原有六类词汇。`ConnectionIndicator` 可渲染警告色的断联操作（常驻重试图形指明重试动作，断联文案由持有方提供）、与文案使用相同警告色的共享 ongoing loading 加一至三个点以独立于 retry 时序的 500ms 节奏推进的连接中状态，或成功色的恢复状态。点击任一警告状态都会请求立即重连；没有任何悬停交互会改变文案。药丸出现时淡入、卸载前淡出 150ms，宽度随当前 label 自适应。它的持有方提供可见性、恢复驻留时间、本地化 label 与立即重连回调；该原语不使用原生 title tooltip。`useAnchoredPosition` 与 `useAnchoredMaxHeight` 让浮动面板与底部锚定浮层始终钳制在视口内并跟随锚点；锚定浮层与 portal 模式的 `Menu` 在框架发布的顶部占用量上增加 20px，原生全屏时保留 20px，普通浏览器中沿用自身的最小边距。`HoverCard` 通过指针离开宽限期让采用 portal 的预览在跨过锚点间隙时仍可触及，并可通过 `copyText` prop 提供复制按钮。触摸进入不会打开预览，也不会拦截锚点操作。鼠标进入要求存在可悬停的指针设备；键盘聚焦不依赖该能力。其 `preview` 变体使用 anchor 或 `widthAnchorRef` 元素的宽度减去 48px，左右各内缩 24px，并在视口内放置于行的上方或下方。浮层避开框架顶部保留区，高度最多 420px，会跟随内容及 anchor 尺寸变化；Escape 或通过鼠标和键盘激活锚点可将其关闭。整个浮层的淡入和淡出各持续 100ms；关闭中的浮层停止接收指针输入，淡出后卸载。在淡出期间移回锚点可恢复显示。减少动态效果偏好会禁用过渡动画。只有启用复制时才必须提供复制标签。`HoverCard` 与嵌套的操作提示独立显示；使用 `Tooltip.portal` 将小气泡置于卡片上层。可见的嵌套 `Tooltip` 只隐藏外层 tooltip，不隐藏悬停卡片。`Toast` 使用调用方的 `holdMs` 同时控制淡出延迟与停留加淡出的总时长。`holdMs` 未变时，父组件重渲染不会重启该生命周期；完成时调用最新回调，完全淡出的操作不能接收输入。新的组件 key 会重新开始横幅周期。`rankByName` 是 `/` 菜单命令源与 skill（技能）源共享的候选排序器：查询必须是名字的不区分大小写的有序子序列；前缀命中排最前，其次按对齐分数，再按来源顺序。 portal 模式的 `Menu` 列表会在拖动和 CSS 变换期间跟随锚点，并在关闭时停止跟踪。`Menu.autoFocus` 聚焦首个启用项，支持上下方向键与 Home/End 导航，并在 Escape 时聚焦 anchor 内的第一个按钮；操作菜单可显式启用。
 
 `Tooltip` 在悬停或键盘聚焦时读取锚点位置，再根据 `ResizeObserver` 提供的边框盒尺寸调整气泡。首次定位前保持隐藏，优先使用指定方向，再尝试相反方向和垂直于该方向的两侧；只要某一侧容得下，就沿锚点平移而不遮挡锚点。左右放置保留 10px 间距，上下放置使用 `gap`（默认 8px）。宽高限制在视口内并保留 12px 边距；文本自动换行，超出视口高度的内容在固定气泡后可滚动。若所有方向都放不下，则使用稳定的视口内回退位置，可能遮挡锚点。视口尺寸变化会重新读取锚点坐标，标签尺寸变化则复用坐标；定位不会同步测量气泡，也不会触发 React 渲染。 触摸按下会关闭未固定的提示，且不会触发悬停提示，包括触摸后的兼容鼠标事件。只有 `(any-hover: hover)` 表明存在可悬停的输入设备时，鼠标进入才会打开提示，从而排除 iOS 因已点击图标变化而生成的鼠标进入事件。仅有触摸输入的设备仍可使用键盘聚焦提示和显式点击打开的说明。信息按钮可显式启用 `openOnClick`，通过鼠标或触摸点击固定气泡供阅读，并将内容关联为锚点的无障碍描述；再次点击、Escape、Tab 或外部 pointerdown 会关闭。普通操作按钮在触摸点击时直接执行操作，不显示 Tooltip。
 
@@ -118,9 +122,11 @@ kind: "package-library"
 
 `ImageLightbox` 是共享原图浮层，支持焦点恢复与 Esc 关闭。与 `Modal` 相同，其遮罩不覆盖 Windows 顶栏，关闭按钮位于顶栏下方 20px。包内缩略图渲染器由调用方提供加载及失败文案。`HoverCard.inline` 使文件链接保持在文本流内，并使用共享菜单材质、键盘可见焦点，并在锚点上方或下方定位而不遮挡锚点。即使焦点位于其他位置，Esc 也会关闭已打开的缩略图；后续 Esc 按键继续传给 owner。`MarkdownDelegateProvider.fileImages` 提供已解码路径解析器与完整图片文案：消息落定后的图片链接支持悬停预览，独立图片支持点击放大。仅包含图片的链接保留单一导航目标。解析器仅恢复完整、未转义、独立成段且带明确图片扩展名的含裸空格本地图片引用；代码与有歧义的目标保持原文。 透明悬停区域连接锚点与弹层之间的视觉空隙，鼠标经过时不会激活下方内容。
 
+`DraggableImage` 接收显式的 `fileDrag: FileDragActions`，受管理的 Markdown 图片通过 `MarkdownDelegateProvider.fileImages.fileDrag` 接收同一组回调。[文件拖放插件](../ui-file-drag/README.zh.md) 负责准备、传递与本地化失败提示；图片原语负责手势和取消。带资源引用的图片仅在主指针按下时准备，其他来源也可在悬停时准备。在图片内松开保留准备供下一次手势使用；指针移开释放未使用的准备，平移模式跳过准备。Markdown 导出名取已解码路径的文件名。在准备完成前起拖会静默取消本次手势；实际准备失败才显示重试提示。受管理的 Web 拖放携带应用内令牌和指向插件所持 Blob URL 的 `DownloadURL`，不设置 `text/plain`。
+
 ### 本地化文案
 
-这些原子组件无法读取应用 locale，因此每段面向用户的文案都必须通过 label prop 提供。`HoverCard`、`TerminalBlock`、`JsonTree`、`CodeBlock`、`MarkdownText`、`JsonBlock`、`ConnectionIndicator`、`Modal`、`DiffBlock`、`ReadBlock`、`SearchBlock` 与 `WebBlock` 接收完整的本地化 label。本包不拥有语言回退；遗漏会导致类型检查失败，各功能会把带类型的 `t` 席位映射到 primitive 的 label 接口。
+这些原子组件无法读取应用 locale，因此每段面向用户的文案都必须通过 label prop 提供。`HoverCard`、`TerminalBlock`、`JsonTree`、`CodeBlock`、`MarkdownText`、`JsonBlock`、`ConnectionIndicator`、`Modal`、`DiffBlock`、`ReadBlock`、`SearchBlock`、`WebBlock` 与 `ZoomControls` 接收完整的本地化 label。本包不拥有语言回退；遗漏会导致类型检查失败，各功能会把带类型的 `t` 席位映射到 primitive 的 label 接口。
 
 -----
 
@@ -153,7 +159,7 @@ kind: "package-library"
 | [`src/TerminalBlock.tsx`](src/TerminalBlock.tsx) | ANSI 转义解析（`anser`）与终端卡片渲染 |
 | [`src/ReadBlock.tsx`](src/ReadBlock.tsx) / [`src/DiffBlock.tsx`](src/DiffBlock.tsx) | 读取与差异卡片 |
 | [`src/SearchBlock.tsx`](src/SearchBlock.tsx) / [`src/WebBlock.tsx`](src/WebBlock.tsx) | 搜索与网页检索卡片 |
-| [`src/icons/`](src/icons/) | 与尺寸无关的 `Regular` 和 `Medium` 产品图标组件 |
+| [`src/icons/`](src/icons/) | 默认产品图标图形、其 `ICON_SYMBOLS` sprite 文档，以及引用这些 symbol 的与尺寸无关的 `Regular` 和 `Medium` 组件 |
 | [`src/code-highlighting.ts`](src/code-highlighting.ts) | 共享的文件名 grammar 选择与惰性逐行高亮 |
 | [`src/input-modality.ts`](src/input-modality.ts) | 全文档输入模态，发布到 `<html>` |
 | [`src/plugin-artwork.tsx`](src/plugin-artwork.tsx) | 固定配色插件插画，SVG def id 按实例生成 |
@@ -208,6 +214,7 @@ kind: "package-library"
 
 这些限制说明原子组件在边缘情况下的行为；它们是当前包约束，不是组件路线图。
 
+- **浏览器图片传递**：外部接收依赖 Chromium 的 `DownloadURL` 与接收应用；原生文件交付由 Desktop 提供。Web 令牌不跨窗口或标签页传递。不可读取的跨源图片保留浏览器原生拖动，链接内的 Markdown 图片及未配置 `fileImages` 的 Markdown 也保留原生行为；这些原生路径可能携带 URL。
 - **Diff 搜索有上限，输入处理仍为线性**：编辑距离上限使大量改动的片段采用粗粒度替换，不再精确对齐。规范化、回退行及复制内容仍随输入大小增长；高度限制只约束可见行数，不限制这些分配。
 - **已知站点标记是固定列表**：只有列名的主机解析为自己的标记，其余外部主机仍使用地球；要识别任意站点需要通过网络抓取它的图标。
 - **流式期间跨边界引用解析被推迟**：定义落在增量冻结边界另一侧的引用式链接或脚注，在回复流式输出期间渲染为字面文本；定稿时的全量解析会将其解析。
@@ -215,6 +222,7 @@ kind: "package-library"
 - **超长行不着色**：所有高亮界面中，长度达到 1,000 个 UTF-16 单元的源码行渲染为一段纯文本，因为 TextMate 扫描成本随行长超线性增长，单个生成行否则会阻塞页面数秒。语法状态会跳过该行，因此在该行开始或结束的注释、模板字符串会使后续行着色错误。高亮仍在渲染期间同步执行，因此数千个普通行的文件仍按比例增加开销。
 - **鱼形标志是重新绘制的近似版本**：它来自字体字形，而本地设计数据无法导出其矢量几何；在获得精确导出路径前，使用手工重建版本代替。
 - **`Pill` 与 `Input` 没有设计来源**：两个原子组件均自行定义；与其相似的侧边栏搜索字段和视图标签条由消费方组合，不是这些原子组件。
+- **产品图标依赖 ui-theme 的 sprite**：每个图标只引用自己的 symbol，因此没有 ui-theme 时，或在 iframe 等另一个文档中，图标不渲染任何内容。
 - **`StateDot` 没有 `Active` 变体**：支持的状态为 done、warning、ongoing、error 和 idle。
 - **面向用户的文案必须由渲染点提供**：这些原子组件是 zero-Cordis 的，拿不到 `ctx.locale`；各功能必须通过原子组件的带类型 prop 提供完整本地化 label（见[决策](../../../.agents/notes/implemented/architecture/2026-08-23-locale-owned-client-ui-copy.zh.md)）。
 - **显示数学保留若干回退形状**：开围栏行上的 `$$x$$ trailing` 走上游行内数学，前后正文保持不变；同样形态出现在后续行时块被放弃，随后由上游把正文吞到下一个独占行 `$$` 或文件结尾；未闭合的块在下一个独占行 `$$` 或文件结尾结束；后续行的围栏若位于**含文本**的 `%` 注释之后则不闭合，若无其他围栏闭合，块走同一条回退；开围栏行含孤立 `$` 的多行块会留在段落内，除非与前文空一行；容器内续行若离开条目缩进，块交由上游 flow 处理并丢弃开围栏行。`$$` 围栏 meta 不再生效（见[决策](../../../.agents/notes/implemented/bug-fix/2026-09-17-multiline-display-dollar-math.zh.md)）。
