@@ -114,7 +114,7 @@ it('persists settings and reports disconnection in the detail card', async () =>
   const store = createSnapshotStore<SpeechReadiness>({ connected: true, error: null, catalog: {
     selection: { providerId: id, language: 'auto' }, maxAudioBytes: 100, maxDurationSeconds: 120,
     providers: [{ id, name: 'SenseVoiceSmall', location: 'host-local', languages: ['auto', 'zh', 'en', 'ja'], preparation: { phase: 'ready' } },
-      { id: 'cloud' as SpeechProviderId, name: 'Cloud', location: 'cloud', languages: ['auto', 'en', 'zh', 'ja', 'fr'], preparation: { phase: 'ready' } }],
+      { id: 'cloud' as SpeechProviderId, name: 'Cloud', location: 'cloud', languages: ['auto', 'en', 'zh', 'ja', 'fr', 'it'], preparation: { phase: 'ready' } }],
   } })
   const configure = vi.fn<VoiceInputProps['configure']>(async () => {})
   const props = { useSpeechReadiness: bindSnapshotSelector(store), configure, t,
@@ -128,8 +128,9 @@ it('persists settings and reports disconnection in the detail card', async () =>
   act(() => { store.set({ ...current, catalog: { ...current.catalog!, selection: { providerId: 'cloud' as SpeechProviderId, language: 'en' } } }) })
   expect(screen.getByText(zh.cloud)).toBeTruthy()
   expect(within(screen.getByLabelText(zh.language)).getAllByRole<HTMLOptionElement>('option').map(item => item.value))
-    .toEqual(['auto', 'en', 'zh', 'ja', 'fr'])
+    .toEqual(['auto', 'en', 'zh', 'ja', 'fr', 'it'])
   expect(within(screen.getByLabelText(zh.language)).getByRole('option', { name: zh.fr })).toBeTruthy()
+  expect(within(screen.getByLabelText(zh.language)).getByRole('option', { name: 'it' })).toBeTruthy()
   configure.mockRejectedValueOnce(new Error('settings are read-only'))
   fireEvent.change(screen.getByLabelText(zh.language), { target: { value: 'zh' } })
   await screen.findByText('语音识别失败：settings are read-only')
