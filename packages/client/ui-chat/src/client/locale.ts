@@ -905,7 +905,7 @@ export const fr = {
   'settings.collapse.description': 'Choisissez quand réduire automatiquement les détails du travail',
   'settings.collapse.completion': 'À la fin',
   'settings.collapse.nextInput': 'Au prochain message',
-  'settings.foldedReplies.title': "Réponses après l'repli",
+  'settings.foldedReplies.title': 'Réponses après le repli',
   'settings.foldedReplies.description': "Choisissez quelles réponses de l'assistant restent visibles lorsque les détails du travail sont réduits",
   'settings.foldedReplies.all': 'Toutes les réponses',
   'settings.foldedReplies.final': 'Réponse finale seulement',
