@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-experimental-liveshare-protocol` gives the Liveshare owner bundle and the Relay one copy of what they must agree on: the owner/worker IPC frames, the gateway frames the Relay forwards without interpreting, and the provider-neutral identity contract and the loopback mock implementation. Both packages import it, so neither depends on the other and the Relay never loads owner code. Its only DSH dependency is the stateless `dsh-brand` primitive library.
+`dsh-experimental-liveshare-protocol` gives the Liveshare owner bundle and the Relay one copy of what they must agree on: the owner/worker IPC frames, the gateway frames the Relay forwards without interpreting, the viewer carrier script the Relay places in the served page, and the provider-neutral identity contract with its loopback mock implementation. It exists so the owner bundle and the Relay share these definitions without either importing the other; the Relay never loads owner code. It depends on the stateless `dsh-brand` type library and declares `cordis` as a peer.
 
 ## Table of Contents
 
@@ -26,7 +26,7 @@ English | [中文](README.zh.md)
 
 ### When to use it
 
-Import `./protocol` and `./identity` from this package whenever code must speak the Liveshare wire or resolve one viewer identity: the owner host and its gateway worker, the Relay server and its acceptance tests. This is a library — no profile mounts it and no `cordis.yml` row names it.
+Import `./protocol` and `./identity` from this package whenever code must speak the Liveshare wire or resolve one viewer identity: the owner host and its gateway worker, the Relay server and its acceptance tests. The viewer carrier and the viewer-state vocabulary are imported from the package root. This is a library — no profile mounts it and no `cordis.yml` row names it.
 
 ### Entry point
 
@@ -74,9 +74,8 @@ Relay compatibility uses declared versions, capabilities, and explicit refusals,
 
 -----
 
-## Known Limitations and Deferred Work
-
 <a id="known-limitations-and-deferred-work"></a>
+## Known Limitations and Deferred Work
 
 - Gateway requests require the Relay's authenticated actor outside the opaque body; frames without that actor are refused.
 - The Owner Host and worker ship together. The supervisor mints a branded UUID `registrationToken` per logical add, invalidates it on removal, and replays it only for the same retained registration after process restart. Lifecycle, requests, and cancellations echo that token with the share id; per-request `TunnelRequestToken` remains independent. IPC decoders refuse missing identities, and neither token enters Relay URLs or wire frames. Same-package IPC does not negotiate versions; Relay wire frames retain numeric ids and protocol version 1. Compatibility capabilities include `file-upload`, `actor-credential`, and `direct-connection`. An actor may carry an optional owner-verifiable `credential` (the protocol validates its type only; an owner verifies it before trusting the asserted identity, and absence keeps today's Relay-asserted semantics). A share spec may carry `connection`; absence reads as `{ mode: 'relay' }`, and a Relay that still owns the data path refuses a `direct` registration.: a relay registration that declares it may carry `allowsFileUpload` on the share support and access-state frames; every other peer keeps the stored value and a frame without the field reads as uploads off.

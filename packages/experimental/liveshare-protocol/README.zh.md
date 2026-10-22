@@ -9,7 +9,7 @@ kind: "package-library"
 
 ## 概述
 
-`dsh-experimental-liveshare-protocol` 让 Liveshare owner bundle 与 Relay 共用同一份必须一致的定义：owner/worker 的 IPC 帧、Relay 不解析只转发的 gateway 帧，以及与 provider 无关的身份契约及回环 mock 实现。两个包都依赖它，因此谁也不依赖谁，Relay 也不会加载 owner 侧代码。它唯一的 DSH 依赖是无状态的 `dsh-brand` 基础类型库。
+`dsh-experimental-liveshare-protocol` 让 Liveshare owner bundle 与 Relay 共用同一份必须一致的定义：owner/worker 的 IPC 帧、Relay 不解析只转发的 gateway 帧、Relay 放进被服务页面的查看页载体脚本，以及与 provider 无关的身份契约及其回环 mock 实现。它让 owner bundle 与 Relay 共享这些定义而不必互相依赖，Relay 也不会加载 owner 侧代码。它依赖无状态的 `dsh-brand` 类型库，并把 `cordis` 声明为 peer。
 
 ## 目录
 
@@ -26,7 +26,7 @@ kind: "package-library"
 
 ### 何时使用
 
-凡是需要说 Liveshare 线路协议或解析某个 viewer 身份的代码，都从本包导入 `./protocol` 与 `./identity`：owner host 及其 gateway worker、Relay server 及其验收测试。这是一个库——没有 profile 会挂载它，也没有 `cordis.yml` 行引用它。
+凡是需要说 Liveshare 线路协议或解析某个 viewer 身份的代码，都从本包导入 `./protocol` 与 `./identity`：owner host 及其 gateway worker、Relay server 及其验收测试。查看页载体与查看页状态词汇从包根入口导入。这是一个库——没有 profile 会挂载它，也没有 `cordis.yml` 行引用它。
 
 ### 入口
 
@@ -74,9 +74,8 @@ Relay 兼容性依靠声明版本、能力和明确拒绝，不提供逐发布�
 
 -----
 
-## 已知限制与延期工作
-
 <a id="known-limitations-and-deferred-work"></a>
+## 已知限制与延期工作
 
 - 网关请求必须在不透明请求体之外携带 Relay 已认证主体；没有该主体的帧被拒绝。
 - Owner Host 与 worker 同包发布。Supervisor 为每次逻辑添加生成品牌化 UUID `registrationToken`，移除时使其失效，进程重启只为仍保留的同一注册重播该身份。生命周期、请求及取消事件回传该 token 与分享 ID；逐请求 `TunnelRequestToken` 独立存在。IPC 编解码拒绝缺失身份，两种 token 都不进入 Relay URL 或线协议帧。同包 IPC 不协商版本；Relay 线协议帧保留数字 ID 与协议版本 1。兼容能力包含 `file-upload`、`actor-credential` 与 `direct-connection`。actor 可携带可选的、owner 可验证的 `credential`（协议只校验类型；owner 在采信断言身份前自行验证，缺失时保持今天由 Relay 断言的语义）。分享 spec 可携带 `connection`；缺失读作 `{ mode: 'relay' }`，仍拥有数据面的 Relay 会拒绝 `direct` 注册。：声明它的 Relay 注册可在分享支持与 access-state 帧上携带 `allowsFileUpload`；其它 peer 保留已存值，而缺少该字段的帧读作上传关闭。
