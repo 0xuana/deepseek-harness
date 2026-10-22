@@ -3,7 +3,7 @@
 exports[`interface creation > loads page planning with a live duplicate-check catalog and withdraws it on unload > skill discovery 1`] = `
 [
   {
-    "description": "Plan an optional new page or small tool when the user asks for a page, tab, panel, tool or interface in this app (even for one-off use), wants something to keep, revisit or update later, will keep changing data shown in your answer, or wants a live view of this app’s own data (Sessions, tasks, logs, workspace files). Load this before reading any files or source; it tells you how to submit the proposal. Not for requested files or code, ordinary answers, existing-feature questions, quoted wishes or declined recommendations.",
+    "description": "Plan an optional page or small tool when the user asks for a page, tab, panel, tool or interface in this app (even for one-off use), wants something to keep, revisit or update later, will keep changing data in your answer, or wants a live view of this app’s own data (Sessions, tasks, logs, workspace). Load this before reading any files or source; it says how to submit the proposal. Not for requested files or code, ordinary answers, existing-feature questions, quoted wishes or declined offers.",
     "invocation": {
       "modelInvocable": true,
       "userInvocable": false,
