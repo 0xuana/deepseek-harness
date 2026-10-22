@@ -56,6 +56,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           DECISION_TOKEN: ${{ steps.decision-token.outputs.token }}
+          DECISION_APP_SLUG: ${{ vars.DSH_APPROVAL_APP_SLUG }}
           GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: node .github/review-ownership/check-approval.mjs pending
       # SECURITY: dependency setup runs in the status-writing job.
@@ -73,6 +74,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           DECISION_TOKEN: ${{ steps.decision-token.outputs.token }}
+          DECISION_APP_SLUG: ${{ vars.DSH_APPROVAL_APP_SLUG }}
           GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: node .github/review-ownership/check-approval.mjs
       - name: Publish approval setup failure
@@ -80,5 +82,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           DECISION_TOKEN: ${{ steps.decision-token.outputs.token }}
+          DECISION_APP_SLUG: ${{ vars.DSH_APPROVAL_APP_SLUG }}
           GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: node .github/review-ownership/check-approval.mjs error

@@ -1313,7 +1313,10 @@ describe('Weighted approval workflow', () => {
     expect(tokenIndex).toBeGreaterThan(steps.indexOf(checkout!))
     expect(tokenIndex).toBeLessThan(steps.findIndex(step => step.id === 'revoke'))
     for (const step of steps.filter(step => typeof step.run === 'string' && step.run.startsWith('node .github/review-ownership/check-approval.mjs'))) {
-      expect(step.env).toMatchObject({ DECISION_TOKEN: '${{ steps.decision-token.outputs.token }}' })
+      expect(step.env).toMatchObject({
+        DECISION_TOKEN: '${{ steps.decision-token.outputs.token }}',
+        DECISION_APP_SLUG: '${{ vars.DSH_APPROVAL_APP_SLUG }}',
+      })
     }
     const setupIndex = steps.findIndex(step => typeof step.uses === 'string' && step.uses.startsWith('actions/setup-python@'))
     expect(steps[setupIndex]?.if).toBe("steps.revoke.outputs.active == 'true'")
