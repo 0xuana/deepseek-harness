@@ -119,7 +119,9 @@ it('rejects with unknown-state when a failed batch cannot restore its staged doc
   await expect(unit.putRecord('t', 'c', { v: 3 })).rejects.toMatchObject({ code: 'unknown-state' })
   await expect(unit.deleteRecord('t', 'a')).rejects.toMatchObject({ code: 'unknown-state' })
   await expect(unit.setGlobal({ g: 1 })).rejects.toMatchObject({ code: 'unknown-state' })
-  await expect(unit.backupRecord('t', 'b')).rejects.toMatchObject({ code: 'unknown-state' })
+  const backup = unit.backupRecord?.bind(unit)
+  if (backup === undefined) throw new Error('per-record unit must expose backupRecord')
+  await expect(backup('t', 'b')).rejects.toMatchObject({ code: 'unknown-state' })
   // Releasing the handle stays possible.
   await unit.close()
   // A reopened unit reads the partial tree: the staged document is unreadable
