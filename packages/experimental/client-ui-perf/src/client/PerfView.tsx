@@ -1614,7 +1614,7 @@ export function PerfView(props: PerfViewProps): ReactElement {
     return () => { clearInterval(timer) }
   }, [hasRunning])
   // Turns compare only with the other turns in the window.
-  const totals = view.showTotals && turns.length > 0 ? aggregateTotals(turns, view.contextMode) : null
+  const totals = view.showTotals && turns.length > 0 ? aggregateTotals(turns) : null
   const scaleTurns = visibleTurns.size === 0 ? turns : turns.filter(turn => visibleTurns.has(turn.turn))
   const turnScale = scaleTurns.reduce((max, turn) => {
     const span = totalSpan(turn, now)

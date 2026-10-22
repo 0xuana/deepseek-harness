@@ -59,7 +59,7 @@ Four Conversation Definitions fold the event window into nodes for one view targ
 
 The footer switches control the totals row and the context basis, and the footer stays pinned above the composer while the table scrolls. An expanded step row fills the Trigger column with its start clock and the gap since the previous step.
 
-The footer switches control the totals row and the context basis. `Context basis: Latest` shows each turn's final prompt size; `Cumulative` sums that turn's step prompt sizes, so a row shows the tokens processed rather than the final window. The totals row applies the same basis to every loaded turn and sums the numeric columns (cache stays token-weighted, speed stays output over decode time).
+The footer switches control the totals row and the context basis. `Context basis` changes only how a turn row aggregates its steps: `Latest` shows the turn's final prompt size, while `Cumulative` sums that turn's step prompt sizes. The totals row is not affected by this switch: its context cell is always the cumulative step context of the loaded turns, and the other numeric columns are sums (cache stays token-weighted, speed stays output over decode time). Token cells switch from `K` to `M` at ten million.
 
 The turn cache-hit cell is token-weighted across the steps that reported usage (summed cache reads ÷ summed prompt tokens), so one transient cold step is not hidden by a warmer neighbour; the tooltip shows the summed read/input/write breakdown. A step row keeps its own measured share.
 

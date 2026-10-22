@@ -239,7 +239,7 @@ describe('turn aggregation', () => {
     const bare = aggregateTurn(3, [metricsOf({ step: 1 })])
     expect(turnContext(bare, 'cumulative')).toBeNull()
     expect(turnContext(bare, 'latest')).toBeNull()
-    const totals = aggregateTotals([bare], 'cumulative')
+    const totals = aggregateTotals([bare])
     expect(totals.context).toBeNull()
     expect(totals.output).toBeNull()
     expect(totals.cacheHit).toBeNull()
@@ -252,14 +252,14 @@ describe('turn aggregation', () => {
 
     const partial = aggregateTurn(4, [metricsOf({ step: 1, context: 100, cacheRead: 40 })])
     expect(turnContext(partial, 'cumulative')).toBe(100)
-    const mixed = aggregateTotals([partial], 'cumulative')
+    const mixed = aggregateTotals([partial])
     expect(mixed.cacheWrite).toBe(0)
     expect(mixed.cacheHit).toBe(0.4)
     const forged = { ...bare, cacheRead: 10, cacheContext: 100, cacheWrite: null }
-    expect(aggregateTotals([forged], 'latest').cacheWrite).toBe(0)
+    expect(aggregateTotals([forged]).cacheWrite).toBe(0)
   })
 
-  it('aggregates loaded turns into totals and switches the context basis', () => {
+  it('aggregates loaded turns into totals with cumulative context', () => {
     const first = aggregateTurn(1, [
       metricsOf({
         step: 1, startTime: 0, endTime: 300, context: 100, output: 10, decode: 1_000,
@@ -276,10 +276,10 @@ describe('turn aggregation', () => {
         cacheRead: 250, cacheWrite: 10, tool: 75, toolWall: 60, wall: 500,
       }),
     ])
-    const latest = aggregateTotals([first, second], 'latest')
+    const latest = aggregateTotals([first, second])
     expect(latest.turnCount).toBe(2)
     expect(latest.stepCount).toBe(3)
-    expect(latest.context).toBe(300)
+    expect(latest.context).toBe(600)
     expect(turnContext(first, 'latest')).toBe(200)
     expect(turnContext(first, 'cumulative')).toBe(300)
     expect(latest.output).toBe(60)
@@ -297,10 +297,7 @@ describe('turn aggregation', () => {
     expect(latest.toolWall).toBe(100)
     expect(latest.wall).toBe(1_200)
 
-    const cumulative = aggregateTotals([first, second], 'cumulative')
-    expect(cumulative.context).toBe(600)
-
-    const empty = aggregateTotals([], 'cumulative')
+    const empty = aggregateTotals([])
     expect(empty).toEqual({
       turnCount: 0,
       stepCount: 0,

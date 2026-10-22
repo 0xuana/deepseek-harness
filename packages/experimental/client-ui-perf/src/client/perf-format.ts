@@ -30,13 +30,13 @@ export function formatTokens(value: number | null): string {
 }
 
 /**
- * Token count in K: one decimal at or above 1K, two decimals below so a
- * short reply does not print as 0.0K.
+ * Token count in K, switching to M once the value reaches ten million.
  * @param value - token count, or null when unrecorded.
- * @returns the K-suffixed count, or the dash placeholder.
+ * @returns the K/M-suffixed count, or the dash placeholder.
  */
 export function formatTokensShort(value: number | null): string {
   if (!isNumber(value)) return DASH
+  if (value >= 10_000_000) return `${(value / 1_000_000).toFixed(1)}M`
   return value >= 1_000 ? `${(value / 1_000).toFixed(1)}K` : `${(value / 1_000).toFixed(2)}K`
 }
 

@@ -363,11 +363,9 @@ export function turnContext(turn: PerfTurnMetrics, mode: ContextMode): number | 
 /**
  * Aggregate the loaded turns into one totals row.
  * @param turns - aggregated turns in display order.
- * @param mode - context basis shared with the turn rows.
- * @returns summed metrics and the context value for the selected basis.
+ * @returns summed metrics; the context column is always the cumulative step context.
  */
-export function aggregateTotals(turns: readonly PerfTurnMetrics[], mode: ContextMode): PerfTotals {
-  let context: number | null = null
+export function aggregateTotals(turns: readonly PerfTurnMetrics[]): PerfTotals {
   let stepCount = 0
   let outputSum = 0
   let outputMeasured = false
@@ -391,7 +389,6 @@ export function aggregateTotals(turns: readonly PerfTurnMetrics[], mode: Context
   let wallMeasured = false
   for (const turn of turns) {
     stepCount += turn.steps.length
-    if (isNumber(turn.context)) context = turn.context
     if (isNumber(turn.output)) {
       outputSum += turn.output
       outputMeasured = true
@@ -429,19 +426,17 @@ export function aggregateTotals(turns: readonly PerfTurnMetrics[], mode: Context
   }
   let cumulative = 0
   let cumulativeMeasured = false
-  if (mode === 'cumulative') {
-    for (const turn of turns) {
-      for (const step of turn.steps) {
-        if (!isNumber(step.context)) continue
-        cumulative += step.context
-        cumulativeMeasured = true
-      }
+  for (const turn of turns) {
+    for (const step of turn.steps) {
+      if (!isNumber(step.context)) continue
+      cumulative += step.context
+      cumulativeMeasured = true
     }
   }
   return {
     turnCount: turns.length,
     stepCount,
-    context: mode === 'cumulative' ? (cumulativeMeasured ? cumulative : null) : context,
+    context: cumulativeMeasured ? cumulative : null,
     output: outputMeasured ? outputSum : null,
     cacheHit: cacheMeasured && contextSum > 0 ? Math.min(1, read / contextSum) : null,
     cacheRead: cacheMeasured ? read : null,

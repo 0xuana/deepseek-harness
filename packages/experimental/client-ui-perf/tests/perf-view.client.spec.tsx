@@ -780,7 +780,7 @@ describe('turn rows', () => {
     const totalLabel = screen.getByText(say('totals.label'))
     expect(totalLabel.parentElement?.textContent).toContain(say('summary', { turns: 2, steps: 4 }))
     const totalRow = totalLabel.closest('tr') as HTMLTableRowElement
-    expect(cellsOf(totalRow)[2]?.textContent).toBe(formatTokensShort(300))
+    expect(cellsOf(totalRow)[2]?.textContent).toBe(formatTokensShort(600))
 
     const first = rowWithPrefix(say('turn.label', { turn: 1 }))
     expect(cellsOf(first)[3]?.textContent).toBe(formatTokensShort(200))
