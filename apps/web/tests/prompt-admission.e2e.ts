@@ -1,11 +1,10 @@
-// Keyless browser coverage for Agent admission through the shipped Web
-// composition and the real wire: a Host `agent-controller/admission` listener
-// holds a sent message, so the composer keeps it behind the sending control
-// and stays editable for the next message; once the listener admits it, only
-// the admitted text leaves the composer. A refusal leaves the message in the
-// composer, announced by a toast unless the refusing plugin presents it.
+// Keyless browser coverage for Host acceptance through the shipped Web
+// composition and the real wire: while the prompt request of a sent message is
+// held, the composer stays read-only behind the sending control and Chat shows
+// no echo; once the Host accepts the prompt the composer clears and takes the
+// keyboard back. queue-actions covers a refused prompt keeping its draft.
 import { fileURLToPath } from 'node:url'
-import type { Browser } from 'playwright'
+import type { Browser, Route } from 'playwright'
 import { chromium } from 'playwright'
 import { afterEach, describe, expect, it, onTestFailed } from 'vitest'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
@@ -15,11 +14,8 @@ import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './suppor
 const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/live-interactions/session.v3.jsonl', import.meta.url))
 const MODE = webSnapshotMode()
 
-const HELD = 'Message held by admission'
+const HELD = 'Message held until the Host accepts it'
 const FOLLOW_UP = 'Typed once the message was accepted'
-const REFUSED = 'Message refused by admission'
-const TOAST_REFUSAL = 'The workspace is not ready yet'
-const PRESENTED_REFUSAL = 'The refusing plugin explains this itself'
 
 describe('web e2e: prompt admission', () => {
   let scaffold: WebScaffold | undefined
@@ -36,7 +32,7 @@ describe('web e2e: prompt admission', () => {
     if (failures.length > 1) throw new AggregateError(failures, 'prompt-admission teardown failed')
   })
 
-  it.skipIf(MODE === 'record')('holds a message in the composer until admitted and keeps a refused one there', async () => {
+  it.skipIf(MODE === 'record')('holds a message in the read-only composer until the Host accepts it', async () => {
     const sessionEvents: SessionEvent[] = []
     scaffold = await launchWebScaffold({ replayFixture: FIXTURE, compareReplaySession: false })
     const host = scaffold
@@ -52,60 +48,27 @@ describe('web e2e: prompt admission', () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-prompt-admission'))
     const input = page.locator('[data-composer-input]').first()
 
-    const gate = Promise.withResolvers<undefined>()
-    const held = Promise.withResolvers<undefined>()
-    const disposeHold = host.ctx.on('agent-controller/admission', async (_admission, next) => {
-      held.resolve(undefined)
-      await gate.promise
-      return await next()
-    })
+    const held = Promise.withResolvers<Route>()
+    await page.route('**/api/session/prompt', (route) => { held.resolve(route) }, { times: 1 })
     await input.fill(HELD)
     await input.press('Enter')
-    await held.promise
+    const prompt = await held.promise
     const sending = page.getByRole('button', { name: 'Sending message', exact: true })
     await expect.poll(() => sending.getAttribute('aria-busy')).toBe('true')
-    expect(await input.getAttribute('contenteditable')).toBe('true')
+    expect(await input.getAttribute('contenteditable')).toBe('false')
     expect(await input.textContent()).toBe(HELD)
-    // The next message can be typed at once; Enter waits for the Host instead of sending it.
-    await page.keyboard.press('Shift+Enter')
-    await page.keyboard.type(FOLLOW_UP)
-    await expect.poll(() => input.textContent()).toBe(`${HELD}${FOLLOW_UP}`)
-    await page.keyboard.press('Enter')
     expect(await page.locator('[data-submission-echo]').count()).toBe(0)
     expect(userMessages()).toBe(0)
 
     const settled = host.whenTurnSettled()
-    gate.resolve(undefined)
+    await prompt.continue()
     await settled
-    // Only the admitted text leaves the composer; the line typed meanwhile stays, and so does the keyboard.
+    await expect.poll(() => input.textContent()).toBe('')
+    expect(await input.getAttribute('contenteditable')).toBe('true')
+    // The keyboard returns to the composer, so the next message can be typed at once.
+    await page.keyboard.type(FOLLOW_UP)
     await expect.poll(() => input.textContent()).toBe(FOLLOW_UP)
-    expect(await input.evaluate(element => element === document.activeElement)).toBe(true)
     await page.locator('[data-chat-flow-kind="user"]', { hasText: HELD }).waitFor()
-    expect(userMessages()).toBe(1)
-    disposeHold()
-
-    let presented = false
-    host.ctx.on('agent-controller/admission', () => Promise.resolve({
-      kind: 'reject' as const, reason: 'e2e/workspace-not-ready', message: presented ? PRESENTED_REFUSAL : TOAST_REFUSAL, presented,
-    }))
-    await input.fill(REFUSED)
-    await input.press('Enter')
-    await page.getByRole('alert').filter({ hasText: TOAST_REFUSAL }).waitFor()
-    await expect.poll(() => input.getAttribute('contenteditable')).toBe('true')
-    expect(await input.textContent()).toBe(REFUSED)
-
-    presented = true
-    const response = page.waitForResponse('**/api/session/prompt')
-    await input.press('Enter')
-    // The rejection reaches the wire with its reason and the plugin's own presentation.
-    const envelope = await (await response).json() as { readonly result: unknown }
-    expect(envelope.result).toMatchObject({
-      ok: false,
-      error: { code: 'session/prompt-rejected', details: { reason: 'e2e/workspace-not-ready', presented: true } },
-    })
-    await expect.poll(() => input.getAttribute('contenteditable')).toBe('true')
-    expect(await input.textContent()).toBe(REFUSED)
-    expect(await page.getByRole('alert').filter({ hasText: PRESENTED_REFUSAL }).count()).toBe(0)
     expect(userMessages()).toBe(1)
     expect(tripwire.pageErrors).toEqual([])
   })

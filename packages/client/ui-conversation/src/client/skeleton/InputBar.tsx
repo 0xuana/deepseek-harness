@@ -28,7 +28,6 @@ import type {} from '@deepseek-ai/dsh-goal/client'
 // wire types: apiproxy's sessions contract declares it, and client-runtime's
 // api-remotes import already places it in every client program.
 import type { Translate } from '@deepseek-ai/dsh-client-ui-slots'
-import type { DraftAttachmentId } from '../contract/input.ts'
 import type { ComposerBarProps } from '../contract/slots.ts'
 import { DraftEditor } from '../input/editor/DraftEditor.tsx'
 import {
@@ -43,8 +42,6 @@ import { observeControlRow } from './control-row-layout.ts'
 import css from './InputBar.module.css'
 
 export type InputBarProps = ComposerBarProps
-
-const NO_ATTACHMENTS: readonly DraftAttachmentId[] = []
 
 export const InputBar = memo(function InputBar({
   useSession, useInput, inputActions, keyboard, addFiles, removeAttachment, resolveDraftAttachments,
@@ -81,14 +78,14 @@ export const InputBar = memo(function InputBar({
     () => input === undefined || resolveDraftAttachments === undefined ? [] : resolveDraftAttachments(input.attachmentIds),
     [resolveDraftAttachments, input?.attachmentIds],
   )
-  const sendingAttachmentIds = input?.sendingAttachmentIds ?? NO_ATTACHMENTS
   const empty = draft.trim() === '' && attachments.length === 0
   const uploads = useFileUploads(snapshot => snapshot)
-  // Send waits for every picked file: uploading and failed drafts both hold
-  // the gate (a failed upload is retried or removed, never silently dropped).
-  const uploadsPending = attachments.some(
-    attachment => attachment.kind === 'file' && uploads[attachment.id]?.status !== 'ready',
-  )
+  // Send waits for every picked file and every uploading image: uploading and
+  // failed drafts both hold the gate (a failed upload is retried or removed,
+  // never silently dropped). An image draft without an upload sends inline.
+  const uploadsPending = attachments.some(attachment => attachment.kind === 'file'
+    ? uploads[attachment.id]?.status !== 'ready'
+    : uploads[attachment.id] !== undefined && uploads[attachment.id]?.status !== 'ready')
   // Transient error banner (machine notices, image-intake rejections, and
   // prompt failures): the seq keys the Toast so an identical repeated message
   // restarts the hold-then-fade cycle instead of reusing the faded one.
@@ -102,10 +99,14 @@ export const InputBar = memo(function InputBar({
   // The deployment's image-intake limits (absent while no attachment service
   // is composed — the pre-check below then defers entirely to the host).
   const imageLimits = useProjection('imageLimits')
+  // Enter while uploads hold the send explains the first failed draft; a Host refusal names its reason.
+  const failedUpload = attachments.map(attachment => uploads[attachment.id]).find(upload => upload?.status === 'error')
+  const uploadsHeldText = failedUpload?.status !== 'error'
+    ? t('file.stillUploading')
+    : failedUpload.reason === undefined ? t('file.uploadFailed') : attachmentErrorText(t, failedUpload.reason, imageLimits)
   // Prompt failures are ordinary failures (no create/attach transaction exists
   // anymore): the toast announces promptError, the draft stays in the machine,
-  // and the user resubmits. A refusal whose plugin presents its own
-  // explanation adds no toast; another refusal shows the plugin's text. A remount over a session whose machine still holds
+  // and the user resubmits. A remount over a session whose machine still holds
   // an unresolved promptError deliberately re-announces it once — the failure
   // is still pending, and a transient banner is its only surface. Attachment
   // rejections show product copy keyed by the wire reason — whichever domain
@@ -116,10 +117,6 @@ export const InputBar = memo(function InputBar({
     const { error } = promptError
     if (error.code === 'session/writer-held') {
       showToast(t('error.sessionInUse'))
-      return
-    }
-    if (error.code === 'session/prompt-rejected') {
-      if (!error.details.presented) showToast(error.message)
       return
     }
     showToast(error.code === 'session/attachment-invalid' || error.code === 'subagent/attachment-invalid'
@@ -153,19 +150,16 @@ export const InputBar = memo(function InputBar({
   // the composer asking for the only thing it prevents. The other reasons to
   // be disabled do lock it — there is no session to choose a model for.
   const modelSeatLocked = removed || inert || !live
-  // A command being checked or run holds the draft read-only.
-  const commandBusy = input?.phase === 'adjudicating' || input?.phase === 'submitting'
-  // The message waits for the Host to accept it; Send shows progress instead
-  // of the arrow, and the box stays editable for the next message.
+  const machineBusy = input?.phase === 'adjudicating' || input?.phase === 'submitting' || input?.phase === 'sending'
+  // The message waits for the Host to accept it; Send shows progress instead of the arrow.
   const sending = input?.phase === 'sending'
-  const machineBusy = commandBusy || sending
   // The no-workspace surface remains the resident DOM node but acts as the
   // existing picker trigger. Message controls stay locked until a Session
   // exists; the trigger itself is read-only rather than disabled so pointer
   // and keyboard users can reach the recovery action.
   const workspaceTrigger = inert && !removed && onRequestWorkspace !== undefined
   const editorDisabled = removed || (locked && !workspaceTrigger)
-  const editable = live && !locked && !commandBusy
+  const editable = live && !locked && !machineBusy
   const steeringAvailable = subagent === null || subagent.address.mode === 'continuable'
   const canSteerQueue = !locked && !machineBusy && !commandMenuOpen && empty && running && steeringAvailable
     && input.queue.length > 0
@@ -196,13 +190,13 @@ export const InputBar = memo(function InputBar({
     focusDraftEditor(editor, revealSelection)
   }, [locked, sessionId, editor])
 
-  // A command phase leaves the box read-only, and the browser then moves the
+  // A busy phase leaves the box read-only, and the browser then moves the
   // keyboard to the document body. When the phase ends with the keyboard still
-  // there, return it, so typing can continue as soon as the command settles; a
-  // control the user moved to meanwhile keeps the keyboard.
+  // there, return it, so the next message can be typed as soon as a send
+  // settles; a control the user moved to meanwhile keeps the keyboard.
   const busyPhaseSeen = useRef(false)
   useEffect(() => {
-    if (commandBusy) {
+    if (machineBusy) {
       busyPhaseSeen.current = true
       return
     }
@@ -210,7 +204,7 @@ export const InputBar = memo(function InputBar({
     busyPhaseSeen.current = false
     if (locked || editor === null) return
     if (document.activeElement === null || document.activeElement === document.body) focusDraftEditor(editor, revealSelection)
-  }, [commandBusy])
+  }, [machineBusy])
 
   // A persisted draft arrives AFTER the unlock effect: DefaultConversationViews
   // adopts it in its own mount effect, and a parent's mount effect runs after
@@ -237,11 +231,10 @@ export const InputBar = memo(function InputBar({
   // refused as a whole batch, announced immediately, and never enters the
   // rail. Only the image subset is limit-checked: generic files carry no
   // client-side size or count limit and upload as soon as they are picked.
-  // The images of a message being sent belong to that message, so the limits
-  // count only the images of the next one. The host enforces the same image
-  // limits at submit for callers that bypass this composer.
+  // The host enforces the same image limits at submit for callers that bypass
+  // this composer.
   const intakeFiles = useCallback((files: readonly File[], directories?: ReadonlySet<File>): void => {
-    if (locked || commandBusy || (subagent !== null && !continuable) || addFiles === undefined || files.length === 0) return
+    if (locked || machineBusy || (subagent !== null && !continuable) || addFiles === undefined || files.length === 0) return
     const rejected = ((): string | null => {
       // Child prompts support images, but not generic file receipts or the
       // Desktop path-reference fallback. Refuse mixed batches before intake.
@@ -251,8 +244,7 @@ export const InputBar = memo(function InputBar({
       if (imageLimits !== undefined) {
         const mediaTypes = imageLimits.mediaTypes as readonly string[]
         const images = files.filter(file => mediaTypes.includes(file.type))
-        const imageAttachments = attachments.filter(attachment => attachment.kind === 'image'
-          && !sendingAttachmentIds.includes(attachment.id))
+        const imageAttachments = attachments.filter(attachment => attachment.kind === 'image')
         if (imageAttachments.length + images.length > imageLimits.maxImagesPerMessage) {
           return t('image.tooMany', { count: imageLimits.maxImagesPerMessage })
         }
@@ -268,9 +260,9 @@ export const InputBar = memo(function InputBar({
       return addFiles(files, directories)
     })()
     if (rejected !== null) showToast(rejected)
-  }, [locked, commandBusy, subagent, continuable, addFiles, attachments, sendingAttachmentIds, imageLimits, showToast, t])
+  }, [locked, machineBusy, subagent, continuable, addFiles, attachments, imageLimits, showToast, t])
 
-  const canAcceptDrop = (subagent === null || continuable) && !locked && !commandBusy && addFiles !== undefined
+  const canAcceptDrop = (subagent === null || continuable) && !locked && !machineBusy && addFiles !== undefined
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const onPickFiles = (e: ChangeEvent<HTMLInputElement>): void => {
@@ -283,12 +275,12 @@ export const InputBar = memo(function InputBar({
   // The keymap handlers read live bar state through this ref so the editor
   // registration survives re-renders without re-arming per keystroke.
   const gate = useRef({
-    locked, commandBusy, machineBusy, canSteerQueue, running, steeringAvailable, busyEnter,
-    intakeFiles, uploadsPending, showToast, t, canAcceptDrop,
+    locked, machineBusy, canSteerQueue, running, steeringAvailable, busyEnter,
+    intakeFiles, uploadsPending, uploadsHeldText, showToast, canAcceptDrop,
   })
   gate.current = {
-    locked, commandBusy, machineBusy, canSteerQueue, running, steeringAvailable, busyEnter,
-    intakeFiles, uploadsPending, showToast, t, canAcceptDrop,
+    locked, machineBusy, canSteerQueue, running, steeringAvailable, busyEnter,
+    intakeFiles, uploadsPending, uploadsHeldText, showToast, canAcceptDrop,
   }
 
   useEffect(() => {
@@ -352,7 +344,7 @@ export const InputBar = memo(function InputBar({
   // describes a delivery the click cannot or does not perform; every other
   // state keeps plain Send. A continuable child keeps Send primary and
   // exposes Stop independently, and so does a running session while a
-  // message waits for the Host, whatever the draft holds meanwhile.
+  // message waits for the Host.
   const primaryStops = running && subagent === null && !sending && (empty || blocked !== undefined)
   // Disabled native buttons may omit mouseleave; their tooltip must close from state.
   const primaryDisabled = primaryStops ? stop === undefined : empty || disabled || machineBusy || uploadsPending
@@ -444,9 +436,9 @@ export const InputBar = memo(function InputBar({
           canAcceptDrop,
           onAddFiles: intakeFiles,
           onRemoveAttachment: (id) => { removeAttachment?.(id) },
-          sendingAttachmentIds,
           uploads,
           onRetryFile: (id) => { retryFileUpload?.(id) },
+          uploadFailureText: reason => attachmentErrorText(t, reason, imageLimits),
           dropLimits: imageLimits === undefined ? undefined : {
             count: imageLimits.maxImagesPerMessage,
             size: imageSizeText(imageLimits.maxImageBytes),

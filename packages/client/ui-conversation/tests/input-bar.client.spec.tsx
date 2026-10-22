@@ -25,7 +25,7 @@ import type { ContextPressureProjection } from '@deepseek-ai/dsh-token-meter/cli
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { CommandClaim, SubmitOutcome } from '../src/client/contract/input.ts'
+import type { SubmitOutcome } from '../src/client/contract/input.ts'
 import { SessionInputShell } from '../src/client/input/facade.ts'
 import { $replaceDetectSpanWithText, $selectDetectSpan } from '../src/client/input/editor/span-map.ts'
 import type {
@@ -242,8 +242,9 @@ function bench(over?: BenchOptions) {
   const steeringAvailable = over?.subagent === undefined || over.subagent.address.mode === 'continuable'
   const composerLocked = over?.disabled === true || over?.inert === true || over?.blocked !== undefined
     || (over?.subagent?.address.mode === 'continuable' && over.subagent.parentAvailable !== true)
-  const uploadsPending = (over?.attachments ?? []).some(attachment =>
-    attachment.kind === 'file' && over?.fileUploads?.[attachment.id]?.status !== 'ready')
+  const uploadsPending = (over?.attachments ?? []).some(attachment => attachment.kind === 'file'
+    ? over?.fileUploads?.[attachment.id]?.status !== 'ready'
+    : over?.fileUploads?.[attachment.id] !== undefined && over.fileUploads[attachment.id]?.status !== 'ready')
   const plainMessageDraft = sendableDraft && !uploadsPending && !(over?.draft?.trimStart().startsWith('/') ?? false)
   const primaryLabel = primaryStops
     ? '停止生成'
@@ -383,41 +384,19 @@ describe('composer focus handoff', () => {
   it.each<[string, SubmitOutcome]>([
     ['the Host accepts it', { kind: 'success' }],
     ['it fails', { kind: 'error', text: 'send failed' }],
-  ])('keeps the editor editable and focused while a message is sent until %s', async (_label, outcome) => {
+  ])('returns the keyboard to the editor once a sent message settles because %s', async (_label, outcome) => {
     const { shell, textarea, sink } = bench()
     writeDraft(shell, 'draft text')
     act(() => { shell.focus() })
     let settle!: (outcome: SubmitOutcome) => void
     sink.mockImplementationOnce(() => new Promise<SubmitOutcome>((resolve) => { settle = resolve }))
     fireEvent.keyDown(textarea, { key: 'Enter' })
-    expect(shell.snapshot.phase).toBe('sending')
-    expect(textarea.getAttribute('contenteditable')).toBe('true')
-    expect(document.activeElement).toBe(textarea)
-    // Enter waits for the Host instead of sending again.
-    fireEvent.keyDown(textarea, { key: 'Enter' })
-    expect(sink).toHaveBeenCalledOnce()
-
-    await act(async () => { settle(outcome) })
-
-    expect(textarea.getAttribute('contenteditable')).toBe('true')
-    expect(document.activeElement).toBe(textarea)
-  })
-
-  it('returns the keyboard to the editor once a command leaves the box read-only', async () => {
-    const { shell, textarea } = bench()
-    const result = Promise.withResolvers<SubmitOutcome>()
-    const claim: CommandClaim = { name: 'goal', token: '/goal ', submit: () => result.promise }
-    writeDraft(shell, '/goal')
-    act(() => { shell.beginCommand(claim, { start: 0, end: '/goal'.length, draftRev: shell.snapshot.draftRev }) })
-    act(() => { shell.focus() })
-    fireEvent.keyDown(textarea, { key: 'Enter' })
-    expect(shell.snapshot.phase).toBe('submitting')
     expect(textarea.getAttribute('contenteditable')).toBe('false')
     // A browser moves the keyboard to the body once the focused box stops being editable; jsdom does not.
     act(() => { textarea.blur() })
     expect(document.activeElement).toBe(document.body)
 
-    await act(async () => { result.resolve({ kind: 'success' }) })
+    await act(async () => { settle(outcome) })
 
     expect(textarea.getAttribute('contenteditable')).toBe('true')
     expect(document.activeElement).toBe(textarea)
@@ -618,66 +597,6 @@ describe('image draft rail', () => {
     expect(within.view.queryByRole('alert')).toBeNull()
   })
 
-  it.each([
-    ['count', { maxImagesPerMessage: 1, maxMessageImageBytes: 4 * 1024 * 1024 }, 16, 16],
-    ['total size', { maxImagesPerMessage: 5, maxMessageImageBytes: 2 * 1024 * 1024 }, 1.5 * 1024 * 1024, 1024 * 1024],
-  ])('checks a new image against the next message\'s %s limit while a message is sent', async (_limit, caps, sentBytes, nextBytes) => {
-    const limits = {
-      maxImageBytes: 2 * 1024 * 1024,
-      ...caps,
-      maxImagePixels: 40_000_000,
-      maxImageDimension: 2000,
-      mediaTypes: ['image/png'] as const,
-    }
-    const sent = {
-      kind: 'image' as const, id: 'draft-1' as DraftAttachmentId,
-      file: new File([new ArrayBuffer(sentBytes)], 'sent.png', { type: 'image/png' }), previewUrl: 'blob:draft-1',
-    }
-    const addFiles = vi.fn(() => null)
-    const result = bench({ attachments: [sent], imageLimits: limits, addFiles })
-    let settle!: (outcome: SubmitOutcome) => void
-    result.sink.mockImplementationOnce(() => new Promise<SubmitOutcome>((resolve) => { settle = resolve }))
-    fireEvent.keyDown(result.textarea, { key: 'Enter' })
-    expect(attachmentOwner(result.slotCalls).sendingAttachmentIds).toEqual(['draft-1'])
-    const next = new File([new ArrayBuffer(nextBytes)], 'next.png', { type: 'image/png' })
-    act(() => { attachmentOwner(result.slotCalls).onAddFiles([next]) })
-    expect(addFiles).toHaveBeenCalledWith([next], undefined)
-    expect(result.view.queryByRole('alert')).toBeNull()
-    await act(async () => { settle({ kind: 'success' }) })
-    expect(attachmentOwner(result.slotCalls).sendingAttachmentIds).toEqual([])
-  })
-
-  it('counts the images of a refused message against the next addition again', async () => {
-    const sent = {
-      kind: 'image' as const, id: 'draft-1' as DraftAttachmentId,
-      file: new File([Uint8Array.of(1)], 'sent.png', { type: 'image/png' }), previewUrl: 'blob:draft-1',
-    }
-    const addFiles = vi.fn(() => null)
-    const result = bench({
-      attachments: [sent],
-      addFiles,
-      imageLimits: {
-        maxImageBytes: 1024 * 1024,
-        maxImagesPerMessage: 1,
-        maxMessageImageBytes: 1024 * 1024,
-        maxImagePixels: 40_000_000,
-        maxImageDimension: 2000,
-        mediaTypes: ['image/png'] as const,
-      },
-    })
-    let refuse!: (outcome: SubmitOutcome) => void
-    result.sink.mockImplementationOnce(() => new Promise<SubmitOutcome>((resolve) => { refuse = resolve }))
-    fireEvent.keyDown(result.textarea, { key: 'Enter' })
-    await act(async () => { refuse({ kind: 'error' }) })
-    // The refused message's image stays in the draft, so the next message would carry it too.
-    expect(attachmentOwner(result.slotCalls).sendingAttachmentIds).toEqual([])
-    act(() => {
-      attachmentOwner(result.slotCalls).onAddFiles([new File([Uint8Array.of(2)], 'next.png', { type: 'image/png' })])
-    })
-    expect(addFiles).not.toHaveBeenCalled()
-    expect(result.view.getByRole('alert').textContent).toContain('一条消息最多添加 1 张图片')
-  })
-
   it('announces the format problem before any limit when the batch holds a non-image', () => {
     const addFiles = vi.fn(() => '仅支持 PNG、JPG、WebP、GIF 格式的图片')
     const result = bench({
@@ -777,10 +696,8 @@ describe('image draft rail', () => {
     sink.mockImplementationOnce(() => new Promise<SubmitOutcome>((resolve) => { settle = resolve }))
     fireEvent.keyDown(textarea, { key: 'Enter' })
     expect(sink).toHaveBeenCalledWith('', ['draft-1'], 'queue', expect.any(AbortSignal), expect.any(Function))
-    // The rail keeps the sent image, and Send shows progress, until the Host accepts the message;
-    // the rail still takes files for the next message meanwhile.
+    // The rail keeps the sent image, and Send shows progress, until the Host accepts the message.
     expect(attachmentOwner(result.slotCalls).attachments).toEqual([attachments[0]])
-    expect(attachmentOwner(result.slotCalls).canAcceptDrop).toBe(true)
     const sending = view.getByRole('button', { name: '正在发送消息' }) as HTMLButtonElement
     expect(sending.disabled).toBe(true)
     expect(sending.getAttribute('aria-busy')).toBe('true')
@@ -1117,7 +1034,7 @@ describe('running and lock semantics', () => {
         t: makeTranslate(messages, {}),
       })
       const stop = view.getByRole('button', { name: label })
-      if (trigger === 'hover') fireEvent.mouseEnter(stop)
+      if (trigger === 'hover') fireEvent.pointerEnter(stop)
       else fireEvent.focus(stop)
       act(() => { vi.advanceTimersByTime(500) })
       expect(view.getByRole('tooltip').getAttribute('aria-label')).toBe(`${label} Esc Esc`)
@@ -1132,7 +1049,7 @@ describe('running and lock semantics', () => {
     vi.useFakeTimers()
     try {
       const { button, view, session } = bench({ running: true })
-      fireEvent.mouseEnter(button)
+      fireEvent.pointerEnter(button)
       act(() => { vi.advanceTimersByTime(500) })
       expect(view.getByRole('tooltip').getAttribute('aria-label')).toBe('停止生成 Esc Esc')
 
@@ -1166,7 +1083,7 @@ describe('running and lock semantics', () => {
   })
 
   it('running keeps Stop beside the sending control until the Host accepts the message', async () => {
-    const { view, textarea, stop, sink, shell } = bench({ running: true, draft: '排队消息' })
+    const { view, textarea, stop, sink } = bench({ running: true, draft: '排队消息' })
     let settle!: (outcome: SubmitOutcome) => void
     sink.mockImplementationOnce(() => new Promise<SubmitOutcome>((resolve) => { settle = resolve }))
     fireEvent.keyDown(textarea, { key: 'Enter' })
@@ -1174,9 +1091,6 @@ describe('running and lock semantics', () => {
     expect(sending.disabled).toBe(true)
     fireEvent.click(view.getByRole('button', { name: '停止生成' }))
     expect(stop).toHaveBeenCalledTimes(1)
-    // An emptied draft keeps the sending control while the message waits.
-    writeDraft(shell, '')
-    expect(view.getByRole('button', { name: '正在发送消息' })).toBe(sending)
 
     await act(async () => { settle({ kind: 'success' }) })
 
@@ -1244,6 +1158,58 @@ describe('running and lock semantics', () => {
     })
     expect(ready.button.getAttribute('aria-label')).toBe('插话发送')
     expect(ready.button.disabled).toBe(false)
+  })
+
+  it('running Send waits for an uploading image and treats an image without an upload as ready', () => {
+    const image = {
+      kind: 'image' as const,
+      id: 'image-1' as DraftAttachmentId,
+      file: new File(['x'], 'shot.png', { type: 'image/png' }),
+      previewUrl: 'blob:shot',
+    }
+    const uploading = bench({
+      running: true, busyEnter: 'steer', draft: '带图', attachments: [image],
+      fileUploads: { [image.id]: { status: 'uploading', loaded: 0 } },
+    })
+    expect(uploading.button.getAttribute('aria-label')).toBe('发送消息')
+    expect(uploading.button.disabled).toBe(true)
+
+    // A subagent continuation's image has no upload and travels inline.
+    const inline = bench({ running: true, busyEnter: 'steer', draft: '带图', attachments: [image] })
+    expect(inline.button.getAttribute('aria-label')).toBe('插话发送')
+    expect(inline.button.disabled).toBe(false)
+  })
+
+  it('explains on Enter why uploads hold the send, naming a Host refusal', () => {
+    const limits = {
+      maxImageBytes: 1024 * 1024,
+      maxImagesPerMessage: 2,
+      maxMessageImageBytes: 2 * 1024 * 1024,
+      maxImagePixels: 40_000_000,
+      maxImageDimension: 2000,
+      mediaTypes: ['image/png'] as const,
+    }
+    const image = {
+      kind: 'image' as const,
+      id: 'image-1' as DraftAttachmentId,
+      file: new File(['x'], 'wide.png', { type: 'image/png' }),
+      previewUrl: 'blob:wide',
+    }
+    const enterWith = (upload: NonNullable<BenchOptions['fileUploads']>[string]): string | null => {
+      const result = bench({ draft: '带图', attachments: [image], fileUploads: { [image.id]: upload }, imageLimits: limits })
+      fireEvent.keyDown(result.textarea, { key: 'Enter' })
+      expect(result.sink).not.toHaveBeenCalled()
+      const text = result.view.getByRole('alert').textContent
+      cleanup()
+      return text
+    }
+    expect(enterWith({ status: 'uploading', loaded: 0 })).toContain('文件还在上传，请等待上传完成后发送')
+    expect(enterWith({ status: 'error', message: 'offline' })).toContain('上传失败，点击重试')
+    const refusal = '图片宽高不能超过 2000px，请缩小后重试'
+    expect(enterWith({ status: 'error', message: 'too wide', reason: 'IMAGE_DIMENSION_TOO_LARGE' })).toContain(refusal)
+    // The attachments slot receives the same localized explanation for its thumbnail.
+    const owner = attachmentOwner(bench({ attachments: [image], imageLimits: limits }).slotCalls)
+    expect(owner.uploadFailureText('IMAGE_DIMENSION_TOO_LARGE')).toBe(refusal)
   })
 
   it('idle Send keeps the plain label regardless of the busy-state preference', () => {

@@ -104,7 +104,6 @@ const inputState: InputState = {
   attachmentIds: [],
   draftRev: 0,
   phase: 'plain',
-  sendingAttachmentIds: [],
   occurrences: [],
   queue: [],
 }
@@ -132,6 +131,7 @@ const kit: Omit<QuestionComposerProps, 'matched'> = {
   useProjection: (() => undefined),
   useInput: selector => selector(inputState),
   inputActions: {
+    insertQuote: () => false,
     captureInsertion: () => ({ start: 0, end: 0, draftRev: 0 }),
     insertText: () => false,
     setDraft: () => { throw new Error('unused') },
