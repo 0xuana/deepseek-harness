@@ -4,11 +4,11 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, uti
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { ON_DEMAND_BUNDLES } from '../packages/boot/app-boot/src/official-bundles.ts'
+import { ON_DEMAND_BUNDLES } from '../packages/boot/official-bundles/src/index.ts'
 import { generateOfficialBundleCatalog, renderOfficialBundleCatalog, syncOfficialBundleCatalog } from './gen-official-bundle-catalog.ts'
 
 const roots: string[] = []
-const output = 'packages/boot/app-boot/src/official-bundles.generated.ts'
+const output = 'packages/boot/official-bundles/src/catalog.generated.ts'
 
 function write(root: string, path: string, content: unknown): void {
   mkdirSync(dirname(join(root, path)), { recursive: true })
