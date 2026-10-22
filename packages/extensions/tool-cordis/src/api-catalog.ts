@@ -7457,7 +7457,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionForkRequest',
-    declaration: 'export interface SessionForkRequest {\n    readonly sessionId: SessionId;\n    readonly atSeq?: number;\n    readonly allowMigration?: boolean;\n    readonly childSessionId?: SessionId;\n}',
+    declaration: 'export interface SessionForkRequest {\n    readonly sessionId: SessionId;\n    readonly atSeq?: number;\n    readonly allowMigration?: boolean;\n}',
   },
   {
     name: 'SessionForkSource',
