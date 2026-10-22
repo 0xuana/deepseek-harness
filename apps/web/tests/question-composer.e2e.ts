@@ -21,7 +21,7 @@ import {
   launchWebScaffold, recordFixture, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import {
-  connectFreshWorkspace, expandTurnProcesses, newEnglishPage, saveFailureShot,
+  connectFreshWorkspace, expandTurnProcesses, newEnglishPage, pinBrowserClock, pinHostClock, saveFailureShot, WEB_FIXTURE_TIME,
 } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/question-composer', import.meta.url))
@@ -211,9 +211,7 @@ function resettledFixture(fixture: string, outcome: 'cancelled' | 'queued' | 'la
     const event: unknown = JSON.parse(line)
     if (!isRecord(event)) throw new Error('question fixture event is invalid')
     if (event.type === 'session') {
-      // Keep the derived session's relative-time header stable as the source
-      // fixture ages.
-      event.createdAt = Date.now()
+      event.createdAt = WEB_FIXTURE_TIME
       lines.push(JSON.stringify(event))
       continue
     }
@@ -299,9 +297,10 @@ async function openSeededTranscript(fixtureText: string, seedId: string): Promis
   const scaffold = await launchWebScaffold({})
   let browser: Browser | undefined
   try {
-    await seedSession(scaffold, fixtureText, seedId)
+    await seedSession(scaffold, fixtureText, seedId, undefined, { createdAt: WEB_FIXTURE_TIME })
     browser = await chromium.launch()
     const page = await newEnglishPage(browser)
+    await pinBrowserClock(page)
     const tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
@@ -326,12 +325,15 @@ describe('web e2e: resident question composer round trip', () => {
   let tripwire: ReturnType<typeof watchConsole>
   const sessionEvents: SessionEvent[] = []
   let answeredSession: SessionId | undefined
+  let hostClock: ReturnType<typeof pinHostClock> | undefined
 
   beforeAll(async () => {
+    if (MODE !== 'record') hostClock = pinHostClock()
     scaffold = await launchWebScaffold(MODE === 'record' ? {} : { replayFixture: FIXTURE, paceMs: 15, compareReplaySession: true })
     scaffold.ctx.on('session/event', (_session, event: SessionEvent) => { sessionEvents.push(event) })
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
+    if (MODE !== 'record') await pinBrowserClock(page)
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
@@ -340,8 +342,12 @@ describe('web e2e: resident question composer round trip', () => {
   }, 120_000)
 
   afterAll(async () => {
-    await browser?.close()
-    await scaffold?.close()
+    try {
+      await browser?.close()
+    } finally {
+      try { await scaffold?.close() }
+      finally { hostClock?.mockRestore() }
+    }
   })
 
   it('asks through the composer, answers, and completes with the answer logged', async () => {
@@ -361,6 +367,7 @@ describe('web e2e: resident question composer round trip', () => {
     const composer = page.locator('[data-question-key]')
     await composer.waitFor({ timeout: MODE === 'record' ? 120_000 : 30_000 })
     await expect.poll(() => composer.getByText('Which color do you prefer?').count(), { timeout: 10_000 }).toBeGreaterThan(0)
+    expect(await page.locator('[data-question-reply]').count()).toBe(0)
 
     const selectedRow = page.locator('[role="treeitem"][aria-selected="true"]')
     await expect.poll(() => selectedRow.locator('[data-state="warning"]').count(), { timeout: 10_000 }).toBe(1)
@@ -411,10 +418,11 @@ describe('web e2e: resident question composer round trip', () => {
         })
         expect(squeeze.rows).toBeGreaterThan(0)
         for (const description of await composer.locator('[data-option-description]').all()) {
-          const copy = await description.evaluate(readCopy)
-          expect(copy.lines).toBeLessThanOrEqual(2)
-          expect(copy.clipped).toBe(copy.overflows)
-          expect(copy.toggle).toBe(copy.clipped ? 'expand' : undefined)
+          await expect.poll(async () => {
+            const copy = await description.evaluate(readCopy)
+            return copy.lines <= 2 && copy.clipped === copy.overflows
+              && copy.toggle === (copy.clipped ? 'expand' : undefined)
+          }).toBe(true)
         }
         scrollStates.push(squeeze.scrolls)
         expect(squeeze.titleInScrollport).toBe(true)
@@ -539,7 +547,34 @@ describe('web e2e: resident question composer round trip', () => {
     expect(await page.locator('[data-question-key]').count()).toBe(0)
     expect(await selectedRow.locator('[data-state="warning"]').count()).toBe(0)
     await expect.poll(() => page.locator('[data-composer-input]').first().isEnabled(), { timeout: 10_000 }).toBe(true)
-    // The default golden pins Compact mode before process disclosure.
+    const reply = page.locator('[data-question-reply]')
+    await reply.waitFor({ state: 'visible', timeout: 15_000 })
+    expect(await reply.count()).toBe(1)
+    expect(await reply.getByText('Which color do you prefer?', { exact: true }).count()).toBe(1)
+    expect(await reply.getByText('Blue, Include accessibility notes', { exact: true }).count()).toBe(1)
+    expect(await reply.getByText('Green', { exact: true }).count()).toBe(0)
+    expect(await reply.getByText('A cool recessive hue', { exact: false }).count()).toBe(0)
+    expect(await reply.locator('[aria-expanded]').count()).toBe(0)
+    const processControl = page.locator('[data-turn-process]').first()
+    const processGroups = page.locator('[data-step-process]')
+    await expect.poll(() => processControl.isEnabled(), { timeout: 10_000 }).toBe(true)
+    await expect.poll(() => processControl.getAttribute('aria-expanded')).toBe('false')
+    expect(await processGroups.count()).toBeGreaterThan(0)
+    await expect.poll(async () => {
+      for (const group of await processGroups.all()) if (await group.isVisible()) return false
+      return true
+    }).toBe(true)
+    expect(await reply.isVisible()).toBe(true)
+    expect(await page.getByText('DONE', { exact: true }).isVisible()).toBe(true)
+    await processControl.click()
+    await expect.poll(() => processControl.getAttribute('aria-expanded')).toBe('true')
+    await expect.poll(() => processGroups.first().isVisible()).toBe(true)
+    await processControl.click()
+    await expect.poll(() => processControl.getAttribute('aria-expanded')).toBe('false')
+    await expect.poll(() => processGroups.first().isVisible()).toBe(false)
+    expect(await reply.isVisible()).toBe(true)
+    expect(await reply.getByText('Blue, Include accessibility notes', { exact: true }).isVisible()).toBe(true)
+    // Compact mode retains the answered batch outside the folded process.
     const snapshot = await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(ANSWERED_EXPECTED, snapshot, MODE)
     // Keep the ask_user_question card's readable answer in the expanded golden
@@ -549,9 +584,11 @@ describe('web e2e: resident question composer round trip', () => {
     // accessible name is the bare summary, as before timed questions existed.
     const answeredRow = page.getByRole('button', { name: 'Ask question 1/1 answered', exact: true })
     await answeredRow.click()
-    await page.getByText('Which color do you prefer?', { exact: true }).waitFor({ timeout: 10_000 })
+    await page.locator('[data-tool="ask_user_question"]')
+      .getByText('Which color do you prefer?', { exact: true }).waitFor({ timeout: 10_000 })
     expect(await page.getByText('Blue', { exact: true }).count()).toBeGreaterThanOrEqual(1)
-    expect(await page.getByText('Include accessibility notes', { exact: true }).count()).toBe(1)
+    expect(await page.locator('[data-tool="ask_user_question"]')
+      .getByText('Include accessibility notes', { exact: true }).count()).toBe(1)
     expect(await page.getByText(/"answers"/).count()).toBe(0)
     expect(await page.getByRole('button', { name: 'View answers', exact: true }).count()).toBe(0)
     const expanded = await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd)
@@ -1138,18 +1175,20 @@ describe.skipIf(MODE === 'record')('web e2e: late-answered question transcript',
     const { page: latePage, scaffold, tripwire } = seeded
     onTestFailed(() => saveFailureShot(latePage, 'web-e2e-question-late-answered-row'))
     const reply = latePage.locator('[data-question-reply]')
-    await reply.waitFor({ state: 'attached', timeout: 15_000 })
+    await reply.waitFor({ state: 'visible', timeout: 15_000 })
     expect(await reply.count()).toBe(1)
     expect(await latePage.locator('[data-chat-flow-kind="turn-trigger"]').count()).toBe(0)
-    expect(await reply.isVisible()).toBe(false)
-    // Whether the answer beat the timeout is the agent's pacing, not something
-    // a reader of the row has to reason about.
+    expect(await reply.getByText('Which color do you prefer?', { exact: true }).count()).toBe(1)
+    expect(await reply.getByText('Green, Answered after the timeout', { exact: true }).count()).toBe(1)
+    expect(await reply.getByText('Blue', { exact: true }).count()).toBe(0)
+    expect(await reply.getByText('A restful mid-spectrum hue', { exact: false }).count()).toBe(0)
+    expect(await reply.locator('[aria-expanded]').count()).toBe(0)
     await expandTurnProcesses(latePage)
-    await reply.waitFor({ state: 'visible', timeout: 15_000 })
+    expect(await reply.isVisible()).toBe(true)
     const row = latePage.locator('[data-tool="ask_user_question"]')
     await row.waitFor({ timeout: 15_000 })
     await row.getByRole('button', { name: 'Ask question', exact: true }).click()
-    await latePage.getByText('Which color do you prefer?', { exact: true }).waitFor({ timeout: 10_000 })
+    await row.getByText('Which color do you prefer?', { exact: true }).waitFor({ timeout: 10_000 })
     expect(await latePage.getByText('Green', { exact: true }).count()).toBeGreaterThanOrEqual(1)
     expect(await latePage.getByText('Answered after the timeout', { exact: true }).count()).toBeGreaterThanOrEqual(1)
     // The recorded timeout is the row's state, never its transcript copy.

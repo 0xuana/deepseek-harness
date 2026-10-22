@@ -35,7 +35,7 @@ Fixed approval questions use the same pending-question and answer channel. A fea
 
 ### Reading a settled question back
 
-Each late reply is shown once, including when it opens a new Turn. Replies follow normal Chat process grouping and whole-Turn folding. Expand the containing Turn and work group to read a reply that has been folded away.
+Each answered batch appears once in a right-aligned user-style bubble after its answer is recorded, for native and PTC blocking questions and late replies. The bubble shows every question above its selected choices and custom answer, uses lighter question text, and stays visible when process groups or the containing Turn are folded. A blocking-question answer bubble does not prevent completed work steps from collapsing. Late replies admitted after the opening step are interleaved Turn inputs and keep that Turn open. Each bubble separates the process runs before and after its recorded answer. Unanswered questions remain in the question card and tool row.
 
 A question that already settled opens as a read-only card: the same pager over the recorded answers, marked `Answered`. Every option and text field is disabled, Skip and the submit action are gone, a question the user skipped says so in place of its empty answer, and a free-text field appears only where the recorded answer used one. Closing it removes the card, and the tool call row builds another from the same record.
 
@@ -57,7 +57,7 @@ Each Session and pending request has an independent draft in browser storage. A 
 
 A browser that reconnects while the tool call is open receives the pending request again and can still complete it with the remaining time. A Session reopened after the agent or process ended shows the card as continued; submitting resumes the Session's root agent and enters the answer as a new user turn.
 
-Settled question replies remain compact in chat history. A caret marks the bubble as a disclosure; clicking it reopens the read-only question and answer details, and never reopens the settled tool call for a second submission. Its copy action writes each question with the answer the user gave, the same text whether the bubble is open or closed.
+The settled bubble is fully visible and has no disclosure control. Question and answer text renders as plain text; question detail and unselected options are omitted. Its copy action writes each question with the answer the user gave, without reopening the tool call or submitting another answer.
 
 -----
 
