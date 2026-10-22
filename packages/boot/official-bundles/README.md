@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`@deepseek-ai/dsh-official-bundles` holds the bundle package names the dsh installation decides on: which bundles each shipped profile starts with, which bundles it ships switched off, which official bundles install on request, and which bundles earlier releases shipped and profiles drop. [`dsh-app-boot`](../app-boot/README.md) applies these lists when it loads a profile; the plugin manager, the CLI, Desktop, and repository checks read them directly. The package holds data only, so adding or removing a bundle changes this package and leaves the boot code untouched. Use it as a direct library dependency, not through `cordis.yml`.
+`@deepseek-ai/dsh-official-bundles` holds the bundle package names the dsh installation decides on: which bundles each shipped profile starts with, which bundles it ships switched off, which official bundles install on request, and which bundles earlier releases shipped and profiles drop. [`dsh-app-boot`](../app-boot/README.md) applies these lists when it loads a profile; the plugin manager, the CLI, Desktop, the WebWorker image packer, and repository checks read them directly. The package holds data only, so adding or removing a bundle changes this package and leaves the boot code untouched. Use it as a direct library dependency, not through `cordis.yml`.
 
 ## Table of Contents
 

@@ -9,7 +9,7 @@ kind: "package-library"
 
 ## 概述
 
-`@deepseek-ai/dsh-official-bundles` 保存由 dsh 安装决定的组合包包名：每个随附 profile 以哪些组合包启动、随附但默认关闭哪些组合包、哪些官方组合包按请求安装，以及哪些组合包曾由早期版本随附、现在要从 profile 中移除。[`dsh-app-boot`](../app-boot/README.zh.md) 在加载 profile 时应用这些列表；插件管理器、CLI、Desktop 和仓库检查直接读取它们。本包只含数据，因此增加或移除组合包只修改本包，不触及启动代码。请把它作为直接的库依赖使用，而不是通过 `cordis.yml` 使用。
+`@deepseek-ai/dsh-official-bundles` 保存由 dsh 安装决定的组合包包名：每个随附 profile 以哪些组合包启动、随附但默认关闭哪些组合包、哪些官方组合包按请求安装，以及哪些组合包曾由早期版本随附、现在要从 profile 中移除。[`dsh-app-boot`](../app-boot/README.zh.md) 在加载 profile 时应用这些列表；插件管理器、CLI、Desktop、WebWorker 镜像打包器和仓库检查直接读取它们。本包只含数据，因此增加或移除组合包只修改本包，不触及启动代码。请把它作为直接的库依赖使用，而不是通过 `cordis.yml` 使用。
 
 ## 目录
 
@@ -32,11 +32,11 @@ kind: "package-library"
 
 ### 可选与已退役组合包
 
-`OPTIONAL_BUNDLES` 列出安装随附、供用户开启的组合包。每一项都必须是 `dsh` 应用的运行时依赖，并声明 `dsh.bundle.patch`、图标和 `./locale/*.json` 显示元数据，且不能被任何模板选中；[`verify-default-product-isolation`](../../../scripts/verify-default-product-isolation.ts) 检查这些规则。[插件管理器](../plugin-manager/README.zh.md#use-this-package)把这些组合包报告为 `optional`。`RETIRED_BUNDLES` 列出安装不再携带的组合包；app-boot 在加载 profile 时将它们从该 profile 的组合包列表中移除。
+`OPTIONAL_BUNDLES` 列出安装随附、供用户开启的组合包。每一项都必须是 `dsh` 应用的运行时依赖，并声明 `dsh.bundle.patch`、图标和 `./locale/*.json` 显示元信息，且不能被任何模板选中；[`verify-default-product-isolation`](../../../scripts/verify-default-product-isolation.ts) 检查这些规则。[插件管理器](../plugin-manager/README.zh.md#use-this-package)把这些组合包报告为 `optional`。`RETIRED_BUNDLES` 列出安装不再携带的组合包；app-boot 在加载 profile 时将它们从该 profile 的组合包列表中移除。
 
 ### 按需组合包
 
-`ON_DEMAND_BUNDLES` 列出只在请求时安装的公开 Official 包。`OFFICIAL_ON_DEMAND_CATALOG` 内嵌这些包自己持有的本地化元数据和图标，用于离线发现；`pnpm gen-official-bundle-catalog` 显式更新生成内容，`verify-official-bundle-catalog` 检查资源完整性与时效；构建使用已提交的目录，不导入提供方代码。目录不包含安装目标：插件管理器根据运行中的版本和安装推导目标，并使用普通的组合包安装器。[产品使用检查](../../../scripts/verify-product-use.ts)针对 Web 组合随附选择和按需选择，不执行提供方。
+`ON_DEMAND_BUNDLES` 列出只在请求时安装的官方公开包。`OFFICIAL_ON_DEMAND_CATALOG` 内嵌这些包自己持有的本地化元信息和图标，用于离线发现；`pnpm gen-official-bundle-catalog` 显式更新生成内容，`verify-official-bundle-catalog` 检查资源完整性与时效；构建使用已提交的目录，不导入提供方代码。目录不包含安装目标：插件管理器根据运行中的版本和安装推导目标，并使用普通的组合包安装器。[产品使用检查](../../../scripts/verify-product-use.ts)针对 Web 组合随附选择和按需选择，不执行提供方。
 
 -----
 
@@ -53,7 +53,7 @@ kind: "package-library"
 | 文件 | 职责 |
 |---|---|
 | [`src/bundles.ts`](src/bundles.ts) | Profile 模板，以及默认、安装持有、已退役、可选和按需组合包列表 |
-| [`src/catalog.generated.ts`](src/catalog.generated.ts) | 按需组合包的生成离线元数据 |
+| [`src/catalog.generated.ts`](src/catalog.generated.ts) | 按需组合包的生成离线元信息 |
 | [`src/index.ts`](src/index.ts) | 公开导出与目录条目类型 |
 
 </details>
