@@ -1021,6 +1021,15 @@ describe('clearing inactive tasks', () => {
     expect(within(dialog).getByText(en['clear.description'])).toBeDefined()
   })
 
+  it('closes the cleanup menu without opening the confirmation', () => {
+    mount({ records: [at, endedTask] })
+    fireEvent.click(moreTrigger())
+    expect(screen.getByRole('menuitem', { name: en['clear.action'] })).toBeDefined()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('menuitem', { name: en['clear.action'] })).toBeNull()
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
   it('removes nothing when the confirmation is dismissed', () => {
     const h = mount({ records: [at, endedTask] })
     openClear()
