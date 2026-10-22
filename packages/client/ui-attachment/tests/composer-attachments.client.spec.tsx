@@ -85,6 +85,7 @@ function props(overrides: Partial<ComposerAttachmentsOwnerProps> = {}): Paramete
     uploadFailureText: (reason: string) => `refused:${reason}`,
     t,
     ...overrides,
+    readFileDrag: () => undefined,
   }
 }
 
@@ -377,4 +378,29 @@ describe('ComposerAttachments file drafts', () => {
     })} />)
     expect(view.getByTitle('.env').textContent).toContain('ENV 3B')
   })
+})
+
+it('accepts internal file tokens only inside the composer without the full-page overlay', () => {
+  const file = new File([Uint8Array.of(1, 2)], 'original.pdf', { type: 'application/pdf' })
+  const onAddFiles = vi.fn()
+  const view = render(<div data-composer-card data-testid="composer"><ComposerAttachments {...props({ onAddFiles })}
+    readFileDrag={transfer => transfer.getData('application/x-dsh-file') === 'token' ? file : undefined} /></div>)
+  const data = new Map([['application/x-dsh-file', 'token']])
+  const transfer = {
+    types: ['application/x-dsh-file'], items: [], files: [],
+    getData: (key: string) => data.get(key) ?? '',
+  }
+  fireEvent.dragEnter(document.body, { dataTransfer: transfer })
+  fireEvent.dragOver(document.body, { dataTransfer: transfer })
+  fireEvent.drop(document.body, { dataTransfer: transfer })
+  expect(onAddFiles).not.toHaveBeenCalled()
+  const target = view.getByTestId('composer')
+  fireEvent.dragEnter(target, { dataTransfer: transfer })
+  fireEvent.dragOver(target, { dataTransfer: transfer })
+  expect(view.queryByText('文件或图片拖动到此处即可添加')).toBeNull()
+  fireEvent.drop(target, { dataTransfer: transfer })
+  expect(onAddFiles).toHaveBeenCalledExactlyOnceWith([file], new Set())
+  data.set('application/x-dsh-file', 'foreign')
+  fireEvent.drop(target, { dataTransfer: transfer })
+  expect(onAddFiles).toHaveBeenCalledOnce()
 })

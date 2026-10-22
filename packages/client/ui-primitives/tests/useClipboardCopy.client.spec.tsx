@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { StrictMode } from 'react'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useClipboardCopy } from '../src/use-clipboard-copy.ts'
@@ -24,7 +25,9 @@ async function settleCopy(): Promise<void> {
 
 describe('useClipboardCopy', () => {
   it('copies current text, blocks success-window repeats, and resets after one second', async () => {
-    const { result, rerender } = renderHook(({ text }) => useClipboardCopy(text), { initialProps: { text: 'first' } })
+    const { result, rerender } = renderHook(({ text }) => useClipboardCopy(text), {
+      initialProps: { text: 'first' }, wrapper: StrictMode,
+    })
     const callback = result.current.onCopy
     rerender({ text: 'first' })
     expect(result.current.onCopy).toBe(callback)
