@@ -75,7 +75,10 @@ describe('creation recommendation after an explicit wish', () => {
     const compactHeight = await plan.evaluate(element => element.clientHeight)
     const previewText = await plan.innerText()
     expect(previewText.endsWith('…')).toBe(true)
-    expect(Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(previewText))).toHaveLength(81)
+    // The preview keeps about 260 Latin-letter widths before the ellipsis; a trailing space may be trimmed.
+    const previewLength = Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(previewText)).length
+    expect(previewLength).toBeGreaterThan(200)
+    expect(previewLength).toBeLessThanOrEqual(261)
     await expand.click()
     expect(await plan.evaluate(element => element.clientHeight)).toBeGreaterThan(compactHeight)
     expect(await card.getByRole('button', { name: 'Create', exact: true }).isEnabled()).toBe(true)
