@@ -87,10 +87,11 @@ export interface KvTable<K extends string, V> {
    * at call time, so an earlier queued write of the same domain is visible to
    * it and no other write interleaves. Missing keys are ignored. The in-memory
    * records reach the committed state before any `domain/changed` listener
-   * runs. A backend failure rejects with the batch unapplied, leaving every
-   * record in place. A backend that cannot restore its staged records rejects
-   * with `unknown-state` and quarantines the domain: synchronous reads and
-   * every later write reject with that error, while `close()` still works.
+   * runs. A backend failure normally rejects with the batch unapplied, leaving
+   * every record in place. A backend that cannot establish or restore the
+   * batch's state rejects with `unknown-state` and quarantines the domain:
+   * synchronous reads and every later write reject with that error, while
+   * `close()` still works.
    * @param keys - Record keys; duplicates are harmless.
    * @returns the number of keys that existed and were removed.
    */

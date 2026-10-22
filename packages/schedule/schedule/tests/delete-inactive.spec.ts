@@ -167,7 +167,7 @@ it('clears a large ended set in one batch and stays idempotent across repeated c
   expect(changed).toHaveBeenCalledTimes(rounds + 1)
 })
 
-it('removes nothing and reports the batch failure', async () => {
+it('reports the batch failure', async () => {
   const pool = new MemoryMediaPool()
   const batches: string[][] = []
   const backend = gatedScheduleBackend(pool, {

@@ -345,7 +345,7 @@ type ScheduleCatalogEntry = ScheduleRecord & {
 }
 ```
 
-Remote 方法 `schedule.list({ sessionId })`、模型 `schedule_list` 和 Session 页头目录仅返回活动任务。模型视图派生的时间 `state` 与存储的生命周期 `status` 仍是不同概念。删除通过 `schedule.delete({ sessionId, id })` 使用条目的原始绑定；绑定不匹配时返回未找到。模型工具传入当前 Agent 的 Session，全局用户界面则传入所选任务的绑定。仅校验绑定并不构成调用者鉴权。`schedule.deleteInactive()` 删除跨会话的全部未运行（已结束）任务，连同每行携带的已保存的发送记录；成功时以它移除的计数答复 `{ deleted }`；普通失败时不删除任何行，后端报告 `unknown-state` 时可能已移除部分行，服务会先发出 `schedule/changed` 再拒绝，客户端重新读取。自动化任务页面的批量清理使用该方法。未运行任务从不会安排定时器，因此该删除不重算任何目标。无 payload 的 `schedule/changed` 事件通知客户端刷新列表；重新连接后，客户端再次获取当前状态。
+Remote 方法 `schedule.list({ sessionId })`、模型 `schedule_list` 和 Session 页头目录仅返回活动任务。模型视图派生的时间 `state` 与存储的生命周期 `status` 仍是不同概念。删除通过 `schedule.delete({ sessionId, id })` 使用条目的原始绑定；绑定不匹配时返回未找到。模型工具传入当前 Agent 的 Session，全局用户界面则传入所选任务的绑定。仅校验绑定并不构成调用者鉴权。`schedule.deleteInactive()` 删除跨会话的全部未运行（已结束）任务，连同每行携带的已保存的发送记录；成功时以它移除的计数答复 `{ deleted }`；普通失败时不删除任何行；后端报告 `unknown-state` 时可能已移除部分行，并会隔离 Host 的 schedule 领域，之后该领域的操作都会拒绝，直到重新打开。任何拒绝都会先发出 `schedule/changed`，客户端重新读取。自动化任务页面的批量清理使用该方法。未运行任务从不会安排定时器，因此该删除不重算任何目标。无 payload 的 `schedule/changed` 事件通知客户端刷新列表；重新连接后，客户端再次获取当前状态。
 
 随发行版交付的 Web 组合把 `ui-schedule` 与宿主能力一起挂载。[客户端包](../../packages/client/ui-schedule/README.zh.md) 负责目录、空状态与删除控件。页面单独筛选全部、活动和未运行任务，保留未运行任务详情及详情页签条内的原 Session 入口，并要求显式确认删除。“规则”和“任务运行记录”页签将任务设置与按需分页加载的已保存回执分开。回执与未运行状态均不确认模型执行。
 
@@ -522,10 +522,12 @@ async create(sessionId: SessionId, request: ScheduleCreateRequest, signal?: Abor
  * Ended tasks never schedule another delivery, so the removal changes no pending
  * target and no timer is recomputed. Rows are enumerated and removed in one FIFO
  * slot, so a delivery ordered behind this call ends its task after the
- * enumeration rather than during it. The batch is one durable write: a failure
- * removes nothing and rejects, so the caller never receives a partial removal.
- * A backend that reports `unknown-state` may have removed rows, so the service
- * announces the change before rejecting and clients re-read the catalog.
+ * enumeration rather than during it. The batch is one domain write: a normal
+ * failure rejects with every listed row still stored, while a backend
+ * `unknown-state` failure may have removed rows and quarantines the Host
+ * domain, so later schedule operations reject until the domain is reopened.
+ * Every rejection announces `schedule/changed` because it does not establish
+ * which rows landed, and clients then re-read the catalog.
  * @returns Count of removed rows; zero when the Host held no ended task.
  */
 @Remote('deleteInactive') async deleteInactive(): Promise<ScheduleDeleteInactiveResult>

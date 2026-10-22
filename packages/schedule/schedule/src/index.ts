@@ -372,10 +372,12 @@ export class ScheduleService extends TypertRemoteService {
    * Ended tasks never schedule another delivery, so the removal changes no pending
    * target and no timer is recomputed. Rows are enumerated and removed in one FIFO
    * slot, so a delivery ordered behind this call ends its task after the
-   * enumeration rather than during it. The batch is one durable write: a failure
-   * removes nothing and rejects, so the caller never receives a partial removal.
-   * A backend that reports `unknown-state` may have removed rows, so the service
-   * announces the change before rejecting and clients re-read the catalog.
+   * enumeration rather than during it. The batch is one domain write: a normal
+   * failure rejects with every listed row still stored, while a backend
+   * `unknown-state` failure may have removed rows and quarantines the Host
+   * domain, so later schedule operations reject until the domain is reopened.
+   * Every rejection announces `schedule/changed` because it does not establish
+   * which rows landed, and clients then re-read the catalog.
    * @returns Count of removed rows; zero when the Host held no ended task.
    */
   @Remote('deleteInactive')
@@ -492,9 +494,11 @@ export class ScheduleService extends TypertRemoteService {
   /**
    * Remove rows as one durable batch inside the current queue slot.
    *
-   * The batch is one domain write: either every present row is removed and
-   * announced, or the removal rejects with every row still stored. A rejection
-   * reason that carries no Error is wrapped with the operation label.
+   * The batch is one domain write: on success every present row is removed and
+   * announced. Any rejection announces `schedule/changed` because it does not
+   * establish which rows landed; a normal failure leaves every row stored, and
+   * an `unknown-state` failure may have removed some. A rejection reason that
+   * carries no Error is wrapped with the operation label.
    * @param ids - rows to remove.
    * @param label - failure message prefix naming the operation that owned them.
    * @param rearm - whether the rows were armed, so the pending timer must be recomputed.
