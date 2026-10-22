@@ -106,6 +106,8 @@ Windows 打包从 `.env.windows` 或所选预设读取 `DSH_DESKTOP_WINDOWS_PACK
 
 真实硬件与安装证据由[Desktop 验证记录](../tests/README.zh.md)和[已安装更新流程](../tests/installed-update/README.zh.md)维护。本文档不授权 PIN 重试、自动删除 interlock、设备初始化或改变已接受的隔离策略。
 
+经操作人员授权后，可运行 `node apps/desktop/tests/windows-signing-concurrency.perf.ts --execute --config-root <打包配置目录的绝对路径> --rounds 2` 做并发实验。不加 `--execute` 只打印用法。诊断比较完全串行、两个完成任务共用单路硬件签名，以及两路硬件签名；每批使用六个合成 PE 文件的全新副本，第二轮反转模式顺序。实验读取机器 test preset，先核对公开身份，持有账户签名阶段锁，每批保留一条硬件尝试保护记录。首错停止派发并排空已发出的工作；最多可能已有两条硬件请求在途。只有全部签名、时间戳和文件验证成功才正常释放保护记录。记录与探针保留在 `.desktop-build/qualification/signing-concurrency`，探针从不执行，也不使用发布签名缓存。计时不含探针准备、等锁及包组装，实验不启用生产并发，也不代表完整发布性能。
+
 ## 开发备注
 
 无。

@@ -106,6 +106,8 @@ Use `pnpm --dir apps/desktop run cache:windows-signatures --usage` to inspect st
 
 Real hardware and installation evidence is owned by the [Desktop qualification record](../tests/README.md) and [installed-update procedure](../tests/installed-update/README.md). This document does not authorize PIN retries, automatic interlock deletion, device initialization or changes to the accepted isolation policy.
 
+For operator-approved concurrency experiments, run `node apps/desktop/tests/windows-signing-concurrency.perf.ts --execute --config-root <absolute-packaging-directory> --rounds 2`. Without `--execute`, it only prints usage. The diagnostic compares serial completion, two completion workers with one hardware request, and two concurrent hardware requests, using fresh copies of six synthetic PE files per batch; the second round reverses mode order. It uses the machine test preset, reads public identity first, holds the account signing-stage lock and retains one hardware-attempt interlock per batch. It stops dispatch on the first failure and drains issued work; up to two hardware calls may already be in flight. Only complete signature, timestamp and file verification permits normal interlock release. Records and probes remain under `.desktop-build/qualification/signing-concurrency`; probes are never executed and no release cache is used. Timings exclude probe preparation, lock waiting and package assembly. This experiment does not enable production concurrency or establish full-release performance.
+
 ## Dev Note
 
 None.
