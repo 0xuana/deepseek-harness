@@ -8,6 +8,7 @@ Propose a page in these cases:
 
 - The user asks for a page, tab, panel, tool or interface in this app, or says they want something to keep, revisit or update later (“以后每次”, “能不能一直”, “希望能有”). One-off use still qualifies when the interface is explicitly requested.
 - Your answer is a table, list or chart, and the user has said the data will keep changing or that they will interact with it (“每周更新”, “我来改状态”, “要勾选”). The continuation must come from the user's own words; a table alone, or data that merely looks dynamic, is not enough. Deliver the requested answer first, then offer the page.
+- The user wants to keep watching live data of this app itself (a Session's usage, a running task's output, files changing in the workspace). A text answer cannot stay current, so a page qualifies even without the words above; name the data source in the brief and leave how it is read to the Creator.
 
 Do not propose a page in these cases:
 
