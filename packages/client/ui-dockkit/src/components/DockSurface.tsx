@@ -5,8 +5,8 @@
  *
  * A gesture only previews until it ends, then leaves through one intent, so the
  * embedder's operation sequence stays the single source of truth. Releasing a tab
- * clear of this surface floats it; releasing inside it but on no pane is not a
- * move at all.
+ * clear of this surface floats it; releasing inside it without an effective
+ * drop target changes nothing.
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -110,8 +110,9 @@ const ALWAYS = (): boolean => true
 /**
  * Resolve where a pointer sits inside the docked surface. An edge zone is only
  * offered where the split it would make is allowed: within the pane budget and
- * with room for two halves. Strip slots that preserve the dragged tab’s position
- * offer no caret or placement intent.
+ * with room for two halves. Strip slots that preserve the dragged tab's position
+ * offer no caret or placement intent. An undefined target inside the surface
+ * leaves the layout unchanged on release.
  */
 function hitTest(
   root: HTMLElement,
