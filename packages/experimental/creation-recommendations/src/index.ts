@@ -16,6 +16,7 @@ import type {} from '@deepseek-ai/dsh-api-remote-access'
 import type {} from '@deepseek-ai/dsh-subagent'
 import type {} from '@deepseek-ai/dsh-app-boot'
 import type {} from '@deepseek-ai/dsh-skill'
+import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import { registerCreationSkill } from './skill.ts'
 import { creationProjection, customLocationSchema, slotSchema, type CreationState } from './projection.ts'
 import { validateGeneratedBundle } from './generated-bundle.ts'
@@ -47,6 +48,11 @@ interface CreationJob {
 /** Invalid proposals never start a child or change the profile. */
 export class CreationRecommendationError extends HarnessError {}
 
+/** Own entries only: browser-supplied ids such as `toString` never reach inherited object members. */
+function ownEntry<T>(record: Readonly<Record<string, T>>, key: string): T | undefined {
+  return Object.hasOwn(record, key) ? record[key] : undefined
+}
+
 /** Internal Remote and effect owner assembled by the personalized-pages plugin. */
 export class CreationRecommendations extends TypertRemoteService {
   static inject = ['tools', 'pluginManager', 'agents', 'sessionProjections', 'remoteAccess', 'subagents', 'profileContext', 'skills']
@@ -73,7 +79,7 @@ export class CreationRecommendations extends TypertRemoteService {
       if (pending.length === 0) return decision
       const updates = Object.values(state.view.decisions)
         .filter(receipt => state.pendingStatus[receipt.callId] !== undefined)
-        .map(receipt => ({ callId: receipt.callId, title: state.proposals[receipt.callId]?.title, phase: receipt.phase,
+        .map(receipt => ({ callId: receipt.callId, title: ownEntry(state.view.proposals, receipt.callId)?.title, phase: receipt.phase,
           slot: receipt.slot, customLocation: receipt.customLocation, application: receipt.application }))
       return { ...decision, messages: [...decision.messages, createUserMessage({
         source: { kind: 'personalized-pages', through: SessionSeq(Math.max(...pending.map(([, seq]) => seq))),
@@ -100,12 +106,9 @@ export class CreationRecommendations extends TypertRemoteService {
       }
     })
     this.ctx.tools.guard((exec) => {
-      if (exec.agent === undefined) return undefined
-      const creator = [...this.jobs.values()].some(job => job.childId === exec.agent?.id)
-      if (creator && exec.name === 'plugin_manager' && !z.object({ action: z.enum(['list_plugins', 'list_bundles', 'list_version_exemptions']) }).safeParse(exec.arguments).success) {
-        return 'Generate the new bundle files only. The caller installs them after validation.'
-      }
-      return undefined
+      if (exec.agent === undefined || exec.name !== 'plugin_manager' || this.jobs.size === 0
+        || z.object({ action: z.enum(['list_plugins', 'list_bundles', 'list_version_exemptions']) }).safeParse(exec.arguments).success) return undefined
+      return this.underCreator(exec.agent) ? 'Generate the new bundle files only. The caller installs them after validation.' : undefined
     })
     for (const agent of this.ctx.agents.roots()) await this.recoverOnOpen(agent)
   }
@@ -165,6 +168,19 @@ export class CreationRecommendations extends TypertRemoteService {
     }
   }
 
+  /** A running Creator child, or an agent created under one at any depth, by runtime ownership. */
+  private underCreator(agent: Agent): boolean {
+    const creators = new Set([...this.jobs.values()].map(job => job.childId))
+    const live = this.ctx.agents.list()
+    const lineage = [agent]
+    for (const current of lineage) {
+      if (creators.has(current.id)) return true
+      const owner = live.find(candidate => this.ctx.agents.isOwnedBy(current.id, candidate))
+      if (owner !== undefined) lineage.push(owner)
+    }
+    return false
+  }
+
   /** Parent disposal starts before its child effects drain. */
   private isStopping(): boolean {
     let owner = this.owner
@@ -183,11 +199,11 @@ export class CreationRecommendations extends TypertRemoteService {
       return { status: 'refused', reason: 'unavailable' }
     }
     const state = this.projection.stateOf(agent.session)
-    const proposal = state.proposals[callId]
+    const proposal = ownEntry(state.view.proposals, callId)
     if (proposal === undefined) return { status: 'refused', reason: 'unknown' }
     if (this.isStopping()) return { status: 'refused', reason: 'closing' }
     if (!this.ctx.agents.roots().includes(agent)) return { status: 'refused', reason: 'not-live-root' }
-    const previous = state.view.decisions[callId]
+    const previous = ownEntry(state.view.decisions, callId)
     const job = this.jobs.get(key)
     if (job !== undefined) {
       if (action === 'cancel' && previous?.phase !== 'installing') {
@@ -222,6 +238,8 @@ export class CreationRecommendations extends TypertRemoteService {
       return { status: 'settled', decision }
     }
     if (action !== 'create') return { status: 'refused', reason: 'unavailable' }
+    // The Creator inherits this Session's sandbox mode and could not write the package in read-only mode.
+    if (this.ctx.get('sandboxPolicy')?.resolve({ session: agent.session }).mode === 'read-only') return { status: 'refused', reason: 'read-only' }
     const id = randomUUID()
     const directory = join(this.ctx.profileContext.dir, 'created-plugins', id)
     // Spawn preserves the parent's workspace-write boundary even with a different cwd.

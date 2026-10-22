@@ -52,7 +52,7 @@ Existing messages and decision records are unchanged. Readers without this plugi
 <a id="verification"></a>
 ## Verification
 
-Focused creation, projection, status and card component tests: 68 passed; changed Host modules have 100% coverage. The web creation recording includes dismissal followed by a status question; Host protocol refresh and keyless replay each passed. Expiry tests cover queued and directly logged human input, replay, stale clicks, background notices and started-task retries. A late request-preparation callback adds no context after the feature unloads.
+Focused creation, projection, status and card component tests: 68 passed; changed Host modules have 100% coverage. The web creation recording includes dismissal followed by a status question; Host protocol refresh and keyless replay each passed. Cards are replaced or suppressed and never expire; tests cover replacement by a later proposal, suppression while human input is queued, replay, stale clicks, background notices and started-task retries. A late request-preparation callback adds no context after the feature unloads.
 
 <a id="dev-note"></a>
 ## Dev Note

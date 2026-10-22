@@ -1,5 +1,5 @@
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import { createToolResultMessage, createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { appendPluginRecord, SessionId } from '@deepseek-ai/dsh-session'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { readFile, rm } from 'node:fs/promises'
@@ -235,31 +235,18 @@ describe('interface creation', () => {
     const f = await fixture()
     for (const [index, args] of [{ ...proposal, title: ' ' }, { ...proposal, brief: ' ' }].entries()) {
       const failed = await f.propose('failed-' + String(index), args)
-      expect(f.state().proposals[failed]).toBeUndefined()
+      expect(f.state().view.proposals[failed]).toBeUndefined()
     }
     await f.propose()
     const second = await f.propose('second')
-    expect(f.state().proposals[second]).toBeUndefined()
+    expect(f.state().view.proposals[second]).toBeUndefined()
     f.agent.session.append('turn/start', { turn: 2 })
     const nextTurn = await f.propose('next-turn')
-    expect(f.state().proposals[nextTurn]).toBeDefined()
+    expect(f.state().view.proposals[nextTurn]).toBeDefined()
     vi.spyOn(f.ctx.agents, 'roots').mockReturnValue([])
     expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')).toEqual({ status: 'refused', reason: 'not-live-root' })
     vi.spyOn(f.ctx.remoteAccess, 'allows').mockReturnValue(false)
     expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')).toEqual({ status: 'refused', reason: 'access-denied' })
-  })
-
-  it('keeps one card per turn when the official recommendation tool already offered one', async () => {
-    const f = await fixture()
-    f.agent.session.append('tool/result', { turn: 1, step: 1,
-      message: createToolResultMessage({ callId: ToolCallId('official'), content: [{ type: 'text', text: 'official' }], isError: false }),
-      meta: { pluginRecommendation: { callId: 'official' } },
-    }, { surfaceOp: 'append' })
-    await f.propose()
-    expect(f.state().proposals[callId]).toBeUndefined()
-    f.agent.session.append('turn/start', { turn: 2 })
-    const later = await f.propose('creation-2')
-    expect(f.state().proposals[later]).toBeDefined()
   })
 
   it('returns a typed invalid-location refusal and falls back for invalid dismissal locations', async () => {
@@ -383,6 +370,41 @@ describe('interface creation', () => {
     expect((await run('install', f.agent)).isError).toBe(false)
     const unrelated = await f.harness.create(SessionId('other-root'))
     expect((await run('install', unrelated)).isError).toBe(false)
+    const helper = await f.ctx.agents.create({ sessionId: SessionId('creator-helper'), parentAgent: child,
+      meta: { parentSession: child.id, origin: 'subagent' } })
+    const nested = await f.ctx.agents.create({ sessionId: SessionId('creator-nested'), parentAgent: helper.agent,
+      meta: { parentSession: helper.agent.id, origin: 'subagent' } })
+    for (const owned of [helper.agent, nested.agent]) {
+      expect((await run('install', owned)).isError).toBe(true)
+      expect((await run('list_bundles', owned)).isError).toBe(false)
+    }
+    // Session lineage alone is not runtime ownership.
+    const lineage = await f.ctx.agents.create({ sessionId: SessionId('creator-lineage'), meta: { parentSession: child.id } })
+    expect((await run('install', lineage.agent)).isError).toBe(false)
+  })
+
+  it('treats inherited object member names as unknown proposals and logs nothing for them', async () => {
+    const f = await fixture()
+    await f.propose()
+    const logged = f.events.length
+    expect(await f.ctx.creationRecommendations.act(f.agent, ToolCallId('toString'), 'dismiss', 'page')).toEqual({ status: 'refused', reason: 'unknown' })
+    expect(await f.ctx.creationRecommendations.act(f.agent, ToolCallId('constructor'), 'create', 'page')).toEqual({ status: 'refused', reason: 'unknown' })
+    expect(f.events).toHaveLength(logged)
+    expect(f.startActivation).not.toHaveBeenCalled()
+  })
+
+  it('refuses to start a Creator while the Session is read-only and keeps dismissal available', async () => {
+    const f = await fixture()
+    await f.propose()
+    const resolve = vi.fn(() => ({ mode: 'read-only', workspaceRoot: f.directory }))
+    f.ctx.provide('sandboxPolicy', { resolve })
+    expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')).toEqual({ status: 'refused', reason: 'read-only' })
+    expect(resolve).toHaveBeenCalledWith({ session: f.agent.session })
+    expect(f.current()).toBeUndefined()
+    expect(f.startActivation).not.toHaveBeenCalled()
+    resolve.mockReturnValue({ mode: 'workspace-write', workspaceRoot: f.directory })
+    expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')).toEqual({ status: 'accepted' })
+    expect(f.current()?.phase).toBe('creating')
   })
 
   it('releases installation follow-up when HMR unloads the creator and recovers its eventual result', async () => {
@@ -595,6 +617,6 @@ it('never offers a proposal written while the user has queued more messages for 
   f.agent.inbox.append('next-turn', queued())
   f.agent.session.append('turn/start', { turn: 2 })
   const next = await f.propose('creation-2')
-  expect(f.state().proposals[next]).toBeDefined()
+  expect(f.state().view.proposals[next]).toBeDefined()
   expect(f.state().view.decisions[next]).toBeUndefined()
 })

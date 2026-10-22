@@ -240,6 +240,10 @@ describe('client bundle purity gate', () => {
     expect(() => resolveId('@deepseek-ai/dsh-experimental-creation-recommendations/action-block/internal')).toThrow(/purity/)
   })
 
+  it('inlines the zero-dependency dsh-action fence utility', () => {
+    expect(resolveId('@deepseek-ai/dsh-util-action-block')).toBeNull()
+  })
+
   it('inlines the stateless file-drag entry without admitting its subpaths or UI plugin', () => {
     expect(resolveId('@deepseek-ai/dsh-util-file-drag')).toBeNull()
     expect(() => resolveId('@deepseek-ai/dsh-util-file-drag/internal')).toThrow(/purity/)

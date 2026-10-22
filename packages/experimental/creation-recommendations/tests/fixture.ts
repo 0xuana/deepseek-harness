@@ -72,7 +72,7 @@ export async function fixture(initial?: CreationDecision) {
   if (initial !== undefined) appendPluginRecord(agent.session, 'plugin:creation-recommendations/decision', initial)
   const fiber = await ctx.plugin(CreationRecommendations)
   const projection = creationProjection(CreationRecommendations.Config.parse({}))
-  const state = () => events.reduce(projection.apply, projection.init())
+  const state = () => events.reduce(projection.apply, projection.init(agent.session.header, agent.session.inheritedEventCount))
   const current = (): CreationCardState | undefined => state().view.decisions[callId]
   /** Log an assistant answer ending in a dsh-action block, as the model would write it. */
   let step = 0
