@@ -22,6 +22,7 @@ import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import { Group } from '@deepseek-ai/cordis-plugin-loader'
 import * as operations from '../src/operations.ts'
 import * as githubConnection from '../src/github-connection.ts'
+import * as gitTransport from '../src/git-transport.ts'
 import { parse, parseDocument } from 'yaml'
 import { isolateGitCommandLineConfig } from './git-environment.ts'
 
@@ -131,6 +132,36 @@ it('cancels an active GitHub check before starting pnpm', async () => {
   onTestFinished(() => { pnpm.mockRestore() })
   const requestId = '824103ec-bc45-489d-bb85-5b4fe0aefc78' as PluginInstallRequestId
   const installing = manager.installBundle('github:acme/dsh-plugin', { requestId })
+  await entered.promise
+  expect(await manager.cancelInstall(requestId)).toEqual({ status: 'cancelled' })
+  expect(await installing).toMatchObject({ application: 'cancelled', changed: false })
+  expect(pnpm).not.toHaveBeenCalled()
+})
+
+it('installs the spec the Git transport probe chooses with the profile Git environment and deadline', async () => {
+  const env = { GIT_CONFIG_GLOBAL: '/application/git.config' }
+  const { manager, dir } = await fixture('live', false, undefined, { gitTransportTimeoutMs: 7000 }, { command: 'pnpm', args: [], env })
+  const spec = 'git+https://git.example/team/sub/plugin.git#main'
+  const transport = vi.spyOn(gitTransport, 'chooseGitTransport').mockResolvedValue('git+ssh://git@git.example/team/sub/plugin.git#main')
+  const pnpm = vi.spyOn(operations, 'runProfilePnpm').mockResolvedValue({ exitCode: 1, output: 'stop', truncated: false, logPath: 'pnpm.log', kind: 'unknown' })
+  onTestFinished(() => { transport.mockRestore(); pnpm.mockRestore() })
+  expect((await manager.installBundle(spec)).application).toBe('failed')
+  expect(transport).toHaveBeenCalledWith(expect.objectContaining({ kind: 'git', spec }), dir, expect.objectContaining({ timeoutMs: 7000, env }))
+  expect(pnpm.mock.calls[0]?.[1]).toEqual(['add', 'git+ssh://git@git.example/team/sub/plugin.git#main'])
+})
+
+it('cancels an active Git transport probe before starting pnpm', async () => {
+  const { manager } = await fixture()
+  const entered = Promise.withResolvers<undefined>()
+  const transport = vi.spyOn(gitTransport, 'chooseGitTransport').mockImplementation(async (spec, _dir, options) => {
+    entered.resolve(undefined)
+    await new Promise<void>((resolve) => { options.signal.addEventListener('abort', () => { resolve() }, { once: true }) })
+    return spec.spec
+  })
+  const pnpm = vi.spyOn(operations, 'runProfilePnpm')
+  onTestFinished(() => { transport.mockRestore(); pnpm.mockRestore() })
+  const requestId = '5f0c1f8e-3f5e-4a59-9a43-1d0c5c3f7a21' as PluginInstallRequestId
+  const installing = manager.installBundle('git+https://git.example/team/plugin.git', { requestId })
   await entered.promise
   expect(await manager.cancelInstall(requestId)).toEqual({ status: 'cancelled' })
   expect(await installing).toMatchObject({ application: 'cancelled', changed: false })
@@ -832,6 +863,10 @@ it('refuses to install over an installed package, by name, version or local dire
   expect(await manager.installBundle(join(dir, '..', 'extra-1.0.0.tgz'), { approvedBuilds: ['native-provider'] }))
     .toMatchObject({ application: 'failed', changed: false, error: { code: 'already-installed' } })
   expect(existsSync(workspace) ? readFileSync(workspace, 'utf8') : undefined).toBe(settings)
+  // A self-hosted HTTPS Git spec matches the SSH form an earlier installation saved.
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({ ...manifest, dependencies: { extra: 'git+ssh://git@git.example/team/sub/extra.git#main' } }))
+  expect(await manager.installBundle('git+https://git.example/team/sub/extra.git#main'))
+    .toMatchObject({ application: 'failed', changed: false, error: { code: 'already-installed' } })
   writeFileSync(join(dir, 'package.json'), JSON.stringify(manifest))
   expect(install).not.toHaveBeenCalled()
   expect(readProfileManifest('test', dir).dependencies).toEqual({ extra: '1.0.0' })
