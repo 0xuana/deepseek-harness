@@ -1,11 +1,10 @@
-.card { margin: 16px 0; border: 0.5px solid var(--dsw-alias-border-l1); border-radius: var(--dsw-radius-lg); overflow: hidden; font-family: var(--dsw-font-family); color: var(--dsw-alias-label-primary); }
+.card { margin: 16px 0; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg); overflow: hidden; background: var(--dsw-alias-bg-layer-1); font-family: var(--dsw-font-family); color: var(--dsw-alias-label-primary); }
 .header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 20px; background: var(--dsw-alias-bg-module-platform); font-size: 12px; line-height: 1.5; color: var(--dsw-alias-label-secondary); }
 .badge { font-size: 12px; }
 .body { padding: 20px; }
-.details { display: block; width: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; }
-.details:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; border-radius: var(--dsw-radius-sm); }
-@media (hover: hover) { .details:hover .detailHint { color: var(--dsw-alias-label-primary); text-decoration: underline; } }
-.detailHint { display: block; margin-top: 12px; font-size: 12px; line-height: 1.5; color: var(--dsw-alias-label-secondary); }
+.details { display: block; box-sizing: border-box; width: calc(100% + 16px); margin: -8px; padding: 8px; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: inherit; font: inherit; text-align: start; cursor: pointer; transition: background-color 120ms ease; }
+@media (hover: hover) { .details:hover { background: var(--dsw-alias-interactive-bg-hover); } }
+.details:focus-visible { outline: none; background: var(--dsw-alias-interactive-bg-hover); box-shadow: inset 0 0 0 2px var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); }
 .reason, .description { display: block; }
 .title { display: block; font-size: 16px; font-weight: 500; line-height: 1.5; overflow-wrap: anywhere; }
 .reason { margin: 8px 0; font-size: 13px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }

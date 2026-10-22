@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import type { ComponentProps } from 'react'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { RecommendationCardState, RecommendationDetails, RecommendationView } from '@deepseek-ai/dsh-experimental-plugin-recommendations/types'
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
@@ -79,16 +79,17 @@ it('shows the proposal admitted in a turn once that turn has ended for any reaso
   await act(async () => {})
 })
 
-it('shows the Host catalog text, the reason and scope, opens details, and enables only on click', async () => {
+it('shows the Host catalog text and reason as one details target, the scope, and enables only on click', async () => {
   const value = props()
   await shown(value)
   expect(screen.getByRole('region', { name: '推荐插件' })).toBeTruthy()
-  expect(screen.getByText('会话搜索')).toBeTruthy()
-  expect(screen.getByText('检索过去的会话')).toBeTruthy()
-  expect(screen.getByText('帮你找到上周讨论的方案')).toBeTruthy()
+  const details = screen.getByRole('button', { name: '查看详情：会话搜索' })
+  for (const text of ['会话搜索', '帮你找到上周讨论的方案', '检索过去的会话']) expect(within(details).getByText(text)).toBeTruthy()
+  expect(details.textContent).toBe('会话搜索帮你找到上周讨论的方案检索过去的会话')
+  expect(screen.getAllByRole('button').map(button => button.textContent)).toEqual([details.textContent, '暂不需要', '启用'])
   expect(screen.getByText('启用后可在所有会话中使用')).toBeTruthy()
   expect(value.act).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByRole('button', { name: '查看详情：会话搜索' }))
+  fireEvent.click(details)
   expect(value.openDetails).toHaveBeenCalledWith('official-search')
   fireEvent.click(screen.getByRole('button', { name: '启用' }))
   await waitFor(() => { expect(value.act).toHaveBeenCalledWith('block:m1', 'enable') })

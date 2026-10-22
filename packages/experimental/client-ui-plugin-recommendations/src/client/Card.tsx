@@ -93,7 +93,6 @@ export function RecommendationCard({ recommendation, useProjection, useLocale, a
         <strong className={css.title}>{title}</strong>
         <span className={css.reason}>{recommendation.reason}</span>
         {available !== undefined && <span className={css.description}>{resolveText(available.description)}</span>}
-        <span className={css.detailHint}>{t('detailsHint')}</span>
       </button>
       {settled !== undefined && <p role="status" className={css.status}>{t(settled)}</p>}
       {view?.invalid ? <p role="alert" className={css.status}>{t('invalid-history')}</p>

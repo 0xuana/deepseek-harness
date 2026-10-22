@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Users see one plugin recommendation below the completed answer, with the plugin's current title and description in the interface language and the Agent's reason. Clicking its title or description opens that plugin's details in Plugins without enabling it or changing the current Session. Enable and Not now remain separate choices. Decisions and the details link remain available after reconnecting.
+Users see one plugin recommendation below the completed answer, with the plugin's current title and description in the interface language and the Agent's reason. The title, reason and description form one target that highlights on hover; clicking it opens that plugin's details in Plugins without enabling it or changing the current Session. Enable and Not now remain separate choices. Decisions and the details link remain available after reconnecting.
 
 ## Table of Contents
 
@@ -37,7 +37,7 @@ Enable the [Plugin recommendations bundle](../plugin-recommendations/README.md).
 
 The Turn tail reads the proposals of the `pluginRecommendations` Session projection and shows the one admitted in its Turn once that Turn has ended, for any end reason; the projection admits at most one proposal per Turn, and the chat hides the fence itself. A proposal the projection marks never offered renders nothing. The card asks the Host for the plugin's current catalog text and selection; a name outside the eligible catalog shows no actions. Session projection decisions drive the card after reload. The optional Remote and all UI registrations are removed together on unload.
 
-Cards use the application font, a distinct title and compact body scale, and a separate action footer. The built entry supplies generated Remote descriptors to the source-tested mount lifecycle.
+Cards use the application font, the deliverables card border and background, a distinct title and compact body scale, and a separate action footer. The built entry supplies generated Remote descriptors to the source-tested mount lifecycle.
 
 - [Source](src/client/index.ts)
 - [Tests](tests/)
