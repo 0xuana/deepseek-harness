@@ -349,9 +349,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'forkSession( sessionId: SessionId, onCreated?: (childId: SessionId) => void, options?: ForkSessionOptions, ): Promise<SessionId>',
-        description: 'Fork a Session. Pages whose access snapshot includes renaming it increment the child title; other pages leave the title unchanged and present the child only once the Host lists it.',
+        description: 'Fork a Session and apply its branch presentation policy. Pages whose access snapshot includes renaming the source increment the child title; other pages leave the title to the Host and open the child only once its summary is listed. In the latter case the call begins one navigation for that listing, so a pending navigation may be superseded.',
         parameters: [{ name: 'sessionId', description: 'source Session.' }, { name: 'onCreated', description: 'observer after creation, before the optional child-title update.' }, { name: 'options', description: 'branch boundary, migration permission, and how the child is presented.' }],
-        returns: 'the child SessionId after creation and any permitted inherited-title increment.',
+        returns: 'the child SessionId after creation and any permitted inherited-title increment; kept for upper layers that need the id while the listed-open wait is still pending.',
+        throws: ['when the Host refuses or fails the fork; the caller keeps its current view and decides whether to report the failure.'],
       },
       {
         signature: 'connectWorkspace(workspaceId: WorkspaceId, options?: Pick<StartSessionOptions, \'agentPreset\'>): Promise<SessionId>',
