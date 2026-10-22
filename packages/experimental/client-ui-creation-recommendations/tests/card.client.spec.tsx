@@ -278,7 +278,8 @@ it('only offers expansion for omitted content and preserves the full plan withou
   const view = render(<RecommendationCard {...value} />)
   expect(screen.queryByRole('button', { name: '展开方案' })).toBeNull()
   expect(screen.getByText(/Keep my task count visible/).textContent).toBe(short)
-  const prefix = '计'.repeat(79) + '👩🏽‍💻'
+  // 129 wide graphemes (258 units) plus one narrow emoji fill the 260-unit budget; the next grapheme folds.
+  const prefix = '计'.repeat(129) + '👩🏽‍💻'
   value.recommendation = { ...value.recommendation, brief: prefix + '\n\n保留完整方案，点击创建后交给 Creator。' }
   view.rerender(<RecommendationCard {...value} />)
   const expand = screen.getByRole('button', { name: '展开方案' })
@@ -307,7 +308,7 @@ it('shows supplied initial content as folded data below the plan and omits it ot
   expect(screen.getByText('预填内容')).toBeTruthy()
   expect(screen.getByText(/导出成功/).textContent).toBe(items)
   expect(screen.queryByRole('button', { name: '展开内容' })).toBeNull()
-  value.recommendation = { ...value.recommendation, initialContent: '条'.repeat(81) }
+  value.recommendation = { ...value.recommendation, initialContent: '条'.repeat(131) }
   view.rerender(<RecommendationCard {...value} />)
   const expand = screen.getByRole('button', { name: '展开内容' })
   fireEvent.click(expand)

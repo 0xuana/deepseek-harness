@@ -50,14 +50,25 @@ function LocationPicker({ value, disabled, onChange, t }: {
     </Button>} />
 }
 
-/** Fold omitted text without measuring layout; the full text is never altered. */
+/** Graphemes drawn about twice as wide as a Latin letter: CJK scripts, CJK punctuation and fullwidth forms. */
+const WIDE_GRAPHEME = /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}　-〿＀-｠￠-￦]/u
+/** Preview budget in Latin-letter widths, about two card lines at desktop width. */
+const FOLD_WIDTH = 260
+
+/** Fold omitted text without measuring layout; a wide grapheme counts twice so Chinese and English fold near the same line.
+ * The full text is never altered. */
 function FoldedText({ text, expandLabel, collapseLabel }: { text: string; expandLabel: string; collapseLabel: string }) {
   const id = useId()
   const [expanded, setExpanded] = useState(false)
   const preview = useMemo(() => {
     const compact = text.replace(/\s+/g, ' ').trim()
     const characters = Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(compact), part => part.segment)
-    return characters.length > 80 ? characters.slice(0, 80).join('').trimEnd() + '…' : undefined
+    let width = 0
+    for (const [index, character] of characters.entries()) {
+      width += WIDE_GRAPHEME.test(character) ? 2 : 1
+      if (width > FOLD_WIDTH) return characters.slice(0, index).join('').trimEnd() + '…'
+    }
+    return undefined
   }, [text])
   return <>
     <p id={id} className={css.reason}>{expanded || preview === undefined ? text : preview}</p>
