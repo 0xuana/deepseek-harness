@@ -29,6 +29,8 @@ Users switch the color scheme, font sizes, and fonts from rows in Settings (Gene
 
 ### Appearance and font size
 
+In narrow browser settings, the three Appearance choices share one row and font-size labels use a smaller gutter. Windows and macOS desktop windows retain wrapping choices and standard spacing.
+
 The plugin registers Appearance preference cubes and the text font-size stepper in the General section. A More font settings button after the stepper expands a region below it, collapsed on every settings open, with a font row for each of text, code, and the terminal, plus the code and terminal font-size steppers. The text stepper accepts integer values from 10 through 22 px and defaults to 14 px. It changes conversation headings and base text by the same increment, including the user bubble and composer draft; flow-row titles, summaries, and tables follow one step under the body size, while small text keeps a fixed size. The code stepper (10–16 px, default 11) sets the code-block size; inline code stays 1 px larger, and the small tool-output variant uses the same size. The terminal stepper (10–20 px, default 13) sets the sidebar terminal cell font size; changing it keeps the shell and output and refits the grid. Each accepted change writes through the Host settings API. Rapid changes serialize in gesture order with namespace revisions, and a rejected latest write reloads the durable values.
 
 Desktop's fixed `Cmd`/`Ctrl` + `+` (or `=`) and `Cmd`/`Ctrl` + `-` shortcuts change the text, code, and terminal font sizes together by 1 px, each within its own range. Each physical key press saves the changed fields in one settings mutation; holding a key does not repeat the adjustment. The actions appear in the shortcut reference and work in the main document, including dialogs and text inputs, unless a local control consumes the input; terminal input retains its own key handling. Web retains the browser's zoom shortcuts.
@@ -58,6 +60,8 @@ Shared menus use `--dsw-menu-surface-fill` and blur through `MenuSurface`; platf
 The service owns theme, font-size, and font-family state and publishes snapshots. The ui-layout presenter applies those snapshots, and the token sheets own the color and conversation text scales.
 
 ### Stylesheets
+
+The style installer publishes `--dsh-hairline-width` on the document root and updates it through one device-pixel-ratio listener when the document has a window. Documents without a window receive the stylesheets and use the CSS fallback width. Its width matches a 0.5px border rounded down to whole device pixels, with a one-device-pixel minimum. Only styles that explicitly consume this variable use the width; plugin disposal releases the listener and restores the previous root declaration.
 
 `base.css` owns the shared radius scale, the font tokens, and settings-card material aliases. `--dsh-font-family-text-default` and `--dsh-font-family-code-default` hold the built-in stacks on `:root`; on `body`, `--dsw-font-family` and `--ds-font-family-code` place `--dsh-font-family-text` and `--dsh-font-family-code` ahead of those stacks, and an unset list resolves to the built-in stack (repeated once, which font matching ignores). The material aliases resolve on `body`, alongside the active palette. Follow [Web styling](../../../docs/web-styling.md#corner-radii-and-settings-cards) when choosing component radii.
 

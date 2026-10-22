@@ -29,8 +29,10 @@
   cursor: pointer;
 }
 
-.trigger:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .trigger:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .trigger:focus-visible:not([data-selection-focus]) {
@@ -66,6 +68,31 @@
 .triggerIcon {
   display: var(--dsh-composer-model-icon-display, none);
   flex: 0 0 auto;
+}
+
+/* Clipped selector text fades over its last 24px instead of ending in an
+   ellipsis. A self scroll timeline is active only while the box overflows,
+   so the mask never touches text that fits; browsers without scroll-driven
+   animations keep the ellipsis. A mask rather than a painted gradient, so
+   the fade matches the trigger's bare and hover fills and every menu row. */
+@supports (animation-timeline: scroll()) {
+  .triggerLabel,
+  .triggerEffort,
+  .modelName,
+  .cellValue {
+    text-overflow: clip;
+    /* Longhands only: the build folds a full set into the `animation`
+       shorthand, which cannot carry a timeline. */
+    animation-name: clipped-fade;
+    animation-fill-mode: both;
+    animation-timeline: scroll(self inline);
+  }
+}
+
+@keyframes clipped-fade {
+  from, to {
+    mask-image: linear-gradient(to right, black calc(100% - 24px), transparent);
+  }
 }
 
 /* The composer measures expanded row demand and owns these display variables.
@@ -193,10 +220,16 @@
   cursor: pointer;
 }
 
-.searchClear:hover,
 .searchClear:focus-visible {
   outline: none;
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .searchClear:hover {
+    outline: none;
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .searchRow .search:focus-within {
@@ -236,10 +269,15 @@
   cursor: pointer;
 }
 
-.option:not(.modelOption):hover:not(:disabled),
 .option:focus-visible,
 .optionActive:not(:disabled) {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .option:not(.modelOption):hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* Selection marker is the trailing check, not a fill — matches the Menu
@@ -303,9 +341,14 @@
   outline: none;
 }
 
-.cell:hover,
 .cell:focus-visible {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .cell:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .cellLabel {

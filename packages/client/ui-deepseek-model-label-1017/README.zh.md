@@ -27,7 +27,7 @@ kind: "package-reference"
 
 Web bundle 包含本插件，桌面端使用该 bundle 时也会加载。本包没有配置字段。
 
-只有提供方为 `deepseek-official` 或 `deepseek-account`、模型 ID 为 `deepseek-flash`，且目录名称恰好为 `DeepSeek-V4.1-Flash` 时才显示角标。其他名称和提供方保留目录文字。输入框按钮、当前模型菜单行和模型选项共用这个角标。
+只有提供方为 `deepseek-official` 或 `deepseek-account`、模型 ID 为 `deepseek-flash`，且目录名称恰好为 `DeepSeek-V4.1-Flash` 时才显示角标。其他名称和提供方保留目录文字。输入框按钮、当前模型菜单行和模型选项共用蓝色纯文字版本标记。标记与模型名称字号相同、基线对齐，不使用胶囊；空间不足时由选择器将整段文字末尾渐隐，版本标记可能被隐藏。
 
 通过 profile patch 停用以下条目即可恢复目录名称：
 
@@ -44,7 +44,7 @@ Web bundle 包含本插件，桌面端使用该 bundle 时也会加载。本包�
 <details>
 <summary>内部实现 — 点击展开</summary>
 
-浏览器入口通过 `ctx.slots.inject()` 向已有的 `conversation.input.model.label` slot 注册组件。组件根据 owner props 派生标签，使用共享 `Tag` 基元，不拥有缓存、订阅、网络请求或模型选择状态。注册和字典随插件卸载。Host 入口仅让 Loader 能加载浏览器包。
+浏览器入口通过 `ctx.slots.inject()` 向已有的 `conversation.input.model.label` slot 注册组件。组件根据 owner props 派生标签，以行内 span 显示版本标记，不拥有缓存、订阅、网络请求或模型选择状态。注册和字典随插件卸载。Host 入口仅让 Loader 能加载浏览器包。
 
 </details>
 
