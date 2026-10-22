@@ -19,7 +19,7 @@ export function eligible(bundle: BundleInfo): boolean {
 export function registerOfficialPluginsSkill(ctx: Context): void {
   const candidate: SkillCandidate = {
     name: 'official-plugins',
-    description: 'Check DSH’s built-in optional plugins when the user wants this app itself to work differently or gain an ability, including adding plugins or plugin sources: input methods, how thinking or titles are shown, searching past sessions, persistent terminals, worktrees, agent teams, desktop control, output badges or fewer approval prompts. Such a wish is not a request to develop DSH, even when its source is in the workspace: load this before reading any files or source. Not for ordinary tasks, quoted wishes or declined recommendations.',
+    description: 'Check DSH’s optional plugins when the user asks how to do or use something in this app, whether it can, or says a capability is missing or should change: tools, input, thinking or title display, session search, terminals, worktrees, agent teams, desktop control, automation, access, approvals, badges or signatures, plugins or plugin sources. Not a request to develop DSH, even in its own repository: load before reading files or source. Not for ordinary tasks, quoted wishes or declined offers.',
     provider: 'dsh-official-plugins', source: 'bundled', rank: BUNDLED_SKILL_RANK, locator: null,
     invocation: { modelInvocable: true, userInvocable: false },
   }

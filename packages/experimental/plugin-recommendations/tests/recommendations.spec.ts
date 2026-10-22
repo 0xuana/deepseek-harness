@@ -12,7 +12,10 @@ describe('official recommendations', () => {
     const f = await fixture()
     expect(f.ctx.tools.get('list_official_plugins')).toBeUndefined()
     expect(f.ctx.tools.get('suggest_plugin')).toBeUndefined()
-    expect((await f.ctx.skills.list()).filter(skill => skill.name === 'official-plugins')).toMatchSnapshot('skill discovery')
+    const discovered = (await f.ctx.skills.list()).filter(skill => skill.name === 'official-plugins')
+    expect(discovered).toMatchSnapshot('skill discovery')
+    // The skill catalog cuts entries longer than its default 500 characters, which would drop the exclusions at the end.
+    expect(discovered[0]!.description.length).toBeLessThanOrEqual(500)
     expect(f.manager.listBundles).not.toHaveBeenCalled()
     const noMeta = { ...bundle }
     delete noMeta.meta
