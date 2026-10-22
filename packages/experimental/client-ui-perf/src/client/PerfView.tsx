@@ -4,10 +4,12 @@
  */
 
 import {
-  Fragment, useEffect, useLayoutEffect, useRef, useState,
+  Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState,
   type ReactElement, type ReactNode, type UIEvent,
 } from 'react'
+import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
+import { HoverCard, ImageLightbox } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ConvViewProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
@@ -32,6 +34,8 @@ const COPY_FEEDBACK_MS = 1_200
 const CODE_LINE_LIMIT = 400
 /** Line count above which a diff falls back to whole-side removal and addition. */
 const DIFF_LINE_LIMIT = 300
+/** Hover dwell before the prompt image preview opens. */
+const IMAGE_PREVIEW_DELAY_MS = 200
 /** Numeric columns in table order. */
 const COLUMNS = ['context', 'output', 'cache', 'ttft', 'model', 'tps', 'tool'] as const
 
@@ -89,11 +93,32 @@ export interface PerfViewInjected {
    * @returns false when the snapshot produced no new page.
    */
   loadOlder: () => Promise<boolean>
+  /**
+   * Resolve one durable prompt image through the shared Conversation image cache.
+   * @param attachment - image reference the user message recorded.
+   * @returns browser URL owned by the cache for the Session binding's lifetime.
+   */
+  loadImage: (attachment: ImageAttachmentRef) => Promise<string>
 }
 
 /** Full props of the performance conversation View. */
 export type PerfViewProps =
   ConvViewProps & InjectFace<PerfViewInjected> & PropsLocale<'perf'>
+
+/** Resolve one durable prompt image to a browser URL. */
+type LoadImage = PerfViewInjected['loadImage']
+
+/** Prompt image shown by the full-size lightbox. */
+interface LightboxImage {
+  readonly src: string
+  readonly alt: string
+}
+
+/** Load state of one preview thumbnail. */
+type ImageLoad =
+  | { readonly status: 'loading' }
+  | { readonly status: 'failed' }
+  | { readonly status: 'ready'; readonly src: string }
 
 /** Open/closed default for turns the user never toggled explicitly. */
 type ViewMode = 'newest' | 'all' | 'none'
@@ -195,6 +220,7 @@ interface CallGroup {
 interface TurnRowsOptions {
   readonly turn: PerfTurnMetrics
   readonly t: PerfTranslate
+  readonly loadImage: LoadImage
   readonly now: number
   readonly open: boolean
   readonly state: StepViewState
@@ -267,6 +293,25 @@ interface PromptCellProps {
   readonly turn: PerfTurnMetrics
   readonly t: PerfTranslate
   readonly className: string | undefined
+  readonly loadImage: LoadImage
+}
+
+/** Props of one preview thumbnail inside the image popover. */
+interface PromptImageThumbProps {
+  readonly attachment: ImageAttachmentRef
+  readonly index: number
+  readonly count: number
+  readonly loadImage: LoadImage
+  readonly t: PerfTranslate
+  readonly onOpen: (image: LightboxImage) => void
+}
+
+/** Props of the image-count pill and its hover/focus preview. */
+interface ImagePromptPillProps {
+  readonly first: ImageAttachmentRef
+  readonly images: readonly ImageAttachmentRef[]
+  readonly loadImage: LoadImage
+  readonly t: PerfTranslate
 }
 
 /** Empty per-turn step state, shared so unexpanded turns allocate nothing. */
@@ -908,8 +953,146 @@ function TimeCell({ value, scale, gap, className, trackClass, now, t }: TimeCell
   )
 }
 
+/** Display name of one prompt image: its recorded name, otherwise its position. */
+function imageName(attachment: ImageAttachmentRef, index: number, count: number, t: PerfTranslate): string {
+  return attachment.name ?? t('imagePreview.alt', { index, count })
+}
+
+/** One prompt-image thumbnail: loads while the preview is open and opens the full image on click. */
+function PromptImageThumb({
+  attachment, index, count, loadImage, t, onOpen,
+}: PromptImageThumbProps): ReactElement {
+  const [image, setImage] = useState<ImageLoad>({ status: 'loading' })
+  const [attempt, setAttempt] = useState(0)
+  useEffect(() => {
+    let live = true
+    void loadImage(attachment).then(
+      (src) => { if (live) setImage({ status: 'ready', src }) },
+      () => { if (live) setImage({ status: 'failed' }) },
+    )
+    return () => { live = false }
+  }, [attachment, loadImage, attempt])
+  if (image.status === 'ready') {
+    const name = imageName(attachment, index, count, t)
+    return (
+      <button
+        type="button"
+        className={css.imageThumb}
+        aria-label={t('imagePreview.open', { index, count })}
+        title={t('imagePreview.open', { index, count })}
+        onClick={(event) => {
+          // A portalled preview click still bubbles through the row that toggles the turn.
+          event.stopPropagation()
+          onOpen({ src: image.src, alt: name })
+        }}
+      >
+        <img src={image.src} alt={name} />
+      </button>
+    )
+  }
+  return (
+    <span className={css.imageThumbStatus} data-state={image.status}>
+      <span>{image.status === 'loading' ? t('imagePreview.loading') : t('imagePreview.failed')}</span>
+      {image.status === 'failed' ? (
+        <button
+          type="button"
+          className={css.chip}
+          onClick={(event) => {
+            event.stopPropagation()
+            setImage({ status: 'loading' })
+            setAttempt(value => value + 1)
+          }}
+        >
+          {t('imagePreview.retry')}
+        </button>
+      ) : null}
+    </span>
+  )
+}
+
+/**
+ * Image-count pill for one turn's prompt: hovering or focusing it previews the
+ * images, and clicking it loads the first one full size. URLs come from the
+ * shared Conversation image cache, which owns their lifetime per Session.
+ */
+function ImagePromptPill({ first, images, loadImage, t }: ImagePromptPillProps): ReactElement {
+  const [lightbox, setLightbox] = useState<LightboxImage | null>(null)
+  const [status, setStatus] = useState<'idle' | 'loading' | 'failed'>('idle')
+  const count = images.length
+  const closeLightbox = useCallback(() => { setLightbox(null) }, [])
+  const label = status === 'idle'
+    ? t('turn.images', { count })
+    : status === 'loading' ? t('imagePreview.loading') : t('imagePreview.failed')
+  const preview = (
+    <div
+      className={css.imagePreview}
+      role="group"
+      aria-label={t('imagePreview.dialog')}
+      data-single={count === 1 || undefined}
+    >
+      {images.map((attachment, offset) => (
+        <PromptImageThumb
+          key={`${attachment.attachmentId}:${offset}`}
+          attachment={attachment}
+          index={offset + 1}
+          count={count}
+          loadImage={loadImage}
+          t={t}
+          onOpen={setLightbox}
+        />
+      ))}
+    </div>
+  )
+  return (
+    <Fragment>
+      <HoverCard
+        inline
+        openDelayMs={IMAGE_PREVIEW_DELAY_MS}
+        anchor={(
+          <button
+            type="button"
+            className={cx(css.triggerPill, css.imagePill)}
+            data-state={status}
+            title={t('imagePreview.hint')}
+            onClick={(event) => {
+              // The row toggles its steps on click; the pill opens the image instead.
+              event.stopPropagation()
+              setStatus('loading')
+              void loadImage(first).then(
+                (src) => {
+                  setStatus('idle')
+                  setLightbox({ src, alt: imageName(first, 1, count, t) })
+                },
+                () => { setStatus('failed') },
+              )
+            }}
+          >
+            {label}
+          </button>
+        )}
+        content={preview}
+      />
+      {lightbox === null ? null : (
+        <span onClick={(event) => { event.stopPropagation() }}>
+          <ImageLightbox
+            src={lightbox.src}
+            alt={lightbox.alt}
+            labels={{ dialog: t('imagePreview.dialog'), close: t('imagePreview.close') }}
+            onClose={closeLightbox}
+          />
+        </span>
+      )}
+    </Fragment>
+  )
+}
+
 /** Prompt column: the turn's user question, clipped with the full text in the title. */
-function PromptCell({ turn, t, className }: PromptCellProps): ReactElement {
+function PromptCell({ turn, t, className, loadImage }: PromptCellProps): ReactElement {
+  const images = turn.promptImages
+  const first = images[0]
+  const pill = first === undefined
+    ? null
+    : <ImagePromptPill first={first} images={images} loadImage={loadImage} t={t} />
   const source = turn.promptSource
   if (source !== null && source !== 'user') {
     // Automated turns explain what woke them instead of pretending to be a question.
@@ -918,27 +1101,24 @@ function PromptCell({ turn, t, className }: PromptCellProps): ReactElement {
     return (
       <td className={className} title={text === '' ? label : text}>
         <span className={css.triggerPill}>{label}</span>
+        {pill}
         {text === '' ? null : <span className={css.promptText}>{text}</span>}
       </td>
     )
   }
   if (turn.prompt === null || turn.prompt === '') {
     // An image-only prompt still says how many images opened the turn.
-    if (turn.promptImages > 0) {
-      const label = t('turn.images', { count: turn.promptImages })
-      return (
-        <td className={className} title={label}>
-          <span className={css.promptText}>{label}</span>
-        </td>
-      )
-    }
-    return <td className={className} />
+    if (first === undefined) return <td className={className} />
+    return (
+      <td className={className} title={t('turn.images', { count: images.length })}>
+        {pill}
+      </td>
+    )
   }
-  const images = turn.promptImages > 0 ? ` · ${t('turn.images', { count: turn.promptImages })}` : ''
-  const text = turn.prompt + images
   return (
-    <td className={className} title={text}>
-      <span className={css.promptText}>{text}</span>
+    <td className={className} title={turn.prompt}>
+      <span className={css.promptText}>{turn.prompt}</span>
+      {pill}
     </td>
   )
 }
@@ -1279,7 +1459,7 @@ function stepRows(options: StepRowsOptions): ReactNode[] {
 
 /** All rows of one turn: the clickable header, then the expanded body. */
 function turnRows(options: TurnRowsOptions): ReactNode[] {
-  const { turn, t, now, open, state, turnScale, onToggle, onToggleDetail, onControl } = options
+  const { turn, t, loadImage, now, open, state, turnScale, onToggle, onToggleDetail, onControl } = options
   const cells = metricsCells(turn, t)
   const toggleLabel = open ? t('turn.collapse') : t('turn.expand')
   const rows: ReactNode[] = [
@@ -1315,7 +1495,7 @@ function turnRows(options: TurnRowsOptions): ReactNode[] {
         ) : null}
         {scopeMarkers(turn, t)}
       </td>
-      <PromptCell turn={turn} t={t} className={css.promptCellTurn} />
+      <PromptCell turn={turn} t={t} className={css.promptCellTurn} loadImage={loadImage} />
       {turnDidCell(turn, t)}
       <ContextCell value={turn.context} delta={null} title="" className={css.turnMetric} />
       <MetricCells cells={cells} className={css.turnMetric} />
@@ -1366,7 +1546,7 @@ interface PendingPrepend {
  * @returns the scrolling table, its empty state, and the expand/collapse footer.
  */
 export function PerfView(props: PerfViewProps): ReactElement {
-  const { usePerf, t, loadOlder } = props
+  const { usePerf, t, loadOlder, loadImage } = props
   const snapshot = usePerf(value => value)
   const [view, setView] = useState<ViewState>(createViewState)
   const [now, setNow] = useState(() => Date.now())
@@ -1533,6 +1713,7 @@ export function PerfView(props: PerfViewProps): ReactElement {
               {turns.flatMap(turn => turnRows({
                 turn,
                 t,
+                loadImage,
                 now,
                 open: isTurnOpen(turn.turn),
                 state: view.stepViews[turn.turn] ?? EMPTY_STEP_VIEW,

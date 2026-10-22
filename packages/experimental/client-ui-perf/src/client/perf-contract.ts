@@ -1,5 +1,6 @@
 /** Published performance model: per-step metrics, per-turn aggregates, and marker contributions. */
 
+import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type {
   ConversationLocation, ConversationViewNode,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -70,7 +71,8 @@ export interface PerfStepState {
   /** Turn-level marker kind; step states leave this null. */
   readonly mark: 'prompt' | 'end' | null
   readonly prompt: string | null
-  readonly images: number
+  /** Durable image references the prompt attached, in message order. */
+  readonly images: readonly ImageAttachmentRef[]
   readonly closed: boolean
   readonly closeKind: string | null
   /** Producer source kind of the trigger prompt Context. */
@@ -112,7 +114,7 @@ export interface PerfStepMetrics {
   readonly ttftPending?: number
   readonly mark?: 'prompt' | 'end' | null
   readonly prompt?: string | null
-  readonly images?: number
+  readonly images?: readonly ImageAttachmentRef[]
   readonly closed?: boolean
   readonly closeKind?: string | null
 }
@@ -148,7 +150,8 @@ export interface PerfTurnMetrics {
   readonly aborted: boolean
   readonly wall: number | null
   readonly prompt: string | null
-  readonly promptImages: number
+  /** Durable image references the prompt attached, in message order. */
+  readonly promptImages: readonly ImageAttachmentRef[]
   /** Producer source kind that opened the turn (`user`, `agent-message`, ...). */
   readonly promptSource: string | null
   /** Last answer preview measured in the turn. */
@@ -169,7 +172,8 @@ export type PerfContribution =
     readonly kind: 'prompt'
     readonly turn: number
     readonly prompt: string | null
-    readonly images: number
+    /** Durable image references the prompt attached, in message order. */
+    readonly images: readonly ImageAttachmentRef[]
     /** Producer source kind of the triggering user message. */
     readonly source: string
   }

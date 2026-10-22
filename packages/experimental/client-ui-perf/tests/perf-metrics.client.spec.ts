@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { AttachmentId, type ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import { aggregateTurn, buildTurns } from '../src/client/perf-aggregate.ts'
 import type { PerfCall, PerfStepMetrics, PerfViewNode } from '../src/client/perf-contract.ts'
 import { CALL_LIMIT } from '../src/client/perf-fold.ts'
@@ -72,7 +73,22 @@ function stepNode(value: PerfStepMetrics): PerfViewNode {
   }
 }
 
-function promptNode(turn: number, prompt: string | null, images = 0, source = 'user'): PerfViewNode {
+function imageRef(id: string): ImageAttachmentRef {
+  return {
+    attachmentId: AttachmentId(id),
+    mediaType: 'image/png',
+    bytes: 1,
+    width: 1,
+    height: 1,
+  }
+}
+
+function promptNode(
+  turn: number,
+  prompt: string | null,
+  images: readonly ImageAttachmentRef[] = [],
+  source = 'user',
+): PerfViewNode {
   return {
     key: `${turn}:prompt:${prompt ?? 'null'}`,
     kind: 'perf-prompt',
@@ -142,7 +158,7 @@ describe('turn aggregation', () => {
     expect(turn.aborted).toBe(false)
     expect(turn.wall).toBeNull()
     expect(turn.prompt).toBeNull()
-    expect(turn.promptImages).toBe(0)
+    expect(turn.promptImages).toEqual([])
   })
 
   it('sums measured spans and reports partial coverage as a lower bound', () => {
@@ -285,7 +301,7 @@ describe('turn aggregation', () => {
   it('describes the turn prompt as absent until the table attributes it', () => {
     const turn = aggregateTurn(2, [metricsOf()])
     expect(turn.prompt).toBeNull()
-    expect(turn.promptImages).toBe(0)
+    expect(turn.promptImages).toEqual([])
     expect(turn.steps).toHaveLength(1)
   })
 })
@@ -299,13 +315,13 @@ describe('turn grouping', () => {
       stepNode(later),
       stepNode(one),
       stepNode(two),
-      promptNode(8, '问题', 2),
+      promptNode(8, '问题', [imageRef('sha256:a'), imageRef('sha256:b')]),
       endNode(9, 31_000, 'interrupted'),
     ])
     expect(turns.map(turn => turn.turn)).toEqual([8, 9])
     expect(turns[0]?.steps.map(step => step.step)).toEqual([1, 2])
     expect(turns[0]?.prompt).toBe('问题')
-    expect(turns[0]?.promptImages).toBe(2)
+    expect(turns[0]?.promptImages).toEqual([imageRef('sha256:a'), imageRef('sha256:b')])
     expect(turns[1]?.interrupted).toBe(true)
   })
 
@@ -324,7 +340,7 @@ describe('turn grouping', () => {
     ])
     expect(turns).toHaveLength(1)
     expect(turns[0]?.prompt).toBeNull()
-    expect(turns[0]?.promptImages).toBe(0)
+    expect(turns[0]?.promptImages).toEqual([])
     expect(turns[0]?.running).toBe(true)
   })
 
@@ -333,47 +349,47 @@ describe('turn grouping', () => {
     const turns = buildTurns([
       stepNode(step),
       promptNode(1, null),
-      promptNode(1, 'first', 3),
-      promptNode(1, 'second', 4),
+      promptNode(1, 'first', [imageRef('sha256:a'), imageRef('sha256:b'), imageRef('sha256:c')]),
+      promptNode(1, 'second', [imageRef('sha256:d')]),
     ])
     expect(turns[0]?.prompt).toBe('first')
-    expect(turns[0]?.promptImages).toBe(3)
+    expect(turns[0]?.promptImages).toHaveLength(3)
   })
 
   it('classifies the turn trigger and prefers the human prompt', () => {
     const step = metricsOf({ turn: 1, step: 1, startTime: 100 })
     const human = buildTurns([
       stepNode(step),
-      promptNode(1, 'team message', 0, 'agent-message'),
-      promptNode(1, 'human question', 2, 'user'),
+      promptNode(1, 'team message', [], 'agent-message'),
+      promptNode(1, 'human question', [imageRef('sha256:a'), imageRef('sha256:b')], 'user'),
     ])
     expect(human[0]?.prompt).toBe('human question')
     expect(human[0]?.promptSource).toBe('user')
 
     const team = buildTurns([
       stepNode(metricsOf({ turn: 2, step: 1, startTime: 200 })),
-      promptNode(2, 'team message', 0, 'agent-message'),
+      promptNode(2, 'team message', [], 'agent-message'),
     ])
     expect(team[0]?.prompt).toBe('team message')
     expect(team[0]?.promptSource).toBe('agent-message')
 
     const settled = buildTurns([
       stepNode(metricsOf({ turn: 3, step: 1, startTime: 300 })),
-      promptNode(3, 'subagent done', 0, 'subagent-settled'),
+      promptNode(3, 'subagent done', [], 'subagent-settled'),
     ])
     expect(settled[0]?.promptSource).toBe('subagent-settled')
 
     const goal = buildTurns([
       stepNode(metricsOf({ turn: 4, step: 1, startTime: 400 })),
-      promptNode(4, 'goal round', 0, 'goal'),
-      promptNode(4, '', 0, 'goal'),
+      promptNode(4, 'goal round', [], 'goal'),
+      promptNode(4, '', [], 'goal'),
     ])
     expect(goal[0]?.promptSource).toBe('goal')
     expect(goal[0]?.prompt).toBe('goal round')
 
     const context = buildTurns([
       stepNode(metricsOf({ turn: 5, step: 1, startTime: 500 })),
-      promptNode(5, 'clock', 0, 'time-context'),
+      promptNode(5, 'clock', [], 'time-context'),
     ])
     expect(context[0]?.promptSource).toBe('time-context')
   })

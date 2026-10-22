@@ -1,6 +1,7 @@
 /** Event folding and per-step metric derivation for the performance table. */
 
 import type { SessionEventLike } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { AssistantMessage, ContentBlock, StreamChunk, UserMessage } from '@deepseek-ai/dsh-llm'
 import { assistantStreamFirstTokenTime } from '@deepseek-ai/dsh-llm/assistant-stream'
 // Type-only: the PTC event members this fold reads.
@@ -302,7 +303,7 @@ export function newState(
     toolErrors: 0,
     mark,
     prompt: null,
-    images: 0,
+    images: [],
     closed: false,
     closeKind: null,
     trigger: null,
@@ -340,14 +341,14 @@ function resultInfo(content: readonly ContentBlock[]): {
 /**
  * User question: only a human-typed `user` source is the text the user wrote.
  * @param message - one user-role message from the Session log.
- * @returns the one-line question and the number of attached images.
+ * @returns the one-line question and the durable images it attached.
  */
-export function promptOf(message: UserMessage): { text: string | null; images: number } {
+export function promptOf(message: UserMessage): { text: string | null; images: readonly ImageAttachmentRef[] } {
   const parts: string[] = []
-  let images = 0
+  const images: ImageAttachmentRef[] = []
   for (const block of message.content) {
     if (block.type === 'text') parts.push(block.text)
-    if (block.type === 'image') images += 1
+    if (block.type === 'image') images.push(block.attachment)
   }
   return { text: clip(parts.join(' '), 400), images }
 }

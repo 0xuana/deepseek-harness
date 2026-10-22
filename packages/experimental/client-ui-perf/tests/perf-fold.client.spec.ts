@@ -71,11 +71,11 @@ function textBlock(text: string): ContentBlock {
   return { type: 'text', text }
 }
 
-function imageBlock(): ImageBlock {
+function imageBlock(attachmentId = 'sha256:fixture'): ImageBlock {
   return {
     type: 'image',
     attachment: {
-      attachmentId: AttachmentId('sha256:fixture'),
+      attachmentId: AttachmentId(attachmentId),
       mediaType: 'image/png',
       bytes: 1,
       width: 1,
@@ -692,13 +692,15 @@ describe('assistant timeline and usage', () => {
 })
 
 describe('prompt helper', () => {
-  it('joins typed text blocks and counts images', () => {
-    const prompt = promptOf(userMessage([textBlock('explain'), textBlock('this'), imageBlock()]))
+  it('joins typed text blocks and keeps every attached image in order', () => {
+    const first = imageBlock()
+    const second = imageBlock('sha256:second')
+    const prompt = promptOf(userMessage([textBlock('explain'), textBlock('this'), first]))
     expect(prompt.text).toBe('explain this')
-    expect(prompt.images).toBe(1)
-    const imageOnly = promptOf(userMessage([imageBlock(), imageBlock()]))
+    expect(prompt.images).toEqual([first.attachment])
+    const imageOnly = promptOf(userMessage([first, second]))
     expect(imageOnly.text).toBeNull()
-    expect(imageOnly.images).toBe(2)
+    expect(imageOnly.images).toEqual([first.attachment, second.attachment])
   })
 
   it('clips long questions and drops blank text', () => {
@@ -1148,7 +1150,7 @@ describe('step metric derivation', () => {
     expect(metrics.cacheHit).toBeNull()
     expect(metrics.mark).toBeNull()
     expect(metrics.prompt).toBeNull()
-    expect(metrics.images).toBe(0)
+    expect(metrics.images).toEqual([])
     expect(metrics.closed).toBe(false)
     expect(metrics.closeKind).toBeNull()
   })
@@ -1168,7 +1170,7 @@ describe('step metric derivation', () => {
       interrupted: true,
       mark: 'end',
       prompt: 'question',
-      images: 3,
+      images: [imageBlock().attachment, imageBlock('sha256:b').attachment, imageBlock('sha256:c').attachment],
       closed: true,
       closeKind: 'interrupted',
     }))
@@ -1189,7 +1191,7 @@ describe('step metric derivation', () => {
     expect(metrics.toolPending).toBe(3)
     expect(metrics.mark).toBe('end')
     expect(metrics.prompt).toBe('question')
-    expect(metrics.images).toBe(3)
+    expect(metrics.images).toHaveLength(3)
     expect(metrics.closed).toBe(true)
     expect(metrics.closeKind).toBe('interrupted')
   })

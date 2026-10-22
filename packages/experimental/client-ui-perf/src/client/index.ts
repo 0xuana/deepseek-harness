@@ -4,6 +4,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { SessionBinding, SessionFace } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -101,11 +102,14 @@ export function apply(ctx: Context): void {
           const grew = perf.getSnapshot() !== before
           if (grew) return true
           const snapshot = session.getSnapshot()
-          if (snapshot.hasMore === true) {
+          if (snapshot.hasMore) {
             throw new Error('client-ui-perf: history page did not advance')
           }
           return false
         },
+        // The shared Conversation cache reads the durable bytes once per Session
+        // and owns the resulting browser URL until its binding is released.
+        loadImage: (attachment: ImageAttachmentRef) => ctx.uiConversation.imageUrl(sessionId, attachment),
       }
     },
   }, PerfView))

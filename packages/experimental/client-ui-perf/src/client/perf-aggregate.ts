@@ -1,5 +1,6 @@
 /** Turn aggregation over the step metrics a window holds. */
 
+import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type {
   PerfCall, PerfContribution, PerfStepMetrics, PerfToolCount, PerfTurnMetrics, PerfViewNode,
 } from './perf-contract.ts'
@@ -9,10 +10,13 @@ import { isNumber } from './perf-usage.ts'
 /** One Code-Mode root call's inner contribution, before merging into its step. */
 type InnerContribution = Extract<PerfContribution, { kind: 'inner' }>
 
+/** Empty image list shared by turns whose trigger attached no image. */
+const NO_IMAGES: readonly ImageAttachmentRef[] = []
+
 /** The trigger that opened one turn, kept from the highest-priority source. */
 interface TurnTrigger {
   readonly text: string
-  readonly images: number
+  readonly images: readonly ImageAttachmentRef[]
   readonly source: string
 }
 
@@ -184,7 +188,7 @@ export function aggregateTurn(turn: number, steps: readonly PerfStepMetrics[]): 
     aborted: steps.some(step => step.aborted),
     wall,
     prompt: null,
-    promptImages: 0,
+    promptImages: NO_IMAGES,
     promptSource: null,
     answer,
   }
@@ -291,7 +295,7 @@ export function buildTurns(nodes: Iterable<PerfViewNode>): PerfTurnMetrics[] {
       running: (index < order.length - 1 || at !== undefined) ? false : aggregate.running,
       interrupted: closedKind.get(turn) === 'interrupted' ? true : aggregate.interrupted,
       prompt: prompt === undefined || prompt.text === '' ? null : prompt.text,
-      promptImages: prompt === undefined ? 0 : prompt.images,
+      promptImages: prompt === undefined ? NO_IMAGES : prompt.images,
       promptSource: prompt === undefined ? null : prompt.source,
     })
   })

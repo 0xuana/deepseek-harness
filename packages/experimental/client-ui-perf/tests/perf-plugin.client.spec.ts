@@ -1,5 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
+import { AttachmentId, type ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import { LlmAttemptId } from '@deepseek-ai/dsh-llm/brand'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import type {
@@ -32,6 +33,15 @@ import type { PerfViewInjected } from '../src/client/PerfView.tsx'
 import { apply as hostApply } from '../src/index.ts'
 
 const SID = 'perf-session' as SessionId
+
+/** One durable image the prompt fixtures attach. */
+const IMAGE: ImageAttachmentRef = {
+  attachmentId: AttachmentId('sha256:image'),
+  mediaType: 'image/png',
+  bytes: 12,
+  width: 2,
+  height: 2,
+}
 
 let seq = 0
 
@@ -115,6 +125,7 @@ interface PluginBench {
   readonly localeRegister: ReturnType<typeof vi.fn>
   readonly binding: ReturnType<typeof vi.fn>
   readonly loadOlder: ReturnType<typeof vi.fn>
+  readonly imageUrl: ReturnType<typeof vi.fn>
   readonly setOpenState: (state: 'cold' | 'open' | 'error') => void
   readonly settleOnNextSubscribe: () => void
   readonly setHasMore: (value: boolean) => void
@@ -143,6 +154,7 @@ async function mountPlugin(): Promise<PluginBench> {
     }),
   }))
   const loadOlder = vi.fn(async () => undefined)
+  const imageUrl = vi.fn(async () => 'blob:image')
   let openState: 'cold' | 'open' | 'error' = 'open'
   let hasMore = false
   let openListener: (() => void) | undefined
@@ -165,6 +177,7 @@ async function mountPlugin(): Promise<PluginBench> {
   ctx.provide('locale', { register: localeRegister, bind: () => makeTranslate(zh) } as never)
   ctx.provide('uiConversation', {
     binding,
+    imageUrl,
     events: {
       register: (definition: ConversationNodeDefinition) => {
         events.push(definition)
@@ -193,6 +206,7 @@ async function mountPlugin(): Promise<PluginBench> {
     localeRegister,
     binding,
     loadOlder,
+    imageUrl,
     setOpenState: (state: 'cold' | 'open' | 'error') => {
       openState = state
       openListener?.()
@@ -391,9 +405,9 @@ describe('browser plugin registration', () => {
     bench.settleOnNextSubscribe()
     expect(await injected.loadOlder()).toBe(false)
     expect(bench.loadOlder).toHaveBeenCalledTimes(1)
-    // A no-progress page with older history left stays retryable.
+    // A no-progress page with older history left is surfaced, not hidden as exhausted.
     bench.setHasMore(true)
-    expect(await injected.loadOlder()).toBe(true)
+    await expect(injected.loadOlder()).rejects.toThrow(/did not advance/)
     await bench.fiber.dispose()
   })
 
@@ -420,6 +434,15 @@ describe('browser plugin registration', () => {
     await bench.fiber.dispose()
   })
 
+  it('resolves prompt images through the shared Conversation image cache', async () => {
+    const bench = await mountPlugin()
+    const injectEntry = bench.entries()[0]!.inject as ((sessionId: SessionId) => PerfViewInjected) | undefined
+    const injected = injectEntry!(SID)
+    await expect(injected.loadImage(IMAGE)).resolves.toBe('blob:image')
+    expect(bench.imageUrl).toHaveBeenCalledWith(SID, IMAGE)
+    await bench.fiber.dispose()
+  })
+
   it('serves the empty snapshot until the target publishes turns', async () => {
     const bench = await mountPlugin()
     const injectEntry = bench.entries()[0]!.inject as ((sessionId: SessionId) => PerfViewInjected) | undefined
@@ -435,11 +458,18 @@ describe('browser plugin registration', () => {
     bench.notify()
     expect(listener).toHaveBeenCalledTimes(1)
     unsubscribe()
-    expect(await injected.loadOlder()).toBe(false)
-    expect(bench.loadOlder).toHaveBeenCalledTimes(1)
-    // A no-progress page with older history left stays retryable.
-    bench.setHasMore(true)
+    // A page that grew the published snapshot reports progress.
+    bench.loadOlder.mockImplementationOnce(() => {
+      bench.setSnapshot({ turns: [], stepCount: 0 })
+    })
     expect(await injected.loadOlder()).toBe(true)
+    expect(bench.loadOlder).toHaveBeenCalledTimes(1)
+    // A page that leaves the snapshot unchanged and has no history left is exhausted.
+    expect(await injected.loadOlder()).toBe(false)
+    expect(bench.loadOlder).toHaveBeenCalledTimes(2)
+    // A no-progress page with older history left is surfaced, not hidden as exhausted.
+    bench.setHasMore(true)
+    await expect(injected.loadOlder()).rejects.toThrow(/did not advance/)
     // The source is cached per Session binding; a second injection reuses it.
     expect(injectEntry!(SID).hooks.perf).toBe(injected.hooks.perf)
     expect(() => injectEntry!('perf-missing' as SessionId)).toThrow(/unavailable/)
@@ -485,7 +515,7 @@ describe('snapshot builder', () => {
     expect(builder.apply({ upserts: [], timeline: { turnOrder: [], turns: new Map() } })).toBe(first)
     const upserted = builder.apply({
       upserts: [
-        node('perf-prompt:1:0', { kind: 'prompt', turn: 1, prompt: '问', images: 2, source: 'user' }),
+        node('perf-prompt:1:0', { kind: 'prompt', turn: 1, prompt: '问', images: [IMAGE], source: 'user' }),
         node('perf-step:1:1', { kind: 'step', metrics: measuredStep(1, 1, 1_000, 1_800) }),
         node('perf-turn-end:1:100000', { kind: 'end', turn: 1, closeKind: 'completed', endTime: 1_800 }),
       ],
@@ -510,7 +540,7 @@ describe('conversation Definitions', () => {
     const snapshot = assemble(definitions, [
       entry(event('turn/start', { turn: 1 })),
       entry(event('user/message', {
-        role: 'user', id: 'u1', content: [{ type: 'text', text: '看看这个' }, { type: 'image' }], source: { kind: 'user' },
+        role: 'user', id: 'u1', content: [{ type: 'text', text: '看看这个' }, { type: 'image', attachment: IMAGE }], source: { kind: 'user' },
       })),
       entry(event('step/start', { turn: 1, step: 1 }, 2_000)),
       transient(1, 1, delta, 2_100),
@@ -534,7 +564,7 @@ describe('conversation Definitions', () => {
     expect(snapshot?.stepCount).toBe(1)
     const turn = snapshot!.turns[0]!
     expect(turn.prompt).toBe('看看这个')
-    expect(turn.promptImages).toBe(1)
+    expect(turn.promptImages).toEqual([IMAGE])
     expect(turn.interrupted).toBe(false)
     expect(turn.steps[0]?.startTime).toBe(2_000)
     expect(turn.steps[0]?.calls).toHaveLength(1)
@@ -660,7 +690,7 @@ describe('conversation Definitions', () => {
     })
     expect(prompt.match(runtime)).toEqual({ id: `${runtime.seq}`, role: 'start' })
     const user = event('user/message', {
-      role: 'user', id: 'u6', content: [{ type: 'text', text: '继续' }, { type: 'image' }], source: { kind: 'user' },
+      role: 'user', id: 'u6', content: [{ type: 'text', text: '继续' }, { type: 'image', attachment: IMAGE }], source: { kind: 'user' },
     })
     expect(prompt.match(user)).toEqual({ id: `${user.seq}`, role: 'start' })
     const match = locatedStart(user, turnAt(9))
@@ -668,12 +698,12 @@ describe('conversation Definitions', () => {
     expect(state.turn).toBe(9)
     expect(state.mark).toBe('prompt')
     expect(state.prompt).toBe('继续')
-    expect(state.images).toBe(1)
+    expect(state.images).toEqual([IMAGE])
     expect(state.trigger).toBe('user')
     const node = prompt.buildViewNode!({
       ...contextOf(prompt, state, [match], match),
     }) as PerfViewNode
-    expect(node.data).toEqual({ kind: 'prompt', turn: 9, prompt: '继续', images: 1, source: 'user' })
+    expect(node.data).toEqual({ kind: 'prompt', turn: 9, prompt: '继续', images: [IMAGE], source: 'user' })
     const context: ConversationNodeContext<PerfStepState> & { readonly state: PerfStepState } = {
       ...contextOf(prompt, state, [match], match),
       state,

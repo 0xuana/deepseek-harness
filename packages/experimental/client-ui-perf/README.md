@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Adds a Performance tab beside Chat and Trajectory. Each turn is one row; expanding it lists its steps with context tokens, output tokens, cache hit rate, first-token latency, model time, output speed, tool time, and a total-time bar split into first token, generation, tools, and the rest. A running step shows elapsed time instead of a blank. Scrolling to the top pulls earlier turns through the same Session paging the other views use; there are no page controls. When a step has no tool calls, its answer label is followed by the first line of the model reply, with the full text on hover. The Question column classifies what opened the turn: a human prompt shows its text, while a team message, subagent settlement, goal round, or runtime/time context shows a localized trigger badge plus the triggering text. The panel reads Session events only; it registers no tool, prompt section, or service.
+Adds a Performance tab beside Chat and Trajectory. Each turn is one row; expanding it lists its steps with context tokens, output tokens, cache hit rate, first-token latency, model time, output speed, tool time, and a total-time bar split into first token, generation, tools, and the rest. A running step shows elapsed time instead of a blank. Scrolling to the top pulls earlier turns through the same Session paging the other views use; there are no page controls. When a step has no tool calls, its answer label is followed by the first line of the model reply, with the full text on hover. The Question column classifies what opened the turn: a human prompt shows its text, while a team message, subagent settlement, goal round, or runtime/time context shows a localized trigger badge plus the triggering text. A prompt that attached images shows an image-count pill in the same style as the trigger badge. Hovering or keyboard-focusing the pill opens a small preview strip, and clicking a preview loads that image in the shared image viewer; an image-only prompt shows the pill instead of an empty cell. The panel reads Session events and the prompt's durable images; it registers no tool, prompt section, or service.
 
 ## Table of Contents
 
@@ -54,8 +54,8 @@ Four Conversation Definitions fold the event window into nodes for one view targ
 | `src/client/perf-fold.ts` | Event folding, tool pairing, Code-Mode dispatch attribution, and per-step metrics |
 | `src/client/perf-aggregate.ts` | Turn aggregation and ordering, the interrupted-tail close, and the Code-Mode merge into the owning step |
 | `src/client/perf-snapshot-builder.ts` | The `perf` view target builder |
-| `src/client/PerfView.tsx` | Scrollport with scroll-to-top paging, table, time bars, step accordion, and copy controls |
-| `src/client/locales.ts` | Every visible string, in Chinese and English |
+| `src/client/PerfView.tsx` | Scrollport with scroll-to-top paging, table, time bars, step accordion, copy controls, and the prompt image pill with its preview and viewer |
+| `src/client/locales.ts` | Every visible string, in Chinese, English, and Japanese |
 
 Windows are bounded: when a step's `step/start` is outside the loaded window, its start-dependent columns show `—` with a `start unknown` marker rather than a guessed value. Scrolling to the top asks the Session for one older page; the view offsets the scroll position by the height it prepended, so the row being read stays in place.
 
@@ -91,6 +91,7 @@ No effect. The package never constructs a model request and never mutates a prom
 - **Browser evidence is a test-only overlay.** Package tests cover folding, aggregation, formatting, and the jsdom table; `apps/web/tests/client-ui-perf-panel.e2e.ts` mounts the plugin through a test-only overlay over the shipped Web surface and compares a committed ARIA golden. No recorded-session scenario exists because no shipped profile mounts the package yet.
 - **Late re-deliveries are not turns.** Compaction can restate a pruned tool result under its original turn and step after that turn left the window; a turn with no loaded start, prompt, or end marker is dropped instead of appearing as an empty ghost row.
 - **Timing is derived, not sampled.** Total time is the last step's end minus the first step's start; queueing and scheduler waits land in the "rest" segment. The total-time bar draws tool calls as the union of their paired intervals, so parallel calls count once; the tool column keeps the summed per-call time.
+- **Prompt images load through the shared image cache.** The pill and its preview resolve durable attachments with `uiConversation.imageUrl`, so the cache owns and revokes the browser URLs per Session binding; the view creates none of its own. A failed read shows a localized failure state with retry. Touch clients do not open the hover preview; tapping the pill loads the first image directly.
 
 <a id="dev-note"></a>
 ### Dev Note

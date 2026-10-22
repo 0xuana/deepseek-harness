@@ -225,6 +225,109 @@
   font: var(--dsw-font-xxxs-11);
 }
 
+/* Image-count pill: the trigger pill's material on an interactive button. */
+.imagePill {
+  margin-right: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.promptText + .imagePill {
+  margin-left: 4px;
+}
+
+.imagePill[data-state='failed'] {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+@media (hover: hover) {
+  .imagePill:hover {
+    background: var(--dsw-alias-bg-layer-2);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.imagePill:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+/* Prompt image preview inside the shared hover card: a small strip, or one large image. */
+.imagePreview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 284px;
+}
+
+.imageThumb {
+  box-sizing: border-box;
+  width: 76px;
+  height: 76px;
+  padding: 0;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 4px;
+  background: var(--dsw-alias-bg-layer-2);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.imageThumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.imagePreview[data-single='true'] .imageThumb {
+  width: 100%;
+  height: 180px;
+}
+
+.imagePreview[data-single='true'] .imageThumb img {
+  object-fit: contain;
+}
+
+.imageThumb:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+@media (hover: hover) {
+  .imageThumb:hover {
+    border-color: var(--dsw-alias-state-business-primary);
+  }
+}
+
+.imageThumbStatus {
+  box-sizing: border-box;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 76px;
+  min-height: 76px;
+  padding: 4px;
+  border: 0.5px dashed var(--dsw-alias-border-l2);
+  border-radius: 4px;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-11);
+  text-align: center;
+}
+
+.imagePreview[data-single='true'] .imageThumbStatus {
+  width: 100%;
+}
+
+.imageThumbStatus[data-state='failed'] {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.imageThumbStatus .chip {
+  margin-right: 0;
+}
+
 .answerPreview {
   color: var(--dsw-alias-label-tertiary);
   font-weight: 400;

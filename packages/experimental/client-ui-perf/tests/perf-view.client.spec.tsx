@@ -11,6 +11,7 @@
 import { createElement } from 'react'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { AttachmentId, type ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { PerfView } from '../src/client/PerfView.tsx'
@@ -133,7 +134,7 @@ function turn(overrides: Partial<PerfTurnMetrics> = {}): PerfTurnMetrics {
     aborted: false,
     wall: 1_000,
     prompt: null,
-    promptImages: 0,
+    promptImages: [],
     promptSource: null,
     ...overrides,
   }
@@ -158,14 +159,26 @@ function callSnapshot(
 /** Loader contract the view receives from the inject face. */
 type LoadOlder = () => Promise<boolean>
 
+/** One durable prompt image reference. */
+function imageRef(id = 'sha256:image'): ImageAttachmentRef {
+  return {
+    attachmentId: AttachmentId(id),
+    mediaType: 'image/png',
+    bytes: 12,
+    width: 2,
+    height: 2,
+  }
+}
+
 /** Render the view with every prop it consumes. */
 function mount(
   snapshot: PerfSnapshot,
   loadOlder: LoadOlder = async () => false,
+  loadImage: (attachment: ImageAttachmentRef) => Promise<string> = async () => 'blob:image',
 ): ReturnType<typeof createSnapshotStore<PerfSnapshot>> {
   const store = createSnapshotStore<PerfSnapshot>(snapshot)
   const usePerf = bindSnapshotSelector(store)
-  render(createElement(PerfView, { usePerf, t, loadOlder } as never))
+  render(createElement(PerfView, { usePerf, t, loadOlder, loadImage } as never))
   return store
 }
 
@@ -205,12 +218,15 @@ function stubInitialScroll(height: number): { top: number } {
 function deferred<T>(): {
   readonly promise: Promise<T>
   readonly resolve: (value: T) => void
+  readonly reject: (reason?: unknown) => void
 } {
   let settle: (value: T) => void = () => undefined
-  const promise = new Promise<T>((resolve) => {
+  let fail: (reason?: unknown) => void = () => undefined
+  const promise = new Promise<T>((resolve, reject) => {
     settle = resolve
+    fail = reject
   })
-  return { promise, resolve: settle }
+  return { promise, resolve: settle, reject: fail }
 }
 
 /** Give the navigator a clipboard mock for copy-control cases. */
@@ -282,6 +298,7 @@ afterEach(() => {
   cleanup()
   vi.useRealTimers()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   Reflect.deleteProperty(navigator, 'clipboard')
 })
 
@@ -416,10 +433,11 @@ describe('older history', () => {
     expect(loadOlder).toHaveBeenCalledTimes(1)
     expect(screen.queryByRole('status')).toBeNull()
     expect(screen.queryByText(say('loadOlder.done'))).toBeNull()
-    expect(screen.getByRole('button', { name: say('loadOlder') })).toBeTruthy()
+    const retry = screen.getByRole('button', { name: say('loadOlder.failed') })
+    expect(screen.queryByRole('button', { name: say('loadOlder') })).toBeNull()
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: say('loadOlder') }))
+      fireEvent.click(retry)
     })
     expect(loadOlder).toHaveBeenCalledTimes(2)
   })
@@ -466,7 +484,7 @@ describe('turn rows', () => {
     mount({
       turns: [turn({
         prompt: 'why?',
-        promptImages: 2,
+        promptImages: [imageRef('sha256:a'), imageRef('sha256:b')],
         cacheHit: 0.2,
         cacheRead: 100,
         cacheWrite: 100,
@@ -497,8 +515,9 @@ describe('turn rows', () => {
     expect(miss.getAttribute('title')).toBe(say('state.cacheMiss.title'))
 
     const cells = cellsOf(row)
-    expect(cells[1]?.textContent).toBe(`why? · ${say('turn.images', { count: 2 })}`)
-    expect(cells[1]?.getAttribute('title')).toBe(`why? · ${say('turn.images', { count: 2 })}`)
+    expect(cells[1]?.querySelector('[class*="promptText"]')?.textContent).toBe('why?')
+    expect(cells[1]?.textContent).toBe(`why?${say('turn.images', { count: 2 })}`)
+    expect(cells[1]?.getAttribute('title')).toBe('why?')
     expect(cells[2]?.textContent).toBe(say('did.answer'))
     expect(cells[3]?.textContent).toBe(formatTokensShort(1_000))
     expect(cells[3]?.getAttribute('title')).toBeNull()
@@ -599,18 +618,20 @@ describe('turn rows', () => {
     expect(did.getAttribute('title')).toBe(say('did.title', { calls: 3, tools: 'read ×1 · edit ×1 · write ×1' }))
   })
 
-  it('renders a prompt without images and an empty prompt cell without one', () => {
+  it('renders a prompt without images and an image-only prompt as a pill', () => {
     mount({
       turns: [
         turn({ turn: 1, prompt: 'plain question' }),
-        turn({ turn: 2, prompt: '', promptImages: 1 }),
+        turn({ turn: 2, prompt: '', promptImages: [imageRef()] }),
         turn({ turn: 3, prompt: null }),
       ],
       stepCount: 3,
     })
     expect(cellsOf(rowWithPrefix(say('turn.label', { turn: 1 })))[1]?.textContent).toBe('plain question')
-    expect(cellsOf(rowWithPrefix(say('turn.label', { turn: 2 })))[1]?.textContent).toBe('')
-    expect(cellsOf(rowWithPrefix(say('turn.label', { turn: 2 })))[1]?.getAttribute('title')).toBeNull()
+    const only = cellsOf(rowWithPrefix(say('turn.label', { turn: 2 })))[1] as HTMLTableCellElement
+    expect(within(only).getByRole('button', { name: say('turn.images', { count: 1 }) })).toBeTruthy()
+    expect(only.textContent).toBe(say('turn.images', { count: 1 }))
+    expect(only.getAttribute('title')).toBe(say('turn.images', { count: 1 }))
     expect(cellsOf(rowWithPrefix(say('turn.label', { turn: 3 })))[1]?.textContent).toBe('')
   })
 
@@ -1469,5 +1490,175 @@ describe('live clock', () => {
     })
     expect(cellsOf(stepRow(1))[10]?.textContent).toBe(formatMs(2_000))
     expect(vi.getTimerCount()).toBe(0)
+  })
+})
+
+describe('prompt images', () => {
+  /** jsdom reports no hover capability; the view asks the primitive, which reads matchMedia. */
+  function stubHover(canHover = true): void {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: canHover && query === '(any-hover: hover)' }))
+  }
+
+  /** One image pill by its accessible count name. */
+  function imagePill(count: number): HTMLButtonElement {
+    return button(say('turn.images', { count }))
+  }
+
+  /** Hover the pill's wrapper long enough for the preview dwell. */
+  function hoverPill(pill: HTMLButtonElement): void {
+    fireEvent.pointerEnter(pill.parentElement as HTMLElement)
+    act(() => { vi.advanceTimersByTime(200) })
+  }
+
+  it('previews a multi-image prompt on hover and opens a thumbnail full size', async () => {
+    vi.useFakeTimers()
+    stubHover()
+    const loadImage = vi.fn(async (attachment: ImageAttachmentRef) => `blob:${attachment.attachmentId}`)
+    mount(turnSnapshot([step()], {
+      prompt: 'compare',
+      promptImages: [{ ...imageRef('sha256:a'), name: 'left.png' }, imageRef('sha256:b')],
+    }), async () => false, loadImage)
+
+    expect(imagePill(2)).toBeTruthy()
+    expect(cellsOf(rowWithPrefix(say('turn.label', { turn: 1 })))[1]?.textContent)
+      .toBe(`compare${say('turn.images', { count: 2 })}`)
+
+    hoverPill(imagePill(2))
+    await act(async () => {})
+    expect(screen.getByRole('group', { name: say('imagePreview.dialog') })).toBeTruthy()
+    expect(loadImage).toHaveBeenCalledTimes(2)
+    expect(loadImage).toHaveBeenCalledWith({ ...imageRef('sha256:a'), name: 'left.png' })
+    const thumbs = screen.getAllByRole('img')
+    expect(thumbs).toHaveLength(2)
+    expect(thumbs[0]?.getAttribute('alt')).toBe('left.png')
+    expect(thumbs[0]?.getAttribute('src')).toBe('blob:sha256:a')
+    expect(thumbs[1]?.getAttribute('alt')).toBe(say('imagePreview.alt', { index: 2, count: 2 }))
+
+    fireEvent.click(button(say('imagePreview.open', { index: 2, count: 2 })))
+    const dialog = screen.getByRole('dialog', { name: say('imagePreview.dialog') })
+    expect(dialog.querySelector('img')?.getAttribute('src')).toBe('blob:sha256:b')
+    // A portalled image click must not collapse the row that owns the pill.
+    expect(stepRows()).toHaveLength(1)
+
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(stepRows()).toHaveLength(1)
+  })
+
+  it('loads the first image from the pill, reports progress, and closes the lightbox', async () => {
+    const gate = deferred<string>()
+    const loadImage = vi.fn(() => gate.promise)
+    mount(turnSnapshot([step()], { prompt: null, promptImages: [imageRef()] }), async () => false, loadImage)
+
+    imagePill(1).focus()
+    fireEvent.click(imagePill(1))
+    expect(button(say('imagePreview.loading'))).toBeTruthy()
+    expect(loadImage).toHaveBeenCalledWith(imageRef())
+
+    await act(async () => { gate.resolve('blob:full') })
+    const dialog = screen.getByRole('dialog', { name: say('imagePreview.dialog') })
+    expect(dialog.querySelector('img')?.getAttribute('src')).toBe('blob:full')
+    expect(dialog.querySelector('img')?.getAttribute('alt')).toBe(say('imagePreview.alt', { index: 1, count: 1 }))
+
+    fireEvent.click(button(say('imagePreview.close')))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    // Closing restores focus to the pill instead of the row toggle.
+    expect(document.activeElement).toBe(imagePill(1))
+    expect(stepRows()).toHaveLength(1)
+  })
+
+  it('reports a failed pill load and retries it', async () => {
+    const loadImage = vi.fn()
+      .mockRejectedValueOnce(new Error('unreadable attachment'))
+      .mockResolvedValueOnce('blob:later')
+    mount(turnSnapshot([], { prompt: 'see', promptImages: [imageRef()] }), async () => false, loadImage)
+
+    fireEvent.click(imagePill(1))
+    await act(async () => {})
+    expect(loadImage).toHaveBeenCalledTimes(1)
+    const failed = button(say('imagePreview.failed'))
+    expect(failed.hasAttribute('data-state')).toBe(true)
+    expect(failed.getAttribute('data-state')).toBe('failed')
+
+    fireEvent.click(failed)
+    await act(async () => {})
+    expect(loadImage).toHaveBeenCalledTimes(2)
+    expect(screen.getByRole('dialog', { name: say('imagePreview.dialog') })).toBeTruthy()
+  })
+
+  it('retries one failed preview thumbnail without dropping the preview', async () => {
+    vi.useFakeTimers()
+    stubHover()
+    const loadImage = vi.fn()
+      .mockRejectedValueOnce(new Error('unreadable attachment'))
+      .mockResolvedValueOnce('blob:recovered')
+    mount(turnSnapshot([], { prompt: '', promptImages: [imageRef()] }), async () => false, loadImage)
+
+    hoverPill(imagePill(1))
+    await act(async () => {})
+    expect(screen.getByText(say('imagePreview.failed'))).toBeTruthy()
+    fireEvent.click(button(say('imagePreview.retry')))
+    await act(async () => {})
+    expect(loadImage).toHaveBeenCalledTimes(2)
+    expect(screen.getByRole('img').getAttribute('src')).toBe('blob:recovered')
+    expect(screen.queryByText(say('imagePreview.failed'))).toBeNull()
+  })
+
+  it('reveals the preview for keyboard focus and ignores touch entry', async () => {
+    vi.useFakeTimers()
+    stubHover(false)
+    mount(turnSnapshot([], { prompt: 'keyboard', promptImages: [imageRef()] }))
+
+    const pill = imagePill(1)
+    const touch = new Event('pointerover', { bubbles: true })
+    Object.defineProperty(touch, 'pointerType', { value: 'touch' })
+    fireEvent(pill.parentElement as HTMLElement, touch)
+    act(() => { vi.advanceTimersByTime(500) })
+    expect(screen.queryByRole('group', { name: say('imagePreview.dialog') })).toBeNull()
+
+    // jsdom does not model keyboard input modality for :focus-visible.
+    vi.spyOn(pill, 'matches').mockReturnValue(true)
+    fireEvent.focus(pill)
+    await act(async () => {})
+    expect(screen.getByRole('group', { name: say('imagePreview.dialog') })).toBeTruthy()
+    expect(screen.getByRole('img').getAttribute('src')).toBe('blob:image')
+
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByRole('group', { name: say('imagePreview.dialog') })).toBeNull()
+  })
+
+  it('keeps the trigger badge and the image pill together on an automated turn', () => {
+    mount(turnSnapshot([], {
+      prompt: 'team note',
+      promptSource: 'agent-message',
+      promptImages: [imageRef()],
+    }))
+    const cell = cellsOf(rowWithPrefix(say('turn.label', { turn: 1 })))[1] as HTMLTableCellElement
+    expect(within(cell).getByText(say('trigger.agent-message'))).toBeTruthy()
+    expect(within(cell).getByRole('button', { name: say('turn.images', { count: 1 }) })).toBeTruthy()
+    expect(cell.textContent).toContain('team note')
+  })
+
+  it('drops pending preview loads when the view unmounts', async () => {
+    vi.useFakeTimers()
+    stubHover()
+    const ready = deferred<string>()
+    const failed = deferred<string>()
+    const loadImage = vi.fn((attachment: ImageAttachmentRef) => (
+      attachment.attachmentId === imageRef('sha256:a').attachmentId ? ready.promise : failed.promise
+    ))
+    mount(turnSnapshot([], {
+      prompt: 'closing',
+      promptImages: [imageRef('sha256:a'), imageRef('sha256:b')],
+    }), async () => false, loadImage)
+    hoverPill(imagePill(2))
+    await act(async () => {})
+    expect(loadImage).toHaveBeenCalledTimes(2)
+    cleanup()
+    await act(async () => {
+      ready.resolve('blob:late')
+      failed.reject(new Error('unreadable attachment'))
+    })
+    expect(screen.queryByRole('img')).toBeNull()
   })
 })
