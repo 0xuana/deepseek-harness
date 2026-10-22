@@ -26,12 +26,15 @@ export const en = {
   'invalid-location': 'Choose a location or describe it in up to 1,000 characters.',
   'restart-required': 'The change is saved. Restart DSH to apply it.',
   overridden: 'Another configuration overrides this change.', cancelled: 'Cancelled',
+  applicationFailed: 'The last change did not apply. Check Plugins.',
+  applicationCancelled: 'The last change was cancelled.',
   transport: 'Could not confirm the result. Reconnect and check the card before retrying.',
   unknown: 'This recommendation is no longer available.',
   unavailable: 'This action is unavailable. Check the plugin in Plugins.',
   'access-denied': 'This connection cannot change plugins.',
   'not-live-root': 'Open the original conversation to use this card.',
   closing: 'The creation plugin is stopping. Try again after it reloads.',
+  'read-only': 'This Session is read-only. Switch the permission preset to create pages.',
 }
 
 /** Keys shared by both dictionaries. */
@@ -64,11 +67,14 @@ export const zh: Record<RecommendationKey, string> = {
   'invalid-location': '请选择位置，或填写不超过 1,000 字的位置说明',
   'restart-required': '变更已保存，重启 DSH 后生效',
   overridden: '其他配置覆盖了本次变更', cancelled: '已取消',
+  applicationFailed: '上一步更改未生效，请到插件页查看',
+  applicationCancelled: '上一步更改已取消',
   transport: '暂时无法确认结果，请重新连接并查看卡片状态后再重试',
   unknown: '这条推荐已不可用', unavailable: '暂时无法执行，请到插件页面查看',
   'access-denied': '当前连接没有修改插件的权限',
   'not-live-root': '请打开原会话后使用这张卡片',
   closing: '创建插件正在停止，请等待重新加载后再试',
+  'read-only': '当前会话为只读模式，创建页面需要切换权限预设',
 }
 
 /** Japanese creation and recovery copy. */
@@ -99,10 +105,13 @@ export const ja: Record<RecommendationKey, string> = {
   'invalid-location': '場所を選択するか、1,000文字以内で説明してください。',
   'restart-required': '変更は保存されました。適用するにはDSHを再起動してください。',
   overridden: '別の設定がこの変更を上書きしています。', cancelled: 'キャンセル済み',
+  applicationFailed: '前回の変更は適用されませんでした。プラグイン画面で確認してください。',
+  applicationCancelled: '前回の変更はキャンセルされました。',
   transport: '結果を確認できませんでした。再接続してカードを確認してから再試行してください。',
   unknown: 'この提案は利用できなくなりました。',
   unavailable: 'この操作は利用できません。プラグイン画面でプラグインを確認してください。',
   'access-denied': 'この接続ではプラグインを変更できません。',
   'not-live-root': 'このカードを使うには元の会話を開いてください。',
   closing: '作成プラグインが停止中です。再読み込み後に再試行してください。',
+  'read-only': 'このセッションは読み取り専用です。ページを作成するには権限プリセットを切り替えてください。',
 }

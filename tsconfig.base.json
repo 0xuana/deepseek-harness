@@ -57,7 +57,6 @@
       "@deepseek-ai/dsh-experimental-client-ui-cot-translation": ["./packages/experimental/client-ui-cot-translation/src/index.ts"],
       "@deepseek-ai/dsh-experimental-creation-recommendations": ["./packages/experimental/creation-recommendations/src/index.ts"],
       "@deepseek-ai/dsh-experimental-creation-recommendations/types": ["./packages/experimental/creation-recommendations/src/types.ts"],
-      "@deepseek-ai/dsh-experimental-creation-recommendations/action-block": ["./packages/experimental/creation-recommendations/src/action-block.ts"],
       "@deepseek-ai/dsh-experimental-client-ui-creation-recommendations": ["./packages/experimental/client-ui-creation-recommendations/src/index.ts"],
       "@deepseek-ai/dsh-experimental-client-ui-creation-recommendations/client": ["./packages/experimental/client-ui-creation-recommendations/src/client/index.ts"],
       "@deepseek-ai/dsh-experimental-client-ui-cot-translation/types": ["./packages/experimental/client-ui-cot-translation/src/types.ts"],

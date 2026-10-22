@@ -25,10 +25,6 @@
       "types": "./lib/types/types.d.ts",
       "default": "./lib/types/types.js"
     },
-    "./action-block": {
-      "types": "./lib/types/action-block.d.ts",
-      "default": "./lib/types/action-block.js"
-    },
     "./typert": {
       "types": "./lib/typert.host.d.ts",
       "default": "./lib/typert.host.js"

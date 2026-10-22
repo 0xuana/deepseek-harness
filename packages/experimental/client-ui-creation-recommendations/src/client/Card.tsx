@@ -1,12 +1,14 @@
 /** Completed-answer creation card with location selection and undo. */
 import { useId, useMemo, useState } from 'react'
-import { Button, IconChevronDownOutlineRegular, IconInfoOutlineRegular, Menu, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconChevronDownOutlineRegular, IconWarningTriangleOutlineRegular, Menu, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
-import type { CreationRecommendation, CreationActionResult, CreationSlot } from '@deepseek-ai/dsh-experimental-creation-recommendations/types'
+import type {
+  CreationActionResult, CreationDecision, CreationRecommendation, CreationSlot, CreationView,
+} from '@deepseek-ai/dsh-experimental-creation-recommendations/types'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
+import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { RecommendationKey } from './locales.ts'
-import type {} from './definition.ts'
 import css from './Card.module.css'
 
 /** Session-bound user actions; installation paths remain Host-owned. */
@@ -16,15 +18,17 @@ export interface CardInjected {
   dismissInfo: () => void
 }
 
-/** Proposals indexed by their originating turn. */
-export interface RecommendationTailInjected extends CardInjected {
-  keyedHooks: { recommendations: (turn: string) => ObservableSnapshot<readonly CreationRecommendation[]> }
-}
-
 type CardProps = { recommendation: CreationRecommendation } & Pick<PropsRuntime<'conversation.chat.turnTail'>, 'useProjection'>
   & PropsLocale<'creationRecommendations'> & InjectFace<CardInjected>
 
+type CardAction = Parameters<CardInjected['act']>[1]
+
 type LocationChoice = CreationSlot | 'custom'
+
+/** Application outcomes have their own copy; the phase copy of failed and cancelled describes creation instead. */
+const APPLICATION_KEYS: Readonly<Record<Exclude<NonNullable<CreationDecision['application']>, 'applied'>, RecommendationKey>> = {
+  'restart-required': 'restart-required', overridden: 'overridden', failed: 'applicationFailed', cancelled: 'applicationCancelled',
+}
 
 function LocationPicker({ value, disabled, onChange, t }: {
   value: LocationChoice
@@ -62,17 +66,27 @@ function FoldedText({ text, expandLabel, collapseLabel }: { text: string; expand
   </>
 }
 
-/** Place one card after the complete answer.
- * @param props - Completed turn and its session-bound proposals.
- * @returns the first proposal, or null.
+/** The projection admits at most one proposal per turn; should several exist, the lowest call id is shown. */
+function proposalOf(view: CreationView | undefined, turn: number): CreationRecommendation | undefined {
+  let found: CreationRecommendation | undefined
+  for (const proposal of Object.values(view?.proposals ?? {})) {
+    if (proposal.turn === turn && (found === undefined || proposal.callId < found.callId)) found = proposal
+  }
+  return found
+}
+
+/** Place the proposal admitted in a turn after that turn's final answer, once the turn has ended.
+ * @param props - Turn location, projection reader and session-bound actions.
+ * @returns the creation card, or null.
  */
 // Each optional bundle owns its card and locale contracts; this small tail wrapper does not warrant a shared package.
 /* jscpd:ignore-start */
-export function RecommendationTail({ turn, useRecommendations, ...props }: Pick<PropsRuntime<'conversation.chat.turnTail'>, 'turn' | 'useProjection'>
-  & PropsLocale<'creationRecommendations'> & InjectFace<RecommendationTailInjected>) {
-  const recommendation = useRecommendations(String(turn.turn))?.[0]
-  const phase = props.useProjection('creationRecommendations')?.decisions[recommendation?.callId ?? '']?.phase
-  return recommendation === undefined || phase === 'suppressed' || turn.end?.data.reason.kind !== 'completed' || turn.data.get('turn-tail')?.closing == null
+export function RecommendationTail({ turn, ...props }: Pick<PropsRuntime<'conversation.chat.turnTail'>, 'turn' | 'useProjection'>
+  & PropsLocale<'creationRecommendations'> & InjectFace<CardInjected>) {
+  const view = props.useProjection('creationRecommendations')
+  const recommendation = proposalOf(view, turn.turn)
+  const phase = view?.decisions[recommendation?.callId ?? '']?.phase
+  return recommendation === undefined || phase === 'suppressed' || turn.end === undefined || turn.data.get('turn-tail')?.closing == null
     ? null : <RecommendationCard {...props} recommendation={recommendation} />
 }
 /* jscpd:ignore-end */
@@ -90,16 +104,17 @@ export function RecommendationCard({ recommendation, useProjection, act, useInfo
   const infoDismissed = useInfoDismissed(value => value)
   const infoId = useId()
   const customId = useId()
-  const [pending, setPending] = useState(false)
+  const [pending, setPending] = useState<CardAction>()
   const [error, setError] = useState<RecommendationKey>()
+  const busy = pending !== undefined
   const slot = selected !== undefined && selected !== 'custom' ? selected : decision?.slot ?? recommendation.slot
   const location = selected ?? (decision?.customLocation === undefined ? slot : 'custom')
   const customLocation = custom ?? decision?.customLocation ?? ''
   const offer = decision === undefined || decision.phase === 'cancelled' || decision.phase === 'failed' || decision.phase === 'interrupted' || decision.phase === 'unconfirmed'
   const infoOpen = info ?? (offer && !infoDismissed)
   const installed = decision?.phase === 'installed' || decision?.phase === 'kept'
-  const run = async (action: 'create' | 'dismiss' | 'keep' | 'undo' | 'cancel') => {
-    setPending(true)
+  const run = async (action: CardAction) => {
+    setPending(action)
     setError(undefined)
     if (action === 'create' || action === 'dismiss') { dismissInfo(); setInfo(false) }
     // Independent optional cards keep their action and receipt handling local.
@@ -111,7 +126,7 @@ export function RecommendationCard({ recommendation, useProjection, act, useInfo
     } catch {
       // A lost reply does not prove failure; replay supplies the durable receipt.
       setError('transport')
-    } finally { setPending(false) }
+    } finally { setPending(undefined) }
     /* jscpd:ignore-end */
   }
   return <section className={css.card} aria-label={t('heading')} data-creation-recommendation={recommendation.callId}>
@@ -122,7 +137,7 @@ export function RecommendationCard({ recommendation, useProjection, act, useInfo
             setInfo(!infoOpen)
             if (infoOpen) dismissInfo()
           }}>
-          <IconInfoOutlineRegular size={14} />
+          <IconWarningTriangleOutlineRegular size={14} />
         </Button>
       </Tooltip>
     </span>
@@ -141,36 +156,36 @@ export function RecommendationCard({ recommendation, useProjection, act, useInfo
         <span className={css.contentLabel}>{t('initialContent')}</span>
         <FoldedText text={recommendation.initialContent} expandLabel={t('expandContent')} collapseLabel={t('collapseContent')} />
       </div>}
-      {decision?.application !== undefined && decision.application !== 'applied'
-        && <p role="status" className={css.status}>{t(decision.application)}</p>}
+      {decision?.application !== undefined && decision.application !== 'applied' && decision.phase !== 'failed'
+        && <p role="status" className={css.status}>{t(APPLICATION_KEYS[decision.application])}</p>}
       {error !== undefined && <p role="alert" className={css.status}>{t(error)}</p>}
       {offer ? <div className={css.controls}>
         <div className={css.locationRow}>
           <span className={css.locationLabel}>{t('location')}</span>
-          <LocationPicker value={location} disabled={pending} onChange={setSelected} t={t} />
+          <LocationPicker value={location} disabled={busy} onChange={setSelected} t={t} />
         </div>
         {location === 'custom' && <div className={css.customLocation}>
           <label htmlFor={customId} className={css.locationLabel}>{t('customLabel')}</label>
-          <textarea id={customId} value={customLocation} rows={2} maxLength={1000} disabled={pending}
+          <textarea id={customId} value={customLocation} rows={2} maxLength={1000} disabled={busy}
             placeholder={t('customPlaceholder')} onChange={(event) => { setCustom(event.target.value) }} />
         </div>}
         <footer className={css.footer}>
           <div className={css.actions}>
-            <Button variant="ghost" size="sm" disabled={pending || view === undefined} onClick={() => { void run('dismiss') }}>{t('dismiss')}</Button>
-            <Button variant="primary" size="sm" disabled={pending || view === undefined || location === 'custom' && customLocation.trim() === ''} onClick={() => { void run('create') }}>
-              {t(pending ? 'starting' : decision === undefined ? 'create' : 'retry')}
+            <Button variant="ghost" size="sm" disabled={busy || view === undefined} onClick={() => { void run('dismiss') }}>{t('dismiss')}</Button>
+            <Button variant="primary" size="sm" disabled={busy || view === undefined || location === 'custom' && customLocation.trim() === ''} onClick={() => { void run('create') }}>
+              {t(pending === 'create' ? 'starting' : decision === undefined ? 'create' : 'retry')}
             </Button>
           </div>
         </footer>
-      </div> : <p className={css.description}>{t('location')} · {location === 'custom' ? customLocation : t(slot)}</p>}
+      </div> : <p className={css.description}>{t('location')} · {decision.customLocation ?? t(decision.slot)}</p>}
       {decision?.phase === 'creating' && <footer className={css.footer}>
-        <Button variant="ghost" size="sm" disabled={pending} onClick={() => { void run('cancel') }}>{t(pending ? 'cancelling' : 'cancel')}</Button>
+        <Button variant="ghost" size="sm" disabled={busy} onClick={() => { void run('cancel') }}>{t(pending === 'cancel' ? 'cancelling' : 'cancel')}</Button>
       </footer>}
       {installed && <footer className={css.footer}>
         <span className={css.scope}>{t('scope')}</span>
         <div className={css.actions}>
-          <Button variant="ghost" size="sm" disabled={pending} onClick={() => { void run('undo') }}>{t('undo')}</Button>
-          {decision.phase !== 'kept' && <Button variant="primary" size="sm" disabled={pending} onClick={() => { void run('keep') }}>{t('keep')}</Button>}
+          <Button variant="ghost" size="sm" disabled={busy} onClick={() => { void run('undo') }}>{t('undo')}</Button>
+          {decision.phase !== 'kept' && <Button variant="primary" size="sm" disabled={busy} onClick={() => { void run('keep') }}>{t('keep')}</Button>}
         </div>
       </footer>}
     </div>

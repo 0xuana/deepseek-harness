@@ -234,12 +234,6 @@ describe('client bundle purity gate', () => {
     expect(() => resolveId('@deepseek-ai/dsh-spill-policy/notice/internal')).toThrow(/purity/)
   })
 
-  it('admits only the pure proposal block parser of the creation experiment, not its Host plugin', () => {
-    expect(resolveId('@deepseek-ai/dsh-experimental-creation-recommendations/action-block')).toBeNull()
-    expect(() => resolveId('@deepseek-ai/dsh-experimental-creation-recommendations')).toThrow(/purity/)
-    expect(() => resolveId('@deepseek-ai/dsh-experimental-creation-recommendations/action-block/internal')).toThrow(/purity/)
-  })
-
   it('inlines the zero-dependency dsh-action fence utility', () => {
     expect(resolveId('@deepseek-ai/dsh-util-action-block')).toBeNull()
   })

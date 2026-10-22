@@ -45,7 +45,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-成功的原生及 PTC 结果中，`create_personalized_page` 的 `actionCard` 元数据成为隐藏的 Conversation 节点。已有实验会话的 `creationRecommendation` 元数据仍可读取；其他动作类型使用各自的渲染器。已完成回合的末尾插槽读取该回合的推荐索引，只显示第一项。组件接收绑定会话的回调和框架绑定的提示偏好，不直接访问服务。共享 Menu 处理浮层定位、键盘选择和关闭。可选 Remote、语言字典、事件定义和插槽注册使用同一插件生命周期。
+回合末尾插槽读取 `creationRecommendations` 会话投影中的提案，在回合结束后（不论结束原因）显示该回合接纳的提案；投影每回合最多接纳一个提案。组件接收绑定会话的回调和框架绑定的提示偏好，不直接访问服务。共享 Menu 处理浮层定位、键盘选择和关闭。可选 Remote、语言字典和插槽注册使用同一插件生命周期。
 
 - [源码](src/client/index.ts)
 - [测试](tests/)
@@ -58,7 +58,7 @@ kind: "package-reference"
 ## 延伸阅读
 
 - [创建服务](../creation-recommendations/README.zh.md) — 创建任务与持久化。
-- [Conversation](../../client/ui-conversation/README.zh.md) — 事件索引。
+- [Session 投影](../../session/session-projection/README.zh.md) — 卡片读取的提案和操作记录。
 - [Slots](../../client/ui-slots/README.zh.md) — 回合末尾呈现.
 
 <a id="model-experience"></a>

@@ -45,7 +45,7 @@ Plan disclosure depends on omitted text, not rendered height. Long previews coll
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-Successful native and PTC `actionCard` metadata for `create_personalized_page` becomes a hidden Conversation node. Existing experiment sessions using `creationRecommendation` metadata remain readable; unrelated action kinds use their own renderers. The completed-Turn tail reads its indexed proposals and displays only the first. The component receives session-bound callbacks and a framework-bound notice preference rather than accessing services. The shared Menu handles portal positioning, keyboard selection and dismissal. Its optional Remote, locale, event definition and slot registration share one plugin lifetime.
+The Turn tail reads the proposals of the `creationRecommendations` Session projection and shows the one admitted in its Turn once that Turn has ended, for any end reason; the projection admits at most one proposal per Turn. The component receives session-bound callbacks and a framework-bound notice preference rather than accessing services. The shared Menu handles portal positioning, keyboard selection and dismissal. Its optional Remote, locale and slot registration share one plugin lifetime.
 
 - [Source](src/client/index.ts)
 - [Tests](tests/)
@@ -58,7 +58,7 @@ Successful native and PTC `actionCard` metadata for `create_personalized_page` b
 ## Further Exploration
 
 - [Creation service](../creation-recommendations/README.md) — creation ownership and persistence.
-- [Conversation](../../client/ui-conversation/README.md) — event indexing.
+- [Session projection](../../session/session-projection/README.md) — the proposals and receipts the card reads.
 - [Slots](../../client/ui-slots/README.md) — completed-Turn presentation.
 
 <a id="model-experience"></a>
