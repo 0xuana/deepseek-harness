@@ -1,6 +1,6 @@
 - table "Performance":
   - rowgroup:
-    - row "Turn / step Trigger Execution Context Output Cache hit First token Model time Output speed (tok/s) Tool time Total time":
+    - row "Turn / step Trigger Execution Context Output Cache hit First token Model time Output speed Tool time Total time":
       - columnheader "Turn / step"
       - columnheader "Trigger"
       - columnheader "Execution"
@@ -9,7 +9,7 @@
       - columnheader "Cache hit"
       - columnheader "First token"
       - columnheader "Model time"
-      - columnheader "Output speed (tok/s)"
+      - columnheader "Output speed"
       - columnheader "Tool time"
       - columnheader "Total time"
   - rowgroup:

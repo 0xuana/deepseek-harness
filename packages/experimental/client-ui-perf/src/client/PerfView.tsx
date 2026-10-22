@@ -1053,19 +1053,20 @@ function PromptCell({ turn, t, className, loadImage }: PromptCellProps): ReactEl
     : <ImagePromptPill first={first} images={images} loadImage={loadImage} t={t} />
   const source = turn.promptSource
   if (source !== null && source !== 'user') {
-    // Automated turns explain what woke them; team messages also name the sender.
-    const base = triggerLabel(source, t)
+    // Automated turns show the wake tag, the named sender when known, and the
+    // body with its transport framing removed.
+    const raw = turn.prompt ?? ''
+    const base = triggerLabelOf(raw, source, t)
     const sender = turn.promptSender
     const label = sender === null ? base : `${base} · ${sender}`
-    const raw = turn.prompt ?? ''
-    const text = sender === null
-      ? raw
-      : raw.replace(/^(?:Team message from [^:]+:|Agent \S+ sent a message:)\s*/u, '')
+    const text = triggerBodyOf(raw)
     return (
       <td className={className} title={raw === '' ? label : raw}>
-        <span className={css.triggerPill}>{label}</span>
-        {pill}
-        {text === '' ? null : <span className={css.promptText}>{text}</span>}
+        <span className={css.promptClip}>
+          <span className={css.triggerPill}>{label}</span>
+          {pill}
+          {text === '' ? null : <span className={css.promptText}>{text}</span>}
+        </span>
       </td>
     )
   }
@@ -1084,6 +1085,26 @@ function PromptCell({ turn, t, className, loadImage }: PromptCellProps): ReactEl
       {pill}
     </td>
   )
+}
+
+const TEAM_FRAME = /^Team message from /u
+const AGENT_FRAME = /^Agent \S+ sent a message:/u
+const SUBAGENT_FRAME = /^Background subagent \S+ finished/u
+
+/** Label of the concrete wake frame, falling back to the producer source kind. */
+function triggerLabelOf(text: string, source: string, t: PerfTranslate): string {
+  if (TEAM_FRAME.test(text)) return t('trigger.team-message')
+  if (source === 'subagent-settled' && SUBAGENT_FRAME.test(text)) return t('trigger.subagent-settled')
+  if (source === 'agent-message' && AGENT_FRAME.test(text)) return t('trigger.agent-message')
+  return triggerLabel(source, t)
+}
+
+/** Remove the transport framing so only the message body is previewed. */
+function triggerBodyOf(text: string): string {
+  return text
+    .replace(/^Team message from [^:]+:\s*/u, '')
+    .replace(/^Agent \S+ sent a message:\s*/u, '')
+    .replace(/^Background subagent \S+ finished\s*/u, '')
 }
 
 /** Localized label for one automated turn trigger. */

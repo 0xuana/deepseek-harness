@@ -597,6 +597,37 @@ describe('turn rows', () => {
     expect(cell.getAttribute('title')).toBe('Team message from hfai-deploy: P1 已 rebase 完成')
   })
 
+  it('shows the frame label and body without opaque session ids', () => {
+    mount({
+      turns: [
+        turn({
+          turn: 1,
+          prompt: 'Agent 52224ac7-b02b-4d25-8c6e-123456789abc sent a message: 请检查构建',
+          promptSource: 'agent-message',
+        }),
+        turn({
+          turn: 2,
+          prompt: 'Background subagent 10a0dbaa-08dd-4e3f-838d-d6f84b36babe finished and will do no further work.',
+          promptSource: 'subagent-settled',
+        }),
+        turn({ turn: 3, prompt: 'Team message from stack-rebase: P2 已合并', promptSource: 'team-message', promptSender: 'stack-rebase' }),
+      ],
+      stepCount: 3,
+    })
+    const first = cellsOf(rowWithPrefix(say('turn.label', { turn: 1 })))[1] as HTMLTableCellElement
+    expect(first.textContent).toContain(say('trigger.agent-message'))
+    expect(first.textContent).not.toContain('52224ac7')
+    expect(first.textContent).toContain('请检查构建')
+    const second = cellsOf(rowWithPrefix(say('turn.label', { turn: 2 })))[1] as HTMLTableCellElement
+    expect(second.textContent).toContain(say('trigger.subagent-settled'))
+    expect(second.textContent).not.toContain('10a0dbaa')
+    expect(second.textContent).toContain('and will do no further work.')
+    const third = cellsOf(rowWithPrefix(say('turn.label', { turn: 3 })))[1] as HTMLTableCellElement
+    expect(third.textContent).toContain(`${say('trigger.team-message')} · stack-rebase`)
+    expect(third.textContent).toContain('P2 已合并')
+    expect(third.textContent).not.toContain('Team message from')
+  })
+
   it('summarizes turn tools with pills, overflow, errors, and output size', () => {
     mount({
       turns: [turn({

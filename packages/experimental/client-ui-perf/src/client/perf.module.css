@@ -237,7 +237,24 @@
 }
 
 /* Did column: tool names, hints, and output sizes. */
+.promptClip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.promptClip .promptText {
+  flex: 1;
+  min-width: 0;
+  max-width: none;
+}
+
 .triggerPill {
+  flex: none;
+  max-width: 70%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   margin-right: 4px;
   padding: 0 4px;
   border: 0.5px solid var(--dsw-alias-border-l2);

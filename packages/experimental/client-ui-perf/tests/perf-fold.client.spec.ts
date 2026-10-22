@@ -734,6 +734,10 @@ describe('trigger sender helper', () => {
     expect(triggerSenderOf(userMessage([textBlock('Agent abc-123 sent a message: hi')], {
       kind: 'agent-message',
     }))).toBe('abc-123')
+    // Raw session UUIDs are not member names.
+    expect(triggerSenderOf(userMessage([textBlock('Agent 52224ac7-b02b-4d25-8c6e-123456789abc sent a message: hi')], {
+      kind: 'agent-message',
+    }))).toBeNull()
   })
 
   it('returns nothing without a framed sender', () => {

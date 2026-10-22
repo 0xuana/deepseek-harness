@@ -256,6 +256,7 @@ function isTokenDelta(chunk: StreamChunk): boolean {
 
 const TEAM_MESSAGE_PREFIX = /^Team message from ([^:]+):/u
 const AGENT_MESSAGE_PREFIX = /^Agent (\S+) sent a message:/u
+const OPAQUE_SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu
 
 /** Sender agent name of a teammate/agent notification, parsed from its body prefix. */
 export function triggerSenderOf(message: UserMessage): string | null {
@@ -269,7 +270,9 @@ export function triggerSenderOf(message: UserMessage): string | null {
   /* v8 ignore next -- a matched capture group is always present. */
   if (team !== null) return team[1]?.trim() ?? null
   const agent = AGENT_MESSAGE_PREFIX.exec(text)
-  return agent?.[1] ?? null
+  const id = agent?.[1] ?? null
+  // A raw session UUID is not a readable member name; keep the badge generic.
+  return id !== null && OPAQUE_SESSION_ID.test(id) ? null : id
 }
 
 /** Answer characters kept for the one-line Did preview. */
