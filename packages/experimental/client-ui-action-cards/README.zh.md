@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-启用[个性化页面 Bundle](../creation-recommendations/README.zh.md)，它会在本包旁插入对应的 [Host 服务](../action-cards/README.zh.md)。本浏览器组件没有配置字段。
+启用[个性化页面](../creation-recommendations/README.zh.md)或[插件推荐](../plugin-recommendations/README.zh.md) Bundle，它们都会在本包旁插入对应的 [Host 服务](../action-cards/README.zh.md)。本浏览器组件没有配置字段。
 
 ### 注册卡片正文
 
@@ -59,7 +59,7 @@ kind: "package-reference"
 ## 延伸阅读
 
 - [操作卡片](../action-cards/README.zh.md) — 框架背后的工具、卡片状态与用户操作。
-- [个性化页面卡片](../client-ui-creation-recommendations/README.zh.md) — 随产品提供的卡片正文。
+- [个性化页面卡片](../client-ui-creation-recommendations/README.zh.md)和[推荐卡片](../client-ui-plugin-recommendations/README.zh.md) — 随产品提供的卡片正文。
 - [插槽](../../client/ui-slots/README.zh.md) — 轮次尾部与工具行的注册。
 
 <a id="model-experience"></a>

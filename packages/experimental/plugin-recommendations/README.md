@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Users can discover a relevant built-in plugin while discussing a concrete need. The Agent answers first, then offers one card at the completed Turn’s end; the user can open its plugin details, choose Enable, or choose Not now. Enabling changes the whole profile and persists across restarts. The Agent learns the result with the next request; clicking starts no model turn. Users can later disable or remove the plugin from its details page.
+Users can discover a relevant built-in plugin while discussing a concrete need or asking how to do something in DSH. The Agent answers first, then offers one card at the completed Turn’s end; the user can open its plugin details, choose Enable, or choose Not now. Enabling changes the whole profile and persists across restarts. The Agent learns the result with the next request; clicking starts no model turn. Users can later disable or remove the plugin from its details page.
 
 ## Table of Contents
 
@@ -25,19 +25,13 @@ Users can discover a relevant built-in plugin while discussing a concrete need. 
 <a id="use-this-package"></a>
 ## Use this package
 
-Open Plugins → More → Experimental plugins and enable Plugin recommendations. Shipped profiles leave this experimental bundle disabled. Enabling pins it to the main Plugins list; disabling returns it to the secondary page only. Its one configuration field, `queuedMessageLimit`, is the number of queued next-turn messages at or above which the current turn offers no card; the default is 2.
+Open Plugins → More → Experimental plugins and enable Plugin recommendations. Shipped profiles leave this experimental bundle disabled. Enabling pins it to the main Plugins list; disabling returns it to the secondary page only. The bundle also enables the shared [action card service](../action-cards/README.md) and its browser half; that service's `queuedMessageLimit` sets how many queued next-turn messages stop the current turn's card. This bundle has no configuration of its own.
 
-```yaml
-- name: @deepseek-ai/dsh-experimental-plugin-recommendations
-  config:
-    queuedMessageLimit: 2
-```
-
-The experiment works with or without Personalized pages. Both read the same answer-block format through `@deepseek-ai/dsh-util-action-block`, and neither package depends on the other. Each admits at most one card per turn from its own blocks. For several independent needs, guidance writes one block per answer: an explicit user priority wins, and otherwise an existing plugin takes precedence over a new page; other needs stay in the answer. An answer that still carries both kinds of block shows both cards.
+The experiment works with or without Personalized pages, and neither package depends on the other. Both bundles insert the same card-service rows, and the Loader keeps one entry for each. A Turn shows at most one card across both kinds: the first accepted `propose_action` call of the Turn becomes the card. For several independent needs, guidance follows an explicit user priority and otherwise prefers an existing plugin over a new page; other needs stay in the answer.
 
 ### Outcomes and recovery
 
-The card appears once the Turn whose answer carries the block ends, for any end reason. Enable requires permission to modify the profile. The Host rechecks catalog eligibility before changing it. A saved selection can require restart or be overridden; failed and cancelled changes can be retried from the same card. A plugin already selected elsewhere settles as already enabled without another change. A later proposal replaces an undecided card, which then shows Replaced; a proposal written while `queuedMessageLimit` or more messages are queued, or after this experiment's card in the same turn, is never offered. A lost response leaves the outcome uncertain until the Session projection reconnects; repeated card actions are idempotent.
+The card appears after the Turn of its accepted call ends. Enable requires permission to modify the profile. The Host rechecks the plugin's catalog eligibility when the user acts, so a card naming a plugin outside the eligible catalog says so and offers no Enable. A saved selection can require restart or be overridden; failed and cancelled changes can be retried from the same card. A plugin already selected elsewhere settles as already enabled without another change. A later proposal replaces an undecided card, which then shows Replaced; a proposal written while `queuedMessageLimit` or more messages are queued is never offered. A lost response leaves the outcome uncertain until the Session projection reconnects; repeated card actions are idempotent.
 
 -----
 
@@ -47,11 +41,11 @@ The card appears once the Turn whose answer carries the block ends, for any end 
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The Host entry is a function plugin. Its `apply` assembles the internal `pluginRecommendations` Remote service with `ctx.plugin`. That service owns feature state, effect lifetimes and typed button calls; it is not a separately configurable or replaceable YAML entry, and adds no service to `dsh-base`. Disabling the feature disposes its internal service, skill provider and listeners and drains its owned asynchronous work. This follows the existing `command-feedback` composition of `sessionFeedback`.
+The Host entry is a function plugin. Its `apply` assembles the internal `pluginRecommendations` Remote service with `ctx.plugin`; the service reads catalog text for cards and enables plugins for its card kind. It is not a separately configurable or replaceable YAML entry and adds no service to `dsh-base`. Disabling the feature removes its skill, card kind and Remote and drains its owned enabling work.
 
-The plugin adds no model tool and no system-prompt section. It registers the `official-plugins` skill; loading it appends the current eligible catalog from `pluginManager`. A proposal is one fenced `dsh-action` JSON object with `action: "enable_official_plugin"`, `name` and `reason` at the end of the final answer. The Session projection reads the answer's last valid official-plugin block through `@deepseek-ai/dsh-util-action-block`, identifies the card by the message id, and applies the same per-turn reservation, queue suppression and replacement rules as Personalized pages, without depending on that package. Events a forked Session inherits create no proposals or receipts, so a fork starts without cards. The projection’s client view carries the admitted proposals with their Turns beside the card states. The card asks the Host for the plugin's current title, description and selection, so names outside the eligible catalog show no actions. Only shipped, optional, official plugins that are available, writable and error-free are eligible.
+The plugin adds no model tool and no system-prompt section. It registers the `official-plugins` skill; loading it appends the current eligible catalog from `pluginManager`. It registers the `enable_official_plugin` kind with the shared [action card service](../action-cards/README.md): the `official-plugins` skill, `details` holding the plugin `name`, and the Enable verb, which requires global Remote access. The service owns the `propose_action` tool, the card projection, Not now, the Remote action and the status notice. This plugin enables the named plugin through Plugin Manager and records `enabled`, `already-enabled` or `failed`; the decision data carries `application` when the saved selection needs a restart, is overridden or was cancelled, and the management `errorCode` of a failed change. Not now is recorded for an unstarted or failed card. Only shipped, optional, official plugins that are available, writable and error-free are eligible; the name is checked when the user acts, not when the model proposes. The Remote `describe(sessionId, callId)` returns the current title, description and selection of a card's plugin, or a refusal.
 
-Concurrent actions on one card share an operation, and disposal stops local follow-up without waiting on a profile mutation queued behind its own HMR unload. Plugin Manager owns an accepted mutation; an unconfirmed card rechecks the profile when clicked again. Profile files own installation state; experimental Session records own only the historical decision. Unreadable receipts block actions and show a recovery message without stalling other Session projections. Each decision is queued as a status notice for the next model request through the existing request-preparation hook; delivery is acknowledged only after the notice is logged.
+Concurrent actions on one card share one operation, and disposal stops local follow-up without waiting on a profile mutation queued behind its own HMR unload. Plugin Manager owns an accepted mutation; an unconfirmed card rechecks the profile when clicked again. Profile files own installation state; the card decision records only the historical outcome.
 
 - [Source](src/index.ts) — registration and service entry.
 - [Tests](tests/) — actions, recovery and lifecycle evidence.
@@ -64,9 +58,9 @@ Concurrent actions on one card share an operation, and disposal stops local foll
 ## Further Exploration
 
 - [Plugin manager](../../boot/plugin-manager/README.md) — profile changes.
-- [Session projection](../../session/session-projection/README.md) — durable derived state.
-- [Recommendation cards](../client-ui-plugin-recommendations/README.md) — completed-answer placement.
-- [Personalized pages](../creation-recommendations/README.md) — the other card action, written in the same block format.
+- [Action cards](../action-cards/README.md) — the card tool, card state and user actions.
+- [Recommendation cards](../client-ui-plugin-recommendations/README.md) — the card body.
+- [Personalized pages](../creation-recommendations/README.md) — the other card kind.
 
 <a id="model-experience"></a>
 ## Model Experience
@@ -75,15 +69,15 @@ Concurrent actions on one card share an operation, and disposal stops local foll
 
 #### What the model sees
 
-The existing `skill` tool loads `official-plugins` when the user asks how to do or use something in DSH, asks whether DSH can do something, or says a capability is missing or should change, such as tools, input, displayed thinking or titles, session search, terminals, worktrees, agent teams, desktop control, automation, access, approval prompts, output badges or signatures, and plugins or plugin sources. The catalog entry tells the Agent that such a question is not a request to develop DSH and to load the skill before reading files or source. Loading returns matching policy, the block format, six short examples and the current catalog with names, localized titles, descriptions and enabled state. An enabled match gets usage guidance without a card; a partial match states its limit. Ordinary tasks, quoted wishes, discussion-only and declined requests get no card. The block is the submission; nothing changes until the user clicks Enable. The next request after a click carries a status notice: a fact, not a request for more work, and enabling authorizes nothing beyond that plugin.
+The existing `skill` tool loads `official-plugins` when the user asks how to do or use something in DSH, asks whether DSH can do something, or says a capability is missing or should change, such as tools, input, displayed thinking or titles, session search, terminals, worktrees, agent teams, desktop control, automation, access, approval prompts, output badges or signatures, and plugins or plugin sources. The catalog entry tells the Agent that such a question is not a request to develop DSH and to load the skill before reading files or source. Loading returns matching policy, the submission rule, six short examples and the current catalog with names, localized titles, descriptions and enabled state. An enabled match gets usage guidance without a card; a partial match states its limit. Ordinary tasks, quoted wishes, discussion-only and declined requests get no card. The proposal is one [`propose_action`](../action-cards/README.md#model-experience) call in the same Turn as the skill load, with `action: "enable_official_plugin"`, the plugin's catalog `title`, a one-sentence `brief` in the user's language and `details` holding the catalog `name`; the call itself is the submission, and nothing changes until the user clicks Enable. The next request after a click carries the shared status notice with this kind's guidance: a fact, not a request for more work, and enabling authorizes nothing beyond that plugin.
 
 #### Token effect
 
-While enabled, requests carry only the 495-character catalog entry, within the skill catalog's 500-character limit; no tool schema or prompt section is added. A skill load appends about 10K characters: a 3.3K-character policy plus the catalog, which grows with the number of eligible plugins. A recommendation needs one skill load and no further model round trip: the block is part of the final answer. A changed card appends one short status notice to the next request.
+While enabled, requests carry only the 495-character catalog entry, within the skill catalog's 500-character limit; the shared card tool is declared only after a card skill loads. A skill load appends about 10K characters: a 3.2K-character policy plus the catalog, which grows with the number of eligible plugins. A recommendation needs one skill load and one `propose_action` call before the final answer. A changed card appends one short status notice to the next request.
 
 #### KV Cache effect
 
-Skill contents and proposal blocks append to the transcript; the common system prompt and tool list are unchanged, so toggling this experiment changes only its catalog entry. Enabling a recommended plugin can change later tool declarations and their cache reuse.
+Skill contents and the proposal call append to the transcript; the common system prompt is unchanged, and the card tool joins the declarations only after a card skill loads, as the [action cards](../action-cards/README.md#model-experience) page describes. Enabling a recommended plugin can change later tool declarations and their cache reuse.
 
 ## Known Limitations and Deferred Work
 
@@ -93,8 +87,7 @@ The manual real-model input set is in `evaluation/intent-cases.json`; unit tests
 
 - Only shipped, optional, official plugins are eligible; missing packages and third-party registries are excluded.
 - Recommendations require a live root conversation; there is no unsolicited opportunity discovery.
-- The block parser is shared through `@deepseek-ai/dsh-util-action-block`; the turn rules, status notice and card tail are copies of the Personalized pages code until a shared action-card package owns them.
-- A historical receipt does not continuously track changes later made on the Plugins page.
+- A historical decision does not continuously track changes later made on the Plugins page.
 
 <a id="dev-note"></a>
 ### Dev Note

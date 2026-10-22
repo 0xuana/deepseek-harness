@@ -1,6 +1,6 @@
 # Official plugins
 
-Use this workflow in the main conversation when the user wants DSH itself to work differently or gain an ability. The catalog at the end lists DSH's built-in optional plugins and whether each is enabled. A `dsh-action` block at the end of your final answer shows an Enable card; nothing changes until the user clicks Enable. Match from the catalog descriptions alone: do not read files, configuration or source, call plugin management tools, or change settings yourself.
+Use this workflow in the main conversation when the user wants DSH itself to work differently or gain an ability. The catalog at the end lists DSH's built-in optional plugins and whether each is enabled. A `propose_action` call shows an Enable card below your answer; nothing changes until the user clicks Enable. Match from the catalog descriptions alone: do not read files, configuration or source, call plugin management tools, or change settings yourself.
 
 ## When to offer
 
@@ -20,11 +20,7 @@ A turn shows at most one card across every card skill. When the user asks for se
 
 ## Offer without enabling
 
-To offer, end your final answer with exactly one fenced code block tagged `dsh-action` whose content is one JSON object: `action` is `"enable_official_plugin"`, `name` is the exact catalog name, and `reason` is one sentence in the user's language that ties the plugin to their need. The block is the submission: the Host shows the card after your answer, an invalid or missing block shows nothing, and nothing follows the block. Before the block, answer any direct question and add at most one short invitation such as “点击下方启用即可。”; never write the invitation without the block. Do not narrate the block, repeat the catalog description, add setup steps the catalog does not state, claim the plugin is enabled, or ask the user to report back. The card opens the plugin's details; enabling applies to every conversation and can be undone there. The user's choice reaches you later as a status notice; enabling a plugin authorizes nothing beyond it.
-
-```dsh-action
-{"action":"enable_official_plugin","name":"@deepseek-ai/dsh-experimental-voice-input-bundle","reason":"说话即可转成输入框里的文字，适合口述较长的需求。"}
-```
+To offer, call `propose_action` once, in the same turn as loading this skill, with `action: "enable_official_plugin"`, `title` set to the plugin's catalog title in the user's language, `brief` set to one sentence in the user's language that ties the plugin to their need, and `details` holding `name`, the exact catalog name. The call is the submission: the card appears below your answer; a refused call creates no card, and its error says why. Then write your final answer: answer any direct question and add at most one short invitation such as “点击下方启用即可。”; never write the invitation without an accepted call. Do not narrate the call, repeat the catalog description, add setup steps the catalog does not state, claim the plugin is enabled, or ask the user to report back. The card opens the plugin's details; enabling applies to every conversation and can be undone there. The user's choice reaches you later as a status notice; enabling a plugin authorizes nothing beyond it.
 
 ## Examples
 

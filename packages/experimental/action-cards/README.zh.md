@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-[个性化页面 Bundle](../creation-recommendations/README.zh.md) 会插入本服务及其[浏览器端](../client-ui-action-cards/README.zh.md)；启用该 Bundle 即同时启用两者。本服务只有一个配置字段：
+[个性化页面](../creation-recommendations/README.zh.md)和[插件推荐](../plugin-recommendations/README.zh.md)两个 Bundle 都会插入本服务及其[浏览器端](../client-ui-action-cards/README.zh.md)；启用其中任一个即同时启用两者。本服务只有一个配置字段：
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
@@ -74,7 +74,7 @@ Remote `act(sessionId, callId, verb, payload?)` 先检查服务所有者、在�
 ## 延伸阅读
 
 - [操作卡片显示](../client-ui-action-cards/README.zh.md) — 浏览器端卡片框架、种类正文与过程行。
-- [个性化页面](../creation-recommendations/README.zh.md) — 随产品提供的卡片种类。
+- [个性化页面](../creation-recommendations/README.zh.md)和[插件推荐](../plugin-recommendations/README.zh.md) — 随产品提供的卡片种类。
 - [工具](../../core/tools/README.zh.md) — 条件注册与每步准入。
 - [会话投影](../../session/session-projection/README.zh.md) — 浏览器读取的卡片状态。
 
@@ -123,7 +123,7 @@ Latest status of action cards from user actions and background work. These are s
 - 从代码中发起的调用（例如 PTC 预设中）会被拒绝：日志把它们记为程序派发而不是工具调用，因此不可能有卡片跟随。
 - 所有种类合计每轮只展示一张卡片，每个对话只保留一张尚未开始的卡片。
 - 投影读取 `queuedMessageLimit`，状态版本却不随它变化。修改后的上限只作用于重新从日志折叠的会话；已缓存的投影行保留按旧上限得出的“未展示”结果。
-- 本服务及其浏览器端的行由个性化页面 Bundle 插入。第二个种类的 Bundle 若插入相同的行会与其冲突；多个 Bundle 共享这些行的方式留到第二个种类发布时再定。
+- 个性化页面和插件推荐两个 Bundle 都会插入本服务及其浏览器端的行。两个 Bundle 都启用时，Loader 对每个行 id 只保留一个条目；两个 Bundle 的详情页都会列出这些行，在那里开关或配置某一行，改的是同一个共享条目。
 
 <a id="dev-note"></a>
 ### 开发备注

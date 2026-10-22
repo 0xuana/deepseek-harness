@@ -1,5 +1,5 @@
 ---
-description: "Show official plugin recommendations after completed answers."
+description: "Show official plugin recommendation cards after completed answers."
 kind: "package-reference"
 ---
 
@@ -25,7 +25,7 @@ Users see one plugin recommendation below the completed answer, with the plugin'
 <a id="use-this-package"></a>
 ## Use this package
 
-Enable the [Plugin recommendations bundle](../plugin-recommendations/README.md). It composes this browser contribution with the Host skill and action service. This contribution has no configuration fields.
+Enable the [Plugin recommendations bundle](../plugin-recommendations/README.md). This browser contribution has no configuration fields; it fills the shared [action card frame](../client-ui-action-cards/README.md) for `enable_official_plugin` cards.
 
 -----
 
@@ -35,9 +35,9 @@ Enable the [Plugin recommendations bundle](../plugin-recommendations/README.md).
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The Turn tail reads the proposals of the `pluginRecommendations` Session projection and shows the one admitted in its Turn once that Turn has ended, for any end reason; the projection admits at most one proposal per Turn, and the chat hides the fence itself. A proposal the projection marks never offered renders nothing. The card asks the Host for the plugin's current catalog text and selection; a name outside the eligible catalog shows no actions. The browser contribution keeps returned catalog text by plugin name for its lifetime, so a revisited card renders it at once while its own lookup refreshes the selection. Until a plugin's first lookup returns, placeholder lines and the disabled actions hold the title, description and footer in place. Session projection decisions drive the card after reload. The optional Remote and all UI registrations are removed together on unload.
+The plugin mounts its catalog-text Remote, then registers its body with the shared card frame, which places the card after its Turn and supplies the card, its recorded decision and card-bound actions. The body asks the Host for the plugin's current catalog text and selection and renders the header with the Official badge, the details target, status, and Enable and Not now through the frame's action; a name outside the eligible catalog shows no actions. The plugin keeps returned catalog text by plugin name for its lifetime, so a revisited card renders it at once while its own lookup refreshes the selection. Until a plugin's first lookup returns, the card shows the proposed title, a placeholder description line and the disabled actions, so its layout holds. The Remote, the body registration and its dictionaries share one plugin lifetime.
 
-Cards use the application font, the deliverables card border and background, a distinct title and compact body scale, and a separate action footer. The built entry supplies generated Remote descriptors to the source-tested mount lifecycle.
+Cards use the application font, a distinct title and compact body scale, and a separate action footer. The built entry supplies generated Remote descriptors to the source-tested mount lifecycle.
 
 - [Source](src/client/index.ts)
 - [Tests](tests/)
@@ -49,14 +49,13 @@ Cards use the application font, the deliverables card border and background, a d
 <a id="further-exploration"></a>
 ## Further Exploration
 
-- [Recommendation service](../plugin-recommendations/README.md) — eligibility, activation and persistence.
-- [Session projection](../../session/session-projection/README.md) — the proposals and card states the card reads.
-- [Slots](../../client/ui-slots/README.md) — completed-Turn presentation.
+- [Recommendation service](../plugin-recommendations/README.md) — eligibility, enabling and decisions.
+- [Action card display](../client-ui-action-cards/README.md) — the frame, kind bodies and the process row.
 
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through card actions: the Host recommendation service adds a logged status notice to the next model request. The browser contribution adds no model tools or prompt content.
+Indirectly, through card actions: the shared Host card service adds a logged status notice to the next model request. The browser contribution adds no model tools or prompt content.
 
 #### KV Cache effect
 

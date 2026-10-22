@@ -1984,20 +1984,14 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'pluginRecommendations',
-    summary: 'Internal Remote and effect owner assembled by the plugin-recommendation feature.',
-    description: 'Internal Remote and effect owner assembled by the plugin-recommendation feature.',
+    summary: 'Catalog lookups for card text and the enabling behind the `enable_official_plugin` card.',
+    description: 'Catalog lookups for card text and the enabling behind the `enable_official_plugin` card.',
     methods: [
       {
         signature: '@Remote async describe(agent: Agent, callId: ToolCallId): Promise<RecommendationDetails>',
-        description: 'Read the current catalog text for a logged proposal\'s card.',
-        parameters: [{ name: 'agent', description: 'Exact live root resolved by the Gateway from the Session id.' }, { name: 'callId', description: 'Proposal id from the answer block, never a package supplied by the browser.' }],
-        returns: 'the plugin\'s title, description and selection, or a refusal when the block names no available official plugin.',
-      },
-      {
-        signature: '@Remote act(agent: Agent, callId: ToolCallId, action: \'enable\' | \'dismiss\'): Promise<RecommendationActionResult>',
-        description: 'Decide one logged recommendation. Concurrent actions on the same card share one operation; a settled success or dismissal never enables twice. Failed activation remains retryable. Profile selection survives session disposal.',
-        parameters: [{ name: 'agent', description: 'Exact live root resolved by the Gateway from the Session id.' }, { name: 'callId', description: 'Proposal id from the answer block, never a package supplied by the browser.' }, { name: 'action', description: 'Human choice.' }],
-        returns: 'An observed outcome, a refusal before mutation, or an unconfirmed result if reload interrupts the wait.',
+        description: 'Read the current catalog text for a logged card.',
+        parameters: [{ name: 'agent', description: 'Exact live root resolved by the Gateway from the Session id.' }, { name: 'callId', description: 'The card\'s `propose_action` call id, never a package supplied by the browser.' }],
+        returns: 'the plugin\'s title, description and selection, or a refusal when the card names no available official plugin.',
       },
     ],
   },
@@ -7022,20 +7016,8 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ReasoningEffortId = Branded<\'ReasoningEffortId\'>;',
   },
   {
-    name: 'RecommendationActionResult',
-    declaration: 'export type RecommendationActionResult = {\n    readonly status: \'settled\';\n    readonly outcome: RecommendationCardState;\n    readonly errorCode?: ManagementError[\'code\'];\n} | {\n    readonly status: \'refused\';\n    readonly reason: \'unknown\' | \'unavailable\' | \'access-denied\' | \'not-live-root\' | \'closing\' | \'invalid-history\';\n} | {\n    readonly status: \'unconfirmed\';\n    readonly reason: \'closing\';\n};',
-  },
-  {
-    name: 'RecommendationCardState',
-    declaration: 'export type RecommendationCardState = RecommendationOutcome | \'replaced\' | \'suppressed\';',
-  },
-  {
     name: 'RecommendationDetails',
     declaration: 'export type RecommendationDetails = {\n    readonly status: \'available\';\n    readonly title: LocalizedText;\n    readonly description: LocalizedText;\n    readonly enabled: boolean;\n} | {\n    readonly status: \'refused\';\n    readonly reason: \'unknown\' | \'unavailable\' | \'not-live-root\' | \'closing\';\n};',
-  },
-  {
-    name: 'RecommendationOutcome',
-    declaration: 'export type RecommendationOutcome = \'dismissed\' | \'applied\' | \'already-enabled\' | \'restart-required\' | \'overridden\' | \'failed\' | \'cancelled\';',
   },
   {
     name: 'RecurringScheduleRecord',

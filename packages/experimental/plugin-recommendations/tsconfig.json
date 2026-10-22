@@ -21,9 +21,6 @@
       "path": "../../core/session"
     },
     {
-      "path": "../../session/session-projection"
-    },
-    {
       "path": "../../boot/plugin-manager"
     },
     {
@@ -36,13 +33,12 @@
       "path": "../../skill/skill"
     },
     {
-      "path": "../../util/action-block"
+      "path": "../action-cards"
     }
   ],
   "files": [
     "src/index.ts",
     "src/types.ts",
-    "src/projection.ts",
     "src/skill.ts"
   ]
 }

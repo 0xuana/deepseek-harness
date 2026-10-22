@@ -25,7 +25,7 @@ An experiment can offer one optional action below an answer, such as creating a 
 <a id="use-this-package"></a>
 ## Use this package
 
-The [Personalized pages bundle](../creation-recommendations/README.md) inserts this service and its [browser half](../client-ui-action-cards/README.md); enabling that bundle enables both. The service has one configuration field:
+The [Personalized pages](../creation-recommendations/README.md) and [Plugin recommendations](../plugin-recommendations/README.md) bundles each insert this service and its [browser half](../client-ui-action-cards/README.md); enabling either bundle enables both. The service has one configuration field:
 
 | Field | Default | Meaning |
 |---|---|---|
@@ -74,7 +74,7 @@ The Remote `act(sessionId, callId, verb, payload?)` checks the owner, the live r
 ## Further Exploration
 
 - [Action card display](../client-ui-action-cards/README.md) — the browser frame, kind bodies and the process row.
-- [Personalized pages](../creation-recommendations/README.md) — the shipped card kind.
+- [Personalized pages](../creation-recommendations/README.md) and [Plugin recommendations](../plugin-recommendations/README.md) — the shipped card kinds.
 - [Tools](../../core/tools/README.md) — conditional registration and step admission.
 - [Session projection](../../session/session-projection/README.md) — the card state the browser reads.
 
@@ -123,7 +123,7 @@ The notice is appended after the request's other new context and never rewrites 
 - Calls dispatched from code, as in PTC presets, are refused: the log records them as program dispatches rather than tool calls, so no card could follow them.
 - Only one card is offered per turn across all kinds, and one unstarted card per conversation.
 - The projection reads `queuedMessageLimit` while its state version stays fixed. A changed limit applies to Sessions folded again from their log; cached projection rows keep the suppression decided under the earlier limit.
-- The rows of this service and its browser half are inserted by the Personalized pages bundle. A second kind's bundle that inserts the same rows conflicts with it; shared row ownership between bundles is deferred until a second kind ships.
+- The Personalized pages and Plugin recommendations bundles both insert the rows of this service and its browser half. With both bundles enabled the Loader keeps one entry per row id, and both bundle pages list these rows, so switching or configuring a row there changes the one shared entry.
 
 <a id="dev-note"></a>
 ### Dev Note

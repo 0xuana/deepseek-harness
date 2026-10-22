@@ -121,6 +121,6 @@
   {
     "id": "two_existing_plugins",
     "prompt": "我看展开的英文思考很费劲，也希望每个 PR 都有 DSH 标识。两个现成插件都给推荐入口，先不要启用。",
-    "expected": "Select one eligible plugin before calling suggest_plugin, explain the other need, no rejected second call or claim that both cards exist."
+    "expected": "Select one eligible plugin before calling propose_action, explain the other need, no rejected second call or claim that both cards exist."
   }
 ]

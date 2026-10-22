@@ -1,14 +1,11 @@
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
-import { appendPluginRecord } from '@deepseek-ai/dsh-session'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import type { BundleInfo, ChangeResult } from '@deepseek-ai/dsh-plugin-manager/types'
-import * as PluginRecommendations from '../src/index.ts'
-import type { RecommendationDecision } from '../src/types.ts'
-import { bundle, callId, fixture } from './fixture.ts'
+import { ACTION, bundle, callId, fixture, logProposal, proposal } from './fixture.ts'
 
 describe('official recommendations', () => {
-  it('offers the live catalog through a skill, adds no tools, and withdraws it on unload', async () => {
+  it('offers the live catalog through a skill, adds no tools of its own, and withdraws the skill and card kind on unload', async () => {
     const f = await fixture()
     expect(f.ctx.tools.get('list_official_plugins')).toBeUndefined()
     expect(f.ctx.tools.get('suggest_plugin')).toBeUndefined()
@@ -33,13 +30,15 @@ describe('official recommendations', () => {
     const controller = new AbortController()
     f.manager.listBundles.mockImplementationOnce(async () => { controller.abort(); return [bundle] })
     await expect(f.ctx.skills.get('official-plugins', { signal: controller.signal })).rejects.toThrow()
-    expect(f.manager.setBundleEnabled).not.toHaveBeenCalled()
+    f.propose()
     await f.fiber.dispose()
     expect(f.ctx.get('pluginRecommendations')).toBeUndefined()
     expect((await f.ctx.skills.list()).some(skill => skill.name === 'official-plugins')).toBe(false)
+    expect(await f.ctx.actionCards.act(f.agent, callId, 'enable')).toEqual({ status: 'refused', reason: 'unavailable' })
+    expect(f.manager.setBundleEnabled).not.toHaveBeenCalled()
   })
 
-  it('describes a logged proposal from the current catalog and refuses names outside it', async () => {
+  it('describes a logged card from the current catalog and refuses other cards and names outside it', async () => {
     const f = await fixture()
     expect(await f.ctx.pluginRecommendations.describe(f.agent, callId)).toEqual({ status: 'refused', reason: 'unknown' })
     f.propose()
@@ -58,6 +57,15 @@ describe('official recommendations', () => {
       f.manager.listBundles.mockResolvedValueOnce(listed)
       expect(await f.ctx.pluginRecommendations.describe(f.agent, callId)).toEqual({ status: 'refused', reason: 'unavailable' })
     }
+    // A card of another kind, and one whose details name no plugin, describe nothing.
+    f.agent.session.append('turn/start', { turn: 2 })
+    const page = logProposal(f.ctx, f.agent, 'call-page', { title: 'Counter', brief: 'Count.', details: { slot: 'page' } }, 'create_personalized_page')
+    expect(await f.ctx.pluginRecommendations.describe(f.agent, page)).toEqual({ status: 'refused', reason: 'unknown' })
+    f.agent.session.append('turn/start', { turn: 3 })
+    const unnamed = f.propose('call-unnamed', { ...proposal, details: {} })
+    expect(await f.ctx.pluginRecommendations.describe(f.agent, unnamed)).toEqual({ status: 'refused', reason: 'unknown' })
+    expect(await f.ctx.actionCards.act(f.agent, unnamed, 'enable')).toEqual({ status: 'refused', reason: 'unavailable' })
+    expect(await f.ctx.pluginRecommendations.describe(f.agent, ToolCallId('toString'))).toEqual({ status: 'refused', reason: 'unknown' })
     vi.spyOn(f.ctx.agents, 'roots').mockReturnValueOnce([])
     expect(await f.ctx.pluginRecommendations.describe(f.agent, callId)).toEqual({ status: 'refused', reason: 'not-live-root' })
     const service = f.ctx.pluginRecommendations
@@ -65,69 +73,63 @@ describe('official recommendations', () => {
     expect(await service.describe(f.agent, callId)).toEqual({ status: 'refused', reason: 'closing' })
   })
 
-  it('records the application result once, never wakes the conversation, and restores decisions by replay', async () => {
+  it('records the enabled card once, never wakes the conversation, and keeps the decision in the Session', async () => {
     const f = await fixture()
     const steer = vi.spyOn(f.agent, 'steer')
     const followup = vi.spyOn(f.agent, 'followup')
     f.propose()
-    expect(await f.ctx.pluginRecommendations.act(f.agent, callId, 'enable')).toEqual({ status: 'settled', outcome: 'applied' })
-    expect(await f.ctx.pluginRecommendations.act(f.agent, callId, 'enable')).toEqual({ status: 'settled', outcome: 'applied' })
+    const enabled = { callId, action: ACTION, phase: 'enabled' }
+    expect(await f.ctx.actionCards.act(f.agent, callId, 'enable')).toEqual({ status: 'settled', decision: enabled })
+    expect(await f.ctx.actionCards.act(f.agent, callId, 'enable')).toEqual({ status: 'settled', decision: enabled })
     expect(f.manager.setBundleEnabled).toHaveBeenCalledExactlyOnceWith(bundle.name, true)
     expect(steer).not.toHaveBeenCalled()
     expect(followup).not.toHaveBeenCalled()
-    expect(f.state().view.decisions[callId]).toBe('applied')
-    expect(f.ctx.sessionProjections.summaryKeys().has('pluginRecommendations')).toBe(false)
+    expect(f.card()).toEqual(enabled)
   })
 
-  it.each(['restart-required', 'overridden', 'failed', 'cancelled'] as const)('preserves the exact %s outcome and retries only failures', async (application) => {
+  it.each([
+    ['restart-required', { phase: 'enabled', data: { application: 'restart-required' } }, false],
+    ['overridden', { phase: 'enabled', data: { application: 'overridden' } }, false],
+    ['failed', { phase: 'failed' }, true],
+    ['cancelled', { phase: 'failed', data: { application: 'cancelled' } }, true],
+  ] as const)('records the %s outcome and retries only failures', async (application, recorded, retried) => {
     const f = await fixture()
     f.propose()
     f.manager.setBundleEnabled.mockResolvedValue({ application, changed: false, stage: 'enable', target: bundle.name })
-    expect(await f.ctx.pluginRecommendations.act(f.agent, callId, 'enable')).toEqual({ status: 'settled', outcome: application })
+    expect(await f.ctx.actionCards.act(f.agent, callId, 'enable')).toEqual({ status: 'settled', decision: { callId, action: ACTION, ...recorded } })
     f.manager.setBundleEnabled.mockResolvedValue({ application: 'applied', changed: true, stage: 'enable', target: bundle.name })
-    expect(await f.ctx.pluginRecommendations.act(f.agent, callId, 'enable')).toEqual({
-      status: 'settled', outcome: application === 'failed' || application === 'cancelled' ? 'applied' : application,
-    })
+    expect(await f.ctx.actionCards.act(f.agent, callId, 'enable')).toEqual({ status: 'settled',
+      decision: retried ? { callId, action: ACTION, phase: 'enabled' } : { callId, action: ACTION, ...recorded } })
+    expect(f.manager.setBundleEnabled).toHaveBeenCalledTimes(retried ? 2 : 1)
   })
 
   it('settles an already-enabled plugin without another profile change', async () => {
     const f = await fixture()
     f.propose()
     f.manager.listBundles.mockResolvedValue([{ ...bundle, enabled: true }])
-    expect(await f.ctx.pluginRecommendations.act(f.agent, callId, 'enable')).toEqual({ status: 'settled', outcome: 'already-enabled' })
+    expect(await f.ctx.actionCards.act(f.agent, callId, 'enable')).toEqual({ status: 'settled',
+      decision: { callId, action: ACTION, phase: 'already-enabled' } })
     expect(f.manager.setBundleEnabled).not.toHaveBeenCalled()
   })
 
-  it('preserves the management failure code without persisting external diagnostics', async () => {
+  it('records the management error code without the diagnostic text', async () => {
     const f = await fixture()
     f.propose()
     f.manager.setBundleEnabled.mockResolvedValue({ application: 'failed', changed: false, stage: 'enable', target: bundle.name,
       error: { code: 'incompatible-version', diagnostic: '/private/profile/path' } })
-    expect(await f.ctx.pluginRecommendations.act(f.agent, callId, 'enable')).toEqual({ status: 'settled', outcome: 'failed', errorCode: 'incompatible-version' })
+    expect(await f.ctx.actionCards.act(f.agent, callId, 'enable')).toEqual({ status: 'settled',
+      decision: { callId, action: ACTION, phase: 'failed', data: { errorCode: 'incompatible-version' } } })
     expect(JSON.stringify(f.events)).not.toContain('/private/profile/path')
   })
 
-  it('contains an unreadable receipt and refuses actions without stalling later events', async () => {
-    const f = await fixture()
-    f.propose()
-    // Persisted data can originate in a newer build, outside the current writer's types.
-    const malformed = JSON.parse('{"callId":"block:answer-1","outcome":"future-outcome"}') as RecommendationDecision
-    appendPluginRecord(f.agent.session, 'plugin:plugin-recommendations/decision', malformed)
-    f.agent.session.append('turn/start', { turn: 2 })
-    expect(await f.ctx.pluginRecommendations.act(f.agent, callId, 'enable')).toEqual({ status: 'refused', reason: 'invalid-history' })
-    expect(f.manager.setBundleEnabled).not.toHaveBeenCalled()
-    expect(f.state().turn).toBe(2)
-    expect(f.state().view.invalid).toBe(true)
-  })
-
-  it.each(['plugin', 'plugin-reload', 'agent'] as const)('does not start activation after the %s leaves during catalog lookup', async (target) => {
+  it.each(['plugin', 'plugin-reload', 'agent'] as const)('does not start enabling after the %s leaves during catalog lookup', async (target) => {
     const f = await fixture()
     f.propose()
     const entered = Promise.withResolvers<undefined>()
     const gate = Promise.withResolvers<BundleInfo[]>()
     onTestFinished(() => { gate.resolve([bundle]) })
     f.manager.listBundles.mockImplementationOnce(() => { entered.resolve(undefined); return gate.promise })
-    const action = f.ctx.pluginRecommendations.act(f.agent, callId, 'enable')
+    const action = f.ctx.actionCards.act(f.agent, callId, 'enable')
     await entered.promise
     const disposal = target === 'agent' ? f.handle.dispose()
       : target === 'plugin' ? f.fiber.dispose() : f.fiber.restart()
@@ -138,61 +140,40 @@ describe('official recommendations', () => {
     expect(f.manager.setBundleEnabled).not.toHaveBeenCalled()
   })
 
-  it('treats inherited object member names as unknown proposals and logs nothing for them', async () => {
+  it('dismisses durably, rejects unknown cards, and rechecks catalog eligibility before enabling', async () => {
     const f = await fixture()
-    f.propose()
-    const logged = f.events.length
-    expect(await f.ctx.pluginRecommendations.describe(f.agent, ToolCallId('toString'))).toEqual({ status: 'refused', reason: 'unknown' })
-    expect(await f.ctx.pluginRecommendations.act(f.agent, ToolCallId('toString'), 'dismiss')).toEqual({ status: 'refused', reason: 'unknown' })
-    expect(await f.ctx.pluginRecommendations.act(f.agent, ToolCallId('constructor'), 'enable')).toEqual({ status: 'refused', reason: 'unknown' })
-    expect(f.events).toHaveLength(logged)
-    expect(f.manager.listBundles).not.toHaveBeenCalled()
-    expect(f.manager.setBundleEnabled).not.toHaveBeenCalled()
-  })
-
-  it('dismisses durably, rejects unknown ids, and rechecks catalog eligibility', async () => {
-    const f = await fixture()
-    expect(await f.ctx.pluginRecommendations.act(f.agent, callId, 'enable')).toEqual({ status: 'refused', reason: 'unknown' })
+    expect(await f.ctx.actionCards.act(f.agent, callId, 'enable')).toEqual({ status: 'refused', reason: 'unknown' })
     f.propose()
     f.manager.listBundles.mockResolvedValue([])
-    expect(await f.ctx.pluginRecommendations.act(f.agent, callId, 'enable')).toEqual({ status: 'refused', reason: 'unavailable' })
+    expect(await f.ctx.actionCards.act(f.agent, callId, 'enable')).toEqual({ status: 'refused', reason: 'unavailable' })
     f.manager.listBundles.mockResolvedValue([{ ...bundle, optional: false }])
-    expect(await f.ctx.pluginRecommendations.act(f.agent, callId, 'enable')).toEqual({ status: 'refused', reason: 'unavailable' })
-    expect(await f.ctx.pluginRecommendations.act(f.agent, callId, 'dismiss')).toEqual({ status: 'settled', outcome: 'dismissed' })
-    expect(await f.ctx.pluginRecommendations.act(f.agent, callId, 'enable')).toEqual({ status: 'settled', outcome: 'dismissed' })
+    expect(await f.ctx.actionCards.act(f.agent, callId, 'enable')).toEqual({ status: 'refused', reason: 'unavailable' })
+    const dismissed = { callId, action: ACTION, phase: 'dismissed' }
+    expect(await f.ctx.actionCards.act(f.agent, callId, 'dismiss')).toEqual({ status: 'settled', decision: dismissed })
+    expect(await f.ctx.actionCards.act(f.agent, callId, 'enable')).toEqual({ status: 'settled', decision: dismissed })
     expect(f.manager.setBundleEnabled).not.toHaveBeenCalled()
   })
 
-  it('settles cards that were never offered or were replaced without changing the profile', async () => {
+  it('leaves a replaced card and a card proposed while messages were queued unenabled', async () => {
     const f = await fixture()
+    const first = f.propose('call-first')
+    f.agent.session.append('turn/start', { turn: 2 })
+    f.propose('call-second')
+    expect(await f.ctx.actionCards.act(f.agent, first, 'enable')).toEqual({ status: 'settled', decision: { callId: first, action: ACTION, phase: 'replaced' } })
     const message = createUserMessage({ content: [{ type: 'text', text: 'Next question.' }], source: { kind: 'user' } })
     f.agent.session.append('agent/inbox/spliced', { target: 'next-turn', start: 0, inserted: [message, message] })
-    const suppressed = f.propose('answer-1')
-    expect(await f.ctx.pluginRecommendations.act(f.agent, suppressed, 'enable')).toEqual({ status: 'settled', outcome: 'suppressed' })
-    f.agent.session.append('agent/inbox/spliced', { target: 'next-turn', start: 0, removedCount: 2, inserted: [] })
-    f.agent.session.append('turn/start', { turn: 2 })
-    const first = f.propose('answer-2')
     f.agent.session.append('turn/start', { turn: 3 })
-    f.propose('answer-3')
-    expect(await f.ctx.pluginRecommendations.act(f.agent, first, 'enable')).toEqual({ status: 'settled', outcome: 'replaced' })
+    const queued = f.propose('call-queued')
+    expect(await f.ctx.actionCards.act(f.agent, queued, 'enable')).toEqual({ status: 'settled', decision: { callId: queued, action: ACTION, phase: 'suppressed' } })
     expect(f.manager.setBundleEnabled).not.toHaveBeenCalled()
   })
 
-  it('allows a session-authorized dismissal without global profile access', async () => {
+  it('allows dismissal without global profile access but refuses enabling', async () => {
     const f = await fixture()
     f.propose()
     vi.spyOn(f.ctx.remoteAccess, 'allows').mockReturnValue(false)
-    expect(await f.ctx.pluginRecommendations.act(f.agent, callId, 'dismiss')).toEqual({ status: 'settled', outcome: 'dismissed' })
-    expect(f.manager.setBundleEnabled).not.toHaveBeenCalled()
-  })
-
-  it('refuses non-root callers and profile writes without global access', async () => {
-    const f = await fixture()
-    f.propose()
-    vi.spyOn(f.ctx.agents, 'roots').mockReturnValue([])
-    expect(await f.ctx.pluginRecommendations.act(f.agent, callId, 'enable')).toEqual({ status: 'refused', reason: 'not-live-root' })
-    vi.spyOn(f.ctx.remoteAccess, 'allows').mockReturnValue(false)
-    expect(await f.ctx.pluginRecommendations.act(f.agent, callId, 'enable')).toEqual({ status: 'refused', reason: 'access-denied' })
+    expect(await f.ctx.actionCards.act(f.agent, callId, 'enable')).toEqual({ status: 'refused', reason: 'access-denied' })
+    expect(await f.ctx.actionCards.act(f.agent, callId, 'dismiss')).toMatchObject({ status: 'settled', decision: { phase: 'dismissed' } })
     expect(f.manager.setBundleEnabled).not.toHaveBeenCalled()
   })
 
@@ -201,21 +182,20 @@ describe('official recommendations', () => {
     f.propose()
     const roots = f.ctx.agents.roots()
     vi.spyOn(f.ctx.agents, 'roots').mockReturnValueOnce(roots).mockReturnValue([])
-    expect(await f.ctx.pluginRecommendations.act(f.agent, callId, 'enable')).toEqual({ status: 'refused', reason: 'not-live-root' })
+    expect(await f.ctx.actionCards.act(f.agent, callId, 'enable')).toEqual({ status: 'refused', reason: 'not-live-root' })
     expect(f.manager.setBundleEnabled).not.toHaveBeenCalled()
   })
 
-  it('coalesces actions and releases local work when HMR must unload the consumer before applying', async () => {
+  it('coalesces actions and releases local work when HMR must unload this plugin before applying', async () => {
     const f = await fixture()
     f.propose()
     const gate = Promise.withResolvers<ChangeResult>()
     onTestFinished(() => { gate.resolve({ application: 'applied', changed: true, stage: 'enable', target: bundle.name }) })
     const entered = Promise.withResolvers<undefined>()
     f.manager.setBundleEnabled.mockImplementation(() => { entered.resolve(undefined); return gate.promise })
-    const first = f.ctx.pluginRecommendations.act(f.agent, callId, 'enable')
+    const first = f.ctx.actionCards.act(f.agent, callId, 'enable')
     await entered.promise
-    const second = f.ctx.pluginRecommendations.act(f.agent, callId, 'dismiss')
-    const service = f.ctx.pluginRecommendations
+    const second = f.ctx.actionCards.act(f.agent, callId, 'dismiss')
     await f.fiber.dispose()
     expect(await first).toEqual({ status: 'unconfirmed', reason: 'closing' })
     expect(await second).toEqual(await first)
@@ -224,17 +204,6 @@ describe('official recommendations', () => {
     await gate.promise
     expect(f.events).toHaveLength(before)
     expect(f.manager.setBundleEnabled).toHaveBeenCalledOnce()
-    expect(await service.act(f.agent, callId, 'enable')).toEqual({ status: 'refused', reason: 'closing' })
-  })
-
-  it('applies validated configuration and the schema default for direct composition', async () => {
-    expect(PluginRecommendations.Config.parse(undefined)).toEqual({ queuedMessageLimit: 2 })
-    expect(() => PluginRecommendations.Config.parse({ queuedMessageLimit: 0 })).toThrow()
-    const f = await fixture()
-    await f.fiber.dispose()
-    await f.ctx.plugin(PluginRecommendations, PluginRecommendations.Config.parse({ queuedMessageLimit: 1 }))
-    f.agent.inbox.append('next-turn', createUserMessage({ content: [{ type: 'text', text: 'Later.' }], source: { kind: 'user' } }))
-    f.propose()
-    expect(await f.ctx.pluginRecommendations.act(f.agent, callId, 'enable')).toEqual({ status: 'settled', outcome: 'suppressed' })
+    expect(await f.ctx.actionCards.act(f.agent, callId, 'enable')).toEqual({ status: 'refused', reason: 'unavailable' })
   })
 })

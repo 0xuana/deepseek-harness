@@ -25,7 +25,7 @@ Users see an optional action card below a completed answer: its title, a brief t
 <a id="use-this-package"></a>
 ## Use this package
 
-Enable the [Personalized pages bundle](../creation-recommendations/README.md), which inserts this package beside its [Host service](../action-cards/README.md). This browser contribution has no configuration fields.
+Enable the [Personalized pages](../creation-recommendations/README.md) or [Plugin recommendations](../plugin-recommendations/README.md) bundle; each inserts this package beside its [Host service](../action-cards/README.md). This browser contribution has no configuration fields.
 
 ### Register a card body
 
@@ -59,7 +59,7 @@ A `tool.call.toolview` entry keyed `propose_action` renders the process row from
 ## Further Exploration
 
 - [Action cards](../action-cards/README.md) — the tool, card state and user actions behind the frame.
-- [Personalized page cards](../client-ui-creation-recommendations/README.md) — the shipped card body.
+- [Personalized page cards](../client-ui-creation-recommendations/README.md) and [recommendation cards](../client-ui-plugin-recommendations/README.md) — the shipped card bodies.
 - [Slots](../../client/ui-slots/README.md) — Turn tail and tool row registration.
 
 <a id="model-experience"></a>

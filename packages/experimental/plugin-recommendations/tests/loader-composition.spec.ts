@@ -1,4 +1,4 @@
-/** Profile files, Loader, HMR, AgentLoop and skills are real; only model output is scripted. */
+/** Profile files, Loader, HMR, AgentLoop, skills and the card service are real; only model output is scripted. */
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -12,14 +12,15 @@ import Sessions, { SessionId } from '@deepseek-ai/dsh-session'
 import Projections from '@deepseek-ai/dsh-session-projection'
 import Agents from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import Llm, { LlmAdapter, ToolCallId, createUserMessage, type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import Llm, { LlmAdapter, createUserMessage, type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import Tools from '@deepseek-ai/dsh-tools'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import Skills from '@deepseek-ai/dsh-skill'
 import Access from '@deepseek-ai/dsh-api-remote-access'
+import * as ActionCards from '@deepseek-ai/dsh-experimental-action-cards'
 import * as Recommendations from '../src/index.ts'
-import { answer } from './fixture.ts'
+import { ACTION, logProposal } from './fixture.ts'
 
 class Model extends LlmAdapter {
   readonly requests: GenerateOptions[] = []
@@ -32,7 +33,7 @@ class Model extends LlmAdapter {
   }
 }
 
-it.each(['normal', 'consumer-unload'] as const)('enables through the real Loader/HMR queue: %s', async (scenario) => {
+it.each(['normal', 'consumer-unload', 'shared-rows'] as const)('enables through the real Loader/HMR queue: %s', async (scenario) => {
   const home = await mkdtemp(join(tmpdir(), 'dsh-recommendations-'))
   let owner: Context | undefined
   onTestFinished(async () => { await owner?.fiber.dispose(); await rm(home, { recursive: true, force: true }) })
@@ -40,7 +41,8 @@ it.each(['normal', 'consumer-unload'] as const)('enables through the real Loader
   const anchor = join(home, 'package.json')
   const name = '@deepseek-ai/dsh-experimental-session-search'
   await writeFile(anchor, JSON.stringify({ name: 'installation', dependencies: { [name]: '1.0.0' } }))
-  initProfile(dir, ['fixture-base'])
+  // The Personalized pages bundle inserts the same card-service row; the Loader keeps one entry for the id.
+  initProfile(dir, scenario === 'shared-rows' ? ['fixture-base', 'fixture-pages'] : ['fixture-base'])
   async function bundle(root: string, name: string, patch: string) {
     const path = join(root, 'node_modules', name)
     await mkdir(path, { recursive: true })
@@ -52,6 +54,7 @@ it.each(['normal', 'consumer-unload'] as const)('enables through the real Loader
     return path
   }
   await bundle(dir, 'fixture-base', await readFile(new URL('./fixtures/cordis.yml', import.meta.url), 'utf8'))
+  await bundle(dir, 'fixture-pages', JSON.stringify([{ insert: [{ id: 'action-cards', name: 'cordis:actionCards' }] }]))
   const plugin = await bundle(home, name, JSON.stringify([{ insert: [{ id: 'recommendation-probe', name: './plugin.mjs' }] }]))
   await writeFile(join(plugin, 'plugin.mjs'), 'export function apply(ctx) { ctx.provide("recommendationProbe", true) }\n')
   await writeFile(join(dir, 'cordis.yml'), '[]\n')
@@ -66,18 +69,18 @@ it.each(['normal', 'consumer-unload'] as const)('enables through the real Loader
     ctx.provide('appReady', { onReady: (listener) => { listener(); return () => {} } })
     Object.assign(ctx.loader.builtins, {
       sessions: Sessions, projections: Projections, llm: Llm, prompt: SystemPrompt, tools: Tools,
-      executor: NativeToolExecutor, skills: Skills,
-      agents: Agents, loop: AgentLoop, access: Access, manager: PluginManager, recommendations: Recommendations,
+      executor: NativeToolExecutor, skills: Skills, agents: Agents, loop: AgentLoop, access: Access, manager: PluginManager,
+      actionCards: ActionCards, recommendations: Recommendations,
     })
   })
   await ctx.plugin(Timer)
   await ctx.plugin(Hmr, { root: [], ignored: [], debounce: 0 })
   await ctx.hmr.runExclusive(async () => {})
+  expect([...ctx.loader.entries()].filter(entry => entry.options.id === 'action-cards')).toHaveLength(1)
   const model = new Model()
   ctx.llm.registerAdapter(['mock'], model)
   const agent = await ctx.agentLoop.create(SessionId('recommendation-live'), { provider: 'mock', model: 'test' })
-  const callId = ToolCallId('block:recommend-live')
-  agent.session.append('assistant/message', answer('recommend-live', [{ action: 'enable_official_plugin', name, reason: 'Search saved conversations' }]), { surfaceOp: 'append' })
+  const callId = logProposal(ctx, agent, 'call-live', { title: 'Session search', brief: 'Search saved conversations', details: { name } })
   expect((await ctx.skills.list()).map(skill => skill.name)).toContain('official-plugins')
   expect(readProfileManifest('test', dir).dsh?.profile?.bundles).not.toContain(name)
   if (scenario === 'consumer-unload') {
@@ -93,7 +96,7 @@ it.each(['normal', 'consumer-unload'] as const)('enables through the real Loader
     })
     await entered.promise
     const exclusive = vi.spyOn(ctx.hmr, 'runExclusive')
-    const action = ctx.pluginRecommendations.act(agent, callId, 'enable')
+    const action = ctx.actionCards.act(agent, callId, 'enable')
     await vi.waitFor(() => { expect(exclusive).toHaveBeenCalledOnce() })
     release.resolve(undefined)
     await reload
@@ -106,18 +109,17 @@ it.each(['normal', 'consumer-unload'] as const)('enables through the real Loader
     expect(model.requests).toHaveLength(0)
     return
   }
-  expect(await ctx.pluginRecommendations.act(agent, callId, 'enable')).toEqual({ status: 'settled', outcome: 'applied' })
+  const enabled = { callId, action: ACTION, phase: 'enabled' }
+  expect(await ctx.actionCards.act(agent, callId, 'enable')).toEqual({ status: 'settled', decision: enabled })
   expect(readProfileManifest('test', dir).dsh?.profile?.bundles).toContain(name)
   expect([...ctx.loader.entries()].find(entry => entry.options.id === 'recommendation-probe')?.fiber).toBeDefined()
   expect((await ctx.pluginManager.listBundles()).find(bundle => bundle.name === name)?.enabled).toBe(true)
   // The outcome reaches the model with the next request; enabling starts no turn by itself.
   expect(agent.status).toBe('idle')
   expect(model.requests).toHaveLength(0)
-  expect(ctx.sessionProjections.snapshot(agent.session).values.pluginRecommendations).toEqual({
-    decisions: { [callId]: 'applied' }, proposals: { [callId]: { callId, name, reason: 'Search saved conversations', turn: 0 } },
-  })
+  expect(ctx.actionCards.view(agent.session).decisions[callId]).toEqual(enabled)
   agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Thanks.' }], source: { kind: 'user' } }))
   await agent.whenIdle()
   expect(model.requests).toHaveLength(1)
-  expect(JSON.stringify(model.requests[0]?.messages)).toContain('Latest official plugin card status')
+  expect(JSON.stringify(model.requests[0]?.messages)).toContain('enabled means the plugin is on now')
 })

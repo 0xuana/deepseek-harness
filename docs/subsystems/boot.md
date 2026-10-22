@@ -404,27 +404,16 @@ Source: [`packages/boot/plugin-market/src/index.ts`](../../packages/boot/plugin-
 
 ### `ctx.pluginRecommendations` — `PluginRecommendations`
 
-Internal Remote and effect owner assembled by the plugin-recommendation feature.
+Catalog lookups for card text and the enabling behind the `enable_official_plugin` card.
 
 ```ts cordis-catalog
 /**
- * Read the current catalog text for a logged proposal's card.
+ * Read the current catalog text for a logged card.
  * @param agent - Exact live root resolved by the Gateway from the Session id.
- * @param callId - Proposal id from the answer block, never a package supplied by the browser.
- * @returns the plugin's title, description and selection, or a refusal when the block names no available official plugin.
+ * @param callId - The card's `propose_action` call id, never a package supplied by the browser.
+ * @returns the plugin's title, description and selection, or a refusal when the card names no available official plugin.
  */
 @Remote async describe(agent: Agent, callId: ToolCallId): Promise<RecommendationDetails>
-
-/**
- * Decide one logged recommendation. Concurrent actions on the same card share
- * one operation; a settled success or dismissal never enables twice. Failed
- * activation remains retryable. Profile selection survives session disposal.
- * @param agent - Exact live root resolved by the Gateway from the Session id.
- * @param callId - Proposal id from the answer block, never a package supplied by the browser.
- * @param action - Human choice.
- * @returns An observed outcome, a refusal before mutation, or an unconfirmed result if reload interrupts the wait.
- */
-@Remote act(agent: Agent, callId: ToolCallId, action: 'enable' | 'dismiss'): Promise<RecommendationActionResult>
 ```
 
 Types: [Agent](core.md) · [ToolCallId](core.md)

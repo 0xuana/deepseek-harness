@@ -23,5 +23,7 @@
       name: cordis:access
     - id: manager
       name: cordis:manager
+    - id: action-cards
+      name: cordis:actionCards
     - id: recommendations
       name: cordis:recommendations

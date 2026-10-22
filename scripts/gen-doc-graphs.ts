@@ -121,7 +121,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Explicit-need plugin recommendations',
     mode: 'service',
     consumers: ['experimental-client-ui-plugin-recommendations'],
-    note: 'Offers official catalog entries and records explicit user activation through the profile plugin manager.',
+    note: 'Reads the current catalog text of an official plugin card and enables the plugin through the profile plugin manager after a click.',
   },
   {
     key: 'headlessStartup',
