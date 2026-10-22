@@ -850,15 +850,19 @@ describe('pressure measurement and retention', () => {
     expect(await compactIfNeeded(compact, retained)).toBeNull()
   })
 
-  it('uses one unified measurement for each pressure-and-retention decision', async () => {
+  it('preserves history when a pressure summary fails', async () => {
     const ctx = createContext()
     const compact = service(compactConfig, ctx)
-    const measure = vi.spyOn(ctx.tokenMeter, 'measure')
-    const stop = new Error('stop after first decision')
-    vi.spyOn(compact, 'compactRegion').mockRejectedValueOnce(stop)
+    const session = conversation(4)
+    const originalNodes = [...session.surface.nodes]
+    const stop = new Error('summary failed')
+    compact.error = stop
 
-    await expect(compactIfNeeded(compact, conversation(4))).rejects.toBe(stop)
-    expect(measure).toHaveBeenCalledTimes(1)
+    await expect(compactIfNeeded(compact, session)).rejects.toBe(stop)
+    expect(compact.calls).toHaveLength(1)
+    expect(session.surface.nodes).toEqual(originalNodes)
+    expect(session.snapshotEvents().filter(event => event.type === 'compaction/summary')).toEqual([])
+    expect(session.snapshotEvents().at(-1)).toMatchObject({ type: 'compaction/end', data: { error: 'summary failed' } })
   })
 
   it('bounds retries when a shrinking checkpoint remains above threshold', async () => {

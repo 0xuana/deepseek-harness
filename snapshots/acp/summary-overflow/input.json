@@ -1,0 +1,67 @@
+{
+  "steps": [
+    {
+      "op": "initialize"
+    },
+    {
+      "op": "newSession"
+    },
+    {
+      "op": "promptContent",
+      "content": [
+        {
+          "type": "text",
+          "text": "First group: inspect these three reference screenshots and acknowledge receipt."
+        },
+        {
+          "type": "image",
+          "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC",
+          "mimeType": "image/png"
+        },
+        {
+          "type": "image",
+          "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC",
+          "mimeType": "image/png"
+        },
+        {
+          "type": "image",
+          "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC",
+          "mimeType": "image/png"
+        }
+      ]
+    },
+    {
+      "op": "promptContent",
+      "content": [
+        {
+          "type": "text",
+          "text": "Second group: inspect these three reference screenshots and acknowledge receipt."
+        },
+        {
+          "type": "image",
+          "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC",
+          "mimeType": "image/png"
+        },
+        {
+          "type": "image",
+          "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC",
+          "mimeType": "image/png"
+        },
+        {
+          "type": "image",
+          "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC",
+          "mimeType": "image/png"
+        }
+      ]
+    },
+    {
+      "op": "promptContent",
+      "content": [
+        {
+          "type": "text",
+          "text": "Now reply with exactly the single word DONE."
+        }
+      ]
+    }
+  ]
+}

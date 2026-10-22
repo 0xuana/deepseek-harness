@@ -41,6 +41,11 @@ const controllerCases: readonly {
     hasModelTurn: true,
     configPath: join(corpusDir, 'image-compaction', 'cordis.yml'),
   },
+  {
+    name: 'summary-overflow',
+    hasModelTurn: true,
+    configPath: join(corpusDir, 'summary-overflow', 'cordis.yml'),
+  },
 ] as const
 
 function localScenarioSource(source: string | undefined): string | undefined {
