@@ -286,7 +286,7 @@ describe('Chat inject API', () => {
     ])
     injected.forkAt(17)
     expect(track).toHaveBeenLastCalledWith('branch_session_click', { session_id: ROOT, parent_session_id: ROOT, parent_message_id: 'reply', click_position: 'footer' })
-    // A rejected branch is reported on this Session's composer; the page adds no retry of its own.
+    // A rejected branch leaves the source view unchanged, as on master; the page adds no retry.
     vi.spyOn(b.uiWorkspace, 'forkSession').mockRejectedValueOnce(new Error('fork failed'))
     injected.forkAt(18)
     await vi.waitFor(() => {
