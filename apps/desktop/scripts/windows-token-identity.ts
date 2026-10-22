@@ -81,7 +81,7 @@ export function windowsTokenIdentityFailure(result: Exclude<WindowsTokenIdentity
     'provider-unavailable': 'The configured eToken provider is unavailable; check the SafeNet driver.',
     'container-unavailable': 'The configured container could not be opened; after replacing the UKey, check its container name and visibility.',
     'certificate-mismatch': 'The returned container public keys do not match the configured certificate; check the certificate and container after replacing the UKey.',
-    unknown: 'The container public identity could not be confirmed; check that PowerShell 7 (pwsh) can start, device visibility and SafeNet public-information support.',
+    unknown: 'The container public identity could not be confirmed; check that PowerShell 7 (pwsh) can start, then check device visibility and SafeNet public-information support.',
   }
   return `${reasons[result]} No PIN was supplied and no signing was attempted by this check. Signing stopped; device lock and PIN retry counts are unknown.`
 }

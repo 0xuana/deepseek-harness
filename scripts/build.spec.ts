@@ -11,8 +11,8 @@ const artifactGraph = {
   'host-src': ['native', 'host-typert'],
   'host-bundle': ['host-src'],
   'desktop-bundle': ['host-bundle'],
-  'client-src': ['host-src'],
-  'client-bundle': ['desktop-bundle', 'client-src'],
+  'client-src': ['desktop-bundle'],
+  'client-bundle': ['client-src'],
   'web': ['client-bundle'],
 }
 
@@ -60,7 +60,7 @@ describe('repository build CLI', () => {
 })
 
 describe('repository build steps', () => {
-  it('overlaps Client compilation with Host bundling while ordering bundle writers', () => {
+  it('finishes Host and Desktop readers before Client compilation rewrites shared outputs', () => {
     expect(graph(buildGates(root, 'artifacts'))).toEqual(artifactGraph)
   })
 

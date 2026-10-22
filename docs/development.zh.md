@@ -78,7 +78,7 @@ Host 与 Client 保持两个 aggregate program，是因为两侧在相同键下�
 
 拆分 Host/Client tsconfig 的包有六个：`api/remotes`、`api/gateway`、`api/session-controller`、`api/workspace-controller`、`client/connection` 与 `session-query/session-log-export`。`api/remotes` 的 Host 入口进入 Host Typert 图，而 Client 入口导入生成的 `/remote` 声明；`session-log-export` 则让 Node archive 生产代码不进入浏览器 controller。每个拆分包根 `tsconfig.json` 因此只作为 solution，两个 aggregate 和直接消费方分别引用 `tsconfig.host.json` 或 `tsconfig.client.json`。workspace `constraints` 门禁遍历可达的 Project Reference 图，并按各引用 project 自身的 compiler face 检查：只有单一配置的目标可由任一 face 引用，拆分配置的目标则必须引用匹配的 leaf，不得引用 solution 根或另一侧 leaf；该门禁按「两个 leaf 配置同时存在」自动发现拆分包，所以新拆分的包会自动纳入管辖。[`api-remotes` README](../packages/api/remotes/README.zh.md) 与 [`session-log-export` README](../packages/session-query/session-log-export/README.zh.md)分别说明其拆分。
 
-`pnpm run build:artifacts` 产出全部产物，只检查并编译各 compiler face 的包 reference。Client 编译在 Host 编译完成后启动，与 Host 和 Desktop 打包并行；Client 打包等待 Client 编译和 Desktop 打包均完成。等价的串行顺序为：
+`pnpm run build:artifacts` 产出全部产物，只检查并编译各 compiler face 的包 reference。Client 编译等待 Host 和 Desktop 打包完成：拆分 compiler face 会重写这些打包步骤读取的共享 `lib/types` 文件。Client 打包在 Client 编译后执行。产物步骤顺序为：
 
 ```sh
 pnpm run build:native-system
