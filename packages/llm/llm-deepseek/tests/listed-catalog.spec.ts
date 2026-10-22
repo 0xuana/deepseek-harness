@@ -29,7 +29,7 @@ describe('without a listing', () => {
   it('offers the bundled catalog', () => {
     const catalog = resolve(undefined)
     expect(catalog.offered.map(model => [model.id, model.name, model.contextWindow])).toEqual([
-      ['deepseek-flash', 'DeepSeek-V4.1-Flash', 1_000_000], ['deepseek-v4-pro', 'DeepSeek-V4-Pro', 1_000_000],
+      ['deepseek-flash', 'DeepSeek-V4.1-Flash', 1_048_576], ['deepseek-v4-pro', 'DeepSeek-V4-Pro', 1_048_576],
     ])
     expect(catalog.resolution).toEqual(catalog.offered)
     expect(catalog.refusals.size).toBe(0)
@@ -57,7 +57,7 @@ describe('with a listing', () => {
 
   it('keeps this build\'s values for fields a listing omits', () => {
     const [pro] = resolve([{ id: 'deepseek-v4-pro', api_capabilities: { anthropic_messages: {} } }]).offered
-    expect(pro).toMatchObject({ name: 'DeepSeek-V4-Pro', contextWindow: 1_000_000, inputModalities: ['text'] })
+    expect(pro).toMatchObject({ name: 'DeepSeek-V4-Pro', contextWindow: 1_048_576, inputModalities: ['text'] })
     expect(pro).not.toHaveProperty('maxTokens')
   })
 
