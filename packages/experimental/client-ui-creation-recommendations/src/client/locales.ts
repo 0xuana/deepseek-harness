@@ -15,6 +15,7 @@ export const en = {
   customLabel: 'Where should it appear?',
   customPlaceholder: 'For example, a left sidebar entry that opens a full-page calendar',
   create: 'Create', starting: 'Starting…', dismiss: 'Not now', retry: 'Create again', keep: 'Keep', undo: 'Undo',
+  restore: 'Restore', restoring: 'Restoring…',
   scope: 'You can remove it at any time',
   dismissed: 'Dismissed', replaced: 'Replaced', suppressed: 'Not offered', creating: 'Creating in the background',
   cancel: 'Cancel creation', cancelling: 'Cancelling…', installing: 'Installing…',
@@ -35,6 +36,7 @@ export const en = {
   'not-live-root': 'Open the original conversation to use this card.',
   closing: 'The creation plugin is stopping. Try again after it reloads.',
   'read-only': 'This Session is read-only. Switch the permission preset to create pages.',
+  'source-missing': 'The page files are gone. Ask for a new proposal.',
 }
 
 /** Keys shared by both dictionaries. */
@@ -57,6 +59,7 @@ export const zh: Record<RecommendationKey, string> = {
   customLabel: '你希望放在哪里？',
   customPlaceholder: '例如：在左侧加一个入口，打开全屏日历',
   create: '创建', starting: '开始创建…', dismiss: '暂不需要', retry: '重新创建', keep: '保留', undo: '撤销',
+  restore: '恢复', restoring: '恢复中…',
   scope: '可随时移除',
   dismissed: '已忽略', replaced: '已替换', suppressed: '未展示', creating: '正在后台创建',
   cancel: '取消创建', cancelling: '正在取消…', installing: '正在安装…',
@@ -75,6 +78,7 @@ export const zh: Record<RecommendationKey, string> = {
   'not-live-root': '请打开原会话后使用这张卡片',
   closing: '创建插件正在停止，请等待重新加载后再试',
   'read-only': '当前会话为只读模式，创建页面需要切换权限预设',
+  'source-missing': '页面文件已不在，需要重新提案',
 }
 
 /** Japanese creation and recovery copy. */
@@ -94,6 +98,7 @@ export const ja: Record<RecommendationKey, string> = {
   customLabel: 'どこに表示しますか？',
   customPlaceholder: '例：左サイドバーに全画面カレンダーを開く項目を追加',
   create: '作成', starting: '開始しています…', dismiss: '今はしない', retry: '再作成', keep: '保持', undo: '元に戻す',
+  restore: '復元', restoring: '復元中…',
   scope: 'いつでも削除できます',
   dismissed: '却下済み', replaced: '置き換え済み', suppressed: '非表示', creating: 'バックグラウンドで作成中',
   cancel: '作成をキャンセル', cancelling: 'キャンセルしています…', installing: 'インストール中…',
@@ -114,4 +119,5 @@ export const ja: Record<RecommendationKey, string> = {
   'not-live-root': 'このカードを使うには元の会話を開いてください。',
   closing: '作成プラグインが停止中です。再読み込み後に再試行してください。',
   'read-only': 'このセッションは読み取り専用です。ページを作成するには権限プリセットを切り替えてください。',
+  'source-missing': 'ページのファイルが見つかりません。新しい提案を依頼してください。',
 }

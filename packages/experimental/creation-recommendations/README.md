@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-For an explicit interface request, a clear implied viewing or editing need, or a result with concrete continuing use, the Agent answers first and may offer one optional creation card at the completed Turn’s end. Explicit requests can serve a single task. The user can change the suggested location, then choose Create. A background Creator builds a new plugin and installs it into the profile. Keep confirms retention; Undo removes that plugin.
+For an explicit interface request, a clear implied viewing or editing need, or a result with concrete continuing use, the Agent answers first and may offer one optional creation card at the completed Turn’s end. Explicit requests can serve a single task. The user can change the suggested location, then choose Create. A background Creator builds a new plugin and installs it into the profile. Keep confirms retention; Undo removes that plugin, and Restore reinstalls it.
 
 ## Table of Contents
 
@@ -48,6 +48,8 @@ For multiple independent needs, guidance selects one page proposal for the answe
 The card appears after the Turn whose answer carries the block ends. An unstarted proposal stays available across later human messages, including follow-ups about its plan. The next proposal in the same conversation replaces it: the old card shows Replaced without creation controls, and the Host refuses its stale clicks, so one unstarted card exists per conversation. Refreshing, switching views and background notices do not change a card. Already-started work keeps its progress and retry controls. Replacement is derived from the later proposal, not a new persisted decision record. While the user has queued `queuedMessageLimit` or more messages for later turns, a proposal written in the current turn is logged but never offered.
 
 Creation requires a live root conversation, permission to modify the profile, and a Session sandbox mode other than read-only: the Creator inherits that mode, so a read-only Session refuses Create and leaves the card unstarted. Cancel is available during generation; retry waits for the child’s cleanup. Once installation starts, the card shows Installing and lets the accepted operation finish. Closing or leaving the conversation does not uninstall a completed plugin. Receipts survive reconnects; interrupted or uncertain runs are reconciled with the installed bundle before retry. Failed removal preserves the existing receipt and its application outcome for retry. Unloading this recommendation bundle stops its Creator work and local follow-up. Plugin Manager owns accepted profile changes and may finish after reload; reopening checks the installed profile before retrying. Installed plugins remain. Recovery confirms installation only; it does not infer runtime activation from the profile’s enabled flag.
+
+Undo uninstalls the plugin and keeps its files. On the removed card, Restore validates the retained profile copy again and reinstalls it without running the Creator; it needs the same live root conversation and profile permission as Create. If that copy is missing or fails validation, Restore is refused and a new proposal is needed.
 
 The next naturally occurring model request receives the latest unreported status for each changed card. Status updates never wake the conversation or authorize another action. The Session projection acknowledges delivery only after the status context is logged, so cancellation, reload and reopen retain undelivered updates. Several background transitions before a request collapse to the latest receipt.
 
@@ -109,7 +111,7 @@ Skill contents and proposal metadata append to the transcript; loading the skill
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Only new plugins are supported; editing existing plugins and restoring old versions are deferred.
+- Only new plugins are supported; editing existing plugins is deferred. Restore reinstalls only the profile copy named by the card’s receipt; there is no version history.
 - Intent recognition depends on model semantics. Guidance does not enforce tool choice or factual grounding: the Agent can still inspect files unnecessarily or infer capabilities absent from the catalog. Generated code runs with the existing Creator permissions; package validation is not a code sandbox.
 - Source directories and profile copies remain after success, failure, cancellation and Undo. Undo removes the installed plugin and its UI, not these files. The card identifies `.dsh-created-plugins/` in the original workspace as the source location. Historical receipts do not continuously track manual plugin changes.
 

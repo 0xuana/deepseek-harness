@@ -149,7 +149,7 @@ it('disables pending decisions, labels only a pending Create as starting, and su
   expect(screen.getByRole('button', { name: '创建' }).hasAttribute('disabled')).toBe(false)
 })
 
-it.each(['installing', 'dismissed', 'removed', 'replaced'] as const)('restores %s without repeat actions', (phase) => {
+it.each(['installing', 'dismissed', 'replaced'] as const)('restores %s without repeat actions', (phase) => {
   render(<RecommendationCard {...props({ callId, phase, slot: 'sidebar-left' }, false)} />)
   expect(screen.getByRole('status').textContent).toBe(en[phase])
   expect(screen.getAllByRole('button')).toEqual([screen.getByRole('button', { name: en.creationInfo })])
@@ -216,6 +216,25 @@ it('retains installed and kept plugins with an Undo action and the actual applic
   expect(screen.getByText(zh['restart-required'])).toBeTruthy()
   fireEvent.click(screen.getByRole('button', { name: '撤销' }))
   await waitFor(() => { expect(kept.act).toHaveBeenCalledWith(callId, 'undo', 'page', undefined) })
+})
+
+it('offers only Restore on a removed card, labels it while pending and explains missing page files', async () => {
+  const value = props({ callId, phase: 'removed', slot: 'page', bundleName: '@dsh-local/view-fixture', application: 'applied' })
+  const pending = Promise.withResolvers<Awaited<ReturnType<Props['act']>>>()
+  value.act = vi.fn(() => pending.promise)
+  render(<RecommendationCard {...value} />)
+  expect(screen.getByRole('status').textContent).toBe(zh.removed)
+  const restore = screen.getByRole('button', { name: zh.restore })
+  expect(screen.getAllByRole('button')).toEqual([screen.getByRole('button', { name: zh.creationInfo }), restore])
+  expect(screen.queryByRole('button', { name: zh.undo })).toBeNull()
+  expect(screen.queryByRole('button', { name: zh.keep })).toBeNull()
+  expect(restore.closest('footer')).not.toBeNull()
+  fireEvent.click(restore)
+  expect(value.act).toHaveBeenCalledExactlyOnceWith(callId, 'restore', 'page', undefined)
+  expect(screen.getByRole('button', { name: zh.restoring }).hasAttribute('disabled')).toBe(true)
+  await act(async () => { pending.resolve({ status: 'refused', reason: 'source-missing' }) })
+  expect(screen.getByRole('alert').textContent).toBe(zh['source-missing'])
+  expect(screen.getByRole('button', { name: zh.restore }).hasAttribute('disabled')).toBe(false)
 })
 
 it.each([

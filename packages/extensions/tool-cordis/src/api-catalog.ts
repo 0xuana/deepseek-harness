@@ -844,9 +844,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Internal Remote and effect owner assembled by the personalized-pages plugin.',
     methods: [
       {
-        signature: '@Remote act(agent: Agent, callId: ToolCallId, action: \'create\' | \'dismiss\' | \'keep\' | \'undo\' | \'cancel\', slot: CreationSlot, customLocation?: string): Promise<CreationActionResult>',
+        signature: '@Remote act(agent: Agent, callId: ToolCallId, action: \'create\' | \'dismiss\' | \'keep\' | \'undo\' | \'cancel\' | \'restore\', slot: CreationSlot, customLocation?: string): Promise<CreationActionResult>',
         description: 'Apply a human decision to a logged proposal.',
-        parameters: [{ name: 'agent', description: 'Live root resolved from the displayed session.' }, { name: 'callId', description: 'Logged proposal id.' }, { name: 'action', description: 'Create, cancel generation, dismiss, confirm retention, or remove the owned bundle.' }, { name: 'slot', description: 'Location chosen by the user when creating or dismissing.' }, { name: 'customLocation', description: 'Omitted: use slot. Present: Creator resolves this human-authored placement instead.' }],
+        parameters: [{ name: 'agent', description: 'Live root resolved from the displayed session.' }, { name: 'callId', description: 'Logged proposal id.' }, { name: 'action', description: 'Create, cancel generation, dismiss, confirm retention, remove the owned bundle, or reinstall its retained profile copy.' }, { name: 'slot', description: 'Location chosen by the user when creating or dismissing.' }, { name: 'customLocation', description: 'Omitted: use slot. Present: Creator resolves this human-authored placement instead.' }],
         returns: 'acceptance for background work, a durable receipt, or a refusal.',
       },
     ],
@@ -5472,7 +5472,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CreationActionResult',
-    declaration: 'export type CreationActionResult = {\n    readonly status: \'accepted\';\n} | {\n    readonly status: \'settled\';\n    readonly decision: CreationCardState;\n} | {\n    readonly status: \'refused\';\n    readonly reason: \'unknown\' | \'access-denied\' | \'not-live-root\' | \'closing\' | \'unavailable\' | \'invalid-location\' | \'read-only\';\n} | {\n    readonly status: \'unconfirmed\';\n    readonly reason: \'closing\';\n};',
+    declaration: 'export type CreationActionResult = {\n    readonly status: \'accepted\';\n} | {\n    readonly status: \'settled\';\n    readonly decision: CreationCardState;\n} | {\n    readonly status: \'refused\';\n    readonly reason: \'unknown\' | \'access-denied\' | \'not-live-root\' | \'closing\' | \'unavailable\' | \'invalid-location\' | \'read-only\' | \'source-missing\';\n} | {\n    readonly status: \'unconfirmed\';\n    readonly reason: \'closing\';\n};',
   },
   {
     name: 'CreationCardState',

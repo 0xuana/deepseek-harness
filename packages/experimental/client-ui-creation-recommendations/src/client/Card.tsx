@@ -1,4 +1,4 @@
-/** Completed-answer creation card with location selection and undo. */
+/** Completed-answer creation card with location selection, undo and restore. */
 import { useId, useMemo, useState } from 'react'
 import { Button, IconChevronDownOutlineRegular, IconWarningTriangleOutlineRegular, Menu, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -13,7 +13,7 @@ import css from './Card.module.css'
 
 /** Session-bound user actions; installation paths remain Host-owned. */
 export interface CardInjected {
-  act: (callId: ToolCallId, action: 'create' | 'dismiss' | 'keep' | 'undo' | 'cancel', slot: CreationSlot, customLocation?: string) => Promise<CreationActionResult | undefined>
+  act: (callId: ToolCallId, action: 'create' | 'dismiss' | 'keep' | 'undo' | 'cancel' | 'restore', slot: CreationSlot, customLocation?: string) => Promise<CreationActionResult | undefined>
   hooks: { infoDismissed: ObservableSnapshot<boolean> }
   dismissInfo: () => void
 }
@@ -91,7 +91,7 @@ export function RecommendationTail({ turn, ...props }: Pick<PropsRuntime<'conver
 }
 /* jscpd:ignore-end */
 
-/** Display creation, persistent installation, and reversible removal.
+/** Display creation, persistent installation, reversible removal and restoration.
  * @param props - Proposal, receipts and human actions.
  * @returns the creation card.
  */
@@ -186,6 +186,11 @@ export function RecommendationCard({ recommendation, useProjection, act, useInfo
         <div className={css.actions}>
           <Button variant="ghost" size="sm" disabled={busy} onClick={() => { void run('undo') }}>{t('undo')}</Button>
           {decision.phase !== 'kept' && <Button variant="primary" size="sm" disabled={busy} onClick={() => { void run('keep') }}>{t('keep')}</Button>}
+        </div>
+      </footer>}
+      {decision?.phase === 'removed' && <footer className={css.footer}>
+        <div className={css.actions}>
+          <Button variant="primary" size="sm" disabled={busy} onClick={() => { void run('restore') }}>{t(pending === 'restore' ? 'restoring' : 'restore')}</Button>
         </div>
       </footer>}
     </div>

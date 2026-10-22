@@ -44,7 +44,7 @@ export interface CreationView {
 export type CreationActionResult =
   | { readonly status: 'accepted' }
   | { readonly status: 'settled'; readonly decision: CreationCardState }
-  | { readonly status: 'refused'; readonly reason: 'unknown' | 'access-denied' | 'not-live-root' | 'closing' | 'unavailable' | 'invalid-location' | 'read-only' }
+  | { readonly status: 'refused'; readonly reason: 'unknown' | 'access-denied' | 'not-live-root' | 'closing' | 'unavailable' | 'invalid-location' | 'read-only' | 'source-missing' }
   | { readonly status: 'unconfirmed'; readonly reason: 'closing' }
 
 declare module '@deepseek-ai/dsh-llm' {
