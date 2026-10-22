@@ -35,7 +35,7 @@ export const zh = {
   'column.model.title': '步开始到收到完整回复（含首 token 延迟）',
   'column.tps': '输出速度',
   'column.tps.title': '输出词数 ÷ 生成秒数（TPS，tok/s）',
-  'column.tool': '工具调用用时',
+  'column.tool': '工具用时',
   'column.tool.title': '该步内每次工具调用到拿到结果的耗时之和；还没有结果的调用不计',
   'column.time': '总用时',
   'column.time.title': '总用时拆分：浅蓝 首 token、蓝 生成、橙 工具调用、灰 其余。条长按平方根刻度，步只和同一轮的步比，轮只和轮比',
