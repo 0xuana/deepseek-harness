@@ -1,9 +1,10 @@
 /** Catalog resolution: version gating, this build's model knowledge, and model overrides. */
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_REQUEST_IMAGE_MAX_BYTES, resolveAdapterOptions } from '@deepseek-ai/dsh-llm-deepseek'
-import type { ModelOverride } from '../src/config.ts'
+import { resolveAdapterOptions } from '../src/config.ts'
+import { resolveListedCatalog } from '../src/listed-catalog.ts'
+import type { ModelOverride } from '../src/listed-catalog.ts'
 import { parseModelListing } from '../src/listing.ts'
-import { resolveAccountCatalog } from '../src/resolve-catalog.ts'
+import { DEFAULT_REQUEST_IMAGE_MAX_BYTES } from '../src/request-pricing.ts'
 
 const FLASH = {
   id: 'deepseek-flash', name: 'DeepSeek-V4.1-Flash', context_window: 1_048_576, max_output_tokens: 393_216,
@@ -16,7 +17,7 @@ const PRO = {
   api_capabilities: { anthropic_messages: { system_prompt_update: 'leading-only' } },
 }
 const requires = (version: unknown) => ({ client_requirements: { 'deepseek-harness': { min_version: version } } })
-const resolve = (rows: object[] | undefined, overrides: Record<string, ModelOverride> = {}) => resolveAccountCatalog({
+const resolve = (rows: object[] | undefined, overrides: Record<string, ModelOverride> = {}) => resolveListedCatalog({
   listing: rows === undefined ? undefined : parseModelListing({ data: rows }).entries,
   supported: resolveAdapterOptions({}).models,
   overrides,
@@ -136,7 +137,7 @@ describe('with a listing', () => {
     expect(catalog.offered[0]).not.toHaveProperty('imageMaxBytes')
     expect(catalog.overrideErrors).toEqual([
       expect.stringMatching(/^modelOverrides\.deepseek-v4-pro does not apply \(.*cannot declare image request limits/),
-      'modelOverrides names "retired", which neither the account listing nor the built-in catalog describes',
+      'modelOverrides names "retired", which neither the model listing nor the built-in catalog describes',
     ])
   })
 })

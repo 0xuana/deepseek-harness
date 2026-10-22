@@ -7,7 +7,7 @@ import { deadline } from '@deepseek-ai/dsh-timeout'
 import { LISTING_TIMEOUT, parseModelListing, requestModelListing } from '../src/listing.ts'
 import type { ListedCapabilities } from '../src/listing.ts'
 
-/** The account listing the service returned on 2026-09-24. */
+/** The listing the service returned to an account token on 2026-09-24. */
 const LISTING = {
   object: 'list',
   data: [
