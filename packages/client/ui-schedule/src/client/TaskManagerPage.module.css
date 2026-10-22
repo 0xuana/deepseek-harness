@@ -149,11 +149,36 @@
    neutral hairline, the 10px radius, and the mock's `--muted` leading icon. The
    mock brightens the border on hover and takes the brand stroke on focus
    rather than drawing a ring around the control. */
-.searchField {
+.searchTools {
+  --task-search-height: 36px;
   display: flex;
   align-items: center;
-  height: 36px;
-  margin: 0 0 16px;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.catalogActions {
+  flex: none;
+}
+
+.catalogMore {
+  width: var(--task-search-height);
+  height: var(--task-search-height);
+  padding: 0;
+}
+
+.catalogMore[aria-expanded='true'] {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.searchField {
+  box-sizing: border-box;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  height: var(--task-search-height);
+  margin: 0;
   padding: 0 10px;
   border: 0.5px solid var(--dsw-alias-border-l3);
   border-radius: 12px;

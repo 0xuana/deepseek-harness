@@ -2,7 +2,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
-  Button, IconClockOutlineRegular, IconCloseOutlineRegular, IconPlusOutlineRegular, IconSearchOutlineRegular, Input, Modal,
+  Button, IconClockOutlineRegular, IconCloseOutlineRegular, IconEllipsisOutlineRegular, IconPlusOutlineRegular,
+  IconSearchOutlineRegular, IconTrashOutlineRegular, Input, Menu, Modal, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
@@ -57,6 +58,7 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active')
   const [selectedId, setSelectedId] = useState<ScheduleId | null>(null)
   const [clearConfirm, setClearConfirm] = useState(false)
+  const [clearMenu, setClearMenu] = useState(false)
   const [clearing, setClearing] = useState(false)
   // The rows state how long remains, so they read the shared ticking clock
   // rather than a value sampled at mount: a catalog refresh can move the target
@@ -184,22 +186,12 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
             <div className={css.pageHeading}>
               <h1 ref={headingRef} tabIndex={-1}>{t('title')}</h1>
               <div className={css.creationActions}>
-                {endedCount > 0 && <Button
-                  ref={clearTriggerRef}
-                  variant="ghost"
-                  size="sm"
-                  className={css.headerAction}
-                  onClick={() => {
-                    clearFocusPending.current = true
-                    setClearConfirm(true)
-                  }}
-                >{t('clear.action')}</Button>}
                 <Button variant="primary" size="sm" className={css.headerAction} icon={<IconPlusOutlineRegular size={13} />} onClick={onNewTask}>{t('new.action')}</Button>
               </div>
             </div>
             <div className={css.filters}>
               <div className={css.filterTabs} role="group" aria-label={t('statusFilter.label')}>
-                {(['all', 'active', 'inactive'] as const).map(value => (
+                {(['active', 'inactive', 'all'] as const).map(value => (
                   <button
                     key={value}
                     type="button"
@@ -212,18 +204,50 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
                 ))}
               </div>
             </div>
-            <div className={css.searchField}>
-              <Input
-                type="search"
-                icon={<IconSearchOutlineRegular />}
-                aria-label={t('search.label')}
-                placeholder={t('search.placeholder')}
-                value={search}
-                onChange={(event) => { setSearch(event.target.value) }}
-              />
-              {search !== '' && <Button size="sm" className={css.searchClear} aria-label={t('search.clear')} onClick={() => { setSearch('') }}>
-                <IconCloseOutlineRegular />
-              </Button>}
+            <div className={css.searchTools}>
+              <div className={css.searchField}>
+                <Input
+                  type="search"
+                  icon={<IconSearchOutlineRegular />}
+                  aria-label={t('search.label')}
+                  placeholder={t('search.placeholder')}
+                  value={search}
+                  onChange={(event) => { setSearch(event.target.value) }}
+                />
+                {search !== '' && <Button size="sm" className={css.searchClear} aria-label={t('search.clear')} onClick={() => { setSearch('') }}>
+                  <IconCloseOutlineRegular />
+                </Button>}
+              </div>
+              {statusFilter !== 'active' && endedCount > 0 && <Menu
+                open={clearMenu}
+                onClose={() => { setClearMenu(false) }}
+                align="end"
+                portal
+                items={[{
+                  id: 'clear-inactive', label: t(clearing ? 'clear.pending' : 'clear.action'),
+                  icon: <IconTrashOutlineRegular />, danger: true,
+                  disabled: clearing || status !== 'ready',
+                }]}
+                onSelect={() => {
+                  setClearMenu(false)
+                  clearFocusPending.current = true
+                  setClearConfirm(true)
+                }}
+                anchor={<Tooltip label={t('list.more')} side="bottom" portal disabled={clearMenu}>
+                  <Button
+                    ref={clearTriggerRef}
+                    variant="outline"
+                    className={css.catalogMore}
+                    aria-label={t('list.more')}
+                    aria-haspopup="menu"
+                    aria-expanded={clearMenu}
+                    aria-busy={clearing}
+                    onClick={() => { setClearMenu(value => !value) }}
+                  >
+                    <IconEllipsisOutlineRegular />
+                  </Button>
+                </Tooltip>}
+              />}
             </div>
             <div className={css.list}>
               {selected === undefined && <CatalogFeedback status={status} populated={rows.length > 0} onRetry={onRetry} t={t} />}
@@ -289,7 +313,7 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
         className={css.confirmDialog as string}
         contentClassName={css.confirmContent as string}
         open={clearConfirm}
-        title={t('clear.title')}
+        title={t('clear.title', { count: endedCount })}
         description={t('clear.description')}
         closeLabel={t('clear.close')}
         // Dismissal waits for the settled removal: the confirmation is the only
@@ -308,9 +332,8 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
             {t(clearing ? 'clear.pending' : 'clear.confirm')}
           </Button>
         </div>}
-      >
-        <p className={css.confirmTitle}>{t(endedCount === 1 ? 'clear.count.one' : 'clear.count.other', { count: endedCount })}</p>
-      </Modal>
+      />
+
     </section>
   )
 }
