@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Mercados de plugins personalizados",
+    "description": "Adiciona uma guia Descobrir aos plug-ins para navegar e instalar pacotes de índices de mercado de plug-ins que você adiciona.",
+    "detail": "docs/DETAIL.md"
+  }
+}

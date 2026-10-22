@@ -34,7 +34,7 @@ export function readInstallerLocales(directory = defaultDirectory) {
     return { id: name.slice(0, -5), nsisLanguage: resource.nsisLanguage, strings,
       uninstaller: dictionary('uninstaller' in resource ? resource.uninstaller : undefined) }
   })
-  for (const id of ['en_US', 'zh_CN', 'ja_JP']) {
+  for (const id of ['en_US', 'zh_CN', 'ja_JP', 'es_ES', 'fr_FR', 'de_DE', 'ru_RU', 'pt_BR']) {
     if (!locales.some(locale => locale.id === id)) throw new Error(`installer locales: missing ${id}.json`)
   }
   const english = locales.find(locale => locale.id === 'en_US')
@@ -49,8 +49,8 @@ export function readInstallerLocales(directory = defaultDirectory) {
       const actual = locale[field]
       if (Object.keys(expected).sort().join(',') !== Object.keys(actual).sort().join(',')) throw new Error(`${locale.id}: ${field} keys differ from English`)
       for (const [key, text] of Object.entries(expected)) {
-        const placeholders = (/** @type {string} */ value) => (value.match(/%.?/gu) ?? []).join(',')
-        if (placeholders(text) !== placeholders(actual[key])) throw new Error(`${locale.id}: ${key} changes format placeholders`)
+        const placeholders = (/** @type {string} */ value) => (value.match(/%.?|(?<![A-Za-z0-9/])\/[A-Z][A-Z_]*(?:=[\w-]+)?/gu) ?? []).join(',')
+        if (placeholders(text) !== placeholders(actual[key])) throw new Error(`${locale.id}: ${key} changes format placeholders or commands`)
       }
     }
   }

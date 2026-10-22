@@ -8,7 +8,7 @@ import { readInstallerLocales, renderInstallerStrings } from '../scripts/install
 function fixture(): string {
   const directory = mkdtempSync(join(tmpdir(), 'dsh-installer-locales-'))
   onTestFinished(() => { rmSync(directory, { recursive: true, force: true }) })
-  for (const id of ['en_US', 'zh_CN', 'ja_JP']) {
+  for (const id of ['en_US', 'zh_CN', 'ja_JP', 'es_ES', 'fr_FR', 'de_DE', 'ru_RU', 'pt_BR']) {
     writeFileSync(join(directory, `${id}.json`), readFileSync(new URL(`../installer/locales/${id}.json`, import.meta.url)))
   }
   return directory
@@ -16,17 +16,17 @@ function fixture(): string {
 
 it('generates Japanese NSIS strings from the same files that select packaged languages', () => {
   const locales = readInstallerLocales()
-  expect(locales.map(locale => locale.id)).toEqual(['en_US', 'ja_JP', 'zh_CN'])
+  expect(locales.map(locale => locale.id)).toEqual(['de_DE', 'en_US', 'es_ES', 'fr_FR', 'ja_JP', 'pt_BR', 'ru_RU', 'zh_CN'])
   const source = renderInstallerStrings(locales)
   expect(source).toContain('LangString INSTALLER_INSTALL ${LANG_JAPANESE} "今すぐインストール"')
   expect(source).toContain('LangString INSTALLER_NATIVE_PROGRESS ${LANG_JAPANESE} "インストールを準備しています… %d%%"')
   expect(source).toContain('!ifdef LANG_JAPANESE\n')
-  expect(source.match(/^LangString /gmu)).toHaveLength(93)
+  expect(source.match(/^LangString /gmu)).toHaveLength(248)
   const japanese = locales.filter(locale => locale.id === 'ja_JP')
   expect(renderInstallerStrings(japanese)).not.toContain('${LANG_ENGLISH}')
 })
 
-it.each(['en_US', 'zh_CN', 'ja_JP'])('rejects a missing %s configuration', (id) => {
+it.each(['en_US', 'zh_CN', 'ja_JP', 'es_ES', 'fr_FR', 'de_DE', 'ru_RU', 'pt_BR'])('rejects a missing %s configuration', (id) => {
   const directory = fixture()
   rmSync(join(directory, `${id}.json`))
   expect(() => readInstallerLocales(directory)).toThrow(`missing ${id}.json`)
@@ -39,6 +39,7 @@ it.each([
   ['changed placeholder', (resource: ReturnType<typeof readInstallerLocales>[number]) => { resource.strings.INSTALLER_NATIVE_PROGRESS = '%s%%' }, 'format placeholders'],
   ['missing percent escape', (resource: ReturnType<typeof readInstallerLocales>[number]) => { resource.strings.INSTALLER_NATIVE_PROGRESS = '%d%' }, 'format placeholders'],
   ['extra format specifier', (resource: ReturnType<typeof readInstallerLocales>[number]) => { resource.strings.INSTALLER_NATIVE_PROGRESS = '%d%% %q' }, 'format placeholders'],
+  ['translated command', (resource: ReturnType<typeof readInstallerLocales>[number]) => { resource.strings.INSTALLER_THEME_ERROR = 'Use /THEME=claro.' }, 'format placeholders'],
   ['duplicate language', (resource: ReturnType<typeof readInstallerLocales>[number]) => { resource.nsisLanguage = 'ENGLISH' }, 'duplicate NSIS language'],
   ['invalid compiler token', (resource: ReturnType<typeof readInstallerLocales>[number]) => { resource.nsisLanguage = 'JA\n!error' }, 'invalid NSIS language'],
 ])('rejects %s', (_name, mutate, diagnostic) => {
