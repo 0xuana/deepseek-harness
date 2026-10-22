@@ -1,0 +1,67 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/action-cards/README.md
+/:
+  en: 1a68a7a733a2676d
+  zh: 01f72eb61a0626b7
+/deepseek-ai-dsh-experimental-action-cards:
+  en: e57ce09e58e6fabc
+  zh: 8a727dbd6f925363
+/deepseek-ai-dsh-experimental-action-cards/summary:
+  en: 7621088773d073f4
+  zh: 57674e6dcee15997
+/deepseek-ai-dsh-experimental-action-cards/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: b00dddf4c88f0a45
+/deepseek-ai-dsh-experimental-action-cards/use-this-package:
+  en: e64653a62247236d
+  zh: d035f7cf50071696
+/deepseek-ai-dsh-experimental-action-cards/use-this-package/register-a-card-kind:
+  en: a1414c3cfa8e204f
+  zh: 90eb7a7010972743
+/deepseek-ai-dsh-experimental-action-cards/use-this-package/card-rules:
+  en: d37be4e928e6fa00
+  zh: 5d3eb834c2509707
+/deepseek-ai-dsh-experimental-action-cards/understand-the-implementation:
+  en: 5640f0436038aefc
+  zh: 5ebb181d81ad2c7e
+/deepseek-ai-dsh-experimental-action-cards/further-exploration:
+  en: db407bb756ee5641
+  zh: af5d25f4f2351ee6
+/deepseek-ai-dsh-experimental-action-cards/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-experimental-action-cards/model-experience/card-tool:
+  en: 4925bc5f7153825a
+  zh: 3a7bfb2210d9c6aa
+/deepseek-ai-dsh-experimental-action-cards/model-experience/card-tool/what-the-model-sees:
+  en: 04e06f15a53041b0
+  zh: b17c3c707c96c086
+/deepseek-ai-dsh-experimental-action-cards/model-experience/card-tool/token-effect:
+  en: f9c78daaf64cf38e
+  zh: 2908740f9bc3bc9c
+/deepseek-ai-dsh-experimental-action-cards/model-experience/card-tool/kv-cache-effect:
+  en: d4192e35d47b5fa3
+  zh: c786828e123de657
+/deepseek-ai-dsh-experimental-action-cards/model-experience/card-status-notice:
+  en: 407ebca5eb94992e
+  zh: 779819ea83974103
+/deepseek-ai-dsh-experimental-action-cards/model-experience/card-status-notice/what-the-model-sees:
+  en: a14013ca3ddb5ee3
+  zh: 18cd7ffc62fd6590
+/deepseek-ai-dsh-experimental-action-cards/model-experience/card-status-notice/what-the-model-sees/notice-preamble:
+  en: 04dd9469bfaff052
+  zh: 35110b231b8e3928
+/deepseek-ai-dsh-experimental-action-cards/model-experience/card-status-notice/token-effect:
+  en: 4e73a2cff60b5e88
+  zh: 4887212815e7425d
+/deepseek-ai-dsh-experimental-action-cards/model-experience/card-status-notice/kv-cache-effect:
+  en: 58785543e2428dba
+  zh: 4b082f77b3b2f482
+/deepseek-ai-dsh-experimental-action-cards/known-limitations-and-deferred-work:
+  en: a8b122edac907461
+  zh: d1003e2830e410c1
+/deepseek-ai-dsh-experimental-action-cards/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: bd8a8936229e035e

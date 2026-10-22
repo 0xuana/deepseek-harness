@@ -1,4 +1,4 @@
-- region "Personalized pages":
+- region "Counter":
   - text: Personalized pages
   - button "How creation works and token usage" [expanded]
   - note:
@@ -8,7 +8,7 @@
     - paragraph: Click Create to start in the background. You can keep chatting here.
   - strong: Counter
   - paragraph: "Need: Keep a small counter visible across conversations. Location: A card titled Today’s achievements in the right sidebar. Controls: Increment and reset buttons beside the current value. Storage: Save changes in browser storage across navigation and refresh.…"
-  - button "View full plan"
+  - button "Show more"
   - text: Add to
   - 'button "Add to: Right sidebar"': Right sidebar
   - button "Not now"

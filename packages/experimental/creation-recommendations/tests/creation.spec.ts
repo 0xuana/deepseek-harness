@@ -1,18 +1,22 @@
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
-import { appendPluginRecord, SessionId } from '@deepseek-ai/dsh-session'
+import { SessionId } from '@deepseek-ai/dsh-session'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { ChangeResult } from '@deepseek-ai/dsh-plugin-manager/types'
 import * as CreationRecommendations from '../src/index.ts'
-import { fixture, callId, proposal, installedBundle, writeBundle } from './fixture.ts'
-import type { CreationSlot, CreationView } from '../src/types.ts'
+import { ACTION, fixture, callId, proposal, installedBundle, recordCard, writeBundle } from './fixture.ts'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
+/** The Remote result for a recorded page decision. */
+function settled(phase: string, data: object) {
+  return { status: 'settled', decision: { callId, action: ACTION, phase, data } }
+}
+
 describe('interface creation', () => {
-  it('loads page planning with a live duplicate-check catalog and withdraws it on unload', async () => {
+  it('loads page planning with a live duplicate-check catalog and withdraws the skill and card kind on unload', async () => {
     const f = await fixture()
     f.bundles.push(
       { ...installedBundle('enabled'), official: true, meta: { title: 'Existing view', description: 'Inspect current work' } },
@@ -21,9 +25,7 @@ describe('interface creation', () => {
       { ...installedBundle('localized'), official: true, meta: { title: { en: 'Counter', zh: '计数器' }, description: { en: 'Count tasks', zh: '统计任务' } } },
       installedBundle('third-party'),
     )
-    expect(f.ctx.tools.get('list_official_plugins')).toBeUndefined()
     expect(f.ctx.tools.get('plugin_manager')).toBeUndefined()
-    expect(f.ctx.tools.get('list_creation_plugins')).toBeUndefined()
     expect(await f.ctx.skills.list()).toMatchSnapshot('skill discovery')
     expect(f.manager.listBundles).not.toHaveBeenCalled()
     const result = await executeToolFixture(f.ctx, { name: 'skill', arguments: { name: 'personalized-pages' }, agent: f.agent,
@@ -38,20 +40,20 @@ describe('interface creation', () => {
     await expect(f.ctx.skills.get('personalized-pages', { signal: controller.signal })).rejects.toThrow()
     expect(f.manager.installBundle).not.toHaveBeenCalled()
     expect(f.startActivation).not.toHaveBeenCalled()
+    await f.propose()
     await f.fiber.dispose()
-    expect(f.ctx.tools.get('list_creation_plugins')).toBeUndefined()
-    expect(f.ctx.get('creationRecommendations')).toBeUndefined()
     expect(await f.ctx.skills.list()).toEqual([])
+    expect(await f.act('create')).toEqual({ status: 'refused', reason: 'unavailable' })
   })
 
   it('requires a logged proposal and explicit user creation, then reuses Creator with the chosen location', async () => {
     const f = await fixture()
-    expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')).toEqual({ status: 'refused', reason: 'unknown' })
+    expect(await f.act('create')).toEqual({ status: 'refused', reason: 'unknown' })
     await f.propose()
     expect(f.startActivation).not.toHaveBeenCalled()
-    expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'keep', 'page')).toEqual({ status: 'refused', reason: 'unavailable' })
-    expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')).toEqual({ status: 'accepted' })
-    expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')).toEqual({ status: 'accepted' })
+    expect(await f.act('keep')).toEqual({ status: 'refused', reason: 'unavailable' })
+    expect(await f.act('create')).toEqual({ status: 'accepted' })
+    expect(await f.act('create')).toEqual({ status: 'accepted' })
     const spec = await f.complete()
     expect(spec).toMatchObject({ provider: 'spawn', delivery: 'caller', request: { agentPreset: 'cordis' } })
     expect(spec.request.parent).toBe(f.agent)
@@ -71,21 +73,21 @@ describe('interface creation', () => {
     expect(f.manager.removeBundle).not.toHaveBeenCalled()
     await f.ctx.plugin(CreationRecommendations)
     expect(f.current()?.phase).toBe('installed')
-    expect((await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')).status).toBe('settled')
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'keep', 'page')
+    expect((await f.act('create')).status).toBe('settled')
+    await f.act('keep')
     expect(f.current()?.phase).toBe('kept')
     expect(f.manager.removeBundle).not.toHaveBeenCalled()
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'undo', 'page')
+    await f.act('undo')
     expect(f.manager.removeBundle).toHaveBeenCalledExactlyOnceWith(f.current()?.bundleName)
     expect(f.current()?.phase).toBe('removed')
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'undo', 'page')
+    await f.act('undo')
     expect(f.manager.removeBundle).toHaveBeenCalledOnce()
   })
 
   it('passes the user-selected left entry to Creator with only its location reference', async () => {
     const f = await fixture()
     await f.propose()
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'sidebar-left')
+    await f.act('create', 'sidebar-left')
     const spec = await f.complete()
     const instructions: unknown = JSON.parse(spec.request.prompt.find(block => block.type === 'text')!.text)
     expect(instructions).toMatchObject({ location: 'sidebar-left', uiReference: fileURLToPath(import.meta.resolve('@deepseek-ai/dsh-experimental-creation-recommendations/references/sidebar-entry.md')),
@@ -93,7 +95,7 @@ describe('interface creation', () => {
     })
     expect(f.current()).toMatchObject({ phase: 'installed', slot: 'sidebar-left' })
     const source = await readFile(join(spec.request.cwd!, 'package.json'), 'utf8')
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'undo', 'sidebar-left')
+    await f.act('undo')
     expect(f.current()?.phase).toBe('removed')
     expect(await readFile(join(spec.request.cwd!, 'package.json'), 'utf8')).toBe(source)
   })
@@ -101,11 +103,11 @@ describe('interface creation', () => {
   it('retains actual task content separately from the short plan and hands it to Creator after reload', async () => {
     const f = await fixture()
     const initialContent = '| 项目 | 负责人 | 状态 |\n| A | 小李 | 未开始 |\n| B | 小王 | 进行中 |\n| C | 小陈 | 已完成 |'
-    await f.propose('creation-1', { ...proposal, initialContent })
+    await f.propose('call-creation-1', { ...proposal, details: { ...proposal.details, initialContent } })
     expect(f.startActivation).not.toHaveBeenCalled()
     await f.fiber.dispose()
     await f.ctx.plugin(CreationRecommendations)
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'sidebar-left')
+    await f.act('create', 'sidebar-left')
     const spec = await f.complete()
     const prompt: unknown = JSON.parse(spec.request.prompt.find(block => block.type === 'text')!.text)
     expect(prompt).toMatchObject({ brief: proposal.brief, initialContent, location: 'sidebar-left' })
@@ -121,11 +123,11 @@ describe('interface creation', () => {
   it('uses the profile workspace when an accepted Session has no recorded working directory', async () => {
     const f = await fixture()
     const handle = await f.ctx.agents.create({ sessionId: SessionId('without-cwd') })
-    await f.propose('creation-1', proposal, handle.agent)
-    await f.ctx.creationRecommendations.act(handle.agent, callId, 'create', 'sidebar-right')
+    await f.propose('call-creation-1', proposal, handle.agent)
+    await f.act('create', 'sidebar-right', undefined, handle.agent)
     const spec = await f.entered.promise
     expect(spec.request.cwd!.startsWith(join(f.ctx.profileContext.cwd, '.dsh-created-plugins'))).toBe(true)
-    await f.ctx.creationRecommendations.act(handle.agent, callId, 'cancel', 'sidebar-right')
+    await f.act('cancel', 'sidebar-right', undefined, handle.agent)
     expect(f.manager.installBundle).not.toHaveBeenCalled()
   })
 
@@ -133,10 +135,11 @@ describe('interface creation', () => {
     const f = await fixture()
     await f.propose()
     for (const invalid of ['', '  ', 'x'.repeat(1001)]) {
-      expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page', invalid)).toEqual({ status: 'refused', reason: 'invalid-location' })
+      expect(await f.act('create', 'page', invalid)).toEqual({ status: 'refused', reason: 'invalid-location' })
     }
+    expect(await f.ctx.actionCards.act(f.agent, callId, 'create')).toEqual({ status: 'refused', reason: 'invalid-location' })
     expect(f.startActivation).not.toHaveBeenCalled()
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page', '  左侧入口打开全屏日历  ')
+    await f.act('create', 'page', '  左侧入口打开全屏日历  ')
     const spec = await f.complete()
     const instructions: unknown = JSON.parse(spec.request.prompt.find(block => block.type === 'text')!.text)
     const references = ['sidebar-right.md', 'session-tab.md', 'sidebar-entry.md'].map(file =>
@@ -146,18 +149,18 @@ describe('interface creation', () => {
     expect(instructions).not.toHaveProperty('uiReference')
     for (const reference of references) expect(await readFile(reference, 'utf8')).toMatch(/^# /)
     expect(f.current()).toMatchObject({ phase: 'installed', customLocation: '左侧入口打开全屏日历' })
-    appendPluginRecord(f.agent.session, 'plugin:creation-recommendations/decision', { ...f.current()!, phase: 'interrupted' })
+    recordCard(f.agent.session, { ...f.current()!, phase: 'interrupted' })
     await f.fiber.dispose()
     await f.ctx.plugin(CreationRecommendations)
     expect(f.current()?.customLocation).toBe('左侧入口打开全屏日历')
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'undo', 'page')
+    await f.act('undo')
     expect(f.current()).toMatchObject({ phase: 'removed', customLocation: '左侧入口打开全屏日历' })
   })
 
   it.each(['', '右侧查看当前会话'])('allows dismissing a custom location without creation: %s', async (customLocation) => {
     const f = await fixture()
     await f.propose()
-    expect((await f.ctx.creationRecommendations.act(f.agent, callId, 'dismiss', 'page', customLocation)).status).toBe('settled')
+    expect((await f.act('dismiss', 'page', customLocation)).status).toBe('settled')
     expect(f.current()?.phase).toBe('dismissed')
     expect(f.current()?.customLocation).toBe(customLocation === '' ? undefined : customLocation)
     expect(f.startActivation).not.toHaveBeenCalled()
@@ -166,8 +169,8 @@ describe('interface creation', () => {
   it('cancels generation, drains its child, preserves source and permits a fresh retry', async () => {
     const f = await fixture()
     await f.propose()
-    expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'cancel', 'page')).toEqual({ status: 'refused', reason: 'unavailable' })
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')
+    expect(await f.act('cancel')).toEqual({ status: 'refused', reason: 'unavailable' })
+    await f.act('create')
     const spec = await f.entered.promise
     const firstName = f.current()!.bundleName!
     await writeBundle(spec.request.cwd!, firstName)
@@ -175,23 +178,23 @@ describe('interface creation', () => {
     onTestFinished(() => { cleanup.resolve(undefined) })
     f.dispose.mockImplementation(async () => { f.result.resolve({ output: [], stopReason: 'aborted' }); await cleanup.promise })
     const access = vi.spyOn(f.ctx.remoteAccess, 'allows').mockReturnValue(false)
-    const cancelling = f.ctx.creationRecommendations.act(f.agent, callId, 'cancel', 'page')
+    const cancelling = f.act('cancel')
     await vi.waitFor(() => { expect(spec.signal.aborted).toBe(true) })
     access.mockRestore()
-    expect(f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')).toBe(cancelling)
+    expect(f.act('create')).toBe(cancelling)
     expect(f.current()?.phase).toBe('creating')
     expect(f.manager.installBundle).not.toHaveBeenCalled()
     cleanup.resolve(undefined)
     expect(await cancelling).toEqual({ status: 'accepted' })
     expect(f.current()?.phase).toBe('cancelled')
     expect(await readFile(join(spec.request.cwd!, 'package.json'), 'utf8')).toContain(firstName)
-    expect((await f.ctx.creationRecommendations.act(f.agent, callId, 'cancel', 'page')).status).toBe('settled')
+    expect((await f.act('cancel')).status).toBe('settled')
     f.startActivation.mockImplementationOnce(async (retry) => {
       await writeBundle(retry.request.cwd!, f.current()!.bundleName!)
       return { childId: retry.childId!, result: Promise.resolve({ output: [], stopReason: 'completed', structured: { ready: true } }),
         dispose: vi.fn(async () => {}) }
     })
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')
+    await f.act('create')
     await vi.waitFor(() => { expect(f.current()?.phase).toBe('installed') })
     expect(f.current()?.bundleName).not.toBe(firstName)
     expect(f.startActivation).toHaveBeenCalledTimes(2)
@@ -205,14 +208,14 @@ describe('interface creation', () => {
     const gate = Promise.withResolvers<ChangeResult>()
     onTestFinished(() => { gate.resolve({ application: 'failed', changed: false, stage: 'install', target: 'fixture' }) })
     f.manager.installBundle.mockImplementation(() => { installing.resolve(undefined); return gate.promise })
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')
+    await f.act('create')
     const spec = await f.entered.promise
     const name = f.current()!.bundleName!
     await writeBundle(spec.request.cwd!, name)
     f.result.resolve({ output: [], stopReason: 'completed', structured: { ready: true } })
     await installing.promise
     expect(f.current()?.phase).toBe('installing')
-    expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'cancel', 'page')).toEqual({ status: 'accepted' })
+    expect(await f.act('cancel')).toEqual({ status: 'accepted' })
     expect(spec.signal.aborted).toBe(false)
     f.bundles.push(installedBundle(name))
     gate.resolve({ application: 'applied', changed: true, stage: 'install', target: name })
@@ -223,85 +226,90 @@ describe('interface creation', () => {
   it('coalesces rapid clicks without creating twice, and dismisses durably', async () => {
     const f = await fixture()
     await f.propose()
-    const one = f.ctx.creationRecommendations.act(f.agent, callId, 'dismiss', 'page')
-    const two = f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')
+    const one = f.act('dismiss')
+    const two = f.act('create')
     expect(two).toBe(one)
-    expect(await one).toMatchObject({ status: 'settled', decision: { phase: 'dismissed', slot: 'page' } })
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')
+    expect(await one).toEqual(settled('dismissed', { slot: 'page' }))
+    await f.act('create')
     expect(f.startActivation).not.toHaveBeenCalled()
   })
 
-  it('ignores blank proposals, keeps one card per turn, and refuses non-root or unauthorized clicks', async () => {
+  it('refuses clicks from non-root or unauthorized connections', async () => {
     const f = await fixture()
-    for (const [index, args] of [{ ...proposal, title: ' ' }, { ...proposal, brief: ' ' }].entries()) {
-      const failed = await f.propose('failed-' + String(index), args)
-      expect(f.state().view.proposals[failed]).toBeUndefined()
-    }
     await f.propose()
-    const second = await f.propose('second')
-    expect(f.state().view.proposals[second]).toBeUndefined()
-    f.agent.session.append('turn/start', { turn: 2 })
-    const nextTurn = await f.propose('next-turn')
-    expect(f.state().view.proposals[nextTurn]).toBeDefined()
-    vi.spyOn(f.ctx.agents, 'roots').mockReturnValue([])
-    expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')).toEqual({ status: 'refused', reason: 'not-live-root' })
+    const roots = vi.spyOn(f.ctx.agents, 'roots').mockReturnValue([])
+    expect(await f.act('create')).toEqual({ status: 'refused', reason: 'not-live-root' })
+    roots.mockRestore()
     vi.spyOn(f.ctx.remoteAccess, 'allows').mockReturnValue(false)
-    expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')).toEqual({ status: 'refused', reason: 'access-denied' })
+    expect(await f.act('create')).toEqual({ status: 'refused', reason: 'access-denied' })
+    expect(await f.act('restore')).toEqual({ status: 'refused', reason: 'access-denied' })
+    expect(f.startActivation).not.toHaveBeenCalled()
   })
 
   it('returns a typed invalid-location refusal and falls back for invalid dismissal locations', async () => {
     const f = await fixture()
     await f.propose()
-    const invalid = 'unknown-location' as CreationSlot
-    expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'create', invalid)).toEqual({ status: 'refused', reason: 'invalid-location' })
+    expect(await f.act('create', 'unknown-location')).toEqual({ status: 'refused', reason: 'invalid-location' })
     vi.spyOn(f.ctx.remoteAccess, 'allows').mockReturnValue(false)
-    expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'dismiss', invalid)).toMatchObject({ status: 'settled', decision: { slot: proposal.slot } })
+    expect(await f.act('dismiss', 'unknown-location', '   ')).toEqual(settled('dismissed', { slot: proposal.details.slot }))
     expect(f.startActivation).not.toHaveBeenCalled()
   })
 
   it('keeps a Session usable when profile recovery fails, and checks again before any retry', async () => {
     const f = await fixture({ callId, phase: 'creating', slot: 'page', bundleName: '@dsh-local/recover' })
     await f.propose()
-    appendPluginRecord(f.agent.session, 'plugin:creation-recommendations/decision', { callId: ToolCallId('other-kept'), phase: 'kept', slot: 'page', bundleName: '@dsh-local/kept' })
+    recordCard(f.agent.session, { callId: ToolCallId('other-kept'), phase: 'kept', slot: 'page', bundleName: '@dsh-local/kept' })
     await f.fiber.dispose()
     f.manager.listBundles.mockRejectedValue(new Error('profile read failed'))
     await f.ctx.plugin(CreationRecommendations)
     expect(f.current()?.phase).toBe('unconfirmed')
-    expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')).toEqual({ status: 'refused', reason: 'unavailable' })
+    expect(await f.act('create')).toEqual({ status: 'refused', reason: 'unavailable' })
     expect(f.startActivation).not.toHaveBeenCalled()
     f.manager.listBundles.mockResolvedValue([installedBundle('@dsh-local/recover')])
-    expect((await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')).status).toBe('settled')
+    expect((await f.act('create')).status).toBe('settled')
     expect(f.current()?.phase).toBe('installed')
   })
 
   it('keeps unsuccessful uninstall outcomes visible and permits retry only for the owned bundle', async () => {
     const f = await fixture()
     await f.propose()
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')
+    await f.act('create')
     await f.complete()
     const owned = f.current()!.bundleName!
     f.manager.removeBundle.mockResolvedValueOnce({ application: 'restart-required', changed: true, stage: 'remove', target: owned })
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'undo', 'page')
+    await f.act('undo')
     expect(f.current()).toMatchObject({ phase: 'installed', application: 'restart-required' })
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'undo', 'page')
+    await f.act('undo')
     expect(f.current()?.phase).toBe('removed')
   })
 
   it('settles an already removed plugin without another removal and refuses incomplete old receipts', async () => {
     const f = await fixture()
     await f.propose()
-    appendPluginRecord(f.agent.session, 'plugin:creation-recommendations/decision', { callId, phase: 'installed', slot: 'page' })
-    expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'undo', 'page')).toEqual({ status: 'refused', reason: 'unavailable' })
-    appendPluginRecord(f.agent.session, 'plugin:creation-recommendations/decision', { callId, phase: 'installed', slot: 'page', bundleName: '@dsh-local/removed' })
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'undo', 'page')
+    recordCard(f.agent.session, { callId, phase: 'installed', slot: 'page' })
+    expect(await f.act('undo')).toEqual({ status: 'refused', reason: 'unavailable' })
+    recordCard(f.agent.session, { callId, phase: 'installed', slot: 'page', bundleName: '@dsh-local/removed' })
+    await f.act('undo')
     expect(f.current()?.phase).toBe('removed')
     expect(f.manager.removeBundle).not.toHaveBeenCalled()
+  })
+
+  it('ignores page receipts whose data no longer validates and decisions of other kinds', async () => {
+    const f = await fixture()
+    await f.propose()
+    const other = { callId: ToolCallId('other-card'), action: 'other_action', phase: 'creating', data: { slot: 'page', bundleName: '@dsh-local/other' } }
+    f.ctx.actionCards.record(f.agent, other)
+    f.ctx.actionCards.record(f.agent, { callId, action: ACTION, phase: 'installed', data: { slot: 'elsewhere' } })
+    expect(await f.act('keep')).toEqual({ status: 'refused', reason: 'unavailable' })
+    f.ctx.actionCards.record(f.agent, { callId, action: ACTION, phase: 'installed' })
+    expect(await f.act('create')).toEqual({ status: 'accepted' })
+    expect(f.ctx.actionCards.view(f.agent.session).decisions['other-card']).toEqual(other)
   })
 
   it.each(['error', 'completed'] as const)('does not install an incomplete %s Creator result', async (stopReason) => {
     const f = await fixture()
     await f.propose()
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')
+    await f.act('create')
     await f.entered.promise
     f.result.resolve({ output: [], stopReason, structured: { ready: false } })
     await vi.waitFor(() => { expect(f.current()?.phase).toBe('failed') })
@@ -311,7 +319,7 @@ describe('interface creation', () => {
   it('does not install generated files when Creator ends without a completion receipt', async () => {
     const f = await fixture()
     await f.propose()
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')
+    await f.act('create')
     const spec = await f.entered.promise
     await writeBundle(spec.request.cwd!, f.current()!.bundleName!)
     f.result.resolve({ output: [], stopReason: 'completed' })
@@ -323,9 +331,9 @@ describe('interface creation', () => {
   it('reconciles an interrupted receipt with the installed profile before retrying', async () => {
     const f = await fixture()
     await f.propose()
-    appendPluginRecord(f.agent.session, 'plugin:creation-recommendations/decision', { callId, phase: 'interrupted', slot: 'page', bundleName: '@dsh-local/recovered' })
+    recordCard(f.agent.session, { callId, phase: 'interrupted', slot: 'page', bundleName: '@dsh-local/recovered' })
     f.bundles.push(installedBundle('@dsh-local/recovered'))
-    expect((await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')).status).toBe('settled')
+    expect((await f.act('create')).status).toBe('settled')
     expect(f.current()?.phase).toBe('installed')
     expect(f.current()?.application).toBeUndefined()
     expect(f.startActivation).not.toHaveBeenCalled()
@@ -343,22 +351,21 @@ describe('interface creation', () => {
   it('aborts owned children on unload and waits for their cleanup without uninstalling anything', async () => {
     const f = await fixture()
     await f.propose()
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')
+    await f.act('create')
     const spec = await f.entered.promise
-    const service = f.ctx.creationRecommendations
     await f.fiber.dispose()
     expect(spec.signal.aborted).toBe(true)
     expect(f.dispose).toHaveBeenCalledOnce()
     expect(f.current()?.phase).toBe('interrupted')
     expect(f.manager.installBundle).not.toHaveBeenCalled()
     expect(f.manager.removeBundle).not.toHaveBeenCalled()
-    expect(await service.act(f.agent, callId, 'create', 'page')).toEqual({ status: 'refused', reason: 'closing' })
+    expect(await f.act('create')).toEqual({ status: 'refused', reason: 'unavailable' })
   })
 
   it('blocks Creator profile mutations while leaving reads and unrelated agents usable', async () => {
     const f = await fixture()
     await f.propose()
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')
+    await f.act('create')
     const spec = await f.entered.promise
     const child = await f.harness.create(spec.childId!)
     f.ctx.tools.register(defineTool({ name: 'plugin_manager', description: 'fixture', parameters: { action: { type: 'string', required: true } },
@@ -383,27 +390,17 @@ describe('interface creation', () => {
     expect((await run('install', lineage.agent)).isError).toBe(false)
   })
 
-  it('treats inherited object member names as unknown proposals and logs nothing for them', async () => {
-    const f = await fixture()
-    await f.propose()
-    const logged = f.events.length
-    expect(await f.ctx.creationRecommendations.act(f.agent, ToolCallId('toString'), 'dismiss', 'page')).toEqual({ status: 'refused', reason: 'unknown' })
-    expect(await f.ctx.creationRecommendations.act(f.agent, ToolCallId('constructor'), 'create', 'page')).toEqual({ status: 'refused', reason: 'unknown' })
-    expect(f.events).toHaveLength(logged)
-    expect(f.startActivation).not.toHaveBeenCalled()
-  })
-
   it('refuses to start a Creator while the Session is read-only and keeps dismissal available', async () => {
     const f = await fixture()
     await f.propose()
     const resolve = vi.fn(() => ({ mode: 'read-only', workspaceRoot: f.directory }))
     f.ctx.provide('sandboxPolicy', { resolve })
-    expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')).toEqual({ status: 'refused', reason: 'read-only' })
+    expect(await f.act('create')).toEqual({ status: 'refused', reason: 'read-only' })
     expect(resolve).toHaveBeenCalledWith({ session: f.agent.session })
     expect(f.current()).toBeUndefined()
     expect(f.startActivation).not.toHaveBeenCalled()
     resolve.mockReturnValue({ mode: 'workspace-write', workspaceRoot: f.directory })
-    expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')).toEqual({ status: 'accepted' })
+    expect(await f.act('create')).toEqual({ status: 'accepted' })
     expect(f.current()?.phase).toBe('creating')
   })
 
@@ -414,7 +411,7 @@ describe('interface creation', () => {
     onTestFinished(() => { gate.resolve({ application: 'failed', changed: false, stage: 'install', target: 'fixture' }) })
     const installing = Promise.withResolvers<undefined>()
     f.manager.installBundle.mockImplementation(() => { installing.resolve(undefined); return gate.promise })
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')
+    await f.act('create')
     const spec = await f.entered.promise
     await writeBundle(spec.request.cwd!, f.current()!.bundleName!)
     f.result.resolve({ output: [], stopReason: 'completed', structured: { ready: true } })
@@ -435,7 +432,7 @@ describe('interface creation', () => {
       const entered = Promise.withResolvers<undefined>()
       const gate = Promise.withResolvers<ReturnType<typeof f.manager.listBundles> extends Promise<infer T> ? T : never>()
       f.manager.listBundles.mockImplementationOnce(() => { entered.resolve(undefined); return gate.promise })
-      const creating = f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')
+      const creating = f.act('create')
       await entered.promise
       const disposing = target === 'plugin' ? f.fiber.dispose() : f.agentHandle.dispose()
       if (target === 'agent') await disposing
@@ -452,7 +449,7 @@ describe('interface creation', () => {
     const gate = Promise.withResolvers<undefined>()
     const original = f.startActivation.getMockImplementation()!
     f.startActivation.mockImplementation(async (spec) => { const value = await original(spec); await gate.promise; return value })
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')
+    await f.act('create')
     const spec = await f.entered.promise
     const unrelated = await f.ctx.agents.create({ sessionId: SessionId('unrelated') })
     await unrelated.dispose()
@@ -469,7 +466,7 @@ describe('interface creation', () => {
   it('reports cleanup failure without leaving a live child or installing its files', async () => {
     const f = await fixture()
     await f.propose()
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')
+    await f.act('create')
     await f.entered.promise
     f.dispose.mockImplementation(async () => { f.result.resolve({ output: [], stopReason: 'aborted' }); throw new Error('cleanup failure') })
     await f.fiber.dispose()
@@ -481,10 +478,9 @@ describe('interface creation', () => {
     for (const collision of [true, false]) {
       const f = await fixture()
       await f.propose()
-      await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')
+      await f.act('create')
       const spec = await f.entered.promise
       const name = f.current()!.bundleName!
-      const { writeBundle } = await import('./fixture.ts')
       await writeBundle(spec.request.cwd!, name)
       if (collision) f.bundles.push(installedBundle(name))
       else f.manager.installBundle.mockResolvedValueOnce({ application: 'failed', changed: false, stage: 'install', target: name })
@@ -500,9 +496,8 @@ describe('interface creation', () => {
     const installing = Promise.withResolvers<undefined>()
     const gate = Promise.withResolvers<ChangeResult>()
     f.manager.installBundle.mockImplementation(() => { installing.resolve(undefined); return gate.promise })
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')
+    await f.act('create')
     const spec = await f.entered.promise
-    const { writeBundle } = await import('./fixture.ts')
     const name = f.current()!.bundleName!
     await writeBundle(spec.request.cwd!, name)
     f.result.resolve({ output: [], stopReason: 'completed', structured: { ready: true } })
@@ -524,7 +519,7 @@ describe('interface creation', () => {
     const gate = Promise.withResolvers<ChangeResult>()
     onTestFinished(() => { gate.resolve({ application: 'failed', changed: false, stage: 'install', target: 'fixture' }) })
     f.manager.installBundle.mockImplementation(() => { installing.resolve(undefined); return gate.promise })
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')
+    await f.act('create')
     const spec = await f.entered.promise
     const name = f.current()!.bundleName!
     await writeBundle(spec.request.cwd!, name)
@@ -533,12 +528,9 @@ describe('interface creation', () => {
     const seed = [...f.events]
     await f.agentHandle.dispose()
     const reopened = await f.ctx.agents.create({ sessionId: f.agent.id, seed })
-    const current = () => {
-      const view = f.ctx.sessionProjections.snapshot(reopened.agent.session).values.creationRecommendations as CreationView
-      return view.decisions[callId]
-    }
+    const current = () => f.cardOf(callId, reopened.agent)
     expect(current()?.phase).toBe('installing')
-    expect(await f.ctx.creationRecommendations.act(reopened.agent, callId, 'create', 'page')).toEqual({ status: 'accepted' })
+    expect(await f.act('create', 'page', undefined, reopened.agent)).toEqual({ status: 'accepted' })
     f.bundles.push(installedBundle(name))
     gate.resolve({ application: 'applied', changed: true, stage: 'install', target: name })
     await vi.waitFor(() => { expect(current()?.phase).toBe('installed') })
@@ -551,11 +543,11 @@ describe('interface creation', () => {
     const cleanup = Promise.withResolvers<undefined>()
     onTestFinished(() => { cleanup.resolve(undefined) })
     f.dispose.mockImplementation(async () => { f.result.resolve({ output: [], stopReason: 'aborted' }); await cleanup.promise })
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')
+    await f.act('create')
     await f.entered.promise
     await f.agentHandle.dispose()
     const reopened = await f.ctx.agents.create({ sessionId: f.agent.id, seed: [...f.events] })
-    expect(await f.ctx.creationRecommendations.act(reopened.agent, callId, 'create', 'page')).toEqual({ status: 'accepted' })
+    expect(await f.act('create', 'page', undefined, reopened.agent)).toEqual({ status: 'accepted' })
     expect(f.startActivation).toHaveBeenCalledOnce()
     cleanup.resolve(undefined)
     await f.fiber.dispose()
@@ -565,7 +557,7 @@ describe('interface creation', () => {
   it.each(['lookup', 'lookup-reload', 'remove'] as const)('releases Undo when the plugin unloads during %s', async (stage) => {
     const f = await fixture()
     await f.propose()
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')
+    await f.act('create')
     await f.complete()
     const entered = Promise.withResolvers<undefined>()
     const lookup = Promise.withResolvers<ReturnType<typeof installedBundle>[]>()
@@ -573,7 +565,7 @@ describe('interface creation', () => {
     onTestFinished(() => { lookup.resolve(f.bundles); removing.resolve({ application: 'applied', changed: true, stage: 'remove', target: 'fixture' }) })
     if (stage !== 'remove') f.manager.listBundles.mockImplementationOnce(() => { entered.resolve(undefined); return lookup.promise })
     else f.manager.removeBundle.mockImplementationOnce(() => { entered.resolve(undefined); return removing.promise })
-    const result = f.ctx.creationRecommendations.act(f.agent, callId, 'undo', 'page')
+    const result = f.act('undo')
     await entered.promise
     const disposing = stage === 'lookup-reload' ? f.fiber.restart() : f.fiber.dispose()
     lookup.resolve(f.bundles)
@@ -588,15 +580,15 @@ describe('interface creation', () => {
   it('restores an undone page from its retained profile copy without running the Creator again', async () => {
     const f = await fixture()
     await f.propose()
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')
+    await f.act('create')
     await f.complete()
     const bundleName = f.current()!.bundleName!
     const directory = join(f.directory, 'created-plugins', bundleName.slice('@dsh-local/view-'.length))
     expect(f.manager.installBundle).toHaveBeenCalledExactlyOnceWith(directory)
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'undo', 'page')
+    await f.act('undo')
     expect(f.current()).toMatchObject({ phase: 'removed', application: 'applied' })
     const access = vi.spyOn(f.ctx.remoteAccess, 'allows').mockReturnValue(false)
-    expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'restore', 'page')).toEqual({ status: 'refused', reason: 'access-denied' })
+    expect(await f.act('restore')).toEqual({ status: 'refused', reason: 'access-denied' })
     access.mockRestore()
     let installing: unknown
     f.manager.installBundle.mockImplementationOnce(async (path: string) => {
@@ -604,66 +596,63 @@ describe('interface creation', () => {
       f.bundles.push(installedBundle(bundleName))
       return { application: 'applied', changed: true, stage: 'install', target: path }
     })
-    const decision = { callId, phase: 'installed', slot: 'page', bundleName, application: 'applied' }
-    expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'restore', 'page')).toEqual({ status: 'settled', decision })
+    expect(await f.act('restore')).toEqual(settled('installed', { slot: 'page', bundleName, application: 'applied' }))
     expect(installing).toEqual({ callId, phase: 'installing', slot: 'page', bundleName })
     expect(f.manager.installBundle).toHaveBeenLastCalledWith(directory)
-    expect(f.current()).toEqual(decision)
+    expect(f.current()).toEqual({ callId, phase: 'installed', slot: 'page', bundleName, application: 'applied' })
     expect(f.startActivation).toHaveBeenCalledOnce()
   })
 
   it('refuses Restore without its profile copy or package name and records nothing', async () => {
     const f = await fixture()
     await f.propose()
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')
+    await f.act('create')
     await f.complete()
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'undo', 'page')
+    await f.act('undo')
     await rm(f.manager.installBundle.mock.calls[0]![0], { recursive: true })
     const logged = f.events.length
-    expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'restore', 'page')).toEqual({ status: 'refused', reason: 'source-missing' })
+    expect(await f.act('restore')).toEqual({ status: 'refused', reason: 'source-missing' })
     expect(f.events).toHaveLength(logged)
     expect(f.current()?.phase).toBe('removed')
-    appendPluginRecord(f.agent.session, 'plugin:creation-recommendations/decision', { callId, phase: 'removed', slot: 'page' })
-    expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'restore', 'page')).toEqual({ status: 'refused', reason: 'unavailable' })
+    recordCard(f.agent.session, { callId, phase: 'removed', slot: 'page' })
+    expect(await f.act('restore')).toEqual({ status: 'refused', reason: 'unavailable' })
     expect(f.manager.installBundle).toHaveBeenCalledOnce()
   })
 
   it('records a failed receipt instead of leaving Restore installing when the reinstallation throws', async () => {
     const f = await fixture()
     await f.propose()
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')
+    await f.act('create')
     await f.complete()
     const bundleName = f.current()!.bundleName!
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'undo', 'page')
+    await f.act('undo')
     f.manager.installBundle.mockRejectedValueOnce(new Error('profile locked'))
-    const decision = { callId, phase: 'failed', slot: 'page', bundleName }
-    expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'restore', 'page')).toEqual({ status: 'settled', decision })
-    expect(f.current()).toEqual(decision)
+    expect(await f.act('restore')).toEqual(settled('failed', { slot: 'page', bundleName }))
+    expect(f.current()).toEqual({ callId, phase: 'failed', slot: 'page', bundleName })
     expect(f.startActivation).toHaveBeenCalledOnce()
   })
 
   it('settles Restore on a page that is not removed and confirms one reinstalled elsewhere without installing it', async () => {
     const f = await fixture()
     await f.propose()
-    expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'restore', 'page')).toEqual({ status: 'refused', reason: 'unavailable' })
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')
+    expect(await f.act('restore')).toEqual({ status: 'refused', reason: 'unavailable' })
+    await f.act('create')
     await f.complete()
     const installed = f.current()!
-    expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'restore', 'page')).toEqual({ status: 'settled', decision: installed })
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'undo', 'page')
+    expect(await f.act('restore')).toEqual(settled('installed', { slot: 'page', bundleName: installed.bundleName, application: 'applied' }))
+    await f.act('undo')
     f.bundles.push(installedBundle(installed.bundleName!))
-    const decision = { callId, phase: 'installed', slot: 'page', bundleName: installed.bundleName }
-    expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'restore', 'page')).toEqual({ status: 'settled', decision })
-    expect(f.current()).toEqual(decision)
+    expect(await f.act('restore')).toEqual(settled('installed', { slot: 'page', bundleName: installed.bundleName }))
+    expect(f.current()).toEqual({ callId, phase: 'installed', slot: 'page', bundleName: installed.bundleName })
     expect(f.manager.installBundle).toHaveBeenCalledOnce()
   })
 
   it.each(['lookup', 'install', 'outcome lookup'] as const)('releases Restore when the plugin unloads during %s', async (stage) => {
     const f = await fixture()
     await f.propose()
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')
+    await f.act('create')
     await f.complete()
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'undo', 'page')
+    await f.act('undo')
     const entered = Promise.withResolvers<undefined>()
     const lookup = Promise.withResolvers<ReturnType<typeof installedBundle>[]>()
     const installing = Promise.withResolvers<ChangeResult>()
@@ -672,7 +661,7 @@ describe('interface creation', () => {
     if (stage === 'lookup') f.manager.listBundles.mockImplementationOnce(blocked)
     else if (stage === 'install') f.manager.installBundle.mockImplementationOnce(() => { entered.resolve(undefined); return installing.promise })
     else f.manager.listBundles.mockImplementationOnce(async () => f.bundles).mockImplementationOnce(blocked)
-    const restoring = f.ctx.creationRecommendations.act(f.agent, callId, 'restore', 'page')
+    const restoring = f.act('restore')
     await entered.promise
     const disposing = f.fiber.dispose()
     if (stage === 'outcome lookup') lookup.reject(new Error('profile read failed'))
@@ -691,7 +680,7 @@ describe('interface creation', () => {
       void f.fiber.dispose().then(() => { disposed.resolve(undefined) }, disposed.reject)
       return { application: 'applied', changed: true, stage: 'install', target: 'fixture' }
     })
-    await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'page')
+    await f.act('create')
     const spec = await f.entered.promise
     await writeBundle(spec.request.cwd!, f.current()!.bundleName!)
     f.result.resolve({ output: [], stopReason: 'completed', structured: { ready: true } })
@@ -706,15 +695,7 @@ it('never offers a proposal written while the user has queued more messages for 
   f.agent.inbox.append('next-turn', queued())
   f.agent.inbox.append('next-turn', queued())
   await f.propose()
-  expect(f.current()).toEqual({ callId, phase: 'suppressed', slot: 'sidebar-right' })
-  expect(await f.ctx.creationRecommendations.act(f.agent, callId, 'create', 'sidebar-right')).toEqual({
-    status: 'settled', decision: { callId, phase: 'suppressed', slot: 'sidebar-right' },
-  })
+  expect(f.current()).toEqual({ callId, phase: 'suppressed' })
+  expect(await f.act('create')).toEqual({ status: 'settled', decision: { callId, action: ACTION, phase: 'suppressed' } })
   expect(f.startActivation).not.toHaveBeenCalled()
-  f.agent.inbox.clear()
-  f.agent.inbox.append('next-turn', queued())
-  f.agent.session.append('turn/start', { turn: 2 })
-  const next = await f.propose('creation-2')
-  expect(f.state().view.proposals[next]).toBeDefined()
-  expect(f.state().view.decisions[next]).toBeUndefined()
 })

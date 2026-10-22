@@ -69,6 +69,51 @@ interface PendingModule {
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxactioncards--actioncards"></a>
+
+### `ctx.actionCards` — `ActionCards`
+
+Card tool, kind registry, Session projection, user actions and status notices.
+
+```ts cordis-catalog
+/**
+ * Register one action kind for the caller's lifetime.
+ * @param kind - the kind's skill, details schema, verbs and handler.
+ * @returns disposer removing the kind; actions on its cards are then unavailable.
+ * @throws when another kind already registered the same action.
+ */
+register<Details>(kind: ActionCardKind<Details>): () => void
+
+/**
+ * Record a card decision in the Session log; the next model request reports it.
+ * @param agent - agent whose Session owns the card.
+ * @param decision - the card's new state.
+ */
+record(agent: Agent, decision: ActionCardDecision): void
+
+/**
+ * Read the cards of one Session.
+ * @param session - a Session whose projections are prepared.
+ * @returns proposals and decisions by call id.
+ */
+view(session: Session): ActionCardView
+
+/**
+ * Apply a user action to a logged card. Shared checks run first; `dismiss` is recorded here and every other
+ * verb goes to the card's kind. Concurrent actions on one card share one operation.
+ * @param agent - live root resolved from the displayed Session.
+ * @param callId - the card's `propose_action` call id.
+ * @param verb - `dismiss` or one of the kind's verbs.
+ * @param payload - kind-defined fields such as a chosen location.
+ * @returns acceptance of background work, the decision in effect, or a refusal.
+ */
+@Remote act(agent: Agent, callId: ToolCallId, verb: string, payload?: Record<string, JsonValue>): Promise<ActionCardResult>
+```
+
+Types: [Agent](core.md) · [Session](session.md) · [ToolCallId](core.md)
+
+Source: [`packages/experimental/action-cards/src/index.ts`](../../packages/experimental/action-cards/src/index.ts)
+
 <a id="ctxconfigeditor--configeditor"></a>
 
 ### `ctx.configEditor` — `ConfigEditor`
@@ -95,28 +140,6 @@ async edit( entry: Entry, change: (current: Record<string, unknown>, inherited: 
 ```
 
 Source: [`packages/boot/config-editor/src/index.ts`](../../packages/boot/config-editor/src/index.ts)
-
-<a id="ctxcreationrecommendations--creationrecommendations"></a>
-
-### `ctx.creationRecommendations` — `CreationRecommendations`
-
-Internal Remote and effect owner assembled by the personalized-pages plugin.
-
-```ts cordis-catalog
-/** Apply a human decision to a logged proposal.
- * @param agent - Live root resolved from the displayed session.
- * @param callId - Logged proposal id.
- * @param action - Create, cancel generation, dismiss, confirm retention, remove the owned bundle, or reinstall its retained profile copy.
- * @param slot - Location chosen by the user when creating or dismissing.
- * @param customLocation - Omitted: use slot. Present: Creator resolves this human-authored placement instead.
- * @returns acceptance for background work, a durable receipt, or a refusal.
- */
-@Remote act(agent: Agent, callId: ToolCallId, action: 'create' | 'dismiss' | 'keep' | 'undo' | 'cancel' | 'restore', slot: CreationSlot, customLocation?: string): Promise<CreationActionResult>
-```
-
-Types: [Agent](core.md) · [ToolCallId](core.md)
-
-Source: [`packages/experimental/creation-recommendations/src/index.ts`](../../packages/experimental/creation-recommendations/src/index.ts)
 
 <a id="ctxheadlessstartup--headlessstartupvalues"></a>
 

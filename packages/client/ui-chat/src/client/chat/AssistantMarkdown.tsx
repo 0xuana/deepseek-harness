@@ -9,7 +9,6 @@ import type { AssistantBlock } from '../contract/snapshot.ts'
 import { markdownLabels } from '../markdown-labels.ts'
 import { ReasoningRow } from './ReasoningRow.tsx'
 import css from './AssistantMarkdown.module.css'
-import { hideDirectiveFences } from './directive-fences.ts'
 
 /**
  * Standalone fallback for image destinations (query/fragment suffixes are ignored).
@@ -86,7 +85,7 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
         rendered.push(
           <MarkdownText
             key={i}
-            text={hideDirectiveFences(block.text, { streaming })}
+            text={block.text}
             streaming={streaming}
             labels={labels}
             fileMentions={mentions}

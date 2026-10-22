@@ -1,72 +1,38 @@
-/** Durable recommendations and receipts for newly created interface plugins. */
-import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
-import type { SessionProjectionSummaryExcluded } from '@deepseek-ai/dsh-session-projection/types'
+/** Fields, recorded data and user actions of `create_personalized_page` cards. */
 import type { ChangeResult } from '@deepseek-ai/dsh-plugin-manager/types'
-import type { ContextFormed } from '@deepseek-ai/dsh-llm'
-import type { SessionSeq } from '@deepseek-ai/dsh-session/types'
 
 /** Placements: page is a Session view tab; sidebar-left combines a global page and its left entry. */
 export type CreationSlot = 'sidebar-right' | 'page' | 'sidebar-left'
 
-/** The explicit need and context passed to the Creator after the user accepts. */
-export interface CreationRecommendation {
-  readonly callId: ToolCallId
-  readonly title: string
-  readonly brief: string
+/** Card fields the skill asks the model to write in `details`. */
+export interface PageDetails {
+  /** Recommended location; the user can change it on the card. */
   readonly slot: CreationSlot
   /** Omitted for a new empty page; otherwise the existing content passed to the Creator, separate from the short brief. */
   readonly initialContent?: string | undefined
 }
 
-/** Receipts describe the created bundle; profile files own its installation. */
-export interface CreationDecision {
-  readonly callId: ToolCallId
-  readonly phase: 'dismissed' | 'creating' | 'installing' | 'cancelled' | 'installed' | 'kept' | 'removed' | 'failed' | 'interrupted' | 'unconfirmed'
+/** Phases a page card records besides the shared `dismissed`. */
+export type PagePhase = 'creating' | 'installing' | 'cancelled' | 'installed' | 'kept' | 'removed' | 'failed' | 'interrupted' | 'unconfirmed'
+
+/** Data each page decision records; profile files own the installed bundle. */
+export interface PageData {
+  /** Location chosen when the user created or dismissed the card. */
   readonly slot: CreationSlot
   /** Omitted: use slot. Present: Creator resolves this human-authored placement instead. */
   readonly customLocation?: string | undefined
+  /** Host-reserved name of the created bundle. */
   readonly bundleName?: string | undefined
+  /** Outcome of the latest installation or removal. */
   readonly application?: ChangeResult['application'] | undefined
 }
 
-/** Replacement and suppression are derived from the log, never written as plugin decisions: a later proposal
- * replaces an unstarted card; a proposal written while user messages are queued is never offered. */
-export type CreationCardState = CreationDecision | (Omit<CreationDecision, 'phase'> & { readonly phase: 'replaced' | 'suppressed' })
+/** User actions a page card offers besides the shared `dismiss`. */
+export type PageVerb = 'create' | 'keep' | 'undo' | 'cancel' | 'restore'
 
-/** Open-session proposals and receipts, excluded from session-list summaries. */
-export interface CreationView {
-  readonly decisions: Readonly<Record<string, CreationCardState>>
-  /** Every admitted proposal by call id, with the turn whose answer carried it. */
-  readonly proposals: Readonly<Record<string, CreationRecommendation & { readonly turn: number }>>
-}
-
-/** Human actions never accept a package name or installation path from the browser. */
-export type CreationActionResult =
-  | { readonly status: 'accepted' }
-  | { readonly status: 'settled'; readonly decision: CreationCardState }
-  | { readonly status: 'refused'; readonly reason: 'unknown' | 'access-denied' | 'not-live-root' | 'closing' | 'unavailable' | 'invalid-location' | 'read-only' | 'source-missing' }
-  | { readonly status: 'unconfirmed'; readonly reason: 'closing' }
-
-declare module '@deepseek-ai/dsh-llm' {
-  interface MessageSourceMap {
-    /** Status receipt attribution; other readers preserve the recorded text without this plugin.
-     * The producer uses through only to acknowledge delivered updates.
-     * @persistenceAttribution
-     */
-    'personalized-pages': { kind: 'personalized-pages'; through: SessionSeq } & ContextFormed
-  }
-}
-
-declare module '@deepseek-ai/dsh-session/types' {
-  interface PluginRecordMap {
-    /** New-plugin creation progress and explicit keep/undo decisions. */
-    'plugin:creation-recommendations/decision': CreationDecision
-  }
-}
-
-declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionMap {
-    /** Persistent creation proposals and receipts for the currently open session. */
-    creationRecommendations: SessionProjectionSummaryExcluded<CreationView>
-  }
+/** Fields the card sends with Create and Not now; Create requires a valid location. */
+export interface PageLocation {
+  readonly slot: CreationSlot
+  /** Human-written placement of at most 1,000 characters; omitted for a listed location. */
+  readonly customLocation?: string | undefined
 }

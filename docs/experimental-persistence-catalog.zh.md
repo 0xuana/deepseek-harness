@@ -13,7 +13,6 @@
 
 | 记录 | 所属包 | 用途 | 载荷与源码 |
 |---|---|---|---|
-| `plugin:creation-recommendations/decision` | `@deepseek-ai/dsh-experimental-creation-recommendations` | New-plugin creation progress and explicit keep/undo decisions. | <code>CreationDecision</code> · [`packages/experimental/creation-recommendations/src/types.ts`](../packages/experimental/creation-recommendations/src/types.ts) |
-| `plugin:plugin-recommendations/decision` | `@deepseek-ai/dsh-experimental-plugin-recommendations` | Informational receipt of a profile change; profile files own the actual configuration. | <code>RecommendationDecision</code> · [`packages/experimental/plugin-recommendations/src/types.ts`](../packages/experimental/plugin-recommendations/src/types.ts) |
+| `plugin:action-cards/decision` | `@deepseek-ai/dsh-experimental-action-cards` | Dismissals and kind-defined progress of action cards. | <code>ActionCardDecision</code> · [`packages/experimental/action-cards/src/types.ts`](../packages/experimental/action-cards/src/types.ts) |
 | `plugin:translator/request` | `@deepseek-ai/dsh-experimental-translator` | Provider-independent translation input, retained before dispatch. | <code>TranslationRequestRecord</code> · [`packages/experimental/translator/src/types.ts`](../packages/experimental/translator/src/types.ts) |
 | `plugin:translator/result` | `@deepseek-ai/dsh-experimental-translator` | Successful translation, retained before it is returned to the consumer. | <code>TranslationResultRecord</code> · [`packages/experimental/translator/src/types.ts`](../packages/experimental/translator/src/types.ts) |
