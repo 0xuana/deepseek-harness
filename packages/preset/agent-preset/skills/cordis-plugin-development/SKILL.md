@@ -1,17 +1,17 @@
 ---
 name: cordis-plugin-development
-description: Use when creating, reviewing, installing, enabling, disabling, configuring, or debugging Harness plugins, bundles, features, tools, MCP connections, pages, panels, decorations or widgets. Visual requests without another destination mean an installed UI plugin in Harness Web UI.
+description: Use when designing, reviewing, adding, enabling, disabling, installing, configuring, or debugging a plugin, bundle, feature, page, panel, tool, or MCP connection in the current Harness profile, including a shipped plugin that is disabled by default, and for any visual object, decoration, or widget request that names no other destination, which means an installed UI plugin rendered in the Harness Web UI.
 ---
 
 # Persistent Harness plugins
 
-Author a workspace bundle, then install it in the current profile with `plugin_manager` (`action: install_bundle`, absolute package directory as `target`). It persists across sessions and restarts. Load `editing-cordis-compositions` for agent preset changes.
+For implementation, use ordinary workspace files to author a bundle, then `plugin_manager` with `action: install_bundle` and the absolute package directory as `target` to install it in the current profile. Changes affect every session in that profile and survive restart. Load `editing-cordis-compositions` for agent preset changes.
 
 Do not write the profile's `package.json` or `cordis.patch.yml`, create packages under `$DSH_HOME`, or run pnpm in the profile directory: `install_bundle` performs those steps, and each hand-made write outside the workspace needs its own approval. Every `plugin_manager` action, including `list_plugins` and `list_bundles`, also needs approval without Full access, so call it only when its result decides the next step.
 
 ## Design or review
 
-Inspect the plugin against current APIs using the applicable references below. Report choices or findings; write files, install bundles, or change profile state only when implementation is requested.
+Read the applicable references below and inspect the proposed or existing plugin against current APIs. Report design choices or findings instead of following the installation workflow. Do not write files, install bundles, or change profile state unless the user requests implementation.
 
 ## Enable a shipped plugin
 
@@ -35,7 +35,7 @@ A shipped bundle can resolve a plugin row and leave it `disabled`. The row id an
 
 ## Read next
 
-The table lists every file in the base directory reported by `skill`; do not enumerate it. In every deployment, including source checkouts, use file-read/file-write tools to copy these files into the workspace, then read the copies to verify them. Desktop stores the directory in `app.asar`: only Host file reads work there. Shell commands, native glob/search tools, `node`, and pnpm cannot read it. Never install or syntax-check a template in place; copy its contents into the workspace first.
+The files below live in this skill's base directory, which the `skill` tool reported, and the table is the complete list: do not enumerate that directory. In every deployment, including a source checkout, read these files with the file-read tool, write copies into the workspace with the file-write tool, and verify a copy by reading it back. In Desktop the directory sits inside `app.asar`, which only the Host process's own file reads can open; shell commands (`ls`, `cat`, `cp`, `cmp`), the glob and search tools (they run a native ripgrep process), `node`, and pnpm all fail on it. Never install or syntax-check a template in place; copy its contents into the workspace first.
 
 | Task | File |
 |---|---|
@@ -43,8 +43,8 @@ The table lists every file in the base directory reported by `skill`; do not enu
 | Web UI: Client manifest, module loader, slot registration | `references/ui-plugin.md` |
 | Connecting an MCP server through a configuration-only bundle | `references/mcp-bundle.md` |
 | Page/panel design checks and verification without browser control | `references/verification.md` |
-| UI plugin template and display resources | `templates/decoration/package.json`, `templates/decoration/cordis.patch.yml`, `templates/decoration/index.js`, `templates/decoration/client.js`, `templates/decoration/locale/en.json`, `templates/decoration/locale/ja.json`, `templates/decoration/locale/es.json`, `templates/decoration/locale/fr.json`, `templates/decoration/locale/de.json`, `templates/decoration/locale/ru.json`, `templates/decoration/locale/pt.json`, `templates/decoration/icon.svg` |
-| MCP template and display resources | `templates/mcp/package.json`, `templates/mcp/cordis.patch.yml`, `templates/mcp/locale/en.json`, `templates/mcp/locale/ja.json`, `templates/mcp/locale/es.json`, `templates/mcp/locale/fr.json`, `templates/mcp/locale/de.json`, `templates/mcp/locale/ru.json`, `templates/mcp/locale/pt.json`, `templates/mcp/icon.svg` |
+| UI plugin template, including display resources | `templates/decoration/package.json`, `templates/decoration/cordis.patch.yml`, `templates/decoration/index.js`, `templates/decoration/client.js`, `templates/decoration/locale`, `templates/decoration/icon.svg` |
+| MCP bundle template, including display resources | `templates/mcp/package.json`, `templates/mcp/cordis.patch.yml`, `templates/mcp/locale`, `templates/mcp/icon.svg` |
 | Loader patch dialect and the list of installable plugin packages | the `cordis-composition-reference` skill |
 | Choosing extension points, contexts, and state mechanisms for upgrade stability and performance | `references/practices.md` |
 | Sharing application operations between UI actions and agent tools | `references/user-actions.md` |

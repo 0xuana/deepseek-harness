@@ -10,7 +10,7 @@ import { PreparationCard, VoicePreparation } from '../src/client/PreparationCard
 import type { VoiceInputProps } from '../src/client/VoiceInput.tsx'
 import type { SpeechReadiness } from '../src/client/readiness.ts'
 import { Recording } from '../src/client/audio.ts'
-import { zh } from '../src/client/locales.ts'
+import { zh, en, ja, es, fr, de, ru, pt } from '../src/client/locales.ts'
 
 afterEach(() => { cleanup(); vi.useRealTimers() })
 const id = 'local' as SpeechProviderId, t = makeTranslate(zh, commonZh)
@@ -129,7 +129,7 @@ it('persists settings and reports disconnection in the detail card', async () =>
   expect(screen.getByText(zh.cloud)).toBeTruthy()
   expect(within(screen.getByLabelText(zh.language)).getAllByRole<HTMLOptionElement>('option').map(item => item.value))
     .toEqual(['auto', 'en', 'zh', 'ja', 'fr'])
-  expect(within(screen.getByLabelText(zh.language)).getByRole('option', { name: 'fr' })).toBeTruthy()
+  expect(within(screen.getByLabelText(zh.language)).getByRole('option', { name: zh.fr })).toBeTruthy()
   configure.mockRejectedValueOnce(new Error('settings are read-only'))
   fireEvent.change(screen.getByLabelText(zh.language), { target: { value: 'zh' } })
   await screen.findByText('语音识别失败：settings are read-only')
@@ -211,4 +211,15 @@ it('locks source changes while a preparation request is pending and hides them d
   expect(screen.getByLabelText<HTMLSelectElement>(zh.sourceChoice).disabled).toBe(true)
   b.rerender(<PreparationCard {...b.props} provider={{ ...provider, preparation: { phase: 'downloading', resource: 'model.onnx', completedBytes: 0 } }} />)
   expect(screen.queryByLabelText(zh.sourceChoice)).toBeNull()
+})
+
+it('gives each speech recognition language a distinct localized name', () => {
+  for (const dictionary of [zh, en, ja, es, fr, de, ru, pt]) {
+    const names = [
+      dictionary.zh, dictionary.en, dictionary.yue, dictionary.ja, dictionary.es,
+      dictionary.fr, dictionary.de, dictionary.ru, dictionary.pt, dictionary.ko,
+    ]
+    expect(new Set(names).size).toBe(names.length)
+  }
+  expect(zh.fr).toBe('法语')
 })

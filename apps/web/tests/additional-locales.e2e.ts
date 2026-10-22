@@ -47,6 +47,9 @@ it.each(languages)('selects %s from the browser, localizes metadata and persists
     return { panel: element.scrollWidth <= element.clientWidth + 1, content: content.scrollWidth <= content.clientWidth + 1 }
   })).toEqual({ panel: true, content: true })
   await dialog.getByRole('button', { name: label, exact: true }).click()
+  await page.getByRole('menuitem', { name: label, exact: true }).click()
+  await expect.poll(() => readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')).toContain(`preference: ${id}`)
+  await dialog.getByRole('button', { name: label, exact: true }).click()
   await page.getByRole('menuitem', { name: 'English', exact: true }).click()
   await expect.poll(() => readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')).toContain('preference: en')
   const warningsBeforeReload = tripwire.warnings.length

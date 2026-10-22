@@ -12,3 +12,12 @@ export type ShippedLocaleId = typeof SHIPPED_LOCALE_IDS[number]
 export function localeTokens(text: string): string[] {
   return (text.match(/\{\w+\}|(?<![A-Za-z0-9/])\/[A-Za-z][\w-]*(?:=[\w-]+| (?:on|off))?|\b[a-z]+_[a-z_]+\b/gu) ?? []).sort()
 }
+
+/**
+ * Detect translation-service artifacts that must not enter locale resources.
+ * @param text - Raw resource or localized text.
+ * @returns Whether the text contains a zero-width space or byte-order mark.
+ */
+export function hasInvisibleLocaleCharacters(text: string): boolean {
+  return /[\u200b\ufeff]/u.test(text)
+}

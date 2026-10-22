@@ -1,8 +1,9 @@
+import { SHIPPED_LOCALE_IDS } from '../../../scripts/shipped-locales.ts'
 import { describe, expect, it } from 'vitest'
 import { en, formatDesktopMessage, resolveDesktopLocale, resolveDesktopStartupLocale, ja, zh, es, fr, de, ru, pt } from '../src/locale.ts'
 
 describe('desktop locale dictionaries', () => {
-  it('ships the same key set in English, Chinese, and Japanese', () => {
+  it('ships baseline and Japanese keys and falls back for unsupported languages', () => {
     expect(Object.keys(zh)).toEqual(Object.keys(en))
     expect(Object.keys(ja)).toEqual(Object.keys(en))
     expect(resolveDesktopLocale('JA-jp')).toEqual({ id: 'ja', messages: ja })
@@ -23,6 +24,11 @@ describe('desktop locale dictionaries', () => {
       const placeholders = (text: string): string[] => (text.match(/\{\w+\}/gu) ?? []).sort()
       expect(placeholders(messages[key]), key).toEqual(placeholders(en[key]))
     }
+  })
+
+  it.each(SHIPPED_LOCALE_IDS)('resolves every shipped language %s without fallback', (id) => {
+    expect(resolveDesktopLocale(id).id).toBe(id === 'zh' ? 'zh-CN' : id)
+    expect(resolveDesktopStartupLocale(null, [id]).id).toBe(id === 'zh' ? 'zh-CN' : id)
   })
 
   it('formats named values without consuming unknown placeholders', () => {

@@ -3,7 +3,7 @@ import { existsSync, globSync, readFileSync } from 'node:fs'
 import { basename, posix, join, resolve } from 'node:path'
 import { detailPath } from '../packages/util/plugin-detail/src/document.ts'
 import { PRODUCT_PACKAGE_POLICY } from './product-package-policy.ts'
-import { SHIPPED_LOCALE_IDS, localeTokens } from './shipped-locales.ts'
+import { SHIPPED_LOCALE_IDS, localeTokens, hasInvisibleLocaleCharacters } from './shipped-locales.ts'
 import { collectConfigCatalog } from './gen-config-catalog.ts'
 
 /** Flatten metadata strings and reject values that cannot be translated. */
@@ -35,7 +35,9 @@ export function localeMetadataProblems(root: string): string[] {
     try {
       const read = (language: string): Record<string, string> => {
         const file = join(root, directory, `${language}.json`)
-        const value: unknown = JSON.parse(readFileSync(file, 'utf8'))
+        const source = readFileSync(file, 'utf8')
+        if (hasInvisibleLocaleCharacters(source) || /\\u(?:200b|feff)/iu.test(source)) throw new Error(`${language}.json: invisible locale character`)
+        const value: unknown = JSON.parse(source)
         const dictionary = strings(value)
         const detail = detailPath(dictionary['meta.detail'], `${directory}/${language}.json: meta.detail`)
         const packageDir = directory.slice(0, directory.lastIndexOf('/locale'))
@@ -55,7 +57,8 @@ export function localeMetadataProblems(root: string): string[] {
           if (translated[key] === undefined) problems.push(`${directory}/${language}.json: missing ${key}`)
           else if (expected[key] === undefined) problems.push(`${directory}/${language}.json: unexpected ${key}`)
           else {
-            if (language !== 'ja' && key === 'meta.description' && /\p{Script=Han}/u.test(expected[key]) && translated[key] === expected[key]) {
+            if (language !== 'ja' && key === 'meta.description' && ((zh[key] !== undefined && /\p{Script=Han}/u.test(zh[key]) && translated[key] === zh[key])
+              || (en[key] !== undefined && translated[key] === en[key]))) {
               problems.push(`${directory}/${language}.json: ${key} contains untranslated source text`)
             }
             const placeholders = (text: string): string => localeTokens(text).join(',')

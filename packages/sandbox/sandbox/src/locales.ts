@@ -17,7 +17,7 @@ export const ja = {
 
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
-  escalation: (mode: string, justification: string): string => `Permite esta operación con permisos ${mode}: ${justification}`,
+  escalation: (mode: string, justification: string): string => `Permitir esta operación con permisos ${mode}: ${justification}`,
 } satisfies typeof en
 
 /** French dictionary, checked against the English keys. */

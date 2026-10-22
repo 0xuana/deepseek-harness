@@ -205,7 +205,7 @@ export const guideEs = {
     '### Lo que llega al modelo',
     'Los resultados de la herramienta llegan primero al programa, que puede filtrarlos y combinarlos. El modelo recibe lo que el programa imprime o devuelve; Los resultados de la imagen se adjuntan por separado. Las llamadas a herramientas anidadas aún se registran y permanecen sujetas a los permisos de la herramienta.',
     '### Comparado con el modo Estándar',
-    'Ambos modos pueden manejar tareas de codificación y por lotes. El modo estándar expone herramientas individuales directamente; PTC organiza llamadas a herramientas en código. El ajuste preestablecido actual PTC ​​deja las herramientas de administración de complementos y flujo de trabajo deshabilitadas. La velocidad y el uso de tokens dependen de la tarea y de cómo el programa maneja sus resultados.',
+    'Ambos modos pueden manejar tareas de codificación y por lotes. El modo estándar expone herramientas individuales directamente; PTC organiza llamadas a herramientas en código. El ajuste preestablecido actual PTC deja las herramientas de administración de complementos y flujo de trabajo deshabilitadas. La velocidad y el uso de tokens dependen de la tarea y de cómo el programa maneja sus resultados.',
   ].join('\n\n\n\n'),
   guidePtcUsage: [
     '### Verifique un conjunto de archivos de configuración',

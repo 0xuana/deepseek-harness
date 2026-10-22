@@ -38,10 +38,10 @@ export const es = {
   'workspace.defaultName': 'Espacio de trabajo predeterminado',
   'unknown': 'Desconocido',
   'none': 'Ninguno',
-  'truncated': 'truncado',
+  'truncated': 'Truncado',
   'json.label': 'JSON',
   'markdown.footnotes': 'Notas a pie de página',
-  'markdown.truncatedCharacters': '… truncado en caracteres {total}',
+  'markdown.truncatedCharacters': '… truncado a {total} caracteres',
   'number.thousand': '{value}K',
   'number.million': '{value}M',
 } satisfies Record<keyof typeof en, string>

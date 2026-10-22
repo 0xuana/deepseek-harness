@@ -557,7 +557,7 @@ export const es = {
   showAllApplications: 'Mostrar todo',
   quitApplication: 'Salir de DeepSeek Harness',
   openApplication: 'Abrir DeepSeek Harness',
-  quit: 'dejar de fumar',
+  quit: 'Salir',
   cancel: 'Cancelar',
   quitTitle: '¿Salir de DeepSeek Harness?',
   quitActiveTasks: 'Las tareas en ejecución se interrumpirán.',
@@ -664,7 +664,7 @@ export const es = {
   policyLoginFailed: 'El inicio de sesión de Feishu no se completó. Por favor inténtalo de nuevo.',
   policyLoginLoading: 'Cargando página de inicio de sesión...',
   mandatoryNoRelease: 'No se encontró ninguna actualización compatible. Verifique nuevamente o comuníquese con el soporte.',
-  mandatoryRefresh: 'comprobar de nuevo',
+  mandatoryRefresh: 'Comprobar de nuevo',
   mandatoryPage: 'Descargar desde el sitio web oficial.',
   mandatoryCopy: 'Copiar enlace de descarga',
   mandatoryPageFailed: 'No se pudo abrir la página de descarga oficial. Copie el enlace y ábralo en su navegador.',
@@ -702,7 +702,7 @@ export const fr = {
   cliCommandNotInstalled: 'Ajoutez la commande Bureau à votre terminal.',
   cliCommandBroken: 'La commande Bureau doit être réparée.',
   cliCommandInstall: 'Installer',
-  cliCommandRepair: 'Réparation',
+  cliCommandRepair: 'Réparer',
   cliCommandRemove: 'Supprimer',
   cliCommandClose: 'Fermer',
   cliCommandSwitch: 'Continuer avec la commande Bureau ?',
@@ -718,7 +718,7 @@ export const fr = {
   cliCommandChanged: "La commande ou PATH a changé pendant que cette boîte de dialogue était ouverte. Ouvrez à nouveau la commande Gérer dsh pour vérifier l'état actuel.",
   cliCommandOwnershipError: "L'enregistrement ou la sauvegarde de la commande a été modifiée. Aucune commande sans rapport n'a été supprimée.",
   cliCommandFailed: "La commande n'a pas pu être mise à jour. Vérifiez que l'application est installée et que la destination est accessible en écriture, puis réessayez.",
-  application: 'Demande',
+  application: 'Application',
   fileMenu: 'Fichier',
   closePage: 'Fermer la page ou la fenêtre',
   aboutMenu: 'À propos de DeepSeek Harness',
@@ -864,12 +864,12 @@ export const fr = {
 /** German dictionary, checked against the English keys. */
 export const de = {
   cliCommandMenu: 'dsh-Befehl verwalten…',
-  cliCommandTitle: 'Verwalten Sie den dsh-Befehl',
+  cliCommandTitle: 'dsh-Befehl verwalten',
   cliCommandLocation: 'Desktop-Befehl: {path}',
   cliCommandSelected: 'Aktueller dsh-Befehl: {path}',
   cliCommandTarget: 'Aktuelles Launcher-Ziel: {path}',
   cliCommandShadowed: 'Ein anderer dsh hat Vorrang. Entfernen Sie diese Installation oder ordnen Sie sie neu an, um standardmäßig den Desktop-Befehl zu verwenden. Sie können den Desktop-Befehl auch über seinen vollständigen Pfad ausführen.',
-  cliCommandSelectionUnknown: 'Ihr Shell-Befehl konnte nicht überprüft werden. Ein Alias ​​oder eine andere dsh-Installation kann Vorrang haben.',
+  cliCommandSelectionUnknown: 'Ihr Shell-Befehl konnte nicht überprüft werden. Ein Alias oder eine andere dsh-Installation kann Vorrang haben.',
   cliCommandInstalled: 'Der Desktop-Befehl ist installiert.',
   cliCommandNotInstalled: 'Fügen Sie den Desktop-Befehl zu Ihrem Terminal hinzu.',
   cliCommandBroken: 'Der Desktop-Befehl muss repariert werden.',
@@ -890,7 +890,7 @@ export const de = {
   cliCommandChanged: 'Der Befehl oder PATH hat sich geändert, während dieses Dialogfeld geöffnet war. Öffnen Sie den Befehl „dsh verwalten“ erneut, um den aktuellen Status zu überprüfen.',
   cliCommandOwnershipError: 'Die Befehlsregistrierung oder Sicherung wurde geändert. Es wurde kein nicht verwandter Befehl entfernt.',
   cliCommandFailed: 'Der Befehl konnte nicht aktualisiert werden. Überprüfen Sie, ob die Anwendung installiert ist und das Ziel beschreibbar ist, und versuchen Sie es dann erneut.',
-  application: 'Bewerbung',
+  application: 'Anwendung',
   fileMenu: 'Datei',
   closePage: 'Seite oder Fenster schließen',
   aboutMenu: 'Über DeepSeek Harness',
@@ -898,10 +898,10 @@ export const de = {
   aboutVersion: 'Version V{version}',
   hideApplication: 'DeepSeek Harness ausblenden',
   hideOtherApplications: 'Andere ausblenden',
-  showAllApplications: 'Alle anzeigen',
-  quitApplication: 'Beenden Sie DeepSeek Harness',
-  openApplication: 'Öffnen Sie DeepSeek Harness',
-  quit: 'Hör auf',
+  showAllApplications: 'Alle einblenden',
+  quitApplication: 'DeepSeek Harness beenden',
+  openApplication: 'DeepSeek Harness öffnen',
+  quit: 'Beenden',
   cancel: 'Abbrechen',
   quitTitle: 'DeepSeek Harness beenden?',
   quitActiveTasks: 'Laufende Aufgaben werden unterbrochen.',
@@ -914,17 +914,17 @@ export const de = {
   delete: 'Löschen',
   undo: 'Rückgängig machen',
   redo: 'Wiederholen',
-  cut: 'Schneiden',
+  cut: 'Ausschneiden',
   copy: 'Kopieren',
   paste: 'Einfügen',
-  selectAll: 'Wählen Sie „Alle“ aus',
+  selectAll: 'Alles auswählen',
   startupFailed: 'DeepSeek Harness ist nicht verfügbar',
   fatalSummary: 'Die Anwendung konnte nicht gestartet werden oder wurde unerwartet gestoppt.',
   startupAddressInUse: 'Eine andere DSH-Instanz (z. B. dsh Web oder die Desktop-App) wird ausgeführt. Sie können nicht gleichzeitig starten. Beenden Sie die andere laufende DSH-Instanz und starten Sie sie neu.',
   diagnosticTruncated: '… Fehlerdetails gekürzt.',
   reportWrittenTo: 'Diagnosebericht: {path}',
   startupReinstallAdvice: 'Wenn Anwendungsdateien fehlen oder beschädigt sind, schließen Sie die Anwendung und installieren Sie sie erneut. Ihre Aufgaben werden separat gespeichert.',
-  exitApplication: 'Ausstieg',
+  exitApplication: 'Beenden',
   restartApplication: 'Neustart',
   recoveryOperationFailed: 'Der Wiederherstellungsvorgang ist fehlgeschlagen',
   disableThirdPartyPlugins: 'Deaktivieren Sie Plugins von Drittanbietern, sichern Sie den Profil-Patch und starten Sie neu',
@@ -934,7 +934,7 @@ export const de = {
   welcomeTaglineBrand: 'DeepSeek Harness',
   welcomeTaglineAfter: '',
   welcomeDescription: 'Potenzial aufbauen. Entdecken Sie Intelligenz.',
-  welcomeAuthStarting: 'Eröffnungsanmeldung…',
+  welcomeAuthStarting: 'Anmeldung wird geöffnet…',
   welcomeAuthWaiting: 'Browser wurde nicht automatisch geöffnet?',
   welcomeAuthWaitingDescription: 'Kopieren Sie den Anmeldelink und öffnen Sie ihn in Ihrem Browser, um sich anzumelden.',
   welcomeAuthExchanging: 'Anmeldung wird abgeschlossen…',
@@ -945,23 +945,23 @@ export const de = {
   welcomeAuthCopied: 'Kopiert',
   welcomeAuthCopyFailed: 'Konnte nicht kopiert werden. Versuchen Sie es erneut.',
   welcomeAuthCancel: 'Abbrechen',
-  welcomeAuthRetry: 'Melden Sie sich erneut an',
-  welcomeSignIn: 'Melden Sie sich an',
-  welcomeApiKey: 'Fügen Sie den API-Schlüssel hinzu',
+  welcomeAuthRetry: 'Erneut anmelden',
+  welcomeSignIn: 'Anmelden',
+  welcomeApiKey: 'API-Schlüssel hinzufügen',
   welcomeKeyTitle: 'Fügen Sie einen API-Schlüssel hinzu, um loszulegen',
   welcomeKeyDescription: 'Konfigurieren Sie offizielle DeepSeek-Modelle für die Verwendung von Harness',
-  welcomeKeyPlaceholder: 'Geben Sie den Schlüssel API ein',
+  welcomeKeyPlaceholder: 'API-Schlüssel eingeben',
   welcomeKeySave: 'Speichern und fortfahren',
   welcomeKeyLater: 'Später einrichten',
   welcomeKeyBack: 'Zurück zur Anmeldung',
   welcomeSessionExpired: 'Sie haben sich von Ihrem Konto abgemeldet. Bitte melden Sie sich erneut an.',
   welcomeKeyBlank: 'Geben Sie einen API-Schlüssel ein.',
   welcomeKeyInvalid: 'Geben Sie den API-Schlüssel selbst ein, ohne Anführungszeichen, Leerzeichen oder eine Umgebungsvariablenzuweisung.',
-  welcomeKeyFailed: 'Der Schlüssel API konnte nicht gespeichert werden. Bitte versuchen Sie es erneut.',
+  welcomeKeyFailed: 'Der API-Schlüssel konnte nicht gespeichert werden. Bitte versuchen Sie es erneut.',
   welcomeContinueFailed: 'Der Arbeitsbereich konnte nicht geöffnet werden. Bitte versuchen Sie es erneut.',
   checkUpdatesMenu: 'Nach Updates suchen…',
   reloadPageMenu: 'Seite neu laden',
-  restartAppHostMenu: 'Starten Sie App und Host neu',
+  restartAppHostMenu: 'Anwendung und Host neu starten',
   updateCheckFailedTitle: 'Update-Überprüfung fehlgeschlagen',
   updateCheckFailed: 'Es konnte nicht nach Updates gesucht werden. Bitte versuchen Sie es später noch einmal.',
   updateDownloadFailed: 'Das Update konnte nicht heruntergeladen werden. Bitte versuchen Sie es erneut.',
@@ -970,9 +970,9 @@ export const de = {
   updateDownloadNetworkFailed: 'Das Update konnte nicht heruntergeladen werden. Überprüfen Sie Ihre Verbindung und versuchen Sie es erneut.',
   updateInstallNetworkFailed: 'Das Update konnte nicht installiert werden. Überprüfen Sie Ihre Verbindung und versuchen Sie es erneut.',
   unknownError: 'Unbekannter Fehler',
-  updateCheckTitle: 'Suchen Sie nach Updates',
+  updateCheckTitle: 'Nach Updates suchen',
   updateCurrentDetail: 'Aktuelle Version: {version}',
-  updateCurrent: 'Du bist auf dem Laufenden!',
+  updateCurrent: 'Sie verwenden die neueste Version.',
   updateChecking: 'Suche nach Updates…',
   updateDownload: 'Update herunterladen',
   updateDownloadedTitle: 'Die Version {version} ist zur Installation bereit',
@@ -987,7 +987,7 @@ export const de = {
   updateRetry: 'Update erneut versuchen',
   updateActiveTasks: 'Aufgaben sind noch in Bearbeitung',
   updateActiveTasksDetail: 'Durch die Aktualisierung werden die laufenden Aufgaben gestoppt und die App neu gestartet. Weitermachen?',
-  updateStopTasks: 'Stoppen Sie Aufgaben und aktualisieren Sie sie',
+  updateStopTasks: 'Aufgaben beenden und Update installieren',
   updateTasksChanged: 'Neue Aufgaben haben begonnen. Bestätigen Sie erneut, um die Aufgaben zu stoppen und zu aktualisieren.',
   updateTasksUnavailable: 'Der Aufgabenstatus ist nicht verfügbar. Versuchen Sie erneut, die Aktualisierung durchzuführen, wenn der Arbeitsbereich bereit ist.',
   updateFullscreenTimeout: 'Der Vollbildmodus konnte nicht beendet werden. Beenden Sie den Vollbildmodus und versuchen Sie dann erneut, das Update durchzuführen.',
@@ -1008,7 +1008,7 @@ export const de = {
   policyLoginFailed: 'Die Feishu-Anmeldung wurde nicht abgeschlossen. Bitte versuchen Sie es erneut.',
   policyLoginLoading: 'Anmeldeseite wird geladen…',
   mandatoryNoRelease: 'Es wurde kein kompatibles Update gefunden. Überprüfen Sie es erneut oder wenden Sie sich an den Support.',
-  mandatoryRefresh: 'Überprüfen Sie es noch einmal',
+  mandatoryRefresh: 'Erneut prüfen',
   mandatoryPage: 'Von der offiziellen Website herunterladen',
   mandatoryCopy: 'Download-Link kopieren',
   mandatoryPageFailed: 'Die offizielle Download-Seite konnte nicht geöffnet werden. Kopieren Sie den Link und öffnen Sie ihn in Ihrem Browser.',
@@ -1019,14 +1019,14 @@ export const de = {
   mandatoryVersion: 'Neue Version: {version}',
   mandatoryReadyDetail: 'Die App wird während des Updates geschlossen und nach Abschluss automatisch wieder geöffnet.',
   mandatoryDeferred: 'Laufende Aufgaben werden weiterhin ausgeführt. Schließen Sie das Update ab, bevor Sie die App erneut verwenden.',
-  mandatoryContinue: 'Weiter aktualisieren',
+  mandatoryContinue: 'Update fortsetzen',
   mandatoryInspecting: 'Aufgaben prüfen…',
   mandatoryStopping: 'Aufgaben stoppen…',
   mandatoryRestarting: 'Die App wird in Kürze neu gestartet. Bitte warten.',
   mandatoryDownloadFailed: 'Die Update-Dateien konnten nicht heruntergeladen oder vorbereitet werden. Bitte versuchen Sie es erneut.',
   mandatoryInstallFailed: 'Das Update wurde nicht installiert. Überprüfen Sie die Aufgaben erneut und versuchen Sie es erneut.',
   mandatoryOpenHelp: 'Seite wurde nicht geöffnet?',
-  mandatoryReopen: 'Öffnen Sie die offizielle Download-Seite erneut',
+  mandatoryReopen: 'Offizielle Downloadseite erneut öffnen',
   mandatoryCopied: 'Link kopiert',
   mandatoryCopyFailed: 'Der Link konnte nicht kopiert werden. Wählen Sie es aus und kopieren Sie es unten.',
   mandatoryAddress: 'Download-Link',
@@ -1037,25 +1037,25 @@ export const de = {
 export const ru = {
   cliCommandMenu: 'Управление командой dsh…',
   cliCommandTitle: 'Управление командой dsh',
-  cliCommandLocation: 'Команда рабочего стола: {path}',
+  cliCommandLocation: 'Команда Desktop: {path}',
   cliCommandSelected: 'Текущая команда dsh: {path}.',
   cliCommandTarget: 'Текущая цель лаунчера: {path}',
-  cliCommandShadowed: 'Другой dsh имеет приоритет. Удалите или измените порядок установки, чтобы использовать команду «Рабочий стол» по умолчанию. Вы также можете запустить команду «Рабочий стол» по ее полному пути.',
+  cliCommandShadowed: 'Другой dsh имеет приоритет. Удалите или измените порядок установки, чтобы использовать команду «Desktop» по умолчанию. Вы также можете запустить команду «Desktop» по ее полному пути.',
   cliCommandSelectionUnknown: 'Не удалось проверить вашу команду оболочки. Псевдоним или другая установка dsh может иметь приоритет.',
-  cliCommandInstalled: 'Команда «Рабочий стол» установлена.',
-  cliCommandNotInstalled: 'Добавьте команду «Рабочий стол» в свой терминал.',
+  cliCommandInstalled: 'Команда «Desktop» установлена.',
+  cliCommandNotInstalled: 'Добавьте команду «Desktop» в свой терминал.',
   cliCommandBroken: 'Команда Desktop требует ремонта.',
   cliCommandInstall: 'Установить',
-  cliCommandRepair: 'Ремонт',
+  cliCommandRepair: 'Исправить',
   cliCommandRemove: 'Удалить',
   cliCommandClose: 'Закрыть',
-  cliCommandSwitch: 'Продолжить команду «Рабочий стол»?',
+  cliCommandSwitch: 'Продолжить команду «Desktop»?',
   cliCommandPreserve: 'Существующая команда будет сохранена. Другие установки и файлы запуска оболочки не будут изменены.',
   cliCommandContinue: 'Продолжить',
   cliCommandInstallApp: 'Установите Desktop в папку «Приложения», прежде чем управлять командой dsh.',
   cliCommandUpdating: 'Идет установка обновления. Управляйте командой после завершения установки.',
   cliCommandNewTerminal: 'Откройте новый терминал и запустите dsh --version.',
-  cliCommandRemoved: 'Регистрация команд рабочего стола удалена.',
+  cliCommandRemoved: 'Регистрация команд Desktop удалена.',
   cliCommandPreviousRestored: 'Предыдущий лаунчер восстановлен.',
   cliCommandOtherKept: 'Остальные командные установки остались на месте.',
   cliCommandBackupKept: 'Предыдущий лаунчер сохранился по адресу: {path}.',
@@ -1144,7 +1144,7 @@ export const ru = {
   unknownError: 'Неизвестная ошибка',
   updateCheckTitle: 'Проверьте наличие обновлений',
   updateCurrentDetail: 'Текущая версия: {version}.',
-  updateCurrent: 'Вы в курсе!',
+  updateCurrent: 'У вас последняя версия.',
   updateChecking: 'Проверка обновлений…',
   updateDownload: 'Скачать обновление',
   updateDownloadedTitle: 'Версия {version} готова к установке.',
@@ -1186,7 +1186,7 @@ export const ru = {
   mandatoryPageFailed: 'Не удалось открыть официальную страницу загрузки. Скопируйте ссылку и откройте ее в браузере.',
   mandatoryViewDownload: 'Открыть страницу загрузки',
   mandatoryViewPageFailed: 'Не удалось открыть страницу загрузки. Пожалуйста, попробуйте еще раз.',
-  mandatoryActionFailed: 'Акция провалилась. Пожалуйста, попробуйте еще раз. Вы сможете снова использовать приложение после завершения обновления.',
+  mandatoryActionFailed: 'Не удалось выполнить действие. Повторите попытку. Вы сможете снова использовать приложение после завершения обновления.',
   mandatoryReady: 'Обновление готово',
   mandatoryVersion: 'Новая версия: {version}',
   mandatoryReadyDetail: 'Приложение закроется во время обновления и автоматически откроется после его завершения.',
@@ -1234,7 +1234,7 @@ export const pt = {
   cliCommandChanged: 'O comando ou PATH foi alterado enquanto esta caixa de diálogo estava aberta. Abra o comando Gerenciar dsh novamente para revisar o estado atual.',
   cliCommandOwnershipError: 'O registro ou backup do comando foi alterado. Nenhum comando não relacionado foi removido.',
   cliCommandFailed: 'O comando não pôde ser atualizado. Verifique se o aplicativo está instalado e se o destino é gravável e tente novamente.',
-  application: 'Aplicação',
+  application: 'Aplicativo',
   fileMenu: 'Arquivo',
   closePage: 'Fechar página ou janela',
   aboutMenu: 'Sobre DeepSeek Harness',
@@ -1294,7 +1294,7 @@ export const pt = {
   welcomeApiKey: 'Adicionar chave API',
   welcomeKeyTitle: 'Adicione uma chave API para começar',
   welcomeKeyDescription: 'Configure modelos DeepSeek oficiais para começar a usar o Harness',
-  welcomeKeyPlaceholder: 'Insira a tecla API',
+  welcomeKeyPlaceholder: 'Insira a chave de API',
   welcomeKeySave: 'Salvar e continuar',
   welcomeKeyLater: 'Configurar mais tarde',
   welcomeKeyBack: 'Voltar para fazer login',
@@ -1373,9 +1373,11 @@ export const pt = {
   mandatoryReopen: 'Abra a página oficial de download novamente',
   mandatoryCopied: 'Link copiado',
   mandatoryCopyFailed: 'Não foi possível copiar o link. Selecione e copie abaixo.',
-  mandatoryAddress: 'Baixar link',
+  mandatoryAddress: 'Link de download',
   mandatoryNotification: 'Retorne ao aplicativo para confirmar a instalação e reinicie.',
 } satisfies DesktopMessages
+
+const dictionaries = { en, zh, ja, es, fr, de, ru, pt }
 
 /** Locale payload exposed to the Desktop-owned renderer. */
 export interface DesktopLocale {
@@ -1386,14 +1388,11 @@ export interface DesktopLocale {
 /** Resolve Electron's locale to one shipped Desktop dictionary. */
 export function resolveDesktopLocale(locale: string): DesktopLocale {
   const primary = locale.toLowerCase().split('-')[0]
-  const dictionaries = { ja, es, fr, de, ru, pt }
   if (primary !== undefined && Object.hasOwn(dictionaries, primary)) {
     const id = primary as keyof typeof dictionaries
-    return { id, messages: dictionaries[id] }
+    return { id: id === 'zh' ? 'zh-CN' : id, messages: dictionaries[id] }
   }
-  return primary === 'zh'
-    ? { id: 'zh-CN', messages: zh }
-    : { id: 'en', messages: en }
+  return { id: 'en', messages: en }
 }
 
 /**
@@ -1404,10 +1403,10 @@ export function resolveDesktopLocale(locale: string): DesktopLocale {
  */
 export function resolveDesktopStartupLocale(preference: string | null, languages: readonly string[]): DesktopLocale {
   const selected = preference?.toLowerCase()
-  if (selected !== undefined && ['zh', 'en', 'ja', 'es', 'fr', 'de', 'ru', 'pt'].includes(selected)) return resolveDesktopLocale(selected)
+  if (selected !== undefined && Object.hasOwn(dictionaries, selected)) return resolveDesktopLocale(selected)
   for (const language of languages) {
     const primary = language.toLowerCase().split('-')[0]
-    if (primary !== undefined && ['zh', 'en', 'ja', 'es', 'fr', 'de', 'ru', 'pt'].includes(primary)) return resolveDesktopLocale(primary)
+    if (primary !== undefined && Object.hasOwn(dictionaries, primary)) return resolveDesktopLocale(primary)
   }
   return resolveDesktopLocale('en')
 }

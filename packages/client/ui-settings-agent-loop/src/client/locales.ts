@@ -108,7 +108,7 @@ export const de = {
   readOnly: 'Diese Bereitstellung speichert Einstellungen schreibgeschützt.',
   unavailable: 'Dieses Plugin ist nicht geladen und kann daher derzeit nicht konfiguriert werden.',
   save: 'Speichern',
-  saving: 'Sparen…',
+  saving: 'Speichern…',
   saveFailed: 'Die Bereitstellung hat diese Werte nicht akzeptiert. Sie mussten sie korrigieren.',
   invalidNumber: 'Geben Sie eine Zahl ein oder lassen Sie das Feld leer, um den Standardwert zu verwenden.',
 } satisfies Record<keyof typeof en, string>

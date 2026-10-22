@@ -393,7 +393,7 @@ function i18nGates(includeDictionaries: boolean): Gate[] {
   return [
     pnpmScript('installer-locales', 'verify-installer-locales', { label: 'Windows installer locales' }),
     pnpmScript('locale-metadata', 'verify-locale-metadata', { label: 'plugin locale metadata' }),
-    ...includeDictionaries ? [pnpmExec('locale-dictionaries', ['vitest', 'run', 'scripts/locale-dictionary-parity.spec.ts'], { label: 'locale dictionaries' })] : [],
+    ...includeDictionaries ? [pnpmExec('locale-dictionaries', ['vitest', 'run', 'scripts/locale-dictionary-parity.spec.ts', 'scripts/shipped-locales.spec.ts', 'packages/client/locale/tests/apply.client.spec.ts'], { label: 'locale dictionaries' })] : [],
   ]
 }
 

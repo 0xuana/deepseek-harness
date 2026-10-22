@@ -41,7 +41,7 @@ export const fr = {
   'truncated': 'Tronqué',
   'json.label': 'JSON',
   'markdown.footnotes': 'Notes de bas de page',
-  'markdown.truncatedCharacters': '… tronqué aux caractères {total}',
+  'markdown.truncatedCharacters': '… tronqué à {total} caractères',
   'number.thousand': '{value}K',
   'number.million': '{value}M',
 } satisfies Record<keyof typeof en, string>

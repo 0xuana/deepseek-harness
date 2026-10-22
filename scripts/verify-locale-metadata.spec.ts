@@ -1,5 +1,5 @@
 /** Metadata coverage rejects missing translations through the same checker used by CI. */
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
@@ -19,7 +19,7 @@ function fixture(ja: unknown = { meta: { title: '名前 {name}', description: '�
   writeFileSync(join(directory, 'zh.json'), JSON.stringify({ meta: { title: '名称 {name}', description: '描述' } }))
   writeFileSync(join(directory, 'ja.json'), JSON.stringify(ja))
   for (const language of ['es', 'fr', 'de', 'ru', 'pt']) {
-    writeFileSync(join(directory, `${language}.json`), JSON.stringify({ meta: { title: 'Name {name}', description: 'Description.' } }))
+    writeFileSync(join(directory, `${language}.json`), JSON.stringify({ meta: { title: 'Name {name}', description: 'Localized description.' } }))
   }
   return root
 }
@@ -46,7 +46,7 @@ it.each([
 it('checks referenced detail documents', () => {
   const root = fixture()
   const directory = join(root, 'packages/demo/plugin/locale')
-  const meta = { title: 'Name {name}', description: 'Description.', detail: 'docs/DETAIL.md' }
+  const meta = { title: 'Name {name}', detail: 'docs/DETAIL.md' }
   for (const language of SHIPPED_LOCALE_IDS) writeFileSync(join(directory, `${language}.json`), JSON.stringify({ meta }))
   expect(localeMetadataProblems(root).join('\n')).toContain('missing detail resource')
   mkdirSync(join(directory, '../docs'))
@@ -103,7 +103,7 @@ it('requires sentence punctuation for English descriptions', () => {
   const file = join(root, 'packages/demo/plugin/locale/en.json')
   writeFileSync(file, JSON.stringify({ meta: { title: 'Name {name}', description: 'Description' } }))
   expect(localeMetadataProblems(root).join('\n')).toContain('sentence punctuation')
-  writeFileSync(file, JSON.stringify({ meta: { title: 'Name {name}', description: 'Description.' } }))
+  writeFileSync(file, JSON.stringify({ meta: { title: 'Name {name}', description: 'English description.' } }))
   expect(localeMetadataProblems(root)).toEqual([])
 })
 
@@ -135,6 +135,21 @@ it.each(['es', 'fr', 'de', 'ru', 'pt'])('rejects missing %s metadata', (language
 
 it.each(['es', 'fr', 'de', 'ru', 'pt'])('rejects untranslated Chinese descriptions in %s metadata', (language) => {
   const root = fixture()
+  writeFileSync(join(root, 'packages/demo/plugin/locale/en.json'), JSON.stringify({ meta: { title: 'Name {name}', description: 'English description.' } }))
   writeFileSync(join(root, `packages/demo/plugin/locale/${language}.json`), JSON.stringify({ meta: { title: 'Name {name}', description: '描述' } }))
   expect(localeMetadataProblems(root).join('\n')).toContain(`${language}.json: meta.description contains untranslated source text`)
+})
+
+it.each(['es', 'fr', 'de', 'ru', 'pt'])('rejects copied English descriptions in %s metadata', (language) => {
+  const root = fixture()
+  writeFileSync(join(root, 'packages/demo/plugin/locale/en.json'), JSON.stringify({ meta: { title: 'Name {name}', description: 'English description.' } }))
+  writeFileSync(join(root, `packages/demo/plugin/locale/${language}.json`), JSON.stringify({ meta: { title: 'Name {name}', description: 'English description.' } }))
+  expect(localeMetadataProblems(root).join('\n')).toContain(`${language}.json: meta.description contains untranslated source text`)
+})
+
+it.each(['\u200b', '\ufeff', String.raw`\u200b`, String.raw`\ufeff`])('rejects invisible characters in JSON resources', (character) => {
+  const root = fixture()
+  const file = join(root, 'packages/demo/plugin/locale/es.json')
+  writeFileSync(file, readFileSync(file, 'utf8').replace('Localized description.', `Localized${character} description.`))
+  expect(localeMetadataProblems(root).join('\n')).toContain('invisible locale character')
 })

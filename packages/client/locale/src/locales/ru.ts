@@ -41,7 +41,7 @@ export const ru = {
   'truncated': 'Усечено',
   'json.label': 'JSON',
   'markdown.footnotes': 'Сноски',
-  'markdown.truncatedCharacters': '… усекается до символов {total}',
+  'markdown.truncatedCharacters': '… обрезано до {total} символов',
   'number.thousand': '{value}K',
   'number.million': '{value}M',
 } satisfies Record<keyof typeof en, string>

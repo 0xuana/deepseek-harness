@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
 
-import { SHIPPED_LOCALE_IDS, localeTokens, type ShippedLocaleId } from './shipped-locales.ts'
+import { SHIPPED_LOCALE_IDS, localeTokens, hasInvisibleLocaleCharacters, type ShippedLocaleId } from './shipped-locales.ts'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 
@@ -326,7 +326,13 @@ describe('shipped locale dictionaries', () => {
     const perFile = new Map<string, Dictionary[]>()
     for (const file of files) {
       const dicts = dictionariesIn(file)
-      if (dicts.length > 0) perFile.set(relative(file), dicts)
+      if (dicts.length > 0) {
+        expect(hasInvisibleLocaleCharacters(readFileSync(file, 'utf8')), relative(file)).toBe(false)
+        for (const dictionary of dicts) {
+          for (const text of Object.values(dictionary.templates)) expect(hasInvisibleLocaleCharacters(text), relative(file)).toBe(false)
+        }
+        perFile.set(relative(file), dicts)
+      }
     }
 
     const groups = new Map<string, Map<ShippedLocaleId, Dictionary>>()
@@ -372,26 +378,25 @@ describe('shipped locale dictionaries', () => {
       if (zhOnly.length > 0) problems.push(`${zh.file} ${zh.name} has keys absent from ${en.name}: ${zhOnly.join(', ')}`)
       if (enOnly.length > 0) problems.push(`${en.file} ${en.name} has keys absent from ${zh.name}: ${enOnly.join(', ')}`)
       for (const language of SHIPPED_LOCALE_IDS.filter(id => id !== 'en' && id !== 'zh')) {
-        const ja = slot.get(language)
-        if (ja === undefined) {
+        const translatedDictionary = slot.get(language)
+        if (translatedDictionary === undefined) {
           problems.push(`${key} has no ${language} dictionary`)
         } else {
-          const missing = en.keys.filter(k => !ja.keys.includes(k))
-          const extra = ja.keys.filter(k => !en.keys.includes(k))
+          const missing = en.keys.filter(k => !translatedDictionary.keys.includes(k))
+          const extra = translatedDictionary.keys.filter(k => !en.keys.includes(k))
           if (missing.length > 0 || extra.length > 0) {
-            problems.push(`${ja.file} ${ja.name}: missing [${missing.join(', ')}], extra [${extra.join(', ')}]`)
+            problems.push(`${translatedDictionary.file} ${translatedDictionary.name}: missing [${missing.join(', ')}], extra [${extra.join(', ')}]`)
           }
           for (const [name, text] of Object.entries(en.templates)) {
-            const translated = ja.templates[name]
+            const translated = translatedDictionary.templates[name]
             if (translated === undefined) continue
             const placeholders = (value: string): string => localeTokens(value).join(', ')
             if (placeholders(text) !== placeholders(translated)) {
-              problems.push(`${ja.file} ${ja.name}.${name} changes placeholders or literal tokens from ${en.name}`)
+              problems.push(`${translatedDictionary.file} ${translatedDictionary.name}.${name} changes placeholders or literal tokens from ${en.name}`)
             }
           }
         }
       }
-
     }
 
     // The shipped dictionary count only grows; a collapse means discovery or

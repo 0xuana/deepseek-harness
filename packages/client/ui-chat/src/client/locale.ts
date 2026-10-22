@@ -1585,7 +1585,7 @@ export const pt = {
   'message.turnUsage.reasoning': ' ({tokens} raciocínio)',
   'message.turnUsage.count': '{count} tok',
   'duration.secondUnit': 's',
-  'duration.minuteUnit': 'eu ',
+  'duration.minuteUnit': 'm ',
   'duration.hourUnit': 'h ',
   'command.running': 'Correndo…',
   'command.failed': 'Falha no comando',

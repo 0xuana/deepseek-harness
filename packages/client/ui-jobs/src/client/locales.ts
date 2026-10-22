@@ -140,10 +140,10 @@ export const ja = {
 
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
-  'count.live.one': 'Trabajo en segundo plano {count} ejecutándose',
-  'count.live.other': 'Trabajos en segundo plano {count} en ejecución',
-  'count.idle.one': 'Trabajo en segundo plano {count}',
-  'count.idle.other': 'Trabajos en segundo plano {count}',
+  'count.live.one': 'Tareas en segundo plano en ejecución: {count}',
+  'count.live.other': 'Tareas en segundo plano en ejecución: {count}',
+  'count.idle.one': 'Tareas en segundo plano: {count}',
+  'count.idle.other': 'Tareas en segundo plano: {count}',
   'list.aria': 'Trabajos en segundo plano',
   'section.live': 'corriendo',
   'section.settledCount': 'Terminado {count}',
@@ -184,10 +184,10 @@ export const es = {
 
 /** French dictionary, checked against the English keys. */
 export const fr = {
-  'count.live.one': "Travail en arrière-plan {count} en cours d'exécution",
-  'count.live.other': "Travaux en arrière-plan {count} en cours d'exécution",
-  'count.idle.one': 'Travail en arrière-plan {count}',
-  'count.idle.other': "Travaux d'arrière-plan {count}",
+  'count.live.one': 'Tâches en arrière-plan en cours : {count}',
+  'count.live.other': 'Tâches en arrière-plan en cours : {count}',
+  'count.idle.one': 'Tâches en arrière-plan : {count}',
+  'count.idle.other': 'Tâches en arrière-plan : {count}',
   'list.aria': 'Travaux en arrière-plan',
   'section.live': 'Courir',
   'section.settledCount': 'Terminé {count}',
@@ -228,10 +228,10 @@ export const fr = {
 
 /** German dictionary, checked against the English keys. */
 export const de = {
-  'count.live.one': '{count} Hintergrundjob läuft',
-  'count.live.other': '{count} Hintergrundjobs werden ausgeführt',
-  'count.idle.one': '{count} Hintergrundjob',
-  'count.idle.other': '{count} Hintergrundjobs',
+  'count.live.one': 'Laufende Hintergrundaufgaben: {count}',
+  'count.live.other': 'Laufende Hintergrundaufgaben: {count}',
+  'count.idle.one': 'Hintergrundaufgaben: {count}',
+  'count.idle.other': 'Hintergrundaufgaben: {count}',
   'list.aria': 'Hintergrundjobs',
   'section.live': 'Laufen',
   'section.settledCount': 'Fertig {count}',
@@ -272,10 +272,10 @@ export const de = {
 
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
-  'count.live.one': '{count} фоновое задание выполняется',
-  'count.live.other': '{count} выполняются фоновые задания',
-  'count.idle.one': '{count} фоновое задание',
-  'count.idle.other': '{count} фоновые задания',
+  'count.live.one': 'Фоновые задачи выполняются: {count}',
+  'count.live.other': 'Фоновые задачи выполняются: {count}',
+  'count.idle.one': 'Фоновые задачи: {count}',
+  'count.idle.other': 'Фоновые задачи: {count}',
   'list.aria': 'Фоновые задания',
   'section.live': 'Бег',
   'section.settledCount': 'Закончено {count}',
@@ -316,10 +316,10 @@ export const ru = {
 
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = {
-  'count.live.one': '{count} trabalho em segundo plano em execução',
-  'count.live.other': '{count} jobs em segundo plano em execução',
-  'count.idle.one': '{count} tarefa em segundo plano',
-  'count.idle.other': '{count} trabalhos em segundo plano',
+  'count.live.one': 'Tarefas em segundo plano em execução: {count}',
+  'count.live.other': 'Tarefas em segundo plano em execução: {count}',
+  'count.idle.one': 'Tarefas em segundo plano: {count}',
+  'count.idle.other': 'Tarefas em segundo plano: {count}',
   'list.aria': 'Trabalhos em segundo plano',
   'section.live': 'Correndo',
   'section.settledCount': 'Concluído {count}',

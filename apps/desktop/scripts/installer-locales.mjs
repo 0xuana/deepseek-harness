@@ -10,7 +10,8 @@ const defaultDirectory = fileURLToPath(new URL('../installer/locales/', import.m
  * @returns {{id: string, nsisLanguage: string, strings: Record<string, string>, uninstaller: Record<string, string>}[]} Complete language resources.
  */
 export function readInstallerLocales(directory = defaultDirectory) {
-  const locales = readdirSync(directory).filter(name => name.endsWith('.json')).sort().map(name => {
+  const locales = readdirSync(directory).filter(name => name.endsWith('.json')).sort((a, b) =>
+    a === 'en_US.json' ? -1 : b === 'en_US.json' ? 1 : a.localeCompare(b)).map(name => {
     if (!/^[a-z]{2}_[A-Z]{2}\.json$/u.test(name)) throw new Error(`${name}: invalid installer language filename`)
     /** @type {unknown} */
     const resource = JSON.parse(readFileSync(`${directory}/${name}`, 'utf8'))
@@ -25,6 +26,7 @@ export function readInstallerLocales(directory = defaultDirectory) {
       const result = {}
       for (const [key, text] of Object.entries(value)) {
         if (typeof text !== 'string' || text.trim() === '') throw new Error(`${name}: ${key} must be nonempty text`)
+        if (/[\u200b\ufeff]/u.test(text)) throw new Error(`${name}: ${key} contains an invisible locale character`)
         result[key] = text
       }
       return result

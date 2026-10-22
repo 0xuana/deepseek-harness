@@ -1,3 +1,5 @@
+import { SHIPPED_LOCALE_IDS } from '../../../scripts/shipped-locales.ts'
+import { createRequire } from 'node:module'
 /** Per-language installer resources feed both the packaging language list and the NSIS compiler. */
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -16,7 +18,7 @@ function fixture(): string {
 
 it('generates Japanese NSIS strings from the same files that select packaged languages', () => {
   const locales = readInstallerLocales()
-  expect(locales.map(locale => locale.id)).toEqual(['de_DE', 'en_US', 'es_ES', 'fr_FR', 'ja_JP', 'pt_BR', 'ru_RU', 'zh_CN'])
+  expect(locales.map(locale => locale.id)).toEqual(['en_US', 'de_DE', 'es_ES', 'fr_FR', 'ja_JP', 'pt_BR', 'ru_RU', 'zh_CN'])
   const source = renderInstallerStrings(locales)
   expect(source).toContain('LangString INSTALLER_INSTALL ${LANG_JAPANESE} "今すぐインストール"')
   expect(source).toContain('LangString INSTALLER_NATIVE_PROGRESS ${LANG_JAPANESE} "インストールを準備しています… %d%%"')
@@ -41,6 +43,8 @@ it.each([
   ['extra format specifier', (resource: ReturnType<typeof readInstallerLocales>[number]) => { resource.strings.INSTALLER_NATIVE_PROGRESS = '%d%% %q' }, 'format placeholders'],
   ['translated command', (resource: ReturnType<typeof readInstallerLocales>[number]) => { resource.strings.INSTALLER_THEME_ERROR = 'Use /THEME=claro.' }, 'format placeholders'],
   ['duplicate language', (resource: ReturnType<typeof readInstallerLocales>[number]) => { resource.nsisLanguage = 'ENGLISH' }, 'duplicate NSIS language'],
+  ['invisible character', (resource: ReturnType<typeof readInstallerLocales>[number]) => { resource.strings.INSTALLER_INSTALL = 'Install\u200b' }, 'invisible'],
+  ['byte-order mark', (resource: ReturnType<typeof readInstallerLocales>[number]) => { resource.strings.INSTALLER_INSTALL = 'Install\ufeff' }, 'invisible'],
   ['invalid compiler token', (resource: ReturnType<typeof readInstallerLocales>[number]) => { resource.nsisLanguage = 'JA\n!error' }, 'invalid NSIS language'],
 ])('rejects %s', (_name, mutate, diagnostic) => {
   const directory = fixture()
@@ -54,4 +58,19 @@ it('escapes literal NSIS syntax without changing translated text', () => {
   const locale = readInstallerLocales()[0]!
   expect(renderInstallerStrings([{ ...locale, strings: { INSTALLER_INSTALL: '"$name"\nnext\rline' } }]))
     .toContain('"$\\"$$name$\\"$\\nnext$\\rline"')
+})
+
+it('uses the real electron-builder language identifiers and English fallback', () => {
+  const require = createRequire(import.meta.url)
+  const { LangConfigurator, createAddLangsMacro } = require('app-builder-lib/out/targets/nsis/nsisLang.js') as {
+    LangConfigurator: new (options: { installerLanguages: string[] }) => object
+    createAddLangsMacro: (generator: { macro: (name: string, lines: string[]) => void }, languages: object) => void
+  }
+  const locales = readInstallerLocales()
+  expect(locales[0]?.id).toBe('en_US')
+  expect(locales.map(locale => locale.id.split('_')[0]).sort()).toEqual([...SHIPPED_LOCALE_IDS].sort())
+  createAddLangsMacro({ macro: (_name, lines) => {
+    expect(lines.map(line => /MUI_LANGUAGE "([^" ]+)"/u.exec(line)?.[1]?.toUpperCase()))
+      .toEqual(locales.map(locale => locale.nsisLanguage))
+  } }, new LangConfigurator({ installerLanguages: locales.map(locale => locale.id) }))
 })

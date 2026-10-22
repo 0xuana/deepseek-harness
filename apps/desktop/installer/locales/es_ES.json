@@ -1,5 +1,5 @@
 {
-  "nsisLanguage": "SPANISH",
+  "nsisLanguage": "SPANISHINTERNATIONAL",
   "strings": {
     "INSTALLER_INSTALL": "Instalar ahora",
     "INSTALLER_FINISH": "Finalizar",

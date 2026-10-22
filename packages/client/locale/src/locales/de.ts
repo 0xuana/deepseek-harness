@@ -41,7 +41,7 @@ export const de = {
   'truncated': 'Abgeschnitten',
   'json.label': 'JSON',
   'markdown.footnotes': 'Fußnoten',
-  'markdown.truncatedCharacters': '… bei {total}-Zeichen abgeschnitten',
+  'markdown.truncatedCharacters': '… nach {total} Zeichen abgeschnitten',
   'number.thousand': '{value}K',
   'number.million': '{value}M',
 } satisfies Record<keyof typeof en, string>

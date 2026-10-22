@@ -19,7 +19,7 @@ export const ja = {
   question: 'Computer Use によるこのアプリの起動、読み取り、画面キャプチャ、操作を許可しますか？',
   detail: 'セッションの許可は DSH の再起動または Computer Use の無効化まで有効です。',
   approve: 'このセッションで許可',
-} satisfies typeof en
+} satisfies Record<keyof typeof en, string>
 
 /** Spanish dictionary, checked against the English keys. */
 export const es = {

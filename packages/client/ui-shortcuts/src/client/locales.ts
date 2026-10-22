@@ -232,7 +232,7 @@ export const de = {
   'global-hint': 'Von überall aus öffnen', 'clear-search': 'Suche löschen',
   title: 'Tastaturkürzel', open: 'Öffnen Sie Tastaturkürzel', settings: 'Tastaturkürzel', view: 'Verknüpfungen bearbeiten',
   description: 'Verfügbare Verknüpfungen und Eingabeaktionen anzeigen und bearbeiten', search: 'Suchverknüpfungen', close: 'Tastaturkürzel schließen',
-  application: 'Bewerbung', input: 'Nachrichteneingabe', menus: 'Menüs und Dialoge', approval: 'Genehmigungsbereich', unbound: 'Keine Abkürzung',
+  application: 'Anwendung', input: 'Nachrichteneingabe', menus: 'Menüs und Dialoge', approval: 'Genehmigungsbereich', unbound: 'Keine Abkürzung',
   empty: 'Keine passenden Verknüpfungen',
   move: 'Menüauswahl verschieben', select: 'Menüpunkt auswählen', dismiss: 'Menü oder oberen Dialog schließen',
 } satisfies Record<keyof typeof en, string>

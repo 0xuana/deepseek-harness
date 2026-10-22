@@ -138,7 +138,7 @@ export const de = {
   translating: 'Argumentation übersetzen', invalidProvider: 'Wählen Sie einen Übersetzungsdienst.', invalidLanguage: 'Geben Sie auto oder einen Sprachcode ein, z. B. zh, en oder ja.',
   overridden: 'Überschrieben', reset: 'Auf Standard zurücksetzen',
   unavailable: 'Übersetzungseinstellungen sind nicht verfügbar.', readOnly: 'Diese Bereitstellung speichert Einstellungen schreibgeschützt.',
-  saveFailed: 'Die Bereitstellung hat diese Werte nicht akzeptiert. Sie mussten sie korrigieren.', save: 'Speichern', saving: 'Sparen…',
+  saveFailed: 'Die Bereitstellung hat diese Werte nicht akzeptiert. Sie mussten sie korrigieren.', save: 'Speichern', saving: 'Speichern…',
   copy: 'Kopieren', copied: 'Kopiert', codeTitle: 'Codeblock', wrap: 'Zeilen umbrechen', unwrap: 'Zeilen abwickeln', footnotes: 'Fußnoten',
 } satisfies Record<keyof typeof en, string>
 
