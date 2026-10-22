@@ -9,12 +9,14 @@ import { loadDesktopPackageEnvironment } from '../scripts/desktop-package-enviro
 import { createPackagingRun } from '../scripts/packaging-run.mjs'
 import { beginWindowsSigningAttempt } from '../scripts/windows-signing-state.mjs'
 import { inspectWindowsTokenIdentity } from '../scripts/windows-token-identity.ts'
+import { prepareSigningCorpus } from './helpers/windows-signing-corpus.ts'
 
 const state = vi.hoisted(() => ({
   root: '', environment: {} as NodeJS.ProcessEnv,
   identity: 'matched', failure: '' as '' | 'primary' | 'final' | 'audit',
   signed: new Set<string>(), completed: new Set<string>(), stages: [] as string[],
   events: [] as object[], successes: 0, failures: 0,
+  removals: [] as { executable: string; args: readonly string[]; environment: NodeJS.ProcessEnv }[],
 }))
 
 vi.mock('node:child_process', () => ({
@@ -40,6 +42,17 @@ vi.mock('../scripts/windows-token-identity.ts', () => ({
   inspectWindowsTokenIdentity: vi.fn(async () => state.identity),
   windowsTokenIdentityFailure: (result: string) => `Identity refused: ${result}`,
 }))
+vi.mock('./helpers/windows-signing-corpus.ts', () => ({
+  prepareSigningCorpus: vi.fn(async () => {
+    const files = []
+    for (let index = 0; index < 6; index++) {
+      const path = join(state.root, `real-${index}.dll`)
+      await writeFile(path, 'inert real file')
+      files.push({ path, bytes: 15, sha256: 'a'.repeat(64) })
+    }
+    return files
+  }),
+}))
 vi.mock('../scripts/windows-signing-stage.mjs', () => ({
   withWindowsSigningStage: vi.fn(async (_options: object, operation: () => Promise<void>) => operation()),
 }))
@@ -47,10 +60,12 @@ vi.mock('../scripts/packaging-run.mjs', () => ({
   createPackagingRun: vi.fn(() => ({
     directory: join(state.root, 'run'),
     finish: vi.fn(),
-    run: vi.fn(async (stage: string, _executable: string, args: readonly string[], options: { env: NodeJS.ProcessEnv }) => {
+    run: vi.fn(async (stage: string, executable: string, args: readonly string[], options: { env: NodeJS.ProcessEnv }) => {
       state.stages.push(stage)
       if (stage.startsWith('compile-')) {
         await writeFile(args.find(arg => arg.startsWith('/out:'))!.slice(5), 'inert probe')
+      } else if (stage.startsWith('remove-signature-')) {
+        state.removals.push({ executable, args, environment: options.env })
       } else {
         state.signed.add(options.env.DSH_DESKTOP_WINDOWS_SIGN_TARGET!)
       }
@@ -102,7 +117,7 @@ beforeEach(async () => {
   state.root = await mkdtemp(join(tmpdir(), 'signing-driver-'))
   mkdirSync(join(state.root, 'run'))
   state.identity = 'matched'; state.failure = ''; state.successes = 0; state.failures = 0
-  state.signed.clear(); state.completed.clear(); state.stages = []; state.events = []
+  state.signed.clear(); state.completed.clear(); state.stages = []; state.events = []; state.removals = []
   state.environment = {
     DSH_DESKTOP_WINDOWS_CER_FILE: join(state.root, 'certificate.cer'),
     DSH_DESKTOP_WINDOWS_SIGNTOOL: 'forbidden-signer', DSH_DESKTOP_WINDOWS_TOKEN_PIN: 'fixture-pin',
@@ -164,6 +179,48 @@ it('completes all three modes and releases each default-account batch only after
     container: 'fixture-container', environment: {},
   }))
   expect(JSON.stringify(state.events)).not.toMatch(/fixture-pin|fixture-secret|fixture-container/u)
+})
+
+it('uses fresh real-file copies for 1, 2, 4 workers and reverses the second round', async () => {
+  await runWindowsSigningConcurrencyExperiment(['--execute', '--config-root', state.root, '--corpus', join(state.root, 'manifest.json')])
+  expect(state.successes).toBe(6)
+  expect(state.signed.size).toBe(36)
+  expect(state.stages.some(stage => stage.startsWith('compile-'))).toBe(false)
+  expect(prepareSigningCorpus).toHaveBeenCalledOnce()
+  expect(state.events.filter(event => 'type' in event && event.type === 'experiment-batch-plan')).toEqual([
+    expect.objectContaining({ round: 1, jobs: 1, hardwareConcurrency: 1 }),
+    expect.objectContaining({ round: 1, jobs: 2, hardwareConcurrency: 2 }),
+    expect.objectContaining({ round: 1, jobs: 4, hardwareConcurrency: 4 }),
+    expect.objectContaining({ round: 2, jobs: 4, hardwareConcurrency: 4 }),
+    expect.objectContaining({ round: 2, jobs: 2, hardwareConcurrency: 2 }),
+    expect.objectContaining({ round: 2, jobs: 1, hardwareConcurrency: 1 }),
+  ])
+  expect(existsSync(lock())).toBe(false)
+})
+
+it('offers a separate four-job control with only one hardware request', async () => {
+  await runWindowsSigningConcurrencyExperiment(['--execute', '--config-root', state.root, '--rounds', '1', '--corpus', join(state.root, 'manifest.json'), '--pipeline-control'])
+  expect(state.successes).toBe(1)
+  expect(state.events).toContainEqual(expect.objectContaining({ type: 'experiment-batch-plan', jobs: 4, hardwareConcurrency: 1 }))
+})
+
+it('refuses corpus preparation failure before beginning a hardware attempt', async () => {
+  vi.mocked(prepareSigningCorpus).mockRejectedValueOnce(new Error('changed input'))
+  await expect(runWindowsSigningConcurrencyExperiment(['--execute', '--config-root', state.root, '--corpus', join(state.root, 'manifest.json')])).rejects.toThrow('changed input')
+  expect(beginWindowsSigningAttempt).not.toHaveBeenCalled()
+  expect(state.signed.size).toBe(0)
+})
+
+it('uses the stripping override only for public removal on a corpus copy', async () => {
+  const copy = join(state.root, 'copy.exe')
+  const stripTool = join(state.root, 'sdk-signtool.exe')
+  vi.mocked(prepareSigningCorpus).mockImplementationOnce(async (_manifest, _directory, remove) => {
+    await remove(copy)
+    throw new Error('stop before hardware')
+  })
+  await expect(runWindowsSigningConcurrencyExperiment(['--execute', '--config-root', state.root, '--corpus', join(state.root, 'manifest.json'), '--strip-tool', stripTool])).rejects.toThrow('stop before hardware')
+  expect(state.removals).toEqual([{ executable: stripTool, args: ['remove', '/s', copy], environment: {} }])
+  expect(beginWindowsSigningAttempt).not.toHaveBeenCalled()
 })
 
 it.each(['primary', 'final', 'audit'] as const)('retains the batch interlock and stops later modes after %s failure', async (failure) => {

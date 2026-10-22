@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { resolve } from 'node:path'
+import { parse, resolve } from 'node:path'
 import yaml from 'js-yaml'
 import { expect, it } from 'vitest'
 
@@ -202,35 +202,38 @@ it('scopes the optional temporary directory to installer building without changi
 it.skipIf(process.platform !== 'win32')('keeps the dependency store stable across run-specific pnpm homes', () => {
   const directory = mkdtempSync(resolve(tmpdir(), 'windows-package-store-'))
   try {
+    const workspace = resolve(directory, 'runner', 'repo')
+    const packageCache = resolve(directory, 'tool-cache', 'desktop')
+    const store = resolve(parse(directory).root, '.pnpm-store')
     const step = job.steps.find(entry => entry.name === 'Configure persistent pnpm store')!
     expect(job.steps.indexOf(step)).toBeLessThan(job.steps.findIndex(entry => entry.name === 'Install locked dependencies'))
     const script = resolve(directory, 'store.ps1')
-    writeFileSync(script, step.run!)
+    writeFileSync(script, "$ErrorActionPreference = 'Stop'\n" + step.run!)
     const outputs = ['first', 'second'].map((run) => {
       const environmentFile = resolve(directory, run + '.env')
       execFileSync('pwsh', ['-NoProfile', '-File', script], {
-        env: { ...process.env, GITHUB_WORKSPACE: 'D:\\runner\\_work\\repo\\repo',
-          PACKAGE_CACHE_NAMESPACE: '', DSH_DESKTOP_PACKAGE_CACHE_DIR: 'D:\\tool-cache\\desktop',
+        env: { ...process.env, GITHUB_WORKSPACE: workspace,
+          PACKAGE_CACHE_NAMESPACE: '', DSH_DESKTOP_PACKAGE_CACHE_DIR: packageCache,
           PNPM_HOME: resolve(directory, run, 'pnpm'), GITHUB_ENV: environmentFile },
         stdio: 'pipe',
       })
       return readFileSync(environmentFile, 'utf8').trim()
     })
     expect(outputs.map(output => output.split(/\r?\n/u))).toEqual(Array.from({ length: 2 }, () => [
-      'DSH_DESKTOP_PACKAGE_CACHE_DIR=D:\\tool-cache\\desktop', 'PNPM_CONFIG_STORE_DIR=D:\\.pnpm-store',
+      `DSH_DESKTOP_PACKAGE_CACHE_DIR=${packageCache}`, `PNPM_CONFIG_STORE_DIR=${store}`,
     ]))
     const runNamespace = (namespace: string) => {
       const output = resolve(directory, 'namespace.env')
       rmSync(output, { force: true })
       execFileSync('pwsh', ['-NoProfile', '-File', script], {
-        env: { ...process.env, GITHUB_WORKSPACE: 'D:\\runner\\_work\\repo\\repo',
-          PACKAGE_CACHE_NAMESPACE: namespace, DSH_DESKTOP_PACKAGE_CACHE_DIR: 'D:\\tool-cache\\desktop', GITHUB_ENV: output },
+        env: { ...process.env, GITHUB_WORKSPACE: workspace,
+          PACKAGE_CACHE_NAMESPACE: namespace, DSH_DESKTOP_PACKAGE_CACHE_DIR: packageCache, GITHUB_ENV: output },
         stdio: 'pipe',
       })
       return readFileSync(output, 'utf8').trim().split(/\r?\n/u)
     }
     expect(runNamespace('perf-1')).toEqual([
-      'DSH_DESKTOP_PACKAGE_CACHE_DIR=D:\\tool-cache\\desktop\\perf-1', 'PNPM_CONFIG_STORE_DIR=D:\\.pnpm-store\\perf-1',
+      `DSH_DESKTOP_PACKAGE_CACHE_DIR=${resolve(packageCache, 'perf-1')}`, `PNPM_CONFIG_STORE_DIR=${resolve(store, 'perf-1')}`,
     ])
     for (const invalid of ['../escape', 'Upper', 'has space', 'con', 'perf\n', 'a'.repeat(65)]) {
       expect(() => runNamespace(invalid)).toThrow()

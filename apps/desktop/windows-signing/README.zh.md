@@ -106,7 +106,11 @@ Windows 打包从 `.env.windows` 或所选预设读取 `DSH_DESKTOP_WINDOWS_PACK
 
 真实硬件与安装证据由[Desktop 验证记录](../tests/README.zh.md)和[已安装更新流程](../tests/installed-update/README.zh.md)维护。本文档不授权 PIN 重试、自动删除 interlock、设备初始化或改变已接受的隔离策略。
 
-经操作人员授权后，可运行 `node apps/desktop/tests/windows-signing-concurrency.perf.ts --execute --config-root <打包配置目录的绝对路径> --rounds 2` 做并发实验。不加 `--execute` 只打印用法。诊断比较完全串行、两个完成任务共用单路硬件签名，以及两路硬件签名；每批使用六个合成 PE 文件的全新副本，第二轮反转模式顺序。实验读取机器 test preset，先核对公开身份，持有账户签名阶段锁，每批保留一条硬件尝试保护记录。首错停止派发并排空已发出的工作；最多可能已有两条硬件请求在途。只有全部签名、时间戳和文件验证成功才正常释放保护记录。记录与探针保留在 `.desktop-build/qualification/signing-concurrency`，探针从不执行，也不使用发布签名缓存。计时不含探针准备、等锁及包组装，实验不启用生产并发，也不代表完整发布性能。
+经操作人员授权后，可运行 `node apps/desktop/tests/windows-signing-concurrency.perf.ts --execute --config-root <打包配置目录的绝对路径> --rounds 2` 做并发实验。不加 `--execute` 只打印用法。默认比较完全串行、两个完成任务共用单路硬件签名，以及两路硬件签名，每批使用六个合成 PE 副本。第二轮反转模式顺序。
+
+加上 `--corpus <清单 JSON 的绝对路径>` 后，改用真实发布文件比较 1、2、4 个并发任务。清单是非空 JSON 数组，每项包含绝对路径 `path` 及对应的小写十六进制 `sha256`。准备阶段复制哈希固定的文件，验证签名并仅移除副本上的有效签名；签名无效或字节变化会中止准备。移除签名要求 SignTool 支持 `remove /s`；配置中的版本不支持时，可用 `--strip-tool <signtool.exe 的绝对路径>` 仅覆盖这个公开准备工具。硬件签名和时间戳仍使用机器 preset。每批使用经过字节比对的全新无签名模板副本，保持清单顺序。配合语料使用 `--pipeline-control` 时，改为四个完成任务共用一个硬件请求。原文件和发布缓存保持不变。
+
+实验读取机器 test preset，核对公开身份，持有账户签名阶段锁，每批保留一条硬件尝试保护记录。首错停止派发并排空已发出的工作；最多可能已有四条硬件请求在途。只有全部签名、时间戳和文件验证成功才正常释放保护记录。文件从不执行。记录保留在 `.desktop-build/qualification/signing-concurrency`，包含整批及单文件耗时、批次起止时的主机 CPU 计数、可用内存和驱动进程内存采样。内存采样不含子进程，不能用于确定峰值内存。计时不含输入准备、等锁和包组装。重放现成产物还排除了它们之间的构建依赖；实验不启用生产并发，也不代表完整发布性能。
 
 ## 开发备注
 

@@ -9,6 +9,36 @@ const observe = (operation: Promise<void>) => operation.then(
   () => ({ ok: true as const }), (error: unknown) => ({ ok: false as const, error }),
 )
 
+it('drains four issued hardware calls after failure without dispatching a fifth', async () => {
+  const allStarted = barrier()
+  const release = barrier()
+  const failed = barrier()
+  const started: number[] = []
+  const finished: number[] = []
+  const outcome = observe(runSigningExperimentBatch([1, 2, 3, 4, 5, 6], {
+    jobs: 4, hardwareConcurrency: 4,
+    sign: async (item) => {
+      started.push(item)
+      if (started.length === 4) allStarted.resolve()
+      await allStarted.promise
+      if (item === 1) { failed.resolve(); throw new Error('hardware failure') }
+      await release.promise
+      finished.push(item)
+    },
+    complete: async (item, sign) => { await sign(`staged-${item}`) },
+  }))
+  let settled = false
+  void outcome.then(() => { settled = true })
+  try {
+    await failed.promise
+    expect(started).toEqual([1, 2, 3, 4])
+    expect(settled).toBe(false)
+  } finally { release.resolve() }
+  expect(await outcome).toEqual({ ok: false, error: new Error('hardware failure') })
+  expect(finished.sort()).toEqual([2, 3, 4])
+  expect(started).toEqual([1, 2, 3, 4])
+})
+
 it('finishes each item before beginning the next in serial mode', async () => {
   const events: string[] = []
   await runSigningExperimentBatch([1, 2], {
@@ -66,28 +96,28 @@ it('overlaps completion with the next signature while keeping hardware concurren
   expect(started).toEqual([1, 2, 3])
 })
 
-it('allows two hardware requests but does not start a third item while both jobs are occupied', async () => {
+it.each([2, 4] as const)('allows %i hardware requests but keeps later items queued until a job completes', async (limit) => {
   const bothSigning = barrier()
   const release = barrier()
   const started: number[] = []
   let active = 0
   let peak = 0
-  const outcome = observe(runSigningExperimentBatch([1, 2, 3], {
-    jobs: 2, hardwareConcurrency: 2,
+  const outcome = observe(runSigningExperimentBatch(Array.from({ length: limit + 1 }, (_, index) => index + 1), {
+    jobs: limit, hardwareConcurrency: limit,
     sign: async () => {
       active++
       peak = Math.max(peak, active)
-      if (active === 2) bothSigning.resolve()
+      if (active === limit) bothSigning.resolve()
       try { await release.promise } finally { active-- }
     },
     complete: async (item, sign) => { started.push(item); await sign(`staged-${item}`) },
   }))
   try {
     await bothSigning.promise
-    expect(started).toEqual([1, 2])
-    expect(active).toBe(2)
+    expect(started).toEqual(Array.from({ length: limit }, (_, index) => index + 1))
+    expect(active).toBe(limit)
   } finally { release.resolve(); expect(await outcome).toEqual({ ok: true }) }
-  expect(peak).toBe(2)
+  expect(peak).toBe(limit)
   expect(active).toBe(0)
 })
 

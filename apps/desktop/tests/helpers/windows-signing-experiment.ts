@@ -2,8 +2,8 @@
 
 /** Operations owned by one experiment, with independently bounded completion and hardware work. */
 export interface SigningExperimentOptions<T> {
-  readonly jobs: 1 | 2
-  readonly hardwareConcurrency: 1 | 2
+  readonly jobs: 1 | 2 | 4
+  readonly hardwareConcurrency: 1 | 2 | 4
   readonly signal?: AbortSignal
   /** Complete one item, awaiting the supplied signing operation and all subsequent work before returning. */
   readonly complete: (item: T, sign: (path: string) => Promise<void>) => Promise<void>
