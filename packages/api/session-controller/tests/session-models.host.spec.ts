@@ -794,6 +794,33 @@ describe('Web session model selection', () => {
     await ctx.fiber.dispose()
   })
 
+  it('admits Markdown blockquote text without source metadata', async () => {
+    const { ctx, agent, sessionId } = await harness()
+    const followup = vi.fn()
+    Object.assign(agent, { followup })
+    const remote = await createSessionTestRemote(ctx, {
+      defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
+      cwd: '/tmp',
+    })
+    expectValue(await remote.prompt(promptRequest({
+      sessionId,
+      mode: 'queue',
+      content: [
+        { type: 'text', text: 'Question:\n\n' },
+        { type: 'text', text: '> quoted source' },
+      ],
+    })))
+    const message = followup.mock.calls[0]?.[0] as UserMessage
+    expect(message.content).toEqual([
+      { type: 'text', text: 'Question:\n\n' },
+      { type: 'text', text: '> quoted source' },
+    ])
+    expect(message.source.kind).toBe('user')
+    expect(message.source).not.toHaveProperty('quotes')
+
+    await ctx.fiber.dispose()
+  })
+
   it('serves a session and its catalog when the stored default names a route that is gone', async () => {
     const { ctx, sessionId } = await harness()
     await createSessionTestRemote(ctx, {

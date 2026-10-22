@@ -55,11 +55,14 @@ kind: "package-library"
 | `StateDot` | 10px 槽内的绿色 `done`、琥珀色 `warning`、红色 `error`、中性灰色 `idle` 圆点，以及 tertiary 灰色 14px 旋转 `ongoing` loading，其动画在挂载时以及每次动画重启（如列表重排）时固定到文档时间零点，所以所有可见 loading 同相旋转。它是 `aria-hidden` 的，名称由渲染点提供。 `appearance="step"` 以实心勾表示完成、空心圆表示等待。 |
 | `ConnectionIndicator` | 行内连接恢复控件，覆盖断线、重试与已恢复三种状态。 |
 | `DisclosureRow` | 24px 紧凑折叠行，标题与内容左右排列。标题行默认使用 tertiary，悬停时使用 secondary；文字与图标继承该颜色，不受能否展开及开合状态影响，调用方可提供功能专属覆盖。语义状态色保持显式指定。收起时悬停预览向下箭头，展开后持续显示向上箭头。`headerAccessory` 将独立操作放在折叠触发区域和流光之外；有此操作时，标题行收窄到内容宽度。使用浅层 prop 比较进行 memo；内容未变时，保持回调与 React 节点 prop 的引用稳定。 |
+| `AnimatedRows` | 带键列表的位移动画：移动为 200 ms，进出淡变为 100 ms。列表内发生指针或键盘输入后才启用，遵循减少动态效果设置，加载或替换视图时直接完成。为行标记 `data-row-key` 并传入对应的 `rowKeys`，为父容器设置定位以承载不可交互的退出层；`role` 和 `label` 由调用方提供。 |
+| `useRowDragPreview` | 使用不可交互的离屏行副本生成原生拖拽预览。传入设置表面底色的类名；拖拽来自子级手柄时，将行元素传给 `start`；`clear` 和卸载会移除副本。 |
 | `TextShimmer` | 同一道高光从左到右扫过一行的标题、分隔符、摘要与后缀：首次等待 300ms，扫动一秒，再静止 500ms。遮罩覆盖内容宽度，并限制在可见行宽内，相对垂直方向倾斜 15°，峰值区域平坦，两侧柔和渐隐。移动的装饰层始终裁剪在行内，不会扩大可滚动区域。底色继承调用方的颜色，包括悬停变化；主题提供半透明高光。图标和箭头放在 `TextShimmer` 外，只有文字和分隔符参与扫光。字符串子节点沿用稳定的文字接口；嵌套的 `TextShimmer` 共用外层动画。活动期间组合子节点渲染两次，因此不得带副作用或元素 id。分隔符标记 `data-shimmer-decoration`，让填色参与扫光。`DisclosureRow` 将 `contentClassName` 传给文字区域，将 `contentLayoutClassName` 传给内部布局。惰性装饰副本不参与交互、选区和无障碍访问；文字更新保留动画，减少动态效果模式保留静态底色。 |
 | `Modal` | 页面遮罩之上的居中对话框。嵌套对话框可通过 `onKeyDownCapture` 在文档级 Escape 处理器之前拦截按键。 色层与弹窗淡入，背景模糊始终完整生效，并遵循减少动态效果偏好。调用方已模糊源页面时设置 `backdropBlur={false}`。 |
 | `RiskConfirmation` | 以显式复选框把关的敏感操作确认。 |
 | `Tooltip` | 锚定在克隆子元素上的悬停与键盘聚焦提示；可选的 `delayMs` 控制悬停延迟，`focusDelayMs` 控制键盘聚焦延迟，均默认为 0 毫秒。可通过 `portal` 渲染到外层，避免被容器裁剪，或受祖先层叠上下文限制其 z-index。 |
 | `HoverCard`、`HoverCardGroup` | 可阅读、可选带复制按钮的悬停预览；物理列表可选择让卡片共享首次显示等待，并互斥显示。 |
+| `DraggableImage` | 通过显式传递与反馈回调提供原图拖放。 |
 | `ImageLightbox` | 共享图片浮层，支持焦点恢复与 Esc 关闭。 |
 | `Toast` | 顶部居中的瞬时横幅，保持时长由所有者的 `holdMs` 决定。 |
 | `SettingsForm`、`SettingsValueField`、`SettingsSecretField` | 插件设置页的框架与控件：框架以 `labels` 接收文案，只在按钮点击时保存，卸载即丢弃；值字段显示暂存文本以及已覆盖标签和重置；密文字段每次为空，请求浏览器不要自动填入已保存的密码，只报告是否已配置。 |
@@ -67,10 +70,12 @@ kind: "package-library"
 | `JsonTree`、`JsonBlock` | 只读 JSON 查看。 |
 | `MarkdownText`、`MarkdownDelegateProvider`、`CodeBlock` | 不可信 GFM 与 TeX 数学、owner 委托的 HTTP(S) 导航，以及高亮代码。`CodeBlock` 可通过 `lineNumbers` 开启行号；复制的源码不含行号栏，`contentRef` 则向需要把稳定源码包装节点用作滚动区的 owner 提供该节点。调用方提供自己的语言与复制工具栏时，设置 `showHeader={false}`。 |
 | `DetailDocument`、`detailDocumentState`、`useDetailDocumentLabels` | 用于较长 Markdown 描述（例如插件的详细介绍文档）的区块，本身不带标题：加载期间显示三行骨架屏，随后显示文档、owner 提供的失败消息和重试，或在没有文档时不显示任何内容。文档高度超过 `min(560px, 60vh)` 时，在可通过键盘聚焦、由 owner 的标题命名的区域内滚动。文档中的原始 HTML 会被省略。相对链接保持为文本，只加载 owner 的 `images` 解析器接受的图片或绝对 HTTP(S) 地址的图片。`detailDocumentState` 把 owner 的读取结果映射为显示状态，`useDetailDocumentLabels` 根据翻译后的字符串构建引用稳定的标签。 |
+| `useClipboardCopy` | 复制当前文本并显示一秒成功反馈，阻止写入期间及成功反馈期间的重复操作，卸载时清除重置计时器；迟到的写入结果不会更新已卸载控件。 |
+| `UserMessageBubble` | 用户消息的背景、圆角、内容内边距、字体与纯文本换行规则。接收原生 div props；行对齐、宽度、内容和操作由调用方拥有。 |
 | `UserTextRun`、`ReferenceChip` | 不做解析的行内文本，以及业务已解析的引用标签或激活按钮。 |
 | `CommandText` | 可选中的命令或参数文本；仅横向溢出时添加具名的键盘聚焦目标。 |
 | `TerminalBlock`、`ReadBlock`、`DiffBlock`、`SearchBlock`、`WebBlock` | 与各类工具结果意图对应的 agent 输出卡片。 |
-| `icons/*`、`FishLogo`、`BrandWordmark`、`ReferenceIconRegular`/`ReferenceIconMedium`、`LinkIconRegular`/`LinkIconMedium` | 字形与品牌标识。思考图标的轨道在 16px 视口内保留内边距。“更多”入口使用的 `IconAppsAddOutlineRegular`/`Medium` 接受 `compact`，在卡片尺寸下让方块更靠近。`LinkIconMedium` 用于 14px 的可点击链接分类及已知站点标记。 |
+| `icons/*`、`FishLogo`、`BrandWordmark`、`ReferenceIconRegular`/`ReferenceIconMedium`、`LinkIconRegular`/`LinkIconMedium` | 字形与品牌标识。`IconDragHandleOutlineRegular`/`Medium` 以三条横线表示可拖动的排序手柄。思考图标的轨道在 16px 视口内保留内边距。“更多”入口使用的 `IconAppsAddOutlineRegular`/`Medium` 接受 `compact`，在卡片尺寸下让方块更靠近。`LinkIconMedium` 用于 14px 的可点击链接分类及已知站点标记。 |
 | `PermissionIconReadOnlyRegular`/`Medium`、`PermissionIconWorkspaceWriteRegular`/`Medium`、`PermissionIconFullAccessRegular`/`Medium`、`PermissionIconAutoReviewRegular`/`Medium` | 只读、工作区写入、完全访问与自动审查选项使用的权限模式图形。 |
 | `PluginArtworkTerminal`/`Loop`/`Subagent`/`Search`/`Default` | 固定配色的 36×36 插件插画；`Terminal` 为插件卡片和侧边栏开始页入口提供浅蓝色提示符。`Default` 用于没有自有插画的插件。def id 按实例生成，同一插画可在一页中安全重复。 |
 | `GuideArtworkBrowser`/`Files` | 固定配色的 36×36 浏览器与文件夹插画，用于侧栏引导入口。 |
@@ -94,15 +99,17 @@ kind: "package-library"
 
 <a id="rendering-agent-output"></a>
 
-`HoverCardGroup` 为一个已挂载的物理列表持有私有状态。设置 `grouped` 的 `HoverCard` 共享首张实际显示卡片的等待：在同一次指针交互中，后续卡片立即替换当前卡片。列表与其当前活动的 portal 卡片构成一次指针交互：指针可进入卡片阅读或复制，再返回其他列表项并立即替换卡片。指针离开两者后，共享等待在活动卡片通过原有指针宽限及关闭生命周期关闭时重置；分组不另设计时器。列表没有活动卡片时，指针离开便立即重置等待。指针位于列表外时，通过键盘聚焦打开行内卡片不会让下一次指针进入跳过等待。互斥显示也包括正在淡出的预览：普通预览关闭保留淡出，但分组内替换会立即移除前一张卡片。未设置 `grouped` 的卡片保持独立。
+`HoverCardGroup` 为一个已挂载的物理列表持有私有状态。设置 `grouped` 的 `HoverCard` 共享首张实际显示卡片的等待：在同一次指针交互中，后续卡片立即替换当前卡片。列表与其当前活动的 portal 卡片构成一次指针交互：指针可进入卡片阅读或复制，再返回其他列表项并立即替换卡片。指针离开两者后，共享等待在活动卡片通过原有指针宽限及关闭生命周期关闭时重置；分组不另设计时器。列表没有活动卡片时，指针离开便立即重置等待。指针位于列表外时，通过键盘聚焦打开行内卡片不会让下一次指针进入跳过等待。互斥显示也包括正在淡出的预览：普通预览关闭保留淡出，但分组内替换会立即移除前一张卡片。未设置 `grouped` 的卡片保持独立。`as="span"` 保留行内文本容器。
 
 ### 渲染 agent 输出
+
+纯 Markdown 工具 `formatQuoteText` 规范化 CRLF 和 CR 换行符，再为每行添加 `> ` 前缀。
 
 最近的 `MarkdownDelegateProvider` 提供可选的 `openExternalLink` 和 `openFile` 导航回调。嵌套 Provider 替换外层能力，回调变化无需重新构建 Markdown 即可到达已渲染链接。其 `openFile` 使本地 Markdown 链接在落定后可点击。绝对路径和工作区相对路径支持百分号转义以及 `#L24` / `#L24-L30` 片段；范围定位到起始行。文件名中的字面 `?` 和 `#` 必须百分号编码。悬停提示使用解码后的路径，并在标签为空时提供可访问名称。回调接收解码后的路径和可选行号，渲染器保留标签并显示文件图标。不传回调时，本地链接仍为文本。URL 协议、查询串、不支持的片段及格式错误的目标不会传给文件打开器。
 
 `MarkdownText` 渲染不可信的 GFM 与 TeX 公式、阻止不安全的链接与图片，并可把已解析的文件提及转换为显式控件。删除线需要 `~~`；单个 `~`（如 `10~20`）保持字面文本。外层 `MarkdownDelegateProvider` 会接收普通点击产生的已净化 HTTP(S) URL；带修饰键的点击和 Provider 外的链接保留原生外部 anchor 行为。`omitHtml` 不渲染原始 HTML，而不是将其显示为原样文本，用于为 HTML 渲染器编写的文档。当 owner 传入 `pathImages` 词表时，本地媒体路径的图片目标只在落定渲染阶段重写为可展示 URL（与 file mentions 相同的流式门）；不传词表时本地目标保持惰性 alt 文本。重写后的图片支持 HTTP(S)、data、blob 及桌面端 `dsh-app://app/api/file`、`dsh-app://app/api/plugin-market/detail-file` 与 `dsh-app://app/api/plugin-manager/detail-file` 路由；正文直接书写的桌面端 URL 仍保持惰性。加载或解码失败后，图片替换为作者的 alt 文本；alt 为空时显示原始目标路径；`fileImages` 还提供本地化的失败提示前缀。图片源变化后可重新加载。回复流式输出时，它冻结已完成的块、按已完成行推进顶层未闭合 fence，并从保存的 Shiki grammar state 为该 fence 增量高亮。已完成的 token 行进入固定大小的 React 分组，后续分片只 reconcile 正在增长的分组；最终全量解析解决跨文档语法时，未变化的 fence 会保留该 DOM。`TerminalBlock`、`ReadBlock`、`DiffBlock`、`SearchBlock` 与 `WebBlock` 把对应的工具结果意图渲染为带复制控件、溢出处理及适用时 ANSI 处理的卡片。`JsonTree` 与 `JsonBlock` 以只读方式检查 JSON 值；`UserTextRun` 渲染不做解析的文本，`ReferenceChip` 渲染业务已解析的标签。显式传入 `onActivate` 后，胶囊成为可由键盘操作的按钮；重复指针点击和已有文本选区不触发激活，键盘激活仍然可用。标签继承所属容器的换行规则。识别和 JSON 变换由 [ui-conversation](../ui-conversation/README.zh.md#sent-user-text) 负责。
 
-`MarkdownText` 默认为 `variant="body"`。次级内容使用 `variant="compact"`：其 13px 字号与 20px 行高跟随内容字号设置，各级标题保持同一字号并使用 600 字重，段落与列表采用更紧凑的间距。正文、链接和代码均保持 tertiary 颜色，以点状下划线区分链接。代码标题栏随代码块滚动。表格和公式仍然启用，使用周围文字的字号，并在可用宽度内横向滚动。两个变体共享解析器与流式缓存。
+`MarkdownText` 默认为 `variant="body"`。次级内容使用 `variant="compact"`：其 13px 字号与 20px 行高跟随内容字号设置，各级标题保持同一字号并使用 600 字重，段落与列表采用更紧凑的间距。正文、链接和代码均保持 tertiary 颜色，以点状下划线区分链接。代码标题栏随代码块滚动。表格和公式仍然启用，使用周围文字的字号，并在可用宽度内横向滚动。两个变体共享解析器与流式缓存。 `textInteractionSource` 将已有根元素标记为文本选区交互的来源。
 
 `CodeBlock.toolbarLabels` 启用共享代码卡片的标题栏和间距。`ReadBlock` 与 `DiffBlock` 使用相同的标题栏：tertiary 色的语言名称与文件名、secondary 色的复制与换行图标，以及悬停或键盘聚焦时的提示。语言缺失或不受支持时显示调用方提供的本地化代码块标题；混合语言的 Diff 也使用该标题。代码卡片共用字体和内容内边距；在两种主题下，标题栏和正文都使用相同背景。读取卡片的行号栏容纳返回窗口中的最大行号，Diff 底色覆盖完整可滚动行。换行按钮保留固定的无障碍名称，以 `aria-pressed` 表达状态；提示文本说明下一步操作。换行设置仅属于当前挂载的卡片，不改变复制的文本；代码围栏默认换行，读取和差异卡片则在启用换行前保留源码列位置。紧凑 Markdown 共用此工具栏、间距和代码字体排版，同时保留单色文本。源码预览传入 `toolbarLabels` 后，可用 `wrap` 跟随所属视图的换行设置，仅显示语言和复制图标；所属视图的 CSS 保留源码布局。
 
@@ -110,7 +117,9 @@ kind: "package-library"
 
 `JsonTree` 把折叠字符串限制为 `collapsedStringLines` 行（默认三行）。展开后显示原始文本、保留同级逗号，并限制在窗口与外层滚动容器内；尺寸变化和祖先滚动事件会更新此限制。行复制反馈独立于 JSON 值渲染更新；尚未完成的剪贴板写入不会更新另一行或已卸载的树。
 
-`ImageLightbox` 是共享原图浮层，支持焦点恢复与 Esc 关闭。与 `Modal` 相同，其遮罩不覆盖 Windows 顶栏，关闭按钮位于顶栏下方 20px。包内缩略图渲染器由调用方提供加载及失败文案。`HoverCard.inline` 使文件链接保持在文本流内，并使用共享菜单材质、键盘可见焦点，并在锚点上方或下方定位而不遮挡锚点。即使焦点位于其他位置，Esc 也会关闭已打开的缩略图；后续 Esc 按键继续传给 owner。`MarkdownDelegateProvider.fileImages` 提供已解码路径解析器与完整图片文案：消息落定后的图片链接支持悬停预览，独立图片支持点击放大。仅包含图片的链接保留单一导航目标。解析器仅恢复完整、未转义、独立成段且带明确图片扩展名的含裸空格本地图片引用；代码与有歧义的目标保持原文。
+`ImageLightbox` 是共享原图浮层，支持焦点恢复与 Esc 关闭。与 `Modal` 相同，其遮罩不覆盖 Windows 顶栏，关闭按钮位于顶栏下方 20px。包内缩略图渲染器由调用方提供加载及失败文案。`HoverCard.inline` 使文件链接保持在文本流内，并使用共享菜单材质、键盘可见焦点，并在锚点上方或下方定位而不遮挡锚点。即使焦点位于其他位置，Esc 也会关闭已打开的缩略图；后续 Esc 按键继续传给 owner。`MarkdownDelegateProvider.fileImages` 提供已解码路径解析器与完整图片文案：消息落定后的图片链接支持悬停预览，独立图片支持点击放大。仅包含图片的链接保留单一导航目标。解析器仅恢复完整、未转义、独立成段且带明确图片扩展名的含裸空格本地图片引用；代码与有歧义的目标保持原文。 透明悬停区域连接锚点与弹层之间的视觉空隙，鼠标经过时不会激活下方内容。
+
+`DraggableImage` 接收显式的 `fileDrag: FileDragActions`，受管理的 Markdown 图片通过 `MarkdownDelegateProvider.fileImages.fileDrag` 接收同一组回调。[文件拖放插件](../ui-file-drag/README.zh.md) 负责准备、传递与本地化失败提示；图片原语负责手势和取消。带资源引用的图片仅在主指针按下时准备，其他来源也可在悬停时准备。在图片内松开保留准备供下一次手势使用；指针移开释放未使用的准备，平移模式跳过准备。Markdown 导出名取已解码路径的文件名。在准备完成前起拖会静默取消本次手势；实际准备失败才显示重试提示。受管理的 Web 拖放携带应用内令牌和指向插件所持 Blob URL 的 `DownloadURL`，不设置 `text/plain`。
 
 ### 本地化文案
 
@@ -184,6 +193,8 @@ kind: "package-library"
 
 -----
 
+`QuotePreview` 在 composer 与已发送消息之间共享紧凑 quote 摘录和仅截断时显示的行内 HoverCard。原文弹层按文本内容确定宽度，最大为 300px，并限制在视口内。两处均展示原文；可编辑草稿可以提供本地化的整条 quote 删除操作。quote 加入最近的 `HoverCardGroup`，使原文弹层互斥显示。该 primitive 不负责识别或导航。
+
 <a id="model-experience"></a>
 ## 模型体验
 
@@ -200,6 +211,7 @@ kind: "package-library"
 
 这些限制说明原子组件在边缘情况下的行为；它们是当前包约束，不是组件路线图。
 
+- **浏览器图片传递**：外部接收依赖 Chromium 的 `DownloadURL` 与接收应用；原生文件交付由 Desktop 提供。Web 令牌不跨窗口或标签页传递。不可读取的跨源图片保留浏览器原生拖动，链接内的 Markdown 图片及未配置 `fileImages` 的 Markdown 也保留原生行为；这些原生路径可能携带 URL。
 - **Diff 搜索有上限，输入处理仍为线性**：编辑距离上限使大量改动的片段采用粗粒度替换，不再精确对齐。规范化、回退行及复制内容仍随输入大小增长；高度限制只约束可见行数，不限制这些分配。
 - **已知站点标记是固定列表**：只有列名的主机解析为自己的标记，其余外部主机仍使用地球；要识别任意站点需要通过网络抓取它的图标。
 - **流式期间跨边界引用解析被推迟**：定义落在增量冻结边界另一侧的引用式链接或脚注，在回复流式输出期间渲染为字面文本；定稿时的全量解析会将其解析。
@@ -209,6 +221,8 @@ kind: "package-library"
 - **`Pill` 与 `Input` 没有设计来源**：两个原子组件均自行定义；与其相似的侧边栏搜索字段和视图标签条由消费方组合，不是这些原子组件。
 - **`StateDot` 没有 `Active` 变体**：支持的状态为 done、warning、ongoing、error 和 idle。
 - **面向用户的文案必须由渲染点提供**：这些原子组件是 zero-Cordis 的，拿不到 `ctx.locale`；各功能必须通过原子组件的带类型 prop 提供完整本地化 label（见[决策](../../../.agents/notes/implemented/architecture/2026-08-23-locale-owned-client-ui-copy.zh.md)）。
+- **显示数学保留若干回退形状**：开围栏行上的 `$$x$$ trailing` 走上游行内数学，前后正文保持不变；同样形态出现在后续行时块被放弃，随后由上游把正文吞到下一个独占行 `$$` 或文件结尾；未闭合的块在下一个独占行 `$$` 或文件结尾结束；后续行的围栏若位于**含文本**的 `%` 注释之后则不闭合，若无其他围栏闭合，块走同一条回退；开围栏行含孤立 `$` 的多行块会留在段落内，除非与前文空一行；容器内续行若离开条目缩进，块交由上游 flow 处理并丢弃开围栏行。`$$` 围栏 meta 不再生效（见[决策](../../../.agents/notes/implemented/bug-fix/2026-09-17-multiline-display-dollar-math.zh.md)）。
+- **紧跟 `\verb` 分隔符的围栏属于内容**：解析器只读取围栏之前的六个字符，因此紧跟 `\verb` 或 `\verb*` 的 `$` 是该命令的分隔符而不是闭合围栏，内容以 `\verb` 结尾的区域（`\verb**\verb*$$`）同理。未闭合区域内部的围栏（`\verb|$$`）仍会在该处闭合块，因为区域内容不被解析。
 - **`TerminalBlock` 不是终端模拟器**：它渲染已结束或仍在运行的命令输出，而不是交互式会话：SGR 颜色、回车、退格、行内擦除、制表位与字符宽度会被遵循；绝对光标定位、清屏与备用屏幕序列会被剥离。
 
 <a id="dev-note"></a>

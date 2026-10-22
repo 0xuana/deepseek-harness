@@ -1,3 +1,6 @@
+import { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { ModelSelection } from '@deepseek-ai/dsh-agent'
@@ -46,12 +49,13 @@ async function mountTools(opts: {
   const ctx = new Context()
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(WebRuntime, opts.webConfig ?? {})
   if (opts.search) ctx.web.registerSearchProvider(opts.search)
   if (opts.fetchProvider) ctx.web.registerFetchProvider(opts.fetchProvider)
   const fiber = await ctx.plugin(ToolWeb, opts.config ?? {})
   let counter = 0
-  const call = (name: string, args: unknown) => ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId(`call-${++counter}`), name, arguments: args })
+  const call = (name: string, args: unknown) => executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId(`call-${++counter}`), name, arguments: args })
   return { ctx, fiber, call }
 }
 
@@ -463,9 +467,9 @@ describe('tool-web registration', () => {
     const names = ctx.tools.schemas().map(s => s.name)
     expect(names).toContain('web_search')
     expect(names).toContain('web_fetch')
-    expect(ctx.tools.executionMode({ signal: testToolSignal, callId: ToolCallId('search-safe'), name: 'web_search', arguments: { queries: ['q'] } }))
+    expect(new ToolExecutionPipeline(ctx).executionMode({ signal: testToolSignal, callId: ToolCallId('search-safe'), name: 'web_search', arguments: { queries: ['q'] } }))
       .toEqual({ kind: 'parallel' })
-    expect(ctx.tools.executionMode({ signal: testToolSignal, callId: ToolCallId('fetch-safe'), name: 'web_fetch', arguments: { url: 'https://a.test' } }))
+    expect(new ToolExecutionPipeline(ctx).executionMode({ signal: testToolSignal, callId: ToolCallId('fetch-safe'), name: 'web_fetch', arguments: { url: 'https://a.test' } }))
       .toEqual({ kind: 'parallel' })
     await fiber.dispose()
     expect(ctx.tools.schemas().map(s => s.name)).not.toContain('web_search')
@@ -762,7 +766,7 @@ describe('tool-web execution through the real registry', () => {
     }
     const { ctx, fiber } = await mountTools({ webConfig: { fetchProvider: 'stub-fetch' }, fetchProvider })
     const controller = new AbortController()
-    const out = await ctx.tools.execute({ callId: ToolCallId('fetch-1'), name: 'web_fetch', arguments: { url: 'https://a.test' }, signal: controller.signal })
+    const out = await executeToolFixture(ctx, { callId: ToolCallId('fetch-1'), name: 'web_fetch', arguments: { url: 'https://a.test' }, signal: controller.signal })
     expect(out.isError).toBe(false)
     expect(out.value).toEqual({
       url: 'https://a.test',
@@ -789,7 +793,7 @@ describe('tool-web execution through the real registry', () => {
       },
     }
     const { ctx, fiber } = await mountTools({ webConfig: { fetchProvider: 'stub-fetch' }, fetchProvider })
-    const out = await ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('fetch-2'), name: 'web_fetch', arguments: { url: 'https://a.test' } })
+    const out = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('fetch-2'), name: 'web_fetch', arguments: { url: 'https://a.test' } })
     expect(out.isError).toBe(false)
     expect(out.value).toEqual({
       url: 'https://a.test',
@@ -811,7 +815,7 @@ describe('tool-web execution through the real registry', () => {
     }
     const { ctx, fiber } = await mountTools({ webConfig: { searchProvider: 'stub-search' }, search: provider })
     const controller = new AbortController()
-    await ctx.tools.execute({ callId: ToolCallId('search-1'), name: 'web_search', arguments: { queries: ['q'] }, signal: controller.signal })
+    await executeToolFixture(ctx, { callId: ToolCallId('search-1'), name: 'web_search', arguments: { queries: ['q'] }, signal: controller.signal })
     expect(seen.signal).toBe(controller.signal)
     await fiber.dispose()
   })
@@ -830,7 +834,7 @@ describe('tool-web execution through the real registry', () => {
     }
     const { ctx, fiber } = await mountTools({ webConfig: { searchProvider: 'stub-search' }, search: provider })
     const controller = new AbortController()
-    const pending = ctx.tools.execute({ callId: ToolCallId('search-multi-1'), name: 'web_search', arguments: { queries: ['one', 'two'] }, signal: controller.signal })
+    const pending = executeToolFixture(ctx, { callId: ToolCallId('search-multi-1'), name: 'web_search', arguments: { queries: ['one', 'two'] }, signal: controller.signal })
     await vi.waitFor(() => { expect(signals).toHaveLength(2) })
     expect(signals[0]).toBe(signals[1])
     expect(signals[0]).not.toBe(controller.signal)
@@ -880,6 +884,7 @@ describe('searchMaxResults is plugin config', () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(WebRuntime, {})
     await expect(ctx.plugin(ToolWeb, { searchMaxResults: value }))
       .rejects.toThrow(/tool-web: searchMaxResults must be a positive integer/)
@@ -954,6 +959,7 @@ describe('searchMaxQueries is plugin config', () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(WebRuntime, {})
     await expect(ctx.plugin(ToolWeb, { searchMaxQueries: value }))
       .rejects.toThrow(/tool-web: searchMaxQueries must be a positive integer/)
@@ -982,6 +988,7 @@ describe('tool-call timeout budget is plugin config', () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(WebRuntime, {})
     await expect(ctx.plugin(ToolWeb, config))
       .rejects.toThrow(new RegExp(`tool-web: ${key} must be a positive integer`))
@@ -1014,6 +1021,7 @@ describe('fetchMaxOutputChars is plugin config', () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(WebRuntime, {})
     await expect(ctx.plugin(ToolWeb, { fetchMaxOutputChars: value }))
       .rejects.toThrow(/tool-web: fetchMaxOutputChars must be a positive integer/)
