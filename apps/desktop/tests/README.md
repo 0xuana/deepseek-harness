@@ -20,6 +20,8 @@ Installed qualification can opt into `DSH_DESKTOP_UPDATE_JOURNAL_DIR`, an absolu
 
 ## Fault-report verification
 
+See [recovery and diagnostics](../docs/diagnostics/README.md) for product behavior and limitations.
+
 Use a disposable profile and separate Electron `userData` with the actual packaged client. Construct a minimal local bundle with `package.json`, `dsh.bundle.patch` pointing to `cordis.patch.yml`, and an optional plugin module; archive it as a local `.tgz`. These packages deliberately break the application and must not be published or installed in a daily profile.
 
 Exercise import and plugin-initialization exceptions, an asynchronous exception after `appReady`, and a nonzero Host exit. A patch disabling the `agent`, `session`, `llm`, and `tools` providers exercises missing-service diagnostics. To check cross-restart history, select that bundle through `pluginManager`, then restart the same profile. Runtime scenarios require observing actual client readiness; `appReady` alone does not establish that the window is visible.

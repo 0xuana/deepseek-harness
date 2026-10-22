@@ -20,6 +20,8 @@
 
 ## 故障报告验证
 
+产品行为与限制见[故障恢复与诊断](../docs/diagnostics/README.zh.md)。
+
 使用可丢弃的 profile、独立的 Electron `userData` 和实际打包客户端。构造最小本地组合包：`package.json` 的 `dsh.bundle.patch` 指向 `cordis.patch.yml`，需要执行代码时再加入插件模块，然后打成可本地安装的 `.tgz`。这些包会故意使应用出错，不得发布或安装到日常 profile。
 
 分别构造模块导入异常、插件初始化异常、`appReady` 后的异步异常，以及 Host 非零退出。用 patch 禁用 `agent`、`session`、`llm`、`tools` 提供者，检查服务缺失诊断。跨重启场景通过 `pluginManager` 选入该组合包，再重启同一 profile。运行期场景须实际观察客户端就绪；`appReady` 不代表窗口已经显示。
