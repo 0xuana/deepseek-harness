@@ -6,7 +6,7 @@ const registrationToken = '12345678-1234-4123-8123-123456789abc'
 const identity = { registrationToken, token: 'worker-unique-request', shareId: 'share', id: 1 }
 const frames = [
   { type: 'share-rpc-response', ...identity, status: 200, body: { answer: true } },
-  { type: 'share-rpc-request', ...identity, body: { op: 'stream-read' }, actor: { providerId: 'mock', tenantId: '', subjectId: 'alice' } },
+  { type: 'share-rpc-request', ...identity, body: { op: 'stream-read' }, actor: { providerId: 'mock', tenantId: 'mock', subjectId: 'alice' } },
   { type: 'share-rpc-cancel', ...identity },
 ]
 const parse = (frame: Record<string, unknown>) => frame.type === 'share-rpc-response'
@@ -30,6 +30,7 @@ describe('Host/worker request tokens', () => {
   it('requires response status and request actor and body', () => {
     for (const status of [99, 600, 200.5]) expect(parse({ ...frames[0], status })).toBeUndefined()
     expect(parse({ ...frames[1], actor: undefined })).toBeUndefined()
+    expect(parse({ ...frames[1], actor: { providerId: 'mock', tenantId: '', subjectId: 'alice' } })).toBeUndefined()
     expect(parse({ ...frames[1], body: undefined })).toBeUndefined()
   })
 })

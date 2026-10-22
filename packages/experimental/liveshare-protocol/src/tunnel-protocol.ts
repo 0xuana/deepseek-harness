@@ -168,6 +168,7 @@ export interface ShareRpcFrame {
 /** Authenticated viewer identity the Relay asserts for one forwarded request. */
 export interface ShareRpcActor {
   readonly providerId: string
+  /** Provider tenant; the Relay asserts the normalized, non-empty tenant its adapters store. */
   readonly tenantId: string
   readonly subjectId: string
   /**
@@ -524,13 +525,13 @@ function isTunnelShareSpec(value: unknown): value is TunnelShareSpec {
 /**
  * Validate the actor the Relay asserts on one forwarded request.
  * @param value Candidate actor.
- * @returns True when it carries a provider, tenant, and subject.
+ * @returns True when it carries a non-empty provider, tenant, and subject.
  */
 function isShareRpcActor(value: unknown): value is ShareRpcActor {
   if (typeof value !== 'object' || value === null) return false
   const actor = value as Record<string, unknown>
   return typeof actor.providerId === 'string' && actor.providerId !== ''
-    && typeof actor.tenantId === 'string'
+    && typeof actor.tenantId === 'string' && actor.tenantId !== ''
     && typeof actor.subjectId === 'string' && actor.subjectId !== ''
     && (actor.credential === undefined || typeof actor.credential === 'string')
 }

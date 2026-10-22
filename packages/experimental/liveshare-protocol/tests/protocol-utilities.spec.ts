@@ -120,6 +120,7 @@ describe('Relay frame parsing', () => {
       undefined,
       'actor',
       { providerId: '', tenantId: 't', subjectId: 's' },
+      { providerId: 'p', tenantId: '', subjectId: 's' },
       { providerId: 'p', tenantId: 't', subjectId: '' },
       { providerId: 'p', tenantId: 't', subjectId: 's', credential: 3 },
     ]) {
