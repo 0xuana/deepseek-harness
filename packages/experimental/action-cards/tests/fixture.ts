@@ -14,6 +14,7 @@ import type { ActionCardFields, ActionCardKind, ActionCardProposalOf, ActionCard
 
 export const ACTION = 'test_action'
 export const SKILL = 'test-skill'
+export const INVITATION = 'Invite the user to try the card in one sentence.'
 export const callId = ToolCallId('call-card-1')
 export const proposal = { action: ACTION, title: 'Counter', brief: 'Keep a counter visible.', details: { value: 'a' } }
 
@@ -51,7 +52,7 @@ export async function fixture(kind: Partial<ActionCardKind<TestDetails>> = {}) {
     ({ status: 'settled', decision: { callId: card.callId, action: ACTION, phase: verb } }))
   const kindFiber = await ctx.plugin({ name: 'test-kind', inject: ['actionCards'], apply: (inner: Context) => {
     inner.actionCards.register({
-      action: ACTION, skill: SKILL, details: z.object({ value: z.string() }),
+      action: ACTION, skill: SKILL, invitation: INVITATION, details: z.object({ value: z.string() }),
       verbs: { start: {}, publish: { global: true }, write: { writes: true } },
       act, ...kind,
     })

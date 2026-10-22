@@ -93,6 +93,9 @@ class PersonalizedPages {
     registerCreationSkill(ctx)
     ctx.actionCards.register({
       action: ACTION, skill: 'personalized-pages', details: detailsSchema,
+      invitation: 'End with at most one short invitation in the user’s language, in the first person: after they click Create below, '
+        + 'you will build it in the background as a plugin page that stays available, without blocking the chat; '
+        + 'the build takes minutes and many tokens.',
       verbs: { create: { global: true, writes: true }, keep: {}, undo: { global: true }, cancel: {}, restore: { global: true } },
       openPhases: ['cancelled', 'failed', 'interrupted', 'unconfirmed'],
       statusGuidance: 'Cancelled means a started background creation was stopped before installation. '

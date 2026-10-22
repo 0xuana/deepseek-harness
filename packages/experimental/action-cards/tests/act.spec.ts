@@ -89,7 +89,7 @@ it('shares one operation between concurrent actions on a card and drains it on u
 
 it('rejects a second kind for the same action and releases a kind through its disposer', async () => {
   const f = await fixture()
-  const kind = (action: string) => ({ action, skill: 'other-skill', details: z.object({}), verbs: { start: {} },
+  const kind = (action: string) => ({ action, skill: 'other-skill', invitation: 'Invite the user.', details: z.object({}), verbs: { start: {} },
     act: () => Promise.resolve<ActionCardResult>({ status: 'accepted' }) })
   expect(() => f.ctx.actionCards.register(kind(ACTION))).toThrow('action-cards: action "test_action" is already registered')
   const unregister = f.ctx.actionCards.register(kind('other_action'))

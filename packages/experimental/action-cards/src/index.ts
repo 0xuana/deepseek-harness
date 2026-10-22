@@ -81,6 +81,12 @@ export interface ActionCardKind<Details> {
   readonly action: string
   /** Skill whose instructions propose this action; a load in the current turn admits the call. */
   readonly skill: string
+  /**
+   * Model-facing closing guidance that the result of an accepted call gives: one or two sentences on how to invite
+   * the user to the card, in the user's language. Refused calls never carry it, so the model invites the user only to a
+   * card that exists.
+   */
+  readonly invitation: string
   /** Validates `details` when the model proposes and before each user action. */
   readonly details: ZodType<Details>
   /** User actions besides `dismiss`, with the shared checks each requires; other verbs are refused as unavailable. */
@@ -123,6 +129,7 @@ export interface ActionCardKind<Details> {
 /** A registered kind with its details type erased behind validating closures. */
 interface RegisteredKind {
   readonly skill: string
+  readonly invitation: string
   readonly verbs: Readonly<Record<string, ActionCardVerb>>
   readonly openPhases: readonly string[]
   readonly statusGuidance: string | undefined
@@ -194,9 +201,11 @@ export class ActionCards extends TypertRemoteService {
       output: {
         schema: {
           type: 'object', additionalProperties: false,
-          properties: { action: { type: 'string', required: true }, title: { type: 'string', required: true } },
+          properties: {
+            action: { type: 'string', required: true }, title: { type: 'string', required: true }, invitation: { type: 'string', required: true },
+          },
         },
-        render: () => [{ type: 'text', text: 'Card shown below your answer. Do not restate it; end with one short invitation.' }],
+        render: (_args, value) => [{ type: 'text', text: `Card shown below your answer. Do not restate it. ${value.invitation}` }],
       },
       execute: (args, exec) => Promise.resolve(this.propose(args, exec)),
     }), { when: ({ agent }) => this.declares(agent) })
@@ -261,7 +270,7 @@ export class ActionCards extends TypertRemoteService {
     }
     const reconcile = kind.reconcile?.bind(kind)
     const entry: RegisteredKind = {
-      skill: kind.skill, verbs: kind.verbs, openPhases: kind.openPhases ?? [],
+      skill: kind.skill, invitation: kind.invitation, verbs: kind.verbs, openPhases: kind.openPhases ?? [],
       statusGuidance: kind.statusGuidance, statusFields: kind.statusFields,
       detailsIssues: (details) => {
         const parsed = kind.details.safeParse(details)
@@ -406,7 +415,7 @@ export class ActionCards extends TypertRemoteService {
   private propose(
     args: { readonly action: string; readonly title: string; readonly brief: string; readonly details: ActionCardFields },
     exec: ToolRunContext,
-  ): { action: string; title: string } {
+  ): { action: string; title: string; invitation: string } {
     const agent = exec.agent
     // Step admission declares the tool only to an agent; calls dispatched from code are not logged as tool calls,
     // so no card could follow them.
@@ -431,7 +440,7 @@ export class ActionCards extends TypertRemoteService {
       throw new ActionCardError('One card per turn; the earlier card stands.', 'ACTION_CARD_LIMIT')
     }
     this.accepted.set(agent, { turn, callId: exec.callId })
-    return { action: args.action, title: args.title.trim() }
+    return { action: args.action, title: args.title.trim(), invitation: kind.invitation }
   }
 
   private isStopping(): boolean {
