@@ -4,7 +4,7 @@
     - menuitemradio "DeepSeek-V4.1-Flash 1017"
   - group "DeepSeek":
     - text: DeepSeek
-    - menuitemradio "DeepSeek-V4.1-Flash 1017" [checked]
+    - menuitemradio "DeepSeek-V4.1-Flash 新" [checked]
     - menuitemradio "DeepSeek-V4-Pro"
   - group "External":
     - text: External

@@ -1,4 +1,4 @@
-/** The shipped browser plugin decorates both DeepSeek routes without changing catalog identity. */
+/** Catalog badges reach every selector placement through the Host catalog without changing catalog identity. */
 import { fileURLToPath } from 'node:url'
 import { chromium, type Browser, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -8,11 +8,11 @@ import {
 import { connectFreshWorkspaceZh, ZH_BROWSER_LOCALE } from './support.ts'
 
 const NAME = 'DeepSeek-V4.1-Flash'
-const FIXTURE = fileURLToPath(new URL('./fixtures/deepseek-model-label-1017/session.v4.jsonl', import.meta.url))
-const EXPECTED = fileURLToPath(new URL('./expected/deepseek-model-label-1017/models.expected.md', import.meta.url))
+const FIXTURE = fileURLToPath(new URL('./fixtures/model-badge/session.v4.jsonl', import.meta.url))
+const EXPECTED = fileURLToPath(new URL('./expected/model-badge/models.expected.md', import.meta.url))
 const MODE = webSnapshotMode()
 
-describe.skipIf(MODE === 'record')('web e2e: temporary DeepSeek release badge', () => {
+describe.skipIf(MODE === 'record')('web e2e: catalog model badges', () => {
   let scaffold: WebScaffold
   let browser: Browser
   let page: Page
@@ -20,13 +20,16 @@ describe.skipIf(MODE === 'record')('web e2e: temporary DeepSeek release badge', 
 
   beforeAll(async () => {
     scaffold = await launchWebScaffold({
-      extraOverlayPath: fileURLToPath(new URL('./fixtures/deepseek-model-label-1017/account.overlay.yml', import.meta.url)),
+      extraOverlayPath: fileURLToPath(new URL('./fixtures/model-badge/account.overlay.yml', import.meta.url)),
       replayFixture: FIXTURE,
       replayProvidersOnly: true,
       replayProviders: [
-        { id: 'deepseek-account', name: 'DeepSeek Account', models: [{ id: 'deepseek-flash', name: NAME }] },
+        { id: 'deepseek-account', name: 'DeepSeek Account', models: [
+          { id: 'deepseek-flash', name: NAME, badge: { text: '1017', tone: 'info' } },
+        ] },
         { id: 'deepseek-official', name: 'DeepSeek', models: [
-          { id: 'deepseek-flash', name: NAME }, { id: 'deepseek-v4-pro', name: 'DeepSeek-V4-Pro' },
+          { id: 'deepseek-flash', name: NAME, badge: { text: { en: 'New', zh: '新' }, tone: 'success' } },
+          { id: 'deepseek-v4-pro', name: 'DeepSeek-V4-Pro' },
         ] },
         { id: 'external', name: 'External', models: [{ id: 'deepseek-flash', name: NAME }] },
       ],
@@ -43,21 +46,22 @@ describe.skipIf(MODE === 'record')('web e2e: temporary DeepSeek release badge', 
     finally { await scaffold?.close() }
   })
 
-  it('shows the same badge in all placements while preserving the chosen provider and model id', async () => {
+  it('shows each catalog badge in all placements while preserving the chosen provider and model id', async () => {
     const trigger = page.getByRole('button', { name: /^选择模型/ })
-    await trigger.getByText('1017', { exact: true }).waitFor()
-    expect(await trigger.textContent()).toContain(`${NAME} 1017`)
+    await trigger.getByText('新', { exact: true }).waitFor()
+    expect(await trigger.textContent()).toContain(`${NAME} 新`)
     expect(await trigger.getAttribute('aria-label')).toBe(`选择模型，当前 ${NAME}`)
+    expect(await trigger.getByText('新', { exact: true }).getAttribute('data-tone')).toBe('success')
     try {
       await trigger.click()
       const current = page.getByRole('menuitem', { name: /^模型/ })
-      expect(await current.getByText('1017', { exact: true }).count()).toBe(1)
+      expect(await current.getByText('新', { exact: true }).count()).toBe(1)
       await current.click()
       const menu = page.getByRole('menu', { name: '模型', exact: true })
       await compareOrRefreshGolden(EXPECTED, await captureStableAria(page, '[role="menu"][aria-label="模型"]', scaffold.workspaceCwd), MODE)
-      expect(await menu.getByText('1017', { exact: true }).count()).toBe(2)
-      expect(await menu.getByRole('group', { name: 'External', exact: true }).getByText('1017', { exact: true }).count()).toBe(0)
+      expect(await menu.getByRole('group', { name: 'External', exact: true }).locator('[data-tone]').count()).toBe(0)
       const account = menu.getByRole('group', { name: 'DeepSeek 账号', exact: true })
+      expect(await account.getByText('1017', { exact: true }).getAttribute('data-tone')).toBe('info')
       await account.getByRole('menuitemradio', { name: `${NAME} 1017`, exact: true }).click()
       await expect.poll(() => scaffold.ctx.agentDefaultModel.currentSelection()).toEqual({ provider: 'deepseek-account', model: 'deepseek-flash' })
       await expect.poll(() => trigger.textContent()).toContain(`${NAME} 1017`)
@@ -69,7 +73,7 @@ describe.skipIf(MODE === 'record')('web e2e: temporary DeepSeek release badge', 
     }
   })
 
-  it('keeps the release badge inside a 390px model menu and uses both theme palettes', async () => {
+  it('keeps a badge inside a 390px model menu and uses both theme palettes', async () => {
     try {
       await page.setViewportSize({ width: 390, height: 844 })
       const trigger = page.getByRole('button', { name: /^选择模型/ })

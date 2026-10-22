@@ -1,0 +1,39 @@
+# Agent Note: Model selector badges come from the model listing
+
+Status: implemented
+
+English | [中文](2026-10-22-listed-model-badges.zh.md)
+
+## Problem
+
+The Web model selector showed `1017` beside `DeepSeek-V4.1-Flash` through a dedicated client package that matched two DeepSeek providers, one model id, and one exact catalog name. Changing or retiring that release marker, or labeling another model, required a client release, while both DeepSeek routes already read model metadata from the service's `GET /models` listing.
+
+## Decision
+
+- Each `/models` entry may declare `badge: { text, tone }`. `text` uses the package-metadata `LocalizedText` form: one string, or translations keyed by lowercase language id that include `en`. Each text is trimmed and holds 1 to 12 user-perceived characters on one line.
+- `tone` is `neutral`, `info`, `success`, or `warning`: the `Tag` palettes for a plain fact, a highlight, a benefit, and attention. The shipped release marker used `info`; the surveyed selectors draw plan and capability tags neutral, new features with an accent, and usage hints in a warning color. `danger` and `solid` keep their failure and selection meanings.
+- [`parseModelListing`](../../../../packages/llm/llm-deepseek/src/listing.ts) decodes the badge beside the entry's other declarations, and [`resolveListedCatalog`](../../../../packages/llm/llm-deepseek/src/listed-catalog.ts) keeps the badges of offered models; both routes attach them through `catalogModelInfo`. An absent or `null` badge shows none, and an absent or unrecognized tone shows `neutral`. An unreadable badge is dropped and reported with the listing's other problems, and never hides its model.
+- `LlmModelInfo.badge` and `ModelCatalogModel.badge` carry the badge from discovery through the Host model catalog to the browser. `resolveModelInfo` omits it, and no model request, Session event, or model-facing tool reads it.
+- [`ui-model-selection`](../../../../packages/client/ui-model-selection/README.md) renders the badge after the catalog name in the trigger, the root-menu value, and each option, resolving its text with `ctx.locale.resolveText`. A `conversation.input.model.label` contribution replaces the name and badge together and receives the badge in its owner props.
+- The build ships no badge of its own: a route before its first listing, a customized catalog, and a non-official endpoint show none. The fixed `ui-deepseek-model-label-1017` package and its Web bundle row are removed.
+
+## Alternatives considered
+
+**A semantic badge kind mapped to client dictionaries.** OpenCode, ZCode, and DeepSeek-Reasonix translate a closed set of client-owned tag kinds, and none renders text a server sends. A fixed vocabulary cannot express a release code such as `1017`, and each new wording would need the client release the listing exists to avoid. Listing text is provider data, which the [locale-owned copy decision](../architecture/2026-08-23-locale-owned-client-ui-copy.md) renders verbatim; the `LocalizedText` form still lets the service supply translations.
+
+**Accept colors, CSS, or markup from the listing.** No surveyed product accepts styling from a catalog, and arbitrary colors bypass the theme's light and dark palettes and their contrast. A closed tone set maps onto the existing `Tag` palettes, and an unrecognized tone degrades to `neutral`, so a value a newer service adds never removes the text.
+
+**Keep `1017` as a built-in default.** A bundled badge would keep the marker offline and on custom endpoints. Under the listing rule that an absent field keeps the build's value, the service could then remove it only with a special empty value, and old builds would keep the stale marker wherever no listing loads. Shipping no badge makes the listing the only source, so omitting the field removes the badge.
+
+**An expiry or start time on the badge.** The listing cache lives in memory and refreshes on access after `modelsMaxAgeMs`, so a badge the service drops disappears within one refresh. Client-side time windows would add dependence on the client clock without removing reachable staleness.
+
+**Drop the whole entry or listing for a bad badge.** OpenCode drops a model whose catalog status it cannot decode, and Codex fails its catalog decode on one unknown enum value. A badge is presentation only, so a bad one is dropped by itself.
+
+**A DeepSeek-specific badge Remote beside the catalog.** Keeping the badge out of `LlmModelInfo` would need a second Remote, a second client fetch, and agreement between two caches about which models exist. One optional field on the existing catalog reaches every placement in one load.
+
+## Consequences
+
+- The service changes, localizes, or removes a badge without a client release; a running client shows the change after its next listing refresh and catalog reload.
+- `deepseek-flash` shows no badge until the service declares one, and never on custom endpoints, with a customized catalog, or before a listing loads.
+- The `/model` popup, the trigger's accessible name, and the Models settings page keep plain names.
+- A profile patch that still targets `ui-deepseek-model-label-1017` matches no row and boots with a warning ([upgrade guide](../../../../docs/upgrade-guide/v0.2.1-rc.2/model-badge-package-removal/guide.md)).
