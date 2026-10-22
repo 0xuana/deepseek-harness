@@ -20,7 +20,7 @@ export const LIVESHARE_PROTOCOL_VERSION = 1
  * observe on the wire, so a Relay relies only on what it has been told rather than on the release it
  * happens to run beside.
  */
-export const LIVESHARE_CAPABILITIES: readonly string[] = [
+export const LIVESHARE_CAPABILITIES = [
   'session-mode',
   'fork',
   'acl-subjects',
@@ -32,7 +32,10 @@ export const LIVESHARE_CAPABILITIES: readonly string[] = [
   'file-upload',
   'actor-credential',
   'direct-connection',
-]
+] as const
+
+/** One optional behavior this build offers the Relay; a peer compiles against the names it knows. */
+export type LiveshareCapability = typeof LIVESHARE_CAPABILITIES[number]
 
 /**
  * The permission facts a share publishes.
