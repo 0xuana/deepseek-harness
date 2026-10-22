@@ -793,6 +793,7 @@ export const ja = {
   'input.file': 'ファイル',
   'input.stop': '生成を停止',
   'input.send': 'メッセージを送信',
+  'input.sending': 'メッセージを送信中',
   'input.send.queue': 'メッセージをキューに追加',
   'input.send.steer': '実行中の指示にメッセージを追加',
   'attachment.pending': '保留中の添付ファイル',
