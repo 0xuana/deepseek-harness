@@ -3,8 +3,6 @@
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   height: 100%;
-  box-sizing: border-box;
-  padding-block: var(--dsh-safe-area-top, 0px) var(--dsh-safe-area-bottom, 0px);
   overflow: hidden;
   background: var(--dsw-alias-bg-base);
 }

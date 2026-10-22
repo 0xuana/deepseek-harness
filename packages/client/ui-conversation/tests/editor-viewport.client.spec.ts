@@ -23,6 +23,7 @@ function fixture(viewport: { height: number; offsetTop: number; pageTop: number 
   document.body.append(root)
   const runtime: DraftEditorRuntime = new DraftEditorRuntime({
     onUpdate: () => { runtime.refreshProjection() },
+    quoteLabels: () => ({ remove: 'Remove quote' }),
     openReference: () => false,
     lexicon: () => new Map(), resolveLexicon: () => undefined,
   })
