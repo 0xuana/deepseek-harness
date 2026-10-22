@@ -1,4 +1,4 @@
-/** Replay model output through the shipped Web profile and decide its real card. */
+/** Replay model output through the shipped Web profile and decide its real propose_action card. */
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -33,7 +33,7 @@ describe('official plugin recommendation in a conversation', () => {
     await scaffold?.close()
   })
 
-  it('offers the answer block as one card, keeps the fence out of the answer, and reports a dismissal on the next request', async () => {
+  it('offers the propose_action call as one card below the answer, and reports a dismissal on the next request', async () => {
     const tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await connectFreshWorkspace(page, scaffold.workspaceCwd)
@@ -43,10 +43,10 @@ describe('official plugin recommendation in a conversation', () => {
     await input.fill(prompts[0]!)
     await input.press('Enter')
     await settled
-    const card = page.locator('[data-plugin-recommendation]')
+    const card = page.locator('[data-action-card]')
     await card.waitFor({ state: 'visible' })
     expect(await card.count()).toBe(1)
-    expect(await page.locator('[data-turn-tail] [data-plugin-recommendation]').count()).toBe(1)
+    expect(await page.locator('[data-turn-tail] [data-action-card][data-action="enable_official_plugin"]').count()).toBe(1)
     const answer = page.getByText('Voice input transcribes your recordings locally into the composer. You can enable it below.', { exact: true })
     const answerBox = await answer.boundingBox()
     const cardBox = await card.boundingBox()
@@ -56,7 +56,7 @@ describe('official plugin recommendation in a conversation', () => {
     await card.getByText('Voice input', { exact: true }).waitFor()
     expect(await card.getByRole('button', { name: 'Enable', exact: true }).isEnabled()).toBe(true)
     expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === voiceBundle)?.enabled).toBe(false)
-    await compareOrRefreshGolden(join(directory, 'offered.expected.md'), await captureStableAria(page, '[data-plugin-recommendation]', scaffold.workspaceCwd), scaffold.mode)
+    await compareOrRefreshGolden(join(directory, 'offered.expected.md'), await captureStableAria(page, '[data-action-card]', scaffold.workspaceCwd), scaffold.mode)
     await page.setViewportSize({ width: 620, height: 900 })
     expect(await card.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
     await card.getByRole('button', { name: 'Not now', exact: true }).click()
@@ -68,7 +68,7 @@ describe('official plugin recommendation in a conversation', () => {
     expect(await card.count()).toBe(1)
     expect(await card.getByRole('button').count()).toBe(1)
     expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === voiceBundle)?.enabled).toBe(false)
-    await compareOrRefreshGolden(join(directory, 'dismissed.expected.md'), await captureStableAria(page, '[data-plugin-recommendation]', scaffold.workspaceCwd), scaffold.mode)
+    await compareOrRefreshGolden(join(directory, 'dismissed.expected.md'), await captureStableAria(page, '[data-action-card]', scaffold.workspaceCwd), scaffold.mode)
     const statusSettled = scaffold.whenTurnSettled()
     await input.fill(prompts[1]!)
     await input.press('Enter')

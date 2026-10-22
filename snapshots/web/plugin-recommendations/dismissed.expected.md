@@ -1,4 +1,4 @@
-- region "Recommended plugin":
+- region "Voice input":
   - text: Recommended plugin Official
   - 'button "View details: Voice input"':
     - strong: Voice input
