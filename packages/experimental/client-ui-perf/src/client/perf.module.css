@@ -8,6 +8,7 @@
   box-sizing: border-box;
   height: 100%;
   min-height: 0;
+  padding-bottom: calc(var(--dsh-composer-height, 152px) + 8px);
   overflow: hidden;
   color: var(--dsw-alias-label-primary);
   font: var(--dsw-font-xxs-12);
@@ -21,7 +22,7 @@
   overflow-y: auto;
   /* No top padding: a sticky header sits at the scrollport top, and padding
      here would leave a strip where rows scroll above it. */
-  padding: 0 20px calc(var(--dsh-composer-height, 152px) + 16px);
+  padding: 0 20px 16px;
 }
 
 .scroll > :first-child {
@@ -813,16 +814,12 @@
 
 /* Footer controls: the passive table summary plus expand/collapse everything. */
 .toolbar {
-  position: sticky;
-  bottom: calc(var(--dsh-composer-height, 152px) + 4px);
-  z-index: 3;
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 14px;
+  margin: 8px 20px 0;
   padding: 8px 0;
   border-top: 0.5px solid var(--dsw-alias-border-l1);
-  background: var(--dsw-alias-bg-layer-1);
   font: var(--dsw-font-xxs-12);
 }
 

@@ -1801,36 +1801,36 @@ export function PerfView(props: PerfViewProps): ReactElement {
             )}
           </table>
         )}
-        <div className={css.toolbar}>
-          <span className={css.summary}>
-            {t('summary', { turns: turns.length, steps: snapshot.stepCount })}
-          </span>
-          <div className={css.controls}>
-            <span className={css.controlLabel}>{t('table.showTotals')}</span>
-            <Switch
-              checked={view.showTotals}
-              onChange={(next) => { setView(previous => ({ ...previous, showTotals: next })) }}
-              label={t('table.showTotals')}
-            />
-            <span className={css.controlLabel}>{t('contextMode.label')}</span>
-            <SegmentedControl
-              id="perf-context-mode"
-              value={view.contextMode}
-              options={[
-                { value: 'latest', label: t('contextMode.latest'), title: t('contextMode.latest.title') },
-                { value: 'cumulative', label: t('contextMode.cumulative'), title: t('contextMode.cumulative.title') },
-              ]}
-              onChange={(next) => { setView(previous => ({ ...previous, contextMode: next })) }}
-              label={t('contextMode.label')}
-              className={css.contextMode}
-            />
-          </div>
-          <TableButton
-            caption={allOpen ? t('collapse.all') : t('expand.all')}
-            enabled={turns.length > 0}
-            onClick={toggleAllTurns}
+      </div>
+      <div className={css.toolbar}>
+        <span className={css.summary}>
+          {t('summary', { turns: turns.length, steps: snapshot.stepCount })}
+        </span>
+        <div className={css.controls}>
+          <span className={css.controlLabel}>{t('table.showTotals')}</span>
+          <Switch
+            checked={view.showTotals}
+            onChange={(next) => { setView(previous => ({ ...previous, showTotals: next })) }}
+            label={t('table.showTotals')}
+          />
+          <span className={css.controlLabel}>{t('contextMode.label')}</span>
+          <SegmentedControl
+            id="perf-context-mode"
+            value={view.contextMode}
+            options={[
+              { value: 'latest', label: t('contextMode.latest'), title: t('contextMode.latest.title') },
+              { value: 'cumulative', label: t('contextMode.cumulative'), title: t('contextMode.cumulative.title') },
+            ]}
+            onChange={(next) => { setView(previous => ({ ...previous, contextMode: next })) }}
+            label={t('contextMode.label')}
+            className={css.contextMode}
           />
         </div>
+        <TableButton
+          caption={allOpen ? t('collapse.all') : t('expand.all')}
+          enabled={turns.length > 0}
+          onClick={toggleAllTurns}
+        />
       </div>
     </div>
   )
