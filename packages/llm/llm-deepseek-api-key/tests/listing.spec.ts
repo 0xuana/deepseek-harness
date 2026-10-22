@@ -104,7 +104,9 @@ it('lets a caller abandon the first listing wait', async () => {
   const started = Promise.withResolvers<undefined>()
   vi.spyOn(globalThis, 'fetch').mockImplementation((_input, init) => new Promise((_resolve, reject) => {
     started.resolve(undefined)
-    init?.signal?.addEventListener('abort', () => { reject(init.signal?.reason) }, { once: true })
+    init?.signal?.addEventListener('abort', () => {
+      reject(new Error('listing request aborted', { cause: init.signal?.reason }))
+    }, { once: true })
   }))
   const { ctx } = await host()
   await ctx.plugin(ApiKey, {})
