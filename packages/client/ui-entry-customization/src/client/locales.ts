@@ -15,3 +15,12 @@ export const zh: Record<keyof typeof en, string> = {
   'createPrompt.conversation': '创建一个 DSH 会话视图插件。',
   'createPrompt.rightbar': '创建一个带右侧栏入口的 DSH 插件。',
 }
+
+/** Japanese copy, checked against the English keys. */
+export const ja = {
+  'install': '他のプラグインを探す',
+  'create': 'プラグインを作成',
+  'createPrompt.sidebar': '左サイドバーにエントリを持つ DSH プラグインを作成します。',
+  'createPrompt.conversation': 'DSH 会話ビュープラグインを作成します。',
+  'createPrompt.rightbar': '右サイドバーにエントリを持つ DSH プラグインを作成します。',
+} satisfies Record<keyof typeof en, string>
