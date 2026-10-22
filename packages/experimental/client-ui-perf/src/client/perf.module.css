@@ -45,17 +45,17 @@
 
 /* Scope | question | did | seven metrics | total time; fixed widths keep the
    measurement columns visible instead of letting the did cell push them out. */
-.table col:nth-child(1) { width: 10%; }
-.table col:nth-child(2) { width: 16%; }
-.table col:nth-child(3) { width: 13%; }
-.table col:nth-child(4) { width: 6%; }
-.table col:nth-child(5) { width: 6%; }
-.table col:nth-child(6) { width: 6%; }
-.table col:nth-child(7) { width: 6.5%; }
-.table col:nth-child(8) { width: 6.5%; }
+.table col:nth-child(1) { width: 15%; }
+.table col:nth-child(2) { width: 17%; }
+.table col:nth-child(3) { width: 15%; }
+.table col:nth-child(4) { width: 5%; }
+.table col:nth-child(5) { width: 5%; }
+.table col:nth-child(6) { width: 5%; }
+.table col:nth-child(7) { width: 5.5%; }
+.table col:nth-child(8) { width: 5.5%; }
 .table col:nth-child(9) { width: 6.5%; }
-.table col:nth-child(10) { width: 6.5%; }
-.table col:nth-child(11) { width: 17%; }
+.table col:nth-child(10) { width: 6%; }
+.table col:nth-child(11) { width: 14.5%; }
 
 .thLeft,
 .th {
@@ -101,8 +101,8 @@
 
 .turnCell {
   overflow: hidden;
-  text-overflow: ellipsis;
   font-weight: 600;
+  white-space: normal;
 }
 
 .turnMetric {
@@ -530,15 +530,17 @@
 
 /* Time composition: turn bars are tall and outlined, step bars short and bare. */
 .timeWrap {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
 }
 
 .barTurn {
   display: inline-block;
   box-sizing: border-box;
-  width: 150px;
+  flex: 1;
+  min-width: 40px;
   height: 14px;
   border: 0.5px solid var(--dsw-alias-border-l2);
   border-radius: 2px;
@@ -549,7 +551,8 @@
 
 .barStep {
   display: inline-block;
-  width: 104px;
+  flex: 1;
+  min-width: 32px;
   height: 6px;
   border-radius: 2px;
   background: var(--dsw-alias-bg-layer-2);

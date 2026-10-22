@@ -17,7 +17,7 @@ import type {
 } from './perf-contract.ts'
 import {
   DASH, barShare, formatChars, formatClock, formatDateTime, formatDateTimeShort, formatMs, formatPercent,
-  formatTokens, formatTokensDelta, formatTokensShort, formatTps,
+  formatTokens, formatTokensShort, formatTps,
 } from './perf-format.ts'
 import { isNumber } from './perf-usage.ts'
 import { CALL_LIMIT } from './perf-fold.ts'
@@ -176,15 +176,6 @@ interface TimeState {
   readonly toolWall: number | null
 }
 
-/** Context growth from the previous step of the same turn. */
-interface ContextDelta {
-  readonly from: number
-  readonly to: number
-  readonly diff: number
-  readonly chars: number
-  readonly tokens: number | null
-}
-
 /** Text and tooltip of one numeric cell. */
 interface CellText {
   readonly text: string
@@ -265,8 +256,6 @@ interface MetricCellsProps {
 /** Props of the context column cell. */
 interface ContextCellProps {
   readonly value: number | null
-  readonly delta: number | null
-  readonly title: string
   readonly className: string | undefined
 }
 
@@ -732,30 +721,6 @@ function callGroups(calls: readonly PerfCall[]): readonly CallGroup[] {
   return [...groups.values()]
 }
 
-/** Context delta of each step against the previous measured step in its turn. */
-function contextDeltas(turn: PerfTurnMetrics): ReadonlyMap<number, ContextDelta> {
-  const deltas = new Map<number, ContextDelta>()
-  let previous: number | null = null
-  let previousChars = 0
-  let previousTokens: number | null = null
-  for (const step of turn.steps) {
-    const context = step.context
-    if (isNumber(previous) && isNumber(context) && context !== previous) {
-      deltas.set(step.step, {
-        from: previous,
-        to: context,
-        diff: context - previous,
-        chars: previousChars,
-        tokens: previousTokens,
-      })
-    }
-    if (isNumber(context)) previous = context
-    previousChars = isNumber(step.toolOutput) ? step.toolOutput : 0
-    previousTokens = isNumber(step.output) ? step.output : null
-  }
-  return deltas
-}
-
 /** Gap between one step's start and the previous step's end. */
 function stepGaps(turn: PerfTurnMetrics): ReadonlyMap<number, number> {
   const gaps = new Map<number, number>()
@@ -864,7 +829,7 @@ function metricsCells(value: MetricsValues, t: PerfTranslate): readonly MetricCe
   })
 }
 
-/** Numeric cells after the context column, which renders its own delta. */
+/** Numeric cells after the context column. */
 function MetricCells({ cells, className }: MetricCellsProps): ReactElement {
   return (
     <Fragment>
@@ -877,18 +842,11 @@ function MetricCells({ cells, className }: MetricCellsProps): ReactElement {
   )
 }
 
-/** Context column: value plus the signed change from the previous step. */
-function ContextCell({ value, delta, title, className }: ContextCellProps): ReactElement {
+/** Context column: the last measured prompt size of the row. */
+function ContextCell({ value, className }: ContextCellProps): ReactElement {
   return (
-    <td className={className} title={title === '' ? undefined : title}>
+    <td className={className}>
       <span className={css.num}>{formatTokensShort(value)}</span>
-      {isNumber(delta) && delta !== 0
-        ? (
-          <span className={cx(css.numDelta, delta > 0 ? css.deltaUp : css.deltaDown)}>
-            {formatTokensDelta(delta)}
-          </span>
-        )
-        : <span className={css.numDelta} />}
     </td>
   )
 }
@@ -1095,11 +1053,16 @@ function PromptCell({ turn, t, className, loadImage }: PromptCellProps): ReactEl
     : <ImagePromptPill first={first} images={images} loadImage={loadImage} t={t} />
   const source = turn.promptSource
   if (source !== null && source !== 'user') {
-    // Automated turns explain what woke them instead of pretending to be a question.
-    const label = triggerLabel(source, t)
-    const text = turn.prompt ?? ''
+    // Automated turns explain what woke them; team messages also name the sender.
+    const base = triggerLabel(source, t)
+    const sender = turn.promptSender
+    const label = sender === null ? base : `${base} · ${sender}`
+    const raw = turn.prompt ?? ''
+    const text = sender === null
+      ? raw
+      : raw.replace(/^(?:Team message from [^:]+:|Agent \S+ sent a message:)\s*/u, '')
     return (
-      <td className={className} title={text === '' ? label : text}>
+      <td className={className} title={raw === '' ? label : raw}>
         <span className={css.triggerPill}>{label}</span>
         {pill}
         {text === '' ? null : <span className={css.promptText}>{text}</span>}
@@ -1127,7 +1090,12 @@ function PromptCell({ turn, t, className, loadImage }: PromptCellProps): ReactEl
 function triggerLabel(source: string, t: PerfTranslate): string {
   switch (source) {
     case 'agent-message': return t('trigger.agent-message')
+    case 'team-message': return t('trigger.team-message')
     case 'subagent-settled': return t('trigger.subagent-settled')
+    case 'schedule': return t('trigger.schedule')
+    case 'webhook': return t('trigger.webhook')
+    case 'tool-jobs': return t('trigger.tool-jobs')
+    case 'cordis-host-runner': return t('trigger.cordis-host-runner')
     case 'goal': return t('trigger.goal')
     case 'runtime-context':
     case 'time-context': return t('trigger.context')
@@ -1360,7 +1328,6 @@ function moreRows(
 /** Rendered rows of one turn: header, step-list controls, and step rows. */
 function stepRows(options: StepRowsOptions): ReactNode[] {
   const { turn, t, now, state, onToggleDetail, onControl } = options
-  const deltas = contextDeltas(turn)
   const gaps = stepGaps(turn)
   const open = state.open ?? {}
   // Steps compare only with steps of the same turn.
@@ -1372,24 +1339,8 @@ function stepRows(options: StepRowsOptions): ReactNode[] {
   const rows: ReactNode[] = []
   for (const step of shown) {
     const cells = metricsCells(step, t)
-    const delta = deltas.get(step.step)
     const expanded = open[step.step] === true
     const hasDetail = step.calls.length > 0
-    let contextTitle = ''
-    if (delta !== undefined) {
-      const lines = [
-        t('context.delta', {
-          from: formatTokensShort(delta.from),
-          to: formatTokensShort(delta.to),
-          delta: formatTokensDelta(delta.diff),
-        }),
-      ]
-      if (delta.chars > 0) lines.push(t('context.delta.chars', { chars: formatTokens(delta.chars) }))
-      if (delta.tokens !== null && delta.tokens > 0) {
-        lines.push(t('context.delta.output', { tokens: formatTokens(delta.tokens) }))
-      }
-      contextTitle = lines.join('\n')
-    }
     const rowClass: (string | undefined)[] = []
     if (hasDetail) rowClass.push(css.stepRowClickable)
     if (step.toolErrors > 0) rowClass.push(css.stepRowError)
@@ -1434,12 +1385,7 @@ function stepRows(options: StepRowsOptions): ReactNode[] {
         </td>
         <td className={css.promptCell} />
         {stepDidCell(step, t)}
-        <ContextCell
-          value={step.context}
-          delta={delta === undefined ? null : delta.diff}
-          title={contextTitle}
-          className={css.stepMetric}
-        />
+        <ContextCell value={step.context} className={css.stepMetric} />
         <MetricCells cells={cells} className={css.stepMetric} />
         <TimeCell
           value={step}
@@ -1464,6 +1410,7 @@ function turnRows(options: TurnRowsOptions): ReactNode[] {
   const rows: ReactNode[] = [
     <tr
       key={`turn:${turn.turn}`}
+      data-turn={turn.turn}
       className={css.turnRow}
       onClick={onToggle}
       title={t('turn.toggle.title')}
@@ -1495,7 +1442,7 @@ function turnRows(options: TurnRowsOptions): ReactNode[] {
       </td>
       <PromptCell turn={turn} t={t} className={css.promptCellTurn} loadImage={loadImage} />
       {turnDidCell(turn, t)}
-      <ContextCell value={turn.context} delta={null} title="" className={css.turnMetric} />
+      <ContextCell value={turn.context} className={css.turnMetric} />
       <MetricCells cells={cells} className={css.turnMetric} />
       <TimeCell
         value={turn}
@@ -1551,6 +1498,7 @@ export function PerfView(props: PerfViewProps): ReactElement {
   const [loading, setLoading] = useState(false)
   const [exhausted, setExhausted] = useState(false)
   const [loadFailed, setLoadFailed] = useState(false)
+  const [visibleTurns, setVisibleTurns] = useState<ReadonlySet<number>>(() => new Set())
   const scrollRef = useRef<HTMLDivElement>(null)
   const loadingRef = useRef(false)
   const pendingPrepend = useRef<PendingPrepend | null>(null)
@@ -1571,7 +1519,8 @@ export function PerfView(props: PerfViewProps): ReactElement {
     return () => { clearInterval(timer) }
   }, [hasRunning])
   // Turns compare only with the other turns in the window.
-  const turnScale = turns.reduce((max, turn) => {
+  const scaleTurns = visibleTurns.size === 0 ? turns : turns.filter(turn => visibleTurns.has(turn.turn))
+  const turnScale = scaleTurns.reduce((max, turn) => {
     const span = totalSpan(turn, now)
     return span !== null && span > max ? span : max
   }, 0)
@@ -1659,6 +1608,28 @@ export function PerfView(props: PerfViewProps): ReactElement {
     pendingPrepend.current = null
     element.scrollTop = pending.top + Math.max(0, element.scrollHeight - pending.height)
   })
+  // Turn bars compare against the largest duration currently on screen, so an
+  // oversized turn that scrolled away does not flatten the visible comparison.
+  useEffect(() => {
+    const element = scrollRef.current
+    /* v8 ignore next -- the scrollport mounts with the first render. */
+    if (element === null || typeof IntersectionObserver === 'undefined') return undefined
+    const visible = new Set<number>()
+    const observer = new IntersectionObserver((entries) => {
+      let changed = false
+      for (const entry of entries) {
+        const turn = Number((entry.target as HTMLElement).dataset.turn)
+        const had = visible.has(turn)
+        if (entry.isIntersecting) visible.add(turn)
+        else visible.delete(turn)
+        if (had !== visible.has(turn)) changed = true
+      }
+      if (changed) setVisibleTurns(new Set(visible))
+    }, { root: element })
+    for (const row of element.querySelectorAll<HTMLElement>('tr[data-turn]')) observer.observe(row)
+    return () => { observer.disconnect() }
+  }, [turns.length])
+
   const handleScroll = (event: UIEvent<HTMLDivElement>): void => {
     if (event.currentTarget.scrollTop > LOAD_OLDER_THRESHOLD) return
     void requestOlder()

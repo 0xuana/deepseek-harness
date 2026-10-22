@@ -254,6 +254,24 @@ function isTokenDelta(chunk: StreamChunk): boolean {
   }
 }
 
+const TEAM_MESSAGE_PREFIX = /^Team message from ([^:]+):/u
+const AGENT_MESSAGE_PREFIX = /^Agent (\S+) sent a message:/u
+
+/** Sender agent name of a teammate/agent notification, parsed from its body prefix. */
+export function triggerSenderOf(message: UserMessage): string | null {
+  const kind: string = message.source.kind
+  if (kind !== 'agent-message' && kind !== 'team-message') return null
+  let text = ''
+  for (const block of message.content) {
+    if (block.type === 'text') text += block.text
+  }
+  const team = TEAM_MESSAGE_PREFIX.exec(text)
+  /* v8 ignore next -- a matched capture group is always present. */
+  if (team !== null) return team[1]?.trim() ?? null
+  const agent = AGENT_MESSAGE_PREFIX.exec(text)
+  return agent?.[1] ?? null
+}
+
 /** Answer characters kept for the one-line Did preview. */
 const ANSWER_LIMIT = 400
 
@@ -307,6 +325,7 @@ export function newState(
     closed: false,
     closeKind: null,
     trigger: null,
+    triggerSender: null,
     answer: null,
   }
 }

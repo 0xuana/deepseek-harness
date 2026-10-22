@@ -96,7 +96,7 @@ function promptNode(
     target: 'perf',
     anchorSeq: 1,
     location: { kind: 'unresolved' },
-    data: { kind: 'prompt', turn, prompt, images, source },
+    data: { kind: 'prompt', turn, prompt, images, source, sender: null },
   }
 }
 
@@ -372,6 +372,22 @@ describe('turn grouping', () => {
     ])
     expect(team[0]?.prompt).toBe('team message')
     expect(team[0]?.promptSource).toBe('agent-message')
+
+    const teamMessage = buildTurns([
+      stepNode(metricsOf({ turn: 8, step: 1, startTime: 800 })),
+      promptNode(8, 'team body', [], 'team-message'),
+      promptNode(8, 'agent body', [], 'agent-message'),
+    ])
+    expect(teamMessage[0]?.promptSource).toBe('team-message')
+
+    const automation = ['schedule', 'webhook', 'tool-jobs', 'cordis-host-runner'].map((source, index) => {
+      const turn = buildTurns([
+        stepNode(metricsOf({ turn: 20 + index, step: 1, startTime: 2_000 + index })),
+        promptNode(20 + index, source, [], source),
+      ])
+      return turn[0]?.promptSource
+    })
+    expect(automation).toEqual(['schedule', 'webhook', 'tool-jobs', 'cordis-host-runner'])
 
     const settled = buildTurns([
       stepNode(metricsOf({ turn: 3, step: 1, startTime: 300 })),

@@ -515,7 +515,7 @@ describe('snapshot builder', () => {
     expect(builder.apply({ upserts: [], timeline: { turnOrder: [], turns: new Map() } })).toBe(first)
     const upserted = builder.apply({
       upserts: [
-        node('perf-prompt:1:0', { kind: 'prompt', turn: 1, prompt: '问', images: [IMAGE], source: 'user' }),
+        node('perf-prompt:1:0', { kind: 'prompt', turn: 1, prompt: '问', images: [IMAGE], source: 'user', sender: null }),
         node('perf-step:1:1', { kind: 'step', metrics: measuredStep(1, 1, 1_000, 1_800) }),
         node('perf-turn-end:1:100000', { kind: 'end', turn: 1, closeKind: 'completed', endTime: 1_800 }),
       ],
@@ -703,7 +703,7 @@ describe('conversation Definitions', () => {
     const node = prompt.buildViewNode!({
       ...contextOf(prompt, state, [match], match),
     }) as PerfViewNode
-    expect(node.data).toEqual({ kind: 'prompt', turn: 9, prompt: '继续', images: [IMAGE], source: 'user' })
+    expect(node.data).toEqual({ kind: 'prompt', turn: 9, prompt: '继续', images: [IMAGE], source: 'user', sender: null })
     const context: ConversationNodeContext<PerfStepState> & { readonly state: PerfStepState } = {
       ...contextOf(prompt, state, [match], match),
       state,

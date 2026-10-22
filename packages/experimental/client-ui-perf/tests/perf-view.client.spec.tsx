@@ -18,7 +18,7 @@ import { PerfView } from '../src/client/PerfView.tsx'
 import { zh } from '../src/client/locales.ts'
 import css from '../src/client/perf.module.css'
 import {
-  formatChars, formatClock, formatDateTime, formatDateTimeShort, formatMs, formatPercent, formatTokens,
+  barShare, formatChars, formatClock, formatDateTime, formatDateTimeShort, formatMs, formatPercent, formatTokens,
   formatTokensShort, formatTps,
 } from '../src/client/perf-format.ts'
 import type {
@@ -136,6 +136,7 @@ function turn(overrides: Partial<PerfTurnMetrics> = {}): PerfTurnMetrics {
     prompt: null,
     promptImages: [],
     promptSource: null,
+    promptSender: null,
     ...overrides,
   }
 }
@@ -580,6 +581,22 @@ describe('turn rows', () => {
     expect(stillRunning[10]?.textContent).toBe(formatMs(1_000))
   })
 
+  it('names the sending agent on team-message triggers', () => {
+    mount({
+      turns: [turn({
+        prompt: 'Team message from hfai-deploy: P1 已 rebase 完成',
+        promptSource: 'team-message',
+        promptSender: 'hfai-deploy',
+      })],
+      stepCount: 0,
+    })
+    const cell = cellsOf(rowWithPrefix(say('turn.label', { turn: 1 })))[1] as HTMLTableCellElement
+    expect(cell.textContent).toContain(`${say('trigger.team-message')} · hfai-deploy`)
+    expect(cell.textContent).toContain('P1 已 rebase 完成')
+    expect(cell.textContent).not.toContain('Team message from')
+    expect(cell.getAttribute('title')).toBe('Team message from hfai-deploy: P1 已 rebase 完成')
+  })
+
   it('summarizes turn tools with pills, overflow, errors, and output size', () => {
     mount({
       turns: [turn({
@@ -637,7 +654,7 @@ describe('turn rows', () => {
   })
 
   it('labels automated turn triggers instead of leaving the question empty', () => {
-    const sources = ['agent-message', 'subagent-settled', 'goal', 'runtime-context', 'time-context', 'mystery']
+    const sources = ['agent-message', 'team-message', 'subagent-settled', 'goal', 'schedule', 'webhook', 'tool-jobs', 'cordis-host-runner', 'runtime-context', 'time-context', 'mystery']
     mount({
       turns: sources.map((source, index) => turn({
         turn: index + 1,
@@ -648,8 +665,13 @@ describe('turn rows', () => {
     })
     const labels: Readonly<Record<string, string>> = {
       'agent-message': say('trigger.agent-message'),
+      'team-message': say('trigger.team-message'),
       'subagent-settled': say('trigger.subagent-settled'),
       'goal': say('trigger.goal'),
+      'schedule': say('trigger.schedule'),
+      'webhook': say('trigger.webhook'),
+      'tool-jobs': say('trigger.tool-jobs'),
+      'cordis-host-runner': say('trigger.cordis-host-runner'),
       'runtime-context': say('trigger.context'),
       'time-context': say('trigger.context'),
       'mystery': say('trigger.other'),
@@ -695,6 +717,56 @@ describe('turn rows', () => {
     expect(readOnly[3]?.textContent).toBe('—')
     const absent = cellsOf(rowWithPrefix(say('turn.label', { turn: 4 })))
     expect(absent[5]?.getAttribute('title')).toBe(say('column.cache.title'))
+  })
+
+  it('scales turn bars against the turns visible on screen', () => {
+    interface FakeEntry { readonly target: Element; readonly isIntersecting: boolean }
+    class FakeObserver {
+      static current: FakeObserver | undefined
+      readonly observed: Element[] = []
+      readonly disconnect = vi.fn()
+      readonly callback: (entries: readonly FakeEntry[]) => void
+      constructor(callback: (entries: readonly FakeEntry[]) => void) {
+        this.callback = callback
+        FakeObserver.current = this
+      }
+      observe(element: Element): void { this.observed.push(element) }
+    }
+    vi.stubGlobal('IntersectionObserver', FakeObserver)
+    const base = 1_700_000_000_000
+    mount({
+      turns: [
+        turn({ turn: 1, startTime: base, wall: 1_000 }),
+        turn({ turn: 2, startTime: base, wall: 4_000 }),
+      ],
+      stepCount: 2,
+    })
+    const barWidth = (turnNumber: number): string => {
+      const row = rowWithPrefix(say('turn.label', { turn: turnNumber }))
+      const fill = row.querySelector<HTMLElement>('[class*="barFill"]')
+      return fill?.style.width ?? ''
+    }
+    // The observer starts with no visible rows: the whole loaded window scales the bars.
+    expect(barWidth(1)).toBe(`${Math.round(barShare(1_000, 4_000) * 100)}%`)
+    const observer = FakeObserver.current
+    expect(observer?.observed).toHaveLength(2)
+    const row1 = rowWithPrefix(say('turn.label', { turn: 1 }))
+    const row2 = rowWithPrefix(say('turn.label', { turn: 2 }))
+    act(() => {
+      observer!.callback([
+        { target: row1, isIntersecting: true },
+        { target: row2, isIntersecting: false },
+      ])
+    })
+    // Visible turn 1 becomes the scale, so its bar fills the track.
+    expect(barWidth(1)).toBe('100%')
+    act(() => {
+      observer!.callback([{ target: row1, isIntersecting: true }])
+    })
+    expect(barWidth(1)).toBe('100%')
+    cleanup()
+    expect(observer?.disconnect).toHaveBeenCalled()
+    vi.unstubAllGlobals()
   })
 
   it('draws the bar tool segment from the non-overlapping span and keeps the column sum', () => {
@@ -802,7 +874,7 @@ describe('step rows', () => {
     expect(cellsOf(rowWithPrefix(say('turn.label', { turn: 1 })))[2]?.textContent).toBe(say('did.answer'))
   })
 
-  it('shows context deltas and the gap since the previous step', () => {
+  it('shows the plain context value and the gap since the previous step', () => {
     const steps = [
       step({ step: 1, context: 1_000, toolOutput: 500, output: 100, startTime: BASE, endTime: BASE + 1_000 }),
       step({ step: 2, context: 1_500, toolOutput: 0, output: 200, startTime: BASE + 5_000, endTime: BASE + 6_000 }),
@@ -813,12 +885,8 @@ describe('step rows', () => {
     mount(turnSnapshot(steps))
 
     const second = cellsOf(stepRow(2))
-    expect(second[3]?.textContent).toContain('+0.50K')
-    expect(second[3]?.getAttribute('title')).toBe([
-      say('context.delta', { from: formatTokensShort(1_000), to: formatTokensShort(1_500), delta: '+0.50K' }),
-      say('context.delta.chars', { chars: formatTokens(500) }),
-      say('context.delta.output', { tokens: formatTokens(100) }),
-    ].join('\n'))
+    expect(second[3]?.textContent).toBe(formatTokensShort(1_500))
+    expect(second[3]?.getAttribute('title')).toBeNull()
     expect(timeTitle(stepRow(2))).toContain(say('bar.gap', { value: formatMs(4_000) }))
 
     const third = cellsOf(stepRow(3))
@@ -839,12 +907,8 @@ describe('step rows', () => {
     expect(timeTitle(stepRow(4))).not.toContain('距上一步')
 
     const fifth = cellsOf(stepRow(5))
-    expect(fifth[3]?.textContent).toContain('−0.60K')
-    expect(fifth[3]?.getAttribute('title')).toBe(say('context.delta', {
-      from: formatTokensShort(1_500),
-      to: formatTokensShort(900),
-      delta: '−0.60K',
-    }))
+    expect(fifth[3]?.textContent).toBe(formatTokensShort(900))
+    expect(fifth[3]?.getAttribute('title')).toBeNull()
   })
 
   it('summarizes step tools with line, edit, and character statistics', () => {

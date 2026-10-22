@@ -15,7 +15,7 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { PerfStepState, PerfViewNode } from './perf-contract.ts'
 import {
-  CALL_LIMIT, fallbackState, foldEvent, isCodeMode, newState, promptOf, stepMetrics,
+  CALL_LIMIT, fallbackState, foldEvent, isCodeMode, newState, promptOf, stepMetrics, triggerSenderOf,
 } from './perf-fold.ts'
 
 /** Target name shared by every Definition and the view builder. */
@@ -136,6 +136,7 @@ const promptDefinition: ConversationNodeDefinition<PerfStepState> = {
       prompt: prompt.text,
       images: prompt.images,
       trigger: match.event.data.source.kind,
+      triggerSender: triggerSenderOf(match.event.data),
     }
   },
   update: context => context.state,
@@ -150,6 +151,7 @@ const promptDefinition: ConversationNodeDefinition<PerfStepState> = {
       prompt: state.prompt,
       images: state.images,
       source: state.trigger ?? 'other',
+      sender: state.triggerSender,
     })
   },
 }

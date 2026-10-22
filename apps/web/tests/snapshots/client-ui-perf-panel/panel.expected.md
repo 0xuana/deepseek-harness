@@ -1,22 +1,22 @@
 - table "Performance":
   - rowgroup:
-    - row "Turn / step Question Did Context Output Cache hit First token Model time Output speed Tool time Total time":
+    - row "Turn / step Trigger Execution Context Output Cache hit First token Model time Output speed (tok/s) Tool time Total time":
       - columnheader "Turn / step"
-      - columnheader "Question"
-      - columnheader "Did"
+      - columnheader "Trigger"
+      - columnheader "Execution"
       - columnheader "Context"
       - columnheader "Output"
       - columnheader "Cache hit"
       - columnheader "First token"
       - columnheader "Model time"
-      - columnheader "Output speed"
+      - columnheader "Output speed (tok/s)"
       - columnheader "Tool time"
       - columnheader "Total time"
   - rowgroup:
-    - row "Expand or collapse turn 1 · 1 steps · Hide · {{clock}} Show the measured round. read ×1 → 7 chars 5.2K 0.24K 69.23% {{ttft}} {{duration}} {{tps}} {{duration}} {{duration}}":
-      - cell "Expand or collapse turn 1 · 1 steps · Hide · {{clock}}":
+    - row "Expand or collapse turn 1 · 1 steps · 10-22 {{clock}} Show the measured round. read ×1 → 7 chars 5.2K 0.24K 69.23% {{ttft}} {{duration}} {{tps}} {{duration}} {{duration}}":
+      - cell "Expand or collapse turn 1 · 1 steps · 10-22 {{clock}}":
         - button "Expand or collapse turn 1" [expanded]: Turn 1
-        - text: · 1 steps · Hide · {{clock}}
+        - text: · 1 steps · 10-22 {{clock}}
       - cell "Show the measured round."
       - cell "read ×1 → 7 chars"
       - cell "5.2K"

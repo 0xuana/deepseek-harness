@@ -1,3 +1,10 @@
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'team-message': { readonly kind: 'team-message'; readonly senderName: string }
+    'agent-message': { readonly kind: 'agent-message' }
+  }
+}
+
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { SessionEventLike } from '@deepseek-ai/dsh-api-session-controller/client'
 import { AttachmentId } from '@deepseek-ai/dsh-attachment'
@@ -19,7 +26,7 @@ import type {} from '@deepseek-ai/dsh-llm-retry/types'
 import { SessionSeq, type SessionEventMap, type SessionEventType } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-tool-executor-ptc/types'
 import {
-  CALL_LIMIT, fallbackState, foldEvent, isCodeMode, newState, promptOf, stepMetrics, toolSpanUnion,
+  CALL_LIMIT, fallbackState, foldEvent, isCodeMode, newState, promptOf, stepMetrics, toolSpanUnion, triggerSenderOf,
 } from '../src/client/perf-fold.ts'
 import {
   DASH, barShare, formatChars, formatClock, formatDateTime, formatDateTimeShort, formatMs, formatPercent,
@@ -319,8 +326,8 @@ describe('display formatting boundaries', () => {
     expect(formatChars(1_234)).toBe('1.2K')
     expect(formatTps(null)).toBe(DASH)
     expect(formatTps(Number.NaN)).toBe(DASH)
-    expect(formatTps(0)).toBe('0.0')
-    expect(formatTps(268.94)).toBe('268.9')
+    expect(formatTps(0)).toBe('0.0 tok/s')
+    expect(formatTps(268.94)).toBe('268.9 tok/s')
     expect(formatPercent(null)).toBe(DASH)
     expect(formatPercent(0)).toBe('0.00%')
     expect(formatPercent(0.962)).toBe('96.20%')
@@ -710,6 +717,29 @@ describe('prompt helper', () => {
     expect(promptOf(userMessage([textBlock('q'.repeat(500))])).text?.endsWith('…')).toBe(true)
     expect(promptOf(userMessage([textBlock('   ')])).text).toBeNull()
     expect(promptOf(userMessage([textBlock('  a\n b  ')])).text).toBe('a b')
+  })
+})
+
+describe('trigger sender helper', () => {
+  it('names the teammate that sent a framed message', () => {
+    expect(triggerSenderOf(userMessage([imageBlock(), textBlock('Team message from hfai-deploy: update')], {
+      kind: 'team-message', senderName: 'hfai-deploy',
+    }))).toBe('hfai-deploy')
+    expect(triggerSenderOf(userMessage([textBlock('Team message from  stack-rebase : go')], {
+      kind: 'team-message', senderName: 'stack-rebase',
+    }))).toBe('stack-rebase')
+  })
+
+  it('parses the agent id from a direct agent message', () => {
+    expect(triggerSenderOf(userMessage([textBlock('Agent abc-123 sent a message: hi')], {
+      kind: 'agent-message',
+    }))).toBe('abc-123')
+  })
+
+  it('returns nothing without a framed sender', () => {
+    expect(triggerSenderOf(userMessage([textBlock('Team message from hfai-deploy: x')], { kind: 'user' }))).toBeNull()
+    expect(triggerSenderOf(userMessage([textBlock('hello')], { kind: 'agent-message' }))).toBeNull()
+    expect(triggerSenderOf(userMessage([textBlock('Agent noverb')], { kind: 'agent-message' }))).toBeNull()
   })
 })
 

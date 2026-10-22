@@ -18,15 +18,21 @@ interface TurnTrigger {
   readonly text: string
   readonly images: readonly ImageAttachmentRef[]
   readonly source: string
+  readonly sender: string | null
 }
 
 /** Human prompts outrank automation context; ties keep the first message. */
 function triggerRank(source: string): number {
   switch (source) {
     case 'user': return 4
-    case 'agent-message': return 3
+    case 'team-message': return 3
+    case 'agent-message': return 2
     case 'subagent-settled': return 2
     case 'goal': return 1
+    case 'schedule':
+    case 'webhook':
+    case 'tool-jobs':
+    case 'cordis-host-runner': return 1
     default: return 0
   }
 }
@@ -190,6 +196,7 @@ export function aggregateTurn(turn: number, steps: readonly PerfStepMetrics[]): 
     prompt: null,
     promptImages: NO_IMAGES,
     promptSource: null,
+    promptSender: null,
     answer,
   }
 }
@@ -230,6 +237,7 @@ export function buildTurns(nodes: Iterable<PerfViewNode>): PerfTurnMetrics[] {
           text: data.prompt ?? '',
           images: data.images,
           source: data.source,
+          sender: data.sender,
         })
       }
       continue
@@ -297,6 +305,7 @@ export function buildTurns(nodes: Iterable<PerfViewNode>): PerfTurnMetrics[] {
       prompt: prompt === undefined || prompt.text === '' ? null : prompt.text,
       promptImages: prompt === undefined ? NO_IMAGES : prompt.images,
       promptSource: prompt === undefined ? null : prompt.source,
+      promptSender: prompt === undefined ? null : prompt.sender,
     })
   })
   return turns

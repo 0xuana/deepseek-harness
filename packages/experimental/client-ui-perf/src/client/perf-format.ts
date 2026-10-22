@@ -66,7 +66,7 @@ export function formatChars(value: number | null): string {
  * @returns one-decimal speed, or the dash placeholder.
  */
 export function formatTps(value: number | null): string {
-  return isNumber(value) ? value.toFixed(1) : DASH
+  return isNumber(value) ? `${value.toFixed(1)} tok/s` : DASH
 }
 
 /**
