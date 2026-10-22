@@ -132,7 +132,7 @@ export class SessionCommandController {
           && (workspace === undefined || workspace.sessionIds.includes(sessionId)),
       })
     } catch (error) {
-      this.rejectCreation(error)
+      this.rejectCreation(error, request.sessionId)
     }
     const sessionId = created.agent.id
     if (workspace !== undefined) {
@@ -513,8 +513,11 @@ export class SessionCommandController {
     return found.agent
   }
 
-  private rejectCreation(error: unknown): never {
+  private rejectCreation(error: unknown, sessionId: SessionId | undefined): never {
     if (remoteErrorOf(error) !== undefined) throw error
+    if (sessionId !== undefined && error instanceof ApiSessionNotFound) {
+      throw new RemoteError('session/not-found', error.message, { sessionId })
+    }
     if (error instanceof ApiSessionPresetConflict) {
       throw new RemoteError('agent-preset/conflict', error.message, {
         sessionId: error.sessionId,

@@ -7,7 +7,9 @@ import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deep
 import { SessionId, SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session'
 import * as JsonlPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SessionTitle from '@deepseek-ai/dsh-session-title'
+import { SessionAlreadyOwnedError } from '@deepseek-ai/dsh-session-persistence'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { ApiSessionAgentController } from '../src/agent.ts'
 import type { SessionRequestId } from '../src/types.ts'
 import { createSessionTestController, createSessionTestRemote } from './test-remote.ts'
 
@@ -38,6 +40,18 @@ async function harness() {
   const controller = await createSessionTestController(api.ctx, defaults)
   const remote = await createSessionTestRemote(api.ctx, defaults)
   return { ctx, root, controller, remote, api }
+}
+
+function nextSessionRead(ctx: Context, sessionId: SessionId): Promise<undefined> {
+  const read = Promise.withResolvers<undefined>()
+  const get = ctx.sessions.get.bind(ctx.sessions)
+  const spy = vi.spyOn(ctx.sessions, 'get').mockImplementation((id) => {
+    const session = get(id)
+    if (id === sessionId) read.resolve(undefined)
+    return session
+  })
+  onTestFinished(() => { spy.mockRestore() })
+  return read.promise
 }
 
 describe('Web Agent initialization', () => {
@@ -144,6 +158,162 @@ describe('Web Agent initialization', () => {
     } finally {
       release.resolve(undefined)
       await failed
+    }
+  })
+
+  it.each(['failure', 'cancel'] as const)('reports named blank initialization %s without starting another Agent', async (outcome) => {
+    const { ctx, root, remote } = await harness()
+    const sessionId = SessionId('failed-blank')
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const cancellation = new AbortController()
+    const creation = ctx.agents.create({
+      sessionId, meta: { cwd: root }, signal: cancellation.signal,
+      setup: async () => {
+        entered.resolve(undefined)
+        await release.promise
+        if (outcome === 'failure') throw new Error('setup failed')
+      },
+    })
+    const failed = expect(creation).rejects.toThrow()
+    const create = vi.spyOn(ctx.agents, 'create')
+    try {
+      await entered.promise
+      const published = ctx.sessions.get(sessionId)
+      if (published === undefined) throw new Error('initializing Session was not published')
+      const waiting = nextSessionRead(ctx, sessionId)
+      const reused = remote.create({ sessionId, cwd: root })
+      await waiting
+      if (outcome === 'cancel') cancellation.abort(new Error('cancelled'))
+      release.resolve(undefined)
+      await failed
+      await expect(reused).resolves.toMatchObject({ ok: false, error: { code: 'session/not-found', details: { sessionId } } })
+      expect(create).not.toHaveBeenCalled()
+      expect(ctx.agents.list()).toHaveLength(0)
+      await using writer = await ctx.sessionPersistence.create(published.header)
+      expect(writer.id).toBe(sessionId)
+    } finally {
+      release.resolve(undefined)
+      await failed
+      create.mockRestore()
+    }
+  })
+
+  it.each([
+    ['resolve', 'success'], ['create', 'success'], ['create', 'failure'], ['create', 'cancel'],
+  ] as const)('joins the external writer after %s races its acquisition (%s)', async (operation, outcome) => {
+    const { ctx, root, controller, remote } = await harness()
+    const sessionId = SessionId('writer-race')
+    const previous = await ctx.agents.create({ sessionId, meta: { cwd: root }, seed: [
+      { type: 'session/title', seq: SessionSeq(0), time: 1, data: { title: 'Blank', messageSeqs: [], source: { kind: 'user' } } },
+    ] })
+    await previous.dispose()
+    const acquiring = Promise.withResolvers<undefined>()
+    const conflict = Promise.withResolvers<undefined>()
+    const resume = vi.spyOn(ctx.agents, 'resume').mockImplementationOnce(async () => {
+      acquiring.resolve(undefined)
+      await conflict.promise
+      throw new SessionAlreadyOwnedError(sessionId)
+    })
+    const request = operation === 'resolve'
+      ? controller.resolveAgent(sessionId).then(result => 'agent' in result
+        ? { sessionId: result.agent.id, agent: result.agent } : result)
+      : remote.create({ sessionId, cwd: root }).then(result => result.ok ? result.value : { error: result.error })
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const cancellation = new AbortController()
+    onTestFinished(async () => {
+      conflict.resolve(undefined)
+      release.resolve(undefined)
+      await request
+      resume.mockRestore()
+    })
+    await Promise.race([acquiring.promise, request.then((result) => {
+      if ('error' in result) throw result.error
+      throw new Error('request settled before write acquisition')
+    })])
+    const initialization = ctx.agents.resume({
+      resumeSessionId: sessionId, signal: cancellation.signal,
+      setup: async () => {
+        entered.resolve(undefined)
+        await release.promise
+        if (outcome === 'failure') throw new Error('setup failed')
+      },
+    })
+    const settled = initialization.then(handle => ({ handle }), (error: unknown) => ({ error }))
+    onTestFinished(async () => {
+      release.resolve(undefined)
+      await settled
+    })
+    await Promise.race([entered.promise, initialization])
+    const waiting = nextSessionRead(ctx, sessionId)
+    conflict.resolve(undefined)
+    await waiting
+    if (outcome === 'cancel') cancellation.abort(new Error('cancelled'))
+    release.resolve(undefined)
+    const original = await settled
+    const result = await request
+    if (outcome === 'success') {
+      if ('error' in original) throw original.error
+      expect(result).toMatchObject({ sessionId })
+      if ('agent' in result) expect(result.agent).toBe(original.handle.agent)
+      expect(ctx.agents.get(sessionId)).toBe(original.handle.agent)
+    } else {
+      expect(original).toHaveProperty('error')
+      expect(result).toMatchObject({ error: { code: 'session/not-found', details: { sessionId } } })
+      expect(ctx.agents.list()).toHaveLength(0)
+      await using writer = await ctx.sessionPersistence.open(sessionId, 'write')
+      expect(writer.id).toBe(sessionId)
+    }
+    expect(resume).toHaveBeenCalledTimes(2)
+  })
+
+  it('joins initialization that starts during preset resolution without another resume', async () => {
+    const { ctx, root, controller } = await harness()
+    const sessionId = SessionId('composition-race')
+    const previous = await ctx.agents.create({ sessionId, meta: { cwd: root }, seed })
+    await previous.dispose()
+    const composing = Promise.withResolvers<undefined>()
+    const finishComposition = Promise.withResolvers<undefined>()
+    // oxlint-disable-next-line typescript/unbound-method -- Invoked with the intercepted controller through call().
+    const compose = ApiSessionAgentController.prototype.composeAgent
+    const composition = vi.spyOn(ApiSessionAgentController.prototype, 'composeAgent')
+      .mockImplementationOnce(async function (this: ApiSessionAgentController, preset) {
+        composing.resolve(undefined)
+        await finishComposition.promise
+        return compose.call(this, preset)
+      })
+    const resolving = controller.resolveAgent(sessionId)
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    onTestFinished(async () => {
+      finishComposition.resolve(undefined)
+      release.resolve(undefined)
+      await resolving
+      composition.mockRestore()
+    })
+    await composing.promise
+    const initialization = ctx.agents.resume({
+      resumeSessionId: sessionId,
+      setup: async () => { entered.resolve(undefined); await release.promise },
+    })
+    const resume = vi.spyOn(ctx.agents, 'resume')
+    try {
+      await Promise.race([entered.promise, initialization])
+      const waiting = nextSessionRead(ctx, sessionId)
+      finishComposition.resolve(undefined)
+      await waiting
+      release.resolve(undefined)
+      const original = await initialization
+      const result = await resolving
+      expect('agent' in result && result.agent).toBe(original.agent)
+      expect(resume).not.toHaveBeenCalled()
+    } finally {
+      finishComposition.resolve(undefined)
+      release.resolve(undefined)
+      await initialization
+      await resolving
+      resume.mockRestore()
     }
   })
 

@@ -303,6 +303,7 @@ export class ApiSessionAgentController {
    * @throws ApiSessionSubagentOwnership when subagent routing owns the named Session.
    * @throws RemoteError `agent-preset/not-found` or `agent-preset/invalid` for the requested or default preset.
    * @throws ApiSessionPresetConflict when no roster is composed and the request names a preset for a reused Session.
+   * @throws ApiSessionNotFound when a joined initialization ends without an Agent.
    */
   async createSession(request: ApiSessionCreateRequest): Promise<ApiSessionCreated> {
     const named = request.sessionId

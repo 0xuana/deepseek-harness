@@ -18,7 +18,9 @@ const childFixturePath = fileURLToPath(new URL('../../../snapshots/web/preset-mi
 const fixturePath = fileURLToPath(new URL('../../../snapshots/web/preset-migration/session.v2.jsonl', import.meta.url))
 
 describe.skipIf(webSnapshotMode() === 'record')('historical preset restoration through the Web Host', () => {
-  it.each([false, true])('resumes code as PTC (selection events=%s)', async (withSelections) => {
+  it.each([
+    ['controller', false], ['controller', true], ['external', true],
+  ] as const)('resumes code as PTC through %s (selection events=%s)', async (activation, withSelections) => {
     const scaffold = await launchWebScaffold()
     try {
       const id = SessionId('preset-migration')
@@ -70,18 +72,18 @@ describe.skipIf(webSnapshotMode() === 'record')('historical preset restoration t
       }
       await expect(readFile(successor)).rejects.toMatchObject({ code: 'ENOENT' })
 
-      const setupEntered = Promise.withResolvers<undefined>()
-      const releaseSetup = Promise.withResolvers<undefined>()
-      const initialization = scaffold.ctx.agents.resume({
-        resumeSessionId: id,
-        setup: async (ctx) => {
-          installModelSelection(ctx)
-          await scaffold.ctx.agentPresets.mount(ctx, 'ptc')
-          setupEntered.resolve(undefined)
-          await releaseSetup.promise
-        },
-      })
-      const resolved = await (async () => {
+      const resolved = activation === 'controller' ? await scaffold.ctx.sessionController.resolveAgent(id) : await (async () => {
+        const setupEntered = Promise.withResolvers<undefined>()
+        const releaseSetup = Promise.withResolvers<undefined>()
+        const initialization = scaffold.ctx.agents.resume({
+          resumeSessionId: id,
+          setup: async (ctx) => {
+            installModelSelection(ctx)
+            await scaffold.ctx.agentPresets.mount(ctx, 'ptc')
+            setupEntered.resolve(undefined)
+            await releaseSetup.promise
+          },
+        })
         try {
           await Promise.race([setupEntered.promise, initialization])
           expect(scaffold.ctx.agents.get(id)).toBeUndefined()
