@@ -98,7 +98,13 @@ export function apply(ctx: Context): void {
           // A concurrent view (Chat/Trajectory) may own the in-flight page and
           // this call then returns without progress. Only a Session that has no
           // older history left may hide the trigger; otherwise keep it retryable.
-          return perf.getSnapshot() !== before || session.getSnapshot().hasMore === true
+          const grew = perf.getSnapshot() !== before
+          if (grew) return true
+          const snapshot = session.getSnapshot()
+          if (snapshot.hasMore === true) {
+            throw new Error('client-ui-perf: history page did not advance')
+          }
+          return false
         },
       }
     },

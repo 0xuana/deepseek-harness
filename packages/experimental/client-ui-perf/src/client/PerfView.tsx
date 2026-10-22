@@ -1361,6 +1361,7 @@ export function PerfView(props: PerfViewProps): ReactElement {
   const [now, setNow] = useState(() => Date.now())
   const [loading, setLoading] = useState(false)
   const [exhausted, setExhausted] = useState(false)
+  const [loadFailed, setLoadFailed] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const loadingRef = useRef(false)
   const pendingPrepend = useRef<PendingPrepend | null>(null)
@@ -1422,6 +1423,7 @@ export function PerfView(props: PerfViewProps): ReactElement {
     if (element === null) return
     loadingRef.current = true
     setLoading(true)
+    setLoadFailed(false)
     const before: PendingPrepend = {
       height: element.scrollHeight,
       top: element.scrollTop,
@@ -1431,9 +1433,10 @@ export function PerfView(props: PerfViewProps): ReactElement {
     try {
       grew = await loadOlder()
     } catch {
-      // A failed page leaves the trigger in place: the next scroll or click tries again.
+      // Surface the failed page instead of looking like a silent no-op.
       loadingRef.current = false
       setLoading(false)
+      setLoadFailed(true)
       return
     }
     if (grew) {
@@ -1487,6 +1490,10 @@ export function PerfView(props: PerfViewProps): ReactElement {
               <span className={css.olderStatus} role="status">{t('loadOlder.loading')}</span>
             ) : exhausted ? (
               <span className={css.olderStatus}>{t('loadOlder.done')}</span>
+            ) : loadFailed ? (
+              <button type="button" className={css.button} onClick={() => { void requestOlder() }}>
+                {t('loadOlder.failed')}
+              </button>
             ) : (
               <button type="button" className={css.button} onClick={() => { void requestOlder() }}>
                 {t('loadOlder')}
