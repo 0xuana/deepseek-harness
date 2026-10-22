@@ -85,10 +85,15 @@ it('falls back to the built-in catalog when the listing fails', async () => {
 })
 
 it('refuses listed models this build cannot serve before any inference request', async () => {
-  const requests = officialListing(listing(FLASH, { ...PRO, id: 'deepseek-v5' }, { ...PRO, id: 'deepseek-v5-next', ...requires('99.0.0-alpha.1') }))
-  const { ctx } = await host()
+  const requests = officialListing(listing(
+    FLASH, { ...PRO, id: 'deepseek-v5' }, { ...PRO, id: 'deepseek-v5-next', ...requires('99.0.0-alpha.1') }, { id: 'deepseek-v4-pro' },
+  ))
+  const { ctx, warn } = await host()
   await ctx.plugin(ApiKey, {})
   expect(await ids(ctx)).toEqual(['deepseek-flash'])
+  expect(await ids(ctx)).toEqual(['deepseek-flash'])
+  expect(warn).toHaveBeenCalledExactlyOnceWith('[llm-deepseek-api-key]', 'model "deepseek-v4-pro" declares no api_capabilities.anthropic_messages')
+  await expect(ctx.llm.prepareCall({ provider: 'deepseek-official', model: 'deepseek-v4-pro' })).rejects.toMatchObject({ code: 'MODEL_UNSUPPORTED' })
   await expect(ctx.llm.prepareCall({ provider: 'deepseek-official', model: 'deepseek-v5' })).rejects.toMatchObject({ code: 'MODEL_UNSUPPORTED' })
   await expect(ctx.llm.prepareCall({ provider: 'deepseek-official', model: 'deepseek-v5-next' })).rejects.toMatchObject({ code: 'CLIENT_UPGRADE_REQUIRED' })
   await expect(ctx.llm.prepareCall({ provider: 'deepseek-official', model: 'unlisted-pass-through' })).resolves.toBeDefined()
