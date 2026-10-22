@@ -24,7 +24,7 @@ kind: "package-reference"
 <a id="access-hooks"></a>
 ## 访问 Hook
 
-本包注入 Client `remoteAccess` 服务，并在其 `source()` 之上发布会话访问 Hook：根作用域的 `useSessionAccess(sessionId, action)` 回答某一个 Session 资源上的访问，Session 作用域的 `useAccess(action)` 回答所绑定 Session 资源上的访问；`global` 资源上的答案是另一个 Hook `useRemoteAccess(action)`，两者互不遮蔽。`ctx.uiSession.whenAccess(sessionId, action, callback)` 是 `useSessionAccess` 在 JS 侧的对应：当前 Peer 能在该 Session 上调用 `action` 期间保持回调的效果，语义同 `ctx.remoteAccess.whenAccess`。SessionMaybe 作用域的 `useAccess(action)` 在未绑定 Session 时返回 `undefined`，调用方将其视为不允许；需要 `global` 资源上的判断时读 `useRemoteAccess`。快照语义归 [`dsh-api-remote-access`](../../api/remote-access/README.zh.md#client-face)。
+本包注入 Client `remoteAccess` 服务，并在其 `source()` 之上发布会话访问 Hook：根作用域的 `useSessionAccess(sessionId, action)` 回答某一个 Session 资源上的访问，Session 作用域的 `useAccess(action)` 回答所绑定 Session 资源上的访问；`global` 资源上的答案是另一个 Hook `useRemoteAccess(action)`，两者互不遮蔽。`ctx.uiSession.whenAccess(sessionId, action, callback)` 是 `useSessionAccess` 在 JS 侧的对应：当前 Peer 能在该 Session 上调用 `action` 期间保持回调的效果，语义同 `ctx.remoteAccess.whenAccess`。`ctx.uiSession.access(sessionId, action)` 在渲染外做一次性读取时回答同一个问题；其他插件应使用该方法，而不是自行读取 Session kind 的 `remoteAccess.source()`。SessionMaybe 作用域的 `useAccess(action)` 在未绑定 Session 时返回 `undefined`，调用方将其视为不允许；需要 `global` 资源上的判断时读 `useRemoteAccess`。快照语义归 [`dsh-api-remote-access`](../../api/remote-access/README.zh.md#client-face)。
 
 <a id="model-experience"></a>
 ## 模型体验

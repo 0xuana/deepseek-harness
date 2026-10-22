@@ -767,6 +767,12 @@ describe('ui-session apply', () => {
     const guarded = vi.fn(() => () => {})
     expect(ctx.uiSession.whenAccess(sessionId('s1'), 'session/fork', guarded)).toBe(stopGuard)
     expect(remoteAccess.whenResourceAccess).toHaveBeenCalledWith('session', sessionId('s1'), 'session/fork', guarded)
+
+    // `access` is the non-Hook read for JS callers: the same Session source, read live.
+    expect(ctx.uiSession.access(sessionId('s1'), 'session/rename')).toBe(false)
+    remoteAccess.source.mockReturnValueOnce({ getSnapshot: () => true, subscribe: () => () => {} })
+    expect(ctx.uiSession.access(sessionId('s1'), 'session/rename')).toBe(true)
+    expect(remoteAccess.source).toHaveBeenLastCalledWith('session', sessionId('s1'), 'session/rename')
   })
 
   it('hangs Session-guarded effects on the calling plugin, so they leave when it unloads', async () => {
