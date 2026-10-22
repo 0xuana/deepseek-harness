@@ -268,7 +268,7 @@ describe('composer stats pills', () => {
     expect(dialog.getAttribute('aria-label')).toBe('Session statistics')
     // Portaled out of the composer dock.
     expect(dialog.parentElement).toBe(document.body)
-    expect(dialog.firstChild?.textContent).toBe('Session statistics')
+    expect(dialog.firstChild?.textContent).toBe('Session statistics1 turns 1 steps')
     const details = dialog.querySelector('[data-session-stats-details]') as HTMLElement
     expect(details).toBeTruthy()
     expect(details.textContent).toContain('LLM time3.8s')
@@ -375,28 +375,51 @@ describe('composer stats pills', () => {
     expect(usageDialog.textContent).toContain('未缓存输入5 tok')
   })
 
-  it.each([false, true])('shows the full reading on hover only while the label is cut off: %s', (overflow) => {
-    vi.spyOn(Element.prototype, 'scrollWidth', 'get').mockReturnValue(overflow ? 200 : 80)
-    vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(80)
-    const { source } = makeSource({ nodes: [timedStep()] })
-    const view = render(<StatsPills {...props(source)} />)
-    const usagePill = view.getAllByRole('button')[1]!
-    fireEvent.pointerEnter(usagePill)
-    expect(view.queryByRole('tooltip')?.textContent ?? null).toBe(overflow ? '105 tok · Cache hit 90%' : null)
-    // The open dialog carries every figure, so the tooltip yields to it.
-    fireEvent.click(usagePill)
-    fireEvent.pointerEnter(usagePill)
-    expect(view.queryByRole('tooltip')).toBeNull()
-    fireEvent.keyDown(document, { key: 'Escape' })
-    fireEvent.pointerLeave(usagePill)
-    view.rerender(<StatsPills {...props(source)} usePerformanceUsage={selector => selector('compact')} />)
-    const plainPill = view.getByText('Cache hit 90%').parentElement!
-    fireEvent.pointerEnter(plainPill)
-    expect(view.queryByRole('tooltip')?.textContent ?? null).toBe(overflow ? 'Cache hit 90%' : null)
-    // A tap pins the static reading's tooltip, since no dialog shows it.
-    fireEvent.pointerLeave(plainPill)
-    fireEvent.click(plainPill)
-    expect(view.queryByRole('tooltip')?.textContent ?? null).toBe(overflow ? 'Cache hit 90%' : null)
+  describe('full reading of a cut-off pill', () => {
+    const FULL = '105 tok · Cache hit 90%'
+
+    function renderCut(overflow: boolean, mode: 'detailed' | 'compact' = 'detailed') {
+      vi.spyOn(Element.prototype, 'scrollWidth', 'get').mockReturnValue(overflow ? 200 : 80)
+      vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(80)
+      vi.useFakeTimers()
+      const { source } = makeSource({ nodes: [timedStep()] })
+      return render(<StatsPills {...props(source)} usePerformanceUsage={selector => selector(mode)} />)
+    }
+    const tooltipText = (view: ReturnType<typeof render>) => view.queryByRole('tooltip')?.textContent ?? null
+    afterEach(() => { vi.useRealTimers() })
+
+    it.each([false, true])('shows on hover after the dock delay only while the label is cut off: %s', (overflow) => {
+      const view = renderCut(overflow)
+      fireEvent.pointerEnter(view.getAllByRole('button')[1]!)
+      expect(tooltipText(view)).toBeNull()
+      act(() => { vi.advanceTimersByTime(200) })
+      expect(tooltipText(view)).toBe(overflow ? FULL : null)
+    })
+
+    it('shows on keyboard focus of a dialog pill', () => {
+      const view = renderCut(true)
+      fireEvent.keyDown(document.body, { key: 'Tab' })
+      fireEvent.focus(view.getAllByRole('button')[1]!)
+      expect(tooltipText(view)).toBe(FULL)
+    })
+
+    it('yields to the open dialog, whose head carries the counts', () => {
+      const view = renderCut(true)
+      const [timePill] = view.getAllByRole('button') as [HTMLElement]
+      fireEvent.click(timePill)
+      fireEvent.pointerEnter(timePill)
+      act(() => { vi.advanceTimersByTime(200) })
+      expect(tooltipText(view)).toBeNull()
+      expect(view.getByRole('dialog').firstChild?.textContent).toBe('Session statistics1 turns 1 steps')
+    })
+
+    it('pins a cut-off static reading on tap', () => {
+      const view = renderCut(true, 'compact')
+      const plainPill = view.getByText('Cache hit 90%').parentElement!
+      fireEvent.pointerDown(plainPill, { pointerType: 'touch' })
+      fireEvent.click(plainPill)
+      expect(tooltipText(view)).toBe('Cache hit 90%')
+    })
   })
 
   it('keeps the durable usage pill after the visible step window is empty', () => {

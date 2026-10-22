@@ -4,7 +4,7 @@
 // token totals, and click-open dialogs. Settled-node identity prevents
 // stream-delta updates from rerendering the pills.
 
-import { memo, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { memo, useMemo, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { IconDatabaseOutlineRegular, IconGaugeOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { UseProjection } from '@deepseek-ai/dsh-api-session-controller/client'
@@ -159,24 +159,6 @@ function reading(first: string, second: string | null): Pick<PillContent, 'label
   }
 }
 
-// The dock gives the pills whatever width the composer row leaves, so only a
-// rendered measurement can tell whether the ellipsis cut the label.
-function useLabelTruncated(text: string) {
-  const ref = useRef<HTMLSpanElement | null>(null)
-  const [truncated, setTruncated] = useState(false)
-  useLayoutEffect(() => {
-    const el = ref.current
-    /* v8 ignore next -- the ref is attached before layout effects run. */
-    if (el === null) return
-    const measure = () => { setTruncated(el.scrollWidth > el.clientWidth) }
-    measure()
-    const observer = new ResizeObserver(measure)
-    observer.observe(el)
-    return () => { observer.disconnect() }
-  }, [text])
-  return { ref, truncated }
-}
-
 // Every figure rides the durable sessionStats projection, so paging and
 // compaction cannot change any of them; an assembly without the unit falls
 // back to the window-scoped fold wholesale (same field names), paid only
@@ -193,16 +175,18 @@ function decodeSpeed(stats: WindowStats, t: Translate): string {
   })
 }
 
+/** The full reading above a pill, only while an ellipsis cuts its label; the delay matches the dock's context meter. */
+const FULL_READING_TOOLTIP = { side: 'top', portal: true, delayMs: 200, onlyWhenClipped: true } as const
+
 /** A static reading: used when the pill has no dialog rows or the mode is Compact. */
 function PlainPill({ stat, icon, label, text }: PillContent) {
-  const { ref, truncated } = useLabelTruncated(text)
   return (
     <span className={css.anchor} data-composer-stat={stat}>
       {/* No dialog carries a static reading, so a tap also pins the full text. */}
-      <Tooltip label={text} side="top" portal openOnClick disabled={!truncated}>
+      <Tooltip label={text} {...FULL_READING_TOOLTIP} openOnClick>
         <span className={css.pill}>
           {icon}
-          <span ref={ref} className={css.label}>{label}</span>
+          <span className={css.label}>{label}</span>
         </span>
       </Tooltip>
     </span>
@@ -220,11 +204,10 @@ function DialogPill({ stat, icon, label, text, title, titleValue, children }: Pi
   children: ReactNode
 }) {
   const { open, setOpen, rootRef, panelRef, pos } = useStatDialog()
-  const { ref, truncated } = useLabelTruncated(text)
   return (
     <span ref={rootRef} className={css.anchor} data-composer-stat={stat}>
       {/* The open dialog already shows every figure; a tooltip would cover it. */}
-      <Tooltip label={text} side="top" portal disabled={open || !truncated}>
+      <Tooltip label={text} {...FULL_READING_TOOLTIP} disabled={open}>
         <button
           type="button"
           className={css.pill}
@@ -234,7 +217,7 @@ function DialogPill({ stat, icon, label, text, title, titleValue, children }: Pi
           onClick={() => { setOpen(!open) }}
         >
           {icon}
-          <span ref={ref} className={css.label}>{label}</span>
+          <span className={css.label}>{label}</span>
         </button>
       </Tooltip>
       {open && createPortal(
@@ -278,7 +261,8 @@ export const ActivityPill = memo(function ActivityPill({ useChat, useProjection,
   // stays a plain reading instead of a button opening an empty dialog.
   if (stats.llmMs <= 0 && stats.toolMs <= 0 && stats.ttftSteps <= 0 && speed === null) return <PlainPill {...content} />
   return (
-    <DialogPill {...content} title={t('stats.dialog.title')}>
+    // The counts head the dialog, so a cut-off reading stays complete once the dialog opens.
+    <DialogPill {...content} title={t('stats.dialog.title')} titleValue={counts}>
       <dl className={dialogCss.details} data-session-stats-details>
         {stats.llmMs > 0 && (
           <>
