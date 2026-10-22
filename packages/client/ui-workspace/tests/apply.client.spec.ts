@@ -83,6 +83,11 @@ async function bench(access: 'fake' | 'static' = 'fake') {
   const whenResourceAccess = vi.fn((): () => void => stopGuard)
   if (access === 'static') new StaticRemoteAccess(ctx)
   else ctx.provide('remoteAccess', { source: accessSource, whenAccess: vi.fn(() => () => {}), whenResourceAccess })
+  // The Session kind's source owner: navigation reads `session/rename` through this service.
+  ctx.provide('uiSession', {
+    access: (sessionId: string, action: string) =>
+      ctx.get('remoteAccess')?.source('session', sessionId, action).getSnapshot() ?? true,
+  } as never)
   const create = vi.fn(async (input: { name: string } | { path: string }) => ({
     workspaceId: 'ws-new' as never,
     path: 'name' in input ? `/projects/${input.name}` : input.path,
@@ -247,6 +252,7 @@ describe('ui-workspace apply', () => {
   it('declares the services it drives', () => {
     expect(inject).toEqual([
       'slots', 'sessions', 'workspaces', 'locale', 'remote', 'remote.directoryPicker', 'layout', 'shortcuts', 'remoteAccess',
+      'uiSession',
     ])
   })
 
@@ -355,7 +361,8 @@ describe('ui-workspace apply', () => {
     expect(rowToastEntry.store).toBeUndefined()
     expect(b.slots.entries('workspace.toast').map(row => row.options.key)).toEqual([
       'sessionIdCopied', 'sessionIdCopyFailed', 'pinFailed', 'unpinFailed', 'archivedNotOpenable',
-      'defaultWorkspaceFailed', 'shortcutForkFailed', 'createFailed', 'forkRequiresOpen', 'archived', 'stoppedAndArchived',
+      'defaultWorkspaceFailed', 'shortcutForkFailed', 'createFailed', 'branchListRefreshFailed', 'forkRequiresOpen',
+      'archived', 'stoppedAndArchived',
     ])
     for (const registration of b.slots.entries('workspace.toast')) {
       expect(registration.locale).toBe('workspace')
@@ -1056,7 +1063,7 @@ describe('ui-workspace apply', () => {
     await forkReaderBranch(b, sid('refused'))
     await Promise.resolve()
     const toast = faceOf(entry(b.slots, 'shell.overlay', 'workspace.row-toast')) as RowToastInjected
-    expect(toast.hooks.toast.getSnapshot()).toMatchObject({ kind: 'createFailed', message: 'list refused' })
+    expect(toast.hooks.toast.getSnapshot()).toMatchObject({ kind: 'branchListRefreshFailed', message: 'list refused' })
   })
 
   it('does not subscribe or refresh a branch when navigation is already cancelled', async () => {

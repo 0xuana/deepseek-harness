@@ -59,12 +59,17 @@ export interface UiWorkspace {
     options?: Pick<StartSessionOptions, 'agentPreset'>,
   ): Promise<void>
   /**
-   * Fork a Session. Pages whose access snapshot includes renaming it increment the child title; other
-   * pages leave the title unchanged and present the child only once the Host lists it.
+   * Fork a Session and apply its branch presentation policy. Pages whose access snapshot includes
+   * renaming the source increment the child title; other pages leave the title to the Host and open
+   * the child only once its summary is listed. In the latter case the call begins one navigation for
+   * that listing, so a pending navigation may be superseded.
    * @param sessionId - source Session.
    * @param onCreated - observer after creation, before the optional child-title update.
    * @param options - branch boundary, migration permission, and how the child is presented.
-   * @returns the child SessionId after creation and any permitted inherited-title increment.
+   * @returns the child SessionId after creation and any permitted inherited-title increment; kept
+   *   for upper layers that need the id while the listed-open wait is still pending.
+   * @throws when the Host refuses or fails the fork; the caller keeps its current view and decides
+   *   whether to report the failure.
    */
   forkSession(
     sessionId: SessionId,
@@ -156,9 +161,15 @@ declare module '@deepseek-ai/cordis' {
 /** What one branch fork asks of the Workspace navigation service. */
 export interface ForkSessionOptions extends Pick<Parameters<ISessions['fork']>[0], 'atSeq' | 'allowMigration'> {
   /**
-   * How the caller presents the child. `selected` opens it immediately when the page may rename the
-   * source Session and otherwise once the Host lists it; `listed` (the default, the row-action path)
-   * never selects it immediately and opens it once listed only when the page could not name it.
+   * How the caller presents the child, by whether the page may rename the source Session
+   * (`session/rename`) and by the caller's landing choice:
+   *
+   * | may rename `session/rename` | `selected` | `listed` (default) |
+   * | --- | --- | --- |
+   * | yes | selects the child immediately | leaves the selection alone |
+   * | no | reveals the child once the Host lists it | reveals the child once the Host lists it |
+   *
+   * The row-action path uses `listed`; a branch surface asks for `selected`.
    */
   readonly present?: 'selected' | 'listed'
 }
@@ -174,10 +185,16 @@ interface ListedBranchNavigation {
    */
   reveal(sessionId: SessionId, signal: AbortSignal): void
   /**
-   * Report a failed refresh that may have kept the child out of the list.
-   * @param error - the refresh rejection.
+   * Report a failure to reveal a child the Host did list.
+   * @param error - the reveal rejection.
    */
   fail(error: unknown): void
+  /**
+   * Report a failed refresh that may have kept the child out of the list. The fork itself succeeded,
+   * so this failure must not reuse the creation notice.
+   * @param error - the refresh rejection.
+   */
+  refreshFail(error: unknown): void
 }
 
 /**
@@ -231,7 +248,7 @@ function openListedBranch(
     open()
     finish()
   }, (error: unknown) => {
-    if (!settled && !signal.aborted) navigation.fail(error)
+    if (!settled && !signal.aborted) navigation.refreshFail(error)
     finish()
   })
 }
@@ -412,7 +429,7 @@ class UiWorkspaceService extends Service implements UiWorkspace {
   ): Promise<SessionId> {
     // Naming a branch renames the child. A page whose access snapshot excludes renaming the source
     // Session leaves the name to the Host — asking for it would fail the fork it just made.
-    const namesBranch = this.ctx.remoteAccess.source('session', sessionId, 'session/rename').getSnapshot()
+    const namesBranch = this.ctx.uiSession.access(sessionId, 'session/rename')
     const childId = await this.sessions.fork({
       sessionId,
       ...options.atSeq === undefined ? {} : { atSeq: options.atSeq },
@@ -432,52 +449,9 @@ class UiWorkspaceService extends Service implements UiWorkspace {
       signal: AbortSignal.any([this.ctx.layout.beginNavigation(), this.lifetime.signal]),
       reveal: (listedId, signal) => { this.replaceMain(listedId, signal, 'reveal') },
       fail: (error) => { this.notify({ kind: 'createFailed', message: creationFailureMessage(error) }) },
+      refreshFail: (error) => { this.notify({ kind: 'branchListRefreshFailed', message: creationFailureMessage(error) }) },
     }, this.sessions, childId)
     return childId
-  }
-
-  /** @inheritdoc */
-  openListedBranch(childId: SessionId): void {
-    const navigation = AbortSignal.any([this.ctx.layout.beginNavigation(), this.lifetime.signal])
-    if (navigation.aborted) return
-    let stop = (): void => {}
-    let settled = false
-    const finish = (): void => {
-      settled = true
-      stop()
-      navigation.removeEventListener('abort', finish)
-    }
-    const open = (): void => {
-      if (settled || navigation.aborted || this.sessions.list.getSnapshot().byId[childId] === undefined) return
-      finish()
-      try {
-        this.replaceMain(childId, navigation, 'reveal')
-      } catch (error: unknown) {
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- retain may synchronously abort navigation before throwing.
-        if (!navigation.aborted) this.notify({ kind: 'createFailed', message: creationFailureMessage(error) })
-      }
-    }
-    stop = this.sessions.list.subscribe(open)
-    navigation.addEventListener('abort', finish, { once: true })
-    // Registration may synchronously publish the row; always recheck after the disposer is owned.
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- subscribe may synchronously call open and finish.
-    if (settled) {
-      stop()
-      navigation.removeEventListener('abort', finish)
-      return
-    }
-    open()
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- open synchronously settles a listed child.
-    if (settled) return
-    void this.sessions.refresh().then(() => {
-      open()
-      finish()
-    }, (error: unknown) => {
-      if (!settled && !navigation.aborted) {
-        this.notify({ kind: 'createFailed', message: creationFailureMessage(error) })
-      }
-      finish()
-    })
   }
 
   startSession(workspaceId?: WorkspaceId, options?: StartSessionOptions): void {

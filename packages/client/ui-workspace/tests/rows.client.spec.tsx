@@ -288,7 +288,8 @@ describe('workspace browser rows', () => {
       archived: false,
       snippet: 'matching message excerpt',
     }
-    render(<SearchResultItem result={result} currentId={result.id} onOpen={onOpen} onUnarchive={vi.fn()} t={t} />)
+    render(<SearchResultItem result={result} currentId={result.id} onOpen={onOpen}
+      onUnarchive={vi.fn()} useSessionAccess={allowAllAccess.useSessionAccess} t={t} />)
     const row = screen.getByRole('treeitem')
     expect(row.getAttribute('aria-selected')).toBe('true')
     expect(screen.getByText('Workspace context')).toBeTruthy()
@@ -300,6 +301,24 @@ describe('workspace browser rows', () => {
     expect(onOpen).toHaveBeenCalledWith(result.id)
   })
 
+  it('withholds the search-result restore control while the Session access excludes unarchiving', () => {
+    const result: SearchResultNode = {
+      id: sid('archived-result'), title: 'Archived', workspace: 'Project',
+      running: false, runningSubagentCount: 0, completed: false, archived: true,
+    }
+    const denied = vi.fn(() => false)
+    const view = render(<SearchResultItem result={result} currentId={undefined}
+      onOpen={vi.fn()} onUnarchive={vi.fn()} useSessionAccess={denied} t={t} />)
+    expect(denied).toHaveBeenCalledWith(result.id, 'workspace/unarchiveSession')
+    expect(view.queryByRole('button', { name: zh['menu.unarchiveSession'] })).toBeNull()
+    cleanup()
+    // The allowed answer renders the same verb.
+    const allowed = vi.fn(() => true)
+    const restored = render(<SearchResultItem result={result} currentId={undefined}
+      onOpen={vi.fn()} onUnarchive={vi.fn()} useSessionAccess={allowed} t={t} />)
+    expect(restored.getByRole('button', { name: zh['menu.unarchiveSession'] })).toBeTruthy()
+  })
+
   it.each([
     ['approval', '等待审批'],
     ['plan-review', '计划待审'],
@@ -309,7 +328,8 @@ describe('workspace browser rows', () => {
       id: sid(pendingInteraction), title: 'Needs input', workspace: 'Project',
       pendingInteraction, running: true, runningSubagentCount: 0, completed: false, archived: false,
     }
-    render(<SearchResultItem result={result} currentId={undefined} onOpen={vi.fn()} onUnarchive={vi.fn()} t={t} />)
+    render(<SearchResultItem result={result} currentId={undefined}
+      onOpen={vi.fn()} onUnarchive={vi.fn()} useSessionAccess={allowAllAccess.useSessionAccess} t={t} />)
     const row = screen.getByRole('treeitem')
     expect(row.querySelector('[data-state="warning"]')).toBeTruthy()
     expect(row.querySelector('[data-state="ongoing"]')).toBeNull()
@@ -597,7 +617,8 @@ describe('workspace browser rows', () => {
         id: sid('result'), title: 'Done', workspace: 'Workspace', running: false,
         runningSubagentCount: 0, completed: true, archived: false,
       }}
-      currentId={undefined} onOpen={vi.fn()} onUnarchive={vi.fn()} t={t}
+      currentId={undefined} onOpen={vi.fn()} onUnarchive={vi.fn()}
+      useSessionAccess={allowAllAccess.useSessionAccess} t={t}
     />)
     expect(screen.getByRole('treeitem').querySelector('[data-state="done"]')).not.toBeNull()
   })
@@ -1379,7 +1400,8 @@ describe('workspace browser rows', () => {
       id: sid('result'), title: 'Old result', workspace: 'Workspace context',
       running: false, runningSubagentCount: 0, completed: false, archived: true,
     }
-    render(<SearchResultItem result={result} currentId={undefined} onOpen={vi.fn()} onUnarchive={vi.fn()} t={t} />)
+    render(<SearchResultItem result={result} currentId={undefined}
+      onOpen={vi.fn()} onUnarchive={vi.fn()} useSessionAccess={allowAllAccess.useSessionAccess} t={t} />)
     const row = screen.getByRole('treeitem')
     expect(row.className).toMatch(/archived/)
     // No leading marker: the grayed row alone carries the archived look.
@@ -1550,7 +1572,7 @@ it.each([['未命名', t], ['Untitled', tEn]])('labels unnamed search results as
     running: false, runningSubagentCount: 0, completed: false, archived: false }
   const onOpen = vi.fn()
   render(<SearchResultItem result={result} currentId={undefined} onOpen={onOpen}
-    onUnarchive={vi.fn()} t={translate} />)
+    onUnarchive={vi.fn()} useSessionAccess={allowAllAccess.useSessionAccess} t={translate} />)
   fireEvent.click(screen.getByText(label))
   expect(onOpen).toHaveBeenCalledWith(result.id)
 })

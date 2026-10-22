@@ -517,17 +517,22 @@ function SessionHoverContent({ node, cwd, now, renderSlot, t }: {
  * @param props.currentId - selected session id.
  * @param props.onOpen - open the selected session.
  * @param props.onUnarchive - unarchive an archived result row.
+ * @param props.useSessionAccess - the browser root's Session access Hook; the restore control
+ * appears only while the snapshot allows `workspace/unarchiveSession` for that Session.
  * @param props.t - Workspace-browser translation seat.
  * @returns the result row.
  */
-export function SearchResultItem({ result, currentId, onOpen, onUnarchive, t }: {
+export function SearchResultItem({
+  result, currentId, onOpen, onUnarchive, useSessionAccess, t,
+}: {
   result: SearchResultNode
   currentId: string | undefined
   onOpen: (id: SearchResultNode['id']) => void
   onUnarchive: (id: SearchResultNode['id']) => void
   t: RowTranslate
-}) {
+} & Pick<WorkspaceBrowserProps, 'useSessionAccess'>) {
   const selected = result.id === currentId
+  const canUnarchive = useSessionAccess(result.id, 'workspace/unarchiveSession')
   const statuses = sessionStatuses(result, t)
   const primaryStatus = statuses[0]
   return (
@@ -548,7 +553,7 @@ export function SearchResultItem({ result, currentId, onOpen, onUnarchive, t }: 
           )}
         </span>
         <span className={css.searchResultTitle}>{result.title || t('session.untitled')}</span>
-        {result.archived && (
+        {result.archived && canUnarchive && (
           <span className={css.rowActions}>
             <Tooltip label={t('actions.unarchive')} side="bottom" align="end" delayMs={500} portal>
               <button

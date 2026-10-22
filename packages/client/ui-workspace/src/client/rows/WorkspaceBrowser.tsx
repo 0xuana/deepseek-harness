@@ -819,8 +819,9 @@ function SearchResults({
   remote,
   resultLimit,
   usePanelInfo,
+  useSessionAccess,
   t,
-}: Pick<WorkspaceBrowserProps, 'useSessions' | 'useSessionStatus' | 'open' | 't' | 'usePanelInfo'> & {
+}: Pick<WorkspaceBrowserProps, 'useSessions' | 'useSessionStatus' | 'open' | 't' | 'usePanelInfo' | 'useSessionAccess'> & {
   workspaces: readonly WorkspaceView[]
   archivedSessionIds: readonly SessionNode['id'][]
   /** Search matches follow the archived filter selected for the list. */
@@ -866,6 +867,7 @@ function SearchResults({
               currentId={currentId}
               onOpen={open}
               onUnarchive={onUnarchive}
+              useSessionAccess={useSessionAccess}
               t={t}
             />
           ))}
@@ -1418,6 +1420,7 @@ export function WorkspaceBrowser({
           ? (
             <SearchResults
               usePanelInfo={usePanelInfo}
+              useSessionAccess={useSessionAccess}
               useSessions={useSessions}
               useSessionStatus={useSessionStatus}
               open={openSearchResult}

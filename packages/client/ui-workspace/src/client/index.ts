@@ -101,6 +101,7 @@ const NS = 'workspace'
  */
 export const inject = [
   'slots', 'sessions', 'workspaces', 'locale', 'remote', 'remote.directoryPicker', 'layout', 'shortcuts', 'remoteAccess',
+  'uiSession',
 ]
 
 /**
