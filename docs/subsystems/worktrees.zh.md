@@ -42,9 +42,10 @@ interface CreatedWorktree {
 
 ```ts type-equiv
 /**
- * Stage of one creation, reported before it begins: `prepare` validates the
- * request, allocates the checkout directory, and creates the branch;
- * `checkout` writes the files and enters the checkout.
+ * Stage of one creation or restoration, reported before it begins: `prepare`
+ * validates the request, allocates the checkout directory, and creates the
+ * branch, which a restoration creates again only when it is gone; `checkout`
+ * writes the files and, for a creation, enters the checkout.
  */
 type CreateWorktreePhase = 'prepare' | 'checkout'
 ```
@@ -114,9 +115,10 @@ async create( agent: Agent, request: CreateWorktreeRequest = {}, signal?: AbortS
  * @param agent - caller whose sandbox policy confines the commands.
  * @param request - recorded directory, branch, base commit, and source repository root.
  * @param signal - cancellation of the restoration.
+ * @param onPhase - receives each stage before it begins; it must not throw.
  * @returns the directory and whether the branch was created again.
  */
-async restore(agent: Agent, request: RestoreWorktreeRequest, signal?: AbortSignal): Promise<RestoredWorktree>
+async restore( agent: Agent, request: RestoreWorktreeRequest, signal?: AbortSignal, onPhase?: (phase: CreateWorktreePhase) => void, ): Promise<RestoredWorktree>
 ```
 
 Types: [Agent](core.zh.md)

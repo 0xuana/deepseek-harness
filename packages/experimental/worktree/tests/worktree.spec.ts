@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { access, mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import { join, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -392,8 +393,12 @@ describe('restoring removed worktrees', () => {
     await rm(created.path, { recursive: true, force: true })
     await rm(abandoned.path, { recursive: true, force: true })
 
-    const restored = await ctx.worktrees.restore(agent, created)
+    const phases: string[] = []
+    const restored = await ctx.worktrees.restore(agent, created, undefined, (phase) => {
+      phases.push(`${phase}:${String(existsSync(created.path))}`)
+    })
 
+    expect(phases).toEqual(['prepare:false', 'checkout:true'])
     expect(restored).toEqual({ path: created.path, branchRecreated: false })
     expect(await git(created.path, 'symbolic-ref', '--short', 'HEAD')).toBe('topic')
     expect(await git(created.path, 'rev-parse', 'HEAD')).toBe(tip)

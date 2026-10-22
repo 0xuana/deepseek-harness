@@ -86,11 +86,17 @@ export interface ForgeWorktreeCreation {
   /** Base branch, or null for HEAD. */
   readonly from: string | null
   /**
-   * Whether a message waits for the creation before it enters the Session.
-   * Only such a creation can be stopped, which returns the message to its
-   * sender; a creation at the first step serves a message the Session already holds.
+   * Whether a message waits for the creation before its turn starts. Only
+   * such a creation can be stopped, after which the message keeps waiting; a
+   * creation at the first step serves a message the Session already holds.
    */
   readonly held: boolean
+}
+
+/** One running restoration of the removed worktree a Session works in. */
+export interface ForgeWorktreeRestoration {
+  /** Running step: `prepare` registers the checkout again, creating a missing branch, then `checkout` writes the files. */
+  readonly phase: 'prepare' | 'checkout'
 }
 
 /** The last attempt to create the requested worktree for a message, which failed. */
@@ -106,17 +112,11 @@ export interface ForgeWorktreeFailure {
 }
 
 /**
- * Why the panel refuses a message at Agent admission; the refusal reason a
- * `session/prompt-rejected` error carries. The panel shows each refusal itself
- * while it follows the Session.
+ * What a message waits for before its turn starts: the creation of the
+ * requested worktree, or the restoration or leaving of the removed worktree
+ * the Session works in.
  */
-export type ForgeAdmissionRefusal =
-  /** The requested worktree could not be created; the panel state carries the failure. */
-  | 'forge/worktree-creation-failed'
-  /** The creation the message waited for was stopped. */
-  | 'forge/worktree-creation-stopped'
-  /** The worktree the Session works in was removed. */
-  | 'forge/worktree-missing'
+export type ForgeWorktreeWaiting = 'creation' | 'restoration'
 
 /** The worktree a Session works in, whose directory no longer exists. */
 export interface ForgeMissingWorktree {
@@ -140,12 +140,17 @@ export interface ForgePanelWorktree {
   /** Running creation, or null. */
   readonly creation: ForgeWorktreeCreation | null
   /**
-   * The failed attempt that returned the last message to its sender, or null.
-   * It clears when another attempt starts and when the request changes or is withdrawn.
+   * The last failed attempt of the creation a message waits for, or null. It
+   * clears when another attempt starts, when the request changes or is
+   * withdrawn, and when the wait ends.
    */
   readonly failure: ForgeWorktreeFailure | null
   /** The created worktree the Session works in when its directory is gone, or null. */
   readonly missing: ForgeMissingWorktree | null
+  /** Running restoration of the removed worktree, or null. */
+  readonly restoration: ForgeWorktreeRestoration | null
+  /** What a message of the Session waits for before its turn starts, or null while none waits. */
+  readonly waiting: ForgeWorktreeWaiting | null
 }
 
 /** One bound change request in the panel state. */
@@ -322,6 +327,8 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'forgePanel/no-worktree': Record<string, never>
     /** The Session's Agent is not loaded or has other work, so its checkout cannot change now. */
     'forgePanel/session-busy': Record<string, never>
+    /** No message of the Session waits after a failed or stopped attempt to create its worktree. */
+    'forgePanel/not-waiting': Record<string, never>
     /** The removed worktree could not be checked out again; the message gives the reason. */
     'forgePanel/restore-failed': Record<string, never>
     /** The URL is not a visible binding of the Session that a provider serves, so the panel does not act on it. */

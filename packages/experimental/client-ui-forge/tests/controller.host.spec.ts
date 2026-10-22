@@ -10,8 +10,8 @@ import ForgePanelController from '../src/index.ts'
 import type { Config, ForgePanelState, ForgeSessionWorktree, ForgeWorktreeState } from '../src/index.ts'
 import { WORKTREE_RECORD } from '../src/worktree.ts'
 import {
-  admitPrompt, bench, branches, commitAt, demo, follow, git, hold, notice, prompt, proposeStep, pullUrl,
-  rejectionOf, repository, scratch, shellTurn, snapshot, startStep, startTurn,
+  bench, branches, commitAt, demo, follow, git, hold, notice, prompt, proposeStep, pullUrl,
+  rejectionOf, repository, scratch, sendPrompt, shellTurn, snapshot, startStep, startTurn,
 } from './harness.ts'
 import type { Bench, BenchOptions, Follower } from './harness.ts'
 
@@ -58,7 +58,10 @@ function reader(opened: Bench): Follower {
 const ready = (state: ForgePanelState): boolean => state.checkout.state === 'ready' && state.readiness !== null
 
 /** Worktree facts of a Session without a worktree service, request, or creation, whose checkout can host a worktree. */
-const UNAVAILABLE = { editable: false, blocker: null, request: null, created: null, creation: null, failure: null, missing: null }
+const UNAVAILABLE = {
+  editable: false, blocker: null, request: null, created: null, creation: null, failure: null, missing: null, restoration: null,
+  waiting: null,
+}
 
 /** Matches a generated branch name with the default prefix. */
 const GENERATED_BRANCH: unknown = expect.stringMatching(/^dsh-[0-9a-f]{8}$/)
@@ -84,8 +87,8 @@ async function settle(): Promise<void> {
   await new Promise(resolve => setImmediate(resolve))
 }
 
-/** Texts of the prompts admitted into the Agent's next turn, in order. */
-function admitted(opened: Bench): string[] {
+/** Texts of the prompts queued for the Agent's next turn, in order. */
+function queued(opened: Bench): string[] {
   return opened.agent.inbox.nextTurn.map(message => message.content.map(block => block.type === 'text' ? block.text : '').join(''))
 }
 
@@ -94,14 +97,15 @@ function worktreeState(opened: Bench, session: Session = opened.session): ForgeW
 }
 
 /**
- * Request a worktree and admit the first message, whose admission creates it, as the Web Session Remote does.
+ * Request a worktree and send the first message, which waits until the worktree exists, as the Web Session Remote does.
  * @param opened - composition with the worktree service.
  * @param from - base branch, or null for HEAD.
  * @returns the created worktree.
  */
 async function startInWorktree(opened: Bench, from: string | null = null): Promise<ForgeSessionWorktree> {
   await opened.ctx.forgePanel.requestWorktree(opened.session, from, signal)
-  await admitPrompt(opened.ctx, opened.agent, 'first')
+  sendPrompt(opened.agent, 'first')
+  await opened.agent.whenIdle()
   const created = worktreeState(opened)?.created ?? null
   if (created === null) throw new Error('the requested worktree was not recorded')
   return created
@@ -714,17 +718,21 @@ describe('forgePanel worktree requests', () => {
     expect(opened.records).toHaveLength(2)
   })
 
-  it('refuses worktree changes, creation, and restoration without a worktree service', async () => {
+  it('refuses worktree requests and restoration without a worktree service, and keeps a waiting message for the withdrawal', async () => {
     const { repo } = await project()
     const opened = await open(repo)
 
     await expect(opened.ctx.forgePanel.requestWorktree(opened.session, null, signal)).rejects.toMatchObject({ code: 'forgePanel/worktrees-unavailable' })
-    await expect(opened.ctx.forgePanel.cancelWorktree(opened.session, signal)).rejects.toMatchObject({ code: 'forgePanel/worktrees-unavailable' })
     expect(opened.records).toEqual([])
     appendPluginRecord(opened.session, WORKTREE_RECORD, { action: 'request', from: null })
-    await expect(admitPrompt(opened.ctx, opened.agent, 'first')).rejects.toMatchObject({
-      reason: 'forge/worktree-creation-failed', message: 'The worktree could not be created: No worktree service is mounted',
-    })
+    const follower = reader(opened)
+    sendPrompt(opened.agent, 'first')
+    const failed = await follower.until(state => state.worktree.failure !== null)
+    expect(failed.worktree.failure).toEqual({ branch: null, from: null, phase: 'prepare', message: 'No worktree service is mounted' })
+    // Withdrawing needs no worktree service, so the waiting message can go on.
+    await opened.ctx.forgePanel.cancelWorktree(opened.session, signal)
+    await opened.agent.whenIdle()
+    expect(opened.agent.wakes).toBe(1)
 
     const worktree: ForgeSessionWorktree = {
       path: join(repo, '.agents', 'worktrees', 'dsh', '0a1b2c3d'), branch: 'dsh/0a1b2c3d', from: null, baseCommit: 'c'.repeat(40), repositoryRoot: repo,
@@ -799,8 +807,8 @@ describe('forgePanel worktree requests', () => {
   })
 })
 
-describe('forgePanel worktree creation at admission', () => {
-  it('creates the requested worktree as Agent maintenance while the first message waits, showing each step, and admits the message into it', async () => {
+describe('forgePanel worktree creation while a message waits', () => {
+  it('creates the requested worktree as Agent maintenance while the first message waits in the inbox, showing each step, then starts its turn', async () => {
     const { repo } = await project()
     const opened = await open(repo, {}, { worktrees: true })
     const follower = reader(opened)
@@ -809,21 +817,23 @@ describe('forgePanel worktree creation at admission', () => {
     const preparing = hold(opened.sandbox, 'check-ref-format')
     const checkingOut = hold(opened.sandbox, 'reset')
 
-    const admission = admitPrompt(opened.ctx, opened.agent, 'first')
+    sendPrompt(opened.agent, 'first')
     const prepare = await follower.until(state => state.worktree.creation?.phase === 'prepare')
     expect(() => opened.agent.runMaintenance(() => Promise.resolve())).toThrow('already has active work')
-    expect(admitted(opened)).toEqual([])
+    expect(queued(opened)).toEqual(['first'])
+    expect(opened.agent.wakes).toBe(0)
     preparing.release()
     const checkout = await follower.until(state => state.worktree.creation?.phase === 'checkout')
     checkingOut.release()
-    await admission
+    await opened.agent.whenIdle()
     const created = worktreeState(opened)?.created ?? null
-    const moved = await follower.until(state => state.directory === created?.path && state.checkout.state === 'ready')
+    const moved = await follower.until(state => state.directory === created?.path && state.checkout.state === 'ready' && state.worktree.waiting === null)
 
     const branch = created?.branch ?? ''
     const running = { branch, from: null, held: true }
-    expect(prepare.worktree).toEqual({ ...UNAVAILABLE, editable: true, request: { from: null }, creation: { ...running, phase: 'prepare' } })
-    expect(checkout.worktree).toEqual({ ...UNAVAILABLE, editable: true, request: { from: null }, creation: { ...running, phase: 'checkout' } })
+    const waiting = { ...UNAVAILABLE, editable: true, request: { from: null }, waiting: 'creation' }
+    expect(prepare.worktree).toEqual({ ...waiting, creation: { ...running, phase: 'prepare' } })
+    expect(checkout.worktree).toEqual({ ...waiting, creation: { ...running, phase: 'checkout' } })
     expect(moved.worktree).toEqual({ ...UNAVAILABLE, request: { from: null }, created })
     expect(moved.checkout).toEqual({ state: 'ready', checkout: { root: created?.path, branch, linked: true, commit: COMMIT } })
     expect(created).toEqual({
@@ -833,167 +843,216 @@ describe('forgePanel worktree creation at admission', () => {
       baseCommit: await git(repo, 'rev-parse', 'HEAD'),
       repositoryRoot: repo,
     })
+    expect(opened.agent.wakes).toBe(1)
     expect(opened.ctx.workingDirectory.get(opened.session)).toBe(created?.path)
     expect(opened.agent.inbox.nextStep).toEqual([notice(created?.path ?? '')])
-    expect(admitted(opened)).toEqual(['first'])
+    expect(queued(opened)).toEqual(['first'])
     expect(opened.records).toEqual([{ action: 'request', from: null }, { action: 'created', worktree: created }])
   })
 
-  it('returns the message with a failure the panel shows, keeps the request open, and tries again with a new branch for the next message', async () => {
+  it('keeps the message waiting with the failure the panel shows, and tries again with a new branch when asked', async () => {
     const { repo } = await project()
     const opened = await open(repo, {}, { worktrees: true })
     const follower = reader(opened)
     await follower.until(ready)
     await opened.ctx.forgePanel.requestWorktree(opened.session, 'later', signal)
 
-    const refusal = await rejectionOf(admitPrompt(opened.ctx, opened.agent, 'first'))
+    sendPrompt(opened.agent, 'first')
     const failed = await follower.until(state => state.worktree.failure !== null && state.worktree.creation === null)
+    expect(opened.agent.wakes).toBe(0)
     await git(repo, 'branch', 'later')
-    const retry = admitPrompt(opened.ctx, opened.agent, 'first')
+    await opened.ctx.forgePanel.retryWorktree(opened.session, signal)
     const retrying = await follower.next(state => state.worktree.creation !== null)
-    await retry
+    await opened.agent.whenIdle()
 
-    const explained: unknown = expect.stringMatching(/^The worktree could not be created: worktree command failed \(128\): fatal: /)
-    expect(refusal).toMatchObject({ name: 'AgentAdmissionRejected', reason: 'forge/worktree-creation-failed', presented: true, message: explained })
     expect(failed.worktree).toEqual({
-      ...UNAVAILABLE, editable: true, request: { from: 'later' },
+      ...UNAVAILABLE, editable: true, request: { from: 'later' }, waiting: 'creation',
       failure: { branch: GENERATED_BRANCH, from: 'later', phase: 'prepare', message: MISSING_BASE },
     })
     expect(retrying.worktree.failure).toBeNull()
     const created = worktreeState(opened)?.created ?? null
     expect(created).toMatchObject({ from: 'later', baseCommit: await git(repo, 'rev-parse', 'later') })
     expect(created?.branch).not.toBe(failed.worktree.failure?.branch)
-    expect(admitted(opened)).toEqual(['first'])
+    expect(opened.agent.wakes).toBe(1)
+    expect(queued(opened)).toEqual(['first'])
     expect(opened.records).toEqual([{ action: 'request', from: 'later' }, { action: 'created', worktree: created }])
   })
 
-  it('tells the sender to show a refusal itself while no panel follows the Session', async () => {
-    const { repo } = await project()
-    const opened = await open(repo, {}, { worktrees: true })
-    await opened.ctx.forgePanel.requestWorktree(opened.session, 'later', signal)
-
-    await expect(admitPrompt(opened.ctx, opened.agent, 'first'))
-      .rejects.toMatchObject({ reason: 'forge/worktree-creation-failed', presented: false })
-  })
-
-  it('forgets a failed attempt when the request changes or is withdrawn', async () => {
+  it('keeps the message waiting when the request changes, and lets it go on in the current checkout once the request is withdrawn', async () => {
     const { repo } = await project()
     const opened = await open(repo, {}, { worktrees: true })
     const follower = reader(opened)
     await follower.until(ready)
     await opened.ctx.forgePanel.requestWorktree(opened.session, 'later', signal)
-    await rejectionOf(admitPrompt(opened.ctx, opened.agent, 'first'))
+    sendPrompt(opened.agent, 'first')
     await follower.until(state => state.worktree.failure !== null)
 
     await opened.ctx.forgePanel.requestWorktree(opened.session, 'gone', signal)
     const changed = await follower.next(state => state.worktree.request?.from === 'gone')
-    await rejectionOf(admitPrompt(opened.ctx, opened.agent, 'first'))
-    await follower.next(state => state.worktree.failure !== null)
+    await opened.ctx.forgePanel.retryWorktree(opened.session, signal)
+    const failedAgain = await follower.next(state => state.worktree.failure !== null)
+    const withdrawal = follower.next(state => state.worktree.request === null && state.worktree.waiting === null)
     await opened.ctx.forgePanel.cancelWorktree(opened.session, signal)
-    const withdrawn = await follower.next(state => state.worktree.request === null)
-    await admitPrompt(opened.ctx, opened.agent, 'first')
+    await opened.agent.whenIdle()
+    const withdrawn = await withdrawal
 
-    expect(changed.worktree.failure).toBeNull()
-    expect(withdrawn.worktree.failure).toBeNull()
-    expect(admitted(opened)).toEqual(['first'])
+    expect(changed.worktree).toEqual({ ...UNAVAILABLE, editable: true, request: { from: 'gone' }, waiting: 'creation' })
+    expect(failedAgain.worktree.failure).toMatchObject({ from: 'gone' })
+    expect(withdrawn.worktree).toEqual({ ...UNAVAILABLE, editable: true })
+    expect(opened.agent.wakes).toBe(1)
+    expect(queued(opened)).toEqual(['first'])
+    expect(opened.agent.inbox.nextStep).toEqual([])
     expect(opened.ctx.workingDirectory.get(opened.session)).toBe(repo)
+    expect(opened.records).toEqual([{ action: 'request', from: 'later' }, { action: 'request', from: 'gone' }, { action: 'cancel' }])
   })
 
-  it('stops the creation a message waits for, returning the message with the request still open', async () => {
-    const { repo } = await project()
-    const opened = await open(repo, {}, { worktrees: true })
-    await opened.ctx.forgePanel.requestWorktree(opened.session, null, signal)
-    await opened.ctx.forgePanel.stopCreation(opened.session, signal)
-    const held = hold(opened.sandbox, 'check-ref-format')
-
-    const admission = rejectionOf(admitPrompt(opened.ctx, opened.agent, 'first'))
-    await held.reached
-    await opened.ctx.forgePanel.stopCreation(opened.session, signal)
-    held.release()
-
-    expect(await admission).toMatchObject({ reason: 'forge/worktree-creation-stopped', presented: false })
-    expect((await reader(opened).until(ready)).worktree).toEqual({ ...UNAVAILABLE, editable: true, request: { from: null } })
-    expect(admitted(opened)).toEqual([])
-    expect(opened.records).toEqual([{ action: 'request', from: null }])
-    expect(opened.ctx.workingDirectory.get(opened.session)).toBe(repo)
-    expect(await branches(repo)).toEqual(['main'])
-  })
-
-  it('returns the message when the Agent is cancelled during the creation', async () => {
-    const { repo } = await project()
-    const opened = await open(repo, {}, { worktrees: true })
-    await opened.ctx.forgePanel.requestWorktree(opened.session, null, signal)
-    const held = hold(opened.sandbox, 'check-ref-format')
-
-    const admission = rejectionOf(admitPrompt(opened.ctx, opened.agent, 'first'))
-    await held.reached
-    opened.agent.cancel({ kind: 'user' })
-    held.release()
-
-    expect(await admission).toMatchObject({ reason: 'forge/worktree-creation-stopped' })
-    expect(worktreeState(opened)).toMatchObject({ request: { from: null }, created: null })
-    expect(admitted(opened)).toEqual([])
-  })
-
-  it('passes the sender cancellation through without a refusal, keeping the request open', async () => {
-    const { repo } = await project()
-    const opened = await open(repo, {}, { worktrees: true })
-    await opened.ctx.forgePanel.requestWorktree(opened.session, null, signal)
-    const held = hold(opened.sandbox, 'check-ref-format')
-    const sender = new AbortController()
-    const reason = new Error('closed')
-
-    const admission = rejectionOf(admitPrompt(opened.ctx, opened.agent, 'first', sender.signal))
-    await held.reached
-    sender.abort(reason)
-    held.release()
-
-    expect(await admission).toBe(reason)
-    expect(worktreeState(opened)).toMatchObject({ request: { from: null }, created: null })
-    expect(opened.records).toEqual([{ action: 'request', from: null }])
-    expect(admitted(opened)).toEqual([])
-    expect(await branches(repo)).toEqual(['main'])
-  })
-
-  it('returns the message with a failure when the Agent has other work', async () => {
+  it('stops the running attempt, and the message keeps waiting with the request open until another attempt', async () => {
     const { repo } = await project()
     const opened = await open(repo, {}, { worktrees: true })
     const follower = reader(opened)
     await follower.until(ready)
     await opened.ctx.forgePanel.requestWorktree(opened.session, null, signal)
+    await opened.ctx.forgePanel.stopCreation(opened.session, signal)
+    const held = hold(opened.sandbox, 'check-ref-format')
+
+    sendPrompt(opened.agent, 'first')
+    await held.reached
+    const stopping = follower.next(state => state.worktree.waiting === 'creation' && state.worktree.creation === null)
+    await opened.ctx.forgePanel.stopCreation(opened.session, signal)
+    held.release()
+    const stopped = await stopping
+    const before = { wakes: opened.agent.wakes, records: [...opened.records], cwd: opened.ctx.workingDirectory.get(opened.session) }
+    await opened.ctx.forgePanel.retryWorktree(opened.session, signal)
+    await opened.agent.whenIdle()
+
+    expect(stopped.worktree).toEqual({ ...UNAVAILABLE, editable: true, request: { from: null }, waiting: 'creation' })
+    expect(before).toEqual({ wakes: 0, records: [{ action: 'request', from: null }], cwd: repo })
+    expect(worktreeState(opened)?.created).toMatchObject({ from: null, repositoryRoot: repo })
+    expect(opened.agent.wakes).toBe(1)
+  })
+
+  it('makes no attempt when the request is withdrawn right after another attempt was asked for', async () => {
+    const { repo } = await project()
+    const opened = await open(repo, {}, { worktrees: true })
+    const follower = reader(opened)
+    await follower.until(ready)
+    await opened.ctx.forgePanel.requestWorktree(opened.session, 'later', signal)
+    sendPrompt(opened.agent, 'first')
+    await follower.until(state => state.worktree.failure !== null)
+    await git(repo, 'branch', 'later')
+
+    // Both decisions arrive before the wait resumes, so the next attempt reads the withdrawn request.
+    await Promise.all([
+      opened.ctx.forgePanel.retryWorktree(opened.session, signal),
+      opened.ctx.forgePanel.cancelWorktree(opened.session, signal),
+    ])
+    await opened.agent.whenIdle()
+
+    expect(opened.agent.wakes).toBe(1)
+    expect(opened.records).toEqual([{ action: 'request', from: 'later' }, { action: 'cancel' }])
+    expect(opened.ctx.workingDirectory.get(opened.session)).toBe(repo)
+  })
+
+  it('refuses another attempt while no message waits or an attempt runs', async () => {
+    const { repo } = await project()
+    const opened = await open(repo, {}, { worktrees: true })
+    await expect(opened.ctx.forgePanel.retryWorktree(opened.session, signal)).rejects.toMatchObject({ code: 'forgePanel/not-waiting' })
+    await opened.ctx.forgePanel.requestWorktree(opened.session, null, signal)
+    const held = hold(opened.sandbox, 'check-ref-format')
+
+    sendPrompt(opened.agent, 'first')
+    await held.reached
+    await expect(opened.ctx.forgePanel.retryWorktree(opened.session, signal)).rejects.toMatchObject({ code: 'forgePanel/not-waiting' })
+    held.release()
+    await opened.agent.whenIdle()
+
+    expect(worktreeState(opened)?.created).not.toBeNull()
+    expect(opened.agent.wakes).toBe(1)
+  })
+
+  it('ends the wait and drops the waiting messages when the Agent is cancelled', async () => {
+    const { repo } = await project()
+    const opened = await open(repo, {}, { worktrees: true })
+    const follower = reader(opened)
+    await follower.until(ready)
+    await opened.ctx.forgePanel.requestWorktree(opened.session, 'later', signal)
+    sendPrompt(opened.agent, 'first')
+    await follower.until(state => state.worktree.failure !== null)
+
+    const ending = follower.next(state => state.worktree.waiting === null)
+    opened.agent.cancel({ kind: 'user' })
+    await opened.agent.whenIdle()
+    const ended = await ending
+
+    expect(ended.worktree).toEqual({ ...UNAVAILABLE, editable: true, request: { from: 'later' } })
+    expect(opened.agent.wakes).toBe(0)
+    expect(queued(opened)).toEqual([])
+    expect(worktreeState(opened)).toMatchObject({ request: { from: 'later' }, created: null })
+  })
+
+  it('lets the waiting message go on when the panel stops', async () => {
+    const { repo } = await project()
+    const opened = await open(repo, {}, { worktrees: true })
+    await opened.ctx.forgePanel.requestWorktree(opened.session, 'later', signal)
+    sendPrompt(opened.agent, 'first')
+    await vi.waitFor(() => { expect(() => opened.agent.runMaintenance(() => Promise.resolve())).toThrow('already has active work') })
+
+    await opened.panel.dispose()
+    await opened.agent.whenIdle()
+
+    expect(opened.agent.wakes).toBe(1)
+    expect(queued(opened)).toEqual(['first'])
+    expect(worktreeState(opened)).toMatchObject({ request: { from: 'later' }, created: null })
+  })
+
+  it('holds one wait for every message that arrives during it', async () => {
+    const { repo } = await project()
+    const opened = await open(repo, {}, { worktrees: true })
+    await opened.ctx.forgePanel.requestWorktree(opened.session, null, signal)
+    const held = hold(opened.sandbox, 'check-ref-format')
+
+    sendPrompt(opened.agent, 'first')
+    await held.reached
+    sendPrompt(opened.agent, 'second')
+    held.release()
+    await opened.agent.whenIdle()
+
+    expect(opened.agent.wakes).toBe(1)
+    expect(queued(opened)).toEqual(['first', 'second'])
+    expect(opened.records).toHaveLength(2)
+  })
+
+  it('leaves a message that arrives while the Agent has other work to the first step', async () => {
+    const { repo } = await project()
+    const opened = await open(repo, {}, { worktrees: true })
+    const follower = reader(opened)
+    await follower.until(ready)
+    await opened.ctx.forgePanel.requestWorktree(opened.session, null, signal)
+    await follower.until(state => state.worktree.request !== null)
     const release = occupy(opened)
 
-    const refusal = await rejectionOf(admitPrompt(opened.ctx, opened.agent, 'first'))
-    const failed = await follower.until(state => state.worktree.failure !== null)
+    sendPrompt(opened.agent, 'first')
+    await settle()
+    const busy = follower.states.at(-1)
     await release()
 
-    const busy: unknown = expect.stringContaining('already has active work')
-    expect(refusal).toMatchObject({ reason: 'forge/worktree-creation-failed', presented: true })
-    expect(failed.worktree.failure).toEqual({ branch: null, from: null, phase: 'prepare', message: busy })
+    expect(busy?.worktree).toEqual({ ...UNAVAILABLE, editable: true, request: { from: null } })
+    expect(opened.agent.wakes).toBe(1)
     expect(worktreeState(opened)).toMatchObject({ request: { from: null }, created: null })
     expect(await branches(repo)).toEqual(['main'])
   })
 
-  it('reports a refusal to start the creation that is not an Error by its text', async () => {
-    const { repo } = await project()
-    const opened = await open(repo, {}, { worktrees: true })
-    await opened.ctx.forgePanel.requestWorktree(opened.session, null, signal)
-    const thrown: unknown = 'busy'
-    vi.spyOn(opened.agent, 'runMaintenance').mockImplementationOnce(() => { throw thrown })
-
-    await expect(admitPrompt(opened.ctx, opened.agent, 'first'))
-      .rejects.toMatchObject({ reason: 'forge/worktree-creation-failed', message: 'The worktree could not be created: busy' })
-  })
-
-  it('admits a message without a creation once the first turn started, leaving the worktree to the first step', async () => {
+  it('lets a message go on without a wait once the first turn started, leaving the worktree to the first step', async () => {
     const { repo } = await project()
     const opened = await open(repo, {}, { worktrees: true })
     await opened.ctx.forgePanel.requestWorktree(opened.session, null, signal)
     startTurn(opened.session, 1)
 
-    await admitPrompt(opened.ctx, opened.agent, 'steer')
+    sendPrompt(opened.agent, 'steer')
+    await opened.agent.whenIdle()
 
-    expect(admitted(opened)).toEqual(['steer'])
+    expect(opened.agent.wakes).toBe(1)
+    expect(queued(opened)).toEqual(['steer'])
     expect(worktreeState(opened)).toMatchObject({ request: { from: null }, created: null, locked: true })
     expect(await branches(repo)).toEqual(['main'])
   })
@@ -1006,13 +1065,13 @@ describe('forgePanel worktree requests during a creation', () => {
     await opened.ctx.forgePanel.requestWorktree(opened.session, null, signal)
     const held = hold(opened.sandbox, 'check-ref-format')
 
-    const admission = admitPrompt(opened.ctx, opened.agent, 'first')
+    sendPrompt(opened.agent, 'first')
     await held.reached
     await expect(opened.ctx.forgePanel.cancelWorktree(opened.session, signal)).rejects.toMatchObject({ code: 'forgePanel/session-busy' })
     await expect(opened.ctx.forgePanel.requestWorktree(opened.session, 'main', signal))
       .rejects.toMatchObject({ code: 'forgePanel/session-busy' })
     held.release()
-    await admission
+    await opened.agent.whenIdle()
 
     const created = worktreeState(opened)?.created ?? null
     expect(created).toMatchObject({ from: null, repositoryRoot: repo })
@@ -1022,7 +1081,7 @@ describe('forgePanel worktree requests during a creation', () => {
 })
 
 describe('forgePanel removed worktrees', () => {
-  it('shows a removed worktree whose branch remains, and checks the branch out again as Agent maintenance', async () => {
+  it('shows a removed worktree whose branch remains, and holds the next message until the branch is checked out again', async () => {
     const { repo } = await project()
     const opened = await open(repo, {}, { worktrees: true })
     const follower = reader(opened)
@@ -1032,26 +1091,34 @@ describe('forgePanel removed worktrees', () => {
     await follower.until(state => state.directory === created.path && state.checkout.state === 'ready')
     await rm(created.path, { recursive: true, force: true })
 
-    const refusal = await rejectionOf(admitPrompt(opened.ctx, opened.agent, 'next'))
-    const missing = await follower.until(state => state.worktree.missing !== null)
+    sendPrompt(opened.agent, 'next')
+    const missing = await follower.until(state => state.worktree.waiting === 'restoration')
+    expect(opened.agent.wakes).toBe(1)
     const pruning = hold(opened.sandbox, 'prune')
+    const resetting = hold(opened.sandbox, 'reset')
     const restoring = opened.ctx.forgePanel.restoreWorktree(opened.session, signal)
     await pruning.reached
     expect(() => opened.agent.runMaintenance(() => Promise.resolve())).toThrow('already has active work')
+    const preparing = await follower.until(state => state.worktree.restoration?.phase === 'prepare')
     pruning.release()
+    await resetting.reached
+    const checkingOut = await follower.until(state => state.worktree.restoration?.phase === 'checkout')
+    const restoration = follower.next(state => state.worktree.missing === null && state.worktree.waiting === null && state.checkout.state === 'ready')
+    resetting.release()
     await restoring
-    const restored = await follower.next(state => state.worktree.missing === null && state.checkout.state === 'ready')
+    await opened.agent.whenIdle()
+    const restored = await restoration
 
-    expect(missing.worktree).toEqual({ ...UNAVAILABLE, request: { from: null }, created, missing: { branchExists: true } })
+    expect(missing.worktree).toEqual({ ...UNAVAILABLE, request: { from: null }, created, missing: { branchExists: true }, waiting: 'restoration' })
+    expect(preparing.worktree).toMatchObject({ missing: { branchExists: true }, restoration: { phase: 'prepare' }, waiting: 'restoration' })
+    expect(checkingOut.worktree.restoration).toEqual({ phase: 'checkout' })
     expect(restored).toMatchObject({ directory: created.path, checkout: { state: 'ready', checkout: { root: created.path, branch: created.branch } } })
     expect(restored.worktree).toEqual({ ...UNAVAILABLE, request: { from: null }, created })
     expect(await git(created.path, 'rev-parse', 'HEAD')).toBe(tip)
     expect(await readFile(join(created.path, 'later.txt'), 'utf8')).toBe('later.txt\n')
     expect(opened.ctx.workingDirectory.get(opened.session)).toBe(created.path)
-    expect(refusal).toMatchObject({ name: 'AgentAdmissionRejected', reason: 'forge/worktree-missing', presented: true })
-    expect(admitted(opened)).toEqual(['first'])
-    await admitPrompt(opened.ctx, opened.agent, 'next')
-    expect(admitted(opened)).toEqual(['first', 'next'])
+    expect(opened.agent.wakes).toBe(2)
+    expect(queued(opened)).toEqual(['first', 'next'])
   })
 
   it('shows a removed worktree whose branch is gone, and creates the branch again at its base commit', async () => {
@@ -1063,23 +1130,26 @@ describe('forgePanel removed worktrees', () => {
     await commitAt(created.path, 'later.txt', '2026-05-01T00:00:00Z')
     await follower.until(state => state.directory === created.path && state.checkout.state === 'ready')
     await rm(created.path, { recursive: true, force: true })
-    await rejectionOf(admitPrompt(opened.ctx, opened.agent, 'next'))
+    sendPrompt(opened.agent, 'next')
     await follower.until(state => state.worktree.missing?.branchExists === true)
     await git(repo, 'worktree', 'prune')
     await git(repo, 'branch', '-D', created.branch)
 
-    await expect(admitPrompt(opened.ctx, opened.agent, 'next')).rejects.toMatchObject({ reason: 'forge/worktree-missing' })
-    const gone = await follower.next(state => state.worktree.missing?.branchExists === false)
+    await opened.ctx.forgePanel.refresh(opened.session, signal)
+    const gone = await follower.until(state => state.worktree.missing?.branchExists === false)
+    const restoration = follower.next(state => state.worktree.missing === null && state.checkout.state === 'ready')
     await opened.ctx.forgePanel.restoreWorktree(opened.session, signal)
-    const restored = await follower.next(state => state.worktree.missing === null && state.checkout.state === 'ready')
+    await opened.agent.whenIdle()
+    const restored = await restoration
 
-    expect(gone.worktree).toEqual({ ...UNAVAILABLE, request: { from: null }, created, missing: { branchExists: false } })
+    expect(gone.worktree).toEqual({ ...UNAVAILABLE, request: { from: null }, created, missing: { branchExists: false }, waiting: 'restoration' })
     expect(await git(repo, 'rev-parse', created.branch)).toBe(created.baseCommit)
     expect(restored.checkout).toEqual({ state: 'ready', checkout: { root: created.path, branch: created.branch, linked: true, commit: COMMIT } })
     await expect(access(join(created.path, 'later.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(opened.agent.wakes).toBe(2)
   })
 
-  it('publishes an unchanged answer only once', async () => {
+  it('checks once for all the messages that wait, publishing the answer once', async () => {
     const { repo } = await project()
     const opened = await open(repo, {}, { worktrees: true })
     const follower = reader(opened)
@@ -1087,19 +1157,23 @@ describe('forgePanel removed worktrees', () => {
     const created = await startInWorktree(opened)
     await follower.until(state => state.directory === created.path && state.checkout.state === 'ready')
     await rm(created.path, { recursive: true, force: true })
-    await rejectionOf(admitPrompt(opened.ctx, opened.agent, 'next'))
-    await follower.until(state => state.worktree.missing !== null)
+    sendPrompt(opened.agent, 'next')
+    await follower.until(state => state.worktree.waiting === 'restoration')
     const pending = follower.next(() => true)
     let published = false
     void pending.then(() => { published = true }, () => undefined)
+    const calls = opened.sandbox.calls.length
 
-    await expect(admitPrompt(opened.ctx, opened.agent, 'next')).rejects.toMatchObject({ reason: 'forge/worktree-missing' })
+    sendPrompt(opened.agent, 'again')
     await settle()
 
     expect(published).toBe(false)
+    expect(opened.sandbox.calls).toHaveLength(calls)
+    expect(queued(opened)).toEqual(['first', 'next', 'again'])
+    expect(opened.agent.wakes).toBe(1)
   })
 
-  it('finds a removed worktree on inspection, and admits messages without offering restoration while Git cannot answer', async () => {
+  it('finds a removed worktree on inspection, and lets messages go on without offering restoration while Git cannot answer', async () => {
     const { repo } = await project()
     const opened = await open(repo, {}, { worktrees: true })
     const follower = reader(opened)
@@ -1111,16 +1185,19 @@ describe('forgePanel removed worktrees', () => {
     await opened.ctx.forgePanel.refresh(opened.session, signal)
     const inspected = await follower.next(state => state.worktree.missing !== null)
     opened.sandbox.failure = new Error('sandbox unavailable')
-    await admitPrompt(opened.ctx, opened.agent, 'next')
+    sendPrompt(opened.agent, 'next')
+    await opened.agent.whenIdle()
+    const answer = follower.next(state => state.worktree.missing === null)
     await opened.ctx.forgePanel.refresh(opened.session, signal)
-    const unanswered = await follower.next(state => state.worktree.missing === null)
+    const unanswered = await answer
 
     expect(inspected).toMatchObject({ directory: created.path, checkout: { state: 'failed' }, worktree: { missing: { branchExists: true } } })
-    expect(unanswered).toMatchObject({ directory: created.path, checkout: { state: 'failed', message: 'sandbox unavailable' } })
-    expect(admitted(opened)).toEqual(['first', 'next'])
+    expect(unanswered).toMatchObject({ directory: created.path, checkout: { state: 'failed', message: 'sandbox unavailable' }, worktree: { waiting: null } })
+    expect(queued(opened)).toEqual(['first', 'next'])
+    expect(opened.agent.wakes).toBe(2)
   })
 
-  it('refuses with the answer for the directory it checked without publishing it once the Session moved', async () => {
+  it('lets the message go on, without publishing the answer, when the Session moved out of the worktree during the check', async () => {
     const { repo } = await project()
     const opened = await open(repo, {}, { worktrees: true })
     const follower = reader(opened)
@@ -1131,33 +1208,40 @@ describe('forgePanel removed worktrees', () => {
     const branchCheck = hold(opened.sandbox, 'show-ref')
     const inspection = hold(opened.sandbox, '--show-toplevel')
 
-    const check = rejectionOf(admitPrompt(opened.ctx, opened.agent, 'next'))
+    sendPrompt(opened.agent, 'next')
     await branchCheck.reached
     await opened.ctx.workingDirectory.set(opened.agent, repo)
     await inspection.reached
     branchCheck.release()
-
-    expect(await check).toMatchObject({ reason: 'forge/worktree-missing' })
+    await opened.agent.whenIdle()
     const moved = await follower.next(() => true)
     inspection.release()
     await follower.until(state => state.directory === repo && state.checkout.state === 'ready')
 
-    expect(moved).toMatchObject({ directory: repo, checkout: { state: 'pending' }, worktree: { missing: null } })
+    expect(moved).toMatchObject({ directory: repo, checkout: { state: 'pending' }, worktree: { missing: null, waiting: null } })
+    expect(opened.agent.wakes).toBe(2)
   })
 
-  it('refuses messages for a removed worktree of a Session that no panel follows, telling the sender to show the refusal', async () => {
+  it('holds messages for a removed worktree of a Session that no panel follows, until it is left for the source checkout', async () => {
     const { repo } = await project()
     const opened = await open(repo, {}, { worktrees: true })
 
-    await admitPrompt(opened.ctx, opened.agent, 'before')
+    sendPrompt(opened.agent, 'before')
     const created = await startInWorktree(opened)
-    await admitPrompt(opened.ctx, opened.agent, 'inside')
+    sendPrompt(opened.agent, 'inside')
+    await opened.agent.whenIdle()
     await rm(created.path, { recursive: true, force: true })
-    await expect(admitPrompt(opened.ctx, opened.agent, 'removed')).rejects.toMatchObject({ reason: 'forge/worktree-missing', presented: false })
-    await opened.ctx.forgePanel.continueInProject(opened.session, signal)
-    await admitPrompt(opened.ctx, opened.agent, 'outside')
+    sendPrompt(opened.agent, 'removed')
+    await vi.waitFor(() => { expect(() => opened.agent.runMaintenance(() => Promise.resolve())).toThrow('already has active work') })
+    const waiting = opened.agent.wakes
+    await vi.waitFor(async () => { await expect(opened.ctx.forgePanel.continueInProject(opened.session, signal)).resolves.toBeUndefined() })
+    await opened.agent.whenIdle()
+    sendPrompt(opened.agent, 'outside')
 
-    expect(admitted(opened)).toEqual(['before', 'first', 'inside', 'outside'])
+    expect(waiting).toBe(3)
+    expect(opened.agent.wakes).toBe(5)
+    expect(opened.ctx.workingDirectory.get(opened.session)).toBe(repo)
+    expect(queued(opened)).toEqual(['before', 'first', 'inside', 'removed', 'outside'])
   })
 
   it('leaves a worktree whose directory exists unchanged', async () => {
@@ -1185,6 +1269,37 @@ describe('forgePanel removed worktrees', () => {
     await expect(opened.ctx.forgePanel.restoreWorktree(opened.session, signal))
       .rejects.toMatchObject({ code: 'forgePanel/restore-failed', message, details: {}, cause: failure })
     await expect(access(created.path)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('keeps the message waiting when a restoration inside its wait fails or is aborted, and lets it go on once one succeeds', async () => {
+    const { repo } = await project()
+    const opened = await open(repo, {}, { worktrees: true })
+    const follower = reader(opened)
+    await follower.until(ready)
+    const created = await startInWorktree(opened)
+    await follower.until(state => state.directory === created.path && state.checkout.state === 'ready')
+    await rm(created.path, { recursive: true, force: true })
+    sendPrompt(opened.agent, 'next')
+    await follower.until(state => state.worktree.waiting === 'restoration')
+    const pruning = hold(opened.sandbox, 'prune')
+    const caller = new AbortController()
+    const reason = new Error('closed')
+
+    const aborted = rejectionOf(opened.ctx.forgePanel.restoreWorktree(opened.session, caller.signal))
+    await pruning.reached
+    caller.abort(reason)
+    pruning.release()
+    expect(await aborted).toBe(reason)
+    opened.sandbox.failure = new Error('sandbox unavailable')
+    await expect(opened.ctx.forgePanel.restoreWorktree(opened.session, signal)).rejects.toMatchObject({ code: 'forgePanel/restore-failed' })
+    const still = follower.states.at(-1)
+    opened.sandbox.failure = undefined
+    await opened.ctx.forgePanel.restoreWorktree(opened.session, signal)
+    await opened.agent.whenIdle()
+
+    expect(still?.worktree.waiting).toBe('restoration')
+    expect(opened.agent.wakes).toBe(2)
+    expect(opened.ctx.workingDirectory.get(opened.session)).toBe(created.path)
   })
 
   it('stops a restoration when the caller aborts', async () => {
@@ -1221,29 +1336,45 @@ describe('forgePanel removed worktrees', () => {
 })
 
 describe('forgePanel leaving a worktree', () => {
-  it('moves the Session from its removed worktree to the source checkout as Agent maintenance', async () => {
+  it('moves the Session from its removed worktree to the source checkout inside the wait of the message that waits for it', async () => {
     const { repo } = await project()
     const opened = await open(repo, {}, { worktrees: true })
     const follower = reader(opened)
     await follower.until(ready)
     const created = await startInWorktree(opened)
-    // The first step would have claimed the notice of entering the worktree.
+    // The first step would have claimed the first message and the notice of entering the worktree.
     opened.agent.inbox.clear()
     await follower.until(state => state.directory === created.path && state.checkout.state === 'ready')
     await rm(created.path, { recursive: true, force: true })
-    await rejectionOf(admitPrompt(opened.ctx, opened.agent, 'next'))
-    await follower.until(state => state.worktree.missing !== null)
     const maintenance = vi.spyOn(opened.agent, 'runMaintenance')
+    sendPrompt(opened.agent, 'next')
+    await follower.until(state => state.worktree.waiting === 'restoration')
 
+    const leaving = follower.next(state => state.directory === repo && state.checkout.state === 'ready' && state.worktree.waiting === null)
     await opened.ctx.forgePanel.continueInProject(opened.session, signal)
-    const moved = await follower.next(state => state.directory === repo && state.checkout.state === 'ready')
+    await opened.agent.whenIdle()
+    const moved = await leaving
 
     expect(maintenance).toHaveBeenCalledOnce()
+    expect(opened.agent.wakes).toBe(2)
     expect(opened.ctx.workingDirectory.get(opened.session)).toBe(repo)
     expect(opened.agent.inbox.nextStep).toEqual([notice(repo)])
+    expect(queued(opened)).toEqual(['next'])
     expect(moved.checkout).toEqual({ state: 'ready', checkout: { root: repo, branch: 'main', linked: false, commit: COMMIT } })
     expect(moved.worktree).toEqual({ ...UNAVAILABLE, request: { from: null }, created })
     expect(await branches(repo)).toEqual([created.branch, 'main'])
+  })
+
+  it('moves the Session to the source checkout as Agent maintenance while no message waits', async () => {
+    const { repo } = await project()
+    const opened = await open(repo, {}, { worktrees: true })
+    await startInWorktree(opened)
+    const maintenance = vi.spyOn(opened.agent, 'runMaintenance')
+
+    await opened.ctx.forgePanel.continueInProject(opened.session, signal)
+
+    expect(maintenance).toHaveBeenCalledOnce()
+    expect(opened.ctx.workingDirectory.get(opened.session)).toBe(repo)
   })
 
   it('refuses to leave without a created worktree, while the Session is not loaded, or while its Agent has other work', async () => {
@@ -1450,7 +1581,7 @@ describe('forgePanel actions', () => {
 })
 
 describe('forgePanel lifecycle', () => {
-  it('removes its Remote, worktree projection, and admission and pre-step listeners when stopped, and folds the recorded request again after a restart', async () => {
+  it('removes its Remote, worktree projection, and inbox and pre-step listeners when stopped, and folds the recorded request again after a restart', async () => {
     const { repo } = await project()
     const opened = await open(repo, {}, { worktrees: true })
     await opened.ctx.forgePanel.requestWorktree(opened.session, null, signal)
@@ -1460,10 +1591,11 @@ describe('forgePanel lifecycle', () => {
 
     expect(opened.ctx.get('forgePanel')).toBeUndefined()
     expect(opened.ctx.sessionProjections.checkpoint(opened.session)).not.toHaveProperty('forgeWorktree')
-    await admitPrompt(opened.ctx, opened.agent, 'go')
+    sendPrompt(opened.agent, 'go')
     await expect(proposeStep(opened.ctx, opened.agent, { turn: 1, step: 1, messages: [proposed] })).resolves.toEqual({ kind: 'enter', messages: [proposed] })
     expect(opened.ctx.workingDirectory.get(opened.session)).toBe(repo)
-    expect(admitted(opened)).toEqual(['go'])
+    expect(opened.agent.wakes).toBe(1)
+    expect(queued(opened)).toEqual(['go'])
 
     await opened.ctx.plugin(ForgePanelController, {})
 

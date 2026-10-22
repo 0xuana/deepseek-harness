@@ -8,7 +8,6 @@ import { promisify } from 'node:util'
 import { expect } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
-import AgentController from '@deepseek-ai/dsh-agent-controller'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
 import ForgeService, { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
@@ -347,34 +346,76 @@ export class FakeProvider implements ForgeProvider {
   }
 }
 
+/** An Agent double that counts the turns it would start. */
+export interface TestAgent extends Agent {
+  /** Turns the Agent would have started: a wake while idle, or one latched behind maintenance and replayed when it ends. */
+  readonly wakes: number
+}
+
 /**
- * An idle Agent double whose `followup` queues the message for the next turn and whose `steer` and `inject` queue it
- * for the next step, as the Agent loop does. Like the Agent loop, it runs one maintenance task at a time, refusing
- * another synchronously while one runs, and `cancel` aborts the running task's signal with its cause; it drives no
- * turns and leaves the inbox to the caller.
+ * An idle Agent double that delivers like the Agent loop: `followup` queues the message for the next turn, `steer`
+ * and `inject` for the next step, each announces it with `agent/inbox/inserted`, and every delivery but `inject`
+ * then wakes the Agent. A wake during maintenance waits and replays when the task ends while a message is still
+ * pending; it drives no turns and leaves the inbox to the caller. It runs one maintenance task at a time, refusing
+ * another synchronously while one runs, and `cancel` clears the inbox unless told to keep it and aborts the running
+ * task's signal with its cause.
  * @param ctx - composition that owns the Agent scope.
  * @param session - Session the Agent drives.
  * @returns the Agent, not yet registered.
  */
-export function testAgent(ctx: Context, session: Session): Agent {
+export function testAgent(ctx: Context, session: Session): TestAgent {
   const scope = ctx.plugin(() => {})
   const inbox = createInboxStub()
-  let maintenance: AbortController | undefined
-  return {
+  let maintenance: Maintenance | undefined
+  let wakes = 0
+  const wake = (): void => {
+    if (maintenance === undefined) wakes++
+    else if (!maintenance.disposed) maintenance.latched = true
+  }
+  const agent: TestAgent = {
     id: session.id, session, options: {}, status: 'idle', ctx: scope.ctx, inbox,
-    send() {},
-    followup(message) { inbox.append('next-turn', message) },
-    steer(message) { inbox.append('next-step', message) },
-    cancel(cause) { maintenance?.abort(cause) },
-    inject(message) { inbox.append('next-step', message) },
-    whenIdle: async () => {},
+    get wakes() { return wakes },
+    send(message, target, wakeup) {
+      inbox.append(target, message)
+      agentEvents(ctx, agent).emit('agent/inbox/inserted', { message })
+      if (wakeup) wake()
+    },
+    followup(message) { agent.send(message, 'next-turn', true) },
+    steer(message) { agent.send(message, 'next-step', true) },
+    inject(message) { agent.send(message, 'next-step', false) },
+    cancel(cause, options = {}) {
+      if (options.keepInbox !== true) inbox.clear()
+      if (maintenance === undefined) return
+      if (cause.kind === 'disposed') maintenance.disposed = true
+      maintenance.abort.abort(cause)
+    },
+    async whenIdle() {
+      while (maintenance !== undefined) await maintenance.done
+    },
     runMaintenance(task) {
       if (maintenance !== undefined) throw new Error(`agent "${session.id}" already has active work`)
-      const running = new AbortController()
-      maintenance = running
-      return task(running.signal).finally(() => { maintenance = undefined })
+      const current: Maintenance = { abort: new AbortController(), latched: false, disposed: false, done: Promise.resolve() }
+      maintenance = current
+      const running = task(current.abort.signal).finally(() => {
+        maintenance = undefined
+        if (current.latched && !current.disposed && inbox.nextTurn.length + inbox.nextStep.length > 0) wakes++
+      })
+      current.done = running.then(() => undefined, () => undefined)
+      return running
     },
   }
+  return agent
+}
+
+/** The maintenance task an {@link testAgent} runs, and the wake it latched. */
+interface Maintenance {
+  readonly abort: AbortController
+  /** Whether a delivery woke the Agent during the task. */
+  latched: boolean
+  /** Whether the Agent's disposal aborted the task, which drops the latched wake. */
+  disposed: boolean
+  /** Settles once the task ends, whatever its outcome. */
+  done: Promise<void>
 }
 
 /** A user prompt. */
@@ -383,16 +424,12 @@ export function prompt(text: string): UserMessage {
 }
 
 /**
- * Deliver a user prompt for the next turn through the agent controller's admission, as the Web Session Remote does.
- * @param ctx - composition whose admission listeners decide.
+ * Queue a user prompt for the next turn and wake the Agent, as the Web Session Remote does.
  * @param agent - receiving Agent.
  * @param text - prompt text.
- * @param signal - the sender's cancellation; a fresh signal when omitted.
- * @returns settles once the prompt is in the Agent's inbox.
  */
-export async function admitPrompt(ctx: Context, agent: Agent, text: string, signal = new AbortController().signal): Promise<void> {
-  const message = prompt(text)
-  await ctx.agentController.deliver(agent, { mode: 'followup', source: message.source, signal, prepare: async () => message.content })
+export function sendPrompt(agent: Agent, text: string): void {
+  agent.followup(prompt(text))
 }
 
 /**
@@ -457,7 +494,7 @@ export interface Runtime {
   readonly provider: FakeProvider
   readonly sandbox: SandboxRecord
   readonly session: Session
-  readonly agent: Agent
+  readonly agent: TestAgent
   /** Data of the Session's worktree records in log order. */
   readonly records: unknown[]
   /** Fiber of the worktree service, or undefined when it is not mounted. */
@@ -491,7 +528,6 @@ export async function runtime(cwd: string, options: BenchOptions = {}): Promise<
   try {
     await ctx.plugin(SessionStore)
     await ctx.plugin(AgentRegistry)
-    await ctx.plugin(AgentController)
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(LocalFileSystem, { cwd })

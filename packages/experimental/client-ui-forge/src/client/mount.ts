@@ -186,6 +186,9 @@ function registerUi(ctx: Context): void {
       stop: () => {
         void ctx.remote.forgePanel.stopCreation(sessionId).then(result => settled(result, 'toast.worktreeFailed'))
       },
+      retry: () => {
+        void ctx.remote.forgePanel.retryWorktree(sessionId).then(result => settled(result, 'toast.worktreeFailed'))
+      },
       withdraw: () => {
         void ctx.remote.forgePanel.cancelWorktree(sessionId).then(result => settled(result, 'toast.worktreeFailed'))
       },

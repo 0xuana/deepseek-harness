@@ -2664,7 +2664,12 @@
     },
     {
       "doc": "docs/subsystems/forge.md",
-      "symbol": "ForgeAdmissionRefusal",
+      "symbol": "ForgeWorktreeWaiting",
+      "source": "packages/experimental/client-ui-forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeWorktreeRestoration",
       "source": "packages/experimental/client-ui-forge/src/types.ts"
     },
     {

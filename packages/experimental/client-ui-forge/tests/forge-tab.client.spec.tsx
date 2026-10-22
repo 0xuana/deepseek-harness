@@ -201,6 +201,15 @@ describe('ForgeTab checkout', () => {
     expect(b.copyPath).toHaveBeenCalledWith('/work/repo-dsh')
   })
 
+  it('turns the restore button into a disabled spinner while a restoration runs', () => {
+    const b = tab(removed(true, false, { restoration: { phase: 'prepare' } }))
+    const row = checkoutRow(b.view)
+    if (row === null) throw new Error('no checkout row')
+    const restore = within(row).getByRole('button', { name: en['checkout.restore'] })
+    expect(restore instanceof HTMLButtonElement && restore.disabled).toBe(true)
+    expect(restore.querySelector('svg[data-state="ongoing"]')).not.toBeNull()
+  })
+
   it.each([
     ['a folder for the project directory', () => ready(), IconFolderCloseRegular],
     ['a branch for a linked worktree', () => ready({}, { linked: true }), IconBranchOutlineRegular],

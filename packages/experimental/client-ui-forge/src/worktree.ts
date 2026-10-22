@@ -1,8 +1,8 @@
 /** The worktree a Session requests before it starts: its record, its projection, and its creation. */
 
+import { isAbsolute, relative, sep } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
-import type { AdmissionDecision } from '@deepseek-ai/dsh-agent-controller'
 import { generatedWorktreeName } from '@deepseek-ai/dsh-experimental-worktree'
 import type { CreatedWorktree, CreateWorktreePhase } from '@deepseek-ai/dsh-experimental-worktree'
 import { appendPluginRecord, pluginRecordOf } from '@deepseek-ai/dsh-session'
@@ -11,7 +11,8 @@ import type { ProjectionDefinition, ProjectionHandle } from '@deepseek-ai/dsh-se
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { z } from 'zod'
 import type {
-  ForgeAdmissionRefusal, ForgeSessionWorktree, ForgeWorktreeCreation, ForgeWorktreeFailure, ForgeWorktreeState, WorktreeRecord,
+  ForgeMissingWorktree, ForgeSessionWorktree, ForgeWorktreeCreation, ForgeWorktreeFailure, ForgeWorktreeRestoration, ForgeWorktreeState,
+  ForgeWorktreeWaiting, WorktreeRecord,
 } from './types.ts'
 
 /** Plugin record type of worktree requests, withdrawals, and creations. */
@@ -54,6 +55,26 @@ export const forgeWorktreeProjection = {
   apply,
 } satisfies ProjectionDefinition<'forgeWorktree', ForgeWorktreeState>
 
+/**
+ * Whether `path` is `root` or lies below it.
+ * @param root - absolute directory.
+ * @param path - absolute path.
+ * @returns whether `root` contains `path`.
+ */
+export function within(root: string, path: string): boolean {
+  const rest = relative(root, path)
+  return rest === '' || (rest !== '..' && !rest.startsWith(`..${sep}`) && !isAbsolute(rest))
+}
+
+/**
+ * The text of a failure: an Error's message, or else the thrown value as a string.
+ * @param error - what was thrown.
+ * @returns the text.
+ */
+export function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
 function apply(state: ForgeWorktreeState, event: SessionEvent): ForgeWorktreeState {
   switch (event.type) {
     case 'turn/start':
@@ -85,17 +106,6 @@ function applyRecord(state: ForgeWorktreeState, event: SessionEvent): ForgeWorkt
   }
 }
 
-/**
- * Reject a message at Agent admission.
- * @param reason - why the panel rejects it.
- * @param message - text the sender shows when no panel does.
- * @param presented - whether a panel shows the rejection to the sender.
- * @returns the decision that keeps the message out of the inbox.
- */
-export function refusal(reason: ForgeAdmissionRefusal, message: string, presented: boolean): AdmissionDecision {
-  return { kind: 'reject', reason, message, presented }
-}
-
 /** A failed attempt to create a requested worktree; `cause` holds the worktree service's error. */
 export class CreationFailure extends Error {
   /**
@@ -111,27 +121,71 @@ export class CreationFailure extends Error {
 }
 
 /**
- * Creates requested worktrees, one attempt with a new branch name per call:
- * through {@link WorktreeCreations.admit}, which holds a Session's first
- * message at Agent admission until its worktree exists, and at the first step
- * proposal of a Session whose request is still open, which covers a message
- * that entered without admission. The worktree service enters the created
- * checkout and queues its directory notice. At a step proposal the notice
- * joins the proposed messages so the first request already names the new
- * directory; a proposal without messages leaves it queued, and a failure ends
- * the turn with the request still open. A failed attempt may leave its branch
- * or checkout behind.
+ * The failure a waiting message shows for an attempt.
+ * @param error - what the attempt threw.
+ * @param from - base branch of the attempt, or null for HEAD.
+ * @returns the failure.
+ */
+function failureOf(error: unknown, from: string | null): ForgeWorktreeFailure {
+  return error instanceof CreationFailure
+    ? { branch: error.branch, from, phase: error.phase, message: error.reason }
+    : { branch: null, from, phase: 'prepare', message: messageOf(error) }
+}
+
+/** Work on a Session's checkout that runs as maintenance of its Agent. */
+export type HeldWork = (agent: Agent, signal: AbortSignal) => Promise<void>
+
+/** A message's wait for the creation of the requested worktree. */
+interface CreationHold {
+  readonly kind: 'creation'
+  /** Stops the running attempt. */
+  stop: AbortController | undefined
+  /** The wait for the next decision: another attempt, or reading the request again. */
+  next: PromiseWithResolvers<'retry' | 'recheck'> | undefined
+}
+
+/** A message's wait for the restoration or leaving of the removed worktree the Session works in. */
+interface RestorationHold {
+  readonly kind: 'restoration'
+  /** Whether the check found the worktree gone. */
+  waiting: boolean
+  /** The wait for the work that restores or leaves the worktree, with its outcome. */
+  next: PromiseWithResolvers<{ readonly work: HeldWork; readonly done: PromiseWithResolvers<void> }> | undefined
+}
+
+type Hold = CreationHold | RestorationHold
+
+/**
+ * Creates requested worktrees, one attempt with a new branch name per call,
+ * and holds the turn of a message while the Session's worktree is not ready.
+ * A hold is maintenance of the Session's Agent that starts while the message
+ * enters the inbox, before the delivery wakes the Agent, so the Agent starts
+ * the message's turn once the hold ends. A creation hold makes an attempt
+ * and, after a failed or stopped one, waits for another attempt or for the
+ * request to be withdrawn; a restoration hold checks the worktree the Session
+ * works in and, when it is gone, waits until it is restored or left. The
+ * Agent's cancellation and the panel's stop end a hold. The first step
+ * proposal of a Session whose request is still open also creates the
+ * worktree, which covers a message no hold took. The worktree service enters
+ * the created checkout and queues its directory notice; at a step proposal
+ * the notice joins the proposed messages so the first request already names
+ * the new directory, a proposal without messages leaves it queued, and a
+ * failure ends the turn with the request still open. A failed attempt may
+ * leave its branch or checkout behind.
  */
 export class WorktreeCreations {
   private readonly live = new Map<Session, ForgeWorktreeCreation>()
+  private readonly restorations = new Map<Session, ForgeWorktreeRestoration>()
   private readonly failures = new Map<Session, ForgeWorktreeFailure>()
-  private readonly stops = new Map<Session, AbortController>()
+  private readonly holds = new Map<Session, Hold>()
+  private readonly lifetime = new AbortController()
 
   /**
    * @param ctx - context that optionally provides `worktrees`.
    * @param states - reads the `forgeWorktree` projection of a Session.
    * @param prefix - branch name prefix that `generatedWorktreeName` combines with the Session id and random digits.
-   * @param changed - called after the creation of a Session starts, changes phase, or ends, and after its failure changes.
+   * @param changed - called after the creation or restoration of a Session starts, changes phase, or ends, after its
+   * failure changes, and after a wait starts or ends.
    */
   constructor(
     private readonly ctx: Context,
@@ -140,6 +194,7 @@ export class WorktreeCreations {
     private readonly changed: (session: Session) => void,
   ) {
     ctx.on('agent/pre-step', async ({ agent, step, signal }, next): Promise<PreStepDecision> => await this.preStep(agent, step, signal, next))
+    ctx.effect(() => () => { this.lifetime.abort(new Error('The forge panel stopped')) }, 'forge-panel: release waiting messages')
   }
 
   /**
@@ -152,12 +207,32 @@ export class WorktreeCreations {
   }
 
   /**
-   * Read the failed attempt that returned a Session's last message to its sender.
+   * Read the running restoration of a Session.
+   * @param session - Session to read.
+   * @returns the running restoration, or null.
+   */
+  restorationOf(session: Session): ForgeWorktreeRestoration | null {
+    return this.restorations.get(session) ?? null
+  }
+
+  /**
+   * Read the failed attempt that a waiting message saw last.
    * @param session - Session to read.
    * @returns the failure, or null.
    */
   failureOf(session: Session): ForgeWorktreeFailure | null {
     return this.failures.get(session) ?? null
+  }
+
+  /**
+   * Read what a message of a Session waits for before its turn starts.
+   * @param session - Session to read.
+   * @returns the creation or restoration the message waits for, or null while none waits.
+   */
+  waitingOf(session: Session): ForgeWorktreeWaiting | null {
+    const hold = this.holds.get(session)
+    if (hold === undefined || (hold.kind === 'restoration' && !hold.waiting)) return null
+    return hold.kind
   }
 
   /**
@@ -169,53 +244,103 @@ export class WorktreeCreations {
   }
 
   /**
-   * Create a Session's requested worktree for a message that waits at Agent
-   * admission, as maintenance of the Session's Agent. A failure is kept for
-   * {@link WorktreeCreations.failureOf} until another attempt starts or the
-   * request changes; the message then goes back to its sender, which may send
-   * it again for another attempt. {@link WorktreeCreations.stop} and the
-   * Agent's cancellation also return the message.
+   * Hold the turn of a message entering the inbox of a Session whose
+   * requested worktree does not exist yet, and create the worktree. Call it
+   * while the message enters, before the delivery wakes the Agent. A Session
+   * already held, or an Agent with other work, gets no new hold.
    * @param agent - Agent of the Session.
-   * @param from - base branch, or null for HEAD of the current checkout.
-   * @param signal - the sender's cancellation, whose reason passes through unchanged.
-   * @param presented - whether a panel shows a rejection to the sender.
-   * @returns undefined once the worktree exists, or a decision that rejects the message with
-   * `forge/worktree-creation-failed` or `forge/worktree-creation-stopped`.
-   * @throws the sender's cancellation reason once `signal` aborts.
    */
-  async admit(agent: Agent, from: string | null, signal: AbortSignal, presented: boolean): Promise<AdmissionDecision | undefined> {
-    const session = agent.session
-    const stop = new AbortController()
-    let work: AbortSignal | undefined
-    this.stops.set(session, stop)
-    try {
-      await agent.runMaintenance(async (maintenance) => {
-        work = maintenance
-        await this.create(agent, from, AbortSignal.any([signal, stop.signal, maintenance]), true)
-      })
-    } catch (error) {
-      signal.throwIfAborted()
-      if (stop.signal.aborted || work?.aborted === true) return refusal('forge/worktree-creation-stopped', 'The worktree creation was stopped', presented)
-      const failure: ForgeWorktreeFailure = error instanceof CreationFailure
-        ? { branch: error.branch, from, phase: error.phase, message: error.reason }
-        : { branch: null, from, phase: 'prepare', message: error instanceof Error ? error.message : String(error) }
-      this.failures.set(session, failure)
-      this.changed(session)
-      return refusal('forge/worktree-creation-failed', `The worktree could not be created: ${failure.message}`, presented)
-    } finally {
-      this.stops.delete(session)
-    }
-    return undefined
+  holdCreation(agent: Agent): void {
+    this.hold(agent, { kind: 'creation', stop: undefined, next: undefined }, (hold, signal) => this.runCreation(agent, hold, signal))
   }
 
   /**
-   * Stop the creation that holds a message of a Session at admission; the
-   * message goes back to its sender and the request stays open. Without such a
-   * creation the Session is unchanged.
-   * @param session - Session whose creation stops.
+   * Hold the turn of a message entering the inbox of a Session that works in
+   * its created worktree while `check` decides whether that worktree is gone,
+   * and until it is restored or left when it is. Call it while the message
+   * enters, before the delivery wakes the Agent. A Session already held, or an
+   * Agent with other work, gets no new hold.
+   * @param agent - Agent of the Session.
+   * @param check - answers whether the worktree is gone; a rejection lets the message go on.
+   */
+  holdRestoration(agent: Agent, check: (signal: AbortSignal) => Promise<ForgeMissingWorktree | null>): void {
+    this.hold(agent, { kind: 'restoration', waiting: false, next: undefined }, (hold, signal) => this.runRestoration(agent, hold, check, signal))
+  }
+
+  /**
+   * Make another attempt for the message that waits after a failed or stopped one.
+   * @param session - Session whose message waits.
+   * @returns whether a waiting message without a running attempt took the decision.
+   */
+  retry(session: Session): boolean {
+    const hold = this.holds.get(session)
+    if (hold?.kind !== 'creation' || hold.next === undefined) return false
+    hold.next.resolve('retry')
+    return true
+  }
+
+  /**
+   * Read the request again after it changed; a withdrawn request lets the waiting message go on.
+   * @param session - Session whose request changed.
+   */
+  recheck(session: Session): void {
+    const hold = this.holds.get(session)
+    if (hold?.kind === 'creation') hold.next?.resolve('recheck')
+  }
+
+  /**
+   * Run work on the removed worktree a message waits for, inside the wait; its success lets the message go on.
+   * @param session - Session whose message waits.
+   * @param work - restores or leaves the worktree.
+   * @returns the work's outcome, or undefined when no message waits for the removed worktree.
+   */
+  within(session: Session, work: HeldWork): Promise<void> | undefined {
+    const hold = this.holds.get(session)
+    if (hold?.kind !== 'restoration' || hold.next === undefined) return undefined
+    const done = Promise.withResolvers<void>()
+    hold.next.resolve({ work, done })
+    return done.promise
+  }
+
+  /**
+   * Stop the running attempt a message waits for; the message keeps waiting
+   * with the request still open. Without such an attempt the Session is unchanged.
+   * @param session - Session whose attempt stops.
    */
   stop(session: Session): void {
-    this.stops.get(session)?.abort(new Error('The worktree creation was stopped'))
+    const hold = this.holds.get(session)
+    if (hold?.kind === 'creation') hold.stop?.abort(new Error('The worktree creation was stopped'))
+  }
+
+  /**
+   * Check the removed worktree of a Session out again through the worktree
+   * service; the running restoration is readable through
+   * {@link WorktreeCreations.restorationOf} until it ends.
+   * @param agent - Agent of the Session.
+   * @param worktrees - the worktree service.
+   * @param created - the worktree the Session created.
+   * @param signal - cancellation of the restoration.
+   * @param restored - runs once the checkout is back, before the restoration ends, so both changes publish together.
+   * @throws the worktree service's error when the restoration fails; the cancellation reason once `signal` aborts.
+   */
+  async restore(
+    agent: Agent,
+    worktrees: Context['worktrees'],
+    created: ForgeSessionWorktree,
+    signal: AbortSignal,
+    restored: () => void,
+  ): Promise<void> {
+    const session = agent.session
+    try {
+      await worktrees.restore(agent, created, signal, (phase) => {
+        this.restorations.set(session, { phase })
+        this.changed(session)
+      })
+      restored()
+    } finally {
+      this.restorations.delete(session)
+      this.changed(session)
+    }
   }
 
   /**
@@ -225,7 +350,7 @@ export class WorktreeCreations {
    * @param agent - Agent of the Session.
    * @param from - base branch, or null for HEAD of the current checkout.
    * @param signal - cancellation of the attempt.
-   * @param held - whether a message waits for the creation at admission.
+   * @param held - whether a message waits for the creation before its turn starts.
    * @returns the created worktree.
    * @throws {@link CreationFailure} when the attempt fails; the cancellation reason once `signal` aborts.
    */
@@ -247,7 +372,7 @@ export class WorktreeCreations {
         })
       } catch (error) {
         signal.throwIfAborted()
-        throw new CreationFailure(status.branch, status.phase, error instanceof Error ? error.message : String(error), error)
+        throw new CreationFailure(status.branch, status.phase, messageOf(error), error)
       }
       const worktree: ForgeSessionWorktree = {
         path: created.path, branch: created.branch, from, baseCommit: created.baseCommit, repositoryRoot: created.repositoryRoot,
@@ -258,6 +383,115 @@ export class WorktreeCreations {
       // After the record, so a follower never sees the creation end without its result.
       this.live.delete(session)
       this.changed(session)
+    }
+  }
+
+  /**
+   * Run a hold as maintenance of the Agent, which latches the delivery's wake until the hold ends.
+   * @param agent - Agent of the Session.
+   * @param hold - the hold's state.
+   * @param body - waits for the worktree; settles once the message may go on.
+   */
+  private hold<H extends Hold>(agent: Agent, hold: H, body: (hold: H, signal: AbortSignal) => Promise<void>): void {
+    const session = agent.session
+    if (this.holds.has(session)) return
+    let task: Promise<void>
+    try {
+      task = agent.runMaintenance(async (maintenance) => {
+        // Leave the inbox mutation that announced the message before the hold touches the Session.
+        await Promise.resolve()
+        try {
+          await body(hold, AbortSignal.any([maintenance, this.lifetime.signal]))
+        } catch (error) {
+          void error // Only the Agent's cancellation or disposal and the panel's stop reject a hold's waits; each ends it.
+        } finally {
+          this.holds.delete(session)
+          this.failures.delete(session)
+          this.changed(session)
+        }
+      })
+    } catch (error) {
+      void error // A running turn or other maintenance owns the Agent, so the message takes its usual path.
+      return
+    }
+    this.holds.set(session, hold)
+    void task
+  }
+
+  /**
+   * Make attempts until one creates the worktree or the request no longer asks
+   * for one, waiting for a decision after each failed or stopped attempt.
+   */
+  private async runCreation(agent: Agent, hold: CreationHold, signal: AbortSignal): Promise<void> {
+    const session = agent.session
+    for (;;) {
+      const state = this.states.stateOf(session)
+      if (state.request === null || state.created !== null || state.locked) return
+      const stop = new AbortController()
+      hold.stop = stop
+      try {
+        await this.create(agent, state.request.from, AbortSignal.any([signal, stop.signal]), true)
+        return
+      } catch (error) {
+        signal.throwIfAborted()
+        if (stop.signal.aborted) this.failures.delete(session)
+        else this.failures.set(session, failureOf(error, state.request.from))
+        this.changed(session)
+      } finally {
+        hold.stop = undefined
+      }
+      while (await this.wait(hold, signal) !== 'retry') {
+        const current = this.states.stateOf(session)
+        if (current.request === null || current.created !== null || current.locked) return
+      }
+    }
+  }
+
+  /** Check the worktree the Session works in and, when it is gone, run the work that restores or leaves it until one succeeds. */
+  private async runRestoration(
+    agent: Agent,
+    hold: RestorationHold,
+    check: (signal: AbortSignal) => Promise<ForgeMissingWorktree | null>,
+    signal: AbortSignal,
+  ): Promise<void> {
+    let missing: ForgeMissingWorktree | null
+    try {
+      missing = await check(signal)
+    } catch (error) {
+      // Without an answer from the filesystem or Git the panel offers no restoration, so the message goes on.
+      signal.throwIfAborted()
+      void error
+      return
+    }
+    if (missing === null) return
+    hold.waiting = true
+    this.changed(agent.session)
+    for (;;) {
+      const { work, done } = await this.wait(hold, signal)
+      try {
+        await work(agent, signal)
+      } catch (error) {
+        done.reject(error)
+        signal.throwIfAborted()
+        continue
+      }
+      done.resolve()
+      return
+    }
+  }
+
+  /** Wait for the next decision on a hold; rejects with the abort reason once `signal` aborts. */
+  private async wait<T>(hold: { next: PromiseWithResolvers<T> | undefined }, signal: AbortSignal): Promise<T> {
+    signal.throwIfAborted()
+    const next = Promise.withResolvers<T>()
+    hold.next = next
+    const abort = (): void => { next.reject(signal.reason) }
+    signal.addEventListener('abort', abort, { once: true })
+    try {
+      return await next.promise
+    } finally {
+      signal.removeEventListener('abort', abort)
+      hold.next = undefined
     }
   }
 
