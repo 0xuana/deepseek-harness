@@ -356,7 +356,7 @@ export function SidebarRoot({
 
       {panels.length > 0 && (
         <nav className={css.panelList} aria-label={t('panels.label')}>
-          {panels.filter(({ id }) => id === FIXED_PANEL_ID || id === activePanelId || !unpinned.includes(id)).map(({ id, label }) => (
+          {panels.filter(({ id }) => id === FIXED_PANEL_ID || !unpinned.includes(id)).map(({ id, label }) => (
             <PanelRow
               key={id}
               id={id}
@@ -373,7 +373,7 @@ export function SidebarRoot({
               wide={wide}
               label={t('panels.more')}
               entries={panels.filter(({ id }) => id !== FIXED_PANEL_ID)
-                .map(({ id, label }) => ({ id, label, pinned: !unpinned.includes(id) }))}
+                .map(({ id, label }) => ({ id, label, pinned: !unpinned.includes(id), active: id === activePanelId }))}
               onOpen={(id) => {
                 const entry = officialEntry(id)
                 if (entry !== undefined) trackEntryClick({ menu_name: entry, position: 'sidebar_more' })
