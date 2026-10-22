@@ -24,8 +24,8 @@
   en: 5b4f0f80a117f202
   zh: ff05be196c181087
 /desktop-packaging/windows-actions-packaging:
-  en: e1b101593f6f755e
-  zh: 121f225de399de1e
+  en: af6991014e97911e
+  zh: f30c4d6cdcd8e8c6
 /desktop-packaging/macos-self-hosted-packaging:
   en: 734d1df945da8f45
   zh: 2b17a3039efdde78
@@ -45,11 +45,11 @@
   en: b42f103358d0dfd7
   zh: a534164ad9eb00da
 /desktop-packaging/runtime-file-selection-and-installation-checks:
-  en: bfd89e1d139c5729
-  zh: 5d6cced5462ba13e
+  en: 3d6a375108c6b3d7
+  zh: 5fce0057313b3527
 /desktop-packaging/desktop-runtime-preparation:
-  en: a7aa3066e649ffe8
-  zh: 4334637910058c09
+  en: 59783a64552d4464
+  zh: d7876d51b4015578
 /desktop-packaging/installation-and-release-verification:
   en: eb35eb973b796643
   zh: c1c52311632b7296

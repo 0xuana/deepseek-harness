@@ -10,7 +10,15 @@ const workflow = yaml.load(readFileSync(resolve(import.meta.dirname, '../.github
   jobs: Record<string, {
     'runs-on': string[]
     env: Record<string, string>
-    steps: Array<{ id?: string; name?: string; if?: string; uses?: string; run?: string; with?: Record<string, unknown> }>
+    steps: Array<{
+      id?: string
+      name?: string
+      if?: string
+      uses?: string
+      run?: string
+      env?: Record<string, string>
+      with?: Record<string, unknown>
+    }>
   }>
 }
 
@@ -44,8 +52,13 @@ it('defaults to notarization and labels the explicit debugging option', () => {
 
 it('retains build inputs outside checkout and run-specific pnpm installations', () => {
   const env = workflow.jobs.package!.env
-  expect(env.DSH_DESKTOP_PACKAGE_CACHE_DIR).toBe('${{ runner.tool_cache }}/dsh-desktop-package-cache')
-  expect(env.PNPM_CONFIG_STORE_DIR).toBe('${{ runner.tool_cache }}/dsh-desktop-package-cache/workspace-pnpm-store')
+  expect(JSON.stringify(env)).not.toContain('runner.')
+  const steps = workflow.jobs.package!.steps
+  const cache = steps.find(step => step.name === 'Configure persistent package caches')!
+  expect(cache.env?.DSH_DESKTOP_PACKAGE_CACHE_DIR).toBe('${{ runner.tool_cache }}/dsh-desktop-package-cache')
+  expect(cache.run).toContain('PNPM_CONFIG_STORE_DIR=$DSH_DESKTOP_PACKAGE_CACHE_DIR/workspace-pnpm-store')
+  expect(cache.run).toContain('DSH_DESKTOP_PACKAGE_CACHE_DIR=$DSH_DESKTOP_PACKAGE_CACHE_DIR')
+  expect(steps.indexOf(cache)).toBeLessThan(steps.findIndex(step => step.name === 'Install locked dependencies'))
 })
 
 it('offers ZIP compression choices with a fast default', () => {

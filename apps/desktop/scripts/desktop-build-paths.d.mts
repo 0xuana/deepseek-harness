@@ -1,6 +1,6 @@
 import type { DesktopAutoUpdateTarget } from './desktop-auto-update-environment.mjs'
 
-/** Mutable target directories plus shared download and package stores. */
+/** Mutable target directories plus shared download and package caches. */
 export interface DesktopTargetBuildPaths {
   readonly root: string
   readonly artifacts: string
@@ -34,8 +34,8 @@ export function resolveDesktopBuildTarget(
 /**
  * Return the mutable preparation and artifact directories owned by one release target.
  * @param target - Supported Desktop target name.
- * @param environment - Build cache override; defaults to the current process.
- * @returns Target paths plus shared download and package stores.
+ * @param environment - Packaging environment with an optional absolute cache directory.
+ * @returns Target paths plus shared download and package caches.
  */
 export function desktopTargetBuildPaths(target: DesktopAutoUpdateTarget, environment?: NodeJS.ProcessEnv): DesktopTargetBuildPaths
 

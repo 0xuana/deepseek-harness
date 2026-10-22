@@ -7,7 +7,7 @@ import { expect, it } from 'vitest'
 
 const root = resolve(import.meta.dirname, '..')
 const workflow = yaml.load(readFileSync(resolve(root, '.github/workflows/windows-package.yml'), 'utf8')) as {
-  on: Record<string, { inputs: Record<string, { required?: boolean; default?: string; description?: string }> }>
+  on: Record<string, { inputs: Record<string, { type?: string; required?: boolean; default?: string; description?: string }> }>
   permissions: Record<string, string>
   concurrency: { group: string; 'cancel-in-progress': boolean }
   jobs: Record<string, {
@@ -19,6 +19,7 @@ const workflow = yaml.load(readFileSync(resolve(root, '.github/workflows/windows
       uses?: string
       run?: string
       if?: string
+      'working-directory'?: string
       env?: Record<string, string>
       with?: Record<string, unknown>
     }>
@@ -61,13 +62,17 @@ it('routes manual packaging to the dedicated runner with explicit preset and sig
   expect(Object.keys(workflow.on)).toEqual(['workflow_dispatch'])
   expect(workflow.jobs.package).not.toHaveProperty('name')
   expect(job['runs-on']).toBe('dsh-win-package-trial')
-  expect(job.env.DSH_DESKTOP_PACKAGE_CACHE_DIR).toBe('${{ runner.tool_cache }}/dsh-desktop-package-cache')
+  expect(JSON.stringify(job.env)).not.toContain('runner.')
+  expect(job.steps.find(step => step.name === 'Configure persistent pnpm store')?.env?.DSH_DESKTOP_PACKAGE_CACHE_DIR)
+    .toBe('${{ runner.tool_cache }}/dsh-desktop-package-cache')
   expect(workflow.concurrency).toEqual({ group: 'windows-desktop-package', 'cancel-in-progress': false })
   expect(workflow.permissions).toEqual({ contents: 'read' })
   expect(Object.keys(workflow.on.workflow_dispatch!.inputs).sort()).toEqual([
-    'build_version', 'preset', 'signing', 'source_ref', 'test_release_id', 'update_channel', 'version_mode',
+    'build_root', 'build_version', 'cache_namespace', 'compression_level', 'preset', 'signing', 'source_ref', 'test_release_id', 'update_channel', 'version_mode',
   ])
   expect(workflow.on.workflow_dispatch!.inputs.signing!.default).toBe('signed')
+  expect(workflow.on.workflow_dispatch!.inputs.compression_level).toMatchObject({ type: 'choice', options: ['3', '7'], default: '3', required: true })
+  expect(job.env.PACKAGE_WINDOWS_COMPRESSION_LEVEL).toBe('${{ inputs.compression_level }}')
   expect(workflow.on.workflow_dispatch!.inputs.build_version!.required).toBe(false)
   expect(workflow.on.workflow_dispatch!.inputs.version_mode!.default).toBe('default')
   expect(workflow.on.workflow_dispatch!.inputs.source_ref!.default).toBe('master')
@@ -102,11 +107,96 @@ it('retains failure diagnostics and uploads only the selected successful install
   const uploads = job.steps.filter(step => step.uses?.startsWith('actions/upload-artifact@'))
   expect(uploads).toHaveLength(3)
   expect(uploads[0]!.if).toBe("always() && steps.checkout.outcome == 'success'")
-  expect(uploads[0]!.with).toMatchObject({ path: 'apps/desktop/.desktop-build/packaging-runs/', 'include-hidden-files': true })
+  expect(uploads[0]!.with).toMatchObject({
+    path: '${{ steps.build_workspace.outputs.directory || github.workspace }}/apps/desktop/.desktop-build/packaging-runs/',
+    'include-hidden-files': true,
+  })
   for (const mode of ['unsigned', 'signed']) {
     const upload = uploads.find(step => step.if === `success() && inputs.signing == '${mode}'`)!
-    expect(upload.with).toMatchObject({ path: '${{ steps.retained.outputs.directory }}/*', 'if-no-files-found': 'error' })
+    expect(upload.with).toMatchObject({ path: '${{ steps.retained.outputs.directory }}/*', 'if-no-files-found': 'error', 'compression-level': 0 })
   }
+})
+
+it('routes all packaging consumers to the selected workspace and removes it only after successful uploads', () => {
+  expect(workflow.on.workflow_dispatch!.inputs.build_root).toMatchObject({ type: 'string', default: '', required: false })
+  expect(job.env.PACKAGE_BUILD_ROOT).toBe('${{ inputs.build_root }}')
+  const selected = job.steps.find(step => step.id === 'build_workspace')!
+  expect(selected.name).toBe('Select packaging workspace')
+  expect(selected.env).toEqual({ PACKAGE_SOURCE_SHA: '${{ steps.checkout.outputs.commit }}' })
+  expect(selected['working-directory']).toBeUndefined()
+  expect(selected.run).toContain('if (!$env:PACKAGE_BUILD_ROOT)')
+  expect(selected.run).toContain('"directory=$env:GITHUB_WORKSPACE" >> $env:GITHUB_OUTPUT')
+  expect(selected.run).toContain('} else {')
+  expect(selected.run).toContain('node apps/desktop/scripts/windows-build-workspace.mjs')
+  expect(selected.run).toContain('exit $LASTEXITCODE')
+  const index = job.steps.indexOf(selected)
+  expect(index).toBeGreaterThan(job.steps.findIndex(step => step.uses?.startsWith('actions/setup-node@')))
+  expect(index).toBeLessThan(job.steps.findIndex(step => step.name === 'Configure persistent pnpm store'))
+  const consumers = [
+    'Install locked dependencies',
+    'Validate preset and resolve build version',
+    'Check packaging configuration and toolchain',
+    'Build installer and verify packaged runtime',
+    'Retain complete package outside the checkout',
+  ]
+  for (const name of consumers) {
+    const step = job.steps.find(entry => entry.name === name)!
+    expect(step['working-directory']).toBe('${{ steps.build_workspace.outputs.directory }}')
+    expect(job.steps.indexOf(step)).toBeGreaterThan(index)
+  }
+  expect(job.steps.filter(step => step['working-directory'] === '${{ steps.build_workspace.outputs.directory }}'))
+    .toHaveLength(consumers.length)
+  const store = job.steps.find(step => step.name === 'Configure persistent pnpm store')!
+  expect(store.run).toContain('[IO.Path]::GetPathRoot($env:GITHUB_WORKSPACE)')
+  expect(store['working-directory']).toBeUndefined()
+  const cleanup = job.steps.at(-1)!
+  expect(cleanup).toMatchObject({
+    name: 'Remove isolated packaging workspace',
+    if: "success() && inputs.build_root != ''",
+    env: { PACKAGE_SOURCE_SHA: '${{ steps.checkout.outputs.commit }}' },
+    run: 'node apps/desktop/scripts/windows-build-workspace.mjs --remove',
+  })
+  expect(cleanup['working-directory']).toBeUndefined()
+  for (const upload of job.steps.filter(step => step.uses?.startsWith('actions/upload-artifact@'))) {
+    expect(job.steps.indexOf(upload)).toBeLessThan(job.steps.indexOf(cleanup))
+  }
+})
+
+it('normalizes priority in the dependency and packaging shells before launching their children', () => {
+  const command = '& ./apps/desktop/scripts/windows-packaging-priority.ps1'
+  expect(job.steps.find(entry => entry.name === 'Validate selected source and adapter support')!.run)
+    .toContain("fs.existsSync('apps/desktop/scripts/windows-packaging-priority.ps1')")
+  for (const name of ['Install locked dependencies', 'Build installer and verify packaged runtime']) {
+    const step = job.steps.find(entry => entry.name === name)!
+    expect(step.run!.trimStart().startsWith(command + '\n')).toBe(true)
+  }
+})
+
+it('scopes the optional temporary directory to installer building without changing Actions or later steps', () => {
+  const build = job.steps.find(step => step.name === 'Build installer and verify packaged runtime')!
+  expect(build.env?.PACKAGE_BUILD_TEMP).toBe('${{ steps.build_workspace.outputs.temporaryDirectory }}')
+  expect(build.run).toContain([
+    'if ($env:PACKAGE_BUILD_TEMP) {',
+    '  $env:TEMP = $env:PACKAGE_BUILD_TEMP',
+    '  $env:TMP = $env:PACKAGE_BUILD_TEMP',
+    '}',
+  ].join('\n'))
+  expect(build.run!.indexOf('if ($env:PACKAGE_BUILD_TEMP)')).toBeLessThan(build.run!.indexOf('$packageArgs ='))
+  expect(build.run).not.toContain('GITHUB_ENV')
+  expect(build.run).not.toContain('RUNNER_TEMP')
+  expect(job.env).not.toHaveProperty('TEMP')
+  expect(job.env).not.toHaveProperty('TMP')
+  expect(job.env).not.toHaveProperty('PACKAGE_BUILD_TEMP')
+  for (const step of job.steps.filter(step => step !== build)) {
+    expect(step.env ?? {}).not.toHaveProperty('PACKAGE_BUILD_TEMP')
+    expect(step.env ?? {}).not.toHaveProperty('TEMP')
+    expect(step.env ?? {}).not.toHaveProperty('TMP')
+    expect(step.run ?? '').not.toMatch(/\$env:(?:TEMP|TMP)\s*=/u)
+  }
+  const selected = job.steps.find(step => step.id === 'build_workspace')!
+  const defaultBranch = selected.run!.split('} else {')[0]!
+  expect(defaultBranch).toContain('"directory=$env:GITHUB_WORKSPACE" >> $env:GITHUB_OUTPUT')
+  expect(defaultBranch).not.toContain('temporaryDirectory')
 })
 
 it.skipIf(process.platform !== 'win32')('keeps the dependency store stable across run-specific pnpm homes', () => {
@@ -120,12 +210,31 @@ it.skipIf(process.platform !== 'win32')('keeps the dependency store stable acros
       const environmentFile = resolve(directory, run + '.env')
       execFileSync('pwsh', ['-NoProfile', '-File', script], {
         env: { ...process.env, GITHUB_WORKSPACE: 'D:\\runner\\_work\\repo\\repo',
+          PACKAGE_CACHE_NAMESPACE: '', DSH_DESKTOP_PACKAGE_CACHE_DIR: 'D:\\tool-cache\\desktop',
           PNPM_HOME: resolve(directory, run, 'pnpm'), GITHUB_ENV: environmentFile },
         stdio: 'pipe',
       })
       return readFileSync(environmentFile, 'utf8').trim()
     })
-    expect(outputs).toEqual(['PNPM_CONFIG_STORE_DIR=D:\\.pnpm-store', 'PNPM_CONFIG_STORE_DIR=D:\\.pnpm-store'])
+    expect(outputs.map(output => output.split(/\r?\n/u))).toEqual(Array.from({ length: 2 }, () => [
+      'DSH_DESKTOP_PACKAGE_CACHE_DIR=D:\\tool-cache\\desktop', 'PNPM_CONFIG_STORE_DIR=D:\\.pnpm-store',
+    ]))
+    const runNamespace = (namespace: string) => {
+      const output = resolve(directory, 'namespace.env')
+      rmSync(output, { force: true })
+      execFileSync('pwsh', ['-NoProfile', '-File', script], {
+        env: { ...process.env, GITHUB_WORKSPACE: 'D:\\runner\\_work\\repo\\repo',
+          PACKAGE_CACHE_NAMESPACE: namespace, DSH_DESKTOP_PACKAGE_CACHE_DIR: 'D:\\tool-cache\\desktop', GITHUB_ENV: output },
+        stdio: 'pipe',
+      })
+      return readFileSync(output, 'utf8').trim().split(/\r?\n/u)
+    }
+    expect(runNamespace('perf-1')).toEqual([
+      'DSH_DESKTOP_PACKAGE_CACHE_DIR=D:\\tool-cache\\desktop\\perf-1', 'PNPM_CONFIG_STORE_DIR=D:\\.pnpm-store\\perf-1',
+    ])
+    for (const invalid of ['../escape', 'Upper', 'has space', 'con', 'perf\n', 'a'.repeat(65)]) {
+      expect(() => runNamespace(invalid)).toThrow()
+    }
   } finally {
     rmSync(directory, { recursive: true, force: true, maxRetries: 3 })
   }
