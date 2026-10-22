@@ -333,8 +333,6 @@ export default defineConfig({
         'packages/experimental/client-ui-voice-input/src/client/index.ts',
         // Built Web replay covers generated action-card Remote wiring; mount.ts is source-covered.
         'packages/experimental/client-ui-action-cards/src/client/index.ts',
-        // Built Web replay covers generated recommendation Remote wiring; mount.ts is source-covered.
-        'packages/experimental/client-ui-creation-recommendations/src/client/index.ts',
         // The permission entry binds generated Remote code; cua-permissions.e2e.ts covers
         // its built entry, while source tests exercise mountCuaPermissions and its UI.
         'packages/experimental/cua/src/client/index.ts',

@@ -1,33 +1,43 @@
-/** Completed-answer creation card with location selection, undo and restore. */
-import { useId, useMemo, useState } from 'react'
+/** Body of a `create_personalized_page` card: location choice, creation progress, retention, undo and restore. */
+import { useCallback, useId, useState, useSyncExternalStore } from 'react'
+import { z } from 'zod'
 import { Button, IconChevronDownOutlineRegular, IconWarningTriangleOutlineRegular, Menu, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
-import type {
-  CreationActionResult, CreationDecision, CreationRecommendation, CreationSlot, CreationView,
-} from '@deepseek-ai/dsh-experimental-creation-recommendations/types'
-import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
-import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { ActionCardBodyProps } from '@deepseek-ai/dsh-experimental-client-ui-action-cards/client'
+import type { CreationSlot, PageData, PageDetails, PageVerb } from '@deepseek-ai/dsh-experimental-creation-recommendations/types'
 import type { RecommendationKey } from './locales.ts'
 import css from './Card.module.css'
 
-/** Session-bound user actions; installation paths remain Host-owned. */
-export interface CardInjected {
-  act: (callId: ToolCallId, action: 'create' | 'dismiss' | 'keep' | 'undo' | 'cancel' | 'restore', slot: CreationSlot, customLocation?: string) => Promise<CreationActionResult | undefined>
-  hooks: { infoDismissed: ObservableSnapshot<boolean> }
-  dismissInfo: () => void
-}
-
-type CardProps = { recommendation: CreationRecommendation } & Pick<PropsRuntime<'conversation.chat.turnTail'>, 'useProjection'>
-  & PropsLocale<'creationRecommendations'> & InjectFace<CardInjected>
-
-type CardAction = Parameters<CardInjected['act']>[1]
+/** Body props: the frame's card props plus this browser's cost-notice preference. */
+export type PageCardProps = ActionCardBodyProps<'creationRecommendations'> & { readonly infoDismissed: SnapshotStore<boolean> }
 
 type LocationChoice = CreationSlot | 'custom'
+type CardVerb = PageVerb | 'dismiss'
+
+const slotSchema = z.enum(['sidebar-right', 'page', 'sidebar-left'])
+const detailsSchema = z.object({ slot: slotSchema, initialContent: z.string().optional() }) satisfies z.ZodType<PageDetails>
+const dataSchema = z.object({
+  slot: slotSchema, customLocation: z.string().optional(), bundleName: z.string().optional(),
+  application: z.enum(['applied', 'restart-required', 'overridden', 'failed', 'cancelled']).optional(),
+}) satisfies z.ZodType<PageData>
+
+/** Phases with their own status copy. */
+const PHASE_KEYS: readonly RecommendationKey[] = [
+  'dismissed', 'replaced', 'creating', 'installing', 'cancelled', 'installed', 'kept', 'removed', 'failed', 'interrupted', 'unconfirmed',
+]
+/** Refusal reasons with their own copy; any other reason reads as unavailable. */
+const REASON_KEYS: readonly RecommendationKey[] = [
+  'unknown', 'access-denied', 'not-live-root', 'closing', 'unavailable', 'invalid-location', 'read-only', 'source-missing',
+]
 
 /** Application outcomes have their own copy; the phase copy of failed and cancelled describes creation instead. */
-const APPLICATION_KEYS: Readonly<Record<Exclude<NonNullable<CreationDecision['application']>, 'applied'>, RecommendationKey>> = {
+const APPLICATION_KEYS: Readonly<Record<Exclude<NonNullable<PageData['application']>, 'applied'>, RecommendationKey>> = {
   'restart-required': 'restart-required', overridden: 'overridden', failed: 'applicationFailed', cancelled: 'applicationCancelled',
+}
+
+function keyOf(keys: readonly RecommendationKey[], value: string): RecommendationKey | undefined {
+  return keys.find(key => key === value)
 }
 
 function LocationPicker({ value, disabled, onChange, t }: {
@@ -50,125 +60,75 @@ function LocationPicker({ value, disabled, onChange, t }: {
     </Button>} />
 }
 
-/** Graphemes drawn about twice as wide as a Latin letter: CJK scripts, CJK punctuation and fullwidth forms. */
-const WIDE_GRAPHEME = /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}　-〿＀-｠￠-￦]/u
-/** Preview budget in Latin-letter widths, about two card lines at desktop width. */
-const FOLD_WIDTH = 260
-
-/** Fold omitted text without measuring layout; a wide grapheme counts twice so Chinese and English fold near the same line.
- * The full text is never altered. */
-function FoldedText({ text, expandLabel, collapseLabel }: { text: string; expandLabel: string; collapseLabel: string }) {
-  const id = useId()
-  const [expanded, setExpanded] = useState(false)
-  const preview = useMemo(() => {
-    const compact = text.replace(/\s+/g, ' ').trim()
-    const characters = Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(compact), part => part.segment)
-    let width = 0
-    for (const [index, character] of characters.entries()) {
-      width += WIDE_GRAPHEME.test(character) ? 2 : 1
-      if (width > FOLD_WIDTH) return characters.slice(0, index).join('').trimEnd() + '…'
-    }
-    return undefined
-  }, [text])
-  return <>
-    <p id={id} className={css.reason}>{expanded || preview === undefined ? text : preview}</p>
-    {preview !== undefined && <Button variant="ghost" size="sm" className={css.planToggle} aria-expanded={expanded} aria-controls={id}
-      onClick={() => { setExpanded(value => !value) }}>{expanded ? collapseLabel : expandLabel}</Button>}
-  </>
-}
-
-/** The projection admits at most one proposal per turn; should several exist, the lowest call id is shown. */
-function proposalOf(view: CreationView | undefined, turn: number): CreationRecommendation | undefined {
-  let found: CreationRecommendation | undefined
-  for (const proposal of Object.values(view?.proposals ?? {})) {
-    if (proposal.turn === turn && (found === undefined || proposal.callId < found.callId)) found = proposal
-  }
-  return found
-}
-
-/** Place the proposal admitted in a turn after that turn's final answer, once the turn has ended.
- * @param props - Turn location, projection reader and session-bound actions.
- * @returns the creation card, or null.
+/**
+ * Display creation, persistent installation, reversible removal and restoration below the frame's summary.
+ * @param props - card, state, actions, folded-text component and notice preference.
+ * @returns the card body.
  */
-// Each optional bundle owns its card and locale contracts; this small tail wrapper does not warrant a shared package.
-/* jscpd:ignore-start */
-export function RecommendationTail({ turn, ...props }: Pick<PropsRuntime<'conversation.chat.turnTail'>, 'turn' | 'useProjection'>
-  & PropsLocale<'creationRecommendations'> & InjectFace<CardInjected>) {
-  const view = props.useProjection('creationRecommendations')
-  const recommendation = proposalOf(view, turn.turn)
-  const phase = view?.decisions[recommendation?.callId ?? '']?.phase
-  return recommendation === undefined || phase === 'suppressed' || turn.end === undefined || turn.data.get('turn-tail')?.closing == null
-    ? null : <RecommendationCard {...props} recommendation={recommendation} />
-}
-/* jscpd:ignore-end */
-
-/** Display creation, persistent installation, reversible removal and restoration.
- * @param props - Proposal, receipts and human actions.
- * @returns the creation card.
- */
-export function RecommendationCard({ recommendation, useProjection, act, useInfoDismissed, dismissInfo, t }: CardProps) {
-  const view = useProjection('creationRecommendations')
-  const decision = view?.decisions[recommendation.callId]
+export function PageCardBody({ proposal, decision, ready, summary, Folded, act, infoDismissed, t }: PageCardProps) {
+  const details = detailsSchema.safeParse(proposal.details)
+  const parsed = decision === undefined ? undefined : dataSchema.safeParse(decision.data)
+  const data = parsed?.success === true ? parsed.data : undefined
+  const phase = decision === undefined ? undefined : keyOf(PHASE_KEYS, decision.phase)
   const [selected, setSelected] = useState<LocationChoice>()
   const [custom, setCustom] = useState<string>()
   const [info, setInfo] = useState<boolean>()
-  const infoDismissed = useInfoDismissed(value => value)
+  const subscribe = useCallback((listener: () => void) => infoDismissed.subscribe(listener), [infoDismissed])
+  const noticeDismissed = useSyncExternalStore(subscribe, () => infoDismissed.getSnapshot())
   const infoId = useId()
   const customId = useId()
-  const [pending, setPending] = useState<CardAction>()
+  const [pending, setPending] = useState<CardVerb>()
   const [error, setError] = useState<RecommendationKey>()
+  if (!details.success) return <div className={css.body}>{summary}</div>
   const busy = pending !== undefined
-  const slot = selected !== undefined && selected !== 'custom' ? selected : decision?.slot ?? recommendation.slot
-  const location = selected ?? (decision?.customLocation === undefined ? slot : 'custom')
-  const customLocation = custom ?? decision?.customLocation ?? ''
-  const offer = decision === undefined || decision.phase === 'cancelled' || decision.phase === 'failed' || decision.phase === 'interrupted' || decision.phase === 'unconfirmed'
-  const infoOpen = info ?? (offer && !infoDismissed)
-  const installed = decision?.phase === 'installed' || decision?.phase === 'kept'
-  const run = async (action: CardAction) => {
-    setPending(action)
+  const slot = selected !== undefined && selected !== 'custom' ? selected : data?.slot ?? details.data.slot
+  const location = selected ?? (data?.customLocation === undefined ? slot : 'custom')
+  const customLocation = custom ?? data?.customLocation ?? ''
+  const offer = decision === undefined || phase === 'cancelled' || phase === 'failed' || phase === 'interrupted' || phase === 'unconfirmed'
+  const infoOpen = info ?? (offer && !noticeDismissed)
+  const installed = phase === 'installed' || phase === 'kept'
+  const run = async (verb: CardVerb) => {
+    setPending(verb)
     setError(undefined)
-    if (action === 'create' || action === 'dismiss') { dismissInfo(); setInfo(false) }
-    // Independent optional cards keep their action and receipt handling local.
-    /* jscpd:ignore-start */
+    if (verb === 'create' || verb === 'dismiss') { infoDismissed.set(true); setInfo(false) }
+    const placement = { slot, ...location === 'custom' ? { customLocation: customLocation.trim() } : {} }
     try {
-      const result = await act(recommendation.callId, action, slot, location === 'custom' ? customLocation.trim() : undefined)
+      const result = await act(verb, verb === 'create' || verb === 'dismiss' ? placement : undefined)
       if (result === undefined) setError('transport')
-      else if (result.status === 'refused' || result.status === 'unconfirmed') setError(result.reason)
+      else if (result.status === 'refused' || result.status === 'unconfirmed') setError(keyOf(REASON_KEYS, result.reason) ?? 'unavailable')
     } catch {
-      // A lost reply does not prove failure; replay supplies the durable receipt.
+      // A lost reply does not prove failure; replay supplies the durable decision.
       setError('transport')
     } finally { setPending(undefined) }
-    /* jscpd:ignore-end */
   }
-  return <section className={css.card} aria-label={t('heading')} data-creation-recommendation={recommendation.callId}>
+  return <>
     <header className={css.header}><span className={css.heading}>{t('heading')}
       <Tooltip label={t('creationInfo')} side="top" portal disabled={infoOpen}>
         <Button variant="ghost" size="sm" className={css.infoButton} aria-label={t('creationInfo')}
           aria-expanded={infoOpen} aria-controls={infoId} onClick={() => {
             setInfo(!infoOpen)
-            if (infoOpen) dismissInfo()
+            if (infoOpen) infoDismissed.set(true)
           }}>
           <IconWarningTriangleOutlineRegular size={14} />
         </Button>
       </Tooltip>
     </span>
-    {decision !== undefined && <span role="status" className={css.phase} data-phase={decision.phase}>{t(decision.phase)}</span>}
+    {phase !== undefined && <span role="status" className={css.phase} data-phase={phase}>{t(phase)}</span>}
     </header>
     {infoOpen && <div id={infoId} role="note" className={css.info}>
       <p>{t('creationMethod')}</p>
       <p><strong>{t('creationCost')}</strong></p>
       <p>{t('creationBackground')}</p>
-      {decision?.bundleName !== undefined && <p>{t('sourceRetained')}</p>}
+      {data?.bundleName !== undefined && <p>{t('sourceRetained')}</p>}
     </div>}
     <div className={css.body}>
-      <strong className={css.title}>{recommendation.title}</strong>
-      <FoldedText text={recommendation.brief} expandLabel={t('expandPlan')} collapseLabel={t('collapsePlan')} />
-      {recommendation.initialContent !== undefined && <div className={css.content}>
+      {summary}
+      {details.data.initialContent !== undefined && <div className={css.content}>
         <span className={css.contentLabel}>{t('initialContent')}</span>
-        <FoldedText text={recommendation.initialContent} expandLabel={t('expandContent')} collapseLabel={t('collapseContent')} />
+        <Folded text={details.data.initialContent} expandLabel={t('expandContent')} collapseLabel={t('collapseContent')} />
       </div>}
-      {decision?.application !== undefined && decision.application !== 'applied' && decision.phase !== 'failed'
-        && <p role="status" className={css.status}>{t(APPLICATION_KEYS[decision.application])}</p>}
+      {data?.application !== undefined && data.application !== 'applied' && phase !== 'failed'
+        && <p role="status" className={css.status}>{t(APPLICATION_KEYS[data.application])}</p>}
       {error !== undefined && <p role="alert" className={css.status}>{t(error)}</p>}
       {offer ? <div className={css.controls}>
         <div className={css.locationRow}>
@@ -182,28 +142,28 @@ export function RecommendationCard({ recommendation, useProjection, act, useInfo
         </div>}
         <footer className={css.footer}>
           <div className={css.actions}>
-            <Button variant="ghost" size="sm" disabled={busy || view === undefined} onClick={() => { void run('dismiss') }}>{t('dismiss')}</Button>
-            <Button variant="primary" size="sm" disabled={busy || view === undefined || location === 'custom' && customLocation.trim() === ''} onClick={() => { void run('create') }}>
+            <Button variant="ghost" size="sm" disabled={busy || !ready} onClick={() => { void run('dismiss') }}>{t('dismiss')}</Button>
+            <Button variant="primary" size="sm" disabled={busy || !ready || location === 'custom' && customLocation.trim() === ''} onClick={() => { void run('create') }}>
               {t(pending === 'create' ? 'starting' : decision === undefined ? 'create' : 'retry')}
             </Button>
           </div>
         </footer>
-      </div> : <p className={css.description}>{t('location')} · {decision.customLocation ?? t(decision.slot)}</p>}
-      {decision?.phase === 'creating' && <footer className={css.footer}>
+      </div> : <p className={css.description}>{t('location')} · {data?.customLocation ?? t(data?.slot ?? details.data.slot)}</p>}
+      {phase === 'creating' && <footer className={css.footer}>
         <Button variant="ghost" size="sm" disabled={busy} onClick={() => { void run('cancel') }}>{t(pending === 'cancel' ? 'cancelling' : 'cancel')}</Button>
       </footer>}
       {installed && <footer className={css.footer}>
         <span className={css.scope}>{t('scope')}</span>
         <div className={css.actions}>
           <Button variant="ghost" size="sm" disabled={busy} onClick={() => { void run('undo') }}>{t('undo')}</Button>
-          {decision.phase !== 'kept' && <Button variant="primary" size="sm" disabled={busy} onClick={() => { void run('keep') }}>{t('keep')}</Button>}
+          {phase !== 'kept' && <Button variant="primary" size="sm" disabled={busy} onClick={() => { void run('keep') }}>{t('keep')}</Button>}
         </div>
       </footer>}
-      {decision?.phase === 'removed' && <footer className={css.footer}>
+      {phase === 'removed' && <footer className={css.footer}>
         <div className={css.actions}>
           <Button variant="primary" size="sm" disabled={busy} onClick={() => { void run('restore') }}>{t(pending === 'restore' ? 'restoring' : 'restore')}</Button>
         </div>
       </footer>}
     </div>
-  </section>
+  </>
 }

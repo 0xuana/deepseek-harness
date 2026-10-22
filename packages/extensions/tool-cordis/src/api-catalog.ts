@@ -82,6 +82,37 @@ export interface TypeApiEntry {
 /** Every harness `ctx.<key>` service, sorted by key. */
 export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
+    key: 'actionCards',
+    summary: 'Card tool, kind registry, Session projection, user actions and status notices.',
+    description: 'Card tool, kind registry, Session projection, user actions and status notices.',
+    methods: [
+      {
+        signature: 'register<Details>(kind: ActionCardKind<Details>): () => void',
+        description: 'Register one action kind for the caller\'s lifetime.',
+        parameters: [{ name: 'kind', description: 'the kind\'s skill, details schema, verbs and handler.' }],
+        returns: 'disposer removing the kind; actions on its cards are then unavailable.',
+        throws: ['when another kind already registered the same action.'],
+      },
+      {
+        signature: 'record(agent: Agent, decision: ActionCardDecision): void',
+        description: 'Record a card decision in the Session log; the next model request reports it.',
+        parameters: [{ name: 'agent', description: 'agent whose Session owns the card.' }, { name: 'decision', description: 'the card\'s new state.' }],
+      },
+      {
+        signature: 'view(session: Session): ActionCardView',
+        description: 'Read the cards of one Session.',
+        parameters: [{ name: 'session', description: 'a Session whose projections are prepared.' }],
+        returns: 'proposals and decisions by call id.',
+      },
+      {
+        signature: '@Remote act(agent: Agent, callId: ToolCallId, verb: string, payload?: Record<string, JsonValue>): Promise<ActionCardResult>',
+        description: 'Apply a user action to a logged card. Shared checks run first; `dismiss` is recorded here and every other verb goes to the card\'s kind. Concurrent actions on one card share one operation.',
+        parameters: [{ name: 'agent', description: 'live root resolved from the displayed Session.' }, { name: 'callId', description: 'the card\'s `propose_action` call id.' }, { name: 'verb', description: '`dismiss` or one of the kind\'s verbs.' }, { name: 'payload', description: 'kind-defined fields such as a chosen location.' }],
+        returns: 'acceptance of background work, the decision in effect, or a refusal.',
+      },
+    ],
+  },
+  {
     key: 'agentDefaultModel',
     summary: 'Owns the default model selection independently of any Host or transport.',
     description: 'Owns the default model selection independently of any Host or transport. Each operation reads the owning Config references.',
@@ -835,19 +866,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Translate one displayed fragment through the reader\'s selected provider.',
         parameters: [{ name: 'request', description: 'original text and Session identity supplied by the Client; provider and explicit target language match accepted preferences, while auto uses the browser locale.' }, { name: 'signal', description: 'browser cancellation or Remote contribution withdrawal.' }],
         returns: 'translated text; an uncached inactive Session joins ordinary GUI activation before retry. Failures omit the source and provider response. Cancellation stops this caller\'s wait, not shared activation.',
-      },
-    ],
-  },
-  {
-    key: 'creationRecommendations',
-    summary: 'Internal Remote and effect owner assembled by the personalized-pages plugin.',
-    description: 'Internal Remote and effect owner assembled by the personalized-pages plugin.',
-    methods: [
-      {
-        signature: '@Remote act(agent: Agent, callId: ToolCallId, action: \'create\' | \'dismiss\' | \'keep\' | \'undo\' | \'cancel\' | \'restore\', slot: CreationSlot, customLocation?: string): Promise<CreationActionResult>',
-        description: 'Apply a human decision to a logged proposal.',
-        parameters: [{ name: 'agent', description: 'Live root resolved from the displayed session.' }, { name: 'callId', description: 'Logged proposal id.' }, { name: 'action', description: 'Create, cancel generation, dismiss, confirm retention, remove the owned bundle, or reinstall its retained profile copy.' }, { name: 'slot', description: 'Location chosen by the user when creating or dismissing.' }, { name: 'customLocation', description: 'Omitted: use slot. Present: Creator resolves this human-authored placement instead.' }],
-        returns: 'acceptance for background work, a durable receipt, or a refusal.',
       },
     ],
   },
@@ -4901,6 +4919,38 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface AccountWallet {\n    readonly currency: \'CNY\' | \'USD\';\n    readonly balance: string;\n}',
   },
   {
+    name: 'ActionCardDecision',
+    declaration: 'export interface ActionCardDecision {\n    readonly callId: ToolCallId;\n    readonly action: string;\n    readonly phase: string;\n    readonly data?: ActionCardFields | undefined;\n}',
+  },
+  {
+    name: 'ActionCardFields',
+    declaration: 'export type ActionCardFields = Readonly<Record<string, JsonValue>>;',
+  },
+  {
+    name: 'ActionCardKind',
+    declaration: 'export interface ActionCardKind<Details> {\n    readonly action: string;\n    readonly skill: string;\n    readonly details: ZodType<Details>;\n    readonly verbs: Readonly<Record<string, ActionCardVerb>>;\n    readonly openPhases?: readonly string[];\n    readonly statusGuidance?: string;\n    readonly statusFields?: readonly string[];\n    dismissal?(proposal: ActionCardProposalOf<Details>, payload: ActionCardFields | undefined): ActionCardFields | undefined;\n    act(agent: Agent, proposal: ActionCardProposalOf<Details>, verb: string, payload: ActionCardFields | undefined): Promise<ActionCardResult>;\n}',
+  },
+  {
+    name: 'ActionCardProposal',
+    declaration: 'export interface ActionCardProposal {\n    readonly callId: ToolCallId;\n    readonly turn: number;\n    readonly action: string;\n    readonly title: string;\n    readonly brief: string;\n    readonly details: ActionCardFields;\n}',
+  },
+  {
+    name: 'ActionCardProposalOf',
+    declaration: 'export type ActionCardProposalOf<Details> = Omit<ActionCardProposal, \'details\'> & {\n    readonly details: Details;\n};',
+  },
+  {
+    name: 'ActionCardResult',
+    declaration: 'export type ActionCardResult = {\n    readonly status: \'accepted\';\n} | {\n    readonly status: \'settled\';\n    readonly decision: ActionCardDecision;\n} | {\n    readonly status: \'refused\';\n    readonly reason: string;\n} | {\n    readonly status: \'unconfirmed\';\n    readonly reason: string;\n};',
+  },
+  {
+    name: 'ActionCardVerb',
+    declaration: 'export interface ActionCardVerb {\n    readonly global?: true;\n    readonly writes?: true;\n}',
+  },
+  {
+    name: 'ActionCardView',
+    declaration: 'export interface ActionCardView {\n    readonly proposals: Readonly<Record<string, ActionCardProposal>>;\n    readonly decisions: Readonly<Record<string, ActionCardDecision>>;\n}',
+  },
+  {
     name: 'AdapterRegistrationHandle',
     declaration: 'export interface AdapterRegistrationHandle {\n    (): void;\n    replace(providers: string[]): void;\n}',
   },
@@ -5487,22 +5537,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'CreateWorktreeRequest',
     declaration: 'export interface CreateWorktreeRequest {\n    name?: string;\n    from?: string;\n}',
-  },
-  {
-    name: 'CreationActionResult',
-    declaration: 'export type CreationActionResult = {\n    readonly status: \'accepted\';\n} | {\n    readonly status: \'settled\';\n    readonly decision: CreationCardState;\n} | {\n    readonly status: \'refused\';\n    readonly reason: \'unknown\' | \'access-denied\' | \'not-live-root\' | \'closing\' | \'unavailable\' | \'invalid-location\' | \'read-only\' | \'source-missing\';\n} | {\n    readonly status: \'unconfirmed\';\n    readonly reason: \'closing\';\n};',
-  },
-  {
-    name: 'CreationCardState',
-    declaration: 'export type CreationCardState = CreationDecision | (Omit<CreationDecision, \'phase\'> & {\n    readonly phase: \'replaced\' | \'suppressed\';\n});',
-  },
-  {
-    name: 'CreationDecision',
-    declaration: 'export interface CreationDecision {\n    readonly callId: ToolCallId;\n    readonly phase: \'dismissed\' | \'creating\' | \'installing\' | \'cancelled\' | \'installed\' | \'kept\' | \'removed\' | \'failed\' | \'interrupted\' | \'unconfirmed\';\n    readonly slot: CreationSlot;\n    readonly customLocation?: string | undefined;\n    readonly bundleName?: string | undefined;\n    readonly application?: ChangeResult[\'application\'] | undefined;\n}',
-  },
-  {
-    name: 'CreationSlot',
-    declaration: 'export type CreationSlot = \'sidebar-right\' | \'page\' | \'sidebar-left\';',
   },
   {
     name: 'CredentialInfo',

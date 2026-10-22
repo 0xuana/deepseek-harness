@@ -25,14 +25,6 @@
       "types": "./lib/types/types.d.ts",
       "default": "./lib/types/types.js"
     },
-    "./typert": {
-      "types": "./lib/typert.host.d.ts",
-      "default": "./lib/typert.host.js"
-    },
-    "./remote": {
-      "types": "./lib/typert.remote-client.d.ts",
-      "default": "./lib/typert.remote-client.js"
-    },
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./references/*.md": "./references/*.md",
     "./skills/*.md": "./skills/*.md"
@@ -40,7 +32,6 @@
   "license": "MIT",
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
-    "@deepseek-ai/dsh-typert-protocol": "workspace:*",
     "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-tools": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
@@ -48,7 +39,6 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
-    "@deepseek-ai/dsh-typert-protocol": "workspace:*",
     "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-tools": "workspace:*",
     "@deepseek-ai/dsh-agent": "workspace:*",
@@ -63,11 +53,12 @@
     "@deepseek-ai/dsh-tool-testkit": "workspace:*"
   },
   "dependencies": {
-    "@deepseek-ai/dsh-util-action-block": "workspace:*",
     "yaml": "^2.9.0",
     "resolve.exports": "^2.0.3",
     "zod": "4.4.3",
-    "@deepseek-ai/dsh-experimental-client-ui-creation-recommendations": "workspace:*"
+    "@deepseek-ai/dsh-experimental-client-ui-creation-recommendations": "workspace:*",
+    "@deepseek-ai/dsh-experimental-action-cards": "workspace:*",
+    "@deepseek-ai/dsh-experimental-client-ui-action-cards": "workspace:*"
   },
   "files": [
     "icon.svg",
@@ -77,11 +68,7 @@
     "references/*.md",
     "skills/*.md",
     "lib/types/**/*.js",
-    "lib/types/**/*.d.ts",
-    "lib/typert.host.js",
-    "lib/typert.host.d.ts",
-    "lib/typert.remote-client.js",
-    "lib/typert.remote-client.d.ts"
+    "lib/types/**/*.d.ts"
   ],
   "dsh": {
     "bundle": {

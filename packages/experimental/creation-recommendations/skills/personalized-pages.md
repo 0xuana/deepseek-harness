@@ -1,6 +1,6 @@
 # Personalized pages
 
-Use this workflow in the main conversation to plan an optional new page or small tool for any task, not just DSH. You decide whether a page helps, check existing capabilities, and hand the Creator a short plan. A `dsh-action` block at the end of your final answer saves the proposal and shows a card; nothing is built until the user clicks Create. Plan from the conversation and the catalog at the end of this skill. Do not read files, configuration or source to validate a page idea; name an uninspected source as an unverified dependency and leave its details to the Creator.
+Use this workflow in the main conversation to plan an optional new page or small tool for any task, not just DSH. You decide whether a page helps, check existing capabilities, and hand the Creator a short plan. A `propose_action` call saves the proposal and shows a card below your answer; nothing is built until the user clicks Create. Plan from the conversation and the catalog at the end of this skill. Do not read files, configuration or source to validate a page idea; name an uninspected source as an unverified dependency and leave its details to the Creator.
 
 ## When to propose
 
@@ -47,10 +47,10 @@ Supplying data in this conversation does not make a record Session-bound.
 
 ## Offer without starting
 
-To propose, end your final answer with exactly one fenced code block tagged `dsh-action` whose content is one JSON object with `action: "create_personalized_page"`, the fields above and `slot`. The block is the submission: the Host validates it after your answer and shows the card; an invalid or missing block creates no card, and nothing follows the block. One proposal per turn, and one unstarted card per conversation: if a card is still waiting, do not propose another; a new proposal replaces it only when the user changed the plan. Plan-only and read-only requests still get a card; do not ask for approval instead of writing it. Only clicking Create starts the background Creator; do not wait, poll, claim installation or ask for a report-back. Answer any direct question, then add at most one short invitation, in the user's language, covering, in the first person: after they click Create below, you will build it in the background as a plugin page that stays available, without blocking the chat; the build takes minutes and many tokens. Do not repeat the plan, list extra features, narrate the block or mention schema names.
+To propose, call `propose_action` once, in the same turn as loading this skill, with `action: "create_personalized_page"`, `title`, `brief` and `details` holding `slot` and, when there is supplied content, `initialContent`. The call is the submission: the card appears below your answer; a refused call creates no card, and its error says why. Then write your final answer. One proposal per turn, and one unstarted card per conversation: if a card is still waiting, do not propose another; a new proposal replaces it only when the user changed the plan. Plan-only and read-only requests still get a card; do not ask for approval instead of proposing it. Only clicking Create starts the background Creator; do not wait, poll, claim installation or ask for a report-back. Answer any direct question, then add at most one short invitation, in the user's language, covering, in the first person: after they click Create below, you will build it in the background as a plugin page that stays available, without blocking the chat; the build takes minutes and many tokens. Do not repeat the plan, list extra features, narrate the call or mention schema names.
 
-```dsh-action
-{"action":"create_personalized_page","title":"本次验收清单","brief":"在当前会话右侧展示验收清单，可勾选和取消，状态随会话保存。","slot":"sidebar-right","initialContent":"1. 导出成功\n2. 断网提示清楚"}
+```json
+{"action":"create_personalized_page","title":"本次验收清单","brief":"在当前会话右侧展示验收清单，可勾选和取消，状态随会话保存。","details":{"slot":"sidebar-right","initialContent":"1. 导出成功\n2. 断网提示清楚"}}
 ```
 
 ## Examples

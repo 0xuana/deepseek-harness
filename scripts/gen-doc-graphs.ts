@@ -112,16 +112,8 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'experimental-action-cards',
     title: 'Optional action cards',
     mode: 'service',
-    consumers: ['experimental-client-ui-action-cards'],
+    consumers: ['experimental-creation-recommendations', 'experimental-client-ui-action-cards'],
     note: 'Owns the card tool, card state, user actions and status notices; card kinds register their actions and handlers.',
-  },
-  {
-    key: 'creationRecommendations',
-    pkg: 'experimental-creation-recommendations',
-    title: 'Explicit-need interface creation',
-    mode: 'service',
-    consumers: ['experimental-client-ui-creation-recommendations'],
-    note: 'Starts a Creator after a human choice and owns installation and removal of the new bundle.',
   },
   {
     key: 'headlessStartup',

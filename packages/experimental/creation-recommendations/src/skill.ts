@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import type { Context } from '@deepseek-ai/cordis'
 import { BUNDLED_SKILL_RANK, type SkillCandidate } from '@deepseek-ai/dsh-skill'
 
-/** Register the experiment's skill without adding a model tool or a system-prompt section.
+/** Register the experiment's skill without a system-prompt section.
  * @param ctx - Owning plugin context with skill and plugin registries.
  */
 export function registerCreationSkill(ctx: Context): void {
