@@ -348,11 +348,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['on failure; a refused creation is also shown through the Workspace notice unless a later navigation or disposal superseded the request.'],
       },
       {
-        signature: 'forkSession( sessionId: SessionId, onCreated?: (childId: SessionId) => void, options?: ForkSessionOptions, ): Promise<SessionId>',
-        description: 'Fork a Session and apply its branch presentation policy. The child always receives the incremented title: whoever may fork a Session also holds `session/rename` on the child it creates, so the source\'s own rename answer does not matter.',
-        parameters: [{ name: 'sessionId', description: 'source Session.' }, { name: 'onCreated', description: 'observer after creation, before the child-title update.' }, { name: 'options', description: 'branch boundary, migration permission, and how the child is presented.' }],
+        signature: 'forkSession( sessionId: SessionId, onCreated?: (childId: SessionId) => void, options?: Pick<Parameters<ISessions[\'fork\']>[0], \'allowMigration\'>, ): Promise<SessionId>',
+        description: 'Fork a Session without changing the current selection.',
+        parameters: [{ name: 'sessionId', description: 'source Session.' }, { name: 'onCreated', description: 'observer before the optional child-title update.' }, { name: 'options', description: 'optional permission to start source migration; omission preserves the Host default.' }],
         returns: 'the child SessionId after creation and inherited-title increment.',
-        throws: ['when the Host refuses or fails the fork; the caller keeps its current view and decides whether to report the failure.'],
       },
       {
         signature: 'connectWorkspace(workspaceId: WorkspaceId, options?: Pick<StartSessionOptions, \'agentPreset\'>): Promise<SessionId>',
@@ -631,10 +630,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'FontSizes',
     declaration: 'export type FontSizes = Readonly<Record<FontRole, number>>;',
-  },
-  {
-    name: 'ForkSessionOptions',
-    declaration: 'export interface ForkSessionOptions extends Pick<Parameters<ISessions[\'fork\']>[0], \'atSeq\' | \'allowMigration\'> {\n    readonly present?: \'selected\' | \'listed\';\n}',
   },
   {
     name: 'GlobalStandardProps',

@@ -59,20 +59,16 @@ export interface UiWorkspace {
     options?: Pick<StartSessionOptions, 'agentPreset'>,
   ): Promise<void>
   /**
-   * Fork a Session and apply its branch presentation policy. The child always receives the
-   * incremented title: whoever may fork a Session also holds `session/rename` on the child it
-   * creates, so the source's own rename answer does not matter.
+   * Fork a Session without changing the current selection.
    * @param sessionId - source Session.
-   * @param onCreated - observer after creation, before the child-title update.
-   * @param options - branch boundary, migration permission, and how the child is presented.
+   * @param onCreated - observer before the optional child-title update.
+   * @param options - optional permission to start source migration; omission preserves the Host default.
    * @returns the child SessionId after creation and inherited-title increment.
-   * @throws when the Host refuses or fails the fork; the caller keeps its current view and decides
-   *   whether to report the failure.
    */
   forkSession(
     sessionId: SessionId,
     onCreated?: (childId: SessionId) => void,
-    options?: ForkSessionOptions,
+    options?: Pick<Parameters<ISessions['fork']>[0], 'allowMigration'>,
   ): Promise<SessionId>
   /**
    * Resolve the Session for a new conversation in a Workspace: navigation names the first reusable
@@ -154,15 +150,6 @@ declare module '@deepseek-ai/cordis' {
     /** Cross-Controller Workspace navigation and directory UI capability. */
     uiWorkspace: UiWorkspace
   }
-}
-
-/** What one branch fork asks of the Workspace navigation service. Every fork names its child. */
-export interface ForkSessionOptions extends Pick<Parameters<ISessions['fork']>[0], 'atSeq' | 'allowMigration'> {
-  /**
-   * How the caller presents the child: `selected` opens it immediately, while `listed` (the
-   * default, the row-action path) leaves the selection alone.
-   */
-  readonly present?: 'selected' | 'listed'
 }
 
 /** Structured directory failure exposed to directory UI consumers. */
@@ -337,19 +324,14 @@ class UiWorkspaceService extends Service implements UiWorkspace {
   async forkSession(
     sessionId: SessionId,
     onCreated?: (childId: SessionId) => void,
-    options: ForkSessionOptions = {},
+    options?: Pick<Parameters<ISessions['fork']>[0], 'allowMigration'>,
   ): Promise<SessionId> {
-    // `increaseTitle` renames the child, not the source: whoever may fork a Session also holds
-    // `session/rename` on the Session it creates, so the source's own access answer does not matter.
-    const childId = await this.sessions.fork({
+    return this.sessions.fork({
       sessionId,
-      ...options.atSeq === undefined ? {} : { atSeq: options.atSeq },
       increaseTitle: true,
       ...onCreated === undefined ? {} : { onCreated },
-      ...options.allowMigration === undefined ? {} : { allowMigration: options.allowMigration },
+      ...options?.allowMigration === undefined ? {} : { allowMigration: options.allowMigration },
     })
-    if (options.present === 'selected') this.openSession(childId)
-    return childId
   }
 
   startSession(workspaceId?: WorkspaceId, options?: StartSessionOptions): void {

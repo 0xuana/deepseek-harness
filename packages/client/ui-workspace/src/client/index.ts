@@ -58,7 +58,7 @@ import { SessionIdMenuItem } from './session-actions/SessionId.tsx'
 import { WorkspacePicker } from './WorkspacePicker.tsx'
 import { en, ja, zh, type WorkspaceKey } from './locales.ts'
 
-export type { ForkSessionOptions, StartSessionOptions, UiWorkspace } from './navigation.ts'
+export type { StartSessionOptions, UiWorkspace } from './navigation.ts'
 export type {
   DirectoryFlowOwnerProps, DirectoryFlowSlotName, DirectoryPickingHooks, DirectoryPickingInjected,
   MenuOpenState, RowToast, SessionRenameTarget, SessionRowOwnerProps, UseMenuOpenState, WorkspaceBrowserInjected,
@@ -101,7 +101,6 @@ const NS = 'workspace'
  */
 export const inject = [
   'slots', 'sessions', 'workspaces', 'locale', 'remote', 'remote.directoryPicker', 'layout', 'shortcuts', 'remoteAccess',
-  'uiSession',
 ]
 
 /**

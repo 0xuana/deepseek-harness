@@ -429,7 +429,7 @@
     "a7d8cc8d42e37ad5cc4882241492ac572ed8163c7fb8663180e893c7178e906f": 1
   },
   "packages/client/ui-chat/tests/apply-inject.client.spec.tsx": {
-    "04984a2ce1486250236e638e0197da0a1a840855ed3975c59130a85358c7e5fe": 1
+    "04984a2ce1486250236e638e0197da0a1a840855ed3975c59130a85358c7e5fe": 2
   },
   "packages/client/ui-chat/tests/approval-command.client.spec.tsx": {
     "84e41ecee24d2aa283a30e2cd2c08fb3ec72999d7db5bbac68a0fa87021a91b7": 1

@@ -69,12 +69,9 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
     openTab: vi.fn<(kind: string, options?: unknown) => void>(),
   }
   runtime.ctx.provide('sidebarRight', sidebarRight as never)
-  // Pages open files through the right Sidebar's tab-type registry, whose own claim decides whether
-  // an address opens at all; the spy records whether this call site ever asks it.
   const browserAvailable = createSnapshotStore(true)
   const sidebarRightTabs = {
     get: vi.fn<(kind: string) => object | undefined>(() => browserAvailable.getSnapshot() ? {} : undefined),
-    candidates: vi.fn<(address: string) => readonly object[]>(() => []),
     subscribe: (listener: () => void) => browserAvailable.subscribe(listener),
     register: vi.fn(() => () => {}),
   }
@@ -85,23 +82,13 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
   )
   runtime.remote.provideNamespaces({ session: { openWorkspacePath } })
   const openSession = vi.fn<(id: SessionId) => void>()
-  const uiWorkspace = {
+  runtime.ctx.provide('uiWorkspace', {
     openWorkspace: vi.fn(async (_workspaceId: WorkspaceId, beforeOpen: (id: SessionId) => void) => {
       beforeOpen(ROOT)
       openSession(ROOT)
     }),
     openSession,
-    // The branch surface delegates naming and presentation to Workspace navigation.
-    forkSession: vi.fn(async (
-      _sessionId: SessionId,
-      onCreated?: (childId: SessionId) => void,
-      _options?: { readonly atSeq?: number; readonly present?: 'selected' | 'listed' },
-    ) => {
-      onCreated?.(ROOT)
-      return ROOT
-    }),
-  }
-  runtime.ctx.provide('uiWorkspace', uiWorkspace as never)
+  } as never)
   const session = sessionFakeFor()
   await runtime.sessions.add({
     id: ROOT,
@@ -148,7 +135,6 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
     },
     runtime, chat, chatSettings, browserAvailable,
     layout, openWorkspacePath, sidebarRight, sidebarRightTabs, session, chatViewApi, chatFlowApi, rootReference, openSession,
-    uiWorkspace,
   }
 }
 
@@ -259,7 +245,7 @@ describe('Chat inject API', () => {
     }
   })
 
-  it('delegates the branch point, its analytics, and the child presentation to Workspace navigation', async () => {
+  it('loads older history and forks through the Session Controller', async () => {
     const b = await bench()
     const { injected } = b.chatViewApi(b.rootReference)
     injected.loadOlder()
@@ -270,11 +256,8 @@ describe('Chat inject API', () => {
 
     const track = vi.fn()
     b.runtime.ctx.provide('productAnalytics', { track } as never)
+    const forkCreated = vi.spyOn(b.runtime.sessions, 'fork').mockImplementation(async (input) => { input.onCreated?.(ROOT); return ROOT })
     injected.forkAt(17)
-    // The page owns only its branch point and analytics; naming and presentation belong to Workspace.
-    expect(b.uiWorkspace.forkSession).toHaveBeenCalledWith(ROOT, expect.any(Function) as (childId: SessionId) => void, {
-      atSeq: 17, present: 'selected',
-    })
     expect(track).toHaveBeenCalledWith('branch_session_click', { session_id: ROOT, parent_session_id: ROOT, click_position: 'footer' })
     await b.runtime.sessions.replaceEvents(ROOT, [
       { type: 'event', event: { type: 'turn/start', seq: SessionSeq(10), time: 10, data: { turn: 1 } } },
@@ -286,12 +269,20 @@ describe('Chat inject API', () => {
     ])
     injected.forkAt(17)
     expect(track).toHaveBeenLastCalledWith('branch_session_click', { session_id: ROOT, parent_session_id: ROOT, parent_message_id: 'reply', click_position: 'footer' })
-    // A rejected branch leaves the source view unchanged, as on master; the page adds no retry.
-    vi.spyOn(b.uiWorkspace, 'forkSession').mockRejectedValueOnce(new Error('fork failed'))
+    forkCreated.mockRestore()
+    injected.forkAt(17)
+    await vi.waitFor(() => {
+      expect(b.openSession).toHaveBeenCalledWith(ROOT)
+    })
+    expect(b.runtime.sessions.calls).toContainEqual({
+      method: 'fork', args: [{ sessionId: ROOT, atSeq: 17, increaseTitle: true, onCreated: expect.any(Function) as (childId: SessionId) => void }],
+    })
+
+    const fork = vi.spyOn(b.runtime.sessions, 'fork').mockRejectedValueOnce(new Error('fork failed'))
     injected.forkAt(18)
     await vi.waitFor(() => {
-      expect(b.uiWorkspace.forkSession).toHaveBeenLastCalledWith(ROOT, expect.any(Function) as (childId: SessionId) => void, {
-        atSeq: 18, present: 'selected',
+      expect(fork).toHaveBeenCalledWith({
+        sessionId: ROOT, atSeq: 18, increaseTitle: true, onCreated: expect.any(Function) as (childId: SessionId) => void,
       })
     })
     await b.runtime.dispose()
@@ -317,10 +308,6 @@ describe('Chat inject API', () => {
     // A line travels as the `file` type's navigation parameter, not in the address.
     await injected.openFile('src/a.ts', { line: 7 })
     expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1/src/a.ts', { params: { line: 7 } })
-    // Which type claims the address is the Sidebar registry's decision: the call site hands the
-    // address over without asking whether this page carries a type that would open it. A page with
-    // none — a reader's share — is answered by its own registered type, or by the Sidebar's refusal.
-    expect(b.sidebarRightTabs.candidates).not.toHaveBeenCalled()
     await b.runtime.dispose()
   })
 
@@ -503,7 +490,10 @@ describe('Chat inject API', () => {
   it('fails loud when a Chat View inject resolves no Session', async () => {
     const b = await bench()
     const entry = b.runtime.slots.entries('conversation.view')[0]!
-    const injectView = entry.inject! as (...args: [SessionId, ChatActions]) => Record<string, unknown>
+    const injectView = entry.inject as unknown as (
+      sessionId: SessionId,
+      actions: ChatActions,
+    ) => ChatViewInjected
     expect(() => injectView('never-listed' as SessionId, {} as ChatActions))
       .toThrow(/unknown session/)
     const flowEntry = b.runtime.slots.entries('conversation.chat.flow')[0]!
@@ -519,7 +509,6 @@ describe('Chat inject API', () => {
 
     const flow = b.chatFlowApi(b.rootReference)
     expect(flow.instance).toBe(b.chatViewApi(b.rootReference).instance)
-    expect(flow.injected.hooks.presentation).toBe(injected.hooks.presentation)
     expect(flow.injected.keyedHooks.chatNode('missing')).toBe(injected.keyedHooks.chatNode('missing'))
     expect(flow.injected.keyedHooks.chatNodeProcess('missing')).toBe(injected.keyedHooks.chatNodeProcess('missing'))
     expect(flow.injected.keyedHooks.chatNodeBottom('missing')).toBe(injected.keyedHooks.chatNodeBottom('missing'))

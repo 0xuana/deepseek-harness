@@ -285,11 +285,6 @@ function bench(options: BenchOptions = {}) {
   locale.setLocale('en')
   ctx.effect(() => locale.register('workspace', { en, zh }))
   ctx.provide('locale', locale)
-  // The owner's access snapshot allows every endpoint, so forks name their child.
-  const allowed = createSnapshotStore(true)
-  ctx.provide('remoteAccess', { source: () => allowed })
-  // ui-session owns the Session kind's source; navigation asks it for the rename answer.
-  ctx.provide('uiSession', { access: () => allowed.getSnapshot() } as never)
   const requestDraftInitialization = vi.fn<SessionInputResolver['requestDraftInitialization']>(() => 'applied')
   if (options.conversation !== false) ctx.provide('conversation', { input: { requestDraftInitialization } })
   const layout = new LayoutController({

@@ -73,11 +73,6 @@ async function bench(access: 'fake' | 'static' = 'fake') {
   const whenResourceAccess = vi.fn((): () => void => stopGuard)
   if (access === 'static') new StaticRemoteAccess(ctx)
   else ctx.provide('remoteAccess', { source: accessSource, whenAccess: vi.fn(() => () => {}), whenResourceAccess })
-  // The Session kind's source owner: navigation reads `session/rename` through this service.
-  ctx.provide('uiSession', {
-    access: (sessionId: string, action: string) =>
-      ctx.get('remoteAccess')?.source('session', sessionId, action).getSnapshot() ?? true,
-  } as never)
   const create = vi.fn(async (input: { name: string } | { path: string }) => ({
     workspaceId: 'ws-new' as never,
     path: 'name' in input ? `/projects/${input.name}` : input.path,
@@ -129,19 +124,7 @@ async function bench(access: 'fake' | 'static' = 'fake') {
   // keeps its identity between reads.
   let workspaceSnapshot = workspaceState([])
   let sessionSnapshot = sessionState([])
-  const listeners = new Set<() => void>()
-  const subscribe = (listener: () => void): (() => void) => {
-    listeners.add(listener)
-    return () => { listeners.delete(listener) }
-  }
-  const setSummary = (sessionId: string, facts: Partial<SessionSummary>): void => {
-    const byId = {
-      ...sessionSnapshot.byId,
-      [sessionId]: { ...summary(sessionId, 0), ...sessionSnapshot.byId[sessionId as SessionId], ...facts },
-    }
-    sessionSnapshot = { ...sessionSnapshot, ids: Object.keys(byId) as SessionId[], byId }
-    for (const listener of [...listeners]) listener()
-  }
+  const subscribe = () => () => {}
   const workspacesSubscribe = vi.fn(subscribe)
   const initializeDefault = vi.fn(async (): Promise<WorkspaceView | undefined> => undefined)
   ctx.provide('workspaces', {
@@ -184,7 +167,7 @@ async function bench(access: 'fake' | 'static' = 'fake') {
   return {
     ctx, slots: ctx.get('slots') as SlotRegistry, locale, create, rename, commands, accessSource, whenResourceAccess, stopGuard,
     retain, using, selectPanel, search, renameSession, binding, fork, pickDirectory, pinSession, unpinSession,
-    workspacesSubscribe, setSummary, initializeDefault, history, scope, sessionOf,
+    workspacesSubscribe, initializeDefault, history, scope, sessionOf,
     setWorkspaces: (snapshot: WorkspaceSnapshot): void => { workspaceSnapshot = snapshot },
     setSessions: (snapshot: SessionListState): void => { sessionSnapshot = snapshot },
   }
@@ -240,7 +223,6 @@ describe('ui-workspace apply', () => {
   it('declares the services it drives', () => {
     expect(inject).toEqual([
       'slots', 'sessions', 'workspaces', 'locale', 'remote', 'remote.directoryPicker', 'layout', 'shortcuts', 'remoteAccess',
-      'uiSession',
     ])
   })
 
@@ -349,8 +331,7 @@ describe('ui-workspace apply', () => {
     expect(rowToastEntry.store).toBeUndefined()
     expect(b.slots.entries('workspace.toast').map(row => row.options.key)).toEqual([
       'sessionIdCopied', 'sessionIdCopyFailed', 'pinFailed', 'unpinFailed', 'archivedNotOpenable',
-      'defaultWorkspaceFailed', 'shortcutForkFailed', 'createFailed', 'forkRequiresOpen',
-      'archived', 'stoppedAndArchived',
+      'defaultWorkspaceFailed', 'shortcutForkFailed', 'createFailed', 'forkRequiresOpen', 'archived', 'stoppedAndArchived',
     ])
     for (const registration of b.slots.entries('workspace.toast')) {
       expect(registration.locale).toBe('workspace')
@@ -873,97 +854,6 @@ describe('ui-workspace apply', () => {
     const picker = faceOf(b.slots.entries('conversation.hero.workspace')[0]!) as WorkspacePickerInjected
     await picker.createWorkspace({ path: '/tmp/project' })
     expect(b.create).toHaveBeenCalledWith({ path: '/tmp/project' })
-  })
-
-  /**
-   * Answer as a standalone reader page's access snapshot does: it may branch the one Session the
-   * share grants and may not rename that source Session.
-   * @param b - Benchmark whose access source answers.
-   */
-  function provideReaderAnswers(b: Awaited<ReturnType<typeof bench>>): void {
-    b.accessSource.mockImplementation((_kind, id, endpoint) =>
-      createSnapshotStore(endpoint === 'session/fork' && id === 'session'))
-  }
-
-  it('names a reader page\'s branch and opens it immediately when the caller selects it', async () => {
-    const b = await bench()
-    onTestFinished(() => b.ctx.fiber.dispose())
-    provideReaderAnswers(b)
-    await b.ctx.plugin({ inject: [...inject], apply }).await()
-
-    await b.ctx.uiWorkspace.forkSession(sid('session'), undefined, { present: 'selected' })
-
-    // The child inherits a title from the fork itself; the reader's answer for the source says nothing
-    // about the child it now owns.
-    expect(b.fork).toHaveBeenCalledExactlyOnceWith({ sessionId: sid('session'), increaseTitle: true })
-    expect(b.retain).toHaveBeenCalledExactlyOnceWith('forked', { source: 'mainView' })
-    expect(b.selectPanel).toHaveBeenCalledExactlyOnceWith(null)
-  })
-
-  it('leaves the selection alone when the caller presents the branch as listed', async () => {
-    const b = await bench()
-    onTestFinished(() => b.ctx.fiber.dispose())
-    provideReaderAnswers(b)
-    await b.ctx.plugin({ inject: [...inject], apply }).await()
-    b.ctx.uiWorkspace.openSession(sid('source'))
-    b.retain.mockClear()
-    b.selectPanel.mockClear()
-
-    await b.ctx.uiWorkspace.forkSession(sid('session'), undefined, { present: 'listed' })
-
-    expect(b.fork).toHaveBeenCalledExactlyOnceWith({ sessionId: sid('session'), increaseTitle: true })
-    expect(b.retain).not.toHaveBeenCalled()
-    expect(b.selectPanel).not.toHaveBeenCalled()
-  })
-
-  it('forks the reader main Session by shortcut with a child title and leaves the selection alone', async () => {
-    const b = await bench()
-    onTestFinished(() => b.ctx.fiber.dispose())
-    provideReaderAnswers(b)
-    b.setSessions(sessionState([{ ...summary('session', 1), retainedBy: { mainView: 1 } }]))
-    await b.ctx.plugin({ inject: [...inject], apply }).await()
-    const resolution = b.commands.get('session.fork')!.resolve({ region: 'page', modal: null, target: null })
-    if (resolution.status !== 'handled') throw new Error('the reader may branch its main Session')
-    resolution.run()
-    await vi.waitFor(() => {
-      expect(b.fork).toHaveBeenCalledExactlyOnceWith({ sessionId: sid('session'), increaseTitle: true })
-    })
-    expect(b.retain).not.toHaveBeenCalled()
-    expect(b.selectPanel).not.toHaveBeenCalled()
-    expect(b.renameSession).not.toHaveBeenCalled()
-  })
-
-  it('does not open or retry a reader fork refused for migration until its source notice is used', async () => {
-    const b = await bench()
-    onTestFinished(() => b.ctx.fiber.dispose())
-    provideReaderAnswers(b)
-    declare(b.slots, 'sidebar.workspaces', 'shell.overlay')
-    await b.ctx.plugin({ inject: [...inject], apply }).await()
-    b.fork.mockRejectedValueOnce(new SessionForkError(
-      new RemoteError('session/migration-required', 'migration required', { sessionId: sid('session') }),
-      sid('session'),
-    ))
-    const fork = faceOf(entry(b.slots, MENU_ITEM, 'fork')) as ForkSessionInjected
-    const toast = faceOf(entry(b.slots, 'shell.overlay', 'workspace.row-toast')) as RowToastInjected
-
-    fork.forkSession(sid('session'))
-    await vi.waitFor(() => {
-      expect(toast.hooks.toast.getSnapshot()).toEqual({ kind: 'forkRequiresOpen', sessionId: 'session', seq: 1 })
-    })
-
-    expect(b.fork).toHaveBeenCalledExactlyOnceWith({
-      sessionId: 'session', increaseTitle: true, allowMigration: false, onCreated: b.fork.mock.calls[0]?.[0].onCreated,
-    })
-    expect(b.fork.mock.calls[0]?.[0].onCreated).toBeTypeOf('function')
-    expect(b.retain).not.toHaveBeenCalled()
-    expect(b.renameSession).not.toHaveBeenCalled()
-    expect(b.selectPanel).not.toHaveBeenCalled()
-    toast.dismissToast()
-    ;(faceOf(b.slots.entries('workspace.toast').find(row => row.options.key === 'forkRequiresOpen')!) as ToastDisplayInjected<'forkRequiresOpen'>)
-      .display({ kind: 'forkRequiresOpen', sessionId: sid('session'), seq: 1 }, b.locale.bind('workspace'), toast.dismissToast).actions![0]!.onClick()
-    expect(b.retain).toHaveBeenCalledExactlyOnceWith('session', { source: 'mainView' })
-    expect(b.fork).toHaveBeenCalledOnce()
-    expect(b.renameSession).not.toHaveBeenCalled()
   })
 
   it('declares the browser child slots and reports directory-flow occupancy per surface', async () => {
