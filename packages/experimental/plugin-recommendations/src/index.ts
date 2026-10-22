@@ -7,12 +7,16 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { isPluginStopping } from '@deepseek-ai/dsh-experimental-action-cards'
 import type { ActionCardDecision, ActionCardProposalOf, ActionCardResult } from '@deepseek-ai/dsh-experimental-action-cards'
 import type {} from '@deepseek-ai/dsh-plugin-manager'
+import type { ChangeResult } from '@deepseek-ai/dsh-plugin-manager/types'
 import type {} from '@deepseek-ai/dsh-skill'
 import { eligible, registerOfficialPluginsSkill } from './skill.ts'
 import type { PluginData, PluginDetails, PluginPhase, RecommendationDetails } from './types.ts'
 export type * from './types.ts'
 
 export const name = 'plugin-recommendations'
+
+/** Services the plugin uses; `actionCards` owns the card tool, card state and user actions. */
+export const inject = ['pluginManager', 'agents', 'skills', 'actionCards']
 
 declare module '@deepseek-ai/cordis' {
   interface Context { pluginRecommendations: PluginRecommendations }
@@ -40,7 +44,7 @@ function refused(reason: string): ActionCardResult {
 
 /** Catalog lookups for card text and the enabling behind the `enable_official_plugin` card. */
 export class PluginRecommendations extends TypertRemoteService {
-  static inject = ['pluginManager', 'agents', 'skills', 'actionCards']
+  static inject = inject
   private readonly operations = new Set<Promise<ActionCardResult>>()
   private readonly stopped = Promise.withResolvers<undefined>()
   private closing = false
@@ -56,9 +60,9 @@ export class PluginRecommendations extends TypertRemoteService {
     this.ctx.actionCards.register({
       action: ACTION, skill: 'official-plugins', details: detailsSchema,
       verbs: { enable: { global: true } },
-      openPhases: ['failed'],
-      statusGuidance: 'Plugin cards: enabled means the plugin is on now, or turns on after a DSH restart when application is restart-required, '
-        + 'while application overridden means another configuration keeps it off; already-enabled means it was on before; failed can be retried from its card; '
+      openPhases: ['failed', 'unconfirmed'],
+      statusGuidance: 'Plugin cards: enabled means the plugin is on now, or after a DSH restart when application is restart-required; '
+        + 'already-enabled means it was on before; failed, or unconfirmed when a reload cut enabling off, can be retried from the card; '
         + 'dismissed means the user declined it, so do not offer it again in this conversation; enabling authorizes nothing beyond that plugin.',
       act: (agent, proposal) => {
         const operation = this.enable(agent, proposal)
@@ -96,29 +100,42 @@ export class PluginRecommendations extends TypertRemoteService {
     return isPluginStopping(this.owner, this.closing)
   }
 
-  private record(agent: Agent, callId: ToolCallId, phase: PluginPhase, data: PluginData = {}): ActionCardResult {
-    const fields = Object.fromEntries(Object.entries(data).filter(([, value]) => value !== undefined))
-    const decision: ActionCardDecision = { callId, action: ACTION, phase, ...Object.keys(fields).length === 0 ? {} : { data: fields } }
-    this.ctx.actionCards.record(agent, decision)
-    return settled(decision)
-  }
-
-  /** Enable the card's plugin once; an enabled card settles unchanged and a failed one can be retried. */
+  /** Enable the card's plugin once; an enabled card settles unchanged, and a failed or unconfirmed one can be retried. */
   private async enable(agent: Agent, proposal: PluginProposal): Promise<ActionCardResult> {
-    const previous = ownEntry(this.ctx.actionCards.view(agent.session).decisions, proposal.callId)
-    if (previous !== undefined && previous.phase !== 'failed') return settled(previous)
+    // Held from the start: an unload during the profile change still records where this card stands.
+    const cards = this.ctx.actionCards
+    const record = (phase: PluginPhase, data: PluginData = {}): ActionCardResult => {
+      const fields = Object.fromEntries(Object.entries(data).filter(([, value]) => value !== undefined))
+      const decision: ActionCardDecision = {
+        callId: proposal.callId, action: ACTION, phase, ...Object.keys(fields).length === 0 ? {} : { data: fields },
+      }
+      cards.record(agent, decision)
+      return settled(decision)
+    }
+    const previous = ownEntry(cards.view(agent.session).decisions, proposal.callId)
+    if (previous !== undefined && previous.phase !== 'failed' && previous.phase !== 'unconfirmed') return settled(previous)
     const bundle = (await this.ctx.pluginManager.listBundles()).find(item => item.name === proposal.details.name)
     if (bundle === undefined || !eligible(bundle)) return refused('unavailable')
     if (this.isStopping()) return refused('closing')
     if (!this.ctx.agents.roots().includes(agent)) return refused('not-live-root')
-    if (bundle.enabled) return this.record(agent, proposal.callId, 'already-enabled')
-    // PluginManager owns the accepted profile mutation. HMR may unload this
-    // consumer before it finishes, so only our wait for its result is cancelled.
-    const result = await Promise.race([this.ctx.pluginManager.setBundleEnabled(bundle.name, true), this.stopped.promise])
-    if (result === undefined || this.isStopping()) return { status: 'unconfirmed', reason: 'closing' }
-    const { application } = result
-    return this.record(agent, proposal.callId, application === 'failed' || application === 'cancelled' ? 'failed' : 'enabled', {
-      application: application === 'applied' || application === 'failed' ? undefined : application, errorCode: result.error?.code,
+    // A plugin found on after this card's own interrupted enable was turned on by this card.
+    if (bundle.enabled) return record(previous?.phase === 'unconfirmed' ? 'enabled' : 'already-enabled')
+    let result: ChangeResult | undefined
+    try {
+      // PluginManager owns the accepted profile mutation. HMR may unload this
+      // consumer before it finishes, so only our wait for its result is cancelled.
+      result = await Promise.race([this.ctx.pluginManager.setBundleEnabled(bundle.name, true), this.stopped.promise])
+    } catch (error) {
+      // A rejected change reports no management code; the card offers a retry instead of failing the click.
+      this.ctx.logger.warn('Enabling %s was rejected: %s', bundle.name, String(error))
+      return record('failed', { errorCode: 'operation-error' })
+    }
+    if (result === undefined) {
+      record('unconfirmed')
+      return { status: 'unconfirmed', reason: 'closing' }
+    }
+    return record(result.application === 'failed' ? 'failed' : 'enabled', {
+      application: result.application === 'restart-required' ? 'restart-required' : undefined, errorCode: result.error?.code,
     })
   }
 }

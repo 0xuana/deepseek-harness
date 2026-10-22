@@ -44,6 +44,11 @@ async function shown(value: PluginCardProps) {
   return view
 }
 
+/** Text a screen reader announces as the element's description. */
+function description(element: HTMLElement) {
+  return element.getAttribute('aria-describedby')?.split(' ').map(id => document.getElementById(id)?.textContent)
+}
+
 it('keeps every dictionary aligned', () => {
   expect(Object.keys(en).sort()).toEqual(Object.keys(zh).sort())
   expect(Object.keys(ja).sort()).toEqual(Object.keys(zh).sort())
@@ -56,6 +61,8 @@ it('shows the catalog text and reason as one details target with the official ba
   expect(screen.getByText('官方')).toBeTruthy()
   const details = screen.getByRole('button', { name: '查看详情：会话搜索' })
   expect(details.textContent).toBe('会话搜索帮你找到上周讨论的方案检索过去的会话')
+  // The details label names the plugin; the reason and catalog description stay readable as its description.
+  expect(description(details)).toEqual(['帮你找到上周讨论的方案', '检索过去的会话'])
   expect(screen.getAllByRole('button').map(button => button.textContent)).toEqual([details.textContent, '暂不需要', '启用'])
   expect(screen.getByText('启用后可在所有会话中使用')).toBeTruthy()
   expect(value.act).not.toHaveBeenCalled()
@@ -65,22 +72,25 @@ it('shows the catalog text and reason as one details target with the official ba
   await waitFor(() => { expect(value.act).toHaveBeenCalledExactlyOnceWith('enable') })
 })
 
-it('allows dismissal and disables both actions until the request settles', async () => {
+it.each([
+  ['dismiss', '暂不需要', '启用'],
+  ['enable', '启用', '暂不需要'],
+] as const)('marks only the clicked %s action as working and disables both until the request settles', async (verb, clicked, other) => {
   const value = props()
   const pending = Promise.withResolvers<ActionCardResult | undefined>()
   value.act = vi.fn<Act>(() => pending.promise)
   await shown(value)
-  fireEvent.click(screen.getByRole('button', { name: '暂不需要' }))
+  fireEvent.click(screen.getByRole('button', { name: clicked }))
+  expect(value.act).toHaveBeenCalledWith(verb)
   expect(screen.getByRole('button', { name: '正在处理…' }).hasAttribute('disabled')).toBe(true)
-  expect(screen.getByRole('button', { name: '暂不需要' }).hasAttribute('disabled')).toBe(true)
-  expect(value.act).toHaveBeenCalledWith('dismiss')
+  expect(screen.getByRole('button', { name: other }).hasAttribute('disabled')).toBe(true)
   await act(async () => { pending.resolve({ status: 'settled', decision: { callId, action: ACTION, phase: 'dismissed' } }) })
+  expect(screen.getByRole('button', { name: clicked }).hasAttribute('disabled')).toBe(false)
 })
 
 it.each([
   [{ phase: 'enabled' }, zh.enabled],
   [{ phase: 'enabled', data: { application: 'restart-required' } }, zh['restart-required']],
-  [{ phase: 'enabled', data: { application: 'overridden' } }, zh.overridden],
   [{ phase: 'already-enabled' }, zh['already-enabled']],
   [{ phase: 'dismissed' }, zh.dismissed],
   [{ phase: 'replaced' }, zh.replaced],
@@ -99,9 +109,9 @@ it('names no status for a phase it does not know, and offers no action', async (
 
 it.each([
   [{ phase: 'failed' }, zh.failed, undefined],
-  [{ phase: 'failed', data: { application: 'cancelled' } }, zh.cancelled, undefined],
   [{ phase: 'failed', data: { errorCode: 'incompatible-version' } }, zh.failed, zh['version-error']],
   [{ phase: 'failed', data: { errorCode: 'operation-error' } }, zh.failed, zh['management-error']],
+  [{ phase: 'unconfirmed' }, zh.unconfirmed, undefined],
 ] as const)('offers a retry after %j', async (decision, status, alert) => {
   const value = props(decision)
   await shown(value)
@@ -111,28 +121,44 @@ it.each([
   await waitFor(() => { expect(value.act).toHaveBeenCalledWith('enable') })
 })
 
-it('shows a plugin already selected in Plugins as enabled and a name outside the catalog without actions', async () => {
+it('shows a plugin already selected in Plugins as enabled without actions', async () => {
   await shown(props(undefined, { ...available, enabled: true }))
   expect(screen.getByRole('status').textContent).toBe(zh['already-enabled'])
   expect(screen.queryByRole('button', { name: '启用' })).toBeNull()
-  cleanup()
-  await shown(props(undefined, { status: 'refused', reason: 'unavailable' }))
-  expect(screen.getByRole('alert').textContent).toBe(zh.unavailable)
-  expect(screen.getByText('搜索旧会话')).toBeTruthy()
-  expect(screen.queryByRole('button', { name: '启用' })).toBeNull()
+  expect(screen.queryByRole('button', { name: '暂不需要' })).toBeNull()
 })
 
-it('reports an unreachable Host without actions', async () => {
-  const lost = props()
-  lost.describe = vi.fn<Describe>(async () => undefined)
-  await shown(lost)
-  expect(screen.getByRole('alert').textContent).toBe(zh.transport)
+it.each([
+  [{ status: 'refused', reason: 'unavailable' }, zh.unavailable],
+  [{ status: 'refused', reason: 'closing' }, zh.closing],
+  [undefined, zh['lookup-failed']],
+  ['offline', zh['lookup-failed']],
+] as const)('offers Not now and a retry of the lookup, but not Enable, after the lookup answers %j', async (answer, message) => {
+  const value = props()
+  value.describe = vi.fn<Describe>(async () => available).mockImplementationOnce(async () => {
+    if (answer === 'offline') throw new Error('offline')
+    return answer
+  })
+  await shown(value)
+  expect(screen.getByRole('alert').textContent).toBe(message)
+  const details = screen.getByRole('button', { name: '查看详情：搜索旧会话' })
+  expect(description(details)).toEqual(['帮你找到上周讨论的方案'])
   expect(screen.queryByRole('button', { name: '启用' })).toBeNull()
-  cleanup()
-  const rejected = props()
-  rejected.describe = vi.fn<Describe>(async () => { throw new Error('offline') })
-  await shown(rejected)
-  expect(screen.getByRole('alert').textContent).toBe(zh.transport)
+  fireEvent.click(screen.getByRole('button', { name: '暂不需要' }))
+  await waitFor(() => { expect(value.act).toHaveBeenCalledExactlyOnceWith('dismiss') })
+  fireEvent.click(screen.getByRole('button', { name: '重试' }))
+  await waitFor(() => { expect(screen.getByRole('button', { name: '启用' }).hasAttribute('disabled')).toBe(false) })
+  expect(value.describe).toHaveBeenCalledTimes(2)
+  expect(screen.queryByRole('alert')).toBeNull()
+  expect(screen.queryByRole('button', { name: '重试' })).toBeNull()
+})
+
+it('keeps the recorded outcome of an enabled card whose plugin has left the catalog', async () => {
+  await shown(props({ phase: 'enabled' }, { status: 'refused', reason: 'unavailable' }))
+  expect(screen.getByRole('status').textContent).toBe(zh.enabled)
+  expect(screen.queryByRole('alert')).toBeNull()
+  expect(screen.getByRole('button', { name: '查看详情：搜索旧会话' })).toBeTruthy()
+  expect(screen.queryByRole('button', { name: '重试' })).toBeNull()
 })
 
 it('keeps actions disabled until the card state loads', async () => {
@@ -147,7 +173,9 @@ it('holds the description and action lines while the first catalog lookup is pen
   const { container } = render(<PluginCardBody {...loading} />)
   const body = container.querySelector('[aria-busy="true"]')
   expect(body).not.toBeNull()
-  expect(within(screen.getByRole('button', { name: '查看详情：搜索旧会话' })).getByText('搜索旧会话')).toBeTruthy()
+  const details = screen.getByRole('button', { name: '查看详情：搜索旧会话' })
+  expect(within(details).getByText('搜索旧会话')).toBeTruthy()
+  expect(description(details)).toEqual(['帮你找到上周讨论的方案'])
   expect(container.querySelectorAll('button span > span')).toHaveLength(1)
   expect(screen.getByText('启用后可在所有会话中使用')).toBeTruthy()
   for (const name of ['暂不需要', '启用']) expect(screen.getByRole('button', { name }).hasAttribute('disabled')).toBe(true)

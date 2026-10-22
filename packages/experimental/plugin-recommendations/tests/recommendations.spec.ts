@@ -2,13 +2,14 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import type { BundleInfo, ChangeResult } from '@deepseek-ai/dsh-plugin-manager/types'
+import * as PluginRecommendations from '../src/index.ts'
 import { ACTION, bundle, callId, fixture, logProposal, proposal } from './fixture.ts'
 
 describe('official recommendations', () => {
   it('offers the live catalog through a skill, adds no tools of its own, and withdraws the skill and card kind on unload', async () => {
     const f = await fixture()
-    expect(f.ctx.tools.get('list_official_plugins')).toBeUndefined()
-    expect(f.ctx.tools.get('suggest_plugin')).toBeUndefined()
+    const tools = () => f.ctx.tools.definitions().map(tool => tool.name).sort()
+    const withPlugin = tools()
     const discovered = (await f.ctx.skills.list()).filter(skill => skill.name === 'official-plugins')
     expect(discovered).toMatchSnapshot('skill discovery')
     // The skill catalog cuts entries longer than its default 500 characters, which would drop the exclusions at the end.
@@ -32,6 +33,7 @@ describe('official recommendations', () => {
     await expect(f.ctx.skills.get('official-plugins', { signal: controller.signal })).rejects.toThrow()
     f.propose()
     await f.fiber.dispose()
+    expect(tools()).toEqual(withPlugin)
     expect(f.ctx.get('pluginRecommendations')).toBeUndefined()
     expect((await f.ctx.skills.list()).some(skill => skill.name === 'official-plugins')).toBe(false)
     expect(await f.ctx.actionCards.act(f.agent, callId, 'enable')).toEqual({ status: 'refused', reason: 'unavailable' })
@@ -89,9 +91,7 @@ describe('official recommendations', () => {
 
   it.each([
     ['restart-required', { phase: 'enabled', data: { application: 'restart-required' } }, false],
-    ['overridden', { phase: 'enabled', data: { application: 'overridden' } }, false],
     ['failed', { phase: 'failed' }, true],
-    ['cancelled', { phase: 'failed', data: { application: 'cancelled' } }, true],
   ] as const)('records the %s outcome and retries only failures', async (application, recorded, retried) => {
     const f = await fixture()
     f.propose()
@@ -120,6 +120,16 @@ describe('official recommendations', () => {
     expect(await f.ctx.actionCards.act(f.agent, callId, 'enable')).toEqual({ status: 'settled',
       decision: { callId, action: ACTION, phase: 'failed', data: { errorCode: 'incompatible-version' } } })
     expect(JSON.stringify(f.events)).not.toContain('/private/profile/path')
+  })
+
+  it('records a rejected profile change as failed with a generic code and lets the user retry', async () => {
+    const f = await fixture()
+    f.propose()
+    f.manager.setBundleEnabled.mockRejectedValueOnce(new Error('profile lock timed out'))
+    expect(await f.ctx.actionCards.act(f.agent, callId, 'enable')).toEqual({ status: 'settled',
+      decision: { callId, action: ACTION, phase: 'failed', data: { errorCode: 'operation-error' } } })
+    expect(await f.ctx.actionCards.act(f.agent, callId, 'enable')).toEqual({ status: 'settled', decision: { callId, action: ACTION, phase: 'enabled' } })
+    expect(f.manager.setBundleEnabled).toHaveBeenCalledTimes(2)
   })
 
   it.each(['plugin', 'plugin-reload', 'agent'] as const)('does not start enabling after the %s leaves during catalog lookup', async (target) => {
@@ -199,11 +209,33 @@ describe('official recommendations', () => {
     await f.fiber.dispose()
     expect(await first).toEqual({ status: 'unconfirmed', reason: 'closing' })
     expect(await second).toEqual(await first)
+    // The lost outcome stays on the card, retryable.
+    expect(f.card()).toEqual({ callId, action: ACTION, phase: 'unconfirmed' })
     const before = f.events.length
     gate.resolve({ application: 'applied', changed: true, stage: 'enable', target: bundle.name })
     await gate.promise
     expect(f.events).toHaveLength(before)
     expect(f.manager.setBundleEnabled).toHaveBeenCalledOnce()
     expect(await f.ctx.actionCards.act(f.agent, callId, 'enable')).toEqual({ status: 'refused', reason: 'unavailable' })
+    // Reloaded, a retry that finds the plugin on records this card's own change, not one made elsewhere.
+    await f.ctx.plugin(PluginRecommendations)
+    f.manager.listBundles.mockResolvedValue([{ ...bundle, enabled: true }])
+    expect(await f.ctx.actionCards.act(f.agent, callId, 'enable')).toEqual({ status: 'settled', decision: { callId, action: ACTION, phase: 'enabled' } })
+    expect(f.manager.setBundleEnabled).toHaveBeenCalledOnce()
+  })
+
+  it('retries an unconfirmed enable that did not land', async () => {
+    const f = await fixture()
+    f.propose()
+    f.ctx.actionCards.record(f.agent, { callId, action: ACTION, phase: 'unconfirmed' })
+    expect(await f.ctx.actionCards.act(f.agent, callId, 'enable')).toEqual({ status: 'settled', decision: { callId, action: ACTION, phase: 'enabled' } })
+    expect(f.manager.setBundleEnabled).toHaveBeenCalledOnce()
+  })
+
+  it('dismisses an unconfirmed card', async () => {
+    const f = await fixture()
+    f.propose()
+    f.ctx.actionCards.record(f.agent, { callId, action: ACTION, phase: 'unconfirmed' })
+    expect(await f.ctx.actionCards.act(f.agent, callId, 'dismiss')).toMatchObject({ status: 'settled', decision: { phase: 'dismissed' } })
   })
 })

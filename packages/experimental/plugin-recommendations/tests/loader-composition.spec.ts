@@ -101,6 +101,7 @@ it.each(['normal', 'consumer-unload', 'shared-rows'] as const)('enables through 
     release.resolve(undefined)
     await reload
     expect(await action).toEqual({ status: 'unconfirmed', reason: 'closing' })
+    expect(ctx.actionCards.view(agent.session).decisions[callId]).toEqual({ callId, action: ACTION, phase: 'unconfirmed' })
     expect(ctx.get('pluginRecommendations')).toBeUndefined()
     expect(await ctx.skills.list()).toEqual([])
     await ctx.hmr.runExclusive(async () => {})
@@ -108,6 +109,17 @@ it.each(['normal', 'consumer-unload', 'shared-rows'] as const)('enables through 
     expect((await ctx.pluginManager.listBundles()).find(bundle => bundle.name === name)?.enabled).toBe(true)
     expect(model.requests).toHaveLength(0)
     return
+  }
+  if (scenario === 'shared-rows') {
+    // The composed configuration holds the shared row twice, so the Plugins page cannot address it; the bundles still switch.
+    const shared = async () => (await ctx.pluginManager.listPlugins()).find(plugin => plugin.moduleName === 'cordis:actionCards')
+    expect((await shared())?.readOnlyReason).toBe('unaddressable')
+    const service = [...ctx.loader.entries()].find(entry => entry.options.id === 'action-cards')?.fiber
+    expect((await ctx.pluginManager.setBundleEnabled('fixture-pages', false)).application).toBe('applied')
+    expect((await shared())?.readOnlyReason).toBeUndefined()
+    expect([...ctx.loader.entries()].find(entry => entry.options.id === 'action-cards')?.fiber).toBe(service)
+    expect((await ctx.pluginManager.setBundleEnabled('fixture-pages', true)).application).toBe('applied')
+    expect((await shared())?.readOnlyReason).toBe('unaddressable')
   }
   const enabled = { callId, action: ACTION, phase: 'enabled' }
   expect(await ctx.actionCards.act(agent, callId, 'enable')).toEqual({ status: 'settled', decision: enabled })

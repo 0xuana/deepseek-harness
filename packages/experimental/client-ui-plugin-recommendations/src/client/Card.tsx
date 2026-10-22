@@ -1,5 +1,5 @@
 /** Body of an `enable_official_plugin` card: the plugin's catalog text, its details link, the user's choice and its outcome. */
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useId, useState, useSyncExternalStore } from 'react'
 import { z } from 'zod'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -34,13 +34,15 @@ export interface PluginCardServices {
 /** Body props: the frame's card props plus the plugin-lifetime services. */
 export type PluginCardProps = ActionCardBodyProps<'pluginRecommendations'> & PluginCardServices
 
+type CardVerb = 'enable' | 'dismiss'
+
 const detailsSchema = z.object({ name: z.string() }) satisfies z.ZodType<PluginDetails>
 /** Recorded decision data the body reads; see `PluginData` for its meaning. */
-const dataSchema = z.object({
-  application: z.enum(['restart-required', 'overridden', 'cancelled']).optional(), errorCode: z.string().optional(),
-})
+const dataSchema = z.object({ application: z.literal('restart-required').optional(), errorCode: z.string().optional() })
 type CardData = z.infer<typeof dataSchema>
 
+/** Phases that still offer Enable and Not now; any other recorded phase is settled. */
+const OPEN_PHASES: readonly string[] = ['failed', 'unconfirmed']
 /** Refusal reasons with their own copy; any other reason reads as unavailable. */
 const REASON_KEYS: readonly RecommendationKey[] = ['unknown', 'unavailable', 'access-denied', 'not-live-root', 'closing']
 
@@ -48,12 +50,11 @@ function reasonKey(reason: string): RecommendationKey {
   return REASON_KEYS.find(key => key === reason) ?? 'unavailable'
 }
 
-/** Status copy of a recorded phase; `restart-required` and `overridden` refine enabled, `cancelled` refines failed. */
+/** Status copy of a recorded phase; `restart-required` refines enabled. */
 function statusKey(phase: string, data: CardData): RecommendationKey | undefined {
   switch (phase) {
-    case 'dismissed': case 'replaced': case 'already-enabled': return phase
-    case 'enabled': return data.application === 'restart-required' || data.application === 'overridden' ? data.application : 'enabled'
-    case 'failed': return data.application === 'cancelled' ? 'cancelled' : 'failed'
+    case 'dismissed': case 'replaced': case 'already-enabled': case 'failed': case 'unconfirmed': return phase
+    case 'enabled': return data.application === 'restart-required' ? 'restart-required' : 'enabled'
     default: return undefined
   }
 }
@@ -61,6 +62,7 @@ function statusKey(phase: string, data: CardData): RecommendationKey | undefined
 /**
  * Display one plugin card: its current catalog text, the model's reason, the user's choice and its outcome.
  * Until the plugin's first catalog lookup returns, a placeholder line and the disabled actions hold the final layout.
+ * A refused or lost lookup leaves Not now and a retry of the lookup, but not Enable.
  * @param props - card, state, actions and plugin-lifetime services.
  * @returns the card body.
  */
@@ -74,10 +76,13 @@ export function PluginCardBody({
     const entries = catalog.getSnapshot()
     return name !== undefined && Object.hasOwn(entries, name) ? entries[name] : undefined
   })
-  // This card's latest lookup: undefined while loading, null when the Host could not be reached.
+  // This card's latest lookup: undefined while loading, null when the reply was lost.
   const [lookup, setLookup] = useState<RecommendationDetails | null>()
-  const [pending, setPending] = useState(false)
+  const [attempt, setAttempt] = useState(0)
+  const [pending, setPending] = useState<CardVerb>()
   const [error, setError] = useState<RecommendationKey>()
+  const reasonId = useId()
+  const descriptionId = useId()
   const phase = decision?.phase
   useEffect(() => {
     if (name === undefined) return undefined
@@ -91,7 +96,7 @@ export function PluginCardBody({
       () => { if (current) setLookup(null) },
     )
     return () => { current = false }
-  }, [catalog, describe, sessionId, proposal.callId, name, phase])
+  }, [catalog, describe, sessionId, proposal.callId, name, phase, attempt])
   if (name === undefined) return <div className={css.body}>{summary}</div>
   // Remembered text shows at once; this card's own refusal or lost reply still decides what it offers.
   const current = lookup === null || lookup?.status === 'refused' ? lookup : cached ?? lookup
@@ -99,12 +104,17 @@ export function PluginCardBody({
   const available = current?.status === 'available' ? current : undefined
   const parsed = dataSchema.safeParse(decision?.data ?? {})
   const data: CardData = parsed.success ? parsed.data : {}
+  const settled = phase !== undefined && !OPEN_PHASES.includes(phase)
   const status = phase === undefined ? available?.enabled ? 'already-enabled' : undefined : statusKey(phase, data)
-  const open = (available !== undefined || loading) && (phase === undefined ? available?.enabled !== true : phase === 'failed')
+  // A settled card keeps its recorded outcome; a later catalog change does not reopen or relabel it.
+  const offered = !settled && available?.enabled !== true
+  const enable = offered && (available !== undefined || loading)
+  const lookupProblem = settled || current === undefined || current?.status === 'available' ? undefined
+    : current === null ? 'lookup-failed' : current.reason
   const failure = phase === 'failed' && data.errorCode !== undefined ? data.errorCode === 'incompatible-version' ? 'version-error' : 'management-error' : undefined
   const title = available === undefined ? proposal.title : resolveText(available.title)
-  const run = async (verb: 'enable' | 'dismiss') => {
-    setPending(true)
+  const run = async (verb: CardVerb) => {
+    setPending(verb)
     setError(undefined)
     try {
       const result = await act(verb)
@@ -113,30 +123,37 @@ export function PluginCardBody({
     } catch {
       // The Host operation may have committed before a connection loss; retry is idempotent.
       setError('transport')
-    } finally { setPending(false) }
+    } finally { setPending(undefined) }
   }
+  const busy = pending !== undefined || !ready
   return <>
     <header className={css.header}><span>{t('heading')}</span><span className={css.badge}>{t('official')}</span></header>
     <div className={css.body} aria-busy={loading || undefined}>
-      <button type="button" className={css.details} onClick={() => { openDetails(name) }} aria-label={t('detailsFor').replace('{title}', title)}>
+      <button type="button" className={css.details} onClick={() => { openDetails(name) }}
+        aria-label={t('detailsFor', { title })} aria-describedby={available === undefined ? reasonId : `${reasonId} ${descriptionId}`}>
         <strong className={css.title}>{title}</strong>
-        <span className={css.reason}>{proposal.brief}</span>
-        {(loading || available !== undefined) && <span className={css.description}>
+        <span id={reasonId} className={css.reason}>{proposal.brief}</span>
+        {(loading || available !== undefined) && <span id={descriptionId} className={css.description}>
           {available === undefined ? <span className={css.placeholder} /> : resolveText(available.description)}
         </span>}
       </button>
       {status !== undefined && <p role="status" className={css.status}>{t(status)}</p>}
       {failure !== undefined && <p role="alert" className={css.status}>{t(failure)}</p>}
-      {current === null ? <p role="alert" className={css.status}>{t('transport')}</p>
-        : current?.status === 'refused' ? <p role="alert" className={css.status}>{t(current.reason)}</p>
-          : open && error !== undefined && <p role="alert" className={css.status}>{t(error)}</p>}
-      {open && <footer className={css.footer}>
+      {lookupProblem !== undefined && <p role="alert" className={css.status}>{t(lookupProblem)}</p>}
+      {offered && error !== undefined && <p role="alert" className={css.status}>{t(error)}</p>}
+      {offered && <footer className={css.footer}>
         <span className={css.scope}>{t('scope')}</span>
         <div className={css.actions}>
-          <Button variant="ghost" size="sm" disabled={pending || loading || !ready} onClick={() => { void run('dismiss') }}>{t('dismiss')}</Button>
-          <Button variant="primary" size="sm" disabled={pending || loading || !ready} onClick={() => { void run('enable') }}>
-            {t(pending ? 'enabling' : phase === 'failed' ? 'retry' : 'enable')}
+          {lookupProblem !== undefined && <Button variant="ghost" size="sm" disabled={busy} onClick={() => {
+            setLookup(undefined)
+            setAttempt(value => value + 1)
+          }}>{t('retryLookup')}</Button>}
+          <Button variant="ghost" size="sm" disabled={busy || loading} onClick={() => { void run('dismiss') }}>
+            {t(pending === 'dismiss' ? 'working' : 'dismiss')}
           </Button>
+          {enable && <Button variant="primary" size="sm" disabled={busy || loading} onClick={() => { void run('enable') }}>
+            {t(pending === 'enable' ? 'working' : phase === undefined ? 'enable' : 'retry')}
+          </Button>}
         </div>
       </footer>}
     </div>

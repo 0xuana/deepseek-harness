@@ -123,7 +123,7 @@ The notice is appended after the request's other new context and never rewrites 
 - Calls dispatched from code, as in PTC presets, are refused: the log records them as program dispatches rather than tool calls, so no card could follow them.
 - Only one card is offered per turn across all kinds, and one unstarted card per conversation.
 - The projection reads `queuedMessageLimit` while its state version stays fixed. A changed limit applies to Sessions folded again from their log; cached projection rows keep the suppression decided under the earlier limit.
-- The Personalized pages and Plugin recommendations bundles both insert the rows of this service and its browser half. With both bundles enabled the Loader keeps one entry per row id, and both bundle pages list these rows, so switching or configuring a row there changes the one shared entry.
+- The Personalized pages and Plugin recommendations bundles both insert the rows of this service and its browser half, and with both enabled the Loader keeps one entry per row id. Two optional bundles cannot yet share a dependency row addressably: while both are enabled, the Plugins page cannot address the two shared rows (`action-cards`, `client-ui-action-cards`), so they cannot be switched or configured individually. Use the bundle switches; `queuedMessageLimit` can then be changed only in the profile's `cordis.patch.yml`.
 
 <a id="dev-note"></a>
 ### Dev Note

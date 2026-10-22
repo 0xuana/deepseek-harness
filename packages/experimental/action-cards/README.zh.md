@@ -123,7 +123,7 @@ Latest status of action cards from user actions and background work. These are s
 - 从代码中发起的调用（例如 PTC 预设中）会被拒绝：日志把它们记为程序派发而不是工具调用，因此不可能有卡片跟随。
 - 所有种类合计每轮只展示一张卡片，每个对话只保留一张尚未开始的卡片。
 - 投影读取 `queuedMessageLimit`，状态版本却不随它变化。修改后的上限只作用于重新从日志折叠的会话；已缓存的投影行保留按旧上限得出的“未展示”结果。
-- 个性化页面和插件推荐两个 Bundle 都会插入本服务及其浏览器端的行。两个 Bundle 都启用时，Loader 对每个行 id 只保留一个条目；两个 Bundle 的详情页都会列出这些行，在那里开关或配置某一行，改的是同一个共享条目。
+- 个性化页面和插件推荐两个 Bundle 都会插入本服务及其浏览器端的行，两个都启用时 Loader 对每个行 id 只保留一个条目。平台目前不支持两个可选 Bundle 以可定位的方式共享同一依赖行：两个都启用时，插件页无法定位这两条共享行（`action-cards`、`client-ui-action-cards`），不能单独开关或配置它们。请使用 Bundle 开关；此时 `queuedMessageLimit` 只能在 profile 的 `cordis.patch.yml` 中修改。
 
 <a id="dev-note"></a>
 ### 开发备注

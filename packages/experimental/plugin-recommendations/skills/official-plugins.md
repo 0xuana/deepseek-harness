@@ -21,12 +21,3 @@ A turn shows at most one card across every card skill. When the user asks for se
 ## Offer without enabling
 
 To offer, call `propose_action` once, in the same turn as loading this skill, with `action: "enable_official_plugin"`, `title` set to the plugin's catalog title in the user's language, `brief` set to one sentence in the user's language that ties the plugin to their need, and `details` holding `name`, the exact catalog name. The call is the submission: the card appears below your answer; a refused call creates no card, and its error says why. Then write your final answer: answer any direct question and add at most one short invitation such as “点击下方启用即可。”; never write the invitation without an accepted call. Do not narrate the call, repeat the catalog description, add setup steps the catalog does not state, claim the plugin is enabled, or ask the user to report back. The card opens the plugin's details; enabling applies to every conversation and can be undone there. The user's choice reaches you later as a status notice; enabling a plugin authorizes nothing beyond it.
-
-## Examples
-
-- “展开的英文推理看着费劲，能直接读中文吗？” → thinking translation; say it translates the display; card.
-- “我想让你从这个工作区以前的会话里找回讨论过的方案。” → session search; card.
-- “我想自己按关键词查旧会话。” → the sidebar search already does this; no card.
-- “把这句话翻成中文：I wish DSH had voice input.” → translate only; no card.
-- “我想要语音输入，但这轮先只讨论，不要推荐。” → discuss only; no card.
-- “每个 PR 都想带 DSH 标识，也想在右侧放一个计数器。” → badge plugin card; mention the counter in one sentence.

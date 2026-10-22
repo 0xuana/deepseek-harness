@@ -1,5 +1,5 @@
 /** Fields, recorded data and catalog text of `enable_official_plugin` cards. */
-import type { ChangeResult, ManagementError } from '@deepseek-ai/dsh-plugin-manager/types'
+import type { ManagementError } from '@deepseek-ai/dsh-plugin-manager/types'
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
 
 /** Card fields the skill asks the model to write in `details`. */
@@ -8,14 +8,17 @@ export interface PluginDetails {
   readonly name: string
 }
 
-/** Phases a plugin card records besides the shared `dismissed`. */
-export type PluginPhase = 'enabled' | 'already-enabled' | 'failed'
+/**
+ * Phases a plugin card records besides the shared `dismissed`. `unconfirmed` marks an enable whose outcome an unload
+ * cut off; a retry that then finds the plugin enabled records `enabled`, since this card's own change landed.
+ */
+export type PluginPhase = 'enabled' | 'already-enabled' | 'failed' | 'unconfirmed'
 
 /** Data each plugin decision records; profile files own the actual configuration. */
 export interface PluginData {
-  /** Present when the saved selection did not apply at once (`restart-required`, `overridden`) or the change was `cancelled`. */
-  readonly application?: Exclude<ChangeResult['application'], 'applied' | 'failed'> | undefined
-  /** Plugin manager error code of a failed change; its diagnostic text is not recorded. */
+  /** `restart-required` when the saved selection applies only after DSH restarts. */
+  readonly application?: 'restart-required' | undefined
+  /** Plugin manager error code of a failed change, or `operation-error` when the change was rejected; no diagnostic text is recorded. */
   readonly errorCode?: ManagementError['code'] | undefined
 }
 

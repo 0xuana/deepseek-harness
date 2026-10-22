@@ -110,7 +110,7 @@
     "id": "explicit_creation_priority",
     "setup": "Both experiments enabled; badge disabled.",
     "prompt": "我希望每个 PR 都有 DSH 标识，也想在当前会话右侧放一个手动小成就计数器，能加一、归零并按会话保存。这轮优先给计数器的创建方案入口，徽章暂时只说明，不要执行。",
-    "expected": "Exactly one suggest_view sidebar-right for the manual counter; no badge proposal and no generation before clicking Create."
+    "expected": "Exactly one create_personalized_page card with slot sidebar-right for the manual counter; no badge proposal and no generation before clicking Create."
   },
   {
     "id": "later_independent_need",

@@ -51,7 +51,9 @@ it('registers the plugin body, its copy and Remote for the plugin lifetime and s
   describe.mockResolvedValueOnce({ ok: false })
   render(card())
   await act(async () => {})
-  expect(screen.getByRole('alert').textContent).toBe('Could not confirm the result. Refresh and try again.')
+  // A lost catalog lookup asks for another lookup rather than reporting an action result.
+  expect(screen.getByRole('alert').textContent).toBe('Could not load this plugin’s details. Try again.')
+  expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy()
   await fiber.dispose()
   expect(unregister).toHaveBeenCalledOnce()
   expect(unmount).toHaveBeenCalledOnce()
