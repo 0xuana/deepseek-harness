@@ -44,7 +44,7 @@ interface StorageBackend {
 }
 ```
 
-一个后端拥有一个介质（一棵文件树的根目录、一个数据库文件），并提供可选的操作组；`kv` 是唯一已交付的操作组。`KvFacet.open(descriptor)` 打开一个具名 unit——`KvUnitDescriptor` 携带名称、当前格式版本、可选的兼容记录版本、表名清单，以及是否存在全局单例 slot——并返回提供 `loadAll`、`putRecord`、`deleteRecord`、`deleteRecords`、`setGlobal` 和 `close` 的 `KvUnit`。unit 名与表名必须匹配 `UNIT_NAME_RE`（既可安全用作文件名，也可安全用作 SQL 标识符片段）；记录键在 `single` 布局中是不透明字符串，在 `per-record` 布局中则是匹配 `[a-zA-Z0-9_-]+` 的路径片段。unit 不对并发写入做串行化——顺序由调用方负责——但每次单独调用在介质上都是原子的；单记录写入与整文件发布在 resolve 后即已持久，`per-record` 批量删除则依赖文件系统对目录项更新的持久化。`deleteRecords` 以一次调用应用整批删除：所有列出的记录都从可读状态消失且后端接受该批后才 resolve，拒绝时通常整批未应用；无法建立或恢复批次状态的批量删除会以 `unknown-state` 拒绝，之后该 unit 的所有操作都以同一错误拒绝，直到 `close()` 释放它（关闭后的调用以 `closed` 拒绝）。`single` 布局在原子替换之后失败（目录 fsync 错误）时，新文件可能已落在介质上而调用方看到拒绝；unit 的内存保持一致，下一次发布会重写该文件。`single` 介质上记录的版本不同时拒绝 `version-mismatch`；`per-record` 文档的版本在接受集合之外时读作不存在。无法按该 unit 解析的介质拒绝 `malformed-medium`。[`backend.ts`](../../packages/storage/storage/src/backend.ts) 是逐条款的规范性约定，[`tests/contract.ts`](../../packages/storage/storage/tests/contract.ts) 中的共享一致性套件会针对每个后端检查共享条款。[json 后端](../../packages/storage/storage-json/README.zh.md)以原子方式为每个 unit 整文件重新发布一份人类可读文件；[sqlite 后端](../../packages/storage/storage-sqlite/README.zh.md)在单个数据库中每行存储一份文档，用于频繁更新的数据。
+一个后端拥有一个介质（一棵文件树的根目录、一个数据库文件），并提供可选的操作组；`kv` 是唯一已交付的操作组。`KvFacet.open(descriptor)` 打开一个具名 unit——`KvUnitDescriptor` 携带名称、当前格式版本、可选的兼容版本、表名清单，以及是否存在全局单例 slot——并返回提供 `loadAll`、`putRecord`、`deleteRecord`、`setGlobal` 和 `close` 的 `KvUnit`。unit 名与表名必须匹配 `UNIT_NAME_RE`（既可安全用作文件名，也可安全用作 SQL 标识符片段）；记录键是任意字符串，绝不进入文件路径。unit 不对并发写入做串行化——顺序由调用方负责——但每次单独调用在介质上都是原子的，且 resolve 后即已持久。`single` 介质版本不在当前版本和兼容版本内时拒绝 `version-mismatch`；未接受的 `per-record` 文档读作不存在。无法按该 unit 解析的介质拒绝 `malformed-medium`。[`backend.ts`](../../packages/storage/storage/src/backend.ts) 是逐条款的规范性约定，[`tests/contract.ts`](../../packages/storage/storage/tests/contract.ts) 中的共享一致性套件会针对每个后端检查每项条款。[json 后端](../../packages/storage/storage-json/README.zh.md)以原子方式为每个 unit 整文件重新发布一份人类可读文件；[sqlite 后端](../../packages/storage/storage-sqlite/README.zh.md)在单个数据库中每行存储一份文档，用于频繁更新的数据。
 
 ## 声明领域
 
@@ -68,10 +68,10 @@ interface DomainSpec {
   /**
    * Older domain versions whose stored records the current record schemas
    * also accept (the declaring owner vouches for that, typically by
-   * declaring the fields older records lack as optional). `per-record` backends
-   * read documents stamped with a listed version instead of discarding them,
-   * and accept a legacy whole-unit file so stamped for the one-time
-   * bootstrap; writes always stamp {@link version}.
+   * declaring the fields older records lack as optional). Ordinary reads admit
+   * listed versions without restamping saved data; writes stamp {@link version}
+   * while leaving untouched records as saved. Current schemas must therefore
+   * accept mixed generations even under the current unit stamp.
    */
   readonly compatibleVersions?: readonly number[]
   /**
@@ -93,6 +93,19 @@ interface DomainSpec {
 ```
 
 `defineDomain(spec)` 固定 spec 的字面量类型，并在拥有方的模块加载时、任何介质被触碰之前就明确报错：领域名或表名不匹配 `UNIT_NAME_RE`、版本不是非负整数、global schema 接受 `null`，这些都会抛出（`null` 是介质的「从未写入」哨兵值，可空的 global 一旦存储就无法往返还原）。`domainTable<K, V>(schema)` 声明一张表，其键类型是仅存在于编译期的 phantom 类型（通常是[品牌化 id](core.zh.md#branded-ids)）；`descriptorOf(spec)` 投影出面向后端的 unit 描述符。
+
+<a id="domain-versioning"></a>
+## 领域版本
+
+`version` 表示当前读写格式。`compatibleVersions` 列出拥有方可用当前 schema 解码其记录和全局值的旧版本；只允许小于 `version` 的非负整数。不声明兼容版本时，读取仍要求精确版本。接受旧版本不放宽记录校验，也不允许更新的未知版本。每行已存字段必须能无歧义地确定其含义；单元版本戳无法在混合行中区分相同字段的不同含义。
+
+普通兼容打开和读取不会重新盖戳或规范化已存值。整单元 JSON 用一次原子文件替换发布当前版本戳和修改后的数据；SQLite 将首次单元版本更新与修改放在同一事务中提交，此后使用普通语句。删除不存在的记录不会推进版本戳。写入失败时数据与版本戳都保持不变。版本戳标识可接受格式，不代表值规范化已经完成；读取器必须接受混合代际。读取器会拒绝不支持的单元版本戳。
+
+JSON 的 `per-record` 布局独立检查和标记每份文档；不支持的文档读取为缺失。其已有整单元引导是只读加载的例外：它将接受的历史值复制到当前版本文档中，不转换其中的值。SQLite 无论布局请求为何都保持单元级版本检查。布局与恢复行为见 [JSON 后端](../../packages/storage/storage-json/README.zh.md)和 [SQLite 后端](../../packages/storage/storage-sqlite/README.zh.md)。
+
+兼容后继版本需提升 `version`、在 `compatibleVersions` 中保留仍可读的版本戳，并扩展同一 schema 的解码和默认规则。消费者在重写选定记录时规范化值；Storage 不分配应用记录版本。验证历史版本与跨版本升级、混合值、不写入的读取、失败回滚、重启、其他单元隔离和未知版本拒绝。删表与布局变更各自需要保留及升级策略；兼容版本戳本身不定义这些策略。
+
+不兼容变更需要在用新 schema 打开前执行明确且可恢复的升级；存储领域没有值迁移执行器。移除旧解码逻辑前必须重写并验证全部受影响记录，因为当前版本戳下仍可能包含旧行。Session 格式迁移与 SQLite 物理布局版本各有拥有方，不迁移领域值。
 
 ## 打开的领域
 

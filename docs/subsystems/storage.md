@@ -44,7 +44,7 @@ interface StorageBackend {
 }
 ```
 
-A backend owns one medium (a file-tree root, a database file) and exposes optional operation groups; `kv` is the only shipped group. `KvFacet.open(descriptor)` opens one named unit — `KvUnitDescriptor` carries the name, current format version, optional compatible record versions, table names, and whether a global singleton slot exists — and returns a `KvUnit` with `loadAll`, `putRecord`, `deleteRecord`, `deleteRecords`, `setGlobal`, and `close`. Unit and table names must match `UNIT_NAME_RE` (safe as a file name and as a SQL identifier segment); record keys are opaque strings in the `single` layout and match `[a-zA-Z0-9_-]+` path segments in the `per-record` layout. A unit does not serialize concurrent writes — ordering belongs to the caller — but each single call is atomic on the medium; durability holds for single-record writes and whole-file publishes, while a `per-record` batch deletion relies on the filesystem persisting directory-entry updates. `deleteRecords` applies a whole batch in one call: it resolves once every listed record is absent from the readable state and the backend accepted the batch, and a rejection normally leaves the batch unapplied; a backend that cannot establish or restore the batch's state rejects with `unknown-state`, after which every later operation on that unit rejects with the same error until `close()` releases it (calls after close reject `closed`). A `single`-layout failure after the atomic replacement (a directory-fsync error) can leave the new file on the medium while the caller sees a rejection; the unit keeps its memory consistent and the next publish rewrites the file. A `single` medium stamped with a different version rejects `version-mismatch`; a `per-record` document stamped outside the accepted set reads as absent. A medium that cannot be parsed as the unit rejects `malformed-medium`. [`backend.ts`](../../packages/storage/storage/src/backend.ts) is the normative clause-by-clause contract, and the shared conformance suite in [`tests/contract.ts`](../../packages/storage/storage/tests/contract.ts) checks the shared clauses against each backend. The [json backend](../../packages/storage/storage-json/README.md) republishes one whole human-readable file per unit atomically; the [sqlite backend](../../packages/storage/storage-sqlite/README.md) stores one document per row in one database for frequently updated data.
+A backend owns one medium (a file-tree root, a database file) and exposes optional operation groups; `kv` is the only shipped group. `KvFacet.open(descriptor)` opens one named unit — `KvUnitDescriptor` carries the name, current format version, optional compatible versions, table names, and whether a global singleton slot exists — and returns a `KvUnit` with `loadAll`, `putRecord`, `deleteRecord`, `setGlobal`, and `close`. Unit and table names must match `UNIT_NAME_RE` (safe as a file name and as a SQL identifier segment); record keys are arbitrary strings that never reach file paths. A unit does not serialize concurrent writes — ordering belongs to the caller — but each single call is atomic on the medium and durable once resolved. A `single` medium stamped outside the current and compatible versions rejects `version-mismatch`; an unaccepted `per-record` document reads as absent. A medium that cannot be parsed as the unit rejects `malformed-medium`. [`backend.ts`](../../packages/storage/storage/src/backend.ts) is the normative clause-by-clause contract, and the shared conformance suite in [`tests/contract.ts`](../../packages/storage/storage/tests/contract.ts) checks every clause against each backend. The [json backend](../../packages/storage/storage-json/README.md) republishes one whole human-readable file per unit atomically; the [sqlite backend](../../packages/storage/storage-sqlite/README.md) stores one document per row in one database for frequently updated data.
 
 ## Declaring a domain
 
@@ -68,10 +68,10 @@ interface DomainSpec {
   /**
    * Older domain versions whose stored records the current record schemas
    * also accept (the declaring owner vouches for that, typically by
-   * declaring the fields older records lack as optional). `per-record` backends
-   * read documents stamped with a listed version instead of discarding them,
-   * and accept a legacy whole-unit file so stamped for the one-time
-   * bootstrap; writes always stamp {@link version}.
+   * declaring the fields older records lack as optional). Ordinary reads admit
+   * listed versions without restamping saved data; writes stamp {@link version}
+   * while leaving untouched records as saved. Current schemas must therefore
+   * accept mixed generations even under the current unit stamp.
    */
   readonly compatibleVersions?: readonly number[]
   /**
@@ -93,6 +93,19 @@ interface DomainSpec {
 ```
 
 `defineDomain(spec)` pins the spec's literal types and fails loud at the owner's module load, before any medium is touched: a domain or table name outside `UNIT_NAME_RE`, a version that is not a non-negative integer, or a global schema that accepts `null` all throw (`null` is the medium's "never written" sentinel, so a stored nullable global could not round-trip). `domainTable<K, V>(schema)` declares one table with a phantom compile-time key type (typically a [branded id](core.md#branded-ids)); `descriptorOf(spec)` projects the backend-facing unit descriptor.
+
+<a id="domain-versioning"></a>
+## Domain versioning
+
+`version` names the current read/write format. `compatibleVersions` lists older versions whose records and global value the owner can decode with its current schemas; only nonnegative integers below `version` are allowed. Without that declaration, reads stay exact-version. Acceptance does not weaken record validation or permit a newer unknown version. Each row's saved fields must determine its meaning unambiguously; a unit stamp cannot distinguish different meanings of identical fields in mixed rows.
+
+Ordinary compatible opens and reads do not restamp or normalize saved values. Whole-unit JSON publishes the current stamp and changed data in one atomic file replacement; SQLite commits its first updated unit stamp and mutation in one transaction, then uses ordinary statements. Deleting a missing record does not advance the stamp. A failed write leaves data and stamp unchanged. The stamp identifies an accepted format, not completion of value normalization; readers must accept mixed generations. A reader rejects an unsupported unit stamp.
+
+JSON's `per-record` layout checks and stamps each document independently; an unsupported document reads as absent. Its existing whole-unit bootstrap is an exception to read-only loading: it copies accepted historical values into current-stamped documents without converting them. SQLite retains unit-wide version checks regardless of the layout request. See the [JSON backend](../../packages/storage/storage-json/README.md) and [SQLite backend](../../packages/storage/storage-sqlite/README.md) for layout and recovery behavior.
+
+For a compatible successor, bump `version`, keep all still-readable stamps in `compatibleVersions`, and extend the same schema's decoding/defaults. Consumers normalize values when rewriting selected records; Storage does not assign application record versions. Verify historical and skipped upgrades, mixed values, reads without writes, failure rollback, restart, other-unit isolation, and unknown-version refusal. Table removal and layout changes require their own retention and upgrade policy; a compatible stamp alone does not define either.
+
+An incompatible change needs an explicit, recoverable upgrade before opening with the new schema; the storage domain has no value-migration runner. Removing old decoding requires rewriting and validating all affected records first, since a current stamp may still contain old rows. Session-format migrations and SQLite physical-layout versioning have separate owners and do not migrate domain values.
 
 ## The open domain
 
