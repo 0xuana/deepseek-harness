@@ -28,7 +28,11 @@ import type { UserTextDocumentInput, UserTextEvaluator, UserTextId, UserTextNode
 /** Browser-owned draft attachment that has not crossed the durable Host boundary. */
 export type ComposerAttachment = ComposerImageAttachment | ComposerFileAttachment
 
-/** Browser-owned image, base64-encoded into the prompt at send time. */
+/**
+ * Browser-owned image. An ordinary Session's draft uploads it to the Host as
+ * soon as it is added, and the prompt cites the receipt; a subagent
+ * continuation's draft base64-encodes it into the prompt at send time.
+ */
 export interface ComposerImageAttachment {
   kind: 'image'
   id: DraftAttachmentId
@@ -47,11 +51,17 @@ export interface ComposerFileAttachment {
   file: File
 }
 
-/** Upload lifecycle of one picked file draft (files upload on pick, not on send). */
+/**
+ * Upload lifecycle of one draft that uploads when it is added, not on send:
+ * every file draft, and every image draft of an ordinary Session. A failed
+ * upload the Host refused keeps the attachment refusal `reason`, because
+ * retrying the same bytes cannot succeed.
+ */
 export type DraftFileUpload =
   | { readonly status: 'uploading'; readonly loaded: number; readonly total?: number }
   | { readonly status: 'ready'; readonly receiptId: FileUploadReceiptId; readonly file: FileAttachmentRef }
-  | { readonly status: 'error'; readonly message: string }
+  | { readonly status: 'ready'; readonly receiptId: FileUploadReceiptId }
+  | { readonly status: 'error'; readonly message: string; readonly reason?: string }
 
 /** Per-draft upload states keyed by draft attachment id. */
 export type DraftFileUploads = Readonly<Record<string, DraftFileUpload>>
@@ -74,6 +84,13 @@ export interface ComposerAttachmentsOwnerProps {
   uploads: DraftFileUploads
   /** Restart one failed file upload. */
   onRetryFile: (id: DraftAttachmentId) => void
+  /**
+   * Explain one upload the Host refused; such a draft cannot be retried and
+   * stays until it is removed.
+   * @param reason - the refusal `reason` the failed upload carries.
+   * @returns localized text naming the limit or the way out.
+   */
+  uploadFailureText: (reason: string) => string
   /** Display-ready limits for the drop invitation. */
   dropLimits?: { readonly count: number; readonly size: string } | undefined
 }
@@ -187,6 +204,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'conversation.images.content': {
       scope: 'root'
       props: MessageImagesContentInput
+      inject: { readonly fileDrag: import('@deepseek-ai/dsh-client-ui-primitives').FileDragActions }
       locale: 'conversation'
     }
   }
@@ -254,6 +272,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       scope: 'session'
       owner: ConversationHeaderCornerOwnerProps
     }
+    /** Rows of the View tab row's More menu; the header shows More only while this list has registrations. */
+    'conversation.session.header.views.actions': { kind: 'list'; scope: 'root'; owner: ConversationViewActionsOwnerProps }
     /** Registered Conversation target Views, rendered one at a time. */
     'conversation.view': { kind: 'list'; scope: 'session'; owner: ConvViewOwnerProps }
     /** Selector-routed replacements for the current Session's resident composer. */
@@ -264,6 +284,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'conversation.hero.brand.mark': { kind: 'single'; scope: 'root'; owner: HeroBrandMarkOwnerProps }
     /** Agent-preset control staged for a New Session. */
     'conversation.hero.agentPreset': { kind: 'single'; scope: 'session-maybe'; owner: HeroAgentPresetOwnerProps }
+    /** Compact options right-aligned in the New Session row after the workspace and preset controls; rendered only with a Session. */
+    'conversation.hero.options': { kind: 'list'; scope: 'session' }
     /** Full-width entries above the composer card. */
     'conversation.input.dock': { kind: 'list'; scope: 'session'; owner: InputZone }
     /** Floating entries rendered inside the resident composer card. */
@@ -309,6 +331,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
         'conversation.hero.brand.mark': { kind: 'single'; scope: 'root' }
         'conversation.hero.workspace': { kind: 'single'; scope: 'root' }
         'conversation.hero.agentPreset': { kind: 'single'; scope: 'session-maybe' }
+        'conversation.hero.options': { kind: 'list'; scope: 'session' }
       }
       inject: ConversationInjected
       locale: 'conversation'
@@ -419,10 +442,51 @@ export interface ConversationSessionInjected {
   openView: (view: string, focus: string) => void
 }
 
+/** One customizable View tab listed in the More menu. */
+export interface ConversationViewActionEntry {
+  /** View id. */
+  readonly id: string
+  /** Resolved View label. */
+  readonly label: string
+  /** False while the tab is unpinned from the header. */
+  readonly pinned: boolean
+}
+
+/** Owner share of the View tab row's More menu rows. */
+export interface ConversationViewActionsOwnerProps {
+  /** Available Views in registration order; Chat is never listed. */
+  readonly entries: readonly ConversationViewActionEntry[]
+  /**
+   * Select a View in this Session without changing its pin state.
+   * @param id - Listed View id.
+   */
+  readonly onOpen: (id: string) => void
+  /**
+   * Show (true) or unpin (false) a View tab in every Session.
+   * @param id - Listed View id.
+   * @param pinned - Whether the tab shows in the header.
+   */
+  readonly onPinnedChange: (id: string, pinned: boolean) => void
+  /** Close the More menu. */
+  readonly onDismiss: () => void
+}
+
 /** Business callbacks injected into the strict Session header. */
 export interface ConversationSessionHeaderInjected {
   /** Package-owned View roster source bound only for the Conversation header. */
-  readonly hooks: { readonly conversationViews: ObservableSnapshot<readonly ViewTab[]> }
+  readonly hooks: {
+    readonly conversationViews: ObservableSnapshot<readonly ViewTab[]>
+    /** Ids of unpinned View tabs, persisted across reloads and shared by every Session. */
+    readonly entryPins: ObservableSnapshot<readonly string[]>
+    /** Whether `conversation.session.header.views.actions` has registrations. */
+    readonly entryActions: ObservableSnapshot<boolean>
+  }
+  /**
+   * Show or unpin one View tab in every Session; Chat is ignored.
+   * @param id - View id.
+   * @param pinned - Whether the tab shows in the header.
+   */
+  setPinned: (id: string, pinned: boolean) => void
   /** Select a Session through the Session Controller. */
   open: (sessionId: SessionId) => void
   /** Select and activate one registered Conversation View. */
@@ -471,7 +535,7 @@ export interface ComposerBarInjected {
      * and the primary Send button use while the addressed agent is busy.
      */
     busyEnter: ObservableSnapshot<BusyEnterBehavior>
-    /** Live per-draft upload states for file-kind drafts. */
+    /** Live per-draft upload states for drafts that upload when added. */
     fileUploads: ObservableSnapshot<DraftFileUploads>
     notices: ObservableSnapshot<InputNotice | null>
     lexicon: ObservableSnapshot<ReadonlyMap<'/' | '@', readonly string[]>>
@@ -576,6 +640,7 @@ export type ConversationSessionHeaderSlotProps =
     | 'conversation.session.header.actions'
     | 'conversation.session.header.utilities'
     | 'conversation.session.header.corner'
+    | 'conversation.session.header.views.actions'
   >
   & PropsStore<ConversationStore>
   & InjectFace<ConversationSessionHeaderInjected>

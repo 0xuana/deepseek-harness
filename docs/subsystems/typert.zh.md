@@ -229,6 +229,8 @@ interface PeerScope {
   readonly principal: Principal
   /** Aborted once the Peer is disposed; Remote streams that speak for the Peer end with it. */
   readonly signal: AbortSignal
+  /** Whether the Peer may open a forwarded-event stream; this does not grant business permissions. */
+  readonly interactions: 'answer' | 'none'
   /**
    * Tear down every registration made through `ctx`.
    * @returns settles once the scope has quiesced; racing calls share one completion.
@@ -414,6 +416,7 @@ type TypertGatewayErrorCode =
   | 'gateway/context-unavailable'
   | 'gateway/definition-unavailable'
   | 'gateway/input-invalid'
+  | 'gateway/interactions-forbidden'
   | 'gateway/invocation-unavailable'
   | 'gateway/lookup-failed'
   | 'gateway/lookup-not-found'
@@ -558,10 +561,9 @@ decide(request: RemoteAccessRequest<Principal>): RemoteAccessDecision
 allows(resource: RemoteAccessResource): boolean
 
 /**
- * The baseline a page opens with before its snapshot stream connects. A
- * business package rendering a non-owner page assigns this value to
- * {@link REMOTE_ACCESS_SNAPSHOT_KEY} after every index injection row,
- * replacing the owner baseline the webServer index carries.
+ * The baseline a page opens with before its snapshot stream connects; every
+ * index the webServer renders carries it under
+ * {@link REMOTE_ACCESS_SNAPSHOT_KEY} for the Peer the page speaks for.
  * @param principal - the page's caller identity.
  * @returns the owner baseline for the owner; otherwise the principal's current grants.
  */

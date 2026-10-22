@@ -57,12 +57,14 @@ export interface PeerScope {
   readonly principal: Principal
   /** Aborted once the Peer is disposed; Remote streams that speak for the Peer end with it. */
   readonly signal: AbortSignal
+  /** Forwarded human-interaction participation; independent of authorization. */
+  readonly interactions: 'answer' | 'none'
   dispose(): Promise<void>
 }
 
 // @deepseek-ai/dsh-client-connection
 export class Peer implements PeerScope {
-  constructor(owner: Context, options: { readonly principal: Principal })
+  constructor(owner: Context, options: { readonly principal: Principal; readonly interactions?: 'answer' | 'none' })
 }
 
 interface HostConnectionHandle {
@@ -71,7 +73,7 @@ interface HostConnectionHandle {
   /** Network admission: the admitted Peer or the refusal status. */
   admit(request: ConnectionTrustRequest): PeerAdmission
   /** In-process only; disposed with the Context that read `ctx.connection`, or earlier by dispose(). */
-  createPeer(options: { readonly principal: Principal }): PeerScope
+  createPeer(options: { readonly principal: Principal; readonly interactions?: 'answer' | 'none' }): PeerScope
 }
 
 interface ConnectionFetchHandler {
@@ -90,6 +92,7 @@ wireStream.open(endpoint, payload, uplink, peer: PeerScope, signal)          // 
 | 浏览器连接共享 `browserPeer` | 所有浏览器连接共享一个 Peer，每个使用处都显式引用 `connection.browserPeer`，不存在兜底变量；页内 Host（webworker-runtime）同样显式传 `browserPeer` |
 | Host 进程内自动化 | 需要调用 Remote 方法时用 `createPeer({ principal })` 创建自己的 Peer。目前没有这类生产调用方，因此不预置固定的 Host Peer |
 | 多 Peer | `createPeer()` 每次返回独立 Peer；liveshare 将用它为读者的每条连接建一个 Peer（在 #3854 侧接入） |
+| 交互参与 | `Peer(owner, { principal, interactions? })` 与 `createPeer()` 省略 interactions 时默认 `answer`。`none` 对所有 principal 拒绝 `$events` 与 `$events/result`；交互模式不赋予方法权限。回答型 owner 能接收并回答 waterfall，非 owner 只能接收 RBAC 授权的广播，不能回答 |
 | exact Fetch route | file-upload、present-open、media-references、session-log-export、inspector 等 exact route 不经 Gateway；共享 Fetch handler 对非 owner Peer 一律返回 403 |
 
 ### 身份类型
@@ -443,7 +446,7 @@ export const REMOTE_ACCESS_SNAPSHOT_KEY = '__DSH_REMOTE_ACCESS__'
 
 | 行为 | 说明 |
 |---|---|
-| 首份快照 | `snapshotFor(principal)` 计算页面打开时的 baseline。remote-access 经 `webserver/index-inject` 为 webServer 渲染的每个 index 加入全局变量 `REMOTE_ACCESS_SNAPSHOT_KEY`，值为 owner baseline `{ type: 'baseline', owner: true }`。渲染非 owner 页面的业务包（例如 owner Host 上的 liveshare）在所有 index 注入行之后放置一条把该全局变量赋值为 `snapshotFor(principal)` 的语句；后写的赋值生效，Client 在挂载时读取该全局变量 |
+| 首份快照 | `snapshotFor(principal)` 计算页面打开时的 baseline。webServer 按页面所代表的 Peer 渲染 index，`webserver/index-inject` 把该 Peer 传给监听方；remote-access 为每个 index 加入全局变量 `REMOTE_ACCESS_SNAPSHOT_KEY`，值为 `snapshotFor(peer.principal)`，owner 页面因此得到 owner baseline `{ type: 'baseline', owner: true }`，为非 owner Peer 渲染的页面（例如 owner Host 上的 liveshare 读者页）得到该 principal 的 grant。Client 在挂载时读取该全局变量 |
 | 订阅 | 每个 Peer 订阅一条访问快照流，其 baseline 取代注入的快照 |
 | 计算 | 取该 principal kind 的 policy 的全部 binding，按资源相等归并；每个资源的 `actions` 为这些 binding 的 role 中、经与调用相同的判定（单个资源、不带 args，condition 以无 args 调用）放行的端点 action；只为至少放行一个端点 action 的资源给出 grant。判定与快照同源：同一 principal、action 与资源（不带参数）上，快照答案与 `decide()` 一致 |
 | 只含端点 action | `event:<name>` action 不进入快照；前端只据端点 action 决定入口显隐 |
@@ -547,9 +550,9 @@ GlobalStandardProps.useWorkspaceAccess: (workspaceId: WorkspaceId, action: Remot
 
 ### 不在范围与 Future work
 
-- `/connect` 握手、API Cookie、每条 API 连接一个 Peer、WebSocket 生命周期：归 pr-5945。
+- 仅供 API 的 `/connect` 握手、API Cookie、每条 API 连接一个 Peer 与 WebSocket 生命周期见 [Peer 作用域建连握手](2026-10-09-operator-scoped-connect-handshake.zh.md)。
 - 浏览器多 Peer（如每标签页一个）：所有浏览器连接共享 `browserPeer`。
-- 交互参与（interactions）与按 principal 隔离审批由后续工作引入；目前非 owner 只收被授权的 `$events` 广播帧。
+- 交互参与属于 Peer；`interactions: 'answer'` 的非 owner 依然只能收到 RBAC 授权的广播，不能回答 owner 的 waterfall；按 principal 处理审批不在本机制内。
 - `agent-preset/selected` 等其余转发事件未声明资源，按 `global` 判定；读者需要某个会话事件时，#3854 为其声明资源并在 role 中列出 `event:<name>`。
 - liveshare 接入（声明 `share-viewer`、每条读者连接一个 Peer、定义 role 并注册 policy、删除 `origin` / `prompt/origin` / `READ_ENDPOINTS`）：#3854 侧。
 - `session/cancel` 归属检查、fork 的 `childSessionId`、`ToolExecutionInput.turn`：不改。
@@ -635,7 +638,7 @@ GlobalStandardProps.useWorkspaceAccess: (workspaceId: WorkspaceId, action: Remot
 | 资源解析 | 默认字段（顶层或首个对象参数）得到对应资源；声明了该种类 `resource` 的 lookup 参数得到其 wire 身份；Context 方法从 args 中的 Agent Context 身份得到其 session 资源且不激活 Agent，另可经 `resources` 声明其他资源；`resources` 读取函数覆盖该种类，数组为多个资源，`undefined` 为无；都没有为 `[global]`；抛错、空数组或非非空字符串（含 Context 身份）为非法，Gateway 以 `resource-invalid` 拒绝且不询问 `decide()`；未声明 `resource` 的 Context 按普通规则解析；资源与 `args` 读取校验后的参数，未声明的嵌套字段不改变资源、condition 也读不到它，JSON 参数校验失败在访问检查前返回 `gateway/input-invalid` | Gateway host spec（gateway-access） |
 | 资源注册表 | `typert.resources` 每个种类登记一个默认字段，拒绝重复登记与 `global`，并随 fiber 撤回；配置的 lookup resolver 保留 provider 的 `resource`；Host Context adapter 保留其 `resource` | typert-registry spec |
 | 转发事件 | 非 owner 的 `$events` 流只在 `event:<name>` 于其资源上被授权时整条收到事件；未声明资源的事件按 `global` 判定；读取函数返回 `undefined` 的事件不送达非 owner，且不询问 `decide()`；owner 全部收到 | Gateway host spec（gateway-access） |
-| 首份快照 | `snapshotFor()` 返回 owner baseline 或该 principal 的 grant；remote-access 为渲染的每个 index 注入 owner baseline；Client 从注入的 baseline 起步并拒绝格式错误的快照 | remote-access host 与 client spec |
+| 首份快照 | `snapshotFor()` 返回 owner baseline 或该 principal 的 grant；remote-access 为每个 index 注入其所代表 Peer 的快照；Client 从注入的 baseline 起步并拒绝格式错误的快照 | remote-access host 与 client spec |
 | 类型推断 | `resources` 读取函数的参数类型从方法推断；lookup 位为 wire 类型；访问不存在的属性、参数多于方法参数与 `global` 键编译失败；binding 的资源种类与 role 不符编译失败 | typert-protocol spec、remote-access spec（类型测试） |
 | 列表过滤 | `session/list`、`session/search`、`session/control`、`workspace/follow` 对非 owner 只返回 `allows()` 为 true 的项；已下发工作区失去可见性时 `workspace/follow` 发送 `replace` 增量帧，访问恢复后该工作区重新出现；owner 结果不变 | session-controller / workspace-controller host spec |
 | 访问快照 | 快照中的允许集合与 Host 对同一 principal、action、资源（不带参数）的判定一致；只含端点 action；没有放行 action 的资源不出 grant，放行集合变空时推送 `remove`；`invalidate()` 与 policy 注册、撤回后推送增量；被变化结束的等待不残留 abort 监听器；卸载服务即结束所有打开的快照流；owner 只收 `{ owner: true }` | remote-access host spec |

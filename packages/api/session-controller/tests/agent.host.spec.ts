@@ -1,3 +1,4 @@
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -17,7 +18,6 @@ import {
   ApiSessionNotFound,
   inspectApiSession,
 } from '../src/agent.ts'
-import { installModelSelectionProjection } from '../src/model-selection-projection.ts'
 import { installSessionReadTestServices, testSessionPersistence } from './test-remote.ts'
 
 const roots: Context[] = []
@@ -35,15 +35,17 @@ async function harness(): Promise<{ ctx: Context; agents: ApiSessionAgentControl
   roots.push(ctx)
   await ctx.plugin(TypertRegistry)
   await ctx.plugin(SessionStore)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   installSessionReadTestServices(ctx)
-  ctx.sessionProjections.register(agentPresetProjectionDefinition)
-  installModelSelectionProjection(ctx)
+  await ctx.sessionProjections.register(agentPresetProjectionDefinition)
   ctx.provide('agentDefaultModel', {
     currentSelection: () => ({ provider: 'fixture', model: 'fixture-model' }),
     saveSelection: () => Promise.resolve(),
   } as never)
-  return { ctx, agents: new ApiSessionAgentController(ctx) }
+  const agents = new ApiSessionAgentController(ctx)
+  agents.initialize()
+  return { ctx, agents }
 }
 
 function header(id: string, cwd: string | null = '/workspace'): SessionHeader {
@@ -283,48 +285,6 @@ describe('ApiSession Agent lookup and recovery', () => {
     expect(() => agents.presetForObservation(observed)).toThrow(
       'Agent activation requires a projected Session observation',
     )
-  })
-})
-
-describe('ApiSession model selection', () => {
-  it('requires the model-selection projection', async () => {
-    const { ctx, agents } = await harness()
-    const live = agent(ctx, header('missing-model-projection'))
-    vi.spyOn(ctx.sessionProjections, 'stateOf').mockReturnValue(undefined)
-
-    expect(() => agents.selectionFor(live)).toThrow('required modelSelection projection')
-  })
-
-  it('reads a reasoning-free request and consumes only the exact pending selection', async () => {
-    const { ctx, agents } = await harness()
-    const logged = agent(ctx, header('logged-model'))
-    logged.session.append('request/header', {
-      header: { config: { provider: 'logged-provider', model: 'logged-model' } },
-      reason: 'initial',
-    })
-    expect(agents.selectionFor(logged).current).toEqual({
-      provider: 'logged-provider',
-      model: 'logged-model',
-    })
-
-    const pending = agent(ctx, header('pending-model'))
-    const selection = agents.selectionFor(pending)
-    agents.selectForNextRequest(pending, {
-      provider: 'selected-provider',
-      model: 'selected-model',
-      reasoningEffort: 'high' as never,
-    })
-    expect(selection.current).toMatchObject({
-      provider: 'selected-provider', model: 'selected-model', reasoningEffort: 'high',
-    })
-    expect(agents.consumeSelection(pending, 'other-provider', 'selected-model', 'high')).toBe(false)
-    expect(agents.consumeSelection(pending, 'selected-provider', 'other-model', 'high')).toBe(false)
-    expect(agents.consumeSelection(pending, 'selected-provider', 'selected-model', 'low')).toBe(false)
-    expect(agents.consumeSelection(pending, 'selected-provider', 'selected-model', 'high')).toBe(true)
-    expect(selection.current).toEqual({ provider: 'fixture', model: 'fixture-model' })
-
-    const untouched = agent(ctx, header('uninstalled-model'))
-    expect(agents.consumeSelection(untouched, 'fixture', 'fixture-model', undefined)).toBe(false)
   })
 })
 

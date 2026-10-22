@@ -8,6 +8,7 @@
 // root listener routes them through the keymap commands); draft writes drive
 // the shell (jsdom's beforeinput lacks the ranges Lexical needs).
 
+import * as uiPrimitives from '@deepseek-ai/dsh-client-ui-primitives'
 import './control-row-dom.ts'
 import type { InboxState } from '@deepseek-ai/dsh-agent/types'
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
@@ -242,8 +243,9 @@ function bench(over?: BenchOptions) {
   const steeringAvailable = over?.subagent === undefined || over.subagent.address.mode === 'continuable'
   const composerLocked = over?.disabled === true || over?.inert === true || over?.blocked !== undefined
     || (over?.subagent?.address.mode === 'continuable' && over.subagent.parentAvailable !== true)
-  const uploadsPending = (over?.attachments ?? []).some(attachment =>
-    attachment.kind === 'file' && over?.fileUploads?.[attachment.id]?.status !== 'ready')
+  const uploadsPending = (over?.attachments ?? []).some(attachment => attachment.kind === 'file'
+    ? over?.fileUploads?.[attachment.id]?.status !== 'ready'
+    : over?.fileUploads?.[attachment.id] !== undefined && over.fileUploads[attachment.id]?.status !== 'ready')
   const plainMessageDraft = sendableDraft && !uploadsPending && !(over?.draft?.trimStart().startsWith('/') ?? false)
   const primaryLabel = primaryStops
     ? '停止生成'
@@ -990,7 +992,7 @@ describe('running and lock semantics', () => {
         t: makeTranslate(messages, {}),
       })
       const stop = view.getByRole('button', { name: label })
-      if (trigger === 'hover') fireEvent.mouseEnter(stop)
+      if (trigger === 'hover') fireEvent.pointerEnter(stop)
       else fireEvent.focus(stop)
       act(() => { vi.advanceTimersByTime(500) })
       expect(view.getByRole('tooltip').getAttribute('aria-label')).toBe(`${label} Esc Esc`)
@@ -1005,7 +1007,7 @@ describe('running and lock semantics', () => {
     vi.useFakeTimers()
     try {
       const { button, view, session } = bench({ running: true })
-      fireEvent.mouseEnter(button)
+      fireEvent.pointerEnter(button)
       act(() => { vi.advanceTimersByTime(500) })
       expect(view.getByRole('tooltip').getAttribute('aria-label')).toBe('停止生成 Esc Esc')
 
@@ -1098,6 +1100,58 @@ describe('running and lock semantics', () => {
     })
     expect(ready.button.getAttribute('aria-label')).toBe('插话发送')
     expect(ready.button.disabled).toBe(false)
+  })
+
+  it('running Send waits for an uploading image and treats an image without an upload as ready', () => {
+    const image = {
+      kind: 'image' as const,
+      id: 'image-1' as DraftAttachmentId,
+      file: new File(['x'], 'shot.png', { type: 'image/png' }),
+      previewUrl: 'blob:shot',
+    }
+    const uploading = bench({
+      running: true, busyEnter: 'steer', draft: '带图', attachments: [image],
+      fileUploads: { [image.id]: { status: 'uploading', loaded: 0 } },
+    })
+    expect(uploading.button.getAttribute('aria-label')).toBe('发送消息')
+    expect(uploading.button.disabled).toBe(true)
+
+    // A subagent continuation's image has no upload and travels inline.
+    const inline = bench({ running: true, busyEnter: 'steer', draft: '带图', attachments: [image] })
+    expect(inline.button.getAttribute('aria-label')).toBe('插话发送')
+    expect(inline.button.disabled).toBe(false)
+  })
+
+  it('explains on Enter why uploads hold the send, naming a Host refusal', () => {
+    const limits = {
+      maxImageBytes: 1024 * 1024,
+      maxImagesPerMessage: 2,
+      maxMessageImageBytes: 2 * 1024 * 1024,
+      maxImagePixels: 40_000_000,
+      maxImageDimension: 2000,
+      mediaTypes: ['image/png'] as const,
+    }
+    const image = {
+      kind: 'image' as const,
+      id: 'image-1' as DraftAttachmentId,
+      file: new File(['x'], 'wide.png', { type: 'image/png' }),
+      previewUrl: 'blob:wide',
+    }
+    const enterWith = (upload: NonNullable<BenchOptions['fileUploads']>[string]): string | null => {
+      const result = bench({ draft: '带图', attachments: [image], fileUploads: { [image.id]: upload }, imageLimits: limits })
+      fireEvent.keyDown(result.textarea, { key: 'Enter' })
+      expect(result.sink).not.toHaveBeenCalled()
+      const text = result.view.getByRole('alert').textContent
+      cleanup()
+      return text
+    }
+    expect(enterWith({ status: 'uploading', loaded: 0 })).toContain('文件还在上传，请等待上传完成后发送')
+    expect(enterWith({ status: 'error', message: 'offline' })).toContain('上传失败，点击重试')
+    const refusal = '图片宽高不能超过 2000px，请缩小后重试'
+    expect(enterWith({ status: 'error', message: 'too wide', reason: 'IMAGE_DIMENSION_TOO_LARGE' })).toContain(refusal)
+    // The attachments slot receives the same localized explanation for its thumbnail.
+    const owner = attachmentOwner(bench({ attachments: [image], imageLimits: limits }).slotCalls)
+    expect(owner.uploadFailureText('IMAGE_DIMENSION_TOO_LARGE')).toBe(refusal)
   })
 
   it('idle Send keeps the plain label regardless of the busy-state preference', () => {
@@ -1415,6 +1469,81 @@ describe('running and lock semantics', () => {
     expect(focused).toEqual([true])
   })
 
+  it.each([
+    { name: 'iPhone', userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1', platform: 'iPhone', maxTouchPoints: 5, automatic: false },
+    { name: 'Android phone', userAgent: 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 Chrome/119.0.0.0 Mobile Safari/537.36', platform: 'Linux armv8l', maxTouchPoints: 0, automatic: false },
+    { name: 'Android tablet', userAgent: 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 Chrome/119.0.0.0 Safari/537.36', platform: 'Linux armv8l', maxTouchPoints: 5, automatic: false },
+    { name: 'desktop-mode iPad', userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.6 Safari/605.1.15', platform: 'MacIntel', maxTouchPoints: 5, automatic: false },
+    { name: 'Mac', userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.6 Safari/605.1.15', platform: 'MacIntel', maxTouchPoints: 0, automatic: true },
+    { name: 'Windows touchscreen', userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/119.0.0.0 Safari/537.36', platform: 'Win32', maxTouchPoints: 5, automatic: true },
+  ])('composer focus and submission respect device classification: $name', async ({ userAgent, platform, maxTouchPoints, automatic }) => {
+    for (const [name, value] of Object.entries({ userAgent, platform, maxTouchPoints })) {
+      const descriptor = Object.getOwnPropertyDescriptor(navigator, name)
+      Object.defineProperty(navigator, name, { configurable: true, value })
+      onTestFinished(() => {
+        if (descriptor === undefined) Reflect.deleteProperty(navigator, name)
+        else Object.defineProperty(navigator, name, descriptor)
+      })
+    }
+    vi.resetModules()
+    const detection = await import('@deepseek-ai/dsh-client-ui-primitives/src/focus.ts')
+    const device = vi.spyOn(uiPrimitives, 'isMobileDevice').mockImplementation(detection.isMobileDevice)
+    onTestFinished(() => { device.mockRestore() })
+    const outside = document.createElement('input')
+    document.body.append(outside)
+    onTestFinished(() => { outside.remove() })
+    outside.focus()
+
+    const { view, textarea, props, shell, button, sink } = bench({ draft: 'draft' })
+    expect(document.activeElement).toBe(automatic ? textarea : outside)
+    act(() => { outside.focus() })
+    act(() => { view.rerender(<InputBar {...props} sessionId={'s2' as SessionId} />) })
+    expect(document.activeElement).toBe(automatic ? textarea : outside)
+    act(() => { outside.focus() })
+    act(() => { view.rerender(<InputBar {...props} disabled />) })
+    act(() => { view.rerender(<InputBar {...props} />) })
+    expect(document.activeElement).toBe(automatic ? textarea : outside)
+
+    act(() => { outside.focus() })
+    fireEvent.mouseDown(view.container.querySelector('[data-composer-card]')!, { button: 0 })
+    expect(document.activeElement).toBe(textarea)
+
+    writeDraft(shell, '')
+    expect(document.activeElement).toBe(textarea)
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+    expect(sink).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(textarea)
+
+    for (const gesture of ['click', 'enter'] as const) {
+      writeDraft(shell, `send by ${gesture}`)
+      act(() => { textarea.focus() })
+      if (gesture === 'click') {
+        fireEvent.mouseDown(button, { button: 0 })
+        fireEvent.click(button)
+      } else {
+        fireEvent.keyDown(textarea, { key: 'Enter' })
+      }
+      await act(async () => {})
+      expect(sink).toHaveBeenLastCalledWith(`send by ${gesture}`, [], 'queue', expect.any(AbortSignal))
+      expect(shell.snapshot.draft).toBe('')
+      expect(document.activeElement === textarea).toBe(automatic)
+    }
+
+    writeDraft(shell, '/goal ')
+    act(() => {
+      shell.beginCommand(
+        { name: 'goal', token: '/goal ', submit: () => Promise.resolve({ kind: 'error', text: 'Missing goal' }) },
+        { start: 0, end: 6, draftRev: shell.snapshot.draftRev },
+      )
+      textarea.focus()
+    })
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+    await act(async () => {})
+    expect(shell.snapshot.phase).toBe('claimed')
+    expect(shell.snapshot.draft).toBe('/goal ')
+    expect(document.activeElement).toBe(textarea)
+  })
+
   it('a persisted draft adopted after mount does not steal focus from another control', () => {
     const { shell } = bench()
     const other = document.createElement('input')
@@ -1507,12 +1636,12 @@ describe('machine pending lock', () => {
 })
 
 describe('decorations', () => {
-  /** The claim-token styled leaf (the transform's inline accent color). */
-  function tokenSpanOf(container: HTMLElement): HTMLElement | null {
-    return container.querySelector('[data-lexical-text][style*="business-primary"]')
+  /** The claimed command chip's host element. */
+  function commandChipOf(container: HTMLElement): HTMLElement | null {
+    return container.querySelector('[data-composer-command]')
   }
 
-  it('claimed token styles the leading leaf and sets the blank-args hint variable', () => {
+  it('a claim renders the leading command chip and sets the blank-args hint variable', () => {
     // Dictionary-less stub: an unmatched hint key keeps the machine's raw hint.
     const { view, shell, textarea } = bench({ t: makeTranslate({}) })
     act(() => {
@@ -1521,15 +1650,14 @@ describe('decorations', () => {
         { name: 'goal', token: '/goal ', hint: '目标内容', submit: () => Promise.resolve({ kind: 'success' as const }) },
         { start: 0, end: 6, draftRev: shell.snapshot.draftRev },
       )
-      shell.editor.update(() => {}, { discrete: true }) // flush the queued decoration refresh
     })
-    expect(tokenSpanOf(view.container)?.textContent).toBe('/goal ')
+    expect(commandChipOf(view.container)?.textContent).toBe('/goal')
     expect(textarea.style.getPropertyValue('--dsh-composer-hint')).toBe(JSON.stringify('目标内容'))
-    // Args typed: the hint disappears, the token style stays.
-    act(() => { shell.setDraft('/goal 发布') })
-    act(() => { shell.editor.update(() => {}, { discrete: true }) }) // flush the queued decoration refresh
+    // Args typed: the hint disappears, the chip stays.
+    act(() => { shell.actions.insertText('发布', shell.actions.captureInsertion()) })
+    expect(shell.snapshot.draft).toBe('/goal 发布')
     expect(textarea.style.getPropertyValue('--dsh-composer-hint')).toBe('')
-    expect(tokenSpanOf(view.container)).not.toBeNull()
+    expect(commandChipOf(view.container)).not.toBeNull()
   })
 
   it('a locale entry for the claimed command overrides the raw claim hint (trailing-space token)', () => {

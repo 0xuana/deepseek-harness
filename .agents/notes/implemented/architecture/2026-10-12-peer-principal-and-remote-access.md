@@ -57,12 +57,14 @@ export interface PeerScope {
   readonly principal: Principal
   /** Aborted once the Peer is disposed; Remote streams that speak for the Peer end with it. */
   readonly signal: AbortSignal
+  /** Forwarded human-interaction participation; independent of authorization. */
+  readonly interactions: 'answer' | 'none'
   dispose(): Promise<void>
 }
 
 // @deepseek-ai/dsh-client-connection
 export class Peer implements PeerScope {
-  constructor(owner: Context, options: { readonly principal: Principal })
+  constructor(owner: Context, options: { readonly principal: Principal; readonly interactions?: 'answer' | 'none' })
 }
 
 interface HostConnectionHandle {
@@ -71,7 +73,7 @@ interface HostConnectionHandle {
   /** Network admission: the admitted Peer or the refusal status. */
   admit(request: ConnectionTrustRequest): PeerAdmission
   /** In-process only; disposed with the Context that read `ctx.connection`, or earlier by dispose(). */
-  createPeer(options: { readonly principal: Principal }): PeerScope
+  createPeer(options: { readonly principal: Principal; readonly interactions?: 'answer' | 'none' }): PeerScope
 }
 
 interface ConnectionFetchHandler {
@@ -90,6 +92,7 @@ wireStream.open(endpoint, payload, uplink, peer: PeerScope, signal)          // 
 | Browser connections share `browserPeer` | Every browser connection shares one Peer, and every use site names `connection.browserPeer` explicitly; there is no fallback variable. The in-page Host (webworker-runtime) also passes `browserPeer` explicitly |
 | In-process Host automation | Code that calls Remote methods creates its own Peer with `createPeer({ principal })`. No production caller exists yet, so no fixed Host Peer is pre-provisioned |
 | Multiple Peers | Each `createPeer()` returns an independent Peer; liveshare is to create one per viewer connection (wired on the #3854 side) |
+| Interaction participation | `Peer(owner, { principal, interactions? })` and `createPeer()` default omitted `interactions` to `answer`. `none` refuses `$events` and `$events/result` for every principal, even owner; this is independent of method-level RBAC. Answering owner Peers receive waterfalls, and non-owner Peers receive only RBAC-authorized broadcasts and cannot answer |
 | Exact Fetch routes | Exact routes such as file-upload, present-open, media-references, session-log-export, and inspector bypass the Gateway; the shared Fetch handler answers 403 to every non-owner Peer |
 
 ### Identity types
@@ -443,7 +446,7 @@ export const REMOTE_ACCESS_SNAPSHOT_KEY = '__DSH_REMOTE_ACCESS__'
 
 | Behavior | Detail |
 |---|---|
-| First snapshot | `snapshotFor(principal)` computes a page's opening baseline. remote-access adds the global `REMOTE_ACCESS_SNAPSHOT_KEY`, set to the owner baseline `{ type: 'baseline', owner: true }`, to every index the webServer renders, through `webserver/index-inject`. A business package that renders a non-owner page (such as liveshare on the owner Host) places an assignment of that global to `snapshotFor(principal)` after every index injection row; the later assignment wins, and the Client reads the global when it mounts |
+| First snapshot | `snapshotFor(principal)` computes a page's opening baseline. The webServer renders each index for the Peer the page speaks for, and `webserver/index-inject` passes that Peer to listeners; remote-access adds the global `REMOTE_ACCESS_SNAPSHOT_KEY`, set to `snapshotFor(peer.principal)`, to every index, so the owner's page receives the owner baseline `{ type: 'baseline', owner: true }` and a page rendered for a non-owner Peer (such as a liveshare viewer page on the owner Host) receives that principal's grants. The Client reads the global when it mounts |
 | Subscription | Each Peer subscribes to one access snapshot stream, whose baseline replaces the injected one |
 | Computation | All bindings of the policy for the principal's kind are merged by equal resource; each resource's `actions` are the endpoint actions of those bindings' roles that the same decision as a call allows (one resource, without args, conditions called without args); only a resource with at least one allowed endpoint action gets a grant. Decisions and snapshots share one source: for the same principal, action, and resource (without arguments), the snapshot answer equals `decide()` |
 | Endpoint actions only | `event:<name>` actions do not enter the snapshot; the frontend decides entry visibility from endpoint actions only |
@@ -547,9 +550,9 @@ The review rule's home is the "`@Remote` marks capability methods" section of [R
 
 ### Out of scope and future work
 
-- The `/connect` handshake, API cookies, one Peer per API connection, and WebSocket lifetimes belong to pr-5945.
+- The API-only `/connect` handshake, API cookies, one Peer per API connection, and WebSocket lifetimes are described in [Peer-scoped connect handshake](2026-10-09-operator-scoped-connect-handshake.md).
 - Multiple browser Peers (such as one per tab): every browser connection shares `browserPeer`.
-- Interaction participation (interactions) and approval isolation by principal come with later work; non-owners currently receive only authorized `$events` broadcast frames.
+- Interaction participation is attached to each Peer. A non-owner with `interactions: 'answer'` still receives only RBAC-authorized broadcast frames and cannot answer owner waterfalls; per-principal approval handling remains outside this mechanism.
 - `agent-preset/selected` and the other forwarded events declare no resources and are decided on `global`; when its viewers need a Session event, #3854 declares that event's resources and lists `event:<name>` in a role.
 - Liveshare integration (declaring `share-viewer`, one Peer per viewer connection, defining roles and registering a policy, removing `origin` / `prompt/origin` / `READ_ENDPOINTS`) happens on the #3854 side.
 - `session/cancel` ownership checks, the fork `childSessionId`, and `ToolExecutionInput.turn` do not change.
@@ -635,7 +638,7 @@ The review rule's home is the "`@Remote` marks capability methods" section of [R
 | Resource resolution | A default field (top-level or first object argument) yields its resource; a lookup parameter that declares that kind as its `resource` yields its wire identity; a Context method gets its Session resource from the Agent Context identity in args without activating the Agent, and may declare other resources through `resources`; a `resources` reader overrides its kind, an array yields several resources, and `undefined` none; with nothing the call is `[global]`; a throw, an empty array, or a value that is not a non-empty string (including a Context identity) is invalid, refused by the Gateway with `resource-invalid` without asking `decide()`; a Context that declares no `resource` resolves by the ordinary rules; resources and `args` read the validated arguments, so an undeclared nested field changes no resource and no condition sees it, and a JSON argument failing validation returns `gateway/input-invalid` before the access check | Gateway host spec (gateway-access) |
 | Resource registry | `typert.resources` registers one default field per kind, rejects a second registration and `global`, and withdraws the registration with its fiber; a configured lookup resolver keeps the provider's `resource`; a Host Context adapter keeps its `resource` | typert-registry spec |
 | Forwarded events | A non-owner `$events` stream receives an event, whole, only when `event:<name>` is granted on its resources; an event that declares no resources is decided on `global`; an event whose reader returns `undefined` does not reach non-owners, and `decide()` is not asked; the owner receives all | Gateway host spec (gateway-access) |
-| First snapshot | `snapshotFor()` returns the owner baseline or the principal's grants; remote-access injects the owner baseline into every rendered index; the Client starts from the injected baseline and rejects a malformed one | remote-access host and client specs |
+| First snapshot | `snapshotFor()` returns the owner baseline or the principal's grants; remote-access injects the snapshot of the Peer each index speaks for; the Client starts from the injected baseline and rejects a malformed one | remote-access host and client specs |
 | Type inference | The parameter types of `resources` readers are inferred from the method; lookup positions have wire types; a missing property, more parameters than the method has, and a `global` key fail compilation; a binding whose resource kind differs from its role's fails compilation | typert-protocol spec, remote-access spec (type tests) |
 | List filtering | `session/list`, `session/search`, `session/control`, and `workspace/follow` return non-owners only items for which `allows()` is true; `workspace/follow` sends a `replace` increment when a delivered Workspace loses visibility, and the Workspace reappears once access returns; owner results are unchanged | session-controller / workspace-controller host spec |
 | Access snapshots | The allowed set in a snapshot equals the Host decision for the same principal, action, and resource without arguments; it contains endpoint actions only; a resource with no allowed action gets no grant, and one whose allowed set becomes empty is removed; `invalidate()` and policy registration or removal push increments; a wait that a change ends leaves no abort listener behind; unloading the service ends every open snapshot stream; the owner receives only `{ owner: true }` | remote-access host spec |
