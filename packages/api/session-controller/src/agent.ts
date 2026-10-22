@@ -8,6 +8,7 @@ import type {} from '@deepseek-ai/dsh-agent-default-model'
 import { installModelSelection } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import { brandString } from '@deepseek-ai/dsh-brand'
+import { carrierKeyOf } from '@deepseek-ai/dsh-scope'
 import type { Session, SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionInspection } from '@deepseek-ai/dsh-session-persistence'
 import { SessionQueryError, type SessionObservation } from '@deepseek-ai/dsh-session-query'
@@ -159,6 +160,7 @@ export async function inspectApiSession(
 
 /** Owns every operation that may create, resume, or configure a Web Agent. */
 export class ApiSessionAgentController {
+  private readonly initializing = new Map<Session, PromiseWithResolvers<Agent | undefined>>()
   private readonly resumes = new Map<SessionId, Promise<Agent>>()
   private readonly claims = new Map<SessionId, Promise<void>>()
   private readonly imageAdmissionChains = new WeakMap<Agent, Promise<void>>()
@@ -171,6 +173,25 @@ export class ApiSessionAgentController {
    */
   initialize(): void {
     const ctx = this.ctx
+    const initializing = this.initializing
+    ctx.on('session/created', function (session) {
+      // AgentLoop publishes through its own Agent scope; bare Sessions and
+      // Sessions created by another Agent do not announce their own readiness.
+      const owner = carrierKeyOf(this) as Agent | undefined
+      if (owner?.session === session) initializing.set(session, Promise.withResolvers())
+    })
+    ctx.on('agent/created', ({ agent }) => {
+      initializing.get(agent.session)?.resolve(agent)
+      initializing.delete(agent.session)
+    })
+    ctx.on('session/disposed', (session) => {
+      initializing.get(session)?.resolve(undefined)
+      initializing.delete(session)
+    })
+    ctx.effect(() => () => {
+      for (const pending of initializing.values()) pending.resolve(undefined)
+      initializing.clear()
+    }, 'session-controller: Agent readiness')
     ctx.typert.lookups.configure('agent', async (sessionId: SessionId) => {
       const found = await this.resolveAgent(sessionId)
       if ('error' in found) throw found.error
@@ -219,7 +240,8 @@ export class ApiSessionAgentController {
 
     let resume = this.resumes.get(sessionId)
     if (resume === undefined) {
-      resume = this.resume(sessionId, observation).finally(() => { this.resumes.delete(sessionId) })
+      resume = (this.pendingAgent(sessionId) ?? this.resume(sessionId, observation))
+        .finally(() => { this.resumes.delete(sessionId) })
       this.resumes.set(sessionId, resume)
     }
     try {
@@ -238,6 +260,7 @@ export class ApiSessionAgentController {
       const raced = this.liveAgent(sessionId)
       if (raced !== undefined) return raced
       const racedSession = this.ctx.sessions.get(sessionId)
+      if (racedSession !== undefined && this.initializing.has(racedSession)) return this.resolve(sessionId)
       if (racedSession !== undefined && hasApiSessionSubagentOwner(this.ctx, racedSession, undefined)) {
         return { error: apiSessionSubagentOwnershipError(sessionId) }
       }
@@ -252,6 +275,16 @@ export class ApiSessionAgentController {
         ),
       }
     }
+  }
+
+  /** Observe Web readiness without acquiring the initializing Agent's disposal capability. */
+  private pendingAgent(sessionId: SessionId): Promise<Agent> | undefined {
+    const session = this.ctx.sessions.get(sessionId)
+    const pending = session === undefined ? undefined : this.initializing.get(session)
+    return pending?.promise.then((agent) => {
+      if (agent === undefined) throw new ApiSessionNotFound(`session "${sessionId}" initialization did not complete`)
+      return agent
+    })
   }
 
   /**
@@ -270,6 +303,7 @@ export class ApiSessionAgentController {
    * @throws ApiSessionSubagentOwnership when subagent routing owns the named Session.
    * @throws RemoteError `agent-preset/not-found` or `agent-preset/invalid` for the requested or default preset.
    * @throws ApiSessionPresetConflict when no roster is composed and the request names a preset for a reused Session.
+   * @throws ApiSessionNotFound when a joined initialization ends without an Agent.
    */
   async createSession(request: ApiSessionCreateRequest): Promise<ApiSessionCreated> {
     const named = request.sessionId
@@ -351,6 +385,8 @@ export class ApiSessionAgentController {
       throw new ApiSessionSubagentOwnership(sessionId)
     }
     const composition = await this.composeAgent(this.presetForObservation(observation))
+    const pending = this.pendingAgent(sessionId)
+    if (pending !== undefined) return pending
     const published = this.ctx.sessions.get(sessionId)
     const live = this.ctx.agents.get(sessionId)
     if (published !== undefined && hasApiSessionSubagentOwner(this.ctx, published, live)) {
@@ -376,6 +412,7 @@ export class ApiSessionAgentController {
 
   /** @returns the reused Session, a new Session under `sessionId` when none is stored, or a new Session under a minted identity. */
   private async claim(sessionId: SessionId, request: ApiSessionCreateRequest): Promise<Agent> {
+    await this.pendingAgent(sessionId)
     const attached = this.ctx.sessions.get(sessionId)
     const live = this.ctx.agents.get(sessionId)
     if (attached !== undefined && hasApiSessionSubagentOwner(this.ctx, attached, live)) {
@@ -419,6 +456,7 @@ export class ApiSessionAgentController {
       if (error instanceof ApiSessionStartedSinceObserved) return this.createMinted(request.cwd, composition)
       if (!(error instanceof Error) || error.name !== 'SessionAlreadyOwnedError') throw error
       // Another resume in this process may hold the writer for the Agent it published.
+      await this.pendingAgent(sessionId)
       return this.ctx.agents.get(sessionId) === undefined
         ? this.createMinted(request.cwd, composition)
         : this.claim(sessionId, request)
