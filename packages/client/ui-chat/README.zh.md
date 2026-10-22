@@ -56,8 +56,6 @@ Chat 在所有工作步骤展示模式下都不显示系统提示词行、普通
 
 Assistant 尝试结束且没有可见消息时，Chat 隐藏已发布的 Node，不移除其 key。同一 Step 的重试再次产生可见内容时，复用该 key。已加载窗口缺少 Step 起点时也遵循此规则。
 
-Chat 在渲染的回答和轮次页脚复制的回答文本中隐藏 [`dsh-util-action-block`](../../util/action-block/README.zh.md) 识别出的顶层 `dsh-` 指令围栏；Trajectory 保留原始文本。
-
 <a id="command-and-failure-rows"></a>
 ## 指令与失败行
 

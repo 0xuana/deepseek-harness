@@ -3921,9 +3921,6 @@ importers:
       '@deepseek-ai/dsh-tool-executor-ptc':
         specifier: workspace:*
         version: link:../../core/tool-executor-ptc
-      '@deepseek-ai/dsh-util-action-block':
-        specifier: workspace:*
-        version: link:../../util/action-block
       '@deepseek-ai/dsh-util-values':
         specifier: workspace:*
         version: link:../../util/values
@@ -16200,12 +16197,6 @@ importers:
       '@deepseek-ai/dsh-typert-protocol':
         specifier: workspace:*
         version: link:../protocol
-
-  packages/util/action-block:
-    devDependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:~
-        version: link:../../../vendor/cordis
 
   packages/util/atomic-write:
     devDependencies:

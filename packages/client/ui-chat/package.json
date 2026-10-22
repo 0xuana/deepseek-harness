@@ -92,7 +92,6 @@
     "@deepseek-ai/dsh-util-workspace-path": "workspace:*",
     "@deepseek-ai/dsh-tool-executor-ptc": "workspace:*",
     "@deepseek-ai/dsh-util-values": "workspace:*",
-    "@deepseek-ai/dsh-util-action-block": "workspace:*",
     "@tanstack/react-virtual": "3.14.10",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
