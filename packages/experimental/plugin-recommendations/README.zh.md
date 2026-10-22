@@ -31,7 +31,7 @@ kind: "package-bundle"
 
 ### 结果与恢复
 
-被接受的调用所在的轮次结束后卡片才会出现。启用需要修改 profile 的权限。卡片显示时读取插件的目录文本；查询被拒绝时显示原因，回复丢失时说明无法读取插件信息，两种情况都提供「暂不需要」和「重试」，不提供启用。用户操作时 Host 会重新检查插件是否在可推荐目录里。已保存的选择可能需要重启。失败的变更可在同一张卡片上重试；插件重载打断启用、结果未能确认时，卡片显示未确认，同样可以重试。已在别处开启的插件会直接记为已启用，不再改动。之后的新提案会替换尚未处理的卡片，旧卡片显示「已替换」；排队消息达到 `queuedMessageLimit` 时，卡片工具会拒绝提案。响应丢失时结果暂不确定，Session 投影重连后会恢复；重复点击卡片是幂等的。
+被接受的调用所在的轮次结束后卡片才会出现。启用需要修改 profile 的权限。卡片显示时读取插件的目录文本；查询被拒绝时显示原因，回复丢失时说明无法读取插件信息，两种情况都提供「暂不需要」和「重试」，不提供启用。用户操作时 Host 会重新检查插件是否在可推荐目录里。已保存的选择可能需要重启。失败的变更可在同一张卡片上重试；插件重载打断启用、结果未能确认时，卡片显示未确认，同样可以重试；那次启用之后生效的，下一次点击卡片会显示「已启用」。已在别处开启的插件会直接记为已启用，不再改动。之后的新提案会替换尚未处理的卡片，旧卡片显示「已替换」；排队消息达到 `queuedMessageLimit` 时，卡片工具会拒绝提案。响应丢失时结果暂不确定，Session 投影重连后会恢复；重复点击卡片是幂等的。
 
 -----
 
@@ -43,7 +43,7 @@ kind: "package-bundle"
 
 Host 入口是函数插件。它的 `apply` 通过 `ctx.plugin` 组装内部的 `pluginRecommendations` Remote service；该 service 为卡片读取目录文本，并为本卡片种类启用插件。它不是可单独配置或替换的 YAML 条目，也不会向 `dsh-base` 添加 service。关闭功能会移除它的 skill、卡片种类和 Remote，并等待它拥有的启用操作结束。
 
-本插件不添加模型工具，也不添加 system prompt 段。它注册 `official-plugins` skill，加载时追加来自 `pluginManager` 的当前可推荐目录。它向共享的[操作卡片服务](../action-cards/README.zh.md)注册 `enable_official_plugin` 种类：skill 为 `official-plugins`，`details` 带插件的 `name`，动作「启用」需要全局 Remote 权限。`propose_action` 工具、卡片投影、「暂不需要」、Remote 操作和状态通知都由共享服务负责。本插件通过 Plugin Manager 启用指定插件，记录 `enabled`、`already-enabled`、`failed` 或 `unconfirmed`。保存的选择要等重启才生效时，决定数据带 `application: restart-required`；变更失败时带插件管理的 `errorCode`，Plugin Manager 拒绝变更但没有给出代码时带 `operation-error`。`unconfirmed` 表示插件重载打断了启用、没有拿到结果；之后重试时若发现插件已开启，记为 `enabled`。未处理、失败和未确认的卡片可以记为「暂不需要」。只有已随安装提供、可选、官方、可读取、可写且无错误的插件可以推荐；名字在用户操作时检查，而不是在模型提议时。Remote `describe(sessionId, callId)` 返回卡片对应插件当前的标题、描述和启用状态，或拒绝原因。
+本插件不添加模型工具，也不添加 system prompt 段。它注册 `official-plugins` skill，加载时追加来自 `pluginManager` 的当前可推荐目录。它向共享的[操作卡片服务](../action-cards/README.zh.md)注册 `enable_official_plugin` 种类：skill 为 `official-plugins`，`details` 带插件的 `name`，动作「启用」需要全局 Remote 权限。`propose_action` 工具、卡片投影、「暂不需要」、Remote 操作和状态通知都由共享服务负责。本插件通过 Plugin Manager 启用指定插件，记录 `enabled`、`already-enabled`、`failed` 或 `unconfirmed`。保存的选择要等重启才生效时，决定数据带 `application: restart-required`；变更失败时带插件管理的 `errorCode`，Plugin Manager 拒绝变更但没有给出代码时带 `operation-error`。`unconfirmed` 表示插件重载打断了启用、没有拿到结果。这类卡片在每次操作前（包括「暂不需要」）都会检查 profile，发现插件已开启就记为 `enabled`，不再重试或记为忽略。未处理、失败和未确认的卡片可以记为「暂不需要」。只有已随安装提供、可选、官方、可读取、可写且无错误的插件可以推荐；名字在用户操作时检查，而不是在模型提议时。Remote `describe(sessionId, callId)` 返回卡片对应插件当前的标题、描述和启用状态，或拒绝原因。
 
 同一张卡上的并发操作共用一次执行；卸载时停止本地后续处理，不等待排在自身 HMR 卸载之后的 profile 变更。已接纳的变更由 Plugin Manager 负责完成；结果未确认的卡片再次点击时会重新检查 profile。安装状态由 profile 文件负责，卡片决定只记录历史结果。
 

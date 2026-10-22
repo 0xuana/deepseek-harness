@@ -10,7 +10,8 @@ export interface PluginDetails {
 
 /**
  * Phases a plugin card records besides the shared `dismissed`. `unconfirmed` marks an enable whose outcome an unload
- * cut off; a retry that then finds the plugin enabled records `enabled`, since this card's own change landed.
+ * cut off; the next action that finds the plugin enabled, Not now included, records `enabled`, since this card's own
+ * change landed.
  */
 export type PluginPhase = 'enabled' | 'already-enabled' | 'failed' | 'unconfirmed'
 

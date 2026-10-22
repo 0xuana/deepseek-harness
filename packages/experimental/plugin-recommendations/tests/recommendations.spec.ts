@@ -227,6 +227,26 @@ describe('official recommendations', () => {
     expect(f.manager.setBundleEnabled).toHaveBeenCalledOnce()
   })
 
+  it('settles Not now on an unconfirmed card as enabled when its interrupted enable has landed', async () => {
+    const f = await fixture()
+    f.propose()
+    f.ctx.actionCards.record(f.agent, { callId, action: ACTION, phase: 'unconfirmed' })
+    f.manager.listBundles.mockResolvedValue([{ ...bundle, enabled: true }])
+    const enabled = { callId, action: ACTION, phase: 'enabled' }
+    expect(await f.ctx.actionCards.act(f.agent, callId, 'dismiss')).toEqual({ status: 'settled', decision: enabled })
+    expect(f.card()).toEqual(enabled)
+    expect(f.manager.setBundleEnabled).not.toHaveBeenCalled()
+  })
+
+  it('records enabled when an unconfirmed enable lands between the profile check and the retry', async () => {
+    const f = await fixture()
+    f.propose()
+    f.ctx.actionCards.record(f.agent, { callId, action: ACTION, phase: 'unconfirmed' })
+    f.manager.listBundles.mockResolvedValueOnce([bundle]).mockResolvedValue([{ ...bundle, enabled: true }])
+    expect(await f.ctx.actionCards.act(f.agent, callId, 'enable')).toEqual({ status: 'settled', decision: { callId, action: ACTION, phase: 'enabled' } })
+    expect(f.manager.setBundleEnabled).not.toHaveBeenCalled()
+  })
+
   it('dismisses an unconfirmed card', async () => {
     const f = await fixture()
     f.propose()

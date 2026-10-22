@@ -45,7 +45,8 @@ function refused(reason: string): ActionCardResult {
 /** Catalog lookups for card text and the enabling behind the `enable_official_plugin` card. */
 export class PluginRecommendations extends TypertRemoteService {
   static inject = inject
-  private readonly operations = new Set<Promise<ActionCardResult>>()
+  /** Card reconciliations and enabling in flight; unloading waits for them. */
+  private readonly operations = new Set<Promise<unknown>>()
   private readonly stopped = Promise.withResolvers<undefined>()
   private closing = false
   private readonly owner: Context['fiber']
@@ -64,11 +65,9 @@ export class PluginRecommendations extends TypertRemoteService {
       statusGuidance: 'Plugin cards: enabled means the plugin is on now, or after a DSH restart when application is restart-required; '
         + 'already-enabled means it was on before; failed, or unconfirmed when a reload cut enabling off, can be retried from the card; '
         + 'dismissed means the user declined it, so do not offer it again in this conversation; enabling authorizes nothing beyond that plugin.',
-      act: (agent, proposal) => {
-        const operation = this.enable(agent, proposal)
-        this.operations.add(operation)
-        return operation.finally(() => { this.operations.delete(operation) })
-      },
+      // Every action, including Not now, first learns whether an interrupted enable has since landed.
+      reconcile: (agent, proposal) => this.tracked(this.confirm(agent, proposal)),
+      act: (agent, proposal) => this.tracked(this.enable(agent, proposal)),
     })
     this.ctx.effect(() => async () => {
       this.closing = true
@@ -100,6 +99,21 @@ export class PluginRecommendations extends TypertRemoteService {
     return isPluginStopping(this.owner, this.closing)
   }
 
+  /** Track an operation until it settles, so unloading waits for it. */
+  private tracked<T>(operation: Promise<T>): Promise<T> {
+    this.operations.add(operation)
+    return operation.finally(() => { this.operations.delete(operation) })
+  }
+
+  /** Record `enabled` on an unconfirmed card whose interrupted enable has since turned its plugin on. */
+  private async confirm(agent: Agent, proposal: PluginProposal): Promise<void> {
+    // Held from the start, like enabling: an unload while the catalog is read still records the outcome.
+    const cards = this.ctx.actionCards
+    if (ownEntry(cards.view(agent.session).decisions, proposal.callId)?.phase !== 'unconfirmed') return
+    const bundle = (await this.ctx.pluginManager.listBundles()).find(item => item.name === proposal.details.name)
+    if (bundle?.enabled === true) cards.record(agent, { callId: proposal.callId, action: ACTION, phase: 'enabled' })
+  }
+
   /** Enable the card's plugin once; an enabled card settles unchanged, and a failed or unconfirmed one can be retried. */
   private async enable(agent: Agent, proposal: PluginProposal): Promise<ActionCardResult> {
     // Held from the start: an unload during the profile change still records where this card stands.
@@ -118,7 +132,7 @@ export class PluginRecommendations extends TypertRemoteService {
     if (bundle === undefined || !eligible(bundle)) return refused('unavailable')
     if (this.isStopping()) return refused('closing')
     if (!this.ctx.agents.roots().includes(agent)) return refused('not-live-root')
-    // A plugin found on after this card's own interrupted enable was turned on by this card.
+    // An unconfirmed card's plugin that reconciliation still found off and is on now was turned on by its own enable.
     if (bundle.enabled) return record(previous?.phase === 'unconfirmed' ? 'enabled' : 'already-enabled')
     let result: ChangeResult | undefined
     try {
