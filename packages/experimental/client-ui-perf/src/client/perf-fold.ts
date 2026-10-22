@@ -305,6 +305,7 @@ export function newState(
     images: 0,
     closed: false,
     closeKind: null,
+    trigger: null,
     answer: null,
   }
 }

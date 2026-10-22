@@ -134,6 +134,7 @@ function turn(overrides: Partial<PerfTurnMetrics> = {}): PerfTurnMetrics {
     wall: 1_000,
     prompt: null,
     promptImages: 0,
+    promptSource: null,
     ...overrides,
   }
 }
@@ -603,6 +604,39 @@ describe('turn rows', () => {
     expect(cellsOf(rowWithPrefix(say('turn.label', { turn: 2 })))[1]?.textContent).toBe('')
     expect(cellsOf(rowWithPrefix(say('turn.label', { turn: 2 })))[1]?.getAttribute('title')).toBeNull()
     expect(cellsOf(rowWithPrefix(say('turn.label', { turn: 3 })))[1]?.textContent).toBe('')
+  })
+
+  it('labels automated turn triggers instead of leaving the question empty', () => {
+    const sources = ['agent-message', 'subagent-settled', 'goal', 'runtime-context', 'time-context', 'mystery']
+    mount({
+      turns: sources.map((source, index) => turn({
+        turn: index + 1,
+        prompt: `trigger text ${index}`,
+        promptSource: source,
+      })),
+      stepCount: sources.length,
+    })
+    const labels: Readonly<Record<string, string>> = {
+      'agent-message': say('trigger.agent-message'),
+      'subagent-settled': say('trigger.subagent-settled'),
+      'goal': say('trigger.goal'),
+      'runtime-context': say('trigger.context'),
+      'time-context': say('trigger.context'),
+      'mystery': say('trigger.other'),
+    }
+    sources.forEach((source, index) => {
+      const cell = cellsOf(rowWithPrefix(say('turn.label', { turn: index + 1 })))[1] as HTMLTableCellElement
+      expect(cell.textContent).toContain(labels[source])
+      expect(cell.textContent).toContain(`trigger text ${index}`)
+      expect(cell.getAttribute('title')).toBe(`trigger text ${index}`)
+    })
+
+    // A context-only trigger with no readable text still shows its badge alone.
+    cleanup()
+    mount({ turns: [turn({ prompt: null, promptSource: 'time-context' })], stepCount: 0 })
+    const bare = cellsOf(rowWithPrefix(say('turn.label', { turn: 1 })))[1] as HTMLTableCellElement
+    expect(bare.textContent).toContain(say('trigger.context'))
+    expect(bare.getAttribute('title')).toBe(say('trigger.context'))
   })
 
   it('shows the recorded cache breakdown and the formula fallback when none was recorded', () => {

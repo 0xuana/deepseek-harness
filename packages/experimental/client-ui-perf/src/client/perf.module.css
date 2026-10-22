@@ -209,6 +209,15 @@
 }
 
 /* Did column: tool names, hints, and output sizes. */
+.triggerPill {
+  margin-right: 4px;
+  padding: 0 4px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 4px;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-11);
+}
+
 .answerPreview {
   color: var(--dsw-alias-label-tertiary);
   font-weight: 400;

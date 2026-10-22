@@ -72,7 +72,7 @@ function stepNode(value: PerfStepMetrics): PerfViewNode {
   }
 }
 
-function promptNode(turn: number, prompt: string | null, images = 0): PerfViewNode {
+function promptNode(turn: number, prompt: string | null, images = 0, source = 'user'): PerfViewNode {
   return {
     key: `${turn}:prompt:${prompt ?? 'null'}`,
     kind: 'perf-prompt',
@@ -80,7 +80,7 @@ function promptNode(turn: number, prompt: string | null, images = 0): PerfViewNo
     target: 'perf',
     anchorSeq: 1,
     location: { kind: 'unresolved' },
-    data: { kind: 'prompt', turn, prompt, images },
+    data: { kind: 'prompt', turn, prompt, images, source },
   }
 }
 
@@ -338,6 +338,44 @@ describe('turn grouping', () => {
     ])
     expect(turns[0]?.prompt).toBe('first')
     expect(turns[0]?.promptImages).toBe(3)
+  })
+
+  it('classifies the turn trigger and prefers the human prompt', () => {
+    const step = metricsOf({ turn: 1, step: 1, startTime: 100 })
+    const human = buildTurns([
+      stepNode(step),
+      promptNode(1, 'team message', 0, 'agent-message'),
+      promptNode(1, 'human question', 2, 'user'),
+    ])
+    expect(human[0]?.prompt).toBe('human question')
+    expect(human[0]?.promptSource).toBe('user')
+
+    const team = buildTurns([
+      stepNode(metricsOf({ turn: 2, step: 1, startTime: 200 })),
+      promptNode(2, 'team message', 0, 'agent-message'),
+    ])
+    expect(team[0]?.prompt).toBe('team message')
+    expect(team[0]?.promptSource).toBe('agent-message')
+
+    const settled = buildTurns([
+      stepNode(metricsOf({ turn: 3, step: 1, startTime: 300 })),
+      promptNode(3, 'subagent done', 0, 'subagent-settled'),
+    ])
+    expect(settled[0]?.promptSource).toBe('subagent-settled')
+
+    const goal = buildTurns([
+      stepNode(metricsOf({ turn: 4, step: 1, startTime: 400 })),
+      promptNode(4, 'goal round', 0, 'goal'),
+      promptNode(4, '', 0, 'goal'),
+    ])
+    expect(goal[0]?.promptSource).toBe('goal')
+    expect(goal[0]?.prompt).toBe('goal round')
+
+    const context = buildTurns([
+      stepNode(metricsOf({ turn: 5, step: 1, startTime: 500 })),
+      promptNode(5, 'clock', 0, 'time-context'),
+    ])
+    expect(context[0]?.promptSource).toBe('time-context')
   })
 
   it('carries the last measured answer preview into the turn', () => {

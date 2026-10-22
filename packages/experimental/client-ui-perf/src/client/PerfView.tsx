@@ -910,6 +910,18 @@ function TimeCell({ value, scale, gap, className, trackClass, now, t }: TimeCell
 
 /** Prompt column: the turn's user question, clipped with the full text in the title. */
 function PromptCell({ turn, t, className }: PromptCellProps): ReactElement {
+  const source = turn.promptSource
+  if (source !== null && source !== 'user') {
+    // Automated turns explain what woke them instead of pretending to be a question.
+    const label = triggerLabel(source, t)
+    const text = turn.prompt ?? ''
+    return (
+      <td className={className} title={text === '' ? label : text}>
+        <span className={css.triggerPill}>{label}</span>
+        {text === '' ? null : <span className={css.promptText}>{text}</span>}
+      </td>
+    )
+  }
   if (turn.prompt === null || turn.prompt === '') return <td className={className} />
   const images = turn.promptImages > 0 ? ` · ${t('turn.images', { count: turn.promptImages })}` : ''
   const text = turn.prompt + images
@@ -918,6 +930,18 @@ function PromptCell({ turn, t, className }: PromptCellProps): ReactElement {
       <span className={css.promptText}>{text}</span>
     </td>
   )
+}
+
+/** Localized label for one automated turn trigger. */
+function triggerLabel(source: string, t: PerfTranslate): string {
+  switch (source) {
+    case 'agent-message': return t('trigger.agent-message')
+    case 'subagent-settled': return t('trigger.subagent-settled')
+    case 'goal': return t('trigger.goal')
+    case 'runtime-context':
+    case 'time-context': return t('trigger.context')
+    default: return t('trigger.other')
+  }
 }
 
 /** Step did column: tool calls grouped by name and target, with output sizes. */

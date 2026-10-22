@@ -419,7 +419,7 @@ describe('snapshot builder', () => {
     expect(builder.apply({ upserts: [], timeline: { turnOrder: [], turns: new Map() } })).toBe(first)
     const upserted = builder.apply({
       upserts: [
-        node('perf-prompt:1:0', { kind: 'prompt', turn: 1, prompt: '问', images: 2 }),
+        node('perf-prompt:1:0', { kind: 'prompt', turn: 1, prompt: '问', images: 2, source: 'user' }),
         node('perf-step:1:1', { kind: 'step', metrics: measuredStep(1, 1, 1_000, 1_800) }),
         node('perf-turn-end:1:100000', { kind: 'end', turn: 1, closeKind: 'completed', endTime: 1_800 }),
       ],
@@ -589,9 +589,10 @@ describe('conversation Definitions', () => {
     const definitions = await registeredDefinitions()
     const prompt = definitions[1] as ConversationNodeDefinition<PerfStepState>
     expect(prompt.match(event('turn/start', { turn: 9 }))).toBeNull()
-    expect(prompt.match(event('user/message', {
+    const runtime = event('user/message', {
       role: 'user', id: 'u4', content: [{ type: 'text', text: '<system-reminder>' }], source: { kind: 'runtime-context' },
-    }))).toBeNull()
+    })
+    expect(prompt.match(runtime)).toEqual({ id: `${runtime.seq}`, role: 'start' })
     const user = event('user/message', {
       role: 'user', id: 'u6', content: [{ type: 'text', text: '继续' }, { type: 'image' }], source: { kind: 'user' },
     })
@@ -602,10 +603,11 @@ describe('conversation Definitions', () => {
     expect(state.mark).toBe('prompt')
     expect(state.prompt).toBe('继续')
     expect(state.images).toBe(1)
+    expect(state.trigger).toBe('user')
     const node = prompt.buildViewNode!({
       ...contextOf(prompt, state, [match], match),
     }) as PerfViewNode
-    expect(node.data).toEqual({ kind: 'prompt', turn: 9, prompt: '继续', images: 1 })
+    expect(node.data).toEqual({ kind: 'prompt', turn: 9, prompt: '继续', images: 1, source: 'user' })
     const context: ConversationNodeContext<PerfStepState> & { readonly state: PerfStepState } = {
       ...contextOf(prompt, state, [match], match),
       state,
@@ -630,6 +632,20 @@ describe('conversation Definitions', () => {
     expect(node.data).toMatchObject({ kind: 'prompt', turn: 4 })
     // A message the window cannot place publishes no row.
     expect(prompt.buildViewNode!({ ...contextOf(prompt, state) })).toBeNull()
+  })
+
+  it('falls back to the generic trigger when the source kind is unrecorded', async () => {
+    const definitions = await registeredDefinitions()
+    const prompt = definitions[1] as ConversationNodeDefinition<PerfStepState>
+    const user = event('user/message', {
+      role: 'user', id: 'u8', content: [{ type: 'text', text: '问题' }], source: { kind: 'user' },
+    })
+    const match = locatedStart(user, turnAt(3))
+    const state = { ...prompt.start(contextOf(prompt, undefined), match, reader), trigger: null }
+    const node = prompt.buildViewNode!({
+      ...contextOf(prompt, state, [match], match),
+    }) as PerfViewNode
+    expect(node.data).toMatchObject({ kind: 'prompt', source: 'other' })
   })
 
   it('folds Code-Mode dispatches into one node per root call', async () => {

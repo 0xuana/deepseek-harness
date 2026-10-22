@@ -73,6 +73,8 @@ export interface PerfStepState {
   readonly images: number
   readonly closed: boolean
   readonly closeKind: string | null
+  /** Producer source kind of the trigger prompt Context. */
+  readonly trigger: string | null
   /** Trimmed one-message answer text, for the Did column preview. */
   readonly answer: string | null
 }
@@ -147,6 +149,8 @@ export interface PerfTurnMetrics {
   readonly wall: number | null
   readonly prompt: string | null
   readonly promptImages: number
+  /** Producer source kind that opened the turn (`user`, `agent-message`, ...). */
+  readonly promptSource: string | null
   /** Last answer preview measured in the turn. */
   readonly answer: string | null
 }
@@ -166,6 +170,8 @@ export type PerfContribution =
     readonly turn: number
     readonly prompt: string | null
     readonly images: number
+    /** Producer source kind of the triggering user message. */
+    readonly source: string
   }
   | {
     readonly kind: 'end'

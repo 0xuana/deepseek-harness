@@ -118,11 +118,11 @@ const stepDefinition: ConversationNodeDefinition<PerfStepState> = {
   },
 }
 
-/** The user question of one turn: one Context per human-typed `user/message`. */
+/** The trigger of one turn: one Context per `user/message`, classified by source. */
 const promptDefinition: ConversationNodeDefinition<PerfStepState> = {
   kind: PROMPT_KIND,
   target: TARGET,
-  match: event => (event.type === 'user/message' && event.data.source.kind === 'user'
+  match: event => (event.type === 'user/message'
     ? { id: `${event.seq}`, role: 'start' }
     : null),
   start: (_context, match) => {
@@ -135,6 +135,7 @@ const promptDefinition: ConversationNodeDefinition<PerfStepState> = {
       ...newState(located?.turn ?? 0, PROMPT_STEP, 'prompt'),
       prompt: prompt.text,
       images: prompt.images,
+      trigger: match.event.data.source.kind,
     }
   },
   update: context => context.state,
@@ -148,6 +149,7 @@ const promptDefinition: ConversationNodeDefinition<PerfStepState> = {
       turn: located.turn,
       prompt: state.prompt,
       images: state.images,
+      source: state.trigger ?? 'other',
     })
   },
 }

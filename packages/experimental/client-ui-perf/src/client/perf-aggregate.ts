@@ -9,6 +9,24 @@ import { isNumber } from './perf-usage.ts'
 /** One Code-Mode root call's inner contribution, before merging into its step. */
 type InnerContribution = Extract<PerfContribution, { kind: 'inner' }>
 
+/** The trigger that opened one turn, kept from the highest-priority source. */
+interface TurnTrigger {
+  readonly text: string
+  readonly images: number
+  readonly source: string
+}
+
+/** Human prompts outrank automation context; ties keep the first message. */
+function triggerRank(source: string): number {
+  switch (source) {
+    case 'user': return 4
+    case 'agent-message': return 3
+    case 'subagent-settled': return 2
+    case 'goal': return 1
+    default: return 0
+  }
+}
+
 /** Context measured last in the turn: steps without usage keep the previous value. */
 function turnContext(steps: readonly PerfStepMetrics[]): number | null {
   let context: number | null = null
@@ -167,6 +185,7 @@ export function aggregateTurn(turn: number, steps: readonly PerfStepMetrics[]): 
     wall,
     prompt: null,
     promptImages: 0,
+    promptSource: null,
     answer,
   }
 }
@@ -192,14 +211,22 @@ export function buildTurns(nodes: Iterable<PerfViewNode>): PerfTurnMetrics[] {
   const closedAt = new Map<number, number>()
   const closedKind = new Map<number, string>()
   // User question per turn; the first typed question wins over later retries.
-  const prompts = new Map<number, { text: string; images: number }>()
+  const prompts = new Map<number, TurnTrigger>()
   // Code-Mode dispatches per step, merged after the steps are ordered.
   const inner = new Map<string, InnerContribution[]>()
   for (const node of nodes) {
     const data = node.data
     if (data.kind === 'prompt') {
-      if (data.prompt !== null && data.prompt !== '' && !prompts.has(data.turn)) {
-        prompts.set(data.turn, { text: data.prompt, images: data.images })
+      const previous = prompts.get(data.turn)
+      const rank = triggerRank(data.source)
+      if (previous === undefined
+        || rank > triggerRank(previous.source)
+        || (rank === triggerRank(previous.source) && previous.text === '' && (data.prompt ?? '') !== '')) {
+        prompts.set(data.turn, {
+          text: data.prompt ?? '',
+          images: data.images,
+          source: data.source,
+        })
       }
       continue
     }
@@ -263,8 +290,9 @@ export function buildTurns(nodes: Iterable<PerfViewNode>): PerfTurnMetrics[] {
       // A turn followed by another turn cannot still be running.
       running: (index < order.length - 1 || at !== undefined) ? false : aggregate.running,
       interrupted: closedKind.get(turn) === 'interrupted' ? true : aggregate.interrupted,
-      prompt: prompt === undefined ? null : prompt.text,
+      prompt: prompt === undefined || prompt.text === '' ? null : prompt.text,
       promptImages: prompt === undefined ? 0 : prompt.images,
+      promptSource: prompt === undefined ? null : prompt.source,
     })
   })
   return turns
