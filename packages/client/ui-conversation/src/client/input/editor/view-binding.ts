@@ -29,8 +29,6 @@ export function installDraftKeyboardDismissal(editor: LexicalEditor, destination
 
 interface DraftViewGate {
   locked: boolean
-  /** The Session access snapshot excludes `session/prompt`; no keyboard path may submit. */
-  promptDenied: boolean
   machineBusy: boolean
   canSteerQueue: boolean
   running: boolean
@@ -138,12 +136,9 @@ export function installDraftKeymap(
       return keyboard.space()
     },
     dismissPopup: () => { keyboard.dismissPopup() },
-    canSubmit: () => !gate.current.locked && !gate.current.machineBusy && !gate.current.promptDenied,
+    canSubmit: () => !gate.current.locked && !gate.current.machineBusy,
     submit: (accelerated) => {
       const g = gate.current
-      // Enter, Mod+Enter, and accelerated Enter (queue steering) all pass canSubmit; this second
-      // refusal keeps a future caller of submit() from bypassing the access answer.
-      if (g.promptDenied) return
       // Empty-draft accelerated Enter acts on the queue instead of the
       // (empty) draft: the machine rejects empty drafts, so the gesture
       // steers every still-pending queued message into the running turn.

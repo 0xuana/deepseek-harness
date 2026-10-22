@@ -86,7 +86,7 @@ root 作用域的 `conversation.session.header.views.actions` list 有注册项�
 
 输入框注册「文件」命令动作，负责其标题、可用性和原生文件选择器回调。菜单可用性与实际调用都读取已挂载输入框当前的附件接收策略。输入框卸载或锁定后该动作不可用，插件 dispose（资源释放）时移除注册。回调绑定留在输入模块内部。
 
-输入框通过会话作用域的 `useAccess` 钩子读取所在 Session 的访问答案：访问快照不含 `session/prompt` 时隐藏发送，不含 `session/cancel` 时隐藏停止，附件接收跟随 `fileUploads/upload`。没有 Session 的输入框尚无答案，保留普通控件。同一答案也门控键盘路径：访问快照不含 `session/prompt` 时，Enter、Mod+Enter 与加速回车都不会提交，也不会触发队列插话；不含 `session/cancel` 时，Esc-Esc 不会发出取消序列。这些界面判断不替代 Host 授权。
+输入框通过会话作用域的 `useAccess` 钩子读取所在 Session 的访问答案：访问快照不含 `session/prompt` 时隐藏发送，不含 `session/cancel` 时隐藏停止，附件接收跟随 `fileUploads/upload`。没有 Session 的输入框尚无答案，保留普通控件。只有停止的键盘路径跟随同一答案：访问快照不含 `session/cancel` 时，Esc-Esc 不会发出取消序列。发送只对按钮生效——键盘提交仍会到达 Host，由 Host 拒绝并上报失败。这些界面判断不替代 Host 授权。
 
 `SessionInputShell` 通过私有 [DraftEditorRuntime](src/client/input/editor/runtime.ts) 为每个 Session 持有一个 Lexical editor，同时保留提交、附件选择和恢复决策。[DraftEditor](src/client/input/editor/DraftEditor.tsx) 呈现借用的 editor；InputBar 保留钩子与 refs，并通过 [view-binding](src/client/input/editor/view-binding.ts) 安装 DOM 行为。编辑器类型位于 [draft-editor.ts](src/client/contract/draft-editor.ts)，共享输入和提交类型位于 [input.ts](src/client/contract/input.ts)。编辑器后台更新会保留草稿选区，不修改文档选区或从其他控件夺回焦点；显式聚焦 Composer 时恢复其选区。这一拆分不支持同一 Session 同时挂载多个可编辑 root；[两阶段隔离提案](../../../.agents/notes/proposed/architecture/2026-09-14-composer-model-and-draft-editor.zh.md) 定义剩余工作。
 
