@@ -1,5 +1,5 @@
 ---
-description: "Installation-owned lists of official dsh packages: shipped profile templates, the default bundle list, the optional, on-demand, and retired bundles, and the plugin manager's protected and presented packages."
+description: "Installation-owned lists of official dsh bundles (shipped profile templates, the default list, and the optional, on-demand, and retired bundles) and the plugin manager's protected and presented packages."
 kind: "package-library"
 ---
 
@@ -37,7 +37,7 @@ Edit this package when the installation's bundle selection or the plugin manager
 <a id="plugin-manager-lists"></a>
 ### Plugin manager lists
 
-`PROTECTED_PLUGINS` names the plugin packages the [plugin manager](../../boot/plugin-manager/README.md) keeps read-only because management needs them; a bundle that contains one is a management bundle. The [Web plugin page](../../client/ui-plugin-manager/README.md) hides the `HIDDEN_BUNDLES`, keeps the `EXTENSION_BUNDLES` on its main list in their order, keeps the `MORE_BUNDLES` off its main list until the profile enables them, and marks the `EXPERIMENTAL_BUNDLES` with the Experimental badge.
+`PROTECTED_PLUGINS` names the plugin packages the [plugin manager](../../boot/plugin-manager/README.md) keeps read-only because management needs them; a bundle that contains one is a management bundle. Removing a name lets the Web page and the `plugin_manager` tool disable or remove that package and its bundle. The [Web plugin page](../../client/ui-plugin-manager/README.md) hides the `HIDDEN_BUNDLES`, ranks the `EXTENSION_BUNDLES` first in their order, keeps the `MORE_BUNDLES` off its main list until the profile enables them, and marks the `EXPERIMENTAL_BUNDLES` with the Experimental badge.
 
 ### On-demand bundles
 
@@ -51,7 +51,7 @@ Edit this package when the installation's bundle selection or the plugin manager
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-Repository checks read the lists in `src/bundles.ts` as TypeScript literals without executing them, so each list stays a static array or object literal of package names.
+Repository checks read the lists in `src/bundles.ts` as TypeScript literals without executing them, so each list stays a static array or object literal of package names. `ui-plugin-manager` inlines `src/plugin-manager.ts` into its browser bundle through `INLINE_SAFE` in [`tsdown.client.ts`](../../client/tsdown.client.ts), so its exports stay plain data without runtime identity; tree-shaking keeps the generated catalog out of that bundle while no Client code imports it.
 
 ### Source map
 
