@@ -27,7 +27,7 @@ Recovery waits for Host shutdown before changing plugin activation. The native r
 
 ## Report contents
 
-Native dialog details include at most 1,200 UTF-16 code units and eight diagnostic lines, plus the path of the crash report described below when one was written. Host error diagnostics retain only the last 64 Ki characters written to stderr. Earlier output is discarded so a long-running Host does not grow the shell’s diagnostic buffer indefinitely.
+Native dialog details include at most 1,200 UTF-16 code units and eight diagnostic lines, plus the crash report path or its pending/unavailable status. Retrieving a pending or unavailable report preserves any recovery-operation failure headline and details. Host error diagnostics retain only the last 64 Ki characters written to stderr. Earlier output is discarded so a long-running Host does not grow the shell’s diagnostic buffer indefinitely.
 
 Before the first fatal dialog opens, Electron writes a crash report to the platform logs directory (`app.getPath('logs')`: `~/Library/Logs/DeepSeek Harness` on macOS, `logs` under the application’s `userData` directory on Windows and Linux), waiting at most one second for the write; a slow or failed write shows the dialog with an explicit pending or unavailable status. Get diagnostic report checks the same write and reveals a saved file in the system file manager without restarting or stopping the Host; a write that completes after the initial deadline remains available. The user attaches that file to a support ticket. If writing fails, the dialog hides Get diagnostic report and suggests providing a screenshot.
 

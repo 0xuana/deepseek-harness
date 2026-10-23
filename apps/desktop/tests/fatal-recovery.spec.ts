@@ -300,3 +300,33 @@ it('does not attempt to reveal an unavailable report', async () => {
   expect(operations.show.mock.calls[0]![0].buttons).not.toContain(operations.messages().getDiagnosticReport)
   expect(operations.show.mock.calls[0]![0].detail).toContain(operations.messages().reportUnavailable)
 })
+
+it.each(['pending', 'failed'] as const)('keeps the recovery failure visible when fetching a %s report', async (state) => {
+  vi.useFakeTimers()
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  const write = Promise.withResolvers<string | undefined>()
+  try {
+    const { operations, stopped, recovery } = fixture('en', () => write.promise)
+    stopped.resolve(undefined)
+    operations.disablePlugins.mockRejectedValueOnce(new Error('profile is read-only'))
+    operations.show.mockResolvedValueOnce({ response: 2, checkboxChecked: false })
+      .mockImplementationOnce(async () => {
+        if (state === 'failed') write.resolve(undefined)
+        return { response: 3, checkboxChecked: false }
+      })
+      .mockResolvedValueOnce({ response: 0, checkboxChecked: false })
+    const pending = recovery.report(new Error('original startup failure'), 'host')
+    await vi.runAllTimersAsync()
+    await pending
+    expect(operations.show).toHaveBeenCalledTimes(3)
+    const last = operations.show.mock.calls[2]![0]
+    expect(last.message).toBe(operations.messages().recoveryOperationFailed)
+    expect(last.detail).toContain('profile is read-only')
+    expect(last.detail).toContain(state === 'pending' ? operations.messages().reportPending : operations.messages().reportUnavailable)
+    expect(operations.revealReport).not.toHaveBeenCalled()
+    expect(operations.writeReport).toHaveBeenCalledOnce()
+  } finally {
+    write.resolve(undefined)
+    vi.useRealTimers()
+  }
+})

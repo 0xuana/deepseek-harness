@@ -29,12 +29,7 @@ const DETAIL_BUDGET = 1200
 /** Tail lines of the error kept in the dialog; the report file holds the rest. */
 const DETAIL_TAIL_LINES = 8
 
-/**
- * Compose the dialog detail: the error's last lines (prefixed by the
- * shortening notice when they are not the whole error), then the report path
- * when one was written, then the reinstall advice. The report line does not
- * depend on shortening: a short error that was persisted names its file too.
- */
+/** Error tail with a shortening notice when needed, report path or write status, and reinstall advice. */
 function dialogDetail(error: string, messages: DesktopMessages, reportState: ReportState): string {
   const advice = `\n\n${messages.startupReinstallAdvice}`
   const report = reportLine(messages, reportState)
@@ -106,8 +101,6 @@ export class DesktopFatalRecovery {
             console.error('dsh desktop: could not reveal crash report', failure)
             message = messages.reportRevealFailed
           }
-        } else {
-          message = messages.fatalSummary
         }
         continue
       }
