@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-root",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.1-rc.3",
   "license": "MIT",
   "private": true,
   "type": "module",
@@ -303,6 +303,7 @@
     "@deepseek-ai/dsh-experimental-cua-macos": "workspace:*",
     "@deepseek-ai/dsh-experimental-forge": "workspace:*",
     "@deepseek-ai/dsh-experimental-forge-github": "workspace:*",
-    "@deepseek-ai/dsh-experimental-forge-session": "workspace:*"
+    "@deepseek-ai/dsh-experimental-forge-session": "workspace:*",
+    "@deepseek-ai/dsh-action-cards": "workspace:*"
   }
 }
