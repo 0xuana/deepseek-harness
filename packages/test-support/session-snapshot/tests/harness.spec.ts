@@ -725,14 +725,14 @@ describe('runScenario', () => {
     expect(await readdir(parent)).toEqual(['a-longer-parent-directory'])
   })
 
-  it.each([1, 192.5])('rejects unusable serialized cwd length %s before allocating a workspace', async (workspaceCwdTextLength) => {
+  it.each([1, 192.5, 2 ** 53])('rejects unusable serialized cwd length %s before allocating a workspace', async (workspaceCwdTextLength) => {
     const { fixtureFile } = await scenario({})
     const allocate = vi.spyOn(fsPromises, 'mkdtemp')
     try {
       await expect(runScenario(
         { steps: boot },
         { agent: AGENT, mode: 'replay', fixtureFile, workspaceCwdTextLength },
-      )).rejects.toThrow('workspaceCwdTextLength')
+      )).rejects.toThrow('workspaceCwdTextLength must be a safe integer of at least')
       expect(allocate).not.toHaveBeenCalled()
     } finally {
       allocate.mockRestore()

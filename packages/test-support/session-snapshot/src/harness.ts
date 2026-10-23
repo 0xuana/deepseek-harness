@@ -214,7 +214,7 @@ export interface RunOptions {
   /**
    * Exact JSON-quoted cwd length for fixtures that persist path-dependent token prices.
    * Pads a natively resolved temporary path while retaining mkdtemp's random suffix;
-   * an insufficient or non-integer length rejects before directory allocation.
+   * a length below the minimum or not a safe integer rejects before directory allocation.
    */
   workspaceCwdTextLength?: number
   /**
@@ -252,7 +252,7 @@ function workspaceTemporaryPrefix(options: RunOptions): string {
   // mkdtemp contributes six characters; runtime-context renders the JSON-quoted cwd.
   const minimum = JSON.stringify(`${prefix}XXXXXX`).length
   if (!Number.isSafeInteger(length) || length < minimum) {
-    throw new Error(`snapshot-harness: workspaceCwdTextLength must be an integer of at least ${minimum}`)
+    throw new Error(`snapshot-harness: workspaceCwdTextLength must be a safe integer of at least ${minimum}`)
   }
   return prefix + '-'.repeat(length - minimum)
 }
