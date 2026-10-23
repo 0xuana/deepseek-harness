@@ -17,7 +17,9 @@ import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
   launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
+import {
+  connectFreshWorkspace, newEnglishPage, pinBrowserClock, pinHostClock, saveFailureShot,
+} from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./snapshots/client-ui-perf-panel', import.meta.url))
 const PANEL_EXPECTED = join(SNAPSHOT_DIR, 'panel.expected.md')
@@ -60,11 +62,14 @@ describe('web e2e: Performance view', () => {
   let browser: Browser
   let page: Page
   let tripwire: ReturnType<typeof watchConsole>
+  let clock: ReturnType<typeof pinHostClock>
 
   beforeAll(async () => {
+    clock = pinHostClock()
     scaffold = await launchWebScaffold({ extraOverlayPath: OVERLAY, extraInstallAnchors: INSTALL_ANCHORS })
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
+    await pinBrowserClock(page)
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
@@ -117,6 +122,7 @@ describe('web e2e: Performance view', () => {
 
   afterAll(async () => {
     await browser?.close()
+    clock?.mockRestore()
     await scaffold?.close()
   })
 

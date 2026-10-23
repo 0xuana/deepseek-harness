@@ -224,10 +224,11 @@ function mount(
   snapshot: PerfSnapshot,
   loadOlder: LoadOlder = async () => false,
   loadImage: (attachment: ImageAttachmentRef) => Promise<string> = async () => 'blob:image',
+  useProjection?: (key: string) => unknown,
 ): ReturnType<typeof createSnapshotStore<PerfSnapshot>> {
   const store = createSnapshotStore<PerfSnapshot>(snapshot)
   const usePerf = bindSnapshotSelector(store)
-  render(createElement(PerfView, { usePerf, t, loadOlder, loadImage } as never))
+  render(createElement(PerfView, { usePerf, t, loadOlder, loadImage, useProjection } as never))
   return store
 }
 
@@ -820,11 +821,11 @@ describe('turn rows', () => {
       ],
       stepCount: 4,
     })
-    expect(screen.queryByText(say('totals.label'))).toBeNull()
+    expect(screen.queryByText(say('totals.window'))).toBeNull()
     const totalsSwitch = screen.getByRole('switch', { name: say('table.showTotals') })
     expect(totalsSwitch.getAttribute('aria-checked')).toBe('false')
     fireEvent.click(totalsSwitch)
-    const totalLabel = screen.getByText(say('totals.label'))
+    const totalLabel = screen.getByText(say('totals.window'))
     expect(totalLabel.parentElement?.textContent).toContain(say('summary', { turns: 2, steps: 4 }))
     const totalRow = totalLabel.closest('tr') as HTMLTableRowElement
     expect(cellsOf(totalRow)[2]?.textContent).toBe(formatTokensShort(600))
@@ -839,13 +840,41 @@ describe('turn rows', () => {
       .getAttribute('aria-selected')).toBe('true')
 
     fireEvent.click(totalsSwitch)
-    expect(screen.queryByText(say('totals.label'))).toBeNull()
+    expect(screen.queryByText(say('totals.window'))).toBeNull()
+  })
+
+  it('uses the whole-session projections for the totals row', () => {
+    const useProjection = (key: string): unknown => key === 'sessionStats'
+      ? {
+        turns: 10, steps: 80, llmMs: 400_000, toolMs: 200_000,
+        ttftMs: 1_200, ttftSteps: 8, decodeMs: 300_000, decodeTokens: 60_000,
+      }
+      : key === 'tokenUsage'
+        ? {
+          uncachedInputTokens: 2_000_000,
+          outputTokens: 500_000,
+          cacheReadTokens: 8_000_000,
+          cacheWriteTokens: 0,
+        }
+        : undefined
+    mount(turnSnapshot([step({ step: 1, startTime: BASE, endTime: BASE + 1_000 })]),
+      undefined, undefined, useProjection)
+    fireEvent.click(screen.getByRole('switch', { name: say('table.showTotals') }))
+    const label = screen.getByText(say('totals.full'))
+    expect(label.parentElement?.textContent).toContain(say('summary', { turns: 10, steps: 80 }))
+    const row = label.closest('tr') as HTMLTableRowElement
+    const cells = cellsOf(row)
+    expect(cells[2]?.textContent).toBe(formatTokensShort(10_000_000))
+    expect(cells[3]?.textContent).toBe(formatTokensShort(500_000))
+    expect(cells[4]?.textContent).toBe(formatPercent(0.8))
+    expect(cells.at(-1)?.textContent).toBe(formatMs(600_000))
+    expect(row.getAttribute('title')).toBe(say('totals.full.title'))
   })
 
   it('leaves the totals time blank when no turn wall was measured', () => {
     mount({ turns: [turn({ turn: 1, wall: null, context: 500 })], stepCount: 0 })
     fireEvent.click(screen.getByRole('switch', { name: say('table.showTotals') }))
-    const label = screen.getByText(say('totals.label'))
+    const label = screen.getByText(say('totals.window'))
     const row = label.closest('tr') as HTMLTableRowElement
     expect(cellsOf(row).at(-1)?.textContent).toBe('—')
   })
@@ -856,6 +885,7 @@ describe('turn rows', () => {
       step({ step: 2, startTime: BASE + 4_000, endTime: BASE + 5_000 }),
       step({ step: 3, startTime: BASE + 6_000, endTime: BASE + 7_000 }),
       step({ step: 4, startTime: null, endTime: null }),
+      step({ step: 5, startTime: BASE + 7_001, endTime: BASE + 8_000 }),
     ]))
     const first = cellsOf(stepRow(1))
     expect(first[1]?.textContent).toContain(formatClock(BASE))
@@ -870,6 +900,9 @@ describe('turn rows', () => {
     const partial = cellsOf(stepRow(4))
     expect(partial[1]?.textContent).toBe('')
     expect(partial[1]?.getAttribute('title')).toBeNull()
+    const tiny = cellsOf(stepRow(5))
+    expect(tiny[1]?.textContent).toContain(formatClock(BASE + 7_001))
+    expect(tiny[1]?.textContent).not.toContain(say('bar.gap', { value: formatMs(1) }))
   })
 
   it('renders compaction rows between the steps they ran between', () => {

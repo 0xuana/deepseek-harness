@@ -18,6 +18,8 @@
     { "path": "../../client/ui-slots" },
     { "path": "../../core/session" },
     { "path": "../../core/tools" },
-    { "path": "../../llm/llm" }
+    { "path": "../../llm/llm" },
+    { "path": "../../llm/token-meter" },
+    { "path": "../../session/session-stats" }
   ]
 }

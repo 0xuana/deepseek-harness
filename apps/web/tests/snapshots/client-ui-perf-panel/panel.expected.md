@@ -13,10 +13,10 @@
       - columnheader "Tool time"
       - columnheader "Total time"
   - rowgroup:
-    - row "Expand or collapse turn 1 · 10-22 {{clock}} Show the measured round. read ×1 → 7 chars 5.2K 0.24K 69.23% {{ttft}} {{duration}} {{tps}} {{duration}} {{duration}}":
-      - cell "Expand or collapse turn 1 · 10-22 {{clock}}":
+    - row "Expand or collapse turn 1 · 01-15 {{clock}} Show the measured round. read ×1 → 7 chars 5.2K 0.24K 69.23% {{ttft}} {{duration}} {{tps}} {{duration}} {{duration}}":
+      - cell "Expand or collapse turn 1 · 01-15 {{clock}}":
         - button "Expand or collapse turn 1" [expanded]: Turn 1
-        - text: · 10-22 {{clock}}
+        - text: · 01-15 {{clock}}
       - cell "Show the measured round."
       - cell "read ×1 → 7 chars"
       - cell "5.2K"

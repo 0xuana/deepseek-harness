@@ -65,7 +65,9 @@
     "@testing-library/react": "^16.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "@deepseek-ai/dsh-compaction": "workspace:*"
+    "@deepseek-ai/dsh-compaction": "workspace:*",
+    "@deepseek-ai/dsh-session-stats": "workspace:*",
+    "@deepseek-ai/dsh-token-meter": "workspace:*"
   },
   "files": [
     "locale/*.json",

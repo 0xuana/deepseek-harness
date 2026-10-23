@@ -9,6 +9,7 @@ import {
 } from 'react'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
+import type { UseProjection } from '@deepseek-ai/dsh-api-session-controller/client'
 import { HoverCard, ImageLightbox, SegmentedControl, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ConvViewProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
@@ -24,12 +25,18 @@ import { aggregateTotals, turnContext, type ContextMode, type PerfTotals } from 
 import { isNumber } from './perf-usage.ts'
 import { CALL_LIMIT } from './perf-fold.ts'
 import type { PerfTranslate } from './locales.ts'
+import { totalsFromProjections } from './perf-totals.ts'
 import css from './perf.module.css'
+// Type-only: merges sessionStats and tokenUsage into SessionProjectionMap for useProjection.
+import type {} from '@deepseek-ai/dsh-session-stats/client'
+import type {} from '@deepseek-ai/dsh-token-meter/client'
 
 /** Steps one turn renders before the "show all" control appears. */
 const STEP_LIMIT = 24
 /** Distance from the scroll top, in pixels, that requests one older history page. */
 const LOAD_OLDER_THRESHOLD = 64
+/** Ignore sub-second idles when showing the gap since the previous step. */
+const STEP_GAP_MIN_MS = 1_000
 /** How long the clipboard button reports its outcome, in milliseconds. */
 const COPY_FEEDBACK_MS = 1_200
 /** Lines one code block renders before the line-cap notice. */
@@ -950,12 +957,13 @@ function TimeCell({ value, scale, gap, className, trackClass, now, t }: TimeCell
 /** Props of the totals row. */
 interface TotalsRowProps {
   readonly totals: PerfTotals
+  readonly full: boolean
   readonly t: PerfTranslate
   readonly now: number
 }
 
 /** Bottom row summing the turns loaded in the current window. */
-function TotalsRow({ totals, t, now }: TotalsRowProps): ReactElement {
+function TotalsRow({ totals, full, t, now }: TotalsRowProps): ReactElement {
   const cells = metricsCells(totals, t)
   const value: TimeState = {
     running: false,
@@ -967,9 +975,9 @@ function TotalsRow({ totals, t, now }: TotalsRowProps): ReactElement {
     toolWall: totals.toolWall,
   }
   return (
-    <tr className={css.totalsRow} title={t('totals.title')}>
+    <tr className={css.totalsRow} title={full ? t('totals.full.title') : t('totals.window.title')}>
       <td colSpan={2} className={css.totalsLabel}>
-        <span className={css.totalsTitle}>{t('totals.label')}</span>
+        <span className={css.totalsTitle}>{full ? t('totals.full') : t('totals.window')}</span>
         <span className={css.totalsMeta}>{` · ${t('summary', { turns: totals.turnCount, steps: totals.stepCount })}`}</span>
       </td>
       <td className={css.turnMetric} />
@@ -1626,6 +1634,7 @@ function stepRows(options: StepRowsOptions): ReactNode[] {
     emitEventsUntil(step.startTime)
     const cells = metricsCells(step, t)
     const gap = gaps.get(step.step)
+    const visibleGap = gap !== undefined && gap >= STEP_GAP_MIN_MS ? gap : undefined
     const expanded = open[step.step] === true
     const hasDetail = step.calls.length > 0
     const rowClass: (string | undefined)[] = []
@@ -1675,7 +1684,7 @@ function stepRows(options: StepRowsOptions): ReactNode[] {
           title={isNumber(step.startTime)
             ? [
               t('step.started.title', { time: formatDateTime(step.startTime) }),
-              ...gap === undefined ? [] : [t('bar.gap', { value: formatMs(gap) })],
+              ...visibleGap === undefined ? [] : [t('bar.gap', { value: formatMs(visibleGap) })],
             ].join('\n')
             : undefined}
         >
@@ -1683,11 +1692,11 @@ function stepRows(options: StepRowsOptions): ReactNode[] {
             ? (
               <>
                 <span className={css.stepClock}>{formatClock(step.startTime)}</span>
-                {gap === undefined
+                {visibleGap === undefined
                   ? null
                   : (
                     <span className={css.stepGap}>
-                      {t('bar.gap', { value: formatMs(gap) })}
+                      {t('bar.gap', { value: formatMs(visibleGap) })}
                     </span>
                   )}
               </>
@@ -1809,7 +1818,7 @@ interface PendingPrepend {
  * @returns the scrolling table, its empty state, and the expand/collapse footer.
  */
 export function PerfView(props: PerfViewProps): ReactElement {
-  const { usePerf, t, loadOlder, loadImage } = props
+  const { usePerf, t, loadOlder, loadImage, useProjection } = props as typeof props & { useProjection?: UseProjection }
   const snapshot = usePerf(value => value)
   const [view, setView] = useState<ViewState>(createViewState)
   const [now, setNow] = useState(() => Date.now())
@@ -1837,7 +1846,10 @@ export function PerfView(props: PerfViewProps): ReactElement {
     return () => { clearInterval(timer) }
   }, [hasRunning])
   // Turns compare only with the other turns in the window.
-  const totals = view.showTotals && turns.length > 0 ? aggregateTotals(turns) : null
+  const projectionStats = useProjection === undefined ? undefined : useProjection('sessionStats')
+  const projectionUsage = useProjection === undefined ? undefined : useProjection('tokenUsage')
+  const fullTotals = view.showTotals ? totalsFromProjections(projectionStats, projectionUsage) : null
+  const totals = fullTotals ?? (view.showTotals && turns.length > 0 ? aggregateTotals(turns) : null)
   const turnDeltas = new Map<number, number>()
   if (view.showContextDelta) {
     let previous: number | null = null
@@ -2031,7 +2043,7 @@ export function PerfView(props: PerfViewProps): ReactElement {
             </tbody>
             {totals === null ? null : (
               <tfoot>
-                <TotalsRow totals={totals} t={t} now={now} />
+                <TotalsRow totals={totals} full={fullTotals !== null} t={t} now={now} />
               </tfoot>
             )}
           </table>
