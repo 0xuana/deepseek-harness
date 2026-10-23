@@ -179,7 +179,7 @@ Tool results append to the transcript. Enabling or disabling other tools can cha
 <a id="failure-behavior"></a>
 ### Failure behavior
 
-Failures preserve completed steps and report the actual remaining state. Profile dependencies without valid bundle metadata remain visible and removable, with enablement unavailable.
+Failures preserve completed steps and report the actual remaining state. Profile dependencies without valid bundle metadata remain visible and removable, with enablement unavailable. If `dsh plugin` installs a bundle whose platform declaration excludes the Host, automatic activation returns exit code 1 and a diagnostic naming the package. Installed dependencies remain, and bundle selection stays unchanged. Use a supported Host or remove the dependency with `dsh plugin --profile <name> remove <package>`.
 
 | Failed operation | Handling |
 |---|---|

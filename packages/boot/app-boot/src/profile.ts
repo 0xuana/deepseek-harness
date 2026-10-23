@@ -714,8 +714,8 @@ export function loadProfileDirectory(
 
 /**
  * Load a profile: resolve every `dsh.profile.bundles` entry to its patch
- * layer and parse the profile's own patch file. Unreadable or incompatible bundles
- * are skipped and listed in `skippedBundles`; profile manifest and user patch errors still throw.
+ * layer and parse the profile's own patch file. Unreadable bundles, unsupported Host platforms,
+ * and incompatible bundles are skipped and listed in `skippedBundles`; profile manifest and user patch errors still throw.
  * @param binName - the diagnostic prefix on thrown errors.
  * @param name - the profile name.
  * @param installAnchor - absolute path of the dsh app's package.json (first resolution anchor).
