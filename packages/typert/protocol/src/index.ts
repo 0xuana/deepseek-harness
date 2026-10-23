@@ -73,6 +73,7 @@ export type {
   TypertResourceReader,
   TypertResourceReaders,
   TypertResourceRegistry,
+  TypertResourceResolveInput,
   TypertLocalRegistry,
   TypertLookup,
   TypertLookupDefinition,

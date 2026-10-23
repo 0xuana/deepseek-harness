@@ -118,11 +118,32 @@ describe('Session Controller access', () => {
     if (resource === undefined || !('resolve' in resource)) throw new Error('Session resource resolver is missing')
     for (const method of ['page', 'follow']) {
       const reader = remoteMethods(controller).find(marker => marker.method === method)?.resources?.['session']
-        ?? ((...args: readonly unknown[]) => resource.resolve(...args))
+        ?? ((request: unknown) => resource.resolve({ args: { request }, parameters: [{ name: 'request', wire: 'request' }] }))
       expect(reader?.({ address: { kind: 'session', sessionId: SHARED } })).toBe(SHARED)
       // A subagent address reads the child transcript; whether the parent's access covers it is the policy's rule.
       expect(reader?.({ address: { kind: 'subagent', parentSessionId: SHARED, childSessionId: PRIVATE } })).toBe(PRIVATE)
     }
+  })
+
+  it('resolves named Session IDs and first-object requests without treating unrelated strings as identities', async () => {
+    const { ctx } = await harness()
+    const resource = ctx.typert.resources.get('session')
+    if (resource === undefined || !('resolve' in resource)) throw new Error('Session resource resolver is missing')
+    const resolve = (args: Readonly<Record<string, unknown>>, ...names: string[]) => resource.resolve({
+      args, parameters: names.map(name => ({ name, wire: name })),
+    })
+    expect(resolve({ sessionId: SHARED, zzz: 'other' }, 'sessionId', 'zzz')).toBe(SHARED)
+    expect(resolve({ options: { sessionId: SHARED }, yyy: 'other' }, 'options', 'yyy')).toBe(SHARED)
+    expect(resolve({ options: { address: { kind: 'session', sessionId: SHARED } }, xxx: 'other' }, 'options', 'xxx')).toBe(SHARED)
+    expect(resolve({ options: { address: { kind: 'subagent', parentSessionId: SHARED, childSessionId: PRIVATE } } }, 'options')).toBe(PRIVATE)
+    expect(resolve({ ns: SHARED, value: 'other' }, 'ns', 'value')).toBeUndefined()
+    expect(resolve({ ref: SHARED, value: 'other' }, 'ref', 'value')).toBeUndefined()
+    expect(resolve({ zzz: 'other', sessionId: SHARED }, 'zzz', 'sessionId')).toBe(SHARED)
+    expect(resolve({ first: {}, later: { sessionId: SHARED } }, 'first', 'later')).toBeUndefined()
+    expect(resolve({ count: 1, tags: [], empty: null, options: { sessionId: SHARED } }, 'count', 'tags', 'empty', 'options')).toBe(SHARED)
+    expect(resolve({}, 'sessionId')).toBeUndefined()
+    expect(resolve({})).toBeUndefined()
+    expect(resource.resolve({ args: { target: SHARED }, parameters: [{ name: 'sessionId', wire: 'target' }] })).toBe(SHARED)
   })
 
   it('lets a global role call session/list and lists only the Sessions a Session role admits', async () => {

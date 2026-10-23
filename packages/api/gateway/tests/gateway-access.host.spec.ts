@@ -21,6 +21,7 @@ import {
   type TypertContext,
   type TypertLookup,
   type TypertResource,
+  type TypertResourceResolveInput,
 } from '@deepseek-ai/dsh-typert-protocol'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import { z } from 'zod'
@@ -872,8 +873,12 @@ describe('resource resolution', () => {
     const ctx = new Context()
     roots.push(ctx)
     await ctx.plugin(TypertRegistry)
-    const resolve = vi.fn((request?: string | { address?: { id: string } }) => {
-      return typeof request === 'string' ? request : request?.address?.id
+    const resolve = vi.fn(({ args, parameters }: TypertResourceResolveInput) => {
+      const named = parameters.find(parameter => parameter.wire === 'roomId')
+      if (named !== undefined) return args[named.wire] as string | undefined
+      const first = parameters[0]
+      const request = first === undefined ? undefined : args[first.wire] as { address?: { id: string } } | undefined
+      return request?.address?.id
     })
     const dispose = ctx.typert.resources.register('test-shelf', { resolve })
     expect(callResources(ctx.typert, undefined, method('roomId'), { roomId: 'r1' }, NEVER)).toEqual([ROOM])
@@ -882,12 +887,14 @@ describe('resource resolution', () => {
     resolve.mockClear()
     const args = { other: {}, later: { address: { id: 'r1' } } }
     expect(callResources(ctx.typert, undefined, method('other', 'later'), args, NEVER)).toEqual([GLOBAL])
-    expect(resolve).toHaveBeenCalledExactlyOnceWith(args.other, args.later)
+    expect(resolve).toHaveBeenCalledExactlyOnceWith({ args, parameters: method('other', 'later').parameters })
     resolve.mockClear()
     expect(callResources(ctx.typert, undefined, {
       ...method('renamed'), cancellation: { parameter: 'signal' },
     }, { renamed: { address: { id: 'r1' } } }, NEVER)).toEqual([ROOM])
-    expect(resolve).toHaveBeenCalledExactlyOnceWith({ address: { id: 'r1' } }, NEVER)
+    expect(resolve).toHaveBeenCalledExactlyOnceWith({
+      args: { renamed: { address: { id: 'r1' } } }, parameters: method('renamed').parameters,
+    })
     expect(callResources(ctx.typert, { 'test-shelf': () => 'override' }, method('request'), {
       request: { address: { id: 'r1' } },
     }, NEVER)).toEqual([shelf('override')])

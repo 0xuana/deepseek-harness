@@ -12,7 +12,7 @@ import { canOpenNativePath, nativeFileManager, nativeFileApplications, openNativ
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-projection-cache'
 import { SessionQueryError, type SessionObservation } from '@deepseek-ai/dsh-session-query'
-import { Remote, RemoteError, TypertRemoteService, principalOf } from '@deepseek-ai/dsh-typert-protocol'
+import { Remote, RemoteError, TypertRemoteService, principalOf, type TypertResourceResolveInput } from '@deepseek-ai/dsh-typert-protocol'
 import { canonicalClientTimeZone } from '@deepseek-ai/dsh-util-time'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import type {} from '@deepseek-ai/dsh-api-remote-access'
@@ -79,13 +79,21 @@ declare module '@deepseek-ai/cordis' {
 
 /**
  * Extract the Session resource from an ID or a history address.
- * @param request - first wire argument carrying a Session ID or address.
- * @returns the target Session identity when present.
+ * @param input - validated wire arguments and their ordered parameter descriptions.
+ * @returns the named Session identity, otherwise the first object's Session identity or history address.
  */
-function resolveSessionResource(request?: { readonly sessionId?: SessionId; readonly address?: SessionAddress }): SessionId | undefined {
-  const address = request?.address
-  return request?.sessionId ?? (address === undefined ? undefined
-    : address.kind === 'session' ? address.sessionId : address.childSessionId)
+function resolveSessionResource({ args, parameters }: TypertResourceResolveInput): SessionId | undefined {
+  const sessionParameter = parameters.find(parameter => parameter.name === 'sessionId' || parameter.wire === 'sessionId')
+  if (sessionParameter !== undefined) return args[sessionParameter.wire] as SessionId | undefined
+  for (const parameter of parameters) {
+    const value = args[parameter.wire]
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) continue
+    const request = value as { readonly sessionId?: SessionId; readonly address?: SessionAddress }
+    const address = request.address
+    return request.sessionId ?? (address === undefined ? undefined
+      : address.kind === 'session' ? address.sessionId : address.childSessionId)
+  }
+  return undefined
 }
 
 /** Session Controller deployment policy. */

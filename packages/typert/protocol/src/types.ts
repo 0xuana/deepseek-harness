@@ -878,12 +878,18 @@ export interface TypertContextRegistry {
   subscribe(listener: TypertRegistryListener): TypertDisposer
 }
 
+/** Validated wire values and their ordered business parameters for resource extraction. */
+export interface TypertResourceResolveInput {
+  readonly args: Readonly<Record<string, unknown>>
+  readonly parameters: readonly Pick<InvocationParameterDescriptor, 'name' | 'wire'>[]
+}
+
 /** Default identity extraction for one resource kind. */
 export type TypertResourceDeclaration =
   | { readonly field: string }
   | {
-    /** Called once with spread positional wire arguments. Undefined means no matching resource. */
-    resolve(...args: readonly unknown[]): string | undefined
+    /** Called once before lookups resolve. Undefined means no matching resource. */
+    resolve(input: TypertResourceResolveInput): string | undefined
   }
 
 /** One registered resource kind with its default identity extraction. */

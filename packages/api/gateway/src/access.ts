@@ -22,9 +22,9 @@ type ResourceIds = readonly unknown[] | 'invalid'
  * `resources` reader of the method wins; otherwise every lookup parameter
  * whose provider declares the kind contributes its wire resource id, and so
  * does the Context identity of a Context method whose Host adapter declares
- * the kind; otherwise the kind's default field registered in
- * `typert.resources` is read from a top-level argument or, failing that,
- * from the first object argument.
+ * the kind; otherwise the kind's registered default resolver receives named
+ * wire values and ordered parameter descriptions. A default field instead
+ * reads a top-level argument or, failing that, the first object argument.
  * @param typert - registry holding default fields, lookup providers, and Host Context adapters.
  * @param readers - the method's `resources` readers, or `undefined` when it declares none.
  * @param descriptor - receiver, parameter order, lookups, and cancellation slot of the method.
@@ -53,7 +53,7 @@ export function callResources(
   for (const declaration of typert.resources.entries()) {
     sources.set(declaration.kind, () => {
       if ('resolve' in declaration) {
-        return read(() => declaration.resolve(...positionalArgs), [])
+        return read(() => declaration.resolve({ args, parameters: descriptor.parameters }), [])
       }
       const id = defaultFieldId(descriptor, args, declaration.field)
       return Array.isArray(id) ? 'invalid' : id === undefined ? [] : [id]
