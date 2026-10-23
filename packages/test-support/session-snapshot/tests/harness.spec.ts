@@ -3,7 +3,7 @@ import * as fsPromises from 'node:fs/promises'
 import { realpathSync } from 'node:fs'
 import { once } from 'node:events'
 import { tmpdir } from 'node:os'
-import { delimiter, join, relative, sep } from 'node:path'
+import { basename, delimiter, join, relative, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterAll, describe, expect, it, vi, type TestContext } from 'vitest'
 import { PROTOCOL_VERSION } from '@agentclientprotocol/sdk'
@@ -725,18 +725,64 @@ describe('runScenario', () => {
     expect(await readdir(parent)).toEqual(['a-longer-parent-directory'])
   })
 
-  it.each([1, 192.5, 2 ** 53])('rejects unusable serialized cwd length %s before allocating a workspace', async (workspaceCwdTextLength) => {
+  it.each([1, 192.5, 2 ** 53, 2 ** 52])('rejects unusable serialized cwd length %s before allocating a workspace', async (workspaceCwdTextLength) => {
     const { fixtureFile } = await scenario({})
     const allocate = vi.spyOn(fsPromises, 'mkdtemp')
     try {
       await expect(runScenario(
         { steps: boot },
         { agent: AGENT, mode: 'replay', fixtureFile, workspaceCwdTextLength },
-      )).rejects.toThrow('workspaceCwdTextLength must be a safe integer of at least')
+      )).rejects.toThrow('workspaceCwdTextLength must be a safe integer between')
       expect(allocate).not.toHaveBeenCalled()
     } finally {
       allocate.mockRestore()
     }
+  })
+
+  it.each([254, 255])('allocates and cleans up a padded cwd with a %s-byte basename', async (nameBytes) => {
+    const { fixtureFile } = await scenario({})
+    const workspaceParent = await mkdtemp(join(tmpdir(), 'acp-snap-name-bound-'))
+    tempDirs.push(workspaceParent)
+    const parent = await realpath(workspaceParent)
+    const workspaceCwdTextLength = JSON.stringify(join(parent, 'a'.repeat(nameBytes))).length
+    const stop = new Error('workspace inspected')
+    let allocated = ''
+    await expect(runScenario(
+      { steps: boot },
+      {
+        agent: AGENT, mode: 'replay', fixtureFile, workspaceParent, workspaceCwdTextLength,
+        prepareWorkspace: async (cwd) => {
+          allocated = cwd
+          expect(Buffer.byteLength(basename(cwd))).toBe(nameBytes)
+          expect(JSON.stringify(cwd).length).toBe(workspaceCwdTextLength)
+          await readdir(cwd)
+          // Directory-name bounds are independent of subprocess cwd length limits.
+          throw stop
+        },
+      },
+    )).rejects.toBe(stop)
+    expect(allocated).not.toBe('')
+    await expect(readdir(allocated)).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await readdir(parent)).toEqual([])
+  })
+
+  it('rejects a padded cwd one byte beyond the basename limit before allocating a workspace', async () => {
+    const { fixtureFile } = await scenario({})
+    const workspaceParent = await mkdtemp(join(tmpdir(), 'acp-snap-name-overflow-'))
+    tempDirs.push(workspaceParent)
+    const parent = await realpath(workspaceParent)
+    const workspaceCwdTextLength = JSON.stringify(join(parent, 'a'.repeat(256))).length
+    const allocate = vi.spyOn(fsPromises, 'mkdtemp')
+    try {
+      await expect(runScenario(
+        { steps: boot },
+        { agent: AGENT, mode: 'replay', fixtureFile, workspaceParent, workspaceCwdTextLength },
+      )).rejects.toThrow('workspaceCwdTextLength must be a safe integer between')
+      expect(allocate).not.toHaveBeenCalled()
+    } finally {
+      allocate.mockRestore()
+    }
+    expect(await readdir(parent)).toEqual([])
   })
 
   it('prices the native long parent path when legacy resolution retains a short alias', async () => {

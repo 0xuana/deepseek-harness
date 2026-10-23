@@ -214,7 +214,8 @@ export interface RunOptions {
   /**
    * Exact JSON-quoted cwd length for fixtures that persist path-dependent token prices.
    * Pads a natively resolved temporary path while retaining mkdtemp's random suffix;
-   * a length below the minimum or not a safe integer rejects before directory allocation.
+   * the generated ASCII basename is capped at 255 bytes, including the suffix.
+   * Lengths outside the resulting safe-integer range reject before padding or allocation.
    */
   workspaceCwdTextLength?: number
   /**
@@ -251,8 +252,10 @@ function workspaceTemporaryPrefix(options: RunOptions): string {
   const prefix = join(realpathSync.native(parent), 'acp-snap-cwd-')
   // mkdtemp contributes six characters; runtime-context renders the JSON-quoted cwd.
   const minimum = JSON.stringify(`${prefix}XXXXXX`).length
-  if (!Number.isSafeInteger(length) || length < minimum) {
-    throw new Error(`snapshot-harness: workspaceCwdTextLength must be a safe integer of at least ${minimum}`)
+  // Cap the generated ASCII component, including mkdtemp's suffix, at 255 bytes.
+  const maximum = minimum + 255 - basename(prefix).length - 6
+  if (!Number.isSafeInteger(length) || length < minimum || length > maximum) {
+    throw new Error(`snapshot-harness: workspaceCwdTextLength must be a safe integer between ${minimum} and ${maximum}`)
   }
   return prefix + '-'.repeat(length - minimum)
 }
