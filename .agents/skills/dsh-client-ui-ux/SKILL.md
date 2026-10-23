@@ -67,6 +67,9 @@ Use [dsh-responsive-ui](../dsh-responsive-ui/SKILL.md) for responsive layouts, m
 
 - Review every changed region for gaps: nothing sits flush against its neighbour without an intentional gap, and adjacent icons and elements keep the region's established spacing.
 - Prefer symmetry for parallel elements; an unexplained one-off gap or offset usually signals a missed shared value.
+- **For complex pages and containers, establish shared vertical alignment axes before adjusting local spacing.** Use these references:
+  - **Sidebar:** align corresponding text starts and leading icons across vertically stacked rows. Align hover and selected row backgrounds with the buttons above the list to maintain visual balance.
+  - **Plugins page:** keep content left-aligned along a shared edge. List-row hover backgrounds may extend beyond that edge while the content stays in place.
 
 ## Design review escalation
 
