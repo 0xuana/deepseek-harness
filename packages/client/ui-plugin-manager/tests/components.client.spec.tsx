@@ -1179,6 +1179,7 @@ describe('PluginManagerPage', () => {
     })
 
     it.each([
+      '@deepseek-ai/dsh-cua-bundle',
       '@deepseek-ai/dsh-experimental-session-search',
       '@deepseek-ai/dsh-experimental-ralph-bundle',
       '@acme/shipped-exploration',
