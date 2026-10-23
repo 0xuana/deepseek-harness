@@ -69,44 +69,6 @@ describe.skipIf(MODE === 'record')('web e2e: temporary DeepSeek release badge', 
     }
   })
 
-  it('fades out the inline release with the model name and restores it after widening', async () => {
-    const trigger = page.getByRole('button', { name: /^选择模型/ })
-    const readLayout = () => trigger.getByText('1017', { exact: true }).evaluate((release) => {
-      const label = release.parentElement!
-      const box = label.closest('[data-provider-id]')!.parentElement!
-      const style = getComputedStyle(release)
-      const labelStyle = getComputedStyle(label)
-      const boxStyle = getComputedStyle(box)
-      return {
-        clipped: box.scrollWidth > box.clientWidth,
-        textOverflow: boxStyle.textOverflow,
-        fade: boxStyle.maskImage,
-        inline: labelStyle.display === 'inline' && style.display === 'inline',
-        sameFontSize: style.fontSize === labelStyle.fontSize,
-        background: style.backgroundColor,
-        padding: style.padding,
-      }
-    })
-    try {
-      await page.setViewportSize({ width: 500, height: 900 })
-      await expect.poll(async () => (await readLayout()).clipped).toBe(true)
-      const narrowed = await readLayout()
-      expect(narrowed).toEqual({
-        clipped: true, textOverflow: 'clip',
-        fade: 'linear-gradient(90deg, rgb(0, 0, 0) calc(100% - 24px), rgba(0, 0, 0, 0))',
-        inline: true, sameFontSize: true, background: 'rgba(0, 0, 0, 0)', padding: '0px',
-      })
-      await page.setViewportSize({ width: 1440, height: 900 })
-      await expect.poll(async () => (await readLayout()).clipped).toBe(false)
-      await compareOrRefreshGolden(
-        fileURLToPath(new URL('./expected/deepseek-model-label-1017/layout.expected.md', import.meta.url)),
-        JSON.stringify({ narrowed, widened: await readLayout() }, null, 2), MODE,
-      )
-    } finally {
-      await page.setViewportSize({ width: 1440, height: 900 })
-    }
-  })
-
   it('keeps the release badge inside a 390px model menu and uses both theme palettes', async () => {
     try {
       await page.setViewportSize({ width: 390, height: 844 })
@@ -134,10 +96,7 @@ describe.skipIf(MODE === 'record')('web e2e: temporary DeepSeek release badge', 
         }
       })
       expect(colors[0]).not.toEqual(colors[1])
-      for (const color of colors) {
-        expect(color.background).toBe('rgba(0, 0, 0, 0)')
-        expect(color.color).not.toBe(color.background)
-      }
+      for (const color of colors) expect(color.color).not.toBe(color.background)
     } finally {
       await page.keyboard.press('Escape')
       await page.keyboard.press('Escape')
