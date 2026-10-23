@@ -103,7 +103,7 @@ kind: "package-reference"
 - **Code-Mode 内层调用按根调用上下文并回步骤。** 内层调用不带 turn/step，因此每个根调用各自开一个以 root call id 为键的上下文，由 builder 把它的派发并回持有 runner 的那一步。窗口里丢了派发起点时仍会合并调用，但无法给出它们各自的实测耗时。
 - **更早历史的加载结果显式区分重试。** 页面请求只返回 `grew`、`exhausted` 或 `retry`；如果 Chat 或轨迹视图正在加载同一个 Session 的页，统计视图会保留加载按钮，而不是误报历史已耗尽或抛出错误。
 - **已知限制：没有整段墙钟 projection。** 合计行的总用时用模型用时 + 工具用时替代，因为宿主 projection 没有整段墙钟；工具段是逐调用求和，并行调用会让这段显得比非重叠墙钟更长。这里作为已知限制记录，插件不为此改动宿主逻辑。
-- **浏览器证据是仅测试用的 overlay。** 包级测试覆盖折叠、汇总、格式化与 jsdom 表格；`apps/web/tests/client-ui-perf-panel.e2e.ts` 用仅测试用的 overlay 把插件挂到真实 Web 面上，并比对提交的 ARIA golden。由于还没有任何 shipped profile 挂载本包，暂无录制会话场景。
+- **本实验 PR 的 recorded-session 覆盖已获豁免。** 包测试覆盖折叠、聚合、格式化、分页与 jsdom 表格；`apps/web/tests/client-ui-perf-panel.e2e.ts` 通过仅测试用的 overlay 挂载 shipped Web 表面并比较已提交的 ARIA golden。经 owner 决定，本实验 PR 不新增 keyless recorded-session 场景；后续 profile 或 bundle 转正时必须补充。
 - **迟到重投不是轮次。** 压缩可能把被裁剪的工具结果按原来的轮次/步骤在之后重新投递；窗口里既没有加载到的起点、也没有问题或结束标记的轮次会被丢弃，不再显示成空的幽灵行。
 - **计时是推导值。** 总用时取最后一步结束减第一步开始；排队和调度等待落在「其余」段里。总用时条把工具调用画成配对区间之并，并行调用只算一次；工具列仍显示逐次求和。轮次时间条以当前屏幕内可见的轮次为刻度，滚出屏幕的超大轮次不会把本屏的行压扁。
 - **提问图片走共用图片缓存。** 标签与预览用 `uiConversation.imageUrl` 解析持久附件，浏览器 URL 由缓存按 Session binding 持有并释放，视图不自己创建 URL。读取失败时显示本地化失败状态并可重试。触屏不打开悬停预览，点击标签会直接加载第一张图。
