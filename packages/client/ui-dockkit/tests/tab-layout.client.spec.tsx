@@ -270,3 +270,91 @@ it('keeps a superseding gesture marker when an older follower detaches', () => {
   second()
   expect(element.dataset.dockkitPointer).toBeUndefined()
 })
+
+it('continues a selected tab\'s strip from its pane\'s last offset and jumps on a first placement', () => {
+  let scrollLeft = 0
+  // Each assignment with the inline `scroll-behavior` it ran under: `auto` jumps, empty leaves the stylesheet's glide.
+  const writes: (readonly [number, string])[] = []
+  const descriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollLeft')
+  Object.defineProperty(Element.prototype, 'scrollLeft', {
+    configurable: true,
+    get() { return scrollLeft },
+    set(this: HTMLElement, value: number) {
+      scrollLeft = value
+      writes.push([value, this.style.scrollBehavior])
+    },
+  })
+  const rect = (left: number, width: number): DOMRect => ({
+    left, right: left + width, top: 0, bottom: 28, x: left, y: 0, width, height: 28, toJSON: () => ({}),
+  })
+  // The chip box spans 0..200; the seeded chip sits at 40..130 and the opened one where `openedAt` says.
+  const controller = seededController()
+  const seeded = getPane(controller.getSnapshot().state, controller.getSnapshot().state.activePaneId).activeTabId
+  if (seeded === undefined) throw new Error('expected the seeded tab')
+  const opened = controller.openContent({ kind: 'file', contentId: 'file:b', title: 'B' })
+  let openedAt = 250
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+    if (this.hasAttribute('data-dockkit-strip-tabs')) return rect(0, 200)
+    if (this.getAttribute('data-dockkit-tab') === opened) return rect(openedAt, 90)
+    if (this.hasAttribute('data-dockkit-tab')) return rect(40, 90)
+    return rect(0, 0)
+  })
+  try {
+    const h = mounted(controller)
+    const scrolled = (): void => { fireEvent.scroll(h.node('[data-dockkit-strip-tabs]')) }
+    // The first strip has no recorded offset: it jumps to the chip.
+    expect(writes).toEqual([[164, 'auto']])
+    scrolled()
+    // The seeded tab's strip starts where the previous one stood, where its chip is in view.
+    scrollLeft = 0
+    fireEvent.click(h.node(`[data-dockkit-tab="${seeded}"]`))
+    expect(writes.slice(1)).toEqual([[164, 'auto']])
+    scrolled()
+    // Back on the opened tab, now 30 past the left edge: restored, then glided the rest.
+    openedAt = -30
+    scrollLeft = 0
+    fireEvent.click(h.node(`[data-dockkit-tab="${opened}"]`))
+    expect(writes.slice(2)).toEqual([[164, 'auto'], [164 - 30 - 24, '']])
+  } finally {
+    if (descriptor === undefined) Reflect.deleteProperty(Element.prototype, 'scrollLeft')
+    else Object.defineProperty(Element.prototype, 'scrollLeft', descriptor)
+  }
+})
+
+it('places a selected tab\'s strip moved to another pane from that pane\'s last offset', () => {
+  // Offsets per chip box, with the inline `scroll-behavior` of each assignment.
+  const offsets = new WeakMap<Element, number>()
+  const writes: (readonly [string | undefined, number, string])[] = []
+  const descriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollLeft')
+  Object.defineProperty(Element.prototype, 'scrollLeft', {
+    configurable: true,
+    get(this: Element) { return offsets.get(this) ?? 0 },
+    set(this: HTMLElement, value: number) {
+      offsets.set(this, value)
+      writes.push([this.dataset.dockkitStripTabs, value, this.style.scrollBehavior])
+    },
+  })
+  try {
+    const controller = seededController()
+    controller.setExpanded(true)
+    const moved = controller.openContent({ kind: 'file', contentId: 'file:a', title: 'A' })
+    controller.openContent({ kind: 'file', contentId: 'file:b', title: 'B' })
+    const h = mounted(controller)
+    act(() => { controller.splitPane(); h.redraw() })
+    const state = controller.getSnapshot().state
+    const split = getNode(state, state.rootId)
+    if (split.kind !== 'split') throw new Error('expected a split')
+    const target = getPane(state, split.children[1]!).id
+    act(() => { controller.focusTab(moved); h.redraw() })
+    const strip = h.node(`[data-dockkit-strip-tabs="${target}"]`)
+    offsets.set(strip, 70)
+    fireEvent.scroll(strip)
+    writes.length = 0
+    act(() => { controller.placeTab(moved, target, 0); h.redraw() })
+    expect(h.node(`[data-dockkit-strip-tabs="${target}"] [data-dockkit-tab="${moved}"]`).getAttribute('aria-selected')).toBe('true')
+    expect(writes).toEqual([[target, 70, 'auto']])
+  } finally {
+    if (descriptor === undefined) Reflect.deleteProperty(Element.prototype, 'scrollLeft')
+    else Object.defineProperty(Element.prototype, 'scrollLeft', descriptor)
+  }
+})
