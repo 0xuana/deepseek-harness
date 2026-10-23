@@ -14,6 +14,7 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
+import { createTrajectoryResultModeStore } from './result-mode-store.ts'
 import { createTrajectoryDurationStore } from './duration-store.ts'
 import { createTrajectoryStringWrappingStore } from './string-wrapping-store.ts'
 import { en, ja, es, fr, de, ru, pt, NS, zh } from './locales.ts'
@@ -64,6 +65,7 @@ export function apply(ctx: Context): void {
   // translate as a thunk, so it follows the active locale without
   // re-registration.
   const t = ctx.locale.bind(NS)
+  const resultMode = createTrajectoryResultModeStore()
   const duration = createTrajectoryDurationStore()
   const stringWrapping = createTrajectoryStringWrappingStore()
   registerTrajectoryMessageDefinitions(ctx)
@@ -90,7 +92,8 @@ export function apply(ctx: Context): void {
       }
       const trajectory = ctx.uiConversation.binding(sessionId).target('trajectory')
       return {
-        hooks: { duration },
+        hooks: { duration, resultMode },
+        setResultMode: (value) => { resultMode.set(value) },
         jsonStringWrapping: {
           getDefault: () => stringWrapping.getSnapshot(),
           setDefault: (value) => { stringWrapping.set(value) },

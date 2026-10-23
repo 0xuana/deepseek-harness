@@ -1,6 +1,7 @@
 /** Shared trajectory record data and formatting contracts. */
 
 import type { HTMLAttributes } from 'react'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { ConversationPromptSnapshot } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { TrajectoryTranslate } from './locales.ts'
@@ -66,6 +67,8 @@ export interface TrajectoryCellProps extends HTMLAttributes<HTMLDivElement> {
   previousPromptDetail?: ConversationPromptSnapshot
   /** Full assistant/tool result content for the details panel. */
   outputDetail?: string
+  /** Final canonical tool value; absent on failures and records created before value recording. */
+  resultValue?: JsonValue
   /** Full assistant reasoning content for the details panel. */
   thinkingDetail?: string
   /** Original message blocks in source order for the details panel. */

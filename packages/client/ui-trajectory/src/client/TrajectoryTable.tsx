@@ -388,6 +388,10 @@ function AssistantTimingPanel({
 
 /** Props for the trajectory ledger. */
 export interface TrajectoryTableProps {
+  /** Browser-wide result mode, independent of record and inspector tab selection. */
+  rawResult?: boolean
+  /** Persist an explicit result mode selection. */
+  onResultModeChange?: (raw: boolean) => void
   /** Wrapping control shared by all JSON inspectors. */
   stringWrapping?: JsonTreeProps['stringWrapping']
   /** Trajectory locale seat. */
@@ -2083,6 +2087,8 @@ function OverviewSection({
  * @returns The ledger and an optional local record inspector.
  */
 export function TrajectoryTable({
+  rawResult = false,
+  onResultModeChange,
   t,
   stringWrapping,
   renderSlot,
@@ -3520,9 +3526,39 @@ export function TrajectoryTable({
                   stringWrapping={stringWrapping} t={t} />
             )}
             {!promptSelected && selected !== undefined && activeTab === 'output' && (
-              selectedProgram === undefined
-                ? <RecordPayload record={selected} direction="output" renderSlot={renderSlot} loadImage={loadImage} stringWrapping={stringWrapping} t={t} />
-                : <ProgramOutput record={selected} stringWrapping={stringWrapping} t={t} />
+              <>
+                {(selected.cell.kind === 'tool' || selected.cell.kind === 'subtool') && (
+                  <header className={css.overviewHeading}>
+                    <span>{t(rawResult ? 'record.rawResult' : 'record.renderedResult')}</span>
+                    <span className={css.programActions}>
+                      <Tooltip label={t('record.rawResult')}>
+                        <button type="button" className={css.programAction}
+                          aria-label={t('record.rawResult')} aria-pressed={rawResult}
+                          aria-controls="trajectory-result-content"
+                          onClick={() => { onResultModeChange?.(!rawResult) }}>
+                          <IconCodeOutlineRegular size={12} />
+                        </button>
+                      </Tooltip>
+                      {rawResult && selected.cell.resultValue !== undefined && (
+                        <InspectorCopyButton text={JSON.stringify(selected.cell.resultValue, null, 2)}
+                          label={t('copy.json')} t={t} />
+                      )}
+                    </span>
+                  </header>
+                )}
+                <div id="trajectory-result-content">
+                  {rawResult && (selected.cell.kind === 'tool' || selected.cell.kind === 'subtool')
+                    ? selected.cell.resultValue === undefined
+                      ? <p className={css.noPayload}>{t('record.rawResultUnavailable')}</p>
+                      : selected.cell.resultValue !== null && typeof selected.cell.resultValue === 'object'
+                        ? <JsonTree data={selected.cell.resultValue} label={t('record.resultJson')}
+                          labels={jsonTreeLabels(t)} stringWrapping={stringWrapping} />
+                        : <pre className={css.jsonPayload}>{JSON.stringify(selected.cell.resultValue)}</pre>
+                    : selectedProgram === undefined
+                      ? <RecordPayload record={selected} direction="output" renderSlot={renderSlot} loadImage={loadImage} stringWrapping={stringWrapping} t={t} />
+                      : <ProgramOutput record={selected} stringWrapping={stringWrapping} t={t} />}
+                </div>
+              </>
             )}
             {!promptSelected && selected !== undefined && activeTab === 'schema' && (
               <RecordSchema record={selected} stringWrapping={stringWrapping} t={t} />

@@ -1133,6 +1133,38 @@ describe('TrajectoryTable', () => {
     expect(turnLabel.textContent).toContain('#1')
   })
 
+  it.each([null, false, 0, '', { answer: 42 }])('switches to the recorded value %j and retains the mode across records and tabs', (value) => {
+    const turns: readonly TrajectoryTurnModel[] = [{ turn: 1, groups: [{ title: 'Step 1', cells: [
+      { index: 1, kind: 'tool', text: 'recorded', outputDetail: 'rendered answer', resultValue: value, timeSeconds: 0.1 },
+      { index: 2, kind: 'subtool', text: 'historical', outputDetail: 'old answer', timeSeconds: 0.1 },
+    ] }] }]
+    const changes = vi.fn()
+    function Harness() {
+      const [raw, setRaw] = useState(false)
+      return <TrajectoryTable turns={turns} {...FOLD_PROPS} rawResult={raw}
+        onResultModeChange={(next) => { changes(next); setRaw(next) }} />
+    }
+    render(<Harness />)
+    fireEvent.click(screen.getByRole('row', { name: /recorded/ }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Result' }))
+    expect(screen.getByText('rendered answer')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Raw result' }))
+    expect(document.getElementById('trajectory-result-content')?.textContent).toContain(
+      typeof value === 'object' && value !== null ? 'answer:' : JSON.stringify(value),
+    )
+    fireEvent.click(screen.getByRole('row', { name: /historical/ }))
+    expect(screen.getByText('No raw result was recorded')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Raw result' }).getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(screen.getByRole('tab', { name: 'Summary' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Result' }))
+    fireEvent.click(screen.getByRole('row', { name: /recorded/ }))
+    expect(screen.queryByText('No raw result was recorded')).toBeNull()
+    expect(changes.mock.calls).toEqual([[true]])
+    fireEvent.click(screen.getByRole('button', { name: 'Raw result' }))
+    expect(screen.getByText('rendered answer')).toBeTruthy()
+    expect(changes.mock.calls).toEqual([[true], [false]])
+  })
+
   it('renders a single-text JSON tool result as a JSON tree', () => {
     const turns: readonly TrajectoryTurnModel[] = [{
       turn: 1,

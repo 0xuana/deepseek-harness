@@ -465,6 +465,7 @@ export function deriveTrajectoryLayout(
               : resultAsText(resultPreview)),
             ...(node.call !== null ? { inputDetail: node.call.argsRaw } : {}),
             outputDetail: detailResult(node, t),
+            ...node.value === undefined ? {} : { resultValue: node.value },
             outputBlocks: node.content.map(block => sourceBlock(block)),
             ...resultPreview,
             callId: node.callId,
@@ -785,6 +786,7 @@ function expandAssistant(
         ...(result !== undefined
           ? {
             outputDetail: detailResult(result, t),
+            ...result.value === undefined ? {} : { resultValue: result.value },
             outputBlocks: result.content.map(block => sourceBlock(block)),
             ...resultPreview,
             isError: result.isError,
@@ -1032,6 +1034,7 @@ function expandSubCalls(
         ...(settled
           ? {
             outputDetail: detailResult(sub, t),
+            ...sub.value === undefined ? {} : { resultValue: sub.value },
             outputBlocks: sub.content.map(block => sourceBlock(block)),
             ...resultPreview,
             isError: sub.isError,
