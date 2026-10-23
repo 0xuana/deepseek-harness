@@ -236,7 +236,8 @@ function mount(
 ): ReturnType<typeof createSnapshotStore<PerfSnapshot>> {
   const store = createSnapshotStore<PerfSnapshot>(snapshot)
   const usePerf = bindSnapshotSelector(store)
-  render(createElement(PerfView, { usePerf, t, loadOlder, loadImage, useProjection } as never))
+  const projection = useProjection ?? (() => undefined)
+  render(createElement(PerfView, { usePerf, t, loadOlder, loadImage, useProjection: projection } as never))
   return store
 }
 

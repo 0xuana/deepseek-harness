@@ -44,7 +44,7 @@ function shortPath(value: string | null): string | null {
   return parts.length <= 2 ? value : parts.slice(-2).join('/')
 }
 
-/** Parse tool arguments into a field map, accepting the raw JSON string form. */
+/** Parse tool arguments into a field map, accepting structured Code-Mode values. */
 function argumentsOf(raw: unknown): Record<string, unknown> | null {
   if (raw !== null && typeof raw === 'object' && !Array.isArray(raw)) {
     return raw as Record<string, unknown>
@@ -61,7 +61,7 @@ function argumentsOf(raw: unknown): Record<string, unknown> | null {
   }
 }
 
-/** Raw arguments for the inspector, bounded and stringified when not already text. */
+/** Raw arguments for the inspector, bounded and stringified when structured. */
 function rawArgs(raw: unknown): string | null {
   if (typeof raw === 'string') return boundedText(raw, ARGS_LIMIT).text
   if (raw === null || raw === undefined) return null
@@ -95,6 +95,11 @@ function ownValue<T>(record: Readonly<Record<string, T>> | null, key: string): T
   return record !== null && Object.hasOwn(record, key) ? record[key] : undefined
 }
 
+/** In-bounds typed-array read: the surrounding loops own the index bound. */
+function cell(values: Uint16Array, index: number): number {
+  return values[index] as number
+}
+
 /** Longest common subsequence length, one rolling row; fine below 400 lines a side. */
 function lcsLength(left: readonly string[], right: readonly string[]): number {
   const width = right.length + 1
@@ -102,13 +107,10 @@ function lcsLength(left: readonly string[], right: readonly string[]): number {
   let current = new Uint16Array(width)
   for (let row = 1; row <= left.length; row += 1) {
     for (let column = 1; column <= right.length; column += 1) {
-      /* v8 ignore next -- an in-bounds typed-array read always yields a number; the fallback only satisfies the index type. */
-      const up = previous[column] ?? 0
-      /* v8 ignore next -- an in-bounds typed-array read always yields a number; the fallback only satisfies the index type. */
-      const leftCell = current[column - 1] ?? 0
-      /* v8 ignore next 3 -- the typed-array nullish fallback is unreachable; in-bounds reads never yield undefined. */
+      const up = cell(previous, column)
+      const leftCell = cell(current, column - 1)
       current[column] = left[row - 1] === right[column - 1]
-        ? (previous[column - 1] ?? 0) + 1
+        ? cell(previous, column - 1) + 1
         : Math.max(up, leftCell)
     }
     const swap = previous
@@ -116,8 +118,7 @@ function lcsLength(left: readonly string[], right: readonly string[]): number {
     current = swap
     current.fill(0)
   }
-  /* v8 ignore next -- an in-bounds typed-array read always yields a number; the fallback only satisfies the index type. */
-  return previous[right.length] ?? 0
+  return cell(previous, right.length)
 }
 
 /** Lines actually added and removed by one replacement. */

@@ -9,7 +9,6 @@ import {
 } from 'react'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
-import type { UseProjection } from '@deepseek-ai/dsh-api-session-controller/client'
 import { HoverCard, ImageLightbox, MarkdownText, SegmentedControl, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { MarkdownLabels } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ConvViewProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -1918,7 +1917,7 @@ interface PendingPrepend {
  * @returns the scrolling table, its empty state, and the expand/collapse footer.
  */
 export function PerfView(props: PerfViewProps): ReactElement {
-  const { usePerf, t, loadOlder, loadImage, useProjection } = props as typeof props & { useProjection?: UseProjection }
+  const { usePerf, t, loadOlder, loadImage, useProjection } = props
   const snapshot = usePerf(value => value)
   const [view, setView] = useState<ViewState>(createViewState)
   const [now, setNow] = useState(() => Date.now())
@@ -1946,8 +1945,8 @@ export function PerfView(props: PerfViewProps): ReactElement {
     return () => { clearInterval(timer) }
   }, [hasRunning])
   // Turns compare only with the other turns in the window.
-  const projectionStats = useProjection === undefined ? undefined : useProjection('sessionStats')
-  const projectionUsage = useProjection === undefined ? undefined : useProjection('tokenUsage')
+  const projectionStats = useProjection('sessionStats')
+  const projectionUsage = useProjection('tokenUsage')
   const fullTotals = view.showTotals ? totalsFromProjections(projectionStats, projectionUsage) : null
   const totals = fullTotals ?? (view.showTotals && turns.length > 0 ? aggregateTotals(turns) : null)
   const turnDeltas = new Map<number, number>()
