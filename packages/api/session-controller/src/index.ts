@@ -599,8 +599,6 @@ export class SessionController extends TypertRemoteService {
       }
     }
   }
-
-
 }
 
 export default SessionController

@@ -81,8 +81,6 @@ describe('ApiSession identity failures', () => {
     expect(new ApiSessionCwdConflict(SessionId('wrong-cwd'), '/wanted', '/existing').message)
       .toContain('belongs to "/existing"')
   })
-
-
 })
 
 describe('ApiSession Agent lookup and recovery', () => {
