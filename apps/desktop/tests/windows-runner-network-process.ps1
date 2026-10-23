@@ -137,3 +137,4 @@ exit 0
     if ([IO.Path]::GetDirectoryName($root).TrimEnd('\') -ne [IO.Path]::GetTempPath().TrimEnd('\')) { throw 'Unsafe cleanup path' }
     Remove-Item -LiteralPath $root -Recurse -Force
 }
+exit 0
