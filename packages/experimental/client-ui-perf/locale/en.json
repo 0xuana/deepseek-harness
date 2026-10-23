@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "Performance view",
-    "description": "Inspect per-turn and per-step context, timing, cache, and tool cost in the conversation."
+    "title": "Statistics view",
+    "description": "Show per-turn and per-step context, timing, cache, and tool cost beside Chat."
   }
 }

@@ -323,6 +323,7 @@
       "@deepseek-ai/dsh-experimental-client-ui-agent-team": ["./packages/experimental/client-ui-agent-team/src"],
       "@deepseek-ai/dsh-experimental-client-ui-agent-team/client": ["./packages/experimental/client-ui-agent-team/src/client/index.ts"],
       "@deepseek-ai/dsh-experimental-client-ui-perf": ["./packages/experimental/client-ui-perf/src"],
+      "@deepseek-ai/dsh-experimental-client-ui-perf/client": ["./packages/experimental/client-ui-perf/src/client/index.ts"],
       "@deepseek-ai/dsh-client-ui-settings-plugins": ["./packages/client/ui-settings-plugins/src"],
       "@deepseek-ai/dsh-client-ui-settings-shell": ["./packages/client/ui-settings-shell/src"],
       "@deepseek-ai/dsh-cua/client": ["./packages/experimental/cua/src/client/index.ts"],
