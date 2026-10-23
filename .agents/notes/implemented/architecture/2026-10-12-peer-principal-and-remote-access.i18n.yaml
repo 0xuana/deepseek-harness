@@ -27,14 +27,14 @@
   en: a01ac57fc71a84f0
   zh: 3e488ef3da5e4b8c
 /agent-note-peer-principals-and-method-level-remote-access-control/decision/method-level-access-control:
-  en: a55516339b0d49dd
-  zh: 3281df9ea7878fc0
+  en: 725a2d4145c0a75e
+  zh: b98a64532cadeaba
 /agent-note-peer-principals-and-method-level-remote-access-control/decision/method-level-access-control/correspondence-with-rbac:
   en: a78a2410eb52f777
   zh: a868bf1b0e690c9f
 /agent-note-peer-principals-and-method-level-remote-access-control/decision/method-level-access-control/resources-and-resource-readers-deepseek-ai-dsh-typert-protocol-deepseek-ai-dsh-typert-registry:
-  en: b79a4e9401b44978
-  zh: eaca7cd4d07f485a
+  en: d50ae22978165c57
+  zh: 8c1fcfb7dc2d3367
 /agent-note-peer-principals-and-method-level-remote-access-control/decision/method-level-access-control/endpoint-resources:
   en: 056a141b31270cba
   zh: 3f6caafb3a13c192
@@ -45,8 +45,8 @@
   en: 3c911f57f0f6ca4b
   zh: 1509781eeda4c922
 /agent-note-peer-principals-and-method-level-remote-access-control/decision/method-level-access-control/host-access-check-order:
-  en: 6c58dc8777e107ef
-  zh: bc14605c96e4d8f3
+  en: 2d97a251cc4c9db0
+  zh: df072d5a96a9e82f
 /agent-note-peer-principals-and-method-level-remote-access-control/decision/method-level-access-control/forwarded-events:
   en: 5fe34ee5ec31942a
   zh: ef39b020b0539b8f
@@ -75,8 +75,8 @@
   en: 305ec45a7cd85ed7
   zh: d2cd4209a56b1d0c
 /agent-note-peer-principals-and-method-level-remote-access-control/alternatives-considered:
-  en: 130df2981ba550df
-  zh: e9a0a89af6fb50a3
+  en: 60da38bca6e9c3d6
+  zh: 61ea578fe8185b61
 /agent-note-peer-principals-and-method-level-remote-access-control/consequences:
   en: 89452c3c3f042e75
   zh: 9bcad00a60c65303

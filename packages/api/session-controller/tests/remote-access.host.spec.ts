@@ -1,10 +1,10 @@
 /**
  * Session Controller under non-owner callers: the Session resource kind it
- * registers, the Session readers of `session/page` and `session/follow`,
- * `session/list`, `session/search`, and `session/control` called through a
- * `global` role and filtered per Session through `remoteAccess.allows()`, the caller recorded
- * on prompt sources, and `session/projections` admitted per Session through
- * the Gateway.
+ * registers and its default resolver, which supplies the identities of
+ * `session/page` and `session/follow`, `session/list`, `session/search`, and
+ * `session/control` called through a `global` role and filtered per Session
+ * through `remoteAccess.allows()`, the caller recorded on prompt sources, and
+ * `session/projections` admitted per Session through the Gateway.
  */
 
 import { Context } from '@deepseek-ai/cordis'

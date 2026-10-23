@@ -25,7 +25,7 @@ type ResourceIds = readonly unknown[] | 'invalid'
  * the kind; otherwise the kind's registered default resolver receives named
  * wire values and ordered parameter descriptions. A default field instead
  * reads a top-level argument or, failing that, the first object argument.
- * @param typert - registry holding default fields, lookup providers, and Host Context adapters.
+ * @param typert - registry holding default fields or resolvers, lookup providers, and Host Context adapters.
  * @param readers - the method's `resources` readers, or `undefined` when it declares none.
  * @param descriptor - receiver, parameter order, lookups, and cancellation slot of the method.
  * @param args - named arguments matched to the descriptor's field set: JSON
@@ -33,9 +33,9 @@ type ResourceIds = readonly unknown[] | 'invalid'
  *   identities as wire values.
  * @param signal - value placed in the cancellation slot of the positional arguments.
  * @returns the touched resources, the global resource alone when none;
- *   `undefined` when the resources are invalid: a reader throws or returns
- *   an empty list, a default field holds an array, or a resource id is not a
- *   non-empty string.
+ *   `undefined` when the resources are invalid: a reader or resolver throws,
+ *   a reader returns an empty list, a default field or resolver holds an
+ *   array, or a resource id is not a non-empty string.
  */
 export function callResources(
   typert: Pick<TypertRegistryContract, 'contexts' | 'lookups' | 'resources'>,
@@ -52,17 +52,18 @@ export function callResources(
   ]
   for (const declaration of typert.resources.entries()) {
     sources.set(declaration.kind, () => {
+      let id: unknown
       if (declaration.resolve !== undefined) {
-        let id: unknown
+        const resolve = declaration.resolve
         try {
-          id = declaration.resolve({ args, parameters: descriptor.parameters })
-        } catch (error) {
+          id = resolve({ args, parameters: descriptor.parameters })
+        } catch {
           // A resolver failure cannot identify an authorized resource.
           return 'invalid'
         }
-        return Array.isArray(id) ? 'invalid' : id === undefined ? [] : [id]
+      } else {
+        id = defaultFieldId(descriptor, args, declaration.field)
       }
-      const id = defaultFieldId(descriptor, args, declaration.field)
       return Array.isArray(id) ? 'invalid' : id === undefined ? [] : [id]
     })
   }

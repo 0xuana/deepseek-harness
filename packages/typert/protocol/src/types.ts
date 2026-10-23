@@ -880,17 +880,26 @@ export interface TypertContextRegistry {
 
 /** Validated wire values and their ordered business parameters for resource extraction. */
 export interface TypertResourceResolveInput {
+  /** Wire field to its validated value, including lookup and Context identities as wire values. */
   readonly args: Readonly<Record<string, unknown>>
+  /** Declared parameters in call order, so a resolver can match a name or an aliased wire field. */
   readonly parameters: readonly Pick<InvocationParameterDescriptor, 'name' | 'wire'>[]
 }
 
-/** Default identity extraction for one resource kind. */
+/** Default identity extraction for one resource kind; exactly one of `field` and `resolve` is declared. */
 export type TypertResourceDeclaration =
-  | { readonly field: string; readonly resolve?: never }
+  | {
+    readonly field: string
+    readonly resolve?: never
+  }
   | {
     readonly field?: never
-    /** Called once before lookups resolve. Returns one identity, or undefined when absent; throws to reject the resource. */
-    resolve(input: TypertResourceResolveInput): string | undefined
+    /**
+     * Called once before lookups resolve. It takes no receiver, so it reads only its
+     * input. Returns one identity, or undefined when absent; throws or returns an
+     * array to reject the call.
+     */
+    resolve(this: void, input: TypertResourceResolveInput): string | undefined
   }
 
 /** One registered resource kind with its default identity extraction. */

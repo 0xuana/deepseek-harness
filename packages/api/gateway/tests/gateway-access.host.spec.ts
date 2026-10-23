@@ -49,6 +49,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     /** Test-only resource kinds; the Gateway itself names no kind. */
     'test-shelf': TypertResource<string>
     'test-desk': TypertResource<string>
+    'test-frame': TypertResource<string>
   }
 }
 
@@ -59,11 +60,12 @@ const GUEST: Guest = { kind: 'test-guest', guest: 'gateway' }
 const GLOBAL = { kind: 'global' } as const
 const shelf = (id: string) => ({ kind: 'test-shelf', id }) as const
 const desk = (id: string) => ({ kind: 'test-desk', id }) as const
+const frame = (id: string) => ({ kind: 'test-frame', id }) as const
 
 const FIXTURE_ACTIONS: readonly RemoteAccessAction[] = [
   'accessFixture/open', 'accessFixture/read', 'accessFixture/byAgent', 'accessFixture/byLookup',
   'accessFixture/byLookupAndOption', 'accessFixture/byList', 'accessFixture/scoped', 'accessFixture/scopedOnDesk',
-  'accessFixture/scopedByReader', 'accessFixture/annotate', 'absentAccess/read', 'event:fixture/notice', 'event:fixture/shelf',
+  'accessFixture/scopedByReader', 'accessFixture/annotate', 'accessFixture/bySession', 'absentAccess/read', 'event:fixture/notice', 'event:fixture/shelf',
 ]
 
 function role<K extends RemoteAccessResourceKind>(resource: K): RemoteAccessRole<K> {
@@ -79,6 +81,8 @@ function on(resource: RemoteAccessResource): RemoteAccessBinding {
       return { role: role('test-shelf'), resource }
     case 'test-desk':
       return { role: role('test-desk'), resource }
+    case 'test-frame':
+      return { role: role('test-frame'), resource }
     default:
       throw new Error('no fixture role for this resource kind')
   }
@@ -124,6 +128,12 @@ class AccessFixture extends TypertRemoteService {
   @Remote({ resources: { 'test-shelf': shelfIds => shelfIds } })
   byList(shelfIds: readonly string[]): string {
     void shelfIds
+    return this.seen()
+  }
+
+  @Remote
+  bySession(sessionId: string): string {
+    void sessionId
     return this.seen()
   }
 
@@ -364,6 +374,22 @@ describe('Gateway access checks', () => {
     await expect(ctx.typertGateway.invoke({ peer: peerFor(ctx, GUEST), namespace: 'absentAccess', method: 'read', args: {} }))
       .rejects.toMatchObject({ code: 'remote-access/denied', details: { action: 'absentAccess/read', reason: 'no-allow' } })
     expect(decisions()).toEqual([{ action: 'absentAccess/read', resources: [GLOBAL] }])
+  })
+
+  it('passes declared parameter names to a registered resolver through dispatch', async () => {
+    const { ctx, hold } = await setup()
+    const resolve = vi.fn(({ args, parameters }: TypertResourceResolveInput) => {
+      const named = parameters.find(parameter => parameter.name === 'sessionId')
+      return named === undefined ? undefined : args[named.wire] as string
+    })
+    const dispose = ctx.typert.resources.register('test-frame', { resolve })
+    const guest = peerFor(ctx, GUEST)
+    hold(frame('f1'))
+    await expect(call(ctx, guest, 'bySession', { sessionId: 'f1' })).resolves.toBe('test-guest')
+    await expect(call(ctx, guest, 'bySession', { sessionId: 'f2' }))
+      .rejects.toMatchObject({ code: 'remote-access/denied' })
+    expect(resolve).toHaveBeenCalledTimes(2)
+    await dispose()
   })
 
   it('checks access before resolving lookups, so a refused call activates nothing', async () => {

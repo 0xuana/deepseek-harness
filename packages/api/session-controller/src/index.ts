@@ -79,6 +79,11 @@ declare module '@deepseek-ai/cordis' {
 
 /**
  * Extract the Session resource from an ID or a history address.
+ *
+ * Registers as the `session` kind default, so it applies to every Remote method of
+ * every namespace: a top-level `sessionId` parameter, otherwise the first object
+ * parameter carrying `sessionId` or an `address`. A new request type whose first
+ * object parameter has an unrelated `address` field would be read as an address.
  * @param input - validated wire arguments and their ordered parameter descriptions.
  * @returns the named Session identity, otherwise the first object's Session identity or history address.
  * @throws Error when the request object supplies both sessionId and address.

@@ -63,7 +63,6 @@ describe('SessionController facade', () => {
     ctx.on('api-session/error', failure)
     ctx.on('api-session/activity', activity)
 
-
     const session = ctx.sessions.create(sessionId, { meta: header })
     const agent = {
       id: sessionId,

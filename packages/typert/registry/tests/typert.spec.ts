@@ -11,6 +11,7 @@ import type {
   InvocationDescriptor,
   TypertContext,
   TypertResource,
+  TypertResourceDeclaration,
   TypertResourceKind,
   TypertLookup,
   TypertRegistryChange,
@@ -453,7 +454,7 @@ describe('TypertRegistry', () => {
     const ctx = await makeCtx()
     const resolve = () => 'fixture-id'
     const changes: TypertRegistryChange[] = []
-    ctx.typert.resources.subscribe(change => { changes.push(change) })
+    ctx.typert.resources.subscribe((change) => { changes.push(change) })
     const fiber = ctx.plugin({
       inject: ['typert'],
       apply: (pluginCtx: Context) => { pluginCtx.typert.resources.register('registryFixture', { resolve }) },
@@ -469,6 +470,23 @@ describe('TypertRegistry', () => {
       { kind: 'resource', key: 'registryFixture' },
       { kind: 'resource', key: 'registryFixture' },
     ])
+  })
+
+  it('keeps a prototype resolver callable and rejects a declaration that names no default', async () => {
+    const ctx = await makeCtx()
+    class PrototypeResolver {
+      resolve(): string { return 'prototype-id' }
+    }
+    const declaration: TypertResourceDeclaration = new PrototypeResolver()
+    ctx.typert.resources.register('registryFixture', declaration)
+    const resolve = ctx.typert.resources.get('registryFixture')?.resolve
+    expect(resolve?.({ args: {}, parameters: [] })).toBe('prototype-id')
+    const opaque = {} as TypertResourceDeclaration
+    const other = new Context()
+    await other.plugin(TypertRegistry)
+    expect(() => other.typert.resources.register('registryFixture', opaque))
+      .toThrow('declares neither a field nor a resolve function')
+    await other.fiber.dispose()
   })
 
   it('reserves the built-in global resource kind', async () => {
