@@ -37,7 +37,7 @@ kind: "package-library"
 <a id="plugin-manager-lists"></a>
 ### 插件管理器列表
 
-`PROTECTED_PLUGINS` 列出[插件管理器](../../boot/plugin-manager/README.zh.md)因管理功能依赖而保持只读的插件包；包含其中任一插件的组合包是管理组合包。移除其中一项后，Web 插件页和 `plugin_manager` 工具就能禁用或移除该包及其所在组合包。[Web 插件页](../../client/ui-plugin-manager/README.zh.md)隐藏 `HIDDEN_BUNDLES`，把 `EXTENSION_BUNDLES` 按顺序排在最前，在 profile 启用 `MORE_BUNDLES` 之前不把它们放上主列表，并为 `EXPERIMENTAL_BUNDLES` 显示实验性标记。
+`PROTECTED_PLUGINS` 列出[插件管理器](../../boot/plugin-manager/README.zh.md)因管理功能依赖而保持只读的插件包；包含其中任一插件的组合包是管理组合包。移除其中一项只解除这一条 `management-required` 拒绝；管理器自身的入口、随安装提供的组合包和不可寻址的行仍由各自的规则保护。[Web 插件页](../../client/ui-plugin-manager/README.zh.md)隐藏 `HIDDEN_BUNDLES`，把 `EXTENSION_BUNDLES` 按顺序排在最前，在 profile 启用 `MORE_BUNDLES` 之前不把它们放上主列表，并为 `EXPERIMENTAL_BUNDLES` 显示实验性标记。
 
 ### 按需组合包
 
@@ -51,7 +51,7 @@ kind: "package-library"
 <details>
 <summary>实现细节——点击展开</summary>
 
-仓库检查把 `src/bundles.ts` 中的列表当作 TypeScript 字面量读取而不执行，因此每个列表都保持为由包名组成的静态数组或对象字面量。`ui-plugin-manager` 通过 [`tsdown.client.ts`](../../client/tsdown.client.ts) 中的 `INLINE_SAFE` 把 `src/plugin-manager.ts` 内联进浏览器 bundle，因此它的导出保持为没有运行时同一性的纯数据；只要没有 Client 代码导入生成的目录，tree-shaking 就会让目录数据不进入该 bundle。
+仓库检查把 `src/bundles.ts` 中的列表当作 TypeScript 字面量读取而不执行，因此每个列表都保持为由包名组成的静态数组或对象字面量。[`tsdown.client.ts`](../../client/tsdown.client.ts) 中的 `INLINE_SAFE` 允许 Client bundle 内联整个包，因此每个导出都保持为没有需要共享的运行时身份的数据。`ui-plugin-manager` 从包入口导入 Web 列表；只要没有 Client 代码导入 profile 模板和生成的目录，tree-shaking 就会让它们不进入该 bundle。
 
 ### 源码地图
 

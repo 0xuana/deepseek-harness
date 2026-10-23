@@ -2,8 +2,8 @@
 
 /**
  * Plugin packages the plugin manager refuses to disable or remove, because management itself needs them; a bundle that
- * contains one is read-only as well. Removing a name lets the Web page and the `plugin_manager` tool disable or remove
- * that package and its bundle.
+ * contains one is read-only as well. Removing a name drops only this `management-required` refusal; the manager's own
+ * entry, installation-carried bundles, and unaddressable rows stay protected by their own rules.
  */
 export const PROTECTED_PLUGINS: ReadonlySet<string> = new Set([
   '@deepseek-ai/dsh-plugin-manager', '@deepseek-ai/cordis-plugin-loader',
