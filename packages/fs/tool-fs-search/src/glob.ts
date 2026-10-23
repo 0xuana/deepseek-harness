@@ -82,8 +82,9 @@ export function parseGlobArgs(args: { pattern: string; path?: string }): GlobInp
  * a flag. `--sort=modified` orders by modification time, `--no-ignore
  * --hidden` searches ignored and hidden files, and
  * {@link GLOB_VCS_EXCLUDES} keeps VCS metadata out. Simple directory prefixes
- * prune unrelated subtrees through directory-only globs without changing the
- * search root, path separators, or symlink handling.
+ * prune unrelated subtrees through directory-name globs without changing the
+ * search root, path separators, or symlink handling. Added pruning arguments
+ * over 8 KiB retain the original traversal to bound command-line growth.
  *
  * @param input - the validated arguments.
  * @returns the complete ripgrep argument vector (excluding the binary itself).
@@ -93,10 +94,10 @@ export function buildGlobCommand(input: GlobInput): string[] {
   const pruning: string[] = []
   if (input.path === undefined && directories.length > 0
     && directories.every(part => /^[\w .-]+$/.test(part) && part !== '.' && part !== '..' && !GLOB_VCS_EXCLUDES.includes(part))) {
-    pruning.push('--glob=!**')
     // Trailing slashes admit directories only, never files with the same names.
-    for (let depth = 1; depth <= directories.length; depth++) {
-      pruning.push(`--glob=/${directories.slice(0, depth).join('/')}/`)
+    const directoryGlob = `--glob={${[...new Set(directories)].join(',')}}/`
+    if (directoryGlob.length + '--glob=!**'.length + 2 <= 8 * 1024) {
+      pruning.push('--glob=!**', directoryGlob)
     }
   }
   const parts = [

@@ -8,7 +8,7 @@
  * suite runs on every platform without a system `rg` install; the
  * fake-service suite (tools.spec.ts) carries the coverage gate.
  */
-import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import { executeModelToolFixture, executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
@@ -85,6 +85,8 @@ describe('search tools over the real subprocess service + the packaged rg', () =
       await writeFile(join(dir, 'packages', 'core', 'src', 'old.ts'), '')
       await writeFile(join(dir, 'packages', 'core', 'src', '.hidden.ts'), '')
       await writeFile(join(dir, 'packages', 'core', 'src', 'nested', 'other.ts'), '')
+      await mkdir(join(dir, 'packages', 'src', 'core'), { recursive: true })
+      await writeFile(join(dir, 'packages', 'src', 'core', 'other.ts'), '')
       await writeFile(join(dir, '.gitignore'), 'packages/\n')
       await utimes(join(dir, 'packages', 'core', 'src', 'old.ts'), new Date(2000, 0, 1), new Date(2000, 0, 1))
       const spawn = vi.spyOn(ctx.subprocess, 'spawn')
@@ -97,8 +99,8 @@ describe('search tools over the real subprocess service + the packaged rg', () =
         join('packages', 'core', 'src', 'old.ts'),
         join('packages', 'core', 'src', '.hidden.ts'),
       ] })
-      expect(spawn.mock.calls[0]?.[0].argv.slice(3, 8)).toEqual([
-        '--glob=!**', '--glob=/packages/', '--glob=/packages/core/', '--glob=/packages/core/src/', '--glob=packages/core/src/*.ts',
+      expect(spawn.mock.calls[0]?.[0].argv.slice(3, 6)).toEqual([
+        '--glob=!**', '--glob={packages,core,src}/', '--glob=packages/core/src/*.ts',
       ])
       expect(spawn.mock.calls[0]?.[0].argv).not.toContain('--')
     })
@@ -118,10 +120,27 @@ describe('search tools over the real subprocess service + the packaged rg', () =
       expect(text(result)).toBe('No files found')
     })
 
+    it.each([[1, 8170, 8192], [1, 8171, 0], [1500, 1, 23], [16, 240, 262]])('keeps %i directories of length %i searchable through Native execution', async (depth, length, pruningBytes) => {
+      const pattern = `${Array.from({ length: depth }, () => 'a'.repeat(length)).join('/')}/*.ts`
+      const spawn = vi.spyOn(ctx.subprocess, 'spawn')
+      const result = await executeModelToolFixture(ctx, {
+        signal: testToolSignal,
+        callId: ToolCallId(`deep-glob-${++callCounter}`),
+        name: 'glob',
+        arguments: { pattern },
+        agent: agent() as never,
+      })
+      expect(result.isError).toBe(false)
+      expect(text(result)).toBe('No files found')
+      const argv = spawn.mock.calls[0]?.[0].argv ?? []
+      const pruning = argv.slice(3, argv.indexOf(`--glob=${pattern}`))
+      expect(pruning.reduce((bytes, arg) => bytes + Buffer.byteLength(arg) + 1, 0)).toBe(pruningBytes)
+    })
+
     it('preserves case-sensitive matching while pruning directories', async () => {
       const spawn = vi.spyOn(ctx.subprocess, 'spawn')
       expect(text(await call('glob', { pattern: 'SRC/*.ts' }, agent()))).toBe('No files found')
-      expect(spawn.mock.calls[0]?.[0].argv).toContain('--glob=/SRC/')
+      expect(spawn.mock.calls[0]?.[0].argv).toContain('--glob={SRC}/')
     })
 
     it('does not follow a directory link when narrowing a literal prefix', async () => {
