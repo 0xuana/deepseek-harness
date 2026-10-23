@@ -1517,7 +1517,7 @@ function eventRow(event: PerfEventMetrics, t: PerfTranslate): ReactElement {
         <span className={css.compactionTag}>{eventLabel(event.kind, t)}</span>
         <span className={css.stepClock}>{formatClock(event.time)}</span>
       </td>
-      <td className={cx(css.promptCell, css.stepWhen)}>{side}</td>
+      <td className={css.promptCell}><span className={css.stepWhen}>{side}</span></td>
       <td className={css.stepDid}>{detail}</td>
       <ContextCell value={null} className={css.stepMetric} />
       <MetricCells cells={metricsCells(metrics, t)} className={css.stepMetric} />
@@ -1681,7 +1681,7 @@ function stepRows(options: StepRowsOptions): ReactNode[] {
           ) : null}
         </td>
         <td
-          className={cx(css.promptCell, css.stepWhen)}
+          className={css.promptCell}
           title={isNumber(step.startTime)
             ? [
               t('step.started.title', { time: formatDateTimeMs(step.startTime) }),
@@ -1689,20 +1689,22 @@ function stepRows(options: StepRowsOptions): ReactNode[] {
             ].join('\n')
             : undefined}
         >
-          {isNumber(step.startTime)
-            ? (
-              <>
-                <span className={css.stepClock}>{formatStepClock(step.startTime)}</span>
-                {visibleGap === undefined
-                  ? null
-                  : (
-                    <span className={css.stepGap}>
-                      {t('bar.gap', { value: formatMs(visibleGap) })}
-                    </span>
-                  )}
-              </>
-            )
-            : null}
+          <span className={css.stepWhen}>
+            {isNumber(step.startTime)
+              ? (
+                <>
+                  <span className={css.stepClock}>{formatStepClock(step.startTime)}</span>
+                  {visibleGap === undefined
+                    ? null
+                    : (
+                      <span className={css.stepGap}>
+                        {t('bar.gap', { value: formatMs(visibleGap) })}
+                      </span>
+                    )}
+                </>
+              )
+              : null}
+          </span>
         </td>
         {stepDidCell(step, t)}
         <ContextCell

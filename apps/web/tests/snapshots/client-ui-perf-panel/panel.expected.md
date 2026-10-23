@@ -27,11 +27,11 @@
       - cell "{{tps}}"
       - cell "{{duration}}"
       - cell "{{duration}}"
-    - row "Expand or collapse the tool details of step 1 · details {{clock}} read /work/notes.md 2 lines 5.2K 0.24K 69.23% {{ttft}} {{duration}} {{tps}} {{duration}} {{duration}}":
+    - row "Expand or collapse the tool details of step 1 · details 01-15 {{clock}} read /work/notes.md 2 lines 5.2K 0.24K 69.23% {{ttft}} {{duration}} {{tps}} {{duration}} {{duration}}":
       - cell "Expand or collapse the tool details of step 1 · details":
         - button "Expand or collapse the tool details of step 1": Step 1
         - text: · details
-      - cell "{{clock}}"
+      - cell "01-15 {{clock}}"
       - cell "read /work/notes.md 2 lines"
       - cell "5.2K"
       - cell "0.24K"

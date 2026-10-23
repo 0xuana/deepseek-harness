@@ -213,11 +213,13 @@
 }
 
 .stepWhen {
-  display: flex;
-  align-items: baseline;
+  display: inline-flex;
+  align-items: center;
   gap: 6px;
+  min-height: 30px;
   color: var(--dsw-alias-label-secondary);
   font-variant-numeric: tabular-nums;
+  vertical-align: middle;
 }
 
 .stepClock {
