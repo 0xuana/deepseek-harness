@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Équipes d'agents",
-    "description": "Permet à l'agent avec lequel vous parlez de répartir un travail entre des coéquipiers nommés : il place le travail sur un tableau de tâches partagé, attend leurs résultats et vous rend compte ; cliquez sur « Équipe d'agents » à côté du titre de la conversation pour voir les membres et les tâches. Chaque coéquipier envoie ses propres requêtes au modèle ; une équipe consomme donc plus de jetons qu'un seul agent, et tant que le plugin est activé, les agents délèguent par l'intermédiaire de l'équipe au lieu des outils de sous-agents habituels.",
+    "description": "Permet à l'agent avec lequel vous parlez de répartir un travail entre des coéquipiers nommés : il place le travail sur un tableau de tâches partagé, attend leurs résultats et vous rend compte ; cliquez sur « Équipe d'agents » à côté du titre de la conversation pour voir les membres et les tâches. Les coéquipiers modifient les mêmes fichiers, et les périmètres d'écriture qui se chevauchent n'affichent qu'un avertissement. Chaque coéquipier envoie ses propres requêtes au modèle ; une équipe consomme donc plus de jetons qu'un seul agent, et tant que le plugin est activé, les agents délèguent par l'intermédiaire de l'équipe au lieu des outils de sous-agents habituels.",
     "detail": "docs/DETAIL.md"
   }
 }

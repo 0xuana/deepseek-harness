@@ -21,7 +21,7 @@
 
 SVG 必须自包含：不使用字体、远程资源、脚本、事件处理器、动画、样式表、`text` 或 `foreignObject`。`image` 元素可以通过 base64 data URL 嵌入未改动的官方 PNG/JPEG/WebP 品牌素材。小插件图标仍仅使用几何图形。页面通过 `<img>` 渲染 SVG。每个文件都应控制大小；Host 会拒绝超过 plugin-manager 的 `detailImageMaxBytes`（默认 5 MiB）的图片。
 
-## 3. 放在详细介绍文档顶部
+## 3. 用它作为详细介绍文档
 
 将这对文件保存为组合包中的 `docs/preview.svg` 和 `docs/preview.zh.svg`，与 `docs/DETAIL.md` 和 `docs/DETAIL.zh.md` 放在一起，并把图片作为每份文档唯一的一行：
 

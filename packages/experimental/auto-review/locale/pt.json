@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Revisão de autorização automática",
-    "description": "Adiciona o modo de acesso “Auto review”, escolhido no menu de modo de acesso ou com /permission auto para a sessão atual: antes de cada chamada de ferramenta, uma solicitação ao modelo verifica a chamada em relação ao que você pediu; as chamadas permitidas são executadas imediatamente com acesso total e sem sandbox, e as negadas aguardam sua aprovação. A revisão pode permitir uma ação insegura ou negar um trabalho útil, e desativar o plug-in muda essas sessões para “Acesso total”.",
+    "description": "Adiciona o modo de acesso “Auto review”, escolhido no menu de modo de acesso ou com /permission auto para a sessão atual: antes de cada chamada de ferramenta, uma solicitação ao modelo verifica a chamada em relação ao que você pediu; as chamadas permitidas são executadas imediatamente com acesso total e sem sandbox, e as negadas aguardam sua aprovação. No modo PTC, apenas as chamadas de ferramenta feitas por um programa são revisadas, não as operações de arquivos e processos do próprio programa. A revisão pode permitir uma ação insegura ou negar um trabalho útil; desativar o plug-in muda as sessões “Auto review” abertas para “Acesso total”, e uma sessão “Auto review” salva só pode ser reaberta enquanto o plug-in estiver ativado.",
     "detail": "docs/DETAIL.md"
   }
 }

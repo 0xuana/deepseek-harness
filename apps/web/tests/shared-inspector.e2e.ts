@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { chromium, type Browser } from 'playwright'
 import { expect, it, onTestFinished } from 'vitest'
 import { compareOrRefreshGolden, launchWebScaffold, seedSession, selectedSessionFixture, watchConsole, webSnapshotMode, type WebScaffold } from './scaffold.ts'
+import { experimentalBundleDescription } from './support.ts'
 
 const bundle = fileURLToPath(new URL('../../../packages/experimental/inspector-profile', import.meta.url))
 const fixture = fileURLToPath(new URL('../../../snapshots/web/fresh-round-trip/session.v4.jsonl', import.meta.url))
@@ -87,14 +88,14 @@ it('toggles bottom DevTools from the page and iframe without a selected Session'
 it.each([
   {
     locale: 'zh-CN', file: 'zh', plugins: '插件', open: '查看 开发者工具', bundle: '开发者工具',
-    description: '用于排查问题：从侧边栏的“新标签页”打开“会话数据诊断”，查看 DSH 为会话记录的内容；按 Ctrl+Shift+.（macOS 上为 Cmd+Shift+.）打开连接到 DSH 后端的 Chrome DevTools。启用期间，DSH 会在内存中保留后端的网络请求且不隐藏 API key 或 cookie，这台计算机上的任何程序都能连接其调试端点并在 DSH 内部运行代码，不调试时请关闭此插件。',
+    description: experimentalBundleDescription('inspector-profile', 'zh'),
     inspector: 'NodeJS 诊断', inspectorDescription: '按 Ctrl/Cmd+Shift+. 在底部面板打开 Chrome DevTools 进行开发调试',
     session: '会话数据诊断', sessionDescription: '在会话侧边栏启用当前会话的原始数据和聊天分组数据分析功能',
     openSidebar: '打开右侧边栏', sidebarDescription: '在侧边栏分析当前会话原始日志和聊天分组数据',
   },
   {
     locale: 'en-US', file: 'en', plugins: 'Plugins', open: 'View Developer tools', bundle: 'Developer tools',
-    description: "For troubleshooting: open Session log from the sidebar's New tab to see what DSH recorded for a session, and press Ctrl+Shift+. (Cmd+Shift+. on macOS) to open Chrome DevTools connected to the DSH backend. While it is on, DSH keeps the backend's network requests in memory without hiding API keys or cookies, and any program on this computer can connect to its debugging endpoint and run code inside DSH, so turn it off when you are not debugging.",
+    description: experimentalBundleDescription('inspector-profile', 'en'),
     inspector: 'NodeJS inspector', inspectorDescription: 'Press Ctrl/Cmd+Shift+. to open Chrome DevTools in the bottom panel for development and debugging.',
     session: 'Session log', sessionDescription: "Enable analysis of the current session's raw data and grouped chat messages in the session sidebar.",
     openSidebar: 'Open right sidebar', sidebarDescription: 'Analyze raw logs and grouped chat messages for the current session in the sidebar.',

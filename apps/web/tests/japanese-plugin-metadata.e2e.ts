@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { chromium, type Browser } from 'playwright'
 import { expect, it, onTestFailed, onTestFinished } from 'vitest'
 import { captureStableAria, compareOrRefreshGolden, launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold } from './scaffold.ts'
-import { saveFailureShot } from './support.ts'
+import { experimentalBundleDescription, saveFailureShot } from './support.ts'
 
 it('displays Japanese plugin titles and descriptions from package metadata', async () => {
   const resources: { scaffold?: WebScaffold; browser?: Browser } = {}
@@ -23,7 +23,7 @@ it('displays Japanese plugin titles and descriptions from package metadata', asy
   const title = panel.getByRole('button', { name: '自動認可レビューを表示', exact: true })
   await title.waitFor()
   const card = title.locator('xpath=ancestor::li')
-  await card.getByText('「自動認可レビュー」アクセスモードを追加します。アクセスモードメニューで選択するか /permission auto を入力すると、現在のセッションに適用されます。各ツール呼び出しの前に、モデルリクエストがその呼び出しをあなたの依頼内容と照らし合わせて確認します。許可された呼び出しはサンドボックスなしの完全なアクセス権で即座に実行され、拒否された呼び出しはあなたの承認を待ちます。レビューは安全でない操作を許可したり、有用な作業を拒否したりすることがあります。プラグインをオフにすると、それらのセッションは「フルアクセス」に切り替わります。', { exact: true }).waitFor()
+  await card.getByText(experimentalBundleDescription('auto-review', 'ja'), { exact: true }).waitFor()
   const expected = fileURLToPath(new URL('./expected/japanese-plugin-metadata/card.expected.md', import.meta.url))
   await compareOrRefreshGolden(expected,
     await captureStableAria(page, '[data-plugin-panel] li:has(button[aria-label="自動認可レビューを表示"])', scaffold.workspaceCwd), webSnapshotMode())

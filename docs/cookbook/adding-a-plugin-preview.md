@@ -21,7 +21,7 @@ Show one concrete result or recognizable capability. Omit the image when the des
 
 The SVG is self-contained: no fonts, remote resources, scripts, handlers, animation, stylesheets, `text`, or `foreignObject`. An `image` element may embed an unchanged official PNG/JPEG/WebP brand asset as a base64 data URL. Small plugin icons remain geometry-only. The page renders the SVG through `<img>`. Keep each file small; the Host refuses images above plugin-manager's `detailImageMaxBytes`, 5 MiB by default.
 
-## 3. Put it at the top of the detail document
+## 3. Make it the detail document
 
 Save the pair as `docs/preview.svg` and `docs/preview.zh.svg` in the bundle package, beside `docs/DETAIL.md` and `docs/DETAIL.zh.md`, and make the image the only line of each document:
 

@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Custom plugin indexes",
-    "description": "Adds a Discover tab to Plugins where you browse and install plugins from plugin indexes you add by URL; DSH contacts an index only after you add it. Plugins in an index come from third parties and run with your permissions, so add only indexes you trust.",
+    "description": "Adds a Discover tab to Plugins where you browse and install plugins from plugin indexes you add by URL. Plugins in an index come from third parties and run with your permissions, so add only indexes you trust; plugin details load from public npm file services or the plugin's Git repository, and icons load from the addresses in the index, so those servers see your IP address.",
     "detail": "docs/DETAIL.md"
   }
 }

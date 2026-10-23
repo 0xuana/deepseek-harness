@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Índices de complementos personalizados",
-    "description": "Añade la pestaña “Descubrir” a “Complementos”, donde puede explorar e instalar complementos de los índices de complementos que agregue por URL; DSH solo se conecta a un índice después de que usted lo agregue. Los complementos de un índice provienen de terceros y se ejecutan con sus permisos, así que agregue solo índices de confianza.",
+    "description": "Añade la pestaña “Descubrir” a “Complementos”, donde puede explorar e instalar complementos de los índices de complementos que agregue por URL. Los complementos de un índice provienen de terceros y se ejecutan con sus permisos, así que agregue solo índices de confianza; los detalles de los complementos se cargan desde servicios públicos de archivos de npm o desde el repositorio Git del complemento, y los iconos se cargan desde las direcciones del índice, por lo que esos servidores ven su dirección IP.",
     "detail": "docs/DETAIL.md"
   }
 }

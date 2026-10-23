@@ -13,11 +13,19 @@ export function eligible(bundle: BundleInfo): boolean {
     && bundle.readOnlyReason === undefined && bundle.error === undefined
 }
 
-/** The eligible plugins as the skill lists them: name, title, description and selection. */
+/** English text of a localized metadata value; the catalog keeps one description language to bound the skill result.
+ * @param text - plain or localized metadata text.
+ * @returns the English text, or undefined when absent.
+ */
+function english(text: string | { readonly en: string } | undefined): string | undefined {
+  return typeof text === 'object' ? text.en : text
+}
+
+/** The eligible plugins as the skill lists them: name, localized title, English description and selection. */
 function catalogOf(bundles: readonly BundleInfo[]): string {
   return JSON.stringify(bundles.filter(eligible).map(bundle => ({
     name: bundle.name, title: bundle.meta?.title ?? bundle.name,
-    description: bundle.meta?.description ?? bundle.description ?? '', enabled: bundle.enabled,
+    description: english(bundle.meta?.description) ?? bundle.description ?? '', enabled: bundle.enabled,
   })))
 }
 
