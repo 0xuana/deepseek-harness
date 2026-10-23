@@ -15,7 +15,7 @@ import type { ConvViewProps } from '@deepseek-ai/dsh-client-ui-conversation/clie
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
   PerfCall, PerfCompactionMetrics, PerfEventKind, PerfEventMetrics, PerfSnapshot, PerfStepMetrics,
-  PerfToolCount, PerfTurnMetrics,
+  LoadOlderResult, PerfToolCount, PerfTurnMetrics,
 } from './perf-contract.ts'
 import {
   DASH, barShare, formatChars, formatClock, formatDateTime, formatDateTimeShort, formatDateTimeMs, formatMs,
@@ -100,9 +100,11 @@ export interface PerfViewInjected {
   }
   /**
    * Load one older history page into the published window.
-   * @returns false when the snapshot produced no new page.
+   * @returns whether the page grew, exhausted history, or must be retried.
    */
-  loadOlder: () => Promise<boolean>
+  loadOlder: () => Promise<LoadOlderResult>
+  /** Cancel a pending open-window wait when this view unmounts. */
+  cancel: () => void
   /**
    * Resolve one durable prompt image through the shared Conversation image cache.
    * @param attachment - image reference the user message recorded.
@@ -1917,7 +1919,7 @@ interface PendingPrepend {
  * @returns the scrolling table, its empty state, and the expand/collapse footer.
  */
 export function PerfView(props: PerfViewProps): ReactElement {
-  const { usePerf, t, loadOlder, loadImage, useProjection } = props
+  const { usePerf, t, loadOlder, loadImage, useProjection, cancel } = props
   const snapshot = usePerf(value => value)
   const [view, setView] = useState<ViewState>(createViewState)
   const [now, setNow] = useState(() => Date.now())
@@ -1944,6 +1946,7 @@ export function PerfView(props: PerfViewProps): ReactElement {
     const timer = setInterval(() => { setNow(Date.now()) }, 1000)
     return () => { clearInterval(timer) }
   }, [hasRunning])
+  useEffect(() => () => { cancel() }, [cancel])
   // Turns compare only with the other turns in the window.
   const projectionStats = useProjection('sessionStats')
   const projectionUsage = useProjection('tokenUsage')
@@ -2006,9 +2009,9 @@ export function PerfView(props: PerfViewProps): ReactElement {
       top: element.scrollTop,
       firstTurn,
     }
-    let grew: boolean
+    let result: LoadOlderResult
     try {
-      grew = await loadOlder()
+      result = await loadOlder()
     } catch {
       // Surface the failed page instead of looking like a silent no-op.
       loadingRef.current = false
@@ -2016,11 +2019,15 @@ export function PerfView(props: PerfViewProps): ReactElement {
       setLoadFailed(true)
       return
     }
-    if (grew) {
+    if (result === 'grew') {
       pendingPrepend.current = before
-    } else {
+    } else if (result === 'exhausted') {
       pendingPrepend.current = null
       setExhausted(true)
+    } else {
+      // Another view owns the in-flight page, or this page added no perf row.
+      // Keep the trigger retryable without claiming exhaustion.
+      pendingPrepend.current = null
     }
     loadingRef.current = false
     setLoading(false)

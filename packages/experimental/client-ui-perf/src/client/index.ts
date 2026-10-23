@@ -17,7 +17,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 // Type-only: the standard Session props the slot component receives.
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import { de, en, es, fr, ja, NS, pt, ru, zh } from './locales.ts'
-import type { PerfSnapshot } from './perf-contract.ts'
+import type { LoadOlderResult, PerfSnapshot } from './perf-contract.ts'
 import { registerPerfDefinitions } from './perf-definition.ts'
 import { EMPTY_PERF_SNAPSHOT, registerPerfConversationView } from './perf-snapshot-builder.ts'
 import { PerfView, type PerfViewInjected } from './PerfView.tsx'
@@ -29,23 +29,25 @@ export type { PerfCall, PerfSnapshot, PerfStepMetrics, PerfTurnMetrics } from '.
 export const inject = ['slots', 'sessions', 'uiConversation', 'locale']
 
 
-/** Resolve once the Session window has opened (or failed); paging before that is a no-op. */
-async function whenOpened(session: SessionFace): Promise<void> {
+/** Resolve once the Session window has opened or failed, or the caller cancels. */
+async function whenOpened(session: SessionFace, signal: AbortSignal): Promise<void> {
   const settled = (): boolean => {
     const state = session.getSnapshot().openState
     return state === 'open' || state === 'error'
   }
-  if (settled()) return
+  if (settled() || signal.aborted) return
   await new Promise<void>((resolve) => {
-    const stop = session.subscribe(() => {
-      if (!settled()) return
-      stop()
-      resolve()
-    })
-    if (settled()) {
-      stop()
+    const subscription: { cleanup?: () => void } = {}
+    const stop = (): void => {
+      signal.removeEventListener('abort', stop)
+      subscription.cleanup?.()
       resolve()
     }
+    subscription.cleanup = session.subscribe(() => {
+      if (settled()) stop()
+    })
+    signal.addEventListener('abort', stop, { once: true })
+    if (settled() || signal.aborted) stop()
   })
 }
 
@@ -61,6 +63,9 @@ const HOOK = 'perf'
 export function apply(ctx: Context): void {
   // Per-plugin-instance source cache; unloading the plugin drops the map with it.
   const sources = new WeakMap<SessionBinding, ObservableSnapshot<PerfSnapshot>>()
+  // One page request per Session binding; Chat/Trajectory may still own the
+  // Session's in-flight page, which loadOlder observes through loadingOlder.
+  const pages = new WeakMap<SessionBinding, Promise<LoadOlderResult>>()
   ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, de, es, fr, pt, ru }), 'client-ui-perf: dictionaries')
   // Registration-time text (the tab label) reads through the bound translate as
   // a thunk, so it follows the active locale without re-registration.
@@ -80,6 +85,7 @@ export function apply(ctx: Context): void {
         throw new Error(`client-ui-perf: session "${sessionId}" is unavailable`)
       }
       const target = ctx.uiConversation.binding(sessionId).target('perf')
+      const lifecycle = new AbortController()
       let perf = sources.get(binding)
       if (perf === undefined) {
         perf = {
@@ -90,22 +96,33 @@ export function apply(ctx: Context): void {
       }
       return {
         hooks: { [HOOK]: perf },
-        loadOlder: async () => {
-          const before = perf.getSnapshot()
-          // A view can mount before the Session finishes opening; loadOlder is a
-          // no-op then and would look like exhausted history.
-          await whenOpened(session)
-          await session.loadOlder()
-          // A concurrent view (Chat/Trajectory) may own the in-flight page and
-          // this call then returns without progress. Only a Session that has no
-          // older history left may hide the trigger; otherwise keep it retryable.
-          const grew = perf.getSnapshot() !== before
-          if (grew) return true
-          const snapshot = session.getSnapshot()
-          if (snapshot.hasMore) {
-            throw new Error('client-ui-perf: history page did not advance')
-          }
-          return false
+        cancel: () => { lifecycle.abort() },
+        loadOlder: (): Promise<LoadOlderResult> => {
+          const pending = pages.get(binding)
+          if (pending !== undefined) return pending
+          const task = (async (): Promise<LoadOlderResult> => {
+            const before = perf.getSnapshot()
+            let changed = false
+            const stop = perf.subscribe(() => { changed = true })
+            try {
+              // A view can mount before the Session finishes opening; paging before
+              // that is a no-op, so wait for open unless the view is gone.
+              await whenOpened(session, lifecycle.signal)
+              if (lifecycle.signal.aborted) return 'retry'
+              if (session.getSnapshot().loadingOlder) return 'retry'
+              await session.loadOlder()
+              if (changed || perf.getSnapshot() !== before) return 'grew'
+              const after = session.getSnapshot()
+              // A page can grow the Session window without adding a perf node. Only
+              // an exhausted Session may hide the trigger; otherwise keep it retryable.
+              return after.hasMore ? 'retry' : 'exhausted'
+            } finally {
+              stop()
+            }
+          })()
+          const promise = task.finally(() => { pages.delete(binding) })
+          pages.set(binding, promise)
+          return promise
         },
         // The shared Conversation cache reads the durable bytes once per Session
         // and owns the resulting browser URL until its binding is released.

@@ -5,6 +5,9 @@ import type {
   ConversationLocation, ConversationViewNode,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 
+/** Outcome of one older-history request. */
+export type LoadOlderResult = 'grew' | 'exhausted' | 'retry'
+
 /** Token usage counts one assistant message reported. */
 export interface PerfUsage {
   readonly inputTokens?: number

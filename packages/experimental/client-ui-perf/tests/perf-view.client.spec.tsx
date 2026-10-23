@@ -25,6 +25,7 @@ import {
 import type {
   PerfCall, PerfCompactionMetrics, PerfEventMetrics, PerfSnapshot, PerfStepMetrics, PerfToolCount,
   PerfTurnMetrics,
+  LoadOlderResult,
 } from '../src/client/perf-contract.ts'
 
 const t = makeTranslate(zh)
@@ -214,7 +215,7 @@ function callSnapshot(
 }
 
 /** Loader contract the view receives from the inject face. */
-type LoadOlder = () => Promise<boolean>
+type LoadOlder = () => Promise<LoadOlderResult>
 
 /** One durable prompt image reference. */
 function imageRef(id = 'sha256:image'): ImageAttachmentRef {
@@ -230,14 +231,15 @@ function imageRef(id = 'sha256:image'): ImageAttachmentRef {
 /** Render the view with every prop it consumes. */
 function mount(
   snapshot: PerfSnapshot,
-  loadOlder: LoadOlder = async () => false,
+  loadOlder: LoadOlder = async () => 'exhausted',
   loadImage: (attachment: ImageAttachmentRef) => Promise<string> = async () => 'blob:image',
   useProjection?: (key: string) => unknown,
+  cancel: () => void = () => {},
 ): ReturnType<typeof createSnapshotStore<PerfSnapshot>> {
   const store = createSnapshotStore<PerfSnapshot>(snapshot)
   const usePerf = bindSnapshotSelector(store)
   const projection = useProjection ?? (() => undefined)
-  render(createElement(PerfView, { usePerf, t, loadOlder, loadImage, useProjection: projection } as never))
+  render(createElement(PerfView, { usePerf, t, loadOlder, loadImage, useProjection: projection, cancel } as never))
   return store
 }
 
@@ -407,14 +409,14 @@ describe('older history', () => {
 
   it('prefetches one older page on the first content commit in a real scrollport', async () => {
     vi.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(800)
-    const loadOlder = vi.fn(async () => true)
+    const loadOlder = vi.fn(async (): Promise<LoadOlderResult> => 'grew')
     mount(twoTurns(), loadOlder)
     await act(async () => {})
     expect(loadOlder).toHaveBeenCalledTimes(1)
   })
 
   it('loads near the top, reports the load, and stops after an exhausted page', async () => {
-    const gate = deferred<boolean>()
+    const gate = deferred<LoadOlderResult>()
     const loadOlder = vi.fn(() => gate.promise)
     mount(twoTurns(), loadOlder)
     const scroller = scrollRegion()
@@ -429,7 +431,7 @@ describe('older history', () => {
     fireEvent.scroll(scroller)
     expect(loadOlder).toHaveBeenCalledTimes(1)
 
-    await act(async () => { gate.resolve(false) })
+    await act(async () => { gate.resolve('exhausted') })
     expect(screen.getByText(say('loadOlder.done'))).toBeTruthy()
     expect(screen.queryByRole('status')).toBeNull()
 
@@ -439,9 +441,9 @@ describe('older history', () => {
 
   it('loads from the visible button and stops once a page reports no progress', async () => {
     let pages = 0
-    const loadOlder = vi.fn(async () => {
+    const loadOlder = vi.fn(async (): Promise<LoadOlderResult> => {
       pages += 1
-      return pages === 1
+      return pages === 1 ? 'grew' : 'exhausted'
     })
     mount(twoTurns(), loadOlder)
 
@@ -463,13 +465,13 @@ describe('older history', () => {
   })
 
   it('ignores a scroll away from the top and keeps an empty snapshot quiet', () => {
-    const emptyLoad = vi.fn(async () => true)
+    const emptyLoad = vi.fn(async (): Promise<LoadOlderResult> => 'grew')
     mount({ turns: [], stepCount: 0 }, emptyLoad)
     fireEvent.scroll(scrollRegion())
     expect(emptyLoad).not.toHaveBeenCalled()
 
     cleanup()
-    const loadOlder = vi.fn(async () => true)
+    const loadOlder = vi.fn(async (): Promise<LoadOlderResult> => 'grew')
     mount(twoTurns(), loadOlder)
     const scroller = scrollRegion()
     const metrics = scrollDouble(scroller, 1_000, 200)
@@ -480,8 +482,21 @@ describe('older history', () => {
     expect(loadOlder).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps the trigger retryable when the Session reports a busy page', async () => {
+    const loadOlder = vi.fn(async () => 'retry' as const)
+    mount(twoTurns(), loadOlder)
+    const scroller = scrollRegion()
+    scrollDouble(scroller, 1_000, 0)
+    await act(async () => { fireEvent.scroll(scroller) })
+    expect(loadOlder).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText(say('loadOlder.done'))).toBeNull()
+    expect(screen.getByRole('button', { name: say('loadOlder') })).toBeTruthy()
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: say('loadOlder') })) })
+    expect(loadOlder).toHaveBeenCalledTimes(2)
+  })
+
   it('keeps the trigger available after a rejected page', async () => {
-    const loadOlder = vi.fn(async () => {
+    const loadOlder = vi.fn(async (): Promise<LoadOlderResult> => {
       throw new Error('history unavailable')
     })
     mount(twoTurns(), loadOlder)
@@ -502,7 +517,7 @@ describe('older history', () => {
   })
 
   it('restores the reading position when older turns prepend above the viewport', async () => {
-    const gate = deferred<boolean>()
+    const gate = deferred<LoadOlderResult>()
     const loadOlder = vi.fn(() => gate.promise)
     const store = mount({ turns: [turn({ turn: 2 }), turn({ turn: 3 })], stepCount: 2 }, loadOlder)
     const scroller = scrollRegion()
@@ -518,7 +533,7 @@ describe('older history', () => {
       })
     })
     metrics.height = 1_500
-    await act(async () => { gate.resolve(true) })
+    await act(async () => { gate.resolve('grew') })
     expect(metrics.top).toBe(500)
   })
 
@@ -1927,7 +1942,7 @@ describe('prompt images', () => {
     mount(turnSnapshot([step()], {
       prompt: 'compare',
       promptImages: [{ ...imageRef('sha256:a'), name: 'left.png' }, imageRef('sha256:b')],
-    }), async () => false, loadImage)
+    }), async () => 'exhausted', loadImage)
 
     expect(imagePill(2)).toBeTruthy()
     expect(cellsOf(rowWithPrefix(say('turn.label', { turn: 1 })))[1]?.textContent)
@@ -1958,7 +1973,7 @@ describe('prompt images', () => {
   it('loads the first image from the pill, reports progress, and closes the lightbox', async () => {
     const gate = deferred<string>()
     const loadImage = vi.fn(() => gate.promise)
-    mount(turnSnapshot([step()], { prompt: null, promptImages: [imageRef()] }), async () => false, loadImage)
+    mount(turnSnapshot([step()], { prompt: null, promptImages: [imageRef()] }), async () => 'exhausted', loadImage)
 
     imagePill(1).focus()
     fireEvent.click(imagePill(1))
@@ -1981,7 +1996,7 @@ describe('prompt images', () => {
     const loadImage = vi.fn()
       .mockRejectedValueOnce(new Error('unreadable attachment'))
       .mockResolvedValueOnce('blob:later')
-    mount(turnSnapshot([], { prompt: 'see', promptImages: [imageRef()] }), async () => false, loadImage)
+    mount(turnSnapshot([], { prompt: 'see', promptImages: [imageRef()] }), async () => 'exhausted', loadImage)
 
     fireEvent.click(imagePill(1))
     await act(async () => {})
@@ -2002,7 +2017,7 @@ describe('prompt images', () => {
     const loadImage = vi.fn()
       .mockRejectedValueOnce(new Error('unreadable attachment'))
       .mockResolvedValueOnce('blob:recovered')
-    mount(turnSnapshot([], { prompt: '', promptImages: [imageRef()] }), async () => false, loadImage)
+    mount(turnSnapshot([], { prompt: '', promptImages: [imageRef()] }), async () => 'exhausted', loadImage)
 
     hoverPill(imagePill(1))
     await act(async () => {})
@@ -2060,7 +2075,7 @@ describe('prompt images', () => {
     mount(turnSnapshot([], {
       prompt: 'closing',
       promptImages: [imageRef('sha256:a'), imageRef('sha256:b')],
-    }), async () => false, loadImage)
+    }), async () => 'exhausted', loadImage)
     hoverPill(imagePill(2))
     await act(async () => {})
     expect(loadImage).toHaveBeenCalledTimes(2)

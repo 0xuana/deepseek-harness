@@ -135,6 +135,7 @@ interface PluginBench {
   readonly setOpenState: (state: 'cold' | 'open' | 'error') => void
   readonly settleOnNextSubscribe: () => void
   readonly setHasMore: (value: boolean) => void
+  readonly setLoadingOlder: (value: boolean) => void
   readonly entries: () => readonly StoredEntry[]
   readonly setSnapshot: (next: PerfSnapshot | undefined) => void
   readonly notify: () => void
@@ -163,12 +164,13 @@ async function mountPlugin(): Promise<PluginBench> {
   const imageUrl = vi.fn(async () => 'blob:image')
   let openState: 'cold' | 'open' | 'error' = 'open'
   let hasMore = false
+  let loadingOlder = false
   let openListener: (() => void) | undefined
   let settleOnSubscribe = false
   const sessionBinding = {
     session: {
       loadOlder,
-      getSnapshot: () => ({ openState, hasMore }),
+      getSnapshot: () => ({ openState, hasMore, loadingOlder }),
       subscribe: (next: () => void) => {
         openListener = next
         if (settleOnSubscribe) {
@@ -219,6 +221,7 @@ async function mountPlugin(): Promise<PluginBench> {
     },
     settleOnNextSubscribe: () => { settleOnSubscribe = true },
     setHasMore: (value: boolean) => { hasMore = value },
+    setLoadingOlder: (value: boolean) => { loadingOlder = value },
     entries: () => ctx.slots.entries('conversation.view'),
     setSnapshot: (next) => { snapshot = next },
     notify: () => { listener?.() },
@@ -411,11 +414,11 @@ describe('browser plugin registration', () => {
     const injected = injectEntry!(SID)
     bench.setOpenState('cold')
     bench.settleOnNextSubscribe()
-    expect(await injected.loadOlder()).toBe(false)
+    expect(await injected.loadOlder()).toBe('exhausted')
     expect(bench.loadOlder).toHaveBeenCalledTimes(1)
     // A no-progress page with older history left is surfaced, not hidden as exhausted.
     bench.setHasMore(true)
-    await expect(injected.loadOlder()).rejects.toThrow(/did not advance/)
+    expect(await injected.loadOlder()).toBe('retry')
     await bench.fiber.dispose()
   })
 
@@ -438,7 +441,46 @@ describe('browser plugin registration', () => {
     expect(bench.loadOlder).toHaveBeenCalledTimes(1)
     // A failed open also settles instead of leaving the view waiting forever.
     bench.setOpenState('error')
-    expect(await injected.loadOlder()).toBe(false)
+    expect(await injected.loadOlder()).toBe('exhausted')
+    await bench.fiber.dispose()
+  })
+
+  it('single-flights older pages and keeps a busy or no-progress page retryable', async () => {
+    const bench = await mountPlugin()
+    const injectEntry = bench.entries()[0]!.inject as ((sessionId: SessionId) => PerfViewInjected) | undefined
+    const injected = injectEntry!(SID)
+    bench.setHasMore(true)
+    const gate = Promise.withResolvers<undefined>()
+    bench.loadOlder.mockImplementationOnce(() => gate.promise)
+    const first = injected.loadOlder()
+    const second = injected.loadOlder()
+    expect(second).toBe(first)
+    await Promise.resolve()
+    expect(bench.loadOlder).toHaveBeenCalledTimes(1)
+    gate.resolve(undefined)
+    expect(await first).toBe('retry')
+    expect(bench.loadOlder).toHaveBeenCalledTimes(1)
+
+    // Chat/Trajectory may own the next page; do not start a second request or
+    // claim exhaustion while the Session reports that page in flight.
+    bench.setLoadingOlder(true)
+    expect(await injected.loadOlder()).toBe('retry')
+    expect(bench.loadOlder).toHaveBeenCalledTimes(1)
+    bench.setLoadingOlder(false)
+    expect(await injected.loadOlder()).toBe('retry')
+    expect(bench.loadOlder).toHaveBeenCalledTimes(2)
+    await bench.fiber.dispose()
+  })
+
+  it('cancels a pending open-window wait without asking for a page', async () => {
+    const bench = await mountPlugin()
+    const injectEntry = bench.entries()[0]!.inject as ((sessionId: SessionId) => PerfViewInjected) | undefined
+    const injected = injectEntry!(SID)
+    bench.setOpenState('cold')
+    const page = injected.loadOlder()
+    injected.cancel()
+    expect(await page).toBe('retry')
+    expect(bench.loadOlder).not.toHaveBeenCalled()
     await bench.fiber.dispose()
   })
 
@@ -469,15 +511,16 @@ describe('browser plugin registration', () => {
     // A page that grew the published snapshot reports progress.
     bench.loadOlder.mockImplementationOnce(() => {
       bench.setSnapshot({ turns: [], stepCount: 0 })
+      bench.notify()
     })
-    expect(await injected.loadOlder()).toBe(true)
+    expect(await injected.loadOlder()).toBe('grew')
     expect(bench.loadOlder).toHaveBeenCalledTimes(1)
     // A page that leaves the snapshot unchanged and has no history left is exhausted.
-    expect(await injected.loadOlder()).toBe(false)
+    expect(await injected.loadOlder()).toBe('exhausted')
     expect(bench.loadOlder).toHaveBeenCalledTimes(2)
     // A no-progress page with older history left is surfaced, not hidden as exhausted.
     bench.setHasMore(true)
-    await expect(injected.loadOlder()).rejects.toThrow(/did not advance/)
+    expect(await injected.loadOlder()).toBe('retry')
     // The source is cached per Session binding; a second injection reuses it.
     expect(injectEntry!(SID).hooks.perf).toBe(injected.hooks.perf)
     expect(() => injectEntry!('perf-missing' as SessionId)).toThrow(/unavailable/)
