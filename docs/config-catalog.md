@@ -33,6 +33,21 @@ export interface AcpConfig {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-acp -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-action-cards -->
+<a id="deepseek-aidsh-action-cards"></a>
+
+## `@deepseek-ai/dsh-action-cards`
+
+- `inject`: `tools` · `agents` · `sessionProjections` · `remoteAccess`
+- `refs`: `z` (`zod`)
+- `source`: [`packages/experimental/action-cards/src/index.ts:23`](../packages/experimental/action-cards/src/index.ts)
+
+```ts config-catalog
+/** Validated card limits after schema defaults. */
+export type Config = z.infer<typeof Config>
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-action-cards -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-agent-default-model -->
 <a id="deepseek-aidsh-agent-default-model"></a>
 
@@ -4691,6 +4706,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-client-locale` | — | [`packages/client/locale/src/index.ts`](../packages/client/locale/src/index.ts) |
 | `@deepseek-ai/dsh-client-modules` | `loader` | [`packages/client/modules/src/index.ts`](../packages/client/modules/src/index.ts) |
 | `@deepseek-ai/dsh-client-resources` | — | [`packages/client/resources/src/index.ts`](../packages/client/resources/src/index.ts) |
+| `@deepseek-ai/dsh-client-ui-action-cards` | — | [`packages/experimental/client-ui-action-cards/src/index.ts`](../packages/experimental/client-ui-action-cards/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-agent-preset` | — | [`packages/client/ui-agent-preset/src/index.ts`](../packages/client/ui-agent-preset/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-approval` | — | [`packages/client/ui-approval/src/index.ts`](../packages/client/ui-approval/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-attachment` | — | [`packages/client/ui-attachment/src/index.ts`](../packages/client/ui-attachment/src/index.ts) |
@@ -4699,6 +4715,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-client-ui-commands` | — | [`packages/client/ui-commands/src/index.ts`](../packages/client/ui-commands/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-conversation` | — | [`packages/client/ui-conversation/src/index.ts`](../packages/client/ui-conversation/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-cordis` | — | [`packages/extensions/ui-cordis/src/index.ts`](../packages/extensions/ui-cordis/src/index.ts) |
+| `@deepseek-ai/dsh-client-ui-creation-recommendations` | — | [`packages/experimental/client-ui-creation-recommendations/src/index.ts`](../packages/experimental/client-ui-creation-recommendations/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-deliverables` | `connection` · `sessionQuery` · `sessionController` · `workspaceFiles` · `fs` · `sandboxPolicy` · `workspaceChanges` | [`packages/client/ui-deliverables/src/index.ts`](../packages/client/ui-deliverables/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-directory-picker-browse` | — | [`packages/client/ui-directory-picker-browse/src/index.ts`](../packages/client/ui-directory-picker-browse/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-directory-picker-native` | — | [`packages/client/ui-directory-picker-native/src/index.ts`](../packages/client/ui-directory-picker-native/src/index.ts) |
@@ -4714,6 +4731,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-client-ui-permission-presets` | — | [`packages/client/ui-permission-presets/src/index.ts`](../packages/client/ui-permission-presets/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-plan` | — | [`packages/client/ui-plan/src/index.ts`](../packages/client/ui-plan/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-plugin-market` | — | [`packages/client/ui-plugin-market/src/index.ts`](../packages/client/ui-plugin-market/src/index.ts) |
+| `@deepseek-ai/dsh-client-ui-plugin-recommendations` | — | [`packages/experimental/client-ui-plugin-recommendations/src/index.ts`](../packages/experimental/client-ui-plugin-recommendations/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-reference` | — | [`packages/client/ui-reference/src/index.ts`](../packages/client/ui-reference/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-renderer` | — | [`packages/client/ui-renderer/src/index.ts`](../packages/client/ui-renderer/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-schedule` | — | [`packages/client/ui-schedule/src/index.ts`](../packages/client/ui-schedule/src/index.ts) |
@@ -4749,6 +4767,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-computer-use` | — | [`packages/computer-use/computer-use/src/index.ts`](../packages/computer-use/computer-use/src/index.ts) |
 | `@deepseek-ai/dsh-config-editor` | `loader` · `profileContext` | [`packages/boot/config-editor/src/index.ts`](../packages/boot/config-editor/src/index.ts) |
 | `@deepseek-ai/dsh-cordis-client-runner` | — | [`packages/extensions/cordis-client-runner/src/index.ts`](../packages/extensions/cordis-client-runner/src/index.ts) |
+| `@deepseek-ai/dsh-creation-recommendations` | `tools` · `pluginManager` · `agents` · `subagents` · `profileContext` · `skills` · `actionCards` | [`packages/experimental/creation-recommendations/src/index.ts`](../packages/experimental/creation-recommendations/src/index.ts) |
 | `@deepseek-ai/dsh-cua` | — | [`packages/experimental/cua/src/index.ts`](../packages/experimental/cua/src/index.ts) |
 | `@deepseek-ai/dsh-deepseek-llm-api-extensions` | — | [`packages/llm/deepseek-llm-api-extensions/src/index.ts`](../packages/llm/deepseek-llm-api-extensions/src/index.ts) |
 | `@deepseek-ai/dsh-deliverable-file-references` | `systemPrompt` | [`packages/deliverables/deliverable-file-references/src/index.ts`](../packages/deliverables/deliverable-file-references/src/index.ts) |
@@ -4771,6 +4790,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-mcp-resources` | `tools` | [`packages/mcp/mcp-resources/src/index.ts`](../packages/mcp/mcp-resources/src/index.ts) |
 | `@deepseek-ai/dsh-message-quotes` | — | [`packages/session/message-quotes/src/index.ts`](../packages/session/message-quotes/src/index.ts) |
 | `@deepseek-ai/dsh-otel` | — | [`packages/telemetry/otel/src/index.ts`](../packages/telemetry/otel/src/index.ts) |
+| `@deepseek-ai/dsh-plugin-recommendations` | `pluginManager` · `agents` · `skills` · `actionCards` | [`packages/experimental/plugin-recommendations/src/index.ts`](../packages/experimental/plugin-recommendations/src/index.ts) |
 | `@deepseek-ai/dsh-sandbox-ssh` | `ssh` | [`packages/ssh/sandbox-ssh/src/index.ts`](../packages/ssh/sandbox-ssh/src/index.ts) |
 | `@deepseek-ai/dsh-session` | — | [`packages/core/session/src/index.ts`](../packages/core/session/src/index.ts) |
 | `@deepseek-ai/dsh-session-checkpoint-policy` | `llm` · `sessionPersistence` · `sessions` · `tools` | [`packages/session/session-checkpoint-policy/src/index.ts`](../packages/session/session-checkpoint-policy/src/index.ts) |
@@ -4865,7 +4885,7 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 | `@deepseek-ai/dsh-llm-mock-server` | — | [`packages/test-support/llm-mock-server/src/index.ts`](../packages/test-support/llm-mock-server/src/index.ts) |
 | `@deepseek-ai/dsh-loader-smoke` | — | [`packages/test-support/loader-smoke/src/index.ts`](../packages/test-support/loader-smoke/src/index.ts) |
 | `@deepseek-ai/dsh-native-command` | — | [`packages/util/native-command/src/index.ts`](../packages/util/native-command/src/index.ts) |
-| `@deepseek-ai/dsh-official-bundles` | — | [`packages/boot/official-bundles/src/index.ts`](../packages/boot/official-bundles/src/index.ts) |
+| `@deepseek-ai/dsh-official-bundles` | — | [`packages/util/official-bundles/src/index.ts`](../packages/util/official-bundles/src/index.ts) |
 | `@deepseek-ai/dsh-output-retention` | — | [`packages/util/output-retention/src/index.ts`](../packages/util/output-retention/src/index.ts) |
 | `@deepseek-ai/dsh-package-manifest` | — | [`packages/util/package-manifest/src/index.ts`](../packages/util/package-manifest/src/index.ts) |
 | `@deepseek-ai/dsh-plugin-detail` | — | [`packages/util/plugin-detail/src/index.ts`](../packages/util/plugin-detail/src/index.ts) |
