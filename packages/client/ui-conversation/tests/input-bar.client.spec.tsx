@@ -1638,7 +1638,7 @@ describe('running and lock semantics', () => {
         fireEvent.keyDown(textarea, { key: 'Enter' })
       }
       await act(async () => {})
-      expect(sink).toHaveBeenLastCalledWith(`send by ${gesture}`, [], 'queue', expect.any(AbortSignal))
+      expect(sink).toHaveBeenLastCalledWith(`send by ${gesture}`, [], 'queue', expect.any(AbortSignal), expect.any(Function))
       expect(shell.snapshot.draft).toBe('')
       expect(document.activeElement === textarea).toBe(automatic)
     }
