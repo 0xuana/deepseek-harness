@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Traduction automatique du raisonnement",
-    "description": "Traduction automatique d'un raisonnement élargi ; le texte source est envoyé au service sélectionné.",
+    "description": "Traduit les lignes « Pensez » développées dans la langue de votre interface pendant que l'agent les écrit, et « Voir l'original » permet de revenir au texte d'origine ; choisissez le service de traduction et la langue cible sur cette page. Le raisonnement, qui peut inclure votre code et votre conversation, est envoyé au service sélectionné.",
     "detail": "docs/DETAIL.md"
   }
 }

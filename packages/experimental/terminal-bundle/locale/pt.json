@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Terminais persistentes",
-    "description": "Mantenha os processos shell ativos durante as chamadas de ferramentas.",
+    "description": "Fornece ao agente terminais cujos processos continuam em execução em segundo plano e cujo diretório, variáveis e funções de shell são mantidos entre chamadas de ferramentas, para que ele possa iniciar um servidor de desenvolvimento ou um REPL e voltar depois para ler a saída ou digitar entradas. Os terminais param quando o DSH é reiniciado ou este plug-in é desativado.",
     "detail": "docs/DETAIL.md"
   }
 }

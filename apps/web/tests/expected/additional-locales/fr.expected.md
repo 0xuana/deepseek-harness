@@ -1,5 +1,5 @@
 - listitem:
   - button "Voir Examen des autorisations automatiques": Examen des autorisations automatiques
-  - text: Expérimental Ajoutez un mode d'autorisation Auto review qui utilise le modèle pour évaluer l'autorisation avant chaque appel d'outil.
+  - text: "Expérimental Ajoute le mode d'accès « Auto review » : avant chaque appel d'outil, une requête au modèle vérifie l'appel par rapport à ce que vous avez demandé ; les appels autorisés s'exécutent immédiatement avec un accès complet et sans bac à sable, et les appels refusés attendent votre approbation. La vérification peut autoriser une action dangereuse ou refuser un travail utile."
   - status
   - switch "Activer Examen des autorisations automatiques"

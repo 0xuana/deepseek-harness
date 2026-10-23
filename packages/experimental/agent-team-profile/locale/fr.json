@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Équipes d'agents",
-    "description": "Activez la collaboration en équipe, les outils d’équipe, la liste des membres et le tableau des tâches partagé.",
+    "description": "Permet à l'agent avec lequel vous parlez de répartir un travail entre des coéquipiers nommés : il place le travail sur un tableau de tâches partagé, attend leurs résultats et vous rend compte ; cliquez sur « Équipe d'agents » à côté du titre de la conversation pour voir les membres et les tâches. Chaque coéquipier envoie ses propres requêtes au modèle ; une équipe consomme donc plus de jetons qu'un seul agent.",
     "detail": "docs/DETAIL.md"
   }
 }

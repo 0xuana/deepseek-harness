@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Agent teams",
-    "description": "Enable team collaboration, team tools, the member roster, and the shared task board.",
+    "description": "Lets the agent you talk to split a job among named teammates: it puts the work on a shared task board, waits for their results, and reports back; click Agent team next to the conversation title to see the members and tasks. Each teammate makes its own model requests, so a team uses more tokens than one agent.",
     "detail": "docs/DETAIL.md"
   }
 }

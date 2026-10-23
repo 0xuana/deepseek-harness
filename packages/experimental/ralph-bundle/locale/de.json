@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Ralph-Loops",
-    "description": "Führen Sie explizit angeforderte wiederholte Arbeiten mit neuen Agenten durch.",
+    "description": "Bitten Sie um eine Ralph-Schleife mit einem Ziel, das sich anhand der Dateien prüfen lässt, und der Agent startet Runde um Runde einen neuen Agenten darauf, bis eine Runde das Ziel als erreicht oder ein Hindernis meldet oder das Rundenlimit erreicht ist. Jede Runde sieht nur das Ziel, die Dateien und den Bericht der letzten Runde und ist ein vollständiger Agentenlauf, daher steigen die Kosten mit jeder Runde.",
     "detail": "docs/DETAIL.md"
   }
 }

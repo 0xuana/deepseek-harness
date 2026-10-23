@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Agententeams",
-    "description": "Aktivieren Sie Teamzusammenarbeit, Teamtools, die Mitgliederliste und das gemeinsame Aufgabenboard.",
+    "description": "Ermöglicht dem Agenten, mit dem Sie sprechen, eine Aufgabe auf benannte Teammitglieder aufzuteilen: Er stellt die Arbeit auf ein gemeinsames Aufgabenboard, wartet auf deren Ergebnisse und berichtet Ihnen; klicken Sie neben dem Gesprächstitel auf „Agententeam“, um Mitglieder und Aufgaben zu sehen. Jedes Teammitglied stellt eigene Modellanfragen, daher verbraucht ein Team mehr Tokens als ein einzelner Agent.",
     "detail": "docs/DETAIL.md"
   }
 }

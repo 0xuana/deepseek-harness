@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Índices de plug-ins personalizados",
-    "description": "Adiciona uma guia Descobrir a Plug-ins para navegar e instalar pacotes dos índices de plug-ins que você adicionar.",
+    "description": "Adiciona a guia “Descubra” a “Plug-ins”, onde você navega e instala plug-ins de índices de plug-ins que adiciona por URL; o DSH só contata um índice depois que você o adiciona. Os plug-ins de um índice vêm de terceiros e são executados com suas permissões, então adicione apenas índices em que você confia.",
     "detail": "docs/DETAIL.md"
   }
 }

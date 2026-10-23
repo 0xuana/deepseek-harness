@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Equipos de agentes",
-    "description": "Habilite la colaboración en equipo, las herramientas del equipo, la lista de miembros y el tablero de tareas compartido.",
+    "description": "Permite que el agente con el que habla reparta un trabajo entre compañeros con nombre: coloca el trabajo en un tablero de tareas compartido, espera sus resultados y le informa; haga clic en “equipo de agentes” junto al título de la conversación para ver los miembros y las tareas. Cada compañero hace sus propias solicitudes al modelo, por lo que un equipo usa más tokens que un solo agente.",
     "detail": "docs/DETAIL.md"
   }
 }

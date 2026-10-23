@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Índices de complementos personalizados",
-    "description": "Agrega una pestaña Descubrir a Complementos para explorar e instalar paquetes desde los índices de complementos que agregue.",
+    "description": "Añade la pestaña “Descubrir” a “Complementos”, donde puede explorar e instalar complementos de los índices de complementos que agregue por URL; DSH solo se conecta a un índice después de que usted lo agregue. Los complementos de un índice provienen de terceros y se ejecutan con sus permisos, así que agregue solo índices de confianza.",
     "detail": "docs/DETAIL.md"
   }
 }

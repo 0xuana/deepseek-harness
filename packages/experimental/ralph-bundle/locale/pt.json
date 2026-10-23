@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Loops de Ralph",
-    "description": "Execute trabalhos repetidos solicitados explicitamente com novos agentes.",
+    "description": "Peça um loop Ralph com um objetivo que possa ser verificado pelos arquivos, e o agente inicia um novo agente nele rodada após rodada até que uma rodada informe que o objetivo foi atingido ou que há um bloqueio, ou que o limite de rodadas seja alcançado. Cada rodada vê apenas o objetivo, os arquivos e o relatório da rodada anterior, e é uma execução completa de agente, então o custo aumenta a cada rodada.",
     "detail": "docs/DETAIL.md"
   }
 }

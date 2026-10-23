@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Maschinelle Übersetzung der Argumentation",
-    "description": "Maschinelle Übersetzung erweiterter Argumentation; Der Quelltext wird an den ausgewählten Dienst gesendet.",
+    "description": "Übersetzt aufgeklappte „Denken Sie nach“-Zeilen in Ihre Oberflächensprache, während der Agent sie schreibt, und „Original ansehen“ wechselt zurück; Übersetzungsdienst und Zielsprache wählen Sie auf dieser Seite. Die Gedankengänge, die Ihren Code und Ihr Gespräch enthalten können, werden an den ausgewählten Dienst gesendet.",
     "detail": "docs/DETAIL.md"
   }
 }

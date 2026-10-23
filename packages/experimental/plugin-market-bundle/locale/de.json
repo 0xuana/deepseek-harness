@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Benutzerdefinierte Plugin-Indizes",
-    "description": "Fügt Plugins die Registerkarte „Entdecken“ hinzu, um Bundles aus hinzugefügten Plugin-Indizes zu durchsuchen und zu installieren.",
+    "description": "Fügt unter „Plugins“ den Tab „Entdecken“ hinzu, in dem Sie Plugins aus Plugin-Indizes durchsuchen und installieren, die Sie per URL hinzufügen; DSH kontaktiert einen Index erst, nachdem Sie ihn hinzugefügt haben. Plugins in einem Index stammen von Dritten und laufen mit Ihren Berechtigungen, fügen Sie daher nur Indizes hinzu, denen Sie vertrauen.",
     "detail": "docs/DETAIL.md"
   }
 }

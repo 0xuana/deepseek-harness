@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Session search",
-    "description": "Give agents tools to search and read earlier sessions from the current workspace.",
+    "description": "Ask about earlier work, such as “How did we fix the pool leak last week?”, and the agent searches and reads your earlier sessions from the same working directory to answer. The search tools are added to every model request, so they use some tokens even when the agent does not search.",
     "detail": "docs/DETAIL.md"
   }
 }

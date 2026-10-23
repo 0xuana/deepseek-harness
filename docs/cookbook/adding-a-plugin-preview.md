@@ -2,11 +2,11 @@
 
 English | [中文](adding-a-plugin-preview.zh.md)
 
-A feature preview is an optional illustration at the top of a bundle's detail document, the long description that its page in **Plugins** shows first. Follow this guide when drawing one for an official bundle. The detail document itself is declared through [`meta.detail`](adding-a-package.md#plugin-display-metadata).
+A feature preview is an optional illustration in a bundle's detail document, the document that its page in **Plugins** shows below the description. Follow this guide when drawing one for an official bundle. The detail document itself is declared through [`meta.detail`](adding-a-package.md#plugin-display-metadata).
 
 ## 1. Decide whether an image helps
 
-Show one concrete result or recognizable capability. Omit the image when the description is enough: no image is required. Essential instructions stay in the document's text or in configuration outside the illustration.
+Show one concrete result or recognizable capability. Omit the image when the description is enough: no image is required. Essential instructions stay in the bundle's description or in configuration outside the illustration.
 
 ## 2. Draw one fixed-size SVG
 
@@ -23,13 +23,13 @@ The SVG is self-contained: no fonts, remote resources, scripts, handlers, animat
 
 ## 3. Put it at the top of the detail document
 
-Save the pair as `docs/preview.svg` and `docs/preview.zh.svg` in the bundle package, beside `docs/DETAIL.md` and `docs/DETAIL.zh.md`, and make the image the first line of each document:
+Save the pair as `docs/preview.svg` and `docs/preview.zh.svg` in the bundle package, beside `docs/DETAIL.md` and `docs/DETAIL.zh.md`, and make the image the only line of each document:
 
 ```markdown
 ![Example feature preview](preview.svg)
 ```
 
-The Chinese document references `preview.zh.svg` with Chinese alternative text. Use the [badge skill](../../packages/experimental/badge-skill-bundle/docs/DETAIL.md) and [voice input](../../packages/experimental/voice-input-bundle/docs/DETAIL.md) documents as examples. The voice transcript is explanatory sample content, not a recording result.
+The Chinese document references `preview.zh.svg` with Chinese alternative text. Use the [badge skill](../../packages/experimental/badge-skill-bundle/docs/DETAIL.md) and [voice input](../../packages/experimental/voice-input-bundle/docs/DETAIL.md) documents as examples. The voice transcript is explanatory sample content, not a recording result. Put what the bundle does, how to use it, and its material risks in `meta.description`, which the page shows above the image.
 
 ## 4. Page behavior
 

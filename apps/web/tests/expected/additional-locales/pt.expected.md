@@ -1,5 +1,5 @@
 - listitem:
   - button "Ver Revisão de autorização automática": Revisão de autorização automática
-  - text: Experimental Adicione um modo de permissão Auto review que usa o modelo para avaliar a autorização antes de cada chamada de ferramenta.
+  - text: "Experimental Adiciona o modo de acesso “Auto review”: antes de cada chamada de ferramenta, uma solicitação ao modelo verifica a chamada em relação ao que você pediu; as chamadas permitidas são executadas imediatamente com acesso total e sem sandbox, e as negadas aguardam sua aprovação. A revisão pode permitir uma ação insegura ou negar um trabalho útil."
   - status
   - switch "Ativar Revisão de autorização automática"

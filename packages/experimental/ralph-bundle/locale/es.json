@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Bucles de Ralph",
-    "description": "Ejecute trabajos repetidos solicitados explícitamente con agentes nuevos.",
+    "description": "Pida un bucle Ralph con un objetivo que pueda comprobarse a partir de los archivos, y el agente inicia un agente nuevo sobre él ronda tras ronda hasta que una ronda informe que se cumplió el objetivo o que hay un bloqueo, o se alcance el límite de rondas. Cada ronda solo ve el objetivo, los archivos y el informe de la ronda anterior, y es una ejecución completa de un agente, por lo que el costo aumenta con cada ronda.",
     "detail": "docs/DETAIL.md"
   }
 }

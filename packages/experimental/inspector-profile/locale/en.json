@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Developer tools",
-    "description": "Inspect and debug raw session data, grouped chat messages, and the NodeJS backend.",
+    "description": "For troubleshooting: open Session log from the sidebar's New tab to see what DSH recorded for a session, and press Ctrl+Shift+. (Cmd+Shift+. on macOS) to open Chrome DevTools connected to the DSH backend. While it is on, DSH keeps the backend's network requests in memory without hiding API keys, and any program on this computer can connect to its debugging endpoint and run code inside DSH.",
     "detail": "docs/DETAIL.md"
   }
 }

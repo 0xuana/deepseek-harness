@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Auto authorization review",
-    "description": "Add an Auto review permission mode that uses the model to assess authorization before each tool call.",
+    "description": "Adds an Auto review access mode: before each tool call, a model request checks the call against what you asked for; allowed calls run at once with full access and no sandbox, and denied calls wait for your approval. The review can allow an unsafe action or deny useful work.",
     "detail": "docs/DETAIL.md"
   }
 }

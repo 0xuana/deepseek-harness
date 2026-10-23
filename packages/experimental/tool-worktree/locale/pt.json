@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Árvores de trabalho Git",
-    "description": "Deixe o agente criar uma nova ramificação e árvore de trabalho do Git e continue lá.",
+    "description": "Peça para trabalhar em um novo branch, e o agente cria um worktree do Git em .agents/worktrees/<name> e continua lá, deixando seu checkout atual e as alterações não confirmadas como estão. Apenas os arquivos confirmados são extraídos e as dependências não são instaladas; desativar o plug-in mantém os worktrees e os branches.",
     "detail": "docs/DETAIL.md"
   }
 }
