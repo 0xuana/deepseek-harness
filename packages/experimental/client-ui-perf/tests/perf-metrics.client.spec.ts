@@ -25,6 +25,8 @@ function metricsOf(overrides: Partial<PerfStepMetrics> = {}): PerfStepMetrics {
     retries: 0,
     toolErrors: 0,
     answer: null,
+    answerBody: null,
+    answerTruncated: false,
     cacheRead: null,
     cacheWrite: null,
     cacheHit: null,

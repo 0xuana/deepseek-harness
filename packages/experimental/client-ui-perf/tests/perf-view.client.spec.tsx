@@ -93,6 +93,8 @@ function step(overrides: Partial<PerfStepMetrics> = {}): PerfStepMetrics {
     retries: 0,
     toolErrors: 0,
     answer: null,
+    answerBody: null,
+    answerTruncated: false,
     cacheRead: null,
     cacheWrite: null,
     cacheHit: null,
@@ -1000,6 +1002,24 @@ describe('turn rows', () => {
     expect(step2()).toContain('+0.50K')
     expect(cellsOf(stepRow(3))[3]?.textContent).not.toContain('+0.00K')
     expect(turn2()).toContain(formatTokensDelta(-300))
+  })
+
+  it('expands the full model answer from the step detail row', () => {
+    mount(turnSnapshot([
+      step({
+        step: 1,
+        answer: 'short preview',
+        answerBody: 'short preview\nfull second paragraph',
+        answerTruncated: false,
+      }),
+      step({ step: 2, calls: [], tools: [], answer: 'capped', answerBody: 'capped'.repeat(50), answerTruncated: true }),
+    ]))
+    expect(rowWithPrefix(say('step.label', { step: 1 })).textContent).toContain(say('detail.show'))
+    fireEvent.click(stepRow(1))
+    expect(screen.getAllByText(say('detail.answer')).length).toBeGreaterThan(0)
+    expect(document.body.textContent).toContain('full second paragraph')
+    fireEvent.click(stepRow(2))
+    expect(screen.getByText(say('detail.answer.truncated'))).toBeTruthy()
   })
 
   it('scales turn bars against the turns visible on screen', () => {

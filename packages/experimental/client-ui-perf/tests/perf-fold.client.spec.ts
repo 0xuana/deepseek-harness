@@ -685,16 +685,20 @@ describe('assistant timeline and usage', () => {
       turn: 2, step: 1, message: assistantMessage([textBlock('first line\nsecond line')]), stream: [],
     }, 1_500)))
     expect(first.answer).toBe('first line\nsecond line')
+    expect(first.answerBody).toBe('first line\nsecond line')
+    expect(first.answerTruncated).toBe(false)
     // Non-text blocks do not contribute, and a text-only whitespace message contributes nothing.
     const mixed = defined(foldEvent(first, event('assistant/message', {
       turn: 2, step: 1, message: assistantMessage([imageBlock(), textBlock('   ')]), stream: [],
     }, 1_600)))
     expect(mixed.answer).toBe('first line\nsecond line')
-    const long = 'x'.repeat(450)
+    const long = 'x'.repeat(20_001)
     const capped = defined(foldEvent(undefined, event('assistant/message', {
       turn: 3, step: 1, message: assistantMessage([textBlock(long)]), stream: [],
     }, 1_700)))
     expect(capped.answer).toHaveLength(400)
+    expect(capped.answerBody).toHaveLength(16_000)
+    expect(capped.answerTruncated).toBe(true)
   })
 
   it('leaves usage unset when the first message reports none', () => {

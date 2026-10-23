@@ -1333,38 +1333,62 @@ function stepDetailRow(
     ? step.tools.reduce((sum, item) => sum + item.count, 0)
     : calls.length
   const hidden = Math.max(0, allCalls - calls.length)
+  const answerBody = step.answerBody ?? null
+  const hasCalls = calls.length > 0 || hidden > 0
   return (
     <tr key={`detail:${step.turn}:${step.step}`}>
       <td colSpan={TOTAL_COLUMNS} className={css.detailCell}>
-        <div className={css.detailHead}>
-          <span className={css.detailTitle}>{t('detail.calls', { count: allCalls })}</span>
-          {total > 0
-            ? <span className={css.blockMeta}>{` · ${t('detail.chars', { chars: formatTokens(total) })}`}</span>
-            : null}
-          <span className={css.detailActions}>
-            <button
-              type="button"
-              className={wrap ? css.chipOn : css.chip}
-              title={t('detail.wrap.title')}
-              aria-pressed={wrap}
-              onClick={() => { onControl({ wrap: !wrap }) }}
-            >
-              {t('detail.wrap')}
-            </button>
-          </span>
-        </div>
-        {calls.map(call => (
-          <CallBlock
-            key={call.callId}
-            call={call}
-            t={t}
-            wrap={wrap}
-            raw={raw[call.callId] === true}
-            onToggleRaw={() => { onControl({ raw: { ...raw, [call.callId]: raw[call.callId] !== true } }) }}
-          />
-        ))}
-        {hidden > 0
-          ? <div className={css.blockEmpty}>{t('detail.hidden', { count: hidden, limit: CALL_LIMIT })}</div>
+        {answerBody === null
+          ? null
+          : (
+            <section className={css.answerSection}>
+              <div className={css.detailHead}>
+                <span className={css.detailTitle}>{t('detail.answer')}</span>
+                <span className={css.blockMeta}>
+                  {` · ${t('detail.chars', { chars: formatTokens(answerBody.length) })}`}
+                </span>
+              </div>
+              <div className={css.answerBody}>{answerBody}</div>
+              {step.answerTruncated
+                ? <div className={css.blockEmpty}>{t('detail.answer.truncated')}</div>
+                : null}
+            </section>
+          )}
+        {hasCalls
+          ? (
+            <>
+              <div className={css.detailHead}>
+                <span className={css.detailTitle}>{t('detail.calls', { count: allCalls })}</span>
+                {total > 0
+                  ? <span className={css.blockMeta}>{` · ${t('detail.chars', { chars: formatTokens(total) })}`}</span>
+                  : null}
+                <span className={css.detailActions}>
+                  <button
+                    type="button"
+                    className={wrap ? css.chipOn : css.chip}
+                    title={t('detail.wrap.title')}
+                    aria-pressed={wrap}
+                    onClick={() => { onControl({ wrap: !wrap }) }}
+                  >
+                    {t('detail.wrap')}
+                  </button>
+                </span>
+              </div>
+              {calls.map(call => (
+                <CallBlock
+                  key={call.callId}
+                  call={call}
+                  t={t}
+                  wrap={wrap}
+                  raw={raw[call.callId] === true}
+                  onToggleRaw={() => { onControl({ raw: { ...raw, [call.callId]: raw[call.callId] !== true } }) }}
+                />
+              ))}
+              {hidden > 0
+                ? <div className={css.blockEmpty}>{t('detail.hidden', { count: hidden, limit: CALL_LIMIT })}</div>
+                : null}
+            </>
+          )
           : null}
       </td>
     </tr>
@@ -1637,7 +1661,8 @@ function stepRows(options: StepRowsOptions): ReactNode[] {
     const gap = gaps.get(step.step)
     const visibleGap = gap !== undefined && gap >= STEP_GAP_MIN_MS ? gap : undefined
     const expanded = open[step.step] === true
-    const hasDetail = step.calls.length > 0
+    const hasAnswer = step.answerBody !== null && step.answerBody !== undefined
+    const hasDetail = step.calls.length > 0 || hasAnswer
     const rowClass: (string | undefined)[] = []
     if (hasDetail) rowClass.push(css.stepRowClickable)
     if (step.toolErrors > 0) rowClass.push(css.stepRowError)

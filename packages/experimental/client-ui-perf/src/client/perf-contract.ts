@@ -81,6 +81,10 @@ export interface PerfStepState {
   readonly triggerSender: string | null
   /** Trimmed one-message answer text, for the Did column preview. */
   readonly answer: string | null
+  /** Full answer body kept for expansion, bounded by the fold budget. */
+  readonly answerBody: string | null
+  /** Whether the stored answer body lost trailing characters. */
+  readonly answerTruncated: boolean
 }
 
 /** Measured metrics of one step. */
@@ -103,8 +107,12 @@ export interface PerfStepMetrics {
   readonly toolOutput: number | null
   readonly retries: number
   readonly toolErrors: number
-  /** Trimmed answer text of the settled assistant message, or null. */
+  /** Trimmed one-line answer preview of the settled assistant message, or null. */
   readonly answer: string | null
+  /** Full answer body kept for expansion, or null. */
+  readonly answerBody: string | null
+  /** Whether the stored answer body lost trailing characters. */
+  readonly answerTruncated: boolean
   readonly cacheRead: number | null
   readonly cacheWrite: number | null
   readonly cacheHit: number | null

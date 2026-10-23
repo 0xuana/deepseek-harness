@@ -281,16 +281,26 @@ export function triggerSenderOf(message: UserMessage): string | null {
 
 /** Answer characters kept for the one-line Did preview. */
 const ANSWER_LIMIT = 400
+/** Answer characters kept for the expandable body. */
+const ANSWER_BODY_LIMIT = 16_000
 
-/** First text of one assistant message, trimmed and capped for the preview. */
-function answerOf(message: AssistantMessage): string | null {
+/** Trimmed answer text, its bounded full body, and whether the body was clipped. */
+function answerOf(message: AssistantMessage): {
+  preview: string
+  body: string
+  truncated: boolean
+} | null {
   const parts: string[] = []
   for (const block of message.content) {
     if (block.type === 'text') parts.push(block.text)
   }
   const text = parts.join('\n').trim()
   if (text === '') return null
-  return text.length > ANSWER_LIMIT ? text.slice(0, ANSWER_LIMIT) : text
+  return {
+    preview: text.length > ANSWER_LIMIT ? text.slice(0, ANSWER_LIMIT) : text,
+    body: text.length > ANSWER_BODY_LIMIT ? text.slice(0, ANSWER_BODY_LIMIT) : text,
+    truncated: text.length > ANSWER_BODY_LIMIT,
+  }
 }
 
 /**
@@ -334,6 +344,8 @@ export function newState(
     trigger: null,
     triggerSender: null,
     answer: null,
+    answerBody: null,
+    answerTruncated: false,
   }
 }
 
@@ -422,12 +434,15 @@ export function foldEvent(
         if (isNumber(fromStream)) next = { ...next, firstTokenTime: fromStream }
       }
       if (event.type === 'assistant/attempt') return next
+      const answer = answerOf(event.data.message)
       return {
         ...next,
         messageTime: next.messageTime ?? event.time,
         usage: event.data.usage ?? next.usage,
         interrupted: event.data.interrupted === true,
-        answer: answerOf(event.data.message) ?? next.answer,
+        ...answer === null
+          ? {}
+          : { answer: answer.preview, answerBody: answer.body, answerTruncated: answer.truncated },
       }
     }
 
@@ -656,6 +671,8 @@ export function stepMetrics(state: PerfStepState): PerfStepMetrics {
     retries: state.retries,
     toolErrors: state.toolErrors,
     answer: state.answer,
+    answerBody: state.answerBody,
+    answerTruncated: state.answerTruncated,
     cacheRead: cacheReadTokens(state.usage),
     cacheWrite: cacheWriteTokens(state.usage),
     cacheHit: cacheHitRate(state.usage),

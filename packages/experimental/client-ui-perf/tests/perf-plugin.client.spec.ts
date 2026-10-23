@@ -293,6 +293,8 @@ function measuredStep(turn: number, step: number, startTime: number, endTime: nu
     retries: 0,
     toolErrors: 0,
     answer: null,
+    answerBody: null,
+    answerTruncated: false,
     cacheRead: 400,
     cacheWrite: 100,
     cacheHit: 400 / 600,
