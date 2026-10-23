@@ -106,9 +106,11 @@ const REPLAY_SCENARIOS: Scenario[] = [
     env: { DSH_PERMISSION_MODE: 'never' },
     configPath: AGENT.configPath,
     workspaceParent: tmpdir(),
+    workspaceCwdTextLength: 192,
     pinsChildToolSchemas: [1],
     pinsChildSystemPrompts: [1],
     prepareWorkspace: (cwd) => {
+      expect(JSON.stringify(cwd).length).toBe(192)
       writeFileSync(join(cwd, 'seed.txt'), 'prepared at runtime')
     },
   },

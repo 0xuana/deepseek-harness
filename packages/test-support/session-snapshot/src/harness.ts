@@ -20,7 +20,7 @@ import { cp, mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { existsSync, realpathSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
-import { basename, dirname, join, delimiter } from 'node:path'
+import { basename, dirname, join, delimiter, toNamespacedPath } from 'node:path'
 import { vi } from 'vitest'
 import {
   PROTOCOL_VERSION,
@@ -212,6 +212,13 @@ export interface RunOptions {
    */
   workspaceParent?: string
   /**
+   * Exact JSON-quoted cwd length for fixtures that persist path-dependent token prices.
+   * Pads a natively resolved temporary path while retaining mkdtemp's random suffix;
+   * the generated ASCII basename is capped at 255 bytes, including the suffix.
+   * Lengths outside the resulting safe-integer range reject before padding or allocation.
+   */
+  workspaceCwdTextLength?: number
+  /**
    * Alternate live profile patch (absolute), overriding
    * {@link AgentUnderTest.configPath} for this run. Its basename still ends
    * in `cordis.yml` so the launcher can select the replay sibling.
@@ -236,6 +243,23 @@ export function snapshotSpillRoot(
   return `${root}/dsh-acp-snap-${key}`
 }
 
+/** Keep path-priced fixtures independent of the temporary root without sharing directories. */
+function workspaceTemporaryPrefix(options: RunOptions): string {
+  const parent = options.workspaceParent ?? tmpdir()
+  const length = options.workspaceCwdTextLength
+  if (length === undefined) return join(parent, 'acp-snap-cwd-')
+  // Native resolution expands Windows short names before their characters are priced.
+  const prefix = join(realpathSync.native(parent), 'acp-snap-cwd-')
+  // mkdtemp contributes six characters; runtime-context renders the JSON-quoted cwd.
+  const minimum = JSON.stringify(`${prefix}XXXXXX`).length
+  // Cap the generated ASCII component, including mkdtemp's suffix, at 255 bytes.
+  const maximum = minimum + 255 - basename(prefix).length - 6
+  if (!Number.isSafeInteger(length) || length < minimum || length > maximum) {
+    throw new Error(`snapshot-harness: workspaceCwdTextLength must be a safe integer between ${minimum} and ${maximum}`)
+  }
+  return prefix + '-'.repeat(length - minimum)
+}
+
 /**
  * Run a scenario end-to-end against a freshly-spawned subprocess. Owns the
  * child and its generated dirs; always tears them down. Returns the captured stdout
@@ -246,7 +270,10 @@ export function snapshotSpillRoot(
  * @returns The captured stdout/stderr, session id, generated cwd, and harvested logs.
  */
 export async function runScenario(input: InputScript, opts: RunOptions): Promise<RunResult> {
-  const cwd = await mkdtemp(join(opts.workspaceParent ?? tmpdir(), 'acp-snap-cwd-'))
+  const cwdPrefix = workspaceTemporaryPrefix(opts)
+  // Windows mkdtemp needs an explicit long-path namespace; requests retain the priced logical cwd.
+  const allocatedCwd = await mkdtemp(toNamespacedPath(cwdPrefix))
+  const cwd = join(dirname(cwdPrefix), basename(allocatedCwd))
   const cwdAliases = [...new Set([realpathSync(cwd), realpathSync.native(cwd)])]
   const sessionsRoot = await mkdtemp(join(tmpdir(), 'acp-snap-sessions-'))
   let spillRoot: string | undefined
