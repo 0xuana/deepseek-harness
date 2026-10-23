@@ -190,8 +190,15 @@ export function installViewerCarrier(options: ViewerCarrierOptions): void {
     let pathname: string | undefined
     let method = 'GET'
     try {
-      const pageBase = (globalThis as { document?: { readonly baseURI: string } }).document?.baseURI
-      pathname = new URL(input instanceof Request ? input.url : String(input), pageBase).pathname
+      const page = globalThis as {
+        readonly document?: { readonly baseURI: string }
+        readonly location?: { readonly origin: string }
+      }
+      const pageOrigin = page.location?.origin
+      const target = new URL(input instanceof Request ? input.url : String(input), page.document?.baseURI)
+      // A request outside the page's own origin belongs to that origin: its path naming an owner
+      // route must not divert it from the fetch the page replaced.
+      pathname = pageOrigin !== undefined && target.origin === pageOrigin ? target.pathname : undefined
       method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase()
     } catch {
       // A target this page base cannot resolve is not one of the forwarded routes.

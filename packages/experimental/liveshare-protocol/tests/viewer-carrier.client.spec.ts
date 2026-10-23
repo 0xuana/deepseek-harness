@@ -559,6 +559,36 @@ describe('viewer carrier forwarded page routes', () => {
     expect(direct).toHaveBeenCalledTimes(3)
   })
 
+  it('leaves a cross-origin request that names a forwarded route to the page fetch', async () => {
+    const direct = directFetch()
+    expect(await (await globalThis.fetch('https://cdn.example/api/present.host')).text())
+      .toBe('direct:https://cdn.example/api/present.host')
+    expect(await (await globalThis.fetch('https://cdn.example/x/open-in-app/apps')).text())
+      .toBe('direct:https://cdn.example/x/open-in-app/apps')
+    expect(direct).toHaveBeenCalledTimes(2)
+  })
+
+  it('forwards an absolute request the page makes to its own origin', async () => {
+    const { posted } = carrier(() => json({ name: 'owner-host' }))
+    const origin = new URL(document.baseURI).origin
+    expect(await (await globalThis.fetch(`${origin}/relay/s/abc/api/present.host`)).json())
+      .toMatchObject({ name: 'owner-host' })
+    expect(posted[0]).toMatchObject({ op: 'call', path: '/api/present.host' })
+  })
+
+  it('leaves a relative route to the page fetch once the page base names another origin', async () => {
+    const direct = directFetch()
+    const base = document.createElement('base')
+    base.href = 'https://cdn.example/'
+    document.head.append(base)
+    try {
+      expect(await (await globalThis.fetch('api/present.host')).text()).toBe('direct:api/present.host')
+      expect(direct).toHaveBeenCalledTimes(1)
+    } finally {
+      base.remove()
+    }
+  })
+
   it('forwards a hit whose page URL carries a query without passing it to the owner', async () => {
     const { posted } = carrier(() => json({ name: 'owner-host', available: true, fileManager: 'finder' }))
     expect(await (await globalThis.fetch('/relay/s/abc/api/present.host?x=1#frag')).json()).toMatchObject({ name: 'owner-host' })
@@ -626,7 +656,7 @@ describe('viewer carrier forwarded page routes', () => {
 
   it('reads the target and method from a Request object', async () => {
     const { posted } = carrier(() => json({ apps: ['finder'] }))
-    const response = await globalThis.fetch(new Request('https://relay.example/open-in-app/apps'))
+    const response = await globalThis.fetch(new Request(new URL('open-in-app/apps', document.baseURI)))
     expect(await response.json()).toEqual({ apps: ['finder'] })
     expect(posted[0]).toMatchObject({ op: 'call', path: '/open-in-app/apps' })
   })
