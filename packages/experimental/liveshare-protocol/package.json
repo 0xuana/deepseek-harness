@@ -19,6 +19,10 @@
       "types": "./lib/types/identity/index.d.ts",
       "default": "./lib/identity/index.js"
     },
+    "./identity/mock": {
+      "types": "./lib/types/identity/mock.d.ts",
+      "default": "./lib/identity/mock.js"
+    },
     "./protocol": {
       "types": "./lib/types/tunnel-protocol.d.ts",
       "default": "./lib/tunnel-protocol.js"
@@ -29,6 +33,7 @@
   "files": [
     "lib/index.js",
     "lib/identity/index.js",
+    "lib/identity/mock.js",
     "lib/tunnel-protocol.js",
     "lib/types/**/*.d.ts"
   ],

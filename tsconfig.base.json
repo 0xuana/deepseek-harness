@@ -376,6 +376,7 @@
       "@deepseek-ai/dsh-experimental-inspector/client": ["./packages/experimental/inspector/src/client/index.ts"],
       "@deepseek-ai/dsh-experimental-liveshare-protocol": ["./packages/experimental/liveshare-protocol/src"],
       "@deepseek-ai/dsh-experimental-liveshare-protocol/identity": ["./packages/experimental/liveshare-protocol/src/identity/index.ts"],
+      "@deepseek-ai/dsh-experimental-liveshare-protocol/identity/mock": ["./packages/experimental/liveshare-protocol/src/identity/mock.ts"],
       "@deepseek-ai/dsh-experimental-liveshare-protocol/protocol": ["./packages/experimental/liveshare-protocol/src/tunnel-protocol.ts"],
       "@deepseek-ai/dsh-experimental-ptc-runtime-python": ["./packages/experimental/ptc-runtime-python/src"],
       "@deepseek-ai/dsh-util-crypto": ["./packages/util/crypto/src"],
