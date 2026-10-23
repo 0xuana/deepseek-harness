@@ -2,7 +2,7 @@
 import { createElement } from 'react'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
-import type {} from '@deepseek-ai/dsh-experimental-client-ui-action-cards/client'
+import type {} from '@deepseek-ai/dsh-client-ui-action-cards/client'
 import { PageCardBody } from './Card.tsx'
 import { en, ja, zh, type RecommendationKey } from './locales.ts'
 import { createCreationInfoStore } from './info-store.ts'

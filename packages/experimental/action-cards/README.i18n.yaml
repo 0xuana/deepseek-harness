@@ -5,63 +5,63 @@
 /:
   en: 1a68a7a733a2676d
   zh: 01f72eb61a0626b7
-/deepseek-ai-dsh-experimental-action-cards:
-  en: e57ce09e58e6fabc
-  zh: 8a727dbd6f925363
-/deepseek-ai-dsh-experimental-action-cards/summary:
+/deepseek-ai-dsh-action-cards:
+  en: 63bf9077e164f6fe
+  zh: 8b696bb8c3d6fcd4
+/deepseek-ai-dsh-action-cards/summary:
   en: 7621088773d073f4
   zh: 57674e6dcee15997
-/deepseek-ai-dsh-experimental-action-cards/table-of-contents:
+/deepseek-ai-dsh-action-cards/table-of-contents:
   en: d152484eb41ac6b4
   zh: b00dddf4c88f0a45
-/deepseek-ai-dsh-experimental-action-cards/use-this-package:
-  en: f8dd030ecb0470fa
-  zh: a0df8bd22cdf6600
-/deepseek-ai-dsh-experimental-action-cards/use-this-package/register-a-card-kind:
+/deepseek-ai-dsh-action-cards/use-this-package:
+  en: 5fb9910bf02f3713
+  zh: 67c8384d876e7fb2
+/deepseek-ai-dsh-action-cards/use-this-package/register-a-card-kind:
   en: 8432c02ef18eda11
   zh: 6d43a0a32edd7e30
-/deepseek-ai-dsh-experimental-action-cards/use-this-package/card-rules:
+/deepseek-ai-dsh-action-cards/use-this-package/card-rules:
   en: 2f5b3ccb91f3b30e
   zh: 9bd877d9d92615da
-/deepseek-ai-dsh-experimental-action-cards/understand-the-implementation:
+/deepseek-ai-dsh-action-cards/understand-the-implementation:
   en: d92243d71d2106c1
   zh: 47f0840fa723bb31
-/deepseek-ai-dsh-experimental-action-cards/further-exploration:
+/deepseek-ai-dsh-action-cards/further-exploration:
   en: db407bb756ee5641
   zh: af5d25f4f2351ee6
-/deepseek-ai-dsh-experimental-action-cards/model-experience:
+/deepseek-ai-dsh-action-cards/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
-/deepseek-ai-dsh-experimental-action-cards/model-experience/card-tool:
+/deepseek-ai-dsh-action-cards/model-experience/card-tool:
   en: 4925bc5f7153825a
   zh: 3a7bfb2210d9c6aa
-/deepseek-ai-dsh-experimental-action-cards/model-experience/card-tool/what-the-model-sees:
-  en: 58a76216203226f7
-  zh: 0a12b579f6b28f29
-/deepseek-ai-dsh-experimental-action-cards/model-experience/card-tool/token-effect:
+/deepseek-ai-dsh-action-cards/model-experience/card-tool/what-the-model-sees:
+  en: 58521d3992ce42ec
+  zh: 45681f7b43e67613
+/deepseek-ai-dsh-action-cards/model-experience/card-tool/token-effect:
   en: 7efaaad09be98a07
   zh: 86c7fa13d60c3588
-/deepseek-ai-dsh-experimental-action-cards/model-experience/card-tool/kv-cache-effect:
+/deepseek-ai-dsh-action-cards/model-experience/card-tool/kv-cache-effect:
   en: d4192e35d47b5fa3
   zh: c786828e123de657
-/deepseek-ai-dsh-experimental-action-cards/model-experience/card-status-notice:
+/deepseek-ai-dsh-action-cards/model-experience/card-status-notice:
   en: 407ebca5eb94992e
   zh: 779819ea83974103
-/deepseek-ai-dsh-experimental-action-cards/model-experience/card-status-notice/what-the-model-sees:
+/deepseek-ai-dsh-action-cards/model-experience/card-status-notice/what-the-model-sees:
   en: a14013ca3ddb5ee3
   zh: 18cd7ffc62fd6590
-/deepseek-ai-dsh-experimental-action-cards/model-experience/card-status-notice/what-the-model-sees/notice-preamble:
+/deepseek-ai-dsh-action-cards/model-experience/card-status-notice/what-the-model-sees/notice-preamble:
   en: 04dd9469bfaff052
   zh: 35110b231b8e3928
-/deepseek-ai-dsh-experimental-action-cards/model-experience/card-status-notice/token-effect:
+/deepseek-ai-dsh-action-cards/model-experience/card-status-notice/token-effect:
   en: 4e73a2cff60b5e88
   zh: 4887212815e7425d
-/deepseek-ai-dsh-experimental-action-cards/model-experience/card-status-notice/kv-cache-effect:
+/deepseek-ai-dsh-action-cards/model-experience/card-status-notice/kv-cache-effect:
   en: 58785543e2428dba
   zh: 4b082f77b3b2f482
-/deepseek-ai-dsh-experimental-action-cards/known-limitations-and-deferred-work:
+/deepseek-ai-dsh-action-cards/known-limitations-and-deferred-work:
   en: 2d7ed01235b52b61
   zh: 611c6dfb3104827b
-/deepseek-ai-dsh-experimental-action-cards/known-limitations-and-deferred-work/dev-note:
+/deepseek-ai-dsh-action-cards/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: bd8a8936229e035e

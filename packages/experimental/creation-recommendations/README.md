@@ -3,7 +3,7 @@ description: "Create persistent removable interface plugins after an explicit us
 kind: "package-bundle"
 ---
 
-# @deepseek-ai/dsh-experimental-creation-recommendations
+# @deepseek-ai/dsh-creation-recommendations
 
 English | [中文](README.zh.md)
 

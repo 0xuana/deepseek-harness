@@ -110,7 +110,7 @@ export function shortName(name: string): string {
 
 /** Official bundles that display the Experimental badge. */
 const EXPERIMENTAL_BUNDLES: readonly string[] = [
-  '@deepseek-ai/dsh-experimental-creation-recommendations',
+  '@deepseek-ai/dsh-creation-recommendations',
   '@deepseek-ai/dsh-cua-bundle',
   '@deepseek-ai/dsh-experimental-agent-team-profile',
   '@deepseek-ai/dsh-experimental-voice-input-bundle',

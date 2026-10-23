@@ -3,7 +3,7 @@ description: "在完整回答末尾显示支持位置选择、保留和撤销的
 kind: "package-reference"
 ---
 
-# @deepseek-ai/dsh-experimental-client-ui-creation-recommendations
+# @deepseek-ai/dsh-client-ui-creation-recommendations
 
 [English](README.md) | 中文
 

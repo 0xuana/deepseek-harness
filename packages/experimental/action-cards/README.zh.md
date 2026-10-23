@@ -3,7 +3,7 @@ description: "可选操作卡片的共享 Host 服务：propose_action 工具、
 kind: "package-reference"
 ---
 
-# @deepseek-ai/dsh-experimental-action-cards
+# @deepseek-ai/dsh-action-cards
 
 [English](README.md) | 中文
 
@@ -31,7 +31,7 @@ kind: "package-reference"
 |---|---|---|
 | `queuedMessageLimit` | `2` | 排队到后续轮次的用户消息达到该数量时，`propose_action` 拒绝调用，因此不会展示卡片。 |
 
-生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-action-cards)是可接受字段的完整来源。
+生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-action-cards)是可接受字段的完整来源。
 
 ### 注册卡片种类
 
@@ -85,7 +85,7 @@ Remote `act(sessionId, callId, verb, payload?)` 先检查服务所有者、在�
 
 #### 模型看到什么
 
-[`propose_action` 声明](../../../docs/tool-catalog.zh.md#deepseek-aidsh-experimental-action-cards)只对在本会话中自己直接调用加载过已注册种类 Skill 的在线根 Agent 出现，从下一步开始，持续到该 Agent 被释放。subagent 看不到它；PTC 预设的 Skill 加载由代码发起，也看不到它，因此不会展示卡片。种类的 Skill 给出动作名和 `details` 的字段。被接受的调用返回 `Card shown below your answer. Do not restate it. <invitation>`，其中 `<invitation>` 是种类给出的一两句指引，说明如何用用户的语言邀请用户使用卡片，因此模型只会在卡片已经存在之后写邀请。被拒绝的调用不带邀请，只返回原因，例如 `Load skill <skill> first, then call propose_action.`、`One card per turn; the earlier card stands.`、`The user has queued more messages; show no card and answer briefly.`、`Cards are offered in the main conversation only.`、`Unknown action "<action>". Registered actions: <actions>.`（最后一个种类注销后列表为 `none`），或未通过校验的 `details` 字段。
+[`propose_action` 声明](../../../docs/tool-catalog.zh.md#deepseek-aidsh-action-cards)只对在本会话中自己直接调用加载过已注册种类 Skill 的在线根 Agent 出现，从下一步开始，持续到该 Agent 被释放。subagent 看不到它；PTC 预设的 Skill 加载由代码发起，也看不到它，因此不会展示卡片。种类的 Skill 给出动作名和 `details` 的字段。被接受的调用返回 `Card shown below your answer. Do not restate it. <invitation>`，其中 `<invitation>` 是种类给出的一两句指引，说明如何用用户的语言邀请用户使用卡片，因此模型只会在卡片已经存在之后写邀请。被拒绝的调用不带邀请，只返回原因，例如 `Load skill <skill> first, then call propose_action.`、`One card per turn; the earlier card stands.`、`The user has queued more messages; show no card and answer briefly.`、`Cards are offered in the main conversation only.`、`Unknown action "<action>". Registered actions: <actions>.`（最后一个种类注销后列表为 `none`），或未通过校验的 `details` 字段。
 
 #### Token 影响
 

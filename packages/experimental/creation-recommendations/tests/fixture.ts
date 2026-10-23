@@ -10,7 +10,7 @@ import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deep
 import Skills from '@deepseek-ai/dsh-skill'
 import * as SkillTool from '@deepseek-ai/dsh-tool-skill'
 import RemoteAccess from '@deepseek-ai/dsh-api-remote-access'
-import ActionCards from '@deepseek-ai/dsh-experimental-action-cards'
+import ActionCards from '@deepseek-ai/dsh-action-cards'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { BundleInfo, ChangeResult } from '@deepseek-ai/dsh-plugin-manager/types'
 import type { SubagentActivationSpec, SubagentResult } from '@deepseek-ai/dsh-subagent'

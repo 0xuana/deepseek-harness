@@ -25,6 +25,9 @@ importers:
 
   .:
     devDependencies:
+      '@deepseek-ai/dsh-action-cards':
+        specifier: workspace:*
+        version: link:packages/experimental/action-cards
       '@deepseek-ai/dsh-agent':
         specifier: workspace:*
         version: link:packages/core/agent
@@ -40,9 +43,6 @@ importers:
       '@deepseek-ai/dsh-cua-bundle':
         specifier: workspace:*
         version: link:packages/experimental/cua-bundle
-      '@deepseek-ai/dsh-experimental-action-cards':
-        specifier: workspace:*
-        version: link:packages/experimental/action-cards
       '@deepseek-ai/dsh-experimental-browser-use-chrome-devtools-mcp':
         specifier: workspace:*
         version: link:packages/experimental/browser-use-chrome-devtools-mcp
@@ -325,6 +325,9 @@ importers:
       '@deepseek-ai/dsh-cordis-client-runner':
         specifier: workspace:*
         version: link:../../packages/extensions/cordis-client-runner
+      '@deepseek-ai/dsh-creation-recommendations':
+        specifier: workspace:*
+        version: link:../../packages/experimental/creation-recommendations
       '@deepseek-ai/dsh-cua-bundle':
         specifier: workspace:*
         version: link:../../packages/experimental/cua-bundle
@@ -340,9 +343,6 @@ importers:
       '@deepseek-ai/dsh-experimental-cot-translation-bundle':
         specifier: workspace:*
         version: link:../../packages/experimental/cot-translation-bundle
-      '@deepseek-ai/dsh-experimental-creation-recommendations':
-        specifier: workspace:*
-        version: link:../../packages/experimental/creation-recommendations
       '@deepseek-ai/dsh-experimental-inspector-profile':
         specifier: workspace:*
         version: link:../../packages/experimental/inspector-profile
@@ -8674,6 +8674,9 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-action-cards':
+        specifier: workspace:*
+        version: link:../action-cards
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:*
         version: link:../../api/remotes
@@ -8704,9 +8707,6 @@ importers:
       '@deepseek-ai/dsh-client-ui-tool':
         specifier: workspace:*
         version: link:../../client/ui-tool
-      '@deepseek-ai/dsh-experimental-action-cards':
-        specifier: workspace:*
-        version: link:../action-cards
       '@deepseek-ai/dsh-llm':
         specifier: workspace:*
         version: link:../../llm/llm
@@ -8915,6 +8915,9 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-action-cards':
+        specifier: workspace:*
+        version: link:../action-cards
       '@deepseek-ai/dsh-client-locale':
         specifier: workspace:*
         version: link:../../client/locale
@@ -8924,6 +8927,9 @@ importers:
       '@deepseek-ai/dsh-client-test-runtime':
         specifier: workspace:*
         version: link:../../test-support/client-runtime
+      '@deepseek-ai/dsh-client-ui-action-cards':
+        specifier: workspace:*
+        version: link:../client-ui-action-cards
       '@deepseek-ai/dsh-client-ui-primitives':
         specifier: workspace:*
         version: link:../../client/ui-primitives
@@ -8933,13 +8939,7 @@ importers:
       '@deepseek-ai/dsh-client-ui-slots':
         specifier: workspace:*
         version: link:../../client/ui-slots
-      '@deepseek-ai/dsh-experimental-action-cards':
-        specifier: workspace:*
-        version: link:../action-cards
-      '@deepseek-ai/dsh-experimental-client-ui-action-cards':
-        specifier: workspace:*
-        version: link:../client-ui-action-cards
-      '@deepseek-ai/dsh-experimental-creation-recommendations':
+      '@deepseek-ai/dsh-creation-recommendations':
         specifier: workspace:*
         version: link:../creation-recommendations
       '@deepseek-ai/dsh-llm':
@@ -9155,13 +9155,13 @@ importers:
 
   packages/experimental/creation-recommendations:
     dependencies:
-      '@deepseek-ai/dsh-experimental-action-cards':
+      '@deepseek-ai/dsh-action-cards':
         specifier: workspace:*
         version: link:../action-cards
-      '@deepseek-ai/dsh-experimental-client-ui-action-cards':
+      '@deepseek-ai/dsh-client-ui-action-cards':
         specifier: workspace:*
         version: link:../client-ui-action-cards
-      '@deepseek-ai/dsh-experimental-client-ui-creation-recommendations':
+      '@deepseek-ai/dsh-client-ui-creation-recommendations':
         specifier: workspace:*
         version: link:../client-ui-creation-recommendations
       resolve.exports:
