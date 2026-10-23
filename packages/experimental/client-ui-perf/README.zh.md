@@ -46,20 +46,25 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-四个 Conversation Definition 把事件窗口折叠成名为 `perf` 的视图目标节点。`perf-step` 每个 `step/start` 一个上下文；`perf-prompt` 每条唤醒该轮的用户消息（人写提示或自动触发）一个上下文；`perf-turn-end` 记录轮次边界，让被中断的尾部也能收尾；`perf-code-mode` 每个 Code-Mode 根调用一个上下文，收纳它实际派发的内层调用。轮次与步骤身份取自引擎给出的 match Location，而不是模块级状态，因此历史分页和多个 Session 都不会串归属。
+六个 Conversation Definition 把事件窗口折叠成名为 `perf` 的视图目标节点。`perf-step` 每个 `step/start` 一个上下文；`perf-prompt` 每条唤醒该轮的用户消息（人写提示或自动触发）一个上下文；`perf-turn-end` 记录轮次边界，让被中断的尾部也能收尾；`perf-code-mode` 每个 Code-Mode 根调用一个上下文，收纳它实际派发的内层调用；`perf-compaction` 每个压缩事务一个上下文；`perf-event` 负责请求、提示词、重试、审批和裁剪等非步骤事件行。轮次与步骤身份取自引擎给出的 match Location，而不是模块级状态，因此历史分页和多个 Session 都不会串归属。内部标识保留 `perf` 前缀，因为这里展示的是性能测量数据；产品名是「统计」。
 
 | 文件 | 职责 |
 | --- | --- |
-| `src/client/perf-definition.ts` | 三个 Definition：匹配规则、发布节奏与节点信封 |
+| `src/client/perf-definition.ts` | 六个 Definition：匹配规则、发布节奏与节点信封 |
 | `src/client/perf-fold.ts` | 事件折叠、工具配对、Code-Mode 内层调用归属、单步指标 |
 | `src/client/perf-aggregate.ts` | 轮次汇总与排序，含被中断尾部的收尾 |
+| `src/client/perf-compaction.ts` | 压缩事务状态与合成摘要行 |
+| `src/client/perf-event.ts` | 非步骤事件行的归一化 |
+| `src/client/perf-format.ts` | 时间、耗时、token、百分比的显示格式化 |
+| `src/client/perf-usage.ts` | 步骤、压缩与合计共用的 token 用量推导 |
+| `src/client/perf-totals.ts` | 从宿主 stats 与 tokenUsage projection 生成全量合计 |
 | `src/client/perf-snapshot-builder.ts` | `perf` 视图目标的增量 builder |
-| `src/client/PerfView.tsx` | 表格、时间条、步骤手风琴、复制按钮，以及提问图片标签、预览与看图器 |
-| `src/client/locales.ts` | 全部可见文案，中、英、日三份 |
+| `src/client/PerfView.tsx` | 表格、合计/事件行、时间条、步骤/工具/回答详情、复制按钮，以及提问图片标签、预览与看图器 |
+| `src/client/locales.ts` | 全部可见文案；中、日已翻译，德、西、法、葡、俄当前使用英文 fallback |
 
 页脚的开关控制合计行、事件行与上下文口径，滚表格时页脚钉在输入框上方。「显示上下文增量」默认关闭；打开后每轮/每步显示相对同范围内上一个已测值的提示词大小变化，负增量（例如压缩后）用错误色显示。展开的步骤行在「触发」列显示该步开始时间戳（`MM-DD HH:MM:SS.mmm`，tooltip 为完整的 `YYYY-MM-DD HH:MM:SS.mmm`），以及距上一步至少一秒的空闲；亚秒级调度噪声不显示。带模型回答的步骤也可以展开：点击该行会打开详情行，通过共享的 Chat Markdown 原语渲染回答，最多保留 16,000 字符并提示截断。
 
-页脚的开关控制合计行与上下文口径。「上下文口径」只改变轮次行对其各步的聚合方式：「最新」显示该轮最后一步的提示词大小，「累计」显示该轮各步提示词大小之和。合计行不受这个开关影响。宿主提供 `sessionStats` 与 `tokenUsage` projection 时，合计行覆盖整段会话：轮次、步数、累计上下文与输出、token 加权缓存、首 token/模型/工具用时和输出速度；总用时为模型用时 + 工具用时（暂无整段墙钟 projection）。projection 不可用时回退到已加载窗口，并标为「本窗口合计」。token 超过一千万时从 K 切换为 M。
+「上下文口径」只改变轮次行对其各步的聚合方式：「最新」显示该轮最后一步的提示词大小，「累计」显示该轮各步提示词大小之和。合计行不受这个开关影响。宿主提供 `sessionStats` 与 `tokenUsage` projection 时，合计行覆盖整段会话：轮次、步数、累计上下文与输出、token 加权缓存、首 token/模型/工具用时和输出速度；总用时为模型用时 + 工具用时（暂无整段墙钟 projection）。projection 不可用时回退到已加载窗口，并标为「本窗口合计」。token 超过一千万时从 K 切换为 M。
 
 非步骤行默认隐藏，由页脚的「显示事件行（含压缩）」开关打开。压缩是 log-only 事务，不是 step。表格会在压缩发生的相邻步骤之间插入一条合成的「压缩」行，显示摘要调用的上下文、输出与缓存命中、被压缩的 token 数、摘要大小和墙钟时间。同一个开关还会显示请求头、路由能力、系统提示词、工具集变更、模型重试、模型尝试、上下文刷新、审批和纯裁剪行：请求头显示 reason、provider/model、是否新序列和工具数；路由能力显示 provider/model 和提示词更新模式；系统提示词显示追加/替换/清空和字符数；工具集行列出新增与移除；重试行显示第几次、等待时间和失败信息；尝试行标记未提交消息的模型尝试；上下文刷新行显示运行时/时间上下文的刷新大小；审批行显示工具和等待/允许/拒绝状态；裁剪行显示被裁剪的 token 数。这些行不计入轮次与合计的步骤求和，步骤列仍只表示步骤。
 
@@ -96,6 +101,7 @@ kind: "package-reference"
 - **默认产品不挂载。** Web 包按规则拒绝引用 experimental 包；可选的「开发者工具」组合包（`@deepseek-ai/dsh-experimental-inspector-profile`）会挂载本视图，也可以由 profile 显式添加。
 - **窗口被截断时没有起始时刻。** 已加载窗口从半步中间开始时，首 token、模型用时和总用时都推导不出来；行上标「起止未知」，不估算。
 - **Code-Mode 内层调用按根调用上下文并回步骤。** 内层调用不带 turn/step，因此每个根调用各自开一个以 root call id 为键的上下文，由 builder 把它的派发并回持有 runner 的那一步。窗口里丢了派发起点时仍会合并调用，但无法给出它们各自的实测耗时。
+- **五种 shipped locale 仍使用英文 fallback。** 德、西、法、葡、俄的字典和 metadata 目前是英文副本，先满足 shipped-language 门禁；这些语言下的界面文案仍为英文。
 - **已知限制：没有整段墙钟 projection。** 合计行的总用时用模型用时 + 工具用时替代，因为宿主 projection 没有整段墙钟；工具段是逐调用求和，并行调用会让这段显得比非重叠墙钟更长。这里作为已知限制记录，插件不为此改动宿主逻辑。
 - **浏览器证据是仅测试用的 overlay。** 包级测试覆盖折叠、汇总、格式化与 jsdom 表格；`apps/web/tests/client-ui-perf-panel.e2e.ts` 用仅测试用的 overlay 把插件挂到真实 Web 面上，并比对提交的 ARIA golden。由于还没有任何 shipped profile 挂载本包，暂无录制会话场景。
 - **迟到重投不是轮次。** 压缩可能把被裁剪的工具结果按原来的轮次/步骤在之后重新投递；窗口里既没有加载到的起点、也没有问题或结束标记的轮次会被丢弃，不再显示成空的幽灵行。
