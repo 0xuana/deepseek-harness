@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Git worktrees",
-    "description": "Ask for work on a new branch, and the agent creates a Git worktree at .agents/worktrees/<name> and continues there, leaving your current checkout and its uncommitted changes as they are. Only committed files are checked out and dependencies are not installed; turning the plugin off keeps the worktrees and branches.",
+    "description": "Ask for work on a new branch, and the agent creates a separate Git worktree and continues there, leaving your current checkout as it is.",
     "detail": "docs/DETAIL.md"
   }
 }

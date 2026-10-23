@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Agent teams",
-    "description": "Lets the agent you talk to split a job among named teammates: it puts the work on a shared task board, waits for their results, and reports back; click Agent team next to the conversation title to see the members and tasks. Teammates edit the same files, and overlapping write scopes only show a warning. Each teammate makes its own model requests, so a team uses more tokens than one agent, and while the plugin is on, agents delegate through the team instead of the ordinary subagent tools.",
+    "description": "Lets the agent you talk to split a job among named teammates, track it on a shared task board, and report back with their results.",
     "detail": "docs/DETAIL.md"
   }
 }

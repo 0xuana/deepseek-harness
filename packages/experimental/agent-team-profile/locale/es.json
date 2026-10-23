@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Equipos de agentes",
-    "description": "Permite que el agente con el que habla reparta un trabajo entre compañeros con nombre: coloca el trabajo en un tablero de tareas compartido, espera sus resultados y le informa; haga clic en “equipo de agentes” junto al título de la conversación para ver los miembros y las tareas. Los compañeros editan los mismos archivos, y los ámbitos de escritura superpuestos solo muestran una advertencia. Cada compañero hace sus propias solicitudes al modelo, por lo que un equipo usa más tokens que un solo agente, y mientras el complemento está activado, los agentes delegan a través del equipo en lugar de usar las herramientas de subagentes habituales.",
+    "description": "Permite que el agente con el que habla reparta un trabajo entre compañeros con nombre, lo siga en un tablero de tareas compartido y le informe con sus resultados.",
     "detail": "docs/DETAIL.md"
   }
 }

@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Session search",
-    "description": "Ask about earlier work, such as “How did we fix the pool leak last week?”, and the agent searches and reads your earlier sessions from the same working directory to answer. The search tools are added to every model request, so they use some tokens even when the agent does not search.",
+    "description": "Ask about earlier work, such as “How did we fix the pool leak last week?”, and the agent searches your earlier sessions in the same workspace to answer.",
     "detail": "docs/DETAIL.md"
   }
 }

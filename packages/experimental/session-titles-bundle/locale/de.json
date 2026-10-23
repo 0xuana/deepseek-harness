@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Konversationsfolgende Titel",
-    "description": "Erstellt den Titel einer Sitzung aus all Ihren Nachrichten und aktualisiert ihn, wenn sich die Hauptaufgabe ändert, statt ihn nur aus der ersten Nachricht zu bilden; Titel, die Sie selbst umbenannt haben, ändern sich nie. Jede neue Nachricht startet eine kurze Titelanfrage mit dem Modell des Gesprächs.",
+    "description": "Erstellt den Titel einer Sitzung aus all Ihren Nachrichten und aktualisiert ihn, wenn sich die Hauptaufgabe ändert, statt ihn nur aus der ersten Nachricht zu bilden.",
     "detail": "docs/DETAIL.md"
   }
 }

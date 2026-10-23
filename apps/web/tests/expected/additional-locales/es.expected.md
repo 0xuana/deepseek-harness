@@ -1,5 +1,5 @@
 - listitem:
   - button "Ver Revisión de autorización automática": Revisión de autorización automática
-  - text: "Experimental Añade el modo de acceso “Auto review”, que se elige en el menú de modo de acceso o con /permission auto para la sesión actual: antes de cada llamada a una herramienta, una solicitud al modelo comprueba la llamada frente a lo que usted pidió; las llamadas permitidas se ejecutan de inmediato con acceso completo y sin zona de pruebas, y las denegadas esperan su aprobación. En el modo PTC, solo se revisan las llamadas a herramientas que hace un programa, no las operaciones de archivos y procesos del propio programa. La revisión puede permitir una acción insegura o denegar trabajo útil; al desactivar el complemento, las sesiones “Auto review” abiertas cambian a “Acceso completo”, y una sesión “Auto review” guardada solo se vuelve a abrir mientras el complemento está activado."
+  - text: "Experimental Añade el modo de acceso “Auto review”: antes de cada llamada a una herramienta, un modelo comprueba la llamada frente a lo que usted pidió; las llamadas permitidas se ejecutan de inmediato y las denegadas esperan su aprobación."
   - status
   - switch "Habilitar Revisión de autorización automática"

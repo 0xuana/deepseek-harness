@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Herramientas de desarrollador",
-    "description": "Para solucionar problemas: abra “Registro de sesión” desde “Nueva pestaña” en la barra lateral para ver lo que DSH registró de una sesión, y pulse Ctrl+Shift+. (Cmd+Shift+. en macOS) para abrir Chrome DevTools conectado al backend de DSH. Mientras está activado, DSH conserva en memoria las solicitudes de red del backend sin ocultar las claves de API ni las cookies, y cualquier programa de este equipo puede conectarse a su punto de conexión de depuración y ejecutar código dentro de DSH, así que desactívelo cuando no esté depurando.",
+    "description": "Para solucionar problemas: vea en “Registro de sesión” lo que DSH registró de una sesión y depure el backend de DSH en Chrome DevTools.",
     "detail": "docs/DETAIL.md"
   }
 }

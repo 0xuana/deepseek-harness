@@ -6,7 +6,7 @@
 - text: v{{version}} 实验性
 - paragraph:
   - code: "@deepseek-ai/dsh-experimental-cot-translation-bundle"
-- paragraph: 智能体输出时翻译展开的“思考”行，默认译成界面语言，点击“查看原文”可切换回原文；在此插件的设置中选择翻译服务和目标语言。思考内容可能包含你的代码和对话，会发送给所选服务；选择付费的 DeepSeek Flash 服务时，每段没有已保存译文的内容都是一次付费请求。
+- paragraph: 智能体输出时，把展开的“思考”行翻译成你选择的语言，点击“查看原文”可切换回原文。
 - region "详细介绍":
   - paragraph:
     - img "展开的思考行从英文翻译成中文，并显示“查看原文”按钮"

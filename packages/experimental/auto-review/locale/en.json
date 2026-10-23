@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Auto authorization review",
-    "description": "Adds an Auto review access mode, chosen in the access mode menu or with /permission auto for the current session: before each tool call, a model request checks the call against what you asked for; allowed calls run at once with full access and no sandbox, and denied calls wait for your approval. In PTC mode, only the tool calls a program makes are reviewed, not the program's own file and process operations. The review can allow an unsafe action or deny useful work; turning the plugin off switches open Auto review sessions to Full access, and a saved Auto review session reopens only while the plugin is on.",
+    "description": "Adds an Auto review access mode: before each tool call, a model checks it against what you asked for, runs allowed calls at once, and holds denied calls for your approval.",
     "detail": "docs/DETAIL.md"
   }
 }

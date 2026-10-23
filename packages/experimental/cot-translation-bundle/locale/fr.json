@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Traduction automatique du raisonnement",
-    "description": "Traduit les lignes « Pensez » développées pendant que l'agent les écrit, par défaut dans la langue de votre interface, et « Voir l'original » permet de revenir au texte d'origine ; choisissez le service de traduction et la langue cible dans les paramètres de ce plugin. Le raisonnement, qui peut inclure votre code et votre conversation, est envoyé au service sélectionné, et avec les services payants DeepSeek Flash, chaque fragment sans traduction enregistrée constitue une requête payante.",
+    "description": "Traduit les lignes « Pensez » développées dans la langue de votre choix pendant que l'agent les écrit, et « Voir l'original » permet de revenir au texte d'origine.",
     "detail": "docs/DETAIL.md"
   }
 }

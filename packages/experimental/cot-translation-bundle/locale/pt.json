@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Tradução automática de raciocínio",
-    "description": "Traduz as linhas “Pense” expandidas enquanto o agente as escreve, por padrão para o idioma da sua interface, e “Ver original” volta ao texto original; escolha o serviço de tradução e o idioma de destino nas configurações deste plug-in. O raciocínio, que pode incluir seu código e sua conversa, é enviado ao serviço selecionado e, com os serviços pagos DeepSeek Flash, cada trecho sem uma tradução salva é uma solicitação paga.",
+    "description": "Traduz as linhas “Pense” expandidas para o idioma que você escolher enquanto o agente as escreve, e “Ver original” volta ao texto original.",
     "detail": "docs/DETAIL.md"
   }
 }

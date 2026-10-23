@@ -1,5 +1,5 @@
 - listitem:
   - button "Voir Examen des autorisations automatiques": Examen des autorisations automatiques
-  - text: "Expérimental Ajoute le mode d'accès « Auto review », à choisir dans le menu Mode d'accès ou avec /permission auto pour la session en cours : avant chaque appel d'outil, une requête au modèle vérifie l'appel par rapport à ce que vous avez demandé ; les appels autorisés s'exécutent immédiatement avec un accès complet et sans bac à sable, et les appels refusés attendent votre approbation. En mode PTC, seuls les appels d'outils effectués par un programme sont vérifiés, pas les opérations sur les fichiers et les processus du programme lui-même. La vérification peut autoriser une action dangereuse ou refuser un travail utile ; la désactivation du plugin fait passer les sessions « Auto review » ouvertes en « Accès complet », et une session « Auto review » enregistrée ne se rouvre que tant que le plugin est activé."
+  - text: "Expérimental Ajoute le mode d'accès « Auto review » : avant chaque appel d'outil, un modèle vérifie l'appel par rapport à ce que vous avez demandé ; les appels autorisés s'exécutent immédiatement et les appels refusés attendent votre approbation."
   - status
   - switch "Activer Examen des autorisations automatiques"

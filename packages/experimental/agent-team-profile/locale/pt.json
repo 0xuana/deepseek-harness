@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Equipes de agentes",
-    "description": "Permite que o agente com quem você conversa divida um trabalho entre colegas de equipe nomeados: ele coloca o trabalho em um quadro de tarefas compartilhado, aguarda os resultados deles e informa você; clique em “Equipe de agentes” ao lado do título da conversa para ver os membros e as tarefas. Os colegas editam os mesmos arquivos, e escopos de escrita sobrepostos apenas exibem um aviso. Cada colega faz suas próprias solicitações ao modelo, por isso uma equipe usa mais tokens do que um único agente, e enquanto o plug-in estiver ativado, os agentes delegam pela equipe em vez de usar as ferramentas comuns de subagentes.",
+    "description": "Permite que o agente com quem você conversa divida um trabalho entre colegas de equipe nomeados, acompanhe-o em um quadro de tarefas compartilhado e informe você com os resultados deles.",
     "detail": "docs/DETAIL.md"
   }
 }

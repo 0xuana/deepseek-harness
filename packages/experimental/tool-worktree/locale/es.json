@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "árboles de trabajo de git",
-    "description": "Pida trabajar en una rama nueva, y el agente crea un worktree de Git en .agents/worktrees/<name> y continúa allí, dejando su checkout actual y sus cambios sin confirmar tal como están. Solo se extraen los archivos confirmados y no se instalan las dependencias; desactivar el complemento conserva los worktrees y las ramas.",
+    "description": "Pida trabajar en una rama nueva, y el agente crea un worktree de Git independiente y continúa allí, dejando su checkout actual tal como está.",
     "detail": "docs/DETAIL.md"
   }
 }

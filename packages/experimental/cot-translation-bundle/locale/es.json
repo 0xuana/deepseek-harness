@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Traducción automática de razonamiento",
-    "description": "Traduce las filas “pensar” expandidas mientras el agente las escribe, de forma predeterminada al idioma de su interfaz, y “Ver original” vuelve al texto original; elija el servicio de traducción y el idioma de destino en la configuración de este complemento. El razonamiento, que puede incluir su código y su conversación, se envía al servicio seleccionado y, con los servicios de pago DeepSeek Flash, cada fragmento sin una traducción guardada es una solicitud de pago.",
+    "description": "Traduce las filas “pensar” expandidas al idioma que elija mientras el agente las escribe, y “Ver original” vuelve al texto original.",
     "detail": "docs/DETAIL.md"
   }
 }

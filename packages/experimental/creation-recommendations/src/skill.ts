@@ -3,14 +3,6 @@ import { readFile } from 'node:fs/promises'
 import type { Context } from '@deepseek-ai/cordis'
 import { BUNDLED_SKILL_RANK, type SkillCandidate } from '@deepseek-ai/dsh-skill'
 
-/** English text of a localized metadata value; the catalog keeps one description language to bound the skill result.
- * @param text - plain or localized metadata text.
- * @returns the English text, or undefined when absent.
- */
-function english(text: string | { readonly en: string } | undefined): string | undefined {
-  return typeof text === 'object' ? text.en : text
-}
-
 /** Register the experiment's skill without a system-prompt section.
  * @param ctx - Owning plugin context with skill and plugin registries.
  */
@@ -36,7 +28,7 @@ export function registerCreationSkill(ctx: Context): void {
         content: instructions + '\n## Existing capabilities to check against this page plan\n\n'
           + JSON.stringify(bundles.filter(bundle => bundle.official).map(bundle => ({
             name: bundle.name, title: bundle.meta?.title ?? bundle.name,
-            description: english(bundle.meta?.description) ?? bundle.description ?? '', enabled: bundle.enabled,
+            description: bundle.meta?.description ?? bundle.description ?? '', enabled: bundle.enabled,
           }))),
       }
     },

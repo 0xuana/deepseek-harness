@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Index de plugins personnalisés",
-    "description": "Ajoute à « Plugins » un onglet « Découvrez » où vous parcourez et installez des plugins provenant des index de plugins que vous ajoutez par URL. Les plugins d'un index proviennent de tiers et s'exécutent avec vos autorisations ; n'ajoutez donc que des index auxquels vous faites confiance ; les détails des plugins sont chargés depuis des services de fichiers npm publics ou depuis le dépôt Git du plugin, et les icônes depuis les adresses indiquées dans l'index, de sorte que ces serveurs voient votre adresse IP.",
+    "description": "Ajoute à « Plugins » un onglet « Découvrez » où vous parcourez et installez des plugins provenant des index de plugins que vous ajoutez.",
     "detail": "docs/DETAIL.md"
   }
 }

@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Benutzerdefinierte Plugin-Indizes",
-    "description": "Fügt unter „Plugins“ den Tab „Entdecken“ hinzu, in dem Sie Plugins aus Plugin-Indizes durchsuchen und installieren, die Sie per URL hinzufügen. Plugins in einem Index stammen von Dritten und laufen mit Ihren Berechtigungen, fügen Sie daher nur Indizes hinzu, denen Sie vertrauen; Plugin-Details werden von öffentlichen npm-Dateidiensten oder aus dem Git-Repository des Plugins geladen, und Symbole werden von den Adressen im Index geladen, sodass diese Server Ihre IP-Adresse sehen.",
+    "description": "Fügt unter „Plugins“ den Tab „Entdecken“ hinzu, in dem Sie Plugins aus von Ihnen hinzugefügten Plugin-Indizes durchsuchen und installieren.",
     "detail": "docs/DETAIL.md"
   }
 }

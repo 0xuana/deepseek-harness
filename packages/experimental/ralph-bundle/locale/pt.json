@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Loops de Ralph",
-    "description": "Peça um loop Ralph com um objetivo que possa ser verificado pelos arquivos, e o agente inicia um novo agente nele rodada após rodada até que uma rodada informe que o objetivo foi atingido ou que há um bloqueio, ou que o limite de rodadas seja alcançado. Cada rodada vê apenas o objetivo, os arquivos e o relatório da rodada anterior, e é uma execução completa de agente, então o custo aumenta a cada rodada. A conclusão e os bloqueios são o próprio relatório do último agente; verifique o resultado você mesmo.",
+    "description": "Peça um loop Ralph com um objetivo, e o agente inicia um novo agente nele rodada após rodada até que o objetivo seja atingido, um bloqueio seja informado ou o limite de rodadas seja alcançado.",
     "detail": "docs/DETAIL.md"
   }
 }

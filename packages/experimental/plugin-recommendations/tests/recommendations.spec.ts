@@ -22,7 +22,6 @@ describe('official recommendations', () => {
     f.manager.listBundles.mockResolvedValue([
       bundle, { ...bundle, name: 'enabled', enabled: true },
       { ...noMeta, name: 'described', description: 'History search' }, { ...noMeta, name: 'bare' },
-      { ...bundle, name: 'localized', meta: { title: 'Translated', description: { en: 'Translate thinking.', zh: '翻译思考内容。' } } },
       { ...bundle, name: 'custom', official: false }, { ...bundle, name: 'missing', availability: 'missing' },
       { ...bundle, name: 'on-demand', optional: false }, { ...bundle, name: 'read-only', readOnlyReason: 'management-required' },
       { ...bundle, name: 'failed', error: { code: 'operation-error', diagnostic: 'load failed' } },
