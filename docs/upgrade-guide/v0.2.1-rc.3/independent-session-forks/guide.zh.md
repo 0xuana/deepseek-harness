@@ -11,7 +11,7 @@ description: "普通 Session fork 停止记录来源关系，也不再显示为�
 
 普通 fork 复制选定历史并独立继续运行。它们省略 `SessionHeader.parentSession` 及客户端的 `parentSessionId`，不写入替代来源字段。子代理（包括使用 fork backend 的子代理）保留直接创建者。已有日志保留记录中的元数据。
 
-SDK 的 `subagent.started` 排除普通 fork，包括携带父 ID 的历史会话。ACP 列表和恢复允许普通 fork。客户端列表不再将它们缩进，也不再把新发现的 fork 插到来源之前；已保存的手动位置保持不变。基于来源的追踪查询、父关系筛选、遥测和远端日志无法还原新普通 fork 的来源。工作区绑定、可选标题递增、继承历史和 seed 边界仍然可用。
+SDK 的 `subagent.started` 排除普通 fork，包括携带父 ID 的历史会话。ACP 列表和恢复允许普通 fork；通过 cwd 和 preset 检查的普通 fork 也可由 headless 沿用。客户端列表不再将它们缩进，也不再把新发现的 fork 插到来源之前；已保存的手动位置保持不变。基于来源的追踪查询、父关系筛选、遥测和远端日志无法还原新普通 fork 的来源。工作区绑定、可选标题递增、继承历史和 seed 边界仍然可用。
 
 Session 格式保持 V4。旧 V4 reader 可能将包含继承投递确认的无父关系 fork 作为损坏日志拒绝，报错为 `current-generation delivery marker names the wrong Session`。已测试的 reader 在授予句柄或截断文件之前拒绝，不提供专门的升级诊断。参见[兼容性决策](../../../../.agents/notes/implemented/architecture/2026-10-23-independent-session-forks.zh.md)。
 
