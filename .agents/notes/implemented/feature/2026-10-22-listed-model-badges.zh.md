@@ -23,7 +23,7 @@ Web 模型选择器通过一个专门的客户端包在 `DeepSeek-V4.1-Flash` �
 
 **把 `badge` 放进 `client_requirements["deepseek-harness"]`。** 这样不增加顶层字段，已发布版本也会忽略其中多出的键。但版本要求无法读取时，所有版本都会隐藏该模型，已发布的版本也不例外；撤下角标后，序列化器若把清空的对象写成 `null`，模型就会被隐藏。版本要求决定模型能否使用，展示数据必须可以忽略。
 
-**只用于展示的映射，例如 `client_presentation`。** 下一个不属于展示数据的客户端专属字段又要新开一个顶层字段；`client_metadata` 可以容纳任何版本都能忽略的字段。
+**范围更窄的映射，例如 `client_presentation` 或 `client_annotations`。** 这些名称把对象限定为展示数据或附加说明，下一个其他类型的客户端专属字段（例如默认值）又要新开一个顶层字段；`client_metadata` 可以容纳任何版本都能忽略的字段。
 
 **用语义化的角标类别映射到客户端字典。** OpenCode、ZCode 和 DeepSeek-Reasonix 都翻译一组封闭的、由客户端持有的标签类别，没有一家直接渲染服务端发来的文字。固定词表表达不了 `1017` 这样的版本代号，每出现一种新说法都要发一次客户端版本，而列表正是为了免去这一步。列表文字属于提供方数据，按[客户端文案归 locale 管理的决定](../architecture/2026-08-23-locale-owned-client-ui-copy.zh.md)原样渲染；`LocalizedText` 形式仍允许服务端提供译文。
 

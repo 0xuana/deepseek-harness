@@ -23,7 +23,7 @@ The Web model selector showed `1017` beside `DeepSeek-V4.1-Flash` through a dedi
 
 **`badge` inside `client_requirements["deepseek-harness"]`.** It adds no top-level field, and released builds ignore an extra key there. But an unreadable requirement hides its model on every build, released ones included, so a serializer that writes the emptied object as `null` after a badge is retired would hide the model. Requirements gate availability; display data must stay ignorable.
 
-**A display-only map such as `client_presentation`.** The next client-specific field that is not display data would need another top-level field; `client_metadata` takes any field a build may ignore.
+**A narrower map such as `client_presentation` or `client_annotations`.** These names limit the object to display data or descriptive notes, so the next client-specific field of another kind, such as a default, would need another top-level field; `client_metadata` takes any field a build may ignore.
 
 **A semantic badge kind mapped to client dictionaries.** OpenCode, ZCode, and DeepSeek-Reasonix translate a closed set of client-owned tag kinds, and none renders text a server sends. A fixed vocabulary cannot express a release code such as `1017`, and each new wording would need the client release the listing exists to avoid. Listing text is provider data, which the [locale-owned copy decision](../architecture/2026-08-23-locale-owned-client-ui-copy.md) renders verbatim; the `LocalizedText` form still lets the service supply translations.
 
