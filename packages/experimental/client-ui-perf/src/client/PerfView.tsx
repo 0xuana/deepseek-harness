@@ -1463,6 +1463,11 @@ function eventLabel(kind: PerfEventKind, t: PerfTranslate): string {
     case 'system-prompt': return t('event.system-prompt')
     case 'tool-set': return t('event.tool-set')
     case 'context-prune': return t('event.context-prune')
+    case 'request-context': return t('event.request-context')
+    case 'model-retry': return t('event.model-retry')
+    case 'model-attempt': return t('event.model-attempt')
+    case 'context-refresh': return t('event.context-refresh')
+    case 'approval': return t('event.approval')
     /* v8 ignore next -- PerfEventKind is exhaustive. */
     default: return ''
   }
@@ -1490,6 +1495,27 @@ function eventAction(action: PerfEventMetrics['surfaceOp'], t: PerfTranslate): s
   }
 }
 
+/** Localized Context refresh source. */
+function eventSource(source: string | null, t: PerfTranslate): string {
+  switch (source) {
+    case 'runtime-context': return t('event.source.runtime')
+    case 'time-context': return t('event.source.time')
+    default: return source ?? ''
+  }
+}
+
+/** Localized approval state or outcome. */
+function eventApproval(status: string | null, t: PerfTranslate): string {
+  switch (status) {
+    case 'asked': return t('event.approval.asked')
+    case 'allowed-once': return t('event.approval.allowed')
+    case 'rejected': return t('event.approval.rejected')
+    case 'cancelled': return t('event.approval.cancelled')
+    case 'unavailable': return t('event.approval.unavailable')
+    default: return status ?? ''
+  }
+}
+
 /** One-line explanation of a non-step event. */
 function eventDetail(event: PerfEventMetrics, t: PerfTranslate): string {
   switch (event.kind) {
@@ -1513,6 +1539,29 @@ function eventDetail(event: PerfEventMetrics, t: PerfTranslate): string {
     }
     case 'context-prune':
       return t('event.prune.detail', { tokens: formatTokens(event.shadowedTokens) })
+    case 'request-context':
+      return t('event.context.detail', {
+        provider: event.provider ?? '',
+        model: event.model ?? '',
+        mode: event.status ?? '',
+      })
+    case 'model-retry':
+      return t('event.retry.detail', {
+        retry: String(event.retry ?? 0),
+        delay: formatMs(event.delayMs),
+      })
+    case 'model-attempt':
+      return t('event.attempt.detail')
+    case 'context-refresh':
+      return t('event.refresh.detail', {
+        source: eventSource(event.status, t),
+        chars: formatChars(event.chars),
+      })
+    case 'approval':
+      return t('event.approval.detail', {
+        status: eventApproval(event.status, t),
+        tool: event.label ?? '',
+      })
   }
 }
 
@@ -1534,9 +1583,14 @@ function eventRow(event: PerfEventMetrics, t: PerfTranslate): ReactElement {
     ? `${event.provider} / ${event.model}`
     : event.kind === 'system-prompt'
       ? eventAction(event.surfaceOp, t)
-      : event.kind === 'tool-set' ? t('event.tool-set') : ''
+      : event.kind === 'tool-set'
+        ? t('event.tool-set')
+        : event.kind === 'context-refresh'
+          ? eventSource(event.status, t)
+          : event.kind === 'approval' ? eventApproval(event.status, t) : ''
+  const title = event.error === null ? t('event.title') : `${t('event.title')}\n${event.error}`
   return (
-    <tr className={css.eventRow} title={t('event.title')}>
+    <tr className={css.eventRow} title={title}>
       <td className={css.stepCell}>
         <span className={css.compactionTag}>{eventLabel(event.kind, t)}</span>
         <span className={css.stepClock}>{formatClock(event.time)}</span>

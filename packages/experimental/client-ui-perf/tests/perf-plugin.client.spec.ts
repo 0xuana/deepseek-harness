@@ -823,6 +823,48 @@ describe('conversation Definitions', () => {
     }), undefined)).toBeNull()
   })
 
+  it('normalizes lifecycle events for the event rows', () => {
+    const turnLocation = { kind: 'turn', turn: { turn: 9 } } as Parameters<typeof eventMetrics>[1]
+    expect(eventMetrics(event('request/context', {
+      provider: 'p', model: 'm', contextWindow: 128_000, systemPromptUpdate: 'in-history',
+    }), turnLocation)).toMatchObject({
+      kind: 'request-context', turn: 9, step: null, provider: 'p', model: 'm', status: 'in-history', chars: 128_000,
+    })
+    expect(eventMetrics(event('request/context', { provider: 'p', model: 'm' }), undefined)).toMatchObject({
+      status: null, chars: null,
+    })
+    expect(eventMetrics(event('llm/retry', {
+      retryId: 'r1', turn: 3, step: 2, provider: 'p', mode: 'normal', policyKey: 'k', retry: 2, maxRetries: 5,
+      delayMs: 1_500, failure: { message: 'rate limited', code: 'RATE_LIMIT' },
+    }), undefined)).toMatchObject({
+      kind: 'model-retry', turn: 3, step: 2, provider: 'p', status: 'normal', retry: 2, delayMs: 1_500,
+      error: 'rate limited',
+    })
+    expect(eventMetrics(event('assistant/attempt', { turn: 3, step: 2, stream: [] }), undefined)).toMatchObject({
+      kind: 'model-attempt', turn: 3, step: 2, status: 'attempt',
+    })
+    expect(eventMetrics(surfaceEvent('user/message', {
+      role: 'user', source: { kind: 'runtime-context' }, content: [{ type: 'text', text: 'ctx' }],
+    }, 'append'), undefined)).toMatchObject({ kind: 'context-refresh', status: 'runtime-context', chars: 3 })
+    expect(eventMetrics(surfaceEvent('user/message', {
+      role: 'user', source: { kind: 'time-context' }, content: [],
+    }, 'append'), undefined)).toMatchObject({ kind: 'context-refresh', status: 'time-context', chars: 0 })
+    expect(eventMetrics(surfaceEvent('user/message', {
+      role: 'user', source: { kind: 'user' }, content: [],
+    }, 'append'), undefined)).toBeNull()
+    expect(eventMetrics(event('approval/asked', {
+      id: 'a1', toolName: 'bash', reason: 'needs approval',
+    }), turnLocation)).toMatchObject({
+      kind: 'approval', turn: 9, step: null, status: 'asked', label: 'bash', error: 'needs approval',
+    })
+    expect(eventMetrics(event('approval/asked', { id: 'a2', toolName: 'read' }), undefined)).toMatchObject({
+      kind: 'approval', status: 'asked', label: 'read', error: null,
+    })
+    expect(eventMetrics(event('approval/decided', { id: 'a1', outcome: 'rejected' }), turnLocation)).toMatchObject({
+      kind: 'approval', turn: 9, status: 'rejected',
+    })
+  })
+
   it('attributes Code-Mode dispatch events through the root call table', async () => {
     const definitions = await registeredDefinitions()
     const snapshot = assemble(definitions, [

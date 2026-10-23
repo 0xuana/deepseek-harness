@@ -165,6 +165,11 @@ function perfEvent(overrides: Partial<PerfEventMetrics> = {}): PerfEventMetrics 
     added: [],
     removed: [],
     shadowedTokens: null,
+    status: null,
+    retry: null,
+    delayMs: null,
+    error: null,
+    label: null,
     ...overrides,
   }
 }
@@ -956,7 +961,23 @@ describe('turn rows', () => {
         perfEvent({ time: BASE + 800, kind: 'tool-set', added: ['read'], removed: ['edit'] }),
         perfEvent({ time: BASE + 850, kind: 'tool-set', added: ['read'], removed: [] }),
         perfEvent({ time: BASE + 900, kind: 'tool-set', added: [], removed: ['edit'] }),
-        perfEvent({ time: BASE + 1_000, kind: 'context-prune', shadowedTokens: 4_000 }),
+        perfEvent({ time: BASE + 950, kind: 'request-context', provider: 'p', model: 'm', status: 'in-history', chars: 128_000 }),
+        perfEvent({ time: BASE + 960, kind: 'request-context', provider: 'p', model: 'm', status: null, chars: null }),
+        perfEvent({ time: BASE + 965, kind: 'request-context', provider: null, model: null, status: null, chars: null }),
+        perfEvent({ time: BASE + 970, kind: 'model-retry', provider: 'p', retry: 2, delayMs: 1_500, error: 'rate limited' }),
+        perfEvent({ time: BASE + 975, kind: 'model-retry', provider: null, retry: null, delayMs: null, error: null }),
+        perfEvent({ time: BASE + 980, kind: 'model-attempt' }),
+        perfEvent({ time: BASE + 990, kind: 'context-refresh', status: 'runtime-context', chars: 32 }),
+        perfEvent({ time: BASE + 995, kind: 'context-refresh', status: 'time-context', chars: 16 }),
+        perfEvent({ time: BASE + 997, kind: 'context-refresh', status: null, chars: null }),
+        perfEvent({ time: BASE + 1_000, kind: 'approval', status: 'asked', label: 'bash', error: 'needs approval' }),
+        perfEvent({ time: BASE + 1_010, kind: 'approval', status: 'allowed-once', label: 'bash' }),
+        perfEvent({ time: BASE + 1_020, kind: 'approval', status: 'rejected', label: 'bash' }),
+        perfEvent({ time: BASE + 1_030, kind: 'approval', status: 'cancelled', label: 'bash' }),
+        perfEvent({ time: BASE + 1_040, kind: 'approval', status: 'unavailable', label: 'bash' }),
+        perfEvent({ time: BASE + 1_050, kind: 'approval', status: null, label: null }),
+        perfEvent({ time: BASE + 1_055, kind: 'approval', status: 'asked', label: null, error: null }),
+        perfEvent({ time: BASE + 1_060, kind: 'context-prune', shadowedTokens: 4_000 }),
       ],
     }))
     expect(screen.queryByText(say('event.request-header'))).toBeNull()
@@ -973,6 +994,24 @@ describe('turn rows', () => {
     }))).toBeTruthy()
     expect(screen.getAllByText(/新增 read|added read/).length).toBeGreaterThan(0)
     expect(screen.getByText(say('event.prune.detail', { tokens: formatTokens(4_000) }))).toBeTruthy()
+    expect(screen.getAllByText(say('event.request-context'))).toHaveLength(3)
+    expect(screen.getByText(say('event.context.detail', { provider: 'p', model: 'm', mode: 'in-history' }))).toBeTruthy()
+    expect(screen.getAllByText(say('event.model-retry'))).toHaveLength(2)
+    expect(screen.getByText(say('event.retry.detail', {
+      retry: '2', delay: formatMs(1_500),
+    }))).toBeTruthy()
+    expect(screen.getByText(say('event.attempt.detail'))).toBeTruthy()
+    expect(screen.getAllByText(say('event.context-refresh'))).toHaveLength(3)
+    expect(screen.getByText(say('event.refresh.detail', {
+      source: say('event.source.runtime'), chars: formatChars(32),
+    }))).toBeTruthy()
+    expect(screen.getByText(say('event.refresh.detail', {
+      source: say('event.source.time'), chars: formatChars(16),
+    }))).toBeTruthy()
+    expect(screen.getAllByText(say('event.approval'))).toHaveLength(7)
+    for (const status of ['asked', 'allowed', 'rejected', 'cancelled', 'unavailable'] as const) {
+      expect(screen.getAllByText(say(`event.approval.${status}`)).length).toBeGreaterThan(0)
+    }
   })
 
   it('shows context deltas only when the delta switch is on', () => {

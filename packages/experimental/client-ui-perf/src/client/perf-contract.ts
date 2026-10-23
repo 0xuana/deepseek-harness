@@ -179,7 +179,16 @@ export interface PerfTurnMetrics {
 }
 
 /** Non-step event kinds the performance table can explain. */
-export type PerfEventKind = 'request-header' | 'system-prompt' | 'tool-set' | 'context-prune'
+export type PerfEventKind =
+  | 'request-header'
+  | 'system-prompt'
+  | 'tool-set'
+  | 'context-prune'
+  | 'request-context'
+  | 'model-retry'
+  | 'model-attempt'
+  | 'context-refresh'
+  | 'approval'
 
 /** One synthetic event row: request admission, prompt/tool changes, or a model-free prune. */
 export interface PerfEventMetrics {
@@ -197,6 +206,11 @@ export interface PerfEventMetrics {
   readonly added: readonly string[]
   readonly removed: readonly string[]
   readonly shadowedTokens: number | null
+  readonly status: string | null
+  readonly retry: number | null
+  readonly delayMs: number | null
+  readonly error: string | null
+  readonly label: string | null
 }
 
 /** One completed or running compaction transaction with its model-call facts. */

@@ -5,10 +5,18 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-compaction/types'
 import type {} from '@deepseek-ai/dsh-tools'
+import type { LlmRetryEventData } from '@deepseek-ai/dsh-llm-retry/types'
+import type {} from '@deepseek-ai/dsh-user-approval/types'
+import type { SessionEventMap } from '@deepseek-ai/dsh-session/types'
 import type { PerfEventMetrics } from './perf-contract.ts'
 
 /** Event shape a Conversation Definition receives. */
 type MatchEvent = Parameters<ConversationNodeDefinition['match']>[0]
+
+/** Payload of an event whose type is known to the caller. */
+function dataOf<T>(event: MatchEvent): T {
+  return (event as MatchEvent & { data: T }).data
+}
 
 /** Turn and step a Location resolves, or null when the window lost them. */
 function locationTurnStep(
@@ -65,6 +73,11 @@ export function eventMetrics(event: MatchEvent, location: ConversationLocation |
     added: [] as string[],
     removed: [] as string[],
     shadowedTokens: null,
+    status: null,
+    retry: null,
+    delayMs: null,
+    error: null,
+    label: null,
   } satisfies Omit<PerfEventMetrics, 'kind'>
   if (event.type === 'request/header') {
     const header = event.data.header
@@ -93,6 +106,69 @@ export function eventMetrics(event: MatchEvent, location: ConversationLocation |
   }
   if (event.type === 'compaction/prune') {
     return { ...base, kind: 'context-prune', shadowedTokens: event.data.shadowedTokenCount }
+  }
+  const eventType: string = event.type
+  if (eventType === 'request/context') {
+    const data = dataOf<SessionEventMap['request/context']>(event)
+    return {
+      ...base,
+      kind: 'request-context',
+      provider: data.provider,
+      model: data.model,
+      status: data.systemPromptUpdate ?? null,
+      chars: data.contextWindow ?? null,
+    }
+  }
+  if (eventType === 'llm/retry') {
+    const data = dataOf<LlmRetryEventData>(event)
+    return {
+      ...base,
+      kind: 'model-retry',
+      turn: data.turn,
+      step: data.step,
+      provider: data.provider,
+      status: data.mode,
+      retry: data.retry,
+      delayMs: data.delayMs,
+      error: data.failure.message,
+    }
+  }
+  if (eventType === 'assistant/attempt') {
+    const data = dataOf<{ turn: number; step: number }>(event)
+    return {
+      ...base,
+      kind: 'model-attempt',
+      turn: data.turn,
+      step: data.step,
+      status: 'attempt',
+    }
+  }
+  if (eventType === 'user/message') {
+    const data = dataOf<{
+      source: { kind: string }
+      content: readonly { type: string; text?: string }[]
+    }>(event)
+    if (data.source.kind !== 'runtime-context' && data.source.kind !== 'time-context') return null
+    return {
+      ...base,
+      kind: 'context-refresh',
+      status: data.source.kind,
+      chars: contentChars(data.content),
+    }
+  }
+  if (eventType === 'approval/asked') {
+    const data = dataOf<{ toolName: string; reason?: string }>(event)
+    return {
+      ...base,
+      kind: 'approval',
+      status: 'asked',
+      label: data.toolName,
+      error: data.reason ?? null,
+    }
+  }
+  if (eventType === 'approval/decided') {
+    const data = dataOf<{ outcome: string }>(event)
+    return { ...base, kind: 'approval', status: data.outcome }
   }
   return null
 }
